@@ -1,5 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type {
   ExitPayload,
   Instance,
@@ -15,12 +16,12 @@ import type {
   VersionEntry,
 } from "@/lib/types";
 
-import type { ContentSearch, ContentProject, ContentVersion, ContentProgress } from "@/lib/modrinth";
+import type { CatalogType, ContentSearch, ContentProject, ContentVersion, ContentProgress, ModUpdate } from "@/lib/modrinth";
 
 // Mock nur im Dev-Server: im Release-Build ist das konstant true, Vite wirft Mock und mock.ts heraus.
 const tauri = !import.meta.env.DEV || isTauri();
 function contentCall<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  if (!tauri) return Promise.reject(new Error("Modrinth benötigt die Tauri-App. Im Browser werden keine Inhalte installiert."));
+  if (!tauri) return Promise.reject(new Error("Modrinth-Modpacks benötigen die Tauri-App. Im Browser werden keine Modpacks installiert."));
   return call<T>(cmd, args);
 }
 
@@ -52,6 +53,9 @@ const db = {
 // Events im Browser-Modus: gleiches Format wie die Tauri-Events.
 const bus = new EventTarget();
 const emit = <T>(event: string, payload: T) => bus.dispatchEvent(new CustomEvent(event, { detail: payload }));
+
+// Modrinth im Browser: Katalog live von api.modrinth.com, Installieren und Updates nur simuliert.
+const mockContent = mockData?.createContentMock(db, emit);
 
 function on<T>(event: string, cb: (payload: T) => void): Promise<UnlistenFn> {
   if (tauri) return listen<T>(event, (e) => cb(e.payload));
@@ -228,17 +232,27 @@ const mockGame = {
 
 export const api = {
   isMock: !tauri,
-  modrinthSearch: (query: string, projectType: "mod" | "modpack", minecraftVersion: string | null, loader: string | null): Promise<ContentSearch> =>
-    contentCall("modrinth_search", { query, projectType, minecraftVersion, loader, offset: 0 }),
-  modrinthProject: (projectId: string): Promise<ContentProject> => contentCall("modrinth_project", { projectId }),
+  modrinthSearch: (query: string, projectType: CatalogType, minecraftVersion: string | null, loader: string | null, offset = 0): Promise<ContentSearch> =>
+    tauri ? call("modrinth_search", { query, projectType, minecraftVersion, loader, offset }) : mockContent!.search(query, projectType, minecraftVersion, loader, offset),
+  modrinthProject: (projectId: string): Promise<ContentProject> =>
+    tauri ? call("modrinth_project", { projectId }) : mockContent!.project(projectId),
+  modrinthProjects: (projectIds: string[]): Promise<ContentProject[]> =>
+    tauri ? call("modrinth_projects", { projectIds }) : mockContent!.projects(projectIds),
   modrinthVersions: (projectId: string, minecraftVersion: string | null, loader: string | null): Promise<ContentVersion[]> =>
-    contentCall("modrinth_versions", { projectId, minecraftVersion, loader }),
+    tauri ? call("modrinth_versions", { projectId, minecraftVersion, loader }) : mockContent!.versions(projectId, minecraftVersion, loader),
   modrinthInstallMod: (instanceId: string, versionId: string, operationId: string): Promise<Instance> =>
-    contentCall("modrinth_install_mod", { instanceId, versionId, operationId }),
+    tauri ? call("modrinth_install_mod", { instanceId, versionId, operationId }) : mockContent!.installMod(instanceId, versionId, operationId),
+  modrinthCheckUpdates: (instanceId: string): Promise<ModUpdate[]> =>
+    tauri ? call("modrinth_check_updates", { instanceId }) : mockContent!.checkUpdates(instanceId),
+  modrinthUpdateMods: (instanceId: string, modIds: string[], operationId: string): Promise<Instance> =>
+    tauri ? call("modrinth_update_mods", { instanceId, modIds, operationId }) : mockContent!.updateMods(instanceId, modIds, operationId),
   modrinthInstallPack: (versionId: string, name: string, operationId: string): Promise<Instance> =>
     contentCall("modrinth_install_pack", { versionId, name, operationId }),
   modrinthImportPack: (path: string, name: string, operationId: string): Promise<Instance> =>
     contentCall("modrinth_import_pack", { path, name, operationId }),
+  /** Links aus Beschreibungen im Standardbrowser öffnen, nie im Launcher-Fenster. */
+  openExternal: (url: string): Promise<void> =>
+    tauri ? openUrl(url) : Promise.resolve(void window.open(url, "_blank", "noopener,noreferrer")),
   onContentProgress: (cb: (p: ContentProgress) => void) => on("content-progress", cb),
 
   listInstances: (): Promise<Instance[]> =>
