@@ -6,7 +6,7 @@ use crate::{
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     time::Duration,
 };
 
@@ -207,6 +207,19 @@ pub async fn versions(
     }
     api(client, &format!("project/{id}/version"), &q).await
 }
+/// Mehrere Versionen in einem Aufruf je 100 IDs; jede angefragte muss genau so zurückkommen.
+pub async fn versions_by_ids(client: &reqwest::Client, ids: &[String]) -> AppResult<Vec<Version>> {
+    let mut out = Vec::new();
+    for chunk in ids.chunks(100) {
+        chunk.iter().try_for_each(|id| identifier(id))?;
+        let got: Vec<Version> = api(client, "versions", &[("ids".into(), serde_json::to_string(chunk)?)]).await?;
+        if got.len() != chunk.len() || !got.iter().all(|v| chunk.contains(&v.id)) {
+            return Err(invalid("Versionen stimmen nicht überein"));
+        }
+        out.extend(got);
+    }
+    Ok(out)
+}
 /// Neueste Release-Version je SHA-1 für Loader und MC-Version; Schlüssel ist der gesendete Hash.
 pub async fn latest_by_hash(
     client: &reqwest::Client,
@@ -372,18 +385,34 @@ pub async fn resolve(
     root: &str,
     instance: &Instance,
 ) -> AppResult<Vec<Version>> {
-    let mut queue = VecDeque::from([version(client, root).await?]);
+    let root = version(client, root).await?;
     let mut selected = HashMap::new();
-    let mut calls = 1;
-    for m in instance.mods.iter().filter(|m| m.enabled && m.kind == ModKind::Mod) {
-        if let crate::models::ModSource::Modrinth { version_id, .. } = &m.source {
-            calls += 1;
-            if calls > 64 {
-                return Err(invalid("Zu viele installierte Dependencies"));
-            }
-            queue.push_back(version(client, version_id).await?);
-        }
+    let mut installed: Vec<String> = instance
+        .mods
+        .iter()
+        .filter(|m| m.enabled && m.kind == ModKind::Mod)
+        .filter_map(|m| match &m.source {
+            crate::models::ModSource::Modrinth { version_id, .. } => Some(version_id.clone()),
+            _ => None,
+        })
+        .collect();
+    installed.sort();
+    installed.dedup();
+    if installed.len() > 1000 {
+        return Err(invalid("Zu viele installierte Mods"));
     }
+    let installed = versions_by_ids(client, &installed).await?;
+    // Already installed projects came with the instance (often from a pack): they only pin the graph.
+    // The client/compatibility checks apply to what this operation adds, the root included.
+    let known: HashSet<String> = installed
+        .iter()
+        .map(|v| v.project_id.clone())
+        .filter(|p| p != &root.project_id)
+        .collect();
+    let mut queue = VecDeque::from([root]);
+    queue.extend(installed);
+    // Only requests count against the limits; installed versions cost one bulk request per 100.
+    let mut calls = 1;
     let mut pinned = HashMap::new();
     for v in &queue {
         select(&mut pinned, v.clone())?;
@@ -415,28 +444,38 @@ pub async fn resolve(
             queue.push_back(child);
         }
         let v = queue.pop_front().unwrap();
-        compatible(&v, instance)?;
+        let new = !known.contains(&v.project_id);
+        if new {
+            compatible(&v, instance)?;
+        }
         if !select(&mut selected, v.clone())? {
             continue;
         }
-        calls += 1;
-        if calls > 192 || selected.len() > 64 {
-            return Err(invalid("Dependency-Limit erreicht"));
-        }
-        let p = project(client, &v.project_id).await?;
-        if p.id != v.project_id || p.project_type != "mod" || p.client_side == "unsupported" {
-            return Err(invalid("Projekt ist keine Client-Mod"));
+        if new {
+            calls += 1;
+            if calls > 192 || selected.keys().filter(|p| !known.contains(*p)).count() > 64 {
+                return Err(invalid("Dependency-Limit erreicht"));
+            }
+            let p = project(client, &v.project_id).await?;
+            if p.id != v.project_id || p.project_type != "mod" || p.client_side == "unsupported" {
+                return Err(invalid("Projekt ist keine Client-Mod"));
+            }
         }
         for d in &v.dependencies {
             if d.dependency_type != "required" {
                 continue;
             }
-            calls += 1;
-            if calls > 192 || queue.len() > 128 {
+            if calls > 192 || queue.len() > 128 + known.len() {
                 return Err(invalid("Dependency-Limit erreicht"));
             }
             let child = if let Some(id) = &d.version_id {
-                version(client, id).await?
+                match pinned.values().chain(selected.values()).find(|p| &p.id == id) {
+                    Some(same) => same.clone(),
+                    None => {
+                        calls += 1;
+                        version(client, id).await?
+                    }
+                }
             } else if let Some(id) = &d.project_id {
                 if let Some(existing) = pinned.get(id).or_else(|| selected.get(id)) {
                     existing.clone()
