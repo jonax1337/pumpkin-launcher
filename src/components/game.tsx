@@ -190,7 +190,7 @@ export function LogConsole({ instanceId }: { instanceId: string }) {
   return (
     <div className="overflow-hidden rounded-xl border bg-black/40">
       <div className="flex items-center justify-between border-b bg-white/[0.02] px-4 py-2">
-        <p className="font-mono text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           {lines?.length ? `${lines.length.toLocaleString("de")} Zeilen` : "Keine Ausgabe"}
         </p>
         <Button

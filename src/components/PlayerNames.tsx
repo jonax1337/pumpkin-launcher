@@ -12,7 +12,7 @@ function Avatar({ name, active }: { name: string; active?: boolean }) {
     <div
       aria-hidden
       className={cn(
-        "grid size-9 shrink-0 place-items-center rounded-md font-mono text-xs font-semibold",
+        "grid size-9 shrink-0 place-items-center rounded-md text-xs font-semibold",
         active ? "bg-gold/15 text-gold" : "bg-white/5 text-muted-foreground",
       )}
     >
@@ -67,7 +67,7 @@ export function PlayerNamesCard() {
   const { offlineName, offlineAccounts, selectAccount, removeAccount } = useSettings();
 
   return (
-        <Card id="spielername" className="bg-card/60">
+        <Card id="spielername" className="bg-card">
           <CardHeader>
             <CardTitle>Spielername</CardTitle>
             <CardDescription>Mit diesem Namen spielst du. Du kannst mehrere anlegen und hier wechseln.</CardDescription>
