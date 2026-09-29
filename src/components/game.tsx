@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useInstall, useInstanceStatus, useKill, useLaunch } from "@/hooks/useInstances";
 import { cn } from "@/lib/utils";
-import { INSTALL_STEP_LABELS, type Instance, type InstallProgress, type InstallStep } from "@/lib/types";
+import { INSTALL_STEP_LABELS, LOADER_LABELS, type Instance, type InstallProgress, type InstallStep } from "@/lib/types";
 import { useGame } from "@/store/game";
 
 // Reihenfolge der Vanilla-Schritte im Backend (`install::install`)
@@ -126,6 +126,14 @@ export function PlayControl({
     );
   }
 
+  if (phase === "missing" && instance.loader !== "vanilla") {
+    return (
+      <Button size={hero ? "lg" : "default"} variant="secondary" disabled className={size}>
+        <Download aria-hidden /> {LOADER_LABELS[instance.loader]} folgt
+      </Button>
+    );
+  }
+
   if (phase === "missing") {
     return (
       <Button
@@ -197,7 +205,17 @@ export function LogConsole({ instanceId }: { instanceId: string }) {
       >
         {lines?.length ? (
           lines.map((l) => (
-            <div key={l.id} className={cn("break-all whitespace-pre-wrap", l.stream === "stderr" ? "text-red-300/90" : "text-foreground/80")}>
+            <div
+              key={l.id}
+              className={cn(
+                "break-all whitespace-pre-wrap",
+                l.stream === "stderr" || /\/(ERROR|FATAL)\]/.test(l.line)
+                  ? "text-red-300/90"
+                  : /\/WARN\]/.test(l.line)
+                    ? "text-gold"
+                    : "text-foreground/80",
+              )}
+            >
               {l.line}
             </div>
           ))
