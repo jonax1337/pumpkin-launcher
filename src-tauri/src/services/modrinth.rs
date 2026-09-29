@@ -443,7 +443,7 @@ pub async fn resolve(
             .ok_or_else(|| invalid("Keine kompatible Dependency"))?;
             queue.push_back(child);
         }
-        let v = queue.pop_front().unwrap();
+        let Some(v) = queue.pop_front() else { continue };
         let new = !known.contains(&v.project_id);
         if new {
             compatible(&v, instance)?;

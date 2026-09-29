@@ -1,26 +1,60 @@
 use serde::{Serialize, Serializer};
 
-/// Zentraler Fehlertyp des Backends. Wird an das Frontend als String serialisiert.
+/// Zentraler Fehlertyp des Backends. Wird an das Frontend als lesbarer Satz serialisiert;
+/// technische Details folgen nach „ – Details: “.
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
-    #[error("E/A-Fehler: {0}")]
+    #[error("{}", io_text(.0))]
     Io(#[from] std::io::Error),
-    #[error("JSON-Fehler: {0}")]
+    #[error("Die Daten konnten nicht gelesen werden – Details: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("HTTP-Fehler: {0}")]
+    #[error("{}", http_text(.0))]
     Http(#[from] reqwest::Error),
-    #[error("ZIP-Fehler: {0}")]
+    #[error("Das Archiv ist beschädigt oder kein gültiges Paket – Details: {0}")]
     Zip(#[from] zip::result::ZipError),
-    #[error("Download fehlgeschlagen: {0}")]
+    #[error("Ein Download ist fehlgeschlagen – Details: {0}")]
     Download(String),
-    #[error("Tauri-Fehler: {0}")]
+    #[error("Interner Fehler der App – Details: {0}")]
     Tauri(#[from] tauri::Error),
-    #[error("{kind} '{id}' nicht gefunden")]
+    #[error("Der Windows-Anmeldespeicher ist nicht erreichbar – Details: {0}")]
+    Keyring(#[from] keyring::Error),
+    #[error("{kind} „{id}“ wurde nicht gefunden")]
     NotFound { kind: &'static str, id: String },
-    #[error("Ungültige Eingabe: {0}")]
+    #[error("{0}")]
     Invalid(String),
-    #[error("Noch nicht implementiert: {0}")]
+    #[error("{0} gibt es noch nicht")]
     NotImplemented(&'static str),
+    #[error("Installation abgebrochen")]
+    Cancelled,
+}
+
+fn io_text(err: &std::io::Error) -> String {
+    use std::io::ErrorKind::*;
+    // Windows: 32 = Datei von anderem Prozess geöffnet, 33 = Bereich gesperrt, 39/112 = Datenträger voll.
+    let text = match (err.kind(), err.raw_os_error()) {
+        (StorageFull, _) | (_, Some(39 | 112)) => "Auf der Festplatte ist nicht genug Platz frei. Schaffe Platz und versuch es erneut.",
+        (_, Some(32 | 33)) => "Eine Datei wird gerade von einem anderen Programm benutzt. Schließe es (z. B. Minecraft) und versuch es erneut.",
+        (PermissionDenied, _) => "Zugriff auf eine Datei wurde verweigert. Prüfe, ob ein anderes Programm sie sperrt oder schützt.",
+        (NotFound, _) => "Eine benötigte Datei oder ein Ordner fehlt.",
+        (TimedOut, _) => "Der Vorgang hat zu lange gedauert. Versuch es erneut.",
+        _ => "Beim Lesen oder Schreiben einer Datei ist ein Fehler aufgetreten.",
+    };
+    format!("{text} – Details: {err}")
+}
+
+fn http_text(err: &reqwest::Error) -> String {
+    let text = match err.status().map(|s| s.as_u16()) {
+        Some(404 | 410) => "Die Datei gibt es auf dem Server nicht (mehr).",
+        Some(401 | 403) => "Der Server hat den Zugriff verweigert.",
+        Some(429) => "Zu viele Anfragen in kurzer Zeit. Warte einen Moment und versuch es erneut.",
+        Some(500..=599) => "Der Server hat gerade Probleme. Versuch es später erneut.",
+        Some(_) => "Der Server hat die Anfrage abgelehnt.",
+        None if err.is_timeout() => "Der Server antwortet nicht rechtzeitig. Prüfe deine Verbindung und versuch es erneut.",
+        None if err.is_connect() => "Keine Verbindung zum Internet. Prüfe deine Verbindung und versuch es erneut.",
+        None if err.is_decode() => "Die Antwort des Servers war unvollständig oder unlesbar.",
+        None => "Die Verbindung zum Server ist abgebrochen. Versuch es erneut.",
+    };
+    format!("{text} – Details: {err}")
 }
 
 impl Serialize for AppError {
@@ -30,3 +64,41 @@ impl Serialize for AppError {
 }
 
 pub type AppResult<T> = Result<T, AppError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::{Error, ErrorKind};
+
+    fn starts(err: AppError, prefix: &str) {
+        let text = err.to_string();
+        assert!(text.starts_with(prefix), "{text}");
+    }
+
+    #[test]
+    fn io_errors_read_like_sentences() {
+        starts(Error::from_raw_os_error(112).into(), "Auf der Festplatte ist nicht genug Platz");
+        starts(Error::from(ErrorKind::StorageFull).into(), "Auf der Festplatte ist nicht genug Platz");
+        starts(Error::from_raw_os_error(32).into(), "Eine Datei wird gerade von einem anderen Programm benutzt");
+        starts(Error::from(ErrorKind::PermissionDenied).into(), "Zugriff auf eine Datei wurde verweigert");
+        starts(Error::other("x").into(), "Beim Lesen oder Schreiben");
+        assert!(AppError::from(Error::other("kaputt")).to_string().ends_with(" – Details: kaputt"));
+        assert_eq!(AppError::Cancelled.to_string(), "Installation abgebrochen");
+        assert_eq!(AppError::Invalid("Instanz läuft noch".into()).to_string(), "Instanz läuft noch");
+    }
+
+    #[tokio::test]
+    async fn http_errors_read_like_sentences() {
+        // Port 9 auf localhost: sofortige Ablehnung, kein echtes Netz nötig.
+        let err = reqwest::Client::new().get("http://127.0.0.1:9/").send().await.unwrap_err();
+        starts(err.into(), "Keine Verbindung zum Internet");
+        starts(http_error(404).into(), "Die Datei gibt es auf dem Server nicht");
+        starts(http_error(503).into(), "Der Server hat gerade Probleme");
+    }
+
+    /// reqwest-Fehler mit Status, wie ihn `error_for_status` liefert.
+    fn http_error(status: u16) -> reqwest::Error {
+        let response = tauri::http::Response::builder().status(status).body(Vec::<u8>::new()).unwrap();
+        reqwest::Response::from(response).error_for_status().unwrap_err()
+    }
+}
