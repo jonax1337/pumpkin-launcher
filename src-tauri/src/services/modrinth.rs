@@ -204,7 +204,7 @@ pub async fn versions(
     }
     api(client, &format!("project/{id}/version"), &q).await
 }
-/// Neueste Version je SHA-1 für Loader und MC-Version; Schlüssel ist der gesendete Hash.
+/// Neueste Release-Version je SHA-1 für Loader und MC-Version; Schlüssel ist der gesendete Hash.
 pub async fn latest_by_hash(
     client: &reqwest::Client,
     hashes: &[String],
@@ -218,7 +218,9 @@ pub async fn latest_by_hash(
     let url = reqwest::Url::parse(&format!("{API}/version_files/update"))
         .map_err(|e| invalid(e.to_string()))?;
     let body = serde_json::json!({
-        "hashes": hashes, "algorithm": "sha1", "loaders": loaders, "game_versions": [mc]
+        "hashes": hashes, "algorithm": "sha1", "loaders": loaders, "game_versions": [mc],
+        // Nur stabile Versionen anbieten; Betas bleiben eine bewusste Wahl über „Andere Version“.
+        "version_types": ["release"]
     });
     Ok(serde_json::from_slice(
         &bytes(client.post(url).json(&body), 8 * 1024 * 1024).await?,
