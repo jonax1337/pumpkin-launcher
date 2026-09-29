@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,7 @@ import { api } from "@/lib/api";
 import { isAbsoluteMrpack, modCompatibility } from "@/lib/modrinth";
 import { useInstances } from "@/hooks/useInstances";
 import { useContentInstall, useContentState } from "@/hooks/useContent";
+import type { Instance } from "@/lib/types";
 
 export function ContentCatalog({ type }: { type: "mod" | "modpack" }) {
   const [query, setQuery] = useState("");
@@ -25,6 +26,9 @@ export function ContentCatalog({ type }: { type: "mod" | "modpack" }) {
   const instances = useInstances();
   const operation = useContentState();
   const install = useContentInstall();
+  const navigate = useNavigate();
+  // Nach einem Pack-Import direkt zur neuen Instanz: dort installiert „Spielen“ bei Bedarf selbst.
+  const openInstance = { onSuccess: (inst: Instance | null) => inst && navigate(`/instances/${inst.id}`) };
   const results = useQuery({
     queryKey: ["modrinth-search", type, search],
     queryFn: () => api.modrinthSearch(search.query, type, search.mc || null, search.loader === "all" ? null : search.loader),
@@ -86,18 +90,18 @@ export function ContentCatalog({ type }: { type: "mod" | "modpack" }) {
         <p className="text-xs text-muted-foreground">Nur Fabric mit passender Minecraft-Version. Erforderliche Dependencies werden vom Backend mitinstalliert; Konflikte werden nicht überschrieben.</p>
       </> : <><Label htmlFor="pack-name">Name der neuen Instanz</Label><Input id="pack-name" value={name} onChange={(e) => setName(e.target.value)} /></>}
       {reason && <p className="text-sm text-muted-foreground">{reason}</p>}
-      <Button disabled={api.isMock || busy || !!reason} onClick={() => { if (!version || reason) return; install.mutate((id) => type === "mod" ? api.modrinthInstallMod(instanceId, version.id, id) : api.modrinthInstallPack(version.id, name.trim(), id)); }}> {type === "mod" ? "Mod + Dependencies installieren" : "Neue Instanz aus Pack erstellen"}</Button>
+      <Button disabled={api.isMock || busy || !!reason} onClick={() => { if (!version || reason) return; if (type === "mod") install.mutate((id) => api.modrinthInstallMod(instanceId, version.id, id)); else install.mutate((id) => api.modrinthInstallPack(version.id, name.trim(), id), openInstance); }}> {type === "mod" ? "Mod + Dependencies installieren" : "Neue Instanz aus Pack erstellen"}</Button>
     </section>}
     {type === "modpack" && <section className="mt-6 space-y-3 rounded-xl border bg-card/60 p-5" aria-label="Lokaler Packimport">
       <h2 className="font-heading text-lg">Lokale .mrpack importieren</h2>
       <Label htmlFor="mrpack-path">Absoluter Dateipfad</Label><Input id="mrpack-path" value={path} onChange={(e) => setPath(e.target.value)} placeholder="C:\\Downloads\\pack.mrpack" />
       <Label htmlFor="local-pack-name">Name der neuen Instanz</Label><Input id="local-pack-name" value={localName} onChange={(e) => setLocalName(e.target.value)} />
-      <p className="text-xs text-muted-foreground">Nur unterstützte Vanilla-/Fabric-Packs. Das Backend prüft Archiv, Loader und Downloads. Danach die Spieldateien unter Instanzen installieren.</p>
-      <Button disabled={api.isMock || busy || !localName.trim() || !isAbsoluteMrpack(path.trim())} onClick={() => install.mutate((id) => api.modrinthImportPack(path.trim(), localName.trim(), id))}>Pack importieren</Button>
+      <p className="text-xs text-muted-foreground">Nur unterstützte Vanilla-/Fabric-Packs. Das Backend prüft Archiv, Loader und Downloads.</p>
+      <Button disabled={api.isMock || busy || !localName.trim() || !isAbsoluteMrpack(path.trim())} onClick={() => install.mutate((id) => api.modrinthImportPack(path.trim(), localName.trim(), id), openInstance)}>Pack importieren</Button>
     </section>}
     <div className="mt-5 space-y-3" aria-live="polite">
       {busy && <p role="status">Inhalte werden installiert… {operation.progress && `${operation.progress.phase}: ${operation.progress.done} / ${operation.progress.total || "?"}`}</p>}
-      {!busy && operation.result && <p>Inhalte für <Link className="underline" to={`/instances/${operation.result.id}`}>{operation.result.name}</Link> gespeichert. Falls noch nicht installiert: dort zuerst die Spieldateien installieren.</p>}
+      {!busy && operation.result && <p>Inhalte für <Link className="underline" to={`/instances/${operation.result.id}`}>{operation.result.name}</Link> gespeichert.</p>}
     </div>
   </>;
 }

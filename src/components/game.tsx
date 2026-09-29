@@ -1,10 +1,9 @@
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Download, Loader2, Play, Square, Trash2 } from "lucide-react";
+import { Loader2, Play, Square, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useInstall, useInstanceStatus, useKill, useLaunch } from "@/hooks/useInstances";
+import { useInstanceStatus, useKill, usePlay } from "@/hooks/useInstances";
 import { cn } from "@/lib/utils";
 import {
   INSTALL_STEP_LABELS,
@@ -28,27 +27,32 @@ function overallPercent(p: InstallProgress, steps: InstallStep[]) {
   return Math.round(((index + within) / steps.length) * 100);
 }
 
-type Phase = "loading" | "installing" | "running" | "installed" | "missing";
+type Phase = "loading" | "preparing" | "starting" | "running" | "installed" | "missing";
 
 function usePhase(instanceId: string): Phase {
   const status = useInstanceStatus(instanceId);
-  const installing = useGame((s) => !!s.installs[instanceId]);
-  if (installing) return "installing";
-  if (!status.data) return "loading";
-  if (status.data.running) return "running";
-  return status.data.installed ? "installed" : "missing";
+  const preparing = useGame((s) => !!s.installs[instanceId]);
+  const launching = useGame((s) => !!s.launching[instanceId]);
+  if (preparing) return "preparing";
+  if (status.data?.running) return "running";
+  if (launching) return "starting";
+  // Schlägt die Statusabfrage fehl, gilt die Instanz als nicht installiert; „Spielen“ bereitet sie dann vor.
+  if (status.isPending) return "loading";
+  return status.data?.installed ? "installed" : "missing";
 }
 
 const PHASE_LABEL: Record<Exclude<Phase, "loading">, string> = {
   missing: "Nicht installiert",
-  installing: "Wird installiert",
+  preparing: "Wird vorbereitet",
+  starting: "Startet",
   installed: "Bereit",
   running: "Läuft",
 };
 
 const PHASE_TINT: Record<Exclude<Phase, "loading">, string> = {
   missing: "bg-white/5 text-muted-foreground ring-white/10 [&>span]:bg-muted-foreground",
-  installing: "bg-gold/10 text-gold ring-gold/25 [&>span]:bg-gold",
+  preparing: "bg-gold/10 text-gold ring-gold/25 [&>span]:bg-gold",
+  starting: "bg-gold/10 text-gold ring-gold/25 [&>span]:bg-gold",
   installed: "bg-primary/10 text-primary ring-primary/25 [&>span]:bg-primary",
   running: "bg-emerald-400/15 text-emerald-300 ring-emerald-400/30 [&>span]:bg-emerald-300 [&>span]:animate-pulse",
 };
@@ -71,33 +75,7 @@ export function StatusBadge({ instanceId, className }: { instanceId: string; cla
   );
 }
 
-function InstallBar({ progress, loader, hero }: { progress: InstallProgress; loader: ModLoader; hero?: boolean }) {
-  const steps = stepsFor(loader);
-  const percent = overallPercent(progress, steps);
-  const stepNo = steps.indexOf(progress.step) + 1;
-  return (
-    <div className={cn("space-y-2", hero ? "w-72" : "w-64")} aria-live="polite">
-      <div className="flex items-baseline justify-between gap-3 text-sm">
-        <span className="inline-flex min-w-0 items-center gap-2 font-medium">
-          <Loader2 className="size-3.5 shrink-0 animate-spin text-gold" aria-hidden />
-          <span className="truncate">{INSTALL_STEP_LABELS[progress.step]}</span>
-        </span>
-        <span className="font-mono text-xs text-muted-foreground tabular-nums">{percent} %</span>
-      </div>
-      <Progress
-        value={percent}
-        aria-label="Installationsfortschritt"
-        className={cn("bg-white/10 [&>*]:bg-gold [&>*]:duration-300", hero ? "h-2" : "h-1.5")}
-      />
-      <p className="font-mono text-[11px] text-muted-foreground tabular-nums">
-        Schritt {stepNo}/{steps.length}
-        {progress.total > 0 && ` · ${progress.done.toLocaleString("de")} / ${progress.total.toLocaleString("de")}`}
-      </p>
-    </div>
-  );
-}
-
-/** Installieren → Spielen → Stoppen, je nach Zustand der Instanz. */
+/** Ein Knopf für alles: Spielen (installiert bei Bedarf), Fortschritt beim Vorbereiten, Beenden. */
 export function PlayControl({
   instance,
   hero,
@@ -109,16 +87,51 @@ export function PlayControl({
 }) {
   const phase = usePhase(instance.id);
   const progress = useGame((s) => s.installs[instance.id]);
-  const install = useInstall();
-  const launch = useLaunch();
+  const play = usePlay();
   const kill = useKill();
+  // onLaunched (z. B. Tab wechseln) nur, solange der Knopf noch zu sehen ist.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const size = hero
     ? "h-16 min-w-56 gap-3 rounded-2xl px-8 text-lg font-semibold ring-1 ring-white/20 [&_svg:not([class*='size-'])]:size-5"
     : "min-w-32";
 
   if (phase === "loading") return <Skeleton className={hero ? "h-16 w-56 rounded-2xl" : "h-9 w-32"} />;
-  if (phase === "installing" && progress) return <InstallBar progress={progress} loader={instance.loader} hero={hero} />;
+
+  if (phase === "preparing" || phase === "starting") {
+    const percent = phase === "preparing" && progress ? overallPercent(progress, stepsFor(instance.loader)) : null;
+    return (
+      <div className="flex flex-col items-end gap-1.5">
+        <Button
+          size={hero ? "lg" : "default"}
+          disabled
+          aria-label={percent == null ? `${instance.name} startet` : `${instance.name} wird vorbereitet, ${percent} %`}
+          className={cn(size, "relative overflow-hidden disabled:opacity-100", hero ? "min-w-72" : "min-w-52")}
+        >
+          {percent != null && (
+            <span
+              aria-hidden
+              className="absolute inset-y-0 left-0 bg-white/20 transition-[width] duration-300"
+              style={{ width: `${percent}%` }}
+            />
+          )}
+          <Loader2 className="relative animate-spin" aria-hidden />
+          <span className="relative tabular-nums">
+            {percent == null ? "Startet …" : `Wird vorbereitet … ${percent} %`}
+          </span>
+        </Button>
+        <p className="text-xs text-muted-foreground" aria-live="polite">
+          {phase === "preparing" && progress ? INSTALL_STEP_LABELS[progress.step] : "Minecraft wird gestartet"}
+        </p>
+      </div>
+    );
+  }
 
   if (phase === "running") {
     return (
@@ -131,7 +144,7 @@ export function PlayControl({
         className={cn(size, "border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive")}
       >
         {kill.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Square className="fill-current" aria-hidden />}
-        Stoppen
+        Beenden
       </Button>
     );
   }
@@ -147,31 +160,16 @@ export function PlayControl({
     );
   }
 
-  if (phase === "missing") {
-    return (
-      <Button
-        size={hero ? "lg" : "default"}
-        variant={hero ? "default" : "secondary"}
-        onClick={() => install.mutate(instance)}
-        aria-label={`${instance.name} installieren`}
-        className={cn(size, hero && "shadow-[0_10px_40px_-10px_var(--primary)]")}
-      >
-        <Download aria-hidden /> Installieren
-      </Button>
-    );
-  }
-
   return (
     <motion.div whileHover={hero ? { scale: 1.02 } : undefined} whileTap={{ scale: 0.98 }}>
       <Button
         size={hero ? "lg" : "default"}
-        disabled={launch.isPending}
-        onClick={() => launch.mutate(instance, { onSuccess: onLaunched })}
+        onClick={() => void play(instance, () => mounted.current && onLaunched?.())}
         aria-label={`${instance.name} spielen`}
         className={cn(size, hero && "shadow-[0_10px_40px_-10px_var(--primary)]")}
       >
-        {launch.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Play className="fill-current" aria-hidden />}
-        {launch.isPending ? "Startet…" : "Spielen"}
+        <Play className="fill-current" aria-hidden />
+        Spielen
       </Button>
     </motion.div>
   );

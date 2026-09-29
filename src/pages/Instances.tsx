@@ -18,7 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BlockTile, ConfirmDialog, EmptyState, ErrorNote, LoaderBadge, PageHeader } from "@/components/common";
-import { StatusBadge } from "@/components/game";
+import { PlayControl, StatusBadge } from "@/components/game";
 import { useCreateInstance, useDeleteInstance, useInstances, useLoaderVersions, useVersions } from "@/hooks/useInstances";
 import { formatMemory, relativeTime } from "@/lib/format";
 import { INSTALLABLE_LOADERS, LOADER_LABELS, type Instance, type ModLoader } from "@/lib/types";
@@ -220,7 +220,7 @@ export function InstancesPage() {
           <li key={inst.id} className="group relative">
             <Link
               to={`/instances/${inst.id}`}
-              className="flex items-center gap-4 rounded-xl border bg-card/60 p-4 pr-16 transition-colors outline-none hover:border-primary/30 hover:bg-card focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex min-h-20 items-center gap-4 rounded-xl border bg-card/60 p-4 pr-80 transition-colors outline-none hover:border-primary/30 hover:bg-card focus-visible:ring-2 focus-visible:ring-ring"
             >
               <BlockTile seed={inst.id} />
               <div className="min-w-0 flex-1">
@@ -236,15 +236,18 @@ export function InstancesPage() {
               <span className="hidden text-sm text-muted-foreground md:block">{relativeTime(inst.lastPlayedAt)}</span>
               <StatusBadge instanceId={inst.id} />
             </Link>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={`${inst.name} löschen`}
-              className="absolute top-1/2 right-4 -translate-y-1/2 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-destructive"
-              onClick={() => setToDelete(inst)}
-            >
-              <Trash2 aria-hidden />
-            </Button>
+            <div className="absolute top-1/2 right-4 flex -translate-y-1/2 items-center gap-2">
+              <PlayControl instance={inst} />
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={`${inst.name} löschen`}
+                className="text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-destructive"
+                onClick={() => setToDelete(inst)}
+              >
+                <Trash2 aria-hidden />
+              </Button>
+            </div>
           </li>
         ))}
       </ul>

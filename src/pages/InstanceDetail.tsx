@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Blocks, Check, Trash2 } from "lucide-react";
+import { ArrowLeft, Blocks, Check, Trash2, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,9 +15,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BlockTile, ConfirmDialog, EmptyState, ErrorNote, LoaderBadge } from "@/components/common";
 import { LogConsole, PlayControl, StatusBadge } from "@/components/game";
-import { instanceKeys, useDeleteInstance, useInstance, useUpdateInstance, useUpdateMods } from "@/hooks/useInstances";
+import {
+  instanceKeys,
+  useDeleteInstance,
+  useInstall,
+  useInstance,
+  useInstanceStatus,
+  useUpdateInstance,
+  useUpdateMods,
+} from "@/hooks/useInstances";
 import { formatDate, formatMemory, relativeTime } from "@/lib/format";
-import { SOURCE_LABELS, type Instance, type Mod } from "@/lib/types";
+import { INSTALLABLE_LOADERS, SOURCE_LABELS, type Instance, type Mod } from "@/lib/types";
+import { useGame } from "@/store/game";
 import { useSettings } from "@/store/settings";
 
 function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
@@ -127,6 +136,29 @@ function ModsTab({ instance }: { instance: Instance }) {
   );
 }
 
+/** Spieldateien prüfen und neu laden. „Spielen“ installiert selbst; das hier ist nur für den Fall, dass etwas kaputt ist. */
+function RepairCard({ instance }: { instance: Instance }) {
+  const install = useInstall();
+  const status = useInstanceStatus(instance.id);
+  const busy = useGame((s) => !!s.installs[instance.id] || !!s.launching[instance.id]);
+  if (!INSTALLABLE_LOADERS.includes(instance.loader)) return null;
+  return (
+    <Card className="bg-card/60">
+      <CardHeader>
+        <CardTitle>Reparieren</CardTitle>
+        <CardDescription>
+          Prüft die Spieldateien und lädt fehlende oder beschädigte neu, falls das Spiel nicht mehr startet. Welten und Mods bleiben erhalten.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button variant="outline" disabled={busy || !!status.data?.running} onClick={() => install.mutate(instance)}>
+          <Wrench aria-hidden /> {busy ? "Läuft gerade…" : "Reparieren"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function SettingsTab({ instance }: { instance: Instance }) {
   const defaultMemory = useSettings((s) => s.memoryMb);
   const [name, setName] = useState(instance.name);
@@ -197,6 +229,8 @@ function SettingsTab({ instance }: { instance: Instance }) {
           </div>
         </CardContent>
       </Card>
+
+      <RepairCard instance={instance} />
 
       <Card className="border-destructive/30 bg-destructive/5 ring-destructive/20">
         <CardHeader>

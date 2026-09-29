@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router";
+import { useNavigate, type NavigateFunction } from "react-router";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { Instance, InstanceStatus, ModLoader, NewInstance } from "@/lib/types";
@@ -86,7 +86,7 @@ export function useDeleteInstance() {
   });
 }
 
-/** Zuletzt gespielte Instanz (Fallback: zuletzt erstellte). */
+/** Zuletzt gespielte Instanz (Fallback: zuletzt erstellte; `lastPlayedAt` zeigt, welcher Fall vorliegt). */
 export function pickRecentInstance(instances: Instance[] | undefined): Instance | undefined {
   if (!instances?.length) return undefined;
   return [...instances].sort(
@@ -124,7 +124,8 @@ export function useInstall() {
       setProgress({ instanceId: instance.id, step: instance.loader === "fabric" ? "loader" : "java", done: 0, total: 0 });
       return api.installInstance(instance.id);
     },
-    onSuccess: (_, instance) => toast.success(`${instance.name} ist installiert`),
+    // Beim Spielen folgt gleich der Start; eine Erfolgsmeldung gibt es nur für Reparieren und „Erneut versuchen“.
+    onSuccess: (_, instance) => !useGame.getState().launching[instance.id] && toast.success(`${instance.name} ist bereit`),
     onError: (err, instance) =>
       toast.error(`${instance.name} konnte nicht installiert werden`, {
         description: err.message,
@@ -155,14 +156,44 @@ export function useLaunch() {
       return api.launchInstance(instance.id, offlineName, javaPath, memoryMb);
     },
     onSuccess: (_, instance) => {
-      qc.setQueryData<InstanceStatus>(instanceKeys.status(instance.id), (s) => s && { ...s, running: true });
+      // Ohne vorherigen Status (Abfrage fehlgeschlagen) gilt die Instanz jetzt als installiert und laufend.
+      qc.setQueryData<InstanceStatus>(instanceKeys.status(instance.id), (s) => ({ installed: true, ...s, running: true }));
       return qc.invalidateQueries({ queryKey: instanceKeys.all });
     },
     onError: (err) =>
-      useSettings.getState().offlineName
-        ? toast.error(err.message)
-        : toast.error(err.message, { duration: 10_000, action: { label: "Spielername festlegen", onClick: () => navigate("/account") } }),
+      useSettings.getState().offlineName ? toast.error(err.message) : missingNameToast(err.message, navigate),
   });
+}
+
+function missingNameToast(message: string, navigate: NavigateFunction) {
+  toast.error(message, { duration: 10_000, action: { label: "Spielername festlegen", onClick: () => navigate("/account") } });
+}
+
+/**
+ * „Spielen“: prüft den Spielernamen, installiert bei Bedarf und startet danach.
+ * Fehler melden `useInstall`/`useLaunch` selbst; der Knopf fällt dann in den Ausgangszustand zurück.
+ */
+export function usePlay() {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const install = useInstall();
+  const launch = useLaunch();
+  return async (instance: Instance, onLaunched?: () => void) => {
+    const game = useGame.getState();
+    if (game.launching[instance.id] || game.installs[instance.id]) return;
+    if (!useSettings.getState().offlineName) return missingNameToast("Leg zuerst einen Spielernamen fest.", navigate);
+    game.setLaunching(instance.id, true);
+    try {
+      // Fehlt der Status (Abfrage fehlgeschlagen), wird wie „nicht installiert“ vorbereitet.
+      if (!qc.getQueryData<InstanceStatus>(instanceKeys.status(instance.id))?.installed) await install.mutateAsync(instance);
+      await launch.mutateAsync(instance);
+      onLaunched?.();
+    } catch {
+      // Toast kommt aus useInstall/useLaunch.
+    } finally {
+      game.setLaunching(instance.id, false);
+    }
+  };
 }
 
 // Vom Nutzer gestoppte Instanzen: deren Exit-Code (unter Windows 1) ist kein Fehler.
