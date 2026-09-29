@@ -19,8 +19,9 @@ import { SaveTemplateDialog } from "@/components/SaveTemplateDialog";
 import { useDeleteInstance, useInstances } from "@/hooks/useInstances";
 import { relativeTime } from "@/lib/format";
 import { LOADER_LABELS, type Instance } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
-const GRID = "grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-4";
+const GRID = "grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] xl:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-4";
 
 function InstanceCard({ inst, onTemplate, onDelete }: { inst: Instance; onTemplate: () => void; onDelete: () => void }) {
   const percent = useInstallPercent(inst);
@@ -34,14 +35,14 @@ function InstanceCard({ inst, onTemplate, onDelete }: { inst: Instance; onTempla
           <Link to={`/instances/${inst.id}`} title={inst.name} className="block truncate font-medium outline-none after:absolute after:inset-0 after:rounded-xl">
             {inst.name}
           </Link>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+          <p className="mt-0.5 truncate text-xs text-muted-foreground" title={`${LOADER_LABELS[inst.loader]} ${inst.minecraftVersion}`}>
             {LOADER_LABELS[inst.loader]} {inst.minecraftVersion}
             {contents > 0 && ` · ${contents} ${contents === 1 ? "Inhalt" : "Inhalte"}`}
           </p>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label={`Mehr zu ${inst.name}`} className="relative -mt-1 -mr-1.5 text-muted-foreground">
+            <Button variant="ghost" size="icon-sm" aria-label={`Mehr zu ${inst.name}`} className="relative -mt-1 shrink-0 text-muted-foreground">
               <Ellipsis aria-hidden />
             </Button>
           </DropdownMenuTrigger>
@@ -102,7 +103,8 @@ export function InstancesPage() {
               </div>
             )}
             <NewInstanceDialog primary>
-              <Button aria-keyshortcuts="Control+N">
+              {/* Im Leerzustand trägt der Leerzustand die eine Aktion; der Dialog bleibt für Strg+N und Drag & Drop da. */}
+              <Button aria-keyshortcuts="Control+N" className={cn(instances?.length === 0 && "hidden")}>
                 <Plus aria-hidden /> Neu
               </Button>
             </NewInstanceDialog>

@@ -95,7 +95,7 @@ export function HomePage() {
               </Link>
             </Button>
           </div>
-          <ul className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
+          <ul className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] xl:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
             {others.slice(0, 6).map((inst) => (
               <li key={inst.id} className="min-w-0">
                 <Link
@@ -107,7 +107,7 @@ export function HomePage() {
                     <span className="block truncate text-sm font-medium" title={inst.name}>
                       {inst.name}
                     </span>
-                    <span className="block truncate text-xs text-muted-foreground">
+                    <span className="block truncate text-xs text-muted-foreground" title={`${LOADER_LABELS[inst.loader]} ${inst.minecraftVersion} · ${relativeTime(inst.lastPlayedAt)}`}>
                       {LOADER_LABELS[inst.loader]} {inst.minecraftVersion} · {relativeTime(inst.lastPlayedAt)}
                     </span>
                   </span>
