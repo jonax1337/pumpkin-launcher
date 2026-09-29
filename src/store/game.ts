@@ -12,9 +12,10 @@ export interface LogLine {
 const toneOf = ({ stream, line }: LogPayload): LogLine["tone"] =>
   stream === "stderr" || /\/(ERROR|FATAL)\]/.test(line) ? "error" : /\/WARN\]/.test(line) ? "warn" : "normal";
 
-// Log-Events kommen zeilenweise; je Frame gebündelt anhängen statt pro Zeile Array kopieren und rendern.
+// Log-Events kommen zeilenweise; gebündelt anhängen statt pro Zeile Array kopieren und rendern.
+// Timer statt requestAnimationFrame: rAF pausiert bei minimiertem Fenster, dann wüchse `pending` unbegrenzt.
 let pending: LogPayload[] = [];
-let frame = 0;
+let timer: ReturnType<typeof setTimeout> | undefined;
 
 // ponytail: Log-Puffer auf die letzten MAX_LOG_LINES Zeilen je Instanz begrenzt; für vollständige Logs Datei im Backend lesen.
 export const MAX_LOG_LINES = 2000;
@@ -56,10 +57,10 @@ export const useGame = create<GameState>()((set) => ({
     }),
   appendLog: (p) => {
     pending.push(p);
-    frame ||= requestAnimationFrame(() => {
+    timer ??= setTimeout(() => {
       const batch = pending;
       pending = [];
-      frame = 0;
+      timer = undefined;
       set((s) => {
         const logs = { ...s.logs };
         const added: Record<string, LogLine[]> = {};
@@ -67,9 +68,12 @@ export const useGame = create<GameState>()((set) => ({
         for (const [id, items] of Object.entries(added)) logs[id] = [...(logs[id] ?? []), ...items].slice(-MAX_LOG_LINES);
         return { logs };
       });
-    });
+    }, 50);
   },
-  clearLog: (id) => set((s) => ({ logs: { ...s.logs, [id]: [] } })),
+  clearLog: (id) => {
+    pending = pending.filter((p) => p.instanceId !== id);
+    set((s) => ({ logs: { ...s.logs, [id]: [] } }));
+  },
   setCrash: (exit) => set((s) => ({ crashes: { ...s.crashes, [exit.instanceId]: exit } })),
   clearCrash: (id) =>
     set((s) => {
