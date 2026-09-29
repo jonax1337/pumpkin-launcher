@@ -15,7 +15,7 @@ use crate::services::{java, Dirs};
 /// Name des Tauri-Events, über das `InstallProgress` ans Frontend geht.
 pub const INSTALL_PROGRESS_EVENT: &str = "install-progress";
 
-/// Benannte Installationsschritte in Ausführungsreihenfolge (`Loader`/`Mods` folgen mit den Mod-Loadern).
+/// Benannte Installationsschritte in Ausführungsreihenfolge (`Loader`/`Mods` nur mit Mod-Loader).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum InstallStep {
@@ -24,9 +24,7 @@ pub enum InstallStep {
     Libraries,
     Natives,
     Assets,
-    #[allow(dead_code)]
     Loader,
-    #[allow(dead_code)]
     Mods,
 }
 
