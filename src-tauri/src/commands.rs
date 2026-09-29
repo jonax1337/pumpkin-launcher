@@ -150,6 +150,7 @@ pub async fn instance_launch(
     instance_id: String,
     username: String,
     java_path: Option<String>,
+    default_memory_mb: Option<u32>,
 ) -> AppResult<u32> {
     let mut instance = state.instances.get(&instance_id)?;
     require_vanilla(&instance)?;
@@ -169,7 +170,7 @@ pub async fn instance_launch(
             dirs: &state.dirs,
             instance_id: &instance_id,
             account: &account,
-            memory_mb: instance.memory_mb.unwrap_or(launch::DEFAULT_MEMORY_MB),
+            memory_mb: instance.memory_mb.or(default_memory_mb).unwrap_or(launch::DEFAULT_MEMORY_MB),
             extra_jvm_args: &instance.jvm_args,
         },
         &Env::current(),

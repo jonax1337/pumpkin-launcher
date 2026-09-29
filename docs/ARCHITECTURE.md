@@ -29,9 +29,15 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `state.rs` | `AppState` (Manager): je ein `JsonStore` für Instanzen und Presets plus storeübergreifende Logik (`resolve_preset`, `apply_preset`, `delete_preset`) |
 | `commands.rs` | Dünne Commands: Eingabe prüfen, an `AppState`/Store delegieren, loggen |
 | `services/store.rs` | Generischer `JsonStore<T>`: in-memory + atomares Schreiben (tmp + rename) |
-| `services/auth.rs` | `AuthProvider`-Trait, `MicrosoftAuth`-Stub, Offline-Account |
-| `services/download.rs` | `Downloader`-Trait (Stub), `InstallStep`, `InstallProgress`, Event `install-progress` |
-| `services/launch.rs` | `Launcher`-Trait, Stub |
+| `services/mod.rs` | `Dirs`: Verzeichnislayout (geteilter Cache, Instanz-Verzeichnisse) |
+| `services/auth.rs` | `AuthProvider`-Trait, `MicrosoftAuth`-Stub, Offline-Account (UUID nach `OfflinePlayer:<name>`, MD5/v3) |
+| `services/mojang.rs` | serde-Formate von piston-meta: Version-Manifest v2, Versions-JSON, Asset-Index |
+| `services/rules.rs` | Mojang-`rules` (os/arch/features), Arch-Filter für Natives-Classifier |
+| `services/download.rs` | HTTP-Client, SHA-1-geprüfte Downloads mit Retry, 16 parallel (`buffer_unordered`) |
+| `services/java.rs` | Mojangs Java-Runtime (`java-runtime/…/all.json`, Komponente aus `javaVersion.component`) |
+| `services/install.rs` | Installation in Schritten, `InstallStep`, `InstallProgress`, Event `install-progress` |
+| `services/launch.rs` | Classpath, JVM-/Game-Args mit `${…}`-Ersetzung, Prozessstart, Log-Streaming |
+| `services/gamelog.rs` | log4j-XML auf stdout (Mojangs Logging-Config) → lesbare Zeilen |
 
 ### Persistenz
 
@@ -64,6 +70,21 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `update_preset` | `preset: Preset` | `Preset` |
 | `delete_preset` | `id` | – |
 | `apply_preset` | `instanceId`, `presetId` | `Instance` |
+| `versions_list` | – | `VersionEntry[]` (`id`, `type`, `url`, `sha1`, `releaseTime`) |
+| `instance_install` | `instanceId` | – (Events `install-progress`) |
+| `instance_launch` | `instanceId`, `username` (Offline) | PID (`number`) |
+| `instance_kill` | `instanceId` | – (Event `instance-exit` folgt) |
+
+Events: `install-progress` `{ instanceId, step, done, total }` · `instance-log` `{ instanceId, stream: "stdout"|"stderr", line }` · `instance-exit` `{ instanceId, code: number|null }`. Installation und Start gibt es vorerst nur für `loader = vanilla`.
+
+### Verzeichnisse (App-Datenverzeichnis)
+
+```
+versions/<id>/<id>.json|.jar   libraries/…   assets/{indexes,objects,log_configs}/   runtime/<komponente>/
+instances/<instanz-id>/minecraft/ (Spielverzeichnis)   instances/<instanz-id>/natives/
+```
+
+Headless-Test ohne UI: `cargo run --example launch -- [version|1.21] [spielername] [sekunden]` (in `src-tauri/`).
 
 ### Presets
 
@@ -78,14 +99,14 @@ Ein Preset bündelt Mods, Spieleinstellungen (`options.txt`-Schlüssel), JVM-Arg
 
 ### Installation und Mod-Cache (geplant, Vertrag steht)
 
-- Installation läuft in benannten Schritten (`InstallStep`: `java → client → libraries → natives → assets → loader → mods`). Jeder Fortschritt geht als Tauri-Event `install-progress` mit `{ instanceId, step, done, total }` ans Frontend.
+- Installation läuft in benannten Schritten (`InstallStep`: `java → client → libraries → natives → assets → loader → mods`; Vanilla bis `assets` umgesetzt). Jeder Fortschritt geht als Tauri-Event `install-progress` mit `{ instanceId, step, done, total }` ans Frontend.
 - Mod-JARs liegen einmalig in einem globalen, per SHA-1 adressierten Cache (`<app_data>/cache/mods/<sha1>.jar`). Fabric bindet sie per `-Dfabric.addMods=@<datei>` ein, die übrigen Loader per Hardlink (Fallback Kopie) nach `mods/`.
 
 ### Noch nicht implementiert (Stubs)
 
 - **auth**: Microsoft-OAuth (Auth-Code + PKCE, **eigene** Azure-App mit Mojang-Freigabe) → Xbox Live → XSTS → Minecraft-Token. Refresh-Tokens gehören in den OS-Keyring (`keyring`-Crate), nie in JSON.
-- **download**: Mojang-Version-Manifest, Java (Temurin), Libraries, Natives, Assets, Loader, Mods über die Modrinth-API (CurseForge später hinter derselben Schnittstelle).
-- **launch**: Classpath/Argumente bauen, Java-Prozess starten, Logs streamen.
+- **Mod-Loader und Mods**: Fabric/Quilt/Forge/NeoForge, Mods über die Modrinth-API (CurseForge später hinter derselben Schnittstelle).
+- **Accounts**: kein Account-Store; `instance_launch` nimmt vorerst den Offline-Namen direkt.
 
 Die Traits nutzen `async fn` in Traits (nicht `dyn`-fähig); wird Laufzeit-Polymorphie nötig, auf Enum-Dispatch oder `async-trait` umstellen.
 

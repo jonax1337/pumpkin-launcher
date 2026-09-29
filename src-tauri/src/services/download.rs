@@ -61,7 +61,9 @@ async fn download_once(client: &reqwest::Client, job: &Job) -> AppResult<()> {
         tokio::fs::create_dir_all(parent).await?;
     }
     // Erst vollständig schreiben, dann umbenennen: ein Abbruch hinterlässt keine halbe Datei.
-    let tmp = job.path.with_extension("part");
+    // `.part` anhängen statt Endung ersetzen: `java.exe` und `java.dll` bekämen sonst dieselbe Temp-Datei.
+    let mut tmp = job.path.clone().into_os_string();
+    tmp.push(".part");
     tokio::fs::write(&tmp, &bytes).await?;
     tokio::fs::rename(&tmp, &job.path).await?;
     Ok(())
