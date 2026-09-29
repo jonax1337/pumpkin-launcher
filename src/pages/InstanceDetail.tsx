@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Blocks, Check, ExternalLink, Loader2, MoreHorizontal, Plus, RefreshCw, Search, Trash2, Wrench } from "lucide-react";
+import { ArrowLeft, Blocks, BookmarkPlus, Check, ChevronRight, Clock, ExternalLink, Loader2, MoreHorizontal, Plus, RefreshCw, Search, Trash2, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BlockTile, ConfirmDialog, EmptyState, ErrorNote, LoaderBadge } from "@/components/common";
 import { LogConsole, PlayControl, StatusBadge } from "@/components/game";
+import { SaveTemplateDialog } from "@/components/SaveTemplateDialog";
 import { AddContentSheet, ContentIcon, IRIS_PROJECT_ID, KIND_LABELS, kindsFor } from "@/components/ContentBrowser";
 import { useContentInstall, useContentState, useModUpdates, useProjects, withTarget } from "@/hooks/useContent";
 import { api } from "@/lib/api";
@@ -31,47 +32,10 @@ import {
   useUpdateInstance,
   useUpdateMods,
 } from "@/hooks/useInstances";
-import { formatDate, formatMemory, relativeTime } from "@/lib/format";
+import { formatMemory, relativeTime } from "@/lib/format";
 import { INSTALLABLE_LOADERS, type Instance, type Mod, type ModKind } from "@/lib/types";
 import { useGame } from "@/store/game";
 import { useSettings } from "@/store/settings";
-
-function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="rounded-xl border bg-card/60 p-4">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className={mono ? "mt-1 font-mono text-lg" : "mt-1 text-lg font-medium"}>{value}</p>
-    </div>
-  );
-}
-
-function OverviewTab({ instance }: { instance: Instance }) {
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Minecraft" value={instance.minecraftVersion} mono />
-        <Stat label="Loader-Version" value={instance.loaderVersion ?? "–"} mono />
-        <Stat label="Mods" value={`${instance.mods.filter((m) => m.enabled).length} / ${instance.mods.length} aktiv`} />
-        <Stat label="Arbeitsspeicher" value={formatMemory(instance.memoryMb)} />
-      </div>
-      <Card className="bg-card/60">
-        <CardHeader>
-          <CardTitle>Details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid grid-cols-[160px_1fr] gap-y-3 text-sm">
-            <dt className="text-muted-foreground">Erstellt</dt>
-            <dd>{formatDate(instance.createdAt)}</dd>
-            <dt className="text-muted-foreground">Zuletzt gespielt</dt>
-            <dd>{relativeTime(instance.lastPlayedAt)}</dd>
-            <dt className="text-muted-foreground">JVM-Argumente</dt>
-            <dd className="font-mono text-xs break-all">{instance.jvmArgs.join(" ") || "–"}</dd>
-          </dl>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
 
 type Row = { mod: Mod; owners: string[] };
 
@@ -165,7 +129,7 @@ function ContentTab({ instance, onAdd }: { instance: Instance; onAdd: () => void
         <Button onClick={onAdd}><Plus aria-hidden /> Hinzufügen</Button>
       </div>
 
-      <ul className="divide-y overflow-hidden rounded-xl border bg-card/60">
+      <ul className="divide-y overflow-hidden rounded-xl border bg-card">
         {visible.map(({ mod, owners }) => {
           const project = projects.data?.get(projectOf(mod) ?? "");
           const available = updateFor.get(mod.id);
@@ -190,7 +154,7 @@ function ContentTab({ instance, onAdd }: { instance: Instance; onAdd: () => void
                   </button>
                 </Badge>
               )}
-              <span className="hidden w-24 truncate text-right font-mono text-xs text-muted-foreground sm:block" title={mod.version}>{mod.version}</span>
+              <span className="hidden w-24 truncate text-right text-xs tabular-nums text-muted-foreground sm:block" title={mod.version}>{mod.version}</span>
               <Switch
                 checked={mod.enabled}
                 aria-label={`${title(mod)} ${mod.enabled ? "ausschalten" : "einschalten"}`}
@@ -241,7 +205,7 @@ function RepairCard({ instance }: { instance: Instance }) {
   const busy = useGame((s) => !!s.installs[instance.id] || !!s.launching[instance.id]);
   if (!INSTALLABLE_LOADERS.includes(instance.loader)) return null;
   return (
-    <Card className="bg-card/60">
+    <Card className="bg-card">
       <CardHeader>
         <CardTitle>Reparieren</CardTitle>
         <CardDescription>
@@ -263,10 +227,7 @@ function SettingsTab({ instance }: { instance: Instance }) {
   const [customMemory, setCustomMemory] = useState(instance.memoryMb != null);
   const [memory, setMemory] = useState(instance.memoryMb ?? defaultMemory);
   const [jvmArgs, setJvmArgs] = useState(instance.jvmArgs.join(" "));
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const update = useUpdateInstance();
-  const del = useDeleteInstance();
-  const navigate = useNavigate();
 
   function save() {
     update.mutate({
@@ -279,7 +240,7 @@ function SettingsTab({ instance }: { instance: Instance }) {
 
   return (
     <div className="space-y-6">
-      <Card className="bg-card/60">
+      <Card className="bg-card">
         <CardHeader>
           <CardTitle>Allgemein</CardTitle>
           <CardDescription>Einstellungen gelten nur für diese Instanz.</CardDescription>
@@ -304,21 +265,27 @@ function SettingsTab({ instance }: { instance: Instance }) {
                 onValueChange={([v]) => setMemory(v)}
                 disabled={!customMemory}
               />
-              <span className="w-20 text-right font-mono text-sm">
+              <span className="w-20 text-right text-sm tabular-nums">
                 {formatMemory(customMemory ? memory : defaultMemory)}
               </span>
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="inst-jvm">JVM-Argumente</Label>
-            <Textarea
-              id="inst-jvm"
-              value={jvmArgs}
-              onChange={(e) => setJvmArgs(e.target.value)}
-              className="font-mono text-xs"
-              placeholder="-XX:+UseG1GC"
-            />
-          </div>
+          <details className="group" open={jvmArgs ? true : undefined}>
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+              <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden /> Erweitert
+            </summary>
+            <div className="mt-4 space-y-2">
+              <Label htmlFor="inst-jvm">Java-Startoptionen</Label>
+              <Textarea
+                id="inst-jvm"
+                value={jvmArgs}
+                onChange={(e) => setJvmArgs(e.target.value)}
+                className="font-mono text-xs"
+                placeholder="-XX:+UseG1GC"
+              />
+              <p className="text-xs text-muted-foreground">Nur ändern, wenn du weißt, was die Optionen bewirken.</p>
+            </div>
+          </details>
           <div className="flex justify-end">
             <Button onClick={save} disabled={update.isPending}>
               {update.isSuccess && !update.isPending ? <Check aria-hidden /> : null}
@@ -330,25 +297,6 @@ function SettingsTab({ instance }: { instance: Instance }) {
 
       <RepairCard instance={instance} />
 
-      <Card className="border-destructive/30 bg-destructive/5 ring-destructive/20">
-        <CardHeader>
-          <CardTitle>Instanz löschen</CardTitle>
-          <CardDescription>Entfernt die Instanz inklusive Mods und Welten.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button variant="destructive" onClick={() => setConfirmDelete(true)}>
-            <Trash2 aria-hidden /> Löschen
-          </Button>
-        </CardContent>
-      </Card>
-      <ConfirmDialog
-        open={confirmDelete}
-        onOpenChange={setConfirmDelete}
-        title={`„${instance.name}" löschen?`}
-        description="Das lässt sich nicht rückgängig machen."
-        pending={del.isPending}
-        onConfirm={() => del.mutate(instance.id, { onSuccess: () => navigate("/instances") })}
-      />
     </div>
   );
 }
@@ -358,9 +306,13 @@ export function InstanceDetailPage() {
   const { data: instance, isLoading, error } = useInstance(id);
   // Tab in der URL, damit z. B. der Absturz-Toast direkt die Konsole öffnen kann.
   const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") ?? "overview";
+  // Ältere Links (overview/mods) landen bei den Inhalten.
+  const tab = ["content", "console", "settings"].find((t) => t === params.get("tab")) ?? "content";
   const setTab = (value: string) => setParams({ tab: value }, { replace: true });
   const [adding, setAdding] = useState(false);
+  const [menuAction, setMenuAction] = useState<"template" | "delete" | null>(null);
+  const del = useDeleteInstance();
+  const navigate = useNavigate();
   // Gleiche Query wie im Inhalte-Tab: der Kopf zeigt das Ergebnis, sobald der Tab einmal geprüft hat.
   const updates = useModUpdates(id ?? "", false);
 
@@ -368,7 +320,7 @@ export function InstanceDetailPage() {
     <div>
       <Button variant="ghost" size="sm" asChild className="mb-6 -ml-2 text-muted-foreground">
         <Link to="/instances">
-          <ArrowLeft aria-hidden /> Instanzen
+          <ArrowLeft aria-hidden /> Bibliothek
         </Link>
       </Button>
 
@@ -393,7 +345,12 @@ export function InstanceDetailPage() {
               <div className="mt-2 flex items-center gap-3 text-sm text-muted-foreground">
                 <StatusBadge instanceId={instance.id} />
                 <LoaderBadge loader={instance.loader} />
-                <span className="font-mono">{instance.minecraftVersion}</span>
+                <span>{instance.minecraftVersion}</span>
+                {instance.lastPlayedAt != null && (
+                  <span className="hidden items-center gap-1.5 sm:inline-flex">
+                    <Clock className="size-3.5" aria-hidden /> {relativeTime(instance.lastPlayedAt)}
+                  </span>
+                )}
                 {!!updates.data?.length && (
                   <button type="button" className="text-primary underline-offset-4 hover:underline" onClick={() => setTab("content")}>
                     {updates.data.length === 1 ? "1 Update" : `${updates.data.length} Updates`}
@@ -401,30 +358,52 @@ export function InstanceDetailPage() {
                 )}
               </div>
             </div>
-            <PlayControl instance={instance} onLaunched={() => setTab("console")} />
+            <div className="flex items-start gap-2">
+              <PlayControl instance={instance} onLaunched={() => setTab("console")} />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label={`Mehr zu ${instance.name}`}>
+                    <MoreHorizontal aria-hidden />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => setMenuAction("template")}>
+                    <BookmarkPlus aria-hidden /> Als Vorlage speichern…
+                  </DropdownMenuItem>
+                  <DropdownMenuItem variant="destructive" onSelect={() => setMenuAction("delete")}>
+                    <Trash2 aria-hidden /> Löschen…
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </header>
 
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="mb-4">
-              <TabsTrigger value="overview">Übersicht</TabsTrigger>
               <TabsTrigger value="content">Inhalte ({instance.mods.length})</TabsTrigger>
-              <TabsTrigger value="console">Konsole</TabsTrigger>
+              <TabsTrigger value="console">Protokoll</TabsTrigger>
               <TabsTrigger value="settings">Einstellungen</TabsTrigger>
             </TabsList>
             <TabsContent value="console">
               <LogConsole instanceId={instance.id} />
             </TabsContent>
-            <TabsContent value="overview">
-              <OverviewTab instance={instance} />
-            </TabsContent>
             <TabsContent value="content">
               <ContentTab instance={instance} onAdd={() => setAdding(true)} />
             </TabsContent>
             <TabsContent value="settings">
-              <SettingsTab key={`${instance.presetId}-${instance.memoryMb}-${instance.jvmArgs.join()}`} instance={instance} />
+              <SettingsTab key={`${instance.memoryMb}-${instance.jvmArgs.join()}`} instance={instance} />
             </TabsContent>
           </Tabs>
           <AddContentSheet instance={instance} open={adding} onOpenChange={setAdding} />
+          <SaveTemplateDialog instance={menuAction === "template" ? instance : null} onClose={() => setMenuAction(null)} />
+          <ConfirmDialog
+            open={menuAction === "delete"}
+            onOpenChange={(o) => !o && setMenuAction(null)}
+            title={`„${instance.name}" löschen?`}
+            description="Die Instanz samt Mods und Welten wird entfernt. Das lässt sich nicht rückgängig machen."
+            pending={del.isPending}
+            onConfirm={() => del.mutate(instance.id, { onSuccess: () => navigate("/instances") })}
+          />
         </>
       )}
     </div>

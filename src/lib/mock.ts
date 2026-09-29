@@ -1,4 +1,4 @@
-import type { Instance, Mod, ModKind, Modpack, NewsItem, Preset, VersionEntry } from "@/lib/types";
+import type { Instance, Mod, ModKind, VersionEntry } from "@/lib/types";
 import type { CatalogType, ContentProgress, ContentProject, ContentSearch, ContentVersion, ModUpdate } from "@/lib/modrinth";
 
 const DAY = 86_400_000;
@@ -66,7 +66,6 @@ export function initialInstances(): Instance[] {
       minecraftVersion: "1.21.4",
       loader: "fabric",
       loaderVersion: "0.16.10",
-      presetId: "preset-performance",
       modpack: null,
       memoryMb: 6144,
       jvmArgs: ["-XX:+UseG1GC", "-XX:MaxGCPauseMillis=50"],
@@ -80,7 +79,6 @@ export function initialInstances(): Instance[] {
       minecraftVersion: "1.20.1",
       loader: "forge",
       loaderVersion: "47.3.0",
-      presetId: null,
       modpack: null,
       memoryMb: 8192,
       jvmArgs: [],
@@ -94,7 +92,6 @@ export function initialInstances(): Instance[] {
       minecraftVersion: "1.21.5",
       loader: "vanilla",
       loaderVersion: null,
-      presetId: null,
       modpack: null,
       memoryMb: null,
       jvmArgs: [],
@@ -104,94 +101,6 @@ export function initialInstances(): Instance[] {
     },
   ];
 }
-
-export function initialPresets(): Preset[] {
-  return [
-    {
-      id: "preset-performance",
-      name: "Performance",
-      description: "Sodium, Lithium und FerriteCore mit G1GC-Tuning für flüssige Frameraten.",
-      inheritsFrom: null,
-      excludeMods: [],
-      mods: ["sodium", "lithium", "ferritecore"].map(byId),
-      jvmArgs: ["-XX:+UseG1GC", "-XX:MaxGCPauseMillis=50", "-XX:+ParallelRefProcEnabled"],
-      memoryMb: 6144,
-      gameSettings: { renderDistance: "16", maxFps: "240", graphicsMode: "fancy" },
-      createdAt: now - 60 * DAY,
-    },
-    {
-      id: "preset-qol",
-      name: "Komfort",
-      description: "Minimap, AppleSkin und Mod Menu – kleine Helfer für den Alltag.",
-      inheritsFrom: null,
-      excludeMods: [],
-      mods: ["xaeros-minimap", "appleskin", "modmenu"].map(byId),
-      jvmArgs: [],
-      memoryMb: null,
-      gameSettings: { guiScale: "3" },
-      createdAt: now - 20 * DAY,
-    },
-  ];
-}
-
-export const MOCK_MODPACKS: Modpack[] = [
-  {
-    id: "pack-cobblemon",
-    name: "Cobblemon Official",
-    description: "Fangen, trainieren und kämpfen – Kreaturen-Abenteuer in der Blockwelt.",
-    minecraftVersion: "1.21.1",
-    loader: "fabric",
-    mods: ["sodium", "modmenu", "appleskin"].map(byId),
-  },
-  {
-    id: "pack-create-above",
-    name: "Create: Above and Beyond",
-    description: "Automatisierung und Technik rund um Create – mit Questbuch.",
-    minecraftVersion: "1.16.5",
-    loader: "forge",
-    mods: ["create", "jei"].map(byId),
-  },
-  {
-    id: "pack-fabulously",
-    name: "Fabulously Optimized",
-    description: "Leichtgewichtiges Performance-Paket, nah am Vanilla-Gefühl.",
-    minecraftVersion: "1.21.4",
-    loader: "fabric",
-    mods: ["sodium", "lithium", "iris", "ferritecore", "modmenu"].map(byId),
-  },
-  {
-    id: "pack-atm",
-    name: "All the Mods 10",
-    description: "Hunderte Mods, Magie und Technik – für lange Nächte.",
-    minecraftVersion: "1.21.1",
-    loader: "neoforge",
-    mods: ["jei", "create", "xaeros-minimap"].map(byId),
-  },
-];
-
-export const MOCK_NEWS: NewsItem[] = [
-  {
-    id: "n1",
-    title: "Minecraft 1.21.5 ist da",
-    excerpt: "Neue Tier-Varianten, fallende Blätter und überarbeitete Spawn-Eier.",
-    tag: "Update",
-    date: now - 2 * DAY,
-  },
-  {
-    id: "n2",
-    title: "Presets: Setups in Sekunden",
-    excerpt: "Mods, JVM-Argumente und RAM als Vorlage speichern und auf Instanzen anwenden.",
-    tag: "Launcher",
-    date: now - 6 * DAY,
-  },
-  {
-    id: "n3",
-    title: "Modrinth-Anbindung in Arbeit",
-    excerpt: "Bald durchsuchst und installierst du Mods direkt aus dem Launcher.",
-    tag: "Vorschau",
-    date: now - 12 * DAY,
-  },
-];
 
 // Nur für den Browser-Modus ohne Tauri (siehe api.ts).
 export const MOCK_VERSIONS: VersionEntry[] = (

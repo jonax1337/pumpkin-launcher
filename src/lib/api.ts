@@ -11,8 +11,7 @@ import type {
   LogPayload,
   ModLoader,
   NewInstance,
-  NewPreset,
-  Preset,
+  Template,
   VersionEntry,
 } from "@/lib/types";
 
@@ -45,7 +44,7 @@ const mockData = tauri ? null : await import("@/lib/mock");
 
 const db = {
   instances: mockData?.initialInstances() ?? [],
-  presets: mockData?.initialPresets() ?? [],
+  templates: [] as { template: Template; instance: Instance }[],
   installed: new Set<string>(),
   running: new Map<string, number>(),
 };
@@ -74,30 +73,6 @@ function findInstance(id: string): Instance {
   return inst;
 }
 
-function findPreset(id: string): Preset {
-  const preset = db.presets.find((p) => p.id === id);
-  if (!preset) throw new Error(`Preset "${id}" nicht gefunden`);
-  return preset;
-}
-
-/** Spiegel von `Preset::resolve` im Backend: Kind gewinnt, `excludeMods` filtert Geerbtes. */
-function resolvePreset(preset: Preset, seen = new Set<string>()): Preset {
-  if (!preset.inheritsFrom) return preset;
-  if (seen.has(preset.id)) throw new Error(`Preset-Vererbung ist zyklisch bei '${preset.id}'`);
-  const parent = resolvePreset(findPreset(preset.inheritsFrom), seen.add(preset.id));
-  const own = new Set(preset.mods.map((m) => m.id));
-  return {
-    ...preset,
-    mods: [
-      ...parent.mods.filter((m) => !own.has(m.id) && !preset.excludeMods.includes(m.id)),
-      ...preset.mods,
-    ],
-    gameSettings: { ...parent.gameSettings, ...preset.gameSettings },
-    jvmArgs: preset.jvmArgs.length ? preset.jvmArgs : parent.jvmArgs,
-    memoryMb: preset.memoryMb ?? parent.memoryMb,
-  };
-}
-
 const mock = {
   async listInstances() {
     await delay();
@@ -112,7 +87,6 @@ const mock = {
     const inst: Instance = {
       ...input,
       id: newId("inst"),
-      presetId: null,
       modpack: null,
       memoryMb: null,
       jvmArgs: [],
@@ -134,45 +108,35 @@ const mock = {
     findInstance(id);
     db.instances = db.instances.filter((i) => i.id !== id);
   },
-  async listPresets() {
-    await delay();
-    return clone(db.presets);
-  },
-  async createPreset(input: NewPreset) {
-    await delay();
-    const preset: Preset = { ...clone(input), id: newId("preset"), createdAt: Date.now() };
-    resolvePreset(preset);
-    db.presets.push(preset);
-    return clone(preset);
-  },
-  async updatePreset(preset: Preset) {
-    await delay();
-    findPreset(preset.id);
-    resolvePreset(preset);
-    db.presets = db.presets.map((p) => (p.id === preset.id ? clone(preset) : p));
-    return clone(preset);
-  },
-  async deletePreset(id: string) {
-    await delay();
-    findPreset(id);
-    const child = db.presets.find((p) => p.inheritsFrom === id);
-    if (child) throw new Error(`Preset '${child.name}' erbt noch davon`);
-    db.presets = db.presets.filter((p) => p.id !== id);
-  },
-  async applyPreset(instanceId: string, presetId: string) {
-    await delay();
-    const inst = findInstance(instanceId);
-    const preset = resolvePreset(findPreset(presetId));
-    const known = new Set(inst.mods.map((m) => m.id));
-    const updated: Instance = {
-      ...inst,
-      presetId,
-      memoryMb: preset.memoryMb ?? inst.memoryMb,
-      jvmArgs: preset.jvmArgs,
-      mods: [...inst.mods, ...clone(preset.mods).filter((m) => !known.has(m.id))],
+  async templateSave(instanceId: string, name: string) {
+    await delay(600);
+    const instance = clone(findInstance(instanceId));
+    const template: Template = {
+      id: newId("tpl"),
+      name,
+      minecraftVersion: instance.minecraftVersion,
+      loader: instance.loader,
+      modCount: instance.mods.filter((m) => m.enabled).length,
+      createdAt: Date.now(),
     };
-    db.instances = db.instances.map((i) => (i.id === instanceId ? updated : i));
-    return clone(updated);
+    db.templates.push({ template, instance });
+    return clone(template);
+  },
+  async templateList() {
+    await delay();
+    return db.templates.map((t) => clone(t.template));
+  },
+  async templateDelete(id: string) {
+    await delay();
+    db.templates = db.templates.filter((t) => t.template.id !== id);
+  },
+  async templateCreateInstance(templateId: string, name: string) {
+    await delay(800);
+    const found = db.templates.find((t) => t.template.id === templateId);
+    if (!found) throw new Error("Die Vorlage gibt es nicht mehr");
+    const inst: Instance = { ...clone(found.instance), id: newId("inst"), name, createdAt: Date.now(), lastPlayedAt: null };
+    db.instances.push(inst);
+    return clone(inst);
   },
 };
 
@@ -266,18 +230,12 @@ export const api = {
   deleteInstance: (id: string): Promise<void> =>
     tauri ? call("delete_instance", { id }) : mock.deleteInstance(id),
 
-  listPresets: (): Promise<Preset[]> => (tauri ? call("list_presets") : mock.listPresets()),
-  createPreset: (input: NewPreset): Promise<Preset> =>
-    tauri ? call("create_preset", { input }) : mock.createPreset(input),
-  updatePreset: (preset: Preset): Promise<Preset> =>
-    tauri ? call("update_preset", { preset }) : mock.updatePreset(preset),
-  deletePreset: (id: string): Promise<void> =>
-    tauri ? call("delete_preset", { id }) : mock.deletePreset(id),
-
-  applyPreset: (instanceId: string, presetId: string): Promise<Instance> =>
-    tauri
-      ? call("apply_preset", { instanceId, presetId })
-      : mock.applyPreset(instanceId, presetId),
+  templateSave: (instanceId: string, name: string): Promise<Template> =>
+    tauri ? call("template_save", { instanceId, name }) : mock.templateSave(instanceId, name),
+  templateList: (): Promise<Template[]> => (tauri ? call("template_list") : mock.templateList()),
+  templateDelete: (id: string): Promise<void> => (tauri ? call("template_delete", { id }) : mock.templateDelete(id)),
+  templateCreateInstance: (templateId: string, name: string, operationId: string): Promise<Instance> =>
+    tauri ? call("template_create_instance", { templateId, name, operationId }) : mock.templateCreateInstance(templateId, name),
 
   versionsList: (): Promise<VersionEntry[]> => (tauri ? call("versions_list") : mockGame.versionsList()),
   loaderVersions: (loader: ModLoader, mcVersion: string): Promise<LoaderVersion[]> =>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { Ellipsis, LibraryBig, Plus, Search, Trash2 } from "lucide-react";
+import { BookmarkPlus, Ellipsis, LibraryBig, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { BlockTile, ConfirmDialog, EmptyState, ErrorNote, PageHeader } from "@/components/common";
 import { PlayControl } from "@/components/game";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
+import { SaveTemplateDialog } from "@/components/SaveTemplateDialog";
 import { useDeleteInstance, useInstances } from "@/hooks/useInstances";
 import { LOADER_LABELS, type Instance } from "@/lib/types";
 
@@ -20,6 +21,7 @@ export function InstancesPage() {
   const { data: instances, isLoading, error } = useInstances();
   const del = useDeleteInstance();
   const [toDelete, setToDelete] = useState<Instance | null>(null);
+  const [toTemplate, setToTemplate] = useState<Instance | null>(null);
   const [filter, setFilter] = useState("");
   const shown = instances?.filter((i) => i.name.toLowerCase().includes(filter.trim().toLowerCase()));
 
@@ -83,6 +85,9 @@ export function InstancesPage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => setToTemplate(inst)}>
+                      <BookmarkPlus aria-hidden /> Als Vorlage speichern…
+                    </DropdownMenuItem>
                     <DropdownMenuItem variant="destructive" onSelect={() => setToDelete(inst)}>
                       <Trash2 aria-hidden /> Löschen
                     </DropdownMenuItem>
@@ -106,6 +111,7 @@ export function InstancesPage() {
           </li>
         </ul>
       )}
+      <SaveTemplateDialog instance={toTemplate} onClose={() => setToTemplate(null)} />
       <ConfirmDialog
         open={!!toDelete}
         onOpenChange={(o) => !o && setToDelete(null)}
