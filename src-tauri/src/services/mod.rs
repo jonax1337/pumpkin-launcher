@@ -40,7 +40,7 @@ impl Dirs {
         self.root.join("versions").join(id).join(format!("{id}.{ext}"))
     }
 
-    fn instance(&self, instance_id: &str) -> PathBuf {
+    pub fn instance(&self, instance_id: &str) -> PathBuf {
         self.root.join("instances").join(instance_id)
     }
 
