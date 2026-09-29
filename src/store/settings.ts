@@ -23,6 +23,8 @@ interface SettingsState {
   removeAccount: (name: string) => void;
   /** Microsoft-Konto wurde entfernt: war es aktiv, übernimmt der erste Offline-Name. */
   forgetMicrosoft: (id: string) => void;
+  /** Nach dem Laden der Microsoft-Konten: fehlt das aktive, übernimmt der erste Offline-Name. */
+  syncMicrosoft: (ids: string[]) => void;
 }
 
 const defaults = { javaPath: "", memoryMb: null };
@@ -59,6 +61,8 @@ export const useSettings = create<SettingsState>()(
         }),
       forgetMicrosoft: (id) =>
         set((s) => (s.active?.kind === "microsoft" && s.active.id === id ? { active: offline(s.offlineAccounts[0]) } : {})),
+      syncMicrosoft: (ids) =>
+        set((s) => (s.active?.kind === "microsoft" && !ids.includes(s.active.id) ? { active: offline(s.offlineAccounts[0]) } : {})),
     }),
     {
       name: "launcher-settings",

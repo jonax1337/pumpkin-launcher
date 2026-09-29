@@ -203,6 +203,13 @@ const mockGame = {
     db.running.delete(instanceId);
     emit<ExitPayload>("instance-exit", { instanceId, code: null, crashed: false, crashReport: null, logFile: null });
   },
+  /** Lasttest fürs Protokoll: `voxletMock.logBurst("inst-vanilla")` schickt 5000 Zeilen in etwa 1–2 s. */
+  async logBurst(instanceId: string, count = 5000) {
+    for (let i = 0; i < count; i++) {
+      emit<LogPayload>("instance-log", { instanceId, stream: "stdout", line: `[Render thread/${i % 50 ? "INFO" : "WARN"}]: Lastzeile ${i + 1}` });
+      if (i % 100 === 99) await delay(20);
+    }
+  },
   /** Nur zum Vorführen: `voxletMock.crash("inst-survival")` in der Browser-Konsole. */
   crash(instanceId: string) {
     clearInterval(db.running.get(instanceId));
@@ -259,7 +266,7 @@ const mockAccounts = {
   },
 };
 
-if (!tauri) Object.assign(globalThis, { voxletMock: { crash: mockGame.crash } });
+if (!tauri) Object.assign(globalThis, { voxletMock: { crash: mockGame.crash, logBurst: mockGame.logBurst } });
 
 // ---------- Öffentliche API ----------
 

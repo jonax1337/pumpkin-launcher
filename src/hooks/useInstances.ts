@@ -193,6 +193,8 @@ export function useLaunch() {
     onSuccess: (_, instance) => {
       // Ohne vorherigen Status (Abfrage fehlgeschlagen) gilt die Instanz jetzt als installiert und laufend.
       qc.setQueryData<InstanceStatus>(instanceKeys.status(instance.id), (s) => ({ installed: true, ...s, running: true }));
+      // Endet das Spiel sofort, kann instance-exit vor dieser Antwort kommen: echten Status nachladen.
+      void qc.invalidateQueries({ queryKey: instanceKeys.status(instance.id) });
       return qc.invalidateQueries({ queryKey: instanceKeys.all });
     },
     onError: (err) => (useSettings.getState().active ? toast.error(err.message) : missingNameToast(err.message, navigate)),
@@ -200,7 +202,7 @@ export function useLaunch() {
 }
 
 function missingNameToast(message: string, navigate: NavigateFunction) {
-  toast.error(message, { duration: 10_000, action: { label: "Spielername festlegen", onClick: () => navigate("/settings#spielername") } });
+  toast.error(message, { duration: 10_000, action: { label: "Spielername festlegen", onClick: () => navigate("/settings#konten") } });
 }
 
 /**
@@ -275,7 +277,9 @@ export function useGameEvents() {
         }
       }),
       // Das Backend hat Instanzen umgebaut (z. B. Migration): Listen und Details neu laden.
-      api.onInstancesChanged(() => void qc.invalidateQueries({ queryKey: instanceKeys.all })),
+      api.onInstancesChanged(() =>
+        ["instances", "instance-status", "templates"].forEach((key) => void qc.invalidateQueries({ queryKey: [key] })),
+      ),
     ];
     return () => subs.forEach((p) => p.then((unlisten) => unlisten()));
   }, [qc, navigate]);

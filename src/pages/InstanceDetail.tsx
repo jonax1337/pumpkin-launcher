@@ -267,7 +267,11 @@ function SettingsTab({ instance }: { instance: Instance }) {
                   <Label htmlFor="inst-custom-mem">Eigener Arbeitsspeicher</Label>
                   <p className="mt-1 text-xs text-muted-foreground">Aus: Standard aus den Einstellungen.</p>
                 </div>
-                <Switch id="inst-custom-mem" checked={customMemory} onCheckedChange={setCustomMemory} />
+                <Switch id="inst-custom-mem" checked={customMemory} onCheckedChange={(on) => {
+                    setCustomMemory(on);
+                    if (on && instance.memoryMb == null) setMemory(defaultMemory);
+                  }}
+                />
               </div>
               <MemorySlider value={customMemory ? memory : defaultMemory} onChange={setMemory} disabled={!customMemory} />
             </div>

@@ -5,7 +5,16 @@ export interface LogLine {
   id: number;
   stream: LogPayload["stream"];
   line: string;
+  /** Beim Anhängen einmal berechnet, damit die Anzeige keine Regex je Render braucht. */
+  tone: "error" | "warn" | "normal";
 }
+
+const toneOf = ({ stream, line }: LogPayload): LogLine["tone"] =>
+  stream === "stderr" || /\/(ERROR|FATAL)\]/.test(line) ? "error" : /\/WARN\]/.test(line) ? "warn" : "normal";
+
+// Log-Events kommen zeilenweise; je Frame gebündelt anhängen statt pro Zeile Array kopieren und rendern.
+let pending: LogPayload[] = [];
+let frame = 0;
 
 // ponytail: Log-Puffer auf die letzten MAX_LOG_LINES Zeilen je Instanz begrenzt; für vollständige Logs Datei im Backend lesen.
 export const MAX_LOG_LINES = 2000;
@@ -45,13 +54,21 @@ export const useGame = create<GameState>()((set) => ({
       const { [id]: _, ...rest } = s.launching;
       return { launching: launching ? { ...rest, [id]: true } : rest };
     }),
-  appendLog: ({ instanceId, stream, line }) =>
-    set((s) => ({
-      logs: {
-        ...s.logs,
-        [instanceId]: [...(s.logs[instanceId] ?? []), { id: nextLogId++, stream, line }].slice(-MAX_LOG_LINES),
-      },
-    })),
+  appendLog: (p) => {
+    pending.push(p);
+    frame ||= requestAnimationFrame(() => {
+      const batch = pending;
+      pending = [];
+      frame = 0;
+      set((s) => {
+        const logs = { ...s.logs };
+        const added: Record<string, LogLine[]> = {};
+        for (const b of batch) (added[b.instanceId] ??= []).push({ id: nextLogId++, stream: b.stream, line: b.line, tone: toneOf(b) });
+        for (const [id, items] of Object.entries(added)) logs[id] = [...(logs[id] ?? []), ...items].slice(-MAX_LOG_LINES);
+        return { logs };
+      });
+    });
+  },
   clearLog: (id) => set((s) => ({ logs: { ...s.logs, [id]: [] } })),
   setCrash: (exit) => set((s) => ({ crashes: { ...s.crashes, [exit.instanceId]: exit } })),
   clearCrash: (id) =>

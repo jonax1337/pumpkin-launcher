@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { memo, useEffect, useLayoutEffect, useRef } from "react";
 import { toast } from "sonner";
 import { Copy, FileText, Loader2, Play, Square, Trash2, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { useCancelInstall, useInstanceStatus, useKill, usePlay } from "@/hooks/u
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { installStepLabel, SUPPORTED_LOADERS, type Instance, type InstallProgress, type InstallStep, type ModLoader } from "@/lib/types";
-import { useGame } from "@/store/game";
+import { useGame, type LogLine } from "@/store/game";
 
 // Reihenfolge der Schritte im Backend (`install::install`, mit Loader umrahmt von `instance_install`)
 const VANILLA_STEPS: InstallStep[] = ["java", "client", "libraries", "natives", "assets"];
@@ -247,6 +247,7 @@ export function LogConsole({ instanceId }: { instanceId: string }) {
       <div
         ref={ref}
         role="log"
+        aria-live="off"
         aria-label="Spielausgabe"
         tabIndex={0}
         onScroll={(e) => {
@@ -256,21 +257,7 @@ export function LogConsole({ instanceId }: { instanceId: string }) {
         className="h-[max(14rem,calc(100dvh-24rem))] overflow-y-auto px-4 py-3 font-mono text-xs leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
         {lines?.length ? (
-          lines.map((l) => (
-            <div
-              key={l.id}
-              className={cn(
-                "break-all whitespace-pre-wrap",
-                l.stream === "stderr" || /\/(ERROR|FATAL)\]/.test(l.line)
-                  ? "text-destructive"
-                  : /\/WARN\]/.test(l.line)
-                    ? "text-gold"
-                    : "text-foreground/80",
-              )}
-            >
-              {l.line}
-            </div>
-          ))
+          lines.map((l) => <LogRow key={l.id} line={l} />)
         ) : (
           <p className="font-sans text-sm text-muted-foreground">Starte das Spiel, dann erscheint hier live, was Minecraft meldet.</p>
         )}
@@ -278,3 +265,9 @@ export function LogConsole({ instanceId }: { instanceId: string }) {
     </div>
   );
 }
+
+const TONE_CLASS: Record<LogLine["tone"], string> = { error: "text-destructive", warn: "text-gold", normal: "text-foreground/80" };
+
+const LogRow = memo(function LogRow({ line }: { line: LogLine }) {
+  return <div className={cn("break-all whitespace-pre-wrap", TONE_CLASS[line.tone])}>{line.line}</div>;
+});

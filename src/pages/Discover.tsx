@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/common";
 import { AddToInstanceMenu, ContentDetail, ContentResults, KIND_LABELS, PackActions, PackInstallButton } from "@/components/ContentBrowser";
-import { packReason, type CatalogType } from "@/lib/modrinth";
+import type { CatalogType } from "@/lib/modrinth";
 import { cn } from "@/lib/utils";
 
 const TABS: CatalogType[] = ["modpack", "mod", "shader", "resourcepack"];
@@ -51,7 +51,7 @@ export function DiscoverPage() {
           onOpen={setProjectId}
           action={(hit) =>
             type === "modpack" ? (
-              <PackInstallButton projectId={hit.project_id} title={hit.title} reason={packReason(hit.categories)} />
+              <PackInstallButton projectId={hit.project_id} title={hit.title} />
             ) : (
               <AddToInstanceMenu projectId={hit.project_id} title={hit.title} type={type} />
             )
