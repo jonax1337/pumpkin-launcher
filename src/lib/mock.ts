@@ -99,6 +99,17 @@ export function initialInstances(): Instance[] {
       createdAt: now - 5 * DAY,
       lastPlayedAt: null,
     },
+    ...(
+      [
+        ["inst-quilt", "Quilt Kreativ", "1.21.1", "quilt", ["sodium", "modmenu"], 12],
+        ["inst-neo", "NeoForge Abenteuer mit sehr langem Namen für den Test", "1.21.1", "neoforge", ["jei", "xaeros-minimap", "ferritecore"], 20],
+        ["inst-pvp", "PvP Training", "1.21.4", "fabric", ["sodium", "lithium", "fabric-api"], 30],
+        ["inst-retro", "Retro 1.16", "1.16.5", "vanilla", [], 60],
+      ] as const
+    ).map(([id, name, minecraftVersion, loader, mods, days]): Instance => ({
+      id, name, minecraftVersion, loader, loaderVersion: null, modpack: null, memoryMb: null, jvmArgs: [],
+      mods: mods.map(byId), createdAt: now - (days + 10) * DAY, lastPlayedAt: now - days * DAY,
+    })),
   ];
 }
 

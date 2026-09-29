@@ -9,19 +9,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TemplatesTab } from "@/components/TemplatesTab";
+import { MemorySlider } from "@/components/common";
 import { ContentResults, PackInstallButton } from "@/components/ContentBrowser";
 import { useContentInstall, useContentState } from "@/hooks/useContent";
-import { useCreateInstance, useLoaderVersions, useVersions } from "@/hooks/useInstances";
+import { useCreateInstance, useLoaderVersions, useMemory, useVersions } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import { packReason } from "@/lib/modrinth";
 import { formatMemory } from "@/lib/format";
-import { INSTALLABLE_LOADERS, LOADER_LABELS, type ModLoader } from "@/lib/types";
+import { ALL_LOADERS, LOADER_LABELS, SUPPORTED_LOADERS, type ModLoader } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { useSettings } from "@/store/settings";
 
 type Tab = "empty" | "modpack" | "file" | "template";
 
@@ -31,7 +30,7 @@ const LATEST = "latest";
 const packName = (path: string) => path.split(/[\\/]/).pop()!.replace(/\.mrpack$/i, "");
 
 function EmptyTab({ onDone }: { onDone: (id: string) => void }) {
-  const defaultMemory = useSettings((s) => s.memoryMb);
+  const defaultMemory = useMemory().value;
   const [name, setName] = useState("");
   const [snapshots, setSnapshots] = useState(false);
   const [version, setVersion] = useState("");
@@ -88,27 +87,32 @@ function EmptyTab({ onDone }: { onDone: (id: string) => void }) {
         )}
       </div>
       <div className="space-y-2">
-        <Label id="inst-loader">Mods</Label>
-        <div role="radiogroup" aria-labelledby="inst-loader" className="grid grid-cols-2 gap-2">
-          {INSTALLABLE_LOADERS.map((l) => (
-            <button
-              key={l}
-              type="button"
-              role="radio"
-              aria-checked={loader === l}
-              onClick={() => setLoader(l)}
-              className={cn(
-                "rounded-lg border px-3 py-2.5 text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
-                loader === l ? "border-primary/50 bg-primary/5" : "hover:border-primary/30",
-              )}
-            >
-              <span className="font-medium">{l === "vanilla" ? "Ohne Mods" : `Mit Mods (${LOADER_LABELS[l]})`}</span>
-            </button>
-          ))}
+        <Label id="inst-loader">Mod-Loader</Label>
+        <div role="radiogroup" aria-labelledby="inst-loader" className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2">
+          {ALL_LOADERS.map((l) => {
+            const soon = !SUPPORTED_LOADERS.includes(l);
+            return (
+              <button
+                key={l}
+                type="button"
+                role="radio"
+                aria-checked={loader === l}
+                disabled={soon}
+                onClick={() => setLoader(l)}
+                className={cn(
+                  "flex min-h-14 flex-col justify-center rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+                  loader === l ? "border-primary bg-accent" : "hover:bg-accent/50",
+                )}
+              >
+                <span className="font-medium">{LOADER_LABELS[l]}</span>
+                <span className="text-xs text-muted-foreground">{soon ? "bald verfügbar" : l === "vanilla" ? "ohne Mods" : "mit Mods"}</span>
+              </button>
+            );
+          })}
         </div>
         {loaderUnavailable && (
           <p role="alert" className="text-xs text-destructive">
-            {loaderVersions.error ? "Fabric ist gerade nicht erreichbar." : `Für ${selected} gibt es noch kein Fabric.`}
+            {loaderVersions.error ? `${LOADER_LABELS[loader]} ist gerade nicht erreichbar.` : `Für Minecraft ${selected} gibt es noch kein ${LOADER_LABELS[loader]}.`}
           </p>
         )}
       </div>
@@ -130,7 +134,7 @@ function EmptyTab({ onDone }: { onDone: (id: string) => void }) {
           </div>
           {loader !== "vanilla" && (
             <div className="space-y-2">
-              <Label htmlFor="inst-loader-version">Fabric-Version</Label>
+              <Label htmlFor="inst-loader-version">{LOADER_LABELS[loader]}-Version</Label>
               <Select value={selectedLoader} onValueChange={setLoaderVersion} disabled={loaderUnavailable || loaderVersions.isLoading}>
                 <SelectTrigger id="inst-loader-version" className="w-full">
                   <SelectValue />
@@ -148,21 +152,14 @@ function EmptyTab({ onDone }: { onDone: (id: string) => void }) {
             </div>
           )}
           <div className="space-y-3">
-            <div className="flex items-baseline justify-between">
-              <Label htmlFor="inst-memory">Arbeitsspeicher</Label>
-              <span className="text-sm text-primary tabular-nums">
-                {memory == null ? `Standard (${formatMemory(defaultMemory)})` : formatMemory(memory)}
-              </span>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <Label htmlFor="inst-memory-custom">Eigener Arbeitsspeicher</Label>
+                <p className="mt-1 text-xs text-muted-foreground tabular-nums">Aus: Standard ({formatMemory(defaultMemory)}).</p>
+              </div>
+              <Switch id="inst-memory-custom" checked={memory != null} onCheckedChange={(on) => setMemory(on ? defaultMemory : null)} />
             </div>
-            <Slider
-              id="inst-memory"
-              aria-label="Arbeitsspeicher in MB"
-              min={1024}
-              max={16384}
-              step={512}
-              value={[memory ?? defaultMemory]}
-              onValueChange={([v]) => setMemory(v)}
-            />
+            {memory != null && <MemorySlider id="inst-memory" value={memory} onChange={setMemory} />}
           </div>
         </div>
       </details>
@@ -229,7 +226,7 @@ function FileTab({ path, setPath, onDone }: { path: string; setPath: (p: string)
 /** Kompakte Modpack-Suche; Details bleiben in „Entdecken“. */
 function ModpackTab({ onDone, onDiscover }: { onDone: (id: string) => void; onDiscover: (projectId?: string) => void }) {
   return (
-    <div className="-mx-4 max-h-[55vh] overflow-y-auto px-4">
+    <div>
       <ContentResults
         type="modpack"
         onOpen={(id) => onDiscover(id)}
@@ -279,13 +276,13 @@ export function NewInstanceDialog({ children, primary }: { children: ReactNode; 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="w-[min(40rem,calc(100vw-2rem))] content-start">
         <DialogHeader>
           <DialogTitle>Neue Instanz</DialogTitle>
           <DialogDescription>Ein eigenes Minecraft mit eigener Version, eigenen Mods und eigenen Welten.</DialogDescription>
         </DialogHeader>
         <Tabs value={tab} onValueChange={(t) => setTab(t as Tab)} className="min-w-0">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid h-9 w-full grid-cols-4">
             <TabsTrigger value="empty">Leer</TabsTrigger>
             <TabsTrigger value="modpack">Modpack</TabsTrigger>
             <TabsTrigger value="file">Datei</TabsTrigger>

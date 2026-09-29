@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/app/Layout";
+import { INSTALL_CANCELLED } from "@/lib/types";
 import { HomePage } from "@/pages/Home";
 import { InstancesPage } from "@/pages/Instances";
 import { InstanceDetailPage } from "@/pages/InstanceDetail";
@@ -19,7 +20,10 @@ import "./index.css";
 const queryClient = new QueryClient({
   mutationCache: new MutationCache({
     onError: (err, _vars, _ctx, mutation) => {
-      if (!mutation.meta?.ownErrorToast) toast.error(err.message);
+      if (mutation.meta?.ownErrorToast) return;
+      // Abbrechen war Absicht: neutral melden, nicht als Fehler.
+      if (err.message === INSTALL_CANCELLED) toast(INSTALL_CANCELLED);
+      else toast.error(err.message);
     },
   }),
   defaultOptions: {
@@ -51,7 +55,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={300}>
         <RouterProvider router={router} />
-        <Toaster position="bottom-right" richColors closeButton />
+        <Toaster position="bottom-right" closeButton />
       </TooltipProvider>
     </QueryClientProvider>
   </React.StrictMode>,

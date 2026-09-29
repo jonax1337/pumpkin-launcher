@@ -1,30 +1,31 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { motion } from "framer-motion";
-import { Loader2, Play, Square, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { Copy, FileText, Loader2, Play, Square, Trash2, TriangleAlert, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useInstanceStatus, useKill, usePlay } from "@/hooks/useInstances";
+import { useCancelInstall, useInstanceStatus, useKill, usePlay } from "@/hooks/useInstances";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import {
-  INSTALL_STEP_LABELS,
-  INSTALLABLE_LOADERS,
-  type Instance,
-  type InstallProgress,
-  type InstallStep,
-  type ModLoader,
-} from "@/lib/types";
+import { installStepLabel, SUPPORTED_LOADERS, type Instance, type InstallProgress, type InstallStep, type ModLoader } from "@/lib/types";
 import { useGame } from "@/store/game";
 
-// Reihenfolge der Schritte im Backend (`install::install`, bei Fabric umrahmt von `instance_install`)
+// Reihenfolge der Schritte im Backend (`install::install`, mit Loader umrahmt von `instance_install`)
 const VANILLA_STEPS: InstallStep[] = ["java", "client", "libraries", "natives", "assets"];
-const stepsFor = (loader: ModLoader): InstallStep[] =>
-  loader === "fabric" ? ["loader", ...VANILLA_STEPS, "mods"] : VANILLA_STEPS;
+const stepsFor = (loader: ModLoader): InstallStep[] => (loader === "vanilla" ? VANILLA_STEPS : ["loader", ...VANILLA_STEPS, "mods"]);
 
 /** Gesamtfortschritt 0–100: jeder Schritt zählt gleich, innerhalb des Schritts anteilig. */
 function overallPercent(p: InstallProgress, steps: InstallStep[]) {
   const index = Math.max(0, steps.indexOf(p.step));
   const within = p.total > 0 ? p.done / p.total : 0;
   return Math.round(((index + within) / steps.length) * 100);
+}
+
+const count = (n: number) => n.toLocaleString("de");
+
+/** „Lade Spieldateien … 312 von 3 480“ */
+function stepText(p: InstallProgress, loader: ModLoader) {
+  const label = installStepLabel(p.step, loader);
+  return p.total > 1 ? `${label} … ${count(p.done)} von ${count(p.total)}` : `${label} …`;
 }
 
 type Phase = "loading" | "preparing" | "starting" | "running" | "installed" | "missing";
@@ -41,6 +42,12 @@ function usePhase(instanceId: string): Phase {
   return status.data?.installed ? "installed" : "missing";
 }
 
+/** Fortschritt einer Instanz (null = keine Vorbereitung). */
+export function useInstallPercent(instance: Instance) {
+  const progress = useGame((s) => s.installs[instance.id]);
+  return progress ? overallPercent(progress, stepsFor(instance.loader)) : null;
+}
+
 const PHASE_LABEL: Record<Exclude<Phase, "loading">, string> = {
   missing: "Nicht installiert",
   preparing: "Wird vorbereitet",
@@ -49,46 +56,48 @@ const PHASE_LABEL: Record<Exclude<Phase, "loading">, string> = {
   running: "Läuft",
 };
 
-const PHASE_TINT: Record<Exclude<Phase, "loading">, string> = {
-  missing: "bg-white/5 text-muted-foreground ring-white/10 [&>span]:bg-muted-foreground",
-  preparing: "bg-gold/10 text-gold ring-gold/25 [&>span]:bg-gold",
-  starting: "bg-gold/10 text-gold ring-gold/25 [&>span]:bg-gold",
-  installed: "bg-primary/10 text-primary ring-primary/25 [&>span]:bg-primary",
-  running: "bg-emerald-400/15 text-emerald-300 ring-emerald-400/30 [&>span]:bg-emerald-300 [&>span]:animate-pulse",
+const PHASE_DOT: Record<Exclude<Phase, "loading">, string> = {
+  missing: "border border-muted-foreground",
+  preparing: "bg-gold",
+  starting: "bg-gold",
+  installed: "bg-foreground/60",
+  running: "bg-primary animate-pulse",
 };
 
+/** Status als Punkt + Wort (keine Pille). */
 export function StatusBadge({ instanceId, className }: { instanceId: string; className?: string }) {
   const phase = usePhase(instanceId);
-  if (phase === "loading") return <Skeleton className={cn("h-6 w-24 rounded-full", className)} />;
+  if (phase === "loading") return <Skeleton className={cn("h-4 w-20", className)} />;
   return (
-    <span
-      role="status"
-      className={cn(
-        "inline-flex h-6 items-center gap-2 rounded-full px-2.5 text-xs font-medium ring-1",
-        PHASE_TINT[phase],
-        className,
-      )}
-    >
-      <span aria-hidden className="size-1.5 rounded-full" />
+    <span className={cn("inline-flex items-center gap-1.5 text-xs text-muted-foreground", phase === "running" && "text-foreground", className)}>
+      <span aria-hidden className={cn("size-2 rounded-full", PHASE_DOT[phase])} />
       {PHASE_LABEL[phase]}
     </span>
   );
 }
 
-/** Ein Knopf für alles: Spielen (installiert bei Bedarf), Fortschritt beim Vorbereiten, Beenden. */
+/**
+ * Ein Knopf für alles: Spielen (installiert bei Bedarf), Fortschritt im Knopf mit „Abbrechen“, Stoppen.
+ * `size="hero"` ist der große Knopf einer Ansicht (nur einmal pro Ansicht), `size="icon"` der Knopf auf Karten.
+ */
 export function PlayControl({
   instance,
-  hero,
+  size = "hero",
+  align = "start",
   onLaunched,
+  className,
 }: {
   instance: Instance;
-  hero?: boolean;
+  size?: "hero" | "icon";
+  align?: "start" | "end";
   onLaunched?: () => void;
+  className?: string;
 }) {
   const phase = usePhase(instance.id);
   const progress = useGame((s) => s.installs[instance.id]);
   const play = usePlay();
   const kill = useKill();
+  const cancel = useCancelInstall();
   // onLaunched (z. B. Tab wechseln) nur, solange der Knopf noch zu sehen ist.
   const mounted = useRef(true);
   useEffect(() => {
@@ -97,81 +106,109 @@ export function PlayControl({
       mounted.current = false;
     };
   }, []);
+  const start = () => void play(instance, () => mounted.current && onLaunched?.());
+  const unsupported = phase === "missing" && !SUPPORTED_LOADERS.includes(instance.loader);
 
-  const size = hero
-    ? "h-16 min-w-56 gap-3 rounded-2xl px-8 text-lg font-semibold ring-1 ring-white/20 [&_svg:not([class*='size-'])]:size-5"
-    : "min-w-32";
+  if (size === "icon") {
+    if (phase === "loading") return <Skeleton className={cn("size-9", className)} />;
+    if (phase === "running")
+      return (
+        <Button variant="secondary" size="icon" onClick={() => kill.mutate(instance)} disabled={kill.isPending} aria-label={`${instance.name} stoppen`} title="Stoppen" className={cn(className, "opacity-100")}>
+          <Square className="fill-current text-destructive" aria-hidden />
+        </Button>
+      );
+    if (phase === "preparing" || phase === "starting")
+      return (
+        <Button variant="secondary" size="icon" disabled aria-label={`${instance.name} wird vorbereitet`} className={cn(className, "opacity-100 disabled:opacity-100")}>
+          <Loader2 className="animate-spin" aria-hidden />
+        </Button>
+      );
+    return (
+      <Button size="icon" onClick={start} disabled={unsupported} aria-label={`${instance.name} spielen`} title={unsupported ? "Kann Voxlet noch nicht starten" : "Spielen"} className={className}>
+        <Play className="fill-current" aria-hidden />
+      </Button>
+    );
+  }
 
-  if (phase === "loading") return <Skeleton className={hero ? "h-16 w-56 rounded-2xl" : "h-9 w-32"} />;
+  const big = "h-12 min-w-44 gap-2.5 px-8 text-base font-semibold [&_svg:not([class*='size-'])]:size-5";
+  const wrap = cn("flex min-w-0 flex-col gap-2", align === "end" ? "items-end" : "items-start", className);
+
+  if (phase === "loading") return <Skeleton className={cn("h-12 w-44", className)} />;
 
   if (phase === "preparing" || phase === "starting") {
     const percent = phase === "preparing" && progress ? overallPercent(progress, stepsFor(instance.loader)) : null;
     return (
-      <div className="flex flex-col items-end gap-1.5">
+      <div className={wrap}>
         <Button
-          size={hero ? "lg" : "default"}
           disabled
           aria-label={percent == null ? `${instance.name} startet` : `${instance.name} wird vorbereitet, ${percent} %`}
-          className={cn(size, "relative overflow-hidden disabled:opacity-100", hero ? "min-w-72" : "min-w-52")}
+          className={cn(big, "relative min-w-56 overflow-hidden bg-primary/20 text-foreground disabled:opacity-100")}
         >
           {percent != null && (
             <span
               aria-hidden
-              className="absolute inset-y-0 left-0 bg-white/20 transition-[width] duration-300"
+              data-progress
+              className="absolute inset-y-0 left-0 bg-primary/45 transition-[width] duration-300 ease-out"
               style={{ width: `${percent}%` }}
             />
           )}
           <Loader2 className="relative animate-spin" aria-hidden />
-          <span className="relative tabular-nums">
-            {percent == null ? "Startet …" : `Wird vorbereitet … ${percent} %`}
-          </span>
+          <span className="relative tabular-nums">{percent == null ? "Startet …" : `Vorbereiten … ${percent} %`}</span>
         </Button>
-        <p className="text-xs text-muted-foreground" aria-live="polite">
-          {phase === "preparing" && progress ? INSTALL_STEP_LABELS[progress.step] : "Minecraft wird gestartet"}
-        </p>
+        <div className={cn("flex max-w-full items-center gap-2", align === "end" && "flex-row-reverse")}>
+          <p className="min-w-0 truncate text-xs text-muted-foreground tabular-nums" aria-live="polite">
+            {phase === "preparing" && progress ? stepText(progress, instance.loader) : "Minecraft wird gestartet …"}
+          </p>
+          {phase === "preparing" && (
+            <Button variant="ghost" size="sm" disabled={cancel.isPending} onClick={() => cancel.mutate(instance.id)} className="shrink-0 text-muted-foreground">
+              <X aria-hidden /> Abbrechen
+            </Button>
+          )}
+        </div>
       </div>
     );
   }
 
   if (phase === "running") {
     return (
-      <Button
-        size={hero ? "lg" : "default"}
-        variant="outline"
-        disabled={kill.isPending}
-        onClick={() => kill.mutate(instance)}
-        aria-label={`${instance.name} beenden`}
-        className={cn(size, "border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive")}
-      >
-        {kill.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Square className="fill-current" aria-hidden />}
-        Beenden
-      </Button>
-    );
-  }
-
-  if (phase === "missing" && !INSTALLABLE_LOADERS.includes(instance.loader)) {
-    return (
-      <div className="flex flex-col items-end gap-1.5">
-        <Button size={hero ? "lg" : "default"} variant="secondary" disabled className={size}>
-          <Play className="fill-current" aria-hidden /> Spielen
+      <div className={wrap}>
+        <Button variant="secondary" disabled={kill.isPending} onClick={() => kill.mutate(instance)} aria-label={`${instance.name} stoppen`} className={big}>
+          {kill.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Square className="fill-current text-destructive" aria-hidden />}
+          Stoppen
         </Button>
-        <p className="text-xs text-muted-foreground">Diese Variante kann Voxlet noch nicht starten.</p>
       </div>
     );
   }
 
   return (
-    <motion.div whileHover={hero ? { scale: 1.02 } : undefined} whileTap={{ scale: 0.98 }}>
-      <Button
-        size={hero ? "lg" : "default"}
-        onClick={() => void play(instance, () => mounted.current && onLaunched?.())}
-        aria-label={`${instance.name} spielen`}
-        className={cn(size, hero && "shadow-[0_10px_40px_-10px_var(--primary)]")}
-      >
+    <div className={wrap}>
+      <Button onClick={start} disabled={unsupported} aria-label={`${instance.name} spielen`} className={big}>
         <Play className="fill-current" aria-hidden />
         Spielen
       </Button>
-    </motion.div>
+      {unsupported && <p className="text-xs text-muted-foreground">Diese Variante kann Voxlet noch nicht starten.</p>}
+    </div>
+  );
+}
+
+/** Hinweis nach einem Absturz, bis zum nächsten Start. */
+export function CrashNotice({ instanceId }: { instanceId: string }) {
+  const crash = useGame((s) => s.crashes[instanceId]);
+  const clear = useGame((s) => s.clearCrash);
+  if (!crash) return null;
+  return (
+    <div role="alert" className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm">
+      <TriangleAlert className="size-4 shrink-0 text-destructive" aria-hidden />
+      <p className="min-w-0 flex-1 font-medium">Minecraft ist abgestürzt{crash.code != null ? ` (Code ${crash.code})` : ""}.</p>
+      {crash.crashReport && (
+        <Button variant="outline" size="sm" onClick={() => void api.openPath(crash.crashReport!).catch((e: Error) => toast.error(e.message))}>
+          <FileText aria-hidden /> Absturzbericht öffnen
+        </Button>
+      )}
+      <Button variant="ghost" size="icon-sm" aria-label="Hinweis schließen" onClick={() => clear(instanceId)}>
+        <X aria-hidden />
+      </Button>
+    </div>
   );
 }
 
@@ -187,21 +224,25 @@ export function LogConsole({ instanceId }: { instanceId: string }) {
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [lines]);
 
+  function copy() {
+    void navigator.clipboard.writeText((lines ?? []).map((l) => l.line).join("\n")).then(
+      () => toast.success("Protokoll kopiert"),
+      () => toast.error("Kopieren hat nicht geklappt"),
+    );
+  }
+
   return (
-    <div className="overflow-hidden rounded-xl border bg-black/40">
-      <div className="flex items-center justify-between border-b bg-white/[0.02] px-4 py-2">
-        <p className="text-xs text-muted-foreground">
-          {lines?.length ? `${lines.length.toLocaleString("de")} Zeilen` : "Keine Ausgabe"}
-        </p>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 text-muted-foreground"
-          disabled={!lines?.length}
-          onClick={() => clearLog(instanceId)}
-        >
-          <Trash2 aria-hidden /> Leeren
-        </Button>
+    <div className="overflow-hidden rounded-xl border bg-sidebar">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
+        <p className="text-xs text-muted-foreground tabular-nums">{lines?.length ? `${count(lines.length)} Zeilen` : "Keine Ausgabe"}</p>
+        <div className="flex gap-1">
+          <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={!lines?.length} onClick={copy}>
+            <Copy aria-hidden /> Kopieren
+          </Button>
+          <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={!lines?.length} onClick={() => clearLog(instanceId)}>
+            <Trash2 aria-hidden /> Leeren
+          </Button>
+        </div>
       </div>
       <div
         ref={ref}
@@ -212,7 +253,7 @@ export function LogConsole({ instanceId }: { instanceId: string }) {
           const el = e.currentTarget;
           stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
         }}
-        className="h-[420px] overflow-y-auto px-4 py-3 font-mono text-xs leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        className="h-[max(14rem,calc(100dvh-24rem))] overflow-y-auto px-4 py-3 font-mono text-xs leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
         {lines?.length ? (
           lines.map((l) => (
@@ -221,7 +262,7 @@ export function LogConsole({ instanceId }: { instanceId: string }) {
               className={cn(
                 "break-all whitespace-pre-wrap",
                 l.stream === "stderr" || /\/(ERROR|FATAL)\]/.test(l.line)
-                  ? "text-red-300/90"
+                  ? "text-destructive"
                   : /\/WARN\]/.test(l.line)
                     ? "text-gold"
                     : "text-foreground/80",
@@ -231,7 +272,7 @@ export function LogConsole({ instanceId }: { instanceId: string }) {
             </div>
           ))
         ) : (
-          <p className="text-muted-foreground">Starte das Spiel, um hier die Ausgabe live zu sehen.</p>
+          <p className="font-sans text-sm text-muted-foreground">Starte das Spiel, dann erscheint hier live, was Minecraft meldet.</p>
         )}
       </div>
     </div>

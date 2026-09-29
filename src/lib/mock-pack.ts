@@ -1,6 +1,6 @@
 // Nur im Browser-Dev-Modus dynamisch geladen (siehe api.ts); im Release-Build nicht enthalten.
 import type { ContentProgress, ContentVersion } from "./modrinth";
-import type { Instance, ModLoader } from "./types";
+import { INSTALL_CANCELLED, type Instance, type ModLoader } from "./types";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -10,7 +10,7 @@ const PACK_MODS = [
 ] as const;
 
 /** Simuliert `modrinth_install_pack`: neue Instanz mit ein paar Mods und Fortschritts-Events. */
-export function createPackMock(db: { instances: Instance[] }, emit: (event: string, payload: ContentProgress) => void) {
+export function createPackMock(db: { instances: Instance[]; cancelled: Set<string> }, emit: (event: string, payload: ContentProgress) => void) {
   return async (versionId: string, name: string, operationId: string): Promise<Instance> => {
     const progress = (phase: string, done: number, total: number) => emit("content-progress", { operationId, phase, done, total });
     progress("resolve", 0, 1);
@@ -22,8 +22,9 @@ export function createPackMock(db: { instances: Instance[] }, emit: (event: stri
       throw new Error("Dieses Modpack braucht einen Mod-Loader, den Voxlet noch nicht kann.");
     const mods = loader === "fabric" ? PACK_MODS : [];
     for (let i = 0; i < mods.length; i++) {
+      if (db.cancelled.delete(operationId)) throw new Error(INSTALL_CANCELLED);
       progress("download", i, mods.length);
-      await wait(400);
+      await wait(900);
     }
     const inst: Instance = {
       id: `inst-${crypto.randomUUID().slice(0, 8)}`,

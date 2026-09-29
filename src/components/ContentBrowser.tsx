@@ -4,7 +4,7 @@ import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { ArrowLeft, Check, ChevronDown, ChevronRight, Download, Loader2, Plus, Search } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronRight, Download, Loader2, Plus, Search, SearchX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BlockTile, ErrorNote } from "@/components/common";
+import { BlockTile, EmptyState, ErrorNote } from "@/components/common";
 import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { useInstances } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
@@ -28,9 +28,9 @@ export const IRIS_PROJECT_ID = "YL57xq9U";
 
 export const KIND_LABELS: Record<ModKind, string> = { mod: "Mods", shader: "Shader", resourcepack: "Ressourcenpakete" };
 
-/** Was in eine Instanz passt: Mods und Shader nur mit Fabric, Ressourcenpakete immer. */
+/** Was in eine Instanz passt: Mods und Shader nur mit Mod-Loader, Ressourcenpakete immer. */
 export const kindsFor = (instance: Instance): ModKind[] =>
-  instance.loader === "fabric" ? ["mod", "shader", "resourcepack"] : ["resourcepack"];
+  instance.loader !== "vanilla" ? ["mod", "shader", "resourcepack"] : ["resourcepack"];
 
 /** „Fabric 1.21.4“ für Mods, sonst nur die Minecraft-Version. */
 export const fitsLabel = (instance: Instance, type: CatalogType) =>
@@ -41,7 +41,7 @@ const loaderFor = (instance: Instance, type: CatalogType) => (type === "mod" ? i
 
 export function ContentIcon({ url, seed, size = "md" }: { url?: string | null; seed: string; size?: "sm" | "md" | "lg" }) {
   const [broken, setBroken] = useState(false);
-  if (!url || broken) return <BlockTile seed={seed} size={size} />;
+  if (!url || broken) return <BlockTile seed={seed} size={size === "lg" ? "xl" : size} />;
   return (
     <img
       src={url}
@@ -49,8 +49,8 @@ export function ContentIcon({ url, seed, size = "md" }: { url?: string | null; s
       loading="lazy"
       onError={() => setBroken(true)}
       className={cn(
-        "shrink-0 rounded-lg bg-muted object-cover ring-1 ring-white/10",
-        size === "sm" && "size-9",
+        "shrink-0 rounded-lg bg-muted object-cover",
+        size === "sm" && "size-9 rounded-md",
         size === "md" && "size-12",
         size === "lg" && "size-20 rounded-xl",
       )}
@@ -157,17 +157,30 @@ function AddButton({ instance, projectId, title, type, versionId, large }: {
   return large ? (
     <Button disabled={!!active} onClick={add}><Plus aria-hidden /> Hinzufügen</Button>
   ) : (
-    <Button variant="outline" size="icon-sm" disabled={!!active} aria-label={`${title} hinzufügen`} title="Hinzufügen" onClick={add}>
+    <Button variant="secondary" size="icon-sm" disabled={!!active} aria-label={`${title} hinzufügen`} title="Hinzufügen" onClick={add}>
       <Plus aria-hidden />
     </Button>
   );
 }
 
-const busyNote = (label: string) => (
-  <span role="status" className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-    <Loader2 className="size-3.5 animate-spin" aria-hidden /> {label}
+const busyNote = (label: string, onCancel?: () => void) => (
+  <span className="flex shrink-0 items-center gap-1">
+    <span role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
+      <Loader2 className="size-3.5 animate-spin" aria-hidden /> {label}
+    </span>
+    {onCancel && (
+      <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={onCancel}>
+        <X aria-hidden /> Abbrechen
+      </Button>
+    )}
   </span>
 );
+
+/** Laufende Modpack-Installation abbrechen; das Ergebnis meldet der zentrale Fehler-Toast neutral. */
+function cancelActive() {
+  const op = useContentState.getState().active;
+  if (op) void api.packInstallCancel(op).catch((e: Error) => toast.error(e.message));
+}
 
 /** Ohne Instanz-Kontext: Menü mit allen Instanzen; unpassende ausgegraut mit Grund, sonst „Neue Instanz anlegen…“. */
 export function AddToInstanceMenu({ projectId, title, type, large }: { projectId: string; title: string; type: ModKind; large?: boolean }) {
@@ -270,7 +283,7 @@ function useInstallPack(projectId: string, title: string, onDone?: (instanceId: 
     });
   }
   const busy = checking ? "Wird geprüft…" : active && target === projectId ? progressLabel(progress) : null;
-  return { run, busy, blocked: !!active || checking };
+  return { run, busy, blocked: !!active || checking, cancel: !checking && busy ? cancelActive : undefined };
 }
 
 /** Zeilenaktion für Modpacks. `reason` (z. B. aus den Loader-Kategorien) sperrt vorab mit kurzem Grund. */
@@ -278,13 +291,13 @@ export function PackInstallButton({ projectId, title, reason, onDone }: {
   projectId: string; title: string; reason?: string | null; onDone?: (instanceId: string) => void;
 }) {
   const pack = useInstallPack(projectId, title, onDone);
-  if (pack.busy) return busyNote(pack.busy);
+  if (pack.busy) return busyNote(pack.busy, pack.cancel);
   return (
     <span className="flex shrink-0 flex-col items-end gap-1">
-      <Button variant="outline" size="sm" disabled={!!reason || pack.blocked} aria-label={`${title} als Instanz installieren`} onClick={() => void pack.run()}>
+      <Button variant="secondary" size="sm" disabled={!!reason || pack.blocked} aria-label={`${title} als Instanz installieren`} onClick={() => void pack.run()}>
         <Download aria-hidden /> Installieren
       </Button>
-      {reason && <span className="max-w-44 text-right text-xs text-muted-foreground">{reason}</span>}
+      {reason && <span className="max-w-40 text-right text-xs text-muted-foreground">{reason}</span>}
     </span>
   );
 }
@@ -301,10 +314,10 @@ export function PackActions({ projectId, title, onDone }: { projectId: string; t
   const { version, reason } = versions.data ? pickPackVersion(versions.data) : { version: null, reason: null };
   const fitting = versions.data?.filter(isPackVersionSupported) ?? [];
 
-  if (pack.busy) return busyNote(pack.busy);
+  if (pack.busy) return busyNote(pack.busy, pack.cancel);
   return (
-    <div className="flex flex-col items-end gap-1">
-      <div className="flex gap-2">
+    <div className="flex flex-col items-start gap-1">
+      <div className="flex flex-wrap gap-2">
         <Button disabled={!version || pack.blocked} onClick={() => void pack.run(version?.id)}>
           <Download aria-hidden /> Als Instanz installieren
         </Button>
@@ -349,8 +362,10 @@ const SEARCH_PLACEHOLDER: Record<CatalogType, string> = {
  * Suche mit „Beliebt“ als Startzustand. Mit `instance` passend gefiltert und mit „+“ je Zeile,
  * sonst mit `action` je Zeile. `barClassName` gibt der klebenden Suchleiste den Hintergrund der Umgebung.
  */
-export function ContentResults({ type, instance, action, onOpen, barClassName = "bg-popover" }: {
+export function ContentResults({ type, instance, action, onOpen, barClassName = "bg-popover", grid, autoFocus = true }: {
   type: CatalogType; instance?: Instance; action?: (hit: ContentHit) => ReactNode; onOpen: (projectId: string) => void; barClassName?: string;
+  /** Kacheln im Raster statt einer Liste (Entdecken in breiten Fenstern). */
+  grid?: boolean; autoFocus?: boolean;
 }) {
   const [input, setInput] = useState("");
   const query = useDebounced(input.trim(), 300);
@@ -368,17 +383,17 @@ export function ContentResults({ type, instance, action, onOpen, barClassName = 
 
   return (
     <div>
-      <div className={cn("sticky top-0 z-10 -mx-4 px-4 pb-3", barClassName)}>
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+      <div className={cn("sticky top-0 z-10 -mx-1 px-1 pt-1 pb-3", barClassName)}>
+        <div className="relative max-w-xl">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input
             type="search"
             aria-label={SEARCH_PLACEHOLDER[type]}
             placeholder={SEARCH_PLACEHOLDER[type]}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            autoFocus
-            className="pl-8"
+            autoFocus={autoFocus}
+            className="pl-9"
           />
         </div>
       </div>
@@ -386,33 +401,40 @@ export function ContentResults({ type, instance, action, onOpen, barClassName = 
         {!query ? "Beliebt" : results.data ? `${results.data.pages[0].total_hits.toLocaleString("de")} Treffer` : "Sucht…"}
       </p>
 
-      {results.error && (
-        <div className="space-y-2">
-          <ErrorNote error={results.error} />
-          <Button variant="outline" size="sm" onClick={() => void results.refetch()}>Erneut versuchen</Button>
-        </div>
-      )}
+      {results.error && <ErrorNote title="Modrinth ist gerade nicht erreichbar" error={results.error} onRetry={() => void results.refetch()} />}
       {results.isPending && (
-        <div className="space-y-2">
-          {Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
-        </div>
+        <ul className={cn(grid ? GRID : "divide-y overflow-hidden rounded-xl border bg-card")} aria-busy aria-label="Wird geladen">
+          {Array.from({ length: 6 }, (_, i) => (
+            <li key={i} className={cn("flex items-center gap-3 px-3 py-3", grid && "rounded-xl border bg-card")}>
+              <Skeleton className="size-12 rounded-lg" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-2/5" />
+                <Skeleton className="h-3 w-4/5" />
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
-      {results.data && hits.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">Nichts gefunden für „{query}“.</p>}
+      {results.data && hits.length === 0 && (
+        <EmptyState icon={<SearchX />} title={`Nichts gefunden für „${query}“`}>
+          Versuch es mit einem anderen Suchwort.
+        </EmptyState>
+      )}
 
       {hits.length > 0 && (
-        <ul className="divide-y overflow-hidden rounded-xl border bg-card/60">
+        <ul className={cn(grid ? GRID : "divide-y overflow-hidden rounded-xl border bg-card")}>
           {hits.map((hit) => (
-            <li key={hit.project_id} className="flex items-center gap-3 px-3 py-2.5">
+            <li key={hit.project_id} className={cn("flex min-w-0 items-center gap-3 px-3 py-3", grid && "rounded-xl border bg-card")}>
               <button
                 type="button"
                 onClick={() => onOpen(hit.project_id)}
-                className="group flex min-w-0 flex-1 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                className="group flex min-w-0 flex-1 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <ContentIcon url={hit.icon_url} seed={hit.project_id} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium group-hover:underline">{hit.title}</span>
+                  <span className="block truncate font-medium underline-offset-4 group-hover:underline" title={hit.title}>{hit.title}</span>
                   <span className="line-clamp-2 text-xs text-muted-foreground">{hit.description}</span>
-                  <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                  <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
                     <Download className="size-3" aria-hidden /> {formatDownloads(hit.downloads)}
                     <span className="sr-only">Downloads</span>
                   </span>
@@ -437,6 +459,8 @@ export function ContentResults({ type, instance, action, onOpen, barClassName = 
     </div>
   );
 }
+
+const GRID = "grid grid-cols-[repeat(auto-fill,minmax(24rem,1fr))] gap-3";
 
 // ---------- Details ----------
 
@@ -477,17 +501,19 @@ export function ContentDetail({ projectId, type, instance, action, onBack }: {
       {project.error && <ErrorNote error={project.error} />}
       {project.data && (
         <>
-          <header className="flex flex-wrap items-center gap-4">
-            <ContentIcon url={project.data.icon_url} seed={projectId} size="lg" />
-            <div className="min-w-0 flex-1">
-              <h2 className="text-xl font-semibold">{title}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{project.data.description}</p>
+          <header className="flex flex-wrap items-center gap-x-5 gap-y-4">
+            <div className="flex min-w-0 flex-1 basis-72 items-center gap-4">
+              <ContentIcon url={project.data.icon_url} seed={projectId} size="lg" />
+              <div className="min-w-0 flex-1">
+                <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+                <p className="mt-1 line-clamp-3 text-sm text-muted-foreground">{project.data.description}</p>
+              </div>
             </div>
             {instance ? <AddButton instance={instance} projectId={projectId} title={title} type={type} large /> : action?.(project.data)}
           </header>
 
           {instance && choose && versions.data && versions.data.length > 0 && (
-            <details className="group rounded-xl border bg-card/60">
+            <details className="group rounded-xl border bg-card">
               <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium select-none">
                 <ChevronRight className="mr-1 inline size-4 transition-transform group-open:rotate-90" aria-hidden />
                 Andere Version wählen…
@@ -507,7 +533,9 @@ export function ContentDetail({ projectId, type, instance, action, onBack }: {
             <p className="text-sm text-muted-foreground">Keine Version für {fitsLabel(instance, type)}.</p>
           )}
 
-          <Description body={project.data.body} />
+          <div className="max-w-[75ch] border-t pt-5">
+            <Description body={project.data.body} />
+          </div>
         </>
       )}
     </div>
@@ -538,7 +566,7 @@ export function AddContentSheet({ instance, open, onOpenChange }: { instance: In
             </Tabs>
           )}
         </SheetHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 [scrollbar-gutter:stable]">
           {projectId && (
             <div className="pt-3">
               <ContentDetail projectId={projectId} type={type} instance={instance} onBack={() => setProjectId(null)} />
@@ -547,7 +575,7 @@ export function AddContentSheet({ instance, open, onOpenChange }: { instance: In
           {/* Bleibt beim Öffnen von Details erhalten, damit Suche und geladene Seiten nicht verloren gehen. */}
           <div className={cn("pt-4", projectId && "hidden")}>
             {type === "shader" && !hasIris && (
-              <p className="mb-3 rounded-lg border border-gold/25 bg-gold/5 px-3 py-2 text-xs text-gold">
+              <p className="mb-3 rounded-lg border border-gold/25 bg-gold/10 px-3 py-2 text-xs text-gold">
                 Shader brauchen die Mod „Iris“. Füge sie unter „Mods“ hinzu.
               </p>
             )}
