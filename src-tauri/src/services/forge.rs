@@ -1,7 +1,7 @@
 //! Forge und NeoForge über ihren offiziellen Installer: `install_profile.json` nennt Libraries und
 //! Processors (Java-Programme, die das Client-JAR entschlüsseln, umbenennen und patchen), die
 //! `version.json` darin ist ein Profil mit `inheritsFrom` auf Vanilla. Beide Loader nutzen dasselbe
-//! Installer-Format; unterstützt wird es ab Forge für Minecraft 1.17 bzw. NeoForge ab 1.20.2.
+//! Installer-Format; unterstützt wird es ab Forge für Minecraft 1.17 bzw. NeoForge ab 1.20.1.
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{self, Read};
@@ -126,7 +126,8 @@ pub fn check_supported(kind: Kind, mc: &str) -> AppResult<()> {
     let ok = match (kind, mc_numbers(mc).as_deref()) {
         (_, Some([major, ..])) if *major >= 2 => true,
         (Kind::Forge, Some([1, minor, ..])) => *minor >= 17,
-        (Kind::NeoForge, Some([1, 20, patch, ..])) => *patch >= 2,
+        // 1.20.1: NeoForges erste Versionen, noch als Forge-Abzweig (`net.neoforged:forge`).
+        (Kind::NeoForge, Some([1, 20, patch, ..])) => *patch >= 1,
         (Kind::NeoForge, Some([1, minor, ..])) => *minor >= 21,
         _ => false,
     };
@@ -135,9 +136,14 @@ pub fn check_supported(kind: Kind, mc: &str) -> AppResult<()> {
     }
     let from = match kind {
         Kind::Forge => "1.17",
-        Kind::NeoForge => "1.20.2",
+        Kind::NeoForge => "1.20.1",
     };
     Err(AppError::Invalid(format!("{} gibt es in Voxlet erst ab Minecraft {from}, nicht für {mc}", kind.name())))
+}
+
+/// NeoForge für 1.20.1 liegt als Forge-Abzweig unter `net.neoforged:forge:1.20.1-<version>`.
+fn legacy_neoforge(kind: Kind, mc: &str) -> bool {
+    kind == Kind::NeoForge && mc == "1.20.1"
 }
 
 /// NeoForge-Versionen beginnen mit der Minecraft-Version ohne führende `1.`:
@@ -162,6 +168,15 @@ struct NeoForgeVersions {
 pub async fn loader_versions(client: &reqwest::Client, kind: Kind, mc: &str) -> AppResult<Vec<LoaderVersion>> {
     check_supported(kind, segment(mc)?)?;
     let mut versions: Vec<LoaderVersion> = match kind {
+        Kind::NeoForge if legacy_neoforge(kind, mc) => {
+            let url = "https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/forge";
+            let all: NeoForgeVersions = download::get_json(client, url).await?;
+            all.versions
+                .into_iter()
+                .filter_map(|v| v.strip_prefix("1.20.1-").map(str::to_owned))
+                .map(|v| LoaderVersion { stable: !v.contains('-'), version: v })
+                .collect()
+        }
         Kind::NeoForge => {
             let url = "https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge";
             let all: NeoForgeVersions = download::get_json(client, url).await?;
@@ -205,6 +220,7 @@ pub async fn resolve_loader(client: &reqwest::Client, kind: Kind, mc: &str, want
 /// ID der Loader-Version, wie im Installer: `neoforge-21.1.252`, `1.21.1-forge-52.1.16`.
 pub fn profile_id(kind: Kind, mc: &str, loader: &str) -> String {
     match kind {
+        Kind::NeoForge if legacy_neoforge(kind, mc) => format!("{mc}-neoforge-{loader}"),
         Kind::NeoForge => format!("neoforge-{loader}"),
         Kind::Forge => format!("{mc}-forge-{loader}"),
     }
@@ -212,6 +228,7 @@ pub fn profile_id(kind: Kind, mc: &str, loader: &str) -> String {
 
 fn installer_coord(kind: Kind, mc: &str, loader: &str) -> String {
     match kind {
+        Kind::NeoForge if legacy_neoforge(kind, mc) => format!("net.neoforged:forge:{mc}-{loader}:installer"),
         Kind::NeoForge => format!("net.neoforged:neoforge:{loader}:installer"),
         Kind::Forge => format!("net.minecraftforge:forge:{mc}-{loader}:installer"),
     }
@@ -515,7 +532,10 @@ mod tests {
         assert!(check_supported(Kind::Forge, "1.17").is_ok());
         assert!(check_supported(Kind::Forge, "1.16.5").is_err());
         assert!(check_supported(Kind::NeoForge, "1.20.2").is_ok());
-        assert!(check_supported(Kind::NeoForge, "1.20.1").is_err());
+        assert!(check_supported(Kind::NeoForge, "1.20.1").is_ok());
+        assert!(check_supported(Kind::NeoForge, "1.20").is_err());
+        assert_eq!(installer_coord(Kind::NeoForge, "1.20.1", "47.1.106"), "net.neoforged:forge:1.20.1-47.1.106:installer");
+        assert_eq!(profile_id(Kind::NeoForge, "1.20.1", "47.1.106"), "1.20.1-neoforge-47.1.106");
         assert!(check_supported(Kind::NeoForge, "26.1").is_ok());
         assert!(check_supported(Kind::Forge, "25w14a").is_err());
         assert_eq!(neoforge_prefix("1.21.1").as_deref(), Some("21.1."));
