@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Check, LogIn, Plus, Trash2, UserRound } from "lucide-react";
+import { Check, Plus, Trash2, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -123,19 +123,6 @@ export function AccountPage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-card/40">
-          <CardHeader>
-            <CardTitle>Microsoft-Konto</CardTitle>
-            <CardDescription>
-              Für Online-Server und Skins. Die Anmeldung über Microsoft folgt in einer späteren Version.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button disabled variant="outline" className="w-full">
-              <LogIn aria-hidden /> Mit Microsoft anmelden (folgt)
-            </Button>
-          </CardContent>
-        </Card>
       </div>
     </>
   );

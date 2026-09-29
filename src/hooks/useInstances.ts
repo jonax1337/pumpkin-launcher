@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { Instance, InstanceStatus, ModLoader, NewInstance } from "@/lib/types";
@@ -47,6 +48,33 @@ export function useUpdateInstance() {
   });
 }
 
+/**
+ * Mod-Liste speichern: Anzeige sofort, bei Fehler zurückgerollt. Gespeichert wird der Reihe nach,
+ * weil das Backend eine zweite Änderung ablehnt, solange eine läuft.
+ */
+export function useUpdateMods(instanceId: string) {
+  const qc = useQueryClient();
+  const key = instanceKeys.detail(instanceId);
+  const mutationKey = ["instance-mods", instanceId];
+  return useMutation({
+    mutationKey,
+    scope: { id: mutationKey.join(":") },
+    mutationFn: (instance: Instance) => api.updateInstance(instance),
+    onMutate: async (instance) => {
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<Instance>(key);
+      qc.setQueryData(key, instance);
+      return { previous };
+    },
+    onError: (_, __, ctx) => ctx?.previous && qc.setQueryData(key, ctx.previous),
+    onSuccess: (inst) => {
+      // Nur die letzte Änderung übernimmt den Serverstand, sonst springen noch wartende Schalter zurück.
+      if (qc.isMutating({ mutationKey }) === 1) qc.setQueryData(key, inst);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: instanceKeys.all, exact: true }),
+  });
+}
+
 export function useDeleteInstance() {
   const qc = useQueryClient();
   return useMutation({
@@ -90,12 +118,19 @@ export function useInstanceStatus(id: string | undefined) {
 export function useInstall() {
   const qc = useQueryClient();
   const { setProgress, clearProgress } = useGame.getState();
-  return useMutation({
+  const install = useMutation({
+    meta: { ownErrorToast: true },
     mutationFn: (instance: Instance) => {
       setProgress({ instanceId: instance.id, step: instance.loader === "fabric" ? "loader" : "java", done: 0, total: 0 });
       return api.installInstance(instance.id);
     },
     onSuccess: (_, instance) => toast.success(`${instance.name} ist installiert`),
+    onError: (err, instance) =>
+      toast.error(`${instance.name} konnte nicht installiert werden`, {
+        description: err.message,
+        duration: 10_000,
+        action: { label: "Erneut versuchen", onClick: () => install.mutate(instance) },
+      }),
     onSettled: (_, __, instance) => {
       clearProgress(instance.id);
       // Bei Fabric ohne loaderVersion schreibt das Backend die gewählte Version in die Instanz.
@@ -105,14 +140,17 @@ export function useInstall() {
       ]);
     },
   });
+  return install;
 }
 
 export function useLaunch() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   return useMutation({
+    meta: { ownErrorToast: true },
     mutationFn: (instance: Instance) => {
       const { offlineName, javaPath, memoryMb } = useSettings.getState();
-      if (!offlineName) throw new Error("Lege zuerst unter Konto einen Offline-Account an");
+      if (!offlineName) throw new Error("Leg zuerst einen Spielernamen fest.");
       useGame.getState().clearLog(instance.id);
       return api.launchInstance(instance.id, offlineName, javaPath, memoryMb);
     },
@@ -120,6 +158,10 @@ export function useLaunch() {
       qc.setQueryData<InstanceStatus>(instanceKeys.status(instance.id), (s) => s && { ...s, running: true });
       return qc.invalidateQueries({ queryKey: instanceKeys.all });
     },
+    onError: (err) =>
+      useSettings.getState().offlineName
+        ? toast.error(err.message)
+        : toast.error(err.message, { duration: 10_000, action: { label: "Spielername festlegen", onClick: () => navigate("/account") } }),
   });
 }
 
@@ -139,6 +181,7 @@ export function useKill() {
 /** Verbindet die Backend-Events mit dem Spiel-Store. Einmal im Layout einhängen. */
 export function useGameEvents() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   useEffect(() => {
     const { setProgress, appendLog } = useGame.getState();
     const subs = [
@@ -147,9 +190,13 @@ export function useGameEvents() {
       api.onLog(appendLog),
       api.onExit(({ instanceId, code }) => {
         qc.setQueryData<InstanceStatus>(instanceKeys.status(instanceId), (s) => s && { ...s, running: false });
-        if (!stopping.delete(instanceId) && code != null && code !== 0) toast.error(`Spiel mit Code ${code} beendet – Details in der Konsole`);
+        if (!stopping.delete(instanceId) && code != null && code !== 0)
+          toast.error(`Minecraft wurde unerwartet beendet (Code ${code})`, {
+            duration: 10_000,
+            action: { label: "Protokoll ansehen", onClick: () => navigate(`/instances/${instanceId}?tab=console`) },
+          });
       }),
     ];
     return () => subs.forEach((p) => p.then((unlisten) => unlisten()));
-  }, [qc]);
+  }, [qc, navigate]);
 }

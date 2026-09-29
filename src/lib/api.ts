@@ -1,6 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { initialInstances, initialPresets, MOCK_VERSIONS } from "@/lib/mock";
 import type {
   ExitPayload,
   Instance,
@@ -18,7 +17,8 @@ import type {
 
 import type { ContentSearch, ContentProject, ContentVersion, ContentProgress } from "@/lib/modrinth";
 
-const tauri = isTauri();
+// Mock nur im Dev-Server: im Release-Build ist das konstant true, Vite wirft Mock und mock.ts heraus.
+const tauri = !import.meta.env.DEV || isTauri();
 function contentCall<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   if (!tauri) return Promise.reject(new Error("Modrinth benötigt die Tauri-App. Im Browser werden keine Inhalte installiert."));
   return call<T>(cmd, args);
@@ -39,9 +39,12 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 
 // ---------- In-Memory-Mock ----------
 
+// Dynamisch und nur ohne Tauri: im Release-Build fällt der Import samt mock.ts weg.
+const mockData = tauri ? null : await import("@/lib/mock");
+
 const db = {
-  instances: initialInstances(),
-  presets: initialPresets(),
+  instances: mockData?.initialInstances() ?? [],
+  presets: mockData?.initialPresets() ?? [],
   installed: new Set<string>(),
   running: new Map<string, number>(),
 };
@@ -172,7 +175,7 @@ const mock = {
 const mockGame = {
   async versionsList() {
     await delay(400);
-    return clone(MOCK_VERSIONS);
+    return clone(mockData!.MOCK_VERSIONS);
   },
   async loaderVersions(loader: ModLoader): Promise<LoaderVersion[]> {
     await delay(300);

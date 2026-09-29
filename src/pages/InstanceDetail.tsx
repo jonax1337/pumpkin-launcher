@@ -1,17 +1,11 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
-import { ArrowLeft, Blocks, Check, Layers, Trash2 } from "lucide-react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { ArrowLeft, Blocks, Check, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -21,62 +15,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BlockTile, ConfirmDialog, EmptyState, ErrorNote, LoaderBadge } from "@/components/common";
 import { LogConsole, PlayControl, StatusBadge } from "@/components/game";
-import { useDeleteInstance, useInstance, useUpdateInstance } from "@/hooks/useInstances";
-import { useApplyPreset, usePresets } from "@/hooks/usePresets";
+import { instanceKeys, useDeleteInstance, useInstance, useUpdateInstance, useUpdateMods } from "@/hooks/useInstances";
 import { formatDate, formatMemory, relativeTime } from "@/lib/format";
-import { SOURCE_LABELS, type Instance } from "@/lib/types";
+import { SOURCE_LABELS, type Instance, type Mod } from "@/lib/types";
 import { useSettings } from "@/store/settings";
-
-function ApplyPresetDialog({ instance }: { instance: Instance }) {
-  const [open, setOpen] = useState(false);
-  const { data: presets } = usePresets();
-  const apply = useApplyPreset();
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline">
-          <Layers aria-hidden /> Preset anwenden
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Preset anwenden</DialogTitle>
-          <DialogDescription>
-            Mods, JVM-Argumente und RAM des Presets werden in „{instance.name}" übernommen.
-          </DialogDescription>
-        </DialogHeader>
-        <ul className="grid gap-2">
-          {presets?.length === 0 && <p className="text-sm text-muted-foreground">Keine Presets vorhanden.</p>}
-          {presets?.map((p) => {
-            const active = p.id === instance.presetId;
-            return (
-              <li key={p.id}>
-                <button
-                  type="button"
-                  disabled={apply.isPending}
-                  onClick={() =>
-                    apply.mutate({ instanceId: instance.id, presetId: p.id }, { onSuccess: () => setOpen(false) })
-                  }
-                  className="flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors outline-none hover:border-primary/40 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium">{p.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {p.mods.length} Mods · {formatMemory(p.memoryMb)} · {p.jvmArgs.length} JVM-Args
-                    </p>
-                  </div>
-                  {active && <Check className="size-4 text-primary" aria-label="Aktuell angewendet" />}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        {apply.error && <ErrorNote error={apply.error} />}
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
@@ -88,8 +30,6 @@ function Stat({ label, value, mono }: { label: string; value: string; mono?: boo
 }
 
 function OverviewTab({ instance }: { instance: Instance }) {
-  const { data: presets } = usePresets();
-  const preset = presets?.find((p) => p.id === instance.presetId);
   return (
     <div className="space-y-6">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -104,8 +44,6 @@ function OverviewTab({ instance }: { instance: Instance }) {
         </CardHeader>
         <CardContent>
           <dl className="grid grid-cols-[160px_1fr] gap-y-3 text-sm">
-            <dt className="text-muted-foreground">Preset</dt>
-            <dd>{preset ? preset.name : "Keins"}</dd>
             <dt className="text-muted-foreground">Erstellt</dt>
             <dd>{formatDate(instance.createdAt)}</dd>
             <dt className="text-muted-foreground">Zuletzt gespielt</dt>
@@ -120,12 +58,32 @@ function OverviewTab({ instance }: { instance: Instance }) {
 }
 
 function ModsTab({ instance }: { instance: Instance }) {
-  const update = useUpdateInstance();
+  const qc = useQueryClient();
+  const update = useUpdateMods(instance.id);
+
+  function remove(mod: Mod) {
+    const index = instance.mods.findIndex((m) => m.id === mod.id);
+    update.mutate({ ...instance, mods: instance.mods.filter((m) => m.id !== mod.id) });
+    toast(`${mod.name} entfernt`, {
+      duration: 6000,
+      action: {
+        label: "Rückgängig",
+        onClick: () => {
+          // Aktuellen Stand nehmen: in den 6 s können weitere Änderungen passiert sein.
+          const current = qc.getQueryData<Instance>(instanceKeys.detail(instance.id));
+          if (!current || current.mods.some((m) => m.id === mod.id)) return;
+          const mods = [...current.mods];
+          mods.splice(index, 0, mod);
+          update.mutate({ ...current, mods });
+        },
+      },
+    });
+  }
 
   if (instance.mods.length === 0) {
     return (
       <EmptyState icon={<Blocks className="size-5" />} title="Keine Mods installiert">
-        Wende ein Preset an oder durchsuche den{" "}
+        Durchsuche den{" "}
         <Link to="/mods" className="text-primary underline-offset-4 hover:underline">
           Mod-Browser
         </Link>
@@ -146,7 +104,6 @@ function ModsTab({ instance }: { instance: Instance }) {
           <span className="w-20 text-right font-mono text-xs text-muted-foreground">{mod.version}</span>
           <Switch
             checked={mod.enabled}
-            disabled={update.isPending}
             aria-label={`${mod.name} ${mod.enabled ? "deaktivieren" : "aktivieren"}`}
             onCheckedChange={(enabled) =>
               update.mutate({
@@ -160,8 +117,7 @@ function ModsTab({ instance }: { instance: Instance }) {
             size="icon-sm"
             aria-label={`${mod.name} entfernen`}
             className="text-muted-foreground hover:text-destructive"
-            disabled={update.isPending}
-            onClick={() => update.mutate({ ...instance, mods: instance.mods.filter((m) => m.id !== mod.id) })}
+            onClick={() => remove(mod)}
           >
             <Trash2 aria-hidden />
           </Button>
@@ -233,7 +189,6 @@ function SettingsTab({ instance }: { instance: Instance }) {
               placeholder="-XX:+UseG1GC"
             />
           </div>
-          {update.error && <ErrorNote error={update.error} />}
           <div className="flex justify-end">
             <Button onClick={save} disabled={update.isPending}>
               {update.isSuccess && !update.isPending ? <Check aria-hidden /> : null}
@@ -269,7 +224,10 @@ function SettingsTab({ instance }: { instance: Instance }) {
 export function InstanceDetailPage() {
   const { id } = useParams();
   const { data: instance, isLoading, error } = useInstance(id);
-  const [tab, setTab] = useState("overview");
+  // Tab in der URL, damit z. B. der Absturz-Toast direkt die Konsole öffnen kann.
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("tab") ?? "overview";
+  const setTab = (value: string) => setParams({ tab: value }, { replace: true });
 
   return (
     <div>
@@ -303,10 +261,7 @@ export function InstanceDetailPage() {
                 <span className="font-mono">{instance.minecraftVersion}</span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <ApplyPresetDialog instance={instance} />
-              <PlayControl instance={instance} onLaunched={() => setTab("console")} />
-            </div>
+            <PlayControl instance={instance} onLaunched={() => setTab("console")} />
           </header>
 
           <Tabs value={tab} onValueChange={setTab}>
@@ -326,7 +281,6 @@ export function InstanceDetailPage() {
               <ModsTab instance={instance} />
             </TabsContent>
             <TabsContent value="settings">
-              {/* key: Formular nach Preset-Anwendung neu initialisieren */}
               <SettingsTab key={`${instance.presetId}-${instance.memoryMb}-${instance.jvmArgs.join()}`} instance={instance} />
             </TabsContent>
           </Tabs>

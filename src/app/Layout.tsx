@@ -3,7 +3,6 @@ import {
   Blocks,
   Boxes,
   House,
-  Layers,
   Package,
   Settings,
   UserRound,
@@ -20,7 +19,6 @@ const NAV: { to: string; label: string; icon: LucideIcon; end?: boolean }[] = [
   { to: "/instances", label: "Instanzen", icon: Boxes },
   { to: "/mods", label: "Mods", icon: Blocks },
   { to: "/modpacks", label: "Modpacks", icon: Package },
-  { to: "/presets", label: "Presets", icon: Layers },
 ];
 
 const NAV_BOTTOM: typeof NAV = [
