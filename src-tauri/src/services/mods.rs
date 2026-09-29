@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use crate::error::{AppError, AppResult};
 use crate::models::Mod;
-use crate::services::download::sha1_hex;
+use crate::services::download::{sha1_file, sha1_hex};
 use crate::services::Dirs;
 
 /// Pfad eines Cache-Eintrags. Der Hash wird Teil des Pfads, daher nur echte SHA-1-Hex-Strings.
@@ -17,22 +17,6 @@ pub fn cached(dirs: &Dirs, sha1: &str) -> AppResult<PathBuf> {
     Ok(dirs
         .mod_cache()
         .join(format!("{}.jar", sha1.to_ascii_lowercase())))
-}
-
-fn sha1_of(path: &Path) -> io::Result<String> {
-    use sha1::{Digest, Sha1};
-    use std::io::Read;
-    let mut file = fs::File::open(path)?;
-    let mut hash = Sha1::new();
-    let mut buffer = [0u8; 65536];
-    loop {
-        let n = file.read(&mut buffer)?;
-        if n == 0 {
-            break;
-        }
-        hash.update(&buffer[..n]);
-    }
-    Ok(hash.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
 /// Legt eine JAR im Cache ab (falls noch nicht vorhanden) und liefert ihren SHA-1.
@@ -116,12 +100,12 @@ pub fn sync_commit<T>(
                 if !meta.is_file() {
                     return Err(AppError::Invalid("Kein regulaeres Mod-Ziel".into()));
                 }
-                Some(sha1_of(&path)?)
+                Some(sha1_file(&path)?)
             }
             Err(e) if e.kind() == io::ErrorKind::NotFound => None,
             Err(e) => return Err(e.into()),
         };
-        let hash = m.sha1.as_ref().unwrap();
+        let Some(hash) = m.sha1.as_ref() else { continue };
         let ours = current
             .as_ref()
             .is_some_and(|s| s.eq_ignore_ascii_case(hash));
@@ -143,7 +127,7 @@ pub fn sync_commit<T>(
                     id: hash.clone(),
                 });
             }
-            if !sha1_of(&cache)?.eq_ignore_ascii_case(hash) {
+            if !sha1_file(&cache)?.eq_ignore_ascii_case(hash) {
                 return Err(AppError::Invalid("Mod-Cache-Hash stimmt nicht".into()));
             }
             changes.push((path, Some(cache)));
@@ -154,7 +138,9 @@ pub fn sync_commit<T>(
     let mut journal: Vec<(PathBuf, Option<PathBuf>)> = Vec::new();
     let result = (|| {
         for (path, source) in changes {
-            fs::create_dir_all(path.parent().expect("Zielpfad hat einen Ordner"))?;
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
+            }
             if let Some(source) = source {
                 // place is exclusive; only record a successfully created target.
                 place(&source, &path)?;
@@ -187,7 +173,7 @@ pub fn sync_commit<T>(
                     if let Some(backup) = backup {
                         match fs::symlink_metadata(&path) {
                             Err(e) if e.kind() == io::ErrorKind::NotFound => place(&backup, &path)?,
-                            Ok(_) if sha1_of(&path)? == sha1_of(&backup)? => {}
+                            Ok(_) if sha1_file(&path)? == sha1_file(&backup)? => {}
                             Ok(_) => {
                                 return Err(AppError::Invalid(format!(
                                     "Rollback-Ziel belegt; Backup: {}",
@@ -256,7 +242,7 @@ mod tests {
             version: "1".into(),
             source: ModSource::Local,
             file_name: "large.jar".into(),
-            sha1: Some(sha1_of(&path).unwrap()),
+            sha1: Some(sha1_file(&path).unwrap()),
             enabled: true,
             kind: Default::default(),
             required_by: Vec::new(),
@@ -270,7 +256,7 @@ mod tests {
             Err(AppError::Invalid("store failure".into()))
         });
         assert!(failed.is_err());
-        assert_eq!(sha1_of(&path).unwrap(), m.sha1.unwrap());
+        assert_eq!(sha1_file(&path).unwrap(), m.sha1.unwrap());
         assert_eq!(fs::read_dir(dirs.mods_dir("i")).unwrap().count(), 1);
         fs::remove_dir_all(&dirs.root).unwrap();
     }
