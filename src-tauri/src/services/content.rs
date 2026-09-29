@@ -1,8 +1,5 @@
 //! Transaktionaler Content-Import. Ziele werden exklusiv neu angelegt, niemals ersetzt.
-use super::{
-    download::sha1_hex,
-    modrinth::{self, invalid, File, Version},
-};
+use super::modrinth::{self, invalid, File, Version};
 use crate::{
     error::AppResult,
     models::{Instance, Mod, ModKind, ModLoader, ModSource, NewInstance},
@@ -189,6 +186,8 @@ pub async fn install_mod(
         for (v, file, target, data) in ready {
             write_new(&target, &data)?;
             created.push(target);
+            // Cache aus den verifizierten Bytes; Fehler rollen nur die Ziele zurück.
+            let sha1 = super::mods::cache_bytes(&state.dirs, &data)?;
             instance.mods.push(Mod {
                 id: v.project_id.clone(),
                 name: v.name,
@@ -198,13 +197,11 @@ pub async fn install_mod(
                     version_id: v.id,
                 },
                 file_name: file.filename,
-                sha1: Some(sha1_hex(&data)),
+                sha1: Some(sha1),
                 enabled: true,
                 kind,
                 required_by: Vec::new(),
             });
-            // Cache is populated from the fully verified target; failures roll back targets only.
-            super::mods::cache_file(&state.dirs, created.last().unwrap())?;
         }
         mark_dependencies(&mut instance.mods, &selected, &fresh);
         state.instances.update(instance)
@@ -507,6 +504,16 @@ struct Pack {
     instance: Instance,
     downloads: Vec<(PathBuf, File)>,
     overrides: Vec<(PathBuf, Vec<u8>)>,
+    /// Aus `voxlet.json` eigener Vorlagen: Dateiname -> `required_by`.
+    required_by: HashMap<String, Vec<String>>,
+}
+/// Eigene Zusatzdatei in Vorlagen-`.mrpack`s; andere Launcher ignorieren sie.
+pub const VOXLET_FILE: &str = "voxlet.json";
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct VoxletMeta {
+    #[serde(default)]
+    required_by: HashMap<String, Vec<String>>,
 }
 const PACK_LIMIT: u64 = 1024 * 1024 * 1024;
 fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
@@ -524,6 +531,7 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
     let mut entries = HashSet::new();
     let mut overrides = Vec::new();
     let mut manifest = None;
+    let mut meta = VoxletMeta::default();
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i)?;
         let name = entry.name().to_string();
@@ -557,13 +565,14 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
             continue;
         }
         let is_index = name == "modrinth.index.json";
+        let is_meta = name == VOXLET_FILE;
         let target = name
             .strip_prefix("client-overrides/")
             .or_else(|| name.strip_prefix("overrides/"));
-        if !is_index && target.is_none() {
+        if !is_index && !is_meta && target.is_none() {
             continue;
         }
-        let limit = if is_index {
+        let limit = if is_index || is_meta {
             8 * 1024 * 1024
         } else {
             modrinth::FILE_LIMIT
@@ -575,6 +584,8 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
         }
         if is_index {
             manifest = Some(serde_json::from_slice::<Index>(&bytes)?);
+        } else if is_meta {
+            meta = serde_json::from_slice(&bytes)?;
         } else if let Some(target) = target {
             overrides.push((
                 safe_path(target)?,
@@ -684,6 +695,7 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
         instance,
         downloads,
         overrides,
+        required_by: meta.required_by,
     })
 }
 pub async fn import(
@@ -698,8 +710,10 @@ pub async fn import(
     pack.instance.modpack = origin;
     let root = state.dirs.instance(&pack.instance.id);
     regular_parents(&root)?;
-    fs::create_dir_all(root.parent().unwrap())?;
+    fs::create_dir_all(state.dirs.root.join("instances"))?;
     fs::create_dir(&root)?;
+    // Abbruch (Future verworfen) räumt die halbe Instanz weg; Fehler räumt unten `match` auf.
+    let mut guard = super::download::RemoveOnDrop(Some(root.clone()));
     let result = async {
         let client = modrinth::client()?;
         let total = (pack.downloads.len() + pack.overrides.len()) as u64;
@@ -733,11 +747,19 @@ pub async fn import(
             let m = entry(kind, file_name, sha1, &known, &titles, &pack.instance.mods);
             pack.instance.mods.push(m);
         }
+        if pack.required_by.is_empty() {
+            derive_required_by(&mut pack.instance.mods, &known);
+        } else {
+            for m in &mut pack.instance.mods {
+                m.required_by = pack.required_by.remove(&m.file_name).unwrap_or_default();
+            }
+        }
         let instance = state.instances.insert(pack.instance)?;
         progress("complete", total, total);
         Ok(instance)
     }
     .await;
+    guard.0 = None;
     match result {
         Err(e) => {
             if let Err(cleanup) = fs::remove_dir_all(&root) {
@@ -778,6 +800,99 @@ async fn identify(
         }
     };
     Ok((known, titles))
+}
+
+/// Fremde Packs: `required_by` aus den Pflicht-Abhängigkeiten der erkannten Modrinth-Versionen.
+/// Was keine andere enthaltene Mod braucht, gilt als direkt hinzugefügt.
+fn derive_required_by(mods: &mut [Mod], known: &HashMap<String, Version>) {
+    let selected: HashMap<String, Version> =
+        known.values().map(|v| (v.project_id.clone(), v.clone())).collect();
+    let fresh: HashSet<String> = selected
+        .values()
+        .flat_map(|v| &v.dependencies)
+        .filter(|d| d.dependency_type == "required")
+        .filter_map(|d| {
+            d.project_id.clone().or_else(|| {
+                let id = d.version_id.as_ref()?;
+                selected.values().find(|o| &o.id == id).map(|o| o.project_id.clone())
+            })
+        })
+        .filter(|p| selected.contains_key(p))
+        .collect();
+    mark_dependencies(mods, &selected, &fresh);
+}
+
+/// Inhalte im Spielordner, die nicht in `instance.mods` stehen: (Art, Dateiname, aktiv, Pfad).
+/// `name.jar.disabled` zählt als deaktiviertes `name.jar`.
+fn untracked(dirs: &super::Dirs, instance: &Instance) -> AppResult<Vec<(ModKind, String, bool, PathBuf)>> {
+    let mut found: Vec<(ModKind, String, bool, PathBuf)> = Vec::new();
+    for kind in [ModKind::Mod, ModKind::ResourcePack, ModKind::Shader] {
+        let entries = match fs::read_dir(dirs.game_dir(&instance.id).join(kind.folder())) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => return Err(e.into()),
+        };
+        for e in entries {
+            let e = e?;
+            let Some(raw) = e.file_name().to_str().map(str::to_owned) else { continue };
+            let (name, enabled) = match raw.strip_suffix(".disabled") {
+                Some(name) => (name.to_owned(), false),
+                None => (raw, true),
+            };
+            let seen = instance.mods.iter().any(|m| m.kind == kind && m.file_name.eq_ignore_ascii_case(&name))
+                || found.iter().any(|(k, n, ..)| *k == kind && n.eq_ignore_ascii_case(&name));
+            if seen || !e.file_type()?.is_file() || !name.ends_with(kind.extension()) || safe_path(&name).is_err() {
+                continue;
+            }
+            found.push((kind, name, enabled, e.path()));
+        }
+    }
+    Ok(found)
+}
+
+/// Nachpflege nach dem Start: Dateien in `mods/`, `resourcepacks/`, `shaderpacks/`, die (etwa bei
+/// vor a9f2691 importierten Packs) nicht in der Instanz stehen, werden gecacht und eingetragen;
+/// erkannt per Modrinth-Sammelabfrage, ohne Netz als lokal. Liefert die Anzahl neuer Einträge.
+/// Ohne Operations-Lock: jede Instanz wird ohne `await` dazwischen frisch gelesen und geschrieben;
+/// geht ein Nachtrag an eine parallele Änderung verloren, holt ihn der nächste Start nach.
+pub async fn adopt_untracked(state: &AppState) -> AppResult<usize> {
+    let mut plan = Vec::new();
+    for instance in state.instances.list() {
+        for (kind, name, enabled, path) in untracked(&state.dirs, &instance)? {
+            let sha1 = super::mods::cache_file(&state.dirs, &path)?;
+            plan.push((instance.id.clone(), kind, name, enabled, sha1));
+        }
+    }
+    if plan.is_empty() {
+        return Ok(0);
+    }
+    let mut hashes: Vec<String> = plan.iter().map(|p| p.4.clone()).collect();
+    hashes.sort();
+    hashes.dedup();
+    let (known, titles) = identify(&modrinth::client()?, &hashes).await.unwrap_or_else(|err| {
+        tracing::warn!(%err, "Nachgetragene Inhalte nicht bei Modrinth erkannt; als lokal erfasst");
+        Default::default()
+    });
+    let mut added = 0;
+    let mut ids: Vec<&String> = plan.iter().map(|p| &p.0).collect();
+    ids.dedup();
+    for id in ids {
+        let Ok(mut instance) = state.instances.get(id) else { continue };
+        let before = instance.mods.len();
+        for (_, kind, name, enabled, sha1) in plan.iter().filter(|p| &p.0 == id) {
+            if instance.mods.iter().any(|m| m.kind == *kind && m.file_name.eq_ignore_ascii_case(name)) {
+                continue;
+            }
+            let m = entry(*kind, name.clone(), sha1.clone(), &known, &titles, &instance.mods);
+            instance.mods.push(Mod { enabled: *enabled, ..m });
+        }
+        if instance.mods.len() > before {
+            added += instance.mods.len() - before;
+            derive_required_by(&mut instance.mods, &known);
+            state.instances.update(instance)?;
+        }
+    }
+    Ok(added)
 }
 
 fn entry(
@@ -985,6 +1100,66 @@ mod tests {
         assert_eq!(again.name, "sodium-2");
         assert_eq!(content_file(Path::new("shaderpacks/x.zip")).map(|(k, _)| k), Some(ModKind::Shader));
         assert!(content_file(Path::new("mods/x.zip")).is_none() && content_file(Path::new("x.jar")).is_none());
+    }
+    #[test]
+    fn foreign_pack_derives_required_by() {
+        // a -> b -> c, d alone; Schlüssel wie bei `identify`: sha1 -> Version.
+        let known: HashMap<String, Version> = graph(&[("a", &["b"]), ("b", &["c"]), ("c", &[]), ("d", &[])])
+            .into_iter()
+            .map(|(p, v)| (format!("{p:0>40}"), v))
+            .collect();
+        let mut mods: Vec<Mod> = ["a", "b", "c", "d"]
+            .iter()
+            .map(|p| entry(ModKind::Mod, format!("{p}.jar"), format!("{p:0>40}"), &known, &HashMap::new(), &[]))
+            .collect();
+        derive_required_by(&mut mods, &known);
+        let by: Vec<_> = mods.iter().map(|m| m.required_by.join(",")).collect();
+        assert_eq!(by, ["", "a", "a", ""]);
+    }
+    #[tokio::test]
+    async fn adopts_untracked_files_once() {
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        let state = AppState::load(&root).unwrap();
+        let i = state
+            .instances
+            .insert(Instance::from_new(NewInstance {
+                name: "Alt".into(),
+                minecraft_version: "1.21.1".into(),
+                loader: ModLoader::Fabric,
+                loader_version: None,
+            }))
+            .unwrap();
+        let game = state.dirs.game_dir(&i.id);
+        for (path, data) in [
+            ("mods/a.jar", "a"),
+            ("mods/off.jar.disabled", "off"),
+            ("mods/notes.txt", "n"),
+            ("resourcepacks/r.zip", "r"),
+            ("shaderpacks/s.zip", "s"),
+        ] {
+            fs::create_dir_all(game.join(path).parent().unwrap()).unwrap();
+            fs::write(game.join(path), data).unwrap();
+        }
+        assert_eq!(adopt_untracked(&state).await.unwrap(), 4);
+        let mods = state.instances.get(&i.id).unwrap().mods;
+        let got: Vec<_> = mods.iter().map(|m| (m.kind, m.file_name.as_str(), m.enabled)).collect();
+        assert_eq!(
+            got,
+            [
+                (ModKind::Mod, "a.jar", true),
+                (ModKind::Mod, "off.jar", false),
+                (ModKind::ResourcePack, "r.zip", true),
+                (ModKind::Shader, "s.zip", true),
+            ]
+        );
+        assert!(mods.iter().all(|m| m.source == ModSource::Local));
+        // Gecacht: Aktivieren legt die deaktivierte Mod aus dem Cache ab.
+        let on: Vec<_> = mods.iter().map(|m| Mod { enabled: true, ..m.clone() }).collect();
+        crate::services::mods::sync(&state.dirs, &i.id, &on).unwrap();
+        assert_eq!(fs::read(game.join("mods/off.jar")).unwrap(), b"off");
+        // Zweiter Lauf trägt nichts doppelt ein.
+        assert_eq!(adopt_untracked(&state).await.unwrap(), 0);
+        fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn security_boundaries() {

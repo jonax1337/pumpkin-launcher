@@ -105,6 +105,15 @@ fn write_pack(dirs: &Dirs, instance: &Instance, remote: &[Value]) -> AppResult<V
     let options = zip::write::SimpleFileOptions::default();
     zip.start_file("modrinth.index.json", options)?;
     zip.write_all(&serde_json::to_vec_pretty(&index)?)?;
+    // „benötigt von“ kennt das mrpack-Format nicht: eigene Datei, die der Import auswertet.
+    let required_by: serde_json::Map<String, Value> = instance
+        .mods
+        .iter()
+        .filter(|m| m.enabled && m.sha1.is_some() && !m.required_by.is_empty())
+        .map(|m| (m.file_name.clone(), json!(m.required_by)))
+        .collect();
+    zip.start_file(content::VOXLET_FILE, options)?;
+    zip.write_all(&serde_json::to_vec_pretty(&json!({ "requiredBy": required_by }))?)?;
     let mut total = 0u64;
     for (path, source) in files {
         content::safe_path(&path)?;
@@ -137,7 +146,7 @@ pub async fn save(state: &AppState, instance_id: &str, name: &str) -> AppResult<
         created_at: now_ms(),
     };
     let path = file(&state.dirs, &template.id);
-    fs::create_dir_all(path.parent().expect("templates/ hat einen Ordner"))?;
+    fs::create_dir_all(state.dirs.root.join("templates"))?;
     let tmp = path.with_extension("mrpack.part");
     fs::write(&tmp, &data)?;
     fs::rename(&tmp, &path)?;
@@ -200,7 +209,7 @@ mod tests {
             loader: ModLoader::Fabric,
             loader_version: Some("0.16.10".into()),
         });
-        source.mods = vec![local("own", true), local("off", false)];
+        source.mods = vec![local("own", true), local("off", false), Mod { required_by: vec!["own".into()], ..local("dep", true) }];
         let source = state.instances.insert(source).unwrap();
         let game = state.dirs.game_dir(&source.id);
         for (path, data) in [("config/sub/a.toml", "x=1"), ("options.txt", "fov:1"), ("saves/w/level.dat", "welt")] {
@@ -210,14 +219,16 @@ mod tests {
 
         assert!(save(&state, &source.id, "  ").await.is_err());
         let t = save(&state, &source.id, "Meine Vorlage").await.unwrap();
-        assert_eq!((t.mod_count, t.loader), (1, ModLoader::Fabric));
+        assert_eq!((t.mod_count, t.loader), (2, ModLoader::Fabric));
         assert_eq!(state.templates.list(), vec![t.clone()]);
 
         let copy = create_instance(&state, &t.id, "Kopie", &|_, _, _| {}).await.unwrap();
         let new = state.dirs.game_dir(&copy.id);
         assert_eq!(fs::read(new.join("mods/own.jar")).unwrap(), b"own");
-        assert_eq!(copy.mods.iter().map(|m| (m.file_name.as_str(), m.enabled)).collect::<Vec<_>>(), [("own.jar", true)]);
-        assert_eq!(copy.mods[0].sha1, source.mods[0].sha1);
+        let mut got: Vec<_> = copy.mods.iter().map(|m| (m.file_name.as_str(), m.enabled, m.required_by.clone())).collect();
+        got.sort();
+        assert_eq!(got, [("dep.jar", true, vec!["own".to_string()]), ("own.jar", true, vec![])]);
+        assert!(copy.mods.iter().any(|m| m.sha1 == source.mods[0].sha1));
         assert_eq!(fs::read(new.join("config/sub/a.toml")).unwrap(), b"x=1");
         assert_eq!(fs::read(new.join("options.txt")).unwrap(), b"fov:1");
         assert!(!new.join("mods/off.jar").exists() && !new.join("saves").exists());
