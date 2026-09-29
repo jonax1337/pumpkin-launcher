@@ -259,11 +259,12 @@ export function useGameEvents() {
         const { instanceId, code, crashed, crashReport } = exit;
         qc.setQueryData<InstanceStatus>(instanceKeys.status(instanceId), (s) => s && { ...s, running: false });
         if (stopping.delete(instanceId)) return;
+        const name = qc.getQueryData<Instance[]>(instanceKeys.all)?.find((i) => i.id === instanceId)?.name ?? "Minecraft";
         const showLog = { label: "Protokoll anzeigen", onClick: () => navigate(`/instances/${instanceId}?tab=console`) };
         if (crashed) {
           useGame.getState().setCrash(exit);
           // Bleibt stehen, bis der Nutzer reagiert: ein Absturz ist keine vorübergehende Meldung.
-          toast.error("Minecraft ist abgestürzt", {
+          toast.error(`${name} ist abgestürzt`, {
             id: `crash-${instanceId}`,
             duration: Infinity,
             description: crashReport ? "Im Absturzbericht steht meist, welche Mod schuld ist." : "Das Protokoll zeigt, was zuletzt passiert ist.",
@@ -273,7 +274,7 @@ export function useGameEvents() {
             cancel: crashReport ? showLog : undefined,
           });
         } else if (code != null && code !== 0) {
-          toast.error(`Minecraft wurde unerwartet beendet (Code ${code})`, { duration: 10_000, action: showLog });
+          toast.error(`${name} wurde unerwartet beendet (Code ${code})`, { duration: 10_000, action: showLog });
         }
       }),
       // Das Backend hat Instanzen umgebaut (z. B. Migration): Listen und Details neu laden.
