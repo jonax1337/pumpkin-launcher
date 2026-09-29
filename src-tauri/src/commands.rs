@@ -135,6 +135,8 @@ pub async fn instance_install(app: AppHandle, state: State<'_, AppState>, instan
         emit(&app, INSTALL_PROGRESS_EVENT, InstallProgress { instance_id: instance_id.clone(), step, done, total });
     };
     install::install(&state.http, &state.dirs, &version, &instance_id, &on_progress).await?;
+    // Marker erst nach vollständigem Erfolg: `instance_status` erkennt so auch abgebrochene Installationen.
+    tokio::fs::write(installed_marker(&state, &instance_id), &instance.minecraft_version).await?;
     tracing::info!(instance = %instance_id, "Installation abgeschlossen");
     Ok(())
 }
@@ -147,14 +149,19 @@ pub async fn instance_launch(
     state: State<'_, AppState>,
     instance_id: String,
     username: String,
+    java_path: Option<String>,
 ) -> AppResult<u32> {
     let mut instance = state.instances.get(&instance_id)?;
     require_vanilla(&instance)?;
     let account = auth::offline_account(&username)?;
     let version = install::installed_version(&state.dirs, &instance.minecraft_version).await?;
-    let java = java::java_exe(&state.dirs, install::java_component(&version));
+    // Eigener Java-Pfad aus den Einstellungen hat Vorrang vor der mitgelieferten Runtime.
+    let java = match java_path.filter(|p| !p.trim().is_empty()) {
+        Some(p) => std::path::PathBuf::from(p.trim()),
+        None => java::java_exe(&state.dirs, install::java_component(&version)),
+    };
     if !java.exists() {
-        return Err(AppError::Invalid("Java-Runtime fehlt, bitte Instanz installieren".into()));
+        return Err(AppError::Invalid(format!("Java nicht gefunden: {}", java.display())));
     }
     let args = launch::build_args(
         &LaunchSpec {
@@ -210,4 +217,25 @@ pub fn instance_kill(state: State<'_, AppState>, instance_id: String) -> AppResu
     game.kill();
     tracing::info!(instance = %instance_id, "Spiel wird beendet");
     Ok(())
+}
+
+fn installed_marker(state: &AppState, instance_id: &str) -> std::path::PathBuf {
+    state.dirs.natives_dir(instance_id).with_file_name("installed")
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceStatus {
+    /// Aktuelle Minecraft-Version der Instanz ist vollständig installiert.
+    installed: bool,
+    running: bool,
+}
+
+/// Installations- und Laufzustand einer Instanz (für die Statusanzeige im Frontend).
+#[tauri::command]
+pub fn instance_status(state: State<'_, AppState>, instance_id: String) -> AppResult<InstanceStatus> {
+    let instance = state.instances.get(&instance_id)?;
+    let installed = std::fs::read_to_string(installed_marker(&state, &instance_id))
+        .is_ok_and(|v| v == instance.minecraft_version);
+    Ok(InstanceStatus { installed, running: state.running().contains_key(&instance_id) })
 }
