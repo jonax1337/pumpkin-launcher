@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TemplatesTab } from "@/components/TemplatesTab";
 import { ContentResults, PackInstallButton } from "@/components/ContentBrowser";
 import { useContentInstall, useContentState } from "@/hooks/useContent";
 import { useCreateInstance, useLoaderVersions, useVersions } from "@/hooks/useInstances";
@@ -22,7 +23,7 @@ import { INSTALLABLE_LOADERS, LOADER_LABELS, type ModLoader } from "@/lib/types"
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/store/settings";
 
-type Tab = "empty" | "modpack" | "file";
+type Tab = "empty" | "modpack" | "file" | "template";
 
 // Radix-Select erlaubt keinen leeren Wert; steht für loaderVersion = null.
 const LATEST = "latest";
@@ -284,10 +285,11 @@ export function NewInstanceDialog({ children, primary }: { children: ReactNode; 
           <DialogDescription>Ein eigenes Minecraft mit eigener Version, eigenen Mods und eigenen Welten.</DialogDescription>
         </DialogHeader>
         <Tabs value={tab} onValueChange={(t) => setTab(t as Tab)} className="min-w-0">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="empty">Leer</TabsTrigger>
             <TabsTrigger value="modpack">Modpack</TabsTrigger>
             <TabsTrigger value="file">Datei</TabsTrigger>
+            <TabsTrigger value="template">Vorlage</TabsTrigger>
           </TabsList>
           <TabsContent value="empty" className="mt-5">
             <EmptyTab onDone={done} />
@@ -297,6 +299,9 @@ export function NewInstanceDialog({ children, primary }: { children: ReactNode; 
           </TabsContent>
           <TabsContent value="file" className="mt-5">
             <FileTab path={path} setPath={setPath} onDone={done} />
+          </TabsContent>
+          <TabsContent value="template" className="mt-5">
+            <TemplatesTab onDone={done} />
           </TabsContent>
         </Tabs>
       </DialogContent>
