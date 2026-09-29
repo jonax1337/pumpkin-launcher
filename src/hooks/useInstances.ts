@@ -142,7 +142,8 @@ export function useGameEvents() {
   useEffect(() => {
     const { setProgress, appendLog } = useGame.getState();
     const subs = [
-      api.onInstallProgress(setProgress),
+      // Events laufen dem invoke-Ergebnis nach; ohne Guard setzen späte Events eine abgeschlossene Installation wieder auf "läuft".
+      api.onInstallProgress((p) => useGame.getState().installs[p.instanceId] && setProgress(p)),
       api.onLog(appendLog),
       api.onExit(({ instanceId, code }) => {
         qc.setQueryData<InstanceStatus>(instanceKeys.status(instanceId), (s) => s && { ...s, running: false });
