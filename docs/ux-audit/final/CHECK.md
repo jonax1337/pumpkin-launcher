@@ -61,3 +61,11 @@ Alle Icons sind SVG, Instanzkacheln CSS-Raster; es gibt keine Bitmaps unter 2×.
 - `prefers-reduced-motion: reduce`: Übergänge auf 0,01 ms (gemessen an Knopf und Seitenleiste), Seitenwechsel ohne Überblendung; Fortschrittsbalken ausgenommen.
 - Browser-Konsole während aller Läufe: keine Fehler.
 - `pnpm build` (tsc strict + vite) grün.
+
+## Nachlauf Review-Befunde (29.09.2026)
+
+Neu erzeugt in allen sechs Größen: spielen, instanz-protokoll, entdecken-details, einstellungen (einstellungen bytegleich, keine sichtbare Änderung). Prüfung: 24 / 24 ohne doc/clipped/spill/untitled.
+
+- **Spielen:** ab 1280 px zweite Hero-Spalte mit Inhalte-Anzahl, Loader-Version, Erstelldatum und den vier zuletzt selbst hinzugefügten Inhalten; ab 1920 px größere Kachel und Überschrift. „Weitere Instanzen“ zeigt bis zu 8. Bei 800×600 bleibt „Spielen“ ohne Scrollen sichtbar (Hero-Spalte erst ab xl). Der Leerraum darunter bei 2560×1440 kommt aus den Mock-Daten (6 weitere Instanzen = eine Reihe); es gibt bewusst keine Füllflächen.
+- **Entdecken-Details:** Reihen verlinkter Bild-Knöpfe (z. B. „How to install“, „Discord“) erscheinen als Textlinks in Primärfarbe; einzelne verlinkte Bilder (Video, Screenshots) bleiben.
+- **Protokoll-Last:** `voxletMock.logBurst("inst-vanilla")` (5000 Zeilen in ≈2 s, Dev-Build 1280×800): Median-Frame 4 ms, 3 Frames über 50 ms (max. 100 ms), 2000 Zeilen im Puffer, bleibt unten angeheftet.
