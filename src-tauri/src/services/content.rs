@@ -302,7 +302,6 @@ pub async fn check_updates(
     client: &reqwest::Client,
     instance: &Instance,
 ) -> AppResult<Vec<(usize, Version)>> {
-    let loader = serde_json::to_value(instance.loader)?;
     let mut found = Vec::new();
     for kind in [ModKind::Mod, ModKind::ResourcePack, ModKind::Shader] {
         let hashes: Vec<String> = instance
@@ -312,7 +311,7 @@ pub async fn check_updates(
             .filter_map(|m| m.sha1.as_ref().map(|h| h.to_ascii_lowercase()))
             .collect();
         let loaders = match kind {
-            ModKind::Mod => vec![loader.as_str().unwrap_or_default()],
+            ModKind::Mod => instance.loader.modrinth_loaders().to_vec(),
             ModKind::ResourcePack => vec!["minecraft"],
             ModKind::Shader => vec!["iris", "optifine", "canvas", "vanilla"],
         };
@@ -598,12 +597,12 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
     if index.format_version != 1 || index.game != "minecraft" || index.files.len() > 2048 {
         return Err(invalid("Nicht unterstütztes Packformat"));
     }
-    if index
-        .dependencies
-        .keys()
-        .any(|k| k != "minecraft" && k != "fabric-loader")
-    {
-        return Err(invalid("Nur Vanilla/Fabric-Packs unterstützt"));
+    let loaders: Vec<(ModLoader, String)> = ModLoader::PACK_KEYS
+        .iter()
+        .filter_map(|(l, k)| index.dependencies.get(*k).map(|v| (*l, v.clone())))
+        .collect();
+    if loaders.len() > 1 || index.dependencies.len() > loaders.len() + 1 {
+        return Err(invalid("Das Pack braucht einen Loader, den Voxlet nicht kennt"));
     }
     let mc = index
         .dependencies
@@ -611,18 +610,14 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
         .ok_or_else(|| invalid("Minecraft-Version fehlt"))?
         .clone();
     modrinth::identifier(&mc)?;
-    let loader_version = index.dependencies.get("fabric-loader").cloned();
+    let (loader, loader_version) = loaders.into_iter().next().map_or((ModLoader::Vanilla, None), |(l, v)| (l, Some(v)));
     if let Some(v) = &loader_version {
         modrinth::identifier(v)?;
     }
     let instance = Instance::from_new(NewInstance {
         name: name.trim().into(),
         minecraft_version: mc,
-        loader: if loader_version.is_some() {
-            ModLoader::Fabric
-        } else {
-            ModLoader::Vanilla
-        },
+        loader,
         loader_version,
     });
     let mut paths = HashSet::new();
@@ -1208,6 +1203,11 @@ mod tests {
         let pack = unpack(&data, "test").unwrap();
         assert_eq!(pack.instance.loader, ModLoader::Fabric);
         assert_eq!(pack.overrides.len(), 1);
+        let neo = br#"{"formatVersion":1,"game":"minecraft","files":[],"dependencies":{"minecraft":"1.21.1","neoforge":"21.1.252"}}"#;
+        let pack = unpack(&archive(&[("modrinth.index.json", neo)]), "neo").unwrap();
+        assert_eq!((pack.instance.loader, pack.instance.loader_version.as_deref()), (ModLoader::NeoForge, Some("21.1.252")));
+        let two = br#"{"formatVersion":1,"game":"minecraft","files":[],"dependencies":{"minecraft":"1.21.1","forge":"1","neoforge":"2"}}"#;
+        assert!(unpack(&archive(&[("modrinth.index.json", two)]), "x").is_err());
         for bad in ["../evil", "overrides/CON", "overrides/../evil"] {
             assert!(unpack(
                 &archive(&[("modrinth.index.json", index), (bad, b"bad")]),

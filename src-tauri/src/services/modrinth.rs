@@ -1,7 +1,7 @@
 //! Modrinth v2: GET plus der lesende `POST version_files/update`, feste Origins, begrenzte Antworten.
 use crate::{
     error::{AppError, AppResult},
-    models::{Instance, ModKind, ModLoader},
+    models::{Instance, ModKind},
     services::download::sha1_hex,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -338,10 +338,7 @@ pub fn primary(version: &Version, extension: &str) -> AppResult<File> {
     Ok(selected.clone())
 }
 pub fn compatible(v: &Version, instance: &Instance) -> AppResult<()> {
-    if instance.loader != ModLoader::Fabric
-        || !v.game_versions.contains(&instance.minecraft_version)
-        || !v.loaders.iter().any(|l| l == "fabric")
-    {
+    if !v.game_versions.contains(&instance.minecraft_version) || !instance.loader.runs(&v.loaders) {
         return Err(invalid(format!("Inkompatible Mod-Version {}", v.id)));
     }
     Ok(())
@@ -431,15 +428,11 @@ pub async fn resolve(
             if calls > 192 {
                 return Err(invalid("Dependency-Limit erreicht"));
             }
-            let child = versions(
-                client,
-                &id,
-                Some(&instance.minecraft_version),
-                Some("fabric"),
-            )
+            // Ohne Loader-Filter anfragen: Quilt nimmt Quilt- und Fabric-Versionen.
+            let child = versions(client, &id, Some(&instance.minecraft_version), None)
             .await?
             .into_iter()
-            .next()
+            .find(|v| instance.loader.runs(&v.loaders))
             .ok_or_else(|| invalid("Keine kompatible Dependency"))?;
             queue.push_back(child);
         }

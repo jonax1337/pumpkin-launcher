@@ -9,6 +9,7 @@ use crate::services::launch::{self, LaunchSpec, LogStream, EXIT_EVENT, LOG_EVENT
 use crate::services::mojang::{VersionEntry, VersionManifest, MANIFEST_URL};
 use crate::services::rules::Env;
 use crate::services::fabric::{self, LoaderVersion};
+use crate::services::forge;
 use crate::services::mojang::VersionJson;
 use crate::services::{auth, download, java, mods};
 use crate::state::AppState;
@@ -97,30 +98,44 @@ fn emit<T: Serialize + Clone>(app: &AppHandle, event: &str, payload: T) {
     }
 }
 
-fn require_supported(loader: ModLoader) -> AppResult<()> {
+/// Wie ein Mod-Loader installiert wird: Profil vom Meta-Server (Fabric, Quilt) oder Installer (Forge, NeoForge).
+enum LoaderKind {
+    Profile(fabric::Flavor),
+    Installer(forge::Kind),
+}
+
+fn loader_kind(loader: ModLoader) -> Option<LoaderKind> {
     match loader {
-        ModLoader::Vanilla | ModLoader::Fabric => Ok(()),
-        _ => Err(AppError::NotImplemented("Installation und Start mit Quilt, Forge oder NeoForge")),
+        ModLoader::Vanilla => None,
+        ModLoader::Fabric => Some(LoaderKind::Profile(fabric::Flavor::Fabric)),
+        ModLoader::Quilt => Some(LoaderKind::Profile(fabric::Flavor::Quilt)),
+        ModLoader::Forge => Some(LoaderKind::Installer(forge::Kind::Forge)),
+        ModLoader::NeoForge => Some(LoaderKind::Installer(forge::Kind::NeoForge)),
     }
 }
 
-/// Fabric-Loader-Version einer installierten bzw. zu startenden Instanz.
-fn fabric_loader(instance: &Instance) -> AppResult<&str> {
+/// Loader-Version einer installierten bzw. zu startenden Instanz.
+fn loader_version(instance: &Instance) -> AppResult<&str> {
     instance
         .loader_version
         .as_deref()
-        .ok_or_else(|| AppError::Invalid("Fabric-Instanz ohne Loader-Version: bitte neu installieren".into()))
+        .ok_or_else(|| AppError::Invalid("Instanz ohne Loader-Version: bitte neu installieren".into()))
 }
 
-/// Versions-JSON zum Start: Vanilla, bei Fabric mit dem installierten Profil zusammengeführt.
+/// Versions-JSON zum Start: Vanilla, mit Mod-Loader mit dessen installiertem Profil zusammengeführt.
 async fn installed_version(state: &AppState, instance: &Instance) -> AppResult<VersionJson> {
     let version = install::installed_version(&state.dirs, &instance.minecraft_version).await?;
-    match instance.loader {
-        ModLoader::Fabric => {
-            let profile = fabric::installed_profile(&state.dirs, &instance.minecraft_version, fabric_loader(instance)?).await?;
+    let mc = &instance.minecraft_version;
+    match loader_kind(instance.loader) {
+        None => Ok(version),
+        Some(LoaderKind::Profile(flavor)) => {
+            let profile = fabric::installed_profile(&state.dirs, flavor, mc, loader_version(instance)?).await?;
             fabric::merge(version, &profile)
         }
-        _ => Ok(version),
+        Some(LoaderKind::Installer(kind)) => {
+            let profile = forge::installed_profile(&state.dirs, kind, mc, loader_version(instance)?).await?;
+            forge::merge(version, &profile)
+        }
     }
 }
 
@@ -131,10 +146,10 @@ pub async fn loader_versions(
     loader: ModLoader,
     mc_version: String,
 ) -> AppResult<Vec<LoaderVersion>> {
-    require_supported(loader)?;
-    match loader {
-        ModLoader::Fabric => fabric::loader_versions(&state.http, &mc_version).await,
-        _ => Ok(Vec::new()),
+    match loader_kind(loader) {
+        None => Ok(Vec::new()),
+        Some(LoaderKind::Profile(flavor)) => fabric::loader_versions(&state.http, flavor, &mc_version).await,
+        Some(LoaderKind::Installer(kind)) => forge::loader_versions(&state.http, kind, &mc_version).await,
     }
 }
 
@@ -160,25 +175,38 @@ pub fn instance_install_cancel(state: State<'_, AppState>, instance_id: String) 
 
 async fn install_instance(app: AppHandle, state: &AppState, instance_id: String) -> AppResult<()> {
     let mut instance = state.instances.get(&instance_id)?;
-    require_supported(instance.loader)?;
     tracing::info!(instance = %instance_id, version = %instance.minecraft_version, loader = ?instance.loader, "Installation gestartet");
     let on_progress = |step, done, total| {
         emit(&app, INSTALL_PROGRESS_EVENT, InstallProgress { instance_id: instance_id.clone(), step, done, total });
     };
     let mut version = install::fetch_version(&state.http, &state.dirs, &instance.minecraft_version).await?;
-    if instance.loader == ModLoader::Fabric {
+    let mc = instance.minecraft_version.clone();
+    let kind = loader_kind(instance.loader);
+    if let Some(kind) = &kind {
         on_progress(InstallStep::Loader, 0, 1);
         // Ohne gewählte Version die neueste stabile nehmen und festhalten, damit der Start dieselbe nutzt.
-        let loader = fabric::resolve_loader(&state.http, &instance.minecraft_version, instance.loader_version.as_deref()).await?;
-        let profile = fabric::fetch_profile(&state.http, &state.dirs, &instance.minecraft_version, &loader).await?;
-        version = fabric::merge(version, &profile)?;
+        let wanted = instance.loader_version.as_deref();
+        let loader = match kind {
+            LoaderKind::Profile(flavor) => fabric::resolve_loader(&state.http, *flavor, &mc, wanted).await?,
+            LoaderKind::Installer(k) => forge::resolve_loader(&state.http, *k, &mc, wanted).await?,
+        };
+        if let LoaderKind::Profile(flavor) = kind {
+            let profile = fabric::fetch_profile(&state.http, &state.dirs, *flavor, &mc, &loader).await?;
+            version = fabric::merge(version, &profile)?;
+        }
         if instance.loader_version.as_deref() != Some(loader.as_str()) {
             instance.loader_version = Some(loader);
             instance = state.instances.update(instance)?;
         }
         on_progress(InstallStep::Loader, 1, 1);
     }
-    install::install(&state.http, &state.dirs, &version, &instance_id, &on_progress).await?;
+    // Forge/NeoForge brauchen Vanilla-Client und Java zuerst: ihre Processors patchen das Client-JAR.
+    let java = install::install(&state.http, &state.dirs, &version, &instance_id, &on_progress).await?;
+    if let Some(LoaderKind::Installer(k)) = kind {
+        let loader = loader_version(&instance)?.to_owned();
+        let on_loader = |done, total| on_progress(InstallStep::Loader, done, total);
+        forge::install(&state.http, &state.dirs, k, &mc, &loader, &java, &on_loader).await?;
+    }
     if instance.loader != ModLoader::Vanilla {
         on_progress(InstallStep::Mods, 0, 1);
         let active = mods::sync(&state.dirs, &instance_id, &instance.mods)?;
@@ -205,7 +233,6 @@ pub async fn instance_launch(
 ) -> AppResult<u32> {
     let _operation = state.operation(Some(&instance_id))?;
     let mut instance = state.instances.get(&instance_id)?;
-    require_supported(instance.loader)?;
     mods::sync(&state.dirs,&instance_id,&instance.mods)?;
     // Mit Microsoft-Konto: echte Sitzung (bei Bedarf erneuert); sonst Offline mit `username`.
     let (account, session) = match account_id.filter(|id| !id.is_empty()) {

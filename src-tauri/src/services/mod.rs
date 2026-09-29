@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 pub mod auth;
 pub mod download;
 pub mod fabric;
+pub mod forge;
 pub mod gamelog;
 pub mod install;
 pub mod java;

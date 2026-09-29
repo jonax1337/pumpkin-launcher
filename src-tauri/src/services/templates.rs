@@ -76,9 +76,11 @@ fn write_pack(dirs: &Dirs, instance: &Instance, remote: &[Value]) -> AppResult<V
     let mut dependencies = json!({ "minecraft": instance.minecraft_version });
     match (instance.loader, &instance.loader_version) {
         (ModLoader::Vanilla, _) => {}
-        (ModLoader::Fabric, Some(v)) => dependencies["fabric-loader"] = json!(v),
-        (ModLoader::Fabric, None) => return Err(invalid("Fabric-Instanz ohne Loader-Version: bitte erst installieren")),
-        _ => return Err(invalid("Vorlagen gibt es nur für Vanilla- und Fabric-Instanzen")),
+        (loader, Some(v)) => {
+            let key = loader.pack_key().ok_or_else(|| invalid("Loader ohne Pack-Schlüssel"))?;
+            dependencies[key] = json!(v);
+        }
+        (_, None) => return Err(invalid("Instanz ohne Loader-Version: bitte erst einmal starten")),
     }
     let index = json!({
         "formatVersion": 1, "game": "minecraft", "versionId": "1", "name": instance.name,
