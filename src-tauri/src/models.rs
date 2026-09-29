@@ -26,6 +26,32 @@ pub enum ModLoader {
     NeoForge,
 }
 
+impl ModLoader {
+    /// Loader mit ihrem Schlüssel unter `dependencies` in `modrinth.index.json`.
+    pub const PACK_KEYS: [(ModLoader, &'static str); 4] =
+        [(Self::Fabric, "fabric-loader"), (Self::Quilt, "quilt-loader"), (Self::Forge, "forge"), (Self::NeoForge, "neoforge")];
+
+    pub fn pack_key(self) -> Option<&'static str> {
+        Self::PACK_KEYS.iter().find(|(l, _)| *l == self).map(|(_, k)| *k)
+    }
+
+    /// Modrinth-Loader-Namen, deren Mods in dieser Instanz laufen (Quilt lädt auch Fabric-Mods).
+    pub fn modrinth_loaders(self) -> &'static [&'static str] {
+        match self {
+            Self::Vanilla => &[],
+            Self::Fabric => &["fabric"],
+            Self::Quilt => &["quilt", "fabric"],
+            Self::Forge => &["forge"],
+            Self::NeoForge => &["neoforge"],
+        }
+    }
+
+    /// `true`, wenn eine Mod-Version mit diesen Modrinth-Loadern hier läuft.
+    pub fn runs(self, loaders: &[String]) -> bool {
+        loaders.iter().any(|l| self.modrinth_loaders().contains(&l.as_str()))
+    }
+}
+
 /// Herkunft einer Mod-Datei. Getaggt als `{"type": "modrinth", ...}`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase", rename_all_fields = "camelCase")]
@@ -207,6 +233,16 @@ mod tests {
         let keys: Vec<_> = json.as_object().unwrap().keys().map(String::as_str).collect();
         assert_eq!(keys, ["clientId", "id", "kind", "username"]);
         assert_eq!(serde_json::to_value(a.account()).unwrap()["kind"], "microsoft");
+    }
+
+    #[test]
+    fn loader_names() {
+        let names = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert!(ModLoader::Quilt.runs(&names(&["fabric"])));
+        assert!(!ModLoader::Fabric.runs(&names(&["quilt"])));
+        assert!(!ModLoader::Vanilla.runs(&names(&["fabric"])));
+        assert_eq!(ModLoader::NeoForge.pack_key(), Some("neoforge"));
+        assert_eq!(serde_json::to_value(ModLoader::NeoForge).unwrap(), "neoforge");
     }
 
     #[test]

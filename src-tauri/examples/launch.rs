@@ -1,17 +1,18 @@
-//! Headless-Test ohne UI: installiert eine Version (Vanilla oder Fabric) und startet sie offline.
+//! Headless-Test ohne UI: installiert eine Version (Vanilla oder mit Mod-Loader) und startet sie offline.
 //!
-//! `cargo run --example launch -- [version|1.21] [spielername] [sekunden] [vanilla|fabric[:loader]]`
+//! `cargo run --example launch -- [version|1.21] [spielername] [sekunden] [vanilla|fabric|quilt|neoforge|forge[:loader]]`
 //!
 //! - Version: exakte ID oder Präfix; Präfix nimmt die neueste passende Release (Standard `1.21`).
 //! - Sekunden: danach wird das Spiel beendet (Standard `0`: warten, bis es sich selbst beendet).
-//! - Loader: Standard `vanilla`; `fabric` nimmt den neuesten stabilen Loader, `fabric:0.19.5` einen bestimmten.
+//! - Loader: Standard `vanilla`; `fabric` nimmt den neuesten stabilen Loader, `fabric:0.19.5` einen bestimmten
+//!   (ebenso `quilt`, `neoforge`, `forge`).
 //! - Datenverzeichnis: `LAUNCHER_DATA`, sonst dasselbe wie die App (`%APPDATA%/dev.laux.launcher`).
 use std::path::PathBuf;
 use std::time::Duration;
 
 use launcher_lib::services::mojang::{VersionManifest, MANIFEST_URL};
 use launcher_lib::services::rules::Env;
-use launcher_lib::services::{auth, download, fabric, install, launch, Dirs};
+use launcher_lib::services::{auth, download, fabric, forge, install, launch, Dirs};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -21,10 +22,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let username = args.next().unwrap_or_else(|| "Headless".into());
     let seconds: Option<u64> = args.next().map(|s| s.parse()).transpose()?.filter(|&s| s > 0);
     let loader = args.next().unwrap_or_else(|| "vanilla".into());
-    let fabric_loader = match loader.split_once(':') {
-        _ if loader == "vanilla" => None,
-        _ if loader == "fabric" => Some(None),
-        Some(("fabric", v)) => Some(Some(v.to_owned())),
+    let (loader_name, wanted_loader) = match loader.split_once(':') {
+        Some((name, v)) => (name.to_owned(), Some(v.to_owned())),
+        None => (loader.clone(), None),
+    };
+    enum Kind {
+        Vanilla,
+        Profile(fabric::Flavor),
+        Installer(forge::Kind),
+    }
+    let kind = match loader_name.as_str() {
+        "vanilla" => Kind::Vanilla,
+        "fabric" => Kind::Profile(fabric::Flavor::Fabric),
+        "quilt" => Kind::Profile(fabric::Flavor::Quilt),
+        "neoforge" => Kind::Installer(forge::Kind::NeoForge),
+        "forge" => Kind::Installer(forge::Kind::Forge),
         _ => return Err(format!("unbekannter Loader '{loader}'").into()),
     };
 
@@ -45,20 +57,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Version {id}, Daten in {}", dirs.root.display());
 
     let mut version = install::fetch_version(&client, &dirs, &id).await?;
-    let mut instance_id = "headless";
-    if let Some(wanted) = fabric_loader {
-        let loader = fabric::resolve_loader(&client, &id, wanted.as_deref()).await?;
-        println!("Fabric-Loader {loader}");
-        let profile = fabric::fetch_profile(&client, &dirs, &id, &loader).await?;
-        version = fabric::merge(version, &profile)?;
-        instance_id = "headless-fabric";
-    }
+    let instance_id = format!("headless-{loader_name}");
     let on_progress = |step, done, total| {
         if done == total || done % 500 == 0 {
             println!("[install] {step:?} {done}/{total}");
         }
     };
-    let java = install::install(&client, &dirs, &version, instance_id, &on_progress).await?;
+    let mut installer = None;
+    match &kind {
+        Kind::Vanilla => {}
+        Kind::Profile(flavor) => {
+            let loader = fabric::resolve_loader(&client, *flavor, &id, wanted_loader.as_deref()).await?;
+            println!("{} {loader}", flavor.name());
+            let profile = fabric::fetch_profile(&client, &dirs, *flavor, &id, &loader).await?;
+            version = fabric::merge(version, &profile)?;
+        }
+        Kind::Installer(k) => {
+            let loader = forge::resolve_loader(&client, *k, &id, wanted_loader.as_deref()).await?;
+            println!("{} {loader}", k.name());
+            installer = Some((*k, loader));
+        }
+    }
+    let java = install::install(&client, &dirs, &version, &instance_id, &on_progress).await?;
+    if let Some((k, loader)) = installer {
+        let profile = forge::install(&client, &dirs, k, &id, &loader, &java, &|d, t| println!("[install] Loader {d}/{t}")).await?;
+        version = forge::merge(version, &profile)?;
+    }
+    let instance_id = instance_id.as_str();
 
     let account = auth::offline_account(&username)?;
     let spec = launch::LaunchSpec {
