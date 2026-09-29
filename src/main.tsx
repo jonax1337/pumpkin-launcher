@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { createBrowserRouter, RouterProvider } from "react-router";
@@ -11,18 +11,19 @@ import { InstancesPage } from "@/pages/Instances";
 import { InstanceDetailPage } from "@/pages/InstanceDetail";
 import { ModsPage } from "@/pages/Mods";
 import { ModpacksPage } from "@/pages/Modpacks";
-import { PresetsPage } from "@/pages/Presets";
 import { SettingsPage } from "@/pages/Settings";
 import { AccountPage } from "@/pages/Account";
 import { NotFoundPage } from "@/pages/NotFound";
 import "./index.css";
 
-// Fehler aus Backend-Aufrufen zentral als Toast
-const toastError = (err: Error) => toast.error(err.message);
-
+// Mutations-Fehler zentral als Toast; Mutationen mit eigenem Fehler-Toast setzen `meta.ownErrorToast`.
+// Query-Fehler zeigen die Seiten inline.
 const queryClient = new QueryClient({
-  queryCache: new QueryCache({ onError: toastError }),
-  mutationCache: new MutationCache({ onError: toastError }),
+  mutationCache: new MutationCache({
+    onError: (err, _vars, _ctx, mutation) => {
+      if (!mutation.meta?.ownErrorToast) toast.error(err.message);
+    },
+  }),
   defaultOptions: {
     queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: 1 },
   },
@@ -38,7 +39,6 @@ const router = createBrowserRouter([
       { path: "instances/:id", element: <InstanceDetailPage /> },
       { path: "mods", element: <ModsPage /> },
       { path: "modpacks", element: <ModpacksPage /> },
-      { path: "presets", element: <PresetsPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "account", element: <AccountPage /> },
       { path: "*", element: <NotFoundPage /> },

@@ -21,7 +21,7 @@ import { BlockTile, ConfirmDialog, EmptyState, ErrorNote, LoaderBadge, PageHeade
 import { StatusBadge } from "@/components/game";
 import { useCreateInstance, useDeleteInstance, useInstances, useLoaderVersions, useVersions } from "@/hooks/useInstances";
 import { formatMemory, relativeTime } from "@/lib/format";
-import { INSTALLABLE_LOADERS, LOADER_LABELS, LOADERS, type Instance, type ModLoader } from "@/lib/types";
+import { INSTALLABLE_LOADERS, LOADER_LABELS, type Instance, type ModLoader } from "@/lib/types";
 import { useSettings } from "@/store/settings";
 
 type Channel = "release" | "snapshot";
@@ -87,7 +87,7 @@ function CreateInstanceDialog() {
         <form onSubmit={submit} className="space-y-5">
           <DialogHeader>
             <DialogTitle>Neue Instanz</DialogTitle>
-            <DialogDescription>Versionen kommen direkt von Mojang. Forge, NeoForge und Quilt folgen.</DialogDescription>
+            <DialogDescription>Versionen kommen direkt von Mojang.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="inst-name">Name</Label>
@@ -129,10 +129,9 @@ function CreateInstanceDialog() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {LOADERS.map((l) => (
-                    <SelectItem key={l} value={l} disabled={!INSTALLABLE_LOADERS.includes(l)}>
+                  {INSTALLABLE_LOADERS.map((l) => (
+                    <SelectItem key={l} value={l}>
                       {LOADER_LABELS[l]}
-                      {!INSTALLABLE_LOADERS.includes(l) && <span className="ml-2 text-xs text-muted-foreground">folgt</span>}
                     </SelectItem>
                   ))}
                 </SelectContent>

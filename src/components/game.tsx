@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils";
 import {
   INSTALL_STEP_LABELS,
   INSTALLABLE_LOADERS,
-  LOADER_LABELS,
   type Instance,
   type InstallProgress,
   type InstallStep,
@@ -139,9 +138,12 @@ export function PlayControl({
 
   if (phase === "missing" && !INSTALLABLE_LOADERS.includes(instance.loader)) {
     return (
-      <Button size={hero ? "lg" : "default"} variant="secondary" disabled className={size}>
-        <Download aria-hidden /> {LOADER_LABELS[instance.loader]} folgt
-      </Button>
+      <div className="flex flex-col items-end gap-1.5">
+        <Button size={hero ? "lg" : "default"} variant="secondary" disabled className={size}>
+          <Play className="fill-current" aria-hidden /> Spielen
+        </Button>
+        <p className="text-xs text-muted-foreground">Diese Variante kann Voxlet noch nicht starten.</p>
+      </div>
     );
   }
 

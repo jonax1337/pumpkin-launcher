@@ -97,7 +97,6 @@ export function ContentCatalog({ type }: { type: "mod" | "modpack" }) {
     </section>}
     <div className="mt-5 space-y-3" aria-live="polite">
       {busy && <p role="status">Inhalte werden installiert… {operation.progress && `${operation.progress.phase}: ${operation.progress.done} / ${operation.progress.total || "?"}`}</p>}
-      {operation.error && <div role="alert" className="text-sm text-destructive"><p>{operation.error}</p><p>Ursache beheben und die gewünschte Installation erneut auslösen.</p></div>}
       {!busy && operation.result && <p>Inhalte für <Link className="underline" to={`/instances/${operation.result.id}`}>{operation.result.name}</Link> gespeichert. Falls noch nicht installiert: dort zuerst die Spieldateien installieren.</p>}
     </div>
   </>;

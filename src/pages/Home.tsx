@@ -1,24 +1,21 @@
 import { Link } from "react-router";
-import { motion } from "framer-motion";
 import { ArrowRight, Clock, Cpu, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BlockTile, LoaderBadge } from "@/components/common";
+import { BlockTile, ErrorNote, LoaderBadge } from "@/components/common";
 import { PlayControl, StatusBadge } from "@/components/game";
 import { pickRecentInstance, useInstances } from "@/hooks/useInstances";
-import { MOCK_NEWS } from "@/lib/mock";
-import { formatDate, formatMemory, relativeTime } from "@/lib/format";
+import { formatMemory, relativeTime } from "@/lib/format";
 import { useSettings } from "@/store/settings";
 
 export function HomePage() {
-  const { data: instances, isLoading } = useInstances();
+  const { data: instances, isLoading, error } = useInstances();
   const recent = pickRecentInstance(instances);
   const defaultMemory = useSettings((s) => s.memoryMb);
 
   return (
     <div className="space-y-10">
+      {error && <ErrorNote error={error} />}
       {/* Hero */}
       <section className="relative overflow-hidden rounded-3xl border bg-gradient-to-br from-emerald-950/70 via-card/80 to-card/60 p-8 shadow-2xl shadow-black/30">
         <div aria-hidden className="pointer-events-none absolute inset-0 bg-grid opacity-60 [mask-image:linear-gradient(to_left,black,transparent_65%)]" />
@@ -115,35 +112,6 @@ export function HomePage() {
           </div>
         </section>
       )}
-
-      {/* News */}
-      <section>
-        <h2 className="mb-4 text-lg font-semibold">Neuigkeiten</h2>
-        <div className="grid gap-4 md:grid-cols-3">
-          {MOCK_NEWS.map((n, i) => (
-            <motion.div
-              key={n.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.05 * i + 0.1, duration: 0.3 }}
-            >
-              <Card className="h-full bg-card/70 transition-colors hover:bg-card">
-                <CardHeader>
-                  <div className="mb-2 flex items-center justify-between">
-                    <Badge variant="outline" className="border-gold/30 text-gold">
-                      {n.tag}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">{formatDate(n.date)}</span>
-                  </div>
-                  <CardTitle className="font-heading text-base">{n.title}</CardTitle>
-                  <CardDescription>{n.excerpt}</CardDescription>
-                </CardHeader>
-                <CardContent />
-              </Card>
-            </motion.div>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }
