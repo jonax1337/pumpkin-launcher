@@ -207,7 +207,6 @@ impl Preset {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AccountKind {
@@ -216,7 +215,7 @@ pub enum AccountKind {
 }
 
 /// Account ohne Tokens – Refresh-Tokens gehören in den OS-Keyring, nie in JSON.
-#[allow(dead_code)]
+/// `id` ist die Minecraft-Spieler-UUID (bei Offline-Accounts deterministisch aus dem Namen).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Account {
