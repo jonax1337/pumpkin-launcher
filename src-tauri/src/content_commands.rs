@@ -1,7 +1,7 @@
 use crate::{
     error::AppResult,
-    models::{Instance, ModpackOrigin},
-    services::{content, modrinth as api},
+    models::{Instance, ModpackOrigin, Template},
+    services::{content, modrinth as api, templates},
     state::AppState,
 };
 use serde::Serialize;
@@ -50,6 +50,10 @@ pub async fn modrinth_search(
 #[tauri::command]
 pub async fn modrinth_project(project_id: String) -> AppResult<api::Project> {
     api::project(&api::client()?, &project_id).await
+}
+#[tauri::command]
+pub async fn modrinth_projects(project_ids: Vec<String>) -> AppResult<Vec<api::Project>> {
+    api::projects(&api::client()?, &project_ids).await
 }
 #[tauri::command]
 pub async fn modrinth_versions(
@@ -161,4 +165,28 @@ pub async fn modrinth_update_mods(
 ) -> AppResult<Instance> {
     let _operation = state.operation(Some(&instance_id))?;
     content::update_mods(&state, &instance_id, &mod_ids, &progress(app, operation_id)).await
+}
+#[tauri::command]
+pub async fn template_save(state: State<'_, AppState>, instance_id: String, name: String) -> AppResult<Template> {
+    let _operation = state.operation(Some(&instance_id))?;
+    templates::save(&state, &instance_id, &name).await
+}
+#[tauri::command]
+pub fn template_list(state: State<'_, AppState>) -> Vec<Template> {
+    state.templates.list()
+}
+#[tauri::command]
+pub fn template_delete(state: State<'_, AppState>, id: String) -> AppResult<()> {
+    templates::delete(&state, &id)
+}
+#[tauri::command]
+pub async fn template_create_instance(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    template_id: String,
+    name: String,
+    operation_id: String,
+) -> AppResult<Instance> {
+    let _operation = state.operation(None)?;
+    templates::create_instance(&state, &template_id, &name, &progress(app, operation_id)).await
 }

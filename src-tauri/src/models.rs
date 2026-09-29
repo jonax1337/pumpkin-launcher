@@ -1,10 +1,8 @@
 //! Datenmodelle. Serialisierung in camelCase, passend zu `src/lib/types.ts`.
-use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{AppError, AppResult};
 
 pub fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
@@ -102,7 +100,6 @@ pub struct Instance {
     pub minecraft_version: String,
     pub loader: ModLoader,
     pub loader_version: Option<String>,
-    pub preset_id: Option<String>,
     #[serde(default)]
     pub modpack: Option<ModpackOrigin>,
     pub memory_mb: Option<u32>,
@@ -129,7 +126,6 @@ impl Instance {
             minecraft_version: input.minecraft_version,
             loader: input.loader,
             loader_version: input.loader_version,
-            preset_id: None,
             modpack: None,
             memory_mb: None,
             jvm_args: Vec::new(),
@@ -139,105 +135,18 @@ impl Instance {
         }
     }
 
-    /// Übernimmt Mods, JVM-Args und RAM eines bereits aufgelösten Presets
-    /// (`Preset::resolve`). Mods werden anhand ihrer ID ergänzt, nicht dupliziert;
-    /// JVM-Args und RAM des Presets ersetzen die der Instanz.
-    pub fn apply_preset(&mut self, preset: &Preset) {
-        for m in &preset.mods {
-            if !self.mods.iter().any(|x| x.id == m.id) {
-                self.mods.push(m.clone());
-            }
-        }
-        self.jvm_args = preset.jvm_args.clone();
-        if preset.memory_mb.is_some() {
-            self.memory_mb = preset.memory_mb;
-        }
-        self.preset_id = Some(preset.id.clone());
-    }
 }
 
-/// Sammlung aus Mods, Spieleinstellungen und JVM-Args, die auf Instanzen angewendet wird.
-/// Kann von einem anderen Preset erben (siehe `Preset::resolve`).
+/// Vorlage: Schnappschuss einer Instanz als `templates/<id>.mrpack`, ohne Verbindung zur Instanz.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Preset {
+pub struct Template {
     pub id: String,
     pub name: String,
-    pub description: String,
-    #[serde(default)]
-    pub inherits_from: Option<String>,
-    /// Mod-IDs aus Eltern-Presets, die hier nicht übernommen werden.
-    #[serde(default)]
-    pub exclude_mods: Vec<String>,
-    pub mods: Vec<Mod>,
-    pub jvm_args: Vec<String>,
-    pub memory_mb: Option<u32>,
-    /// Schlüssel/Wert-Paare für `options.txt`.
-    pub game_settings: BTreeMap<String, String>,
+    pub minecraft_version: String,
+    pub loader: ModLoader,
+    pub mod_count: usize,
     pub created_at: u64,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NewPreset {
-    pub name: String,
-    pub description: String,
-    #[serde(default)]
-    pub inherits_from: Option<String>,
-    #[serde(default)]
-    pub exclude_mods: Vec<String>,
-    pub mods: Vec<Mod>,
-    pub jvm_args: Vec<String>,
-    pub memory_mb: Option<u32>,
-    pub game_settings: BTreeMap<String, String>,
-}
-
-impl Preset {
-    pub fn from_new(input: NewPreset) -> Self {
-        Self {
-            id: new_id(),
-            name: input.name,
-            description: input.description,
-            inherits_from: input.inherits_from,
-            exclude_mods: input.exclude_mods,
-            mods: input.mods,
-            jvm_args: input.jvm_args,
-            memory_mb: input.memory_mb,
-            game_settings: input.game_settings,
-            created_at: now_ms(),
-        }
-    }
-
-    /// Löst die Vererbungskette zu einem flachen Preset auf. Das Kind gewinnt: gleiche
-    /// Mod-IDs werden ersetzt, `exclude_mods` entfernt geerbte Mods, Spieleinstellungen
-    /// werden zusammengeführt, JVM-Args und RAM der Eltern gelten nur, wenn das Kind keine
-    /// setzt. `lookup` liefert Presets per ID.
-    pub fn resolve(&self, lookup: impl Fn(&str) -> AppResult<Preset>) -> AppResult<Preset> {
-        let mut chain = vec![self.clone()];
-        while let Some(parent) = chain.last().and_then(|p| p.inherits_from.clone()) {
-            if chain.iter().any(|p| p.id == parent) {
-                return Err(AppError::Invalid(format!("Preset-Vererbung ist zyklisch bei '{parent}'")));
-            }
-            chain.push(lookup(&parent)?);
-        }
-        // Von der Wurzel zum Kind falten; Identität (ID, Name, …) bleibt die des Kindes.
-        let mut resolved = chain.pop().expect("Kette enthält mindestens self");
-        while let Some(mut child) = chain.pop() {
-            resolved
-                .mods
-                .retain(|m| !child.exclude_mods.contains(&m.id) && !child.mods.iter().any(|c| c.id == m.id));
-            resolved.mods.append(&mut child.mods);
-            resolved.game_settings.append(&mut child.game_settings);
-            child.mods = resolved.mods;
-            child.game_settings = resolved.game_settings;
-            if child.jvm_args.is_empty() {
-                child.jvm_args = resolved.jvm_args;
-            }
-            child.memory_mb = child.memory_mb.or(resolved.memory_mb);
-            resolved = child;
-        }
-        Ok(resolved)
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -262,52 +171,14 @@ pub struct Account {
 mod tests {
     use super::*;
 
-    fn preset(id: &str, parent: Option<&str>, mods: &[&str], exclude: &[&str]) -> Preset {
-        let mod_of = |id: &str| Mod {
-            id: id.into(),
-            name: id.into(),
-            version: "1".into(),
-            source: ModSource::Local,
-            file_name: format!("{id}.jar"),
-            sha1: None,
-            enabled: true,
-            kind: ModKind::Mod,
-            required_by: Vec::new(),
-        };
-        Preset {
-            id: id.into(),
-            inherits_from: parent.map(Into::into),
-            exclude_mods: exclude.iter().map(|s| s.to_string()).collect(),
-            mods: mods.iter().map(|s| mod_of(s)).collect(),
-            ..Preset::from_new(NewPreset {
-                name: id.into(),
-                description: String::new(),
-                inherits_from: None,
-                exclude_mods: Vec::new(),
-                mods: Vec::new(),
-                jvm_args: Vec::new(),
-                memory_mb: None,
-                game_settings: BTreeMap::new(),
-            })
-        }
-    }
-
-    fn lookup(presets: &[Preset]) -> impl Fn(&str) -> AppResult<Preset> + '_ {
-        |id| presets.iter().find(|p| p.id == id).cloned().ok_or(AppError::NotFound { kind: "Preset", id: id.into() })
-    }
-
     #[test]
-    fn preset_inheritance_and_cycle() {
-        let base = Preset { memory_mb: Some(4096), ..preset("base", None, &["sodium", "lithium"], &[]) };
-        let child = preset("child", Some("base"), &["iris"], &["lithium"]);
-
-        let r = child.resolve(lookup(&[base.clone(), child.clone()])).unwrap();
-        let ids: Vec<_> = r.mods.iter().map(|m| m.id.as_str()).collect();
-        assert_eq!(ids, ["sodium", "iris"]);
-        assert_eq!((r.id.as_str(), r.memory_mb, r.inherits_from.as_deref()), ("child", Some(4096), Some("base")));
-
-        let cyclic_base = Preset { inherits_from: Some("child".into()), ..base };
-        assert!(matches!(child.resolve(lookup(&[cyclic_base, child.clone()])), Err(AppError::Invalid(_))));
+    fn old_instance_json_with_preset_id_loads() {
+        let i: Instance = serde_json::from_value(serde_json::json!({
+            "id": "i", "name": "Alt", "minecraftVersion": "1.21.1", "loader": "fabric", "loaderVersion": null,
+            "presetId": "p", "memoryMb": null, "jvmArgs": [], "mods": [], "createdAt": 1, "lastPlayedAt": null
+        }))
+        .unwrap();
+        assert_eq!((i.name.as_str(), i.loader), ("Alt", ModLoader::Fabric));
     }
 
     #[test]

@@ -55,8 +55,14 @@ pub struct Version {
     pub version_number: String,
     pub game_versions: Vec<String>,
     pub loaders: Vec<String>,
+    /// release, beta oder alpha; fehlt es, gilt die Version als Release.
+    #[serde(default = "release")]
+    pub version_type: String,
     pub files: Vec<File>,
     pub dependencies: Vec<Dependency>,
+}
+fn release() -> String {
+    "release".into()
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct File {
@@ -144,17 +150,31 @@ pub async fn search(
         identifier(&loader)?;
         facets.push(vec![format!("categories:{loader}")]);
     }
+    // Ohne Suchbegriff: die beliebtesten Projekte zuerst.
+    let index = if query.trim().is_empty() { "downloads" } else { "relevance" };
     api(
         client,
         "search",
         &[
             ("query".into(), query),
             ("facets".into(), serde_json::to_string(&facets)?),
+            ("index".into(), index.into()),
             ("offset".into(), offset.to_string()),
             ("limit".into(), "20".into()),
         ],
     )
     .await
+}
+/// Mehrere Projekte in einem Aufruf (Icons und Namen für die Inhaltsliste einer Instanz).
+pub async fn projects(client: &reqwest::Client, ids: &[String]) -> AppResult<Vec<Project>> {
+    if ids.len() > 500 {
+        return Err(invalid("Zu viele Projekte"));
+    }
+    ids.iter().try_for_each(|id| identifier(id))?;
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    api(client, "projects", &[("ids".into(), serde_json::to_string(ids)?)]).await
 }
 pub async fn project(client: &reqwest::Client, id: &str) -> AppResult<Project> {
     identifier(id)?;
@@ -455,6 +475,7 @@ mod tests {
             version_number: "1".into(),
             game_versions: vec!["1.21.1".into()],
             loaders: vec!["fabric".into()],
+            version_type: release(),
             files: vec![],
             dependencies: vec![],
         }
