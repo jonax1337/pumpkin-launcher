@@ -39,6 +39,33 @@ pub enum ModSource {
     CurseForge { project_id: u32, file_id: u32 },
 }
 
+/// Inhaltsart und Zielordner im Spielverzeichnis. Fehlt das Feld (alte JSON), ist es eine Mod.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ModKind {
+    #[default]
+    Mod,
+    ResourcePack,
+    Shader,
+}
+
+impl ModKind {
+    pub fn folder(self) -> &'static str {
+        match self {
+            Self::Mod => "mods",
+            Self::ResourcePack => "resourcepacks",
+            Self::Shader => "shaderpacks",
+        }
+    }
+
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Mod => ".jar",
+            Self::ResourcePack | Self::Shader => ".zip",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Mod {
@@ -51,6 +78,12 @@ pub struct Mod {
     #[serde(default)]
     pub sha1: Option<String>,
     pub enabled: bool,
+    #[serde(default)]
+    pub kind: ModKind,
+    /// Modrinth-Projekt-IDs der direkt installierten Mods, die diese als Pflicht-Abhängigkeit
+    /// mitgebracht haben. Leer = vom Nutzer direkt hinzugefügt.
+    #[serde(default)]
+    pub required_by: Vec<String>,
 }
 
 /// Aus welchem Modpack eine Instanz installiert wurde (für Pack-Updates).
@@ -238,6 +271,8 @@ mod tests {
             file_name: format!("{id}.jar"),
             sha1: None,
             enabled: true,
+            kind: ModKind::Mod,
+            required_by: Vec::new(),
         };
         Preset {
             id: id.into(),
@@ -283,5 +318,17 @@ mod tests {
             serde_json::json!({"type": "modrinth", "projectId": "AANobbMI", "versionId": "v1"})
         );
         assert_eq!(serde_json::to_value(ModSource::Local).unwrap(), serde_json::json!({"type": "local"}));
+    }
+
+    #[test]
+    fn old_mod_json_gets_defaults() {
+        let m: Mod = serde_json::from_value(serde_json::json!({
+            "id": "sodium", "name": "Sodium", "version": "1", "source": {"type": "local"},
+            "fileName": "sodium.jar", "enabled": true
+        }))
+        .unwrap();
+        assert_eq!((m.kind, m.required_by.len(), m.sha1.is_none()), (ModKind::Mod, 0, true));
+        let v = serde_json::to_value(Mod { kind: ModKind::ResourcePack, required_by: vec!["p".into()], ..m }).unwrap();
+        assert_eq!((&v["kind"], &v["requiredBy"]), (&serde_json::json!("resourcepack"), &serde_json::json!(["p"])));
     }
 }

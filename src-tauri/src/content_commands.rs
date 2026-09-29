@@ -126,3 +126,39 @@ pub async fn modrinth_import_pack(
     let data = content::local_pack(std::path::Path::new(&path))?;
     content::import(&state, &data, &name, None, &progress(app, operation_id)).await
 }
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModUpdate {
+    mod_id: String,
+    current_version: String,
+    version_id: String,
+    version_number: String,
+}
+#[tauri::command]
+pub async fn modrinth_check_updates(
+    state: State<'_, AppState>,
+    instance_id: String,
+) -> AppResult<Vec<ModUpdate>> {
+    let instance = state.instances.get(&instance_id)?;
+    Ok(content::check_updates(&api::client()?, &instance)
+        .await?
+        .into_iter()
+        .map(|(i, v)| ModUpdate {
+            mod_id: instance.mods[i].id.clone(),
+            current_version: instance.mods[i].version.clone(),
+            version_id: v.id,
+            version_number: v.version_number,
+        })
+        .collect())
+}
+#[tauri::command]
+pub async fn modrinth_update_mods(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    instance_id: String,
+    mod_ids: Vec<String>,
+    operation_id: String,
+) -> AppResult<Instance> {
+    let _operation = state.operation(Some(&instance_id))?;
+    content::update_mods(&state, &instance_id, &mod_ids, &progress(app, operation_id)).await
+}

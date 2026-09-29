@@ -37,25 +37,29 @@ fn sha1_of(path: &Path) -> io::Result<String> {
 
 /// Legt eine JAR im Cache ab (falls noch nicht vorhanden) und liefert ihren SHA-1.
 pub fn cache_file(dirs: &Dirs, src: &Path) -> AppResult<String> {
-    let bytes = fs::read(src)?;
-    let sha1 = sha1_hex(&bytes);
+    cache_bytes(dirs, &fs::read(src)?)
+}
+
+/// Legt bereits verifizierte Bytes im Cache ab und liefert ihren SHA-1.
+pub fn cache_bytes(dirs: &Dirs, bytes: &[u8]) -> AppResult<String> {
+    let sha1 = sha1_hex(bytes);
     let dest = cached(dirs, &sha1)?;
     if !dest.exists() {
         fs::create_dir_all(dirs.mod_cache())?;
         let tmp = dest.with_extension("jar.part");
-        fs::write(&tmp, &bytes)?;
+        fs::write(&tmp, bytes)?;
         fs::rename(&tmp, &dest)?;
     }
     Ok(sha1)
 }
 
-/// Dateiname aus der Instanz-JSON: ein einzelner `.jar`-Name, kein Pfad.
+/// Dateiname aus der Instanz-JSON: ein einzelner Name mit der Endung seiner Art, kein Pfad.
 fn file_name(m: &Mod) -> AppResult<&str> {
     let name = m.file_name.as_str();
     super::content::safe_path(name)?;
     let plain =
         Path::new(name).file_name().is_some_and(|f| f == name) && !name.contains(['/', '\\', ':']);
-    if !plain || !name.ends_with(".jar") {
+    if !plain || !name.ends_with(m.kind.extension()) {
         return Err(AppError::Invalid(format!(
             "ungültiger Dateiname '{name}' für Mod {}",
             m.name
@@ -84,7 +88,7 @@ fn place(src: &Path, dest: &Path) -> io::Result<()> {
     })
 }
 
-/// Bringt `mods/` auf den Stand der Mod-Liste: aktivierte Mods mit SHA-1 kommen aus dem Cache,
+/// Bringt `mods/`, `resourcepacks/` und `shaderpacks/` auf den Stand der Liste: aktivierte Mods mit SHA-1 kommen aus dem Cache,
 /// deaktivierte werden entfernt, sofern die Datei dort wirklich diese Mod ist. Dateien, die der
 /// Nutzer selbst in `mods/` gelegt hat, bleiben unberührt. Liefert die Zahl der aktiven Mods.
 pub fn sync(dirs: &Dirs, instance_id: &str, mods: &[Mod]) -> AppResult<usize> {
@@ -98,13 +102,11 @@ pub fn sync_commit<T>(
     mods: &[Mod],
     commit: impl FnOnce(usize) -> AppResult<T>,
 ) -> AppResult<T> {
-    let dir = dirs.mods_dir(instance_id);
-    super::content::regular_parents(&dir)?;
     let mut changes = Vec::new();
     let mut names = std::collections::HashSet::new();
     let mut active = 0;
     for m in mods.iter().filter(|m| m.sha1.is_some()) {
-        let path = dir.join(file_name(m)?);
+        let path = dirs.game_dir(instance_id).join(m.kind.folder()).join(file_name(m)?);
         if !names.insert(m.file_name.to_lowercase()) {
             return Err(AppError::Invalid("Doppelte Mod-Zieldatei".into()));
         }
@@ -149,16 +151,16 @@ pub fn sync_commit<T>(
             changes.push((path, None));
         }
     }
-    fs::create_dir_all(&dir)?;
     let mut journal: Vec<(PathBuf, Option<PathBuf>)> = Vec::new();
     let result = (|| {
         for (path, source) in changes {
+            fs::create_dir_all(path.parent().expect("Zielpfad hat einen Ordner"))?;
             if let Some(source) = source {
                 // place is exclusive; only record a successfully created target.
                 place(&source, &path)?;
                 journal.push((path, None));
             } else {
-                let backup = dir.join(format!(".rollback-{}", crate::models::new_id()));
+                let backup = path.with_file_name(format!(".rollback-{}", crate::models::new_id()));
                 place(&path, &backup)?;
                 journal.push((path.clone(), Some(backup)));
                 fs::remove_file(&path)?;
@@ -256,6 +258,8 @@ mod tests {
             file_name: "large.jar".into(),
             sha1: Some(sha1_of(&path).unwrap()),
             enabled: true,
+            kind: Default::default(),
+            required_by: Vec::new(),
         };
         assert_eq!(sync(&dirs, "i", std::slice::from_ref(&m)).unwrap(), 1);
         let disabled = Mod {
@@ -293,6 +297,8 @@ mod tests {
             file_name: "sodium.jar".into(),
             sha1: Some(sha1.clone()),
             enabled: true,
+            kind: Default::default(),
+            required_by: Vec::new(),
         };
         let installed = dirs.mods_dir("i1").join("sodium.jar");
         assert_eq!(sync(&dirs, "i1", std::slice::from_ref(&m)).unwrap(), 1);
