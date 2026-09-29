@@ -8,7 +8,10 @@
     "opener:default",
     {
       "identifier": "opener:allow-open-path",
-      "allow": [{ "path": "$APPDATA" }, { "path": "$APPDATA/**" }]
+      "allow": [
+        { "path": "$APPDATA/instances/*/minecraft/crash-reports/**" },
+        { "path": "$APPDATA/instances/*/minecraft/logs/**" }
+      ]
     },
     "dialog:default"
   ]

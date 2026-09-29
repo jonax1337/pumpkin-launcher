@@ -284,13 +284,21 @@ fn read_installer(installer: &Path, libraries: &Path, tmp: &Path) -> AppResult<(
         // `enclosed_name` verwirft `..` und absolute Pfade.
         let Some(rel) = entry.enclosed_name().and_then(|p| p.strip_prefix("maven").ok().map(Path::to_path_buf)) else { continue };
         let target = libraries.join(rel);
-        if entry.is_dir() || target.exists() {
+        // Vorhandene Datei nur bei passender Größe behalten: ein früherer Abbruch kann sie abgeschnitten haben.
+        if entry.is_dir() || fs::metadata(&target).is_ok_and(|m| m.len() == entry.size()) {
             continue;
         }
         if let Some(parent) = target.parent() {
             fs::create_dir_all(parent)?;
         }
-        io::copy(&mut entry, &mut fs::File::create(&target)?)?;
+        // Erst `.part` vollständig schreiben, dann umbenennen (wie in `download`).
+        let mut part = target.clone().into_os_string();
+        part.push(".part");
+        let part = PathBuf::from(part);
+        let mut guard = download::RemoveOnDrop(Some(part.clone()));
+        io::copy(&mut entry, &mut fs::File::create(&part)?)?;
+        fs::rename(&part, &target)?;
+        guard.0 = None;
     }
 
     fs::create_dir_all(tmp)?;
@@ -590,5 +598,32 @@ mod tests {
 
         let other = Profile { inherits_from: "1.20.1".into(), ..profile };
         assert!(merge(vanilla, &other).is_err());
+    }
+    #[test]
+    fn installer_replaces_truncated_maven_file() {
+        use std::io::Write;
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        let (installer, libs) = (root.join("installer.jar"), root.join("libs"));
+        fs::create_dir_all(&root).unwrap();
+        let mut zip = zip::ZipWriter::new(fs::File::create(&installer).unwrap());
+        let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        for (name, data) in [
+            ("install_profile.json", r#"{"data":{},"processors":[]}"#),
+            ("version.json", "{}"),
+            ("maven/a/b.jar", "vollständig"),
+            ("maven/a/c.jar", "neu"),
+        ] {
+            zip.start_file(name, opts).unwrap();
+            zip.write_all(data.as_bytes()).unwrap();
+        }
+        zip.finish().unwrap();
+        fs::create_dir_all(libs.join("a")).unwrap();
+        fs::write(libs.join("a/b.jar"), "voll").unwrap(); // abgebrochener Lauf
+        fs::write(libs.join("a/c.jar"), "alt").unwrap(); // gleiche Größe: bleibt
+        read_installer(&installer, &libs, &root.join("tmp")).unwrap();
+        assert_eq!(fs::read_to_string(libs.join("a/b.jar")).unwrap(), "vollständig");
+        assert_eq!(fs::read_to_string(libs.join("a/c.jar")).unwrap(), "alt");
+        assert!(!libs.join("a/b.jar.part").exists());
+        fs::remove_dir_all(root).unwrap();
     }
 }
