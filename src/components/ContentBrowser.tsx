@@ -1,18 +1,26 @@
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { ArrowLeft, Check, ChevronRight, Download, Loader2, Plus, Search } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, ChevronRight, Download, Loader2, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BlockTile, ErrorNote } from "@/components/common";
 import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { useInstances } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
-import { formatDownloads, pickVersion, progressLabel, projectOf, type CatalogType, type ContentVersion } from "@/lib/modrinth";
+import {
+  formatDownloads, isPackVersionSupported, pickPackVersion, pickVersion, progressLabel, projectOf,
+  type CatalogType, type ContentHit, type ContentProject, type ContentVersion,
+} from "@/lib/modrinth";
 import { LOADER_LABELS, type Instance, type ModKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -87,20 +95,17 @@ export function Description({ body }: { body: string }) {
 
 // ---------- Hinzufügen ----------
 
-/** Wählt die passende Version automatisch (oder nimmt `versionId`) und installiert mit Abhängigkeiten. */
-function AddButton({ instance, projectId, title, type, versionId, large }: {
-  instance: Instance; projectId: string; title: string; type: CatalogType; versionId?: string; large?: boolean;
-}) {
+/**
+ * Wählt die passende Version automatisch (oder nimmt `versionId`) und installiert mit Abhängigkeiten.
+ * "missing" = keine Version für diese Instanz. Mit `openAction` bekommt der Toast „Öffnen“ (Instanz, Tab Inhalte).
+ */
+function useAddContent() {
   const qc = useQueryClient();
   const install = useContentInstall();
-  const { active, target, progress } = useContentState();
-  const [state, setState] = useState<"idle" | "checking" | "missing">("idle");
-  const installed = instance.mods.some((m) => projectOf(m) === projectId);
-
-  async function add() {
-    let id = versionId;
+  const navigate = useNavigate();
+  return async (instance: Instance, projectId: string, title: string, type: CatalogType, opts: { versionId?: string; openAction?: boolean } = {}) => {
+    let id = opts.versionId;
     if (!id) {
-      setState("checking");
       const mc = instance.minecraftVersion, loader = loaderFor(instance, type);
       try {
         const versions = await qc.fetchQuery({
@@ -110,21 +115,38 @@ function AddButton({ instance, projectId, title, type, versionId, large }: {
         });
         id = pickVersion(versions)?.id;
       } catch (err) {
-        setState("idle");
         toast.error(`${title} konnte nicht geladen werden`, { description: err instanceof Error ? err.message : String(err) });
-        return;
+        return "error";
       }
-      setState(id ? "idle" : "missing");
-      if (!id) return;
+      if (!id) return "missing";
     }
     const before = instance.mods.length;
     install.mutate(withTarget(projectId, (op) => api.modrinthInstallMod(instance.id, id, op)), {
       onSuccess: (result) => {
         if (!result) return;
         const extra = result.mods.length - before - 1;
-        toast.success(`${title} hinzugefügt${extra > 0 ? ` (+ ${extra} benötigte ${extra === 1 ? "Mod" : "Mods"})` : ""}`);
+        const deps = extra > 0 ? ` (+ ${extra} benötigte ${extra === 1 ? "Mod" : "Mods"})` : "";
+        if (!opts.openAction) return void toast.success(`${title} hinzugefügt${deps}`);
+        toast.success(`${title} ist jetzt in ${result.name}${deps}`, {
+          action: { label: "Öffnen", onClick: () => navigate(`/instances/${result.id}?tab=content`) },
+        });
       },
     });
+    return "ok";
+  };
+}
+
+function AddButton({ instance, projectId, title, type, versionId, large }: {
+  instance: Instance; projectId: string; title: string; type: CatalogType; versionId?: string; large?: boolean;
+}) {
+  const addContent = useAddContent();
+  const { active, target, progress } = useContentState();
+  const [state, setState] = useState<"idle" | "checking" | "missing">("idle");
+  const installed = instance.mods.some((m) => projectOf(m) === projectId);
+
+  async function add() {
+    setState("checking");
+    setState((await addContent(instance, projectId, title, type, { versionId })) === "missing" ? "missing" : "idle");
   }
 
   const note = "flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground";
@@ -138,6 +160,173 @@ function AddButton({ instance, projectId, title, type, versionId, large }: {
     <Button variant="outline" size="icon-sm" disabled={!!active} aria-label={`${title} hinzufügen`} title="Hinzufügen" onClick={add}>
       <Plus aria-hidden />
     </Button>
+  );
+}
+
+const busyNote = (label: string) => (
+  <span role="status" className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+    <Loader2 className="size-3.5 animate-spin" aria-hidden /> {label}
+  </span>
+);
+
+/** Ohne Instanz-Kontext: Menü mit allen Instanzen; unpassende ausgegraut mit Grund, sonst „Neue Instanz anlegen…“. */
+export function AddToInstanceMenu({ projectId, title, type, large }: { projectId: string; title: string; type: ModKind; large?: boolean }) {
+  const instances = useInstances();
+  const addContent = useAddContent();
+  const navigate = useNavigate();
+  const { active, target, progress } = useContentState();
+  const [open, setOpen] = useState(false);
+  // Alle Versionen einmal laden, um Instanzen ohne passende Minecraft-Version vorab auszugrauen.
+  const all = useQuery({
+    queryKey: versionsKey(projectId, null, null),
+    queryFn: () => api.modrinthVersions(projectId, null, null),
+    enabled: open,
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+  const reasonFor = (i: Instance): string | null => {
+    if (!kindsFor(i).includes(type)) return "Geht nur in Fabric-Instanzen";
+    if (i.mods.some((m) => projectOf(m) === projectId)) return "Schon drin";
+    const fits = all.data?.some((v) => v.game_versions.includes(i.minecraftVersion) && (type !== "mod" || v.loaders.includes(i.loader)));
+    return all.data && !fits ? `Keine Version für ${i.minecraftVersion}` : null;
+  };
+  const rows = (instances.data ?? []).map((i) => ({ i, reason: reasonFor(i) }));
+  const usable = rows.some((r) => !r.reason);
+
+  if (active && target === projectId) return busyNote(progressLabel(progress));
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button variant={large ? "default" : "outline"} size={large ? "default" : "sm"} disabled={!!active} aria-label={large ? undefined : `${title} zu Instanz hinzufügen`}>
+          <Plus aria-hidden /> {large ? "Zu Instanz hinzufügen" : "Hinzufügen"} <ChevronDown aria-hidden />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="max-h-80 w-64">
+        <DropdownMenuLabel>Hinzufügen zu …</DropdownMenuLabel>
+        {rows.map(({ i, reason }) => (
+          <DropdownMenuItem
+            key={i.id}
+            disabled={!!reason}
+            onSelect={() =>
+              void addContent(i, projectId, title, type, { openAction: true }).then(
+                (r) => r === "missing" && toast.error(`${title} gibt es nicht für Minecraft ${i.minecraftVersion}`),
+              )
+            }
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block truncate">{i.name}</span>
+              <span className="block text-xs text-muted-foreground">{reason ?? fitsLabel(i, type)}</span>
+            </span>
+          </DropdownMenuItem>
+        ))}
+        {all.isPending && rows.length > 0 && <p className="px-2 py-1.5 text-xs text-muted-foreground">Prüft passende Versionen…</p>}
+        {!usable && !all.isPending && (
+          <>
+            {rows.length > 0 && <DropdownMenuSeparator />}
+            <DropdownMenuItem onSelect={() => navigate("/instances?neu=1")}>
+              <Plus aria-hidden /> {type === "resourcepack" ? "Neue Instanz anlegen…" : "Neue Fabric-Instanz anlegen…"}
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** Modpack als neue Instanz; ohne `versionId` die neueste stabile Fabric/Vanilla-Version. */
+function useInstallPack(projectId: string, title: string, onDone?: (instanceId: string) => void) {
+  const qc = useQueryClient();
+  const install = useContentInstall();
+  const navigate = useNavigate();
+  const [checking, setChecking] = useState(false);
+  const { active, target, progress } = useContentState();
+
+  async function run(versionId?: string) {
+    let id = versionId;
+    if (!id) {
+      setChecking(true);
+      try {
+        const picked = pickPackVersion(await qc.fetchQuery({
+          queryKey: versionsKey(projectId, null, null),
+          queryFn: () => api.modrinthVersions(projectId, null, null),
+          staleTime: 10 * 60_000,
+        }));
+        if (picked.reason) toast.error(`${title} lässt sich nicht installieren`, { description: picked.reason });
+        id = picked.version?.id;
+      } catch (err) {
+        toast.error(`${title} konnte nicht geladen werden`, { description: err instanceof Error ? err.message : String(err) });
+      } finally {
+        setChecking(false);
+      }
+      if (!id) return;
+    }
+    install.mutate(withTarget(projectId, (op) => api.modrinthInstallPack(id, title, op)), {
+      onSuccess: (inst) => {
+        if (!inst) return;
+        toast.success(`${title} ist bereit – „Spielen“ lädt beim ersten Start den Rest`);
+        if (onDone) onDone(inst.id);
+        else navigate(`/instances/${inst.id}`);
+      },
+    });
+  }
+  const busy = checking ? "Wird geprüft…" : active && target === projectId ? progressLabel(progress) : null;
+  return { run, busy, blocked: !!active || checking };
+}
+
+/** Zeilenaktion für Modpacks. `reason` (z. B. aus den Loader-Kategorien) sperrt vorab mit kurzem Grund. */
+export function PackInstallButton({ projectId, title, reason, onDone }: {
+  projectId: string; title: string; reason?: string | null; onDone?: (instanceId: string) => void;
+}) {
+  const pack = useInstallPack(projectId, title, onDone);
+  if (pack.busy) return busyNote(pack.busy);
+  return (
+    <span className="flex shrink-0 flex-col items-end gap-1">
+      <Button variant="outline" size="sm" disabled={!!reason || pack.blocked} aria-label={`${title} als Instanz installieren`} onClick={() => void pack.run()}>
+        <Download aria-hidden /> Installieren
+      </Button>
+      {reason && <span className="max-w-44 text-right text-xs text-muted-foreground">{reason}</span>}
+    </span>
+  );
+}
+
+/** Aktionen in den Pack-Details: „Als Instanz installieren“ plus „Andere Version…“. */
+export function PackActions({ projectId, title, onDone }: { projectId: string; title: string; onDone?: (instanceId: string) => void }) {
+  const pack = useInstallPack(projectId, title, onDone);
+  const versions = useQuery({
+    queryKey: versionsKey(projectId, null, null),
+    queryFn: () => api.modrinthVersions(projectId, null, null),
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+  const { version, reason } = versions.data ? pickPackVersion(versions.data) : { version: null, reason: null };
+  const fitting = versions.data?.filter(isPackVersionSupported) ?? [];
+
+  if (pack.busy) return busyNote(pack.busy);
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex gap-2">
+        <Button disabled={!version || pack.blocked} onClick={() => void pack.run(version?.id)}>
+          <Download aria-hidden /> Als Instanz installieren
+        </Button>
+        {fitting.length > 1 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={pack.blocked}>Andere Version… <ChevronDown aria-hidden /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="max-h-80">
+              {fitting.map((v) => (
+                <DropdownMenuItem key={v.id} onSelect={() => void pack.run(v.id)}>
+                  <span className="flex-1">{v.version_number}</span>
+                  <span className="text-xs text-muted-foreground">Minecraft {v.game_versions.at(-1)}</span>
+                  {VERSION_TYPE[v.version_type] && <span className="text-xs text-gold">{VERSION_TYPE[v.version_type]}</span>}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
+      {reason && <span className="text-xs text-muted-foreground">{reason}</span>}
+    </div>
   );
 }
 
@@ -156,8 +345,13 @@ const SEARCH_PLACEHOLDER: Record<CatalogType, string> = {
   mod: "Mods suchen…", shader: "Shader suchen…", resourcepack: "Ressourcenpakete suchen…", modpack: "Modpacks suchen…",
 };
 
-/** Suche mit „Beliebt“ als Startzustand. Mit `instance` passend gefiltert und mit „+“ je Zeile. */
-export function ContentResults({ type, instance, onOpen }: { type: CatalogType; instance?: Instance; onOpen: (projectId: string) => void }) {
+/**
+ * Suche mit „Beliebt“ als Startzustand. Mit `instance` passend gefiltert und mit „+“ je Zeile,
+ * sonst mit `action` je Zeile. `barClassName` gibt der klebenden Suchleiste den Hintergrund der Umgebung.
+ */
+export function ContentResults({ type, instance, action, onOpen, barClassName = "bg-popover" }: {
+  type: CatalogType; instance?: Instance; action?: (hit: ContentHit) => ReactNode; onOpen: (projectId: string) => void; barClassName?: string;
+}) {
   const [input, setInput] = useState("");
   const query = useDebounced(input.trim(), 300);
   const mc = instance?.minecraftVersion ?? null;
@@ -174,7 +368,7 @@ export function ContentResults({ type, instance, onOpen }: { type: CatalogType; 
 
   return (
     <div>
-      <div className="sticky top-0 z-10 -mx-4 bg-popover px-4 pb-3">
+      <div className={cn("sticky top-0 z-10 -mx-4 px-4 pb-3", barClassName)}>
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input
@@ -225,6 +419,8 @@ export function ContentResults({ type, instance, onOpen }: { type: CatalogType; 
               </button>
               {instance ? (
                 <AddButton instance={instance} projectId={hit.project_id} title={hit.title} type={type} />
+              ) : action ? (
+                action(hit)
               ) : (
                 <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
               )}
@@ -245,8 +441,8 @@ export function ContentResults({ type, instance, onOpen }: { type: CatalogType; 
 
 const VERSION_TYPE: Record<ContentVersion["version_type"], string | null> = { release: null, beta: "Beta", alpha: "Testversion" };
 
-export function ContentDetail({ projectId, type, instance, onBack }: {
-  projectId: string; type: CatalogType; instance?: Instance; onBack: () => void;
+export function ContentDetail({ projectId, type, instance, action, onBack }: {
+  projectId: string; type: CatalogType; instance?: Instance; action?: (project: ContentProject) => ReactNode; onBack: () => void;
 }) {
   const project = useQuery({
     queryKey: ["modrinth-project", projectId],
@@ -286,7 +482,7 @@ export function ContentDetail({ projectId, type, instance, onBack }: {
               <h2 className="text-xl font-semibold">{title}</h2>
               <p className="mt-1 text-sm text-muted-foreground">{project.data.description}</p>
             </div>
-            {instance && <AddButton instance={instance} projectId={projectId} title={title} type={type} large />}
+            {instance ? <AddButton instance={instance} projectId={projectId} title={title} type={type} large /> : action?.(project.data)}
           </header>
 
           {instance && choose && versions.data && versions.data.length > 0 && (

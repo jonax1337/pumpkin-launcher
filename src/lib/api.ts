@@ -55,6 +55,7 @@ const emit = <T>(event: string, payload: T) => bus.dispatchEvent(new CustomEvent
 
 // Modrinth im Browser: Katalog live von api.modrinth.com, Installieren und Updates nur simuliert.
 const mockContent = mockData?.createContentMock(db, emit);
+const mockPack = tauri ? null : (await import("@/lib/mock-pack")).createPackMock(db, emit);
 
 function on<T>(event: string, cb: (payload: T) => void): Promise<UnlistenFn> {
   if (tauri) return listen<T>(event, (e) => cb(e.payload));
@@ -211,7 +212,7 @@ export const api = {
   modrinthUpdateMods: (instanceId: string, modIds: string[], operationId: string): Promise<Instance> =>
     tauri ? call("modrinth_update_mods", { instanceId, modIds, operationId }) : mockContent!.updateMods(instanceId, modIds, operationId),
   modrinthInstallPack: (versionId: string, name: string, operationId: string): Promise<Instance> =>
-    contentCall("modrinth_install_pack", { versionId, name, operationId }),
+    tauri ? call("modrinth_install_pack", { versionId, name, operationId }) : mockPack!(versionId, name, operationId),
   modrinthImportPack: (path: string, name: string, operationId: string): Promise<Instance> =>
     contentCall("modrinth_import_pack", { path, name, operationId }),
   /** Links aus Beschreibungen im Standardbrowser öffnen, nie im Launcher-Fenster. */

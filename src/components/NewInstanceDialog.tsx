@@ -12,9 +12,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ContentResults, PackInstallButton } from "@/components/ContentBrowser";
 import { useContentInstall, useContentState } from "@/hooks/useContent";
 import { useCreateInstance, useLoaderVersions, useVersions } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
+import { packReason } from "@/lib/modrinth";
 import { formatMemory } from "@/lib/format";
 import { INSTALLABLE_LOADERS, LOADER_LABELS, type ModLoader } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -223,6 +225,22 @@ function FileTab({ path, setPath, onDone }: { path: string; setPath: (p: string)
   );
 }
 
+/** Kompakte Modpack-Suche; Details bleiben in „Entdecken“. */
+function ModpackTab({ onDone, onDiscover }: { onDone: (id: string) => void; onDiscover: (projectId?: string) => void }) {
+  return (
+    <div className="-mx-4 max-h-[55vh] overflow-y-auto px-4">
+      <ContentResults
+        type="modpack"
+        onOpen={(id) => onDiscover(id)}
+        action={(hit) => <PackInstallButton projectId={hit.project_id} title={hit.title} reason={packReason(hit.categories)} onDone={onDone} />}
+      />
+      <Button variant="link" className="mt-2 px-0" onClick={() => onDiscover()}>
+        <Compass aria-hidden /> Mehr in Entdecken
+      </Button>
+    </div>
+  );
+}
+
 /** „Neu“: leere Instanz, Modpack oder Datei. Die `primary`-Instanz nimmt aufs Fenster gezogene .mrpack und Strg+N an. */
 export function NewInstanceDialog({ children, primary }: { children: ReactNode; primary?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -260,12 +278,12 @@ export function NewInstanceDialog({ children, primary }: { children: ReactNode; 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Neue Instanz</DialogTitle>
           <DialogDescription>Ein eigenes Minecraft mit eigener Version, eigenen Mods und eigenen Welten.</DialogDescription>
         </DialogHeader>
-        <Tabs value={tab} onValueChange={(t) => setTab(t as Tab)}>
+        <Tabs value={tab} onValueChange={(t) => setTab(t as Tab)} className="min-w-0">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="empty">Leer</TabsTrigger>
             <TabsTrigger value="modpack">Modpack</TabsTrigger>
@@ -274,19 +292,8 @@ export function NewInstanceDialog({ children, primary }: { children: ReactNode; 
           <TabsContent value="empty" className="mt-5">
             <EmptyTab onDone={done} />
           </TabsContent>
-          <TabsContent value="modpack" className="mt-5 space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Fertige Pakete aus Mods und Einstellungen. Such dir eins aus, Voxlet legt daraus eine neue Instanz an.
-            </p>
-            <Button
-              className="w-full"
-              onClick={() => {
-                setOpen(false);
-                navigate("/discover");
-              }}
-            >
-              <Compass aria-hidden /> Modpacks entdecken
-            </Button>
+          <TabsContent value="modpack" className="mt-5">
+            <ModpackTab onDone={done} onDiscover={(id) => { setOpen(false); navigate(id ? `/discover?projekt=${id}` : "/discover"); }} />
           </TabsContent>
           <TabsContent value="file" className="mt-5">
             <FileTab path={path} setPath={setPath} onDone={done} />

@@ -1,16 +1,6 @@
 // Run: node src/lib/modrinth.check.mjs (Node with TypeScript stripping).
 import assert from 'node:assert/strict';
-import { isAbsoluteMrpack, modCompatibility, pickVersion, progressLabel, removeWithDependencies, undoRemove } from './modrinth.ts';
-for (const path of ['C:\\packs\\test.mrpack', 'C:/packs/test.MRPACK', '/tmp/a.mrpack', '\\\\server\\share\\a.mrpack']) assert.equal(isAbsoluteMrpack(path), true, path);
-for (const path of ['test.mrpack', 'C:test.mrpack', '/tmp/test.zip', '', 'https://example.com/a.mrpack']) assert.equal(isAbsoluteMrpack(path), false, path);
-const instance = { loader: 'fabric', minecraftVersion: '1.21.1' };
-const version = { loaders: ['fabric'], game_versions: ['1.21.1'] };
-assert.equal(modCompatibility(instance, version), null);
-assert.ok(modCompatibility(undefined, version));
-assert.ok(modCompatibility(instance, undefined));
-for (const loader of ['vanilla', 'forge', 'quilt', 'neoforge']) assert.ok(modCompatibility({ ...instance, loader }, version));
-assert.ok(modCompatibility(instance, { ...version, game_versions: ['1.21'] }));
-assert.ok(modCompatibility(instance, { ...version, loaders: ['forge'] }));
+import { packReason, pickPackVersion, pickVersion, progressLabel, removeWithDependencies, undoRemove } from './modrinth.ts';
 
 // Entfernen mit Abhängigkeiten: Iris und Mod Menu brauchen Fabric API, Sodium braucht nur Iris.
 const m = (id, requiredBy = []) => ({ id, name: id, source: { type: 'modrinth', projectId: id, versionId: 'v' }, requiredBy, enabled: true });
@@ -36,3 +26,13 @@ assert.equal(pickVersion([]), null);
 assert.equal(progressLabel({ phase: 'resolve', done: 0, total: 1 }), 'Wird geprüft…');
 assert.equal(progressLabel({ phase: 'download', done: 2, total: 7 }), 'Lädt 3 von 7…');
 console.log('Modrinth checks passed');
+
+// Pack-Version: Fabric/Vanilla bevorzugt stabil, sonst Grund.
+const pv = (id, loaders, version_type = 'release') => ({ id, loaders, version_type });
+assert.equal(pickPackVersion([pv('f1', ['forge']), pv('b', ['fabric'], 'beta'), pv('r', ['fabric'])]).version.id, 'r');
+assert.equal(pickPackVersion([pv('v', ['minecraft'])]).version.id, 'v');
+assert.deepEqual(pickPackVersion([pv('f', ['forge']), pv('n', ['neoforge'])]), { version: null, reason: 'Braucht Forge – kann Voxlet noch nicht' });
+assert.ok(pickPackVersion([]).reason);
+assert.equal(packReason(['forge', 'technology']), 'Braucht Forge – kann Voxlet noch nicht');
+assert.equal(packReason(['forge', 'fabric']), null);
+assert.equal(packReason(['adventure']), null);

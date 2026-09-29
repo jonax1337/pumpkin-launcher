@@ -1,4 +1,4 @@
-import type { Instance, Mod } from "./types";
+import type { Mod } from "./types";
 
 // Modrinth-Katalog bleibt snake_case; Instanzen und Events sind camelCase.
 export interface ContentHit {
@@ -70,13 +70,23 @@ export function undoRemove(current: Mod[], before: Mod[], removed: Mod[]): Mod[]
     ...current.filter((m) => !known.has(m.id)),
   ];
 }
-export function modCompatibility(instance: Instance | undefined, version: ContentVersion | undefined): string | null {
-  if (!instance) return "Wähle eine Fabric-Instanz.";
-  if (instance.loader !== "fabric") return "Mods können nur in Fabric-Instanzen installiert werden – nicht in Vanilla, Quilt, Forge oder NeoForge.";
-  if (!version) return "Wähle eine Version.";
-  if (!version.loaders.includes("fabric") || !version.game_versions.includes(instance.minecraftVersion)) return "Diese Version passt nicht zur Minecraft-Version und zum Fabric-Loader der Instanz.";
-  return null;
+
+// Voxlet installiert Packs nur ohne Mod-Loader oder mit Fabric.
+const PACK_LOADERS = ["fabric", "minecraft", "vanilla"];
+const LOADER_NAMES: Record<string, string> = { forge: "Forge", neoforge: "NeoForge", quilt: "Quilt" };
+
+export const isPackVersionSupported = (v: ContentVersion) => v.loaders.some((l) => PACK_LOADERS.includes(l));
+
+/** Pack-Version für eine neue Instanz: neueste stabile mit Fabric/Vanilla, sonst ein kurzer Grund. */
+export function pickPackVersion(versions: ContentVersion[]): { version: ContentVersion | null; reason: string | null } {
+  const version = pickVersion(versions.filter(isPackVersionSupported));
+  if (version) return { version, reason: null };
+  return { version: null, reason: versions.length ? packReason(versions[0].loaders) : "Keine Version verfügbar" };
 }
-export function isAbsoluteMrpack(path: string): boolean {
-  return /^(?:[A-Za-z]:[\\/]|\\\\[^\\]+\\[^\\]+\\|\/)/.test(path) && /\.mrpack$/i.test(path);
+
+/** Grund aus den Loader-Kategorien eines Suchtreffers; null, wenn Fabric/Vanilla dabei ist oder nichts bekannt ist. */
+export function packReason(loaders: string[]): string | null {
+  const known = loaders.filter((l) => l in LOADER_NAMES || PACK_LOADERS.includes(l));
+  if (!known.length || known.some((l) => PACK_LOADERS.includes(l))) return null;
+  return `Braucht ${LOADER_NAMES[known[0]]} – kann Voxlet noch nicht`;
 }
