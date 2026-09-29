@@ -614,6 +614,12 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
     if let Some(v) = &loader_version {
         modrinth::identifier(v)?;
     }
+    // Vor dem Download ablehnen, was Voxlet nicht starten kann (z. B. Forge vor 1.17).
+    match loader {
+        ModLoader::Forge => crate::services::forge::check_supported(crate::services::forge::Kind::Forge, &mc)?,
+        ModLoader::NeoForge => crate::services::forge::check_supported(crate::services::forge::Kind::NeoForge, &mc)?,
+        _ => {}
+    }
     let instance = Instance::from_new(NewInstance {
         name: name.trim().into(),
         minecraft_version: mc,
