@@ -42,6 +42,8 @@ impl ModLoader {
             Self::Fabric => &["fabric"],
             Self::Quilt => &["quilt", "fabric"],
             Self::Forge => &["forge"],
+            // ponytail: NeoForge für 1.20.1 lädt auch reine Forge-Mods; der Katalog findet dort nur als NeoForge markierte.
+            // Upgrade: Loader-Liste abhängig von der Minecraft-Version.
             Self::NeoForge => &["neoforge"],
         }
     }
