@@ -71,7 +71,7 @@ function Brand() {
         <span className="rounded-[2px] bg-gold" />
       </div>
       <div className="leading-tight">
-        <p className="font-heading text-[15px] font-semibold tracking-tight">Launcher</p>
+        <p className="font-heading text-[15px] font-semibold tracking-tight">Laux Launcher</p>
         <p className="text-[11px] text-muted-foreground">Minecraft Java Edition</p>
       </div>
     </div>
