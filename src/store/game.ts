@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { InstallProgress, LogPayload } from "@/lib/types";
+import type { ExitPayload, InstallProgress, LogPayload } from "@/lib/types";
 
 export interface LogLine {
   id: number;
@@ -18,17 +18,22 @@ interface GameState {
   /** Instanzen, für die „Spielen“ gerade läuft (Vorbereiten und Starten). */
   launching: Record<string, true>;
   logs: Record<string, LogLine[]>;
+  /** Letzter Absturz je Instanz, bis zum nächsten Start (Hinweis im Protokoll). */
+  crashes: Record<string, ExitPayload>;
   setProgress: (p: InstallProgress) => void;
   clearProgress: (instanceId: string) => void;
   setLaunching: (instanceId: string, launching: boolean) => void;
   appendLog: (p: LogPayload) => void;
   clearLog: (instanceId: string) => void;
+  setCrash: (exit: ExitPayload) => void;
+  clearCrash: (instanceId: string) => void;
 }
 
 export const useGame = create<GameState>()((set) => ({
   installs: {},
   launching: {},
   logs: {},
+  crashes: {},
   setProgress: (p) => set((s) => ({ installs: { ...s.installs, [p.instanceId]: p } })),
   clearProgress: (id) =>
     set((s) => {
@@ -48,4 +53,10 @@ export const useGame = create<GameState>()((set) => ({
       },
     })),
   clearLog: (id) => set((s) => ({ logs: { ...s.logs, [id]: [] } })),
+  setCrash: (exit) => set((s) => ({ crashes: { ...s.crashes, [exit.instanceId]: exit } })),
+  clearCrash: (id) =>
+    set((s) => {
+      const { [id]: _, ...crashes } = s.crashes;
+      return { crashes };
+    }),
 }));

@@ -3,9 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, type NavigateFunction } from "react-router";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import type { Instance, InstanceStatus, ModLoader, NewInstance } from "@/lib/types";
+import { autoMemoryMb, maxMemoryMb } from "@/lib/format";
+import { INSTALL_CANCELLED, type Instance, type InstanceStatus, type ModLoader, type NewInstance } from "@/lib/types";
 import { useGame } from "@/store/game";
-import { useSettings } from "@/store/settings";
+import { accountName, useSettings } from "@/store/settings";
 
 export const instanceKeys = {
   all: ["instances"] as const,
@@ -107,6 +108,31 @@ export function useLoaderVersions(loader: ModLoader, mcVersion: string) {
   });
 }
 
+const systemMemoryQuery = { queryKey: ["system-memory"], queryFn: api.systemMemoryMb, staleTime: Infinity, retry: false } as const;
+
+/**
+ * Arbeitsspeicher: `value` ist der Standard für alle Instanzen (eigene Wahl oder automatisch),
+ * `max` die Obergrenze für Regler, `total` der Speicher des PCs (null, solange unbekannt).
+ */
+export function useMemory() {
+  const chosen = useSettings((s) => s.memoryMb);
+  const { data: total = null } = useQuery(systemMemoryQuery);
+  const auto = total == null ? 4096 : autoMemoryMb(total);
+  return { value: chosen ?? auto, auto, total, max: total == null ? 16384 : maxMemoryMb(total), isAuto: chosen == null };
+}
+
+async function defaultMemory(qc: ReturnType<typeof useQueryClient>) {
+  const chosen = useSettings.getState().memoryMb;
+  if (chosen != null) return chosen;
+  try {
+    return autoMemoryMb(await qc.fetchQuery(systemMemoryQuery));
+  } catch {
+    return 4096;
+  }
+}
+
+const isCancelled = (err: unknown) => err instanceof Error && err.message === INSTALL_CANCELLED;
+
 export function useInstanceStatus(id: string | undefined) {
   return useQuery({
     queryKey: instanceKeys.status(id ?? ""),
@@ -121,17 +147,19 @@ export function useInstall() {
   const install = useMutation({
     meta: { ownErrorToast: true },
     mutationFn: (instance: Instance) => {
-      setProgress({ instanceId: instance.id, step: instance.loader === "fabric" ? "loader" : "java", done: 0, total: 0 });
+      setProgress({ instanceId: instance.id, step: instance.loader !== "vanilla" ? "loader" : "java", done: 0, total: 0 });
       return api.installInstance(instance.id);
     },
     // Beim Spielen folgt gleich der Start; eine Erfolgsmeldung gibt es nur für Reparieren und „Erneut versuchen“.
     onSuccess: (_, instance) => !useGame.getState().launching[instance.id] && toast.success(`${instance.name} ist bereit`),
     onError: (err, instance) =>
-      toast.error(`${instance.name} konnte nicht installiert werden`, {
-        description: err.message,
-        duration: 10_000,
-        action: { label: "Erneut versuchen", onClick: () => install.mutate(instance) },
-      }),
+      isCancelled(err)
+        ? toast(`Installation von ${instance.name} abgebrochen`)
+        : toast.error(`${instance.name} konnte nicht installiert werden`, {
+            description: err.message,
+            duration: 10_000,
+            action: { label: "Erneut versuchen", onClick: () => install.mutate(instance) },
+          }),
     onSettled: (_, __, instance) => {
       clearProgress(instance.id);
       // Bei Fabric ohne loaderVersion schreibt das Backend die gewählte Version in die Instanz.
@@ -144,24 +172,30 @@ export function useInstall() {
   return install;
 }
 
+/** Bricht die laufende Vorbereitung ab; das Backend beendet `instance_install` dann mit INSTALL_CANCELLED. */
+export function useCancelInstall() {
+  return useMutation({ mutationFn: (instanceId: string) => api.installCancel(instanceId) });
+}
+
 export function useLaunch() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   return useMutation({
     meta: { ownErrorToast: true },
-    mutationFn: (instance: Instance) => {
-      const { offlineName, javaPath, memoryMb } = useSettings.getState();
-      if (!offlineName) throw new Error("Leg zuerst einen Spielernamen fest.");
+    mutationFn: async (instance: Instance) => {
+      const { active, javaPath } = useSettings.getState();
+      if (!active) throw new Error("Leg zuerst einen Spielernamen fest.");
       useGame.getState().clearLog(instance.id);
-      return api.launchInstance(instance.id, offlineName, javaPath, memoryMb);
+      useGame.getState().clearCrash(instance.id);
+      const accountId = active.kind === "microsoft" ? active.id : null;
+      return api.launchInstance(instance.id, accountName(active), accountId, javaPath, await defaultMemory(qc));
     },
     onSuccess: (_, instance) => {
       // Ohne vorherigen Status (Abfrage fehlgeschlagen) gilt die Instanz jetzt als installiert und laufend.
       qc.setQueryData<InstanceStatus>(instanceKeys.status(instance.id), (s) => ({ installed: true, ...s, running: true }));
       return qc.invalidateQueries({ queryKey: instanceKeys.all });
     },
-    onError: (err) =>
-      useSettings.getState().offlineName ? toast.error(err.message) : missingNameToast(err.message, navigate),
+    onError: (err) => (useSettings.getState().active ? toast.error(err.message) : missingNameToast(err.message, navigate)),
   });
 }
 
@@ -181,7 +215,7 @@ export function usePlay() {
   return async (instance: Instance, onLaunched?: () => void) => {
     const game = useGame.getState();
     if (game.launching[instance.id] || game.installs[instance.id]) return;
-    if (!useSettings.getState().offlineName) return missingNameToast("Leg zuerst einen Spielernamen fest.", navigate);
+    if (!useSettings.getState().active) return missingNameToast("Leg zuerst einen Spielernamen fest.", navigate);
     game.setLaunching(instance.id, true);
     try {
       // Fehlt der Status (Abfrage fehlgeschlagen), wird wie „nicht installiert“ vorbereitet.
@@ -219,14 +253,29 @@ export function useGameEvents() {
       // Events laufen dem invoke-Ergebnis nach; ohne Guard setzen späte Events eine abgeschlossene Installation wieder auf "läuft".
       api.onInstallProgress((p) => useGame.getState().installs[p.instanceId] && setProgress(p)),
       api.onLog(appendLog),
-      api.onExit(({ instanceId, code }) => {
+      api.onExit((exit) => {
+        const { instanceId, code, crashed, crashReport } = exit;
         qc.setQueryData<InstanceStatus>(instanceKeys.status(instanceId), (s) => s && { ...s, running: false });
-        if (!stopping.delete(instanceId) && code != null && code !== 0)
-          toast.error(`Minecraft wurde unerwartet beendet (Code ${code})`, {
-            duration: 10_000,
-            action: { label: "Protokoll ansehen", onClick: () => navigate(`/instances/${instanceId}?tab=console`) },
+        if (stopping.delete(instanceId)) return;
+        const showLog = { label: "Protokoll anzeigen", onClick: () => navigate(`/instances/${instanceId}?tab=console`) };
+        if (crashed) {
+          useGame.getState().setCrash(exit);
+          // Bleibt stehen, bis der Nutzer reagiert: ein Absturz ist keine vorübergehende Meldung.
+          toast.error("Minecraft ist abgestürzt", {
+            id: `crash-${instanceId}`,
+            duration: Infinity,
+            description: crashReport ? "Im Absturzbericht steht meist, welche Mod schuld ist." : "Das Protokoll zeigt, was zuletzt passiert ist.",
+            action: crashReport
+              ? { label: "Absturzbericht öffnen", onClick: () => void api.openPath(crashReport).catch((e: Error) => toast.error(e.message)) }
+              : showLog,
+            cancel: crashReport ? showLog : undefined,
           });
+        } else if (code != null && code !== 0) {
+          toast.error(`Minecraft wurde unerwartet beendet (Code ${code})`, { duration: 10_000, action: showLog });
+        }
       }),
+      // Das Backend hat Instanzen umgebaut (z. B. Migration): Listen und Details neu laden.
+      api.onInstancesChanged(() => void qc.invalidateQueries({ queryKey: instanceKeys.all })),
     ];
     return () => subs.forEach((p) => p.then((unlisten) => unlisten()));
   }, [qc, navigate]);

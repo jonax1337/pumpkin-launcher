@@ -17,21 +17,27 @@ export function DiscoverPage() {
   const [projectId, setProjectId] = useState<string | null>(params.get("projekt"));
 
   return (
-    <div className="mx-auto max-w-4xl">
+    <div>
       <PageHeader title="Entdecken" description="Modpacks, Mods, Shader und Ressourcenpakete von Modrinth." />
       {projectId ? (
-        <ContentDetail
-          projectId={projectId}
-          type={type}
-          onBack={() => setProjectId(null)}
-          action={(p) =>
-            type === "modpack" ? <PackActions projectId={p.id} title={p.title} /> : <AddToInstanceMenu projectId={p.id} title={p.title} type={type} large />
-          }
-        />
+        <div className="max-w-5xl">
+          <ContentDetail
+            projectId={projectId}
+            type={type}
+            onBack={() => setProjectId(null)}
+            action={(p) =>
+              type === "modpack" ? <PackActions projectId={p.id} title={p.title} /> : <AddToInstanceMenu projectId={p.id} title={p.title} type={type} large />
+            }
+          />
+        </div>
       ) : (
         <Tabs value={type} onValueChange={(t) => setParams({ tab: t }, { replace: true })} className="mb-4">
-          <TabsList>
-            {TABS.map((t) => <TabsTrigger key={t} value={t}>{LABELS[t]}</TabsTrigger>)}
+          <TabsList variant="line" className="h-10 w-full justify-start gap-5 overflow-x-auto rounded-none border-b p-0">
+            {TABS.map((t) => (
+              <TabsTrigger key={t} value={t} className="flex-none px-0.5">
+                {LABELS[t]}
+              </TabsTrigger>
+            ))}
           </TabsList>
         </Tabs>
       )}
@@ -40,6 +46,7 @@ export function DiscoverPage() {
         <ContentResults
           key={type}
           type={type}
+          grid
           barClassName="bg-background"
           onOpen={setProjectId}
           action={(hit) =>

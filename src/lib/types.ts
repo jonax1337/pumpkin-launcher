@@ -62,8 +62,11 @@ export interface NewInstance {
   loaderVersion: string | null;
 }
 
-/** Loader, die das Backend installieren und starten kann. */
-export const INSTALLABLE_LOADERS: ModLoader[] = ["vanilla", "fabric"];
+/** Reihenfolge im Dialog „Neu“. */
+export const ALL_LOADERS: ModLoader[] = ["vanilla", "fabric", "quilt", "neoforge", "forge"];
+
+/** Loader, die das Backend installieren und starten kann; die übrigen erscheinen als „bald verfügbar“. */
+export const SUPPORTED_LOADERS: ModLoader[] = ["vanilla", "fabric", "quilt", "neoforge", "forge"];
 
 export const LOADER_LABELS: Record<ModLoader, string> = {
   vanilla: "Vanilla",
@@ -99,16 +102,23 @@ export interface LoaderVersion {
 
 export type InstallStep = "java" | "client" | "libraries" | "natives" | "assets" | "loader" | "mods";
 
-/** Schritte der Vorbereitung in Alltagssprache (Anzeige im Spielen-Button). */
-export const INSTALL_STEP_LABELS: Record<InstallStep, string> = {
-  java: "Java wird eingerichtet",
-  client: "Spieldaten werden geladen",
-  libraries: "Bibliotheken werden geladen",
-  natives: "Bibliotheken werden geladen",
-  assets: "Spieldaten werden geladen",
-  loader: "Fabric wird eingerichtet",
-  mods: "Mods werden geladen",
-};
+/** Schritte der Vorbereitung in Alltagssprache (Anzeige beim Fortschritt). */
+export function installStepLabel(step: InstallStep, loader: ModLoader): string {
+  switch (step) {
+    case "java":
+      return "Java wird eingerichtet";
+    case "client":
+    case "assets":
+      return "Lade Spieldateien";
+    case "libraries":
+    case "natives":
+      return "Lade Bibliotheken";
+    case "loader":
+      return `${LOADER_LABELS[loader]} wird eingerichtet`;
+    case "mods":
+      return "Lade Mods";
+  }
+}
 
 /** Event `install-progress`. */
 export interface InstallProgress {
@@ -129,6 +139,33 @@ export interface LogPayload {
 export interface ExitPayload {
   instanceId: string;
   code: number | null;
+  crashed: boolean;
+  /** Pfad zum Absturzbericht von Minecraft, falls einer geschrieben wurde. */
+  crashReport: string | null;
+  logFile: string | null;
+}
+
+/** Fehlertext des Backends, wenn der Nutzer eine Installation abbricht (kein Fehler, neutral melden). */
+export const INSTALL_CANCELLED = "Installation abgebrochen";
+
+// ---------- Konten ----------
+
+/** Microsoft-Konto aus `ms_accounts` / `ms_login_finish`. */
+export interface Account {
+  id: string;
+  username: string;
+  kind: "microsoft";
+  active: boolean;
+}
+
+/** Ergebnis von `ms_login_start` (Geräte-Code-Anmeldung). */
+export interface MsLoginStart {
+  userCode: string;
+  verificationUri: string;
+  /** Sekunden, bis der Code verfällt. */
+  expiresIn: number;
+  interval: number;
+  message: string;
 }
 
 export interface InstanceStatus {
