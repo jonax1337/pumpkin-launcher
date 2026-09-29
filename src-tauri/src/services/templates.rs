@@ -216,6 +216,8 @@ mod tests {
         let copy = create_instance(&state, &t.id, "Kopie", &|_, _, _| {}).await.unwrap();
         let new = state.dirs.game_dir(&copy.id);
         assert_eq!(fs::read(new.join("mods/own.jar")).unwrap(), b"own");
+        assert_eq!(copy.mods.iter().map(|m| (m.file_name.as_str(), m.enabled)).collect::<Vec<_>>(), [("own.jar", true)]);
+        assert_eq!(copy.mods[0].sha1, source.mods[0].sha1);
         assert_eq!(fs::read(new.join("config/sub/a.toml")).unwrap(), b"x=1");
         assert_eq!(fs::read(new.join("options.txt")).unwrap(), b"fov:1");
         assert!(!new.join("mods/off.jar").exists() && !new.join("saves").exists());

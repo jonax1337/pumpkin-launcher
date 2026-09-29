@@ -640,16 +640,34 @@ pub async fn import(
         let client = modrinth::client()?;
         let total = (pack.downloads.len() + pack.overrides.len()) as u64;
         let mut done = 0;
+        // (kind, file name, sha1) of every staged content file; bytes go to the cache right away.
+        let mut content = Vec::new();
+        let mut stage = |path: &Path, data: &[u8]| -> AppResult<()> {
+            write_new(&state.dirs.game_dir(&pack.instance.id).join(path), data)?;
+            if let Some((kind, name)) = content_file(path) {
+                content.push((kind, name, super::mods::cache_bytes(&state.dirs, data)?));
+            }
+            Ok(())
+        };
         for (path, file) in pack.downloads {
             progress("download", done, total);
             let data = modrinth::download(&client, &file).await?;
-            write_new(&state.dirs.game_dir(&pack.instance.id).join(path), &data)?;
+            stage(&path, &data)?;
             done += 1;
         }
         for (path, data) in pack.overrides {
-            write_new(&state.dirs.game_dir(&pack.instance.id).join(path), &data)?;
+            stage(&path, &data)?;
             done += 1;
             progress("extract", done, total);
+        }
+        let hashes: Vec<String> = content.iter().map(|(_, _, sha1)| sha1.clone()).collect();
+        let (known, titles) = identify(&client, &hashes).await.unwrap_or_else(|err| {
+            tracing::warn!(%err, "Pack-Inhalte nicht bei Modrinth erkannt; als lokal erfasst");
+            Default::default()
+        });
+        for (kind, file_name, sha1) in content {
+            let m = entry(kind, file_name, sha1, &known, &titles, &pack.instance.mods);
+            pack.instance.mods.push(m);
         }
         let instance = state.instances.insert(pack.instance)?;
         progress("complete", total, total);
@@ -664,6 +682,69 @@ pub async fn import(
             Err(e)
         }
         Ok(i) => Ok(i),
+    }
+}
+/// `mods/*.jar`, `resourcepacks/*.zip`, `shaderpacks/*.zip` directly in the folder, else None.
+fn content_file(path: &Path) -> Option<(ModKind, String)> {
+    let (folder, name) = path.to_str()?.split_once('/')?;
+    [ModKind::Mod, ModKind::ResourcePack, ModKind::Shader]
+        .into_iter()
+        .find(|k| k.folder() == folder && !name.contains('/') && name.ends_with(k.extension()))
+        .map(|k| (k, name.to_string()))
+}
+
+/// Best effort: sha1 -> Modrinth version plus project id -> title, two requests at most.
+async fn identify(
+    client: &reqwest::Client,
+    hashes: &[String],
+) -> AppResult<(HashMap<String, Version>, HashMap<String, String>)> {
+    // Tests stay offline and exercise the fallback path.
+    if cfg!(test) {
+        return Err(invalid("Kein Netzwerk in Tests"));
+    }
+    let known = modrinth::versions_by_hash(client, hashes).await?;
+    let mut ids: Vec<String> = known.values().map(|v| v.project_id.clone()).collect();
+    ids.sort();
+    ids.dedup();
+    let titles = match modrinth::projects(client, &ids).await {
+        Ok(projects) => projects.into_iter().map(|p| (p.id, p.title)).collect(),
+        Err(err) => {
+            tracing::warn!(%err, "Projekttitel nicht geladen");
+            HashMap::new()
+        }
+    };
+    Ok((known, titles))
+}
+
+fn entry(
+    kind: ModKind,
+    file_name: String,
+    sha1: String,
+    known: &HashMap<String, Version>,
+    titles: &HashMap<String, String>,
+    existing: &[Mod],
+) -> Mod {
+    let stem = file_name.strip_suffix(kind.extension()).unwrap_or(&file_name).to_string();
+    let (id, name, version, source) = match known.get(&sha1) {
+        Some(v) => (
+            // Two files of one project keep distinct ids.
+            Some(v.project_id.clone()).filter(|p| !existing.iter().any(|m| &m.id == p)),
+            titles.get(&v.project_id).cloned().unwrap_or(stem),
+            v.version_number.clone(),
+            ModSource::Modrinth { project_id: v.project_id.clone(), version_id: v.id.clone() },
+        ),
+        None => (None, stem, String::new(), ModSource::Local),
+    };
+    Mod {
+        id: id.unwrap_or_else(crate::models::new_id),
+        name,
+        version,
+        source,
+        file_name,
+        sha1: Some(sha1),
+        enabled: true,
+        kind,
+        required_by: Vec::new(),
     }
 }
 pub fn local_pack(path: &Path) -> AppResult<Vec<u8>> {
@@ -782,6 +863,24 @@ mod tests {
         fs::remove_dir_all(&dirs.root).unwrap();
     }
     #[test]
+    fn recorded_entry_uses_modrinth_hit() {
+        let sha1 = "a".repeat(40);
+        let known = graph(&[("sodium", &[])])
+            .into_values()
+            .map(|v| (sha1.clone(), v))
+            .collect();
+        let titles = HashMap::from([("sodium".to_string(), "Sodium".to_string())]);
+        let m = entry(ModKind::Mod, "sodium-1.jar".into(), sha1.clone(), &known, &titles, &[]);
+        assert_eq!((m.id.as_str(), m.name.as_str(), m.version.as_str()), ("sodium", "Sodium", "1"));
+        assert_eq!(m.source, ModSource::Modrinth { project_id: "sodium".into(), version_id: "sodium1".into() });
+        // Second file of the same project gets its own id, missing title falls back to the stem.
+        let again = entry(ModKind::Mod, "sodium-2.jar".into(), sha1, &known, &HashMap::new(), &[m]);
+        assert_ne!(again.id, "sodium");
+        assert_eq!(again.name, "sodium-2");
+        assert_eq!(content_file(Path::new("shaderpacks/x.zip")).map(|(k, _)| k), Some(ModKind::Shader));
+        assert!(content_file(Path::new("mods/x.zip")).is_none() && content_file(Path::new("x.jar")).is_none());
+    }
+    #[test]
     fn security_boundaries() {
         for p in [
             "../x",
@@ -854,6 +953,11 @@ mod tests {
         let data = archive(&[
             ("modrinth.index.json", index),
             ("overrides/config/test.txt", b"ok"),
+            ("overrides/mods/a.jar", b"a"),
+            ("overrides/mods/sub/b.jar", b"b"),
+            ("overrides/mods/notes.txt", b"n"),
+            ("overrides/resourcepacks/r.zip", b"r"),
+            ("client-overrides/shaderpacks/s.zip", b"s"),
         ]);
         let i = import(&state, &data, "test", None, &|_, _, _| {})
             .await
@@ -862,6 +966,29 @@ mod tests {
             fs::read(state.dirs.game_dir(&i.id).join("config/test.txt")).unwrap(),
             b"ok"
         );
+        // Lookup fails offline: every direct content file is recorded as local and cached.
+        let got: Vec<_> = i.mods.iter().map(|m| (m.kind, m.file_name.as_str(), m.name.as_str(), m.version.as_str())).collect();
+        assert_eq!(
+            got,
+            [
+                (ModKind::Mod, "a.jar", "a", ""),
+                (ModKind::ResourcePack, "r.zip", "r", ""),
+                (ModKind::Shader, "s.zip", "s", ""),
+            ]
+        );
+        assert!(i.mods.iter().all(|m| m.source == ModSource::Local && m.enabled && m.required_by.is_empty()));
+        assert_eq!(state.instances.get(&i.id).unwrap().mods, i.mods);
+        // Files and cache are already in place: sync is a no-op, toggling round-trips.
+        let game = state.dirs.game_dir(&i.id);
+        let before: Vec<_> = fs::read_dir(game.join("mods")).unwrap().map(|e| e.unwrap().path()).collect();
+        assert_eq!(crate::services::mods::sync(&state.dirs, &i.id, &i.mods).unwrap(), 3);
+        let after: Vec<_> = fs::read_dir(game.join("mods")).unwrap().map(|e| e.unwrap().path()).collect();
+        assert_eq!(before, after);
+        let off: Vec<_> = i.mods.iter().map(|m| Mod { enabled: false, ..m.clone() }).collect();
+        assert_eq!(crate::services::mods::sync(&state.dirs, &i.id, &off).unwrap(), 0);
+        assert!(!game.join("mods/a.jar").exists() && game.join("mods/notes.txt").exists());
+        crate::services::mods::sync(&state.dirs, &i.id, &i.mods).unwrap();
+        assert_eq!(fs::read(game.join("mods/a.jar")).unwrap(), b"a");
         assert!(import(&state, b"broken", "bad", None, &|_, _, _| {})
             .await
             .is_err());
