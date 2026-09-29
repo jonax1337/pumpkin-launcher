@@ -115,3 +115,52 @@ export const SOURCE_LABELS: Record<ModSourceType, string> = {
   url: "URL",
   local: "Lokal",
 };
+
+// ---------- Installation & Spielstart ----------
+
+/** Eintrag aus Mojangs Versions-Manifest (`versions_list`). */
+export interface VersionEntry {
+  id: string;
+  type: "release" | "snapshot" | "old_beta" | "old_alpha";
+  url: string;
+  sha1: string;
+  releaseTime: string;
+}
+
+export type InstallStep = "java" | "client" | "libraries" | "natives" | "assets" | "loader" | "mods";
+
+export const INSTALL_STEP_LABELS: Record<InstallStep, string> = {
+  java: "Java-Runtime",
+  client: "Spieldateien",
+  libraries: "Bibliotheken",
+  natives: "Native Bibliotheken",
+  assets: "Assets",
+  loader: "Mod-Loader",
+  mods: "Mods",
+};
+
+/** Event `install-progress`. */
+export interface InstallProgress {
+  instanceId: string;
+  step: InstallStep;
+  done: number;
+  total: number;
+}
+
+/** Event `instance-log`. */
+export interface LogPayload {
+  instanceId: string;
+  stream: "stdout" | "stderr";
+  line: string;
+}
+
+/** Event `instance-exit`; `code` fehlt, wenn der Prozess abgeschossen wurde. */
+export interface ExitPayload {
+  instanceId: string;
+  code: number | null;
+}
+
+export interface InstanceStatus {
+  installed: boolean;
+  running: boolean;
+}

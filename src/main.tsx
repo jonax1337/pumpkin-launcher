@@ -1,6 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Toaster } from "@/components/ui/sonner";
 import { createBrowserRouter, RouterProvider } from "react-router";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/app/Layout";
@@ -15,7 +17,12 @@ import { AccountPage } from "@/pages/Account";
 import { NotFoundPage } from "@/pages/NotFound";
 import "./index.css";
 
+// Fehler aus Backend-Aufrufen zentral als Toast
+const toastError = (err: Error) => toast.error(err.message);
+
 const queryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: toastError }),
+  mutationCache: new MutationCache({ onError: toastError }),
   defaultOptions: {
     queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: 1 },
   },
@@ -44,6 +51,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <QueryClientProvider client={queryClient}>
       <TooltipProvider delayDuration={300}>
         <RouterProvider router={router} />
+        <Toaster position="bottom-right" richColors closeButton />
       </TooltipProvider>
     </QueryClientProvider>
   </React.StrictMode>,
