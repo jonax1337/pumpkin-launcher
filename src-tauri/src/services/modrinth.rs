@@ -224,6 +224,29 @@ pub async fn latest_by_hash(
         &bytes(client.post(url).json(&body), 8 * 1024 * 1024).await?,
     )?)
 }
+/// Version je SHA-1 (`POST version_files`); nur Antworten, deren Dateien den Hash wirklich tragen.
+pub async fn versions_by_hash(
+    client: &reqwest::Client,
+    hashes: &[String],
+) -> AppResult<HashMap<String, Version>> {
+    if hashes.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let url = reqwest::Url::parse(&format!("{API}/version_files"))
+        .map_err(|e| invalid(e.to_string()))?;
+    let body = serde_json::json!({ "hashes": hashes, "algorithm": "sha1" });
+    let found: HashMap<String, Version> =
+        serde_json::from_slice(&bytes(client.post(url).json(&body), 8 * 1024 * 1024).await?)?;
+    Ok(found
+        .into_iter()
+        .filter(|(sha1, v)| {
+            identifier(&v.project_id).is_ok()
+                && identifier(&v.id).is_ok()
+                && v.files.iter().any(|f| f.hashes.get("sha1").is_some_and(|h| h.eq_ignore_ascii_case(sha1)))
+        })
+        .map(|(sha1, v)| (sha1.to_ascii_lowercase(), v))
+        .collect())
+}
 pub fn download_url(s: &str) -> AppResult<reqwest::Url> {
     let url = reqwest::Url::parse(s).map_err(|e| invalid(e.to_string()))?;
     if url.scheme() != "https"
