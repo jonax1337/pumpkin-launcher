@@ -84,6 +84,11 @@ struct LogPayload {
 struct ExitPayload {
     instance_id: String,
     code: Option<i32>,
+    /// Beendet mit Fehlercode, ohne dass der Nutzer es gestoppt hat.
+    crashed: bool,
+    /// Absolute Pfade (für `openPath`), falls vorhanden.
+    crash_report: Option<String>,
+    log_file: Option<String>,
 }
 
 fn emit<T: Serialize + Clone>(app: &AppHandle, event: &str, payload: T) {
@@ -144,6 +149,16 @@ pub async fn versions_list(state: State<'_, AppState>) -> AppResult<Vec<VersionE
 #[tauri::command]
 pub async fn instance_install(app: AppHandle, state: State<'_, AppState>, instance_id: String) -> AppResult<()> {
     let _operation = state.operation(Some(&instance_id))?;
+    state.cancellable(&instance_id, install_instance(app.clone(), &state, instance_id.clone())).await
+}
+
+/// Bricht eine laufende `instance_install` ab; sie endet mit „Installation abgebrochen“.
+#[tauri::command]
+pub fn instance_install_cancel(state: State<'_, AppState>, instance_id: String) {
+    state.cancel(&instance_id);
+}
+
+async fn install_instance(app: AppHandle, state: &AppState, instance_id: String) -> AppResult<()> {
     let mut instance = state.instances.get(&instance_id)?;
     require_supported(instance.loader)?;
     tracing::info!(instance = %instance_id, version = %instance.minecraft_version, loader = ?instance.loader, "Installation gestartet");
@@ -171,7 +186,7 @@ pub async fn instance_install(app: AppHandle, state: State<'_, AppState>, instan
         tracing::info!(instance = %instance_id, active, "Mods bereitgestellt");
     }
     // Marker erst nach vollständigem Erfolg: `instance_status` erkennt so auch abgebrochene Installationen.
-    tokio::fs::write(installed_marker(&state, &instance_id), install_key(&instance)).await?;
+    tokio::fs::write(installed_marker(state, &instance_id), install_key(&instance)).await?;
     tracing::info!(instance = %instance_id, "Installation abgeschlossen");
     Ok(())
 }
@@ -186,12 +201,20 @@ pub async fn instance_launch(
     username: String,
     java_path: Option<String>,
     default_memory_mb: Option<u32>,
+    account_id: Option<String>,
 ) -> AppResult<u32> {
     let _operation = state.operation(Some(&instance_id))?;
     let mut instance = state.instances.get(&instance_id)?;
     require_supported(instance.loader)?;
     mods::sync(&state.dirs,&instance_id,&instance.mods)?;
-    let account = auth::offline_account(&username)?;
+    // Mit Microsoft-Konto: echte Sitzung (bei Bedarf erneuert); sonst Offline mit `username`.
+    let (account, session) = match account_id.filter(|id| !id.is_empty()) {
+        Some(id) => {
+            let (account, session) = auth::session(&state, &id).await?;
+            (account, Some(session))
+        }
+        None => (auth::offline_account(&username)?, None),
+    };
     let version = installed_version(&state, &instance).await?;
     // Eigener Java-Pfad aus den Einstellungen hat Vorrang vor der mitgelieferten Runtime.
     let java = match java_path.filter(|p| !p.trim().is_empty()) {
@@ -201,7 +224,8 @@ pub async fn instance_launch(
     if !java.exists() {
         return Err(AppError::Invalid(format!("Java nicht gefunden: {}", java.display())));
     }
-    let args = launch::build_args(
+    let session = session.as_ref().map(|s| launch::Session { access_token: &s.access_token, xuid: &s.xuid });
+    let args = launch::build_args_for(
         &LaunchSpec {
             version: &version,
             dirs: &state.dirs,
@@ -211,6 +235,7 @@ pub async fn instance_launch(
             extra_jvm_args: &instance.jvm_args,
         },
         &Env::current(),
+        session.as_ref(),
     )?;
 
     // Lock über Prüfen, Starten und Eintragen halten: sonst könnte ein sofort beendeter
@@ -221,6 +246,7 @@ pub async fn instance_launch(
     }
     let (log_app, log_id) = (app.clone(), instance_id.clone());
     let (exit_app, exit_id) = (app.clone(), instance_id.clone());
+    let started = std::time::SystemTime::now();
     let game = launch::spawn(
         &java,
         &args,
@@ -230,9 +256,16 @@ pub async fn instance_launch(
             emit(&log_app, LOG_EVENT, LogPayload { instance_id: log_id.clone(), stream, line });
         },
         move |code| {
-            exit_app.state::<AppState>().running().remove(&exit_id);
-            tracing::info!(instance = %exit_id, ?code, "Spiel beendet");
-            emit(&exit_app, EXIT_EVENT, ExitPayload { instance_id: exit_id, code });
+            let state = exit_app.state::<AppState>();
+            // `instance_kill` hat den Eintrag schon entfernt: dann hat der Nutzer gestoppt.
+            let stopped = state.running().remove(&exit_id).is_none();
+            let crashed = code != Some(0) && !stopped;
+            let game_dir = state.dirs.game_dir(&exit_id);
+            let text = |p: std::path::PathBuf| p.to_string_lossy().into_owned();
+            let crash_report = launch::crash_report(&game_dir, started).map(text);
+            let log_file = Some(game_dir.join("logs").join("latest.log")).filter(|p| p.is_file()).map(text);
+            tracing::info!(instance = %exit_id, ?code, crashed, "Spiel beendet");
+            emit(&exit_app, EXIT_EVENT, ExitPayload { instance_id: exit_id, code, crashed, crash_report, log_file });
         },
     )?;
     let pid = game.pid;
@@ -285,4 +318,31 @@ pub fn instance_status(state: State<'_, AppState>, instance_id: String) -> AppRe
     let installed = std::fs::read_to_string(installed_marker(&state, &instance_id))
         .is_ok_and(|v| v == install_key(&instance));
     Ok(InstanceStatus { installed, running: state.running().contains_key(&instance_id) })
+}
+
+/// Physischer Arbeitsspeicher in MiB (Grundlage für RAM-Vorgabe und Slider-Obergrenze).
+#[tauri::command]
+pub fn system_memory_mb() -> AppResult<u64> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+        let mut status = MEMORYSTATUSEX { dwLength: size_of::<MEMORYSTATUSEX>() as u32, ..unsafe { std::mem::zeroed() } };
+        // SAFETY: `status` ist ein gültiger, beschreibbarer MEMORYSTATUSEX mit gesetzter Länge.
+        if unsafe { GlobalMemoryStatusEx(&mut status) } == 0 {
+            return Err(std::io::Error::last_os_error().into());
+        }
+        Ok(status.ullTotalPhys / (1024 * 1024))
+    }
+    #[cfg(not(windows))]
+    Err(AppError::NotImplemented("Die Speicheranzeige außerhalb von Windows"))
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(windows)]
+    #[test]
+    fn system_memory_is_plausible() {
+        let mb = super::system_memory_mb().unwrap();
+        assert!((1024..16 * 1024 * 1024).contains(&mb), "{mb}");
+    }
 }
