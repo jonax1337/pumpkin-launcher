@@ -383,7 +383,7 @@ export function ContentResults({ type, instance, action, onOpen, barClassName = 
 
   return (
     <div>
-      <div className={cn("sticky top-0 z-10 -mx-1 px-1 pt-1 pb-3", barClassName)}>
+      <div className={cn("sticky top-0 z-10 pt-1 pb-3", barClassName)}>
         <div className="relative max-w-xl">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input
@@ -501,8 +501,8 @@ export function ContentDetail({ projectId, type, instance, action, onBack }: {
       {project.error && <ErrorNote error={project.error} />}
       {project.data && (
         <>
-          <header className="flex flex-wrap items-center gap-x-5 gap-y-4">
-            <div className="flex min-w-0 flex-1 basis-72 items-center gap-4">
+          <header className="flex flex-col items-start gap-4">
+            <div className="flex w-full min-w-0 items-center gap-4">
               <ContentIcon url={project.data.icon_url} seed={projectId} size="lg" />
               <div className="min-w-0 flex-1">
                 <h2 className="text-xl font-semibold tracking-tight">{title}</h2>

@@ -46,7 +46,8 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 const mockData = tauri ? null : await import("@/lib/mock");
 
 const db = {
-  instances: mockData?.initialInstances() ?? [],
+  // `?mock=leer` startet ohne Instanzen (Onboarding und Leerzustand vorführen).
+  instances: mockData && !location.search.includes("mock=leer") ? mockData.initialInstances() : [],
   templates: [] as { template: Template; instance: Instance }[],
   installed: new Set<string>(),
   running: new Map<string, number>(),

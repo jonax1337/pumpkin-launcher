@@ -142,13 +142,13 @@ export function PlayControl({
         <Button
           disabled
           aria-label={percent == null ? `${instance.name} startet` : `${instance.name} wird vorbereitet, ${percent} %`}
-          className={cn(big, "relative min-w-56 overflow-hidden bg-primary/20 text-foreground disabled:opacity-100")}
+          className={cn(big, "relative min-w-56 overflow-hidden bg-secondary text-foreground disabled:opacity-100")}
         >
           {percent != null && (
             <span
               aria-hidden
               data-progress
-              className="absolute inset-y-0 left-0 bg-primary/45 transition-[width] duration-300 ease-out"
+              className="absolute inset-y-0 left-0 bg-primary/40 transition-[width] duration-300 ease-out"
               style={{ width: `${percent}%` }}
             />
           )}

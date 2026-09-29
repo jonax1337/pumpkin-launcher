@@ -32,7 +32,7 @@ export function DiscoverPage() {
         </div>
       ) : (
         <Tabs value={type} onValueChange={(t) => setParams({ tab: t }, { replace: true })} className="mb-4">
-          <TabsList variant="line" className="h-10 w-full justify-start gap-5 overflow-x-auto rounded-none border-b p-0">
+          <TabsList variant="line" className="h-10 w-full justify-start gap-5 rounded-none border-b p-0">
             {TABS.map((t) => (
               <TabsTrigger key={t} value={t} className="flex-none px-0.5">
                 {LABELS[t]}
