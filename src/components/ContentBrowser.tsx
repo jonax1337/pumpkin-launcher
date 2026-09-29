@@ -37,9 +37,8 @@ export const fitsLabel = (instance: Instance, type: CatalogType) =>
   type === "mod" ? `${LOADER_LABELS[instance.loader]} ${instance.minecraftVersion}` : `Minecraft ${instance.minecraftVersion}`;
 
 const versionsKey = (projectId: string, mc: string | null, loader: string | null) => ["modrinth-versions", projectId, mc, loader];
-// ponytail: Das Backend filtert nach genau einem Loader; Quilt sucht daher Fabric-Mods (die große Mehrheit), reine Quilt-Mods fehlen.
-// Upgrade: Loader-Liste an modrinth_search/modrinth_versions übergeben (`ModLoader::modrinth_loaders`).
-const loaderFor = (instance: Instance, type: CatalogType) => (type === "mod" ? (instance.loader === "quilt" ? "fabric" : instance.loader) : null);
+// Für Quilt fragt das Backend Quilt- und Fabric-Mods an.
+const loaderFor = (instance: Instance, type: CatalogType) => (type === "mod" ? instance.loader : null);
 
 export function ContentIcon({ url, seed, size = "md" }: { url?: string | null; seed: string; size?: "sm" | "md" | "lg" }) {
   const [broken, setBroken] = useState(false);
