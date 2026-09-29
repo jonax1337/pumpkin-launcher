@@ -10,7 +10,9 @@ interface SettingsState {
   /** Aktiver Offline-Account ("" = keiner). */
   offlineName: string;
   offlineAccounts: string[];
-  set: (patch: Partial<Pick<SettingsState, "javaPath" | "memoryMb">>) => void;
+  /** Seitenleiste eingeklappt; null = automatisch nach Fensterbreite. */
+  sidebarCollapsed: boolean | null;
+  set: (patch: Partial<Pick<SettingsState, "javaPath" | "memoryMb" | "sidebarCollapsed">>) => void;
   reset: () => void;
   addAccount: (name: string) => void;
   selectAccount: (name: string) => void;
@@ -28,6 +30,7 @@ export const useSettings = create<SettingsState>()(
       ...defaults,
       offlineName: "",
       offlineAccounts: [],
+      sidebarCollapsed: null,
       set: (patch) => set(patch),
       reset: () => set(defaults),
       addAccount: (name) =>

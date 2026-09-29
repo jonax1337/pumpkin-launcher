@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open as openFile } from "@tauri-apps/plugin-dialog";
 import { ChevronRight, Compass, FileArchive, Loader2 } from "lucide-react";
@@ -223,15 +223,15 @@ function FileTab({ path, setPath, onDone }: { path: string; setPath: (p: string)
   );
 }
 
-/** „Neu“: leere Instanz, Modpack oder Datei. Mit `acceptDrops` öffnet eine aufs Fenster gezogene .mrpack den Datei-Tab. */
-export function NewInstanceDialog({ children, acceptDrops }: { children: ReactNode; acceptDrops?: boolean }) {
+/** „Neu“: leere Instanz, Modpack oder Datei. Die `primary`-Instanz nimmt aufs Fenster gezogene .mrpack und Strg+N an. */
+export function NewInstanceDialog({ children, primary }: { children: ReactNode; primary?: boolean }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("empty");
   const [path, setPath] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (api.isMock || !acceptDrops) return;
+    if (api.isMock || !primary) return;
     const unlisten = getCurrentWebview().onDragDropEvent(({ payload }) => {
       const file = payload.type === "drop" ? payload.paths.find((p) => /\.mrpack$/i.test(p)) : undefined;
       if (!file) return;
@@ -240,7 +240,16 @@ export function NewInstanceDialog({ children, acceptDrops }: { children: ReactNo
       setOpen(true);
     });
     return () => void unlisten.then((f) => f());
-  }, [acceptDrops]);
+  }, [primary]);
+
+  // Strg+N führt zu /instances?neu=1 (siehe Layout).
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (!primary || !params.has("neu")) return;
+    setTab("empty");
+    setOpen(true);
+    setParams({}, { replace: true });
+  }, [primary, params, setParams]);
 
   function done(id: string) {
     setOpen(false);

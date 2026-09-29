@@ -36,7 +36,7 @@ export function InstancesPage() {
                 <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Suchen" aria-label="Instanzen suchen" className="w-48 pl-9" />
               </div>
             )}
-            <NewInstanceDialog acceptDrops>
+            <NewInstanceDialog primary>
               <Button>
                 <Plus aria-hidden /> Neu
               </Button>
@@ -73,8 +73,8 @@ export function InstancesPage() {
                   </Link>
                   <p className="mt-0.5 truncate text-sm text-muted-foreground">
                     {LOADER_LABELS[inst.loader]} {inst.minecraftVersion}
-                    {inst.mods.length > 0 && ` · ${inst.mods.length} Inhalte`}
                   </p>
+                  {inst.mods.length > 0 && <p className="text-xs text-muted-foreground">{inst.mods.length} Inhalte</p>}
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

@@ -23,13 +23,7 @@ export function HomePage() {
       {error && <ErrorNote error={error} />}
       {!hasName && !isLoading && <Onboarding needsInstance={false} />}
       {/* Hero */}
-      <section className="relative overflow-hidden rounded-3xl border bg-gradient-to-br from-emerald-950/70 via-card/80 to-card/60 p-8 shadow-2xl shadow-black/30">
-        <div aria-hidden className="pointer-events-none absolute inset-0 bg-grid opacity-60 [mask-image:linear-gradient(to_left,black,transparent_65%)]" />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-24 -bottom-32 size-96 rounded-full blur-3xl"
-          style={{ background: "radial-gradient(closest-side, oklch(0.8 0.155 158 / 28%), transparent)" }}
-        />
+      <section className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-emerald-950/60 to-card p-6 lg:p-8">
         <div className="relative flex flex-wrap items-end justify-between gap-8">
           <div className="min-w-0">
             <p className="text-xs font-medium tracking-[0.18em] text-primary uppercase">
@@ -47,11 +41,11 @@ export function HomePage() {
               <div className="mt-3 flex items-center gap-4">
                 <BlockTile seed={recent.id} size="lg" />
                 <div className="min-w-0">
-                  <h1 className="truncate text-4xl font-semibold">{recent.name}</h1>
+                  <h1 className="truncate text-3xl font-semibold lg:text-4xl">{recent.name}</h1>
                   <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
                     <StatusBadge instanceId={recent.id} />
                     <LoaderBadge loader={recent.loader} />
-                    <span className="font-mono">{recent.minecraftVersion}</span>
+                    <span>{recent.minecraftVersion}</span>
                     {recent.lastPlayedAt != null && (
                       <span className="inline-flex items-center gap-1.5">
                         <Clock className="size-3.5" aria-hidden />
@@ -107,13 +101,13 @@ export function HomePage() {
               <Link
                 key={inst.id}
                 to={`/instances/${inst.id}`}
-                className="group flex items-center gap-3 rounded-xl border bg-card/60 p-3 transition-colors outline-none hover:border-primary/30 hover:bg-card focus-visible:ring-2 focus-visible:ring-ring"
+                className="group flex items-center gap-3 rounded-xl border bg-card p-3 transition-colors outline-none hover:border-primary/30 hover:bg-card focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <BlockTile seed={inst.id} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{inst.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    <span className="font-mono">{inst.minecraftVersion}</span> · {inst.mods.length} Mods
+                    {inst.minecraftVersion} · {inst.mods.length} Inhalte
                   </p>
                 </div>
                 <ArrowRight className="size-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />

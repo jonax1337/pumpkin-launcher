@@ -64,7 +64,7 @@ export function Onboarding({ needsInstance }: { needsInstance: boolean }) {
   }
 
   return (
-    <form onSubmit={submit} className="rounded-2xl border bg-card/60 p-8">
+    <form onSubmit={submit} className="rounded-2xl border bg-card p-8">
       <h1 className="text-3xl font-semibold">{needsInstance ? "Willkommen bei Voxlet" : "Wie heißt du im Spiel?"}</h1>
       <p className="mt-1.5 text-sm text-muted-foreground">
         {needsInstance ? "Zwei kurze Fragen, dann geht's los." : "Ohne Spielernamen kann Minecraft nicht starten."}
