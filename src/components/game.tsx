@@ -6,17 +6,27 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useInstall, useInstanceStatus, useKill, useLaunch } from "@/hooks/useInstances";
 import { cn } from "@/lib/utils";
-import { INSTALL_STEP_LABELS, LOADER_LABELS, type Instance, type InstallProgress, type InstallStep } from "@/lib/types";
+import {
+  INSTALL_STEP_LABELS,
+  INSTALLABLE_LOADERS,
+  LOADER_LABELS,
+  type Instance,
+  type InstallProgress,
+  type InstallStep,
+  type ModLoader,
+} from "@/lib/types";
 import { useGame } from "@/store/game";
 
-// Reihenfolge der Vanilla-Schritte im Backend (`install::install`)
-const STEPS: InstallStep[] = ["java", "client", "libraries", "natives", "assets"];
+// Reihenfolge der Schritte im Backend (`install::install`, bei Fabric umrahmt von `instance_install`)
+const VANILLA_STEPS: InstallStep[] = ["java", "client", "libraries", "natives", "assets"];
+const stepsFor = (loader: ModLoader): InstallStep[] =>
+  loader === "fabric" ? ["loader", ...VANILLA_STEPS, "mods"] : VANILLA_STEPS;
 
 /** Gesamtfortschritt 0–100: jeder Schritt zählt gleich, innerhalb des Schritts anteilig. */
-function overallPercent(p: InstallProgress) {
-  const index = Math.max(0, STEPS.indexOf(p.step));
+function overallPercent(p: InstallProgress, steps: InstallStep[]) {
+  const index = Math.max(0, steps.indexOf(p.step));
   const within = p.total > 0 ? p.done / p.total : 0;
-  return Math.round(((index + within) / STEPS.length) * 100);
+  return Math.round(((index + within) / steps.length) * 100);
 }
 
 type Phase = "loading" | "installing" | "running" | "installed" | "missing";
@@ -62,9 +72,10 @@ export function StatusBadge({ instanceId, className }: { instanceId: string; cla
   );
 }
 
-function InstallBar({ progress, hero }: { progress: InstallProgress; hero?: boolean }) {
-  const percent = overallPercent(progress);
-  const stepNo = STEPS.indexOf(progress.step) + 1;
+function InstallBar({ progress, loader, hero }: { progress: InstallProgress; loader: ModLoader; hero?: boolean }) {
+  const steps = stepsFor(loader);
+  const percent = overallPercent(progress, steps);
+  const stepNo = steps.indexOf(progress.step) + 1;
   return (
     <div className={cn("space-y-2", hero ? "w-72" : "w-64")} aria-live="polite">
       <div className="flex items-baseline justify-between gap-3 text-sm">
@@ -80,7 +91,7 @@ function InstallBar({ progress, hero }: { progress: InstallProgress; hero?: bool
         className={cn("bg-white/10 [&>*]:bg-gold [&>*]:duration-300", hero ? "h-2" : "h-1.5")}
       />
       <p className="font-mono text-[11px] text-muted-foreground tabular-nums">
-        Schritt {stepNo}/{STEPS.length}
+        Schritt {stepNo}/{steps.length}
         {progress.total > 0 && ` · ${progress.done.toLocaleString("de")} / ${progress.total.toLocaleString("de")}`}
       </p>
     </div>
@@ -108,7 +119,7 @@ export function PlayControl({
     : "min-w-32";
 
   if (phase === "loading") return <Skeleton className={hero ? "h-16 w-56 rounded-2xl" : "h-9 w-32"} />;
-  if (phase === "installing" && progress) return <InstallBar progress={progress} hero={hero} />;
+  if (phase === "installing" && progress) return <InstallBar progress={progress} loader={instance.loader} hero={hero} />;
 
   if (phase === "running") {
     return (
@@ -126,7 +137,7 @@ export function PlayControl({
     );
   }
 
-  if (phase === "missing" && instance.loader !== "vanilla") {
+  if (phase === "missing" && !INSTALLABLE_LOADERS.includes(instance.loader)) {
     return (
       <Button size={hero ? "lg" : "default"} variant="secondary" disabled className={size}>
         <Download aria-hidden /> {LOADER_LABELS[instance.loader]} folgt

@@ -19,12 +19,15 @@ import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BlockTile, ConfirmDialog, EmptyState, ErrorNote, LoaderBadge, PageHeader } from "@/components/common";
 import { StatusBadge } from "@/components/game";
-import { useCreateInstance, useDeleteInstance, useInstances, useVersions } from "@/hooks/useInstances";
+import { useCreateInstance, useDeleteInstance, useInstances, useLoaderVersions, useVersions } from "@/hooks/useInstances";
 import { formatMemory, relativeTime } from "@/lib/format";
-import type { Instance } from "@/lib/types";
+import { INSTALLABLE_LOADERS, LOADER_LABELS, LOADERS, type Instance, type ModLoader } from "@/lib/types";
 import { useSettings } from "@/store/settings";
 
 type Channel = "release" | "snapshot";
+
+// Radix-Select erlaubt keinen leeren Wert; steht für loaderVersion = null.
+const LATEST = "latest";
 
 function CreateInstanceDialog() {
   const defaultMemory = useSettings((s) => s.memoryMb);
@@ -33,6 +36,8 @@ function CreateInstanceDialog() {
   const [channel, setChannel] = useState<Channel>("release");
   const [version, setVersion] = useState("");
   const [memory, setMemory] = useState(defaultMemory);
+  const [loader, setLoader] = useState<ModLoader>("vanilla");
+  const [loaderVersion, setLoaderVersion] = useState(LATEST);
   const versions = useVersions();
   const create = useCreateInstance();
   const navigate = useNavigate();
@@ -40,11 +45,21 @@ function CreateInstanceDialog() {
   const filtered = versions.data?.filter((v) => v.type === channel) ?? [];
   // Neueste Version des Kanals vorauswählen, bis der Nutzer selbst wählt
   const selected = filtered.some((v) => v.id === version) ? version : (filtered[0]?.id ?? "");
+  const loaderVersions = useLoaderVersions(loader, selected);
+  // Gewählte Loader-Version verfällt, wenn es sie für die neue MC-Version nicht gibt
+  const selectedLoader = loaderVersions.data?.some((v) => v.version === loaderVersion) ? loaderVersion : LATEST;
+  const loaderUnavailable = loader !== "vanilla" && (!!loaderVersions.error || loaderVersions.data?.length === 0);
 
   function submit(e: FormEvent) {
     e.preventDefault();
     create.mutate(
-      { name: name.trim(), minecraftVersion: selected, loader: "vanilla", loaderVersion: null, memoryMb: memory },
+      {
+        name: name.trim(),
+        minecraftVersion: selected,
+        loader,
+        loaderVersion: selectedLoader === LATEST ? null : selectedLoader,
+        memoryMb: memory,
+      },
       {
         onSuccess: (inst) => {
           setOpen(false);
@@ -72,7 +87,7 @@ function CreateInstanceDialog() {
         <form onSubmit={submit} className="space-y-5">
           <DialogHeader>
             <DialogTitle>Neue Instanz</DialogTitle>
-            <DialogDescription>Versionen kommen direkt von Mojang. Mod-Loader folgen.</DialogDescription>
+            <DialogDescription>Versionen kommen direkt von Mojang. Forge, NeoForge und Quilt folgen.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor="inst-name">Name</Label>
@@ -106,11 +121,51 @@ function CreateInstanceDialog() {
               </Select>
             )}
           </div>
-          <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2">
-            <Label>Mod-Loader</Label>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <LoaderBadge loader="vanilla" /> Fabric, Forge &amp; Co. folgen
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="inst-loader">Mod-Loader</Label>
+              <Select value={loader} onValueChange={(v) => setLoader(v as ModLoader)}>
+                <SelectTrigger id="inst-loader" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LOADERS.map((l) => (
+                    <SelectItem key={l} value={l} disabled={!INSTALLABLE_LOADERS.includes(l)}>
+                      {LOADER_LABELS[l]}
+                      {!INSTALLABLE_LOADERS.includes(l) && <span className="ml-2 text-xs text-muted-foreground">folgt</span>}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="inst-loader-version">Loader-Version</Label>
+              {loaderVersions.isLoading ? (
+                <Skeleton className="h-9 w-full" />
+              ) : (
+                <Select value={selectedLoader} onValueChange={setLoaderVersion} disabled={loader === "vanilla" || loaderUnavailable}>
+                  <SelectTrigger id="inst-loader-version" className="w-full font-mono">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    <SelectItem value={LATEST}>Neueste stabile</SelectItem>
+                    {loaderVersions.data?.map((v) => (
+                      <SelectItem key={v.version} value={v.version} className="font-mono">
+                        {v.version}
+                        {!v.stable && <span className="ml-2 font-sans text-xs text-gold">Beta</span>}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+            {loaderUnavailable && (
+              <p role="alert" className="col-span-2 text-xs text-destructive">
+                {loaderVersions.error
+                  ? `Loader-Versionen nicht erreichbar: ${loaderVersions.error.message}`
+                  : `${LOADER_LABELS[loader]} gibt es für ${selected} nicht.`}
+              </p>
+            )}
           </div>
           <div className="space-y-3">
             <div className="flex items-baseline justify-between">
@@ -120,7 +175,7 @@ function CreateInstanceDialog() {
             <Slider id="inst-memory" aria-label="Arbeitsspeicher in MB" min={1024} max={16384} step={512} value={[memory]} onValueChange={([v]) => setMemory(v)} />
           </div>
           <DialogFooter>
-            <Button type="submit" disabled={!name.trim() || !selected || create.isPending}>
+            <Button type="submit" disabled={!name.trim() || !selected || loaderUnavailable || create.isPending}>
               {create.isPending ? "Wird angelegt…" : "Anlegen"}
             </Button>
           </DialogFooter>

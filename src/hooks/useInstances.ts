@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import type { Instance, InstanceStatus, NewInstance } from "@/lib/types";
+import type { Instance, InstanceStatus, ModLoader, NewInstance } from "@/lib/types";
 import { useGame } from "@/store/game";
 import { useSettings } from "@/store/settings";
 
@@ -70,6 +70,15 @@ export function useVersions() {
   return useQuery({ queryKey: ["versions"], queryFn: api.versionsList, staleTime: 10 * 60_000 });
 }
 
+export function useLoaderVersions(loader: ModLoader, mcVersion: string) {
+  return useQuery({
+    queryKey: ["loader-versions", loader, mcVersion],
+    queryFn: () => api.loaderVersions(loader, mcVersion),
+    enabled: loader !== "vanilla" && !!mcVersion,
+    staleTime: 10 * 60_000,
+  });
+}
+
 export function useInstanceStatus(id: string | undefined) {
   return useQuery({
     queryKey: instanceKeys.status(id ?? ""),
@@ -83,13 +92,17 @@ export function useInstall() {
   const { setProgress, clearProgress } = useGame.getState();
   return useMutation({
     mutationFn: (instance: Instance) => {
-      setProgress({ instanceId: instance.id, step: "java", done: 0, total: 0 });
+      setProgress({ instanceId: instance.id, step: instance.loader === "fabric" ? "loader" : "java", done: 0, total: 0 });
       return api.installInstance(instance.id);
     },
     onSuccess: (_, instance) => toast.success(`${instance.name} ist installiert`),
     onSettled: (_, __, instance) => {
       clearProgress(instance.id);
-      return qc.invalidateQueries({ queryKey: instanceKeys.status(instance.id) });
+      // Bei Fabric ohne loaderVersion schreibt das Backend die gewählte Version in die Instanz.
+      return Promise.all([
+        qc.invalidateQueries({ queryKey: instanceKeys.status(instance.id) }),
+        qc.invalidateQueries({ queryKey: instanceKeys.all }),
+      ]);
     },
   });
 }

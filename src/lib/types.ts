@@ -101,6 +101,9 @@ export interface NewsItem {
 
 export const LOADERS: ModLoader[] = ["vanilla", "fabric", "quilt", "forge", "neoforge"];
 
+/** Loader, die das Backend installieren und starten kann. */
+export const INSTALLABLE_LOADERS: ModLoader[] = ["vanilla", "fabric"];
+
 export const LOADER_LABELS: Record<ModLoader, string> = {
   vanilla: "Vanilla",
   fabric: "Fabric",
@@ -125,6 +128,12 @@ export interface VersionEntry {
   url: string;
   sha1: string;
   releaseTime: string;
+}
+
+/** Eintrag aus `loader_versions`, neueste zuerst. */
+export interface LoaderVersion {
+  version: string;
+  stable: boolean;
 }
 
 export type InstallStep = "java" | "client" | "libraries" | "natives" | "assets" | "loader" | "mods";

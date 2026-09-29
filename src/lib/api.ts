@@ -7,7 +7,9 @@ import type {
   InstallProgress,
   InstallStep,
   InstanceStatus,
+  LoaderVersion,
   LogPayload,
+  ModLoader,
   NewInstance,
   NewPreset,
   Preset,
@@ -166,9 +168,20 @@ const mockGame = {
     await delay(400);
     return clone(MOCK_VERSIONS);
   },
+  async loaderVersions(loader: ModLoader): Promise<LoaderVersion[]> {
+    await delay(300);
+    if (loader === "vanilla") return [];
+    if (loader !== "fabric") throw new Error("Noch nicht implementiert");
+    return [{ version: "0.17.3", stable: true }, { version: "0.17.2", stable: true }, { version: "0.16.14", stable: true }];
+  },
   async install(instanceId: string) {
-    findInstance(instanceId);
+    const inst = findInstance(instanceId);
     const steps: [InstallStep, number][] = [["java", 60], ["client", 2], ["libraries", 40], ["natives", 4], ["assets", 120]];
+    if (inst.loader === "fabric") {
+      steps.unshift(["loader", 1]);
+      steps.push(["mods", 1]);
+      inst.loaderVersion ??= "0.17.3";
+    }
     for (const [step, total] of steps) {
       for (let done = 0; done <= total; done += Math.ceil(total / 12)) {
         emit<InstallProgress>("install-progress", { instanceId, step, done: Math.min(done, total), total });
@@ -232,6 +245,8 @@ export const api = {
       : mock.applyPreset(instanceId, presetId),
 
   versionsList: (): Promise<VersionEntry[]> => (tauri ? call("versions_list") : mockGame.versionsList()),
+  loaderVersions: (loader: ModLoader, mcVersion: string): Promise<LoaderVersion[]> =>
+    tauri ? call("loader_versions", { loader, mcVersion }) : mockGame.loaderVersions(loader),
   instanceStatus: (instanceId: string): Promise<InstanceStatus> =>
     tauri ? call("instance_status", { instanceId }) : mockGame.status(instanceId),
   installInstance: (instanceId: string): Promise<void> =>
