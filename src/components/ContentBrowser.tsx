@@ -1,0 +1,363 @@
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import DOMPurify from "dompurify";
+import { marked } from "marked";
+import { toast } from "sonner";
+import { ArrowLeft, Check, ChevronRight, Download, Loader2, Plus, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BlockTile, ErrorNote } from "@/components/common";
+import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { api } from "@/lib/api";
+import { formatDownloads, pickVersion, progressLabel, projectOf, type CatalogType, type ContentVersion } from "@/lib/modrinth";
+import { LOADER_LABELS, type Instance, type ModKind } from "@/lib/types";
+import { cn } from "@/lib/utils";
+
+export const IRIS_PROJECT_ID = "YL57xq9U";
+
+export const KIND_LABELS: Record<ModKind, string> = { mod: "Mods", shader: "Shader", resourcepack: "Ressourcenpakete" };
+
+/** Was in eine Instanz passt: Mods und Shader nur mit Fabric, Ressourcenpakete immer. */
+export const kindsFor = (instance: Instance): ModKind[] =>
+  instance.loader === "fabric" ? ["mod", "shader", "resourcepack"] : ["resourcepack"];
+
+/** „Fabric 1.21.4“ für Mods, sonst nur die Minecraft-Version. */
+export const fitsLabel = (instance: Instance, type: CatalogType) =>
+  type === "mod" ? `${LOADER_LABELS[instance.loader]} ${instance.minecraftVersion}` : `Minecraft ${instance.minecraftVersion}`;
+
+const versionsKey = (projectId: string, mc: string | null, loader: string | null) => ["modrinth-versions", projectId, mc, loader];
+const loaderFor = (instance: Instance, type: CatalogType) => (type === "mod" ? instance.loader : null);
+
+export function ContentIcon({ url, seed, size = "md" }: { url?: string | null; seed: string; size?: "sm" | "md" | "lg" }) {
+  const [broken, setBroken] = useState(false);
+  if (!url || broken) return <BlockTile seed={seed} size={size} />;
+  return (
+    <img
+      src={url}
+      alt=""
+      loading="lazy"
+      onError={() => setBroken(true)}
+      className={cn(
+        "shrink-0 rounded-lg bg-muted object-cover ring-1 ring-white/10",
+        size === "sm" && "size-9",
+        size === "md" && "size-12",
+        size === "lg" && "size-20 rounded-xl",
+      )}
+    />
+  );
+}
+
+// ---------- Beschreibung (Markdown mit HTML von Modrinth) ----------
+
+// Nur https-Bilder, nur http(s)-Links; Skripte und Event-Handler entfernt DOMPurify ohnehin.
+DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+  if (node.tagName === "IMG") {
+    if (!/^https:\/\//i.test(node.getAttribute("src") ?? "")) node.removeAttribute("src");
+    node.setAttribute("loading", "lazy");
+    node.setAttribute("referrerpolicy", "no-referrer");
+  }
+  if (node.tagName === "A" && !/^https?:\/\//i.test(node.getAttribute("href") ?? "")) node.removeAttribute("href");
+});
+const PURIFY = {
+  FORBID_TAGS: ["style", "form", "input", "button", "textarea", "select", "svg", "math", "video", "audio", "source", "picture"],
+  FORBID_ATTR: ["style", "class", "id", "srcset", "target"],
+};
+
+export function Description({ body }: { body: string }) {
+  const html = useMemo(() => DOMPurify.sanitize(marked.parse(body, { async: false }), PURIFY), [body]);
+  // Links nie im Launcher-Fenster öffnen, sondern im Standardbrowser.
+  function onLink(e: MouseEvent) {
+    const link = (e.target as Element).closest("a");
+    if (!link) return;
+    e.preventDefault();
+    if (/^https?:/.test(link.href)) void api.openExternal(link.href);
+  }
+  return (
+    <div
+      onClick={onLink}
+      onAuxClick={onLink}
+      className="text-sm leading-relaxed break-words text-muted-foreground [&_a]:text-primary [&_a]:underline-offset-4 [&_a:hover]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:font-mono [&_code]:text-xs [&_h1]:mt-5 [&_h1]:mb-2 [&_h1]:text-lg [&_h1]:font-semibold [&_h1]:text-foreground [&_h2]:mt-5 [&_h2]:mb-2 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:text-foreground [&_h3]:mt-4 [&_h3]:mb-1 [&_h3]:font-medium [&_h3]:text-foreground [&_hr]:my-4 [&_img]:inline-block [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-md [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_pre]:overflow-x-auto [&_strong]:text-foreground [&_table]:block [&_table]:overflow-x-auto [&_td]:px-2 [&_th]:px-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
+// ---------- Hinzufügen ----------
+
+/** Wählt die passende Version automatisch (oder nimmt `versionId`) und installiert mit Abhängigkeiten. */
+function AddButton({ instance, projectId, title, type, versionId, large }: {
+  instance: Instance; projectId: string; title: string; type: CatalogType; versionId?: string; large?: boolean;
+}) {
+  const qc = useQueryClient();
+  const install = useContentInstall();
+  const { active, target, progress } = useContentState();
+  const [state, setState] = useState<"idle" | "checking" | "missing">("idle");
+  const installed = instance.mods.some((m) => projectOf(m) === projectId);
+
+  async function add() {
+    let id = versionId;
+    if (!id) {
+      setState("checking");
+      const mc = instance.minecraftVersion, loader = loaderFor(instance, type);
+      try {
+        const versions = await qc.fetchQuery({
+          queryKey: versionsKey(projectId, mc, loader),
+          queryFn: () => api.modrinthVersions(projectId, mc, loader),
+          staleTime: 10 * 60_000,
+        });
+        id = pickVersion(versions)?.id;
+      } catch (err) {
+        setState("idle");
+        toast.error(`${title} konnte nicht geladen werden`, { description: err instanceof Error ? err.message : String(err) });
+        return;
+      }
+      setState(id ? "idle" : "missing");
+      if (!id) return;
+    }
+    const before = instance.mods.length;
+    install.mutate(withTarget(projectId, (op) => api.modrinthInstallMod(instance.id, id, op)), {
+      onSuccess: (result) => {
+        if (!result) return;
+        const extra = result.mods.length - before - 1;
+        toast.success(`${title} hinzugefügt${extra > 0 ? ` (+ ${extra} benötigte ${extra === 1 ? "Mod" : "Mods"})` : ""}`);
+      },
+    });
+  }
+
+  const note = "flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground";
+  if (installed) return <span className={note}><Check className="size-3.5 text-primary" aria-hidden /> Installiert</span>;
+  if (state === "checking" || (active && target === projectId))
+    return <span role="status" className={note}><Loader2 className="size-3.5 animate-spin" aria-hidden /> {state === "checking" ? "Wird geprüft…" : progressLabel(progress)}</span>;
+  if (state === "missing") return <span className={note}>Keine Version für {instance.minecraftVersion}</span>;
+  return large ? (
+    <Button disabled={!!active} onClick={add}><Plus aria-hidden /> Hinzufügen</Button>
+  ) : (
+    <Button variant="outline" size="icon-sm" disabled={!!active} aria-label={`${title} hinzufügen`} title="Hinzufügen" onClick={add}>
+      <Plus aria-hidden />
+    </Button>
+  );
+}
+
+// ---------- Suche und Ergebnisse ----------
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return debounced;
+}
+
+const SEARCH_PLACEHOLDER: Record<CatalogType, string> = {
+  mod: "Mods suchen…", shader: "Shader suchen…", resourcepack: "Ressourcenpakete suchen…", modpack: "Modpacks suchen…",
+};
+
+/** Suche mit „Beliebt“ als Startzustand. Mit `instance` passend gefiltert und mit „+“ je Zeile. */
+export function ContentResults({ type, instance, onOpen }: { type: CatalogType; instance?: Instance; onOpen: (projectId: string) => void }) {
+  const [input, setInput] = useState("");
+  const query = useDebounced(input.trim(), 300);
+  const mc = instance?.minecraftVersion ?? null;
+  const loader = instance ? loaderFor(instance, type) : null;
+  const results = useInfiniteQuery({
+    queryKey: ["modrinth-search", type, query, mc, loader],
+    queryFn: ({ pageParam }) => api.modrinthSearch(query, type, mc, loader, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (last) => (last.offset + last.hits.length < last.total_hits ? last.offset + last.limit : undefined),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const hits = results.data?.pages.flatMap((p) => p.hits) ?? [];
+
+  return (
+    <div>
+      <div className="sticky top-0 z-10 -mx-4 bg-popover px-4 pb-3">
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Input
+            type="search"
+            aria-label={SEARCH_PLACEHOLDER[type]}
+            placeholder={SEARCH_PLACEHOLDER[type]}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+      </div>
+      <p className="mb-2 text-xs font-medium text-muted-foreground" aria-live="polite">
+        {!query ? "Beliebt" : results.data ? `${results.data.pages[0].total_hits.toLocaleString("de")} Treffer` : "Sucht…"}
+      </p>
+
+      {results.error && (
+        <div className="space-y-2">
+          <ErrorNote error={results.error} />
+          <Button variant="outline" size="sm" onClick={() => void results.refetch()}>Erneut versuchen</Button>
+        </div>
+      )}
+      {results.isPending && (
+        <div className="space-y-2">
+          {Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
+        </div>
+      )}
+      {results.data && hits.length === 0 && <p className="py-10 text-center text-sm text-muted-foreground">Nichts gefunden für „{query}“.</p>}
+
+      {hits.length > 0 && (
+        <ul className="divide-y overflow-hidden rounded-xl border bg-card/60">
+          {hits.map((hit) => (
+            <li key={hit.project_id} className="flex items-center gap-3 px-3 py-2.5">
+              <button
+                type="button"
+                onClick={() => onOpen(hit.project_id)}
+                className="group flex min-w-0 flex-1 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <ContentIcon url={hit.icon_url} seed={hit.project_id} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium group-hover:underline">{hit.title}</span>
+                  <span className="line-clamp-2 text-xs text-muted-foreground">{hit.description}</span>
+                  <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                    <Download className="size-3" aria-hidden /> {formatDownloads(hit.downloads)}
+                    <span className="sr-only">Downloads</span>
+                  </span>
+                </span>
+              </button>
+              {instance ? (
+                <AddButton instance={instance} projectId={hit.project_id} title={hit.title} type={type} />
+              ) : (
+                <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {results.hasNextPage && (
+        <Button variant="outline" className="mt-3 w-full" disabled={results.isFetchingNextPage} onClick={() => void results.fetchNextPage()}>
+          {results.isFetchingNextPage ? "Lädt…" : "Mehr laden"}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+// ---------- Details ----------
+
+const VERSION_TYPE: Record<ContentVersion["version_type"], string | null> = { release: null, beta: "Beta", alpha: "Testversion" };
+
+export function ContentDetail({ projectId, type, instance, onBack }: {
+  projectId: string; type: CatalogType; instance?: Instance; onBack: () => void;
+}) {
+  const project = useQuery({
+    queryKey: ["modrinth-project", projectId],
+    queryFn: () => api.modrinthProject(projectId),
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+  const mc = instance?.minecraftVersion ?? null;
+  const loader = instance ? loaderFor(instance, type) : null;
+  const versions = useQuery({
+    queryKey: versionsKey(projectId, mc, loader),
+    queryFn: () => api.modrinthVersions(projectId, mc, loader),
+    enabled: !!instance,
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
+  const title = project.data?.title ?? "";
+  const choose = !!instance && !instance.mods.some((m) => projectOf(m) === projectId);
+
+  return (
+    <div className="space-y-5">
+      <Button variant="ghost" size="sm" className="-ml-2 text-muted-foreground" onClick={onBack}>
+        <ArrowLeft aria-hidden /> Zurück
+      </Button>
+      {project.isPending && (
+        <div className="flex items-center gap-4">
+          <Skeleton className="size-20 rounded-xl" />
+          <div className="flex-1 space-y-2"><Skeleton className="h-6 w-48" /><Skeleton className="h-4 w-full" /></div>
+        </div>
+      )}
+      {project.error && <ErrorNote error={project.error} />}
+      {project.data && (
+        <>
+          <header className="flex flex-wrap items-center gap-4">
+            <ContentIcon url={project.data.icon_url} seed={projectId} size="lg" />
+            <div className="min-w-0 flex-1">
+              <h2 className="text-xl font-semibold">{title}</h2>
+              <p className="mt-1 text-sm text-muted-foreground">{project.data.description}</p>
+            </div>
+            {instance && <AddButton instance={instance} projectId={projectId} title={title} type={type} large />}
+          </header>
+
+          {instance && choose && versions.data && versions.data.length > 0 && (
+            <details className="group rounded-xl border bg-card/60">
+              <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium select-none">
+                <ChevronRight className="mr-1 inline size-4 transition-transform group-open:rotate-90" aria-hidden />
+                Andere Version wählen…
+              </summary>
+              <ul className="max-h-72 divide-y overflow-y-auto border-t">
+                {versions.data.map((v) => (
+                  <li key={v.id} className="flex items-center gap-3 px-4 py-2 text-sm">
+                    <span className="min-w-0 flex-1 truncate">{v.version_number}</span>
+                    {VERSION_TYPE[v.version_type] && <span className="text-xs text-gold">{VERSION_TYPE[v.version_type]}</span>}
+                    <AddButton instance={instance} projectId={projectId} title={title} type={type} versionId={v.id} />
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {instance && versions.data?.length === 0 && (
+            <p className="text-sm text-muted-foreground">Keine Version für {fitsLabel(instance, type)}.</p>
+          )}
+
+          <Description body={project.data.body} />
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------- Seitenpanel in der Instanz ----------
+
+export function AddContentSheet({ instance, open, onOpenChange }: { instance: Instance; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const kinds = kindsFor(instance);
+  const [type, setType] = useState<ModKind>(kinds[0]);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const hasIris = instance.mods.some((m) => projectOf(m) === IRIS_PROJECT_ID);
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="gap-0 data-[side=right]:w-full data-[side=right]:sm:max-w-2xl">
+        <SheetHeader className="border-b pr-12">
+          <SheetTitle>Inhalte für {instance.name}</SheetTitle>
+          <SheetDescription className="flex items-center gap-1.5">
+            <Check className="size-3.5 text-primary" aria-hidden /> Passend zu {fitsLabel(instance, type)}
+          </SheetDescription>
+          {kinds.length > 1 && !projectId && (
+            <Tabs value={type} onValueChange={(t) => setType(t as ModKind)} className="mt-2">
+              <TabsList>
+                {kinds.map((k) => <TabsTrigger key={k} value={k}>{KIND_LABELS[k]}</TabsTrigger>)}
+              </TabsList>
+            </Tabs>
+          )}
+        </SheetHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
+          {projectId && (
+            <div className="pt-3">
+              <ContentDetail projectId={projectId} type={type} instance={instance} onBack={() => setProjectId(null)} />
+            </div>
+          )}
+          {/* Bleibt beim Öffnen von Details erhalten, damit Suche und geladene Seiten nicht verloren gehen. */}
+          <div className={cn("pt-4", projectId && "hidden")}>
+            {type === "shader" && !hasIris && (
+              <p className="mb-3 rounded-lg border border-gold/25 bg-gold/5 px-3 py-2 text-xs text-gold">
+                Shader brauchen die Mod „Iris“. Füge sie unter „Mods“ hinzu.
+              </p>
+            )}
+            <ContentResults key={type} type={type} instance={instance} onOpen={setProjectId} />
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}

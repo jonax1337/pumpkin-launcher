@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Blocks, Check, Trash2, Wrench } from "lucide-react";
+import { ArrowLeft, Blocks, Check, ExternalLink, Loader2, MoreHorizontal, Plus, RefreshCw, Search, Trash2, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,6 +17,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BlockTile, ConfirmDialog, EmptyState, ErrorNote, LoaderBadge } from "@/components/common";
 import { LogConsole, PlayControl, StatusBadge } from "@/components/game";
+import { AddContentSheet, ContentIcon, IRIS_PROJECT_ID, KIND_LABELS, kindsFor } from "@/components/ContentBrowser";
+import { useContentInstall, useContentState, useModUpdates, useProjects, withTarget } from "@/hooks/useContent";
+import { api } from "@/lib/api";
+import { progressLabel, projectOf, removeWithDependencies, undoRemove } from "@/lib/modrinth";
+import { cn } from "@/lib/utils";
 import {
   instanceKeys,
   useDeleteInstance,
@@ -25,7 +32,7 @@ import {
   useUpdateMods,
 } from "@/hooks/useInstances";
 import { formatDate, formatMemory, relativeTime } from "@/lib/format";
-import { INSTALLABLE_LOADERS, SOURCE_LABELS, type Instance, type Mod } from "@/lib/types";
+import { INSTALLABLE_LOADERS, type Instance, type Mod, type ModKind } from "@/lib/types";
 import { useGame } from "@/store/game";
 import { useSettings } from "@/store/settings";
 
@@ -66,14 +73,44 @@ function OverviewTab({ instance }: { instance: Instance }) {
   );
 }
 
-function ModsTab({ instance }: { instance: Instance }) {
+type Row = { mod: Mod; owners: string[] };
+
+function ContentTab({ instance, onAdd }: { instance: Instance; onAdd: () => void }) {
   const qc = useQueryClient();
   const update = useUpdateMods(instance.id);
+  const install = useContentInstall();
+  const { active, target, progress } = useContentState();
+  const [search, setSearch] = useState("");
+  const [kind, setKind] = useState<ModKind | "all">("all");
+  const projects = useProjects(instance.mods.flatMap((m) => projectOf(m) ?? []));
+  const updates = useModUpdates(instance.id, instance.mods.length > 0);
+  // Nur Updates, deren Stand noch stimmt: direkt nach dem Aktualisieren läuft der Check erst neu.
+  const updateFor = new Map(
+    (updates.data ?? []).filter((u) => instance.mods.some((m) => m.id === u.modId && m.version === u.currentVersion)).map((u) => [u.modId, u]),
+  );
+  const byProject = new Map(instance.mods.flatMap((m) => { const p = projectOf(m); return p ? [[p, m] as const] : []; }));
+  const title = (m: Mod) => projects.data?.get(projectOf(m) ?? "")?.title ?? m.name;
+  const kinds = [...new Set(instance.mods.map((m) => m.kind))];
+
+  // Direkt Hinzugefügtes zuerst, jede Abhängigkeit eingerückt unter ihrem ersten vorhandenen Nutzer.
+  const ownersOf = (m: Mod) => m.requiredBy.flatMap((p) => byProject.get(p) ?? []);
+  const rows: Row[] = [];
+  const placed = new Set<Mod>();
+  const add = (mod: Mod) => { rows.push({ mod, owners: ownersOf(mod).map(title) }); placed.add(mod); };
+  for (const m of instance.mods.filter((m) => ownersOf(m).length === 0)) {
+    add(m);
+    instance.mods.filter((d) => ownersOf(d)[0] === m).forEach(add);
+  }
+  instance.mods.filter((m) => !placed.has(m)).forEach(add);
+  const needle = search.trim().toLowerCase();
+  const visible = rows.filter(({ mod }) => (kind === "all" || mod.kind === kind) && (!needle || title(mod).toLowerCase().includes(needle)));
 
   function remove(mod: Mod) {
-    const index = instance.mods.findIndex((m) => m.id === mod.id);
-    update.mutate({ ...instance, mods: instance.mods.filter((m) => m.id !== mod.id) });
-    toast(`${mod.name} entfernt`, {
+    const before = instance.mods;
+    const { mods, removed } = removeWithDependencies(before, mod.id);
+    update.mutate({ ...instance, mods });
+    const extra = removed.length - 1;
+    toast(`${title(mod)}${extra ? ` und ${extra} ${extra === 1 ? "Abhängigkeit" : "Abhängigkeiten"}` : ""} entfernt`, {
       duration: 6000,
       action: {
         label: "Rückgängig",
@@ -81,58 +118,119 @@ function ModsTab({ instance }: { instance: Instance }) {
           // Aktuellen Stand nehmen: in den 6 s können weitere Änderungen passiert sein.
           const current = qc.getQueryData<Instance>(instanceKeys.detail(instance.id));
           if (!current || current.mods.some((m) => m.id === mod.id)) return;
-          const mods = [...current.mods];
-          mods.splice(index, 0, mod);
-          update.mutate({ ...current, mods });
+          update.mutate({ ...current, mods: undoRemove(current.mods, before, removed) });
         },
       },
     });
   }
 
+  function runUpdates(modIds: string[]) {
+    const name = modIds.length === 1 ? title(instance.mods.find((m) => m.id === modIds[0])!) : "";
+    install.mutate(withTarget(modIds.length === 1 ? modIds[0] : "updates", (op) => api.modrinthUpdateMods(instance.id, modIds, op)), {
+      onSuccess: (result) => { if (result) toast.success(name ? `${name} aktualisiert` : `${modIds.length} Inhalte aktualisiert`); },
+    });
+  }
+
   if (instance.mods.length === 0) {
     return (
-      <EmptyState icon={<Blocks className="size-5" />} title="Keine Mods installiert">
-        Durchsuche den{" "}
-        <Link to="/mods" className="text-primary underline-offset-4 hover:underline">
-          Mod-Browser
-        </Link>
-        .
+      <EmptyState icon={<Blocks className="size-5" />} title="Noch keine Inhalte">
+        <p>{kindsFor(instance).map((k) => KIND_LABELS[k]).join(", ").replace(/, ([^,]*)$/, " und $1")}, passend zu dieser Instanz.</p>
+        <Button className="mt-4" onClick={onAdd}><Plus aria-hidden /> Hinzufügen</Button>
       </EmptyState>
     );
   }
 
   return (
-    <ul className="divide-y overflow-hidden rounded-xl border bg-card/60">
-      {instance.mods.map((mod) => (
-        <li key={mod.id} className="flex items-center gap-4 px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium">{mod.name}</p>
-            <p className="truncate font-mono text-xs text-muted-foreground">{mod.fileName}</p>
-          </div>
-          <Badge variant="secondary">{SOURCE_LABELS[mod.source.type]}</Badge>
-          <span className="w-20 text-right font-mono text-xs text-muted-foreground">{mod.version}</span>
-          <Switch
-            checked={mod.enabled}
-            aria-label={`${mod.name} ${mod.enabled ? "deaktivieren" : "aktivieren"}`}
-            onCheckedChange={(enabled) =>
-              update.mutate({
-                ...instance,
-                mods: instance.mods.map((m) => (m.id === mod.id ? { ...m, enabled } : m)),
-              })
-            }
-          />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`${mod.name} entfernen`}
-            className="text-muted-foreground hover:text-destructive"
-            onClick={() => remove(mod)}
-          >
-            <Trash2 aria-hidden />
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-40 flex-1">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Input type="search" aria-label="In Inhalten suchen" placeholder="In Inhalten suchen" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
+        </div>
+        {kinds.length > 1 && (
+          <Select value={kind} onValueChange={(k) => setKind(k as ModKind | "all")}>
+            <SelectTrigger aria-label="Art filtern" className="w-44"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alle</SelectItem>
+              {kinds.map((k) => <SelectItem key={k} value={k}>{KIND_LABELS[k]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
+        {updateFor.size > 0 && (
+          <Button variant="outline" disabled={!!active} onClick={() => runUpdates([...updateFor.keys()])}>
+            {active && target === "updates" ? <Loader2 className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
+            {active && target === "updates" ? progressLabel(progress) : `Alle aktualisieren (${updateFor.size})`}
           </Button>
-        </li>
-      ))}
-    </ul>
+        )}
+        <Button onClick={onAdd}><Plus aria-hidden /> Hinzufügen</Button>
+      </div>
+
+      <ul className="divide-y overflow-hidden rounded-xl border bg-card/60">
+        {visible.map(({ mod, owners }) => {
+          const project = projects.data?.get(projectOf(mod) ?? "");
+          const available = updateFor.get(mod.id);
+          const busy = !!active && (target === mod.id || (target === "updates" && !!available));
+          return (
+            <li key={mod.id} className={cn("flex items-center gap-3 py-2.5 pr-3", owners.length ? "pl-10" : "pl-3")}>
+              <div className={cn("flex min-w-0 flex-1 items-center gap-3", !mod.enabled && "opacity-50")}>
+                <ContentIcon url={project?.icon_url} seed={mod.id} size="sm" />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{title(mod)}</p>
+                  {owners.length > 0 && <p className="truncate text-xs text-muted-foreground">benötigt von {owners.join(", ")}</p>}
+                </div>
+              </div>
+              {busy ? (
+                <span role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden /> {progressLabel(progress)}
+                </span>
+              ) : available && (
+                <Badge asChild variant="secondary" className="cursor-pointer text-primary">
+                  <button type="button" disabled={!!active} onClick={() => runUpdates([mod.id])} title="Jetzt aktualisieren">
+                    Update: {available.versionNumber}
+                  </button>
+                </Badge>
+              )}
+              <span className="hidden w-24 truncate text-right font-mono text-xs text-muted-foreground sm:block" title={mod.version}>{mod.version}</span>
+              <Switch
+                checked={mod.enabled}
+                aria-label={`${title(mod)} ${mod.enabled ? "ausschalten" : "einschalten"}`}
+                onCheckedChange={(enabled) =>
+                  update.mutate({ ...instance, mods: instance.mods.map((m) => (m.id === mod.id ? { ...m, enabled } : m)) })
+                }
+              />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" aria-label={`Mehr zu ${title(mod)}`}><MoreHorizontal aria-hidden /></Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {available && (
+                    <DropdownMenuItem disabled={!!active} onSelect={() => runUpdates([mod.id])}>
+                      <RefreshCw aria-hidden /> Auf {available.versionNumber} aktualisieren
+                    </DropdownMenuItem>
+                  )}
+                  {projectOf(mod) && (
+                    <DropdownMenuItem onSelect={() => void api.openExternal(`https://modrinth.com/project/${projectOf(mod)}`)}>
+                      <ExternalLink aria-hidden /> Auf Modrinth ansehen
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem variant="destructive" onSelect={() => remove(mod)}>
+                    <Trash2 aria-hidden /> Entfernen
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </li>
+          );
+        })}
+        {visible.length === 0 && <li className="px-4 py-8 text-center text-sm text-muted-foreground">Nichts gefunden.</li>}
+      </ul>
+
+      {instance.mods.some((m) => m.kind === "resourcepack") && (
+        <p className="text-xs text-muted-foreground">Ressourcenpakete aktivierst du im Spiel unter Optionen › Ressourcenpakete.</p>
+      )}
+      {instance.mods.some((m) => m.kind === "shader") && !byProject.has(IRIS_PROJECT_ID) && (
+        <p className="text-xs text-gold">Shader funktionieren nur mit der Mod „Iris“. Füge sie über „Hinzufügen“ hinzu.</p>
+      )}
+    </div>
   );
 }
 
@@ -262,6 +360,9 @@ export function InstanceDetailPage() {
   const [params, setParams] = useSearchParams();
   const tab = params.get("tab") ?? "overview";
   const setTab = (value: string) => setParams({ tab: value }, { replace: true });
+  const [adding, setAdding] = useState(false);
+  // Gleiche Query wie im Inhalte-Tab: der Kopf zeigt das Ergebnis, sobald der Tab einmal geprüft hat.
+  const updates = useModUpdates(id ?? "", false);
 
   return (
     <div>
@@ -293,6 +394,11 @@ export function InstanceDetailPage() {
                 <StatusBadge instanceId={instance.id} />
                 <LoaderBadge loader={instance.loader} />
                 <span className="font-mono">{instance.minecraftVersion}</span>
+                {!!updates.data?.length && (
+                  <button type="button" className="text-primary underline-offset-4 hover:underline" onClick={() => setTab("content")}>
+                    {updates.data.length === 1 ? "1 Update" : `${updates.data.length} Updates`}
+                  </button>
+                )}
               </div>
             </div>
             <PlayControl instance={instance} onLaunched={() => setTab("console")} />
@@ -301,7 +407,7 @@ export function InstanceDetailPage() {
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="mb-4">
               <TabsTrigger value="overview">Übersicht</TabsTrigger>
-              <TabsTrigger value="mods">Mods ({instance.mods.length})</TabsTrigger>
+              <TabsTrigger value="content">Inhalte ({instance.mods.length})</TabsTrigger>
               <TabsTrigger value="console">Konsole</TabsTrigger>
               <TabsTrigger value="settings">Einstellungen</TabsTrigger>
             </TabsList>
@@ -311,13 +417,14 @@ export function InstanceDetailPage() {
             <TabsContent value="overview">
               <OverviewTab instance={instance} />
             </TabsContent>
-            <TabsContent value="mods">
-              <ModsTab instance={instance} />
+            <TabsContent value="content">
+              <ContentTab instance={instance} onAdd={() => setAdding(true)} />
             </TabsContent>
             <TabsContent value="settings">
               <SettingsTab key={`${instance.presetId}-${instance.memoryMb}-${instance.jvmArgs.join()}`} instance={instance} />
             </TabsContent>
           </Tabs>
+          <AddContentSheet instance={instance} open={adding} onOpenChange={setAdding} />
         </>
       )}
     </div>

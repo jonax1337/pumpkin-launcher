@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/common";
 import { api } from "@/lib/api";
-import { isAbsoluteMrpack, modCompatibility } from "@/lib/modrinth";
+import { isAbsoluteMrpack, modCompatibility, progressLabel } from "@/lib/modrinth";
 import { useInstances } from "@/hooks/useInstances";
 import { useContentInstall, useContentState } from "@/hooks/useContent";
 import type { Instance } from "@/lib/types";
@@ -100,7 +100,7 @@ export function ContentCatalog({ type }: { type: "mod" | "modpack" }) {
       <Button disabled={api.isMock || busy || !localName.trim() || !isAbsoluteMrpack(path.trim())} onClick={() => install.mutate((id) => api.modrinthImportPack(path.trim(), localName.trim(), id), openInstance)}>Pack importieren</Button>
     </section>}
     <div className="mt-5 space-y-3" aria-live="polite">
-      {busy && <p role="status">Inhalte werden installiert… {operation.progress && `${operation.progress.phase}: ${operation.progress.done} / ${operation.progress.total || "?"}`}</p>}
+      {busy && <p role="status">Wird installiert: {progressLabel(operation.progress)}</p>}
       {!busy && operation.result && <p>Inhalte für <Link className="underline" to={`/instances/${operation.result.id}`}>{operation.result.name}</Link> gespeichert.</p>}
     </div>
   </>;
