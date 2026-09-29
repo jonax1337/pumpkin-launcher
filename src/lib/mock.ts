@@ -1,4 +1,4 @@
-import type { Account, Instance, Mod, Modpack, NewsItem, Preset } from "@/lib/types";
+import type { Instance, Mod, Modpack, NewsItem, Preset, VersionEntry } from "@/lib/types";
 
 const DAY = 86_400_000;
 const now = Date.now();
@@ -180,17 +180,16 @@ export const MOCK_NEWS: NewsItem[] = [
   },
 ];
 
-export const MOCK_ACCOUNTS: Account[] = [
-  { id: "acc-offline", username: "Steve", kind: "offline", active: true },
-];
-
-export const MINECRAFT_VERSIONS = [
-  "1.21.5",
-  "1.21.4",
-  "1.21.1",
-  "1.20.4",
-  "1.20.1",
-  "1.19.2",
-  "1.18.2",
-  "1.16.5",
-];
+// Nur für den Browser-Modus ohne Tauri (siehe api.ts).
+export const MOCK_VERSIONS: VersionEntry[] = (
+  [
+    ["1.21.11", "release"],
+    ["25w41a", "snapshot"],
+    ["1.21.10", "release"],
+    ["1.21.8", "release"],
+    ["1.21.4", "release"],
+    ["1.21.1", "release"],
+    ["1.20.1", "release"],
+    ["1.16.5", "release"],
+  ] as const
+).map(([id, type], i) => ({ id, type, url: "", sha1: "", releaseTime: new Date(now - i * 40 * DAY).toISOString() }));

@@ -1,6 +1,20 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { initialInstances, initialPresets } from "@/lib/mock";
-import type { Instance, NewInstance, NewPreset, Preset } from "@/lib/types";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { initialInstances, initialPresets, MOCK_VERSIONS } from "@/lib/mock";
+import type {
+  ExitPayload,
+  Instance,
+  InstallProgress,
+  InstallStep,
+  InstanceStatus,
+  LogPayload,
+  NewInstance,
+  NewPreset,
+  Preset,
+  VersionEntry,
+} from "@/lib/types";
+
+const tauri = isTauri();
 
 /**
  * Tauri-invoke-Wrapper. Außerhalb von Tauri (reiner `pnpm dev` im Browser)
@@ -20,7 +34,20 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 const db = {
   instances: initialInstances(),
   presets: initialPresets(),
+  installed: new Set<string>(),
+  running: new Map<string, number>(),
 };
+
+// Events im Browser-Modus: gleiches Format wie die Tauri-Events.
+const bus = new EventTarget();
+const emit = <T>(event: string, payload: T) => bus.dispatchEvent(new CustomEvent(event, { detail: payload }));
+
+function on<T>(event: string, cb: (payload: T) => void): Promise<UnlistenFn> {
+  if (tauri) return listen<T>(event, (e) => cb(e.payload));
+  const handler = (e: Event) => cb((e as CustomEvent<T>).detail);
+  bus.addEventListener(event, handler);
+  return Promise.resolve(() => bus.removeEventListener(event, handler));
+}
 
 const clone = <T>(v: T): T => structuredClone(v);
 const delay = (ms = 160) => new Promise((r) => setTimeout(r, ms));
@@ -134,9 +161,48 @@ const mock = {
   },
 };
 
-// ---------- Öffentliche API ----------
+const mockGame = {
+  async versionsList() {
+    await delay(400);
+    return clone(MOCK_VERSIONS);
+  },
+  async install(instanceId: string) {
+    findInstance(instanceId);
+    const steps: [InstallStep, number][] = [["java", 60], ["client", 2], ["libraries", 40], ["natives", 4], ["assets", 120]];
+    for (const [step, total] of steps) {
+      for (let done = 0; done <= total; done += Math.ceil(total / 12)) {
+        emit<InstallProgress>("install-progress", { instanceId, step, done: Math.min(done, total), total });
+        await delay(70);
+      }
+    }
+    db.installed.add(instanceId);
+  },
+  async launch(instanceId: string, username: string) {
+    await delay(300);
+    if (!db.installed.has(instanceId)) throw new Error(`Version ${findInstance(instanceId).minecraftVersion} ist nicht installiert`);
+    if (db.running.has(instanceId)) throw new Error("Ungültige Eingabe: Instanz läuft bereits");
+    let n = 0;
+    const log = (line: string, stream: LogPayload["stream"] = "stdout") =>
+      emit<LogPayload>("instance-log", { instanceId, stream, line: `[${new Date().toLocaleTimeString("de")}] ${line}` });
+    log(`[main/INFO]: Setting user: ${username}`);
+    db.running.set(instanceId, window.setInterval(() => log(`[Render thread/INFO]: Demo-Logzeile ${++n}`, n % 7 ? "stdout" : "stderr"), 400));
+    findInstance(instanceId).lastPlayedAt = Date.now();
+    return 4242;
+  },
+  async kill(instanceId: string) {
+    const timer = db.running.get(instanceId);
+    if (timer == null) throw new Error(`Laufendes Spiel '${instanceId}' nicht gefunden`);
+    clearInterval(timer);
+    db.running.delete(instanceId);
+    emit<ExitPayload>("instance-exit", { instanceId, code: null });
+  },
+  async status(instanceId: string): Promise<InstanceStatus> {
+    await delay();
+    return { installed: db.installed.has(instanceId), running: db.running.has(instanceId) };
+  },
+};
 
-const tauri = isTauri();
+// ---------- Öffentliche API ----------
 
 export const api = {
   isMock: !tauri,
@@ -164,4 +230,21 @@ export const api = {
     tauri
       ? call("apply_preset", { instanceId, presetId })
       : mock.applyPreset(instanceId, presetId),
+
+  versionsList: (): Promise<VersionEntry[]> => (tauri ? call("versions_list") : mockGame.versionsList()),
+  instanceStatus: (instanceId: string): Promise<InstanceStatus> =>
+    tauri ? call("instance_status", { instanceId }) : mockGame.status(instanceId),
+  installInstance: (instanceId: string): Promise<void> =>
+    tauri ? call("instance_install", { instanceId }) : mockGame.install(instanceId),
+  /** Startet das Spiel; liefert die Prozess-ID. Leerer `javaPath` = mitgelieferte Runtime. */
+  launchInstance: (instanceId: string, username: string, javaPath: string, defaultMemoryMb: number): Promise<number> =>
+    tauri
+      ? call("instance_launch", { instanceId, username, javaPath: javaPath || null, defaultMemoryMb })
+      : mockGame.launch(instanceId, username),
+  killInstance: (instanceId: string): Promise<void> =>
+    tauri ? call("instance_kill", { instanceId }) : mockGame.kill(instanceId),
+
+  onInstallProgress: (cb: (p: InstallProgress) => void) => on("install-progress", cb),
+  onLog: (cb: (p: LogPayload) => void) => on("instance-log", cb),
+  onExit: (cb: (p: ExitPayload) => void) => on("instance-exit", cb),
 };
