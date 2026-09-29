@@ -110,8 +110,17 @@ export function useLaunch() {
   });
 }
 
+// Vom Nutzer gestoppte Instanzen: deren Exit-Code (unter Windows 1) ist kein Fehler.
+const stopping = new Set<string>();
+
 export function useKill() {
-  return useMutation({ mutationFn: (instance: Instance) => api.killInstance(instance.id) });
+  return useMutation({
+    mutationFn: (instance: Instance) => {
+      stopping.add(instance.id);
+      return api.killInstance(instance.id);
+    },
+    onError: (_, instance) => stopping.delete(instance.id),
+  });
 }
 
 /** Verbindet die Backend-Events mit dem Spiel-Store. Einmal im Layout einhängen. */
@@ -124,7 +133,7 @@ export function useGameEvents() {
       api.onLog(appendLog),
       api.onExit(({ instanceId, code }) => {
         qc.setQueryData<InstanceStatus>(instanceKeys.status(instanceId), (s) => s && { ...s, running: false });
-        if (code != null && code !== 0) toast.error(`Spiel mit Code ${code} beendet – Details in der Konsole`);
+        if (!stopping.delete(instanceId) && code != null && code !== 0) toast.error(`Spiel mit Code ${code} beendet – Details in der Konsole`);
       }),
     ];
     return () => subs.forEach((p) => p.then((unlisten) => unlisten()));

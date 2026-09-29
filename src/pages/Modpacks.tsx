@@ -8,6 +8,9 @@ export function ModpacksPage() {
   return (
     <>
       <PageHeader title="Modpacks" description="Fertige Zusammenstellungen mit einem Klick installieren." />
+      <div className="mb-6 rounded-xl border border-gold/25 bg-gold/5 px-4 py-3 text-sm text-gold">
+        Modrinth- und CurseForge-Anbindung folgt – angezeigt werden Platzhalter.
+      </div>
       <div className="grid gap-4 md:grid-cols-2">
         {MOCK_MODPACKS.map((pack) => (
           <Card key={pack.id} className="bg-card/60 transition-colors hover:bg-card">
