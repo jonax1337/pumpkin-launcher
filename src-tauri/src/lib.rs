@@ -1,4 +1,5 @@
 mod commands;
+mod content_commands;
 pub mod error;
 pub mod models;
 pub mod services;
@@ -38,6 +39,12 @@ pub fn run() {
             commands::instance_kill,
             commands::instance_status,
             commands::loader_versions,
+            content_commands::modrinth_search,
+            content_commands::modrinth_project,
+            content_commands::modrinth_versions,
+            content_commands::modrinth_install_mod,
+            content_commands::modrinth_install_pack,
+            content_commands::modrinth_import_pack,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

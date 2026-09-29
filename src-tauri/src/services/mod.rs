@@ -9,6 +9,8 @@ pub mod install;
 pub mod java;
 pub mod launch;
 pub mod mods;
+pub mod modrinth;
+pub mod content;
 pub mod mojang;
 pub mod rules;
 pub mod store;
