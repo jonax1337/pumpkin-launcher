@@ -333,7 +333,7 @@ pub fn compatible(v: &Version, instance: &Instance) -> AppResult<()> {
 pub fn select(selected: &mut HashMap<String, Version>, v: Version) -> AppResult<bool> {
     if let Some(old) = selected.get(&v.project_id) {
         if old.id != v.id {
-            return Err(invalid(format!("Dependency-Konflikt für {}", v.project_id)));
+            return Err(invalid(format!("Zwei Mods brauchen unterschiedliche Versionen von {}", v.project_id)));
         }
         return Ok(false);
     }
