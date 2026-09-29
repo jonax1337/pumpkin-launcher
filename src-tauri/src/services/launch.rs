@@ -104,7 +104,7 @@ pub fn build_args(spec: &LaunchSpec, env: &Env) -> AppResult<Vec<String>> {
         ("library_directory", path(dirs.libraries())),
         ("classpath_separator", sep.into()),
         ("classpath", cp),
-        ("launcher_name", "laux-launcher".into()),
+        ("launcher_name", "voxlet".into()),
         ("launcher_version", env!("CARGO_PKG_VERSION").into()),
     ]);
 
