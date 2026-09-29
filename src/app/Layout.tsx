@@ -13,6 +13,7 @@ import { NavLink, useLocation, useOutlet } from "react-router";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useSettings } from "@/store/settings";
+import { useGameEvents } from "@/hooks/useInstances";
 
 const NAV: { to: string; label: string; icon: LucideIcon; end?: boolean }[] = [
   { to: "/", label: "Start", icon: House, end: true },
@@ -82,6 +83,7 @@ export function Layout() {
   const outlet = useOutlet();
   const reduce = useReducedMotion();
   const offlineName = useSettings((s) => s.offlineName);
+  useGameEvents();
   // Nur das erste Pfadsegment als Key, damit Tabs/Unterseiten nicht doppelt animieren
   const pageKey = "/" + (location.pathname.split("/")[1] ?? "");
 
@@ -99,15 +101,21 @@ export function Layout() {
             ))}
           </div>
         </nav>
-        <div className="mx-3 mt-4 flex items-center gap-3 rounded-xl bg-white/[0.03] p-2.5 ring-1 ring-white/5">
+        <NavLink
+          to="/account"
+          className="mx-3 mt-4 flex items-center gap-3 rounded-xl bg-white/[0.03] p-2.5 ring-1 ring-white/5 outline-none transition-colors hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:ring-ring"
+        >
           <div className="grid size-8 place-items-center rounded-md bg-gold/15 font-mono text-xs font-semibold text-gold">
             {offlineName.slice(0, 2).toUpperCase() || "?"}
           </div>
           <div className="min-w-0 leading-tight">
             <p className="truncate text-sm font-medium">{offlineName || "Kein Konto"}</p>
-            <p className="text-[11px] text-muted-foreground">Offline{api.isMock && " · Demo-Daten"}</p>
+            <p className="text-[11px] text-muted-foreground">
+              {offlineName ? "Offline" : "Account anlegen"}
+              {api.isMock && " · Demo-Daten"}
+            </p>
           </div>
-        </div>
+        </NavLink>
       </aside>
 
       <main className="relative flex-1 overflow-hidden">

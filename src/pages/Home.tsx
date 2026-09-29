@@ -1,11 +1,12 @@
-import { useState } from "react";
 import { Link } from "react-router";
 import { motion } from "framer-motion";
-import { ArrowRight, Clock, Cpu, Loader2, Play, Plus } from "lucide-react";
+import { ArrowRight, Clock, Cpu, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { BlockTile, LoaderBadge } from "@/components/common";
+import { PlayControl, StatusBadge } from "@/components/game";
 import { pickRecentInstance, useInstances } from "@/hooks/useInstances";
 import { MOCK_NEWS } from "@/lib/mock";
 import { formatDate, formatMemory, relativeTime } from "@/lib/format";
@@ -15,13 +16,6 @@ export function HomePage() {
   const { data: instances, isLoading } = useInstances();
   const recent = pickRecentInstance(instances);
   const defaultMemory = useSettings((s) => s.memoryMb);
-  const [launching, setLaunching] = useState(false);
-
-  function handlePlay() {
-    // Start-Command existiert im Backend noch nicht – nur visuelles Feedback
-    setLaunching(true);
-    setTimeout(() => setLaunching(false), 1800);
-  }
 
   return (
     <div className="space-y-10">
@@ -37,13 +31,20 @@ export function HomePage() {
           <div className="min-w-0">
             <p className="text-xs font-medium tracking-[0.18em] text-primary uppercase">Zuletzt gespielt</p>
             {isLoading ? (
-              <div className="mt-3 h-10 w-64 animate-pulse rounded-lg bg-white/5" />
+              <div className="mt-3 flex items-center gap-4">
+                <Skeleton className="size-20 rounded-xl" />
+                <div className="space-y-3">
+                  <Skeleton className="h-9 w-64" />
+                  <Skeleton className="h-4 w-48" />
+                </div>
+              </div>
             ) : recent ? (
               <div className="mt-3 flex items-center gap-4">
                 <BlockTile seed={recent.id} size="lg" />
                 <div className="min-w-0">
                   <h1 className="truncate text-4xl font-semibold">{recent.name}</h1>
                   <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+                    <StatusBadge instanceId={recent.id} />
                     <LoaderBadge loader={recent.loader} />
                     <span className="font-mono">{recent.minecraftVersion}</span>
                     <span className="inline-flex items-center gap-1.5">
@@ -63,19 +64,10 @@ export function HomePage() {
           </div>
 
           <div className="flex flex-col items-end gap-3">
-            {recent ? (
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <Button
-                  size="lg"
-                  onClick={handlePlay}
-                  disabled={launching}
-                  aria-label={`${recent.name} spielen`}
-                  className="h-16 min-w-56 gap-3 rounded-2xl px-8 text-lg font-semibold shadow-[0_10px_40px_-10px_var(--primary)] ring-1 ring-white/20 [&_svg:not([class*='size-'])]:size-5"
-                >
-                  {launching ? <Loader2 className="animate-spin" aria-hidden /> : <Play className="fill-current" aria-hidden />}
-                  {launching ? "Wird gestartet…" : "Spielen"}
-                </Button>
-              </motion.div>
+            {isLoading ? (
+              <Skeleton className="h-16 w-56 rounded-2xl" />
+            ) : recent ? (
+              <PlayControl instance={recent} hero />
             ) : (
               <Button size="lg" asChild className="h-14 rounded-2xl px-6">
                 <Link to="/instances">
@@ -83,10 +75,10 @@ export function HomePage() {
                 </Link>
               </Button>
             )}
-            {launching && (
-              <p className="text-xs text-muted-foreground" role="status">
-                Spielstart ist noch nicht angebunden.
-              </p>
+            {recent && (
+              <Link to={`/instances/${recent.id}`} className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+                Details &amp; Konsole
+              </Link>
             )}
           </div>
         </div>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { ArrowLeft, Blocks, Check, Layers, Play, Trash2 } from "lucide-react";
+import { ArrowLeft, Blocks, Check, Layers, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +18,9 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import { BlockTile, ConfirmDialog, EmptyState, ErrorNote, LoaderBadge } from "@/components/common";
+import { LogConsole, PlayControl, StatusBadge } from "@/components/game";
 import { useDeleteInstance, useInstance, useUpdateInstance } from "@/hooks/useInstances";
 import { useApplyPreset, usePresets } from "@/hooks/usePresets";
 import { formatDate, formatMemory, relativeTime } from "@/lib/format";
@@ -267,6 +269,7 @@ function SettingsTab({ instance }: { instance: Instance }) {
 export function InstanceDetailPage() {
   const { id } = useParams();
   const { data: instance, isLoading, error } = useInstance(id);
+  const [tab, setTab] = useState("overview");
 
   return (
     <div>
@@ -276,7 +279,16 @@ export function InstanceDetailPage() {
         </Link>
       </Button>
 
-      {isLoading && <div className="h-24 animate-pulse rounded-2xl bg-card/60" />}
+      {isLoading && (
+        <div className="mb-8 flex items-center gap-5">
+          <Skeleton className="size-20 rounded-xl" />
+          <div className="flex-1 space-y-3">
+            <Skeleton className="h-8 w-72" />
+            <Skeleton className="h-5 w-40" />
+          </div>
+          <Skeleton className="h-9 w-32" />
+        </div>
+      )}
       {error && <ErrorNote error={error} />}
 
       {instance && (
@@ -286,24 +298,27 @@ export function InstanceDetailPage() {
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-3xl font-semibold">{instance.name}</h1>
               <div className="mt-2 flex items-center gap-3 text-sm text-muted-foreground">
+                <StatusBadge instanceId={instance.id} />
                 <LoaderBadge loader={instance.loader} />
                 <span className="font-mono">{instance.minecraftVersion}</span>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <ApplyPresetDialog instance={instance} />
-              <Button>
-                <Play className="fill-current" aria-hidden /> Spielen
-              </Button>
+              <PlayControl instance={instance} onLaunched={() => setTab("console")} />
             </div>
           </header>
 
-          <Tabs defaultValue="overview">
+          <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="mb-4">
               <TabsTrigger value="overview">Übersicht</TabsTrigger>
               <TabsTrigger value="mods">Mods ({instance.mods.length})</TabsTrigger>
+              <TabsTrigger value="console">Konsole</TabsTrigger>
               <TabsTrigger value="settings">Einstellungen</TabsTrigger>
             </TabsList>
+            <TabsContent value="console">
+              <LogConsole instanceId={instance.id} />
+            </TabsContent>
             <TabsContent value="overview">
               <OverviewTab instance={instance} />
             </TabsContent>
