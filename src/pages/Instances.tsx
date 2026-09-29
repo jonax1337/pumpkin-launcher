@@ -192,8 +192,8 @@ export function InstancesPage() {
   return (
     <>
       <PageHeader
-        title="Instanzen"
-        description="Getrennte Spielstände mit eigener Version, eigenem Loader und eigenen Mods."
+        title="Bibliothek"
+        description="Jede Instanz ist ein eigenes Minecraft mit eigener Version, eigenen Mods und eigenen Welten."
         actions={<CreateInstanceDialog />}
       />
       {error && <ErrorNote error={error} />}

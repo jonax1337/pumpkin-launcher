@@ -1,11 +1,11 @@
-import { RotateCcw } from "lucide-react";
+import { ChevronRight, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { PageHeader } from "@/components/common";
+import { PlayerNamesCard } from "@/components/PlayerNames";
 import { formatMemory } from "@/lib/format";
 import { useSettings } from "@/store/settings";
 
@@ -14,39 +14,24 @@ export function SettingsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Einstellungen"
-        description="Standardwerte für alle Instanzen. Werden lokal gespeichert und beim Spielstart übergeben."
-        actions={
-          <Button variant="ghost" onClick={s.reset}>
-            <RotateCcw aria-hidden /> Zurücksetzen
-          </Button>
-        }
-      />
-      <div className="space-y-6">
+      <PageHeader title="Einstellungen" description="Gilt für alle Instanzen, solange eine Instanz nichts Eigenes festlegt." />
+      <div className="max-w-3xl space-y-6">
+        <PlayerNamesCard />
         <Card className="bg-card/60">
-          <CardHeader>
-            <CardTitle>Java &amp; Arbeitsspeicher</CardTitle>
-            <CardDescription>Leer lassen, um die passende Laufzeit automatisch von Mojang zu laden (empfohlen).</CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between gap-4">
+            <div className="space-y-1.5">
+              <CardTitle>Leistung</CardTitle>
+              <CardDescription>Wie viel Arbeitsspeicher Minecraft bekommt.</CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" onClick={s.reset}>
+              <RotateCcw aria-hidden /> Standard
+            </Button>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="java-path">
-                Java-Pfad <span className="font-normal text-muted-foreground">(optional)</span>
-              </Label>
-              <Input
-                id="java-path"
-                value={s.javaPath}
-                onChange={(e) => s.set({ javaPath: e.target.value })}
-                placeholder="C:\Program Files\Java\jdk-21\bin\javaw.exe"
-                className="font-mono text-xs"
-              />
-            </div>
-            <Separator />
             <div className="space-y-3">
               <div className="flex items-baseline justify-between">
-                <Label htmlFor="memory">Standard-Arbeitsspeicher</Label>
-                <span className="font-mono text-sm text-primary">{formatMemory(s.memoryMb)}</span>
+                <Label htmlFor="memory">Arbeitsspeicher</Label>
+                <span className="text-sm font-medium text-primary tabular-nums">{formatMemory(s.memoryMb)}</span>
               </div>
               <Slider
                 id="memory"
@@ -57,12 +42,28 @@ export function SettingsPage() {
                 value={[s.memoryMb]}
                 onValueChange={([v]) => s.set({ memoryMb: v })}
               />
-              <div className="flex justify-between font-mono text-[11px] text-muted-foreground">
+              <div className="flex justify-between text-xs text-muted-foreground">
                 <span>1 GB</span>
                 <span>16 GB</span>
               </div>
-              <p className="text-xs text-muted-foreground">Gilt für Instanzen ohne eigenen Wert und als Vorgabe für neue Instanzen.</p>
             </div>
+            <details className="group">
+              <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+                <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden /> Erweitert
+              </summary>
+              <div className="mt-4 space-y-2">
+                <Label htmlFor="java-path">
+                  Eigenes Java <span className="font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <Input
+                  id="java-path"
+                  value={s.javaPath}
+                  onChange={(e) => s.set({ javaPath: e.target.value })}
+                  placeholder="C:\Program Files\Java\jdk-21\bin\javaw.exe"
+                />
+                <p className="text-xs text-muted-foreground">Leer lassen: Voxlet lädt das passende Java selbst (empfohlen).</p>
+              </div>
+            </details>
           </CardContent>
         </Card>
       </div>
