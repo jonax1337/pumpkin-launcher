@@ -1,27 +1,56 @@
+import { useState } from "react";
 import { useSearchParams } from "react-router";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/common";
-import { ContentCatalog } from "@/components/ContentCatalog";
+import { AddToInstanceMenu, ContentDetail, ContentResults, KIND_LABELS, PackActions, PackInstallButton } from "@/components/ContentBrowser";
+import { packReason, type CatalogType } from "@/lib/modrinth";
+import { cn } from "@/lib/utils";
 
-/** Stöbern ohne Instanz: Modpacks werden zu neuen Instanzen, Mods landen in einer bestehenden. */
+const TABS: CatalogType[] = ["modpack", "mod", "shader", "resourcepack"];
+const LABELS: Record<CatalogType, string> = { modpack: "Modpacks", ...KIND_LABELS };
+
+/** Stöbern ohne Instanz: Modpacks werden zu neuen Instanzen, alles andere landet in einer bestehenden. */
 export function DiscoverPage() {
   const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") === "mods" ? "mods" : "modpacks";
+  const type = TABS.find((t) => t === params.get("tab")) ?? "modpack";
+  // ?projekt= öffnet direkt die Details (aus dem Dialog „Neu“).
+  const [projectId, setProjectId] = useState<string | null>(params.get("projekt"));
+
   return (
-    <>
-      <PageHeader title="Entdecken" description="Modpacks und Mods von Modrinth." />
-      <Tabs value={tab} onValueChange={(t) => setParams({ tab: t }, { replace: true })}>
-        <TabsList>
-          <TabsTrigger value="modpacks">Modpacks</TabsTrigger>
-          <TabsTrigger value="mods">Mods</TabsTrigger>
-        </TabsList>
-        <TabsContent value="modpacks" className="mt-6">
-          <ContentCatalog type="modpack" />
-        </TabsContent>
-        <TabsContent value="mods" className="mt-6">
-          <ContentCatalog type="mod" />
-        </TabsContent>
-      </Tabs>
-    </>
+    <div className="mx-auto max-w-4xl">
+      <PageHeader title="Entdecken" description="Modpacks, Mods, Shader und Ressourcenpakete von Modrinth." />
+      {projectId ? (
+        <ContentDetail
+          projectId={projectId}
+          type={type}
+          onBack={() => setProjectId(null)}
+          action={(p) =>
+            type === "modpack" ? <PackActions projectId={p.id} title={p.title} /> : <AddToInstanceMenu projectId={p.id} title={p.title} type={type} large />
+          }
+        />
+      ) : (
+        <Tabs value={type} onValueChange={(t) => setParams({ tab: t }, { replace: true })} className="mb-4">
+          <TabsList>
+            {TABS.map((t) => <TabsTrigger key={t} value={t}>{LABELS[t]}</TabsTrigger>)}
+          </TabsList>
+        </Tabs>
+      )}
+      {/* Bleibt beim Öffnen von Details erhalten, damit Suche und geladene Seiten nicht verloren gehen. */}
+      <div className={cn(projectId && "hidden")}>
+        <ContentResults
+          key={type}
+          type={type}
+          barClassName="bg-background"
+          onOpen={setProjectId}
+          action={(hit) =>
+            type === "modpack" ? (
+              <PackInstallButton projectId={hit.project_id} title={hit.title} reason={packReason(hit.categories)} />
+            ) : (
+              <AddToInstanceMenu projectId={hit.project_id} title={hit.title} type={type} />
+            )
+          }
+        />
+      </div>
+    </div>
   );
 }
