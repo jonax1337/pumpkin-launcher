@@ -45,6 +45,8 @@ pub fn run() {
             content_commands::modrinth_install_mod,
             content_commands::modrinth_install_pack,
             content_commands::modrinth_import_pack,
+            content_commands::modrinth_check_updates,
+            content_commands::modrinth_update_mods,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

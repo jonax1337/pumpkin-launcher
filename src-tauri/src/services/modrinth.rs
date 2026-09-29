@@ -1,7 +1,7 @@
-//! Modrinth v2: ausschließlich GET, feste Origins und begrenzte Antworten.
+//! Modrinth v2: GET plus der lesende `POST version_files/update`, feste Origins, begrenzte Antworten.
 use crate::{
     error::{AppError, AppResult},
-    models::{Instance, ModLoader},
+    models::{Instance, ModKind, ModLoader},
     services::download::sha1_hex,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -32,6 +32,8 @@ pub struct Hit {
     pub project_type: String,
     pub downloads: u64,
     pub author: String,
+    #[serde(default)]
+    pub categories: Vec<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
@@ -93,8 +95,8 @@ pub fn identifier(s: &str) -> AppResult<()> {
     }
     Ok(())
 }
-pub async fn bytes(client: &reqwest::Client, url: reqwest::Url, limit: u64) -> AppResult<Vec<u8>> {
-    let mut response = client.get(url).send().await?.error_for_status()?;
+pub async fn bytes(request: reqwest::RequestBuilder, limit: u64) -> AppResult<Vec<u8>> {
+    let mut response = request.send().await?.error_for_status()?;
     if !response.status().is_success() {
         return Err(invalid("Redirects werden nicht akzeptiert"));
     }
@@ -119,7 +121,7 @@ async fn api<T: DeserializeOwned>(
         reqwest::Url::parse(&format!("{API}/{path}")).map_err(|e| invalid(e.to_string()))?;
     url.query_pairs_mut().extend_pairs(query);
     Ok(serde_json::from_slice(
-        &bytes(client, url, 8 * 1024 * 1024).await?,
+        &bytes(client.get(url), 8 * 1024 * 1024).await?,
     )?)
 }
 pub async fn search(
@@ -130,7 +132,7 @@ pub async fn search(
     loader: Option<String>,
     offset: u32,
 ) -> AppResult<SearchResponse> {
-    if !matches!(kind.as_str(), "mod" | "modpack") || query.len() > 512 || offset > 100_000 {
+    if !matches!(kind.as_str(), "mod" | "modpack" | "resourcepack" | "shader") || query.len() > 512 || offset > 100_000 {
         return Err(invalid("Ungültige Suche"));
     }
     let mut facets = vec![vec![format!("project_type:{kind}")]];
@@ -182,6 +184,26 @@ pub async fn versions(
     }
     api(client, &format!("project/{id}/version"), &q).await
 }
+/// Neueste Version je SHA-1 für Loader und MC-Version; Schlüssel ist der gesendete Hash.
+pub async fn latest_by_hash(
+    client: &reqwest::Client,
+    hashes: &[String],
+    loaders: &[&str],
+    mc: &str,
+) -> AppResult<HashMap<String, Version>> {
+    identifier(mc)?;
+    if hashes.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let url = reqwest::Url::parse(&format!("{API}/version_files/update"))
+        .map_err(|e| invalid(e.to_string()))?;
+    let body = serde_json::json!({
+        "hashes": hashes, "algorithm": "sha1", "loaders": loaders, "game_versions": [mc]
+    });
+    Ok(serde_json::from_slice(
+        &bytes(client.post(url).json(&body), 8 * 1024 * 1024).await?,
+    )?)
+}
 pub fn download_url(s: &str) -> AppResult<reqwest::Url> {
     let url = reqwest::Url::parse(s).map_err(|e| invalid(e.to_string()))?;
     if url.scheme() != "https"
@@ -226,7 +248,7 @@ pub async fn download(client: &reqwest::Client, file: &File) -> AppResult<Vec<u8
     if file.size > FILE_LIMIT {
         return Err(invalid("Datei zu groß"));
     }
-    let data = bytes(client, download_url(&file.url)?, file.size).await?;
+    let data = bytes(client.get(download_url(&file.url)?), file.size).await?;
     verify(&data, file.size, &file.hashes)?;
     Ok(data)
 }
@@ -305,7 +327,7 @@ pub async fn resolve(
     let mut queue = VecDeque::from([version(client, root).await?]);
     let mut selected = HashMap::new();
     let mut calls = 1;
-    for m in instance.mods.iter().filter(|m| m.enabled) {
+    for m in instance.mods.iter().filter(|m| m.enabled && m.kind == ModKind::Mod) {
         if let crate::models::ModSource::Modrinth { version_id, .. } = &m.source {
             calls += 1;
             if calls > 64 {

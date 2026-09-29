@@ -1,16 +1,16 @@
 //! Transaktionaler Content-Import. Ziele werden exklusiv neu angelegt, niemals ersetzt.
 use super::{
     download::sha1_hex,
-    modrinth::{self, invalid, File},
+    modrinth::{self, invalid, File, Version},
 };
 use crate::{
     error::AppResult,
-    models::{Instance, Mod, ModLoader, ModSource, NewInstance},
+    models::{Instance, Mod, ModKind, ModLoader, ModSource, NewInstance},
     state::AppState,
 };
 use serde::Deserialize;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fs,
     io::{Cursor, Read, Write},
     path::{Path, PathBuf},
@@ -102,10 +102,27 @@ pub async fn install_mod(
     let mut instance = state.instances.get(id)?;
     let client = modrinth::client()?;
     progress("resolve", 0, 1);
-    // Existing Modrinth roots also enter the graph, so incompatibilities work in both directions.
-    let mut selected = std::collections::HashMap::new();
-    for v in modrinth::resolve(&client, version, &instance).await? {
-        modrinth::select(&mut selected, v)?;
+    let root = modrinth::version(&client, version).await?;
+    let project = modrinth::project(&client, &root.project_id).await?;
+    let kind = match project.project_type.as_str() {
+        "mod" => ModKind::Mod,
+        "resourcepack" => ModKind::ResourcePack,
+        "shader" => ModKind::Shader,
+        _ => return Err(invalid("Projekt ist keine Mod, kein Ressourcenpaket und kein Shader")),
+    };
+    let root_project = root.project_id.clone();
+    let mut selected = HashMap::new();
+    if kind == ModKind::Mod {
+        // Existing Modrinth roots also enter the graph, so incompatibilities work in both directions.
+        for v in modrinth::resolve(&client, version, &instance).await? {
+            modrinth::select(&mut selected, v)?;
+        }
+    } else {
+        // Resource packs and shaders have no loader graph: MC version only, no dependencies.
+        if project.id != root.project_id || !root.game_versions.contains(&instance.minecraft_version) {
+            return Err(invalid(format!("Inkompatible Version {}", root.id)));
+        }
+        selected.insert(root_project.clone(), root);
     }
     for v in selected.values() {
         for d in &v.dependencies {
@@ -122,43 +139,44 @@ pub async fn install_mod(
         }
     }
     let mut files = Vec::new();
+    let mut fresh = HashSet::new();
     let mut names: HashSet<String> = instance
         .mods
         .iter()
         .map(|m| m.file_name.to_lowercase())
         .collect();
-    for v in selected.into_values() {
-        if let Some(existing) = instance.mods.iter().find(
-            |m| matches!(&m.source,ModSource::Modrinth{project_id,..} if project_id==&v.project_id),
-        ) {
+    for v in selected.values() {
+        if let Some(existing) = instance
+            .mods
+            .iter_mut()
+            .find(|m| project_of(m) == Some(&v.project_id))
+        {
             if !existing.enabled {
                 return Err(invalid("Benötigte vorhandene Mod ist deaktiviert"));
             }
+            // Installing a present dependency directly makes it direct.
+            if v.project_id == root_project {
+                existing.required_by.clear();
+            }
             continue;
         }
-        let file = modrinth::primary(&v, ".jar")?;
+        let file = modrinth::primary(v, kind.extension())?;
         if !names.insert(file.filename.to_lowercase()) {
             return Err(invalid("Mod-Dateinamen kollidieren"));
         }
-        let target = state.dirs.mods_dir(id).join(&file.filename);
+        let target = state.dirs.game_dir(id).join(kind.folder()).join(&file.filename);
         regular_parents(&target)?;
         match fs::symlink_metadata(&target) {
             Ok(_) => return Err(invalid("Mod-Zieldatei existiert bereits")),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(e.into()),
         }
-        files.push((v, file, target));
+        if v.project_id != root_project {
+            fresh.insert(v.project_id.clone());
+        }
+        files.push((v.clone(), file, target));
     }
-    if files
-        .iter()
-        .map(|(_, f, _)| f.size)
-        .try_fold(0u64, |a, b| a.checked_add(b))
-        .is_none_or(|n| n > modrinth::FILE_LIMIT)
-    {
-        return Err(invalid(
-            "Gesamtbudget für Mod-Download überschritten (256 MiB)",
-        ));
-    }
+    budget(files.iter().map(|(_, f, _)| f.size))?;
     let mut ready = Vec::new();
     let total = files.len() as u64;
     for (v, file, target) in files {
@@ -182,10 +200,13 @@ pub async fn install_mod(
                 file_name: file.filename,
                 sha1: Some(sha1_hex(&data)),
                 enabled: true,
+                kind,
+                required_by: Vec::new(),
             });
             // Cache is populated from the fully verified target; failures roll back targets only.
             super::mods::cache_file(&state.dirs, created.last().unwrap())?;
         }
+        mark_dependencies(&mut instance.mods, &selected, &fresh);
         state.instances.update(instance)
     })();
     match result {
@@ -195,6 +216,210 @@ pub async fn install_mod(
             Ok(i)
         }
     }
+}
+
+fn budget(mut sizes: impl Iterator<Item = u64>) -> AppResult<()> {
+    if sizes
+        .try_fold(0u64, |a, b| a.checked_add(b))
+        .is_none_or(|n| n > modrinth::FILE_LIMIT)
+    {
+        return Err(invalid(
+            "Gesamtbudget für Mod-Download überschritten (256 MiB)",
+        ));
+    }
+    Ok(())
+}
+
+fn project_of(m: &Mod) -> Option<&String> {
+    match &m.source {
+        ModSource::Modrinth { project_id, .. } => Some(project_id),
+        _ => None,
+    }
+}
+
+/// Projects reachable over required dependencies from `root` inside the resolved graph.
+fn reachable(root: &str, selected: &HashMap<String, Version>) -> HashSet<String> {
+    let mut seen = HashSet::new();
+    let mut stack = vec![root.to_string()];
+    while let Some(p) = stack.pop() {
+        let Some(v) = selected.get(&p) else { continue };
+        for d in v.dependencies.iter().filter(|d| d.dependency_type == "required") {
+            let target = d
+                .version_id
+                .as_ref()
+                .and_then(|id| selected.values().find(|o| &o.id == id))
+                .map(|o| o.project_id.clone())
+                .or_else(|| d.project_id.clone());
+            if let Some(t) = target.filter(|t| seen.insert(t.clone())) {
+                stack.push(t);
+            }
+        }
+    }
+    seen
+}
+
+/// `required_by` = direct Modrinth mods (empty `required_by`) whose required graph reaches the mod.
+/// Direct mods stay direct; `fresh` are dependencies installed by this operation, existing
+/// dependencies gain additional owners. Removing owner P: drop P everywhere, emptied lists may go.
+fn mark_dependencies(mods: &mut [Mod], selected: &HashMap<String, Version>, fresh: &HashSet<String>) {
+    let owners: Vec<(String, HashSet<String>)> = mods
+        .iter()
+        .filter(|m| m.required_by.is_empty())
+        .filter_map(project_of)
+        .filter(|p| !fresh.contains(*p))
+        .map(|p| (p.clone(), reachable(p, selected)))
+        .collect();
+    for m in mods.iter_mut() {
+        let Some(p) = project_of(m).cloned() else { continue };
+        if m.required_by.is_empty() && !fresh.contains(&p) {
+            continue;
+        }
+        for (owner, reach) in &owners {
+            if owner != &p && reach.contains(&p) && !m.required_by.contains(owner) {
+                m.required_by.push(owner.clone());
+            }
+        }
+        m.required_by.sort();
+    }
+}
+
+/// Index into `mods` plus the newer version from a `version_files/update` answer.
+/// ponytail: "newer" = different version id of the same project; no date comparison, so a
+/// manually installed beta newer than the latest filtered release would be offered a "downgrade".
+fn newer(mods: &[Mod], latest: &HashMap<String, Version>, mc: &str) -> Vec<(usize, Version)> {
+    mods.iter()
+        .enumerate()
+        .filter_map(|(i, m)| {
+            let ModSource::Modrinth { project_id, version_id } = &m.source else {
+                return None;
+            };
+            let v = latest.get(&m.sha1.as_ref()?.to_ascii_lowercase())?;
+            (&v.project_id == project_id
+                && &v.id != version_id
+                && v.game_versions.iter().any(|g| g == mc))
+            .then(|| (i, v.clone()))
+        })
+        .collect()
+}
+
+pub async fn check_updates(
+    client: &reqwest::Client,
+    instance: &Instance,
+) -> AppResult<Vec<(usize, Version)>> {
+    let loader = serde_json::to_value(instance.loader)?;
+    let mut found = Vec::new();
+    for kind in [ModKind::Mod, ModKind::ResourcePack, ModKind::Shader] {
+        let hashes: Vec<String> = instance
+            .mods
+            .iter()
+            .filter(|m| m.kind == kind && project_of(m).is_some())
+            .filter_map(|m| m.sha1.as_ref().map(|h| h.to_ascii_lowercase()))
+            .collect();
+        let loaders = match kind {
+            ModKind::Mod => vec![loader.as_str().unwrap_or_default()],
+            ModKind::ResourcePack => vec!["minecraft"],
+            ModKind::Shader => vec!["iris", "optifine", "canvas", "vanilla"],
+        };
+        let latest =
+            modrinth::latest_by_hash(client, &hashes, &loaders, &instance.minecraft_version).await?;
+        found.extend(
+            newer(&instance.mods, &latest, &instance.minecraft_version)
+                .into_iter()
+                .filter(|(i, _)| instance.mods[*i].kind == kind),
+        );
+    }
+    Ok(found)
+}
+
+pub async fn update_mods(
+    state: &AppState,
+    id: &str,
+    mod_ids: &[String],
+    progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
+) -> AppResult<Instance> {
+    let instance = state.instances.get(id)?;
+    if let Some(unknown) = mod_ids.iter().find(|m| !instance.mods.iter().any(|x| &x.id == *m)) {
+        return Err(invalid(format!("Unbekannte Mod {unknown}")));
+    }
+    let client = modrinth::client()?;
+    progress("resolve", 0, 1);
+    let updates: Vec<_> = check_updates(&client, &instance)
+        .await?
+        .into_iter()
+        .filter(|(i, _)| mod_ids.contains(&instance.mods[*i].id))
+        .collect();
+    let mut mods = instance.mods.clone();
+    let mut names: HashSet<String> = mods.iter().map(|m| m.file_name.to_lowercase()).collect();
+    let mut downloads = Vec::new();
+    let mut old = Vec::new();
+    for (i, v) in &updates {
+        let m = &mut mods[*i];
+        let file = modrinth::primary(v, m.kind.extension())?;
+        // Same name as the old file: prefix with the version id instead of replacing it.
+        let file_name = [file.filename.clone(), format!("{}-{}", v.id, file.filename)]
+            .into_iter()
+            .find(|n| names.insert(n.to_lowercase()))
+            .ok_or_else(|| invalid("Mod-Dateinamen kollidieren"))?;
+        old.push(Mod { enabled: false, ..m.clone() });
+        m.source = ModSource::Modrinth { project_id: v.project_id.clone(), version_id: v.id.clone() };
+        m.version = v.version_number.clone();
+        m.file_name = file_name;
+        downloads.push((*i, file));
+    }
+    // New required dependencies of enabled mods; every other enabled mod stays pinned.
+    let mut selected = HashMap::new();
+    let mut fresh = HashSet::new();
+    let root = updates
+        .iter()
+        .find(|(i, _)| mods[*i].kind == ModKind::Mod && mods[*i].enabled);
+    if let Some((_, root)) = root {
+        let planned = Instance { mods: mods.clone(), ..instance.clone() };
+        for v in modrinth::resolve(&client, &root.id, &planned).await? {
+            modrinth::select(&mut selected, v)?;
+        }
+        let mut deps: Vec<_> = selected.values().collect();
+        deps.sort_by(|a, b| a.project_id.cmp(&b.project_id));
+        for v in deps {
+            if let Some(existing) = mods.iter().find(|m| project_of(m) == Some(&v.project_id)) {
+                if !existing.enabled {
+                    return Err(invalid("Benötigte vorhandene Mod ist deaktiviert"));
+                }
+                continue;
+            }
+            let file = modrinth::primary(v, ".jar")?;
+            if !names.insert(file.filename.to_lowercase()) {
+                return Err(invalid("Mod-Dateinamen kollidieren"));
+            }
+            fresh.insert(v.project_id.clone());
+            mods.push(Mod {
+                id: v.project_id.clone(),
+                name: v.name.clone(),
+                version: v.version_number.clone(),
+                source: ModSource::Modrinth { project_id: v.project_id.clone(), version_id: v.id.clone() },
+                file_name: file.filename.clone(),
+                sha1: None,
+                enabled: true,
+                kind: ModKind::Mod,
+                required_by: Vec::new(),
+            });
+            downloads.push((mods.len() - 1, file));
+        }
+    }
+    budget(downloads.iter().map(|(_, f)| f.size))?;
+    let total = downloads.len() as u64;
+    for (n, (i, file)) in downloads.iter().enumerate() {
+        progress("download", n as u64, total);
+        let data = modrinth::download(&client, file).await?;
+        mods[*i].sha1 = Some(super::mods::cache_bytes(&state.dirs, &data)?);
+    }
+    mark_dependencies(&mut mods, &selected, &fresh);
+    // sync places the new files and removes the old ones in one journal; metadata commits last.
+    let desired: Vec<Mod> = mods.iter().cloned().chain(old).collect();
+    let updated = Instance { mods, ..instance };
+    let result =
+        super::mods::sync_commit(&state.dirs, id, &desired, |_| state.instances.update(updated))?;
+    progress("complete", total, total);
+    Ok(result)
 }
 
 #[derive(Deserialize)]
@@ -462,6 +687,100 @@ pub fn local_pack(path: &Path) -> AppResult<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn modrinth_mod(project: &str, required_by: &[&str]) -> Mod {
+        Mod {
+            id: project.into(),
+            name: project.into(),
+            version: "1".into(),
+            source: ModSource::Modrinth { project_id: project.into(), version_id: format!("{project}1") },
+            file_name: format!("{project}.jar"),
+            sha1: Some(format!("{:0>40}", project.len())),
+            enabled: true,
+            kind: ModKind::Mod,
+            required_by: required_by.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+    fn graph(edges: &[(&str, &[&str])]) -> HashMap<String, Version> {
+        edges
+            .iter()
+            .map(|(p, deps)| {
+                let v: Version = serde_json::from_value(serde_json::json!({
+                    "id": format!("{p}1"), "project_id": p, "name": p, "version_number": "1",
+                    "game_versions": ["1.21.1"], "loaders": ["fabric"], "files": [],
+                    "dependencies": deps.iter().map(|d| serde_json::json!({
+                        "version_id": null, "project_id": d, "file_name": null, "dependency_type": "required"
+                    })).collect::<Vec<_>>()
+                }))
+                .unwrap();
+                (p.to_string(), v)
+            })
+            .collect()
+    }
+    #[test]
+    fn required_by_marks_owners_and_keeps_direct_mods() {
+        // x (direct) -> y, x -> z (direct); install a -> b -> c, a -> y, a -> z.
+        let selected = graph(&[
+            ("x", &["y", "z"]),
+            ("y", &[]),
+            ("z", &[]),
+            ("a", &["b", "y", "z"]),
+            ("b", &["c"]),
+            ("c", &[]),
+        ]);
+        let mut mods = vec![
+            modrinth_mod("x", &[]),
+            modrinth_mod("y", &["x"]),
+            modrinth_mod("z", &[]),
+            modrinth_mod("a", &[]),
+            modrinth_mod("b", &[]),
+            modrinth_mod("c", &[]),
+        ];
+        let fresh = HashSet::from(["b".to_string(), "c".to_string()]);
+        mark_dependencies(&mut mods, &selected, &fresh);
+        let by: Vec<_> = mods.iter().map(|m| m.required_by.join(",")).collect();
+        assert_eq!(by, ["", "a,x", "", "", "a", "a"]);
+    }
+    #[test]
+    fn update_check_picks_only_other_versions_of_same_project() {
+        let mut stale = modrinth_mod("sodium", &[]);
+        stale.sha1 = Some("A".repeat(40));
+        let mut current = modrinth_mod("lithium", &[]);
+        current.sha1 = Some("b".repeat(40));
+        let mut foreign = modrinth_mod("iris", &[]);
+        foreign.sha1 = Some("c".repeat(40));
+        let local = Mod { source: ModSource::Local, sha1: Some("d".repeat(40)), ..modrinth_mod("own", &[]) };
+        let version = |id: &str, project: &str, mc: &str| {
+            serde_json::json!({"id": id, "project_id": project, "name": "n", "version_number": id,
+                "game_versions": [mc], "loaders": ["fabric"], "files": [], "dependencies": []})
+        };
+        // Shape of POST /v2/version_files/update: sent hash -> latest version.
+        let answer: HashMap<String, Version> = serde_json::from_value(serde_json::json!({
+            "a".repeat(40): version("sodium2", "sodium", "1.21.1"),
+            "b".repeat(40): version("lithium1", "lithium", "1.21.1"),
+            "c".repeat(40): version("other2", "not-iris", "1.21.1"),
+            "d".repeat(40): version("own2", "own", "1.21.1"),
+        }))
+        .unwrap();
+        let found = newer(&[stale.clone(), current, foreign, local], &answer, "1.21.1");
+        assert_eq!(found.iter().map(|(i, v)| (*i, v.id.as_str())).collect::<Vec<_>>(), [(0, "sodium2")]);
+        assert!(newer(&[stale], &answer, "1.20.1").is_empty());
+    }
+    #[test]
+    fn sync_places_content_kinds_in_their_folders() {
+        let dirs = crate::services::Dirs::new(std::env::temp_dir().join(crate::models::new_id()));
+        let sha1 = crate::services::mods::cache_bytes(&dirs, b"pack").unwrap();
+        let pack = Mod {
+            kind: ModKind::ResourcePack,
+            file_name: "pack.zip".into(),
+            sha1: Some(sha1),
+            ..modrinth_mod("pack", &[])
+        };
+        crate::services::mods::sync(&dirs, "i", std::slice::from_ref(&pack)).unwrap();
+        assert_eq!(fs::read(dirs.game_dir("i").join("resourcepacks/pack.zip")).unwrap(), b"pack");
+        let wrong = Mod { file_name: "pack.jar".into(), ..pack };
+        assert!(crate::services::mods::sync(&dirs, "i", &[wrong]).is_err());
+        fs::remove_dir_all(&dirs.root).unwrap();
+    }
     #[test]
     fn security_boundaries() {
         for p in [
