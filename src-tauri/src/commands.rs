@@ -44,7 +44,17 @@ pub fn update_instance(state: State<'_, AppState>, instance: Instance) -> AppRes
 
 #[tauri::command]
 pub fn delete_instance(state: State<'_, AppState>, id: String) -> AppResult<()> {
+    if state.running().contains_key(&id) {
+        return Err(AppError::Invalid("Instanz läuft noch".into()));
+    }
+    // Erst den Store-Eintrag: nur eine existierende Id wird zum Pfad, und bleibt das
+    // Verzeichnis liegen (Datei gesperrt), ist die Instanz trotzdem weg.
     state.instances.remove(&id)?;
+    match std::fs::remove_dir_all(state.dirs.instance(&id)) {
+        Ok(()) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => tracing::warn!(%id, %err, "Instanzverzeichnis nicht vollständig gelöscht"),
+    }
     tracing::info!(%id, "Instanz gelöscht");
     Ok(())
 }
