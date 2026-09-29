@@ -283,9 +283,8 @@ fn mark_dependencies(mods: &mut [Mod], selected: &HashMap<String, Version>, fres
     }
 }
 
-/// Index into `mods` plus the newer version from a `version_files/update` answer.
-/// ponytail: "newer" = different version id of the same project; no date comparison, so a
-/// manually installed beta newer than the latest filtered release would be offered a "downgrade".
+/// Index into `mods` plus the other version from a `version_files/update` answer; whether it is
+/// really newer decides `drop_older` once the installed versions are known.
 fn newer(mods: &[Mod], latest: &HashMap<String, Version>, mc: &str) -> Vec<(usize, Version)> {
     mods.iter()
         .enumerate()
@@ -338,7 +337,21 @@ pub async fn check_updates(
         .filter_map(|m| m.sha1.as_ref().map(|h| h.to_ascii_lowercase()))
         .collect();
     let installed = modrinth::versions_by_hash(client, &hashes).await?;
+    let found = drop_older(found, &instance.mods, &installed);
     Ok(drop_pinned(found, &instance.mods, &installed))
+}
+
+/// The latest release can be older than an installed beta/alpha (common in packs): no downgrades.
+fn drop_older(
+    mut found: Vec<(usize, Version)>,
+    mods: &[Mod],
+    installed: &HashMap<String, Version>,
+) -> Vec<(usize, Version)> {
+    found.retain(|(i, v)| {
+        let now = mods[*i].sha1.as_ref().and_then(|h| installed.get(&h.to_ascii_lowercase()));
+        now.is_none_or(|now| now.date_published.is_empty() || v.date_published > now.date_published)
+    });
+    found
 }
 
 /// `owner` requires `target`'s project in exactly another version than `target`.
@@ -871,6 +884,21 @@ mod tests {
         mark_dependencies(&mut mods, &selected, &fresh);
         let by: Vec<_> = mods.iter().map(|m| m.required_by.join(",")).collect();
         assert_eq!(by, ["", "a,x", "", "", "a", "a"]);
+    }
+    #[test]
+    fn older_release_is_no_update() {
+        let at = |id: &str, date: &str| -> Version {
+            serde_json::from_value(serde_json::json!({
+                "id": id, "project_id": "lux", "name": id, "version_number": id, "game_versions": ["1.21.1"],
+                "loaders": ["fabric"], "files": [], "dependencies": [], "date_published": date
+            }))
+            .unwrap()
+        };
+        let mods = [modrinth_mod("lux", &[])];
+        let installed = HashMap::from([(mods[0].sha1.clone().unwrap(), at("alpha", "2026-09-01T10:00:00Z"))]);
+        assert!(drop_older(vec![(0, at("old", "2026-08-01T10:00:00Z"))], &mods, &installed).is_empty());
+        assert_eq!(drop_older(vec![(0, at("new", "2026-09-20T10:00:00Z"))], &mods, &installed).len(), 1);
+        assert_eq!(drop_older(vec![(0, at("new", ""))], &mods, &HashMap::new()).len(), 1);
     }
     #[test]
     fn pinned_dependency_blocks_lonely_update() {
