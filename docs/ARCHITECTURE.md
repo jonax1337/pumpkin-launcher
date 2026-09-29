@@ -36,6 +36,8 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `services/download.rs` | HTTP-Client, SHA-1-geprüfte Downloads mit Retry, 16 parallel (`buffer_unordered`) |
 | `services/java.rs` | Mojangs Java-Runtime (`java-runtime/…/all.json`, Komponente aus `javaVersion.component`) |
 | `services/install.rs` | Installation in Schritten, `InstallStep`, `InstallProgress`, Event `install-progress` |
+| `services/fabric.rs` | Fabric-Meta (`meta.fabricmc.net/v2`): Loader-Versionen, Launcher-Profil (`inheritsFrom` Vanilla), Merge mit der Vanilla-Versions-JSON |
+| `services/mods.rs` | Globaler Mod-Cache (`cache/mods/<sha1>.jar`) und Abgleich nach `mods/` der Instanz (Hardlink, Fallback Kopie) |
 | `services/launch.rs` | Classpath, JVM-/Game-Args mit `${…}`-Ersetzung, Prozessstart, Log-Streaming |
 | `services/gamelog.rs` | log4j-XML auf stdout (Mojangs Logging-Config) → lesbare Zeilen |
 
@@ -72,19 +74,33 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `apply_preset` | `instanceId`, `presetId` | `Instance` |
 | `versions_list` | – | `VersionEntry[]` (`id`, `type`, `url`, `sha1`, `releaseTime`) |
 | `instance_install` | `instanceId` | – (Events `install-progress`) |
-| `instance_launch` | `instanceId`, `username` (Offline) | PID (`number`) |
+| `instance_launch` | `instanceId`, `username` (Offline), `javaPath?`, `defaultMemoryMb?` | PID (`number`) |
 | `instance_kill` | `instanceId` | – (Event `instance-exit` folgt) |
+| `instance_status` | `instanceId` | `{ installed, running }` |
+| `loader_versions` | `loader: ModLoader`, `mcVersion` | `{ version, stable }[]`, neueste zuerst; `vanilla` → `[]`, Quilt/Forge/NeoForge → Fehler „nicht implementiert“ |
 
-Events: `install-progress` `{ instanceId, step, done, total }` · `instance-log` `{ instanceId, stream: "stdout"|"stderr", line }` · `instance-exit` `{ instanceId, code: number|null }`. Installation und Start gibt es vorerst nur für `loader = vanilla`.
+Events: `install-progress` `{ instanceId, step, done, total }` · `instance-log` `{ instanceId, stream: "stdout"|"stderr", line }` · `instance-exit` `{ instanceId, code: number|null }`. Installation und Start gibt es für `loader = vanilla` und `fabric`.
+
+### Fabric
+
+- `instance_install` lädt bei `fabric` das Profil `versions/loader/<mc>/<loader>/profile/json`. Ist `loaderVersion` leer, nimmt es den neuesten stabilen Loader und **speichert ihn in der Instanz** (die UI sollte die Instanz danach neu laden).
+- Fehlende SHA-1 im Profil (Loader, Intermediary) kommen aus den `.sha1`-Dateien des Maven-Repos; das ergänzte Profil liegt unter `versions/fabric-loader-<loader>-<mc>/…json` für den Start ohne Netz.
+- Merge: Fabric-Libraries vor den Vanilla-Libraries (gleiche `group:artifact[:classifier]` → Fabric gewinnt), `mainClass` = `net.fabricmc.loader.impl.launch.knot.KnotClient`, Profil-Argumente werden angehängt. ID, Client-JAR, Assets und Java bleiben die der Vanilla-Version.
+- Schritte `loader` (Profil) und `mods` (Abgleich `mods/`) kommen zusätzlich als `install-progress`.
+- Der Installiert-Marker enthält bei Mod-Loadern MC-Version, Loader und Loader-Version; ein Wechsel gilt als „nicht installiert“.
+
+### Mods
+
+`instances/<id>/minecraft/mods/` ist der Mods-Ordner (Spielverzeichnis, dort sucht Fabric). `mods::sync` legt jede aktivierte Mod mit `sha1` aus `cache/mods/<sha1>.jar` per Hardlink (Fallback Kopie) unter ihrem `fileName` ab und entfernt deaktivierte nur, wenn die Datei dort denselben SHA-1 hat; fremde Dateien bleiben liegen. Fehlt eine Mod im Cache, schlägt die Installation fehl (Downloads über Modrinth folgen).
 
 ### Verzeichnisse (App-Datenverzeichnis)
 
 ```
 versions/<id>/<id>.json|.jar   libraries/…   assets/{indexes,objects,log_configs}/   runtime/<komponente>/
-instances/<instanz-id>/minecraft/ (Spielverzeichnis)   instances/<instanz-id>/natives/
+instances/<instanz-id>/minecraft/ (Spielverzeichnis, darin mods/)   instances/<instanz-id>/natives/   cache/mods/<sha1>.jar
 ```
 
-Headless-Test ohne UI: `cargo run --example launch -- [version|1.21] [spielername] [sekunden]` (in `src-tauri/`).
+Headless-Test ohne UI: `cargo run --example launch -- [version|1.21] [spielername] [sekunden] [vanilla|fabric[:loader]]` (in `src-tauri/`), z. B. `-- 1.21.11 Headless 60 fabric`.
 
 ### Presets
 
@@ -97,15 +113,15 @@ Ein Preset bündelt Mods, Spieleinstellungen (`options.txt`-Schlüssel), JVM-Arg
 
 `apply_preset` wendet das aufgelöste Preset an: ergänzt fehlende Mods (per ID), ersetzt JVM-Args, übernimmt RAM (falls gesetzt) und merkt sich `presetId`. `gameSettings` werden erst mit der Launch-Logik in `options.txt` geschrieben.
 
-### Installation und Mod-Cache (geplant, Vertrag steht)
+### Installation und Mod-Cache
 
-- Installation läuft in benannten Schritten (`InstallStep`: `java → client → libraries → natives → assets → loader → mods`; Vanilla bis `assets` umgesetzt). Jeder Fortschritt geht als Tauri-Event `install-progress` mit `{ instanceId, step, done, total }` ans Frontend.
-- Mod-JARs liegen einmalig in einem globalen, per SHA-1 adressierten Cache (`<app_data>/cache/mods/<sha1>.jar`). Fabric bindet sie per `-Dfabric.addMods=@<datei>` ein, die übrigen Loader per Hardlink (Fallback Kopie) nach `mods/`.
+- Installation läuft in benannten Schritten (`InstallStep`: `java → client → libraries → natives → assets → loader → mods`; `loader` kommt als Profil-Download vor `java`). Jeder Fortschritt geht als Tauri-Event `install-progress` mit `{ instanceId, step, done, total }` ans Frontend.
+- Mod-JARs liegen einmalig in einem globalen, per SHA-1 adressierten Cache (`<app_data>/cache/mods/<sha1>.jar`) und kommen für alle Loader per Hardlink (Fallback Kopie) nach `mods/` (siehe „Mods“). `-Dfabric.addMods` bleibt eine Option, falls `mods/` frei vom Launcher bleiben soll.
 
 ### Noch nicht implementiert (Stubs)
 
 - **auth**: Microsoft-OAuth (Auth-Code + PKCE, **eigene** Azure-App mit Mojang-Freigabe) → Xbox Live → XSTS → Minecraft-Token. Refresh-Tokens gehören in den OS-Keyring (`keyring`-Crate), nie in JSON.
-- **Mod-Loader und Mods**: Fabric/Quilt/Forge/NeoForge, Mods über die Modrinth-API (CurseForge später hinter derselben Schnittstelle).
+- **Mod-Loader und Mods**: Quilt/Forge/NeoForge, Mods über die Modrinth-API (CurseForge später hinter derselben Schnittstelle).
 - **Accounts**: kein Account-Store; `instance_launch` nimmt vorerst den Offline-Namen direkt.
 
 Die Traits nutzen `async fn` in Traits (nicht `dyn`-fähig); wird Laufzeit-Polymorphie nötig, auf Enum-Dispatch oder `async-trait` umstellen.
