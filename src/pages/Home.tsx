@@ -78,7 +78,7 @@ export function HomePage() {
             )}
             {recent && (
               <Link to={`/instances/${recent.id}`} className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
-                Details &amp; Konsole
+                Inhalte &amp; Einstellungen
               </Link>
             )}
           </div>
