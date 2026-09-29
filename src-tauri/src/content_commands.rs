@@ -95,28 +95,22 @@ pub async fn modrinth_install_pack(
     operation_id: String,
 ) -> AppResult<Instance> {
     let _operation = state.operation(None)?;
-    let on_progress = progress(app, operation_id);
-    on_progress("resolve", 0, 1);
-    let client = api::client()?;
-    let version = api::version(&client, &version_id).await?;
-    let project = api::project(&client, &version.project_id).await?;
-    if project.project_type != "modpack" {
-        return Err(api::invalid("Projekt ist kein Modpack"));
-    }
-    let file = api::primary(&version, ".mrpack")?;
-    on_progress("download", 0, 1);
-    let data = api::download(&client, &file).await?;
-    content::import(
-        &state,
-        &data,
-        &name,
-        Some(ModpackOrigin::Modrinth {
-            project_id: version.project_id,
-            version_id: version.id,
-        }),
-        &on_progress,
-    )
-    .await
+    let on_progress = progress(app, operation_id.clone());
+    let work = async {
+        on_progress("resolve", 0, 1);
+        let client = api::client()?;
+        let version = api::version(&client, &version_id).await?;
+        let project = api::project(&client, &version.project_id).await?;
+        if project.project_type != "modpack" {
+            return Err(api::invalid("Projekt ist kein Modpack"));
+        }
+        let file = api::primary(&version, ".mrpack")?;
+        on_progress("download", 0, 1);
+        let data = api::download(&client, &file).await?;
+        let origin = ModpackOrigin::Modrinth { project_id: version.project_id, version_id: version.id };
+        content::import(&state, &data, &name, Some(origin), &on_progress).await
+    };
+    state.cancellable(&operation_id, work).await
 }
 #[tauri::command]
 pub async fn modrinth_import_pack(
@@ -128,7 +122,15 @@ pub async fn modrinth_import_pack(
 ) -> AppResult<Instance> {
     let _operation = state.operation(None)?;
     let data = content::local_pack(std::path::Path::new(&path))?;
-    content::import(&state, &data, &name, None, &progress(app, operation_id)).await
+    let on_progress = progress(app, operation_id.clone());
+    let work = content::import(&state, &data, &name, None, &on_progress);
+    state.cancellable(&operation_id, work).await
+}
+/// Bricht `modrinth_install_pack`, `modrinth_import_pack` oder `template_create_instance` mit
+/// dieser `operationId` ab; der Vorgang endet mit „Installation abgebrochen“.
+#[tauri::command]
+pub fn pack_install_cancel(state: State<'_, AppState>, operation_id: String) {
+    state.cancel(&operation_id);
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -188,5 +190,7 @@ pub async fn template_create_instance(
     operation_id: String,
 ) -> AppResult<Instance> {
     let _operation = state.operation(None)?;
-    templates::create_instance(&state, &template_id, &name, &progress(app, operation_id)).await
+    let on_progress = progress(app, operation_id.clone());
+    let work = templates::create_instance(&state, &template_id, &name, &on_progress);
+    state.cancellable(&operation_id, work).await
 }

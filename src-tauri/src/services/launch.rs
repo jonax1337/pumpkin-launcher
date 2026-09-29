@@ -78,8 +78,19 @@ pub fn classpath(version: &VersionJson, dirs: &Dirs, env: &Env) -> Vec<PathBuf> 
     cp
 }
 
-/// Alle Argumente nach der Java-Programmdatei: JVM-Args, Main-Class, Game-Args.
+/// Echte Anmeldung eines Microsoft-Kontos (nur im Speicher, nie auf Platte).
+pub struct Session<'a> {
+    pub access_token: &'a str,
+    pub xuid: &'a str,
+}
+
+/// Alle Argumente nach der Java-Programmdatei: JVM-Args, Main-Class, Game-Args (offline).
 pub fn build_args(spec: &LaunchSpec, env: &Env) -> AppResult<Vec<String>> {
+    build_args_for(spec, env, None)
+}
+
+/// Wie `build_args`, mit Microsoft-Sitzung: echter Token und xuid statt der Offline-Platzhalter.
+pub fn build_args_for(spec: &LaunchSpec, env: &Env, session: Option<&Session>) -> AppResult<Vec<String>> {
     let LaunchSpec { version, dirs, instance_id, account, .. } = spec;
     let sep = if env.os == "windows" { ";" } else { ":" };
     let path = |p: PathBuf| p.to_string_lossy().into_owned();
@@ -88,9 +99,9 @@ pub fn build_args(spec: &LaunchSpec, env: &Env) -> AppResult<Vec<String>> {
     let vars: HashMap<&str, String> = HashMap::from([
         ("auth_player_name", account.username.clone()),
         ("auth_uuid", account.id.replace('-', "")),
-        ("auth_access_token", "0".into()),
-        ("auth_session", "0".into()),
-        ("auth_xuid", "0".into()),
+        ("auth_access_token", session.map_or("0", |s| s.access_token).into()),
+        ("auth_session", session.map_or("0", |s| s.access_token).into()),
+        ("auth_xuid", session.map_or("0", |s| s.xuid).into()),
         ("clientid", "0".into()),
         ("user_type", "msa".into()),
         ("user_properties", "{}".into()),
@@ -125,6 +136,18 @@ pub fn build_args(spec: &LaunchSpec, env: &Env) -> AppResult<Vec<String>> {
     args.push(version.main_class.clone());
     args.extend(game.iter().map(|a| substitute(a, &vars)));
     Ok(args)
+}
+
+/// Neuester Absturzbericht (`crash-reports/*.txt`), der seit `since` entstanden ist.
+pub fn crash_report(game_dir: &Path, since: std::time::SystemTime) -> Option<PathBuf> {
+    std::fs::read_dir(game_dir.join("crash-reports"))
+        .ok()?
+        .filter_map(Result::ok)
+        .filter(|e| e.path().extension().is_some_and(|x| x == "txt"))
+        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+        .filter(|(modified, _)| *modified >= since)
+        .max_by_key(|(modified, _)| *modified)
+        .map(|(_, path)| path)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -222,6 +245,23 @@ mod tests {
     use crate::models::AccountKind;
 
     #[test]
+    fn newest_crash_report_after_start() {
+        use std::time::{Duration, SystemTime};
+        let game = std::env::temp_dir().join(crate::models::new_id());
+        let reports = game.join("crash-reports");
+        assert_eq!(crash_report(&game, SystemTime::UNIX_EPOCH), None);
+        std::fs::create_dir_all(&reports).unwrap();
+        let start = SystemTime::now();
+        for (name, age) in [("old.txt", 3600), ("new.txt", 0), ("newer.log", 0)] {
+            let file = std::fs::File::create(reports.join(name)).unwrap();
+            file.set_modified(start + Duration::from_secs(5) - Duration::from_secs(age)).unwrap();
+        }
+        assert_eq!(crash_report(&game, start), Some(reports.join("new.txt")));
+        assert_eq!(crash_report(&game, start + Duration::from_secs(60)), None);
+        std::fs::remove_dir_all(game).unwrap();
+    }
+
+    #[test]
     fn substitution() {
         let vars = HashMap::from([("a", "1".to_owned()), ("b", "${a}".to_owned())]);
         assert_eq!(substitute("-Dx=${a}/${b}", &vars), "-Dx=1/${a}");
@@ -293,5 +333,9 @@ mod tests {
                 "msa".into(),
             ]
         );
+        let session = Session { access_token: "eyJ.token", xuid: "2535" };
+        let args = build_args_for(&spec, &env, Some(&session)).unwrap();
+        let token = args.iter().position(|a| a == "--accessToken").unwrap();
+        assert_eq!(args[token + 1], "eyJ.token");
     }
 }
