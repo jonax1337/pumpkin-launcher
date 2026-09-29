@@ -17,7 +17,6 @@ import { ContentResults, PackInstallButton } from "@/components/ContentBrowser";
 import { useContentInstall, useContentState } from "@/hooks/useContent";
 import { useCreateInstance, useLoaderVersions, useMemory, useVersions } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
-import { packReason } from "@/lib/modrinth";
 import { formatMemory } from "@/lib/format";
 import { ALL_LOADERS, LOADER_LABELS, SUPPORTED_LOADERS, type ModLoader } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -230,7 +229,7 @@ function ModpackTab({ onDone, onDiscover }: { onDone: (id: string) => void; onDi
       <ContentResults
         type="modpack"
         onOpen={(id) => onDiscover(id)}
-        action={(hit) => <PackInstallButton projectId={hit.project_id} title={hit.title} reason={packReason(hit.categories)} onDone={onDone} />}
+        action={(hit) => <PackInstallButton projectId={hit.project_id} title={hit.title} onDone={onDone} />}
       />
       <Button variant="link" className="mt-2 px-0" onClick={() => onDiscover()}>
         <Compass aria-hidden /> Mehr in Entdecken

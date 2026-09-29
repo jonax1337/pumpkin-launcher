@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
+import { useLocation } from "react-router";
 import { ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +27,10 @@ function Section({ id, title, description, children }: { id: string; title: stri
 export function SettingsPage() {
   const s = useSettings();
   const memory = useMemory();
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash) document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView();
+  }, [hash]);
 
   return (
     <div className="max-w-3xl">

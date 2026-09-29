@@ -18,7 +18,7 @@ import { useContentInstall, useContentState, withTarget } from "@/hooks/useConte
 import { useInstances } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import {
-  formatDownloads, isPackVersionSupported, pickPackVersion, pickVersion, progressLabel, projectOf,
+  formatDownloads, isPackVersionSupported, modLoadersFor, pickPackVersion, pickVersion, progressLabel, projectOf,
   type CatalogType, type ContentHit, type ContentProject, type ContentVersion,
 } from "@/lib/modrinth";
 import { LOADER_LABELS, type Instance, type ModKind } from "@/lib/types";
@@ -37,7 +37,9 @@ export const fitsLabel = (instance: Instance, type: CatalogType) =>
   type === "mod" ? `${LOADER_LABELS[instance.loader]} ${instance.minecraftVersion}` : `Minecraft ${instance.minecraftVersion}`;
 
 const versionsKey = (projectId: string, mc: string | null, loader: string | null) => ["modrinth-versions", projectId, mc, loader];
-const loaderFor = (instance: Instance, type: CatalogType) => (type === "mod" ? instance.loader : null);
+// ponytail: Das Backend filtert nach genau einem Loader; Quilt sucht daher Fabric-Mods (die große Mehrheit), reine Quilt-Mods fehlen.
+// Upgrade: Loader-Liste an modrinth_search/modrinth_versions übergeben (`ModLoader::modrinth_loaders`).
+const loaderFor = (instance: Instance, type: CatalogType) => (type === "mod" ? (instance.loader === "quilt" ? "fabric" : instance.loader) : null);
 
 export function ContentIcon({ url, seed, size = "md" }: { url?: string | null; seed: string; size?: "sm" | "md" | "lg" }) {
   const [broken, setBroken] = useState(false);
@@ -74,8 +76,28 @@ const PURIFY = {
   FORBID_ATTR: ["style", "class", "id", "srcset", "target"],
 };
 
+/**
+ * Reihen verlinkter Bild-Knöpfe („How to install“, „Discord“, Badges) als ruhige Textlinks aus dem Alt-Text,
+ * damit fremd gestaltete Knöpfe nicht neben denen der App stehen. Einzelne verlinkte Bilder (Videos, Screenshots) bleiben.
+ */
+function badgeRowsAsLinks(root: DocumentFragment) {
+  for (const p of root.querySelectorAll("p")) {
+    const links = [...p.children];
+    const badges = links.length > 1 && !p.textContent?.trim() && links.every((a) => a.tagName === "A" && a.children.length === 1 && a.firstElementChild?.tagName === "IMG");
+    if (!badges) continue;
+    p.className = "flex flex-wrap gap-x-4 gap-y-1";
+    for (const a of links) a.replaceChildren(a.firstElementChild!.getAttribute("alt")?.trim() || new URL((a as HTMLAnchorElement).href || "https://link").hostname);
+  }
+}
+
 export function Description({ body }: { body: string }) {
-  const html = useMemo(() => DOMPurify.sanitize(marked.parse(body, { async: false }), PURIFY), [body]);
+  const html = useMemo(() => {
+    const doc = DOMPurify.sanitize(marked.parse(body, { async: false }), { ...PURIFY, RETURN_DOM_FRAGMENT: true });
+    badgeRowsAsLinks(doc);
+    const box = document.createElement("div");
+    box.append(doc);
+    return box.innerHTML;
+  }, [body]);
   // Links nie im Launcher-Fenster öffnen, sondern im Standardbrowser.
   function onLink(e: MouseEvent) {
     const link = (e.target as Element).closest("a");
@@ -198,9 +220,9 @@ export function AddToInstanceMenu({ projectId, title, type, large }: { projectId
     retry: false,
   });
   const reasonFor = (i: Instance): string | null => {
-    if (!kindsFor(i).includes(type)) return "Geht nur in Fabric-Instanzen";
+    if (!kindsFor(i).includes(type)) return "Geht nur in Instanzen mit Mod-Loader";
     if (i.mods.some((m) => projectOf(m) === projectId)) return "Schon drin";
-    const fits = all.data?.some((v) => v.game_versions.includes(i.minecraftVersion) && (type !== "mod" || v.loaders.includes(i.loader)));
+    const fits = all.data?.some((v) => v.game_versions.includes(i.minecraftVersion) && (type !== "mod" || v.loaders.some((l) => modLoadersFor(i.loader).includes(l))));
     return all.data && !fits ? `Keine Version für ${i.minecraftVersion}` : null;
   };
   const rows = (instances.data ?? []).map((i) => ({ i, reason: reasonFor(i) }));
@@ -286,19 +308,14 @@ function useInstallPack(projectId: string, title: string, onDone?: (instanceId: 
   return { run, busy, blocked: !!active || checking, cancel: !checking && busy ? cancelActive : undefined };
 }
 
-/** Zeilenaktion für Modpacks. `reason` (z. B. aus den Loader-Kategorien) sperrt vorab mit kurzem Grund. */
-export function PackInstallButton({ projectId, title, reason, onDone }: {
-  projectId: string; title: string; reason?: string | null; onDone?: (instanceId: string) => void;
-}) {
+/** Zeilenaktion für Modpacks. */
+export function PackInstallButton({ projectId, title, onDone }: { projectId: string; title: string; onDone?: (instanceId: string) => void }) {
   const pack = useInstallPack(projectId, title, onDone);
   if (pack.busy) return busyNote(pack.busy, pack.cancel);
   return (
-    <span className="flex shrink-0 flex-col items-end gap-1">
-      <Button variant="secondary" size="sm" disabled={!!reason || pack.blocked} aria-label={`${title} als Instanz installieren`} onClick={() => void pack.run()}>
-        <Download aria-hidden /> Installieren
-      </Button>
-      {reason && <span className="max-w-40 text-right text-xs text-muted-foreground">{reason}</span>}
-    </span>
+    <Button variant="secondary" size="sm" className="shrink-0" disabled={pack.blocked} aria-label={`${title} als Instanz installieren`} onClick={() => void pack.run()}>
+      <Download aria-hidden /> Installieren
+    </Button>
   );
 }
 

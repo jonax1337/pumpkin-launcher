@@ -71,22 +71,17 @@ export function undoRemove(current: Mod[], before: Mod[], removed: Mod[]): Mod[]
   ];
 }
 
-// Voxlet installiert Packs nur ohne Mod-Loader oder mit Fabric.
-const PACK_LOADERS = ["fabric", "minecraft", "vanilla"];
-const LOADER_NAMES: Record<string, string> = { forge: "Forge", neoforge: "NeoForge", quilt: "Quilt" };
+// Voxlet installiert Packs mit jedem unterstützten Loader.
+const PACK_LOADERS = ["fabric", "quilt", "forge", "neoforge", "minecraft", "vanilla"];
+
+/** Modrinth-Loader, deren Mods eine Instanz ausführt: Quilt lädt auch Fabric-Mods (wie `ModLoader::modrinth_loaders` im Backend). */
+export const modLoadersFor = (loader: string): string[] => (loader === "quilt" ? ["quilt", "fabric"] : loader === "vanilla" ? [] : [loader]);
 
 export const isPackVersionSupported = (v: ContentVersion) => v.loaders.some((l) => PACK_LOADERS.includes(l));
 
-/** Pack-Version für eine neue Instanz: neueste stabile mit Fabric/Vanilla, sonst ein kurzer Grund. */
+/** Pack-Version für eine neue Instanz: neueste stabile mit unterstütztem Loader, sonst ein kurzer Grund. */
 export function pickPackVersion(versions: ContentVersion[]): { version: ContentVersion | null; reason: string | null } {
   const version = pickVersion(versions.filter(isPackVersionSupported));
   if (version) return { version, reason: null };
-  return { version: null, reason: versions.length ? packReason(versions[0].loaders) : "Keine Version verfügbar" };
-}
-
-/** Grund aus den Loader-Kategorien eines Suchtreffers; null, wenn Fabric/Vanilla dabei ist oder nichts bekannt ist. */
-export function packReason(loaders: string[]): string | null {
-  const known = loaders.filter((l) => l in LOADER_NAMES || PACK_LOADERS.includes(l));
-  if (!known.length || known.some((l) => PACK_LOADERS.includes(l))) return null;
-  return `Braucht ${LOADER_NAMES[known[0]]} – kann Voxlet noch nicht`;
+  return { version: null, reason: versions.length ? "Keine unterstützte Version" : "Keine Version verfügbar" };
 }

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -121,7 +121,12 @@ function MsLoginDialog() {
 // ---------- Konten ----------
 
 function useMsAccounts() {
-  return useQuery({ queryKey: ["ms-accounts"], queryFn: api.msAccounts, staleTime: 5 * 60_000, retry: false });
+  const query = useQuery({ queryKey: ["ms-accounts"], queryFn: api.msAccounts, staleTime: 5 * 60_000, retry: false });
+  const syncMicrosoft = useSettings((s) => s.syncMicrosoft);
+  useEffect(() => {
+    if (query.data) syncMicrosoft(query.data.map((a) => a.id));
+  }, [query.data, syncMicrosoft]);
+  return query;
 }
 
 const sameAccount = (a: ActiveAccount | null, b: ActiveAccount) =>
@@ -324,7 +329,7 @@ export function AccountsSection() {
                     size="icon-sm"
                     aria-label={`${name} entfernen`}
                     title="Entfernen"
-                    disabled={removeMs.isPending}
+                    disabled={a.kind === "microsoft" && removeMs.isPending}
                     onClick={() => remove(a)}
                     className="text-muted-foreground hover:text-destructive"
                   >

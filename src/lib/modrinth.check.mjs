@@ -1,6 +1,6 @@
 // Run: node src/lib/modrinth.check.mjs (Node with TypeScript stripping).
 import assert from 'node:assert/strict';
-import { packReason, pickPackVersion, pickVersion, progressLabel, removeWithDependencies, undoRemove } from './modrinth.ts';
+import { modLoadersFor, pickPackVersion, pickVersion, progressLabel, removeWithDependencies, undoRemove } from './modrinth.ts';
 
 // Entfernen mit Abhängigkeiten: Iris und Mod Menu brauchen Fabric API, Sodium braucht nur Iris.
 const m = (id, requiredBy = []) => ({ id, name: id, source: { type: 'modrinth', projectId: id, versionId: 'v' }, requiredBy, enabled: true });
@@ -25,14 +25,15 @@ assert.equal(pickVersion([v('a', 'alpha'), v('b', 'beta')]).id, 'a');
 assert.equal(pickVersion([]), null);
 assert.equal(progressLabel({ phase: 'resolve', done: 0, total: 1 }), 'Wird geprüft…');
 assert.equal(progressLabel({ phase: 'download', done: 2, total: 7 }), 'Lädt 3 von 7…');
-console.log('Modrinth checks passed');
 
-// Pack-Version: Fabric/Vanilla bevorzugt stabil, sonst Grund.
+
+// Pack-Version: jeder unterstützte Loader, stabil bevorzugt, sonst Grund.
 const pv = (id, loaders, version_type = 'release') => ({ id, loaders, version_type });
-assert.equal(pickPackVersion([pv('f1', ['forge']), pv('b', ['fabric'], 'beta'), pv('r', ['fabric'])]).version.id, 'r');
+assert.equal(pickPackVersion([pv('x', ['liteloader']), pv('b', ['fabric'], 'beta'), pv('r', ['quilt'])]).version.id, 'r');
 assert.equal(pickPackVersion([pv('v', ['minecraft'])]).version.id, 'v');
-assert.deepEqual(pickPackVersion([pv('f', ['forge']), pv('n', ['neoforge'])]), { version: null, reason: 'Braucht Forge – kann Voxlet noch nicht' });
+assert.equal(pickPackVersion([pv('f', ['forge'], 'beta'), pv('n', ['neoforge'])]).version.id, 'n');
+assert.deepEqual(pickPackVersion([pv('x', ['liteloader'])]), { version: null, reason: 'Keine unterstützte Version' });
 assert.ok(pickPackVersion([]).reason);
-assert.equal(packReason(['forge', 'technology']), 'Braucht Forge – kann Voxlet noch nicht');
-assert.equal(packReason(['forge', 'fabric']), null);
-assert.equal(packReason(['adventure']), null);
+assert.deepEqual(modLoadersFor('quilt'), ['quilt', 'fabric']);
+assert.deepEqual(modLoadersFor('vanilla'), []);
+console.log('Modrinth checks passed');
