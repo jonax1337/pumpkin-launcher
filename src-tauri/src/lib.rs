@@ -1,7 +1,7 @@
 mod commands;
-mod error;
-mod models;
-mod services;
+pub mod error;
+pub mod models;
+pub mod services;
 mod state;
 
 use tauri::Manager;
@@ -32,6 +32,10 @@ pub fn run() {
             commands::update_preset,
             commands::delete_preset,
             commands::apply_preset,
+            commands::versions_list,
+            commands::instance_install,
+            commands::instance_launch,
+            commands::instance_kill,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

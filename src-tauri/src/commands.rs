@@ -1,8 +1,14 @@
 //! Tauri-Commands. Dünne Schicht über `AppState`; Argumentnamen kommen im Frontend als camelCase an.
-use tauri::State;
+use serde::Serialize;
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::error::{AppError, AppResult};
-use crate::models::{Instance, NewInstance, NewPreset, Preset};
+use crate::models::{now_ms, Instance, ModLoader, NewInstance, NewPreset, Preset};
+use crate::services::install::{self, InstallProgress, INSTALL_PROGRESS_EVENT};
+use crate::services::launch::{self, LaunchSpec, LogStream, EXIT_EVENT, LOG_EVENT};
+use crate::services::mojang::{VersionEntry, VersionManifest, MANIFEST_URL};
+use crate::services::rules::Env;
+use crate::services::{auth, download, java};
 use crate::state::AppState;
 
 fn require_name(name: &str) -> AppResult<()> {
@@ -81,4 +87,127 @@ pub fn apply_preset(
     let instance = state.apply_preset(&instance_id, &preset_id)?;
     tracing::info!(instance = %instance_id, preset = %preset_id, "Preset angewendet");
     Ok(instance)
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LogPayload {
+    instance_id: String,
+    stream: LogStream,
+    line: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ExitPayload {
+    instance_id: String,
+    code: Option<i32>,
+}
+
+fn emit<T: Serialize + Clone>(app: &AppHandle, event: &str, payload: T) {
+    if let Err(err) = app.emit(event, payload) {
+        tracing::warn!(event, %err, "Event konnte nicht gesendet werden");
+    }
+}
+
+fn require_vanilla(instance: &Instance) -> AppResult<()> {
+    match instance.loader {
+        ModLoader::Vanilla => Ok(()),
+        _ => Err(AppError::NotImplemented("Installation und Start mit Mod-Loader")),
+    }
+}
+
+/// Alle Minecraft-Versionen aus Mojangs Manifest (neueste zuerst).
+#[tauri::command]
+pub async fn versions_list(state: State<'_, AppState>) -> AppResult<Vec<VersionEntry>> {
+    let manifest: VersionManifest = download::get_json(&state.http, MANIFEST_URL).await?;
+    Ok(manifest.versions)
+}
+
+/// Installiert die Version der Instanz; Fortschritt kommt als `install-progress`.
+#[tauri::command]
+pub async fn instance_install(app: AppHandle, state: State<'_, AppState>, instance_id: String) -> AppResult<()> {
+    let instance = state.instances.get(&instance_id)?;
+    require_vanilla(&instance)?;
+    tracing::info!(instance = %instance_id, version = %instance.minecraft_version, "Installation gestartet");
+    let version = install::fetch_version(&state.http, &state.dirs, &instance.minecraft_version).await?;
+    let on_progress = |step, done, total| {
+        emit(&app, INSTALL_PROGRESS_EVENT, InstallProgress { instance_id: instance_id.clone(), step, done, total });
+    };
+    install::install(&state.http, &state.dirs, &version, &instance_id, &on_progress).await?;
+    tracing::info!(instance = %instance_id, "Installation abgeschlossen");
+    Ok(())
+}
+
+/// Startet eine installierte Instanz mit Offline-Account und liefert die Prozess-ID.
+/// Ausgaben kommen als `instance-log`, das Ende als `instance-exit`.
+#[tauri::command]
+pub async fn instance_launch(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    instance_id: String,
+    username: String,
+) -> AppResult<u32> {
+    let mut instance = state.instances.get(&instance_id)?;
+    require_vanilla(&instance)?;
+    let account = auth::offline_account(&username)?;
+    let version = install::installed_version(&state.dirs, &instance.minecraft_version).await?;
+    let java = java::java_exe(&state.dirs, install::java_component(&version));
+    if !java.exists() {
+        return Err(AppError::Invalid("Java-Runtime fehlt, bitte Instanz installieren".into()));
+    }
+    let args = launch::build_args(
+        &LaunchSpec {
+            version: &version,
+            dirs: &state.dirs,
+            instance_id: &instance_id,
+            account: &account,
+            memory_mb: instance.memory_mb.unwrap_or(launch::DEFAULT_MEMORY_MB),
+            extra_jvm_args: &instance.jvm_args,
+        },
+        &Env::current(),
+    )?;
+
+    // Lock über Prüfen, Starten und Eintragen halten: sonst könnte ein sofort beendeter
+    // Prozess seinen Eintrag entfernen, bevor er eingetragen ist.
+    let mut running = state.running();
+    if running.contains_key(&instance_id) {
+        return Err(AppError::Invalid("Instanz läuft bereits".into()));
+    }
+    let (log_app, log_id) = (app.clone(), instance_id.clone());
+    let (exit_app, exit_id) = (app.clone(), instance_id.clone());
+    let game = launch::spawn(
+        &java,
+        &args,
+        &state.dirs.game_dir(&instance_id),
+        move |stream, line| {
+            tracing::info!(target: "minecraft", instance = %log_id, ?stream, "{line}");
+            emit(&log_app, LOG_EVENT, LogPayload { instance_id: log_id.clone(), stream, line });
+        },
+        move |code| {
+            exit_app.state::<AppState>().running().remove(&exit_id);
+            tracing::info!(instance = %exit_id, ?code, "Spiel beendet");
+            emit(&exit_app, EXIT_EVENT, ExitPayload { instance_id: exit_id, code });
+        },
+    )?;
+    let pid = game.pid;
+    running.insert(instance_id.clone(), game);
+    drop(running);
+    tracing::info!(instance = %instance_id, pid, user = %account.username, "Spiel gestartet");
+
+    instance.last_played_at = Some(now_ms());
+    state.instances.update(instance)?;
+    Ok(pid)
+}
+
+/// Beendet das laufende Spiel einer Instanz; `instance-exit` folgt.
+#[tauri::command]
+pub fn instance_kill(state: State<'_, AppState>, instance_id: String) -> AppResult<()> {
+    let game = state
+        .running()
+        .remove(&instance_id)
+        .ok_or_else(|| AppError::NotFound { kind: "Laufendes Spiel", id: instance_id.clone() })?;
+    game.kill();
+    tracing::info!(instance = %instance_id, "Spiel wird beendet");
+    Ok(())
 }

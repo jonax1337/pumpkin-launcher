@@ -7,6 +7,12 @@ pub enum AppError {
     Io(#[from] std::io::Error),
     #[error("JSON-Fehler: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("HTTP-Fehler: {0}")]
+    Http(#[from] reqwest::Error),
+    #[error("ZIP-Fehler: {0}")]
+    Zip(#[from] zip::result::ZipError),
+    #[error("Download fehlgeschlagen: {0}")]
+    Download(String),
     #[error("Tauri-Fehler: {0}")]
     Tauri(#[from] tauri::Error),
     #[error("{kind} '{id}' nicht gefunden")]
