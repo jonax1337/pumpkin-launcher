@@ -377,6 +377,7 @@ export function ContentResults({ type, instance, action, onOpen, barClassName = 
             placeholder={SEARCH_PLACEHOLDER[type]}
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            autoFocus
             className="pl-8"
           />
         </div>
