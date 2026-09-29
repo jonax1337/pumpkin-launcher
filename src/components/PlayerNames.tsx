@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageHeader } from "@/components/common";
 import { cn } from "@/lib/utils";
 import { isValidPlayerName, useSettings } from "@/store/settings";
 
@@ -24,6 +23,7 @@ function Avatar({ name, active }: { name: string; active?: boolean }) {
 
 function AddAccountForm() {
   const addAccount = useSettings((s) => s.addAccount);
+  const hasNames = useSettings((s) => s.offlineAccounts.length > 0);
   const [name, setName] = useState("");
   const invalid = name.length > 0 && !isValidPlayerName(name);
 
@@ -36,7 +36,7 @@ function AddAccountForm() {
 
   return (
     <form onSubmit={submit} className="space-y-2">
-      <Label htmlFor="offline-name">Neuer Offline-Account</Label>
+      <Label htmlFor="offline-name">{hasNames ? "Weiterer Spielername" : "Spielername"}</Label>
       <div className="flex gap-2">
         <div className="relative flex-1">
           <UserRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
@@ -56,27 +56,25 @@ function AddAccountForm() {
         </Button>
       </div>
       <p id="offline-name-hint" className={invalid ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
-        3–16 Zeichen, nur Buchstaben, Ziffern und Unterstrich. Nur für Einzelspieler und Offline-Server.
+        3–16 Zeichen, nur Buchstaben, Ziffern und Unterstrich. Gilt für Einzelspieler und Server ohne Anmeldung.
       </p>
     </form>
   );
 }
 
-export function AccountPage() {
+/** Spielernamen verwalten (Einstellungen; der Profil-Chip in der Seitenleiste führt hierher). */
+export function PlayerNamesCard() {
   const { offlineName, offlineAccounts, selectAccount, removeAccount } = useSettings();
 
   return (
-    <>
-      <PageHeader title="Konto" description="Mit welchem Namen du spielst." />
-      <div className="grid max-w-3xl gap-6">
-        <Card className="bg-card/60">
+        <Card id="spielername" className="bg-card/60">
           <CardHeader>
-            <CardTitle>Offline-Accounts</CardTitle>
-            <CardDescription>Der aktive Account wird beim Spielstart verwendet.</CardDescription>
+            <CardTitle>Spielername</CardTitle>
+            <CardDescription>Mit diesem Namen spielst du. Du kannst mehrere anlegen und hier wechseln.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {offlineAccounts.length > 0 ? (
-              <ul className="grid gap-2" aria-label="Offline-Accounts">
+              <ul className="grid gap-2" aria-label="Spielernamen">
                 {offlineAccounts.map((name) => {
                   const active = name === offlineName;
                   return (
@@ -93,7 +91,6 @@ export function AccountPage() {
                         <Avatar name={name} active={active} />
                         <div className="min-w-0 flex-1 leading-tight">
                           <p className="truncate font-medium">{name}</p>
-                          <p className="text-xs text-muted-foreground">Offline</p>
                         </div>
                         {active && (
                           <span className="inline-flex items-center gap-1 text-xs font-medium text-gold">
@@ -106,7 +103,7 @@ export function AccountPage() {
                         size="icon-sm"
                         aria-label={`${name} entfernen`}
                         onClick={() => removeAccount(name)}
-                        className="absolute top-1/2 right-2.5 -translate-y-1/2 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-destructive"
+                        className="absolute top-1/2 right-2.5 -translate-y-1/2 text-muted-foreground hover:text-destructive"
                       >
                         <Trash2 aria-hidden />
                       </Button>
@@ -116,14 +113,11 @@ export function AccountPage() {
               </ul>
             ) : (
               <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-                Noch kein Account. Lege einen an, um spielen zu können.
+                Noch kein Spielername. Leg einen an, um spielen zu können.
               </p>
             )}
             <AddAccountForm />
           </CardContent>
         </Card>
-
-      </div>
-    </>
   );
 }

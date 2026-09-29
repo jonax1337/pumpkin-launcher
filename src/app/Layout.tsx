@@ -1,30 +1,17 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import {
-  Blocks,
-  Boxes,
-  House,
-  Package,
-  Settings,
-  UserRound,
-  type LucideIcon,
-} from "lucide-react";
+import { Compass, LibraryBig, Play, Settings, type LucideIcon } from "lucide-react";
 import { NavLink, useLocation, useOutlet } from "react-router";
 import { cn } from "@/lib/utils";
-import { api } from "@/lib/api";
 import { useSettings } from "@/store/settings";
 import { useGameEvents } from "@/hooks/useInstances";
 
 const NAV: { to: string; label: string; icon: LucideIcon; end?: boolean }[] = [
-  { to: "/", label: "Start", icon: House, end: true },
-  { to: "/instances", label: "Instanzen", icon: Boxes },
-  { to: "/mods", label: "Mods", icon: Blocks },
-  { to: "/modpacks", label: "Modpacks", icon: Package },
+  { to: "/", label: "Spielen", icon: Play, end: true },
+  { to: "/instances", label: "Bibliothek", icon: LibraryBig },
+  { to: "/discover", label: "Entdecken", icon: Compass },
 ];
 
-const NAV_BOTTOM: typeof NAV = [
-  { to: "/settings", label: "Einstellungen", icon: Settings },
-  { to: "/account", label: "Konto", icon: UserRound },
-];
+const NAV_BOTTOM: typeof NAV = [{ to: "/settings", label: "Einstellungen", icon: Settings }];
 
 function NavItem({ item }: { item: (typeof NAV)[number] }) {
   const Icon = item.icon;
@@ -100,18 +87,16 @@ export function Layout() {
           </div>
         </nav>
         <NavLink
-          to="/account"
+          to="/settings#spielername"
+          aria-label={offlineName ? `Spielername ${offlineName} – ändern` : "Spielername festlegen"}
           className="mx-3 mt-4 flex items-center gap-3 rounded-xl bg-white/[0.03] p-2.5 ring-1 ring-white/5 outline-none transition-colors hover:bg-white/[0.06] focus-visible:ring-2 focus-visible:ring-ring"
         >
           <div className="grid size-8 place-items-center rounded-md bg-gold/15 font-mono text-xs font-semibold text-gold">
             {offlineName.slice(0, 2).toUpperCase() || "?"}
           </div>
           <div className="min-w-0 leading-tight">
-            <p className="truncate text-sm font-medium">{offlineName || "Kein Konto"}</p>
-            <p className="text-[11px] text-muted-foreground">
-              {offlineName ? "Offline" : "Account anlegen"}
-              {api.isMock && " · Demo-Daten"}
-            </p>
+            <p className="truncate text-sm font-medium">{offlineName || "Kein Spielername"}</p>
+            <p className="text-xs text-muted-foreground">{offlineName ? "Wechseln" : "Jetzt festlegen"}</p>
           </div>
         </NavLink>
       </aside>

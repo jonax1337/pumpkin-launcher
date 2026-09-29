@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BlockTile, ErrorNote, LoaderBadge } from "@/components/common";
 import { PlayControl, StatusBadge } from "@/components/game";
+import { Onboarding } from "@/components/Onboarding";
 import { pickRecentInstance, useInstances } from "@/hooks/useInstances";
 import { formatMemory, relativeTime } from "@/lib/format";
 import { useSettings } from "@/store/settings";
@@ -12,10 +13,15 @@ export function HomePage() {
   const { data: instances, isLoading, error } = useInstances();
   const recent = pickRecentInstance(instances);
   const defaultMemory = useSettings((s) => s.memoryMb);
+  const hasName = useSettings((s) => !!s.offlineName);
+  const needsInstance = instances?.length === 0;
+
+  if (needsInstance) return <Onboarding needsInstance />;
 
   return (
     <div className="space-y-10">
       {error && <ErrorNote error={error} />}
+      {!hasName && !isLoading && <Onboarding needsInstance={false} />}
       {/* Hero */}
       <section className="relative overflow-hidden rounded-3xl border bg-gradient-to-br from-emerald-950/70 via-card/80 to-card/60 p-8 shadow-2xl shadow-black/30">
         <div aria-hidden className="pointer-events-none absolute inset-0 bg-grid opacity-60 [mask-image:linear-gradient(to_left,black,transparent_65%)]" />

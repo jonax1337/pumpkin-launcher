@@ -3,16 +3,14 @@ import ReactDOM from "react-dom/client";
 import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
-import { createBrowserRouter, RouterProvider } from "react-router";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/app/Layout";
 import { HomePage } from "@/pages/Home";
 import { InstancesPage } from "@/pages/Instances";
 import { InstanceDetailPage } from "@/pages/InstanceDetail";
-import { ModsPage } from "@/pages/Mods";
-import { ModpacksPage } from "@/pages/Modpacks";
+import { DiscoverPage } from "@/pages/Discover";
 import { SettingsPage } from "@/pages/Settings";
-import { AccountPage } from "@/pages/Account";
 import { NotFoundPage } from "@/pages/NotFound";
 import "./index.css";
 
@@ -37,10 +35,12 @@ const router = createBrowserRouter([
       { index: true, element: <HomePage /> },
       { path: "instances", element: <InstancesPage /> },
       { path: "instances/:id", element: <InstanceDetailPage /> },
-      { path: "mods", element: <ModsPage /> },
-      { path: "modpacks", element: <ModpacksPage /> },
+      { path: "discover", element: <DiscoverPage /> },
       { path: "settings", element: <SettingsPage /> },
-      { path: "account", element: <AccountPage /> },
+      // Alte Adressen aus früheren Versionen
+      { path: "mods", element: <Navigate to="/discover?tab=mods" replace /> },
+      { path: "modpacks", element: <Navigate to="/discover" replace /> },
+      { path: "account", element: <Navigate to="/settings" replace /> },
       { path: "*", element: <NotFoundPage /> },
     ],
   },

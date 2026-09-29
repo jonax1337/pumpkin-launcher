@@ -166,7 +166,7 @@ export function useLaunch() {
 }
 
 function missingNameToast(message: string, navigate: NavigateFunction) {
-  toast.error(message, { duration: 10_000, action: { label: "Spielername festlegen", onClick: () => navigate("/account") } });
+  toast.error(message, { duration: 10_000, action: { label: "Spielername festlegen", onClick: () => navigate("/settings#spielername") } });
 }
 
 /**
