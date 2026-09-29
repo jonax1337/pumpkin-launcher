@@ -30,10 +30,10 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `commands.rs` | Dünne Commands: Eingabe prüfen, an `AppState`/Store delegieren, loggen |
 | `services/store.rs` | Generischer `JsonStore<T>`: in-memory + atomares Schreiben (tmp + rename) |
 | `services/mod.rs` | `Dirs`: Verzeichnislayout (geteilter Cache, Instanz-Verzeichnisse) |
-| `services/auth.rs` | `AuthProvider`-Trait, `MicrosoftAuth`-Stub, Offline-Account (UUID nach `OfflinePlayer:<name>`, MD5/v3) |
+| `services/auth.rs` | Microsoft-Konto per Gerätecode → Xbox Live → XSTS → Minecraft (Refresh-Token im OS-Schlüsselbund), Offline-Account (UUID nach `OfflinePlayer:<name>`, MD5/v3) |
 | `services/mojang.rs` | serde-Formate von piston-meta: Version-Manifest v2, Versions-JSON, Asset-Index |
 | `services/rules.rs` | Mojang-`rules` (os/arch/features), Arch-Filter für Natives-Classifier |
-| `services/download.rs` | HTTP-Client, SHA-1-geprüfte Downloads mit Retry, 16 parallel (`buffer_unordered`) |
+| `services/download.rs` | HTTP-Client, SHA-1-geprüfte Downloads mit Retry, 16 parallel (`buffer_unordered`), gestreamt auf Platte, Fortsetzen per HTTP-Range auf `.part` |
 | `services/java.rs` | Mojangs Java-Runtime (`java-runtime/…/all.json`, Komponente aus `javaVersion.component`) |
 | `services/install.rs` | Installation in Schritten, `InstallStep`, `InstallProgress`, Event `install-progress` |
 | `services/fabric.rs` | Fabric-Meta (`meta.fabricmc.net/v2`): Loader-Versionen, Launcher-Profil (`inheritsFrom` Vanilla), Merge mit der Vanilla-Versions-JSON |
@@ -49,7 +49,8 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 JSON-Dateien im App-Datenverzeichnis (`app.path().app_data_dir()`, unter Windows `%APPDATA%\dev.laux.launcher\`):
 
 - `instances.json`
-- `presets.json`
+- `templates.json`
+- `accounts.json` (nur `id`, `username`, `kind`, `clientId`; Refresh-Tokens in der Windows-Anmeldeinformationsverwaltung, Dienst `dev.laux.launcher`)
 
 Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht überschrieben), der Store startet leer. Schlägt das Schreiben fehl, wird die In-Memory-Änderung zurückgerollt.
 
@@ -76,8 +77,15 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `delete_preset` | `id` | – |
 | `apply_preset` | `instanceId`, `presetId` | `Instance` |
 | `versions_list` | – | `VersionEntry[]` (`id`, `type`, `url`, `sha1`, `releaseTime`) |
-| `instance_install` | `instanceId` | – (Events `install-progress`) |
-| `instance_launch` | `instanceId`, `username` (Offline), `javaPath?`, `defaultMemoryMb?` | PID (`number`) |
+| `instance_install` | `instanceId` | – (Events `install-progress`); abgebrochen → Fehler „Installation abgebrochen“ |
+| `instance_install_cancel` | `instanceId` | – |
+| `instance_launch` | `instanceId`, `username` (Offline), `javaPath?`, `defaultMemoryMb?`, `accountId?` (Microsoft) | PID (`number`) |
+| `system_memory_mb` | – | physischer RAM in MiB (`number`) |
+| `ms_login_start` | `clientId?` | `{ userCode, verificationUri, expiresIn, interval, message }` |
+| `ms_login_finish` | – | `Account` (wartet auf Bestätigung im Browser) |
+| `ms_login_cancel` | – | – |
+| `ms_accounts` | – | `Account[]` (`kind: "microsoft"`, `active: false`) |
+| `ms_account_remove` | `id` | – |
 | `instance_kill` | `instanceId` | – (Event `instance-exit` folgt) |
 | `instance_status` | `instanceId` | `{ installed, running }` |
 | `loader_versions` | `loader: ModLoader`, `mcVersion` | `{ version, stable }[]`, neueste zuerst; `vanilla` → `[]`, Quilt/Forge/NeoForge → Fehler „nicht implementiert“ |
@@ -87,10 +95,11 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `modrinth_install_mod` | `instanceId`, `versionId`, `operationId` | Aktualisierte `Instance` |
 | `modrinth_install_pack` | `versionId`, `name`, `operationId` | Neue `Instance` |
 | `modrinth_import_pack` | absoluter `path`, `name`, `operationId` | Neue `Instance` |
+| `pack_install_cancel` | `operationId` | – (bricht `modrinth_install_pack`/`modrinth_import_pack`/`template_create_instance` ab) |
 
 Content-Fortschritt: `content-progress` `{ operationId, phase, done, total }`. Der Aufrufer vergibt die `operationId`; späte oder fremde Events dürfen keinen anderen Auftrag aktualisieren. Modpack-Import und Minecraft-Installation sind getrennte Schritte: nach dem Import installiert `instance_install` die passende Minecraft-/Fabric-Runtime.
 
-Events: `install-progress` `{ instanceId, step, done, total }` · `instance-log` `{ instanceId, stream: "stdout"|"stderr", line }` · `instance-exit` `{ instanceId, code: number|null }`. Installation und Start gibt es für `loader = vanilla` und `fabric`.
+Events: `install-progress` `{ instanceId, step, done, total }` · `instance-log` `{ instanceId, stream: "stdout"|"stderr", line }` · `instance-exit` `{ instanceId, code: number|null, crashed: boolean, crashReport: string|null, logFile: string|null }` (`crashed` = Fehlercode ohne Stopp durch den Nutzer; Pfade absolut, öffnbar per `openPath`, Scope `$APPDATA/**`) · `instances-changed` (ohne Daten; nach dem Nachtragen von Ordner-Inhalten beim Start). Installation und Start gibt es für `loader = vanilla` und `fabric`.
 
 ### Fabric
 
@@ -103,6 +112,8 @@ Events: `install-progress` `{ instanceId, step, done, total }` · `instance-log`
 ### Mods
 
 `instances/<id>/minecraft/mods/` ist der Mods-Ordner (Spielverzeichnis, dort sucht Fabric). `mods::sync` legt jede aktivierte Mod mit `sha1` aus `cache/mods/<sha1>.jar` per Hardlink (Fallback Kopie) unter ihrem `fileName` ab und entfernt deaktivierte nur, wenn die Datei dort denselben SHA-1 hat; fremde Dateien bleiben liegen. Fehlt eine verwaltete Mod im Cache, schlägt der Abgleich fehl. Modrinth-Installationen laden die ausgewählte Fabric-/Minecraft-kompatible Version und erforderliche transitive Dependencies, prüfen Dateigröße, SHA-1 und SHA-512 und füllen den Cache. Automatische Updates oder stilles Ersetzen kollidierender Dateien sind nicht vorgesehen.
+
+„Benötigt von“ (`requiredBy`): Vorlagen legen zusätzlich `voxlet.json` (`{ requiredBy: { <fileName>: [projectId…] } }`) ins `.mrpack`, der Import wertet sie aus; bei fremden Packs wird es aus den Pflicht-Abhängigkeiten der per SHA-1 erkannten Modrinth-Versionen abgeleitet. Beim Start trägt `content::adopt_untracked` Dateien aus `mods/`, `resourcepacks/`, `shaderpacks/` nach, die nicht in der Instanz stehen (`*.disabled` → deaktiviert; ohne Netz als lokal), und sendet danach `instances-changed`.
 
 ### Verzeichnisse (App-Datenverzeichnis)
 
@@ -131,11 +142,9 @@ Ein Preset bündelt Mods, Spieleinstellungen (`options.txt`-Schlüssel), JVM-Arg
 
 ### Noch nicht implementiert (Stubs)
 
-- **auth**: Microsoft-OAuth (Auth-Code + PKCE, **eigene** Azure-App mit Mojang-Freigabe) → Xbox Live → XSTS → Minecraft-Token. Refresh-Tokens gehören in den OS-Keyring (`keyring`-Crate), nie in JSON.
+- **auth**: Der Microsoft-Flow ist fertig, braucht aber eine **eigene** Azure-App mit Minecraft-Freigabe – siehe `docs/ACCOUNT-SETUP.md`.
 - **Mod-Loader und Mods**: Quilt/Forge/NeoForge und CurseForge. Modrinth unterstützt derzeit Fabric-Mods und Vanilla-/Fabric-Modpacks; andere Projekttypen sind nicht installierbar.
-- **Accounts**: kein Account-Store; `instance_launch` nimmt vorerst den Offline-Namen direkt.
 
-Die Traits nutzen `async fn` in Traits (nicht `dyn`-fähig); wird Laufzeit-Polymorphie nötig, auf Enum-Dispatch oder `async-trait` umstellen.
 
 ## Frontend (`src/`)
 

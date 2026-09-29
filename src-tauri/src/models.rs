@@ -167,6 +167,25 @@ pub struct Account {
     pub active: bool,
 }
 
+/// Gespeichertes Microsoft-Konto in `accounts.json`: nur Metadaten. Der Refresh-Token liegt im
+/// OS-Schlüsselbund (Windows-Anmeldeinformationsverwaltung), der Minecraft-Token nur im Speicher.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MsAccount {
+    /// Minecraft-Spieler-UUID (mit Bindestrichen).
+    pub id: String,
+    pub username: String,
+    pub kind: AccountKind,
+    /// Azure-App, mit der angemeldet wurde; der Refresh-Token gilt nur für sie.
+    pub client_id: String,
+}
+
+impl MsAccount {
+    pub fn account(&self) -> Account {
+        Account { id: self.id.clone(), username: self.username.clone(), kind: AccountKind::Microsoft, active: false }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,6 +198,15 @@ mod tests {
         }))
         .unwrap();
         assert_eq!((i.name.as_str(), i.loader), ("Alt", ModLoader::Fabric));
+    }
+
+    #[test]
+    fn ms_account_json_has_no_token() {
+        let a = MsAccount { id: "u".into(), username: "Steve".into(), kind: AccountKind::Microsoft, client_id: "c".into() };
+        let json = serde_json::to_value(&a).unwrap();
+        let keys: Vec<_> = json.as_object().unwrap().keys().map(String::as_str).collect();
+        assert_eq!(keys, ["clientId", "id", "kind", "username"]);
+        assert_eq!(serde_json::to_value(a.account()).unwrap()["kind"], "microsoft");
     }
 
     #[test]
