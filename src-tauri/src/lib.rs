@@ -16,6 +16,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             tracing::info!(?data_dir, "lade Daten");
@@ -28,11 +29,6 @@ pub fn run() {
             commands::create_instance,
             commands::update_instance,
             commands::delete_instance,
-            commands::list_presets,
-            commands::create_preset,
-            commands::update_preset,
-            commands::delete_preset,
-            commands::apply_preset,
             commands::versions_list,
             commands::instance_install,
             commands::instance_launch,
@@ -41,12 +37,17 @@ pub fn run() {
             commands::loader_versions,
             content_commands::modrinth_search,
             content_commands::modrinth_project,
+            content_commands::modrinth_projects,
             content_commands::modrinth_versions,
             content_commands::modrinth_install_mod,
             content_commands::modrinth_install_pack,
             content_commands::modrinth_import_pack,
             content_commands::modrinth_check_updates,
             content_commands::modrinth_update_mods,
+            content_commands::template_save,
+            content_commands::template_list,
+            content_commands::template_delete,
+            content_commands::template_create_instance,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

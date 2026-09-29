@@ -14,6 +14,7 @@ pub mod content;
 pub mod mojang;
 pub mod rules;
 pub mod store;
+pub mod templates;
 
 /// Verzeichnislayout unter dem App-Datenverzeichnis. Libraries, Assets, Versionen und
 /// Java-Runtimes teilen sich alle Instanzen; jede Instanz hat ihr eigenes Spiel- und Natives-Verzeichnis.
