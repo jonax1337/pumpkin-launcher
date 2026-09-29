@@ -74,7 +74,7 @@ pub struct Dependency {
 
 pub fn client() -> AppResult<reqwest::Client> {
     Ok(reqwest::Client::builder()
-        .user_agent(concat!("laux-launcher/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("voxlet/", env!("CARGO_PKG_VERSION")))
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(120))

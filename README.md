@@ -1,8 +1,10 @@
-# Launcher
+# Voxlet
 
-Eigener Minecraft-Launcher auf Basis von **Tauri 2** (Rust) und **React + TypeScript + Vite**. Instanzen, Mods, Modpacks und Presets (Sammlungen aus Mods, Einstellungen und JVM-Args, die auf Instanzen angewendet werden). Orientiert an NoRiskClient.
+**Jede Welt. Ein Klick.** · *Every world, one click.*
 
-> Stand: Grundgerüst. Oberfläche mit Platzhalterdaten, Persistenz für Instanzen und Presets. Login, Downloads und Spielstart sind noch Stubs.
+Voxlet ist ein Launcher für Minecraft: Java Edition auf Basis von **Tauri 2** (Rust) und **React + TypeScript + Vite**. Instanzen, Mods, Modpacks und Presets (Sammlungen aus Mods, Einstellungen und JVM-Args, die auf Instanzen angewendet werden). Orientiert an NoRiskClient.
+
+> Stand: Vanilla und Fabric installieren und starten, Offline-Spielername, Mods und Modpacks von Modrinth, Import lokaler `.mrpack`-Dateien.
 
 ## Stack
 
@@ -36,7 +38,7 @@ Log-Level über `RUST_LOG`, z. B. `RUST_LOG=debug pnpm tauri dev`.
 
 ## Daten
 
-Instanzen und Presets liegen als JSON im App-Datenverzeichnis (Windows: `%APPDATA%\dev.laux.launcher\`).
+Instanzen und Presets liegen als JSON im App-Datenverzeichnis (Windows: `%APPDATA%\dev.laux.launcher\`). Die technische App-Kennung `dev.laux.launcher` bleibt trotz des Namens Voxlet unverändert, damit vorhandene Instanzen und Einstellungen weiter gefunden werden.
 
 ## Struktur
 
