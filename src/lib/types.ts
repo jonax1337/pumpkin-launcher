@@ -106,7 +106,7 @@ export const INSTALL_STEP_LABELS: Record<InstallStep, string> = {
   libraries: "Bibliotheken werden geladen",
   natives: "Bibliotheken werden geladen",
   assets: "Spieldaten werden geladen",
-  loader: "Loader wird eingerichtet",
+  loader: "Fabric wird eingerichtet",
   mods: "Mods werden geladen",
 };
 
