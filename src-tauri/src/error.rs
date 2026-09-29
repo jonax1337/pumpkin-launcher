@@ -31,7 +31,9 @@ pub enum AppError {
 fn io_text(err: &std::io::Error) -> String {
     use std::io::ErrorKind::*;
     // Windows: 32 = Datei von anderem Prozess geöffnet, 33 = Bereich gesperrt, 39/112 = Datenträger voll.
-    let text = match (err.kind(), err.raw_os_error()) {
+    // Rohe Codes nur unter Windows deuten; unter Unix bedeuten 32/33/39 anderes (EPIPE, EDOM, ENOTEMPTY).
+    let code = if cfg!(windows) { err.raw_os_error() } else { None };
+    let text = match (err.kind(), code) {
         (StorageFull, _) | (_, Some(39 | 112)) => "Auf der Festplatte ist nicht genug Platz frei. Schaffe Platz und versuch es erneut.",
         (_, Some(32 | 33)) => "Eine Datei wird gerade von einem anderen Programm benutzt. Schließe es (z. B. Minecraft) und versuch es erneut.",
         (PermissionDenied, _) => "Zugriff auf eine Datei wurde verweigert. Prüfe, ob ein anderes Programm sie sperrt oder schützt.",

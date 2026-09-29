@@ -81,13 +81,17 @@ impl Drop for RemoveOnDrop {
 }
 
 /// Ab welchem Byte die Antwort an eine `.part`-Datei der Länge `part_len` anschließt.
-/// Nur ein 206 mit passendem `Content-Range` setzt fort; sonst (`0`) wird neu geschrieben.
-fn resume_offset(status: u16, content_range: Option<&str>, part_len: u64) -> u64 {
+/// Nicht-206 schreibt neu (`0`); ein 206 muss genau bei `part_len` ansetzen, sonst `None`
+/// (Teilinhalt passt nicht, `.part` verwerfen).
+fn resume_offset(status: u16, content_range: Option<&str>, part_len: u64) -> Option<u64> {
     let start = content_range
         .and_then(|r| r.strip_prefix("bytes "))
         .and_then(|r| r.split('-').next())
         .and_then(|s| s.trim().parse::<u64>().ok());
-    if part_len > 0 && status == 206 && start == Some(part_len) { part_len } else { 0 }
+    match status {
+        206 => (start == Some(part_len)).then_some(part_len),
+        _ => Some(0),
+    }
 }
 
 async fn download_once(client: &reqwest::Client, job: &Job) -> AppResult<()> {
@@ -117,7 +121,11 @@ async fn download_once(client: &reqwest::Client, job: &Job) -> AppResult<()> {
         }
         response = response.error_for_status()?;
         let range = response.headers().get(CONTENT_RANGE).and_then(|v| v.to_str().ok());
-        let offset = resume_offset(response.status().as_u16(), range, part_len);
+        let Some(offset) = resume_offset(response.status().as_u16(), range, part_len) else {
+            // Nächster Versuch ohne Range.
+            tokio::fs::remove_file(&tmp).await.or_else(|e| if e.kind() == std::io::ErrorKind::NotFound { Ok(()) } else { Err(e) })?;
+            return Err(AppError::Download(format!("{}: Server setzt an falscher Stelle fort, lade neu", job.url)));
+        };
         let mut hash = Sha1::new();
         let mut file = if offset > 0 {
             let mut file = tokio::fs::OpenOptions::new().read(true).append(true).open(&tmp).await?;
@@ -208,11 +216,13 @@ mod tests {
 
     #[test]
     fn resume_only_on_matching_partial_content() {
-        assert_eq!(resume_offset(206, Some("bytes 100-199/200"), 100), 100);
-        // Server ignoriert Range (200) oder setzt woanders an: neu schreiben.
-        assert_eq!(resume_offset(200, None, 100), 0);
-        assert_eq!(resume_offset(206, Some("bytes 0-199/200"), 100), 0);
-        assert_eq!(resume_offset(206, Some("kaputt"), 100), 0);
-        assert_eq!(resume_offset(206, Some("bytes 0-199/200"), 0), 0);
+        assert_eq!(resume_offset(206, Some("bytes 100-199/200"), 100), Some(100));
+        // Server ignoriert Range (200): neu schreiben.
+        assert_eq!(resume_offset(200, None, 100), Some(0));
+        assert_eq!(resume_offset(206, Some("bytes 0-199/200"), 0), Some(0));
+        // 206 an falscher Stelle oder ohne lesbaren Content-Range: nur Teilinhalt, verwerfen.
+        assert_eq!(resume_offset(206, Some("bytes 0-199/200"), 100), None);
+        assert_eq!(resume_offset(206, Some("kaputt"), 100), None);
+        assert_eq!(resume_offset(206, None, 100), None);
     }
 }

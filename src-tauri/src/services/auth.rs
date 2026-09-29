@@ -38,6 +38,8 @@ struct Pending {
     interval: u64,
     expires_at: Instant,
     cancel: CancellationToken,
+    /// Von `finish_login` übernommen; bleibt im Slot, damit `cancel_login` sie noch erreicht.
+    claimed: bool,
 }
 
 #[derive(Clone)]
@@ -315,6 +317,22 @@ fn keyring_entry(account_id: &str) -> AppResult<keyring::Entry> {
     Ok(keyring::Entry::new(KEYRING_SERVICE, account_id)?)
 }
 
+/// Token als UTF-8-Bytes ablegen: `set_password` speichert unter Windows UTF-16 und halbiert so
+/// das Limit (2560 Byte) auf 1280 Zeichen; Microsoft-Refresh-Tokens können länger sein.
+// ponytail: bis 2560 Byte (ASCII-Token = 2560 Zeichen); länger bräuchte Aufteilen auf mehrere Einträge.
+fn store_token(entry: &keyring::Entry, token: &str) -> keyring::Result<()> {
+    entry.set_secret(token.as_bytes())
+}
+
+fn load_token(entry: &keyring::Entry) -> keyring::Result<String> {
+    let bytes = entry.get_secret()?;
+    // Ältere Einträge per `set_password` (UTF-16, enthält Nullbytes bei ASCII-Token).
+    if bytes.contains(&0) {
+        return entry.get_password();
+    }
+    String::from_utf8(bytes).map_err(|e| keyring::Error::BadEncoding(e.into_bytes()))
+}
+
 /// Startet den Gerätecode-Flow; eine vorherige, noch wartende Anmeldung wird abgebrochen.
 pub async fn start_login(state: &AppState, client_id_arg: Option<String>) -> AppResult<DeviceCode> {
     let client_id = client_id(client_id_arg)?;
@@ -330,6 +348,7 @@ pub async fn start_login(state: &AppState, client_id_arg: Option<String>) -> App
         interval: r.interval,
         expires_at: Instant::now() + Duration::from_secs(r.expires_in),
         cancel: CancellationToken::new(),
+        claimed: false,
     };
     if let Some(old) = lock(&state.ms.pending).replace(pending) {
         old.cancel.cancel();
@@ -345,7 +364,9 @@ pub async fn start_login(state: &AppState, client_id_arg: Option<String>) -> App
 
 /// Wartet, bis die Anmeldung im Browser bestätigt ist, und speichert das Konto.
 pub async fn finish_login(state: &AppState) -> AppResult<Account> {
-    let pending = lock(&state.ms.pending).clone().ok_or_else(|| say("Es läuft gerade keine Anmeldung. Starte sie bitte neu."))?;
+    // Nicht `take`: `cancel_login`/`start_login` müssen die laufende Anmeldung noch abbrechen können.
+    // `claimed` sorgt dafür, dass ein zweiter paralleler Aufruf sofort „keine Anmeldung“ bekommt.
+    let pending = claim(&mut lock(&state.ms.pending)).ok_or_else(|| say("Es läuft gerade keine Anmeldung. Starte sie bitte neu."))?;
     let result = poll(state, &pending).await;
     // Nur die eigene Anmeldung aufräumen, nicht eine inzwischen neu gestartete.
     let mut slot = lock(&state.ms.pending);
@@ -353,6 +374,12 @@ pub async fn finish_login(state: &AppState) -> AppResult<Account> {
         *slot = None;
     }
     result
+}
+
+fn claim(slot: &mut Option<Pending>) -> Option<Pending> {
+    let p = slot.as_mut().filter(|p| !p.claimed)?;
+    p.claimed = true;
+    Some(p.clone())
 }
 
 async fn poll(state: &AppState, p: &Pending) -> AppResult<Account> {
@@ -381,7 +408,7 @@ async fn poll(state: &AppState, p: &Pending) -> AppResult<Account> {
 async fn complete(state: &AppState, client_id: &str, tokens: Tokens) -> AppResult<Account> {
     let refresh = tokens.refresh_token.ok_or_else(|| say("Microsoft hat keine dauerhafte Anmeldung erlaubt."))?;
     let (login, profile, xuid) = minecraft(&state.http, &tokens.access_token).await?;
-    keyring_entry(&profile.id)?.set_password(&refresh)?;
+    store_token(&keyring_entry(&profile.id)?, &refresh)?;
     let account = MsAccount { id: profile.id, username: profile.name, kind: AccountKind::Microsoft, client_id: client_id.into() };
     let account = match state.accounts.get(&account.id) {
         Ok(_) => state.accounts.update(account)?,
@@ -419,7 +446,7 @@ pub async fn session(state: &AppState, id: &str) -> AppResult<(Account, McSessio
     if let Some(s) = lock(&state.ms.sessions).get(id).filter(|s| s.valid()).cloned() {
         return Ok((stored.account(), s));
     }
-    let refresh = match keyring_entry(id)?.get_password() {
+    let refresh = match load_token(&keyring_entry(id)?) {
         Ok(token) => token,
         Err(keyring::Error::NoEntry) => return Err(say(RELOGIN)),
         Err(err) => return Err(err.into()),
@@ -438,7 +465,7 @@ pub async fn session(state: &AppState, id: &str) -> AppResult<(Account, McSessio
     }
     // Microsoft rotiert Refresh-Tokens: den neuen sichern, sonst läuft die Anmeldung bald ab.
     if let Some(token) = &tokens.refresh_token {
-        keyring_entry(id)?.set_password(token)?;
+        store_token(&keyring_entry(id)?, token)?;
     }
     let account = if profile.name != stored.username {
         state.accounts.update(MsAccount { username: profile.name, ..stored })?
@@ -541,5 +568,37 @@ mod tests {
         let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(br#"{"xuid":"2535400000000000","sub":"x"}"#);
         assert_eq!(jwt_claim(&format!("h.{payload}.s"), "xuid").as_deref(), Some("2535400000000000"));
         assert_eq!(jwt_claim("kein-jwt", "xuid"), None);
+    }
+    #[test]
+    fn second_finish_login_gets_nothing() {
+        let p = Pending {
+            client_id: "c".into(),
+            device_code: "d".into(),
+            interval: 5,
+            expires_at: Instant::now(),
+            cancel: CancellationToken::new(),
+            claimed: false,
+        };
+        let mut slot = Some(p);
+        assert!(claim(&mut slot).is_some());
+        assert!(claim(&mut slot).is_none());
+        assert!(slot.is_some(), "bleibt für cancel_login erreichbar");
+    }
+
+    /// Echter Eintrag im OS-Schlüsselbund; `cargo test -- --ignored long_token_survives_keyring`.
+    #[test]
+    #[ignore = "schreibt in den Schlüsselbund des Nutzers"]
+    fn long_token_survives_keyring() {
+        let entry = keyring::Entry::new("voxlet-test", "long-token").unwrap();
+        let token = "M.C5_xyz-".repeat(300)[..2400].to_string();
+        store_token(&entry, &token).unwrap();
+        let back = load_token(&entry);
+        entry.delete_credential().unwrap();
+        assert_eq!(back.unwrap(), token);
+        // Altbestand im UTF-16-Format bleibt lesbar.
+        entry.set_password("alt").unwrap();
+        let back = load_token(&entry);
+        entry.delete_credential().unwrap();
+        assert_eq!(back.unwrap(), "alt");
     }
 }

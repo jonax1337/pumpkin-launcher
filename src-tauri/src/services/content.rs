@@ -845,14 +845,18 @@ fn untracked(dirs: &super::Dirs, instance: &Instance) -> AppResult<Vec<(ModKind,
     Ok(found)
 }
 
-/// Nachpflege nach dem Start: Dateien in `mods/`, `resourcepacks/`, `shaderpacks/`, die (etwa bei
-/// vor a9f2691 importierten Packs) nicht in der Instanz stehen, werden gecacht und eingetragen;
+/// Nachpflege nach dem Start für vor a9f2691 importierte Packs: Instanzen ganz ohne Inhalts-Liste
+/// bekommen die Dateien aus `mods/`, `resourcepacks/`, `shaderpacks/` gecacht eingetragen;
 /// erkannt per Modrinth-Sammelabfrage, ohne Netz als lokal. Liefert die Anzahl neuer Einträge.
-/// Ohne Operations-Lock: jede Instanz wird ohne `await` dazwischen frisch gelesen und geschrieben;
-/// geht ein Nachtrag an eine parallele Änderung verloren, holt ihn der nächste Start nach.
+/// Nur leere Listen: sonst kämen vom Nutzer entfernte Mods zurück, deren Datei nicht löschbar war.
+/// Läuft unter dem Operations-Lock; ist er belegt, entfällt der Lauf bis zum nächsten Start.
 pub async fn adopt_untracked(state: &AppState) -> AppResult<usize> {
+    let Ok(_guard) = state.operation(None) else {
+        tracing::info!("Nachtragen übersprungen: ein anderer Vorgang läuft");
+        return Ok(0);
+    };
     let mut plan = Vec::new();
-    for instance in state.instances.list() {
+    for instance in state.instances.list().into_iter().filter(|i| i.mods.is_empty()) {
         for (kind, name, enabled, path) in untracked(&state.dirs, &instance)? {
             let sha1 = super::mods::cache_file(&state.dirs, &path)?;
             plan.push((instance.id.clone(), kind, name, enabled, sha1));
@@ -875,9 +879,6 @@ pub async fn adopt_untracked(state: &AppState) -> AppResult<usize> {
         let Ok(mut instance) = state.instances.get(id) else { continue };
         let before = instance.mods.len();
         for (_, kind, name, enabled, sha1) in plan.iter().filter(|p| &p.0 == id) {
-            if instance.mods.iter().any(|m| m.kind == *kind && m.file_name.eq_ignore_ascii_case(name)) {
-                continue;
-            }
             let m = entry(*kind, name.clone(), sha1.clone(), &known, &titles, &instance.mods);
             instance.mods.push(Mod { enabled: *enabled, ..m });
         }
@@ -1152,8 +1153,27 @@ mod tests {
         let on: Vec<_> = mods.iter().map(|m| Mod { enabled: true, ..m.clone() }).collect();
         crate::services::mods::sync(&state.dirs, &i.id, &on).unwrap();
         assert_eq!(fs::read(game.join("mods/off.jar")).unwrap(), b"off");
-        // Zweiter Lauf trägt nichts doppelt ein.
+        // Zweiter Lauf trägt nichts doppelt ein; Instanzen mit Liste bleiben unberührt,
+        // auch wenn eine entfernte Mod-Datei noch im Ordner liegt.
+        fs::write(game.join("mods/entfernt.jar"), "x").unwrap();
         assert_eq!(adopt_untracked(&state).await.unwrap(), 0);
+        // Belegter Operations-Lock: Lauf entfällt.
+        let empty = state
+            .instances
+            .insert(Instance::from_new(NewInstance {
+                name: "Leer".into(),
+                minecraft_version: "1.21.1".into(),
+                loader: ModLoader::Fabric,
+                loader_version: None,
+            }))
+            .unwrap();
+        let empty_mods = state.dirs.game_dir(&empty.id).join("mods");
+        fs::create_dir_all(&empty_mods).unwrap();
+        fs::write(empty_mods.join("b.jar"), "b").unwrap();
+        let busy = state.operation(None).unwrap();
+        assert_eq!(adopt_untracked(&state).await.unwrap(), 0);
+        drop(busy);
+        assert_eq!(adopt_untracked(&state).await.unwrap(), 1);
         fs::remove_dir_all(root).unwrap();
     }
     #[test]
