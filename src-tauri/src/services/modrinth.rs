@@ -133,6 +133,11 @@ async fn api<T: DeserializeOwned>(
         &bytes(client.get(url), 8 * 1024 * 1024).await?,
     )?)
 }
+/// Quilt lädt auch Fabric-Mods: Katalog und Versionen fragen dann beide Loader an (ODER).
+fn with_fabric(loader: &str) -> Vec<&str> {
+    if loader == "quilt" { vec!["quilt", "fabric"] } else { vec![loader] }
+}
+
 pub async fn search(
     client: &reqwest::Client,
     query: String,
@@ -151,7 +156,7 @@ pub async fn search(
     }
     if let Some(loader) = loader {
         identifier(&loader)?;
-        facets.push(vec![format!("categories:{loader}")]);
+        facets.push(with_fabric(&loader).iter().map(|l| format!("categories:{l}")).collect());
     }
     // Ohne Suchbegriff: die beliebtesten Projekte zuerst.
     let index = if query.trim().is_empty() { "downloads" } else { "relevance" };
@@ -199,11 +204,13 @@ pub async fn versions(
 ) -> AppResult<Vec<Version>> {
     identifier(id)?;
     let mut q = Vec::new();
-    for (key, value) in [("game_versions", mc), ("loaders", loader)] {
-        if let Some(value) = value {
-            identifier(value)?;
-            q.push((key.into(), serde_json::to_string(&[value])?));
-        }
+    if let Some(mc) = mc {
+        identifier(mc)?;
+        q.push(("game_versions".into(), serde_json::to_string(&[mc])?));
+    }
+    if let Some(loader) = loader {
+        identifier(loader)?;
+        q.push(("loaders".into(), serde_json::to_string(&with_fabric(loader))?));
     }
     api(client, &format!("project/{id}/version"), &q).await
 }
