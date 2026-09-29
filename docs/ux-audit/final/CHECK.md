@@ -69,3 +69,27 @@ Neu erzeugt in allen sechs Größen: spielen, instanz-protokoll, entdecken-detai
 - **Spielen:** ab 1280 px zweite Hero-Spalte mit Inhalte-Anzahl, Loader-Version, Erstelldatum und den vier zuletzt selbst hinzugefügten Inhalten; ab 1920 px größere Kachel und Überschrift. „Weitere Instanzen“ zeigt bis zu 8. Bei 800×600 bleibt „Spielen“ ohne Scrollen sichtbar (Hero-Spalte erst ab xl). Der Leerraum darunter bei 2560×1440 kommt aus den Mock-Daten (6 weitere Instanzen = eine Reihe); es gibt bewusst keine Füllflächen.
 - **Entdecken-Details:** Reihen verlinkter Bild-Knöpfe (z. B. „How to install“, „Discord“) erscheinen als Textlinks in Primärfarbe; einzelne verlinkte Bilder (Video, Screenshots) bleiben.
 - **Protokoll-Last:** `voxletMock.logBurst("inst-vanilla")` (5000 Zeilen in ≈2 s, Dev-Build 1280×800): Median-Frame 4 ms, 3 Frames über 50 ms (max. 100 ms), 2000 Zeilen im Puffer, bleibt unten angeheftet.
+
+## Echte App (Release-Build, installiert) – 29.09.2026
+
+Screenshots: `app/<Breite>x<Höhe>/<ansicht>.png` mit Jonas' echten (Test-)Daten, Innenmaß des Fensters exakt per `SetWindowPos`, aufgenommen per `PrintWindow` (so auch 1920×1080 und 2560×1440 auf einem 1920×1080-Bildschirm). Ansichten: spielen, bibliothek, instanz-inhalte (50 Einträge, migriertes Pack), instanz-protokoll, instanz-einstellungen, entdecken, entdecken-details, einstellungen, dialog-neu, onboarding, spiel-laeuft.
+
+In der installierten App durchgespielt:
+
+| Pfad | Ergebnis |
+|---|---|
+| Start ohne weißen Blitz (Fenster-Hintergrund dunkel) | ok |
+| Migration alter Pack-Instanzen | „Ember QA Local/API Pack“ zeigen 50 statt 0 Inhalte, Icons von Modrinth |
+| Vanilla 26.3 anlegen, installieren, starten, stoppen | ok (Titelbildschirm) |
+| NeoForge 1.21.1: Installation abbrechen | neutraler Hinweis „… abgebrochen“, Instanz bleibt „Nicht installiert“ |
+| NeoForge 1.21.1 installieren und starten | ok, „Sound engine started“, Atlanten erzeugt |
+| Iris über „Hinzufügen“ in NeoForge-Instanz | Iris + Sodium („benötigt von Iris Shaders“), beide im Log geladen |
+| Spielprozess von außen beendet | Banner + dauerhafter Toast „… ist abgestürzt“, „Protokoll anzeigen“ |
+| Quilt 1.21.1 anlegen und starten | ok, „Loading Minecraft 1.21.1 with Quilt Loader 0.30.1“ |
+| Fabric 1.21.11 mit Iris/Sodium starten | ok |
+| Modpack „NeoFine Optimized“ (NeoForge 1.20.1, 19 Mods) über Entdecken | zuerst abgelehnt → NeoForge 1.20.1 nachgerüstet → startet bis Titelbildschirm |
+| Neu › Datei › nativer Dateidialog (.mrpack) | ok, Name vorbelegt, Import inkl. „benötigt von“ |
+| Neu › Datei › Drag&Drop aus dem Explorer | ok, Datei erkannt, Name vorbelegt |
+| Microsoft-Anmeldung ohne Client-ID | klare Meldung „… noch nicht eingerichtet (es fehlt die Client-ID)“ |
+| Microsoft-Anmeldung mit Platzhalter-Client-ID | Anfrage erreicht Microsoft, Ablehnung wird angezeigt (echte Anmeldung braucht Azure-App, s. `docs/ACCOUNT-SETUP.md`) |
+| Onboarding „Mit Mods“ bei leerer Bibliothek | legt Fabric 26.3 + Sodium an und startet direkt; Sodium im Log geladen |
