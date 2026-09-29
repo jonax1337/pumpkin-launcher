@@ -58,6 +58,9 @@ pub struct Version {
     /// release, beta oder alpha; fehlt es, gilt die Version als Release.
     #[serde(default = "release")]
     pub version_type: String,
+    /// ISO-8601 (UTC, gleiches Format bei Modrinth), daher als Text vergleichbar.
+    #[serde(default)]
+    pub date_published: String,
     pub files: Vec<File>,
     pub dependencies: Vec<Dependency>,
 }
@@ -501,6 +504,7 @@ mod tests {
             game_versions: vec!["1.21.1".into()],
             loaders: vec!["fabric".into()],
             version_type: release(),
+            date_published: String::new(),
             files: vec![],
             dependencies: vec![],
         }
