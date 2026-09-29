@@ -328,7 +328,58 @@ pub async fn check_updates(
                 .filter(|(i, _)| instance.mods[*i].kind == kind),
         );
     }
-    Ok(found)
+    if found.is_empty() {
+        return Ok(found);
+    }
+    let hashes: Vec<String> = instance
+        .mods
+        .iter()
+        .filter(|m| m.enabled && project_of(m).is_some())
+        .filter_map(|m| m.sha1.as_ref().map(|h| h.to_ascii_lowercase()))
+        .collect();
+    let installed = modrinth::versions_by_hash(client, &hashes).await?;
+    Ok(drop_pinned(found, &instance.mods, &installed))
+}
+
+/// `owner` requires `target`'s project in exactly another version than `target`.
+fn pins_other(owner: &Version, target: &Version) -> bool {
+    owner.project_id != target.project_id
+        && owner.dependencies.iter().any(|d| {
+            d.dependency_type == "required"
+                && d.project_id.as_ref() == Some(&target.project_id)
+                && d.version_id.as_ref().is_some_and(|id| id != &target.id)
+        })
+}
+
+/// Drops updates that would fail dependency resolution because of an exact-version pin, in either
+/// direction, against the planned set (updated versions win over installed ones). Repeats until
+/// stable, since dropping one update can invalidate another.
+/// ponytail: pins without project_id (version_id only) are not recognised.
+fn drop_pinned(
+    mut found: Vec<(usize, Version)>,
+    mods: &[Mod],
+    installed: &HashMap<String, Version>,
+) -> Vec<(usize, Version)> {
+    loop {
+        let mut planned: HashMap<&str, &Version> = mods
+            .iter()
+            .filter(|m| m.enabled)
+            .filter_map(|m| installed.get(&m.sha1.as_ref()?.to_ascii_lowercase()))
+            .map(|v| (v.project_id.as_str(), v))
+            .collect();
+        for (_, v) in &found {
+            planned.insert(&v.project_id, v);
+        }
+        let clashing: Vec<String> = found
+            .iter()
+            .filter(|(_, v)| planned.values().any(|p| pins_other(p, v) || pins_other(v, p)))
+            .map(|(_, v)| v.id.clone())
+            .collect();
+        if clashing.is_empty() {
+            return found;
+        }
+        found.retain(|(_, v)| !clashing.contains(&v.id));
+    }
 }
 
 pub async fn update_mods(
@@ -820,6 +871,33 @@ mod tests {
         mark_dependencies(&mut mods, &selected, &fresh);
         let by: Vec<_> = mods.iter().map(|m| m.required_by.join(",")).collect();
         assert_eq!(by, ["", "a,x", "", "", "a", "a"]);
+    }
+    #[test]
+    fn pinned_dependency_blocks_lonely_update() {
+        let v = |id: &str, project: &str, pin: Option<(&str, &str)>| -> Version {
+            serde_json::from_value(serde_json::json!({
+                "id": id, "project_id": project, "name": id, "version_number": id,
+                "game_versions": ["1.21.1"], "loaders": ["fabric"], "files": [],
+                "dependencies": pin.map(|(p, vid)| vec![serde_json::json!({
+                    "version_id": vid, "project_id": p, "file_name": null, "dependency_type": "required"
+                })]).unwrap_or_default()
+            }))
+            .unwrap()
+        };
+        let mods = [modrinth_mod("iris", &[]), modrinth_mod("sodium", &["iris"])];
+        let installed: HashMap<String, Version> = mods
+            .iter()
+            .zip([v("iris1", "iris", Some(("sodium", "sodium1"))), v("sodium1", "sodium", None)])
+            .map(|(m, v)| (m.sha1.clone().unwrap(), v))
+            .collect();
+        // Sodium alone: iris1 pins sodium1, so the update would not resolve.
+        assert!(drop_pinned(vec![(1, v("sodium2", "sodium", None))], &mods, &installed).is_empty());
+        // Together with an Iris update that pins sodium2 both stay.
+        let both = vec![(0, v("iris2", "iris", Some(("sodium", "sodium2")))), (1, v("sodium2", "sodium", None))];
+        assert_eq!(drop_pinned(both, &mods, &installed).len(), 2);
+        // Iris update pinning a Sodium version that is not planned drops Iris.
+        let iris_only = vec![(0, v("iris2", "iris", Some(("sodium", "sodium2"))))];
+        assert!(drop_pinned(iris_only, &mods, &installed).is_empty());
     }
     #[test]
     fn update_check_picks_only_other_versions_of_same_project() {
