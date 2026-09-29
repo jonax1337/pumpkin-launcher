@@ -19,6 +19,8 @@ pub struct AppState {
     pub http: reqwest::Client,
     /// Laufende Spiele je Instanz-ID.
     running: Mutex<HashMap<String, Running>>,
+    // ponytail: global try-lock serialisiert Content/Start/Mutationen; bei Bedarf pro Instanz aufteilen.
+    operation: tokio::sync::Mutex<()>,
 }
 
 impl AppState {
@@ -30,7 +32,14 @@ impl AppState {
             dirs: Dirs::new(data_dir),
             http: http_client()?,
             running: Mutex::new(HashMap::new()),
+            operation: tokio::sync::Mutex::new(()),
         })
+    }
+
+    pub fn operation(&self, id: Option<&str>) -> AppResult<tokio::sync::MutexGuard<'_, ()>> {
+        let guard = self.operation.try_lock().map_err(|_| AppError::Invalid("Eine Installation/Änderung läuft bereits".into()))?;
+        if id.is_some_and(|id| self.running().contains_key(id)) { return Err(AppError::Invalid("Instanz läuft noch".into())); }
+        Ok(guard)
     }
 
     pub fn running(&self) -> MutexGuard<'_, HashMap<String, Running>> {

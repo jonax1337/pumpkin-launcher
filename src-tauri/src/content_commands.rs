@@ -1,0 +1,128 @@
+use crate::{
+    error::AppResult,
+    models::{Instance, ModpackOrigin},
+    services::{content, modrinth as api},
+    state::AppState,
+};
+use serde::Serialize;
+use tauri::{AppHandle, Emitter, State};
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Progress {
+    operation_id: String,
+    phase: String,
+    done: u64,
+    total: u64,
+}
+fn progress(app: AppHandle, id: String) -> impl Fn(&str, u64, u64) + Send + Sync {
+    move |phase, done, total| {
+        if let Err(e) = app.emit(
+            "content-progress",
+            Progress {
+                operation_id: id.clone(),
+                phase: phase.into(),
+                done,
+                total,
+            },
+        ) {
+            tracing::warn!(%e,"Content-Event fehlgeschlagen");
+        }
+    }
+}
+#[tauri::command]
+pub async fn modrinth_search(
+    query: String,
+    project_type: String,
+    minecraft_version: Option<String>,
+    loader: Option<String>,
+    offset: u32,
+) -> AppResult<api::SearchResponse> {
+    api::search(
+        &api::client()?,
+        query,
+        project_type,
+        minecraft_version,
+        loader,
+        offset,
+    )
+    .await
+}
+#[tauri::command]
+pub async fn modrinth_project(project_id: String) -> AppResult<api::Project> {
+    api::project(&api::client()?, &project_id).await
+}
+#[tauri::command]
+pub async fn modrinth_versions(
+    project_id: String,
+    minecraft_version: Option<String>,
+    loader: Option<String>,
+) -> AppResult<Vec<api::Version>> {
+    api::versions(
+        &api::client()?,
+        &project_id,
+        minecraft_version.as_deref(),
+        loader.as_deref(),
+    )
+    .await
+}
+#[tauri::command]
+pub async fn modrinth_install_mod(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    instance_id: String,
+    version_id: String,
+    operation_id: String,
+) -> AppResult<Instance> {
+    let _operation = state.operation(Some(&instance_id))?;
+    content::install_mod(
+        &state,
+        &instance_id,
+        &version_id,
+        &progress(app, operation_id),
+    )
+    .await
+}
+#[tauri::command]
+pub async fn modrinth_install_pack(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    version_id: String,
+    name: String,
+    operation_id: String,
+) -> AppResult<Instance> {
+    let _operation = state.operation(None)?;
+    let on_progress = progress(app, operation_id);
+    on_progress("resolve", 0, 1);
+    let client = api::client()?;
+    let version = api::version(&client, &version_id).await?;
+    let project = api::project(&client, &version.project_id).await?;
+    if project.project_type != "modpack" {
+        return Err(api::invalid("Projekt ist kein Modpack"));
+    }
+    let file = api::primary(&version, ".mrpack")?;
+    on_progress("download", 0, 1);
+    let data = api::download(&client, &file).await?;
+    content::import(
+        &state,
+        &data,
+        &name,
+        Some(ModpackOrigin::Modrinth {
+            project_id: version.project_id,
+            version_id: version.id,
+        }),
+        &on_progress,
+    )
+    .await
+}
+#[tauri::command]
+pub async fn modrinth_import_pack(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    path: String,
+    name: String,
+    operation_id: String,
+) -> AppResult<Instance> {
+    let _operation = state.operation(None)?;
+    let data = content::local_pack(std::path::Path::new(&path))?;
+    content::import(&state, &data, &name, None, &progress(app, operation_id)).await
+}

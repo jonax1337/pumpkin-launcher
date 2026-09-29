@@ -37,7 +37,10 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `services/java.rs` | Mojangs Java-Runtime (`java-runtime/…/all.json`, Komponente aus `javaVersion.component`) |
 | `services/install.rs` | Installation in Schritten, `InstallStep`, `InstallProgress`, Event `install-progress` |
 | `services/fabric.rs` | Fabric-Meta (`meta.fabricmc.net/v2`): Loader-Versionen, Launcher-Profil (`inheritsFrom` Vanilla), Merge mit der Vanilla-Versions-JSON |
-| `services/mods.rs` | Globaler Mod-Cache (`cache/mods/<sha1>.jar`) und Abgleich nach `mods/` der Instanz (Hardlink, Fallback Kopie) |
+| `services/mods.rs` | Globaler Mod-Cache (`cache/mods/<sha1>.jar`) und Abgleich nach `mods/` der Instanz (Hardlink, Fallback Kopie; bestehende fremde Dateien werden nicht ersetzt) |
+| `services/modrinth.rs` | Modrinth-v2-Katalog, Versions-/Dependency-Auflösung und hashgeprüfte Downloads |
+| `services/content.rs` | Sichere Modinstallation und `.mrpack`-Import in neue Instanzen |
+| `content_commands.rs` | Modrinth-IPC und korrelierte `content-progress`-Events |
 | `services/launch.rs` | Classpath, JVM-/Game-Args mit `${…}`-Ersetzung, Prozessstart, Log-Streaming |
 | `services/gamelog.rs` | log4j-XML auf stdout (Mojangs Logging-Config) → lesbare Zeilen |
 
@@ -78,6 +81,14 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `instance_kill` | `instanceId` | – (Event `instance-exit` folgt) |
 | `instance_status` | `instanceId` | `{ installed, running }` |
 | `loader_versions` | `loader: ModLoader`, `mcVersion` | `{ version, stable }[]`, neueste zuerst; `vanilla` → `[]`, Quilt/Forge/NeoForge → Fehler „nicht implementiert“ |
+| `modrinth_search` | `query`, `projectType`, `minecraftVersion?`, `loader?`, `offset` | Modrinth-Suchergebnis (`snake_case`) |
+| `modrinth_project` | `projectId` | Modrinth-Projekt (`snake_case`) |
+| `modrinth_versions` | `projectId`, `minecraftVersion?`, `loader?` | Modrinth-Versionen (`snake_case`) |
+| `modrinth_install_mod` | `instanceId`, `versionId`, `operationId` | Aktualisierte `Instance` |
+| `modrinth_install_pack` | `versionId`, `name`, `operationId` | Neue `Instance` |
+| `modrinth_import_pack` | absoluter `path`, `name`, `operationId` | Neue `Instance` |
+
+Content-Fortschritt: `content-progress` `{ operationId, phase, done, total }`. Der Aufrufer vergibt die `operationId`; späte oder fremde Events dürfen keinen anderen Auftrag aktualisieren. Modpack-Import und Minecraft-Installation sind getrennte Schritte: nach dem Import installiert `instance_install` die passende Minecraft-/Fabric-Runtime.
 
 Events: `install-progress` `{ instanceId, step, done, total }` · `instance-log` `{ instanceId, stream: "stdout"|"stderr", line }` · `instance-exit` `{ instanceId, code: number|null }`. Installation und Start gibt es für `loader = vanilla` und `fabric`.
 
@@ -91,7 +102,7 @@ Events: `install-progress` `{ instanceId, step, done, total }` · `instance-log`
 
 ### Mods
 
-`instances/<id>/minecraft/mods/` ist der Mods-Ordner (Spielverzeichnis, dort sucht Fabric). `mods::sync` legt jede aktivierte Mod mit `sha1` aus `cache/mods/<sha1>.jar` per Hardlink (Fallback Kopie) unter ihrem `fileName` ab und entfernt deaktivierte nur, wenn die Datei dort denselben SHA-1 hat; fremde Dateien bleiben liegen. Fehlt eine Mod im Cache, schlägt die Installation fehl (Downloads über Modrinth folgen).
+`instances/<id>/minecraft/mods/` ist der Mods-Ordner (Spielverzeichnis, dort sucht Fabric). `mods::sync` legt jede aktivierte Mod mit `sha1` aus `cache/mods/<sha1>.jar` per Hardlink (Fallback Kopie) unter ihrem `fileName` ab und entfernt deaktivierte nur, wenn die Datei dort denselben SHA-1 hat; fremde Dateien bleiben liegen. Fehlt eine verwaltete Mod im Cache, schlägt der Abgleich fehl. Modrinth-Installationen laden die ausgewählte Fabric-/Minecraft-kompatible Version und erforderliche transitive Dependencies, prüfen Dateigröße, SHA-1 und SHA-512 und füllen den Cache. Automatische Updates oder stilles Ersetzen kollidierender Dateien sind nicht vorgesehen.
 
 ### Verzeichnisse (App-Datenverzeichnis)
 
@@ -121,7 +132,7 @@ Ein Preset bündelt Mods, Spieleinstellungen (`options.txt`-Schlüssel), JVM-Arg
 ### Noch nicht implementiert (Stubs)
 
 - **auth**: Microsoft-OAuth (Auth-Code + PKCE, **eigene** Azure-App mit Mojang-Freigabe) → Xbox Live → XSTS → Minecraft-Token. Refresh-Tokens gehören in den OS-Keyring (`keyring`-Crate), nie in JSON.
-- **Mod-Loader und Mods**: Quilt/Forge/NeoForge, Mods über die Modrinth-API (CurseForge später hinter derselben Schnittstelle).
+- **Mod-Loader und Mods**: Quilt/Forge/NeoForge und CurseForge. Modrinth unterstützt derzeit Fabric-Mods und Vanilla-/Fabric-Modpacks; andere Projekttypen sind nicht installierbar.
 - **Accounts**: kein Account-Store; `instance_launch` nimmt vorerst den Offline-Namen direkt.
 
 Die Traits nutzen `async fn` in Traits (nicht `dyn`-fähig); wird Laufzeit-Polymorphie nötig, auf Enum-Dispatch oder `async-trait` umstellen.
@@ -132,7 +143,8 @@ Die Traits nutzen `async fn` in Traits (nicht `dyn`-fähig); wird Laufzeit-Polym
 - `lib/api.ts` – `invoke`-Wrapper; außerhalb von Tauri (reiner `pnpm dev` im Browser) Fallback auf Mockdaten aus `lib/mock.ts`
 - Hooks auf TanStack Query; Mutations invalidieren die betroffenen Queries
 - Zustand-Store für Launcher-Einstellungen (Java, RAM, Pfade) – vorerst nur lokal persistiert, noch ohne Backend
-- Mods, Modpacks, News, Account: reine Platzhalterdaten
+- Mods/Modpacks verwenden in Tauri den echten Modrinth-Katalog; neue Content-Installationen melden im Browser ohne Tauri keine vorgetäuschten Erfolge.
+- Offlinekonten und Einstellungen werden lokal gespeichert; Microsoft-Anmeldung bleibt ausdrücklich nicht implementiert. News sind Vorschauinhalte.
 
 ## Herkunft der Ideen und Lizenz
 

@@ -32,6 +32,7 @@ pub fn get_instance(state: State<'_, AppState>, id: String) -> AppResult<Instanc
 
 #[tauri::command]
 pub fn create_instance(state: State<'_, AppState>, input: NewInstance) -> AppResult<Instance> {
+    let _operation = state.operation(None)?;
     require_name(&input.name)?;
     let instance = state.instances.insert(Instance::from_new(input))?;
     tracing::info!(id = %instance.id, name = %instance.name, "Instanz angelegt");
@@ -40,12 +41,21 @@ pub fn create_instance(state: State<'_, AppState>, input: NewInstance) -> AppRes
 
 #[tauri::command]
 pub fn update_instance(state: State<'_, AppState>, instance: Instance) -> AppResult<Instance> {
+    let _operation = state.operation(Some(&instance.id))?;
     require_name(&instance.name)?;
-    state.instances.update(instance)
+    let old = state.instances.get(&instance.id)?;
+    let mut desired = instance.mods.clone();
+    for removed in &old.mods {
+        if !desired.iter().any(|m|m.file_name==removed.file_name) {
+            let mut removed=removed.clone();removed.enabled=false;desired.push(removed);
+        }
+    }
+    mods::sync_commit(&state.dirs,&instance.id.clone(),&desired, |_| state.instances.update(instance))
 }
 
 #[tauri::command]
 pub fn delete_instance(state: State<'_, AppState>, id: String) -> AppResult<()> {
+    let _operation = state.operation(Some(&id))?;
     if state.running().contains_key(&id) {
         return Err(AppError::Invalid("Instanz läuft noch".into()));
     }
@@ -96,6 +106,7 @@ pub fn apply_preset(
     instance_id: String,
     preset_id: String,
 ) -> AppResult<Instance> {
+    let _operation = state.operation(Some(&instance_id))?;
     let instance = state.apply_preset(&instance_id, &preset_id)?;
     tracing::info!(instance = %instance_id, preset = %preset_id, "Preset angewendet");
     Ok(instance)
@@ -173,6 +184,7 @@ pub async fn versions_list(state: State<'_, AppState>) -> AppResult<Vec<VersionE
 /// Installiert die Version der Instanz; Fortschritt kommt als `install-progress`.
 #[tauri::command]
 pub async fn instance_install(app: AppHandle, state: State<'_, AppState>, instance_id: String) -> AppResult<()> {
+    let _operation = state.operation(Some(&instance_id))?;
     let mut instance = state.instances.get(&instance_id)?;
     require_supported(instance.loader)?;
     tracing::info!(instance = %instance_id, version = %instance.minecraft_version, loader = ?instance.loader, "Installation gestartet");
@@ -216,8 +228,10 @@ pub async fn instance_launch(
     java_path: Option<String>,
     default_memory_mb: Option<u32>,
 ) -> AppResult<u32> {
+    let _operation = state.operation(Some(&instance_id))?;
     let mut instance = state.instances.get(&instance_id)?;
     require_supported(instance.loader)?;
+    mods::sync(&state.dirs,&instance_id,&instance.mods)?;
     let account = auth::offline_account(&username)?;
     let version = installed_version(&state, &instance).await?;
     // Eigener Java-Pfad aus den Einstellungen hat Vorrang vor der mitgelieferten Runtime.
