@@ -15,21 +15,30 @@ let nextLogId = 0;
 interface GameState {
   /** Laufende Installationen je Instanz. */
   installs: Record<string, InstallProgress>;
+  /** Instanzen, für die „Spielen“ gerade läuft (Vorbereiten und Starten). */
+  launching: Record<string, true>;
   logs: Record<string, LogLine[]>;
   setProgress: (p: InstallProgress) => void;
   clearProgress: (instanceId: string) => void;
+  setLaunching: (instanceId: string, launching: boolean) => void;
   appendLog: (p: LogPayload) => void;
   clearLog: (instanceId: string) => void;
 }
 
 export const useGame = create<GameState>()((set) => ({
   installs: {},
+  launching: {},
   logs: {},
   setProgress: (p) => set((s) => ({ installs: { ...s.installs, [p.instanceId]: p } })),
   clearProgress: (id) =>
     set((s) => {
       const { [id]: _, ...installs } = s.installs;
       return { installs };
+    }),
+  setLaunching: (id, launching) =>
+    set((s) => {
+      const { [id]: _, ...rest } = s.launching;
+      return { launching: launching ? { ...rest, [id]: true } : rest };
     }),
   appendLog: ({ instanceId, stream, line }) =>
     set((s) => ({

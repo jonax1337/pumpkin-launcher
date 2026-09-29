@@ -26,7 +26,9 @@ export function HomePage() {
         />
         <div className="relative flex flex-wrap items-end justify-between gap-8">
           <div className="min-w-0">
-            <p className="text-xs font-medium tracking-[0.18em] text-primary uppercase">Zuletzt gespielt</p>
+            <p className="text-xs font-medium tracking-[0.18em] text-primary uppercase">
+              {recent?.lastPlayedAt != null ? "Zuletzt gespielt" : "Deine Instanz"}
+            </p>
             {isLoading ? (
               <div className="mt-3 flex items-center gap-4">
                 <Skeleton className="size-20 rounded-xl" />
@@ -44,10 +46,12 @@ export function HomePage() {
                     <StatusBadge instanceId={recent.id} />
                     <LoaderBadge loader={recent.loader} />
                     <span className="font-mono">{recent.minecraftVersion}</span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <Clock className="size-3.5" aria-hidden />
-                      {relativeTime(recent.lastPlayedAt)}
-                    </span>
+                    {recent.lastPlayedAt != null && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Clock className="size-3.5" aria-hidden />
+                        {relativeTime(recent.lastPlayedAt)}
+                      </span>
+                    )}
                     <span className="inline-flex items-center gap-1.5">
                       <Cpu className="size-3.5" aria-hidden />
                       {formatMemory(recent.memoryMb ?? defaultMemory)}

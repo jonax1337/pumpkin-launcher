@@ -138,14 +138,15 @@ export interface LoaderVersion {
 
 export type InstallStep = "java" | "client" | "libraries" | "natives" | "assets" | "loader" | "mods";
 
+/** Schritte der Vorbereitung in Alltagssprache (Anzeige im Spielen-Button). */
 export const INSTALL_STEP_LABELS: Record<InstallStep, string> = {
-  java: "Java-Runtime",
-  client: "Spieldateien",
-  libraries: "Bibliotheken",
-  natives: "Native Bibliotheken",
-  assets: "Assets",
-  loader: "Mod-Loader",
-  mods: "Mods",
+  java: "Java wird eingerichtet",
+  client: "Spieldaten werden geladen",
+  libraries: "Bibliotheken werden geladen",
+  natives: "Bibliotheken werden geladen",
+  assets: "Spieldaten werden geladen",
+  loader: "Loader wird eingerichtet",
+  mods: "Mods werden geladen",
 };
 
 /** Event `install-progress`. */
