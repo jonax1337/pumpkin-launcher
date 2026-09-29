@@ -16,7 +16,13 @@ import type {
   VersionEntry,
 } from "@/lib/types";
 
+import type { ContentSearch, ContentProject, ContentVersion, ContentProgress } from "@/lib/modrinth";
+
 const tauri = isTauri();
+function contentCall<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  if (!tauri) return Promise.reject(new Error("Modrinth benötigt die Tauri-App. Im Browser werden keine Inhalte installiert."));
+  return call<T>(cmd, args);
+}
 
 /**
  * Tauri-invoke-Wrapper. Außerhalb von Tauri (reiner `pnpm dev` im Browser)
@@ -219,6 +225,18 @@ const mockGame = {
 
 export const api = {
   isMock: !tauri,
+  modrinthSearch: (query: string, projectType: "mod" | "modpack", minecraftVersion: string | null, loader: string | null): Promise<ContentSearch> =>
+    contentCall("modrinth_search", { query, projectType, minecraftVersion, loader, offset: 0 }),
+  modrinthProject: (projectId: string): Promise<ContentProject> => contentCall("modrinth_project", { projectId }),
+  modrinthVersions: (projectId: string, minecraftVersion: string | null, loader: string | null): Promise<ContentVersion[]> =>
+    contentCall("modrinth_versions", { projectId, minecraftVersion, loader }),
+  modrinthInstallMod: (instanceId: string, versionId: string, operationId: string): Promise<Instance> =>
+    contentCall("modrinth_install_mod", { instanceId, versionId, operationId }),
+  modrinthInstallPack: (versionId: string, name: string, operationId: string): Promise<Instance> =>
+    contentCall("modrinth_install_pack", { versionId, name, operationId }),
+  modrinthImportPack: (path: string, name: string, operationId: string): Promise<Instance> =>
+    contentCall("modrinth_import_pack", { path, name, operationId }),
+  onContentProgress: (cb: (p: ContentProgress) => void) => on("content-progress", cb),
 
   listInstances: (): Promise<Instance[]> =>
     tauri ? call("list_instances") : mock.listInstances(),
