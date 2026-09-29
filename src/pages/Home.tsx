@@ -1,9 +1,10 @@
 import { Link } from "react-router";
-import { ArrowRight, Clock, Cpu, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, Clock, Cpu, Plus, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BlockTile, ErrorNote, LoaderBadge, tileHue } from "@/components/common";
 import { ContentIcon } from "@/components/ContentBrowser";
+import { NewInstanceDialog } from "@/components/NewInstanceDialog";
 import { PlayControl, StatusBadge } from "@/components/game";
 import { Onboarding } from "@/components/Onboarding";
 import { useProjects } from "@/hooks/useContent";
@@ -168,6 +169,24 @@ export function HomePage() {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+      {/* Nur eine Instanz: statt leerer Fläche die zwei Wege zu mehr. */}
+      {recent && others.length === 0 && (
+        <section aria-labelledby="more-title" className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+          <h2 id="more-title" className="font-semibold">
+            Lust auf mehr?
+          </h2>
+          <NewInstanceDialog>
+            <Button variant="outline" size="sm">
+              <Plus aria-hidden /> Neue Instanz
+            </Button>
+          </NewInstanceDialog>
+          <Button variant="ghost" size="sm" asChild className="text-muted-foreground">
+            <Link to="/discover">
+              Modpacks entdecken <ArrowRight aria-hidden />
+            </Link>
+          </Button>
         </section>
       )}
     </div>

@@ -123,9 +123,11 @@ function MsLoginDialog() {
 function useMsAccounts() {
   const query = useQuery({ queryKey: ["ms-accounts"], queryFn: api.msAccounts, staleTime: 5 * 60_000, retry: false });
   const syncMicrosoft = useSettings((s) => s.syncMicrosoft);
+  // Nur mit frischen Daten abgleichen: ein veralteter Cache nach einer Anmeldung kennt das neue Konto noch nicht.
+  const fresh = query.isSuccess && !query.isFetching;
   useEffect(() => {
-    if (query.data) syncMicrosoft(query.data.map((a) => a.id));
-  }, [query.data, syncMicrosoft]);
+    if (fresh && query.data) syncMicrosoft(query.data.map((a) => a.id));
+  }, [fresh, query.data, syncMicrosoft]);
   return query;
 }
 
