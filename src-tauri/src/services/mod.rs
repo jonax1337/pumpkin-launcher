@@ -3,10 +3,12 @@ use std::path::{Path, PathBuf};
 
 pub mod auth;
 pub mod download;
+pub mod fabric;
 pub mod gamelog;
 pub mod install;
 pub mod java;
 pub mod launch;
+pub mod mods;
 pub mod mojang;
 pub mod rules;
 pub mod store;
@@ -46,6 +48,16 @@ impl Dirs {
 
     pub fn game_dir(&self, instance_id: &str) -> PathBuf {
         self.instance(instance_id).join("minecraft")
+    }
+
+    /// `mods/` im Spielverzeichnis, dort sucht Fabric (und jeder andere Loader).
+    pub fn mods_dir(&self, instance_id: &str) -> PathBuf {
+        self.game_dir(instance_id).join("mods")
+    }
+
+    /// Globaler Mod-Cache, Dateien als `<sha1>.jar`.
+    pub fn mod_cache(&self) -> PathBuf {
+        self.root.join("cache").join("mods")
     }
 
     pub fn natives_dir(&self, instance_id: &str) -> PathBuf {
