@@ -1,0 +1,60 @@
+{
+  "brand": "Pumpkin Launcher",
+  "variants": [
+    {
+      "id": "standard",
+      "name": "Buddy",
+      "label": "Standard",
+      "start": null,
+      "end": null,
+      "period": "Immer wählbar · sonst in den Pausen",
+      "note": "Das feste Markenlogo: unveränderter Buddy mit Blatt, großen Augen und Lächeln.",
+      "accent": "#E39860",
+      "approvedPixelHash": "956ed20f8cd17a621ffd3a912555fa02526264d31aa20985ce1344b4ec1a58d0"
+    },
+    {
+      "id": "spring",
+      "name": "Bloom Buddy",
+      "label": "Frühling",
+      "start": "03-01",
+      "end": "05-31",
+      "period": "1. März – 31. Mai",
+      "note": "Blüte am Blatt und fröhliche Lachaugen. Der unverwechselbare Buddy-Kürbis bleibt die Basis.",
+      "accent": "#E3A1B1",
+      "approvedPixelHash": "442b2c5724002882a5344569de99e76951dd783465eb6dadf5763d2f5a526005"
+    },
+    {
+      "id": "summer",
+      "name": "Sunny Buddy",
+      "label": "Sommer",
+      "start": "06-01",
+      "end": "08-31",
+      "period": "1. Juni – 31. August",
+      "note": "Eine kleine Palme wächst aus Buddys Stiel. Gestufte Blätter und entspannte Lachaugen bringen den Sommer mit.",
+      "accent": "#ADC795",
+      "approvedPixelHash": "ccf17e96f0e9f04778c9068a0b833a21ebb24112b468c7e5e2409fd5885c6325"
+    },
+    {
+      "id": "halloween",
+      "name": "Hex Buddy",
+      "label": "Herbst / Halloween",
+      "start": "10-01",
+      "end": "11-02",
+      "period": "1. Oktober – 2. November",
+      "note": "Geknickter Hex-Hut, helle Schnalle und ein freches Zwinkern. Magisch und freundlich.",
+      "accent": "#B3A2D6",
+      "approvedPixelHash": "c49b39f3bc12b4563e2eb39256de6b0dcd3878700e10ee303c2d9c606d7e1b24"
+    },
+    {
+      "id": "winter",
+      "name": "Frost Buddy",
+      "label": "Winter",
+      "start": "12-01",
+      "end": "02-29",
+      "period": "1. Dezember – Ende Februar",
+      "note": "Eisblaue Mütze, rosige Wangen und ein anliegender Schal mit seitlichem Knoten und kurzem Ende.",
+      "accent": "#9BCDD7",
+      "approvedPixelHash": "834c1ee26df38c0c1f814168ee39f668fe28cb09dd65c9a04bdffd7878ac1519"
+    }
+  ]
+}
