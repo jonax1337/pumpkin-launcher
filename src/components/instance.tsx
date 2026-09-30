@@ -31,7 +31,7 @@ export function useInstanceMenu(instance: Instance, opts: { open?: boolean } = {
     running
       ? { id: "stop", text: "Beenden…", icon: "stop", onSelect: () => askStop(instance) }
       : { id: "play", text: "Spielen", icon: "play", disabled: busy || phase === "loading", onSelect: () => void play(instance) },
-    ...(opts.open ? [{ id: "open", text: "Öffnen", icon: "chev" as const, onSelect: () => navigate(`/instances/${instance.id}`) }] : []),
+    ...(opts.open ? [{ id: "open", text: "Instanz öffnen", icon: "chev" as const, onSelect: () => navigate(`/instances/${instance.id}`) }] : []),
     { id: "log", text: "Protokoll", icon: "term", onSelect: () => navigate(`/instances/${instance.id}?tab=console`) },
     { id: "dir", text: "Ordner öffnen", icon: "folder", onSelect: () => openInstanceFolder(instance) },
     "-",

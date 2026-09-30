@@ -63,7 +63,7 @@ def build():
     frames=render_sources()
     if '--check' in sys.argv:
         verify(frames); return
-    manifest={'brand':DATA['brand'],'integrated':False,'sourceFormat':'SVG','calendarStatus':'proposed','variants':{},'files':{}}
+    manifest={'brand':DATA['brand'],'integrated':True,'sourceFormat':'SVG','calendarStatus':'active','variants':{},'files':{}}
     for v in DATA['variants']:
         key=v['id']; images=frames[key]; folder=ROOT/'assets'/key
         for filename,size in PNG_FILES.items(): images[size].save(folder/filename)

@@ -503,14 +503,14 @@ struct Pack {
     instance: Instance,
     downloads: Vec<(PathBuf, File)>,
     overrides: Vec<(PathBuf, Vec<u8>)>,
-    /// Aus `voxlet.json` eigener Vorlagen: Dateiname -> `required_by`.
+    /// Aus `pumpkin.json` eigener Vorlagen: Dateiname -> `required_by`.
     required_by: HashMap<String, Vec<String>>,
 }
 /// Eigene Zusatzdatei in Vorlagen-`.mrpack`s; andere Launcher ignorieren sie.
-pub const VOXLET_FILE: &str = "voxlet.json";
+pub const PUMPKIN_FILE: &str = "pumpkin.json";
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-struct VoxletMeta {
+struct PumpkinMeta {
     #[serde(default)]
     required_by: HashMap<String, Vec<String>>,
 }
@@ -530,7 +530,8 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
     let mut entries = HashSet::new();
     let mut overrides = Vec::new();
     let mut manifest = None;
-    let mut meta = VoxletMeta::default();
+    let mut meta = PumpkinMeta::default();
+    let mut canonical_meta = false;
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i)?;
         let name = entry.name().to_string();
@@ -564,7 +565,9 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
             continue;
         }
         let is_index = name == "modrinth.index.json";
-        let is_meta = name == VOXLET_FILE;
+        // Ältere eigene Vorlagen haben denselben Inhalt unter einem anderen Markennamen.
+        // Nur JSON direkt im Archivwurzelverzeichnis kommt als Zusatzdatei infrage.
+        let is_meta = !is_index && !name.contains('/') && name.ends_with(".json");
         let target = name
             .strip_prefix("client-overrides/")
             .or_else(|| name.strip_prefix("overrides/"));
@@ -584,7 +587,17 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
         if is_index {
             manifest = Some(serde_json::from_slice::<Index>(&bytes)?);
         } else if is_meta {
-            meta = serde_json::from_slice(&bytes)?;
+            let value = serde_json::from_slice::<serde_json::Value>(&bytes);
+            if name == PUMPKIN_FILE {
+                meta = serde_json::from_value(value?)?;
+                canonical_meta = true;
+            } else if let Ok(value) = value {
+                if !canonical_meta && value.get("requiredBy").is_some() && meta.required_by.is_empty() {
+                    if let Ok(compatible) = serde_json::from_value(value) {
+                        meta = compatible;
+                    }
+                }
+            }
         } else if let Some(target) = target {
             overrides.push((
                 safe_path(target)?,
@@ -602,7 +615,7 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
         .filter_map(|(l, k)| index.dependencies.get(*k).map(|v| (*l, v.clone())))
         .collect();
     if loaders.len() > 1 || index.dependencies.len() > loaders.len() + 1 {
-        return Err(invalid("Das Pack braucht einen Loader, den Voxlet nicht kennt"));
+        return Err(invalid("Das Pack braucht einen Loader, den Pumpkin Launcher nicht kennt"));
     }
     let mc = index
         .dependencies
@@ -614,7 +627,7 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
     if let Some(v) = &loader_version {
         modrinth::identifier(v)?;
     }
-    // Vor dem Download ablehnen, was Voxlet nicht starten kann (z. B. Forge vor 1.17).
+    // Vor dem Download ablehnen, was Pumpkin Launcher nicht starten kann (z. B. Forge vor 1.17).
     match loader {
         ModLoader::Forge => crate::services::forge::check_supported(crate::services::forge::Kind::Forge, &mc)?,
         ModLoader::NeoForge => crate::services::forge::check_supported(crate::services::forge::Kind::NeoForge, &mc)?,
@@ -1227,6 +1240,19 @@ mod tests {
             ("overrides/config/example.txt", b"ok"),
         ]);
         let pack = unpack(&data, "test").unwrap();
+        let metadata = br#"{"requiredBy":{"library.jar":["owner"]}}"#;
+        for filename in [PUMPKIN_FILE, "previous-brand.json"] {
+            let pack = unpack(&archive(&[("modrinth.index.json", index), (filename, metadata)]), "test").unwrap();
+            assert_eq!(pack.required_by["library.jar"], ["owner"]);
+        }
+        for entries in [
+            vec![("modrinth.index.json", index.as_slice()), (PUMPKIN_FILE, b"{}".as_slice()), ("previous-brand.json", metadata.as_slice())],
+            vec![("modrinth.index.json", index.as_slice()), ("previous-brand.json", metadata.as_slice()), (PUMPKIN_FILE, b"{}".as_slice())],
+        ] {
+            assert!(unpack(&archive(&entries), "test").unwrap().required_by.is_empty());
+        }
+        assert!(unpack(&archive(&[("modrinth.index.json", index), ("other.json", b"not metadata")]), "test").is_ok());
+        assert!(unpack(&archive(&[("modrinth.index.json", index), (PUMPKIN_FILE, b"broken")]), "test").is_err());
         assert_eq!(pack.instance.loader, ModLoader::Fabric);
         assert_eq!(pack.overrides.len(), 1);
         let neo = br#"{"formatVersion":1,"game":"minecraft","files":[],"dependencies":{"minecraft":"1.21.1","neoforge":"21.1.252"}}"#;

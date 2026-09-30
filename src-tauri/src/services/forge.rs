@@ -138,7 +138,7 @@ pub fn check_supported(kind: Kind, mc: &str) -> AppResult<()> {
         Kind::Forge => "1.17",
         Kind::NeoForge => "1.20.1",
     };
-    Err(AppError::Invalid(format!("{} gibt es in Voxlet erst ab Minecraft {from}, nicht für {mc}", kind.name())))
+    Err(AppError::Invalid(format!("{} gibt es in Pumpkin Launcher erst ab Minecraft {from}, nicht für {mc}", kind.name())))
 }
 
 /// NeoForge für 1.20.1 liegt als Forge-Abzweig unter `net.neoforged:forge:1.20.1-<version>`.
@@ -292,7 +292,7 @@ fn read_installer(installer: &Path, libraries: &Path, tmp: &Path) -> AppResult<(
     };
     let profile: InstallProfile = serde_json::from_slice(&read(&mut zip, "install_profile.json")?).map_err(|e| {
         tracing::warn!(%e, "Install-Profil in altem Format");
-        AppError::Invalid("Diese Loader-Version nutzt ein altes Installer-Format, das Voxlet nicht unterstützt".into())
+        AppError::Invalid("Diese Loader-Version nutzt ein altes Installer-Format, das Pumpkin Launcher nicht unterstützt".into())
     })?;
     let version = read(&mut zip, &profile.json)?;
 

@@ -68,12 +68,12 @@ fn say(text: impl Into<String>) -> AppError {
     AppError::Invalid(text.into())
 }
 
-/// Client-ID der eigenen Azure-App: Argument, sonst Compile-Vorgabe `VOXLET_MS_CLIENT_ID`.
+/// Client-ID der eigenen Azure-App: Argument, sonst Compile-Vorgabe `PUMPKIN_MS_CLIENT_ID`.
 fn client_id(arg: Option<String>) -> AppResult<String> {
     let id = arg
         .map(|s| s.trim().to_owned())
         .filter(|s| !s.is_empty())
-        .or_else(|| option_env!("VOXLET_MS_CLIENT_ID").map(str::to_owned))
+        .or_else(|| option_env!("PUMPKIN_MS_CLIENT_ID").map(str::to_owned))
         .ok_or_else(|| say("Die Microsoft-Anmeldung ist in dieser Version noch nicht eingerichtet (es fehlt die Client-ID)."))?;
     uuid::Uuid::parse_str(&id).map_err(|_| say("Die hinterlegte Client-ID ist ungültig. Sie sieht so aus: 00000000-0000-0000-0000-000000000000."))?;
     Ok(id)
@@ -589,7 +589,7 @@ mod tests {
     #[test]
     #[ignore = "schreibt in den Schlüsselbund des Nutzers"]
     fn long_token_survives_keyring() {
-        let entry = keyring::Entry::new("voxlet-test", "long-token").unwrap();
+        let entry = keyring::Entry::new("pumpkin-test", "long-token").unwrap();
         let token = "M.C5_xyz-".repeat(300)[..2400].to_string();
         store_token(&entry, &token).unwrap();
         let back = load_token(&entry);

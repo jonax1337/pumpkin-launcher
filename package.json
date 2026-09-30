@@ -1,12 +1,17 @@
 {
-  "name": "launcher",
+  "name": "pumpkin-launcher",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "node scripts/sync-branding.mjs && vite",
+    "build": "node scripts/sync-branding.mjs && tsc && vite build",
+    "check:branding": "node src/branding/branding.check.mjs",
     "preview": "vite preview",
+    "dev:website": "vite --config website/vite.config.mjs",
+    "build:website": "vite build --config website/vite.config.mjs",
+    "preview:website": "vite preview --config website/vite.config.mjs",
+    "check:website": "node website/check.mjs",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -20,6 +25,7 @@
     "@tauri-apps/plugin-opener": "^2",
     "cn": "^0.4.0",
     "dompurify": "^3.4.16",
+    "gsap": "^3.15.0",
     "marked": "^18.0.14",
     "radix-ui": "^1.6.7",
     "react": "^19.1.0",

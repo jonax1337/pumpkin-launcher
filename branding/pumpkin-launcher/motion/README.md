@@ -1,6 +1,6 @@
 # Buddy Motion
 
-Sechs vorbereitete Bewegungen für alle fünf freigegebenen Seasons: **30 animierte SVG-Dateien**. Die App wurde nicht verändert.
+Sechs vorbereitete Bewegungen für alle fünf freigegebenen Seasons: **30 animierte SVG-Dateien**. Die App verwendet diese Dateien über `src/branding/Brand.tsx`; UI-Zustände und Bewegungseinstellungen steuern die jeweilige Pose.
 
 | Datei pro Season | Ablauf | Möglicher Einsatz |
 |---|---|---|

@@ -2,7 +2,7 @@
 
 **SVG ist die Logoquelle.** Jede Season hat genau ein freigegebenes Zeichen. UI, Wortzeichen und Vorschau verwenden SVG direkt. Es gibt keine separaten Mini-Zeichnungen, monochromen Tray-Masken oder PNG-Versionen für die UI.
 
-Die Dateien sind vorbereitet, **noch nicht in die App eingebaut**. Tauri-Konfiguration, Produktname, bestehende App-Icons und UI-Code wurden durch diese Vorbereitung nicht geändert.
+Die Dateien sind in **Pumpkin Launcher integriert**. `src/branding/Brand.tsx` verbindet die saisonalen SVGs mit UI, Favicon und nativem Fenster-/Taskleisten-Icon. `src/branding/calendar.ts` verwendet den vorbereiteten Kalender aus `seasons.mjs` mit dem lokalen Datum.
 
 ## Dateien
 
@@ -46,4 +46,6 @@ Der Build liest jede eingebettete ICO-/ICNS-Größe wieder ein und vergleicht si
 
 Die Animationen werden separat mit `python branding/pumpkin-launcher/motion/build.py` erzeugt; ihr Zeichengenerator verwendet den installierten Pixel-Art-Studio-Skill. Anschließend aktualisiert der normale Branding-Build auch das vollständige ZIP. Der Branding-Build prüft, dass die Animationen weiterhin zu den unveränderten SVG-Quellen gehören.
 
-Die vorhandene Tauri-Konfiguration erwartet die fünf nativen Dateien aus der Tabelle. Zur späteren Integration können die Dateien einer Season nach `src-tauri/icons/` übernommen und die SVGs in der UI referenziert werden. Diese Ziele wurden noch nicht überschrieben. Die Datumsfunktion in `seasons.mjs` ist ebenfalls nur vorbereitet; sie wird aktuell ausschließlich in der Vorschau genutzt.
+Bei `pnpm dev` und `pnpm build` übernimmt `scripts/sync-branding.mjs` die aktuelle Season in alle nativen Paket-Icons. Die laufende App wechselt spätestens an der nächsten lokalen Mitternacht und prüft beim Zurückkehren aus dem Standby sowie einmal pro Minute erneut. Installierte EXE-/Installer-Icons bleiben technisch an ihren Build gebunden; Fenster und Taskleiste erhalten zur Laufzeit das aktuelle Icon.
+
+Buddy erscheint in Fensterleiste, Startseite, Onboarding, Einstellungen, Leer- und Fehlerzuständen sowie Toasts. Die Animationen folgen echten Spiel-/Ladezuständen, respektieren reduzierte Bewegung und pausieren bei laufendem Spiel, verborgenem Fenster oder außerhalb des sichtbaren Bereichs. `pnpm check:branding` prüft Kalendergrenzen, lokale Mitternacht, Zeitzonen und alle Laufzeitdateien.

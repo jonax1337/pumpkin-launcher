@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { useView } from "@/app/Layout";
 import { Actions, BackLink, Button, Count, ErrorBox, Icon, IconButton, Meta, Skel, TabPanel, Tabs, type TabItem } from "@/ui";
@@ -65,7 +65,6 @@ function InstanceDetail({ id }: { id: string }) {
   const tab = TABS.find((t) => t === params.get("tab")) ?? "content";
   const setTab = (t: Tab) => setParams({ tab: t }, { replace: true });
   const { head, compact } = useCompactHead(!!instance);
-  const style = { "--acc": look.acc } as CSSProperties;
 
   if (error)
     return (
@@ -77,7 +76,7 @@ function InstanceDetail({ id }: { id: string }) {
 
   if (!instance)
     return (
-      <section className="detail" style={style} aria-busy aria-label="Wird geladen">
+      <section className="detail" aria-busy aria-label="Wird geladen">
         <header className="dhead">
           <PixelScene bio={look.bio} seed={look.seed} mode="live" className="scene" />
           <div className="shade-head" />
@@ -93,11 +92,11 @@ function InstanceDetail({ id }: { id: string }) {
       </section>
     );
 
-  return <Loaded instance={instance} tab={tab} setTab={setTab} head={head} compact={compact} style={style} />;
+  return <Loaded instance={instance} tab={tab} setTab={setTab} head={head} compact={compact} />;
 }
 
-function Loaded({ instance, tab, setTab, head, compact, style }: {
-  instance: Instance; tab: Tab; setTab: (t: Tab) => void; head: React.RefObject<HTMLElement | null>; compact: boolean; style: CSSProperties;
+function Loaded({ instance, tab, setTab, head, compact }: {
+  instance: Instance; tab: Tab; setTab: (t: Tab) => void; head: React.RefObject<HTMLElement | null>; compact: boolean;
 }) {
   const navigate = useNavigate();
   const narrow = useNarrow();
@@ -143,7 +142,7 @@ function Loaded({ instance, tab, setTab, head, compact, style }: {
   ];
 
   return (
-    <section className="detail" style={style}>
+    <section className="detail">
       <header ref={head} className={cn("dhead", compact && "compact")}>
         <PixelScene bio={look.bio} seed={look.seed} mode="live" className="scene" />
         <div className="shade-head" />

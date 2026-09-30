@@ -35,7 +35,7 @@
 .btn-p[aria-disabled="true"]:hover .bf, .btn-p[aria-disabled="true"]:hover .bc { transform: none; }
 
 /* ---------- Spielen-Knopf (feste Größe in allen Zuständen) ---------- */
-.play { width: 272px; height: var(--h-l); padding: 0; justify-content: flex-start; }
+.play { --acc: var(--copper); width: 272px; height: var(--h-l); padding: 0; justify-content: flex-start; }
 .play .bc { width: 100%; height: 100%; padding: 0 16px 0 10px; gap: 12px; align-items: center; }
 .play .pic { width: 36px; height: 36px; display: grid; place-items: center; background: var(--ink); color: var(--acc); flex: none; clip-path: var(--n1); }
 .play .lab { display: flex; flex-direction: column; justify-content: center; min-width: 0; flex: 1; text-align: left; }

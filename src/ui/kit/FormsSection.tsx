@@ -122,7 +122,7 @@ function FormDemo() {
           <TextField id="kit-name" value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />
         </FormRow>
         <FormRow label="Java" hint="Standard für alle Instanzen" group="radiogroup" aside="Automatisch passt fast immer.">
-          <RadioGroup name="kit-java" value={java} onChange={setJava} options={[{ value: "auto", label: <>Automatisch <span className="faint">(Voxlet lädt die passende Version)</span></> }, { value: "own", label: "Eigene Java-Installation" }]} />
+          <RadioGroup name="kit-java" value={java} onChange={setJava} options={[{ value: "auto", label: <>Automatisch <span className="faint">(Pumpkin Launcher lädt die passende Version)</span></> }, { value: "own", label: "Eigene Java-Installation" }]} />
           <TextField disabled={java === "auto"} aria-label="Pfad zu javaw.exe" placeholder="Pfad zu javaw.exe" />
         </FormRow>
         <FormRow label="Bewegte Szenen" hint="Sterne, Wolken, Glut.">

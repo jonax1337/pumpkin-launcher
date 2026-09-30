@@ -19,7 +19,7 @@ export function createPackMock(db: { instances: Instance[]; cancelled: Set<strin
     const version: ContentVersion = await res.json();
     const loader: ModLoader = version.loaders.includes("fabric") ? "fabric" : "vanilla";
     if (loader === "vanilla" && !version.loaders.some((l) => l === "minecraft" || l === "vanilla"))
-      throw new Error("Dieses Modpack braucht einen Mod-Loader, den Voxlet noch nicht kann.");
+      throw new Error("Dieses Modpack braucht einen Mod-Loader, den Pumpkin Launcher noch nicht kann.");
     const mods = loader === "fabric" ? PACK_MODS : [];
     for (let i = 0; i < mods.length; i++) {
       if (db.cancelled.delete(operationId)) throw new Error(INSTALL_CANCELLED);

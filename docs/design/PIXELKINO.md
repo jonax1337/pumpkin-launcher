@@ -145,7 +145,7 @@ Das vorherige Design („Deepslate & Emerald“, shadcn/ui, Seitenleiste) ist vo
 **Abweichungen vom Mockup:**
 - Auswahlfelder öffnen eine eigene Pixel-Liste statt der nativen Liste; die Breite richtet sich nach der längsten Option.
 - „Alle aktualisieren“ wird schon ab 1180 px kompakt (Symbol + Zahl), weil die Werkzeugleiste der echten App mehr Platz braucht.
-- Einstellungen: echte Tabs waagerecht unter dem Titel statt Seitenspalte (Konten, Spiel, Darstellung, Erweitert, Über Voxlet; `role=tab`/`tabpanel`, Roving-Tabindex, Pfeile/Home/End). Zustand in `?tab=…`; `#konten` (Kontomenü) und die anderen Abschnitts-Anker öffnen ihren Tab. Je Tab nur dessen Inhalt; der Tab-Name ist die Überschrift (`h2` nur für Vorleser). Klebt die Leiste beim Wechsel oben, springt die Seite auf ihre Ruhelage zurück.
+- Einstellungen: echte Tabs waagerecht unter dem Titel statt Seitenspalte (Konten, Spiel, Darstellung, Erweitert, Über Pumpkin Launcher; `role=tab`/`tabpanel`, Roving-Tabindex, Pfeile/Home/End). Zustand in `?tab=…`; `#konten` (Kontomenü) und die anderen Abschnitts-Anker öffnen ihren Tab. Je Tab nur dessen Inhalt; der Tab-Name ist die Überschrift (`h2` nur für Vorleser). Klebt die Leiste beim Wechsel oben, springt die Seite auf ihre Ruhelage zurück.
 - Instanz- und Statusfarben weichen vom Mockup ab (Farbsemantik, Abschnitt 1).
 - Hover, Druck und Ausblenden sind über das Mockup hinaus ergänzt (je Baustein im Kit, Bewegung in `ui/motion.css`): Übergänge laufen in ganzen Stufen (`steps`), nie über halbe Pixel.
 

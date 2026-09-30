@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { Button, Choice, Field, Glyph, Hint, TextField, useRoving } from "@/ui";
 import type { GlyphName, GlyphPalette } from "@/pixel/icons";
 import { PixelScene } from "@/pixel/PixelScene";
+import { Buddy } from "@/branding/Brand";
 import { accountName, isValidPlayerName, useSettings } from "@/store/settings";
 
 const SODIUM = "AANobbMI";
@@ -94,7 +95,10 @@ export function Onboarding() {
         {step === 1 ? (
           <form onSubmit={next} className="contents">
             {steps}
-            <h1 id="onb-t">Willkommen bei Voxlet</h1>
+            <div className="onb-heading">
+              <Buddy mood="hello" size={72} />
+              <h1 id="onb-t">Willkommen bei Pumpkin Launcher</h1>
+            </div>
             <p>Wie heißt du im Spiel?</p>
             <div className="ob">
               {microsoft ? (
@@ -124,7 +128,10 @@ export function Onboarding() {
         ) : (
           <>
             {steps}
-            <h1 id="onb-t">Womit willst du starten?</h1>
+            <div className="onb-heading">
+              <Buddy mood={busy ? 'loading' : 'hello'} size={72} />
+              <h1 id="onb-t">Womit willst du starten?</h1>
+            </div>
             <p>Du kannst jederzeit weitere Instanzen anlegen.</p>
             <div className="ob">
               <div className="starts" role="radiogroup" aria-label="Start" onKeyDown={roveStarts}>

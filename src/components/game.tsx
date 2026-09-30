@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 import { formatClock, formatCount, relativeTime } from "@/lib/format";
 import { installStepLabel, SUPPORTED_LOADERS, type Instance, type InstallProgress, type InstallStep, type ModLoader } from "@/lib/types";
 import { useGame, type LogLine } from "@/store/game";
-import { useLook } from "@/store/look";
 import { useSettings } from "@/store/settings";
 
 // Reihenfolge der Schritte im Backend (`install::install`, mit Loader umrahmt von `instance_install`)
@@ -114,7 +113,7 @@ function playState(instance: Instance, phase: Phase, percent: number | null, cod
       return { st: "idle", icon: "play", l1: "Spielen", s1: "Spielen", l2: "Einen Moment", p: 0, dis: true, aria: `Spielen: ${name}` };
   }
   if (phase === "missing" && !SUPPORTED_LOADERS.includes(instance.loader))
-    return { st: "blocked", icon: "plug", l1: "Kann nicht starten", s1: "Gesperrt", l2: "Diesen Loader kann Voxlet noch nicht", p: 0, dis: true, aria: `Kann nicht starten: ${name}, Loader wird noch nicht unterstützt` };
+    return { st: "blocked", icon: "plug", l1: "Kann nicht starten", s1: "Gesperrt", l2: "Diesen Loader kann Pumpkin Launcher noch nicht", p: 0, dis: true, aria: `Kann nicht starten: ${name}, Loader wird noch nicht unterstützt` };
   const [l2, hint] = !hasAccount ? ["Erst Spielernamen festlegen", ", erst Spielernamen festlegen"] : phase === "installed" ? ["Bereit", ""] : ["Installiert beim ersten Start", ", wird beim ersten Start installiert"];
   return { st: "idle", icon: "play", l1: "Spielen", s1: "Spielen", l2, p: 0, aria: `Spielen: ${name}${hint}` };
 }
@@ -130,7 +129,6 @@ export function PlayButton({ instance, size = "l", onLaunched, tabIndex }: { ins
   const code = useGame((s) => s.crashes[instance.id]?.code ?? null);
   const since = useGame((s) => s.started[instance.id]);
   const hasAccount = useSettings((s) => !!s.active);
-  const { acc } = useLook(instance.id);
   const play = usePlay();
   const mounted = useRef(true);
   useEffect(() => {
@@ -152,7 +150,6 @@ export function PlayButton({ instance, size = "l", onLaunched, tabIndex }: { ins
       type="button"
       className={cn("btn btn-p fx play", size !== "l" && size)}
       data-st={s.st}
-      style={{ "--acc": acc } as CSSProperties}
       aria-label={s.aria}
       aria-disabled={s.dis || undefined}
       tabIndex={tabIndex}
@@ -325,7 +322,7 @@ function LogStat({ instance }: { instance: Instance }) {
   // Wie man zu Ausgabe kommt, sagt der Leerzustand der Konsole; hier nur Stand und Aufbewahrung
   return (
     <StatusPanel size="s" icon="info" className={place} title={instance.lastPlayedAt != null ? `Zuletzt gespielt ${relativeTime(instance.lastPlayedAt)}.` : "Noch nie gespielt."}>
-      Das Protokoll wird beim Schließen von Voxlet geleert.
+      Das Protokoll wird beim Schließen von Pumpkin Launcher geleert.
     </StatusPanel>
   );
 }

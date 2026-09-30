@@ -381,14 +381,14 @@ function PackConfirmBody({ title, versions, picked, onConfirm }: {
       ) : picked && !v ? (
         <Hint tone="bad" live>{picked.reason}</Hint>
       ) : (
-        <Hint>Voxlet lädt jetzt die Mods des Packs. Minecraft selbst kommt beim ersten Start dazu.</Hint>
+        <Hint>Pumpkin Launcher lädt jetzt die Mods des Packs. Minecraft selbst kommt beim ersten Start dazu.</Hint>
       )}
     </form>
   );
 }
 
 /**
- * Bestätigung vor „Als neue Instanz anlegen“: zeigt Version, Minecraft und Loader, die Voxlet wählt,
+ * Bestätigung vor „Als neue Instanz anlegen“: zeigt Version, Minecraft und Loader, die Pumpkin Launcher wählt,
  * und lässt den Namen ändern. `ask()` öffnet sie (optional für eine bestimmte Version), `dialog` gehört ins Markup.
  */
 function usePackConfirm(projectId: string, title: string, onDone?: (instanceId: string) => void) {
@@ -853,7 +853,7 @@ export function AddContentSheet({ instance, open, onOpenChange, initialKind }: {
       onOpenChange={onOpenChange}
       acc={acc}
       title={`Inhalte für ${instance.name}`}
-      sub={`Voxlet wählt automatisch die Version für ${fitsLabel(instance, "mod")}.`}
+      sub={`Pumpkin Launcher wählt automatisch die Version für ${fitsLabel(instance, "mod")}.`}
       tools={
         projectId ? undefined : (
           <>

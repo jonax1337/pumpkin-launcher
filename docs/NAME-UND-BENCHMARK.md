@@ -6,7 +6,9 @@ Legende: **[V]** = verifiziert (Quelle verlinkt bzw. selbst per DNS/GitHub-API g
 
 ---
 
-## A) Namensfindung
+## A) Frühere Namensfindung
+
+Die gewählte Marke ist **Pumpkin Launcher**. Die folgenden Alternativen sind historische Recherche; ihre Domain- und Kollisionsprüfungen gelten nicht für Pumpkin Launcher.
 
 ### Rahmen
 
@@ -23,7 +25,6 @@ Legende: **[V]** = verifiziert (Quelle verlinkt bzw. selbst per DNS/GitHub-API g
 
 | # | Name | Idee | .com | .app | .gg | .de | GitHub-Handle | Kollisionen (Websuche) | Risiko |
 |---|------|------|------|------|-----|-----|---------------|------------------------|--------|
-| 1 | **Voxlet** | *vox*(el) + *-let*: kleiner Block | vergeben, **zum Verkauf** (GoDaddy-Parking) | reg | free? | free? | `voxlet` = Privatperson; `voxletlauncher` frei | kein Produkt „Voxlet“ gefunden. Klanglich nah: *Voxey Launcher* (Android-MC-Launcher), *Vox Launcher* (DST-Server) | **niedrig–mittel** |
 | 2 | **Mossle** | Moos: gemütlich, wächst, „grün“ | reg (keine Website erreichbar) | reg | free? | free? | `mossle` = Org mit 1 Repo (2015); `mosslelauncher` frei | nichts unter „Mossle“ gefunden, nur *Moss* (VR-Spiel von Polyarc) | **niedrig** |
 | 3 | **Sprigly** | *sprig* = Zweig: frisch, leicht | free? | reg | free? | free? | **frei** (404) | *Sprigly* KI-Agenturdienst (UK), *Sprigly* Krypto-Round-up-App, *Sprig* (UX-Research-SaaS). Alles fremde Branchen | **niedrig–mittel** |
 | 4 | **Tessra** | von *tessera* (Mosaikstein) | vergeben, **zum Verkauf** | reg | free? | free? | `tessra` = Org (2025, 2 Repos) | **Tessra**: iOS-Puzzlespiel (Fable Labs), gleiche Store-Kategorie | mittel |
@@ -37,7 +38,6 @@ Legende: **[V]** = verifiziert (Quelle verlinkt bzw. selbst per DNS/GitHub-API g
 | 12 | **Cairn** | Steinmännchen, Wegmarke | reg | reg | reg | – | vergeben | **Cairn**: Spiel 2026 (The Game Bakers) inkl. „CAIRN Multiplayer Launcher“, Cairn-Linux-Launcher, Cairn-RPG-App | **sehr hoch** |
 
 Quellen zu den Kollisionen [V]:
-- Voxlet: <https://github.com/diogo-webber/vox-launcher>, <https://apkod.com/voxey-launcher-android-download-apk-mod-minecraft-app/>
 - Mossle/Moss: <https://en.wikipedia.org/wiki/Moss_(video_game)>
 - Sprigly: <https://www.sprigly.co.uk/>, <https://www.sprigly.xyz/>, <https://sprig.com/>
 - Tessra: <https://apps.apple.com/us/app/tessra/id6764005527>
@@ -51,13 +51,6 @@ Quellen zu den Kollisionen [V]:
 - Cairnly (Ausweichform, ebenfalls belegt): <https://www.cairnly.app/>, <https://cairnly.ai/>
 
 ### Top 3
-
-**1. Voxlet**
-- Einziger Kandidat, der ohne Erklärung „Blöcke“ transportiert (voxel), ohne Mojang-Vokabular zu nutzen.
-- Zwei Silben, identisch auf Deutsch und Englisch („VOX-let“).
-- Kein gleichnamiges Produkt gefunden. voxlet.com steht zum Verkauf, .gg und .de haben keine NS-Einträge.
-- Risiko: klangliche Nähe zu *Voxey Launcher* im selben Nutzerkreis. [E] Abstand halten: nie „Voxlet Launcher“ als Kurzform verwenden, sondern „Voxlet“.
-- Tagline: **„Jede Welt. Ein Klick.“** / EN: *„Every world, one click.“*
 
 **2. Mossle**
 - Das freundlichste Wort der Liste, passt zu einer ruhigen, einfachen UX.
@@ -74,7 +67,6 @@ Quellen zu den Kollisionen [V]:
 
 Reserve: **Quarrly** (alles frei, aber Schreibweise), **Tessra** (nur, falls die iOS-Puzzle-App kein Problem ist).
 
-**Vor der Entscheidung zu klären** (nicht Teil dieser Recherche): Markenrecherche in EUIPO TMview (<https://www.tmdn.org/tmview/>) und DPMAregister für Klasse 9 (Software) und 41 (Spiele), Domain-Check direkt beim Registrar, Preis für voxlet.com.
 
 ---
 

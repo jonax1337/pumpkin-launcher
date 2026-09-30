@@ -2,9 +2,10 @@
  * Rückmeldungen des Kits: Leerzustand, Statusplatte (Fehler/Hinweis/Gefahr), Fortschritt, laufender Vorgang,
  * Platzhalter beim Laden, Toasts. Aussehen: ui/feedback.css (vx-*).
  */
-import { type CSSProperties, type ReactNode } from "react";
+import { type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { Toaster as Sonner } from "sonner";
 import { cn } from "@/lib/utils";
+import { Buddy } from "@/branding/Brand";
 import { ICON_DATA } from "@/pixel/icon-data";
 import { Icon } from "./Icon";
 import { Button, IconButton, buttonClass } from "./Button";
@@ -26,7 +27,7 @@ export function Empty({ ill, title, children, actions, size = "section", asPage,
   const H = asPage ? "h1" : "h2";
   return (
     <div className={cn("vx-empty", className)} data-size={size}>
-      {ill != null && ill !== false && <div className="vx-empty-ill">{isIconName(ill) ? <Icon name={ill} size="xl" tone="muted" /> : ill}</div>}
+      {ill !== false && <div className="vx-empty-ill">{ill == null || isIconName(ill) ? <Buddy size={96} mood={ill === 'tasks' || ill === 'term' ? 'sleep' : 'idle'} /> : ill}</div>}
       <H className="vx-empty-t">{title}</H>
       {children && <p className="vx-empty-p">{children}</p>}
       {actions && <div className="vx-empty-a">{actions}</div>}
@@ -43,11 +44,11 @@ export function Empty({ ill, title, children, actions, size = "section", asPage,
  * `role`: alert für Fehler, die sofort angesagt werden sollen; status für wechselnde Zustände.
  */
 export function StatusPanel({ tone = "neutral", icon, title, children, actions, size = "m", role, id, className }: {
-  tone?: Tone; icon?: IconName | false; title?: ReactNode; children?: ReactNode; actions?: ReactNode; size?: "s" | "m"; role?: "alert" | "status"; id?: string; className?: string;
+  tone?: Tone; icon?: IconName | ReactElement | false; title?: ReactNode; children?: ReactNode; actions?: ReactNode; size?: "s" | "m"; role?: "alert" | "status"; id?: string; className?: string;
 }) {
   return (
     <div id={id} role={role} className={cn("vx-status", className)} data-tone={tone === "neutral" ? undefined : tone} data-size={size}>
-      {icon !== false && <Icon name={icon ?? (tone === "bad" || tone === "warn" ? "warn" : tone === "run" ? "check" : "info")} size="m" className="vx-status-i" />}
+      {icon !== false && (icon != null && !isIconName(icon) ? icon : <Icon name={icon ?? (tone === "bad" || tone === "warn" ? "warn" : tone === "run" ? "check" : "info")} size="m" className="vx-status-i" />)}
       <div className="vx-status-t">
         {title != null && title !== "" && <b>{title}</b>}
         {children != null && children !== "" && <span>{children}</span>}
@@ -64,6 +65,7 @@ export function ErrorBox({ error, title, onRetry, className }: { error: unknown;
   return (
     <StatusPanel
       tone="bad"
+      icon={<Buddy mood="oops" size={48} />}
       role="alert"
       className={className}
       title={title ?? message(error)}
@@ -143,11 +145,11 @@ export function Toaster() {
       visibleToasts={4}
       containerAriaLabel="Benachrichtigungen"
       icons={{
-        success: <Icon name="check" />,
-        info: <Icon name="info" />,
+        success: <Buddy mood="success" size={48} />,
+        info: <Buddy mood="hello" size={48} />,
         warning: <Icon name="warn" />,
-        error: <Icon name="warn" />,
-        loading: <Icon name="hour" />,
+        error: <Buddy mood="oops" size={48} />,
+        loading: <Buddy mood="loading" size={48} />,
         close: <Icon name="x" size="s" />,
       }}
       toastOptions={{

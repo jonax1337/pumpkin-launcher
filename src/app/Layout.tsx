@@ -9,7 +9,7 @@ import { api } from "@/lib/api";
 import { progressLabel } from "@/lib/modrinth";
 import { installStepLabel } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Mark } from "@/pixel/icons";
+import { BrandMark, BrandWordmark } from "@/branding/Brand";
 import { setSceneGate } from "@/pixel/scene";
 import { usePixelUnit } from "@/pixel/unit";
 import { useGame } from "@/store/game";
@@ -67,7 +67,7 @@ function useShortcuts() {
   }, [navigate]);
 }
 
-const APP = "Voxlet";
+const APP = "Pumpkin Launcher";
 
 /** Fenstertitel je Bereich; bei einer Instanz ihr Name. */
 function usePageTitle(pathname: string) {
@@ -83,6 +83,7 @@ function usePageTitle(pathname: string) {
     : "Seite nicht gefunden";
   useEffect(() => {
     document.title = `${page} · ${APP}`;
+    if (!api.isMock) void getCurrentWindow().setTitle(document.title).catch(console.error);
   }, [page]);
 }
 
@@ -260,9 +261,9 @@ function TitleBar({ online }: { online: boolean }) {
   const { pathname } = useLocation();
   return (
     <header className="bar" data-tauri-drag-region>
-      <Link to="/" className="wm fx" aria-label="Voxlet, zum Start">
-        <span className="mark"><Mark /></span>
-        <span className="word">VOXLET</span>
+      <Link to="/" className="wm fx" aria-label="Pumpkin Launcher, zum Start">
+        <BrandMark />
+        <BrandWordmark />
       </Link>
       {/* Normale Links: Bereiche sind Seiten, keine Tabs. `navtabs` nur für den Abstand zur Marke (Leistengerüst) */}
       <NavTabs items={TABS} className="navtabs" />

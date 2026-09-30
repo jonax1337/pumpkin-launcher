@@ -114,7 +114,7 @@ fn write_pack(dirs: &Dirs, instance: &Instance, remote: &[Value]) -> AppResult<V
         .filter(|m| m.enabled && m.sha1.is_some() && !m.required_by.is_empty())
         .map(|m| (m.file_name.clone(), json!(m.required_by)))
         .collect();
-    zip.start_file(content::VOXLET_FILE, options)?;
+    zip.start_file(content::PUMPKIN_FILE, options)?;
     zip.write_all(&serde_json::to_vec_pretty(&json!({ "requiredBy": required_by }))?)?;
     let mut total = 0u64;
     for (path, source) in files {

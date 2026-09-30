@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Buddy } from "@/branding/Brand";
 import { useNavigate } from "react-router";
 import { PlayButton, PlayStatus, StatusChip, usePhase } from "@/components/game";
 import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
@@ -13,6 +14,14 @@ import { PixelScene } from "@/pixel/PixelScene";
 import { motionOff } from "@/pixel/scene";
 import { useLook } from "@/store/look";
 import { AddCard, Button, ButtonLink, Count, ErrorBox, IconButton, Meta, SceneCard, SectionHeader, Skel } from "@/ui";
+
+/** Buddy begleitet den tatsächlichen Zustand der ausgewählten Instanz. */
+function HomeBuddy({ instanceId }: { instanceId: string }) {
+  const phase = usePhase(instanceId);
+  const mood = phase === 'crashed' ? 'oops' : phase === 'running' ? 'sleep'
+    : ['loading', 'preparing', 'starting'].includes(phase) ? 'loading' : 'idle';
+  return <Buddy mood={mood} size={112} className="buddy-library" />;
+}
 
 /** Titel und Metazeile der ausgewählten Instanz (Infos als Text; nur „Updates“ ist ein Knopf). */
 function HeroInfo({ instance }: { instance: Instance }) {
@@ -156,11 +165,11 @@ function HomeSkeleton() {
           <div className="titlebox"><Skel h={72} w="min(520px, 80%)" /></div>
           <div className="hmeta"><Skel h={16} w={320} /></div>
         </div>
-        <div className="acts"><Skel h={56} w={272} /><Skel h={40} w={150} /></div>
+        <div className="acts"><Skel h={56} w={272} /><Skel h={40} w={40} /></div>
         <div className="pstat" />
       </div>
       <div className="cont">
-        <div className="h-8" />
+        <div className="library-heading"><Buddy mood="loading" size={112} className="buddy-library" /><Skel h={22} w={150} /></div>
         <div className="railwrap"><div className="rail">{[0, 1, 2, 3].map((k) => <Skel key={k} w={184} h={104} className="flex-none" />)}</div></div>
       </div>
     </section>
@@ -187,31 +196,33 @@ export function HomePage() {
     (a.lastPlayedAt == null ? 1 : 0) - (b.lastPlayedAt == null ? 1 : 0) || (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0) || b.createdAt - a.createdAt);
 
   return (
-    <section className="home" style={{ "--acc": look.acc } as CSSProperties}>
+    <section className="home">
       <PixelScene bio={look.bio} seed={look.seed} mode="hero" className="scene" />
       <div className="shade-home" />
       <div className="hero">
         <HeroInfo key={`info-${current.id}`} instance={current} />
         <div className="acts">
           <PlayButton key={current.id} instance={current} />
-          <ButtonLink to={`/instances/${current.id}`} onScene>Instanz öffnen</ButtonLink>
-          <InstanceMenuButton instance={current} onScene open={false} />
+          <InstanceMenuButton instance={current} onScene open />
         </div>
         <PlayStatus key={`stat-${current.id}`} instance={current} showLast={false} onScene />
       </div>
       <div className="cont">
-        <SectionHeader
-          title="Deine Instanzen"
-          id="cont-h"
-          actions={
-            <>
-              <NewInstanceDialog>
-                <Button variant="ghost" size="s" icon="plus">Neue Instanz</Button>
-              </NewInstanceDialog>
-              <ButtonLink to="/instances" variant="ghost" size="s" iconEnd="chev" bleed="end">Alle in der Bibliothek</ButtonLink>
-            </>
-          }
-        />
+        <div className="library-heading">
+          <HomeBuddy key={`buddy-${current.id}`} instanceId={current.id} />
+          <SectionHeader
+            title="Deine Instanzen"
+            id="cont-h"
+            actions={
+              <>
+                <NewInstanceDialog>
+                  <Button variant="ghost" size="s" icon="plus">Neue Instanz</Button>
+                </NewInstanceDialog>
+                <ButtonLink to="/instances" variant="ghost" size="s" iconEnd="chev" bleed="end">Alle in der Bibliothek</ButtonLink>
+              </>
+            }
+          />
+        </div>
         <Rail instances={sorted} current={current.id} onPick={setSelected} />
       </div>
     </section>
