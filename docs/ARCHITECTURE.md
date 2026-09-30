@@ -4,7 +4,8 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 
 ```
 ┌──────────────── Frontend (WebView) ────────────────┐
-│ React Router → Seiten (Home, Instanzen, Mods, …)    │
+│ React Router → Seiten (Start, Bibliothek, Instanz,  │
+│                Entdecken, Einstellungen)            │
 │ TanStack Query ─► lib/api.ts ─► invoke(...)         │
 │ Zustand: UI- und Launcher-Einstellungen (persist)   │
 └───────────────────────┬────────────────────────────┘
@@ -148,12 +149,30 @@ Ein Preset bündelt Mods, Spieleinstellungen (`options.txt`-Schlüssel), JVM-Arg
 
 ## Frontend (`src/`)
 
+Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKINO.md`, Referenz-Mockup: `docs/design/concepts/pixelkino.html`).
+
+**Daten und Zustand**
+
 - `lib/types.ts` – TS-Spiegel der Rust-Modelle
 - `lib/api.ts` – `invoke`-Wrapper; außerhalb von Tauri (reiner `pnpm dev` im Browser) Fallback auf Mockdaten aus `lib/mock.ts`
-- Hooks auf TanStack Query; Mutations invalidieren die betroffenen Queries
-- Zustand-Store für Launcher-Einstellungen (Java, RAM, Pfade) – vorerst nur lokal persistiert, noch ohne Backend
+- `hooks/` – TanStack Query; Mutations invalidieren die betroffenen Queries. `useInstances` (Spielen = bei Bedarf installieren, dann starten; Backend-Events), `useContent` (Modrinth-Vorgänge mit Fortschritt), `useTemplates`
+- `store/settings.ts` – Launcher-Einstellungen, lokal persistiert: Java, RAM, Konten (Offline-Namen, aktives Konto), Pixelgröße, bewegte Szenen
+- `store/game.ts` – flüchtiger Laufzeitzustand aus den Events: Installationsfortschritt, Starten, Protokoll (gepuffert, max. 2000 Zeilen je Instanz), Absturz, Startzeit
+- `store/look.ts` – Szenenbild (Biom) je Instanz, lokal persistiert (das Backend hat dafür kein Feld; ohne Wahl fest aus der Instanz-ID)
+- `store/tasks.ts` – Verlauf abgeschlossener Aufgaben für das Aufgaben-Menü; laufende Aufgaben kommen live aus `store/game.ts` und `useContent`
 - Mods/Modpacks verwenden in Tauri den echten Modrinth-Katalog; neue Content-Installationen melden im Browser ohne Tauri keine vorgetäuschten Erfolge.
-- Offlinekonten und Einstellungen werden lokal gespeichert; Microsoft-Anmeldung bleibt ausdrücklich nicht implementiert. News sind Vorschauinhalte.
+- Konten: Offline-Spielernamen lokal, Microsoft-Konten über den Gerätecode-Login des Backends.
+
+**Oberfläche**
+
+- `app/Layout.tsx` – rahmenloses Fenster: Fensterleiste mit Wortzeichen, Pixel-Tabs (Spielen · Bibliothek · Entdecken), Aufgaben-Menü, Kontomenü, Einstellungen, eigene Fensterknöpfe (`@tauri-apps/api/window`, Ziehen per `data-tauri-drag-region`); setzt `--px`, pausiert Szenen, solange Minecraft läuft
+- `pages/` – Start (Szene, Weiterspielen-Reihe, Onboarding), Bibliothek (Poster/Liste), Instanz (klebender Kopf, Inhalte, Protokoll, Einstellungen; `pages/detail/`), Entdecken (Katalog, Projektseite), Einstellungen
+- `components/px.tsx` – Bausteine: Knopf, Chip, Fortschritt, Suchfeld, Auswahl, Segmente, Checkbox, Schalter, Radio, Speicher-Slider, Tooltip, Menü/Kontextmenü, Dialog, Seitenpanel, Leer- und Fehlerzustände, Toasts. Verhalten von Radix, Aussehen aus `styles/`
+- `components/game.tsx` – Spielen-Knopf (feste Größe in allen Zuständen), Statuszeile, Status-Chip, Protokoll mit Filter/Suche/Mitscrollen
+- `components/instance.tsx` – Instanz-Menü (Knopf und Rechtsklick) mit Dialogen „Als Vorlage speichern“ und „Löschen“
+- `components/ContentBrowser.tsx`, `NewInstanceDialog.tsx`, `PlayerNames.tsx`, `Onboarding.tsx` – Katalog und Seitenpanel, Neue Instanz, Konten und Microsoft-Anmeldung, erster Start
+- `pixel/` – `unit.ts` (Pixeleinheit auf ganze Gerätepixel), `scene.ts` (Szenen-Engine: 7 Biome, 12 fps, Pausenregeln, Cache), `PixelScene.tsx`, `icons.tsx` (Pixel-Icons, Mod-Glyphen, Wortzeichen, Spielerkopf)
+- `styles/pixelkino.css` (aus dem Mockup übernommen), `styles/states.css` (Auswahlliste, Hover/Druck/Fokus, Ein- und Ausblenden) plus kleine Ergänzungen je Bereich; beide in der Tailwind-Schicht `components`, deren Reihenfolge `index.html` vor allen Stylesheets festlegt
 
 ## Herkunft der Ideen und Lizenz
 

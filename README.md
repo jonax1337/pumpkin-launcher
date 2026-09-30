@@ -9,7 +9,8 @@ Voxlet ist ein Launcher für Minecraft: Java Edition auf Basis von **Tauri 2** (
 ## Stack
 
 - **Backend:** Rust, Tauri 2, serde, thiserror, tracing
-- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4, shadcn/ui, Zustand, TanStack Query, React Router, lucide-react, Framer Motion
+- **Frontend:** React 19, TypeScript, Vite, Radix UI (Verhalten von Menü, Dialog, Auswahl, Tooltip), Tailwind CSS v4 (nur Layout-Hilfen), Zustand, TanStack Query, React Router, Sonner
+- **Design:** eigenes Pixel-Design „Pixelkino“ mit Szenen-Engine auf Canvas, Pixel-Icons und rahmenlosem Fenster – siehe [docs/design/PIXELKINO.md](docs/design/PIXELKINO.md)
 
 ## Voraussetzungen
 
@@ -45,7 +46,7 @@ Instanzen und Presets liegen als JSON im App-Datenverzeichnis (Windows: `%APPDAT
 ```
 src/            React-Frontend
 src-tauri/      Rust-Backend (commands, models, services, state, error)
-docs/           Architektur
+docs/           Architektur, Design (Spezifikation + Mockup)
 ```
 
-Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), Design: [docs/design/PIXELKINO.md](docs/design/PIXELKINO.md) mit Referenz-Mockup `docs/design/concepts/pixelkino.html`.
