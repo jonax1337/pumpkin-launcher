@@ -21,6 +21,43 @@ export function brandAsset(season: SeasonId, file: 'mark.svg' | '128x128.png' | 
 const BrandContext = createContext({ season: currentSeason(), animate: false });
 export const useBrand = () => useContext(BrandContext);
 
+/** Fenstericon: das Motiv lässt im 32er-Raster Luft, die Taskbar soll aber die volle Fläche bekommen. Also auf die belegten Pixel zuschneiden (quadratisch, mittig), wie `scripts/sync-branding.mjs`. */
+async function croppedIcon(markUrl: string): Promise<Uint8Array> {
+  const image = new Image();
+  image.src = markUrl;
+  await image.decode();
+  const size = 256;
+  const scale = size / 32;
+  const source = document.createElement('canvas');
+  source.width = source.height = size;
+  const sctx = source.getContext('2d', { willReadFrequently: true })!;
+  sctx.drawImage(image, 0, 0, size, size);
+  const { data } = sctx.getImageData(0, 0, size, size);
+  let minX = size, minY = size, maxX = -1, maxY = -1;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (data[(y * size + x) * 4 + 3] === 0) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < 0) throw new Error('Icon ist leer');
+  const w = maxX + 1 - minX, h = maxY + 1 - minY;
+  const side = Math.max(w, h);
+  const sx = minX - Math.floor((side - w) / 2 / scale) * scale;
+  const sy = minY - Math.floor((side - h) / 2 / scale) * scale;
+  const out = document.createElement('canvas');
+  out.width = out.height = size;
+  const octx = out.getContext('2d')!;
+  octx.imageSmoothingEnabled = false;
+  octx.drawImage(source, sx, sy, side, side, 0, 0, size, size);
+  const blob = await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/png'));
+  if (!blob) throw new Error('Icon konnte nicht kodiert werden');
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
 /** Eine Uhr versorgt UI, Favicon und natives Fenster, auch über einen Saisonwechsel hinweg. */
 export function BrandProvider({ children }: { children: ReactNode }) {
   const pumpkin = useSettings((s) => s.pumpkin);
@@ -62,8 +99,7 @@ export function BrandProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isTauri()) return;
     const abort = new AbortController();
-    void fetch(brandAsset(season.id, '128x128.png'), { signal: abort.signal })
-      .then((r) => { if (!r.ok) throw new Error(`Icon: ${r.status}`); return r.arrayBuffer(); })
+    void croppedIcon(brandAsset(season.id, 'mark.svg'))
       .then((bytes) => { if (!abort.signal.aborted) return getCurrentWindow().setIcon(bytes); })
       .catch((error) => { if (!abort.signal.aborted) console.error('Pumpkin-App-Icon konnte nicht aktualisiert werden', error); });
     return () => abort.abort();
