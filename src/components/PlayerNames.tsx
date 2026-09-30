@@ -3,29 +3,16 @@ import { useNavigate } from "react-router";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { create } from "zustand";
-import { Check, ChevronsUpDown, Copy, ExternalLink, Loader2, LogIn, Plus, Settings2, Trash2, UserRound } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ErrorNote, Tip } from "@/components/common";
+import { Btn, Dialog, DialogClose, ErrorBox, Menu, Progress, Skel, TextField, type MenuEntry } from "@/components/px";
 import { api } from "@/lib/api";
 import type { MsLoginStart } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { Face, Icon } from "@/pixel/icons";
 import { accountName, isValidPlayerName, useSettings, type ActiveAccount } from "@/store/settings";
 
-// ---------- Microsoft-Anmeldung (ein Dialog für Seitenleiste und Einstellungen) ----------
+// ---------- Microsoft-Anmeldung (ein Dialog für Kontomenü, Einstellungen und Onboarding) ----------
 
-type LoginState = { step: "idle" } | { step: "starting" } | { step: "code"; info: MsLoginStart } | { step: "error"; message: string };
+type LoginState = { step: "idle" } | { step: "starting" } | { step: "code"; info: MsLoginStart } | { step: "done"; name: string } | { step: "error"; message: string };
 const useMsLogin = create<LoginState>(() => ({ step: "idle" }));
 // Jeder Versuch bekommt eine Nummer; Antworten eines abgebrochenen Versuchs werden verworfen.
 let attempt = 0;
@@ -42,15 +29,14 @@ export async function startMsLogin(qc: QueryClient) {
     if (mine !== attempt) return;
     useSettings.getState().selectAccount({ kind: "microsoft", id: account.id, username: account.username });
     void qc.invalidateQueries({ queryKey: ["ms-accounts"] });
-    useMsLogin.setState({ step: "idle" }, true);
-    toast.success(`Angemeldet als ${account.username}`);
+    useMsLogin.setState({ step: "done", name: account.username }, true);
   } catch (err) {
     if (mine === attempt) useMsLogin.setState({ step: "error", message: err instanceof Error ? err.message : String(err) }, true);
   }
 }
 
-function cancelMsLogin() {
-  const running = useMsLogin.getState().step !== "idle" && useMsLogin.getState().step !== "error";
+function closeMsLogin() {
+  const running = ["starting", "code"].includes(useMsLogin.getState().step);
   attempt++;
   useMsLogin.setState({ step: "idle" }, true);
   if (running) void api.msLoginCancel().catch(() => undefined);
@@ -68,57 +54,75 @@ function MsLoginDialog() {
   }
 
   return (
-    <Dialog open={state.step !== "idle"} onOpenChange={(o) => !o && cancelMsLogin()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Mit Microsoft anmelden</DialogTitle>
-          <DialogDescription>
-            Mit deinem Microsoft-Konto spielst du mit deinem gekauften Minecraft, auch auf Online-Servern.
-          </DialogDescription>
-        </DialogHeader>
-        {state.step === "starting" && (
-          <div className="space-y-3" aria-busy>
-            <Skeleton className="h-16 w-full rounded-xl" />
-            <Skeleton className="h-4 w-2/3" />
-          </div>
-        )}
-        {state.step === "code" && (
-          <div className="space-y-4">
-            <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
-              <li>Im Browser öffnet sich die Microsoft-Seite.</li>
-              <li>Gib dort diesen Code ein und bestätige die Anmeldung.</li>
-            </ol>
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted px-4 py-3">
-              <p className="font-mono text-3xl font-semibold tracking-[0.18em] tabular-nums select-all" aria-label={`Code ${state.info.userCode.split("").join(" ")}`}>
-                {state.info.userCode}
-              </p>
-              <Button variant="secondary" onClick={() => copy(state.info.userCode)}>
-                <Copy aria-hidden /> Kopieren
-              </Button>
-            </div>
-            <p className="flex items-center gap-2 text-sm text-muted-foreground" aria-live="polite">
-              <Loader2 className="size-4 animate-spin" aria-hidden /> Warte auf deine Bestätigung im Browser …
-            </p>
-            <p className="text-xs text-muted-foreground">Der Code gilt {Math.max(1, Math.round(state.info.expiresIn / 60))} Minuten.</p>
-          </div>
-        )}
-        {state.step === "error" && <ErrorNote error={new Error(state.message)} onRetry={() => void startMsLogin(qc)} />}
-        <DialogFooter>
-          <Button variant="ghost" onClick={cancelMsLogin}>
-            {state.step === "error" ? "Schließen" : "Abbrechen"}
-          </Button>
+    <Dialog
+      open={state.step !== "idle"}
+      onOpenChange={(o) => !o && closeMsLogin()}
+      title="Mit Microsoft anmelden"
+      width={520}
+      height={420}
+      footer={
+        <>
           {state.step === "code" && (
-            <Button variant="outline" onClick={() => void api.openExternal(state.info.verificationUri)}>
-              <ExternalLink aria-hidden /> Seite erneut öffnen
-            </Button>
+            <Btn icon="ext" onClick={() => void api.openExternal(state.info.verificationUri)}>Seite öffnen</Btn>
           )}
-        </DialogFooter>
-      </DialogContent>
+          {state.step === "done" ? (
+            <Btn variant="p" full style={{ width: 124 }} onClick={closeMsLogin}>Fertig</Btn>
+          ) : (
+            <DialogClose asChild><Btn full style={{ width: 124 }}>{state.step === "error" ? "Schließen" : "Abbrechen"}</Btn></DialogClose>
+          )}
+        </>
+      }
+    >
+      {state.step === "starting" && (
+        <div className="flex flex-col gap-3 pt-1" aria-busy>
+          <Skel style={{ height: 20, width: "80%" }} />
+          <Skel style={{ height: 64, width: 280 }} />
+          <Skel style={{ height: 16, width: "60%" }} />
+        </div>
+      )}
+      {state.step === "code" && (
+        <>
+          <p>Öffne <b>{state.info.verificationUri.replace(/^https?:\/\/(www\.)?/, "")}</b> in deinem Browser und gib diesen Code ein:</p>
+          <div className="codebox">
+            <span className="code select-all" aria-label={`Code ${state.info.userCode.split("").join(" ")}`}>{state.info.userCode}</span>
+            <Btn icon="copy" onClick={() => copy(state.info.userCode)}>Kopieren</Btn>
+          </div>
+          <div className="wait" aria-live="polite">
+            <Progress />
+            <span>Warte auf deine Anmeldung. Der Code gilt {Math.max(1, Math.round(state.info.expiresIn / 60))} Minuten.</span>
+          </div>
+        </>
+      )}
+      {state.step === "done" && (
+        <div className="row mt-2" style={{ gap: 14 }}>
+          <span className="avatar" style={{ width: 48, height: 48 }}><Face name={state.name} size="calc(var(--avs) * 1.5)" /></span>
+          <div>
+            <p className="ok-msg">Angemeldet als {state.name}</p>
+            <p>Das Konto ist jetzt aktiv. Du kannst jederzeit oben rechts wechseln.</p>
+          </div>
+        </div>
+      )}
+      {state.step === "error" && (
+        <>
+          <p className="err-msg">Anmeldung hat nicht geklappt.</p>
+          <p>{state.message}</p>
+          <p className="mt-2">Mit einem Spielernamen kannst du auch ohne Anmeldung spielen.</p>
+          <div className="row mt-3.5">
+            <Btn icon="redo" onClick={() => void startMsLogin(qc)}>Erneut versuchen</Btn>
+          </div>
+        </>
+      )}
     </Dialog>
   );
 }
 
 // ---------- Konten ----------
+
+/** Offene Kontenteile: Menü in der Fensterleiste und Dialog „Spielername hinzufügen“. */
+const useAccountUi = create<{ menu: boolean; offline: boolean }>(() => ({ menu: false, offline: false }));
+/** Öffnet das Kontomenü oben rechts (z. B. aus „Erst Spielernamen festlegen“). */
+export const openAccounts = () => useAccountUi.setState({ menu: true });
+export const openAddOffline = () => useAccountUi.setState({ offline: true, menu: false });
 
 function useMsAccounts() {
   const query = useQuery({ queryKey: ["ms-accounts"], queryFn: api.msAccounts, staleTime: 5 * 60_000, retry: false });
@@ -144,132 +148,11 @@ function useAllAccounts(): ActiveAccount[] {
   ];
 }
 
-const kindLabel = (a: ActiveAccount) => (a.kind === "microsoft" ? "Microsoft-Konto" : "Offline-Spielername");
+const kindLabel = (a: ActiveAccount) => (a.kind === "microsoft" ? "Microsoft-Konto" : "Spielername · Einzelspieler und LAN");
 const keyOf = (a: ActiveAccount) => (a.kind === "microsoft" ? `ms:${a.id}` : `off:${a.name}`);
 
-function Avatar({ name, active, className }: { name: string; active?: boolean; className?: string }) {
-  return (
-    <div
-      aria-hidden
-      className={cn(
-        "grid size-8 shrink-0 place-items-center rounded-md text-xs font-semibold",
-        active ? "bg-gold/15 text-gold" : "bg-muted text-muted-foreground",
-        className,
-      )}
-    >
-      {name.slice(0, 2).toUpperCase() || <UserRound className="size-4" />}
-    </div>
-  );
-}
-
-/** Kontowechsler unten in der Seitenleiste; enthält den einen Microsoft-Anmeldedialog. */
-export function AccountSwitcher({ collapsed }: { collapsed: boolean }) {
-  const active = useSettings((s) => s.active);
-  const select = useSettings((s) => s.selectAccount);
-  const accounts = useAllAccounts();
-  const navigate = useNavigate();
-  const qc = useQueryClient();
-  const name = accountName(active);
-  const label = name ? `Konto: ${name}` : "Kein Konto festgelegt";
-
-  return (
-    <>
-      <DropdownMenu>
-        <Tip show={collapsed} label={label}>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label={`${label}. Konto wechseln`}
-              className={cn(
-                "flex h-12 min-w-0 items-center gap-3 rounded-lg text-left outline-none transition-colors duration-150 hover:bg-sidebar-accent/60 focus-visible:ring-2 focus-visible:ring-ring aria-expanded:bg-sidebar-accent",
-                collapsed ? "justify-center" : "px-2",
-              )}
-            >
-              <Avatar name={name} active={!!active} />
-              <span className={cn("min-w-0 flex-1 leading-tight", collapsed && "sr-only")}>
-                <span className="block truncate text-sm font-medium" title={name || undefined}>
-                  {name || "Kein Konto"}
-                </span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {active ? (active.kind === "microsoft" ? "Microsoft" : "Offline") : "Jetzt festlegen"}
-                </span>
-              </span>
-              {!collapsed && <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
-            </button>
-          </DropdownMenuTrigger>
-        </Tip>
-        <DropdownMenuContent side={collapsed ? "right" : "top"} align={collapsed ? "end" : "start"} className="w-64">
-          {accounts.length > 0 && <DropdownMenuLabel>Konto wechseln</DropdownMenuLabel>}
-          {accounts.map((a) => {
-            const on = sameAccount(active, a);
-            return (
-              <DropdownMenuItem key={keyOf(a)} onSelect={() => select(a)} aria-checked={on} role="menuitemradio">
-                <Avatar name={accountName(a)} active={on} className="size-7" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">{accountName(a)}</span>
-                  <span className="block text-xs text-muted-foreground">{kindLabel(a)}</span>
-                </span>
-                {on && <Check className="text-gold" aria-hidden />}
-              </DropdownMenuItem>
-            );
-          })}
-          {accounts.length > 0 && <DropdownMenuSeparator />}
-          <DropdownMenuItem onSelect={() => void startMsLogin(qc)}>
-            <LogIn aria-hidden /> Mit Microsoft anmelden …
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => navigate("/settings#konten")}>
-            <Settings2 aria-hidden /> Konten verwalten
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <MsLoginDialog />
-    </>
-  );
-}
-
-function AddOfflineForm() {
-  const addAccount = useSettings((s) => s.addAccount);
-  const [name, setName] = useState("");
-  const invalid = name.length > 0 && !isValidPlayerName(name);
-
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!isValidPlayerName(name)) return;
-    addAccount(name);
-    setName("");
-  }
-
-  return (
-    <form onSubmit={submit} className="space-y-2">
-      <Label htmlFor="offline-name">Spielername ohne Anmeldung</Label>
-      <div className="flex flex-wrap gap-2">
-        <Input
-          id="offline-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="z. B. Steve_42"
-          aria-invalid={invalid}
-          aria-describedby="offline-name-hint"
-          className="min-w-40 flex-1"
-          maxLength={16}
-          autoComplete="off"
-        />
-        <Button type="submit" variant="secondary" disabled={!isValidPlayerName(name)}>
-          <Plus aria-hidden /> Hinzufügen
-        </Button>
-      </div>
-      <p id="offline-name-hint" className={invalid ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
-        3–16 Zeichen: Buchstaben, Ziffern und Unterstrich. Reicht für Einzelspieler und Server ohne Anmeldung.
-      </p>
-    </form>
-  );
-}
-
-/** Konten verwalten (Einstellungen; der Kontowechsler in der Seitenleiste führt hierher). */
-export function AccountsSection() {
-  const { active, selectAccount, removeAccount, forgetMicrosoft } = useSettings();
-  const accounts = useAllAccounts();
-  const ms = useMsAccounts();
+function useRemoveAccount() {
+  const { removeAccount, forgetMicrosoft } = useSettings();
   const qc = useQueryClient();
   const removeMs = useMutation({
     mutationFn: (id: string) => api.msAccountRemove(id),
@@ -278,77 +161,145 @@ export function AccountsSection() {
       return qc.invalidateQueries({ queryKey: ["ms-accounts"] });
     },
   });
+  return { remove: (a: ActiveAccount) => (a.kind === "offline" ? removeAccount(a.name) : removeMs.mutate(a.id)), pending: removeMs.isPending };
+}
 
-  function remove(a: ActiveAccount) {
-    if (a.kind === "offline") removeAccount(a.name);
-    else removeMs.mutate(a.id);
+/** Kontomenü oben rechts: Kopf + Name, Konten wechseln, anmelden, Spielername hinzufügen. */
+export function AccountMenu() {
+  const active = useSettings((s) => s.active);
+  const select = useSettings((s) => s.selectAccount);
+  const accounts = useAllAccounts();
+  const { remove } = useRemoveAccount();
+  const open = useAccountUi((s) => s.menu);
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const name = accountName(active);
+
+  const items: MenuEntry[] = [
+    ...(accounts.length ? [{ label: "Konten" } as const] : []),
+    ...accounts.map((a): MenuEntry => ({
+      id: keyOf(a),
+      text: accountName(a),
+      sub: kindLabel(a),
+      lead: <span className="avatar"><Face name={accountName(a)} /></span>,
+      checked: sameAccount(active, a),
+      onSelect: () => select(a),
+    })),
+    ...(accounts.length ? ["-" as const] : []),
+    { id: "ms", text: "Mit Microsoft anmelden", icon: "user", onSelect: () => void startMsLogin(qc) },
+    { id: "off", text: "Spielername hinzufügen", icon: "plus", onSelect: openAddOffline },
+    { id: "set", text: "Einstellungen", icon: "gear", onSelect: () => navigate("/settings#konten") },
+    ...(active?.kind === "microsoft"
+      ? ["-" as const, { id: "out", text: `Abmelden (${name})`, icon: "power" as const, bad: true, onSelect: () => remove(active) }]
+      : []),
+  ];
+
+  return (
+    <>
+      <Menu
+        open={open}
+        onOpenChange={(o) => useAccountUi.setState({ menu: o })}
+        className="me"
+        items={items}
+        trigger={
+          <button type="button" className="barbtn mebtn fx" aria-label={name ? `Konto: ${name}. Wechseln` : "Kein Konto. Festlegen"}>
+            <span className="avatar">{name ? <Face name={name} /> : <Icon name="user" />}</span>
+            <span className={cn("who", !name && "text-warn")}>{name || "Kein Konto"}</span>
+            <Icon name="chevd" small />
+          </button>
+        }
+      />
+      <MsLoginDialog />
+      <AddOfflineDialog />
+    </>
+  );
+}
+
+function AddOfflineDialog() {
+  const open = useAccountUi((s) => s.offline);
+  const addAccount = useSettings((s) => s.addAccount);
+  const [name, setName] = useState("");
+  const invalid = name.length > 0 && !isValidPlayerName(name);
+  const close = () => {
+    useAccountUi.setState({ offline: false });
+    setName("");
+  };
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!isValidPlayerName(name)) return;
+    addAccount(name);
+    toast.success(`Spielername „${name}“ ist aktiv`);
+    close();
   }
 
   return (
-    <section id="konten" aria-labelledby="konten-title" className="scroll-mt-6 space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h2 id="konten-title" className="text-base font-semibold">
-            Konten
-          </h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">Mit dem aktiven Konto startet Minecraft.</p>
-        </div>
-        <Button onClick={() => void startMsLogin(qc)}>
-          <LogIn aria-hidden /> Mit Microsoft anmelden
-        </Button>
-      </div>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => !o && close()}
+      title="Spielername hinzufügen"
+      width={480}
+      height={330}
+      footer={
+        <>
+          <DialogClose asChild><Btn>Abbrechen</Btn></DialogClose>
+          <Btn variant="p" full style={{ width: 140 }} type="submit" form="off-form" disabled={!isValidPlayerName(name)}>Hinzufügen</Btn>
+        </>
+      }
+    >
+      <form id="off-form" className="nf" onSubmit={submit}>
+        <label htmlFor="off-name">Spielername</label>
+        <TextField id="off-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={16} placeholder="z. B. Steve_42" autoFocus aria-invalid={invalid} />
+        <span className={invalid ? "help text-bad" : "help"} aria-live="polite">
+          {invalid ? "Nur Buchstaben, Ziffern und Unterstrich, 3 bis 16 Zeichen." : "3 bis 16 Zeichen: Buchstaben, Ziffern und Unterstrich. Reicht für Einzelspieler, LAN und Server ohne Anmeldung."}
+        </span>
+      </form>
+    </Dialog>
+  );
+}
 
-      <div className="rounded-xl border bg-card">
+/** Konten verwalten (Einstellungen). */
+export function AccountsSection() {
+  const active = useSettings((s) => s.active);
+  const select = useSettings((s) => s.selectAccount);
+  const accounts = useAllAccounts();
+  const ms = useMsAccounts();
+  const { remove, pending } = useRemoveAccount();
+  const qc = useQueryClient();
+
+  return (
+    <>
+      <div className="acc-list" aria-label="Konten">
         {ms.isPending && accounts.length === 0 ? (
-          <div className="p-4">
-            <Skeleton className="h-10 w-full" />
-          </div>
-        ) : accounts.length > 0 ? (
-          <ul className="divide-y" aria-label="Konten">
-            {accounts.map((a) => {
-              const on = sameAccount(active, a);
-              const name = accountName(a);
-              return (
-                <li key={keyOf(a)} className="flex min-w-0 items-center gap-3 px-4 py-3">
-                  <Avatar name={name} active={on} className="size-9" />
-                  <div className="min-w-0 flex-1 leading-tight">
-                    <p className="truncate font-medium" title={name}>
-                      {name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{kindLabel(a)}</p>
-                  </div>
-                  {on ? (
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-gold">
-                      <Check className="size-3.5" aria-hidden /> Aktiv
-                    </span>
-                  ) : (
-                    <Button variant="ghost" size="sm" onClick={() => selectAccount(a)}>
-                      Verwenden
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`${name} entfernen`}
-                    title="Entfernen"
-                    disabled={a.kind === "microsoft" && removeMs.isPending}
-                    onClick={() => remove(a)}
-                    className="text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 aria-hidden />
-                  </Button>
-                </li>
-              );
-            })}
-          </ul>
+          <Skel style={{ height: 60 }} />
+        ) : accounts.length ? (
+          accounts.map((a) => {
+            const on = sameAccount(active, a);
+            const name = accountName(a);
+            return (
+              <div key={keyOf(a)} className={cn("acct", on && "on")}>
+                <span className="avatar"><Face name={name} /></span>
+                <div className="an">
+                  <b className="ell block">{name}</b>
+                  <span>{kindLabel(a)}{on ? " · aktiv" : ""}</span>
+                </div>
+                {!on && <Btn size="s" onClick={() => select(a)}>Wechseln</Btn>}
+                <Btn variant="g" size="s" disabled={a.kind === "microsoft" && pending} onClick={() => remove(a)}>
+                  {a.kind === "microsoft" ? "Abmelden" : "Entfernen"}
+                </Btn>
+              </div>
+            );
+          })
         ) : (
-          <p className="px-4 py-6 text-center text-sm text-muted-foreground">Noch kein Konto. Melde dich an oder leg einen Spielernamen an.</p>
+          <p className="muted py-3">Noch kein Konto. Melde dich an oder leg einen Spielernamen an.</p>
         )}
-        {ms.error && <ErrorNote className="m-4" title="Microsoft-Konten konnten nicht geladen werden" error={ms.error} onRetry={() => void ms.refetch()} />}
-        <div className="border-t p-4">
-          <AddOfflineForm />
-        </div>
       </div>
-    </section>
+      {ms.error && <ErrorBox className="mt-3" title="Microsoft-Konten konnten nicht geladen werden" error={ms.error} onRetry={() => void ms.refetch()} />}
+      <div className="row flex-wrap" style={{ marginTop: 12 }}>
+        <Btn icon="user" onClick={() => void startMsLogin(qc)}>Mit Microsoft anmelden</Btn>
+        <Btn icon="plus" onClick={openAddOffline}>Spielername hinzufügen</Btn>
+      </div>
+      <p className="help" style={{ marginTop: 10 }}>Mit einem Spielernamen spielst du allein, im LAN und auf Servern ohne Anmeldung. Für die meisten Server brauchst du ein Microsoft-Konto.</p>
+    </>
   );
 }

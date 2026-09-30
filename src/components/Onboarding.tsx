@@ -2,76 +2,54 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, Compass, Loader2, LogIn, Sparkles, TreePine } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Btn, TextField } from "@/components/px";
 import { startMsLogin } from "@/components/PlayerNames";
 import { useCreateInstance, usePlay, useVersions } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import type { ContentVersion } from "@/lib/modrinth";
 import { cn } from "@/lib/utils";
+import { Glyph, Icon, type GlyphName, type GlyphPalette } from "@/pixel/icons";
+import { PixelScene } from "@/pixel/PixelScene";
 import { accountName, isValidPlayerName, useSettings } from "@/store/settings";
 
 const SODIUM = "AANobbMI";
 
 type Start = "vanilla" | "mods" | "modpack";
 
-const STARTS: { id: Start; title: string; text: string; icon: typeof TreePine }[] = [
-  { id: "vanilla", title: "Minecraft pur", text: "Neueste Version, ohne Mods.", icon: TreePine },
-  { id: "mods", title: "Mit Mods", text: "Fabric mit Sodium: läuft flüssiger, weitere Mods jederzeit.", icon: Sparkles },
-  { id: "modpack", title: "Modpack", text: "Ein fertiges Paket aus Entdecken aussuchen.", icon: Compass },
+const STARTS: { id: Start; glyph: GlyphName; pal: GlyphPalette; title: string; text: string }[] = [
+  { id: "vanilla", glyph: "cube", pal: "steel", title: "Minecraft pur", text: "Neueste Version, ohne Mods" },
+  { id: "mods", glyph: "bolt", pal: "gold", title: "Mit Mods", text: "Fabric mit Sodium für mehr Bilder pro Sekunde" },
+  { id: "modpack", glyph: "chest", pal: "violet", title: "Modpack aussuchen", text: "Fertige Sammlungen im Katalog ansehen" },
 ];
 
-function NameField({ name, setName, autoFocus }: { name: string; setName: (n: string) => void; autoFocus?: boolean }) {
-  const nameOk = isValidPlayerName(name);
-  return (
-    <div className="min-w-0 space-y-2">
-      <Label htmlFor="onboarding-name">Spielername</Label>
-      <div className="relative">
-        <Input
-          id="onboarding-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="z. B. Steve_42"
-          maxLength={16}
-          autoFocus={autoFocus}
-          autoComplete="off"
-          aria-invalid={name.length > 0 && !nameOk}
-          aria-describedby="onboarding-name-hint"
-          className="pr-9"
-        />
-        {nameOk && <Check className="absolute top-1/2 right-3 size-4 -translate-y-1/2 text-primary" aria-hidden />}
-      </div>
-      <p id="onboarding-name-hint" className={cn("text-xs", name.length > 0 && !nameOk ? "text-destructive" : "text-muted-foreground")}>
-        3–16 Zeichen: Buchstaben, Ziffern und Unterstrich.
-      </p>
-    </div>
-  );
-}
-
-/** Erster Start: Konto (Spielername oder Microsoft) und, solange es keine Instanz gibt, womit es losgeht. */
-export function Onboarding({ needsInstance }: { needsInstance: boolean }) {
+/** Erster Start ohne Instanz: zwei Schritte über der Szene. Name (oder Microsoft), dann womit es losgeht. */
+export function Onboarding() {
   const active = useSettings((s) => s.active);
   const addAccount = useSettings((s) => s.addAccount);
+  const [step, setStep] = useState<1 | 2>(active ? 2 : 1);
   const [name, setName] = useState(active?.kind === "offline" ? active.name : "");
-  const [start, setStart] = useState<Start>("vanilla");
+  const [start, setStart] = useState<Start>("mods");
   const [busy, setBusy] = useState(false);
   const qc = useQueryClient();
   const versions = useVersions();
   const create = useCreateInstance();
   const play = usePlay();
   const navigate = useNavigate();
-  const nameOk = isValidPlayerName(name);
   const microsoft = active?.kind === "microsoft";
-  const accountOk = nameOk || microsoft;
+  const nameOk = isValidPlayerName(name);
+  const invalid = name.length > 0 && !nameOk;
   const releases = versions.data?.filter((v) => v.type === "release").map((v) => v.id) ?? [];
 
-  async function submit(e: FormEvent) {
+  function next(e: FormEvent) {
     e.preventDefault();
-    if (!accountOk) return;
-    if (!microsoft && name !== accountName(active)) addAccount(name);
-    if (!needsInstance) return;
+    if (!microsoft) {
+      if (!nameOk) return;
+      if (name !== accountName(active)) addAccount(name);
+    }
+    setStep(2);
+  }
+
+  async function go() {
     if (start === "modpack") return navigate("/discover");
     setBusy(true);
     try {
@@ -81,7 +59,7 @@ export function Onboarding({ needsInstance }: { needsInstance: boolean }) {
         return;
       }
       // Neueste Minecraft-Version, für die es Sodium schon gibt; Release-Versionen von Sodium bevorzugt.
-      const sodium = (await api.modrinthVersions(SODIUM, null, "fabric")) as (ContentVersion & { version_type?: string })[];
+      const sodium = (await api.modrinthVersions(SODIUM, null, "fabric")) as ContentVersion[];
       const ranked = [...sodium.filter((v) => (v.version_type ?? "release") === "release"), ...sodium];
       const mc = releases.find((r) => ranked.some((v) => v.game_versions.includes(r)));
       const version = ranked.find((v) => mc && v.game_versions.includes(mc));
@@ -96,94 +74,93 @@ export function Onboarding({ needsInstance }: { needsInstance: boolean }) {
     }
   }
 
-  const msButton = (
-    <Button type="button" variant="outline" onClick={() => void startMsLogin(qc)}>
-      <LogIn aria-hidden /> Mit Microsoft anmelden
-    </Button>
+  const steps = (
+    <div className="steps" aria-label={`Schritt ${step} von 2`}>
+      <i className="on" />
+      <i className={cn(step > 1 && "on")} />
+    </div>
   );
 
-  // Kompakt über dem Hero, wenn nur das Konto fehlt.
-  if (!needsInstance)
-    return (
-      <form onSubmit={submit} aria-labelledby="account-needed" className="rounded-xl border bg-card p-5">
-        <h2 id="account-needed" className="text-base font-semibold">
-          Mit welchem Namen spielst du?
-        </h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">Ohne Konto kann Minecraft nicht starten.</p>
-        <div className="mt-4 flex flex-wrap items-start gap-3">
-          <div className="w-full max-w-xs min-w-48 flex-1">
-            <NameField name={name} setName={setName} />
-          </div>
-          <div className="flex flex-wrap gap-2 sm:mt-[1.375rem]">
-            <Button type="submit" variant="secondary" disabled={!nameOk}>
-              Speichern
-            </Button>
-            {msButton}
-          </div>
-        </div>
-      </form>
-    );
-
   return (
-    <form onSubmit={submit} className="max-w-2xl space-y-10 py-2 xl:py-6">
-      <header>
-        <h1 className="text-3xl font-semibold tracking-tight xl:text-4xl">Willkommen bei Voxlet</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Zwei kurze Fragen, dann geht es los.</p>
-      </header>
-
-      <section aria-labelledby="step-account" className="space-y-4">
-        <h2 id="step-account" className="text-base font-semibold">
-          1. Mit welchem Namen spielst du?
-        </h2>
-        {microsoft ? (
-          <p className="flex items-center gap-2 rounded-xl border bg-card px-4 py-3 text-sm">
-            <Check className="size-4 text-gold" aria-hidden /> Angemeldet als <span className="font-medium">{accountName(active)}</span>
-          </p>
-        ) : (
-          <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
-            <div className="w-full max-w-xs min-w-48 flex-1">
-              <NameField name={name} setName={setName} autoFocus />
-            </div>
-            <div className="flex items-center gap-3 sm:mt-[1.375rem]">
-              <span className="text-sm text-muted-foreground">oder</span>
-              {msButton}
-            </div>
-          </div>
-        )}
-      </section>
-
-      <fieldset className="space-y-4">
-        <legend className="text-base font-semibold">2. Womit willst du starten?</legend>
-        <div className="divide-y overflow-hidden rounded-xl border bg-card">
-          {STARTS.map((s) => (
-            <label
-              key={s.id}
-              className={cn(
-                "flex cursor-pointer items-center gap-4 px-4 py-3.5 transition-colors duration-150 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-inset",
-                start === s.id ? "bg-accent" : "hover:bg-accent/50",
+    <div className="onb">
+      <PixelScene bio="forest" seed={12} mode="hero" className="scene" />
+      <div className="shade-onb" />
+      <div className="onb-card plate" role="dialog" aria-modal="true" aria-labelledby="onb-t">
+        {step === 1 ? (
+          <form onSubmit={next} className="contents">
+            {steps}
+            <h1 id="onb-t">Willkommen bei Voxlet</h1>
+            <p>Wie heißt du im Spiel?</p>
+            <div className="ob">
+              {microsoft ? (
+                <p className="ok-msg">Angemeldet als {accountName(active)}</p>
+              ) : (
+                <div className="nf">
+                  <label htmlFor="ob-name">Spielername</label>
+                  <TextField id="ob-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={16} placeholder="z. B. Steve_42" autoFocus aria-invalid={invalid} aria-describedby="ob-help" />
+                  {/* Fehler ersetzt den Hilfetext an gleicher Stelle: keine leere Reservezeile, kein Springen */}
+                  <span className={invalid ? "help text-bad" : "help"} id="ob-help" aria-live="polite">
+                    {invalid ? "Nur Buchstaben, Ziffern und Unterstrich, 3 bis 16 Zeichen." : "Reicht für Einzelspieler, LAN und Server ohne Anmeldung."}
+                  </span>
+                </div>
               )}
-            >
-              <input type="radio" name="start" value={s.id} checked={start === s.id} onChange={() => setStart(s.id)} className="sr-only" />
-              <s.icon className={cn("size-5 shrink-0", start === s.id ? "text-primary" : "text-muted-foreground")} aria-hidden />
-              <span className="min-w-0 flex-1">
-                <span className="block font-medium">{s.title}</span>
-                <span className="block text-sm text-muted-foreground">{s.text}</span>
-              </span>
-              <span
-                aria-hidden
-                className={cn("grid size-4 shrink-0 place-items-center rounded-full border", start === s.id ? "border-primary" : "border-muted-foreground/60")}
+              <div className="or">oder</div>
+              <Btn icon="user" full style={{ width: "100%" }} onClick={() => void startMsLogin(qc)}>Mit Microsoft anmelden</Btn>
+              <p className="help" style={{ marginTop: 8 }}>Nötig für die meisten Server und Realms. Du kannst es später nachholen.</p>
+            </div>
+            <div className="of">
+              <span className="faint" style={{ fontSize: 12.5 }}>Schritt 1 von 2</span>
+              <Btn type="submit" variant="p" full style={{ width: 140 }} disabled={!microsoft && !nameOk}>
+                Weiter<Icon name="chev" />
+              </Btn>
+            </div>
+          </form>
+        ) : (
+          <>
+            {steps}
+            <h1 id="onb-t">Womit willst du starten?</h1>
+            <p>Du kannst jederzeit weitere Instanzen anlegen.</p>
+            <div className="ob">
+              <div className="starts" role="radiogroup" aria-label="Start">
+                {STARTS.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className="start fx"
+                    role="radio"
+                    aria-checked={start === s.id}
+                    aria-pressed={start === s.id}
+                    onClick={() => setStart(s.id)}
+                  >
+                    <Glyph name={s.glyph} pal={s.pal} />
+                    <div>
+                      <b>{s.title}</b>
+                      <span>{s.text}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="of">
+              {microsoft ? (
+                <span className="faint" style={{ fontSize: 12.5 }}>Angemeldet als {accountName(active)}</span>
+              ) : (
+                <Btn variant="g" onClick={() => setStep(1)} disabled={busy}>Zurück</Btn>
+              )}
+              <Btn
+                variant="p"
+                size="l"
+                full
+                style={{ width: 200 }}
+                disabled={busy || (start !== "modpack" && !releases.length)}
+                onClick={() => void go()}
               >
-                {start === s.id && <span className="size-2 rounded-full bg-primary" />}
-              </span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <Button type="submit" className="h-12 px-8 text-base font-semibold" disabled={!accountOk || busy || (start !== "modpack" && !releases.length)}>
-        {busy && <Loader2 className="animate-spin" aria-hidden />}
-        {busy ? "Wird eingerichtet …" : start === "modpack" ? "Modpack aussuchen" : "Los geht's"}
-      </Button>
-    </form>
+                {busy ? "Wird eingerichtet" : <>Los geht's<Icon name="play" /></>}
+              </Btn>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }

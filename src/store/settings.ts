@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+export type PxSize = "s" | "m" | "l";
+
 /** Aktives Konto: Offline-Spielername oder Microsoft-Konto (der Name wird für die Anzeige mitgemerkt). */
 export type ActiveAccount = { kind: "offline"; name: string } | { kind: "microsoft"; id: string; username: string };
 
@@ -14,9 +16,11 @@ interface SettingsState {
   msClientId: string;
   active: ActiveAccount | null;
   offlineAccounts: string[];
-  /** Seitenleiste eingeklappt; null = automatisch nach Fensterbreite. */
-  sidebarCollapsed: boolean | null;
-  set: (patch: Partial<Pick<SettingsState, "javaPath" | "memoryMb" | "msClientId" | "sidebarCollapsed">>) => void;
+  /** Pixelgröße: 2/3/4 CSS-Pixel bei 100 % Skalierung. */
+  pxSize: PxSize;
+  /** Bewegte Szenen (Sterne, Wolken, Glut); pausieren ohnehin, solange Minecraft läuft. */
+  motion: boolean;
+  set: (patch: Partial<Pick<SettingsState, "javaPath" | "memoryMb" | "msClientId" | "pxSize" | "motion">>) => void;
   reset: () => void;
   addAccount: (name: string) => void;
   selectAccount: (account: ActiveAccount) => void;
@@ -44,7 +48,8 @@ export const useSettings = create<SettingsState>()(
       msClientId: "",
       active: null,
       offlineAccounts: [],
-      sidebarCollapsed: null,
+      pxSize: "m",
+      motion: true,
       set: (patch) => set(patch),
       reset: () => set(defaults),
       addAccount: (name) =>
@@ -66,10 +71,12 @@ export const useSettings = create<SettingsState>()(
     }),
     {
       name: "launcher-settings",
-      version: 3,
+      version: 4,
       migrate: (old, version) => {
+        // v3 hatte noch die Seitenleiste; Pixelgröße und Bewegung kamen mit Pixelkino.
+        if (version === 3) return { ...(old as object), pxSize: "m", motion: true } as unknown as SettingsState;
         // v1 kannte nur einen Offline-Namen, v2 eine Liste mit `offlineName` als aktivem Namen.
-        const prev = old as { javaPath?: string; memoryMb?: number; offlineName?: string; offlineAccounts?: string[]; sidebarCollapsed?: boolean | null };
+        const prev = old as { javaPath?: string; memoryMb?: number; offlineName?: string; offlineAccounts?: string[] };
         const name = prev.offlineName && isValidPlayerName(prev.offlineName) ? prev.offlineName : "";
         const accounts = version >= 2 ? (prev.offlineAccounts ?? []) : name ? [name] : [];
         return {
@@ -79,7 +86,8 @@ export const useSettings = create<SettingsState>()(
           msClientId: "",
           active: offline(name),
           offlineAccounts: accounts,
-          sidebarCollapsed: prev.sidebarCollapsed ?? null,
+          pxSize: "m",
+          motion: true,
         } as unknown as SettingsState;
       },
     },

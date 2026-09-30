@@ -30,6 +30,9 @@ interface GameState {
   logs: Record<string, LogLine[]>;
   /** Letzter Absturz je Instanz, bis zum nächsten Start (Hinweis im Protokoll). */
   crashes: Record<string, ExitPayload>;
+  /** Startzeit laufender Spiele (Unix-ms) für „Läuft seit“. */
+  started: Record<string, number>;
+  setStarted: (instanceId: string, at: number | null) => void;
   setProgress: (p: InstallProgress) => void;
   clearProgress: (instanceId: string) => void;
   setLaunching: (instanceId: string, launching: boolean) => void;
@@ -44,6 +47,12 @@ export const useGame = create<GameState>()((set) => ({
   launching: {},
   logs: {},
   crashes: {},
+  started: {},
+  setStarted: (id, at) =>
+    set((s) => {
+      const { [id]: _, ...rest } = s.started;
+      return { started: at == null ? rest : { ...rest, [id]: at } };
+    }),
   setProgress: (p) => set((s) => ({ installs: { ...s.installs, [p.instanceId]: p } })),
   clearProgress: (id) =>
     set((s) => {

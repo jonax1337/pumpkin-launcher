@@ -1,306 +1,467 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { useQuery } from "@tanstack/react-query";
+import { Slot } from "radix-ui";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open as openFile } from "@tauri-apps/plugin-dialog";
-import { ChevronRight, Compass, FileArchive, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TemplatesTab } from "@/components/TemplatesTab";
-import { MemorySlider } from "@/components/common";
-import { ContentResults, PackInstallButton } from "@/components/ContentBrowser";
-import { useContentInstall, useContentState } from "@/hooks/useContent";
-import { useCreateInstance, useLoaderVersions, useMemory, useVersions } from "@/hooks/useInstances";
+import { Btn, Checkbox, ConfirmDialog, Dialog, DialogClose, Empty, ErrorBox, ProjectIcon, SearchField, Seg, Select, Skel, TextField, Tip } from "@/components/px";
+import { MemoryChooser } from "@/components/common";
+import { useInstallPack } from "@/components/ContentBrowser";
+import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { useCreateInstance, useLoaderVersions, useVersions } from "@/hooks/useInstances";
+import { useDeleteTemplate, useTemplates } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
-import { formatMemory } from "@/lib/format";
-import { ALL_LOADERS, LOADER_LABELS, SUPPORTED_LOADERS, type ModLoader } from "@/lib/types";
+import { formatDate } from "@/lib/format";
+import { formatDownloads, progressLabel } from "@/lib/modrinth";
+import { LOADER_LABELS, type ModLoader, type Template } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { Glyph, Icon, type IconName } from "@/pixel/icons";
+import "@/styles/library.css";
 
-type Tab = "empty" | "modpack" | "file" | "template";
+type Tab = "blank" | "pack" | "file" | "tpl";
 
-// Radix-Select erlaubt keinen leeren Wert; steht für loaderVersion = null.
+const TABS: { value: Tab; label: string; icon: IconName }[] = [
+  { value: "blank", label: "Leer", icon: "plus" },
+  { value: "pack", label: "Modpack", icon: "box" },
+  { value: "file", label: "Datei", icon: "file" },
+  { value: "tpl", label: "Vorlage", icon: "save" },
+];
+
+const LOADERS: ModLoader[] = ["vanilla", "fabric", "quilt", "forge", "neoforge"];
+const LOADER_HELP: Record<ModLoader, string> = {
+  vanilla: "Minecraft pur, ohne Mods.",
+  fabric: "Leicht und schnell. Die meisten Leistungs-Mods gibt es für Fabric.",
+  quilt: "Wie Fabric, kann auch die meisten Fabric-Mods laden.",
+  forge: "Für große, klassische Mods wie Create.",
+  neoforge: "Nachfolger von Forge für neuere Versionen.",
+};
+
+// Leerer Wert steht für loaderVersion = null („neueste stabile“).
 const LATEST = "latest";
 
 const packName = (path: string) => path.split(/[\\/]/).pop()!.replace(/\.mrpack$/i, "");
 
-function EmptyTab({ onDone }: { onDone: (id: string) => void }) {
-  const defaultMemory = useMemory().value;
-  const [name, setName] = useState("");
-  const [snapshots, setSnapshots] = useState(false);
-  const [version, setVersion] = useState("");
-  const [loader, setLoader] = useState<ModLoader>("vanilla");
-  const [loaderVersion, setLoaderVersion] = useState(LATEST);
-  const [memory, setMemory] = useState<number | null>(null);
-  const versions = useVersions();
-  const create = useCreateInstance();
+function useDebounced<T>(value: T, ms: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return debounced;
+}
 
-  const filtered = versions.data?.filter((v) => v.type === "release" || snapshots) ?? [];
-  // Neueste Version vorauswählen, bis der Nutzer selbst wählt
-  const selected = filtered.some((v) => v.id === version) ? version : (filtered[0]?.id ?? "");
-  const loaderVersions = useLoaderVersions(loader, selected);
-  // Gewählte Loader-Version verfällt, wenn es sie für die neue Minecraft-Version nicht gibt
-  const selectedLoader = loaderVersions.data?.some((v) => v.version === loaderVersion) ? loaderVersion : LATEST;
-  const loaderUnavailable = loader !== "vanilla" && (!!loaderVersions.error || loaderVersions.data?.length === 0);
-  const defaultName = `${loader === "vanilla" ? "Minecraft" : LOADER_LABELS[loader]} ${selected}`;
-
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    create.mutate(
-      {
-        name: name.trim() || defaultName,
-        minecraftVersion: selected,
-        loader,
-        loaderVersion: selectedLoader === LATEST ? null : selectedLoader,
-        memoryMb: memory,
-      },
-      { onSuccess: (inst) => onDone(inst.id) },
-    );
-  }
-
+/** Modpack aus dem Katalog als neue Instanz: Suche und Auswahlliste. */
+function PackPane({ selected, onSelect }: { selected: string | null; onSelect: (p: { id: string; title: string }) => void }) {
+  const [input, setInput] = useState("");
+  const query = useDebounced(input.trim(), 300);
+  const results = useQuery({
+    queryKey: ["modrinth-search", "modpack", query, null, null, "pick"],
+    queryFn: () => api.modrinthSearch(query, "modpack", null, null, 0),
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
   return (
-    <form onSubmit={submit} className="space-y-5">
-      <div className="space-y-2">
-        <Label htmlFor="inst-version">Minecraft-Version</Label>
-        {versions.isLoading ? (
-          <Skeleton className="h-9 w-full" />
-        ) : (
-          <Select value={selected} onValueChange={setVersion} disabled={!filtered.length}>
-            <SelectTrigger id="inst-version" className="w-full">
-              <SelectValue placeholder={versions.error ? "Versionen gerade nicht erreichbar" : "Keine Versionen"} />
-            </SelectTrigger>
-            <SelectContent className="max-h-72">
-              {filtered.map((v, i) => (
-                <SelectItem key={v.id} value={v.id}>
-                  {v.id}
-                  {i === 0 && <span className="ml-2 text-xs text-primary">neueste</span>}
-                  {v.type !== "release" && <span className="ml-2 text-xs text-gold">Vorschau</span>}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+    <>
+      <div className="nf">
+        <SearchField value={input} onChange={setInput} placeholder="Modpacks suchen" autoFocus />
       </div>
-      <div className="space-y-2">
-        <Label id="inst-loader">Mod-Loader</Label>
-        <div role="radiogroup" aria-labelledby="inst-loader" className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2">
-          {ALL_LOADERS.map((l) => {
-            const soon = !SUPPORTED_LOADERS.includes(l);
-            return (
-              <button
-                key={l}
-                type="button"
-                role="radio"
-                aria-checked={loader === l}
-                disabled={soon}
-                onClick={() => setLoader(l)}
-                className={cn(
-                  "flex min-h-14 flex-col justify-center rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
-                  loader === l ? "border-primary bg-accent" : "hover:bg-accent/50",
-                )}
-              >
-                <span className="font-medium">{LOADER_LABELS[l]}</span>
-                <span className="text-xs text-muted-foreground">{soon ? "bald verfügbar" : l === "vanilla" ? "ohne Mods" : "mit Mods"}</span>
-              </button>
-            );
-          })}
-        </div>
-        {loaderUnavailable && (
-          <p role="alert" className="text-xs text-destructive">
-            {loaderVersions.error ? `${LOADER_LABELS[loader]} ist gerade nicht erreichbar.` : `Für Minecraft ${selected} gibt es noch kein ${LOADER_LABELS[loader]}.`}
-          </p>
-        )}
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="inst-name">
-          Name <span className="font-normal text-muted-foreground">(optional)</span>
-        </Label>
-        <Input id="inst-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={defaultName} />
-      </div>
-
-      <details className="group">
-        <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded-md text-sm font-medium text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-          <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden /> Erweitert
-        </summary>
-        <div className="mt-4 space-y-5">
-          <div className="flex items-center justify-between gap-3">
-            <Label htmlFor="inst-snapshots">Vorschau-Versionen (Snapshots) anzeigen</Label>
-            <Switch id="inst-snapshots" checked={snapshots} onCheckedChange={setSnapshots} />
-          </div>
-          {loader !== "vanilla" && (
-            <div className="space-y-2">
-              <Label htmlFor="inst-loader-version">{LOADER_LABELS[loader]}-Version</Label>
-              <Select value={selectedLoader} onValueChange={setLoaderVersion} disabled={loaderUnavailable || loaderVersions.isLoading}>
-                <SelectTrigger id="inst-loader-version" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="max-h-72">
-                  <SelectItem value={LATEST}>Neueste stabile (empfohlen)</SelectItem>
-                  {loaderVersions.data?.map((v) => (
-                    <SelectItem key={v.version} value={v.version}>
-                      {v.version}
-                      {!v.stable && <span className="ml-2 text-xs text-gold">Beta</span>}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          <div className="space-y-3">
-            <div className="flex items-start justify-between gap-4">
+      {results.error ? (
+        <ErrorBox title="Der Katalog ist gerade nicht erreichbar" error={results.error} onRetry={() => void results.refetch()} />
+      ) : (
+        <div className="pickl" aria-busy={results.isPending || undefined}>
+          {results.isPending && [0, 1, 2, 3].map((k) => <Skel key={k} />)}
+          {results.data?.hits.map((hit) => (
+            <button
+              key={hit.project_id}
+              type="button"
+              className="pk fx"
+              aria-pressed={selected === hit.project_id}
+              onClick={() => onSelect({ id: hit.project_id, title: hit.title })}
+            >
+              <ProjectIcon url={hit.icon_url} seed={hit.project_id} />
               <div className="min-w-0">
-                <Label htmlFor="inst-memory-custom">Eigener Arbeitsspeicher</Label>
-                <p className="mt-1 text-xs text-muted-foreground tabular-nums">Aus: Standard ({formatMemory(defaultMemory)}).</p>
+                <b>{hit.title}</b>
+                <span>von {hit.author} · {hit.description}</span>
               </div>
-              <Switch id="inst-memory-custom" checked={memory != null} onCheckedChange={(on) => setMemory(on ? defaultMemory : null)} />
-            </div>
-            {memory != null && <MemorySlider id="inst-memory" value={memory} onChange={setMemory} />}
-          </div>
+              <span><span className="num">{formatDownloads(hit.downloads)}</span></span>
+            </button>
+          ))}
+          {results.data && !results.data.hits.length && <p className="muted">Kein Modpack gefunden für „{query}“.</p>}
         </div>
-      </details>
-
-      <DialogFooter>
-        <Button type="submit" disabled={!selected || loaderUnavailable || create.isPending}>
-          {create.isPending ? "Wird erstellt…" : "Erstellen"}
-        </Button>
-      </DialogFooter>
-    </form>
+      )}
+    </>
   );
 }
 
-function FileTab({ path, setPath, onDone }: { path: string; setPath: (p: string) => void; onDone: (id: string) => void }) {
-  const [name, setName] = useState("");
-  const install = useContentInstall();
-  const progress = useContentState((s) => s.progress);
+/** Neue Instanz aus einer gespeicherten Vorlage; Vorlagen lassen sich hier auch löschen. */
+function TemplatePane({ selected, onSelect }: { selected: string | null; onSelect: (t: Template | null) => void }) {
+  const templates = useTemplates();
+  const del = useDeleteTemplate();
+  const [toDelete, setToDelete] = useState<Template | null>(null);
 
-  async function choose() {
+  if (templates.error) return <ErrorBox title="Vorlagen konnten nicht geladen werden" error={templates.error} onRetry={() => void templates.refetch()} />;
+  if (templates.isPending)
+    return (
+      <div className="pickl">
+        {[0, 1].map((k) => <Skel key={k} />)}
+      </div>
+    );
+  if (!templates.data.length)
+    return (
+      <Empty ill={<Glyph name="chest" pal="sand" big />} title="Noch keine Vorlagen" minHeight={280}>
+        Speichere eine Instanz über ihr Menü mit „Als Vorlage speichern“, dann kannst du sie hier als Ausgangspunkt nehmen.
+      </Empty>
+    );
+
+  return (
+    <>
+      <div className="pickl">
+        {templates.data.map((t) => (
+          <div key={t.id} className="pkrow">
+            <button type="button" className="pk fx" aria-pressed={selected === t.id} onClick={() => onSelect(t)}>
+              <Glyph name="chest" pal="sand" />
+              <div className="min-w-0">
+                <b>{t.name}</b>
+                <span>
+                  {LOADER_LABELS[t.loader]} {t.minecraftVersion} · {t.modCount} {t.modCount === 1 ? "Inhalt" : "Inhalte"} · gespeichert {formatDate(t.createdAt)}
+                </span>
+              </div>
+              <span />
+            </button>
+            <Tip label="Vorlage löschen">
+              <Btn variant="g" size="s" iconOnly icon="trash" tone="bad" aria-label={`Vorlage ${t.name} löschen`} disabled={del.isPending} onClick={() => setToDelete(t)} />
+            </Tip>
+          </div>
+        ))}
+      </div>
+      <p className="help" style={{ marginTop: 12 }}>Vorlagen speicherst du über das Menü einer Instanz: „Als Vorlage speichern“.</p>
+      <ConfirmDialog
+        open={!!toDelete}
+        onOpenChange={(o) => !o && setToDelete(null)}
+        title={`Vorlage „${toDelete?.name ?? ""}“ löschen?`}
+        text="Instanzen, die aus der Vorlage entstanden sind, bleiben erhalten."
+        pending={del.isPending}
+        onConfirm={() =>
+          toDelete &&
+          del.mutate(toDelete.id, {
+            onSuccess: () => {
+              if (selected === toDelete.id) onSelect(null);
+              setToDelete(null);
+            },
+          })
+        }
+      />
+    </>
+  );
+}
+
+/**
+ * Inhalt des Dialogs. Ist nur eingehängt, solange der Dialog offen ist oder etwas daraus noch läuft,
+ * damit Versionslisten erst beim Öffnen geladen werden und laufende Installationen ihr Ende melden.
+ */
+function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
+  open: boolean; onOpenChange: (o: boolean) => void; initial: { tab: Tab; path: string }; onBusy: (busy: boolean) => void; onDone: (id: string) => void;
+}) {
+  const [tab, setTab] = useState<Tab>(initial.tab);
+
+  // Leer
+  const [name, setName] = useState("");
+  const [nameEdited, setNameEdited] = useState(false);
+  const [snapshots, setSnapshots] = useState(false);
+  const [version, setVersion] = useState("");
+  const [loader, setLoader] = useState<ModLoader>("fabric");
+  const [loaderVersion, setLoaderVersion] = useState(LATEST);
+  const [memory, setMemory] = useState<number | null>(null);
+  const versions = useVersions();
+  const filtered = versions.data?.filter((v) => v.type === "release" || snapshots) ?? [];
+  // Neueste Version vorauswählen, bis der Nutzer selbst wählt
+  const selectedVersion = filtered.some((v) => v.id === version) ? version : (filtered[0]?.id ?? "");
+  const loaderVersions = useLoaderVersions(loader, selectedVersion);
+  // Gewählte Loader-Version verfällt, wenn es sie für die neue Minecraft-Version nicht gibt
+  const selectedLoader = loaderVersions.data?.some((v) => v.version === loaderVersion) ? loaderVersion : LATEST;
+  const loaderUnavailable = loader !== "vanilla" && (!!loaderVersions.error || loaderVersions.data?.length === 0);
+  const suggestion = `${loader === "vanilla" ? "Minecraft" : LOADER_LABELS[loader]} ${selectedVersion}`.trim();
+  const create = useCreateInstance();
+
+  // Modpack
+  const [pack, setPack] = useState<{ id: string; title: string } | null>(null);
+  const packInstall = useInstallPack(pack?.id ?? "", pack?.title ?? "", onDone);
+
+  // Datei
+  const [path, setPath] = useState(initial.path);
+  const [fileName, setFileName] = useState("");
+
+  // Vorlage
+  const [template, setTemplate] = useState<Template | null>(null);
+
+  const install = useContentInstall();
+  const { progress } = useContentState();
+  const busy = create.isPending || install.isPending || !!packInstall.busy;
+  useEffect(() => onBusy(busy), [busy, onBusy]);
+
+  async function chooseFile() {
     const picked = await openFile({ multiple: false, directory: false, filters: [{ name: "Modpack", extensions: ["mrpack"] }] });
     if (picked) setPath(picked);
   }
 
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    install.mutate((op) => api.modrinthImportPack(path, name.trim() || packName(path), op), { onSuccess: (inst) => inst && onDone(inst.id) });
+  const valid =
+    tab === "blank" ? !!selectedVersion && !loaderUnavailable
+    : tab === "pack" ? !!pack && !packInstall.blocked
+    : tab === "file" ? !!path && !api.isMock
+    : !!template;
+
+  function go() {
+    if (!valid || busy) return;
+    const done = { onSuccess: (inst: { id: string } | null) => inst && onDone(inst.id) };
+    if (tab === "blank") {
+      create.mutate(
+        {
+          name: (nameEdited ? name.trim() : "") || suggestion,
+          minecraftVersion: selectedVersion,
+          loader,
+          loaderVersion: selectedLoader === LATEST ? null : selectedLoader,
+          memoryMb: memory,
+        },
+        done,
+      );
+    } else if (tab === "pack") {
+      void packInstall.run();
+    } else if (tab === "file") {
+      const title = fileName.trim() || packName(path);
+      install.mutate(withTarget("import", (op) => api.modrinthImportPack(path, title, op), `${title} importieren`), done);
+    } else if (template) {
+      install.mutate(withTarget(`template:${template.id}`, (op) => api.templateCreateInstance(template.id, template.name, op), `${template.name} anlegen`), done);
+    }
   }
 
-  if (api.isMock) return <p className="text-sm text-muted-foreground">Dateien lassen sich nur in der Voxlet-App öffnen.</p>;
+  const goLabel =
+    tab === "blank" ? (create.isPending ? "Wird erstellt" : "Erstellen")
+    : tab === "pack" ? (packInstall.busy ?? "Installieren")
+    : install.isPending ? progressLabel(progress)
+    : tab === "file" ? "Importieren" : "Erstellen";
+
+  const hint =
+    tab === "blank" ? "Das Spiel wird beim ersten Start geladen."
+    : tab === "pack" ? (pack ? "Die Installation läuft im Hintergrund." : "Wähle ein Modpack.")
+    : tab === "file" ? (path ? "Alle Inhalte aus der Datei werden übernommen." : "Unterstützt: .mrpack")
+    : template ? "Welten sind nicht Teil einer Vorlage." : "Wähle eine Vorlage.";
+
+  const navigate = useNavigate();
 
   return (
-    <form onSubmit={submit} className="space-y-5">
-      <button
-        type="button"
-        onClick={choose}
-        className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed px-4 py-8 text-center outline-none transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <FileArchive className="size-6 text-muted-foreground" aria-hidden />
-        {path ? (
-          <span className="max-w-full truncate font-medium">{packName(path)}.mrpack</span>
-        ) : (
-          <span className="font-medium">Datei auswählen oder hierher ziehen</span>
-        )}
-        <span className="text-xs text-muted-foreground">Modpack-Datei (.mrpack), z. B. von Modrinth heruntergeladen</span>
-      </button>
-      {path && (
-        <div className="space-y-2">
-          <Label htmlFor="file-name">
-            Name <span className="font-normal text-muted-foreground">(optional)</span>
-          </Label>
-          <Input id="file-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={packName(path)} />
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Neue Instanz"
+      width={720}
+      height={600}
+      footLeft={hint}
+      footer={
+        <>
+          <DialogClose asChild><Btn>{busy ? "Schließen" : "Abbrechen"}</Btn></DialogClose>
+          {tab === "pack" && packInstall.cancel && <Btn variant="g" onClick={packInstall.cancel}>Abbrechen</Btn>}
+          <Btn variant="p" full style={{ width: 170 }} disabled={!valid || busy} onClick={go}>{goLabel}</Btn>
+        </>
+      }
+    >
+      <div className="nwrap">
+        <div className="nnav" role="tablist" aria-label="Weg">
+          {TABS.map((t) => (
+            <button key={t.value} type="button" role="tab" className="ptab fx" aria-selected={tab === t.value} onClick={() => setTab(t.value)}>
+              <Icon name={t.icon} />
+              {t.label}
+              <i className="tick" />
+            </button>
+          ))}
         </div>
-      )}
-      <DialogFooter>
-        <Button type="submit" disabled={!path || install.isPending}>
-          {install.isPending && <Loader2 className="animate-spin" aria-hidden />}
-          {install.isPending ? (progress?.total ? `Lädt ${progress.done} von ${progress.total}…` : "Wird geprüft…") : "Importieren"}
-        </Button>
-      </DialogFooter>
-    </form>
+        <div className="npane" role="tabpanel">
+          {tab === "blank" && (
+            <>
+              <div className="nf">
+                <label htmlFor="ni-name">Name</label>
+                <TextField
+                  id="ni-name"
+                  value={nameEdited ? name : suggestion}
+                  maxLength={64}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setNameEdited(true);
+                  }}
+                />
+                <span className="help">Vorschlag aus Version und Loader. Du kannst ihn später ändern.</span>
+              </div>
+              <div className="nf">
+                <label htmlFor="ni-mc">Minecraft-Version</label>
+                <div className="row flex-wrap">
+                  {versions.isPending ? (
+                    <Skel style={{ height: 40, width: 220 }} />
+                  ) : (
+                    <Select
+                      id="ni-mc"
+                      value={selectedVersion}
+                      onChange={setVersion}
+                      disabled={!filtered.length}
+                      options={
+                        filtered.length
+                          ? filtered.map((v, k) => ({ value: v.id, label: `${v.id}${v.type !== "release" ? " (Vorabversion)" : k === 0 ? " (neueste)" : ""}` }))
+                          : [{ value: "", label: versions.error ? "Versionen gerade nicht erreichbar" : "Keine Versionen" }]
+                      }
+                    />
+                  )}
+                  <span className="ni-check" onClick={(e) => e.target === e.currentTarget && setSnapshots(!snapshots)}>
+                    <Checkbox checked={snapshots} onChange={setSnapshots} label="Vorabversionen zeigen" />
+                    <span onClick={() => setSnapshots(!snapshots)}>Vorabversionen zeigen</span>
+                  </span>
+                </div>
+              </div>
+              <div className="nf">
+                <span className="fl" id="ni-loader">Loader</span>
+                <Seg label="Loader" value={loader} onChange={setLoader} options={LOADERS.map((l) => ({ value: l, label: LOADER_LABELS[l] }))} />
+                {loaderUnavailable ? (
+                  <span className="err-msg" role="alert">
+                    {loaderVersions.error ? `${LOADER_LABELS[loader]} ist gerade nicht erreichbar.` : `Für Minecraft ${selectedVersion} gibt es noch kein ${LOADER_LABELS[loader]}.`}
+                  </span>
+                ) : (
+                  <span className="help">{LOADER_HELP[loader]}</span>
+                )}
+              </div>
+              <details className="adv">
+                <summary><Icon name="chevr" small />Erweitert</summary>
+                <div style={{ paddingTop: 10 }}>
+                  <div className="nf">
+                    <label htmlFor="ni-lv">Loader-Version</label>
+                    <div className="row">
+                      {loader === "vanilla" ? (
+                        <span className="muted">Nicht nötig bei Vanilla</span>
+                      ) : (
+                        <Select
+                          id="ni-lv"
+                          value={selectedLoader}
+                          onChange={setLoaderVersion}
+                          disabled={loaderUnavailable || loaderVersions.isPending}
+                          options={[
+                            { value: LATEST, label: "Neueste stabile (empfohlen)" },
+                            ...(loaderVersions.data ?? []).map((v) => ({ value: v.version, label: `${v.version}${v.stable ? "" : " (Beta)"}` })),
+                          ]}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  <div className="nf">
+                    <span className="fl">Arbeitsspeicher</span>
+                    <MemoryChooser name="ni-ram" value={memory} onChange={setMemory} autoText="Standard aus den Einstellungen" />
+                  </div>
+                </div>
+              </details>
+            </>
+          )}
+
+          {tab === "pack" && (
+            <>
+              <PackPane selected={pack?.id ?? null} onSelect={setPack} />
+              <Btn
+                variant="g"
+                size="s"
+                icon="chev"
+                style={{ marginTop: 10, marginLeft: -8 }}
+                onClick={() => {
+                  onOpenChange(false);
+                  navigate(pack ? `/discover?projekt=${pack.id}` : "/discover");
+                }}
+              >
+                Mehr in Entdecken
+              </Btn>
+            </>
+          )}
+
+          {tab === "file" &&
+            (api.isMock ? (
+              <Empty ill={<Icon name="file" />} title="Nur in der App" minHeight={280}>
+                Dateien lassen sich nur in der Voxlet-App öffnen, nicht im Browser.
+              </Empty>
+            ) : (
+              <>
+                <div className="drop">
+                  <Icon name="ul" />
+                  <b>.mrpack hierher ziehen</b>
+                  <span>oder</span>
+                  <Btn onClick={() => void chooseFile()}>Datei auswählen</Btn>
+                </div>
+                <div className={cn("fileok", path && "show")}>
+                  <Glyph name="chest" pal="copper" />
+                  <div className="grow">
+                    <b className="fn ell">{path ? `${packName(path)}.mrpack` : ""}</b>
+                    <span className="fs ell">{path}</span>
+                  </div>
+                  <Btn variant="g" size="s" iconOnly aria-label="Datei entfernen" onClick={() => setPath("")}>
+                    <Icon name="x5" small />
+                  </Btn>
+                </div>
+                {path && (
+                  <div className="nf" style={{ marginTop: 16 }}>
+                    <label htmlFor="ni-file-name">Name <span className="faint">(optional)</span></label>
+                    <TextField id="ni-file-name" value={fileName} onChange={(e) => setFileName(e.target.value)} placeholder={packName(path)} maxLength={64} />
+                  </div>
+                )}
+              </>
+            ))}
+
+          {tab === "tpl" && <TemplatePane selected={template?.id ?? null} onSelect={setTemplate} />}
+        </div>
+      </div>
+    </Dialog>
   );
 }
 
-/** Kompakte Modpack-Suche; Details bleiben in „Entdecken“. */
-function ModpackTab({ onDone, onDiscover }: { onDone: (id: string) => void; onDiscover: (projectId?: string) => void }) {
-  return (
-    <div>
-      <ContentResults
-        type="modpack"
-        onOpen={(id) => onDiscover(id)}
-        action={(hit) => <PackInstallButton projectId={hit.project_id} title={hit.title} onDone={onDone} />}
-      />
-      <Button variant="link" className="mt-2 px-0" onClick={() => onDiscover()}>
-        <Compass aria-hidden /> Mehr in Entdecken
-      </Button>
-    </div>
-  );
-}
-
-/** „Neu“: leere Instanz, Modpack oder Datei. Die `primary`-Instanz nimmt aufs Fenster gezogene .mrpack und Strg+N an. */
+/**
+ * „Neue Instanz“ um einen beliebigen Auslöser (`children`). Leer, Modpack, Datei oder Vorlage.
+ * Die `primary`-Instanz nimmt aufs Fenster gezogene .mrpack-Dateien und Strg+N (`?neu=1`) an.
+ */
 export function NewInstanceDialog({ children, primary }: { children: ReactNode; primary?: boolean }) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<Tab>("empty");
-  const [path, setPath] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [session, setSession] = useState(0);
+  const [initial, setInitial] = useState<{ tab: Tab; path: string }>({ tab: "blank", path: "" });
   const navigate = useNavigate();
+
+  function show(tab: Tab, path = "") {
+    // Läuft noch etwas aus dem letzten Öffnen, bleibt dessen Stand erhalten.
+    if (!busy) {
+      setInitial({ tab, path });
+      setSession((s) => s + 1);
+    }
+    setOpen(true);
+  }
 
   useEffect(() => {
     if (api.isMock || !primary) return;
     const unlisten = getCurrentWebview().onDragDropEvent(({ payload }) => {
       const file = payload.type === "drop" ? payload.paths.find((p) => /\.mrpack$/i.test(p)) : undefined;
-      if (!file) return;
-      setPath(file);
-      setTab("file");
-      setOpen(true);
+      if (file) show("file", file);
     });
     return () => void unlisten.then((f) => f());
+    // `show` liest nur `busy`; der Listener wird einmal registriert.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primary]);
 
   // Strg+N führt zu /instances?neu=1 (siehe Layout).
   const [params, setParams] = useSearchParams();
   useEffect(() => {
     if (!primary || !params.has("neu")) return;
-    setTab("empty");
-    setOpen(true);
+    show("blank");
     setParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primary, params, setParams]);
 
   function done(id: string) {
     setOpen(false);
-    setPath("");
     navigate(`/instances/${id}`);
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="w-[min(40rem,calc(100vw-2rem))] content-start">
-        <DialogHeader>
-          <DialogTitle>Neue Instanz</DialogTitle>
-          <DialogDescription>Ein eigenes Minecraft mit eigener Version, eigenen Mods und eigenen Welten.</DialogDescription>
-        </DialogHeader>
-        <Tabs value={tab} onValueChange={(t) => setTab(t as Tab)} className="min-w-0">
-          <TabsList className="grid h-9 w-full grid-cols-4">
-            <TabsTrigger value="empty">Leer</TabsTrigger>
-            <TabsTrigger value="modpack">Modpack</TabsTrigger>
-            <TabsTrigger value="file">Datei</TabsTrigger>
-            <TabsTrigger value="template">Vorlage</TabsTrigger>
-          </TabsList>
-          <TabsContent value="empty" className="mt-5">
-            <EmptyTab onDone={done} />
-          </TabsContent>
-          <TabsContent value="modpack" className="mt-5">
-            <ModpackTab onDone={done} onDiscover={(id) => { setOpen(false); navigate(id ? `/discover?projekt=${id}` : "/discover"); }} />
-          </TabsContent>
-          <TabsContent value="file" className="mt-5">
-            <FileTab path={path} setPath={setPath} onDone={done} />
-          </TabsContent>
-          <TabsContent value="template" className="mt-5">
-            <TemplatesTab onDone={done} />
-          </TabsContent>
-        </Tabs>
-      </DialogContent>
-    </Dialog>
+    <>
+      <Slot.Root onClick={() => show("blank")}>{children}</Slot.Root>
+      {(open || busy) && <NewInstanceForm key={session} open={open} onOpenChange={setOpen} initial={initial} onBusy={setBusy} onDone={done} />}
+    </>
   );
 }

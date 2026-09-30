@@ -1,179 +1,208 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { Link } from "react-router";
-import { BookmarkPlus, Ellipsis, LibraryBig, Plus, Search, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
-import { BlockTile, ConfirmDialog, EmptyState, ErrorNote, PageHeader } from "@/components/common";
-import { PlayControl, StatusBadge, useInstallPercent } from "@/components/game";
+import { Btn, BtnLink, ContextMenu, Empty, ErrorBox, SearchField, Seg, Select, Skel } from "@/components/px";
+import { PlayButton, StatusChip } from "@/components/game";
+import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
+import { loaderLine } from "@/components/common";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
-import { SaveTemplateDialog } from "@/components/SaveTemplateDialog";
-import { useDeleteInstance, useInstances } from "@/hooks/useInstances";
-import { relativeTime } from "@/lib/format";
-import { LOADER_LABELS, type Instance } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { useInstances } from "@/hooks/useInstances";
+import { formatDate, relativeTime } from "@/lib/format";
+import { ALL_LOADERS, LOADER_LABELS, type Instance, type ModLoader } from "@/lib/types";
+import { Glyph, Icon } from "@/pixel/icons";
+import { PixelScene } from "@/pixel/PixelScene";
+import { lookOf, useLookStore } from "@/store/look";
+import "@/styles/library.css";
 
-const GRID = "grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] xl:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-4";
+type Mode = "poster" | "list";
+type Sort = "recent" | "name" | "created";
 
-function InstanceCard({ inst, onTemplate, onDelete }: { inst: Instance; onTemplate: () => void; onDelete: () => void }) {
-  const percent = useInstallPercent(inst);
-  const contents = inst.mods.length;
+const MODE_KEY = "vx-libmode";
+function readMode(): Mode {
+  try {
+    return localStorage.getItem(MODE_KEY) === "list" ? "list" : "poster";
+  } catch {
+    return "poster";
+  }
+}
+function saveMode(mode: Mode) {
+  try {
+    localStorage.setItem(MODE_KEY, mode);
+  } catch {
+    // Ohne Speicher bleibt die Wahl nur bis zum Neustart.
+  }
+}
+
+const SORTS: Record<Sort, (a: Instance, b: Instance) => number> = {
+  recent: (a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0) || b.createdAt - a.createdAt,
+  name: (a, b) => a.name.localeCompare(b.name, "de"),
+  created: (a, b) => b.createdAt - a.createdAt,
+};
+
+type Looks = ReturnType<typeof useLookStore.getState>["looks"];
+
+/** Poster 4:5: Szene, Status oben links, Spielen und Menü beim Überfahren, Name unten. Rechtsklick öffnet das Menü. */
+function PosterCard({ inst, index, looks }: { inst: Instance; index: number; looks: Looks }) {
+  const items = useInstanceMenu(inst);
+  const look = lookOf(looks, inst.id);
   return (
-    <li className="group relative flex min-w-0 flex-col rounded-xl border bg-card p-4 transition-colors duration-150 hover:bg-accent/50 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring">
-      <div className="flex min-w-0 items-start gap-3">
-        <BlockTile seed={inst.id} />
-        <div className="min-w-0 flex-1 pt-0.5">
-          {/* Die ganze Karte ist klickbar; Knöpfe liegen darüber. */}
-          <Link to={`/instances/${inst.id}`} title={inst.name} className="block truncate font-medium outline-none after:absolute after:inset-0 after:rounded-xl">
-            {inst.name}
-          </Link>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground" title={`${LOADER_LABELS[inst.loader]} ${inst.minecraftVersion}`}>
-            {LOADER_LABELS[inst.loader]} {inst.minecraftVersion}
-            {contents > 0 && ` · ${contents} ${contents === 1 ? "Inhalt" : "Inhalte"}`}
-          </p>
+    <ContextMenu items={items}>
+      <div className="poster rise" style={{ "--i": Math.min(index, 12), "--acc": look.acc } as CSSProperties}>
+        <PixelScene bio={look.bio} seed={look.seed} />
+        <Link to={`/instances/${inst.id}`} className="hit fx" aria-label={`${inst.name} öffnen`} />
+        <span className="frame" />
+        <span className="st"><StatusChip instance={inst} small /></span>
+        <div className="pact">
+          <PlayButton instance={inst} size="i" />
+          <InstanceMenuButton instance={inst} small />
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label={`Mehr zu ${inst.name}`} className="relative -mt-1 shrink-0 text-muted-foreground">
-              <Ellipsis aria-hidden />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={onTemplate}>
-              <BookmarkPlus aria-hidden /> Als Vorlage speichern …
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onSelect={onDelete}>
-              <Trash2 aria-hidden /> Löschen …
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="cap">
+          <b title={inst.name}>{inst.name}</b>
+          <span>{loaderLine(inst)} · {relativeTime(inst.lastPlayedAt)}</span>
+        </div>
       </div>
-      <div className="mt-5 flex min-h-9 items-end justify-between gap-3">
-        {percent != null ? (
-          <div className="min-w-0 flex-1 space-y-1.5" aria-label={`Wird vorbereitet, ${percent} %`} role="group">
-            <p className="text-xs text-muted-foreground tabular-nums">Wird vorbereitet … {percent} %</p>
-            <Progress value={percent} />
-          </div>
-        ) : (
-          <div className="min-w-0 space-y-0.5">
-            <StatusBadge instanceId={inst.id} />
-            <p className="truncate text-xs text-muted-foreground">{relativeTime(inst.lastPlayedAt)}</p>
-          </div>
-        )}
-        {/* Spielen erscheint bei Hover und Tastaturfokus; laufend oder beim Vorbereiten bleibt der Knopf stehen. */}
-        <PlayControl
-          instance={inst}
-          size="icon"
-          className="relative opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100"
-        />
+    </ContextMenu>
+  );
+}
+
+/** Listenzeile, 56 px, feste Spalten. */
+function ListRow({ inst, index, looks }: { inst: Instance; index: number; looks: Looks }) {
+  const items = useInstanceMenu(inst);
+  const look = lookOf(looks, inst.id);
+  return (
+    <ContextMenu items={items}>
+      <div className="lrow rise" style={{ "--i": Math.min(index, 12), "--acc": look.acc } as CSSProperties}>
+        <div className="thumb"><PixelScene bio={look.bio} seed={look.seed} /></div>
+        <div className="nm">
+          <Link to={`/instances/${inst.id}`} className="fx" title={inst.name}>{inst.name}</Link>
+          <span>erstellt {formatDate(inst.createdAt)}</span>
+        </div>
+        <span className="c">{loaderLine(inst)}</span>
+        <span className="c c-cnt"><span className="num">{inst.mods.length}</span></span>
+        <span className="c c-last">{relativeTime(inst.lastPlayedAt)}</span>
+        <span className="c"><StatusChip instance={inst} small /></span>
+        <PlayButton instance={inst} size="i" />
+        <InstanceMenuButton instance={inst} variant="g" small />
       </div>
-    </li>
+    </ContextMenu>
   );
 }
 
 export function InstancesPage() {
   const { data: instances, isLoading, error, refetch } = useInstances();
-  const del = useDeleteInstance();
-  const [toDelete, setToDelete] = useState<Instance | null>(null);
-  const [toTemplate, setToTemplate] = useState<Instance | null>(null);
-  const [filter, setFilter] = useState("");
-  const needle = filter.trim().toLowerCase();
-  const shown = instances?.filter((i) => i.name.toLowerCase().includes(needle));
+  const looks = useLookStore((s) => s.looks);
+  const [query, setQuery] = useState("");
+  const [loader, setLoader] = useState<ModLoader | "all">("all");
+  const [sort, setSort] = useState<Sort>("recent");
+  const [mode, setModeState] = useState<Mode>(readMode);
+  const setMode = (m: Mode) => {
+    setModeState(m);
+    saveMode(m);
+  };
 
-  return (
-    <>
-      <PageHeader
-        title="Bibliothek"
-        description="Jede Instanz ist ein eigenes Minecraft mit eigener Version, eigenen Mods und eigenen Welten."
+  const q = query.trim().toLowerCase();
+  const shown = (instances ?? [])
+    .filter((i) => (loader === "all" || i.loader === loader) && (!q || i.name.toLowerCase().includes(q) || i.minecraftVersion.includes(q)))
+    .sort(SORTS[sort]);
+
+  const newButton = (
+    <Btn variant="p" icon="plus">Neue Instanz</Btn>
+  );
+
+  let body;
+  if (error) {
+    body = <ErrorBox title="Die Bibliothek konnte nicht geladen werden" error={error} onRetry={() => void refetch()} />;
+  } else if (isLoading) {
+    body = (
+      <div className="posters" aria-busy aria-label="Wird geladen">
+        {[0, 1, 2, 3].map((k) => <Skel key={k} />)}
+      </div>
+    );
+  } else if (!instances?.length) {
+    body = (
+      <Empty
+        ill={<Glyph name="chest" pal="copper" big />}
+        title="Deine Bibliothek ist leer"
         actions={
           <>
-            {!!instances && instances.length > 5 && (
-              <div className="relative">
-                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-                <Input type="search" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Suchen" aria-label="Instanzen suchen" className="w-48 pl-9" />
-              </div>
-            )}
-            <NewInstanceDialog primary>
-              {/* Im Leerzustand trägt der Leerzustand die eine Aktion; der Dialog bleibt für Strg+N und Drag & Drop da. */}
-              <Button aria-keyshortcuts="Control+N" className={cn(instances?.length === 0 && "hidden")}>
-                <Plus aria-hidden /> Neu
-              </Button>
-            </NewInstanceDialog>
+            <NewInstanceDialog>{newButton}</NewInstanceDialog>
+            <BtnLink to="/discover">Modpacks entdecken</BtnLink>
           </>
         }
-      />
-      {error && <ErrorNote title="Die Bibliothek konnte nicht geladen werden" error={error} onRetry={() => void refetch()} />}
-      {isLoading && (
-        <ul className={GRID} aria-busy aria-label="Wird geladen">
-          {[0, 1, 2].map((i) => (
-            <li key={i} className="rounded-xl border bg-card p-4">
-              <div className="flex gap-3">
-                <Skeleton className="size-12 rounded-lg" />
-                <div className="flex-1 space-y-2 pt-1">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/2" />
-                </div>
-              </div>
-              <Skeleton className="mt-6 h-4 w-24" />
-            </li>
-          ))}
-        </ul>
-      )}
-      {instances?.length === 0 && (
-        <EmptyState
-          icon={<LibraryBig />}
-          title="Noch keine Instanzen"
-          action={
-            <NewInstanceDialog>
-              <Button>
-                <Plus aria-hidden /> Neue Instanz
-              </Button>
-            </NewInstanceDialog>
-          }
-        >
-          Leg deine erste Instanz an, um loszuspielen.
-        </EmptyState>
-      )}
-      {!!instances?.length && shown?.length === 0 && (
-        <p className="py-10 text-center text-sm text-muted-foreground">Keine Instanz heißt „{filter.trim()}“.</p>
-      )}
-      {!!shown?.length && (
-        <ul className={GRID}>
-          {shown.map((inst) => (
-            <InstanceCard key={inst.id} inst={inst} onTemplate={() => setToTemplate(inst)} onDelete={() => setToDelete(inst)} />
-          ))}
-          {!needle && (
-            <li className="min-w-0">
-              <NewInstanceDialog>
-                <button
-                  type="button"
-                  className="flex h-full min-h-36 w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed text-sm text-muted-foreground outline-none transition-colors duration-150 hover:bg-accent/40 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Plus className="size-5" aria-hidden /> Neue Instanz
-                </button>
-              </NewInstanceDialog>
-            </li>
-          )}
-        </ul>
-      )}
-      <SaveTemplateDialog instance={toTemplate} onClose={() => setToTemplate(null)} />
-      <ConfirmDialog
-        open={!!toDelete}
-        onOpenChange={(o) => !o && setToDelete(null)}
-        title={`„${toDelete?.name}“ löschen?`}
-        description="Die Instanz samt Mods und Welten wird entfernt. Das lässt sich nicht rückgängig machen."
-        pending={del.isPending}
-        onConfirm={() => toDelete && del.mutate(toDelete.id, { onSuccess: () => setToDelete(null) })}
-      />
-    </>
+      >
+        Leg eine Instanz an, zieh eine .mrpack-Datei ins Fenster oder such dir ein Modpack aus.
+      </Empty>
+    );
+  } else if (!shown.length) {
+    body = (
+      <Empty
+        ill={<Icon name="search" />}
+        title="Keine Treffer"
+        actions={<Btn onClick={() => { setQuery(""); setLoader("all"); }}>Suche und Filter zurücksetzen</Btn>}
+      >
+        Keine Instanz passt zu „{query.trim() || LOADER_LABELS[loader as ModLoader]}“{q && loader !== "all" ? ` mit ${LOADER_LABELS[loader]}` : ""}.
+      </Empty>
+    );
+  } else if (mode === "poster") {
+    body = (
+      <div className="posters">
+        {shown.map((inst, k) => <PosterCard key={inst.id} inst={inst} index={k} looks={looks} />)}
+      </div>
+    );
+  } else {
+    body = (
+      <>
+        <div className="lhead">
+          <span />
+          <span>Name</span>
+          <span>Version</span>
+          <span className="c-cnt">Inhalte</span>
+          <span className="c-last">Zuletzt gespielt</span>
+          <span>Status</span>
+          <span />
+          <span />
+        </div>
+        <div className="lrows">
+          {shown.map((inst, k) => <ListRow key={inst.id} inst={inst} index={k} looks={looks} />)}
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <section className="page lib">
+      <div className="page-h">
+        <h1 className="h-page">Bibliothek</h1>
+        <span className="cnt">{instances?.length ?? 0}</span>
+        <span className="sp" />
+      </div>
+      <div className="tools">
+        <SearchField value={query} onChange={setQuery} placeholder="Instanz suchen" />
+        <Select
+          label="Loader"
+          value={loader}
+          onChange={(v) => setLoader(v as ModLoader | "all")}
+          options={[{ value: "all", label: "Alle" }, ...ALL_LOADERS.map((l) => ({ value: l, label: LOADER_LABELS[l] }))]}
+        />
+        <Select
+          label="Sortieren"
+          className="hide-m"
+          value={sort}
+          onChange={(v) => setSort(v as Sort)}
+          options={[{ value: "recent", label: "Zuletzt gespielt" }, { value: "name", label: "Name" }, { value: "created", label: "Erstellt" }]}
+        />
+        <Seg
+          icons
+          label="Ansicht"
+          value={mode}
+          onChange={setMode}
+          options={[{ value: "poster", label: "Poster", icon: "grid", tip: "Poster" }, { value: "list", label: "Liste", icon: "list", tip: "Liste" }]}
+        />
+        <span className="grow" />
+        <NewInstanceDialog primary>
+          <Btn variant="p" icon="plus" aria-keyshortcuts="Control+N">Neue Instanz</Btn>
+        </NewInstanceDialog>
+      </div>
+      {body}
+    </section>
   );
 }

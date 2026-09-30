@@ -2,9 +2,8 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Toaster } from "@/components/ui/sonner";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TipProvider, Toaster } from "@/components/px";
 import { Layout } from "@/app/Layout";
 import { INSTALL_CANCELLED } from "@/lib/types";
 import { HomePage } from "@/pages/Home";
@@ -53,10 +52,10 @@ const router = createBrowserRouter([
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider delayDuration={300}>
+      <TipProvider delayDuration={450}>
         <RouterProvider router={router} />
-        <Toaster position="bottom-right" closeButton />
-      </TooltipProvider>
+        <Toaster />
+      </TipProvider>
     </QueryClientProvider>
   </React.StrictMode>,
 );

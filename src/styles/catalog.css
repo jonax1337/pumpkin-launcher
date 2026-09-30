@@ -1,0 +1,63 @@
+/* Katalog: Entdecken, Projektseite, Seitenpanel. Ergänzt pixelkino.css (.rrow, .proj-h, .desc …). */
+@layer components {
+  .ctxline .num { font-size: 17px; color: var(--fg); margin-right: 4px; }
+  .rrow .ra .chip .pi.s { width: 16px; height: 16px; }
+  .rrow .ra > .faint { text-align: right; }
+  .rrow.compact { grid-template-columns: 48px minmax(0, 1fr) 128px; height: 76px; }
+  .rrow.compact .jobp { width: 108px; }
+  .jobp { min-width: 0; }
+  .jobp .ell { display: block; }
+
+  /* Projektseite */
+  .proj .proj-h { min-height: 64px; }
+  .proj .projact { display: flex; justify-content: flex-end; align-items: center; gap: 8px; min-width: 250px; }
+  .proj .lead { color: var(--fg); font-size: 15.5px; line-height: 1.55; max-width: 68ch; margin-top: 2px; }
+  .proj .desc { margin-top: 14px; }
+  .proj .vrow > div { min-width: 0; }
+
+  /* Beschreibung aus Markdown (Modrinth) */
+  .desc.md { overflow-wrap: anywhere; }
+  .desc.md > :first-child { margin-top: 0; }
+  .desc.md h1, .desc.md h2 { font: 800 24px/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; margin: 24px 0 8px; color: var(--fg); }
+  .desc.md h3, .desc.md h4, .desc.md h5, .desc.md h6 { font: 800 19px/1.1 var(--f-display); text-transform: uppercase; margin: 20px 0 8px; color: var(--fg); }
+  .desc.md a { color: var(--copper); text-decoration: underline; text-decoration-thickness: var(--px); text-underline-offset: 3px; }
+  .desc.md a:hover { color: color-mix(in srgb, var(--copper) 60%, #fff); }
+  .desc.md img { display: inline-block; max-width: 100%; height: auto; clip-path: var(--n1); vertical-align: middle; }
+  .desc.md p:has(> img:only-child), .desc.md p:has(> a:only-child > img:only-child) { margin: 12px 0; }
+  .desc.md .badges { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13.5px; }
+  .desc.md strong, .desc.md b { color: var(--fg); }
+  .desc.md code { font: 12.5px/1.5 var(--f-mono); background: var(--sunk); padding: 1px 5px; }
+  .desc.md pre { overflow-x: auto; background: #05080D; padding: 10px 12px; margin: 0 0 12px; clip-path: var(--n1); }
+  .desc.md pre code { background: none; padding: 0; }
+  .desc.md blockquote { margin: 0 0 12px; padding-left: 14px; box-shadow: inset var(--px) 0 0 var(--line-2); }
+  .desc.md blockquote p { color: var(--fg-2); }
+  .desc.md ol { list-style: decimal; padding-left: 22px; margin: 0 0 12px; }
+  .desc.md ol li { padding-left: 2px; }
+  .desc.md ol li::before { display: none; }
+  .desc.md li p { margin: 0; }
+  .desc.md hr { border: 0; height: var(--px); background: var(--line); margin: 18px 0; }
+  .desc.md table { display: block; overflow-x: auto; border-collapse: collapse; margin: 0 0 12px; font-size: 13px; }
+  .desc.md th, .desc.md td { padding: 5px 10px; text-align: left; box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); color: #C9D1DE; }
+  .desc.md details { margin: 0 0 12px; }
+  .desc.md summary { cursor: pointer; color: var(--fg-2); font-weight: 600; }
+  .desc.md iframe { max-width: 100%; }
+
+  /* Hinzufügen zu …: Liste mit eigenem Scrollbereich, Rahmen bleibt stehen */
+  .rpop.addto { width: 300px; }
+  .rpop.addto .scrollbox { max-height: min(320px, calc(var(--radix-dropdown-menu-content-available-height, 400px) - 80px)); }
+
+  /* Seitenpanel: Details einspaltig */
+  .sheet .proj-h { grid-template-columns: 64px minmax(0, 1fr); gap: 14px; margin-top: 6px; }
+  .sheet .proj-h h1 { font-size: 30px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .sheet .projact { grid-column: 1 / -1; justify-content: flex-start; min-width: 0; min-height: 56px; }
+  .sheet .proj-b { grid-template-columns: minmax(0, 1fr); gap: 18px; margin-top: 16px; }
+  .sheet .proj-b .side { order: -1; }
+  .sheet .hintline { margin-bottom: 6px; }
+  .sheet .offl .pi, .offl > .pi { width: 40px; height: 40px; color: var(--fg-2); }
+
+  /* Einstellungen */
+  .set .fsec { scroll-margin-top: 16px; }
+  .set .form .fsec:first-child { padding-top: 6px; }
+  .set .setnav .ptab { height: 36px; }
+  .about .muted .num { font-size: 18px; color: var(--fg); }
+}

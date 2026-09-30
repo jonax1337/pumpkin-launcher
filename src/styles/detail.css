@@ -1,0 +1,5 @@
+/* Instanz-Detail: Ergänzungen zu pixelkino.css */
+.ctile.gone b { min-width: 0; }
+.crow.gone .cn b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dtabs .ptab .wdot { place-items: center; }
+.dtabs:empty { pointer-events: none; }

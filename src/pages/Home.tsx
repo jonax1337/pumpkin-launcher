@@ -1,194 +1,164 @@
-import { Link } from "react-router";
-import { ArrowRight, Clock, Cpu, Plus, SlidersHorizontal } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { BlockTile, ErrorNote, LoaderBadge, tileHue } from "@/components/common";
-import { ContentIcon } from "@/components/ContentBrowser";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { BtnLink, Btn, Chip, ContextMenu, ErrorBox, Skel } from "@/components/px";
+import { PlayButton, PlayStatus, usePhase } from "@/components/game";
+import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
+import { loaderLine } from "@/components/common";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
-import { PlayControl, StatusBadge } from "@/components/game";
 import { Onboarding } from "@/components/Onboarding";
-import { useProjects } from "@/hooks/useContent";
-import { pickRecentInstance, useInstances, useMemory } from "@/hooks/useInstances";
-import { formatDate, formatMemory, relativeTime } from "@/lib/format";
-import { projectOf } from "@/lib/modrinth";
-import { LOADER_LABELS, type Instance, type ModKind } from "@/lib/types";
+import { openAccounts } from "@/components/PlayerNames";
+import { useModUpdates } from "@/hooks/useContent";
+import { pickRecentInstance, useInstances } from "@/hooks/useInstances";
+import { relativeTime } from "@/lib/format";
+import type { Instance } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { Icon } from "@/pixel/icons";
+import { PixelScene } from "@/pixel/PixelScene";
+import { motionOff } from "@/pixel/scene";
+import { useLook } from "@/store/look";
 import { useSettings } from "@/store/settings";
 
-function HeroSkeleton() {
+/** Titel und Chips der ausgewählten Instanz. */
+function HeroInfo({ instance }: { instance: Instance }) {
+  const updates = useModUpdates(instance.id, false);
+  const n = instance.mods.length;
+  const u = updates.data?.length ?? 0;
   return (
-    <div className="rounded-xl border bg-card p-6 xl:p-8" aria-busy aria-label="Wird geladen">
-      <div className="flex items-center gap-5">
-        <Skeleton className="size-16 rounded-xl xl:size-20" />
-        <div className="flex-1 space-y-3">
-          <Skeleton className="h-8 w-2/3 max-w-80" />
-          <Skeleton className="h-4 w-1/2 max-w-64" />
-        </div>
+    <div className="hero-k rise">
+      <div className="titlebox">
+        <h1 title={instance.name}>{instance.name}</h1>
       </div>
-      <Skeleton className="mt-8 h-12 w-44" />
+      <div className="chips">
+        <Chip tone="acc">{loaderLine(instance)}</Chip>
+        <Chip><b>{n}</b>{n === 1 ? "Inhalt" : "Inhalte"}</Chip>
+        <Chip>
+          Arbeitsspeicher{" "}
+          {instance.memoryMb == null ? "automatisch" : <><b>{Math.round(instance.memoryMb / 1024)}</b>GB</>}
+        </Chip>
+        {u > 0 && <Chip tone="warn"><b>{u}</b>{u === 1 ? "Update" : "Updates"}</Chip>}
+      </div>
     </div>
   );
 }
 
-const KIND_COUNT: Record<ModKind, [string, string]> = { mod: ["Mod", "Mods"], shader: ["Shader", "Shader"], resourcepack: ["Ressourcenpaket", "Ressourcenpakete"] };
-
-/** Zweite Hero-Spalte in breiten Fenstern: Eckdaten und die zuletzt selbst hinzugefügten Inhalte (Backend hängt neue hinten an). */
-function InstanceFacts({ instance }: { instance: Instance }) {
-  const latest = instance.mods.filter((m) => m.requiredBy.length === 0).slice(-4).reverse();
-  const projects = useProjects(latest.flatMap((m) => projectOf(m) ?? []));
-  const counts = (Object.keys(KIND_COUNT) as ModKind[])
-    .map((k) => [k, instance.mods.filter((m) => m.kind === k).length] as const)
-    .filter(([, n]) => n > 0)
-    .map(([k, n]) => `${n} ${KIND_COUNT[k][n === 1 ? 0 : 1]}`)
-    .join(" · ");
-  const facts: [string, string][] = [
-    ["Inhalte", counts || "Keine"],
-    ["Loader", `${LOADER_LABELS[instance.loader]}${instance.loaderVersion ? ` ${instance.loaderVersion}` : ""}`],
-    ["Erstellt", formatDate(instance.createdAt)],
-  ];
+/** Miniatur in der Weiterspielen-Reihe; Rechtsklick öffnet das Instanz-Menü. */
+function MiniCard({ instance, current, onPick }: { instance: Instance; current: boolean; onPick: () => void }) {
+  const { bio, seed, acc } = useLook(instance.id);
+  const running = usePhase(instance.id) === "running";
+  const items = useInstanceMenu(instance);
   return (
-    <div className="hidden min-w-0 space-y-5 border-l pl-8 xl:block">
-      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 text-sm">
-        {facts.map(([k, v]) => (
-          <div key={k} className="contents">
-            <dt className="text-muted-foreground">{k}</dt>
-            <dd className="truncate tabular-nums" title={v}>{v}</dd>
-          </div>
-        ))}
-      </dl>
-      {latest.length > 0 && (
-        <div>
-          <p className="mb-2 text-xs font-medium text-muted-foreground">Zuletzt hinzugefügt</p>
-          <ul className="space-y-2">
-            {latest.map((m) => {
-              const project = projects.data?.get(projectOf(m) ?? "");
-              const name = project?.title ?? m.name;
-              return (
-                <li key={m.id} className="flex min-w-0 items-center gap-2.5 text-sm">
-                  <ContentIcon url={project?.icon_url} seed={m.id} size="sm" />
-                  <span className="truncate" title={name}>{name}</span>
-                </li>
-              );
-            })}
-          </ul>
+    <ContextMenu items={items}>
+      <button
+        type="button"
+        role="option"
+        data-id={instance.id}
+        className={cn("mini fx", running && "running")}
+        aria-current={current}
+        aria-selected={current}
+        style={{ "--acc-sel": acc } as CSSProperties}
+        onClick={onPick}
+      >
+        <PixelScene bio={bio} seed={seed} />
+        <span className="frame" />
+        <span className="cap">
+          <b>{instance.name}</b>
+          <span>{loaderLine(instance)} · {relativeTime(instance.lastPlayedAt)}</span>
+        </span>
+        <Chip small dot tone="run" className="runmark">Läuft</Chip>
+      </button>
+    </ContextMenu>
+  );
+}
+
+function Notes() {
+  const hasAccount = useSettings((s) => !!s.active);
+  if (hasAccount) return null;
+  return (
+    <div className="notes" aria-label="Hinweise">
+      <div className="note">
+        <Icon name="user" />
+        <div className="nt">
+          <b>Kein Spielername</b>
+          <span>Nötig zum Spielen</span>
         </div>
-      )}
+        <Btn size="s" onClick={openAccounts}>Festlegen</Btn>
+      </div>
     </div>
+  );
+}
+
+function HomeSkeleton() {
+  return (
+    <section className="home" aria-busy aria-label="Wird geladen">
+      <div className="hero">
+        <div className="hero-k">
+          <div className="titlebox"><Skel style={{ height: 72, width: "min(520px, 80%)" }} /></div>
+          <div className="chips"><Skel style={{ height: 28, width: 120 }} /><Skel style={{ height: 28, width: 96 }} /><Skel style={{ height: 28, width: 180 }} /></div>
+        </div>
+        <div className="acts"><Skel style={{ height: 56, width: 272 }} /><Skel style={{ height: 40, width: 150 }} /></div>
+        <div className="pstat" />
+      </div>
+      <div className="cont">
+        <div className="cont-h" />
+        <div className="rail">{[0, 1, 2, 3].map((k) => <Skel key={k} className="mini" />)}</div>
+      </div>
+    </section>
   );
 }
 
 export function HomePage() {
   const { data: instances, isLoading, error, refetch } = useInstances();
-  const recent = pickRecentInstance(instances);
-  const memory = useMemory();
-  const hasAccount = useSettings((s) => !!s.active);
+  const [selected, setSelected] = useState<string | null>(null);
+  const rail = useRef<HTMLDivElement>(null);
+  const current = instances?.find((i) => i.id === selected) ?? pickRecentInstance(instances);
+  const look = useLook(current?.id);
 
-  if (instances?.length === 0) return <Onboarding needsInstance />;
+  // Ausgewählte Miniatur sichtbar halten.
+  useEffect(() => {
+    if (!selected) return;
+    rail.current?.querySelector<HTMLElement>(`[data-id="${CSS.escape(selected)}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: motionOff() ? "auto" : "smooth" });
+  }, [selected]);
 
-  const others = instances?.filter((i) => i !== recent).sort((a, b) => (b.lastPlayedAt ?? b.createdAt) - (a.lastPlayedAt ?? a.createdAt)) ?? [];
+  if (isLoading) return <HomeSkeleton />;
+  if (error)
+    return (
+      <section className="page">
+        <ErrorBox title="Deine Instanzen konnten nicht geladen werden" error={error} onRetry={() => void refetch()} />
+      </section>
+    );
+  if (!instances?.length || !current) return <Onboarding />;
+
+  const sorted = [...instances].sort((a, b) => (b.lastPlayedAt ?? b.createdAt) - (a.lastPlayedAt ?? a.createdAt));
 
   return (
-    <div className="space-y-8">
-      {error && <ErrorNote title="Deine Instanzen konnten nicht geladen werden" error={error} onRetry={() => void refetch()} />}
-      {!hasAccount && !isLoading && <Onboarding needsInstance={false} />}
-
-      {isLoading && <HeroSkeleton />}
-      {recent && (
-        <section
-          aria-labelledby="hero-title"
-          className="grid gap-8 rounded-xl border p-6 xl:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)] xl:p-8 3xl:min-h-80 3xl:grid-cols-[minmax(0,1fr)_26rem] 3xl:p-10"
-          // Einziger Verlauf der App: Instanzfarbe mit höchstens 12 % Deckkraft über der Kartenfläche.
-          style={{ background: `linear-gradient(120deg, oklch(0.62 0.12 ${tileHue(recent.id)} / 0.12), transparent 65%), var(--card)` }}
-        >
-          <div className="flex min-w-0 flex-col">
-          <p className="text-xs font-medium text-muted-foreground">{recent.lastPlayedAt != null ? "Zuletzt gespielt" : "Deine Instanz"}</p>
-          <div className="mt-3 flex min-w-0 items-center gap-5">
-            <BlockTile seed={recent.id} size="lg" className="xl:size-20 3xl:size-28" />
-            <div className="min-w-0 flex-1">
-              <h1 id="hero-title" className="truncate text-3xl font-semibold tracking-tight xl:text-4xl 3xl:text-5xl" title={recent.name}>
-                {recent.name}
-              </h1>
-              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-                <StatusBadge instanceId={recent.id} />
-                <LoaderBadge loader={recent.loader} />
-                <span className="tabular-nums">Minecraft {recent.minecraftVersion}</span>
-                {recent.lastPlayedAt != null && (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Clock className="size-3.5" aria-hidden />
-                    {relativeTime(recent.lastPlayedAt)}
-                  </span>
-                )}
-                <span className="inline-flex items-center gap-1.5 tabular-nums">
-                  <Cpu className="size-3.5" aria-hidden />
-                  {formatMemory(recent.memoryMb ?? memory.value)}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="mt-8 flex flex-wrap items-start gap-3 xl:mt-auto xl:pt-8">
-            <PlayControl instance={recent} />
-            <Button variant="ghost" size="lg" asChild className="h-12 text-muted-foreground">
-              <Link to={`/instances/${recent.id}`}>
-                <SlidersHorizontal aria-hidden /> Inhalte und Einstellungen
-              </Link>
-            </Button>
-          </div>
-          </div>
-          <InstanceFacts instance={recent} />
-        </section>
-      )}
-
-      {others.length > 0 && (
-        <section aria-labelledby="others-title">
-          <div className="mb-3 flex items-center justify-between gap-4">
-            <h2 id="others-title" className="text-base font-semibold">
-              Weitere Instanzen
-            </h2>
-            <Button variant="ghost" size="sm" asChild className="text-muted-foreground">
-              <Link to="/instances">
-                Bibliothek <ArrowRight aria-hidden />
-              </Link>
-            </Button>
-          </div>
-          <ul className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] xl:grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
-            {others.slice(0, 8).map((inst) => (
-              <li key={inst.id} className="min-w-0">
-                <Link
-                  to={`/instances/${inst.id}`}
-                  className="flex min-w-0 items-center gap-3 rounded-xl border bg-card p-3 outline-none transition-colors duration-150 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <BlockTile seed={inst.id} size="sm" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium" title={inst.name}>
-                      {inst.name}
-                    </span>
-                    <span className="block truncate text-xs text-muted-foreground" title={`${LOADER_LABELS[inst.loader]} ${inst.minecraftVersion} · ${relativeTime(inst.lastPlayedAt)}`}>
-                      {LOADER_LABELS[inst.loader]} {inst.minecraftVersion} · {relativeTime(inst.lastPlayedAt)}
-                    </span>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {/* Nur eine Instanz: statt leerer Fläche die zwei Wege zu mehr. */}
-      {recent && others.length === 0 && (
-        <section aria-labelledby="more-title" className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-          <h2 id="more-title" className="font-semibold">
-            Lust auf mehr?
-          </h2>
+    <section className="home" style={{ "--acc": look.acc } as CSSProperties}>
+      <PixelScene bio={look.bio} seed={look.seed} mode="hero" className="scene" />
+      <div className="shade-home" />
+      <Notes />
+      <div className="hero">
+        <HeroInfo key={`info-${current.id}`} instance={current} />
+        <div className="acts">
+          <PlayButton key={current.id} instance={current} />
+          <BtnLink to={`/instances/${current.id}`}>Instanz öffnen</BtnLink>
+          <InstanceMenuButton instance={current} open={false} />
+        </div>
+        <PlayStatus key={`stat-${current.id}`} instance={current} />
+      </div>
+      <div className="cont">
+        <div className="cont-h">
+          <h2 id="cont-h">Weiterspielen</h2>
+          <BtnLink to="/instances" variant="g" size="s">Alle in der Bibliothek</BtnLink>
+        </div>
+        <div className="rail" role="listbox" aria-labelledby="cont-h" ref={rail}>
+          {sorted.map((i) => (
+            <MiniCard key={i.id} instance={i} current={i.id === current.id} onPick={() => setSelected(i.id)} />
+          ))}
           <NewInstanceDialog>
-            <Button variant="outline" size="sm">
-              <Plus aria-hidden /> Neue Instanz
-            </Button>
+            <button type="button" className="mini newtile fx">
+              <span className="in"><Icon name="plus" />Neue Instanz</span>
+            </button>
           </NewInstanceDialog>
-          <Button variant="ghost" size="sm" asChild className="text-muted-foreground">
-            <Link to="/discover">
-              Modpacks entdecken <ArrowRight aria-hidden />
-            </Link>
-          </Button>
-        </section>
-      )}
-    </div>
+        </div>
+      </div>
+    </section>
   );
 }

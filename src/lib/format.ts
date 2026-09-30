@@ -15,6 +15,15 @@ export function formatDate(ms: number): string {
   return dtf.format(ms);
 }
 
+/** Spielzeit als „12:04“ oder „1:02:09“. */
+export function formatClock(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
+  return `${h ? `${h}:${String(m).padStart(2, "0")}` : m}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/** Tausender mit schmalem Leerzeichen („3 480“), wie im Mockup. */
+export const formatCount = (n: number) => n.toLocaleString("de").replace(/\./g, " ");
+
 export function formatMemory(mb: number | null): string {
   if (mb == null) return "Standard";
   return `${(mb / 1024).toLocaleString("de", { maximumFractionDigits: 1 })} GB`;
