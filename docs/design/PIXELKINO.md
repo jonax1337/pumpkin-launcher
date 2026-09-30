@@ -135,7 +135,7 @@ Das vorherige Design („Deepslate & Emerald“, shadcn/ui, Seitenleiste) ist vo
 | Pixeleinheit | `src/pixel/unit.ts` (`usePixelUnit`, DPR-Regel aus Abschnitt 1; setzt `--px`, `--avs`, `--av-32`, `--gl-*`, `data-ico-m`) |
 | Szenen-Engine | `src/pixel/scene.ts` (reines TS, `buildScene` aller 7 Biome, 12-fps-Takt, Pausenregeln, Bayer-Wechsel, Cache), `src/pixel/PixelScene.tsx` |
 | Glyphen, Wortzeichen, Spielerkopf | `src/pixel/icons.tsx` (UI-Icons: `src/pixel/icon-data.ts`, gerendert über `Icon` aus `@/ui`) |
-| Fensterleiste | `src/app/Layout.tsx` (rahmenlos, NavTabs/Aufgaben-Popover/Kontomenü/Fensterknöpfe aus dem Kit) |
+| Fensterleiste, Seitenleiste | `src/app/Layout.tsx` (rahmenlos; Leiste: Kontomenü/Fensterknöpfe, Seitenleiste: `BarButton side` für Bereiche, Aufgaben-Popover, Einstellungen, aus dem Kit) |
 | Spielen | `src/components/game.tsx` (`PlayButton`, `PlayBar`, `PlayStatus`, `StatusChip`, `LogConsole`) |
 | Seiten | `pages/Home.tsx`, `Instances.tsx`, `InstanceDetail.tsx` + `pages/detail/`, `Discover.tsx`, `Settings.tsx`; `components/ContentBrowser.tsx`, `NewInstanceDialog.tsx`, `PlayerNames.tsx`, `Onboarding.tsx`, `instance.tsx` |
 | Laufzeit | `store/look.ts` (Biom je Instanz), `store/tasks.ts` (Aufgaben-Verlauf), `store/game.ts` (Startzeit für „Läuft seit“) |

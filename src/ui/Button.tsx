@@ -141,10 +141,13 @@ type BarLook = {
    * unter dem Symbol (`p` 0–1, null = unbestimmt); der Platz bleibt immer, nichts verschiebt sich.
    */
   activity?: { count: number; p: number | null };
+  /** Für die Seitenleiste: 44 px quadratisch, nur Symbol, Kupferstrich am linken Rand statt unten. */
+  side?: boolean;
 };
 
-function barData({ label, tone, compactBelow, activity }: Pick<BarLook, "label" | "tone" | "compactBelow" | "activity">) {
+function barData({ label, tone, compactBelow, activity, side }: Pick<BarLook, "label" | "tone" | "compactBelow" | "activity" | "side">) {
   return {
+    "data-side": side ? "" : undefined,
     "data-tone": label != null ? tone : undefined,
     "data-compact": label != null ? compactBelow : undefined,
     "data-activity": activity ? (activity.count > 0 ? "busy" : "") : undefined,
@@ -176,16 +179,16 @@ function BarInner({ children, label, iconEnd, activity }: Pick<BarLook, "childre
  */
 export function BarButton(props: BarLook & (({ to: string } & Omit<LinkProps, "to" | "children" | "className"> & { ref?: Ref<HTMLAnchorElement> }) | ({ to?: undefined } & Omit<ComponentProps<"button">, "children" | "className">))) {
   if (props.to != null) {
-    const { current, expanded, className, children, label, tone, iconEnd, compactBelow, activity, ...rest } = props;
+    const { current, expanded, className, children, label, tone, iconEnd, compactBelow, activity, side, ...rest } = props;
     return (
-      <Link className={cn("vx-bar fx", className)} {...barData({ label, tone, compactBelow, activity })} aria-current={current ? "page" : undefined} aria-expanded={expanded} {...rest}>
+      <Link className={cn("vx-bar fx", className)} {...barData({ label, tone, compactBelow, activity, side })} aria-current={current ? "page" : undefined} aria-expanded={expanded} {...rest}>
         <BarInner label={label} iconEnd={iconEnd} activity={activity}>{children}</BarInner>
       </Link>
     );
   }
-  const { current, expanded, className, children, label, tone, iconEnd, compactBelow, activity, to: _t, type = "button", ...rest } = props;
+  const { current, expanded, className, children, label, tone, iconEnd, compactBelow, activity, side, to: _t, type = "button", ...rest } = props;
   return (
-    <button type={type} className={cn("vx-bar fx", className)} {...barData({ label, tone, compactBelow, activity })} aria-current={current ? "page" : undefined} aria-expanded={expanded} {...rest}>
+    <button type={type} className={cn("vx-bar fx", className)} {...barData({ label, tone, compactBelow, activity, side })} aria-current={current ? "page" : undefined} aria-expanded={expanded} {...rest}>
       <BarInner label={label} iconEnd={iconEnd} activity={activity}>{children}</BarInner>
     </button>
   );

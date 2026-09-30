@@ -15,16 +15,19 @@ import { usePixelUnit } from "@/pixel/unit";
 import { useGame } from "@/store/game";
 import { useSettings } from "@/store/settings";
 import { useTasks } from "@/store/tasks";
-import { BarButton, Button, Cell, Chip, Empty, Icon, JobProgress, List, ListRow, NavTabs, Popover, RowTitle, SectionHeader, Tip } from "@/ui";
+import { BarButton, Button, Cell, Chip, Empty, Icon, JobProgress, List, ListRow, Popover, RowTitle, SectionHeader, Tip } from "@/ui";
+import type { IconName } from "@/ui/types";
 
-/** Die scrollende Ansicht unter der Fensterleiste (für den Instanzkopf, der beim Scrollen schrumpft). */
+/** Die scrollende Ansicht neben der Seitenleiste und unter der Fensterleiste (für den Instanzkopf, der beim Scrollen schrumpft). */
 const ViewContext = createContext<RefObject<HTMLElement | null>>({ current: null });
 export const useView = () => useContext(ViewContext);
 
-const TABS = [
-  { to: "/", label: "Start", match: (p: string) => p === "/", shortcut: "Control+1" },
-  { to: "/instances", label: "Bibliothek", match: (p: string) => p.startsWith("/instances"), shortcut: "Control+2" },
-  { to: "/discover", label: "Entdecken", match: (p: string) => p.startsWith("/discover"), shortcut: "Control+3" },
+type Section = { to: string; label: string; icon: IconName; match: (pathname: string) => boolean; shortcut: string };
+
+const TABS: Section[] = [
+  { to: "/", label: "Start", icon: "home", match: (p) => p === "/", shortcut: "Control+1" },
+  { to: "/instances", label: "Bibliothek", icon: "box", match: (p) => p.startsWith("/instances"), shortcut: "Control+2" },
+  { to: "/discover", label: "Entdecken", icon: "search", match: (p) => p.startsWith("/discover"), shortcut: "Control+3" },
 ];
 
 /** Offener Dialog (auch Rückfrage); Popover und Menüs zählen nicht. */
@@ -210,9 +213,10 @@ function TasksButton() {
       label="Aufgaben"
       tip="Aufgaben"
       width={400}
+      side="right"
       trigger={
         // Feste Glyphe; Zähler und Mini-Balken liegen daneben bzw. darunter, nie darauf
-        <BarButton activity={{ count: live.length, p: avg }} aria-label={busy ? `Aufgaben, ${live.length} ${live.length === 1 ? "läuft" : "laufen"}` : "Aufgaben"}>
+        <BarButton side activity={{ count: live.length, p: avg }} aria-label={busy ? `Aufgaben, ${live.length} ${live.length === 1 ? "läuft" : "laufen"}` : "Aufgaben"}>
           <Icon name="tasks" />
         </BarButton>
       }
@@ -257,16 +261,14 @@ function WindowButtons() {
   );
 }
 
+/** Fensterleiste: Marke links, Konto und Fensterknöpfe rechts; die Bereiche liegen in der Seitenleiste. */
 function TitleBar({ online }: { online: boolean }) {
-  const { pathname } = useLocation();
   return (
     <header className="bar" data-tauri-drag-region>
       <Link to="/" className="wm fx" aria-label="Pumpkin Launcher, zum Start">
         <BrandMark />
         <BrandWordmark />
       </Link>
-      {/* Normale Links: Bereiche sind Seiten, keine Tabs. `navtabs` nur für den Abstand zur Marke (Leistengerüst) */}
-      <NavTabs items={TABS} className="navtabs" />
       <div className="bar-mid" data-tauri-drag-region />
       <div className="bar-right">
         {/* Live-Region bleibt stehen (links neben der Gruppe, schiebt nichts); online leer, damit nichts vorgelesen wird */}
@@ -277,16 +279,39 @@ function TitleBar({ online }: { online: boolean }) {
             </Chip>
           )}
         </span>
-        <TasksButton />
         <AccountMenu />
-        <Tip label="Einstellungen">
-          <BarButton to="/settings" aria-label="Einstellungen" current={pathname.startsWith("/settings")}>
-            <Icon name="gear" />
-          </BarButton>
-        </Tip>
         <WindowButtons />
       </div>
     </header>
+  );
+}
+
+/**
+ * Seitenleiste mit nur Symbolen: oben die Hauptbereiche (normale Links: Bereiche sind Seiten, keine Tabs),
+ * unten Aufgaben und Einstellungen. Der Name steht im Tooltip und als aria-label.
+ */
+function Sidebar() {
+  const { pathname } = useLocation();
+  return (
+    <nav className="side" aria-label="Hauptbereiche">
+      <div className="side-grp">
+        {TABS.map((t) => (
+          <Tip key={t.to} label={t.label} side="right">
+            <BarButton side to={t.to} aria-label={t.label} aria-keyshortcuts={t.shortcut} current={t.match(pathname)}>
+              <Icon name={t.icon} />
+            </BarButton>
+          </Tip>
+        ))}
+      </div>
+      <div className="side-grp">
+        <TasksButton />
+        <Tip label="Einstellungen" side="right">
+          <BarButton side to="/settings" aria-label="Einstellungen" aria-keyshortcuts="Control+," current={pathname.startsWith("/settings")}>
+            <Icon name="gear" />
+          </BarButton>
+        </Tip>
+      </div>
+    </nav>
   );
 }
 
@@ -406,6 +431,7 @@ export function Layout() {
     <ViewContext.Provider value={view}>
       <div className={cn("app", ready && "ready")} data-offline={online ? undefined : ""}>
         <TitleBar online={online} />
+        <Sidebar />
         <main ref={view} className={cn("view", noscroll && "noscroll")} tabIndex={-1}>
           {outlet}
         </main>

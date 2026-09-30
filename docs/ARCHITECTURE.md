@@ -165,7 +165,7 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 
 **Oberfläche**
 
-- `app/Layout.tsx` – rahmenloses Fenster: Fensterleiste mit Wortzeichen, Pixel-Tabs (Spielen · Bibliothek · Entdecken), Aufgaben-Menü, Kontomenü, Einstellungen, eigene Fensterknöpfe (`@tauri-apps/api/window`, Ziehen per `data-tauri-drag-region`); setzt `--px`, pausiert Szenen, solange Minecraft läuft
+- `app/Layout.tsx` – rahmenloses Fenster: Fensterleiste mit Wortzeichen, Kontomenü und eigenen Fensterknöpfen, links eine Icon-Seitenleiste (Start · Bibliothek · Entdecken, unten Aufgaben-Menü und Einstellungen) (`@tauri-apps/api/window`, Ziehen per `data-tauri-drag-region`); setzt `--px`, pausiert Szenen, solange Minecraft läuft
 - `pages/` – Start (Szene, Weiterspielen-Reihe, Onboarding), Bibliothek (Poster/Liste), Instanz (klebender Kopf, Inhalte, Protokoll, Einstellungen; `pages/detail/`), Entdecken (Katalog, Projektseite), Einstellungen
 - `components/px.tsx` – Bausteine: Knopf, Chip, Fortschritt, Suchfeld, Auswahl, Segmente, Checkbox, Schalter, Radio, Speicher-Slider, Tooltip, Menü/Kontextmenü, Dialog, Seitenpanel, Leer- und Fehlerzustände, Toasts. Verhalten von Radix, Aussehen aus `styles/`
 - `components/game.tsx` – Spielen-Knopf (feste Größe in allen Zuständen), Statuszeile, Status-Chip, Protokoll mit Filter/Suche/Mitscrollen

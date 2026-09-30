@@ -126,3 +126,11 @@
 .vx-bar-badge { position: absolute; right: 4px; top: 50%; margin-top: -9px; min-width: 18px; height: 18px; padding: 0 3px; display: grid; place-items: center; background: var(--copper); color: var(--ink); font: 400 16px/1 var(--f-px); clip-path: var(--n1); visibility: hidden; }
 .vx-bar-meter.vx-prog { position: absolute; left: 9px; bottom: 4px; width: 22px; height: var(--px); visibility: hidden; }
 .vx-bar[data-activity="busy"] :is(.vx-bar-badge, .vx-bar-meter) { visibility: visible; }
+/* Seitenleiste (side): 44 px quadratisch, nur Symbol; Kupferstrich senkrecht am linken Rand der Platte.
+   Aufgaben darin: Symbol mittig, Zähler als Plakette an der oberen rechten Ecke, Balken unter dem Symbol. */
+.vx-bar[data-side] { width: 44px; height: 44px; min-width: 0; padding: 0; }
+.vx-bar[data-side] > .vx-tick { left: var(--u2); right: auto; top: var(--u3); bottom: var(--u3); width: var(--px); height: auto; }
+.vx-bar[data-side][data-activity] { justify-content: center; padding: 0; }
+.vx-bar[data-side][data-activity] > .vx-bc { top: -3px; }
+.vx-bar[data-side] .vx-bar-badge { right: -4px; top: 2px; margin-top: 0; }
+.vx-bar[data-side] .vx-bar-meter.vx-prog { left: 11px; bottom: 7px; }
