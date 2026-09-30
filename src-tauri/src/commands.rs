@@ -240,7 +240,10 @@ pub async fn instance_launch(
             let (account, session) = auth::session(&state, &id).await?;
             (account, Some(session))
         }
-        None => (auth::offline_account(&username)?, None),
+        None => {
+            auth::require_offline(&state)?;
+            (auth::offline_account(&username)?, None)
+        }
     };
     let version = installed_version(&state, &instance).await?;
     // Eigener Java-Pfad aus den Einstellungen hat Vorrang vor der mitgelieferten Runtime.

@@ -11,6 +11,7 @@ import { Button, Choice, Field, Glyph, Hint, TextField, useRoving } from "@/ui";
 import type { GlyphName, GlyphPalette } from "@/pixel/icons";
 import { PixelScene } from "@/pixel/PixelScene";
 import { Buddy } from "@/branding/Brand";
+import { useOfflineAllowed, useUsableAccount } from "@/store/offline";
 import { accountName, isValidPlayerName, useSettings } from "@/store/settings";
 
 const SODIUM = "AANobbMI";
@@ -25,7 +26,9 @@ const STARTS: { id: Start; glyph: GlyphName; pal: GlyphPalette; title: string; t
 
 /** Erster Start ohne Instanz: zwei Schritte über der Szene. Name (oder Microsoft), dann womit es losgeht. */
 export function Onboarding() {
-  const active = useSettings((s) => s.active);
+  const active = useUsableAccount();
+  // Offizieller Build ohne Microsoft-Konto: nur die Anmeldung, kein Spielername (Backend: `offline_allowed`).
+  const offlineOk = useOfflineAllowed((s) => s.allowed);
   const addAccount = useSettings((s) => s.addAccount);
   const [step, setStep] = useState<1 | 2>(active ? 2 : 1);
   const [name, setName] = useState(active?.kind === "offline" ? active.name : "");
@@ -48,7 +51,7 @@ export function Onboarding() {
   function next(e: FormEvent) {
     e.preventDefault();
     if (!microsoft) {
-      if (!nameOk) return;
+      if (!offlineOk || !nameOk) return;
       if (name !== accountName(active)) addAccount(name);
     }
     setStep(2);
@@ -99,11 +102,11 @@ export function Onboarding() {
               <Buddy mood="hello" size={72} />
               <h1 id="onb-t">Willkommen bei Pumpkin Launcher</h1>
             </div>
-            <p>Wie heißt du im Spiel?</p>
+            <p>{offlineOk || microsoft ? "Wie heißt du im Spiel?" : "Melde dich mit deinem Microsoft-Konto an."}</p>
             <div className="ob">
               {microsoft ? (
                 <p className="ok-msg">Angemeldet als {accountName(active)}</p>
-              ) : (
+              ) : !offlineOk ? null : (
                 // Fehler ersetzt den Hilfetext an derselben Stelle: keine leere Reservezeile, kein Springen
                 <Field
                   label="Spielername"
@@ -114,13 +117,15 @@ export function Onboarding() {
                   <TextField id="ob-name" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => setTouched(true)} maxLength={16} placeholder="z. B. Steve_42" autoFocus aria-invalid={invalid} width="full" />
                 </Field>
               )}
-              <div className="or">oder</div>
-              <Button icon="user" width="full" onClick={() => void startMsLogin(qc)}>Mit Microsoft anmelden</Button>
-              <Hint className="ob-ms">Nötig für die meisten Server und Realms. Du kannst es später nachholen.</Hint>
+              {offlineOk && <div className="or">oder</div>}
+              <Button icon="user" variant={offlineOk ? undefined : "primary"} width="full" onClick={() => void startMsLogin(qc)}>Mit Microsoft anmelden</Button>
+              <Hint className="ob-ms">
+                {offlineOk ? "Nötig für die meisten Server und Realms. Du kannst es später nachholen." : "Dafür brauchst du ein Konto, das Minecraft: Java Edition besitzt."}
+              </Hint>
             </div>
             <div className="of">
               <span className="faint" style={{ fontSize: 12.5 }}>Schritt 1 von 2</span>
-              <Button type="submit" variant="primary" width={140} iconEnd="chev" disabled={!microsoft && !nameOk}>
+              <Button type="submit" variant="primary" width={140} iconEnd="chev" disabled={!microsoft && (!offlineOk || !nameOk)}>
                 Weiter
               </Button>
             </div>

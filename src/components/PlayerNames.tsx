@@ -10,6 +10,7 @@ import {
   Actions, Avatar, BarButton, Button, Dialog, DialogActions, Empty, ErrorBox, Field, Hint, Icon, List, ListRow, Menu, Progress, RowTitle, Skel,
   TextField, type MenuEntry,
 } from "@/ui";
+import { refreshOfflineAllowed, useOfflineAllowed, useUsableAccount } from "@/store/offline";
 import { accountName, isValidPlayerName, useSettings, type ActiveAccount } from "@/store/settings";
 
 // ---------- Microsoft-Anmeldung (ein Dialog für Kontomenü, Einstellungen und Onboarding) ----------
@@ -56,6 +57,7 @@ function closeMsLogin() {
 function MsLoginDialog() {
   const state = useMsLogin();
   const then = useAccountUi((s) => s.then);
+  const offlineAllowed = useOfflineAllowed((s) => s.allowed);
   const qc = useQueryClient();
 
   function copy(code: string) {
@@ -119,7 +121,7 @@ function MsLoginDialog() {
       {state.step === "error" && (
         <>
           <ErrorBox title="Anmeldung hat nicht geklappt" error={state.message} onRetry={() => void startMsLogin(qc)} />
-          <p className="mt-3">Mit einem Spielernamen kannst du auch ohne Anmeldung spielen.</p>
+          {offlineAllowed && <p className="mt-3">Mit einem Spielernamen kannst du auch ohne Anmeldung spielen.</p>}
         </>
       )}
     </Dialog>
@@ -134,13 +136,26 @@ type AfterName = { label: string; run: () => void };
 const useAccountUi = create<{ menu: boolean; offline: boolean; then: AfterName | null }>(() => ({ menu: false, offline: false, then: null }));
 /** Öffnet das Kontomenü oben rechts. */
 export const openAccounts = () => useAccountUi.setState({ menu: true });
-export const openAddOffline = () => useAccountUi.setState({ offline: true, menu: false, then: null });
-/** „Spielen“ ohne Namen: Dialog direkt öffnen, nach dem Speichern geht es mit `then` weiter. */
-export const askPlayerName = (then: AfterName) => useAccountUi.setState({ offline: true, menu: false, then });
+/** Spielername hinzufügen; ohne Erlaubnis des Backends (`offline_allowed`) gibt es den Dialog nicht. */
+export const openAddOffline = () => {
+  if (useOfflineAllowed.getState().allowed) useAccountUi.setState({ offline: true, menu: false, then: null });
+};
+/**
+ * „Spielen“ ohne Konto: Dialog für den Namen öffnen, danach geht es mit `then` weiter.
+ * Ist Offline nicht erlaubt (offizieller Build ohne Microsoft-Konto), startet stattdessen die Anmeldung.
+ */
+export const askPlayerName = (then: AfterName, qc: QueryClient) => {
+  if (useOfflineAllowed.getState().allowed) return useAccountUi.setState({ offline: true, menu: false, then });
+  useAccountUi.setState({ menu: false, then });
+  void startMsLogin(qc);
+};
 
 function useMsAccounts() {
   const query = useQuery({ queryKey: ["ms-accounts"], queryFn: api.msAccounts, staleTime: 5 * 60_000, retry: false });
   const syncMicrosoft = useSettings((s) => s.syncMicrosoft);
+  // Ob Spielernamen erlaubt sind, hängt an den Microsoft-Konten: bei jeder Änderung der Anzahl neu fragen.
+  const count = query.data?.length;
+  useEffect(() => void refreshOfflineAllowed(), [count]);
   // Nur mit frischen Daten abgleichen: ein veralteter Cache nach einer Anmeldung kennt das neue Konto noch nicht.
   const fresh = query.isSuccess && !query.isFetching;
   useEffect(() => {
@@ -155,10 +170,11 @@ const sameAccount = (a: ActiveAccount | null, b: ActiveAccount) =>
 /** Alle Konten in einer Liste: Microsoft zuerst, dann Offline-Namen. */
 function useAllAccounts(): ActiveAccount[] {
   const offline = useSettings((s) => s.offlineAccounts);
+  const allowed = useOfflineAllowed((s) => s.allowed);
   const ms = useMsAccounts();
   return [
     ...(ms.data ?? []).map((a): ActiveAccount => ({ kind: "microsoft", id: a.id, username: a.username })),
-    ...offline.map((name): ActiveAccount => ({ kind: "offline", name })),
+    ...(allowed ? offline : []).map((name): ActiveAccount => ({ kind: "offline", name })),
   ];
 }
 
@@ -180,7 +196,8 @@ function useRemoveAccount() {
 
 /** Kontomenü oben rechts: Kopf + Name, Konten wechseln, anmelden, Spielername hinzufügen. */
 export function AccountMenu() {
-  const active = useSettings((s) => s.active);
+  const active = useUsableAccount();
+  const allowed = useOfflineAllowed((s) => s.allowed);
   const select = useSettings((s) => s.selectAccount);
   const accounts = useAllAccounts();
   const { remove } = useRemoveAccount();
@@ -201,7 +218,7 @@ export function AccountMenu() {
     })),
     ...(accounts.length ? ["-" as const] : []),
     { id: "ms", text: "Mit Microsoft anmelden", icon: "user", onSelect: () => void startMsLogin(qc) },
-    { id: "off", text: "Spielername hinzufügen", icon: "plus", onSelect: openAddOffline },
+    ...(allowed ? [{ id: "off", text: "Spielername hinzufügen", icon: "plus" as const, onSelect: openAddOffline }] : []),
     { id: "set", text: "Einstellungen", icon: "gear", onSelect: () => navigate("/settings#konten") },
     ...(active?.kind === "microsoft"
       ? ["-" as const, { id: "out", text: `Abmelden (${name})`, icon: "power" as const, bad: true, onSelect: () => remove(active) }]
@@ -217,8 +234,8 @@ export function AccountMenu() {
         items={items}
         trigger={
           <BarButton
-            aria-label={name ? `Konto: ${name}. Wechseln` : "Spielername fehlt. Konto wählen"}
-            label={name || "Spielername fehlt"}
+            aria-label={name ? `Konto: ${name}. Wechseln` : allowed ? "Spielername fehlt. Konto wählen" : "Nicht angemeldet. Konto wählen"}
+            label={name || (allowed ? "Spielername fehlt" : "Nicht angemeldet")}
             tone={name ? undefined : "warn"}
             iconEnd="chevd"
             compactBelow={900}
@@ -324,7 +341,8 @@ function AddOfflineDialog() {
 
 /** Konten verwalten (Einstellungen). */
 export function AccountsSection() {
-  const active = useSettings((s) => s.active);
+  const active = useUsableAccount();
+  const offlineAllowed = useOfflineAllowed((s) => s.allowed);
   const select = useSettings((s) => s.selectAccount);
   const accounts = useAllAccounts();
   const ms = useMsAccounts();
@@ -353,14 +371,18 @@ export function AccountsSection() {
           })}
         </List>
       ) : (
-        <Empty size="pane" ill="user" title="Noch kein Konto">Melde dich an oder leg einen Spielernamen an.</Empty>
+        <Empty size="pane" ill="user" title="Noch kein Konto">{offlineAllowed ? "Melde dich an oder leg einen Spielernamen an." : "Melde dich mit deinem Microsoft-Konto an."}</Empty>
       )}
       {ms.error && <ErrorBox className="mt-3" title="Microsoft-Konten konnten nicht geladen werden" error={ms.error} onRetry={() => void ms.refetch()} />}
       <Actions wrap className="mt-3">
         <Button icon="user" onClick={() => void startMsLogin(qc)}>Mit Microsoft anmelden</Button>
-        <Button icon="plus" onClick={openAddOffline}>Spielername hinzufügen</Button>
+        {offlineAllowed && <Button icon="plus" onClick={openAddOffline}>Spielername hinzufügen</Button>}
       </Actions>
-      <Hint className="mt-2.5 max-w-[70ch]">Mit einem Spielernamen spielst du allein, im LAN und auf Servern ohne Anmeldung. Für die meisten Server brauchst du ein Microsoft-Konto.</Hint>
+      <Hint className="mt-2.5 max-w-[70ch]">
+        {offlineAllowed
+          ? "Mit einem Spielernamen spielst du allein, im LAN und auf Servern ohne Anmeldung. Für die meisten Server brauchst du ein Microsoft-Konto."
+          : "Du brauchst ein Microsoft-Konto, das Minecraft: Java Edition besitzt."}
+      </Hint>
     </>
   );
 }

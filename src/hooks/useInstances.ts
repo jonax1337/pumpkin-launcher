@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { create } from "zustand";
-import { askPlayerName, openAddOffline } from "@/components/PlayerNames";
+import { askPlayerName, openAddOffline, startMsLogin } from "@/components/PlayerNames";
+import { usableAccount, useOfflineAllowed } from "@/store/offline";
 import { api } from "@/lib/api";
 import { autoMemoryMb, formatClock, maxMemoryMb } from "@/lib/format";
 import { INSTALL_CANCELLED, type Instance, type InstanceStatus, type ModLoader, type NewInstance } from "@/lib/types";
@@ -189,8 +190,10 @@ export function useLaunch() {
   return useMutation({
     meta: { ownErrorToast: true },
     mutationFn: async (instance: Instance) => {
-      const { active, javaPath } = useSettings.getState();
-      if (!active) throw new Error("Leg zuerst einen Spielernamen fest.");
+      const { javaPath } = useSettings.getState();
+      const offlineOk = useOfflineAllowed.getState().allowed;
+      const active = usableAccount(useSettings.getState().active, offlineOk);
+      if (!active) throw new Error(offlineOk ? "Leg zuerst einen Spielernamen fest." : "Melde dich zuerst mit deinem Microsoft-Konto an.");
       useGame.getState().clearLog(instance.id);
       useGame.getState().clearCrash(instance.id);
       const accountId = active.kind === "microsoft" ? active.id : null;
@@ -205,10 +208,14 @@ export function useLaunch() {
       return qc.invalidateQueries({ queryKey: instanceKeys.all });
     },
     // Name erst während der Installation entfernt: selten, deshalb nur Meldung mit direktem Weg zum Dialog.
-    onError: (err) =>
-      useSettings.getState().active
-        ? toast.error(err.message)
-        : toast.error(err.message, { duration: 10_000, action: { label: "Spielername festlegen", onClick: openAddOffline } }),
+    onError: (err) => {
+      const offlineOk = useOfflineAllowed.getState().allowed;
+      if (usableAccount(useSettings.getState().active, offlineOk)) return void toast.error(err.message);
+      const action = offlineOk
+        ? { label: "Spielername festlegen", onClick: openAddOffline }
+        : { label: "Mit Microsoft anmelden", onClick: () => void startMsLogin(qc) };
+      toast.error(err.message, { duration: 10_000, action });
+    },
   });
 }
 
@@ -224,7 +231,9 @@ export function usePlay() {
   const play = async (instance: Instance, onLaunched?: () => void): Promise<void> => {
     const game = useGame.getState();
     if (game.launching[instance.id] || game.installs[instance.id]) return;
-    if (!useSettings.getState().active) return askPlayerName({ label: instance.name, run: () => void play(instance, onLaunched) });
+    if (!usableAccount(useSettings.getState().active, useOfflineAllowed.getState().allowed)) {
+      return askPlayerName({ label: instance.name, run: () => void play(instance, onLaunched) }, qc);
+    }
     game.setLaunching(instance.id, true);
     try {
       // Fehlt der Status (Abfrage fehlgeschlagen), wird wie bei „nicht installiert“ zuerst installiert.

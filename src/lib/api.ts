@@ -367,6 +367,8 @@ export const api = {
   msLoginFinish: (): Promise<Account> => (tauri ? call("ms_login_finish") : mockAccounts.finish()),
   msLoginCancel: (): Promise<void> => (tauri ? call("ms_login_cancel") : mockAccounts.cancel()),
   msAccounts: (): Promise<Account[]> => (tauri ? call("ms_accounts") : Promise.resolve(clone(db.accounts))),
+  /** Spielernamen ohne Konto erlaubt? Im Browser-Mock immer. */
+  offlineAllowed: (): Promise<boolean> => (tauri ? call("offline_allowed") : Promise.resolve(true)),
   msAccountRemove: (id: string): Promise<void> =>
     tauri ? call("ms_account_remove", { id }) : Promise.resolve(void (db.accounts = db.accounts.filter((a) => a.id !== id))),
   /** Datei mit dem Standardprogramm öffnen (z. B. Absturzbericht). */

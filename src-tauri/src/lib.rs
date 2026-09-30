@@ -57,6 +57,7 @@ pub fn run() {
             account_commands::ms_login_finish,
             account_commands::ms_login_cancel,
             account_commands::ms_accounts,
+            account_commands::offline_allowed,
             account_commands::ms_account_remove,
             content_commands::modrinth_search,
             content_commands::modrinth_project,

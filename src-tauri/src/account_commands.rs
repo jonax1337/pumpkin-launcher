@@ -28,6 +28,12 @@ pub fn ms_accounts(state: State<'_, AppState>) -> Vec<Account> {
     auth::accounts(&state)
 }
 
+/// Darf das Frontend Spielernamen ohne Konto anbieten? (Debug-Build oder angemeldetes Microsoft-Konto.)
+#[tauri::command]
+pub fn offline_allowed(state: State<'_, AppState>) -> bool {
+    auth::offline_allowed(&state)
+}
+
 #[tauri::command]
 pub fn ms_account_remove(state: State<'_, AppState>, id: String) -> AppResult<()> {
     auth::remove_account(&state, &id)

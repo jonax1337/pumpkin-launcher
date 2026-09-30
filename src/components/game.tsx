@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { formatClock, formatCount, relativeTime } from "@/lib/format";
 import { installStepLabel, SUPPORTED_LOADERS, type Instance, type InstallProgress, type InstallStep, type ModLoader } from "@/lib/types";
 import { useGame, type LogLine } from "@/store/game";
-import { useSettings } from "@/store/settings";
+import { useUsableAccount } from "@/store/offline";
 
 // Reihenfolge der Schritte im Backend (`install::install`, mit Loader umrahmt von `instance_install`)
 const VANILLA_STEPS: InstallStep[] = ["java", "client", "libraries", "natives", "assets"];
@@ -128,7 +128,7 @@ export function PlayButton({ instance, size = "l", onLaunched, tabIndex }: { ins
   const progress = useGame((s) => s.installs[instance.id]);
   const code = useGame((s) => s.crashes[instance.id]?.code ?? null);
   const since = useGame((s) => s.started[instance.id]);
-  const hasAccount = useSettings((s) => !!s.active);
+  const hasAccount = !!useUsableAccount();
   const play = usePlay();
   const mounted = useRef(true);
   useEffect(() => {

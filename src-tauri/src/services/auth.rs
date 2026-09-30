@@ -480,6 +480,26 @@ pub async fn session(state: &AppState, id: &str) -> AppResult<(Account, McSessio
     Ok((account.account(), session))
 }
 
+/// Spielernamen ohne Konto gibt es nur in Debug-Builds (`pnpm tauri dev`) oder wenn ein Microsoft-Konto
+/// angemeldet ist, dessen Besitz beim Login geprüft wurde. Ein offizieller Build startet so nicht für
+/// Leute, die das Spiel nicht besitzen. Der Quelltext ist offen: das ist Richtlinie, kein Kopierschutz.
+pub fn offline_allowed(state: &AppState) -> bool {
+    let owner = || state.accounts.list().iter().any(|a| keyring_entry(&a.id).is_ok_and(|e| e.get_secret().is_ok()));
+    policy_allows_offline(cfg!(debug_assertions), owner)
+}
+
+fn policy_allows_offline(debug_build: bool, owner: impl FnOnce() -> bool) -> bool {
+    debug_build || owner()
+}
+
+/// Wie `offline_allowed`, aber als Fehler mit Anleitung für den Start.
+pub fn require_offline(state: &AppState) -> AppResult<()> {
+    if offline_allowed(state) {
+        return Ok(());
+    }
+    Err(say("Spielen ohne Konto ist in dieser Version nicht möglich. Melde dich mit einem Microsoft-Konto an, das Minecraft: Java Edition besitzt."))
+}
+
 /// UUID eines Offline-Spielers wie im Spiel selbst: MD5 von `OfflinePlayer:<name>`
 /// mit Version 3 (entspricht Javas `UUID.nameUUIDFromBytes`).
 pub fn offline_uuid(username: &str) -> uuid::Uuid {
@@ -519,6 +539,7 @@ mod tests {
         let id = "8f0c5a3e-1b2d-4c5e-9f00-112233445566";
         assert_eq!(client_id(Some(format!(" {id} "))).unwrap(), id);
         assert!(client_id(Some("kein-uuid".into())).is_err());
+        assert_eq!(client_id(None).unwrap(), option_env!("PUMPKIN_MS_CLIENT_ID").unwrap_or(DEFAULT_CLIENT_ID));
         assert_eq!(form(&[("scope", SCOPE), ("t", "a*b/c=")]), "scope=XboxLive.signin%20offline_access&t=a%2Ab%2Fc%3D");
     }
 
@@ -539,7 +560,6 @@ mod tests {
         assert_eq!(expired.err().unwrap().to_string(), "Der Anmeldecode ist abgelaufen. Starte die Anmeldung neu. – Details: expired_token AADSTS70020: expired");
         assert_eq!(parse_poll(400, &body(json!({"error": "invalid_grant"}))).err().unwrap().to_string().split(" – ").next(), Some(RELOGIN));
         assert!(parse_poll(500, b"<html>").is_err());
-        assert_eq!(client_id(None).unwrap(), option_env!("PUMPKIN_MS_CLIENT_ID").unwrap_or(DEFAULT_CLIENT_ID));
     }
 
     #[test]
@@ -573,6 +593,14 @@ mod tests {
         assert_eq!(jwt_claim(&format!("h.{payload}.s"), "xuid").as_deref(), Some("2535400000000000"));
         assert_eq!(jwt_claim("kein-jwt", "xuid"), None);
     }
+    #[test]
+    fn offline_only_in_debug_or_with_owner() {
+        assert!(policy_allows_offline(true, || false), "Debug-Build: immer");
+        assert!(policy_allows_offline(false, || true), "Release mit Microsoft-Konto");
+        assert!(!policy_allows_offline(false, || false), "Release ohne Konto: gesperrt");
+        assert!(policy_allows_offline(true, || panic!("im Debug-Build nicht nötig")));
+    }
+
     #[test]
     fn second_finish_login_gets_nothing() {
         let p = Pending {

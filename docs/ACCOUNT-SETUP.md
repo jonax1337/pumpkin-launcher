@@ -35,6 +35,15 @@ Die Client-ID der Azure-App „Pumpkin Launcher“ (`5e27ee41-3be2-4c3a-a156-a3c
 
 Die Client-ID ist kein Geheimnis; das Refresh-Token dagegen schon – es liegt nur in der Windows-Anmeldeinformationsverwaltung (Dienst `dev.laux.launcher`, Benutzer = Minecraft-UUID), nie in `accounts.json`.
 
+## Spielen ohne Konto (Offline-Spielername)
+
+Ein offizieller Build (`pnpm tauri build`) startet Minecraft **nicht** mit einem bloßen Spielernamen. Das Backend (`auth::offline_allowed`, erzwungen in `instance_launch`) erlaubt es nur, wenn
+
+- es ein **Debug-Build** ist (`pnpm tauri dev`, auch `pnpm tauri build --debug`), oder
+- ein Microsoft-Konto angemeldet ist, dessen Besitz beim Login geprüft wurde (Eintrag im Schlüsselbund). Dann sind Spielernamen für LAN, Einzelspieler und Tests erlaubt.
+
+Die Oberfläche blendet Spielername-Dialog und Onboarding-Namensfeld aus, sobald das Backend „nein“ sagt. Der Quelltext ist offen, die Sperre ist also eine Richtlinie des offiziellen Builds und kein Kopierschutz.
+
 ## 4. Danach testen
 
 1. Pumpkin Launcher starten, Microsoft-Anmeldung wählen. Es erscheinen ein Code und `https://www.microsoft.com/link`.
