@@ -56,7 +56,7 @@ h2 { font-size: clamp(64px,7vw,100px); line-height: 1; letter-spacing: -1.2px; }
 .product-shot figcaption strong { font-family: var(--display); color: var(--copper); font-size: 23px; font-weight: 700; }
 .product-shot figcaption span { color: var(--muted); font-size: 13px; }
 .preview-note { color: #737f96; text-align: center; font-size: 10px; margin-top: 35px; }
-.showcase-track:has(.is-pinned) { height: calc(100svh + 2100px); }
+.showcase-track:has(.is-pinned) { height: calc(100svh + 2800px); }
 .showcase.is-pinned { position: sticky; top: 0; height: 100svh; padding: 40px 0; }
 .is-pinned .showcase-heading { margin-bottom: 25px; }
 .is-pinned .showcase-heading .eyebrow { margin-bottom: 14px; }
@@ -100,6 +100,7 @@ h2 { font-size: clamp(64px,7vw,100px); line-height: 1; letter-spacing: -1.2px; }
 .faq-list summary::-webkit-details-marker { display: none; }
 .faq-list summary::after { content: "+"; font-family: "Jersey 10",monospace; color: var(--copper); font-size: 28px; }
 .faq-list details[open] summary::after { content: "−"; }
+.faq-list details p a { color: var(--copper); text-decoration: underline; text-underline-offset: 3px; }
 .faq-list details p { color: var(--muted); font-size: 14px; line-height: 1.8; padding: 0 28px 26px 0; }
 .outro { position: relative; isolation: isolate; overflow: clip; min-height: 800px; display: flex; align-items: center; text-align: center; }
 .outro-landscape { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; object-fit: cover; z-index: -3; }

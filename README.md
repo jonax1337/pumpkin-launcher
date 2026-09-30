@@ -36,7 +36,7 @@
 
 <p align="center">
   <img src="website/assets/launcher-library.png" width="395" alt="Library view">
-  <img src="website/assets/launcher-mods.png" width="395" alt="Mod catalog view">
+  <img src="website/assets/launcher-discover.png" width="395" alt="Discover view with mods and modpacks">
 </p>
 
 ## Status

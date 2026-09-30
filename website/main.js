@@ -56,14 +56,12 @@ media.add("(min-width: 900px) and (min-height: 680px) and (prefers-reduced-motio
   // Scroll advances through real screens; mobile and reduced motion keep a normal document.
   // CSS sticky reserves the whole scroll distance without switching layout positions mid-scroll.
   const tour = gsap.timeline({ defaults: { ease: "none" }, scrollTrigger: { id: "product-tour", trigger: showcase.parentElement, start: "top top", end: "bottom bottom", scrub: .65, invalidateOnRefresh: true } });
-  tour.from(shots[0], { rotationX: 12, y: 65, scale: .9, duration: .7 })
-    .to({}, { duration: .6 })
-    .to(shots[0], { y: -50, autoAlpha: 0, scale: .97, duration: .5 })
-    .to(shots[1], { y: 0, rotationX: 0, scale: 1, autoAlpha: 1, duration: .65 }, "<.1")
-    .to({}, { duration: .7 })
-    .to(shots[1], { y: -50, autoAlpha: 0, scale: .97, duration: .5 })
-    .to(shots[2], { y: 0, rotationX: 0, scale: 1, autoAlpha: 1, duration: .65 }, "<.1")
-    .to({}, { duration: .6 });
+  tour.from(shots[0], { rotationX: 12, y: 65, scale: .9, duration: .7 }).to({}, { duration: .6 });
+  shots.slice(1).forEach((shot, index) => {
+    tour.to(shots[index], { y: -50, autoAlpha: 0, scale: .97, duration: .5 })
+      .to(shot, { y: 0, rotationX: 0, scale: 1, autoAlpha: 1, duration: .65 }, "<.1")
+      .to({}, { duration: index === shots.length - 2 ? .6 : .7 });
+  });
   gsap.from(".world-card", { y: 130, rotation: (index) => [4,-3,3][index], autoAlpha: 0, stagger: .15, ease: "power2.out", scrollTrigger: { trigger: ".world-grid", start: "top 90%", end: "top 25%", scrub: .8 } });
   return () => showcase.classList.remove("is-pinned");
 });
