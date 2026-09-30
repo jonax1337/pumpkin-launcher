@@ -1,15 +1,16 @@
-import { ButtonLink, Empty, Glyph } from "@/ui";
+import { ButtonLink, Empty } from "@/ui";
+import { Buddy } from "@/branding/Brand";
 
 export function NotFoundPage() {
   return (
     <section className="page">
       <Empty
-        ill={<Glyph name="compass" pal="ice" box={64} />}
+        ill={<Buddy mood="oops" size={144} />}
         title="Seite nicht gefunden"
         asPage
         actions={<ButtonLink to="/" variant="primary" icon="back">Zum Start</ButtonLink>}
       >
-        Diese Adresse gibt es in Voxlet nicht (mehr).
+        Diese Adresse gibt es in Pumpkin Launcher nicht (mehr).
       </Empty>
     </section>
   );

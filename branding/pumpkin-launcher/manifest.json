@@ -1,8 +1,8 @@
 {
   "brand": "Pumpkin Launcher",
-  "integrated": false,
+  "integrated": true,
   "sourceFormat": "SVG",
-  "calendarStatus": "proposed",
+  "calendarStatus": "active",
   "variants": {
     "standard": {
       "name": "Buddy",

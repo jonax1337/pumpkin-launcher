@@ -115,7 +115,7 @@ pub fn build_args_for(spec: &LaunchSpec, env: &Env, session: Option<&Session>) -
         ("library_directory", path(dirs.libraries())),
         ("classpath_separator", sep.into()),
         ("classpath", cp),
-        ("launcher_name", "voxlet".into()),
+        ("launcher_name", "pumpkin-launcher".into()),
         ("launcher_version", env!("CARGO_PKG_VERSION").into()),
     ]);
 

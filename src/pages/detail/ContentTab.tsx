@@ -231,7 +231,7 @@ export function ContentTab({ instance, updateFor, onAdd, warnsOf, showUpdates = 
       >
         {instance.loader === "vanilla"
           ? "Diese Instanz ist Minecraft pur. Ressourcenpakete gehen trotzdem, Mods brauchen einen Loader wie Fabric."
-          : "Füge Mods, Shader oder Ressourcenpakete hinzu. Voxlet wählt passende Versionen aus."}
+          : "Füge Mods, Shader oder Ressourcenpakete hinzu. Pumpkin Launcher wählt passende Versionen aus."}
       </Empty>
     );
   }

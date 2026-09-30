@@ -7,7 +7,9 @@ export function seasonForDate(isoDate) {
 }
 // Runnable boundary check, using the same resolver as the browser preview.
 if (typeof process !== 'undefined' && process.argv.includes('--check')) {
-  const { strictEqual } = await import('node:assert');
+  const strictEqual = (actual, expected, label) => {
+    if (actual !== expected) throw new Error(`${label}: expected ${expected}, got ${actual}`);
+  };
   for (const [date, expected] of [
     ['2026-01-01','winter'],['2026-02-28','winter'],['2028-02-29','winter'],
     ['2026-03-01','spring'],['2026-05-31','spring'],['2026-06-01','summer'],

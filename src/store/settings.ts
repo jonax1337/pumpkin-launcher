@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { PumpkinChoice } from "@/branding/calendar";
 
 export type PxSize = "s" | "m" | "l";
 
@@ -20,7 +21,9 @@ interface SettingsState {
   pxSize: PxSize;
   /** Bewegte Szenen (Sterne, Wolken, Glut); pausieren ohnehin, solange Minecraft läuft. */
   motion: boolean;
-  set: (patch: Partial<Pick<SettingsState, "javaPath" | "memoryMb" | "msClientId" | "pxSize" | "motion">>) => void;
+  /** Automatisch nach Jahreszeit oder eine dauerhaft gewählte Pumpkin-Variante. */
+  pumpkin: PumpkinChoice;
+  set: (patch: Partial<Pick<SettingsState, "javaPath" | "memoryMb" | "msClientId" | "pxSize" | "motion" | "pumpkin">>) => void;
   reset: () => void;
   addAccount: (name: string) => void;
   selectAccount: (account: ActiveAccount) => void;
@@ -50,6 +53,7 @@ export const useSettings = create<SettingsState>()(
       offlineAccounts: [],
       pxSize: "m",
       motion: true,
+      pumpkin: "auto",
       set: (patch) => set(patch),
       reset: () => set(defaults),
       addAccount: (name) =>

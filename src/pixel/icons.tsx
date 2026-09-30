@@ -2,7 +2,7 @@ import { memo } from "react";
 import { hash, rng } from "./random";
 
 /*
- * Glyphen (10×10, farbig), Wortzeichen und Spielerkopf. Die UI-Icons (7×7/5×5) liegen in
+ * Glyphen (10×10, farbig) und Spielerkopf. Die UI-Icons (7×7/5×5) liegen in
  * icon-data.ts und werden über `Icon` aus "@/ui" gerendert (Größen-Slots s/m/l/xl).
  */
 const G = {
@@ -76,17 +76,6 @@ export const GlyphSvg = memo(function GlyphSvg({ name, pal }: { name: GlyphName;
 });
 
 /** Wortzeichen: ein beleuchtetes Pixel-V (Kupfer + Sand). 7×7, größtmögliche ganze Einheiten in 28 px. */
-export function Mark({ size = "min(calc(var(--px) * 7), 28px)" }: { size?: string }) {
-  const rows = ["a.....b", "a.....b", "aa...bb", ".a...b.", ".aa.bb.", "..a.b..", "..aab.."];
-  return (
-    <svg viewBox="0 0 7 7" style={{ width: size, height: size }} shapeRendering="crispEdges" aria-hidden>
-      {rows.flatMap((r, y) =>
-        [...r].map((ch, x) => (ch === "." ? null : <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill={ch === "a" ? "#E39860" : "#F6E7C8"} />)),
-      )}
-    </svg>
-  );
-}
-
 /** Spielerkopf als Pixelgesicht (8×8), fest aus dem Namen abgeleitet. */
 export const Face = memo(function Face({ name, size = "var(--avs)" }: { name: string; size?: string }) {
   const h = hash(name || "?");

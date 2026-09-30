@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<title>Voxlet Pixelkino</title>
+<title>Pumpkin Launcher Pixelkino</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&family=Jersey+10&display=block">
@@ -915,7 +915,7 @@ input[type="search"]::-webkit-search-cancel-button { display: none; }
 
 <div id="app" data-view="home">
   <header class="bar" data-tauri-drag-region>
-    <a class="wm fx" href="#" data-act="nav" data-v="home" aria-label="Voxlet, zum Start"><span class="mark" id="wmMark"></span><span class="word">VOXLET</span></a>
+    <a class="wm fx" href="#" data-act="nav" data-v="home" aria-label="Pumpkin Launcher, zum Start"><span class="mark" id="wmMark"></span><span class="word">PUMPKIN LAUNCHER</span></a>
     <nav class="navtabs" role="tablist" aria-label="Hauptbereiche">
       <button class="ptab fx" role="tab" id="nt-home" data-act="nav" data-v="home" aria-selected="true">Spielen<i class="tick"></i></button>
       <button class="ptab fx" role="tab" id="nt-library" data-act="nav" data-v="library" aria-selected="false">Bibliothek<i class="tick"></i></button>
@@ -1122,10 +1122,7 @@ function glyph(name, pal, big) {
 
 /* Wortzeichen: ein beleuchtetes Pixel-V (Kupfer + Sand) */
 function markSVG() {
-  const rows = ['a.....b', 'a.....b', 'aa...bb', '.a...b.', '.aa.bb.', '..a.b..', '..aab..'];
-  let out = '';
-  rows.forEach((r, y) => [...r].forEach((ch, x) => { if (ch !== '.') out += `<rect x="${x}" y="${y}" width="1" height="1" fill="${ch === 'a' ? '#E39860' : '#F6E7C8'}"/>`; }));
-  return `<svg viewBox="0 0 7 7" style="width:var(--pis);height:var(--pis)" shape-rendering="crispEdges" aria-hidden="true">${out}</svg>`;
+  return '<img src="../../../branding/pumpkin-launcher/assets/standard/mark.svg" width="32" height="32" alt="" style="image-rendering:pixelated">';
 }
 
 /* Spielerkopf als Pixelgesicht (8x8), deterministisch aus dem Namen */
@@ -1532,7 +1529,7 @@ const S = {
   sheet: { open: false, kind: 'mod', q: '', fit: true },
   game: { id: null, phase: 'idle', pct: 0, step: '', done: 0, total: 3480, t0: 0, err: '', crashed: null },
   offline: false, crashNext: false, emptyLib: false,
-  settings: { motion: LS.get('motion', true), pxSize: Q.get('px') || LS.get('px', 'm'), lang: 'de', onLaunch: 'min', ram: 'auto', ramGb: 6, java: 'auto', win: 'auto', conc: 3, dir: 'C:\\Users\\Jonas\\AppData\\Roaming\\Voxlet', upd: 'avail' },
+  settings: { motion: LS.get('motion', true), pxSize: Q.get('px') || LS.get('px', 'm'), lang: 'de', onLaunch: 'min', ram: 'auto', ramGb: 6, java: 'auto', win: 'auto', conc: 3, dir: 'C:\\Users\\Jonas\\AppData\\Roaming\\Pumpkin Launcher', upd: 'avail' },
   accounts: [{ id: 'a1', name: 'Jonas', kind: 'ms', active: true }, { id: 'a2', name: 'Steve_42', kind: 'off', active: false }],
   jobs: {},
   launcherUpd: true,
@@ -1775,7 +1772,7 @@ function pstat(i) {
   if (mine && g.phase === 'run') return `<span class="ptxt">Läuft seit <b class="num" data-runclock>${hms(Date.now() - g.t0)}</b></span><button class="btn btn-g s fx" data-act="log" data-id="${i.id}"><span class="bc">Protokoll ansehen</span></button>`;
   if (mine && g.phase === 'crash') return `<span class="ptxt"><b>Minecraft ist abgestürzt (Code 1)</b></span><button class="btn btn-g s fx bad" data-act="crashreport"><span class="bc">Absturzbericht öffnen</span></button><button class="btn btn-g s fx" data-act="log" data-id="${i.id}"><span class="bc">Protokoll ansehen</span></button>`;
   if (mine && g.phase === 'error') return `<span class="ptxt"><b>Download unterbrochen.</b> Keine Verbindung zum Server.</span><button class="btn btn-g s fx" data-act="log" data-id="${i.id}"><span class="bc">Protokoll ansehen</span></button>`;
-  if (S.offline && !i.installed) return `<span class="ptxt">Für den ersten Start braucht Voxlet eine Internetverbindung.</span>`;
+  if (S.offline && !i.installed) return `<span class="ptxt">Für den ersten Start braucht Pumpkin Launcher eine Internetverbindung.</span>`;
   if (i.preparing != null) return `<span class="ptxt">Modpack wird eingerichtet: <b class="num">${Math.round(i.preparing)} %</b></span>`;
   if (!i.installed) return `<span class="ptxt">Noch nicht eingerichtet. „Spielen“ lädt alles Nötige.</span>`;
   return `<span class="ptxt">Zuletzt gespielt ${esc(i.last)}</span>`;
@@ -1830,7 +1827,7 @@ function renderHome() {
     <div class="scene" id="homeScene" data-scene="${i.bio}|${i.seed}|hero" aria-hidden="true"></div>
     <div class="shade-home"></div>
     <div class="notes" aria-label="Hinweise">
-      <div class="note" id="noteLauncher" style="visibility:${S.launcherUpd ? 'visible' : 'hidden'}">${ic('up')}<div class="nt"><b>Voxlet 0.10.0 ist da</b><span>Neu: schnellere Downloads</span></div><button class="btn btn-s s fx" data-act="launcherupd"><span class="bc">Installieren</span></button></div>
+      <div class="note" id="noteLauncher" style="visibility:${S.launcherUpd ? 'visible' : 'hidden'}">${ic('up')}<div class="nt"><b>Pumpkin Launcher 0.10.0 ist da</b><span>Neu: schnellere Downloads</span></div><button class="btn btn-s s fx" data-act="launcherupd"><span class="bc">Installieren</span></button></div>
       <div class="note" id="noteMods" style="visibility:${updI ? 'visible' : 'hidden'}">${ic('info')}<div class="nt"><b id="noteModsT">${updI ? `${updCount(updI.id)} Updates für ${esc(updI.name)}` : ''}</b><span>In unter einer Minute erledigt</span></div><button class="btn btn-s s fx" data-act="gotoupd"><span class="bc">Ansehen</span></button></div>
     </div>
     <div class="hero">
@@ -1938,7 +1935,7 @@ function detailTab(i) {
 function kindCounts(id) { const L = liveItems(id); return { all: L.length, mod: L.filter(x => x.kind === 'mod').length, shader: L.filter(x => x.kind === 'shader').length, pack: L.filter(x => x.kind === 'pack').length }; }
 function contentTab(i) {
   const k = kindCounts(i.id), u = updCount(i.id), d = S.detail;
-  if (!items(i.id).length) return `<div class="empty">${glyph('cube', 'steel', true)}<h2>Noch keine Inhalte</h2><p>${i.loader === 'Vanilla' ? 'Diese Instanz ist Minecraft pur. Ressourcenpakete gehen trotzdem, Mods brauchen einen Loader wie Fabric.' : 'Füge Mods, Shader oder Ressourcenpakete hinzu. Voxlet wählt passende Versionen aus.'}</p><div class="row"><button class="btn btn-p fx" data-act="addcontent"><span class="bf"></span><span class="bc">${ic('plus')}Hinzufügen</span></button></div></div>`;
+  if (!items(i.id).length) return `<div class="empty">${glyph('cube', 'steel', true)}<h2>Noch keine Inhalte</h2><p>${i.loader === 'Vanilla' ? 'Diese Instanz ist Minecraft pur. Ressourcenpakete gehen trotzdem, Mods brauchen einen Loader wie Fabric.' : 'Füge Mods, Shader oder Ressourcenpakete hinzu. Pumpkin Launcher wählt passende Versionen aus.'}</p><div class="row"><button class="btn btn-p fx" data-act="addcontent"><span class="bf"></span><span class="bc">${ic('plus')}Hinzufügen</span></button></div></div>`;
   return `<div class="ctool" id="ctool">
     <div class="main">
       ${field('cQ', 'Inhalte suchen', d.q, 'cq', 's')}
@@ -2012,7 +2009,7 @@ function baseLog(i) {
   const L = i.loader === 'Vanilla' ? `Minecraft ${i.mc}` : `Minecraft ${i.mc} with ${i.loader} Loader ${LV[i.loader]}`;
   const n = liveItems(i.id).length;
   LOGS[i.id] = i.installed && i.id !== 'snap' ? [
-    ['12:04:09', 'INFO', 'main', 'Voxlet startet die Instanz „' + i.name + '“ (Java 21.0.5, 6 GB)'],
+    ['12:04:09', 'INFO', 'main', 'Pumpkin Launcher startet die Instanz „' + i.name + '“ (Java 21.0.5, 6 GB)'],
     ['12:04:11', 'INFO', 'main', 'Loading ' + L],
     ['12:04:13', 'INFO', 'main', `Loading ${n} mods`],
     ['12:04:15', 'WARN', 'main', "Mod 'mod-menu' hat ein Update"],
@@ -2066,7 +2063,7 @@ function instSettingsTab(i) {
         <span class="help">Der Rechner hat 32 GB. Mehr als 8 GB bringt selten etwas.</span></div></div>
       <div class="frow"><label for="iWin">Spielfenster</label><div class="fc"><div class="row">${selBox('iWin', [['auto', 'Wie in den Einstellungen'], ['1280', '1280 × 720'], ['1600', '1600 × 900'], ['1920', '1920 × 1080'], ['full', 'Vollbild']], 'auto')}</div></div></div>
       <div class="frow"><div class="fl">Java</div><div class="fc">
-        <label class="radio"><input type="radio" name="ijava" value="auto" checked data-change="ijava"><span class="rb"></span>Automatisch <span class="faint">(Java 21, von Voxlet geladen)</span></label>
+        <label class="radio"><input type="radio" name="ijava" value="auto" checked data-change="ijava"><span class="rb"></span>Automatisch <span class="faint">(Java 21, von Pumpkin Launcher geladen)</span></label>
         <label class="radio"><input type="radio" name="ijava" value="own" data-change="ijava"><span class="rb"></span>Eigene Java-Installation</label>
         <div class="row" id="iJavaRow" style="visibility:hidden"><label class="field" style="flex:1"><input id="iJava" value="C:\\Program Files\\Java\\jdk-21\\bin\\javaw.exe" autocomplete="off"></label><button class="btn btn-s fx" data-act="toast" data-msg="Dateiauswahl geöffnet"><span class="bc">Durchsuchen</span></button></div></div></div>
       <div class="frow"><div class="fl">Erweitert</div><div class="fc"><details class="adv"><summary>${ics('chevr')}Startoptionen anzeigen</summary><div style="padding-top:8px"><label class="field area"><textarea id="iArgs" rows="3" aria-label="Java-Startoptionen" spellcheck="false">-XX:+UseG1GC -XX:MaxGCPauseMillis=50</textarea></label><p class="help" style="margin-top:6px">Nur ändern, wenn eine Mod-Anleitung es verlangt.</p></div></details></div></div>
@@ -2146,8 +2143,8 @@ function renderProject() {
     <div class="proj-b"><div>
       <figure class="gal"><div class="main">${art(shots[S0][0], shots[S0][1])}<span class="frame"></span></div><div class="thumbs" role="group" aria-label="Bilder">${shots.map(([b, s], k) => `<button class="th fx" data-act="shot" data-k="${k}" aria-current="${k === S0}" aria-label="Bild ${k + 1}">${art(b, s)}</button>`).join('')}</div><figcaption id="shotCap">${['Beispielbild: Landschaft im Spiel', 'Beispielbild: Winterbiom', 'Beispielbild: Höhle bei Fackellicht'][S0]}</figcaption></figure>
       <div class="desc"><p>${esc(c.d)}</p>
-        <h3>Was es macht</h3><ul>${(c.kind === 'modpack' ? [`${c.n2} Inhalte, fertig aufeinander abgestimmt`, 'Einstellungen für schwache und starke Rechner', 'Updates über Voxlet, deine Welten bleiben'] : c.kind === 'shader' ? ['Echtes Licht und weiche Schatten', 'Spiegelndes Wasser', 'Voreinstellungen für schwache Rechner'] : c.kind === 'pack' ? ['Ersetzt Texturen, ändert kein Spielverhalten', 'Funktioniert auch ohne Mods', 'Lässt sich im Spiel jederzeit abschalten'] : ['Keine Änderung am Spielablauf', 'Funktioniert im Einzelspieler und auf Servern', 'Einstellungen über Mod Menu erreichbar']).map(t => `<li>${esc(t)}</li>`).join('')}</ul>
-        <h3>Gut zu wissen</h3><p>${c.req ? `Braucht ${esc(c.req.join(', '))}. Voxlet installiert das automatisch mit.` : c.kind === 'shader' ? 'Shader brauchen Iris. Voxlet bietet an, Iris mitzuinstallieren.' : c.kind === 'modpack' ? 'Installiert als eigene Instanz. Bestehende Instanzen bleiben unberührt.' : 'Keine weiteren Abhängigkeiten.'}</p></div>
+        <h3>Was es macht</h3><ul>${(c.kind === 'modpack' ? [`${c.n2} Inhalte, fertig aufeinander abgestimmt`, 'Einstellungen für schwache und starke Rechner', 'Updates über Pumpkin Launcher, deine Welten bleiben'] : c.kind === 'shader' ? ['Echtes Licht und weiche Schatten', 'Spiegelndes Wasser', 'Voreinstellungen für schwache Rechner'] : c.kind === 'pack' ? ['Ersetzt Texturen, ändert kein Spielverhalten', 'Funktioniert auch ohne Mods', 'Lässt sich im Spiel jederzeit abschalten'] : ['Keine Änderung am Spielablauf', 'Funktioniert im Einzelspieler und auf Servern', 'Einstellungen über Mod Menu erreichbar']).map(t => `<li>${esc(t)}</li>`).join('')}</ul>
+        <h3>Gut zu wissen</h3><p>${c.req ? `Braucht ${esc(c.req.join(', '))}. Pumpkin Launcher installiert das automatisch mit.` : c.kind === 'shader' ? 'Shader brauchen Iris. Pumpkin Launcher bietet an, Iris mitzuinstallieren.' : c.kind === 'modpack' ? 'Installiert als eigene Instanz. Bestehende Instanzen bleiben unberührt.' : 'Keine weiteren Abhängigkeiten.'}</p></div>
     </div>
     <aside class="side">
       <div class="sbox"><h3>Passt zu</h3><dl class="kv"><dt>Minecraft</dt><dd>${esc(c.mc.join(', '))}</dd><dt>Loader</dt><dd>${c.kind === 'pack' ? 'Alle' : c.kind === 'shader' ? 'Iris (Fabric, Quilt, NeoForge)' : esc(c.L.join(', '))}</dd><dt>Seite</dt><dd>${c.kind === 'mod' ? 'Spiel und Server' : 'Nur im Spiel'}</dd>${c.kind !== 'modpack' ? `<dt>Deine Instanzen</dt><dd>${fits.length} von ${INST.length}</dd>` : `<dt>Größe</dt><dd>${esc(c.size)}</dd>`}</dl></div>
@@ -2169,7 +2166,7 @@ function projAction(c) {
 function renderSettings() {
   const st = S.settings;
   view.innerHTML = `<section class="set">
-    <nav class="setnav" aria-label="Abschnitte"><h1 class="h-page">Einstellungen</h1>${[['acc', 'Konten'], ['game', 'Spiel'], ['dl', 'Downloads'], ['look', 'Darstellung'], ['about', 'Über Voxlet']].map(([k, t], n) => `<button class="ptab fx" data-act="setnav" data-s="${k}" aria-selected="${n === 0}">${t}<i class="tick"></i></button>`).join('')}</nav>
+    <nav class="setnav" aria-label="Abschnitte"><h1 class="h-page">Einstellungen</h1>${[['acc', 'Konten'], ['game', 'Spiel'], ['dl', 'Downloads'], ['look', 'Darstellung'], ['about', 'Über Pumpkin Launcher']].map(([k, t], n) => `<button class="ptab fx" data-act="setnav" data-s="${k}" aria-selected="${n === 0}">${t}<i class="tick"></i></button>`).join('')}</nav>
     <div class="form" style="padding-top:0">
       <div class="fsec" id="sec-acc"><h3>Konten</h3><div class="acc-list" id="accList">${accRows()}</div>
         <div class="row" style="margin-top:12px"><button class="btn btn-s fx" data-act="mslogin"><span class="bc">${ic('user')}Mit Microsoft anmelden</span></button><button class="btn btn-s fx" data-act="addoff"><span class="bc">${ic('plus')}Spielername hinzufügen</span></button></div>
@@ -2179,9 +2176,9 @@ function renderSettings() {
           <label class="radio"><input type="radio" name="gram" value="auto" data-change="gram" ${st.ram === 'auto' ? 'checked' : ''}><span class="rb"></span>Automatisch</label>
           <label class="radio"><input type="radio" name="gram" value="own" data-change="gram" ${st.ram === 'own' ? 'checked' : ''}><span class="rb"></span>Eigener Wert</label>
           <div class="row" style="gap:14px">${slider('gRam', st.ramGb, st.ram === 'auto', 'gram')}<span class="num" style="font-size:24px;width:64px" data-sval="gRam">${st.ramGb} GB</span></div></div></div>
-        <div class="frow"><div class="fl">Java</div><div class="fc"><label class="radio"><input type="radio" name="gjava" checked><span class="rb"></span>Automatisch <span class="faint">(Voxlet lädt die passende Version)</span></label><label class="radio"><input type="radio" name="gjava"><span class="rb"></span>Eigene Java-Installation</label></div></div>
+        <div class="frow"><div class="fl">Java</div><div class="fc"><label class="radio"><input type="radio" name="gjava" checked><span class="rb"></span>Automatisch <span class="faint">(Pumpkin Launcher lädt die passende Version)</span></label><label class="radio"><input type="radio" name="gjava"><span class="rb"></span>Eigene Java-Installation</label></div></div>
         <div class="frow"><label for="gWin">Fenstergröße</label><div class="fc"><div class="row">${selBox('gWin', [['auto', 'Automatisch'], ['1280', '1280 × 720'], ['1600', '1600 × 900'], ['1920', '1920 × 1080'], ['full', 'Vollbild']], st.win)}</div></div></div>
-        <div class="frow"><div class="fl">Beim Spielstart</div><div class="fc">${[['open', 'Launcher offen lassen'], ['min', 'Launcher minimieren'], ['close', 'Launcher schließen']].map(([v, t]) => `<label class="radio"><input type="radio" name="glaunch" value="${v}" data-change="glaunch" ${st.onLaunch === v ? 'checked' : ''}><span class="rb"></span>${t}</label>`).join('')}<span class="help">Wenn Minecraft abstürzt, öffnet sich Voxlet wieder mit dem Protokoll.</span></div></div>
+        <div class="frow"><div class="fl">Beim Spielstart</div><div class="fc">${[['open', 'Launcher offen lassen'], ['min', 'Launcher minimieren'], ['close', 'Launcher schließen']].map(([v, t]) => `<label class="radio"><input type="radio" name="glaunch" value="${v}" data-change="glaunch" ${st.onLaunch === v ? 'checked' : ''}><span class="rb"></span>${t}</label>`).join('')}<span class="help">Wenn Minecraft abstürzt, öffnet sich Pumpkin Launcher wieder mit dem Protokoll.</span></div></div>
       </div>
       <div class="fsec" id="sec-dl"><h3>Downloads</h3>
         <div class="frow"><div class="fl">Gleichzeitige Downloads</div><div class="fc"><div class="seg s" role="group" aria-label="Gleichzeitige Downloads">${[1, 2, 3, 4, 6, 8].map(n => `<button class="fx" data-act="conc" data-n="${n}" aria-pressed="${st.conc === n}"><span class="num" style="color:inherit;font-size:18px">${n}</span></button>`).join('')}</div><span class="help">Weniger ist besser bei langsamer Leitung.</span></div></div>
@@ -2192,8 +2189,8 @@ function renderSettings() {
         <div class="frow"><div class="fl">Pixelgröße<small>Größe der Pixel in Szenen, Ecken und Symbolen</small></div><div class="fc"><div class="seg s" role="group" aria-label="Pixelgröße">${[['s', 'Klein'], ['m', 'Mittel'], ['l', 'Groß']].map(([v, t]) => `<button class="fx" data-act="pxsize" data-v="${v}" aria-pressed="${st.pxSize === v}">${t}</button>`).join('')}</div></div></div>
         <div class="frow"><label for="gLang">Sprache</label><div class="fc"><div class="row">${selBox('gLang', [['de', 'Deutsch'], ['en', 'English']], st.lang, '', 'glang')}</div></div></div>
       </div>
-      <div class="fsec" id="sec-about"><h3>Über Voxlet</h3>
-        <div class="about"><span class="mark" style="width:40px;height:40px;display:grid;place-items:center">${markSVG()}</span><div><div class="wmbig">VOXLET</div><div class="muted">Version <span class="num" style="font-size:18px">0.9.2</span> · Minecraft-Launcher für Windows</div></div></div>
+      <div class="fsec" id="sec-about"><h3>Über Pumpkin Launcher</h3>
+        <div class="about"><span class="mark" style="width:40px;height:40px;display:grid;place-items:center">${markSVG()}</span><div><div class="wmbig">PUMPKIN LAUNCHER</div><div class="muted">Version <span class="num" style="font-size:18px">0.9.2</span> · Minecraft-Launcher für Windows</div></div></div>
         <div class="upd-box" id="updBox" style="margin-top:16px">${updBox()}</div>
       </div>
     </div>
@@ -2208,7 +2205,7 @@ function updBox() {
   if (u === 'avail') return `<button class="btn btn-p fx" data-act="updinst" style="width:220px"><span class="bf"></span><span class="bc">${ic('dl')}Update 0.10.0 installieren</span></button><span class="muted">Schnellere Downloads, Aufgabenliste</span>`;
   if (u === 'dl') return `<span class="prog" style="width:220px;--p:${S.settings.updP || 0}"></span><span class="muted">Lade Update <span class="num" style="font-size:18px">${Math.floor((S.settings.updP || 0) * 100)} %</span></span>`;
   if (u === 'ready') return `<button class="btn btn-p fx" data-act="restart" style="width:220px"><span class="bf"></span><span class="bc">${ic('redo')}Jetzt neu starten</span></button><span class="muted">Update ist bereit. Laufende Spiele bleiben offen.</span>`;
-  return `<button class="btn btn-s fx" data-act="updcheck" style="width:220px"><span class="bc">${ic('redo')}Nach Updates suchen</span></button><span class="muted">Voxlet ist aktuell.</span>`;
+  return `<button class="btn btn-s fx" data-act="updcheck" style="width:220px"><span class="bc">${ic('redo')}Nach Updates suchen</span></button><span class="muted">Pumpkin Launcher ist aktuell.</span>`;
 }
 </script>
 
@@ -2289,7 +2286,7 @@ function beginStart(i) {
   runTimer = setTimeout(() => {
     g.phase = 'run'; g.t0 = Date.now();
     const log = baseLog(i); log.length = 0; i.last = 'gerade eben';
-    pushLog(i, 'INFO', 'main', `Voxlet startet die Instanz „${i.name}“ (Java 21.0.5, ${i.ram === 'auto' ? '4' : i.ram} GB)`);
+    pushLog(i, 'INFO', 'main', `Pumpkin Launcher startet die Instanz „${i.name}“ (Java 21.0.5, ${i.ram === 'auto' ? '4' : i.ram} GB)`);
     paintPlays(); updateLiveBits();
     let n = 0;
     const script = [['INFO', 'main', i.loader === 'Vanilla' ? `Loading Minecraft ${i.mc}` : `Loading Minecraft ${i.mc} with ${i.loader} Loader ${LV[i.loader]}`], ['INFO', 'main', `Loading ${liveItems(i.id).length} mods`], ['WARN', 'main', "Mod 'mod-menu' hat ein Update"], ['INFO', 'main', 'Setting user: ' + activeAcc().name], ['INFO', 'Render thread', 'OpenGL 4.6 (NVIDIA GeForce RTX 3070)'], ['ERROR', 'Render thread', 'Fehlende Textur minecraft:block/example'], ['INFO', 'Render thread', 'Sound engine started'], ['INFO', 'Server thread', 'Preparing level "Hauptwelt"'], ['INFO', 'Server thread', 'Preparing spawn area: 64%'], ['INFO', 'Server thread', 'Preparing spawn area: 100%'], ['INFO', 'Render thread', 'Loaded 1204 advancements']];
@@ -2408,7 +2405,7 @@ function openSheet(kind) {
   const i = inst(S.detail.id); S.sheet.open = true; if (kind) S.sheet.kind = kind; S.sheet.q = '';
   if (i.loader === 'Vanilla' && S.sheet.kind !== 'pack') S.sheet.kind = 'pack';
   sheet.style.setProperty('--acc', acc(i));
-  sheet.innerHTML = `<div class="sheet-h"><div class="grow"><h2>Inhalte für ${esc(i.name)}</h2><p>Voxlet wählt automatisch die Version für ${esc(lv(i))}.</p></div><button class="btn btn-g ib fx" data-act="sheetclose" aria-label="Panel schließen"><span class="bc">${ic('x')}</span></button></div>
+  sheet.innerHTML = `<div class="sheet-h"><div class="grow"><h2>Inhalte für ${esc(i.name)}</h2><p>Pumpkin Launcher wählt automatisch die Version für ${esc(lv(i))}.</p></div><button class="btn btn-g ib fx" data-act="sheetclose" aria-label="Panel schließen"><span class="bc">${ic('x')}</span></button></div>
     <div class="sheet-t"><div class="seg s" role="tablist" aria-label="Art">${[['mod', 'Mods'], ['shader', 'Shader'], ['pack', 'Ressourcenpakete']].map(([k, t]) => `<button class="fx" role="tab" data-act="skind" data-k="${k}" aria-selected="${S.sheet.kind === k}">${t}</button>`).join('')}</div>
       ${field('sQ', 'Im Katalog suchen', '', 'sq', 's')}
       <label class="row" style="gap:10px;font-size:13px;color:var(--fg-2)">${sw(`data-act="sfit" ${S.sheet.fit ? 'checked' : ''}`, 'Nur passende Inhalte zeigen')}Nur passend zu ${esc(lv(i))}</label></div>
@@ -2574,7 +2571,7 @@ function addOfflineDlg() {
 }
 function chVerDlg(i) {
   const L = liveItems(i.id);
-  openDlg({ title: 'Version ändern', w: 600, h: 520, body: `<p>Wähle die neue Version. Voxlet prüft deine ${L.length} Inhalte und sichert die Welten vorher.</p><div class="nf" style="margin-top:14px"><label for="cvMc">Neue Version</label><div class="row">${selBox('cvMc', MC_REL.map(v => [v, v + (v === i.mc ? ' (aktuell)' : '')]), '1.21.1', '', 'cvmc')}</div></div><div id="cvRes">${cvRes(i, '1.21.1')}</div>`,
+  openDlg({ title: 'Version ändern', w: 600, h: 520, body: `<p>Wähle die neue Version. Pumpkin Launcher prüft deine ${L.length} Inhalte und sichert die Welten vorher.</p><div class="nf" style="margin-top:14px"><label for="cvMc">Neue Version</label><div class="row">${selBox('cvMc', MC_REL.map(v => [v, v + (v === i.mc ? ' (aktuell)' : '')]), '1.21.1', '', 'cvmc')}</div></div><div id="cvRes">${cvRes(i, '1.21.1')}</div>`,
     foot: `<span class="left">Welten werden vorher gesichert.</span><button class="btn btn-s fx" data-act="dlgclose"><span class="bc">Abbrechen</span></button><button class="btn btn-p fx" data-act="cvgo" style="width:150px"><span class="bf"></span><span class="bc">Version ändern</span></button>` });
 }
 function cvRes(i, v) {
@@ -2607,7 +2604,7 @@ function showOnboard() {
 }
 function onbStep() {
   const steps = `<div class="steps" aria-label="Schritt ${OB.step} von 2"><i class="on"></i><i class="${OB.step > 1 ? 'on' : ''}"></i></div>`;
-  if (OB.step === 1) return `${steps}<h1 id="onbT">Willkommen bei Voxlet</h1><p>Wie heißt du im Spiel?</p><div class="ob">
+  if (OB.step === 1) return `${steps}<h1 id="onbT">Willkommen bei Pumpkin Launcher</h1><p>Wie heißt du im Spiel?</p><div class="ob">
       <div class="nf"><label for="obName">Spielername</label><label class="field"><input id="obName" maxlength="16" value="${esc(OB.name)}" data-input="obname" autocomplete="off" spellcheck="false" placeholder="z. B. Jonas"></label><span class="err-msg" id="obErr"></span><span class="help">Reicht für Einzelspieler und LAN.</span></div>
       <div class="or">oder</div>
       <button class="btn btn-s fx" data-act="obms" style="width:100%"><span class="bc">${ic('user')}Mit Microsoft anmelden</span></button><p class="help" style="margin-top:8px">Nötig für Server und Realms. Du kannst es später nachholen.</p></div>
@@ -2773,7 +2770,7 @@ const ACT = {
   tclear() { TASKS = TASKS.filter(t => t.state === 'run'); paintTasks(true); },
   me(el) { if (openPop === $('#popMe')) { closePop(); return; } paintMe(); showPop($('#popMe'), el, 'right'); },
   accswitch(el) { const a = S.accounts.find(x => x.id === el.dataset.a); if (!a || a.active) { closePop(); return; } S.accounts.forEach(x => x.active = x === a); closePop(); paintMe(); if (S.view === 'settings') $('#accList').innerHTML = accRows(); toast(`Du spielst jetzt als ${a.name}`, { icon: 'user' }); },
-  accrm(el) { const a = S.accounts.find(x => x.id === el.dataset.a); closePop(true); confirmDlg({ title: a.kind === 'ms' ? `${a.name} abmelden?` : `${a.name} entfernen?`, text: a.kind === 'ms' ? 'Voxlet vergisst die Anmeldung. Deine Instanzen und Welten bleiben.' : 'Der Spielername wird aus der Liste entfernt.', ok: a.kind === 'ms' ? 'Abmelden' : 'Entfernen', bad: true, fn: () => { const was = a.active; S.accounts.splice(S.accounts.indexOf(a), 1); if (was && S.accounts[0]) S.accounts[0].active = true; if (!S.accounts.length) S.accounts.push({ id: 'a' + (UID++), name: 'Spieler', kind: 'off', active: true }); paintMe(); if (S.view === 'settings') $('#accList').innerHTML = accRows(); toast(a.kind === 'ms' ? `${a.name} abgemeldet` : `${a.name} entfernt`); } }); },
+  accrm(el) { const a = S.accounts.find(x => x.id === el.dataset.a); closePop(true); confirmDlg({ title: a.kind === 'ms' ? `${a.name} abmelden?` : `${a.name} entfernen?`, text: a.kind === 'ms' ? 'Pumpkin Launcher vergisst die Anmeldung. Deine Instanzen und Welten bleiben.' : 'Der Spielername wird aus der Liste entfernt.', ok: a.kind === 'ms' ? 'Abmelden' : 'Entfernen', bad: true, fn: () => { const was = a.active; S.accounts.splice(S.accounts.indexOf(a), 1); if (was && S.accounts[0]) S.accounts[0].active = true; if (!S.accounts.length) S.accounts.push({ id: 'a' + (UID++), name: 'Spieler', kind: 'off', active: true }); paintMe(); if (S.view === 'settings') $('#accList').innerHTML = accRows(); toast(a.kind === 'ms' ? `${a.name} abgemeldet` : `${a.name} entfernt`); } }); },
   mslogin() { closePop(true); msLoginDlg(false); },
   addoff() { closePop(true); addOfflineDlg(); },
   offadd() { const n = $('#offName').value.trim(); S.accounts.forEach(a => a.active = false); S.accounts.push({ id: 'a' + (UID++), name: n, kind: 'off', active: true }); closeDlg(); paintMe(); if (S.view === 'settings') $('#accList').innerHTML = accRows(); toast(`Spielername ${n} hinzugefügt und aktiv`, { icon: 'user' }); },
@@ -2793,9 +2790,9 @@ const ACT = {
   pxsize(el) { S.settings.pxSize = el.dataset.v; LS.set('px', el.dataset.v); applyPx(el.dataset.v); repaintAll(); $$('[data-act="pxsize"]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === el.dataset.v))); },
   updcheck() { S.settings.upd = 'check'; $('#updBox').innerHTML = updBox(); setTimeout(() => { S.settings.upd = 'avail'; S.launcherUpd = true; const b = $('#updBox'); if (b) b.innerHTML = updBox(); }, 1400); },
   updinst() { S.settings.upd = 'dl'; S.settings.updP = 0; $('#updBox').innerHTML = updBox(); const t = setInterval(() => { S.settings.updP = Math.min(1, S.settings.updP + .07); const b = $('#updBox'); if (S.settings.updP >= 1) { clearInterval(t); S.settings.upd = 'ready'; S.launcherUpd = false; } if (b) b.innerHTML = updBox(); }, 150); },
-  restart() { toast('Voxlet startet neu. Im Mockup bleibt alles, wie es ist.', { icon: 'redo' }); S.settings.upd = 'none'; $('#updBox').innerHTML = updBox(); },
+  restart() { toast('Pumpkin Launcher startet neu. Im Mockup bleibt alles, wie es ist.', { icon: 'redo' }); S.settings.upd = 'none'; $('#updBox').innerHTML = updBox(); },
   toast(el) { toast(el.dataset.msg, { icon: /Ordner/.test(el.dataset.msg) ? 'folder' : 'check' }); },
-  win(el) { const w = el.dataset.w; if (w === 'close' && S.game.phase === 'run') { confirmDlg({ title: 'Voxlet schließen?', text: 'Minecraft läuft weiter. Voxlet kann nach dem Spiel kein Protokoll mehr zeigen.', ok: 'Schließen', fn: () => toast('Im Mockup bleibt das Fenster offen', { icon: 'info' }) }); return; } toast({ min: 'Fenster minimiert (im Mockup ohne Wirkung)', max: 'Fenster maximiert (im Mockup ohne Wirkung)', close: 'Fenster geschlossen (im Mockup ohne Wirkung)' }[w], { icon: 'info' }); },
+  win(el) { const w = el.dataset.w; if (w === 'close' && S.game.phase === 'run') { confirmDlg({ title: 'Pumpkin Launcher schließen?', text: 'Minecraft läuft weiter. Pumpkin Launcher kann nach dem Spiel kein Protokoll mehr zeigen.', ok: 'Schließen', fn: () => toast('Im Mockup bleibt das Fenster offen', { icon: 'info' }) }); return; } toast({ min: 'Fenster minimiert (im Mockup ohne Wirkung)', max: 'Fenster maximiert (im Mockup ohne Wirkung)', close: 'Fenster geschlossen (im Mockup ohne Wirkung)' }[w], { icon: 'info' }); },
   mock(el) { if (openPop === $('#popMock')) { closePop(); return; } paintMock(); showPop($('#popMock'), el, 'left'); },
   'mk-onb'() { closePop(true); showOnboard(); },
   'mk-off'(el) { setOffline(el.checked); },

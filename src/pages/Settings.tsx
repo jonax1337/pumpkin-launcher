@@ -6,9 +6,10 @@ import { toast } from "sonner";
 import { useView } from "@/app/Layout";
 import { MemoryChooser, MemoryHelp } from "@/components/common";
 import { AccountsSection } from "@/components/PlayerNames";
-import { Actions, Button, Count, FormRow, FormSection, Hint, PageHeader, Radio, Segmented, Switch, TabPanel, Tabs, TextField } from "@/ui";
+import { Actions, Button, Count, FormRow, FormSection, Hint, PageHeader, Radio, Segmented, Select, Switch, TabPanel, Tabs, TextField } from "@/ui";
 import { api } from "@/lib/api";
-import { Mark } from "@/pixel/icons";
+import { Buddy, BrandWordmark, useBrand } from "@/branding/Brand";
+import { SEASONS, type PumpkinChoice } from "@/branding/calendar";
 import { useSettings, type PxSize } from "@/store/settings";
 import pkg from "../../package.json";
 
@@ -17,11 +18,15 @@ const SECTIONS = [
   { value: "spiel", label: "Spiel" },
   { value: "darstellung", label: "Darstellung" },
   { value: "erweitert", label: "Erweitert" },
-  { value: "ueber", label: "Über Voxlet" },
+  { value: "ueber", label: "Über Pumpkin Launcher" },
 ] as const;
 type SectionId = (typeof SECTIONS)[number]["value"];
 
 const PX_SIZES: { value: PxSize; label: string }[] = [{ value: "s", label: "Klein" }, { value: "m", label: "Mittel" }, { value: "l", label: "Groß" }];
+const PUMPKINS = [
+  { value: "auto", label: "Automatisch · nach Jahreszeit" },
+  ...SEASONS.map((season) => ({ value: season.id, label: `${season.name} · ${season.label}` })),
+];
 
 const RM = "(prefers-reduced-motion: reduce)";
 const subscribeRm = (cb: () => void) => {
@@ -44,10 +49,10 @@ function JavaRow() {
       label="Java"
       hint="Standard für alle Instanzen"
       group="radiogroup"
-      aside="Automatisch passt fast immer: Voxlet lädt für jede Minecraft-Version die richtige Java-Version. Eine eigene Installation brauchst du nur, wenn eine Anleitung es verlangt."
+      aside="Automatisch passt fast immer: Pumpkin Launcher lädt für jede Minecraft-Version die richtige Java-Version. Eine eigene Installation brauchst du nur, wenn eine Anleitung es verlangt."
     >
       <Radio name="gjava" checked={!own} onChange={() => (setOwn(false), set({ javaPath: "" }))}>
-        Automatisch <span className="text-fg-3">(Voxlet lädt die passende Version)</span>
+        Automatisch <span className="text-fg-3">(Pumpkin Launcher lädt die passende Version)</span>
       </Radio>
       <Radio name="gjava" checked={own} onChange={() => setOwn(true)}>Eigene Java-Installation</Radio>
       {/* Bleibt stehen und ist nur gesperrt, wie der Regler bei „Automatisch“: kein Sprung, keine Lücke.
@@ -68,6 +73,7 @@ function JavaRow() {
 }
 
 export function SettingsPage() {
+  const { season } = useBrand();
   const s = useSettings();
   const view = useView();
   const { hash } = useLocation();
@@ -127,17 +133,29 @@ export function SettingsPage() {
 
           {tab === "darstellung" && (
             <>
-              <FormRow label="Bewegte Szenen" hint="Sterne, Wolken, Glut. Pausiert, solange Minecraft läuft.">
+              <FormRow label="Dein Pumpkin" htmlFor="pumpkin-choice" hint="Wähle eine feste Variante für Buddy, Farben und App-Icon oder lass sie mit den Jahreszeiten wechseln.">
+                <Select
+                  id="pumpkin-choice"
+                  value={s.pumpkin}
+                  options={PUMPKINS}
+                  onChange={(value) => s.set({ pumpkin: value as PumpkinChoice })}
+                />
+                <Actions gap={12}>
+                  <Buddy size={72} />
+                  <div><b>{season.name}</b><Hint>{s.pumpkin === 'auto' ? `Automatisch · ${season.id === 'standard' ? 'Zwischen den Jahreszeiten' : season.period}` : 'Fest gewählt · bleibt bis zu deiner nächsten Auswahl'}</Hint></div>
+                </Actions>
+              </FormRow>
+              <FormRow label="Bewegte Szenen & Buddy" hint="Sterne, Wolken, Glut und Buddy. Pausiert, solange Minecraft läuft.">
                 {/* Wünscht das System weniger Bewegung, gewinnt das: Schalter aus und gesperrt, mit Grund daneben. */}
                 <Actions gap={12}>
                   <Switch
                     checked={s.motion && !reduced}
                     disabled={reduced}
                     onChange={(motion) => s.set({ motion })}
-                    label="Bewegte Szenen"
+                    label="Bewegte Szenen & Buddy"
                     stateText={reduced ? undefined : ["An", "Aus"]}
                   />
-                  {reduced && <Hint icon="info">Dein System wünscht weniger Bewegung – Szenen stehen still.</Hint>}
+                  {reduced && <Hint icon="info">Dein System wünscht weniger Bewegung – Szenen und Buddy stehen still.</Hint>}
                 </Actions>
               </FormRow>
               <FormRow label="Pixelgröße" hint="Größe der Pixel in Szenen, Ecken und Symbolen">
@@ -152,7 +170,7 @@ export function SettingsPage() {
                 label="Microsoft-Client-ID"
                 hint="Optional"
                 htmlFor="ms-client-id"
-                aside="Nur für eigene, von Microsoft für Minecraft freigeschaltete Apps (Azure-Client-ID). Leer lassen, dann nutzt Voxlet seine eingebaute Kennung."
+                aside="Nur für eigene, von Microsoft für Minecraft freigeschaltete Apps (Azure-Client-ID). Leer lassen, dann nutzt Pumpkin Launcher seine eingebaute Kennung."
               >
                 <TextField id="ms-client-id" value={s.msClientId} onChange={(e) => s.set({ msClientId: e.target.value })} placeholder="Eingebaute Kennung verwenden" />
               </FormRow>
@@ -174,15 +192,15 @@ export function SettingsPage() {
 
           {tab === "ueber" && (
             <>
-              <Actions gap={12}>
-                <span className="grid size-10 place-items-center"><Mark /></span>
+              <div className="brand-about">
+                <Buddy mood="hello" size={96} />
                 <div>
-                  <div className="font-px text-[44px] leading-none tracking-[.12em]">VOXLET</div>
+                  <BrandWordmark />
                   <div className="text-fg-2">
                     Version <Count value={version} /> · Minecraft-Launcher für Windows
                   </div>
                 </div>
-              </Actions>
+              </div>
               <Hint className="mt-3.5">Inhalte und Modpacks kommen von Modrinth. Minecraft ist eine Marke von Mojang.</Hint>
             </>
           )}

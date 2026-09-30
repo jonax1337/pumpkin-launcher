@@ -24,6 +24,7 @@ dist-ssr
 *.sw?
 
 # TypeScript / Env
+.projectatlas/
 *.tsbuildinfo
 .env
 .env.*

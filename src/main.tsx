@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { TipProvider, Toaster } from "@/ui";
 import { Layout } from "@/app/Layout";
+import { BrandProvider } from "@/branding/Brand";
 import { INSTALL_CANCELLED } from "@/lib/types";
 import { HomePage } from "@/pages/Home";
 import { InstancesPage } from "@/pages/Instances";
@@ -70,8 +71,10 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <TipProvider delayDuration={450}>
-        <RouterProvider router={router} />
-        <Toaster />
+        <BrandProvider>
+          <RouterProvider router={router} />
+          <Toaster />
+        </BrandProvider>
       </TipProvider>
     </QueryClientProvider>
   </React.StrictMode>,

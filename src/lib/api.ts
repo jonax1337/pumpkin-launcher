@@ -203,14 +203,14 @@ const mockGame = {
     db.running.delete(instanceId);
     emit<ExitPayload>("instance-exit", { instanceId, code: null, crashed: false, crashReport: null, logFile: null });
   },
-  /** Lasttest fürs Protokoll: `voxletMock.logBurst("inst-vanilla")` schickt 5000 Zeilen in etwa 1–2 s. */
+  /** Lasttest fürs Protokoll: `pumpkinMock.logBurst("inst-vanilla")` schickt 5000 Zeilen in etwa 1–2 s. */
   async logBurst(instanceId: string, count = 5000) {
     for (let i = 0; i < count; i++) {
       emit<LogPayload>("instance-log", { instanceId, stream: "stdout", line: `[Render thread/${i % 50 ? "INFO" : "WARN"}]: Lastzeile ${i + 1}` });
       if (i % 100 === 99) await delay(20);
     }
   },
-  /** Nur zum Vorführen: `voxletMock.crash("inst-survival")` in der Browser-Konsole. */
+  /** Nur zum Vorführen: `pumpkinMock.crash("inst-survival")` in der Browser-Konsole. */
   crash(instanceId: string) {
     clearInterval(db.running.get(instanceId));
     db.running.delete(instanceId);
@@ -218,8 +218,8 @@ const mockGame = {
       instanceId,
       code: -1,
       crashed: true,
-      crashReport: "C:\\Voxlet\\instances\\survival\\crash-reports\\crash-2026-09-29.txt",
-      logFile: "C:\\Voxlet\\instances\\survival\\logs\\latest.log",
+      crashReport: "C:\\Pumpkin Launcher\\instances\\survival\\crash-reports\\crash-2026-09-29.txt",
+      logFile: "C:\\Pumpkin Launcher\\instances\\survival\\logs\\latest.log",
     });
   },
   async systemMemory() {
@@ -266,7 +266,7 @@ const mockAccounts = {
   },
 };
 
-if (!tauri) Object.assign(globalThis, { voxletMock: { crash: mockGame.crash, logBurst: mockGame.logBurst } });
+if (!tauri) Object.assign(globalThis, { pumpkinMock: { crash: mockGame.crash, logBurst: mockGame.logBurst } });
 
 // ---------- Öffentliche API ----------
 
@@ -327,7 +327,7 @@ export const api = {
     tauri ? call("instance_status", { instanceId }) : mockGame.status(instanceId),
   /** Spielordner der Instanz (wird angelegt, falls er fehlt). */
   instanceDir: (instanceId: string): Promise<string> =>
-    tauri ? call("instance_dir", { instanceId }) : Promise.reject(new Error("Ordner lassen sich nur in der Voxlet-App öffnen.")),
+    tauri ? call("instance_dir", { instanceId }) : Promise.reject(new Error("Ordner lassen sich nur in der Pumpkin Launcher-App öffnen.")),
   installInstance: (instanceId: string): Promise<void> =>
     tauri ? call("instance_install", { instanceId }) : mockGame.install(instanceId),
   /**
@@ -355,5 +355,5 @@ export const api = {
     tauri ? call("ms_account_remove", { id }) : Promise.resolve(void (db.accounts = db.accounts.filter((a) => a.id !== id))),
   /** Datei mit dem Standardprogramm öffnen (z. B. Absturzbericht). */
   openPath: (path: string): Promise<void> =>
-    tauri ? openPath(path) : Promise.reject(new Error("Dateien lassen sich nur in der Voxlet-App öffnen.")),
+    tauri ? openPath(path) : Promise.reject(new Error("Dateien lassen sich nur in der Pumpkin Launcher-App öffnen.")),
 };

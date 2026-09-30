@@ -73,7 +73,7 @@ export function undoRemove(current: Mod[], before: Mod[], removed: Mod[]): Mod[]
   ];
 }
 
-// Voxlet installiert Packs mit jedem unterstützten Loader.
+// Pumpkin Launcher installiert Packs mit jedem unterstützten Loader.
 const PACK_LOADERS = ["fabric", "quilt", "forge", "neoforge", "minecraft", "vanilla"];
 
 /** Modrinth-Loader, deren Mods eine Instanz ausführt: Quilt lädt auch Fabric-Mods (wie `ModLoader::modrinth_loaders` im Backend). */

@@ -348,7 +348,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
           {tab === "file" &&
             (api.isMock ? (
               <Empty ill="file" title="Nur in der App" size="pane">
-                Dateien lassen sich nur in der Voxlet-App öffnen, nicht im Browser.
+                Dateien lassen sich nur in der Pumpkin Launcher-App öffnen, nicht im Browser.
               </Empty>
             ) : (
               <>

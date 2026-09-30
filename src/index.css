@@ -9,6 +9,7 @@
 @import "./ui/ui.css" layer(components);
 /* Spielen (Knopf, Statuszeile, Protokoll) als Domänen-Baustein hinter dem Kit */
 @import "./components/play.css" layer(components);
+@import "./branding/branding.css" layer(components);
 
 /* Nur dunkles Schema. Farben und Schriften aus Pixelkino auch als Utilities (text-fg-2, bg-panel …). */
 @custom-variant dark (&);

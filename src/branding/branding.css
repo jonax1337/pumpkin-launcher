@@ -1,0 +1,23 @@
+/* Die vorbereiteten SVGs bleiben unverändert; feste Slots verhindern Layoutsprünge. */
+.brand-mark, .brand-wordmark, .buddy { display: block; flex: none; object-fit: contain; image-rendering: pixelated; }
+.brand-wordmark { width: 214px; height: 24px; }
+.wm { gap: 6px; }
+.wm .brand-wordmark { width: 178.5px; height: 20px; }
+.brand-about { display: flex; align-items: center; gap: 12px; }
+.brand-about .brand-wordmark { margin-bottom: 10px; }
+/* Das Motiv belegt etwa die halbe SVG-Fläche: sichtbar 56 px, Animationsrand bleibt frei. */
+.buddy-library { margin: -28px -20px; }
+.library-heading { display: flex; align-items: center; gap: 12px; height: 56px; }
+.library-heading > .vx-sech { flex: 1; min-width: 0; }
+.onb-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.onb-heading h1 { font-size: 36px; margin: 0; }
+.vx-toast:has(.buddy) { grid-template-columns: 48px minmax(0, 1fr) 32px; }
+.vx-toast:has(.buddy) [data-icon] { width: 48px; height: 48px; }
+:root[data-season] {
+  --bg-2: color-mix(in srgb, var(--copper) 3%, #0A0E17);
+  --panel: color-mix(in srgb, var(--copper) 2%, #0F1521);
+  --panel-2: color-mix(in srgb, var(--copper) 3%, #151D2C);
+  --panel-3: color-mix(in srgb, var(--copper) 4%, #1D2739);
+}
+@media (max-width: 900px) { .wm .brand-wordmark { width: 142.8px; height: 16px; } }
+@media (max-width: 820px) { .wm .brand-wordmark { display: none; } }
