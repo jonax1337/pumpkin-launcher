@@ -90,7 +90,7 @@ Instances, presets and settings are stored as JSON in the app data directory (Wi
 
 ## Marketing website
 
-The repo also contains the [website/](website/) folder — a standalone static site with the same Pixelkino look. `pnpm dev:website` serves it on port 1430, `pnpm build:website` produces the self-contained `website/dist/` folder. No trackers, no external requests.
+The repo also contains the [website/](website/) folder — a standalone static site with the same Pixelkino look, automatically deployed to [jonax1337.github.io/pumpkin-launcher](https://jonax1337.github.io/pumpkin-launcher/) via GitHub Pages. Locally: `pnpm dev:website` serves it on port 1430, `pnpm build:website` produces the self-contained `website/dist/` folder. No trackers, no external requests.
 
 ## Contributing
 

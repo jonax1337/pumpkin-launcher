@@ -9,7 +9,7 @@ pnpm check:website     # lokale Links und finale Assets prüfen
 pnpm preview:website   # http://127.0.0.1:1431
 ```
 
-`website/dist/` ist ein eigenständiges statisches Deployment. Relative Asset-Pfade erlauben auch ein Unterverzeichnis. Der normale Launcher-Build bleibt separat. Schriftdateien, Bilder und GSAP werden lokal ausgeliefert; keine externen Anfragen oder Tracker.
+`website/dist/` ist ein eigenständiges statisches Deployment. Relative Asset-Pfade (`base: "./"`) erlauben auch ein Unterverzeichnis; GitHub Pages deployed per Workflow `.github/workflows/website.yml` auf `jonax1337.github.io/pumpkin-launcher/`. Der normale Launcher-Build bleibt separat. Schriftdateien, Bilder und GSAP werden lokal ausgeliefert; keine externen Anfragen oder Tracker.
 
 ## Gestaltung und Bewegung
 
