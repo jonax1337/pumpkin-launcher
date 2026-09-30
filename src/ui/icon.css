@@ -1,17 +1,19 @@
-/* Kit-Icon: feste Box je Slot, Glyphe = Rasterzellen × --px (1 Icon-Pixel = 1 Einheit).
-   | Slot | Box | Raster                  | px 2/3/4 |
-   | s    | 20  | 5×5                     | 10/15/20 |
-   | m    | 24  | 7×7, 5×5 wenn 7·px > 24 | 14/21/20 |
-   | l    | 28  | 7×7                     | 14/21/28 |
-   | xl   | 56  | 7×7, 2 Einheiten/Zelle  | 28/42/56 | */
+/* Kit-Icon: feste Box je Slot, Glyphe = Rasterzellen × --iu (1 Icon-Pixel = 1 Icon-Einheit).
+   --iu ist NICHT --px: die Pixelstufe (klein/mittel/groß) gilt nur für Rahmen, Kerben, Szenen. Icons bleiben in jeder Stufe gleich
+   (--iu = 3 px, auf ganze Gerätepixel gerundet; unit.ts).
+   | Slot | Box | Raster                  | Größe bei 3 px |
+   | s    | 20  | 5×5                     | 15             |
+   | m    | 24  | 7×7                     | 21             |
+   | l    | 28  | 7×7                     | 21             |
+   | xl   | 56  | 7×7, 2 Einheiten/Zelle  | 42             | */
 .vx-ico { --ico-box: var(--vx-ico-m); width: var(--ico-box); height: var(--ico-box); display: inline-grid; place-items: center; flex: none; }
 .vx-ico svg { display: block; fill: currentColor; shape-rendering: crispEdges; }
-.vx-ico svg[data-g="7"] { width: calc(var(--px) * 7); height: calc(var(--px) * 7); }
-.vx-ico svg[data-g="5"] { width: calc(var(--px) * 5); height: calc(var(--px) * 5); }
+.vx-ico svg[data-g="7"] { width: calc(var(--iu, 3px) * 7); height: calc(var(--iu, 3px) * 7); }
+.vx-ico svg[data-g="5"] { width: calc(var(--iu, 3px) * 5); height: calc(var(--iu, 3px) * 5); }
 .vx-ico[data-size="s"] { --ico-box: var(--vx-ico-s); }
 .vx-ico[data-size="l"] { --ico-box: var(--vx-ico-l); }
 .vx-ico[data-size="xl"] { --ico-box: var(--vx-ico-xl); }
-.vx-ico[data-size="xl"] svg[data-g="7"] { width: calc(var(--px) * 14); height: calc(var(--px) * 14); }
+.vx-ico[data-size="xl"] svg[data-g="7"] { width: calc(var(--iu, 3px) * 14); height: calc(var(--iu, 3px) * 14); }
 /* m: beide Raster im DOM, eines sichtbar (umschalten ohne Neurendern, kein Layoutshift: Box bleibt) */
 .vx-ico[data-size="m"] svg[data-g="5"] { display: none; }
 :root[data-ico-m="5"] .vx-ico[data-size="m"] svg[data-g="7"] { display: none; }
@@ -30,11 +32,11 @@
 .gl { image-rendering: pixelated; shape-rendering: crispEdges; }
 
 /* Glyphen 10×10 und Projektbilder: Box fest, Kantenlänge aus unit.ts (--gl-<Box>, ganzzahlige Zellen) */
-.vx-gl { --gl-box: 40px; --gl: var(--gl-40, calc(var(--px) * 10)); width: var(--gl-box); height: var(--gl-box); display: inline-grid; place-items: center; flex: none; }
-.vx-gl[data-box="52"] { --gl-box: 52px; --gl: var(--gl-52, calc(var(--px) * 10)); }
-.vx-gl[data-box="64"] { --gl-box: 64px; --gl: var(--gl-64, calc(var(--px) * 20)); }
-.vx-gl[data-box="72"] { --gl-box: 72px; --gl: var(--gl-72, calc(var(--px) * 20)); }
-.vx-gl[data-box="104"] { --gl-box: 104px; --gl: var(--gl-104, calc(var(--px) * 30)); }
+.vx-gl { --gl-box: 40px; --gl: var(--gl-40, calc(var(--iu, 3px) * 10)); width: var(--gl-box); height: var(--gl-box); display: inline-grid; place-items: center; flex: none; }
+.vx-gl[data-box="52"] { --gl-box: 52px; --gl: var(--gl-52, calc(var(--iu, 3px) * 10)); }
+.vx-gl[data-box="64"] { --gl-box: 64px; --gl: var(--gl-64, calc(var(--iu, 3px) * 20)); }
+.vx-gl[data-box="72"] { --gl-box: 72px; --gl: var(--gl-72, calc(var(--iu, 3px) * 20)); }
+.vx-gl[data-box="104"] { --gl-box: 104px; --gl: var(--gl-104, calc(var(--iu, 3px) * 30)); }
 .vx-gl svg { display: block; width: var(--gl); height: var(--gl); image-rendering: pixelated; shape-rendering: crispEdges; }
 /* Bild: füllt die Box mit Rand (2 px, ab 64 px 4 px), Kerbe, dunkler Grund während des Ladens */
 .vx-gl[data-img] { padding: 2px; }

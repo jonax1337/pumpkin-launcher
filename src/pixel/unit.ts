@@ -25,11 +25,15 @@ export function applyPx(size: PxSize) {
   Object.assign(PX, { css, dev, eff });
   const st = document.documentElement.style;
   st.setProperty("--px", `${css}px`);
-  // Icons: feste Box, Glyphe ein ganzzahliges Vielfaches der Einheit, das in die Box passt.
-  const fit = (box: number, cells: number) => `${Math.max(1, Math.floor((box + 0.01) / (cells * css))) * cells * css}px`;
+  // Icons, Glyphen, Avatare hängen NICHT an der Pixelstufe (die gilt nur für Rahmen, Kerben, Szenen):
+  // eigene Einheit --iu = 3 CSS-px, auf ganze Gerätepixel gerundet. So bleiben sie in jeder Stufe gleich groß und scharf.
+  const iu = Math.max(1, Math.round(3 * eff)) / eff;
+  st.setProperty("--iu", `${iu}px`);
+  // Feste Box, Glyphe ein ganzzahliges Vielfaches der Icon-Einheit, das in die Box passt.
+  const fit = (box: number, cells: number) => `${Math.max(1, Math.floor((box + 0.01) / (cells * iu))) * cells * iu}px`;
   st.setProperty("--avs", fit(28, 8));
   // Kit (src/ui): Icon-Slot m (Box 24) zeichnet 7×7 nur, wenn 7 Einheiten hineinpassen, sonst 5×5.
-  document.documentElement.dataset.icoM = 7 * css <= 24.01 ? "7" : "5";
+  document.documentElement.dataset.icoM = 7 * iu <= 24.01 ? "7" : "5";
   // Kit-Glyphen 10×10 in fester Box: Kantenlänge = ganzzahlige Zellen (k Einheiten je Glyphen-Pixel)
   for (const box of [40, 52, 64, 72, 104]) st.setProperty(`--gl-${box}`, fit(box, 10));
   // Kit-Avatar: Box 32 (--av-32), Box 28 (--avs)

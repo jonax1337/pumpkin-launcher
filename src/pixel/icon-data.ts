@@ -1,6 +1,6 @@
 /**
  * Pixel-Icons des Kits: jedes Icon in zwei Rastern, 7×7 (Knöpfe m/l, Illustration) und 5×5 (klein).
- * Regel: 1 Icon-Pixel = genau 1 Einheit (--px); welches Raster gezeichnet wird, entscheidet der Größen-Slot (ui/Icon).
+ * Regel: 1 Icon-Pixel = genau 1 Icon-Einheit (--iu, nicht die Pixelstufe --px); welches Raster gezeichnet wird, entscheidet der Größen-Slot (ui/Icon).
  * Beide Raster sind Pflicht (Typ prüft Zeilenzahl). Der Altbestand (pixel/icons.tsx) liest seine Daten hier ab.
  */
 type R7 = readonly [string, string, string, string, string, string, string];

@@ -149,7 +149,8 @@ a { color: inherit; }
 .bar-mid { flex: 1; min-width: 12px; display: flex; justify-content: flex-start; padding-left: 20px; }
 .bar-right { position: relative; display: flex; align-items: center; gap: 4px; flex: none; }
 .win { display: flex; height: var(--bar); margin-left: 4px; }
-.winbtn { position: relative; width: 46px; height: var(--bar); display: grid; place-items: center; color: var(--fg-2); }
+/* Die untere Kante der Leiste ist ein inneres Schatten-Band (--px) auf .bar; Kinder malen darüber. Darum die Fläche um das Band kürzen, sonst ragt der Hover darüber. */
+.winbtn { position: relative; width: 46px; height: var(--bar); display: grid; place-items: center; color: var(--fg-2); clip-path: inset(0 0 var(--px) 0); }
 .winbtn:hover { background: var(--panel-2); color: var(--fg); }
 .winbtn.close:hover { background: var(--bad-fill); color: #fff; }
 .winbtn:active { background: var(--panel); }

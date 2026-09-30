@@ -14,8 +14,8 @@ function Raster({ name, g }: { name: IconName; g: 7 | 5 }) {
 }
 
 /**
- * Pixel-Icon in fester Box. Regel: 1 Icon-Pixel = 1 Einheit (--px), nie hochskaliert (xl: fest 2 Einheiten).
- * s: Box 20, 5×5 · m: Box 24, 7×7 (5×5, wenn 7 Einheiten nicht passen; unit.ts setzt data-ico-m) · l: Box 28, 7×7 · xl: Box 56, 7×7 × 2.
+ * Pixel-Icon in fester Box. Regel: 1 Icon-Pixel = 1 Icon-Einheit (--iu, unabhängig von der Pixelstufe --px), nie gebrochen skaliert (xl: fest 2 Einheiten).
+ * s: Box 20, 5×5 · m: Box 24, 7×7 (5×5 nur, wenn 7 Einheiten nicht passen; unit.ts setzt data-ico-m) · l: Box 28, 7×7 · xl: Box 56, 7×7 × 2.
  * Farbe: currentColor, außer `tone`.
  */
 export const Icon = memo(function Icon({ name, size = "m", tone, flip, className }: {
@@ -66,7 +66,7 @@ export function ProjectIcon({ url, seed, box = 40, className }: { url?: string |
 export function Avatar({ name, box = 32, className }: { name: string; box?: 28 | 32; className?: string }) {
   return (
     <span className={cn("vx-av", className)} data-box={box} aria-hidden>
-      <Face name={name} size={box === 32 ? "var(--av-32, calc(var(--px) * 8))" : "var(--avs, calc(var(--px) * 8))"} />
+      <Face name={name} size={box === 32 ? "var(--av-32, calc(var(--iu, 3px) * 8))" : "var(--avs, calc(var(--iu, 3px) * 8))"} />
     </span>
   );
 }
