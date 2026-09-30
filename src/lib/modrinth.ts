@@ -6,6 +6,8 @@ export interface ContentHit {
   icon_url: string | null; project_type: string; downloads: number; author: string; categories: string[];
 }
 export type CatalogType = "mod" | "modpack" | "resourcepack" | "shader";
+/** Sortierung der Modrinth-Suche. */
+export type SearchIndex = "relevance" | "downloads" | "follows" | "newest" | "updated";
 export interface ContentSearch { hits: ContentHit[]; total_hits: number; offset: number; limit: number }
 export interface ContentProject {
   id: string; slug: string; title: string; description: string; body: string;

@@ -90,7 +90,7 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `instance_kill` | `instanceId` | – (Event `instance-exit` folgt) |
 | `instance_status` | `instanceId` | `{ installed, running }` |
 | `loader_versions` | `loader: ModLoader`, `mcVersion` | `{ version, stable }[]`, neueste zuerst; `vanilla` → `[]`, Quilt/Forge/NeoForge → Fehler „nicht implementiert“ |
-| `modrinth_search` | `query`, `projectType`, `minecraftVersion?`, `loader?`, `offset` | Modrinth-Suchergebnis (`snake_case`) |
+| `modrinth_search` | `query`, `projectType`, `minecraftVersion?`, `loader?`, `offset`, `index?` (relevance, downloads, follows, newest, updated) | Modrinth-Suchergebnis (`snake_case`) |
 | `modrinth_project` | `projectId` | Modrinth-Projekt (`snake_case`) |
 | `modrinth_versions` | `projectId`, `minecraftVersion?`, `loader?` | Modrinth-Versionen (`snake_case`) |
 | `modrinth_install_mod` | `instanceId`, `versionId`, `operationId` | Aktualisierte `Instance` |

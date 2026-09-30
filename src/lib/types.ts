@@ -62,11 +62,11 @@ export interface NewInstance {
   loaderVersion: string | null;
 }
 
-/** Reihenfolge im Dialog „Neu“. */
-export const ALL_LOADERS: ModLoader[] = ["vanilla", "fabric", "quilt", "neoforge", "forge"];
+/** Feste Reihenfolge überall (Dialog „Neue Instanz“, Filter). */
+export const ALL_LOADERS: ModLoader[] = ["vanilla", "fabric", "quilt", "forge", "neoforge"];
 
 /** Loader, die das Backend installieren und starten kann; die übrigen erscheinen als „bald verfügbar“. */
-export const SUPPORTED_LOADERS: ModLoader[] = ["vanilla", "fabric", "quilt", "neoforge", "forge"];
+export const SUPPORTED_LOADERS: ModLoader[] = ["vanilla", "fabric", "quilt", "forge", "neoforge"];
 
 export const LOADER_LABELS: Record<ModLoader, string> = {
   vanilla: "Vanilla",

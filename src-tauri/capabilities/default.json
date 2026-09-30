@@ -13,6 +13,7 @@
     {
       "identifier": "opener:allow-open-path",
       "allow": [
+        { "path": "$APPDATA/instances/*/minecraft" },
         { "path": "$APPDATA/instances/*/minecraft/crash-reports/**" },
         { "path": "$APPDATA/instances/*/minecraft/logs/**" }
       ]

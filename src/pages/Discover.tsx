@@ -4,17 +4,19 @@ import { useView } from "@/app/Layout";
 import { Seg, Select, SearchField } from "@/components/px";
 import { AddToInstanceMenu, ContentDetail, ContentResults, KIND_LABELS, PackActions, PackInstallButton } from "@/components/ContentBrowser";
 import { useVersions } from "@/hooks/useInstances";
-import type { CatalogType, ContentHit } from "@/lib/modrinth";
+import type { CatalogType, ContentHit, SearchIndex } from "@/lib/modrinth";
+import { ALL_LOADERS, LOADER_LABELS } from "@/lib/types";
 
 const TABS: CatalogType[] = ["modpack", "mod", "shader", "resourcepack"];
 const LABELS: Record<CatalogType, string> = { modpack: "Modpacks", ...KIND_LABELS };
 const IN_LABEL: Record<CatalogType, string> = { modpack: "In Modpacks suchen", mod: "In Mods suchen", shader: "In Shadern suchen", resourcepack: "In Ressourcenpaketen suchen" };
-const LOADERS = [
-  { value: "all", label: "Alle" },
-  { value: "fabric", label: "Fabric" },
-  { value: "quilt", label: "Quilt" },
-  { value: "forge", label: "Forge" },
-  { value: "neoforge", label: "NeoForge" },
+const LOADERS = [{ value: "all", label: "Alle" }, ...ALL_LOADERS.filter((l) => l !== "vanilla").map((l) => ({ value: l, label: LOADER_LABELS[l] }))];
+const SORTS: { value: SearchIndex; label: string }[] = [
+  { value: "relevance", label: "Relevanz" },
+  { value: "downloads", label: "Downloads" },
+  { value: "follows", label: "Follower" },
+  { value: "newest", label: "Neueste" },
+  { value: "updated", label: "Zuletzt aktualisiert" },
 ];
 
 /** Stöbern ohne Instanz: Modpacks werden zu neuen Instanzen, alles andere landet in einer bestehenden. */
@@ -27,6 +29,8 @@ export function DiscoverPage() {
   const [query, setQuery] = useState("");
   const [ver, setVer] = useState("all");
   const [loader, setLoader] = useState("all");
+  // null = automatisch: Downloads ohne Suchbegriff, sonst Relevanz.
+  const [sort, setSort] = useState<SearchIndex | null>(null);
   const versions = useVersions();
   const releases = versions.data?.filter((v) => v.type === "release").slice(0, 12) ?? [];
   const withLoader = type === "mod" || type === "modpack";
@@ -43,6 +47,7 @@ export function DiscoverPage() {
     setQuery("");
     setVer("all");
     setLoader("all");
+    setSort(null);
   };
   const open = (id: string, h?: ContentHit) => {
     listScroll.current = view.current?.scrollTop ?? 0;
@@ -53,7 +58,7 @@ export function DiscoverPage() {
   return (
     <>
       {projectId && (
-        <div className="page">
+        <div className="page disc-proj">
           <ContentDetail
             key={projectId}
             projectId={projectId}
@@ -87,6 +92,7 @@ export function DiscoverPage() {
           <SearchField value={query} onChange={setQuery} placeholder={IN_LABEL[type]} autoFocus />
           <Select label="Version" value={ver} onChange={setVer} options={[{ value: "all", label: "Alle" }, ...releases.map((v) => ({ value: v.id, label: v.id }))]} />
           {withLoader && <Select label="Loader" className="hide-m" value={loader} onChange={setLoader} options={LOADERS} />}
+          <Select label="Sortieren" className="sortsel" value={sort ?? (query.trim() ? "relevance" : "downloads")} onChange={(v) => setSort(v as SearchIndex)} options={SORTS} />
         </div>
         <ContentResults
           key={type}
@@ -94,6 +100,8 @@ export function DiscoverPage() {
           query={query}
           mc={ver === "all" ? null : ver}
           loader={withLoader && loader !== "all" ? loader : null}
+          sort={sort}
+          feature
           onReset={reset}
           onOpen={open}
           action={(h) =>

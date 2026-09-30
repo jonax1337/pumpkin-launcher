@@ -13,7 +13,7 @@ import { useDeleteTemplate, useTemplates } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { formatDownloads, progressLabel } from "@/lib/modrinth";
-import { LOADER_LABELS, type ModLoader, type Template } from "@/lib/types";
+import { ALL_LOADERS, LOADER_LABELS, type ModLoader, type Template } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Glyph, Icon, type IconName } from "@/pixel/icons";
 import "@/styles/library.css";
@@ -21,13 +21,12 @@ import "@/styles/library.css";
 type Tab = "blank" | "pack" | "file" | "tpl";
 
 const TABS: { value: Tab; label: string; icon: IconName }[] = [
-  { value: "blank", label: "Leer", icon: "plus" },
+  { value: "blank", label: "Eigene Instanz", icon: "plus" },
   { value: "pack", label: "Modpack", icon: "box" },
   { value: "file", label: "Datei", icon: "file" },
   { value: "tpl", label: "Vorlage", icon: "save" },
 ];
 
-const LOADERS: ModLoader[] = ["vanilla", "fabric", "quilt", "forge", "neoforge"];
 const LOADER_HELP: Record<ModLoader, string> = {
   vanilla: "Minecraft pur, ohne Mods.",
   fabric: "Leicht und schnell. Die meisten Leistungs-Mods gibt es für Fabric.",
@@ -164,7 +163,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
 }) {
   const [tab, setTab] = useState<Tab>(initial.tab);
 
-  // Leer
+  // Eigene
   const [name, setName] = useState("");
   const [nameEdited, setNameEdited] = useState(false);
   const [snapshots, setSnapshots] = useState(false);
@@ -235,10 +234,10 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
   }
 
   const goLabel =
-    tab === "blank" ? (create.isPending ? "Wird erstellt" : "Erstellen")
-    : tab === "pack" ? (packInstall.busy ?? "Installieren")
+    tab === "blank" ? (create.isPending ? "Wird angelegt" : "Anlegen")
+    : tab === "pack" ? (packInstall.busy ?? "Anlegen")
     : install.isPending ? progressLabel(progress)
-    : tab === "file" ? "Importieren" : "Erstellen";
+    : tab === "file" ? "Importieren" : "Anlegen";
 
   const hint =
     tab === "blank" ? "Das Spiel wird beim ersten Start geladen."
@@ -265,22 +264,32 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
       }
     >
       <div className="nwrap">
-        <div className="nnav" role="tablist" aria-label="Weg">
+        <div className="nnav" role="tablist" aria-label="Weg" aria-orientation="vertical">
           {TABS.map((t) => (
-            <button key={t.value} type="button" role="tab" className="ptab fx" aria-selected={tab === t.value} onClick={() => setTab(t.value)}>
+            <button
+              key={t.value}
+              id={`ni-tab-${t.value}`}
+              type="button"
+              role="tab"
+              className="ptab fx"
+              aria-selected={tab === t.value}
+              aria-controls="ni-pane"
+              onClick={() => setTab(t.value)}
+            >
               <Icon name={t.icon} />
               {t.label}
               <i className="tick" />
             </button>
           ))}
         </div>
-        <div className="npane" role="tabpanel">
+        <div className="npane" id="ni-pane" role="tabpanel" aria-labelledby={`ni-tab-${tab}`}>
           {tab === "blank" && (
             <>
               <div className="nf">
                 <label htmlFor="ni-name">Name</label>
                 <TextField
                   id="ni-name"
+                  aria-describedby="ni-name-help"
                   value={nameEdited ? name : suggestion}
                   maxLength={64}
                   onChange={(e) => {
@@ -288,7 +297,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
                     setNameEdited(true);
                   }}
                 />
-                <span className="help">Vorschlag aus Version und Loader. Du kannst ihn später ändern.</span>
+                <span className="help" id="ni-name-help">Vorschlag aus Version und Loader. Du kannst ihn später ändern.</span>
               </div>
               <div className="nf">
                 <label htmlFor="ni-mc">Minecraft-Version</label>
@@ -316,13 +325,16 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
               </div>
               <div className="nf">
                 <span className="fl" id="ni-loader">Loader</span>
-                <Seg label="Loader" value={loader} onChange={setLoader} options={LOADERS.map((l) => ({ value: l, label: LOADER_LABELS[l] }))} />
+                {/* Seg reicht keine Beschreibung durch: die Gruppe darum trägt Label und Hilfetext. */}
+                <div role="group" aria-labelledby="ni-loader" aria-describedby="ni-loader-help">
+                  <Seg label="Loader" value={loader} onChange={setLoader} options={ALL_LOADERS.map((l) => ({ value: l, label: LOADER_LABELS[l] }))} />
+                </div>
                 {loaderUnavailable ? (
-                  <span className="err-msg" role="alert">
+                  <span className="err-msg" role="alert" id="ni-loader-help">
                     {loaderVersions.error ? `${LOADER_LABELS[loader]} ist gerade nicht erreichbar.` : `Für Minecraft ${selectedVersion} gibt es noch kein ${LOADER_LABELS[loader]}.`}
                   </span>
                 ) : (
-                  <span className="help">{LOADER_HELP[loader]}</span>
+                  <span className="help" id="ni-loader-help">{LOADER_HELP[loader]}</span>
                 )}
               </div>
               <details className="adv">
@@ -341,7 +353,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
                           disabled={loaderUnavailable || loaderVersions.isPending}
                           options={[
                             { value: LATEST, label: "Neueste stabile (empfohlen)" },
-                            ...(loaderVersions.data ?? []).map((v) => ({ value: v.version, label: `${v.version}${v.stable ? "" : " (Beta)"}` })),
+                            ...(loaderVersions.data ?? []).map((v) => ({ value: v.version, label: `${v.version}${v.stable ? "" : " (Vorabversion)"}` })),
                           ]}
                         />
                       )}
@@ -414,7 +426,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
 }
 
 /**
- * „Neue Instanz“ um einen beliebigen Auslöser (`children`). Leer, Modpack, Datei oder Vorlage.
+ * „Neue Instanz“ um einen beliebigen Auslöser (`children`). Eigene, Modpack, Datei oder Vorlage.
  * Die `primary`-Instanz nimmt aufs Fenster gezogene .mrpack-Dateien und Strg+N (`?neu=1`) an.
  */
 export function NewInstanceDialog({ children, primary }: { children: ReactNode; primary?: boolean }) {

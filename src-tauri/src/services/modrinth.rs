@@ -145,9 +145,13 @@ pub async fn search(
     mc: Option<String>,
     loader: Option<String>,
     offset: u32,
+    index: Option<String>,
 ) -> AppResult<SearchResponse> {
     if !matches!(kind.as_str(), "mod" | "modpack" | "resourcepack" | "shader") || query.len() > 512 || offset > 100_000 {
         return Err(invalid("Ungültige Suche"));
+    }
+    if !matches!(index.as_deref(), None | Some("relevance" | "downloads" | "follows" | "newest" | "updated")) {
+        return Err(invalid("Ungültige Sortierung"));
     }
     let mut facets = vec![vec![format!("project_type:{kind}")]];
     if let Some(mc) = mc {
@@ -158,15 +162,15 @@ pub async fn search(
         identifier(&loader)?;
         facets.push(with_fabric(&loader).iter().map(|l| format!("categories:{l}")).collect());
     }
-    // Ohne Suchbegriff: die beliebtesten Projekte zuerst.
-    let index = if query.trim().is_empty() { "downloads" } else { "relevance" };
+    // Ohne Sortierung: ohne Suchbegriff die beliebtesten Projekte zuerst.
+    let index = index.unwrap_or_else(|| if query.trim().is_empty() { "downloads" } else { "relevance" }.into());
     api(
         client,
         "search",
         &[
             ("query".into(), query),
             ("facets".into(), serde_json::to_string(&facets)?),
-            ("index".into(), index.into()),
+            ("index".into(), index),
             ("offset".into(), offset.to_string()),
             ("limit".into(), "20".into()),
         ],

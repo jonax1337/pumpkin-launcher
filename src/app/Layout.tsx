@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as RPointerEvent, type RefObject } from "react";
 import { Link, useLocation, useNavigate, useOutlet } from "react-router";
 import { Popover } from "radix-ui";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -23,22 +23,39 @@ const ViewContext = createContext<RefObject<HTMLElement | null>>({ current: null
 export const useView = () => useContext(ViewContext);
 
 const TABS = [
-  { to: "/", label: "Spielen", match: (p: string) => p === "/" },
+  { to: "/", label: "Start", match: (p: string) => p === "/" },
   { to: "/instances", label: "Bibliothek", match: (p: string) => p.startsWith("/instances") },
   { to: "/discover", label: "Entdecken", match: (p: string) => p.startsWith("/discover") },
 ];
 
-/** Strg+1…3 wechselt den Bereich, Strg+, öffnet die Einstellungen, Strg+N „Neue Instanz“. */
+/** Offener Dialog (auch Rückfrage); Popover und Menüs zählen nicht. */
+const dialogOpen = () => !!document.querySelector(".dlg[data-state=open], [role=alertdialog][data-state=open], [role=dialog][aria-modal=true]");
+
+/** Fokus in einem Feld, in das getippt wird (dort gehört Strg+N/Strg+, nicht uns). */
+function typing(el: Element | null) {
+  if (!(el instanceof HTMLElement)) return false;
+  if (el.isContentEditable || el instanceof HTMLTextAreaElement) return true;
+  return el instanceof HTMLInputElement && !["checkbox", "radio", "button", "submit", "reset", "range", "file", "color"].includes(el.type);
+}
+
+/**
+ * Strg+1…3 wechselt den Bereich, Strg+, öffnet die Einstellungen, Strg+N „Neue Instanz“.
+ * Bei offenem Dialog nichts (sonst gingen Eingaben verloren); in Textfeldern nur Strg+Zahl.
+ */
 function useShortcuts() {
   const navigate = useNavigate();
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (!e.ctrlKey || e.altKey || e.metaKey) return;
+      if (!e.ctrlKey || e.altKey || e.metaKey || e.shiftKey || e.defaultPrevented) return;
+      if (dialogOpen()) return;
       const tab = TABS[Number(e.key) - 1];
       if (tab) {
         e.preventDefault();
         navigate(tab.to);
-      } else if (e.key === ",") {
+        return;
+      }
+      if (typing(document.activeElement)) return;
+      if (e.key === ",") {
         e.preventDefault();
         navigate("/settings");
       } else if (e.key.toLowerCase() === "n") {
@@ -49,6 +66,95 @@ function useShortcuts() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [navigate]);
+}
+
+const APP = "Voxlet";
+
+/** Fenstertitel je Bereich; bei einer Instanz ihr Name. */
+function usePageTitle(pathname: string) {
+  const { data: instances } = useInstances();
+  const id = pathname.match(/^\/instances\/([^/]+)/)?.[1];
+  const name = id ? instances?.find((i) => i.id === decodeURIComponent(id))?.name : undefined;
+  const page =
+    pathname === "/" ? "Start"
+    : id ? (name ?? "Bibliothek")
+    : pathname.startsWith("/instances") ? "Bibliothek"
+    : pathname.startsWith("/discover") ? "Entdecken"
+    : pathname.startsWith("/settings") ? "Einstellungen"
+    : "Seite nicht gefunden";
+  useEffect(() => {
+    document.title = `${page} · ${APP}`;
+  }, [page]);
+}
+
+/**
+ * Nach einem Seitenwechsel (nicht beim ersten Laden) Fokus auf die Seitenüberschrift, damit Tastatur und
+ * Screenreader auf der neuen Seite beginnen. Die Seite kann später rendern (Laden), deshalb kurz auf das h1 warten.
+ * Hat die Seite selbst schon fokussiert (Suchfeld, Dialog), bleibt es dabei.
+ */
+function usePageFocus(pathname: string, view: RefObject<HTMLElement | null>) {
+  // Vorige Adresse statt „erster Lauf“: StrictMode führt Effekte beim Laden doppelt aus.
+  const prev = useRef(pathname);
+  useEffect(() => {
+    if (prev.current === pathname) return;
+    prev.current = pathname;
+    const main = view.current;
+    if (!main) return;
+    const tryFocus = () => {
+      const h1 = main.querySelector<HTMLElement>("h1");
+      if (!h1) return false;
+      const a = document.activeElement;
+      const pageOwns = a instanceof HTMLElement && a !== main && main.contains(a);
+      if (!pageOwns && !dialogOpen()) {
+        if (!h1.hasAttribute("tabindex")) h1.tabIndex = -1;
+        h1.focus({ preventScroll: true });
+      }
+      return true;
+    };
+    if (tryFocus()) return;
+    const mo = new MutationObserver(() => tryFocus() && stop());
+    const t = setTimeout(() => stop(), 3000);
+    const stop = () => {
+      mo.disconnect();
+      clearTimeout(t);
+    };
+    mo.observe(main, { childList: true, subtree: true });
+    return stop;
+  }, [pathname, view]);
+}
+
+/**
+ * Start scrollt nicht, solange die Seite in die Ansicht passt (Szene bis an den Rand). Passt sie nicht
+ * (Zoom, kleines Fenster), wird sie normal scrollbar statt abgeschnitten. Beobachtet Ansicht und Inhalt.
+ */
+function useFits(view: RefObject<HTMLElement | null>, active: boolean) {
+  const [fits, setFits] = useState(true);
+  useEffect(() => {
+    const el = view.current;
+    if (!active || !el) return;
+    let frame = 0;
+    const check = () => {
+      frame = 0;
+      setFits(el.scrollHeight <= el.clientHeight + 1);
+    };
+    const schedule = () => void (frame ||= requestAnimationFrame(check));
+    const ro = new ResizeObserver(schedule);
+    const watch = () => {
+      ro.disconnect();
+      ro.observe(el);
+      for (const c of el.children) ro.observe(c);
+      schedule();
+    };
+    const mo = new MutationObserver(watch);
+    mo.observe(el, { childList: true });
+    watch();
+    return () => {
+      cancelAnimationFrame(frame);
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, [view, active]);
+  return active && fits;
 }
 
 const subscribeOnline = (cb: () => void) => {
@@ -71,7 +177,7 @@ function useLiveTasks() {
   const live = Object.values(installs).map((p) => ({
     id: `i-${p.instanceId}`,
     instanceId: p.instanceId,
-    label: `${name(p.instanceId)} vorbereiten`,
+    label: `${name(p.instanceId)} wird installiert`,
     sub: installStepLabel(p.step, loader(p.instanceId)),
     p: p.total > 0 ? p.done / p.total : null,
   }));
@@ -101,10 +207,11 @@ function TasksButton() {
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Tip label="Aufgaben">
         <Popover.Trigger asChild>
-          <button type="button" className={cn("barbtn tasksbtn fx", busy && "busy")} aria-label={busy ? `Aufgaben, ${live.length} laufen` : "Aufgaben"}>
-            <Icon name="dl" />
-            <span className="badge">{live.length}</span>
-            <Progress thin p={avg} className="tmini" />
+          {/* Feste Glyphe; Zähler und Mini-Balken liegen daneben bzw. darunter, nie darauf */}
+          <button type="button" className={cn("barbtn tasksbtn fx", busy && "busy")} aria-label={busy ? `Aufgaben, ${live.length} ${live.length === 1 ? "läuft" : "laufen"}` : "Aufgaben"}>
+            <Icon name="tasks" />
+            <span className="badge" aria-hidden>{live.length > 9 ? "9+" : live.length}</span>
+            <Progress thin p={avg} className="tmini" decorative />
           </button>
         </Popover.Trigger>
       </Tip>
@@ -112,14 +219,15 @@ function TasksButton() {
         <Popover.Content className="rpop tasks" align="end" sideOffset={6} collisionPadding={8} aria-label="Aufgaben">
           <div className="tasks-h">
             <b>Aufgaben</b>
-            <Btn variant="g" size="s" disabled={!history.length} onClick={clear}>Fertige entfernen</Btn>
+            {/* Ohne Fertige unsichtbar statt nur grau; der Platz bleibt (Kopfhöhe) */}
+            <Btn variant="g" size="s" disabled={!history.length} style={history.length ? undefined : { visibility: "hidden" }} onClick={clear}>Fertige entfernen</Btn>
           </div>
           {live.map((t) => (
             <div key={t.id} className="task">
               <span className="ti"><Icon name="dl" /></span>
               <div className="tt">
                 <b>{t.label}</b>
-                <Progress thin p={t.p} />
+                <Progress thin p={t.p} label={t.label} />
                 <span>{t.sub}</span>
               </div>
               <span className="tp num">{t.p != null ? `${Math.floor(t.p * 100)} %` : ""}</span>
@@ -166,7 +274,7 @@ function WindowButtons() {
   );
 }
 
-function TitleBar() {
+function TitleBar({ online }: { online: boolean }) {
   const { pathname } = useLocation();
   return (
     <header className="bar" data-tauri-drag-region>
@@ -174,9 +282,10 @@ function TitleBar() {
         <span className="mark"><Mark /></span>
         <span className="word">VOXLET</span>
       </Link>
-      <nav className="navtabs" role="tablist" aria-label="Hauptbereiche">
+      {/* Normale Links: Bereiche sind Seiten, keine Tabs */}
+      <nav className="navtabs" aria-label="Hauptbereiche">
         {TABS.map((t, i) => (
-          <Link key={t.to} to={t.to} role="tab" className="ptab fx" aria-selected={t.match(pathname)} aria-keyshortcuts={`Control+${i + 1}`}>
+          <Link key={t.to} to={t.to} className="ptab fx" aria-current={t.match(pathname) ? "page" : undefined} aria-keyshortcuts={`Control+${i + 1}`}>
             {t.label}
             <i className="tick" />
           </Link>
@@ -184,17 +293,99 @@ function TitleBar() {
       </nav>
       <div className="bar-mid" data-tauri-drag-region />
       <div className="bar-right">
-        <span className="netchip" role="status"><Icon name="plug" small />Offline</span>
+        {/* Live-Region bleibt stehen; online leer, damit nichts vorgelesen wird */}
+        <span className="netchip" role="status">{!online && <><Icon name="plug" small />Offline<span className="sr">: keine Internetverbindung, Katalog und Downloads sind nicht verfügbar</span></>}</span>
         <TasksButton />
         <AccountMenu />
         <Tip label="Einstellungen">
-          <Link to="/settings" className="barbtn fx" aria-label="Einstellungen" aria-current={pathname === "/settings" ? "page" : undefined}>
+          <Link to="/settings" className="barbtn fx" aria-label="Einstellungen" aria-current={pathname.startsWith("/settings") ? "page" : undefined}>
             <Icon name="gear" />
+            <i className="tick" />
           </Link>
         </Tip>
         <WindowButtons />
       </div>
     </header>
+  );
+}
+
+/**
+ * Schmale Pixel-Scrollbar über der Ansicht statt der nativen Spur: nichts wird reserviert,
+ * Szenen (Start, Instanzkopf) reichen bis an den Fensterrand. Ziehen und Klick in die Bahn wie gewohnt.
+ */
+function ViewScrollbar({ view }: { view: RefObject<HTMLElement | null> }) {
+  const track = useRef<HTMLDivElement>(null);
+  const thumb = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ y: number; top: number; k: number } | null>(null);
+
+  useEffect(() => {
+    const el = view.current;
+    const tr = track.current;
+    const th = thumb.current;
+    if (!el || !tr || !th) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const { scrollHeight: sh, clientHeight: ch, scrollTop: st } = el;
+      const on = sh > ch + 1 && getComputedStyle(el).overflowY !== "hidden";
+      tr.toggleAttribute("data-on", on);
+      if (!on) return;
+      const h = Math.max(40, Math.round((ch * ch) / sh));
+      th.style.height = `${h}px`;
+      th.style.transform = `translateY(${Math.round((st / (sh - ch)) * (ch - h))}px)`;
+    };
+    const schedule = () => void (frame ||= requestAnimationFrame(update));
+    // Inhaltshöhe: Größe der Seite beobachten; wechselt die Seite, das neue Kind anmelden.
+    const ro = new ResizeObserver(schedule);
+    const watch = () => {
+      ro.disconnect();
+      ro.observe(el);
+      for (const c of el.children) ro.observe(c);
+      schedule();
+    };
+    const mo = new MutationObserver(watch);
+    mo.observe(el, { childList: true, attributes: true, attributeFilter: ["class"] });
+    el.addEventListener("scroll", schedule, { passive: true });
+    watch();
+    return () => {
+      cancelAnimationFrame(frame);
+      ro.disconnect();
+      mo.disconnect();
+      el.removeEventListener("scroll", schedule);
+    };
+  }, [view]);
+
+  function onThumbDown(e: RPointerEvent<HTMLDivElement>) {
+    const el = view.current;
+    if (!el || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const h = e.currentTarget.offsetHeight;
+    drag.current = { y: e.clientY, top: el.scrollTop, k: (el.scrollHeight - el.clientHeight) / Math.max(1, el.clientHeight - h) };
+    track.current?.setAttribute("data-drag", "");
+  }
+  function onThumbMove(e: RPointerEvent<HTMLDivElement>) {
+    const d = drag.current;
+    if (d && view.current) view.current.scrollTop = d.top + (e.clientY - d.y) * d.k;
+  }
+  function onThumbUp() {
+    drag.current = null;
+    track.current?.removeAttribute("data-drag");
+  }
+  // Klick in die Bahn blättert eine Seite in Richtung des Klicks.
+  function onTrackDown(e: RPointerEvent<HTMLDivElement>) {
+    const el = view.current;
+    const th = thumb.current;
+    if (!el || !th || e.button !== 0) return;
+    const above = e.clientY < th.getBoundingClientRect().top;
+    el.scrollBy({ top: (above ? -1 : 1) * el.clientHeight * 0.9 });
+  }
+
+  return (
+    <div ref={track} className="vbar" aria-hidden onPointerDown={onTrackDown}>
+      <div ref={thumb} className="vthumb" onPointerDown={onThumbDown} onPointerMove={onThumbMove} onPointerUp={onThumbUp} onPointerCancel={onThumbUp} />
+    </div>
   );
 }
 
@@ -209,6 +400,9 @@ export function Layout() {
   usePixelUnit();
   useGameEvents();
   useShortcuts();
+  usePageTitle(pathname);
+  usePageFocus(pathname, view);
+  const noscroll = useFits(view, pathname === "/");
 
   // Szenen stehen still, solange Minecraft startet oder läuft, oder wenn Bewegung aus ist.
   useEffect(() => setSceneGate({ motion, game: gameActive }), [motion, gameActive]);
@@ -230,10 +424,11 @@ export function Layout() {
   return (
     <ViewContext.Provider value={view}>
       <div className={cn("app", ready && "ready")} data-offline={online ? undefined : ""}>
-        <TitleBar />
-        <main ref={view} className={cn("view", pathname === "/" && "noscroll")} tabIndex={-1}>
+        <TitleBar online={online} />
+        <main ref={view} className={cn("view", noscroll && "noscroll")} tabIndex={-1}>
           {outlet}
         </main>
+        <ViewScrollbar view={view} />
       </div>
       <InstanceDialogs />
     </ViewContext.Provider>

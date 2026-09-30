@@ -36,6 +36,7 @@ pub async fn modrinth_search(
     minecraft_version: Option<String>,
     loader: Option<String>,
     offset: u32,
+    index: Option<String>,
 ) -> AppResult<api::SearchResponse> {
     api::search(
         &api::client()?,
@@ -44,6 +45,7 @@ pub async fn modrinth_search(
         minecraft_version,
         loader,
         offset,
+        index,
     )
     .await
 }

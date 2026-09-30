@@ -1,5 +1,85 @@
 /* Instanz-Detail: Ergänzungen zu pixelkino.css */
 .ctile.gone b { min-width: 0; }
 .crow.gone .cn b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.dtabs .ptab .wdot { place-items: center; }
+/* Warnpunkt als Hochzeichen an der Tab-Ecke: reserviert keinen Platz, Tab-Abstände bleiben gleich */
+.dtabs .ptab .wdot { position: absolute; top: -3px; right: -5px; display: grid; place-items: center; pointer-events: auto; }
+/* Sticky Kopf (kompakt 64 px) und Tab-Leiste (48 px) verdecken sonst beim Tabben fokussierte Felder */
+.view:has(.detail) { scroll-padding-top: calc(64px + 48px + 12px); scroll-padding-bottom: 12px; }
+/* Infozeile im Kopf: Text · Status-Chip (nur Ausnahmen) · „Updates“ als echter Knopf mit Pfeil */
+.dh-meta { display: flex; align-items: center; gap: 12px; height: 32px; min-width: 0; }
+.dh-meta .meta { flex: 0 1 auto; overflow: hidden; }
+.dh-meta .meta b { font-size: 20px; }
+.dh-meta .upbtn .pi { color: var(--fg-2); }
+.dh-meta .upbtn .count { margin-right: -2px; }
+.dh-compact .meta { flex: none; }
+/* „‹ Bibliothek“ über hellen Wolken: dezente dunkle Platte und harter Schatten statt ~3,7:1.
+   Die Platte nimmt ::before (sonst der Unterstrich); ::after bleibt dem Fokusring. Hover unterstreicht per Text. */
+.dh-info .back { color: var(--fg); text-shadow: 0 var(--px) 0 rgba(3,5,10,.85); }
+.dh-info .back::before { left: 0; right: 0; top: 4px; bottom: 4px; height: auto; opacity: 1; background: rgba(7,10,17,.6); clip-path: var(--n1); }
+.dh-info .back:hover .bc { text-decoration: underline; text-decoration-thickness: var(--px); text-underline-offset: 3px; }
 .dtabs:empty { pointer-events: none; }
+
+/* Inhalte-Werkzeugleiste: „Alle aktualisieren“ bleibt bis 1096 px beschriftet (schmaleres Suchfeld schafft Platz),
+   darunter Symbol + Zahl. Ohne Updates ruhiger Text in derselben Breite. */
+.upall { width: 192px; flex: none; }
+.upnone { display: inline-flex; align-items: center; justify-content: center; height: 32px; color: var(--fg-3); font-size: 13px; }
+@media (max-width: 1180px) {
+  .ctool .field { width: 176px; }
+}
+@media (max-width: 960px) {
+  .ctool .field { width: 128px; }
+}
+@media (max-width: 1096px) {
+  .upall { width: 64px; }
+  .upall .updt { font-size: 0; }
+  .upall .updt::after { content: attr(data-n); font: 400 18px/1 var(--f-px); }
+  .upnone { visibility: hidden; }
+}
+
+/* Ausgeschaltete Inhalte: nur das Icon gedämpft, Text bleibt lesbar (Name --fg-2); „Aus“ neben dem Schalter sagt den Zustand */
+.crow.off .mi, .ctile.off .mi { opacity: .35; filter: grayscale(.8); }
+.ctile.off .cn b { color: var(--fg-2); }
+
+/* Spalte „Hinweise“ entfällt, wenn kein Inhalt einen hat; der Name bekommt die Breite */
+.ctable.nw .chead, .ctable.nw .crow { grid-template-columns: 28px 40px minmax(0, 1fr) 136px 72px 36px; }
+@media (max-width: 1040px) {
+  .ctable.nw .chead, .ctable.nw .crow { grid-template-columns: 28px 40px minmax(0, 1fr) 116px 72px 36px; }
+}
+@media (max-width: 900px) {
+  .ctable.nw .chead, .ctable.nw .crow { grid-template-columns: 28px 40px minmax(0, 1fr) 104px 72px 36px; }
+}
+.ctable .crow.gone { grid-template-columns: 28px 40px minmax(0, 1fr) auto; }
+
+/* Inhalte auf dem Seitenraster (--page-max wie Bibliothek und Kopf); dezente Zeilentrenner */
+.ctab { max-width: var(--page-max); }
+.clist > .crow:not(.gone) + .crow:not(.gone) { box-shadow: inset 0 var(--px) 0 color-mix(in srgb, var(--line) 50%, transparent); }
+.chead .updh { text-align: right; }
+.chead .onh { text-align: right; padding-right: 10px; }
+/* Update-Knopf je Zeile: feste Breite, Version zentriert, lange Versionen mit Auslassung */
+.upd .updbtn { width: 96px; }
+.upd .updbtn .bc { min-width: 0; }
+/* An/Aus: „Aus“ sichtbar neben dem Schalter (Platz bleibt reserviert); Ressourcenpakete ohne Schalter */
+.onc { display: flex; align-items: center; justify-content: flex-end; gap: 8px; height: 32px; min-width: 0; }
+.onc .offl { font-size: 12px; font-weight: 600; color: var(--fg-3); visibility: hidden; }
+.crow.off .onc .offl, .ctile.off .onc .offl { visibility: visible; }
+.onc .ingame { font-size: 12px; color: var(--fg-3); white-space: nowrap; cursor: default; }
+.ctile .onc { flex: none; }
+/* Kachel: „Aus“ nur im ausgeschalteten Zustand (spart dem Namen Platz) */
+.ctile:not(.off) .onc .offl { display: none; }
+/* Raster: Auswahlfeld liegt auf der Icon-Ecke, sichtbar bei Hover/Fokus oder im Auswahlmodus (kein Springen) */
+.ctile .tic > .cb { opacity: 0; transition: opacity .1s steps(2, end); }
+.ctile:is(:hover, :focus-within) .tic > .cb, .cgrid.picking .ctile .tic > .cb, .ctile.picked .tic > .cb { opacity: 1; }
+/* Filter ohne Treffer gedämpft, aber lesbar (--fg-3, ≥ 4,5:1; keine zusätzliche Transparenz) */
+.seg button:has(.zero) { color: var(--fg-3); }
+
+/* Kopf: Infozeile mit hartem Schatten gegen helle Szenenpixel (Lesbarkeit ≥ 4,5:1 auch über Wolken) */
+.dh-meta .meta { text-shadow: 0 var(--px) 0 rgba(3,5,10,.9); }
+/* Schmal oder stark gezoomt: Aktionen unter den Titel, Kopf wächst mit; Titel behält die volle Breite */
+@media (max-width: 720px) {
+  .detail { --dh: 292px; }
+  .dh-full { flex-direction: column; align-items: stretch; gap: 12px; bottom: 12px; }
+  .dh-info { flex: none; gap: 4px; }
+  .dh-act { align-items: flex-start; }
+  .dh-act .pstat { width: auto; justify-content: flex-start; }
+  .shade-head { background: linear-gradient(0deg, rgba(7,10,17,.92) 0, rgba(7,10,17,.7) 55%, rgba(7,10,17,.15) 100%); }
+}

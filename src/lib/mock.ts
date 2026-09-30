@@ -161,10 +161,10 @@ export function createContentMock(db: { instances: Instance[] }, emit: (event: s
     emit("content-progress", { operationId, phase, done, total });
 
   return {
-    async search(query: string, type: CatalogType, mc: string | null, loader: string | null, offset: number): Promise<ContentSearch> {
+    async search(query: string, type: CatalogType, mc: string | null, loader: string | null, offset: number, index: string | null = null): Promise<ContentSearch> {
       const facets = [[`project_type:${type}`], ...(mc ? [[`versions:${mc}`]] : []), ...(loader ? [[`categories:${loader}`]] : [])];
       const r = await modrinth<ContentSearch>("/search", {
-        query, facets: JSON.stringify(facets), offset: String(offset), limit: "20", index: query ? "relevance" : "downloads",
+        query, facets: JSON.stringify(facets), offset: String(offset), limit: "20", index: index ?? (query ? "relevance" : "downloads"),
       });
       return { hits: r.hits, total_hits: r.total_hits, offset: r.offset, limit: r.limit };
     },

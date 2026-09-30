@@ -4,7 +4,8 @@ import { hash, rng } from "./random";
 
 /* Pixel-Icons: 7×7 für Aktionen, 5×5 klein. Jeder Icon-Pixel = 1 Einheit (--px). */
 const ICONS = {
-  play: ["#......", "###....", "#####..", "#######", "#####..", "###....", "#......"],
+  // Spitze 1 Pixel pro Zeile, Basis 2 breit: liest sich auch klein als Dreieck (nicht als Fahne)
+  play: [".##....", ".###...", ".####..", ".#####.", ".####..", ".###...", ".##...."],
   stop: [".......", ".#####.", ".#####.", ".#####.", ".#####.", ".#####.", "......."],
   plus: ["...#...", "...#...", "...#...", "#######", "...#...", "...#...", "...#..."],
   x: ["#.....#", ".#...#.", "..#.#..", "...#...", "..#.#..", ".#...#.", "#.....#"],
@@ -38,6 +39,8 @@ const ICONS = {
   swap: ["....#..", "#######", "....#..", ".......", "..#....", "#######", "..#...."],
   box: [".#####.", "#.....#", "#######", "#.....#", "#..#..#", "#.....#", "#######"],
   eye: [".......", "..###..", ".#...#.", "#..#..#", ".#...#.", "..###..", "......."],
+  // Klemmbrett mit Zeilen (Aufgaben)
+  tasks: ["..###..", "###.###", "#.....#", "#.###.#", "#.....#", "#.###.#", "#######"],
   /* 5×5 */
   chevd: [".....", "#...#", ".#.#.", "..#..", "....."],
   chevr: [".#...", "..#..", "...#.", "..#..", ".#..."],
@@ -75,7 +78,7 @@ export type IconName = keyof typeof ICONS;
 const SMALL5: Partial<Record<IconName, IconName>> = {
   plus: "plus5", up: "up5", dl: "dl5", ul: "ul5", down2: "down5", trash: "trash5", folder: "folder5", copy: "copy5", redo: "redo5",
   play: "play5", stop: "stop5", user: "user5", power: "power5", ext: "ext5", save: "save5", swap: "swap5", plug: "plug5",
-  check: "check5", x: "x5", chev: "chevr", gear: "gear5", back: "back5", term: "term5",
+  check: "check5", x: "x5", chev: "chevr", gear: "gear5", back: "back5", term: "term5", warn: "warn5",
 };
 
 const PATHS = new Map<string, string>();

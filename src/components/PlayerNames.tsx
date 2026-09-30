@@ -3,11 +3,12 @@ import { useNavigate } from "react-router";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { create } from "zustand";
+import { StopDialog } from "@/components/game";
 import { Btn, Dialog, DialogClose, ErrorBox, Menu, Progress, Skel, TextField, type MenuEntry } from "@/components/px";
 import { api } from "@/lib/api";
 import type { MsLoginStart } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Face, Icon } from "@/pixel/icons";
+import { Face, Icon, IconSvg } from "@/pixel/icons";
 import { accountName, isValidPlayerName, useSettings, type ActiveAccount } from "@/store/settings";
 
 // ---------- Microsoft-Anmeldung (ein Dialog für Kontomenü, Einstellungen und Onboarding) ----------
@@ -29,6 +30,14 @@ export async function startMsLogin(qc: QueryClient) {
     if (mine !== attempt) return;
     useSettings.getState().selectAccount({ kind: "microsoft", id: account.id, username: account.username });
     void qc.invalidateQueries({ queryKey: ["ms-accounts"] });
+    // Aus „Spielen“ ohne Namen gekommen: Dialog zu und direkt weiter (der Spielen-Knopf zeigt den Fortschritt).
+    const then = useAccountUi.getState().then;
+    if (then) {
+      useAccountUi.setState({ then: null });
+      useMsLogin.setState({ step: "idle" }, true);
+      toast.success(`Angemeldet als ${account.username}`);
+      return then.run();
+    }
     useMsLogin.setState({ step: "done", name: account.username }, true);
   } catch (err) {
     if (mine === attempt) useMsLogin.setState({ step: "error", message: err instanceof Error ? err.message : String(err) }, true);
@@ -38,12 +47,14 @@ export async function startMsLogin(qc: QueryClient) {
 function closeMsLogin() {
   const running = ["starting", "code"].includes(useMsLogin.getState().step);
   attempt++;
+  useAccountUi.setState({ then: null });
   useMsLogin.setState({ step: "idle" }, true);
   if (running) void api.msLoginCancel().catch(() => undefined);
 }
 
 function MsLoginDialog() {
   const state = useMsLogin();
+  const then = useAccountUi((s) => s.then);
   const qc = useQueryClient();
 
   function copy(code: string) {
@@ -58,6 +69,7 @@ function MsLoginDialog() {
       open={state.step !== "idle"}
       onOpenChange={(o) => !o && closeMsLogin()}
       title="Mit Microsoft anmelden"
+      sub={then && state.step !== "done" ? <>Danach startet <b>{then.label}</b>.</> : undefined}
       width={520}
       height={420}
       footer={
@@ -118,11 +130,15 @@ function MsLoginDialog() {
 
 // ---------- Konten ----------
 
+/** Was nach dem Speichern des Namens passiert (z. B. „Spielen“ fortsetzen); `label` nennt die Instanz. */
+type AfterName = { label: string; run: () => void };
 /** Offene Kontenteile: Menü in der Fensterleiste und Dialog „Spielername hinzufügen“. */
-const useAccountUi = create<{ menu: boolean; offline: boolean }>(() => ({ menu: false, offline: false }));
-/** Öffnet das Kontomenü oben rechts (z. B. aus „Erst Spielernamen festlegen“). */
+const useAccountUi = create<{ menu: boolean; offline: boolean; then: AfterName | null }>(() => ({ menu: false, offline: false, then: null }));
+/** Öffnet das Kontomenü oben rechts. */
 export const openAccounts = () => useAccountUi.setState({ menu: true });
-export const openAddOffline = () => useAccountUi.setState({ offline: true, menu: false });
+export const openAddOffline = () => useAccountUi.setState({ offline: true, menu: false, then: null });
+/** „Spielen“ ohne Namen: Dialog direkt öffnen, nach dem Speichern geht es mit `then` weiter. */
+export const askPlayerName = (then: AfterName) => useAccountUi.setState({ offline: true, menu: false, then });
 
 function useMsAccounts() {
   const query = useQuery({ queryKey: ["ms-accounts"], queryFn: api.msAccounts, staleTime: 5 * 60_000, retry: false });
@@ -202,58 +218,106 @@ export function AccountMenu() {
         className="me"
         items={items}
         trigger={
-          <button type="button" className="barbtn mebtn fx" aria-label={name ? `Konto: ${name}. Wechseln` : "Kein Konto. Festlegen"}>
-            <span className="avatar">{name ? <Face name={name} /> : <Icon name="user" />}</span>
-            <span className={cn("who", !name && "text-warn")}>{name || "Kein Konto"}</span>
+          <button type="button" className="barbtn mebtn fx" aria-label={name ? `Konto: ${name}. Wechseln` : "Spielername fehlt. Konto wählen"}>
+            {/* Ohne Namen: Warnsymbol statt Kopf (Form, nicht nur gelbe Schrift; bleibt auch schmal sichtbar, wenn der Text wegfällt) */}
+            <span className="avatar">
+              {name ? <Face name={name} /> : <span className="pi" aria-hidden style={{ color: "var(--warn)" }}><IconSvg name="warn" className="g7" /></span>}
+            </span>
+            <span className={cn("who", !name && "text-warn")}>{name || "Spielername fehlt"}</span>
             <Icon name="chevd" small />
           </button>
         }
       />
       <MsLoginDialog />
       <AddOfflineDialog />
+      {/* Globale Rückfrage „Minecraft beenden?“ (askStop); hier, weil das Kontomenü immer eingehängt ist */}
+      <StopDialog />
     </>
   );
 }
 
+/**
+ * Fehler zum Spielernamen erst zeigen, wenn er etwas bedeutet: nach Verlassen des Felds oder ab 3 Zeichen.
+ * Unerlaubte Zeichen sofort (die werden auch mit mehr Tippen nicht richtig).
+ */
+export function showNameError(name: string, touched: boolean) {
+  if (!name || isValidPlayerName(name)) return false;
+  return touched || name.length >= 3 || /[^A-Za-z0-9_]/.test(name);
+}
+
 function AddOfflineDialog() {
   const open = useAccountUi((s) => s.offline);
+  const then = useAccountUi((s) => s.then);
   const addAccount = useSettings((s) => s.addAccount);
+  const qc = useQueryClient();
   const [name, setName] = useState("");
-  const invalid = name.length > 0 && !isValidPlayerName(name);
+  const [touched, setTouched] = useState(false);
+  const invalid = showNameError(name, touched);
   const close = () => {
-    useAccountUi.setState({ offline: false });
+    useAccountUi.setState({ offline: false, then: null });
     setName("");
+    setTouched(false);
   };
 
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!isValidPlayerName(name)) return;
     addAccount(name);
-    toast.success(`Spielername „${name}“ ist aktiv`);
+    // Startet danach das Spiel, zeigt der Spielen-Knopf den Fortschritt; eine Meldung wäre doppelt.
+    if (!then) toast.success(`Spielername „${name}“ ist aktiv`);
     close();
+    then?.run();
+  }
+
+  /** Beim Spielen: statt Namen mit Microsoft anmelden; `then` bleibt stehen und startet nach der Anmeldung. */
+  function microsoft() {
+    useAccountUi.setState({ offline: false });
+    setName("");
+    void startMsLogin(qc);
   }
 
   return (
     <Dialog
       open={open}
       onOpenChange={(o) => !o && close()}
-      title="Spielername hinzufügen"
+      title={then ? "Wie heißt du im Spiel?" : "Spielername hinzufügen"}
+      sub={then ? <>Danach startet <b>{then.label}</b>.</> : undefined}
       width={480}
-      height={330}
+      height={then ? 402 : 278}
       footer={
         <>
           <DialogClose asChild><Btn>Abbrechen</Btn></DialogClose>
-          <Btn variant="p" full style={{ width: 140 }} type="submit" form="off-form" disabled={!isValidPlayerName(name)}>Hinzufügen</Btn>
+          <Btn variant="p" full style={{ width: then ? 196 : 140 }} type="submit" form="off-form" icon={then ? "play" : undefined} disabled={!isValidPlayerName(name)}>
+            {then ? "Speichern und spielen" : "Hinzufügen"}
+          </Btn>
         </>
       }
     >
       <form id="off-form" className="nf" onSubmit={submit}>
         <label htmlFor="off-name">Spielername</label>
-        <TextField id="off-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={16} placeholder="z. B. Steve_42" autoFocus aria-invalid={invalid} />
-        <span className={invalid ? "help text-bad" : "help"} aria-live="polite">
-          {invalid ? "Nur Buchstaben, Ziffern und Unterstrich, 3 bis 16 Zeichen." : "3 bis 16 Zeichen: Buchstaben, Ziffern und Unterstrich. Reicht für Einzelspieler, LAN und Server ohne Anmeldung."}
+        <TextField
+          id="off-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={() => setTouched(true)}
+          maxLength={16}
+          placeholder="z. B. Steve_42"
+          autoFocus
+          aria-invalid={invalid}
+          aria-describedby="off-help"
+        />
+        {/* Zwei Zeilen reserviert: der kürzere Fehler ersetzt den Hilfetext, ohne dass etwas nachrückt */}
+        <span id="off-help" className={invalid ? "help text-bad" : "help"} style={{ minHeight: 36 }} aria-live="polite">
+          {invalid ? <><Icon name="warn" small className="helpwarn" />Nur Buchstaben, Ziffern und Unterstrich, 3 bis 16 Zeichen.</> : "3 bis 16 Zeichen: Buchstaben, Ziffern und Unterstrich. Reicht für Einzelspieler, LAN und Server ohne Anmeldung."}
         </span>
       </form>
+      {then && (
+        <>
+          <div className="or">oder</div>
+          <Btn icon="user" full style={{ width: "100%" }} onClick={microsoft}>Mit Microsoft anmelden</Btn>
+          <p className="help" style={{ marginTop: 8 }}>Nötig für die meisten Server und Realms.</p>
+        </>
+      )}
     </Dialog>
   );
 }

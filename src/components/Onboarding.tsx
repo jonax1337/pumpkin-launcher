@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Btn, TextField } from "@/components/px";
-import { startMsLogin } from "@/components/PlayerNames";
+import { showNameError, startMsLogin } from "@/components/PlayerNames";
 import { useCreateInstance, usePlay, useVersions } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import type { ContentVersion } from "@/lib/modrinth";
@@ -16,10 +16,10 @@ const SODIUM = "AANobbMI";
 
 type Start = "vanilla" | "mods" | "modpack";
 
-const STARTS: { id: Start; glyph: GlyphName; pal: GlyphPalette; title: string; text: string }[] = [
-  { id: "vanilla", glyph: "cube", pal: "steel", title: "Minecraft pur", text: "Neueste Version, ohne Mods" },
-  { id: "mods", glyph: "bolt", pal: "gold", title: "Mit Mods", text: "Fabric mit Sodium für mehr Bilder pro Sekunde" },
-  { id: "modpack", glyph: "chest", pal: "violet", title: "Modpack aussuchen", text: "Fertige Sammlungen im Katalog ansehen" },
+const STARTS: { id: Start; glyph: GlyphName; pal: GlyphPalette; title: string; text: string; cta: string; next: string }[] = [
+  { id: "vanilla", glyph: "cube", pal: "steel", title: "Minecraft pur", text: "Neueste Version, ohne Mods", cta: "Anlegen und spielen", next: "Legt die Instanz an, installiert Minecraft und startet das Spiel." },
+  { id: "mods", glyph: "bolt", pal: "gold", title: "Mit Mods", text: "Fabric mit Sodium für mehr Bilder pro Sekunde", cta: "Anlegen und spielen", next: "Legt die Instanz an, installiert Fabric mit Sodium und startet das Spiel." },
+  { id: "modpack", glyph: "chest", pal: "violet", title: "Modpack aussuchen", text: "Fertige Sammlungen im Katalog ansehen", cta: "Modpacks ansehen", next: "Öffnet den Katalog: Dort wählst du ein Modpack und legst es an." },
 ];
 
 /** Erster Start ohne Instanz: zwei Schritte über der Szene. Name (oder Microsoft), dann womit es losgeht. */
@@ -30,6 +30,7 @@ export function Onboarding() {
   const [name, setName] = useState(active?.kind === "offline" ? active.name : "");
   const [start, setStart] = useState<Start>("mods");
   const [busy, setBusy] = useState(false);
+  const [touched, setTouched] = useState(false);
   const qc = useQueryClient();
   const versions = useVersions();
   const create = useCreateInstance();
@@ -37,8 +38,9 @@ export function Onboarding() {
   const navigate = useNavigate();
   const microsoft = active?.kind === "microsoft";
   const nameOk = isValidPlayerName(name);
-  const invalid = name.length > 0 && !nameOk;
+  const invalid = showNameError(name, touched);
   const releases = versions.data?.filter((v) => v.type === "release").map((v) => v.id) ?? [];
+  const choice = STARTS.find((s) => s.id === start)!;
 
   function next(e: FormEvent) {
     e.preventDefault();
@@ -85,7 +87,8 @@ export function Onboarding() {
     <div className="onb">
       <PixelScene bio="forest" seed={12} mode="hero" className="scene" />
       <div className="shade-onb" />
-      <div className="onb-card plate" role="dialog" aria-modal="true" aria-labelledby="onb-t">
+      {/* Kein Modal: die Fensterleiste bleibt bedienbar, deshalb eine benannte Region */}
+      <section className="onb-card plate" aria-labelledby="onb-t">
         {step === 1 ? (
           <form onSubmit={next} className="contents">
             {steps}
@@ -97,10 +100,10 @@ export function Onboarding() {
               ) : (
                 <div className="nf">
                   <label htmlFor="ob-name">Spielername</label>
-                  <TextField id="ob-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={16} placeholder="z. B. Steve_42" autoFocus aria-invalid={invalid} aria-describedby="ob-help" />
+                  <TextField id="ob-name" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => setTouched(true)} maxLength={16} placeholder="z. B. Steve_42" autoFocus aria-invalid={invalid} aria-describedby="ob-help" />
                   {/* Fehler ersetzt den Hilfetext an gleicher Stelle: keine leere Reservezeile, kein Springen */}
                   <span className={invalid ? "help text-bad" : "help"} id="ob-help" aria-live="polite">
-                    {invalid ? "Nur Buchstaben, Ziffern und Unterstrich, 3 bis 16 Zeichen." : "Reicht für Einzelspieler, LAN und Server ohne Anmeldung."}
+                    {invalid ? <><Icon name="warn" small className="helpwarn" />Nur Buchstaben, Ziffern und Unterstrich, 3 bis 16 Zeichen.</> : "Reicht für Einzelspieler, LAN und Server ohne Anmeldung."}
                   </span>
                 </div>
               )}
@@ -140,6 +143,7 @@ export function Onboarding() {
                   </button>
                 ))}
               </div>
+              <p className="help onb-next" aria-live="polite">{choice.next}</p>
             </div>
             <div className="of">
               {microsoft ? (
@@ -147,20 +151,22 @@ export function Onboarding() {
               ) : (
                 <Btn variant="g" onClick={() => setStep(1)} disabled={busy}>Zurück</Btn>
               )}
+              {/* Symbol links wie bei allen Knöpfen; beim Anlegen die Sanduhr */}
               <Btn
                 variant="p"
                 size="l"
+                icon={busy ? "hour" : start === "modpack" ? "grid" : "play"}
                 full
-                style={{ width: 200 }}
+                style={{ width: 232 }}
                 disabled={busy || (start !== "modpack" && !releases.length)}
                 onClick={() => void go()}
               >
-                {busy ? "Wird eingerichtet" : <>Los geht's<Icon name="play" /></>}
+                {busy ? "Wird angelegt" : choice.cta}
               </Btn>
             </div>
           </>
         )}
-      </div>
+      </section>
     </div>
   );
 }
