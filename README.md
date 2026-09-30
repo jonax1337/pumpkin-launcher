@@ -1,64 +1,103 @@
-# Pumpkin Launcher
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="branding/pumpkin-launcher/wordmark/light.svg">
+    <img src="branding/pumpkin-launcher/wordmark/dark.svg" alt="Pumpkin Launcher" width="420">
+  </picture>
+</p>
 
-**Jede Welt. Ein Klick.** · *Every world, one click.*
+<h3 align="center">Every world, one click.</h3>
 
-Pumpkin Launcher ist ein Launcher für Minecraft: Java Edition auf Basis von **Tauri 2** (Rust) und **React + TypeScript + Vite**. Instanzen, Mods, Modpacks und Presets (Sammlungen aus Mods, Einstellungen und JVM-Args, die auf Instanzen angewendet werden). Orientiert an NoRiskClient.
+<p align="center">
+  A desktop launcher for <strong>Minecraft: Java Edition</strong> — instances, mods, modpacks and presets,<br>
+  wrapped in a hand-crafted pixel-art UI. Built with Tauri&nbsp;2 (Rust) and React&nbsp;+&nbsp;TypeScript.
+</p>
 
-> Stand: Vanilla und Fabric installieren und starten, Offline-Spielername, Mods und Modpacks von Modrinth, Import lokaler `.mrpack`-Dateien.
+<p align="center">
+  <a href="https://github.com/jonax1337/pumpkin-launcher/actions/workflows/ci.yml"><img src="https://github.com/jonax1337/pumpkin-launcher/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-orange.svg" alt="License: Apache-2.0"></a>
+  <img src="https://img.shields.io/badge/Tauri-2-blue.svg" alt="Tauri 2">
+  <img src="https://img.shields.io/badge/platform-Windows-blueviolet.svg" alt="Platform: Windows">
+</p>
 
-## Stack
+<p align="center">
+  <img src="website/assets/launcher-home.png" alt="Pumpkin Launcher home screen with seasonal buddy mascot" width="820">
+</p>
 
-- **Backend:** Rust, Tauri 2, serde, thiserror, tracing
-- **Frontend:** React 19, TypeScript, Vite, Radix UI (Verhalten von Menü, Dialog, Auswahl, Tooltip), Tailwind CSS v4 (nur Layout-Hilfen), Zustand, TanStack Query, React Router, Sonner
-- **Design:** eigenes Pixel-Design „Pixelkino“ mit Szenen-Engine auf Canvas, Pixel-Icons und rahmenlosem Fenster – siehe [docs/design/PIXELKINO.md](docs/design/PIXELKINO.md)
+## Features
 
-## Voraussetzungen
+- **Instances** — create, configure and launch isolated game instances for Vanilla, **Fabric, Forge, NeoForge and Quilt**
+- **Mods & modpacks from [Modrinth](https://modrinth.com)** — browse, search and install directly in the launcher
+- **`.mrpack` import** — drag in local modpack files
+- **Presets** — reusable collections of mods, settings and JVM args that can be applied to any instance
+- **Microsoft login** via device code (see [status](#status) below), plus offline player profiles
+- **Quality-of-life** — crash detection with per-instance logs, resumable downloads, automatic RAM detection
+- **Seasonal branding** 🎃 — mascot, accent colors and window/taskbar icon switch automatically with the calendar (spring, summer, Halloween, winter)
+- **Pixelkino UI** — a custom pixel design system with a canvas scene engine, pixel icons and a frameless window. See [the design spec](docs/design/PIXELKINO.md)
 
-- Node 24, pnpm 11
-- Rust (stable) inkl. Cargo
-- Windows: WebView2 (auf Windows 11 vorinstalliert), MSVC Build Tools
+<p align="center">
+  <img src="website/assets/launcher-library.png" width="395" alt="Library view">
+  <img src="website/assets/launcher-mods.png" width="395" alt="Mod catalog view">
+</p>
 
-## Entwicklung
+## Status
+
+Pumpkin Launcher is in active, early development (v0.1.x). Core install/launch flows work; polish, Linux/macOS support and a public installer are still on the way. The Modrinth catalog shows live data.
+
+> **Microsoft login:** sign-in, Xbox Live and XSTS work end-to-end, but Microsoft must approve each launcher's Azure app before `minecraftservices.com` accepts it. Until Pumpkin Launcher's own client ID is approved, the final Minecraft step returns 403 and the launcher says so. Everything you need to register and approve your own client ID is documented in [`docs/ACCOUNT-SETUP.md`](docs/ACCOUNT-SETUP.md).
+
+## Getting started
+
+### Prerequisites
+
+- **Node 24** and **pnpm 11** (`corepack enable`)
+- **Rust** (stable toolchain, MSVC)
+- **Windows**: WebView2 Runtime (preinstalled on Windows 11) and MSVC Build Tools
+
+### Develop
 
 ```bash
 pnpm install
-pnpm tauri dev     # Desktop-App mit Hot Reload
-pnpm dev           # nur Frontend im Browser (http://localhost:1420, Mockdaten)
+pnpm tauri dev     # desktop app with hot reload
+pnpm dev           # frontend only in the browser (http://localhost:1420, mock data)
 ```
 
-## Build & Checks
+Log level via `RUST_LOG`, e.g. `RUST_LOG=debug pnpm tauri dev`.
+
+### Build & checks
 
 ```bash
-pnpm build                          # Frontend (tsc + vite build)
-cd src-tauri && cargo check         # Backend
-cd src-tauri && cargo test          # Backend-Tests (JsonStore)
-pnpm tauri build                    # Installer/Bundle
+pnpm build                        # frontend (sync branding icons, tsc, vite build)
+cd src-tauri && cargo check       # backend
+cd src-tauri && cargo test        # backend tests (JsonStore)
+pnpm tauri build                  # NSIS installer
+pnpm check:branding               # seasonal calendar & branding assets
 ```
 
-Log-Level über `RUST_LOG`, z. B. `RUST_LOG=debug pnpm tauri dev`.
-
-## Daten
-
-Instanzen und Presets liegen als JSON im App-Datenverzeichnis (Windows: `%APPDATA%\dev.laux.launcher\`). Die technische App-Kennung `dev.laux.launcher` bleibt trotz des Namens Pumpkin Launcher unverändert, damit vorhandene Instanzen und Einstellungen weiter gefunden werden.
-
-## Struktur
+## Project layout
 
 ```
-src/            React-Frontend
-src-tauri/      Rust-Backend (commands, models, services, state, error)
-docs/           Architektur, Design (Spezifikation + Mockup)
+src/            React frontend (pages, components, pixel design system)
+src-tauri/      Rust backend (commands, models, services, state, error)
+branding/       released brand assets per season + generators
+docs/           architecture, design spec, account setup
+website/        standalone marketing website (static, no tracker)
+scripts/        build helper scripts
 ```
 
-Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), Design: [docs/design/PIXELKINO.md](docs/design/PIXELKINO.md) mit Referenz-Mockup `docs/design/concepts/pixelkino.html`.
+Details: [Architecture](docs/ARCHITECTURE.md) · [Pixelkino design spec](docs/design/PIXELKINO.md) · [Branding](branding/pumpkin-launcher/README.md) · [Website](website/README.md)
 
-## Saisonales Branding
+Instances, presets and settings are stored as JSON in the app data directory (Windows: `%APPDATA%\dev.laux.launcher\`). The technical identifier stays `dev.laux.launcher` so existing data keeps being found.
 
-Buddy, Akzentfarben und Fenster-/Taskleisten-Icon wechseln automatisch nach dem lokalen Kalender: März–Mai Frühling, Juni–August Sommer, 1. Oktober–2. November Halloween und Dezember–Februar Winter; sonst Standard. Die App prüft auch Mitternacht und die Rückkehr aus dem Standby. Paket-Icons werden beim Dev-/Release-Build passend erzeugt.
+## Marketing website
 
-Die freigegebenen Quellen liegen unter `branding/pumpkin-launcher/`, die Integration unter `src/branding/`. Prüfung: `pnpm check:branding`. Details und Grenzen nativer Paket-Icons: [Branding](branding/pumpkin-launcher/README.md).
+The repo also contains the [website/](website/) folder — a standalone static site with the same Pixelkino look. `pnpm dev:website` serves it on port 1430, `pnpm build:website` produces the self-contained `website/dist/` folder. No trackers, no external requests.
 
-Unter **Einstellungen → Darstellung → Dein Pumpkin** lässt sich jede Variante dauerhaft auswählen. Die Wahl bleibt nach einem Neustart erhalten und gilt für Buddy, Farben und das Fenster-/Taskleisten-Icon. **Automatisch** schaltet wieder auf den Saisonkalender um.
+## Contributing
 
-## Marketing-Website
+Issues and pull requests are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup and conventions. For security issues, please refer to [SECURITY.md](.github/SECURITY.md) instead of opening a public issue.
 
-Die separate Website liegt in [`website/`](website/README.md). `pnpm dev:website` startet sie auf Port 1430, `pnpm build:website` erzeugt das unabhängig deploybare Verzeichnis `website/dist/`. Der Desktop-Launcher behält seinen eigenen Build.
+## License
+
+Released under the [Apache License 2.0](LICENSE).
+
+Pumpkin Launcher is not affiliated with, endorsed by, or associated with Mojang, Microsoft, or Modrinth. "Minecraft" is a trademark of Mojang Synergies AB.
