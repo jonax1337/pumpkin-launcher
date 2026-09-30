@@ -1,0 +1,225 @@
+{
+  "format": "animated-svg",
+  "viewBox": [
+    0,
+    0,
+    48,
+    48
+  ],
+  "origin": [
+    8,
+    8
+  ],
+  "sourceGrid": [
+    32,
+    32
+  ],
+  "integrated": false,
+  "seasons": {
+    "standard": {
+      "name": "Buddy",
+      "poster": "standard/poster.svg",
+      "sourceSha256": "cfb67d04425d62c5a7d784fbbc6c0a1e6935049e7b2fd0bac29963b78cabf90e",
+      "files": {
+        "idle": {
+          "svg": "standard/idle.svg",
+          "bytes": 18296
+        },
+        "hello": {
+          "svg": "standard/hello.svg",
+          "bytes": 25732
+        },
+        "loading": {
+          "svg": "standard/loading.svg",
+          "bytes": 21587
+        },
+        "success": {
+          "svg": "standard/success.svg",
+          "bytes": 29726
+        },
+        "oops": {
+          "svg": "standard/oops.svg",
+          "bytes": 24000
+        },
+        "sleep": {
+          "svg": "standard/sleep.svg",
+          "bytes": 17426
+        }
+      }
+    },
+    "spring": {
+      "name": "Bloom Buddy",
+      "poster": "spring/poster.svg",
+      "sourceSha256": "ed95e54dd882aff8f803cb04c6a7ea23de4390b22da050fc1fd24ea2d392f355",
+      "files": {
+        "idle": {
+          "svg": "spring/idle.svg",
+          "bytes": 19699
+        },
+        "hello": {
+          "svg": "spring/hello.svg",
+          "bytes": 27650
+        },
+        "loading": {
+          "svg": "spring/loading.svg",
+          "bytes": 23339
+        },
+        "success": {
+          "svg": "spring/success.svg",
+          "bytes": 32007
+        },
+        "oops": {
+          "svg": "spring/oops.svg",
+          "bytes": 26039
+        },
+        "sleep": {
+          "svg": "spring/sleep.svg",
+          "bytes": 19091
+        }
+      }
+    },
+    "summer": {
+      "name": "Sunny Buddy",
+      "poster": "summer/poster.svg",
+      "sourceSha256": "8a6b0672db846b8686ab008e2ed5f639d2c11ad4616fd418704b6993f9a1f81d",
+      "files": {
+        "idle": {
+          "svg": "summer/idle.svg",
+          "bytes": 22045
+        },
+        "hello": {
+          "svg": "summer/hello.svg",
+          "bytes": 30819
+        },
+        "loading": {
+          "svg": "summer/loading.svg",
+          "bytes": 26237
+        },
+        "success": {
+          "svg": "summer/success.svg",
+          "bytes": 35652
+        },
+        "oops": {
+          "svg": "summer/oops.svg",
+          "bytes": 29318
+        },
+        "sleep": {
+          "svg": "summer/sleep.svg",
+          "bytes": 21455
+        }
+      }
+    },
+    "halloween": {
+      "name": "Hex Buddy",
+      "poster": "halloween/poster.svg",
+      "sourceSha256": "ddc7e523c83a42f2da266d6e8744f52b123616420a81d5f7905937c05c7857ff",
+      "files": {
+        "idle": {
+          "svg": "halloween/idle.svg",
+          "bytes": 18397
+        },
+        "hello": {
+          "svg": "halloween/hello.svg",
+          "bytes": 25888
+        },
+        "loading": {
+          "svg": "halloween/loading.svg",
+          "bytes": 21857
+        },
+        "success": {
+          "svg": "halloween/success.svg",
+          "bytes": 29836
+        },
+        "oops": {
+          "svg": "halloween/oops.svg",
+          "bytes": 24322
+        },
+        "sleep": {
+          "svg": "halloween/sleep.svg",
+          "bytes": 17689
+        }
+      }
+    },
+    "winter": {
+      "name": "Frost Buddy",
+      "poster": "winter/poster.svg",
+      "sourceSha256": "ccff8ed292d82016db6f6fff07fe2a75b0d29b3bc6c50f250b2c56859285666f",
+      "files": {
+        "idle": {
+          "svg": "winter/idle.svg",
+          "bytes": 19481
+        },
+        "hello": {
+          "svg": "winter/hello.svg",
+          "bytes": 27262
+        },
+        "loading": {
+          "svg": "winter/loading.svg",
+          "bytes": 22940
+        },
+        "success": {
+          "svg": "winter/success.svg",
+          "bytes": 31408
+        },
+        "oops": {
+          "svg": "winter/oops.svg",
+          "bytes": 25579
+        },
+        "sleep": {
+          "svg": "winter/sleep.svg",
+          "bytes": 18727
+        }
+      }
+    }
+  },
+  "motions": [
+    {
+      "id": "idle",
+      "name": "Schweben & Blinzeln",
+      "loop": true,
+      "use": "Ruhige Präsenz, etwa auf Start- oder Leerseiten.",
+      "durationMs": 3200,
+      "frames": 7
+    },
+    {
+      "id": "hello",
+      "name": "Hallo!",
+      "loop": false,
+      "use": "Begrüßung, Onboarding oder ein einmaliger freundlicher Hinweis.",
+      "durationMs": 1500,
+      "frames": 10
+    },
+    {
+      "id": "loading",
+      "name": "Ich bin dran",
+      "loop": true,
+      "use": "Warten auf Daten oder Vorbereiten eines Starts.",
+      "durationMs": 2080,
+      "frames": 7
+    },
+    {
+      "id": "success",
+      "name": "Geschafft!",
+      "loop": false,
+      "use": "Erfolgreicher Download, abgeschlossene Einrichtung oder fertige Aufgabe.",
+      "durationMs": 1460,
+      "frames": 9
+    },
+    {
+      "id": "oops",
+      "name": "Ups …",
+      "loop": false,
+      "use": "Sanfte Reaktion bei einem fehlgeschlagenen Vorgang.",
+      "durationMs": 1180,
+      "frames": 8
+    },
+    {
+      "id": "sleep",
+      "name": "Kleine Pause",
+      "loop": true,
+      "use": "Inaktivität oder eine ruhige, optionale Wartesituation.",
+      "durationMs": 3120,
+      "frames": 6
+    }
+  ]
+}

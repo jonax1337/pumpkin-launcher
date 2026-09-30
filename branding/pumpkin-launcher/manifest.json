@@ -1,0 +1,360 @@
+{
+  "brand": "Pumpkin Launcher",
+  "integrated": false,
+  "sourceFormat": "SVG",
+  "calendarStatus": "proposed",
+  "variants": {
+    "standard": {
+      "name": "Buddy",
+      "start": null,
+      "end": null,
+      "svg": "assets/standard/mark.svg",
+      "lockup": "assets/standard/lockup.svg",
+      "windows": "assets/standard/icon.ico",
+      "macos": "assets/standard/icon.icns",
+      "runtimePng": "assets/standard/32x32.png"
+    },
+    "spring": {
+      "name": "Bloom Buddy",
+      "start": "03-01",
+      "end": "05-31",
+      "svg": "assets/spring/mark.svg",
+      "lockup": "assets/spring/lockup.svg",
+      "windows": "assets/spring/icon.ico",
+      "macos": "assets/spring/icon.icns",
+      "runtimePng": "assets/spring/32x32.png"
+    },
+    "summer": {
+      "name": "Sunny Buddy",
+      "start": "06-01",
+      "end": "08-31",
+      "svg": "assets/summer/mark.svg",
+      "lockup": "assets/summer/lockup.svg",
+      "windows": "assets/summer/icon.ico",
+      "macos": "assets/summer/icon.icns",
+      "runtimePng": "assets/summer/32x32.png"
+    },
+    "halloween": {
+      "name": "Hex Buddy",
+      "start": "10-01",
+      "end": "11-02",
+      "svg": "assets/halloween/mark.svg",
+      "lockup": "assets/halloween/lockup.svg",
+      "windows": "assets/halloween/icon.ico",
+      "macos": "assets/halloween/icon.icns",
+      "runtimePng": "assets/halloween/32x32.png"
+    },
+    "winter": {
+      "name": "Frost Buddy",
+      "start": "12-01",
+      "end": "02-29",
+      "svg": "assets/winter/mark.svg",
+      "lockup": "assets/winter/lockup.svg",
+      "windows": "assets/winter/icon.ico",
+      "macos": "assets/winter/icon.icns",
+      "runtimePng": "assets/winter/32x32.png"
+    }
+  },
+  "files": {
+    "assets/halloween/128x128.png": {
+      "bytes": 950,
+      "sha256": "82cac51e8a1d94de95be1db09208a917046b52f8cb9d8bc1ff10075cd249ef18"
+    },
+    "assets/halloween/128x128@2x.png": {
+      "bytes": 1494,
+      "sha256": "1e6781fbcc29aa4867f5c0911a49ab7a4510761d111b83974534cfbc37c8a02f"
+    },
+    "assets/halloween/32x32.png": {
+      "bytes": 553,
+      "sha256": "ebc202372d08e3240e6458977147bf8960a849112da4db7363bb3da3f3bbd007"
+    },
+    "assets/halloween/icon.icns": {
+      "bytes": 18357,
+      "sha256": "5f3e09476c7371c3a2bc02a40eedd21c9c9c52f288cf3d88ca789f80b466b829"
+    },
+    "assets/halloween/icon.ico": {
+      "bytes": 5209,
+      "sha256": "bd77398551481172e93eb001f2ee5b3db1fea0a4a1a7d688466412d08b8dd06e"
+    },
+    "assets/halloween/lockup.svg": {
+      "bytes": 27750,
+      "sha256": "49663109516744a5a1bc3b1ad1f0e053998e66382284ac277fe6a8beebab197d"
+    },
+    "assets/halloween/mark.svg": {
+      "bytes": 25830,
+      "sha256": "ddc7e523c83a42f2da266d6e8744f52b123616420a81d5f7905937c05c7857ff"
+    },
+    "assets/spring/128x128.png": {
+      "bytes": 1008,
+      "sha256": "4b80bf4061c988fbbdfb1dcfe490a34d5a8a0851f97f3c1445129fbd75782ce4"
+    },
+    "assets/spring/128x128@2x.png": {
+      "bytes": 1516,
+      "sha256": "cfcf0d651cece35ee87142ace5081b99c3b0730b8259431c6987e8f5c150ef72"
+    },
+    "assets/spring/32x32.png": {
+      "bytes": 591,
+      "sha256": "321e449e878fb0c1680e984a3307ec8a0846c3116a7747be49e7e7046b6f7244"
+    },
+    "assets/spring/icon.icns": {
+      "bytes": 18578,
+      "sha256": "2aeb9ee089122e8d531fdbfb50a9035c281cf0d52697bcd3bdf0f4443063edf2"
+    },
+    "assets/spring/icon.ico": {
+      "bytes": 5445,
+      "sha256": "e8dadd44d40ccd5cfdca3929c6af6041ad26f048b19e7971678ec709365de5da"
+    },
+    "assets/spring/lockup.svg": {
+      "bytes": 24714,
+      "sha256": "e55f122e4e28a8dcf5549127d874841bc594e8d0a47aad5bdfd056610f40b152"
+    },
+    "assets/spring/mark.svg": {
+      "bytes": 22794,
+      "sha256": "ed95e54dd882aff8f803cb04c6a7ea23de4390b22da050fc1fd24ea2d392f355"
+    },
+    "assets/standard/128x128.png": {
+      "bytes": 919,
+      "sha256": "126720f58527577b590ccb18435b99ad233eb0f89b92ab6fb61c0780d53e15f8"
+    },
+    "assets/standard/128x128@2x.png": {
+      "bytes": 1420,
+      "sha256": "193e961f9b88e964aad776bef543c9d25de4576afa681d367c1469a55730fa76"
+    },
+    "assets/standard/32x32.png": {
+      "bytes": 528,
+      "sha256": "50a0a3b0f8816d8261bfbb13e11146605414a994526cfb92febea975cf1218b3"
+    },
+    "assets/standard/icon.icns": {
+      "bytes": 17679,
+      "sha256": "99f7c45be8c6b5071628a606ac3e8153baa88083578dc2405a63134fe5690c9c"
+    },
+    "assets/standard/icon.ico": {
+      "bytes": 4993,
+      "sha256": "488fd048292368a9816093ebb83fd6ad82f2ecf4262e3db87a29213f66e63507"
+    },
+    "assets/standard/lockup.svg": {
+      "bytes": 23756,
+      "sha256": "9c8c0cfe298aedcf89f9d41119d9d3850b6f2748740c0fa705a9167ce4f816f2"
+    },
+    "assets/standard/mark.svg": {
+      "bytes": 21836,
+      "sha256": "cfb67d04425d62c5a7d784fbbc6c0a1e6935049e7b2fd0bac29963b78cabf90e"
+    },
+    "assets/summer/128x128.png": {
+      "bytes": 1126,
+      "sha256": "6dbf0a69a93b73a841f5b2295cbe23ad963990c738aa40b7ce34ba70ba24bd58"
+    },
+    "assets/summer/128x128@2x.png": {
+      "bytes": 1678,
+      "sha256": "634b925284b7cc6e15b9ea9a7d6ee99197f7e4613f22d3099b83a7c774973c4b"
+    },
+    "assets/summer/32x32.png": {
+      "bytes": 667,
+      "sha256": "614d01a8df94fc557e6779669b43f46e92b73a523c34a1c86fb0c6967c222c1c"
+    },
+    "assets/summer/icon.icns": {
+      "bytes": 20042,
+      "sha256": "550c47a30ea3d711c8c7cfce836c0fdfcf87e0da0ab587debf4cc87110027bbc"
+    },
+    "assets/summer/icon.ico": {
+      "bytes": 6076,
+      "sha256": "7b9ff7be7ded8f3f956adbd69331af8cf06f5831d867df3931764af648e27541"
+    },
+    "assets/summer/lockup.svg": {
+      "bytes": 28330,
+      "sha256": "9c7a66ce07273080276fddd2e0cad8556a23bb785098db0dd46482b075fc6a53"
+    },
+    "assets/summer/mark.svg": {
+      "bytes": 26410,
+      "sha256": "8a6b0672db846b8686ab008e2ed5f639d2c11ad4616fd418704b6993f9a1f81d"
+    },
+    "assets/winter/128x128.png": {
+      "bytes": 1063,
+      "sha256": "2539709bffae9b7801a0699c433683d9b4495ac8b371d580b335afd07d2f1ebe"
+    },
+    "assets/winter/128x128@2x.png": {
+      "bytes": 1602,
+      "sha256": "61f9d704cd9ba266f40326733cc8bb46e4abe9469e2c07ddd20c6adfc2dca907"
+    },
+    "assets/winter/32x32.png": {
+      "bytes": 629,
+      "sha256": "b1957ba065cdd16bf776128b606452a9cd6dcb3be7aeeddd995a526a190d0cbf"
+    },
+    "assets/winter/icon.icns": {
+      "bytes": 19243,
+      "sha256": "6c1dcc3082e833a2be126428b9cb35d03fbee7f691d65340cb2c169e5761e92f"
+    },
+    "assets/winter/icon.ico": {
+      "bytes": 5703,
+      "sha256": "7e0e8ca4f9381d2e35d7a7952d68f7cdd751f506de3a4cf8d9b85484f96542bb"
+    },
+    "assets/winter/lockup.svg": {
+      "bytes": 29968,
+      "sha256": "b870c849ce52db631b3ac0d08d5756996fefd72c419fa768c04903062d39a0bb"
+    },
+    "assets/winter/mark.svg": {
+      "bytes": 28048,
+      "sha256": "ccff8ed292d82016db6f6fff07fe2a75b0d29b3bc6c50f250b2c56859285666f"
+    },
+    "web/favicon.ico": {
+      "bytes": 1509,
+      "sha256": "fedbded84f9ddfdad08e878ad66a9d3fdbfd5bd8049acd8c8ea8136a4a1db088"
+    },
+    "web/favicon.svg": {
+      "bytes": 21836,
+      "sha256": "cfb67d04425d62c5a7d784fbbc6c0a1e6935049e7b2fd0bac29963b78cabf90e"
+    },
+    "wordmark/dark.svg": {
+      "bytes": 1999,
+      "sha256": "0d74d80b44a61139d0b16208af519b27d26641f4aa8c28e23c64c0bf5add8024"
+    },
+    "wordmark/light.svg": {
+      "bytes": 1999,
+      "sha256": "5974df22acb21bbcd778a80e721980cc92da37c0d072fc8b701bfa6a28988c25"
+    },
+    "motion/halloween/hello.svg": {
+      "bytes": 25888,
+      "sha256": "b1a63d7aae53083f211b256a867e4360cd681371802285c0d8717f22cbb1eb82"
+    },
+    "motion/halloween/idle.svg": {
+      "bytes": 18397,
+      "sha256": "df4199125c11b782b0d8a3dc2553a8602f54a0637b63982f1bb910d80d644e66"
+    },
+    "motion/halloween/loading.svg": {
+      "bytes": 21857,
+      "sha256": "d151cc5dc057b64719e726c3769f7b977adc9ca7e6458be5326be032b850304f"
+    },
+    "motion/halloween/oops.svg": {
+      "bytes": 24322,
+      "sha256": "08ca47947e029c1c9f7f17b45e93b25bc1ba828bca15ac2b7c9fa726dbceb4ec"
+    },
+    "motion/halloween/poster.svg": {
+      "bytes": 2784,
+      "sha256": "4cce8e79812acbdf184f7e9babbf51cabf03511d286a35b16fb87afb1415db89"
+    },
+    "motion/halloween/sleep.svg": {
+      "bytes": 17689,
+      "sha256": "c12353eb63fc20d6b2147724af56e29a602d62223c631b9f9c7c3f805582ff52"
+    },
+    "motion/halloween/success.svg": {
+      "bytes": 29836,
+      "sha256": "20bfb6e69038ab62a4e4c944ca6f67cbe12de3c5f5ef1bc3fbe9523fe8a4d069"
+    },
+    "motion/spring/hello.svg": {
+      "bytes": 27650,
+      "sha256": "1b7a725544ff2d6cbad0ee321d494cde34527eb69ac8b8e2c88431d38fe88431"
+    },
+    "motion/spring/idle.svg": {
+      "bytes": 19699,
+      "sha256": "362baea1ad2aba0e8a1b087567ba41c7e09dc18f6fdd4d7212b476c8ee4c31fc"
+    },
+    "motion/spring/loading.svg": {
+      "bytes": 23339,
+      "sha256": "97b7739633b04da33727284ddc15703443ea725e69d085be3d3d85d13b7aff78"
+    },
+    "motion/spring/oops.svg": {
+      "bytes": 26039,
+      "sha256": "aa8984e40c7c6cd091b0395a598e88b833d3b80b4e66c2f4248d51519dab28e9"
+    },
+    "motion/spring/poster.svg": {
+      "bytes": 3004,
+      "sha256": "0d3ff71e953a2440200e9ee51e0637cbbef19b376650051ee0a40e70bd204d22"
+    },
+    "motion/spring/sleep.svg": {
+      "bytes": 19091,
+      "sha256": "d638f8055b3b98a2ced15c0512274a39f3fd9e313bd1dcd1db976c3d0cd7a18d"
+    },
+    "motion/spring/success.svg": {
+      "bytes": 32007,
+      "sha256": "9774cc3d0e0276bf55500f4e228782acadbf095f7b1426fee8c1da4316f348e0"
+    },
+    "motion/standard/hello.svg": {
+      "bytes": 25732,
+      "sha256": "6641475ea4d46db78a43108bcb8c44f8d9f6a33074b84416aff030922432a7ac"
+    },
+    "motion/standard/idle.svg": {
+      "bytes": 18296,
+      "sha256": "ccb5ad336d1ebe6126845d829bc93ca47365dc73fc723135c0a9c3dbb81f93d6"
+    },
+    "motion/standard/loading.svg": {
+      "bytes": 21587,
+      "sha256": "097bf71bdf353b2184512eeed76c45da7fe24eb746cdde6258a5cfd55281be5f"
+    },
+    "motion/standard/oops.svg": {
+      "bytes": 24000,
+      "sha256": "4336e1d9edc5bf9f0400bf11af8e4f0d242c940a8aff2a64dfc19e47a4555949"
+    },
+    "motion/standard/poster.svg": {
+      "bytes": 2772,
+      "sha256": "156ee80b76bbc7968978fc5c974d2b1071d2bd93cd1fe9e6f1b2ca85728a2eab"
+    },
+    "motion/standard/sleep.svg": {
+      "bytes": 17426,
+      "sha256": "d8049ac7fa9961a888aac6f90ee81bfcfcb50c212589caa285d363be788e524a"
+    },
+    "motion/standard/success.svg": {
+      "bytes": 29726,
+      "sha256": "b5492969404e713f77dcbea9a5b6e01b7eb6d0b54567f1dae0e890b3f0b1bd04"
+    },
+    "motion/summer/hello.svg": {
+      "bytes": 30819,
+      "sha256": "86fdc3ed6a99396b1069a713bbcac24cbfa4305017527af32eab28f62cd2388f"
+    },
+    "motion/summer/idle.svg": {
+      "bytes": 22045,
+      "sha256": "99952d0d38adc6601b8ef10dee468895ecf1dfc93443237238df29ccdace1fe8"
+    },
+    "motion/summer/loading.svg": {
+      "bytes": 26237,
+      "sha256": "eb042b04ed129bdd8c3502bfaf144e235632e433673955984c7141d567613182"
+    },
+    "motion/summer/oops.svg": {
+      "bytes": 29318,
+      "sha256": "044293cd54715c52795690fa38decfa2b9909184049accebb9029bd1ad51004d"
+    },
+    "motion/summer/poster.svg": {
+      "bytes": 3397,
+      "sha256": "c21dd4bbcfe020e697a7aac7e488920b73d16dce5bd63859746396aa7fbd1067"
+    },
+    "motion/summer/sleep.svg": {
+      "bytes": 21455,
+      "sha256": "fea1c429de29a2711de1f13b935706998bd1c0b705fbde35a9a350f39cb24060"
+    },
+    "motion/summer/success.svg": {
+      "bytes": 35652,
+      "sha256": "83cdc2345497b0e1dcc1237f45aa28d6e0b7592f5f67ace767305cd53249de71"
+    },
+    "motion/winter/hello.svg": {
+      "bytes": 27262,
+      "sha256": "b3f543d9afa0d1cfb615a601bf1f2db914f89e19b096aafdec99a1f08f56f119"
+    },
+    "motion/winter/idle.svg": {
+      "bytes": 19481,
+      "sha256": "7954bbfcb03fcf65950c3d369980bcb9803745dbd45d3d49763511e8e065b9fd"
+    },
+    "motion/winter/loading.svg": {
+      "bytes": 22940,
+      "sha256": "18692bdb69033f1bbc666a37d5295c389fb4c0eca37d1c912fda1cddb513c459"
+    },
+    "motion/winter/oops.svg": {
+      "bytes": 25579,
+      "sha256": "ffd3459bc368666e7b905290a3843d933ceaa4772391c6c5888e66a40f4643ee"
+    },
+    "motion/winter/poster.svg": {
+      "bytes": 2975,
+      "sha256": "9748fc7165aab063c4b67b74faa6b6fb271c6f9208972ea20fde85dbda3a8c1d"
+    },
+    "motion/winter/sleep.svg": {
+      "bytes": 18727,
+      "sha256": "bdd50ee0f065adf9b861863ddecbc61339440ab4c258d086be33b7fb7a630b1b"
+    },
+    "motion/winter/success.svg": {
+      "bytes": 31408,
+      "sha256": "0d940be535717f0a5ce0f6ebbbadbcdc19085ff0247ca1f86be7abf07b827413"
+    }
+  },
+  "motion": {
+    "manifest": "motion/manifest.json",
+    "preview": "motion/index.html"
+  }
+}
