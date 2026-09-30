@@ -9,7 +9,7 @@ import { IRIS_PROJECT_ID } from "@/components/ContentBrowser";
 import { useContentInstall, useContentState, useProjects, withTarget } from "@/hooks/useContent";
 import { instanceKeys, useUpdateMods } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
-import { projectOf, removeWithDependencies, undoRemove, type ModUpdate } from "@/lib/modrinth";
+import { ownerKey, projectOf, removeWithDependencies, undoRemove, type ModUpdate } from "@/lib/modrinth";
 import type { Instance, Mod, ModKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -92,7 +92,7 @@ export function ContentTab({ instance, updateFor, onAdd, warnsOf, showUpdates = 
   const title = (m: Mod) => project(m)?.title ?? m.name;
 
   // Direkt Hinzugefügtes zuerst, jede Abhängigkeit eingerückt unter ihrem ersten vorhandenen Nutzer.
-  const byProject = new Map(instance.mods.flatMap((m) => { const p = projectOf(m); return p ? [[p, m] as const] : []; }));
+  const byProject = new Map(instance.mods.flatMap((m) => { const p = ownerKey(m); return p ? [[p, m] as const] : []; }));
   const ownersOf = (m: Mod) => m.requiredBy.flatMap((p) => byProject.get(p) ?? []);
   const rows: Row[] = [];
   const placed = new Set<Mod>();
@@ -249,7 +249,8 @@ export function ContentTab({ instance, updateFor, onAdd, warnsOf, showUpdates = 
     return [
       ...(up ? [{ id: "up", text: `Auf ${up.versionNumber} aktualisieren`, icon: "up" as const, disabled: !!active, onSelect: () => runUpdates([m.id]) }] : []),
       ...(pid ? [{ id: "web", text: "Auf Modrinth ansehen", icon: "ext" as const, onSelect: () => void api.openExternal(`https://modrinth.com/project/${pid}`) }] : []),
-      ...(up || pid ? ["-" as const] : []),
+      ...(m.source.type === "curseforge" ? [{ id: "web", text: "Auf CurseForge ansehen", icon: "ext" as const, onSelect: () => void api.openExternal(`https://www.curseforge.com/projects/${(m.source as { projectId: number }).projectId}`) }] : []),
+      ...(up || pid || m.source.type === "curseforge" ? ["-" as const] : []),
       { id: "rm", text: "Entfernen", icon: "trash", bad: true, onSelect: () => remove([m.id]) },
     ];
   };

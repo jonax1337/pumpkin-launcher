@@ -40,7 +40,8 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `services/fabric.rs` | Fabric-Meta (`meta.fabricmc.net/v2`): Loader-Versionen, Launcher-Profil (`inheritsFrom` Vanilla), Merge mit der Vanilla-Versions-JSON |
 | `services/mods.rs` | Globaler Mod-Cache (`cache/mods/<sha1>.jar`) und Abgleich nach `mods/` der Instanz (Hardlink, Fallback Kopie; bestehende fremde Dateien werden nicht ersetzt) |
 | `services/modrinth.rs` | Modrinth-v2-Katalog, Versions-/Dependency-Auflösung und hashgeprüfte Downloads |
-| `services/content.rs` | Sichere Modinstallation und `.mrpack`-Import in neue Instanzen |
+| `services/providers/` | Weitere Kataloge in Modrinth-Formen: `ftb.rs` (öffentliche FTB-API, installierbar, Downloads nur von festen Hosts mit Prüfsumme), `technic.rs` (Suche, Details und Installation: Pack-Zip des Autors über `net.rs` = nur HTTPS und öffentliche Adressen, Loader aus `bin/version.json`), `curseforge.rs` (CurseForge über den Cloudflare Worker in `proxy/`, der den API-Schlüssel hält: Suche, Mods mit Abhängigkeiten, Modpacks per `manifest.json`; der Launcher selbst kennt keinen Schlüssel, die Dateien kommen direkt vom CDN; nur über die Webseite erlaubte Dateien werden nicht umgangen, sondern vom Nutzer geladen und aus dem Downloads-Ordner übernommen). Pack-Zips werden von der Platte entpackt (`content::Blob::Zip`), nicht im Speicher gehalten |
+| `services/content.rs` | Sichere Modinstallation und `.mrpack`-Import in neue Instanzen; `plan_pack`/`import_plan` für Packs von Anbietern |
 | `content_commands.rs` | Modrinth-IPC und korrelierte `content-progress`-Events |
 | `services/launch.rs` | Classpath, JVM-/Game-Args mit `${…}`-Ersetzung, Prozessstart, Log-Streaming |
 | `services/gamelog.rs` | log4j-XML auf stdout (Mojangs Logging-Config) → lesbare Zeilen |
@@ -93,6 +94,10 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `modrinth_search` | `query`, `projectType`, `minecraftVersion?`, `loader?`, `offset`, `index?` (relevance, downloads, follows, newest, updated) | Modrinth-Suchergebnis (`snake_case`) |
 | `modrinth_project` | `projectId` | Modrinth-Projekt (`snake_case`) |
 | `modrinth_versions` | `projectId`, `minecraftVersion?`, `loader?` | Modrinth-Versionen (`snake_case`) |
+| `provider_search` / `provider_project` / `provider_versions` | `source` (`ftb`, `technic`, `curseforge`) plus die Felder der Modrinth-Gegenstücke | Gleiche Formen wie Modrinth (`snake_case`); CurseForge-IDs sind die Projektnummern |
+| `provider_install_pack` | `source` (`ftb`, `technic`, `curseforge`), `projectId`, `versionId`, `name`, `operationId` | Neue `Instance` mit `modpack: { type: "provider", source, projectId, versionId }` (CurseForge: `type: "curseforge"`); bleibt bei CurseForge etwas nur über die Webseite ladbar, folgt das Event `content-blocked` |
+| `provider_install_mod` | `source` (`curseforge`), `instanceId`, `projectId`, `versionId`, `operationId` | Aktualisierte `Instance`; Mods tragen `source: { type: "curseforge", projectId, fileId }` und `id: "cf-<projectId>"` |
+| `curseforge_adopt_download` | `instanceId`, `projectId`, `fileId` | `Instance` oder `null`, wenn die Datei noch nicht im Downloads-Ordner liegt |
 | `modrinth_install_mod` | `instanceId`, `versionId`, `operationId` | Aktualisierte `Instance` |
 | `modrinth_install_pack` | `versionId`, `name`, `operationId` | Neue `Instance` |
 | `modrinth_import_pack` | absoluter `path`, `name`, `operationId` | Neue `Instance` |

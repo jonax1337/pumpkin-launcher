@@ -201,7 +201,7 @@ export function SettingsPage() {
                   </div>
                 </div>
               </div>
-              <Hint className="mt-3.5">Inhalte und Modpacks kommen von Modrinth. Minecraft ist eine Marke von Mojang.</Hint>
+              <Hint className="mt-3.5">Inhalte und Modpacks kommen von Modrinth, CurseForge, FTB und Technic. Minecraft ist eine Marke von Mojang.</Hint>
             </>
           )}
         </FormSection>

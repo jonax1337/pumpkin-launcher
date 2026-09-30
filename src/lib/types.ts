@@ -29,7 +29,8 @@ export type ModKind = "mod" | "resourcepack" | "shader";
 /** Herkunft einer aus einem Modpack installierten Instanz. */
 export type ModpackOrigin =
   | { type: "modrinth"; projectId: string; versionId: string }
-  | { type: "curseforge"; projectId: number; fileId: number };
+  | { type: "curseforge"; projectId: number; fileId: number }
+  | { type: "provider"; source: string; projectId: string; versionId: string };
 
 export interface Instance {
   id: string;

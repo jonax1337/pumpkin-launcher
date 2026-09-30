@@ -13,6 +13,7 @@ pub mod mods;
 pub mod modrinth;
 pub mod content;
 pub mod mojang;
+pub mod providers;
 pub mod rules;
 pub mod store;
 pub mod templates;

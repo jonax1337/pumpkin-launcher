@@ -18,7 +18,7 @@ import {
   type VersionEntry,
 } from "@/lib/types";
 
-import type { CatalogType, ContentSearch, ContentProject, ContentVersion, ContentProgress, ModUpdate, SearchIndex } from "@/lib/modrinth";
+import type { CatalogType, ContentBlocked, ContentSearch, ContentProject, ContentVersion, ContentProgress, ModUpdate, SearchIndex, Source } from "@/lib/modrinth";
 
 // Mock nur im Dev-Server: im Release-Build ist das konstant true, Vite wirft Mock und mock.ts heraus.
 const tauri = !import.meta.env.DEV || isTauri();
@@ -291,6 +291,22 @@ export const api = {
     tauri ? call("modrinth_install_pack", { versionId, name, operationId }) : mockPack!(versionId, name, operationId),
   modrinthImportPack: (path: string, name: string, operationId: string): Promise<Instance> =>
     contentCall("modrinth_import_pack", { path, name, operationId }),
+  /** Anbieter ohne API-Key (FTB, Technic, CurseForge); gleiche Formen wie bei Modrinth. Nur in der App. */
+  providerSearch: (source: Source, query: string, projectType: CatalogType, minecraftVersion: string | null, loader: string | null, offset = 0, index: SearchIndex | null = null): Promise<ContentSearch> =>
+    contentCall("provider_search", { source, query, projectType, minecraftVersion, loader, offset, index }),
+  providerProject: (source: Source, projectId: string): Promise<ContentProject> => contentCall("provider_project", { source, projectId }),
+  /** `minecraftVersion`/`loader` filtern nur bei CurseForge mit Schlüssel; die anderen Anbieter liefern alle Versionen. */
+  providerVersions: (source: Source, projectId: string, minecraftVersion: string | null = null, loader: string | null = null): Promise<ContentVersion[]> =>
+    contentCall("provider_versions", { source, projectId, minecraftVersion, loader }),
+  providerInstallPack: (source: Source, projectId: string, versionId: string, name: string, operationId: string): Promise<Instance> =>
+    contentCall("provider_install_pack", { source, projectId, versionId, name, operationId }),
+  /** Mod, Shader oder Ressourcenpaket von CurseForge in eine Instanz, samt Abhängigkeiten. */
+  providerInstallMod: (source: Source, instanceId: string, projectId: string, versionId: string, operationId: string): Promise<Instance> =>
+    contentCall("provider_install_mod", { source, instanceId, projectId, versionId, operationId }),
+  /** Holt eine von Hand geladene CurseForge-Datei aus dem Downloads-Ordner; null = noch nicht da. */
+  curseforgeAdoptDownload: (instanceId: string, projectId: number, fileId: number): Promise<Instance | null> =>
+    contentCall("curseforge_adopt_download", { instanceId, projectId, fileId }),
+  onContentBlocked: (cb: (p: ContentBlocked) => void) => on("content-blocked", cb),
   /** Links aus Beschreibungen im Standardbrowser öffnen, nie im Launcher-Fenster. */
   openExternal: (url: string): Promise<void> =>
     tauri ? openUrl(url) : Promise.resolve(void window.open(url, "_blank", "noopener,noreferrer")),

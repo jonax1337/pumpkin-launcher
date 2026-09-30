@@ -1,16 +1,20 @@
 //! Transaktionaler Content-Import. Ziele werden exklusiv neu angelegt, niemals ersetzt.
 use super::modrinth::{self, invalid, File, Version};
+use super::providers::RemoteFile;
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     models::{Instance, Mod, ModKind, ModLoader, ModSource, NewInstance},
     state::AppState,
 };
+use futures::StreamExt;
 use serde::Deserialize;
 use std::{
+    borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
     fs,
     io::{Cursor, Read, Write},
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 
 pub fn safe_path(value: &str) -> AppResult<PathBuf> {
@@ -60,7 +64,7 @@ pub(crate) fn regular_parents(path: &Path) -> AppResult<()> {
     }
     Ok(())
 }
-fn write_new(path: &Path, data: &[u8]) -> AppResult<()> {
+pub(crate) fn write_new(path: &Path, data: &[u8]) -> AppResult<()> {
     regular_parents(path)?;
     let parent = path
         .parent()
@@ -77,7 +81,7 @@ fn write_new(path: &Path, data: &[u8]) -> AppResult<()> {
     }
     Ok(())
 }
-fn rollback(paths: &[PathBuf], original: crate::error::AppError) -> crate::error::AppError {
+pub(crate) fn rollback(paths: &[PathBuf], original: crate::error::AppError) -> crate::error::AppError {
     let mut errors = Vec::new();
     for path in paths.iter().rev() {
         if let Err(e) = fs::remove_file(path) {
@@ -215,7 +219,7 @@ pub async fn install_mod(
     }
 }
 
-fn budget(mut sizes: impl Iterator<Item = u64>) -> AppResult<()> {
+pub(crate) fn budget(mut sizes: impl Iterator<Item = u64>) -> AppResult<()> {
     if sizes
         .try_fold(0u64, |a, b| a.checked_add(b))
         .is_none_or(|n| n > modrinth::FILE_LIMIT)
@@ -499,12 +503,99 @@ struct PackFile {
     file_size: u64,
     env: Option<BTreeMap<String, String>>,
 }
-struct Pack {
-    instance: Instance,
-    downloads: Vec<(PathBuf, File)>,
-    overrides: Vec<(PathBuf, Vec<u8>)>,
+/// Woher eine Pack-Datei kommt: Modrinth-CDN (SHA-1 und SHA-512) oder ein Anbieter ohne Schlüssel.
+pub(crate) enum Fetch {
+    Modrinth(File),
+    Remote(RemoteFile),
+}
+impl Fetch {
+    async fn download(&self, client: &reqwest::Client) -> AppResult<Vec<u8>> {
+        match self {
+            Self::Modrinth(file) => modrinth::download(client, file).await,
+            Self::Remote(file) => file.download(client).await,
+        }
+    }
+}
+/// Inhalt einer Datei im Plan: im Speicher (`.mrpack`) oder bei Bedarf aus einem geöffneten Zip auf der
+/// Platte (Technic), damit große Packs nicht ganz im Arbeitsspeicher liegen müssen.
+pub(crate) enum Blob {
+    Mem(Vec<u8>),
+    Zip { archive: Arc<Mutex<zip::ZipArchive<fs::File>>>, index: usize },
+}
+impl Blob {
+    pub(crate) fn bytes(&self) -> AppResult<Cow<'_, [u8]>> {
+        match self {
+            Self::Mem(data) => Ok(Cow::Borrowed(data)),
+            Self::Zip { archive, index } => {
+                let mut zip = archive.lock().map_err(|_| invalid("Zip nicht lesbar"))?;
+                let mut entry = zip.by_index(*index)?;
+                let expected = entry.size();
+                let mut data = Vec::new();
+                entry.by_ref().take(modrinth::FILE_LIMIT + 1).read_to_end(&mut data)?;
+                if data.len() as u64 != expected || expected > modrinth::FILE_LIMIT {
+                    return Err(invalid("ZIP-Dateigröße ungültig"));
+                }
+                Ok(Cow::Owned(data))
+            }
+        }
+    }
+}
+/// Temporäre Datei, die beim Verwerfen verschwindet (auch bei Abbruch des Vorgangs).
+pub(crate) struct TempFile(pub PathBuf);
+impl Drop for TempFile {
+    fn drop(&mut self) {
+        if let Err(e) = fs::remove_file(&self.0) {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                tracing::warn!(%e, path = %self.0.display(), "Temporäre Datei nicht entfernt");
+            }
+        }
+    }
+}
+pub(crate) struct Pack {
+    pub(crate) instance: Instance,
+    pub(crate) downloads: Vec<(PathBuf, Fetch)>,
+    pub(crate) overrides: Vec<(PathBuf, Blob)>,
     /// Aus `pumpkin.json` eigener Vorlagen: Dateiname -> `required_by`.
-    required_by: HashMap<String, Vec<String>>,
+    pub(crate) required_by: HashMap<String, Vec<String>>,
+    /// Dateiname -> (CurseForge-Projekt, Datei), für Mods, die das Pack von CurseForge bezieht.
+    pub(crate) origins: HashMap<String, (u32, u32)>,
+    /// Zuletzt: wird nach `overrides` verworfen, damit das Zip vor dem Löschen geschlossen ist.
+    pub(crate) temp: Option<TempFile>,
+}
+const PLAN_FILES: usize = 6000;
+/// Summe aller Mod-Dateien eines Anbieter-Packs; fette Packs (All the Mods & Co.) haben mehrere GiB.
+const PLAN_LIMIT: u64 = 32 * 1024 * 1024 * 1024;
+/// Installationsplan eines Anbieters: nur Dateien zum Laden, relativ zum Spielordner.
+/// Gleiche Regeln wie beim `.mrpack`: sichere Pfade, keine Doppelten, Größenlimits.
+pub(crate) fn plan_pack(instance: Instance, files: Vec<(String, RemoteFile)>) -> AppResult<Pack> {
+    if files.len() > PLAN_FILES {
+        return Err(invalid("Zu viele Pack-Dateien"));
+    }
+    let mut paths = HashSet::new();
+    let mut downloads = Vec::new();
+    let mut expanded = 0u64;
+    for (name, file) in files {
+        let path = safe_path(&name)?;
+        expanded = expanded
+            .checked_add(file.size)
+            .ok_or_else(|| invalid("Pack-Größenüberlauf"))?;
+        if expanded > PLAN_LIMIT || file.size > modrinth::FILE_LIMIT {
+            return Err(invalid("Pack-Dateilimit überschritten"));
+        }
+        if !paths.insert(name.to_lowercase()) {
+            return Err(invalid("Doppelte Pack-Zieldatei"));
+        }
+        downloads.push((path, Fetch::Remote(file)));
+    }
+    // A file must never also be another file's parent (case insensitive on Windows).
+    for path in &paths {
+        for (at, _) in path.match_indices('/') {
+            if paths.contains(&path[..at]) {
+                return Err(invalid("Datei/Verzeichnis-Konflikt"));
+            }
+        }
+    }
+    Ok(Pack { instance, downloads, overrides: Vec::new(), required_by: HashMap::new(), origins: HashMap::new(), temp: None })
 }
 /// Eigene Zusatzdatei in Vorlagen-`.mrpack`s; andere Launcher ignorieren sie.
 pub const PUMPKIN_FILE: &str = "pumpkin.json";
@@ -676,13 +767,13 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
         }
         downloads.push((
             path,
-            File {
+            Fetch::Modrinth(File {
                 filename: f.path,
                 hashes: f.hashes,
                 url,
                 size: f.file_size,
                 primary: true,
-            },
+            }),
         ));
     }
     // Client overrides win over generic overrides only inside this fresh staging plan.
@@ -691,7 +782,7 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
     for (path, data, _) in overrides {
         merged.insert(path.to_string_lossy().to_lowercase(), (path, data));
     }
-    let overrides: Vec<_> = merged.into_values().collect();
+    let overrides: Vec<(PathBuf, Blob)> = merged.into_values().map(|(path, data)| (path, Blob::Mem(data))).collect();
     for (path, _) in &overrides {
         if !paths.insert(path.to_string_lossy().to_lowercase()) {
             return Err(invalid("Overrides kollidieren mit Pack-Dateien"));
@@ -710,6 +801,8 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
         downloads,
         overrides,
         required_by: meta.required_by,
+        origins: HashMap::new(),
+        temp: None,
     })
 }
 pub async fn import(
@@ -720,7 +813,15 @@ pub async fn import(
     progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
 ) -> AppResult<Instance> {
     progress("validate", 0, 1);
-    let mut pack = unpack(data, name)?;
+    import_plan(state, unpack(data, name)?, origin, progress).await
+}
+/// Legt die Instanz aus einem fertigen Plan an: laden, prüfen, ablegen; bei Fehler oder Abbruch restlos zurück.
+pub(crate) async fn import_plan(
+    state: &AppState,
+    mut pack: Pack,
+    origin: Option<crate::models::ModpackOrigin>,
+    progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
+) -> AppResult<Instance> {
     pack.instance.modpack = origin;
     let root = state.dirs.instance(&pack.instance.id);
     regular_parents(&root)?;
@@ -730,6 +831,7 @@ pub async fn import(
     let mut guard = super::download::RemoveOnDrop(Some(root.clone()));
     let result = async {
         let client = modrinth::client()?;
+        let downloader = modrinth::download_client()?;
         let total = (pack.downloads.len() + pack.overrides.len()) as u64;
         let mut done = 0;
         // (kind, file name, sha1) of every staged content file; bytes go to the cache right away.
@@ -741,14 +843,21 @@ pub async fn import(
             }
             Ok(())
         };
-        for (path, file) in pack.downloads {
+        // Bis zu sechs Dateien gleichzeitig (FTB-Packs haben über tausend), abgelegt in Plan-Reihenfolge.
+        let mut fetched = futures::stream::iter(pack.downloads.into_iter().map(|(path, file)| {
+            let client = &downloader;
+            async move { Ok::<_, AppError>((path, file.download(client).await?)) }
+        }))
+        .buffered(6);
+        while let Some(item) = fetched.next().await {
+            let (path, data) = item?;
             progress("download", done, total);
-            let data = modrinth::download(&client, &file).await?;
             stage(&path, &data)?;
             done += 1;
         }
-        for (path, data) in pack.overrides {
-            stage(&path, &data)?;
+        drop(fetched);
+        for (path, blob) in std::mem::take(&mut pack.overrides) {
+            stage(&path, &blob.bytes()?)?;
             done += 1;
             progress("extract", done, total);
         }
@@ -758,7 +867,18 @@ pub async fn import(
             Default::default()
         });
         for (kind, file_name, sha1) in content {
-            let m = entry(kind, file_name, sha1, &known, &titles, &pack.instance.mods);
+            let mut m = entry(kind, file_name, sha1, &known, &titles, &pack.instance.mods);
+            // Von CurseForge bezogen und nicht bei Modrinth erkannt: Herkunft merken statt „lokal“.
+            if m.source == ModSource::Local {
+                if let Some(&(project_id, file_id)) = pack.origins.get(&m.file_name) {
+                    let id = format!("cf-{project_id}");
+                    // Zwei Dateien desselben Projekts behalten verschiedene IDs.
+                    if !pack.instance.mods.iter().any(|x| x.id == id) {
+                        m.id = id;
+                    }
+                    m.source = ModSource::CurseForge { project_id, file_id };
+                }
+            }
             pack.instance.mods.push(m);
         }
         if pack.required_by.is_empty() {
@@ -1276,7 +1396,8 @@ mod tests {
             "test",
         )
         .unwrap();
-        assert_eq!(merged.overrides, vec![(PathBuf::from("a"), b"y".to_vec())]);
+        let got: Vec<_> = merged.overrides.iter().map(|(p, b)| (p.clone(), b.bytes().unwrap().into_owned())).collect();
+        assert_eq!(got, vec![(PathBuf::from("a"), b"y".to_vec())]);
     }
     #[tokio::test]
     async fn fresh_import_and_rollback() {

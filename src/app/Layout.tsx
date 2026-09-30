@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useOutlet } from "react-router";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AccountMenu } from "@/components/PlayerNames";
 import { InstanceDialogs } from "@/components/instance";
+import { ManualDownloads } from "@/components/ManualDownloads";
 import { useCancelInstall, useGameEvents, useInstances } from "@/hooks/useInstances";
 import { useContentState } from "@/hooks/useContent";
 import { api } from "@/lib/api";
@@ -438,6 +439,7 @@ export function Layout() {
         <ViewScrollbar view={view} />
       </div>
       <InstanceDialogs />
+      <ManualDownloads />
     </ViewContext.Provider>
   );
 }

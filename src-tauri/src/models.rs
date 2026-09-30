@@ -118,6 +118,8 @@ pub struct Mod {
 pub enum ModpackOrigin {
     Modrinth { project_id: String, version_id: String },
     CurseForge { project_id: u32, file_id: u32 },
+    /// Pack eines Anbieters ohne Schlüssel (`source` z. B. "ftb"), siehe `services::providers`.
+    Provider { source: String, project_id: String, version_id: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

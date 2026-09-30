@@ -46,6 +46,9 @@ pub struct Project {
     pub project_type: String,
     pub client_side: String,
     pub server_side: String,
+    /// Projektseite bei Anbietern ohne eigene Installation (Technic, CurseForge); Modrinth sendet sie nicht.
+    #[serde(default)]
+    pub web_url: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Version {
@@ -89,6 +92,16 @@ pub fn client() -> AppResult<reqwest::Client> {
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(120))
+        .build()?)
+}
+/// Client für große Dateien (Modpack-Zips, Mod-JARs): kein Gesamt-Timeout, nur Verbindungsaufbau und Stillstand
+/// (60 s ohne ein einziges Byte). Ein 500-MB-Pack auf langsamer Leitung darf Minuten brauchen, ein hängender Server nicht.
+pub fn download_client() -> AppResult<reqwest::Client> {
+    Ok(reqwest::Client::builder()
+        .user_agent(concat!("pumpkin-launcher/", env!("CARGO_PKG_VERSION")))
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(Duration::from_secs(15))
+        .read_timeout(Duration::from_secs(60))
         .build()?)
 }
 pub fn identifier(s: &str) -> AppResult<()> {

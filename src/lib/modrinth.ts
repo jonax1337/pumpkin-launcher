@@ -12,7 +12,35 @@ export interface ContentSearch { hits: ContentHit[]; total_hits: number; offset:
 export interface ContentProject {
   id: string; slug: string; title: string; description: string; body: string;
   icon_url: string | null; project_type: string; client_side: string; server_side: string;
+  /** Projektseite bei Anbietern ohne Installation (Technic, CurseForge). */
+  web_url?: string | null;
 }
+
+/** Katalog-Quellen: Modrinth plus die Anbieter ohne API-Key (Backend: `services::providers`). */
+export type Source = "modrinth" | "ftb" | "technic" | "curseforge";
+export interface SourceInfo {
+  label: string;
+  types: CatalogType[];
+  /** Pumpkin Launcher kann Packs dieser Quelle selbst installieren. */
+  install: boolean;
+  /** Sortierung und Loader-Filter stehen zur Verfügung. */
+  filters: boolean;
+  /** Minecraft-Version lässt sich filtern. */
+  versions: boolean;
+}
+export const SOURCES: Record<Source, SourceInfo> = {
+  modrinth: { label: "Modrinth", types: ["modpack", "mod", "shader", "resourcepack"], install: true, filters: true, versions: true },
+  ftb: { label: "FTB", types: ["modpack"], install: true, filters: true, versions: true },
+  technic: { label: "Technic", types: ["modpack"], install: true, filters: false, versions: true },
+  curseforge: { label: "CurseForge", types: ["modpack", "mod", "shader", "resourcepack"], install: true, filters: true, versions: true },
+};
+/** Eine Datei, die CurseForge nur über die Webseite ausliefert (Event `content-blocked`). */
+export interface BlockedFile { projectId: number; fileId: number; name: string; fileName: string; url: string }
+export interface ContentBlocked { operationId: string; instanceId: string; items: BlockedFile[] }
+/** Schlüssel eines Projekts in `Mod.requiredBy` und „Schon drin“: Modrinth-ID oder `cf-<Nummer>`. */
+export const projectKey = (source: Source, id: string) => (source === "curseforge" ? `cf-${id}` : id);
+/** Schlüssel für „Schon in Instanz“: Modrinth-IDs bleiben, Anbieter bekommen ein Präfix. */
+export const installedKey = (source: Source, id: string) => (source === "modrinth" ? id : `${source}:${id}`);
 export interface ContentVersion {
   id: string; project_id: string; name: string; version_number: string;
   game_versions: string[]; loaders: string[]; version_type: "release" | "beta" | "alpha";
@@ -34,6 +62,9 @@ export const formatDownloads = (n: number) => new Intl.NumberFormat("de", { nota
 
 export const projectOf = (m: Mod): string | null => (m.source.type === "modrinth" ? m.source.projectId : null);
 
+/** Wie `projectOf`, aber auch für CurseForge (`cf-<Nummer>`): so verweisen `requiredBy` und Besitzer aufeinander. */
+export const ownerKey = (m: Mod): string | null => projectOf(m) ?? (m.source.type === "curseforge" ? `cf-${m.source.projectId}` : null);
+
 /** Automatische Versionswahl: neueste stabile Version, sonst die neueste überhaupt (Liste kommt neueste zuerst). */
 export function pickVersion(versions: ContentVersion[]): ContentVersion | null {
   return versions.find((v) => v.version_type === "release") ?? versions[0] ?? null;
@@ -46,7 +77,7 @@ export function pickVersion(versions: ContentVersion[]): ContentVersion | null {
 export function removeWithDependencies(mods: Mod[], id: string): { mods: Mod[]; removed: Mod[] } {
   const target = mods.find((m) => m.id === id);
   if (!target) return { mods, removed: [] };
-  const project = projectOf(target);
+  const project = ownerKey(target);
   const removed = [target];
   const kept: Mod[] = [];
   for (const m of mods) {
@@ -79,7 +110,8 @@ const PACK_LOADERS = ["fabric", "quilt", "forge", "neoforge", "minecraft", "vani
 /** Modrinth-Loader, deren Mods eine Instanz ausführt: Quilt lädt auch Fabric-Mods (wie `ModLoader::modrinth_loaders` im Backend). */
 export const modLoadersFor = (loader: string): string[] => (loader === "quilt" ? ["quilt", "fabric"] : loader === "vanilla" ? [] : [loader]);
 
-export const isPackVersionSupported = (v: ContentVersion) => v.loaders.some((l) => PACK_LOADERS.includes(l));
+/** Ohne Loader-Angabe (Technic) erkennt das Backend den Loader erst beim Laden des Packs. */
+export const isPackVersionSupported = (v: ContentVersion) => v.loaders.length === 0 || v.loaders.some((l) => PACK_LOADERS.includes(l));
 
 /** Pack-Version für eine neue Instanz: neueste stabile mit unterstütztem Loader, sonst ein kurzer Grund. */
 export function pickPackVersion(versions: ContentVersion[]): { version: ContentVersion | null; reason: string | null } {
