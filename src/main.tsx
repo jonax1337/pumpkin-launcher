@@ -30,6 +30,21 @@ const queryClient = new QueryClient({
   },
 });
 
+// Nur Entwicklung: Layoutshift-Summe (PIXELKINO.md §4) in window.__cls
+if (import.meta.env.DEV && typeof PerformanceObserver !== "undefined") {
+  const w = window as Window & { __cls?: number };
+  w.__cls = 0;
+  try {
+    new PerformanceObserver((list) => {
+      for (const e of list.getEntries() as (PerformanceEntry & { value: number; hadRecentInput: boolean })[]) {
+        if (!e.hadRecentInput) w.__cls = (w.__cls ?? 0) + e.value;
+      }
+    }).observe({ type: "layout-shift", buffered: true });
+  } catch {
+    // layout-shift nicht unterstützt
+  }
+}
+
 const router = createBrowserRouter([
   {
     path: "/",
@@ -44,6 +59,8 @@ const router = createBrowserRouter([
       { path: "mods", element: <Navigate to="/discover?tab=mods" replace /> },
       { path: "modpacks", element: <Navigate to="/discover" replace /> },
       { path: "account", element: <Navigate to="/settings" replace /> },
+      // Nur Entwicklung: Vorschau des Pixel-Kits (fällt im Build weg)
+      ...(import.meta.env.DEV ? [{ path: "_kit", lazy: async () => ({ Component: (await import("@/ui/KitPage")).KitPage }) }] : []),
       { path: "*", element: <NotFoundPage /> },
     ],
   },

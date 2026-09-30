@@ -4,11 +4,12 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 import { toast } from "sonner";
 import { create } from "zustand";
 import { StopDialog } from "@/components/game";
-import { Btn, Dialog, DialogClose, ErrorBox, Menu, Progress, Skel, TextField, type MenuEntry } from "@/components/px";
 import { api } from "@/lib/api";
 import type { MsLoginStart } from "@/lib/types";
-import { cn } from "@/lib/utils";
-import { Face, Icon, IconSvg } from "@/pixel/icons";
+import {
+  Actions, Avatar, BarButton, Button, Dialog, DialogActions, Empty, ErrorBox, Field, Hint, Icon, List, ListRow, Menu, Progress, RowTitle, Skel,
+  TextField, type MenuEntry,
+} from "@/ui";
 import { accountName, isValidPlayerName, useSettings, type ActiveAccount } from "@/store/settings";
 
 // ---------- Microsoft-Anmeldung (ein Dialog für Kontomenü, Einstellungen und Onboarding) ----------
@@ -73,55 +74,52 @@ function MsLoginDialog() {
       width={520}
       height={420}
       footer={
-        <>
-          {state.step === "code" && (
-            <Btn icon="ext" onClick={() => void api.openExternal(state.info.verificationUri)}>Seite öffnen</Btn>
-          )}
-          {state.step === "done" ? (
-            <Btn variant="p" full style={{ width: 124 }} onClick={closeMsLogin}>Fertig</Btn>
-          ) : (
-            <DialogClose asChild><Btn full style={{ width: 124 }}>{state.step === "error" ? "Schließen" : "Abbrechen"}</Btn></DialogClose>
-          )}
-        </>
+        state.step === "done" ? (
+          <DialogActions confirm={{ label: "Fertig", width: 124, onClick: closeMsLogin }} />
+        ) : (
+          <>
+            {state.step === "code" && (
+              <Button icon="ext" onClick={() => void api.openExternal(state.info.verificationUri)}>Seite öffnen</Button>
+            )}
+            <DialogActions cancel={{ label: state.step === "error" ? "Schließen" : "Abbrechen", width: 124 }} />
+          </>
+        )
       }
     >
       {state.step === "starting" && (
         <div className="flex flex-col gap-3 pt-1" aria-busy>
-          <Skel style={{ height: 20, width: "80%" }} />
-          <Skel style={{ height: 64, width: 280 }} />
-          <Skel style={{ height: 16, width: "60%" }} />
+          <Skel h={20} w="80%" />
+          <Skel h={64} w={280} />
+          <Skel h={16} w="60%" />
         </div>
       )}
       {state.step === "code" && (
         <>
           <p>Öffne <b>{state.info.verificationUri.replace(/^https?:\/\/(www\.)?/, "")}</b> in deinem Browser und gib diesen Code ein:</p>
+          {/* Code-Anzeige (Sonderform: große Pixelschrift in eingelassener Platte) */}
           <div className="codebox">
             <span className="code select-all" aria-label={`Code ${state.info.userCode.split("").join(" ")}`}>{state.info.userCode}</span>
-            <Btn icon="copy" onClick={() => copy(state.info.userCode)}>Kopieren</Btn>
+            <Button icon="copy" onClick={() => copy(state.info.userCode)}>Kopieren</Button>
           </div>
-          <div className="wait" aria-live="polite">
-            <Progress />
-            <span>Warte auf deine Anmeldung. Der Code gilt {Math.max(1, Math.round(state.info.expiresIn / 60))} Minuten.</span>
+          <div className="flex h-8 items-center gap-3" aria-live="polite">
+            <Progress width={120} label="Warte auf Anmeldung" />
+            <Hint>Warte auf deine Anmeldung. Der Code gilt {Math.max(1, Math.round(state.info.expiresIn / 60))} Minuten.</Hint>
           </div>
         </>
       )}
       {state.step === "done" && (
-        <div className="row mt-2" style={{ gap: 14 }}>
-          <span className="avatar" style={{ width: 48, height: 48 }}><Face name={state.name} size="calc(var(--avs) * 1.5)" /></span>
+        <div className="mt-2 flex items-center gap-3.5">
+          <Avatar name={state.name} />
           <div>
-            <p className="ok-msg">Angemeldet als {state.name}</p>
+            <Hint tone="ok">Angemeldet als {state.name}</Hint>
             <p>Das Konto ist jetzt aktiv. Du kannst jederzeit oben rechts wechseln.</p>
           </div>
         </div>
       )}
       {state.step === "error" && (
         <>
-          <p className="err-msg">Anmeldung hat nicht geklappt.</p>
-          <p>{state.message}</p>
-          <p className="mt-2">Mit einem Spielernamen kannst du auch ohne Anmeldung spielen.</p>
-          <div className="row mt-3.5">
-            <Btn icon="redo" onClick={() => void startMsLogin(qc)}>Erneut versuchen</Btn>
-          </div>
+          <ErrorBox title="Anmeldung hat nicht geklappt" error={state.message} onRetry={() => void startMsLogin(qc)} />
+          <p className="mt-3">Mit einem Spielernamen kannst du auch ohne Anmeldung spielen.</p>
         </>
       )}
     </Dialog>
@@ -197,7 +195,7 @@ export function AccountMenu() {
       id: keyOf(a),
       text: accountName(a),
       sub: kindLabel(a),
-      lead: <span className="avatar"><Face name={accountName(a)} /></span>,
+      lead: <Avatar name={accountName(a)} />,
       checked: sameAccount(active, a),
       onSelect: () => select(a),
     })),
@@ -215,17 +213,19 @@ export function AccountMenu() {
       <Menu
         open={open}
         onOpenChange={(o) => useAccountUi.setState({ menu: o })}
-        className="me"
+        width={320}
         items={items}
         trigger={
-          <button type="button" className="barbtn mebtn fx" aria-label={name ? `Konto: ${name}. Wechseln` : "Spielername fehlt. Konto wählen"}>
+          <BarButton
+            aria-label={name ? `Konto: ${name}. Wechseln` : "Spielername fehlt. Konto wählen"}
+            label={name || "Spielername fehlt"}
+            tone={name ? undefined : "warn"}
+            iconEnd="chevd"
+            compactBelow={900}
+          >
             {/* Ohne Namen: Warnsymbol statt Kopf (Form, nicht nur gelbe Schrift; bleibt auch schmal sichtbar, wenn der Text wegfällt) */}
-            <span className="avatar">
-              {name ? <Face name={name} /> : <span className="pi" aria-hidden style={{ color: "var(--warn)" }}><IconSvg name="warn" className="g7" /></span>}
-            </span>
-            <span className={cn("who", !name && "text-warn")}>{name || "Spielername fehlt"}</span>
-            <Icon name="chevd" small />
-          </button>
+            {name ? <Avatar name={name} /> : <Icon name="warn" tone="warn" />}
+          </BarButton>
         }
       />
       <MsLoginDialog />
@@ -285,37 +285,37 @@ function AddOfflineDialog() {
       width={480}
       height={then ? 402 : 278}
       footer={
-        <>
-          <DialogClose asChild><Btn>Abbrechen</Btn></DialogClose>
-          <Btn variant="p" full style={{ width: then ? 196 : 140 }} type="submit" form="off-form" icon={then ? "play" : undefined} disabled={!isValidPlayerName(name)}>
-            {then ? "Speichern und spielen" : "Hinzufügen"}
-          </Btn>
-        </>
+        <DialogActions
+          cancel="Abbrechen"
+          confirm={{ label: then ? "Speichern und spielen" : "Hinzufügen", width: then ? 196 : 140, form: "off-form", icon: then ? "play" : undefined, disabled: !isValidPlayerName(name) }}
+        />
       }
     >
-      <form id="off-form" className="nf" onSubmit={submit}>
-        <label htmlFor="off-name">Spielername</label>
-        <TextField
-          id="off-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={() => setTouched(true)}
-          maxLength={16}
-          placeholder="z. B. Steve_42"
-          autoFocus
-          aria-invalid={invalid}
-          aria-describedby="off-help"
-        />
+      <form id="off-form" onSubmit={submit}>
         {/* Zwei Zeilen reserviert: der kürzere Fehler ersetzt den Hilfetext, ohne dass etwas nachrückt */}
-        <span id="off-help" className={invalid ? "help text-bad" : "help"} style={{ minHeight: 36 }} aria-live="polite">
-          {invalid ? <><Icon name="warn" small className="helpwarn" />Nur Buchstaben, Ziffern und Unterstrich, 3 bis 16 Zeichen.</> : "3 bis 16 Zeichen: Buchstaben, Ziffern und Unterstrich. Reicht für Einzelspieler, LAN und Server ohne Anmeldung."}
-        </span>
+        <Field
+          label="Spielername"
+          htmlFor="off-name"
+          reserveLines={2}
+          help="3 bis 16 Zeichen: Buchstaben, Ziffern und Unterstrich. Reicht für Einzelspieler, LAN und Server ohne Anmeldung."
+          error={invalid && "Nur Buchstaben, Ziffern und Unterstrich, 3 bis 16 Zeichen."}
+        >
+          <TextField
+            id="off-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => setTouched(true)}
+            maxLength={16}
+            placeholder="z. B. Steve_42"
+            autoFocus
+          />
+        </Field>
       </form>
       {then && (
         <>
           <div className="or">oder</div>
-          <Btn icon="user" full style={{ width: "100%" }} onClick={microsoft}>Mit Microsoft anmelden</Btn>
-          <p className="help" style={{ marginTop: 8 }}>Nötig für die meisten Server und Realms.</p>
+          <Button icon="user" width="full" onClick={microsoft}>Mit Microsoft anmelden</Button>
+          <Hint className="mt-2">Nötig für die meisten Server und Realms.</Hint>
         </>
       )}
     </Dialog>
@@ -333,37 +333,34 @@ export function AccountsSection() {
 
   return (
     <>
-      <div className="acc-list" aria-label="Konten">
-        {ms.isPending && accounts.length === 0 ? (
-          <Skel style={{ height: 60 }} />
-        ) : accounts.length ? (
-          accounts.map((a) => {
+      {ms.isPending && accounts.length === 0 ? (
+        <Skel h={60} />
+      ) : accounts.length ? (
+        <List variant="accounts" aria-label="Konten">
+          {accounts.map((a) => {
             const on = sameAccount(active, a);
             const name = accountName(a);
             return (
-              <div key={keyOf(a)} className={cn("acct", on && "on")}>
-                <span className="avatar"><Face name={name} /></span>
-                <div className="an">
-                  <b className="ell block">{name}</b>
-                  <span>{kindLabel(a)}{on ? " · aktiv" : ""}</span>
-                </div>
-                {!on && <Btn size="s" onClick={() => select(a)}>Wechseln</Btn>}
-                <Btn variant="g" size="s" disabled={a.kind === "microsoft" && pending} onClick={() => remove(a)}>
+              <ListRow key={keyOf(a)} selected={on}>
+                <Avatar name={name} />
+                <RowTitle title={name} sub={`${kindLabel(a)}${on ? " · aktiv" : ""}`} />
+                {!on && <Button size="s" onClick={() => select(a)}>Wechseln</Button>}
+                <Button variant="ghost" size="s" disabled={a.kind === "microsoft" && pending} onClick={() => remove(a)}>
                   {a.kind === "microsoft" ? "Abmelden" : "Entfernen"}
-                </Btn>
-              </div>
+                </Button>
+              </ListRow>
             );
-          })
-        ) : (
-          <p className="muted py-3">Noch kein Konto. Melde dich an oder leg einen Spielernamen an.</p>
-        )}
-      </div>
+          })}
+        </List>
+      ) : (
+        <Empty size="pane" ill="user" title="Noch kein Konto">Melde dich an oder leg einen Spielernamen an.</Empty>
+      )}
       {ms.error && <ErrorBox className="mt-3" title="Microsoft-Konten konnten nicht geladen werden" error={ms.error} onRetry={() => void ms.refetch()} />}
-      <div className="row flex-wrap" style={{ marginTop: 12 }}>
-        <Btn icon="user" onClick={() => void startMsLogin(qc)}>Mit Microsoft anmelden</Btn>
-        <Btn icon="plus" onClick={openAddOffline}>Spielername hinzufügen</Btn>
-      </div>
-      <p className="help" style={{ marginTop: 10 }}>Mit einem Spielernamen spielst du allein, im LAN und auf Servern ohne Anmeldung. Für die meisten Server brauchst du ein Microsoft-Konto.</p>
+      <Actions wrap className="mt-3">
+        <Button icon="user" onClick={() => void startMsLogin(qc)}>Mit Microsoft anmelden</Button>
+        <Button icon="plus" onClick={openAddOffline}>Spielername hinzufügen</Button>
+      </Actions>
+      <Hint className="mt-2.5 max-w-[70ch]">Mit einem Spielernamen spielst du allein, im LAN und auf Servern ohne Anmeldung. Für die meisten Server brauchst du ein Microsoft-Konto.</Hint>
     </>
   );
 }

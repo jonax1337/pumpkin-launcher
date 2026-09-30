@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { Tooltip as T } from "radix-ui";
 import { useNavigate } from "react-router";
-import { BtnLink, Btn, ContextMenu, ErrorBox, Skel } from "@/components/px";
 import { PlayButton, PlayStatus, StatusChip, usePhase } from "@/components/game";
 import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
 import { loaderLine } from "@/components/common";
@@ -11,11 +9,10 @@ import { useModUpdates } from "@/hooks/useContent";
 import { pickRecentInstance, useInstances } from "@/hooks/useInstances";
 import { relativeTime } from "@/lib/format";
 import type { Instance } from "@/lib/types";
-import { cn } from "@/lib/utils";
-import { Icon } from "@/pixel/icons";
 import { PixelScene } from "@/pixel/PixelScene";
 import { motionOff } from "@/pixel/scene";
 import { useLook } from "@/store/look";
+import { AddCard, Button, ButtonLink, Count, ErrorBox, IconButton, Meta, SceneCard, SectionHeader, Skel } from "@/ui";
 
 /** Titel und Metazeile der ausgewählten Instanz (Infos als Text; nur „Updates“ ist ein Knopf). */
 function HeroInfo({ instance }: { instance: Instance }) {
@@ -32,15 +29,19 @@ function HeroInfo({ instance }: { instance: Instance }) {
         <h1 title={instance.name}>{instance.name}</h1>
       </div>
       <div className="hmeta">
-        <div className="meta">
-          <span>{loaderLine(instance)}</span>
-          <span><b className="n">{n}</b> {n === 1 ? "Inhalt" : "Inhalte"}</span>
-          {!playing && <span>{instance.lastPlayedAt != null ? `Zuletzt gespielt ${relativeTime(instance.lastPlayedAt)}` : "Noch nie gespielt"}</span>}
-        </div>
+        <Meta
+          onScene
+          className="overflow-hidden"
+          items={[
+            loaderLine(instance),
+            <><Count value={n} /> {n === 1 ? "Inhalt" : "Inhalte"}</>,
+            !playing && (instance.lastPlayedAt != null ? `Zuletzt gespielt ${relativeTime(instance.lastPlayedAt)}` : "Noch nie gespielt"),
+          ]}
+        />
         {u > 0 && (
-          <BtnLink to={`/instances/${instance.id}?tab=content`} size="s" icon="up">
-            {u} {u === 1 ? "Update" : "Updates"}
-          </BtnLink>
+          <ButtonLink to={`/instances/${instance.id}?tab=content`} size="s" icon="up" count={u} onScene>
+            {u === 1 ? "Update" : "Updates"}
+          </ButtonLink>
         )}
       </div>
     </div>
@@ -52,53 +53,34 @@ function HeroInfo({ instance }: { instance: Instance }) {
  * Status-Chip oben links, beim Überfahren oder Fokus ein kleiner Spielen-Knopf oben rechts (wie Poster). Rechtsklick: Instanz-Menü.
  */
 function MiniCard({ instance, current, onPick, hintId }: { instance: Instance; current: boolean; onPick: () => void; hintId: string }) {
-  const { bio, seed, acc } = useLook(instance.id);
+  const look = useLook(instance.id);
   const items = useInstanceMenu(instance);
   const navigate = useNavigate();
-  const title = useRef<HTMLElement>(null);
-  const [tip, setTip] = useState<"" | "name" | "hint">("");
-  // Voller Name nur, wenn er gerade wirklich abgeschnitten ist; der Bedienhinweis immer
-  const onTip = (o: boolean) => setTip(!o ? "" : title.current && title.current.scrollWidth > title.current.clientWidth ? "name" : "hint");
   const open = () => navigate(`/instances/${instance.id}`);
   return (
-    <li>
-      <ContextMenu items={items}>
-        <div className="mini" data-id={instance.id} data-cur={current || undefined} style={{ "--acc": acc } as CSSProperties}>
-          <T.Root open={!!tip} onOpenChange={onTip}>
-            <T.Trigger asChild>
-              <button
-                type="button"
-                className="hit fx"
-                aria-current={current || undefined}
-                aria-describedby={hintId}
-                onClick={onPick}
-                onDoubleClick={open}
-                onKeyDown={(e) => {
-                  // Enter öffnet, Leertaste wählt (Standard-Klick)
-                  if (e.key !== "Enter" || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-                  e.preventDefault();
-                  open();
-                }}
-              >
-                <PixelScene bio={bio} seed={seed} />
-                <span className="frame" />
-                <span className="cap">
-                  <b ref={title}>{instance.name}</b>
-                  <span>{loaderLine(instance)} · {relativeTime(instance.lastPlayedAt)}</span>
-                </span>
-                <span className="st"><StatusChip instance={instance} small loudOnly /></span>
-              </button>
-            </T.Trigger>
-            <T.Portal>
-              <T.Content className="rtip" side="top" sideOffset={8} collisionPadding={8}>
-                {tip === "name" && <span className="tn block">{instance.name}</span>}
-                <span className={cn("block", tip === "name" && "td")}>Klick zeigt sie oben, Doppelklick oder Enter öffnet sie.</span>
-              </T.Content>
-            </T.Portal>
-          </T.Root>
-          <div className="mplay"><PlayButton instance={instance} size="i" /></div>
-        </div>
-      </ContextMenu>
+    <li data-id={instance.id}>
+      <SceneCard
+        variant="mini"
+        look={look}
+        title={instance.name}
+        sub={`${loaderLine(instance)} · ${relativeTime(instance.lastPlayedAt)}`}
+        current={current}
+        status={<StatusChip instance={instance} small loudOnly />}
+        primary={<PlayButton instance={instance} size="i" />}
+        menu={items}
+        tip="Klick zeigt sie oben, Doppelklick oder Enter öffnet sie."
+        hit={{
+          onClick: onPick,
+          onDoubleClick: open,
+          onKeyDown: (e) => {
+            // Enter öffnet, Leertaste wählt (Standard-Klick)
+            if (e.key !== "Enter" || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+            e.preventDefault();
+            open();
+          },
+          describedBy: hintId,
+        }}
+      />
     </li>
   );
 }
@@ -154,16 +136,14 @@ function Rail({ instances, current, onPick }: { instances: Instance[]; current: 
         ))}
         <li>
           <NewInstanceDialog>
-            <button type="button" className="mini newtile fx">
-              <span className="in"><Icon name="plus" />Neue Instanz</span>
-            </button>
+            <AddCard label="Neue Instanz" />
           </NewInstanceDialog>
         </li>
       </ul>
       <span id="rail-hint" className="sr">Auswählen zeigt die Instanz oben. Enter oder Doppelklick öffnet sie.</span>
-      {/* Nur für die Maus: per Tastatur scrollt die Leiste mit dem Fokus mit */}
-      <Btn iconOnly icon="back" className="rarr l" tabIndex={-1} aria-hidden onClick={() => page(-1)} />
-      <Btn iconOnly icon="chev" className="rarr r" tabIndex={-1} aria-hidden onClick={() => page(1)} />
+      {/* Nur für die Maus: per Tastatur scrollt die Leiste mit dem Fokus mit. „absolute“ schlägt die Kit-Position (.rarr legt die Lage fest). */}
+      <IconButton onScene icon="back" label="Zurückblättern" tip={false} className="rarr l absolute" tabIndex={-1} aria-hidden onClick={() => page(-1)} />
+      <IconButton onScene icon="chev" label="Weiterblättern" tip={false} className="rarr r absolute" tabIndex={-1} aria-hidden onClick={() => page(1)} />
     </div>
   );
 }
@@ -173,15 +153,15 @@ function HomeSkeleton() {
     <section className="home" aria-busy aria-label="Wird geladen">
       <div className="hero">
         <div className="hero-k">
-          <div className="titlebox"><Skel style={{ height: 72, width: "min(520px, 80%)" }} /></div>
-          <div className="hmeta"><Skel style={{ height: 16, width: 320 }} /></div>
+          <div className="titlebox"><Skel h={72} w="min(520px, 80%)" /></div>
+          <div className="hmeta"><Skel h={16} w={320} /></div>
         </div>
-        <div className="acts"><Skel style={{ height: 56, width: 272 }} /><Skel style={{ height: 40, width: 150 }} /></div>
+        <div className="acts"><Skel h={56} w={272} /><Skel h={40} w={150} /></div>
         <div className="pstat" />
       </div>
       <div className="cont">
-        <div className="cont-h" />
-        <div className="railwrap"><div className="rail">{[0, 1, 2, 3].map((k) => <Skel key={k} className="mini" />)}</div></div>
+        <div className="h-8" />
+        <div className="railwrap"><div className="rail">{[0, 1, 2, 3].map((k) => <Skel key={k} w={184} h={104} className="flex-none" />)}</div></div>
       </div>
     </section>
   );
@@ -214,21 +194,24 @@ export function HomePage() {
         <HeroInfo key={`info-${current.id}`} instance={current} />
         <div className="acts">
           <PlayButton key={current.id} instance={current} />
-          <BtnLink to={`/instances/${current.id}`}>Instanz öffnen</BtnLink>
-          <InstanceMenuButton instance={current} open={false} />
+          <ButtonLink to={`/instances/${current.id}`} onScene>Instanz öffnen</ButtonLink>
+          <InstanceMenuButton instance={current} onScene open={false} />
         </div>
-        <PlayStatus key={`stat-${current.id}`} instance={current} showLast={false} />
+        <PlayStatus key={`stat-${current.id}`} instance={current} showLast={false} onScene />
       </div>
       <div className="cont">
-        <div className="cont-h">
-          <h2 id="cont-h">Deine Instanzen</h2>
-          <div className="cont-a">
-            <NewInstanceDialog>
-              <Btn variant="g" size="s" icon="plus">Neue Instanz</Btn>
-            </NewInstanceDialog>
-            <BtnLink to="/instances" variant="g" size="s">Alle in der Bibliothek<Icon name="chevr" small /></BtnLink>
-          </div>
-        </div>
+        <SectionHeader
+          title="Deine Instanzen"
+          id="cont-h"
+          actions={
+            <>
+              <NewInstanceDialog>
+                <Button variant="ghost" size="s" icon="plus">Neue Instanz</Button>
+              </NewInstanceDialog>
+              <ButtonLink to="/instances" variant="ghost" size="s" iconEnd="chev" bleed="end">Alle in der Bibliothek</ButtonLink>
+            </>
+          }
+        />
         <Rail instances={sorted} current={current.id} onPick={setSelected} />
       </div>
     </section>

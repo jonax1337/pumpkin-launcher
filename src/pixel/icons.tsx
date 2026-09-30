@@ -1,78 +1,34 @@
 import { memo } from "react";
 import { cn } from "@/lib/utils";
 import { hash, rng } from "./random";
+import { ICON_DATA, rowsPath } from "./icon-data";
 
-/* Pixel-Icons: 7×7 für Aktionen, 5×5 klein. Jeder Icon-Pixel = 1 Einheit (--px). */
-const ICONS = {
-  // Spitze 1 Pixel pro Zeile, Basis 2 breit: liest sich auch klein als Dreieck (nicht als Fahne)
-  play: [".##....", ".###...", ".####..", ".#####.", ".####..", ".###...", ".##...."],
-  stop: [".......", ".#####.", ".#####.", ".#####.", ".#####.", ".#####.", "......."],
-  plus: ["...#...", "...#...", "...#...", "#######", "...#...", "...#...", "...#..."],
-  x: ["#.....#", ".#...#.", "..#.#..", "...#...", "..#.#..", ".#...#.", "#.....#"],
-  search: [".###...", "#...#..", "#...#..", "#...#..", ".###...", "....##.", ".....##"],
-  check: [".......", "......#", ".....#.", "#...#..", ".#.#...", "..#....", "......."],
-  up: ["...#...", "..###..", ".#.#.#.", "#..#..#", "...#...", "...#...", "...#..."],
-  dl: ["...#...", "...#...", ".#.#.#.", "..###..", "...#...", "#.....#", "#######"],
-  ul: ["...#...", "..###..", ".#.#.#.", "...#...", "...#...", "#.....#", "#######"],
-  trash: ["..###..", "#######", ".#...#.", ".#.#.#.", ".#.#.#.", ".#...#.", "..###.."],
-  folder: [".......", "###....", "#######", "#.....#", "#.....#", "#.....#", "#######"],
-  copy: ["####...", "#..#...", "#.####.", "#.#..#.", "###..#.", "..#..#.", "..####."],
-  gear: ["..#.#..", ".#####.", "##...##", ".#...#.", "##...##", ".#####.", "..#.#.."],
-  list: [".......", "#.#####", ".......", "#.#####", ".......", "#.#####", "......."],
-  grid: ["###.###", "###.###", "###.###", ".......", "###.###", "###.###", "###.###"],
-  back: ["....#..", "...#...", "..#....", ".#.....", "..#....", "...#...", "....#.."],
-  chev: ["..#....", "...#...", "....#..", ".....#.", "....#..", "...#...", "..#...."],
-  more: [".......", ".......", ".......", "#..#..#", ".......", ".......", "......."],
-  warn: [".#####.", "###.###", "###.###", "###.###", "#######", "###.###", ".#####."],
-  info: [".#####.", "###.###", "#######", "###.###", "###.###", "###.###", ".#####."],
-  term: ["#######", "#.....#", "#.#...#", "#..#..#", "#.#.###", "#.....#", "#######"],
-  redo: ["..###.#", ".#...##", "#...###", "#......", "#.....#", ".#...#.", "..###.."],
-  user: ["..###..", ".#####.", ".#####.", "..###..", ".......", ".#####.", "#######"],
-  plug: [".#.#...", ".#.#...", "#####..", "#####..", ".###...", "..#....", "..#...."],
-  ext: ["...####", ".....##", "....#.#", "...#..#", "..#....", ".#.....", "#......"],
-  file: ["####...", "#..#...", "#..###.", "#....#.", "#....#.", "#....#.", "######."],
-  save: ["#######", "#.###.#", "#.###.#", "#.....#", "#.###.#", "#.###.#", "#######"],
-  clock: [".#####.", "#..#..#", "#..#..#", "#..##.#", "#.....#", "#.....#", ".#####."],
-  hour: ["#######", ".#...#.", "..#.#..", "...#...", "..#.#..", ".#.#.#.", "#######"],
-  down2: ["...#...", "...#...", "...#...", "#..#..#", ".#.#.#.", "..###..", "...#..."],
-  power: ["...#...", ".#.#.#.", "#..#..#", "#.....#", "#.....#", ".#...#.", "..###.."],
-  swap: ["....#..", "#######", "....#..", ".......", "..#....", "#######", "..#...."],
-  box: [".#####.", "#.....#", "#######", "#.....#", "#..#..#", "#.....#", "#######"],
-  eye: [".......", "..###..", ".#...#.", "#..#..#", ".#...#.", "..###..", "......."],
-  // Klemmbrett mit Zeilen (Aufgaben)
-  tasks: ["..###..", "###.###", "#.....#", "#.###.#", "#.....#", "#.###.#", "#######"],
-  /* 5×5 */
-  chevd: [".....", "#...#", ".#.#.", "..#..", "....."],
-  chevr: [".#...", "..#..", "...#.", "..#..", ".#..."],
-  x5: ["#...#", ".#.#.", "..#..", ".#.#.", "#...#"],
-  wmin: [".....", ".....", ".....", "#####", "....."],
-  wmax: ["#####", "#####", "#...#", "#...#", "#####"],
-  check5: ["....#", "...#.", "#.#..", ".#...", "....."],
-  dot5: [".....", ".###.", ".###.", ".###.", "....."],
-  plus5: ["..#..", "..#..", "#####", "..#..", "..#.."],
-  up5: ["..#..", ".###.", "#.#.#", "..#..", "..#.."],
-  dl5: ["..#..", "#.#.#", ".###.", "..#..", "#####"],
-  ul5: ["..#..", ".###.", "#.#.#", "..#..", "#####"],
-  down5: ["..#..", "..#..", "#.#.#", ".###.", "..#.."],
-  trash5: [".###.", "#####", ".#.#.", ".#.#.", ".###."],
-  folder5: ["##...", "#####", "#...#", "#...#", "#####"],
-  copy5: ["###..", "#.###", "#.#.#", "###.#", "..###"],
-  redo5: [".##.#", "#..##", "#...#", "#...#", ".###."],
-  play5: ["#....", "###..", "#####", "###..", "#...."],
-  stop5: [".....", ".###.", ".###.", ".###.", "....."],
-  user5: [".###.", ".###.", ".....", ".###.", "#####"],
-  power5: ["..#..", "#.#.#", "#...#", "#...#", ".###."],
-  ext5: ["..###", "...##", "..#.#", ".#...", "#...."],
-  save5: ["#####", "#.#.#", "#####", "#...#", "#####"],
-  swap5: ["...#.", "#####", ".....", ".#...", "#####"],
-  plug5: ["#.#..", "#.#..", "####.", ".##..", "..#.."],
-  gear5: [".#.#.", "#####", "##.##", "#####", ".#.#."],
-  back5: ["..#..", ".#...", "#....", ".#...", "..#.."],
-  term5: ["#####", "#...#", "##..#", "#.#.#", "#####"],
-  warn5: [".###.", "##.##", "##.##", "#####", ".#.#."],
-} satisfies Record<string, string[]>;
+/*
+ * ALTBESTAND bis Phase C: `Icon` mit den alten Namen (7×7-Namen + 5×5-Namen wie x5, check5, chevr).
+ * Die Daten kommen aus icon-data.ts; neue Stellen nutzen `Icon` aus "@/ui" (Größen-Slots s/m/l/xl).
+ */
+type KitName = keyof typeof ICON_DATA;
 
-export type IconName = keyof typeof ICONS;
+/** Alte 7×7-Namen → Kit-Name (Raster g7). */
+const OLD7 = {
+  play: "play", stop: "stop", plus: "plus", x: "x", search: "search", check: "check", up: "up", dl: "dl", ul: "ul", trash: "trash",
+  folder: "folder", copy: "copy", gear: "gear", list: "list", grid: "grid", back: "back", chev: "chev", more: "more", warn: "warn",
+  info: "info", term: "term", redo: "redo", user: "user", plug: "plug", ext: "ext", file: "file", save: "save", clock: "clock",
+  hour: "hour", down2: "down", power: "power", swap: "swap", box: "box", eye: "eye", tasks: "tasks",
+} as const satisfies Record<string, KitName>;
+
+/** Alte 5×5-Namen → Kit-Name (Raster g5). */
+const OLD5 = {
+  chevd: "chevd", chevr: "chev", x5: "x", wmin: "wmin", wmax: "wmax", check5: "check", dot5: "dot", plus5: "plus", up5: "up",
+  dl5: "dl", ul5: "ul", down5: "down", trash5: "trash", folder5: "folder", copy5: "copy", redo5: "redo", play5: "play",
+  stop5: "stop", user5: "user", power5: "power", ext5: "ext", save5: "save", swap5: "swap", plug5: "plug", gear5: "gear",
+  back5: "back", term5: "term", warn5: "warn",
+} as const satisfies Record<string, KitName>;
+
+export type IconName = keyof typeof OLD7 | keyof typeof OLD5;
+
+const rowsOf = (name: IconName): readonly string[] =>
+  name in OLD7 ? ICON_DATA[OLD7[name as keyof typeof OLD7]].g7 : ICON_DATA[OLD5[name as keyof typeof OLD5]].g5;
 
 /** Kleine Variante, die in kleinen Knöpfen, Menüs und Toasts statt der 7×7-Glyphe erscheint. */
 const SMALL5: Partial<Record<IconName, IconName>> = {
@@ -81,32 +37,12 @@ const SMALL5: Partial<Record<IconName, IconName>> = {
   check: "check5", x: "x5", chev: "chevr", gear: "gear5", back: "back5", term: "term5", warn: "warn5",
 };
 
-const PATHS = new Map<string, string>();
-function pathOf(name: IconName) {
-  let d = PATHS.get(name);
-  if (d == null) {
-    const rows = ICONS[name];
-    d = "";
-    rows.forEach((r, y) => {
-      let x = 0;
-      while (x < r.length) {
-        if (r[x] !== "#") { x++; continue; }
-        let e = x;
-        while (e < r.length && r[e] === "#") e++;
-        d += `M${x} ${y}h${e - x}v1h${x - e}z`;
-        x = e;
-      }
-    });
-    PATHS.set(name, d);
-  }
-  return d;
-}
-
 function Grid({ name, className }: { name: IconName; className?: string }) {
-  const n = ICONS[name][0].length;
+  const rows = rowsOf(name);
+  const n = rows[0].length;
   return (
     <svg viewBox={`0 0 ${n} ${n}`} className={className} aria-hidden>
-      <path d={pathOf(name)} />
+      <path d={rowsPath(`old:${name}`, rows)} />
     </svg>
   );
 }
@@ -176,7 +112,8 @@ export function glyphFor(seed: string): [GlyphName, GlyphPalette] {
   return [GLYPH_NAMES[h % GLYPH_NAMES.length], PALETTES[(h >>> 8) % PALETTES.length]];
 }
 
-const GlyphSvg = memo(function GlyphSvg({ name, pal }: { name: GlyphName; pal: GlyphPalette }) {
+/** Nur das SVG der Glyphe (Kit: `Glyph` in @/ui). */
+export const GlyphSvg = memo(function GlyphSvg({ name, pal }: { name: GlyphName; pal: GlyphPalette }) {
   const p = GPAL[pal];
   const col: Record<string, string> = { k: "#080C12", w: "#EEF2F7", a: p.a, b: p.b, h: p.h, c: p.c };
   const rects: React.ReactElement[] = [];

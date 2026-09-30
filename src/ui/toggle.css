@@ -1,0 +1,91 @@
+/* Kit-Umschalter: Schalter, Checkbox, Radio, Speicher-Regler. Maße fest (20×20, 40×22, Regler ~400 px auf ganze Zellen).
+   Hover hellt den Steuerrahmen auf; Fokus = Ring (.vx-fring) um das Steuerelement, nicht um die Beschriftung. */
+.vx-tl { min-width: 0; }
+.vx-fring { position: absolute; inset: calc(var(--u2) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; z-index: 5; visibility: hidden; }
+
+/* ---------- Schalter 40×22 ---------- */
+.vx-switch { display: inline-flex; align-items: center; gap: 10px; min-height: 32px; font-size: 14px; color: var(--fg); cursor: pointer; }
+.vx-switch[data-disabled] { color: var(--fg-3); cursor: default; }
+.vx-sw { position: relative; width: 40px; height: 22px; flex: none; display: inline-block; }
+.vx-sw input { position: absolute; inset: 0; z-index: 2; margin: 0; opacity: 0; cursor: inherit; }
+.vx-sw-tr { position: absolute; inset: 0; background: var(--sunk); box-shadow: inset 0 0 0 var(--px) var(--ctl), inset var(--u2) var(--u2) 0 var(--lo); clip-path: var(--n1); }
+.vx-sw-kn { position: absolute; left: var(--u2); top: var(--u2); width: calc(22px - var(--px) * 4); height: calc(22px - var(--px) * 4); background: #8C97AD; box-shadow: inset var(--px) var(--px) 0 #C5CEDC, inset calc(var(--px) * -1) calc(var(--px) * -1) 0 #5C667B; transition: transform .12s steps(3); }
+/* an: gedämpfte Kupferbahn (60 % auf --sunk, 3,6:1 gegen die Aus-Bahn), heller Knauf rechts */
+.vx-sw input:checked ~ .vx-sw-tr { background: color-mix(in srgb, var(--copper) 60%, var(--sunk)); box-shadow: inset 0 0 0 var(--px) #B06C3C, inset var(--u2) var(--u2) 0 rgba(0,0,0,.22); }
+.vx-sw input:checked ~ .vx-sw-kn { transform: translateX(18px); background: #FFF1E2; box-shadow: inset var(--px) var(--px) 0 #fff, inset calc(var(--px) * -1) calc(var(--px) * -1) 0 #C98A5A; }
+.vx-switch:not([data-disabled]):is(:hover, [data-force="hover"]) .vx-sw-tr { box-shadow: inset 0 0 0 var(--px) var(--ctl-hi), inset var(--u2) var(--u2) 0 var(--lo); }
+.vx-switch:not([data-disabled]):is(:hover, [data-force="hover"]) input:checked ~ .vx-sw-tr { background: color-mix(in srgb, var(--copper) 70%, var(--sunk)); box-shadow: inset 0 0 0 var(--px) #F5BE8E, inset var(--u2) var(--u2) 0 rgba(0,0,0,.22); }
+.vx-sw input:disabled ~ .vx-sw-tr { opacity: .5; filter: grayscale(1); }
+.vx-sw input:disabled ~ .vx-sw-kn { opacity: .5; filter: grayscale(1); }
+.vx-sw input:focus-visible ~ .vx-fring { visibility: visible; }
+/* Zustandstext: beide Wörter übereinander, eines sichtbar (feste Breite, nichts springt) */
+.vx-sw-st { display: inline-grid; color: var(--fg-2); font-size: 13px; }
+.vx-sw-st > span { grid-area: 1 / 1; visibility: hidden; }
+.vx-sw-st > span[data-on] { visibility: visible; }
+
+/* ---------- Checkbox 20×20 ---------- */
+.vx-check { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; font-size: 13px; color: var(--fg-2); cursor: pointer; user-select: none; }
+.vx-check[data-bare] { min-height: 0; }
+.vx-check:not([data-disabled]):is(:hover, [data-force="hover"]) { color: var(--fg); }
+.vx-check[data-disabled] { color: var(--fg-3); cursor: default; }
+.vx-cb { position: relative; width: 20px; height: 20px; flex: none; display: inline-grid; place-items: center; }
+.vx-cb input { position: absolute; inset: 0; z-index: 2; margin: 0; opacity: 0; cursor: inherit; }
+.vx-cb-box { position: absolute; inset: 0; background: var(--sunk); box-shadow: inset 0 0 0 var(--px) var(--ctl), inset var(--u2) var(--u2) 0 var(--lo); clip-path: var(--n1); pointer-events: none; }
+.vx-cb > .vx-ico { position: relative; color: var(--ink); opacity: 0; pointer-events: none; }
+.vx-cb-dash { position: absolute; left: 5px; right: 5px; top: calc(50% - var(--px) / 2); height: var(--px); background: var(--ink); opacity: 0; }
+.vx-check:not([data-disabled]):is(:hover, [data-force="hover"]) .vx-cb-box { box-shadow: inset 0 0 0 var(--px) var(--ctl-hi), inset var(--u2) var(--u2) 0 var(--lo); }
+.vx-cb input:is(:checked, :indeterminate) ~ .vx-cb-box { background: var(--copper); box-shadow: inset var(--px) var(--px) 0 #F5BE8E, inset calc(var(--px) * -1) calc(var(--px) * -1) 0 #B06C3C; }
+.vx-cb input:indeterminate ~ .vx-cb-box { box-shadow: none; }
+.vx-cb input:checked:not(:indeterminate) ~ .vx-ico { opacity: 1; animation: vx-pop .12s steps(2, end); }
+.vx-cb input:indeterminate ~ .vx-cb-dash { opacity: 1; }
+.vx-cb input:disabled ~ :is(.vx-cb-box, .vx-ico, .vx-cb-dash) { opacity: .5; filter: grayscale(1); }
+.vx-cb input:disabled:not(:checked, :indeterminate) ~ .vx-ico { opacity: 0; }
+.vx-cb input:focus-visible ~ .vx-fring { visibility: visible; }
+@keyframes vx-pop { from { transform: scale(0); } }
+
+/* ---------- Radio 20×20, zweistufig gekerbt ---------- */
+.vx-radios { display: flex; flex-direction: column; }
+.vx-radio { display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer; }
+.vx-radio[data-disabled] { color: var(--fg-3); cursor: default; }
+.vx-radio input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.vx-rb { position: relative; width: 20px; height: 20px; flex: none; }
+/* Rahmen als Stufenring: Steuerfarbe als Fläche, eingelassener Grund als zwei Rechtecke (folgt den Kerben ohne Lücke) */
+.vx-rb::before {
+  content: ""; position: absolute; inset: 0; --rb-line: var(--ctl);
+  background:
+    linear-gradient(var(--sunk) 0 0) var(--u2) var(--px) / calc(100% - var(--u2) * 2) calc(100% - var(--u2)) no-repeat,
+    linear-gradient(var(--sunk) 0 0) var(--px) var(--u2) / calc(100% - var(--u2)) calc(100% - var(--u2) * 2) no-repeat,
+    var(--rb-line);
+  clip-path: polygon(var(--u2) 0, calc(100% - var(--u2)) 0, calc(100% - var(--u2)) var(--px), calc(100% - var(--px)) var(--px), calc(100% - var(--px)) var(--u2), 100% var(--u2), 100% calc(100% - var(--u2)), calc(100% - var(--px)) calc(100% - var(--u2)), calc(100% - var(--px)) calc(100% - var(--px)), calc(100% - var(--u2)) calc(100% - var(--px)), calc(100% - var(--u2)) 100%, var(--u2) 100%, var(--u2) calc(100% - var(--px)), var(--px) calc(100% - var(--px)), var(--px) calc(100% - var(--u2)), 0 calc(100% - var(--u2)), 0 var(--u2), var(--px) var(--u2), var(--px) var(--px), var(--u2) var(--px));
+}
+.vx-rb::after { content: ""; position: absolute; left: 50%; top: 50%; width: var(--u2); height: var(--u2); margin: calc(var(--px) * -1) 0 0 calc(var(--px) * -1); background: var(--copper); opacity: 0; }
+.vx-radio:not([data-disabled]):is(:hover, [data-force="hover"]) .vx-rb::before { --rb-line: var(--ctl-hi); }
+.vx-radio input:checked + .vx-rb::before { --rb-line: var(--copper); }
+.vx-radio input:checked + .vx-rb::after { opacity: 1; animation: vx-pop .12s steps(2, end); }
+.vx-radio input:disabled + .vx-rb { opacity: .5; filter: grayscale(1); }
+.vx-radio input:focus-visible + .vx-rb .vx-fring { visibility: visible; }
+
+/* ---------- Speicher-Regler: 16 Zellen + Griff; Breite auf ganze Zellen gerundet (Zelle = Vielfaches von --px, ~400 px) ---------- */
+.vx-slider { --sseg: round(nearest, calc((400px - var(--px) * 17) / 16), var(--px)); position: relative; flex: none; width: calc(var(--sseg) * 16 + var(--px) * 17); max-width: 100%; height: 32px; cursor: pointer; touch-action: none; }
+/* Zellen auf dunklem Grund wie der Fortschritt; kein Rahmen in Zellfarbe (sonst lesen sich die Fugen als Striche) */
+.vx-sl-trk { position: absolute; left: 0; right: 0; top: 9px; height: 14px; display: grid; grid-template-columns: repeat(16, 1fr); gap: var(--px); padding: var(--px); background: var(--edge); clip-path: var(--n1); }
+.vx-sl-trk i { background: #2E3A53; transition: background-color var(--st); }
+.vx-sl-trk i[data-on] { background: var(--copper); }
+/* Gesperrt (mehr hat der PC nicht): hohl statt gefüllt */
+.vx-sl-trk i[data-x] { background: #161D2A; }
+.vx-sl-th { position: absolute; top: 4px; left: 0; width: 14px; height: 24px; margin-left: -7px; background: #C9D2E0; box-shadow: inset 0 0 0 var(--px) var(--edge), inset var(--u2) var(--u2) 0 calc(var(--px) * -1) #fff, inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 calc(var(--px) * -1) #7D889C; clip-path: var(--n1); }
+.vx-slider:not([aria-disabled="true"]):is(:hover, [data-force="hover"]) .vx-sl-th { background: #E2E8F2; }
+.vx-slider:not([aria-disabled="true"]):active .vx-sl-th { background: #B4BFD0; }
+/* Aus (Automatisch): entsättigt statt durchscheinend */
+.vx-slider[aria-disabled="true"] { cursor: default; }
+.vx-slider[aria-disabled="true"] .vx-sl-trk i { background: #1E2637; }
+.vx-slider[aria-disabled="true"] .vx-sl-trk i[data-on] { background: #56617A; }
+.vx-slider[aria-disabled="true"] .vx-sl-trk i[data-x] { background: #121823; }
+.vx-slider[aria-disabled="true"] .vx-sl-th { background: #6B768B; box-shadow: inset 0 0 0 var(--px) var(--edge); }
+.vx-slider:focus-visible { outline: none; }
+/* Mit Grenze/Wert (showMax/showValue): Grenze unter dem letzten freien Segment (--free), Zahl rechts in fester Breite */
+.vx-slw { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+.vx-slw-c { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vx-slw-cap { padding-right: var(--free, 0%); text-align: right; font-size: 12px; line-height: 16px; color: var(--fg-3); white-space: nowrap; }
+.vx-slw > .vx-count { width: 64px; line-height: 32px; flex: none; text-align: left; }
+.vx-slider:focus-visible::after { content: ""; position: absolute; inset: calc(var(--u2) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; }

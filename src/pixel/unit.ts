@@ -32,6 +32,12 @@ export function applyPx(size: PxSize) {
   st.setProperty("--mis", fit(40, 10));
   st.setProperty("--mil", fit(64, 10));
   st.setProperty("--avs", fit(28, 8));
+  // Kit (src/ui): Icon-Slot m (Box 24) zeichnet 7×7 nur, wenn 7 Einheiten hineinpassen, sonst 5×5.
+  document.documentElement.dataset.icoM = 7 * css <= 24.01 ? "7" : "5";
+  // Kit-Glyphen 10×10 in fester Box: Kantenlänge = ganzzahlige Zellen (k Einheiten je Glyphen-Pixel)
+  for (const box of [40, 52, 64, 72, 104]) st.setProperty(`--gl-${box}`, fit(box, 10));
+  // Kit-Avatar (Box 32); --avs (Box 28) bleibt für den Altbestand
+  st.setProperty("--av-32", fit(32, 8));
   listeners.forEach((cb) => cb());
 }
 

@@ -45,7 +45,7 @@ Status untereinander: Kupfer–Warnen 17,7, Kupfer–Fehler 12,7. Vorher lagen W
 - Stufen: klein/mittel/groß = 2/3/4 CSS-px bei 100 %.
 - DPR-Regel: `dev = round(ziel * devicePixelRatio)`, `--px = dev / devicePixelRatio`. Bei 125 % wird aus 3 px also 4 Gerätepixel = 3,2 CSS-px, bei 150 % 5 Gerätepixel. Neu berechnen bei `matchMedia('(resolution: …dppx)')`-Wechsel.
 - Aus `--px` abgeleitet: `--u2`, `--u3`, Kerben, Bevel, Rahmen, Fokusring, Fortschrittszellen, Icon-Pixel, Szenenpixel.
-- Icons: Box fest (28/20/40/64 px), Glyphe = ganzzahliges Vielfaches von `--px`, das in die Box passt (`--pis`, `--piss`, `--mis`, `--mil`, `--avs` per JS).
+- Icons: Box fest (28/20/40/64 px), Glyphe = ganzzahliges Vielfaches von `--px`, das in die Box passt (`--pis`, `--piss`, `--mis`, `--mil`, `--avs` per JS; Kit: `--gl-*`, `--av-32`, `data-ico-m`, siehe 5a).
 - Layout-Maße (Höhen, Abstände, Spalten) sind feste CSS-px und hängen **nie** von `--px` ab.
 
 ### Seitenrahmen und Formularraster
@@ -72,7 +72,7 @@ Schriften mit `display=block`; die App wird erst nach `document.fonts.ready` sic
 |---|---|---|
 | Knopf primär | Sockel `::before` (`--acc-lo`) + Fläche `.bf` (Licht oben/links, Schatten unten/rechts, je 1 Einheit) | Hover: Fläche +1 Einheit hoch; gedrückt: Fläche sinkt, Bevel kehrt sich um, Inhalt +1 Einheit (alles `transform`); deaktiviert: flach ohne Bevel |
 | Knopf sekundär | dunkle Platte, 1-Einheit-Rahmen, Bevel | Hover heller; gedrückt Bevel invers + Inhalt 1 Einheit tiefer |
-| Knopf Geist | nur Text | Hover: Pixel-Unterstrich (1 Einheit) |
+| Knopf Geist | nur Text | Hover: Platte `--hv-ctl` (Fläche, nie Linie); getönt: Platte mit 12 % Tonfarbe; Druck: Platte `--pr-ctl`, Inhalt 1 Einheit tiefer (Kit; der alte `.btn-g` zeigt bis zur Umstellung noch den Unterstrich) |
 | Höhen | 32 / 40 / 56 px | Symbolknopf quadratisch; kleine Knöpfe nutzen 5×5-Icons, große 7×7 |
 | Spielen | 272×56 (`m` 176×40, `i` 32×32), feste Größe | Spielen (Unterzeile „Installiert beim ersten Start“, wenn nötig) · Wird installiert x % (Segmentbalken statt Unterzeile) · Startet (laufender Balken) · BEENDEN mit Unterzeile „Läuft seit …“ (dunkel, Akzentrahmen; Klick fragt nach) · Erneut versuchen / Erneut starten (Fehlerrot) · Kann nicht starten (flach) |
 | Tab | Platte nur aktiv, 1-Einheit-Akzentstrich unten | Hover Platte `--panel`; Zähler in Pixelschrift mit fester Breite |
@@ -150,6 +150,37 @@ Das vorherige Design („Deepslate & Emerald“, shadcn/ui, Seitenleiste) ist vo
 **Stolperfallen:**
 - Stylesheets aus Komponenten laden vor `index.css`. Die Schichtreihenfolge (`@layer theme, base, components, utilities`) steht deshalb in `index.html`, sonst gewinnt Tailwinds Reset über alle Pixelkino-Stile.
 - Klassennamen dürfen nicht mit Tailwind-Utilities kollidieren (Beispiel: `ring` zeichnete einen Pixel an jedem Schalter; heißt jetzt `fring`).
+
+## 5a. Kit (src/ui)
+Einheitliche Bausteine mit Präfix `vx-`, Varianten über `data-*` (`<button class="vx-btn fx" data-variant="ghost" data-size="s">`). Stile nur zentral: `src/ui/ui.css` (tokens, icon, button, chip) wird in `src/index.css` nach `states.css` mit `layer(components)` eingebunden; Komponenten importieren kein CSS. Import in TSX aus `@/ui`. Vorschau im Dev-Server unter `/_kit` (Pixelstufe oben umschaltbar). Der Altbestand (`px.tsx`, `.btn`, `.chip`, `.pi`) bleibt bis zur Umstellung unverändert.
+
+**Größen (fest, nie von `--px` abhängig)**
+| size | Höhe | Innenabstand x (Text/Geist) | Schrift | Abstand | Icon-Slot | Symbolknopf |
+|---|---|---|---|---|---|---|
+| s | 32 | 12 / 8 | 13/600 | 6 | s | 32×32 |
+| m | 40 | 16 / 10 | 14/600 | 8 | m | 40×40 |
+| l | 56 | 22 / 16 | 16/600 | 10 | l | 56×56 |
+
+Mit führendem Icon links 2 px weniger. Chip s 22 px (Text + Punkt), Chip m 28 px (Icon s). Überschriften: Seite 40 · Dialog 26 · Abschnitt 22 · Unterabschnitt 20 · Karte 18 (`--hd-*`).
+
+**Icons: 1 Icon-Pixel = genau 1 Einheit** (kein Hochskalieren). Daten in `src/pixel/icon-data.ts`, jedes Icon in 7×7 und 5×5.
+| Slot | Box | Raster | Glyphe bei px 2/3/4 |
+|---|---|---|---|
+| s | 20 | 5×5 | 10/15/20 |
+| m | 24 | 7×7; 5×5, wenn 7·px > 24 (`data-ico-m` am `<html>`, setzt `unit.ts`) | 14/21/20 |
+| l | 28 | 7×7 | 14/21/28 |
+| xl | 56 | 7×7, 2 Einheiten je Zelle | 28/42/56 |
+
+Glyphen 10×10 (Mods/Projekte) in fester Box 40/52/64/72/104: Kantenlänge `--gl-<Box>` = ganzzahlige Zellen (`unit.ts`). Avatar Box 32: `--av-32`.
+
+**Hover, Druck, Auswahl**
+1. Hover ist eine Fläche, nie eine Linie. Striche (1 Einheit) bedeuten nur „aktiv/gewählt“ (Tab-Strich, Segment, Menü-Markierung).
+2. Kontextvariablen: `--hv-row` (Zeilen, Choice, Kacheln) und `--hv-ctl` (Geist, Symbolknopf, Tabs, Leiste, Segment); Druck `--pr-row`/`--pr-ctl` eine Stufe dunkler. Grund: `--panel`/`--panel-2`; in Dialog, Seitenpanel, Menü, Toast und Platten eine Stufe heller (`--panel-2`/`--panel-3`).
+3. Über Szenen (`onScene`): Grundplatte `rgba(7,10,17,.6)` dauerhaft, Hover `rgba(21,29,44,.9)`, harter Schatten 1 Einheit (Text, Trenner, Icons).
+4. Druck: Inhalt 1 Einheit tiefer, Fläche dunkler bzw. eingelassen (`--bv-sunk`). Bewegungen um 1 Einheit springen; Farben wechseln in Stufen (`--st: 90ms steps(2, end)`).
+5. Auswahl nur zwei Formen: „gewählt“ = Kupferrahmen 1 Einheit + 10 % Kupfertönung (`--sel-edge`, `--sel-bg`); „aktuell“ = Akzentbalken unten (`--sel-cur`). Fokus auf Gewähltem: Doppelring `--ring2`.
+6. Unterstrich nur im Fließtext; Namen in Listen werden beim Hover heller, die Zeile trägt die Platte.
+7. Primärknopf aus: flach, neutral, gestrichelter Steuerrahmen (bleibt als „Hauptaktion, gesperrt“ lesbar).
 
 ## 6. Offen
 1. **Abnahme:** Layoutshift-Skript (Playwright, `element.click()`), 100/125/150 %, Tastatur, reduzierte Bewegung.

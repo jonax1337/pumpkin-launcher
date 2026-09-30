@@ -1,0 +1,54 @@
+/* Kit-Seitengerüst: Überschriften, Seiten-/Abschnittskopf, Werkzeugleiste, Aktionen (Layout.tsx). Maße fest in px. */
+
+/* ---------- Überschriftenstufen (Display, Versalien) ---------- */
+.vx-h { font: 800 var(--hd-section)/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; color: var(--fg); min-width: 0; }
+.vx-h[data-level="page"] { font-size: var(--hd-page); line-height: 1; letter-spacing: .005em; }
+.vx-h[data-level="dialog"] { font-size: var(--hd-dialog); line-height: 1; }
+.vx-h[data-level="sub"] { font-size: var(--hd-sub); }
+.vx-h[data-level="card"] { font-size: var(--hd-card); }
+/* Seitenüberschrift bekommt nach dem Seitenwechsel den Fokus: kein Ring, sie ist nicht bedienbar */
+.vx-h[tabindex="-1"]:focus { outline: none; }
+
+/* ---------- Seitenkopf: 44 px, Titel 40 px unten bündig, Zahl daneben, Aktionen rechts ---------- */
+.vx-pageh { display: flex; align-items: flex-end; gap: 14px; height: 44px; min-width: 0; }
+.vx-pageh-n { padding-bottom: 3px; }
+.vx-pageh-a { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: none; }
+
+/* ---------- Abschnittskopf: 32 px, Titel links, Aktionen rechts ---------- */
+.vx-sech { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 32px; min-width: 0; }
+.vx-sech > .vx-h { line-height: 1; padding-top: 2px; }
+.vx-sech-a { display: flex; align-items: center; gap: 2px; flex: none; }
+
+/* ---------- Werkzeugleiste: 40/56 px, Abstand 8; Suchfeldbreite zentral (--tb-search) ---------- */
+.vx-toolbar { --tb-h: 40px; position: relative; display: flex; align-items: center; gap: 8px; height: var(--tb-h); min-width: 0; }
+.vx-toolbar[data-h="56"] { --tb-h: 56px; }
+.vx-toolbar[data-search="s"] { --tb-search: 220px; }
+.vx-toolbar[data-search="m"] { --tb-search: 260px; }
+.vx-toolbar[data-search="l"] { --tb-search: 320px; }
+.vx-toolbar[data-search] .vx-input[data-lead]:not([data-w]) { width: var(--tb-search); flex: none; }
+@media (max-width: 960px) { .vx-toolbar[data-search="s"] { --tb-search: 128px; } }
+@media (max-width: 900px) { .vx-toolbar[data-search="m"] { --tb-search: 180px; } }
+/* Zweite Leiste (Auswahl) deckungsgleich darüber; Wechsel in Stufen, inaktive Leiste ist inert */
+.vx-toolbar[data-alt] > :is(.vx-tb-main, .vx-tb-alt) { position: absolute; inset: 0; display: flex; align-items: center; gap: 8px; min-width: 0; transition: opacity var(--st), visibility var(--st); }
+.vx-toolbar[data-alt="off"] > .vx-tb-alt, .vx-toolbar[data-alt="on"] > .vx-tb-main { opacity: 0; visibility: hidden; }
+/* Umbruch unter der Breite: feste Höhe wird Mindesthöhe; Hauptleiste fließt, Auswahl liegt weiter darüber */
+@media (max-width: 1096px) {
+  .vx-toolbar[data-wrap="1096"] { flex-wrap: wrap; row-gap: 8px; height: auto; min-height: var(--tb-h); }
+}
+@media (max-width: 800px) {
+  .vx-toolbar[data-wrap="800"] { flex-wrap: wrap; row-gap: 8px; height: auto; min-height: var(--tb-h); }
+  .vx-toolbar[data-wrap="800"][data-alt] > .vx-tb-main { position: relative; flex-wrap: wrap; row-gap: 8px; padding: 8px 0; }
+  .vx-toolbar[data-wrap="800"][data-alt] > .vx-tb-alt { flex-wrap: wrap; }
+}
+@media (max-width: 1096px) {
+  .vx-toolbar[data-wrap="1096"][data-alt] > .vx-tb-main { position: relative; flex-wrap: wrap; row-gap: 8px; }
+}
+.vx-sp { flex: 1; }
+
+/* ---------- Aktionen ---------- */
+.vx-acts { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.vx-acts[data-gap="4"] { gap: 4px; }
+.vx-acts[data-gap="12"] { gap: 12px; }
+.vx-acts[data-align="end"] { justify-content: flex-end; }
+.vx-acts[data-align="between"] { justify-content: space-between; }
+.vx-acts[data-wrap] { flex-wrap: wrap; row-gap: 8px; }

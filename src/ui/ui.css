@@ -1,0 +1,14 @@
+/* Pixel-Kit: sammelt alle Kit-Stile. Eingebunden in src/index.css nach states.css (Schicht components).
+   Komponenten importieren kein CSS selbst. */
+@import "./tokens.css";
+@import "./icon.css";
+@import "./button.css";
+@import "./chip.css";
+@import "./tabs.css";
+@import "./field.css";
+@import "./toggle.css";
+@import "./card.css";
+@import "./list.css";
+@import "./overlay.css";
+@import "./feedback.css";
+@import "./layout.css";
