@@ -11,7 +11,7 @@ import { onPxChange, PX } from "@/pixel/unit";
 import { FormsSection } from "./kit/FormsSection";
 import { CardsSection } from "./kit/CardsSection";
 import { OverlaySection } from "./kit/OverlaySection";
-import { BackLink, BarButton, Button, Chip, Count, Icon, IconButton, ICON_NAMES, Meta, type ButtonVariant, type IconSize, type Size } from "@/ui";
+import { BackLink, BarButton, Button, Chip, Count, Icon, IconButton, ICON_NAMES, Meta, PageHeader, type ButtonVariant, type IconSize, type Size } from "@/ui";
 
 const SIZES: Size[] = ["s", "m", "l"];
 const VARIANTS: ButtonVariant[] = ["primary", "secondary", "ghost", "danger"];
@@ -27,7 +27,7 @@ const sec: CSSProperties = { display: "flex", flexDirection: "column", gap: 14, 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section style={sec}>
-      <h2 className="h-sec">{title}</h2>
+      <h2 className="vx-h">{title}</h2>
       {children}
     </section>
   );
@@ -129,11 +129,9 @@ function PxSwitch() {
 export function KitPage() {
   return (
     <div className="page">
-      <div className="page-h">
-        <h1 className="h-page" tabIndex={-1}>Pixel-Kit</h1>
-        <span className="sp" />
+      <PageHeader title="Pixel-Kit">
         <PxSwitch />
-      </div>
+      </PageHeader>
 
       {SIZES.map((s) => (
         <Section key={s} title={`Knopf ${s}`}>

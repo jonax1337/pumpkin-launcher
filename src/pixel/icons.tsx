@@ -1,70 +1,10 @@
 import { memo } from "react";
-import { cn } from "@/lib/utils";
 import { hash, rng } from "./random";
-import { ICON_DATA, rowsPath } from "./icon-data";
 
 /*
- * ALTBESTAND bis Phase C: `Icon` mit den alten Namen (7×7-Namen + 5×5-Namen wie x5, check5, chevr).
- * Die Daten kommen aus icon-data.ts; neue Stellen nutzen `Icon` aus "@/ui" (Größen-Slots s/m/l/xl).
+ * Glyphen (10×10, farbig), Wortzeichen und Spielerkopf. Die UI-Icons (7×7/5×5) liegen in
+ * icon-data.ts und werden über `Icon` aus "@/ui" gerendert (Größen-Slots s/m/l/xl).
  */
-type KitName = keyof typeof ICON_DATA;
-
-/** Alte 7×7-Namen → Kit-Name (Raster g7). */
-const OLD7 = {
-  play: "play", stop: "stop", plus: "plus", x: "x", search: "search", check: "check", up: "up", dl: "dl", ul: "ul", trash: "trash",
-  folder: "folder", copy: "copy", gear: "gear", list: "list", grid: "grid", back: "back", chev: "chev", more: "more", warn: "warn",
-  info: "info", term: "term", redo: "redo", user: "user", plug: "plug", ext: "ext", file: "file", save: "save", clock: "clock",
-  hour: "hour", down2: "down", power: "power", swap: "swap", box: "box", eye: "eye", tasks: "tasks",
-} as const satisfies Record<string, KitName>;
-
-/** Alte 5×5-Namen → Kit-Name (Raster g5). */
-const OLD5 = {
-  chevd: "chevd", chevr: "chev", x5: "x", wmin: "wmin", wmax: "wmax", check5: "check", dot5: "dot", plus5: "plus", up5: "up",
-  dl5: "dl", ul5: "ul", down5: "down", trash5: "trash", folder5: "folder", copy5: "copy", redo5: "redo", play5: "play",
-  stop5: "stop", user5: "user", power5: "power", ext5: "ext", save5: "save", swap5: "swap", plug5: "plug", gear5: "gear",
-  back5: "back", term5: "term", warn5: "warn",
-} as const satisfies Record<string, KitName>;
-
-export type IconName = keyof typeof OLD7 | keyof typeof OLD5;
-
-const rowsOf = (name: IconName): readonly string[] =>
-  name in OLD7 ? ICON_DATA[OLD7[name as keyof typeof OLD7]].g7 : ICON_DATA[OLD5[name as keyof typeof OLD5]].g5;
-
-/** Kleine Variante, die in kleinen Knöpfen, Menüs und Toasts statt der 7×7-Glyphe erscheint. */
-const SMALL5: Partial<Record<IconName, IconName>> = {
-  plus: "plus5", up: "up5", dl: "dl5", ul: "ul5", down2: "down5", trash: "trash5", folder: "folder5", copy: "copy5", redo: "redo5",
-  play: "play5", stop: "stop5", user: "user5", power: "power5", ext: "ext5", save: "save5", swap: "swap5", plug: "plug5",
-  check: "check5", x: "x5", chev: "chevr", gear: "gear5", back: "back5", term: "term5", warn: "warn5",
-};
-
-function Grid({ name, className }: { name: IconName; className?: string }) {
-  const rows = rowsOf(name);
-  const n = rows[0].length;
-  return (
-    <svg viewBox={`0 0 ${n} ${n}`} className={className} aria-hidden>
-      <path d={rowsPath(`old:${name}`, rows)} />
-    </svg>
-  );
-}
-
-/**
- * Pixel-Icon in fester Box (28 px, klein 20 px). `small` nimmt die 20-px-Box;
- * 5×5-Namen (chevd, x5 …) nur mit `small` verwenden, sonst werden sie gestreckt.
- */
-export const Icon = memo(function Icon({ name, small, className }: { name: IconName; small?: boolean; className?: string }) {
-  const s = SMALL5[name];
-  return (
-    <span className={cn("pi", small && "s", className)} aria-hidden>
-      <Grid name={name} className="g7" />
-      {s && !small && <Grid name={s} className="g5" />}
-    </span>
-  );
-});
-
-/** Nur das SVG (z. B. für die Checkbox). */
-export const IconSvg = Grid;
-
-/* Mod-/Projekt-Glyphen (10×10, farbig) */
 const G = {
   cube: ["....kk....", "..kkhhkk..", ".khhhhhhk.", "kkhhhhhhkk", "kaaakkbbbk", "kaaakkbbbk", "kaaakkbbbk", ".kaakkbbk.", "..kakkbk..", "....kk...."],
   spool: ["kkkkkkkkkk", "khhhhhhhbk", ".kkkkkkkk.", ".kaaaaaabk", ".kccccccbk", ".kaaaaaabk", ".kccccccbk", ".kkkkkkkk.", "khhhhhhhbk", "kkkkkkkkkk"],
@@ -135,17 +75,8 @@ export const GlyphSvg = memo(function GlyphSvg({ name, pal }: { name: GlyphName;
   );
 });
 
-/** Farbige 10×10-Glyphe in fester Box (40 px, groß 64 px). */
-export function Glyph({ name, pal, big, className }: { name: GlyphName; pal: GlyphPalette; big?: boolean; className?: string }) {
-  return (
-    <span className={cn("mi", big && "l", className)} aria-hidden>
-      <GlyphSvg name={name} pal={pal} />
-    </span>
-  );
-}
-
-/** Wortzeichen: ein beleuchtetes Pixel-V (Kupfer + Sand). */
-export function Mark({ size = "var(--pis)" }: { size?: string }) {
+/** Wortzeichen: ein beleuchtetes Pixel-V (Kupfer + Sand). 7×7, größtmögliche ganze Einheiten in 28 px. */
+export function Mark({ size = "min(calc(var(--px) * 7), 28px)" }: { size?: string }) {
   const rows = ["a.....b", "a.....b", "aa...bb", ".a...b.", ".aa.bb.", "..a.b..", "..aab.."];
   return (
     <svg viewBox="0 0 7 7" style={{ width: size, height: size }} shapeRendering="crispEdges" aria-hidden>

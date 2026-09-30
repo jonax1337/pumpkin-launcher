@@ -26,6 +26,9 @@
 .vx-ico[data-flip="x"] svg { transform: scaleX(-1); }
 .vx-ico[data-flip="y"] svg { transform: scaleY(-1); }
 
+/* Glyphe aus pixel/icons.tsx (GlyphSvg): Pixel bleiben Pixel */
+.gl { image-rendering: pixelated; shape-rendering: crispEdges; }
+
 /* Glyphen 10×10 und Projektbilder: Box fest, Kantenlänge aus unit.ts (--gl-<Box>, ganzzahlige Zellen) */
 .vx-gl { --gl-box: 40px; --gl: var(--gl-40, calc(var(--px) * 10)); width: var(--gl-box); height: var(--gl-box); display: inline-grid; place-items: center; flex: none; }
 .vx-gl[data-box="52"] { --gl-box: 52px; --gl: var(--gl-52, calc(var(--px) * 10)); }

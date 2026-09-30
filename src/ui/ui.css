@@ -1,4 +1,4 @@
-/* Pixel-Kit: sammelt alle Kit-Stile. Eingebunden in src/index.css nach states.css (Schicht components).
+/* Pixel-Kit: sammelt alle Kit-Stile. Eingebunden in src/index.css hinter pixelkino.css (Schicht components).
    Komponenten importieren kein CSS selbst. */
 @import "./tokens.css";
 @import "./icon.css";
@@ -12,3 +12,5 @@
 @import "./overlay.css";
 @import "./feedback.css";
 @import "./layout.css";
+@import "./motion.css";
+@import "./prose.css";

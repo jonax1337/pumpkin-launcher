@@ -1,0 +1,35 @@
+/* Prosa: Projektbeschreibung aus Markdown (Modrinth), gerendert von Description in ContentBrowser.tsx.
+   Unterstriche sind hier erlaubt: Das ist Fließtext, keine Steuerfläche (PIXELKINO.md §5a). */
+
+.desc { margin-top: 22px; max-width: 68ch; }
+.desc h3 { font: 800 20px/1.1 var(--f-display); text-transform: uppercase; margin: 22px 0 8px; }
+.desc p { color: #C9D1DE; margin: 0 0 10px; line-height: 1.6; font-size: 14.5px; }
+.desc ul { margin: 0 0 12px; }
+.desc li { position: relative; padding-left: 18px; color: #C9D1DE; line-height: 1.6; font-size: 14.5px; }
+.desc li::before { content: ""; position: absolute; left: 2px; top: .62em; width: var(--u2); height: var(--u2); background: var(--copper); }
+
+.desc.md { overflow-wrap: anywhere; }
+.desc.md > :first-child { margin-top: 0; }
+.desc.md h1, .desc.md h2 { font: 800 24px/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; margin: 24px 0 8px; color: var(--fg); }
+.desc.md h3, .desc.md h4, .desc.md h5, .desc.md h6 { font: 800 19px/1.1 var(--f-display); text-transform: uppercase; margin: 20px 0 8px; color: var(--fg); }
+.desc.md a { color: var(--copper); text-decoration: underline; text-decoration-thickness: var(--px); text-underline-offset: 3px; }
+.desc.md a:hover { color: color-mix(in srgb, var(--copper) 60%, #fff); }
+.desc.md img { display: inline-block; max-width: 100%; height: auto; clip-path: var(--n1); vertical-align: middle; }
+.desc.md p:has(> img:only-child), .desc.md p:has(> a:only-child > img:only-child) { margin: 12px 0; }
+.desc.md .badges { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13.5px; }
+.desc.md strong, .desc.md b { color: var(--fg); }
+.desc.md code { font: 12.5px/1.5 var(--f-mono); background: var(--sunk); padding: 1px 5px; }
+.desc.md pre { overflow-x: auto; background: #05080D; padding: 10px 12px; margin: 0 0 12px; clip-path: var(--n1); }
+.desc.md pre code { background: none; padding: 0; }
+.desc.md blockquote { margin: 0 0 12px; padding-left: 14px; box-shadow: inset var(--px) 0 0 var(--line-2); }
+.desc.md blockquote p { color: var(--fg-2); }
+.desc.md ol { list-style: decimal; padding-left: 22px; margin: 0 0 12px; }
+.desc.md ol li { padding-left: 2px; }
+.desc.md ol li::before { display: none; }
+.desc.md li p { margin: 0; }
+.desc.md hr { border: 0; height: var(--px); background: var(--line); margin: 18px 0; }
+.desc.md table { display: block; overflow-x: auto; border-collapse: collapse; margin: 0 0 12px; font-size: 13px; }
+.desc.md th, .desc.md td { padding: 5px 10px; text-align: left; box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); color: #C9D1DE; }
+.desc.md details { margin: 0 0 12px; }
+.desc.md summary { cursor: pointer; color: var(--fg-2); font-weight: 600; }
+.desc.md iframe { max-width: 100%; }

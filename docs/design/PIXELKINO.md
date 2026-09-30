@@ -72,7 +72,7 @@ Schriften mit `display=block`; die App wird erst nach `document.fonts.ready` sic
 |---|---|---|
 | Knopf primär | Sockel `::before` (`--acc-lo`) + Fläche `.bf` (Licht oben/links, Schatten unten/rechts, je 1 Einheit) | Hover: Fläche +1 Einheit hoch; gedrückt: Fläche sinkt, Bevel kehrt sich um, Inhalt +1 Einheit (alles `transform`); deaktiviert: flach ohne Bevel |
 | Knopf sekundär | dunkle Platte, 1-Einheit-Rahmen, Bevel | Hover heller; gedrückt Bevel invers + Inhalt 1 Einheit tiefer |
-| Knopf Geist | nur Text | Hover: Platte `--hv-ctl` (Fläche, nie Linie); getönt: Platte mit 12 % Tonfarbe; Druck: Platte `--pr-ctl`, Inhalt 1 Einheit tiefer (Kit; der alte `.btn-g` zeigt bis zur Umstellung noch den Unterstrich) |
+| Knopf Geist | nur Text | Hover: Platte `--hv-ctl` (Fläche, nie Linie); getönt: Platte mit 12 % Tonfarbe; Druck: Platte `--pr-ctl`, Inhalt 1 Einheit tiefer |
 | Höhen | 32 / 40 / 56 px | Symbolknopf quadratisch; kleine Knöpfe nutzen 5×5-Icons, große 7×7 |
 | Spielen | 272×56 (`m` 176×40, `i` 32×32), feste Größe | Spielen (Unterzeile „Installiert beim ersten Start“, wenn nötig) · Wird installiert x % (Segmentbalken statt Unterzeile) · Startet (laufender Balken) · BEENDEN mit Unterzeile „Läuft seit …“ (dunkel, Akzentrahmen; Klick fragt nach) · Erneut versuchen / Erneut starten (Fehlerrot) · Kann nicht starten (flach) |
 | Tab | Platte nur aktiv, 1-Einheit-Akzentstrich unten | Hover Platte `--panel`; Zähler in Pixelschrift mit fester Breite |
@@ -123,18 +123,20 @@ Schriften mit `display=block`; die App wird erst nach `document.fonts.ready` sic
 7. Messung: `PerformanceObserver('layout-shift')` in `window.__cls`, Anzeige per `?cls=1`.
 
 ## 5. Umsetzung in der React-App (Stand 2026-09-30)
-Das vorherige Design („Deepslate & Emerald“, shadcn/ui, Seitenleiste) ist vollständig ersetzt.
+Das vorherige Design („Deepslate & Emerald“, shadcn/ui, Seitenleiste) ist vollständig ersetzt. Alle Bausteine kommen aus dem Pixel-Kit (siehe 5a); ein Altbestand (px.tsx, .btn, .chip, .pi) existiert nicht mehr.
 
 | Bereich | Datei(en) |
 |---|---|
-| Tokens, Bausteine, Mockup-Stile | `src/styles/pixelkino.css` (aus dem Mockup übernommen), Einbindung in `src/index.css`, Schriften per `@fontsource` |
-| Zustände und Bewegung | `src/styles/states.css`: eigene Auswahlliste, Hover · Druck · Fokus je Baustein, Ein- und Ausblenden von Menü, Tooltip, Dialog, Seitenpanel, Seitenwechsel |
-| Pixeleinheit | `src/pixel/unit.ts` (`usePixelUnit`, DPR-Regel aus Abschnitt 1) |
+| Tokens, Reset, Fokus, App-Gerüst/Fensterleiste, Szene, Seitenlayouts | `src/styles/pixelkino.css`, Einbindung in `src/index.css`, Schriften per `@fontsource` |
+| Bausteine des Kits (Knöpfe, Chips, Felder, Listen, Überlagerungen …) | `src/ui/*` (je Gruppe eine TSX + eine CSS, vx-*), gesammelt über `src/ui/ui.css` |
+| Bewegung (Ein-/Ausblenden, Fortschritt-Suche, Einblenden-Staffel, Seitenwechsel) | `src/ui/motion.css` |
+| Prosa (Modrinth-Markdown, Unterstrich erlaubt) | `src/ui/prose.css` (`.desc`, `.desc.md`) |
+| Spielen (Knopf, Balken, Statuszeile, Protokoll) | `src/components/play.css` + `src/components/game.tsx` |
+| Pixeleinheit | `src/pixel/unit.ts` (`usePixelUnit`, DPR-Regel aus Abschnitt 1; setzt `--px`, `--avs`, `--av-32`, `--gl-*`, `data-ico-m`) |
 | Szenen-Engine | `src/pixel/scene.ts` (reines TS, `buildScene` aller 7 Biome, 12-fps-Takt, Pausenregeln, Bayer-Wechsel, Cache), `src/pixel/PixelScene.tsx` |
-| Icons, Glyphen, Wortzeichen, Spielerkopf | `src/pixel/icons.tsx` |
-| Bausteine | `src/components/px.tsx` (Radix für Menü, Kontextmenü, Auswahl, Tooltip, Dialog, Seitenpanel; Sonner für Toasts) |
-| Fensterleiste | `src/app/Layout.tsx` (rahmenlos, Pixel-Tabs, Aufgaben-Menü, Kontomenü, Fensterknöpfe) |
-| Spielen | `src/components/game.tsx` (`PlayButton`, `PlayStatus`, `StatusChip`, `LogConsole`) |
+| Glyphen, Wortzeichen, Spielerkopf | `src/pixel/icons.tsx` (UI-Icons: `src/pixel/icon-data.ts`, gerendert über `Icon` aus `@/ui`) |
+| Fensterleiste | `src/app/Layout.tsx` (rahmenlos, NavTabs/Aufgaben-Popover/Kontomenü/Fensterknöpfe aus dem Kit) |
+| Spielen | `src/components/game.tsx` (`PlayButton`, `PlayBar`, `PlayStatus`, `StatusChip`, `LogConsole`) |
 | Seiten | `pages/Home.tsx`, `Instances.tsx`, `InstanceDetail.tsx` + `pages/detail/`, `Discover.tsx`, `Settings.tsx`; `components/ContentBrowser.tsx`, `NewInstanceDialog.tsx`, `PlayerNames.tsx`, `Onboarding.tsx`, `instance.tsx` |
 | Laufzeit | `store/look.ts` (Biom je Instanz), `store/tasks.ts` (Aufgaben-Verlauf), `store/game.ts` (Startzeit für „Läuft seit“) |
 
@@ -145,14 +147,14 @@ Das vorherige Design („Deepslate & Emerald“, shadcn/ui, Seitenleiste) ist vo
 - „Alle aktualisieren“ wird schon ab 1180 px kompakt (Symbol + Zahl), weil die Werkzeugleiste der echten App mehr Platz braucht.
 - Einstellungen: echte Tabs waagerecht unter dem Titel statt Seitenspalte (Konten, Spiel, Darstellung, Erweitert, Über Voxlet; `role=tab`/`tabpanel`, Roving-Tabindex, Pfeile/Home/End). Zustand in `?tab=…`; `#konten` (Kontomenü) und die anderen Abschnitts-Anker öffnen ihren Tab. Je Tab nur dessen Inhalt; der Tab-Name ist die Überschrift (`h2` nur für Vorleser). Klebt die Leiste beim Wechsel oben, springt die Seite auf ihre Ruhelage zurück.
 - Instanz- und Statusfarben weichen vom Mockup ab (Farbsemantik, Abschnitt 1).
-- Hover, Druck und Ausblenden sind über das Mockup hinaus ergänzt (Abschnitt „Zustände“ in `states.css`): Übergänge laufen in ganzen Stufen (`steps`), nie über halbe Pixel.
+- Hover, Druck und Ausblenden sind über das Mockup hinaus ergänzt (je Baustein im Kit, Bewegung in `ui/motion.css`): Übergänge laufen in ganzen Stufen (`steps`), nie über halbe Pixel.
 
 **Stolperfallen:**
 - Stylesheets aus Komponenten laden vor `index.css`. Die Schichtreihenfolge (`@layer theme, base, components, utilities`) steht deshalb in `index.html`, sonst gewinnt Tailwinds Reset über alle Pixelkino-Stile.
 - Klassennamen dürfen nicht mit Tailwind-Utilities kollidieren (Beispiel: `ring` zeichnete einen Pixel an jedem Schalter; heißt jetzt `fring`).
 
 ## 5a. Kit (src/ui)
-Einheitliche Bausteine mit Präfix `vx-`, Varianten über `data-*` (`<button class="vx-btn fx" data-variant="ghost" data-size="s">`). Stile nur zentral: `src/ui/ui.css` (tokens, icon, button, chip) wird in `src/index.css` nach `states.css` mit `layer(components)` eingebunden; Komponenten importieren kein CSS. Import in TSX aus `@/ui`. Vorschau im Dev-Server unter `/_kit` (Pixelstufe oben umschaltbar). Der Altbestand (`px.tsx`, `.btn`, `.chip`, `.pi`) bleibt bis zur Umstellung unverändert.
+Einheitliche Bausteine mit Präfix `vx-`, Varianten über `data-*` (`<button class="vx-btn fx" data-variant="ghost" data-size="s">`). Stile nur zentral: `src/ui/ui.css` sammelt alle Kit-CSS (tokens, icon, button, chip, tabs, field, toggle, card, list, overlay, feedback, layout, motion, prose) und wird in `src/index.css` hinter `pixelkino.css` mit `layer(components)` eingebunden; danach `components/play.css` (Spielen). Komponenten importieren kein CSS. Import in TSX aus `@/ui`. Vorschau im Dev-Server unter `/_kit` (Pixelstufe oben umschaltbar).
 
 **Größen (fest, nie von `--px` abhängig)**
 | size | Höhe | Innenabstand x (Text/Geist) | Schrift | Abstand | Icon-Slot | Symbolknopf |

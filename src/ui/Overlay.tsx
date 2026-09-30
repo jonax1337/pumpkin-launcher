@@ -1,27 +1,14 @@
 /**
  * Überlagerungen des Kits: Tooltip, abgeschnittener Text, Menü, Kontextmenü, Popover, Dialog, Rückfrage, Seitenpanel.
- * Verhalten aus Radix; Fokus-Rückgabe, Menü-Auslöser, Akzent-Weitergabe und Autofokus-Priorität wie bisher in px.tsx.
+ * Verhalten aus Radix; Fokus-Rückgabe, Menü-Auslöser, Akzent-Weitergabe und Autofokus-Priorität wie im früheren px.tsx.
  * Aussehen: ui/overlay.css (vx-*). Innerhalb von Overlays gilt der hellere Hover-Kontext (data-ctx="overlay", tokens.css).
  */
-import { cloneElement, createContext, isValidElement, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
+import { cloneElement, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
 import { ContextMenu as CM, Dialog as D, DropdownMenu as DM, Popover as P, Tooltip as T } from "radix-ui";
 import { cn } from "@/lib/utils";
 import { Icon } from "./Icon";
 import { Button, IconButton } from "./Button";
 import type { IconName } from "./types";
-
-// ---------- Übergang: Altklassen für Bestandsaufrufe ----------
-
-/**
- * ALTBESTAND bis Phase C: px.tsx rendert Menü, Kontextmenü, Seitenpanel und Trunc hierüber und setzt zusätzlich die
- * alten Klassen (rpop, mitem, msep, mlabel, sheet, ell), weil Bestandsregeln daran hängen (.rpop.addto, .me .mitem,
- * .sheet .proj-h, Listen-.ell …). Kit-Aufrufe aus "@/ui" setzen nur vx-Klassen. Kinder erben den Schalter nicht.
- */
-const Legacy = createContext(false);
-export function LegacyClasses({ children }: { children: ReactNode }) {
-  return <Legacy.Provider value>{children}</Legacy.Provider>;
-}
-const Plain = ({ children }: { children: ReactNode }) => <Legacy.Provider value={false}>{children}</Legacy.Provider>;
 
 // ---------- Tooltip ----------
 
@@ -66,7 +53,6 @@ type TruncTag = "span" | "b" | "strong" | "p" | "div" | "h1" | "h2" | "h3";
  * Beispiele: `<Trunc as="b" text={name} host=".hit" />` · `<Link …><Trunc text={name} /></Link>`
  */
 export function Trunc({ text, as: Tag = "span", host, side = "top", className, style }: { text: string; as?: TruncTag; host?: string; side?: "top" | "bottom"; className?: string; style?: CSSProperties }) {
-  const legacy = useContext(Legacy);
   const ref = useRef<HTMLElement>(null);
   const [over, setOver] = useState(false);
   const [open, setOpen] = useState(false);
@@ -121,7 +107,7 @@ export function Trunc({ text, as: Tag = "span", host, side = "top", className, s
     <T.Root open={open} onOpenChange={(o) => !o && setOpen(false)}>
       {/* Der Text selbst ist nur Anker: kein eigener Hover/Fokus, das regelt der Wirt */}
       <T.Trigger asChild onPointerMove={(e) => e.preventDefault()} onPointerLeave={(e) => e.preventDefault()} onFocus={(e) => e.preventDefault()}>
-        <El ref={ref as never} className={cn("vx-trunc", legacy && "ell", className)} style={style}>{text}</El>
+        <El ref={ref as never} className={cn("vx-trunc", className)} style={style}>{text}</El>
       </T.Trigger>
       <T.Portal>
         <T.Content className="vx-tip" data-pass="" side={side} sideOffset={8} collisionPadding={8} aria-hidden>
@@ -140,15 +126,15 @@ export type MenuEntry =
   | { label: string }
   | { id: string; text: ReactNode; icon?: IconName; bad?: boolean; disabled?: boolean; onSelect: () => void; sub?: ReactNode; lead?: ReactNode; checked?: boolean };
 
-function entries(list: MenuEntry[], legacy: boolean, Item: typeof DM.Item | typeof CM.Item, Sep: typeof DM.Separator | typeof CM.Separator, Label: typeof DM.Label | typeof CM.Label) {
+function entries(list: MenuEntry[], Item: typeof DM.Item | typeof CM.Item, Sep: typeof DM.Separator | typeof CM.Separator, Label: typeof DM.Label | typeof CM.Label) {
   return list.map((e, i) => {
-    if (e === "-") return <Sep key={`s${i}`} className={cn("vx-msep", legacy && "msep")} />;
-    if ("label" in e) return <Label key={`l${i}`} className={cn("vx-mlabel", legacy && "mlabel")}>{e.label}</Label>;
+    if (e === "-") return <Sep key={`s${i}`} className="vx-msep" />;
+    if ("label" in e) return <Label key={`l${i}`} className="vx-mlabel">{e.label}</Label>;
     const tall = !!(e.sub || e.lead);
     return (
       <Item
         key={e.id}
-        className={cn("vx-mi", legacy && cn("mitem", e.bad && "bad", tall && "tall"))}
+        className="vx-mi"
         data-tone={e.bad ? "bad" : undefined}
         data-tall={tall ? "" : undefined}
         disabled={e.disabled}
@@ -156,7 +142,7 @@ function entries(list: MenuEntry[], legacy: boolean, Item: typeof DM.Item | type
       >
         {e.lead ?? (e.icon ? <Icon name={e.icon} size="s" /> : null)}
         {e.sub ? (
-          <span className={cn("vx-mi-t2", legacy && "sub2 ell")}><b className="vx-trunc">{e.text}</b><span className="vx-trunc">{e.sub}</span></span>
+          <span className="vx-mi-t2"><b className="vx-trunc">{e.text}</b><span className="vx-trunc">{e.sub}</span></span>
         ) : (
           <span className="vx-trunc">{e.text}</span>
         )}
@@ -205,7 +191,6 @@ export function Menu({ trigger, items, align = "end", width, className, open, on
   width?: number;
   className?: string; open?: boolean; onOpenChange?: (o: boolean) => void; children?: ReactNode;
 }) {
-  const legacy = useContext(Legacy);
   const ref = useRef<HTMLButtonElement>(null);
   return (
     <DM.Root
@@ -219,9 +204,9 @@ export function Menu({ trigger, items, align = "end", width, className, open, on
     >
       <DM.Trigger asChild ref={ref}>{trigger}</DM.Trigger>
       <DM.Portal>
-        <DM.Content className={cn("vx-pop", legacy && "rpop", className)} data-ctx="overlay" style={width ? { width } : undefined} align={align} sideOffset={6} collisionPadding={8} onFocus={keepFocusWhenClosed}>
-          {items && entries(items, legacy, DM.Item, DM.Separator, DM.Label)}
-          <Plain>{children}</Plain>
+        <DM.Content className={cn("vx-pop", className)} data-ctx="overlay" style={width ? { width } : undefined} align={align} sideOffset={6} collisionPadding={8} onFocus={keepFocusWhenClosed}>
+          {items && entries(items, DM.Item, DM.Separator, DM.Label)}
+          {children}
         </DM.Content>
       </DM.Portal>
     </DM.Root>
@@ -230,7 +215,6 @@ export function Menu({ trigger, items, align = "end", width, className, open, on
 
 /** Kontextmenü (Rechtsklick) mit denselben Einträgen. */
 export function ContextMenu({ items, children }: { items: MenuEntry[]; children: ReactNode }) {
-  const legacy = useContext(Legacy);
   return (
     <CM.Root modal={false} onOpenChange={(o) => !o && menuClosed()}>
       <CM.Trigger
@@ -245,8 +229,8 @@ export function ContextMenu({ items, children }: { items: MenuEntry[]; children:
         {children}
       </CM.Trigger>
       <CM.Portal>
-        <CM.Content className={cn("vx-pop", legacy && "rpop")} data-ctx="overlay" collisionPadding={8} onFocus={keepFocusWhenClosed}>
-          {entries(items, legacy, CM.Item, CM.Separator, CM.Label)}
+        <CM.Content className="vx-pop" data-ctx="overlay" collisionPadding={8} onFocus={keepFocusWhenClosed}>
+          {entries(items, CM.Item, CM.Separator, CM.Label)}
         </CM.Content>
       </CM.Portal>
     </CM.Root>
@@ -345,25 +329,25 @@ function useReturnFocus(open?: boolean) {
 }
 
 /**
- * --acc am Auslöser (berechnet, also auch geerbt). Ein Gefahrknopf (Kit: data-variant=danger, alt: .btn-d) überschreibt
+ * --acc am Auslöser (berechnet, also auch geerbt). Ein Gefahrknopf (data-variant="danger") überschreibt
  * --acc nur für sich, dann zählt sein Umfeld. Nur wenn es vom globalen Kupfer abweicht; die Ableitungen
  * (--acc-hi/-mid/-lo) rechnet pixelkino.css über [style*="--acc:"].
  */
 function accentOf(el: HTMLElement | null) {
   if (!el?.isConnected) return undefined;
-  const src = el.closest(".btn-d, .vx-btn[data-variant='danger']")?.parentElement ?? el;
+  const src = el.closest(".vx-btn[data-variant='danger']")?.parentElement ?? el;
   const v = getComputedStyle(src).getPropertyValue("--acc").trim();
   return v && v !== getComputedStyle(document.documentElement).getPropertyValue("--acc").trim() ? v : undefined;
 }
 
 /**
  * Erstes Ziel nach Priorität, nicht in Dokument-Reihenfolge: markiert → Eingabe → Hauptknopf → erstes Bedienbare.
- * Hauptknopf: Kit-Primärknopf im Fuß; `.btn-p` ist der alte Btn (Bestand bis Phase B, schließt dort auch .btn-d ein).
+ * Hauptknopf: Kit-Primärknopf im Fuß.
  */
 const AUTOFOCUS = [
   "[data-autofocus], [autofocus]",
   ".vx-dlg-b input:not([type=checkbox]):not([type=radio]):not([type=file]):not(:disabled), .vx-dlg-b textarea:not(:disabled)",
-  ".vx-dlg-f :is(.vx-btn[data-variant='primary'], .btn-p):not(:disabled)",
+  ".vx-dlg-f .vx-btn[data-variant='primary']:not(:disabled)",
   "button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]",
 ];
 
@@ -463,7 +447,7 @@ export function Dialog({ open, onOpenChange, trigger, title, sub, width = 560, h
           onClick={(e) => syncTabStops(e.currentTarget)}
           style={{ ["--dw" as string]: `${width}px`, ...(ret.acc && { ["--acc" as string]: ret.acc }), height: height ? `min(${height}px, calc(100vh - 64px))` : undefined }}
         >
-          <Plain>
+          <div>
             <div className="vx-dlg-h">
               <div className="vx-dlg-ht">
                 <D.Title asChild><h2>{title}</h2></D.Title>
@@ -480,7 +464,7 @@ export function Dialog({ open, onOpenChange, trigger, title, sub, width = 560, h
                 {footer}
               </div>
             )}
-          </Plain>
+          </div>
         </D.Content>
       </D.Portal>
     </D.Root>
@@ -566,13 +550,12 @@ export function ConfirmDialog({ open, onOpenChange, title, text, confirmLabel = 
 
 /** Seitenpanel rechts (Katalog im Kontext einer Instanz). Nicht modal: die Liste daneben bleibt bedienbar. */
 export function Sheet({ open, onOpenChange, title, sub, acc, children, tools }: { open: boolean; onOpenChange: (o: boolean) => void; title: ReactNode; sub?: ReactNode; acc?: string; children: ReactNode; tools?: ReactNode }) {
-  const legacy = useContext(Legacy);
   const ret = useReturnFocus(open);
   return (
     <D.Root open={open} onOpenChange={onOpenChange} modal={false}>
       <D.Portal>
         <D.Content
-          className={cn("vx-sheet", legacy && "sheet")}
+          className="vx-sheet"
           data-ctx="overlay"
           aria-describedby={undefined}
           style={acc || ret.acc ? ({ "--acc": acc ?? ret.acc } as CSSProperties) : undefined}
@@ -580,7 +563,7 @@ export function Sheet({ open, onOpenChange, title, sub, acc, children, tools }: 
           onOpenAutoFocus={ret.remember}
           onCloseAutoFocus={ret.restore}
         >
-          <Plain>
+          <div>
             <div className="vx-sheet-h">
               <div className="vx-sheet-ht">
                 <D.Title asChild><h2>{title}</h2></D.Title>
@@ -592,7 +575,7 @@ export function Sheet({ open, onOpenChange, title, sub, acc, children, tools }: 
             </div>
             {tools && <div className="vx-sheet-t">{tools}</div>}
             <div className="vx-sheet-b">{children}</div>
-          </Plain>
+          </div>
         </D.Content>
       </D.Portal>
     </D.Root>

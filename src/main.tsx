@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
-import { TipProvider, Toaster } from "@/components/px";
+import { TipProvider, Toaster } from "@/ui";
 import { Layout } from "@/app/Layout";
 import { INSTALL_CANCELLED } from "@/lib/types";
 import { HomePage } from "@/pages/Home";

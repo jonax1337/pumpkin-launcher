@@ -206,7 +206,7 @@ export function Select({ value, onChange, options, label, size = "m", className,
         </S.Icon>
       </S.Trigger>
       <S.Portal>
-        <S.Content className="rpop vx-selpop" position="popper" sideOffset={6} collisionPadding={8} align="start">
+        <S.Content className="vx-pop vx-selpop" position="popper" sideOffset={6} collisionPadding={8} align="start">
           <S.ScrollUpButton className="vx-selscroll"><Icon name="chevd" size="s" flip="y" /></S.ScrollUpButton>
           <S.Viewport>
             {items.map((o) => (

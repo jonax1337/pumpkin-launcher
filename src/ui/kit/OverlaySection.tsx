@@ -16,7 +16,7 @@ const row: CSSProperties = { display: "flex", gap: 12, alignItems: "center", fle
 function Sec({ title, id, children }: { title: string; id: string; children: ReactNode }) {
   return (
     <section style={sec} data-kit={`sec-${id}`}>
-      <h2 className="h-sec">{title}</h2>
+      <h2 className="vx-h">{title}</h2>
       {children}
     </section>
   );

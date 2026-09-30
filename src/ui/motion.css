@@ -1,0 +1,28 @@
+/* Bewegung des Kits und des App-Gerüsts: Ein- und Ausblenden von Overlays (Radix wartet auf die Ausblend-Animation),
+   Fortschritt-Suchen (ind), Platzhalter-Puls (skp), Einblenden-Staffel (rise) und Seitenwechsel.
+   Übergänge in ganzen Stufen (steps), nie über halbe Pixel; `prefers-reduced-motion` steht in pixelkino.css. */
+
+@keyframes fade { from { opacity: 0; } }
+@keyframes fadeout { to { opacity: 0; } }
+
+/* Menüs, Popover, Dialog, Seitenpanel */
+@keyframes popin { from { opacity: 0; transform: translateY(-4px); } }
+@keyframes popinup { from { opacity: 0; transform: translateY(4px); } }
+@keyframes popout { to { opacity: 0; transform: translateY(-4px); } }
+@keyframes dlgin { from { opacity: 0; transform: translate(-50%, calc(-50% + 10px)); } }
+@keyframes dlgout { to { opacity: 0; transform: translate(-50%, calc(-50% + 8px)); } }
+@keyframes sheetin { from { transform: translateX(calc(100% + 16px)); } }
+@keyframes sheetout { from { transform: none; } to { transform: translateX(calc(100% + 16px)); } }
+
+/* Unbestimmter Fortschritt: Suchfenster wandert (vx-prog und .prog im Spielen-Knopf) */
+@keyframes ind { from { -webkit-mask-position: -120px 0; mask-position: -120px 0; } to { -webkit-mask-position: 240px 0; mask-position: 240px 0; } }
+
+/* Platzhalter beim Laden (vx-skel) pulsiert in Stufen */
+@keyframes skp { to { background: #172131; } }
+
+/* Einblenden-Staffel: Zeilen und Karten (40 ms je Position, --i) */
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+.rise { animation: rise .32s var(--ease) both; animation-delay: calc(var(--i, 0) * 40ms); }
+
+/* Seitenwechsel: nur Deckkraft (ein transform würde position: fixed/sticky darunter brechen) */
+.view > * { animation: fade .2s var(--ease) both; }
