@@ -2,12 +2,15 @@
 //! Minecraft-Token. Refresh-Tokens liegen im OS-Schlüsselbund (`keyring`), nie in JSON;
 //! Minecraft-Tokens nur im Speicher und mit Ablaufzeit. Anleitung: `docs/ACCOUNT-SETUP.md`.
 use std::collections::HashMap;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use md5::{Digest, Md5};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sha2::Sha256;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
 use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, AppResult};
@@ -31,16 +34,28 @@ pub struct MsState {
     sessions: Mutex<HashMap<String, McSession>>,
 }
 
+/// Wie die Anmeldung läuft: Browser mit Rücksprung auf localhost (Standard) oder Gerätecode (Rückfall).
+#[derive(Clone)]
+enum Flow {
+    Device { device_code: String, interval: u64 },
+    /// Lokaler Listener für den Rücksprung, PKCE-Verifier und `state` gegen fremde Aufrufe.
+    Browser { listener: Arc<TcpListener>, verifier: String, state: String, redirect_uri: String },
+}
+
 #[derive(Clone)]
 struct Pending {
+    /// Unterscheidet Anmeldungen, damit `finish_login` nur die eigene aufräumt.
+    id: String,
     client_id: String,
-    device_code: String,
-    interval: u64,
+    flow: Flow,
     expires_at: Instant,
     cancel: CancellationToken,
     /// Von `finish_login` übernommen; bleibt im Slot, damit `cancel_login` sie noch erreicht.
     claimed: bool,
 }
+
+/// So lange wartet die Browser-Anmeldung auf den Rücksprung.
+const BROWSER_TIMEOUT: Duration = Duration::from_secs(600);
 
 #[derive(Clone)]
 pub struct McSession {
@@ -122,10 +137,19 @@ fn five() -> u64 {
     5
 }
 
-/// Was das Frontend anzeigt: Code und Adresse zum Eingeben.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LoginMode {
+    Browser,
+    Device,
+}
+
+/// Was das Frontend anzeigt. Browser: `verification_uri` ist die Anmeldeseite (öffnet die App selbst),
+/// `user_code` bleibt leer. Gerätecode: Code und Adresse zum Eingeben.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct DeviceCode {
+pub struct LoginStart {
+    pub mode: LoginMode,
     pub user_code: String,
     pub verification_uri: String,
     pub expires_in: u64,
@@ -336,33 +360,101 @@ fn load_token(entry: &keyring::Entry) -> keyring::Result<String> {
     String::from_utf8(bytes).map_err(|e| keyring::Error::BadEncoding(e.into_bytes()))
 }
 
-/// Startet den Gerätecode-Flow; eine vorherige, noch wartende Anmeldung wird abgebrochen.
-pub async fn start_login(state: &AppState, client_id_arg: Option<String>) -> AppResult<DeviceCode> {
+/// Startet die Anmeldung; eine vorherige, noch wartende wird abgebrochen. Standard ist der Browser mit
+/// Rücksprung auf localhost (kein Code zum Abtippen). Mit `method = "device"` oder wenn der lokale
+/// Listener nicht startet, gibt es den Gerätecode.
+pub async fn start_login(state: &AppState, client_id_arg: Option<String>, method: Option<String>) -> AppResult<LoginStart> {
     let client_id = client_id(client_id_arg)?;
+    if method.as_deref() != Some("device") {
+        match start_browser(state, &client_id).await {
+            Ok(start) => return Ok(start),
+            Err(err) => tracing::warn!(%err, "Browser-Anmeldung nicht möglich, weiche auf Gerätecode aus"),
+        }
+    }
+    start_device(state, client_id).await
+}
+
+fn set_pending(state: &AppState, pending: Pending) {
+    if let Some(old) = lock(&state.ms.pending).replace(pending) {
+        old.cancel.cancel();
+    }
+}
+
+async fn start_browser(state: &AppState, client_id: &str) -> AppResult<LoginStart> {
+    // Nur Loopback: von außen ist der Listener nicht erreichbar. Microsoft ignoriert den Port von `http://localhost`.
+    let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
+    let redirect_uri = format!("http://localhost:{}", listener.local_addr()?.port());
+    let verifier = format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
+    let login_state = uuid::Uuid::new_v4().simple().to_string();
+    let url = authorize_url(client_id, &redirect_uri, &pkce_challenge(&verifier), &login_state);
+    set_pending(
+        state,
+        Pending {
+            id: uuid::Uuid::new_v4().to_string(),
+            client_id: client_id.into(),
+            flow: Flow::Browser { listener: Arc::new(listener), verifier, state: login_state, redirect_uri },
+            expires_at: Instant::now() + BROWSER_TIMEOUT,
+            cancel: CancellationToken::new(),
+            claimed: false,
+        },
+    );
+    Ok(LoginStart {
+        mode: LoginMode::Browser,
+        user_code: String::new(),
+        verification_uri: url,
+        expires_in: BROWSER_TIMEOUT.as_secs(),
+        interval: 0,
+        message: "Melde dich im Browser bei Microsoft an.".into(),
+    })
+}
+
+async fn start_device(state: &AppState, client_id: String) -> AppResult<LoginStart> {
     let (status, body) =
         post_form(&state.http, &format!("{LOGIN}/devicecode"), &[("client_id", &client_id), ("scope", SCOPE)]).await?;
     if !ok(status) {
         return Err(say(oauth_text(&serde_json::from_slice(&body).unwrap_or_default())));
     }
     let r: DeviceCodeResponse = serde_json::from_slice(&body)?;
-    let pending = Pending {
-        client_id,
-        device_code: r.device_code,
-        interval: r.interval,
-        expires_at: Instant::now() + Duration::from_secs(r.expires_in),
-        cancel: CancellationToken::new(),
-        claimed: false,
-    };
-    if let Some(old) = lock(&state.ms.pending).replace(pending) {
-        old.cancel.cancel();
-    }
-    Ok(DeviceCode {
+    set_pending(
+        state,
+        Pending {
+            id: uuid::Uuid::new_v4().to_string(),
+            client_id,
+            flow: Flow::Device { device_code: r.device_code, interval: r.interval },
+            expires_at: Instant::now() + Duration::from_secs(r.expires_in),
+            cancel: CancellationToken::new(),
+            claimed: false,
+        },
+    );
+    Ok(LoginStart {
+        mode: LoginMode::Device,
         user_code: r.user_code,
         verification_uri: r.verification_uri,
         expires_in: r.expires_in,
         interval: r.interval,
         message: r.message,
     })
+}
+
+fn authorize_url(client_id: &str, redirect_uri: &str, challenge: &str, state: &str) -> String {
+    let query = form(&[
+        ("client_id", client_id),
+        ("response_type", "code"),
+        ("redirect_uri", redirect_uri),
+        ("response_mode", "query"),
+        ("scope", SCOPE),
+        ("code_challenge", challenge),
+        ("code_challenge_method", "S256"),
+        ("state", state),
+        ("prompt", "select_account"),
+    ]);
+    format!("{LOGIN}/authorize?{query}")
+}
+
+/// PKCE (RFC 7636): Base64url des SHA-256 vom Verifier.
+fn pkce_challenge(verifier: &str) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))
 }
 
 /// Wartet, bis die Anmeldung im Browser bestätigt ist, und speichert das Konto.
@@ -373,7 +465,7 @@ pub async fn finish_login(state: &AppState) -> AppResult<Account> {
     let result = poll(state, &pending).await;
     // Nur die eigene Anmeldung aufräumen, nicht eine inzwischen neu gestartete.
     let mut slot = lock(&state.ms.pending);
-    if slot.as_ref().is_some_and(|p| p.device_code == pending.device_code) {
+    if slot.as_ref().is_some_and(|p| p.id == pending.id) {
         *slot = None;
     }
     result
@@ -386,7 +478,176 @@ fn claim(slot: &mut Option<Pending>) -> Option<Pending> {
 }
 
 async fn poll(state: &AppState, p: &Pending) -> AppResult<Account> {
-    let mut interval = p.interval.max(1);
+    match &p.flow {
+        Flow::Device { device_code, interval } => poll_device(state, p, device_code, *interval).await,
+        Flow::Browser { listener, verifier, state: login_state, redirect_uri } => {
+            let code = wait_for_code(p, listener, login_state).await?;
+            let grant = [
+                ("grant_type", "authorization_code"),
+                ("client_id", p.client_id.as_str()),
+                ("code", code.as_str()),
+                ("redirect_uri", redirect_uri.as_str()),
+                ("code_verifier", verifier.as_str()),
+                ("scope", SCOPE),
+            ];
+            let (status, body) = post_form(&state.http, &format!("{LOGIN}/token"), &grant).await?;
+            match parse_poll(status, &body)? {
+                Poll::Done(tokens) => complete(state, &p.client_id, tokens).await,
+                _ => Err(say("Microsoft hat die Anmeldung nicht abgeschlossen. Versuch es bitte erneut.")),
+            }
+        }
+    }
+}
+
+// Seite im Browser nach der Anmeldung: Vorlage und Schriften liegen in `assets/login/`; Stylesheets, Buddy, Wortzeichen
+// und Favicon sind die Dateien der App selbst (`src/`, `branding/`). Alles wird eingebunden, die Seite lädt nichts nach.
+const PAGE: &str = include_str!("../../assets/login/page.html");
+const APP_CSS: &str = concat!(include_str!("../../../src/styles/pixelkino.css"), "
+", include_str!("../../../src/branding/branding.css"));
+const FONT_BIG: &[u8] = include_bytes!("../../assets/login/big-shoulders-800.woff2");
+const FONT_HANKEN: &[u8] = include_bytes!("../../assets/login/hanken-grotesk.woff2");
+const BUDDY_SUCCESS: &[u8] = include_bytes!("../../../branding/pumpkin-launcher/motion/standard/success.svg");
+const BUDDY_OOPS: &[u8] = include_bytes!("../../../branding/pumpkin-launcher/motion/standard/oops.svg");
+const WORDMARK: &[u8] = include_bytes!("../../../branding/pumpkin-launcher/wordmark/light.svg");
+const FAVICON: &[u8] = include_bytes!("../../../branding/pumpkin-launcher/web/favicon.svg");
+
+/// Die Seite, die der Browser nach dem Rücksprung zeigt (nur feste Texte, nichts aus der Anfrage).
+fn result_page(success: bool) -> String {
+    use base64::Engine;
+    let data = |mime: &str, bytes: &[u8]| format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes));
+    let (buddy, class, title, text) = if success {
+        (BUDDY_SUCCESS, "", "Angemeldet", "Du kannst dieses Fenster schließen und zu Pumpkin Launcher zurückkehren.")
+    } else {
+        (BUDDY_OOPS, "bad", "Das hat nicht geklappt", "Schließe dieses Fenster und versuch die Anmeldung in Pumpkin Launcher noch einmal.")
+    };
+    // Das Stylesheet zuletzt einsetzen: seine Zeichen sollen nicht von den übrigen Platzhaltern erfasst werden.
+    PAGE.replace("@FAVICON@", &data("image/svg+xml", FAVICON))
+        .replace("@F_BIG@", &data("font/woff2", FONT_BIG))
+        .replace("@F_HANKEN@", &data("font/woff2", FONT_HANKEN))
+        .replace("@BUDDY@", &data("image/svg+xml", buddy))
+        .replace("@WORDMARK@", &data("image/svg+xml", WORDMARK))
+        .replace("@CLASS@", class)
+        .replace("@TITLE@", title)
+        .replace("@TEXT@", text)
+        .replace("@CSS_APP@", APP_CSS)
+}
+
+/// Wartet auf den Rücksprung des Browsers und liefert den einmaligen Code. Fremde oder falsche
+/// Aufrufe (anderer `state`, andere Pfade, leere Verbindungen) werden abgewiesen, ohne abzubrechen.
+async fn wait_for_code(p: &Pending, listener: &TcpListener, expected_state: &str) -> AppResult<String> {
+    loop {
+        let left = p.expires_at.saturating_duration_since(Instant::now());
+        let (mut stream, _) = match p.cancel.run_until_cancelled(tokio::time::timeout(left, listener.accept())).await {
+            None => return Err(say("Anmeldung abgebrochen.")),
+            Some(Err(_)) => return Err(say("Die Anmeldung ist abgelaufen. Starte sie bitte neu.")),
+            Some(Ok(Err(err))) => return Err(err.into()),
+            Some(Ok(Ok(conn))) => conn,
+        };
+        let Some(line) = read_request_line(&mut stream).await else { continue };
+        match parse_callback(&line, expected_state) {
+            Callback::Code(code) => {
+                respond(&mut stream, 200, &result_page(true)).await;
+                return Ok(code);
+            }
+            Callback::Failed(err) => {
+                respond(&mut stream, 200, &result_page(false)).await;
+                return Err(say(oauth_text(&err)));
+            }
+            Callback::Ignore(status) => respond(&mut stream, status, "").await,
+        }
+    }
+}
+
+/// Erste Zeile der HTTP-Anfrage; Browser öffnen gern leere Vorab-Verbindungen, deshalb kurzes Zeitlimit.
+async fn read_request_line(stream: &mut TcpStream) -> Option<String> {
+    let mut buf = [0u8; 8192];
+    let mut len = 0;
+    let read = async {
+        while !buf[..len].contains(&b'\n') && len < buf.len() {
+            match stream.read(&mut buf[len..]).await {
+                Ok(0) | Err(_) => return None,
+                Ok(n) => len += n,
+            }
+        }
+        Some(())
+    };
+    tokio::time::timeout(Duration::from_secs(2), read).await.ok()??;
+    String::from_utf8_lossy(&buf[..len]).lines().next().map(str::to_owned)
+}
+
+async fn respond(stream: &mut TcpStream, status: u16, body: &str) {
+    let reason = match status {
+        200 => "OK",
+        404 => "Not Found",
+        _ => "Bad Request",
+    };
+    let head = format!(
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nContent-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:\r\nConnection: close\r\n\r\n",
+        body.len()
+    );
+    let _ = stream.write_all(head.as_bytes()).await;
+    let _ = stream.write_all(body.as_bytes()).await;
+    let _ = stream.shutdown().await;
+}
+
+enum Callback {
+    Code(String),
+    Failed(OAuthError),
+    /// Nicht unsere Antwort: mit diesem Status abweisen und weiter warten.
+    Ignore(u16),
+}
+
+/// Wertet die Anfragezeile `GET /?code=…&state=… HTTP/1.1` aus.
+fn parse_callback(line: &str, expected_state: &str) -> Callback {
+    let mut parts = line.split_whitespace();
+    let (Some("GET"), Some(target)) = (parts.next(), parts.next()) else { return Callback::Ignore(400) };
+    let (path, query) = target.split_once('?').unwrap_or((target, ""));
+    if path != "/" {
+        return Callback::Ignore(404);
+    }
+    let params: HashMap<String, String> =
+        query.split('&').filter_map(|kv| kv.split_once('=')).map(|(k, v)| (percent_decode(k), percent_decode(v))).collect();
+    if params.get("state").map(String::as_str) != Some(expected_state) {
+        return Callback::Ignore(400);
+    }
+    if let Some(error) = params.get("error") {
+        let error_description = params.get("error_description").cloned().unwrap_or_default();
+        return Callback::Failed(OAuthError { error: error.clone(), error_description });
+    }
+    match params.get("code") {
+        Some(code) if !code.is_empty() => Callback::Code(code.clone()),
+        _ => Callback::Ignore(400),
+    }
+}
+
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = (bytes[i] == b'%' && i + 2 < bytes.len())
+            .then(|| std::str::from_utf8(&bytes[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()))
+            .flatten();
+        match (hex, bytes[i]) {
+            (Some(byte), _) => {
+                out.push(byte);
+                i += 3;
+            }
+            (None, b'+') => {
+                out.push(b' ');
+                i += 1;
+            }
+            (None, byte) => {
+                out.push(byte);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+async fn poll_device(state: &AppState, p: &Pending, device_code: &str, first_interval: u64) -> AppResult<Account> {
+    let mut interval = first_interval.max(1);
     loop {
         if p.cancel.run_until_cancelled(tokio::time::sleep(Duration::from_secs(interval))).await.is_none() {
             return Err(say("Anmeldung abgebrochen."));
@@ -397,7 +658,7 @@ async fn poll(state: &AppState, p: &Pending) -> AppResult<Account> {
         let grant = [
             ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
             ("client_id", p.client_id.as_str()),
-            ("device_code", p.device_code.as_str()),
+            ("device_code", device_code),
         ];
         let (status, body) = post_form(&state.http, &format!("{LOGIN}/token"), &grant).await?;
         match parse_poll(status, &body)? {
@@ -593,6 +854,91 @@ mod tests {
         assert_eq!(jwt_claim(&format!("h.{payload}.s"), "xuid").as_deref(), Some("2535400000000000"));
         assert_eq!(jwt_claim("kein-jwt", "xuid"), None);
     }
+    fn pending_for_test(flow: Flow, lifetime: Duration) -> Pending {
+        Pending {
+            id: "t".into(),
+            client_id: "c".into(),
+            flow,
+            expires_at: Instant::now() + lifetime,
+            cancel: CancellationToken::new(),
+            claimed: false,
+        }
+    }
+
+    #[test]
+    fn pkce_matches_rfc7636_example() {
+        assert_eq!(pkce_challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"), "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
+    }
+
+    #[test]
+    fn authorize_url_carries_pkce_and_state() {
+        let url = authorize_url("cid", "http://localhost:5000", "chal", "st");
+        assert!(url.starts_with("https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?client_id=cid&response_type=code"));
+        for part in ["redirect_uri=http%3A%2F%2Flocalhost%3A5000", "code_challenge=chal", "code_challenge_method=S256", "state=st", "scope=XboxLive.signin%20offline_access"] {
+            assert!(url.contains(part), "{part} fehlt in {url}");
+        }
+    }
+
+    #[test]
+    fn result_pages_are_branded_and_fixed() {
+        let ok = result_page(true);
+        assert!(ok.contains("<h1>Angemeldet</h1>") && ok.contains("Pumpkin Launcher") && ok.contains("data:image/svg+xml;base64,"));
+        let bad = result_page(false);
+        assert!(bad.contains("Das hat nicht geklappt") && bad.contains("onb-card plate bad"));
+        assert!(ok.contains(".onb-card") && ok.contains(".plate::before"), "Stylesheets der App sind eingebunden");
+        assert!(ok.contains("font-family:\"Big Shoulders Display\"") && !ok.contains("url(http"), "Schriften eingebettet, keine externen Adressen");
+        for page in [&ok, &bad] {
+            for placeholder in ["@FAVICON@", "@F_BIG@", "@F_HANKEN@", "@BUDDY@", "@WORDMARK@", "@CLASS@", "@TITLE@", "@TEXT@", "@CSS_APP@"] {
+                assert!(!page.contains(placeholder), "offener Platzhalter {placeholder}");
+            }
+        }
+    }
+
+    #[test]
+    fn callback_parsing() {
+        assert!(matches!(parse_callback("GET /?code=M.C5_a%2Fb&state=xyz HTTP/1.1", "xyz"), Callback::Code(c) if c == "M.C5_a/b"));
+        assert!(matches!(parse_callback("GET /?code=abc&state=falsch HTTP/1.1", "xyz"), Callback::Ignore(400)), "fremder state");
+        assert!(matches!(parse_callback("GET /?code=abc HTTP/1.1", "xyz"), Callback::Ignore(400)), "ohne state");
+        assert!(matches!(parse_callback("GET /favicon.ico HTTP/1.1", "xyz"), Callback::Ignore(404)));
+        assert!(matches!(parse_callback("POST /?code=a&state=xyz HTTP/1.1", "xyz"), Callback::Ignore(400)));
+        assert!(matches!(parse_callback("GET /?state=xyz&code= HTTP/1.1", "xyz"), Callback::Ignore(400)), "leerer Code");
+        let denied = parse_callback("GET /?error=access_denied&error_description=nope+bitte&state=xyz HTTP/1.1", "xyz");
+        assert!(matches!(denied, Callback::Failed(e) if e.error == "access_denied" && e.error_description == "nope bitte"));
+        assert_eq!(percent_decode("a%2"), "a%2", "abgeschnittene Kodierung bleibt stehen");
+        assert_eq!(percent_decode("%C3%A4%zz"), "ä%zz");
+    }
+
+    /// Echter Listener auf Loopback: ein Stör-Aufruf, eine leere Vorab-Verbindung, dann der richtige Rücksprung.
+    #[tokio::test]
+    async fn browser_callback_over_real_socket() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let p = pending_for_test(Flow::Device { device_code: String::new(), interval: 1 }, Duration::from_secs(20));
+        let waiter = tokio::spawn(async move { wait_for_code(&p, &listener, "xyz").await });
+        let get = |path: &'static str| async move {
+            let mut s = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+            s.write_all(format!("GET {path} HTTP/1.1\r\nHost: localhost\r\n\r\n").as_bytes()).await.unwrap();
+            let mut reply = String::new();
+            s.read_to_string(&mut reply).await.unwrap();
+            reply
+        };
+        assert!(get("/?code=evil&state=nope").await.starts_with("HTTP/1.1 400"));
+        let idle = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+        let reply = get("/?code=gut&state=xyz").await;
+        assert!(reply.starts_with("HTTP/1.1 200") && reply.contains("Angemeldet"), "{reply}");
+        assert_eq!(waiter.await.unwrap().unwrap(), "gut");
+        drop(idle);
+    }
+
+    #[tokio::test]
+    async fn browser_wait_can_be_cancelled() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let p = pending_for_test(Flow::Device { device_code: String::new(), interval: 1 }, Duration::from_secs(20));
+        p.cancel.cancel();
+        let err = wait_for_code(&p, &listener, "xyz").await.err().unwrap();
+        assert_eq!(err.to_string(), "Anmeldung abgebrochen.");
+    }
+
     #[test]
     fn offline_only_in_debug_or_with_owner() {
         assert!(policy_allows_offline(true, || false), "Debug-Build: immer");
@@ -603,14 +949,7 @@ mod tests {
 
     #[test]
     fn second_finish_login_gets_nothing() {
-        let p = Pending {
-            client_id: "c".into(),
-            device_code: "d".into(),
-            interval: 5,
-            expires_at: Instant::now(),
-            cancel: CancellationToken::new(),
-            claimed: false,
-        };
+        let p = pending_for_test(Flow::Device { device_code: "d".into(), interval: 5 }, Duration::ZERO);
         let mut slot = Some(p);
         assert!(claim(&mut slot).is_some());
         assert!(claim(&mut slot).is_none());

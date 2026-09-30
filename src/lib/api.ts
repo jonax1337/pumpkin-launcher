@@ -234,9 +234,13 @@ const mockGame = {
 // Microsoft-Anmeldung im Browser: Code sofort, Bestätigung nach ein paar Sekunden.
 let pendingLogin: { cancel: () => void } | null = null;
 const mockAccounts = {
-  async start(): Promise<MsLoginStart> {
+  async start(method?: "device"): Promise<MsLoginStart> {
     await delay(500);
+    if (method !== "device") {
+      return { mode: "browser", userCode: "", verificationUri: "https://login.microsoftonline.com/consumers/", expiresIn: 600, interval: 0, message: "Melde dich im Browser bei Microsoft an." };
+    }
     return {
+      mode: "device",
       userCode: "B7KQ-X4TZ",
       verificationUri: "https://www.microsoft.com/link",
       expiresIn: 900,
@@ -362,8 +366,9 @@ export const api = {
   onExit: (cb: (p: ExitPayload) => void) => on("instance-exit", cb),
   onInstancesChanged: (cb: () => void) => on("instances-changed", cb),
 
-  msLoginStart: (clientId: string): Promise<MsLoginStart> =>
-    tauri ? call("ms_login_start", { clientId: clientId.trim() || null }) : mockAccounts.start(),
+  /** `method: "device"` erzwingt den Gerätecode; sonst Browser-Anmeldung (Rückfall auf Gerätecode im Backend). */
+  msLoginStart: (clientId: string, method?: "device"): Promise<MsLoginStart> =>
+    tauri ? call("ms_login_start", { clientId: clientId.trim() || null, method: method ?? null }) : mockAccounts.start(method),
   msLoginFinish: (): Promise<Account> => (tauri ? call("ms_login_finish") : mockAccounts.finish()),
   msLoginCancel: (): Promise<void> => (tauri ? call("ms_login_cancel") : mockAccounts.cancel()),
   msAccounts: (): Promise<Account[]> => (tauri ? call("ms_accounts") : Promise.resolve(clone(db.accounts))),

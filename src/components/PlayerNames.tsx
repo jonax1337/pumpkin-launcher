@@ -20,11 +20,12 @@ const useMsLogin = create<LoginState>(() => ({ step: "idle" }));
 // Jeder Versuch bekommt eine Nummer; Antworten eines abgebrochenen Versuchs werden verworfen.
 let attempt = 0;
 
-export async function startMsLogin(qc: QueryClient) {
+/** `method: "device"` erzwingt den Gerätecode (Knopf „Stattdessen Code verwenden“); sonst Anmeldung im Browser. */
+export async function startMsLogin(qc: QueryClient, method?: "device") {
   const mine = ++attempt;
   useMsLogin.setState({ step: "starting" }, true);
   try {
-    const info = await api.msLoginStart(useSettings.getState().msClientId);
+    const info = await api.msLoginStart(useSettings.getState().msClientId, method);
     if (mine !== attempt) return;
     useMsLogin.setState({ step: "code", info }, true);
     void api.openExternal(info.verificationUri).catch(() => undefined);
@@ -83,6 +84,9 @@ function MsLoginDialog() {
             {state.step === "code" && (
               <Button icon="ext" onClick={() => void api.openExternal(state.info.verificationUri)}>Seite öffnen</Button>
             )}
+            {state.step === "code" && state.info.mode === "browser" && (
+              <Button variant="ghost" onClick={() => void startMsLogin(qc, "device")}>Stattdessen Code verwenden</Button>
+            )}
             <DialogActions cancel={{ label: state.step === "error" ? "Schließen" : "Abbrechen", width: 124 }} />
           </>
         )
@@ -95,7 +99,17 @@ function MsLoginDialog() {
           <Skel h={16} w="60%" />
         </div>
       )}
-      {state.step === "code" && (
+      {state.step === "code" && state.info.mode === "browser" && (
+        <>
+          <p>Die Microsoft-Anmeldung hat sich in deinem Browser geöffnet. Melde dich dort an, danach geht es hier automatisch weiter.</p>
+          <div className="flex h-8 items-center gap-3" aria-live="polite">
+            <Progress width={120} label="Warte auf Anmeldung" />
+            <Hint>Warte auf deine Anmeldung. Das Fenster wartet {Math.max(1, Math.round(state.info.expiresIn / 60))} Minuten.</Hint>
+          </div>
+          <Hint className="mt-3">Nichts passiert? Über „Seite öffnen“ geht die Anmeldung erneut auf, oder nimm stattdessen einen Code.</Hint>
+        </>
+      )}
+      {state.step === "code" && state.info.mode === "device" && (
         <>
           <p>Öffne <b>{state.info.verificationUri.replace(/^https?:\/\/(www\.)?/, "")}</b> in deinem Browser und gib diesen Code ein:</p>
           {/* Code-Anzeige (Sonderform: große Pixelschrift in eingelassener Platte) */}

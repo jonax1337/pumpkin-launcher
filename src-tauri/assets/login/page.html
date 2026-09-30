@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pumpkin Launcher</title>
+<link rel="icon" href="@FAVICON@">
+<style>
+/* Seite nach der Microsoft-Anmeldung im Browser. Kein eigenes Design: Sie nutzt die Stylesheets der App
+   (src/styles/pixelkino.css, src/branding/branding.css) und deren Klassen wie im Onboarding (.onb-card, .plate,
+   .onb-heading, .steps). Platzhalter @…@ füllt services/auth.rs. Schriften: Big Shoulders Display und
+   Hanken Grotesk (SIL OFL 1.1, aus @fontsource), dieselben wie in der App. */
+@font-face{font-family:"Big Shoulders Display";font-weight:800;src:url(@F_BIG@) format("woff2");font-display:block}
+@font-face{font-family:"Hanken Grotesk Variable";font-weight:100 900;src:url(@F_HANKEN@) format("woff2");font-display:block}
+@CSS_APP@
+/* Nur die Stellen, an denen die Seite vom Onboarding abweicht: alles mittig, Buddy groß in eigener Zeile
+   über der Überschrift, ohne Fensterleiste, Höhe nach Inhalt */
+.onb{top:0}
+.onb-card{left:50%;transform:translate(-50%,-50%);height:auto;align-items:center;text-align:center}
+.onb-card .steps{justify-content:center}
+.onb-card.bad .steps i{background:var(--bad)}
+.onb-heading{flex-direction:column;gap:0;margin-bottom:10px}
+.onb-heading .buddy{width:168px;height:168px;margin:-14px 0 -10px}
+.onb-card .onb-heading h1{font-size:44px}
+.onb-card > p{margin-bottom:0}
+.onb-card .brand-wordmark{margin-top:26px;opacity:.9}
+</style>
+</head>
+<body>
+<div class="onb">
+  <main class="onb-card plate @CLASS@">
+    <div class="steps" aria-hidden="true"><i class="on"></i><i class="on"></i></div>
+    <div class="onb-heading"><img class="buddy" src="@BUDDY@" width="168" height="168" alt=""><h1>@TITLE@</h1></div>
+    <p>@TEXT@</p>
+    <img class="brand-wordmark" src="@WORDMARK@" width="214" height="24" alt="Pumpkin Launcher">
+  </main>
+</div>
+</body>
+</html>

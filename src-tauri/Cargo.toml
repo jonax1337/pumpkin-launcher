@@ -26,7 +26,7 @@ thiserror = "2"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 uuid = { version = "1.26.1", features = ["v4"] }
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "fs", "process", "sync", "io-util", "time"] }
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "fs", "process", "sync", "io-util", "time", "net"] }
 futures = "0.3.34"
 sha1 = "0.11.0"
 sha2 = "0.11"

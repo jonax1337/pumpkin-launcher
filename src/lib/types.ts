@@ -159,11 +159,13 @@ export interface Account {
   active: boolean;
 }
 
-/** Ergebnis von `ms_login_start` (Geräte-Code-Anmeldung). */
+/** Ergebnis von `ms_login_start`: Browser mit Rücksprung auf localhost (Standard) oder Gerätecode. */
 export interface MsLoginStart {
+  /** `browser`: `verificationUri` ist die Anmeldeseite, `userCode` ist leer. `device`: Code dort eingeben. */
+  mode: "browser" | "device";
   userCode: string;
   verificationUri: string;
-  /** Sekunden, bis der Code verfällt. */
+  /** Sekunden, bis die Anmeldung verfällt. */
   expiresIn: number;
   interval: number;
   message: string;
