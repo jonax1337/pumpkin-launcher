@@ -68,13 +68,16 @@ fn say(text: impl Into<String>) -> AppError {
     AppError::Invalid(text.into())
 }
 
-/// Client-ID der eigenen Azure-App: Argument, sonst Compile-Vorgabe `PUMPKIN_MS_CLIENT_ID`.
+/// Eingebaute Client-ID der Azure-App „Pumpkin Launcher“ (öffentlicher Client, kein Geheimnis).
+const DEFAULT_CLIENT_ID: &str = "5e27ee41-3be2-4c3a-a156-a3c61dbef8dc";
+
+/// Client-ID der eigenen Azure-App: Argument, sonst Compile-Vorgabe `PUMPKIN_MS_CLIENT_ID`, sonst die eingebaute.
 fn client_id(arg: Option<String>) -> AppResult<String> {
     let id = arg
         .map(|s| s.trim().to_owned())
         .filter(|s| !s.is_empty())
         .or_else(|| option_env!("PUMPKIN_MS_CLIENT_ID").map(str::to_owned))
-        .ok_or_else(|| say("Die Microsoft-Anmeldung ist in dieser Version noch nicht eingerichtet (es fehlt die Client-ID)."))?;
+        .unwrap_or_else(|| DEFAULT_CLIENT_ID.to_owned());
     uuid::Uuid::parse_str(&id).map_err(|_| say("Die hinterlegte Client-ID ist ungültig. Sie sieht so aus: 00000000-0000-0000-0000-000000000000."))?;
     Ok(id)
 }
@@ -536,6 +539,7 @@ mod tests {
         assert_eq!(expired.err().unwrap().to_string(), "Der Anmeldecode ist abgelaufen. Starte die Anmeldung neu. – Details: expired_token AADSTS70020: expired");
         assert_eq!(parse_poll(400, &body(json!({"error": "invalid_grant"}))).err().unwrap().to_string().split(" – ").next(), Some(RELOGIN));
         assert!(parse_poll(500, b"<html>").is_err());
+        assert_eq!(client_id(None).unwrap(), option_env!("PUMPKIN_MS_CLIENT_ID").unwrap_or(DEFAULT_CLIENT_ID));
     }
 
     #[test]

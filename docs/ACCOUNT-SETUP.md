@@ -26,9 +26,9 @@ Quellen: [Minecraft Wiki – Microsoft authentication](https://minecraft.wiki/w/
 
 ## 3. Client-ID in Pumpkin Launcher eintragen
 
-Zwei Wege, einer genügt:
+Die Client-ID der Azure-App „Pumpkin Launcher“ (`5e27ee41-3be2-4c3a-a156-a3c61dbef8dc`, registriert am 30.09.2026, nur persönliche Konten, öffentliche Clientflows an) ist als `DEFAULT_CLIENT_ID` in `src-tauri/src/services/auth.rs` eingebaut. Überschreiben geht auf zwei Wegen:
 
-- **Fest einbauen (empfohlen für Releases):** beim Bauen die Umgebungsvariable setzen, z. B. in PowerShell
+- **Beim Bauen:** die Umgebungsvariable setzen, z. B. in PowerShell
   `$env:PUMPKIN_MS_CLIENT_ID = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"; pnpm tauri build`
   (wird per `option_env!` beim Kompilieren übernommen; nach Änderung neu bauen).
 - **Zur Laufzeit:** das Frontend übergibt sie an `ms_login_start({ clientId })`. Hat es eine Client-ID, gilt diese vor der eingebauten.
