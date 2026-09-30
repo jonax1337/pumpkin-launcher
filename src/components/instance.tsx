@@ -42,10 +42,10 @@ export function useInstanceMenu(instance: Instance, opts: { open?: boolean } = {
 }
 
 /**
- * Symbolknopf „Weitere Aktionen“ mit dem Instanz-Menü. `small`: 32 statt 40 px; `variant`: s = Platte, g = Geist;
+ * Symbolknopf „Weitere Aktionen“ mit dem Instanz-Menü. `small`: 32 statt 40 px, `large`: 56 px (neben dem großen Spielen-Knopf); `variant`: s = Platte, g = Geist;
  * `onScene`: über einer Szene (Grundplatte, harter Schatten).
  */
-export function InstanceMenuButton({ instance, small, variant = "s", onScene, open }: { instance: Instance; small?: boolean; variant?: "s" | "g"; onScene?: boolean; open?: boolean }) {
+export function InstanceMenuButton({ instance, small, large, variant = "s", onScene, open }: { instance: Instance; small?: boolean; large?: boolean; variant?: "s" | "g"; onScene?: boolean; open?: boolean }) {
   const items = useInstanceMenu(instance, { open });
   return (
     <Menu
@@ -53,7 +53,7 @@ export function InstanceMenuButton({ instance, small, variant = "s", onScene, op
       trigger={
         <IconButton
           variant={variant === "g" ? "ghost" : "secondary"}
-          size={small ? "s" : "m"}
+          size={small ? "s" : large ? "l" : "m"}
           onScene={onScene}
           icon="more"
           label={`Weitere Aktionen für ${instance.name}`}

@@ -5,8 +5,9 @@
 .wm .brand-wordmark { width: 178.5px; height: 20px; }
 .brand-about { display: flex; align-items: center; gap: 12px; }
 .brand-about .brand-wordmark { margin-bottom: 10px; }
-/* Das Motiv belegt etwa die halbe SVG-Fläche: sichtbar 56 px, Animationsrand bleibt frei. */
-.buddy-library { margin: -28px -20px; }
+/* Startseite: das Maskottchen liegt neben Spielen und Menü (Zeile .acts, beide 56 hoch). Sichtbar ist etwa die Hälfte der SVG-Fläche (56 von 120 px);
+   negative Ränder machen die Box 56 hoch und rücken es 20 px ab, der transparente Rand fängt keine Klicks ab. */
+.buddy-rest { margin: -32px -32px -32px -22px; pointer-events: none; }
 .library-heading { display: flex; align-items: center; gap: 12px; height: 56px; }
 .library-heading > .vx-sech { flex: 1; min-width: 0; }
 .onb-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }

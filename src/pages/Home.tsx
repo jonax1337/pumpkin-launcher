@@ -15,12 +15,16 @@ import { motionOff } from "@/pixel/scene";
 import { useLook } from "@/store/look";
 import { AddCard, Button, ButtonLink, Count, ErrorBox, IconButton, Meta, SceneCard, SectionHeader, Skel } from "@/ui";
 
-/** Buddy begleitet den tatsächlichen Zustand der ausgewählten Instanz. */
-function HomeBuddy({ instanceId }: { instanceId: string }) {
+/**
+ * Buddy schläft neben dem Spielen-Knopf (rechts hinter dem Menü, gleiche Zeile) und hängt an ihm: Läuft die Instanz nicht, schläft er;
+ * Überfahren oder Fokus auf „Spielen“ weckt ihn (winkt); Laden/Installieren/Starten zeigt die Lade-Animation,
+ * beim Spielen ist er wach (Standbild, die App pausiert Animationen, solange ein Spiel läuft), nach einem Absturz schaut er erschrocken.
+ */
+function HomeBuddy({ instanceId, awake }: { instanceId: string; awake: boolean }) {
   const phase = usePhase(instanceId);
-  const mood = phase === 'crashed' ? 'oops' : phase === 'running' ? 'sleep'
-    : ['loading', 'preparing', 'starting'].includes(phase) ? 'loading' : 'idle';
-  return <Buddy mood={mood} size={112} className="buddy-library" />;
+  const mood = phase === "crashed" ? "oops" : phase === "running" ? "idle"
+    : ["loading", "preparing", "starting"].includes(phase) ? "loading" : awake ? "hello" : "sleep";
+  return <Buddy mood={mood} size={120} className="buddy-rest" />;
 }
 
 /** Titel und Metazeile der ausgewählten Instanz (Infos als Text; nur „Updates“ ist ein Knopf). */
@@ -165,11 +169,11 @@ function HomeSkeleton() {
           <div className="titlebox"><Skel h={72} w="min(520px, 80%)" /></div>
           <div className="hmeta"><Skel h={16} w={320} /></div>
         </div>
-        <div className="acts"><Skel h={56} w={272} /><Skel h={40} w={40} /></div>
+        <div className="acts"><Skel h={56} w={272} /><Skel h={56} w={56} /></div>
         <div className="pstat" />
       </div>
       <div className="cont">
-        <div className="library-heading"><Buddy mood="loading" size={112} className="buddy-library" /><Skel h={22} w={150} /></div>
+        <div className="library-heading"><Skel h={22} w={150} /></div>
         <div className="railwrap"><div className="rail">{[0, 1, 2, 3].map((k) => <Skel key={k} w={184} h={104} className="flex-none" />)}</div></div>
       </div>
     </section>
@@ -179,6 +183,8 @@ function HomeSkeleton() {
 export function HomePage() {
   const { data: instances, isLoading, error, refetch } = useInstances();
   const [selected, setSelected] = useState<string | null>(null);
+  // „Spielen“ überfahren oder fokussiert: weckt das Maskottchen
+  const [awake, setAwake] = useState(false);
   const current = instances?.find((i) => i.id === selected) ?? pickRecentInstance(instances);
   const look = useLook(current?.id);
 
@@ -201,15 +207,21 @@ export function HomePage() {
       <div className="shade-home" />
       <div className="hero">
         <HeroInfo key={`info-${current.id}`} instance={current} />
-        <div className="acts">
+        <div
+          className="acts"
+          onPointerOver={(e) => setAwake(!!(e.target as Element).closest(".play"))}
+          onPointerLeave={() => setAwake(false)}
+          onFocus={(e) => setAwake(!!(e.target as Element).closest(".play"))}
+          onBlur={() => setAwake(false)}
+        >
           <PlayButton key={current.id} instance={current} />
-          <InstanceMenuButton instance={current} onScene open />
+          <InstanceMenuButton instance={current} onScene large open />
+          <HomeBuddy key={`buddy-${current.id}`} instanceId={current.id} awake={awake} />
         </div>
         <PlayStatus key={`stat-${current.id}`} instance={current} showLast={false} onScene />
       </div>
       <div className="cont">
         <div className="library-heading">
-          <HomeBuddy key={`buddy-${current.id}`} instanceId={current.id} />
           <SectionHeader
             title="Deine Instanzen"
             id="cont-h"
