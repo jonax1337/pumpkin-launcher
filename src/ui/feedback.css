@@ -49,7 +49,10 @@
 .vx-skel { display: block; background: #111927; clip-path: var(--n1); animation: skp 1.4s steps(3) infinite alternate; }
 
 /* ---------- Toasts (Sonner): Raster Symbol | Text (≥ 240 px) | Schließen; Aktion unter dem Text ---------- */
-/* Overlay-Kontext wie in tokens.css (Sonner reicht keine data-* an die Toast-Fläche) */
+/* Overlay-Kontext wie in tokens.css (Sonner reicht keine data-* an die Toast-Fläche).
+   Sonner setzt --width inline am Toaster; eigene Breite und Schrift daneben (Toast selbst ist unstyled). */
+[data-sonner-toaster] { --pk-toast-w: 416px; font-family: var(--f-body); }
+[data-sonner-toaster][data-sonner-theme] { width: var(--pk-toast-w); }
 .vx-toast { --hv-row: var(--panel-2); --pr-row: var(--panel); --hv-ctl: var(--panel-3); --pr-ctl: var(--panel-2);
   position: relative; width: var(--pk-toast-w, 416px); min-height: 56px; display: grid; grid-template-columns: 24px minmax(240px, 1fr) 32px; align-items: center; column-gap: 12px; padding: 10px 8px 10px 14px; color: var(--fg); font-size: 14px; isolation: isolate; }
 .vx-toast:not(:has(> [data-icon])) { grid-template-columns: 0 minmax(240px, 1fr) 32px; padding-left: 6px; }

@@ -43,7 +43,7 @@
 }
 
 /* Overlay-Kontext: Dialog, Seitenpanel, Menü/Popover, Toast, Platten. Hover und Auswahl eine Stufe heller als der Grund. */
-:is(.dlg, .sheet, .rpop, .pop, .stoast, .toast, .plate, .sbox, .vx-panel, [data-ctx="overlay"]) {
+:is(.plate, .vx-panel, [data-ctx="overlay"]) {
   --hv-row: var(--panel-2);
   --pr-row: var(--panel);
   --hv-ctl: var(--panel-3);

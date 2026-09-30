@@ -28,7 +28,7 @@ const TABS = [
 ];
 
 /** Offener Dialog (auch Rückfrage); Popover und Menüs zählen nicht. */
-const dialogOpen = () => !!document.querySelector(".dlg[data-state=open], [role=alertdialog][data-state=open], [role=dialog][aria-modal=true]");
+const dialogOpen = () => !!document.querySelector("[role=alertdialog][data-state=open], [role=dialog][aria-modal=true]");
 
 /** Fokus in einem Feld, in das getippt wird (dort gehört Strg+N/Strg+, nicht uns). */
 function typing(el: Element | null) {

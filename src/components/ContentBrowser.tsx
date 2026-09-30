@@ -19,7 +19,6 @@ import {
 import { LOADER_LABELS, type Instance, type ModKind, type ModLoader } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { lookOf, useLook, useLookStore } from "@/store/look";
-import "@/styles/catalog.css";
 
 export const IRIS_PROJECT_ID = "YL57xq9U";
 

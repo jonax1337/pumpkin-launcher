@@ -15,7 +15,7 @@ const row: CSSProperties = { display: "flex", gap: 16, alignItems: "center", fle
 function Sec({ title, id, children }: { title: string; id: string; children: ReactNode }) {
   return (
     <section style={sec} data-kit={`sec-${id}`}>
-      <h2 className="h-sec">{title}</h2>
+      <h2 className="vx-h">{title}</h2>
       {children}
     </section>
   );
@@ -167,7 +167,7 @@ function FieldsDemo() {
           <TextField size="s" width="m" placeholder="play.example.net" />
         </Field>
         <Field label="Minecraft-Version" htmlFor="kit-mc">
-          <div className="row" style={{ flexWrap: "wrap" }}>
+          <div className="flex flex-wrap items-center gap-2">
             <Select id="kit-mc" value={ver} onChange={setVer} options={OPTS} />
             <Checkbox checked={snap} onChange={setSnap}>Vorabversionen zeigen</Checkbox>
           </div>

@@ -14,7 +14,6 @@ import { PixelScene } from "@/pixel/PixelScene";
 import { useLook } from "@/store/look";
 import { ContentTab, useWarnings } from "./detail/ContentTab";
 import { SettingsTab } from "./detail/SettingsTab";
-import "@/styles/detail.css";
 
 type Tab = "content" | "console" | "settings";
 const TABS: Tab[] = ["content", "console", "settings"];

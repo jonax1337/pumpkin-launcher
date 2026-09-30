@@ -1,8 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-// Progress (Altbestand): Balken im Spielen-Knopf mit eigenen Farben (.play .pbar), bis Phase C
-import { Progress } from "@/components/px";
 import { Button, Chip, ConfirmDialog, Count, Empty, Icon, SearchField, Segmented, Spacer, StatusPanel, Tip, Toolbar, type IconName } from "@/ui";
 import { askStop, useCancelInstall, useInstanceStatus, useKill, usePlay, useStopAsk } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
@@ -66,6 +64,30 @@ function spokenSince(ms: number) {
 }
 
 type PlayState = { st: "idle" | "prep" | "start" | "run" | "error" | "blocked"; icon: IconName; l1: string; s1: string; l2: ReactNode; p: number | null; pct?: string; dis?: boolean; aria: string };
+
+/**
+ * Balken im Spielen-Knopf (`.play .pbar`): segmentierter Fortschritt in den Knopf-Farben
+ * (`--prog-on: var(--ink)` auf der Akzentfläche, siehe components/play.css). `p` 0–1, ohne `p` unbestimmt.
+ * `label` ist der zugängliche Name; `decorative` blendet ihn aus, wenn derselbe Fortschritt schon anders angesagt wird.
+ */
+function PlayBar({ p, thin, bad, className, style, label = "Fortschritt", decorative }: { p?: number | null; thin?: boolean; bad?: boolean; className?: string; style?: CSSProperties; label?: string; decorative?: boolean }) {
+  const ind = p == null;
+  const look = {
+    className: cn("prog", thin && "thin", ind && "ind", bad && "bad", className),
+    style: { ...style, ["--p" as string]: ind ? 0 : Math.max(0, Math.min(1, p)) },
+  };
+  if (decorative) return <span aria-hidden {...look} />;
+  return (
+    <span
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={ind ? undefined : Math.round(Math.max(0, Math.min(1, p!)) * 100)}
+      {...look}
+    />
+  );
+}
 
 /**
  * Große Zeile = Aktion oder laufender Vorgang (Spielen, Wird installiert, Startet, Beenden …).
@@ -146,7 +168,7 @@ export function PlayButton({ instance, size = "l", onLaunched, tabIndex }: { ins
         {/* Symbolknopf (i): Prozent nur im Namen, sonst ragt die Zahl aus den 32 px */}
         {size !== "i" && <span className="pct">{s.pct ?? ""}</span>}
       </span>
-      <Progress p={s.p} className="pbar" />
+      <PlayBar p={s.p} className="pbar" />
     </button>
   );
   return size === "i" ? <Tip label={s.l1}>{btn}</Tip> : btn;

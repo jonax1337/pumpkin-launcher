@@ -20,7 +20,7 @@ const cell: CSSProperties = { outline: "1px dashed #33415C", display: "inline-gr
 function Sec({ title, id, children }: { title: string; id: string; children: ReactNode }) {
   return (
     <section style={sec} data-kit={id}>
-      <h2 className="h-sec">{title}</h2>
+      <h2 className="vx-h">{title}</h2>
       {children}
     </section>
   );

@@ -5,9 +5,10 @@
 @import "@fontsource/jersey-10";
 /* Pixelkino liegt in der Komponenten-Schicht: Tailwind-Utilities dürfen Layout darüber setzen. */
 @import "./styles/pixelkino.css" layer(components);
-@import "./styles/states.css" layer(components);
-/* Pixel-Kit (src/ui): nach dem Altbestand, gleiche Schicht */
+/* Pixel-Kit (src/ui): danach, gleiche Schicht */
 @import "./ui/ui.css" layer(components);
+/* Spielen (Knopf, Statuszeile, Protokoll) als Domänen-Baustein hinter dem Kit */
+@import "./components/play.css" layer(components);
 
 /* Nur dunkles Schema. Farben und Schriften aus Pixelkino auch als Utilities (text-fg-2, bg-panel …). */
 @custom-variant dark (&);
