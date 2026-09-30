@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { SceneHost, type Biome, type SceneMode } from "./scene";
+import { SceneHost, type Biome, type SceneMode, type SunAnchor } from "./scene";
 import { onPxChange } from "./unit";
 
 const RO = typeof ResizeObserver !== "undefined"
@@ -10,14 +10,15 @@ const RO = typeof ResizeObserver !== "undefined"
 /**
  * Pixel-Szene als Box. `scene` füllt den Elternblock (Start, Kopf), `art` ist eine Kachel (Poster, Miniatur).
  * `flat` rendert einmal und cacht nach Größe; `live` belebt mit 12 fps; `hero` zusätzlich mit Parallax.
+ * `sun`: Lage der Lichtquelle (siehe SunAnchor); ohne Angabe `live` → links der Mitte (Instanzkopf), `hero` → Mockup, `flat` → je Seed.
  */
-export function PixelScene({ bio, seed, mode = "flat", className = "art" }: { bio: Biome; seed: number; mode?: SceneMode; className?: string }) {
+export function PixelScene({ bio, seed, mode = "flat", sun, className = "art" }: { bio: Biome; seed: number; mode?: SceneMode; sun?: SunAnchor; className?: string }) {
   const ref = useRef<HTMLDivElement & { _scene?: SceneHost }>(null);
   const host = useRef<SceneHost | null>(null);
 
   useEffect(() => {
     const el = ref.current!;
-    const h = new SceneHost(el, bio, seed, mode);
+    const h = new SceneHost(el, bio, seed, mode, sun);
     host.current = h;
     el._scene = h;
     h.paint(true);
@@ -35,8 +36,8 @@ export function PixelScene({ bio, seed, mode = "flat", className = "art" }: { bi
   }, []);
 
   useEffect(() => {
-    host.current?.set(bio, seed, mode);
-  }, [bio, seed, mode]);
+    host.current?.set(bio, seed, mode, sun);
+  }, [bio, seed, mode, sun]);
 
   return <div ref={ref} className={cn(className)} aria-hidden />;
 }

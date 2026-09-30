@@ -1,18 +1,19 @@
 import { useEffect, useMemo, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
-  BackLink, Btn, BtnLink, Chip, Empty, ErrorBox, Menu, MenuItem, MenuLabel, MenuSep, Progress, ProjectIcon, SearchField, Seg, Sheet, Switch, Tip,
+  BackLink, Btn, BtnLink, Chip, Dialog, DialogClose, Empty, ErrorBox, Menu, MenuItem, MenuLabel, MenuSep, Progress, ProjectIcon, SearchField, Seg, Sheet, Switch,
+  TextField, Tip,
 } from "@/components/px";
 import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { useInstances } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import {
   formatDownloads, isPackVersionSupported, modLoadersFor, pickPackVersion, pickVersion, progressLabel, projectOf,
-  type CatalogType, type ContentHit, type ContentProgress, type ContentProject, type ContentVersion,
+  type CatalogType, type ContentHit, type ContentProgress, type ContentProject, type ContentVersion, type SearchIndex,
 } from "@/lib/modrinth";
 import { LOADER_LABELS, type Instance, type ModKind, type ModLoader } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -49,7 +50,7 @@ const allVersionsQuery = (projectId: string) => ({
 // Modrinth-Kategorien in Alltagssprache; Loader-Namen sind keine Kategorie für die Anzeige.
 const CATEGORY: Record<string, string> = {
   adventure: "Abenteuer", optimization: "Leistung", technology: "Technik", magic: "Magie", decoration: "Deko", utility: "Werkzeug",
-  "game-mechanics": "Spielmechanik", library: "Bibliothek", worldgen: "Weltgenerierung", mobs: "Kreaturen", storage: "Lager",
+  "game-mechanics": "Spielmechanik", library: "Programmbibliothek", worldgen: "Weltgenerierung", mobs: "Kreaturen", storage: "Lager",
   equipment: "Ausrüstung", food: "Essen", transportation: "Transport", social: "Mehrspieler", economy: "Wirtschaft", management: "Verwaltung",
   minigame: "Minispiel", "kitchen-sink": "Alles drin", lightweight: "Leicht", multiplayer: "Mehrspieler", quests: "Quests",
   challenging: "Fordernd", combat: "Kampf", realistic: "Realistisch", "semi-realistic": "Halbrealistisch", cartoon: "Comic",
@@ -125,7 +126,7 @@ function JobCell({ label, p, onCancel, wide }: { label: string; p: number | null
           {label}
           {p != null && <> <span className="num" style={{ fontSize: 16 }}>{Math.floor(p * 100)} %</span></>}
         </span>
-        <Progress thin={!wide} p={p} />
+        <Progress thin={!wide} p={p} label={label} />
       </div>
       {onCancel && (
         <Tip label="Abbrechen">
@@ -146,6 +147,37 @@ function InstalledChip({ title }: { title?: string }) {
     </Chip>
   );
   return title ? <Tip label={title}>{chip}</Tip> : chip;
+}
+
+/** Instanzen je Projekt-ID: als Inhalt drin oder als Modpack angelegt. */
+function useInstalledIn() {
+  const instances = useInstances();
+  return useMemo(() => {
+    const map = new Map<string, Instance[]>();
+    const add = (id: string, i: Instance) => map.set(id, [...(map.get(id) ?? []), i]);
+    for (const i of instances.data ?? []) {
+      const ids = new Set(i.mods.map(projectOf).filter((id): id is string => !!id));
+      if (i.modpack?.type === "modrinth") ids.add(i.modpack.projectId);
+      ids.forEach((id) => add(id, i));
+    }
+    return map;
+  }, [instances.data]);
+}
+
+/** „In Survival 1.21“ oder „In 2 Instanzen“; die Namen stehen im Tooltip und für Vorleser im Chip selbst. */
+function InChip({ instances }: { instances?: Instance[] }) {
+  if (!instances?.length) return null;
+  const one = instances.length === 1;
+  const names = instances.map((i) => i.name).join(", ");
+  return (
+    <Tip label={`Schon in ${names}`}>
+      <Chip small className="inchip">
+        <Icon name="check5" small />
+        <span className="ell">{one ? `In ${instances[0].name}` : `In ${instances.length} Instanzen`}</span>
+        {!one && <span className="sr">: {names}</span>}
+      </Chip>
+    </Tip>
+  );
 }
 
 // ---------- Hinzufügen ----------
@@ -307,7 +339,7 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
   const [checking, setChecking] = useState(false);
   const { active, target, progress } = useContentState();
 
-  async function run(versionId?: string) {
+  async function run(versionId?: string, name = title) {
     let id = versionId;
     if (!id) {
       setChecking(true);
@@ -322,10 +354,10 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
       }
       if (!id) return;
     }
-    install.mutate(withTarget(projectId, (op) => api.modrinthInstallPack(id, title, op), `Modpack „${title}“ installieren`), {
+    install.mutate(withTarget(projectId, (op) => api.modrinthInstallPack(id, name, op), `Modpack „${name}“ installieren`), {
       onSuccess: (inst) => {
         if (!inst) return;
-        toast.success(`${title} ist bereit. „Spielen“ lädt beim ersten Start den Rest.`, {
+        toast.success(`${inst.name} ist bereit. „Spielen“ lädt beim ersten Start den Rest.`, {
           action: onDone ? undefined : { label: "Öffnen", onClick: () => navigate(`/instances/${inst.id}`) },
         });
         if (onDone) onDone(inst.id);
@@ -337,35 +369,125 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
   return { run, busy, p: checking ? null : progressShare(progress), blocked: !!active || checking, cancel: !checking && busy ? cancelActive : undefined };
 }
 
-/** Zeilenaktion für Modpacks. */
-export function PackInstallButton({ projectId, title, onDone }: { projectId: string; title: string; onDone?: (instanceId: string) => void }) {
-  const pack = useInstallPack(projectId, title, onDone);
-  if (pack.busy) return <JobCell label={pack.busy} p={pack.p} onCancel={pack.cancel} />;
+const loaderNames = (v: ContentVersion) =>
+  v.loaders.filter((l) => l !== "minecraft").map((l) => LOADER_LABELS[l as ModLoader] ?? l).join(", ") || "Vanilla";
+
+/** Inhalt der Bestätigung; wird beim Schließen verworfen, der Name beginnt also immer beim Pack-Titel. */
+function PackConfirmBody({ title, versions, picked, onConfirm }: {
+  title: string; versions: UseQueryResult<ContentVersion[]>; picked: { version: ContentVersion | null; reason: string | null } | null;
+  onConfirm: (versionId: string, name: string) => void;
+}) {
+  const [name, setName] = useState(title);
+  const v = picked?.version ?? null;
+  const val = (text: ReactNode) => (v ? text : versions.isPending ? <i className="sk" style={{ display: "inline-block", width: 90, height: 12 }} /> : "–");
+  const submit = () => v && onConfirm(v.id, name.trim() || title);
   return (
-    <Btn size="s" icon="dl" disabled={pack.blocked} aria-label={`${title} als Instanz installieren`} onClick={() => void pack.run()}>
-      Installieren
-    </Btn>
+    <form
+      id="pack-confirm"
+      className="pcf"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
+      <div className="nf">
+        <label htmlFor="pc-name">Name der Instanz</label>
+        <TextField id="pc-name" value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <dl className="kv">
+        <dt>Modpack-Version</dt>
+        <dd className="ell">{val(v?.version_number)}</dd>
+        <dt>Minecraft</dt>
+        <dd>{val(v?.game_versions.at(-1))}</dd>
+        <dt>Loader</dt>
+        <dd>{val(v && loaderNames(v))}</dd>
+      </dl>
+      {versions.error ? (
+        <ErrorBox className="mt-3" title="Versionen konnten nicht geladen werden" error={versions.error} onRetry={() => void versions.refetch()} />
+      ) : picked && !v ? (
+        <p className="err-msg" role="alert">{picked.reason}</p>
+      ) : (
+        <p className="help">Voxlet lädt jetzt die Mods des Packs. Minecraft selbst kommt beim ersten Start dazu.</p>
+      )}
+    </form>
   );
 }
 
-const VERSION_TYPE: Record<ContentVersion["version_type"], string | null> = { release: null, beta: "Beta", alpha: "Testversion" };
-
-/** Aktionen in den Pack-Details: „Als neue Instanz installieren“ plus „Andere Version…“. */
-export function PackActions({ projectId, title, onDone }: { projectId: string; title: string; onDone?: (instanceId: string) => void }) {
+/**
+ * Bestätigung vor „Als neue Instanz anlegen“: zeigt Version, Minecraft und Loader, die Voxlet wählt,
+ * und lässt den Namen ändern. `ask()` öffnet sie (optional für eine bestimmte Version), `dialog` gehört ins Markup.
+ */
+function usePackConfirm(projectId: string, title: string, onDone?: (instanceId: string) => void) {
   const pack = useInstallPack(projectId, title, onDone);
+  const [ask, setAsk] = useState<{ versionId?: string } | null>(null);
+  const versions = useQuery({ ...allVersionsQuery(projectId), enabled: !!ask });
+  const picked = versions.data
+    ? ask?.versionId
+      ? { version: versions.data.find((v) => v.id === ask.versionId) ?? null, reason: "Diese Version gibt es nicht mehr" }
+      : pickPackVersion(versions.data)
+    : null;
+  const dialog = (
+    <Dialog
+      open={!!ask}
+      onOpenChange={(o) => !o && setAsk(null)}
+      title="Neue Instanz aus Modpack"
+      sub={title}
+      width={480}
+      height={380}
+      footer={
+        <>
+          <DialogClose asChild><Btn>Abbrechen</Btn></DialogClose>
+          <Btn variant="p" full type="submit" form="pack-confirm" style={{ width: 170 }} disabled={!picked?.version || pack.blocked}>Instanz anlegen</Btn>
+        </>
+      }
+    >
+      <PackConfirmBody
+        title={title}
+        versions={versions}
+        picked={picked}
+        onConfirm={(id, name) => {
+          setAsk(null);
+          void pack.run(id, name);
+        }}
+      />
+    </Dialog>
+  );
+  return { pack, ask: (versionId?: string) => setAsk({ versionId }), dialog };
+}
+
+/** Zeilenaktion für Modpacks: erst bestätigen, dann anlegen. */
+export function PackInstallButton({ projectId, title, onDone }: { projectId: string; title: string; onDone?: (instanceId: string) => void }) {
+  const { pack, ask, dialog } = usePackConfirm(projectId, title, onDone);
+  return (
+    <>
+      {pack.busy ? (
+        <JobCell label={pack.busy} p={pack.p} onCancel={pack.cancel} />
+      ) : (
+        <Btn size="s" icon="plus" disabled={pack.blocked} aria-label={`${title} als Instanz anlegen`} onClick={() => ask()}>
+          Anlegen
+        </Btn>
+      )}
+      {dialog}
+    </>
+  );
+}
+
+// Ein Begriff für alles Unfertige, wie im Dialog „Neue Instanz“.
+const VERSION_TYPE: Record<ContentVersion["version_type"], string | null> = { release: null, beta: "Vorabversion", alpha: "Vorabversion" };
+
+/** Aktionen in den Pack-Details: „Als neue Instanz anlegen“ plus „Andere Version…“, beide mit Bestätigung. */
+export function PackActions({ projectId, title, onDone }: { projectId: string; title: string; onDone?: (instanceId: string) => void }) {
+  const { pack, ask, dialog } = usePackConfirm(projectId, title, onDone);
   const versions = useQuery(allVersionsQuery(projectId));
   const { version, reason } = versions.data ? pickPackVersion(versions.data) : { version: null, reason: null };
   const fitting = versions.data?.filter(isPackVersionSupported) ?? [];
 
   if (pack.busy) return <JobCell label={pack.busy} p={pack.p} onCancel={pack.cancel} wide />;
-  const main = (
-    <Btn variant="p" size="l" icon="dl" disabled={!version || pack.blocked} onClick={() => void pack.run(version?.id)}>
-      {reason ?? "Als neue Instanz installieren"}
-    </Btn>
-  );
   return (
     <>
-      {main}
+      <Btn variant="p" size="l" icon="plus" disabled={!version || pack.blocked} onClick={() => ask(version?.id)}>
+        {reason ?? "Als neue Instanz anlegen"}
+      </Btn>
       {fitting.length > 1 && (
         <Menu
           trigger={<Btn iconOnly icon="more" disabled={pack.blocked} aria-label="Andere Version wählen" />}
@@ -374,13 +496,14 @@ export function PackActions({ projectId, title, onDone }: { projectId: string; t
             ...fitting.slice(0, 30).map((v) => ({
               id: v.id,
               text: v.version_number,
-              sub: `${v.loaders.map((l) => LOADER_LABELS[l as ModLoader] ?? l).join(", ")} ${v.game_versions.at(-1) ?? ""}${VERSION_TYPE[v.version_type] ? ` · ${VERSION_TYPE[v.version_type]}` : ""}`,
-              icon: "dl" as const,
-              onSelect: () => void pack.run(v.id),
+              sub: `${loaderNames(v)} ${v.game_versions.at(-1) ?? ""}${VERSION_TYPE[v.version_type] ? ` · ${VERSION_TYPE[v.version_type]}` : ""}`,
+              icon: "plus" as const,
+              onSelect: () => ask(v.id),
             })),
           ]}
         />
       )}
+      {dialog}
     </>
   );
 }
@@ -415,12 +538,18 @@ function Offline({ onRetry, compact }: { onRetry: () => void; compact?: boolean 
   );
 }
 
+/** Überschrift ohne Suchbegriff je Sortierung. */
+export const SORT_HEADINGS: Record<SearchIndex, string> = {
+  relevance: "Nach Relevanz", downloads: "Beliebt", follows: "Meistgefolgt", newest: "Neu", updated: "Zuletzt aktualisiert",
+};
+
 /**
  * Suche mit „Beliebt“ als Startzustand. Mit `instance` passend gefiltert und mit „Hinzufügen“ je Zeile,
  * sonst mit `action` je Zeile. Ohne `query` bringt sie ihr eigenes Suchfeld mit; mit `query` sucht sie,
  * was außen steht (Entdecken, Seitenpanel). `compact` = schmale Zeilen im Seitenpanel.
+ * `sort` fehlt = Downloads ohne Suchbegriff, sonst Relevanz. `feature` hebt ohne Suchbegriff den meistgeladenen bzw. meistgefolgten Treffer als Karte hervor.
  */
-export function ContentResults({ type, instance, action, onOpen, autoFocus = true, query: outerQuery, mc: outerMc, loader: outerLoader, fit = true, compact, onReset }: {
+export function ContentResults({ type, instance, action, onOpen, autoFocus = true, query: outerQuery, mc: outerMc, loader: outerLoader, fit = true, compact, onReset, sort, feature }: {
   type: CatalogType; instance?: Instance; action?: (hit: ContentHit) => ReactNode; onOpen: (projectId: string, hit?: ContentHit) => void;
   /** Früher: Hintergrund der klebenden Suchleiste; ohne Wirkung. */
   barClassName?: string;
@@ -428,16 +557,17 @@ export function ContentResults({ type, instance, action, onOpen, autoFocus = tru
   grid?: boolean;
   autoFocus?: boolean; query?: string; mc?: string | null; loader?: string | null;
   /** Mit `instance`: nur Passendes zeigen (Version und Loader der Instanz). */
-  fit?: boolean; compact?: boolean; onReset?: () => void;
+  fit?: boolean; compact?: boolean; onReset?: () => void; sort?: SearchIndex | null; feature?: boolean;
 }) {
   const [input, setInput] = useState("");
   const controlled = outerQuery != null;
   const query = useDebounced((controlled ? outerQuery : input).trim(), 300);
   const mc = instance ? (fit ? instance.minecraftVersion : null) : (outerMc ?? null);
   const loader = instance ? (fit ? loaderFor(instance, type) : null) : (outerLoader ?? null);
+  const index: SearchIndex = sort ?? (query ? "relevance" : "downloads");
   const results = useInfiniteQuery({
-    queryKey: ["modrinth-search", type, query, mc, loader],
-    queryFn: ({ pageParam }) => api.modrinthSearch(query, type, mc, loader, pageParam),
+    queryKey: ["modrinth-search", type, query, mc, loader, index],
+    queryFn: ({ pageParam }) => api.modrinthSearch(query, type, mc, loader, pageParam, index),
     initialPageParam: 0,
     getNextPageParam: (last) => (last.offset + last.hits.length < last.total_hits ? last.offset + last.limit : undefined),
     staleTime: 5 * 60_000,
@@ -447,6 +577,9 @@ export function ContentResults({ type, instance, action, onOpen, autoFocus = tru
   const total = results.data?.pages[0]?.total_hits ?? 0;
   const { active, target, progress } = useContentState();
   const hasFilter = !!(query || outerMc || outerLoader);
+  const installedIn = useInstalledIn();
+  // Nur eine echte Spitze hervorheben (Downloads, Follower), nicht den zufällig neuesten Upload.
+  const featured = !!feature && !compact && !query && (index === "downloads" || index === "follows");
 
   return (
     <div>
@@ -455,10 +588,13 @@ export function ContentResults({ type, instance, action, onOpen, autoFocus = tru
           <SearchField value={input} onChange={setInput} placeholder={SEARCH_PLACEHOLDER[type]} autoFocus={autoFocus} />
         </div>
       )}
+      {/* Ohne Suchbegriff eine Abschnittsüberschrift (wie auf Start), mit Suchbegriff die Trefferzahl; gleiche Höhe */}
       {!results.error && (
-        <p className="ctxline" aria-live="polite">
-          {!query ? "Beliebt" : results.data ? <><span className="num">{total.toLocaleString("de")}</span> Treffer</> : "Sucht …"}
-        </p>
+        <div className="ctxline" aria-live="polite">
+          {!query ? (
+            compact ? <h3 className="ctxh">{SORT_HEADINGS[index]}</h3> : <h2 className="ctxh">{SORT_HEADINGS[index]}</h2>
+          ) : results.data ? <p><span className="num">{total.toLocaleString("de")}</span> Treffer</p> : <p>Sucht …</p>}
+        </div>
       )}
 
       {results.error ? (
@@ -470,7 +606,7 @@ export function ContentResults({ type, instance, action, onOpen, autoFocus = tru
       ) : results.isPending ? (
         <div className="rlist" aria-busy aria-label="Wird geladen">
           {Array.from({ length: 6 }, (_, i) => (
-            <div key={i} className="skrow" style={compact ? { gridTemplateColumns: "48px minmax(0,1fr) 128px", height: 76 } : undefined}>
+            <div key={i} className={cn("skrow", featured && i === 0 && "feat")} style={compact ? { gridTemplateColumns: "48px minmax(0,1fr) 128px", height: 76 } : undefined}>
               <i className="sk a" style={compact ? { width: 40, height: 40 } : undefined} />
               <div className="b">
                 <i className="sk" style={{ width: "38%" }} />
@@ -496,10 +632,11 @@ export function ContentResults({ type, instance, action, onOpen, autoFocus = tru
             {hits.map((hit, k) => {
               const busy = !instance && !!active && target === hit.project_id && type !== "modpack";
               const cats = categoryNames(hit.categories, compact ? 0 : 2);
+              const feat = featured && k === 0;
               return (
                 <div
                   key={hit.project_id}
-                  className={cn("rrow rise", compact && "compact")}
+                  className={cn("rrow rise", compact && "compact", feat && "feat")}
                   style={{ "--i": k % 20 } as CSSProperties}
                   onClick={(e) => !(e.target as Element).closest(".ra") && onOpen(hit.project_id, hit)}
                 >
@@ -513,7 +650,8 @@ export function ContentResults({ type, instance, action, onOpen, autoFocus = tru
                     <p title={hit.description}>{hit.description}</p>
                     <div className="t3">
                       <span><span className="num">{formatDownloads(hit.downloads)}</span> Downloads</span>
-                      {cats.map((c) => <span key={c} className="hide-m">{c}</span>)}
+                      {cats.map((c) => <Chip key={c} small className="hide-m">{c}</Chip>)}
+                      {!instance && <InChip instances={installedIn.get(hit.project_id)} />}
                     </div>
                   </div>
                   <div className="ra">
@@ -548,16 +686,34 @@ export function ContentResults({ type, instance, action, onOpen, autoFocus = tru
 
 // ---------- Details ----------
 
-const sideText = (p: ContentProject) => {
-  const client = p.client_side !== "unsupported", server = p.server_side !== "unsupported";
-  return client && server ? "Spiel und Server" : server ? "Nur auf dem Server" : "Nur im Spiel";
+/** Wo das Projekt installiert sein muss: Client = dein Spiel, Server = der Server, auf dem du spielst. */
+const sideText = ({ client_side: c, server_side: s }: ContentProject) => {
+  if (c === "unsupported") return "Nur Server";
+  if (s === "unsupported") return "Nur Client";
+  if (c === "required" && s === "required") return "Client und Server";
+  if (c === "required") return "Client, Server optional";
+  if (s === "required") return "Server, Client optional";
+  return "Client oder Server";
 };
 
-/** Minecraft-Versionen einer Liste zusammengefasst („1.21.4, 1.21.1, 1.20.1 und 12 weitere“). */
-function mcSummary(versions: ContentVersion[]) {
-  const all = [...new Set(versions.flatMap((v) => v.game_versions).filter((g) => /^\d+\.\d+(\.\d+)?$/.test(g)))];
-  if (!all.length) return "Unbekannt";
-  return all.length > 3 ? `${all.slice(0, 3).join(", ")} und ${all.length - 3} weitere` : all.join(", ");
+const cmpMc = (a: string, b: string) => {
+  const x = a.split(".").map(Number), y = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) - (y[i] ?? 0);
+  return 0;
+};
+
+/** Minecraft-Versionen einer Liste: bis drei einzeln, sonst Spanne und Anzahl („1.21.4 – 1.20.1“, „33 Versionen“). */
+function McSummary({ versions }: { versions: ContentVersion[] }) {
+  const all = [...new Set(versions.flatMap((v) => v.game_versions).filter((g) => /^\d+\.\d+(\.\d+)?$/.test(g)))].sort(cmpMc).reverse();
+  if (!all.length) return <>Unbekannt</>;
+  if (all.length <= 3) return <>{all.join(", ")}</>;
+  // Zwei feste Zeilen statt freiem Umbruch in der rechtsbündigen Spalte
+  return (
+    <>
+      <span className="block">{all[0]} – {all.at(-1)}</span>
+      <span className="block faint">{all.length} Versionen</span>
+    </>
+  );
 }
 
 /**
@@ -585,8 +741,9 @@ export function ContentDetail({ projectId, type, instance, action, onBack, backL
   });
   const all = useQuery(allVersionsQuery(projectId));
   const instances = useInstances();
-  const pack = useInstallPack(projectId, project.data?.title ?? hit?.title ?? "", undefined);
   const title = project.data?.title ?? hit?.title ?? "";
+  const { pack, ask: askPack, dialog: packDialog } = usePackConfirm(projectId, title);
+  const installedIn = useInstalledIn();
   const shown = (instance ? fitting.data : type === "modpack" ? all.data?.filter(isPackVersionSupported) : all.data)?.slice(0, 5);
   const fitCount =
     type !== "modpack" && all.data && instances.data
@@ -618,6 +775,7 @@ export function ContentDetail({ projectId, type, instance, action, onBack, backL
                 {hit && <span><span className="num">{formatDownloads(hit.downloads)}</span> Downloads</span>}
                 <Chip small>{TYPE_ONE[type]}</Chip>
                 {hit && categoryNames(hit.categories, 2).map((c) => <Chip key={c} small>{c}</Chip>)}
+                {!instance && <InChip instances={installedIn.get(projectId)} />}
               </div>
             </div>
             <div className="projact">
@@ -634,14 +792,14 @@ export function ContentDetail({ projectId, type, instance, action, onBack, backL
                 <h3>Passt zu</h3>
                 <dl className="kv">
                   <dt>Minecraft</dt>
-                  <dd>{all.data ? mcSummary(all.data) : "…"}</dd>
+                  <dd>{all.data ? <McSummary versions={all.data} /> : "…"}</dd>
                   {type !== "resourcepack" && (
                     <>
                       <dt>Loader</dt>
                       <dd>{type === "shader" ? "Iris (Fabric, Quilt, NeoForge)" : loaders.length ? loaders.map((l) => LOADER_LABELS[l as ModLoader] ?? l).join(", ") : "…"}</dd>
                     </>
                   )}
-                  <dt>Seite</dt>
+                  <dt>Benötigt auf</dt>
                   <dd>{sideText(project.data)}</dd>
                   {instance ? (
                     <>
@@ -672,8 +830,8 @@ export function ContentDetail({ projectId, type, instance, action, onBack, backL
                     {instance ? (
                       <AddButton instance={instance} projectId={projectId} title={title} type={type} versionId={v.id} />
                     ) : type === "modpack" ? (
-                      <Tip label="Diese Version installieren">
-                        <Btn variant="g" size="s" iconOnly icon="dl" disabled={pack.blocked} aria-label={`${v.version_number} als Instanz installieren`} onClick={() => void pack.run(v.id)} />
+                      <Tip label="Diese Version als Instanz anlegen">
+                        <Btn variant="g" size="s" iconOnly icon="plus" disabled={pack.blocked} aria-label={`${v.version_number} als Instanz anlegen`} onClick={() => askPack(v.id)} />
                       </Tip>
                     ) : null}
                   </div>
@@ -681,6 +839,7 @@ export function ContentDetail({ projectId, type, instance, action, onBack, backL
               </div>
             </aside>
           </div>
+          {packDialog}
         </>
       )}
     </section>

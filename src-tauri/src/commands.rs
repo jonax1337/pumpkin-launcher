@@ -347,6 +347,15 @@ pub fn instance_status(state: State<'_, AppState>, instance_id: String) -> AppRe
     Ok(InstanceStatus { installed, running: state.running().contains_key(&instance_id) })
 }
 
+/// Spielordner einer Instanz (Welten, Mods, Screenshots) zum Öffnen im Dateimanager; wird bei Bedarf angelegt.
+#[tauri::command]
+pub fn instance_dir(state: State<'_, AppState>, instance_id: String) -> AppResult<String> {
+    state.instances.get(&instance_id)?;
+    let dir = state.dirs.game_dir(&instance_id);
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir.to_string_lossy().into_owned())
+}
+
 /// Physischer Arbeitsspeicher in MiB (Grundlage für RAM-Vorgabe und Slider-Obergrenze).
 #[tauri::command]
 pub fn system_memory_mb() -> AppResult<u64> {

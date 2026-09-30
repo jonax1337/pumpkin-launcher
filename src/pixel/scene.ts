@@ -9,16 +9,22 @@ import { PX, snap } from "./unit";
 
 export type Biome = "forest" | "nether" | "end" | "snow" | "cave" | "sea" | "plains";
 export type SceneMode = "flat" | "live" | "hero";
+/**
+ * Lage der Lichtquelle (Sonne, Mond, Fackel, Insel): `left` links der Mitte (35–55 %, Instanzkopf: rechts steht der Spielen-Knopf),
+ * `std` wie im Mockup (Start), `seed` Seite und Lage je Seed (Poster, Miniaturen). Standard folgt dem Modus: live → left, hero → std, flat → seed.
+ */
+export type SunAnchor = "left" | "std" | "seed";
+export const sunFor = (mode: SceneMode, sun?: SunAnchor): SunAnchor => sun ?? (mode === "live" ? "left" : mode === "hero" ? "std" : "seed");
 
 /** Biome: Name, Akzent (Spielen-Knopf, Poster-Ring, Kopf) und Grundfarbe für Ränder. */
 export const BIOMES: Record<Biome, { n: string; acc: string; bg: string }> = {
-  forest: { n: "Wald am Abend", acc: "#F2B84B", bg: "#1B2140" },
-  nether: { n: "Nether", acc: "#F5735C", bg: "#1A0708" },
+  forest: { n: "Wald am Abend", acc: "#EB85D6", bg: "#1B2140" },
+  nether: { n: "Nether", acc: "#FF7447", bg: "#1A0708" },
   end: { n: "End", acc: "#DCD394", bg: "#07060D" },
   snow: { n: "Schneeberge", acc: "#F4B4A8", bg: "#2A3764" },
-  cave: { n: "Höhle", acc: "#A3BEDC", bg: "#0A0E16" },
-  sea: { n: "Küste", acc: "#6CCBE0", bg: "#13284A" },
-  plains: { n: "Ebene", acc: "#93BEEA", bg: "#3C6FB4" },
+  cave: { n: "Höhle", acc: "#C8ABEE", bg: "#0A0E16" },
+  sea: { n: "Küste", acc: "#4FD8E6", bg: "#13284A" },
+  plains: { n: "Ebene", acc: "#98B0FF", bg: "#3C6FB4" },
 };
 export const BIOME_KEYS = Object.keys(BIOMES) as Biome[];
 
@@ -139,38 +145,47 @@ function streak(b: Buf, x: number, y: number, len: number, c: string, c2?: strin
   if (c2) rect(b, x + Math.round(len * 0.15), y + 1, Math.round(len * 0.7), 1, C32(c2));
 }
 
-/** Baut eine Szene: Grund (Himmel und unbewegte Teile), Ebenen mit Parallax-Tiefe d (1 hinten bis 4 vorn), Effekte. */
-function buildScene(bio: Biome, seed: number, W: number, H: number, M: number): Scene {
+/**
+ * Baut eine Szene: Grund (Himmel und unbewegte Teile), Ebenen mit Parallax-Tiefe d (1 hinten bis 4 vorn), Effekte.
+ * Variation je Seed (eigene Zufallsfolge V, R bestimmt weiter die Formen): Lage der Lichtquelle, Höhe/Amplitude der hinteren
+ * Silhouette, Zahl und Höhe der Wolken, Sternendichte. Bänder und Dithering bleiben unverändert.
+ */
+function buildScene(bio: Biome, seed: number, W: number, H: number, M: number, sun: SunAnchor = "seed"): Scene {
   const R = rng(hash(bio) ^ Math.imul(seed, 2654435761)), u = H / 100, Rn = (n: number) => Math.max(1, Math.round(n * u));
+  const V = rng(hash(bio) ^ Math.imul(seed + 101, 0x85ebca6b)), vj = (a: number) => (V() - 0.5) * 2 * a;
+  // Seed-Variante: Lichtquelle auf die andere Seite gespiegelt (nur Poster/Miniaturen)
+  const flip = sun === "seed" && V() < 0.45;
+  /** x-Anteil einer Lichtquelle; `def` ist ihre Stelle im Mockup. */
+  const at = (def: number) => Math.min(0.88, Math.max(0.12, sun === "left" ? 0.35 + V() * 0.2 : sun === "std" ? def + vj(0.03) : (flip ? 1 - def : def) + vj(0.08)));
+  const lift = vj(0.05), ampK = 0.75 + V() * 0.6, fK = 0.8 + V() * 0.5, starK = 0.6 + V() * 0.8, clouds = 2 + Math.floor(V() * 3), cloudY = vj(0.06);
   const tiny = H < 26, D = H >= 110 ? 4 : H >= 44 ? 2 : 0, LW = W + 2 * M;
   const base = mkBuf(W, H), layers: Scene["layers"] = [];
   const fx: Fx = { stars: [], parts: [], glints: [], drift: null, torch: null, crystals: [] };
   const L = (d: number, fn: (b: Buf) => void) => { const b = mkBuf(LW, H); fn(b); layers.push({ b, d }); };
   const stars = (n: number, ymax: number, cHi: string, cLo: string) => {
+    n = Math.round(n * starK);
     for (let i = 0; i < n; i++) {
       const x = Math.floor(R() * W), y = Math.floor(R() * ymax), hi = R() < 0.3;
       pset(base, x, y, C32(hi ? cHi : cLo));
       if (R() < 0.35) fx.stars.push({ x, y, ph: Math.floor(R() * 16), a: C32(cHi), b: C32(cLo) });
     }
   };
-  const lx = M + W * 0.7;
-
   if (bio === "forest") {
     const hz = Math.round(H * 0.66);
     bands(base, ["#1B2140", "#29305A", "#46386A", "#7A4566", "#B45C5E", "#E08A5E", "#F5BE82"], 0, hz, D);
     rect(base, 0, hz, W, H - hz, C32("#F5BE82"));
     if (!tiny) stars(Math.round((W * H) / 700), hz * 0.32, "#EDE8FF", "#8F8CB8");
-    const sx = Math.round(W * 0.7), sy = Math.round(H * 0.47), sr = Rn(8);
+    const sx = Math.round(W * at(0.7)), sy = Math.round(H * (0.43 + V() * 0.08)), sr = Rn(8), lx = M + sx;
     ring(base, sx, sy, sr, sr + Rn(2), C32("#FAD39A"));
     disc(base, sx, sy, sr, C32("#FFEBC0"));
     if (!tiny) {
       rect(base, sx - sr - Rn(3), sy - Math.round(sr * 0.15), sr * 2 + Rn(6), 1, C32("#F0A56C"));
       rect(base, sx - sr - Rn(5), sy + Math.round(sr * 0.4), sr * 2 + Rn(10), Math.max(1, Rn(0.8)), C32("#F0A56C"));
       const cl = mkBuf(W, H);
-      for (let i = 0; i < 3; i++) streak(cl, Math.floor(R() * W), Math.round(hz * (0.42 + i * 0.12)), Rn(26 + R() * 30), "#8E4C68", "#B05A64");
+      for (let i = 0; i < clouds; i++) streak(cl, Math.floor(R() * W), Math.round(hz * (0.4 + cloudY + i * 0.12)), Rn(26 + R() * 30), "#8E4C68", "#B05A64");
       fx.drift = { b: cl, speed: 6 };
     }
-    L(1, (b) => void ridge(b, R, { c: "#70506F", rim: "#C27678", base: 0.56, amp: 0.09, f: 1.2, rough: 0.02, lx }));
+    L(1, (b) => void ridge(b, R, { c: "#70506F", rim: "#C27678", base: 0.56 + lift, amp: 0.09 * ampK, f: 1.2 * fK, rough: 0.02, lx }));
     L(2, (b) => { const t = ridge(b, R, { c: "#45355C", base: 0.69, amp: 0.035, f: 2 }); if (!tiny) scatter(t, R, Rn(3), (x, y) => pine(b, x, y + 1, Rn(5 + R() * 3), "#45355C")); });
     L(3, (b) => { const t = ridge(b, R, { c: "#241F3A", base: 0.81, amp: 0.03, f: 2.6 }); scatter(t, R, Rn(4.5), (x, y) => pine(b, x, y + 1, Rn(9 + R() * 6), "#241F3A")); });
     L(4, (b) => {
@@ -185,7 +200,7 @@ function buildScene(bio: Biome, seed: number, W: number, H: number, M: number): 
     bands(base, ["#1A0708", "#2A0A0B", "#420F0E", "#651912", "#8E2716"], 0, Math.round(H * 0.78), D, 0, W, 1.2);
     rect(base, 0, Math.round(H * 0.78), W, H, C32("#8E2716"));
     L(1, (b) => {
-      const t = ridge(b, R, { c: "#3E110E", rim: "#A2381A", rimAll: true, base: 0.56, amp: 0.1, f: 1.7, rough: 0.05 });
+      const t = ridge(b, R, { c: "#3E110E", rim: "#A2381A", rimAll: true, base: 0.56 + lift, amp: 0.1 * ampK, f: 1.7 * fK, rough: 0.05 });
       if (!tiny) scatter(t, R, Rn(16), (x, y) => { const h = Rn(8 + R() * 10), w = Rn(2 + R() * 2); rect(b, x, y - h, w, h + 1, C32("#2A0B0A")); rect(b, x, y - h, 1, h, C32("#6A1E10")); });
     });
     L(2, (b) => {
@@ -210,8 +225,10 @@ function buildScene(bio: Biome, seed: number, W: number, H: number, M: number): 
     bands(base, ["#07060D", "#0C0A17", "#141029", "#1F1838", "#2C2250"], 0, Math.round(H * 0.74), D, 0, W, 1.25);
     rect(base, 0, Math.round(H * 0.74), W, H, C32("#2C2250"));
     if (!tiny) stars(Math.round((W * H) / 260), H * 0.75, "#EDE6C9", "#6E6A58");
+    // Links verankert oder Seed-Spiegelung: Säulen links, helle Insel links der Mitte
+    const fl = sun === "left" || flip, mx = (p: number, w = 0) => (fl ? 1 - p - w : p);
     L(1, (b) => {
-      const cx = M + W * 0.3, hw = W * 0.3, top = Math.round(H * 0.62);
+      const cx = M + W * mx(0.3), hw = W * 0.3, top = Math.round(H * (0.62 + lift * 0.5));
       for (let x = Math.floor(cx - hw); x < cx + hw; x++) {
         const k = 1 - Math.pow((x - cx) / hw, 2);
         if (k <= 0) continue;
@@ -222,7 +239,7 @@ function buildScene(bio: Biome, seed: number, W: number, H: number, M: number): 
     L(2, (b) => {
       const floor = Math.round(H * 0.7);
       ([[0.52, 0.22, 7], [0.63, 0.1, 8], [0.74, 0.3, 7], [0.84, 0.16, 8], [0.94, 0.36, 6]] as const).forEach(([px, py, w], i) => {
-        const x = Math.round(M + W * px), top = Math.round(H * py), pw = Rn(w);
+        const x = Math.round(M + W * mx(px, 0.06)), top = Math.round(H * (py + lift)), pw = Rn(w);
         rect(b, x, top, pw, floor - top + 2, C32("#08060F"));
         rect(b, x + pw - Math.max(1, Rn(1.2)), top, Math.max(1, Rn(1.2)), floor - top, C32("#241C3E"));
         const cr = Math.max(1, Rn(1.5));
@@ -231,7 +248,7 @@ function buildScene(bio: Biome, seed: number, W: number, H: number, M: number): 
       });
     });
     L(3, (b) => {
-      const cx = M + W * 0.62, hw = W * 0.6, top = Math.round(H * 0.68), cols = ["#DCD394", "#B3AC7A", "#8A845C", "#5E5A40", "#3B3828"].map(C32);
+      const cx = M + W * (sun === "left" ? 0.45 : mx(0.62)), hw = W * 0.6, top = Math.round(H * 0.68), cols = ["#DCD394", "#B3AC7A", "#8A845C", "#5E5A40", "#3B3828"].map(C32);
       for (let x = Math.floor(cx - hw); x < cx + hw; x++) {
         const k = 1 - Math.pow((x - cx) / hw, 2);
         if (k <= 0) continue;
@@ -246,10 +263,10 @@ function buildScene(bio: Biome, seed: number, W: number, H: number, M: number): 
     bands(base, ["#2A3764", "#44568C", "#7C7DB0", "#B994AE", "#E8B4A6", "#F9D8BE"], 0, hz, D);
     rect(base, 0, hz, W, H - hz, C32("#F9D8BE"));
     if (!tiny) stars(Math.round((W * H) / 1400), hz * 0.25, "#FFFFFF", "#8E9BC8");
-    const sx = Math.round(W * 0.3), sy = hz - Rn(6), sr = Rn(6);
+    const sx = Math.round(W * at(0.3)), sy = hz - Rn(3 + V() * 12), sr = Rn(6);
     ring(base, sx, sy, sr, sr + Rn(2), C32("#FFE6D2"));
     disc(base, sx, sy, sr, C32("#FFF6E6"));
-    L(1, (b) => void ridge(b, R, { c: "#8A96C2", rim: "#F6D6CC", rimW: Math.max(1, Rn(0.8)), cap: "#EEF2FA", capAbove: 0.5, base: 0.52, amp: 0.15, f: 1.05, rough: 0.03, lx: M + sx }));
+    L(1, (b) => void ridge(b, R, { c: "#8A96C2", rim: "#F6D6CC", rimW: Math.max(1, Rn(0.8)), cap: "#EEF2FA", capAbove: 0.5, base: 0.52 + lift, amp: 0.15 * ampK, f: 1.05 * fK, rough: 0.03, lx: M + sx }));
     L(2, (b) => { const t = ridge(b, R, { c: "#C3CDE5", base: 0.67, amp: 0.04, f: 2 }); if (!tiny) scatter(t, R, Rn(5), (x, y) => pine(b, x, y + 1, Rn(4 + R() * 3), "#6B7CA6")); });
     L(3, (b) => { const t = ridge(b, R, { c: "#E1E9F5", base: 0.8, amp: 0.03, f: 2.4 }); scatter(t, R, Rn(7), (x, y) => pine(b, x, y + 1, Rn(8 + R() * 6), "#34466E")); });
     L(4, (b) => {
@@ -259,16 +276,16 @@ function buildScene(bio: Biome, seed: number, W: number, H: number, M: number): 
     if (!tiny) for (let i = 0; i < Math.round((W * H) / 500); i++) fx.parts.push({ x: Math.floor(R() * W), y: Math.floor(R() * H), v: 0.4 + R() * 0.7, ph: Math.floor(R() * 40), c: C32(R() < 0.6 ? "#FFFFFF" : "#D6E0F4"), up: false, top: 0, bot: H });
   } else if (bio === "cave") {
     bands(base, ["#0B1019", "#111826", "#172133", "#1D2940"], 0, H, D, 0, W, 1);
-    const sx0 = W * 0.56, sw = W * 0.12;
+    const sx0 = W * (0.56 + vj(0.1)), sw = W * 0.12;
     for (let y = 0; y < H * 0.9; y++) {
       const x0 = Math.round(sx0 - y * 0.35), w = Math.round(sw + y * 0.08);
       rect(base, x0, y, w, 1, C32("#22314A"));
       rect(base, x0 + Math.round(w * 0.3), y, Math.round(w * 0.4), 1, C32("#2B3D5A"));
     }
-    const tx = Math.round(W * 0.3), ty = Math.round(H * 0.78);
+    const tx = Math.round(W * at(0.3)), ty = Math.round(H * 0.78);
     if (!tiny) ([[Rn(24), "#1E2126"], [Rn(17), "#2A2622"], [Rn(10), "#3A2C1E"]] as const).forEach(([r, c]) => disc(base, tx, ty - Rn(4), r, C32(c)));
     L(1, (b) => {
-      ridge(b, R, { c: "#0F1622", base: 0.84, amp: 0.05, f: 1.8 });
+      ridge(b, R, { c: "#0F1622", base: 0.84 + lift * 0.5, amp: 0.05 * ampK, f: 1.8 * fK });
       if (!tiny) for (let i = 0; i < Math.round(W / 10); i++) {
         const x = Math.floor(R() * b.w), y = Math.floor(H * (0.25 + R() * 0.45)), c = R() < 0.5 ? "#7FDFE8" : "#E0B25A", s = Math.max(1, Rn(1));
         rect(b, x, y, s, s, C32(c));
@@ -293,7 +310,7 @@ function buildScene(bio: Biome, seed: number, W: number, H: number, M: number): 
     const hz = Math.round(H * 0.6);
     bands(base, ["#13284A", "#223F68", "#3A6488", "#7F8298", "#C98F7E", "#F2C69A"], 0, hz, D);
     if (!tiny) stars(Math.round((W * H) / 1600), hz * 0.25, "#FFFFFF", "#7C8DB0");
-    const sx = Math.round(W * 0.64), sr = Rn(8);
+    const sx = Math.round(W * at(0.64)), sr = Rn(8), left = sx < W / 2;
     ring(base, sx, hz, sr, sr + Rn(2), C32("#FFD8A0"));
     disc(base, sx, hz, sr, C32("#FFEBC2"));
     bands(base, ["#6B8398", "#2F6A84", "#1F5470", "#143E55", "#0B2A3C"], hz, H, D ? 2 : 0, 0, W, 1.3);
@@ -308,11 +325,12 @@ function buildScene(bio: Biome, seed: number, W: number, H: number, M: number): 
     }
     if (!tiny) {
       const cl = mkBuf(W, H);
-      for (let i = 0; i < 3; i++) streak(cl, Math.floor(R() * W), Math.round(hz * (0.35 + i * 0.14)), Rn(24 + R() * 26), "#6F7894", "#D39C84");
+      for (let i = 0; i < clouds; i++) streak(cl, Math.floor(R() * W), Math.round(hz * (0.33 + cloudY + i * 0.14)), Rn(24 + R() * 26), "#6F7894", "#D39C84");
       fx.drift = { b: cl, speed: 7 };
     }
     L(2, (b) => {
-      const ix = Math.round(M + W * 0.16), iw = Rn(34);
+      // Insel und Klippe auf der Seite gegenüber der Sonne
+      const ix = Math.round(M + W * (left ? 0.84 : 0.16)), iw = Rn(34);
       for (let k = 0; k < Rn(6); k++) rect(b, ix - (iw >> 1) + k * 2, hz - k - 1, iw - k * 4, 1, C32("#173247"));
       if (!tiny) {
         rect(b, ix + Rn(4), hz - Rn(14), Rn(2), Rn(10), C32("#173247"));
@@ -326,23 +344,23 @@ function buildScene(bio: Biome, seed: number, W: number, H: number, M: number): 
       for (let k = 0; k < 7; k++) {
         const w = Math.round(w0 * (1 - k * 0.12)) + M, h = Rn(4 + k * 0.5);
         y -= h;
-        rect(b, 0, y, w, H - y, C32("#06141C"));
-        rect(b, w - Rn(1.5), y, Rn(1.5), 1, C32("#16303C"));
+        rect(b, left ? b.w - w : 0, y, w, H - y, C32("#06141C"));
+        rect(b, left ? b.w - w : w - Rn(1.5), y, Rn(1.5), 1, C32("#16303C"));
       }
     });
   } else {
     const hz = Math.round(H * 0.64);
     bands(base, ["#3C6FB4", "#5486C8", "#77A3DC", "#A4C4E8", "#D2E3F0"], 0, hz, D);
     rect(base, 0, hz, W, H - hz, C32("#D2E3F0"));
-    const s = Rn(7), sx = Math.round(W * 0.74), sy = Math.round(hz * 0.22);
+    const s = Rn(7), sx = Math.round(W * at(0.74)), sy = Math.round(hz * (0.14 + V() * 0.2));
     rect(base, sx - 1, sy - 1, s + 2, s + 2, C32("#FFF0B8"));
     rect(base, sx, sy, s, s, C32("#FFFBEA"));
     if (!tiny) {
       const cl = mkBuf(W, H);
-      for (let i = 0; i < 4; i++) blockCloud(cl, Math.floor(R() * W), Math.round(hz * (0.18 + i * 0.15)), Rn(16 + R() * 18), Math.max(2, Rn(3)), "#F4F8FF", "#C9D8EA");
+      for (let i = 0; i <= clouds; i++) blockCloud(cl, Math.floor(R() * W), Math.round(hz * (0.16 + cloudY + i * 0.15)), Rn(16 + R() * 18), Math.max(2, Rn(3)), "#F4F8FF", "#C9D8EA");
       fx.drift = { b: cl, speed: 5 };
     }
-    L(1, (b) => void ridge(b, R, { c: "#9BB5C9", rim: "#C6D8E6", base: 0.62, amp: 0.05, f: 1.4, lx: M + sx }));
+    L(1, (b) => void ridge(b, R, { c: "#9BB5C9", rim: "#C6D8E6", base: 0.62 + lift * 0.6, amp: 0.05 * ampK, f: 1.4 * fK, lx: M + sx }));
     L(2, (b) => { const t = ridge(b, R, { c: "#6E9481", base: 0.71, amp: 0.045, f: 2 }); if (!tiny) scatter(t, R, Rn(18), (x, y) => oak(b, x, y + 1, Math.max(1, Rn(0.9)), "#587B6A")); });
     L(3, (b) => { const t = ridge(b, R, { c: "#4A735F", base: 0.81, amp: 0.035, f: 2.3 }); if (!tiny) scatter(t, R, Rn(22), (x, y) => oak(b, x, y + 1, Math.max(1, Rn(1.4)), "#3A5E4C")); });
     L(4, (b) => { const t = ridge(b, R, { c: "#22392F", base: 0.94, amp: 0.02, f: 1.5 }); if (!tiny) oak(b, M + W - Rn(16), t[M + W - Rn(16)] + 1, Math.max(1, Rn(3)), "#1B2E25"); });
@@ -421,6 +439,7 @@ export class SceneHost {
   bio: Biome;
   seed: number;
   mode: SceneMode;
+  sun: SunAnchor | undefined;
   key = "";
   k = 0;
   hero = false;
@@ -430,11 +449,12 @@ export class SceneHost {
   private out: Buf | null = null;
   private g: CanvasRenderingContext2D;
 
-  constructor(el: HTMLElement, bio: Biome, seed: number, mode: SceneMode) {
+  constructor(el: HTMLElement, bio: Biome, seed: number, mode: SceneMode, sun?: SunAnchor) {
     this.el = el;
     this.bio = bio;
     this.seed = seed;
     this.mode = mode;
+    this.sun = sun;
     this.cv = document.createElement("canvas");
     this.cv.setAttribute("aria-hidden", "true");
     el.appendChild(this.cv);
@@ -449,7 +469,8 @@ export class SceneHost {
     const w = this.el.clientWidth, h = this.el.clientHeight;
     if (!w || !h) return;
     const W = Math.ceil(w / PX.css), H = Math.ceil(h / PX.css);
-    const key = [this.bio, this.seed, W, H, this.mode, PX.css].join("|");
+    const sun = sunFor(this.mode, this.sun);
+    const key = [this.bio, this.seed, W, H, this.mode, sun, PX.css].join("|");
     if (!force && key === this.key) return;
     this.key = key;
     this.el.style.setProperty("--scene-bg", BIOMES[this.bio].bg);
@@ -463,17 +484,17 @@ export class SceneHost {
     cv.style.top = `${snap(h - ch)}px`;
     this.hero = this.mode === "hero";
     if (this.anim) {
-      this.sc = buildScene(this.bio, this.seed, W, H, this.hero ? 4 : 0);
+      this.sc = buildScene(this.bio, this.seed, W, H, this.hero ? 4 : 0, sun);
       this.img = this.g.createImageData(W, H);
       this.out = { w: W, h: H, d: new Uint32Array(this.img.data.buffer) };
       LIVE.add(this);
       ensureTicker();
       this.draw(TICK);
     } else {
-      const ck = [this.bio, this.seed, W, H].join("|");
+      const ck = [this.bio, this.seed, W, H, sun].join("|");
       let src = STATIC_CACHE.get(ck);
       if (!src) {
-        const s2 = buildScene(this.bio, this.seed, W, H, 0);
+        const s2 = buildScene(this.bio, this.seed, W, H, 0, sun);
         src = new ImageData(W, H);
         compose(s2, { w: W, h: H, d: new Uint32Array(src.data.buffer) }, 0, 0);
         if (STATIC_CACHE.size > 160) STATIC_CACHE.clear();
@@ -497,11 +518,12 @@ export class SceneHost {
   }
 
   /** Neues Biom oder Seed. Belebte Szenen wechseln per Bayer-Auflösung in 8 Schritten. */
-  set(bio: Biome, seed: number, mode: SceneMode) {
-    if (bio === this.bio && seed === this.seed && mode === this.mode) return;
+  set(bio: Biome, seed: number, mode: SceneMode, sun?: SunAnchor) {
+    if (bio === this.bio && seed === this.seed && mode === this.mode && sun === this.sun) return;
     const old = this.anim && this.out && !motionOff() && mode === this.mode ? new Uint32Array(this.out.d) : null;
     this.bio = bio;
     this.seed = seed;
+    this.sun = sun;
     if (mode !== this.mode) { LIVE.delete(this); this.sc = null; }
     this.mode = mode;
     this.paint(true);

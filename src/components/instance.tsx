@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router";
+import { toast } from "sonner";
 import { create } from "zustand";
 import { Btn, ConfirmDialog, Dialog, DialogClose, Menu, TextField, type MenuEntry } from "@/components/px";
 import { usePhase } from "@/components/game";
-import { useDeleteInstance, useKill, usePlay } from "@/hooks/useInstances";
+import { askStop, useDeleteInstance, usePlay } from "@/hooks/useInstances";
 import { useSaveTemplate } from "@/hooks/useTemplates";
+import { api } from "@/lib/api";
 import type { Instance } from "@/lib/types";
 
 /** Welche Instanz gerade einen der beiden Dialoge offen hat (einmal im Layout gerendert). */
@@ -13,20 +15,25 @@ const useInstanceActions = create<{ template: Instance | null; remove: Instance 
 export const askSaveTemplate = (instance: Instance) => useInstanceActions.setState({ template: instance });
 export const askDelete = (instance: Instance) => useInstanceActions.setState({ remove: instance });
 
+/** Spielordner der Instanz im Dateimanager öffnen; Fehler als Toast. */
+export function openInstanceFolder(instance: Instance) {
+  api.instanceDir(instance.id).then(api.openPath).catch((e: unknown) => toast.error(e instanceof Error ? e.message : String(e)));
+}
+
 /** Einträge für das Menü einer Instanz: Knopf „…“ und Rechtsklick teilen sie sich. */
 export function useInstanceMenu(instance: Instance, opts: { open?: boolean } = { open: true }): MenuEntry[] {
   const phase = usePhase(instance.id);
   const play = usePlay();
-  const kill = useKill();
   const navigate = useNavigate();
   const running = phase === "running";
   const busy = phase === "preparing" || phase === "starting";
   return [
     running
-      ? { id: "stop", text: "Stoppen", icon: "stop", onSelect: () => kill.mutate(instance) }
+      ? { id: "stop", text: "Beenden…", icon: "stop", onSelect: () => askStop(instance) }
       : { id: "play", text: "Spielen", icon: "play", disabled: busy || phase === "loading", onSelect: () => void play(instance) },
     ...(opts.open ? [{ id: "open", text: "Öffnen", icon: "chev" as const, onSelect: () => navigate(`/instances/${instance.id}`) }] : []),
     { id: "log", text: "Protokoll", icon: "term", onSelect: () => navigate(`/instances/${instance.id}?tab=console`) },
+    { id: "dir", text: "Ordner öffnen", icon: "folder", onSelect: () => openInstanceFolder(instance) },
     "-",
     { id: "tpl", text: "Als Vorlage speichern", icon: "save", onSelect: () => askSaveTemplate(instance) },
     "-",

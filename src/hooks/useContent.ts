@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { create } from "zustand";
 import { api } from "@/lib/api";
@@ -74,13 +75,51 @@ export function useProjects(projectIds: string[]) {
   });
 }
 
+/** Update-Check einer Instanz: gemeinsamer Schlüssel und Cache (10 min) für Detail und Bibliothek. */
+const updatesQuery = (instanceId: string) => ({
+  queryKey: ["modrinth-updates", instanceId],
+  queryFn: () => api.modrinthCheckUpdates(instanceId),
+  staleTime: 10 * 60_000,
+  retry: false,
+});
+
 /** Update-Check einer Instanz; still, wenn Modrinth nicht erreichbar ist. */
 export function useModUpdates(instanceId: string, enabled: boolean) {
-  return useQuery({
-    queryKey: ["modrinth-updates", instanceId],
-    queryFn: () => api.modrinthCheckUpdates(instanceId),
-    enabled,
-    staleTime: 10 * 60_000,
-    retry: false,
-  });
+  return useQuery({ ...updatesQuery(instanceId), enabled });
+}
+
+/** Online-Zustand des Browsers/WebViews (für Abfragen im Hintergrund). */
+function useOnline() {
+  const [online, setOnline] = useState(() => navigator.onLine);
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
+  return online;
+}
+
+/**
+ * Sparsamer Update-Check im Hintergrund für mehrere Instanzen (Bibliothek): nur online, höchstens zwei gleichzeitig,
+ * frische Einträge (< 10 min) werden nicht neu abgefragt. Ergebnisse landen im selben Cache wie `useModUpdates`.
+ */
+export function useBackgroundUpdates(instanceIds: string[]) {
+  const qc = useQueryClient();
+  const online = useOnline();
+  const key = instanceIds.join("|");
+  useEffect(() => {
+    if (!key || !online) return;
+    const queue = key.split("|");
+    let stopped = false;
+    const worker = async () => {
+      for (let id = queue.shift(); id && !stopped; id = queue.shift()) await qc.prefetchQuery(updatesQuery(id));
+    };
+    void Promise.all([worker(), worker()]);
+    return () => void (stopped = true);
+  }, [qc, key, online]);
 }

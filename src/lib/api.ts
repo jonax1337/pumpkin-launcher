@@ -18,7 +18,7 @@ import {
   type VersionEntry,
 } from "@/lib/types";
 
-import type { CatalogType, ContentSearch, ContentProject, ContentVersion, ContentProgress, ModUpdate } from "@/lib/modrinth";
+import type { CatalogType, ContentSearch, ContentProject, ContentVersion, ContentProgress, ModUpdate, SearchIndex } from "@/lib/modrinth";
 
 // Mock nur im Dev-Server: im Release-Build ist das konstant true, Vite wirft Mock und mock.ts heraus.
 const tauri = !import.meta.env.DEV || isTauri();
@@ -272,8 +272,9 @@ if (!tauri) Object.assign(globalThis, { voxletMock: { crash: mockGame.crash, log
 
 export const api = {
   isMock: !tauri,
-  modrinthSearch: (query: string, projectType: CatalogType, minecraftVersion: string | null, loader: string | null, offset = 0): Promise<ContentSearch> =>
-    tauri ? call("modrinth_search", { query, projectType, minecraftVersion, loader, offset }) : mockContent!.search(query, projectType, minecraftVersion, loader, offset),
+  /** `index` = Sortierung; ohne: Downloads ohne Suchbegriff, sonst Relevanz. */
+  modrinthSearch: (query: string, projectType: CatalogType, minecraftVersion: string | null, loader: string | null, offset = 0, index: SearchIndex | null = null): Promise<ContentSearch> =>
+    tauri ? call("modrinth_search", { query, projectType, minecraftVersion, loader, offset, index }) : mockContent!.search(query, projectType, minecraftVersion, loader, offset, index),
   modrinthProject: (projectId: string): Promise<ContentProject> =>
     tauri ? call("modrinth_project", { projectId }) : mockContent!.project(projectId),
   modrinthProjects: (projectIds: string[]): Promise<ContentProject[]> =>
@@ -324,6 +325,9 @@ export const api = {
   systemMemoryMb: (): Promise<number> => (tauri ? call("system_memory_mb") : mockGame.systemMemory()),
   instanceStatus: (instanceId: string): Promise<InstanceStatus> =>
     tauri ? call("instance_status", { instanceId }) : mockGame.status(instanceId),
+  /** Spielordner der Instanz (wird angelegt, falls er fehlt). */
+  instanceDir: (instanceId: string): Promise<string> =>
+    tauri ? call("instance_dir", { instanceId }) : Promise.reject(new Error("Ordner lassen sich nur in der Voxlet-App öffnen.")),
   installInstance: (instanceId: string): Promise<void> =>
     tauri ? call("instance_install", { instanceId }) : mockGame.install(instanceId),
   /**

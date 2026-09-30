@@ -51,6 +51,7 @@ pub fn run() {
             commands::instance_launch,
             commands::instance_kill,
             commands::instance_status,
+            commands::instance_dir,
             commands::loader_versions,
             account_commands::ms_login_start,
             account_commands::ms_login_finish,

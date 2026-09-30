@@ -1,11 +1,37 @@
 /* Katalog: Entdecken, Projektseite, Seitenpanel. Ergänzt pixelkino.css (.rrow, .proj-h, .desc …). */
 @layer components {
   .ctxline .num { font-size: 17px; color: var(--fg); margin-right: 4px; }
+  /* „Beliebt“, „Neu“ … als Abschnittsüberschrift wie „Zuletzt gespielt“ auf Start; Zeile bleibt 32 px hoch */
+  .ctxline .ctxh { font: 800 22px/1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; color: var(--fg); padding-top: 2px; }
+  .sheet .ctxline .ctxh { font-size: 18px; }
   .rrow .ra .chip .pi.s { width: 16px; height: 16px; }
   .rrow .ra > .faint { text-align: right; }
   .rrow.compact { grid-template-columns: 48px minmax(0, 1fr) 128px; height: 76px; }
   .rrow.compact .jobp { width: 108px; }
   .jobp { min-width: 0; }
+
+  /* Entdecken: größere Symbole, Tags als Chips, „Schon in …“ */
+  .rrow .mi.l { width: 72px; height: 72px; }
+  .rrow .rt .t3 .chip { flex: none; }
+  .rrow .rt .t3 .inchip { flex: 0 1 auto; min-width: 0; }
+  .inchip { max-width: 240px; color: var(--fg-2); }
+  .inchip .pi { color: var(--copper); }
+
+  /* Erster Treffer ohne Suchbegriff als Karte; Platzhalter gleich hoch */
+  /* Linke Kante des Symbols wie in den Zeilen darunter (8 px) */
+  .rrow.feat, .skrow.feat { height: 132px; grid-template-columns: 104px minmax(0, 1fr) 190px; gap: 18px; padding: 0 10px 0 8px; margin-bottom: 8px; }
+  .rrow.feat::before { background: var(--panel); box-shadow: var(--bv-plate); clip-path: var(--n2); }
+  .rrow.feat:hover::before, .rrow.feat:focus-within::before { background: var(--panel-2); }
+  .rrow.feat .mi.l { width: 104px; height: 104px; }
+  .rrow.feat .mi.l svg { width: calc(var(--px) * 24); height: calc(var(--px) * 24); }
+  .rrow.feat .rt { gap: 6px; }
+  .rrow.feat .rt .t1 b { font: 800 28px/1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; }
+  .rrow.feat .rt p { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; max-width: 90ch; font-size: 13.5px; line-height: 1.45; }
+  .skrow.feat .a { width: 104px; height: 104px; }
+
+  /* Bestätigung „Neue Instanz aus Modpack“ */
+  .pcf .kv { margin: 4px 0 16px; }
+  .pcf .kv dd { min-height: 19px; min-width: 0; }
   .jobp .ell { display: block; }
 
   /* Projektseite */
@@ -56,8 +82,9 @@
   .sheet .offl .pi, .offl > .pi { width: 40px; height: 40px; color: var(--fg-2); }
 
   /* Einstellungen */
-  .set .fsec { scroll-margin-top: 16px; }
-  .set .form .fsec:first-child { padding-top: 6px; }
+  .set .form .fsec:first-child { padding-top: 16px; }
   .set .setnav .ptab { height: 36px; }
+  /* Java-Pfad bleibt stehen, bei „Automatisch“ sichtbar gesperrt */
+  .set .field:has(> input:disabled) { opacity: .5; }
   .about .muted .num { font-size: 18px; color: var(--fg); }
 }

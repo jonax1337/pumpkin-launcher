@@ -7,6 +7,7 @@ export function NotFoundPage() {
       <Empty
         ill={<Glyph name="compass" pal="ice" big />}
         title="Seite nicht gefunden"
+        page
         actions={<BtnLink to="/" variant="p" icon="back">Zum Start</BtnLink>}
       >
         Diese Adresse gibt es in Voxlet nicht (mehr).

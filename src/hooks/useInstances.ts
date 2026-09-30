@@ -1,7 +1,9 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, type NavigateFunction } from "react-router";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
+import { create } from "zustand";
+import { askPlayerName, openAddOffline } from "@/components/PlayerNames";
 import { api } from "@/lib/api";
 import { autoMemoryMb, formatClock, maxMemoryMb } from "@/lib/format";
 import { INSTALL_CANCELLED, type Instance, type InstanceStatus, type ModLoader, type NewInstance } from "@/lib/types";
@@ -153,12 +155,12 @@ export function useInstall() {
     },
     // Beim Spielen folgt gleich der Start; eine Erfolgsmeldung gibt es nur für Reparieren und „Erneut versuchen“.
     onSuccess: (_, instance) => {
-      useTasks.getState().push({ label: `${instance.name} vorbereitet`, sub: "Bereit zum Spielen", state: "done", to: `/instances/${instance.id}` });
+      useTasks.getState().push({ label: `${instance.name} installiert`, sub: "Bereit zum Spielen", state: "done", to: `/instances/${instance.id}` });
       if (!useGame.getState().launching[instance.id]) toast.success(`${instance.name} ist bereit`);
     },
     onError: (err, instance) => {
-      if (isCancelled(err)) return void toast(`Vorbereitung von ${instance.name} abgebrochen`);
-      useTasks.getState().push({ label: `${instance.name} vorbereiten`, sub: err.message, state: "fail", to: `/instances/${instance.id}` });
+      if (isCancelled(err)) return void toast(`Installation von ${instance.name} abgebrochen`);
+      useTasks.getState().push({ label: `${instance.name} konnte nicht installiert werden`, sub: err.message, state: "fail", to: `/instances/${instance.id}` });
       toast.error(`${instance.name} konnte nicht installiert werden`, {
         description: err.message,
         duration: 10_000,
@@ -177,14 +179,13 @@ export function useInstall() {
   return install;
 }
 
-/** Bricht die laufende Vorbereitung ab; das Backend beendet `instance_install` dann mit INSTALL_CANCELLED. */
+/** Bricht die laufende Installation ab; das Backend beendet `instance_install` dann mit INSTALL_CANCELLED. */
 export function useCancelInstall() {
   return useMutation({ mutationFn: (instanceId: string) => api.installCancel(instanceId) });
 }
 
 export function useLaunch() {
   const qc = useQueryClient();
-  const navigate = useNavigate();
   return useMutation({
     meta: { ownErrorToast: true },
     mutationFn: async (instance: Instance) => {
@@ -203,30 +204,30 @@ export function useLaunch() {
       void qc.invalidateQueries({ queryKey: instanceKeys.status(instance.id) });
       return qc.invalidateQueries({ queryKey: instanceKeys.all });
     },
-    onError: (err) => (useSettings.getState().active ? toast.error(err.message) : missingNameToast(err.message, navigate)),
+    // Name erst während der Installation entfernt: selten, deshalb nur Meldung mit direktem Weg zum Dialog.
+    onError: (err) =>
+      useSettings.getState().active
+        ? toast.error(err.message)
+        : toast.error(err.message, { duration: 10_000, action: { label: "Spielername festlegen", onClick: openAddOffline } }),
   });
-}
-
-function missingNameToast(message: string, navigate: NavigateFunction) {
-  toast.error(message, { duration: 10_000, action: { label: "Spielername festlegen", onClick: () => navigate("/settings#konten") } });
 }
 
 /**
  * „Spielen“: prüft den Spielernamen, installiert bei Bedarf und startet danach.
+ * Ohne Namen öffnet sich der Dialog „Spielername hinzufügen“; nach dem Speichern geht es hier weiter.
  * Fehler melden `useInstall`/`useLaunch` selbst; der Knopf fällt dann in den Ausgangszustand zurück.
  */
 export function usePlay() {
   const qc = useQueryClient();
-  const navigate = useNavigate();
   const install = useInstall();
   const launch = useLaunch();
-  return async (instance: Instance, onLaunched?: () => void) => {
+  const play = async (instance: Instance, onLaunched?: () => void): Promise<void> => {
     const game = useGame.getState();
     if (game.launching[instance.id] || game.installs[instance.id]) return;
-    if (!useSettings.getState().active) return missingNameToast("Leg zuerst einen Spielernamen fest.", navigate);
+    if (!useSettings.getState().active) return askPlayerName({ label: instance.name, run: () => void play(instance, onLaunched) });
     game.setLaunching(instance.id, true);
     try {
-      // Fehlt der Status (Abfrage fehlgeschlagen), wird wie „nicht installiert“ vorbereitet.
+      // Fehlt der Status (Abfrage fehlgeschlagen), wird wie bei „nicht installiert“ zuerst installiert.
       if (!qc.getQueryData<InstanceStatus>(instanceKeys.status(instance.id))?.installed) await install.mutateAsync(instance);
       await launch.mutateAsync(instance);
       onLaunched?.();
@@ -236,10 +237,20 @@ export function usePlay() {
       game.setLaunching(instance.id, false);
     }
   };
+  return play;
 }
 
 // Vom Nutzer gestoppte Instanzen: deren Exit-Code (unter Windows 1) ist kein Fehler.
 const stopping = new Set<string>();
+
+/** Offene Rückfrage „Minecraft beenden?“ (StopDialog in game.tsx, einmal global eingehängt). */
+export const useStopAsk = create<{ instance: Instance | null }>(() => ({ instance: null }));
+
+/**
+ * Beenden mit Rückfrage: öffnet „Minecraft beenden?“; erst „Beenden“ dort beendet hart (useKill).
+ * Für alle Auslöser (Spielen-Knopf, Instanz-Menü, Protokoll), damit nie ohne Rückfrage gestoppt wird.
+ */
+export const askStop = (instance: Instance) => useStopAsk.setState({ instance });
 
 export function useKill() {
   return useMutation({

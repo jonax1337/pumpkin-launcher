@@ -1,9 +1,8 @@
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { Btn, Chip, Progress, SearchField, Seg, Tip } from "@/components/px";
-import { openAccounts } from "@/components/PlayerNames";
-import { useCancelInstall, useInstanceStatus, useKill, usePlay } from "@/hooks/useInstances";
+import { Btn, Chip, ConfirmDialog, Progress, SearchField, Seg, Tip } from "@/components/px";
+import { askStop, useCancelInstall, useInstanceStatus, useKill, usePlay, useStopAsk } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { formatClock, formatCount, relativeTime } from "@/lib/format";
@@ -35,12 +34,12 @@ export function usePhase(instanceId: string): Phase {
   if (status.data?.running) return "running";
   if (launching) return "starting";
   if (crashed) return "crashed";
-  // Schlägt die Statusabfrage fehl, gilt die Instanz als nicht installiert; „Spielen“ bereitet sie dann vor.
+  // Schlägt die Statusabfrage fehl, gilt die Instanz als nicht installiert; „Spielen“ installiert sie dann.
   if (status.isPending) return "loading";
   return status.data?.installed ? "installed" : "missing";
 }
 
-/** Fortschritt einer Instanz (null = keine Vorbereitung). */
+/** Fortschritt einer Instanz (null = keine Installation). */
 export function useInstallPercent(instance: Instance) {
   const progress = useGame((s) => s.installs[instance.id]);
   return progress ? overallPercent(progress, stepsFor(instance.loader)) : null;
@@ -57,56 +56,71 @@ function useNow(on: boolean) {
   return now;
 }
 
-type PlayState = { st: "idle" | "prep" | "start" | "run" | "error" | "blocked"; icon: IconName; l1: string; s1: string; l2: string; p: number | null; pct?: string; dis?: boolean; aria: string };
+/** Laufzeit zum Vorlesen, minutengenau (das Label ändert sich nicht jede Sekunde). */
+function spokenSince(ms: number) {
+  const m = Math.floor(ms / 60_000), h = Math.floor(m / 60);
+  if (m < 1) return "weniger als einer Minute";
+  if (h < 1) return m === 1 ? "einer Minute" : `${m} Minuten`;
+  return `${h === 1 ? "einer Stunde" : `${h} Stunden`}${m % 60 ? ` ${m % 60} Minuten` : ""}`;
+}
 
-function playState(instance: Instance, phase: Phase, percent: number | null, step: string, code: number | null, hasAccount: boolean): PlayState {
+type PlayState = { st: "idle" | "prep" | "start" | "run" | "error" | "blocked"; icon: IconName; l1: string; s1: string; l2: ReactNode; p: number | null; pct?: string; dis?: boolean; aria: string };
+
+/**
+ * Große Zeile = Aktion oder laufender Vorgang (Spielen, Wird installiert, Startet, Beenden …).
+ * aria-label beginnt mit dem sichtbaren Wort (WCAG 2.5.3), danach Instanz und Stand.
+ */
+function playState(instance: Instance, phase: Phase, percent: number | null, code: number | null, hasAccount: boolean, runMs: number | null): PlayState {
   const name = instance.name;
   switch (phase) {
     case "preparing":
-      return { st: "prep", icon: "dl", l1: "Vorbereiten", s1: "Lädt", l2: step, p: (percent ?? 0) / 100, pct: `${percent ?? 0}%`, aria: `${name} wird vorbereitet, ${percent ?? 0} Prozent` };
+      // Kein Knopf, sondern Vorgang: Abbrechen steht in der Statuszeile.
+      return { st: "prep", icon: "dl", l1: "Wird installiert", s1: "Installiert", l2: "", p: (percent ?? 0) / 100, pct: `${percent ?? 0}%`, dis: true, aria: `Wird installiert: ${name}, ${percent ?? 0} %` };
     case "starting":
-      return { st: "start", icon: "hour", l1: "Startet", s1: "Startet", l2: "Minecraft öffnet sich", p: null, aria: `${name} startet` };
+      return { st: "start", icon: "hour", l1: "Startet", s1: "Startet", l2: "", p: null, dis: true, aria: `Startet: ${name}` };
     case "running":
-      return { st: "run", icon: "stop", l1: "Läuft", s1: "Stoppen", l2: "Klicken zum Stoppen", p: 0, aria: `${name} läuft. Stoppen` };
+      // Groß die Aktion (Klick fragt nach), klein seit wann es läuft.
+      return {
+        st: "run", icon: "stop", l1: "Beenden", s1: "Beenden",
+        l2: runMs != null ? <>Läuft seit <span className="num">{formatClock(runMs)}</span></> : "Läuft",
+        p: 0, aria: `Beenden: ${name}, läuft${runMs != null ? ` seit ${spokenSince(runMs)}` : ""}`,
+      };
     case "crashed":
-      return { st: "error", icon: "redo", l1: "Erneut starten", s1: "Nochmal", l2: `Abgestürzt${code != null ? ` (Code ${code})` : ""}`, p: 0, aria: `${name} erneut starten` };
+      return { st: "error", icon: "redo", l1: "Erneut starten", s1: "Nochmal", l2: `Abgestürzt${code != null ? ` (Code ${code})` : ""}`, p: 0, aria: `Erneut starten: ${name}, abgestürzt` };
     case "loading":
-      return { st: "idle", icon: "play", l1: "Spielen", s1: "Spielen", l2: "Einen Moment", p: 0, dis: true, aria: `${name} spielen` };
+      return { st: "idle", icon: "play", l1: "Spielen", s1: "Spielen", l2: "Einen Moment", p: 0, dis: true, aria: `Spielen: ${name}` };
   }
   if (phase === "missing" && !SUPPORTED_LOADERS.includes(instance.loader))
-    return { st: "blocked", icon: "plug", l1: "Kann nicht starten", s1: "Gesperrt", l2: "Diesen Loader kann Voxlet noch nicht", p: 0, dis: true, aria: "Kann nicht starten" };
-  return {
-    st: "idle", icon: "play", l1: "Spielen", s1: "Spielen",
-    l2: !hasAccount ? "Erst Spielernamen festlegen" : phase === "installed" ? "Bereit" : "Lädt beim ersten Start",
-    p: 0, aria: `${name} spielen`,
-  };
+    return { st: "blocked", icon: "plug", l1: "Kann nicht starten", s1: "Gesperrt", l2: "Diesen Loader kann Voxlet noch nicht", p: 0, dis: true, aria: `Kann nicht starten: ${name}, Loader wird noch nicht unterstützt` };
+  const [l2, hint] = !hasAccount ? ["Erst Spielernamen festlegen", ", erst Spielernamen festlegen"] : phase === "installed" ? ["Bereit", ""] : ["Installiert beim ersten Start", ", wird beim ersten Start installiert"];
+  return { st: "idle", icon: "play", l1: "Spielen", s1: "Spielen", l2, p: 0, aria: `Spielen: ${name}${hint}` };
 }
 
 /**
- * Ein Knopf für alles, feste Größe in allen Zuständen: Spielen (installiert bei Bedarf), Vorbereiten mit Prozent,
- * Startet, Läuft (Klick stoppt), Erneut starten nach Absturz. `l` 272×56, `m` 176×40, `i` 32×32.
+ * Ein Knopf für alles, feste Größe in allen Zuständen: Spielen (installiert bei Bedarf), Wird installiert x %,
+ * Startet (beide nicht klickbar), Beenden (Klick fragt „Minecraft beenden?“), Erneut starten nach Absturz.
+ * `l` 272×56, `m` 176×40, `i` 32×32.
  */
 export function PlayButton({ instance, size = "l", onLaunched, tabIndex }: { instance: Instance; size?: "l" | "m" | "i"; onLaunched?: () => void; tabIndex?: number }) {
   const phase = usePhase(instance.id);
   const progress = useGame((s) => s.installs[instance.id]);
   const code = useGame((s) => s.crashes[instance.id]?.code ?? null);
+  const since = useGame((s) => s.started[instance.id]);
   const hasAccount = useSettings((s) => !!s.active);
   const { acc } = useLook(instance.id);
   const play = usePlay();
-  const kill = useKill();
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
     return () => void (mounted.current = false);
   }, []);
+  const now = useNow(phase === "running" && !!since);
   const percent = progress ? overallPercent(progress, stepsFor(instance.loader)) : null;
-  const step = progress ? installStepLabel(progress.step, instance.loader) : "";
-  const s = playState(instance, phase, percent, step, code, hasAccount);
+  const s = playState(instance, phase, percent, code, hasAccount, phase === "running" && since ? now - since : null);
 
   function click() {
     if (s.dis) return;
-    if (phase === "running") return void (!kill.isPending && kill.mutate(instance));
-    if (phase === "preparing" || phase === "starting") return;
+    if (phase === "running") return askStop(instance);
     void play(instance, () => mounted.current && onLaunched?.());
   }
 
@@ -136,76 +150,110 @@ export function PlayButton({ instance, size = "l", onLaunched, tabIndex }: { ins
   return size === "i" ? <Tip label={s.l1}>{btn}</Tip> : btn;
 }
 
-/** Statuszeile unter dem Spielen-Knopf (32 px, feste Höhe): Schritt, Laufzeit, Absturz. */
-export function PlayStatus({ instance, className, style }: { instance: Instance; className?: string; style?: CSSProperties }) {
+/**
+ * Statuszeile unter dem Spielen-Knopf (32 px, feste Höhe): Schritt mit Abbrechen, Weg zum Protokoll, Absturz.
+ * Die Laufzeit steht im Knopf, nicht hier.
+ * Vorgelesen wird nur der Anfang (`lead`, ändert sich mit dem Zustand); Zähler und Uhr stehen außerhalb der Live-Region.
+ * Ein fehlender Spielername steht nur im Knopf („Erst Spielernamen festlegen“), „Nicht installiert“ nur im Knopf/Chip.
+ * `showLast={false}`: „Zuletzt gespielt“ steht schon woanders (Start: Metazeile im Hero).
+ */
+export function PlayStatus({ instance, className, style, showLast = true }: { instance: Instance; className?: string; style?: CSSProperties; showLast?: boolean }) {
   const phase = usePhase(instance.id);
   const progress = useGame((s) => s.installs[instance.id]);
   const crash = useGame((s) => s.crashes[instance.id]);
-  const since = useGame((s) => s.started[instance.id]);
-  const hasAccount = useSettings((s) => !!s.active);
   const cancel = useCancelInstall();
   const navigate = useNavigate();
-  const now = useNow(phase === "running");
   const toLog = () => navigate(`/instances/${instance.id}?tab=console`);
 
-  let body;
+  let lead: ReactNode = null;
+  let tail: ReactNode = null;
+  let acts: ReactNode = null;
   if (phase === "preparing" && progress) {
-    body = (
-      <>
-        <span className="ptxt">
-          <b>{installStepLabel(progress.step, instance.loader)}</b>
-          {progress.total > 1 && <> {formatCount(progress.done)} von {formatCount(progress.total)}</>}
-        </span>
-        <Btn variant="g" size="s" disabled={cancel.isPending} onClick={() => cancel.mutate(instance.id)}>Abbrechen</Btn>
-      </>
-    );
+    lead = <b>{installStepLabel(progress.step, instance.loader)}</b>;
+    if (progress.total > 1) tail = <> {formatCount(progress.done)} von {formatCount(progress.total)}</>;
+    acts = <Btn variant="g" size="s" icon="x" className="pcancel" disabled={cancel.isPending} onClick={() => cancel.mutate(instance.id)}>Abbrechen</Btn>;
   } else if (phase === "starting") {
-    body = <span className="ptxt">Minecraft startet. Das Fenster öffnet sich gleich.</span>;
+    lead = "Minecraft startet.";
+    tail = " Das Fenster öffnet sich gleich.";
   } else if (phase === "running") {
-    body = (
-      <>
-        <span className="ptxt">{since ? <>Läuft seit <b className="num">{formatClock(now - since)}</b></> : "Läuft"}</span>
-        <Btn variant="g" size="s" onClick={toLog}>Protokoll ansehen</Btn>
-      </>
-    );
+    // Laufzeit steht im Knopf („Läuft seit …“); hier nur für Screenreader die Zustandsänderung.
+    lead = <span className="sr">Minecraft läuft</span>;
+    acts = <Btn variant="g" size="s" icon="term" className="plog" onClick={toLog}>Protokoll ansehen</Btn>;
   } else if (phase === "crashed" && crash) {
-    body = (
+    lead = <b>Minecraft ist abgestürzt{crash.code != null ? ` (Code ${crash.code})` : ""}</b>;
+    acts = (
       <>
-        <span className="ptxt"><b>Minecraft ist abgestürzt{crash.code != null ? ` (Code ${crash.code})` : ""}</b></span>
         {crash.crashReport && (
           <Btn variant="g" size="s" tone="bad" onClick={() => void api.openPath(crash.crashReport!).catch((e: Error) => toast.error(e.message))}>Absturzbericht öffnen</Btn>
         )}
         <Btn variant="g" size="s" onClick={toLog}>Protokoll ansehen</Btn>
       </>
     );
-  } else if (!hasAccount) {
-    body = (
-      <>
-        <span className="ptxt">Zum Spielen brauchst du einen Spielernamen.</span>
-        <Btn variant="g" size="s" tone="acc" onClick={openAccounts}>Festlegen</Btn>
-      </>
-    );
-  } else if (phase === "missing") {
-    body = <span className="ptxt">Noch nicht eingerichtet. „Spielen“ lädt alles Nötige.</span>;
-  } else if (phase === "installed") {
-    body = <span className="ptxt">{instance.lastPlayedAt != null ? `Zuletzt gespielt ${relativeTime(instance.lastPlayedAt)}` : "Noch nie gespielt"}</span>;
+  } else if (phase === "installed" && showLast) {
+    lead = instance.lastPlayedAt != null ? `Zuletzt gespielt ${relativeTime(instance.lastPlayedAt)}` : "Noch nie gespielt";
   }
-  return <div className={cn("pstat", phase === "crashed" && "bad", className)} style={style} aria-live="polite">{body}</div>;
+  return (
+    <div className={cn("pstat", phase === "crashed" && "bad", phase === "running" && "run", className)} style={style}>
+      <span className="ptxt">
+        <span aria-live="polite">{lead}</span>
+        {tail}
+      </span>
+      {acts}
+    </div>
+  );
 }
 
-/** Status als Chip; `fixed` hält die Breite konstant (kein Springen bei „Wird vorbereitet 34 %“). */
-export function StatusChip({ instance, small, fixed }: { instance: Instance; small?: boolean; fixed?: boolean }) {
+/** Zustände, die auffallen sollen; „Bereit“ und „Nicht installiert“ sind der ruhige Normalfall. */
+export const LOUD_PHASES: Phase[] = ["preparing", "starting", "running", "crashed"];
+
+/**
+ * Status als Chip (Poster, Mini-Karte, Listen-Statusspalte, oben links): Breite nach Inhalt, feste Höhe.
+ * Die Prozentzahl steht in Pixelschrift mit fester Stellenbreite, damit der Chip beim Zählen nicht springt.
+ * `loudOnly`: im ruhigen Normalfall nichts zeigen. `fixed` bleibt für Aufrufer erhalten (gleiches Verhalten).
+ */
+export function StatusChip({ instance, small, fixed, loudOnly }: { instance: Instance; small?: boolean; fixed?: boolean; loudOnly?: boolean }) {
   const phase = usePhase(instance.id);
   const percent = useInstallPercent(instance);
-  const [text, tone]: [string, "run" | "acc" | "bad" | undefined] =
+  if (loudOnly && !LOUD_PHASES.includes(phase)) return null;
+  const [text, tone]: [ReactNode, "run" | "acc" | "bad" | undefined] =
     phase === "running" ? ["Läuft", "run"]
-    : phase === "preparing" ? [`Wird vorbereitet${percent != null ? ` ${percent} %` : ""}`, "acc"]
+    : phase === "preparing" ? [<>Wird installiert <b className="pnum">{percent ?? 0}</b>&nbsp;%</>, "acc"]
     : phase === "starting" ? ["Startet", "acc"]
     : phase === "crashed" ? ["Abgestürzt", "bad"]
     : phase === "missing" ? ["Nicht installiert", undefined]
     : phase === "installed" ? ["Bereit", undefined]
     : ["Wird geprüft", undefined];
-  return <Chip small={small} fixed={fixed} dot tone={tone}>{text}</Chip>;
+  // Text in einem Span: sonst setzt der Chip seinen Flex-Abstand zwischen Wort, Zahl und „%“.
+  return <Chip small={small} fixed={fixed} dot tone={tone} className="stchip"><span>{text}</span></Chip>;
+}
+
+/**
+ * Rückfrage vor dem harten Beenden („Minecraft beenden?“), einmal global eingehängt (Kontomenü, neben den Konto-Dialogen).
+ * Öffnen per `askStop(instance)`. ConfirmDialog: alertdialog, Fokus zuerst auf „Abbrechen“; endet das Spiel von selbst, schließt sich die Frage.
+ */
+export function StopDialog() {
+  const instance = useStopAsk((s) => s.instance);
+  const phase = usePhase(instance?.id ?? "");
+  const kill = useKill();
+  const close = () => useStopAsk.setState({ instance: null });
+  const gone = !!instance && phase !== "running" && phase !== "loading";
+  useEffect(() => {
+    if (gone) close();
+  }, [gone]);
+  return (
+    <ConfirmDialog
+      open={!!instance}
+      onOpenChange={(o) => !o && close()}
+      title="Minecraft beenden?"
+      text="Nicht gespeicherter Fortschritt geht verloren. Beende das Spiel besser im Spiel selbst."
+      confirmLabel="Beenden"
+      pending={kill.isPending}
+      onConfirm={() => {
+        if (instance) kill.mutate(instance);
+        close();
+      }}
+    />
+  );
 }
 
 // ---------- Protokoll ----------
@@ -219,14 +267,13 @@ function LogStat({ instance }: { instance: Instance }) {
   const phase = usePhase(instance.id);
   const crash = useGame((s) => s.crashes[instance.id]);
   const since = useGame((s) => s.started[instance.id]);
-  const kill = useKill();
   const now = useNow(phase === "running");
   if (phase === "running")
     return (
       <div className="logstat run">
         <Icon name="term" />
         <span className="lt"><b>Läuft</b>{since && <> seit <span className="num">{formatClock(now - since)}</span></>}. Neue Zeilen erscheinen sofort.</span>
-        <Btn size="s" icon="stop" disabled={kill.isPending} onClick={() => kill.mutate(instance)}>Stoppen</Btn>
+        <Btn size="s" icon="stop" onClick={() => askStop(instance)}>Beenden…</Btn>
       </div>
     );
   if (crash)
@@ -240,7 +287,8 @@ function LogStat({ instance }: { instance: Instance }) {
   return (
     <div className="logstat">
       <Icon name="info" />
-      <span className="lt">{instance.lastPlayedAt != null ? `Zuletzt gespielt ${relativeTime(instance.lastPlayedAt)}. ` : ""}Hier erscheint die Ausgabe, solange Voxlet offen ist.</span>
+      {/* Wie man zu Ausgabe kommt, sagt der Leerzustand der Konsole; hier nur Stand und Aufbewahrung */}
+      <span className="lt">{instance.lastPlayedAt != null ? `Zuletzt gespielt ${relativeTime(instance.lastPlayedAt)}.` : "Noch nie gespielt."} Das Protokoll wird beim Schließen von Voxlet geleert.</span>
     </div>
   );
 }
@@ -252,6 +300,44 @@ const LogRow = memo(function LogRow({ line, re }: { line: LogLine; re: RegExp | 
   return <span className={cls}>{parts.map((p, i) => (i % 2 ? <mark key={i}>{p}</mark> : p))}</span>;
 });
 
+/**
+ * Kurzmeldung für Screenreader: neue Warnungen und Fehler seit der letzten Meldung, höchstens alle 5 s.
+ * Die Konsole selbst liest nicht mit (aria-live="off"), sonst käme jede Zeile.
+ */
+function useLogDigest(lines: LogLine[] | undefined) {
+  const [msg, setMsg] = useState("");
+  const latest = useRef(lines);
+  latest.current = lines;
+  // Bestand beim Öffnen wird nicht angesagt, nur was danach kommt.
+  const seen = useRef(lines?.at(-1)?.id ?? -1);
+  const last = useRef(0);
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (timer.current !== undefined) return;
+    timer.current = window.setTimeout(() => {
+      timer.current = undefined;
+      const all = latest.current ?? [];
+      let w = 0, e = 0;
+      for (let i = all.length - 1; i >= 0 && all[i].id > seen.current; i--) {
+        if (all[i].tone === "warn") w++;
+        else if (all[i].tone === "error") e++;
+      }
+      seen.current = all.at(-1)?.id ?? seen.current;
+      if (!w && !e) return;
+      last.current = Date.now();
+      const parts = [w && `${w} ${w === 1 ? "neue Warnung" : "neue Warnungen"}`, e && `${e} ${e === 1 ? "neuer Fehler" : "neue Fehler"}`].filter(Boolean);
+      const text = `Protokoll: ${parts.join(", ")}`;
+      // Gleicher Wortlaut wie zuletzt: unsichtbar ändern, damit er erneut angesagt wird.
+      setMsg((m) => (m === text ? `${text} ` : text));
+    }, Math.max(0, last.current + 5000 - Date.now()));
+  }, [lines]);
+  useEffect(() => () => {
+    window.clearTimeout(timer.current);
+    timer.current = undefined;
+  }, []);
+  return msg;
+}
+
 /** Live-Ausgabe des Spiels mit Filter, Suche und Mitscrollen (solange man unten ist). */
 export function LogConsole({ instance }: { instance: Instance }) {
   const lines = useGame((s) => s.logs[instance.id]);
@@ -260,6 +346,7 @@ export function LogConsole({ instance }: { instance: Instance }) {
   const [filter, setFilter] = useState<LogFilter>("all");
   const [query, setQuery] = useState("");
   const [follow, setFollow] = useState(true);
+  const digest = useLogDigest(lines);
   const ref = useRef<HTMLDivElement>(null);
   const q = query.trim().toLowerCase();
   const re = useMemo(() => (q ? new RegExp(`(${escapeRe(q)})`, "gi") : null), [q]);
@@ -285,7 +372,7 @@ export function LogConsole({ instance }: { instance: Instance }) {
       <LogStat instance={instance} />
       <div className="logtool">
         <SearchField small value={query} onChange={setQuery} placeholder="Im Protokoll suchen" />
-        <Seg small label="Filter" value={filter} onChange={setFilter} options={[{ value: "all", label: "Alles" }, { value: "warn", label: "Warnungen" }, { value: "err", label: "Fehler" }]} />
+        <Seg small label="Filter" value={filter} onChange={setFilter} options={[{ value: "all", label: "Alle" }, { value: "warn", label: "Warnungen" }, { value: "err", label: "Fehler" }]} />
         <span className="grow" />
         <Btn size="s" icon="copy" disabled={!lines?.length} onClick={copy}><span className="hide-m">Kopieren</span></Btn>
         {crash?.logFile && (
@@ -299,6 +386,7 @@ export function LogConsole({ instance }: { instance: Instance }) {
           className="cbody"
           tabIndex={0}
           role="log"
+          aria-live="off"
           aria-label="Protokoll"
           onScroll={(e) => {
             const el = e.currentTarget;
@@ -312,6 +400,7 @@ export function LogConsole({ instance }: { instance: Instance }) {
         </div>
         <Btn size="s" icon="down2" className={cn("down", !follow && "show")} onClick={() => setFollow(true)}>Nach unten</Btn>
       </div>
+      <span className="sr" role="status">{digest}</span>
     </>
   );
 }

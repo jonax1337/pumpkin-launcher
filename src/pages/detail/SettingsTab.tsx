@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Btn, Progress, TextArea, TextField, Tip } from "@/components/px";
-import { loaderLine, MemoryChooser } from "@/components/common";
+import { Btn, Progress, TextArea, TextField } from "@/components/px";
+import { MemoryChooser, MemoryHelp } from "@/components/common";
 import { useInstallPercent, usePhase } from "@/components/game";
 import { askDelete } from "@/components/instance";
 import { useInstall, useUpdateInstance } from "@/hooks/useInstances";
@@ -12,6 +12,10 @@ import { BIOME_KEYS, BIOMES } from "@/pixel/scene";
 import { useLook, useLookStore } from "@/store/look";
 
 const splitArgs = (s: string) => s.split(/\s+/).filter(Boolean);
+
+/** „Minecraft 1.21.4 · Fabric 0.16.10“; ohne Loader nur die Minecraft-Version. */
+const versionText = (i: Instance) =>
+  i.loader === "vanilla" ? `Minecraft ${i.minecraftVersion}` : `Minecraft ${i.minecraftVersion} · ${LOADER_LABELS[i.loader]}${i.loaderVersion ? ` ${i.loaderVersion}` : ""}`;
 
 /** Einstellungen einer Instanz. Alles speichert sofort (Name und Startoptionen beim Verlassen des Felds). */
 export function SettingsTab({ instance }: { instance: Instance }) {
@@ -56,7 +60,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
   return (
     <div className="form">
       <div className="fsec">
-        <h3>Allgemein</h3>
+        <h2>Allgemein</h2>
         <div className="frow">
           <label htmlFor="inst-name">Name</label>
           <div className="fc">
@@ -72,20 +76,21 @@ export function SettingsTab({ instance }: { instance: Instance }) {
         </div>
         <div className="frow">
           <div className="fl">Bild<small>Erscheint auf Start, Poster und Kopf.</small></div>
-          <div className="fc">
+          <div className="fc wide">
+            {/* Name sichtbar unter der Miniatur (dunkle Szenen wie die Höhle sind klein kaum zu erkennen) */}
             <div className="biopick" role="group" aria-label="Szene wählen">
               {BIOME_KEYS.map((b) => (
-                <Tip key={b} label={BIOMES[b].n}>
-                  <button
-                    type="button"
-                    className="bio fx"
-                    aria-pressed={look.bio === b}
-                    aria-label={BIOMES[b].n}
-                    onClick={() => useLookStore.getState().setBiome(instance.id, b)}
-                  >
-                    <PixelScene bio={b} seed={look.seed} />
-                  </button>
-                </Tip>
+                <button
+                  key={b}
+                  type="button"
+                  className="bio fx"
+                  data-bio={b}
+                  aria-pressed={look.bio === b}
+                  onClick={() => useLookStore.getState().setBiome(instance.id, b)}
+                >
+                  <span className="bth"><PixelScene bio={b} seed={look.seed} /></span>
+                  <span className="bn">{BIOMES[b].n}</span>
+                </button>
               ))}
             </div>
           </div>
@@ -93,12 +98,13 @@ export function SettingsTab({ instance }: { instance: Instance }) {
       </div>
 
       <div className="fsec">
-        <h3>Spiel</h3>
+        <h2>Spiel</h2>
         <div className="frow">
-          <div className="fl">Arbeitsspeicher<small>Automatisch nimmt den Standard aus den Einstellungen.</small></div>
-          <div className="fc">
-            <MemoryChooser name="inst-mem" value={memory} onChange={changeMemory} />
+          <div className="fl"><span id="inst-mem-l">Arbeitsspeicher</span><small id="inst-mem-h">Automatisch nimmt den Standard aus den Einstellungen.</small></div>
+          <div className="fc" role="radiogroup" aria-labelledby="inst-mem-l" aria-describedby="inst-mem-h">
+            <MemoryChooser name="inst-mem" value={memory} onChange={changeMemory} help={false} />
           </div>
+          <div className="fh"><MemoryHelp value={memory} /></div>
         </div>
         <div className="frow">
           <div className="fl">Erweitert</div>
@@ -122,15 +128,13 @@ export function SettingsTab({ instance }: { instance: Instance }) {
       </div>
 
       <div className="fsec">
-        <h3>Version</h3>
+        <h2>Version</h2>
         <div className="frow">
-          <div className="fl">
-            Minecraft
-            <small>{loaderLine(instance)}{instance.loaderVersion ? `, ${LOADER_LABELS[instance.loader]} ${instance.loaderVersion}` : ""}</small>
+          <div className="fl">Spielversion</div>
+          <div className="fc" style={{ paddingTop: 10 }}>
+            <span>{versionText(instance)}</span>
           </div>
-          <div className="fc">
-            <span className="help" style={{ paddingTop: 10 }}>Version und Loader stehen fest. Für eine andere Version leg eine neue Instanz an.</span>
-          </div>
+          <div className="fh">Version und Loader lassen sich nachträglich nicht ändern. Für eine andere Version leg eine neue Instanz an.</div>
         </div>
         {SUPPORTED_LOADERS.includes(instance.loader) && (
           <div className="frow">
@@ -138,7 +142,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
             <div className="fc">
               <div className="row">
                 <Btn icon="redo" full style={{ width: 160 }} disabled={busy} onClick={() => install.mutate(instance)}>
-                  {repairing ? "Läuft" : "Reparieren"}
+                  {repairing ? "Wird repariert" : "Reparieren"}
                 </Btn>
                 <Progress p={(percent ?? 0) / 100} style={{ width: 180, visibility: repairing ? "visible" : "hidden" }} label="Fortschritt" />
               </div>
@@ -148,7 +152,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
       </div>
 
       <div className="fsec">
-        <h3>Gefahrenzone</h3>
+        <h2>Gefahrenzone</h2>
         <div className="danger">
           <div className="t">
             <b>Instanz löschen</b>
