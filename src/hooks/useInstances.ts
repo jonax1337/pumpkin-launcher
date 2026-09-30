@@ -3,10 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, type NavigateFunction } from "react-router";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import { autoMemoryMb, maxMemoryMb } from "@/lib/format";
+import { autoMemoryMb, formatClock, maxMemoryMb } from "@/lib/format";
 import { INSTALL_CANCELLED, type Instance, type InstanceStatus, type ModLoader, type NewInstance } from "@/lib/types";
 import { useGame } from "@/store/game";
 import { accountName, useSettings } from "@/store/settings";
+import { useTasks } from "@/store/tasks";
 
 export const instanceKeys = {
   all: ["instances"] as const,
@@ -151,15 +152,19 @@ export function useInstall() {
       return api.installInstance(instance.id);
     },
     // Beim Spielen folgt gleich der Start; eine Erfolgsmeldung gibt es nur für Reparieren und „Erneut versuchen“.
-    onSuccess: (_, instance) => !useGame.getState().launching[instance.id] && toast.success(`${instance.name} ist bereit`),
-    onError: (err, instance) =>
-      isCancelled(err)
-        ? toast(`Installation von ${instance.name} abgebrochen`)
-        : toast.error(`${instance.name} konnte nicht installiert werden`, {
-            description: err.message,
-            duration: 10_000,
-            action: { label: "Erneut versuchen", onClick: () => install.mutate(instance) },
-          }),
+    onSuccess: (_, instance) => {
+      useTasks.getState().push({ label: `${instance.name} vorbereitet`, sub: "Bereit zum Spielen", state: "done", to: `/instances/${instance.id}` });
+      if (!useGame.getState().launching[instance.id]) toast.success(`${instance.name} ist bereit`);
+    },
+    onError: (err, instance) => {
+      if (isCancelled(err)) return void toast(`Vorbereitung von ${instance.name} abgebrochen`);
+      useTasks.getState().push({ label: `${instance.name} vorbereiten`, sub: err.message, state: "fail", to: `/instances/${instance.id}` });
+      toast.error(`${instance.name} konnte nicht installiert werden`, {
+        description: err.message,
+        duration: 10_000,
+        action: { label: "Erneut versuchen", onClick: () => install.mutate(instance) },
+      });
+    },
     onSettled: (_, __, instance) => {
       clearProgress(instance.id);
       // Bei Fabric ohne loaderVersion schreibt das Backend die gewählte Version in die Instanz.
@@ -191,6 +196,7 @@ export function useLaunch() {
       return api.launchInstance(instance.id, accountName(active), accountId, javaPath, await defaultMemory(qc));
     },
     onSuccess: (_, instance) => {
+      useGame.getState().setStarted(instance.id, Date.now());
       // Ohne vorherigen Status (Abfrage fehlgeschlagen) gilt die Instanz jetzt als installiert und laufend.
       qc.setQueryData<InstanceStatus>(instanceKeys.status(instance.id), (s) => ({ installed: true, ...s, running: true }));
       // Endet das Spiel sofort, kann instance-exit vor dieser Antwort kommen: echten Status nachladen.
@@ -257,10 +263,15 @@ export function useGameEvents() {
       api.onLog(appendLog),
       api.onExit((exit) => {
         const { instanceId, code, crashed, crashReport } = exit;
+        const since = useGame.getState().started[instanceId];
+        useGame.getState().setStarted(instanceId, null);
         qc.setQueryData<InstanceStatus>(instanceKeys.status(instanceId), (s) => s && { ...s, running: false });
-        if (stopping.delete(instanceId)) return;
+        const showLog = { label: "Protokoll", onClick: () => navigate(`/instances/${instanceId}?tab=console`) };
+        if (stopping.delete(instanceId)) {
+          toast(since ? `Minecraft beendet. Gespielt: ${formatClock(Date.now() - since)}` : "Minecraft beendet", { action: showLog });
+          return;
+        }
         const name = qc.getQueryData<Instance[]>(instanceKeys.all)?.find((i) => i.id === instanceId)?.name ?? "Minecraft";
-        const showLog = { label: "Protokoll anzeigen", onClick: () => navigate(`/instances/${instanceId}?tab=console`) };
         if (crashed) {
           useGame.getState().setCrash(exit);
           // Bleibt stehen, bis der Nutzer reagiert: ein Absturz ist keine vorübergehende Meldung.

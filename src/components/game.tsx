@@ -1,13 +1,17 @@
-import { memo, useEffect, useLayoutEffect, useRef } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { Copy, FileText, Loader2, Play, Square, Trash2, TriangleAlert, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Btn, Chip, Progress, SearchField, Seg, Tip } from "@/components/px";
+import { openAccounts } from "@/components/PlayerNames";
 import { useCancelInstall, useInstanceStatus, useKill, usePlay } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { formatClock, formatCount, relativeTime } from "@/lib/format";
 import { installStepLabel, SUPPORTED_LOADERS, type Instance, type InstallProgress, type InstallStep, type ModLoader } from "@/lib/types";
+import { Icon, type IconName } from "@/pixel/icons";
 import { useGame, type LogLine } from "@/store/game";
+import { useLook } from "@/store/look";
+import { useSettings } from "@/store/settings";
 
 // Reihenfolge der Schritte im Backend (`install::install`, mit Loader umrahmt von `instance_install`)
 const VANILLA_STEPS: InstallStep[] = ["java", "client", "libraries", "natives", "assets"];
@@ -17,26 +21,20 @@ const stepsFor = (loader: ModLoader): InstallStep[] => (loader === "vanilla" ? V
 function overallPercent(p: InstallProgress, steps: InstallStep[]) {
   const index = Math.max(0, steps.indexOf(p.step));
   const within = p.total > 0 ? p.done / p.total : 0;
-  return Math.round(((index + within) / steps.length) * 100);
+  return Math.min(100, Math.round(((index + within) / steps.length) * 100));
 }
 
-const count = (n: number) => n.toLocaleString("de");
+export type Phase = "loading" | "preparing" | "starting" | "running" | "crashed" | "installed" | "missing";
 
-/** „Lade Spieldateien … 312 von 3 480“ */
-function stepText(p: InstallProgress, loader: ModLoader) {
-  const label = installStepLabel(p.step, loader);
-  return p.total > 1 ? `${label} … ${count(p.done)} von ${count(p.total)}` : `${label} …`;
-}
-
-type Phase = "loading" | "preparing" | "starting" | "running" | "installed" | "missing";
-
-function usePhase(instanceId: string): Phase {
+export function usePhase(instanceId: string): Phase {
   const status = useInstanceStatus(instanceId);
   const preparing = useGame((s) => !!s.installs[instanceId]);
   const launching = useGame((s) => !!s.launching[instanceId]);
+  const crashed = useGame((s) => !!s.crashes[instanceId]);
   if (preparing) return "preparing";
   if (status.data?.running) return "running";
   if (launching) return "starting";
+  if (crashed) return "crashed";
   // Schlägt die Statusabfrage fehl, gilt die Instanz als nicht installiert; „Spielen“ bereitet sie dann vor.
   if (status.isPending) return "loading";
   return status.data?.installed ? "installed" : "missing";
@@ -48,181 +46,232 @@ export function useInstallPercent(instance: Instance) {
   return progress ? overallPercent(progress, stepsFor(instance.loader)) : null;
 }
 
-const PHASE_LABEL: Record<Exclude<Phase, "loading">, string> = {
-  missing: "Nicht installiert",
-  preparing: "Wird vorbereitet",
-  starting: "Startet",
-  installed: "Bereit",
-  running: "Läuft",
-};
+/** Tickt jede Sekunde, solange `on` (für „Läuft seit“). */
+function useNow(on: boolean) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!on) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [on]);
+  return now;
+}
 
-const PHASE_DOT: Record<Exclude<Phase, "loading">, string> = {
-  missing: "border border-muted-foreground",
-  preparing: "bg-gold",
-  starting: "bg-gold",
-  installed: "bg-foreground/60",
-  running: "bg-primary animate-pulse",
-};
+type PlayState = { st: "idle" | "prep" | "start" | "run" | "error" | "blocked"; icon: IconName; l1: string; s1: string; l2: string; p: number | null; pct?: string; dis?: boolean; aria: string };
 
-/** Status als Punkt + Wort (keine Pille). */
-export function StatusBadge({ instanceId, className }: { instanceId: string; className?: string }) {
-  const phase = usePhase(instanceId);
-  if (phase === "loading") return <Skeleton className={cn("h-4 w-20", className)} />;
-  return (
-    <span className={cn("inline-flex items-center gap-1.5 text-xs text-muted-foreground", phase === "running" && "text-foreground", className)}>
-      <span aria-hidden className={cn("size-2 rounded-full", PHASE_DOT[phase])} />
-      {PHASE_LABEL[phase]}
-    </span>
-  );
+function playState(instance: Instance, phase: Phase, percent: number | null, step: string, code: number | null, hasAccount: boolean): PlayState {
+  const name = instance.name;
+  switch (phase) {
+    case "preparing":
+      return { st: "prep", icon: "dl", l1: "Vorbereiten", s1: "Lädt", l2: step, p: (percent ?? 0) / 100, pct: `${percent ?? 0}%`, aria: `${name} wird vorbereitet, ${percent ?? 0} Prozent` };
+    case "starting":
+      return { st: "start", icon: "hour", l1: "Startet", s1: "Startet", l2: "Minecraft öffnet sich", p: null, aria: `${name} startet` };
+    case "running":
+      return { st: "run", icon: "stop", l1: "Läuft", s1: "Stoppen", l2: "Klicken zum Stoppen", p: 0, aria: `${name} läuft. Stoppen` };
+    case "crashed":
+      return { st: "error", icon: "redo", l1: "Erneut starten", s1: "Nochmal", l2: `Abgestürzt${code != null ? ` (Code ${code})` : ""}`, p: 0, aria: `${name} erneut starten` };
+    case "loading":
+      return { st: "idle", icon: "play", l1: "Spielen", s1: "Spielen", l2: "Einen Moment", p: 0, dis: true, aria: `${name} spielen` };
+  }
+  if (phase === "missing" && !SUPPORTED_LOADERS.includes(instance.loader))
+    return { st: "blocked", icon: "plug", l1: "Kann nicht starten", s1: "Gesperrt", l2: "Diesen Loader kann Voxlet noch nicht", p: 0, dis: true, aria: "Kann nicht starten" };
+  return {
+    st: "idle", icon: "play", l1: "Spielen", s1: "Spielen",
+    l2: !hasAccount ? "Erst Spielernamen festlegen" : phase === "installed" ? "Bereit" : "Lädt beim ersten Start",
+    p: 0, aria: `${name} spielen`,
+  };
 }
 
 /**
- * Ein Knopf für alles: Spielen (installiert bei Bedarf), Fortschritt im Knopf mit „Abbrechen“, Stoppen.
- * `size="hero"` ist der große Knopf einer Ansicht (nur einmal pro Ansicht), `size="icon"` der Knopf auf Karten.
+ * Ein Knopf für alles, feste Größe in allen Zuständen: Spielen (installiert bei Bedarf), Vorbereiten mit Prozent,
+ * Startet, Läuft (Klick stoppt), Erneut starten nach Absturz. `l` 272×56, `m` 176×40, `i` 32×32.
  */
-export function PlayControl({
-  instance,
-  size = "hero",
-  align = "start",
-  onLaunched,
-  className,
-}: {
-  instance: Instance;
-  size?: "hero" | "icon";
-  align?: "start" | "end";
-  onLaunched?: () => void;
-  className?: string;
-}) {
+export function PlayButton({ instance, size = "l", onLaunched, tabIndex }: { instance: Instance; size?: "l" | "m" | "i"; onLaunched?: () => void; tabIndex?: number }) {
   const phase = usePhase(instance.id);
   const progress = useGame((s) => s.installs[instance.id]);
+  const code = useGame((s) => s.crashes[instance.id]?.code ?? null);
+  const hasAccount = useSettings((s) => !!s.active);
+  const { acc } = useLook(instance.id);
   const play = usePlay();
   const kill = useKill();
-  const cancel = useCancelInstall();
-  // onLaunched (z. B. Tab wechseln) nur, solange der Knopf noch zu sehen ist.
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
+    return () => void (mounted.current = false);
   }, []);
-  const start = () => void play(instance, () => mounted.current && onLaunched?.());
-  const unsupported = phase === "missing" && !SUPPORTED_LOADERS.includes(instance.loader);
+  const percent = progress ? overallPercent(progress, stepsFor(instance.loader)) : null;
+  const step = progress ? installStepLabel(progress.step, instance.loader) : "";
+  const s = playState(instance, phase, percent, step, code, hasAccount);
 
-  if (size === "icon") {
-    if (phase === "loading") return <Skeleton className={cn("size-9", className)} />;
-    if (phase === "running")
-      return (
-        <Button variant="secondary" size="icon" onClick={() => kill.mutate(instance)} disabled={kill.isPending} aria-label={`${instance.name} stoppen`} title="Stoppen" className={cn(className, "opacity-100")}>
-          <Square className="fill-current text-destructive" aria-hidden />
-        </Button>
-      );
-    if (phase === "preparing" || phase === "starting")
-      return (
-        <Button variant="secondary" size="icon" disabled aria-label={`${instance.name} wird vorbereitet`} className={cn(className, "opacity-100 disabled:opacity-100")}>
-          <Loader2 className="animate-spin" aria-hidden />
-        </Button>
-      );
-    return (
-      <Button size="icon" onClick={start} disabled={unsupported} aria-label={`${instance.name} spielen`} title={unsupported ? "Kann Voxlet noch nicht starten" : "Spielen"} className={className}>
-        <Play className="fill-current" aria-hidden />
-      </Button>
-    );
+  function click() {
+    if (s.dis) return;
+    if (phase === "running") return void (!kill.isPending && kill.mutate(instance));
+    if (phase === "preparing" || phase === "starting") return;
+    void play(instance, () => mounted.current && onLaunched?.());
   }
 
-  const big = "h-12 min-w-44 gap-2.5 px-8 text-base font-semibold [&_svg:not([class*='size-'])]:size-5";
-  const wrap = cn("flex min-w-0 flex-col gap-2", align === "end" ? "items-end" : "items-start", className);
+  const btn = (
+    <button
+      type="button"
+      className={cn("btn btn-p fx play", size !== "l" && size)}
+      data-st={s.st}
+      style={{ "--acc": acc } as CSSProperties}
+      aria-label={s.aria}
+      aria-disabled={s.dis || undefined}
+      tabIndex={tabIndex}
+      onClick={click}
+    >
+      <span className="bf" />
+      <span className="bc">
+        <span className="pic"><Icon name={s.icon} /></span>
+        <span className="lab">
+          <span className="l1">{size === "m" ? s.s1 : s.l1}</span>
+          <span className="l2">{s.l2}</span>
+        </span>
+        <span className="pct">{s.pct ?? ""}</span>
+      </span>
+      <Progress p={s.p} className="pbar" />
+    </button>
+  );
+  return size === "i" ? <Tip label={s.l1}>{btn}</Tip> : btn;
+}
 
-  if (phase === "loading") return <Skeleton className={cn("h-12 w-44", className)} />;
+/** Statuszeile unter dem Spielen-Knopf (32 px, feste Höhe): Schritt, Laufzeit, Absturz. */
+export function PlayStatus({ instance, className, style }: { instance: Instance; className?: string; style?: CSSProperties }) {
+  const phase = usePhase(instance.id);
+  const progress = useGame((s) => s.installs[instance.id]);
+  const crash = useGame((s) => s.crashes[instance.id]);
+  const since = useGame((s) => s.started[instance.id]);
+  const hasAccount = useSettings((s) => !!s.active);
+  const cancel = useCancelInstall();
+  const navigate = useNavigate();
+  const now = useNow(phase === "running");
+  const toLog = () => navigate(`/instances/${instance.id}?tab=console`);
 
-  if (phase === "preparing" || phase === "starting") {
-    const percent = phase === "preparing" && progress ? overallPercent(progress, stepsFor(instance.loader)) : null;
+  let body;
+  if (phase === "preparing" && progress) {
+    body = (
+      <>
+        <span className="ptxt">
+          <b>{installStepLabel(progress.step, instance.loader)}</b>
+          {progress.total > 1 && <> {formatCount(progress.done)} von {formatCount(progress.total)}</>}
+        </span>
+        <Btn variant="g" size="s" disabled={cancel.isPending} onClick={() => cancel.mutate(instance.id)}>Abbrechen</Btn>
+      </>
+    );
+  } else if (phase === "starting") {
+    body = <span className="ptxt">Minecraft startet. Das Fenster öffnet sich gleich.</span>;
+  } else if (phase === "running") {
+    body = (
+      <>
+        <span className="ptxt">{since ? <>Läuft seit <b className="num">{formatClock(now - since)}</b></> : "Läuft"}</span>
+        <Btn variant="g" size="s" onClick={toLog}>Protokoll ansehen</Btn>
+      </>
+    );
+  } else if (phase === "crashed" && crash) {
+    body = (
+      <>
+        <span className="ptxt"><b>Minecraft ist abgestürzt{crash.code != null ? ` (Code ${crash.code})` : ""}</b></span>
+        {crash.crashReport && (
+          <Btn variant="g" size="s" tone="bad" onClick={() => void api.openPath(crash.crashReport!).catch((e: Error) => toast.error(e.message))}>Absturzbericht öffnen</Btn>
+        )}
+        <Btn variant="g" size="s" onClick={toLog}>Protokoll ansehen</Btn>
+      </>
+    );
+  } else if (!hasAccount) {
+    body = (
+      <>
+        <span className="ptxt">Zum Spielen brauchst du einen Spielernamen.</span>
+        <Btn variant="g" size="s" tone="acc" onClick={openAccounts}>Festlegen</Btn>
+      </>
+    );
+  } else if (phase === "missing") {
+    body = <span className="ptxt">Noch nicht eingerichtet. „Spielen“ lädt alles Nötige.</span>;
+  } else if (phase === "installed") {
+    body = <span className="ptxt">{instance.lastPlayedAt != null ? `Zuletzt gespielt ${relativeTime(instance.lastPlayedAt)}` : "Noch nie gespielt"}</span>;
+  }
+  return <div className={cn("pstat", phase === "crashed" && "bad", className)} style={style} aria-live="polite">{body}</div>;
+}
+
+/** Status als Chip; `fixed` hält die Breite konstant (kein Springen bei „Wird vorbereitet 34 %“). */
+export function StatusChip({ instance, small, fixed }: { instance: Instance; small?: boolean; fixed?: boolean }) {
+  const phase = usePhase(instance.id);
+  const percent = useInstallPercent(instance);
+  const [text, tone]: [string, "run" | "acc" | "bad" | undefined] =
+    phase === "running" ? ["Läuft", "run"]
+    : phase === "preparing" ? [`Wird vorbereitet${percent != null ? ` ${percent} %` : ""}`, "acc"]
+    : phase === "starting" ? ["Startet", "acc"]
+    : phase === "crashed" ? ["Abgestürzt", "bad"]
+    : phase === "missing" ? ["Nicht installiert", undefined]
+    : phase === "installed" ? ["Bereit", undefined]
+    : ["Wird geprüft", undefined];
+  return <Chip small={small} fixed={fixed} dot tone={tone}>{text}</Chip>;
+}
+
+// ---------- Protokoll ----------
+
+type LogFilter = "all" | "warn" | "err";
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Kopfzeile des Protokolls: läuft, abgestürzt oder Ruhe. */
+function LogStat({ instance }: { instance: Instance }) {
+  const phase = usePhase(instance.id);
+  const crash = useGame((s) => s.crashes[instance.id]);
+  const since = useGame((s) => s.started[instance.id]);
+  const kill = useKill();
+  const now = useNow(phase === "running");
+  if (phase === "running")
     return (
-      <div className={wrap}>
-        <Button
-          disabled
-          aria-label={percent == null ? `${instance.name} startet` : `${instance.name} wird vorbereitet, ${percent} %`}
-          className={cn(big, "relative min-w-56 overflow-hidden bg-secondary text-foreground disabled:opacity-100")}
-        >
-          {percent != null && (
-            <span
-              aria-hidden
-              data-progress
-              className="absolute inset-y-0 left-0 bg-primary/40 transition-[width] duration-300 ease-out"
-              style={{ width: `${percent}%` }}
-            />
-          )}
-          <Loader2 className="relative animate-spin" aria-hidden />
-          <span className="relative tabular-nums">{percent == null ? "Startet …" : `Vorbereiten … ${percent} %`}</span>
-        </Button>
-        <div className={cn("flex max-w-full items-center gap-2", align === "end" && "flex-row-reverse")}>
-          <p className="min-w-0 truncate text-xs text-muted-foreground tabular-nums" aria-live="polite">
-            {phase === "preparing" && progress ? stepText(progress, instance.loader) : "Minecraft wird gestartet …"}
-          </p>
-          {phase === "preparing" && (
-            <Button variant="ghost" size="sm" disabled={cancel.isPending} onClick={() => cancel.mutate(instance.id)} className="shrink-0 text-muted-foreground">
-              <X aria-hidden /> Abbrechen
-            </Button>
-          )}
-        </div>
+      <div className="logstat run">
+        <Icon name="term" />
+        <span className="lt"><b>Läuft</b>{since && <> seit <span className="num">{formatClock(now - since)}</span></>}. Neue Zeilen erscheinen sofort.</span>
+        <Btn size="s" icon="stop" disabled={kill.isPending} onClick={() => kill.mutate(instance)}>Stoppen</Btn>
       </div>
     );
-  }
-
-  if (phase === "running") {
+  if (crash)
     return (
-      <div className={wrap}>
-        <Button variant="secondary" disabled={kill.isPending} onClick={() => kill.mutate(instance)} aria-label={`${instance.name} stoppen`} className={big}>
-          {kill.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Square className="fill-current text-destructive" aria-hidden />}
-          Stoppen
-        </Button>
+      <div className="logstat bad">
+        <Icon name="warn" />
+        <span className="lt"><b>Minecraft ist abgestürzt{crash.code != null ? ` (Code ${crash.code})` : ""}.</b> {crash.crashReport ? "Der Absturzbericht nennt meist die Ursache." : "Die letzten Zeilen unten zeigen, was passiert ist."}</span>
+        {crash.crashReport && <Btn size="s" onClick={() => void api.openPath(crash.crashReport!).catch((e: Error) => toast.error(e.message))}>Absturzbericht öffnen</Btn>}
       </div>
     );
-  }
-
   return (
-    <div className={wrap}>
-      <Button onClick={start} disabled={unsupported} aria-label={`${instance.name} spielen`} className={big}>
-        <Play className="fill-current" aria-hidden />
-        Spielen
-      </Button>
-      {unsupported && <p className="text-xs text-muted-foreground">Diese Variante kann Voxlet noch nicht starten.</p>}
+    <div className="logstat">
+      <Icon name="info" />
+      <span className="lt">{instance.lastPlayedAt != null ? `Zuletzt gespielt ${relativeTime(instance.lastPlayedAt)}. ` : ""}Hier erscheint die Ausgabe, solange Voxlet offen ist.</span>
     </div>
   );
 }
 
-/** Hinweis nach einem Absturz, bis zum nächsten Start. */
-export function CrashNotice({ instanceId }: { instanceId: string }) {
-  const crash = useGame((s) => s.crashes[instanceId]);
-  const clear = useGame((s) => s.clearCrash);
-  if (!crash) return null;
-  return (
-    <div role="alert" className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm">
-      <TriangleAlert className="size-4 shrink-0 text-destructive" aria-hidden />
-      <p className="min-w-0 flex-1 font-medium">Minecraft ist abgestürzt{crash.code != null ? ` (Code ${crash.code})` : ""}.</p>
-      {crash.crashReport && (
-        <Button variant="outline" size="sm" onClick={() => void api.openPath(crash.crashReport!).catch((e: Error) => toast.error(e.message))}>
-          <FileText aria-hidden /> Absturzbericht öffnen
-        </Button>
-      )}
-      <Button variant="ghost" size="icon-sm" aria-label="Hinweis schließen" onClick={() => clear(instanceId)}>
-        <X aria-hidden />
-      </Button>
-    </div>
-  );
-}
+const LogRow = memo(function LogRow({ line, re }: { line: LogLine; re: RegExp | null }) {
+  const cls = cn("ln", line.tone === "warn" && "w", line.tone === "error" && "e");
+  if (!re) return <span className={cls}>{line.line}</span>;
+  const parts = line.line.split(re);
+  return <span className={cls}>{parts.map((p, i) => (i % 2 ? <mark key={i}>{p}</mark> : p))}</span>;
+});
 
-/** Live-Ausgabe des Spiels. Scrollt mit, solange man unten ist. */
-export function LogConsole({ instanceId }: { instanceId: string }) {
-  const lines = useGame((s) => s.logs[instanceId]);
+/** Live-Ausgabe des Spiels mit Filter, Suche und Mitscrollen (solange man unten ist). */
+export function LogConsole({ instance }: { instance: Instance }) {
+  const lines = useGame((s) => s.logs[instance.id]);
   const clearLog = useGame((s) => s.clearLog);
+  const crash = useGame((s) => s.crashes[instance.id]);
+  const [filter, setFilter] = useState<LogFilter>("all");
+  const [query, setQuery] = useState("");
+  const [follow, setFollow] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
-  const stick = useRef(true);
+  const q = query.trim().toLowerCase();
+  const re = useMemo(() => (q ? new RegExp(`(${escapeRe(q)})`, "gi") : null), [q]);
+  const shown = useMemo(
+    () => (lines ?? []).filter((l) => (filter === "all" || (filter === "warn" ? l.tone !== "normal" : l.tone === "error")) && (!q || l.line.toLowerCase().includes(q))),
+    [lines, filter, q],
+  );
 
   useLayoutEffect(() => {
     const el = ref.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [lines]);
+    if (el && follow) el.scrollTop = el.scrollHeight;
+  }, [shown, follow]);
 
   function copy() {
     void navigator.clipboard.writeText((lines ?? []).map((l) => l.line).join("\n")).then(
@@ -232,42 +281,37 @@ export function LogConsole({ instanceId }: { instanceId: string }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-sidebar">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
-        <p className="text-xs text-muted-foreground tabular-nums">{lines?.length ? `${count(lines.length)} Zeilen` : "Keine Ausgabe"}</p>
-        <div className="flex gap-1">
-          <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={!lines?.length} onClick={copy}>
-            <Copy aria-hidden /> Kopieren
-          </Button>
-          <Button variant="ghost" size="sm" className="text-muted-foreground" disabled={!lines?.length} onClick={() => clearLog(instanceId)}>
-            <Trash2 aria-hidden /> Leeren
-          </Button>
-        </div>
-      </div>
-      <div
-        ref={ref}
-        role="log"
-        aria-live="off"
-        aria-label="Spielausgabe"
-        tabIndex={0}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
-        }}
-        className="h-[max(14rem,calc(100dvh-24rem))] overflow-y-auto px-4 py-3 font-mono text-xs leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-      >
-        {lines?.length ? (
-          lines.map((l) => <LogRow key={l.id} line={l} />)
-        ) : (
-          <p className="font-sans text-sm text-muted-foreground">Starte das Spiel, dann erscheint hier live, was Minecraft meldet.</p>
+    <>
+      <LogStat instance={instance} />
+      <div className="logtool">
+        <SearchField small value={query} onChange={setQuery} placeholder="Im Protokoll suchen" />
+        <Seg small label="Filter" value={filter} onChange={setFilter} options={[{ value: "all", label: "Alles" }, { value: "warn", label: "Warnungen" }, { value: "err", label: "Fehler" }]} />
+        <span className="grow" />
+        <Btn size="s" icon="copy" disabled={!lines?.length} onClick={copy}><span className="hide-m">Kopieren</span></Btn>
+        {crash?.logFile && (
+          <Btn size="s" icon="folder" onClick={() => void api.openPath(crash.logFile!).catch((e: Error) => toast.error(e.message))}><span className="hide-m">Logdatei</span></Btn>
         )}
+        <Btn size="s" icon="trash" disabled={!lines?.length} onClick={() => clearLog(instance.id)}><span className="hide-m">Leeren</span></Btn>
       </div>
-    </div>
+      <div className="console">
+        <div
+          ref={ref}
+          className="cbody"
+          tabIndex={0}
+          role="log"
+          aria-label="Protokoll"
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 24);
+          }}
+        >
+          {shown.map((l) => <LogRow key={l.id} line={l} re={re} />)}
+        </div>
+        <div className="none" style={{ visibility: shown.length ? "hidden" : "visible" }}>
+          {lines?.length ? "Keine Zeilen für diesen Filter." : "Noch keine Ausgabe. Starte die Instanz, dann erscheint hier das Protokoll."}
+        </div>
+        <Btn size="s" icon="down2" className={cn("down", !follow && "show")} onClick={() => setFollow(true)}>Nach unten</Btn>
+      </div>
+    </>
   );
 }
-
-const TONE_CLASS: Record<LogLine["tone"], string> = { error: "text-destructive", warn: "text-gold", normal: "text-foreground/80" };
-
-const LogRow = memo(function LogRow({ line }: { line: LogLine }) {
-  return <div className={cn("break-all whitespace-pre-wrap", TONE_CLASS[line.tone])}>{line.line}</div>;
-});

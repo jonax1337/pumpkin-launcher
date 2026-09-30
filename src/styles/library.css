@@ -1,0 +1,14 @@
+/* Bibliothek und Dialog „Neue Instanz“: kleine Ergänzungen zu pixelkino.css */
+.lrow .nm a { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; }
+.lrow .nm a:hover { text-decoration: underline; text-decoration-thickness: var(--px); text-underline-offset: 3px; }
+.lrow .nm a.fx:focus-visible::after { inset: -2px -4px; }
+.poster > a.hit { display: block; }
+.posters .skl { aspect-ratio: 4 / 5; }
+.nnav .ptab { color: var(--fg-2); }
+.pkrow { display: flex; align-items: center; gap: 4px; }
+.pkrow .pk { flex: 1; min-width: 0; }
+.pickl .skl { height: 56px; }
+.ni-check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--fg-2); cursor: pointer; user-select: none; }
+.drop .pi { width: 40px; height: 40px; }
+.fileok .fn { display: block; font-weight: 600; }
+.fileok .fs { display: block; font-size: 12px; color: var(--fg-3); }
