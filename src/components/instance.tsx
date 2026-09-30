@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { create } from "zustand";
-import { Btn, ConfirmDialog, Dialog, DialogClose, Menu, TextField, type MenuEntry } from "@/components/px";
+import { ConfirmDialog, Dialog, DialogActions, Field, IconButton, Menu, TextField, type MenuEntry } from "@/ui";
 import { usePhase } from "@/components/game";
 import { askStop, useDeleteInstance, usePlay } from "@/hooks/useInstances";
 import { useSaveTemplate } from "@/hooks/useTemplates";
@@ -41,13 +41,25 @@ export function useInstanceMenu(instance: Instance, opts: { open?: boolean } = {
   ];
 }
 
-/** Knopf „Weitere Aktionen“ mit dem Instanz-Menü. */
-export function InstanceMenuButton({ instance, small, variant = "s", open }: { instance: Instance; small?: boolean; variant?: "s" | "g"; open?: boolean }) {
+/**
+ * Symbolknopf „Weitere Aktionen“ mit dem Instanz-Menü. `small`: 32 statt 40 px; `variant`: s = Platte, g = Geist;
+ * `onScene`: über einer Szene (Grundplatte, harter Schatten).
+ */
+export function InstanceMenuButton({ instance, small, variant = "s", onScene, open }: { instance: Instance; small?: boolean; variant?: "s" | "g"; onScene?: boolean; open?: boolean }) {
   const items = useInstanceMenu(instance, { open });
   return (
     <Menu
       items={items}
-      trigger={<Btn variant={variant} size={small ? "s" : "m"} iconOnly icon="more" aria-label={`Weitere Aktionen für ${instance.name}`} />}
+      trigger={
+        <IconButton
+          variant={variant === "g" ? "ghost" : "secondary"}
+          size={small ? "s" : "m"}
+          onScene={onScene}
+          icon="more"
+          label={`Weitere Aktionen für ${instance.name}`}
+          tip="Weitere Aktionen"
+        />
+      }
     />
   );
 }
@@ -65,17 +77,12 @@ function SaveTemplateDialog({ instance, onClose }: { instance: Instance; onClose
       onOpenChange={(o) => !o && onClose()}
       title="Als Vorlage speichern"
       width={480}
-      footer={
-        <>
-          <DialogClose asChild><Btn>Abbrechen</Btn></DialogClose>
-          <Btn variant="p" full style={{ width: 130 }} type="submit" form="tpl-form" disabled={save.isPending}>{save.isPending ? "Speichert" : "Speichern"}</Btn>
-        </>
-      }
+      footer={<DialogActions cancel="Abbrechen" confirm={{ label: save.isPending ? "Speichert" : "Speichern", width: 130, form: "tpl-form", disabled: save.isPending }} />}
     >
-      <form id="tpl-form" onSubmit={submit} className="nf">
-        <label htmlFor="tpl-name">Name der Vorlage</label>
-        <TextField id="tpl-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} autoFocus />
-        <span className="help">Gespeichert werden Version, Loader, {instance.mods.length} Inhalte und Einstellungen. Welten nicht.</span>
+      <form id="tpl-form" onSubmit={submit}>
+        <Field label="Name der Vorlage" help={<>Gespeichert werden Version, Loader, {instance.mods.length} Inhalte und Einstellungen. Welten nicht.</>}>
+          <TextField value={name} onChange={(e) => setName(e.target.value)} maxLength={100} autoFocus />
+        </Field>
       </form>
     </Dialog>
   );

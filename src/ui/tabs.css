@@ -1,0 +1,65 @@
+/* Kit-Tabs: Leiste (underline), Segment, senkrecht, Navigation. Hover = Fläche (--hv-ctl), nie Linie.
+   Gewählt = erhabene Platte + Strich (1 Einheit): Leiste unten, senkrecht links, Segment als Kupferkante.
+   Druck: Inhalt 1 Einheit tiefer. data-force="hover|press" erzwingt den Zustand (Vorschau /_kit). */
+.vx-tab {
+  --t-h: 36px; --t-pad: 16px; --t-gap: 8px; --t-fs: 14px;
+  position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; flex: none;
+  height: var(--t-h); padding: 0 var(--t-pad) 0 var(--t-pl, var(--t-pad));
+  color: var(--fg-2); font-size: var(--t-fs); font-weight: 600; white-space: nowrap; text-decoration: none; user-select: none; cursor: pointer;
+}
+.vx-tabs[data-size="s"] .vx-tab { --t-h: 32px; --t-pad: 12px; --t-gap: 6px; --t-fs: 13px; }
+/* Führendes Icon: die Box hat Luft um die Glyphe, links 2px weniger */
+.vx-tab[data-lead] { --t-pl: calc(var(--t-pad) - 2px); }
+.vx-tab::before { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--n1); transition: background-color var(--st); }
+.vx-tc { position: relative; display: inline-flex; align-items: center; gap: var(--t-gap); min-width: 0; }
+.vx-tab .vx-count { min-width: 1.4em; text-align: center; color: var(--fg-3); }
+.vx-tab-badge { display: inline-flex; align-items: center; }
+
+.vx-tab:is(:hover, [data-force="hover"]):not(:disabled) { color: var(--fg); }
+.vx-tab:is(:hover, [data-force="hover"]):not(:disabled)::before { background: var(--hv-ctl); }
+.vx-tab:is([aria-selected="true"], [aria-checked="true"], [aria-current="page"]) { color: var(--fg); }
+.vx-tab:is([aria-selected="true"], [aria-checked="true"], [aria-current="page"])::before { background: var(--hv-ctl); box-shadow: var(--bv-raised); }
+.vx-tab:is(:active, [data-force="press"]):not(:disabled, [aria-selected="true"], [aria-checked="true"], [aria-current="page"])::before { background: var(--pr-ctl); }
+.vx-tab:is(:active, [data-force="press"]):not(:disabled, [aria-selected="true"], [aria-checked="true"], [aria-current="page"]) > .vx-tc { translate: 0 var(--px); }
+.vx-tab:disabled { color: var(--fg-3); cursor: default; }
+.vx-tab:disabled .vx-ico { opacity: .6; }
+
+/* Strich „gewählt“: wächst in vier Stufen aus der Mitte */
+.vx-tab-tick { position: absolute; left: var(--u3); right: var(--u3); bottom: var(--px); height: var(--px); background: var(--acc-bar, var(--copper)); opacity: 0; }
+.vx-tab:is([aria-selected="true"], [aria-current="page"]) > .vx-tab-tick { opacity: 1; animation: vx-tick-x .16s steps(4, end); }
+@keyframes vx-tick-x { from { clip-path: inset(0 50%); } }
+@keyframes vx-tick-y { from { clip-path: inset(50% 0); } }
+
+/* ---------- Leiste: 48 px (s 40) mit Linie unten ---------- */
+.vx-tabs[data-variant="underline"] { display: flex; align-items: center; gap: 4px; height: 48px; box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); }
+.vx-tabs[data-variant="underline"][data-size="s"] { height: 40px; }
+.vx-navtabs { display: flex; align-items: center; gap: 4px; flex: none; }
+.vx-tabs[data-sticky] { position: sticky; top: var(--vx-tabs-top, 0); z-index: 6; background: var(--bg); }
+
+/* ---------- Senkrecht: volle Breite, 44 px (s 36), Strich links ---------- */
+.vx-tabs[data-variant="vertical"] { display: flex; flex-direction: column; gap: 4px; }
+.vx-tabs[data-variant="vertical"] .vx-tab { --t-h: 44px; width: 100%; justify-content: flex-start; }
+.vx-tabs[data-variant="vertical"][data-size="s"] .vx-tab { --t-h: 36px; }
+.vx-tabs[data-variant="vertical"] .vx-tab-tick { left: 0; right: auto; top: var(--u2); bottom: var(--u2); width: var(--px); height: auto; }
+.vx-tabs[data-variant="vertical"] .vx-tab[aria-selected="true"] > .vx-tab-tick { animation-name: vx-tick-y; }
+
+/* ---------- Segment: eingelassene Gruppe 40 px (s 32); gewählt = Platte mit Steuerrahmen und Kupferkante unten ---------- */
+.vx-tabs[data-variant="segment"] { position: relative; isolation: isolate; display: inline-flex; flex: none; width: fit-content; height: var(--vx-h-m); padding: var(--px); }
+.vx-tabs[data-variant="segment"][data-size="s"] { height: var(--vx-h-s); }
+.vx-tabs[data-variant="segment"]::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--sunk); box-shadow: var(--bv-sunk); clip-path: var(--n1); }
+.vx-tabs[data-variant="segment"] .vx-tab { --t-h: 100%; --t-pad: 12px; }
+.vx-tabs[data-variant="segment"][data-size="s"] .vx-tab { --t-pad: 10px; }
+.vx-tabs[data-variant="segment"] .vx-tab:is([aria-selected="true"], [aria-checked="true"])::before {
+  background: var(--panel-3);
+  box-shadow: inset 0 calc(var(--px) * -1) 0 var(--copper), inset 0 0 0 var(--px) var(--ctl), inset var(--u2) var(--u2) 0 var(--hi);
+  animation: vx-seg-in .12s steps(2, end);
+}
+@keyframes vx-seg-in { from { background: var(--hv-ctl); } }
+/* Ring enger: die Nachbarn liegen direkt daneben */
+.vx-tabs[data-variant="segment"] .vx-tab:focus-visible::after { inset: calc(var(--px) * -1); }
+/* Nur Symbole: quadratisch (Box + Luft), fest in px */
+.vx-tabs[data-variant="segment"][data-icons] .vx-tab { width: 36px; --t-pad: 0px; --t-pl: 0px; }
+.vx-tabs[data-variant="segment"][data-icons][data-size="s"] .vx-tab { width: 28px; }
+.vx-tabs[data-icons]:not([data-variant="segment"]) .vx-tab { --t-pad: 6px; --t-pl: 6px; }
+
+.vx-tabpanel[data-flow] { display: flow-root; }

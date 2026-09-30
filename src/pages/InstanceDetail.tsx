@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { useView } from "@/app/Layout";
-import { BackLink, Btn, ErrorBox, Skel, Tip } from "@/components/px";
+import { Actions, BackLink, Button, Count, ErrorBox, Icon, IconButton, Meta, Skel, TabPanel, Tabs, type TabItem } from "@/ui";
 import { LogConsole, PlayButton, PlayStatus, StatusChip, usePhase } from "@/components/game";
 import { InstanceMenuButton } from "@/components/instance";
 import { AddContentSheet, IRIS_PROJECT_ID } from "@/components/ContentBrowser";
@@ -10,7 +10,6 @@ import { useInstance, useUpdateMods } from "@/hooks/useInstances";
 import { projectOf } from "@/lib/modrinth";
 import { LOADER_LABELS, type Instance } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Icon } from "@/pixel/icons";
 import { PixelScene } from "@/pixel/PixelScene";
 import { useLook } from "@/store/look";
 import { ContentTab, useWarnings } from "./detail/ContentTab";
@@ -19,6 +18,15 @@ import "@/styles/detail.css";
 
 type Tab = "content" | "console" | "settings";
 const TABS: Tab[] = ["content", "console", "settings"];
+
+/** Schmales Fenster (bis 900 px): Loader-Version und Kurzinfo im kompakten Kopf entfallen. */
+const NARROW = "(max-width: 900px)";
+const subscribeNarrow = (cb: () => void) => {
+  const mq = matchMedia(NARROW);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+};
+const useNarrow = () => useSyncExternalStore(subscribeNarrow, () => matchMedia(NARROW).matches);
 
 export function InstanceDetailPage() {
   const { id = "" } = useParams();
@@ -76,13 +84,13 @@ function InstanceDetail({ id }: { id: string }) {
           <div className="shade-head" />
           <div className="dh-full">
             <div className="dh-info">
-              <BackLink to="/instances">Bibliothek</BackLink>
-              <Skel style={{ height: 48, width: "min(460px, 60%)" }} />
-              <Skel style={{ height: 28, width: 280 }} />
+              <div className="flex"><BackLink to="/instances" onScene>Bibliothek</BackLink></div>
+              <Skel h={48} w="min(460px, 60%)" />
+              <Skel h={28} w={280} />
             </div>
           </div>
         </header>
-        <nav className="dtabs" />
+        <div className="dtabs" />
       </section>
     );
 
@@ -93,6 +101,7 @@ function Loaded({ instance, tab, setTab, head, compact, style }: {
   instance: Instance; tab: Tab; setTab: (t: Tab) => void; head: React.RefObject<HTMLElement | null>; compact: boolean; style: CSSProperties;
 }) {
   const navigate = useNavigate();
+  const narrow = useNarrow();
   const look = useLook(instance.id);
   const [adding, setAdding] = useState(false);
   const mods = useUpdateMods(instance.id);
@@ -115,24 +124,23 @@ function Loaded({ instance, tab, setTab, head, compact, style }: {
   const [updCall, setUpdCall] = useState(0);
   const showUpdates = () => { setTab("content"); setUpdCall((n) => n + 1); };
 
-  // Pfeiltasten, Home und End wechseln den Tab (Roving-Tabindex: nur der aktive Tab ist per Tab erreichbar).
-  function onTabKey(e: KeyboardEvent<HTMLElement>) {
-    const i = TABS.indexOf(tab);
-    const next = e.key === "ArrowRight" ? TABS[(i + 1) % TABS.length]
-      : e.key === "ArrowLeft" ? TABS[(i + TABS.length - 1) % TABS.length]
-      : e.key === "Home" ? TABS[0]
-      : e.key === "End" ? TABS[TABS.length - 1]
-      : null;
-    if (!next) return;
-    e.preventDefault();
-    setTab(next);
-    document.getElementById(`dt-${next}`)?.focus();
-  }
-
-  const tabs: { id: Tab; label: string; count?: number }[] = [
-    { id: "content", label: "Inhalte", count: instance.mods.length },
-    { id: "console", label: "Protokoll" },
-    { id: "settings", label: "Einstellungen" },
+  const version = <>{LOADER_LABELS[instance.loader]} <Count value={instance.minecraftVersion} size={20} /></>;
+  const tabs: TabItem<Tab>[] = [
+    {
+      value: "content",
+      label: "Inhalte",
+      count: instance.mods.length,
+      // Warnsymbol: Platz bleibt reserviert (kein Springen); die Anzahl auch für Screenreader, nicht nur im Tooltip.
+      badge: (
+        <>
+          <Icon name="warn" size="s" tone="warn" className={cn(!warnTotal && "invisible")} />
+          {warnTotal > 0 && <span className="sr">, {warnText}</span>}
+        </>
+      ),
+      tip: warnText || undefined,
+    },
+    { value: "console", label: "Protokoll" },
+    { value: "settings", label: "Einstellungen" },
   ];
 
   return (
@@ -142,75 +150,51 @@ function Loaded({ instance, tab, setTab, head, compact, style }: {
         <div className="shade-head" />
         <div className="dh-full" aria-hidden={compact || undefined}>
           <div className="dh-info">
-            <BackLink to="/instances">Bibliothek</BackLink>
+            <div className="flex"><BackLink to="/instances" onScene>Bibliothek</BackLink></div>
             <h1 title={instance.name}>{instance.name}</h1>
             {/* Infos als ruhiger Text, Absturz als Chip, Updates als Knopf: was klickbar ist, sieht so aus. */}
             <div className="dh-meta">
-              <div className="meta">
-                <span>{LOADER_LABELS[instance.loader]} <b>{instance.minecraftVersion}</b></span>
-                {instance.loaderVersion && <span className="hide-m">Loader <b>{instance.loaderVersion}</b></span>}
-              </div>
+              <Meta
+                size="l"
+                onScene
+                className="overflow-hidden"
+                items={[version, !narrow && instance.loaderVersion && <>Loader <Count value={instance.loaderVersion} size={20} /></>]}
+              />
               {crashed && <StatusChip instance={instance} />}
               {nUpd > 0 && (
-                <Btn size="s" icon="up" className="upbtn" onClick={showUpdates} tabIndex={compact ? -1 : undefined}>
-                  <b className="count">{nUpd}</b>{nUpd === 1 ? "Update" : "Updates"}
-                </Btn>
+                <Button size="s" icon="up" count={nUpd} onScene onClick={showUpdates} tabIndex={compact ? -1 : undefined}>
+                  {nUpd === 1 ? "Update" : "Updates"}
+                </Button>
               )}
             </div>
           </div>
           <div className="dh-act">
-            <div className="row">
+            <Actions>
               <PlayButton instance={instance} onLaunched={toLog} tabIndex={compact ? -1 : undefined} />
               <InstanceMenuButton instance={instance} open={false} />
-            </div>
+            </Actions>
             <PlayStatus instance={instance} />
           </div>
         </div>
         <div className="dh-compact" aria-hidden={!compact}>
-          <Btn size="s" iconOnly icon="back" aria-label="Zur Bibliothek" tabIndex={compact ? 0 : -1} onClick={() => navigate("/instances")} />
+          <IconButton size="s" icon="back" label="Zur Bibliothek" onScene tabIndex={compact ? 0 : -1} onClick={() => navigate("/instances")} />
           <h2 title={instance.name}>{instance.name}</h2>
-          <div className="meta hide-m"><span>{LOADER_LABELS[instance.loader]} <b>{instance.minecraftVersion}</b></span></div>
+          {!narrow && <Meta onScene className="flex-none" items={[version]} />}
           <PlayButton instance={instance} size="m" onLaunched={toLog} tabIndex={compact ? 0 : -1} />
         </div>
       </header>
 
-      <nav className="dtabs" role="tablist" aria-label="Bereiche der Instanz" onKeyDown={onTabKey}>
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            id={`dt-${t.id}`}
-            className="ptab fx"
-            aria-selected={tab === t.id}
-            aria-controls="dbody"
-            tabIndex={tab === t.id ? 0 : -1}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-            {t.count != null && <span className="num">{t.count}</span>}
-            {t.id === "content" && (
-              <Tip label={warnText}>
-                <span className="wdot" style={{ visibility: warnTotal ? "visible" : "hidden" }}>
-                  <Icon name="warn5" small />
-                </span>
-              </Tip>
-            )}
-            {/* Anzahl der Hinweise auch für Screenreader, nicht nur im Tooltip */}
-            {t.id === "content" && warnTotal > 0 && <span className="sr">, {warnText}</span>}
-            <i className="tick" />
-          </button>
-        ))}
-      </nav>
+      {/* Leiste klebt unter dem kompakten Kopf; .dtabs gibt nur den Seitenrand (Seitengerüst). */}
+      <Tabs idBase="dt" sticky="var(--dc)" className="dtabs" label="Bereiche der Instanz" items={tabs} value={tab} onChange={setTab} />
 
-      <div className="dbody" id="dbody" role="tabpanel" aria-labelledby={`dt-${tab}`}>
+      <TabPanel idBase="dt" value={tab} className="dbody">
         {/* Bleibt gemountet: Auswahl und Platzhalter entfernter Inhalte überleben den Tabwechsel. */}
         <div hidden={tab !== "content"} className="flow-root">
           <ContentTab instance={instance} updateFor={updateFor} warnsOf={warnsOf} onAdd={() => setAdding(true)} showUpdates={updCall} />
         </div>
         {tab === "console" && <LogConsole instance={instance} />}
         {tab === "settings" && <SettingsTab instance={instance} />}
-      </div>
+      </TabPanel>
 
       <AddContentSheet instance={instance} open={adding} onOpenChange={setAdding} />
     </section>

@@ -1,8 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as RPointerEvent, type RefObject } from "react";
 import { Link, useLocation, useNavigate, useOutlet } from "react-router";
-import { Popover } from "radix-ui";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Btn, Progress, Tip } from "@/components/px";
 import { AccountMenu } from "@/components/PlayerNames";
 import { InstanceDialogs } from "@/components/instance";
 import { useCancelInstall, useGameEvents, useInstances } from "@/hooks/useInstances";
@@ -11,21 +9,22 @@ import { api } from "@/lib/api";
 import { progressLabel } from "@/lib/modrinth";
 import { installStepLabel } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Icon, Mark } from "@/pixel/icons";
+import { Mark } from "@/pixel/icons";
 import { setSceneGate } from "@/pixel/scene";
 import { usePixelUnit } from "@/pixel/unit";
 import { useGame } from "@/store/game";
 import { useSettings } from "@/store/settings";
 import { useTasks } from "@/store/tasks";
+import { BarButton, Button, Cell, Chip, Empty, Icon, JobProgress, List, ListRow, NavTabs, Popover, RowTitle, SectionHeader, Tip } from "@/ui";
 
 /** Die scrollende Ansicht unter der Fensterleiste (für den Instanzkopf, der beim Scrollen schrumpft). */
 const ViewContext = createContext<RefObject<HTMLElement | null>>({ current: null });
 export const useView = () => useContext(ViewContext);
 
 const TABS = [
-  { to: "/", label: "Start", match: (p: string) => p === "/" },
-  { to: "/instances", label: "Bibliothek", match: (p: string) => p.startsWith("/instances") },
-  { to: "/discover", label: "Entdecken", match: (p: string) => p.startsWith("/discover") },
+  { to: "/", label: "Start", match: (p: string) => p === "/", shortcut: "Control+1" },
+  { to: "/instances", label: "Bibliothek", match: (p: string) => p.startsWith("/instances"), shortcut: "Control+2" },
+  { to: "/discover", label: "Entdecken", match: (p: string) => p.startsWith("/discover"), shortcut: "Control+3" },
 ];
 
 /** Offener Dialog (auch Rückfrage); Popover und Menüs zählen nicht. */
@@ -204,72 +203,55 @@ function TasksButton() {
   const busy = live.length > 0;
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Tip label="Aufgaben">
-        <Popover.Trigger asChild>
-          {/* Feste Glyphe; Zähler und Mini-Balken liegen daneben bzw. darunter, nie darauf */}
-          <button type="button" className={cn("barbtn tasksbtn fx", busy && "busy")} aria-label={busy ? `Aufgaben, ${live.length} ${live.length === 1 ? "läuft" : "laufen"}` : "Aufgaben"}>
-            <Icon name="tasks" />
-            <span className="badge" aria-hidden>{live.length > 9 ? "9+" : live.length}</span>
-            <Progress thin p={avg} className="tmini" decorative />
-          </button>
-        </Popover.Trigger>
-      </Tip>
-      <Popover.Portal>
-        <Popover.Content className="rpop tasks" align="end" sideOffset={6} collisionPadding={8} aria-label="Aufgaben">
-          <div className="tasks-h">
-            <b>Aufgaben</b>
-            {/* Ohne Fertige unsichtbar statt nur grau; der Platz bleibt (Kopfhöhe) */}
-            <Btn variant="g" size="s" disabled={!history.length} style={history.length ? undefined : { visibility: "hidden" }} onClick={clear}>Fertige entfernen</Btn>
-          </div>
+    <Popover
+      open={open}
+      onOpenChange={setOpen}
+      label="Aufgaben"
+      tip="Aufgaben"
+      width={400}
+      trigger={
+        // Feste Glyphe; Zähler und Mini-Balken liegen daneben bzw. darunter, nie darauf
+        <BarButton activity={{ count: live.length, p: avg }} aria-label={busy ? `Aufgaben, ${live.length} ${live.length === 1 ? "läuft" : "laufen"}` : "Aufgaben"}>
+          <Icon name="tasks" />
+        </BarButton>
+      }
+    >
+      {/* Ohne Fertige kein Knopf; der Kopf bleibt 32 px hoch */}
+      <SectionHeader title="Aufgaben" as="h2" size="card" actions={history.length > 0 && <Button variant="ghost" size="s" bleed="end" onClick={clear}>Fertige entfernen</Button>} />
+      {live.length || history.length ? (
+        <List variant="tasks" divided aria-label="Aufgaben">
           {live.map((t) => (
-            <div key={t.id} className="task">
-              <span className="ti"><Icon name="dl" /></span>
-              <div className="tt">
-                <b>{t.label}</b>
-                <Progress thin p={t.p} label={t.label} />
-                <span>{t.sub}</span>
-              </div>
-              <span className="tp num">{t.p != null ? `${Math.floor(t.p * 100)} %` : ""}</span>
-              {t.instanceId ? (
-                <Tip label="Abbrechen">
-                  <Btn variant="g" size="s" iconOnly className="tx" aria-label={`${t.label} abbrechen`} onClick={() => cancel.mutate(t.instanceId)}>
-                    <Icon name="x5" small />
-                  </Btn>
-                </Tip>
-              ) : <span />}
-            </div>
+            <ListRow key={t.id}>
+              <Icon name="dl" tone="acc" />
+              <JobProgress label={t.label} sub={t.sub} p={t.p} onCancel={t.instanceId ? () => cancel.mutate(t.instanceId) : undefined} cancelLabel={`${t.label} abbrechen`} />
+            </ListRow>
           ))}
           {history.map((t) => (
-            <div key={t.id} className={cn("task", t.state)}>
-              <span className="ti"><Icon name={t.state === "done" ? "check" : "warn"} /></span>
-              <div className="tt">
-                <b>{t.label}</b>
-                <span>{t.sub}</span>
-              </div>
-              <div className="tact">
-                {t.to && (
-                  <Btn size="s" onClick={() => { setOpen(false); navigate(t.to!); }}>Öffnen</Btn>
-                )}
-              </div>
-            </div>
+            <ListRow key={t.id}>
+              <Icon name={t.state === "done" ? "check" : "warn"} tone={t.state === "done" ? "run" : "bad"} />
+              <RowTitle title={t.label} sub={t.sub} />
+              <Cell align="end" flex>
+                {t.to && <Button size="s" onClick={() => { setOpen(false); navigate(t.to!); }}>Öffnen</Button>}
+              </Cell>
+            </ListRow>
           ))}
-          {!live.length && !history.length && <div className="none">Keine Aufgaben. Downloads und Installationen erscheinen hier.</div>}
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+        </List>
+      ) : (
+        <Empty size="pane" ill="tasks" title="Keine Aufgaben">Downloads und Installationen erscheinen hier.</Empty>
+      )}
+    </Popover>
   );
 }
 
-/** Fensterknöpfe des rahmenlosen Fensters (nur in der App, im Browser nicht nötig). */
+/** Fensterknöpfe des rahmenlosen Fensters (nur in der App, im Browser nicht nötig). Sonderform: volle Leistenhöhe, bündig am Rand. */
 function WindowButtons() {
   if (api.isMock) return null;
   const win = getCurrentWindow();
   return (
     <div className="win">
-      <button type="button" className="winbtn" aria-label="Minimieren" onClick={() => void win.minimize()}><Icon name="wmin" small /></button>
-      <button type="button" className="winbtn" aria-label="Maximieren" onClick={() => void win.toggleMaximize()}><Icon name="wmax" small /></button>
-      <button type="button" className="winbtn close" aria-label="Schließen" onClick={() => void win.close()}><Icon name="x5" small /></button>
+      <button type="button" className="winbtn" aria-label="Minimieren" onClick={() => void win.minimize()}><Icon name="wmin" size="s" /></button>
+      <button type="button" className="winbtn" aria-label="Maximieren" onClick={() => void win.toggleMaximize()}><Icon name="wmax" size="s" /></button>
+      <button type="button" className="winbtn close" aria-label="Schließen" onClick={() => void win.close()}><Icon name="x" size="s" /></button>
     </div>
   );
 }
@@ -282,26 +264,24 @@ function TitleBar({ online }: { online: boolean }) {
         <span className="mark"><Mark /></span>
         <span className="word">VOXLET</span>
       </Link>
-      {/* Normale Links: Bereiche sind Seiten, keine Tabs */}
-      <nav className="navtabs" aria-label="Hauptbereiche">
-        {TABS.map((t, i) => (
-          <Link key={t.to} to={t.to} className="ptab fx" aria-current={t.match(pathname) ? "page" : undefined} aria-keyshortcuts={`Control+${i + 1}`}>
-            {t.label}
-            <i className="tick" />
-          </Link>
-        ))}
-      </nav>
+      {/* Normale Links: Bereiche sind Seiten, keine Tabs. `navtabs` nur für den Abstand zur Marke (Leistengerüst) */}
+      <NavTabs items={TABS} className="navtabs" />
       <div className="bar-mid" data-tauri-drag-region />
       <div className="bar-right">
-        {/* Live-Region bleibt stehen; online leer, damit nichts vorgelesen wird */}
-        <span className="netchip" role="status">{!online && <><Icon name="plug" small />Offline<span className="sr">: keine Internetverbindung, Katalog und Downloads sind nicht verfügbar</span></>}</span>
+        {/* Live-Region bleibt stehen (links neben der Gruppe, schiebt nichts); online leer, damit nichts vorgelesen wird */}
+        <span className="pointer-events-none absolute top-1/2 right-[calc(100%+8px)] flex -translate-y-1/2" role="status">
+          {!online && (
+            <Chip tone="warn" icon="plug">
+              Offline<span className="sr">: keine Internetverbindung, Katalog und Downloads sind nicht verfügbar</span>
+            </Chip>
+          )}
+        </span>
         <TasksButton />
         <AccountMenu />
         <Tip label="Einstellungen">
-          <Link to="/settings" className="barbtn fx" aria-label="Einstellungen" aria-current={pathname.startsWith("/settings") ? "page" : undefined}>
+          <BarButton to="/settings" aria-label="Einstellungen" current={pathname.startsWith("/settings")}>
             <Icon name="gear" />
-            <i className="tick" />
-          </Link>
+          </BarButton>
         </Tip>
         <WindowButtons />
       </div>

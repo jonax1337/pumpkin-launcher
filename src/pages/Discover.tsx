@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useView } from "@/app/Layout";
-import { Seg, Select, SearchField } from "@/components/px";
+import { PageHeader, SearchField, Select, Spacer, TabPanel, Tabs, Toolbar } from "@/ui";
 import { AddToInstanceMenu, ContentDetail, ContentResults, KIND_LABELS, PackActions, PackInstallButton } from "@/components/ContentBrowser";
 import { useVersions } from "@/hooks/useInstances";
 import type { CatalogType, ContentHit, SearchIndex } from "@/lib/modrinth";
@@ -74,40 +74,44 @@ export function DiscoverPage() {
       )}
       {/* Bleibt beim Öffnen von Details erhalten, damit Suche und geladene Seiten nicht verloren gehen. */}
       <section className="page disc" hidden={!!projectId}>
-        <div className="disc-top">
-          <h1 className="h-page">Entdecken</h1>
-          <span className="grow" />
-          <Seg
-            tabs
+        <PageHeader title="Entdecken">
+          <Tabs
+            variant="segment"
+            role="tablist"
+            idBase="disc"
             label="Kategorie"
             value={type}
             onChange={(t) => {
               if (t !== "mod" && t !== "modpack") setLoader("all");
               setParams({ tab: t }, { replace: true });
             }}
-            options={TABS.map((t) => ({ value: t, label: LABELS[t] }))}
+            items={TABS.map((t) => ({ value: t, label: LABELS[t] }))}
           />
-        </div>
-        <div className="disc-tools">
+        </PageHeader>
+        {/* Suchfeld bewusst breiter als in der Bibliothek; unter 1096 px bricht die Leiste um */}
+        <Toolbar search="l" wrapBelow={1096} label="Suche und Filter" className="mt-4 mb-3.5">
           <SearchField value={query} onChange={setQuery} placeholder={IN_LABEL[type]} autoFocus />
           <Select label="Version" value={ver} onChange={setVer} options={[{ value: "all", label: "Alle" }, ...releases.map((v) => ({ value: v.id, label: v.id }))]} />
-          {withLoader && <Select label="Loader" className="hide-m" value={loader} onChange={setLoader} options={LOADERS} />}
-          <Select label="Sortieren" className="sortsel" value={sort ?? (query.trim() ? "relevance" : "downloads")} onChange={(v) => setSort(v as SearchIndex)} options={SORTS} />
-        </div>
-        <ContentResults
-          key={type}
-          type={type}
-          query={query}
-          mc={ver === "all" ? null : ver}
-          loader={withLoader && loader !== "all" ? loader : null}
-          sort={sort}
-          feature
-          onReset={reset}
-          onOpen={open}
-          action={(h) =>
-            type === "modpack" ? <PackInstallButton projectId={h.project_id} title={h.title} /> : <AddToInstanceMenu projectId={h.project_id} title={h.title} type={type} />
-          }
-        />
+          {withLoader && <Select label="Loader" value={loader} onChange={setLoader} options={LOADERS} />}
+          <Spacer />
+          <Select label="Sortieren" value={sort ?? (query.trim() ? "relevance" : "downloads")} onChange={(v) => setSort(v as SearchIndex)} options={SORTS} />
+        </Toolbar>
+        <TabPanel idBase="disc" value={type}>
+          <ContentResults
+            key={type}
+            type={type}
+            query={query}
+            mc={ver === "all" ? null : ver}
+            loader={withLoader && loader !== "all" ? loader : null}
+            sort={sort}
+            feature
+            onReset={reset}
+            onOpen={open}
+            action={(h) =>
+              type === "modpack" ? <PackInstallButton projectId={h.project_id} title={h.title} /> : <AddToInstanceMenu projectId={h.project_id} title={h.title} type={type} />
+            }
+          />
+        </TabPanel>
       </section>
     </>
   );

@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { Link } from "react-router";
-import { Btn, BtnLink, Chip, ContextMenu, Empty, ErrorBox, SearchField, Seg, Select, Skel } from "@/components/px";
-import { PlayButton, StatusChip, usePhase, type Phase } from "@/components/game";
+import { LOUD_PHASES, PlayButton, StatusChip, usePhase } from "@/components/game";
 import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
 import { loaderLine } from "@/components/common";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
@@ -9,10 +7,11 @@ import { useBackgroundUpdates, useModUpdates } from "@/hooks/useContent";
 import { useInstances } from "@/hooks/useInstances";
 import { formatDate, relativeTime } from "@/lib/format";
 import { ALL_LOADERS, LOADER_LABELS, type Instance, type ModLoader } from "@/lib/types";
-import { Glyph, Icon } from "@/pixel/icons";
-import { PixelScene } from "@/pixel/PixelScene";
 import { lookOf, useLookStore } from "@/store/look";
-import "@/styles/library.css";
+import {
+  Button, ButtonLink, CardGrid, Cell, Chip, Count, Empty, ErrorBox, Glyph, List, ListRow, PageHeader, RowTitle, SceneCard, SceneThumb,
+  SearchField, Segmented, Select, Skel, Spacer, Toolbar,
+} from "@/ui";
 
 type Mode = "poster" | "list";
 type Sort = "recent" | "name" | "created";
@@ -41,9 +40,6 @@ const SORTS: Record<Sort, (a: Instance, b: Instance) => number> = {
 
 type Looks = ReturnType<typeof useLookStore.getState>["looks"];
 
-/** Zustände, die auffallen sollen; „Bereit“ und „Nicht installiert“ sind der ruhige Normalfall. */
-const LOUD: Phase[] = ["preparing", "starting", "running", "crashed"];
-
 /** Anzahl bekannter Updates aus dem Cache (gefüllt vom Detail oder von `useBackgroundUpdates`). */
 function useCachedUpdates(inst: Instance) {
   const { data } = useModUpdates(inst.id, false);
@@ -54,12 +50,11 @@ function useCachedUpdates(inst: Instance) {
 function LibStatus({ inst }: { inst: Instance }) {
   const phase = usePhase(inst.id);
   const nUpd = useCachedUpdates(inst);
-  if (LOUD.includes(phase)) return <StatusChip instance={inst} small />;
+  if (LOUD_PHASES.includes(phase)) return <StatusChip instance={inst} small />;
   if (nUpd > 0)
     return (
-      <Chip small className="upchip">
-        <Icon name="up" small />
-        <b>{nUpd}</b>{nUpd === 1 ? "Update" : "Updates"}
+      <Chip icon="up">
+        <Count value={nUpd} /> {nUpd === 1 ? "Update" : "Updates"}
       </Chip>
     );
   return null;
@@ -68,47 +63,37 @@ function LibStatus({ inst }: { inst: Instance }) {
 /** Poster 4:5: Szene, Ausnahme-Status oben links, beim Überfahren oder Fokus großer Spielen-Knopf mittig und Menü oben rechts, Name unten. Rechtsklick öffnet das Menü. */
 function PosterCard({ inst, index, looks }: { inst: Instance; index: number; looks: Looks }) {
   const items = useInstanceMenu(inst);
-  const look = lookOf(looks, inst.id);
-  const sub = `${loaderLine(inst)} · ${relativeTime(inst.lastPlayedAt)}`;
   return (
-    <ContextMenu items={items}>
-      <div className="poster rise" style={{ "--i": Math.min(index, 12), "--acc": look.acc } as CSSProperties}>
-        <PixelScene bio={look.bio} seed={look.seed} />
-        <Link to={`/instances/${inst.id}`} className="hit fx" aria-label={`${inst.name} öffnen`} title={`${inst.name}\n${sub}`} />
-        <span className="frame" />
-        <span className="st"><LibStatus inst={inst} /></span>
-        <div className="pplay"><PlayButton instance={inst} size="m" /></div>
-        <div className="pact"><InstanceMenuButton instance={inst} small /></div>
-        <div className="cap">
-          {/* Bildunterschrift lässt Klicks durch; der volle Text steht im title des Links. */}
-          <b>{inst.name}</b>
-          <span>{sub}</span>
-        </div>
-      </div>
-    </ContextMenu>
+    <SceneCard
+      variant="poster"
+      look={lookOf(looks, inst.id)}
+      title={inst.name}
+      sub={`${loaderLine(inst)} · ${relativeTime(inst.lastPlayedAt)}`}
+      status={<LibStatus inst={inst} />}
+      primary={<PlayButton instance={inst} size="m" />}
+      actions={<InstanceMenuButton instance={inst} small variant="g" onScene />}
+      hit={{ to: `/instances/${inst.id}`, label: `${inst.name} öffnen` }}
+      menu={items}
+      index={index}
+    />
   );
 }
 
-/** Listenzeile, 56 px, feste Spalten. Der Namenslink deckt die ganze Zeile ab (wie `.hit` beim Poster); Spielen und Menü liegen darüber. */
-function ListRow({ inst, index, looks }: { inst: Instance; index: number; looks: Looks }) {
+/** Listenzeile, 56 px, feste Spalten. Die ganze Zeile öffnet die Instanz; Spielen und Menü liegen darüber. */
+function InstanceRow({ inst, index, looks }: { inst: Instance; index: number; looks: Looks }) {
   const items = useInstanceMenu(inst);
   const look = lookOf(looks, inst.id);
   return (
-    <ContextMenu items={items}>
-      <div className="lrow rise" style={{ "--i": Math.min(index, 12), "--acc": look.acc } as CSSProperties}>
-        <div className="thumb"><PixelScene bio={look.bio} seed={look.seed} /></div>
-        <div className="nm">
-          <Link to={`/instances/${inst.id}`} className="fx" title={inst.name}>{inst.name}</Link>
-          <span>erstellt {formatDate(inst.createdAt)}</span>
-        </div>
-        <span className="c" title={loaderLine(inst)}>{loaderLine(inst)}</span>
-        <span className="c c-cnt"><span className="num">{inst.mods.length}</span></span>
-        <span className="c c-last">{relativeTime(inst.lastPlayedAt)}</span>
-        <span className="c c-st"><LibStatus inst={inst} /></span>
-        <PlayButton instance={inst} size="i" />
-        <InstanceMenuButton instance={inst} variant="g" small />
-      </div>
-    </ContextMenu>
+    <ListRow hit={{ to: `/instances/${inst.id}`, label: `${inst.name} öffnen` }} menu={items} index={Math.min(index, 12)} style={{ "--acc": look.acc } as CSSProperties}>
+      <SceneThumb bio={look.bio} seed={look.seed} />
+      <RowTitle title={inst.name} sub={`erstellt ${formatDate(inst.createdAt)}`} />
+      <Cell title={loaderLine(inst)}>{loaderLine(inst)}</Cell>
+      <Cell hide={1040}><Count value={inst.mods.length} /></Cell>
+      <Cell hide={1040}>{relativeTime(inst.lastPlayedAt)}</Cell>
+      <Cell flex><LibStatus inst={inst} /></Cell>
+      <PlayButton instance={inst} size="i" />
+      <InstanceMenuButton instance={inst} variant="g" small />
+    </ListRow>
   );
 }
 
@@ -154,21 +139,22 @@ export function InstancesPage() {
     body = <ErrorBox title="Die Bibliothek konnte nicht geladen werden" error={error} onRetry={() => void refetch()} />;
   } else if (isLoading) {
     body = (
-      <div className="posters" aria-busy aria-label="Wird geladen">
-        {[0, 1, 2, 3].map((k) => <Skel key={k} />)}
-      </div>
+      <CardGrid aria-busy aria-label="Wird geladen">
+        {[0, 1, 2, 3].map((k) => <Skel key={k} className="aspect-[4/5]" />)}
+      </CardGrid>
     );
   } else if (!instances?.length) {
     body = (
       <Empty
-        ill={<Glyph name="chest" pal="copper" big />}
+        size="page"
+        ill={<Glyph name="chest" pal="copper" box={64} />}
         title="Deine Bibliothek ist leer"
         actions={
           <>
             <NewInstanceDialog primary>
-              <Btn variant="p" icon="plus" aria-keyshortcuts="Control+N">Neue Instanz</Btn>
+              <Button variant="primary" icon="plus" aria-keyshortcuts="Control+N">Neue Instanz</Button>
             </NewInstanceDialog>
-            <BtnLink to="/discover">Modpacks entdecken</BtnLink>
+            <ButtonLink to="/discover">Modpacks entdecken</ButtonLink>
           </>
         }
       >
@@ -178,74 +164,78 @@ export function InstancesPage() {
   } else if (!shown.length) {
     body = (
       <Empty
-        ill={<Icon name="search" />}
+        size="page"
+        ill="search"
         title="Keine Treffer"
-        actions={<Btn onClick={() => { setQuery(""); setLoader("all"); }}>Suche und Filter zurücksetzen</Btn>}
+        actions={<Button onClick={() => { setQuery(""); setLoader("all"); }}>Suche und Filter zurücksetzen</Button>}
       >
         Keine Instanz passt zu „{query.trim() || LOADER_LABELS[loader as ModLoader]}“{q && loader !== "all" ? ` mit ${LOADER_LABELS[loader]}` : ""}.
       </Empty>
     );
   } else if (mode === "poster") {
     body = (
-      <div className="posters">
+      <CardGrid>
         {shown.map((inst, k) => <PosterCard key={inst.id} inst={inst} index={k} looks={looks} />)}
-      </div>
+      </CardGrid>
     );
   } else {
     body = (
-      <>
-        <div className="lhead">
-          <span />
-          <span>Name</span>
-          <span>Version</span>
-          <span className="c-cnt">Inhalte</span>
-          <span className="c-last">Zuletzt gespielt</span>
-          <span>Status</span>
-          <span />
-          <span />
-        </div>
-        <div className="lrows">
-          {shown.map((inst, k) => <ListRow key={inst.id} inst={inst} index={k} looks={looks} />)}
-        </div>
-      </>
+      <List
+        variant="instances"
+        divided
+        aria-label="Instanzen"
+        head={
+          <>
+            <span />
+            <Cell>Name</Cell>
+            <Cell>Version</Cell>
+            <Cell hide={1040}>Inhalte</Cell>
+            <Cell hide={1040}>Zuletzt gespielt</Cell>
+            <Cell>Status</Cell>
+            <span />
+            <span />
+          </>
+        }
+      >
+        {shown.map((inst, k) => <InstanceRow key={inst.id} inst={inst} index={k} looks={looks} />)}
+      </List>
     );
   }
 
   return (
     <section className="page lib">
-      <div className="page-h">
-        <h1 className="h-page">Bibliothek</h1>
-        <span className="cnt">{instances?.length ?? 0}</span>
-        <span className="sp" />
-      </div>
+      <PageHeader title="Bibliothek" count={instances?.length ?? 0} />
       <div className="sr" role="status" aria-live="polite" aria-atomic="true">{said}</div>
-      {!empty && <div className="tools">
-        <SearchField value={query} onChange={setQuery} placeholder="Instanz suchen" />
-        <Select
-          label="Loader"
-          value={loader}
-          onChange={(v) => setLoader(v as ModLoader | "all")}
-          options={[{ value: "all", label: "Alle" }, ...ALL_LOADERS.map((l) => ({ value: l, label: LOADER_LABELS[l] }))]}
-        />
-        <Select
-          label="Sortieren"
-          className="hide-m"
-          value={sort}
-          onChange={(v) => setSort(v as Sort)}
-          options={[{ value: "recent", label: "Zuletzt gespielt" }, { value: "name", label: "Name" }, { value: "created", label: "Erstellt" }]}
-        />
-        <Seg
-          icons
-          label="Ansicht"
-          value={mode}
-          onChange={setMode}
-          options={[{ value: "poster", label: "Poster", icon: "grid", tip: "Poster" }, { value: "list", label: "Liste", icon: "list", tip: "Liste" }]}
-        />
-        <span className="grow" />
-        <NewInstanceDialog primary>
-          <Btn variant="p" icon="plus" aria-keyshortcuts="Control+N">Neue Instanz</Btn>
-        </NewInstanceDialog>
-      </div>}
+      {/* Abstände wie bisher: 16 über, 18 unter der Werkzeugleiste */}
+      {!empty && (
+        <Toolbar search="m" className="mt-4 mb-4.5">
+          <SearchField value={query} onChange={setQuery} placeholder="Instanz suchen" />
+          <Select
+            label="Loader"
+            value={loader}
+            onChange={(v) => setLoader(v as ModLoader | "all")}
+            options={[{ value: "all", label: "Alle" }, ...ALL_LOADERS.map((l) => ({ value: l, label: LOADER_LABELS[l] }))]}
+          />
+          <Select
+            label="Sortieren"
+            className="max-[900px]:hidden"
+            value={sort}
+            onChange={(v) => setSort(v as Sort)}
+            options={[{ value: "recent", label: "Zuletzt gespielt" }, { value: "name", label: "Name" }, { value: "created", label: "Erstellt" }]}
+          />
+          <Segmented
+            iconsOnly
+            label="Ansicht"
+            value={mode}
+            onChange={setMode}
+            items={[{ value: "poster", label: "Poster", icon: "grid" }, { value: "list", label: "Liste", icon: "list" }]}
+          />
+          <Spacer />
+          <NewInstanceDialog primary>
+            <Button variant="primary" icon="plus" aria-keyshortcuts="Control+N">Neue Instanz</Button>
+          </NewInstanceDialog>
+        </Toolbar>
+      )}
       {body}
     </section>
   );

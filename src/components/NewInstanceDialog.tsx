@@ -4,7 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Slot } from "radix-ui";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open as openFile } from "@tauri-apps/plugin-dialog";
-import { Btn, Checkbox, ConfirmDialog, Dialog, DialogClose, Empty, ErrorBox, ProjectIcon, SearchField, Seg, Select, Skel, TextField, Tip } from "@/components/px";
+import {
+  Actions, Button, Checkbox, Choice, ConfirmDialog, Count, Dialog, DialogActions, Disclosure, Empty, ErrorBox, Field, Glyph, Hint, Icon, IconButton, Panel,
+  ProjectIcon, RowTitle, SearchField, Segmented, Select, Skel, TabPanel, Tabs, TextField, type IconName,
+} from "@/ui";
 import { MemoryChooser } from "@/components/common";
 import { useInstallPack } from "@/components/ContentBrowser";
 import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
@@ -15,8 +18,6 @@ import { formatDate } from "@/lib/format";
 import { formatDownloads, progressLabel } from "@/lib/modrinth";
 import { ALL_LOADERS, LOADER_LABELS, type ModLoader, type Template } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Glyph, Icon, type IconName } from "@/pixel/icons";
-import "@/styles/library.css";
 
 type Tab = "blank" | "pack" | "file" | "tpl";
 
@@ -34,6 +35,8 @@ const LOADER_HELP: Record<ModLoader, string> = {
   forge: "Für große, klassische Mods wie Create.",
   neoforge: "Nachfolger von Forge für neuere Versionen.",
 };
+
+const LOADER_ITEMS = ALL_LOADERS.map((l) => ({ value: l, label: LOADER_LABELS[l] }));
 
 // Leerer Wert steht für loaderVersion = null („neueste stabile“).
 const LATEST = "latest";
@@ -61,31 +64,24 @@ function PackPane({ selected, onSelect }: { selected: string | null; onSelect: (
   });
   return (
     <>
-      <div className="nf">
-        <SearchField value={input} onChange={setInput} placeholder="Modpacks suchen" autoFocus />
-      </div>
+      <SearchField value={input} onChange={setInput} placeholder="Modpacks suchen" autoFocus className="mb-4" />
       {results.error ? (
         <ErrorBox title="Der Katalog ist gerade nicht erreichbar" error={results.error} onRetry={() => void results.refetch()} />
       ) : (
-        <div className="pickl" aria-busy={results.isPending || undefined}>
-          {results.isPending && [0, 1, 2, 3].map((k) => <Skel key={k} />)}
+        <div className="flex flex-col gap-1" aria-busy={results.isPending || undefined}>
+          {results.isPending && [0, 1, 2, 3].map((k) => <Skel key={k} h={56} />)}
           {results.data?.hits.map((hit) => (
-            <button
+            <Choice
               key={hit.project_id}
-              type="button"
-              className="pk fx"
-              aria-pressed={selected === hit.project_id}
+              media={<ProjectIcon url={hit.icon_url} seed={hit.project_id} />}
+              title={hit.title}
+              sub={`von ${hit.author} · ${hit.description}`}
+              trail={<Count value={formatDownloads(hit.downloads)} />}
+              selected={selected === hit.project_id}
               onClick={() => onSelect({ id: hit.project_id, title: hit.title })}
-            >
-              <ProjectIcon url={hit.icon_url} seed={hit.project_id} />
-              <div className="min-w-0">
-                <b>{hit.title}</b>
-                <span>von {hit.author} · {hit.description}</span>
-              </div>
-              <span><span className="num">{formatDownloads(hit.downloads)}</span></span>
-            </button>
+            />
           ))}
-          {results.data && !results.data.hits.length && <p className="muted">Kein Modpack gefunden für „{query}“.</p>}
+          {results.data && !results.data.hits.length && <Hint>Kein Modpack gefunden für „{query}“.</Hint>}
         </div>
       )}
     </>
@@ -101,39 +97,35 @@ function TemplatePane({ selected, onSelect }: { selected: string | null; onSelec
   if (templates.error) return <ErrorBox title="Vorlagen konnten nicht geladen werden" error={templates.error} onRetry={() => void templates.refetch()} />;
   if (templates.isPending)
     return (
-      <div className="pickl">
-        {[0, 1].map((k) => <Skel key={k} />)}
+      <div className="flex flex-col gap-1">
+        {[0, 1].map((k) => <Skel key={k} h={56} />)}
       </div>
     );
   if (!templates.data.length)
     return (
-      <Empty ill={<Glyph name="chest" pal="sand" big />} title="Noch keine Vorlagen" minHeight={280}>
+      <Empty ill={<Glyph name="chest" pal="sand" box={64} />} title="Noch keine Vorlagen" size="pane">
         Speichere eine Instanz über ihr Menü mit „Als Vorlage speichern“, dann kannst du sie hier als Ausgangspunkt nehmen.
       </Empty>
     );
 
   return (
     <>
-      <div className="pickl">
+      <div className="flex flex-col gap-1">
         {templates.data.map((t) => (
-          <div key={t.id} className="pkrow">
-            <button type="button" className="pk fx" aria-pressed={selected === t.id} onClick={() => onSelect(t)}>
-              <Glyph name="chest" pal="sand" />
-              <div className="min-w-0">
-                <b>{t.name}</b>
-                <span>
-                  {LOADER_LABELS[t.loader]} {t.minecraftVersion} · {t.modCount} {t.modCount === 1 ? "Inhalt" : "Inhalte"} · gespeichert {formatDate(t.createdAt)}
-                </span>
-              </div>
-              <span />
-            </button>
-            <Tip label="Vorlage löschen">
-              <Btn variant="g" size="s" iconOnly icon="trash" tone="bad" aria-label={`Vorlage ${t.name} löschen`} disabled={del.isPending} onClick={() => setToDelete(t)} />
-            </Tip>
+          <div key={t.id} className="flex items-center gap-1">
+            <Choice
+              className="min-w-0 flex-1"
+              media={<Glyph name="chest" pal="sand" />}
+              title={t.name}
+              sub={`${LOADER_LABELS[t.loader]} ${t.minecraftVersion} · ${t.modCount} ${t.modCount === 1 ? "Inhalt" : "Inhalte"} · gespeichert ${formatDate(t.createdAt)}`}
+              selected={selected === t.id}
+              onClick={() => onSelect(t)}
+            />
+            <IconButton size="s" icon="trash" tone="bad" label={`Vorlage ${t.name} löschen`} tip="Vorlage löschen" disabled={del.isPending} onClick={() => setToDelete(t)} />
           </div>
         ))}
       </div>
-      <p className="help" style={{ marginTop: 12 }}>Vorlagen speicherst du über das Menü einer Instanz: „Als Vorlage speichern“.</p>
+      <Hint className="mt-3">Vorlagen speicherst du über das Menü einer Instanz: „Als Vorlage speichern“.</Hint>
       <ConfirmDialog
         open={!!toDelete}
         onOpenChange={(o) => !o && setToDelete(null)}
@@ -257,39 +249,20 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
       footLeft={hint}
       footer={
         <>
-          <DialogClose asChild><Btn>{busy ? "Schließen" : "Abbrechen"}</Btn></DialogClose>
-          {tab === "pack" && packInstall.cancel && <Btn variant="g" onClick={packInstall.cancel}>Abbrechen</Btn>}
-          <Btn variant="p" full style={{ width: 170 }} disabled={!valid || busy} onClick={go}>{goLabel}</Btn>
+          {tab === "pack" && packInstall.cancel && (
+            <Button variant="ghost" aria-label="Installation abbrechen" onClick={packInstall.cancel}>Abbrechen</Button>
+          )}
+          <DialogActions cancel={busy ? "Schließen" : "Abbrechen"} confirm={{ label: goLabel, width: 170, disabled: !valid || busy, onClick: go }} />
         </>
       }
     >
       <div className="nwrap">
-        <div className="nnav" role="tablist" aria-label="Weg" aria-orientation="vertical">
-          {TABS.map((t) => (
-            <button
-              key={t.value}
-              id={`ni-tab-${t.value}`}
-              type="button"
-              role="tab"
-              className="ptab fx"
-              aria-selected={tab === t.value}
-              aria-controls="ni-pane"
-              onClick={() => setTab(t.value)}
-            >
-              <Icon name={t.icon} />
-              {t.label}
-              <i className="tick" />
-            </button>
-          ))}
-        </div>
-        <div className="npane" id="ni-pane" role="tabpanel" aria-labelledby={`ni-tab-${tab}`}>
+        <Tabs variant="vertical" idBase="ni" label="Weg" value={tab} onChange={setTab} items={TABS} />
+        <TabPanel idBase="ni" value={tab} className="npane">
           {tab === "blank" && (
             <>
-              <div className="nf">
-                <label htmlFor="ni-name">Name</label>
+              <Field label="Name" help="Vorschlag aus Version und Loader. Du kannst ihn später ändern.">
                 <TextField
-                  id="ni-name"
-                  aria-describedby="ni-name-help"
                   value={nameEdited ? name : suggestion}
                   maxLength={64}
                   onChange={(e) => {
@@ -297,16 +270,13 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
                     setNameEdited(true);
                   }}
                 />
-                <span className="help" id="ni-name-help">Vorschlag aus Version und Loader. Du kannst ihn später ändern.</span>
-              </div>
-              <div className="nf">
-                <label htmlFor="ni-mc">Minecraft-Version</label>
-                <div className="row flex-wrap">
+              </Field>
+              <Field label="Minecraft-Version">
+                <Actions gap={12} wrap>
                   {versions.isPending ? (
-                    <Skel style={{ height: 40, width: 220 }} />
+                    <Skel w={220} h={40} />
                   ) : (
                     <Select
-                      id="ni-mc"
                       value={selectedVersion}
                       onChange={setVersion}
                       disabled={!filtered.length}
@@ -317,109 +287,95 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
                       }
                     />
                   )}
-                  <span className="ni-check" onClick={(e) => e.target === e.currentTarget && setSnapshots(!snapshots)}>
-                    <Checkbox checked={snapshots} onChange={setSnapshots} label="Vorabversionen zeigen" />
-                    <span onClick={() => setSnapshots(!snapshots)}>Vorabversionen zeigen</span>
-                  </span>
-                </div>
-              </div>
-              <div className="nf">
-                <span className="fl" id="ni-loader">Loader</span>
-                {/* Seg reicht keine Beschreibung durch: die Gruppe darum trägt Label und Hilfetext. */}
-                <div role="group" aria-labelledby="ni-loader" aria-describedby="ni-loader-help">
-                  <Seg label="Loader" value={loader} onChange={setLoader} options={ALL_LOADERS.map((l) => ({ value: l, label: LOADER_LABELS[l] }))} />
-                </div>
-                {loaderUnavailable ? (
-                  <span className="err-msg" role="alert" id="ni-loader-help">
-                    {loaderVersions.error ? `${LOADER_LABELS[loader]} ist gerade nicht erreichbar.` : `Für Minecraft ${selectedVersion} gibt es noch kein ${LOADER_LABELS[loader]}.`}
-                  </span>
-                ) : (
-                  <span className="help" id="ni-loader-help">{LOADER_HELP[loader]}</span>
-                )}
-              </div>
-              <details className="adv">
-                <summary><Icon name="chevr" small />Erweitert</summary>
-                <div style={{ paddingTop: 10 }}>
-                  <div className="nf">
-                    <label htmlFor="ni-lv">Loader-Version</label>
-                    <div className="row">
-                      {loader === "vanilla" ? (
-                        <span className="muted">Nicht nötig bei Vanilla</span>
-                      ) : (
-                        <Select
-                          id="ni-lv"
-                          value={selectedLoader}
-                          onChange={setLoaderVersion}
-                          disabled={loaderUnavailable || loaderVersions.isPending}
-                          options={[
-                            { value: LATEST, label: "Neueste stabile (empfohlen)" },
-                            ...(loaderVersions.data ?? []).map((v) => ({ value: v.version, label: `${v.version}${v.stable ? "" : " (Vorabversion)"}` })),
-                          ]}
-                        />
-                      )}
-                    </div>
-                  </div>
-                  <div className="nf">
-                    <span className="fl">Arbeitsspeicher</span>
-                    <MemoryChooser name="ni-ram" value={memory} onChange={setMemory} autoText="Standard aus den Einstellungen" />
-                  </div>
-                </div>
-              </details>
+                  <Checkbox checked={snapshots} onChange={setSnapshots}>Vorabversionen zeigen</Checkbox>
+                </Actions>
+              </Field>
+              <Field
+                label="Loader"
+                group
+                reserveLines={1}
+                help={LOADER_HELP[loader]}
+                error={
+                  loaderUnavailable
+                    ? loaderVersions.error ? `${LOADER_LABELS[loader]} ist gerade nicht erreichbar.` : `Für Minecraft ${selectedVersion} gibt es noch kein ${LOADER_LABELS[loader]}.`
+                    : undefined
+                }
+              >
+                <Segmented label="Loader" value={loader} onChange={setLoader} items={LOADER_ITEMS} />
+              </Field>
+              <Disclosure summary="Erweitert">
+                <Field label="Loader-Version" group={loader === "vanilla"}>
+                  {loader === "vanilla" ? (
+                    <span className="text-fg-2">Nicht nötig bei Vanilla</span>
+                  ) : (
+                    <Select
+                      value={selectedLoader}
+                      onChange={setLoaderVersion}
+                      disabled={loaderUnavailable || loaderVersions.isPending}
+                      options={[
+                        { value: LATEST, label: "Neueste stabile (empfohlen)" },
+                        ...(loaderVersions.data ?? []).map((v) => ({ value: v.version, label: `${v.version}${v.stable ? "" : " (Vorabversion)"}` })),
+                      ]}
+                    />
+                  )}
+                </Field>
+                <Field label="Arbeitsspeicher" group>
+                  <MemoryChooser name="ni-ram" value={memory} onChange={setMemory} autoText="Standard aus den Einstellungen" />
+                </Field>
+              </Disclosure>
             </>
           )}
 
           {tab === "pack" && (
             <>
               <PackPane selected={pack?.id ?? null} onSelect={setPack} />
-              <Btn
-                variant="g"
+              <Button
+                variant="ghost"
                 size="s"
                 icon="chev"
-                style={{ marginTop: 10, marginLeft: -8 }}
+                bleed="start"
+                className="mt-2.5"
                 onClick={() => {
                   onOpenChange(false);
                   navigate(pack ? `/discover?projekt=${pack.id}` : "/discover");
                 }}
               >
                 Mehr in Entdecken
-              </Btn>
+              </Button>
             </>
           )}
 
           {tab === "file" &&
             (api.isMock ? (
-              <Empty ill={<Icon name="file" />} title="Nur in der App" minHeight={280}>
+              <Empty ill="file" title="Nur in der App" size="pane">
                 Dateien lassen sich nur in der Voxlet-App öffnen, nicht im Browser.
               </Empty>
             ) : (
               <>
                 <div className="drop">
-                  <Icon name="ul" />
+                  <Icon name="ul" size="xl" tone="muted" />
                   <b>.mrpack hierher ziehen</b>
                   <span>oder</span>
-                  <Btn onClick={() => void chooseFile()}>Datei auswählen</Btn>
+                  <Button onClick={() => void chooseFile()}>Datei auswählen</Button>
                 </div>
-                <div className={cn("fileok", path && "show")}>
+                {/* Platz bleibt reserviert (unsichtbar), damit nichts springt, wenn eine Datei gewählt wird */}
+                <Panel level="raised" className={cn("mt-3 flex h-14 items-center gap-2.5 pr-2 pl-3", !path && "invisible")}>
                   <Glyph name="chest" pal="copper" />
-                  <div className="grow">
-                    <b className="fn ell">{path ? `${packName(path)}.mrpack` : ""}</b>
-                    <span className="fs ell">{path}</span>
+                  <div className="min-w-0 flex-1">
+                    <RowTitle title={path ? `${packName(path)}.mrpack` : ""} sub={path} />
                   </div>
-                  <Btn variant="g" size="s" iconOnly aria-label="Datei entfernen" onClick={() => setPath("")}>
-                    <Icon name="x5" small />
-                  </Btn>
-                </div>
+                  <IconButton size="s" icon="x" label="Datei entfernen" disabled={!path} onClick={() => setPath("")} />
+                </Panel>
                 {path && (
-                  <div className="nf" style={{ marginTop: 16 }}>
-                    <label htmlFor="ni-file-name">Name <span className="faint">(optional)</span></label>
-                    <TextField id="ni-file-name" value={fileName} onChange={(e) => setFileName(e.target.value)} placeholder={packName(path)} maxLength={64} />
-                  </div>
+                  <Field label="Name" optional className="mt-4">
+                    <TextField value={fileName} onChange={(e) => setFileName(e.target.value)} placeholder={packName(path)} maxLength={64} />
+                  </Field>
                 )}
               </>
             ))}
 
           {tab === "tpl" && <TemplatePane selected={template?.id ?? null} onSelect={setTemplate} />}
-        </div>
+        </TabPanel>
       </div>
     </Dialog>
   );

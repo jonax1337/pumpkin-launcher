@@ -1,13 +1,14 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { Btn, Chip, ConfirmDialog, Progress, SearchField, Seg, Tip } from "@/components/px";
+// Progress (Altbestand): Balken im Spielen-Knopf mit eigenen Farben (.play .pbar), bis Phase C
+import { Progress } from "@/components/px";
+import { Button, Chip, ConfirmDialog, Count, Empty, Icon, SearchField, Segmented, Spacer, StatusPanel, Tip, Toolbar, type IconName } from "@/ui";
 import { askStop, useCancelInstall, useInstanceStatus, useKill, usePlay, useStopAsk } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { formatClock, formatCount, relativeTime } from "@/lib/format";
 import { installStepLabel, SUPPORTED_LOADERS, type Instance, type InstallProgress, type InstallStep, type ModLoader } from "@/lib/types";
-import { Icon, type IconName } from "@/pixel/icons";
 import { useGame, type LogLine } from "@/store/game";
 import { useLook } from "@/store/look";
 import { useSettings } from "@/store/settings";
@@ -137,12 +138,13 @@ export function PlayButton({ instance, size = "l", onLaunched, tabIndex }: { ins
     >
       <span className="bf" />
       <span className="bc">
-        <span className="pic"><Icon name={s.icon} /></span>
+        <span className="pic"><Icon name={s.icon} size={size === "i" ? "s" : size} /></span>
         <span className="lab">
           <span className="l1">{size === "m" ? s.s1 : s.l1}</span>
           <span className="l2">{s.l2}</span>
         </span>
-        <span className="pct">{s.pct ?? ""}</span>
+        {/* Symbolknopf (i): Prozent nur im Namen, sonst ragt die Zahl aus den 32 px */}
+        {size !== "i" && <span className="pct">{s.pct ?? ""}</span>}
       </span>
       <Progress p={s.p} className="pbar" />
     </button>
@@ -156,8 +158,9 @@ export function PlayButton({ instance, size = "l", onLaunched, tabIndex }: { ins
  * Vorgelesen wird nur der Anfang (`lead`, ändert sich mit dem Zustand); Zähler und Uhr stehen außerhalb der Live-Region.
  * Ein fehlender Spielername steht nur im Knopf („Erst Spielernamen festlegen“), „Nicht installiert“ nur im Knopf/Chip.
  * `showLast={false}`: „Zuletzt gespielt“ steht schon woanders (Start: Metazeile im Hero).
+ * `onScene`: Knöpfe über einer Szene (Grundplatte, harter Schatten).
  */
-export function PlayStatus({ instance, className, style, showLast = true }: { instance: Instance; className?: string; style?: CSSProperties; showLast?: boolean }) {
+export function PlayStatus({ instance, className, style, showLast = true, onScene }: { instance: Instance; className?: string; style?: CSSProperties; showLast?: boolean; onScene?: boolean }) {
   const phase = usePhase(instance.id);
   const progress = useGame((s) => s.installs[instance.id]);
   const crash = useGame((s) => s.crashes[instance.id]);
@@ -171,22 +174,22 @@ export function PlayStatus({ instance, className, style, showLast = true }: { in
   if (phase === "preparing" && progress) {
     lead = <b>{installStepLabel(progress.step, instance.loader)}</b>;
     if (progress.total > 1) tail = <> {formatCount(progress.done)} von {formatCount(progress.total)}</>;
-    acts = <Btn variant="g" size="s" icon="x" className="pcancel" disabled={cancel.isPending} onClick={() => cancel.mutate(instance.id)}>Abbrechen</Btn>;
+    acts = <Button variant="ghost" size="s" icon="x" onScene={onScene} className="pcancel" disabled={cancel.isPending} onClick={() => cancel.mutate(instance.id)}>Abbrechen</Button>;
   } else if (phase === "starting") {
     lead = "Minecraft startet.";
     tail = " Das Fenster öffnet sich gleich.";
   } else if (phase === "running") {
     // Laufzeit steht im Knopf („Läuft seit …“); hier nur für Screenreader die Zustandsänderung.
     lead = <span className="sr">Minecraft läuft</span>;
-    acts = <Btn variant="g" size="s" icon="term" className="plog" onClick={toLog}>Protokoll ansehen</Btn>;
+    acts = <Button variant="ghost" size="s" icon="term" onScene={onScene} className="plog" onClick={toLog}>Protokoll ansehen</Button>;
   } else if (phase === "crashed" && crash) {
     lead = <b>Minecraft ist abgestürzt{crash.code != null ? ` (Code ${crash.code})` : ""}</b>;
     acts = (
       <>
         {crash.crashReport && (
-          <Btn variant="g" size="s" tone="bad" onClick={() => void api.openPath(crash.crashReport!).catch((e: Error) => toast.error(e.message))}>Absturzbericht öffnen</Btn>
+          <Button variant="ghost" size="s" tone="bad" onScene={onScene} onClick={() => void api.openPath(crash.crashReport!).catch((e: Error) => toast.error(e.message))}>Absturzbericht öffnen</Button>
         )}
-        <Btn variant="g" size="s" onClick={toLog}>Protokoll ansehen</Btn>
+        <Button variant="ghost" size="s" onScene={onScene} onClick={toLog}>Protokoll ansehen</Button>
       </>
     );
   } else if (phase === "installed" && showLast) {
@@ -209,22 +212,23 @@ export const LOUD_PHASES: Phase[] = ["preparing", "starting", "running", "crashe
 /**
  * Status als Chip (Poster, Mini-Karte, Listen-Statusspalte, oben links): Breite nach Inhalt, feste Höhe.
  * Die Prozentzahl steht in Pixelschrift mit fester Stellenbreite, damit der Chip beim Zählen nicht springt.
- * `loudOnly`: im ruhigen Normalfall nichts zeigen. `fixed` bleibt für Aufrufer erhalten (gleiches Verhalten).
+ * `loudOnly`: im ruhigen Normalfall nichts zeigen. `small`: Chip s (22 px), sonst m (28 px).
+ * `fixed` bleibt für Aufrufer erhalten, ohne Wirkung (die Breite folgt dem Inhalt, die Zahl reserviert ihre Stellen).
  */
-export function StatusChip({ instance, small, fixed, loudOnly }: { instance: Instance; small?: boolean; fixed?: boolean; loudOnly?: boolean }) {
+export function StatusChip({ instance, small, loudOnly }: { instance: Instance; small?: boolean; fixed?: boolean; loudOnly?: boolean }) {
   const phase = usePhase(instance.id);
   const percent = useInstallPercent(instance);
   if (loudOnly && !LOUD_PHASES.includes(phase)) return null;
   const [text, tone]: [ReactNode, "run" | "acc" | "bad" | undefined] =
     phase === "running" ? ["Läuft", "run"]
-    : phase === "preparing" ? [<>Wird installiert <b className="pnum">{percent ?? 0}</b>&nbsp;%</>, "acc"]
+    : phase === "preparing" ? [<>Wird installiert <Count value={percent ?? 0} minDigits={3} />&nbsp;%</>, "acc"]
     : phase === "starting" ? ["Startet", "acc"]
     : phase === "crashed" ? ["Abgestürzt", "bad"]
     : phase === "missing" ? ["Nicht installiert", undefined]
     : phase === "installed" ? ["Bereit", undefined]
     : ["Wird geprüft", undefined];
   // Text in einem Span: sonst setzt der Chip seinen Flex-Abstand zwischen Wort, Zahl und „%“.
-  return <Chip small={small} fixed={fixed} dot tone={tone} className="stchip"><span>{text}</span></Chip>;
+  return <Chip size={small ? "s" : "m"} dot tone={tone}><span>{text}</span></Chip>;
 }
 
 /**
@@ -259,6 +263,7 @@ export function StopDialog() {
 // ---------- Protokoll ----------
 
 type LogFilter = "all" | "warn" | "err";
+const LOG_FILTERS: { value: LogFilter; label: string }[] = [{ value: "all", label: "Alle" }, { value: "warn", label: "Warnungen" }, { value: "err", label: "Fehler" }];
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -268,28 +273,38 @@ function LogStat({ instance }: { instance: Instance }) {
   const crash = useGame((s) => s.crashes[instance.id]);
   const since = useGame((s) => s.started[instance.id]);
   const now = useNow(phase === "running");
+  // Abstände wie bisher (oben 12, unten 10): die Höhe der Konsole rechnet damit (.console).
+  const place = "mt-3 mb-2.5";
   if (phase === "running")
     return (
-      <div className="logstat run">
-        <Icon name="term" />
-        <span className="lt"><b>Läuft</b>{since && <> seit <span className="num">{formatClock(now - since)}</span></>}. Neue Zeilen erscheinen sofort.</span>
-        <Btn size="s" icon="stop" onClick={() => askStop(instance)}>Beenden…</Btn>
-      </div>
+      <StatusPanel
+        size="s"
+        tone="run"
+        icon="term"
+        className={place}
+        title={<>Läuft{since && <> seit <Count value={formatClock(now - since)} /></>}.</>}
+        actions={<Button size="s" icon="stop" onClick={() => askStop(instance)}>Beenden…</Button>}
+      >
+        Neue Zeilen erscheinen sofort.
+      </StatusPanel>
     );
   if (crash)
     return (
-      <div className="logstat bad">
-        <Icon name="warn" />
-        <span className="lt"><b>Minecraft ist abgestürzt{crash.code != null ? ` (Code ${crash.code})` : ""}.</b> {crash.crashReport ? "Der Absturzbericht nennt meist die Ursache." : "Die letzten Zeilen unten zeigen, was passiert ist."}</span>
-        {crash.crashReport && <Btn size="s" onClick={() => void api.openPath(crash.crashReport!).catch((e: Error) => toast.error(e.message))}>Absturzbericht öffnen</Btn>}
-      </div>
+      <StatusPanel
+        size="s"
+        tone="bad"
+        className={place}
+        title={`Minecraft ist abgestürzt${crash.code != null ? ` (Code ${crash.code})` : ""}.`}
+        actions={crash.crashReport && <Button size="s" onClick={() => void api.openPath(crash.crashReport!).catch((e: Error) => toast.error(e.message))}>Absturzbericht öffnen</Button>}
+      >
+        {crash.crashReport ? "Der Absturzbericht nennt meist die Ursache." : "Die letzten Zeilen unten zeigen, was passiert ist."}
+      </StatusPanel>
     );
+  // Wie man zu Ausgabe kommt, sagt der Leerzustand der Konsole; hier nur Stand und Aufbewahrung
   return (
-    <div className="logstat">
-      <Icon name="info" />
-      {/* Wie man zu Ausgabe kommt, sagt der Leerzustand der Konsole; hier nur Stand und Aufbewahrung */}
-      <span className="lt">{instance.lastPlayedAt != null ? `Zuletzt gespielt ${relativeTime(instance.lastPlayedAt)}.` : "Noch nie gespielt."} Das Protokoll wird beim Schließen von Voxlet geleert.</span>
-    </div>
+    <StatusPanel size="s" icon="info" className={place} title={instance.lastPlayedAt != null ? `Zuletzt gespielt ${relativeTime(instance.lastPlayedAt)}.` : "Noch nie gespielt."}>
+      Das Protokoll wird beim Schließen von Voxlet geleert.
+    </StatusPanel>
   );
 }
 
@@ -370,16 +385,16 @@ export function LogConsole({ instance }: { instance: Instance }) {
   return (
     <>
       <LogStat instance={instance} />
-      <div className="logtool">
-        <SearchField small value={query} onChange={setQuery} placeholder="Im Protokoll suchen" />
-        <Seg small label="Filter" value={filter} onChange={setFilter} options={[{ value: "all", label: "Alle" }, { value: "warn", label: "Warnungen" }, { value: "err", label: "Fehler" }]} />
-        <span className="grow" />
-        <Btn size="s" icon="copy" disabled={!lines?.length} onClick={copy}><span className="hide-m">Kopieren</span></Btn>
+      <Toolbar search="s" className="mb-2.5">
+        <SearchField size="s" value={query} onChange={setQuery} placeholder="Im Protokoll suchen" />
+        <Segmented size="s" label="Filter" value={filter} onChange={setFilter} items={LOG_FILTERS} />
+        <Spacer />
+        <Button size="s" icon="copy" compactBelow={900} disabled={!lines?.length} onClick={copy}>Kopieren</Button>
         {crash?.logFile && (
-          <Btn size="s" icon="folder" onClick={() => void api.openPath(crash.logFile!).catch((e: Error) => toast.error(e.message))}><span className="hide-m">Logdatei</span></Btn>
+          <Button size="s" icon="folder" compactBelow={900} onClick={() => void api.openPath(crash.logFile!).catch((e: Error) => toast.error(e.message))}>Logdatei</Button>
         )}
-        <Btn size="s" icon="trash" disabled={!lines?.length} onClick={() => clearLog(instance.id)}><span className="hide-m">Leeren</span></Btn>
-      </div>
+        <Button size="s" icon="trash" compactBelow={900} disabled={!lines?.length} onClick={() => clearLog(instance.id)}>Leeren</Button>
+      </Toolbar>
       <div className="console">
         <div
           ref={ref}
@@ -396,9 +411,13 @@ export function LogConsole({ instance }: { instance: Instance }) {
           {shown.map((l) => <LogRow key={l.id} line={l} re={re} />)}
         </div>
         <div className="none" style={{ visibility: shown.length ? "hidden" : "visible" }}>
-          {lines?.length ? "Keine Zeilen für diesen Filter." : "Noch keine Ausgabe. Starte die Instanz, dann erscheint hier das Protokoll."}
+          {lines?.length ? (
+            <Empty size="pane" ill="search" title="Keine Treffer">Keine Zeilen für diesen Filter.</Empty>
+          ) : (
+            <Empty size="pane" ill="term" title="Noch keine Ausgabe">Starte die Instanz, dann erscheint hier das Protokoll.</Empty>
+          )}
         </div>
-        <Btn size="s" icon="down2" className={cn("down", !follow && "show")} onClick={() => setFollow(true)}>Nach unten</Btn>
+        <Button size="s" icon="down" className={cn("down", !follow && "show")} onClick={() => setFollow(true)}>Nach unten</Button>
       </div>
       <span className="sr" role="status">{digest}</span>
     </>

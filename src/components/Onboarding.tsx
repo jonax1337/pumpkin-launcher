@@ -2,13 +2,13 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Btn, TextField } from "@/components/px";
 import { showNameError, startMsLogin } from "@/components/PlayerNames";
 import { useCreateInstance, usePlay, useVersions } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import type { ContentVersion } from "@/lib/modrinth";
 import { cn } from "@/lib/utils";
-import { Glyph, Icon, type GlyphName, type GlyphPalette } from "@/pixel/icons";
+import { Button, Choice, Field, Glyph, Hint, TextField, useRoving } from "@/ui";
+import type { GlyphName, GlyphPalette } from "@/pixel/icons";
 import { PixelScene } from "@/pixel/PixelScene";
 import { accountName, isValidPlayerName, useSettings } from "@/store/settings";
 
@@ -41,6 +41,8 @@ export function Onboarding() {
   const invalid = showNameError(name, touched);
   const releases = versions.data?.filter((v) => v.type === "release").map((v) => v.id) ?? [];
   const choice = STARTS.find((s) => s.id === start)!;
+  // Pfeiltasten in der Startwahl: Auswahl folgt dem Fokus, ein Tab-Stopp.
+  const roveStarts = useRoving<HTMLDivElement>("xy");
 
   function next(e: FormEvent) {
     e.preventDefault();
@@ -98,24 +100,25 @@ export function Onboarding() {
               {microsoft ? (
                 <p className="ok-msg">Angemeldet als {accountName(active)}</p>
               ) : (
-                <div className="nf">
-                  <label htmlFor="ob-name">Spielername</label>
-                  <TextField id="ob-name" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => setTouched(true)} maxLength={16} placeholder="z. B. Steve_42" autoFocus aria-invalid={invalid} aria-describedby="ob-help" />
-                  {/* Fehler ersetzt den Hilfetext an gleicher Stelle: keine leere Reservezeile, kein Springen */}
-                  <span className={invalid ? "help text-bad" : "help"} id="ob-help" aria-live="polite">
-                    {invalid ? <><Icon name="warn" small className="helpwarn" />Nur Buchstaben, Ziffern und Unterstrich, 3 bis 16 Zeichen.</> : "Reicht für Einzelspieler, LAN und Server ohne Anmeldung."}
-                  </span>
-                </div>
+                // Fehler ersetzt den Hilfetext an derselben Stelle: keine leere Reservezeile, kein Springen
+                <Field
+                  label="Spielername"
+                  htmlFor="ob-name"
+                  help="Reicht für Einzelspieler, LAN und Server ohne Anmeldung."
+                  error={invalid ? <>Nur Buchstaben, Ziffern und Unterstrich, 3 bis 16 Zeichen.</> : undefined}
+                >
+                  <TextField id="ob-name" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => setTouched(true)} maxLength={16} placeholder="z. B. Steve_42" autoFocus aria-invalid={invalid} width="full" />
+                </Field>
               )}
               <div className="or">oder</div>
-              <Btn icon="user" full style={{ width: "100%" }} onClick={() => void startMsLogin(qc)}>Mit Microsoft anmelden</Btn>
-              <p className="help" style={{ marginTop: 8 }}>Nötig für die meisten Server und Realms. Du kannst es später nachholen.</p>
+              <Button icon="user" width="full" onClick={() => void startMsLogin(qc)}>Mit Microsoft anmelden</Button>
+              <Hint className="ob-ms">Nötig für die meisten Server und Realms. Du kannst es später nachholen.</Hint>
             </div>
             <div className="of">
               <span className="faint" style={{ fontSize: 12.5 }}>Schritt 1 von 2</span>
-              <Btn type="submit" variant="p" full style={{ width: 140 }} disabled={!microsoft && !nameOk}>
-                Weiter<Icon name="chev" />
-              </Btn>
+              <Button type="submit" variant="primary" width={140} iconEnd="chev" disabled={!microsoft && !nameOk}>
+                Weiter
+              </Button>
             </div>
           </form>
         ) : (
@@ -124,23 +127,19 @@ export function Onboarding() {
             <h1 id="onb-t">Womit willst du starten?</h1>
             <p>Du kannst jederzeit weitere Instanzen anlegen.</p>
             <div className="ob">
-              <div className="starts" role="radiogroup" aria-label="Start">
+              <div className="starts" role="radiogroup" aria-label="Start" onKeyDown={roveStarts}>
                 {STARTS.map((s) => (
-                  <button
+                  <Choice
                     key={s.id}
-                    type="button"
-                    className="start fx"
+                    size="l"
                     role="radio"
-                    aria-checked={start === s.id}
-                    aria-pressed={start === s.id}
+                    media={<Glyph name={s.glyph} pal={s.pal} box={40} />}
+                    title={s.title}
+                    sub={s.text}
+                    selected={start === s.id}
+                    tabIndex={start === s.id ? 0 : -1}
                     onClick={() => setStart(s.id)}
-                  >
-                    <Glyph name={s.glyph} pal={s.pal} />
-                    <div>
-                      <b>{s.title}</b>
-                      <span>{s.text}</span>
-                    </div>
-                  </button>
+                  />
                 ))}
               </div>
               <p className="help onb-next" aria-live="polite">{choice.next}</p>
@@ -149,20 +148,19 @@ export function Onboarding() {
               {microsoft ? (
                 <span className="faint" style={{ fontSize: 12.5 }}>Angemeldet als {accountName(active)}</span>
               ) : (
-                <Btn variant="g" onClick={() => setStep(1)} disabled={busy}>Zurück</Btn>
+                <Button variant="ghost" onClick={() => setStep(1)} disabled={busy}>Zurück</Button>
               )}
               {/* Symbol links wie bei allen Knöpfen; beim Anlegen die Sanduhr */}
-              <Btn
-                variant="p"
+              <Button
+                variant="primary"
                 size="l"
                 icon={busy ? "hour" : start === "modpack" ? "grid" : "play"}
-                full
-                style={{ width: 232 }}
+                width={232}
                 disabled={busy || (start !== "modpack" && !releases.length)}
                 onClick={() => void go()}
               >
                 {busy ? "Wird angelegt" : choice.cta}
-              </Btn>
+              </Button>
             </div>
           </>
         )}

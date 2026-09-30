@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
-  BackLink, Btn, BtnLink, Chip, Dialog, DialogClose, Empty, ErrorBox, Menu, MenuItem, MenuLabel, MenuSep, Progress, ProjectIcon, SearchField, Seg, Sheet, Switch,
-  TextField, Tip,
-} from "@/components/px";
+  BackLink, Button, ButtonLink, Cell, Chip, Count, Dialog, DialogActions, Empty, ErrorBox, Field, Hint, Icon, IconButton, JobProgress, List, ListRow, Menu,
+  MenuItem, MenuLabel, MenuNote, MenuScroll, MenuSep, Meta, Panel, ProjectIcon, RowTitle, SceneThumb, SearchField, SectionHeader, Sheet, Skel, SkelRow,
+  Switch, TabPanel, Tabs, TextField, Tip, Toolbar,
+} from "@/ui";
 import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { useInstances } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
@@ -17,8 +18,6 @@ import {
 } from "@/lib/modrinth";
 import { LOADER_LABELS, type Instance, type ModKind, type ModLoader } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Icon } from "@/pixel/icons";
-import { PixelScene } from "@/pixel/PixelScene";
 import { lookOf, useLook, useLookStore } from "@/store/look";
 import "@/styles/catalog.css";
 
@@ -117,37 +116,10 @@ export function Description({ body, className }: { body: string; className?: str
 
 // ---------- Kleine Zustände in Zeilen ----------
 
-/** Laufender Vorgang in einer Zeile: Beschriftung und Segmentbalken. */
-function JobCell({ label, p, onCancel, wide }: { label: string; p: number | null; onCancel?: () => void; wide?: boolean }) {
-  return (
-    <>
-      <div className="jobp" style={wide ? { width: 230 } : undefined} role="status">
-        <span className="ell">
-          {label}
-          {p != null && <> <span className="num" style={{ fontSize: 16 }}>{Math.floor(p * 100)} %</span></>}
-        </span>
-        <Progress thin={!wide} p={p} label={label} />
-      </div>
-      {onCancel && (
-        <Tip label="Abbrechen">
-          <Btn variant="g" size="s" iconOnly aria-label="Abbrechen" onClick={onCancel}><Icon name="x5" small /></Btn>
-        </Tip>
-      )}
-    </>
-  );
-}
+/** Breite des laufenden Vorgangs: Projektkopf 230, Zeile 120, Seitenpanel 112. */
+const jobWidth = (large?: boolean, compact?: boolean) => (large ? 230 : compact ? 112 : 120);
 
 const shortLabel = (p: ContentProgress | null) => (!p || p.phase === "resolve" || p.phase === "validate" ? "Wird geprüft" : p.phase === "download" ? "Lädt" : p.phase === "extract" ? "Wird entpackt" : "Fertig");
-
-function InstalledChip({ title }: { title?: string }) {
-  const chip = (
-    <Chip small>
-      <Icon name="check5" small />
-      Installiert
-    </Chip>
-  );
-  return title ? <Tip label={title}>{chip}</Tip> : chip;
-}
 
 /** Instanzen je Projekt-ID: als Inhalt drin oder als Modpack angelegt. */
 function useInstalledIn() {
@@ -164,18 +136,20 @@ function useInstalledIn() {
   }, [instances.data]);
 }
 
-/** „In Survival 1.21“ oder „In 2 Instanzen“; die Namen stehen im Tooltip und für Vorleser im Chip selbst. */
-function InChip({ instances }: { instances?: Instance[] }) {
+// Chip-Text bleibt kurz (die Zeile schneidet sonst mitten im Wort ab); der volle Name steht im Tooltip.
+const shortName = (name: string, max: number) => (name.length > max ? `${name.slice(0, max - 1).trimEnd()}…` : name);
+
+/**
+ * „In Survival 1.21“ oder „In 2 Instanzen“; die Namen stehen im Tooltip (für Vorleser als Beschreibung, wenn sie im Chip fehlen).
+ * In der Katalogzeile klein mit Punkt (Metazeile 22 px), im Projektkopf mit Haken.
+ */
+function InChip({ instances, small }: { instances?: Instance[]; small?: boolean }) {
   if (!instances?.length) return null;
   const one = instances.length === 1;
-  const names = instances.map((i) => i.name).join(", ");
+  const text = shortName(one ? `In ${instances[0].name}` : `In ${instances.length} Instanzen`, small ? 28 : 36);
   return (
-    <Tip label={`Schon in ${names}`}>
-      <Chip small className="inchip">
-        <Icon name="check5" small />
-        <span className="ell">{one ? `In ${instances[0].name}` : `In ${instances.length} Instanzen`}</span>
-        {!one && <span className="sr">: {names}</span>}
-      </Chip>
+    <Tip label={`Schon in ${instances.map((i) => i.name).join(", ")}`} describe={!one || text.endsWith("…")}>
+      {small ? <Chip size="s" dot>{text}</Chip> : <Chip icon="check">{text}</Chip>}
     </Tip>
   );
 }
@@ -239,18 +213,16 @@ function AddButton({ instance, projectId, title, type, versionId, large, compact
     if (r === "missing" && compact) toast.error(`${title} gibt es nicht für ${fitsLabel(instance, type)}`);
   }
 
-  if (installed) return <InstalledChip />;
-  if (state === "checking") return <JobCell label="Wird geprüft" p={null} wide={large} />;
-  if (active && target === projectId) return <JobCell label={shortLabel(progress)} p={progressShare(progress)} wide={large} />;
-  if (state === "missing" && !compact) return <span className="faint" style={{ fontSize: 12.5 }}>Keine Version für {instance.minecraftVersion}</span>;
+  if (installed) return <Chip icon="check">Installiert</Chip>;
+  if (state === "checking") return <JobProgress label="Wird geprüft" p={null} width={jobWidth(large, compact)} />;
+  if (active && target === projectId) return <JobProgress label={shortLabel(progress)} p={progressShare(progress)} width={jobWidth(large, compact)} />;
+  if (state === "missing" && !compact) return <Hint>Keine Version für {instance.minecraftVersion}</Hint>;
   return large ? (
-    <Btn variant="p" size="l" icon="plus" disabled={!!active} onClick={add}>Hinzufügen</Btn>
+    <Button variant="primary" size="l" icon="plus" disabled={!!active} onClick={add}>Hinzufügen</Button>
   ) : versionId ? (
-    <Tip label="Diese Version hinzufügen">
-      <Btn variant="g" size="s" iconOnly icon="dl" disabled={!!active} aria-label={`${title} in dieser Version hinzufügen`} onClick={add} />
-    </Tip>
+    <IconButton size="s" icon="dl" label={`${title} in dieser Version hinzufügen`} tip="Diese Version hinzufügen" disabled={!!active} onClick={add} />
   ) : (
-    <Btn size="s" icon="plus" disabled={!!active} aria-label={`${title} hinzufügen`} onClick={add}>Hinzufügen</Btn>
+    <Button size="s" icon="plus" disabled={!!active} aria-label={`${title} hinzufügen`} onClick={add}>Hinzufügen</Button>
   );
 }
 
@@ -279,51 +251,54 @@ export function AddToInstanceMenu({ projectId, title, type, large }: { projectId
   const rows = (instances.data ?? []).map((i) => ({ i, reason: reasonFor(i) }));
   const usable = rows.some((r) => !r.reason);
 
-  if (active && target === projectId) return <JobCell label={shortLabel(progress)} p={progressShare(progress)} wide={large} />;
+  if (active && target === projectId) return <JobProgress label={shortLabel(progress)} p={progressShare(progress)} width={jobWidth(large)} />;
   return (
     <Menu
       open={open}
       onOpenChange={setOpen}
-      className="addto"
+      width={300}
       trigger={
-        <Btn variant={large ? "p" : "s"} size={large ? "l" : "s"} icon="plus" disabled={!!active} aria-label={large ? undefined : `${title} zu Instanz hinzufügen`}>
+        <Button
+          variant={large ? "primary" : "secondary"}
+          size={large ? "l" : "s"}
+          icon="plus"
+          iconEnd="chevd"
+          disabled={!!active}
+          aria-label={large ? undefined : `${title} zu Instanz hinzufügen`}
+        >
           {large ? "Zu Instanz hinzufügen" : "Hinzufügen"}
-          <Icon name="chevd" small />
-        </Btn>
+        </Button>
       }
     >
-      <MenuLabel className="mlabel">Hinzufügen zu …</MenuLabel>
-      <div className="scrollbox">
+      <MenuLabel>Hinzufügen zu …</MenuLabel>
+      <MenuScroll>
         {rows.map(({ i, reason }) => {
           const look = lookOf(looks, i.id);
           return (
             <MenuItem
               key={i.id}
-              className="mitem tall"
               disabled={!!reason}
+              lead={<SceneThumb bio={look.bio} seed={look.seed} size={28} />}
+              sub={reason ?? fitsLabel(i, type)}
               onSelect={() =>
                 void addContent(i, projectId, title, type, { openAction: true }).then(
                   (r) => r === "missing" && toast.error(`${title} gibt es nicht für Minecraft ${i.minecraftVersion}`),
                 )
               }
             >
-              <span className="thumb"><PixelScene bio={look.bio} seed={look.seed} /></span>
-              <span className="sub2 ell">
-                <b className="ell">{i.name}</b>
-                <span className="ell">{reason ?? fitsLabel(i, type)}</span>
-              </span>
+              {i.name}
             </MenuItem>
           );
         })}
-        {rows.length === 0 && !instances.isPending && <p className="faint" style={{ padding: "6px 10px", fontSize: 12.5 }}>Noch keine Instanz.</p>}
-      </div>
-      {all.isPending && rows.length > 0 && <p className="faint" style={{ padding: "4px 10px 6px", fontSize: 12 }}>Prüft passende Versionen …</p>}
+        {rows.length === 0 && !instances.isPending && <MenuNote>Noch keine Instanz.</MenuNote>}
+      </MenuScroll>
+      {all.isPending && rows.length > 0 && <MenuNote>Prüft passende Versionen …</MenuNote>}
       {!usable && !all.isPending && (
         <>
-          <MenuSep className="msep" />
-          <MenuItem className="mitem" onSelect={() => navigate("/instances?neu=1")}>
-            <Icon name="plus" />
-            <span className="ell">{type === "resourcepack" ? "Neue Instanz anlegen …" : "Neue Fabric-Instanz anlegen …"}</span>
+          <MenuSep />
+          <MenuItem onSelect={() => navigate("/instances?neu=1")}>
+            <Icon name="plus" size="s" />
+            <span className="vx-trunc">{type === "resourcepack" ? "Neue Instanz anlegen …" : "Neue Fabric-Instanz anlegen …"}</span>
           </MenuItem>
         </>
       )}
@@ -379,7 +354,8 @@ function PackConfirmBody({ title, versions, picked, onConfirm }: {
 }) {
   const [name, setName] = useState(title);
   const v = picked?.version ?? null;
-  const val = (text: ReactNode) => (v ? text : versions.isPending ? <i className="sk" style={{ display: "inline-block", width: 90, height: 12 }} /> : "–");
+  // Platzhalter rechtsbündig in der Wertspalte (Zeile bleibt 19 px hoch)
+  const val = (text: ReactNode) => (v ? text : versions.isPending ? <Skel w={90} h={12} className="ml-auto mt-1" /> : "–");
   const submit = () => v && onConfirm(v.id, name.trim() || title);
   return (
     <form
@@ -390,13 +366,12 @@ function PackConfirmBody({ title, versions, picked, onConfirm }: {
         submit();
       }}
     >
-      <div className="nf">
-        <label htmlFor="pc-name">Name der Instanz</label>
-        <TextField id="pc-name" value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />
-      </div>
+      <Field label="Name der Instanz">
+        <TextField value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />
+      </Field>
       <dl className="kv">
         <dt>Modpack-Version</dt>
-        <dd className="ell">{val(v?.version_number)}</dd>
+        <dd className="vx-trunc">{val(v?.version_number)}</dd>
         <dt>Minecraft</dt>
         <dd>{val(v?.game_versions.at(-1))}</dd>
         <dt>Loader</dt>
@@ -405,9 +380,9 @@ function PackConfirmBody({ title, versions, picked, onConfirm }: {
       {versions.error ? (
         <ErrorBox className="mt-3" title="Versionen konnten nicht geladen werden" error={versions.error} onRetry={() => void versions.refetch()} />
       ) : picked && !v ? (
-        <p className="err-msg" role="alert">{picked.reason}</p>
+        <Hint tone="bad" live>{picked.reason}</Hint>
       ) : (
-        <p className="help">Voxlet lädt jetzt die Mods des Packs. Minecraft selbst kommt beim ersten Start dazu.</p>
+        <Hint>Voxlet lädt jetzt die Mods des Packs. Minecraft selbst kommt beim ersten Start dazu.</Hint>
       )}
     </form>
   );
@@ -434,12 +409,7 @@ function usePackConfirm(projectId: string, title: string, onDone?: (instanceId: 
       sub={title}
       width={480}
       height={380}
-      footer={
-        <>
-          <DialogClose asChild><Btn>Abbrechen</Btn></DialogClose>
-          <Btn variant="p" full type="submit" form="pack-confirm" style={{ width: 170 }} disabled={!picked?.version || pack.blocked}>Instanz anlegen</Btn>
-        </>
-      }
+      footer={<DialogActions cancel="Abbrechen" confirm={{ label: "Instanz anlegen", width: 170, form: "pack-confirm", disabled: !picked?.version || pack.blocked }} />}
     >
       <PackConfirmBody
         title={title}
@@ -461,11 +431,11 @@ export function PackInstallButton({ projectId, title, onDone }: { projectId: str
   return (
     <>
       {pack.busy ? (
-        <JobCell label={pack.busy} p={pack.p} onCancel={pack.cancel} />
+        <JobProgress label={pack.busy} p={pack.p} width={120} onCancel={pack.cancel} cancelLabel={`Installation von ${title} abbrechen`} />
       ) : (
-        <Btn size="s" icon="plus" disabled={pack.blocked} aria-label={`${title} als Instanz anlegen`} onClick={() => ask()}>
+        <Button size="s" icon="plus" disabled={pack.blocked} aria-label={`${title} als Instanz anlegen`} onClick={() => ask()}>
           Anlegen
-        </Btn>
+        </Button>
       )}
       {dialog}
     </>
@@ -475,22 +445,22 @@ export function PackInstallButton({ projectId, title, onDone }: { projectId: str
 // Ein Begriff für alles Unfertige, wie im Dialog „Neue Instanz“.
 const VERSION_TYPE: Record<ContentVersion["version_type"], string | null> = { release: null, beta: "Vorabversion", alpha: "Vorabversion" };
 
-/** Aktionen in den Pack-Details: „Als neue Instanz anlegen“ plus „Andere Version…“, beide mit Bestätigung. */
+/** Aktionen in den Pack-Details: „Als neue Instanz anlegen“ plus „Andere Version“, beide mit Bestätigung. */
 export function PackActions({ projectId, title, onDone }: { projectId: string; title: string; onDone?: (instanceId: string) => void }) {
   const { pack, ask, dialog } = usePackConfirm(projectId, title, onDone);
   const versions = useQuery(allVersionsQuery(projectId));
   const { version, reason } = versions.data ? pickPackVersion(versions.data) : { version: null, reason: null };
   const fitting = versions.data?.filter(isPackVersionSupported) ?? [];
 
-  if (pack.busy) return <JobCell label={pack.busy} p={pack.p} onCancel={pack.cancel} wide />;
+  if (pack.busy) return <JobProgress label={pack.busy} p={pack.p} width={230} onCancel={pack.cancel} cancelLabel={`Installation von ${title} abbrechen`} />;
   return (
     <>
-      <Btn variant="p" size="l" icon="plus" disabled={!version || pack.blocked} onClick={() => ask(version?.id)}>
+      <Button variant="primary" size="l" icon="plus" disabled={!version || pack.blocked} onClick={() => ask(version?.id)}>
         {reason ?? "Als neue Instanz anlegen"}
-      </Btn>
+      </Button>
       {fitting.length > 1 && (
         <Menu
-          trigger={<Btn iconOnly icon="more" disabled={pack.blocked} aria-label="Andere Version wählen" />}
+          trigger={<Button iconEnd="chevd" disabled={pack.blocked}>Andere Version</Button>}
           items={[
             { label: "Andere Version" },
             ...fitting.slice(0, 30).map((v) => ({
@@ -526,15 +496,19 @@ const SEARCH_PLACEHOLDER: Record<CatalogType, string> = {
 /** Keine Verbindung: Katalog braucht Internet. */
 function Offline({ onRetry, compact }: { onRetry: () => void; compact?: boolean }) {
   return (
-    <div className="offl" style={compact ? { padding: "40px 8px" } : undefined}>
-      <Icon name="plug" />
-      <h2>Keine Verbindung</h2>
-      <p>Der Katalog braucht Internet. Deine installierten Instanzen kannst du trotzdem spielen.</p>
-      <div className="row">
-        <Btn icon="redo" onClick={onRetry}>Erneut versuchen</Btn>
-        {!compact && <BtnLink variant="g" to="/instances">Zur Bibliothek</BtnLink>}
-      </div>
-    </div>
+    <Empty
+      ill="plug"
+      title="Keine Verbindung"
+      size={compact ? "pane" : "page"}
+      actions={
+        <>
+          <Button icon="redo" onClick={onRetry}>Erneut versuchen</Button>
+          {!compact && <ButtonLink variant="ghost" to="/instances">Zur Bibliothek</ButtonLink>}
+        </>
+      }
+    >
+      Der Katalog braucht Internet. Deine installierten Instanzen kannst du trotzdem spielen.
+    </Empty>
   );
 }
 
@@ -580,20 +554,23 @@ export function ContentResults({ type, instance, action, onOpen, autoFocus = tru
   const installedIn = useInstalledIn();
   // Nur eine echte Spitze hervorheben (Downloads, Follower), nicht den zufällig neuesten Upload.
   const featured = !!feature && !compact && !query && (index === "downloads" || index === "follows");
+  const variant = compact ? "catalog-compact" : "catalog";
 
   return (
     <div>
       {!controlled && (
-        <div className="disc-tools" style={{ marginTop: 0 }}>
+        <Toolbar search="l" className="mb-3.5">
           <SearchField value={input} onChange={setInput} placeholder={SEARCH_PLACEHOLDER[type]} autoFocus={autoFocus} />
-        </div>
+        </Toolbar>
       )}
-      {/* Ohne Suchbegriff eine Abschnittsüberschrift (wie auf Start), mit Suchbegriff die Trefferzahl; gleiche Höhe */}
+      {/* Ohne Suchbegriff die Sortierung als Abschnittsüberschrift (wie auf Start), mit Suchbegriff die Trefferzahl; gleiche Höhe */}
       {!results.error && (
-        <div className="ctxline" aria-live="polite">
-          {!query ? (
-            compact ? <h3 className="ctxh">{SORT_HEADINGS[index]}</h3> : <h2 className="ctxh">{SORT_HEADINGS[index]}</h2>
-          ) : results.data ? <p><span className="num">{total.toLocaleString("de")}</span> Treffer</p> : <p>Sucht …</p>}
+        <div aria-live="polite" className="mb-2.5">
+          <SectionHeader
+            as={compact ? "h3" : "h2"}
+            size={compact ? "card" : "section"}
+            title={!query ? SORT_HEADINGS[index] : results.data ? <><Count value={total.toLocaleString("de")} /> Treffer</> : "Sucht …"}
+          />
         </div>
       )}
 
@@ -604,78 +581,62 @@ export function ContentResults({ type, instance, action, onOpen, autoFocus = tru
           <ErrorBox title="Modrinth ist gerade nicht erreichbar" error={results.error} onRetry={() => void results.refetch()} />
         )
       ) : results.isPending ? (
-        <div className="rlist" aria-busy aria-label="Wird geladen">
-          {Array.from({ length: 6 }, (_, i) => (
-            <div key={i} className={cn("skrow", featured && i === 0 && "feat")} style={compact ? { gridTemplateColumns: "48px minmax(0,1fr) 128px", height: 76 } : undefined}>
-              <i className="sk a" style={compact ? { width: 40, height: 40 } : undefined} />
-              <div className="b">
-                <i className="sk" style={{ width: "38%" }} />
-                <i className="sk" style={{ width: "72%" }} />
-                <i className="sk" style={{ width: "24%" }} />
-              </div>
-              <i className="sk" style={{ height: 32, width: compact ? 100 : 120, justifySelf: "end" }} />
-            </div>
-          ))}
-        </div>
+        <List variant={variant} aria-busy aria-label="Wird geladen">
+          {Array.from({ length: 6 }, (_, i) => <SkelRow key={i} feature={featured && i === 0} />)}
+        </List>
       ) : hits.length === 0 ? (
         <Empty
-          ill={<Icon name="search" />}
+          ill="search"
           title="Nichts gefunden"
-          minHeight={compact ? 200 : undefined}
-          actions={hasFilter && onReset ? <Btn onClick={onReset}>Filter zurücksetzen</Btn> : undefined}
+          size={compact ? "pane" : "section"}
+          actions={hasFilter && onReset ? <Button onClick={onReset}>Filter zurücksetzen</Button> : undefined}
         >
           {instance && fit ? `Für ${fitsLabel(instance, type)} gibt es hier nichts Passendes. Schalte den Filter aus, um alles zu sehen.` : `Keine ${TYPE_LABELS[type]} passen zu deiner Suche und den Filtern.`}
         </Empty>
       ) : (
         <>
-          <div className="rlist">
+          <List variant={variant} aria-label={TYPE_LABELS[type]}>
             {hits.map((hit, k) => {
               const busy = !instance && !!active && target === hit.project_id && type !== "modpack";
-              const cats = categoryNames(hit.categories, compact ? 0 : 2);
               const feat = featured && k === 0;
               return (
-                <div
-                  key={hit.project_id}
-                  className={cn("rrow rise", compact && "compact", feat && "feat")}
-                  style={{ "--i": k % 20 } as CSSProperties}
-                  onClick={(e) => !(e.target as Element).closest(".ra") && onOpen(hit.project_id, hit)}
-                >
-                  <button type="button" className="hit fx" aria-label={`${hit.title} ansehen`} onClick={(e) => (e.stopPropagation(), onOpen(hit.project_id, hit))} />
-                  <ProjectIcon url={hit.icon_url} seed={hit.project_id} big={!compact} />
-                  <div className="rt">
-                    <div className="t1">
-                      <b title={hit.title}>{hit.title}</b>
-                      {!compact && <span>von {hit.author}</span>}
-                    </div>
-                    <p title={hit.description}>{hit.description}</p>
-                    <div className="t3">
-                      <span><span className="num">{formatDownloads(hit.downloads)}</span> Downloads</span>
-                      {cats.map((c) => <Chip key={c} small className="hide-m">{c}</Chip>)}
-                      {!instance && <InChip instances={installedIn.get(hit.project_id)} />}
-                    </div>
-                  </div>
-                  <div className="ra">
+                <ListRow key={hit.project_id} feature={feat} index={k % 20} hit={{ onClick: () => onOpen(hit.project_id, hit), label: `${hit.title} ansehen` }}>
+                  <ProjectIcon url={hit.icon_url} seed={hit.project_id} box={feat ? 104 : compact ? 40 : 72} />
+                  <RowTitle
+                    size={feat ? "feature" : "l"}
+                    title={hit.title}
+                    aside={compact ? undefined : `von ${hit.author}`}
+                    sub={hit.description}
+                    meta={
+                      <>
+                        <span><Count value={formatDownloads(hit.downloads)} /> Downloads</span>
+                        {categoryNames(hit.categories, compact ? 0 : 2).map((c) => <Chip key={c} size="s" data-hide="900">{c}</Chip>)}
+                        {!instance && <InChip small instances={installedIn.get(hit.project_id)} />}
+                      </>
+                    }
+                  />
+                  <Cell flex align="end">
                     {busy ? (
-                      <JobCell label={shortLabel(progress)} p={progressShare(progress)} />
+                      <JobProgress label={shortLabel(progress)} p={progressShare(progress)} width={jobWidth(false, compact)} />
                     ) : instance ? (
                       <AddButton instance={instance} projectId={hit.project_id} title={hit.title} type={type} compact={compact} />
                     ) : action ? (
                       action(hit)
                     ) : (
-                      <Icon name="chevr" small />
+                      <Icon name="chev" size="s" tone="muted" />
                     )}
-                  </div>
-                </div>
+                  </Cell>
+                </ListRow>
               );
             })}
-          </div>
+          </List>
           <div className="morebar">
             {results.hasNextPage ? (
-              <Btn disabled={results.isFetchingNextPage} onClick={() => void results.fetchNextPage()}>
+              <Button disabled={results.isFetchingNextPage} onClick={() => void results.fetchNextPage()}>
                 {results.isFetchingNextPage ? "Lädt …" : "Mehr laden"}
-              </Btn>
+              </Button>
             ) : (
-              <span className="faint" style={{ alignSelf: "center" }}>Alle {hits.length} Ergebnisse geladen</span>
+              <Hint className="self-center">Alle {hits.length} Ergebnisse geladen</Hint>
             )}
           </div>
         </>
@@ -711,7 +672,7 @@ function McSummary({ versions }: { versions: ContentVersion[] }) {
   return (
     <>
       <span className="block">{all[0]} – {all.at(-1)}</span>
-      <span className="block faint">{all.length} Versionen</span>
+      <span className="block text-fg-3">{all.length} Versionen</span>
     </>
   );
 }
@@ -719,6 +680,7 @@ function McSummary({ versions }: { versions: ContentVersion[] }) {
 /**
  * Projektseite: Kopf mit Bild und Aktion, links Beschreibung, rechts „Passt zu“ und Versionen.
  * Mit `instance` (Seitenpanel) wird für diese Instanz hinzugefügt; `hit` liefert Autor, Downloads und Kategorien aus der Suche.
+ * Im Seitenpanel einspaltig (ui/overlay.css, .vx-sheet .proj-*).
  */
 export function ContentDetail({ projectId, type, instance, action, onBack, backLabel = "Zurück", hit }: {
   projectId: string; type: CatalogType; instance?: Instance; action?: (project: ContentProject) => ReactNode; onBack: () => void;
@@ -756,10 +718,10 @@ export function ContentDetail({ projectId, type, instance, action, onBack, backL
       <BackLink onClick={onBack}>{backLabel}</BackLink>
       {project.isPending && (
         <div className="proj-h" aria-busy aria-label="Wird geladen">
-          <i className="sk" style={{ width: 64, height: 64 }} />
+          <Skel w={64} h={64} />
           <div className="flex flex-col gap-2.5">
-            <i className="sk" style={{ height: 36, width: "50%" }} />
-            <i className="sk" style={{ height: 14, width: "30%" }} />
+            <Skel h={36} w="50%" />
+            <Skel h={14} w="30%" />
           </div>
         </div>
       )}
@@ -767,14 +729,13 @@ export function ContentDetail({ projectId, type, instance, action, onBack, backL
       {project.data && (
         <>
           <div className="proj-h">
-            <ProjectIcon url={project.data.icon_url} seed={projectId} big />
-            <div style={{ minWidth: 0 }}>
+            <ProjectIcon url={project.data.icon_url} seed={projectId} box={64} />
+            <div className="min-w-0">
               <h1 title={title}>{title}</h1>
               <div className="by">
-                {hit && <span>von {hit.author}</span>}
-                {hit && <span><span className="num">{formatDownloads(hit.downloads)}</span> Downloads</span>}
-                <Chip small>{TYPE_ONE[type]}</Chip>
-                {hit && categoryNames(hit.categories, 2).map((c) => <Chip key={c} small>{c}</Chip>)}
+                {hit && <Meta items={[`von ${hit.author}`, <><Count value={formatDownloads(hit.downloads)} /> Downloads</>]} />}
+                <Chip size="s">{TYPE_ONE[type]}</Chip>
+                {hit && categoryNames(hit.categories, 2).map((c) => <Chip key={c} size="s">{c}</Chip>)}
                 {!instance && <InChip instances={installedIn.get(projectId)} />}
               </div>
             </div>
@@ -788,8 +749,8 @@ export function ContentDetail({ projectId, type, instance, action, onBack, backL
               <Description body={project.data.body} />
             </div>
             <aside className="side">
-              <div className="sbox">
-                <h3>Passt zu</h3>
+              <Panel notch={2} pad="m">
+                <SectionHeader as="h3" size="card" title="Passt zu" />
                 <dl className="kv">
                   <dt>Minecraft</dt>
                   <dd>{all.data ? <McSummary versions={all.data} /> : "…"}</dd>
@@ -813,30 +774,29 @@ export function ContentDetail({ projectId, type, instance, action, onBack, backL
                     </>
                   ) : null}
                 </dl>
-              </div>
-              <div className="sbox">
-                <h3>{instance ? `Versionen für ${fitsLabel(instance, type)}` : "Versionen"}</h3>
-                {!shown && <i className="sk block" style={{ height: 44 }} />}
-                {shown?.length === 0 && <p className="faint" style={{ fontSize: 13 }}>{instance ? `Keine Version für ${fitsLabel(instance, type)}.` : "Keine Version verfügbar."}</p>}
-                {shown?.map((v) => (
-                  <div key={v.id} className="vrow">
-                    <div style={{ minWidth: 0 }}>
-                      <b className="ell block">{v.version_number}</b>
-                      <span className="ell">
-                        {v.loaders.filter((l) => l !== "minecraft").map((l) => LOADER_LABELS[l as ModLoader] ?? l).join(", ") || "Alle Loader"} · {v.game_versions.at(-1)}
-                        {VERSION_TYPE[v.version_type] && ` · ${VERSION_TYPE[v.version_type]}`}
-                      </span>
-                    </div>
-                    {instance ? (
-                      <AddButton instance={instance} projectId={projectId} title={title} type={type} versionId={v.id} />
-                    ) : type === "modpack" ? (
-                      <Tip label="Diese Version als Instanz anlegen">
-                        <Btn variant="g" size="s" iconOnly icon="plus" disabled={pack.blocked} aria-label={`${v.version_number} als Instanz anlegen`} onClick={() => askPack(v.id)} />
-                      </Tip>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
+              </Panel>
+              <Panel notch={2} pad="m">
+                <SectionHeader as="h3" size="card" title={instance ? `Versionen für ${fitsLabel(instance, type)}` : "Versionen"} />
+                {!shown && <Skel h={44} />}
+                {shown?.length === 0 && <Hint>{instance ? `Keine Version für ${fitsLabel(instance, type)}.` : "Keine Version verfügbar."}</Hint>}
+                {!!shown?.length && (
+                  <List variant="versions" aria-label="Versionen">
+                    {shown.map((v) => (
+                      <ListRow key={v.id}>
+                        <RowTitle
+                          title={v.version_number}
+                          sub={`${v.loaders.filter((l) => l !== "minecraft").map((l) => LOADER_LABELS[l as ModLoader] ?? l).join(", ") || "Alle Loader"} · ${v.game_versions.at(-1)}${VERSION_TYPE[v.version_type] ? ` · ${VERSION_TYPE[v.version_type]}` : ""}`}
+                        />
+                        {instance ? (
+                          <AddButton instance={instance} projectId={projectId} title={title} type={type} versionId={v.id} />
+                        ) : type === "modpack" ? (
+                          <IconButton size="s" icon="plus" label={`${v.version_number} als Instanz anlegen`} tip="Diese Version als Instanz anlegen" disabled={pack.blocked} onClick={() => askPack(v.id)} />
+                        ) : null}
+                      </ListRow>
+                    ))}
+                  </List>
+                )}
+              </Panel>
             </aside>
           </div>
           {packDialog}
@@ -858,6 +818,7 @@ export function AddContentSheet({ instance, open, onOpenChange, initialKind }: {
   const { acc } = useLook(instance.id);
   const hasIris = instance.mods.some((m) => projectOf(m) === IRIS_PROJECT_ID);
   const kind = kinds.includes(type) ? type : kinds[0];
+  const tabbed = kinds.length > 1;
 
   // Beim Öffnen mit gewünschter Art (z. B. „Iris hinzufügen“) direkt dorthin.
   useEffect(() => {
@@ -867,6 +828,25 @@ export function AddContentSheet({ instance, open, onOpenChange, initialKind }: {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialKind]);
+
+  const results = (
+    <>
+      {kind === "shader" && !hasIris && <Hint tone="warn" className="mb-2">Shader brauchen die Mod „Iris“. Füge sie unter „Mods“ hinzu.</Hint>}
+      <ContentResults
+        key={kind}
+        type={kind}
+        instance={instance}
+        query={query}
+        fit={fit}
+        compact
+        onReset={() => setQuery("")}
+        onOpen={(id, h) => {
+          setHit(h ?? null);
+          setProjectId(id);
+        }}
+      />
+    </>
+  );
 
   return (
     <Sheet
@@ -878,14 +858,11 @@ export function AddContentSheet({ instance, open, onOpenChange, initialKind }: {
       tools={
         projectId ? undefined : (
           <>
-            {kinds.length > 1 && (
-              <Seg small tabs label="Art" value={kind} onChange={(t) => setType(t)} options={kinds.map((k) => ({ value: k, label: KIND_LABELS[k] }))} />
+            {tabbed && (
+              <Tabs variant="segment" size="s" idBase="sheet-art" label="Art" value={kind} onChange={setType} items={kinds.map((k) => ({ value: k, label: KIND_LABELS[k] }))} />
             )}
-            <SearchField small value={query} onChange={setQuery} placeholder="Im Katalog suchen" autoFocus />
-            <div className="row" style={{ gap: 10, fontSize: 13, color: "var(--fg-2)" }}>
-              <Switch id="sheet-fit" checked={fit} onChange={setFit} label="Nur passende Inhalte zeigen" />
-              <label htmlFor="sheet-fit" className="cursor-pointer">Nur passend zu {fitsLabel(instance, kind)}</label>
-            </div>
+            <SearchField size="s" value={query} onChange={setQuery} placeholder="Im Katalog suchen" autoFocus />
+            <Switch checked={fit} onChange={setFit} label={`Nur passend zu ${fitsLabel(instance, kind)}`} visibleLabel />
           </>
         )
       }
@@ -894,24 +871,11 @@ export function AddContentSheet({ instance, open, onOpenChange, initialKind }: {
         <ContentDetail projectId={projectId} type={kind} instance={instance} hit={hit} backLabel={KIND_LABELS[kind]} onBack={() => setProjectId(null)} />
       )}
       {/* Bleibt beim Öffnen von Details erhalten, damit Suche und geladene Seiten nicht verloren gehen. */}
-      <div hidden={!!projectId}>
-        {kind === "shader" && !hasIris && (
-          <p className="hintline warn"><Icon name="warn" small />Shader brauchen die Mod „Iris“. Füge sie unter „Mods“ hinzu.</p>
-        )}
-        <ContentResults
-          key={kind}
-          type={kind}
-          instance={instance}
-          query={query}
-          fit={fit}
-          compact
-          onReset={() => setQuery("")}
-          onOpen={(id, h) => {
-            setHit(h ?? null);
-            setProjectId(id);
-          }}
-        />
-      </div>
+      {tabbed ? (
+        <TabPanel idBase="sheet-art" value={kind} hidden={!!projectId}>{results}</TabPanel>
+      ) : (
+        <div hidden={!!projectId}>{results}</div>
+      )}
     </Sheet>
   );
 }

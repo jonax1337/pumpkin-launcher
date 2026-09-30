@@ -1,0 +1,52 @@
+/* Pixel-Kit (src/ui): Tokens. Liegt in der Komponenten-Schicht hinter pixelkino.css/states.css
+   und nutzt deren Farben, Kerben (--n1/--n2/--ring) und Bevel. Alles hier ist neu; der Altbestand liest nichts davon. */
+:root {
+  /* Komponentengrößen (fest, nie von --px abhängig) */
+  --vx-h-s: 32px;
+  --vx-h-m: 40px;
+  --vx-h-l: 56px;
+
+  /* Icon-Slots: Box fest, Raster aus dem Slot (1 Icon-Pixel = 1 Einheit) */
+  --vx-ico-s: 20px;
+  --vx-ico-m: 24px;
+  --vx-ico-l: 28px;
+  --vx-ico-xl: 56px;
+
+  /* Hover = Fläche, nie Linie. Zeilen/Choice/Kacheln (--hv-row) und Steuerelemente (--hv-ctl: Geist, Symbolknopf, Tabs, Leiste, Segment).
+     Druck (--pr-*) eine Stufe dunkler. In Overlays und Platten eine Stufe heller (unten). */
+  --hv-row: var(--panel);
+  --pr-row: var(--sunk);
+  --hv-ctl: var(--panel-2);
+  --pr-ctl: var(--panel);
+
+  /* Über Szenen: Grundplatte dauerhaft, Hover dichter, harter Schatten 1 Einheit */
+  --scene-plate: rgba(7,10,17,.6);
+  --scene-hover: rgba(21,29,44,.9);
+  --scene-shadow: 0 var(--px) 0 rgba(3,5,10,.85);
+
+  /* Auswahl: „gewählt“ = Kupferrahmen 1 Einheit + 10 % Kupfertönung; „aktuell“ = Akzentbalken unten (2 Einheiten).
+     --sel-ring liest states.css schon als Rückfall (Doppelring bei Fokus auf Gewähltem). */
+  --sel-ring: var(--copper);
+  --sel-edge: inset 0 0 0 var(--px) var(--sel-ring);
+  --sel-bg: color-mix(in srgb, var(--copper) 10%, var(--panel));
+  --sel-cur: var(--acc);
+
+  /* Übergänge nur in ganzen Stufen; Bewegungen um 1 Einheit springen (kein Übergang, sonst halbe Pixel) */
+  --st: 90ms steps(2, end);
+
+  /* Überschriftenstufen (Display, Versalien) */
+  --hd-page: 40px;
+  --hd-dialog: 26px;
+  --hd-section: 22px;
+  --hd-sub: 20px;
+  --hd-card: 18px;
+}
+
+/* Overlay-Kontext: Dialog, Seitenpanel, Menü/Popover, Toast, Platten. Hover und Auswahl eine Stufe heller als der Grund. */
+:is(.dlg, .sheet, .rpop, .pop, .stoast, .toast, .plate, .sbox, .vx-panel, [data-ctx="overlay"]) {
+  --hv-row: var(--panel-2);
+  --pr-row: var(--panel);
+  --hv-ctl: var(--panel-3);
+  --pr-ctl: var(--panel-2);
+  --sel-bg: color-mix(in srgb, var(--copper) 10%, var(--panel-2));
+}

@@ -1,0 +1,146 @@
+/* Kit-Listen: Spaltenraster je Variante (inkl. Media Queries), Zeile, Name, Zelle, Platzhalter.
+   Hover = Platte (--hv-row), Name wird #fff, nie Unterstrich. Gewählt = Kupferrahmen + 10 % Tönung.
+   Zeilenfläche über Variablen: --r-bg (Ruhe), --r-bv (Rahmen/Bevel), --r-hv (Hover), --r-clip (Kerbe).
+   data-force="hover|press" erzwingt den Zustand (Vorschau /_kit). */
+
+.vx-list { --l-cols: minmax(0, 1fr); --l-gap: 12px; --l-pad: 0 8px; --l-h: 56px; --l-hh: 32px; display: flex; flex-direction: column; min-width: 0; }
+.vx-rows { display: flex; flex-direction: column; min-width: 0; }
+.vx-lhead, .vx-row { display: grid; grid-template-columns: var(--l-cols); column-gap: var(--l-gap); align-items: center; padding: var(--l-pad); }
+.vx-lhead { height: var(--l-hh); color: var(--fg-3); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.vx-row { --r-bg: transparent; --r-bv: none; --r-hv: var(--hv-row); --r-clip: var(--n1); position: relative; isolation: isolate; height: var(--l-h); min-width: 0; }
+.vx-row::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--r-bg); box-shadow: var(--r-bv); clip-path: var(--r-clip); transition: background-color var(--st); pointer-events: none; }
+.vx-row[data-rise] { animation: vx-rise .32s var(--ease) both; animation-delay: calc(var(--i, 0) * 40ms); }
+.vx-row:is(:hover, :focus-within, [data-force="hover"])::before { background: var(--r-hv); }
+.vx-row[data-hit]:is(:has(> .hit:active), [data-force="press"])::before { background: var(--pr-row); }
+.vx-row[data-selected]::before { background: var(--sel-bg); box-shadow: var(--sel-edge); }
+
+/* Trefferfläche über der ganzen Zeile; Zellen lassen Klicks durch, nur ihre Bedienelemente fangen sie ab */
+.vx-row[data-hit] { cursor: pointer; }
+.vx-row > .hit { position: absolute; inset: 0; z-index: 0; display: block; }
+.vx-row > .hit.fx:focus-visible::after { inset: calc(var(--px) * -1); }
+.vx-row[data-hit] > :not(.hit) { position: relative; z-index: 1; pointer-events: none; }
+.vx-row[data-hit] > :not(.hit) :is(a[href], button, input, select, textarea, label, [tabindex]:not([tabindex="-1"])),
+.vx-row[data-hit] > :is(a[href], button, input, select, textarea, label, [tabindex]:not([tabindex="-1"])):not(.hit) { pointer-events: auto; }
+
+/* Bild und Name: Hover hellt auf; aus = gedämpft (Name bleibt lesbar) */
+.vx-row :is(.vx-gl, .vx-sthumb) { transition: filter var(--st); }
+.vx-row:is(:hover, [data-force="hover"]) :is(.vx-gl, .vx-sthumb) { filter: brightness(1.08); }
+.vx-row:is(:hover, [data-force="hover"]) .vx-rt-n { color: #fff; }
+.vx-row[data-off] :is(.vx-gl, .vx-sthumb) { opacity: .35; filter: grayscale(.8); }
+.vx-row[data-off] .vx-rt-n { color: var(--fg-2); }
+
+/* ---------- Name ---------- */
+.vx-rt { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.vx-rt-1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.vx-rt-n { font-weight: 600; font-size: 14px; color: var(--fg); transition: color var(--st); }
+.vx-rt-a { flex: none; font-size: 12.5px; color: var(--fg-3); white-space: nowrap; }
+.vx-rt-s { margin: 0; font-size: 12px; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vx-rt-m { display: flex; align-items: center; gap: 6px; height: 22px; overflow: hidden; font-size: 12px; color: var(--fg-3); }
+.vx-rt-m .vx-count { font-size: 17px; color: var(--fg-2); }
+.vx-rt-m .vx-chip { flex: none; }
+.vx-rt[data-size="l"] { gap: 3px; line-height: normal; }
+.vx-rt[data-size="l"] .vx-rt-n { font-weight: 700; font-size: 15px; }
+.vx-rt[data-size="l"] .vx-rt-s { font-size: 13px; color: var(--fg-2); }
+.vx-rt[data-size="feature"] { gap: 6px; line-height: normal; }
+.vx-rt[data-size="feature"] .vx-rt-n { font: 800 28px/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; }
+.vx-rt[data-size="feature"] .vx-rt-s { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; max-width: 90ch; font-size: 13.5px; line-height: 1.45; color: var(--fg-2); }
+/* Abhängigkeit: eingerückt, Winkel zur Zeile darüber */
+.vx-row[data-dep] .vx-rt { position: relative; padding-left: 22px; }
+.vx-row[data-dep] .vx-rt::before { content: ""; position: absolute; left: 6px; top: -6px; width: 10px; height: 18px; box-shadow: inset var(--px) calc(var(--px) * -1) 0 var(--line-2); }
+
+/* ---------- Zelle ---------- */
+.vx-cell { display: block; min-width: 0; color: var(--fg-2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vx-cell .vx-count { font-size: 18px; color: var(--fg); }
+.vx-cell[data-align="end"] { text-align: right; }
+.vx-cell[data-flex] { display: flex; align-items: center; gap: 6px; height: 32px; overflow: visible; }
+.vx-cell[data-flex][data-align="end"] { justify-content: flex-end; }
+.vx-lhead .vx-cell { color: inherit; font-size: inherit; }
+
+/* ---------- Trenner ---------- */
+.vx-list[data-divided] .vx-row:not([data-ghost]) + .vx-row:not([data-ghost]) { box-shadow: inset 0 var(--px) 0 color-mix(in srgb, var(--line) 50%, transparent); }
+
+/* ---------- Platzhalter (entfernt) ---------- */
+.vx-row[data-ghost] { --r-hv: var(--r-bg); }
+.vx-row[data-ghost="content"] { grid-template-columns: 28px 40px minmax(0, 1fr) auto; }
+.vx-row[data-ghost="content"]::before { background: repeating-linear-gradient(90deg, var(--line) 0 var(--u2), transparent var(--u2) calc(var(--px) * 4)) left bottom / 100% var(--px) no-repeat; }
+.vx-ghost-m { display: grid; place-items: center; opacity: .35; filter: grayscale(.8); }
+.vx-ghost-t { font-weight: 500; font-size: 14px; color: var(--fg-2); }
+
+/* ---------- Bibliothek: 56 px ---------- */
+.vx-list[data-variant="instances"] { --l-cols: 44px minmax(0, 1fr) 150px 84px 150px 150px 40px 40px; }
+.vx-list[data-variant="instances"] .vx-rt { padding-right: 12px; }
+
+/* ---------- Inhalte: 48 px, Spalte „Hinweise“ entfällt ohne Hinweise (noWarnCol) ---------- */
+.vx-list[data-variant="content"] { --l-cols: 28px 40px minmax(0, 1fr) 300px 136px 72px 36px; --l-gap: 10px; --l-pad: 0 6px 0 8px; --l-h: 48px; --l-hh: 30px; }
+.vx-list[data-variant="content"][data-nw] { --l-cols: 28px 40px minmax(0, 1fr) 136px 72px 36px; }
+
+/* ---------- Katalog: 84 px, erster Treffer als Karte 132 px; kompakt (Seitenpanel) 76 px ---------- */
+.vx-list[data-variant="catalog"] { --l-cols: 72px minmax(0, 1fr) 190px; --l-gap: 14px; --l-pad: 0 10px 0 8px; --l-h: 84px; }
+.vx-list[data-variant="catalog-compact"] { --l-cols: 48px minmax(0, 1fr) 128px; --l-gap: 14px; --l-pad: 0 4px 0 8px; --l-h: 76px; }
+.vx-row[data-feature] { --r-bg: var(--panel); --r-bv: var(--bv-plate); --r-hv: var(--panel-2); --r-clip: var(--n2); height: 132px; grid-template-columns: 104px minmax(0, 1fr) 190px; column-gap: 18px; margin-bottom: 8px; }
+.vx-row[data-feature]:is(:has(> .hit:active), [data-force="press"])::before { background: var(--panel); box-shadow: var(--bv-sunk); }
+
+/* Platzhalter beim Laden (SkelRow): Bild 64 (kompakt 40, Karte 104), Zeilen 12 px, Aktion 32 px; ohne Hover */
+.vx-row[data-skel] { --r-hv: var(--r-bg); }
+.vx-row[data-skel] .vx-skel-m { width: 64px; height: 64px; justify-self: center; }
+.vx-list[data-variant="catalog-compact"] .vx-row[data-skel] .vx-skel-m { width: 40px; height: 40px; }
+.vx-row[data-skel][data-feature] .vx-skel-m { width: 104px; height: 104px; }
+.vx-skel-t { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.vx-skel-t > .vx-skel { height: 12px; width: 38%; }
+.vx-skel-t > .vx-skel:nth-child(2) { width: 72%; }
+.vx-skel-t > .vx-skel:nth-child(3) { width: 24%; }
+.vx-row[data-skel] .vx-skel-a { justify-self: end; width: 120px; height: 32px; }
+.vx-list[data-variant="catalog-compact"] .vx-row[data-skel] .vx-skel-a { width: 100px; }
+
+/* ---------- Versionen: mind. 44 px, Linie unten, kein Hover ---------- */
+.vx-list[data-variant="versions"] { --l-cols: minmax(0, 1fr) auto; --l-gap: 8px; --l-pad: 0; --l-h: auto; }
+.vx-list[data-variant="versions"] .vx-row { --r-hv: transparent; min-height: 44px; font-size: 13px; box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); }
+.vx-list[data-variant="versions"] .vx-row:last-child { box-shadow: none; }
+.vx-list[data-variant="versions"] .vx-rt-n { font-size: 13px; }
+
+/* ---------- Aufgaben: 64 px, volle Trennlinie, kein Hover ---------- */
+.vx-list[data-variant="tasks"] { --l-cols: 32px minmax(0, 1fr) 44px 32px; --l-gap: 8px; --l-pad: 0 4px 0 6px; --l-h: 64px; }
+.vx-list[data-variant="tasks"] .vx-row { --r-hv: transparent; }
+.vx-list[data-variant="tasks"] .vx-rt { gap: 5px; }
+.vx-list[data-variant="tasks"] .vx-rt-n { font-size: 13.5px; }
+/* Laufend: JobProgress über Name, Prozent und Abbrechen; fertig: Aktion (Zelle an 3. Stelle) über Prozent und Abbrechen */
+.vx-list[data-variant="tasks"] .vx-row > .vx-job { grid-column: 2 / -1; }
+.vx-list[data-variant="tasks"] .vx-row > .vx-cell:nth-child(3):last-child { grid-column: 3 / -1; }
+.vx-list[data-variant="tasks"][data-divided] .vx-row + .vx-row { box-shadow: inset 0 var(--px) 0 var(--line); }
+
+/* ---------- Kacheln (Inhalte als Raster): 88 px, Platte; Kinder: Bild · Name · rechts oben · Unterzeile · rechts unten ---------- */
+.vx-list[data-variant="tiles"] .vx-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; padding-top: 4px; }
+.vx-list[data-variant="tiles"] .vx-row { --r-bg: var(--panel); --r-bv: var(--bv-plate); --r-hv: var(--panel-2); height: 88px; padding: 12px 8px 12px 12px; grid-template-columns: 52px minmax(0, 1fr) auto; grid-template-rows: 32px 32px; column-gap: 12px; }
+.vx-list[data-variant="tiles"] .vx-row:not([data-ghost]) > :nth-child(1) { grid-row: 1 / 3; position: relative; }
+.vx-list[data-variant="tiles"] .vx-row:not([data-ghost]) > :nth-child(2) { grid-column: 2; grid-row: 1; }
+.vx-list[data-variant="tiles"] .vx-row:not([data-ghost]) > :nth-child(3) { grid-column: 3; grid-row: 1; display: flex; align-items: center; gap: 2px; }
+.vx-list[data-variant="tiles"] .vx-row:not([data-ghost]) > :nth-child(4) { grid-column: 2; grid-row: 2; min-width: 0; display: flex; gap: 4px; overflow: hidden; font-size: 12px; color: var(--fg-3); }
+.vx-list[data-variant="tiles"] .vx-row:not([data-ghost]) > :nth-child(5) { grid-column: 3; grid-row: 2; display: flex; justify-content: flex-end; padding-right: 2px; }
+.vx-list[data-variant="tiles"] .vx-row:not([data-ghost]):not(:has(> :nth-child(5) > *)) > :nth-child(4) { grid-column: 2 / 4; }
+.vx-list[data-variant="tiles"] .vx-row[data-ghost] { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* Auswahlfeld auf der Bild-Ecke (Bild + Checkbox im ersten Kind): sichtbar bei Hover/Fokus, gewählt oder sobald etwas gewählt ist (kein Springen) */
+.vx-list[data-variant="tiles"] .vx-row:not([data-ghost]) > :nth-child(1) { display: grid; }
+.vx-list[data-variant="tiles"] .vx-row:not([data-ghost]) > :nth-child(1) > .vx-check { position: absolute; left: -6px; top: -6px; opacity: 0; transition: opacity var(--st); }
+.vx-list[data-variant="tiles"] :is(.vx-row:is(:hover, :focus-within, [data-selected]), .vx-rows:has(> [data-selected]) > .vx-row) > :nth-child(1) > .vx-check { opacity: 1; }
+
+/* ---------- Konten: 60-px-Platten, aktives Konto gewählt ---------- */
+.vx-list[data-variant="accounts"] .vx-rows { gap: 8px; }
+.vx-list[data-variant="accounts"] .vx-row { --r-bg: var(--panel); --r-bv: var(--bv-plate); --r-hv: var(--panel); display: flex; align-items: center; gap: 12px; height: 60px; padding: 0 8px 0 12px; }
+.vx-list[data-variant="accounts"] .vx-row > .vx-rt { flex: 1; }
+
+/* ---------- Schmal ---------- */
+@media (max-width: 1180px) {
+  .vx-list[data-variant="instances"] { --l-cols: 44px minmax(0, 1fr) 130px 70px 130px 130px 36px 36px; --l-gap: 10px; }
+  .vx-list [data-hide="1180"] { display: none; }
+}
+@media (max-width: 1040px) {
+  .vx-list[data-variant="instances"] { --l-cols: 44px minmax(0, 1fr) 120px 110px 36px 36px; }
+  .vx-list[data-variant="content"] { --l-cols: 28px 40px minmax(0, 1fr) 190px 116px 72px 36px; }
+  .vx-list[data-variant="content"][data-nw] { --l-cols: 28px 40px minmax(0, 1fr) 116px 72px 36px; }
+  .vx-list [data-hide="1040"] { display: none; }
+}
+@media (max-width: 900px) {
+  .vx-list[data-variant="content"] { --l-cols: 28px 40px minmax(0, 1fr) 170px 104px 72px 36px; }
+  .vx-list[data-variant="content"][data-nw] { --l-cols: 28px 40px minmax(0, 1fr) 104px 72px 36px; }
+  .vx-list [data-hide="900"] { display: none; }
+}

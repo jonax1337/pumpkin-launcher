@@ -1,14 +1,13 @@
-import { BtnLink, Empty } from "@/components/px";
-import { Glyph } from "@/pixel/icons";
+import { ButtonLink, Empty, Glyph } from "@/ui";
 
 export function NotFoundPage() {
   return (
     <section className="page">
       <Empty
-        ill={<Glyph name="compass" pal="ice" big />}
+        ill={<Glyph name="compass" pal="ice" box={64} />}
         title="Seite nicht gefunden"
-        page
-        actions={<BtnLink to="/" variant="p" icon="back">Zum Start</BtnLink>}
+        asPage
+        actions={<ButtonLink to="/" variant="primary" icon="back">Zum Start</ButtonLink>}
       >
         Diese Adresse gibt es in Voxlet nicht (mehr).
       </Empty>

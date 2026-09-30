@@ -1,7 +1,10 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Btn, Checkbox, Chip, Empty, Menu, Progress, ProjectIcon, SearchField, Seg, Switch, Tip, type MenuEntry } from "@/components/px";
+import {
+  Button, Cell, Checkbox, Chip, Count, Empty, GhostRow, Glyph, Hint, IconButton, JobProgress, List, ListRow, Menu, ProjectIcon, RowTitle,
+  SearchField, Segmented, Spacer, Switch, Tip, Toolbar, type MenuEntry,
+} from "@/ui";
 import { IRIS_PROJECT_ID } from "@/components/ContentBrowser";
 import { useContentInstall, useContentState, useProjects, withTarget } from "@/hooks/useContent";
 import { instanceKeys, useUpdateMods } from "@/hooks/useInstances";
@@ -9,7 +12,6 @@ import { api } from "@/lib/api";
 import { projectOf, removeWithDependencies, undoRemove, type ModUpdate } from "@/lib/modrinth";
 import type { Instance, Mod, ModKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { Glyph, Icon } from "@/pixel/icons";
 
 const KIND1: Record<ModKind, string> = { mod: "Mod", shader: "Shader", resourcepack: "Ressourcenpaket" };
 const KINDS: Record<ModKind, string> = { mod: "Mods", shader: "Shader", resourcepack: "Ressourcenpakete" };
@@ -77,7 +79,7 @@ export function ContentTab({ instance, updateFor, onAdd, warnsOf, showUpdates = 
     let raf = 0, tries = 0;
     const go = () => {
       const b = updRef.current;
-      if (b && b.checkVisibility()) {
+      if (b && b.checkVisibility({ visibilityProperty: true } as CheckVisibilityOptions)) {
         b.scrollIntoView({ block: "nearest" });
         b.focus({ preventScroll: true, focusVisible: true } as FocusOptions);
       } else if (++tries < 30) raf = requestAnimationFrame(go);
@@ -146,7 +148,7 @@ export function ContentTab({ instance, updateFor, onAdd, warnsOf, showUpdates = 
 
   /** Nach Bulk-Aktionen, die die Leiste schließen: Kopf-Checkbox (Liste) oder Suchfeld (Raster). */
   const focusHead = () =>
-    focusSoon(() => rootRef.current?.querySelector<HTMLElement>(".chead input[type=checkbox]") ?? rootRef.current?.querySelector<HTMLElement>(".ctool .main input[type=search]"));
+    focusSoon(() => rootRef.current?.querySelector<HTMLElement>(".vx-lhead input[type=checkbox]") ?? rootRef.current?.querySelector<HTMLElement>(".vx-tb-main input[type=search]"));
   const clearPicked = () => {
     setPicked(new Set());
     focusHead();
@@ -223,9 +225,9 @@ export function ContentTab({ instance, updateFor, onAdd, warnsOf, showUpdates = 
   if (instance.mods.length === 0 && shownGhosts.length === 0) {
     return (
       <Empty
-        ill={<Glyph name="cube" pal="steel" big />}
+        ill={<Glyph name="cube" pal="steel" box={64} />}
         title="Noch keine Inhalte"
-        actions={<Btn icon="plus" onClick={onAdd}>Hinzufügen</Btn>}
+        actions={<Button icon="plus" onClick={onAdd}>Hinzufügen</Button>}
       >
         {instance.loader === "vanilla"
           ? "Diese Instanz ist Minecraft pur. Ressourcenpakete gehen trotzdem, Mods brauchen einen Loader wie Fabric."
@@ -282,219 +284,212 @@ export function ContentTab({ instance, updateFor, onAdd, warnsOf, showUpdates = 
   const subOf = (r: Row) =>
     r.owners.length ? `Benötigt von ${r.owners.join(", ")} · ${r.mod.version}` : `${KIND1[r.mod.kind]} · ${r.mod.version}`;
 
-  const updCell = (m: Mod) => {
-    if (busyFor(m))
-      return (
-        <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
-          <span className="faint" style={{ fontSize: 11.5 }}>Wird aktualisiert</span>
-          <Progress thin p={pct} style={{ width: "100%" }} label={`${title(m)} wird aktualisiert`} />
-        </div>
-      );
+  /** Update je Inhalt: Fortschritt beim Aktualisieren, sonst Knopf mit fester Breite (Version mit Auslassung, voller Text im Tooltip). */
+  const updCell = (m: Mod, tile = false) => {
+    if (busyFor(m)) return <JobProgress label="Wird aktualisiert" p={pct} width={tile ? 112 : undefined} className={tile ? undefined : "w-full"} />;
     const up = updateFor.get(m.id);
     if (!up) return null;
-    // Feste Breite: linke Kanten stehen untereinander, lange Versionen enden mit Auslassung (voller Text im Tooltip).
     return (
       <Tip label={`${title(m)} von ${m.version} auf ${up.versionNumber} aktualisieren`}>
-        <Btn size="s" icon="up" full className="updbtn" disabled={!!active} aria-label={`${title(m)} auf ${up.versionNumber} aktualisieren`} onClick={() => runUpdates([m.id])}>
-          <span className="ell">{up.versionNumber}</span>
-        </Btn>
+        <Button size="s" icon="up" width={96} disabled={!!active} aria-label={`${title(m)} auf ${up.versionNumber} aktualisieren`} onClick={() => runUpdates([m.id])}>
+          <span className="truncate">{up.versionNumber}</span>
+        </Button>
       </Tip>
     );
   };
 
   /** An/Aus: Schalter mit sichtbarem „Aus“; Ressourcenpakete haben keinen (das Spiel schaltet sie ein). */
-  const onCell = (m: Mod) =>
+  const onCell = (m: Mod, tile = false) =>
     m.kind === "resourcepack" ? (
       <Tip label={RP_HINT}>
-        <span className="ingame">Im Spiel<span className="sr"> einschalten</span></span>
+        <span>Im Spiel<span className="sr"> einschalten</span></span>
       </Tip>
     ) : (
-      <>
-        <span className="offl" aria-hidden>Aus</span>
-        <Switch checked={m.enabled} onChange={(v) => setEnabled([m.id], v)} label={`${title(m)} eingeschaltet`} />
-      </>
+      // Kachel: „Aus“ nur im ausgeschalteten Zustand (spart dem Namen Platz); Zeile: Platz bleibt reserviert.
+      <Switch checked={m.enabled} onChange={(v) => setEnabled([m.id], v)} label={`${title(m)} eingeschaltet`} stateText={tile && m.enabled ? undefined : ["", "Aus"]} />
     );
 
   const moreBtn = (m: Mod, described = false) => (
     <Menu
       items={menuFor(m)}
-      trigger={<Btn variant="g" size="s" iconOnly icon="more" data-more={m.id} aria-label={`Mehr zu ${title(m)}`} aria-describedby={described ? descId(m) : undefined} />}
+      trigger={<IconButton size="s" icon="more" tip={false} data-more={m.id} label={`Mehr zu ${title(m)}`} aria-describedby={described ? descId(m) : undefined} />}
     />
   );
 
-  const ghostRow = (g: Ghost) =>
-    mode === "grid" ? (
-      <div key={`g-${g.mod.id}`} className="ctile gone">
-        <b className="ell" id={`${uid}-g-${g.mod.id}`}>{g.title} entfernt</b>
-        {g.main && <Btn size="s" data-undo={g.group} aria-describedby={`${uid}-g-${g.mod.id}`} onClick={() => undo(g.group)}>Rückgängig</Btn>}
-      </div>
-    ) : (
-      <div key={`g-${g.mod.id}`} className="crow gone" role="listitem">
-        <span />
-        <ProjectIcon url={project(g.mod)?.icon_url} seed={g.mod.id} />
-        <div className="cn"><b id={`${uid}-g-${g.mod.id}`}>{g.title} entfernt{g.by ? ` (mit ${g.by})` : ""}</b></div>
-        {g.main ? <Btn size="s" icon="redo" data-undo={g.group} aria-describedby={`${uid}-g-${g.mod.id}`} onClick={() => undo(g.group)}>Rückgängig</Btn> : <span />}
-      </div>
-    );
+  const ghostRow = (g: Ghost) => (
+    <GhostRow
+      key={`g-${g.mod.id}`}
+      variant={mode === "grid" ? "tile" : "content"}
+      text={`${g.title} entfernt${g.by && mode !== "grid" ? ` (mit ${g.by})` : ""}`}
+      media={mode === "grid" ? undefined : <ProjectIcon url={project(g.mod)?.icon_url} seed={g.mod.id} />}
+      undoId={g.main ? g.group : undefined}
+      onUndo={g.main ? () => undo(g.group) : undefined}
+    />
+  );
 
   const listRow = (r: Row) => {
     const m = r.mod, warns = warnsOf(m), on = picked.has(m.id), desc = descOf(r, warns);
     return (
-      <div key={m.id} className={cn("crow", !m.enabled && "off", r.owners.length > 0 && "dep", on && "picked")} role="listitem">
+      <ListRow key={m.id} selected={on} off={!m.enabled} dep={r.owners.length > 0}>
         <Checkbox checked={on} onChange={(v) => togglePick(m.id, v)} label={`${title(m)} auswählen`} />
         <ProjectIcon url={project(m)?.icon_url} seed={m.id} />
         <Tip label={tipFor(r, warns)}>
-          <div className="cn"><b>{title(m)}</b><span>{subOf(r)}</span>{srDesc(m, desc)}</div>
+          <div><RowTitle title={title(m)} sub={subOf(r)} trunc={false}>{srDesc(m, desc)}</RowTitle></div>
         </Tip>
         {hasWarns && (
-          <div className="warns">
+          <Cell flex>
             {warns.map((w) => (
-              <span key={w.t} className="contents">
-                <Chip small dot tone="warn" title={w.t}>{w.t}</Chip>
-                <Btn variant="g" size="s" tone="warn" onClick={w.fix}>{w.lab}</Btn>
-              </span>
+              <Fragment key={w.t}>
+                <Chip size="s" dot tone="warn" data-hide="1040">{w.t}</Chip>
+                <Button variant="ghost" size="s" tone="warn" onClick={w.fix}>{w.lab}</Button>
+              </Fragment>
             ))}
-          </div>
+          </Cell>
         )}
-        <div className="upd">{updCell(m)}</div>
-        <div className="onc">{onCell(m)}</div>
+        <Cell flex align="end">{updCell(m)}</Cell>
+        <Cell flex align="end">{onCell(m)}</Cell>
         {moreBtn(m, !!desc)}
-      </div>
+      </ListRow>
     );
   };
 
-  /** Kachel, 88 px: Icon (Auswahlfeld darüber) · Name mit Schalter und Menü · eine Zeile Beschreibung bzw. Hinweis, rechts Update. */
+  /** Kachel, 88 px: Icon (Auswahlfeld darüber) · Name · rechts oben Schalter und Menü · eine Zeile Beschreibung bzw. Hinweis · rechts unten Update. */
   const tile = (r: Row) => {
     const m = r.mod, warns = warnsOf(m), on = picked.has(m.id), desc = descOf(r, warns);
     // Beschreibung steht schon im Screenreader-Text (srDesc); Art/Version nur hier.
     const about = r.owners.length ? "" : project(m)?.description ?? "";
     return (
-      <div key={m.id} className={cn("ctile", !m.enabled && "off", on && "picked")}>
-        <div className="tic">
-          <ProjectIcon url={project(m)?.icon_url} seed={m.id} />
+      <ListRow key={m.id} selected={on} off={!m.enabled}>
+        <span>
+          <ProjectIcon url={project(m)?.icon_url} seed={m.id} box={52} />
           <Checkbox checked={on} onChange={(v) => togglePick(m.id, v)} label={`${title(m)} auswählen`} />
-        </div>
+        </span>
         <Tip label={tipFor(r, warns)}>
-          <div className="cn"><b>{title(m)}</b>{srDesc(m, desc)}</div>
+          <div><RowTitle title={title(m)} trunc={false}>{srDesc(m, desc)}</RowTitle></div>
         </Tip>
-        <div className="tr1">
-          <div className="onc">{onCell(m)}</div>
+        <span>
+          {onCell(m, true)}
           {moreBtn(m, !!desc)}
-        </div>
-        <div className="tl">
-          {warns.length ? warns.map((w) => <Chip key={w.t} small dot tone="warn" title={w.t}>{w.t}</Chip>) : about ? <span aria-hidden>{about}</span> : <span>{subOf(r)}</span>}
-        </div>
-        <div className="upd">{updCell(m)}</div>
-      </div>
+        </span>
+        <span>
+          {warns.length
+            ? warns.map((w) => <Chip key={w.t} size="s" dot tone="warn">{w.t}</Chip>)
+            : about ? <span className="truncate" aria-hidden>{about}</span> : <span className="truncate">{subOf(r)}</span>}
+        </span>
+        <span>{updCell(m, true)}</span>
+      </ListRow>
     );
   };
 
-  // Leere Filter gedämpft (Seg kennt nur den Text; die Klasse hängt am Label).
-  const kindLabel = (text: string, n: number) => (n ? text : <span className="zero">{text}</span>);
+  // Leere Filter gedämpft, aber lesbar (--fg-3, ≥ 4,5:1).
+  const kindLabel = (text: string, n: number) => (n ? text : <span className="text-fg-3">{text}</span>);
   const pickedSwitchable = pickedLive.filter(switchable);
+  const upShown = nUpd > 0 || updatingAll;
+
+  const bulk = (
+    <>
+      <span><Count value={pickedLive.length} minDigits={2} /> ausgewählt</span>
+      <Button size="s" disabled={!pickedSwitchable.length} onClick={() => setEnabled(pickedSwitchable, false)}>Ausschalten</Button>
+      <Button size="s" disabled={!pickedSwitchable.length} onClick={() => setEnabled(pickedSwitchable, true)}>Einschalten</Button>
+      <Button size="s" icon="up" disabled={!!active || !pickedLive.some((id) => updateFor.has(id))} onClick={() => runUpdates(pickedLive.filter((id) => updateFor.has(id)))}>Aktualisieren</Button>
+      <Button size="s" icon="trash" onClick={() => remove(pickedLive)}>Entfernen</Button>
+      <Spacer />
+      <Button variant="ghost" size="s" onClick={clearPicked}>Auswahl aufheben</Button>
+    </>
+  );
 
   return (
-    <div className="ctab" ref={rootRef}>
+    <div className="max-w-[var(--page-max)]" ref={rootRef}>
       <div className="sr" role="status" aria-live="polite" aria-atomic="true">{said}</div>
-      <div className={cn("ctool", pickedLive.length > 0 && "picking")}>
-        <div className="main" aria-hidden={pickedLive.length > 0 || undefined}>
-          <SearchField small value={search} onChange={setSearch} placeholder="Inhalte suchen" />
-          <Seg
-            small
-            label="Art"
-            value={kind}
-            onChange={setKind}
-            options={[
-              { value: "all", label: "Alle", count: counts.all },
-              { value: "mod", label: kindLabel("Mods", counts.mod), count: counts.mod },
-              { value: "shader", label: kindLabel("Shader", counts.shader), count: counts.shader },
-              { value: "resourcepack", label: kindLabel("Ressourcenpakete", counts.resourcepack), count: counts.resourcepack },
-            ]}
-          />
-          <span className="sp" />
-          <Seg
-            small
-            icons
-            className="hide-m"
-            label="Darstellung"
-            value={mode}
-            onChange={setMode}
-            options={[{ value: "list", label: "Liste", icon: "list", tip: "Liste" }, { value: "grid", label: "Raster", icon: "grid", tip: "Raster" }]}
-          />
-          {/* Feste Breite in beiden Fällen: ohne Updates steht an derselben Stelle ruhiger Text statt eines toten Knopfs. */}
-          {nUpd > 0 || updatingAll ? (
-            <Btn
-              ref={updRef}
-              size="s"
-              icon="up"
-              className="upall"
-              aria-label={updatingAll ? "Wird aktualisiert" : `Alle aktualisieren (${nUpd})`}
-              disabled={!!active}
-              onClick={() => runUpdates([...updateFor.keys()])}
-            >
-              <span className="updt" data-n={nUpd || ""}>{updatingAll ? "Wird aktualisiert" : `Alle aktualisieren (${nUpd})`}</span>
-            </Btn>
-          ) : (
-            <span className="upall upnone">Alles aktuell</span>
-          )}
-          {/* Sekundär: auf dieser Seite ist nur Spielen Akzent-Primär. */}
-          <Btn size="s" icon="plus" onClick={onAdd}>Hinzufügen</Btn>
-        </div>
-        <div className="bulk" aria-hidden={pickedLive.length === 0 || undefined}>
-          <span className="bl"><b className="num">{pickedLive.length}</b> ausgewählt</span>
-          <Btn size="s" disabled={!pickedSwitchable.length} onClick={() => setEnabled(pickedSwitchable, false)}>Ausschalten</Btn>
-          <Btn size="s" disabled={!pickedSwitchable.length} onClick={() => setEnabled(pickedSwitchable, true)}>Einschalten</Btn>
-          <Btn size="s" icon="up" disabled={!!active || !pickedLive.some((id) => updateFor.has(id))} onClick={() => runUpdates(pickedLive.filter((id) => updateFor.has(id)))}>Aktualisieren</Btn>
-          <Btn size="s" icon="trash" onClick={() => remove(pickedLive)}>Entfernen</Btn>
-          <span className="sp" />
-          <Btn variant="g" size="s" onClick={clearPicked}>Auswahl aufheben</Btn>
-        </div>
-      </div>
+      <Toolbar height={56} search="s" wrapBelow={800} alt={bulk} altActive={pickedLive.length > 0}>
+        <SearchField size="s" value={search} onChange={setSearch} placeholder="Inhalte suchen" />
+        <Segmented
+          size="s"
+          label="Art"
+          value={kind}
+          onChange={setKind}
+          items={[
+            { value: "all", label: "Alle", count: counts.all },
+            { value: "mod", label: kindLabel("Mods", counts.mod), count: counts.mod },
+            { value: "shader", label: kindLabel("Shader", counts.shader), count: counts.shader },
+            { value: "resourcepack", label: kindLabel("Ressourcenpakete", counts.resourcepack), count: counts.resourcepack },
+          ]}
+        />
+        <Spacer />
+        <Segmented
+          size="s"
+          iconsOnly
+          className="max-[900px]:hidden"
+          label="Darstellung"
+          value={mode}
+          onChange={setMode}
+          items={[{ value: "list", label: "Liste", icon: "list" }, { value: "grid", label: "Raster", icon: "grid" }]}
+        />
+        {/* Knopf und „Alles aktuell“ liegen übereinander: die Breite bleibt, ob Updates da sind oder nicht (kein toter Knopf). */}
+        <span className="grid items-center justify-items-end *:col-start-1 *:row-start-1">
+          <Button
+            ref={updRef}
+            size="s"
+            icon="up"
+            count={nUpd}
+            compactBelow={1096}
+            className={cn(!upShown && "invisible")}
+            aria-label={updatingAll ? "Wird aktualisiert" : undefined}
+            disabled={!!active || !upShown}
+            onClick={() => runUpdates([...updateFor.keys()])}
+          >
+            Alle aktualisieren
+          </Button>
+          {!upShown && <Hint tone="ok" className="max-[1096px]:invisible">Alles aktuell</Hint>}
+        </span>
+        {/* Sekundär: auf dieser Seite ist nur Spielen Akzent-Primär. */}
+        <Button size="s" icon="plus" onClick={onAdd}>Hinzufügen</Button>
+      </Toolbar>
 
       {visible.length === 0 ? (
         <Empty
-          minHeight={240}
-          ill={<Icon name="search" />}
+          ill="search"
           title="Nichts gefunden"
           actions={
             <>
-              <Btn onClick={() => { setSearch(""); setKind("all"); }}>Filter zurücksetzen</Btn>
-              <Btn onClick={onAdd}>Im Katalog suchen</Btn>
+              <Button onClick={() => { setSearch(""); setKind("all"); }}>Filter zurücksetzen</Button>
+              <Button onClick={onAdd}>Im Katalog suchen</Button>
             </>
           }
         >
           Kein Inhalt passt zu „{search.trim() || (kind !== "all" ? KINDS[kind] : "")}“.
         </Empty>
       ) : mode === "grid" ? (
-        <div className={cn("cgrid", pickedLive.length > 0 && "picking")}>{visible.map((e) => (e.type === "row" ? tile(e) : ghostRow(e)))}</div>
+        <List variant="tiles">{visible.map((e) => (e.type === "row" ? tile(e) : ghostRow(e)))}</List>
       ) : (
-        <div className={cn("ctable", !hasWarns && "nw")}>
-          <div className="chead">
-            <span>
-              <Checkbox
-                label="Alle auswählen"
-                checked={pickedVisible > 0 && pickedVisible === visibleLive.length}
-                indeterminate={pickedVisible > 0 && pickedVisible < visibleLive.length}
-                onChange={(v) => setPicked((p) => { const n = new Set(p); visibleLive.forEach((r) => (v ? n.add(r.mod.id) : n.delete(r.mod.id))); return n; })}
-              />
-            </span>
-            <span />
-            <span>Name</span>
-            {hasWarns && <span>Hinweise</span>}
-            <span className="updh">Update</span>
-            <span className="onh">An</span>
-            <span />
-          </div>
-          <div className="clist" role="list">{visible.map((e) => (e.type === "row" ? listRow(e) : ghostRow(e)))}</div>
-        </div>
+        <List
+          variant="content"
+          noWarnCol={!hasWarns}
+          divided
+          head={
+            <>
+              <span>
+                <Checkbox
+                  label="Alle auswählen"
+                  checked={pickedVisible > 0 && pickedVisible === visibleLive.length}
+                  indeterminate={pickedVisible > 0 && pickedVisible < visibleLive.length}
+                  onChange={(v) => setPicked((p) => { const n = new Set(p); visibleLive.forEach((r) => (v ? n.add(r.mod.id) : n.delete(r.mod.id))); return n; })}
+                />
+              </span>
+              <span />
+              <Cell>Name</Cell>
+              {hasWarns && <Cell>Hinweise</Cell>}
+              <Cell align="end">Update</Cell>
+              <Cell align="end">An</Cell>
+              <span />
+            </>
+          }
+        >
+          {visible.map((e) => (e.type === "row" ? listRow(e) : ghostRow(e)))}
+        </List>
       )}
 
-      {instance.mods.some((m) => m.kind === "resourcepack") && (
-        <p className="hintline" style={{ marginTop: 8 }}>
-          <Icon name="info" />
-          {RP_HINT}
-        </p>
-      )}
+      {instance.mods.some((m) => m.kind === "resourcepack") && <Hint icon="info" className="mt-2">{RP_HINT}</Hint>}
     </div>
   );
 }
