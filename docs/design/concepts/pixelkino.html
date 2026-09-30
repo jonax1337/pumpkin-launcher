@@ -925,7 +925,7 @@ input[type="search"]::-webkit-search-cancel-button { display: none; }
     <div class="bar-right">
       <span class="netchip" id="netChip" role="status"><span class="pi s" data-ic="plug"></span>Offline</span>
       <button class="barbtn tasksbtn fx" id="tasksBtn" data-act="tasks" aria-haspopup="dialog" aria-expanded="false" aria-label="Aufgaben"><span class="pi" data-ic="dl"></span><span class="badge" id="taskCount">0</span><span class="tmini prog thin" id="taskMini"></span></button>
-      <button class="barbtn mebtn fx" id="meBtn" data-act="me" aria-haspopup="menu" aria-expanded="false" aria-label="Spieler und Konten"><span class="avatar" id="meAv"></span><span class="who" id="meName">Jonas</span><span class="pi s" data-ic="chevd"></span></button>
+      <button class="barbtn mebtn fx" id="meBtn" data-act="me" aria-haspopup="menu" aria-expanded="false" aria-label="Spieler und Konten"><span class="avatar" id="meAv"></span><span class="who" id="meName">Alex</span><span class="pi s" data-ic="chevd"></span></button>
       <button class="barbtn fx" id="gearBtn" data-act="nav" data-v="settings" aria-label="Einstellungen" data-tip="Einstellungen"><span class="pi" data-ic="gear"></span></button>
       <div class="win">
         <button class="winbtn" data-act="win" data-w="min" aria-label="Minimieren"><span class="pi s" data-ic="wmin"></span></button>
@@ -1131,7 +1131,7 @@ function faceSVG(name) {
   const hairs = ['#3B2A1E', '#5A3A22', '#1E1A18', '#B8763A', '#8C3A22', '#D8C080'], skins = ['#E0A882', '#C98E6A', '#A06A4A', '#F2C4A0'], eyes = ['#3E5A9A', '#4A3A2A', '#2E6A7A', '#6A4A8A'];
   let H = hairs[h % hairs.length], S = skins[(h >> 3) % skins.length], E = eyes[(h >> 6) % eyes.length];
   if (name === 'Steve_42') { H = '#2F2014'; S = '#C49273'; E = '#4B3C8E'; }
-  if (name === 'Jonas') { H = '#4A3222'; S = '#E0A882'; E = '#3E5A9A'; }
+  if (name === 'Alex') { H = '#4A3222'; S = '#E0A882'; E = '#3E5A9A'; }
   const N = '#' + [0, 2, 4].map(i => Math.round(parseInt(S.slice(1 + i, 3 + i), 16) * .82).toString(16).padStart(2, '0')).join('');
   const M = '#6A3A2A', W = '#F2F2F2';
   const map = ['HHHHHHHH', 'HHHHHHHH', r() < .5 ? 'HSSSSSSH' : 'HHSSSSHH', 'SSSSSSSS', 'SWESSEWS', 'SSSNNSSS', 'SSMMMMSS', 'SSSSSSSS'];
@@ -1529,8 +1529,8 @@ const S = {
   sheet: { open: false, kind: 'mod', q: '', fit: true },
   game: { id: null, phase: 'idle', pct: 0, step: '', done: 0, total: 3480, t0: 0, err: '', crashed: null },
   offline: false, crashNext: false, emptyLib: false,
-  settings: { motion: LS.get('motion', true), pxSize: Q.get('px') || LS.get('px', 'm'), lang: 'de', onLaunch: 'min', ram: 'auto', ramGb: 6, java: 'auto', win: 'auto', conc: 3, dir: 'C:\\Users\\Jonas\\AppData\\Roaming\\Pumpkin Launcher', upd: 'avail' },
-  accounts: [{ id: 'a1', name: 'Jonas', kind: 'ms', active: true }, { id: 'a2', name: 'Steve_42', kind: 'off', active: false }],
+  settings: { motion: LS.get('motion', true), pxSize: Q.get('px') || LS.get('px', 'm'), lang: 'de', onLaunch: 'min', ram: 'auto', ramGb: 6, java: 'auto', win: 'auto', conc: 3, dir: 'C:\\Users\\<Name>\\AppData\\Roaming\\Pumpkin Launcher', upd: 'avail' },
+  accounts: [{ id: 'a1', name: 'Alex', kind: 'ms', active: true }, { id: 'a2', name: 'Steve_42', kind: 'off', active: false }],
   jobs: {},
   launcherUpd: true,
 };
@@ -2293,7 +2293,7 @@ function beginStart(i) {
     clearInterval(logTimer);
     logTimer = setInterval(() => {
       if (S.game.phase !== 'run') { clearInterval(logTimer); return; }
-      if (n < script.length) pushLog(i, ...script[n]); else pushLog(i, 'INFO', 'Server thread', ['Saving chunks for level "Hauptwelt"', 'Autosave abgeschlossen', 'Jonas hat den Erfolg [Holz sammeln] erzielt'][n % 3]);
+      if (n < script.length) pushLog(i, ...script[n]); else pushLog(i, 'INFO', 'Server thread', ['Saving chunks for level "Hauptwelt"', 'Autosave abgeschlossen', 'Alex hat den Erfolg [Holz sammeln] erzielt'][n % 3]);
       n++;
       if (S.crashNext && n === 6) crashGame(i);
     }, 650);
@@ -2555,10 +2555,10 @@ function msLoginDlg(fromOnb) {
   clearTimeout(msTimer);
   if (!S.offline) msTimer = setTimeout(() => {
     if (!dlg.classList.contains('open')) return;
-    const exists = S.accounts.find(a => a.name === 'Mara');
-    if (!exists) S.accounts.push({ id: 'a' + (UID++), name: 'Mara', kind: 'ms', active: false });
-    S.accounts.forEach(a => a.active = a.name === 'Mara');
-    $('#msBody').innerHTML = `<div class="row" style="gap:14px;margin-top:8px"><span class="avatar" style="width:48px;height:48px">${faceSVG('Mara')}</span><div><p class="ok-msg">Angemeldet als Mara</p><p>Das Konto ist jetzt aktiv. Du kannst jederzeit oben rechts wechseln.</p></div></div>`;
+    const exists = S.accounts.find(a => a.name === 'Nova');
+    if (!exists) S.accounts.push({ id: 'a' + (UID++), name: 'Nova', kind: 'ms', active: false });
+    S.accounts.forEach(a => a.active = a.name === 'Nova');
+    $('#msBody').innerHTML = `<div class="row" style="gap:14px;margin-top:8px"><span class="avatar" style="width:48px;height:48px">${faceSVG('Nova')}</span><div><p class="ok-msg">Angemeldet als Nova</p><p>Das Konto ist jetzt aktiv. Du kannst jederzeit oben rechts wechseln.</p></div></div>`;
     $('#msCancel').outerHTML = `<button class="btn btn-p fx" data-act="${fromOnb ? 'onbms' : 'dlgclose'}" style="width:124px"><span class="bf"></span><span class="bc">Fertig</span></button>`;
     paintMe(); if (S.view === 'settings') $('#accList').innerHTML = accRows();
   }, 4200);
@@ -2605,7 +2605,7 @@ function showOnboard() {
 function onbStep() {
   const steps = `<div class="steps" aria-label="Schritt ${OB.step} von 2"><i class="on"></i><i class="${OB.step > 1 ? 'on' : ''}"></i></div>`;
   if (OB.step === 1) return `${steps}<h1 id="onbT">Willkommen bei Pumpkin Launcher</h1><p>Wie heißt du im Spiel?</p><div class="ob">
-      <div class="nf"><label for="obName">Spielername</label><label class="field"><input id="obName" maxlength="16" value="${esc(OB.name)}" data-input="obname" autocomplete="off" spellcheck="false" placeholder="z. B. Jonas"></label><span class="err-msg" id="obErr"></span><span class="help">Reicht für Einzelspieler und LAN.</span></div>
+      <div class="nf"><label for="obName">Spielername</label><label class="field"><input id="obName" maxlength="16" value="${esc(OB.name)}" data-input="obname" autocomplete="off" spellcheck="false" placeholder="z. B. Alex"></label><span class="err-msg" id="obErr"></span><span class="help">Reicht für Einzelspieler und LAN.</span></div>
       <div class="or">oder</div>
       <button class="btn btn-s fx" data-act="obms" style="width:100%"><span class="bc">${ic('user')}Mit Microsoft anmelden</span></button><p class="help" style="margin-top:8px">Nötig für Server und Realms. Du kannst es später nachholen.</p></div>
     <div class="of"><span class="faint" style="font-size:12.5px">Schritt 1 von 2</span><button class="btn btn-p fx" data-act="obnext" id="obNext" style="width:140px" ${OB.name.length >= 3 ? '' : 'disabled'}><span class="bf"></span><span class="bc">Weiter${ic('chev')}</span></button></div>`;
