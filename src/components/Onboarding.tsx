@@ -70,8 +70,8 @@ export function Onboarding() {
     setBusy(true);
     try {
       if (start === "vanilla") {
-        const inst = await create.mutateAsync({ name: `Minecraft ${releases[0]}`, minecraftVersion: releases[0], loader: "vanilla", loaderVersion: null, memoryMb: null });
-        void play(inst);
+        const instance = await create.mutateAsync({ name: `Minecraft ${releases[0]}`, minecraftVersion: releases[0], loader: "vanilla", loaderVersion: null, memoryMb: null });
+        void play(instance);
         return;
       }
       // Neueste Minecraft-Version, für die es Sodium schon gibt; Release-Versionen von Sodium bevorzugt.
@@ -80,8 +80,8 @@ export function Onboarding() {
       const mc = releases.find((r) => ranked.some((v) => v.game_versions.includes(r)));
       const version = ranked.find((v) => mc && v.game_versions.includes(mc));
       if (!mc || !version) throw new Error(t("components.onboarding.noSodium"));
-      const inst = await create.mutateAsync({ name: `Fabric ${mc}`, minecraftVersion: mc, loader: "fabric", loaderVersion: null, memoryMb: null });
-      const withMods = await api.modrinthInstallMod(inst.id, version.id, crypto.randomUUID());
+      const instance = await create.mutateAsync({ name: `Fabric ${mc}`, minecraftVersion: mc, loader: "fabric", loaderVersion: null, memoryMb: null });
+      const withMods = await api.modrinthInstallMod(instance.id, version.id, crypto.randomUUID());
       void play(withMods);
     } catch (err) {
       toast.error(t("components.onboarding.goFailed"), { description: errorMessage(err) });

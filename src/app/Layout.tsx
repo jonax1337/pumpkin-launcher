@@ -107,6 +107,12 @@ function usePageTitle(pathname: string) {
   }, [page]);
 }
 
+/** So lange wartet der Fokus auf die Überschrift einer Seite, die noch lädt. */
+const PAGE_FOCUS_WAIT_MS = 3000;
+
+/** Spätestens dann wird die Oberfläche sichtbar, auch wenn die Schriften noch nicht da sind. */
+const FONTS_WAIT_MS = 2500;
+
 /**
  * Nach einem Seitenwechsel (nicht beim ersten Laden) Fokus auf die Seitenüberschrift, damit Tastatur und
  * Screenreader auf der neuen Seite beginnen. Die Seite kann später rendern (Laden), deshalb kurz auf das h1 warten.
@@ -133,10 +139,10 @@ function usePageFocus(pathname: string, view: RefObject<HTMLElement | null>) {
     };
     if (tryFocus()) return;
     const mo = new MutationObserver(() => tryFocus() && stop());
-    const t = setTimeout(() => stop(), 3000);
+    const giveUp = setTimeout(() => stop(), PAGE_FOCUS_WAIT_MS);
     const stop = () => {
       mo.disconnect();
-      clearTimeout(t);
+      clearTimeout(giveUp);
     };
     mo.observe(main, { childList: true, subtree: true });
     return stop;
@@ -212,8 +218,8 @@ function TasksButton() {
   const clear = useTasks((s) => s.clear);
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const known = live.filter((t) => t.p != null);
-  const avg = known.length ? known.reduce((s, t) => s + (t.p ?? 0), 0) / known.length : null;
+  const known = live.filter((task) => task.p != null);
+  const avg = known.length ? known.reduce((sum, task) => sum + (task.p ?? 0), 0) / known.length : null;
   const busy = live.length > 0;
   const runningAria = t(live.length === 1 ? "ui.tasks.ariaRunning.one" : "ui.tasks.ariaRunning.other", { count: live.length });
 
@@ -433,8 +439,8 @@ export function Layout() {
     let done = false;
     const show = () => !done && ((done = true), setReady(true));
     void document.fonts.ready.then(show);
-    const t = setTimeout(show, 2500);
-    return () => clearTimeout(t);
+    const fallback = setTimeout(show, FONTS_WAIT_MS);
+    return () => clearTimeout(fallback);
   }, []);
 
   // Neue Seite beginnt oben.

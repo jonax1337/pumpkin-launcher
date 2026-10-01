@@ -23,7 +23,7 @@ import { useLocalFiles } from "./LocalFiles";
 const RP_HINT_KEY = "detail.content.resourcePackHint";
 
 type KindFilter = "all" | ModKind;
-type Warn = { t: string; lab: string; fix: () => void };
+type Warn = { text: string; actionLabel: string; fix: () => void };
 type Row = { type: "row"; mod: Mod; owners: string[] };
 type Ghost = { type: "ghost"; mod: Mod; title: string; at: number; group: string; main: boolean; by?: string };
 type Entry = Row | Ghost;
@@ -47,8 +47,8 @@ export function useWarnings(instance: Instance, onAddIris: () => void, turnOnIri
     if (m.kind !== "shader" || (iris && iris.enabled)) return [];
     return [
       iris
-        ? { t: t("detail.content.shaderNeedsIris"), lab: t("detail.content.turnIrisOn"), fix: turnOnIris }
-        : { t: t("detail.content.shaderNeedsIris"), lab: t("detail.content.addIris"), fix: onAddIris },
+        ? { text: t("detail.content.shaderNeedsIris"), actionLabel: t("detail.content.turnIrisOn"), fix: turnOnIris }
+        : { text: t("detail.content.shaderNeedsIris"), actionLabel: t("detail.content.addIris"), fix: onAddIris },
     ];
   };
   const total = instance.mods.reduce((n, m) => n + warnsOf(m).length, 0);
@@ -159,7 +159,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     return () => clearTimeout(timer);
   }, [filterKey, nVisible, nAll]);
 
-  /** Nach Bulk-Aktionen, die die Leiste schließen: Kopf-Checkbox (Liste) oder Suchfeld (Raster). */
+  // Nach Bulk-Aktionen, die die Leiste schließen: Kopf-Checkbox (Liste) oder Suchfeld (Raster).
   const focusHead = () =>
     focusSoon(() => rootRef.current?.querySelector<HTMLElement>(".vx-lhead input[type=checkbox]") ?? rootRef.current?.querySelector<HTMLElement>(".vx-tb-main input[type=search]"));
   const clearPicked = () => {
@@ -302,20 +302,20 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
         </div>
         {r.owners.length > 0 && <div className="tr">{t("detail.content.requiredBy", { names: r.owners.join(", ") })}</div>}
         {up && <div className="tu">{t("detail.content.updateAvailable", { version: up.versionNumber })}</div>}
-        {warns.map((w) => <div key={w.t} className="tw">{w.t}</div>)}
+        {warns.map((w) => <div key={w.text} className="tw">{w.text}</div>)}
         {desc && <div className="td">{desc}</div>}
       </>
     );
   };
 
-  /** Was sonst nur im Tooltip steht, als Text für Screenreader (per aria-describedby am Menüknopf der Zeile). */
+  // Was sonst nur im Tooltip steht, als Text für Screenreader (per aria-describedby am Menüknopf der Zeile).
   const descId = (m: Mod) => `${uid}-d-${m.id}`;
   const descOf = (r: Row, warns: Warn[]) => {
     const m = r.mod, up = updateFor.get(m.id), desc = project(m)?.description;
     return [
       !m.enabled && t("detail.content.offState"),
       up && t("detail.content.updateAvailable", { version: up.versionNumber }),
-      ...warns.map((w) => w.t),
+      ...warns.map((w) => w.text),
       desc,
     ].filter(Boolean).join(". ");
   };
@@ -324,7 +324,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
   const subOf = (r: Row) =>
     r.owners.length ? `${t("detail.content.requiredBy", { names: r.owners.join(", ") })} · ${r.mod.version}` : `${t(TYPE_ONE_KEYS[r.mod.kind])} · ${r.mod.version}`;
 
-  /** Update je Inhalt: Fortschritt beim Aktualisieren, sonst Knopf mit fester Breite (Version mit Auslassung, voller Text im Tooltip). */
+  // Update je Inhalt: Fortschritt beim Aktualisieren, sonst Knopf mit fester Breite (Version mit Auslassung, voller Text im Tooltip).
   const updCell = (m: Mod, tile = false) => {
     if (busyFor(m)) return <JobProgress label={t("detail.content.updating")} p={pct} width={tile ? 112 : undefined} className={tile ? undefined : "w-full"} />;
     const up = updateFor.get(m.id);
@@ -338,7 +338,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     );
   };
 
-  /** An/Aus: Schalter mit sichtbarem „Aus“; Ressourcenpakete haben keinen (das Spiel schaltet sie ein). */
+  // An/Aus: Schalter mit sichtbarem „Aus“; Ressourcenpakete haben keinen (das Spiel schaltet sie ein).
   const onCell = (m: Mod, tile = false) =>
     m.kind === "resourcepack" ? (
       <Tip label={t(RP_HINT_KEY)}>
@@ -381,9 +381,9 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
         {hasWarns && (
           <Cell flex>
             {warns.map((w) => (
-              <Fragment key={w.t}>
-                <Chip size="s" dot tone="warn" data-hide={WIDTH.md}>{w.t}</Chip>
-                <Button variant="ghost" size="s" tone="warn" onClick={w.fix}>{w.lab}</Button>
+              <Fragment key={w.text}>
+                <Chip size="s" dot tone="warn" data-hide={WIDTH.md}>{w.text}</Chip>
+                <Button variant="ghost" size="s" tone="warn" onClick={w.fix}>{w.actionLabel}</Button>
               </Fragment>
             ))}
           </Cell>
@@ -395,7 +395,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     );
   };
 
-  /** Kachel, 88 px: Icon (Auswahlfeld darüber) · Name · rechts oben Schalter und Menü · eine Zeile Beschreibung bzw. Hinweis · rechts unten Update. */
+  // Kachel, 88 px: Icon (Auswahlfeld darüber) · Name · rechts oben Schalter und Menü · eine Zeile Beschreibung bzw. Hinweis · rechts unten Update.
   const tile = (r: Row) => {
     const m = r.mod, warns = warnsOf(m), on = picked.has(m.id), desc = descOf(r, warns);
     // Beschreibung steht schon im Screenreader-Text (srDesc); Art/Version nur hier.
@@ -415,7 +415,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
         </span>
         <span>
           {warns.length
-            ? warns.map((w) => <Chip key={w.t} size="s" dot tone="warn">{w.t}</Chip>)
+            ? warns.map((w) => <Chip key={w.text} size="s" dot tone="warn">{w.text}</Chip>)
             : about ? <span className="truncate" aria-hidden>{about}</span> : <span className="truncate">{subOf(r)}</span>}
         </span>
         <span>{updCell(m, true)}</span>

@@ -57,7 +57,7 @@ export const readDiscoverParams = (params: URLSearchParams) => ({
 // ---------- Instanz ----------
 
 export type InstanceTab = "content" | "worlds" | "screenshots" | "console" | "settings";
-export const INSTANCE_TABS: InstanceTab[] = ["content", "worlds", "screenshots", "console", "settings"];
+const INSTANCE_TABS: InstanceTab[] = ["content", "worlds", "screenshots", "console", "settings"];
 
 export const instanceUrl = (id: string, tab?: InstanceTab) => (tab ? `/instances/${id}?tab=${tab}` : `/instances/${id}`);
 

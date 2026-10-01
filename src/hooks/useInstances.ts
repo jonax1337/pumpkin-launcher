@@ -47,16 +47,16 @@ export function useCreateInstance() {
   return useMutation({
     // RAM ist nicht Teil von `NewInstance` und wird direkt danach gesetzt.
     mutationFn: async ({ memoryMb, ...input }: NewInstance & { memoryMb: number | null }) => {
-      const inst = await api.createInstance(input);
-      return memoryMb == null ? inst : api.updateInstance({ ...inst, memoryMb });
+      const instance = await api.createInstance(input);
+      return memoryMb == null ? instance : api.updateInstance({ ...instance, memoryMb });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: instanceKeys.all }),
   });
 }
 
 /** Gespeicherte Instanz in den Cache übernehmen und die Liste neu laden. */
-function instanceSaved(qc: QueryClient, inst: Instance) {
-  qc.setQueryData(instanceKeys.detail(inst.id), inst);
+function instanceSaved(qc: QueryClient, instance: Instance) {
+  qc.setQueryData(instanceKeys.detail(instance.id), instance);
   return qc.invalidateQueries({ queryKey: instanceKeys.all });
 }
 
@@ -64,7 +64,7 @@ export function useUpdateInstance() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (instance: Instance) => api.updateInstance(instance),
-    onSuccess: (inst) => instanceSaved(qc, inst),
+    onSuccess: (instance) => instanceSaved(qc, instance),
   });
 }
 
@@ -73,7 +73,7 @@ export function useSetGroup(instanceId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (group: string | null) => api.setInstanceGroup(instanceId, group),
-    onSuccess: (inst) => instanceSaved(qc, inst),
+    onSuccess: (instance) => instanceSaved(qc, instance),
   });
 }
 
@@ -96,9 +96,9 @@ export function useUpdateMods(instanceId: string) {
       return { previous };
     },
     onError: (_, __, ctx) => ctx?.previous && qc.setQueryData(key, ctx.previous),
-    onSuccess: (inst) => {
+    onSuccess: (instance) => {
       // Nur die letzte Änderung übernimmt den Serverstand, sonst springen noch wartende Schalter zurück.
-      if (qc.isMutating({ mutationKey }) === 1) qc.setQueryData(key, inst);
+      if (qc.isMutating({ mutationKey }) === 1) qc.setQueryData(key, instance);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: instanceKeys.all, exact: true }),
   });

@@ -213,7 +213,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
 
   function go() {
     if (!valid || busy) return;
-    const done = { onSuccess: (inst: { id: string } | null) => inst && onDone(inst.id) };
+    const done = { onSuccess: (instance: { id: string } | null) => instance && onDone(instance.id) };
     if (tab === "blank") {
       create.mutate(
         {

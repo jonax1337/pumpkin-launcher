@@ -375,13 +375,13 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
     }
     const perform = (op: string) => (source === "modrinth" ? api.modrinthInstallPack(id, name, op) : api.providerInstallPack(source, projectId, id, name, op));
     install.mutate(withTarget(projectId, perform, t("components.pack.installTask", { name }), { cancellable: true, doneLabel: t("components.pack.installTaskDone", { name }) }), {
-      onSuccess: (inst) => {
-        if (!inst) return;
-        toast.success(t("components.pack.readyToast", { name: inst.name }), {
-          action: onDone ? undefined : { label: t("common.open"), onClick: () => navigate(instanceUrl(inst.id)) },
+      onSuccess: (instance) => {
+        if (!instance) return;
+        toast.success(t("components.pack.readyToast", { name: instance.name }), {
+          action: onDone ? undefined : { label: t("common.open"), onClick: () => navigate(instanceUrl(instance.id)) },
         });
-        if (onDone) onDone(inst.id);
-        else navigate(instanceUrl(inst.id));
+        if (onDone) onDone(instance.id);
+        else navigate(instanceUrl(instance.id));
       },
     });
   }
