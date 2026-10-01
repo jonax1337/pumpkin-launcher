@@ -1,9 +1,10 @@
 //! Screenshots einer Instanz: PNG-Dateien in `screenshots/` (F2 im Spiel) auflisten und in den Papierkorb legen.
 //! Die Vorschau lädt das Frontend selbst über das Asset-Protokoll (Scope in `tauri.conf.json`).
-use std::{cmp::Reverse, fs, io, path::Path, time::UNIX_EPOCH};
+use std::{cmp::Reverse, fs, path::Path, time::UNIX_EPOCH};
 
 use serde::Serialize;
 
+use super::{entries, has_extension, move_to_trash};
 use crate::error::{AppError, AppResult};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -20,38 +21,28 @@ pub struct Screenshot {
 
 /// PNG-Dateien in `dir`, neueste zuerst. Fehlt der Ordner (noch nie F2 gedrückt), ist die Liste leer.
 pub fn list(dir: &Path) -> AppResult<Vec<Screenshot>> {
-    let entries = match fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(e.into()),
-    };
-    let mut shots: Vec<Screenshot> = entries.filter_map(|entry| screenshot(&entry.ok()?)).collect();
+    let mut shots: Vec<Screenshot> = entries(dir)?.iter().filter_map(screenshot).collect();
     shots.sort_by_key(|s| Reverse(s.taken_at));
     Ok(shots)
 }
 
 /// Eintrag als Screenshot, falls er eine PNG-Datei ist. Was sich nicht lesen lässt (gerade gelöscht), fällt weg.
 fn screenshot(entry: &fs::DirEntry) -> Option<Screenshot> {
-    let file_name = entry.file_name().into_string().ok().filter(|name| is_png(name))?;
+    let file_name = entry.file_name().into_string().ok().filter(|name| has_extension(name, "png"))?;
     // DirEntry-Metadaten folgen keinen Symlinks: ein Link ist hier keine Datei.
     let meta = entry.metadata().ok().filter(fs::Metadata::is_file)?;
     let taken_at = meta.modified().ok()?.duration_since(UNIX_EPOCH).ok()?.as_millis() as u64;
     Some(Screenshot { path: entry.path().to_string_lossy().into_owned(), file_name, taken_at, size: meta.len() })
 }
 
-fn is_png(name: &str) -> bool {
-    Path::new(name).extension().is_some_and(|ext| ext.eq_ignore_ascii_case("png"))
-}
-
 /// Legt den Screenshot `file_name` aus `dir` in den Papierkorb (lässt sich dort wiederherstellen).
 /// Nur ein Name aus der Liste wird zum Pfad: so trifft das Löschen nie etwas außerhalb des Ordners.
 pub fn delete(dir: &Path, file_name: &str) -> AppResult<()> {
-    let shot = list(dir)?
+    let entry = entries(dir)?
         .into_iter()
-        .find(|s| s.file_name == file_name)
+        .find(|entry| entry.file_name() == file_name && screenshot(entry).is_some())
         .ok_or_else(|| AppError::NotFound { kind: "Screenshot", id: file_name.to_owned() })?;
-    trash::delete(shot.path)?;
-    Ok(())
+    move_to_trash(&entry.path())
 }
 
 #[cfg(test)]

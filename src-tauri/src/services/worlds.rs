@@ -3,17 +3,17 @@
 //! die Welt wiederherstellen; die Sicherungen gehören zur Instanz und verschwinden mit ihr.
 use std::{
     cmp::Reverse,
+    collections::HashSet,
     fs,
     io::{self, Read},
     path::{Path, PathBuf},
 };
 
-use base64::Engine;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use super::{
-    blocking, content, download::RemoveOnDrop, free_name, modrinth::invalid, providers::zip_paths, servers, walk, Dirs,
-    ZIP64_FROM,
+    add_zip_file, blocking, content, download::RemoveOnDrop, entries, free_name, modrinth::invalid, png_data_url,
+    providers::zip_paths, servers, walk, write_zip_atomic, Dirs,
 };
 use crate::{
     error::{AppError, AppResult},
@@ -104,24 +104,27 @@ struct LevelVersion {
 
 /// Welten der Instanz, zuletzt gespielte zuerst. Ordner ohne `level.dat` sind keine Welten.
 pub fn list(dirs: &Dirs, instance_id: &str) -> AppResult<Vec<World>> {
-    let mut worlds = Vec::new();
-    for entry in entries(&dirs.saves(instance_id))? {
-        let path = entry.path();
-        if let Some(id) = entry.file_name().to_str().filter(|_| path.join("level.dat").is_file()) {
-            worlds.push(read_world(&path, id));
-        }
-    }
+    let mut worlds: Vec<World> = entries(&dirs.saves(instance_id))?
+        .iter()
+        .filter(|entry| is_world(&entry.path()))
+        .filter_map(|entry| Some(read_world(&entry.path(), entry.file_name().to_str()?)))
+        .collect();
     worlds.sort_by_key(|w| Reverse(w.last_played));
     Ok(worlds)
 }
 
 /// Ordner der Welt `id`: ein einzelner Ordnername direkt unter `saves/` mit einer `level.dat`.
 pub fn world_dir(dirs: &Dirs, instance_id: &str, id: &str) -> AppResult<PathBuf> {
-    let dir = dirs.saves(instance_id).join(file_name(id)?);
-    if !dir.join("level.dat").is_file() {
+    let dir = dirs.saves(instance_id).join(require_file_name(id)?);
+    if !is_world(&dir) {
         return Err(AppError::NotFound { kind: "Welt", id: id.into() });
     }
     Ok(dir)
+}
+
+/// Ein Ordner mit `level.dat` ist eine Welt.
+fn is_world(dir: &Path) -> bool {
+    dir.join("level.dat").is_file()
 }
 
 /// Prüft ein Quick-Play-Ziel, bevor es zum Startargument wird.
@@ -137,14 +140,35 @@ pub fn backup(dirs: &Dirs, instance_id: &str, id: &str, progress: &dyn Fn(&str, 
     let dir = world_dir(dirs, instance_id, id)?;
     let mut files = Vec::new();
     walk(&dirs.saves(instance_id), &dir, &mut files)?;
-    let lock = format!("{id}/{SESSION_LOCK}");
-    files.retain(|(name, _)| *name != lock);
+    let prefix = format!("{id}/");
+    files.retain(|(name, _)| name.strip_prefix(&prefix) != Some(SESSION_LOCK));
+    ensure_restorable(&files, &prefix)?;
     let backups = dirs.backups(instance_id);
     fs::create_dir_all(&backups)?;
     let backup_id = format!("{id}-{}.zip", now_ms());
     write_zip(&backups.join(&backup_id), &files, progress)?;
     tracing::info!(instance = %instance_id, world = %id, backup = %backup_id, "Welt gesichert");
     read_backup(&backups, &backup_id)
+}
+
+/// Eine Sicherung, die `restore` ablehnen würde, wird gar nicht erst geschrieben: sonst löschte `delete` die Welt
+/// und ihre einzige Wiederherstellung schlüge fehl. Das trifft eine Welt ohne Dateien (ein Ordner-Link wird nicht
+/// verfolgt) und Namen, die unter Windows nicht gehen oder sich nur in der Schreibweise unterscheiden; Linux und
+/// macOS lassen beides in einer Welt zu.
+fn ensure_restorable(files: &[(String, PathBuf)], prefix: &str) -> AppResult<()> {
+    let refuse = |why: String| invalid(format!("Die Welt lässt sich nicht wiederherstellen, daher wird sie nicht gesichert: {why}"));
+    if files.is_empty() {
+        return Err(refuse("sie enthält keine Dateien".into()));
+    }
+    let mut seen = HashSet::new();
+    for (name, _) in files {
+        let rel = name.strip_prefix(prefix).unwrap_or(name);
+        content::safe_path(rel).map_err(|err| refuse(err.to_string()))?;
+        if !seen.insert(rel.to_lowercase()) {
+            return Err(refuse(format!("{rel} gibt es nur in anderer Schreibweise ein zweites Mal")));
+        }
+    }
+    Ok(())
 }
 
 /// Sicherungen aller Welten der Instanz (auch gelöschter), neueste zuerst.
@@ -217,16 +241,16 @@ fn remove_leftovers_in(dir: &Path) -> usize {
         tracing::warn!(path = %dir.display(), %err, "Sicherungsordner nicht lesbar");
         Vec::new()
     });
-    let leftovers = entries.iter().filter(|entry| entry.file_name().to_str().is_some_and(is_leftover));
-    leftovers
-        .filter(|entry| match remove_entry(entry) {
-            Ok(()) => true,
+    let mut removed = 0;
+    for entry in entries.iter().filter(|entry| entry.file_name().to_str().is_some_and(is_leftover)) {
+        match remove_entry(entry) {
+            Ok(()) => removed += 1,
             Err(err) => {
-                tracing::warn!(path = %entry.path().display(), %err, "Rest eines unterbrochenen Vorgangs nicht entfernt");
-                false
+                tracing::warn!(path = %entry.path().display(), %err, "Rest eines unterbrochenen Vorgangs nicht entfernt")
             }
-        })
-        .count()
+        }
+    }
+    removed
 }
 
 fn remove_entry(entry: &fs::DirEntry) -> io::Result<()> {
@@ -270,8 +294,7 @@ fn icon(path: &Path) -> Option<String> {
     if fs::metadata(path).ok()?.len() > ICON_LIMIT {
         return None;
     }
-    let png = fs::read(path).ok()?;
-    Some(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)))
+    Some(png_data_url(&fs::read(path).ok()?))
 }
 
 /// Belegter Platz eines Ordners, nur zur Anzeige: Unlesbares zählt nicht, Verknüpfungen werden nicht verfolgt.
@@ -287,17 +310,8 @@ fn dir_size(dir: &Path) -> u64 {
         .sum()
 }
 
-/// Einträge eines Ordners; fehlt er, keine.
-pub(super) fn entries(dir: &Path) -> AppResult<Vec<fs::DirEntry>> {
-    match fs::read_dir(dir) {
-        Ok(entries) => Ok(entries.collect::<io::Result<_>>()?),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(e) => Err(e.into()),
-    }
-}
-
-/// Ein einzelner, unter Windows gültiger Datei- oder Ordnername (kein Pfad).
-fn file_name(name: &str) -> AppResult<&str> {
+/// Ein einzelner, unter Windows gültiger Datei- oder Ordnername (kein Pfad); sonst ein Fehler.
+fn require_file_name(name: &str) -> AppResult<&str> {
     if name.contains('/') {
         return Err(invalid(format!("Ungültiger Name: {name}")));
     }
@@ -308,7 +322,7 @@ fn file_name(name: &str) -> AppResult<&str> {
 /// Sicherung `id` in `dir`; ihr Name verrät Welt und Zeitpunkt.
 fn read_backup(dir: &Path, id: &str) -> AppResult<WorldBackup> {
     let not_found = || AppError::NotFound { kind: "Sicherung", id: id.into() };
-    let (world, created_at) = backup_name(file_name(id)?).ok_or_else(not_found)?;
+    let (world, created_at) = backup_name(require_file_name(id)?).ok_or_else(not_found)?;
     let size_bytes = fs::metadata(dir.join(id)).map_err(|_| not_found())?.len();
     Ok(WorldBackup { id: id.into(), world: world.into(), created_at, size_bytes })
 }
@@ -338,35 +352,23 @@ fn extract(zip: &mut zip::ZipArchive<fs::File>, files: Vec<(PathBuf, usize)>, ta
 
 /// Schreibt das Archiv über `<path>.part`; bei einem Fehler bleibt nichts Halbes liegen.
 fn write_zip(path: &Path, files: &[(String, PathBuf)], progress: &dyn Fn(&str, u64, u64)) -> AppResult<()> {
-    let tmp = path.with_extension(PART);
-    let mut guard = RemoveOnDrop(Some(tmp.clone()));
-    let mut zip = zip::ZipWriter::new(fs::File::create(&tmp)?);
     let total = files.len() as u64;
     progress(BACKUP_PHASE, 0, total);
-    for (done, (name, source)) in (1..).zip(files) {
-        let mut file = fs::File::open(source)?;
-        let large = file.metadata()?.len() >= ZIP64_FROM;
-        zip.start_file(name.as_str(), zip::write::SimpleFileOptions::default().large_file(large))?;
-        io::copy(&mut file, &mut zip)?;
-        progress(BACKUP_PHASE, done, total);
-    }
-    // Erst schließen, dann umbenennen: Windows verschiebt keine offene Datei.
-    drop(zip.finish()?);
-    fs::rename(&tmp, path)?;
-    guard.0 = None;
-    Ok(())
+    write_zip_atomic(path, PART, |zip| {
+        for (done, (name, source)) in (1..).zip(files) {
+            add_zip_file(zip, name, &mut fs::File::open(source)?)?;
+            progress(BACKUP_PHASE, done, total);
+        }
+        Ok(())
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::models::{new_id, Instance, ModLoader, NewInstance};
+    use crate::services::{compound, gzip_nbt, write_files};
     use fastnbt::Value;
-    use std::{collections::HashMap, io::Write};
-
-    fn compound(pairs: Vec<(&str, Value)>) -> Value {
-        Value::Compound(pairs.into_iter().map(|(k, v)| (k.to_owned(), v)).collect::<HashMap<_, _>>())
-    }
 
     /// `level.dat` wie vom Spiel: gzip-NBT mit `Data`, dazu Tags, die die Liste nicht braucht.
     fn level_dat(name: &str, last_played: i64, game_type: i32, hardcore: bool) -> Vec<u8> {
@@ -378,22 +380,13 @@ mod tests {
             ("Version", compound(vec![("Name", Value::String("1.21.4".into())), ("Id", Value::Int(4189))])),
             ("SpawnX", Value::Int(12)),
         ]);
-        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
-        gz.write_all(&fastnbt::to_bytes(&compound(vec![("Data", data)])).unwrap()).unwrap();
-        gz.finish().unwrap()
-    }
-
-    fn write_files(dir: &Path, files: &[(&str, &[u8])]) {
-        for (path, data) in files {
-            fs::create_dir_all(dir.join(path).parent().unwrap()).unwrap();
-            fs::write(dir.join(path), data).unwrap();
-        }
+        gzip_nbt(&compound(vec![("Data", data)]))
     }
 
     fn setup() -> (PathBuf, Dirs) {
         let root = std::env::temp_dir().join(new_id());
         let dirs = Dirs::new(&root);
-        write_files(
+        write_files::<&[u8]>(
             &dirs.saves("i"),
             &[
                 ("Neue Welt/level.dat", &level_dat("Abenteuer", 1_700_000_000_000, 1, true)),
@@ -456,11 +449,22 @@ mod tests {
         let (root, dirs) = setup();
         // 2 MiB Nullen packen weit über 200:1, wie große, leere Kartendaten: für einen Pack-Import eine ZIP-Bombe.
         let zeros = vec![0u8; 2 * 1024 * 1024];
-        write_files(&dirs.saves("i"), &[("Alt/data/karte.dat", &zeros)]);
+        write_files::<&[u8]>(&dirs.saves("i"), &[("Alt/data/karte.dat", &zeros)]);
         let safety = delete(&dirs, "i", "Alt", &|_, _, _| {}).unwrap();
         restore(&dirs, "i", &safety.id).unwrap();
         assert_eq!(fs::read(dirs.saves("i").join("Alt/data/karte.dat")).unwrap(), zeros);
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn refuses_backups_that_could_not_be_restored() {
+        let file = |name: &str| (format!("Welt/{name}"), PathBuf::new());
+        let check = |names: &[&str]| ensure_restorable(&names.iter().map(|n| file(n)).collect::<Vec<_>>(), "Welt/");
+        assert!(check(&["level.dat", "region/r.0.0.mca", "datapacks/pack/data/x.json"]).is_ok());
+        // Ein Ordner-Link liefert keine Dateien; ohne die Prüfung löschte `delete` die Welt gegen eine leere Sicherung.
+        assert!(check(&[]).is_err());
+        assert!(check(&["level.dat", "data/aux.mcfunction"]).is_err());
+        assert!(check(&["level.dat", "startup", "Startup"]).is_err());
     }
 
     #[test]
@@ -479,7 +483,7 @@ mod tests {
         let new = NewInstance { name: "Welten".into(), minecraft_version: "1.21.4".into(), loader: ModLoader::Vanilla, loader_version: None };
         let id = state.instances.insert(Instance::from_new(new)).unwrap().id;
         let backups = state.dirs.backups(&id);
-        write_files(&backups, &[("Alt-1.zip", b"zip"), ("Alt-2.zip.part", b"halb"), ("Neu-3.deleting/level.dat", b"weg"), ("notiz.txt", b"x")]);
+        write_files::<&[u8]>(&backups, &[("Alt-1.zip", b"zip"), ("Alt-2.zip.part", b"halb"), ("Neu-3.deleting/level.dat", b"weg"), ("notiz.txt", b"x")]);
 
         assert_eq!(remove_leftovers(&state).await.unwrap(), 2);
 

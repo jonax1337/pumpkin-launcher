@@ -51,6 +51,11 @@ impl AppState {
         })
     }
 
+    /// Nur die ID einer existierenden Instanz wird Teil eines Pfads.
+    pub fn require_instance(&self, id: &str) -> AppResult<()> {
+        self.instances.get(id).map(drop)
+    }
+
     pub fn operation(&self, id: Option<&str>) -> AppResult<tokio::sync::MutexGuard<'_, ()>> {
         let guard = self.operation.try_lock().map_err(|_| AppError::Invalid("Eine Installation/Änderung läuft bereits".into()))?;
         if id.is_some_and(|id| self.running().contains_key(id)) { return Err(AppError::Invalid("Instanz läuft noch".into())); }

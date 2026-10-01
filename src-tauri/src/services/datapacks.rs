@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use super::{
-    blocking, content, local_files,
+    blocking, content, entries, has_extension, local_files, move_to_trash,
     modrinth::{self, invalid, Version},
     providers::zip_files,
     worlds, Dirs,
@@ -106,7 +106,7 @@ pub fn list(dirs: &Dirs, instance_id: &str, world_id: &str) -> AppResult<Vec<Dat
 pub fn add_files(dirs: &Dirs, instance_id: &str, world_id: &str, paths: &[String]) -> AppResult<()> {
     let world = worlds::world_dir(dirs, instance_id, world_id)?;
     let files = paths.iter().map(|path| read_zip(path)).collect::<AppResult<Vec<_>>>()?;
-    place(dirs, &world, files)?;
+    place(&dirs.root, &world, files)?;
     tracing::info!(instance = %instance_id, world = %world_id, count = paths.len(), "Datenpakete hinzugefügt");
     Ok(())
 }
@@ -131,8 +131,8 @@ pub async fn install(
     let file = modrinth::primary(&version, ".zip")?;
     progress("download", 0, 1);
     let data = modrinth::download(&client, &file).await?;
-    let dirs = state.dirs.clone();
-    blocking(move |_| place(&dirs, &world, vec![(file.filename, data)])).await?;
+    let root = state.dirs.root.clone();
+    blocking(move |_| place(&root, &world, vec![(file.filename, data)])).await?;
     tracing::info!(instance = %instance_id, world = %world_id, version = %version_id, "Datenpaket installiert");
     progress("complete", 1, 1);
     Ok(())
@@ -141,11 +141,11 @@ pub async fn install(
 /// Legt das Paket `id` in den Papierkorb (lässt sich dort wiederherstellen). Nur ein Name aus der Liste wird zum Pfad.
 pub fn remove(dirs: &Dirs, instance_id: &str, world_id: &str, id: &str) -> AppResult<()> {
     let world = worlds::world_dir(dirs, instance_id, world_id)?;
-    let listed = worlds::entries(&world.join(DATAPACKS))?.iter().any(|entry| entry.file_name() == id && pack_is_folder(entry).is_some());
+    let listed = entries(&world.join(DATAPACKS))?.iter().any(|entry| entry.file_name() == id && pack_kind(entry).is_some());
     if !listed {
         return Err(AppError::NotFound { kind: "Datenpaket", id: id.to_owned() });
     }
-    trash::delete(world.join(DATAPACKS).join(id))?;
+    move_to_trash(&world.join(DATAPACKS).join(id))?;
     tracing::info!(instance = %instance_id, world = %world_id, pack = %id, "Datenpaket in den Papierkorb gelegt");
     Ok(())
 }
@@ -153,7 +153,7 @@ pub fn remove(dirs: &Dirs, instance_id: &str, world_id: &str, id: &str) -> AppRe
 fn packs_in(world: &Path) -> AppResult<Vec<Datapack>> {
     let lists = pack_lists(world);
     let mut packs: Vec<Datapack> =
-        worlds::entries(&world.join(DATAPACKS))?.iter().filter_map(|entry| read_pack(entry, &lists)).collect();
+        entries(&world.join(DATAPACKS))?.iter().filter_map(|entry| read_pack(entry, &lists)).collect();
     packs.sort_by_key(|pack| pack.name.to_lowercase());
     Ok(packs)
 }
@@ -166,14 +166,19 @@ fn pack_lists(world: &Path) -> PackLists {
     })
 }
 
-/// `Some(true)` für einen Paket-Ordner, `Some(false)` für eine `.zip`-Datei, sonst ist der Eintrag kein Datenpaket.
-fn pack_is_folder(entry: &fs::DirEntry) -> Option<bool> {
+enum PackKind {
+    Folder,
+    Zip,
+}
+
+/// Ordner und `.zip`-Dateien sind Datenpakete, alles andere nicht.
+fn pack_kind(entry: &fs::DirEntry) -> Option<PackKind> {
     // DirEntry folgt keinen Symlinks: ein Link ist hier weder Ordner noch Datei.
     let kind = entry.file_type().ok()?;
     if kind.is_dir() {
-        Some(true)
+        Some(PackKind::Folder)
     } else if kind.is_file() && is_zip(entry.file_name().to_str()?) {
-        Some(false)
+        Some(PackKind::Zip)
     } else {
         None
     }
@@ -182,7 +187,10 @@ fn pack_is_folder(entry: &fs::DirEntry) -> Option<bool> {
 /// Ist `pack.mcmeta` unlesbar, fehlt nur die Beschreibung.
 fn read_pack(entry: &fs::DirEntry, lists: &PackLists) -> Option<Datapack> {
     let id = entry.file_name().into_string().ok()?;
-    let mcmeta = if pack_is_folder(entry)? { folder_mcmeta(&entry.path()) } else { file_mcmeta(&entry.path()) };
+    let mcmeta = match pack_kind(entry)? {
+        PackKind::Folder => folder_mcmeta(&entry.path()),
+        PackKind::Zip => file_mcmeta(&entry.path()),
+    };
     let description = mcmeta.ok().and_then(|mcmeta| mcmeta.description());
     Some(Datapack { name: pack_name(&id).to_owned(), description, enabled: lists.state(&id), id })
 }
@@ -232,7 +240,7 @@ fn strip_formatting(text: &str) -> String {
 }
 
 fn is_zip(name: &str) -> bool {
-    Path::new(name).extension().is_some_and(|ext| ext.eq_ignore_ascii_case("zip"))
+    has_extension(name, "zip")
 }
 
 fn pack_name(id: &str) -> &str {
@@ -255,7 +263,7 @@ fn read_zip(path: &str) -> AppResult<(String, Vec<u8>)> {
 
 /// Prüft alle Zips und legt sie dann unter `datapacks/` ab, ohne Vorhandenes zu ersetzen. Schlägt das Ablegen fehl,
 /// verschwinden die schon abgelegten wieder.
-fn place(dirs: &Dirs, world: &Path, files: Vec<(String, Vec<u8>)>) -> AppResult<()> {
+fn place(root: &Path, world: &Path, files: Vec<(String, Vec<u8>)>) -> AppResult<()> {
     let folder = world.join(DATAPACKS);
     for (name, data) in &files {
         check(name, data)?;
@@ -266,7 +274,7 @@ fn place(dirs: &Dirs, world: &Path, files: Vec<(String, Vec<u8>)>) -> AppResult<
     let mut created = Vec::new();
     for (name, data) in files {
         let target = folder.join(name);
-        content::write_new(&dirs.root, &target, &data).map_err(|err| content::rollback(&created, err))?;
+        content::write_new(root, &target, &data).map_err(|err| content::rollback(&created, err))?;
         created.push(target);
     }
     Ok(())
@@ -299,6 +307,7 @@ fn has_pack_layout<'a>(paths: impl Iterator<Item = &'a Path>) -> bool {
 mod tests {
     use super::*;
     use crate::models::new_id;
+    use crate::services::{gzip_nbt, write_files};
     use std::io::Write;
 
     const MCMETA_JSON: &str = r#"{"pack": {"pack_format": 48, "description": "Mehr Biome"}}"#;
@@ -319,9 +328,7 @@ mod tests {
     /// `level.dat` wie vom Spiel, mit den Listen der Datenpakete.
     fn level_dat(enabled: &[&str], disabled: &[&str]) -> Vec<u8> {
         let level = fastnbt::nbt!({ "Data": { "LevelName": "Welt", "DataPacks": { "Enabled": enabled, "Disabled": disabled } } });
-        let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
-        gz.write_all(&fastnbt::to_bytes(&level).unwrap()).unwrap();
-        gz.finish().unwrap()
+        gzip_nbt(&level)
     }
 
     /// Welt „Welt“ mit `files` unter ihrem Ordner.
@@ -329,12 +336,8 @@ mod tests {
         let root = std::env::temp_dir().join(new_id());
         let dirs = Dirs::new(&root);
         let world = dirs.saves("i").join("Welt");
-        fs::create_dir_all(&world).unwrap();
-        fs::write(world.join("level.dat"), level).unwrap();
-        for (path, data) in files {
-            fs::create_dir_all(world.join(path).parent().unwrap()).unwrap();
-            fs::write(world.join(path), data).unwrap();
-        }
+        write_files(&world, &[("level.dat", level)]);
+        write_files(&world, files);
         (root, dirs)
     }
 

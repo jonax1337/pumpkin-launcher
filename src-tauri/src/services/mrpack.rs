@@ -2,7 +2,7 @@
 //! liegt unter `overrides/`. Vorlagen und „Exportieren…“ schreiben darüber; der Pack-Import liest es wieder.
 use std::{
     fs,
-    io::{self, Write},
+    io::Write,
     path::{Path, PathBuf},
 };
 
@@ -10,10 +10,9 @@ use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
 use super::{
-    blocking, check_cancelled, content,
-    download::RemoveOnDrop,
+    add_zip_file, blocking, check_cancelled, content,
     modrinth::{self, invalid},
-    mods, Dirs, ZIP64_FROM,
+    mods, write_zip_atomic, Dirs,
 };
 use crate::{
     error::AppResult,
@@ -171,30 +170,23 @@ fn overrides(dirs: &Dirs, instance: &Instance, include: &[String], remote: &[Val
 
 /// Schreibt das Archiv über `<path>.part`; bei einem Fehler oder Abbruch bleibt am Ziel nichts Halbes liegen.
 fn write_zip(path: &Path, index: &Value, meta: &Value, files: Vec<(String, PathBuf)>, stop: &CancellationToken) -> AppResult<()> {
-    let tmp = path.with_extension("mrpack.part");
-    let mut guard = RemoveOnDrop(Some(tmp.clone()));
-    let mut zip = zip::ZipWriter::new(fs::File::create(&tmp)?);
-    let options = zip::write::SimpleFileOptions::default();
-    zip.start_file("modrinth.index.json", options)?;
-    zip.write_all(&serde_json::to_vec_pretty(index)?)?;
-    zip.start_file(content::PUMPKIN_FILE, options)?;
-    zip.write_all(&serde_json::to_vec_pretty(meta)?)?;
-    for (name, source) in files {
-        check_cancelled(stop)?;
-        // Gleiche Prüfung wie der Import, der den ganzen Eintragsnamen samt `overrides/` sieht.
-        let entry = format!("overrides/{name}");
-        content::safe_path(&entry)?;
-        let mut file = fs::File::open(&source).map_err(|e| invalid(format!("{name} nicht lesbar: {e}")))?;
-        zip.start_file(entry, options.large_file(file.metadata()?.len() >= ZIP64_FROM))?;
-        io::copy(&mut file, &mut zip)?;
-    }
-    // Erst schließen, dann umbenennen: Windows verschiebt keine offene Datei.
-    drop(zip.finish()?);
-    // Ein Abbruch während der letzten Datei darf kein fertiges Pack am Ziel hinterlassen.
-    check_cancelled(stop)?;
-    fs::rename(&tmp, path)?;
-    guard.0 = None;
-    Ok(())
+    write_zip_atomic(path, "mrpack.part", |zip| {
+        let options = zip::write::SimpleFileOptions::default();
+        zip.start_file("modrinth.index.json", options)?;
+        zip.write_all(&serde_json::to_vec_pretty(index)?)?;
+        zip.start_file(content::PUMPKIN_FILE, options)?;
+        zip.write_all(&serde_json::to_vec_pretty(meta)?)?;
+        for (name, source) in files {
+            check_cancelled(stop)?;
+            // Gleiche Prüfung wie der Import, der den ganzen Eintragsnamen samt `overrides/` sieht.
+            let entry = format!("overrides/{name}");
+            content::safe_path(&entry)?;
+            let mut file = fs::File::open(&source).map_err(|e| invalid(format!("{name} nicht lesbar: {e}")))?;
+            add_zip_file(zip, &entry, &mut file)?;
+        }
+        // Ein Abbruch während der letzten Datei darf kein fertiges Pack am Ziel hinterlassen.
+        check_cancelled(stop)
+    })
 }
 
 #[cfg(test)]
