@@ -130,7 +130,7 @@ pub async fn install_mod(
     if kind == ModKind::Mod {
         // Existing Modrinth roots also enter the graph, so incompatibilities work in both directions.
         for v in modrinth::resolve(&client, version, &instance).await? {
-            modrinth::select(&mut selected, v)?;
+            modrinth::insert_if_consistent(&mut selected, v)?;
         }
     } else {
         // Resource packs and shaders have no loader graph: MC version only, no dependencies.
@@ -447,7 +447,7 @@ pub async fn update_mods(
     if let Some((_, root)) = root {
         let planned = Instance { mods: mods.clone(), ..instance.clone() };
         for v in modrinth::resolve(&client, &root.id, &planned).await? {
-            modrinth::select(&mut selected, v)?;
+            modrinth::insert_if_consistent(&mut selected, v)?;
         }
         let mut deps: Vec<_> = selected.values().collect();
         deps.sort_by(|a, b| a.project_id.cmp(&b.project_id));

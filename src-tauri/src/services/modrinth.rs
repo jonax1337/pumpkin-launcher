@@ -1,11 +1,12 @@
 //! Modrinth v2: GET plus der lesende `POST version_files/update`, feste Origins, begrenzte Antworten.
 use super::{
+    content::safe_path,
     limits::{API_JSON_LIMIT, FILE_LIMIT, PAGE_SIZE, QUERY_MAX},
     transport::{base_client_builder, read_capped, Digests, DOWNLOAD_TOO_BIG},
 };
 use crate::{
     error::{AppError, AppResult},
-    models::{Instance, ModKind},
+    models::{Instance, ModKind, ModSource},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
@@ -74,7 +75,7 @@ pub struct Version {
     pub game_versions: Vec<String>,
     pub loaders: Vec<String>,
     /// release, beta oder alpha; fehlt es, gilt die Version als Release.
-    #[serde(default = "release")]
+    #[serde(default = "default_release")]
     pub version_type: String,
     /// ISO-8601 (UTC, gleiches Format bei Modrinth), daher als Text vergleichbar.
     #[serde(default)]
@@ -82,7 +83,7 @@ pub struct Version {
     pub files: Vec<File>,
     pub dependencies: Vec<Dependency>,
 }
-fn release() -> String {
+fn default_release() -> String {
     "release".into()
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,7 +141,7 @@ async fn api<T: DeserializeOwned>(
     Ok(serde_json::from_slice(&bytes(client.get(url), API_JSON_LIMIT).await?)?)
 }
 /// Quilt lädt auch Fabric-Mods: Katalog und Versionen fragen dann beide Loader an (ODER).
-fn with_fabric(loader: &str) -> Vec<&str> {
+fn loaders_to_query(loader: &str) -> Vec<&str> {
     if loader == "quilt" { vec!["quilt", "fabric"] } else { vec![loader] }
 }
 
@@ -166,7 +167,7 @@ pub async fn search(
     }
     if let Some(loader) = loader {
         identifier(&loader)?;
-        facets.push(with_fabric(&loader).iter().map(|l| format!("categories:{l}")).collect());
+        facets.push(loaders_to_query(&loader).iter().map(|l| format!("categories:{l}")).collect());
     }
     // Ohne Sortierung: ohne Suchbegriff die beliebtesten Projekte zuerst.
     let index = index.unwrap_or_else(|| if query.trim().is_empty() { "downloads" } else { "relevance" }.into());
@@ -220,7 +221,7 @@ pub async fn versions(
     }
     if let Some(loader) = loader {
         identifier(loader)?;
-        q.push(("loaders".into(), serde_json::to_string(&with_fabric(loader))?));
+        q.push(("loaders".into(), serde_json::to_string(&loaders_to_query(loader))?));
     }
     api(client, &format!("project/{id}/version"), &q).await
 }
@@ -317,25 +318,20 @@ pub async fn download(client: &reqwest::Client, file: &File) -> AppResult<Vec<u8
     verify(&data, file.size, &file.hashes)?;
     Ok(data)
 }
+/// Die als primär markierte Datei mit der Endung `extension`, sonst die einzige; ein bloßer Dateiname.
 pub fn primary(version: &Version, extension: &str) -> AppResult<File> {
-    let files: Vec<_> = version
-        .files
-        .iter()
-        .filter(|f| f.filename.ends_with(extension))
-        .collect();
+    let files: Vec<&File> = version.files.iter().filter(|f| f.filename.ends_with(extension)).collect();
+    let only = || match files.as_slice() {
+        [only] => Some(*only),
+        _ => None,
+    };
     let selected = files
         .iter()
         .find(|f| f.primary)
         .copied()
-        .or_else(|| {
-            if files.len() == 1 {
-                Some(files[0])
-            } else {
-                None
-            }
-        })
+        .or_else(only)
         .ok_or_else(|| AppError::invalid("Keine eindeutige primäre Datei"))?;
-    super::content::safe_path(&selected.filename)?;
+    safe_path(&selected.filename)?;
     if selected.filename.contains('/') {
         return Err(AppError::invalid("Dateiname enthält Verzeichnis"));
     }
@@ -347,7 +343,9 @@ pub fn compatible(v: &Version, instance: &Instance) -> AppResult<()> {
     }
     Ok(())
 }
-pub fn select(selected: &mut HashMap<String, Version>, v: Version) -> AppResult<bool> {
+/// Nimmt `v` in `selected` auf, sofern das Projekt dort noch fehlt; `true`, wenn es neu hinzukam. Eine andere
+/// Version desselben Projekts ist ein Fehler.
+pub fn insert_if_consistent(selected: &mut HashMap<String, Version>, v: Version) -> AppResult<bool> {
     if let Some(old) = selected.get(&v.project_id) {
         if old.id != v.id {
             return Err(AppError::invalid(format!("Zwei Mods brauchen unterschiedliche Versionen von {}", v.project_id)));
@@ -357,30 +355,7 @@ pub fn select(selected: &mut HashMap<String, Version>, v: Version) -> AppResult<
     selected.insert(v.project_id.clone(), v);
     Ok(true)
 }
-/// Exact constraints supersede provisional latest selections; rebuild to remove their descendants.
-/// ponytail: conservative retained pins, no SAT/backtracking; conflicting exact pins fail closed.
-fn pin_and_rebuild(
-    pinned: &mut HashMap<String, Version>,
-    selected: &mut HashMap<String, Version>,
-    queue: &mut VecDeque<Version>,
-    deferred: &mut VecDeque<String>,
-    child: &Version,
-) -> AppResult<bool> {
-    select(pinned, child.clone())?;
-    if selected
-        .get(&child.project_id)
-        .is_some_and(|v| v.id != child.id)
-    {
-        selected.clear();
-        deferred.clear();
-        queue.clear();
-        let mut roots: Vec<_> = pinned.values().cloned().collect();
-        roots.sort_by(|a, b| a.project_id.cmp(&b.project_id));
-        queue.extend(roots);
-        return Ok(true);
-    }
-    Ok(false)
-}
+
 /// Erklärt eine der gewählten Versionen eine andere der gewählten für unverträglich?
 pub fn has_incompatibility(selected: &HashMap<String, Version>) -> bool {
     selected.values().flat_map(|v| &v.dependencies).filter(|d| d.dependency_type == "incompatible").any(|d| {
@@ -389,140 +364,244 @@ pub fn has_incompatibility(selected: &HashMap<String, Version>) -> bool {
         })
     })
 }
-pub async fn resolve(
-    client: &reqwest::Client,
-    root: &str,
-    instance: &Instance,
-) -> AppResult<Vec<Version>> {
+
+/// Löst die Pflicht-Abhängigkeiten der Version `root` gegen die aktiven Modrinth-Mods der Instanz auf und liefert
+/// alle beteiligten Versionen nach Projekt sortiert.
+pub async fn resolve(client: &reqwest::Client, root: &str, instance: &Instance) -> AppResult<Vec<Version>> {
     let root = version(client, root).await?;
-    let mut selected = HashMap::new();
-    let mut installed: Vec<String> = instance
+    let installed = installed_versions(client, instance).await?;
+    let mut resolver = Resolver::new(client, instance, root, installed)?;
+    resolver.run().await?;
+    resolver.finish()
+}
+
+/// Versionen der aktiven Modrinth-Mods der Instanz, eine Sammelabfrage je 100.
+async fn installed_versions(client: &reqwest::Client, instance: &Instance) -> AppResult<Vec<Version>> {
+    let mut ids: Vec<String> = instance
         .mods
         .iter()
         .filter(|m| m.enabled && m.kind == ModKind::Mod)
         .filter_map(|m| match &m.source {
-            crate::models::ModSource::Modrinth { version_id, .. } => Some(version_id.clone()),
+            ModSource::Modrinth { version_id, .. } => Some(version_id.clone()),
             _ => None,
         })
         .collect();
-    installed.sort();
-    installed.dedup();
-    if installed.len() > MAX_INSTALLED_MODS {
+    ids.sort();
+    ids.dedup();
+    if ids.len() > MAX_INSTALLED_MODS {
         return Err(AppError::invalid("Zu viele installierte Mods"));
     }
-    let installed = versions_by_ids(client, &installed).await?;
-    // Already installed projects came with the instance (often from a pack): they only pin the graph.
-    // The client/compatibility checks apply to what this operation adds, the root included.
-    let known: HashSet<String> = installed
-        .iter()
-        .map(|v| v.project_id.clone())
-        .filter(|p| p != &root.project_id)
-        .collect();
-    let mut queue = VecDeque::from([root]);
-    queue.extend(installed);
-    // Only requests count against the limits; installed versions cost one bulk request per 100.
-    let mut calls: u32 = 1;
-    let mut pinned = HashMap::new();
-    for v in &queue {
-        select(&mut pinned, v.clone())?;
+    versions_by_ids(client, &ids).await
+}
+
+/// Zählt die Anfragen eines Abhängigkeitsabgleichs und die Neuaufbauten des Graphen gegen ihre Grenzen.
+struct ResolveBudget {
+    calls: u32,
+    rebuilds: u32,
+}
+
+impl ResolveBudget {
+    /// Die Wurzelversion ist schon geladen; die Sammelabfragen der installierten Versionen zählen nicht.
+    fn new() -> Self {
+        Self { calls: 1, rebuilds: 0 }
     }
-    let mut deferred: VecDeque<String> = VecDeque::new();
-    let mut rebuilds = 0u32;
-    loop {
-        if queue.is_empty() {
-            let Some(id) = deferred.pop_front() else {
-                break;
-            };
-            if selected.contains_key(&id) {
-                continue;
+
+    /// Zählt eine Anfrage, deren Grenze erst die nächste Prüfung zieht.
+    fn count_call(&mut self) {
+        self.calls += 1;
+    }
+
+    fn spend_call(&mut self) -> AppResult<()> {
+        self.count_call();
+        self.check_calls()
+    }
+
+    fn check_calls(&self) -> AppResult<()> {
+        if self.calls > MAX_API_CALLS {
+            return Err(limit_reached());
+        }
+        Ok(())
+    }
+
+    fn spend_rebuild(&mut self) -> AppResult<()> {
+        self.rebuilds += 1;
+        if self.rebuilds > MAX_REBUILDS {
+            return Err(AppError::invalid("Dependency rebuild limit erreicht"));
+        }
+        Ok(())
+    }
+}
+
+fn limit_reached() -> AppError {
+    AppError::invalid("Dependency-Limit erreicht")
+}
+
+/// Zustand des Abhängigkeitsgraphen: exakt festgelegte und vorläufig gewählte Versionen, dazu die Versionen und
+/// Projekte, die noch zu besuchen sind.
+#[derive(Default)]
+struct Graph {
+    pinned: HashMap<String, Version>,
+    selected: HashMap<String, Version>,
+    queue: VecDeque<Version>,
+    deferred: VecDeque<String>,
+}
+
+impl Graph {
+    /// Exakte Vorgaben schlagen vorläufig gewählte neueste Versionen; dann wird neu aufgebaut, damit deren
+    /// Nachfahren verschwinden. `true`, wenn neu aufgebaut wird.
+    /// ponytail: festgelegte Stände bleiben, kein SAT/Backtracking; widersprüchliche exakte Vorgaben scheitern.
+    fn pin_and_rebuild(&mut self, child: &Version) -> AppResult<bool> {
+        insert_if_consistent(&mut self.pinned, child.clone())?;
+        let superseded = self.selected.get(&child.project_id).is_some_and(|v| v.id != child.id);
+        if !superseded {
+            return Ok(false);
+        }
+        self.selected.clear();
+        self.deferred.clear();
+        self.queue.clear();
+        let mut roots: Vec<_> = self.pinned.values().cloned().collect();
+        roots.sort_by(|a, b| a.project_id.cmp(&b.project_id));
+        self.queue.extend(roots);
+        Ok(true)
+    }
+
+    /// Festgelegte oder gewählte Version des Projekts `project_id`.
+    fn chosen_of_project(&self, project_id: &str) -> Option<&Version> {
+        self.pinned.get(project_id).or_else(|| self.selected.get(project_id))
+    }
+
+    /// Festgelegte oder gewählte Version mit der Versions-ID `version_id`.
+    fn chosen_version(&self, version_id: &str) -> Option<&Version> {
+        self.pinned.values().chain(self.selected.values()).find(|v| v.id == version_id)
+    }
+}
+
+/// Breitensuche über die Pflicht-Abhängigkeiten innerhalb der Grenzen von [`ResolveBudget`].
+struct Resolver<'a> {
+    client: &'a reqwest::Client,
+    instance: &'a Instance,
+    /// Schon installierte Projekte kamen mit der Instanz (oft aus einem Pack) und legen den Graphen nur fest. Die
+    /// Client- und Verträglichkeitsprüfungen gelten dem, was dieser Vorgang hinzufügt, die Wurzel eingeschlossen.
+    installed: HashSet<String>,
+    graph: Graph,
+    budget: ResolveBudget,
+}
+
+impl<'a> Resolver<'a> {
+    fn new(client: &'a reqwest::Client, instance: &'a Instance, root: Version, installed: Vec<Version>) -> AppResult<Self> {
+        let installed_projects = installed.iter().map(|v| v.project_id.clone()).filter(|p| p != &root.project_id).collect();
+        let mut graph = Graph { queue: VecDeque::from([root]), ..Graph::default() };
+        graph.queue.extend(installed);
+        for v in &graph.queue {
+            insert_if_consistent(&mut graph.pinned, v.clone())?;
+        }
+        Ok(Self { client, instance, installed: installed_projects, graph, budget: ResolveBudget::new() })
+    }
+
+    async fn run(&mut self) -> AppResult<()> {
+        while let Some(v) = self.next_version().await? {
+            self.visit(v).await?;
+        }
+        Ok(())
+    }
+
+    /// Nächste Version aus der Warteschlange; ist sie leer, die passende eines zurückgestellten Projekts.
+    async fn next_version(&mut self) -> AppResult<Option<Version>> {
+        if let Some(v) = self.graph.queue.pop_front() {
+            return Ok(Some(v));
+        }
+        while let Some(project_id) = self.graph.deferred.pop_front() {
+            if !self.graph.selected.contains_key(&project_id) {
+                self.budget.spend_call()?;
+                return self.runnable_version_of(&project_id).await.map(Some);
             }
-            calls += 1;
-            if calls > MAX_API_CALLS {
-                return Err(AppError::invalid("Dependency-Limit erreicht"));
-            }
-            // Ohne Loader-Filter anfragen: Quilt nimmt Quilt- und Fabric-Versionen.
-            let child = versions(client, &id, Some(&instance.minecraft_version), None)
+        }
+        Ok(None)
+    }
+
+    /// Neueste Version des Projekts, die die Instanz starten kann. Ohne Loader-Filter angefragt: Quilt nimmt Quilt-
+    /// und Fabric-Versionen.
+    async fn runnable_version_of(&self, project_id: &str) -> AppResult<Version> {
+        versions(self.client, project_id, Some(&self.instance.minecraft_version), None)
             .await?
             .into_iter()
-            .find(|v| instance.loader.runs(&v.loaders))
-            .ok_or_else(|| AppError::invalid("Keine kompatible Dependency"))?;
-            queue.push_back(child);
+            .find(|v| self.instance.loader.runs(&v.loaders))
+            .ok_or_else(|| AppError::invalid("Keine kompatible Dependency"))
+    }
+
+    async fn visit(&mut self, v: Version) -> AppResult<()> {
+        let added = !self.installed.contains(&v.project_id);
+        if added {
+            compatible(&v, self.instance)?;
         }
-        let Some(v) = queue.pop_front() else { continue };
-        let new = !known.contains(&v.project_id);
-        if new {
-            compatible(&v, instance)?;
+        if !insert_if_consistent(&mut self.graph.selected, v.clone())? {
+            return Ok(());
         }
-        if !select(&mut selected, v.clone())? {
-            continue;
+        if added {
+            self.check_added_project(&v).await?;
         }
-        if new {
-            calls += 1;
-            if calls > MAX_API_CALLS || selected.keys().filter(|p| !known.contains(*p)).count() > MAX_NEW_PROJECTS {
-                return Err(AppError::invalid("Dependency-Limit erreicht"));
-            }
-            let p = project(client, &v.project_id).await?;
-            if p.id != v.project_id || p.project_type != "mod" || p.client_side == "unsupported" {
-                return Err(AppError::invalid("Projekt ist keine Client-Mod"));
-            }
+        self.enqueue_dependencies(&v).await
+    }
+
+    /// Ein hinzukommendes Projekt passt noch ins Budget neuer Projekte und ist eine Client-Mod.
+    async fn check_added_project(&mut self, v: &Version) -> AppResult<()> {
+        self.budget.spend_call()?;
+        if self.graph.selected.keys().filter(|p| !self.installed.contains(*p)).count() > MAX_NEW_PROJECTS {
+            return Err(limit_reached());
         }
-        for d in &v.dependencies {
-            if d.dependency_type != "required" {
-                continue;
+        let p = project(self.client, &v.project_id).await?;
+        if p.id != v.project_id || p.project_type != "mod" || p.client_side == "unsupported" {
+            return Err(AppError::invalid("Projekt ist keine Client-Mod"));
+        }
+        Ok(())
+    }
+
+    async fn enqueue_dependencies(&mut self, v: &Version) -> AppResult<()> {
+        for d in v.dependencies.iter().filter(|d| d.dependency_type == "required") {
+            self.budget.check_calls()?;
+            if self.graph.queue.len() > MAX_QUEUE_SLACK + self.installed.len() {
+                return Err(limit_reached());
             }
-            if calls > MAX_API_CALLS || queue.len() > MAX_QUEUE_SLACK + known.len() {
-                return Err(AppError::invalid("Dependency-Limit erreicht"));
-            }
-            let child = if let Some(id) = &d.version_id {
-                match pinned.values().chain(selected.values()).find(|p| &p.id == id) {
-                    Some(same) => same.clone(),
-                    None => {
-                        calls += 1;
-                        version(client, id).await?
-                    }
-                }
-            } else if let Some(id) = &d.project_id {
-                if let Some(existing) = pinned.get(id).or_else(|| selected.get(id)) {
-                    existing.clone()
-                } else {
-                    deferred.push_back(id.clone());
-                    continue;
-                }
-            } else {
-                return Err(AppError::invalid(
-                    "Required Datei-Dependency ohne Projekt/Version nicht unterstützt",
-                ));
-            };
-            if d.project_id
-                .as_ref()
-                .is_some_and(|p| p != &child.project_id)
-            {
+            let Some(child) = self.next_child(d).await? else { continue };
+            if d.project_id.as_ref().is_some_and(|p| p != &child.project_id) {
                 return Err(AppError::invalid("Dependency-Projekt stimmt nicht"));
             }
-            if d.version_id.is_some()
-                && pin_and_rebuild(
-                    &mut pinned,
-                    &mut selected,
-                    &mut queue,
-                    &mut deferred,
-                    &child,
-                )?
-            {
-                rebuilds += 1;
-                if rebuilds > MAX_REBUILDS {
-                    return Err(AppError::invalid("Dependency rebuild limit erreicht"));
-                }
-                break;
+            if d.version_id.is_some() && self.graph.pin_and_rebuild(&child)? {
+                return self.budget.spend_rebuild();
             }
-            queue.push_back(child);
+            self.graph.queue.push_back(child);
         }
+        Ok(())
     }
-    if has_incompatibility(&selected) {
-        return Err(AppError::invalid("Inkompatible Dependencies"));
+
+    /// Version, die `d` verlangt: die exakt genannte oder die schon gewählte des Projekts. `None`, wenn das Projekt
+    /// zurückgestellt wird, bis die Warteschlange leer ist.
+    async fn next_child(&mut self, d: &Dependency) -> AppResult<Option<Version>> {
+        if let Some(version_id) = &d.version_id {
+            if let Some(same) = self.graph.chosen_version(version_id) {
+                return Ok(Some(same.clone()));
+            }
+            self.budget.count_call();
+            return version(self.client, version_id).await.map(Some);
+        }
+        let Some(project_id) = &d.project_id else {
+            return Err(AppError::invalid("Required Datei-Dependency ohne Projekt/Version nicht unterstützt"));
+        };
+        if let Some(existing) = self.graph.chosen_of_project(project_id) {
+            return Ok(Some(existing.clone()));
+        }
+        self.graph.deferred.push_back(project_id.clone());
+        Ok(None)
     }
-    let mut result: Vec<_> = selected.into_values().collect();
-    result.sort_by(|a, b| a.project_id.cmp(&b.project_id));
-    Ok(result)
+
+    fn finish(self) -> AppResult<Vec<Version>> {
+        if has_incompatibility(&self.graph.selected) {
+            return Err(AppError::invalid("Inkompatible Dependencies"));
+        }
+        let mut result: Vec<_> = self.graph.selected.into_values().collect();
+        result.sort_by(|a, b| a.project_id.cmp(&b.project_id));
+        Ok(result)
+    }
 }
 
 #[cfg(test)]
@@ -536,7 +615,7 @@ mod tests {
             version_number: "1".into(),
             game_versions: vec!["1.21.1".into()],
             loaders: vec!["fabric".into()],
-            version_type: release(),
+            version_type: default_release(),
             date_published: String::new(),
             files: vec![],
             dependencies: vec![],
@@ -545,9 +624,9 @@ mod tests {
     #[test]
     fn dependency_dedup_cycle_and_conflict() {
         let mut selected = HashMap::new();
-        assert!(select(&mut selected, v("v1")).unwrap());
-        assert!(!select(&mut selected, v("v1")).unwrap());
-        assert!(select(&mut selected, v("v2")).is_err());
+        assert!(insert_if_consistent(&mut selected, v("v1")).unwrap());
+        assert!(!insert_if_consistent(&mut selected, v("v1")).unwrap());
+        assert!(insert_if_consistent(&mut selected, v("v2")).is_err());
         assert_eq!(selected["project"].id, "v1");
     }
     #[test]
@@ -560,30 +639,20 @@ mod tests {
         b1.id = "b1".into();
         let mut c = v("c1");
         c.project_id = "c".into();
-        let mut pinned = HashMap::from([("a".into(), a.clone())]);
-        let mut selected = HashMap::from([("a".into(), a), ("b".into(), b2), ("c".into(), c)]);
-        let mut queue = VecDeque::new();
-        let mut deferred = VecDeque::from(["old-child".into()]);
-        assert!(
-            pin_and_rebuild(&mut pinned, &mut selected, &mut queue, &mut deferred, &b1).unwrap()
-        );
-        assert!(selected.is_empty());
-        assert!(deferred.is_empty());
-        assert_eq!(
-            queue.iter().map(|v| v.id.as_str()).collect::<Vec<_>>(),
-            vec!["a1", "b1"]
-        );
-        assert_eq!(pinned["b"].id, "b1");
+        let mut graph = Graph {
+            pinned: HashMap::from([("a".into(), a.clone())]),
+            selected: HashMap::from([("a".into(), a), ("b".into(), b2), ("c".into(), c)]),
+            queue: VecDeque::new(),
+            deferred: VecDeque::from(["old-child".into()]),
+        };
+        assert!(graph.pin_and_rebuild(&b1).unwrap());
+        assert!(graph.selected.is_empty());
+        assert!(graph.deferred.is_empty());
+        assert_eq!(graph.queue.iter().map(|v| v.id.as_str()).collect::<Vec<_>>(), vec!["a1", "b1"]);
+        assert_eq!(graph.pinned["b"].id, "b1");
         let mut conflicting = b1.clone();
         conflicting.id = "b3".into();
-        assert!(pin_and_rebuild(
-            &mut pinned,
-            &mut selected,
-            &mut queue,
-            &mut deferred,
-            &conflicting
-        )
-        .is_err());
+        assert!(graph.pin_and_rebuild(&conflicting).is_err());
     }
     #[test]
     fn incompatibility_matches_the_exact_version_or_the_whole_project() {
