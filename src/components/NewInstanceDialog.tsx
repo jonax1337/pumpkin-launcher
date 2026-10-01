@@ -10,9 +10,9 @@ import {
 } from "@/ui";
 import { MemoryChooser } from "@/components/common";
 import { useInstallPack } from "@/components/ContentBrowser";
-import { ImportPane, useForeignSelection } from "@/components/LauncherImport";
+import { ImportPane } from "@/components/LauncherImport";
 import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
-import { useImportInstances } from "@/hooks/useImport";
+import { useForeignSelection, useImportInstances } from "@/hooks/useImport";
 import { useCreateInstance, useLoaderVersions, useVersions } from "@/hooks/useInstances";
 import { useDeleteTemplate, useTemplates } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
@@ -400,10 +400,11 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
 }
 
 /**
- * „Neue Instanz“ um einen beliebigen Auslöser (`children`). Eigene, Modpack, Datei, Vorlage oder anderer Launcher;
- * `tab` wählt, womit der Dialog öffnet. Die `primary`-Instanz nimmt aufs Fenster gezogene .mrpack-Dateien und Strg+N (`?neu=1`) an.
+ * „Neue Instanz“ um einen beliebigen Auslöser (`children`): Eigene, Modpack, Datei, Vorlage oder anderer Launcher.
+ * Die `primary`-Instanz der Bibliothek braucht keinen Auslöser: Sie öffnet über `?neu=1` (Strg+N, Knöpfe der Bibliothek)
+ * bzw. `?neu=import` (Onboarding) und nimmt aufs Fenster gezogene .mrpack-Dateien an.
  */
-export function NewInstanceDialog({ children, primary, tab = "blank" }: { children: ReactNode; primary?: boolean; tab?: Tab }) {
+export function NewInstanceDialog({ children, primary }: { children?: ReactNode; primary?: boolean }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [session, setSession] = useState(0);
@@ -434,7 +435,7 @@ export function NewInstanceDialog({ children, primary, tab = "blank" }: { childr
   const [params, setParams] = useSearchParams();
   useEffect(() => {
     if (!primary || !params.has("neu")) return;
-    show("blank");
+    show(params.get("neu") === "import" ? "import" : "blank");
     setParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primary, params, setParams]);
@@ -446,7 +447,7 @@ export function NewInstanceDialog({ children, primary, tab = "blank" }: { childr
 
   return (
     <>
-      <Slot.Root onClick={() => show(tab)}>{children}</Slot.Root>
+      {children && <Slot.Root onClick={() => show("blank")}>{children}</Slot.Root>}
       {(open || busy) && <NewInstanceForm key={session} open={open} onOpenChange={setOpen} initial={initial} onBusy={setBusy} onDone={done} />}
     </>
   );

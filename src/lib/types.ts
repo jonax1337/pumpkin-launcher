@@ -120,6 +120,8 @@ export interface ForeignInstance {
   gameDir: string;
   /** Aus diesem Ordner wurde schon einmal importiert. */
   imported: boolean;
+  /** Warum Pumpkin Launcher die Instanz nicht starten kann (z. B. Forge vor 1.17); dann gibt es keinen Import. */
+  unsupported: string | null;
   name: string;
   minecraftVersion: string;
   loader: ModLoader;

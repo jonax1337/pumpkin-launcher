@@ -1,40 +1,11 @@
-import { useState } from "react";
 import { open as openFolder } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { Button, Chip, Choice, Empty, ErrorBox, Field, Glyph, JobProgress, Skel } from "@/ui";
 import { useContentState } from "@/hooks/useContent";
-import { importTarget, useForeignInstances } from "@/hooks/useImport";
+import { importTarget, type ForeignSelection } from "@/hooks/useImport";
 import { api } from "@/lib/api";
 import { progressShare } from "@/lib/modrinth";
 import { FOREIGN_LAUNCHER_LABELS, FOREIGN_LAUNCHERS, LOADER_LABELS, type ForeignInstance } from "@/lib/types";
-
-/**
- * Erkannte und per „Ordner wählen…“ ergänzte Instanzen samt Auswahl. Ohne eigene Wahl sind alle gewählt,
- * die noch nicht importiert wurden.
- */
-export function useForeignSelection(enabled: boolean) {
-  const detected = useForeignInstances(enabled);
-  const [added, setAdded] = useState<ForeignInstance[]>([]);
-  const [picked, setPicked] = useState<Set<string> | null>(null);
-  const all = [...(detected.data ?? []), ...added.filter((a) => !detected.data?.some((d) => d.path === a.path))];
-  const chosenPaths = picked ?? new Set(all.filter((f) => !f.imported).map((f) => f.path));
-
-  function toggle(source: ForeignInstance) {
-    const rest = [...chosenPaths].filter((p) => p !== source.path);
-    setPicked(new Set(chosenPaths.has(source.path) ? rest : [...rest, source.path]));
-  }
-
-  async function addFolder(folder: string) {
-    const found = (await api.importDetect(folder)).filter((f) => !all.some((a) => a.path === f.path));
-    if (!found.length) return void toast("In diesem Ordner gibt es keine neuen Instanzen.");
-    setAdded((a) => [...a, ...found]);
-    setPicked((p) => p && new Set([...p, ...found.filter((f) => !f.imported).map((f) => f.path)]));
-  }
-
-  return { detected, all, chosen: all.filter((f) => chosenPaths.has(f.path)), isChosen: (f: ForeignInstance) => chosenPaths.has(f.path), toggle, addFolder };
-}
-
-export type ForeignSelection = ReturnType<typeof useForeignSelection>;
 
 /** Import aus anderen Launchern im Dialog „Neue Instanz“: Instanzen nach Launcher gruppiert, Fortschritt in der Zeile. */
 export function ImportPane({ selection, busy }: { selection: ForeignSelection; busy: boolean }) {
@@ -47,7 +18,7 @@ export function ImportPane({ selection, busy }: { selection: ForeignSelection; b
   }
 
   const trail = (f: ForeignInstance) =>
-    active && target === importTarget(f) ? <JobProgress label="Kopiert" p={progressShare(progress)} width={120} />
+    active && target === importTarget(f) ? <JobProgress label={progress?.phase === "hash" ? "Erkennt" : "Kopiert"} p={progressShare(progress)} width={120} />
     : f.imported ? <Chip>Schon importiert</Chip>
     : undefined;
 
@@ -73,10 +44,10 @@ export function ImportPane({ selection, busy }: { selection: ForeignSelection; b
                   key={f.path}
                   media={<Glyph name="chest" pal="copper" />}
                   title={f.name}
-                  sub={`${LOADER_LABELS[f.loader]} ${f.minecraftVersion}`}
+                  sub={f.unsupported ?? `${LOADER_LABELS[f.loader]} ${f.minecraftVersion}`}
                   trail={trail(f)}
                   selected={selection.isChosen(f)}
-                  disabled={busy}
+                  disabled={busy || !!f.unsupported}
                   onClick={() => selection.toggle(f)}
                 />
               ))}

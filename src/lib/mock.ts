@@ -143,7 +143,7 @@ export const MOCK_FOREIGN: ForeignInstance[] = (
     ["curseforge", "All the Mods 10", "1.21.1", "neoforge", "21.1.172", "curseforge\\minecraft\\Instances"],
   ] as const
 ).map(([launcher, name, minecraftVersion, loader, loaderVersion, dir]) => ({
-  launcher, name, minecraftVersion, loader, loaderVersion, path: `C:\\Users\\Steve\\${dir}\\${name}`, gameDir: "", imported: false, memoryMb: 6144, jvmArgs: [],
+  launcher, name, minecraftVersion, loader, loaderVersion, path: `C:\\Users\\Steve\\${dir}\\${name}`, gameDir: "", imported: false, unsupported: null, memoryMb: 6144, jvmArgs: [],
 }));
 
 // ---------- Modrinth im Browser-Modus ----------
