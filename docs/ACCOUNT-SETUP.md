@@ -1,6 +1,6 @@
 # Microsoft-Anmeldung einrichten
 
-Pumpkin Launcher meldet Microsoft-Konten im **Browser** an (Anmeldeseite von Microsoft, danach Rücksprung auf `http://localhost`); als Rückfall gibt es den **Gerätecode** (Code auf microsoft.com/link eingeben). Dafür braucht Pumpkin Launcher eine **eigene Azure-App** (Client-ID), die Microsoft/Mojang für die Minecraft-API freigeschaltet hat. Fremde Client-IDs anderer Launcher dürfen nicht verwendet werden.
+Pumpkin Launcher meldet Microsoft-Konten im **Browser** an (Anmeldeseite von Microsoft, danach Rücksprung auf `http://localhost`); als Rückfall gibt es den **Gerätecode** (Code auf microsoft.com/link eingeben). Dafür braucht Pumpkin Launcher eine **eigene Azure-App** (Client-ID), die Microsoft/Mojang für die Minecraft-API freigeschaltet hat. Der offizielle Build bringt seine mit; die Schritte unten brauchst du nur für einen **Fork**. Fremde Client-IDs anderer Launcher dürfen nicht verwendet werden.
 
 Solange die Freigabe fehlt, klappen Microsoft-Login, Xbox Live und XSTS, aber der letzte Schritt (`api.minecraftservices.com/authentication/login_with_xbox`) antwortet mit **403**. Pumpkin Launcher zeigt dann: „Microsoft hat diesen Launcher noch nicht für Minecraft freigeschaltet.“
 
@@ -27,14 +27,9 @@ Solange die Freigabe fehlt, klappen Microsoft-Login, Xbox Live und XSTS, aber de
 
 Quellen: [Minecraft Wiki – Microsoft authentication](https://minecraft.wiki/w/Microsoft_authentication) (Kontotyp „consumers“, öffentliche Clientflows, Formular aka.ms/mce-reviewappid, 403 ohne Freigabe). Microsoft-Q&A-Beiträge aus 2026 ([1](https://learn.microsoft.com/en-us/answers/questions/5971906/xboxlive-signin-minecraft-services-access-for-an-i), [2](https://learn.microsoft.com/en-gb/answers/questions/5768276/how-to-get-xboxlive-signin-permission-for-azure-ap)) verweisen teils zusätzlich auf <https://aka.ms/AppRegInfo> (leitet auf einen Minecraft-Hilfeartikel) bzw. das Xbox-Entwicklerprogramm. Falls das Formular nicht mehr erreichbar ist, dort nachsehen.
 
-## 3. Client-ID in Pumpkin Launcher eintragen
+## 3. Client-ID im Quelltext eintragen (Forks)
 
-Die Client-ID der Azure-App „Pumpkin Launcher“ (`5e27ee41-3be2-4c3a-a156-a3c61dbef8dc`, registriert am 30.09.2026, nur persönliche Konten, öffentliche Clientflows an) ist als `DEFAULT_CLIENT_ID` in `src-tauri/src/services/auth.rs` eingebaut. Überschreiben geht auf zwei Wegen:
-
-- **Beim Bauen:** die Umgebungsvariable setzen, z. B. in PowerShell
-  `$env:PUMPKIN_MS_CLIENT_ID = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"; pnpm tauri build`
-  (wird per `option_env!` beim Kompilieren übernommen; nach Änderung neu bauen).
-- **Zur Laufzeit:** das Frontend übergibt sie an `ms_login_start({ clientId })`. Hat es eine Client-ID, gilt diese vor der eingebauten.
+Die Client-ID der Azure-App „Pumpkin Launcher“ (`5e27ee41-3be2-4c3a-a156-a3c61dbef8dc`, registriert am 30.09.2026, nur persönliche Konten, öffentliche Clientflows an) ist als `DEFAULT_CLIENT_ID` in `src-tauri/src/services/auth.rs` eingebaut; in den Einstellungen gibt es dafür kein Feld. Ein Fork registriert eine eigene Azure-App (Schritte 1 und 2) und ersetzt diese Konstante, danach neu bauen. Schon angemeldete Konten behalten die Client-ID, mit der sie angemeldet wurden (`clientId` in `accounts.json`), denn nur mit ihr lässt sich das Refresh-Token erneuern.
 
 Die Client-ID ist kein Geheimnis; das Refresh-Token dagegen schon – es liegt nur im Schlüsselbund des Systems (Windows-Anmeldeinformationsverwaltung, macOS-Schlüsselbund bzw. Secret Service unter Linux; Dienst `dev.laux.launcher`, Benutzer = Minecraft-UUID), nie in `accounts.json`.
 
@@ -61,7 +56,7 @@ Mögliche Meldungen und was sie bedeuten:
 
 | Meldung beginnt mit | Ursache |
 |---|---|
-| „Microsoft kennt diese Launcher-App nicht …“ | Client-ID falsch, „Öffentliche Clientflows“ nicht auf Ja oder `http://localhost` nicht als Umleitungs-URI eingetragen |
+| „Microsoft kennt diese Launcher-App nicht …“ | Client-ID (`DEFAULT_CLIENT_ID`) falsch, „Öffentliche Clientflows“ nicht auf Ja oder `http://localhost` nicht als Umleitungs-URI eingetragen |
 | „Microsoft hat diesen Launcher noch nicht für Minecraft freigeschaltet“ | Freigabe (Schritt 2) fehlt noch |
 | „Zu diesem Microsoft-Konto gibt es noch kein Xbox-Profil“ | XErr 2148916233 – einmal auf xbox.com anmelden |
 | „Das Konto gehört einem Kind …“ | XErr 2148916238 – Konto zu einer Microsoft-Familie hinzufügen |

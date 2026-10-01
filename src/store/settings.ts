@@ -13,8 +13,6 @@ interface SettingsState {
   javaPath: string;
   /** RAM für Instanzen ohne eigenen Wert; null = automatisch nach Arbeitsspeicher des PCs. */
   memoryMb: number | null;
-  /** Eigene App-Kennung für die Microsoft-Anmeldung; leer = eingebauter Standard. */
-  msClientId: string;
   active: ActiveAccount | null;
   offlineAccounts: string[];
   /** Pixelgröße: 2/3/4 CSS-Pixel bei 100 % Skalierung. */
@@ -23,7 +21,7 @@ interface SettingsState {
   motion: boolean;
   /** Automatisch nach Jahreszeit oder eine dauerhaft gewählte Pumpkin-Variante. */
   pumpkin: PumpkinChoice;
-  set: (patch: Partial<Pick<SettingsState, "javaPath" | "memoryMb" | "msClientId" | "pxSize" | "motion" | "pumpkin">>) => void;
+  set: (patch: Partial<Pick<SettingsState, "javaPath" | "memoryMb" | "pxSize" | "motion" | "pumpkin">>) => void;
   reset: () => void;
   addAccount: (name: string) => void;
   selectAccount: (account: ActiveAccount) => void;
@@ -35,6 +33,11 @@ interface SettingsState {
 }
 
 const defaults = { javaPath: "", memoryMb: null };
+
+function withoutClientId(old: unknown) {
+  const { msClientId: _dropped, ...rest } = old as Record<string, unknown>;
+  return rest;
+}
 
 /** Wie im Spiel und im Backend (`auth::offline_account`). */
 export const isValidPlayerName = (name: string) => /^[A-Za-z0-9_]{3,16}$/.test(name);
@@ -48,7 +51,6 @@ export const useSettings = create<SettingsState>()(
   persist(
     (set) => ({
       ...defaults,
-      msClientId: "",
       active: null,
       offlineAccounts: [],
       pxSize: "m",
@@ -75,10 +77,12 @@ export const useSettings = create<SettingsState>()(
     }),
     {
       name: "launcher-settings",
-      version: 4,
+      version: 5,
       migrate: (old, version) => {
+        // v4 hatte noch eine eigene Microsoft-Kennung (`msClientId`); der Launcher bringt seine mit.
+        if (version === 4) return withoutClientId(old) as unknown as SettingsState;
         // v3 hatte noch die Seitenleiste; Pixelgröße und Bewegung kamen mit Pixelkino.
-        if (version === 3) return { ...(old as object), pxSize: "m", motion: true } as unknown as SettingsState;
+        if (version === 3) return { ...withoutClientId(old), pxSize: "m", motion: true } as unknown as SettingsState;
         // v1 kannte nur einen Offline-Namen, v2 eine Liste mit `offlineName` als aktivem Namen.
         const prev = old as { javaPath?: string; memoryMb?: number; offlineName?: string; offlineAccounts?: string[] };
         const name = prev.offlineName && isValidPlayerName(prev.offlineName) ? prev.offlineName : "";
@@ -87,7 +91,6 @@ export const useSettings = create<SettingsState>()(
           javaPath: prev.javaPath ?? "",
           // 4096 war bis v2 der feste Standard; der gilt jetzt als „automatisch“.
           memoryMb: prev.memoryMb == null || prev.memoryMb === 4096 ? null : prev.memoryMb,
-          msClientId: "",
           active: offline(name),
           offlineAccounts: accounts,
           pxSize: "m",

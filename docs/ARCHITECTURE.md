@@ -126,7 +126,7 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `instance_launch` | `instanceId`, `options: LaunchOptions` | PID (`number`) |
 | `instance_dir` | `instanceId` | Spielordner als absoluter Pfad (`string`, wird bei Bedarf angelegt) |
 | `system_memory_mb` | – | physischer RAM in MiB (`number`) |
-| `ms_login_start` | `clientId?`, `method?` (`"device"` erzwingt den Gerätecode) | `{ mode: "browser" \| "device", userCode, verificationUri, expiresIn, interval, message }`; im Browser-Modus ist `userCode` leer und `verificationUri` die Anmeldeseite |
+| `ms_login_start` | `method?` (`"device"` erzwingt den Gerätecode) | `{ mode: "browser" \| "device", userCode, verificationUri, expiresIn, interval, message }`; im Browser-Modus ist `userCode` leer und `verificationUri` die Anmeldeseite |
 | `ms_login_finish` | – | `Account` (wartet auf den Rücksprung bzw. die Bestätigung im Browser) |
 | `ms_login_cancel` | – | – |
 | `ms_accounts` | – | `Account[]` (`kind: "microsoft"`, `active: false`) |

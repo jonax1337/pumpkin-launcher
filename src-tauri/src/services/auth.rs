@@ -84,19 +84,9 @@ fn say(text: impl Into<String>) -> AppError {
     AppError::Invalid(text.into())
 }
 
-/// Eingebaute Client-ID der Azure-App „Pumpkin Launcher“ (öffentlicher Client, kein Geheimnis).
+/// Client-ID der Azure-App „Pumpkin Launcher“ (öffentlicher Client, kein Geheimnis). Forks müssen eine eigene
+/// Azure-App registrieren und von Microsoft freischalten lassen (`docs/ACCOUNT-SETUP.md`) und diese Konstante ändern.
 const DEFAULT_CLIENT_ID: &str = "5e27ee41-3be2-4c3a-a156-a3c61dbef8dc";
-
-/// Client-ID der eigenen Azure-App: Argument, sonst Compile-Vorgabe `PUMPKIN_MS_CLIENT_ID`, sonst die eingebaute.
-fn client_id(arg: Option<String>) -> AppResult<String> {
-    let id = arg
-        .map(|s| s.trim().to_owned())
-        .filter(|s| !s.is_empty())
-        .or_else(|| option_env!("PUMPKIN_MS_CLIENT_ID").map(str::to_owned))
-        .unwrap_or_else(|| DEFAULT_CLIENT_ID.to_owned());
-    uuid::Uuid::parse_str(&id).map_err(|_| say("Die hinterlegte Client-ID ist ungültig. Sie sieht so aus: 00000000-0000-0000-0000-000000000000."))?;
-    Ok(id)
-}
 
 /// `application/x-www-form-urlencoded` ohne zusätzliches Crate.
 fn form(pairs: &[(&str, &str)]) -> String {
@@ -364,15 +354,14 @@ fn load_token(entry: &keyring::Entry) -> keyring::Result<String> {
 /// Startet die Anmeldung; eine vorherige, noch wartende wird abgebrochen. Standard ist der Browser mit
 /// Rücksprung auf localhost (kein Code zum Abtippen). Mit `method = "device"` oder wenn der lokale
 /// Listener nicht startet, gibt es den Gerätecode.
-pub async fn start_login(state: &AppState, client_id_arg: Option<String>, method: Option<String>) -> AppResult<LoginStart> {
-    let client_id = client_id(client_id_arg)?;
+pub async fn start_login(state: &AppState, method: Option<String>) -> AppResult<LoginStart> {
     if method.as_deref() != Some("device") {
-        match start_browser(state, &client_id).await {
+        match start_browser(state, DEFAULT_CLIENT_ID).await {
             Ok(start) => return Ok(start),
             Err(err) => tracing::warn!(%err, "Browser-Anmeldung nicht möglich, weiche auf Gerätecode aus"),
         }
     }
-    start_device(state, client_id).await
+    start_device(state, DEFAULT_CLIENT_ID.into()).await
 }
 
 fn set_pending(state: &AppState, pending: Pending) {
@@ -795,11 +784,8 @@ mod tests {
     }
 
     #[test]
-    fn client_id_and_form_encoding() {
-        let id = "8f0c5a3e-1b2d-4c5e-9f00-112233445566";
-        assert_eq!(client_id(Some(format!(" {id} "))).unwrap(), id);
-        assert!(client_id(Some("kein-uuid".into())).is_err());
-        assert_eq!(client_id(None).unwrap(), option_env!("PUMPKIN_MS_CLIENT_ID").unwrap_or(DEFAULT_CLIENT_ID));
+    fn default_client_id_is_a_uuid_and_form_encoding_escapes() {
+        assert!(uuid::Uuid::parse_str(DEFAULT_CLIENT_ID).is_ok(), "ein Fork hat die Client-ID falsch eingetragen");
         assert_eq!(form(&[("scope", SCOPE), ("t", "a*b/c=")]), "scope=XboxLive.signin%20offline_access&t=a%2Ab%2Fc%3D");
     }
 

@@ -474,8 +474,8 @@ export const api = {
   onInstancesChanged: (cb: () => void) => on("instances-changed", cb),
 
   /** `method: "device"` erzwingt den Gerätecode; sonst Browser-Anmeldung (Rückfall auf Gerätecode im Backend). */
-  msLoginStart: (clientId: string, method?: "device"): Promise<MsLoginStart> =>
-    tauri ? call("ms_login_start", { clientId: clientId.trim() || null, method: method ?? null }) : mockAccounts.start(method),
+  msLoginStart: (method?: "device"): Promise<MsLoginStart> =>
+    tauri ? call("ms_login_start", { method: method ?? null }) : mockAccounts.start(method),
   msLoginFinish: (): Promise<Account> => (tauri ? call("ms_login_finish") : mockAccounts.finish()),
   msLoginCancel: (): Promise<void> => (tauri ? call("ms_login_cancel") : mockAccounts.cancel()),
   msAccounts: (): Promise<Account[]> => (tauri ? call("ms_accounts") : Promise.resolve(clone(db.accounts))),

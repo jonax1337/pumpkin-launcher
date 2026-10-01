@@ -7,7 +7,7 @@ import { UpdateRow } from "@/components/AppUpdate";
 import { JavaChooser, MemoryChooser, MemoryHelp } from "@/components/common";
 import { AccountsSection } from "@/components/PlayerNames";
 import { SupportSection } from "@/components/support";
-import { Actions, Button, Count, FormRow, FormSection, Hint, PageHeader, Segmented, Select, Switch, TabPanel, Tabs, TextField } from "@/ui";
+import { Actions, Button, Count, FormRow, FormSection, Hint, PageHeader, Segmented, Select, Switch, TabPanel, Tabs } from "@/ui";
 import { api } from "@/lib/api";
 import { Buddy, BrandWordmark, useBrand } from "@/branding/Brand";
 import { SEASONS, type PumpkinChoice } from "@/branding/calendar";
@@ -152,14 +152,6 @@ export function SettingsPage() {
 
           {tab === "erweitert" && (
             <>
-              <FormRow
-                label="Microsoft-Client-ID"
-                hint="Optional"
-                htmlFor="ms-client-id"
-                aside="Nur für eigene, von Microsoft für Minecraft freigeschaltete Apps (Azure-Client-ID). Leer lassen, dann nutzt Pumpkin Launcher seine eingebaute Kennung."
-              >
-                <TextField id="ms-client-id" value={s.msClientId} onChange={(e) => s.set({ msClientId: e.target.value })} placeholder="Eingebaute Kennung verwenden" />
-              </FormRow>
               <FormRow label="Zurücksetzen" hint="Einstellungen für Java und Arbeitsspeicher">
                 <Actions>
                   <Button

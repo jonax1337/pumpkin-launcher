@@ -26,7 +26,7 @@ export async function startMsLogin(qc: QueryClient, method?: "device") {
   const mine = ++attempt;
   useMsLogin.setState({ step: "starting" }, true);
   try {
-    const info = await api.msLoginStart(useSettings.getState().msClientId, method);
+    const info = await api.msLoginStart(method);
     if (mine !== attempt) return;
     useMsLogin.setState({ step: "code", info }, true);
     void api.openExternal(info.verificationUri).catch(() => undefined);
