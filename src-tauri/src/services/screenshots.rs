@@ -4,8 +4,8 @@ use std::{cmp::Reverse, fs, path::Path, time::UNIX_EPOCH};
 
 use serde::Serialize;
 
-use super::{entries, has_extension, move_to_trash};
-use crate::error::{AppError, AppResult};
+use super::{entries, has_extension, trash_listed};
+use crate::error::AppResult;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,18 +36,14 @@ fn screenshot(entry: &fs::DirEntry) -> Option<Screenshot> {
 }
 
 /// Legt den Screenshot `file_name` aus `dir` in den Papierkorb (lässt sich dort wiederherstellen).
-/// Nur ein Name aus der Liste wird zum Pfad: so trifft das Löschen nie etwas außerhalb des Ordners.
 pub fn delete(dir: &Path, file_name: &str) -> AppResult<()> {
-    let entry = entries(dir)?
-        .into_iter()
-        .find(|entry| entry.file_name() == file_name && screenshot(entry).is_some())
-        .ok_or_else(|| AppError::NotFound { kind: "Screenshot", id: file_name.to_owned() })?;
-    move_to_trash(&entry.path())
+    trash_listed(dir, file_name, "Screenshot", |entry| screenshot(entry).is_some())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::AppError;
     use std::time::{Duration, SystemTime};
 
     /// Datei mit `len` Bytes, zuletzt geändert vor `age` Sekunden.
