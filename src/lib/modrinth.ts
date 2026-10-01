@@ -57,6 +57,7 @@ export function progressLabel(p: ContentProgress | null): string {
   if (p.phase === "extract") return "Wird entpackt…";
   if (p.phase === "copy") return p.total ? `Kopiert ${p.done} von ${p.total}…` : "Wird kopiert…";
   if (p.phase === "hash") return p.total ? `Erkennt Inhalte ${p.done} von ${p.total}…` : "Erkennt Inhalte…";
+  if (p.phase === "pack") return "Wird gepackt…";
   return "Fertig";
 }
 

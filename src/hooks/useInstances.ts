@@ -7,7 +7,7 @@ import { askPlayerName, openAddOffline, startMsLogin } from "@/components/Player
 import { usableAccount, useOfflineAllowed } from "@/store/offline";
 import { api } from "@/lib/api";
 import { autoMemoryMb, formatClock, maxMemoryMb } from "@/lib/format";
-import { INSTALL_CANCELLED, type Instance, type InstanceStatus, type ModLoader, type NewInstance, type QuickPlay } from "@/lib/types";
+import { CANCELLED, type Instance, type InstanceStatus, type ModLoader, type NewInstance, type QuickPlay } from "@/lib/types";
 import { useGame } from "@/store/game";
 import { accountName, useSettings } from "@/store/settings";
 import { useTasks } from "@/store/tasks";
@@ -109,18 +109,6 @@ export function useExportEntries(instanceId: string) {
   return useQuery({ queryKey: ["export-entries", instanceId], queryFn: () => api.exportEntries(instanceId), staleTime: 0 });
 }
 
-/** Export als `.mrpack`; der Erfolgs-Toast führt zur Datei im Dateimanager. */
-export function useExportInstance() {
-  return useMutation({
-    mutationFn: ({ instance, include, path }: { instance: Instance; include: string[]; path: string }) => api.exportInstance(instance.id, include, path),
-    onSuccess: (_, { instance, path }) =>
-      toast.success(`„${instance.name}“ exportiert`, {
-        description: path,
-        action: { label: "Im Ordner zeigen", onClick: () => api.revealPath(path).catch((e: Error) => toast.error(e.message)) },
-      }),
-  });
-}
-
 /** Zuletzt gespielte Instanz (Fallback: zuletzt erstellte; `lastPlayedAt` zeigt, welcher Fall vorliegt). */
 export function pickRecentInstance(instances: Instance[] | undefined): Instance | undefined {
   if (!instances?.length) return undefined;
@@ -166,7 +154,7 @@ export async function defaultMemory(qc: ReturnType<typeof useQueryClient>) {
   }
 }
 
-const isCancelled = (err: unknown) => err instanceof Error && err.message === INSTALL_CANCELLED;
+const isCancelled = (err: unknown) => err instanceof Error && err.message === CANCELLED;
 
 export function useInstanceStatus(id: string | undefined) {
   return useQuery({
@@ -211,7 +199,7 @@ export function useInstall() {
   return install;
 }
 
-/** Bricht die laufende Installation ab; das Backend beendet `instance_install` dann mit INSTALL_CANCELLED. */
+/** Bricht die laufende Installation ab; das Backend beendet `instance_install` dann mit CANCELLED. */
 export function useCancelInstall() {
   return useMutation({ mutationFn: (instanceId: string) => api.installCancel(instanceId) });
 }

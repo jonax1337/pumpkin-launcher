@@ -209,7 +209,7 @@ pub async fn install_mod(
             });
         }
         mark_dependencies(&mut instance.mods, &selected, &fresh);
-        state.instances.update(instance)
+        state.instances.modify(id, |current| current.mods = instance.mods)
     })();
     match result {
         Err(e) => Err(rollback(&created, e)),
@@ -486,9 +486,8 @@ pub async fn update_mods(
     mark_dependencies(&mut mods, &selected, &fresh);
     // sync places the new files and removes the old ones in one journal; metadata commits last.
     let desired: Vec<Mod> = mods.iter().cloned().chain(old).collect();
-    let updated = Instance { mods, ..instance };
-    let result =
-        super::mods::sync_commit(&state.dirs, id, &desired, |_| state.instances.update(updated))?;
+    let commit = |_| state.instances.modify(id, |current| current.mods = mods);
+    let result = super::mods::sync_commit(&state.dirs, id, &desired, commit)?;
     progress("complete", total, total);
     Ok(result)
 }
@@ -1012,10 +1011,13 @@ pub async fn adopt_untracked(state: &AppState) -> AppResult<usize> {
     let (known, titles) = identify_or_local(&modrinth::client()?, &hashes).await;
     let mut added = 0;
     for (id, found) in plan {
-        let Ok(mut instance) = state.instances.get(&id) else { continue };
-        added += found.len();
-        record(&mut instance.mods, &found, &known, &titles, &HashMap::new());
-        state.instances.update(instance)?;
+        let adopted = state.instances.modify(&id, |current| record(&mut current.mods, &found, &known, &titles, &HashMap::new()));
+        match adopted {
+            Ok(_) => added += found.len(),
+            // Inzwischen gelöscht: nichts nachzutragen.
+            Err(AppError::NotFound { .. }) => {}
+            Err(err) => return Err(err),
+        }
     }
     Ok(added)
 }

@@ -4,7 +4,7 @@ import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import {
-  INSTALL_CANCELLED,
+  CANCELLED,
   type Account,
   type ExitPayload,
   type FileCheck,
@@ -67,7 +67,7 @@ const db = {
   templates: [] as { template: Template; instance: Instance }[],
   installed: new Set<string>(),
   running: new Map<string, number>(),
-  /** Abgebrochene Installationen (Instanz-IDs) und Pack-Vorgänge (Operation-IDs). */
+  /** Abgebrochene Installationen (Instanz-IDs) und Content-Vorgänge (Operation-IDs). */
   cancelled: new Set<string>(),
   accounts: [] as Account[],
 };
@@ -126,8 +126,9 @@ const mock = {
     findInstance(id);
     db.instances = db.instances.filter((i) => i.id !== id);
   },
-  async duplicateInstance(instanceId: string) {
+  async duplicateInstance(instanceId: string, operationId: string) {
     await delay(800);
+    if (db.cancelled.delete(operationId)) throw new Error(CANCELLED);
     const source = findInstance(instanceId);
     const inst: Instance = { ...clone(source), id: newId("inst"), name: `${source.name} (Kopie)`, createdAt: Date.now(), lastPlayedAt: null, playtimeSecs: 0 };
     db.instances.push(inst);
@@ -220,7 +221,7 @@ const mockGame = {
     db.cancelled.delete(instanceId);
     for (const [step, total] of steps) {
       for (let done = 0; done <= total; done += Math.ceil(total / 12)) {
-        if (db.cancelled.delete(instanceId)) throw new Error(INSTALL_CANCELLED);
+        if (db.cancelled.delete(instanceId)) throw new Error(CANCELLED);
         emit<InstallProgress>("install-progress", { instanceId, step, done: Math.min(done, total), total });
         await delay(90);
       }
@@ -394,13 +395,13 @@ export const api = {
     tauri ? call("delete_instance", { id }) : mock.deleteInstance(id),
   /** Kopie mit Spielordner unter „<Name> (Kopie)“; Fortschritt als `content-progress`. */
   duplicateInstance: (instanceId: string, operationId: string): Promise<Instance> =>
-    tauri ? call("instance_duplicate", { instanceId, operationId }) : mock.duplicateInstance(instanceId),
+    tauri ? call("instance_duplicate", { instanceId, operationId }) : mock.duplicateInstance(instanceId, operationId),
   /** Einträge des Spielordners, die ein Export mitnehmen kann (Ordner und Dateien). */
   exportEntries: (instanceId: string): Promise<string[]> =>
     tauri ? call("instance_export_entries", { instanceId }) : Promise.resolve(["config", "mods", "options.txt", "resourcepacks", "saves", "screenshots"]),
-  /** Schreibt die Instanz als `.mrpack` nach `path` (absolut); `include` aus `exportEntries`. */
-  exportInstance: (instanceId: string, include: string[], path: string): Promise<void> =>
-    tauri ? call("instance_export", { instanceId, include, path }) : Promise.reject(new Error("Exportieren geht nur in der Pumpkin Launcher-App.")),
+  /** Schreibt die Instanz als `.mrpack` nach `path` (absolut); `include` aus `exportEntries`. Abbrechbar wie ein Pack. */
+  exportInstance: (instanceId: string, include: string[], path: string, operationId: string): Promise<void> =>
+    tauri ? call("instance_export", { instanceId, include, path, operationId }) : Promise.reject(new Error("Exportieren geht nur in der Pumpkin Launcher-App.")),
   /** Datei im Dateimanager markieren (z. B. ein Export). */
   revealPath: (path: string): Promise<void> =>
     tauri
@@ -426,7 +427,7 @@ export const api = {
     tauri ? call("loader_versions", { loader, mcVersion }) : mockGame.loaderVersions(loader),
   installCancel: (instanceId: string): Promise<void> =>
     tauri ? call("instance_install_cancel", { instanceId }) : mockGame.installCancel(instanceId),
-  /** Bricht eine Modpack-Installation ab. Einzige Stelle, die den Command-Namen kennt. */
+  /** Bricht einen abbrechbaren Content-Vorgang ab (Modpack, Import, Vorlage, Duplizieren, Export). Einzige Stelle, die den Command-Namen kennt. */
   packInstallCancel: (operationId: string): Promise<void> =>
     tauri ? call("pack_install_cancel", { operationId }) : Promise.resolve(void db.cancelled.add(operationId)),
   systemMemoryMb: (): Promise<number> => (tauri ? call("system_memory_mb") : mockGame.systemMemory()),

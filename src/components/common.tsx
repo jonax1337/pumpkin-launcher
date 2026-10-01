@@ -35,8 +35,8 @@ export function MemoryHelp({ value }: { value: number | null }) {
  * `value` null = automatisch; sonst MB. Segmente über dem, was der PC übrig hat, sind gesperrt (flach, dunkel)
  * und die Grenze steht darunter. `help={false}`: Hinweis steht woanders (rechte Formularspalte, `MemoryHelp`).
  */
-export function MemoryChooser({ name, value, onChange, autoText, help = true }: {
-  name: string; value: number | null; onChange: (mb: number | null) => void; autoText?: string; help?: boolean;
+export function MemoryChooser({ name, value, onChange, autoText, help = true, disabled }: {
+  name: string; value: number | null; onChange: (mb: number | null) => void; autoText?: string; help?: boolean; disabled?: boolean;
 }) {
   const { auto, max } = useMemory();
   const isAuto = value == null;
@@ -44,19 +44,19 @@ export function MemoryChooser({ name, value, onChange, autoText, help = true }: 
   const top = Math.max(1, Math.min(16, Math.floor(max / 1024)));
   return (
     <>
-      <Radio name={name} checked={isAuto} onChange={() => onChange(null)}>
+      <Radio name={name} checked={isAuto} disabled={disabled} onChange={() => onChange(null)}>
         Automatisch <span className="faint">({autoText ?? `zurzeit ${formatMemory(auto)}`})</span>
       </Radio>
-      <Radio name={name} checked={!isAuto} onChange={() => onChange(gb * 1024)}>
+      <Radio name={name} checked={!isAuto} disabled={disabled} onChange={() => onChange(gb * 1024)}>
         Eigener Wert
       </Radio>
       <div className="memrow">
         <div className="memsl" style={{ "--free": `${((16 - top) / 16) * 100}%` } as CSSProperties}>
-          <SegSlider value={gb} max={top} disabled={isAuto} onChange={(v) => onChange(v * 1024)} />
+          <SegSlider value={gb} max={top} disabled={disabled || isAuto} onChange={(v) => onChange(v * 1024)} />
           {/* Grenze unter dem letzten freien Segment; bei 16 unter dem Ende */}
           <span className="cap" aria-hidden>max. {top} GB</span>
         </div>
-        <span className="num" style={{ color: isAuto ? "var(--fg-3)" : undefined }}>{gb} GB</span>
+        <span className="num" style={{ color: disabled || isAuto ? "var(--fg-3)" : undefined }}>{gb} GB</span>
       </div>
       {help && <MemoryHelp value={value} />}
     </>
@@ -74,7 +74,7 @@ const JAVA_PROGRAM = {
  * Java: ohne eigenen Pfad (`value` leer; was dann gilt, beschreibt `fallback`) oder eigene Java-Programmdatei.
  * Gemeldet wird erst beim Verlassen des Felds, mit Enter oder nach „Durchsuchen“, nicht je Tastendruck.
  */
-export function JavaChooser({ name, value, onChange, fallback }: { name: string; value: string; onChange: (path: string) => void; fallback: ReactNode }) {
+export function JavaChooser({ name, value, onChange, fallback, disabled }: { name: string; value: string; onChange: (path: string) => void; fallback: ReactNode; disabled?: boolean }) {
   const [own, setOwn] = useState(value !== "");
   const [draft, setDraft] = useState(value);
   function commit(path: string) {
@@ -88,14 +88,14 @@ export function JavaChooser({ name, value, onChange, fallback }: { name: string;
   }
   return (
     <>
-      <Radio name={name} checked={!own} onChange={() => (setOwn(false), commit(""))}>{fallback}</Radio>
-      <Radio name={name} checked={own} onChange={() => setOwn(true)}>Eigene Java-Installation</Radio>
+      <Radio name={name} checked={!own} disabled={disabled} onChange={() => (setOwn(false), commit(""))}>{fallback}</Radio>
+      <Radio name={name} checked={own} disabled={disabled} onChange={() => setOwn(true)}>Eigene Java-Installation</Radio>
       {/* Bleibt stehen und ist nur gesperrt, wie der Regler bei „Automatisch“: kein Sprung, keine Lücke.
           Gesperrt ohne Beispielpfad, sonst wirkt es, als wäre schon ein Pfad gesetzt. */}
       <Actions>
         <TextField
           width="full"
-          disabled={!own}
+          disabled={disabled || !own}
           aria-label={`Pfad zu ${JAVA_PROGRAM.file}`}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -103,7 +103,7 @@ export function JavaChooser({ name, value, onChange, fallback }: { name: string;
           onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
           placeholder={own ? `z. B. ${JAVA_PROGRAM.example}` : `Pfad zu ${JAVA_PROGRAM.file}`}
         />
-        {!api.isMock && <Button disabled={!own} onClick={() => void browse().catch((e: Error) => toast.error(e.message))}>Durchsuchen</Button>}
+        {!api.isMock && <Button disabled={disabled || !own} onClick={() => void browse().catch((e: Error) => toast.error(e.message))}>Durchsuchen</Button>}
       </Actions>
     </>
   );

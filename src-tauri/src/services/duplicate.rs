@@ -1,16 +1,16 @@
 //! Instanz duplizieren: neuer Eintrag mit eigener ID und eine Kopie des Instanzordners. Verwaltete Inhalte
 //! legt `mods::sync` per Hardlink aus dem Cache ab, statt sie Byte für Byte zu kopieren.
-use std::{fs, path::PathBuf, sync::atomic::AtomicBool};
+use std::{fs, path::PathBuf};
 
-use super::{content, copy_files, download::RemoveOnDrop, modrinth::invalid, mods, walk, Dirs};
+use super::{blocking, check_cancelled, content, download::RemoveOnDrop, mods, walk, Dirs};
 use crate::{
     error::AppResult,
     models::{new_id, now_ms, Instance, Mod},
     state::AppState,
 };
 
-/// Kopiert die Instanz samt Spielordner; Fortschritt kommt als Phase `copy` (Dateien).
-/// Schlägt etwas fehl, verschwindet die halbe Kopie wieder.
+/// Kopiert die Instanz samt Spielordner; Fortschritt kommt als Phase `copy`.
+/// Schlägt etwas fehl oder wird abgebrochen, verschwindet die halbe Kopie wieder.
 pub async fn duplicate(
     state: &AppState,
     instance_id: &str,
@@ -28,16 +28,19 @@ pub async fn duplicate(
     };
     let target = state.dirs.instance(&copy.id);
     content::regular_parents(&state.dirs.root, &target)?;
-    fs::create_dir_all(&target)?;
-    let mut guard = RemoveOnDrop(Some(target));
     let (dirs, from, to, mods) = (state.dirs.clone(), instance_id.to_owned(), copy.id.clone(), copy.mods.clone());
-    tokio::task::spawn_blocking(move || {
-        mods::recache(&dirs, &from, &mods)?;
-        mods::sync(&dirs, &to, &mods)?;
-        copy_files(&files_to_copy(&dirs, &from, &to, &mods)?, &progress, &AtomicBool::new(false))
+    // Der Wächter lebt im Thread: bei Abbruch räumt er erst weg, wenn dort nichts mehr geschrieben wird.
+    let mut guard = blocking(move |stop| {
+        fs::create_dir_all(&target)?;
+        let guard = RemoveOnDrop(Some(target));
+        copy_instance(&dirs, &from, &to, &mods, &|done, total| {
+            check_cancelled(stop)?;
+            progress("copy", done, total);
+            Ok(())
+        })?;
+        Ok(guard)
     })
-    .await
-    .map_err(|e| invalid(format!("Kopieren abgebrochen: {e}")))??;
+    .await?;
     let copy = state.instances.insert(copy)?;
     guard.0 = None;
     tracing::info!(source = %instance_id, id = %copy.id, "Instanz dupliziert");
@@ -70,6 +73,32 @@ fn files_to_copy(dirs: &Dirs, from: &str, to: &str, mods: &[Mod]) -> AppResult<V
     let instance = dirs.instance(to);
     files.extend(rest.into_iter().map(|(rel, path)| (instance.join(rel), path)));
     Ok(files)
+}
+
+/// Legt die Kopie an: erst die verwalteten Inhalte einzeln aus dem Cache (der Abgleich prüft jede JAR per SHA-1,
+/// das dauert und soll als Fortschritt sichtbar sein), dann die übrigen Dateien. `step(done, total)` folgt jedem
+/// Schritt; ein Fehler daraus bricht ab.
+fn copy_instance(dirs: &Dirs, from: &str, to: &str, mods: &[Mod], step: &dyn Fn(u64, u64) -> AppResult<()>) -> AppResult<()> {
+    let files = files_to_copy(dirs, from, to, mods)?;
+    let total = (mods.len() + files.len()) as u64;
+    step(0, total)?;
+    let mut done = 0;
+    for m in mods {
+        let one = std::slice::from_ref(m);
+        mods::recache(dirs, from, one)?;
+        mods::sync(dirs, to, one)?;
+        done += 1;
+        step(done, total)?;
+    }
+    for (dest, source) in &files {
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::copy(source, dest)?;
+        done += 1;
+        step(done, total)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -168,6 +197,36 @@ mod tests {
 
         assert!(duplicate(&state, &source.id, |_, _, _| {}).await.is_err());
 
+        assert_eq!(state.instances.list(), vec![source]);
+        assert_eq!(fs::read_dir(root.join("instances")).unwrap().count(), 1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancelled_duplicate_leaves_nothing_behind() {
+        let root = std::env::temp_dir().join(new_id());
+        let state = AppState::load(&root).unwrap();
+        let source = source_instance(&state, Vec::new());
+        write_files(&state.dirs.game_dir(&source.id), &[("options.txt", "fov:1")]);
+        // Der erste Schritt hält an, bis abgebrochen ist; endet der Thread, schließt sich `started`.
+        let (reached, started) = std::sync::mpsc::channel();
+        let (resume, hold) = std::sync::mpsc::channel::<()>();
+        let progress = move |_: &str, done: u64, _: u64| {
+            if done == 0 {
+                reached.send(()).unwrap();
+                hold.recv().ok();
+            }
+        };
+
+        let work = state.cancellable("op", duplicate(&state, &source.id, progress));
+        let (result, ()) = tokio::join!(work, async {
+            started.recv().unwrap();
+            state.cancel("op");
+        });
+        drop(resume);
+        assert!(started.recv().is_err());
+
+        assert!(matches!(result, Err(crate::error::AppError::Cancelled)));
         assert_eq!(state.instances.list(), vec![source]);
         assert_eq!(fs::read_dir(root.join("instances")).unwrap().count(), 1);
         fs::remove_dir_all(root).unwrap();

@@ -4,19 +4,28 @@ import { hash } from "@/pixel/random";
 import { BIOME_KEYS, BIOMES, type Biome } from "@/pixel/scene";
 
 /**
- * Bild einer Instanz (Biom der Szene). Lebt lokal, weil das Backend kein Feld dafür hat;
- * ohne Wahl ergibt es sich fest aus der Instanz-ID.
+ * Bild einer Instanz (Biom der Szene) und zugeklappte Gruppen der Bibliothek. Lebt lokal, weil das Backend
+ * kein Feld dafür hat; ohne Wahl ergibt sich das Bild fest aus der Instanz-ID.
  */
 interface LookState {
   looks: Record<string, { bio: Biome; seed: number }>;
+  /** Zugeklappte Abschnitte der Bibliothek; "" = Instanzen ohne Gruppe. */
+  collapsed: string[];
   setBiome: (instanceId: string, bio: Biome) => void;
+  setCollapsed: (group: string, collapsed: boolean) => void;
 }
 
 export const useLookStore = create<LookState>()(
   persist(
     (set) => ({
       looks: {},
+      collapsed: [],
       setBiome: (id, bio) => set((s) => ({ looks: { ...s.looks, [id]: { bio, seed: s.looks[id]?.seed ?? defaultLook(id).seed } } })),
+      // <details> meldet beim Einhängen schon offen; ohne Änderung bleibt der Zustand gleich, kein Neu-Rendern.
+      setCollapsed: (group, collapsed) =>
+        set((s) =>
+          s.collapsed.includes(group) === collapsed ? s : { collapsed: collapsed ? [...s.collapsed, group] : s.collapsed.filter((g) => g !== group) },
+        ),
     }),
     { name: "launcher-look", version: 1 },
   ),

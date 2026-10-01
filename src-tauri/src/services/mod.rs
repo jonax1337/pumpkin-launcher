@@ -6,6 +6,8 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
+use tokio_util::sync::CancellationToken;
+
 use crate::error::{AppError, AppResult};
 use modrinth::invalid;
 
@@ -178,6 +180,26 @@ pub(crate) fn copy_files(files: &[(PathBuf, PathBuf)], progress: &dyn Fn(&str, u
         }
         fs::copy(source, dest)?;
         progress("copy", done, total);
+    }
+    Ok(())
+}
+
+/// Führt blockierende Dateiarbeit aus. Verwirft der Aufrufer das Future (Abbruch über `AppState::cancellable`),
+/// läuft der Thread weiter, bis `work` das Token prüft ([`check_cancelled`]); aufräumen muss `work` selbst,
+/// erst dann schreibt nichts mehr in das, was weg soll.
+pub(crate) async fn blocking<T: Send + 'static>(
+    work: impl FnOnce(&CancellationToken) -> AppResult<T> + Send + 'static,
+) -> AppResult<T> {
+    let stop = CancellationToken::new();
+    let _stop_on_drop = stop.clone().drop_guard();
+    tokio::task::spawn_blocking(move || work(&stop))
+        .await
+        .map_err(|e| invalid(format!("Der Vorgang ist unerwartet abgebrochen: {e}")))?
+}
+
+pub(crate) fn check_cancelled(stop: &CancellationToken) -> AppResult<()> {
+    if stop.is_cancelled() {
+        return Err(AppError::Cancelled);
     }
     Ok(())
 }

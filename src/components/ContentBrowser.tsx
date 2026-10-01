@@ -9,7 +9,7 @@ import {
   MenuItem, MenuLabel, MenuNote, MenuScroll, MenuSep, Meta, Panel, ProjectIcon, RowTitle, SceneThumb, SearchField, SectionHeader, Select, Sheet, Skel, SkelRow,
   Switch, TabPanel, Tabs, TextField, Tip, Toolbar,
 } from "@/ui";
-import { cancelActive, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { cancelContent, cancellable, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { useInstances } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import {
@@ -339,7 +339,7 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
       if (!id) return;
     }
     const perform = (op: string) => (source === "modrinth" ? api.modrinthInstallPack(id, name, op) : api.providerInstallPack(source, projectId, id, name, op));
-    install.mutate(withTarget(projectId, perform, `Modpack „${name}“ installieren`), {
+    install.mutate(cancellable(withTarget(projectId, perform, `Modpack „${name}“ installieren`)), {
       onSuccess: (inst) => {
         if (!inst) return;
         toast.success(`${inst.name} ist bereit. „Spielen“ lädt beim ersten Start den Rest.`, {
@@ -351,7 +351,7 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
     });
   }
   const busy = checking ? "Wird geprüft" : active && target === projectId ? progressLabel(progress).replace(/…$/, "") : null;
-  return { run, busy, p: checking ? null : progressShare(progress), blocked: !!active || checking, cancel: !checking && busy ? cancelActive : undefined };
+  return { run, busy, p: checking ? null : progressShare(progress), blocked: !!active || checking, cancel: !checking && busy ? cancelContent : undefined };
 }
 
 const loaderNames = (v: ContentVersion) =>

@@ -58,19 +58,22 @@ pub fn update_instance(state: State<'_, AppState>, instance: Instance) -> AppRes
     require_name(&instance.name)?;
     let old = state.instances.get(&instance.id)?;
     require_launch_settings(&instance, &old)?;
-    let instance = Instance {
-        group: instance.group.map(|g| g.trim().to_owned()).filter(|g| !g.is_empty()),
-        // Spielzeit zählt nur das Backend: ein veralteter Stand im Frontend darf sie nicht zurücksetzen.
-        playtime_secs: old.playtime_secs,
-        ..instance
-    };
+    let instance = Instance { group: instance.group.map(|g| g.trim().to_owned()).filter(|g| !g.is_empty()), ..instance };
     let mut desired = instance.mods.clone();
     for removed in &old.mods {
         if !desired.iter().any(|m|m.file_name==removed.file_name) {
             let mut removed=removed.clone();removed.enabled=false;desired.push(removed);
         }
     }
-    mods::sync_commit(&state.dirs,&instance.id.clone(),&desired, |_| state.instances.update(instance))
+    let id = instance.id.clone();
+    // Spielzeit und letzten Start führt nur das Backend: ein veralteter Stand im Frontend darf sie nicht zurücksetzen,
+    // auch nicht, wenn das Spielende sie gerade erst speichert.
+    let commit = |_| {
+        state.instances.modify(&id, |current| {
+            *current = Instance { playtime_secs: current.playtime_secs, last_played_at: current.last_played_at, ..instance }
+        })
+    };
+    mods::sync_commit(&state.dirs, &id, &desired, commit)
 }
 
 #[tauri::command]
@@ -186,7 +189,7 @@ pub async fn instance_install(app: AppHandle, state: State<'_, AppState>, instan
     state.cancellable(&instance_id, install_instance(app.clone(), &state, instance_id.clone())).await
 }
 
-/// Bricht eine laufende `instance_install` ab; sie endet mit „Installation abgebrochen“.
+/// Bricht eine laufende `instance_install` ab; sie endet mit „Vorgang abgebrochen“.
 #[tauri::command]
 pub fn instance_install_cancel(state: State<'_, AppState>, instance_id: String) {
     state.cancel(&instance_id);
@@ -214,8 +217,7 @@ async fn install_instance(app: AppHandle, state: &AppState, instance_id: String)
             version = fabric::merge(version, &profile)?;
         }
         if instance.loader_version.as_deref() != Some(loader.as_str()) {
-            instance.loader_version = Some(loader);
-            instance = state.instances.update(instance)?;
+            instance = state.instances.modify(&instance_id, |i| i.loader_version = Some(loader))?;
         }
         on_progress(InstallStep::Loader, 1, 1);
     }
@@ -253,7 +255,7 @@ pub async fn instance_launch(
     quick_play: Option<QuickPlay>,
 ) -> AppResult<u32> {
     let _operation = state.operation(Some(&instance_id))?;
-    let mut instance = state.instances.get(&instance_id)?;
+    let instance = state.instances.get(&instance_id)?;
     if let Some(target) = &quick_play {
         worlds::require_target(&state.dirs, &instance_id, target)?;
     }
@@ -322,13 +324,13 @@ pub async fn instance_launch(
     )?;
     let pid = game.pid;
     running.insert(instance_id.clone(), game);
-    // Noch unter dem Lock speichern: ein sofort beendetes Spiel rechnet seine Spielzeit sonst
-    // auf einen Stand an, den dieses Update gleich wieder überschreibt.
-    instance.last_played_at = Some(now_ms());
-    if quick_play.is_some() {
-        instance.last_quick_play = quick_play;
-    }
-    state.instances.update(instance)?;
+    // Noch unter dem Lock: `instance-exit` eines sofort beendeten Spiels kommt so erst nach diesem Stand.
+    state.instances.modify(&instance_id, |i| {
+        i.last_played_at = Some(now_ms());
+        if quick_play.is_some() {
+            i.last_quick_play = quick_play;
+        }
+    })?;
     drop(running);
     tracing::info!(instance = %instance_id, pid, user = %account.username, "Spiel gestartet");
     Ok(pid)

@@ -5,8 +5,8 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { Checkbox, ConfirmDialog, Dialog, DialogActions, Field, Hint, IconButton, Menu, Skel, TextField, type MenuEntry } from "@/ui";
 import { usePhase } from "@/components/game";
-import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
-import { askStop, useDeleteInstance, useExportEntries, useExportInstance, useGroups, usePlay, useUpdateInstance } from "@/hooks/useInstances";
+import { cancellable, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { askStop, useDeleteInstance, useExportEntries, useGroups, usePlay, useUpdateInstance } from "@/hooks/useInstances";
 import { useSaveTemplate } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
 import type { Instance } from "@/lib/types";
@@ -29,14 +29,34 @@ export function openInstanceFolder(instance: Instance) {
   api.instanceDir(instance.id).then(api.openPath).catch((e: unknown) => toast.error(e instanceof Error ? e.message : String(e)));
 }
 
-/** Instanz duplizieren: Fortschritt im Aufgaben-Menü, danach ein Toast mit Sprung zur Kopie. */
+/** Instanz duplizieren: Fortschritt und „Abbrechen“ im Aufgaben-Menü, danach ein Toast mit Sprung zur Kopie. */
 function useDuplicate() {
   const install = useContentInstall();
   const navigate = useNavigate();
   return (instance: Instance) =>
-    install.mutate(withTarget(`duplicate:${instance.id}`, (op) => api.duplicateInstance(instance.id, op), `${instance.name} duplizieren`), {
+    install.mutate(cancellable(withTarget(`duplicate:${instance.id}`, (op) => api.duplicateInstance(instance.id, op), `${instance.name} duplizieren`)), {
       onSuccess: (copy) => copy && toast.success(`„${copy.name}“ angelegt`, { action: { label: "Öffnen", onClick: () => navigate(`/instances/${copy.id}`) } }),
     });
+}
+
+/**
+ * Export als `.mrpack` wie Duplizieren im Aufgaben-Menü; der Erfolgs-Toast führt zur Datei im Dateimanager.
+ * Gehört in InstanceDialogs, nicht in den Dialog: der schließt sofort, und mit ihm fiele der Erfolgs-Toast weg.
+ */
+function useExport() {
+  const install = useContentInstall();
+  return (instance: Instance, include: string[], path: string) => {
+    // Ein Content-Lauf liefert eine Instanz (für „Öffnen“ im Verlauf); beim Export ist es die exportierte.
+    const run = (op: string) => api.exportInstance(instance.id, include, path, op).then(() => instance);
+    install.mutate(cancellable(withTarget(`export:${instance.id}`, run, `${instance.name} exportieren`)), {
+      onSuccess: (exported) =>
+        exported &&
+        toast.success(`„${instance.name}“ exportiert`, {
+          description: path,
+          action: { label: "Im Ordner zeigen", onClick: () => api.revealPath(path).catch((e: Error) => toast.error(e.message)) },
+        }),
+    });
+  };
 }
 
 /**
@@ -75,7 +95,7 @@ export function useInstanceMenu(instance: Instance, opts: { open?: boolean } = {
     { id: "group", text: "Gruppe", icon: "box", disabled: running || busy, items: groupItems },
     "-",
     { id: "dup", text: "Duplizieren", icon: "copy", disabled: running || busy || contentBusy, onSelect: () => duplicate(instance) },
-    { id: "exp", text: "Exportieren…", icon: "ul", disabled: running || busy, onSelect: () => askExport(instance) },
+    { id: "exp", text: "Exportieren…", icon: "ul", disabled: running || busy || contentBusy, onSelect: () => askExport(instance) },
     { id: "tpl", text: "Als Vorlage speichern", icon: "save", onSelect: () => askSaveTemplate(instance) },
     "-",
     { id: "del", text: "Löschen", icon: "trash", bad: true, disabled: running || busy, onSelect: () => askDelete(instance) },
@@ -147,16 +167,17 @@ const ENTRY_LABELS: Record<string, string> = {
   "servers.dat": "Serverliste",
 };
 
-function ExportDialog({ instance, onClose }: { instance: Instance; onClose: () => void }) {
+function ExportDialog({ instance, onExport, onClose }: { instance: Instance; onExport: (include: string[], path: string) => void; onClose: () => void }) {
   const entries = useExportEntries(instance.id);
   const [picked, setPicked] = useState<Set<string> | null>(null);
   const chosen = picked ?? new Set(entries.data?.filter((name) => EXPORT_DEFAULTS.includes(name)));
-  const exp = useExportInstance();
   const toggle = (name: string, on: boolean) => setPicked(new Set(on ? [...chosen, name] : [...chosen].filter((n) => n !== name)));
 
   async function submit() {
     const path = await saveFile({ defaultPath: packFileName(instance.name), filters: [{ name: "Modrinth-Modpack", extensions: ["mrpack"] }] });
-    if (path) exp.mutate({ instance, include: [...chosen], path }, { onSuccess: onClose });
+    if (!path) return;
+    onExport([...chosen], path);
+    onClose();
   }
 
   return (
@@ -167,7 +188,7 @@ function ExportDialog({ instance, onClose }: { instance: Instance; onClose: () =
       sub={instance.name}
       width={480}
       footLeft={api.isMock ? "Nur in der App." : undefined}
-      footer={<DialogActions cancel="Abbrechen" confirm={{ label: exp.isPending ? "Exportiert" : "Exportieren", width: 150, disabled: api.isMock || !entries.data || exp.isPending, onClick: submit }} />}
+      footer={<DialogActions cancel="Abbrechen" confirm={{ label: "Exportieren", width: 150, disabled: api.isMock || !entries.data, onClick: submit }} />}
     >
       <Field label="Mitnehmen" group help="Inhalte von Modrinth werden verlinkt, alles andere kommt mit in die Datei. CurseForge-Dateien darfst du so nicht unbedingt öffentlich teilen.">
         {entries.error ? (
@@ -177,7 +198,7 @@ function ExportDialog({ instance, onClose }: { instance: Instance; onClose: () =
         ) : entries.data.length ? (
           <div className="flex flex-col gap-2">
             {entries.data.map((name) => (
-              <Checkbox key={name} checked={chosen.has(name)} disabled={exp.isPending} onChange={(on) => toggle(name, on)}>
+              <Checkbox key={name} checked={chosen.has(name)} onChange={(on) => toggle(name, on)}>
                 {ENTRY_LABELS[name] ? `${ENTRY_LABELS[name]} (${name})` : name}
               </Checkbox>
             ))}
@@ -219,13 +240,14 @@ function NewGroupDialog({ instance, onClose }: { instance: Instance; onClose: ()
 export function InstanceDialogs() {
   const { template, exporting, remove, newGroup } = useInstanceActions();
   const del = useDeleteInstance();
+  const exportPack = useExport();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const close = () => useInstanceActions.setState({ template: null, exporting: null, remove: null, newGroup: null });
   return (
     <>
       {template && <SaveTemplateDialog key={template.id} instance={template} onClose={close} />}
-      {exporting && <ExportDialog key={exporting.id} instance={exporting} onClose={close} />}
+      {exporting && <ExportDialog key={exporting.id} instance={exporting} onExport={(include, path) => exportPack(exporting, include, path)} onClose={close} />}
       {newGroup && <NewGroupDialog key={newGroup.id} instance={newGroup} onClose={close} />}
       <ConfirmDialog
         open={!!remove}

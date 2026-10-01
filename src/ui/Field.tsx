@@ -225,11 +225,13 @@ export function Select({ value, onChange, options, label, size = "m", className,
 
 /**
  * Aufklappbarer Bereich („Erweitert“): Zusammenfassung wie ein Geist-Knopf s (Hover-Platte, bündig mit der Kante),
- * Pfeil dreht sich, echter Fokusring. `open` = Startzustand.
+ * Pfeil dreht sich, echter Fokusring. `open` = Startzustand; `onToggle` meldet Auf- und Zuklappen.
  */
-export function Disclosure({ summary, open, className, children }: { summary: ReactNode; open?: boolean; className?: string; children: ReactNode }) {
+export function Disclosure({ summary, open, onToggle, className, children }: {
+  summary: ReactNode; open?: boolean; onToggle?: (open: boolean) => void; className?: string; children: ReactNode;
+}) {
   return (
-    <details className={cn("vx-disc", className)} open={open || undefined}>
+    <details className={cn("vx-disc", className)} open={open || undefined} onToggle={(e) => onToggle?.(e.currentTarget.open)}>
       <summary className="vx-disc-s fx">
         <span className="vx-disc-c">
           <Icon name="chev" size="s" />

@@ -1,7 +1,7 @@
 // Nur im Browser-Dev-Modus dynamisch geladen (siehe api.ts); im Release-Build nicht enthalten.
 import type { ContentProgress, ContentVersion } from "./modrinth";
 import { blankInstanceFields } from "./mock";
-import { INSTALL_CANCELLED, type Instance, type ModLoader } from "./types";
+import { CANCELLED, type Instance, type ModLoader } from "./types";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -23,7 +23,7 @@ export function createPackMock(db: { instances: Instance[]; cancelled: Set<strin
       throw new Error("Dieses Modpack braucht einen Mod-Loader, den Pumpkin Launcher noch nicht kann.");
     const mods = loader === "fabric" ? PACK_MODS : [];
     for (let i = 0; i < mods.length; i++) {
-      if (db.cancelled.delete(operationId)) throw new Error(INSTALL_CANCELLED);
+      if (db.cancelled.delete(operationId)) throw new Error(CANCELLED);
       progress("download", i, mods.length);
       await wait(900);
     }

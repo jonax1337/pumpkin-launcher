@@ -30,7 +30,7 @@ pub enum AppError {
     NotFound { kind: &'static str, id: String },
     #[error("{0}")]
     Invalid(String),
-    #[error("Installation abgebrochen")]
+    #[error("Vorgang abgebrochen")]
     Cancelled,
 }
 
@@ -89,7 +89,7 @@ mod tests {
         starts(Error::from(ErrorKind::PermissionDenied).into(), "Zugriff auf eine Datei wurde verweigert");
         starts(Error::other("x").into(), "Beim Lesen oder Schreiben");
         assert!(AppError::from(Error::other("kaputt")).to_string().ends_with(" – Details: kaputt"));
-        assert_eq!(AppError::Cancelled.to_string(), "Installation abgebrochen");
+        assert_eq!(AppError::Cancelled.to_string(), "Vorgang abgebrochen");
         assert_eq!(AppError::Invalid("Instanz läuft noch".into()).to_string(), "Instanz läuft noch");
     }
 

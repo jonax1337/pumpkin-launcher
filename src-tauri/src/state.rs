@@ -59,9 +59,7 @@ impl AppState {
 
     /// Rechnet eine beendete Sitzung auf die Spielzeit der Instanz an.
     pub fn add_playtime(&self, id: &str, secs: u64) -> AppResult<()> {
-        let mut instance = self.instances.get(id)?;
-        instance.playtime_secs = instance.playtime_secs.saturating_add(secs);
-        self.instances.update(instance)?;
+        self.instances.modify(id, |i| i.playtime_secs = i.playtime_secs.saturating_add(secs))?;
         Ok(())
     }
 
@@ -105,7 +103,7 @@ mod tests {
             tokio::task::yield_now().await;
             state.cancel("op");
         });
-        assert_eq!(result.unwrap_err().to_string(), "Installation abgebrochen");
+        assert_eq!(result.unwrap_err().to_string(), "Vorgang abgebrochen");
         assert!(state.cancels().is_empty());
         assert_eq!(state.cancellable("op", async { Ok(1) }).await.unwrap(), 1);
         std::fs::remove_dir_all(root).unwrap();
