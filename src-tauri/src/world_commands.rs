@@ -1,5 +1,5 @@
-//! Welten, Sicherungen, Datenpakete und Serverliste einer Instanz, siehe `services::worlds`, `services::datapacks`
-//! und `services::servers`.
+//! Alles, was im Spielordner einer Instanz unter `saves/` und in `servers.dat` liegt: Welten, Sicherungen,
+//! Datenpakete und Serverliste, siehe `services::worlds`, `services::datapacks` und `services::servers`.
 //! Was Spieldateien ändert, geht nur, solange die Instanz nicht läuft (`AppState::operation`).
 use tauri::{AppHandle, State};
 
@@ -7,20 +7,15 @@ use crate::content_commands::progress;
 use crate::error::AppResult;
 use crate::models::QuickPlay;
 use crate::services::datapacks::{self, Datapack};
-use crate::services::servers::{self, Server};
+use crate::services::servers::{self, Server, ServerInput};
 use crate::services::worlds::{self, World, WorldBackup};
-use crate::services::{blocking, install, launch, Dirs};
+use crate::services::{blocking, install, launch};
 use crate::state::AppState;
-
-/// Verzeichnisse einer bestehenden Instanz: ihre ID wird erst nach dieser Prüfung Teil eines Pfads.
-fn dirs_of(state: &AppState, instance_id: &str) -> AppResult<Dirs> {
-    state.instances.get(instance_id)?;
-    Ok(state.dirs.clone())
-}
 
 #[tauri::command]
 pub async fn world_list(state: State<'_, AppState>, instance_id: String) -> AppResult<Vec<World>> {
-    let dirs = dirs_of(&state, &instance_id)?;
+    state.require_instance(&instance_id)?;
+    let dirs = state.dirs.clone();
     blocking(move |_| worlds::list(&dirs, &instance_id)).await
 }
 
@@ -34,26 +29,30 @@ pub async fn world_backup(
     operation_id: String,
 ) -> AppResult<WorldBackup> {
     let _operation = state.operation(Some(&instance_id))?;
-    let (dirs, on_progress) = (dirs_of(&state, &instance_id)?, progress(app, operation_id));
+    state.require_instance(&instance_id)?;
+    let (dirs, on_progress) = (state.dirs.clone(), progress(app, operation_id));
     blocking(move |_| worlds::backup(&dirs, &instance_id, &world_id, &on_progress)).await
 }
 
 #[tauri::command]
 pub fn world_backups(state: State<'_, AppState>, instance_id: String) -> AppResult<Vec<WorldBackup>> {
-    worlds::backups(&dirs_of(&state, &instance_id)?, &instance_id)
+    state.require_instance(&instance_id)?;
+    worlds::backups(&state.dirs, &instance_id)
 }
 
 /// Stellt eine Sicherung als neue Welt her, nie über eine bestehende.
 #[tauri::command]
 pub async fn world_restore(state: State<'_, AppState>, instance_id: String, backup_id: String) -> AppResult<World> {
     let _operation = state.operation(Some(&instance_id))?;
-    let dirs = dirs_of(&state, &instance_id)?;
+    state.require_instance(&instance_id)?;
+    let dirs = state.dirs.clone();
     blocking(move |_| worlds::restore(&dirs, &instance_id, &backup_id)).await
 }
 
 #[tauri::command]
 pub fn world_backup_delete(state: State<'_, AppState>, instance_id: String, backup_id: String) -> AppResult<()> {
-    worlds::delete_backup(&dirs_of(&state, &instance_id)?, &instance_id, &backup_id)
+    state.require_instance(&instance_id)?;
+    worlds::delete_backup(&state.dirs, &instance_id, &backup_id)
 }
 
 /// Löscht eine Welt, nachdem sie gesichert wurde (Fortschritt wie `world_backup`); liefert die Sicherung.
@@ -67,12 +66,12 @@ pub async fn world_delete(
     operation_id: String,
 ) -> AppResult<WorldBackup> {
     let _operation = state.operation(Some(&instance_id))?;
-    let (dirs, on_progress) = (dirs_of(&state, &instance_id)?, progress(app, operation_id));
-    let deleted = Some(QuickPlay::World { id: world_id.clone() });
-    let target = instance_id.clone();
-    let backup = blocking(move |_| worlds::delete(&dirs, &target, &world_id, &on_progress)).await?;
+    state.require_instance(&instance_id)?;
+    let (dirs, on_progress) = (state.dirs.clone(), progress(app, operation_id));
+    let instance = instance_id.clone();
+    let backup = blocking(move |_| worlds::delete(&dirs, &instance, &world_id, &on_progress)).await?;
     state.instances.modify(&instance_id, |i| {
-        if i.last_quick_play == deleted {
+        if matches!(&i.last_quick_play, Some(QuickPlay::World { id }) if *id == backup.world) {
             i.last_quick_play = None;
         }
     })?;
@@ -89,7 +88,8 @@ pub async fn world_quick_play_supported(state: State<'_, AppState>, instance_id:
 
 #[tauri::command]
 pub async fn datapack_list(state: State<'_, AppState>, instance_id: String, world_id: String) -> AppResult<Vec<Datapack>> {
-    let dirs = dirs_of(&state, &instance_id)?;
+    state.require_instance(&instance_id)?;
+    let dirs = state.dirs.clone();
     blocking(move |_| datapacks::list(&dirs, &instance_id, &world_id)).await
 }
 
@@ -97,7 +97,8 @@ pub async fn datapack_list(state: State<'_, AppState>, instance_id: String, worl
 #[tauri::command]
 pub async fn datapack_add(state: State<'_, AppState>, instance_id: String, world_id: String, paths: Vec<String>) -> AppResult<()> {
     let _operation = state.operation(Some(&instance_id))?;
-    let dirs = dirs_of(&state, &instance_id)?;
+    state.require_instance(&instance_id)?;
+    let dirs = state.dirs.clone();
     blocking(move |_| datapacks::add_files(&dirs, &instance_id, &world_id, &paths)).await
 }
 
@@ -119,23 +120,27 @@ pub async fn datapack_install(
 #[tauri::command]
 pub fn datapack_remove(state: State<'_, AppState>, instance_id: String, world_id: String, pack_id: String) -> AppResult<()> {
     let _operation = state.operation(Some(&instance_id))?;
-    datapacks::remove(&dirs_of(&state, &instance_id)?, &instance_id, &world_id, &pack_id)
+    state.require_instance(&instance_id)?;
+    datapacks::remove(&state.dirs, &instance_id, &world_id, &pack_id)
 }
 
 #[tauri::command]
 pub fn server_list(state: State<'_, AppState>, instance_id: String) -> AppResult<Vec<Server>> {
-    servers::list(&dirs_of(&state, &instance_id)?.game_dir(&instance_id))
+    state.require_instance(&instance_id)?;
+    servers::list(&state.dirs.game_dir(&instance_id))
 }
 
 /// Legt einen Server an (`index` fehlt) oder ändert den an Stelle `index` aus `server_list`.
 #[tauri::command]
-pub fn server_save(state: State<'_, AppState>, instance_id: String, index: Option<usize>, server: Server) -> AppResult<()> {
+pub fn server_save(state: State<'_, AppState>, instance_id: String, index: Option<usize>, server: ServerInput) -> AppResult<()> {
     let _operation = state.operation(Some(&instance_id))?;
-    servers::save(&dirs_of(&state, &instance_id)?.game_dir(&instance_id), index, &server)
+    state.require_instance(&instance_id)?;
+    servers::save(&state.dirs.game_dir(&instance_id), index, &server)
 }
 
 #[tauri::command]
 pub fn server_remove(state: State<'_, AppState>, instance_id: String, index: usize) -> AppResult<()> {
     let _operation = state.operation(Some(&instance_id))?;
-    servers::remove(&dirs_of(&state, &instance_id)?.game_dir(&instance_id), index)
+    state.require_instance(&instance_id)?;
+    servers::remove(&state.dirs.game_dir(&instance_id), index)
 }

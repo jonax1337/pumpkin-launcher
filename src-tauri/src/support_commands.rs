@@ -11,8 +11,7 @@ use crate::state::AppState;
 /// Lädt ein Protokoll der Instanz bereinigt zu mclo.gs hoch und liefert den öffentlichen Link.
 #[tauri::command]
 pub async fn log_share(state: State<'_, AppState>, instance_id: String, kind: LogKind) -> AppResult<String> {
-    // Nur eine existierende Id wird zum Pfad.
-    state.instances.get(&instance_id)?;
+    state.require_instance(&instance_id)?;
     let url = logshare::share(&state.http, &state.dirs, &instance_id, kind).await?;
     tracing::info!(instance = %instance_id, ?kind, %url, "Protokoll geteilt");
     Ok(url)

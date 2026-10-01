@@ -5,6 +5,7 @@ use std::sync::{Mutex, MutexGuard};
 
 use serde::{de::DeserializeOwned, Serialize};
 
+use super::write_atomic;
 use crate::error::{AppError, AppResult};
 use crate::models::{Instance, LibrarySkin, MsAccount, Template};
 
@@ -131,10 +132,7 @@ fn not_found<T: Entity>(id: &str) -> AppError {
 
 /// Schreibt atomar: erst in eine Temp-Datei, dann umbenennen.
 fn persist<T: Serialize>(path: &Path, items: &[T]) -> AppResult<()> {
-    let tmp = path.with_extension("json.tmp");
-    fs::write(&tmp, serde_json::to_vec_pretty(items)?)?;
-    fs::rename(&tmp, path)?;
-    Ok(())
+    write_atomic(path, &serde_json::to_vec_pretty(items)?)
 }
 
 #[cfg(test)]

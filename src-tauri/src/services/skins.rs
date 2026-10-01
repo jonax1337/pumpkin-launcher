@@ -3,12 +3,11 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use base64::Engine;
 use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::{auth::{self, MC_PROFILE}, modrinth::{self, invalid}, Dirs};
+use super::{auth::{self, MC_PROFILE}, modrinth::{self, invalid}, png_data_url, write_atomic, Dirs};
 use crate::error::AppResult;
 use crate::models::{now_ms, LibrarySkin, SkinVariant};
 use crate::services::download::sha1_hex;
@@ -215,9 +214,7 @@ fn add(state: &AppState, png: &[u8], name: &str, variant: SkinVariant) -> AppRes
     }
     let path = file(&state.dirs, &skin.id);
     fs::create_dir_all(state.dirs.skins())?;
-    let tmp = path.with_extension("png.part");
-    fs::write(&tmp, png)?;
-    fs::rename(&tmp, &path)?;
+    write_atomic(&path, png)?;
     state.skins.insert(skin).inspect_err(|_| remove_file(&path))
 }
 
@@ -247,7 +244,7 @@ fn remove_file(path: &Path) {
 pub fn texture(state: &AppState, id: &str) -> AppResult<String> {
     let skin = state.skins.get(id)?;
     let png = fs::read(file(&state.dirs, &skin.id))?;
-    Ok(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)))
+    Ok(png_data_url(&png))
 }
 
 #[cfg(test)]

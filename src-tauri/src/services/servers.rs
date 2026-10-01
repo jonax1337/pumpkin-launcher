@@ -5,23 +5,31 @@ use std::{collections::HashMap, fs, io, path::Path};
 use fastnbt::Value;
 use serde::{Deserialize, Serialize};
 
-use super::modrinth::invalid;
+use super::{modrinth::invalid, write_atomic, PNG_DATA_URL};
 use crate::error::{AppError, AppResult};
 
 const FILE: &str = "servers.dat";
 
 type Compound = HashMap<String, Value>;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Server {
     pub name: String,
     /// `host[:port]`, wie im Spiel eingegeben.
     pub address: String,
     /// Servericon als `data:`-URL. Schreibt nur das Spiel (beim Anpingen); beim Speichern bleibt das alte.
-    #[serde(default)]
     pub icon: Option<String>,
     /// Ressourcenpakete des Servers annehmen bzw. ablehnen; `None` = im Spiel nachfragen.
+    pub accept_textures: Option<bool>,
+}
+
+/// Was der Launcher an einem Server ändert; das Icon gehört dem Spiel.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerInput {
+    pub name: String,
+    pub address: String,
     #[serde(default)]
     pub accept_textures: Option<bool>,
 }
@@ -29,32 +37,24 @@ pub struct Server {
 /// Die Server, die das Spiel zeigt, in seiner Reihenfolge.
 pub fn list(game_dir: &Path) -> AppResult<Vec<Server>> {
     let mut root = read(&game_dir.join(FILE))?;
-    Ok(visible(entries(&mut root)?).map(|(_, entry)| server(entry)).collect())
+    Ok(visible(entries(&mut root)?).map(|(_, entry)| to_server(entry)).collect())
 }
 
 /// Legt einen Server an (`index` = None) oder ändert den Eintrag an Stelle `index` der Liste aus [`list`].
-pub fn save(game_dir: &Path, index: Option<usize>, server: &Server) -> AppResult<()> {
+pub fn save(game_dir: &Path, index: Option<usize>, server: &ServerInput) -> AppResult<()> {
     let name = server.name.trim();
     if name.is_empty() {
         return Err(invalid("Gib dem Server einen Namen"));
     }
     let address = require_address(&server.address)?;
     update(game_dir, |list| {
-        let at = match index {
-            Some(index) => position(list, index)?,
-            None => {
-                list.push(Value::Compound(Compound::new()));
-                list.len() - 1
-            }
+        let entry = entry_at(list, index)?;
+        entry.insert("name".into(), Value::String(name.into()));
+        entry.insert("ip".into(), Value::String(address.into()));
+        match server.accept_textures {
+            Some(accept) => entry.insert("acceptTextures".into(), Value::Byte(accept.into())),
+            None => entry.remove("acceptTextures"),
         };
-        if let Value::Compound(entry) = &mut list[at] {
-            entry.insert("name".into(), Value::String(name.into()));
-            entry.insert("ip".into(), Value::String(address.into()));
-            match server.accept_textures {
-                Some(accept) => entry.insert("acceptTextures".into(), Value::Byte(accept.into())),
-                None => entry.remove("acceptTextures"),
-            };
-        }
         Ok(())
     })
 }
@@ -82,11 +82,7 @@ fn update(game_dir: &Path, change: impl FnOnce(&mut Vec<Value>) -> AppResult<()>
     let mut root = read(&path)?;
     change(entries(&mut root)?)?;
     fs::create_dir_all(game_dir)?;
-    // Erst vollständig schreiben, dann umbenennen: ein Abbruch hinterlässt nie eine halbe Serverliste.
-    let tmp = path.with_extension("dat.tmp");
-    fs::write(&tmp, fastnbt::to_bytes(&root)?)?;
-    fs::rename(&tmp, &path)?;
-    Ok(())
+    write_atomic(&path, &fastnbt::to_bytes(&root)?)
 }
 
 fn read(path: &Path) -> AppResult<Compound> {
@@ -114,6 +110,21 @@ fn visible(list: &[Value]) -> impl Iterator<Item = (usize, &Compound)> {
     })
 }
 
+/// Der sichtbare Eintrag `index` der Liste aus [`list`]; ohne `index` ein neuer, leerer am Ende.
+fn entry_at(list: &mut Vec<Value>, index: Option<usize>) -> AppResult<&mut Compound> {
+    let at = match index {
+        Some(index) => position(list, index)?,
+        None => {
+            list.push(Value::Compound(Compound::new()));
+            list.len() - 1
+        }
+    };
+    match list.get_mut(at) {
+        Some(Value::Compound(entry)) => Ok(entry),
+        _ => Err(invalid("servers.dat hat ein unbekanntes Format")),
+    }
+}
+
 /// Stelle des sichtbaren Eintrags `index` in der Datei.
 fn position(list: &[Value], index: usize) -> AppResult<usize> {
     visible(list)
@@ -122,7 +133,7 @@ fn position(list: &[Value], index: usize) -> AppResult<usize> {
         .ok_or_else(|| AppError::NotFound { kind: "Server", id: (index + 1).to_string() })
 }
 
-fn server(entry: &Compound) -> Server {
+fn to_server(entry: &Compound) -> Server {
     let text = |key: &str| match entry.get(key) {
         Some(Value::String(s)) => s.clone(),
         _ => String::new(),
@@ -131,7 +142,7 @@ fn server(entry: &Compound) -> Server {
         name: text("name"),
         address: text("ip"),
         icon: match entry.get("icon") {
-            Some(Value::String(png)) if !png.is_empty() => Some(format!("data:image/png;base64,{png}")),
+            Some(Value::String(png)) if !png.is_empty() => Some(format!("{PNG_DATA_URL}{png}")),
             _ => None,
         },
         accept_textures: match entry.get("acceptTextures") {
@@ -145,10 +156,7 @@ fn server(entry: &Compound) -> Server {
 mod tests {
     use super::*;
     use crate::models::new_id;
-
-    fn compound(pairs: Vec<(&str, Value)>) -> Value {
-        Value::Compound(pairs.into_iter().map(|(k, v)| (k.to_owned(), v)).collect())
-    }
+    use crate::services::compound;
 
     fn string(s: &str) -> Value {
         Value::String(s.into())
@@ -175,8 +183,12 @@ mod tests {
         entries(&mut root).unwrap().clone()
     }
 
-    fn input(name: &str, address: &str, accept_textures: Option<bool>) -> Server {
+    fn server(name: &str, address: &str, accept_textures: Option<bool>) -> Server {
         Server { name: name.into(), address: address.into(), icon: None, accept_textures }
+    }
+
+    fn input(name: &str, address: &str, accept_textures: Option<bool>) -> ServerInput {
+        ServerInput { name: name.into(), address: address.into(), accept_textures }
     }
 
     #[test]
@@ -186,8 +198,8 @@ mod tests {
         assert_eq!(
             servers,
             [
-                Server { icon: Some("data:image/png;base64,iVBORw0KGgo=".into()), ..input("Lobby", "lobby.example.net", Some(true)) },
-                input("Bau", "bau.example.net:25570", None),
+                Server { icon: Some("data:image/png;base64,iVBORw0KGgo=".into()), ..server("Lobby", "lobby.example.net", Some(true)) },
+                server("Bau", "bau.example.net:25570", None),
             ]
         );
         assert!(list(&dir.join("neu")).unwrap().is_empty());

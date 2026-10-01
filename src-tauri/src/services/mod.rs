@@ -8,6 +8,7 @@ use std::{
 use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, AppResult};
+use download::RemoveOnDrop;
 use modrinth::invalid;
 
 pub mod auth;
@@ -125,18 +126,12 @@ impl Dirs {
     }
 
     /// Ordner und Dateien direkt im Spielverzeichnis, sortiert und ohne Neuerzeugtes.
-    pub fn game_entries(&self, instance_id: &str) -> io::Result<Vec<String>> {
-        let entries = match fs::read_dir(self.game_dir(instance_id)) {
-            Ok(entries) => entries,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(e) => return Err(e),
-        };
-        let mut names = Vec::new();
-        for entry in entries {
-            if let Some(name) = entry?.file_name().to_str().filter(|n| !REGENERATED.contains(n)) {
-                names.push(name.to_owned());
-            }
-        }
+    pub fn game_entries(&self, instance_id: &str) -> AppResult<Vec<String>> {
+        let mut names: Vec<String> = entries(&self.game_dir(instance_id))?
+            .iter()
+            .filter_map(|entry| entry.file_name().into_string().ok())
+            .filter(|name| !REGENERATED.contains(&name.as_str()))
+            .collect();
         names.sort();
         Ok(names)
     }
@@ -169,6 +164,80 @@ pub(crate) fn walk(base: &Path, path: &Path, out: &mut Vec<(String, PathBuf)>) -
 /// Ab dieser Dateigröße schreiben ZIP-Archive ZIP64 (Pflicht ab 4 GiB); mit Abstand, weil Deflate Unkomprimierbares
 /// leicht vergrößert.
 pub(crate) const ZIP64_FROM: u64 = 2 * 1024 * 1024 * 1024;
+
+/// Schreibt `bytes` erst in `<path>.tmp` und benennt dann um: ein Abbruch hinterlässt nie eine halbe Datei.
+pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> AppResult<()> {
+    let mut tmp = path.as_os_str().to_owned();
+    tmp.push(".tmp");
+    let tmp = PathBuf::from(tmp);
+    fs::write(&tmp, bytes)?;
+    fs::rename(&tmp, path)?;
+    Ok(())
+}
+
+/// Schreibt ein ZIP über `<path>.<part_ext>`: `fill` legt die Einträge an, danach wird umbenannt. Bei einem Fehler
+/// (auch aus `fill`) oder Abbruch bleibt am Ziel nichts Halbes liegen.
+pub(crate) fn write_zip_atomic(
+    path: &Path,
+    part_ext: &str,
+    fill: impl FnOnce(&mut zip::ZipWriter<fs::File>) -> AppResult<()>,
+) -> AppResult<()> {
+    let tmp = path.with_extension(part_ext);
+    let mut guard = RemoveOnDrop(Some(tmp.clone()));
+    let mut zip = zip::ZipWriter::new(fs::File::create(&tmp)?);
+    fill(&mut zip)?;
+    // Erst schließen, dann umbenennen: Windows verschiebt keine offene Datei. Vorher auf den Datenträger, damit ein
+    // Absturz nach dem Umbenennen (und etwa dem Löschen der gesicherten Welt) keine leere Datei zurücklässt.
+    zip.finish()?.sync_all()?;
+    fs::rename(&tmp, path)?;
+    guard.0 = None;
+    Ok(())
+}
+
+/// Hängt `file` als Eintrag `name` an; ab [`ZIP64_FROM`] als ZIP64.
+pub(crate) fn add_zip_file(zip: &mut zip::ZipWriter<fs::File>, name: &str, file: &mut fs::File) -> AppResult<()> {
+    let large = file.metadata()?.len() >= ZIP64_FROM;
+    zip.start_file(name, zip::write::SimpleFileOptions::default().large_file(large))?;
+    io::copy(file, zip)?;
+    Ok(())
+}
+
+/// Einträge eines Ordners; fehlt er, keine.
+pub(crate) fn entries(dir: &Path) -> AppResult<Vec<fs::DirEntry>> {
+    match fs::read_dir(dir) {
+        Ok(entries) => Ok(entries.collect::<io::Result<_>>()?),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Hat `name` die Endung `ext` (ohne Punkt), unabhängig von der Schreibweise?
+pub(crate) fn has_extension(name: &str, ext: &str) -> bool {
+    Path::new(name).extension().is_some_and(|e| e.eq_ignore_ascii_case(ext))
+}
+
+/// Präfix einer `data:`-URL mit base64-codiertem PNG.
+pub(crate) const PNG_DATA_URL: &str = "data:image/png;base64,";
+
+pub(crate) fn png_data_url(png: &[u8]) -> String {
+    use base64::Engine;
+    format!("{PNG_DATA_URL}{}", base64::engine::general_purpose::STANDARD.encode(png))
+}
+
+/// Legt eine Datei oder einen Ordner in den Papierkorb. Unter macOS über `NSFileManager`: der Standardweg über den
+/// Finder bräuchte die Automation-Freigabe (Apple Events) und bliebe ohne sie wirkungslos.
+pub(crate) fn move_to_trash(path: &Path) -> AppResult<()> {
+    #[cfg(target_os = "macos")]
+    {
+        use trash::macos::{DeleteMethod, TrashContextExtMacos};
+        let mut trash = trash::TrashContext::default();
+        trash.set_delete_method(DeleteMethod::NsFileManager);
+        trash.delete(path)?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    trash::delete(path)?;
+    Ok(())
+}
 
 /// Erster freier Name aus `stem<ext>`, `stem (2)<ext>`, `stem (3)<ext>` …, den `taken` nicht als belegt meldet.
 pub(crate) fn free_name(stem: &str, ext: &str, taken: impl Fn(&str) -> bool) -> String {
@@ -217,9 +286,24 @@ pub(crate) fn check_cancelled(stop: &CancellationToken) -> AppResult<()> {
 
 /// Testdateien unter `dir` anlegen: (relativer Pfad, Inhalt).
 #[cfg(test)]
-pub(crate) fn write_files(dir: &Path, files: &[(&str, &str)]) {
+pub(crate) fn write_files<B: AsRef<[u8]>>(dir: &Path, files: &[(&str, B)]) {
     for (path, data) in files {
         fs::create_dir_all(dir.join(path).parent().unwrap()).unwrap();
         fs::write(dir.join(path), data).unwrap();
     }
+}
+
+/// NBT-Compound aus Paaren.
+#[cfg(test)]
+pub(crate) fn compound(pairs: Vec<(&str, fastnbt::Value)>) -> fastnbt::Value {
+    fastnbt::Value::Compound(pairs.into_iter().map(|(k, v)| (k.to_owned(), v)).collect())
+}
+
+/// `level.dat` wie vom Spiel: gzip-komprimiertes NBT.
+#[cfg(test)]
+pub(crate) fn gzip_nbt(value: &fastnbt::Value) -> Vec<u8> {
+    use std::io::Write;
+    let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    gz.write_all(&fastnbt::to_bytes(value).unwrap()).unwrap();
+    gz.finish().unwrap()
 }
