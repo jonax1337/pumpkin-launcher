@@ -5,6 +5,7 @@ import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import {
   CANCELLED,
+  quickPlayTarget,
   type Account,
   type Datapack,
   type ExitPayload,
@@ -241,7 +242,7 @@ const mockGame = {
       emit<LogPayload>("instance-log", { instanceId, stream, line: `[${new Date().toLocaleTimeString("de")}] ${line}` });
     log(`[main/INFO]: Setting user: ${username}`);
     if (quickPlay) {
-      log(`[main/INFO]: Quick Play: ${quickPlay.type === "world" ? quickPlay.id : quickPlay.address}`);
+      log(`[main/INFO]: Quick Play: ${quickPlayTarget(quickPlay)}`);
       findInstance(instanceId).lastQuickPlay = quickPlay;
     }
     db.running.set(instanceId, window.setInterval(() => log(`[Render thread/INFO]: Demo-Logzeile ${++n}`, n % 7 ? "stdout" : "stderr"), 400));

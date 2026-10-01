@@ -145,6 +145,8 @@ export function InstancesPage() {
   const { data: instances, isLoading, error, refetch } = useInstances();
   const looks = useLookStore((s) => s.looks);
   const collapsed = useLookStore((s) => s.collapsed);
+  const setCollapsed = useLookStore((s) => s.setCollapsed);
+  const [, setParams] = useSearchParams();
   const [query, setQuery] = useState("");
   const [loader, setLoader] = useState<ModLoader | "all">("all");
   const [sort, setSort] = useState<Sort>("recent");
@@ -178,7 +180,6 @@ export function InstancesPage() {
 
   // Leere Bibliothek: keine Werkzeugleiste, der Leerzustand trägt „Neue Instanz“.
   const empty = !error && !isLoading && !instances?.length;
-  const [, setParams] = useSearchParams();
   const newInstance = (
     <Button variant="primary" icon="plus" aria-keyshortcuts="Control+N" onClick={() => setParams({ neu: "1" }, { replace: true })}>Neue Instanz</Button>
   );
@@ -228,7 +229,7 @@ export function InstancesPage() {
         <Disclosure
           key={key}
           open={!collapsed.includes(key)}
-          onToggle={(open) => useLookStore.getState().setCollapsed(key, !open)}
+          onToggle={(open) => setCollapsed(key, !open)}
           className="mb-4"
           summary={<>{group ?? UNGROUPED} <Count value={members.length} muted /></>}
         >

@@ -9,7 +9,7 @@ import { Onboarding } from "@/components/Onboarding";
 import { useModUpdates } from "@/hooks/useContent";
 import { pickRecentInstance, useInstances, usePlay } from "@/hooks/useInstances";
 import { relativeTime } from "@/lib/format";
-import type { Instance } from "@/lib/types";
+import { quickPlayTarget, type Instance } from "@/lib/types";
 import { PixelScene } from "@/pixel/PixelScene";
 import { motionOff } from "@/pixel/scene";
 import { useLook } from "@/store/look";
@@ -61,7 +61,7 @@ function HeroInfo({ instance }: { instance: Instance }) {
         )}
         {resume && (
           <Button size="s" icon="play" onScene onClick={() => void play(instance, undefined, resume)}>
-            Weiterspielen in „{resume.type === "world" ? resume.id : resume.address}“
+            Weiterspielen in „{quickPlayTarget(resume)}“
           </Button>
         )}
       </div>
