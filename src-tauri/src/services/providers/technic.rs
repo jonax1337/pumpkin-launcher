@@ -198,6 +198,15 @@ pub async fn versions(client: &reqwest::Client, slug: &str) -> AppResult<Vec<Ver
     }])
 }
 
+/// Maven-Koordinaten, an denen ein Loader in den Bibliotheken des Launcher-Profils zu erkennen ist; die Reihenfolge
+/// entscheidet, wenn mehrere vorkommen.
+const LOADER_LIBRARIES: [(ModLoader, &[&str]); 4] = [
+    (ModLoader::Fabric, &["net.fabricmc:fabric-loader:"]),
+    (ModLoader::Quilt, &["org.quiltmc:quilt-loader:"]),
+    (ModLoader::NeoForge, &["net.neoforged:neoforge:", "net.neoforged:forge:"]),
+    (ModLoader::Forge, &["net.minecraftforge:forge:", "net.minecraftforge:fmlloader:"]),
+];
+
 /// Minecraft-Version, Loader und Loader-Version aus dem Launcher-Profil `bin/version.json`.
 /// Der Loader steht in den Bibliotheken (`net.fabricmc:fabric-loader:0.15.3`, `net.minecraftforge:forge:1.20.1-47.1.3` …).
 fn loader_from(profile: &serde_json::Value) -> AppResult<(String, ModLoader, Option<String>)> {
@@ -216,22 +225,15 @@ fn loader_from(profile: &serde_json::Value) -> AppResult<(String, ModLoader, Opt
         let v = v.split(':').next()?;
         Some(v.strip_prefix(&format!("{mc}-")).unwrap_or(v).to_string())
     };
-    let found = if let Some(v) = version("net.fabricmc:fabric-loader:") {
-        (ModLoader::Fabric, Some(v))
-    } else if let Some(v) = version("org.quiltmc:quilt-loader:") {
-        (ModLoader::Quilt, Some(v))
-    } else if let Some(v) = version("net.neoforged:neoforge:").or_else(|| version("net.neoforged:forge:")) {
-        (ModLoader::NeoForge, Some(v))
-    } else if let Some(v) = version("net.minecraftforge:forge:").or_else(|| version("net.minecraftforge:fmlloader:")) {
-        (ModLoader::Forge, Some(v))
-    } else {
-        (ModLoader::Vanilla, None)
-    };
-    if let Some(v) = &found.1 {
+    let (loader, loader_version) = LOADER_LIBRARIES
+        .iter()
+        .find_map(|(loader, prefixes)| prefixes.iter().find_map(|prefix| version(prefix)).map(|v| (*loader, Some(v))))
+        .unwrap_or((ModLoader::Vanilla, None));
+    if let Some(v) = &loader_version {
         identifier(v)?;
     }
-    forge::check_loader(found.0, &mc)?;
-    Ok((mc, found.0, found.1))
+    forge::check_loader(loader, &mc)?;
+    Ok((mc, loader, loader_version))
 }
 
 /// Liest das Pack-Zip (nur das Inhaltsverzeichnis) und plant die Dateien. Regeln wie beim `.mrpack`:
