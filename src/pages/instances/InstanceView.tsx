@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import { useI18n } from "@/i18n";
 import { Cell, CardGrid, Chip, Count, List, ListRow, RowTitle, SceneCard, SceneThumb } from "@/ui";
 import { loaderLine, playtimeLine } from "@/components/common";
+import { InstanceIcon } from "@/components/InstanceIcon";
 import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
 import { PlayButton } from "@/components/play/PlayButton";
 import { LOUD_PHASES, usePhase } from "@/components/play/phase";
@@ -33,7 +34,7 @@ function LibStatus({ instance }: { instance: Instance }) {
 }
 
 /**
- * Poster 4:5: Szene, Ausnahme-Status oben links, beim Überfahren oder Fokus großer Spielen-Knopf mittig und Menü oben rechts, Name unten.
+ * Poster 4:5: Instanzbild, Ausnahme-Status oben links, beim Überfahren oder Fokus großer Spielen-Knopf mittig und Menü oben rechts, Name unten.
  * Rechtsklick öffnet das Menü. Unter dem Namen ist nur Platz für eine Angabe neben der Version: Spielzeit, sonst „zuletzt gespielt“.
  */
 function PosterCard({ instance, index }: { instance: Instance; index: number }) {
@@ -44,6 +45,7 @@ function PosterCard({ instance, index }: { instance: Instance; index: number }) 
     <SceneCard
       variant="poster"
       look={look}
+      art={<InstanceIcon instance={instance} bio={look.bio} />}
       title={instance.name}
       sub={`${loaderLine(instance)} · ${playtimeLine(instance) || relativeTime(instance.lastPlayedAt)}`}
       status={<LibStatus instance={instance} />}
@@ -69,7 +71,7 @@ function InstanceRow({ instance, index }: { instance: Instance; index: number })
       index={Math.min(index, MAX_STAGGERED_ROWS)}
       style={{ "--acc": look.acc } as CSSProperties}
     >
-      <SceneThumb bio={look.bio} seed={look.seed} />
+      <SceneThumb bio={look.bio} seed={look.seed} art={<InstanceIcon instance={instance} bio={look.bio} />} />
       <RowTitle title={instance.name} sub={t("pages.instances.createdOn", { date: formatDate(instance.createdAt) })} />
       <Cell title={loaderLine(instance)}>{loaderLine(instance)}</Cell>
       <Cell hide={WIDTH.md}><Count value={instance.mods.length} /></Cell>

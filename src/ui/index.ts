@@ -8,7 +8,7 @@ export { Segmented, TabPanel, Tabs, useRoving, type TabItem, type TabsProps } fr
 export { Disclosure, Field, FormRow, FormSection, Hint, SearchField, Select, TextArea, TextField, type Option } from "./Field";
 export { Checkbox, Radio, Switch } from "./Toggle";
 export { SegSlider } from "./Slider";
-export { AddCard, CardGrid, Choice, Panel, SceneCard, SceneThumb, ThumbCard, type ChoiceProps, type PanelProps, type SceneCardProps, type SceneLook } from "./Card";
+export { AddCard, CardGrid, Choice, Panel, PickTile, SceneCard, SceneThumb, ThumbCard, type ChoiceProps, type PanelProps, type SceneCardProps, type SceneLook } from "./Card";
 export type { Hit } from "./Hit";
 export { Cell, GhostRow, List, ListRow, RowTitle, SkelRow, type ListRowProps, type ListVariant } from "./List";
 export { Tip, TipProvider, Trunc } from "./Tip";

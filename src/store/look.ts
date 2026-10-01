@@ -1,19 +1,27 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { GlyphName, GlyphPalette } from "@/pixel/icons";
 import { hash } from "@/pixel/random";
 import { BIOME_KEYS, BIOMES, type Biome } from "@/pixel/scene";
 
 type StoredLook = { bio: Biome; seed: number };
 
+/** Vom Nutzer gewähltes Icon einer Instanz: ein Pixel-Icon oder ein eigenes Bild (quadratisch, als Datenadresse). */
+export type IconChoice = { type: "glyph"; glyph: GlyphName; palette: GlyphPalette } | { type: "image"; src: string };
+
 /**
- * Bild einer Instanz (Biom der Szene) und zugeklappte Gruppen der Bibliothek. Lebt lokal, weil das Backend
- * kein Feld dafür hat; ohne Wahl ergibt sich das Bild fest aus der Instanz-ID.
+ * Bild einer Instanz (Biom der Szene, Icon) und zugeklappte Gruppen der Bibliothek. Lebt lokal, weil das Backend
+ * kein Feld dafür hat; ohne Wahl ergibt sich die Szene fest aus der Instanz-ID, das Icon aus dem Modpack bzw. der ID.
  */
 interface LookState {
   looks: Record<string, StoredLook>;
+  /** Gewählte Icons; ohne Eintrag gilt „automatisch“. */
+  icons: Record<string, IconChoice>;
   /** Zugeklappte Abschnitte der Bibliothek; "" = Instanzen ohne Gruppe. */
   collapsed: string[];
   setBiome: (instanceId: string, bio: Biome) => void;
+  /** `null` stellt „automatisch“ wieder her. */
+  setIcon: (instanceId: string, icon: IconChoice | null) => void;
   setCollapsed: (group: string, collapsed: boolean) => void;
 }
 
@@ -26,8 +34,14 @@ export const useLookStore = create<LookState>()(
   persist(
     (set) => ({
       looks: {},
+      icons: {},
       collapsed: [],
       setBiome: (id, bio) => set((s) => ({ looks: { ...s.looks, [id]: { bio, seed: s.looks[id]?.seed ?? defaultLook(id).seed } } })),
+      setIcon: (id, icon) =>
+        set((s) => {
+          const { [id]: _replaced, ...others } = s.icons;
+          return { icons: icon ? { ...others, [id]: icon } : others };
+        }),
       // <details> meldet beim Einhängen schon offen; ohne Änderung bleibt der Zustand gleich, kein Neu-Rendern.
       setCollapsed: (group, collapsed) =>
         set((s) =>

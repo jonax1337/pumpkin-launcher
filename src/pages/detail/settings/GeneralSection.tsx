@@ -1,4 +1,6 @@
 import { Actions, Button, CardGrid, FormRow, FormSection, Menu, TextField, ThumbCard } from "@/ui";
+import { IconPicker } from "@/components/IconPicker";
+import { InstanceIcon } from "@/components/InstanceIcon";
 import { useGroupMenu } from "@/components/instance";
 import { useI18n } from "@/i18n";
 import { blurOnEnter } from "@/lib/dom";
@@ -10,10 +12,12 @@ import type { InstanceForm } from "./useInstanceForm";
 /** Maximale Länge des Instanznamens. */
 const NAME_MAX_LENGTH = 64;
 
-/** Name, Gruppe und Bild (Biom der Szene) der Instanz. */
+/** Name, Gruppe, Icon und Szene (Biom) der Instanz. */
 export function GeneralSection({ instance, form, locked }: { instance: Instance; form: InstanceForm; locked: boolean }) {
   const { t } = useI18n();
   const look = useLook(instance.id);
+  const icon = useLookStore((s) => s.icons[instance.id]);
+  const setIcon = useLookStore((s) => s.setIcon);
   const groupItems = useGroupMenu(instance);
   const groupText = instance.group ?? t("detail.settings.noGroup");
   return (
@@ -41,6 +45,14 @@ export function GeneralSection({ instance, form, locked }: { instance: Instance;
             }
           />
         </Actions>
+      </FormRow>
+      <FormRow label={t("components.icon.label")} hint={t("components.icon.hint")} wide>
+        <IconPicker
+          key={instance.id}
+          value={icon ?? null}
+          onChange={(next) => setIcon(instance.id, next)}
+          preview={<InstanceIcon instance={instance} bio={look.bio} />}
+        />
       </FormRow>
       <FormRow label={t("detail.settings.lookLabel")} hint={t("detail.settings.lookHint")} wide>
         {/* Name sichtbar unter der Miniatur (dunkle Szenen wie die Höhle sind klein kaum zu erkennen) */}

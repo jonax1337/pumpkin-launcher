@@ -1,4 +1,4 @@
-/* Kit-Karten: Szenenkarte (poster 4:5, mini 184×104, thumb 96×64), Neu-Kachel, Kartenraster, kleine Szene,
+/* Kit-Karten: Szenenkarte (poster und mini quadratisch, Name darunter, thumb 96×64), Neu-Kachel, Kartenraster, kleine Szene,
    Auswahlkarte (Choice), Platte (Panel).
    Eine Hebung für alle Karten: Hover 1 Einheit hoch + helleres Rahmenlicht, Druck setzt ab (springt, kein Übergang).
    data-force="hover|press|focus" erzwingt den Zustand (Vorschau /_kit). */
@@ -11,13 +11,23 @@
 .vx-sthumb { position: relative; display: block; flex: none; width: 44px; height: 44px; }
 .vx-sthumb[data-size="28"] { width: 28px; height: 28px; }
 
+/* Instanzbild (InstanceIcon): füllt die quadratische Bildfläche der Karte; das Modpack-Icon in voller Auflösung (cover, quadratisch
+   also ohne Zuschnitt), die Pixel-Glyphe steht auf einem Verlauf des Bioms (--tile, --tile-hi) mit k Einheiten je Glyphen-Pixel (--k),
+   ganzzahlig, damit die Pixel scharf bleiben. */
+.vx-icon { position: absolute; inset: 0; display: block; width: 100%; height: 100%; max-width: none; object-fit: cover; }
+.vx-icon[data-default] { --k: 1; display: grid; place-items: center; background: linear-gradient(color-mix(in srgb, var(--tile-hi) 40%, var(--tile)), var(--tile)); }
+.vx-icon[data-default] svg { width: calc(var(--iu, 3px) * 10 * var(--k)); height: calc(var(--iu, 3px) * 10 * var(--k)); }
+.vx-card[data-variant="poster"] .vx-icon { --k: 5; }
+.vx-card[data-variant="mini"] .vx-icon { --k: 2; }
+
 /* ---------- Szenenkarte ---------- */
-.vx-card { --fl: rgba(255,255,255,.12); position: relative; isolation: isolate; min-width: 0; text-align: left; }
+.vx-card { --fl: rgba(255,255,255,.12); position: relative; isolation: isolate; min-width: 0; text-align: left; container-type: inline-size; }
 .vx-card[data-rise] { animation: vx-rise .32s var(--ease) both; animation-delay: calc(var(--i, 0) * 40ms); }
-.vx-card[data-variant="poster"] { aspect-ratio: 4 / 5; }
-.vx-card[data-variant="mini"] { flex: none; width: 184px; height: 104px; }
+/* Poster und Mini: quadratisches Bild, darunter der Name. Mini: Bildkante --mini (niedrige Fenster kleiner, siehe unten) */
+.vx-card[data-variant="mini"], .vx-add { --mini: 96px; }
+.vx-card[data-variant="mini"] { flex: none; width: var(--mini); }
 .vx-card[data-variant="thumb"] { flex: none; width: 96px; display: flex; flex-direction: column; gap: 5px; padding-bottom: 2px; }
-.vx-card-media { position: absolute; inset: 0; display: block; }
+.vx-card-media { position: relative; display: block; aspect-ratio: 1; }
 .vx-card[data-variant="thumb"] .vx-card-media { position: relative; inset: auto; width: 96px; height: 64px; }
 /* Dunkle Biome sind als Thumb kaum zu erkennen: aufgehellt */
 .vx-card[data-variant="thumb"]:is([data-bio="cave"], [data-bio="end"]) .vx-art { filter: brightness(1.5) saturate(1.1); }
@@ -26,18 +36,19 @@
 .vx-card-frame { position: absolute; inset: 0; z-index: 2; pointer-events: none; clip-path: var(--n1); box-shadow: inset 0 0 0 var(--px) rgba(3,5,10,.9), inset var(--u2) var(--u2) 0 var(--fl), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 rgba(0,0,0,.3); }
 .vx-card[data-variant="thumb"] .vx-card-frame { box-shadow: inset 0 0 0 var(--px) var(--line-2), inset var(--u2) var(--u2) 0 var(--fl); }
 
-/* Bildunterschrift: Verlauf über der Szene, harter Schatten gegen helle Szenenpixel; lässt Klicks zur Trefferfläche durch */
-.vx-card-cap { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; pointer-events: none; clip-path: var(--n1); text-shadow: var(--scene-shadow); }
+/* Bildunterschrift unter dem Bild; lässt Klicks zur Trefferfläche durch */
+.vx-card-cap { display: block; pointer-events: none; }
 .vx-card-cap b { display: block; color: var(--fg); font-weight: 800; font-family: var(--f-display); text-transform: uppercase; letter-spacing: .01em; }
-.vx-card-cap span { display: block; color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Poster: höchstens zwei Zeilen; Zeilenhöhe 1.1 und clip, damit Umlautpunkte einer abgeschnittenen dritten Zeile nicht in die zweite ragen */
-.vx-card[data-variant="poster"] .vx-card-cap { padding: 58px 12px 11px; background: linear-gradient(0deg, rgba(7,10,17,.97) 0, rgba(7,10,17,.9) 45%, rgba(7,10,17,.62) 72%, rgba(7,10,17,0)); }
-.vx-card[data-variant="poster"] .vx-card-cap b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: clip; font-size: 21px; line-height: 1.1; max-height: calc(21px * 1.1 * 2); overflow-wrap: anywhere; }
-.vx-card[data-variant="poster"] .vx-card-cap span { font-size: 12px; line-height: 18px; margin-top: 6px; }
-/* Mini: eine Zeile; Zeilenhöhe 1.15 statt 1, sonst schneidet die Auslassung die Umlautpunkte ab (Box bleibt unten verankert) */
-.vx-card[data-variant="mini"] .vx-card-cap { padding: 16px 12px 9px; background: linear-gradient(0deg, rgba(7,10,17,.95) 0, rgba(7,10,17,.8) 55%, rgba(7,10,17,0)); }
-.vx-card[data-variant="mini"] .vx-card-cap b { font-size: var(--hd-card); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vx-card[data-variant="mini"] .vx-card-cap span { font-size: 11.5px; line-height: 16px; margin-top: 2px; }
+.vx-card-cap span { display: block; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Poster: höchstens zwei Zeilen, Platz für zwei bleibt reserviert (Karten einer Reihe gleich hoch); Zeilenhöhe 1.1 und clip,
+   damit Umlautpunkte einer abgeschnittenen dritten Zeile nicht in die zweite ragen */
+.vx-card[data-variant="poster"] .vx-card-cap { padding: 9px 2px 0; min-height: calc(9px + 18px * 1.1 * 2 + 2px + 18px); }
+.vx-card[data-variant="poster"] .vx-card-cap b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: clip; font-size: 18px; line-height: 1.1; max-height: calc(18px * 1.1 * 2); overflow-wrap: anywhere; }
+.vx-card[data-variant="poster"] .vx-card-cap span { font-size: 12px; line-height: 18px; margin-top: 2px; }
+/* Mini: nur der Name, eine Zeile; Zeilenhöhe 1.15 statt 1, sonst schneidet die Auslassung die Umlautpunkte ab */
+.vx-card[data-variant="mini"] .vx-card-cap { padding: 6px 1px 0; height: 24px; }
+.vx-card[data-variant="mini"] .vx-card-cap b { font-size: 15px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vx-card[data-variant="mini"] .vx-card-cap span { display: none; }
 /* Thumb: Name unter dem Bild */
 .vx-card-t { display: block; min-width: 0; color: var(--fg-2); font-size: 12px; font-weight: 600; line-height: 16px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -47,10 +58,10 @@
 .vx-card > .hit { position: absolute; inset: 0; z-index: 1; display: block; cursor: pointer; }
 .vx-card > .hit.fx:focus-visible::after { display: none; }
 
-/* Aktionen: poster mittig über dem Titel, oben rechts Symbolknöpfe (mini: auch Spielen); nur bei Hover/Fokus oder offenem Menü */
+/* Aktionen: poster mittig auf dem Bild, oben rechts Symbolknöpfe (mini: auch Spielen); nur bei Hover/Fokus oder offenem Menü */
 .vx-card-mid, .vx-card-tr { position: absolute; z-index: 3; opacity: 0; visibility: hidden; transition: opacity .12s steps(2, end), visibility 0s linear .12s; }
 .vx-card-tr { right: 6px; top: 6px; display: flex; gap: 4px; }
-.vx-card-mid { left: 50%; bottom: calc(11px + 18px + 6px + 21px * 1.1 * 2 + 10px); translate: -50% 0; }
+.vx-card-mid { left: 50%; top: 50cqw; translate: -50% -50%; }
 .vx-card:is(:hover, :focus-within, [data-force]) :is(.vx-card-mid, .vx-card-tr),
 .vx-card:has(.vx-card-tr [data-state="open"], .vx-card-mid [data-state="open"]) :is(.vx-card-mid, .vx-card-tr) { opacity: 1; visibility: visible; transition: opacity .12s steps(2, end), visibility 0s; }
 /* Kleiner Spielen-Knopf (PlayButton, play.css) auf der Szene: dunkle Platte */
@@ -65,16 +76,32 @@
 /* „aktuell“ (mini): Akzentbalken unten, 2 Einheiten, mit dunkler Kante darüber */
 .vx-card[data-cur]::before { content: ""; position: absolute; z-index: 3; left: var(--px); right: var(--px); bottom: 0; height: var(--u2); background: var(--acc); box-shadow: 0 calc(var(--px) * -1) 0 rgba(3,5,10,.9); pointer-events: none; }
 
+.vx-card[data-variant="mini"][data-cur]::before { bottom: 24px; }
+
 /* Ring an der Karte (über allem): gewählt = Kupfer, Fokus = Creme, Fokus auf Gewähltem = Doppelring */
 .vx-card::after { content: ""; position: absolute; z-index: 4; inset: calc(var(--u2) * -1); pointer-events: none; clip-path: var(--ring); }
 .vx-card[data-pressed]::after { background: var(--sel-ring); }
 .vx-card:is(:has(> .hit:focus-visible), [data-force="focus"])::after { background: var(--focus); }
 .vx-card[data-pressed]:is(:has(> .hit:focus-visible), [data-force="focus"])::after { padding: var(--u2); background: linear-gradient(var(--sel-ring) 0 0) content-box, var(--focus); clip-path: var(--ring2); }
 
-/* Mini bei niedrigem Fenster (wie Start-Leiste) */
+/* Mini bei niedrigem Fenster */
 @media (max-height: 640px) {
-  .vx-card[data-variant="mini"], .vx-add { height: 92px; }
+  .vx-card[data-variant="mini"], .vx-add { --mini: 80px; }
 }
+
+/* ---------- Auswahlkachel (PickTile) und Vorschau des Instanzbilds ---------- */
+.vx-pick { position: relative; isolation: isolate; display: grid; place-items: center; flex: none; width: 48px; height: 48px; color: var(--fg); cursor: pointer; }
+.vx-pick[data-size="32"] { width: 32px; height: 32px; }
+.vx-pick::before { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--n1); background: var(--panel); box-shadow: var(--bv-plate); transition: background-color var(--st); }
+.vx-pick:is(:hover, [data-force="hover"])::before { background: var(--panel-2); }
+.vx-pick:is(:active, [data-force="press"])::before { background: var(--panel); box-shadow: var(--bv-sunk); }
+.vx-pick[aria-pressed="true"]::before, .vx-pick[aria-pressed="true"]:hover::before { background: var(--sel-bg); box-shadow: var(--sel-edge); }
+.vx-pick.fx:focus-visible::after { content: ""; position: absolute; inset: calc(var(--px) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; z-index: 5; }
+.vx-swatch { display: block; width: 16px; height: 16px; box-shadow: inset 0 0 0 var(--px) rgba(3,5,10,.9); }
+/* Vorschau des Instanzbilds neben der Auswahl: quadratisch, Pixel-Icon k = 2 */
+.vx-iconbox { position: relative; display: block; flex: none; width: 72px; height: 72px; --k: 2; }
+.vx-iconbox .vx-art { clip-path: var(--n1); }
+.vx-iconbox .vx-icon[data-default] { --k: 2; }
 
 /* ---------- Kartenraster ---------- */
 /* 188 px Mindestbreite: bei 1440 bleiben Poster so groß wie bei 1100 (≥ 190 px) */
@@ -82,7 +109,7 @@
 .vx-cards[data-variant="thumb"] { display: flex; flex-wrap: wrap; gap: 12px; padding: 6px; }
 
 /* ---------- Neu-Kachel ---------- */
-.vx-add { position: relative; isolation: isolate; flex: none; display: grid; place-items: center; width: 184px; height: 104px; color: var(--fg-2); cursor: pointer; }
+.vx-add { position: relative; isolation: isolate; flex: none; display: grid; place-items: center; width: var(--mini); height: calc(var(--mini) + 24px); color: var(--fg-2); cursor: pointer; }
 .vx-add::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--panel); box-shadow: var(--bv-plate); clip-path: var(--n1); transition: background-color var(--st); }
 .vx-add-in { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; }
 .vx-add:is(:hover, [data-force="hover"]) { color: var(--fg); }

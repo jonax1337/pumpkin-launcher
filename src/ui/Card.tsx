@@ -19,9 +19,11 @@ type ForcedState = "hover" | "press" | "focus";
 const MAX_STAGGER = 12;
 
 export type SceneCardProps = {
-  /** poster: 4:5 im Raster (Bibliothek) · mini: 184×104 (Start-Leiste) */
+  /** poster: quadratisches Bild im Raster (Bibliothek) · mini: 96-px-Quadrat (Start-Leiste); der Name steht jeweils darunter */
   variant: "poster" | "mini";
   look: SceneLook;
+  /** Eigenes Bild statt der Szene; füllt die Karte (`.vx-icon` in card.css). */
+  art?: ReactNode;
   title: string;
   /** Unterzeile in der Bildunterschrift. */
   sub?: string;
@@ -47,13 +49,12 @@ export type SceneCardProps = {
 const cardStyle = (look: SceneLook, index?: number) =>
   cssVars({ "--acc": look.acc, "--i": index != null ? Math.min(index, MAX_STAGGER) : undefined });
 
-/** Szene mit Rahmenlicht; `children` (Bildunterschrift) liegen darüber. */
-function SceneMedia({ look, children }: { look: SceneLook; children?: ReactNode }) {
+/** Szene (oder `art`) mit Rahmenlicht; quadratisch bei Poster und Mini. */
+function SceneMedia({ look, art }: { look: SceneLook; art?: ReactNode }) {
   return (
     <span className="vx-card-media">
-      <PixelScene bio={look.bio} seed={look.seed} className="vx-art" />
+      {art ? <span className="vx-art">{art}</span> : <PixelScene bio={look.bio} seed={look.seed} className="vx-art" />}
       <span className="vx-card-frame" />
-      {children}
     </span>
   );
 }
@@ -89,11 +90,11 @@ function CardHit({ hit, title, sub, tip, current, pressed, titleRef, subRef }: {
 }
 
 /**
- * Szenenkarte: Pixel-Szene mit Rahmenlicht, Bildunterschrift und einer Trefferfläche (`hit`, Link oder Knopf).
- * Hover: eine Hebung (1 Einheit) + helleres Rahmenlicht; Druck setzt ab. Fokusring an der Karte
- * (über Rahmen und Bildunterschrift).
+ * Szenenkarte: quadratisches Bild (Pixel-Szene oder `art`) mit Rahmenlicht, darunter die Bildunterschrift, und eine
+ * Trefferfläche (`hit`, Link oder Knopf) über allem. Hover: eine Hebung (1 Einheit) + helleres Rahmenlicht; Druck setzt ab.
+ * Fokusring an der Karte (über Rahmen und Bildunterschrift).
  */
-export function SceneCard({ variant, look, title, sub, status, actions, primary, hit, current, menu, index, tip, className, "data-force": force }: SceneCardProps) {
+export function SceneCard({ variant, look, art, title, sub, status, actions, primary, hit, current, menu, index, tip, className, "data-force": force }: SceneCardProps) {
   const titleRef = useRef<HTMLElement>(null);
   const subRef = useRef<HTMLElement>(null);
   const card = (
@@ -106,12 +107,11 @@ export function SceneCard({ variant, look, title, sub, status, actions, primary,
       data-force={force}
       style={cardStyle(look, index)}
     >
-      <SceneMedia look={look}>
-        <span className="vx-card-cap">
-          <b ref={titleRef}>{title}</b>
-          {sub && <span ref={subRef}>{sub}</span>}
-        </span>
-      </SceneMedia>
+      <SceneMedia look={look} art={art} />
+      <span className="vx-card-cap">
+        <b ref={titleRef}>{title}</b>
+        {sub && <span ref={subRef}>{sub}</span>}
+      </span>
       {status && <span className="vx-card-st">{status}</span>}
       <CardHit hit={hit} title={title} sub={sub} tip={tip} current={current} titleRef={titleRef} subRef={subRef} />
       {variant === "poster" && primary && <div className="vx-card-mid">{primary}</div>}
@@ -155,6 +155,17 @@ export function AddCard({ label, className, type = "button", ...props }: { label
   );
 }
 
+/** Quadratische Auswahlkachel (Pixel-Icon, Farbe): Platte, „gewählt“ mit Kupferring. Der Name ist Pflicht, er steht als aria-label und Tooltip am Knopf. */
+export function PickTile({ label, pressed, size = 48, onClick, children }: {
+  label: string; pressed: boolean; size?: 32 | 48; onClick: () => void; children: ReactNode;
+}) {
+  return (
+    <button type="button" className="vx-pick fx" data-size={size} aria-pressed={pressed} aria-label={label} title={label} onClick={onClick}>
+      {children}
+    </button>
+  );
+}
+
 /** Raster für Karten: poster (auto-fill ab 188 px, Lücke 14) oder thumb (umbrechende Reihe, Lücke 12). */
 export function CardGrid({ variant = "poster", className, children, ...props }: { variant?: "poster" | "thumb" } & ComponentProps<"div">) {
   return (
@@ -165,10 +176,12 @@ export function CardGrid({ variant = "poster", className, children, ...props }: 
 }
 
 /** Kleine Szene als Bild (Listenzeile 44, Menüeintrag 28): Kerbe, keine Fläche. */
-export function SceneThumb({ bio, seed, size = 44, className }: { bio: Biome; seed: number; size?: 28 | 44; className?: string }) {
+export function SceneThumb({ bio, seed, size = 44, art, className }: {
+  bio: Biome; seed: number; size?: 28 | 44; art?: ReactNode; className?: string;
+}) {
   return (
     <span className={cn("vx-sthumb", className)} data-size={size} aria-hidden>
-      <PixelScene bio={bio} seed={seed} className="vx-art" />
+      {art ? <span className="vx-art">{art}</span> : <PixelScene bio={bio} seed={seed} className="vx-art" />}
     </span>
   );
 }

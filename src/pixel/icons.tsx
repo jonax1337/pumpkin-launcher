@@ -239,7 +239,7 @@ const GLYPHS = {
 
 export type GlyphName = keyof typeof GLYPHS;
 
-const GLYPH_PALETTES = {
+export const GLYPH_PALETTES = {
   copper: { a: "#D98A54", b: "#9B5A30", h: "#F3BD8B", c: "#F6E6C8" },
   steel: { a: "#7F96B8", b: "#4F6382", h: "#B9C9E0", c: "#E0955F" },
   sand: { a: "#CDB892", b: "#8F7C56", h: "#EADFC4", c: "#6D8CB0" },
@@ -253,13 +253,13 @@ const GLYPH_PALETTES = {
 
 export type GlyphPalette = keyof typeof GLYPH_PALETTES;
 
-const GLYPH_NAMES = Object.keys(GLYPHS) as GlyphName[];
-const PALETTES = Object.keys(GLYPH_PALETTES) as GlyphPalette[];
+export const GLYPH_NAMES = Object.keys(GLYPHS) as GlyphName[];
+export const PALETTE_NAMES = Object.keys(GLYPH_PALETTES) as GlyphPalette[];
 
 /** Feste Glyphe und Palette aus einer ID (für Inhalte ohne eigenes Bild). */
 export function glyphFor(seed: string): [GlyphName, GlyphPalette] {
   const h = hash(seed);
-  return [GLYPH_NAMES[h % GLYPH_NAMES.length], PALETTES[(h >>> 8) % PALETTES.length]];
+  return [GLYPH_NAMES[h % GLYPH_NAMES.length], PALETTE_NAMES[(h >>> 8) % PALETTE_NAMES.length]];
 }
 
 const GLYPH_OUTLINE = "#080C12";

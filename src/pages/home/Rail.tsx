@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { useI18n } from "@/i18n";
 import { AddCard, IconButton, SceneCard } from "@/ui";
 import { loaderLine } from "@/components/common";
+import { InstanceIcon } from "@/components/InstanceIcon";
 import { useInstanceMenu } from "@/components/instance";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
 import { PlayButton } from "@/components/play/PlayButton";
@@ -17,8 +18,8 @@ import { useLook } from "@/store/look";
  * Größe der Kacheln (`SceneCard` mini) und Abstand in der Leiste „Deine Instanzen“;
  * wie in ui/card.css und .rail (styles/pixelkino.css).
  */
-export const TILE_W = 184;
-export const TILE_H = 104;
+export const TILE_W = 96;
+export const TILE_H = 120;
 const TILE_GAP = 12;
 const TILE_STEP = TILE_W + TILE_GAP;
 
@@ -42,6 +43,7 @@ function MiniCard({ instance, current, onPick, hintId }: { instance: Instance; c
       <SceneCard
         variant="mini"
         look={look}
+        art={<InstanceIcon instance={instance} bio={look.bio} />}
         title={instance.name}
         sub={`${loaderLine(instance)} · ${relativeTime(instance.lastPlayedAt)}`}
         current={current}

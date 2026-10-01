@@ -2,6 +2,10 @@ import { useState } from "react";
 import { useI18n, type TKey } from "@/i18n";
 import { Actions, Checkbox, Disclosure, Field, Segmented, Select, Skel, TextField } from "@/ui";
 import { MemoryChooser } from "@/components/common";
+import { IconPicker } from "@/components/IconPicker";
+import { IconView } from "@/components/InstanceIcon";
+import type { Biome } from "@/pixel/scene";
+import { useLookStore, type IconChoice } from "@/store/look";
 import { useCreateInstance, useLoaderVersions, useVersions } from "@/hooks/useInstances";
 import { ALL_LOADERS, LOADER_LABELS, type ModLoader } from "@/lib/types";
 import type { TabContext, TabModel } from "./tab";
@@ -17,6 +21,10 @@ const LOADER_HELP: Record<ModLoader, TKey> = {
 
 const LOADER_ITEMS = ALL_LOADERS.map((l) => ({ value: l, label: LOADER_LABELS[l] }));
 
+// Vorschau des Icons, solange die Instanz noch keine ID hat: „automatisch“ zeigt ein neutrales Pixel-Icon.
+const PREVIEW_ICON: IconChoice = { type: "glyph", glyph: "cube", palette: "copper" };
+const PREVIEW_BIOME: Biome = "forest";
+
 // Leerer Wert steht für loaderVersion = null („neueste stabile“).
 const LATEST = "latest";
 
@@ -29,6 +37,7 @@ function useBlankForm() {
   const [loader, setLoader] = useState<ModLoader>("fabric");
   const [loaderVersion, setLoaderVersion] = useState(LATEST);
   const [memory, setMemory] = useState<number | null>(null);
+  const [icon, setIcon] = useState<IconChoice | null>(null);
   const versions = useVersions();
   const filtered = versions.data?.filter((v) => v.type === "release" || snapshots) ?? [];
   // Neueste Version vorauswählen, bis der Nutzer selbst wählt
@@ -40,8 +49,8 @@ function useBlankForm() {
   const suggestion = `${loader === "vanilla" ? "Minecraft" : LOADER_LABELS[loader]} ${selectedVersion}`.trim();
   return {
     versions, filtered, selectedVersion, loaderVersions, selectedLoader, loaderUnavailable, suggestion,
-    customName, snapshots, loader, memory,
-    setCustomName, setSnapshots, setVersion, setLoader, setLoaderVersion, setMemory,
+    customName, snapshots, loader, memory, icon,
+    setCustomName, setSnapshots, setVersion, setLoader, setLoaderVersion, setMemory, setIcon,
   };
 }
 
@@ -87,6 +96,13 @@ function BlankPane({ form }: { form: BlankForm }) {
       >
         <Segmented label={t("components.common.loader")} value={loader} onChange={form.setLoader} items={LOADER_ITEMS} />
       </Field>
+      <Field label={t("components.icon.label")} group>
+        <IconPicker
+          value={form.icon}
+          onChange={form.setIcon}
+          preview={<IconView icon={form.icon ?? PREVIEW_ICON} bio={PREVIEW_BIOME} fallback={PREVIEW_ICON} />}
+        />
+      </Field>
       <Disclosure summary={t("components.newInstance.advanced")}>
         <Field label={t("components.newInstance.loaderVersion")} group={loader === "vanilla"}>
           {loader === "vanilla" ? (
@@ -126,7 +142,12 @@ export function useBlankTab(ctx: TabContext): TabModel {
         loaderVersion: form.selectedLoader === LATEST ? null : form.selectedLoader,
         memoryMb: form.memory,
       },
-      { onSuccess: ctx.onCreated },
+      {
+        onSuccess: (instance) => {
+          useLookStore.getState().setIcon(instance.id, form.icon);
+          ctx.onCreated(instance);
+        },
+      },
     );
   }
 
