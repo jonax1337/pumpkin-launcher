@@ -6,10 +6,12 @@ import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import { type ContentProgress, type ContentProject } from "@/lib/modrinth";
 import { toastError } from "@/lib/toast";
+import { HOUR } from "@/lib/time";
 import type { Instance } from "@/lib/types";
 import { useTasks, type DoneTask } from "@/store/tasks";
 import { useOnline } from "./useOnline";
 import { catalogKeys, instanceKeys } from "./queryKeys";
+import { CATALOG_STALE_MS } from "./staleTimes";
 
 // Keeps progress visible across route changes; only the matching active operation may update it.
 // `target` says what runs (a project ID or "updates"), so rows can show their own progress.
@@ -83,6 +85,9 @@ export function useContentInstall() {
   });
 }
 
+/** Titel und Icons eines Projekts ändern sich praktisch nie. */
+const PROJECT_INFO_STALE_MS = HOUR;
+
 /** Icons und Titel der installierten Modrinth-Inhalte, ein Aufruf pro Liste. Fehler: Liste zeigt Kacheln und Dateinamen. */
 export function useProjects(projectIds: string[]) {
   const ids = [...new Set(projectIds)].sort();
@@ -90,7 +95,7 @@ export function useProjects(projectIds: string[]) {
     queryKey: catalogKeys.projects(ids),
     queryFn: async () => new Map((await api.modrinthProjects(ids)).map((p): [string, ContentProject] => [p.id, p])),
     enabled: ids.length > 0,
-    staleTime: 60 * 60_000,
+    staleTime: PROJECT_INFO_STALE_MS,
     placeholderData: (prev) => prev,
     retry: false,
   });
@@ -100,7 +105,7 @@ export function useProjects(projectIds: string[]) {
 const updatesQuery = (instanceId: string) => ({
   queryKey: catalogKeys.updates(instanceId),
   queryFn: () => api.modrinthCheckUpdates(instanceId),
-  staleTime: 10 * 60_000,
+  staleTime: CATALOG_STALE_MS,
   retry: false,
 });
 

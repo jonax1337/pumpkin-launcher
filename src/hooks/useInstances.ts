@@ -7,13 +7,14 @@ import { askPlayerName, openAddOffline, startMsLogin } from "@/components/Player
 import { t } from "@/i18n/core";
 import { usableAccount, useOfflineAllowed } from "@/store/offline";
 import { api } from "@/lib/api";
-import { autoMemoryMb, formatClock, maxMemoryMb } from "@/lib/format";
+import { autoMemoryMb, formatClock, MEMORY_FALLBACK_MAX_MB, MEMORY_FALLBACK_MB, maxMemoryMb } from "@/lib/format";
 import { instanceUrl } from "@/lib/routes";
 import { toastError } from "@/lib/toast";
 import { CANCELLED, type Instance, type InstanceStatus, type ModLoader, type NewInstance, type QuickPlay } from "@/lib/types";
 import { useGame } from "@/store/game";
 import { accountName, useSettings } from "@/store/settings";
 import { useTasks } from "@/store/tasks";
+import { CATALOG_STALE_MS } from "./staleTimes";
 import { appKeys, instanceKeys, instanceRelatedKeys, screenshotKeys, worldKeys } from "./queryKeys";
 
 const instanceListQuery = { queryKey: instanceKeys.all, queryFn: api.listInstances };
@@ -128,7 +129,7 @@ export function pickRecentInstance(instances: Instance[] | undefined): Instance 
 }
 
 export function useVersions() {
-  return useQuery({ queryKey: appKeys.minecraftVersions, queryFn: api.versionsList, staleTime: 10 * 60_000 });
+  return useQuery({ queryKey: appKeys.minecraftVersions, queryFn: api.versionsList, staleTime: CATALOG_STALE_MS });
 }
 
 export function useLoaderVersions(loader: ModLoader, mcVersion: string) {
@@ -136,7 +137,7 @@ export function useLoaderVersions(loader: ModLoader, mcVersion: string) {
     queryKey: appKeys.loaderVersions(loader, mcVersion),
     queryFn: () => api.loaderVersions(loader, mcVersion),
     enabled: loader !== "vanilla" && !!mcVersion,
-    staleTime: 10 * 60_000,
+    staleTime: CATALOG_STALE_MS,
   });
 }
 
@@ -149,8 +150,8 @@ const systemMemoryQuery = { queryKey: appKeys.systemMemory, queryFn: api.systemM
 export function useMemory() {
   const chosen = useSettings((s) => s.memoryMb);
   const { data: total = null } = useQuery(systemMemoryQuery);
-  const auto = total == null ? 4096 : autoMemoryMb(total);
-  return { value: chosen ?? auto, auto, total, max: total == null ? 16384 : maxMemoryMb(total), isAuto: chosen == null };
+  const auto = total == null ? MEMORY_FALLBACK_MB : autoMemoryMb(total);
+  return { value: chosen ?? auto, auto, total, max: total == null ? MEMORY_FALLBACK_MAX_MB : maxMemoryMb(total), isAuto: chosen == null };
 }
 
 /** RAM für Instanzen ohne eigene Einstellung, wie ihn der Start übergibt. */
@@ -160,7 +161,7 @@ export async function defaultMemory(qc: ReturnType<typeof useQueryClient>) {
   try {
     return autoMemoryMb(await qc.fetchQuery(systemMemoryQuery));
   } catch {
-    return 4096;
+    return MEMORY_FALLBACK_MB;
   }
 }
 

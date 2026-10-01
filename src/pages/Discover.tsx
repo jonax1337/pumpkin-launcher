@@ -8,6 +8,7 @@ import {
 } from "@/components/ContentBrowser";
 import { useVersions } from "@/hooks/useInstances";
 import { SOURCES, type CatalogType, type ContentHit, type SearchIndex, type Source } from "@/lib/modrinth";
+import { WIDTH } from "@/lib/breakpoints";
 import { discoverParams, readDiscoverParams } from "@/lib/routes";
 import { ALL_LOADERS, LOADER_LABELS } from "@/lib/types";
 
@@ -99,7 +100,7 @@ export function DiscoverPage() {
           )}
         </PageHeader>
         {/* Suchfeld bewusst breiter als in der Bibliothek; unter 1096 px bricht die Leiste um */}
-        <Toolbar search="l" wrapBelow={1096} label={t("pages.discover.searchFilterLabel")} className="mt-4 mb-3.5">
+        <Toolbar search="l" wrapBelow={WIDTH.lg} label={t("pages.discover.searchFilterLabel")} className="mt-4 mb-3.5">
           <SearchField value={query} onChange={setQuery} placeholder={SEARCH_PLACEHOLDER[type]} autoFocus />
           <Select
             label={t("components.sheet.sourceLabel")}

@@ -10,6 +10,7 @@ import { useContentInstall, useContentState, useProjects, withTarget } from "@/h
 import { instanceKeys } from "@/hooks/queryKeys";
 import { useUpdateMods } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
+import { WIDTH } from "@/lib/breakpoints";
 import { KIND_LABEL_KEYS, TYPE_ONE_KEYS } from "@/lib/catalog";
 import { openPage, projectUrl } from "@/lib/links";
 import { ownerKey, projectOf, removeWithDependencies, undoRemove, type ModUpdate } from "@/lib/modrinth";
@@ -381,7 +382,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
           <Cell flex>
             {warns.map((w) => (
               <Fragment key={w.t}>
-                <Chip size="s" dot tone="warn" data-hide="1040">{w.t}</Chip>
+                <Chip size="s" dot tone="warn" data-hide={WIDTH.md}>{w.t}</Chip>
                 <Button variant="ghost" size="s" tone="warn" onClick={w.fix}>{w.lab}</Button>
               </Fragment>
             ))}
@@ -443,7 +444,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     <div className="relative max-w-[var(--page-max)]" ref={rootRef}>
       {local.overlay}
       <div className="sr" role="status" aria-live="polite" aria-atomic="true">{said}</div>
-      <Toolbar height={56} search="s" wrapBelow={800} alt={bulk} altActive={pickedLive.length > 0}>
+      <Toolbar height={56} search="s" wrapBelow={WIDTH.xs} alt={bulk} altActive={pickedLive.length > 0}>
         <SearchField size="s" value={search} onChange={setSearch} placeholder={t("detail.content.searchPlaceholder")} />
         <Segmented
           size="s"
@@ -474,7 +475,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
             size="s"
             icon="up"
             count={nUpd}
-            compactBelow={1096}
+            compactBelow={WIDTH.lg}
             className={cn(!upShown && "invisible")}
             aria-label={updatingAll ? t("detail.content.updating") : undefined}
             disabled={!!active || !upShown}
@@ -486,7 +487,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
         </span>
         {/* Sekundär: auf dieser Seite ist nur Spielen Akzent-Primär. */}
         <Button size="s" icon="plus" onClick={onAdd}>{t("common.add")}</Button>
-        {local.pick && <Button size="s" icon="ul" compactBelow={1096} disabled={!!active} onClick={local.pick}>{t("detail.content.addFile")}</Button>}
+        {local.pick && <Button size="s" icon="ul" compactBelow={WIDTH.lg} disabled={!!active} onClick={local.pick}>{t("detail.content.addFile")}</Button>}
       </Toolbar>
 
       {visible.length === 0 ? (

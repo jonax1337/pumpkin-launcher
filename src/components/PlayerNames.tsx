@@ -7,8 +7,10 @@ import { t, useI18n } from "@/i18n";
 import { StopDialog } from "@/components/game";
 import { accountKeys } from "@/hooks/queryKeys";
 import { api } from "@/lib/api";
+import { WIDTH } from "@/lib/breakpoints";
 import { errorMessage } from "@/lib/errors";
 import { openPage } from "@/lib/links";
+import { MINUTE } from "@/lib/time";
 import type { MsLoginStart } from "@/lib/types";
 import {
   Actions, Avatar, BarButton, Button, Dialog, DialogActions, Empty, ErrorBox, Field, Hint, Icon, List, ListRow, Menu, Progress, RowTitle, Skel,
@@ -180,8 +182,11 @@ export const askPlayerName = (then: AfterName, qc: QueryClient) => {
   void startMsLogin(qc);
 };
 
+/** Konten ändern sich nur durch Anmelden und Abmelden hier; der Abgleich mit Microsoft eilt nicht. */
+const ACCOUNTS_STALE_MS = 5 * MINUTE;
+
 function useMsAccounts() {
-  const query = useQuery({ queryKey: accountKeys.microsoft, queryFn: api.msAccounts, staleTime: 5 * 60_000, retry: false });
+  const query = useQuery({ queryKey: accountKeys.microsoft, queryFn: api.msAccounts, staleTime: ACCOUNTS_STALE_MS, retry: false });
   const syncMicrosoft = useSettings((s) => s.syncMicrosoft);
   // Ob Spielernamen erlaubt sind, hängt an den Microsoft-Konten: bei jeder Änderung der Anzahl neu fragen.
   const count = query.data?.length;
@@ -270,7 +275,7 @@ export function AccountMenu() {
             label={name || (allowed ? t("components.account.noName") : t("components.account.notLoggedIn"))}
             tone={name ? undefined : "warn"}
             iconEnd="chevd"
-            compactBelow={900}
+            compactBelow={WIDTH.sm}
           >
             {/* Ohne Namen: Warnsymbol statt Kopf (Form, nicht nur gelbe Schrift; bleibt auch schmal sichtbar, wenn der Text wegfällt) */}
             {name ? <Avatar name={name} /> : <Icon name="warn" tone="warn" />}

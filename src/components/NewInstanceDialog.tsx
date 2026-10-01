@@ -10,8 +10,10 @@ import {
 import { loaderLine, MemoryChooser } from "@/components/common";
 import { useInstallPack } from "@/components/ContentBrowser";
 import { ImportPane } from "@/components/LauncherImport";
+import { SkelList } from "@/components/SkelList";
 import { catalogKeys } from "@/hooks/queryKeys";
 import { cancelContent, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { SEARCH_STALE_MS } from "@/hooks/staleTimes";
 import { useDebounced } from "@/hooks/useDebounced";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { useForeignSelection, useImportInstances } from "@/hooks/useImport";
@@ -56,11 +58,11 @@ const packName = (path: string) => fileName(path).replace(MRPACK_EXT, "");
 function PackPane({ selected, onSelect }: { selected: string | null; onSelect: (p: { id: string; title: string }) => void }) {
   const { t } = useI18n();
   const [input, setInput] = useState("");
-  const query = useDebounced(input.trim(), 300);
+  const query = useDebounced(input.trim());
   const results = useQuery({
     queryKey: catalogKeys.packPicker(query),
     queryFn: () => api.modrinthSearch(query, "modpack", null, null, 0),
-    staleTime: 5 * 60_000,
+    staleTime: SEARCH_STALE_MS,
     retry: false,
   });
   return (
@@ -70,7 +72,7 @@ function PackPane({ selected, onSelect }: { selected: string | null; onSelect: (
         <ErrorBox title={t("components.catalog.unreachable")} error={results.error} onRetry={() => void results.refetch()} />
       ) : (
         <div className="flex flex-col gap-1" aria-busy={results.isPending || undefined}>
-          {results.isPending && [0, 1, 2, 3].map((k) => <Skel key={k} h={56} />)}
+          {results.isPending && <SkelList n={4} h={56} />}
           {results.data?.hits.map((hit) => (
             <Choice
               key={hit.project_id}
@@ -100,7 +102,7 @@ function TemplatePane({ selected, onSelect }: { selected: string | null; onSelec
   if (templates.isPending)
     return (
       <div className="flex flex-col gap-1">
-        {[0, 1].map((k) => <Skel key={k} h={56} />)}
+        <SkelList n={2} h={56} />
       </div>
     );
   if (!templates.data.length)

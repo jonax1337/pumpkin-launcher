@@ -2,7 +2,8 @@ import { useState, type CSSProperties, type ReactNode } from "react";
 import { useI18n, t } from "@/i18n";
 import { useMemory } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
-import { formatMemory, formatPlaytime, memoryTooHigh } from "@/lib/format";
+import { blurOnEnter } from "@/lib/dom";
+import { formatMemory, formatPlaytime, MB_PER_GB, memoryTooHigh } from "@/lib/format";
 import { platform } from "@/lib/platform";
 import { toastError } from "@/lib/toast";
 import { LOADER_LABELS, type Instance } from "@/lib/types";
@@ -15,6 +16,12 @@ export const loaderLine = (i: Pick<Instance, "loader" | "minecraftVersion">) => 
 export const playtimeLine = (i: Pick<Instance, "playtimeSecs">) =>
   i.playtimeSecs > 0 ? t("components.playtime.played", { zeit: formatPlaytime(i.playtimeSecs) }) : "";
 
+/** Segmente des Reglers: 1 bis 16 GB. */
+const MEMORY_SEGMENTS = 16;
+
+/** Ganze GB, die der Regler zeigt: der Wert, sonst der automatische Standard; mindestens 1. */
+const toGb = (value: number | null, auto: number) => Math.max(1, Math.round((value ?? auto) / MB_PER_GB));
+
 /**
  * Hinweis zum Arbeitsspeicher. Zu viel für den PC: Warnung mit Symbol (nie nur Farbe) an derselben Stelle.
  * `value` wie bei MemoryChooser (null = automatisch).
@@ -22,8 +29,8 @@ export const playtimeLine = (i: Pick<Instance, "playtimeSecs">) =>
 export function MemoryHelp({ value }: { value: number | null }) {
   const { t } = useI18n();
   const { auto, total } = useMemory();
-  const gb = Math.max(1, Math.round((value ?? auto) / 1024));
-  if (value != null && total != null && memoryTooHigh(gb * 1024, total))
+  const gb = toGb(value, auto);
+  if (value != null && total != null && memoryTooHigh(gb * MB_PER_GB, total))
     return (
       <Hint tone="warn" live>
         {t("components.memory.tooHigh", { ram: formatMemory(total) })}
@@ -33,7 +40,7 @@ export function MemoryHelp({ value }: { value: number | null }) {
 }
 
 /**
- * Arbeitsspeicher: „Automatisch“ oder eigener Wert als 16 Segmente (1 bis 16 GB).
+ * Arbeitsspeicher: „Automatisch“ oder eigener Wert als Segmente (1 bis 16 GB).
  * `value` null = automatisch; sonst MB. Segmente über dem, was der PC übrig hat, sind gesperrt (flach, dunkel)
  * und die Grenze steht darunter. `help={false}`: Hinweis steht woanders (rechte Formularspalte, `MemoryHelp`).
  */
@@ -43,19 +50,19 @@ export function MemoryChooser({ name, value, onChange, autoText, help = true, di
   const { t } = useI18n();
   const { auto, max } = useMemory();
   const isAuto = value == null;
-  const gb = Math.max(1, Math.round((value ?? auto) / 1024));
-  const top = Math.max(1, Math.min(16, Math.floor(max / 1024)));
+  const gb = toGb(value, auto);
+  const top = Math.max(1, Math.min(MEMORY_SEGMENTS, Math.floor(max / MB_PER_GB)));
   return (
     <>
       <Radio name={name} checked={isAuto} disabled={disabled} onChange={() => onChange(null)}>
         {t("components.memory.auto")} <span className="faint">({autoText ?? t("components.memory.currently", { ram: formatMemory(auto) })})</span>
       </Radio>
-      <Radio name={name} checked={!isAuto} disabled={disabled} onChange={() => onChange(gb * 1024)}>
+      <Radio name={name} checked={!isAuto} disabled={disabled} onChange={() => onChange(gb * MB_PER_GB)}>
         {t("components.memory.ownValue")}
       </Radio>
       <div className="memrow">
-        <div className="memsl" style={{ "--free": `${((16 - top) / 16) * 100}%` } as CSSProperties}>
-          <SegSlider value={gb} max={top} disabled={disabled || isAuto} onChange={(v) => onChange(v * 1024)} />
+        <div className="memsl" style={{ "--free": `${((MEMORY_SEGMENTS - top) / MEMORY_SEGMENTS) * 100}%` } as CSSProperties}>
+          <SegSlider value={gb} max={top} disabled={disabled || isAuto} onChange={(v) => onChange(v * MB_PER_GB)} />
           {/* Grenze unter dem letzten freien Segment; bei 16 unter dem Ende */}
           <span className="cap" aria-hidden>{t("components.memory.maxGb", { n: top })}</span>
         </div>
@@ -108,7 +115,7 @@ export function JavaChooser({ name, value, onChange, fallback, disabled }: { nam
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={() => commit(draft)}
-          onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+          onKeyDown={blurOnEnter}
           placeholder={own ? t("components.java.examplePath", { pfad: JAVA_PROGRAM.example }) : t("components.java.pathTo", { datei: JAVA_PROGRAM.file })}
         />
         {!api.isMock && <Button disabled={disabled || !own} onClick={() => void browse().catch(toastError)}>{t("components.java.browse")}</Button>}

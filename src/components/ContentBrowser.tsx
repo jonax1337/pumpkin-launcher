@@ -9,11 +9,13 @@ import {
   Switch, TabPanel, Tabs, TextField, Tip, type MenuEntry,
 } from "@/ui";
 import { cancelContent, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { CATALOG_STALE_MS, SEARCH_STALE_MS } from "@/hooks/staleTimes";
 import { useDebounced } from "@/hooks/useDebounced";
 import { useInstances } from "@/hooks/useInstances";
 import { worldsQuery } from "@/hooks/useWorlds";
 import { catalogKeys, worldKeys } from "@/hooks/queryKeys";
 import { api } from "@/lib/api";
+import { WIDTH } from "@/lib/breakpoints";
 import { TYPE_LABEL_KEYS, TYPE_ONE_KEYS } from "@/lib/catalog";
 import { errorMessage } from "@/lib/errors";
 import { formatCount } from "@/lib/format";
@@ -60,7 +62,7 @@ const versionFits = (v: ContentVersion, instance: Instance, type: CatalogType) =
 const allVersionsQuery = (projectId: string, source: Source = "modrinth") => ({
   queryKey: catalogKeys.versions(source, projectId, null, null),
   queryFn: () => (source === "modrinth" ? api.modrinthVersions(projectId, null, null) : api.providerVersions(source, projectId)),
-  staleTime: 10 * 60_000,
+  staleTime: CATALOG_STALE_MS,
   retry: false,
 });
 
@@ -168,7 +170,7 @@ function useAddContent() {
         const versions = await qc.fetchQuery({
           queryKey: catalogKeys.versions(source, projectId, mc, loader),
           queryFn: () => (source === "modrinth" ? api.modrinthVersions(projectId, mc, loader) : api.providerVersions(source, projectId, mc, loader)),
-          staleTime: 10 * 60_000,
+          staleTime: CATALOG_STALE_MS,
         });
         picked = pickVersion(versions) ?? undefined;
         id = picked?.id;
@@ -182,7 +184,7 @@ function useAddContent() {
     if (!id) return "missing";
     // CurseForge: Die Autoren erlauben den Download nur über die Webseite. Nicht umgehen, sondern beim Laden von Hand helfen.
     if (source !== "modrinth" && picked && !picked.files[0]?.url) {
-      const page = await qc.fetchQuery({ queryKey: catalogKeys.project(source, projectId), queryFn: () => api.providerProject(source, projectId), staleTime: 10 * 60_000 })
+      const page = await qc.fetchQuery({ queryKey: catalogKeys.project(source, projectId), queryFn: () => api.providerProject(source, projectId), staleTime: CATALOG_STALE_MS })
         .then((p) => p.web_url).catch(() => null);
       openManualDownloads({
         instanceId: instance.id,
@@ -578,7 +580,7 @@ export function ContentResults({ type, instance, world, action, onOpen, query: t
   fit?: boolean; compact?: boolean; onReset?: () => void; sort?: SearchIndex | null; feature?: boolean;
 }) {
   const { t } = useI18n();
-  const query = useDebounced(typed.trim(), 300);
+  const query = useDebounced(typed.trim());
   const mc = instance ? (fit ? instance.minecraftVersion : null) : (outerMc ?? null);
   const loader = instance ? (fit ? loaderFor(instance, type) : null) : (outerLoader ?? null);
   const index: SearchIndex = sort ?? (query ? "relevance" : "downloads");
@@ -589,7 +591,7 @@ export function ContentResults({ type, instance, world, action, onOpen, query: t
       source === "modrinth" ? api.modrinthSearch(query, type, mc, loader, pageParam, index) : api.providerSearch(source, query, type, mc, loader, pageParam, index),
     initialPageParam: 0,
     getNextPageParam: (last) => (last.offset + last.hits.length < last.total_hits ? last.offset + last.limit : undefined),
-    staleTime: 5 * 60_000,
+    staleTime: SEARCH_STALE_MS,
     retry: false,
   });
   const hits = results.data?.pages.flatMap((p) => p.hits) ?? [];
@@ -650,7 +652,7 @@ export function ContentResults({ type, instance, world, action, onOpen, query: t
                     meta={
                       <>
                         <span><Count value={formatDownloads(hit.downloads)} /> {t("components.stats.downloads")}</span>
-                        {categoryNames(hit.categories, compact ? 0 : 2).map((c) => <Chip key={c} size="s" data-hide="900">{c}</Chip>)}
+                        {categoryNames(hit.categories, compact ? 0 : 2).map((c) => <Chip key={c} size="s" data-hide={WIDTH.sm}>{c}</Chip>)}
                         {!instance && <InChip small instances={installedIn.get(installedKey(source, hit.project_id))} />}
                       </>
                     }
@@ -732,7 +734,7 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
   const project = useQuery({
     queryKey: catalogKeys.project(source, projectId),
     queryFn: () => (source === "modrinth" ? api.modrinthProject(projectId) : api.providerProject(source, projectId)),
-    staleTime: 10 * 60_000,
+    staleTime: CATALOG_STALE_MS,
     retry: false,
   });
   const mc = instance?.minecraftVersion ?? null;
@@ -741,7 +743,7 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
     queryKey: catalogKeys.versions(source, projectId, mc, loader),
     queryFn: () => (source === "modrinth" ? api.modrinthVersions(projectId, mc, loader) : api.providerVersions(source, projectId, mc, loader)),
     enabled: !!instance,
-    staleTime: 10 * 60_000,
+    staleTime: CATALOG_STALE_MS,
     retry: false,
   });
   // Datenpaket-Projekte bieten oft auch Mod-Versionen an; hier zählen nur die Datenpakete.

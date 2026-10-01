@@ -5,15 +5,17 @@ import { LOUD_PHASES, PlayButton, StatusChip, usePhase } from "@/components/game
 import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
 import { loaderLine, playtimeLine } from "@/components/common";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
+import { SkelList } from "@/components/SkelList";
 import { useBackgroundUpdates, useModUpdates } from "@/hooks/useContent";
 import { groupsOf, ungrouped, useInstances } from "@/hooks/useInstances";
+import { WIDTH } from "@/lib/breakpoints";
 import { formatDate, formatPlaytime, relativeTime } from "@/lib/format";
 import { newInstanceParams } from "@/lib/routes";
 import { ALL_LOADERS, LOADER_LABELS, type Instance, type ModLoader } from "@/lib/types";
 import { lookOf, useLookStore } from "@/store/look";
 import {
   Button, ButtonLink, CardGrid, Cell, Chip, Count, Disclosure, Empty, ErrorBox, Glyph, List, ListRow, PageHeader, RowTitle, SceneCard, SceneThumb,
-  SearchField, Segmented, Select, Skel, Spacer, Toolbar,
+  SearchField, Segmented, Select, Spacer, Toolbar,
 } from "@/ui";
 
 type Mode = "poster" | "list";
@@ -104,9 +106,9 @@ function InstanceRow({ inst, index, looks }: { inst: Instance; index: number; lo
       <SceneThumb bio={look.bio} seed={look.seed} />
       <RowTitle title={inst.name} sub={t("pages.instances.createdOn", { datum: formatDate(inst.createdAt) })} />
       <Cell title={loaderLine(inst)}>{loaderLine(inst)}</Cell>
-      <Cell hide={1040}><Count value={inst.mods.length} /></Cell>
-      <Cell hide={1040}>{relativeTime(inst.lastPlayedAt)}</Cell>
-      <Cell hide={1180}>{inst.playtimeSecs > 0 ? formatPlaytime(inst.playtimeSecs) : "–"}</Cell>
+      <Cell hide={WIDTH.md}><Count value={inst.mods.length} /></Cell>
+      <Cell hide={WIDTH.md}>{relativeTime(inst.lastPlayedAt)}</Cell>
+      <Cell hide={WIDTH.xl}>{inst.playtimeSecs > 0 ? formatPlaytime(inst.playtimeSecs) : "–"}</Cell>
       <Cell flex><LibStatus inst={inst} /></Cell>
       <PlayButton instance={inst} size="i" />
       <InstanceMenuButton instance={inst} variant="g" small />
@@ -133,9 +135,9 @@ function InstanceView({ instances, mode, looks }: { instances: Instance[]; mode:
           <span />
           <Cell>{t("common.name")}</Cell>
           <Cell>{t("common.version")}</Cell>
-          <Cell hide={1040}>{t("pages.instances.colContents")}</Cell>
-          <Cell hide={1040}>{t("pages.instances.colLastPlayed")}</Cell>
-          <Cell hide={1180}>{t("pages.instances.colPlaytime")}</Cell>
+          <Cell hide={WIDTH.md}>{t("pages.instances.colContents")}</Cell>
+          <Cell hide={WIDTH.md}>{t("pages.instances.colLastPlayed")}</Cell>
+          <Cell hide={WIDTH.xl}>{t("pages.instances.colPlaytime")}</Cell>
           <Cell>{t("common.status")}</Cell>
           <span />
           <span />
@@ -197,7 +199,7 @@ export function InstancesPage() {
   } else if (isLoading) {
     body = (
       <CardGrid aria-busy aria-label={t("components.common.loadingAria")}>
-        {[0, 1, 2, 3].map((k) => <Skel key={k} className="aspect-[4/5]" />)}
+        <SkelList n={4} className="aspect-[4/5]" />
       </CardGrid>
     );
   } else if (!instances?.length) {

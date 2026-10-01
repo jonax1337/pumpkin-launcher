@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useI18n } from "@/i18n";
 import { QueryList } from "@/components/QueryList";
+import { SkelList } from "@/components/SkelList";
 import { startMsLogin } from "@/components/PlayerNames";
 import {
   useAddSkin, useDeleteSkin, useResetSkin, useSaveActiveSkin, useSetCape, useSkinLibrary, useSkinProfile, useSkinTexture, useUpdateSkin,
@@ -143,7 +144,7 @@ function Library({ accountId }: { accountId: string | null }) {
           error={t("pages.instances.loadErrorTitle")}
           loading={
             <CardGrid aria-busy aria-label={t("components.common.loadingAria")}>
-              {[0, 1, 2].map((k) => <Skel key={k} h={308} />)}
+              <SkelList n={3} h={308} />
             </CardGrid>
           }
           empty={

@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { QueryList } from "@/components/QueryList";
+import { SkelList } from "@/components/SkelList";
 import { useDeleteScreenshot, useScreenshots } from "@/hooks/useScreenshots";
 import { api } from "@/lib/api";
 import { dayLabel, dayStart, formatDateTime, formatSize } from "@/lib/format";
 import { toastError } from "@/lib/toast";
 import { useI18n } from "@/i18n";
 import type { Instance, Screenshot } from "@/lib/types";
-import { Actions, Button, CardGrid, Count, Dialog, Empty, Glyph, IconButton, SectionHeader, Skel } from "@/ui";
+import { Actions, Button, CardGrid, Count, Dialog, Empty, Glyph, IconButton, SectionHeader } from "@/ui";
 
 /** Screenshots je Kalendertag; die Liste kommt neueste zuerst, die Map behält diese Reihenfolge. */
 function byDay(shots: Screenshot[]) {
@@ -31,7 +32,7 @@ export function ScreenshotsTab({ instance }: { instance: Instance }) {
         error={t("detail.screenshots.loadError")}
         loading={
           <CardGrid aria-busy aria-label={t("common.loading")}>
-            {[0, 1, 2, 3].map((k) => <Skel key={k} className="aspect-video" />)}
+            <SkelList n={4} className="aspect-video" />
           </CardGrid>
         }
         empty={

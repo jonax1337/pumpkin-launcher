@@ -6,6 +6,7 @@ import { PlayButton, PlayStatus, StatusChip, usePhase } from "@/components/game"
 import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
 import { loaderLine } from "@/components/common";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
+import { SkelList } from "@/components/SkelList";
 import { Onboarding } from "@/components/Onboarding";
 import { useModUpdates } from "@/hooks/useContent";
 import { pickRecentInstance, useInstances, usePlay } from "@/hooks/useInstances";
@@ -110,6 +111,12 @@ function MiniCard({ instance, current, onPick, hintId }: { instance: Instance; c
   );
 }
 
+/** Größe der Kacheln (`SceneCard` mini) und Abstand in der Leiste „Deine Instanzen“; wie in ui/card.css und .rail (styles/pixelkino.css). */
+const TILE_W = 184;
+const TILE_H = 104;
+const TILE_GAP = 12;
+const TILE_STEP = TILE_W + TILE_GAP;
+
 /** Leiste „Deine Instanzen“ (Klick wählt die Instanz für den Hero, Doppelklick/Enter öffnet sie): Liste mit Knöpfen, Pfeile nur in Richtungen, in die noch etwas kommt. */
 function Rail({ instances, current, onPick }: { instances: Instance[]; current: string; onPick: (id: string) => void }) {
   const { t } = useI18n();
@@ -146,11 +153,11 @@ function Rail({ instances, current, onPick }: { instances: Instance[]; current: 
     if (to !== null) el.scrollTo({ left: to, behavior: motionOff() ? "auto" : "smooth" });
   }, [current]);
 
-  // Blättert um ganze Kacheln (184 + 12 Lücke), mindestens eine.
+  // Blättert um ganze Kacheln, mindestens eine.
   function page(dir: 1 | -1) {
     const el = rail.current;
     if (!el) return;
-    const step = Math.max(1, Math.floor(el.clientWidth / 196) - 1) * 196;
+    const step = Math.max(1, Math.floor(el.clientWidth / TILE_STEP) - 1) * TILE_STEP;
     el.scrollBy({ left: dir * step, behavior: motionOff() ? "auto" : "smooth" });
   }
 
@@ -188,7 +195,7 @@ function HomeSkeleton() {
       </div>
       <div className="cont">
         <div className="library-heading"><Skel h={22} w={150} /></div>
-        <div className="railwrap"><div className="rail">{[0, 1, 2, 3].map((k) => <Skel key={k} w={184} h={104} className="flex-none" />)}</div></div>
+        <div className="railwrap"><div className="rail"><SkelList n={4} w={TILE_W} h={TILE_H} className="flex-none" /></div></div>
       </div>
     </section>
   );

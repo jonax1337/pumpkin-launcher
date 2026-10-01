@@ -6,6 +6,7 @@ import { Button, Chip, ConfirmDialog, Count, Empty, Icon, IconButton, SearchFiel
 import { askShareLog, DebugInfoButton, shareKindAfter } from "@/components/support";
 import { askStop, useCancelInstall, useInstanceStatus, useKill, usePlay, useStopAsk } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
+import { WIDTH } from "@/lib/breakpoints";
 import { instanceUrl } from "@/lib/routes";
 import { toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
@@ -341,6 +342,8 @@ const LogRow = memo(function LogRow({ line, re }: { line: LogLine; re: RegExp | 
   return <span className={cls}>{parts.map((p, i) => (i % 2 ? <mark key={i}>{p}</mark> : p))}</span>;
 });
 
+const LOG_DIGEST_INTERVAL_MS = 5000;
+
 /**
  * Kurzmeldung für Screenreader: neue Warnungen und Fehler seit der letzten Meldung, höchstens alle 5 s.
  * Die Konsole selbst liest nicht mit (aria-live="off"), sonst käme jede Zeile.
@@ -371,7 +374,7 @@ function useLogDigest(lines: LogLine[] | undefined) {
       const text = t("components.log.digestPrefix") + parts.join(", ");
       // Gleicher Wortlaut wie zuletzt: unsichtbar ändern, damit er erneut angesagt wird.
       setMsg((m) => (m === text ? `${text} ` : text));
-    }, Math.max(0, last.current + 5000 - Date.now()));
+    }, Math.max(0, last.current + LOG_DIGEST_INTERVAL_MS - Date.now()));
   }, [lines]);
   useEffect(() => () => {
     window.clearTimeout(timer.current);
@@ -417,13 +420,13 @@ export function LogConsole({ instance }: { instance: Instance }) {
         <SearchField size="s" value={query} onChange={setQuery} placeholder={t("components.log.searchPlaceholder")} />
         <Segmented size="s" label={t("components.log.filter")} value={filter} onChange={setFilter} items={LOG_FILTERS.map(({ value, label }) => ({ value, label: t(label) }))} />
         <Spacer />
-        <Button size="s" icon="copy" compactBelow={900} disabled={!lines?.length} onClick={copy}>{t("common.copy")}</Button>
-        <Button size="s" icon="ul" compactBelow={1180} onClick={() => askShareLog(instance.id, shareKindAfter(crash))}>{t("components.game.shareLog")}</Button>
-        <DebugInfoButton size="s" icon="info" compactBelow={1180} />
+        <Button size="s" icon="copy" compactBelow={WIDTH.sm} disabled={!lines?.length} onClick={copy}>{t("common.copy")}</Button>
+        <Button size="s" icon="ul" compactBelow={WIDTH.xl} onClick={() => askShareLog(instance.id, shareKindAfter(crash))}>{t("components.game.shareLog")}</Button>
+        <DebugInfoButton size="s" icon="info" compactBelow={WIDTH.xl} />
         {crash?.logFile && (
-          <Button size="s" icon="folder" compactBelow={900} onClick={() => void api.openPath(crash.logFile!).catch(toastError)}>{t("components.log.logFile")}</Button>
+          <Button size="s" icon="folder" compactBelow={WIDTH.sm} onClick={() => void api.openPath(crash.logFile!).catch(toastError)}>{t("components.log.logFile")}</Button>
         )}
-        <Button size="s" icon="trash" compactBelow={900} disabled={!lines?.length} onClick={() => clearLog(instance.id)}>{t("components.log.clear")}</Button>
+        <Button size="s" icon="trash" compactBelow={WIDTH.sm} disabled={!lines?.length} onClick={() => clearLog(instance.id)}>{t("components.log.clear")}</Button>
       </Toolbar>
       <div className="console">
         <div

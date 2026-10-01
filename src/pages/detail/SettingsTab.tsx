@@ -5,6 +5,7 @@ import { JavaChooser, MemoryChooser, MemoryHelp } from "@/components/common";
 import { useInstallPercent, usePhase } from "@/components/game";
 import { askDelete, useGroupMenu } from "@/components/instance";
 import { useInstall, useUpdateInstance } from "@/hooks/useInstances";
+import { blurOnEnter } from "@/lib/dom";
 import { LOADER_LABELS, type GameWindow, type Instance } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n";
@@ -80,7 +81,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
             maxLength={64}
             onChange={(e) => setName(e.target.value)}
             onBlur={saveName}
-            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+            onKeyDown={blurOnEnter}
           />
         </FormRow>
         <FormRow label={t("components.instance.group")} hint={t("detail.settings.groupHint")}>
@@ -225,7 +226,7 @@ function WindowChooser({ value, onChange, disabled }: { value: GameWindow; onCha
       value={text}
       onChange={(e) => setText(e.target.value)}
       onBlur={commitSize}
-      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+      onKeyDown={blurOnEnter}
     />
   );
 

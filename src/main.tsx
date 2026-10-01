@@ -18,6 +18,9 @@ import { SkinsPage } from "@/pages/Skins";
 import { NotFoundPage } from "@/pages/NotFound";
 import "./index.css";
 
+/** Abfragen ohne eigene Angabe gelten kurz als frisch; was seltener wechselt, setzt `staleTime` selbst (hooks/staleTimes.ts). */
+const DEFAULT_STALE_MS = 30_000;
+
 // Mutations-Fehler zentral als Toast; Mutationen mit eigenem Fehler-Toast setzen `meta.ownErrorToast`.
 // Query-Fehler zeigen die Seiten inline.
 const queryClient = new QueryClient({
@@ -30,7 +33,7 @@ const queryClient = new QueryClient({
     },
   }),
   defaultOptions: {
-    queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: 1 },
+    queries: { staleTime: DEFAULT_STALE_MS, refetchOnWindowFocus: false, retry: 1 },
   },
 });
 

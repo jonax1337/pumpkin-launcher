@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { loaderLine } from "@/components/common";
-import { Button, Chip, Choice, Empty, ErrorBox, Field, Glyph, JobProgress, Skel } from "@/ui";
+import { SkelList } from "@/components/SkelList";
+import { Button, Chip, Choice, Empty, ErrorBox, Field, Glyph, JobProgress } from "@/ui";
 import { useContentState } from "@/hooks/useContent";
 import { importTarget, type ForeignSelection } from "@/hooks/useImport";
 import { useI18n } from "@/i18n";
@@ -30,7 +31,7 @@ export function ImportPane({ selection, busy }: { selection: ForeignSelection; b
         <ErrorBox title={t("components.import.searchFailed")} error={detected.error} onRetry={() => void detected.refetch()} />
       ) : detected.isPending ? (
         <div className="flex flex-col gap-1">
-          {[0, 1, 2].map((k) => <Skel key={k} h={56} />)}
+          <SkelList n={3} h={56} />
         </div>
       ) : !all.length ? (
         <Empty ill={<Glyph name="chest" pal="sand" box={64} />} title={t("components.import.noneFound")} size="pane">
