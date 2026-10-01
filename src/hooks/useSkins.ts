@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { t } from "@/i18n";
 import { api } from "@/lib/api";
 import type { Cape, LibrarySkin, SkinVariant } from "@/lib/types";
 
@@ -39,7 +40,7 @@ function useLibraryChange<V, R>(change: (v: V) => Promise<R>, done?: (result: R)
   });
 }
 
-const inLibrary = (skin: LibrarySkin) => `„${skin.name}“ liegt jetzt in deiner Bibliothek`;
+const inLibrary = (skin: LibrarySkin) => t("hooks.skin.inLibrary", { name: skin.name });
 
 export const useAddSkin = () => useLibraryChange(api.skinAdd, inLibrary);
 
@@ -64,13 +65,13 @@ function useProfileChange<V extends { accountId: string }>(change: (v: V) => Pro
 }
 
 export const useUploadSkin = () =>
-  useProfileChange(({ accountId, skin }: { accountId: string; skin: LibrarySkin }) => api.skinUpload(accountId, skin.id), ({ skin }) => `Du trägst jetzt „${skin.name}“`);
+  useProfileChange(({ accountId, skin }: { accountId: string; skin: LibrarySkin }) => api.skinUpload(accountId, skin.id), ({ skin }) => t("hooks.skin.nowWearing", { name: skin.name }));
 
 export const useResetSkin = () =>
-  useProfileChange(({ accountId }: { accountId: string }) => api.skinReset(accountId), () => "Du trägst jetzt den Standardskin");
+  useProfileChange(({ accountId }: { accountId: string }) => api.skinReset(accountId), () => t("hooks.skin.wearingDefault"));
 
 export const useSetCape = () =>
   useProfileChange(
     ({ accountId, cape }: { accountId: string; cape: Cape | null }) => api.skinCape(accountId, cape?.id ?? null),
-    ({ cape }) => (cape ? `Du trägst jetzt den Umhang „${cape.alias}“` : "Umhang abgelegt"),
+    ({ cape }) => (cape ? t("hooks.skin.nowWearingCape", { name: cape.alias }) : t("hooks.skin.capeRemoved")),
   );

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { t } from "@/i18n";
 import { api } from "@/lib/api";
 import type { Instance } from "@/lib/types";
 
@@ -13,8 +14,8 @@ export function useSaveTemplate() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ instance, name }: { instance: Instance; name: string }) => api.templateSave(instance.id, name),
-    onSuccess: (t) => {
-      toast.success(`Vorlage „${t.name}“ gespeichert`, { description: "Du findest sie unter Neu › Vorlage." });
+    onSuccess: (tpl) => {
+      toast.success(t("hooks.template.saved", { name: tpl.name }), { description: t("hooks.template.savedHint") });
       return qc.invalidateQueries({ queryKey: templateKeys.all });
     },
   });

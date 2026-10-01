@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { t } from "@/i18n";
 import { defaultMemory } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import { openPage } from "@/lib/links";
@@ -12,10 +13,10 @@ export function useShareLog() {
     onSuccess: async (url) => {
       // Klappt das Kopieren nicht, steht der Link trotzdem im Toast: das Hochladen war erfolgreich.
       const copied = await navigator.clipboard.writeText(url).then(() => true, () => false);
-      toast.success(copied ? "Link kopiert" : "Log geteilt", {
+      toast.success(copied ? t("hooks.support.linkCopied") : t("hooks.support.logShared"), {
         description: url,
         duration: 15_000,
-        action: { label: "Öffnen", onClick: () => openPage(url) },
+        action: { label: t("common.open"), onClick: () => openPage(url) },
       });
     },
   });
@@ -27,7 +28,7 @@ export function useCopyDebugInfo() {
   return useMutation({
     meta: { ownErrorToast: true },
     mutationFn: async () => navigator.clipboard.writeText(await api.debugInfo(await defaultMemory(qc))),
-    onSuccess: () => toast.success("Debug-Info kopiert", { description: "Füge sie in deinen Fehlerbericht ein." }),
-    onError: () => toast.error("Kopieren hat nicht geklappt"),
+    onSuccess: () => toast.success(t("hooks.support.debugCopied"), { description: t("hooks.support.debugHint") }),
+    onError: () => toast.error(t("hooks.support.copyFailed")),
   });
 }
