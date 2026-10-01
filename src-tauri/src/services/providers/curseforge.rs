@@ -881,19 +881,32 @@ fn downloads_dir() -> Option<PathBuf> {
     dir.is_dir().then_some(dir)
 }
 
-/// Sucht im Downloads-Ordner nach der Datei, die der Nutzer auf CurseForge geladen hat (Größe und SHA-1 müssen
-/// stimmen; Browser hängen bei Doppelten ` (1)` an).
-fn find_download(dir: &std::path::Path, file: &CfFile) -> AppResult<Option<Vec<u8>>> {
-    let Some(expected) = sha1_of(file) else { return Ok(None) };
-    let (stem, ext) = file.file_name.rsplit_once('.').unwrap_or((&file.file_name, ""));
+/// Dateien im Downloads-Ordner, die nach `file_name` aussehen (Browser hängen bei Doppelten ` (1)` an).
+fn download_candidates(dir: &std::path::Path, file_name: &str) -> AppResult<Vec<PathBuf>> {
+    let (stem, ext) = file_name.rsplit_once('.').unwrap_or((file_name, ""));
+    let mut found = Vec::new();
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().to_string();
-        let candidate = name == file.file_name || (name.starts_with(stem) && name.ends_with(&format!(".{ext}")));
-        if !candidate || !entry.file_type()?.is_file() || entry.metadata()?.len() != file.file_length || file.file_length > modrinth::FILE_LIMIT {
+        let candidate = name == file_name || (name.starts_with(stem) && name.ends_with(&format!(".{ext}")));
+        if candidate && entry.file_type()?.is_file() {
+            found.push(entry.path());
+        }
+    }
+    Ok(found)
+}
+
+/// Die Kandidatin, deren Größe und SHA-1 zur Datei bei CurseForge passen.
+fn verified_download(candidates: &[PathBuf], file: &CfFile) -> AppResult<Option<Vec<u8>>> {
+    let Some(expected) = sha1_of(file) else { return Ok(None) };
+    if file.file_length > modrinth::FILE_LIMIT {
+        return Ok(None);
+    }
+    for path in candidates {
+        if fs::metadata(path)?.len() != file.file_length {
             continue;
         }
-        let data = fs::read(entry.path())?;
+        let data = fs::read(path)?;
         if crate::services::download::sha1_hex(&data) == expected {
             return Ok(Some(data));
         }
@@ -903,17 +916,22 @@ fn find_download(dir: &std::path::Path, file: &CfFile) -> AppResult<Option<Vec<u
 
 /// Holt eine manuell geladene Datei aus dem Downloads-Ordner und trägt sie in die Instanz ein.
 /// `None` = noch nicht da (der Nutzer lädt noch).
-pub async fn adopt_download(state: &AppState, instance_id: &str, project_id: u32, file_id: u32) -> AppResult<Option<Instance>> {
-    let client = modrinth::client()?;
-    let m = mod_of(&client, project_id).await?;
-    let kind = mod_kind(m.class_id)?;
-    let f = file_of(&client, project_id, file_id).await?;
+pub async fn adopt_download(state: &AppState, instance_id: &str, project_id: u32, file_id: u32, file_name: &str) -> AppResult<Option<Instance>> {
     let mut instance = state.instances.get(instance_id)?;
     if instance.mods.iter().any(|x| matches!(x.source, ModSource::CurseForge { file_id: id, .. } if id == file_id)) {
         return Ok(Some(instance));
     }
     let Some(dir) = downloads_dir() else { return Ok(None) };
-    let Some(data) = find_download(&dir, &f)? else { return Ok(None) };
+    // Die Oberfläche fragt alle paar Sekunden: CurseForge erst bemühen, wenn eine passend benannte Datei da ist.
+    let candidates = download_candidates(&dir, file_name)?;
+    if candidates.is_empty() {
+        return Ok(None);
+    }
+    let client = modrinth::client()?;
+    let m = mod_of(&client, project_id).await?;
+    let kind = mod_kind(m.class_id)?;
+    let f = file_of(&client, project_id, file_id).await?;
+    let Some(data) = verified_download(&candidates, &f)? else { return Ok(None) };
     check_file_name(&f.file_name, kind)?;
     let target = state.dirs.game_dir(instance_id).join(kind.folder()).join(&f.file_name);
     content::regular_parents(&target)?;
@@ -1214,12 +1232,15 @@ mod tests {
             "id": 1, "modId": 2, "fileName": "a-1.0.jar", "fileLength": data.len(),
             "hashes": [{"value": crate::services::download::sha1_hex(data), "algo": 1}]
         }));
-        assert!(find_download(&dir, &f).unwrap().is_none());
+        let found = || verified_download(&download_candidates(&dir, &f.file_name).unwrap(), &f).unwrap();
+        assert!(download_candidates(&dir, &f.file_name).unwrap().is_empty());
         // Falscher Inhalt gleicher Größe wird nicht akzeptiert, der echte unter Browser-Namen schon.
         fs::write(dir.join("a-1.0.jar"), b"jar-bytez").unwrap();
-        assert!(find_download(&dir, &f).unwrap().is_none());
+        fs::write(dir.join("b-1.0.jar"), data).unwrap();
+        assert_eq!(download_candidates(&dir, &f.file_name).unwrap().len(), 1);
+        assert!(found().is_none());
         fs::write(dir.join("a-1.0 (1).jar"), data).unwrap();
-        assert_eq!(find_download(&dir, &f).unwrap().unwrap(), data);
+        assert_eq!(found().unwrap(), data);
         fs::remove_dir_all(dir).unwrap();
     }
 

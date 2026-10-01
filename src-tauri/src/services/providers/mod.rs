@@ -127,16 +127,24 @@ fn check_url(url: &reqwest::Url) -> AppResult<()> {
 }
 
 /// CurseForge hat angekündigt, Downloads vom CDN nur noch mit API-Schlüssel auszuliefern (sonst 401). Dann soll der
-/// Nutzer erfahren, was zu tun ist, statt einen nackten HTTP-Fehler zu sehen.
+/// Nutzer erfahren, was zu tun ist, statt einen nackten HTTP-Fehler zu sehen. 403 zählt nicht: So antwortet das CDN
+/// schon heute auf gelöschte Dateien, da hilft kein Update.
 fn cdn_wants_key(url: &reqwest::Url, status: reqwest::StatusCode) -> bool {
-    url.host_str().is_some_and(|h| h.ends_with(".forgecdn.net")) && matches!(status.as_u16(), 401 | 403)
+    url.host_str().is_some_and(|h| h.ends_with(".forgecdn.net")) && status == reqwest::StatusCode::UNAUTHORIZED
+}
+
+/// Letztes Pfadstück einer Download-Adresse, lesbar (`a%20b.jar` -> `a b.jar`).
+fn file_name(url: &reqwest::Url) -> String {
+    let last = url.path_segments().and_then(|mut s| s.next_back()).unwrap_or_default();
+    percent_encoding::percent_decode_str(last).decode_utf8_lossy().into_owned()
 }
 
 fn ok_status(response: reqwest::Response) -> AppResult<reqwest::Response> {
     if cdn_wants_key(response.url(), response.status()) {
-        return Err(invalid(
-            "CurseForge gibt diese Datei nur noch mit Schlüssel heraus. Bitte aktualisiere Pumpkin Launcher oder lade die Datei von Hand auf curseforge.com.",
-        ));
+        return Err(invalid(format!(
+            "CurseForge gibt {} nur noch mit Schlüssel heraus. Bitte aktualisiere Pumpkin Launcher oder lade die Datei von Hand auf curseforge.com.",
+            file_name(response.url())
+        )));
     }
     Ok(response.error_for_status()?)
 }
@@ -363,9 +371,16 @@ mod tests {
         let url = |u: &str| reqwest::Url::parse(u).unwrap();
         let cdn = url("https://edge.forgecdn.net/files/4013/966/a.jar");
         assert!(cdn_wants_key(&cdn, reqwest::StatusCode::UNAUTHORIZED));
-        assert!(cdn_wants_key(&url("https://mediafilez.forgecdn.net/files/1/2/a.jar"), reqwest::StatusCode::FORBIDDEN));
+        // 403 = Datei fehlt (so antwortet mediafilez schon heute), kein Schlüsselproblem.
+        assert!(!cdn_wants_key(&url("https://mediafilez.forgecdn.net/files/1/2/a.jar"), reqwest::StatusCode::FORBIDDEN));
         assert!(!cdn_wants_key(&cdn, reqwest::StatusCode::NOT_FOUND));
         assert!(!cdn_wants_key(&url("https://files.feed-the-beast.com/blob/aa/x.jar"), reqwest::StatusCode::UNAUTHORIZED));
+    }
+
+    #[test]
+    fn the_key_message_names_the_file() {
+        let url = reqwest::Url::parse("https://edge.forgecdn.net/files/2935/316/Botania r1.16.2-411.jar").unwrap();
+        assert_eq!(file_name(&url), "Botania r1.16.2-411.jar");
     }
 
     #[test]
