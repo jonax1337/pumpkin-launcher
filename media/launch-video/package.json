@@ -1,0 +1,15 @@
+{
+  "name": "pumpkin-launch-video",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "music": "python audio/music.py",
+    "build": "python audio/music.py && node build.mjs",
+    "preview:yt": "node build.mjs && cd yt && npx --yes hyperframes@0.8.98 preview",
+    "preview:tiktok": "node build.mjs && cd tiktok && npx --yes hyperframes@0.8.98 preview",
+    "check": "node build.mjs && cd yt && npx --yes hyperframes@0.8.98 check && cd ../tiktok && npx --yes hyperframes@0.8.98 check",
+    "render:yt": "node build.mjs && cd yt && npx --yes hyperframes@0.8.98 render -o renders/pumpkin-launcher-yt-16x9.mp4",
+    "render:tiktok": "node build.mjs && cd tiktok && npx --yes hyperframes@0.8.98 render -o renders/pumpkin-launcher-tiktok-9x16.mp4",
+    "render": "npm run render:yt && npm run render:tiktok"
+  }
+}
