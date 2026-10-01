@@ -4,6 +4,7 @@
  * und alle Icons in s/m/l/xl. Oben die Pixelstufe (Einstellung pxSize) zum Vergleichen.
  */
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useI18n } from "@/i18n";
 import { useSettings, type PxSize } from "@/store/settings";
 import { PixelScene } from "@/pixel/PixelScene";
 import { BIOMES } from "@/pixel/scene";
@@ -44,21 +45,22 @@ function Head({ cols }: { cols: string[] }) {
 }
 
 function ButtonMatrix({ size }: { size: Size }) {
+  const { t } = useI18n();
   return (
     <div style={grid("110px repeat(4, max-content)")}>
       <Head cols={STATES} />
       {VARIANTS.map((v) => (
         <Row key={v} label={v}>
-          {STATES.map((s) => <Button key={s} variant={v} size={size} icon="plus" {...stateProps(s)}>Anlegen</Button>)}
+          {STATES.map((s) => <Button key={s} variant={v} size={size} icon="plus" {...stateProps(s)}>{t("ui.kit.buttonCreate")}</Button>)}
         </Row>
       ))}
-      {TONES.map((t) => (
-        <Row key={t} label={`ghost ${t}`}>
-          {STATES.map((s) => <Button key={s} variant="ghost" tone={t} size={size} icon={t === "acc" ? "up" : t === "warn" ? "warn" : "trash"} {...stateProps(s)}>{t === "bad" ? "Löschen" : "Aktualisieren"}</Button>)}
+      {TONES.map((tone) => (
+        <Row key={tone} label={`ghost ${tone}`}>
+          {STATES.map((s) => <Button key={s} variant="ghost" tone={tone} size={size} icon={tone === "acc" ? "up" : tone === "warn" ? "warn" : "trash"} {...stateProps(s)}>{tone === "bad" ? t("common.delete") : t("common.refresh")}</Button>)}
         </Row>
       ))}
       <Row label="secondary warn">
-        {STATES.map((s) => <Button key={s} tone="warn" size={size} icon="warn" {...stateProps(s)}>Prüfen</Button>)}
+        {STATES.map((s) => <Button key={s} tone="warn" size={size} icon="warn" {...stateProps(s)}>{t("ui.kit.buttonCheck")}</Button>)}
       </Row>
       <Row label="IconButton">
         {STATES.map((s) => (
@@ -70,8 +72,8 @@ function ButtonMatrix({ size }: { size: Size }) {
       <Row label="count / iconEnd">
         {STATES.map((s) => (
           <span key={s} style={{ display: "flex", gap: 6 }}>
-            <Button size={size} icon="up" count={12} {...stateProps(s)}>Alle</Button>
-            <Button variant="ghost" size={size} iconEnd="chevd" {...stateProps(s)}>Mehr</Button>
+            <Button size={size} icon="up" count={12} {...stateProps(s)}>{t("ui.kit.all")}</Button>
+            <Button variant="ghost" size={size} iconEnd="chevd" {...stateProps(s)}>{t("ui.kit.more")}</Button>
           </span>
         ))}
       </Row>
@@ -107,13 +109,14 @@ function IconTable() {
 }
 
 function PxSwitch() {
+  const { t } = useI18n();
   const px = useSettings((s) => s.pxSize);
   const set = useSettings((s) => s.set);
   const [, bump] = useState(0);
   useEffect(() => onPxChange(() => bump((n) => n + 1)), []);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <span style={cap}>Pixelstufe</span>
+      <span style={cap}>{t("ui.kit.pxSize")}</span>
       {(["s", "m", "l"] as PxSize[]).map((p) => (
         <Button key={p} size="s" variant={p === px ? "primary" : "secondary"} onClick={() => set({ pxSize: p })} aria-pressed={p === px}>
           {p}
@@ -127,6 +130,7 @@ function PxSwitch() {
 }
 
 export function KitPage() {
+  const { t } = useI18n();
   return (
     <div className="page">
       <PageHeader title="Pixel-Kit">
@@ -134,75 +138,75 @@ export function KitPage() {
       </PageHeader>
 
       {SIZES.map((s) => (
-        <Section key={s} title={`Knopf ${s}`}>
+        <Section key={s} title={t("ui.kit.buttonMatrix", { size: s })}>
           <ButtonMatrix size={s} />
         </Section>
       ))}
 
-      <Section title="Breite, kompakt, Zurück">
+      <Section title={t("ui.kit.widthRow")}>
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <Button variant="primary" width={160}>Speichern</Button>
-          <Button width={160}>Abbrechen</Button>
-          <Button icon="up" count={3} compactBelow={1180}>Alle aktualisieren</Button>
-          <BackLink onClick={() => undefined}>Bibliothek</BackLink>
-          <span style={{ width: 240 }}><Button variant="primary" icon="play" width="full">Volle Breite</Button></span>
+          <Button variant="primary" width={160}>{t("common.save")}</Button>
+          <Button width={160}>{t("common.cancel")}</Button>
+          <Button icon="up" count={3} compactBelow={1180}>{t("ui.kit.updateAll")}</Button>
+          <BackLink onClick={() => undefined}>{t("ui.nav.library")}</BackLink>
+          <span style={{ width: 240 }}><Button variant="primary" icon="play" width="full">{t("ui.kit.fullWidth")}</Button></span>
         </div>
       </Section>
 
-      <Section title="Fensterleiste">
+      <Section title={t("ui.window.bar")}>
         <div style={{ display: "flex", gap: 4, alignItems: "center", height: 48, padding: "0 8px", background: "var(--bg-2)" }}>
           <BarButton><Icon name="tasks" /></BarButton>
           <BarButton data-force="hover"><Icon name="gear" /> hover</BarButton>
-          <BarButton current><Icon name="gear" /> aktuell</BarButton>
-          <BarButton expanded><Icon name="user" /> offen</BarButton>
+          <BarButton current><Icon name="gear" /> {t("ui.kit.current")}</BarButton>
+          <BarButton expanded><Icon name="user" /> {t("ui.kit.openState")}</BarButton>
           <BarButton data-force="press"><Icon name="gear" /> press</BarButton>
         </div>
       </Section>
 
-      <Section title="Über Szene">
+      <Section title={t("ui.kit.onScene")}>
         <div style={{ position: "relative", height: 220, overflow: "hidden" }}>
           <PixelScene bio="forest" seed={7} className="scene" />
           <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 12, padding: 16, ["--acc" as string]: BIOMES.forest.acc }}>
-            <BackLink onScene onClick={() => undefined}>Bibliothek</BackLink>
+            <BackLink onScene onClick={() => undefined}>{t("ui.nav.library")}</BackLink>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              {STATES.map((st) => <Button key={st} variant="ghost" onScene icon="folder" {...stateProps(st)}>Ordner {st}</Button>)}
-              <Button variant="ghost" tone="warn" onScene icon="warn">Warnung</Button>
+              {STATES.map((st) => <Button key={st} variant="ghost" onScene icon="folder" {...stateProps(st)}>{t("ui.kit.folderState", { state: st })}</Button>)}
+              <Button variant="ghost" tone="warn" onScene icon="warn">{t("ui.kit.warning")}</Button>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              {STATES.map((st) => <Button key={st} onScene icon="up" {...stateProps(st)}>Sek. {st}</Button>)}
-              {STATES.map((st) => <IconButton key={st} onScene icon="more" label={`Mehr ${st}`} tip={false} {...stateProps(st)} />)}
-              <Button variant="primary" size="l" icon="play">Spielen</Button>
+              {STATES.map((st) => <Button key={st} onScene icon="up" {...stateProps(st)}>{t("ui.kit.secState", { state: st })}</Button>)}
+              {STATES.map((st) => <IconButton key={st} onScene icon="more" label={t("ui.kit.moreState", { state: st })} tip={false} {...stateProps(st)} />)}
+              <Button variant="primary" size="l" icon="play">{t("common.play")}</Button>
             </div>
             <Meta onScene items={[<><Count value="1.21.4" /></>, "Fabric", <><Icon name="clock" size="s" /> vor 2 Std.</>, <><Count value={42} /> Mods</>]} />
           </div>
         </div>
       </Section>
 
-      <Section title="Overlay-Kontext (Hover eine Stufe heller)">
+      <Section title={t("ui.kit.overlayContext")}>
         <div className="plate" style={{ display: "flex", gap: 8, padding: 16, alignItems: "center" }}>
-          {STATES.map((st) => <Button key={st} variant="ghost" icon="copy" {...stateProps(st)}>Kopieren {st}</Button>)}
-          {STATES.map((st) => <IconButton key={st} icon="x" label={`Schließen ${st}`} tip={false} {...stateProps(st)} />)}
+          {STATES.map((st) => <Button key={st} variant="ghost" icon="copy" {...stateProps(st)}>{t("ui.kit.copyState", { state: st })}</Button>)}
+          {STATES.map((st) => <IconButton key={st} icon="x" label={t("ui.kit.closeState", { state: st })} tip={false} {...stateProps(st)} />)}
         </div>
       </Section>
 
-      <Section title="Chips">
+      <Section title={t("ui.kit.chips")}>
         <div style={grid("110px repeat(6, max-content)")}>
-          <Head cols={["neutral", "acc", "warn", "bad", "run", "fest 120"]} />
+          <Head cols={["neutral", "acc", "warn", "bad", "run", t("ui.kit.fixedCol")]} />
           <Row label="m">
             <Chip>Fabric</Chip>
-            <Chip tone="acc" icon="play">Läuft</Chip>
-            <Chip tone="warn" icon="warn">2 Warnungen</Chip>
-            <Chip tone="bad" dot>Fehler</Chip>
-            <Chip tone="run" dot>Wird installiert <Count value={7} minDigits={3} /></Chip>
-            <Chip fixed={120} tone="run" dot>Wird installiert sehr lang</Chip>
+            <Chip tone="acc" icon="play">{t("ui.kit.running")}</Chip>
+            <Chip tone="warn" icon="warn">{t("ui.kit.warnings")}</Chip>
+            <Chip tone="bad" dot>{t("common.error")}</Chip>
+            <Chip tone="run" dot>{t("ui.kit.installing")} <Count value={7} minDigits={3} /></Chip>
+            <Chip fixed={120} tone="run" dot>{t("ui.kit.installingLong")}</Chip>
           </Row>
           <Row label="s">
             <Chip size="s">Fabric</Chip>
-            <Chip size="s" tone="acc" dot>Aktuell</Chip>
-            <Chip size="s" tone="warn" dot>Alt</Chip>
-            <Chip size="s" tone="bad" dot>Kaputt</Chip>
-            <Chip size="s" tone="run" dot>Lädt <Count value={42} minDigits={3} /></Chip>
-            <Chip size="s" fixed={120}>Neutral fest</Chip>
+            <Chip size="s" tone="acc" dot>{t("ui.kit.chipCurrent")}</Chip>
+            <Chip size="s" tone="warn" dot>{t("ui.kit.chipOutdated")}</Chip>
+            <Chip size="s" tone="bad" dot>{t("ui.kit.chipBroken")}</Chip>
+            <Chip size="s" tone="run" dot>{t("ui.kit.loading")} <Count value={42} minDigits={3} /></Chip>
+            <Chip size="s" fixed={120}>{t("ui.kit.neutralFixed")}</Chip>
           </Row>
         </div>
         <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
@@ -210,7 +214,7 @@ export function KitPage() {
           <Count value={5} minDigits={3} muted />
         </div>
         <Meta items={["Minecraft 1.21.4", <><Icon name="plug" size="s" /> <Count value={42} /> Mods</>, "vor 2 Std."]} />
-        <Meta size="l" items={["Groß", <><Count value={3} /> Welten</>, null, "Ende"]} />
+        <Meta size="l" items={[t("ui.kit.large"), <><Count value={3} /> {t("common.worlds")}</>, null, t("ui.kit.end")]} />
       </Section>
 
       <FormsSection />

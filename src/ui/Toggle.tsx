@@ -1,4 +1,5 @@
 import { useEffect, useRef, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { Icon } from "./Icon";
 import { Count } from "./Chip";
@@ -102,10 +103,12 @@ export function Segmented<V extends string>(props: Omit<TabsProps<V>, "variant" 
  * Segmente über `max` sind gesperrt (mehr hat der PC nicht übrig).
  * `showMax`: Grenze „max. N GB“ unter dem letzten freien Segment · `showValue`: Wert als Pixelzahl rechts (feste Breite, aus = grau).
  */
-export function SegSlider({ value, onChange, disabled, max = 16, label = "Arbeitsspeicher", id, showMax, showValue }: {
+export function SegSlider({ value, onChange, disabled, max = 16, label, id, showMax, showValue }: {
   value: number; onChange: (gb: number) => void; disabled?: boolean; max?: number; label?: string; id?: string; showMax?: boolean; showValue?: boolean;
 }) {
+  const { t } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
+  const name = label ?? t("ui.memory.label");
   const top = Math.max(1, Math.min(16, Math.floor(max)));
   const v = Math.max(1, Math.min(top, Math.round(value)));
   const set = (n: number) => onChange(Math.max(1, Math.min(top, Math.round(n))));
@@ -132,7 +135,7 @@ export function SegSlider({ value, onChange, disabled, max = 16, label = "Arbeit
       className="vx-slider"
       role="slider"
       tabIndex={disabled ? -1 : 0}
-      aria-label={label}
+      aria-label={name}
       aria-valuemin={1}
       aria-valuemax={top}
       aria-valuenow={v}
@@ -156,7 +159,7 @@ export function SegSlider({ value, onChange, disabled, max = 16, label = "Arbeit
       <div className="vx-slw-c" style={{ "--free": `${((16 - top) / 16) * 100}%` } as CSSProperties}>
         {slider}
         {/* Grenze unter dem letzten freien Segment; bei 16 unter dem Ende */}
-        {showMax && <span className="vx-slw-cap" aria-hidden>max. {top} GB</span>}
+        {showMax && <span className="vx-slw-cap" aria-hidden>{t("ui.memory.max", { n: top })}</span>}
       </div>
       {showValue && <Count value={`${v} GB`} size={26} muted={disabled} />}
     </div>

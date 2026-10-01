@@ -5,6 +5,7 @@ import { detail } from "./de/detail.ts";
 import { format } from "./de/format.ts";
 import { hooks } from "./de/hooks.ts";
 import { pages } from "./de/pages.ts";
+import { ui } from "./de/ui.ts";
 
 /** Deutsches Wörterbuch – Quelle der Wahrheit. Neue Namensräume hier anmelden. */
-export const de = { ...common, ...components, ...detail, ...format, ...hooks, ...pages } satisfies Dict;
+export const de = { ...common, ...components, ...detail, ...format, ...hooks, ...pages, ...ui } satisfies Dict;

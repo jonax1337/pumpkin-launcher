@@ -6,6 +6,7 @@ import { type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { Toaster as Sonner } from "sonner";
 import { cn } from "@/lib/utils";
 import { Buddy } from "@/branding/Brand";
+import { useI18n } from "@/i18n";
 import { ICON_DATA } from "@/pixel/icon-data";
 import { Icon } from "./Icon";
 import { Button, IconButton, buttonClass } from "./Button";
@@ -62,6 +63,7 @@ const message = (error: unknown) => (error instanceof Error ? error.message : St
 
 /** Fehler in Alltagssprache; mit `title` ist die Backend-Meldung das Detail. `onRetry` → „Erneut versuchen“. */
 export function ErrorBox({ error, title, onRetry, className }: { error: unknown; title?: string; onRetry?: () => void; className?: string }) {
+  const { t } = useI18n();
   return (
     <StatusPanel
       tone="bad"
@@ -69,7 +71,7 @@ export function ErrorBox({ error, title, onRetry, className }: { error: unknown;
       role="alert"
       className={className}
       title={title ?? message(error)}
-      actions={onRetry && <Button size="s" icon="redo" onClick={onRetry}>Erneut versuchen</Button>}
+      actions={onRetry && <Button size="s" icon="redo" onClick={onRetry}>{t("common.retry")}</Button>}
     >
       {title ? message(error) : undefined}
     </StatusPanel>
@@ -83,10 +85,12 @@ export function ErrorBox({ error, title, onRetry, className }: { error: unknown;
  * `label` ist der zugängliche Name (worum es geht, z. B. „Mods herunterladen“); `decorative` blendet ihn für Screenreader aus,
  * wenn derselbe Fortschritt schon anders angesagt wird. `tone`: Füllfarbe (Standard Akzent).
  */
-export function Progress({ p, thin, tone, label = "Fortschritt", decorative, width, className, style }: {
+export function Progress({ p, thin, tone, label, decorative, width, className, style }: {
   p?: number | null; thin?: boolean; tone?: "acc" | "bad" | "run" | "warn"; label?: string; decorative?: boolean; width?: number | "full"; className?: string; style?: CSSProperties;
 }) {
+  const { t } = useI18n();
   const ind = p == null;
+  const name = label ?? t("ui.progress.label");
   const v = ind ? 0 : Math.max(0, Math.min(1, p));
   const look = {
     className: cn("vx-prog", className),
@@ -96,7 +100,7 @@ export function Progress({ p, thin, tone, label = "Fortschritt", decorative, wid
     style: { ...style, ...(width != null && { width: width === "full" ? "100%" : width }), ["--p" as string]: v },
   };
   if (decorative) return <span aria-hidden {...look} />;
-  return <span role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={ind ? undefined : Math.round(v * 100)} {...look} />;
+  return <span role="progressbar" aria-label={name} aria-valuemin={0} aria-valuemax={100} aria-valuenow={ind ? undefined : Math.round(v * 100)} {...look} />;
 }
 
 /**
@@ -107,6 +111,7 @@ export function Progress({ p, thin, tone, label = "Fortschritt", decorative, wid
 export function JobProgress({ label, sub, p, width, onCancel, cancelLabel, className }: {
   label: string; sub?: ReactNode; p: number | null; width?: 112 | 120 | 230; onCancel?: () => void; cancelLabel?: string; className?: string;
 }) {
+  const { t } = useI18n();
   return (
     <div className={cn("vx-job", className)}>
       <div className="vx-job-m" role="status" style={width ? { width } : undefined} data-w={width ? "" : undefined}>
@@ -117,7 +122,7 @@ export function JobProgress({ label, sub, p, width, onCancel, cancelLabel, class
         <Progress thin={width !== 230} p={p} label={label} />
         {sub != null && sub !== "" && <span className="vx-job-s vx-trunc">{sub}</span>}
       </div>
-      {onCancel && <IconButton icon="x" size="s" label={cancelLabel ?? `${label} abbrechen`} tip="Abbrechen" onClick={onCancel} />}
+      {onCancel && <IconButton icon="x" size="s" label={cancelLabel ?? t("ui.job.cancelAria", { label })} tip={t("common.cancel")} onClick={onCancel} />}
     </div>
   );
 }
@@ -136,6 +141,7 @@ export function Skel({ w, h, className, style }: { w?: number | string; h?: numb
  * Schließen als Symbolknopf s. Einmal in main.tsx eingehängt.
  */
 export function Toaster() {
+  const { t } = useI18n();
   return (
     <Sonner
       position="bottom-right"
@@ -143,7 +149,7 @@ export function Toaster() {
       gap={8}
       offset={20}
       visibleToasts={4}
-      containerAriaLabel="Benachrichtigungen"
+      containerAriaLabel={t("ui.toast.containerAria")}
       icons={{
         success: <Buddy mood="success" size={48} />,
         info: <Buddy mood="hello" size={48} />,
@@ -155,7 +161,7 @@ export function Toaster() {
       toastOptions={{
         unstyled: true,
         duration: 6500,
-        closeButtonAriaLabel: "Schließen",
+        closeButtonAriaLabel: t("common.close"),
         classNames: {
           toast: "vx-toast",
           actionButton: buttonClass({ variant: "ghost", size: "s", tone: "acc" }),
