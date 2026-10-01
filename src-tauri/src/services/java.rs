@@ -129,53 +129,68 @@ pub fn custom_java(path: &str, setting: JavaSetting) -> AppResult<PathBuf> {
     Ok(path)
 }
 
+/// Rechte ausführbarer Runtime-Dateien (`rwxr-xr-x`).
+#[cfg(unix)]
+const EXECUTABLE_MODE: u32 = 0o755;
+
 /// Lädt die Runtime `component` (z. B. `java-runtime-delta`) nach `runtime/<component>/`
 /// und liefert den Pfad der Java-Programmdatei.
-pub async fn ensure(
-    client: &reqwest::Client,
-    dirs: &Dirs,
-    component: &str,
-    on_done: CountFn<'_>,
-) -> AppResult<PathBuf> {
-    let (os, arch) = (std::env::consts::OS, std::env::consts::ARCH);
-    let mut all: HashMap<String, HashMap<String, Vec<RuntimeEntry>>> =
-        download::get_json(client, RUNTIMES_URL).await?;
-    let entry = runtime_platforms(os, arch)
-        .iter()
-        .find_map(|platform| all.get_mut(*platform)?.remove(component)?.into_iter().next())
-        .ok_or_else(|| AppError::NotFound { kind: "Java-Runtime", id: format!("{component} ({os} {arch})") })?;
-    let manifest: RuntimeManifest = download::get_json(client, &entry.manifest.url).await?;
-
+pub async fn ensure(client: &reqwest::Client, dirs: &Dirs, component: &str, on_done: CountFn<'_>) -> AppResult<PathBuf> {
+    let manifest = runtime_manifest(client, component).await?;
     let base = dirs.runtime(component);
-    let mut jobs = Vec::new();
-    for (path, file) in &manifest.files {
-        let target = base.join(Path::new(path));
-        match (file.kind.as_str(), &file.downloads) {
-            ("directory", _) => tokio::fs::create_dir_all(&target).await?,
-            ("file", Some(d)) => jobs.push(Job { url: d.raw.url.clone(), path: target, sha1: Some(d.raw.sha1.clone()) }),
-            _ => {} // Links: siehe unten
-        }
-    }
+    let jobs = runtime_files(&manifest, &base).await?;
     download::fetch_all(client, jobs, on_done).await?;
-
     #[cfg(unix)]
-    for (path, file) in &manifest.files {
-        use std::os::unix::fs::PermissionsExt;
-        let target = base.join(path);
-        if file.kind == "link" {
-            if let (Some(link), Err(_)) = (&file.target, tokio::fs::symlink_metadata(&target).await) {
-                tokio::fs::symlink(link, &target).await?;
-            }
-        } else if file.executable {
-            tokio::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await?;
-        }
-    }
+    apply_unix_modes(&manifest, &base).await?;
 
     let exe = java_exe(dirs, component);
     if !exe.exists() {
         return Err(AppError::Download(format!("Java-Runtime unvollständig: {} fehlt", exe.display())));
     }
     Ok(exe)
+}
+
+/// Dateiliste der Runtime für diese Plattform (siehe `runtime_platforms`).
+async fn runtime_manifest(client: &reqwest::Client, component: &str) -> AppResult<RuntimeManifest> {
+    let (os, arch) = (std::env::consts::OS, std::env::consts::ARCH);
+    let mut all: HashMap<String, HashMap<String, Vec<RuntimeEntry>>> = download::get_json(client, RUNTIMES_URL).await?;
+    let entry = runtime_platforms(os, arch)
+        .iter()
+        .find_map(|platform| all.get_mut(*platform)?.remove(component)?.into_iter().next())
+        .ok_or_else(|| AppError::NotFound { kind: "Java-Runtime", id: format!("{component} ({os} {arch})") })?;
+    download::get_json(client, &entry.manifest.url).await
+}
+
+/// Legt die Ordner der Runtime an und liefert die Downloads ihrer Dateien. Links entstehen erst danach
+/// (`apply_unix_modes`), weil sie auf geladene Dateien zeigen.
+async fn runtime_files(manifest: &RuntimeManifest, base: &Path) -> AppResult<Vec<Job>> {
+    let mut jobs = Vec::new();
+    for (path, file) in &manifest.files {
+        let target = base.join(Path::new(path));
+        match (file.kind.as_str(), &file.downloads) {
+            ("directory", _) => tokio::fs::create_dir_all(&target).await?,
+            ("file", Some(d)) => jobs.push(Job::from_download(&d.raw, target)),
+            _ => {}
+        }
+    }
+    Ok(jobs)
+}
+
+/// Links anlegen und Exec-Bits setzen; beides kennt nur Unix.
+#[cfg(unix)]
+async fn apply_unix_modes(manifest: &RuntimeManifest, base: &Path) -> AppResult<()> {
+    use std::os::unix::fs::PermissionsExt;
+    for (path, file) in &manifest.files {
+        let target = base.join(path);
+        if file.kind == "link" {
+            if let (Some(link), Err(_)) = (&file.target, tokio::fs::symlink_metadata(&target).await) {
+                tokio::fs::symlink(link, &target).await?;
+            }
+        } else if file.executable {
+            tokio::fs::set_permissions(&target, std::fs::Permissions::from_mode(EXECUTABLE_MODE)).await?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
