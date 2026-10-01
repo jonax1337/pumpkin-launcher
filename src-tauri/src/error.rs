@@ -1,7 +1,9 @@
+use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
 
-/// Zentraler Fehlertyp des Backends. Wird an das Frontend als lesbarer Satz serialisiert;
-/// technische Details folgen nach „ – Details: “.
+/// Zentraler Fehlertyp des Backends. Wird an das Frontend als `{ code, message }` serialisiert:
+/// `message` ist ein lesbarer Satz (technische Details folgen nach „ – Details: “), `code` ein stabiler
+/// Schlüssel, an dem das Frontend Fälle erkennt, ohne den Text zu vergleichen.
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
     #[error("{}", io_text(.0))]
@@ -41,6 +43,27 @@ impl AppError {
     /// Fehler mit einer Meldung, die der Nutzer so lesen soll.
     pub fn invalid(message: impl Into<String>) -> Self {
         Self::Invalid(message.into())
+    }
+
+    /// Stabiler Schlüssel der Fehlerart für das Frontend; ändert sich nie, auch wenn der Text umformuliert wird.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Io(_) => "io",
+            Self::Json(_) => "json",
+            Self::Http(_) => "http",
+            Self::Zip(_) => "zip",
+            Self::Nbt(_) => "nbt",
+            Self::Download(_) => "download",
+            Self::Upload(_) => "upload",
+            Self::Tauri(_) => "tauri",
+            Self::Keyring(_) => "keyring",
+            Self::Trash(_) => "trash",
+            Self::Sqlite(_) => "sqlite",
+            Self::NotFound { .. } => "not_found",
+            Self::Invalid(_) => "invalid",
+            Self::Refused(_) => "refused",
+            Self::Cancelled => "cancelled",
+        }
     }
 
     /// Fehlte die Datei oder der Ordner?
@@ -97,7 +120,10 @@ fn http_text(err: &reqwest::Error) -> String {
 
 impl Serialize for AppError {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.to_string())
+        let mut wire = serializer.serialize_struct("AppError", 2)?;
+        wire.serialize_field("code", self.code())?;
+        wire.serialize_field("message", &self.to_string())?;
+        wire.end()
     }
 }
 
@@ -146,6 +172,18 @@ mod tests {
     fn unix_codes_read_by_kind() {
         starts(Error::from_raw_os_error(libc::ENOSPC).into(), "Auf der Festplatte ist nicht genug Platz");
         starts(Error::from_raw_os_error(libc::EPIPE).into(), "Beim Lesen oder Schreiben");
+    }
+
+    #[test]
+    fn errors_reach_the_frontend_as_code_and_message() {
+        let json = |err: AppError| serde_json::to_value(err).unwrap();
+        assert_eq!(json(AppError::Cancelled), serde_json::json!({ "code": "cancelled", "message": "Vorgang abgebrochen" }));
+        assert_eq!(
+            json(AppError::NotFound { kind: "Welt", id: "x".into() }),
+            serde_json::json!({ "code": "not_found", "message": "Welt „x“ wurde nicht gefunden" })
+        );
+        assert_eq!(json(AppError::invalid("Instanz läuft noch")), serde_json::json!({ "code": "invalid", "message": "Instanz läuft noch" }));
+        assert_eq!(json(Error::other("kaputt").into())["code"], "io");
     }
 
     #[tokio::test]
