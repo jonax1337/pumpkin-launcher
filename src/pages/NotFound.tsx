@@ -1,16 +1,18 @@
 import { ButtonLink, Empty } from "@/ui";
 import { Buddy } from "@/branding/Brand";
+import { useI18n } from "@/i18n";
 
 export function NotFoundPage() {
+  const { t } = useI18n();
   return (
     <section className="page">
       <Empty
         ill={<Buddy mood="oops" size={144} />}
-        title="Seite nicht gefunden"
+        title={t("pages.notFound.title")}
         asPage
-        actions={<ButtonLink to="/" variant="primary" icon="back">Zum Start</ButtonLink>}
+        actions={<ButtonLink to="/" variant="primary" icon="back">{t("pages.notFound.backToHome")}</ButtonLink>}
       >
-        Diese Adresse gibt es in Pumpkin Launcher nicht (mehr).
+        {t("pages.notFound.body")}
       </Empty>
     </section>
   );

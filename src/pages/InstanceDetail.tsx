@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { useView } from "@/app/Layout";
+import { useI18n } from "@/i18n";
 import { Actions, BackLink, Button, Count, ErrorBox, Icon, IconButton, Meta, Skel, TabPanel, Tabs, type TabItem } from "@/ui";
 import { LogConsole, PlayButton, PlayStatus, StatusChip, usePhase } from "@/components/game";
 import { playtimeLine } from "@/components/common";
@@ -62,30 +63,31 @@ function useCompactHead(ready: boolean) {
 }
 
 function InstanceDetail({ id }: { id: string }) {
+  const { t } = useI18n();
   const { data: instance, error, refetch } = useInstance(id);
   const look = useLook(id);
   const [params, setParams] = useSearchParams();
-  const tab = TABS.find((t) => t === params.get("tab")) ?? "content";
-  const setTab = (t: Tab) => setParams({ tab: t }, { replace: true });
+  const tab = TABS.find((tb) => tb === params.get("tab")) ?? "content";
+  const setTab = (next: Tab) => setParams({ tab: next }, { replace: true });
   const { head, compact } = useCompactHead(!!instance);
 
   if (error)
     return (
       <section className="page">
-        <BackLink to="/instances">Bibliothek</BackLink>
-        <ErrorBox className="mt-4" title="Diese Instanz konnte nicht geladen werden" error={error} onRetry={() => void refetch()} />
+        <BackLink to="/instances">{t("pages.detail.backToLibrary")}</BackLink>
+        <ErrorBox className="mt-4" title={t("pages.detail.loadErrorTitle")} error={error} onRetry={() => void refetch()} />
       </section>
     );
 
   if (!instance)
     return (
-      <section className="detail" aria-busy aria-label="Wird geladen">
+      <section className="detail" aria-busy aria-label={t("pages.detail.loadingLabel")}>
         <header className="dhead">
           <PixelScene bio={look.bio} seed={look.seed} mode="live" className="scene" />
           <div className="shade-head" />
           <div className="dh-full">
             <div className="dh-info">
-              <div className="flex"><BackLink to="/instances" onScene>Bibliothek</BackLink></div>
+              <div className="flex"><BackLink to="/instances" onScene>{t("pages.detail.backToLibrary")}</BackLink></div>
               <Skel h={48} w="min(460px, 60%)" />
               <Skel h={28} w={280} />
             </div>
@@ -102,6 +104,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
   instance: Instance; tab: Tab; setTab: (t: Tab) => void; head: React.RefObject<HTMLElement | null>; compact: boolean;
 }) {
   const navigate = useNavigate();
+  const { t } = useI18n();
   const narrow = useNarrow();
   const look = useLook(instance.id);
   const [adding, setAdding] = useState(false);
@@ -117,7 +120,8 @@ function Loaded({ instance, tab, setTab, head, compact }: {
     () => mods.mutate({ ...instance, mods: instance.mods.map((m) => (projectOf(m) === IRIS_PROJECT_ID ? { ...m, enabled: true } : m)) }),
   );
   const nUpd = updateFor.size;
-  const warnText = warnTotal ? `${warnTotal} ${warnTotal === 1 ? "Hinweis" : "Hinweise"}` : "";
+  // Anzahl der Hinweise als Text (für Vorleser und Tooltip), mit Einzahl/Mehrzahl.
+  const warnText = warnTotal ? t(warnTotal === 1 ? "pages.detail.warningCount.one" : "pages.detail.warningCount.other", { n: warnTotal }) : "";
   // Der Spielen-Knopf zeigt den Zustand; in der Infozeile bleibt nur ein Absturz als Hinweis.
   const crashed = usePhase(instance.id) === "crashed";
   const toLog = () => setTab("console");
@@ -129,7 +133,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
   const tabs: TabItem<Tab>[] = [
     {
       value: "content",
-      label: "Inhalte",
+      label: t("pages.detail.tabContent"),
       count: instance.mods.length,
       // Warnsymbol: Platz bleibt reserviert (kein Springen); die Anzahl auch für Screenreader, nicht nur im Tooltip.
       badge: (
@@ -140,10 +144,10 @@ function Loaded({ instance, tab, setTab, head, compact }: {
       ),
       tip: warnText || undefined,
     },
-    { value: "worlds", label: "Welten" },
-    { value: "screenshots", label: "Screenshots" },
-    { value: "console", label: "Protokoll" },
-    { value: "settings", label: "Einstellungen" },
+    { value: "worlds", label: t("common.worlds") },
+    { value: "screenshots", label: t("pages.detail.tabScreenshots") },
+    { value: "console", label: t("pages.detail.tabConsole") },
+    { value: "settings", label: t("common.settings") },
   ];
 
   return (
@@ -153,7 +157,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
         <div className="shade-head" />
         <div className="dh-full" aria-hidden={compact || undefined}>
           <div className="dh-info">
-            <div className="flex"><BackLink to="/instances" onScene>Bibliothek</BackLink></div>
+            <div className="flex"><BackLink to="/instances" onScene>{t("pages.detail.backToLibrary")}</BackLink></div>
             <h1 title={instance.name}>{instance.name}</h1>
             {/* Infos als ruhiger Text, Absturz als Chip, Updates als Knopf: was klickbar ist, sieht so aus. */}
             <div className="dh-meta">
@@ -161,12 +165,12 @@ function Loaded({ instance, tab, setTab, head, compact }: {
                 size="l"
                 onScene
                 className="overflow-hidden"
-                items={[version, !narrow && instance.loaderVersion && <>Loader <Count value={instance.loaderVersion} size={20} /></>, !narrow && playtimeLine(instance)]}
+                items={[version, !narrow && instance.loaderVersion && <>{t("pages.detail.loaderWord")} <Count value={instance.loaderVersion} size={20} /></>, !narrow && playtimeLine(instance)]}
               />
               {crashed && <StatusChip instance={instance} />}
               {nUpd > 0 && (
                 <Button size="s" icon="up" count={nUpd} onScene onClick={showUpdates} tabIndex={compact ? -1 : undefined}>
-                  {nUpd === 1 ? "Update" : "Updates"}
+                  {nUpd === 1 ? t("pages.detail.updateCount.one") : t("pages.detail.updateCount.other")}
                 </Button>
               )}
             </div>
@@ -180,7 +184,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
           </div>
         </div>
         <div className="dh-compact" aria-hidden={!compact}>
-          <IconButton size="s" icon="back" label="Zur Bibliothek" onScene tabIndex={compact ? 0 : -1} onClick={() => navigate("/instances")} />
+          <IconButton size="s" icon="back" label={t("pages.detail.toLibraryLabel")} onScene tabIndex={compact ? 0 : -1} onClick={() => navigate("/instances")} />
           <h2 title={instance.name}>{instance.name}</h2>
           {!narrow && <Meta onScene className="flex-none" items={[version]} />}
           <PlayButton instance={instance} size="m" onLaunched={toLog} tabIndex={compact ? 0 : -1} />
@@ -188,7 +192,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
       </header>
 
       {/* Leiste klebt unter dem kompakten Kopf; .dtabs gibt nur den Seitenrand (Seitengerüst). */}
-      <Tabs idBase="dt" sticky="var(--dc)" className="dtabs" label="Bereiche der Instanz" items={tabs} value={tab} onChange={setTab} />
+      <Tabs idBase="dt" sticky="var(--dc)" className="dtabs" label={t("pages.detail.tabsLabel")} items={tabs} value={tab} onChange={setTab} />
 
       <TabPanel idBase="dt" value={tab} className="dbody">
         {/* Bleibt gemountet: Auswahl und Platzhalter entfernter Inhalte überleben den Tabwechsel. */}
