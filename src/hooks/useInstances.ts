@@ -26,6 +26,9 @@ export function useInstances() {
 export const groupsOf = (instances: Instance[]) =>
   [...new Set(instances.flatMap((i) => (i.group ? [i.group] : [])))].sort((a, b) => a.localeCompare(b, "de"));
 
+/** Anzeige für Instanzen ohne Gruppe (Bibliothek und Einstellungen). */
+export const UNGROUPED = "Ohne Gruppe";
+
 export function useGroups() {
   return useQuery({ queryKey: instanceKeys.all, queryFn: api.listInstances, select: groupsOf }).data ?? [];
 }

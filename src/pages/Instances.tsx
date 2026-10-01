@@ -4,7 +4,7 @@ import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
 import { loaderLine, playtimeLine } from "@/components/common";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
 import { useBackgroundUpdates, useModUpdates } from "@/hooks/useContent";
-import { groupsOf, useInstances } from "@/hooks/useInstances";
+import { groupsOf, UNGROUPED, useInstances } from "@/hooks/useInstances";
 import { formatDate, formatPlaytime, relativeTime } from "@/lib/format";
 import { ALL_LOADERS, LOADER_LABELS, type Instance, type ModLoader } from "@/lib/types";
 import { lookOf, useLookStore } from "@/store/look";
@@ -40,13 +40,11 @@ const SORTS: Record<Sort, (a: Instance, b: Instance) => number> = {
 
 type Looks = ReturnType<typeof useLookStore.getState>["looks"];
 
-const UNGROUPED = "Ohne Gruppe";
-
-/** Abschnitte je Gruppe (alphabetisch), Instanzen ohne Gruppe zuletzt; leere Abschnitte entfallen. */
-function sectionsOf(instances: Instance[]): [title: string, members: Instance[]][] {
-  const groups = groupsOf(instances).map((group): [string, Instance[]] => [group, instances.filter((i) => i.group === group)]);
+/** Abschnitte je Gruppe (alphabetisch), Instanzen ohne Gruppe (`null`) zuletzt; leere Abschnitte entfallen. */
+function sectionsOf(instances: Instance[]): [group: string | null, members: Instance[]][] {
+  const groups = groupsOf(instances).map((group): [string | null, Instance[]] => [group, instances.filter((i) => i.group === group)]);
   const ungrouped = instances.filter((i) => !i.group);
-  return ungrouped.length ? [...groups, [UNGROUPED, ungrouped]] : groups;
+  return ungrouped.length ? [...groups, [null, ungrouped]] : groups;
 }
 
 /** Anzahl bekannter Updates aus dem Cache (gefüllt vom Detail oder von `useBackgroundUpdates`). */
@@ -219,8 +217,9 @@ export function InstancesPage() {
     );
   } else if (shown.some((i) => i.group)) {
     // Gruppen als aufklappbare Abschnitte; zugeklappt bleibt ein Abschnitt, solange die Seite offen ist.
-    body = sectionsOf(shown).map(([title, members]) => (
-      <Disclosure key={title} open className="mb-4" summary={<>{title} <Count value={members.length} muted /></>}>
+    // Schlüssel ist die Gruppe selbst: eine Gruppe darf auch „Ohne Gruppe“ heißen.
+    body = sectionsOf(shown).map(([group, members]) => (
+      <Disclosure key={group ?? ""} open className="mb-4" summary={<>{group ?? UNGROUPED} <Count value={members.length} muted /></>}>
         <InstanceView instances={members} mode={mode} looks={looks} />
       </Disclosure>
     ));

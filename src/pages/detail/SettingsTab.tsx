@@ -4,7 +4,7 @@ import { Actions, Button, CardGrid, Disclosure, FormRow, FormSection, Hint, Menu
 import { JavaChooser, MemoryChooser, MemoryHelp } from "@/components/common";
 import { useInstallPercent, usePhase } from "@/components/game";
 import { askDelete, useGroupMenu } from "@/components/instance";
-import { useInstall, useUpdateInstance } from "@/hooks/useInstances";
+import { UNGROUPED, useInstall, useUpdateInstance } from "@/hooks/useInstances";
 import { LOADER_LABELS, SUPPORTED_LOADERS, type GameWindow, type Instance } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BIOME_KEYS, BIOMES } from "@/pixel/scene";
@@ -67,7 +67,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
 
   const busy = phase === "preparing" || phase === "starting" || phase === "running" || install.isPending;
   const repairing = percent != null;
-  const groupText = instance.group ?? "Keine Gruppe";
+  const groupText = instance.group ?? UNGROUPED;
 
   return (
     <div className="max-w-[var(--page-max)] pt-2">
@@ -147,7 +147,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
               onChange={(e) => setGameArgs(e.target.value)}
               onBlur={() => saveArgs("gameArgs", gameArgs)}
             />
-            <Hint id="inst-game-args-h" className="mt-1.5">Gehen an Minecraft selbst, z. B. um direkt einem Server beizutreten. Leerzeichen trennen.</Hint>
+            <Hint id="inst-game-args-h" className="mt-1.5">Gehen an Minecraft selbst, z. B. um direkt einem Server beizutreten. Leerzeichen trennen. Die Fenstergröße stellst du unter „Fenster“ ein.</Hint>
           </Disclosure>
         </FormRow>
       </FormSection>

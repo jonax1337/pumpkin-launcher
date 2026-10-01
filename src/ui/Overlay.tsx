@@ -127,7 +127,7 @@ export function Trunc({ text, as: Tag = "span", host, side = "top", className, s
 export type MenuEntry =
   | "-"
   | { label: string }
-  | { id: string; text: ReactNode; icon?: IconName; items: MenuEntry[] }
+  | { id: string; text: ReactNode; icon?: IconName; disabled?: boolean; items: MenuEntry[] }
   | { id: string; text: ReactNode; icon?: IconName; bad?: boolean; disabled?: boolean; onSelect: () => void; sub?: ReactNode; lead?: ReactNode; checked?: boolean };
 
 /** Dropdown- und Kontextmenü von Radix haben dieselben Bausteine. */
@@ -140,7 +140,7 @@ function entries(list: MenuEntry[], M: MenuKit): ReactNode[] {
     if ("items" in e)
       return (
         <M.Sub key={e.id}>
-          <M.SubTrigger className="vx-mi">
+          <M.SubTrigger className="vx-mi" disabled={e.disabled}>
             {e.icon && <Icon name={e.icon} size="s" />}
             <span className="vx-trunc">{e.text}</span>
             <Icon name="chev" size="s" className="vx-mi-sub" />

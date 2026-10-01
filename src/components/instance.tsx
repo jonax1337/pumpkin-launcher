@@ -56,7 +56,7 @@ export function useInstanceMenu(instance: Instance, opts: { open?: boolean } = {
     ...(opts.open ? [{ id: "open", text: "Instanz öffnen", icon: "chev" as const, onSelect: () => navigate(`/instances/${instance.id}`) }] : []),
     { id: "log", text: "Protokoll", icon: "term", onSelect: () => navigate(`/instances/${instance.id}?tab=console`) },
     { id: "dir", text: "Ordner öffnen", icon: "folder", onSelect: () => openInstanceFolder(instance) },
-    { id: "group", text: "Gruppe", icon: "box", items: groupItems },
+    { id: "group", text: "Gruppe", icon: "box", disabled: running || busy, items: groupItems },
     "-",
     { id: "tpl", text: "Als Vorlage speichern", icon: "save", onSelect: () => askSaveTemplate(instance) },
     "-",
