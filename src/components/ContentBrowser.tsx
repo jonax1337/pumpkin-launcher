@@ -814,7 +814,7 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
               {project.data.description && <p className="lead">{project.data.description}</p>}
               <Description body={project.data.body} />
             </div>
-            <aside className="side">
+            <aside className="proj-side">
               <Panel notch={2} pad="m">
                 <SectionHeader as="h3" size="card" title={t("components.detail.fitsHeading")} />
                 <dl className="kv">
