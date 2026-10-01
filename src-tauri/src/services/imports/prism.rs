@@ -8,7 +8,7 @@ use std::{
 use serde::Deserialize;
 
 use super::{folder_name, from_json, read_marker, split_args, Found, Setup};
-use crate::{error::AppResult, models::ModLoader, services::modrinth::invalid};
+use crate::{error::{AppError, AppResult}, models::ModLoader};
 
 #[derive(Deserialize)]
 struct Pack {
@@ -35,7 +35,7 @@ const LOADERS: [(&str, ModLoader); 4] = [
 
 pub fn read(dir: &Path) -> AppResult<Option<Found>> {
     let Some(cfg) = read_marker(&dir.join("instance.cfg"))? else { return Ok(None) };
-    let pack = read_marker(&dir.join("mmc-pack.json"))?.ok_or_else(|| invalid("mmc-pack.json fehlt"))?;
+    let pack = read_marker(&dir.join("mmc-pack.json"))?.ok_or_else(|| AppError::invalid("mmc-pack.json fehlt"))?;
     let setup = setup(&String::from_utf8_lossy(&cfg), &pack, &folder_name(dir))?;
     Ok(Some(Found { game_dir: game_dir(dir), setup }))
 }
@@ -58,7 +58,7 @@ fn setup(cfg: &str, pack: &[u8], folder: &str) -> AppResult<Setup> {
         let component = pack.components.iter().find(|c| c.uid == uid)?;
         component.version.clone().or_else(|| component.cached_version.clone())
     };
-    let minecraft_version = version("net.minecraft").ok_or_else(|| invalid("Instanz ohne Minecraft-Version"))?;
+    let minecraft_version = version("net.minecraft").ok_or_else(|| AppError::invalid("Instanz ohne Minecraft-Version"))?;
     let loader = LOADERS.iter().find(|(uid, _)| pack.components.iter().any(|c| c.uid == *uid));
     let overrides = |key: &str| cfg.get(key).is_some_and(|v| v == "true");
     Ok(Setup {

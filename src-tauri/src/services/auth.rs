@@ -2,7 +2,7 @@
 //! Minecraft-Token. Refresh-Tokens liegen im OS-Schlüsselbund (`keyring`), nie in JSON;
 //! Minecraft-Tokens nur im Speicher und mit Ablaufzeit. Anleitung: `docs/ACCOUNT-SETUP.md`.
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use md5::{Digest, Md5};
@@ -13,7 +13,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::sync::CancellationToken;
 
-use super::data_url;
+use super::{data_url, lock};
 use crate::error::{AppError, AppResult};
 use crate::models::{Account, AccountKind, MsAccount};
 use crate::state::AppState;
@@ -74,14 +74,6 @@ impl McSession {
     fn valid(&self) -> bool {
         Instant::now() + Duration::from_secs(300) < self.expires_at
     }
-}
-
-fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn say(text: impl Into<String>) -> AppError {
-    AppError::Invalid(text.into())
 }
 
 /// Client-ID der Azure-App „Pumpkin Launcher“ (öffentlicher Client, kein Geheimnis). Forks müssen eine eigene
@@ -191,7 +183,7 @@ fn parse_poll(status: u16, body: &[u8]) -> AppResult<Poll> {
     match err.error.as_str() {
         "authorization_pending" => Ok(Poll::Pending),
         "slow_down" => Ok(Poll::SlowDown),
-        _ => Err(say(oauth_text(&err))),
+        _ => Err(AppError::invalid(oauth_text(&err))),
     }
 }
 
@@ -237,7 +229,7 @@ fn parse_xbox(status: u16, body: &[u8]) -> AppResult<XboxToken> {
         #[serde(rename = "XErr")]
         code: u64,
     }
-    Err(say(match serde_json::from_slice::<XErr>(body) {
+    Err(AppError::invalid(match serde_json::from_slice::<XErr>(body) {
         Ok(XErr { code }) => format!("{} (Fehler {code})", xerr_text(code)),
         Err(_) => format!("Xbox Live hat die Anmeldung abgelehnt (Fehler {status})."),
     }))
@@ -252,9 +244,9 @@ struct McLogin {
 fn parse_mc_login(status: u16, body: &[u8]) -> AppResult<McLogin> {
     match status {
         s if ok(s) => Ok(serde_json::from_slice(body)?),
-        403 => Err(say("Microsoft hat diesen Launcher noch nicht für Minecraft freigeschaltet. Die Freigabe der App steht noch aus.")),
-        429 => Err(say("Zu viele Anmeldeversuche in kurzer Zeit. Warte ein paar Minuten und versuch es erneut.")),
-        s => Err(say(format!("Die Anmeldung bei Minecraft ist fehlgeschlagen (Fehler {s})."))),
+        403 => Err(AppError::invalid("Microsoft hat diesen Launcher noch nicht für Minecraft freigeschaltet. Die Freigabe der App steht noch aus.")),
+        429 => Err(AppError::invalid("Zu viele Anmeldeversuche in kurzer Zeit. Warte ein paar Minuten und versuch es erneut.")),
+        s => Err(AppError::invalid(format!("Die Anmeldung bei Minecraft ist fehlgeschlagen (Fehler {s})."))),
     }
 }
 
@@ -284,12 +276,12 @@ fn parse_profile(status: u16, body: &[u8], owns: bool) -> AppResult<Profile> {
     match status {
         s if ok(s) => {
             let p: Profile = serde_json::from_slice(body)?;
-            let id = uuid::Uuid::parse_str(&p.id).map_err(|_| say("Minecraft hat ein ungültiges Profil geliefert."))?;
+            let id = uuid::Uuid::parse_str(&p.id).map_err(|_| AppError::invalid("Minecraft hat ein ungültiges Profil geliefert."))?;
             Ok(Profile { id: id.hyphenated().to_string(), name: p.name })
         }
-        404 if owns => Err(say("Zu diesem Konto gibt es noch kein Minecraft-Profil. Starte einmal den offiziellen Minecraft Launcher und wähle einen Spielernamen.")),
-        404 => Err(say("Dieses Microsoft-Konto besitzt Minecraft: Java Edition nicht.")),
-        s => Err(say(format!("Das Minecraft-Profil konnte nicht geladen werden (Fehler {s})."))),
+        404 if owns => Err(AppError::invalid("Zu diesem Konto gibt es noch kein Minecraft-Profil. Starte einmal den offiziellen Minecraft Launcher und wähle einen Spielernamen.")),
+        404 => Err(AppError::invalid("Dieses Microsoft-Konto besitzt Minecraft: Java Edition nicht.")),
+        s => Err(AppError::invalid(format!("Das Minecraft-Profil konnte nicht geladen werden (Fehler {s})."))),
     }
 }
 
@@ -319,7 +311,7 @@ async fn minecraft(client: &reqwest::Client, ms_access_token: &str) -> AppResult
     });
     let (status, bytes) = send(client.post(XSTS_AUTH).json(&body)).await?;
     let xsts = parse_xbox(status, &bytes)?;
-    let xui = xsts.display_claims.xui.first().ok_or_else(|| say("Xbox Live hat kein Profil geliefert."))?;
+    let xui = xsts.display_claims.xui.first().ok_or_else(|| AppError::invalid("Xbox Live hat kein Profil geliefert."))?;
     let body = json!({ "identityToken": format!("XBL3.0 x={};{}", xui.uhs, xsts.token) });
     let (status, bytes) = send(client.post(MC_LOGIN).json(&body)).await?;
     let login = parse_mc_login(status, &bytes)?;
@@ -402,7 +394,7 @@ async fn start_device(state: &AppState, client_id: String) -> AppResult<LoginSta
     let (status, body) =
         post_form(&state.http, &format!("{LOGIN}/devicecode"), &[("client_id", &client_id), ("scope", SCOPE)]).await?;
     if !ok(status) {
-        return Err(say(oauth_text(&serde_json::from_slice(&body).unwrap_or_default())));
+        return Err(AppError::invalid(oauth_text(&serde_json::from_slice(&body).unwrap_or_default())));
     }
     let r: DeviceCodeResponse = serde_json::from_slice(&body)?;
     set_pending(
@@ -451,7 +443,7 @@ fn pkce_challenge(verifier: &str) -> String {
 pub async fn finish_login(state: &AppState) -> AppResult<Account> {
     // Nicht `take`: `cancel_login`/`start_login` müssen die laufende Anmeldung noch abbrechen können.
     // `claimed` sorgt dafür, dass ein zweiter paralleler Aufruf sofort „keine Anmeldung“ bekommt.
-    let pending = claim(&mut lock(&state.ms.pending)).ok_or_else(|| say("Es läuft gerade keine Anmeldung. Starte sie bitte neu."))?;
+    let pending = claim(&mut lock(&state.ms.pending)).ok_or_else(|| AppError::invalid("Es läuft gerade keine Anmeldung. Starte sie bitte neu."))?;
     let result = poll(state, &pending).await;
     // Nur die eigene Anmeldung aufräumen, nicht eine inzwischen neu gestartete.
     let mut slot = lock(&state.ms.pending);
@@ -483,7 +475,7 @@ async fn poll(state: &AppState, p: &Pending) -> AppResult<Account> {
             let (status, body) = post_form(&state.http, &format!("{LOGIN}/token"), &grant).await?;
             match parse_poll(status, &body)? {
                 Poll::Done(tokens) => complete(state, &p.client_id, tokens).await,
-                _ => Err(say("Microsoft hat die Anmeldung nicht abgeschlossen. Versuch es bitte erneut.")),
+                _ => Err(AppError::invalid("Microsoft hat die Anmeldung nicht abgeschlossen. Versuch es bitte erneut.")),
             }
         }
     }
@@ -526,8 +518,8 @@ async fn wait_for_code(p: &Pending, listener: &TcpListener, expected_state: &str
     loop {
         let left = p.expires_at.saturating_duration_since(Instant::now());
         let (mut stream, _) = match p.cancel.run_until_cancelled(tokio::time::timeout(left, listener.accept())).await {
-            None => return Err(say("Anmeldung abgebrochen.")),
-            Some(Err(_)) => return Err(say("Die Anmeldung ist abgelaufen. Starte sie bitte neu.")),
+            None => return Err(AppError::invalid("Anmeldung abgebrochen.")),
+            Some(Err(_)) => return Err(AppError::invalid("Die Anmeldung ist abgelaufen. Starte sie bitte neu.")),
             Some(Ok(Err(err))) => return Err(err.into()),
             Some(Ok(Ok(conn))) => conn,
         };
@@ -539,7 +531,7 @@ async fn wait_for_code(p: &Pending, listener: &TcpListener, expected_state: &str
             }
             Callback::Failed(err) => {
                 respond(&mut stream, 200, &result_page(false)).await;
-                return Err(say(oauth_text(&err)));
+                return Err(AppError::invalid(oauth_text(&err)));
             }
             Callback::Ignore(status) => respond(&mut stream, status, "").await,
         }
@@ -638,10 +630,10 @@ async fn poll_device(state: &AppState, p: &Pending, device_code: &str, first_int
     let mut interval = first_interval.max(1);
     loop {
         if p.cancel.run_until_cancelled(tokio::time::sleep(Duration::from_secs(interval))).await.is_none() {
-            return Err(say("Anmeldung abgebrochen."));
+            return Err(AppError::invalid("Anmeldung abgebrochen."));
         }
         if Instant::now() >= p.expires_at {
-            return Err(say("Der Anmeldecode ist abgelaufen. Starte die Anmeldung neu."));
+            return Err(AppError::invalid("Der Anmeldecode ist abgelaufen. Starte die Anmeldung neu."));
         }
         let grant = [
             ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
@@ -658,7 +650,7 @@ async fn poll_device(state: &AppState, p: &Pending, device_code: &str, first_int
 }
 
 async fn complete(state: &AppState, client_id: &str, tokens: Tokens) -> AppResult<Account> {
-    let refresh = tokens.refresh_token.ok_or_else(|| say("Microsoft hat keine dauerhafte Anmeldung erlaubt."))?;
+    let refresh = tokens.refresh_token.ok_or_else(|| AppError::invalid("Microsoft hat keine dauerhafte Anmeldung erlaubt."))?;
     let (login, profile, xuid) = minecraft(&state.http, &tokens.access_token).await?;
     store_token(&keyring_entry(&profile.id)?, &refresh)?;
     let account = MsAccount { id: profile.id, username: profile.name, kind: AccountKind::Microsoft, client_id: client_id.into() };
@@ -700,7 +692,7 @@ pub async fn session(state: &AppState, id: &str) -> AppResult<(Account, McSessio
     }
     let refresh = match load_token(&keyring_entry(id)?) {
         Ok(token) => token,
-        Err(keyring::Error::NoEntry) => return Err(say(RELOGIN)),
+        Err(keyring::Error::NoEntry) => return Err(AppError::invalid(RELOGIN)),
         Err(err) => return Err(err.into()),
     };
     let grant = [
@@ -710,10 +702,10 @@ pub async fn session(state: &AppState, id: &str) -> AppResult<(Account, McSessio
         ("scope", SCOPE),
     ];
     let (status, body) = post_form(&state.http, &format!("{LOGIN}/token"), &grant).await?;
-    let Poll::Done(tokens) = parse_poll(status, &body)? else { return Err(say(RELOGIN)) };
+    let Poll::Done(tokens) = parse_poll(status, &body)? else { return Err(AppError::invalid(RELOGIN)) };
     let (login, profile, xuid) = minecraft(&state.http, &tokens.access_token).await?;
     if profile.id != stored.id {
-        return Err(say("Microsoft hat ein anderes Minecraft-Profil geliefert. Bitte melde dich erneut an."));
+        return Err(AppError::invalid("Microsoft hat ein anderes Minecraft-Profil geliefert. Bitte melde dich erneut an."));
     }
     // Microsoft rotiert Refresh-Tokens: den neuen sichern, sonst läuft die Anmeldung bald ab.
     if let Some(token) = &tokens.refresh_token {
@@ -746,7 +738,7 @@ pub fn require_offline(state: &AppState) -> AppResult<()> {
     if offline_allowed(state) {
         return Ok(());
     }
-    Err(say("Spielen ohne Konto ist in dieser Version nicht möglich. Melde dich mit einem Microsoft-Konto an, das Minecraft: Java Edition besitzt."))
+    Err(AppError::invalid("Spielen ohne Konto ist in dieser Version nicht möglich. Melde dich mit einem Microsoft-Konto an, das Minecraft: Java Edition besitzt."))
 }
 
 /// UUID eines Offline-Spielers wie im Spiel selbst: MD5 von `OfflinePlayer:<name>`
@@ -761,7 +753,7 @@ pub fn offline_uuid(username: &str) -> uuid::Uuid {
 pub fn offline_account(username: &str) -> AppResult<Account> {
     let valid = (3..=16).contains(&username.len()) && username.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');
     if !valid {
-        return Err(AppError::Invalid(format!("Ungültiger Spielername '{username}' (3–16 Zeichen, A-Z, 0-9, _)")));
+        return Err(AppError::invalid(format!("Ungültiger Spielername '{username}' (3–16 Zeichen, A-Z, 0-9, _)")));
     }
     Ok(Account {
         id: offline_uuid(username).to_string(),

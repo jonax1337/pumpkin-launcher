@@ -7,16 +7,15 @@ use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::{auth::{self, MC_PROFILE}, data_url, modrinth::{self, invalid}, write_atomic, Dirs};
-use crate::error::AppResult;
-use crate::models::{now_ms, LibrarySkin, SkinVariant};
+use super::{auth::{self, MC_PROFILE}, data_url, modrinth, remove_logged, write_atomic, Dirs};
+use crate::error::{AppError, AppResult};
+use crate::models::{now_ms, require_name, LibrarySkin, SkinVariant, MAX_SKIN_NAME_LEN};
 use crate::services::download::sha1_hex;
 use crate::state::AppState;
 
 const TEXTURE_BASE: &str = "textures.minecraft.net/texture/";
 /// Echte Skins haben wenige KiB; die Grenze fängt nur versehentlich gewählte große Bilder ab.
 const MAX_FILE: u64 = 256 * 1024;
-const MAX_NAME: usize = 64;
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
 
 /// Was das Konto gerade trägt: aktiver Skin (fehlt, wenn Minecraft keinen meldet) und alle Umhänge.
@@ -104,7 +103,7 @@ fn check(status: u16, body: &[u8]) -> AppResult<()> {
         #[serde(rename = "errorMessage")]
         message: String,
     }
-    Err(invalid(match serde_json::from_slice::<ApiError>(body) {
+    Err(AppError::invalid(match serde_json::from_slice::<ApiError>(body) {
         Ok(ApiError { message }) if !message.is_empty() => format!("{text} – Details: {message}"),
         _ => text,
     }))
@@ -117,7 +116,7 @@ fn texture_url(url: &str) -> AppResult<String> {
         .find_map(|scheme| url.strip_prefix(scheme))
         .and_then(|rest| rest.strip_prefix(TEXTURE_BASE))
         .filter(|hash| !hash.is_empty() && hash.bytes().all(|b| b.is_ascii_hexdigit()))
-        .ok_or_else(|| invalid("Minecraft hat eine unerwartete Texturadresse geliefert."))?;
+        .ok_or_else(|| AppError::invalid("Minecraft hat eine unerwartete Texturadresse geliefert."))?;
     Ok(format!("https://{TEXTURE_BASE}{hash}"))
 }
 
@@ -165,20 +164,17 @@ fn validate_png(bytes: &[u8]) -> AppResult<()> {
     let header = bytes
         .get(..24)
         .filter(|h| h.starts_with(PNG_SIGNATURE) && &h[12..16] == b"IHDR")
-        .ok_or_else(|| invalid("Die Datei ist kein PNG-Bild."))?;
+        .ok_or_else(|| AppError::invalid("Die Datei ist kein PNG-Bild."))?;
     let dimension = |at: usize| u32::from_be_bytes([header[at], header[at + 1], header[at + 2], header[at + 3]]);
     match (dimension(16), dimension(20)) {
         (64, 64) | (64, 32) => Ok(()),
-        (w, h) => Err(invalid(format!("Ein Skin muss 64×64 oder 64×32 Pixel groß sein, dieses Bild hat {w}×{h}."))),
+        (w, h) => Err(AppError::invalid(format!("Ein Skin muss 64×64 oder 64×32 Pixel groß sein, dieses Bild hat {w}×{h}."))),
     }
 }
 
 fn skin_name(name: &str) -> AppResult<String> {
-    let name = name.trim();
-    if name.is_empty() || name.chars().count() > MAX_NAME {
-        return Err(invalid(format!("Der Name des Skins muss 1 bis {MAX_NAME} Zeichen lang sein.")));
-    }
-    Ok(name.into())
+    let message = format!("Der Name des Skins muss 1 bis {MAX_SKIN_NAME_LEN} Zeichen lang sein.");
+    require_name(name, MAX_SKIN_NAME_LEN, message).map(str::to_owned)
 }
 
 /// Nur mit IDs aus dem Store aufrufen: die ID wird Teil des Pfads.
@@ -189,10 +185,10 @@ fn file(dirs: &Dirs, id: &str) -> PathBuf {
 /// Nimmt eine PNG-Datei in die Bibliothek auf; Name ist der Dateiname, das Modell zunächst klassisch.
 pub fn add_file(state: &AppState, path: &Path) -> AppResult<LibrarySkin> {
     if fs::metadata(path)?.len() > MAX_FILE {
-        return Err(invalid("Die Datei ist zu groß für einen Skin."));
+        return Err(AppError::invalid("Die Datei ist zu groß für einen Skin."));
     }
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Skin");
-    let name: String = stem.chars().take(MAX_NAME).collect();
+    let name: String = stem.chars().take(MAX_SKIN_NAME_LEN).collect();
     add(state, &fs::read(path)?, &name, SkinVariant::Classic)
 }
 
@@ -201,7 +197,7 @@ pub async fn save_active(state: &AppState, account_id: &str, name: &str) -> AppR
     let skin = profile(state, account_id)
         .await?
         .skin
-        .ok_or_else(|| invalid("Minecraft meldet für dieses Konto gerade keinen Skin."))?;
+        .ok_or_else(|| AppError::invalid("Minecraft meldet für dieses Konto gerade keinen Skin."))?;
     let png = modrinth::bytes(state.http.get(&skin.url), MAX_FILE).await?;
     add(state, &png, name, skin.variant)
 }
@@ -210,12 +206,12 @@ fn add(state: &AppState, png: &[u8], name: &str, variant: SkinVariant) -> AppRes
     validate_png(png)?;
     let skin = LibrarySkin { id: sha1_hex(png), name: skin_name(name)?, variant, added_at: now_ms() };
     if let Ok(existing) = state.skins.get(&skin.id) {
-        return Err(invalid(format!("Dieser Skin ist schon in der Bibliothek: „{}“.", existing.name)));
+        return Err(AppError::invalid(format!("Dieser Skin ist schon in der Bibliothek: „{}“.", existing.name)));
     }
     let path = file(&state.dirs, &skin.id);
     fs::create_dir_all(state.dirs.skins())?;
     write_atomic(&path, png)?;
-    state.skins.insert(skin).inspect_err(|_| remove_file(&path))
+    state.skins.insert(skin).inspect_err(|_| remove_logged(&path))
 }
 
 /// Neuer Name und neues Modell; die Datei bleibt dieselbe.
@@ -227,17 +223,8 @@ pub fn update(state: &AppState, id: &str, name: &str, variant: SkinVariant) -> A
 pub fn delete(state: &AppState, id: &str) -> AppResult<()> {
     // Erst der Store-Eintrag: nur eine existierende ID wird zum Pfad.
     state.skins.remove(id)?;
-    remove_file(&file(&state.dirs, id));
+    remove_logged(&file(&state.dirs, id));
     Ok(())
-}
-
-fn remove_file(path: &Path) {
-    match fs::remove_file(path) {
-        Err(err) if err.kind() != std::io::ErrorKind::NotFound => {
-            tracing::warn!(%err, path = %path.display(), "Skin-Datei nicht gelöscht")
-        }
-        _ => {}
-    }
 }
 
 /// Die PNG eines Bibliotheks-Skins als `data:`-URL für die Vorschau.

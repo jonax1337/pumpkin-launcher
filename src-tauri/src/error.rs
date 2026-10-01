@@ -38,6 +38,21 @@ pub enum AppError {
 }
 
 impl AppError {
+    /// Fehler mit einer Meldung, die der Nutzer so lesen soll.
+    pub fn invalid(message: impl Into<String>) -> Self {
+        Self::Invalid(message.into())
+    }
+
+    /// Fehlte die Datei oder der Ordner?
+    pub fn is_not_found(&self) -> bool {
+        matches!(self, Self::Io(e) if e.kind() == std::io::ErrorKind::NotFound)
+    }
+
+    /// Fehlte die Datei, ist `what` nicht installiert; jeder andere Fehler bleibt, wie er ist.
+    pub fn or_not_installed(self, what: impl std::fmt::Display) -> Self {
+        if self.is_not_found() { Self::invalid(format!("{what} ist nicht installiert")) } else { self }
+    }
+
     /// Ob ein neuer Versuch helfen kann. Nicht, wenn der Server die Anfrage selbst ablehnt (4xx außer 408 Zeitüberschreitung
     /// und 429 zu viele Anfragen): dieselbe Anfrage bekäme dieselbe Antwort.
     pub fn is_retryable(&self) -> bool {
@@ -105,7 +120,18 @@ mod tests {
         starts(Error::other("x").into(), "Beim Lesen oder Schreiben");
         assert!(AppError::from(Error::other("kaputt")).to_string().ends_with(" – Details: kaputt"));
         assert_eq!(AppError::Cancelled.to_string(), "Vorgang abgebrochen");
-        assert_eq!(AppError::Invalid("Instanz läuft noch".into()).to_string(), "Instanz läuft noch");
+        assert_eq!(AppError::invalid("Instanz läuft noch").to_string(), "Instanz läuft noch");
+    }
+
+    #[test]
+    fn only_missing_files_read_as_not_installed() {
+        let missing = AppError::from(Error::from(ErrorKind::NotFound));
+        assert!(missing.is_not_found());
+        assert_eq!(missing.or_not_installed("Version 1.21").to_string(), "Version 1.21 ist nicht installiert");
+        let locked = AppError::from(Error::from(ErrorKind::PermissionDenied));
+        assert!(!locked.is_not_found());
+        assert!(locked.or_not_installed("Version 1.21").to_string().starts_with("Zugriff auf eine Datei"));
+        assert!(!AppError::NotFound { kind: "Welt", id: "x".into() }.is_not_found());
     }
 
     #[test]

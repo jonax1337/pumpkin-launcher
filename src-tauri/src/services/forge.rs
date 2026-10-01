@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use super::progress::CountFn;
 use crate::error::{AppError, AppResult};
 use crate::models::ModLoader;
 use crate::services::download::{self, Job};
@@ -140,7 +141,7 @@ pub fn check_supported(kind: Kind, mc: &str) -> AppResult<()> {
         Kind::Forge => "1.17",
         Kind::NeoForge => "1.20.1",
     };
-    Err(AppError::Invalid(format!("{} gibt es in Pumpkin Launcher erst ab Minecraft {from}, nicht für {mc}", kind.name())))
+    Err(AppError::invalid(format!("{} gibt es in Pumpkin Launcher erst ab Minecraft {from}, nicht für {mc}", kind.name())))
 }
 
 /// `check_supported` für jeden Loader: Vanilla, Fabric und Quilt gibt es für alle Versionen.
@@ -248,12 +249,9 @@ fn installer_coord(kind: Kind, mc: &str, loader: &str) -> String {
 /// Liest ein installiertes Profil (für den Start ohne Netz).
 pub async fn installed_profile(dirs: &Dirs, kind: Kind, mc: &str, loader: &str) -> AppResult<Profile> {
     let path = dirs.version_file(&profile_id(kind, segment(mc)?, segment(loader)?), "json");
-    download::read_json(&path).await.map_err(|err| match err {
-        AppError::Io(e) if e.kind() == io::ErrorKind::NotFound => {
-            AppError::Invalid(format!("{} {loader} für {mc} ist nicht installiert", kind.name()))
-        }
-        other => other,
-    })
+    download::read_json(&path)
+        .await
+        .map_err(|err| err.or_not_installed(format!("{} {loader} für {mc}", kind.name())))
 }
 
 /// Ersetzt ein Processor-Argument: `[koordinate]` → Library-Pfad, `'text'` → Text,
@@ -268,9 +266,9 @@ fn resolve(arg: &str, data: &HashMap<String, String>, libraries: &Path) -> AppRe
     let mut out = String::with_capacity(arg.len());
     let mut rest = arg;
     while let Some(start) = rest.find('{') {
-        let end = rest[start..].find('}').ok_or_else(|| AppError::Invalid(format!("Installer-Argument '{arg}' unvollständig")))?;
+        let end = rest[start..].find('}').ok_or_else(|| AppError::invalid(format!("Installer-Argument '{arg}' unvollständig")))?;
         let key = &rest[start + 1..start + end];
-        let value = data.get(key).ok_or_else(|| AppError::Invalid(format!("Installer-Variable {{{key}}} unbekannt")))?;
+        let value = data.get(key).ok_or_else(|| AppError::invalid(format!("Installer-Variable {{{key}}} unbekannt")))?;
         out.push_str(&rest[..start]);
         out.push_str(value);
         rest = &rest[start + end + 1..];
@@ -289,7 +287,7 @@ fn main_class(jar: &Path) -> AppResult<String> {
         .replace("\n ", "")
         .lines()
         .find_map(|l| l.strip_prefix("Main-Class:").map(|v| v.trim().to_owned()))
-        .ok_or_else(|| AppError::Invalid(format!("{} hat keine Main-Class", jar.display())))
+        .ok_or_else(|| AppError::invalid(format!("{} hat keine Main-Class", jar.display())))
 }
 
 /// Liest das Installer-JAR: Install-Profil, `version.json` (roh) und entpackt `maven/…` in die
@@ -303,7 +301,7 @@ fn read_installer(installer: &Path, libraries: &Path, tmp: &Path) -> AppResult<(
     };
     let profile: InstallProfile = serde_json::from_slice(&read(&mut zip, "install_profile.json")?).map_err(|e| {
         tracing::warn!(%e, "Install-Profil in altem Format");
-        AppError::Invalid("Diese Loader-Version nutzt ein altes Installer-Format, das Pumpkin Launcher nicht unterstützt".into())
+        AppError::invalid("Diese Loader-Version nutzt ein altes Installer-Format, das Pumpkin Launcher nicht unterstützt")
     })?;
     let version = read(&mut zip, &profile.json)?;
 
@@ -323,19 +321,19 @@ fn read_installer(installer: &Path, libraries: &Path, tmp: &Path) -> AppResult<(
         let mut part = target.clone().into_os_string();
         part.push(".part");
         let part = PathBuf::from(part);
-        let mut guard = download::RemoveOnDrop(Some(part.clone()));
+        let guard = download::RemoveOnDrop::new(part.clone());
         io::copy(&mut entry, &mut fs::File::create(&part)?)?;
         fs::rename(&part, &target)?;
-        guard.0 = None;
+        guard.disarm();
     }
 
     fs::create_dir_all(tmp)?;
     let mut files = HashMap::new();
     for entry in profile.data.values().filter(|d| d.client.starts_with('/')) {
         let name = entry.client.trim_start_matches('/');
-        let file_name = Path::new(name).file_name().ok_or_else(|| AppError::Invalid(format!("ungültiger Installer-Eintrag '{name}'")))?;
+        let file_name = Path::new(name).file_name().ok_or_else(|| AppError::invalid(format!("ungültiger Installer-Eintrag '{name}'")))?;
         if name.contains("..") {
-            return Err(AppError::Invalid(format!("ungültiger Installer-Eintrag '{name}'")));
+            return Err(AppError::invalid(format!("ungültiger Installer-Eintrag '{name}'")));
         }
         let target = tmp.join(file_name);
         fs::write(&target, read(&mut zip, name)?)?;
@@ -367,7 +365,7 @@ pub async fn install(
     mc: &str,
     loader: &str,
     java: &Path,
-    on_progress: &(dyn Fn(u64, u64) + Send + Sync),
+    on_progress: CountFn<'_>,
 ) -> AppResult<Profile> {
     check_supported(kind, segment(mc)?)?;
     let id = profile_id(kind, mc, segment(loader)?);
@@ -401,7 +399,7 @@ pub async fn install(
     };
     let profile: Profile = serde_json::from_slice(&version_raw)?;
     if profile.inherits_from != mc {
-        return Err(AppError::Invalid(format!("{} {loader} gehört zu Minecraft {} statt {mc}", kind.name(), profile.inherits_from)));
+        return Err(AppError::invalid(format!("{} {loader} gehört zu Minecraft {} statt {mc}", kind.name(), profile.inherits_from)));
     }
 
     let processors: Vec<&Processor> = install_profile
@@ -504,7 +502,7 @@ pub async fn install(
 /// Vanilla-ID; NeoForge schließt über `-DignoreList=…,${version_name}.jar` genau dieses JAR aus.
 pub fn merge(version: VersionJson, profile: &Profile) -> AppResult<VersionJson> {
     if profile.inherits_from != version.id {
-        return Err(AppError::Invalid(format!("Loader-Profil erbt von {} statt {}", profile.inherits_from, version.id)));
+        return Err(AppError::invalid(format!("Loader-Profil erbt von {} statt {}", profile.inherits_from, version.id)));
     }
     let mut seen = HashSet::new();
     let mut libraries = Vec::with_capacity(profile.libraries.len());

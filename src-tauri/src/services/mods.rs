@@ -7,12 +7,12 @@ use std::path::{Path, PathBuf};
 use crate::error::{AppError, AppResult};
 use crate::models::Mod;
 use crate::services::download::{sha1_file, sha1_hex};
-use crate::services::Dirs;
+use crate::services::{none_if_missing, remove_logged, Dirs};
 
 /// Pfad eines Cache-Eintrags. Der Hash wird Teil des Pfads, daher nur echte SHA-1-Hex-Strings.
 pub fn cached(dirs: &Dirs, sha1: &str) -> AppResult<PathBuf> {
     if sha1.len() != 40 || !sha1.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err(AppError::Invalid(format!("ungültiger SHA-1 '{sha1}'")));
+        return Err(AppError::invalid(format!("ungültiger SHA-1 '{sha1}'")));
     }
     Ok(dirs
         .mod_cache()
@@ -44,7 +44,7 @@ fn file_name(m: &Mod) -> AppResult<&str> {
     let plain =
         Path::new(name).file_name().is_some_and(|f| f == name) && !name.contains(['/', '\\', ':']);
     if !plain || !name.ends_with(m.kind.extension()) {
-        return Err(AppError::Invalid(format!(
+        return Err(AppError::invalid(format!(
             "ungültiger Dateiname '{name}' für Mod {}",
             m.name
         )));
@@ -84,13 +84,9 @@ pub fn recache(dirs: &Dirs, instance_id: &str, mods: &[Mod]) -> AppResult<()> {
             continue;
         }
         let placed = dirs.game_dir(instance_id).join(m.kind.folder()).join(file_name(m)?);
-        match fs::read(&placed) {
-            Ok(bytes) if sha1_hex(&bytes).eq_ignore_ascii_case(hash) => {
-                cache_bytes(dirs, &bytes)?;
-            }
-            Ok(_) => {}
-            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e.into()),
+        let placed = none_if_missing(fs::read(&placed))?;
+        if let Some(bytes) = placed.filter(|bytes| sha1_hex(bytes).eq_ignore_ascii_case(hash)) {
+            cache_bytes(dirs, &bytes)?;
         }
     }
     Ok(())
@@ -136,18 +132,13 @@ pub fn sync_commit<T>(
     for m in mods.iter().filter(|m| m.sha1.is_some()) {
         let path = dirs.game_dir(instance_id).join(m.kind.folder()).join(file_name(m)?);
         if !names.insert(m.file_name.to_lowercase()) {
-            return Err(AppError::Invalid("Doppelte Mod-Zieldatei".into()));
+            return Err(AppError::invalid("Doppelte Mod-Zieldatei"));
         }
         super::content::regular_parents(&dirs.root, &path)?;
-        let current = match fs::symlink_metadata(&path) {
-            Ok(meta) => {
-                if !meta.is_file() {
-                    return Err(AppError::Invalid("Kein regulaeres Mod-Ziel".into()));
-                }
-                Some(sha1_file(&path)?)
-            }
-            Err(e) if e.kind() == io::ErrorKind::NotFound => None,
-            Err(e) => return Err(e.into()),
+        let current = match none_if_missing(fs::symlink_metadata(&path))? {
+            Some(meta) if !meta.is_file() => return Err(AppError::invalid("Kein regulaeres Mod-Ziel")),
+            Some(_) => Some(sha1_file(&path)?),
+            None => None,
         };
         let Some(hash) = m.sha1.as_ref() else { continue };
         let ours = current
@@ -159,9 +150,7 @@ pub fn sync_commit<T>(
                 continue;
             }
             if current.is_some() {
-                return Err(AppError::Invalid(
-                    "Mod-Konflikt: vorhandene Zieldatei".into(),
-                ));
+                return Err(AppError::invalid("Mod-Konflikt: vorhandene Zieldatei"));
             }
             let cache = cached(dirs, hash)?;
             super::content::regular_parents(&dirs.root, &cache)?;
@@ -172,7 +161,7 @@ pub fn sync_commit<T>(
                 });
             }
             if !sha1_file(&cache)?.eq_ignore_ascii_case(hash) {
-                return Err(AppError::Invalid("Mod-Cache-Hash stimmt nicht".into()));
+                return Err(AppError::invalid("Mod-Cache-Hash stimmt nicht"));
             }
             changes.push((path, Some(cache)));
         } else if ours {
@@ -200,13 +189,9 @@ pub fn sync_commit<T>(
     })();
     match result {
         Ok(value) => {
-            for (_, backup) in journal {
-                if let Some(backup) = backup {
-                    // Metadata is committed: a cleanup failure must not pretend the operation failed.
-                    if let Err(err) = fs::remove_file(&backup) {
-                        tracing::warn!(%err,path=%backup.display(),"Mod rollback backup cleanup failed");
-                    }
-                }
+            // Metadata is committed: a cleanup failure must not pretend the operation failed.
+            for backup in journal.into_iter().filter_map(|(_, backup)| backup) {
+                remove_logged(&backup);
             }
             Ok(value)
         }
@@ -215,16 +200,15 @@ pub fn sync_commit<T>(
             for (path, backup) in journal.into_iter().rev() {
                 let restore = (|| -> AppResult<()> {
                     if let Some(backup) = backup {
-                        match fs::symlink_metadata(&path) {
-                            Err(e) if e.kind() == io::ErrorKind::NotFound => place(&backup, &path)?,
-                            Ok(_) if sha1_file(&path)? == sha1_file(&backup)? => {}
-                            Ok(_) => {
-                                return Err(AppError::Invalid(format!(
+                        match none_if_missing(fs::symlink_metadata(&path))? {
+                            None => place(&backup, &path)?,
+                            Some(_) if sha1_file(&path)? == sha1_file(&backup)? => {}
+                            Some(_) => {
+                                return Err(AppError::invalid(format!(
                                     "Rollback-Ziel belegt; Backup: {}",
                                     backup.display()
                                 )))
                             }
-                            Err(e) => return Err(e.into()),
                         }
                         fs::remove_file(&backup)?;
                     } else {
@@ -239,7 +223,7 @@ pub fn sync_commit<T>(
             if errors.is_empty() {
                 Err(original)
             } else {
-                Err(AppError::Invalid(format!(
+                Err(AppError::invalid(format!(
                     "{original}; Rollback: {}",
                     errors.join("; ")
                 )))
@@ -297,7 +281,7 @@ mod tests {
             ..m.clone()
         };
         let failed: AppResult<()> = sync_commit(&dirs, "i", &[disabled], |_| {
-            Err(AppError::Invalid("store failure".into()))
+            Err(AppError::invalid("store failure"))
         });
         assert!(failed.is_err());
         assert_eq!(sha1_file(&path).unwrap(), m.sha1.unwrap());
@@ -354,7 +338,7 @@ mod tests {
         assert_eq!(fs::read(&installed).unwrap(), b"sodium");
         m.enabled = false;
         let result: AppResult<()> = sync_commit(&dirs, "i1", std::slice::from_ref(&m), |_| {
-            Err(AppError::Invalid("store failure".into()))
+            Err(AppError::invalid("store failure"))
         });
         assert!(result.is_err());
         assert_eq!(fs::read(&installed).unwrap(), b"sodium");

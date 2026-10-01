@@ -101,7 +101,7 @@ mod linux {
     /// Physischer Arbeitsspeicher in MiB (Grundlage für RAM-Vorgabe und Slider-Obergrenze).
     pub fn total_memory_mb() -> AppResult<u64> {
         let meminfo = std::fs::read_to_string("/proc/meminfo")?;
-        let kib = super::meminfo_total_kib(&meminfo).ok_or_else(|| AppError::Invalid("Der Arbeitsspeicher ließ sich nicht ermitteln.".into()))?;
+        let kib = super::meminfo_total_kib(&meminfo).ok_or_else(|| AppError::invalid("Der Arbeitsspeicher ließ sich nicht ermitteln."))?;
         Ok(kib / 1024)
     }
 

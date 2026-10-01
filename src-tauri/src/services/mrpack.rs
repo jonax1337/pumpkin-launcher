@@ -10,12 +10,10 @@ use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
 use super::{
-    add_zip_file, blocking, check_cancelled, content,
-    modrinth::{self, invalid},
-    mods, write_zip_atomic, Dirs,
+    add_zip_file, blocking, check_cancelled, content, modrinth, mods, write_zip_atomic, Dirs,
 };
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     models::{Instance, Mod, ModLoader, ModSource},
     state::AppState,
 };
@@ -39,13 +37,13 @@ impl PackLimit {
             return Ok(());
         }
         if files.len() > MAX_ENTRIES {
-            return Err(invalid(format!("Zu viele Dateien für ein Pack (höchstens {MAX_ENTRIES})")));
+            return Err(AppError::invalid(format!("Zu viele Dateien für ein Pack (höchstens {MAX_ENTRIES})")));
         }
         let mut total = 0;
         for (name, source) in files {
-            total += fs::metadata(source).map_err(|e| invalid(format!("{name} nicht lesbar: {e}")))?.len();
+            total += fs::metadata(source).map_err(|e| AppError::invalid(format!("{name} nicht lesbar: {e}")))?.len();
             if total > modrinth::FILE_LIMIT {
-                return Err(invalid("Das Pack wäre größer als 256 MiB und ließe sich nicht wieder importieren"));
+                return Err(AppError::invalid("Das Pack wäre größer als 256 MiB und ließe sich nicht wieder importieren"));
             }
         }
         Ok(())
@@ -69,12 +67,12 @@ pub fn entries(dirs: &Dirs, instance: &Instance) -> AppResult<Vec<String>> {
 /// Exportiert die Instanz nach `path`; `include` sind Einträge aus [`entries`].
 pub async fn export(state: &AppState, instance_id: &str, include: Vec<String>, path: &Path) -> AppResult<()> {
     if !path.is_absolute() || path.extension().and_then(|e| e.to_str()) != Some("mrpack") {
-        return Err(invalid("Bitte einen Speicherort für die .mrpack-Datei wählen"));
+        return Err(AppError::invalid("Bitte einen Speicherort für die .mrpack-Datei wählen"));
     }
     let instance = state.instances.get(instance_id)?;
     let available = entries(&state.dirs, &instance)?;
     if let Some(unknown) = include.iter().find(|n| !available.contains(n)) {
-        return Err(invalid(format!("„{unknown}“ gibt es im Spielordner nicht")));
+        return Err(AppError::invalid(format!("„{unknown}“ gibt es im Spielordner nicht")));
     }
     write(&state.dirs, instance, include, path, PackLimit::Unlimited).await
 }
@@ -135,10 +133,10 @@ fn index(instance: &Instance, remote: &[Value]) -> AppResult<Value> {
     match (instance.loader, &instance.loader_version) {
         (ModLoader::Vanilla, _) => {}
         (loader, Some(v)) => {
-            let key = loader.pack_key().ok_or_else(|| invalid("Loader ohne Pack-Schlüssel"))?;
+            let key = loader.pack_key().ok_or_else(|| AppError::invalid("Loader ohne Pack-Schlüssel"))?;
             dependencies[key] = json!(v);
         }
-        (_, None) => return Err(invalid("Instanz ohne Loader-Version: bitte erst einmal starten")),
+        (_, None) => return Err(AppError::invalid("Instanz ohne Loader-Version: bitte erst einmal starten")),
     }
     Ok(json!({
         "formatVersion": 1, "game": "minecraft", "versionId": "1", "name": instance.name,
@@ -184,7 +182,7 @@ fn write_zip(path: &Path, index: &Value, meta: &Value, files: Vec<(String, PathB
             // Gleiche Prüfung wie der Import, der den ganzen Eintragsnamen samt `overrides/` sieht.
             let entry = format!("overrides/{name}");
             content::safe_path(&entry)?;
-            let mut file = fs::File::open(&source).map_err(|e| invalid(format!("{name} nicht lesbar: {e}")))?;
+            let mut file = fs::File::open(&source).map_err(|e| AppError::invalid(format!("{name} nicht lesbar: {e}")))?;
             add_zip_file(zip, &entry, &mut file)?;
         }
         // Ein Abbruch während der letzten Datei darf kein fertiges Pack am Ziel hinterlassen.

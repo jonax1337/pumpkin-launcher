@@ -1,11 +1,11 @@
 //! Einfache JSON-Persistenz: eine Datei pro Collection unter dem App-Datenverzeichnis.
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::Mutex;
 
 use serde::{de::DeserializeOwned, Serialize};
 
-use super::write_atomic;
+use super::{lock, none_if_missing, write_atomic};
 use crate::error::{AppError, AppResult};
 use crate::models::{Instance, LibrarySkin, MsAccount, Template};
 
@@ -53,8 +53,8 @@ impl<T: Entity> JsonStore<T> {
     /// Lädt die Datei. Fehlt sie, startet der Store leer. Ist sie defekt, wird sie
     /// nach `*.json.corrupt` verschoben statt beim nächsten Speichern überschrieben.
     pub fn open(path: PathBuf) -> AppResult<Self> {
-        let items = match fs::read_to_string(&path) {
-            Ok(raw) => match serde_json::from_str(&raw) {
+        let items = match none_if_missing(fs::read_to_string(&path))? {
+            Some(raw) => match serde_json::from_str(&raw) {
                 Ok(items) => items,
                 Err(err) => {
                     let backup = path.with_extension("json.corrupt");
@@ -63,22 +63,17 @@ impl<T: Entity> JsonStore<T> {
                     Vec::new()
                 }
             },
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Vec::new(),
-            Err(err) => return Err(err.into()),
+            None => Vec::new(),
         };
         Ok(Self { path, items: Mutex::new(items) })
     }
 
-    fn lock(&self) -> MutexGuard<'_, Vec<T>> {
-        self.items.lock().unwrap_or_else(|e| e.into_inner())
-    }
-
     pub fn list(&self) -> Vec<T> {
-        self.lock().clone()
+        lock(&self.items).clone()
     }
 
     pub fn get(&self, id: &str) -> AppResult<T> {
-        self.lock()
+        lock(&self.items)
             .iter()
             .find(|x| x.id() == id)
             .cloned()
@@ -86,7 +81,7 @@ impl<T: Entity> JsonStore<T> {
     }
 
     pub fn insert(&self, item: T) -> AppResult<T> {
-        let mut items = self.lock();
+        let mut items = lock(&self.items);
         items.push(item.clone());
         if let Err(err) = persist(&self.path, &items) {
             items.pop();
@@ -103,7 +98,7 @@ impl<T: Entity> JsonStore<T> {
     /// Ändert einen Eintrag unter dem Lock des Stores: kein anderer Schreiber kommt zwischen Lesen und
     /// Schreiben. `change` darf den Store nicht selbst aufrufen (Deadlock).
     pub fn modify(&self, id: &str, change: impl FnOnce(&mut T)) -> AppResult<T> {
-        let mut items = self.lock();
+        let mut items = lock(&self.items);
         let idx = items.iter().position(|x| x.id() == id).ok_or_else(|| not_found::<T>(id))?;
         let old = items[idx].clone();
         change(&mut items[idx]);
@@ -115,7 +110,7 @@ impl<T: Entity> JsonStore<T> {
     }
 
     pub fn remove(&self, id: &str) -> AppResult<()> {
-        let mut items = self.lock();
+        let mut items = lock(&self.items);
         let idx = items.iter().position(|x| x.id() == id).ok_or_else(|| not_found::<T>(id))?;
         let old = items.remove(idx);
         if let Err(err) = persist(&self.path, &items) {

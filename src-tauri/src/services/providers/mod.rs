@@ -1,7 +1,8 @@
 //! Kataloge ohne API-Key: FTB (öffentliche API, installierbar), Technic und CurseForge (nur lesend).
 //! Alle liefern dieselben Formen wie Modrinth (`Hit`, `Project`, `Version`), damit die Oberfläche sie gleich zeigt.
+use crate::services::progress::CountFn;
 use super::download;
-use super::modrinth::{self, invalid};
+use super::modrinth;
 use crate::error::{AppError, AppResult};
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256, Sha512};
@@ -25,7 +26,7 @@ impl Source {
             "ftb" => Ok(Self::Ftb),
             "technic" => Ok(Self::Technic),
             "curseforge" => Ok(Self::CurseForge),
-            _ => Err(invalid("Unbekannter Anbieter")),
+            _ => Err(AppError::invalid("Unbekannter Anbieter")),
         }
     }
     pub fn key(self) -> &'static str {
@@ -48,18 +49,18 @@ const MAX_ENTRIES: usize = 20_000;
 /// (Regeln wie beim `.mrpack`).
 pub(crate) fn zip_files(zip: &mut zip::ZipArchive<impl std::io::Read + std::io::Seek>, prefix: &str, skip: &[&str]) -> AppResult<Vec<(std::path::PathBuf, usize)>> {
     if zip.len() > MAX_ENTRIES {
-        return Err(invalid("Zu viele ZIP-Einträge"));
+        return Err(AppError::invalid("Zu viele ZIP-Einträge"));
     }
     let files = zip_paths(zip, prefix, skip)?;
     let mut expanded = 0u64;
     for (_, index) in &files {
         let entry = zip.by_index_raw(*index)?;
-        expanded = expanded.checked_add(entry.size()).ok_or_else(|| invalid("ZIP-Größenüberlauf"))?;
+        expanded = expanded.checked_add(entry.size()).ok_or_else(|| AppError::invalid("ZIP-Größenüberlauf"))?;
         if expanded > EXPANDED_LIMIT
             || entry.size() > modrinth::FILE_LIMIT
             || entry.size() > entry.compressed_size().saturating_mul(200).saturating_add(MIB)
         {
-            return Err(invalid("ZIP-Limit überschritten"));
+            return Err(AppError::invalid("ZIP-Limit überschritten"));
         }
     }
     Ok(files)
@@ -83,10 +84,10 @@ pub(crate) fn zip_paths(zip: &mut zip::ZipArchive<impl std::io::Read + std::io::
         let rel = rel.to_string();
         let path = super::content::safe_path(&rel)?;
         if entry.unix_mode().is_some_and(|m| matches!(m & 0o170000, 0o120000 | 0o060000 | 0o020000 | 0o010000 | 0o140000)) {
-            return Err(invalid("ZIP-Symlink/Spezialdatei"));
+            return Err(AppError::invalid("ZIP-Symlink/Spezialdatei"));
         }
         if !seen.insert(rel.to_lowercase()) {
-            return Err(invalid("Doppelter ZIP-Pfad"));
+            return Err(AppError::invalid("Doppelter ZIP-Pfad"));
         }
         files.push((path, index));
     }
@@ -94,7 +95,7 @@ pub(crate) fn zip_paths(zip: &mut zip::ZipArchive<impl std::io::Read + std::io::
     for path in &seen {
         for (at, _) in path.match_indices('/') {
             if seen.contains(&path[..at]) {
-                return Err(invalid("Datei/Verzeichnis-Konflikt"));
+                return Err(AppError::invalid("Datei/Verzeichnis-Konflikt"));
             }
         }
     }
@@ -130,7 +131,7 @@ fn check_url(url: &reqwest::Url) -> AppResult<()> {
         || url.password().is_some()
         || url.fragment().is_some()
     {
-        return Err(invalid("Download-Origin nicht erlaubt"));
+        return Err(AppError::invalid("Download-Origin nicht erlaubt"));
     }
     Ok(())
 }
@@ -161,7 +162,7 @@ fn ensure_success(response: reqwest::Response) -> AppResult<reqwest::Response> {
 
 /// GET mit handgeführten Weiterleitungen (höchstens drei), jedes Ziel gegen die Host-Liste geprüft.
 async fn get(client: &reqwest::Client, start: &str) -> AppResult<reqwest::Response> {
-    let mut url = reqwest::Url::parse(start).map_err(|e| invalid(e.to_string()))?;
+    let mut url = reqwest::Url::parse(start).map_err(|e| AppError::invalid(e.to_string()))?;
     for _ in 0..4 {
         check_url(&url)?;
         let response = client.get(url.clone()).send().await?;
@@ -172,15 +173,15 @@ async fn get(client: &reqwest::Client, start: &str) -> AppResult<reqwest::Respon
             .headers()
             .get(reqwest::header::LOCATION)
             .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| invalid("Weiterleitung ohne Ziel"))?;
-        url = url.join(location).map_err(|e| invalid(e.to_string()))?;
+            .ok_or_else(|| AppError::invalid("Weiterleitung ohne Ziel"))?;
+        url = url.join(location).map_err(|e| AppError::invalid(e.to_string()))?;
     }
-    Err(invalid("Zu viele Weiterleitungen"))
+    Err(AppError::invalid("Zu viele Weiterleitungen"))
 }
 
 fn ensure_within(size: u64, limit: u64) -> AppResult<()> {
     if size > limit {
-        return Err(invalid("Download zu groß"));
+        return Err(AppError::invalid("Download zu groß"));
     }
     Ok(())
 }
@@ -221,7 +222,7 @@ where
             }
         }
     }
-    Err(last.unwrap_or_else(|| invalid("Keine Download-Adresse")))
+    Err(last.unwrap_or_else(|| AppError::invalid("Keine Download-Adresse")))
 }
 
 /// Datei eines Packs mit Ausweich-Adressen. Ohne mindestens einen Hash wird nichts akzeptiert.
@@ -239,20 +240,20 @@ fn hex(bytes: &[u8]) -> String {
 impl RemoteFile {
     pub fn verify(&self, data: &[u8]) -> AppResult<()> {
         if self.hashes.is_empty() {
-            return Err(invalid("Datei ohne Prüfsumme"));
+            return Err(AppError::invalid("Datei ohne Prüfsumme"));
         }
         if self.size != 0 && data.len() as u64 != self.size {
-            return Err(invalid("Dateigröße stimmt nicht"));
+            return Err(AppError::invalid("Dateigröße stimmt nicht"));
         }
         for (algorithm, expected) in &self.hashes {
             let actual = match *algorithm {
                 "sha1" => super::download::sha1_hex(data),
                 "sha256" => hex(&Sha256::digest(data)),
                 "sha512" => hex(&Sha512::digest(data)),
-                _ => return Err(invalid("Unbekannter Hash")),
+                _ => return Err(AppError::invalid("Unbekannter Hash")),
             };
             if !expected.eq_ignore_ascii_case(&actual) {
-                return Err(invalid(format!("{algorithm} stimmt nicht")));
+                return Err(AppError::invalid(format!("{algorithm} stimmt nicht")));
             }
         }
         Ok(())
@@ -265,9 +266,9 @@ impl RemoteFile {
 
     /// Wie `download`, aber in eine Datei (für große Pack-Zips). Die Prüfsummen werden an der fertigen Datei
     /// gelesen; bei Abweichung verschwindet sie wieder. `progress(geladen, gesamt)` in Bytes.
-    pub async fn download_to(&self, client: &reqwest::Client, dest: &std::path::Path, progress: &(dyn Fn(u64, u64) + Send + Sync)) -> AppResult<()> {
+    pub async fn download_to(&self, client: &reqwest::Client, dest: &std::path::Path, progress: CountFn<'_>) -> AppResult<()> {
         if self.hashes.is_empty() {
-            return Err(invalid("Datei ohne Prüfsumme"));
+            return Err(AppError::invalid("Datei ohne Prüfsumme"));
         }
         from_any(&self.urls, |url| async move {
             let saved = self.save(client, url, dest, progress).await.and_then(|()| self.verify_file(dest));
@@ -280,7 +281,7 @@ impl RemoteFile {
     }
 
     /// Schreibt die Antwort von `url` nach `dest`, höchstens `ZIP_LIMIT` Bytes.
-    async fn save(&self, client: &reqwest::Client, url: &str, dest: &std::path::Path, progress: &(dyn Fn(u64, u64) + Send + Sync)) -> AppResult<()> {
+    async fn save(&self, client: &reqwest::Client, url: &str, dest: &std::path::Path, progress: CountFn<'_>) -> AppResult<()> {
         use tokio::io::AsyncWriteExt;
         let limit = self.limit(ZIP_LIMIT);
         let mut response = get(client, url).await?;
@@ -304,7 +305,7 @@ impl RemoteFile {
         use std::io::Read;
         let mut file = std::fs::File::open(path)?;
         if self.size != 0 && file.metadata()?.len() != self.size {
-            return Err(invalid("Dateigröße stimmt nicht"));
+            return Err(AppError::invalid("Dateigröße stimmt nicht"));
         }
         let (mut sha1, mut sha256, mut sha512) = (Sha1::new(), Sha256::new(), Sha512::new());
         let mut buffer = vec![0u8; 256 * 1024];
@@ -322,10 +323,10 @@ impl RemoteFile {
                 "sha1" => hex(&sha1.clone().finalize()),
                 "sha256" => hex(&sha256.clone().finalize()),
                 "sha512" => hex(&sha512.clone().finalize()),
-                _ => return Err(invalid("Unbekannter Hash")),
+                _ => return Err(AppError::invalid("Unbekannter Hash")),
             };
             if !expected.eq_ignore_ascii_case(&actual) {
-                return Err(invalid(format!("{algorithm} stimmt nicht")));
+                return Err(AppError::invalid(format!("{algorithm} stimmt nicht")));
             }
         }
         Ok(())

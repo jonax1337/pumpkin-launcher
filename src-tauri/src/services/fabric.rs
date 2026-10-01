@@ -3,7 +3,6 @@
 //! Vanilla-Version, die hier mit ihr zusammengeführt wird. Beide Meta-Server liefern dasselbe Format.
 use std::cmp::Ordering;
 use std::collections::HashSet;
-use std::io;
 
 use serde::{Deserialize, Serialize};
 
@@ -88,7 +87,7 @@ pub struct Profile {
 /// Versions-IDs landen in URLs und Pfaden: nur einzelne, harmlose Segmente zulassen.
 pub fn segment(s: &str) -> AppResult<&str> {
     if s.is_empty() || s.contains("..") || s.contains(['/', '\\', '?', '#', '%', ':']) {
-        return Err(AppError::Invalid(format!("ungültige Version '{s}'")));
+        return Err(AppError::invalid(format!("ungültige Version '{s}'")));
     }
     Ok(s)
 }
@@ -119,12 +118,12 @@ pub fn compare_versions(a: &str, b: &str) -> Ordering {
 
 /// `group:artifact:version[:classifier][@ext]` → Pfad im Maven-Repository.
 pub fn maven_path(name: &str) -> AppResult<String> {
-    let invalid = || AppError::Invalid(format!("ungültige Maven-Koordinate '{name}'"));
+    let malformed = || AppError::invalid(format!("ungültige Maven-Koordinate '{name}'"));
     let (coords, ext) = name.split_once('@').unwrap_or((name, "jar"));
     let parts: Vec<&str> = coords.split(':').collect();
-    let [group, artifact, version, rest @ ..] = parts.as_slice() else { return Err(invalid()) };
+    let [group, artifact, version, rest @ ..] = parts.as_slice() else { return Err(malformed()) };
     if rest.len() > 1 || [*group, *artifact, *version, ext].iter().chain(rest).any(|p| segment(p).is_err()) {
-        return Err(invalid());
+        return Err(malformed());
     }
     let classifier = rest.first().map(|c| format!("-{c}")).unwrap_or_default();
     Ok(format!("{}/{artifact}/{version}/{artifact}-{version}{classifier}.{ext}", group.replace('.', "/")))
@@ -198,7 +197,7 @@ pub async fn fetch_profile(client: &reqwest::Client, dirs: &Dirs, flavor: Flavor
         other => other,
     })?;
     if profile.inherits_from != mc_version {
-        return Err(AppError::Invalid(format!("{}-Profil erbt von {} statt {mc_version}", flavor.name(), profile.inherits_from)));
+        return Err(AppError::invalid(format!("{}-Profil erbt von {} statt {mc_version}", flavor.name(), profile.inherits_from)));
     }
     for lib in profile.libraries.iter_mut().filter(|l| l.sha1.is_none()) {
         lib.sha1 = Some(maven_sha1(client, &artifact_url(lib)?).await?);
@@ -214,12 +213,9 @@ pub async fn fetch_profile(client: &reqwest::Client, dirs: &Dirs, flavor: Flavor
 /// Liest ein bereits installiertes Profil.
 pub async fn installed_profile(dirs: &Dirs, flavor: Flavor, mc_version: &str, loader: &str) -> AppResult<Profile> {
     let path = dirs.version_file(&profile_id(flavor, segment(mc_version)?, segment(loader)?), "json");
-    download::read_json(&path).await.map_err(|err| match err {
-        AppError::Io(e) if e.kind() == io::ErrorKind::NotFound => {
-            AppError::Invalid(format!("{} {loader} für {mc_version} ist nicht installiert", flavor.name()))
-        }
-        other => other,
-    })
+    download::read_json(&path)
+        .await
+        .map_err(|err| err.or_not_installed(format!("{} {loader} für {mc_version}", flavor.name())))
 }
 
 /// Vanilla-Versions-JSON plus Profil: Loader-Main-Class, Loader-Libraries vor den Vanilla-
@@ -227,12 +223,12 @@ pub async fn installed_profile(dirs: &Dirs, flavor: Flavor, mc_version: &str, lo
 /// Die ID bleibt die Vanilla-ID, weil Client-JAR und Assets daran hängen.
 pub fn merge(version: VersionJson, profile: &Profile) -> AppResult<VersionJson> {
     if profile.inherits_from != version.id {
-        return Err(AppError::Invalid(format!("Loader-Profil erbt von {} statt {}", profile.inherits_from, version.id)));
+        return Err(AppError::invalid(format!("Loader-Profil erbt von {} statt {}", profile.inherits_from, version.id)));
     }
     let mut libraries = Vec::with_capacity(profile.libraries.len());
     for lib in &profile.libraries {
         let sha1 = lib.sha1.clone().filter(|s| is_sha1(s));
-        let sha1 = sha1.ok_or_else(|| AppError::Invalid(format!("Loader-Library {} ohne SHA-1", lib.name)))?;
+        let sha1 = sha1.ok_or_else(|| AppError::invalid(format!("Loader-Library {} ohne SHA-1", lib.name)))?;
         libraries.push(Library {
             name: lib.name.clone(),
             downloads: LibraryDownloads {

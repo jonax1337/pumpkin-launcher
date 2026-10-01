@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use super::progress::CountFn;
 use crate::error::{AppError, AppResult};
 use crate::services::download::{self, Job};
 use crate::services::mojang::Download;
@@ -100,7 +101,7 @@ pub fn resolve(dirs: &Dirs, component: &str, instance_path: Option<&str>, global
     }
     let java = java_exe(dirs, component);
     if !java.exists() {
-        return Err(AppError::Invalid(format!("Java nicht gefunden: {}", java.display())));
+        return Err(AppError::invalid(format!("Java nicht gefunden: {}", java.display())));
     }
     Ok(java)
 }
@@ -111,7 +112,7 @@ pub fn custom_java(path: &str, setting: JavaSetting) -> AppResult<PathBuf> {
     let path = PathBuf::from(path);
     let name = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
     if !JAVA_FILE_NAMES.contains(&name.as_str()) {
-        return Err(AppError::Invalid(format!(
+        return Err(AppError::invalid(format!(
             "„{}“ ist kein Java-Programm. Wähle {} die {} im bin-Ordner deiner Java-Installation.",
             path.display(),
             setting.place(),
@@ -119,7 +120,7 @@ pub fn custom_java(path: &str, setting: JavaSetting) -> AppResult<PathBuf> {
         )));
     }
     if !path.is_file() {
-        return Err(AppError::Invalid(format!(
+        return Err(AppError::invalid(format!(
             "Java nicht gefunden: {}. Prüfe Java {}.",
             path.display(),
             setting.place()
@@ -134,7 +135,7 @@ pub async fn ensure(
     client: &reqwest::Client,
     dirs: &Dirs,
     component: &str,
-    on_done: &(dyn Fn(u64, u64) + Send + Sync),
+    on_done: CountFn<'_>,
 ) -> AppResult<PathBuf> {
     let (os, arch) = (std::env::consts::OS, std::env::consts::ARCH);
     let mut all: HashMap<String, HashMap<String, Vec<RuntimeEntry>>> =

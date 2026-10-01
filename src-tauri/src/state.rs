@@ -4,6 +4,7 @@ use std::future::Future;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 
+use tauri::AppHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, AppResult};
@@ -11,8 +12,9 @@ use crate::models::{Instance, LibrarySkin, MsAccount, Template};
 use crate::services::auth::MsState;
 use crate::services::download::http_client;
 use crate::services::launch::Running;
+use crate::services::progress::{progress, SharedProgress};
 use crate::services::store::JsonStore;
-use crate::services::Dirs;
+use crate::services::{blocking, lock, Dirs};
 
 /// Globaler App-State (per `app.manage` registriert). Hält die Fachlogik, die über
 /// mehrere Stores geht; Commands reichen nur durch.
@@ -57,8 +59,17 @@ impl AppState {
     }
 
     pub fn operation(&self, id: Option<&str>) -> AppResult<tokio::sync::MutexGuard<'_, ()>> {
-        let guard = self.operation.try_lock().map_err(|_| AppError::Invalid("Eine Installation/Änderung läuft bereits".into()))?;
-        if id.is_some_and(|id| self.running().contains_key(id)) { return Err(AppError::Invalid("Instanz läuft noch".into())); }
+        let guard = self.operation.try_lock().map_err(|_| AppError::invalid("Eine Installation/Änderung läuft bereits"))?;
+        if id.is_some_and(|id| self.is_running(id)) {
+            return Err(AppError::invalid("Instanz läuft noch"));
+        }
+        Ok(guard)
+    }
+
+    /// Wie `operation` für eine bestimmte Instanz, die es auch geben muss.
+    pub fn exclusive(&self, id: &str) -> AppResult<tokio::sync::MutexGuard<'_, ()>> {
+        let guard = self.operation(Some(id))?;
+        self.require_instance(id)?;
         Ok(guard)
     }
 
@@ -79,12 +90,51 @@ impl AppState {
         }
     }
 
-    fn cancels(&self) -> MutexGuard<'_, HashMap<String, CancellationToken>> {
-        self.cancels.lock().unwrap_or_else(|e| e.into_inner())
+    /// Wie `cancellable` unter der `operationId` des Frontends; `work` bekommt den Rückruf, der den Fortschritt als
+    /// `content-progress` meldet.
+    pub async fn run_cancellable<T, F: Future<Output = AppResult<T>>>(
+        &self,
+        app: &AppHandle,
+        operation_id: &str,
+        work: impl FnOnce(SharedProgress) -> F,
+    ) -> AppResult<T> {
+        self.cancellable(operation_id, work(progress(app.clone(), operation_id.to_owned()))).await
     }
 
-    pub fn running(&self) -> MutexGuard<'_, HashMap<String, Running>> {
-        self.running.lock().unwrap_or_else(|e| e.into_inner())
+    /// Führt blockierende Dateiarbeit mit den Verzeichnissen der App aus (siehe `services::blocking`).
+    pub async fn blocking_with_dirs<T: Send + 'static>(
+        &self,
+        work: impl FnOnce(&Dirs) -> AppResult<T> + Send + 'static,
+    ) -> AppResult<T> {
+        let dirs = self.dirs.clone();
+        blocking(move |_| work(&dirs)).await
+    }
+
+    pub fn is_running(&self, instance_id: &str) -> bool {
+        lock(&self.running).contains_key(instance_id)
+    }
+
+    /// Startet das Spiel der Instanz mit `spawn` und trägt es als laufend ein. Prüfen, Starten und Eintragen laufen
+    /// unter einer Sperre: sonst könnte ein sofort beendeter Prozess seinen Eintrag über `take_running` entfernen,
+    /// bevor er eingetragen ist. Was `spawn` tut, ist damit auch vor dem `instance-exit` dieses Prozesses fertig.
+    pub fn spawn_running(&self, instance_id: &str, spawn: impl FnOnce() -> AppResult<Running>) -> AppResult<u32> {
+        let mut running = lock(&self.running);
+        if running.contains_key(instance_id) {
+            return Err(AppError::invalid("Instanz läuft bereits"));
+        }
+        let game = spawn()?;
+        let pid = game.pid;
+        running.insert(instance_id.to_owned(), game);
+        Ok(pid)
+    }
+
+    /// Nimmt die Instanz aus den laufenden; `None`, wenn sie nicht (mehr) läuft.
+    pub fn take_running(&self, instance_id: &str) -> Option<Running> {
+        lock(&self.running).remove(instance_id)
+    }
+
+    fn cancels(&self) -> MutexGuard<'_, HashMap<String, CancellationToken>> {
+        lock(&self.cancels)
     }
 }
 

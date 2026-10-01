@@ -4,21 +4,21 @@ use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use serde::{Deserialize, Serialize};
 
+use super::progress::{Phase, ProgressFn, SharedProgress};
 use super::{
     blocking,
     content::{self, CachedFile},
     download::sha1_file,
     free_name,
-    modrinth::{self, invalid, Version},
+    modrinth::{self, Version},
     mods, Dirs,
 };
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     models::{Instance, Mod, ModKind, ModSource},
     state::AppState,
 };
@@ -60,21 +60,20 @@ pub async fn add(
     state: &AppState,
     instance_id: &str,
     files: Vec<LocalFile>,
-    progress: impl Fn(&str, u64, u64) + Send + Sync + 'static,
+    progress: SharedProgress,
 ) -> AppResult<Instance> {
     let instance = state.instances.get(instance_id)?;
     let total = files.len() as u64;
-    let progress = Arc::new(progress);
     let staged = {
         let (dirs, instance, progress) = (state.dirs.clone(), instance.clone(), progress.clone());
         blocking(move |_| stage(&dirs, &instance, &files, &*progress)).await?
     };
-    progress("resolve", 0, 1);
+    progress(Phase::Resolve, 0, 1);
     let hashes: Vec<String> = staged.iter().map(|s| s.sha1.clone()).collect();
     let (known, titles) = content::identify_or_local(&modrinth::client()?, &hashes).await;
     let mods = with_entries(&instance.mods, staged, &known, &titles)?;
     let result = mods::sync_commit(&state.dirs, instance_id, &mods, |_| content::commit_mods(state, instance_id, mods.clone()))?;
-    progress("complete", total, total);
+    progress(Phase::Complete, total, total);
     Ok(result)
 }
 
@@ -83,16 +82,16 @@ fn stage(
     dirs: &Dirs,
     instance: &Instance,
     files: &[LocalFile],
-    progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
+    progress: ProgressFn<'_>,
 ) -> AppResult<Vec<CachedFile>> {
     let mut staged: Vec<CachedFile> = Vec::new();
     for (done, file) in files.iter().enumerate() {
-        progress("copy", done as u64, files.len() as u64);
+        progress(Phase::Copy, done as u64, files.len() as u64);
         let (path, name) = source(&file.path)?;
         let stem = stem_for(&name, file.kind)?;
         let sha1 = mods::cache_file(dirs, &path)?;
         if let Some(m) = holder(&instance.mods, &sha1) {
-            return Err(invalid(format!("„{name}“ ist schon in dieser Instanz ({})", m.name)));
+            return Err(AppError::invalid(format!("„{name}“ ist schon in dieser Instanz ({})", m.name)));
         }
         if staged.iter().any(|s| s.sha1 == sha1) {
             continue;
@@ -135,7 +134,7 @@ fn with_entries(
 fn ensure_new_project(mods: &[Mod], m: &Mod) -> AppResult<()> {
     let Some(project) = content::project_of(m) else { return Ok(()) };
     match mods.iter().find(|o| content::project_of(o) == Some(project)) {
-        Some(have) => Err(invalid(format!("„{}“ ist {}, das schon in dieser Instanz ist", m.file_name, have.name))),
+        Some(have) => Err(AppError::invalid(format!("„{}“ ist {}, das schon in dieser Instanz ist", m.file_name, have.name))),
         None => Ok(()),
     }
 }
@@ -178,19 +177,19 @@ pub(crate) fn source(path: &str) -> AppResult<(PathBuf, String)> {
         .file_name()
         .and_then(|n| n.to_str())
         .filter(|_| path.is_absolute())
-        .ok_or_else(|| invalid("Die Datei muss mit ihrem vollständigen Pfad angegeben werden"))?
+        .ok_or_else(|| AppError::invalid("Die Datei muss mit ihrem vollständigen Pfad angegeben werden"))?
         .to_string();
     let lower = name.to_ascii_lowercase();
     if !lower.ends_with(".jar") && !lower.ends_with(".zip") {
-        return Err(invalid(format!("„{name}“ ist keine .jar- oder .zip-Datei")));
+        return Err(AppError::invalid(format!("„{name}“ ist keine .jar- oder .zip-Datei")));
     }
     content::safe_path(&name)?;
-    let meta = fs::symlink_metadata(&path).map_err(|_| invalid(format!("„{name}“ ist nicht lesbar")))?;
+    let meta = fs::symlink_metadata(&path).map_err(|_| AppError::invalid(format!("„{name}“ ist nicht lesbar")))?;
     if !meta.is_file() {
-        return Err(invalid(format!("„{name}“ ist keine normale Datei")));
+        return Err(AppError::invalid(format!("„{name}“ ist keine normale Datei")));
     }
     if meta.len() == 0 || meta.len() > modrinth::FILE_LIMIT {
-        return Err(invalid(format!("„{name}“ ist leer oder größer als 256 MiB")));
+        return Err(AppError::invalid(format!("„{name}“ ist leer oder größer als 256 MiB")));
     }
     Ok((path, name))
 }
@@ -201,7 +200,7 @@ fn detect_kind(path: &Path, name: &str) -> AppResult<Option<ModKind>> {
         return Ok(Some(ModKind::Mod));
     }
     let zip = zip::ZipArchive::new(fs::File::open(path)?)
-        .map_err(|_| invalid(format!("„{name}“ ist kein lesbares Zip-Archiv")))?;
+        .map_err(|_| AppError::invalid(format!("„{name}“ ist kein lesbares Zip-Archiv")))?;
     Ok(zip_kind(zip.file_names()))
 }
 
@@ -229,7 +228,7 @@ fn holder<'a>(mods: &'a [Mod], sha1: &str) -> Option<&'a Mod> {
 fn stem_for(name: &str, kind: ModKind) -> AppResult<&str> {
     let ext = kind.extension();
     if !name.to_ascii_lowercase().ends_with(ext) {
-        return Err(invalid(format!("„{name}“ passt nicht zur gewählten Art")));
+        return Err(AppError::invalid(format!("„{name}“ passt nicht zur gewählten Art")));
     }
     Ok(&name[..name.len() - ext.len()])
 }
@@ -238,6 +237,7 @@ fn stem_for(name: &str, kind: ModKind) -> AppResult<&str> {
 mod tests {
     use super::*;
     use crate::models::{ModLoader, NewInstance};
+    use crate::services::progress::ignored;
     use std::io::Write;
 
     fn zip_with(names: &[&str]) -> Vec<u8> {
@@ -357,7 +357,7 @@ mod tests {
             local(&drop.join("look.zip"), ModKind::ResourcePack),
             local(&drop.join("Same.jar"), ModKind::Mod),
         ];
-        let added = add(&state, &i.id, files, |_, _, _| {}).await.unwrap();
+        let added = add(&state, &i.id, files, ignored()).await.unwrap();
         let got: Vec<_> = added.mods.iter().map(|m| (m.kind, m.file_name.as_str(), m.name.as_str())).collect();
         assert_eq!(
             got,
@@ -370,7 +370,7 @@ mod tests {
 
         // Dieselbe Datei noch einmal: Vorab-Prüfung nennt den Eintrag, Hinzufügen lehnt ab.
         assert_eq!(check(&state, &i.id, paths[..1].to_vec()).await.unwrap()[0].duplicate_of.as_deref(), Some("Tool (2)"));
-        assert!(add(&state, &i.id, vec![local(&drop.join("Tool.JAR"), ModKind::Mod)], |_, _, _| {}).await.is_err());
+        assert!(add(&state, &i.id, vec![local(&drop.join("Tool.JAR"), ModKind::Mod)], ignored()).await.is_err());
         assert_eq!(state.instances.get(&i.id).unwrap().mods.len(), 3);
         fs::remove_dir_all(root).unwrap();
     }

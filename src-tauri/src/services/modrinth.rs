@@ -10,9 +10,6 @@ use std::{
     time::Duration,
 };
 
-pub fn invalid(message: impl Into<String>) -> AppError {
-    AppError::Invalid(message.into())
-}
 pub const FILE_LIMIT: u64 = 256 * 1024 * 1024;
 const API: &str = "https://api.modrinth.com/v2";
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -113,22 +110,22 @@ pub fn identifier(s: &str) -> AppResult<()> {
         || s == "."
         || s == ".."
     {
-        return Err(invalid("Ungültige ID/Version"));
+        return Err(AppError::invalid("Ungültige ID/Version"));
     }
     Ok(())
 }
 pub async fn bytes(request: reqwest::RequestBuilder, limit: u64) -> AppResult<Vec<u8>> {
     let mut response = request.send().await?.error_for_status()?;
     if !response.status().is_success() {
-        return Err(invalid("Redirects werden nicht akzeptiert"));
+        return Err(AppError::invalid("Redirects werden nicht akzeptiert"));
     }
     if response.content_length().is_some_and(|n| n > limit) {
-        return Err(invalid("Download zu groß"));
+        return Err(AppError::invalid("Download zu groß"));
     }
     let mut data = Vec::new();
     while let Some(chunk) = response.chunk().await? {
         if data.len() as u64 + chunk.len() as u64 > limit {
-            return Err(invalid("Download zu groß"));
+            return Err(AppError::invalid("Download zu groß"));
         }
         data.extend_from_slice(&chunk);
     }
@@ -140,7 +137,7 @@ async fn api<T: DeserializeOwned>(
     query: &[(String, String)],
 ) -> AppResult<T> {
     let mut url =
-        reqwest::Url::parse(&format!("{API}/{path}")).map_err(|e| invalid(e.to_string()))?;
+        reqwest::Url::parse(&format!("{API}/{path}")).map_err(|e| AppError::invalid(e.to_string()))?;
     url.query_pairs_mut().extend_pairs(query);
     Ok(serde_json::from_slice(
         &bytes(client.get(url), 8 * 1024 * 1024).await?,
@@ -161,10 +158,10 @@ pub async fn search(
     index: Option<String>,
 ) -> AppResult<SearchResponse> {
     if !matches!(kind.as_str(), "mod" | "modpack" | "resourcepack" | "shader" | "datapack") || query.len() > 512 || offset > 100_000 {
-        return Err(invalid("Ungültige Suche"));
+        return Err(AppError::invalid("Ungültige Suche"));
     }
     if !matches!(index.as_deref(), None | Some("relevance" | "downloads" | "follows" | "newest" | "updated")) {
-        return Err(invalid("Ungültige Sortierung"));
+        return Err(AppError::invalid("Ungültige Sortierung"));
     }
     let mut facets = vec![vec![format!("project_type:{kind}")]];
     if let Some(mc) = mc {
@@ -193,7 +190,7 @@ pub async fn search(
 /// Mehrere Projekte in einem Aufruf (Icons und Namen für die Inhaltsliste einer Instanz).
 pub async fn projects(client: &reqwest::Client, ids: &[String]) -> AppResult<Vec<Project>> {
     if ids.len() > 500 {
-        return Err(invalid("Zu viele Projekte"));
+        return Err(AppError::invalid("Zu viele Projekte"));
     }
     ids.iter().try_for_each(|id| identifier(id))?;
     if ids.is_empty() {
@@ -209,7 +206,7 @@ pub async fn version(client: &reqwest::Client, id: &str) -> AppResult<Version> {
     identifier(id)?;
     let v: Version = api(client, &format!("version/{id}"), &[]).await?;
     if v.id != id {
-        return Err(invalid("Versions-ID stimmt nicht überein"));
+        return Err(AppError::invalid("Versions-ID stimmt nicht überein"));
     }
     Ok(v)
 }
@@ -238,7 +235,7 @@ pub async fn versions_by_ids(client: &reqwest::Client, ids: &[String]) -> AppRes
         chunk.iter().try_for_each(|id| identifier(id))?;
         let got: Vec<Version> = api(client, "versions", &[("ids".into(), serde_json::to_string(chunk)?)]).await?;
         if got.len() != chunk.len() || !got.iter().all(|v| chunk.contains(&v.id)) {
-            return Err(invalid("Versionen stimmen nicht überein"));
+            return Err(AppError::invalid("Versionen stimmen nicht überein"));
         }
         out.extend(got);
     }
@@ -256,7 +253,7 @@ pub async fn latest_by_hash(
         return Ok(HashMap::new());
     }
     let url = reqwest::Url::parse(&format!("{API}/version_files/update"))
-        .map_err(|e| invalid(e.to_string()))?;
+        .map_err(|e| AppError::invalid(e.to_string()))?;
     let body = serde_json::json!({
         "hashes": hashes, "algorithm": "sha1", "loaders": loaders, "game_versions": [mc],
         // Nur stabile Versionen anbieten; Betas bleiben eine bewusste Wahl über „Andere Version“.
@@ -275,7 +272,7 @@ pub async fn versions_by_hash(
         return Ok(HashMap::new());
     }
     let url = reqwest::Url::parse(&format!("{API}/version_files"))
-        .map_err(|e| invalid(e.to_string()))?;
+        .map_err(|e| AppError::invalid(e.to_string()))?;
     let body = serde_json::json!({ "hashes": hashes, "algorithm": "sha1" });
     let found: HashMap<String, Version> =
         serde_json::from_slice(&bytes(client.post(url).json(&body), 8 * 1024 * 1024).await?)?;
@@ -290,7 +287,7 @@ pub async fn versions_by_hash(
         .collect())
 }
 pub fn download_url(s: &str) -> AppResult<reqwest::Url> {
-    let url = reqwest::Url::parse(s).map_err(|e| invalid(e.to_string()))?;
+    let url = reqwest::Url::parse(s).map_err(|e| AppError::invalid(e.to_string()))?;
     if url.scheme() != "https"
         || url.host_str() != Some("cdn.modrinth.com")
         || url.port_or_known_default() != Some(443)
@@ -298,7 +295,7 @@ pub fn download_url(s: &str) -> AppResult<reqwest::Url> {
         || url.password().is_some()
         || url.fragment().is_some()
     {
-        return Err(invalid(
+        return Err(AppError::invalid(
             "Download-Origin nicht erlaubt (nur https://cdn.modrinth.com)",
         ));
     }
@@ -307,7 +304,7 @@ pub fn download_url(s: &str) -> AppResult<reqwest::Url> {
 pub fn verify(data: &[u8], size: u64, hashes: &BTreeMap<String, String>) -> AppResult<()> {
     use sha2::{Digest, Sha512};
     if data.len() as u64 != size {
-        return Err(invalid("Dateigröße stimmt nicht"));
+        return Err(AppError::invalid("Dateigröße stimmt nicht"));
     }
     for (key, len, actual) in [
         ("sha1", 40, sha1_hex(data)),
@@ -322,16 +319,16 @@ pub fn verify(data: &[u8], size: u64, hashes: &BTreeMap<String, String>) -> AppR
     ] {
         let hash = hashes
             .get(key)
-            .ok_or_else(|| invalid(format!("{key} fehlt")))?;
+            .ok_or_else(|| AppError::invalid(format!("{key} fehlt")))?;
         if hash.len() != len || !hash.eq_ignore_ascii_case(&actual) {
-            return Err(invalid(format!("{key} stimmt nicht")));
+            return Err(AppError::invalid(format!("{key} stimmt nicht")));
         }
     }
     Ok(())
 }
 pub async fn download(client: &reqwest::Client, file: &File) -> AppResult<Vec<u8>> {
     if file.size > FILE_LIMIT {
-        return Err(invalid("Datei zu groß"));
+        return Err(AppError::invalid("Datei zu groß"));
     }
     let data = bytes(client.get(download_url(&file.url)?), file.size).await?;
     verify(&data, file.size, &file.hashes)?;
@@ -354,23 +351,23 @@ pub fn primary(version: &Version, extension: &str) -> AppResult<File> {
                 None
             }
         })
-        .ok_or_else(|| invalid("Keine eindeutige primäre Datei"))?;
+        .ok_or_else(|| AppError::invalid("Keine eindeutige primäre Datei"))?;
     super::content::safe_path(&selected.filename)?;
     if selected.filename.contains('/') {
-        return Err(invalid("Dateiname enthält Verzeichnis"));
+        return Err(AppError::invalid("Dateiname enthält Verzeichnis"));
     }
     Ok(selected.clone())
 }
 pub fn compatible(v: &Version, instance: &Instance) -> AppResult<()> {
     if !v.game_versions.contains(&instance.minecraft_version) || !instance.loader.runs(&v.loaders) {
-        return Err(invalid(format!("Inkompatible Mod-Version {}", v.id)));
+        return Err(AppError::invalid(format!("Inkompatible Mod-Version {}", v.id)));
     }
     Ok(())
 }
 pub fn select(selected: &mut HashMap<String, Version>, v: Version) -> AppResult<bool> {
     if let Some(old) = selected.get(&v.project_id) {
         if old.id != v.id {
-            return Err(invalid(format!("Zwei Mods brauchen unterschiedliche Versionen von {}", v.project_id)));
+            return Err(AppError::invalid(format!("Zwei Mods brauchen unterschiedliche Versionen von {}", v.project_id)));
         }
         return Ok(false);
     }
@@ -420,7 +417,7 @@ pub async fn resolve(
     installed.sort();
     installed.dedup();
     if installed.len() > 1000 {
-        return Err(invalid("Zu viele installierte Mods"));
+        return Err(AppError::invalid("Zu viele installierte Mods"));
     }
     let installed = versions_by_ids(client, &installed).await?;
     // Already installed projects came with the instance (often from a pack): they only pin the graph.
@@ -450,14 +447,14 @@ pub async fn resolve(
             }
             calls += 1;
             if calls > 192 {
-                return Err(invalid("Dependency-Limit erreicht"));
+                return Err(AppError::invalid("Dependency-Limit erreicht"));
             }
             // Ohne Loader-Filter anfragen: Quilt nimmt Quilt- und Fabric-Versionen.
             let child = versions(client, &id, Some(&instance.minecraft_version), None)
             .await?
             .into_iter()
             .find(|v| instance.loader.runs(&v.loaders))
-            .ok_or_else(|| invalid("Keine kompatible Dependency"))?;
+            .ok_or_else(|| AppError::invalid("Keine kompatible Dependency"))?;
             queue.push_back(child);
         }
         let Some(v) = queue.pop_front() else { continue };
@@ -471,11 +468,11 @@ pub async fn resolve(
         if new {
             calls += 1;
             if calls > 192 || selected.keys().filter(|p| !known.contains(*p)).count() > 64 {
-                return Err(invalid("Dependency-Limit erreicht"));
+                return Err(AppError::invalid("Dependency-Limit erreicht"));
             }
             let p = project(client, &v.project_id).await?;
             if p.id != v.project_id || p.project_type != "mod" || p.client_side == "unsupported" {
-                return Err(invalid("Projekt ist keine Client-Mod"));
+                return Err(AppError::invalid("Projekt ist keine Client-Mod"));
             }
         }
         for d in &v.dependencies {
@@ -483,7 +480,7 @@ pub async fn resolve(
                 continue;
             }
             if calls > 192 || queue.len() > 128 + known.len() {
-                return Err(invalid("Dependency-Limit erreicht"));
+                return Err(AppError::invalid("Dependency-Limit erreicht"));
             }
             let child = if let Some(id) = &d.version_id {
                 match pinned.values().chain(selected.values()).find(|p| &p.id == id) {
@@ -501,7 +498,7 @@ pub async fn resolve(
                     continue;
                 }
             } else {
-                return Err(invalid(
+                return Err(AppError::invalid(
                     "Required Datei-Dependency ohne Projekt/Version nicht unterstützt",
                 ));
             };
@@ -509,7 +506,7 @@ pub async fn resolve(
                 .as_ref()
                 .is_some_and(|p| p != &child.project_id)
             {
-                return Err(invalid("Dependency-Projekt stimmt nicht"));
+                return Err(AppError::invalid("Dependency-Projekt stimmt nicht"));
             }
             if d.version_id.is_some()
                 && pin_and_rebuild(
@@ -522,7 +519,7 @@ pub async fn resolve(
             {
                 rebuilds += 1;
                 if rebuilds > 16 {
-                    return Err(invalid("Dependency rebuild limit erreicht"));
+                    return Err(AppError::invalid("Dependency rebuild limit erreicht"));
                 }
                 break;
             }
@@ -539,7 +536,7 @@ pub async fn resolve(
                     )
                 })
             {
-                return Err(invalid("Inkompatible Dependencies"));
+                return Err(AppError::invalid("Inkompatible Dependencies"));
             }
         }
     }

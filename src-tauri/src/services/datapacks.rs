@@ -10,9 +10,10 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::progress::{Phase, ProgressFn};
 use super::{
     blocking, content, entries, has_extension, local_files, move_to_trash,
-    modrinth::{self, invalid, Version},
+    modrinth::{self, Version},
     providers::zip_files,
     worlds, Dirs,
 };
@@ -118,23 +119,23 @@ pub async fn install(
     instance_id: &str,
     world_id: &str,
     version_id: &str,
-    progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
+    progress: ProgressFn<'_>,
 ) -> AppResult<()> {
     let mc = state.instances.get(instance_id)?.minecraft_version;
     let world = worlds::world_dir(&state.dirs, instance_id, world_id)?;
-    progress("resolve", 0, 1);
+    progress(Phase::Resolve, 0, 1);
     let client = modrinth::client()?;
     let version = modrinth::version(&client, version_id).await?;
     if !fits(&version, &mc) {
-        return Err(invalid(format!("„{}“ ist kein Datenpaket für Minecraft {mc}", version.name)));
+        return Err(AppError::invalid(format!("„{}“ ist kein Datenpaket für Minecraft {mc}", version.name)));
     }
     let file = modrinth::primary(&version, ".zip")?;
-    progress("download", 0, 1);
+    progress(Phase::Download, 0, 1);
     let data = modrinth::download(&client, &file).await?;
     let root = state.dirs.root.clone();
     blocking(move |_| place(&root, &world, vec![(file.filename, data)])).await?;
     tracing::info!(instance = %instance_id, world = %world_id, version = %version_id, "Datenpaket installiert");
-    progress("complete", 1, 1);
+    progress(Phase::Complete, 1, 1);
     Ok(())
 }
 
@@ -256,7 +257,7 @@ fn fits(version: &Version, mc: &str) -> bool {
 fn read_zip(path: &str) -> AppResult<(String, Vec<u8>)> {
     let (path, name) = local_files::source(path)?;
     if !is_zip(&name) {
-        return Err(invalid(format!("„{name}“ ist keine .zip-Datei")));
+        return Err(AppError::invalid(format!("„{name}“ ist keine .zip-Datei")));
     }
     Ok((name, fs::read(path)?))
 }
@@ -268,7 +269,7 @@ fn place(root: &Path, world: &Path, files: Vec<(String, Vec<u8>)>) -> AppResult<
     for (name, data) in &files {
         check(name, data)?;
         if folder.join(name).exists() {
-            return Err(invalid(format!("„{name}“ liegt schon in dieser Welt")));
+            return Err(AppError::invalid(format!("„{name}“ liegt schon in dieser Welt")));
         }
     }
     let mut created = Vec::new();
@@ -283,10 +284,10 @@ fn place(root: &Path, world: &Path, files: Vec<(String, Vec<u8>)>) -> AppResult<
 /// Ein Datenpaket-Zip: Einträge nach den Regeln der Pack-Importe, ganz oben eine lesbare `pack.mcmeta` und `data/`.
 fn check(name: &str, data: &[u8]) -> AppResult<()> {
     let not_a_pack =
-        || invalid(format!("„{name}“ ist kein Datenpaket: ganz oben im Zip fehlen pack.mcmeta oder der Ordner data/"));
+        || AppError::invalid(format!("„{name}“ ist kein Datenpaket: ganz oben im Zip fehlen pack.mcmeta oder der Ordner data/"));
     let mut zip = zip::ZipArchive::new(Cursor::new(data))
-        .map_err(|_| invalid(format!("„{name}“ ist kein lesbares Zip-Archiv")))?;
-    let files = zip_files(&mut zip, "", &[]).map_err(|err| invalid(format!("„{name}“: {err}")))?;
+        .map_err(|_| AppError::invalid(format!("„{name}“ ist kein lesbares Zip-Archiv")))?;
+    let files = zip_files(&mut zip, "", &[]).map_err(|err| AppError::invalid(format!("„{name}“: {err}")))?;
     if !has_pack_layout(files.iter().map(|(path, _)| path.as_path())) {
         return Err(not_a_pack());
     }

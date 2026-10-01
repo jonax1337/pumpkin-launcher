@@ -7,15 +7,16 @@ mod prism;
 
 use std::{
     collections::HashSet,
-    fs, io,
+    fs,
     path::{Path, PathBuf},
 };
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use super::{blocking, check_cancelled, content, copy_files, forge, modrinth, walk, REGENERATED};
+use super::progress::{Phase, SharedProgress};
+use super::{blocking, check_cancelled, content, copy_files, forge, modrinth, none_if_missing, walk, REGENERATED};
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     models::{Instance, ModLoader, NewInstance},
     state::AppState,
 };
@@ -158,11 +159,7 @@ fn subdirs(dir: &Path) -> Vec<PathBuf> {
 
 /// Kennungsdatei eines Launchers; fehlt sie, ist der Ordner keine Instanz dieses Launchers.
 fn read_marker(path: &Path) -> AppResult<Option<Vec<u8>>> {
-    match fs::read(path) {
-        Ok(data) => Ok(Some(data)),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(e.into()),
-    }
+    Ok(none_if_missing(fs::read(path))?)
 }
 
 /// JSON der anderen Launcher; Windows-Programme schreiben es teils mit BOM.
@@ -172,8 +169,8 @@ fn from_json<T: DeserializeOwned>(data: &[u8]) -> AppResult<T> {
 
 /// Loader nach dem Namen, den die anderen Launcher schreiben: wie der serde-Name, Groß- und Kleinschreibung egal.
 fn loader_named(name: &str) -> AppResult<ModLoader> {
-    serde_json::from_value(name.to_ascii_lowercase().into())
-        .map_err(|_| modrinth::invalid(format!("Den Loader „{name}“ kann Pumpkin Launcher nicht starten")))
+    ModLoader::from_name(&name.to_ascii_lowercase())
+        .ok_or_else(|| AppError::invalid(format!("Den Loader „{name}“ kann Pumpkin Launcher nicht starten")))
 }
 
 /// JVM-Argumente aus einer Zeile, wie die Launcher sie speichern.
@@ -195,7 +192,7 @@ fn text(path: &Path) -> String {
 pub async fn import(
     state: &AppState,
     source: ForeignInstance,
-    progress: impl Fn(&str, u64, u64) + Send + 'static,
+    progress: SharedProgress,
 ) -> AppResult<Instance> {
     check(&source)?;
     let game_dir = PathBuf::from(source.game_dir);
@@ -213,18 +210,18 @@ pub async fn import(
         })
     };
     let (dirs, target, fresh) = (state.dirs.clone(), state.dirs.game_dir(&instance.id), instance.clone());
-    let (mut guard, found) = content::populate_new_dir(&state.dirs, state.dirs.instance(&instance.id), move |stop| {
+    let (guard, found) = content::populate_new_dir(&state.dirs, state.dirs.instance(&instance.id), move |stop| {
         copy_files(&files_to_copy(&game_dir, &target)?, &|done, total| {
             check_cancelled(stop)?;
-            progress("copy", done, total);
+            progress(Phase::Copy, done, total);
             Ok(())
         })?;
-        content::cached_untracked(&dirs, &fresh, &progress, stop)
+        content::cached_untracked(&dirs, &fresh, &*progress, stop)
     })
     .await?;
     content::record_untracked(&mut instance.mods, &found, &origins).await?;
     let instance = state.instances.insert(instance)?;
-    guard.0 = None;
+    guard.disarm();
     tracing::info!(id = %instance.id, from = ?instance.imported_from, "Instanz importiert");
     Ok(instance)
 }
@@ -239,7 +236,7 @@ fn check(source: &ForeignInstance) -> AppResult<()> {
     forge::check_loader(setup.loader, &setup.minecraft_version)?;
     let game_dir = Path::new(&source.game_dir);
     if !game_dir.is_absolute() || !game_dir.is_dir() {
-        return Err(modrinth::invalid(format!("Den Spielordner {} gibt es nicht mehr", source.game_dir)));
+        return Err(AppError::invalid(format!("Den Spielordner {} gibt es nicht mehr", source.game_dir)));
     }
     Ok(())
 }
@@ -268,7 +265,7 @@ fn relocated(rel: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{models::ModSource, services::write_files};
+    use crate::{models::ModSource, services::{progress::ignored, write_files}};
 
     const PACK: &str = r#"{"formatVersion": 1, "components": [
         {"uid": "net.minecraft", "version": "1.21.1", "important": true},
@@ -346,7 +343,7 @@ mod tests {
         add_content(&source.join("minecraft"));
         let from = detect(&state, Some(&source)).await.unwrap().remove(0);
 
-        let instance = import(&state, from, |_, _, _| {}).await.unwrap();
+        let instance = import(&state, from, ignored()).await.unwrap();
 
         assert_eq!((instance.name.as_str(), instance.loader, instance.memory_mb), ("Welt", ModLoader::Fabric, Some(4096)));
         let mods: Vec<_> = instance.mods.iter().map(|m| (m.file_name.as_str(), m.enabled)).collect();
@@ -367,7 +364,7 @@ mod tests {
         write_files(&source, &[("minecraftinstance.json", manifest), ("mods/jei.jar", "jei"), ("mods/own.jar", "own")]);
         let from = detect(&state, Some(&source)).await.unwrap().remove(0);
 
-        let instance = import(&state, from, |_, _, _| {}).await.unwrap();
+        let instance = import(&state, from, ignored()).await.unwrap();
 
         let sources: Vec<_> = instance.mods.iter().map(|m| (m.id.as_str(), &m.source)).collect();
         assert_eq!(sources[0], ("cf-238222", &ModSource::CurseForge { project_id: 238222, file_id: 5846880 }));
@@ -411,7 +408,7 @@ mod tests {
         let vanilla = Setup { loader: ModLoader::Vanilla, loader_version: None, ..old_forge.setup.clone() };
         let missing = ForeignInstance::new(Launcher::CurseForge, &root.join("weg"), Found { game_dir: root.join("weg"), setup: vanilla });
         for source in [old_forge, missing] {
-            assert!(import(&state, source, |_, _, _| {}).await.is_err());
+            assert!(import(&state, source, ignored()).await.is_err());
         }
         assert!(state.instances.list().is_empty());
         fs::remove_dir_all(root).unwrap();

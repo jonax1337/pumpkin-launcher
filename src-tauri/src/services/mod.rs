@@ -3,13 +3,13 @@
 use std::{
     fs, io,
     path::{Path, PathBuf},
+    sync::{Mutex, MutexGuard},
 };
 
 use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, AppResult};
 use download::RemoveOnDrop;
-use modrinth::invalid;
 
 pub mod auth;
 pub mod datapacks;
@@ -30,6 +30,7 @@ pub mod modrinth;
 pub mod content;
 pub mod mojang;
 pub mod mrpack;
+pub mod progress;
 pub mod providers;
 pub mod rules;
 pub mod servers;
@@ -150,18 +151,15 @@ impl Dirs {
 /// Dateien unter `path` (Datei oder Ordner, rekursiv, ohne Symlinks/Junctions) als
 /// (Pfad relativ zu `base` mit `/`, Pfad). Fehlt `path`, kommt nichts hinzu.
 pub(crate) fn walk(base: &Path, path: &Path, out: &mut Vec<(String, PathBuf)>) -> AppResult<()> {
-    let kind = match fs::symlink_metadata(path) {
-        Ok(meta) => meta.file_type(),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => return Err(e.into()),
-    };
+    let Some(meta) = none_if_missing(fs::symlink_metadata(path))? else { return Ok(()) };
+    let kind = meta.file_type();
     if kind.is_dir() {
         for entry in fs::read_dir(path)? {
             walk(base, &entry?.path(), out)?;
         }
     } else if kind.is_file() {
-        let rel = path.strip_prefix(base).map_err(|_| invalid("Pfad außerhalb des Spielordners"))?;
-        let rel = rel.to_str().ok_or_else(|| invalid("Dateiname ist kein gültiger Text"))?.replace('\\', "/");
+        let rel = path.strip_prefix(base).map_err(|_| AppError::invalid("Pfad außerhalb des Spielordners"))?;
+        let rel = rel.to_str().ok_or_else(|| AppError::invalid("Dateiname ist kein gültiger Text"))?.replace('\\', "/");
         out.push((rel, path.to_owned()));
     }
     Ok(())
@@ -189,14 +187,14 @@ pub(crate) fn write_zip_atomic(
     fill: impl FnOnce(&mut zip::ZipWriter<fs::File>) -> AppResult<()>,
 ) -> AppResult<()> {
     let tmp = path.with_extension(part_ext);
-    let mut guard = RemoveOnDrop(Some(tmp.clone()));
+    let guard = RemoveOnDrop::new(tmp.clone());
     let mut zip = zip::ZipWriter::new(fs::File::create(&tmp)?);
     fill(&mut zip)?;
     // Erst schließen, dann umbenennen: Windows verschiebt keine offene Datei. Vorher auf den Datenträger, damit ein
     // Absturz nach dem Umbenennen (und etwa dem Löschen der gesicherten Welt) keine leere Datei zurücklässt.
     zip.finish()?.sync_all()?;
     fs::rename(&tmp, path)?;
-    guard.0 = None;
+    guard.disarm();
     Ok(())
 }
 
@@ -210,11 +208,33 @@ pub(crate) fn add_zip_file(zip: &mut zip::ZipWriter<fs::File>, name: &str, file:
 
 /// Einträge eines Ordners; fehlt er, keine.
 pub(crate) fn entries(dir: &Path) -> AppResult<Vec<fs::DirEntry>> {
-    match fs::read_dir(dir) {
-        Ok(entries) => Ok(entries.collect::<io::Result<_>>()?),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(e) => Err(e.into()),
+    match none_if_missing(fs::read_dir(dir))? {
+        Some(entries) => Ok(entries.collect::<io::Result<_>>()?),
+        None => Ok(Vec::new()),
     }
+}
+
+/// Ein fehlendes Ziel ist oft kein Fehler: dann `None`; jeder andere Fehler bleibt einer.
+pub(crate) fn none_if_missing<T>(result: io::Result<T>) -> io::Result<Option<T>> {
+    match result {
+        Ok(value) => Ok(Some(value)),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+/// Löscht Datei oder Ordner (samt Inhalt) beim Aufräumen: ein Fehler daraus soll den eigentlichen Vorgang nicht
+/// mehr kippen und wird nur geloggt. Was fehlt, ist schon aufgeräumt.
+pub(crate) fn remove_logged(path: &Path) {
+    let result = if path.is_dir() { fs::remove_dir_all(path) } else { fs::remove_file(path) };
+    if let Err(err) = none_if_missing(result) {
+        tracing::warn!(path = %path.display(), %err, "Aufräumen fehlgeschlagen");
+    }
+}
+
+/// Sperre auf geteilten Zustand; ein Thread, der darunter abgestürzt ist, macht die Daten nicht unbrauchbar.
+pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// Hat `name` die Endung `ext` (ohne Punkt), unabhängig von der Schreibweise?
@@ -275,7 +295,7 @@ pub(crate) async fn blocking<T: Send + 'static>(
     let _stop_on_drop = stop.clone().drop_guard();
     tokio::task::spawn_blocking(move || work(&stop))
         .await
-        .map_err(|e| invalid(format!("Der Vorgang ist unerwartet abgebrochen: {e}")))?
+        .map_err(|e| AppError::invalid(format!("Der Vorgang ist unerwartet abgebrochen: {e}")))?
 }
 
 pub(crate) fn check_cancelled(stop: &CancellationToken) -> AppResult<()> {

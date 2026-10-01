@@ -2,6 +2,7 @@
 //! legt `mods::sync` per Hardlink aus dem Cache ab, statt sie Byte für Byte zu kopieren.
 use std::path::PathBuf;
 
+use super::progress::{Phase, SharedProgress};
 use super::{check_cancelled, content, copy_files, mods, walk, Dirs};
 use crate::{
     error::AppResult,
@@ -14,7 +15,7 @@ use crate::{
 pub async fn duplicate(
     state: &AppState,
     instance_id: &str,
-    progress: impl Fn(&str, u64, u64) + Send + 'static,
+    progress: SharedProgress,
 ) -> AppResult<Instance> {
     let source = state.instances.get(instance_id)?;
     let taken: Vec<String> = state.instances.list().into_iter().map(|i| i.name).collect();
@@ -28,16 +29,16 @@ pub async fn duplicate(
     };
     let dirs = state.dirs.clone();
     let (from, to, mods) = (instance_id.to_owned(), copy.id.clone(), copy.mods.clone());
-    let (mut guard, ()) = content::populate_new_dir(&state.dirs, dirs.instance(&copy.id), move |stop| {
+    let (guard, ()) = content::populate_new_dir(&state.dirs, dirs.instance(&copy.id), move |stop| {
         copy_instance(&dirs, &from, &to, &mods, &|done, total| {
             check_cancelled(stop)?;
-            progress("copy", done, total);
+            progress(Phase::Copy, done, total);
             Ok(())
         })
     })
     .await?;
     let copy = state.instances.insert(copy)?;
-    guard.0 = None;
+    guard.disarm();
     tracing::info!(source = %instance_id, id = %copy.id, "Instanz dupliziert");
     Ok(copy)
 }
@@ -93,7 +94,7 @@ mod tests {
     use super::*;
     use std::fs;
     use crate::models::{ModKind, ModLoader, ModSource, NewInstance};
-    use crate::services::write_files;
+    use crate::services::{progress::ignored, write_files};
 
     fn local_mod(state: &AppState, name: &str) -> Mod {
         Mod {
@@ -149,8 +150,8 @@ mod tests {
             ],
         );
 
-        let copy = duplicate(&state, &source.id, |_, _, _| {}).await.unwrap();
-        let again = duplicate(&state, &source.id, |_, _, _| {}).await.unwrap();
+        let copy = duplicate(&state, &source.id, ignored()).await.unwrap();
+        let again = duplicate(&state, &source.id, ignored()).await.unwrap();
 
         assert_eq!((copy.name.as_str(), again.name.as_str()), ("Quelle (Kopie)", "Quelle (Kopie 2)"));
         assert_ne!(copy.id, source.id);
@@ -183,7 +184,7 @@ mod tests {
         let source = source_instance(&state, vec![missing]);
         write_files(&state.dirs.game_dir(&source.id), &[("options.txt", "fov:1")]);
 
-        assert!(duplicate(&state, &source.id, |_, _, _| {}).await.is_err());
+        assert!(duplicate(&state, &source.id, ignored()).await.is_err());
 
         assert_eq!(state.instances.list(), vec![source]);
         assert_eq!(fs::read_dir(root.join("instances")).unwrap().count(), 1);
