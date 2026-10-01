@@ -2,6 +2,8 @@
 //! zu brechen, und die gewählten samt neuer Pflicht-Abhängigkeiten in einem Zug ablegen.
 use std::collections::{HashMap, HashSet};
 
+use serde::Serialize;
+
 use super::{
     commit_mods, ensure_known,
     install::{budget, download_all, mark_dependencies},
@@ -18,8 +20,35 @@ use crate::{
     state::AppState,
 };
 
+/// Ein verfügbares Update, so wie das Frontend es listet.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModUpdate {
+    mod_id: String,
+    current_version: String,
+    version_id: String,
+    version_number: String,
+}
+
+impl ModUpdate {
+    fn new(installed: &Mod, newer: Version) -> Self {
+        Self {
+            mod_id: installed.id.clone(),
+            current_version: installed.version.clone(),
+            version_id: newer.id,
+            version_number: newer.version_number,
+        }
+    }
+}
+
+/// Updates der Modrinth-Inhalte der Instanz.
+pub async fn check_updates(client: &reqwest::Client, instance: &Instance) -> AppResult<Vec<ModUpdate>> {
+    let found = find_updates(client, instance).await?;
+    Ok(found.into_iter().map(|(i, newer)| ModUpdate::new(&instance.mods[i], newer)).collect())
+}
+
 /// Updates der Modrinth-Inhalte als (Index in `instance.mods`, neue Version).
-pub async fn check_updates(client: &reqwest::Client, instance: &Instance) -> AppResult<Vec<(usize, Version)>> {
+async fn find_updates(client: &reqwest::Client, instance: &Instance) -> AppResult<Vec<(usize, Version)>> {
     let mut found = Vec::new();
     for kind in ModKind::ALL {
         let hashes = hashes_of(&instance.mods, |m| m.kind == kind);
@@ -119,7 +148,7 @@ pub async fn update_mods(state: &AppState, id: &str, mod_ids: &[String], progres
     ensure_known(&instance, mod_ids)?;
     let client = modrinth::client()?;
     progress(Phase::Resolve, 0, 1);
-    let updates: Vec<_> = check_updates(&client, &instance)
+    let updates: Vec<_> = find_updates(&client, &instance)
         .await?
         .into_iter()
         .filter(|(i, _)| mod_ids.contains(&instance.mods[*i].id))

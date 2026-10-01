@@ -2,6 +2,7 @@
 use super::{
     content::fs_safety::safe_path,
     limits::{API_JSON_LIMIT, FILE_LIMIT, PAGE_SIZE, QUERY_MAX},
+    providers::SearchQuery,
     transport::{base_client_builder, read_capped, Digests, DOWNLOAD_TOO_BIG},
 };
 use crate::{
@@ -145,40 +146,23 @@ fn loaders_to_query(loader: &str) -> Vec<&str> {
     if loader == "quilt" { vec!["quilt", "fabric"] } else { vec![loader] }
 }
 
-pub async fn search(
-    client: &reqwest::Client,
-    query: String,
-    kind: String,
-    mc: Option<String>,
-    loader: Option<String>,
-    offset: u32,
-    index: Option<String>,
-) -> AppResult<SearchResponse> {
-    if !matches!(kind.as_str(), "mod" | "modpack" | "resourcepack" | "shader" | "datapack") || query.len() > QUERY_MAX || offset > MAX_SEARCH_OFFSET {
-        return Err(AppError::invalid("Ungültige Suche"));
-    }
-    if !matches!(index.as_deref(), None | Some("relevance" | "downloads" | "follows" | "newest" | "updated")) {
-        return Err(AppError::invalid("Ungültige Sortierung"));
-    }
-    let mut facets = vec![vec![format!("project_type:{kind}")]];
-    if let Some(mc) = mc {
-        identifier(&mc)?;
+pub async fn search(client: &reqwest::Client, request: &SearchQuery) -> AppResult<SearchResponse> {
+    request.ensure_within(QUERY_MAX, MAX_SEARCH_OFFSET)?;
+    let mut facets = vec![vec![format!("project_type:{}", request.project_type.name())]];
+    if let Some(mc) = &request.mc {
         facets.push(vec![format!("versions:{mc}")]);
     }
-    if let Some(loader) = loader {
-        identifier(&loader)?;
-        facets.push(loaders_to_query(&loader).iter().map(|l| format!("categories:{l}")).collect());
+    if let Some(loader) = &request.loader {
+        facets.push(loaders_to_query(loader).iter().map(|l| format!("categories:{l}")).collect());
     }
-    // Ohne Sortierung: ohne Suchbegriff die beliebtesten Projekte zuerst.
-    let index = index.unwrap_or_else(|| if query.trim().is_empty() { "downloads" } else { "relevance" }.into());
     api(
         client,
         "search",
         &[
-            ("query".into(), query),
+            ("query".into(), request.query.clone()),
             ("facets".into(), serde_json::to_string(&facets)?),
-            ("index".into(), index),
-            ("offset".into(), offset.to_string()),
+            ("index".into(), request.sort().name().into()),
+            ("offset".into(), request.offset.to_string()),
             ("limit".into(), PAGE_SIZE.to_string()),
         ],
     )

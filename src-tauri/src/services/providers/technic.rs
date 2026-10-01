@@ -2,8 +2,7 @@
 //! Servern der Autoren (meist Dropbox oder GitHub), ohne Prüfsumme. Pumpkin Launcher lädt sie trotzdem,
 //! aber nur über `net::download_public` (HTTPS, öffentliche Adressen) und entpackt sie mit denselben
 //! Pfad- und Größenregeln wie ein `.mrpack`. Loader und Minecraft-Version stehen in `bin/version.json`.
-use crate::services::progress::{Phase, ProgressFn};
-use super::{json, mib_progress, net, segment, zip_files};
+use super::{json, net, remote_file::mib_progress, segment, zip_files, PackRequest, ProjectType, SearchQuery, SortIndex};
 use crate::{
     error::{AppError, AppResult},
     models::{instance_name, Instance, ModLoader, NewInstance},
@@ -12,6 +11,7 @@ use crate::{
         forge,
         limits::{CATALOG_CONCURRENCY, PAGE_SIZE, QUERY_MAX, SUMMARY_MAX, ZIP_JSON_LIMIT, ZIP_LIMIT},
         modrinth::{identifier, File, Hit, Project, SearchResponse, Version},
+        progress::{Phase, ProgressFn},
         transport::read_capped_io,
         Dirs,
     },
@@ -126,23 +126,15 @@ async fn detail(client: &reqwest::Client, slug: &str) -> AppResult<Detail> {
     Ok(d)
 }
 
-pub async fn search(
-    client: &reqwest::Client,
-    query: &str,
-    kind: &str,
-    mc: Option<&str>,
-    offset: u32,
-    index: Option<&str>,
-) -> AppResult<SearchResponse> {
-    if query.len() > QUERY_MAX {
-        return Err(AppError::invalid("Ungültige Suche"));
-    }
-    let empty = SearchResponse { hits: Vec::new(), total_hits: 0, offset, limit: PAGE_SIZE };
-    // Technic liefert eine einzige Seite ohne Versatz.
-    if kind != "modpack" || offset > 0 {
+/// Technic nennt keinen Loader und liefert nur eine Seite ohne Versatz; ohne Sortierwunsch bleibt es bei der Reihenfolge
+/// der API (bei leerem Suchbegriff die angesagten Packs).
+pub async fn search(client: &reqwest::Client, request: &SearchQuery) -> AppResult<SearchResponse> {
+    request.ensure_within(QUERY_MAX, u32::MAX)?;
+    let empty = SearchResponse { hits: Vec::new(), total_hits: 0, offset: request.offset, limit: PAGE_SIZE };
+    if request.project_type != ProjectType::Modpack || request.offset > 0 {
         return Ok(empty);
     }
-    let query = query.trim();
+    let query = request.query.trim();
     let mut url = reqwest::Url::parse(&format!("{API}/{}", if query.is_empty() { "trending" } else { "search" }))
         .map_err(|e| AppError::invalid(e.to_string()))?;
     url.query_pairs_mut().append_pair("build", BUILD);
@@ -158,14 +150,13 @@ pub async fn search(
         .filter_map(|d| async move { d })
         .collect()
         .await;
+    let mc = request.mc.as_deref();
     let mut details: Vec<Detail> = details.into_iter().filter(|d| mc.is_none_or(|mc| d.minecraft.as_deref() == Some(mc))).collect();
-    match index {
-        Some("downloads") => details.sort_by_key(|d| std::cmp::Reverse(d.installs)),
-        None | Some("relevance" | "follows" | "newest" | "updated") => {}
-        Some(_) => return Err(AppError::invalid("Ungültige Sortierung")),
+    if request.index == Some(SortIndex::Downloads) {
+        details.sort_by_key(|d| std::cmp::Reverse(d.installs));
     }
     let hits: Vec<Hit> = details.iter().map(hit).collect();
-    Ok(SearchResponse { total_hits: hits.len() as u64, hits, offset, limit: PAGE_SIZE })
+    Ok(SearchResponse { total_hits: hits.len() as u64, hits, offset: request.offset, limit: PAGE_SIZE })
 }
 
 pub async fn project(client: &reqwest::Client, slug: &str) -> AppResult<Project> {
@@ -207,6 +198,15 @@ pub async fn versions(client: &reqwest::Client, slug: &str) -> AppResult<Vec<Ver
     }])
 }
 
+/// Maven-Koordinaten, an denen ein Loader in den Bibliotheken des Launcher-Profils zu erkennen ist; die Reihenfolge
+/// entscheidet, wenn mehrere vorkommen.
+const LOADER_LIBRARIES: [(ModLoader, &[&str]); 4] = [
+    (ModLoader::Fabric, &["net.fabricmc:fabric-loader:"]),
+    (ModLoader::Quilt, &["org.quiltmc:quilt-loader:"]),
+    (ModLoader::NeoForge, &["net.neoforged:neoforge:", "net.neoforged:forge:"]),
+    (ModLoader::Forge, &["net.minecraftforge:forge:", "net.minecraftforge:fmlloader:"]),
+];
+
 /// Minecraft-Version, Loader und Loader-Version aus dem Launcher-Profil `bin/version.json`.
 /// Der Loader steht in den Bibliotheken (`net.fabricmc:fabric-loader:0.15.3`, `net.minecraftforge:forge:1.20.1-47.1.3` …).
 fn loader_from(profile: &serde_json::Value) -> AppResult<(String, ModLoader, Option<String>)> {
@@ -225,22 +225,15 @@ fn loader_from(profile: &serde_json::Value) -> AppResult<(String, ModLoader, Opt
         let v = v.split(':').next()?;
         Some(v.strip_prefix(&format!("{mc}-")).unwrap_or(v).to_string())
     };
-    let found = if let Some(v) = version("net.fabricmc:fabric-loader:") {
-        (ModLoader::Fabric, Some(v))
-    } else if let Some(v) = version("org.quiltmc:quilt-loader:") {
-        (ModLoader::Quilt, Some(v))
-    } else if let Some(v) = version("net.neoforged:neoforge:").or_else(|| version("net.neoforged:forge:")) {
-        (ModLoader::NeoForge, Some(v))
-    } else if let Some(v) = version("net.minecraftforge:forge:").or_else(|| version("net.minecraftforge:fmlloader:")) {
-        (ModLoader::Forge, Some(v))
-    } else {
-        (ModLoader::Vanilla, None)
-    };
-    if let Some(v) = &found.1 {
+    let (loader, loader_version) = LOADER_LIBRARIES
+        .iter()
+        .find_map(|(loader, prefixes)| prefixes.iter().find_map(|prefix| version(prefix)).map(|v| (*loader, Some(v))))
+        .unwrap_or((ModLoader::Vanilla, None));
+    if let Some(v) = &loader_version {
         identifier(v)?;
     }
-    forge::check_loader(found.0, &mc)?;
-    Ok((mc, found.0, found.1))
+    forge::check_loader(loader, &mc)?;
+    Ok((mc, loader, loader_version))
 }
 
 /// Liest das Pack-Zip (nur das Inhaltsverzeichnis) und plant die Dateien. Regeln wie beim `.mrpack`:
@@ -282,12 +275,11 @@ fn inspect(temp: TempFile, name: &str) -> AppResult<Pack> {
 pub(crate) async fn plan(
     client: &reqwest::Client,
     dirs: &Dirs,
-    slug: &str,
-    name: &str,
+    request: &PackRequest,
     progress: ProgressFn<'_>,
 ) -> AppResult<Pack> {
-    let name = instance_name(name)?;
-    let d = detail(client, slug).await?;
+    let name = instance_name(&request.name)?;
+    let d = detail(client, &request.project_id).await?;
     if d.solder.is_some() {
         return Err(AppError::invalid("Dieses Modpack nutzt Technic Solder (ältere Technik) und lässt sich nicht installieren"));
     }
@@ -312,9 +304,11 @@ mod tests {
     #[ignore = "braucht Netzwerk"]
     async fn live_trending_search_and_detail() {
         let client = crate::services::modrinth::client().unwrap();
-        let trending = search(&client, "", "modpack", None, 0, Some("downloads")).await.unwrap();
+        let by_downloads = SearchQuery { index: Some(SortIndex::Downloads), ..SearchQuery::of("", ProjectType::Modpack) };
+        let trending = search(&client, &by_downloads).await.unwrap();
         assert!(trending.hits.len() > 3, "Trending leer");
-        let found = search(&client, "cobblemon", "modpack", Some("1.21.1"), 0, None).await.unwrap();
+        let cobblemon = SearchQuery { mc: Some("1.21.1".into()), ..SearchQuery::of("cobblemon", ProjectType::Modpack) };
+        let found = search(&client, &cobblemon).await.unwrap();
         eprintln!("{} Treffer, erster: {:?}", found.hits.len(), found.hits.first().map(|h| (&h.title, h.downloads)));
         assert!(found.hits.iter().all(|h| !h.title.is_empty()));
         let slug = &trending.hits[0].project_id;
@@ -327,11 +321,15 @@ mod tests {
     #[tokio::test]
     #[ignore = "braucht Netzwerk und lädt rund 32 MB"]
     async fn live_install_small_pack() {
-        use crate::{services::content, state::AppState};
+        use crate::{
+            services::{content, providers::Source},
+            state::AppState,
+        };
         let client = crate::services::modrinth::client().unwrap();
         let root = std::env::temp_dir().join(crate::models::new_id());
         let state = AppState::load(&root).unwrap();
-        let pack = plan(&client, &state.dirs, "deadwood-fabric", "Live-Test", &|phase, done, total| eprintln!("{phase:?}: {done}/{total} MiB")).await.unwrap();
+        let request = PackRequest { source: Source::Technic, project_id: "deadwood-fabric".into(), version_id: "1".into(), name: "Live-Test".into() };
+        let pack = plan(&client, &state.dirs, &request, &|phase, done, total| eprintln!("{phase:?}: {done}/{total} MiB")).await.unwrap();
         let instance = content::import_plan(&state, pack, None, &|_, _, _| {}).await.unwrap();
         let jars = std::fs::read_dir(state.dirs.game_dir(&instance.id).join("mods")).unwrap().count();
         eprintln!("{} {:?} {:?}, {jars} Mods, {} erfasst", instance.minecraft_version, instance.loader, instance.loader_version, instance.mods.len());
