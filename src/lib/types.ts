@@ -190,3 +190,32 @@ export interface InstanceStatus {
   installed: boolean;
   running: boolean;
 }
+
+// ---------- Skins ----------
+
+/** Spielermodell: breite (Steve) oder schmale Arme (Alex). */
+export type SkinVariant = "classic" | "slim";
+
+export const SKIN_VARIANT_LABELS: Record<SkinVariant, string> = { classic: "Klassisch", slim: "Schlank" };
+
+/** Skin in der lokalen Bibliothek; `id` ist der SHA-1 der PNG, die Textur kommt über `skin_texture`. */
+export interface LibrarySkin {
+  id: string;
+  name: string;
+  variant: SkinVariant;
+  addedAt: number;
+}
+
+/** Umhang eines Microsoft-Kontos; höchstens einer ist `active`. */
+export interface Cape {
+  id: string;
+  alias: string;
+  url: string;
+  active: boolean;
+}
+
+/** Was ein Microsoft-Konto gerade trägt (`skin_profile`); Texturen von textures.minecraft.net. */
+export interface SkinProfile {
+  skin: { url: string; variant: SkinVariant } | null;
+  capes: Cape[];
+}

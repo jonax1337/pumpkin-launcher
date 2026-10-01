@@ -279,6 +279,14 @@ a { color: inherit; }
 .memsl .cap { padding-right: var(--free, 0%); text-align: right; font-size: 12px; line-height: 16px; color: var(--fg-3); white-space: nowrap; }
 .memrow > .num { width: 64px; height: 32px; line-height: 32px; font-size: 24px; flex: none; }
 
+/* ---------- Skins ---------- */
+/* Figur und Umhang: Canvas in Texturpixeln, per CSS um ganze Icon-Einheiten vergrößert (SkinFigure) */
+.skin-fig { flex: none; image-rendering: pixelated; }
+.skin-now { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 24px; }
+.skin-now-t { flex: 1; min-width: 260px; max-width: 480px; display: flex; flex-direction: column; gap: 12px; }
+.skin-card { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.skin-card-h { display: flex; align-items: center; gap: 4px; width: 100%; }
+
 /* ---------- Dialog-Inhalte ---------- */
 /* „Neue Instanz“: senkrechte Tabs (Kit) links, Formular rechts */
 .nwrap { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 20px; height: min(430px, calc(calc(var(--vh1, 1vh) * 100) - 260px)); }

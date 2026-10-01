@@ -23,9 +23,9 @@ const XBOX_AUTH: &str = "https://user.auth.xboxlive.com/user/authenticate";
 const XSTS_AUTH: &str = "https://xsts.auth.xboxlive.com/xsts/authorize";
 const MC_LOGIN: &str = "https://api.minecraftservices.com/authentication/login_with_xbox";
 const MC_ENTITLEMENTS: &str = "https://api.minecraftservices.com/entitlements/mcstore";
-const MC_PROFILE: &str = "https://api.minecraftservices.com/minecraft/profile";
+pub(crate) const MC_PROFILE: &str = "https://api.minecraftservices.com/minecraft/profile";
 const KEYRING_SERVICE: &str = "dev.laux.launcher";
-const RELOGIN: &str = "Die Anmeldung ist abgelaufen. Bitte melde dich erneut mit deinem Microsoft-Konto an.";
+pub(crate) const RELOGIN: &str = "Die Anmeldung ist abgelaufen. Bitte melde dich erneut mit deinem Microsoft-Konto an.";
 
 /// Laufende Anmeldung und Minecraft-Sitzungen (nur im Speicher).
 #[derive(Default)]
@@ -107,7 +107,7 @@ fn form(pairs: &[(&str, &str)]) -> String {
     pairs.iter().map(|(k, v)| format!("{}={}", enc(k), enc(v))).collect::<Vec<_>>().join("&")
 }
 
-async fn send(request: reqwest::RequestBuilder) -> AppResult<(u16, Vec<u8>)> {
+pub(crate) async fn send(request: reqwest::RequestBuilder) -> AppResult<(u16, Vec<u8>)> {
     let response = request.header(reqwest::header::ACCEPT, "application/json").send().await?;
     let status = response.status().as_u16();
     Ok((status, response.bytes().await?.to_vec()))

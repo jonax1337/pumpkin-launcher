@@ -25,6 +25,7 @@ pub mod mojang;
 pub mod mrpack;
 pub mod providers;
 pub mod rules;
+pub mod skins;
 pub mod store;
 pub mod system;
 pub mod templates;
@@ -83,6 +84,11 @@ impl Dirs {
     /// Globaler Mod-Cache, Dateien als `<sha1>.jar`.
     pub fn mod_cache(&self) -> PathBuf {
         self.root.join("cache").join("mods")
+    }
+
+    /// Skin-Bibliothek, Dateien als `<sha1>.png`.
+    pub fn skins(&self) -> PathBuf {
+        self.root.join("skins")
     }
 
     pub fn natives_dir(&self, instance_id: &str) -> PathBuf {

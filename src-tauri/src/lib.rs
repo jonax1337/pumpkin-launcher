@@ -1,6 +1,7 @@
 mod account_commands;
 mod commands;
 mod content_commands;
+mod skin_commands;
 pub mod error;
 pub mod models;
 pub mod services;
@@ -89,6 +90,16 @@ pub fn run() {
             content_commands::instance_duplicate,
             content_commands::instance_export_entries,
             content_commands::instance_export,
+            skin_commands::skin_profile,
+            skin_commands::skin_library,
+            skin_commands::skin_texture,
+            skin_commands::skin_add,
+            skin_commands::skin_update,
+            skin_commands::skin_delete,
+            skin_commands::skin_save_active,
+            skin_commands::skin_upload,
+            skin_commands::skin_reset,
+            skin_commands::skin_cape,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

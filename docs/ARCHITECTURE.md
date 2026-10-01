@@ -51,6 +51,8 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `services/logshare.rs` | Log teilen über mclo.gs (`POST https://api.mclo.gs/1/log`, JSON `{ content, source }`): liest höchstens die letzten 5 MiB, entfernt lokal Zugangstokens (`--accessToken`, `accessToken=`, JWTs), den Benutzernamen in `C:\Users\<name>\` und E-Mail-Adressen, behält die letzten 24.999 Zeilen plus Kürzungshinweis (Grenzen von mclo.gs: 10 MiB, 25.000 Zeilen) |
 | `services/debuginfo.rs` | Debug-Info als englischer Klartext fürs GitHub-Issue: Launcher-Version, Windows-Version und Architektur, RAM, freier Platz im Datenordner, WebView2-Version, je Instanz (nummeriert, ohne Namen) MC-Version, Loader, aktive Mods, RAM (ohne eigene Einstellung der übergebene Standard), installiert/läuft |
 | `services/system.rs` | Win32-Abfragen: Arbeitsspeicher (`GlobalMemoryStatusEx`), freier Platz (`GetDiskFreeSpaceExW`), Windows-Version (`RtlGetVersion`) |
+| `services/skins.rs` | Skins und Umhänge über die offizielle Minecraft-Services-API (`/minecraft/profile`, nur Microsoft-Konten, Token aus `auth::session`): Profil lesen, Skin hochladen (multipart, `variant` + PNG), zurücksetzen, Umhang zeigen/ausblenden; Fehlerstatus (401, 429, 4xx, 5xx) in Alltagssprache. Lokale Bibliothek `skins/<sha1>.png` + `skins.json`; PNG-Prüfung über den IHDR-Kopf (64×64 oder 64×32). Texturen nur von `textures.minecraft.net`, per HTTPS |
+| `skin_commands.rs` | Dünne Skin-Commands |
 
 ### Plugins und Berechtigungen
 
@@ -70,6 +72,7 @@ JSON-Dateien im App-Datenverzeichnis (`app.path().app_data_dir()`, unter Windows
 - `instances.json`
 - `templates.json`
 - `accounts.json` (nur `id`, `username`, `kind`, `clientId`; Refresh-Tokens in der Windows-Anmeldeinformationsverwaltung, Dienst `dev.laux.launcher`)
+- `skins.json` (Skin-Bibliothek; die PNG-Dateien liegen unter `skins/<sha1>.png`)
 
 Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht überschrieben), der Store startet leer. Schlägt das Schreiben fehl, wird die In-Memory-Änderung zurückgerollt.
 
@@ -83,6 +86,8 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 - **Startoptionen der Instanz**: `javaPath?` (eigene `javaw.exe`, sonst Einstellung des Launchers bzw. mitgelieferte Runtime), `window` (`{type:"default"}` · `{type:"size", width, height}` · `{type:"fullscreen"}`), `gameArgs` (nach den Argumenten der Version), dazu wie bisher `memoryMb?` und `jvmArgs`. `update_instance` prüft einen geänderten Java-Pfad und lehnt Fenstergrößen von 0 ab.
 - **`Instance.playtimeSecs`**: Summe aller Sitzungen; das Backend rechnet sie beim Spielende an (unplausible Dauern über 7 Tage oder bei zurückgestellter Uhr zählen nicht). `update_instance` übernimmt sie nie vom Frontend.
 - **`Instance.group?`**: Gruppe in der Bibliothek (getrimmt, leer = keine). Es gibt keine eigene Gruppen-Entität: Gruppen sind die Namen, die Instanzen tragen.
+- **`LibrarySkin`**: `id` (SHA-1 der PNG), `name`, `variant` (`classic | slim`), `addedAt`. Dieselbe Datei kommt nur einmal in die Bibliothek.
+- **`SkinProfile`** (nur Antwort, nicht gespeichert): `skin: { url, variant } | null`, `capes: { id, alias, url, active }[]`.
 - Neue Felder tragen `#[serde(default)]`, damit ältere JSON-Dateien weiter laden.
 
 ### Commands
@@ -128,6 +133,16 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `pack_install_cancel` | `operationId` | – (bricht `modrinth_install_pack`/`modrinth_import_pack`/`template_create_instance` ab) |
 | `log_share` | `instanceId`, `kind: LogKind` | öffentlicher mclo.gs-Link (`string`); fehlt die Datei, eine Meldung in Alltagssprache |
 | `debug_info` | `defaultMemoryMb` (RAM-Standard wie bei `instance_launch`) | Klartext ohne Instanz-/Kontonamen und Pfade (`string`) |
+| `skin_profile` | `accountId` (Microsoft) | `SkinProfile` |
+| `skin_library` | – | `LibrarySkin[]` |
+| `skin_texture` | `id` | PNG als `data:`-URL |
+| `skin_add` | absoluter `path` einer PNG | `LibrarySkin` (Name = Dateiname, Modell `classic`) |
+| `skin_update` | `id`, `name`, `variant` | `LibrarySkin` |
+| `skin_delete` | `id` | – |
+| `skin_save_active` | `accountId`, `name` | `LibrarySkin` (der gerade getragene Skin) |
+| `skin_upload` | `accountId`, `skinId` | – (Skin der Bibliothek wird aktiver Skin) |
+| `skin_reset` | `accountId` | – (Standardskin) |
+| `skin_cape` | `accountId`, `capeId?` | – (ohne `capeId`: Umhang ausblenden) |
 
 Content-Fortschritt: `content-progress` `{ operationId, phase, done, total }` (Phasen `resolve`, `validate`, `download`, `extract`, `copy`, `complete`). Der Aufrufer vergibt die `operationId`; späte oder fremde Events dürfen keinen anderen Auftrag aktualisieren. Modpack-Import und Minecraft-Installation sind getrennte Schritte: nach dem Import installiert `instance_install` die passende Minecraft-/Fabric-Runtime.
 
@@ -152,6 +167,7 @@ Events: `install-progress` `{ instanceId, step, done, total }` · `instance-log`
 ```
 versions/<id>/<id>.json|.jar   libraries/…   assets/{indexes,objects,log_configs}/   runtime/<komponente>/
 instances/<instanz-id>/minecraft/ (Spielverzeichnis, darin mods/)   instances/<instanz-id>/natives/   cache/mods/<sha1>.jar
+skins/<sha1>.png
 ```
 
 Headless-Test ohne UI: `cargo run --example launch -- [version|1.21] [spielername] [sekunden] [vanilla|fabric[:loader]]` (in `src-tauri/`), z. B. `-- 1.21.11 Headless 60 fabric`.
@@ -186,18 +202,19 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 
 - `lib/types.ts` – TS-Spiegel der Rust-Modelle
 - `lib/api.ts` – `invoke`-Wrapper; außerhalb von Tauri (reiner `pnpm dev` im Browser) Fallback auf Mockdaten aus `lib/mock.ts`
-- `hooks/` – TanStack Query; Mutations invalidieren die betroffenen Queries. `useInstances` (Spielen = bei Bedarf installieren, dann starten; Backend-Events), `useContent` (Modrinth-Vorgänge mit Fortschritt), `useTemplates`, `useAppUpdate` (Launcher-Update: stille Suche nach dem Start im Release-Build, Download mit Fortschritt, Installation erst nach Zustimmung und erst, wenn kein Minecraft mehr läuft), `useSupport` (Log teilen: Link kopieren, Toast mit „Öffnen“; Debug-Info kopieren)
+- `hooks/` – TanStack Query; Mutations invalidieren die betroffenen Queries. `useInstances` (Spielen = bei Bedarf installieren, dann starten; Backend-Events), `useContent` (Modrinth-Vorgänge mit Fortschritt), `useTemplates`, `useAppUpdate` (Launcher-Update: stille Suche nach dem Start im Release-Build, Download mit Fortschritt, Installation erst nach Zustimmung und erst, wenn kein Minecraft mehr läuft), `useSupport` (Log teilen: Link kopieren, Toast mit „Öffnen“; Debug-Info kopieren), `useSkins` (Bibliothek, Texturen, Profil des Microsoft-Kontos)
 - `store/settings.ts` – Launcher-Einstellungen, lokal persistiert: Java, RAM, Konten (Offline-Namen, aktives Konto), Pixelgröße, bewegte Szenen
 - `store/game.ts` – flüchtiger Laufzeitzustand aus den Events: Installationsfortschritt, Starten, Protokoll (gepuffert, max. 2000 Zeilen je Instanz), Absturz, Startzeit
 - `store/look.ts` – Szenenbild (Biom) je Instanz, lokal persistiert (das Backend hat dafür kein Feld; ohne Wahl fest aus der Instanz-ID)
 - `store/tasks.ts` – Verlauf abgeschlossener Aufgaben für das Aufgaben-Menü; laufende Aufgaben kommen live aus `store/game.ts` und `useContent`
 - Mods/Modpacks verwenden in Tauri den echten Modrinth-Katalog; neue Content-Installationen melden im Browser ohne Tauri keine vorgetäuschten Erfolge.
 - Konten: Offline-Spielernamen lokal, Microsoft-Konten über den Gerätecode-Login des Backends.
+- Skins im Browser: Beispielprofil und -bibliothek aus `lib/mock-skins.ts` (Texturen auf einem Canvas gemalt); Dateien hinzufügen geht nur in der App.
 
 **Oberfläche**
 
 - `app/Layout.tsx` – rahmenloses Fenster: Fensterleiste mit Wortzeichen, Kontomenü und eigenen Fensterknöpfen, links eine Icon-Seitenleiste (Start · Bibliothek · Entdecken, unten Aufgaben-Menü und Einstellungen) (`@tauri-apps/api/window`, Ziehen per `data-tauri-drag-region`); setzt `--px`, pausiert Szenen, solange Minecraft läuft
-- `pages/` – Start (Szene, Weiterspielen-Reihe, Onboarding), Bibliothek (Poster/Liste, mit Gruppen als aufklappbare Abschnitte, ohne Gruppe zuletzt), Instanz (klebender Kopf mit Spielzeit, Inhalte, Protokoll, Einstellungen mit Java, Fenster und Spielargumenten; `pages/detail/`), Entdecken (Katalog, Projektseite), Einstellungen
+- `pages/` – Start (Szene, Weiterspielen-Reihe, Onboarding), Bibliothek (Poster/Liste, mit Gruppen als aufklappbare Abschnitte, ohne Gruppe zuletzt), Instanz (klebender Kopf mit Spielzeit, Inhalte, Protokoll, Einstellungen mit Java, Fenster und Spielargumenten; `pages/detail/`), Entdecken (Katalog, Projektseite), Einstellungen, Skins (`/skins`, über das Kontomenü: aktueller Skin und Umhang des Microsoft-Kontos, Bibliothek als Raster; Offline-Konten sehen einen Hinweis auf die Microsoft-Anmeldung)
 - `components/px.tsx` – Bausteine: Knopf, Chip, Fortschritt, Suchfeld, Auswahl, Segmente, Checkbox, Schalter, Radio, Speicher-Slider, Tooltip, Menü/Kontextmenü, Dialog, Seitenpanel, Leer- und Fehlerzustände, Toasts. Verhalten von Radix, Aussehen aus `styles/`
 - `components/game.tsx` – Spielen-Knopf (feste Größe in allen Zuständen), Statuszeile, Status-Chip, Protokoll mit Filter/Suche/Mitscrollen
 - `components/instance.tsx` – Instanz-Menü (Knopf und Rechtsklick, Untermenü „Gruppe“): „Duplizieren“ (Fortschritt im Aufgaben-Menü), Dialoge „Exportieren…“ (Auswahl der Ordner, Speichern-Dialog, Toast mit „Im Ordner zeigen“), „Als Vorlage speichern“, „Neue Gruppe“ und „Löschen“
@@ -205,7 +222,7 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 - `components/support.tsx` – Rückfrage „Log öffentlich teilen?“ (einmal im Layout, `askShareLog`), Knopf „Debug-Info kopieren“, Einstellungen › Support (GitHub-Issues und -Diskussionen). „Log teilen“ steht in der Protokoll-Leiste und als Symbol in der Absturz-Statuszeile; nach einem Absturz mit Bericht wird der Bericht geteilt, sonst `latest.log`
 - `components/ContentBrowser.tsx`, `NewInstanceDialog.tsx`, `PlayerNames.tsx`, `Onboarding.tsx` – Katalog und Seitenpanel, Neue Instanz, Konten und Microsoft-Anmeldung, erster Start
 - `components/AppUpdate.tsx` – Zeile „Updates“ in *Einstellungen › Über*: Version suchen, Versionshinweise, „Installieren und neu starten“, nach dem Warten auf Spiel und Downloads „Jetzt neu starten“
-- `pixel/` – `unit.ts` (Pixeleinheit auf ganze Gerätepixel), `scene.ts` (Szenen-Engine: 7 Biome, 12 fps, Pausenregeln, Cache), `PixelScene.tsx`, `icons.tsx` (Pixel-Icons, Mod-Glyphen, Wortzeichen, Spielerkopf)
+- `pixel/` – `unit.ts` (Pixeleinheit auf ganze Gerätepixel), `scene.ts` (Szenen-Engine: 7 Biome, 12 fps, Pausenregeln, Cache), `PixelScene.tsx`, `icons.tsx` (Pixel-Icons, Mod-Glyphen, Wortzeichen, Spielerkopf), `skin.ts` + `SkinFigure.tsx` (Vorderansicht aus der Skin-Textur: Kopf, Körper, Arme – schlank bei `slim` –, Beine mit zweiter Schicht; altes 64×32-Format gespiegelt, eine ganz deckende Hutschicht gilt dort wie im Spiel als leer; Grundschicht deckend; Umhang-Außenseite; Canvas in Texturpixeln, per CSS um ganze `--iu` vergrößert)
 - `styles/pixelkino.css` (aus dem Mockup übernommen), `styles/states.css` (Auswahlliste, Hover/Druck/Fokus, Ein- und Ausblenden) plus kleine Ergänzungen je Bereich; beide in der Tailwind-Schicht `components`, deren Reihenfolge `index.html` vor allen Stylesheets festlegt
 
 ## Herkunft der Ideen und Lizenz

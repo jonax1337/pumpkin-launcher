@@ -33,6 +33,7 @@
 - **Duplicate & export** — copy an instance to experiment safely, or share it as a `.mrpack` (Modrinth mods linked, everything else embedded; worlds optional)
 - **Presets** — reusable collections of mods, settings and JVM args that can be applied to any instance
 - **Microsoft login** via device code (see [status](#status) below), plus offline player profiles
+- **Skins & capes** — keep a local skin library (PNG, classic or slim) with pixel-art previews, put a skin on and pick your cape through the official Minecraft API (Microsoft accounts)
 - **Quality-of-life** — crash detection with per-instance logs, resumable downloads, automatic RAM detection, one-click log sharing via mclo.gs (access tokens, Windows user name and e-mail addresses removed first) and a debug info without personal data for bug reports
 - **Auto-updates** — signed updates from GitHub Releases, installed only when you say so and never while Minecraft is running; a second launch just focuses the open window
 - **Seasonal branding** 🎃 — mascot, accent colors and window/taskbar icon switch automatically with the calendar (spring, summer, Halloween, winter)
