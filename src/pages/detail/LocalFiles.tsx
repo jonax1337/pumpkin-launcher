@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Dialog, DialogActions, Field, Segmented } from "@/ui";
-import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { useBackgroundTask } from "@/hooks/useBackgroundTask";
+import { useContentState } from "@/hooks/useContent";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { api } from "@/lib/api";
 import { TYPE_ONE_KEYS } from "@/lib/catalog";
@@ -63,7 +64,7 @@ function classify(checks: FileCheck[]): Ask {
  */
 export function useLocalFiles(instance: Instance, active: boolean) {
   const { t } = useI18n();
-  const install = useContentInstall();
+  const background = useBackgroundTask();
   const navigate = useNavigate();
   const [ask, setAsk] = useState<Ask | null>(null);
   // Während der Rückfrage würde ein weiterer Ablage-Vorgang die offenen Dateien ersetzen.
@@ -88,9 +89,13 @@ export function useLocalFiles(instance: Instance, active: boolean) {
     const before = instance.mods.length;
     const label = files.length === 1 ? t("detail.files.addOneLabel", { file: fileName(files[0].path) }) : t("detail.files.addManyLabel", { n: files.length });
     const doneLabel = files.length === 1 ? t("detail.files.addOneDone", { file: fileName(files[0].path) }) : t("detail.files.addedMany", { n: files.length });
-    install.mutate(withTarget("files", (op) => api.addLocalFiles(instance.id, files, op), label, { doneLabel }), {
+    background.run({
+      key: "files",
+      label,
+      doneLabel,
+      task: (op) => api.addLocalFiles(instance.id, files, op),
       // Das Backend hängt neue Einträge hinten an.
-      onSuccess: (result) => void (result && toast.success(addedText(result.mods.slice(before)))),
+      onDone: (result) => toast.success(addedText(result.mods.slice(before))),
     });
   }
 
@@ -100,9 +105,13 @@ export function useLocalFiles(instance: Instance, active: boolean) {
   }
 
   function identify(m: Mod) {
-    install.mutate(withTarget(`identify:${m.id}`, () => api.modrinthIdentify(instance.id, [m.id]), t("detail.files.matchLabel", { name: m.name }), { doneLabel: t("detail.files.matchDone", { name: m.name }) }), {
-      onSuccess: (result) => {
-        const now = result?.mods.find((x) => x.fileName === m.fileName);
+    background.run({
+      key: `identify:${m.id}`,
+      label: t("detail.files.matchLabel", { name: m.name }),
+      doneLabel: t("detail.files.matchDone", { name: m.name }),
+      task: () => api.modrinthIdentify(instance.id, [m.id]),
+      onDone: (result) => {
+        const now = result.mods.find((x) => x.fileName === m.fileName);
         if (now?.source.type === "modrinth") toast.success(t("detail.files.identified", { name: m.name, match: now.name, version: now.version }));
         else if (now) toast(t("detail.files.notFoundOnModrinth", { name: m.name }));
       },
