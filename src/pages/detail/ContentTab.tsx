@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 import { ownerKey, projectOf, removeWithDependencies, undoRemove, type ModUpdate } from "@/lib/modrinth";
 import type { Instance, Mod, ModKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useLocalFiles } from "./LocalFiles";
 
 const KIND1: Record<ModKind, string> = { mod: "Mod", shader: "Shader", resourcepack: "Ressourcenpaket" };
 const KINDS: Record<ModKind, string> = { mod: "Mods", shader: "Shader", resourcepack: "Ressourcenpakete" };
@@ -47,14 +48,17 @@ export function useWarnings(instance: Instance, onAddIris: () => void, turnOnIri
 }
 
 /** Inhalte einer Instanz: Liste oder Raster, Mehrfachauswahl, Hinweise, Entfernen mit Platzhalter. */
-export function ContentTab({ instance, updateFor, onAdd, warnsOf, showUpdates = 0 }: {
+export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpdates = 0 }: {
   instance: Instance; updateFor: Map<string, ModUpdate>; onAdd: () => void; warnsOf: (m: Mod) => Warn[];
+  /** Nur der sichtbare Tab nimmt aufs Fenster gezogene Dateien an. */
+  shown: boolean;
   /** Zählt hoch, wenn der Kopf „Updates“ angeklickt wurde. */
   showUpdates?: number;
 }) {
   const qc = useQueryClient();
   const update = useUpdateMods(instance.id);
   const install = useContentInstall();
+  const local = useLocalFiles(instance, shown);
   const { active, target, progress } = useContentState();
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<KindFilter>("all");
@@ -224,15 +228,23 @@ export function ContentTab({ instance, updateFor, onAdd, warnsOf, showUpdates = 
 
   if (instance.mods.length === 0 && shownGhosts.length === 0) {
     return (
-      <Empty
-        ill={<Glyph name="cube" pal="steel" box={64} />}
-        title="Noch keine Inhalte"
-        actions={<Button icon="plus" onClick={onAdd}>Hinzufügen</Button>}
-      >
-        {instance.loader === "vanilla"
-          ? "Diese Instanz ist Minecraft pur. Ressourcenpakete gehen trotzdem, Mods brauchen einen Loader wie Fabric."
-          : "Füge Mods, Shader oder Ressourcenpakete hinzu. Pumpkin Launcher wählt passende Versionen aus."}
-      </Empty>
+      <div className="relative">
+        {local.overlay}
+        <Empty
+          ill={<Glyph name="cube" pal="steel" box={64} />}
+          title="Noch keine Inhalte"
+          actions={
+            <>
+              <Button icon="plus" onClick={onAdd}>Hinzufügen</Button>
+              {local.pick && <Button icon="ul" disabled={!!active} onClick={local.pick}>Datei hinzufügen…</Button>}
+            </>
+          }
+        >
+          {instance.loader === "vanilla"
+            ? "Diese Instanz ist Minecraft pur. Ressourcenpakete gehen trotzdem, Mods brauchen einen Loader wie Fabric."
+            : "Füge Mods, Shader oder Ressourcenpakete hinzu. Pumpkin Launcher wählt passende Versionen aus."}
+        </Empty>
+      </div>
     );
   }
 
@@ -246,11 +258,13 @@ export function ContentTab({ instance, updateFor, onAdd, warnsOf, showUpdates = 
   const menuFor = (m: Mod): MenuEntry[] => {
     const up = updateFor.get(m.id);
     const pid = projectOf(m);
+    const own = m.source.type === "local";
     return [
       ...(up ? [{ id: "up", text: `Auf ${up.versionNumber} aktualisieren`, icon: "up" as const, disabled: !!active, onSelect: () => runUpdates([m.id]) }] : []),
+      ...(own ? [{ id: "identify", text: "Mit Modrinth abgleichen", icon: "search" as const, disabled: !!active, onSelect: () => local.identify(m) }] : []),
       ...(pid ? [{ id: "web", text: "Auf Modrinth ansehen", icon: "ext" as const, onSelect: () => void api.openExternal(`https://modrinth.com/project/${pid}`) }] : []),
       ...(m.source.type === "curseforge" ? [{ id: "web", text: "Auf CurseForge ansehen", icon: "ext" as const, onSelect: () => void api.openExternal(`https://www.curseforge.com/projects/${(m.source as { projectId: number }).projectId}`) }] : []),
-      ...(up || pid || m.source.type === "curseforge" ? ["-" as const] : []),
+      ...(up || own || pid || m.source.type === "curseforge" ? ["-" as const] : []),
       { id: "rm", text: "Entfernen", icon: "trash", bad: true, onSelect: () => remove([m.id]) },
     ];
   };
@@ -400,7 +414,8 @@ export function ContentTab({ instance, updateFor, onAdd, warnsOf, showUpdates = 
   );
 
   return (
-    <div className="max-w-[var(--page-max)]" ref={rootRef}>
+    <div className="relative max-w-[var(--page-max)]" ref={rootRef}>
+      {local.overlay}
       <div className="sr" role="status" aria-live="polite" aria-atomic="true">{said}</div>
       <Toolbar height={56} search="s" wrapBelow={800} alt={bulk} altActive={pickedLive.length > 0}>
         <SearchField size="s" value={search} onChange={setSearch} placeholder="Inhalte suchen" />
@@ -445,6 +460,7 @@ export function ContentTab({ instance, updateFor, onAdd, warnsOf, showUpdates = 
         </span>
         {/* Sekundär: auf dieser Seite ist nur Spielen Akzent-Primär. */}
         <Button size="s" icon="plus" onClick={onAdd}>Hinzufügen</Button>
+        {local.pick && <Button size="s" icon="ul" compactBelow={1096} disabled={!!active} onClick={local.pick}>Datei hinzufügen…</Button>}
       </Toolbar>
 
       {visible.length === 0 ? (

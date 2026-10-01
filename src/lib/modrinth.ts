@@ -65,6 +65,9 @@ export const progressShare = (p: ContentProgress | null) =>
 
 export const formatDownloads = (n: number) => new Intl.NumberFormat("de", { notation: "compact" }).format(n);
 
+/** Modpack-Datei im Modrinth-Format; wird immer eine eigene Instanz. */
+export const isMrpack = (path: string) => /\.mrpack$/i.test(path);
+
 export const projectOf = (m: Mod): string | null => (m.source.type === "modrinth" ? m.source.projectId : null);
 
 /** Wie `projectOf`, aber auch für CurseForge (`cf-<Nummer>`): so verweisen `requiredBy` und Besitzer aufeinander. */

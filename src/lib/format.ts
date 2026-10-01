@@ -1,6 +1,9 @@
 const rtf = new Intl.RelativeTimeFormat("de", { numeric: "auto" });
 const dtf = new Intl.DateTimeFormat("de", { day: "2-digit", month: "short", year: "numeric" });
 
+/** Letzter Teil eines Windows- oder Unix-Pfads. */
+export const fileName = (path: string) => path.split(/[\\/]/).pop()!;
+
 export function relativeTime(ms: number | null): string {
   if (ms == null) return "Noch nie gespielt";
   const diff = ms - Date.now();

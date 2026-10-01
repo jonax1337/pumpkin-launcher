@@ -193,7 +193,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
       <TabPanel idBase="dt" value={tab} className="dbody">
         {/* Bleibt gemountet: Auswahl und Platzhalter entfernter Inhalte überleben den Tabwechsel. */}
         <div hidden={tab !== "content"} className="flow-root">
-          <ContentTab instance={instance} updateFor={updateFor} warnsOf={warnsOf} onAdd={() => setAdding(true)} showUpdates={updCall} />
+          <ContentTab instance={instance} shown={tab === "content"} updateFor={updateFor} warnsOf={warnsOf} onAdd={() => setAdding(true)} showUpdates={updCall} />
         </div>
         {tab === "worlds" && <WorldsTab instance={instance} onLaunched={toLog} />}
         {tab === "screenshots" && <ScreenshotsTab instance={instance} />}

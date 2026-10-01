@@ -24,7 +24,8 @@ export const withTarget = (target: string, run: (operationId: string) => Promise
 
 /** „installieren“ → „installiert“ für den Verlauf. */
 const doneLabel = (label: string) =>
-  label.replace(/installieren$/, "installiert").replace(/aktualisieren$/, "aktualisiert").replace(/importieren$/, "importiert").replace(/anlegen$/, "angelegt").replace(/duplizieren$/, "dupliziert");
+  label.replace(/installieren$/, "installiert").replace(/aktualisieren$/, "aktualisiert").replace(/importieren$/, "importiert").replace(/anlegen$/, "angelegt").replace(/duplizieren$/, "dupliziert")
+    .replace(/hinzufügen$/, "hinzugefügt").replace(/abgleichen$/, "abgeglichen");
 
 export function useContentInstall() {
   const qc = useQueryClient();

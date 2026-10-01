@@ -30,6 +30,7 @@
 - **Library groups** — sort instances into collapsible groups right from the instance menu
 - **Mods & modpacks from [Modrinth](https://modrinth.com)** — browse, search and install directly in the launcher
 - **`.mrpack` import** — drag in local modpack files
+- **Your own files** — drop `.jar` mods, resource packs and shader packs onto an instance; files Modrinth knows (by SHA-1) still get updates
 - **Screenshots** — browse every instance's F2 screenshots by day, flip through them full size, open them in your image viewer, show them in Explorer or move them to the Recycle Bin
 - **Duplicate & export** — copy an instance to experiment safely, or share it as a `.mrpack` (Modrinth mods linked, everything else embedded; worlds optional)
 - **Worlds & servers** — see an instance's worlds and server list, back up and restore worlds (deleting backs up first), edit servers and jump straight into a world (Minecraft 1.20+) or onto a server with Quick Play
