@@ -120,19 +120,41 @@ export function Trunc({ text, as: Tag = "span", host, side = "top", className, s
 
 // ---------- Menüs (Dropdown und Kontextmenü mit gleichen Einträgen) ----------
 
-/** "-" = Trenner, { label } = Gruppentitel, sonst Eintrag (Icon s; `lead` ersetzt das Icon, z. B. Avatar; `sub` = zweite Zeile, Eintrag 52 px). */
+/**
+ * "-" = Trenner, { label } = Gruppentitel, { items } = Untermenü, sonst Eintrag
+ * (Icon s; `lead` ersetzt das Icon, z. B. Avatar; `sub` = zweite Zeile, Eintrag 52 px).
+ */
 export type MenuEntry =
   | "-"
   | { label: string }
+  | { id: string; text: ReactNode; icon?: IconName; items: MenuEntry[] }
   | { id: string; text: ReactNode; icon?: IconName; bad?: boolean; disabled?: boolean; onSelect: () => void; sub?: ReactNode; lead?: ReactNode; checked?: boolean };
 
-function entries(list: MenuEntry[], Item: typeof DM.Item | typeof CM.Item, Sep: typeof DM.Separator | typeof CM.Separator, Label: typeof DM.Label | typeof CM.Label) {
+/** Dropdown- und Kontextmenü von Radix haben dieselben Bausteine. */
+type MenuKit = typeof DM | typeof CM;
+
+function entries(list: MenuEntry[], M: MenuKit): ReactNode[] {
   return list.map((e, i) => {
-    if (e === "-") return <Sep key={`s${i}`} className="vx-msep" />;
-    if ("label" in e) return <Label key={`l${i}`} className="vx-mlabel">{e.label}</Label>;
+    if (e === "-") return <M.Separator key={`s${i}`} className="vx-msep" />;
+    if ("label" in e) return <M.Label key={`l${i}`} className="vx-mlabel">{e.label}</M.Label>;
+    if ("items" in e)
+      return (
+        <M.Sub key={e.id}>
+          <M.SubTrigger className="vx-mi">
+            {e.icon && <Icon name={e.icon} size="s" />}
+            <span className="vx-trunc">{e.text}</span>
+            <Icon name="chev" size="s" className="vx-mi-sub" />
+          </M.SubTrigger>
+          <M.Portal>
+            <M.SubContent className="vx-pop" data-ctx="overlay" sideOffset={4} collisionPadding={8}>
+              {entries(e.items, M)}
+            </M.SubContent>
+          </M.Portal>
+        </M.Sub>
+      );
     const tall = !!(e.sub || e.lead);
     return (
-      <Item
+      <M.Item
         key={e.id}
         className="vx-mi"
         data-tone={e.bad ? "bad" : undefined}
@@ -147,7 +169,7 @@ function entries(list: MenuEntry[], Item: typeof DM.Item | typeof CM.Item, Sep: 
           <span className="vx-trunc">{e.text}</span>
         )}
         {e.checked && <Icon name="check" size="s" className="vx-mi-ck" />}
-      </Item>
+      </M.Item>
     );
   });
 }
@@ -205,7 +227,7 @@ export function Menu({ trigger, items, align = "end", width, className, open, on
       <DM.Trigger asChild ref={ref}>{trigger}</DM.Trigger>
       <DM.Portal>
         <DM.Content className={cn("vx-pop", className)} data-ctx="overlay" style={width ? { width } : undefined} align={align} sideOffset={6} collisionPadding={8} onFocus={keepFocusWhenClosed}>
-          {items && entries(items, DM.Item, DM.Separator, DM.Label)}
+          {items && entries(items, DM)}
           {children}
         </DM.Content>
       </DM.Portal>
@@ -230,7 +252,7 @@ export function ContextMenu({ items, children }: { items: MenuEntry[]; children:
       </CM.Trigger>
       <CM.Portal>
         <CM.Content className="vx-pop" data-ctx="overlay" collisionPadding={8} onFocus={keepFocusWhenClosed}>
-          {entries(items, CM.Item, CM.Separator, CM.Label)}
+          {entries(items, CM)}
         </CM.Content>
       </CM.Portal>
     </CM.Root>
