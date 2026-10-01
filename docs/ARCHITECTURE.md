@@ -282,7 +282,7 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 
 **Sprache (i18n)**
 
-- `i18n/` – Wörterbuch-Modul ohne Abhängigkeit: `de.ts` und `en.ts` sammeln die Namensräume (`de/common.ts`, `de/format.ts` und je Bereich: Seiten, Komponenten, Hooks, Detail, UI, Mock), `core.ts` übersetzt (`t("ns.key")`, Platzhalter `{name}`), `index.tsx` hängt die Sprache über einen `LanguageProvider` in den React-Baum (`useI18n`).
+- `i18n/` – Wörterbuch-Modul ohne Abhängigkeit: `de.ts` und `en.ts` sammeln die Namensräume (`de/common.ts`, `de/format.ts` und je Bereich: Seiten, Komponenten, Hooks, Detail, UI, Mock), `core.ts` übersetzt (`t("ns.key")`, Platzhalter `{name}`), `index.tsx` hängt die Sprache über einen `LanguageProvider` in den React-Baum (`useI18n`). Muss die Mitte eines Satzes ein React-Knoten bleiben (etwa `Count` oder `<b>`), teilt `tAround(key, marker)` den übersetzten Satz am Platzhalter – die Satzstellung bleibt im Wörterbuch.
 - Deutsch ist die Quelle der Wahrheit; Englisch muss exakt dieselben Schlüssel definieren – der Typ von `en` erzwingt das beim Bauen. Deshalb kein i18next: Die Wörterbücher sind das ganze System, die Prüfung läuft zur Compile-Zeit statt zur Laufzeit.
 - Der `LanguageProvider` sitzt in `main.tsx` um den Router und setzt die Modul-Sprache (auch `lib/format.ts` formatiert Zahlen und Daten nach ihr) und `lang` am Wurzelelement. Einstellungen › Darstellung › „Sprache“ wählt System/Deutsch/English und wirkt sofort; „system“ folgt der Browsersprache.
 - `node src/lib/format.check.mjs` prüft die Formatierung beider Sprachen.

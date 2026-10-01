@@ -89,10 +89,10 @@ function Toasts() {
   const { t } = useI18n();
   return (
     <div style={row}>
-      <Button size="s" onClick={() => toast.success(t("ui.kit.readyToast", { name: "Survival" }), { description: t("ui.kit.readyDesc") })}>{t("ui.kit.success")}</Button>
-      <Button size="s" onClick={() => toast.error(t("ui.kit.crashedToast", { name: "Survival" }), { action: { label: t("ui.kit.showLog"), onClick: () => undefined } })}>{t("ui.kit.errorAction")}</Button>
+      <Button size="s" onClick={() => toast.success(t("hooks.install.readyToast", { name: "Survival" }), { description: t("hooks.install.readySub") })}>{t("ui.kit.success")}</Button>
+      <Button size="s" onClick={() => toast.error(t("hooks.game.crashed", { name: "Survival" }), { action: { label: t("ui.kit.showLog"), onClick: () => undefined } })}>{t("ui.kit.errorAction")}</Button>
       <Button size="s" onClick={() => toast.warning(t("ui.kit.memoryLow"))}>{t("ui.kit.warning")}</Button>
-      <Button size="s" onClick={() => toast(t("ui.kit.playedToast", { time: "1:24" }))}>{t("ui.kit.noIcon")}</Button>
+      <Button size="s" onClick={() => toast(t("components.playtime.played", { zeit: "1:24" }))}>{t("ui.kit.noIcon")}</Button>
     </div>
   );
 }
@@ -137,7 +137,7 @@ export function OverlaySection() {
   const ITEMS: MenuEntry[] = [
     { label: t("common.instance") },
     { id: "play", text: t("common.play"), icon: "play", onSelect: () => undefined },
-    { id: "dir", text: t("ui.menu.openFolder"), icon: "folder", onSelect: () => undefined },
+    { id: "dir", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => undefined },
     { id: "log", text: t("components.log.ariaLabel"), icon: "term", disabled: true, onSelect: () => undefined },
     { id: "acc", text: "Steve_42", sub: t("ui.kit.offlineName"), lead: <Icon name="user" size="l" tone="muted" />, checked: true, onSelect: () => undefined },
     "-",
@@ -183,7 +183,7 @@ export function OverlaySection() {
       </Sec>
 
       <Sec title={t("ui.kit.secStatus")} id="status">
-        <StatusPanel tone="bad" icon="warn" title={t("ui.kit.crashedToast", { name: "Survival" })} actions={<Button size="s" icon="term">{t("components.log.ariaLabel")}</Button>}>{t("ui.kit.crashLine")}</StatusPanel>
+        <StatusPanel tone="bad" icon="warn" title={t("hooks.game.crashed", { name: "Survival" })} actions={<Button size="s" icon="term">{t("components.log.ariaLabel")}</Button>}>{t("ui.kit.crashLine")}</StatusPanel>
         <StatusPanel tone="warn" title={t("ui.kit.memoryLow")}>{t("ui.kit.memoryLowDetail")}</StatusPanel>
         <StatusPanel tone="run" size="s" title={t("components.game.running")}>{t("ui.kit.runningSince", { time: "12:04", lines: "1.824" })}</StatusPanel>
         <StatusPanel size="s" icon="info" title={t("ui.kit.noLog")}>{t("ui.kit.noLogHint")}</StatusPanel>

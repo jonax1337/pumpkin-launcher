@@ -36,7 +36,7 @@ import {
 } from "@/lib/types";
 
 import type { CatalogType, ContentBlocked, ContentSearch, ContentProject, ContentVersion, ContentProgress, ModUpdate, SearchIndex, Source } from "@/lib/modrinth";
-import { t } from "@/i18n";
+import { currentLanguage, t } from "@/i18n";
 
 // Mock nur im Dev-Server: im Release-Build ist das konstant true, Vite wirft Mock und mock.ts heraus.
 const tauri = !import.meta.env.DEV || isTauri();
@@ -253,7 +253,7 @@ const mockGame = {
     if (db.running.has(instanceId)) throw new Error(t("hooks.api.alreadyRunning"));
     let n = 0;
     const log = (line: string, stream: LogPayload["stream"] = "stdout") =>
-      emit<LogPayload>("instance-log", { instanceId, stream, line: `[${new Date().toLocaleTimeString("de")}] ${line}` });
+      emit<LogPayload>("instance-log", { instanceId, stream, line: `[${new Date().toLocaleTimeString(currentLanguage())}] ${line}` });
     log(`[main/INFO]: Setting user: ${username}`);
     if (quickPlay) {
       log(`[main/INFO]: Quick Play: ${quickPlayTarget(quickPlay)}`);

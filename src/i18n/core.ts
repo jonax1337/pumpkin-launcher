@@ -20,3 +20,15 @@ export function t(key: string, params?: Record<string, string | number>): string
   const template = dicts[current][key] ?? key;
   return template.replace(/\{(\w+)\}/g, (placeholder, name: string) => (params && name in params ? String(params[name]) : placeholder));
 }
+
+/**
+ * Übersetzten Satz um den `{marker}`-Platzhalter teilen. Die Mitte (`Count`, `<b>`) rendert die
+ * Aufrufstelle selbst als React-Knoten, weil `t` nur Zeichenketten einsetzen kann – so bleibt die
+ * Satzstellung dennoch vollständig im Wörterbuch.
+ */
+export function tAround(key: string, marker: string): [string, string] {
+  const template = dicts[current][key] ?? key;
+  const token = `{${marker}}`;
+  const at = template.indexOf(token);
+  return at < 0 ? ["", template] : [template.slice(0, at), template.slice(at + token.length)];
+}

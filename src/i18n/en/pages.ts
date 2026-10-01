@@ -3,8 +3,8 @@ import { pages as dePages } from "../de/pages.ts";
 /** Englische Seitenbereiche; muss exakt dieselben Schlüssel wie das deutsche Wörterbuch definieren. */
 export const pages: typeof dePages = {
   // Startseite
-  "pages.home.contentCount.one": "content",
-  "pages.home.contentCount.other": "contents",
+  "pages.home.contentCount.one": "content item",
+  "pages.home.contentCount.other": "content items",
   "pages.home.resumeIn": "Resume in “{welt}”",
   "pages.home.miniCardTip": "Click shows it at the top; double-click or Enter opens it.",
   "pages.home.railHint": "Selecting shows the instance at the top. Enter or double-click opens it.",
@@ -72,7 +72,7 @@ export const pages: typeof dePages = {
   "pages.skins.deleteText": "The skin disappears from your library. What you’re wearing stays on.",
   "pages.skins.previewLabel": "Preview of {name}",
   "pages.skins.modelOf": "Model of {name}",
-  "pages.skins.wearing": "Putting on",
+  "pages.skins.wearing": "Putting on…",
   "pages.skins.wear": "Wear",
   "pages.skins.renameTitle": "Rename skin",
 

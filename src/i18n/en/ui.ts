@@ -12,7 +12,7 @@ export const ui: typeof deUi = {
 
   // ---------- Tasks (title bar) ----------
   "ui.tasks.title": "Tasks",
-  "ui.tasks.ariaRunning.one": "Tasks, {count} running",
+  "ui.tasks.ariaRunning.one": "1 task running",
   "ui.tasks.ariaRunning.other": "Tasks, {count} running",
   "ui.tasks.clearDone": "Clear finished",
   "ui.tasks.emptyTitle": "No tasks",
@@ -68,6 +68,9 @@ export const ui: typeof deUi = {
   "ui.kit.copyState": "Copy {state}",
   "ui.kit.closeState": "Close {state}",
 
+  // ---------- Kit: widths (KitPage) ----------
+  "ui.kit.widthRow": "Widths",
+
   // ---------- Kit: chips ----------
   "ui.kit.chips": "Chips",
   "ui.kit.fixedCol": "fixed 120",
@@ -98,6 +101,9 @@ export const ui: typeof deUi = {
 
   // ---------- Kit: form ----------
   "ui.kit.nameHelp": "Appears on the start page, posters and headers. Up to 64 characters.",
+  "ui.kit.nameSuggestion": "For example “Fabric 1.21.4”",
+  "ui.kit.nameErrorField": "Name (with error)",
+  "ui.kit.nameMinLength": "At least 4 characters",
   "ui.kit.javaAside": "Automatic fits almost always.",
   "ui.kit.javaAutoDetail": "(Pumpkin Launcher downloads the right version)",
   "ui.kit.javaPath": "Java path",
@@ -109,6 +115,9 @@ export const ui: typeof deUi = {
   "ui.kit.memory": "Memory",
   "ui.kit.memoryWarn": "More than three quarters of your RAM.",
   "ui.kit.showSnapshots": "Show snapshots",
+  "ui.kit.optLatest": "latest",
+  "ui.kit.optSnapshot": "snapshot",
+  "ui.kit.optUnavailable": "unavailable",
   "ui.kit.loaderHelp": "Fabric: light and fast, most new mods.",
   "ui.kit.searchMods": "Search mods",
   "ui.kit.searchSmall": "Search (s)",
@@ -121,6 +130,7 @@ export const ui: typeof deUi = {
   "ui.kit.customIcon": "With a custom icon (info).",
   "ui.kit.advancedOpen": "Advanced (open)",
   "ui.kit.content": "Content",
+  "ui.kit.packs": "Packs",
 
   // ---------- Kit: toggles ----------
   "ui.kit.switchA": "Switch A",
@@ -144,7 +154,9 @@ export const ui: typeof deUi = {
   "ui.kit.secContentList": "Content list",
   "ui.kit.secCatalogList": "Catalog list",
   "ui.kit.secSmallLists": "Versions, tasks, accounts",
+  "ui.kit.secSheetCatalog": "Catalog in a panel",
   "ui.kit.copperTint": "Copper + 10%",
+  "ui.kit.overlayContext": "Overlay context",
   "ui.kit.packFab": "by robotkoer · Fast and pretty, set up and ready",
   "ui.kit.packAof": "by Pyrofab · A large collection",
   "ui.kit.packSky": "by Bacon_Donut · Sky island",
@@ -195,6 +207,7 @@ export const ui: typeof deUi = {
   "ui.kit.secStatus": "Status panels, errors",
   "ui.kit.secProgress": "Progress, jobs, loading",
   "ui.kit.secEmpty": "Empty states",
+  "ui.kit.secLayout": "Page layout",
   "ui.kit.states": "States",
   "ui.kit.highlighted": "Highlighted",
   "ui.kit.danger": "Danger",
@@ -210,7 +223,7 @@ export const ui: typeof deUi = {
   "ui.kit.templateSaved": "Template “{name}” saved",
   "ui.kit.templateNameHint": "The name appears under New › Template.",
   "ui.kit.deleteTitle": "Delete {name}?",
-  "ui.kit.deleteText": "This removes the instance's worlds, mods and settings.",
+  "ui.kit.deleteText": "This removes the instance’s worlds, mods and settings.",
   "ui.kit.quitText": "Unsaved progress will be lost.",
   "ui.kit.addMods": "Add mods",
   "ui.kit.tryOtherTerms": "Try different search terms.",
@@ -224,10 +237,12 @@ export const ui: typeof deUi = {
   "ui.kit.secTooltip": "Tooltip, trunc",
   "ui.kit.simpleTip": "Simple tooltip",
   "ui.kit.richTip": "Rich",
+  "ui.kit.lastPlayedAgo": "last played {n} days ago",
   "ui.kit.longName": "A very long instance name that gets truncated",
   "ui.kit.rightClickHere": "Right-click here",
   "ui.kit.loadingLibs": "Loading libraries",
   "ui.kit.crashLine": "Code 1 · the crash report is in the crash-reports folder",
+  "ui.kit.memoryLow": "Low memory",
   "ui.kit.memoryLowDetail": "More than 8 GB leaves the system too little.",
   "ui.kit.runningSince": "since {time} · {lines} lines",
   "ui.kit.noLog": "No log",

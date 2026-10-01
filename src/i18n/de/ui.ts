@@ -12,7 +12,7 @@ export const ui = {
 
   // ---------- Aufgaben (Fensterleiste) ----------
   "ui.tasks.title": "Aufgaben",
-  "ui.tasks.ariaRunning.one": "Aufgaben, {count} läuft",
+  "ui.tasks.ariaRunning.one": "1 Aufgabe läuft",
   "ui.tasks.ariaRunning.other": "Aufgaben, {count} laufen",
   "ui.tasks.clearDone": "Fertige entfernen",
   "ui.tasks.emptyTitle": "Keine Aufgaben",
@@ -68,6 +68,9 @@ export const ui = {
   "ui.kit.copyState": "Kopieren {state}",
   "ui.kit.closeState": "Schließen {state}",
 
+  // ---------- Kit: Breiten (KitPage) ----------
+  "ui.kit.widthRow": "Breiten",
+
   // ---------- Kit: Chips ----------
   "ui.kit.chips": "Chips",
   "ui.kit.fixedCol": "fest 120",
@@ -98,6 +101,9 @@ export const ui = {
 
   // ---------- Kit: Formular ----------
   "ui.kit.nameHelp": "Erscheint auf Start, Poster und Kopf. Höchstens 64 Zeichen.",
+  "ui.kit.nameSuggestion": "Zum Beispiel „Fabric 1.21.4“",
+  "ui.kit.nameErrorField": "Name (mit Fehler)",
+  "ui.kit.nameMinLength": "Mindestens 4 Zeichen",
   "ui.kit.javaAside": "Automatisch passt fast immer.",
   "ui.kit.javaAutoDetail": "(Pumpkin Launcher lädt die passende Version)",
   "ui.kit.javaPath": "Pfad zu Java",
@@ -109,6 +115,9 @@ export const ui = {
   "ui.kit.memory": "Speicher",
   "ui.kit.memoryWarn": "Mehr als drei Viertel deines Arbeitsspeichers.",
   "ui.kit.showSnapshots": "Vorabversionen zeigen",
+  "ui.kit.optLatest": "neueste Version",
+  "ui.kit.optSnapshot": "Snapshot",
+  "ui.kit.optUnavailable": "nicht verfügbar",
   "ui.kit.loaderHelp": "Fabric: leicht und schnell, die meisten neuen Mods.",
   "ui.kit.searchMods": "Mods suchen",
   "ui.kit.searchSmall": "Suchen (s)",
@@ -121,6 +130,7 @@ export const ui = {
   "ui.kit.customIcon": "Mit eigenem Icon (info).",
   "ui.kit.advancedOpen": "Erweitert (offen)",
   "ui.kit.content": "Inhalt",
+  "ui.kit.packs": "Ressourcenpakete",
 
   // ---------- Kit: Umschalter ----------
   "ui.kit.switchA": "Schalter A",
@@ -144,7 +154,9 @@ export const ui = {
   "ui.kit.secContentList": "Liste Inhalte",
   "ui.kit.secCatalogList": "Liste Katalog",
   "ui.kit.secSmallLists": "Versionen, Aufgaben, Konten",
+  "ui.kit.secSheetCatalog": "Katalog in der Platte",
   "ui.kit.copperTint": "Kupfer + 10 %",
+  "ui.kit.overlayContext": "Überlagerungs-Kontext",
   "ui.kit.packFab": "von robotkoer · Schnell und schön, fertig eingerichtet",
   "ui.kit.packAof": "von Pyrofab · Große Sammlung",
   "ui.kit.packSky": "von Bacon_Donut · Himmelsinsel",
@@ -195,6 +207,7 @@ export const ui = {
   "ui.kit.secStatus": "Statusplatte, Fehler",
   "ui.kit.secProgress": "Fortschritt, Vorgang, Laden",
   "ui.kit.secEmpty": "Leerzustand",
+  "ui.kit.secLayout": "Seitengerüst",
   "ui.kit.states": "Zustände",
   "ui.kit.highlighted": "Markiert",
   "ui.kit.danger": "Gefahr",
@@ -224,10 +237,12 @@ export const ui = {
   "ui.kit.secTooltip": "Tooltip, Trunc",
   "ui.kit.simpleTip": "Einfacher Tooltip",
   "ui.kit.richTip": "Reich",
+  "ui.kit.lastPlayedAgo": "zuletzt vor {n} Tagen gespielt",
   "ui.kit.longName": "Ein sehr langer Instanzname, der abgeschnitten wird",
   "ui.kit.rightClickHere": "Rechtsklick hier",
   "ui.kit.loadingLibs": "Bibliotheken laden",
   "ui.kit.crashLine": "Code 1 · Absturzbericht liegt im Ordner crash-reports",
+  "ui.kit.memoryLow": "Wenig Arbeitsspeicher",
   "ui.kit.memoryLowDetail": "Mehr als 8 GB lassen dem System zu wenig übrig.",
   "ui.kit.runningSince": "seit {time} · {lines} Zeilen",
   "ui.kit.noLog": "Kein Protokoll",

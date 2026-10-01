@@ -129,7 +129,7 @@ export function DiscoverPage() {
           <Spacer />
           {info.filters && (
             <Select
-              label={t("pages.discover.sortLabel")}
+              label={t("pages.instances.sortLabel")}
               value={sort ?? (query.trim() ? "relevance" : "downloads")}
               onChange={(v) => setSort(v as SearchIndex)}
               options={[

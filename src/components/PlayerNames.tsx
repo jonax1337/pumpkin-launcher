@@ -57,6 +57,19 @@ function closeMsLogin() {
   if (running) void api.msLoginCancel().catch(() => undefined);
 }
 
+/** Dialog-Untertitel „Danach startet {name}.“ – der Name bleibt als React-Knoten fett. */
+function ThenSub({ label }: { label: string }) {
+  const { tAround } = useI18n();
+  const [before, after] = tAround("components.account.then", "name");
+  return (
+    <>
+      {before}
+      <b>{label}</b>
+      {after}
+    </>
+  );
+}
+
 function MsLoginDialog() {
   const { t } = useI18n();
   const state = useMsLogin();
@@ -76,7 +89,7 @@ function MsLoginDialog() {
       open={state.step !== "idle"}
       onOpenChange={(o) => !o && closeMsLogin()}
       title={t("components.account.msLogin")}
-      sub={then && state.step !== "done" ? <>{t("components.account.thenBefore")}<b>{then.label}</b>{t("components.account.thenAfter")}</> : undefined}
+      sub={then && state.step !== "done" ? <ThenSub label={then.label} /> : undefined}
       width={520}
       height={420}
       footer={
@@ -318,7 +331,7 @@ function AddOfflineDialog() {
       open={open}
       onOpenChange={(o) => !o && close()}
       title={then ? t("components.account.askName") : t("components.account.addPlayerName")}
-      sub={then ? <>{t("components.account.thenBefore")}<b>{then.label}</b>{t("components.account.thenAfter")}</> : undefined}
+      sub={then ? <ThenSub label={then.label} /> : undefined}
       width={480}
       height={then ? 402 : 278}
       footer={

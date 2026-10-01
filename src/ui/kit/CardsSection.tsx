@@ -31,7 +31,7 @@ const Lab = ({ children }: { children: ReactNode }) => <span style={{ ...cap, wi
 /** Einträge des Beispielmenüs; `t` übersetzt die Texte zur Renderzeit (nicht auf Modulebene). */
 const menuOf = (t: (key: string) => string): MenuEntry[] => [
   { id: "open", text: t("common.open"), icon: "ext", onSelect: () => undefined },
-  { id: "folder", text: t("ui.menu.openFolder"), icon: "folder", onSelect: () => undefined },
+  { id: "folder", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => undefined },
   "-",
   { id: "del", text: t("common.delete"), icon: "trash", bad: true, onSelect: () => undefined },
 ];
@@ -85,7 +85,7 @@ function Posters() {
   const menu = menuOf(t);
   const primary = <Button variant="primary" icon="play" width={176}>{t("common.play")}</Button>;
   const actions = <IconButton onScene size="s" icon="more" label={t("ui.kit.more")} tip={false} />;
-  const status = (k: number) => (k === 1 ? <Chip size="s" tone="run" dot>{t("components.game.running")}</Chip> : k === 2 ? <Chip icon="up"><Count value={3} /> Updates</Chip> : null);
+  const status = (k: number) => (k === 1 ? <Chip size="s" tone="run" dot>{t("components.game.running")}</Chip> : k === 2 ? <Chip icon="up"><Count value={3} /> {t("common.updates")}</Chip> : null);
   const force = [undefined, "hover", "focus", "press", undefined] as const;
   return (
     <CardGrid data-kit="posters">
@@ -155,10 +155,10 @@ function Choices() {
   const [pk, setPk] = useState("fab");
   const [st, setSt] = useState("blank");
   const PACKS = [
-    { id: "fab", t: "Fabulously Optimized", s: t("ui.kit.packFab"), n: "12,4 Mio.", f: undefined },
-    { id: "aof", t: "All of Fabric 7", s: t("ui.kit.packAof"), n: "3,1 Mio.", f: "hover" },
-    { id: "sky", t: "SkyFactory One", s: t("ui.kit.packSky"), n: "812.000", f: "press" },
-    { id: "foc", t: t("ui.kit.focusExample"), s: "data-force=focus", n: "1.200", f: "focus" },
+    { id: "fab", name: "Fabulously Optimized", s: t("ui.kit.packFab"), n: "12,4 Mio.", f: undefined },
+    { id: "aof", name: "All of Fabric 7", s: t("ui.kit.packAof"), n: "3,1 Mio.", f: "hover" },
+    { id: "sky", name: "SkyFactory One", s: t("ui.kit.packSky"), n: "812.000", f: "press" },
+    { id: "foc", name: t("ui.kit.focusExample"), s: "data-force=focus", n: "1.200", f: "focus" },
   ];
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 520px) minmax(0, 420px)", gap: 24, alignItems: "start" }}>
@@ -168,7 +168,7 @@ function Choices() {
             <Choice
               key={p.id}
               media={<ProjectIcon seed={p.id} box={40} />}
-              title={p.t}
+              title={p.name}
               sub={p.s}
               trail={<Count value={p.n} size={18} />}
               selected={pk === p.id}
@@ -241,7 +241,7 @@ function InstanceList() {
           <Cell>{i.sub.split(" · ")[0]}</Cell>
           <Cell hide={1040}><Count value={i.mods} /></Cell>
           <Cell hide={1040}>{i.last}</Cell>
-          <Cell flex>{k === 1 ? <Chip size="s" tone="run" dot>{t("components.game.running")}</Chip> : k === 2 ? <Chip icon="up"><Count value={3} /> Updates</Chip> : null}</Cell>
+          <Cell flex>{k === 1 ? <Chip size="s" tone="run" dot>{t("components.game.running")}</Chip> : k === 2 ? <Chip icon="up"><Count value={3} /> {t("common.updates")}</Chip> : null}</Cell>
           <IconButton variant="secondary" icon="play" label={t("common.play")} tip={false} />
           <IconButton icon="more" label={t("ui.kit.moreAbout", { name: i.name })} tip={false} />
         </ListRow>
@@ -254,10 +254,10 @@ function ContentLists() {
   const { t } = useI18n();
   // Beispiel-Mods wie im Mock – die Hinweise entstehen hier in der aktuellen Sprache.
   const MODS = [
-    { id: "sodium", t: "Sodium", s: "Mod · 0.6.5", on: true, dep: false, warn: "" },
-    { id: "fabric-api", t: "Fabric API", s: t("ui.kit.requiredBy"), on: true, dep: true, warn: "" },
-    { id: "iris", t: "Iris Shaders mit einem sehr langen Namen, der abgeschnitten wird", s: "Mod · 1.8.1", on: false, dep: false, warn: "" },
-    { id: "lithium", t: "Lithium", s: "Mod · 0.14.3", on: true, dep: false, warn: t("ui.kit.notFor") },
+    { id: "sodium", name: "Sodium", s: "Mod · 0.6.5", on: true, dep: false, warn: "" },
+    { id: "fabric-api", name: "Fabric API", s: t("ui.kit.requiredBy"), on: true, dep: true, warn: "" },
+    { id: "iris", name: "Iris Shaders mit einem sehr langen Namen, der abgeschnitten wird", s: "Mod · 1.8.1", on: false, dep: false, warn: "" },
+    { id: "lithium", name: "Lithium", s: "Mod · 0.14.3", on: true, dep: false, warn: t("ui.kit.notFor") },
   ];
   const [picked, setPicked] = useState<Set<string>>(new Set(["lithium"]));
   const [gone, setGone] = useState(true);
@@ -268,7 +268,7 @@ function ContentLists() {
       <span />
       <Cell>{t("common.name")}</Cell>
       {!nw && <Cell>{t("ui.kit.notesCol")}</Cell>}
-      <Cell align="end">Update</Cell>
+      <Cell align="end">{t("common.update")}</Cell>
       <Cell align="end">{t("ui.switch.on")}</Cell>
       <span />
     </>
@@ -277,13 +277,13 @@ function ContentLists() {
     <>
       {MODS.map((m) => (
         <ListRow key={m.id} selected={picked.has(m.id)} off={!m.on} dep={m.dep}>
-          <Checkbox checked={picked.has(m.id)} onChange={(v) => pick(m.id, v)} label={t("detail.content.selectItem", { name: m.t })} />
+          <Checkbox checked={picked.has(m.id)} onChange={(v) => pick(m.id, v)} label={t("detail.content.selectItem", { name: m.name })} />
           <ProjectIcon seed={m.id} />
-          <RowTitle title={m.t} sub={m.s} />
+          <RowTitle title={m.name} sub={m.s} />
           {!nw && <Cell flex>{m.warn && <><Chip size="s" tone="warn" dot data-hide="1040">{m.warn}</Chip><Button variant="ghost" size="s" tone="warn">{t("ui.kit.fix")}</Button></>}</Cell>}
           <Cell flex align="end">{m.id === "sodium" ? <Button size="s" icon="up" width={96}>0.6.6</Button> : null}</Cell>
-          <Cell flex align="end"><Switch checked={m.on} onChange={() => undefined} label={t("detail.content.enabledLabel", { name: m.t })} /></Cell>
-          <IconButton size="s" icon="more" label={t("ui.kit.moreAbout", { name: m.t })} tip={false} />
+          <Cell flex align="end"><Switch checked={m.on} onChange={() => undefined} label={t("detail.content.enabledLabel", { name: m.name })} /></Cell>
+          <IconButton size="s" icon="more" label={t("ui.kit.moreAbout", { name: m.name })} tip={false} />
         </ListRow>
       ))}
       {gone ? <GhostRow variant="content" text={t("ui.kit.removedModMenu")} media={<ProjectIcon seed="modmenu" />} undoId="g1" onUndo={() => setGone(false)} /> : null}
@@ -300,8 +300,8 @@ function ContentLists() {
         {MODS.map((m) => (
           <ListRow key={m.id} selected={picked.has(m.id)} off={!m.on}>
             <ProjectIcon seed={m.id} box={52} />
-            <RowTitle title={m.t} />
-            <span><Switch checked={m.on} onChange={() => undefined} label={t("detail.content.enabledLabel", { name: m.t })} /><IconButton size="s" icon="more" label={t("ui.kit.moreAbout", { name: m.t })} tip={false} /></span>
+            <RowTitle title={m.name} />
+            <span><Switch checked={m.on} onChange={() => undefined} label={t("detail.content.enabledLabel", { name: m.name })} /><IconButton size="s" icon="more" label={t("ui.kit.moreAbout", { name: m.name })} tip={false} /></span>
             <span>{m.warn ? <Chip size="s" tone="warn" dot>{m.warn}</Chip> : <span className="ell">{m.s}</span>}</span>
             <span>{m.id === "sodium" ? <Button size="s" icon="up" width={96}>0.6.6</Button> : null}</span>
           </ListRow>
@@ -313,9 +313,9 @@ function ContentLists() {
 }
 
 const HITS = [
-  { id: "sodium", t: "Sodium", a: "von jellysquid3", d: "Die schnellste Rendering-Engine für Minecraft, verbessert die Bildrate deutlich und behebt viele Grafikfehler. Läuft mit fast allen Mods zusammen.", n: "48,1 Mio." },
-  { id: "iris", t: "Iris Shaders", a: "von coderbot", d: "Shader-Unterstützung für Fabric, kompatibel mit OptiFine-Shaderpaketen.", n: "22,3 Mio." },
-  { id: "lithium", t: "Lithium", a: "von CaffeineMC", d: "Optimiert Spiellogik, Physik und KI, ohne das Verhalten zu ändern.", n: "19,8 Mio." },
+  { id: "sodium", name: "Sodium", a: "von jellysquid3", d: "Die schnellste Rendering-Engine für Minecraft, verbessert die Bildrate deutlich und behebt viele Grafikfehler. Läuft mit fast allen Mods zusammen.", n: "48,1 Mio." },
+  { id: "iris", name: "Iris Shaders", a: "von coderbot", d: "Shader-Unterstützung für Fabric, kompatibel mit OptiFine-Shaderpaketen.", n: "22,3 Mio." },
+  { id: "lithium", name: "Lithium", a: "von CaffeineMC", d: "Optimiert Spiellogik, Physik und KI, ohne das Verhalten zu ändern.", n: "19,8 Mio." },
 ];
 
 function CatalogLists() {
@@ -323,7 +323,7 @@ function CatalogLists() {
   const meta = (n: string) => (
     <>
       <span><Count value={n} /> Downloads</span>
-      <Chip size="s" data-hide="900">Optimierung</Chip>
+      <Chip size="s" data-hide="900">{t("components.category.optimization")}</Chip>
       <Chip size="s" data-hide="900">Client</Chip>
     </>
   );
@@ -331,9 +331,9 @@ function CatalogLists() {
     <>
       <List variant="catalog" data-kit="list-catalog">
         {HITS.map((h, k) => (
-          <ListRow key={h.id} feature={k === 0} index={k} hit={{ onClick: () => undefined, label: t("components.search.viewProject", { name: h.t }) }} {...(k === 2 ? { "data-force": "hover" } : {})}>
+          <ListRow key={h.id} feature={k === 0} index={k} hit={{ onClick: () => undefined, label: t("components.search.viewProject", { name: h.name }) }} {...(k === 2 ? { "data-force": "hover" } : {})}>
             <ProjectIcon seed={h.id} box={k === 0 ? 104 : 72} />
-            <RowTitle size={k === 0 ? "feature" : "l"} title={h.t} aside={h.a} sub={h.d} meta={meta(h.n)} />
+            <RowTitle size={k === 0 ? "feature" : "l"} title={h.name} aside={h.a} sub={h.d} meta={meta(h.n)} />
             <Cell flex align="end"><Button size="s" icon="plus">{t("common.add")}</Button></Cell>
           </ListRow>
         ))}
@@ -342,9 +342,9 @@ function CatalogLists() {
       <Panel pad="s" style={{ maxWidth: 520 }}>
         <List variant="catalog-compact" data-kit="list-compact">
           {HITS.map((h) => (
-            <ListRow key={h.id} hit={{ onClick: () => undefined, label: t("components.search.viewProject", { name: h.t }) }}>
+            <ListRow key={h.id} hit={{ onClick: () => undefined, label: t("components.search.viewProject", { name: h.name }) }}>
               <ProjectIcon seed={h.id} box={40} />
-              <RowTitle size="l" title={h.t} sub={h.d} meta={<span><Count value={h.n} /> Downloads</span>} />
+              <RowTitle size="l" title={h.name} sub={h.d} meta={<span><Count value={h.n} /> Downloads</span>} />
               <Cell flex align="end"><Button size="s" icon="plus">{t("common.add")}</Button></Cell>
             </ListRow>
           ))}

@@ -17,8 +17,7 @@ export const components = {
   "components.update.upToDate": "Du hast die neueste Version.",
   "components.update.searching": "Sucht …",
   "components.update.checkNow": "Nach Updates suchen",
-  "components.update.availableBefore": "Version ",
-  "components.update.availableAfter": "ist verfügbar",
+  "components.update.available": "Version {version} ist verfügbar",
   "components.update.installAndRestart": "Installieren und neu starten",
   "components.update.downloading": "Update wird geladen",
   "components.update.restartNow": "Jetzt neu starten",
@@ -79,8 +78,7 @@ export const components = {
   // ---------- Konten und Microsoft-Anmeldung ----------
   "components.account.msLogin": "Mit Microsoft anmelden",
   "components.ms.codeCopied": "Code kopiert",
-  "components.account.thenBefore": "Danach startet ",
-  "components.account.thenAfter": ".",
+  "components.account.then": "Danach startet {name}.",
   "components.ms.useCodeInstead": "Stattdessen Code verwenden",
   "components.ms.browserOpened": "Die Microsoft-Anmeldung hat sich in deinem Browser geöffnet. Melde dich dort an, danach geht es hier automatisch weiter.",
   "components.ms.waiting": "Warte auf Anmeldung",
@@ -460,7 +458,7 @@ export const components = {
   "components.sort.relevance": "Nach Relevanz",
   "components.sort.downloads": "Beliebt",
   "components.sort.follows": "Meistgefolgt",
-  "components.sort.updated": "Zuletzt aktualisiert",
+  "components.sort.updated": "Aktualisiert",
 
   // ---------- Projektseite ----------
   "components.detail.projectLoadFailed": "Das Projekt konnte nicht geladen werden",

@@ -31,12 +31,15 @@ export function UpdateRow() {
 
 /** Gefundene Version mit Versionshinweisen und dem Ablauf Laden → (Spiel und Aufgaben abwarten, erneut bestätigen) → Installieren. */
 function UpdateOffer({ update }: { update: Update }) {
-  const { t } = useI18n();
+  const { t, tAround } = useI18n();
   const { phase, p } = useUpdateRun();
+  const [availableBefore, availableAfter] = tAround("components.update.available", "version");
   return (
     <>
       <b>
-        {t("components.update.availableBefore")} <Count value={update.version} /> {t("components.update.availableAfter")}
+        {availableBefore}
+        <Count value={update.version} />
+        {availableAfter}
       </b>
       {update.body && <Description body={update.body} />}
       {phase === "idle" && (

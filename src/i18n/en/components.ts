@@ -4,7 +4,7 @@ import { components as deComponents } from "../de/components.ts";
 export const components: typeof deComponents = {
   // ---------- Gemeinsames ----------
   "components.common.or": "or",
-  "components.common.copyFailed": "Couldn't copy",
+  "components.common.copyFailed": "Couldn’t copy",
   "components.common.checking": "Checking",
   "components.common.loadingAria": "Loading",
   "components.common.world": "world",
@@ -13,12 +13,11 @@ export const components: typeof deComponents = {
 
   // ---------- Einstellungen › Updates ----------
   "components.update.hint": "New versions arrive via GitHub",
-  "components.update.searchFailed": "Checking for updates didn't work",
-  "components.update.upToDate": "You're on the latest version.",
+  "components.update.searchFailed": "Checking for updates didn’t work",
+  "components.update.upToDate": "You’re on the latest version.",
   "components.update.searching": "Checking…",
   "components.update.checkNow": "Check for updates",
-  "components.update.availableBefore": "Version ",
-  "components.update.availableAfter": "is available",
+  "components.update.available": "Version {version} is available",
   "components.update.installAndRestart": "Install and restart",
   "components.update.downloading": "Downloading update",
   "components.update.restartNow": "Restart now",
@@ -26,8 +25,8 @@ export const components: typeof deComponents = {
 
   // ---------- Import aus anderen Launchern ----------
   "components.import.folderTitle": "Folder of the launcher or an instance",
-  "components.import.folderScanFailed": "Couldn't scan the folder",
-  "components.import.searchFailed": "The search didn't work",
+  "components.import.folderScanFailed": "Couldn’t scan the folder",
+  "components.import.searchFailed": "The search didn’t work",
   "components.import.noneFound": "No other launchers found",
   "components.import.noneFoundHint":
     "We looked where Prism Launcher, Modrinth App, CurseForge App and ATLauncher keep their instances. If your launcher lives somewhere else, for example MultiMC, pick its folder.",
@@ -36,7 +35,7 @@ export const components: typeof deComponents = {
 
   // ---------- Von-Hand-laden (CurseForge) ----------
   "components.manual.fallbackInstance": "your instance",
-  "components.manual.adoptFailed": "Couldn't install {name}",
+  "components.manual.adoptFailed": "Couldn’t install {name}",
   "components.manual.installedOne": "{name} is installed",
   "components.manual.installedAll": "All {n} files are installed",
   "components.manual.titleOne": "Download one file manually",
@@ -62,36 +61,35 @@ export const components: typeof deComponents = {
   "components.onboarding.start.modpack.next": "Opens the catalog: pick a modpack there and create it.",
   "components.onboarding.stepOf": "Step {step} of 2",
   "components.onboarding.welcome": "Welcome to Pumpkin Launcher",
-  "components.account.askName": "What's your in-game name?",
+  "components.account.askName": "What’s your in-game name?",
   "components.account.msLoginPrompt": "Sign in with your Microsoft account.",
   "components.account.loggedInAs": "Signed in as {name}",
   "components.onboarding.msHintOfflineOk": "Required for most servers and Realms. You can do it later.",
-  "components.onboarding.msHintRequired": "You need an account that owns Minecraft: Java Edition for this.",
+  "components.onboarding.msHintRequired": "You’ll need an account that owns Minecraft: Java Edition.",
   "components.onboarding.pickStart": "How do you want to start?",
   "components.onboarding.moreLater": "You can create more instances any time.",
   "components.onboarding.startGroup": "Start",
   "components.onboarding.importForeign.one": "Import {n} instance from another launcher",
   "components.onboarding.importForeign.other": "Import {n} instances from other launchers",
   "components.onboarding.importForeignNone": "Import from another launcher",
-  "components.onboarding.goFailed": "That didn't work",
+  "components.onboarding.goFailed": "That didn’t work",
   "components.onboarding.noSodium": "No matching Sodium version found",
 
   // ---------- Konten und Microsoft-Anmeldung ----------
   "components.account.msLogin": "Sign in with Microsoft",
   "components.ms.codeCopied": "Code copied",
-  "components.account.thenBefore": "After that, ",
-  "components.account.thenAfter": " starts.",
+  "components.account.then": "After that, {name} starts.",
   "components.ms.useCodeInstead": "Use a code instead",
   "components.ms.browserOpened": "The Microsoft sign-in opened in your browser. Sign in there, and this continues automatically.",
   "components.ms.waiting": "Waiting for sign-in",
-  "components.ms.windowWaits": "Waiting for you to sign in. This window waits {min} minutes.",
+  "components.ms.windowWaits": "Waiting for you to sign in. This window stays open for {min} minutes.",
   "components.ms.codeValid": "Waiting for you to sign in. The code is valid for {min} minutes.",
   "components.ms.nothingHappens": "Nothing happening? “Open page” reopens the sign-in, or use a code instead.",
   "components.ms.openAt": "Open",
   "components.ms.enterCode": "in your browser and enter this code:",
   "components.ms.codeSpaced": "Code {code}",
   "components.ms.accountActive": "The account is now active. You can switch it any time via the top right.",
-  "components.ms.loginFailed": "Sign-in didn't work",
+  "components.ms.loginFailed": "Sign-in didn’t work",
   "components.ms.offlinePossible": "With a player name you can play without signing in.",
   "components.account.accounts": "Accounts",
   "components.account.kindMicrosoft": "Microsoft account",
@@ -105,7 +103,7 @@ export const components: typeof deComponents = {
   "components.account.noName": "No player name yet",
   "components.account.notLoggedIn": "Not signed in",
   "components.playerName.helpLong":
-    "3 to 16 characters: letters, digits and underscore. Enough for singleplayer, LAN and servers without signing in.",
+    "3 to 16 characters: letters, digits and underscore. Enough for singleplayer, LAN and servers that don’t require a sign-in.",
   "components.account.playerNameActive": "Player name “{name}” is active",
   "components.account.saveAndPlay": "Save and play",
   "components.account.neededForServers": "Required for most servers and Realms.",
@@ -114,7 +112,7 @@ export const components: typeof deComponents = {
   "components.account.signOutPlain": "Sign out",
   "components.account.noneYet": "No account yet",
   "components.account.noneOfflineAllowed": "Sign in or add a player name.",
-  "components.account.msLoadFailed": "Couldn't load Microsoft accounts",
+  "components.account.msLoadFailed": "Couldn’t load Microsoft accounts",
   "components.account.offlineHint":
     "With a player name you can play alone, on LAN and on servers without signing in. For most servers you need a Microsoft account.",
 
@@ -130,10 +128,10 @@ export const components: typeof deComponents = {
   "components.game.exitCode": " (code {code})",
   "components.game.restart": "Restart",
   "components.game.onceMore": "Retry",
-  "components.game.cannotStart": "Can't start",
-  "components.game.ariaCannotStart": "Can't start: {name}, loader not supported yet",
+  "components.game.cannotStart": "Can’t start",
+  "components.game.ariaCannotStart": "Can’t start: {name}, loader not supported yet",
   "components.game.blocked": "Blocked",
-  "components.game.loaderUnsupported": "Pumpkin Launcher doesn't support this loader yet",
+  "components.game.loaderUnsupported": "Pumpkin Launcher doesn’t support this loader yet",
   "components.game.ariaInstalling": "Installing: {name}, {percent}%",
   "components.game.ariaStarting": "Starting: {name}",
   "components.game.ariaRunning": "Quit: {name}, running",
@@ -188,13 +186,13 @@ export const components: typeof deComponents = {
 
   // ---------- Spielername ----------
   "components.playerName.label": "Player name",
-  "components.playerName.helpShort": "Enough for singleplayer, LAN and servers without signing in.",
+  "components.playerName.helpShort": "Enough for singleplayer, LAN and servers that don’t require a sign-in.",
   "components.playerName.invalid": "Only letters, digits and underscore, 3 to 16 characters.",
   "components.playerName.placeholder": "e.g. Steve_42",
 
   // ---------- Arbeitsspeicher und Java ----------
   "components.playtime.played": "{zeit} played",
-  "components.memory.tooHigh": "That's more than three quarters of your RAM ({ram}). The system and other programs may stutter.",
+  "components.memory.tooHigh": "That’s more than three quarters of your RAM ({ram}). The system and other programs may stutter.",
   "components.memory.hasTotal": "This computer has {ram}.",
   "components.memory.general": "More than 8 GB rarely helps.",
   "components.memory.auto": "Automatic",
@@ -247,9 +245,9 @@ export const components: typeof deComponents = {
   "components.loader.help.fabric": "Lightweight and fast. Most performance mods are available for Fabric.",
   "components.loader.help.quilt": "Like Fabric, can also load most Fabric mods.",
   "components.loader.help.forge": "For big, classic mods like Create.",
-  "components.loader.help.neoforge": "Forge's successor for newer versions.",
+  "components.loader.help.neoforge": "Forge’s successor for newer versions.",
   "components.loader.unreachable": "{loader} is currently unavailable.",
-  "components.loader.notYetFor": "{loader} isn't available for Minecraft {version} yet.",
+  "components.loader.notYetFor": "{loader} isn’t available for Minecraft {version} yet.",
   "components.loader.notNeededVanilla": "Not needed with Vanilla",
   "components.loader.latestStable": "Latest stable (recommended)",
 
@@ -261,11 +259,11 @@ export const components: typeof deComponents = {
   "components.version.none": "No versions",
   "components.version.showPrereleases": "Show pre-releases",
   "components.version.gone": "This version no longer exists",
-  "components.version.loadFailed": "Couldn't load versions",
+  "components.version.loadFailed": "Couldn’t load versions",
   "components.version.allLoaders": "All loaders",
 
   // ---------- Vorlagen ----------
-  "components.template.loadFailed": "Couldn't load templates",
+  "components.template.loadFailed": "Couldn’t load templates",
   "components.template.noneYet": "No templates yet",
   "components.template.noneYetHint":
     "Save an instance from its menu with “Save as template”, then use it here as a starting point.",
@@ -276,7 +274,7 @@ export const components: typeof deComponents = {
   "components.template.deleteNamed": "Delete template {name}",
   "components.template.deleteQuotedTitle": "Delete template “{name}”?",
   "components.template.deleteText": "Instances created from the template stay untouched.",
-  "components.template.saveHint": "You save templates from an instance's menu: “Save as template”.",
+  "components.template.saveHint": "You save templates from an instance’s menu: “Save as template”.",
 
   // ---------- Instanz-Aktionen ----------
   "components.instance.duplicateTask": "Duplicating {name}",
@@ -297,7 +295,7 @@ export const components: typeof deComponents = {
   "components.instance.moreActions": "More actions",
   "components.instance.nameField": "Instance name",
   "components.instance.templateName": "Template name",
-  "components.instance.templateHelp": "Saved are version, loader, {inhalt} entries and settings. Not worlds.",
+  "components.instance.templateHelp": "Saves the version, the loader, {inhalt} entries and the settings. Worlds are not included.",
   "components.instance.groupName": "Group name",
   "components.instance.groupHelp": "“{name}” goes into this group. A group without instances disappears on its own.",
   "components.instance.export": "Export",
@@ -314,7 +312,7 @@ export const components: typeof deComponents = {
   "components.export.entry.servers": "Server list",
   "components.export.include": "Include",
   "components.export.includeHelp":
-    "Modrinth content is linked, everything else goes into the file. You may not be allowed to share CurseForge files publicly like this.",
+    "Modrinth content is linked, everything else goes into the file. You may not be allowed to share CurseForge files publicly.",
   "components.export.folderEmpty": "The game folder is still empty. Version and loader will be exported.",
 
   // ---------- Katalog-Arten ----------
@@ -390,7 +388,7 @@ export const components: typeof deComponents = {
 
   // ---------- Inhalte hinzufügen ----------
   "components.content.destinationWorld": "“{welt}” ({instanz})",
-  "components.content.loadFailed": "Couldn't load {name}",
+  "components.content.loadFailed": "Couldn’t load {name}",
   "components.content.installTask": "Installing {name}",
   "components.content.deps.one": ", plus {n} required mod",
   "components.content.deps.other": ", plus {n} required mods",
@@ -399,8 +397,8 @@ export const components: typeof deComponents = {
   "components.content.viewAction": "View",
   "components.content.installed": "Installed",
   "components.content.noVersionFor": "No version for {version}",
-  "components.content.notAvailableFor": "{name} isn't available for {passt}",
-  "components.content.notForMc": "{name} isn't available for Minecraft {version}",
+  "components.content.notAvailableFor": "{name} isn’t available for {passt}",
+  "components.content.notForMc": "{name} isn’t available for Minecraft {version}",
   "components.content.noVersionForLower": "no version for {version}",
   "components.content.noWorldsLower": "no worlds",
   "components.content.needsLoader": "Only works in instances with a mod loader",
@@ -420,11 +418,11 @@ export const components: typeof deComponents = {
   // ---------- Modpack-Installation ----------
   "components.pack.searchPlaceholder": "Search modpacks",
   "components.pack.noneFound": "No modpack found for “{suche}”.",
-  "components.pack.cannotInstall": "{name} can't be installed",
+  "components.pack.cannotInstall": "{name} can’t be installed",
   "components.pack.installTask": "Installing modpack “{name}”",
   "components.pack.readyToast": "{name} is ready. “Play” downloads the rest on first start.",
   "components.pack.versionLabel": "Modpack version",
-  "components.pack.confirmHint": "Pumpkin Launcher is now downloading the pack's mods. Minecraft itself follows on first start.",
+  "components.pack.confirmHint": "Pumpkin Launcher is now downloading the pack’s mods. Minecraft itself follows on first start.",
   "components.pack.newInstanceTitle": "New instance from modpack",
   "components.pack.cancelInstallPack": "Cancel installation of {name}",
   "components.pack.createAria": "Create {name} as an instance",
@@ -460,10 +458,10 @@ export const components: typeof deComponents = {
   "components.sort.relevance": "Relevance",
   "components.sort.downloads": "Popular",
   "components.sort.follows": "Most followed",
-  "components.sort.updated": "Recently updated",
+  "components.sort.updated": "Updated",
 
   // ---------- Projektseite ----------
-  "components.detail.projectLoadFailed": "Couldn't load the project",
+  "components.detail.projectLoadFailed": "Couldn’t load the project",
   "components.detail.fitsHeading": "Fits",
   "components.detail.notSpecified": "Not specified",
   "components.detail.thisInstance": "This instance",
@@ -508,7 +506,7 @@ export const components: typeof deComponents = {
   "components.support.reportBug": "Report a bug",
   "components.support.reportHint": "As an issue on GitHub",
   "components.support.reportAside":
-    "The debug info names version, system and instances, without names, accounts or paths. After a crash, “Share log” in the instance's log also helps.",
+    "The debug info names version, system and instances, without names, accounts or paths. After a crash, “Share log” in the instance’s log also helps.",
   "components.support.questionsLabel": "Questions and ideas",
   "components.support.questionsHint": "In the GitHub discussions",
   "components.support.openDiscussions": "Open discussions",

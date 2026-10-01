@@ -40,7 +40,7 @@ function TabsDemo() {
     { value: "off", label: t("common.worlds"), disabled: true },
   ];
   const WAYS: TabItem<W>[] = [
-    { value: "blank", label: t("ui.kit.empty"), icon: "plus" },
+    { value: "blank", label: t("ui.kit.wayBlank"), icon: "plus" },
     { value: "pack", label: t("components.catalog.one.modpack"), icon: "box" },
     { value: "file", label: t("ui.kit.wayFromFile"), icon: "file" },
   ];
@@ -192,7 +192,7 @@ function FieldsDemo() {
         <div style={row}>
           <Select label={t("pages.instances.sortLabel")} value={sort} onChange={setSort} options={[{ value: "dl", label: t("pages.discover.sortDownloads") }, { value: "new", label: t("pages.discover.sortNewest") }, { value: "rel", label: t("pages.discover.sortRelevance") }]} />
           <Select size="s" ariaLabel={t("ui.kit.versionSmall")} value={ver} onChange={setVer} options={options} />
-          <Select size="s" ariaLabel={t("ui.kit.empty")} value="" onChange={() => undefined} options={[]} placeholder={t("components.version.none")} />
+          <Select size="s" ariaLabel={t("ui.kit.wayBlank")} value="" onChange={() => undefined} options={[]} placeholder={t("components.version.none")} />
         </div>
         <TextArea rows={2} width="full" defaultValue={"-Xmx4G\n-XX:+UseG1GC"} aria-label={t("ui.kit.args")} />
         <Hint>{t("ui.kit.memHint")}</Hint>

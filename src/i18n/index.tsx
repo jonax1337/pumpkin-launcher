@@ -1,14 +1,15 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useSettings } from "@/store/settings";
-import { setCurrentLanguage, t } from "./core";
+import { currentLanguage, setCurrentLanguage, t, tAround } from "./core";
 import { resolveChoice, type Language, type LanguageChoice } from "./types";
 
-export { t };
+export { currentLanguage, t };
 export type { Language, LanguageChoice };
 
 /** Sprache der Oberfläche: `t`, die gewählte und die aufgelöste Sprache; ein Wechsel greift sofort. */
 interface I18n {
   t: typeof t;
+  tAround: typeof tAround;
   lang: LanguageChoice;
   resolved: Language;
   setLang: (choice: LanguageChoice) => void;
@@ -46,6 +47,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   const value = {
     t,
+    tAround,
     lang,
     resolved: resolveChoice(lang),
     setLang: (choice: LanguageChoice) => useSettings.getState().set({ language: choice }),
