@@ -34,11 +34,22 @@ use std::{
 /// eigenen Schlüssel, betreiben einen eigenen Worker (`proxy/`) und setzen `PUMPKIN_CF_PROXY` (Laufzeit oder beim Bauen).
 const DEFAULT_PROXY: &str = "https://pumpkin-curseforge.jonas-laux.workers.dev";
 const GAME_MINECRAFT: u32 = 432;
+const WEBSITE: &str = "https://www.curseforge.com/";
+/// Dateien je Seite der Dateiliste eines Projekts.
+const FILES_PAGE_SIZE: u32 = 50;
+/// Die Suche von CurseForge liefert nur die ersten 10 000 Treffer; `index + pageSize` darf sie nicht überschreiten.
+const MAX_SEARCH_OFFSET: u32 = 9_900;
+const MAX_SEARCH_TOTAL: u64 = 10_000;
+const MAX_QUERY_LEN: usize = 256;
 const MAX_DEPENDENCIES: usize = 64;
 /// Größte Liste für `POST /v1/mods` und `/v1/mods/files`, die der Worker annimmt.
 const BATCH: usize = 200;
-/// `releaseType` stabiler Dateien (2 = Beta, 3 = Alpha).
+/// `releaseType` einer Datei.
 const RELEASE: u8 = 1;
+const BETA: u8 = 2;
+const ALPHA: u8 = 3;
+/// `algo` des SHA-1 in der Hash-Liste einer Datei.
+const HASH_SHA1: u8 = 1;
 /// Pause nach der ersten 429-Antwort ohne `Retry-After` in Sekunden; sie verdoppelt sich je Versuch.
 const BASE_WAIT_SECS: u64 = 5;
 /// Neue Versuche nach „zu viele Anfragen“ (429), bevor der Fehler beim Nutzer landet.
@@ -251,6 +262,18 @@ const REQUIRED: u8 = 3;
 const OPTIONAL: u8 = 2;
 const INCOMPATIBLE: u8 = 5;
 
+/// `modLoaderType` der API.
+const LOADER_FORGE: u8 = 1;
+const LOADER_FABRIC: u8 = 4;
+const LOADER_QUILT: u8 = 5;
+const LOADER_NEOFORGE: u8 = 6;
+
+/// `sortField` der Suche (1 wäre „Hervorgehoben“, 11 „Veröffentlicht“).
+const SORT_POPULARITY: u8 = 2;
+const SORT_UPDATED: u8 = 3;
+const SORT_DOWNLOADS: u8 = 6;
+const SORT_NEWEST: u8 = 11;
+
 const CLASS_MOD: u32 = 6;
 const CLASS_MODPACK: u32 = 4471;
 const CLASS_RESOURCEPACK: u32 = 12;
@@ -285,10 +308,10 @@ fn mod_kind(class_id: Option<u32>) -> AppResult<ModKind> {
 /// CurseForge-Nummer des Loaders; Vanilla hat keine.
 fn loader_type(loader: ModLoader) -> Option<u8> {
     match loader {
-        ModLoader::Forge => Some(1),
-        ModLoader::Fabric => Some(4),
-        ModLoader::Quilt => Some(5),
-        ModLoader::NeoForge => Some(6),
+        ModLoader::Forge => Some(LOADER_FORGE),
+        ModLoader::Fabric => Some(LOADER_FABRIC),
+        ModLoader::Quilt => Some(LOADER_QUILT),
+        ModLoader::NeoForge => Some(LOADER_NEOFORGE),
         ModLoader::Vanilla => None,
     }
 }
@@ -308,12 +331,12 @@ fn file_minecraft(file: &CfFile) -> Vec<String> {
     file.game_versions.iter().filter(|v| v.starts_with(|c: char| c.is_ascii_digit()) && v.contains('.')).cloned().collect()
 }
 fn sha1_of(file: &CfFile) -> Option<String> {
-    file.hashes.iter().find(|h| h.algo == 1).map(|h| h.value.to_ascii_lowercase())
+    file.hashes.iter().find(|h| h.algo == HASH_SHA1).map(|h| h.value.to_ascii_lowercase())
 }
 fn release(file: &CfFile) -> &'static str {
     match file.release_type {
-        2 => "beta",
-        3 => "alpha",
+        BETA => "beta",
+        ALPHA => "alpha",
         _ => "release",
     }
 }
@@ -382,16 +405,15 @@ pub async fn search(
     offset: u32,
     index: Option<&str>,
 ) -> AppResult<SearchResponse> {
-    if query.len() > 256 || offset > 9_900 {
+    if query.len() > MAX_QUERY_LEN || offset > MAX_SEARCH_OFFSET {
         return Err(AppError::invalid("Ungültige Suche"));
     }
-    // CurseForge: 1 Hervorgehoben, 2 Beliebtheit, 3 Zuletzt aktualisiert, 6 Downloads, 11 Veröffentlicht.
     let sort = match index {
-        None if query.trim().is_empty() => 6,
-        None | Some("relevance" | "follows") => 2,
-        Some("downloads") => 6,
-        Some("updated") => 3,
-        Some("newest") => 11,
+        None if query.trim().is_empty() => SORT_DOWNLOADS,
+        None | Some("relevance" | "follows") => SORT_POPULARITY,
+        Some("downloads") => SORT_DOWNLOADS,
+        Some("updated") => SORT_UPDATED,
+        Some("newest") => SORT_NEWEST,
         Some(_) => return Err(AppError::invalid("Ungültige Sortierung")),
     };
     let mut q = vec![
@@ -411,7 +433,7 @@ pub async fn search(
         q.push(("modLoaderType", t.to_string()));
     }
     let page: Page<CfMod> = get(client, "mods/search", &q).await?;
-    let total = page.pagination.map_or(page.data.len() as u64, |p| p.total_count).min(10_000);
+    let total = page.pagination.map_or(page.data.len() as u64, |p| p.total_count).min(MAX_SEARCH_TOTAL);
     Ok(SearchResponse { hits: page.data.iter().map(hit).collect(), total_hits: total, offset, limit: PAGE_SIZE })
 }
 
@@ -424,6 +446,11 @@ async fn file_of(client: &reqwest::Client, project: u32, file: u32) -> AppResult
         return Err(AppError::invalid("Datei gehört nicht zu diesem Projekt"));
     }
     Ok(f)
+}
+
+/// Projektseite auf CurseForge; eine Adresse anderswo wäre ein Link aus fremder Hand.
+fn website(m: &CfMod) -> Option<String> {
+    m.links.as_ref().map(|l| l.website_url.clone()).filter(|u| u.starts_with(WEBSITE))
 }
 
 pub async fn project(client: &reqwest::Client, id: &str) -> AppResult<Project> {
@@ -441,13 +468,13 @@ pub async fn project(client: &reqwest::Client, id: &str) -> AppResult<Project> {
         project_type: kind_name(m.class_id).into(),
         client_side: "optional".into(),
         server_side: "optional".into(),
-        web_url: m.links.as_ref().map(|l| l.website_url.clone()).filter(|u| u.starts_with("https://www.curseforge.com/")),
+        web_url: website(&m),
     })
 }
 
 pub async fn versions(client: &reqwest::Client, id: &str, mc: Option<&str>, loader: Option<&str>) -> AppResult<Vec<Version>> {
     let id = number(id)?;
-    let mut q = vec![("pageSize", "50".to_string())];
+    let mut q = vec![("pageSize", FILES_PAGE_SIZE.to_string())];
     if let Some(mc) = mc {
         identifier(mc)?;
         q.push(("gameVersion", mc.into()));
@@ -802,11 +829,7 @@ pub(crate) async fn plan_pack(
         if f.file_name.is_empty() || f.file_name.contains(['/', '\\']) {
             return Err(AppError::invalid(format!("Unerwarteter Dateiname {}", f.file_name)));
         }
-        let page = m
-            .and_then(|m| m.links.as_ref())
-            .map(|l| l.website_url.clone())
-            .filter(|u| u.starts_with("https://www.curseforge.com/"))
-            .unwrap_or_else(|| "https://www.curseforge.com/minecraft".into());
+        let page = m.and_then(website).unwrap_or_else(|| format!("{WEBSITE}minecraft"));
         match remote(f) {
             Ok(r) => {
                 files.push((format!("{folder}/{}", f.file_name), r));
