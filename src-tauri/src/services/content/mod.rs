@@ -17,9 +17,9 @@ pub use fs_safety::safe_path;
 pub(crate) use fs_safety::{is_occupied, regular_parents, rollback, write_new, StagedInstall};
 pub use install::install_mod;
 pub(crate) use install::budget;
-pub use pack::{import, local_pack, PUMPKIN_FILE};
+pub use pack::{import, install_modrinth_pack, local_pack, PUMPKIN_FILE};
 pub(crate) use pack::{import_plan, plan_pack, Blob, Pack, TempFile};
-pub use update::{check_updates, update_mods};
+pub use update::{check_updates, update_mods, ModUpdate};
 
 use crate::{
     error::{AppError, AppResult},

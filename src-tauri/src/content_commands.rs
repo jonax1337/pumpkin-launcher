@@ -79,18 +79,7 @@ pub async fn modrinth_install_pack(
     let state = state.inner();
     state
         .run_cancellable(&app, &operation_id, |on_progress| async move {
-            on_progress(Phase::Resolve, 0, 1);
-            let client = api::client()?;
-            let version = api::version(&client, &version_id).await?;
-            let project = api::project(&client, &version.project_id).await?;
-            if project.project_type != "modpack" {
-                return Err(AppError::invalid("Projekt ist kein Modpack"));
-            }
-            let file = api::primary(&version, ".mrpack")?;
-            on_progress(Phase::Download, 0, 1);
-            let data = api::download(&client, &file).await?;
-            let origin = ModpackOrigin::Modrinth { project_id: version.project_id, version_id: version.id };
-            content::import(state, &data, &name, Some(origin), &*on_progress).await
+            content::install_modrinth_pack(state, &version_id, &name, &*on_progress).await
         })
         .await
 }
@@ -251,30 +240,10 @@ pub async fn curseforge_adopt_download(
 pub fn pack_install_cancel(state: State<'_, AppState>, operation_id: String) {
     state.cancel(&operation_id);
 }
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModUpdate {
-    mod_id: String,
-    current_version: String,
-    version_id: String,
-    version_number: String,
-}
 #[tauri::command]
-pub async fn modrinth_check_updates(
-    state: State<'_, AppState>,
-    instance_id: String,
-) -> AppResult<Vec<ModUpdate>> {
+pub async fn modrinth_check_updates(state: State<'_, AppState>, instance_id: String) -> AppResult<Vec<content::ModUpdate>> {
     let instance = state.instances.get(&instance_id)?;
-    Ok(content::check_updates(&api::client()?, &instance)
-        .await?
-        .into_iter()
-        .map(|(i, v)| ModUpdate {
-            mod_id: instance.mods[i].id.clone(),
-            current_version: instance.mods[i].version.clone(),
-            version_id: v.id,
-            version_number: v.version_number,
-        })
-        .collect())
+    content::check_updates(&api::client()?, &instance).await
 }
 #[tauri::command]
 pub async fn modrinth_update_mods(

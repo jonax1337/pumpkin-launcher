@@ -160,6 +160,27 @@ fn duplicate_target() -> AppError {
     AppError::invalid("Doppelte Pack-Zieldatei")
 }
 
+/// Installiert die Modrinth-Modpack-Version `version_id` als neue Instanz `name`.
+pub async fn install_modrinth_pack(
+    state: &AppState,
+    version_id: &str,
+    name: &str,
+    progress: ProgressFn<'_>,
+) -> AppResult<Instance> {
+    progress(Phase::Resolve, 0, 1);
+    let client = modrinth::client()?;
+    let version = modrinth::version(&client, version_id).await?;
+    let project = modrinth::project(&client, &version.project_id).await?;
+    if project.project_type != "modpack" {
+        return Err(AppError::invalid("Projekt ist kein Modpack"));
+    }
+    let file = modrinth::primary(&version, ".mrpack")?;
+    progress(Phase::Download, 0, 1);
+    let data = modrinth::download(&client, &file).await?;
+    let origin = ModpackOrigin::Modrinth { project_id: version.project_id, version_id: version.id };
+    import(state, &data, name, Some(origin), progress).await
+}
+
 pub async fn import(
     state: &AppState,
     data: &[u8],
