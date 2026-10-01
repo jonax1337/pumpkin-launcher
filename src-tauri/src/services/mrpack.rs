@@ -6,6 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use serde::Serialize;
 use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
@@ -101,9 +102,25 @@ fn included(include: &[String], m: &Mod) -> bool {
     include.iter().any(|name| name == m.kind.folder())
 }
 
+/// Eintrag unter `files` im `modrinth.index.json`: eine Datei, die der Import von Modrinth lädt statt aus `overrides/`.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IndexFile {
+    path: String,
+    hashes: IndexHashes,
+    downloads: Vec<String>,
+    file_size: u64,
+}
+
+#[derive(Serialize)]
+struct IndexHashes {
+    sha1: String,
+    sha512: String,
+}
+
 /// Index-Einträge für Modrinth-Inhalte, deren installierte Datei (sha1) Modrinth kennt; eine Sammelabfrage.
 /// Alles ohne Treffer landet als Override aus dem Cache im Pack, auch ohne Netz: die Dateien liegen ja schon da.
-async fn remote_files(client: &reqwest::Client, instance: &Instance, include: &[String]) -> AppResult<Vec<Value>> {
+async fn remote_files(client: &reqwest::Client, instance: &Instance, include: &[String]) -> AppResult<Vec<IndexFile>> {
     let candidates: Vec<(&Mod, &str)> = active_content(instance)
         .filter(|(m, _)| included(include, m) && matches!(m.source, ModSource::Modrinth { .. }))
         .collect();
@@ -120,17 +137,17 @@ async fn remote_files(client: &reqwest::Client, instance: &Instance, include: &[
                     && f.hashes.contains_key("sha512")
                     && modrinth::download_url(&f.url).is_ok()
             })?;
-            Some(json!({
-                "path": mods::game_path(m),
-                "hashes": { "sha1": file.hashes["sha1"], "sha512": file.hashes["sha512"] },
-                "downloads": [file.url],
-                "fileSize": file.size,
-            }))
+            Some(IndexFile {
+                path: mods::game_path(m),
+                hashes: IndexHashes { sha1: file.hashes["sha1"].clone(), sha512: file.hashes["sha512"].clone() },
+                downloads: vec![file.url.clone()],
+                file_size: file.size,
+            })
         })
         .collect())
 }
 
-fn index(instance: &Instance, remote: &[Value]) -> AppResult<Value> {
+fn index(instance: &Instance, remote: &[IndexFile]) -> AppResult<Value> {
     let mut dependencies = json!({ "minecraft": instance.minecraft_version });
     match (instance.loader, &instance.loader_version) {
         (ModLoader::Vanilla, _) => {}
@@ -157,8 +174,8 @@ fn pumpkin_meta(instance: &Instance) -> Value {
 
 /// Dateien für `overrides/`: gewählte aktive Inhalte ohne Index-Eintrag aus dem Cache, dazu die gewählten
 /// Einträge des Spielordners ohne die Dateien verwalteter Inhalte (die kommen aus Index bzw. Cache).
-fn overrides(dirs: &Dirs, instance: &Instance, include: &[String], remote: &[Value]) -> AppResult<Vec<(String, PathBuf)>> {
-    let covered: Vec<&str> = remote.iter().filter_map(|f| f["path"].as_str()).collect();
+fn overrides(dirs: &Dirs, instance: &Instance, include: &[String], remote: &[IndexFile]) -> AppResult<Vec<(String, PathBuf)>> {
+    let covered: Vec<&str> = remote.iter().map(|f| f.path.as_str()).collect();
     mods::recache(dirs, &instance.id, &instance.mods)?;
     let mut files = Vec::new();
     for (m, sha1) in active_content(instance).filter(|(m, _)| included(include, m)) {
@@ -277,6 +294,27 @@ mod tests {
         let remote = remote_files(&offline, &instance, &["mods".to_string()]).await.unwrap();
 
         assert!(remote.is_empty());
+    }
+
+    #[test]
+    fn index_lists_modrinth_files_in_the_mrpack_format() {
+        let instance = Instance::from_new(NewInstance {
+            name: "Pack".into(),
+            minecraft_version: "1.21.1".into(),
+            loader: ModLoader::Fabric,
+            loader_version: Some("0.16.10".into()),
+        });
+        let file = IndexFile {
+            path: "mods/sodium.jar".into(),
+            hashes: IndexHashes { sha1: "a".into(), sha512: "b".into() },
+            downloads: vec!["https://cdn.modrinth.com/s.jar".into()],
+            file_size: 7,
+        };
+
+        let json = serde_json::to_string(&index(&instance, &[file]).unwrap()).unwrap();
+
+        let files = r#""files":[{"downloads":["https://cdn.modrinth.com/s.jar"],"fileSize":7,"hashes":{"sha1":"a","sha512":"b"},"path":"mods/sodium.jar"}]"#;
+        assert!(json.contains(files), "{json}");
     }
 
     #[test]
