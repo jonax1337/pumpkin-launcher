@@ -10,7 +10,8 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use super::{
-    blocking, content,
+    blocking,
+    content::{self, CachedFile},
     download::sha1_file,
     free_name,
     modrinth::{self, invalid, Version},
@@ -40,13 +41,6 @@ pub struct LocalFile {
     kind: ModKind,
 }
 
-/// Im Cache liegende Datei, die unter `file_name` in die Instanz kommt.
-struct Staged {
-    kind: ModKind,
-    file_name: String,
-    sha1: String,
-}
-
 /// Prüft jede Datei für sich, damit eine unpassende die übrigen nicht aufhält.
 pub async fn check(state: &AppState, instance_id: &str, paths: Vec<String>) -> AppResult<Vec<FileCheck>> {
     let mods = state.instances.get(instance_id)?.mods;
@@ -54,7 +48,7 @@ pub async fn check(state: &AppState, instance_id: &str, paths: Vec<String>) -> A
 }
 
 fn check_file(path: String, mods: &[Mod]) -> FileCheck {
-    let found = source(&path).and_then(|(source, name)| Ok((detect_kind(&source, &name)?, sha1_file(&source)?)));
+    let found = source(&path).and_then(|(file, name)| Ok((detect_kind(&file, &name)?, sha1_file(&file)?)));
     match found {
         Ok((kind, sha1)) => FileCheck { path, kind, duplicate_of: holder(mods, &sha1).map(|m| m.name.clone()), error: None },
         Err(e) => FileCheck { path, kind: None, duplicate_of: None, error: Some(e.to_string()) },
@@ -68,7 +62,7 @@ pub async fn add(
     files: Vec<LocalFile>,
     progress: impl Fn(&str, u64, u64) + Send + Sync + 'static,
 ) -> AppResult<Instance> {
-    let mut instance = state.instances.get(instance_id)?;
+    let instance = state.instances.get(instance_id)?;
     let total = files.len() as u64;
     let progress = Arc::new(progress);
     let staged = {
@@ -78,9 +72,8 @@ pub async fn add(
     progress("resolve", 0, 1);
     let hashes: Vec<String> = staged.iter().map(|s| s.sha1.clone()).collect();
     let (known, titles) = content::identify_or_local(&modrinth::client()?, &hashes).await;
-    instance.mods = with_entries(&instance.mods, staged, &known, &titles)?;
-    let mods = instance.mods.clone();
-    let result = mods::sync_commit(&state.dirs, instance_id, &mods, |_| state.instances.modify(instance_id, |current| current.mods = instance.mods))?;
+    let mods = with_entries(&instance.mods, staged, &known, &titles)?;
+    let result = mods::sync_commit(&state.dirs, instance_id, &mods, |_| content::commit_mods(state, instance_id, mods.clone()))?;
     progress("complete", total, total);
     Ok(result)
 }
@@ -91,8 +84,8 @@ fn stage(
     instance: &Instance,
     files: &[LocalFile],
     progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
-) -> AppResult<Vec<Staged>> {
-    let mut staged: Vec<Staged> = Vec::new();
+) -> AppResult<Vec<CachedFile>> {
+    let mut staged: Vec<CachedFile> = Vec::new();
     for (done, file) in files.iter().enumerate() {
         progress("copy", done as u64, files.len() as u64);
         let (path, name) = source(&file.path)?;
@@ -111,7 +104,7 @@ fn stage(
                 || staged.iter().any(|s| s.file_name.eq_ignore_ascii_case(n))
                 || foreign(&folder.join(n), &sha1)
         });
-        staged.push(Staged { kind: file.kind, file_name, sha1 });
+        staged.push(CachedFile { kind: file.kind, file_name, enabled: true, sha1 });
     }
     Ok(staged)
 }
@@ -125,13 +118,13 @@ fn foreign(path: &Path, sha1: &str) -> bool {
 /// `mods` plus je ein Eintrag pro Datei, von Modrinth erkannt oder lokal.
 fn with_entries(
     mods: &[Mod],
-    staged: Vec<Staged>,
+    staged: Vec<CachedFile>,
     known: &HashMap<String, Version>,
     titles: &HashMap<String, String>,
 ) -> AppResult<Vec<Mod>> {
     let mut all = mods.to_vec();
-    for s in staged {
-        let m = content::entry(s.kind, s.file_name, s.sha1, known, titles, &all);
+    for file in staged {
+        let m = content::entry(file.kind, file.file_name, file.sha1, known, titles, &all);
         ensure_new_project(&all, &m)?;
         all.push(m);
     }
@@ -149,7 +142,7 @@ fn ensure_new_project(mods: &[Mod], m: &Mod) -> AppResult<()> {
 
 /// Gleicht lokale Einträge per SHA-1 mit Modrinth ab; erkannte werden zu Modrinth-Einträgen.
 /// Anders als beim Hinzufügen ist ein Netzfehler hier ein Fehler: der Nutzer hat ausdrücklich gefragt.
-pub async fn identify(state: &AppState, instance_id: &str, mod_ids: &[String]) -> AppResult<Instance> {
+pub async fn identify_local(state: &AppState, instance_id: &str, mod_ids: &[String]) -> AppResult<Instance> {
     let mut instance = state.instances.get(instance_id)?;
     content::ensure_known(&instance, mod_ids)?;
     let picked = |m: &Mod| m.source == ModSource::Local && mod_ids.contains(&m.id);
@@ -164,7 +157,7 @@ pub async fn identify(state: &AppState, instance_id: &str, mod_ids: &[String]) -
             instance.mods[i] = m;
         }
     }
-    state.instances.modify(instance_id, |current| current.mods = instance.mods)
+    content::commit_mods(state, instance_id, instance.mods)
 }
 
 /// Von Modrinth erkannter Eintrag anstelle von `m`; Schalter und Abhängigkeiten bleiben.
@@ -185,7 +178,7 @@ pub(crate) fn source(path: &str) -> AppResult<(PathBuf, String)> {
         .file_name()
         .and_then(|n| n.to_str())
         .filter(|_| path.is_absolute())
-        .ok_or_else(|| invalid("Absoluter Dateipfad erforderlich"))?
+        .ok_or_else(|| invalid("Die Datei muss mit ihrem vollständigen Pfad angegeben werden"))?
         .to_string();
     let lower = name.to_ascii_lowercase();
     if !lower.ends_with(".jar") && !lower.ends_with(".zip") {
@@ -303,8 +296,8 @@ mod tests {
         versions.collect()
     }
 
-    fn staged(sha1: &str) -> Staged {
-        Staged { kind: ModKind::Mod, file_name: format!("{sha1}.jar"), sha1: sha1.into() }
+    fn staged(sha1: &str) -> CachedFile {
+        CachedFile { kind: ModKind::Mod, file_name: format!("{sha1}.jar"), enabled: true, sha1: sha1.into() }
     }
 
     #[test]
