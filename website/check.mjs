@@ -14,7 +14,7 @@ const files = readdirSync(new URL("assets/", output));
 
 // Catch broken build paths, invented icons and missing original branding assets.
 for (const [, name] of source.matchAll(/data-icon="([^"]+)"/g)) assert.ok(ICON_DATA[name], `Unknown launcher icon: ${name}`);
-for (const [, url] of html.matchAll(/(?:src|href|data)="([^"]+)"/g)) {
+for (const [, url] of html.matchAll(/(?:src|href|data|poster)="([^"]+)"/g)) {
   if (url.startsWith("#")) {
     if (url.length > 1) assert.ok(html.includes(`id="${url.slice(1)}"`), `Missing anchor: ${url}`);
   } else {
@@ -36,5 +36,6 @@ assert.equal((source.match(/<img\b[^>]*\bdata-seasonal\b/g) ?? []).length, 5, "A
 assert.match(source, /<link data-seasonal rel="icon"/, "Favicon must follow the season");
 assert.equal(files.filter((name) => name.startsWith("launcher-")).length, 4);
 assert.equal(files.filter((name) => name.startsWith("world-")).length, 4);
+assert.equal(files.filter((name) => name.startsWith("trailer")).length, 2, "Trailer video and poster must be bundled");
 assert.ok(!source.includes("data-mood"), "The marketing site must not include the removed Buddy playground");
-console.log(`Website OK: local links, 5 original marks, 4 app landscapes, icons and 4 screenshots verified in ${fileURLToPath(output)}`);
+console.log(`Website OK: local links, 5 original marks, 4 app landscapes, icons, 4 screenshots and trailer verified in ${fileURLToPath(output)}`);

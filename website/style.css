@@ -68,6 +68,19 @@ h2 { font-size: clamp(64px,7vw,100px); line-height: 1; letter-spacing: -1.2px; }
 .is-pinned .product-shot { position: absolute; inset: 0; margin: 0; }
 .is-pinned .preview-note { position: absolute; bottom: 16px; left: 0; right: 0; }
 .section { padding-block: 130px; }
+.trailer { position: relative; isolation: isolate; overflow: clip; min-height: max(720px,100svh); display: flex; align-items: flex-end; }
+.trailer-track:has(.is-pinned) { height: 150svh; }
+.trailer.is-pinned { position: sticky; top: 0; height: 100svh; min-height: 0; }
+.trailer-stage { position: absolute; inset: 0; z-index: -3; overflow: clip; }
+.trailer-video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.trailer-shade { position: absolute; inset: 0; z-index: -2; background: linear-gradient(90deg,#070a11b0 0%,#070a1140 45%,transparent 70%),linear-gradient(0deg,#0b0f19 0%,#0b0f1990 22%,transparent 50%),linear-gradient(180deg,#070a11 0%,transparent 16%); }
+.trailer-content { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; padding-bottom: 90px; }
+.trailer-content .eyebrow { margin-bottom: 22px; }
+.trailer-toggle { display: inline-flex; align-items: center; gap: 10px; padding: 12px 16px; border: 2px solid #ffffff30; background: #070a11a0; color: var(--text); font-size: 11px; font-weight: 700; letter-spacing: 1px; cursor: pointer; transition: border-color .2s,color .2s; }
+.trailer-toggle[hidden] { display: none; }
+.trailer-toggle:hover { border-color: var(--copper); color: var(--copper); }
+.trailer-toggle [data-icon] { width: 11px; height: 11px; }
+.trailer[data-playing] .trailer-toggle [data-icon="play"],.trailer:not([data-playing]) .trailer-toggle [data-icon="stop"] { display: none; }
 .worlds { background: #0b0f19; overflow: clip; }
 .worlds h2 { font-size: clamp(75px,9vw,132px); }
 .outline-type { color: #111723; -webkit-text-stroke: 1px #8190aa; }
@@ -160,6 +173,8 @@ h2 { font-size: clamp(64px,7vw,100px); line-height: 1; letter-spacing: -1.2px; }
   h2 { font-size: clamp(51px,13vw,82px); letter-spacing: -.7px; }
   .showcase-heading > p:last-child { font-size: 14px; line-height: 1.7; max-width: 290px; }
   .product-reel { width: calc(100% - 28px); }
+  .trailer { min-height: 640px; }
+  .trailer-content { flex-direction: column; align-items: flex-start; padding-bottom: 60px; }
   .product-shot { margin-bottom: 42px; }
   .product-shot img { border-width: 2px; box-shadow: 0 14px 30px #0008; }
   .product-shot figcaption { gap: 8px; margin-top: 17px; text-align: center; }
