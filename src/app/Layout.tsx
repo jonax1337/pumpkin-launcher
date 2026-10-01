@@ -9,6 +9,7 @@ import { useUpdateCheckOnStart } from "@/hooks/useAppUpdate";
 import { useCancelInstall, useGameEvents, useInstances } from "@/hooks/useInstances";
 import { cancelContent } from "@/hooks/useContent";
 import { useOnline } from "@/hooks/useOnline";
+import { LanguageProvider } from "@/i18n";
 import { useRunningTasks } from "@/hooks/useRunningTasks";
 import { api } from "@/lib/api";
 import { progressLabel, progressShare } from "@/lib/modrinth";
@@ -433,18 +434,20 @@ export function Layout() {
   }, [pathname]);
 
   return (
-    <ViewContext.Provider value={view}>
-      <div className={cn("app", ready && "ready")} data-offline={online ? undefined : ""}>
-        <TitleBar online={online} />
-        <Sidebar />
-        <main ref={view} className={cn("view", noscroll && "noscroll")} tabIndex={-1}>
-          {outlet}
-        </main>
-        <ViewScrollbar view={view} />
-      </div>
-      <InstanceDialogs />
-      <ShareLogDialog />
-      <ManualDownloads />
-    </ViewContext.Provider>
+    <LanguageProvider>
+      <ViewContext.Provider value={view}>
+        <div className={cn("app", ready && "ready")} data-offline={online ? undefined : ""}>
+          <TitleBar online={online} />
+          <Sidebar />
+          <main ref={view} className={cn("view", noscroll && "noscroll")} tabIndex={-1}>
+            {outlet}
+          </main>
+          <ViewScrollbar view={view} />
+        </div>
+        <InstanceDialogs />
+        <ShareLogDialog />
+        <ManualDownloads />
+      </ViewContext.Provider>
+    </LanguageProvider>
   );
 }
