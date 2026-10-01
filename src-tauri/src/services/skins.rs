@@ -15,7 +15,7 @@ use crate::services::download::sha1_hex;
 use crate::state::AppState;
 
 const PROFILE: &str = "https://api.minecraftservices.com/minecraft/profile";
-const TEXTURES: &str = "textures.minecraft.net/texture/";
+const TEXTURE_BASE: &str = "textures.minecraft.net/texture/";
 /// Echte Skins haben wenige KiB; die Grenze fängt nur versehentlich gewählte große Bilder ab.
 const MAX_FILE: u64 = 256 * 1024;
 const MAX_NAME: usize = 64;
@@ -117,10 +117,10 @@ fn texture_url(url: &str) -> AppResult<String> {
     let hash = ["http://", "https://"]
         .iter()
         .find_map(|scheme| url.strip_prefix(scheme))
-        .and_then(|rest| rest.strip_prefix(TEXTURES))
+        .and_then(|rest| rest.strip_prefix(TEXTURE_BASE))
         .filter(|hash| !hash.is_empty() && hash.bytes().all(|b| b.is_ascii_hexdigit()))
         .ok_or_else(|| invalid("Minecraft hat eine unerwartete Texturadresse geliefert."))?;
-    Ok(format!("https://{TEXTURES}{hash}"))
+    Ok(format!("https://{TEXTURE_BASE}{hash}"))
 }
 
 /// Anfrage mit dem Minecraft-Token des Kontos; `auth::session` erneuert ihn bei Bedarf.
