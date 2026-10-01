@@ -575,7 +575,7 @@ pub async fn install_mod(
                 existing.required_by.push(root_key.clone());
             }
         }
-        state.instances.update(instance.clone())
+        state.instances.modify(instance_id, |current| current.mods = instance.mods)
     })();
     match result {
         Err(e) => Err(content::rollback(&created, e)),
@@ -834,7 +834,7 @@ pub async fn adopt_download(state: &AppState, instance_id: &str, project_id: u32
     };
     let entry = mod_entry(&m, &f, kind, sha1, Vec::new(), &instance.mods);
     instance.mods.push(entry);
-    match state.instances.update(instance) {
+    match state.instances.modify(instance_id, |current| current.mods = instance.mods) {
         Ok(i) => Ok(Some(i)),
         Err(e) => Err(content::rollback(&[target], e)),
     }

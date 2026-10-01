@@ -208,7 +208,7 @@ pub async fn install_mod(
             });
         }
         mark_dependencies(&mut instance.mods, &selected, &fresh);
-        state.instances.update(instance)
+        state.instances.modify(id, |current| current.mods = instance.mods)
     })();
     match result {
         Err(e) => Err(rollback(&created, e)),
@@ -479,9 +479,8 @@ pub async fn update_mods(
     mark_dependencies(&mut mods, &selected, &fresh);
     // sync places the new files and removes the old ones in one journal; metadata commits last.
     let desired: Vec<Mod> = mods.iter().cloned().chain(old).collect();
-    let updated = Instance { mods, ..instance };
-    let result =
-        super::mods::sync_commit(&state.dirs, id, &desired, |_| state.instances.update(updated))?;
+    let commit = |_| state.instances.modify(id, |current| current.mods = mods);
+    let result = super::mods::sync_commit(&state.dirs, id, &desired, commit)?;
     progress("complete", total, total);
     Ok(result)
 }

@@ -59,9 +59,7 @@ impl AppState {
 
     /// Rechnet eine beendete Sitzung auf die Spielzeit der Instanz an.
     pub fn add_playtime(&self, id: &str, secs: u64) -> AppResult<()> {
-        let mut instance = self.instances.get(id)?;
-        instance.playtime_secs = instance.playtime_secs.saturating_add(secs);
-        self.instances.update(instance)?;
+        self.instances.modify(id, |i| i.playtime_secs = i.playtime_secs.saturating_add(secs))?;
         Ok(())
     }
 

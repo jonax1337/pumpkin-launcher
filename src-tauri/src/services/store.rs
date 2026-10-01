@@ -95,17 +95,22 @@ impl<T: Entity> JsonStore<T> {
     }
 
     pub fn update(&self, item: T) -> AppResult<T> {
+        let id = item.id().to_owned();
+        self.modify(&id, |current| *current = item)
+    }
+
+    /// Ändert einen Eintrag unter dem Lock des Stores: kein anderer Schreiber kommt zwischen Lesen und
+    /// Schreiben. `change` darf den Store nicht selbst aufrufen (Deadlock).
+    pub fn modify(&self, id: &str, change: impl FnOnce(&mut T)) -> AppResult<T> {
         let mut items = self.lock();
-        let idx = items
-            .iter()
-            .position(|x| x.id() == item.id())
-            .ok_or_else(|| not_found::<T>(item.id()))?;
-        let old = std::mem::replace(&mut items[idx], item.clone());
+        let idx = items.iter().position(|x| x.id() == id).ok_or_else(|| not_found::<T>(id))?;
+        let old = items[idx].clone();
+        change(&mut items[idx]);
         if let Err(err) = persist(&self.path, &items) {
             items[idx] = old;
             return Err(err);
         }
-        Ok(item)
+        Ok(items[idx].clone())
     }
 
     pub fn remove(&self, id: &str) -> AppResult<()> {
@@ -167,5 +172,39 @@ mod tests {
         assert!(path.with_extension("json.corrupt").exists());
 
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    fn store_with_instance() -> (PathBuf, JsonStore<Instance>, String) {
+        let dir = std::env::temp_dir().join(format!("launcher-test-{}", new_id()));
+        fs::create_dir_all(&dir).unwrap();
+        let store = JsonStore::<Instance>::open(dir.join("instances.json")).unwrap();
+        let new = NewInstance { name: "Test".into(), minecraft_version: "1.21.4".into(), loader: ModLoader::Vanilla, loader_version: None };
+        let id = store.insert(Instance::from_new(new)).unwrap().id;
+        (dir, store, id)
+    }
+
+    #[test]
+    fn concurrent_modifies_lose_no_change() {
+        let (dir, store, id) = store_with_instance();
+        std::thread::scope(|s| {
+            for _ in 0..8 {
+                s.spawn(|| {
+                    for _ in 0..10 {
+                        store.modify(&id, |i| i.playtime_secs += 1).unwrap();
+                    }
+                });
+            }
+        });
+        assert_eq!(store.get(&id).unwrap().playtime_secs, 80);
+        assert!(matches!(store.modify("weg", |_| {}), Err(AppError::NotFound { .. })));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn failed_write_rolls_modify_back() {
+        let (dir, store, id) = store_with_instance();
+        fs::remove_dir_all(&dir).unwrap();
+        assert!(store.modify(&id, |i| i.name = "Neu".into()).is_err());
+        assert_eq!(store.get(&id).unwrap().name, "Test");
     }
 }
