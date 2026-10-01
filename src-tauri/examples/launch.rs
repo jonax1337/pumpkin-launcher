@@ -10,6 +10,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
+use launcher_lib::models::GameWindow;
 use launcher_lib::services::mojang::{VersionManifest, MANIFEST_URL};
 use launcher_lib::services::rules::Env;
 use launcher_lib::services::{auth, download, fabric, forge, install, launch, Dirs};
@@ -93,6 +94,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         account: &account,
         memory_mb: launch::DEFAULT_MEMORY_MB,
         extra_jvm_args: &[],
+        window: GameWindow::Default,
+        extra_game_args: &[],
     };
     let args = launch::build_args(&spec, &Env::current())?;
     let (exit_tx, mut exit_rx) = tokio::sync::oneshot::channel();

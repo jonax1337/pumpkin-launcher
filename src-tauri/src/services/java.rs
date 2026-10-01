@@ -68,6 +68,42 @@ pub fn java_exe(dirs: &Dirs, component: &str) -> PathBuf {
     }
 }
 
+/// Dateinamen, die als eigene Java-Programmdatei gelten (verglichen in Kleinbuchstaben).
+const JAVA_FILE_NAMES: &[&str] = if cfg!(windows) { &["javaw.exe", "java.exe"] } else { &["java"] };
+
+/// Java für den Start: eigener Pfad der Instanz vor dem aus den Einstellungen vor der mitgelieferten Runtime.
+pub fn resolve(dirs: &Dirs, component: &str, instance_path: Option<&str>, global_path: Option<&str>) -> AppResult<PathBuf> {
+    let custom = [instance_path, global_path].into_iter().flatten().map(str::trim).find(|p| !p.is_empty());
+    if let Some(path) = custom {
+        return custom_java(path);
+    }
+    let java = java_exe(dirs, component);
+    if !java.exists() {
+        return Err(AppError::Invalid(format!("Java nicht gefunden: {}", java.display())));
+    }
+    Ok(java)
+}
+
+/// Prüft einen eigenen Java-Pfad: Er muss auf eine vorhandene `javaw.exe` bzw. `java.exe` zeigen
+/// (unter Linux/macOS `java`).
+pub fn custom_java(path: &str) -> AppResult<PathBuf> {
+    let path = PathBuf::from(path.trim());
+    let name = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+    if !JAVA_FILE_NAMES.contains(&name.as_str()) {
+        return Err(AppError::Invalid(format!(
+            "„{}“ ist kein Java-Programm. Wähle die javaw.exe im bin-Ordner deiner Java-Installation.",
+            path.display()
+        )));
+    }
+    if !path.is_file() {
+        return Err(AppError::Invalid(format!(
+            "Java nicht gefunden: {}. Prüfe den eigenen Java-Pfad.",
+            path.display()
+        )));
+    }
+    Ok(path)
+}
+
 /// Lädt die Runtime `component` (z. B. `java-runtime-delta`) nach `runtime/<component>/`
 /// und liefert den Pfad der Java-Programmdatei.
 pub async fn ensure(
@@ -116,4 +152,45 @@ pub async fn ensure(
         return Err(AppError::Download(format!("Java-Runtime unvollständig: {} fehlt", exe.display())));
     }
     Ok(exe)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Leere Datei `<root>/<name>`; liefert ihren Pfad als Text.
+    fn fake_java(root: &Path, name: &str) -> String {
+        let file = root.join(name);
+        std::fs::write(&file, "").unwrap();
+        file.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn instance_path_wins_over_setting_and_runtime() {
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        std::fs::create_dir_all(root.join("jdk")).unwrap();
+        let own = fake_java(&root, JAVA_FILE_NAMES[0]);
+        let global = fake_java(&root.join("jdk"), JAVA_FILE_NAMES[0]);
+        let dirs = Dirs::new(&root);
+
+        assert_eq!(resolve(&dirs, "delta", Some(&own), Some(&global)).unwrap(), PathBuf::from(&own));
+        assert_eq!(resolve(&dirs, "delta", Some("  "), Some(&global)).unwrap(), PathBuf::from(&global));
+        // Ohne eigenen Pfad die Runtime; die fehlt hier.
+        let missing = resolve(&dirs, "delta", None, Some("")).unwrap_err().to_string();
+        assert!(missing.starts_with("Java nicht gefunden"), "{missing}");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn custom_java_must_exist_and_be_java() {
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        std::fs::create_dir_all(&root).unwrap();
+        let other = fake_java(&root, "notepad.exe");
+        assert!(custom_java(&other).unwrap_err().to_string().contains("ist kein Java-Programm"));
+        let gone = root.join(JAVA_FILE_NAMES[0]).to_string_lossy().into_owned();
+        assert!(custom_java(&gone).unwrap_err().to_string().starts_with("Java nicht gefunden"));
+        let java = fake_java(&root, &JAVA_FILE_NAMES[0].to_uppercase());
+        assert_eq!(custom_java(&format!(" {java} ")).unwrap(), PathBuf::from(&java));
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }
