@@ -5,7 +5,7 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 ```
 ┌──────────────── Frontend (WebView) ────────────────┐
 │ React Router → Seiten (Start, Bibliothek, Instanz,  │
-│                Entdecken, Einstellungen)            │
+│          Entdecken, Skins, Einstellungen)           │
 │ TanStack Query ─► lib/api.ts ─► invoke(...)         │
 │ Zustand: UI- und Launcher-Einstellungen (persist)   │
 └───────────────────────┬────────────────────────────┘
@@ -15,7 +15,7 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 │ state.rs      AppState: Stores + Fachlogik (Manager)│
 │ services/     store (JSON), auth, download, launch  │
 │ models.rs     Instance, ModLoader, Mod, ModSource,  │
-│               ModpackOrigin, Preset, Account        │
+│               ModpackOrigin, Template, Account      │
 │ error.rs      AppError (thiserror) → String an FE   │
 └────────────────────────────────────────────────────┘
 ```
@@ -27,26 +27,29 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `lib.rs` | Einstieg: tracing initialisieren, Plugins registrieren (siehe „Plugins und Berechtigungen“), AppState laden, Commands registrieren; im Hintergrund dann `worlds::remove_leftovers` und `content::adopt_untracked` |
 | `error.rs` | `AppError` via `thiserror`; serialisiert als Fehlermeldung (String) ans Frontend. `is_retryable`: Ablehnungen des Servers (4xx außer 408 und 429, dazu `Refused` mit eigener Meldung) versucht kein Download erneut |
 | `models.rs` | Datenmodelle, `serde(rename_all = "camelCase")` – Spiegel in `src/lib/types.ts` |
-| `state.rs` | `AppState` (Manager): je ein `JsonStore` für Instanzen und Presets plus storeübergreifende Logik (`resolve_preset`, `apply_preset`, `delete_preset`) |
-| `commands.rs` | Dünne Commands: Eingabe prüfen, an `AppState`/Store delegieren, loggen |
+| `state.rs` | `AppState`: je ein `JsonStore` für Instanzen, Vorlagen, Konten und Skins, dazu der Laufzeitzustand: laufende Spiele, abbrechbare Vorgänge (`cancellable`/`cancel`) und der `operation`-Lock, der Installation, Inhalts-Vorgänge und Start nacheinander ablaufen lässt und bei laufender Instanz verweigert |
+| `commands.rs` | Dünne Commands für Instanzen, Installation, Start und Loader-Versionen: Eingabe prüfen, an `AppState`/Store delegieren, loggen |
+| `account_commands.rs` | Dünne Commands für Microsoft-Konten und `offline_allowed` |
 | `services/store.rs` | Generischer `JsonStore<T>`: in-memory + atomares Schreiben (tmp + rename); `modify(id, …)` ändert einen Eintrag unter dem Store-Lock, so geht keine gleichzeitige Änderung verloren |
 | `services/mod.rs` | `Dirs`: Verzeichnislayout (geteilter Cache, Instanz-Verzeichnisse); `blocking`: Dateiarbeit im Thread-Pool, die beim Abbruch zwischen zwei Dateien aufhört |
-| `services/auth.rs` | Microsoft-Konto per Gerätecode → Xbox Live → XSTS → Minecraft (Refresh-Token im OS-Schlüsselbund), Offline-Account (UUID nach `OfflinePlayer:<name>`, MD5/v3) |
+| `services/auth.rs` | Microsoft-Konto → Xbox Live → XSTS → Minecraft (Refresh-Token im OS-Schlüsselbund). Die Anmeldung läuft standardmäßig im Browser (PKCE, Rücksprung auf `http://localhost:<Port>` an einen Loopback-Listener), mit `method = "device"` oder wenn der Listener nicht startet per Gerätecode. Offline-Account (UUID nach `OfflinePlayer:<name>`, MD5/v3) nur, wenn `offline_allowed` (Debug-Build oder angemeldetes Microsoft-Konto, siehe `docs/ACCOUNT-SETUP.md`) |
 | `services/mojang.rs` | serde-Formate von piston-meta: Version-Manifest v2, Versions-JSON, Asset-Index |
 | `services/rules.rs` | Mojang-`rules` (os/arch/features), Arch-Filter für Natives-Classifier (`natives-macos-arm64`, `natives-windows-x86` …), Classpath-Trenner je OS (`;` unter Windows, sonst `:`) |
 | `services/download.rs` | HTTP-Client, SHA-1-geprüfte Downloads mit Retry (nicht bei `AppError::is_retryable` = false), 16 parallel (`buffer_unordered`), gestreamt auf Platte, Fortsetzen per HTTP-Range auf `.part` |
 | `services/java.rs` | Mojangs Java-Runtime (`java-runtime/…/all.json`, Komponente aus `javaVersion.component`; Plattform-Schlüssel `windows-x64`, `windows-arm64`, `linux`, `linux-i386`, `mac-os`, `mac-os-arm64`, auf ARM ohne passende Runtime die x64-Runtime in der Emulation; unter Unix Exec-Bit und Symlinks aus dem Manifest); Wahl beim Start: eigener Pfad der Instanz → Einstellung des Launchers → mitgelieferte Runtime, eigene Pfade müssen auf eine vorhandene `javaw.exe`/`java.exe` (Linux/macOS: `java`) zeigen |
 | `services/install.rs` | Installation in Schritten, `InstallStep`, `InstallProgress`, Event `install-progress`; Installiert-Marker je Instanz (`mark_installed`, `is_installed`) |
-| `services/fabric.rs` | Fabric-Meta (`meta.fabricmc.net/v2`): Loader-Versionen, Launcher-Profil (`inheritsFrom` Vanilla), Merge mit der Vanilla-Versions-JSON |
+| `services/fabric.rs` | Fabric- und Quilt-Meta (`meta.fabricmc.net/v2`, `meta.quiltmc.org/v3`, `Flavor`): Loader-Versionen, Launcher-Profil (`inheritsFrom` Vanilla), Merge mit der Vanilla-Versions-JSON |
+| `services/forge.rs` | Forge (ab Minecraft 1.17) und NeoForge (ab 1.20.1) über den offiziellen Installer: `check_loader` lehnt ältere Versionen klar ab, Loader-Versionen aus den Maven-Metadaten, Installer mit Prüfsumme aus dem Maven; `install_profile.json` liefert Libraries und Processors, die mit der Java-Runtime das Client-JAR patchen; das Profil (`inheritsFrom` Vanilla) wird wie bei Fabric gemerged. Ein vollständig installiertes Profil wird nicht erneut gebaut |
 | `services/mods.rs` | Globaler Mod-Cache (`cache/mods/<sha1>.jar`) und Abgleich nach `mods/` der Instanz (Hardlink, Fallback Kopie; bestehende fremde Dateien werden nicht ersetzt); fehlt ein Cache-Eintrag, stellt `recache` ihn für Kopie und Export aus der abgelegten Datei wieder her |
-| `services/modrinth.rs` | Modrinth-v2-Katalog, Versions-/Dependency-Auflösung und hashgeprüfte Downloads |
-| `services/providers/` | Weitere Kataloge in Modrinth-Formen: `ftb.rs` (öffentliche FTB-API, installierbar, Downloads nur von festen Hosts mit Prüfsumme), `technic.rs` (Suche, Details und Installation: Pack-Zip des Autors über `net.rs` = nur HTTPS und öffentliche Adressen, Loader aus `bin/version.json`), `curseforge.rs` (CurseForge über den Cloudflare Worker in `proxy/`, der den API-Schlüssel hält: Suche, Mods mit Abhängigkeiten, Modpacks per `manifest.json`; der Launcher selbst kennt keinen Schlüssel, die Dateien kommen direkt vom CDN; nur über die Webseite erlaubte Dateien werden nicht umgangen, sondern vom Nutzer geladen und aus dem Downloads-Ordner übernommen. Nach den API-Bedingungen wird nichts zwischengespeichert, weder im Worker noch im Launcher. Abhängigkeiten werden Ebene für Ebene mit Sammelabfragen (`POST /v1/mods`, `/v1/mods/files`) und der Datei-Wahl aus `latestFilesIndexes` aufgelöst, damit große Bäume unter dem Limit des Workers von 60 Anfragen pro Minute bleiben; auf 429 wartet der Launcher (`Retry-After`, das der Worker mitschickt, höchstens 30 s, sonst 5/10/20 s) und versucht es bis zu dreimal. Lehnt das CDN einen Download mit 401 ab, weil CurseForge dafür einen Schlüssel verlangt, nennt die Meldung (`AppError::Refused`) die Datei und den Ausweg (Launcher aktualisieren oder Datei von Hand laden), ohne dieselbe Adresse noch zweimal zu versuchen; 403 bedeutet beim CDN schon heute „Datei fehlt“ und bleibt beim allgemeinen Text. Der Dialog „Von Hand laden“ fragt CurseForge erst, wenn im Downloads-Ordner eine passend benannte Datei liegt. Forks nutzen den Worker dieses Projekts nicht, sondern einen eigenen mit eigenem Schlüssel über `PUMPKIN_CF_PROXY`). Pack-Zips werden von der Platte entpackt (`content::Blob::Zip`), nicht im Speicher gehalten |
+| `services/modrinth.rs` | Modrinth-v2-Katalog, Versions-/Dependency-Auflösung (nur Versionen, die in Loader und Minecraft-Version der Instanz laufen; Quilt nimmt auch Fabric-Mods), Abfragen per SHA-1 und hashgeprüfte Downloads |
+| `services/providers/` | Weitere Kataloge in Modrinth-Formen: `ftb.rs` (öffentliche FTB-API, installierbar, Downloads nur von festen Hosts mit Prüfsumme), `technic.rs` (Suche, Details und Installation: Pack-Zip des Autors über `net.rs` = nur HTTPS und öffentliche Adressen, Loader aus `bin/version.json`), `curseforge.rs` (CurseForge über den Worker in `proxy/`, der den Schlüssel hält; Suche, Mods mit Abhängigkeiten, Modpacks per `manifest.json`, Dateien direkt vom CDN; Details unter „CurseForge“). Pack-Zips werden von der Platte entpackt (`content::Blob::Zip`), nicht im Speicher gehalten |
 | `services/mrpack.rs` | `.mrpack`-Export einer Instanz (Vorlagen und „Exportieren…“): Modrinth-Inhalte per SHA-1-Sammelabfrage als Download im Index, alles andere unter `overrides/`, dazu `pumpkin.json`; Vorlagen bleiben unter den Grenzen des eigenen Imports (4000 Dateien, 256 MiB), ein Export hat keine (ZIP64 für große Dateien); abbrechbar, die `.part`-Datei wird entfernt |
 | `services/duplicate.rs` | Instanz duplizieren: neuer Eintrag (neue ID, „<Name> (Kopie)“, `lastPlayedAt` leer, Spielzeit 0), Kopie von Spielordner, Natives und Installiert-Marker ohne `logs/`, `crash-reports/`, `.fabric/`; verwaltete Inhalte legt `mods::sync` einzeln per Hardlink ab (als Fortschritt sichtbar, der Abgleich prüft jede JAR); bei Fehler oder Abbruch wird die halbe Kopie entfernt |
-| `services/imports/` | Instanzen anderer Launcher übernehmen (nur lesend): `prism.rs` (Prism Launcher/MultiMC: `instance.cfg` mit `name`, `MaxMemAlloc`/`JvmArgs` nur bei `OverrideMemory`/`OverrideJavaArgs`, `mmc-pack.json`-Komponenten; Spielordner `minecraft`, sonst `.minecraft`), `modrinth_app.rs` (Modrinth App: SQLite `app.db` per `rusqlite`, schreibgeschützt geöffnet, Tabellen `instances`, `instance_content_sets`, `instance_launch_overrides`, in seit Mitte 2026 nicht mehr geöffneten Datenbanken noch `profiles`; eine unlesbare Zeile verbirgt nur sich selbst; Spielordner `profiles/<path>` unter `settings.custom_dir` oder dem Datenordner), `curseforge.rs` (CurseForge App: `minecraftinstance.json`, Loader aus `baseModLoader.name`, Herkunft der Mods aus `installedAddons[].addonID`/`installedFile.{id,fileName}`), `atlauncher.rs` (`instance.json`: `id` = Minecraft-Version, `launcher.loaderVersion`, `maximumMemory`, `javaArguments`; deaktivierte Mods liegen in `disabledmods/`). Gesucht wird unter `PrismLauncher`, `ModrinthApp` und `ATLauncher` im Datenordner des Systems (`dirs::data_dir`, unter Windows `%APPDATA%`) und unter `curseforge/minecraft` im Benutzerordner (außer unter Windows im Ordner „Dokumente“, Standard der CurseForge App laut ihrer Hilfe) oder im gewählten Ordner; unlesbare Instanzen werden protokolliert und übersprungen, nicht startbare (Forge/NeoForge zu alt) mit Grund in `unsupported` gemeldet. Der Import legt die Instanz an (Name, Version, Loader, RAM und JVM-Args, `importedFrom`), kopiert den Spielordner ohne `logs/`, `crash-reports/`, `.fabric/`, `.cache/` und die Dateien des Launchers (`disabledmods/<name>` als `mods/<name>.disabled`), legt die Inhalte in den Mod-Cache (Phasen `copy` und `hash` im Hintergrund-Thread, abbrechbar) und erfasst sie wie `adopt_untracked` (Modrinth-SHA-1-Abfrage, ohne Netz lokal; was die CurseForge App von CurseForge hat, als CurseForge-Inhalt); bei Fehler oder Abbruch verschwindet der halbe Ordner, auch wenn der Hintergrund-Thread erst danach endet |
-| `services/content.rs` | Sichere Modinstallation und `.mrpack`-Import in neue Instanzen (Ziele exklusiv neu angelegt, kein Symlink unterhalb des Datenordners; darüber, etwa `/var` unter macOS, zählt keiner); `plan_pack`/`import_plan` für Packs von Anbietern |
+| `services/imports/` | Instanzen anderer Launcher übernehmen (nur lesend); je ein Modul pro Launcher, Ablauf unter „Import aus anderen Launchern“ |
+| `services/content.rs` | Sichere Modinstallation und `.mrpack`-Import in neue Instanzen (Ziele exklusiv neu angelegt, kein Symlink unterhalb des Datenordners; darüber, etwa `/var` unter macOS, zählt keiner); `plan_pack`/`import_plan` für Packs von Anbietern; Update-Suche und Aktualisieren per SHA-1-Abfrage (Mods, Ressourcenpakete, Shader) |
+| `services/templates.rs` | Vorlagen: Schnappschuss einer Instanz als `templates/<id>.mrpack` (über `mrpack`, Inhalt: `mods`, `resourcepacks`, `shaderpacks`, `config`, `options.txt`; Welten, Logs und Screenshots bleiben draußen) plus Eintrag in `templates.json`; neue Instanzen entstehen über den normalen Pack-Import |
 | `services/local_files.rs` | Eigene Dateien in eine Instanz: Pfade prüfen (absolut, normale Datei, `.jar`/`.zip`, 1 B bis 256 MiB), Art erkennen (`.jar` = Mod; Zip mit `pack.mcmeta` im Wurzelverzeichnis = Ressourcenpaket, mit Ordner `shaders/` = Shader, sonst fragt die Oberfläche), freie Dateinamen (`name (2).jar`; dieselbe, nur nicht erfasste Datei im Ordner wird übernommen), ein Modrinth-Projekt nur einmal pro Instanz, Cache, Erkennung über `content::identify` (dieselbe SHA-1-Sammelabfrage wie Pack-Import und Nachtragen) |
-| `content_commands.rs` | Modrinth-IPC und korrelierte `content-progress`-Events |
+| `content_commands.rs` | IPC für Modrinth, Anbieter, Vorlagen, eigene Dateien, Duplizieren, Export und Import sowie korrelierte `content-progress`-Events |
 | `support_commands.rs` | Fehlerberichte: Log teilen, Debug-Info |
 | `services/worlds.rs` | Welten unter `saves/<Ordner>` (Ordnername = ID): Name, zuletzt gespielt, Spielmodus, Hardcore und Version aus `level.dat` (gzip-NBT über `fastnbt` + `flate2`; unlesbar → Ordnername), Größe, `icon.png` als `data:`-URL (bis 256 KiB). Sicherung als ZIP `instances/<id>/backups/<Welt>-<Unix-ms>.zip` (Ordner als oberster Eintrag, ohne `session.lock`, über `.part`); Wiederherstellen immer in einen freien Ordner („<Welt> (2)“ …), entpackt mit den Pfadprüfungen von `providers::zip_paths` (ohne die Größengrenzen der Pack-Importe, damit große Welten zurückkommen); Löschen sichert vorher und verschiebt den Ordner erst aus `saves/` (als `backups/<Welt>-<Unix-ms>.deleting`), bevor er entfernt wird. Beim Start entfernt `remove_leftovers` unter `backups/` nur, was ein unterbrochener Vorgang unter genau diesen Namen liegen ließ (`.zip.part`, `.deleting`). Die Sicherungen gehören zur Instanz und werden mit ihr gelöscht |
 | `services/servers.rs` | Serverliste `servers.dat` (NBT ohne Kompression): Name, Adresse, Icon, `acceptTextures`; ändert nur diese Felder, unbekannte Tags und versteckte Einträge (`hidden`, legt das Spiel für Quick Play an) bleiben; Schreiben über `.tmp` + Umbenennen. Einträge werden über ihre Stelle in der sichtbaren Liste angesprochen |
@@ -89,9 +92,10 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 ### Datenmodell
 
 - **`ModLoader`**: `vanilla | fabric | quilt | forge | neoforge` – Vanilla ist ein normaler Loader-Wert.
-- **`Mod`**: `id`, `name`, `version`, `fileName`, `sha1?`, `enabled`, `source`.
+- **`Mod`**: `id`, `name`, `version`, `fileName`, `sha1?`, `enabled`, `source`, `kind` (`mod | resourcepack | shader`, bestimmt den Ordner im Spielverzeichnis), `requiredBy` (siehe „Mods“).
 - **`ModSource`** (getaggt über `type`): `{type:"local"}` · `{type:"url", url}` · `{type:"modrinth", projectId, versionId}` · `{type:"curseforge", projectId, fileId}`.
-- **`Instance.modpack`** (`ModpackOrigin?`): merkt sich, aus welchem Modrinth-/CurseForge-Pack (Projekt + Version/Datei) die Instanz stammt – Grundlage für Pack-Updates.
+- **`Instance.modpack`** (`ModpackOrigin?`, getaggt über `type`): merkt sich, aus welchem Modrinth-, CurseForge- oder Anbieter-Pack (`provider`, z. B. FTB; Projekt + Version/Datei) die Instanz stammt – Grundlage für Pack-Updates.
+- **`Template`** (`templates.json`): `id`, `name`, `minecraftVersion`, `loader`, `modCount`, `createdAt`; der Inhalt liegt als `templates/<id>.mrpack` daneben, ohne Verbindung zur Instanz.
 - **`LogKind`** (`log_share`): `latest` = `logs/latest.log` des letzten Starts · `crashReport` = neuester Bericht in `crash-reports/`.
 - **Startoptionen der Instanz**: `javaPath?` (eigene `javaw.exe` bzw. `java`, sonst Einstellung des Launchers bzw. mitgelieferte Runtime), `window` (`{type:"default"}` · `{type:"size", width, height}` · `{type:"fullscreen"}`), `gameArgs` (nach den Argumenten der Version), dazu wie bisher `memoryMb?` und `jvmArgs`. `update_instance` prüft einen geänderten Java-Pfad und lehnt Fenstergrößen von 0 ab.
 - **`Instance.playtimeSecs`**: Summe aller Sitzungen; das Backend rechnet sie beim Spielende an (unplausible Dauern über 7 Tage oder bei zurückgestellter Uhr zählen nicht). `update_instance` übernimmt sie wie `lastPlayedAt` (setzt der Start) nie vom Frontend; Inhalts-Vorgänge schreiben nur die Liste `mods`.
@@ -115,26 +119,24 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `create_instance` | `input: NewInstance` | `Instance` |
 | `update_instance` | `instance: Instance` | `Instance` |
 | `delete_instance` | `id` | – |
-| `list_presets` | – | `Preset[]` |
-| `create_preset` | `input: NewPreset` | `Preset` |
-| `update_preset` | `preset: Preset` | `Preset` |
-| `delete_preset` | `id` | – |
-| `apply_preset` | `instanceId`, `presetId` | `Instance` |
 | `versions_list` | – | `VersionEntry[]` (`id`, `type`, `url`, `sha1`, `releaseTime`) |
 | `instance_install` | `instanceId` | – (Events `install-progress`); abgebrochen → Fehler „Vorgang abgebrochen“ |
 | `instance_install_cancel` | `instanceId` | – |
 | `instance_launch` | `instanceId`, `options: LaunchOptions` | PID (`number`) |
+| `instance_dir` | `instanceId` | Spielordner als absoluter Pfad (`string`, wird bei Bedarf angelegt) |
 | `system_memory_mb` | – | physischer RAM in MiB (`number`) |
-| `ms_login_start` | `clientId?` | `{ userCode, verificationUri, expiresIn, interval, message }` |
-| `ms_login_finish` | – | `Account` (wartet auf Bestätigung im Browser) |
+| `ms_login_start` | `clientId?`, `method?` (`"device"` erzwingt den Gerätecode) | `{ mode: "browser" \| "device", userCode, verificationUri, expiresIn, interval, message }`; im Browser-Modus ist `userCode` leer und `verificationUri` die Anmeldeseite |
+| `ms_login_finish` | – | `Account` (wartet auf den Rücksprung bzw. die Bestätigung im Browser) |
 | `ms_login_cancel` | – | – |
 | `ms_accounts` | – | `Account[]` (`kind: "microsoft"`, `active: false`) |
+| `offline_allowed` | – | `boolean`: Spielernamen ohne Konto erlaubt (Debug-Build oder angemeldetes Microsoft-Konto); `instance_launch` erzwingt es |
 | `ms_account_remove` | `id` | – |
 | `instance_kill` | `instanceId` | – (Event `instance-exit` folgt) |
 | `instance_status` | `instanceId` | `{ installed, running }` |
-| `loader_versions` | `loader: ModLoader`, `mcVersion` | `{ version, stable }[]`, neueste zuerst; `vanilla` → `[]`, Quilt/Forge/NeoForge → Fehler „nicht implementiert“ |
+| `loader_versions` | `loader: ModLoader`, `mcVersion` | `{ version, stable }[]`, neueste zuerst; `vanilla` → `[]`; Fabric/Quilt über die Meta-Server, Forge/NeoForge über die Maven-Metadaten (zu alte Minecraft-Versionen → Fehler mit Grund) |
 | `modrinth_search` | `query`, `projectType`, `minecraftVersion?`, `loader?`, `offset`, `index?` (relevance, downloads, follows, newest, updated) | Modrinth-Suchergebnis (`snake_case`) |
 | `modrinth_project` | `projectId` | Modrinth-Projekt (`snake_case`) |
+| `modrinth_projects` | `projectIds` | Modrinth-Projekte (`snake_case`) |
 | `modrinth_versions` | `projectId`, `minecraftVersion?`, `loader?` | Modrinth-Versionen (`snake_case`) |
 | `provider_search` / `provider_project` / `provider_versions` | `source` (`ftb`, `technic`, `curseforge`) plus die Felder der Modrinth-Gegenstücke | Gleiche Formen wie Modrinth (`snake_case`); CurseForge-IDs sind die Projektnummern |
 | `provider_install_pack` | `source` (`ftb`, `technic`, `curseforge`), `projectId`, `versionId`, `name`, `operationId` | Neue `Instance` mit `modpack: { type: "provider", source, projectId, versionId }` (CurseForge: `type: "curseforge"`); bleibt bei CurseForge etwas nur über die Webseite ladbar, folgt das Event `content-blocked` |
@@ -144,8 +146,14 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `instance_check_files` | `instanceId`, absolute `paths` | `{ path, kind, duplicateOf, error }[]` je Datei: `kind` null = Zip ohne eindeutiges Merkmal, `duplicateOf` = Name des Eintrags mit demselben SHA-1, `error` = warum die Datei nicht passt |
 | `instance_add_files` | `instanceId`, `files: { path, kind }[]`, `operationId` | Aktualisierte `Instance` (Phasen `copy`, `resolve`, `complete`); erkannte Dateien als `source: { type: "modrinth" }`, sonst `local`; schon vorhandener SHA-1 oder ein schon vorhandenes Modrinth-Projekt → Fehler |
 | `modrinth_identify` | `instanceId`, `modIds` (lokale Einträge) | Aktualisierte `Instance`; erkannte Einträge werden Modrinth-Einträge (Schalter bleibt), ohne Netz ein Fehler |
+| `modrinth_check_updates` | `instanceId` | `{ modId, currentVersion, versionId, versionNumber }[]` (Mods, Ressourcenpakete, Shader mit Modrinth-Herkunft) |
+| `modrinth_update_mods` | `instanceId`, `modIds`, `operationId` | Aktualisierte `Instance` (neue Pflicht-Abhängigkeiten werden mit installiert) |
 | `modrinth_install_pack` | `versionId`, `name`, `operationId` | Neue `Instance` |
 | `modrinth_import_pack` | absoluter `path`, `name`, `operationId` | Neue `Instance` |
+| `template_save` | `instanceId`, `name` | `Template` |
+| `template_list` | – | `Template[]` |
+| `template_delete` | `id` | – |
+| `template_create_instance` | `templateId`, `name`, `operationId` | Neue `Instance` (abbrechbar über `pack_install_cancel`) |
 | `instance_duplicate` | `instanceId`, `operationId` | Neue `Instance` (Fortschritt als `content-progress`, Phase `copy`: erst verwaltete Inhalte, dann Dateien); läuft die Instanz, Fehler |
 | `import_detect` | `folder?` (absolut; ohne: Standardorte) | `ForeignInstance[]`, nach Namen sortiert |
 | `instance_import` | `source: ForeignInstance`, `operationId` | Neue `Instance` (Fortschritt als `content-progress`, Phasen `copy` und `hash`); die Quelle bleibt unverändert |
@@ -183,55 +191,72 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 
 Sichern, Wiederherstellen und Löschen von Welten sowie Änderungen an Datenpaketen und Serverliste gehen nur, solange die Instanz nicht läuft (`AppState::operation`): das Spiel hält die Dateien offen und schreibt sie beim Beenden neu.
 
-Content-Fortschritt: `content-progress` `{ operationId, phase, done, total }` (Phasen `resolve`, `validate`, `download`, `extract`, `copy`, `backup`, `hash`, `pack`, `complete`). Der Aufrufer vergibt die `operationId`; späte oder fremde Events dürfen keinen anderen Auftrag aktualisieren. Modpack-Import und Minecraft-Installation sind getrennte Schritte: nach dem Import installiert `instance_install` die passende Minecraft-/Fabric-Runtime.
+Content-Fortschritt: `content-progress` `{ operationId, phase, done, total }` (Phasen `resolve`, `validate`, `download`, `extract`, `copy`, `backup`, `hash`, `pack`, `complete`). Der Aufrufer vergibt die `operationId`; späte oder fremde Events dürfen keinen anderen Auftrag aktualisieren. Modpack-Import und Minecraft-Installation sind getrennte Schritte: nach dem Import installiert `instance_install` die passende Minecraft- und Loader-Runtime.
 
-Events: `install-progress` `{ instanceId, step, done, total }` · `instance-log` `{ instanceId, stream: "stdout"|"stderr", line }` · `instance-exit` `{ instanceId, code: number|null, crashed: boolean, crashReport: string|null, logFile: string|null }` (kommt nach dem Speichern der Spielzeit; `crashed` = Fehlercode ohne Stopp durch den Nutzer; Pfade absolut, öffnbar per `openPath`, Scope `$APPDATA/**`) · `instances-changed` (ohne Daten; nach dem Nachtragen von Ordner-Inhalten beim Start). Installation und Start gibt es für `loader = vanilla` und `fabric`.
+Events: `install-progress` `{ instanceId, step, done, total }` · `instance-log` `{ instanceId, stream: "stdout"|"stderr", line }` · `instance-exit` `{ instanceId, code: number|null, crashed: boolean, crashReport: string|null, logFile: string|null }` (kommt nach dem Speichern der Spielzeit; `crashed` = Fehlercode ohne Stopp durch den Nutzer; Pfade absolut, öffnbar per `openPath`, Scope `$APPDATA/**`) · `instances-changed` (ohne Daten; nach dem Nachtragen von Ordner-Inhalten beim Start). `content-blocked` `{ operationId, instanceId, items }` (CurseForge-Dateien, die nur über die Webseite ladbar sind).
 
-### Fabric
+### Mod-Loader
 
-- `instance_install` lädt bei `fabric` das Profil `versions/loader/<mc>/<loader>/profile/json`. Ist `loaderVersion` leer, nimmt es den neuesten stabilen Loader und **speichert ihn in der Instanz** (die UI sollte die Instanz danach neu laden).
-- Fehlende SHA-1 im Profil (Loader, Intermediary) kommen aus den `.sha1`-Dateien des Maven-Repos; das ergänzte Profil liegt unter `versions/fabric-loader-<loader>-<mc>/…json` für den Start ohne Netz.
-- Merge: Fabric-Libraries vor den Vanilla-Libraries (gleiche `group:artifact[:classifier]` → Fabric gewinnt), `mainClass` = `net.fabricmc.loader.impl.launch.knot.KnotClient`, Profil-Argumente werden angehängt. ID, Client-JAR, Assets und Java bleiben die der Vanilla-Version.
-- Schritte `loader` (Profil) und `mods` (Abgleich `mods/`) kommen zusätzlich als `install-progress`.
+Die Installation wählt je `ModLoader` die Art (`LoaderKind`): ein Profil vom Meta-Server (Fabric, Quilt) oder den Installer des Loaders (Forge, NeoForge). Ist `loaderVersion` leer, nimmt `instance_install` den neuesten stabilen Loader und **speichert ihn in der Instanz** (die UI sollte die Instanz danach neu laden). `check_loader` lehnt Forge vor 1.17 und NeoForge vor 1.20.1 mit Grund ab, auch beim Import.
+
+**Fabric und Quilt**
+
+- Profil `versions/loader/<mc>/<loader>/profile/json` des jeweiligen Meta-Servers.
+- Fehlende SHA-1 im Profil (Loader, Intermediary) kommen aus den `.sha1`-Dateien des Maven-Repos; das ergänzte Profil liegt unter `versions/<fabric|quilt>-loader-<loader>-<mc>/…json` für den Start ohne Netz.
+- Merge: Loader-Libraries vor den Vanilla-Libraries (gleiche `group:artifact[:classifier]` → Loader gewinnt), `mainClass` des Profils (bei Fabric `net.fabricmc.loader.impl.launch.knot.KnotClient`), Profil-Argumente werden angehängt. ID, Client-JAR, Assets und Java bleiben die der Vanilla-Version.
+**Forge und NeoForge**
+
+- Erst Vanilla-Client und Java, dann `forge::install`: Installer laden, seine Processors ausführen (sie patchen das Client-JAR), danach das Profil des Installers mergen. Der Fortschritt zählt Libraries und Processors.
+
+**Für alle Loader**
+
+- Schritte `loader` (Profil bzw. Installer) und `mods` (Abgleich `mods/`) kommen zusätzlich als `install-progress`.
 - Der Installiert-Marker enthält bei Mod-Loadern MC-Version, Loader und Loader-Version; ein Wechsel gilt als „nicht installiert“.
 
 ### Mods
 
-`instances/<id>/minecraft/mods/` ist der Mods-Ordner (Spielverzeichnis, dort sucht Fabric). `mods::sync` legt jede aktivierte Mod mit `sha1` aus `cache/mods/<sha1>.jar` per Hardlink (Fallback Kopie) unter ihrem `fileName` ab und entfernt deaktivierte nur, wenn die Datei dort denselben SHA-1 hat; fremde Dateien bleiben liegen. Fehlt eine verwaltete Mod im Cache, schlägt der Abgleich fehl. Modrinth-Installationen laden die ausgewählte Fabric-/Minecraft-kompatible Version und erforderliche transitive Dependencies, prüfen Dateigröße, SHA-1 und SHA-512 und füllen den Cache. Automatische Updates oder stilles Ersetzen kollidierender Dateien sind nicht vorgesehen.
+`instances/<id>/minecraft/mods/` ist der Mods-Ordner (Spielverzeichnis, dort suchen die Loader). `mods::sync` legt jede aktivierte Mod mit `sha1` aus `cache/mods/<sha1>.jar` per Hardlink (Fallback Kopie) unter ihrem `fileName` ab und entfernt deaktivierte nur, wenn die Datei dort denselben SHA-1 hat; fremde Dateien bleiben liegen. Fehlt eine verwaltete Mod im Cache, schlägt der Abgleich fehl. Modrinth-Installationen laden die ausgewählte, zu Loader und Minecraft-Version der Instanz passende Version und erforderliche transitive Dependencies, prüfen Dateigröße, SHA-1 und SHA-512 und füllen den Cache. Updates gibt es nur auf Wunsch (`modrinth_check_updates`, `modrinth_update_mods`), nie automatisch; kollidierende Dateien werden nicht stillschweigend ersetzt.
 
 „Benötigt von“ (`requiredBy`): Vorlagen legen zusätzlich `pumpkin.json` (`{ requiredBy: { <fileName>: [projectId…] } }`) ins `.mrpack`, der Import wertet sie aus; bei fremden Packs wird es aus den Pflicht-Abhängigkeiten der per SHA-1 erkannten Modrinth-Versionen abgeleitet. Eigene Dateien (Ziehen aufs Fenster im Tab „Inhalte“ oder „Datei hinzufügen…“) laufen über `instance_check_files` (Art, Doppelte) und `instance_add_files`: Cache, Eintrag, `mods::sync`. Was Modrinth per SHA-1 kennt, wird mit Projekt und Version eingetragen und bekommt so Updates; ohne Netz bleibt es lokal und lässt sich später über „Mit Modrinth abgleichen“ (`modrinth_identify`) nachholen. Ein abgelegtes `.mrpack` führt zum Import als neue Instanz (`/instances?neu=1&datei=<Pfad>`). Beim Start trägt `content::adopt_untracked` Dateien aus `mods/`, `resourcepacks/`, `shaderpacks/` nach, die nicht in der Instanz stehen (`*.disabled` → deaktiviert; ohne Netz als lokal), und sendet danach `instances-changed`.
+
+### CurseForge
+
+Der Launcher kennt keinen Schlüssel: alle Abfragen gehen an den Worker in `proxy/` (Regeln aus den API-Bedingungen, vor allem: nichts wird zwischengespeichert, und Forks: `proxy/README.md`). Die Dateien kommen direkt vom CDN.
+
+- Abhängigkeiten werden Ebene für Ebene mit Sammelabfragen (`POST /v1/mods`, `/v1/mods/files`) und der Datei-Wahl aus `latestFilesIndexes` aufgelöst, damit große Bäume unter dem Limit des Workers von 60 Anfragen pro Minute bleiben.
+- Auf 429 wartet der Launcher (`Retry-After`, das der Worker mitschickt, höchstens 30 s, sonst 5/10/20 s) und versucht es bis zu dreimal.
+- Lehnt das CDN einen Download mit 401 ab, weil CurseForge dafür einen Schlüssel verlangt, nennt die Meldung (`AppError::Refused`) die Datei und den Ausweg (Launcher aktualisieren oder Datei von Hand laden), ohne dieselbe Adresse noch zweimal zu versuchen. 403 bedeutet beim CDN „Datei fehlt“ und bleibt beim allgemeinen Text.
+- Nur über die Webseite erlaubte Dateien werden nicht umgangen: das Event `content-blocked` öffnet den Dialog „Von Hand laden“, und `curseforge_adopt_download` übernimmt die Datei aus dem Downloads-Ordner. CurseForge wird erst gefragt, wenn dort eine passend benannte Datei liegt.
+
+### Import aus anderen Launchern
+
+`import_detect` sucht nur lesend unter `PrismLauncher`, `ModrinthApp` und `ATLauncher` im Datenordner des Systems (`dirs::data_dir`, unter Windows `%APPDATA%`), unter `curseforge/minecraft` im Benutzerordner (unter Windows im Ordner „Dokumente“, dem Standard der CurseForge App) oder im gewählten Ordner. Unlesbare Instanzen werden protokolliert und übersprungen, nicht startbare (Forge/NeoForge zu alt) mit Grund in `unsupported` gemeldet.
+
+- `prism.rs` (Prism Launcher/MultiMC): `instance.cfg` mit `name`, `MaxMemAlloc`/`JvmArgs` nur bei `OverrideMemory`/`OverrideJavaArgs`, Komponenten aus `mmc-pack.json`; Spielordner `minecraft`, sonst `.minecraft`.
+- `modrinth_app.rs`: SQLite `app.db` per `rusqlite`, schreibgeschützt geöffnet; Tabellen `instances`, `instance_content_sets`, `instance_launch_overrides`, in seit Mitte 2026 nicht mehr geöffneten Datenbanken noch `profiles`. Eine unlesbare Zeile verbirgt nur sich selbst. Spielordner `profiles/<path>` unter `settings.custom_dir` oder dem Datenordner.
+- `curseforge.rs` (CurseForge App): `minecraftinstance.json`, Loader aus `baseModLoader.name`, Herkunft der Mods aus `installedAddons[].addonID` und `installedFile.{id,fileName}`.
+- `atlauncher.rs`: `instance.json` mit `id` (= Minecraft-Version), `launcher.loaderVersion`, `maximumMemory`, `javaArguments`; deaktivierte Mods liegen in `disabledmods/`.
+
+`instance_import` legt die Instanz an (Name, Version, Loader, RAM und JVM-Args, `importedFrom`), kopiert den Spielordner ohne `logs/`, `crash-reports/`, `.fabric/`, `.cache/` und die Dateien des Launchers (`disabledmods/<name>` als `mods/<name>.disabled`), legt die Inhalte in den Mod-Cache (Phasen `copy` und `hash` im Hintergrund-Thread, abbrechbar) und erfasst sie wie `adopt_untracked`: Modrinth-SHA-1-Abfrage, ohne Netz lokal, was die CurseForge App von CurseForge hat, als CurseForge-Inhalt. Bei Fehler oder Abbruch verschwindet der halbe Ordner, auch wenn der Hintergrund-Thread erst danach endet.
 
 ### Verzeichnisse (App-Datenverzeichnis)
 
 ```
 versions/<id>/<id>.json|.jar   libraries/…   assets/{indexes,objects,log_configs}/   runtime/<komponente>/
 instances/<instanz-id>/minecraft/ (Spielverzeichnis, darin mods/)   instances/<instanz-id>/natives/   instances/<instanz-id>/backups/<welt>-<unix-ms>.zip   cache/mods/<sha1>.jar
-skins/<sha1>.png
+templates/<id>.mrpack   skins/<sha1>.png
 ```
 
-Headless-Test ohne UI: `cargo run --example launch -- [version|1.21] [spielername] [sekunden] [vanilla|fabric[:loader]]` (in `src-tauri/`), z. B. `-- 1.21.11 Headless 60 fabric`.
+Headless-Test ohne UI: `cargo run --example launch -- [version|1.21] [spielername] [sekunden] [vanilla|fabric|quilt|neoforge|forge[:loader]]` (in `src-tauri/`), z. B. `-- 1.21.11 Headless 60 fabric`.
 
-### Presets
+### Vorlagen
 
-Ein Preset bündelt Mods, Spieleinstellungen (`options.txt`-Schlüssel), JVM-Args und RAM und kann über `inheritsFrom` von **einem** anderen Preset erben. `Preset::resolve` faltet die Kette von der Wurzel zum Kind:
-
-- Mods: geerbte plus eigene; gleiche ID → das Kind gewinnt; `excludeMods` entfernt geerbte Mods.
-- `gameSettings`: zusammengeführt, Kind überschreibt.
-- JVM-Args und RAM: die des Kindes, sonst geerbt.
-- Zyklen und fehlende Eltern sind Fehler; `create_preset`/`update_preset` prüfen das vorab, `delete_preset` verweigert das Löschen, solange ein anderes Preset davon erbt.
-
-`apply_preset` wendet das aufgelöste Preset an: ergänzt fehlende Mods (per ID), ersetzt JVM-Args, übernimmt RAM (falls gesetzt) und merkt sich `presetId`. `gameSettings` werden erst mit der Launch-Logik in `options.txt` geschrieben.
+Eine Vorlage ist der Schnappschuss einer Instanz (`template_save`, im Instanz-Menü „Als Vorlage speichern“) als `.mrpack` unter `templates/<id>.mrpack`: Mods, Ressourcen- und Shaderpakete, `config/` und `options.txt`. Welten, Logs und Screenshots gehören nicht dazu. `template_create_instance` legt daraus über den normalen Pack-Import (`content::import`) eine neue, vom Original unabhängige Instanz an; der Vorgang ist abbrechbar. Das Frontend bietet Vorlagen im Dialog *Neue Instanz* (Reiter „Vorlage“) an und löscht sie dort auch.
 
 ### Installation und Mod-Cache
 
-- Installation läuft in benannten Schritten (`InstallStep`: `java → client → libraries → natives → assets → loader → mods`; `loader` kommt als Profil-Download vor `java`). Jeder Fortschritt geht als Tauri-Event `install-progress` mit `{ instanceId, step, done, total }` ans Frontend.
-- Mod-JARs liegen einmalig in einem globalen, per SHA-1 adressierten Cache (`<app_data>/cache/mods/<sha1>.jar`) und kommen für alle Loader per Hardlink (Fallback Kopie) nach `mods/` (siehe „Mods“). `-Dfabric.addMods` bleibt eine Option, falls `mods/` frei vom Launcher bleiben soll.
-
-### Noch nicht implementiert (Stubs)
-
-- **auth**: Der Microsoft-Flow ist fertig, braucht aber eine **eigene** Azure-App mit Minecraft-Freigabe – siehe `docs/ACCOUNT-SETUP.md`.
-- **Mod-Loader und Mods**: Quilt/Forge/NeoForge und CurseForge. Modrinth unterstützt derzeit Fabric-Mods und Vanilla-/Fabric-Modpacks; andere Projekttypen sind nicht installierbar.
-
+- Installation läuft in benannten Schritten (`InstallStep`: `java → client → libraries → natives → assets → loader → mods`; `loader` kommt bei Fabric/Quilt als Profil-Download vor `java`, bei Forge/NeoForge zusätzlich als Installer-Lauf nach `assets`). Jeder Fortschritt geht als Tauri-Event `install-progress` mit `{ instanceId, step, done, total }` ans Frontend.
+- Mod-JARs liegen einmalig in einem globalen, per SHA-1 adressierten Cache (`<app_data>/cache/mods/<sha1>.jar`) und kommen für alle Loader per Hardlink (Fallback Kopie) nach `mods/` (siehe „Mods“).
 
 ## Frontend (`src/`)
 
@@ -249,7 +274,7 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 - `store/tasks.ts` – Verlauf abgeschlossener Aufgaben für das Aufgaben-Menü; laufende Aufgaben kommen live aus `useRunningTasks`
 - Eigene Dateien hinzufügen geht nur in der App; „Mit Modrinth abgleichen“ erkennt im Browser nichts.
 - Mods/Modpacks verwenden in Tauri den echten Modrinth-Katalog; neue Content-Installationen melden im Browser ohne Tauri keine vorgetäuschten Erfolge.
-- Konten: Offline-Spielernamen lokal, Microsoft-Konten über den Gerätecode-Login des Backends.
+- Konten: Microsoft-Konten melden sich im Browser an (Rückfall „Stattdessen Code verwenden“ = Gerätecode); Offline-Spielernamen lokal in `store/settings.ts`, aber nur, wenn `store/offline.ts` das Backend-Urteil `offline_allowed` hält (Dev-Build oder angemeldetes Microsoft-Konto).
 - Welten, Datenpakete und Server im Browser: Beispiele aus `lib/mock-worlds.ts` (je Instanz bzw. Welt, nur im Speicher; Sichern und Datenpakete von Modrinth mit vorgetäuschtem Download, eigene Zips nur in der App).
 - Screenshots im Browser: fünf auf einem Canvas gemalte Platzhalter je Instanz aus `lib/mock-screenshots.ts` (`path` ist dort die data:-URL); Öffnen und Im-Ordner-Zeigen gehen nur in der App.
 - Skins im Browser: Beispielprofil und -bibliothek aus `lib/mock-skins.ts` (Texturen auf einem Canvas gemalt); Dateien hinzufügen geht nur in der App.
@@ -258,7 +283,7 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 
 - `app/Layout.tsx` – rahmenloses Fenster: Fensterleiste mit Wortzeichen, Kontomenü und eigenen Fensterknöpfen (auf allen Systemen, auch unter macOS statt der Ampel), links eine Icon-Seitenleiste (Start · Bibliothek · Entdecken, unten Aufgaben-Menü und Einstellungen) (`@tauri-apps/api/window`, Ziehen per `data-tauri-drag-region`); setzt `--px`, pausiert Szenen, solange Minecraft läuft
 - `pages/` – Start (Szene, Weiterspielen-Reihe, „Weiterspielen in …“ per Quick Play mit dem Ziel des letzten Quick-Play-Starts, Onboarding), Bibliothek (Poster/Liste, mit Gruppen als aufklappbare Abschnitte, ohne Gruppe zuletzt; zugeklappte bleiben gemerkt), Instanz (klebender Kopf mit Spielzeit, Inhalte mit Ablage eigener Dateien `detail/LocalFiles.tsx`, Welten mit den Abschnitten Welten und Server – „Spielen“ startet per Quick Play, gesperrt mit Tooltip, solange das Spiel läuft oder die Version keine Welten unterstützt; „Datenpakete…“ im Menü einer Welt zeigt ihre Pakete mit Zustand, nimmt Zips per Auswahl oder Ziehen aufs Fenster an und öffnet für „Auf Modrinth suchen“ das Seitenpanel `AddContentSheet` mit `world` –, Screenshots – Raster nach Tagen, Vorschau per Asset-Protokoll mit `loading=lazy`/`decoding=async`, große Ansicht mit ← →, Öffnen, Im Ordner zeigen, Papierkorb –, Protokoll, Einstellungen mit Java, Fenster und Spielargumenten, gesperrt, solange das Spiel läuft; `pages/detail/`), Entdecken (Katalog, Projektseite; Datenpakete fragen über `AddToWorldMenu` je Instanz ein Untermenü mit ihren Welten ab), Einstellungen, Skins (`/skins`, über das Kontomenü: aktueller Skin und Umhang des Microsoft-Kontos, Bibliothek als Raster; Offline-Konten sehen einen Hinweis auf die Microsoft-Anmeldung)
-- `components/px.tsx` – Bausteine: Knopf, Chip, Fortschritt, Suchfeld, Auswahl, Segmente, Checkbox, Schalter, Radio, Speicher-Slider, Tooltip, Menü/Kontextmenü, Dialog, Seitenpanel, Leer- und Fehlerzustände, Toasts. Verhalten von Radix, Aussehen aus `styles/`
+- `ui/` – das Pixel-Kit, aus dem alle Seiten bauen (`index.ts` exportiert): Knopf, Chip, Tabs, Formularfelder, Schalter, Karten und Listen, Dialog, Menü, Seitenpanel, Tooltip, Fortschritt, Leer- und Fehlerzustände, Toasts. Verhalten von Radix, Aussehen aus den Stilen daneben (`tokens.css`, `ui.css` sammelt sie). `KitPage` (`/_kit`, nur in Entwicklung) zeigt jeden Baustein in allen Größen, Varianten und Zuständen
 - `components/game.tsx` – Spielen-Knopf (feste Größe in allen Zuständen), Statuszeile, Status-Chip, Protokoll mit Filter/Suche/Mitscrollen
 - `components/instance.tsx` – Instanz-Menü (Knopf und Rechtsklick, Untermenü „Gruppe“): „Duplizieren“ und „Exportieren…“ (Auswahl der Ordner, Speichern-Dialog; beide mit Fortschritt und „Abbrechen“ im Aufgaben-Menü, danach Toast mit „Öffnen“ bzw. „Im Ordner zeigen“), Dialoge „Als Vorlage speichern“, „Neue Gruppe“ und „Löschen“
 - `components/common.tsx` – geteilte Formularbausteine: Arbeitsspeicher (`MemoryChooser`), Java (`JavaChooser`, global und je Instanz)
@@ -266,8 +291,9 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 - `components/ContentBrowser.tsx`, `NewInstanceDialog.tsx`, `PlayerNames.tsx`, `Onboarding.tsx` – Katalog und Seitenpanel, Neue Instanz, Konten und Microsoft-Anmeldung, erster Start
 - `components/LauncherImport.tsx` – Reiter „Anderer Launcher“ in *Neue Instanz*: gefundene Instanzen nach Launcher gruppiert zum Ankreuzen (noch nicht importierte vorgewählt), „Ordner wählen…“ für portable Launcher wie MultiMC, nicht startbare ausgegraut mit Grund, Fortschritt in der Zeile; das Onboarding öffnet über `/instances?neu=import` den Dialog der Bibliothek (der bleibt offen, wenn der erste Import die Bibliothek füllt) und nennt die Zahl gefundener Instanzen
 - `components/AppUpdate.tsx` – Zeile „Updates“ in *Einstellungen › Über*: Version suchen, Versionshinweise, „Installieren und neu starten“, nach dem Warten auf Spiel und Aufgaben „Jetzt neu starten“
+- `branding/` – saisonales Branding: `calendar.ts` wählt die Jahreszeit (Frühling, Sommer, Halloween, Winter), `Brand.tsx` liefert Wortzeichen, Maskottchen, Akzent und Fenster-/Taskleisten-Icon; Assets aus `branding/pumpkin-launcher/` (`pnpm check:branding`)
 - `pixel/` – `unit.ts` (Pixeleinheit auf ganze Gerätepixel), `scene.ts` (Szenen-Engine: 7 Biome, 12 fps, Pausenregeln, Cache), `PixelScene.tsx`, `icons.tsx` (Pixel-Icons, Mod-Glyphen, Wortzeichen, Spielerkopf), `skin.ts` + `SkinFigure.tsx` (Vorderansicht aus der Skin-Textur: Kopf, Körper, Arme – schlank bei `slim` –, Beine mit zweiter Schicht; altes 64×32-Format gespiegelt, eine ganz deckende Hutschicht gilt dort wie im Spiel als leer; Grundschicht deckend; Umhang-Außenseite; Canvas in Texturpixeln, per CSS um ganze `--iu` vergrößert)
-- `styles/pixelkino.css` (aus dem Mockup übernommen), `styles/states.css` (Auswahlliste, Hover/Druck/Fokus, Ein- und Ausblenden) plus kleine Ergänzungen je Bereich; beide in der Tailwind-Schicht `components`, deren Reihenfolge `index.html` vor allen Stylesheets festlegt
+- `styles/pixelkino.css` (Tokens und Grundstile, aus dem Mockup übernommen), `ui/ui.css` (Kit), `components/play.css` (Spielen-Knopf, Statuszeile, Protokoll) und `branding/branding.css`, alle in der Tailwind-Schicht `components`, deren Reihenfolge `index.html` vor allen Stylesheets festlegt
 
 ## Herkunft der Ideen und Lizenz
 
