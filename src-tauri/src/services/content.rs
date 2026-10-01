@@ -83,10 +83,17 @@ pub(crate) fn write_new(root: &Path, path: &Path, data: &[u8]) -> AppResult<()> 
         .open(path)?;
     if let Err(e) = file.write_all(data).and_then(|()| file.sync_all()) {
         drop(file);
-        fs::remove_file(path)?;
-        return Err(e.into());
+        return Err(match fs::remove_file(path) {
+            Ok(()) => e.into(),
+            Err(cleanup) => AppError::invalid(format!("{e}; Aufräumen: {cleanup}")),
+        });
     }
     Ok(())
+}
+
+/// Ist `path` schon belegt? Verweise werden nicht aufgelöst; nur ein fehlendes Ziel ist frei, jeder andere Fehler bleibt einer.
+pub(crate) fn is_occupied(path: &Path) -> AppResult<bool> {
+    Ok(none_if_missing(fs::symlink_metadata(path))?.is_some())
 }
 pub(crate) fn rollback(paths: &[PathBuf], original: AppError) -> AppError {
     let mut errors = Vec::new();
@@ -163,7 +170,7 @@ pub async fn install_mod(
         }
         let target = state.dirs.game_dir(id).join(kind.folder()).join(&file.filename);
         regular_parents(&state.dirs.root, &target)?;
-        if none_if_missing(fs::symlink_metadata(&target))?.is_some() {
+        if is_occupied(&target)? {
             return Err(AppError::invalid("Mod-Zieldatei existiert bereits"));
         }
         if v.project_id != root_project {
@@ -1412,6 +1419,18 @@ mod tests {
             assert!(has_unsafe_chars(name), "{name:?}");
         }
         assert!(!has_unsafe_chars("sodium-fabric-0.5.8+mc1.20.4.jar"));
+    }
+
+    #[test]
+    fn only_a_missing_path_is_free() {
+        let dir = std::env::temp_dir().join(crate::models::new_id());
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("file"), "x").unwrap();
+
+        assert!(!is_occupied(&dir.join("missing")).unwrap());
+        assert!(is_occupied(&dir.join("file")).unwrap());
+        assert!(is_occupied(&dir).unwrap());
+        fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

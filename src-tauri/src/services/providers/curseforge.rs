@@ -596,20 +596,21 @@ fn remote(file: &CfFile) -> AppResult<RemoteFile> {
 }
 
 /// Trägt eine heruntergeladene, geprüfte Datei in die Instanz ein.
-fn mod_entry(m: &CfMod, f: &CfFile, kind: ModKind, sha1: String, required_by: Vec<String>, existing: &[Mod]) -> Mod {
+fn mod_entry(m: &CfMod, f: &CfFile, kind: ModKind, sha1: String, required_by: Vec<String>, existing: &[Mod]) -> AppResult<Mod> {
     let id = format!("cf-{}", m.id);
-    Mod {
+    let too_large = |_| AppError::invalid("Ungültige CurseForge-Nummer");
+    Ok(Mod {
         // Zwei Dateien desselben Projekts behalten verschiedene IDs.
         id: if existing.iter().any(|x| x.id == id) { crate::models::new_id() } else { id },
         name: m.name.clone(),
         version: if f.display_name.is_empty() { f.file_name.clone() } else { f.display_name.clone() },
-        source: ModSource::CurseForge { project_id: m.id as u32, file_id: f.id as u32 },
+        source: ModSource::CurseForge { project_id: u32::try_from(m.id).map_err(too_large)?, file_id: u32::try_from(f.id).map_err(too_large)? },
         file_name: f.file_name.clone(),
         sha1: Some(sha1),
         enabled: true,
         kind,
         required_by,
-    }
+    })
 }
 
 fn check_file_name(name: &str, kind: ModKind) -> AppResult<()> {
@@ -664,7 +665,7 @@ pub async fn install_mod(
         }
         let target = state.dirs.game_dir(instance_id).join(k.folder()).join(&f.file_name);
         content::regular_parents(&state.dirs.root, &target)?;
-        if fs::symlink_metadata(&target).is_ok() {
+        if content::is_occupied(&target)? {
             return Err(AppError::invalid("Mod-Zieldatei existiert bereits"));
         }
         let remote = remote(f).map_err(|e| AppError::invalid(format!("{}: {e}", m.name)))?;
@@ -686,7 +687,7 @@ pub async fn install_mod(
             created.push(target);
             let sha1 = crate::services::mods::cache_bytes(&state.dirs, &data)?;
             let owners = if m.id == u64::from(project) { Vec::new() } else { vec![root_key.clone()] };
-            let entry = mod_entry(m, f, k, sha1, owners, &instance.mods);
+            let entry = mod_entry(m, f, k, sha1, owners, &instance.mods)?;
             instance.mods.push(entry);
         }
         // Schon vorhandene Abhängigkeiten merken den neuen Besitzer, sofern sie selbst Abhängigkeit sind.
@@ -923,7 +924,7 @@ pub async fn adopt_download(state: &AppState, instance_id: &str, project_id: u32
     check_file_name(&f.file_name, kind)?;
     let target = state.dirs.game_dir(instance_id).join(kind.folder()).join(&f.file_name);
     content::regular_parents(&state.dirs.root, &target)?;
-    if instance.mods.iter().any(|x| x.file_name.eq_ignore_ascii_case(&f.file_name)) || fs::symlink_metadata(&target).is_ok() {
+    if instance.mods.iter().any(|x| x.file_name.eq_ignore_ascii_case(&f.file_name)) || content::is_occupied(&target)? {
         return Err(AppError::invalid("Mod-Dateinamen kollidieren"));
     }
     content::write_new(&state.dirs.root, &target, &data)?;
@@ -931,7 +932,10 @@ pub async fn adopt_download(state: &AppState, instance_id: &str, project_id: u32
         Ok(s) => s,
         Err(e) => return Err(content::rollback(&[target], e)),
     };
-    let entry = mod_entry(&m, &f, kind, sha1, Vec::new(), &instance.mods);
+    let entry = match mod_entry(&m, &f, kind, sha1, Vec::new(), &instance.mods) {
+        Ok(entry) => entry,
+        Err(e) => return Err(content::rollback(&[target], e)),
+    };
     instance.mods.push(entry);
     match content::commit_mods(state, instance_id, instance.mods) {
         Ok(i) => Ok(Some(i)),
@@ -966,6 +970,19 @@ mod tests {
         assert_eq!(v.files[0].hashes["sha1"], "abcdef0123456789abcdef0123456789abcdef01");
         let kinds: Vec<_> = v.dependencies.iter().map(|d| (d.project_id.clone().unwrap(), d.dependency_type.clone())).collect();
         assert_eq!(kinds, [("1".to_string(), "required".to_string()), ("2".into(), "optional".into()), ("3".into(), "incompatible".into())]);
+    }
+
+    #[test]
+    fn recorded_numbers_must_fit_the_instance_format() {
+        let m = |id: u64| serde_json::from_value::<CfMod>(json!({"id": id, "name": "Sodium"})).unwrap();
+        let f = |id: u64| file(json!({"id": id, "modId": 10, "fileName": "s.jar"}));
+        let record = |m: &CfMod, f: &CfFile| mod_entry(m, f, ModKind::Mod, "sha".into(), Vec::new(), &[]);
+
+        let ok = record(&m(10), &f(500)).unwrap();
+        assert_eq!((ok.id.as_str(), ok.source), ("cf-10", ModSource::CurseForge { project_id: 10, file_id: 500 }));
+        let too_large = u64::from(u32::MAX) + 1;
+        assert!(record(&m(too_large), &f(500)).is_err());
+        assert!(record(&m(10), &f(too_large)).is_err());
     }
 
     #[test]

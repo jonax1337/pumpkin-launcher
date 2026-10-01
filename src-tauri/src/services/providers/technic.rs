@@ -151,7 +151,9 @@ pub async fn search(
     }
     let listing: Listing = json(client, url.as_str()).await?;
     let details: Vec<Detail> = futures::stream::iter(listing.modpacks.into_iter().filter(|e| segment(&e.slug).is_ok()).take(PAGE_SIZE as usize))
-        .map(|e| async move { detail(client, &e.slug).await.ok() })
+        .map(|e| async move {
+            detail(client, &e.slug).await.inspect_err(|err| tracing::warn!(slug = %e.slug, %err, "Technic-Pack nicht geladen")).ok()
+        })
         .buffered(CATALOG_CONCURRENCY)
         .filter_map(|d| async move { d })
         .collect()

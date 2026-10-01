@@ -179,7 +179,10 @@ async fn catalog(client: &reqwest::Client) -> AppResult<Arc<Vec<PackDoc>>> {
         match r {
             Ok(p) if !p.private => packs.push(p),
             Ok(_) => {}
-            Err(e) => failed = Some(e),
+            Err(err) => {
+                tracing::warn!(%err, "FTB-Modpack nicht geladen");
+                failed = Some(err);
+            }
         }
     }
     if packs.is_empty() {
