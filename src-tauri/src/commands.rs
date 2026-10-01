@@ -258,7 +258,7 @@ pub async fn instance_launch(app: AppHandle, state: State<'_, AppState>, instanc
     mods::sync(&state.dirs,&instance_id,&instance.mods)?;
     let (account, session) = launch_account(&state, account_id, &username).await?;
     let version = installed_version(&state, &instance).await?;
-    let component = install::java_component(&version);
+    let component = version.java_component();
     let java = java::resolve(&state.dirs, component, instance.java_path.as_deref(), java_path.as_deref())?;
     let session = session.as_ref().map(|s| launch::Session { access_token: &s.access_token, xuid: &s.xuid });
     let args = launch::build_args_for(

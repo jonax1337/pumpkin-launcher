@@ -12,7 +12,7 @@ use tokio::sync::oneshot;
 use crate::error::{AppError, AppResult};
 use crate::models::{Account, GameWindow, QuickPlay};
 use crate::services::gamelog::XmlLog;
-use crate::services::install;
+use crate::services::install::log_config_path;
 use crate::services::mojang::{Argument, OneOrMany, VersionJson};
 use crate::services::rules::{self, Env};
 use crate::services::Dirs;
@@ -86,7 +86,7 @@ fn flatten<'a>(args: &'a [Argument], env: &Env) -> Vec<&'a str> {
 
 /// Libraries (nach Regeln) plus Client-JAR.
 pub fn classpath(version: &VersionJson, dirs: &Dirs, env: &Env) -> Vec<PathBuf> {
-    let mut cp: Vec<PathBuf> = install::artifacts(version, env)
+    let mut cp: Vec<PathBuf> = version.artifacts(env)
         .filter_map(|(_, a)| a.path.as_deref().map(|p| dirs.library(p)))
         .collect();
     cp.push(dirs.version_file(&version.id, "jar"));
@@ -149,7 +149,7 @@ pub fn build_args_for(spec: &LaunchSpec, env: &Env, session: Option<&Session>) -
     let mut args = vec![format!("-Xmx{}M", spec.memory_mb)];
     args.extend(jvm.iter().map(|a| substitute(a, &vars)));
     if let Some(log) = &version.logging.client {
-        let file = path(dirs.assets().join("log_configs").join(&log.file.id));
+        let file = path(log_config_path(dirs, log));
         args.push(substitute(&log.argument, &HashMap::from([("path", file)])));
     }
     // Eigene JVM-Args der Instanz zuletzt, damit sie Vorgaben der Version überschreiben.

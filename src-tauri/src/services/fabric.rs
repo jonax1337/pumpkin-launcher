@@ -264,7 +264,6 @@ pub fn merge_parts(mut version: VersionJson, libraries: Vec<Library>, main_class
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::install;
     use crate::services::rules::Env;
 
     #[test]
@@ -328,7 +327,7 @@ mod tests {
         let cp = crate::services::launch::classpath(&merged, &Dirs::new("/d"), &Env { os: "linux", arch: "x86_64", features: Vec::new() });
         assert_eq!(cp.len(), 4);
         assert_eq!(cp.last(), Some(&Dirs::new("/d").version_file("1.21.11", "jar")));
-        assert_eq!(install::java_component(&merged), install::java_component(&vanilla));
+        assert_eq!(merged.java_component(), vanilla.java_component());
 
         let other = Profile { inherits_from: "1.20.1".into(), ..profile.clone() };
         assert!(merge(vanilla.clone(), &other).is_err());

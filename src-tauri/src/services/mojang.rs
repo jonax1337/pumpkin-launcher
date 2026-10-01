@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::services::rules::Rule;
+use crate::services::rules::{self, Env, Rule};
 
 pub const MANIFEST_URL: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 pub const RESOURCES_URL: &str = "https://resources.download.minecraft.net";
@@ -46,8 +46,8 @@ pub struct Download {
 #[derive(Debug, Clone, Deserialize)]
 pub struct IdDownload {
     pub id: String,
-    pub sha1: String,
-    pub url: String,
+    #[serde(flatten)]
+    pub download: Download,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -79,6 +79,17 @@ pub struct Library {
 }
 
 impl Library {
+    /// Library, die nur aus einem JAR besteht, ohne Regeln und Natives (so liefern Mod-Loader ihre Libraries).
+    pub fn from_artifact(name: &str, artifact: Download) -> Self {
+        Self {
+            name: name.to_owned(),
+            downloads: LibraryDownloads { artifact: Some(artifact), classifiers: HashMap::new() },
+            rules: Vec::new(),
+            natives: HashMap::new(),
+            extract: Extract::default(),
+        }
+    }
+
     /// Classifier aus dem Namen (`org.lwjgl:lwjgl:3.3.3:natives-windows` → `natives-windows`).
     pub fn classifier(&self) -> Option<&str> {
         self.name.splitn(4, ':').nth(3)
@@ -108,10 +119,8 @@ pub struct Arguments {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct JavaVersion {
     pub component: String,
-    pub major_version: u32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -151,6 +160,21 @@ pub struct VersionJson {
     pub java_version: Option<JavaVersion>,
     #[serde(default)]
     pub logging: Logging,
+}
+
+impl VersionJson {
+    /// Java-Komponente der Version; sehr alte Versions-JSONs haben keine Angabe → Java 8.
+    pub fn java_component(&self) -> &str {
+        self.java_version.as_ref().map_or("jre-legacy", |j| j.component.as_str())
+    }
+
+    /// Library-Artefakte, die laut Regeln auf diese Plattform gehören (Classpath und Download).
+    pub fn artifacts<'a>(&'a self, env: &'a Env) -> impl Iterator<Item = (&'a Library, &'a Download)> {
+        self.libraries
+            .iter()
+            .filter(|l| rules::allowed(&l.rules, env))
+            .filter_map(|l| l.downloads.artifact.as_ref().map(|a| (l, a)))
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
