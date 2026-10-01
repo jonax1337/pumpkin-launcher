@@ -98,7 +98,7 @@ pub fn build_args(spec: &LaunchSpec, env: &Env) -> AppResult<Vec<String>> {
 /// Wie `build_args`, mit Microsoft-Sitzung: echter Token und xuid statt der Offline-Platzhalter.
 pub fn build_args_for(spec: &LaunchSpec, env: &Env, session: Option<&Session>) -> AppResult<Vec<String>> {
     let LaunchSpec { version, dirs, instance_id, account, .. } = spec;
-    let sep = if env.os == "windows" { ";" } else { ":" };
+    let sep = env.classpath_separator();
     let path = |p: PathBuf| p.to_string_lossy().into_owned();
     let cp = classpath(version, dirs, env).into_iter().map(path).collect::<Vec<_>>().join(sep);
 
@@ -371,6 +371,15 @@ mod tests {
         let args = build_args_for(&spec, &LINUX, Some(&session)).unwrap();
         let token = args.iter().position(|a| a == "--accessToken").unwrap();
         assert_eq!(args[token + 1], "eyJ.token");
+    }
+
+    #[test]
+    fn macos_gets_the_lwjgl_main_thread_flag_from_the_version() {
+        let (version, dirs, account) = (test_version(), Dirs::new("/data"), notch());
+        let mac = Env { os: "osx", arch: "aarch64", features: Vec::new() };
+        let args = build_args(&plain_spec(&version, &dirs, &account), &mac).unwrap();
+        assert_eq!(args[1], "-XstartOnFirstThread");
+        assert!(!build_args(&plain_spec(&version, &dirs, &account), &LINUX).unwrap().contains(&args[1]));
     }
 
     #[test]

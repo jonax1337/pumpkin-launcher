@@ -1,5 +1,5 @@
 //! Protokolle teilen über mclo.gs (https://api.mclo.gs/). Hochgeladen wird nur das Ende der Datei,
-//! vorher lokal bereinigt: Zugangstokens, Windows-Benutzername in Pfaden, E-Mail-Adressen.
+//! vorher lokal bereinigt: Zugangstokens, Benutzername in Pfaden, E-Mail-Adressen.
 use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
@@ -76,6 +76,8 @@ static REDACTIONS: LazyLock<Vec<(Regex, &str)>> = LazyLock::new(|| {
         // Der Name darf Leerzeichen enthalten; er endet erst an einem Trenner, dem Zeilenende oder einem
         // Zeichen, das Windows in Ordnernamen verbietet (etwa dem schließenden `"` in JSON).
         (r#"(?i)\b([a-z]:[\\/]+users[\\/]+)[^\\/\r\n"<>|:*?]+"#, "${1}<user>"),
+        // Linux (`/home/<name>`, auch `/var/home/…`) und macOS (`/Users/<name>`): Namen ohne Leerzeichen.
+        (r#"(/(?:home|Users)/)[^/\s"']+"#, "${1}<user>"),
         // Endung aus Buchstaben: Mod-Kennungen wie `fabric-loader@0.16.5` bleiben stehen.
         (r"[\w.+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b", "<email>"),
     ]
@@ -84,7 +86,7 @@ static REDACTIONS: LazyLock<Vec<(Regex, &str)>> = LazyLock::new(|| {
     .collect()
 });
 
-/// Entfernt Zugangstokens, den Windows-Benutzernamen in Pfaden und E-Mail-Adressen.
+/// Entfernt Zugangstokens, den Benutzernamen in Pfaden und E-Mail-Adressen.
 fn redact(text: &str) -> String {
     REDACTIONS
         .iter()
@@ -144,6 +146,14 @@ mod tests {
         assert_eq!(redact(r#""path": "C:\\Users\\max\\x""#), r#""path": "C:\\Users\\<user>\\x""#);
         assert_eq!(redact("home=C:\\Users\\max\nnext"), "home=C:\\Users\\<user>\nnext");
         assert_eq!(redact(r#"{"home":"C:\\Users\\max","x":1}"#), r#"{"home":"C:\\Users\\<user>","x":1}"#);
+    }
+
+    #[test]
+    fn redacts_linux_and_macos_user_names_in_paths() {
+        assert_eq!(redact("Loading /home/max/.local/share/x"), "Loading /home/<user>/.local/share/x");
+        assert_eq!(redact("cwd=/var/home/max next"), "cwd=/var/home/<user> next");
+        assert_eq!(redact(r#"{"dir":"/Users/max","x":1}"#), r#"{"dir":"/Users/<user>","x":1}"#);
+        assert_eq!(redact("C:/Users/max/x"), "C:/Users/<user>/x");
     }
 
     #[test]

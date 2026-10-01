@@ -36,14 +36,18 @@ reqwest = { version = "0.13.5", default-features = false, features = ["json", "m
 tauri-plugin-dialog = "2"
 tokio-util = "0.7.19"
 base64 = "0.22"
-keyring = { version = "3", features = ["windows-native"] }
+keyring = { version = "3", features = ["apple-native", "crypto-rust", "sync-secret-service", "windows-native"] }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-single-instance = "2"
 regex = "1.13.1"
+dirs = "7"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Wdk_System_SystemServices", "Win32_Storage_FileSystem", "Win32_System_SystemInformation"] }
+
+[target."cfg(unix)".dependencies]
+libc = "0.2.189"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

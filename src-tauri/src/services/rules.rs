@@ -47,6 +47,11 @@ impl Env {
         };
         Self { os, arch: std::env::consts::ARCH, features: Vec::new() }
     }
+
+    /// Trenner im Java-Classpath (`${classpath_separator}`).
+    pub fn classpath_separator(&self) -> &'static str {
+        if self.os == "windows" { ";" } else { ":" }
+    }
 }
 
 impl Rule {
@@ -133,5 +138,24 @@ mod tests {
         assert!(!native_classifier_matches("natives-windows", &arm));
         assert!(native_classifier_matches("natives-windows-64", &x64));
         assert!(native_classifier_matches("natives-macos-patch", &arm));
+    }
+
+    #[test]
+    fn native_classifiers_on_macos_and_linux() {
+        let apple_silicon = env("osx", "aarch64");
+        let intel_mac = env("osx", "x86_64");
+        assert!(native_classifier_matches("natives-macos-arm64", &apple_silicon));
+        assert!(!native_classifier_matches("natives-macos", &apple_silicon));
+        assert!(native_classifier_matches("natives-macos", &intel_mac));
+        assert!(!native_classifier_matches("natives-macos-arm64", &intel_mac));
+        assert!(native_classifier_matches("natives-linux", &env("linux", "x86_64")));
+        assert!(native_classifier_matches("natives-linux-aarch64", &env("linux", "aarch64")));
+    }
+
+    #[test]
+    fn classpath_separator_per_os() {
+        assert_eq!(env("windows", "x86_64").classpath_separator(), ";");
+        assert_eq!(env("linux", "x86_64").classpath_separator(), ":");
+        assert_eq!(env("osx", "aarch64").classpath_separator(), ":");
     }
 }

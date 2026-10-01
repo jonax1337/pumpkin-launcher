@@ -6,7 +6,7 @@
 //! - Sekunden: danach wird das Spiel beendet (Standard `0`: warten, bis es sich selbst beendet).
 //! - Loader: Standard `vanilla`; `fabric` nimmt den neuesten stabilen Loader, `fabric:0.19.5` einen bestimmten
 //!   (ebenso `quilt`, `neoforge`, `forge`).
-//! - Datenverzeichnis: `LAUNCHER_DATA`, sonst dasselbe wie die App (`%APPDATA%/dev.laux.launcher`).
+//! - Datenverzeichnis: `LAUNCHER_DATA`, sonst dasselbe wie die App (Datenordner des Systems, darin `dev.laux.launcher`).
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -42,8 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let root = std::env::var_os("LAUNCHER_DATA").map(PathBuf::from).unwrap_or_else(|| {
-        let base = std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(|| "target".into());
-        base.join("dev.laux.launcher")
+        dirs::data_dir().unwrap_or_else(|| "target".into()).join("dev.laux.launcher")
     });
     let dirs = Dirs::new(root);
     let client = download::http_client()?;

@@ -27,7 +27,7 @@ pub async fn duplicate(
         ..source
     };
     let target = state.dirs.instance(&copy.id);
-    content::regular_parents(&target)?;
+    content::regular_parents(&state.dirs.root, &target)?;
     fs::create_dir_all(&target)?;
     let mut guard = RemoveOnDrop(Some(target));
     let (dirs, from, to, mods) = (state.dirs.clone(), instance_id.to_owned(), copy.id.clone(), copy.mods.clone());

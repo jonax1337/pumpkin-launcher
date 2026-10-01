@@ -542,7 +542,7 @@ pub async fn install_mod(
             return Err(invalid("Mod-Dateinamen kollidieren"));
         }
         let target = state.dirs.game_dir(instance_id).join(k.folder()).join(&f.file_name);
-        content::regular_parents(&target)?;
+        content::regular_parents(&state.dirs.root, &target)?;
         if fs::symlink_metadata(&target).is_ok() {
             return Err(invalid("Mod-Zieldatei existiert bereits"));
         }
@@ -561,7 +561,7 @@ pub async fn install_mod(
     let mut created = Vec::new();
     let result = (|| {
         for (m, f, k, target, data) in ready {
-            content::write_new(&target, &data)?;
+            content::write_new(&state.dirs.root, &target, &data)?;
             created.push(target);
             let sha1 = crate::services::mods::cache_bytes(&state.dirs, &data)?;
             let owners = if m.id == u64::from(project) { Vec::new() } else { vec![root_key.clone()] };
@@ -782,10 +782,9 @@ pub(crate) async fn plan_pack(
 
 // ---------- Manuell geladene Dateien ----------
 
+/// Downloads-Ordner des Systems: auch verschoben (Windows) oder mit übersetztem Namen (XDG unter Linux).
 fn downloads_dir() -> Option<PathBuf> {
-    let home = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME"))?;
-    let dir = PathBuf::from(home).join("Downloads");
-    dir.is_dir().then_some(dir)
+    dirs::download_dir().filter(|dir| dir.is_dir())
 }
 
 /// Sucht im Downloads-Ordner nach der Datei, die der Nutzer auf CurseForge geladen hat (Größe und SHA-1 müssen
@@ -823,11 +822,11 @@ pub async fn adopt_download(state: &AppState, instance_id: &str, project_id: u32
     let Some(data) = find_download(&dir, &f)? else { return Ok(None) };
     check_file_name(&f.file_name, kind)?;
     let target = state.dirs.game_dir(instance_id).join(kind.folder()).join(&f.file_name);
-    content::regular_parents(&target)?;
+    content::regular_parents(&state.dirs.root, &target)?;
     if instance.mods.iter().any(|x| x.file_name.eq_ignore_ascii_case(&f.file_name)) || fs::symlink_metadata(&target).is_ok() {
         return Err(invalid("Mod-Dateinamen kollidieren"));
     }
-    content::write_new(&target, &data)?;
+    content::write_new(&state.dirs.root, &target, &data)?;
     let sha1 = match crate::services::mods::cache_bytes(&state.dirs, &data) {
         Ok(s) => s,
         Err(e) => return Err(content::rollback(&[target], e)),

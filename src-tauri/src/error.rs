@@ -18,14 +18,12 @@ pub enum AppError {
     Upload(String),
     #[error("Interner Fehler der App – Details: {0}")]
     Tauri(#[from] tauri::Error),
-    #[error("Der Windows-Anmeldespeicher ist nicht erreichbar – Details: {0}")]
+    #[error("Der Passwortspeicher des Systems ist nicht erreichbar – Details: {0}")]
     Keyring(#[from] keyring::Error),
     #[error("{kind} „{id}“ wurde nicht gefunden")]
     NotFound { kind: &'static str, id: String },
     #[error("{0}")]
     Invalid(String),
-    #[error("{0} gibt es noch nicht")]
-    NotImplemented(&'static str),
     #[error("Installation abgebrochen")]
     Cancelled,
 }
