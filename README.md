@@ -81,10 +81,11 @@ src-tauri/      Rust backend (commands, models, services, state, error)
 branding/       released brand assets per season + generators
 docs/           architecture, design spec, account setup
 website/        standalone marketing website (static, no tracker)
+media/          launch video source (HyperFrames, YouTube + TikTok cuts)
 scripts/        build helper scripts
 ```
 
-Details: [Architecture](docs/ARCHITECTURE.md) · [Pixelkino design spec](docs/design/PIXELKINO.md) · [Branding](branding/pumpkin-launcher/README.md) · [Website](website/README.md)
+Details: [Architecture](docs/ARCHITECTURE.md) · [Pixelkino design spec](docs/design/PIXELKINO.md) · [Branding](branding/pumpkin-launcher/README.md) · [Website](website/README.md) · [Launch video](media/launch-video/README.md)
 
 Instances, presets and settings are stored as JSON in the app data directory (Windows: `%APPDATA%\dev.laux.launcher\`). The technical identifier stays `dev.laux.launcher` so existing data keeps being found.
 
