@@ -1,9 +1,11 @@
-//! Welten, Sicherungen und Serverliste einer Instanz, siehe `services::worlds` und `services::servers`.
+//! Welten, Sicherungen, Datenpakete und Serverliste einer Instanz, siehe `services::worlds`, `services::datapacks`
+//! und `services::servers`.
 //! Was Spieldateien ändert, geht nur, solange die Instanz nicht läuft (`AppState::operation`).
 use tauri::{AppHandle, State};
 
 use crate::content_commands::progress;
 use crate::error::AppResult;
+use crate::services::datapacks::{self, Datapack};
 use crate::services::servers::{self, Server};
 use crate::services::worlds::{self, World, WorldBackup};
 use crate::services::{blocking, install, launch, Dirs};
@@ -73,6 +75,41 @@ pub async fn world_quick_play_supported(state: State<'_, AppState>, instance_id:
     let mc = state.instances.get(&instance_id)?.minecraft_version;
     let version = install::installed_or_fetched_version(&state.http, &state.dirs, &mc).await?;
     Ok(launch::starts_into_worlds(&version))
+}
+
+#[tauri::command]
+pub async fn datapack_list(state: State<'_, AppState>, instance_id: String, world_id: String) -> AppResult<Vec<Datapack>> {
+    let dirs = dirs_of(&state, &instance_id)?;
+    blocking(move |_| datapacks::list(&dirs, &instance_id, &world_id)).await
+}
+
+/// Eigene Datenpaket-Zips (absolute Pfade) in eine Welt; passt eins nicht, kommt keins hinein.
+#[tauri::command]
+pub async fn datapack_add(state: State<'_, AppState>, instance_id: String, world_id: String, paths: Vec<String>) -> AppResult<()> {
+    let _operation = state.operation(Some(&instance_id))?;
+    let dirs = dirs_of(&state, &instance_id)?;
+    blocking(move |_| datapacks::add_files(&dirs, &instance_id, &world_id, &paths)).await
+}
+
+/// Datenpaket-Version von Modrinth in eine Welt; Fortschritt als `content-progress`.
+#[tauri::command]
+pub async fn datapack_install(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    instance_id: String,
+    world_id: String,
+    version_id: String,
+    operation_id: String,
+) -> AppResult<()> {
+    let _operation = state.operation(Some(&instance_id))?;
+    datapacks::install(&state, &instance_id, &world_id, &version_id, &progress(app, operation_id)).await
+}
+
+/// Legt ein Datenpaket in den Papierkorb. Synchron auf dem Hauptthread wie `screenshot_delete`: `trash` braucht COM im STA-Modus.
+#[tauri::command]
+pub fn datapack_remove(state: State<'_, AppState>, instance_id: String, world_id: String, pack_id: String) -> AppResult<()> {
+    let _operation = state.operation(Some(&instance_id))?;
+    datapacks::remove(&dirs_of(&state, &instance_id)?, &instance_id, &world_id, &pack_id)
 }
 
 #[tauri::command]

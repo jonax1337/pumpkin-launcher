@@ -160,7 +160,7 @@ pub async fn search(
     offset: u32,
     index: Option<String>,
 ) -> AppResult<SearchResponse> {
-    if !matches!(kind.as_str(), "mod" | "modpack" | "resourcepack" | "shader") || query.len() > 512 || offset > 100_000 {
+    if !matches!(kind.as_str(), "mod" | "modpack" | "resourcepack" | "shader" | "datapack") || query.len() > 512 || offset > 100_000 {
         return Err(invalid("Ungültige Suche"));
     }
     if !matches!(index.as_deref(), None | Some("relevance" | "downloads" | "follows" | "newest" | "updated")) {

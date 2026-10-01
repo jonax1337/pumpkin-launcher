@@ -9,7 +9,7 @@ use std::{
 };
 
 use base64::Engine;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use super::{
     content, download::RemoveOnDrop, free_name, modrinth::invalid, providers::zip_paths, servers, walk, Dirs, ZIP64_FROM,
@@ -201,7 +201,7 @@ pub fn delete_backup(dirs: &Dirs, instance_id: &str, backup_id: &str) -> AppResu
 /// Eine Welt aus ihrem Ordner. Ist `level.dat` unlesbar, heißt sie wie der Ordner und lässt sich trotzdem
 /// sichern und löschen.
 fn read_world(dir: &Path, id: &str) -> World {
-    let level = read_level(&dir.join("level.dat")).unwrap_or_else(|err| {
+    let level = read_level(&dir.join("level.dat")).map(|level: LevelDat| level.data).unwrap_or_else(|err| {
         tracing::warn!(world = %id, %err, "level.dat nicht lesbar");
         LevelData::default()
     });
@@ -218,11 +218,11 @@ fn read_world(dir: &Path, id: &str) -> World {
     }
 }
 
-/// `level.dat` ist gzip-komprimiertes NBT.
-fn read_level(path: &Path) -> AppResult<LevelData> {
+/// `level.dat` ist gzip-komprimiertes NBT; `T` nimmt daraus, was es braucht.
+pub(super) fn read_level<T: DeserializeOwned>(path: &Path) -> AppResult<T> {
     let mut nbt = Vec::new();
     flate2::read::GzDecoder::new(fs::File::open(path)?).read_to_end(&mut nbt)?;
-    Ok(fastnbt::from_bytes::<LevelDat>(&nbt)?.data)
+    Ok(fastnbt::from_bytes(&nbt)?)
 }
 
 fn icon(path: &Path) -> Option<String> {
@@ -247,7 +247,7 @@ fn dir_size(dir: &Path) -> u64 {
 }
 
 /// Einträge eines Ordners; fehlt er, keine.
-fn entries(dir: &Path) -> AppResult<Vec<fs::DirEntry>> {
+pub(super) fn entries(dir: &Path) -> AppResult<Vec<fs::DirEntry>> {
     match fs::read_dir(dir) {
         Ok(entries) => Ok(entries.collect::<io::Result<_>>()?),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
