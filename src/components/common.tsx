@@ -14,7 +14,7 @@ export const loaderLine = (i: Pick<Instance, "loader" | "minecraftVersion">) => 
 
 /** „37 Std. gespielt“; ohne Spielzeit leer. Reine Funktion, deshalb Modul-`t` ohne Hook. */
 export const playtimeLine = (i: Pick<Instance, "playtimeSecs">) =>
-  i.playtimeSecs > 0 ? t("components.playtime.played", { zeit: formatPlaytime(i.playtimeSecs) }) : "";
+  i.playtimeSecs > 0 ? t("components.playtime.played", { time: formatPlaytime(i.playtimeSecs) }) : "";
 
 /** Segmente des Reglers: 1 bis 16 GB. */
 const MEMORY_SEGMENTS = 16;
@@ -111,12 +111,12 @@ export function JavaChooser({ name, value, onChange, fallback, disabled }: { nam
         <TextField
           width="full"
           disabled={disabled || !own}
-          aria-label={t("components.java.pathTo", { datei: JAVA_PROGRAM.file })}
+          aria-label={t("components.java.pathTo", { file: JAVA_PROGRAM.file })}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={() => commit(draft)}
           onKeyDown={blurOnEnter}
-          placeholder={own ? t("components.java.examplePath", { pfad: JAVA_PROGRAM.example }) : t("components.java.pathTo", { datei: JAVA_PROGRAM.file })}
+          placeholder={own ? t("components.java.examplePath", { path: JAVA_PROGRAM.example }) : t("components.java.pathTo", { file: JAVA_PROGRAM.file })}
         />
         {api.capabilities.pickPaths && <Button disabled={disabled || !own} onClick={() => void browse().catch(toastError)}>{t("components.java.browse")}</Button>}
       </Actions>

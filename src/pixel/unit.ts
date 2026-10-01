@@ -16,28 +16,51 @@ export function onPxChange(cb: () => void) {
   return () => void listeners.delete(cb);
 }
 
-export function applyPx(size: PxSize) {
+/** CSS-px je Welt-Pixel bei 100 % für die Stufen klein/mittel/groß. */
+const PX_TARGETS: Record<PxSize, number> = { s: 2, m: 3, l: 4 };
+/** Icon-Einheit (--iu) in CSS-px bei 100 %. */
+const ICON_UNIT_CSS = 3;
+/** Rundungsspielraum, damit eine Zelle, die knapp in die Box passt, nicht herausfällt. */
+const FIT_TOLERANCE = 0.01;
+/** Feste Boxen (CSS-px) für Avatar (--avs) und großen Avatar (--av-32) sowie der Icon-Slot m (7×7 nur, wenn er hineinpasst). */
+const AVATAR_BOX = 28;
+const AVATAR_BOX_LARGE = 32;
+const ICON_SLOT_M_BOX = 24;
+const AVATAR_CELLS = 8;
+const GLYPH_CELLS = 10;
+/** Boxgrößen der Kit-Glyphen (--gl-<Box>); dieselbe Liste steht in ui/icon.css und ui/Icon.tsx. */
+export const GLYPH_BOXES = [40, 52, 64, 72, 104] as const;
+
+/** Kantenlänge einer Box, die ganze Zellen aus ganzen Icon-Einheiten fasst und noch in `box` passt. */
+const fitCells = (box: number, cells: number, iu: number) =>
+  `${Math.max(1, Math.floor((box + FIT_TOLERANCE) / (cells * iu))) * cells * iu}px`;
+
+/** Pixelstufe (CSS-px je Welt-Pixel) so, dass ein Welt-Pixel immer ganze Gerätepixel trifft. */
+function pixelUnitFor(size: PxSize) {
   const eff = window.devicePixelRatio || 1;
-  const target = { s: 2, m: 3, l: 4 }[size];
-  const dev = Math.max(1, Math.round(target * eff));
-  const css = dev / eff;
-  if (PX.css === css && PX.eff === eff && document.documentElement.style.getPropertyValue("--px")) return;
-  Object.assign(PX, { css, dev, eff });
-  const st = document.documentElement.style;
-  st.setProperty("--px", `${css}px`);
-  // Icons, Glyphen, Avatare hängen NICHT an der Pixelstufe (die gilt nur für Rahmen, Kerben, Szenen):
-  // eigene Einheit --iu = 3 CSS-px, auf ganze Gerätepixel gerundet. So bleiben sie in jeder Stufe gleich groß und scharf.
-  const iu = Math.max(1, Math.round(3 * eff)) / eff;
-  st.setProperty("--iu", `${iu}px`);
-  // Feste Box, Glyphe ein ganzzahliges Vielfaches der Icon-Einheit, das in die Box passt.
-  const fit = (box: number, cells: number) => `${Math.max(1, Math.floor((box + 0.01) / (cells * iu))) * cells * iu}px`;
-  st.setProperty("--avs", fit(28, 8));
-  // Kit (src/ui): Icon-Slot m (Box 24) zeichnet 7×7 nur, wenn 7 Einheiten hineinpassen, sonst 5×5.
-  document.documentElement.dataset.icoM = 7 * iu <= 24.01 ? "7" : "5";
-  // Kit-Glyphen 10×10 in fester Box: Kantenlänge = ganzzahlige Zellen (k Einheiten je Glyphen-Pixel)
-  for (const box of [40, 52, 64, 72, 104]) st.setProperty(`--gl-${box}`, fit(box, 10));
-  // Kit-Avatar: Box 32 (--av-32), Box 28 (--avs)
-  st.setProperty("--av-32", fit(32, 8));
+  const dev = Math.max(1, Math.round(PX_TARGETS[size] * eff));
+  return { css: dev / eff, dev, eff };
+}
+
+/** Icons, Glyphen, Avatare hängen NICHT an der Pixelstufe (die gilt nur für Rahmen, Kerben, Szenen):
+ * eigene Einheit --iu = 3 CSS-px, auf ganze Gerätepixel gerundet. So bleiben sie in jeder Stufe gleich groß und scharf. */
+function applyIconUnit(style: CSSStyleDeclaration, eff: number) {
+  const iu = Math.max(1, Math.round(ICON_UNIT_CSS * eff)) / eff;
+  style.setProperty("--iu", `${iu}px`);
+  style.setProperty("--avs", fitCells(AVATAR_BOX, AVATAR_CELLS, iu));
+  style.setProperty("--av-32", fitCells(AVATAR_BOX_LARGE, AVATAR_CELLS, iu));
+  for (const box of GLYPH_BOXES) style.setProperty(`--gl-${box}`, fitCells(box, GLYPH_CELLS, iu));
+  // Kit (src/ui): Icon-Slot m zeichnet 7×7 nur, wenn 7 Einheiten hineinpassen, sonst 5×5.
+  document.documentElement.dataset.icoM = 7 * iu <= ICON_SLOT_M_BOX + FIT_TOLERANCE ? "7" : "5";
+}
+
+export function applyPx(size: PxSize) {
+  const next = pixelUnitFor(size);
+  const style = document.documentElement.style;
+  if (PX.css === next.css && PX.eff === next.eff && style.getPropertyValue("--px")) return;
+  Object.assign(PX, next);
+  style.setProperty("--px", `${next.css}px`);
+  applyIconUnit(style, next.eff);
   listeners.forEach((cb) => cb());
 }
 

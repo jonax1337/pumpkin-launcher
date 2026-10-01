@@ -1,10 +1,14 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useSettings } from "@/store/settings";
-import { currentLanguage, setCurrentLanguage, t, tAround } from "./core";
+import { addWords, currentLanguage, setCurrentLanguage, t, tAround, type TKey } from "./core";
+import { mockWords } from "./mockWords";
 import { resolveChoice, type Language, type LanguageChoice } from "./types";
 
 export { currentLanguage, t };
-export type { Language, LanguageChoice };
+export type { Language, LanguageChoice, TKey };
+
+// Texte des Browser-Mocks nur im Dev-Server: im Release-Build ist die Bedingung konstant falsch und `mockWords` fliegt heraus.
+if (import.meta.env.DEV) addWords(mockWords);
 
 /** Sprache der Oberfläche: `t`, die gewählte und die aufgelöste Sprache; ein Wechsel greift sofort. */
 interface I18n {

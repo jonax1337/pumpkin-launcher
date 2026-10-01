@@ -56,7 +56,7 @@ function HeroInfo({ instance }: { instance: Instance }) {
           items={[
             loaderLine(instance),
             <><Count value={n} /> {n === 1 ? t("pages.home.contentCount.one") : t("pages.home.contentCount.other")}</>,
-            !playing && (instance.lastPlayedAt != null ? t("components.game.lastPlayed", { zeit: relativeTime(instance.lastPlayedAt) }) : t("format.neverPlayed")),
+            !playing && (instance.lastPlayedAt != null ? t("components.game.lastPlayed", { time: relativeTime(instance.lastPlayedAt) }) : t("format.neverPlayed")),
           ]}
         />
         {u > 0 && (
@@ -66,7 +66,7 @@ function HeroInfo({ instance }: { instance: Instance }) {
         )}
         {resume && (
           <Button size="s" icon="play" onScene onClick={() => void play(instance, undefined, resume)}>
-            {t("pages.home.resumeIn", { welt: quickPlayTarget(resume) })}
+            {t("pages.home.resumeIn", { world: quickPlayTarget(resume) })}
           </Button>
         )}
       </div>

@@ -74,7 +74,9 @@ export function drawSkin(ctx: CanvasRenderingContext2D, img: HTMLImageElement, v
   const { unit, rows } = textureScale(img);
   const texture = prepare(img, unit, rows);
   const inTexture = ([, y]: Point, h: number) => y + h <= rows;
-  const face = ([sx, sy]: Point, { w, h, at: [dx, dy] }: Part) => ctx.drawImage(texture, sx * unit, sy * unit, w * unit, h * unit, dx, dy, w, h);
+  const face = ([sx, sy]: Point, { w, h, at: [dx, dy] }: Part) => {
+    ctx.drawImage(texture, sx * unit, sy * unit, w * unit, h * unit, dx, dy, w, h);
+  };
   const mirroredFace = (source: Point, part: Part) => {
     ctx.save();
     ctx.translate(2 * part.at[0] + part.w, 0);

@@ -11,7 +11,7 @@ import { useInstances } from "@/hooks/useInstances";
 import { useCancelInstall } from "@/hooks/usePlay";
 import { cancelContent } from "@/hooks/useContent";
 import { useOnline } from "@/hooks/useOnline";
-import { useI18n } from "@/i18n";
+import { useI18n, type TKey } from "@/i18n";
 import { useRunningTasks } from "@/hooks/useRunningTasks";
 import { api } from "@/lib/api";
 import { progressLabel, progressShare } from "@/lib/progress";
@@ -32,7 +32,7 @@ import type { IconName } from "@/ui/types";
 const ViewContext = createContext<RefObject<HTMLElement | null>>({ current: null });
 export const useView = () => useContext(ViewContext);
 
-type Section = { to: string; key: string; icon: IconName; match: (pathname: string) => boolean; shortcut: string };
+type Section = { to: string; key: TKey; icon: IconName; match: (pathname: string) => boolean; shortcut: string };
 
 // Hauptbereiche; `key` ist der Wörterbuchschlüssel, die Beschriftung entsteht erst beim Rendern.
 const TABS: Section[] = [

@@ -73,7 +73,7 @@ function CurrentLook({ account }: { account: MicrosoftAccount }) {
       {cape && <CapeFigure src={cape.url} zoom={3} label={t("pages.skins.capeFigureLabel", { name: cape.alias })} />}
       <div className="skin-now-t">
         <SectionHeader title={account.username} size="sub" />
-        <Hint>{skin ? t("pages.skins.modelLine", { modell: t(`pages.skins.variant.${skin.variant}`) }) : t("pages.skins.defaultSkin")}</Hint>
+        <Hint>{skin ? t("pages.skins.modelLine", { model: t(`pages.skins.variant.${skin.variant}`) }) : t("pages.skins.defaultSkin")}</Hint>
         <CapeChoice accountId={account.id} capes={capes} />
         <Actions wrap>
           <Button icon="save" disabled={!skin || save.isPending} onClick={() => save.mutate({ accountId: account.id, name: account.username })}>

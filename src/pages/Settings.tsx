@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useSearchParams } from "react-router";
 import { getVersion } from "@tauri-apps/api/app";
 import { toast } from "sonner";
-import { useI18n } from "@/i18n";
+import { useI18n, type TKey } from "@/i18n";
 import { useView } from "@/app/Layout";
 import { UpdateRow } from "@/components/AppUpdate";
 import { JavaChooser, MemoryChooser, MemoryHelp } from "@/components/common";
@@ -28,12 +28,12 @@ const SECTION_KEYS = [
 ] as const;
 type SectionId = (typeof SECTION_KEYS)[number]["value"];
 
-const PX_SIZE_KEYS: { value: PxSize; key: string }[] = [
+const PX_SIZE_KEYS: { value: PxSize; key: TKey }[] = [
   { value: "s", key: "pages.settings.pxSizeSmall" },
   { value: "m", key: "pages.settings.pxSizeMedium" },
   { value: "l", key: "pages.settings.pxSizeLarge" },
 ];
-const LANGUAGE_KEYS: { value: LanguageChoice; key: string }[] = [
+const LANGUAGE_KEYS: { value: LanguageChoice; key: TKey }[] = [
   { value: "system", key: "pages.settings.langSystem" },
   { value: "de", key: "pages.settings.langGerman" },
   { value: "en", key: "pages.settings.langEnglish" },
@@ -140,7 +140,7 @@ export function SettingsPage() {
                 />
                 <Actions gap={12}>
                   <Buddy size={72} />
-                  <div><b>{season.name}</b><Hint>{s.pumpkin === 'auto' ? t("pages.settings.pumpkinAutoStatus", { zeit: season.id === 'standard' ? t("pages.settings.pumpkinBetweenSeasons") : season.period }) : t("pages.settings.pumpkinFixedStatus")}</Hint></div>
+                  <div><b>{season.name}</b><Hint>{s.pumpkin === 'auto' ? t("pages.settings.pumpkinAutoStatus", { time: season.id === 'standard' ? t("pages.settings.pumpkinBetweenSeasons") : season.period }) : t("pages.settings.pumpkinFixedStatus")}</Hint></div>
                 </Actions>
               </FormRow>
               <FormRow label={t("pages.settings.motionLabel")} hint={t("pages.settings.motionHint")}>

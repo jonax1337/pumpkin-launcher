@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router";
 import { save as saveFile } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { create } from "zustand";
-import { t, useI18n } from "@/i18n";
+import { t, useI18n, type TKey } from "@/i18n";
 import { Checkbox, ConfirmDialog, Dialog, DialogActions, Field, Hint, IconButton, Menu, Skel, type MenuEntry } from "@/ui";
 import { isBusy, usePhase } from "@/components/game";
 import { NameDialog } from "@/components/NameDialog";
@@ -155,7 +155,7 @@ function SaveTemplateDialog({ instance, onClose }: { instance: Instance; onClose
     <NameDialog
       title={t("components.instance.saveAsTemplate")}
       label={t("components.instance.templateName")}
-      help={t("components.instance.templateHelp", { inhalt: instance.mods.length })}
+      help={t("components.instance.templateHelp", { count: instance.mods.length })}
       initial={instance.name}
       maxLength={100}
       pending={save.isPending}
@@ -173,7 +173,7 @@ const packFileName = (name: string) => `${name.replace(/[<>:"/\\|?*]/g, "_").tri
 const EXPORT_DEFAULTS = ["config", "mods", "resourcepacks", "shaderpacks", "options.txt"];
 
 /** Lesbare Namen bekannter Einträge im Spielordner. */
-const ENTRY_LABELS: Record<string, string> = {
+const ENTRY_LABELS: Record<string, TKey> = {
   config: "components.export.entry.config",
   mods: KIND_LABEL_KEYS.mod,
   resourcepacks: KIND_LABEL_KEYS.resourcepack,

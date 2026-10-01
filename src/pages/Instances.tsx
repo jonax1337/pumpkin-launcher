@@ -98,7 +98,7 @@ function InstanceRow({ instance, index, looks }: { instance: Instance; index: nu
   return (
     <ListRow hit={{ to: instanceUrl(instance.id), label: t("pages.instances.openInstance", { name: instance.name }) }} menu={items} index={Math.min(index, 12)} style={{ "--acc": look.acc } as CSSProperties}>
       <SceneThumb bio={look.bio} seed={look.seed} />
-      <RowTitle title={instance.name} sub={t("pages.instances.createdOn", { datum: formatDate(instance.createdAt) })} />
+      <RowTitle title={instance.name} sub={t("pages.instances.createdOn", { date: formatDate(instance.createdAt) })} />
       <Cell title={loaderLine(instance)}>{loaderLine(instance)}</Cell>
       <Cell hide={WIDTH.md}><Count value={instance.mods.length} /></Cell>
       <Cell hide={WIDTH.md}>{relativeTime(instance.lastPlayedAt)}</Cell>

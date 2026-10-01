@@ -34,8 +34,10 @@ function TextureCanvas({ size, zoom, label, draw }: {
   return <canvas ref={ref} className="skin-fig" width={size.w} height={size.h} style={style} role="img" aria-label={label} />;
 }
 
+type SkinFigureProps = { src: string | undefined; variant: SkinVariant; zoom?: number; label: string };
+
 /** Spielerfigur von vorn: Grundschicht und zweite Schicht, schlanke Arme bei `slim`. */
-export function SkinFigure({ src, variant, zoom = 2, label }: { src: string | undefined; variant: SkinVariant; zoom?: number; label: string }) {
+export function SkinFigure({ src, variant, zoom = 2, label }: SkinFigureProps) {
   const img = useTexture(src);
   const draw = useCallback((ctx: CanvasRenderingContext2D) => void (img && drawSkin(ctx, img, variant)), [img, variant]);
   return <TextureCanvas size={FIGURE} zoom={zoom} label={label} draw={draw} />;

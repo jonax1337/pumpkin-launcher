@@ -32,7 +32,7 @@ export function ShareLogDialog() {
       onOpenChange={(o) => !o && close()}
       danger={false}
       title={t("components.share.title")}
-      text={t("components.share.text", { was: what })}
+      text={t("components.share.text", { what: what })}
       confirmLabel={t("components.share.upload")}
       pendingLabel={t("components.share.uploading")}
       pending={share.isPending}

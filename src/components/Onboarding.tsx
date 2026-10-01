@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { useI18n } from "@/i18n";
+import { useI18n, type TKey } from "@/i18n";
 import { PlayerNameField } from "@/components/PlayerNameField";
 import { startMsLogin } from "@/store/accountUi";
 import { importable, useForeignInstances } from "@/hooks/useImport";
@@ -25,7 +25,7 @@ const SODIUM = "AANobbMI";
 type Start = "vanilla" | "mods" | "modpack";
 
 // Beschriftungen als Schlüssel; übersetzt wird beim Rendern, damit ein Sprachwechsel sofort greift.
-const STARTS: { id: Start; glyph: GlyphName; pal: GlyphPalette; title: string; text: string; cta: string; next: string }[] = [
+const STARTS: { id: Start; glyph: GlyphName; pal: GlyphPalette; title: TKey; text: TKey; cta: TKey; next: TKey }[] = [
   { id: "vanilla", glyph: "cube", pal: "steel", title: "components.onboarding.start.vanilla.title", text: "components.onboarding.start.vanilla.text", cta: "components.onboarding.ctaCreatePlay", next: "components.onboarding.start.vanilla.next" },
   { id: "mods", glyph: "bolt", pal: "gold", title: "components.onboarding.start.mods.title", text: "components.onboarding.start.mods.text", cta: "components.onboarding.ctaCreatePlay", next: "components.onboarding.start.mods.next" },
   { id: "modpack", glyph: "chest", pal: "violet", title: "components.onboarding.start.modpack.title", text: "components.onboarding.start.modpack.text", cta: "components.onboarding.start.modpack.cta", next: "components.onboarding.start.modpack.next" },

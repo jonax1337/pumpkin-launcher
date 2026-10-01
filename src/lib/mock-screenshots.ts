@@ -60,7 +60,7 @@ export function createScreenshotMock() {
       await wait();
       const shots = shotsOf(instanceId);
       const index = shots.findIndex((s) => s.fileName === fileName);
-      if (index < 0) throw new Error(t("mock.screenshot.notFound", { datei: fileName }));
+      if (index < 0) throw new Error(t("mock.screenshot.notFound", { file: fileName }));
       shots.splice(index, 1);
     },
   } satisfies Partial<Backend>;

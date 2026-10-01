@@ -5,7 +5,7 @@ export const pages: typeof dePages = {
   // Startseite
   "pages.home.contentCount.one": "content item",
   "pages.home.contentCount.other": "content items",
-  "pages.home.resumeIn": "Resume in “{welt}”",
+  "pages.home.resumeIn": "Resume in “{world}”",
   "pages.home.miniCardTip": "Click shows it at the top; double-click or Enter opens it.",
   "pages.home.railHint": "Selecting shows the instance at the top. Enter or double-click opens it.",
   "pages.home.scrollBack": "Scroll back",
@@ -19,7 +19,7 @@ export const pages: typeof dePages = {
 
   // Bibliothek
   "pages.instances.openInstance": "Open {name}",
-  "pages.instances.createdOn": "created {datum}",
+  "pages.instances.createdOn": "created {date}",
   "pages.instances.colContents": "Contents",
   "pages.instances.colLastPlayed": "Last played",
   "pages.instances.colPlaytime": "Playtime",
@@ -54,7 +54,7 @@ export const pages: typeof dePages = {
   "pages.skins.loadErrorTitle": "Your skin couldn’t be loaded",
   "pages.skins.currentSkinLabel": "Current skin of {name}",
   "pages.skins.capeFigureLabel": "Cape {name}",
-  "pages.skins.modelLine": "Model {modell}",
+  "pages.skins.modelLine": "Model {model}",
   "pages.skins.variant.classic": "Classic",
   "pages.skins.variant.slim": "Slim",
   "pages.skins.defaultSkin": "Minecraft’s default skin",
@@ -104,7 +104,7 @@ export const pages: typeof dePages = {
   "pages.settings.languageHint": "Applies immediately, without a restart",
   "pages.settings.pumpkinLabel": "Your Pumpkin",
   "pages.settings.pumpkinHint": "Pick a fixed variant for Buddy, colors and the app icon, or let it change with the seasons.",
-  "pages.settings.pumpkinAutoStatus": "Automatic · {zeit}",
+  "pages.settings.pumpkinAutoStatus": "Automatic · {time}",
   "pages.settings.pumpkinBetweenSeasons": "Between seasons",
   "pages.settings.pumpkinFixedStatus": "Fixed choice · stays until your next selection",
   "pages.settings.motionLabel": "Animated scenes & Buddy",

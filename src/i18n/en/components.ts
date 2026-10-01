@@ -131,7 +131,7 @@ export const components: typeof deComponents = {
   "components.game.ariaInstalling": "Installing: {name}, {percent}%",
   "components.game.ariaStarting": "Starting: {name}",
   "components.game.ariaRunning": "Quit: {name}, running",
-  "components.game.sinceAria": " for {zeit}",
+  "components.game.sinceAria": " for {time}",
   "components.game.ariaCrashed": "Restart: {name}, crashed",
   "components.game.ariaPlay": "Play: {name}",
   "components.game.needNameFirst": "Add a player name first",
@@ -147,7 +147,7 @@ export const components: typeof deComponents = {
   "components.game.viewLog": "View log",
   "components.game.openCrashReport": "Open crash report",
   "components.game.shareLog": "Share log",
-  "components.game.lastPlayed": "Last played {zeit}",
+  "components.game.lastPlayed": "Last played {time}",
   "components.game.notInstalled": "Not installed",
   "components.game.stopTitle": "Quit Minecraft?",
   "components.game.stopText": "Unsaved progress will be lost. Better quit from within the game itself.",
@@ -187,7 +187,7 @@ export const components: typeof deComponents = {
   "components.playerName.placeholder": "e.g. Steve_42",
 
   // ---------- Arbeitsspeicher und Java ----------
-  "components.playtime.played": "{zeit} played",
+  "components.playtime.played": "{time} played",
   "components.memory.tooHigh": "That’s more than three quarters of your RAM ({ram}). The system and other programs may stutter.",
   "components.memory.hasTotal": "This computer has {ram}.",
   "components.memory.general": "More than 8 GB rarely helps.",
@@ -197,8 +197,8 @@ export const components: typeof deComponents = {
   "components.memory.maxGb": "max. {n} GB",
   "components.memory.autoFromSettings": "Default from settings",
   "components.java.own": "Custom Java installation",
-  "components.java.pathTo": "Path to {datei}",
-  "components.java.examplePath": "e.g. {pfad}",
+  "components.java.pathTo": "Path to {file}",
+  "components.java.examplePath": "e.g. {path}",
   "components.java.browse": "Browse",
 
   // ---------- Neue Instanz (Dialog) ----------
@@ -265,7 +265,7 @@ export const components: typeof deComponents = {
     "Save an instance from its menu with “Save as template”, then use it here as a starting point.",
   "components.template.entryCount.one": "{n} entry",
   "components.template.entryCount.other": "{n} entries",
-  "components.template.savedAt": "saved {datum}",
+  "components.template.savedAt": "saved {date}",
   "components.template.delete": "Delete template",
   "components.template.deleteNamed": "Delete template {name}",
   "components.template.deleteQuotedTitle": "Delete template “{name}”?",
@@ -291,7 +291,7 @@ export const components: typeof deComponents = {
   "components.instance.moreActions": "More actions",
   "components.instance.nameField": "Instance name",
   "components.instance.templateName": "Template name",
-  "components.instance.templateHelp": "Saves the version, the loader, {inhalt} entries and the settings. Worlds are not included.",
+  "components.instance.templateHelp": "Saves the version, the loader, {count} entries and the settings. Worlds are not included.",
   "components.instance.groupName": "Group name",
   "components.instance.groupHelp": "“{name}” goes into this group. A group without instances disappears on its own.",
   "components.instance.export": "Export",
@@ -381,20 +381,20 @@ export const components: typeof deComponents = {
   // ---------- Schon-in-Anzeige ----------
   "components.installedIn.one": "In {name}",
   "components.installedIn.other": "In {n} instances",
-  "components.installedIn.tip": "Already in {namen}",
+  "components.installedIn.tip": "Already in {names}",
 
   // ---------- Inhalte hinzufügen ----------
-  "components.content.destinationWorld": "“{welt}” ({instanz})",
+  "components.content.destinationWorld": "“{world}” ({instance})",
   "components.content.loadFailed": "Couldn’t load {name}",
   "components.content.installTask": "Installing {name}",
   "components.content.deps.one": ", plus {n} required mod",
   "components.content.deps.other": ", plus {n} required mods",
   "components.content.added": "Added {name}",
-  "components.content.nowIn": "{name} is now in {ziel}",
+  "components.content.nowIn": "{name} is now in {target}",
   "components.content.viewAction": "View",
   "components.content.installed": "Installed",
   "components.content.noVersionFor": "No version for {version}",
-  "components.content.notAvailableFor": "{name} isn’t available for {passt}",
+  "components.content.notAvailableFor": "{name} isn’t available for {fits}",
   "components.content.notForMc": "{name} isn’t available for Minecraft {version}",
   "components.content.noVersionForLower": "no version for {version}",
   "components.content.noWorldsLower": "no worlds",
@@ -403,8 +403,8 @@ export const components: typeof deComponents = {
   "components.content.addAria": "Add {name}",
   "components.content.addThisVersion": "Add {name} in this version",
   "components.content.addVersion": "Add this version",
-  "components.content.addTo": "Add to {ziel}",
-  "components.content.addToOne": "Add {name} to {ziel}",
+  "components.content.addTo": "Add to {target}",
+  "components.content.addToOne": "Add {name} to {target}",
   "components.content.addToMenu": "Add to …",
   "components.content.noInstancesYet": "No instances yet.",
   "components.content.checkingVersions": "Checking compatible versions…",
@@ -414,7 +414,7 @@ export const components: typeof deComponents = {
 
   // ---------- Modpack-Installation ----------
   "components.pack.searchPlaceholder": "Search modpacks",
-  "components.pack.noneFound": "No modpack found for “{suche}”.",
+  "components.pack.noneFound": "No modpack found for “{query}”.",
   "components.pack.cannotInstall": "{name} can’t be installed",
   "components.pack.installTask": "Installing modpack “{name}”",
   "components.pack.readyToast": "{name} is ready. “Play” downloads the rest on first start.",
@@ -436,11 +436,11 @@ export const components: typeof deComponents = {
   "components.search.searching": "Searching…",
   "components.search.nothingFound": "Nothing found",
   "components.search.resetFilters": "Reset filters",
-  "components.search.nothingFits": "Nothing here fits {passt}. Turn the filter off to see everything.",
-  "components.search.noneMatch": "No {art} match your search and filters.",
+  "components.search.nothingFits": "Nothing here fits {fits}. Turn the filter off to see everything.",
+  "components.search.noneMatch": "No {kind} match your search and filters.",
   "components.search.viewProject": "View {name}",
-  "components.search.byAuthor": "by {autor}",
-  "components.search.byAuthorWithDesc": "by {autor} · {beschreibung}",
+  "components.search.byAuthor": "by {author}",
+  "components.search.byAuthorWithDesc": "by {author} · {description}",
   "components.search.loadMore": "Load more",
   "components.search.loadingMore": "Loading…",
   "components.search.oneResult": "1 result",
@@ -466,7 +466,7 @@ export const components: typeof deComponents = {
   "components.detail.fits": "Fits",
   "components.detail.noVersion": "No version",
   "components.detail.yourInstances": "Your instances",
-  "components.detail.versionsFor": "Versions for {passt}",
+  "components.detail.versionsFor": "Versions for {fits}",
   "components.detail.versions": "Versions",
   "components.detail.noVersionAvailable": "No version available.",
   "components.detail.versionAsInstance": "Create {version} as an instance",
@@ -477,13 +477,13 @@ export const components: typeof deComponents = {
 
   // ---------- Seitenpanel (Inhalte) ----------
   "components.sheet.shaderNeedsIris": "Shaders need the “Iris” mod. Add it under “Mods”.",
-  "components.sheet.datapacksForWorld": "Datapacks for “{welt}”",
+  "components.sheet.datapacksForWorld": "Datapacks for “{world}”",
   "components.sheet.contentForInstance": "Content for {name}",
-  "components.sheet.autoVersion": "Pumpkin Launcher picks the right version for {passt} automatically.",
+  "components.sheet.autoVersion": "Pumpkin Launcher picks the right version for {fits} automatically.",
   "components.sheet.kindLabel": "Type",
   "components.sheet.sourceLabel": "Source",
   "components.sheet.searchPlaceholder": "Search the catalog",
-  "components.sheet.onlyFitting": "Only what fits {passt}",
+  "components.sheet.onlyFitting": "Only what fits {fits}",
 
   // ---------- Anforderungs-Seiten (Client/Server) ----------
   "components.side.serverOnly": "Server only",
@@ -497,7 +497,7 @@ export const components: typeof deComponents = {
   "components.stats.downloads": "downloads",
 
   // ---------- Quellen ----------
-  "components.source.unreachable": "{quelle} is currently unavailable",
+  "components.source.unreachable": "{source} is currently unavailable",
 
   // ---------- Support ----------
   "components.support.copyDebugInfo": "Copy debug info",
@@ -514,7 +514,7 @@ export const components: typeof deComponents = {
   "components.share.whatLatestLog": "the log of the last start",
   "components.share.title": "Share log publicly?",
   "components.share.text":
-    "Pumpkin Launcher uploads {was} to mclo.gs. Anyone with the link can read it. Credentials, the username in file paths and email addresses are removed beforehand. Your player name stays visible.",
+    "Pumpkin Launcher uploads {what} to mclo.gs. Anyone with the link can read it. Credentials, the username in file paths and email addresses are removed beforehand. Your player name stays visible.",
   "components.share.upload": "Upload",
   "components.share.uploading": "Uploading",
 
