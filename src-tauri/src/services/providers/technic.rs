@@ -364,7 +364,7 @@ mod tests {
 
     #[test]
     fn loader_comes_from_the_profile_libraries() {
-        let got = |p| loader_from(&p).map(|(mc, l, v)| (mc, l, v));
+        let got = |p: serde_json::Value| loader_from(&p);
         assert_eq!(
             got(profile("1.20.4", Some("1.20.4"), &["net.fabricmc:sponge-mixin:0.12.5", "net.fabricmc:fabric-loader:0.15.3"])).unwrap(),
             ("1.20.4".to_string(), ModLoader::Fabric, Some("0.15.3".to_string()))
