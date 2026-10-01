@@ -37,9 +37,10 @@ tauri-plugin-dialog = "2"
 tokio-util = "0.7.19"
 base64 = "0.22"
 keyring = { version = "3", features = ["windows-native"] }
+regex = "1.13.1"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_System_SystemInformation"] }
+windows-sys = { version = "0.61", features = ["Wdk_System_SystemServices", "Win32_Storage_FileSystem", "Win32_System_SystemInformation"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
