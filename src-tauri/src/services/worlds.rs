@@ -8,11 +8,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use base64::Engine;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use super::{
-    blocking, content, download::RemoveOnDrop, free_name, modrinth::invalid, providers::zip_paths, servers, walk, Dirs,
+    blocking, content, data_url, download::RemoveOnDrop, free_name, modrinth::invalid, providers::zip_paths, servers, walk, Dirs,
     ZIP64_FROM,
 };
 use crate::{
@@ -271,7 +270,7 @@ fn icon(path: &Path) -> Option<String> {
         return None;
     }
     let png = fs::read(path).ok()?;
-    Some(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)))
+    Some(data_url("image/png", &png))
 }
 
 /// Belegter Platz eines Ordners, nur zur Anzeige: Unlesbares zählt nicht, Verknüpfungen werden nicht verfolgt.

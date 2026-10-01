@@ -39,6 +39,12 @@ pub mod system;
 pub mod templates;
 pub mod worlds;
 
+/// Bytes als `data:`-URL, damit die Oberfläche Bilder ohne eigene Datei-Freigabe anzeigen kann.
+pub(crate) fn data_url(mime: &str, bytes: &[u8]) -> String {
+    use base64::Engine;
+    format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes))
+}
+
 /// Ordner im Spielverzeichnis, die Minecraft und Loader von selbst neu anlegen (Fabric: `.fabric`
 /// mit umgemappten JARs); Kopien und Exporte lassen sie weg.
 pub(crate) const REGENERATED: [&str; 3] = ["logs", "crash-reports", ".fabric"];

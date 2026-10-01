@@ -3,12 +3,11 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use base64::Engine;
 use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::{auth::{self, MC_PROFILE}, modrinth::{self, invalid}, Dirs};
+use super::{auth::{self, MC_PROFILE}, data_url, modrinth::{self, invalid}, Dirs};
 use crate::error::AppResult;
 use crate::models::{now_ms, LibrarySkin, SkinVariant};
 use crate::services::download::sha1_hex;
@@ -247,7 +246,7 @@ fn remove_file(path: &Path) {
 pub fn texture(state: &AppState, id: &str) -> AppResult<String> {
     let skin = state.skins.get(id)?;
     let png = fs::read(file(&state.dirs, &skin.id))?;
-    Ok(format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(png)))
+    Ok(data_url("image/png", &png))
 }
 
 #[cfg(test)]
