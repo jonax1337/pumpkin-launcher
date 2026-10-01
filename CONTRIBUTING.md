@@ -20,6 +20,7 @@ Please make sure the following pass locally:
 ```bash
 pnpm build                # frontend (type-check + vite build)
 pnpm check:branding       # seasonal calendar & branding assets
+pnpm check:lib            # frontend helpers (Modrinth, formatting, errors, routes)
 cd src-tauri
 cargo check
 cargo test

@@ -21,7 +21,7 @@ Idee: Die Szene ist die einzige laute Stelle. Alles andere ist flach, ruhig und 
 | `--focus` | `#F6E7C8` | Fokusring |
 | `--tip-bg` / `--tip-a` / `--tip-b` | `#0C0A18` / `#54409A` / `#2A2156` | Item-Tooltip |
 
-Instanz-Akzente (`BIOMES[…].acc` in `pixel/scene.ts`): Wald `#EB85D6` (Abendorchidee), Nether `#FF7447`, End `#DCD394`, Schnee `#F4B4A8`, Höhle `#C8ABEE` (Amethyst), Küste `#4FD8E6`, Ebene `#98B0FF`.
+Instanz-Akzente (`BIOMES[…].acc` in `pixel/sceneConfig.ts`): Wald `#EB85D6` (Abendorchidee), Nether `#FF7447`, End `#DCD394`, Schnee `#F4B4A8`, Höhle `#C8ABEE` (Amethyst), Küste `#4FD8E6`, Ebene `#98B0FF`.
 Abgeleitet: `--acc-hi` (Licht, Mischung mit Weiß), `--acc-mid` (Schatten, 76 %) und `--acc-lo` (Sockel, 50 %) mischen **in OKLab mit `--bg`** (`#070A11`), nie mit Braun: der Farbton bleibt, kühle Biome bekommen keine orangen Ränder. Die Ableitung steht auf `:root` **und** auf jedem Element mit `style="--acc: …"` (sonst erben alle die Kupfer-Werte von `:root`).
 
 **Farbsemantik (Regel).** Akzent heißt „diese Instanz, hier handeln“, Status heißt „etwas ist so“. Deshalb:
@@ -131,13 +131,13 @@ Das vorherige Design („Deepslate & Emerald“, shadcn/ui, Seitenleiste) ist vo
 | Bausteine des Kits (Knöpfe, Chips, Felder, Listen, Überlagerungen …) | `src/ui/*` (je Gruppe eine TSX + eine CSS, vx-*), gesammelt über `src/ui/ui.css` |
 | Bewegung (Ein-/Ausblenden, Fortschritt-Suche, Einblenden-Staffel, Seitenwechsel) | `src/ui/motion.css` |
 | Prosa (Modrinth-Markdown, Unterstrich erlaubt) | `src/ui/prose.css` (`.desc`, `.desc.md`) |
-| Spielen (Knopf, Balken, Statuszeile, Protokoll) | `src/components/play.css` + `src/components/game.tsx` |
+| Spielen (Knopf, Balken, Statuszeile, Protokoll) | `src/components/play.css` + `src/components/play/`, `src/components/log/` |
 | Pixeleinheit | `src/pixel/unit.ts` (`usePixelUnit`, DPR-Regel aus Abschnitt 1; setzt `--px`, `--avs`, `--av-32`, `--gl-*`, `data-ico-m`) |
-| Szenen-Engine | `src/pixel/scene.ts` (reines TS, `buildScene` aller 7 Biome, 12-fps-Takt, Pausenregeln, Bayer-Wechsel, Cache), `src/pixel/PixelScene.tsx` |
+| Szenen-Engine | `src/pixel/scene.ts` (12-fps-Takt, Pausenregeln, Bayer-Wechsel, Cache), `src/pixel/sceneBuilder.ts` (reines TS, `buildScene` aller 7 Biome), `src/pixel/sceneConfig.ts` (Biome, Modi), `src/pixel/PixelScene.tsx` |
 | Glyphen, Wortzeichen, Spielerkopf | `src/pixel/icons.tsx` (UI-Icons: `src/pixel/icon-data.ts`, gerendert über `Icon` aus `@/ui`) |
-| Fensterleiste, Seitenleiste | `src/app/Layout.tsx` (rahmenlos; Leiste: Kontomenü/Fensterknöpfe, Seitenleiste: `BarButton side` für Bereiche, Aufgaben-Popover, Einstellungen, aus dem Kit) |
-| Spielen | `src/components/game.tsx` (`PlayButton`, `PlayBar`, `PlayStatus`, `StatusChip`, `LogConsole`) |
-| Seiten | `pages/Home.tsx`, `Instances.tsx`, `InstanceDetail.tsx` + `pages/detail/`, `Discover.tsx`, `Settings.tsx`; `components/ContentBrowser.tsx`, `NewInstanceDialog.tsx`, `PlayerNames.tsx`, `Onboarding.tsx`, `instance.tsx` |
+| Fensterleiste, Seitenleiste | `src/app/Layout.tsx` (rahmenlos), `TitleBar.tsx` (Leiste: Kontomenü/Fensterknöpfe), `Sidebar.tsx` (`BarButton side` für Bereiche, Aufgaben-Popover `TasksButton.tsx`, Einstellungen, aus dem Kit) |
+| Spielen | `src/components/play/` (`PlayButton`, `PlayBar`, `PlayStatus`, `StatusChip`), `src/components/log/` (`LogConsole`) |
+| Seiten | `pages/Home.tsx`, `Instances.tsx`, `InstanceDetail.tsx` + `pages/detail/`, `Discover.tsx`, `Settings.tsx`; `components/ContentBrowser.tsx`, `components/catalog/`, `NewInstanceDialog.tsx`, `components/accounts/`, `Onboarding.tsx`, `instance.tsx` |
 | Laufzeit | `store/look.ts` (Biom je Instanz), `store/tasks.ts` (Aufgaben-Verlauf), `store/game.ts` (Startzeit für „Läuft seit“) |
 
 **Bewusst nicht umgesetzt** (kein Backend dafür): Welten-Tab, Launcher-Selbstupdate und dessen Hinweis, „Version ändern“, eigenes Bild, Galerie im Katalog, Export/Duplizieren im Instanz-Menü. Das Biom je Instanz liegt lokal statt im Datenmodell.

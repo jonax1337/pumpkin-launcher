@@ -54,7 +54,7 @@
 
 Pumpkin Launcher is in beta (v0.1.x). Install, launch, content, worlds, skins, import, duplicate/export and auto-update are in place and tested on Windows. Linux (AppImage, `.deb`) and macOS (universal `.dmg`) are built by the release workflow and their backend is tested in CI on every change, but they have not been tried on real machines yet, so expect rough edges there.
 
-> **Microsoft login:** sign-in, Xbox Live and XSTS work end-to-end, but Microsoft must approve each launcher's Azure app before `minecraftservices.com` accepts it. Pumpkin Launcher's own client ID is registered and approval is requested; until it comes through, the final Minecraft step returns 403 and the launcher says so. Forks register their own Azure app and change `DEFAULT_CLIENT_ID` in `src-tauri/src/services/auth.rs`; how to register and approve a client ID is documented in [`docs/ACCOUNT-SETUP.md`](docs/ACCOUNT-SETUP.md).
+> **Microsoft login:** sign-in, Xbox Live and XSTS work end-to-end, but Microsoft must approve each launcher's Azure app before `minecraftservices.com` accepts it. Pumpkin Launcher's own client ID is registered and approval is requested; until it comes through, the final Minecraft step returns 403 and the launcher says so. Forks register their own Azure app and change `DEFAULT_CLIENT_ID` in `src-tauri/src/services/auth/mod.rs`; how to register and approve a client ID is documented in [`docs/ACCOUNT-SETUP.md`](docs/ACCOUNT-SETUP.md).
 
 ## Getting started
 
@@ -82,6 +82,7 @@ Pumpkin Launcher is in beta (v0.1.x). Install, launch, content, worlds, skins, i
 ```bash
 pnpm install
 pnpm tauri dev     # desktop app with hot reload
+pnpm tauri:remote  # same, but without scene animation (for remote-desktop sessions)
 pnpm dev           # frontend only in the browser (http://localhost:1420, mock data)
 ```
 
@@ -95,6 +96,7 @@ cd src-tauri && cargo check       # backend
 cd src-tauri && cargo test        # backend tests
 pnpm tauri build                  # installers for your OS (needs the updater signing key, see docs/RELEASING.md)
 pnpm check:branding               # seasonal calendar & branding assets
+pnpm check:lib                    # frontend helpers (Modrinth, formatting, errors, routes)
 ```
 
 ## Project layout

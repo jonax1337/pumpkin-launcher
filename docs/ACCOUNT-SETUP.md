@@ -29,7 +29,7 @@ Quellen: [Minecraft Wiki – Microsoft authentication](https://minecraft.wiki/w/
 
 ## 3. Client-ID im Quelltext eintragen (Forks)
 
-Die Client-ID der Azure-App „Pumpkin Launcher“ (`5e27ee41-3be2-4c3a-a156-a3c61dbef8dc`, registriert am 30.09.2026, nur persönliche Konten, öffentliche Clientflows an) ist als `DEFAULT_CLIENT_ID` in `src-tauri/src/services/auth.rs` eingebaut; in den Einstellungen gibt es dafür kein Feld. Ein Fork registriert eine eigene Azure-App (Schritte 1 und 2) und ersetzt diese Konstante, danach neu bauen. Schon angemeldete Konten behalten die Client-ID, mit der sie angemeldet wurden (`clientId` in `accounts.json`), denn nur mit ihr lässt sich das Refresh-Token erneuern.
+Die Client-ID der Azure-App „Pumpkin Launcher“ (`5e27ee41-3be2-4c3a-a156-a3c61dbef8dc`, registriert am 30.09.2026, nur persönliche Konten, öffentliche Clientflows an) ist als `DEFAULT_CLIENT_ID` in `src-tauri/src/services/auth/mod.rs` eingebaut; in den Einstellungen gibt es dafür kein Feld. Ein Fork registriert eine eigene Azure-App (Schritte 1 und 2) und ersetzt diese Konstante, danach neu bauen. Schon angemeldete Konten behalten die Client-ID, mit der sie angemeldet wurden (`clientId` in `accounts.json`), denn nur mit ihr lässt sich das Refresh-Token erneuern.
 
 Die Client-ID ist kein Geheimnis; das Refresh-Token dagegen schon – es liegt nur im Schlüsselbund des Systems (Windows-Anmeldeinformationsverwaltung, macOS-Schlüsselbund bzw. Secret Service unter Linux; Dienst `dev.laux.launcher`, Benutzer = Minecraft-UUID), nie in `accounts.json`.
 
