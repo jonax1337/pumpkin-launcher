@@ -1,6 +1,7 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
+import { t, useI18n } from "@/i18n";
 import { Button, Chip, ConfirmDialog, Count, Empty, Icon, IconButton, SearchField, Segmented, Spacer, StatusPanel, Tip, Toolbar, type IconName } from "@/ui";
 import { askShareLog, DebugInfoButton, shareKindAfter } from "@/components/support";
 import { askStop, useCancelInstall, useInstanceStatus, useKill, usePlay, useStopAsk } from "@/hooks/useInstances";
@@ -50,18 +51,18 @@ function useNow(on: boolean) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!on) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, [on]);
   return now;
 }
 
-/** Laufzeit zum Vorlesen, minutengenau (das Label ändert sich nicht jede Sekunde). */
+/** Laufzeit zum Vorlesen, minutengenau (das Label ändert sich nicht jede Sekunde). Reine Funktion, deshalb Modul-`t`. */
 function spokenSince(ms: number) {
   const m = Math.floor(ms / 60_000), h = Math.floor(m / 60);
-  if (m < 1) return "weniger als einer Minute";
-  if (h < 1) return m === 1 ? "einer Minute" : `${m} Minuten`;
-  return `${h === 1 ? "einer Stunde" : `${h} Stunden`}${m % 60 ? ` ${m % 60} Minuten` : ""}`;
+  if (m < 1) return t("components.game.sinceUnderMinute");
+  if (h < 1) return t(m === 1 ? "components.game.sinceMinutes.one" : "components.game.sinceMinutes.other", { n: m });
+  return `${t(h === 1 ? "components.game.sinceHours.one" : "components.game.sinceHours.other", { n: h })}${m % 60 ? ` ${t("components.game.sinceMinutes.other", { n: m % 60 })}` : ""}`;
 }
 
 type PlayState = { st: "idle" | "prep" | "start" | "run" | "error" | "blocked"; icon: IconName; l1: string; s1: string; l2: ReactNode; p: number | null; pct?: string; dis?: boolean; aria: string };
@@ -71,20 +72,21 @@ type PlayState = { st: "idle" | "prep" | "start" | "run" | "error" | "blocked"; 
  * (`--prog-on: var(--ink)` auf der Akzentfläche, siehe components/play.css). `p` 0–1, ohne `p` unbestimmt.
  * `label` ist der zugängliche Name; `decorative` blendet ihn aus, wenn derselbe Fortschritt schon anders angesagt wird.
  */
-function PlayBar({ p, thin, bad, className, style, label = "Fortschritt", decorative }: { p?: number | null; thin?: boolean; bad?: boolean; className?: string; style?: CSSProperties; label?: string; decorative?: boolean }) {
-  const ind = p == null;
+const ind = (p: number | null | undefined) => p == null;
+
+function PlayBar({ p, thin, bad, className, style, label, decorative }: { p?: number | null; thin?: boolean; bad?: boolean; className?: string; style?: CSSProperties; label?: string; decorative?: boolean }) {
   const look = {
-    className: cn("prog", thin && "thin", ind && "ind", bad && "bad", className),
-    style: { ...style, ["--p" as string]: ind ? 0 : Math.max(0, Math.min(1, p)) },
+    className: cn("prog", thin && "thin", ind(p), bad && "bad", className),
+    style: { ...style, ["--p" as string]: ind(p) ? 0 : Math.max(0, Math.min(1, p!)) },
   };
   if (decorative) return <span aria-hidden {...look} />;
   return (
     <span
       role="progressbar"
-      aria-label={label}
+      aria-label={label ?? t("components.game.progress")}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-valuenow={ind ? undefined : Math.round(Math.max(0, Math.min(1, p!)) * 100)}
+      aria-valuenow={ind(p) ? undefined : Math.round(Math.max(0, Math.min(1, p!)) * 100)}
       {...look}
     />
   );
@@ -99,25 +101,29 @@ function playState(instance: Instance, phase: Phase, percent: number | null, cod
   switch (phase) {
     case "preparing":
       // Kein Knopf, sondern Vorgang: Abbrechen steht in der Statuszeile.
-      return { st: "prep", icon: "dl", l1: "Wird installiert", s1: "Installiert", l2: "", p: (percent ?? 0) / 100, pct: `${percent ?? 0}%`, dis: true, aria: `Wird installiert: ${name}, ${percent ?? 0} %` };
+      return { st: "prep", icon: "dl", l1: t("components.game.installing"), s1: t("components.game.installedShort"), l2: "", p: (percent ?? 0) / 100, pct: `${percent ?? 0}%`, dis: true, aria: t("components.game.ariaInstalling", { name, percent: percent ?? 0 }) };
     case "starting":
-      return { st: "start", icon: "hour", l1: "Startet", s1: "Startet", l2: "", p: null, dis: true, aria: `Startet: ${name}` };
+      return { st: "start", icon: "hour", l1: t("components.game.starting"), s1: t("components.game.starting"), l2: "", p: null, dis: true, aria: t("components.game.ariaStarting", { name }) };
     case "running":
       // Groß die Aktion (Klick fragt nach), klein seit wann es läuft.
       return {
-        st: "run", icon: "stop", l1: "Beenden", s1: "Beenden",
-        l2: runMs != null ? <>Läuft seit <span className="num">{formatClock(runMs)}</span></> : "Läuft",
-        p: 0, aria: `Beenden: ${name}, läuft${runMs != null ? ` seit ${spokenSince(runMs)}` : ""}`,
+        st: "run", icon: "stop", l1: t("components.game.quit"), s1: t("components.game.quit"),
+        l2: runMs != null ? <>{t("components.game.runningSince")} <span className="num">{formatClock(runMs)}</span></> : t("components.game.running"),
+        p: 0, aria: t("components.game.ariaRunning", { name }) + (runMs != null ? t("components.game.sinceAria", { zeit: spokenSince(runMs) }) : ""),
       };
     case "crashed":
-      return { st: "error", icon: "redo", l1: "Erneut starten", s1: "Nochmal", l2: `Abgestürzt${code != null ? ` (Code ${code})` : ""}`, p: 0, aria: `Erneut starten: ${name}, abgestürzt` };
+      return { st: "error", icon: "redo", l1: t("components.game.restart"), s1: t("components.game.onceMore"), l2: t("components.game.crashed") + (code != null ? t("components.game.exitCode", { code }) : ""), p: 0, aria: t("components.game.ariaCrashed", { name }) };
     case "loading":
-      return { st: "idle", icon: "play", l1: "Spielen", s1: "Spielen", l2: "Einen Moment", p: 0, dis: true, aria: `Spielen: ${name}` };
+      return { st: "idle", icon: "play", l1: t("common.play"), s1: t("common.play"), l2: t("components.game.oneMoment"), p: 0, dis: true, aria: t("components.game.ariaPlay", { name }) };
   }
   if (phase === "missing" && !SUPPORTED_LOADERS.includes(instance.loader))
-    return { st: "blocked", icon: "plug", l1: "Kann nicht starten", s1: "Gesperrt", l2: "Diesen Loader kann Pumpkin Launcher noch nicht", p: 0, dis: true, aria: `Kann nicht starten: ${name}, Loader wird noch nicht unterstützt` };
-  const [l2, hint] = !hasAccount ? ["Erst Spielernamen festlegen", ", erst Spielernamen festlegen"] : phase === "installed" ? ["Bereit", ""] : ["Installiert beim ersten Start", ", wird beim ersten Start installiert"];
-  return { st: "idle", icon: "play", l1: "Spielen", s1: "Spielen", l2, p: 0, aria: `Spielen: ${name}${hint}` };
+    return { st: "blocked", icon: "plug", l1: t("components.game.cannotStart"), s1: t("components.game.blocked"), l2: t("components.game.loaderUnsupported"), p: 0, dis: true, aria: t("components.game.ariaCannotStart", { name }) };
+  const [l2, hint] = !hasAccount
+    ? [t("components.game.needNameFirst"), t("components.game.needNameFirstAria")]
+    : phase === "installed"
+      ? [t("components.game.ready"), ""]
+      : [t("components.game.installsOnFirstStart"), t("components.game.installsOnFirstStartAria")];
+  return { st: "idle", icon: "play", l1: t("common.play"), s1: t("common.play"), l2, p: 0, aria: t("components.game.ariaPlay", { name }) + hint };
 }
 
 /**
@@ -182,6 +188,7 @@ export function PlayButton({ instance, size = "l", onLaunched, tabIndex }: { ins
  * `onScene`: Knöpfe über einer Szene (Grundplatte, harter Schatten).
  */
 export function PlayStatus({ instance, className, style, showLast = true, onScene }: { instance: Instance; className?: string; style?: CSSProperties; showLast?: boolean; onScene?: boolean }) {
+  const { t } = useI18n();
   const phase = usePhase(instance.id);
   const progress = useGame((s) => s.installs[instance.id]);
   const crash = useGame((s) => s.crashes[instance.id]);
@@ -194,29 +201,29 @@ export function PlayStatus({ instance, className, style, showLast = true, onScen
   let acts: ReactNode = null;
   if (phase === "preparing" && progress) {
     lead = <b>{installStepLabel(progress.step, instance.loader)}</b>;
-    if (progress.total > 1) tail = <> {formatCount(progress.done)} von {formatCount(progress.total)}</>;
-    acts = <Button variant="ghost" size="s" icon="x" onScene={onScene} className="pcancel" disabled={cancel.isPending} onClick={() => cancel.mutate(instance.id)}>Abbrechen</Button>;
+    if (progress.total > 1) tail = <> {t("components.game.countOf", { done: formatCount(progress.done), total: formatCount(progress.total) })}</>;
+    acts = <Button variant="ghost" size="s" icon="x" onScene={onScene} className="pcancel" disabled={cancel.isPending} onClick={() => cancel.mutate(instance.id)}>{t("common.cancel")}</Button>;
   } else if (phase === "starting") {
-    lead = "Minecraft startet.";
-    tail = " Das Fenster öffnet sich gleich.";
+    lead = t("components.game.mcStarting");
+    tail = t("components.game.windowSoon");
   } else if (phase === "running") {
     // Laufzeit steht im Knopf („Läuft seit …“); hier nur für Screenreader die Zustandsänderung.
-    lead = <span className="sr">Minecraft läuft</span>;
-    acts = <Button variant="ghost" size="s" icon="term" onScene={onScene} className="plog" onClick={toLog}>Protokoll ansehen</Button>;
+    lead = <span className="sr">{t("components.game.mcRunningSr")}</span>;
+    acts = <Button variant="ghost" size="s" icon="term" onScene={onScene} className="plog" onClick={toLog}>{t("components.game.viewLog")}</Button>;
   } else if (phase === "crashed" && crash) {
-    lead = <b>Minecraft ist abgestürzt{crash.code != null ? ` (Code ${crash.code})` : ""}</b>;
+    lead = <b>{t("components.game.mcCrashed")}{crash.code != null ? t("components.game.exitCode", { code: crash.code }) : ""}</b>;
     acts = (
       <>
         {crash.crashReport && (
-          <Button variant="ghost" size="s" tone="bad" onScene={onScene} onClick={() => void api.openPath(crash.crashReport!).catch(toastError)}>Absturzbericht öffnen</Button>
+          <Button variant="ghost" size="s" tone="bad" onScene={onScene} onClick={() => void api.openPath(crash.crashReport!).catch(toastError)}>{t("components.game.openCrashReport")}</Button>
         )}
-        <Button variant="ghost" size="s" onScene={onScene} onClick={toLog}>Protokoll ansehen</Button>
+        <Button variant="ghost" size="s" onScene={onScene} onClick={toLog}>{t("components.game.viewLog")}</Button>
         {/* Nur als Symbol: Ausgeschrieben ließe die schmale Zeile keinen Platz für die Meldung. */}
-        <IconButton icon="ul" size="s" label="Log teilen" onScene={onScene} onClick={() => askShareLog(instance.id, shareKindAfter(crash))} />
+        <IconButton icon="ul" size="s" label={t("components.game.shareLog")} onScene={onScene} onClick={() => askShareLog(instance.id, shareKindAfter(crash))} />
       </>
     );
   } else if (phase === "installed" && showLast) {
-    lead = instance.lastPlayedAt != null ? `Zuletzt gespielt ${relativeTime(instance.lastPlayedAt)}` : "Noch nie gespielt";
+    lead = instance.lastPlayedAt != null ? t("components.game.lastPlayed", { zeit: relativeTime(instance.lastPlayedAt) }) : t("format.neverPlayed");
   }
   return (
     <div className={cn("pstat", phase === "crashed" && "bad", phase === "running" && "run", className)} style={style}>
@@ -239,17 +246,18 @@ export const LOUD_PHASES: Phase[] = ["preparing", "starting", "running", "crashe
  * `fixed` bleibt für Aufrufer erhalten, ohne Wirkung (die Breite folgt dem Inhalt, die Zahl reserviert ihre Stellen).
  */
 export function StatusChip({ instance, small, loudOnly }: { instance: Instance; small?: boolean; fixed?: boolean; loudOnly?: boolean }) {
+  const { t } = useI18n();
   const phase = usePhase(instance.id);
   const percent = useInstallPercent(instance);
   if (loudOnly && !LOUD_PHASES.includes(phase)) return null;
   const [text, tone]: [ReactNode, "run" | "acc" | "bad" | undefined] =
-    phase === "running" ? ["Läuft", "run"]
-    : phase === "preparing" ? [<>Wird installiert <Count value={percent ?? 0} minDigits={3} />&nbsp;%</>, "acc"]
-    : phase === "starting" ? ["Startet", "acc"]
-    : phase === "crashed" ? ["Abgestürzt", "bad"]
-    : phase === "missing" ? ["Nicht installiert", undefined]
-    : phase === "installed" ? ["Bereit", undefined]
-    : ["Wird geprüft", undefined];
+    phase === "running" ? [t("components.game.running"), "run"]
+    : phase === "preparing" ? [<>{t("components.game.installing")} <Count value={percent ?? 0} minDigits={3} />&nbsp;%</>, "acc"]
+    : phase === "starting" ? [t("components.game.starting"), "acc"]
+    : phase === "crashed" ? [t("components.game.crashed"), "bad"]
+    : phase === "missing" ? [t("components.game.notInstalled"), undefined]
+    : phase === "installed" ? [t("components.game.ready"), undefined]
+    : [t("components.common.checking"), undefined];
   // Text in einem Span: sonst setzt der Chip seinen Flex-Abstand zwischen Wort, Zahl und „%“.
   return <Chip size={small ? "s" : "m"} dot tone={tone}><span>{text}</span></Chip>;
 }
@@ -259,6 +267,7 @@ export function StatusChip({ instance, small, loudOnly }: { instance: Instance; 
  * Öffnen per `askStop(instance)`. ConfirmDialog: alertdialog, Fokus zuerst auf „Abbrechen“; endet das Spiel von selbst, schließt sich die Frage.
  */
 export function StopDialog() {
+  const { t } = useI18n();
   const instance = useStopAsk((s) => s.instance);
   const phase = usePhase(instance?.id ?? "");
   const kill = useKill();
@@ -271,9 +280,9 @@ export function StopDialog() {
     <ConfirmDialog
       open={!!instance}
       onOpenChange={(o) => !o && close()}
-      title="Minecraft beenden?"
-      text="Nicht gespeicherter Fortschritt geht verloren. Beende das Spiel besser im Spiel selbst."
-      confirmLabel="Beenden"
+      title={t("components.game.stopTitle")}
+      text={t("components.game.stopText")}
+      confirmLabel={t("components.game.quit")}
       pending={kill.isPending}
       onConfirm={() => {
         if (instance) kill.mutate(instance);
@@ -286,12 +295,13 @@ export function StopDialog() {
 // ---------- Protokoll ----------
 
 type LogFilter = "all" | "warn" | "err";
-const LOG_FILTERS: { value: LogFilter; label: string }[] = [{ value: "all", label: "Alle" }, { value: "warn", label: "Warnungen" }, { value: "err", label: "Fehler" }];
+const LOG_FILTERS: { value: LogFilter; label: string }[] = [{ value: "all", label: "components.log.filterAll" }, { value: "warn", label: "components.log.filterWarn" }, { value: "err", label: "common.error" }];
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Kopfzeile des Protokolls: läuft, abgestürzt oder Ruhe. */
 function LogStat({ instance }: { instance: Instance }) {
+  const { t } = useI18n();
   const phase = usePhase(instance.id);
   const crash = useGame((s) => s.crashes[instance.id]);
   const since = useGame((s) => s.started[instance.id]);
@@ -305,10 +315,10 @@ function LogStat({ instance }: { instance: Instance }) {
         tone="run"
         icon="term"
         className={place}
-        title={<>Läuft{since && <> seit <Count value={formatClock(now - since)} /></>}.</>}
-        actions={<Button size="s" icon="stop" onClick={() => askStop(instance)}>Beenden…</Button>}
+        title={<>{t("components.game.running")}{since && <> {t("components.game.since")} <Count value={formatClock(now - since)} /></>}.</>}
+        actions={<Button size="s" icon="stop" onClick={() => askStop(instance)}>{t("components.game.quitEllipsis")}</Button>}
       >
-        Neue Zeilen erscheinen sofort.
+        {t("components.log.liveNote")}
       </StatusPanel>
     );
   if (crash)
@@ -317,16 +327,16 @@ function LogStat({ instance }: { instance: Instance }) {
         size="s"
         tone="bad"
         className={place}
-        title={`Minecraft ist abgestürzt${crash.code != null ? ` (Code ${crash.code})` : ""}.`}
-        actions={crash.crashReport && <Button size="s" onClick={() => void api.openPath(crash.crashReport!).catch(toastError)}>Absturzbericht öffnen</Button>}
+        title={<>{t("components.game.mcCrashed")}{crash.code != null ? t("components.game.exitCode", { code: crash.code }) : ""}.</>}
+        actions={crash.crashReport && <Button size="s" onClick={() => void api.openPath(crash.crashReport!).catch(toastError)}>{t("components.game.openCrashReport")}</Button>}
       >
-        {crash.crashReport ? "Der Absturzbericht nennt meist die Ursache." : "Die letzten Zeilen unten zeigen, was passiert ist."}
+        {crash.crashReport ? t("components.log.crashReportHelp") : t("components.log.tailShowsCause")}
       </StatusPanel>
     );
   // Wie man zu Ausgabe kommt, sagt der Leerzustand der Konsole; hier nur Stand und Aufbewahrung
   return (
-    <StatusPanel size="s" icon="info" className={place} title={instance.lastPlayedAt != null ? `Zuletzt gespielt ${relativeTime(instance.lastPlayedAt)}.` : "Noch nie gespielt."}>
-      Das Protokoll wird beim Schließen von Pumpkin Launcher geleert.
+    <StatusPanel size="s" icon="info" className={place} title={instance.lastPlayedAt != null ? `${t("components.game.lastPlayed", { zeit: relativeTime(instance.lastPlayedAt) })}.` : `${t("format.neverPlayed")}.`}>
+      {t("components.log.clearedOnExit")}
     </StatusPanel>
   );
 }
@@ -343,6 +353,7 @@ const LogRow = memo(function LogRow({ line, re }: { line: LogLine; re: RegExp | 
  * Die Konsole selbst liest nicht mit (aria-live="off"), sonst käme jede Zeile.
  */
 function useLogDigest(lines: LogLine[] | undefined) {
+  const { t } = useI18n();
   const [msg, setMsg] = useState("");
   const latest = useRef(lines);
   latest.current = lines;
@@ -363,10 +374,10 @@ function useLogDigest(lines: LogLine[] | undefined) {
       seen.current = all.at(-1)?.id ?? seen.current;
       if (!w && !e) return;
       last.current = Date.now();
-      const parts = [w && `${w} ${w === 1 ? "neue Warnung" : "neue Warnungen"}`, e && `${e} ${e === 1 ? "neuer Fehler" : "neue Fehler"}`].filter(Boolean);
-      const text = `Protokoll: ${parts.join(", ")}`;
+      const parts = [w && t(w === 1 ? "components.log.newWarnings.one" : "components.log.newWarnings.other", { n: w }), e && t(e === 1 ? "components.log.newErrors.one" : "components.log.newErrors.other", { n: e })].filter(Boolean);
+      const text = t("components.log.digestPrefix") + parts.join(", ");
       // Gleicher Wortlaut wie zuletzt: unsichtbar ändern, damit er erneut angesagt wird.
-      setMsg((m) => (m === text ? `${text} ` : text));
+      setMsg((m) => (m === text ? `${text} ` : text));
     }, Math.max(0, last.current + 5000 - Date.now()));
   }, [lines]);
   useEffect(() => () => {
@@ -378,6 +389,7 @@ function useLogDigest(lines: LogLine[] | undefined) {
 
 /** Live-Ausgabe des Spiels mit Filter, Suche und Mitscrollen (solange man unten ist). */
 export function LogConsole({ instance }: { instance: Instance }) {
+  const { t } = useI18n();
   const lines = useGame((s) => s.logs[instance.id]);
   const clearLog = useGame((s) => s.clearLog);
   const crash = useGame((s) => s.crashes[instance.id]);
@@ -400,8 +412,8 @@ export function LogConsole({ instance }: { instance: Instance }) {
 
   function copy() {
     void navigator.clipboard.writeText((lines ?? []).map((l) => l.line).join("\n")).then(
-      () => toast.success("Protokoll kopiert"),
-      () => toast.error("Kopieren hat nicht geklappt"),
+      () => toast.success(t("components.log.copySuccess")),
+      () => toast.error(t("components.common.copyFailed")),
     );
   }
 
@@ -409,16 +421,16 @@ export function LogConsole({ instance }: { instance: Instance }) {
     <>
       <LogStat instance={instance} />
       <Toolbar search="s" className="mb-2.5">
-        <SearchField size="s" value={query} onChange={setQuery} placeholder="Im Protokoll suchen" />
-        <Segmented size="s" label="Filter" value={filter} onChange={setFilter} items={LOG_FILTERS} />
+        <SearchField size="s" value={query} onChange={setQuery} placeholder={t("components.log.searchPlaceholder")} />
+        <Segmented size="s" label={t("components.log.filter")} value={filter} onChange={setFilter} items={LOG_FILTERS.map(({ value, label }) => ({ value, label: t(label) }))} />
         <Spacer />
-        <Button size="s" icon="copy" compactBelow={900} disabled={!lines?.length} onClick={copy}>Kopieren</Button>
-        <Button size="s" icon="ul" compactBelow={1180} onClick={() => askShareLog(instance.id, shareKindAfter(crash))}>Log teilen</Button>
+        <Button size="s" icon="copy" compactBelow={900} disabled={!lines?.length} onClick={copy}>{t("common.copy")}</Button>
+        <Button size="s" icon="ul" compactBelow={1180} onClick={() => askShareLog(instance.id, shareKindAfter(crash))}>{t("components.game.shareLog")}</Button>
         <DebugInfoButton size="s" icon="info" compactBelow={1180} />
         {crash?.logFile && (
-          <Button size="s" icon="folder" compactBelow={900} onClick={() => void api.openPath(crash.logFile!).catch(toastError)}>Logdatei</Button>
+          <Button size="s" icon="folder" compactBelow={900} onClick={() => void api.openPath(crash.logFile!).catch(toastError)}>{t("components.log.logFile")}</Button>
         )}
-        <Button size="s" icon="trash" compactBelow={900} disabled={!lines?.length} onClick={() => clearLog(instance.id)}>Leeren</Button>
+        <Button size="s" icon="trash" compactBelow={900} disabled={!lines?.length} onClick={() => clearLog(instance.id)}>{t("components.log.clear")}</Button>
       </Toolbar>
       <div className="console">
         <div
@@ -427,7 +439,7 @@ export function LogConsole({ instance }: { instance: Instance }) {
           tabIndex={0}
           role="log"
           aria-live="off"
-          aria-label="Protokoll"
+          aria-label={t("components.log.ariaLabel")}
           onScroll={(e) => {
             const el = e.currentTarget;
             setFollow(el.scrollHeight - el.scrollTop - el.clientHeight < 24);
@@ -437,12 +449,12 @@ export function LogConsole({ instance }: { instance: Instance }) {
         </div>
         <div className="none" style={{ visibility: shown.length ? "hidden" : "visible" }}>
           {lines?.length ? (
-            <Empty size="pane" ill="search" title="Keine Treffer">Keine Zeilen für diesen Filter.</Empty>
+            <Empty size="pane" ill="search" title={t("components.log.noMatches")}>{t("components.log.noLinesForFilter")}</Empty>
           ) : (
-            <Empty size="pane" ill="term" title="Noch keine Ausgabe">Starte die Instanz, dann erscheint hier das Protokoll.</Empty>
+            <Empty size="pane" ill="term" title={t("components.log.noOutputYet")}>{t("components.log.startInstanceHint")}</Empty>
           )}
         </div>
-        <Button size="s" icon="down" className={cn("down", !follow && "show")} onClick={() => setFollow(true)}>Nach unten</Button>
+        <Button size="s" icon="down" className={cn("down", !follow && "show")} onClick={() => setFollow(true)}>{t("components.log.scrollDown")}</Button>
       </div>
       <span className="sr" role="status">{digest}</span>
     </>

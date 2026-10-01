@@ -2,24 +2,26 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import { Description } from "@/components/Description";
 import { installAppUpdate, useAppUpdate, useUpdateRun, WAIT_FOR_IDLE } from "@/hooks/useAppUpdate";
 import { Actions, Button, Count, ErrorBox, FormRow, Hint, JobProgress } from "@/ui";
+import { useI18n } from "@/i18n";
 
 /** Einstellungen › Über: nach einer neuen Version suchen und sie erst auf Wunsch installieren. */
 export function UpdateRow() {
+  const { t } = useI18n();
   const { data: update, error, isFetching, isFetched, refetch } = useAppUpdate();
   const busy = useUpdateRun((s) => s.phase !== "idle");
   return (
-    <FormRow label="Updates" hint="Neue Versionen kommen über GitHub">
+    <FormRow label={t("components.update.label")} hint={t("components.update.hint")}>
       {update ? (
         <UpdateOffer update={update} />
       ) : error ? (
-        <ErrorBox title="Die Suche nach Updates hat nicht geklappt" error={error} />
+        <ErrorBox title={t("components.update.searchFailed")} error={error} />
       ) : (
-        isFetched && !isFetching && <Hint tone="ok">Du hast die neueste Version.</Hint>
+        isFetched && !isFetching && <Hint tone="ok">{t("components.update.upToDate")}</Hint>
       )}
       {!busy && (
         <Actions>
           <Button icon="redo" disabled={isFetching} onClick={() => void refetch()}>
-            {isFetching ? "Sucht …" : "Nach Updates suchen"}
+            {isFetching ? t("components.update.searching") : t("components.update.checkNow")}
           </Button>
         </Actions>
       )}
@@ -29,30 +31,31 @@ export function UpdateRow() {
 
 /** Gefundene Version mit Versionshinweisen und dem Ablauf Laden → (Spiel und Aufgaben abwarten, erneut bestätigen) → Installieren. */
 function UpdateOffer({ update }: { update: Update }) {
+  const { t } = useI18n();
   const { phase, p } = useUpdateRun();
   return (
     <>
       <b>
-        Version <Count value={update.version} /> ist verfügbar
+        {t("components.update.availableBefore")} <Count value={update.version} /> {t("components.update.availableAfter")}
       </b>
       {update.body && <Description body={update.body} />}
       {phase === "idle" && (
         <Actions>
           <Button variant="primary" icon="dl" onClick={() => void installAppUpdate(update)}>
-            Installieren und neu starten
+            {t("components.update.installAndRestart")}
           </Button>
         </Actions>
       )}
-      {phase === "download" && <JobProgress label="Update wird geladen" p={p} />}
+      {phase === "download" && <JobProgress label={t("components.update.downloading")} p={p} />}
       {phase === "wait" && <Hint icon="info">{WAIT_FOR_IDLE}</Hint>}
       {phase === "ready" && (
         <Actions>
           <Button variant="primary" icon="redo" onClick={() => void installAppUpdate(update)}>
-            Jetzt neu starten
+            {t("components.update.restartNow")}
           </Button>
         </Actions>
       )}
-      {phase === "install" && <JobProgress label="Update wird installiert" p={null} />}
+      {phase === "install" && <JobProgress label={t("components.update.installing")} p={null} />}
     </>
   );
 }
