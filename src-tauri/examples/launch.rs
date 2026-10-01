@@ -10,85 +10,98 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use launcher_lib::models::GameWindow;
+use launcher_lib::models::{GameWindow, ModLoader};
+use launcher_lib::services::install::InstallStep;
+use launcher_lib::services::launch::{self, LaunchSpec, Running};
+use launcher_lib::services::loader::{self, GameChoice, InstalledGame};
 use launcher_lib::services::mojang::{VersionManifest, MANIFEST_URL};
 use launcher_lib::services::rules::Env;
-use launcher_lib::services::{auth, download, fabric, forge, install, launch, Dirs};
+use launcher_lib::services::{auth, download, Dirs};
+use tokio::sync::oneshot;
+
+type Error = Box<dyn std::error::Error>;
+/// Exit-Code des Spiels, sobald es beendet ist.
+type ExitCode = oneshot::Receiver<Option<i32>>;
+
+/// Die Angaben der Kommandozeile.
+struct Options {
+    wanted: String,
+    username: String,
+    seconds: Option<u64>,
+    loader: ModLoader,
+    loader_version: Option<String>,
+}
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt().with_env_filter("info").init();
+    let options = parse_options()?;
+    let dirs = Dirs::new(data_dir());
+    let client = download::http_client()?;
+    let mc = find_version(&client, &options.wanted).await?;
+    println!("Version {mc}, Daten in {}", dirs.root.display());
+
+    let instance_id = format!("headless-{}", options.loader.name());
+    let choice = GameChoice { mc: &mc, loader: options.loader, loader_version: options.loader_version.as_deref() };
+    let game = install(&client, &dirs, choice, &instance_id).await?;
+    let (running, exit_rx) = start(&dirs, &game, &instance_id, &options.username)?;
+    println!("gestartet: pid {} mit {}", running.pid, game.java.display());
+    let code = wait_for_exit(running, exit_rx, options.seconds).await?;
+    println!("beendet, Exit-Code {code:?}");
+    Ok(())
+}
+
+fn parse_options() -> Result<Options, Error> {
     let mut args = std::env::args().skip(1);
     let wanted = args.next().unwrap_or_else(|| "1.21".into());
     let username = args.next().unwrap_or_else(|| "Headless".into());
     let seconds: Option<u64> = args.next().map(|s| s.parse()).transpose()?.filter(|&s| s > 0);
-    let loader = args.next().unwrap_or_else(|| "vanilla".into());
-    let (loader_name, wanted_loader) = match loader.split_once(':') {
-        Some((name, v)) => (name.to_owned(), Some(v.to_owned())),
-        None => (loader.clone(), None),
+    let loader_arg = args.next().unwrap_or_else(|| "vanilla".into());
+    let (name, loader_version) = match loader_arg.split_once(':') {
+        Some((name, version)) => (name, Some(version.to_owned())),
+        None => (loader_arg.as_str(), None),
     };
-    enum Kind {
-        Vanilla,
-        Profile(fabric::Flavor),
-        Installer(forge::Kind),
-    }
-    let kind = match loader_name.as_str() {
-        "vanilla" => Kind::Vanilla,
-        "fabric" => Kind::Profile(fabric::Flavor::Fabric),
-        "quilt" => Kind::Profile(fabric::Flavor::Quilt),
-        "neoforge" => Kind::Installer(forge::Kind::NeoForge),
-        "forge" => Kind::Installer(forge::Kind::Forge),
-        _ => return Err(format!("unbekannter Loader '{loader}'").into()),
-    };
+    let loader = ModLoader::from_name(name).ok_or_else(|| format!("unbekannter Loader '{loader_arg}'"))?;
+    Ok(Options { wanted, username, seconds, loader, loader_version })
+}
 
-    let root = std::env::var_os("LAUNCHER_DATA").map(PathBuf::from).unwrap_or_else(|| {
-        dirs::data_dir().unwrap_or_else(|| "target".into()).join("dev.laux.launcher")
-    });
-    let dirs = Dirs::new(root);
-    let client = download::http_client()?;
+fn data_dir() -> PathBuf {
+    std::env::var_os("LAUNCHER_DATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| dirs::data_dir().unwrap_or_else(|| "target".into()).join("dev.laux.launcher"))
+}
 
-    let manifest: VersionManifest = download::get_json(&client, MANIFEST_URL).await?;
+/// Exakte Versions-ID oder die neueste Release mit diesem Präfix.
+async fn find_version(client: &reqwest::Client, wanted: &str) -> Result<String, Error> {
+    let manifest: VersionManifest = download::get_json(client, MANIFEST_URL).await?;
     let id = manifest
         .versions
         .iter()
         .find(|v| v.id == wanted || (v.kind == "release" && v.id.starts_with(&format!("{wanted}."))))
         .map(|v| v.id.clone())
         .ok_or_else(|| format!("keine Version passt zu '{wanted}'"))?;
-    println!("Version {id}, Daten in {}", dirs.root.display());
+    Ok(id)
+}
 
-    let mut version = install::fetch_version(&client, &dirs, &id).await?;
-    let instance_id = format!("headless-{loader_name}");
+async fn install(client: &reqwest::Client, dirs: &Dirs, choice: GameChoice<'_>, instance_id: &str) -> Result<InstalledGame, Error> {
     let on_progress = |step, done, total| {
-        if done == total || done % 500 == 0 {
+        if step == InstallStep::Loader || done == total || done % 500 == 0 {
             println!("[install] {step:?} {done}/{total}");
         }
     };
-    let mut installer = None;
-    match &kind {
-        Kind::Vanilla => {}
-        Kind::Profile(flavor) => {
-            let loader = fabric::resolve_loader(&client, *flavor, &id, wanted_loader.as_deref()).await?;
-            println!("{} {loader}", flavor.name());
-            let profile = fabric::fetch_profile(&client, &dirs, *flavor, &id, &loader).await?;
-            version = fabric::merge(version, &profile)?;
-        }
-        Kind::Installer(k) => {
-            let loader = forge::resolve_loader(&client, *k, &id, wanted_loader.as_deref()).await?;
-            println!("{} {loader}", k.name());
-            installer = Some((*k, loader));
-        }
+    let plan = loader::plan_install(client, dirs, choice, &on_progress).await?;
+    if let Some(version) = plan.loader_version() {
+        println!("{} {version}", choice.loader.display_name());
     }
-    let java = install::install(&client, &dirs, &version, &instance_id, &on_progress).await?;
-    if let Some((k, loader)) = installer {
-        let profile = forge::install(&client, &dirs, k, &id, &loader, &java, &|d, t| println!("[install] Loader {d}/{t}")).await?;
-        version = forge::merge(version, &profile)?;
-    }
-    let instance_id = instance_id.as_str();
+    Ok(plan.install(client, dirs, instance_id, &on_progress).await?)
+}
 
-    let account = auth::offline_account(&username)?;
-    let spec = launch::LaunchSpec {
-        version: &version,
-        dirs: &dirs,
+/// Startet das Spiel offline; der Empfänger bekommt den Exit-Code.
+fn start(dirs: &Dirs, game: &InstalledGame, instance_id: &str, username: &str) -> Result<(Running, ExitCode), Error> {
+    let account = auth::offline_account(username)?;
+    let spec = LaunchSpec {
+        version: &game.version,
+        dirs,
         instance_id,
         account: &account,
         memory_mb: launch::DEFAULT_MEMORY_MB,
@@ -99,29 +112,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         session: None,
     };
     let args = launch::build_args(&spec, &Env::current())?;
-    let (exit_tx, mut exit_rx) = tokio::sync::oneshot::channel();
-    let game = launch::spawn(
-        &java,
-        &args,
-        &dirs.game_dir(instance_id),
-        |stream, line| println!("[{stream:?}] {line}"),
-        move |code| {
-            let _ = exit_tx.send(code);
-        },
-    )?;
-    println!("gestartet: pid {} mit {}", game.pid, java.display());
-
-    let code = match seconds {
-        Some(s) => match tokio::time::timeout(Duration::from_secs(s), &mut exit_rx).await {
-            Ok(code) => code?,
-            Err(_) => {
-                println!("{s} s vorbei, beende pid {}", game.pid);
-                game.kill();
-                exit_rx.await?
-            }
-        },
-        None => exit_rx.await?,
+    let (exit_tx, exit_rx) = oneshot::channel();
+    let on_exit = move |code| {
+        // Ohne Empfänger wartet `main` nicht mehr: dann ist nichts zu melden.
+        exit_tx.send(code).ok();
     };
-    println!("beendet, Exit-Code {code:?}");
-    Ok(())
+    let running = launch::spawn(&game.java, &args, &dirs.game_dir(instance_id), |stream, line| println!("[{stream:?}] {line}"), on_exit)?;
+    Ok((running, exit_rx))
+}
+
+/// Wartet auf das Spielende; nach `seconds` wird das Spiel beendet.
+async fn wait_for_exit(running: Running, mut exit_rx: ExitCode, seconds: Option<u64>) -> Result<Option<i32>, Error> {
+    let Some(seconds) = seconds else { return Ok(exit_rx.await?) };
+    match tokio::time::timeout(Duration::from_secs(seconds), &mut exit_rx).await {
+        Ok(code) => Ok(code?),
+        Err(_) => {
+            println!("{seconds} s vorbei, beende pid {}", running.pid);
+            running.kill();
+            Ok(exit_rx.await?)
+        }
+    }
 }
