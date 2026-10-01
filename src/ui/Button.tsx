@@ -60,7 +60,7 @@ function Inner({ variant = "secondary", size = "m", icon, iconEnd, count, compac
         {icon && <Icon name={icon} size={size} />}
         {hasContent(children) && (compactBelow ? <span className="vx-lab">{children}</span> : children)}
         {count != null && <Count value={count} />}
-        {iconEnd && <Icon name={iconEnd} size={size} />}
+        {iconEnd && <Icon name={iconEnd} size={size} edge="end" />}
       </span>
     </>
   );

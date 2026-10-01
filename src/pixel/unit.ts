@@ -47,6 +47,7 @@ function pixelUnitFor(size: PxSize) {
 function applyIconUnit(style: CSSStyleDeclaration, eff: number) {
   const iu = Math.max(1, Math.round(ICON_UNIT_CSS * eff)) / eff;
   style.setProperty("--iu", `${iu}px`);
+  style.setProperty("--dp", `${1 / eff}px`);
   style.setProperty("--avs", fitCells(AVATAR_BOX, AVATAR_CELLS, iu));
   style.setProperty("--av-32", fitCells(AVATAR_BOX_LARGE, AVATAR_CELLS, iu));
   for (const box of GLYPH_BOXES) style.setProperty(`--gl-${box}`, fitCells(box, GLYPH_CELLS, iu));

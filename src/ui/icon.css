@@ -6,14 +6,17 @@
    | m    | 24  | 7×7                     | 21             |
    | l    | 28  | 7×7                     | 21             |
    | xl   | 56  | 7×7, 2 Einheiten/Zelle  | 42             | */
-.vx-ico { --ico-box: var(--vx-ico-m); width: var(--ico-box); height: var(--ico-box); display: inline-grid; place-items: center; flex: none; }
-.vx-ico svg { display: block; fill: currentColor; shape-rendering: crispEdges; }
-.vx-ico svg[data-g="7"] { width: calc(var(--iu, 3px) * 7); height: calc(var(--iu, 3px) * 7); }
-.vx-ico svg[data-g="5"] { width: calc(var(--iu, 3px) * 5); height: calc(var(--iu, 3px) * 5); }
+/* Die Glyphe sitzt mit festem Versatz in der Box: ungerade Kantenlänge (15, 21) in gerader Box (20, 24, 28) ergäbe beim Zentrieren halbe
+   Pixel, die der Browser je nach Seitenposition mal auf-, mal abrundet. --dp = ein Gerätepixel (unit.ts). */
+.vx-ico { --ico-box: var(--vx-ico-m); --g: 5; --e: var(--e5, 0); --gl: calc(var(--g) * var(--iu, 3px)); --off: round(down, calc((var(--ico-box) - var(--gl)) / 2), var(--dp, 1px)); width: var(--ico-box); height: var(--ico-box); display: inline-grid; place-items: start; flex: none; }
+.vx-ico svg { display: block; width: var(--gl); height: var(--gl); margin: var(--off); fill: currentColor; shape-rendering: crispEdges; }
 .vx-ico[data-size="s"] { --ico-box: var(--vx-ico-s); }
+.vx-ico:is([data-size="m"], [data-size="l"], [data-size="xl"]) { --g: 7; --e: var(--e7, 0); }
 .vx-ico[data-size="l"] { --ico-box: var(--vx-ico-l); }
-.vx-ico[data-size="xl"] { --ico-box: var(--vx-ico-xl); }
-.vx-ico[data-size="xl"] svg[data-g="7"] { width: calc(var(--iu, 3px) * 14); height: calc(var(--iu, 3px) * 14); }
+.vx-ico[data-size="xl"] { --ico-box: var(--vx-ico-xl); --gl: calc(var(--iu, 3px) * 14); }
+:root[data-ico-m="5"] .vx-ico[data-size="m"] { --g: 5; --e: var(--e5, 0); }
+/* Am Ende eines Knopfes: Luft der Box und leere Rasterspalten rechts abschneiden (Icon.edge) */
+.vx-ico[data-edge="end"] { margin-right: calc(-1 * (var(--ico-box) - var(--gl) - var(--off) + var(--e) * var(--iu, 3px))); }
 /* m: beide Raster im DOM, eines sichtbar (umschalten ohne Neurendern, kein Layoutshift: Box bleibt) */
 .vx-ico[data-size="m"] svg[data-g="5"] { display: none; }
 :root[data-ico-m="5"] .vx-ico[data-size="m"] svg[data-g="7"] { display: none; }

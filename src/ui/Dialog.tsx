@@ -133,7 +133,7 @@ export function Dialog({ open, onOpenChange, title, sub, width = 560, height, fo
           onCloseAutoFocus={ret.restore}
           style={{ ...cssVars({ "--dw": `${width}px`, "--acc": ret.acc }), height: height ? `min(${height}px, calc(100vh - ${VIEWPORT_MARGIN_PX}px))` : undefined }}
         >
-          <div>
+          <div className="vx-ov-col">
             <DialogHeader kind="dialog" title={title} sub={sub} closeLabel={t("common.close")} busy={busy} />
             <div className="vx-dlg-b">{children}</div>
             {(footer || footLeft) && (
@@ -241,7 +241,7 @@ export function Sheet({ open, onOpenChange, title, sub, acc, children, tools }: 
           onInteractOutside={(e) => e.preventDefault()}
           onCloseAutoFocus={ret.restore}
         >
-          <div>
+          <div className="vx-ov-col">
             <DialogHeader kind="sheet" title={title} sub={sub} closeLabel={t("ui.sheet.closeAria")} />
             {tools && <div className="vx-sheet-t">{tools}</div>}
             <div className="vx-sheet-b">{children}</div>
