@@ -75,12 +75,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Tauri-Voraussetzungen unter Linux: https://v2.tauri.app/start/prerequisites/#linux (patchelf fürs AppImage)
-      - name: Install Linux system libraries
+      - uses: ./.github/actions/linux-deps
         if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf
 
       - uses: pnpm/action-setup@v4
 
@@ -107,6 +103,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           releaseId: ${{ needs.prepare.outputs.release_id }}
+          # Der Entwurf hat den Text schon; tauri-action schreibt ihn als `notes` in latest.json, das der Updater anzeigt.
           releaseBody: ${{ needs.prepare.outputs.notes }}
           args: ${{ matrix.args }}
 

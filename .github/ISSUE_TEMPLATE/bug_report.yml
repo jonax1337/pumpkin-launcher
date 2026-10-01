@@ -33,10 +33,8 @@ body:
     id: version
     attributes:
       label: Launcher version
-      description: Einstellungen › Über Pumpkin Launcher, or the first line of the debug info.
+      description: Einstellungen › Über Pumpkin Launcher. Not needed if you paste the debug info below, which starts with the version.
       placeholder: "0.1.0"
-    validations:
-      required: true
   - type: textarea
     id: debug-info
     attributes:
