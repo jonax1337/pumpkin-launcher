@@ -19,7 +19,7 @@ export function UpdateCell({ mod, layout }: { mod: Mod; layout: CellLayout }) {
     return (
       <JobProgress
         label={t("detail.content.updating")}
-        p={model.downloadShare}
+        p={model.updateShare}
         width={tile ? TILE_PROGRESS_WIDTH : undefined}
         className={tile ? undefined : "w-full"}
       />

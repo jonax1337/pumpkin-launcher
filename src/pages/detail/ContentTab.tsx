@@ -7,6 +7,7 @@ import { WIDTH } from "@/lib/breakpoints";
 import { KIND_LABEL_KEYS } from "@/lib/catalog";
 import type { ModUpdate } from "@/lib/content-types";
 import { projectOf } from "@/lib/mods";
+import { progressShare } from "@/lib/progress";
 import { useI18n } from "@/i18n";
 import type { Instance, Mod } from "@/lib/types";
 import { BulkBar } from "./content/BulkBar";
@@ -14,7 +15,7 @@ import { ContentList } from "./content/ContentList";
 import { ContentModelProvider, type ContentModel } from "./content/ContentModel";
 import { contentMenuEntries } from "./content/contentMenu";
 import { RP_HINT_KEY } from "./content/constants";
-import { focusSoon, retryPerFrame } from "./content/focus";
+import { focusSoon, retryPerFrame, revealAndFocus, UPDATE_FOCUS_RETRY_FRAMES } from "./content/focus";
 import { insertGhosts } from "./content/ghosts";
 import { countByKind, KindFilter } from "./content/KindFilter";
 import { orderByDependency } from "./content/orderByDependency";
@@ -26,9 +27,6 @@ import { useRemovedGhosts } from "./content/useRemovedGhosts";
 import type { Entry, KindFilter as KindFilterValue, Row, Warn } from "./content/types";
 import { LocalFilesDropzone } from "./LocalFilesDropzone";
 import { useLocalFiles } from "./LocalFiles";
-
-/** Der Tabwechsel zu „Updates“ läuft als Navigation und kann ein paar Frames später sichtbar werden. */
-const UPDATE_FOCUS_RETRY_FRAMES = 30;
 
 type ViewMode = "list" | "grid";
 
@@ -80,13 +78,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     setSearch("");
     setKind("all");
     selection.clear();
-    return retryPerFrame(() => {
-      const button = updateAllRef.current;
-      if (!button?.checkVisibility({ visibilityProperty: true } as CheckVisibilityOptions)) return false;
-      button.scrollIntoView({ block: "nearest" });
-      button.focus({ preventScroll: true, focusVisible: true } as FocusOptions);
-      return true;
-    }, UPDATE_FOCUS_RETRY_FRAMES);
+    return retryPerFrame(() => revealAndFocus(updateAllRef.current), UPDATE_FOCUS_RETRY_FRAMES);
   }, [showUpdates]);
 
   // Nach Bulk-Aktionen, die die Leiste schließen: Kopf-Checkbox (Liste) oder Suchfeld (Raster).
@@ -131,7 +123,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     locked: !!active,
     isUpdating: (m) => !!active && (target === m.id || (target === "updates" && updateFor.has(m.id))),
     updatingAll,
-    downloadShare: progress?.phase === "download" && progress.total ? progress.done / progress.total : null,
+    updateShare: progressShare(progress),
     picked: selection.picked,
     pickedLive: selection.pickedLive,
     togglePick: selection.toggle,

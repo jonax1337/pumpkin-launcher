@@ -19,8 +19,8 @@ export type ContentModel = {
   isUpdating: (mod: Mod) => boolean;
   /** Läuft „Alle aktualisieren“? */
   updatingAll: boolean;
-  /** Download-Anteil 0–1 des laufenden Updates; `null` = unbekannt. */
-  downloadShare: number | null;
+  /** Fortschritt 0–1 des laufenden Updates; `null` = unbekannt. */
+  updateShare: number | null;
   picked: Set<string>;
   /** Die gewählten Inhalte, die es noch gibt. */
   pickedLive: string[];
