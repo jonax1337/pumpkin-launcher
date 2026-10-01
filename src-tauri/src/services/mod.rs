@@ -1,7 +1,8 @@
-//! Services: Persistenz, Auth, Installation (Mojang-Formate, Downloads, Java) und Spielstart.
+//! Services: Persistenz, Auth, Installation (Mojang-Formate, Downloads, Java), Spielstart und Support.
 use std::path::{Path, PathBuf};
 
 pub mod auth;
+pub mod debuginfo;
 pub mod download;
 pub mod fabric;
 pub mod forge;
@@ -9,6 +10,7 @@ pub mod gamelog;
 pub mod install;
 pub mod java;
 pub mod launch;
+pub mod logshare;
 pub mod mods;
 pub mod modrinth;
 pub mod content;
@@ -16,6 +18,7 @@ pub mod mojang;
 pub mod providers;
 pub mod rules;
 pub mod store;
+pub mod system;
 pub mod templates;
 
 /// Verzeichnislayout unter dem App-Datenverzeichnis. Libraries, Assets, Versionen und
@@ -53,6 +56,11 @@ impl Dirs {
 
     pub fn game_dir(&self, instance_id: &str) -> PathBuf {
         self.instance(instance_id).join("minecraft")
+    }
+
+    /// Protokoll des letzten Starts, von Minecraft selbst geschrieben.
+    pub fn latest_log(&self, instance_id: &str) -> PathBuf {
+        self.game_dir(instance_id).join("logs").join("latest.log")
     }
 
     /// `mods/` im Spielverzeichnis, dort sucht Fabric (und jeder andere Loader).

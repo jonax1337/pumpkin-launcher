@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use crate::error::{AppError, AppResult};
+use crate::models::{Instance, ModLoader};
 use crate::services::download::{self, Job};
 use crate::services::mojang::{AssetIndex, Library, VersionJson, VersionManifest, MANIFEST_URL, RESOURCES_URL};
 use crate::services::rules::{self, Env};
@@ -61,6 +62,30 @@ pub async fn installed_version(dirs: &Dirs, version_id: &str) -> AppResult<Versi
         }
         other => other,
     })
+}
+
+fn installed_marker(dirs: &Dirs, instance_id: &str) -> PathBuf {
+    dirs.natives_dir(instance_id).with_file_name("installed")
+}
+
+/// Inhalt der Markerdatei: die MC-Version, bei Mod-Loadern plus Loader und Version. Ein Wechsel
+/// von Loader oder Loader-Version gilt so als nicht installiert; Vanilla-Marker bleiben gültig.
+fn install_key(instance: &Instance) -> String {
+    match instance.loader {
+        ModLoader::Vanilla => instance.minecraft_version.clone(),
+        loader => format!("{} {loader:?} {}", instance.minecraft_version, instance.loader_version.as_deref().unwrap_or("?")),
+    }
+}
+
+/// Vermerkt die Instanz als installiert. Erst nach vollständigem Erfolg: `is_installed` erkennt so auch
+/// abgebrochene Installationen.
+pub async fn mark_installed(dirs: &Dirs, instance: &Instance) -> AppResult<()> {
+    Ok(tokio::fs::write(installed_marker(dirs, &instance.id), install_key(instance)).await?)
+}
+
+/// Aktuelle Minecraft-Version (samt Loader) der Instanz ist vollständig installiert.
+pub fn is_installed(dirs: &Dirs, instance: &Instance) -> bool {
+    fs::read_to_string(installed_marker(dirs, &instance.id)).is_ok_and(|v| v == install_key(instance))
 }
 
 /// Java-Komponente der Version; sehr alte Versions-JSONs haben keine Angabe → Java 8.
@@ -203,4 +228,28 @@ pub async fn install(
     download::fetch_all(client, asset_jobs, &|d, t| on_progress(InstallStep::Assets, d, t)).await?;
 
     Ok(java)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::NewInstance;
+
+    #[tokio::test]
+    async fn loader_change_invalidates_the_installed_marker() {
+        let dirs = Dirs::new(std::env::temp_dir().join(crate::models::new_id()));
+        let mut instance = Instance::from_new(NewInstance {
+            name: "Test".into(),
+            minecraft_version: "1.21.1".into(),
+            loader: ModLoader::Fabric,
+            loader_version: Some("0.16.5".into()),
+        });
+        fs::create_dir_all(dirs.instance(&instance.id)).unwrap();
+        assert!(!is_installed(&dirs, &instance));
+        mark_installed(&dirs, &instance).await.unwrap();
+        assert!(is_installed(&dirs, &instance));
+        instance.loader_version = Some("0.16.6".into());
+        assert!(!is_installed(&dirs, &instance));
+        fs::remove_dir_all(&dirs.root).unwrap();
+    }
 }

@@ -14,6 +14,8 @@ pub enum AppError {
     Zip(#[from] zip::result::ZipError),
     #[error("Ein Download ist fehlgeschlagen – Details: {0}")]
     Download(String),
+    #[error("Das Hochladen hat nicht geklappt – Details: {0}")]
+    Upload(String),
     #[error("Interner Fehler der App – Details: {0}")]
     Tauri(#[from] tauri::Error),
     #[error("Der Windows-Anmeldespeicher ist nicht erreichbar – Details: {0}")]

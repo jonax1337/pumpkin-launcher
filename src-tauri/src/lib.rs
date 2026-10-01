@@ -5,6 +5,7 @@ pub mod error;
 pub mod models;
 pub mod services;
 mod state;
+mod support_commands;
 
 use tauri::{Emitter, Manager};
 use tracing_subscriber::EnvFilter;
@@ -83,6 +84,8 @@ pub fn run() {
             content_commands::template_list,
             content_commands::template_delete,
             content_commands::template_create_instance,
+            support_commands::log_share,
+            support_commands::debug_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -2162,6 +2162,7 @@ dependencies = [
  "futures",
  "keyring",
  "md-5",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",

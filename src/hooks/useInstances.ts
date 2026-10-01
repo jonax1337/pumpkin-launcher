@@ -125,7 +125,8 @@ export function useMemory() {
   return { value: chosen ?? auto, auto, total, max: total == null ? 16384 : maxMemoryMb(total), isAuto: chosen == null };
 }
 
-async function defaultMemory(qc: ReturnType<typeof useQueryClient>) {
+/** RAM für Instanzen ohne eigene Einstellung, wie ihn der Start übergibt. */
+export async function defaultMemory(qc: ReturnType<typeof useQueryClient>) {
   const chosen = useSettings.getState().memoryMb;
   if (chosen != null) return chosen;
   try {

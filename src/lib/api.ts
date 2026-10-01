@@ -13,6 +13,7 @@ import {
   type InstallStep,
   type InstanceStatus,
   type LoaderVersion,
+  type LogKind,
   type LogPayload,
   type ModLoader,
   type NewInstance,
@@ -231,6 +232,10 @@ const mockGame = {
     await delay();
     return { installed: db.installed.has(instanceId), running: db.running.has(instanceId) };
   },
+  async debugInfo() {
+    await delay();
+    return `Pumpkin Launcher (browser preview, no backend)\nInstances: ${db.instances.length}`;
+  },
 };
 
 // Microsoft-Anmeldung im Browser: Code sofort, Bestätigung nach ein paar Sekunden.
@@ -378,6 +383,11 @@ export const api = {
   offlineAllowed: (): Promise<boolean> => (tauri ? call("offline_allowed") : Promise.resolve(true)),
   msAccountRemove: (id: string): Promise<void> =>
     tauri ? call("ms_account_remove", { id }) : Promise.resolve(void (db.accounts = db.accounts.filter((a) => a.id !== id))),
+  /** Lädt ein Protokoll der Instanz bereinigt zu mclo.gs hoch und liefert den öffentlichen Link. */
+  shareLog: (instanceId: string, kind: LogKind): Promise<string> =>
+    tauri ? call("log_share", { instanceId, kind }) : Promise.reject(new Error("Protokolle lassen sich nur in der Pumpkin Launcher-App teilen.")),
+  /** Launcher, System und Instanzen als Klartext ohne persönliche Daten, für Fehlerberichte. */
+  debugInfo: (defaultMemoryMb: number): Promise<string> => (tauri ? call("debug_info", { defaultMemoryMb }) : mockGame.debugInfo()),
   /** Datei mit dem Standardprogramm öffnen (z. B. Absturzbericht). */
   openPath: (path: string): Promise<void> =>
     tauri ? openPath(path) : Promise.reject(new Error("Dateien lassen sich nur in der Pumpkin Launcher-App öffnen.")),

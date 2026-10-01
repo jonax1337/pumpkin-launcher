@@ -146,6 +146,9 @@ export interface ExitPayload {
   logFile: string | null;
 }
 
+/** Welches Protokoll `log_share` hochlädt: `logs/latest.log` oder den neuesten Absturzbericht. */
+export type LogKind = "latest" | "crashReport";
+
 /** Fehlertext des Backends, wenn der Nutzer eine Installation abbricht (kein Fehler, neutral melden). */
 export const INSTALL_CANCELLED = "Installation abgebrochen";
 

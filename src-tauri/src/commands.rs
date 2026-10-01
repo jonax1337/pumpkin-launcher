@@ -11,7 +11,7 @@ use crate::services::rules::Env;
 use crate::services::fabric::{self, LoaderVersion};
 use crate::services::forge;
 use crate::services::mojang::VersionJson;
-use crate::services::{auth, download, java, mods};
+use crate::services::{auth, download, java, mods, system};
 use crate::state::AppState;
 
 pub(crate) fn require_name(name: &str) -> AppResult<()> {
@@ -213,8 +213,7 @@ async fn install_instance(app: AppHandle, state: &AppState, instance_id: String)
         on_progress(InstallStep::Mods, 1, 1);
         tracing::info!(instance = %instance_id, active, "Mods bereitgestellt");
     }
-    // Marker erst nach vollständigem Erfolg: `instance_status` erkennt so auch abgebrochene Installationen.
-    tokio::fs::write(installed_marker(state, &instance_id), install_key(&instance)).await?;
+    install::mark_installed(&state.dirs, &instance).await?;
     tracing::info!(instance = %instance_id, "Installation abgeschlossen");
     Ok(())
 }
@@ -293,7 +292,7 @@ pub async fn instance_launch(
             let game_dir = state.dirs.game_dir(&exit_id);
             let text = |p: std::path::PathBuf| p.to_string_lossy().into_owned();
             let crash_report = launch::crash_report(&game_dir, started).map(text);
-            let log_file = Some(game_dir.join("logs").join("latest.log")).filter(|p| p.is_file()).map(text);
+            let log_file = Some(state.dirs.latest_log(&exit_id)).filter(|p| p.is_file()).map(text);
             tracing::info!(instance = %exit_id, ?code, crashed, "Spiel beendet");
             emit(&exit_app, EXIT_EVENT, ExitPayload { instance_id: exit_id, code, crashed, crash_report, log_file });
         },
@@ -320,19 +319,6 @@ pub fn instance_kill(state: State<'_, AppState>, instance_id: String) -> AppResu
     Ok(())
 }
 
-fn installed_marker(state: &AppState, instance_id: &str) -> std::path::PathBuf {
-    state.dirs.natives_dir(instance_id).with_file_name("installed")
-}
-
-/// Inhalt der Markerdatei: die MC-Version, bei Mod-Loadern plus Loader und Version. Ein Wechsel
-/// von Loader oder Loader-Version gilt so als nicht installiert; Vanilla-Marker bleiben gültig.
-fn install_key(instance: &Instance) -> String {
-    match instance.loader {
-        ModLoader::Vanilla => instance.minecraft_version.clone(),
-        loader => format!("{} {loader:?} {}", instance.minecraft_version, instance.loader_version.as_deref().unwrap_or("?")),
-    }
-}
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstanceStatus {
@@ -345,9 +331,7 @@ pub struct InstanceStatus {
 #[tauri::command]
 pub fn instance_status(state: State<'_, AppState>, instance_id: String) -> AppResult<InstanceStatus> {
     let instance = state.instances.get(&instance_id)?;
-    let installed = std::fs::read_to_string(installed_marker(&state, &instance_id))
-        .is_ok_and(|v| v == install_key(&instance));
-    Ok(InstanceStatus { installed, running: state.running().contains_key(&instance_id) })
+    Ok(InstanceStatus { installed: install::is_installed(&state.dirs, &instance), running: state.running().contains_key(&instance_id) })
 }
 
 /// Spielordner einer Instanz (Welten, Mods, Screenshots) zum Öffnen im Dateimanager; wird bei Bedarf angelegt.
@@ -362,26 +346,5 @@ pub fn instance_dir(state: State<'_, AppState>, instance_id: String) -> AppResul
 /// Physischer Arbeitsspeicher in MiB (Grundlage für RAM-Vorgabe und Slider-Obergrenze).
 #[tauri::command]
 pub fn system_memory_mb() -> AppResult<u64> {
-    #[cfg(windows)]
-    {
-        use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
-        let mut status = MEMORYSTATUSEX { dwLength: size_of::<MEMORYSTATUSEX>() as u32, ..unsafe { std::mem::zeroed() } };
-        // SAFETY: `status` ist ein gültiger, beschreibbarer MEMORYSTATUSEX mit gesetzter Länge.
-        if unsafe { GlobalMemoryStatusEx(&mut status) } == 0 {
-            return Err(std::io::Error::last_os_error().into());
-        }
-        Ok(status.ullTotalPhys / (1024 * 1024))
-    }
-    #[cfg(not(windows))]
-    Err(AppError::NotImplemented("Die Speicheranzeige außerhalb von Windows"))
-}
-
-#[cfg(test)]
-mod tests {
-    #[cfg(windows)]
-    #[test]
-    fn system_memory_is_plausible() {
-        let mb = super::system_memory_mb().unwrap();
-        assert!((1024..16 * 1024 * 1024).contains(&mb), "{mb}");
-    }
+    system::total_memory_mb()
 }
