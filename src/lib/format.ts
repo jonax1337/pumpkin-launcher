@@ -25,6 +25,17 @@ export function formatDateTime(ms: number): string {
   return dtfTime.format(ms);
 }
 
+const DAY = 86_400_000;
+
+/** Beginn des (lokalen) Kalendertags, in dem `ms` liegt. */
+export const dayStart = (ms: number) => new Date(ms).setHours(0, 0, 0, 0);
+
+/** „Heute“, „Gestern“, sonst das Datum von `day` (ein Tagesbeginn). Gerundet, weil Tage mit Zeitumstellung 23 oder 25 Stunden haben. */
+export function dayLabel(day: number, now = Date.now()): string {
+  const ago = Math.round((dayStart(now) - day) / DAY);
+  return ago === 0 ? "Heute" : ago === 1 ? "Gestern" : formatDate(day);
+}
+
 /** Spielzeit als „12:04“ oder „1:02:09“. */
 export function formatClock(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;

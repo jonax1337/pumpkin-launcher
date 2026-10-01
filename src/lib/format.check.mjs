@@ -1,6 +1,6 @@
 // Run: node src/lib/format.check.mjs (Node with TypeScript stripping).
 import assert from 'node:assert/strict';
-import { autoMemoryMb, formatPlaytime, formatSize, maxMemoryMb, memoryTooHigh } from './format.ts';
+import { autoMemoryMb, dayLabel, dayStart, formatPlaytime, formatSize, maxMemoryMb, memoryTooHigh } from './format.ts';
 
 assert.equal(autoMemoryMb(16384), 8192);
 assert.equal(autoMemoryMb(32768), 8192, 'höchstens 8 GB');
@@ -20,4 +20,11 @@ assert.equal(formatSize(850 * 1024), '850 KB');
 assert.equal(formatSize(12.4 * 1024 * 1024), '12,4 MB', 'unter 100 eine Nachkommastelle');
 assert.equal(formatSize(182.6 * 1024 * 1024), '183 MB');
 assert.equal(formatSize(3 * 1024 ** 3), '3 GB');
+// Tage laut lokaler Zeitzone; 29.03.2026 ist in Europa der Tag der Zeitumstellung (23 Stunden).
+const noon = new Date(2026, 2, 30, 12).getTime();
+assert.equal(dayStart(noon), new Date(2026, 2, 30).getTime());
+assert.equal(dayStart(new Date(2026, 2, 30, 23, 59, 59).getTime()), new Date(2026, 2, 30).getTime(), 'bis Mitternacht derselbe Tag');
+assert.equal(dayLabel(new Date(2026, 2, 30).getTime(), noon), 'Heute');
+assert.equal(dayLabel(new Date(2026, 2, 29).getTime(), noon), 'Gestern', 'auch über die Zeitumstellung');
+assert.equal(dayLabel(new Date(2026, 2, 28).getTime(), noon), '28. März 2026');
 console.log('format ok');
