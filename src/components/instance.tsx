@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { Checkbox, ConfirmDialog, Dialog, DialogActions, Field, Hint, IconButton, Menu, Skel, TextField, type MenuEntry } from "@/ui";
 import { usePhase } from "@/components/game";
-import { cancellable, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { askStop, useDeleteInstance, useExportEntries, useGroups, usePlay, useUpdateInstance } from "@/hooks/useInstances";
 import { useSaveTemplate } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
@@ -34,7 +34,7 @@ function useDuplicate() {
   const install = useContentInstall();
   const navigate = useNavigate();
   return (instance: Instance) =>
-    install.mutate(cancellable(withTarget(`duplicate:${instance.id}`, (op) => api.duplicateInstance(instance.id, op), `${instance.name} duplizieren`)), {
+    install.mutate(withTarget(`duplicate:${instance.id}`, (op) => api.duplicateInstance(instance.id, op), `${instance.name} duplizieren`, { cancellable: true }), {
       onSuccess: (copy) => copy && toast.success(`„${copy.name}“ angelegt`, { action: { label: "Öffnen", onClick: () => navigate(`/instances/${copy.id}`) } }),
     });
 }
@@ -48,7 +48,7 @@ function useExport() {
   return (instance: Instance, include: string[], path: string) => {
     // Ein Content-Lauf liefert eine Instanz (für „Öffnen“ im Verlauf); beim Export ist es die exportierte.
     const run = (op: string) => api.exportInstance(instance.id, include, path, op).then(() => instance);
-    install.mutate(cancellable(withTarget(`export:${instance.id}`, run, `${instance.name} exportieren`)), {
+    install.mutate(withTarget(`export:${instance.id}`, run, `${instance.name} exportieren`, { cancellable: true }), {
       onSuccess: (exported) =>
         exported &&
         toast.success(`„${instance.name}“ exportiert`, {

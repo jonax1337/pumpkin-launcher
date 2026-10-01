@@ -1,30 +1,32 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { api } from "@/lib/api";
 import type { ContentProgress, ContentProject } from "@/lib/modrinth";
 import type { Instance } from "@/lib/types";
-import { useTasks } from "@/store/tasks";
+import { useTasks, type DoneTask } from "@/store/tasks";
 import { instanceKeys } from "./useInstances";
 
 // Keeps progress visible across route changes; only the matching active operation may update it.
 // `target` says what runs (a project ID or "updates"), so rows can show their own progress.
 export const useContentState = create<{
-  active: string | null; target: string | null; label: string | null; cancellable: boolean; progress: ContentProgress | null; error: string | null; result: Instance | null;
-}>(() => ({ active: null, target: null, label: null, cancellable: false, progress: null, error: null, result: null }));
+  active: string | null; target: string | null; label: string | null; cancellable: boolean; progress: ContentProgress | null;
+}>(() => ({ active: null, target: null, label: null, cancellable: false, progress: null }));
 
-export type ContentRun = ((operationId: string) => Promise<Instance>) & { target?: string; label?: string; cancellable?: boolean };
+export type ContentRun<R = Instance> = ((operationId: string) => Promise<R>) & { target?: string; label?: string; cancellable?: boolean };
 
 /**
  * Hängt an einen Lauf, was er betrifft (für den Fortschritt in der passenden Zeile)
- * und wie er im Aufgaben-Menü heißt („Sodium installieren“).
+ * und wie er im Aufgaben-Menü heißt („Sodium installieren“). `cancellable`: Backend-Befehl
+ * `pack_install_cancel` bricht ihn ab, das Aufgaben-Menü zeigt dann „Abbrechen“.
  */
-export const withTarget = (target: string, run: (operationId: string) => Promise<Instance>, label?: string): ContentRun =>
-  Object.assign(run, { target, label });
-
-/** Der Lauf lässt sich abbrechen (Backend: `pack_install_cancel`); das Aufgaben-Menü zeigt dann „Abbrechen“. */
-export const cancellable = (run: ContentRun): ContentRun => Object.assign(run, { cancellable: true });
+export const withTarget = <R = Instance>(
+  target: string,
+  run: (operationId: string) => Promise<R>,
+  label?: string,
+  options?: { cancellable?: boolean },
+): ContentRun<R> => Object.assign(run, { target, label, cancellable: options?.cancellable });
 
 /** Bricht den laufenden Vorgang ab; das Ergebnis meldet der zentrale Fehler-Toast neutral. */
 export function cancelContent() {
@@ -32,43 +34,56 @@ export function cancelContent() {
   if (op) void api.packInstallCancel(op).catch((e: Error) => toast.error(e.message));
 }
 
-/** „installieren“ → „installiert“ für den Verlauf. */
-const doneLabel = (label: string) =>
-  label.replace(/installieren$/, "installiert").replace(/aktualisieren$/, "aktualisiert").replace(/importieren$/, "importiert").replace(/anlegen$/, "angelegt").replace(/duplizieren$/, "dupliziert")
-    .replace(/hinzufügen$/, "hinzugefügt").replace(/abgleichen$/, "abgeglichen").replace(/exportieren$/, "exportiert");
+const DONE_VERBS: Record<string, string> = {
+  installieren: "installiert", aktualisieren: "aktualisiert", importieren: "importiert", anlegen: "angelegt", duplizieren: "dupliziert",
+  hinzufügen: "hinzugefügt", abgleichen: "abgeglichen", exportieren: "exportiert", sichern: "gesichert", löschen: "gelöscht", wiederherstellen: "wiederhergestellt",
+};
+
+/** „Sodium installieren“ → „Sodium installiert“ für Verlauf und Meldung. */
+export const doneLabel = (label: string) => label.replace(/\S+$/, (verb) => DONE_VERBS[verb] ?? verb);
+
+/**
+ * Führt einen Lauf als sichtbaren Vorgang aus (Fortschritt im Store, Eintrag im Verlauf) und gibt sein Ergebnis zurück;
+ * null, wenn schon einer läuft. `finish` macht aus dem Ergebnis den Verlaufseintrag.
+ */
+export async function trackContent<R>(
+  qc: QueryClient,
+  run: ContentRun<R>,
+  finish: (result: R, label: string) => Pick<DoneTask, "label" | "sub" | "to">,
+): Promise<R | null> {
+  // A second submit while one runs is ignored: the running operation is already shown.
+  if (useContentState.getState().active) return null;
+  const operationId = crypto.randomUUID();
+  const label = run.label ?? "Inhalte laden";
+  useContentState.setState({ active: operationId, target: run.target ?? null, label, cancellable: !!run.cancellable, progress: null });
+  let unlisten: (() => void) | undefined;
+  try {
+    unlisten = await api.onContentProgress((progress) => {
+      if (progress.operationId === operationId && useContentState.getState().active === operationId) useContentState.setState({ progress });
+    });
+    const result = await run(operationId);
+    useTasks.getState().push({ ...finish(result, label), state: "done" });
+    return result;
+  } catch (error) {
+    useTasks.getState().push({ label, sub: error instanceof Error ? error.message : String(error), state: "fail" });
+    throw error;
+  } finally {
+    unlisten?.();
+    useContentState.setState({ active: null, target: null, label: null, cancellable: false });
+    void qc.invalidateQueries({ queryKey: instanceKeys.all });
+    void qc.invalidateQueries({ queryKey: ["instance-status"] });
+    void qc.invalidateQueries({ queryKey: ["modrinth-updates"] });
+  }
+}
 
 export function useContentInstall() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (install: ContentRun) => {
-      // A second submit while one runs is ignored: the running operation is already shown, an error would linger next to its success.
-      if (useContentState.getState().active) return null;
-      const operationId = crypto.randomUUID();
-      const label = install.label ?? "Inhalte laden";
-      useContentState.setState({ active: operationId, target: install.target ?? null, label, cancellable: !!install.cancellable, progress: null, error: null, result: null });
-      let unlisten: (() => void) | undefined;
-      try {
-        unlisten = await api.onContentProgress((progress) => {
-          if (progress.operationId === operationId && useContentState.getState().active === operationId) useContentState.setState({ progress });
-        });
-        const result = await install(operationId);
-        qc.setQueryData(instanceKeys.detail(result.id), result);
-        useContentState.setState({ result });
-        useTasks.getState().push({ label: doneLabel(label), sub: result.name, state: "done", to: `/instances/${result.id}` });
-        return result;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        useContentState.setState({ error: message });
-        useTasks.getState().push({ label, sub: message, state: "fail" });
-        throw error;
-      } finally {
-        unlisten?.();
-        useContentState.setState({ active: null, target: null, label: null, cancellable: false });
-        void qc.invalidateQueries({ queryKey: instanceKeys.all });
-        void qc.invalidateQueries({ queryKey: ["instance-status"] });
-        void qc.invalidateQueries({ queryKey: ["modrinth-updates"] });
-      }
-    },
+    mutationFn: (install: ContentRun) =>
+      trackContent(qc, install, (instance, label) => {
+        qc.setQueryData(instanceKeys.detail(instance.id), instance);
+        return { label: doneLabel(label), sub: instance.name, to: `/instances/${instance.id}` };
+      }),
     retry: false,
   });
 }

@@ -113,6 +113,9 @@ export function createWorldMock(
     async remove(instanceId: string, worldId: string, operationId: string) {
       const safety = await backup(instanceId, worldId, operationId);
       worlds.set(instanceId, worldsOf(instanceId).filter((w) => w.id !== worldId));
+      // Wie `world_delete`: eine gelöschte Welt ist kein Quick-Play-Ziel mehr.
+      const owner = instance(instanceId);
+      if (owner.lastQuickPlay?.type === "world" && owner.lastQuickPlay.id === worldId) owner.lastQuickPlay = null;
       return safety;
     },
     /** Wie die Versions-JSON ab 1.20 (Feature `is_quick_play_singleplayer`). */

@@ -9,9 +9,10 @@ import {
   MenuItem, MenuLabel, MenuNote, MenuScroll, MenuSep, Meta, Panel, ProjectIcon, RowTitle, SceneThumb, SearchField, SectionHeader, Select, Sheet, Skel, SkelRow,
   Switch, TabPanel, Tabs, TextField, Tip, Toolbar, type MenuEntry,
 } from "@/ui";
-import { cancelContent, cancellable, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { cancelContent, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { useInstances } from "@/hooks/useInstances";
-import { worldKeys, worldsQuery } from "@/hooks/useWorlds";
+import { worldsQuery } from "@/hooks/useWorlds";
+import { worldKeys } from "@/hooks/worldKeys";
 import { api } from "@/lib/api";
 import {
   formatDownloads, installedKey, isPackVersionSupported, modLoadersFor, ownerKey, pickPackVersion, pickVersion, progressLabel, progressShare, projectKey, projectOf, SOURCES,
@@ -24,7 +25,7 @@ import { lookOf, useLook, useLookStore } from "@/store/look";
 
 export const IRIS_PROJECT_ID = "YL57xq9U";
 
-export const KIND_LABELS: Record<ModKind, string> = { mod: "Mods", shader: "Shader", resourcepack: "Ressourcenpakete" };
+const KIND_LABELS: Record<ModKind, string> = { mod: "Mods", shader: "Shader", resourcepack: "Ressourcenpakete" };
 export const TYPE_LABELS: Record<CatalogType, string> = { modpack: "Modpacks", ...KIND_LABELS, datapack: "Datenpakete" };
 const TYPE_ONE: Record<CatalogType, string> = { modpack: "Modpack", mod: "Mod", shader: "Shader", resourcepack: "Ressourcenpaket", datapack: "Datenpaket" };
 
@@ -393,7 +394,7 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
       if (!id) return;
     }
     const perform = (op: string) => (source === "modrinth" ? api.modrinthInstallPack(id, name, op) : api.providerInstallPack(source, projectId, id, name, op));
-    install.mutate(cancellable(withTarget(projectId, perform, `Modpack „${name}“ installieren`)), {
+    install.mutate(withTarget(projectId, perform, `Modpack „${name}“ installieren`, { cancellable: true }), {
       onSuccess: (inst) => {
         if (!inst) return;
         toast.success(`${inst.name} ist bereit. „Spielen“ lädt beim ersten Start den Rest.`, {
@@ -408,8 +409,9 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
   return { run, busy, p: checking ? null : progressShare(progress), blocked: !!active || checking, cancel: !checking && busy ? cancelContent : undefined };
 }
 
-const loaderNames = (v: ContentVersion) =>
-  v.loaders.filter((l) => l !== "minecraft").map((l) => LOADER_LABELS[l as ModLoader] ?? l).join(", ") || "Vanilla";
+/** „Fabric, Quilt“ aus den Loadern einer Version; „minecraft“ ist Modrinths Marke für Ressourcen ohne Loader. */
+const loaderList = (v: ContentVersion) => v.loaders.filter((l) => l !== "minecraft").map((l) => LOADER_LABELS[l as ModLoader] ?? l).join(", ");
+const loaderNames = (v: ContentVersion) => loaderList(v) || "Vanilla";
 
 /** Inhalt der Bestätigung; wird beim Schließen verworfen, der Name beginnt also immer beim Pack-Titel. */
 function PackConfirmBody({ title, versions, picked, onConfirm }: {
@@ -861,7 +863,7 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
                       <ListRow key={v.id}>
                         <RowTitle
                           title={v.version_number}
-                          sub={`${v.loaders.filter((l) => l !== "minecraft").map((l) => LOADER_LABELS[l as ModLoader] ?? l).join(", ") || "Alle Loader"} · ${v.game_versions.at(-1)}${VERSION_TYPE[v.version_type] ? ` · ${VERSION_TYPE[v.version_type]}` : ""}`}
+                          sub={`${loaderList(v) || "Alle Loader"} · ${v.game_versions.at(-1)}${VERSION_TYPE[v.version_type] ? ` · ${VERSION_TYPE[v.version_type]}` : ""}`}
                         />
                         {instance ? (
                           <AddButton instance={instance} world={world} projectId={projectId} title={title} type={type} versionId={v.id} source={source} />

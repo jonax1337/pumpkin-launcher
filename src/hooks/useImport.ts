@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { ForeignInstance, Instance } from "@/lib/types";
-import { cancelContent, cancellable, useContentInstall, withTarget } from "./useContent";
+import { cancelContent, useContentInstall, withTarget } from "./useContent";
 
 const foreignKey = ["foreign-instances"];
 
@@ -61,7 +61,7 @@ export function useImportInstances() {
     try {
       for (const source of sources) {
         if (stopped.current) break;
-        const task = cancellable(withTarget(importTarget(source), (op) => api.importInstance(source, op), `${source.name} importieren`));
+        const task = withTarget(importTarget(source), (op) => api.importInstance(source, op), `${source.name} importieren`, { cancellable: true });
         // Fehler meldet der zentrale Toast und das Aufgaben-Menü; die übrigen Instanzen laufen weiter.
         last = (await install.mutateAsync(task).catch(() => null)) ?? last;
       }

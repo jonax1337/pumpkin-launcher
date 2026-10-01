@@ -58,12 +58,15 @@ export function progressLabel(p: ContentProgress | null): string {
   if (p.phase === "copy") return p.total ? `Kopiert ${p.done} von ${p.total}…` : "Wird kopiert…";
   if (p.phase === "hash") return p.total ? `Erkennt Inhalte ${p.done} von ${p.total}…` : "Erkennt Inhalte…";
   if (p.phase === "pack") return "Wird gepackt…";
+  if (p.phase === "backup") return p.total ? `Sichert ${p.done} von ${p.total}…` : "Wird gesichert…";
   return "Fertig";
 }
 
-/** Anteil für Fortschrittsbalken; nur Phasen mit bekannter Menge (Downloads, kopierte und erkannte Dateien). */
+const SHARE_PHASES = ["download", "copy", "hash", "backup"];
+
+/** Anteil für Fortschrittsbalken; nur Phasen mit bekannter Menge (Downloads, kopierte, erkannte und gesicherte Dateien). */
 export const progressShare = (p: ContentProgress | null) =>
-  (p?.phase === "download" || p?.phase === "copy" || p?.phase === "hash") && p.total ? Math.min(1, p.done / p.total) : null;
+  p && SHARE_PHASES.includes(p.phase) && p.total ? Math.min(1, p.done / p.total) : null;
 
 export const formatDownloads = (n: number) => new Intl.NumberFormat("de", { notation: "compact" }).format(n);
 

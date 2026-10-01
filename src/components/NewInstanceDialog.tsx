@@ -10,7 +10,7 @@ import {
 import { MemoryChooser } from "@/components/common";
 import { useInstallPack } from "@/components/ContentBrowser";
 import { ImportPane } from "@/components/LauncherImport";
-import { cancellable, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { useForeignSelection, useImportInstances } from "@/hooks/useImport";
 import { useCreateInstance, useLoaderVersions, useVersions } from "@/hooks/useInstances";
@@ -227,11 +227,11 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
       void packInstall.run();
     } else if (tab === "file") {
       const title = fileName.trim() || packName(path);
-      install.mutate(cancellable(withTarget("import", (op) => api.modrinthImportPack(path, title, op), `${title} importieren`)), done);
+      install.mutate(withTarget("import", (op) => api.modrinthImportPack(path, title, op), `${title} importieren`, { cancellable: true }), done);
     } else if (tab === "import") {
       void importer.run(foreign.chosen).then((last) => last && onDone(last.id));
     } else if (template) {
-      install.mutate(cancellable(withTarget(`template:${template.id}`, (op) => api.templateCreateInstance(template.id, template.name, op), `${template.name} anlegen`)), done);
+      install.mutate(withTarget(`template:${template.id}`, (op) => api.templateCreateInstance(template.id, template.name, op), `${template.name} anlegen`, { cancellable: true }), done);
     }
   }
 

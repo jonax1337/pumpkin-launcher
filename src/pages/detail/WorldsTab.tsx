@@ -12,22 +12,21 @@ import { useContentState } from "@/hooks/useContent";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { usePlay } from "@/hooks/useInstances";
 import {
-  useAddDatapacks, useDatapacks, useDeleteBackup, useRemoveDatapack, useRemoveServer, useSaveServer, useServers, useWorldBackups, useWorldJob,
-  useWorldJobs, useWorldQuickPlay, useWorlds,
+  useAddDatapacks, useDatapacks, useDeleteBackup, useRemoveDatapack, useRemoveServer, useSaveServer, useServers, useWorldBackups,
+  useWorldJobs, useWorldQuickPlay, useWorlds, worldTarget,
 } from "@/hooks/useWorlds";
 import { api } from "@/lib/api";
 import { fileName, formatDateTime, formatSize, relativeTime } from "@/lib/format";
+import { progressShare } from "@/lib/modrinth";
 import { GAME_MODE_LABELS, type Instance, type QuickPlay, type Server, type World, type WorldBackup } from "@/lib/types";
 
 /** Warum Spieldateien gerade nicht angefasst werden und nichts startet (null = frei); das Backend lässt nur einen Vorgang zu. */
 function useBusyReason(instanceId: string): string | null {
   const phase = usePhase(instanceId);
-  const worldJob = useWorldJob((s) => s.job != null);
   const contentBusy = useContentState((s) => s.active != null);
   if (phase === "running") return "Minecraft läuft gerade. Beende es zuerst.";
   if (phase === "preparing" || phase === "starting") return "Minecraft startet gerade.";
-  if (worldJob) return "Gerade wird eine Welt gesichert oder wiederhergestellt.";
-  if (contentBusy) return "Gerade läuft eine Installation. Warte, bis sie fertig ist.";
+  if (contentBusy) return "Gerade läuft ein Vorgang. Warte, bis er fertig ist.";
   return null;
 }
 
@@ -70,7 +69,7 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
   const worlds = useWorlds(instance.id);
   const startsIntoWorlds = useWorldQuickPlay(instance);
   const { backup, remove } = useWorldJobs(instance);
-  const job = useWorldJob((s) => (s.job?.instanceId === instance.id ? s.job : null));
+  const { target, progress } = useContentState();
   const [removing, setRemoving] = useState<World | null>(null);
   // Sicherungen einer Welt bzw. (world = null) aller Welten, auch gelöschter.
   const [showBackups, setShowBackups] = useState<{ world: string | null } | null>(null);
@@ -108,8 +107,8 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
                   {/* Wie im Spiel: der Ordner steht dabei, wenn er anders heißt (z. B. wiederhergestellte Kopien). */}
                   <RowTitle title={w.name} aside={w.name === w.id ? undefined : w.id} sub={worldLine(w)} />
                   <Cell flex align="end">
-                    {job?.worldId === w.id ? (
-                      <JobProgress label="Wird gesichert" p={job.p} width={120} />
+                    {target === worldTarget(instance.id, w.id) ? (
+                      <JobProgress label="Wird gesichert" p={progressShare(progress)} width={120} />
                     ) : (
                       <GuardedButton size="s" icon="play" blocked={playBlocked} aria-label={`Spielen: ${w.name}`} onClick={() => onPlay({ type: "world", id: w.id })}>
                         Spielen

@@ -186,7 +186,7 @@ type LiveTask = { id: string; label: string; sub: string; p: number | null; canc
 
 /** Zeilen der laufenden Aufgaben, mit „Abbrechen“, wo das Backend es kann. */
 function useLiveTasks(): LiveTask[] {
-  const { installs, content, world } = useRunningTasks();
+  const { installs, content } = useRunningTasks();
   const cancelInstall = useCancelInstall();
   const { data: instances } = useInstances();
   const name = (id: string) => instances?.find((i) => i.id === id)?.name ?? "Instanz";
@@ -206,7 +206,6 @@ function useLiveTasks(): LiveTask[] {
       p: progressShare(content.progress),
       cancel: content.cancellable ? cancelContent : undefined,
     });
-  if (world) live.push({ id: `w-${world.instanceId}`, label: world.label, sub: name(world.instanceId), p: world.p });
   return live;
 }
 

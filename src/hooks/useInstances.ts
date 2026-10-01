@@ -12,7 +12,7 @@ import { useGame } from "@/store/game";
 import { accountName, useSettings } from "@/store/settings";
 import { useTasks } from "@/store/tasks";
 import { screenshotKeys } from "./useScreenshots";
-import { worldKeys } from "./useWorlds";
+import { worldKeys } from "./worldKeys";
 
 export const instanceKeys = {
   all: ["instances"] as const,
