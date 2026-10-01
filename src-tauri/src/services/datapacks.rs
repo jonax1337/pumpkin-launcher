@@ -141,7 +141,8 @@ pub async fn install(
 /// Legt das Paket `id` in den Papierkorb (lässt sich dort wiederherstellen). Nur ein Name aus der Liste wird zum Pfad.
 pub fn remove(dirs: &Dirs, instance_id: &str, world_id: &str, id: &str) -> AppResult<()> {
     let world = worlds::world_dir(dirs, instance_id, world_id)?;
-    if !packs_in(&world)?.iter().any(|pack| pack.id == id) {
+    let listed = worlds::entries(&world.join(DATAPACKS))?.iter().any(|entry| entry.file_name() == id && pack_is_folder(entry).is_some());
+    if !listed {
         return Err(AppError::NotFound { kind: "Datenpaket", id: id.to_owned() });
     }
     trash::delete(world.join(DATAPACKS).join(id))?;
@@ -165,18 +166,23 @@ fn pack_lists(world: &Path) -> PackLists {
     })
 }
 
-/// Ein Ordner oder eine `.zip`-Datei ist ein Datenpaket; ist `pack.mcmeta` unlesbar, fehlt nur die Beschreibung.
-fn read_pack(entry: &fs::DirEntry, lists: &PackLists) -> Option<Datapack> {
-    let id = entry.file_name().into_string().ok()?;
+/// `Some(true)` für einen Paket-Ordner, `Some(false)` für eine `.zip`-Datei, sonst ist der Eintrag kein Datenpaket.
+fn pack_is_folder(entry: &fs::DirEntry) -> Option<bool> {
     // DirEntry folgt keinen Symlinks: ein Link ist hier weder Ordner noch Datei.
     let kind = entry.file_type().ok()?;
-    let mcmeta = if kind.is_dir() {
-        folder_mcmeta(&entry.path())
-    } else if kind.is_file() && is_zip(&id) {
-        file_mcmeta(&entry.path())
+    if kind.is_dir() {
+        Some(true)
+    } else if kind.is_file() && is_zip(entry.file_name().to_str()?) {
+        Some(false)
     } else {
-        return None;
-    };
+        None
+    }
+}
+
+/// Ist `pack.mcmeta` unlesbar, fehlt nur die Beschreibung.
+fn read_pack(entry: &fs::DirEntry, lists: &PackLists) -> Option<Datapack> {
+    let id = entry.file_name().into_string().ok()?;
+    let mcmeta = if pack_is_folder(entry)? { folder_mcmeta(&entry.path()) } else { file_mcmeta(&entry.path()) };
     let description = mcmeta.ok().and_then(|mcmeta| mcmeta.description());
     Some(Datapack { name: pack_name(&id).to_owned(), description, enabled: lists.state(&id), id })
 }
@@ -196,7 +202,8 @@ fn zip_mcmeta(zip: &mut zip::ZipArchive<impl Read + Seek>) -> AppResult<McMeta> 
 fn parse_mcmeta(reader: impl Read) -> AppResult<McMeta> {
     let mut json = Vec::new();
     reader.take(MCMETA_LIMIT).read_to_end(&mut json)?;
-    Ok(serde_json::from_slice(&json)?)
+    // Editoren speichern JSON gern mit BOM; das Spiel liest das, serde_json nicht.
+    Ok(serde_json::from_slice(json.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&json))?)
 }
 
 /// Text-Komponente des Spiels: Text, Liste oder Objekt mit `text` und `extra`.
@@ -343,6 +350,7 @@ mod tests {
         assert_eq!(description(r#"{"pack": {"pack_format": 48}}"#), None);
         assert_eq!(description(r#"{"pack": {"description": " §r "}}"#), None);
         assert!(parse_mcmeta(&br#"{"pack_format": 48}"#[..]).is_err());
+        assert_eq!(description("\u{FEFF}{\"pack\": {\"description\": \"Mit BOM\"}}").as_deref(), Some("Mit BOM"));
     }
 
     #[test]

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
-import { useInfiniteQuery, useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueries, useQuery, useQueryClient, type QueryClient, type UseQueryResult } from "@tanstack/react-query";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { useNavigate } from "react-router";
@@ -162,6 +162,21 @@ function InChip({ instances, small }: { instances?: Instance[]; small?: boolean 
 // ---------- Hinzufügen ----------
 
 /**
+ * Datenpaket in die Welt. Der Lauf gibt die Instanz unverändert zurück (keine Abhängigkeiten), damit Fortschritt und
+ * Aufgaben-Menü wie bei Mods laufen. Die Liste der Welt wird hier aufgefrischt, nicht erst im Erfolgs-Callback, der
+ * bei einer inzwischen verlassenen Seite nicht mehr läuft.
+ */
+const installDatapack = async (qc: QueryClient, instance: Instance, world: World, versionId: string, op: string) => {
+  await api.datapackInstall(instance.id, world.id, versionId, op);
+  void qc.invalidateQueries({ queryKey: worldKeys.datapacks(instance.id, world.id) });
+  return instance;
+};
+
+/** Wohin ein Inhalt kam: in die Welt (Tab Welten) oder in die Instanz (Tab Inhalte). */
+const destination = (instance: Instance, world?: World) =>
+  world ? { label: `„${world.name}“ (${instance.name})`, tab: "worlds" } : { label: instance.name, tab: "content" };
+
+/**
  * Wählt die passende Version automatisch (oder nimmt `versionId`) und installiert mit Abhängigkeiten, Datenpakete in
  * die Welt `world`. "missing" = keine Version für diese Instanz. Mit `openAction` bekommt der Toast „Ansehen“ (Instanz, Tab Inhalte bzw. Welten).
  */
@@ -206,21 +221,16 @@ function useAddContent() {
     }
     const before = instance.mods.length;
     const { world } = opts;
-    // Ein Datenpaket ändert nur die Welt; der Lauf gibt die Instanz zurück, damit Fortschritt und Aufgaben-Menü gleich bleiben.
     const perform = (op: string) =>
-      world
-        ? api.datapackInstall(instance.id, world.id, id, op).then(() => instance)
-        : source === "modrinth" ? api.modrinthInstallMod(instance.id, id, op) : api.providerInstallMod(source, instance.id, projectId, id, op);
+      world ? installDatapack(qc, instance, world, id, op) : source === "modrinth" ? api.modrinthInstallMod(instance.id, id, op) : api.providerInstallMod(source, instance.id, projectId, id, op);
     install.mutate(withTarget(projectId, perform, `${title} installieren`), {
       onSuccess: (result) => {
         if (!result) return;
-        if (world) void qc.invalidateQueries({ queryKey: worldKeys.datapacks(instance.id, world.id) });
-        const extra = world ? 0 : result.mods.length - before - 1;
+        const extra = result.mods.length - before - 1;
         const deps = extra > 0 ? `, dazu ${extra} ${extra === 1 ? "benötigte Mod" : "benötigte Mods"}` : "";
         if (!opts.openAction) return void toast.success(`${title} hinzugefügt${deps}`);
-        toast.success(`${title} ist jetzt in ${world ? `„${world.name}“ (${result.name})` : result.name}${deps}`, {
-          action: { label: "Ansehen", onClick: () => navigate(`/instances/${result.id}?tab=${world ? "worlds" : "content"}`) },
-        });
+        const { label, tab } = destination(result, world);
+        toast.success(`${title} ist jetzt in ${label}${deps}`, { action: { label: "Ansehen", onClick: () => navigate(`/instances/${result.id}?tab=${tab}`) } });
       },
     });
     return "ok";
@@ -326,16 +336,19 @@ export function AddToWorldMenu({ projectId, title, large }: { projectId: string;
   const [open, setOpen] = useState(false);
   const list = instances.data ?? [];
   const worlds = useQueries({ queries: list.map((i) => ({ ...worldsQuery(i.id), enabled: open })) });
+  // Wie im Menü für Instanzen: Versionen einmal laden, um Instanzen ohne passende Minecraft-Version vorab auszugrauen.
+  const all = useQuery({ ...allVersionsQuery(projectId), enabled: open });
   const add = (i: Instance, world: World) =>
     void addContent(i, projectId, title, "datapack", { world, openAction: true }).then(
       (r) => r === "missing" && toast.error(`${title} gibt es nicht für Minecraft ${i.minecraftVersion}`),
     );
   const items: MenuEntry[] = list.map((i, k) => {
     const found = worlds[k].data;
+    const reason = all.data && !all.data.some((v) => versionFits(v, i, "datapack")) ? `keine Version für ${i.minecraftVersion}` : found?.length === 0 ? "keine Welten" : null;
     return {
       id: i.id,
-      text: found?.length === 0 ? `${i.name} (keine Welten)` : i.name,
-      disabled: !found?.length,
+      text: reason ? `${i.name} (${reason})` : i.name,
+      disabled: !!reason || !found?.length,
       items: (found ?? []).map((w) => ({ id: w.id, text: w.name, onSelect: () => add(i, w) })),
     };
   });
