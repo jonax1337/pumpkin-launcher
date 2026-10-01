@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type PointerEvent as RPointerEvent, type RefObject } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type PointerEvent as RPointerEvent, type RefObject } from "react";
 import { Link, useLocation, useNavigate, useOutlet } from "react-router";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AccountMenu } from "@/components/PlayerNames";
@@ -8,6 +8,7 @@ import { ManualDownloads } from "@/components/ManualDownloads";
 import { useUpdateCheckOnStart } from "@/hooks/useAppUpdate";
 import { useCancelInstall, useGameEvents, useInstances } from "@/hooks/useInstances";
 import { cancelContent } from "@/hooks/useContent";
+import { useOnline } from "@/hooks/useOnline";
 import { useRunningTasks } from "@/hooks/useRunningTasks";
 import { api } from "@/lib/api";
 import { progressLabel, progressShare } from "@/lib/modrinth";
@@ -171,16 +172,6 @@ function useFits(view: RefObject<HTMLElement | null>, active: boolean) {
   }, [view, active]);
   return active && fits;
 }
-
-const subscribeOnline = (cb: () => void) => {
-  window.addEventListener("online", cb);
-  window.addEventListener("offline", cb);
-  return () => {
-    window.removeEventListener("online", cb);
-    window.removeEventListener("offline", cb);
-  };
-};
-const useOnline = () => useSyncExternalStore(subscribeOnline, () => navigator.onLine);
 
 type LiveTask = { id: string; label: string; sub: string; p: number | null; cancel?: () => void };
 

@@ -2,18 +2,15 @@ import type { ComponentProps } from "react";
 import { Button, Tip } from "@/ui";
 import { usePhase } from "@/components/game";
 import { useContentState } from "@/hooks/useContent";
-import { useWorldJob } from "@/hooks/useWorlds";
 import type { Instance, QuickPlay } from "@/lib/types";
 
 /** Warum Spieldateien gerade nicht angefasst werden und nichts startet (null = frei); das Backend lässt nur einen Vorgang zu. */
 export function useBusyReason(instanceId: string): string | null {
   const phase = usePhase(instanceId);
-  const worldJob = useWorldJob((s) => s.job != null);
   const contentBusy = useContentState((s) => s.active != null);
   if (phase === "running") return "Minecraft läuft gerade. Beende es zuerst.";
   if (phase === "preparing" || phase === "starting") return "Minecraft startet gerade.";
-  if (worldJob) return "Gerade wird eine Welt gesichert oder wiederhergestellt.";
-  if (contentBusy) return "Gerade läuft eine Installation. Warte, bis sie fertig ist.";
+  if (contentBusy) return "Gerade läuft ein Vorgang. Warte, bis er fertig ist.";
   return null;
 }
 

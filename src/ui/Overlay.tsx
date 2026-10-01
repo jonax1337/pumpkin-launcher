@@ -1,6 +1,6 @@
 /**
  * Überlagerungen des Kits: Tooltip, abgeschnittener Text, Menü, Kontextmenü, Popover, Dialog, Rückfrage, Seitenpanel.
- * Verhalten aus Radix; Fokus-Rückgabe, Menü-Auslöser, Akzent-Weitergabe und Autofokus-Priorität wie im früheren px.tsx.
+ * Verhalten aus Radix; Fokus-Rückgabe, Menü-Auslöser, Akzent-Weitergabe und Autofokus-Priorität wie im alten Pixel-Bestand.
  * Aussehen: ui/overlay.css (vx-*). Innerhalb von Overlays gilt der hellere Hover-Kontext (data-ctx="overlay", tokens.css).
  */
 import { cloneElement, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";

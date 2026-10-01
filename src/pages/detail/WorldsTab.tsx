@@ -7,13 +7,15 @@ import {
 } from "@/ui";
 import { AddContentSheet } from "@/components/ContentBrowser";
 import { QueryList } from "@/components/QueryList";
+import { useContentState } from "@/hooks/useContent";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { usePlay } from "@/hooks/useInstances";
 import {
-  useAddDatapacks, useDatapacks, useDeleteBackup, useRemoveDatapack, useWorldBackups, useWorldJob, useWorldJobs, useWorldQuickPlay, useWorlds,
+  useAddDatapacks, useDatapacks, useDeleteBackup, useRemoveDatapack, useWorldBackups, useWorldJobs, useWorldQuickPlay, useWorlds, worldTarget,
 } from "@/hooks/useWorlds";
 import { api } from "@/lib/api";
 import { formatDateTime, formatSize, relativeTime } from "@/lib/format";
+import { progressShare } from "@/lib/modrinth";
 import { toastError } from "@/lib/toast";
 import { GAME_MODE_LABELS, type Instance, type QuickPlay, type World, type WorldBackup } from "@/lib/types";
 import { DropHint, rejectedFileToast } from "./dropFiles";

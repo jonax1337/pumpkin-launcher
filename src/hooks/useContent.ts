@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { create } from "zustand";
@@ -7,6 +7,7 @@ import { doneLabel, type ContentProgress, type ContentProject } from "@/lib/modr
 import type { Instance } from "@/lib/types";
 import { useTasks, type DoneTask } from "@/store/tasks";
 import { instanceKeys } from "./useInstances";
+import { useOnline } from "./useOnline";
 
 // Keeps progress visible across route changes; only the matching active operation may update it.
 // `target` says what runs (a project ID or "updates"), so rows can show their own progress.
@@ -104,22 +105,6 @@ const updatesQuery = (instanceId: string) => ({
 /** Update-Check einer Instanz; still, wenn Modrinth nicht erreichbar ist. */
 export function useModUpdates(instanceId: string, enabled: boolean) {
   return useQuery({ ...updatesQuery(instanceId), enabled });
-}
-
-/** Online-Zustand des Browsers/WebViews (für Abfragen im Hintergrund). */
-function useOnline() {
-  const [online, setOnline] = useState(() => navigator.onLine);
-  useEffect(() => {
-    const on = () => setOnline(true);
-    const off = () => setOnline(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => {
-      window.removeEventListener("online", on);
-      window.removeEventListener("offline", off);
-    };
-  }, []);
-  return online;
 }
 
 /**
