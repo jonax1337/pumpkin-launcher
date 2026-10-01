@@ -1,10 +1,21 @@
 import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useI18n } from "@/i18n";
+import { useI18n, type TKey } from "@/i18n";
 import { useInstances } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 
 const APP = "Pumpkin Launcher";
+
+/** Bereiche nach Adressanfang; die Startseite ist nur `/` selbst, alles Unbekannte ist „nicht gefunden“. */
+const AREA_TITLES: [prefix: string, key: TKey][] = [
+  ["/instances", "ui.nav.library"],
+  ["/discover", "ui.nav.discover"],
+  ["/settings", "common.settings"],
+  ["/skins", "ui.nav.skins"],
+];
+
+const areaTitleKey = (pathname: string): TKey =>
+  pathname === "/" ? "ui.nav.home" : AREA_TITLES.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? "ui.pageTitle.notFound";
 
 /** Fenstertitel je Bereich; bei einer Instanz ihr Name. */
 export function usePageTitle(pathname: string) {
@@ -12,14 +23,7 @@ export function usePageTitle(pathname: string) {
   const { data: instances } = useInstances();
   const id = pathname.match(/^\/instances\/([^/]+)/)?.[1];
   const name = id ? instances?.find((i) => i.id === decodeURIComponent(id))?.name : undefined;
-  const page =
-    pathname === "/" ? t("ui.nav.home")
-    : id ? (name ?? t("ui.nav.library"))
-    : pathname.startsWith("/instances") ? t("ui.nav.library")
-    : pathname.startsWith("/discover") ? t("ui.nav.discover")
-    : pathname.startsWith("/settings") ? t("common.settings")
-    : pathname.startsWith("/skins") ? t("ui.nav.skins")
-    : t("ui.pageTitle.notFound");
+  const page = name ?? t(areaTitleKey(pathname));
   useEffect(() => {
     document.title = `${page} · ${APP}`;
     if (api.capabilities.nativeWindow) void getCurrentWindow().setTitle(document.title).catch(console.error);
