@@ -9,8 +9,6 @@
 .vx-chip[data-tone="bad"] { color: var(--bad); --c-line: color-mix(in srgb, var(--bad) 45%, transparent); }
 .vx-chip[data-tone="run"] { color: var(--run); --c-line: color-mix(in srgb, var(--run) 45%, transparent); }
 .vx-chip:not([data-tone]) .vx-count { color: var(--fg); }
-.vx-chip[data-fixed] { justify-content: flex-start; }
-.vx-chip-t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .vx-dot { width: var(--u2); height: var(--u2); background: currentColor; flex: none; }
 
 /* Zahl in Pixelschrift; --dg Stellen reserviert (rechtsbündig), damit wechselnde Werte nichts verschieben */

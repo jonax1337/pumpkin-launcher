@@ -1,4 +1,6 @@
 /* Gemeinsame Typen des Pixel-Kits (src/ui). */
+import type { WIDTH } from "@/lib/breakpoints";
+
 export type { IconName } from "@/pixel/icon-data";
 
 /** Komponentengröße: Höhe 32 / 40 / 56 px (fest, nie von --px abhängig). */
@@ -7,5 +9,7 @@ export type Size = "s" | "m" | "l";
 export type Tone = "neutral" | "acc" | "warn" | "bad" | "run";
 /** Icon-Slot: Box 20 / 24 / 28 / 56 px (Raster siehe ui/icon.css). */
 export type IconSize = "s" | "m" | "l" | "xl";
+/** Fensterbreiten (px), an denen die Stylesheets umschalten (lib/breakpoints). */
+export type Breakpoint = (typeof WIDTH)[keyof typeof WIDTH];
 /** Breakpoints, unter denen Knöpfe kompakt werden (nur Symbol + Zahl). */
-export type Compact = 1180 | 1096 | 900;
+export type Compact = Extract<Breakpoint, 900 | 1096 | 1180>;

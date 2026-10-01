@@ -21,8 +21,6 @@
 .vx-btn[data-w="full"] { width: 100%; }
 .vx-btn[data-bleed="start"] { margin-inline-start: calc(var(--b-pl) * -1); }
 .vx-btn[data-bleed="end"] { margin-inline-end: calc(var(--b-pad) * -1); }
-.vx-btn.vx-ib[data-bleed="start"] { margin-inline-start: calc((var(--b-h) - var(--b-ico)) / -2); }
-.vx-btn.vx-ib[data-bleed="end"] { margin-inline-end: calc((var(--b-h) - var(--b-ico)) / -2); }
 .vx-bc { position: relative; display: inline-flex; align-items: center; gap: var(--b-gap); min-width: 0; }
 
 .vx-btn:is([data-tone="acc"], .vx-btn--acc) { --b-tone: var(--acc-hi); --b-tint: var(--acc); }

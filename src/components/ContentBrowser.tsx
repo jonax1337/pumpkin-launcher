@@ -560,7 +560,6 @@ function Offline({ onRetry, compact }: { onRetry: () => void; compact?: boolean 
   const { t } = useI18n();
   return (
     <Empty
-      ill="plug"
       title={t("components.offline.title")}
       size={compact ? "pane" : "page"}
       actions={
@@ -649,7 +648,6 @@ export function ContentResults({ type, instance, world, action, onOpen, query: t
         </List>
       ) : hits.length === 0 ? (
         <Empty
-          ill="search"
           title={t("components.search.nothingFound")}
           size={compact ? "pane" : "section"}
           actions={hasFilter && onReset ? <Button onClick={onReset}>{t("components.search.resetFilters")}</Button> : undefined}
@@ -666,7 +664,7 @@ export function ContentResults({ type, instance, world, action, onOpen, query: t
                 <ListRow key={hit.project_id} feature={feat} index={k % 20} hit={{ onClick: () => onOpen(hit.project_id, hit), label: t("components.search.viewProject", { name: hit.title }) }}>
                   <ProjectIcon url={hit.icon_url} seed={hit.project_id} box={feat ? 104 : compact ? 40 : 72} />
                   <RowTitle
-                    size={feat ? "feature" : "l"}
+                    size="l"
                     title={hit.title}
                     aside={compact ? undefined : t("components.search.byAuthor", { autor: hit.author })}
                     sub={hit.description}
