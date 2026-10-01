@@ -37,6 +37,9 @@ tauri-plugin-dialog = "2"
 tokio-util = "0.7.19"
 base64 = "0.22"
 keyring = { version = "3", features = ["windows-native"] }
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+tauri-plugin-single-instance = "2"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_System_SystemInformation"] }

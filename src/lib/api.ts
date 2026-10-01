@@ -1,6 +1,8 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 import {
   INSTALL_CANCELLED,
   type Account,
@@ -379,4 +381,8 @@ export const api = {
   /** Datei mit dem Standardprogramm öffnen (z. B. Absturzbericht). */
   openPath: (path: string): Promise<void> =>
     tauri ? openPath(path) : Promise.reject(new Error("Dateien lassen sich nur in der Pumpkin Launcher-App öffnen.")),
+
+  /** Neuere Launcher-Version aus den GitHub-Releases, sonst null. Im Browser gibt es keine Updates. */
+  checkAppUpdate: (): Promise<Update | null> => (tauri ? check() : Promise.resolve(null)),
+  restartApp: (): Promise<void> => (tauri ? relaunch() : Promise.resolve(location.reload())),
 };
