@@ -80,7 +80,7 @@ pub(crate) fn write_new(root: &Path, path: &Path, data: &[u8]) -> AppResult<()> 
     }
     Ok(())
 }
-pub(crate) fn rollback(paths: &[PathBuf], original: crate::error::AppError) -> crate::error::AppError {
+pub(crate) fn rollback(paths: &[PathBuf], original: AppError) -> AppError {
     let mut errors = Vec::new();
     for path in paths.iter().rev() {
         if let Err(e) = fs::remove_file(path) {

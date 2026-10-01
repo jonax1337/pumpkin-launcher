@@ -384,7 +384,7 @@ pub fn instance_status(state: State<'_, AppState>, instance_id: String) -> AppRe
 /// Spielordner einer Instanz (Welten, Mods, Screenshots) zum Öffnen im Dateimanager; wird bei Bedarf angelegt.
 #[tauri::command]
 pub fn instance_dir(state: State<'_, AppState>, instance_id: String) -> AppResult<String> {
-    state.instances.get(&instance_id)?;
+    state.require_instance(&instance_id)?;
     let dir = state.dirs.game_dir(&instance_id);
     std::fs::create_dir_all(&dir)?;
     Ok(dir.to_string_lossy().into_owned())
