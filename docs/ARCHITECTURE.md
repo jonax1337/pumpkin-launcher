@@ -55,7 +55,7 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `updater` | Neue Version von GitHub Releases (`latest.json`), Signatur gegen `plugins.updater.pubkey` in `tauri.conf.json` geprüft; Ablauf in `docs/RELEASING.md` |
 | `process` | Neustart nach dem Update (`relaunch`) |
 
-`capabilities/default.json` gibt dem Hauptfenster nur, was das Frontend braucht: Fensterknöpfe, `opener` (Dateipfade nur unter `$APPDATA/instances/*/minecraft`), `dialog:default`, `updater:default` (suchen, laden, installieren) und `process:allow-restart` (kein `exit`).
+`capabilities/default.json` gibt dem Hauptfenster nur, was das Frontend braucht: Fensterknöpfe, `opener` (Dateipfade nur unter `$APPDATA/instances/*/minecraft`), `dialog:default`, `updater:allow-check`/`allow-download`/`allow-install` (suchen, laden, installieren; ohne `download-and-install`) und `process:allow-restart` (kein `exit`).
 
 ### Persistenz
 
@@ -187,7 +187,7 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 - `components/game.tsx` – Spielen-Knopf (feste Größe in allen Zuständen), Statuszeile, Status-Chip, Protokoll mit Filter/Suche/Mitscrollen
 - `components/instance.tsx` – Instanz-Menü (Knopf und Rechtsklick) mit Dialogen „Als Vorlage speichern“ und „Löschen“
 - `components/ContentBrowser.tsx`, `NewInstanceDialog.tsx`, `PlayerNames.tsx`, `Onboarding.tsx` – Katalog und Seitenpanel, Neue Instanz, Konten und Microsoft-Anmeldung, erster Start
-- `components/AppUpdate.tsx` – Zeile „Updates“ in *Einstellungen › Über*: Version suchen, Versionshinweise, „Installieren und neu starten“
+- `components/AppUpdate.tsx` – Zeile „Updates“ in *Einstellungen › Über*: Version suchen, Versionshinweise, „Installieren und neu starten“, nach dem Warten auf Spiel und Downloads „Jetzt neu starten“
 - `pixel/` – `unit.ts` (Pixeleinheit auf ganze Gerätepixel), `scene.ts` (Szenen-Engine: 7 Biome, 12 fps, Pausenregeln, Cache), `PixelScene.tsx`, `icons.tsx` (Pixel-Icons, Mod-Glyphen, Wortzeichen, Spielerkopf)
 - `styles/pixelkino.css` (aus dem Mockup übernommen), `styles/states.css` (Auswahlliste, Hover/Druck/Fokus, Ein- und Ausblenden) plus kleine Ergänzungen je Bereich; beide in der Tailwind-Schicht `components`, deren Reihenfolge `index.html` vor allen Stylesheets festlegt
 

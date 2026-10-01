@@ -40,7 +40,7 @@ Ein fehlgeschlagener Lauf lässt sich über *Re-run jobs* wiederholen; die Datei
 
 - Der Launcher fragt `https://github.com/jonax1337/pumpkin-launcher/releases/latest/download/latest.json` ab. „latest“ ist immer das neueste **veröffentlichte** Release; Entwürfe und Pre-Releases sieht der Updater nicht.
 - Im Release-Build sucht der Launcher kurz nach dem Start still nach einer neuen Version und meldet sie per Hinweis. Von Hand: *Einstellungen › Über › Nach Updates suchen*.
-- Installiert wird nur nach Klick auf *Installieren und neu starten*: Download mit Fortschritt, Prüfung der Signatur, dann startet der NSIS-Installer im passiven Modus und den Launcher danach neu. Läuft gerade Minecraft, wartet der Launcher mit der Installation, bis das Spiel beendet ist, und sagt das an.
+- Installiert wird nur nach Klick auf *Installieren und neu starten*: Download mit Fortschritt, Prüfung der Signatur, dann startet der NSIS-Installer im passiven Modus und den Launcher danach neu. Läuft gerade Minecraft oder ein Download, wartet der Launcher, bis beides fertig ist, sagt das an und startet erst nach einem weiteren Klick auf *Jetzt neu starten* neu, damit ein Absturzbericht nicht im Neustart untergeht.
 - Ein zweiter Start des Launchers holt das laufende Fenster nach vorn (Single-Instance), statt einen zweiten Prozess auf dieselben Daten loszulassen.
 
 ## Lokal bauen

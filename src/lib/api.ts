@@ -384,5 +384,7 @@ export const api = {
 
   /** Neuere Launcher-Version aus den GitHub-Releases, sonst null. Im Browser gibt es keine Updates. */
   checkAppUpdate: (): Promise<Update | null> => (tauri ? check() : Promise.resolve(null)),
-  restartApp: (): Promise<void> => (tauri ? relaunch() : Promise.resolve(location.reload())),
+  /** Launcher neu starten (nach dem Update auf Systemen, deren Installer das nicht selbst tut). */
+  restartApp: (): Promise<void> =>
+    tauri ? relaunch() : Promise.reject(new Error("Neu starten geht nur in der Pumpkin Launcher-App.")),
 };

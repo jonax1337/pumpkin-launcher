@@ -6,9 +6,13 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { api } from "@/lib/api";
 import { isGameActive, useGame } from "@/store/game";
+import { useContentState } from "./useContent";
 
-/** Ein Fund bleibt gültig, bis jemand erneut sucht. */
-const updateQuery = { queryKey: ["app-update"], queryFn: api.checkAppUpdate, staleTime: Infinity, retry: false };
+/**
+ * Ein Fund bleibt gültig, bis jemand erneut sucht; `gcTime` hält ihn auch, wenn gerade niemand die Über-Seite zeigt
+ * (Fund beim Start, wartendes Update).
+ */
+const updateQuery = { queryKey: ["app-update"], queryFn: api.checkAppUpdate, staleTime: Infinity, gcTime: Infinity, retry: false };
 
 /** Erst suchen, wenn der Start durch ist: die Suche soll nicht mit Laden und Szene um das Netz konkurrieren. */
 const START_CHECK_DELAY_MS = 8_000;
@@ -45,21 +49,24 @@ function announceUpdate(version: string, show: () => void) {
 
 /**
  * Ablauf „Installieren und neu starten“; liegt außerhalb der Seite, damit er Seitenwechsel übersteht.
- * `wait`: geladen, aber Minecraft läuft noch. `p`: Anteil des Downloads, null = unbekannt.
+ * `wait`: geladen, aber Minecraft oder ein Download läuft noch. `ready`: frei, Neustart wartet auf einen Klick.
+ * `p`: Anteil des Downloads, null = unbekannt.
  */
-export const useUpdateRun = create<{ phase: "idle" | "download" | "wait" | "install"; p: number | null }>(() => ({ phase: "idle", p: null }));
+export const useUpdateRun = create<{ phase: "idle" | "download" | "wait" | "ready" | "install"; p: number | null }>(() => ({ phase: "idle", p: null }));
 
-export const WAIT_FOR_GAME = "Pumpkin Launcher startet neu, sobald Minecraft beendet ist.";
+export const WAIT_FOR_IDLE = "Neu starten geht, sobald Minecraft beendet ist und keine Downloads mehr laufen.";
 
 /**
- * Lädt das Update, wartet auf das Ende laufender Spiele und installiert dann: unter Windows beendet der
- * Installer den Launcher, mitten im Spiel gingen Protokoll, Spielzeit und Absturzerkennung verloren.
+ * Lädt das Update und installiert es, wenn der Launcher frei ist: unter Windows beendet der Installer den Launcher,
+ * mitten im Spiel gingen Protokoll, Spielzeit und Absturzerkennung verloren, mitten im Download eine halbe Instanz.
+ * Musste gewartet werden, startet erst der nächste Aufruf (Phase `ready`) neu.
  */
 export async function installAppUpdate(update: Update) {
-  if (useUpdateRun.getState().phase !== "idle") return;
+  const { phase } = useUpdateRun.getState();
+  if (phase !== "idle" && phase !== "ready") return;
   try {
-    await download(update);
-    await gameClosed();
+    if (phase === "idle") await download(update);
+    if (launcherBusy()) return await deferRestart(update);
     useUpdateRun.setState({ phase: "install", p: null });
     await update.install();
     // Unter Windows startet der Installer den Launcher neu; der Neustart hier gilt für die übrigen Systeme.
@@ -82,16 +89,39 @@ async function download(update: Update) {
   });
 }
 
-/** Erfüllt sich, sobald kein Minecraft mehr startet oder läuft. */
-function gameClosed() {
+/**
+ * Wartet, bis der Launcher frei ist, und fragt dann noch einmal: wer zugestimmt hat, als das Spiel noch lief,
+ * liest danach womöglich Absturzbericht oder Protokoll, die ein sofortiger Neustart verwerfen würde.
+ */
+async function deferRestart(update: Update) {
+  useUpdateRun.setState({ phase: "wait", p: null });
+  toast.info("Update ist geladen", { description: WAIT_FOR_IDLE });
+  await launcherIdle();
+  useUpdateRun.setState({ phase: "ready" });
+  toast.info("Update ist bereit", {
+    id: "app-update",
+    duration: Infinity,
+    description: "Pumpkin Launcher startet für die Installation neu.",
+    action: { label: "Jetzt neu starten", onClick: () => void installAppUpdate(update) },
+  });
+}
+
+/** Startet oder läuft ein Minecraft, oder lädt gerade eine Instanz oder ein Inhalt? */
+function launcherBusy() {
+  const game = useGame.getState();
+  return isGameActive(game) || Object.keys(game.installs).length > 0 || useContentState.getState().active != null;
+}
+
+/** Erfüllt sich, sobald `launcherBusy` nicht mehr gilt. */
+function launcherIdle() {
   return new Promise<void>((resolve) => {
-    if (!isGameActive(useGame.getState())) return resolve();
-    useUpdateRun.setState({ phase: "wait", p: null });
-    toast.info("Update ist geladen", { description: WAIT_FOR_GAME });
-    const unsubscribe = useGame.subscribe((state) => {
-      if (isGameActive(state)) return;
-      unsubscribe();
+    const check = () => {
+      if (launcherBusy()) return;
+      offGame();
+      offContent();
       resolve();
-    });
+    };
+    const offGame = useGame.subscribe(check);
+    const offContent = useContentState.subscribe(check);
   });
 }

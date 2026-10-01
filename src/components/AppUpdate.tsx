@@ -1,6 +1,6 @@
 import type { Update } from "@tauri-apps/plugin-updater";
 import { Description } from "@/components/ContentBrowser";
-import { installAppUpdate, useAppUpdate, useUpdateRun, WAIT_FOR_GAME } from "@/hooks/useAppUpdate";
+import { installAppUpdate, useAppUpdate, useUpdateRun, WAIT_FOR_IDLE } from "@/hooks/useAppUpdate";
 import { Actions, Button, Count, ErrorBox, FormRow, Hint, JobProgress } from "@/ui";
 
 /** Einstellungen › Über: nach einer neuen Version suchen und sie erst auf Wunsch installieren. */
@@ -27,7 +27,7 @@ export function UpdateRow() {
   );
 }
 
-/** Gefundene Version mit Versionshinweisen und dem Ablauf Laden → (Spielende abwarten) → Installieren. */
+/** Gefundene Version mit Versionshinweisen und dem Ablauf Laden → (Spiel und Downloads abwarten, erneut bestätigen) → Installieren. */
 function UpdateOffer({ update }: { update: Update }) {
   const { phase, p } = useUpdateRun();
   return (
@@ -44,7 +44,14 @@ function UpdateOffer({ update }: { update: Update }) {
         </Actions>
       )}
       {phase === "download" && <JobProgress label="Update wird geladen" p={p} />}
-      {phase === "wait" && <Hint icon="info">{WAIT_FOR_GAME}</Hint>}
+      {phase === "wait" && <Hint icon="info">{WAIT_FOR_IDLE}</Hint>}
+      {phase === "ready" && (
+        <Actions>
+          <Button variant="primary" icon="redo" onClick={() => void installAppUpdate(update)}>
+            Jetzt neu starten
+          </Button>
+        </Actions>
+      )}
       {phase === "install" && <JobProgress label="Update wird installiert" p={null} />}
     </>
   );
