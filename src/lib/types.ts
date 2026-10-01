@@ -121,7 +121,9 @@ export const ALL_LOADERS: ModLoader[] = ["vanilla", "fabric", "quilt", "forge", 
 /** Loader, die das Backend installieren und starten kann; die übrigen erscheinen als „bald verfügbar“. */
 export const SUPPORTED_LOADERS: ModLoader[] = ["vanilla", "fabric", "quilt", "forge", "neoforge"];
 
-export const LOADER_LABELS: Record<ModLoader, string> = {
+/** Auch „datapack“: so nennt Modrinth den Loader von Datenpaketen. */
+export const LOADER_LABELS: Record<ModLoader | "datapack", string> = {
+  datapack: "Datenpaket",
   vanilla: "Vanilla",
   fabric: "Fabric",
   quilt: "Quilt",

@@ -43,7 +43,13 @@ function contentCall<T>(cmd: string, args?: Record<string, unknown>): Promise<T>
   return call<T>(cmd, args);
 }
 
-const LOCAL_FILES_IN_APP = "Eigene Dateien lassen sich nur in der Pumpkin Launcher-App hinzufügen.";
+/** Fehler für Dinge, die der Browser-Mock nicht kann; `what` ist ein Infinitiv-Satzteil („Ordner öffnen“). */
+const onlyInApp = (what: string) => Promise.reject(new Error(`${what} geht nur in der Pumpkin Launcher-App.`));
+
+/** Fehler der Tauri-Aufrufe kommen als string (oder Plugin-Fehlerobjekt); hier werden sie zu `Error`. */
+const rethrowAsError = (err: unknown): never => {
+  throw new Error(String(err));
+};
 
 /**
  * Tauri-invoke-Wrapper. Außerhalb von Tauri (reiner `pnpm dev` im Browser)
@@ -54,7 +60,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
   try {
     return await invoke<T>(cmd, args);
   } catch (err) {
-    throw new Error(typeof err === "string" ? err : String(err));
+    return rethrowAsError(err);
   }
 }
 
@@ -357,9 +363,9 @@ export const api = {
     tauri ? call("modrinth_identify", { instanceId, modIds }) : mockContent!.identify(instanceId),
   /** Eigene Dateien (absolute Pfade) vorab prüfen: Art und ob die Instanz sie schon hat. */
   checkLocalFiles: (instanceId: string, paths: string[]): Promise<FileCheck[]> =>
-    tauri ? call("instance_check_files", { instanceId, paths }) : Promise.reject(new Error(LOCAL_FILES_IN_APP)),
+    tauri ? call("instance_check_files", { instanceId, paths }) : onlyInApp("Eigene Dateien hinzufügen"),
   addLocalFiles: (instanceId: string, files: LocalFile[], operationId: string): Promise<Instance> =>
-    tauri ? call("instance_add_files", { instanceId, files, operationId }) : Promise.reject(new Error(LOCAL_FILES_IN_APP)),
+    tauri ? call("instance_add_files", { instanceId, files, operationId }) : onlyInApp("Eigene Dateien hinzufügen"),
   modrinthInstallPack: (versionId: string, name: string, operationId: string): Promise<Instance> =>
     tauri ? call("modrinth_install_pack", { versionId, name, operationId }) : mockPack!(versionId, name, operationId),
   modrinthImportPack: (path: string, name: string, operationId: string): Promise<Instance> =>
@@ -403,12 +409,12 @@ export const api = {
     tauri ? call("instance_export_entries", { instanceId }) : Promise.resolve(["config", "mods", "options.txt", "resourcepacks", "saves", "screenshots"]),
   /** Schreibt die Instanz als `.mrpack` nach `path` (absolut); `include` aus `exportEntries`. Abbrechbar wie ein Pack. */
   exportInstance: (instanceId: string, include: string[], path: string, operationId: string): Promise<void> =>
-    tauri ? call("instance_export", { instanceId, include, path, operationId }) : Promise.reject(new Error("Exportieren geht nur in der Pumpkin Launcher-App.")),
+    tauri ? call("instance_export", { instanceId, include, path, operationId }) : onlyInApp("Exportieren"),
   /** Datei im Dateimanager markieren (z. B. ein Export). */
   revealPath: (path: string): Promise<void> =>
     tauri
-      ? revealItemInDir(path).catch((err: unknown) => Promise.reject(new Error(String(err))))
-      : Promise.reject(new Error("Ordner lassen sich nur in der Pumpkin Launcher-App öffnen.")),
+      ? revealItemInDir(path).catch(rethrowAsError)
+      : onlyInApp("Ordner öffnen"),
 
   /** Instanzen anderer Launcher an den Standardorten oder, mit `folder` (absolut), in diesem Ordner. */
   importDetect: (folder: string | null): Promise<ForeignInstance[]> =>
@@ -437,7 +443,7 @@ export const api = {
     tauri ? call("instance_status", { instanceId }) : mockGame.status(instanceId),
   /** Spielordner der Instanz (wird angelegt, falls er fehlt). */
   instanceDir: (instanceId: string): Promise<string> =>
-    tauri ? call("instance_dir", { instanceId }) : Promise.reject(new Error("Ordner lassen sich nur in der Pumpkin Launcher-App öffnen.")),
+    tauri ? call("instance_dir", { instanceId }) : onlyInApp("Ordner öffnen"),
   installInstance: (instanceId: string): Promise<void> =>
     tauri ? call("instance_install", { instanceId }) : mockGame.install(instanceId),
   /** Startet das Spiel; liefert die Prozess-ID. */
@@ -463,7 +469,7 @@ export const api = {
     tauri ? call("ms_account_remove", { id }) : Promise.resolve(void (db.accounts = db.accounts.filter((a) => a.id !== id))),
   /** Lädt ein Protokoll der Instanz bereinigt zu mclo.gs hoch und liefert den öffentlichen Link. */
   shareLog: (instanceId: string, kind: LogKind): Promise<string> =>
-    tauri ? call("log_share", { instanceId, kind }) : Promise.reject(new Error("Protokolle lassen sich nur in der Pumpkin Launcher-App teilen.")),
+    tauri ? call("log_share", { instanceId, kind }) : onlyInApp("Protokolle teilen"),
   /** Launcher, System und Instanzen als Klartext ohne persönliche Daten, für Fehlerberichte. */
   debugInfo: (defaultMemoryMb: number): Promise<string> => (tauri ? call("debug_info", { defaultMemoryMb }) : mockGame.debugInfo()),
 
@@ -474,7 +480,7 @@ export const api = {
   skinTexture: (id: string): Promise<string> => (tauri ? call("skin_texture", { id }) : mockSkins!.texture(id)),
   /** PNG-Datei (absoluter Pfad aus dem Dateidialog) in die Bibliothek aufnehmen. */
   skinAdd: (path: string): Promise<LibrarySkin> =>
-    tauri ? call("skin_add", { path }) : Promise.reject(new Error("Skin-Dateien lassen sich nur in der Pumpkin Launcher-App hinzufügen.")),
+    tauri ? call("skin_add", { path }) : onlyInApp("Skin-Dateien hinzufügen"),
   skinUpdate: (id: string, name: string, variant: SkinVariant): Promise<LibrarySkin> =>
     tauri ? call("skin_update", { id, name, variant }) : mockSkins!.update(id, name, variant),
   skinDelete: (id: string): Promise<void> => (tauri ? call("skin_delete", { id }) : mockSkins!.remove(id)),
@@ -512,7 +518,7 @@ export const api = {
     tauri ? call("datapack_list", { instanceId, worldId }) : mockWorlds!.datapacks(instanceId, worldId),
   /** Eigene Datenpaket-Zips (absolute Pfade) in die Welt; passt eins nicht, kommt keins hinein. */
   datapackAdd: (instanceId: string, worldId: string, paths: string[]): Promise<void> =>
-    tauri ? call("datapack_add", { instanceId, worldId, paths }) : Promise.reject(new Error(LOCAL_FILES_IN_APP)),
+    tauri ? call("datapack_add", { instanceId, worldId, paths }) : onlyInApp("Eigene Dateien hinzufügen"),
   /** Datenpaket-Version von Modrinth in die Welt; Fortschritt als `content-progress`. */
   datapackInstall: (instanceId: string, worldId: string, versionId: string, operationId: string): Promise<void> =>
     tauri ? call("datapack_install", { instanceId, worldId, versionId, operationId }) : mockWorlds!.installDatapack(instanceId, worldId, versionId, operationId),
@@ -537,12 +543,12 @@ export const api = {
   /** Datei mit dem Standardprogramm öffnen (z. B. Absturzbericht). */
   openPath: (path: string): Promise<void> =>
     tauri
-      ? openPath(path).catch((err: unknown) => Promise.reject(new Error(String(err))))
-      : Promise.reject(new Error("Dateien lassen sich nur in der Pumpkin Launcher-App öffnen.")),
+      ? openPath(path).catch(rethrowAsError)
+      : onlyInApp("Dateien öffnen"),
 
   /** Neuere Launcher-Version aus den GitHub-Releases, sonst null. Im Browser gibt es keine Updates. */
   checkAppUpdate: (): Promise<Update | null> => (tauri ? check() : Promise.resolve(null)),
   /** Launcher neu starten (nach dem Update auf Systemen, deren Installer das nicht selbst tut). */
   restartApp: (): Promise<void> =>
-    tauri ? relaunch() : Promise.reject(new Error("Neu starten geht nur in der Pumpkin Launcher-App.")),
+    tauri ? relaunch() : onlyInApp("Neu starten"),
 };

@@ -5,8 +5,8 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { Checkbox, ConfirmDialog, Dialog, DialogActions, Field, Hint, IconButton, Menu, Skel, TextField, type MenuEntry } from "@/ui";
 import { usePhase } from "@/components/game";
-import { cancellable, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
-import { askStop, useDeleteInstance, useExportEntries, useGroups, usePlay, useUpdateInstance } from "@/hooks/useInstances";
+import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { askStop, useDeleteInstance, useExportEntries, useGroups, usePlay, useSetGroup } from "@/hooks/useInstances";
 import { useSaveTemplate } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
 import type { Instance } from "@/lib/types";
@@ -20,7 +20,7 @@ const useInstanceActions = create<{ template: Instance | null; exporting: Instan
 }));
 
 export const askSaveTemplate = (instance: Instance) => useInstanceActions.setState({ template: instance });
-export const askExport = (instance: Instance) => useInstanceActions.setState({ exporting: instance });
+const askExport = (instance: Instance) => useInstanceActions.setState({ exporting: instance });
 export const askDelete = (instance: Instance) => useInstanceActions.setState({ remove: instance });
 const askNewGroup = (instance: Instance) => useInstanceActions.setState({ newGroup: instance });
 
@@ -34,7 +34,7 @@ function useDuplicate() {
   const install = useContentInstall();
   const navigate = useNavigate();
   return (instance: Instance) =>
-    install.mutate(cancellable(withTarget(`duplicate:${instance.id}`, (op) => api.duplicateInstance(instance.id, op), `${instance.name} duplizieren`)), {
+    install.mutate(withTarget(`duplicate:${instance.id}`, (op) => api.duplicateInstance(instance.id, op), `${instance.name} duplizieren`, { cancellable: true }), {
       onSuccess: (copy) => copy && toast.success(`„${copy.name}“ angelegt`, { action: { label: "Öffnen", onClick: () => navigate(`/instances/${copy.id}`) } }),
     });
 }
@@ -46,9 +46,10 @@ function useDuplicate() {
 function useExport() {
   const install = useContentInstall();
   return (instance: Instance, include: string[], path: string) => {
-    // Ein Content-Lauf liefert eine Instanz (für „Öffnen“ im Verlauf); beim Export ist es die exportierte.
-    const run = (op: string) => api.exportInstance(instance.id, include, path, op).then(() => instance);
-    install.mutate(cancellable(withTarget(`export:${instance.id}`, run, `${instance.name} exportieren`)), {
+    // Ein Content-Lauf liefert eine Instanz (für „Öffnen“ im Verlauf); beim Export ist es die exportierte, frisch gelesen:
+    // die Kopie vom Öffnen des Dialogs könnte veraltet sein und landete im Cache.
+    const run = (op: string) => api.exportInstance(instance.id, include, path, op).then(() => api.getInstance(instance.id));
+    install.mutate(withTarget(`export:${instance.id}`, run, `${instance.name} exportieren`, { cancellable: true }), {
       onSuccess: (exported) =>
         exported &&
         toast.success(`„${instance.name}“ exportiert`, {
@@ -65,8 +66,8 @@ function useExport() {
  */
 export function useGroupMenu(instance: Instance): MenuEntry[] {
   const groups = useGroups();
-  const update = useUpdateInstance();
-  const assign = (group: string | null) => update.mutate({ ...instance, group });
+  const setGroup = useSetGroup(instance.id);
+  const assign = (group: string | null) => setGroup.mutate(group);
   return [
     ...groups.map((group) => ({ id: `group:${group}`, text: group, checked: group === instance.group, onSelect: () => assign(group) })),
     ...(groups.length ? ["-" as const] : []),
@@ -213,11 +214,11 @@ function ExportDialog({ instance, onExport, onClose }: { instance: Instance; onE
 
 function NewGroupDialog({ instance, onClose }: { instance: Instance; onClose: () => void }) {
   const [name, setName] = useState("");
-  const update = useUpdateInstance();
+  const setGroup = useSetGroup(instance.id);
   const group = name.trim();
   function submit(e: FormEvent) {
     e.preventDefault();
-    if (group) update.mutate({ ...instance, group }, { onSuccess: onClose });
+    if (group) setGroup.mutate(group, { onSuccess: onClose });
   }
   return (
     <Dialog
@@ -225,7 +226,7 @@ function NewGroupDialog({ instance, onClose }: { instance: Instance; onClose: ()
       onOpenChange={(o) => !o && onClose()}
       title="Neue Gruppe"
       width={480}
-      footer={<DialogActions cancel="Abbrechen" confirm={{ label: update.isPending ? "Speichert" : "Speichern", width: 130, form: "group-form", disabled: !group || update.isPending }} />}
+      footer={<DialogActions cancel="Abbrechen" confirm={{ label: setGroup.isPending ? "Speichert" : "Speichern", width: 130, form: "group-form", disabled: !group || setGroup.isPending }} />}
     >
       <form id="group-form" onSubmit={submit}>
         <Field label="Name der Gruppe" help={<>„{instance.name}“ kommt in diese Gruppe. Eine Gruppe ohne Instanzen verschwindet von selbst.</>}>

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { create } from "zustand";
@@ -12,7 +12,7 @@ import { useGame } from "@/store/game";
 import { accountName, useSettings } from "@/store/settings";
 import { useTasks } from "@/store/tasks";
 import { screenshotKeys } from "./useScreenshots";
-import { worldKeys } from "./useWorlds";
+import { worldKeys } from "./worldKeys";
 
 export const instanceKeys = {
   all: ["instances"] as const,
@@ -20,8 +20,10 @@ export const instanceKeys = {
   status: (id: string) => ["instance-status", id] as const,
 };
 
+const instanceListQuery = { queryKey: instanceKeys.all, queryFn: api.listInstances };
+
 export function useInstances() {
-  return useQuery({ queryKey: instanceKeys.all, queryFn: api.listInstances });
+  return useQuery(instanceListQuery);
 }
 
 /** Gruppennamen aller Instanzen, alphabetisch; Gruppen gibt es nur über die Instanzen, die sie tragen. */
@@ -32,7 +34,7 @@ export const groupsOf = (instances: Instance[]) =>
 export const UNGROUPED = "Ohne Gruppe";
 
 export function useGroups() {
-  return useQuery({ queryKey: instanceKeys.all, queryFn: api.listInstances, select: groupsOf }).data ?? [];
+  return useQuery({ ...instanceListQuery, select: groupsOf }).data ?? [];
 }
 
 export function useInstance(id: string | undefined) {
@@ -55,14 +57,29 @@ export function useCreateInstance() {
   });
 }
 
+/** Gespeicherte Instanz in den Cache übernehmen und die Liste neu laden. */
+function instanceSaved(qc: QueryClient, inst: Instance) {
+  qc.setQueryData(instanceKeys.detail(inst.id), inst);
+  return qc.invalidateQueries({ queryKey: instanceKeys.all });
+}
+
 export function useUpdateInstance() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (instance: Instance) => api.updateInstance(instance),
-    onSuccess: (inst) => {
-      qc.setQueryData(instanceKeys.detail(inst.id), inst);
-      return qc.invalidateQueries({ queryKey: instanceKeys.all });
-    },
+    onSuccess: (inst) => instanceSaved(qc, inst),
+  });
+}
+
+/**
+ * Gruppe einer Instanz setzen (null = ohne). Gespeichert wird der aktuelle Stand der Instanz, nicht der beim Öffnen
+ * eines Menüs oder Dialogs: das Backend übernimmt die Mod-Liste vollständig, eine alte Kopie machte Installationen rückgängig.
+ */
+export function useSetGroup(instanceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (group: string | null) => api.updateInstance({ ...(await api.getInstance(instanceId)), group }),
+    onSuccess: (inst) => instanceSaved(qc, inst),
   });
 }
 
@@ -154,7 +171,7 @@ export async function defaultMemory(qc: ReturnType<typeof useQueryClient>) {
   }
 }
 
-const isCancelled = (err: unknown) => err instanceof Error && err.message === CANCELLED;
+export const isCancelled = (err: unknown) => err instanceof Error && err.message === CANCELLED;
 
 export function useInstanceStatus(id: string | undefined) {
   return useQuery({

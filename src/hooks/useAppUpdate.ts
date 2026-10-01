@@ -112,12 +112,11 @@ const launcherBusy = () => isGameActive(useGame.getState()) || anyTaskRunning();
 /** Erfüllt sich, sobald `launcherBusy` nicht mehr gilt. */
 function launcherIdle() {
   return new Promise<void>((resolve) => {
-    const check = () => {
+    // `subscribeRunningTasks` meldet auch den Game-Store: ein Abonnement genügt für Spiel und Aufgaben.
+    const unsubscribe = subscribeRunningTasks(() => {
       if (launcherBusy()) return;
-      offTasks();
+      unsubscribe();
       resolve();
-    };
-    // Enthält den Game-Store: Spiel und Aufgaben melden sich über denselben Abonnenten.
-    const offTasks = subscribeRunningTasks(check);
+    });
   });
 }

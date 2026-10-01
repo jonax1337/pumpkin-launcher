@@ -1,7 +1,8 @@
 import type { ComponentProps } from "react";
 import { create } from "zustand";
 import { Actions, Button, ConfirmDialog, FormRow } from "@/ui";
-import { openPage, useCopyDebugInfo, useShareLog } from "@/hooks/useSupport";
+import { useCopyDebugInfo, useShareLog } from "@/hooks/useSupport";
+import { openPage } from "@/lib/links";
 import type { ExitPayload, LogKind } from "@/lib/types";
 
 const REPO_URL = "https://github.com/jonax1337/pumpkin-launcher";
@@ -29,7 +30,7 @@ export function ShareLogDialog() {
       onOpenChange={(o) => !o && close()}
       danger={false}
       title="Log öffentlich teilen?"
-      text={`Pumpkin Launcher lädt ${what} zu mclo.gs hoch. Jeder mit dem Link kann es lesen. Zugangsdaten, dein Benutzername und E-Mail-Adressen werden vorher entfernt.`}
+      text={`Pumpkin Launcher lädt ${what} zu mclo.gs hoch. Jeder mit dem Link kann es lesen. Zugangsdaten, der Benutzername in Dateipfaden und E-Mail-Adressen werden vorher entfernt. Dein Spielername bleibt sichtbar.`}
       confirmLabel="Hochladen"
       pendingLabel="Lädt hoch"
       pending={share.isPending}

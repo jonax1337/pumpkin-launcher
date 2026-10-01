@@ -1,5 +1,5 @@
 import type { Update } from "@tauri-apps/plugin-updater";
-import { Description } from "@/components/ContentBrowser";
+import { Description } from "@/components/Description";
 import { installAppUpdate, useAppUpdate, useUpdateRun, WAIT_FOR_IDLE } from "@/hooks/useAppUpdate";
 import { Actions, Button, Count, ErrorBox, FormRow, Hint, JobProgress } from "@/ui";
 

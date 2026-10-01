@@ -58,17 +58,39 @@ export function progressLabel(p: ContentProgress | null): string {
   if (p.phase === "copy") return p.total ? `Kopiert ${p.done} von ${p.total}…` : "Wird kopiert…";
   if (p.phase === "hash") return p.total ? `Erkennt Inhalte ${p.done} von ${p.total}…` : "Erkennt Inhalte…";
   if (p.phase === "pack") return "Wird gepackt…";
+  if (p.phase === "backup") return p.total ? `Sichert ${p.done} von ${p.total}…` : "Wird gesichert…";
   return "Fertig";
 }
 
-/** Anteil für Fortschrittsbalken; nur Phasen mit bekannter Menge (Downloads, kopierte und erkannte Dateien). */
+const DONE_VERBS: Record<string, string> = {
+  installieren: "installiert", aktualisieren: "aktualisiert", importieren: "importiert", anlegen: "angelegt", duplizieren: "dupliziert",
+  hinzufügen: "hinzugefügt", abgleichen: "abgeglichen", exportieren: "exportiert", sichern: "gesichert", löschen: "gelöscht", wiederherstellen: "wiederhergestellt",
+};
+
+/** „Sodium installieren“ → „Sodium installiert“ für Verlauf und Meldung. */
+export const doneLabel = (label: string) => label.replace(/\S+$/, (verb) => DONE_VERBS[verb] ?? verb);
+
+/** Ein Wort für schmale Fortschrittsanzeigen in einer Zeile (statt `progressLabel`). */
+export function progressShortLabel(p: ContentProgress | null): string {
+  if (!p || p.phase === "resolve" || p.phase === "validate") return "Wird geprüft";
+  if (p.phase === "download") return "Lädt";
+  if (p.phase === "extract") return "Wird entpackt";
+  if (p.phase === "copy") return "Kopiert";
+  if (p.phase === "hash") return "Erkennt";
+  return "Fertig";
+}
+
+const SHARE_PHASES = ["download", "copy", "hash", "backup"];
+
+/** Anteil für Fortschrittsbalken; nur Phasen mit bekannter Menge (Downloads, kopierte, erkannte und gesicherte Dateien). */
 export const progressShare = (p: ContentProgress | null) =>
-  (p?.phase === "download" || p?.phase === "copy" || p?.phase === "hash") && p.total ? Math.min(1, p.done / p.total) : null;
+  p && SHARE_PHASES.includes(p.phase) && p.total ? Math.min(1, p.done / p.total) : null;
 
 export const formatDownloads = (n: number) => new Intl.NumberFormat("de", { notation: "compact" }).format(n);
 
 /** Modpack-Datei im Modrinth-Format; wird immer eine eigene Instanz. */
-export const isMrpack = (path: string) => /\.mrpack$/i.test(path);
+export const MRPACK_EXT = /\.mrpack$/i;
+export const isMrpack = (path: string) => MRPACK_EXT.test(path);
 
 export const projectOf = (m: Mod): string | null => (m.source.type === "modrinth" ? m.source.projectId : null);
 

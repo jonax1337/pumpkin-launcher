@@ -2,10 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { defaultMemory } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
+import { openPage } from "@/lib/links";
 import type { LogKind } from "@/lib/types";
-
-/** Seite im Browser öffnen; scheitert das, sagt es ein Toast. */
-export const openPage = (url: string) => void api.openExternal(url).catch((e: Error) => toast.error(e.message));
 
 /** Hochladen zu mclo.gs, Link in die Zwischenablage; Fehler beim Hochladen meldet der zentrale Mutations-Toast. */
 export function useShareLog() {

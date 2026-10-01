@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { StopDialog } from "@/components/game";
 import { api } from "@/lib/api";
+import { openPage } from "@/lib/links";
 import type { MsLoginStart } from "@/lib/types";
 import {
   Actions, Avatar, BarButton, Button, Dialog, DialogActions, Empty, ErrorBox, Field, Hint, Icon, List, ListRow, Menu, Progress, RowTitle, Skel,
@@ -82,7 +83,7 @@ function MsLoginDialog() {
         ) : (
           <>
             {state.step === "code" && (
-              <Button icon="ext" onClick={() => void api.openExternal(state.info.verificationUri)}>Seite öffnen</Button>
+              <Button icon="ext" onClick={() => openPage(state.info.verificationUri)}>Seite öffnen</Button>
             )}
             {state.step === "code" && state.info.mode === "browser" && (
               <Button variant="ghost" onClick={() => void startMsLogin(qc, "device")}>Stattdessen Code verwenden</Button>

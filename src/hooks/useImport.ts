@@ -1,9 +1,10 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type { ForeignInstance, Instance } from "@/lib/types";
-import { cancelContent, cancellable, useContentInstall, withTarget } from "./useContent";
+import { useContentInstall, withTarget } from "./useContent";
+import { isCancelled } from "./useInstances";
 
 const foreignKey = ["foreign-instances"];
 
@@ -46,24 +47,25 @@ export const importTarget = (source: ForeignInstance) => `import:${source.path}`
 
 /**
  * Importiert Instanzen nacheinander (das Backend erlaubt nur einen Vorgang zur Zeit); jede erscheint mit Fortschritt
- * im Aufgaben-Menü. `cancel` bricht die laufende ab und lässt den Rest aus. `run` liefert die zuletzt importierte.
+ * im Aufgaben-Menü. Wird eine abgebrochen, im Dialog oder im Aufgaben-Menü, entfällt der Rest. `run` liefert die zuletzt importierte.
  */
 export function useImportInstances() {
   const install = useContentInstall();
   const qc = useQueryClient();
   const [running, setRunning] = useState(false);
-  const stopped = useRef(false);
 
   async function run(sources: ForeignInstance[]): Promise<Instance | null> {
-    stopped.current = false;
     setRunning(true);
     let last: Instance | null = null;
     try {
       for (const source of sources) {
-        if (stopped.current) break;
-        const task = cancellable(withTarget(importTarget(source), (op) => api.importInstance(source, op), `${source.name} importieren`));
-        // Fehler meldet der zentrale Toast und das Aufgaben-Menü; die übrigen Instanzen laufen weiter.
-        last = (await install.mutateAsync(task).catch(() => null)) ?? last;
+        const task = withTarget(importTarget(source), (op) => api.importInstance(source, op), `${source.name} importieren`, { cancellable: true });
+        try {
+          last = (await install.mutateAsync(task)) ?? last;
+        } catch (err) {
+          // Andere Fehler meldet der zentrale Toast und das Aufgaben-Menü; die übrigen Instanzen laufen weiter.
+          if (isCancelled(err)) break;
+        }
       }
     } finally {
       setRunning(false);
@@ -72,10 +74,5 @@ export function useImportInstances() {
     return last;
   }
 
-  function cancel() {
-    stopped.current = true;
-    cancelContent();
-  }
-
-  return { run, cancel, running };
+  return { run, running };
 }

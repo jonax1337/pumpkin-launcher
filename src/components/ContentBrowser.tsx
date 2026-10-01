@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useInfiniteQuery, useQueries, useQuery, useQueryClient, type QueryClient, type UseQueryResult } from "@tanstack/react-query";
-import DOMPurify from "dompurify";
-import { marked } from "marked";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
@@ -9,22 +7,24 @@ import {
   MenuItem, MenuLabel, MenuNote, MenuScroll, MenuSep, Meta, Panel, ProjectIcon, RowTitle, SceneThumb, SearchField, SectionHeader, Select, Sheet, Skel, SkelRow,
   Switch, TabPanel, Tabs, TextField, Tip, Toolbar, type MenuEntry,
 } from "@/ui";
-import { cancelContent, cancellable, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { cancelContent, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { useDebounced } from "@/hooks/useDebounced";
 import { useInstances } from "@/hooks/useInstances";
-import { worldKeys, worldsQuery } from "@/hooks/useWorlds";
+import { worldsQuery } from "@/hooks/useWorlds";
+import { worldKeys } from "@/hooks/worldKeys";
 import { api } from "@/lib/api";
 import {
-  formatDownloads, installedKey, isPackVersionSupported, modLoadersFor, ownerKey, pickPackVersion, pickVersion, progressLabel, progressShare, projectKey, projectOf, SOURCES,
-  type CatalogType, type ContentHit, type ContentProgress, type ContentProject, type ContentVersion, type SearchIndex, type Source,
+  formatDownloads, installedKey, isPackVersionSupported, modLoadersFor, ownerKey, pickPackVersion, pickVersion, progressLabel, progressShare, progressShortLabel, projectKey, projectOf, SOURCES,
+  type CatalogType, type ContentHit, type ContentProject, type ContentVersion, type SearchIndex, type Source,
 } from "@/lib/modrinth";
+import { Description } from "@/components/Description";
 import { openManualDownloads } from "@/components/ManualDownloads";
 import { LOADER_LABELS, type Instance, type ModKind, type ModLoader, type World } from "@/lib/types";
-import { cn } from "@/lib/utils";
 import { lookOf, useLook, useLookStore } from "@/store/look";
 
 export const IRIS_PROJECT_ID = "YL57xq9U";
 
-export const KIND_LABELS: Record<ModKind, string> = { mod: "Mods", shader: "Shader", resourcepack: "Ressourcenpakete" };
+const KIND_LABELS: Record<ModKind, string> = { mod: "Mods", shader: "Shader", resourcepack: "Ressourcenpakete" };
 export const TYPE_LABELS: Record<CatalogType, string> = { modpack: "Modpacks", ...KIND_LABELS, datapack: "Datenpakete" };
 const TYPE_ONE: Record<CatalogType, string> = { modpack: "Modpack", mod: "Mod", shader: "Shader", resourcepack: "Ressourcenpaket", datapack: "Datenpaket" };
 
@@ -70,60 +70,11 @@ const LOADER_CATS = new Set(["fabric", "forge", "quilt", "neoforge", "iris", "op
 const categoryNames = (cats: string[], max = 2) =>
   cats.filter((c) => !LOADER_CATS.has(c) && !/^\d+x/.test(c)).slice(0, max).map((c) => CATEGORY[c] ?? c.charAt(0).toUpperCase() + c.slice(1).replace(/-/g, " "));
 
-// ---------- Beschreibung (Markdown mit HTML von Modrinth) ----------
-
-// Nur https-Bilder, nur http(s)-Links; Skripte und Event-Handler entfernt DOMPurify ohnehin.
-DOMPurify.addHook("afterSanitizeAttributes", (node) => {
-  if (node.tagName === "IMG") {
-    if (!/^https:\/\//i.test(node.getAttribute("src") ?? "")) node.removeAttribute("src");
-    node.setAttribute("loading", "lazy");
-    node.setAttribute("referrerpolicy", "no-referrer");
-  }
-  if (node.tagName === "A" && !/^https?:\/\//i.test(node.getAttribute("href") ?? "")) node.removeAttribute("href");
-});
-const PURIFY = {
-  FORBID_TAGS: ["style", "form", "input", "button", "textarea", "select", "svg", "math", "video", "audio", "source", "picture"],
-  FORBID_ATTR: ["style", "class", "id", "srcset", "target"],
-};
-
-/**
- * Reihen verlinkter Bild-Knöpfe („How to install“, „Discord“, Badges) als ruhige Textlinks aus dem Alt-Text,
- * damit fremd gestaltete Knöpfe nicht neben denen der App stehen. Einzelne verlinkte Bilder (Videos, Screenshots) bleiben.
- */
-function badgeRowsAsLinks(root: DocumentFragment) {
-  for (const p of root.querySelectorAll("p")) {
-    const links = [...p.children];
-    const badges = links.length > 1 && !p.textContent?.trim() && links.every((a) => a.tagName === "A" && a.children.length === 1 && a.firstElementChild?.tagName === "IMG");
-    if (!badges) continue;
-    p.className = "badges";
-    for (const a of links) a.replaceChildren(a.firstElementChild!.getAttribute("alt")?.trim() || new URL((a as HTMLAnchorElement).href || "https://link").hostname);
-  }
-}
-
-/** Projektbeschreibung im Pixelkino-Stil (`.desc`). Links öffnen im Standardbrowser. */
-export function Description({ body, className }: { body: string; className?: string }) {
-  const html = useMemo(() => {
-    const doc = DOMPurify.sanitize(marked.parse(body, { async: false }), { ...PURIFY, RETURN_DOM_FRAGMENT: true });
-    badgeRowsAsLinks(doc);
-    const box = document.createElement("div");
-    box.append(doc);
-    return box.innerHTML;
-  }, [body]);
-  function onLink(e: MouseEvent) {
-    const link = (e.target as Element).closest("a");
-    if (!link) return;
-    e.preventDefault();
-    if (/^https?:/.test(link.href)) void api.openExternal(link.href);
-  }
-  return <div onClick={onLink} onAuxClick={onLink} className={cn("desc md", className)} dangerouslySetInnerHTML={{ __html: html }} />;
-}
-
 // ---------- Kleine Zustände in Zeilen ----------
 
 /** Breite des laufenden Vorgangs: Projektkopf 230, Zeile 120, Seitenpanel 112. */
 const jobWidth = (large?: boolean, compact?: boolean) => (large ? 230 : compact ? 112 : 120);
 
-const shortLabel = (p: ContentProgress | null) => (!p || p.phase === "resolve" || p.phase === "validate" ? "Wird geprüft" : p.phase === "download" ? "Lädt" : p.phase === "extract" ? "Wird entpackt" : "Fertig");
 
 /** Instanzen je Projekt-ID: als Inhalt drin oder als Modpack angelegt. */
 function useInstalledIn() {
@@ -255,7 +206,7 @@ function AddButton({ instance, world, projectId, title, type, versionId, large, 
 
   if (installed) return <Chip icon="check">Installiert</Chip>;
   if (state === "checking") return <JobProgress label="Wird geprüft" p={null} width={jobWidth(large, compact)} />;
-  if (active && target === projectId) return <JobProgress label={shortLabel(progress)} p={progressShare(progress)} width={jobWidth(large, compact)} />;
+  if (active && target === projectId) return <JobProgress label={progressShortLabel(progress)} p={progressShare(progress)} width={jobWidth(large, compact)} />;
   if (state === "missing" && !compact) return <Hint>Keine Version für {instance.minecraftVersion}</Hint>;
   return large ? (
     <Button variant="primary" size="l" icon="plus" disabled={!!active} onClick={add}>Hinzufügen</Button>
@@ -284,7 +235,7 @@ export function AddToInstanceMenu({ projectId, title, type, large, source = "mod
   const rows = (instances.data ?? []).map((i) => ({ i, reason: reasonFor(i) }));
   const usable = rows.some((r) => !r.reason);
 
-  if (active && target === projectId) return <JobProgress label={shortLabel(progress)} p={progressShare(progress)} width={jobWidth(large)} />;
+  if (active && target === projectId) return <JobProgress label={progressShortLabel(progress)} p={progressShare(progress)} width={jobWidth(large)} />;
   return (
     <Menu
       open={open}
@@ -353,7 +304,7 @@ export function AddToWorldMenu({ projectId, title, large }: { projectId: string;
     };
   });
 
-  if (active && target === projectId) return <JobProgress label={shortLabel(progress)} p={progressShare(progress)} width={jobWidth(large)} />;
+  if (active && target === projectId) return <JobProgress label={progressShortLabel(progress)} p={progressShare(progress)} width={jobWidth(large)} />;
   return (
     <Menu open={open} onOpenChange={setOpen} width={300} trigger={addMenuTrigger(title, "Welt", !!active, large)} items={[{ label: "Hinzufügen zu …" }, ...items]}>
       {list.length === 0 && !instances.isPending && <MenuNote>Noch keine Instanz.</MenuNote>}
@@ -393,7 +344,7 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
       if (!id) return;
     }
     const perform = (op: string) => (source === "modrinth" ? api.modrinthInstallPack(id, name, op) : api.providerInstallPack(source, projectId, id, name, op));
-    install.mutate(cancellable(withTarget(projectId, perform, `Modpack „${name}“ installieren`)), {
+    install.mutate(withTarget(projectId, perform, `Modpack „${name}“ installieren`, { cancellable: true }), {
       onSuccess: (inst) => {
         if (!inst) return;
         toast.success(`${inst.name} ist bereit. „Spielen“ lädt beim ersten Start den Rest.`, {
@@ -408,8 +359,9 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
   return { run, busy, p: checking ? null : progressShare(progress), blocked: !!active || checking, cancel: !checking && busy ? cancelContent : undefined };
 }
 
-const loaderNames = (v: ContentVersion) =>
-  v.loaders.filter((l) => l !== "minecraft").map((l) => LOADER_LABELS[l as ModLoader] ?? l).join(", ") || "Vanilla";
+/** „Fabric, Quilt“ aus den Loadern einer Version; „minecraft“ ist Modrinths Marke für Ressourcen ohne Loader. */
+const loaderList = (v: ContentVersion) => v.loaders.filter((l) => l !== "minecraft").map((l) => LOADER_LABELS[l as ModLoader] ?? l).join(", ");
+const loaderNames = (v: ContentVersion) => loaderList(v) || "Vanilla";
 
 /** Inhalt der Bestätigung; wird beim Schließen verworfen, der Name beginnt also immer beim Pack-Titel. */
 function PackConfirmBody({ title, versions, picked, onConfirm }: {
@@ -543,15 +495,6 @@ export function PackActions({ projectId, title, onDone, source = "modrinth" }: {
 }
 
 // ---------- Suche und Ergebnisse ----------
-
-function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return debounced;
-}
 
 export const SEARCH_PLACEHOLDER: Record<CatalogType, string> = {
   mod: "In Mods suchen", shader: "In Shadern suchen", resourcepack: "In Ressourcenpaketen suchen", modpack: "In Modpacks suchen", datapack: "In Datenpaketen suchen",
@@ -687,7 +630,7 @@ export function ContentResults({ type, instance, world, action, onOpen, autoFocu
                   />
                   <Cell flex align="end">
                     {busy ? (
-                      <JobProgress label={shortLabel(progress)} p={progressShare(progress)} width={jobWidth(false, compact)} />
+                      <JobProgress label={progressShortLabel(progress)} p={progressShare(progress)} width={jobWidth(false, compact)} />
                     ) : instance ? (
                       <AddButton instance={instance} world={world} projectId={hit.project_id} title={hit.title} type={type} compact={compact} source={source} />
                     ) : action ? (
@@ -861,7 +804,7 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
                       <ListRow key={v.id}>
                         <RowTitle
                           title={v.version_number}
-                          sub={`${v.loaders.filter((l) => l !== "minecraft").map((l) => LOADER_LABELS[l as ModLoader] ?? l).join(", ") || "Alle Loader"} · ${v.game_versions.at(-1)}${VERSION_TYPE[v.version_type] ? ` · ${VERSION_TYPE[v.version_type]}` : ""}`}
+                          sub={`${loaderList(v) || "Alle Loader"} · ${v.game_versions.at(-1)}${VERSION_TYPE[v.version_type] ? ` · ${VERSION_TYPE[v.version_type]}` : ""}`}
                         />
                         {instance ? (
                           <AddButton instance={instance} world={world} projectId={projectId} title={title} type={type} versionId={v.id} source={source} />

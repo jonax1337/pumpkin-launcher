@@ -1,5 +1,6 @@
 const rtf = new Intl.RelativeTimeFormat("de", { numeric: "auto" });
-const dtf = new Intl.DateTimeFormat("de", { day: "2-digit", month: "short", year: "numeric" });
+const DATE_OPTIONS: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short", year: "numeric" };
+const dtf = new Intl.DateTimeFormat("de", DATE_OPTIONS);
 
 /** Letzter Teil eines Windows- oder Unix-Pfads. */
 export const fileName = (path: string) => path.split(/[\\/]/).pop()!;
@@ -18,7 +19,7 @@ export function formatDate(ms: number): string {
   return dtf.format(ms);
 }
 
-const dtfTime = new Intl.DateTimeFormat("de", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+const dtfTime = new Intl.DateTimeFormat("de", { ...DATE_OPTIONS, hour: "2-digit", minute: "2-digit" });
 
 /** Datum mit Uhrzeit, z. B. für mehrere Sicherungen am selben Tag. */
 export function formatDateTime(ms: number): string {

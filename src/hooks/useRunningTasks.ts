@@ -2,11 +2,10 @@ import { useSyncExternalStore } from "react";
 import { shallow } from "zustand/shallow";
 import { useGame } from "@/store/game";
 import { useContentState } from "./useContent";
-import { useWorldJob } from "./useWorlds";
 
 /**
  * Laufende Aufgaben aus ihren Stores (null = keine): Vorbereitungen der Instanzen, Inhalts- und Instanz-Vorgänge
- * (Installieren, Importieren, Duplizieren, Exportieren) und Arbeit an Welten. Das Aufgaben-Menü zeigt sie, der Neustart
+ * (Installieren, Importieren, Duplizieren, Exportieren, Arbeit an Welten). Das Aufgaben-Menü zeigt sie, der Neustart
  * nach einem Update wartet auf sie; ein neuer Vorgang kommt nur hier dazu.
  */
 function readRunningTasks() {
@@ -15,7 +14,6 @@ function readRunningTasks() {
   return {
     installs: Object.keys(installs).length > 0 ? installs : null,
     content: content.active != null ? content : null,
-    world: useWorldJob.getState().job,
   };
 }
 
@@ -30,7 +28,7 @@ function currentRunningTasks() {
 
 /** Ruft `onChange` bei jeder Änderung der Stores mit laufenden Aufgaben; liefert die Abmeldung. */
 export function subscribeRunningTasks(onChange: () => void) {
-  const offs = [useGame.subscribe(onChange), useContentState.subscribe(onChange), useWorldJob.subscribe(onChange)];
+  const offs = [useGame.subscribe(onChange), useContentState.subscribe(onChange)];
   return () => offs.forEach((off) => off());
 }
 

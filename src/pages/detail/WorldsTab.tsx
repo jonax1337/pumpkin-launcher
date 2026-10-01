@@ -41,7 +41,7 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
   const worlds = useWorlds(instance.id);
   const startsIntoWorlds = useWorldQuickPlay(instance);
   const { backup, remove } = useWorldJobs(instance);
-  const job = useWorldJob((s) => (s.job?.instanceId === instance.id ? s.job : null));
+  const { target, progress } = useContentState();
   const [removing, setRemoving] = useState<World | null>(null);
   // Sicherungen einer Welt bzw. (world = null) aller Welten, auch gelöschter.
   const [showBackups, setShowBackups] = useState<{ world: string | null } | null>(null);
@@ -79,8 +79,8 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
                   {/* Wie im Spiel: der Ordner steht dabei, wenn er anders heißt (z. B. wiederhergestellte Kopien). */}
                   <RowTitle title={w.name} aside={w.name === w.id ? undefined : w.id} sub={worldLine(w)} />
                   <Cell flex align="end">
-                    {job?.worldId === w.id ? (
-                      <JobProgress label="Wird gesichert" p={job.p} width={120} />
+                    {target === worldTarget(instance.id, w.id) ? (
+                      <JobProgress label="Wird gesichert" p={progressShare(progress)} width={120} />
                     ) : (
                       <GuardedButton size="s" icon="play" blocked={playBlocked} aria-label={`Spielen: ${w.name}`} onClick={() => onPlay({ type: "world", id: w.id })}>
                         Spielen

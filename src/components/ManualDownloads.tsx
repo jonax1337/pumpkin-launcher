@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { Button, Chip, Dialog, DialogActions, Hint, List, ListRow, RowTitle } from "@/ui";
 import { api } from "@/lib/api";
+import { openPage } from "@/lib/links";
 import type { BlockedFile } from "@/lib/modrinth";
 import { instanceKeys } from "@/hooks/useInstances";
 
@@ -120,7 +121,7 @@ export function ManualDownloads() {
             ) : (
               <>
                 <Chip size="s" dot>Wartet auf Download</Chip>
-                <Button size="s" icon="ext" onClick={() => void api.openExternal(i.url)}>Seite öffnen</Button>
+                <Button size="s" icon="ext" onClick={() => openPage(i.url)}>Seite öffnen</Button>
               </>
             )}
           </ListRow>

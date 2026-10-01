@@ -1,20 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { create } from "zustand";
 import { api } from "@/lib/api";
 import { fileName } from "@/lib/format";
+import { doneLabel } from "@/lib/modrinth";
 import type { Datapack, Instance, Server, World, WorldBackup } from "@/lib/types";
-import { useTasks } from "@/store/tasks";
-import { instanceKeys } from "./useInstances";
-
-export const worldKeys = {
-  /** Welten, Sicherungen und Serverliste einer Instanz (z. B. nach dem Spielen neu laden). */
-  all: (instanceId: string) => ["worlds", instanceId] as const,
-  list: (instanceId: string) => ["worlds", instanceId, "list"] as const,
-  backups: (instanceId: string) => ["worlds", instanceId, "backups"] as const,
-  servers: (instanceId: string) => ["worlds", instanceId, "servers"] as const,
-  datapacks: (instanceId: string, worldId: string) => ["worlds", instanceId, "datapacks", worldId] as const,
-};
+import { trackContent, withTarget, type ContentRun } from "./useContent";
+import { worldKeys } from "./worldKeys";
 
 /** Welten einer Instanz; auch für die Auswahl der Welt beim Hinzufügen eines Datenpakets aus Entdecken. */
 export const worldsQuery = (instanceId: string) => ({ queryKey: worldKeys.list(instanceId), queryFn: () => api.worldList(instanceId) });
@@ -78,55 +69,31 @@ export const useSaveServer = (instanceId: string) =>
 export const useRemoveServer = (instanceId: string) =>
   useWorldChange(instanceId, ({ index }: { index: number; server: Server }) => api.serverRemove(instanceId, index), (_, { server }) => `„${server.name}“ entfernt`);
 
-/**
- * Laufendes Sichern, Löschen (sichert vorher) oder Wiederherstellen einer Welt: wer, was und wie weit (`p` 0–1, null = noch
- * unbekannt). `worldId`: Zeile mit dem Fortschritt; null beim Wiederherstellen, das legt einen neuen Ordner an.
- * Ein Store, damit der Fortschritt Tab- und Seitenwechsel übersteht; das Backend erlaubt ohnehin nur einen Vorgang.
- */
-export const useWorldJob = create<{ job: { instanceId: string; worldId: string | null; label: string; p: number | null } | null }>(() => ({ job: null }));
+/** Ziel eines Welt-Vorgangs im Inhalts-Store: die Zeile der Welt zeigt dann ihren Fortschritt. */
+export const worldTarget = (instanceId: string, worldId: string) => `world:${instanceId}:${worldId}`;
 
+/** Sichern, Löschen (sichert vorher) und Wiederherstellen laufen wie Inhalts-Vorgänge: Fortschritt im Aufgaben-Menü, ein Vorgang zur Zeit. */
 export function useWorldJobs(instance: Instance) {
   const qc = useQueryClient();
-  const track = async <R,>(world: { id: string | null; name: string }, verb: { running: string; done: string }, run: (operationId: string) => Promise<R>) => {
-    const operationId = crypto.randomUUID();
-    const label = `„${world.name}“ ${verb.running}`;
-    const show = (p: number | null) => useWorldJob.setState({ job: { instanceId: instance.id, worldId: world.id, label, p } });
-    show(null);
-    const unlisten = await api.onContentProgress((e) => {
-      if (e.operationId === operationId && e.total) show(e.done / e.total);
-    });
-    try {
-      const result = await run(operationId);
-      useTasks.getState().push({ label: `„${world.name}“ ${verb.done}`, sub: instance.name, state: "done", to: `/instances/${instance.id}?tab=worlds` });
-      return result;
-    } catch (error) {
-      useTasks.getState().push({ label, sub: error instanceof Error ? error.message : String(error), state: "fail" });
-      throw error;
-    } finally {
-      unlisten();
-      useWorldJob.setState({ job: null });
-    }
+  const track = async <R,>(run: ContentRun<R>) => {
+    const result = await trackContent(qc, run, (_, label) => ({ label: doneLabel(label), sub: instance.name, to: `/instances/${instance.id}?tab=worlds` }));
+    if (result == null) throw new Error("Es läuft schon ein Vorgang. Warte, bis er fertig ist.");
+    return result;
   };
+  const backupLabel = (world: World) => `„${world.name}“ sichern`;
   const backup = useWorldChange(
     instance.id,
-    (world: World) => track(world, { running: "sichern", done: "gesichert" }, (op) => api.worldBackup(instance.id, world.id, op)),
-    (_, world) => `„${world.name}“ gesichert`,
+    (world: World) => track(withTarget(worldTarget(instance.id, world.id), (op) => api.worldBackup(instance.id, world.id, op), backupLabel(world))),
+    (_, world) => doneLabel(backupLabel(world)),
   );
   const remove = useWorldChange(
     instance.id,
-    (world: World) =>
-      track(world, { running: "löschen", done: "gelöscht" }, async (op) => {
-        const backup = await api.worldDelete(instance.id, world.id, op);
-        // Das Backend vergisst die Welt als Quick-Play-Ziel; Home soll „Weiterspielen“ nicht mehr zeigen.
-        await qc.invalidateQueries({ queryKey: instanceKeys.all });
-        return backup;
-      }),
+    (world: World) => track(withTarget(worldTarget(instance.id, world.id), (op) => api.worldDelete(instance.id, world.id, op), `„${world.name}“ löschen`)),
     (_, world) => `„${world.name}“ gelöscht. Die Sicherung davon findest du unter „Sicherungen“.`,
   );
   const restore = useWorldChange(
     instance.id,
-    (backup: WorldBackup) =>
-      track({ id: null, name: backup.world }, { running: "wiederherstellen", done: "wiederhergestellt" }, () => api.worldRestore(instance.id, backup.id)),
+    (backup: WorldBackup) => track(withTarget(`restore:${backup.id}`, () => api.worldRestore(instance.id, backup.id), `„${backup.world}“ wiederherstellen`)),
     (world, backup) => (world.id === backup.world ? `„${world.name}“ ist wieder da` : `„${world.name}“ ist wieder da, im Ordner „${world.id}“`),
   );
   return { backup, remove, restore };
