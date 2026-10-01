@@ -13,6 +13,8 @@ const MAX_PAGE = 50;
 const MAX_RESULTS = 10_000;
 const MAX_IDS = 200;
 const MAX_BODY = 20_000;
+// Zeitraum der Begrenzung aus wrangler.toml (Sekunden): Nach so langer Pause hat ein gedrosselter Launcher wieder Luft.
+const LIMIT_PERIOD = "60";
 
 const ROUTES = [
   ["GET", /^\/v1\/mods\/search$/],
@@ -24,8 +26,8 @@ const ROUTES = [
   ["POST", /^\/v1\/mods\/files$/],
 ];
 
-const json = (body, status) =>
-  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8" } });
+const json = (body, status, headers = {}) =>
+  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", ...headers } });
 
 /** Nicht negative ganze Zahl, sonst NaN (dann scheitert jeder Vergleich). */
 const count = (text) => (/^\d{1,5}$/.test(text) ? Number(text) : NaN);
@@ -64,7 +66,7 @@ export default {
 
     if (env.LIMITER) {
       const { success } = await env.LIMITER.limit({ key: request.headers.get("cf-connecting-ip") ?? "unbekannt" });
-      if (!success) return json({ error: "Zu viele Anfragen, bitte kurz warten" }, 429);
+      if (!success) return json({ error: "Zu viele Anfragen, bitte kurz warten" }, 429, { "retry-after": LIMIT_PERIOD });
     }
 
     if (!validQuery(url)) return json({ error: "Ungültige Anfrage" }, 400);
@@ -93,6 +95,10 @@ export default {
     } catch {
       return json({ error: "CurseForge antwortet nicht" }, 504);
     }
-    return new Response(upstream.body, { status: upstream.status, headers: { "content-type": upstream.headers.get("content-type") ?? "application/json" } });
+    const headers = { "content-type": upstream.headers.get("content-type") ?? "application/json" };
+    // Drosselt CurseForge selbst, soll der Launcher dessen Wartezeit sehen.
+    const retryAfter = upstream.headers.get("retry-after");
+    if (retryAfter) headers["retry-after"] = retryAfter;
+    return new Response(upstream.body, { status: upstream.status, headers });
   },
 };

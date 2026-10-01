@@ -34,7 +34,8 @@ und setzt `PUMPKIN_CF_PROXY=<adresse>` (zur Laufzeit oder beim Bauen).
 Die Logik lässt sich ohne Cloudflare prüfen: `node test.mjs` (simuliert Cloudflare und CurseForge).
 
 Der Worker läuft für dieses Projekt unter `https://pumpkin-curseforge.jonas-laux.workers.dev`. Die Begrenzung (60 Anfragen
-pro Minute und IP) steht als `[[ratelimits]]` in `wrangler.toml`.
+pro Minute und IP) steht als `[[ratelimits]]` in `wrangler.toml`; gedrosselte Anfragen bekommen `Retry-After` mit diesem
+Zeitraum (`LIMIT_PERIOD` im Worker, bei Änderungen beides anpassen).
 
 Schlüssel wechseln (etwa nach einem Leck oder wenn CurseForge ihn erneuert): neuen Schlüssel in der CurseForge-Konsole
 anlegen, `npx wrangler secret put CURSEFORGE_API_KEY` ausführen und einfügen; der Worker nutzt ihn sofort, ein neues
