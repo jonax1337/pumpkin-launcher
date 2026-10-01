@@ -1,10 +1,13 @@
-import { createContext, useContext, useId, type ComponentProps, type CSSProperties, type ReactNode } from "react";
-import { ContextMenu, Trunc, type MenuEntry } from "./Overlay";
+import { createContext, useContext, useId, type ComponentProps, type ReactNode } from "react";
+import { ContextMenu, type MenuEntry } from "./Menu";
+import { Trunc } from "./Tip";
 import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { Button } from "./Button";
 import { HitEl, type Hit } from "./Hit";
 import { Skel } from "./Feedback";
+import { cssVars, flag } from "./util";
+import type { Breakpoint } from "./types";
 
 /**
  * Spaltenraster je Liste (list.css, inkl. Media Queries):
@@ -14,7 +17,8 @@ import { Skel } from "./Feedback";
  */
 export type ListVariant = "instances" | "content" | "catalog" | "catalog-compact" | "versions" | "tasks" | "tiles" | "accounts" | "worlds";
 
-const RowCtx = createContext<{ hit: boolean }>({ hit: false });
+/** Was die Zeile ihrem Inhalt verrät: ob sie als Ganzes trifft (Tooltip-Wirt) und ob sie die Katalogkarte ist (Titelgröße). */
+const RowCtx = createContext({ hit: false, feature: false });
 
 /**
  * Liste mit festen Spalten. `head`: Kopfzellen (gleiches Raster wie die Zeilen). `divided`: dezente Trenner zwischen Zeilen
@@ -27,7 +31,7 @@ export function List({ variant, head, divided, noWarnCol, className, children, "
   noWarnCol?: boolean;
 } & ComponentProps<"div">) {
   return (
-    <div className={cn("vx-list", className)} data-variant={variant} data-divided={divided ? "" : undefined} data-nw={noWarnCol ? "" : undefined} {...props}>
+    <div className={cn("vx-list", className)} data-variant={variant} data-divided={flag(divided)} data-nw={flag(noWarnCol)} {...props}>
       {head != null && <div className="vx-lhead">{head}</div>}
       <div className="vx-rows" role="list" aria-label={label}>{children}</div>
     </div>
@@ -59,17 +63,17 @@ export function ListRow({ hit, hitLabel, selected, off, feature, dep, index, men
     <div
       role="listitem"
       className={cn("vx-row", className)}
-      data-hit={hit ? "" : undefined}
-      data-selected={selected ? "" : undefined}
-      data-off={off ? "" : undefined}
-      data-feature={feature ? "" : undefined}
-      data-dep={dep ? "" : undefined}
-      data-rise={index != null ? "" : undefined}
-      style={index != null ? ({ ...style, "--i": index } as CSSProperties) : style}
+      data-hit={flag(hit)}
+      data-selected={flag(selected)}
+      data-off={flag(off)}
+      data-feature={flag(feature)}
+      data-dep={flag(dep)}
+      data-rise={flag(index != null)}
+      style={index != null ? { ...style, ...cssVars({ "--i": index }) } : style}
       {...props}
     >
       {hit && <HitEl hit={hit} fallbackLabel={hitLabel ?? ""} />}
-      <RowCtx.Provider value={{ hit: !!hit }}>{children}</RowCtx.Provider>
+      <RowCtx.Provider value={{ hit: !!hit, feature: !!feature }}>{children}</RowCtx.Provider>
     </div>
   );
   return menu ? <ContextMenu items={menu}>{row}</ContextMenu> : row;
@@ -77,28 +81,29 @@ export function ListRow({ hit, hitLabel, selected, off, feature, dep, index, men
 
 /**
  * Name (+ Unterzeile) einer Zeile. Abgeschnittener Name zeigt den vollen Text als Tooltip (Wirt: Trefferfläche der Zeile).
- * m: 14/600 + 12 (Bibliothek, Inhalte, Aufgaben) · l: 15/700, `aside` daneben, Beschreibung, `meta`-Zeile (Katalog) ·
- * feature: Display 28, Beschreibung zweizeilig. `children`: z. B. Text nur für Vorleser.
+ * m: 14/600 + 12 (Bibliothek, Inhalte, Aufgaben) · l: 15/700, `aside` daneben, Beschreibung, `meta`-Zeile (Katalog);
+ * in einer `feature`-Zeile Display 28, Beschreibung zweizeilig. `children`: z. B. Text nur für Vorleser.
  */
 export function RowTitle({ title, sub, aside, meta, size = "m", trunc = true, id, children }: {
   title: string;
   sub?: ReactNode;
   aside?: ReactNode;
   meta?: ReactNode;
-  size?: "m" | "l" | "feature";
+  size?: "m" | "l";
   /** false: kein eigener Tooltip (die Zeile zeigt schon einen). */
   trunc?: boolean;
   id?: string;
   children?: ReactNode;
 }) {
-  const { hit } = useContext(RowCtx);
+  const { hit, feature } = useContext(RowCtx);
+  const look = feature ? "feature" : size;
   return (
-    <div className="vx-rt" data-size={size}>
+    <div className="vx-rt" data-size={look}>
       <div className="vx-rt-1">
         {trunc ? <Trunc as="b" text={title} host={hit ? ".hit" : undefined} className="vx-rt-n" /> : <b className="vx-rt-n ell" id={id}>{title}</b>}
         {aside != null && <span className="vx-rt-a">{aside}</span>}
       </div>
-      {sub != null && (size === "m" ? <span className="vx-rt-s">{sub}</span> : <p className="vx-rt-s">{sub}</p>)}
+      {sub != null && (look === "m" ? <span className="vx-rt-s">{sub}</span> : <p className="vx-rt-s">{sub}</p>)}
       {meta != null && <div className="vx-rt-m">{meta}</div>}
       {children}
     </div>
@@ -109,9 +114,9 @@ export function RowTitle({ title, sub, aside, meta, size = "m", trunc = true, id
  * Zelle einer Zeile oder des Kopfs: Text 13 px --fg-2 mit Auslassung. `flex`: Inhalt als Reihe (Chips, Knöpfe, feste Höhe 32).
  * `align="end"`: rechtsbündig. `hide`: unter dieser Fensterbreite ausgeblendet (Raster hat dann eine Spalte weniger).
  */
-export function Cell({ hide, align, flex, className, children, ...props }: { hide?: 1180 | 1040 | 900; align?: "start" | "end"; flex?: boolean } & ComponentProps<"span">) {
+export function Cell({ hide, align, flex, className, children, ...props }: { hide?: Extract<Breakpoint, 900 | 1040 | 1180>; align?: "start" | "end"; flex?: boolean } & ComponentProps<"span">) {
   return (
-    <span className={cn("vx-cell", className)} data-hide={hide} data-align={align} data-flex={flex ? "" : undefined} {...props}>
+    <span className={cn("vx-cell", className)} data-hide={hide} data-align={align} data-flex={flag(flex)} {...props}>
       {children}
     </span>
   );
@@ -144,7 +149,7 @@ export function GhostRow({ variant, text, media, undoId, onUndo }: { variant: "c
  */
 export function SkelRow({ feature }: { feature?: boolean }) {
   return (
-    <div role="listitem" className="vx-row" data-skel="" data-feature={feature ? "" : undefined}>
+    <div role="listitem" className="vx-row" data-skel="" data-feature={flag(feature)}>
       <Skel className="vx-skel-m" />
       <span className="vx-skel-t"><Skel /><Skel /><Skel /></span>
       <Skel className="vx-skel-a" />

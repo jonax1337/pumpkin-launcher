@@ -44,7 +44,6 @@
 @keyframes vx-pop { from { transform: scale(0); } }
 
 /* ---------- Radio 20×20, zweistufig gekerbt ---------- */
-.vx-radios { display: flex; flex-direction: column; }
 .vx-radio { display: flex; align-items: center; gap: 10px; min-height: 32px; cursor: pointer; }
 .vx-radio[data-disabled] { color: var(--fg-3); cursor: default; }
 .vx-radio input { position: absolute; width: 1px; height: 1px; opacity: 0; }
@@ -83,9 +82,4 @@
 .vx-slider[aria-disabled="true"] .vx-sl-trk i[data-x] { background: #121823; }
 .vx-slider[aria-disabled="true"] .vx-sl-th { background: #6B768B; box-shadow: inset 0 0 0 var(--px) var(--edge); }
 .vx-slider:focus-visible { outline: none; }
-/* Mit Grenze/Wert (showMax/showValue): Grenze unter dem letzten freien Segment (--free), Zahl rechts in fester Breite */
-.vx-slw { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
-.vx-slw-c { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.vx-slw-cap { padding-right: var(--free, 0%); text-align: right; font-size: 12px; line-height: 16px; color: var(--fg-3); white-space: nowrap; }
-.vx-slw > .vx-count { width: 64px; line-height: 32px; flex: none; text-align: left; }
 .vx-slider:focus-visible::after { content: ""; position: absolute; inset: calc(var(--u2) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; }

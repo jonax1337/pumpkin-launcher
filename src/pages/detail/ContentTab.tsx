@@ -499,7 +499,6 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
 
       {visible.length === 0 ? (
         <Empty
-          ill="search"
           title={t("components.search.nothingFound")}
           actions={
             <>

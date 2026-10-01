@@ -259,7 +259,7 @@ function TasksButton() {
           ))}
         </List>
       ) : (
-        <Empty size="pane" ill="tasks" title={t("ui.tasks.emptyTitle")}>{t("ui.tasks.emptyBody")}</Empty>
+        <Empty size="pane" mood="sleep" title={t("ui.tasks.emptyTitle")}>{t("ui.tasks.emptyBody")}</Empty>
       )}
     </Popover>
   );

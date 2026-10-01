@@ -1,4 +1,4 @@
-/* Kit-Tabs: Leiste (underline), Segment, senkrecht, Navigation. Hover = Fläche (--hv-ctl), nie Linie.
+/* Kit-Tabs: Leiste (underline), Segment, senkrecht. Hover = Fläche (--hv-ctl), nie Linie.
    Gewählt = erhabene Platte + Strich (1 Einheit): Leiste unten, senkrecht links, Segment als Kupferkante.
    Druck: Inhalt 1 Einheit tiefer. data-force="hover|press" erzwingt den Zustand (Vorschau /_kit). */
 .vx-tab {
@@ -33,7 +33,6 @@
 /* ---------- Leiste: 48 px (s 40) mit Linie unten ---------- */
 .vx-tabs[data-variant="underline"] { display: flex; align-items: center; gap: 4px; height: 48px; box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); }
 .vx-tabs[data-variant="underline"][data-size="s"] { height: 40px; }
-.vx-navtabs { display: flex; align-items: center; gap: 4px; flex: none; }
 .vx-tabs[data-sticky] { position: sticky; top: var(--vx-tabs-top, 0); z-index: 6; background: var(--bg); }
 
 /* ---------- Senkrecht: volle Breite, 44 px (s 36), Strich links ---------- */
@@ -62,4 +61,4 @@
 .vx-tabs[data-variant="segment"][data-icons][data-size="s"] .vx-tab { width: 28px; }
 .vx-tabs[data-icons]:not([data-variant="segment"]) .vx-tab { --t-pad: 6px; --t-pl: 6px; }
 
-.vx-tabpanel[data-flow] { display: flow-root; }
+.vx-tabpanel { display: flow-root; }

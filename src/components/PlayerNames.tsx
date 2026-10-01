@@ -379,7 +379,7 @@ export function AccountsSection() {
           })}
         </List>
       ) : (
-        <Empty size="pane" ill="user" title={t("components.account.noneYet")}>{offlineAllowed ? t("components.account.noneOfflineAllowed") : t("components.account.msLoginPrompt")}</Empty>
+        <Empty size="pane" title={t("components.account.noneYet")}>{offlineAllowed ? t("components.account.noneOfflineAllowed") : t("components.account.msLoginPrompt")}</Empty>
       )}
       {ms.error && <ErrorBox className="mt-3" title={t("components.account.msLoadFailed")} error={ms.error} onRetry={() => void ms.refetch()} />}
       <Actions wrap className="mt-3">

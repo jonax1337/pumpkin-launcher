@@ -1,11 +1,12 @@
-import type { ComponentProps, CSSProperties, ReactNode, Ref } from "react";
+import type { ComponentProps, ReactNode, Ref } from "react";
 import { Link, type LinkProps } from "react-router";
 import { cn } from "@/lib/utils";
-import { Tip } from "./Overlay";
+import { Tip } from "./Tip";
 import { Icon } from "./Icon";
 import { Count } from "./Chip";
 import { Progress } from "./Feedback";
-import type { Compact, IconName, Size } from "./types";
+import { flag, hasContent, widthStyle } from "./util";
+import type { Compact, IconName, Size, Tone } from "./types";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 
@@ -17,7 +18,7 @@ export type ButtonLook = {
   icon?: IconName;
   iconEnd?: IconName;
   /** Textfarbe für Geist/Sekundär; Geist-Hover wird leicht getönt. */
-  tone?: "acc" | "warn" | "bad";
+  tone?: Extract<Tone, "acc" | "warn" | "bad">;
   /** Feste Breite in px (Inhalt zentriert) oder volle Breite. */
   width?: number | "full";
   /** Zahl nach der Beschriftung (Pixelschrift). */
@@ -32,30 +33,32 @@ export type ButtonLook = {
 
 const isBlock = (v: ButtonVariant) => v === "primary" || v === "danger";
 
+/** Trennt die Look-Props von den übrigen Props des Elements. */
+function splitLook<P extends ButtonLook>({ variant, size, icon, iconEnd, tone, width, count, compactBelow, onScene, bleed, ...rest }: P): [ButtonLook, Omit<P, keyof ButtonLook>] {
+  return [{ variant, size, icon, iconEnd, tone, width, count, compactBelow, onScene, bleed }, rest];
+}
+
 /** data-* des Aussehens; Größe/Variante stehen immer da (CSS rechnet nicht mit Vorgaben). */
 function lookData({ variant = "secondary", size = "m", icon, tone, width, compactBelow, onScene, bleed }: ButtonLook) {
   return {
     "data-variant": variant,
     "data-size": size,
     "data-tone": tone,
-    "data-lead": icon ? "" : undefined,
+    "data-lead": flag(icon),
     "data-w": width === "full" ? "full" : undefined,
     "data-compact": compactBelow,
-    "data-scene": onScene ? "" : undefined,
+    "data-scene": flag(onScene),
     "data-bleed": bleed,
   };
 }
 
-const withWidth = (width: ButtonLook["width"], style?: CSSProperties) => (typeof width === "number" ? { ...style, width } : style);
-
 function Inner({ variant = "secondary", size = "m", icon, iconEnd, count, compactBelow, children }: ButtonLook & { children?: ReactNode }) {
-  const label = children != null && children !== false && children !== "";
   return (
     <>
       {isBlock(variant) && <span className="vx-bf" aria-hidden />}
       <span className="vx-bc">
         {icon && <Icon name={icon} size={size} />}
-        {label && (compactBelow ? <span className="vx-lab">{children}</span> : children)}
+        {hasContent(children) && (compactBelow ? <span className="vx-lab">{children}</span> : children)}
         {count != null && <Count value={count} />}
         {iconEnd && <Icon name={iconEnd} size={size} />}
       </span>
@@ -67,44 +70,44 @@ function Inner({ variant = "secondary", size = "m", icon, iconEnd, count, compac
  * Knopf des Kits. Sockel + Fläche mit Bevel (primär/Gefahr), Platte (sekundär) oder Hover-Platte (Geist).
  * Props und ref gehen an das <button> (Radix asChild).
  */
-export function Button({ variant, size, icon, iconEnd, tone, width, count, compactBelow, onScene, bleed, className, style, type = "button", children, ...props }: ButtonLook & ComponentProps<"button">) {
-  const look = { variant, size, icon, iconEnd, tone, width, count, compactBelow, onScene, bleed };
+export function Button({ className, style, type = "button", children, ...props }: ButtonLook & ComponentProps<"button">) {
+  const [look, rest] = splitLook(props);
   return (
-    <button type={type} className={cn("vx-btn fx", className)} {...lookData(look)} style={withWidth(width, style)} {...props}>
+    <button type={type} className={cn("vx-btn fx", className)} {...lookData(look)} style={widthStyle(look.width, style)} {...rest}>
       <Inner {...look}>{children}</Inner>
     </button>
   );
 }
 
 /** Knopf-Optik als Link (react-router). */
-export function ButtonLink({ variant, size, icon, iconEnd, tone, width, count, compactBelow, onScene, bleed, className, style, children, ...props }: ButtonLook & LinkProps & { ref?: Ref<HTMLAnchorElement> }) {
-  const look = { variant, size, icon, iconEnd, tone, width, count, compactBelow, onScene, bleed };
+export function ButtonLink({ className, style, children, ...props }: ButtonLook & LinkProps & { ref?: Ref<HTMLAnchorElement> }) {
+  const [look, rest] = splitLook(props);
   return (
-    <Link className={cn("vx-btn fx", className)} {...lookData(look)} style={withWidth(width, style)} {...props}>
+    <Link className={cn("vx-btn fx", className)} {...lookData(look)} style={widthStyle(look.width, style)} {...rest}>
       <Inner {...look}>{children as ReactNode}</Inner>
     </Link>
   );
 }
 
-type IconButtonLook = Omit<ButtonLook, "icon" | "iconEnd" | "width" | "count" | "compactBelow">;
+type IconButtonLook = Omit<ButtonLook, "icon" | "iconEnd" | "width" | "count" | "compactBelow" | "bleed">;
 
 /**
  * Quadratischer Symbolknopf (32/40/56), Standard Geist. `label` ist der zugängliche Name;
  * der Tooltip zeigt `tip` (Standard: label), `tip={false}` schaltet ihn ab.
  */
-export function IconButton({ icon, label, tip, tipSide, variant = "ghost", size, tone, onScene, bleed, className, type = "button", ...props }: IconButtonLook & {
+export function IconButton({ icon, label, tip, variant = "ghost", size, tone, onScene, className, type = "button", ...props }: IconButtonLook & {
   icon: IconName;
   label: string;
   tip?: string | false;
-  tipSide?: "top" | "bottom" | "left" | "right";
 } & Omit<ComponentProps<"button">, "aria-label" | "children">) {
-  const look = { variant, size, icon, tone, onScene, bleed };
+  const look = { variant, size, icon, tone, onScene };
+  // Der Symbolknopf ist quadratisch: ohne die Einrückung für ein führendes Icon (data-lead)
   const btn = (
     <button type={type} className={cn("vx-btn vx-ib fx", className)} {...lookData(look)} data-lead={undefined} aria-label={label} {...props}>
       <Inner {...look} />
     </button>
   );
-  return tip === false ? btn : <Tip label={tip ?? label} side={tipSide}>{btn}</Tip>;
+  return tip === false ? btn : <Tip label={tip ?? label}>{btn}</Tip>;
 }
 
 /** Zurück-Link über einer Überschrift („‹ Bibliothek“): Geist s, bündig mit der Überschrift. */
@@ -131,11 +134,11 @@ type BarLook = {
   /** Sichtbare Beschriftung nach dem Inhalt (höchstens 124 px, Auslassung); der Name gehört ins aria-label. */
   label?: ReactNode;
   /** Beschriftung in Warnfarbe (z. B. „Spielername fehlt“). */
-  tone?: "warn";
+  tone?: Extract<Tone, "warn">;
   /** Symbol nach der Beschriftung (Icon s, z. B. Menüpfeil). */
   iconEnd?: IconName;
   /** Unter 900 px Fensterbreite nur der Inhalt, die Beschriftung fällt weg. */
-  compactBelow?: 900;
+  compactBelow?: Extract<Compact, 900>;
   /**
    * Laufende Arbeit (Aufgaben): feste Breite 56, Symbol links. Bei `count` > 0 Zähler-Plakette rechts und Mini-Balken
    * unter dem Symbol (`p` 0–1, null = unbestimmt); der Platz bleibt immer, nichts verschiebt sich.
@@ -147,12 +150,15 @@ type BarLook = {
 
 function barData({ label, tone, compactBelow, activity, side }: Pick<BarLook, "label" | "tone" | "compactBelow" | "activity" | "side">) {
   return {
-    "data-side": side ? "" : undefined,
+    "data-side": flag(side),
     "data-tone": label != null ? tone : undefined,
     "data-compact": label != null ? compactBelow : undefined,
     "data-activity": activity ? (activity.count > 0 ? "busy" : "") : undefined,
   };
 }
+
+/** Größte Zahl in der Zähler-Plakette; darüber steht „9+“. */
+const MAX_BADGE_COUNT = 9;
 
 function BarInner({ children, label, iconEnd, activity }: Pick<BarLook, "children" | "label" | "iconEnd" | "activity">) {
   return (
@@ -165,7 +171,7 @@ function BarInner({ children, label, iconEnd, activity }: Pick<BarLook, "childre
       <span className="vx-tick" aria-hidden />
       {activity && (
         <>
-          <span className="vx-bar-badge" aria-hidden>{activity.count > 9 ? "9+" : activity.count}</span>
+          <span className="vx-bar-badge" aria-hidden>{activity.count > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : activity.count}</span>
           <Progress thin p={activity.p} decorative className="vx-bar-meter" />
         </>
       )}
@@ -173,24 +179,26 @@ function BarInner({ children, label, iconEnd, activity }: Pick<BarLook, "childre
   );
 }
 
+type BarLinkProps = { to: string } & Omit<LinkProps, "to" | "children" | "className"> & { ref?: Ref<HTMLAnchorElement> };
+type BarPlainProps = { to?: undefined } & Omit<ComponentProps<"button">, "children" | "className">;
+
 /**
  * Knopf in der Fensterleiste (36 px): Hover-Platte, `current` = Platte + Kupferstrich (aktueller Bereich),
  * `expanded` = offen (Menü). Mit `to` ein Link. `label`/`tone`/`iconEnd`/`compactBelow`: Konto-Knopf; `activity`: Aufgaben.
  */
-export function BarButton(props: BarLook & (({ to: string } & Omit<LinkProps, "to" | "children" | "className"> & { ref?: Ref<HTMLAnchorElement> }) | ({ to?: undefined } & Omit<ComponentProps<"button">, "children" | "className">))) {
-  if (props.to != null) {
-    const { current, expanded, className, children, label, tone, iconEnd, compactBelow, activity, side, ...rest } = props;
-    return (
-      <Link className={cn("vx-bar fx", className)} {...barData({ label, tone, compactBelow, activity, side })} aria-current={current ? "page" : undefined} aria-expanded={expanded} {...rest}>
-        <BarInner label={label} iconEnd={iconEnd} activity={activity}>{children}</BarInner>
-      </Link>
-    );
-  }
-  const { current, expanded, className, children, label, tone, iconEnd, compactBelow, activity, side, to: _t, type = "button", ...rest } = props;
-  return (
-    <button type={type} className={cn("vx-bar fx", className)} {...barData({ label, tone, compactBelow, activity, side })} aria-current={current ? "page" : undefined} aria-expanded={expanded} {...rest}>
-      <BarInner label={label} iconEnd={iconEnd} activity={activity}>{children}</BarInner>
-    </button>
+export function BarButton(props: BarLook & (BarLinkProps | BarPlainProps)) {
+  const { current, expanded, className, children, label, tone, iconEnd, compactBelow, activity, side, ...target } = props;
+  const common = {
+    className: cn("vx-bar fx", className),
+    ...barData({ label, tone, compactBelow, activity, side }),
+    "aria-current": current ? ("page" as const) : undefined,
+    "aria-expanded": expanded,
+  };
+  const inner = <BarInner label={label} iconEnd={iconEnd} activity={activity}>{children}</BarInner>;
+  return target.to != null ? (
+    <Link {...common} {...target}>{inner}</Link>
+  ) : (
+    <button type="button" {...common} {...target}>{inner}</button>
   );
 }
 

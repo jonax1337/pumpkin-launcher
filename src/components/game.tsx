@@ -445,9 +445,9 @@ export function LogConsole({ instance }: { instance: Instance }) {
         </div>
         <div className="none" style={{ visibility: shown.length ? "hidden" : "visible" }}>
           {lines?.length ? (
-            <Empty size="pane" ill="search" title={t("components.log.noMatches")}>{t("components.log.noLinesForFilter")}</Empty>
+            <Empty size="pane" title={t("components.log.noMatches")}>{t("components.log.noLinesForFilter")}</Empty>
           ) : (
-            <Empty size="pane" ill="term" title={t("components.log.noOutputYet")}>{t("components.log.startInstanceHint")}</Empty>
+            <Empty size="pane" mood="sleep" title={t("components.log.noOutputYet")}>{t("components.log.startInstanceHint")}</Empty>
           )}
         </div>
         <Button size="s" icon="down" className={cn("down", !follow && "show")} onClick={() => setFollow(true)}>{t("components.log.scrollDown")}</Button>

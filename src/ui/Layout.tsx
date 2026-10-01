@@ -5,6 +5,8 @@
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Count } from "./Chip";
+import { flag } from "./util";
+import type { Breakpoint } from "./types";
 
 /** Überschriftenstufen (Display, Versalien): Seite 40 · Dialog 26 · Abschnitt 22 · Unterabschnitt 20 · Karte 18. */
 export type HeadingLevel = "page" | "dialog" | "section" | "sub" | "card";
@@ -52,7 +54,7 @@ export function SectionHeader({ title, as, size = "section", id, actions, classN
  * `label`: macht die Leiste zur benannten Gruppe (role=toolbar nur mit echter Pfeiltasten-Bedienung, daher group).
  */
 export function Toolbar({ height = 40, wrapBelow, alt, altActive, search, label, className, children }: {
-  height?: 40 | 56; wrapBelow?: 1096 | 800; alt?: ReactNode; altActive?: boolean; search?: "s" | "m" | "l"; label?: string; className?: string; children: ReactNode;
+  height?: 40 | 56; wrapBelow?: Extract<Breakpoint, 800 | 1096>; alt?: ReactNode; altActive?: boolean; search?: "s" | "m" | "l"; label?: string; className?: string; children: ReactNode;
 }) {
   return (
     <div
@@ -84,7 +86,7 @@ export function Spacer() {
 /** Reihe von Aktionen (Knöpfe): Abstand 8 (oder 4/12), Ausrichtung start/end/between; `wrap` erlaubt Umbruch. */
 export function Actions({ gap = 8, align = "start", wrap, className, children }: { gap?: 4 | 8 | 12; align?: "start" | "end" | "between"; wrap?: boolean; className?: string; children: ReactNode }) {
   return (
-    <div className={cn("vx-acts", className)} data-gap={gap} data-align={align} data-wrap={wrap ? "" : undefined}>
+    <div className={cn("vx-acts", className)} data-gap={gap} data-align={align} data-wrap={flag(wrap)}>
       {children}
     </div>
   );
