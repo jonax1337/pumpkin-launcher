@@ -90,6 +90,8 @@ pub fn run() {
             content_commands::instance_duplicate,
             content_commands::instance_export_entries,
             content_commands::instance_export,
+            content_commands::import_detect,
+            content_commands::instance_import,
             skin_commands::skin_profile,
             skin_commands::skin_library,
             skin_commands::skin_texture,

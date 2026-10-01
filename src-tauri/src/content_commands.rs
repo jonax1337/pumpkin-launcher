@@ -1,8 +1,11 @@
 use crate::{
+    commands::require_name,
     error::AppResult,
     models::{Instance, ModpackOrigin, Template},
     services::{
-        content, duplicate, modrinth as api, mrpack,
+        content, duplicate,
+        imports::{self, ForeignInstance},
+        modrinth as api, mrpack,
         providers::{self, Source},
         templates,
     },
@@ -259,8 +262,8 @@ pub async fn curseforge_adopt_download(state: State<'_, AppState>, instance_id: 
     let Ok(_operation) = state.operation(Some(&instance_id)) else { return Ok(None) };
     providers::curseforge::adopt_download(&state, &instance_id, project_id, file_id).await
 }
-/// Bricht `modrinth_install_pack`, `modrinth_import_pack` oder `template_create_instance` mit
-/// dieser `operationId` ab; der Vorgang endet mit „Installation abgebrochen“.
+/// Bricht `modrinth_install_pack`, `modrinth_import_pack`, `template_create_instance` oder `instance_import`
+/// mit dieser `operationId` ab; der Vorgang endet mit „Installation abgebrochen“.
 #[tauri::command]
 pub fn pack_install_cancel(state: State<'_, AppState>, operation_id: String) {
     state.cancel(&operation_id);
@@ -337,6 +340,29 @@ pub async fn instance_duplicate(
 ) -> AppResult<Instance> {
     let _operation = state.operation(Some(&instance_id))?;
     duplicate::duplicate(&state, &instance_id, progress(app, operation_id)).await
+}
+/// Instanzen anderer Launcher an den bekannten Orten oder im gewählten Ordner (absolut).
+#[tauri::command]
+pub async fn import_detect(state: State<'_, AppState>, folder: Option<String>) -> AppResult<Vec<ForeignInstance>> {
+    let folder = folder.map(std::path::PathBuf::from);
+    if folder.as_ref().is_some_and(|f| !f.is_absolute()) {
+        return Err(api::invalid("Ordner nicht gefunden"));
+    }
+    Ok(imports::detect(&state, folder.as_deref()))
+}
+/// Neue Instanz aus einer Instanz eines anderen Launchers; Fortschritt als `content-progress` (Phase `copy`),
+/// abbrechbar über `pack_install_cancel`.
+#[tauri::command]
+pub async fn instance_import(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    source: ForeignInstance,
+    operation_id: String,
+) -> AppResult<Instance> {
+    require_name(&source.setup.name)?;
+    let _operation = state.operation(None)?;
+    let work = imports::import(&state, source, progress(app, operation_id.clone()));
+    state.cancellable(&operation_id, work).await
 }
 /// Einträge des Spielordners, die `instance_export` mitnehmen kann.
 #[tauri::command]

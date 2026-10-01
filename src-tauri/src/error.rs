@@ -20,6 +20,8 @@ pub enum AppError {
     Tauri(#[from] tauri::Error),
     #[error("Der Windows-Anmeldespeicher ist nicht erreichbar – Details: {0}")]
     Keyring(#[from] keyring::Error),
+    #[error("Die Datenbank eines anderen Launchers ist nicht lesbar – Details: {0}")]
+    Sqlite(#[from] rusqlite::Error),
     #[error("{kind} „{id}“ wurde nicht gefunden")]
     NotFound { kind: &'static str, id: String },
     #[error("{0}")]

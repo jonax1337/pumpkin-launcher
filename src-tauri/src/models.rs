@@ -159,6 +159,9 @@ pub struct Instance {
     /// Gruppe in der Bibliothek; Gruppen gibt es nur über die Instanzen, die sie tragen.
     #[serde(default)]
     pub group: Option<String>,
+    /// Instanzordner im anderen Launcher, aus dem die Instanz importiert wurde.
+    #[serde(default)]
+    pub imported_from: Option<String>,
     pub mods: Vec<Mod>,
     pub created_at: u64,
     pub last_played_at: Option<u64>,
@@ -189,6 +192,7 @@ impl Instance {
             game_args: Vec::new(),
             playtime_secs: 0,
             group: None,
+            imported_from: None,
             mods: Vec::new(),
             created_at: now_ms(),
             last_played_at: None,
