@@ -231,7 +231,7 @@ export function InstanceDialogs() {
         open={!!remove}
         onOpenChange={(o) => !o && close()}
         title={`„${remove?.name ?? ""}“ löschen?`}
-        text="Mods, Einstellungen und Welten dieser Instanz werden gelöscht. Das lässt sich nicht rückgängig machen."
+        text="Mods, Einstellungen, Welten und Weltsicherungen dieser Instanz werden gelöscht. Das lässt sich nicht rückgängig machen."
         pending={del.isPending}
         onConfirm={() =>
           remove &&

@@ -5,19 +5,26 @@ import {
   Actions, Button, Cell, ConfirmDialog, Dialog, DialogActions, Empty, ErrorBox, Field, Glyph, IconButton, JobProgress, List, ListRow, Menu,
   ProjectIcon, RowTitle, SectionHeader, Segmented, Skel, TextField, Tip, type MenuEntry,
 } from "@/ui";
-import { usePhase, type Phase } from "@/components/game";
+import { usePhase } from "@/components/game";
+import { useContentState } from "@/hooks/useContent";
 import { usePlay } from "@/hooks/useInstances";
 import {
-  useDeleteBackup, useRemoveServer, useRestoreBackup, useSaveServer, useServers, useWorldBackups, useWorldJobs, useWorldQuickPlay, useWorlds,
+  useDeleteBackup, useRemoveServer, useRestoreBackup, useSaveServer, useServers, useWorldBackups, useWorldJob, useWorldJobs, useWorldQuickPlay,
+  useWorlds,
 } from "@/hooks/useWorlds";
 import { api } from "@/lib/api";
 import { formatDateTime, formatSize, relativeTime } from "@/lib/format";
 import { GAME_MODE_LABELS, type Instance, type QuickPlay, type Server, type World, type WorldBackup } from "@/lib/types";
 
-/** Warum Spieldateien gerade nicht angefasst werden (null = frei). */
-function lockReason(phase: Phase): string | null {
+/** Warum Spieldateien gerade nicht angefasst werden und nichts startet (null = frei); das Backend lässt nur einen Vorgang zu. */
+function useBusyReason(instanceId: string): string | null {
+  const phase = usePhase(instanceId);
+  const worldJob = useWorldJob((s) => s.job != null);
+  const contentBusy = useContentState((s) => s.active != null);
   if (phase === "running") return "Minecraft läuft gerade. Beende es zuerst.";
   if (phase === "preparing" || phase === "starting") return "Minecraft startet gerade.";
+  if (worldJob) return "Gerade wird eine Welt gesichert.";
+  if (contentBusy) return "Gerade läuft eine Installation. Warte, bis sie fertig ist.";
   return null;
 }
 
@@ -28,12 +35,12 @@ const worldLine = (w: World) =>
 /** Welten und Server einer Instanz: direkt hineinspielen, Welten sichern und wiederherstellen, Serverliste pflegen. */
 export function WorldsTab({ instance, onLaunched }: { instance: Instance; onLaunched: () => void }) {
   const play = usePlay();
-  const locked = lockReason(usePhase(instance.id));
+  const busy = useBusyReason(instance.id);
   const quickPlay = (target: QuickPlay) => void play(instance, onLaunched, target);
   return (
     <div className="max-w-[var(--page-max)] pt-2">
-      <WorldsSection instance={instance} locked={locked} onPlay={quickPlay} />
-      <ServersSection instance={instance} locked={locked} onPlay={quickPlay} />
+      <WorldsSection instance={instance} busy={busy} onPlay={quickPlay} />
+      <ServersSection instance={instance} busy={busy} onPlay={quickPlay} />
     </div>
   );
 }
@@ -54,16 +61,16 @@ function QueryList<T>({ query, error, empty, children }: { query: UseQueryResult
   return query.data.length ? children(query.data) : empty;
 }
 
-type SectionProps = { instance: Instance; locked: string | null; onPlay: (target: QuickPlay) => void };
+type SectionProps = { instance: Instance; busy: string | null; onPlay: (target: QuickPlay) => void };
 
-function WorldsSection({ instance, locked, onPlay }: SectionProps) {
+function WorldsSection({ instance, busy, onPlay }: SectionProps) {
   const worlds = useWorlds(instance.id);
   const startsIntoWorlds = useWorldQuickPlay(instance);
-  const { job, backup, remove } = useWorldJobs(instance.id);
+  const { backup, remove } = useWorldJobs(instance);
+  const job = useWorldJob((s) => (s.job?.instanceId === instance.id ? s.job : null));
   const [removing, setRemoving] = useState<World | null>(null);
   // Sicherungen einer Welt bzw. (world = null) aller Welten, auch gelöschter.
   const [showBackups, setShowBackups] = useState<{ world: string | null } | null>(null);
-  const busy = locked ?? (job ? "Gerade wird eine Welt gesichert." : null);
   const playBlocked = busy ?? (startsIntoWorlds === false ? `Minecraft ${instance.minecraftVersion} kann nicht direkt in eine Welt starten, das geht erst ab 1.20.` : null);
 
   const menuFor = (w: World): MenuEntry[] => [
@@ -114,19 +121,19 @@ function WorldsSection({ instance, locked, onPlay }: SectionProps) {
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
         title={`„${removing?.name ?? ""}“ löschen?`}
-        text="Vorher legt Pumpkin Launcher eine Sicherung an. Unter „Sicherungen“ holst du die Welt jederzeit zurück."
+        text="Vorher legt Pumpkin Launcher eine Sicherung an. Unter „Sicherungen“ holst du die Welt zurück, solange es die Instanz gibt."
         onConfirm={() => {
           if (removing) remove.mutate(removing);
           setRemoving(null);
         }}
       />
-      {showBackups && <BackupsDialog instance={instance} world={showBackups.world} locked={busy} onClose={() => setShowBackups(null)} />}
+      {showBackups && <BackupsDialog instance={instance} world={showBackups.world} busy={busy} onClose={() => setShowBackups(null)} />}
     </section>
   );
 }
 
 /** Sicherungen einer Welt (`world`) oder aller Welten: wiederherstellen (immer als neue Welt) oder löschen. */
-function BackupsDialog({ instance, world, locked, onClose }: { instance: Instance; world: string | null; locked: string | null; onClose: () => void }) {
+function BackupsDialog({ instance, world, busy, onClose }: { instance: Instance; world: string | null; busy: string | null; onClose: () => void }) {
   const backups = useWorldBackups(instance.id, world);
   const restore = useRestoreBackup(instance.id);
   const remove = useDeleteBackup(instance.id);
@@ -149,7 +156,7 @@ function BackupsDialog({ instance, world, locked, onClose }: { instance: Instanc
                   <RowTitle title={formatDateTime(b.createdAt)} sub={formatSize(b.sizeBytes)} />
                 )}
                 <Actions gap={4}>
-                  <GuardedButton size="s" icon="redo" blocked={locked} disabled={restore.isPending} onClick={() => restore.mutate(b)}>
+                  <GuardedButton size="s" icon="redo" blocked={busy} disabled={restore.isPending} onClick={() => restore.mutate(b)}>
                     Wiederherstellen
                   </GuardedButton>
                   <IconButton size="s" icon="trash" label={`Sicherung vom ${formatDateTime(b.createdAt)} löschen`} tip="Löschen" onClick={() => setRemoving(b)} />
@@ -173,22 +180,22 @@ function BackupsDialog({ instance, world, locked, onClose }: { instance: Instanc
 
 const NEW_SERVER: Server = { name: "", address: "", icon: null, acceptTextures: null };
 
-function ServersSection({ instance, locked, onPlay }: SectionProps) {
+function ServersSection({ instance, busy, onPlay }: SectionProps) {
   const servers = useServers(instance.id);
   const remove = useRemoveServer(instance.id);
   // Server im Dialog; `index` null = neu.
   const [editing, setEditing] = useState<{ index: number | null; server: Server } | null>(null);
   const [removing, setRemoving] = useState<{ index: number; server: Server } | null>(null);
   const addButton = (
-    <GuardedButton size="s" icon="plus" blocked={locked} onClick={() => setEditing({ index: null, server: NEW_SERVER })}>
+    <GuardedButton size="s" icon="plus" blocked={busy} onClick={() => setEditing({ index: null, server: NEW_SERVER })}>
       Hinzufügen
     </GuardedButton>
   );
 
   const menuFor = (server: Server, index: number): MenuEntry[] => [
-    { id: "edit", text: "Bearbeiten…", icon: "file", disabled: !!locked, onSelect: () => setEditing({ index, server }) },
+    { id: "edit", text: "Bearbeiten…", icon: "file", disabled: !!busy, onSelect: () => setEditing({ index, server }) },
     "-",
-    { id: "rm", text: "Entfernen…", icon: "trash", bad: true, disabled: !!locked, onSelect: () => setRemoving({ index, server }) },
+    { id: "rm", text: "Entfernen…", icon: "trash", bad: true, disabled: !!busy, onSelect: () => setRemoving({ index, server }) },
   ];
 
   return (
@@ -212,7 +219,7 @@ function ServersSection({ instance, locked, onPlay }: SectionProps) {
                   <ProjectIcon url={server.icon} seed={server.address} />
                   <RowTitle title={server.name || server.address} sub={server.address} />
                   <Cell flex align="end">
-                    <GuardedButton size="s" icon="play" blocked={locked} aria-label={`Spielen: ${server.name}`} onClick={() => onPlay({ type: "server", address: server.address })}>
+                    <GuardedButton size="s" icon="play" blocked={busy} aria-label={`Spielen: ${server.name}`} onClick={() => onPlay({ type: "server", address: server.address })}>
                       Spielen
                     </GuardedButton>
                   </Cell>

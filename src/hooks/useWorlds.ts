@@ -1,8 +1,9 @@
-import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { create } from "zustand";
 import { api } from "@/lib/api";
 import type { Instance, Server, World, WorldBackup } from "@/lib/types";
+import { useTasks } from "@/store/tasks";
 
 export const worldKeys = {
   /** Welten, Sicherungen und Serverliste einer Instanz (z. B. nach dem Spielen neu laden). */
@@ -65,32 +66,41 @@ export const useRemoveServer = (instanceId: string) =>
   useWorldChange(instanceId, ({ index }: { index: number; server: Server }) => api.serverRemove(instanceId, index), (_, { server }) => `„${server.name}“ entfernt`);
 
 /**
- * Sichern und Löschen einer Welt (Löschen sichert vorher). `job`: welche Welt gerade dran ist und wie weit (0–1, null = noch unbekannt).
+ * Laufendes Sichern oder Löschen einer Welt (Löschen sichert vorher): wer, was und wie weit (`p` 0–1, null = noch unbekannt).
+ * Ein Store, damit der Fortschritt Tab- und Seitenwechsel übersteht; das Backend erlaubt ohnehin nur einen Vorgang.
  */
-export function useWorldJobs(instanceId: string) {
-  const [job, setJob] = useState<{ worldId: string; p: number | null } | null>(null);
-  const track = async (world: World, run: (operationId: string) => Promise<WorldBackup>) => {
+export const useWorldJob = create<{ job: { instanceId: string; worldId: string; label: string; p: number | null } | null }>(() => ({ job: null }));
+
+export function useWorldJobs(instance: Instance) {
+  const track = async (world: World, verb: { running: string; done: string }, run: (operationId: string) => Promise<WorldBackup>) => {
     const operationId = crypto.randomUUID();
-    setJob({ worldId: world.id, p: null });
+    const label = `„${world.name}“ ${verb.running}`;
+    const show = (p: number | null) => useWorldJob.setState({ job: { instanceId: instance.id, worldId: world.id, label, p } });
+    show(null);
     const unlisten = await api.onContentProgress((e) => {
-      if (e.operationId === operationId && e.total) setJob({ worldId: world.id, p: e.done / e.total });
+      if (e.operationId === operationId && e.total) show(e.done / e.total);
     });
     try {
-      return await run(operationId);
+      const backup = await run(operationId);
+      useTasks.getState().push({ label: `„${world.name}“ ${verb.done}`, sub: instance.name, state: "done", to: `/instances/${instance.id}?tab=worlds` });
+      return backup;
+    } catch (error) {
+      useTasks.getState().push({ label, sub: error instanceof Error ? error.message : String(error), state: "fail" });
+      throw error;
     } finally {
       unlisten();
-      setJob(null);
+      useWorldJob.setState({ job: null });
     }
   };
   const backup = useWorldChange(
-    instanceId,
-    (world: World) => track(world, (op) => api.worldBackup(instanceId, world.id, op)),
+    instance.id,
+    (world: World) => track(world, { running: "sichern", done: "gesichert" }, (op) => api.worldBackup(instance.id, world.id, op)),
     (_, world) => `„${world.name}“ gesichert`,
   );
   const remove = useWorldChange(
-    instanceId,
-    (world: World) => track(world, (op) => api.worldDelete(instanceId, world.id, op)),
+    instance.id,
+    (world: World) => track(world, { running: "löschen", done: "gelöscht" }, (op) => api.worldDelete(instance.id, world.id, op)),
     (_, world) => `„${world.name}“ gelöscht. Die Sicherung davon findest du unter „Sicherungen“.`,
   );
-  return { job, backup, remove };
+  return { backup, remove };
 }
