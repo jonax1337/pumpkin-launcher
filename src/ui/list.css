@@ -74,6 +74,9 @@
 .vx-list[data-variant="content"] { --l-cols: 28px 40px minmax(0, 1fr) 300px 136px 72px 36px; --l-gap: 10px; --l-pad: 0 6px 0 8px; --l-h: 48px; --l-hh: 30px; }
 .vx-list[data-variant="content"][data-nw] { --l-cols: 28px 40px minmax(0, 1fr) 136px 72px 36px; }
 
+/* ---------- Welten und Server: 56 px, Aktion in fester Spalte (Spielen ↔ Fortschritt ohne Springen) ---------- */
+.vx-list[data-variant="worlds"] { --l-cols: 40px minmax(0, 1fr) 120px 36px; --l-gap: 12px; --l-pad: 0 6px 0 8px; }
+
 /* ---------- Katalog: 84 px, erster Treffer als Karte 132 px; kompakt (Seitenpanel) 76 px ---------- */
 .vx-list[data-variant="catalog"] { --l-cols: 72px minmax(0, 1fr) 190px; --l-gap: 14px; --l-pad: 0 10px 0 8px; --l-h: 84px; }
 .vx-list[data-variant="catalog-compact"] { --l-cols: 48px minmax(0, 1fr) 128px; --l-gap: 14px; --l-pad: 0 4px 0 8px; --l-h: 76px; }

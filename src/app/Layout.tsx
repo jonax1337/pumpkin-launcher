@@ -8,6 +8,7 @@ import { ManualDownloads } from "@/components/ManualDownloads";
 import { useUpdateCheckOnStart } from "@/hooks/useAppUpdate";
 import { useCancelInstall, useGameEvents, useInstances } from "@/hooks/useInstances";
 import { useContentState } from "@/hooks/useContent";
+import { useWorldJob } from "@/hooks/useWorlds";
 import { api } from "@/lib/api";
 import { progressLabel, progressShare } from "@/lib/modrinth";
 import { installStepLabel } from "@/lib/types";
@@ -174,10 +175,11 @@ const subscribeOnline = (cb: () => void) => {
 };
 const useOnline = () => useSyncExternalStore(subscribeOnline, () => navigator.onLine);
 
-/** Laufende Aufgaben: Vorbereitungen der Instanzen und Katalog-Vorgänge. */
+/** Laufende Aufgaben: Vorbereitungen der Instanzen, Katalog-Vorgänge und Weltsicherungen. */
 function useLiveTasks() {
   const installs = useGame((s) => s.installs);
   const content = useContentState();
+  const world = useWorldJob((s) => s.job);
   const { data: instances } = useInstances();
   const name = (id: string) => instances?.find((i) => i.id === id)?.name ?? "Instanz";
   const loader = (id: string) => instances?.find((i) => i.id === id)?.loader ?? "vanilla";
@@ -196,6 +198,7 @@ function useLiveTasks() {
       sub: progressLabel(content.progress),
       p: progressShare(content.progress),
     });
+  if (world) live.push({ id: `w-${world.instanceId}`, instanceId: "", label: world.label, sub: name(world.instanceId), p: world.p });
   return live;
 }
 

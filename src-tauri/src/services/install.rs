@@ -55,13 +55,22 @@ pub async fn fetch_version(client: &reqwest::Client, dirs: &Dirs, version_id: &s
 
 /// Liest eine bereits installierte Versions-JSON (für den Start ohne Netz).
 pub async fn installed_version(dirs: &Dirs, version_id: &str) -> AppResult<VersionJson> {
-    let path = dirs.version_file(version_id, "json");
-    download::read_json(&path).await.map_err(|err| match err {
-        AppError::Io(e) if e.kind() == io::ErrorKind::NotFound => {
-            AppError::Invalid(format!("Version {version_id} ist nicht installiert"))
-        }
+    download::read_json(&dirs.version_file(version_id, "json")).await.map_err(|err| match err {
+        err if is_missing(&err) => AppError::Invalid(format!("Version {version_id} ist nicht installiert")),
         other => other,
     })
+}
+
+/// Die installierte Versions-JSON oder, fehlt sie, die von Mojang (dabei abgelegt wie bei `fetch_version`).
+pub async fn installed_or_fetched_version(client: &reqwest::Client, dirs: &Dirs, version_id: &str) -> AppResult<VersionJson> {
+    match download::read_json(&dirs.version_file(version_id, "json")).await {
+        Err(err) if is_missing(&err) => fetch_version(client, dirs, version_id).await,
+        read => read,
+    }
+}
+
+fn is_missing(err: &AppError) -> bool {
+    matches!(err, AppError::Io(e) if e.kind() == io::ErrorKind::NotFound)
 }
 
 /// Inhalt der Markerdatei: die MC-Version, bei Mod-Loadern plus Loader und Version. Ein Wechsel

@@ -618,6 +618,7 @@ mod tests {
             extra_jvm_args: &[],
             window: GameWindow::Default,
             extra_game_args: &[],
+            quick_play: None,
         };
         let args = build_args(&spec, &Env { os: "windows", arch: "x86_64", features: Vec::new() }).unwrap();
         let libs = dirs.libraries().to_string_lossy().into_owned();

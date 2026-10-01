@@ -11,7 +11,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::sync::oneshot;
 
 use crate::error::{AppError, AppResult};
-use crate::models::{Account, GameWindow};
+use crate::models::{Account, GameWindow, QuickPlay};
 use crate::services::gamelog::XmlLog;
 use crate::services::install;
 use crate::services::mojang::{Argument, OneOrMany, VersionJson};
@@ -28,6 +28,11 @@ const LEGACY_JVM_ARGS: [&str; 3] = ["-Djava.library.path=${natives_directory}", 
 /// Längere Sitzungen zählen nicht als Spielzeit: dann wurde eher die Uhr verstellt.
 const MAX_SESSION: Duration = Duration::from_secs(7 * 24 * 3600);
 
+/// Quick Play ab 1.20: Launcher-Feature in den Regeln der Spielargumente und dessen Platzhalter.
+const WORLD_FEATURE: (&str, &str) = ("is_quick_play_singleplayer", "quickPlaySingleplayer");
+const SERVER_FEATURE: (&str, &str) = ("is_quick_play_multiplayer", "quickPlayMultiplayer");
+const DEFAULT_PORT: &str = "25565";
+
 /// Was für einen Start gebraucht wird.
 pub struct LaunchSpec<'a> {
     pub version: &'a VersionJson,
@@ -38,6 +43,8 @@ pub struct LaunchSpec<'a> {
     pub extra_jvm_args: &'a [String],
     pub window: GameWindow,
     pub extra_game_args: &'a [String],
+    /// Direkt in eine Welt oder auf einen Server.
+    pub quick_play: Option<&'a QuickPlay>,
 }
 
 /// Ersetzt `${name}` durch Werte aus `vars`. Unbekannte Platzhalter bleiben stehen; eingesetzte
@@ -102,7 +109,7 @@ pub fn build_args_for(spec: &LaunchSpec, env: &Env, session: Option<&Session>) -
     let path = |p: PathBuf| p.to_string_lossy().into_owned();
     let cp = classpath(version, dirs, env).into_iter().map(path).collect::<Vec<_>>().join(sep);
 
-    let vars: HashMap<&str, String> = HashMap::from([
+    let mut vars: HashMap<&str, String> = HashMap::from([
         ("auth_player_name", account.username.clone()),
         ("auth_uuid", account.id.replace('-', "")),
         ("auth_access_token", session.map_or("0", |s| s.access_token).into()),
@@ -124,9 +131,15 @@ pub fn build_args_for(spec: &LaunchSpec, env: &Env, session: Option<&Session>) -
         ("launcher_name", "pumpkin-launcher".into()),
         ("launcher_version", env!("CARGO_PKG_VERSION").into()),
     ]);
+    let quick_play = spec.quick_play.map(|target| quick_play_args(version, target)).transpose()?;
+    let mut env = env.clone();
+    if let Some(QuickPlayArgs::Feature { feature, var, value }) = &quick_play {
+        env.features.push(feature);
+        vars.insert(var, value.clone());
+    }
 
     let (jvm, game) = match (&version.arguments, &version.minecraft_arguments) {
-        (Some(a), _) => (flatten(&a.jvm, env), flatten(&a.game, env)),
+        (Some(a), _) => (flatten(&a.jvm, &env), flatten(&a.game, &env)),
         (None, Some(legacy)) => (LEGACY_JVM_ARGS.to_vec(), legacy.split_whitespace().collect()),
         (None, None) => return Err(AppError::Invalid(format!("Version {} ohne Startargumente", version.id))),
     };
@@ -142,6 +155,9 @@ pub fn build_args_for(spec: &LaunchSpec, env: &Env, session: Option<&Session>) -
     args.push(version.main_class.clone());
     args.extend(game.iter().map(|a| substitute(a, &vars)));
     args.extend(window_args(spec.window));
+    if let Some(QuickPlayArgs::Legacy(legacy)) = quick_play {
+        args.extend(legacy);
+    }
     // Eigene Spielargumente zuletzt. Sie überschreiben nichts: doppelte Optionen lehnt Minecraft ab
     // (je nach Version Standardwert oder Startabbruch).
     args.extend(spec.extra_game_args.iter().cloned());
@@ -154,6 +170,55 @@ fn window_args(window: GameWindow) -> Vec<String> {
         GameWindow::Default => Vec::new(),
         GameWindow::Size { width, height } => vec!["--width".into(), width.to_string(), "--height".into(), height.to_string()],
         GameWindow::Fullscreen => vec!["--fullscreen".into()],
+    }
+}
+
+/// Kann die Version direkt in eine Welt starten? Auf Server geht es immer (vor 1.20 über `--server`).
+pub fn starts_into_worlds(version: &VersionJson) -> bool {
+    offers_feature(version, WORLD_FEATURE.0)
+}
+
+/// Ob eine Regel der Spielargumente nach diesem Launcher-Feature fragt.
+fn offers_feature(version: &VersionJson, feature: &str) -> bool {
+    version.arguments.as_ref().is_some_and(|a| {
+        a.game.iter().any(|arg| matches!(arg, Argument::Conditional { rules, .. } if rules.iter().any(|r| r.features.contains_key(feature))))
+    })
+}
+
+/// Wie Minecraft das Quick-Play-Ziel bekommt.
+enum QuickPlayArgs {
+    /// Ab 1.20: Feature einschalten, Ziel in seinen Platzhalter; die Argumente stehen in der Versions-JSON.
+    Feature { feature: &'static str, var: &'static str, value: String },
+    /// Ältere Versionen kennen nur Server, als `--server`/`--port`.
+    Legacy(Vec<String>),
+}
+
+fn quick_play_args(version: &VersionJson, target: &QuickPlay) -> AppResult<QuickPlayArgs> {
+    let ((feature, var), value) = match target {
+        QuickPlay::World { id } => (WORLD_FEATURE, id),
+        QuickPlay::Server { address } => (SERVER_FEATURE, address),
+    };
+    if offers_feature(version, feature) {
+        return Ok(QuickPlayArgs::Feature { feature, var, value: value.clone() });
+    }
+    match target {
+        QuickPlay::World { .. } => {
+            Err(AppError::Invalid(format!("Minecraft {} kann nicht direkt in eine Welt starten, das geht erst ab 1.20", version.id)))
+        }
+        QuickPlay::Server { address } => {
+            let (host, port) = split_address(address);
+            Ok(QuickPlayArgs::Legacy(vec!["--server".into(), host.into(), "--port".into(), port.into()]))
+        }
+    }
+}
+
+/// `host[:port]` → (Host, Port), ohne Port der Standardport. IPv6 mit Port steht in eckigen Klammern.
+fn split_address(address: &str) -> (&str, &str) {
+    match address.rsplit_once(':') {
+        Some((host, port)) if port.parse::<u16>().is_ok() && (!host.contains(':') || host.starts_with('[')) => {
+            (host.trim_matches(['[', ']']), port)
+        }
+        _ => (address.trim_matches(['[', ']']), DEFAULT_PORT),
     }
 }
 
@@ -331,6 +396,7 @@ mod tests {
             extra_jvm_args: &[],
             window: GameWindow::Default,
             extra_game_args: &[],
+            quick_play: None,
         }
     }
 
@@ -387,6 +453,58 @@ mod tests {
 
         let fullscreen = LaunchSpec { window: GameWindow::Fullscreen, ..plain_spec(&version, &dirs, &account) };
         assert_eq!(build_args(&fullscreen, &LINUX).unwrap().last().map(String::as_str), Some("--fullscreen"));
+    }
+
+    /// Wie `test_version`, mit den Quick-Play-Argumenten der Versions-JSON ab 1.20.
+    fn quick_play_version() -> VersionJson {
+        let mut version = test_version();
+        let quick_play: Vec<Argument> = serde_json::from_value(serde_json::json!([
+            {"rules": [{"action": "allow", "features": {"is_quick_play_singleplayer": true}}], "value": ["--quickPlaySingleplayer", "${quickPlaySingleplayer}"]},
+            {"rules": [{"action": "allow", "features": {"is_quick_play_multiplayer": true}}], "value": ["--quickPlayMultiplayer", "${quickPlayMultiplayer}"]}
+        ]))
+        .unwrap();
+        version.arguments.as_mut().unwrap().game.extend(quick_play);
+        version
+    }
+
+    /// Die letzten `n` Argumente eines Vollbild-Starts mit Quick Play.
+    fn quick_play_tail(version: &VersionJson, target: QuickPlay, n: usize) -> AppResult<Vec<String>> {
+        let (dirs, account) = (Dirs::new("/data"), notch());
+        let spec = LaunchSpec { quick_play: Some(&target), window: GameWindow::Fullscreen, ..plain_spec(version, &dirs, &account) };
+        let args = build_args(&spec, &LINUX)?;
+        Ok(args[args.len() - n..].to_vec())
+    }
+
+    #[test]
+    fn quick_play_uses_version_features() {
+        let version = quick_play_version();
+        assert!(starts_into_worlds(&version));
+        let world = QuickPlay::World { id: "Neue Welt".into() };
+        assert_eq!(quick_play_tail(&version, world, 3).unwrap(), ["--quickPlaySingleplayer", "Neue Welt", "--fullscreen"]);
+        let server = QuickPlay::Server { address: "mc.example.net:25570".into() };
+        assert_eq!(quick_play_tail(&version, server, 3).unwrap(), ["--quickPlayMultiplayer", "mc.example.net:25570", "--fullscreen"]);
+
+        // Ohne Ziel bleiben die Quick-Play-Argumente draußen.
+        let (dirs, account) = (Dirs::new("/data"), notch());
+        let args = build_args(&plain_spec(&version, &dirs, &account), &LINUX).unwrap();
+        assert!(!args.iter().any(|a| a.starts_with("--quickPlay")));
+    }
+
+    #[test]
+    fn quick_play_before_1_20_only_joins_servers() {
+        let version = test_version();
+        assert!(!starts_into_worlds(&version));
+        let server = QuickPlay::Server { address: "mc.example.net:25570".into() };
+        assert_eq!(quick_play_tail(&version, server, 5).unwrap(), ["--fullscreen", "--server", "mc.example.net", "--port", "25570"]);
+        assert!(quick_play_tail(&version, QuickPlay::World { id: "Neue Welt".into() }, 1).is_err());
+    }
+
+    #[test]
+    fn server_addresses() {
+        assert_eq!(split_address("mc.example.net"), ("mc.example.net", "25565"));
+        assert_eq!(split_address("mc.example.net:25570"), ("mc.example.net", "25570"));
+        assert_eq!(split_address("[::1]:25566"), ("::1", "25566"));
+        assert_eq!(split_address("::1"), ("::1", "25565"));
     }
 
     #[test]

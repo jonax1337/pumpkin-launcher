@@ -46,7 +46,10 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `services/content.rs` | Sichere Modinstallation und `.mrpack`-Import in neue Instanzen; `plan_pack`/`import_plan` für Packs von Anbietern |
 | `content_commands.rs` | Modrinth-IPC und korrelierte `content-progress`-Events |
 | `support_commands.rs` | Fehlerberichte: Log teilen, Debug-Info |
-| `services/launch.rs` | Classpath, JVM-/Game-Args mit `${…}`-Ersetzung (danach Fenster `--width/--height` bzw. `--fullscreen` und eigene Spielargumente), Prozessstart, Log-Streaming, Sitzungsdauer für die Spielzeit |
+| `services/worlds.rs` | Welten unter `saves/<Ordner>` (Ordnername = ID): Name, zuletzt gespielt, Spielmodus, Hardcore und Version aus `level.dat` (gzip-NBT über `fastnbt` + `flate2`; unlesbar → Ordnername), Größe, `icon.png` als `data:`-URL (bis 256 KiB). Sicherung als ZIP `instances/<id>/backups/<Welt>-<Unix-ms>.zip` (Ordner als oberster Eintrag, ohne `session.lock`, über `.part`); Wiederherstellen immer in einen freien Ordner („<Welt> (2)“ …), entpackt mit den Pfadprüfungen von `providers::zip_paths` (ohne die Größengrenzen der Pack-Importe, damit große Welten zurückkommen); Löschen sichert vorher und verschiebt den Ordner erst aus `saves/`, bevor er entfernt wird. Die Sicherungen gehören zur Instanz und werden mit ihr gelöscht |
+| `services/servers.rs` | Serverliste `servers.dat` (NBT ohne Kompression): Name, Adresse, Icon, `acceptTextures`; ändert nur diese Felder, unbekannte Tags und versteckte Einträge (`hidden`, legt das Spiel für Quick Play an) bleiben; Schreiben über `.tmp` + Umbenennen. Einträge werden über ihre Stelle in der sichtbaren Liste angesprochen |
+| `world_commands.rs` | Dünne Commands für Welten, Sicherungen und Serverliste; Dateiarbeit in `spawn_blocking` |
+| `services/launch.rs` | Classpath, JVM-/Game-Args mit `${…}`-Ersetzung (danach Fenster `--width/--height` bzw. `--fullscreen` und eigene Spielargumente), Prozessstart, Log-Streaming, Sitzungsdauer für die Spielzeit. Quick Play schaltet das Feature der Versions-JSON ein (ab 1.20: `is_quick_play_singleplayer` → `--quickPlaySingleplayer <Ordner>`, `is_quick_play_multiplayer` → `--quickPlayMultiplayer <host:port>`); ältere Versionen bekommen für Server `--server`/`--port`, in Welten starten sie nicht |
 | `services/gamelog.rs` | log4j-XML auf stdout (Mojangs Logging-Config) → lesbare Zeilen |
 | `services/logshare.rs` | Log teilen über mclo.gs (`POST https://api.mclo.gs/1/log`, JSON `{ content, source }`): liest höchstens die letzten 5 MiB, entfernt lokal Zugangstokens (`--accessToken`, `accessToken=`, JWTs), den Benutzernamen in `C:\Users\<name>\` und E-Mail-Adressen, behält die letzten 24.999 Zeilen plus Kürzungshinweis (Grenzen von mclo.gs: 10 MiB, 25.000 Zeilen) |
 | `services/debuginfo.rs` | Debug-Info als englischer Klartext fürs GitHub-Issue: Launcher-Version, Windows-Version und Architektur, RAM, freier Platz im Datenordner, WebView2-Version, je Instanz (nummeriert, ohne Namen) MC-Version, Loader, aktive Mods, RAM (ohne eigene Einstellung der übergebene Standard), installiert/läuft |
@@ -63,7 +66,7 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `updater` | Neue Version von GitHub Releases (`latest.json`), Signatur gegen `plugins.updater.pubkey` in `tauri.conf.json` geprüft; Ablauf in `docs/RELEASING.md` |
 | `process` | Neustart nach dem Update (`relaunch`) |
 
-`capabilities/default.json` gibt dem Hauptfenster nur, was das Frontend braucht: Fensterknöpfe, `opener` (Dateipfade nur unter `$APPDATA/instances/*/minecraft`), `dialog:default`, `updater:allow-check`/`allow-download`/`allow-install` (suchen, laden, installieren; ohne `download-and-install`) und `process:allow-restart` (kein `exit`).
+`capabilities/default.json` gibt dem Hauptfenster nur, was das Frontend braucht: Fensterknöpfe, `opener` (Dateipfade nur unter `$APPDATA/instances/*/minecraft`, darin `logs/`, `crash-reports/` und `saves/`), `dialog:default`, `updater:allow-check`/`allow-download`/`allow-install` (suchen, laden, installieren; ohne `download-and-install`) und `process:allow-restart` (kein `exit`).
 
 ### Persistenz
 
@@ -88,6 +91,8 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 - **`Instance.group?`**: Gruppe in der Bibliothek (getrimmt, leer = keine). Es gibt keine eigene Gruppen-Entität: Gruppen sind die Namen, die Instanzen tragen.
 - **`LibrarySkin`**: `id` (SHA-1 der PNG), `name`, `variant` (`classic | slim`), `addedAt`. Dieselbe Datei kommt nur einmal in die Bibliothek.
 - **`SkinProfile`** (nur Antwort, nicht gespeichert): `skin: { url, variant } | null`, `capes: { id, alias, url, active }[]`.
+- **`QuickPlay`** (getaggt über `type`): `{type:"world", id}` (Ordnername unter `saves/`) · `{type:"server", address}` (`host[:port]`). **`Instance.lastQuickPlay?`** merkt sich das Ziel des letzten Starts per Quick Play.
+- **`World`** (nur Antwort): `id` (Ordnername; Grundlage für spätere Erweiterungen je Welt), `name`, `lastPlayed?`, `gameMode?` (`survival | creative | adventure | spectator`), `hardcore`, `version?`, `sizeBytes`, `icon?` (`data:`-URL), `path`. **`WorldBackup`**: `id` (Dateiname), `world` (Ordnername), `createdAt`, `sizeBytes`. **`Server`**: `name`, `address`, `icon?` (setzt nur das Spiel), `acceptTextures?` (`null` = im Spiel nachfragen).
 - Neue Felder tragen `#[serde(default)]`, damit ältere JSON-Dateien weiter laden.
 
 ### Commands
@@ -107,7 +112,7 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `versions_list` | – | `VersionEntry[]` (`id`, `type`, `url`, `sha1`, `releaseTime`) |
 | `instance_install` | `instanceId` | – (Events `install-progress`); abgebrochen → Fehler „Installation abgebrochen“ |
 | `instance_install_cancel` | `instanceId` | – |
-| `instance_launch` | `instanceId`, `username` (Offline), `javaPath?` (Einstellung des Launchers; der Pfad der Instanz geht vor), `defaultMemoryMb?`, `accountId?` (Microsoft) | PID (`number`) |
+| `instance_launch` | `instanceId`, `username` (Offline), `javaPath?` (Einstellung des Launchers; der Pfad der Instanz geht vor), `defaultMemoryMb?`, `accountId?` (Microsoft), `quickPlay?` (`QuickPlay`; die Welt muss existieren, die Adresse darf nicht wie eine Option aussehen) | PID (`number`) |
 | `system_memory_mb` | – | physischer RAM in MiB (`number`) |
 | `ms_login_start` | `clientId?` | `{ userCode, verificationUri, expiresIn, interval, message }` |
 | `ms_login_finish` | – | `Account` (wartet auf Bestätigung im Browser) |
@@ -133,6 +138,16 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `pack_install_cancel` | `operationId` | – (bricht `modrinth_install_pack`/`modrinth_import_pack`/`template_create_instance` ab) |
 | `log_share` | `instanceId`, `kind: LogKind` | öffentlicher mclo.gs-Link (`string`); fehlt die Datei, eine Meldung in Alltagssprache |
 | `debug_info` | `defaultMemoryMb` (RAM-Standard wie bei `instance_launch`) | Klartext ohne Instanz-/Kontonamen und Pfade (`string`) |
+| `world_list` | `instanceId` | `World[]`, zuletzt gespielte zuerst |
+| `world_backup` | `instanceId`, `worldId`, `operationId` | `WorldBackup` (Fortschritt als `content-progress`, Phase `backup`) |
+| `world_backups` | `instanceId` | `WorldBackup[]` aller Welten, auch gelöschter, neueste zuerst |
+| `world_restore` | `instanceId`, `backupId` | `World` (neuer Ordner, falls der alte belegt ist) |
+| `world_backup_delete` | `instanceId`, `backupId` | – |
+| `world_delete` | `instanceId`, `worldId`, `operationId` | `WorldBackup` (die Sicherung vor dem Löschen) |
+| `world_quick_play_supported` | `instanceId` | `boolean`: startet die Version direkt in Welten (lädt bei Bedarf die Versions-JSON) |
+| `server_list` | `instanceId` | `Server[]` (ohne versteckte Einträge) |
+| `server_save` | `instanceId`, `index?` (fehlt = neu), `server: Server` | – |
+| `server_remove` | `instanceId`, `index` | – |
 | `skin_profile` | `accountId` (Microsoft) | `SkinProfile` |
 | `skin_library` | – | `LibrarySkin[]` |
 | `skin_texture` | `id` | PNG als `data:`-URL |
@@ -144,7 +159,9 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `skin_reset` | `accountId` | – (Standardskin) |
 | `skin_cape` | `accountId`, `capeId?` | – (ohne `capeId`: Umhang ausblenden) |
 
-Content-Fortschritt: `content-progress` `{ operationId, phase, done, total }` (Phasen `resolve`, `validate`, `download`, `extract`, `copy`, `complete`). Der Aufrufer vergibt die `operationId`; späte oder fremde Events dürfen keinen anderen Auftrag aktualisieren. Modpack-Import und Minecraft-Installation sind getrennte Schritte: nach dem Import installiert `instance_install` die passende Minecraft-/Fabric-Runtime.
+Sichern, Wiederherstellen und Löschen von Welten sowie Änderungen an der Serverliste gehen nur, solange die Instanz nicht läuft (`AppState::operation`): das Spiel hält die Dateien offen und schreibt sie beim Beenden neu.
+
+Content-Fortschritt: `content-progress` `{ operationId, phase, done, total }` (Phasen `resolve`, `validate`, `download`, `extract`, `copy`, `backup`, `complete`). Der Aufrufer vergibt die `operationId`; späte oder fremde Events dürfen keinen anderen Auftrag aktualisieren. Modpack-Import und Minecraft-Installation sind getrennte Schritte: nach dem Import installiert `instance_install` die passende Minecraft-/Fabric-Runtime.
 
 Events: `install-progress` `{ instanceId, step, done, total }` · `instance-log` `{ instanceId, stream: "stdout"|"stderr", line }` · `instance-exit` `{ instanceId, code: number|null, crashed: boolean, crashReport: string|null, logFile: string|null }` (kommt nach dem Speichern der Spielzeit; `crashed` = Fehlercode ohne Stopp durch den Nutzer; Pfade absolut, öffnbar per `openPath`, Scope `$APPDATA/**`) · `instances-changed` (ohne Daten; nach dem Nachtragen von Ordner-Inhalten beim Start). Installation und Start gibt es für `loader = vanilla` und `fabric`.
 
@@ -166,7 +183,7 @@ Events: `install-progress` `{ instanceId, step, done, total }` · `instance-log`
 
 ```
 versions/<id>/<id>.json|.jar   libraries/…   assets/{indexes,objects,log_configs}/   runtime/<komponente>/
-instances/<instanz-id>/minecraft/ (Spielverzeichnis, darin mods/)   instances/<instanz-id>/natives/   cache/mods/<sha1>.jar
+instances/<instanz-id>/minecraft/ (Spielverzeichnis, darin mods/)   instances/<instanz-id>/natives/   instances/<instanz-id>/backups/<welt>-<unix-ms>.zip   cache/mods/<sha1>.jar
 skins/<sha1>.png
 ```
 
@@ -202,19 +219,20 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 
 - `lib/types.ts` – TS-Spiegel der Rust-Modelle
 - `lib/api.ts` – `invoke`-Wrapper; außerhalb von Tauri (reiner `pnpm dev` im Browser) Fallback auf Mockdaten aus `lib/mock.ts`
-- `hooks/` – TanStack Query; Mutations invalidieren die betroffenen Queries. `useInstances` (Spielen = bei Bedarf installieren, dann starten; Backend-Events), `useContent` (Modrinth-Vorgänge mit Fortschritt), `useTemplates`, `useAppUpdate` (Launcher-Update: stille Suche nach dem Start im Release-Build, Download mit Fortschritt, Installation erst nach Zustimmung und erst, wenn kein Minecraft mehr läuft), `useSupport` (Log teilen: Link kopieren, Toast mit „Öffnen“; Debug-Info kopieren), `useSkins` (Bibliothek, Texturen, Profil des Microsoft-Kontos)
+- `hooks/` – TanStack Query; Mutations invalidieren die betroffenen Queries. `useInstances` (Spielen = bei Bedarf installieren, dann starten; Backend-Events), `useContent` (Modrinth-Vorgänge mit Fortschritt), `useTemplates`, `useAppUpdate` (Launcher-Update: stille Suche nach dem Start im Release-Build, Download mit Fortschritt, Installation erst nach Zustimmung und erst, wenn kein Minecraft mehr läuft), `useSupport` (Log teilen: Link kopieren, Toast mit „Öffnen“; Debug-Info kopieren), `useSkins` (Bibliothek, Texturen, Profil des Microsoft-Kontos), `useWorlds` (Welten, Sicherungen und Serverliste; Sichern/Löschen mit Fortschritt im Store `useWorldJob`, auch im Aufgaben-Menü; nach Spielende neu geladen)
 - `store/settings.ts` – Launcher-Einstellungen, lokal persistiert: Java, RAM, Konten (Offline-Namen, aktives Konto), Pixelgröße, bewegte Szenen
 - `store/game.ts` – flüchtiger Laufzeitzustand aus den Events: Installationsfortschritt, Starten, Protokoll (gepuffert, max. 2000 Zeilen je Instanz), Absturz, Startzeit
 - `store/look.ts` – Szenenbild (Biom) je Instanz, lokal persistiert (das Backend hat dafür kein Feld; ohne Wahl fest aus der Instanz-ID)
 - `store/tasks.ts` – Verlauf abgeschlossener Aufgaben für das Aufgaben-Menü; laufende Aufgaben kommen live aus `store/game.ts` und `useContent`
 - Mods/Modpacks verwenden in Tauri den echten Modrinth-Katalog; neue Content-Installationen melden im Browser ohne Tauri keine vorgetäuschten Erfolge.
 - Konten: Offline-Spielernamen lokal, Microsoft-Konten über den Gerätecode-Login des Backends.
+- Welten und Server im Browser: Beispiele aus `lib/mock-worlds.ts` (je Instanz, nur im Speicher; Sichern mit vorgetäuschtem Fortschritt).
 - Skins im Browser: Beispielprofil und -bibliothek aus `lib/mock-skins.ts` (Texturen auf einem Canvas gemalt); Dateien hinzufügen geht nur in der App.
 
 **Oberfläche**
 
 - `app/Layout.tsx` – rahmenloses Fenster: Fensterleiste mit Wortzeichen, Kontomenü und eigenen Fensterknöpfen, links eine Icon-Seitenleiste (Start · Bibliothek · Entdecken, unten Aufgaben-Menü und Einstellungen) (`@tauri-apps/api/window`, Ziehen per `data-tauri-drag-region`); setzt `--px`, pausiert Szenen, solange Minecraft läuft
-- `pages/` – Start (Szene, Weiterspielen-Reihe, Onboarding), Bibliothek (Poster/Liste, mit Gruppen als aufklappbare Abschnitte, ohne Gruppe zuletzt), Instanz (klebender Kopf mit Spielzeit, Inhalte, Protokoll, Einstellungen mit Java, Fenster und Spielargumenten; `pages/detail/`), Entdecken (Katalog, Projektseite), Einstellungen, Skins (`/skins`, über das Kontomenü: aktueller Skin und Umhang des Microsoft-Kontos, Bibliothek als Raster; Offline-Konten sehen einen Hinweis auf die Microsoft-Anmeldung)
+- `pages/` – Start (Szene, Weiterspielen-Reihe, Onboarding), Bibliothek (Poster/Liste, mit Gruppen als aufklappbare Abschnitte, ohne Gruppe zuletzt), Instanz (klebender Kopf mit Spielzeit, Inhalte, Welten mit den Abschnitten Welten und Server – „Spielen“ startet per Quick Play, gesperrt mit Tooltip, solange das Spiel läuft oder die Version keine Welten unterstützt –, Protokoll, Einstellungen mit Java, Fenster und Spielargumenten; `pages/detail/`), Entdecken (Katalog, Projektseite), Einstellungen, Skins (`/skins`, über das Kontomenü: aktueller Skin und Umhang des Microsoft-Kontos, Bibliothek als Raster; Offline-Konten sehen einen Hinweis auf die Microsoft-Anmeldung)
 - `components/px.tsx` – Bausteine: Knopf, Chip, Fortschritt, Suchfeld, Auswahl, Segmente, Checkbox, Schalter, Radio, Speicher-Slider, Tooltip, Menü/Kontextmenü, Dialog, Seitenpanel, Leer- und Fehlerzustände, Toasts. Verhalten von Radix, Aussehen aus `styles/`
 - `components/game.tsx` – Spielen-Knopf (feste Größe in allen Zuständen), Statuszeile, Status-Chip, Protokoll mit Filter/Suche/Mitscrollen
 - `components/instance.tsx` – Instanz-Menü (Knopf und Rechtsklick, Untermenü „Gruppe“): „Duplizieren“ (Fortschritt im Aufgaben-Menü), Dialoge „Exportieren…“ (Auswahl der Ordner, Speichern-Dialog, Toast mit „Im Ordner zeigen“), „Als Vorlage speichern“, „Neue Gruppe“ und „Löschen“

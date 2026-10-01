@@ -60,8 +60,8 @@ const byId = (slug: string): Mod => {
 
 /** Was eine neue Instanz wie im Backend (`Instance::from_new`) ohne eigene Werte mitbringt. */
 export const blankInstanceFields = (): Pick<
-  Instance, "modpack" | "memoryMb" | "jvmArgs" | "javaPath" | "window" | "gameArgs" | "playtimeSecs" | "group" | "lastPlayedAt"
-> => ({ modpack: null, memoryMb: null, jvmArgs: [], javaPath: null, window: { type: "default" }, gameArgs: [], playtimeSecs: 0, group: null, lastPlayedAt: null });
+  Instance, "modpack" | "memoryMb" | "jvmArgs" | "javaPath" | "window" | "gameArgs" | "playtimeSecs" | "group" | "lastPlayedAt" | "lastQuickPlay"
+> => ({ modpack: null, memoryMb: null, jvmArgs: [], javaPath: null, window: { type: "default" }, gameArgs: [], playtimeSecs: 0, group: null, lastPlayedAt: null, lastQuickPlay: null });
 
 export function initialInstances(): Instance[] {
   return [

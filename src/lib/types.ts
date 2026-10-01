@@ -32,6 +32,9 @@ export type ModpackOrigin =
   | { type: "curseforge"; projectId: number; fileId: number }
   | { type: "provider"; source: string; projectId: string; versionId: string };
 
+/** Quick Play: direkt in eine Welt (`id` = Ordnername) oder auf einen Server (`host[:port]`). */
+export type QuickPlay = { type: "world"; id: string } | { type: "server"; address: string };
+
 /** Spielfenster beim Start; `default` = wie Minecraft es selbst öffnet. */
 export type GameWindow = { type: "default" } | { type: "size"; width: number; height: number } | { type: "fullscreen" };
 
@@ -56,6 +59,8 @@ export interface Instance {
   mods: Mod[];
   createdAt: number;
   lastPlayedAt: number | null;
+  /** Ziel des letzten Starts per Quick Play. */
+  lastQuickPlay: QuickPlay | null;
 }
 
 /** Vorlage: gespeicherter Schnappschuss einer Instanz (lokales .mrpack, ohne Welten). */
@@ -218,4 +223,45 @@ export interface Cape {
 export interface SkinProfile {
   skin: { url: string; variant: SkinVariant } | null;
   capes: Cape[];
+}
+
+// ---------- Welten und Server ----------
+
+export type GameMode = "survival" | "creative" | "adventure" | "spectator";
+
+export const GAME_MODE_LABELS: Record<GameMode, string> = { survival: "Überleben", creative: "Kreativ", adventure: "Abenteuer", spectator: "Zuschauer" };
+
+/** Welt unter `saves/`; `id` ist ihr Ordnername. */
+export interface World {
+  id: string;
+  name: string;
+  lastPlayed: number | null;
+  gameMode: GameMode | null;
+  hardcore: boolean;
+  /** Minecraft-Version, mit der die Welt zuletzt gespielt wurde. */
+  version: string | null;
+  sizeBytes: number;
+  /** `icon.png` als data:-URL. */
+  icon: string | null;
+  /** Absoluter Ordnerpfad (für `openPath`). */
+  path: string;
+}
+
+/** Sicherung einer Welt; `world` ist der Ordnername, auch von inzwischen gelöschten Welten. */
+export interface WorldBackup {
+  id: string;
+  world: string;
+  createdAt: number;
+  sizeBytes: number;
+}
+
+/** Eintrag der Serverliste des Spiels. */
+export interface Server {
+  name: string;
+  /** `host[:port]` */
+  address: string;
+  /** Icon als data:-URL; setzt nur das Spiel, beim Speichern bleibt das alte. */
+  icon: string | null;
+  /** Ressourcenpakete des Servers annehmen bzw. ablehnen; null = im Spiel nachfragen. */
+  acceptTextures: boolean | null;
 }

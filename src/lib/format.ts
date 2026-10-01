@@ -15,6 +15,13 @@ export function formatDate(ms: number): string {
   return dtf.format(ms);
 }
 
+const dtfTime = new Intl.DateTimeFormat("de", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+/** Datum mit Uhrzeit, z. B. für mehrere Sicherungen am selben Tag. */
+export function formatDateTime(ms: number): string {
+  return dtfTime.format(ms);
+}
+
 /** Spielzeit als „12:04“ oder „1:02:09“. */
 export function formatClock(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
@@ -27,6 +34,15 @@ export function formatPlaytime(secs: number): string {
   if (secs < 3600) return `${Math.floor(secs / 60)} Min.`;
   const hours = secs / 3600;
   return `${hours.toLocaleString("de", { maximumFractionDigits: hours < 10 ? 1 : 0 })} Std.`;
+}
+
+const SIZE_UNITS = ["Bytes", "KB", "MB", "GB", "TB"];
+
+/** Dateigröße mit Basis 1024 wie im Explorer: „850 KB“, „12,4 MB“, „1,2 GB“. */
+export function formatSize(bytes: number): string {
+  let n = bytes, unit = 0;
+  for (; n >= 1024 && unit < SIZE_UNITS.length - 1; unit++) n /= 1024;
+  return `${n.toLocaleString("de", { maximumFractionDigits: unit && n < 100 ? 1 : 0 })} ${SIZE_UNITS[unit]}`;
 }
 
 /** Tausender mit schmalem Leerzeichen („3 480“), wie im Mockup. */

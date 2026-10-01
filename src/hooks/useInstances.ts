@@ -7,10 +7,11 @@ import { askPlayerName, openAddOffline, startMsLogin } from "@/components/Player
 import { usableAccount, useOfflineAllowed } from "@/store/offline";
 import { api } from "@/lib/api";
 import { autoMemoryMb, formatClock, maxMemoryMb } from "@/lib/format";
-import { INSTALL_CANCELLED, type Instance, type InstanceStatus, type ModLoader, type NewInstance } from "@/lib/types";
+import { INSTALL_CANCELLED, type Instance, type InstanceStatus, type ModLoader, type NewInstance, type QuickPlay } from "@/lib/types";
 import { useGame } from "@/store/game";
 import { accountName, useSettings } from "@/store/settings";
 import { useTasks } from "@/store/tasks";
+import { worldKeys } from "./useWorlds";
 
 export const instanceKeys = {
   all: ["instances"] as const,
@@ -218,7 +219,7 @@ export function useLaunch() {
   const qc = useQueryClient();
   return useMutation({
     meta: { ownErrorToast: true },
-    mutationFn: async (instance: Instance) => {
+    mutationFn: async ({ instance, quickPlay }: { instance: Instance; quickPlay: QuickPlay | null }) => {
       const { javaPath } = useSettings.getState();
       const offlineOk = useOfflineAllowed.getState().allowed;
       const active = usableAccount(useSettings.getState().active, offlineOk);
@@ -226,9 +227,9 @@ export function useLaunch() {
       useGame.getState().clearLog(instance.id);
       useGame.getState().clearCrash(instance.id);
       const accountId = active.kind === "microsoft" ? active.id : null;
-      return api.launchInstance(instance.id, accountName(active), accountId, javaPath, await defaultMemory(qc));
+      return api.launchInstance(instance.id, accountName(active), accountId, javaPath, await defaultMemory(qc), quickPlay);
     },
-    onSuccess: (_, instance) => {
+    onSuccess: (_, { instance }) => {
       useGame.getState().setStarted(instance.id, Date.now());
       // Ohne vorherigen Status (Abfrage fehlgeschlagen) gilt die Instanz jetzt als installiert und laufend.
       qc.setQueryData<InstanceStatus>(instanceKeys.status(instance.id), (s) => ({ installed: true, ...s, running: true }));
@@ -249,7 +250,7 @@ export function useLaunch() {
 }
 
 /**
- * „Spielen“: prüft den Spielernamen, installiert bei Bedarf und startet danach.
+ * „Spielen“: prüft den Spielernamen, installiert bei Bedarf und startet danach, mit `quickPlay` direkt in eine Welt oder auf einen Server.
  * Ohne Namen öffnet sich der Dialog „Spielername hinzufügen“; nach dem Speichern geht es hier weiter.
  * Fehler melden `useInstall`/`useLaunch` selbst; der Knopf fällt dann in den Ausgangszustand zurück.
  */
@@ -257,17 +258,17 @@ export function usePlay() {
   const qc = useQueryClient();
   const install = useInstall();
   const launch = useLaunch();
-  const play = async (instance: Instance, onLaunched?: () => void): Promise<void> => {
+  const play = async (instance: Instance, onLaunched?: () => void, quickPlay: QuickPlay | null = null): Promise<void> => {
     const game = useGame.getState();
     if (game.launching[instance.id] || game.installs[instance.id]) return;
     if (!usableAccount(useSettings.getState().active, useOfflineAllowed.getState().allowed)) {
-      return askPlayerName({ label: instance.name, run: () => void play(instance, onLaunched) }, qc);
+      return askPlayerName({ label: instance.name, run: () => void play(instance, onLaunched, quickPlay) }, qc);
     }
     game.setLaunching(instance.id, true);
     try {
       // Fehlt der Status (Abfrage fehlgeschlagen), wird wie bei „nicht installiert“ zuerst installiert.
       if (!qc.getQueryData<InstanceStatus>(instanceKeys.status(instance.id))?.installed) await install.mutateAsync(instance);
-      await launch.mutateAsync(instance);
+      await launch.mutateAsync({ instance, quickPlay });
       onLaunched?.();
     } catch {
       // Toast kommt aus useInstall/useLaunch.
@@ -315,8 +316,9 @@ export function useGameEvents() {
         const since = useGame.getState().started[instanceId];
         useGame.getState().setStarted(instanceId, null);
         qc.setQueryData<InstanceStatus>(instanceKeys.status(instanceId), (s) => s && { ...s, running: false });
-        // Das Backend hat die Spielzeit der Sitzung angerechnet.
+        // Das Backend hat die Spielzeit der Sitzung angerechnet, das Spiel Welten und Serverliste geändert.
         void qc.invalidateQueries({ queryKey: instanceKeys.all });
+        void qc.invalidateQueries({ queryKey: worldKeys.all(instanceId) });
         const showLog = { label: "Protokoll", onClick: () => navigate(`/instances/${instanceId}?tab=console`) };
         if (stopping.delete(instanceId)) {
           toast(since ? `Minecraft beendet. Gespielt: ${formatClock(Date.now() - since)}` : "Minecraft beendet", { action: showLog });

@@ -45,14 +45,31 @@ const EXPANDED_LIMIT: u64 = 8 * 1024 * 1024 * 1024;
 const ATTEMPTS: u32 = 3;
 const MAX_ENTRIES: usize = 20_000;
 
-/// Dateien eines Pack-Zips unterhalb von `prefix`, ohne die Ordner in `skip` (Namen der obersten Ebene):
-/// `(Zielpfad, Eintrags-Nummer)`. Regeln wie beim `.mrpack`: sichere Pfade, keine Sonderdateien,
-/// keine Doppelten, Größen- und Kompressionsgrenzen, keine Datei, die zugleich Ordner einer anderen ist.
+/// Dateien eines Pack-Zips wie bei `zip_paths`, dazu Größen- und Kompressionsgrenzen gegen ZIP-Bomben
+/// (Regeln wie beim `.mrpack`).
 pub(crate) fn zip_files(zip: &mut zip::ZipArchive<std::fs::File>, prefix: &str, skip: &[&str]) -> AppResult<Vec<(std::path::PathBuf, usize)>> {
     if zip.len() > MAX_ENTRIES {
         return Err(invalid("Zu viele ZIP-Einträge"));
     }
+    let files = zip_paths(zip, prefix, skip)?;
     let mut expanded = 0u64;
+    for (_, index) in &files {
+        let entry = zip.by_index_raw(*index)?;
+        expanded = expanded.checked_add(entry.size()).ok_or_else(|| invalid("ZIP-Größenüberlauf"))?;
+        if expanded > EXPANDED_LIMIT
+            || entry.size() > modrinth::FILE_LIMIT
+            || entry.size() > entry.compressed_size().saturating_mul(200).saturating_add(MIB)
+        {
+            return Err(invalid("ZIP-Limit überschritten"));
+        }
+    }
+    Ok(files)
+}
+
+/// Dateien eines ZIPs unterhalb von `prefix`, ohne die Ordner in `skip` (Namen der obersten Ebene):
+/// `(Zielpfad, Eintrags-Nummer)`. Nur Pfadregeln: sichere Pfade, keine Sonderdateien, keine Doppelten,
+/// keine Datei, die zugleich Ordner einer anderen ist.
+pub(crate) fn zip_paths(zip: &mut zip::ZipArchive<std::fs::File>, prefix: &str, skip: &[&str]) -> AppResult<Vec<(std::path::PathBuf, usize)>> {
     let mut seen = std::collections::HashSet::new();
     let mut files = Vec::new();
     for index in 0..zip.len() {
@@ -68,13 +85,6 @@ pub(crate) fn zip_files(zip: &mut zip::ZipArchive<std::fs::File>, prefix: &str, 
         let path = super::content::safe_path(&rel)?;
         if entry.unix_mode().is_some_and(|m| matches!(m & 0o170000, 0o120000 | 0o060000 | 0o020000 | 0o010000 | 0o140000)) {
             return Err(invalid("ZIP-Symlink/Spezialdatei"));
-        }
-        expanded = expanded.checked_add(entry.size()).ok_or_else(|| invalid("ZIP-Größenüberlauf"))?;
-        if expanded > EXPANDED_LIMIT
-            || entry.size() > modrinth::FILE_LIMIT
-            || entry.size() > entry.compressed_size().saturating_mul(200).saturating_add(MIB)
-        {
-            return Err(invalid("ZIP-Limit überschritten"));
         }
         if !seen.insert(rel.to_lowercase()) {
             return Err(invalid("Doppelter ZIP-Pfad"));

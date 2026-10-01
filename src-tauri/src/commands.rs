@@ -3,7 +3,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::error::{AppError, AppResult};
-use crate::models::{now_ms, GameWindow, Instance, ModLoader, NewInstance};
+use crate::models::{now_ms, GameWindow, Instance, ModLoader, NewInstance, QuickPlay};
 use crate::services::install::{self, InstallProgress, InstallStep, INSTALL_PROGRESS_EVENT};
 use crate::services::launch::{self, LaunchSpec, LogStream, EXIT_EVENT, LOG_EVENT};
 use crate::services::mojang::{VersionEntry, VersionManifest, MANIFEST_URL};
@@ -11,7 +11,7 @@ use crate::services::rules::Env;
 use crate::services::fabric::{self, LoaderVersion};
 use crate::services::forge;
 use crate::services::mojang::VersionJson;
-use crate::services::{auth, download, java, mods, system};
+use crate::services::{auth, download, java, mods, system, worlds};
 use crate::state::AppState;
 
 pub(crate) fn require_name(name: &str) -> AppResult<()> {
@@ -237,8 +237,10 @@ async fn install_instance(app: AppHandle, state: &AppState, instance_id: String)
     Ok(())
 }
 
-/// Startet eine installierte Instanz mit Offline-Account und liefert die Prozess-ID.
-/// Ausgaben kommen als `instance-log`, das Ende als `instance-exit`.
+/// Startet eine installierte Instanz mit Offline-Account und liefert die Prozess-ID; mit `quickPlay`
+/// direkt in eine Welt oder auf einen Server. Ausgaben kommen als `instance-log`, das Ende als `instance-exit`.
+// Jedes Argument ist ein Feld des IPC-Aufrufs aus dem Frontend.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn instance_launch(
     app: AppHandle,
@@ -248,9 +250,13 @@ pub async fn instance_launch(
     java_path: Option<String>,
     default_memory_mb: Option<u32>,
     account_id: Option<String>,
+    quick_play: Option<QuickPlay>,
 ) -> AppResult<u32> {
     let _operation = state.operation(Some(&instance_id))?;
     let mut instance = state.instances.get(&instance_id)?;
+    if let Some(target) = &quick_play {
+        worlds::require_target(&state.dirs, &instance_id, target)?;
+    }
     mods::sync(&state.dirs,&instance_id,&instance.mods)?;
     // Mit Microsoft-Konto: echte Sitzung (bei Bedarf erneuert); sonst Offline mit `username`.
     let (account, session) = match account_id.filter(|id| !id.is_empty()) {
@@ -277,6 +283,7 @@ pub async fn instance_launch(
             extra_jvm_args: &instance.jvm_args,
             window: instance.window,
             extra_game_args: &instance.game_args,
+            quick_play: quick_play.as_ref(),
         },
         &Env::current(),
         session.as_ref(),
@@ -318,6 +325,9 @@ pub async fn instance_launch(
     // Noch unter dem Lock speichern: ein sofort beendetes Spiel rechnet seine Spielzeit sonst
     // auf einen Stand an, den dieses Update gleich wieder überschreibt.
     instance.last_played_at = Some(now_ms());
+    if quick_play.is_some() {
+        instance.last_quick_play = quick_play;
+    }
     state.instances.update(instance)?;
     drop(running);
     tracing::info!(instance = %instance_id, pid, user = %account.username, "Spiel gestartet");
