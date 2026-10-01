@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { open as openFile } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { Dialog, DialogActions, Field, Icon, Segmented } from "@/ui";
-import { useContentInstall, withTarget } from "@/hooks/useContent";
+import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { api } from "@/lib/api";
 import { fileName } from "@/lib/format";
@@ -38,9 +38,15 @@ export function useLocalFiles(instance: Instance, active: boolean) {
   const install = useContentInstall();
   const navigate = useNavigate();
   const [ask, setAsk] = useState<Ask | null>(null);
-  const dragging = useFileDrop(active, (paths) => void take(paths).catch(showError));
+  // Während der Rückfrage würde ein weiterer Ablage-Vorgang die offenen Dateien ersetzen.
+  const dragging = useFileDrop(active && !ask, (paths) => void take(paths).catch(showError));
 
   async function take(paths: string[]) {
+    // Sonst verwirft `useContentInstall` die Dateien kommentarlos.
+    if (useContentState.getState().active) {
+      toast.error("Warte, bis der laufende Vorgang fertig ist.");
+      return;
+    }
     const pack = paths.find(isMrpack);
     if (pack) {
       toast("Modpacks werden als eigene Instanz importiert.", {
@@ -52,8 +58,11 @@ export function useLocalFiles(instance: Instance, active: boolean) {
     const files = paths.filter((p) => CONTENT_FILE.test(p));
     if (!files.length) return;
     const checks = await api.checkLocalFiles(instance.id, files);
-    for (const c of checks) if (c.duplicateOf) toast.error(`„${fileName(c.path)}“ ist schon in dieser Instanz (${c.duplicateOf}).`);
-    const fresh = checks.filter((c) => !c.duplicateOf);
+    for (const c of checks) {
+      if (c.error) toast.error(c.error);
+      else if (c.duplicateOf) toast.error(`„${fileName(c.path)}“ ist schon in dieser Instanz (${c.duplicateOf}).`);
+    }
+    const fresh = checks.filter((c) => !c.error && !c.duplicateOf);
     const sure = fresh.flatMap(({ path, kind }) => (kind ? [{ path, kind }] : []));
     const unsure = fresh.filter((c) => !c.kind).map((c) => c.path);
     if (unsure.length) setAsk({ sure, unsure });
@@ -99,7 +108,10 @@ export function useLocalFiles(instance: Instance, active: boolean) {
       {ask && (
         <KindDialog
           paths={ask.unsure}
-          onClose={() => setAsk(null)}
+          onClose={() => {
+            setAsk(null);
+            add(ask.sure);
+          }}
           onConfirm={(chosen) => {
             setAsk(null);
             add([...ask.sure, ...chosen]);
@@ -122,7 +134,7 @@ function KindDialog({ paths, onClose, onConfirm }: { paths: string[]; onClose: (
       onOpenChange={(o) => !o && onClose()}
       title="Ressourcenpaket oder Shader?"
       sub="Am Inhalt ist das nicht eindeutig zu erkennen."
-      footer={<DialogActions cancel="Abbrechen" confirm={{ label: "Hinzufügen", onClick: () => onConfirm(paths.map((path, i) => ({ path, kind: kinds[i] }))) }} />}
+      footer={<DialogActions cancel="Überspringen" confirm={{ label: "Hinzufügen", onClick: () => onConfirm(paths.map((path, i) => ({ path, kind: kinds[i] }))) }} />}
     >
       {paths.map((path, i) => (
         <Field key={path} label={fileName(path)} group>

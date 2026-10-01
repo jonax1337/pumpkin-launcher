@@ -231,7 +231,7 @@ pub(crate) fn budget(mut sizes: impl Iterator<Item = u64>) -> AppResult<()> {
     Ok(())
 }
 
-fn project_of(m: &Mod) -> Option<&String> {
+pub(crate) fn project_of(m: &Mod) -> Option<&String> {
     match &m.source {
         ModSource::Modrinth { project_id, .. } => Some(project_id),
         _ => None,
@@ -395,6 +395,14 @@ fn drop_pinned(
     }
 }
 
+/// Jede der `mod_ids` muss ein Eintrag der Instanz sein.
+pub(crate) fn ensure_known(instance: &Instance, mod_ids: &[String]) -> AppResult<()> {
+    match mod_ids.iter().find(|id| !instance.mods.iter().any(|m| &m.id == *id)) {
+        Some(unknown) => Err(invalid(format!("Unbekannte Mod {unknown}"))),
+        None => Ok(()),
+    }
+}
+
 pub async fn update_mods(
     state: &AppState,
     id: &str,
@@ -402,9 +410,7 @@ pub async fn update_mods(
     progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
 ) -> AppResult<Instance> {
     let instance = state.instances.get(id)?;
-    if let Some(unknown) = mod_ids.iter().find(|m| !instance.mods.iter().any(|x| &x.id == *m)) {
-        return Err(invalid(format!("Unbekannte Mod {unknown}")));
-    }
+    ensure_known(&instance, mod_ids)?;
     let client = modrinth::client()?;
     progress("resolve", 0, 1);
     let updates: Vec<_> = check_updates(&client, &instance)

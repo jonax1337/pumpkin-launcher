@@ -32,11 +32,15 @@ export interface LocalFile {
   kind: ModKind;
 }
 
-/** Vorab-Prüfung einer eigenen Datei: `kind` null = Zip ohne eindeutiges Merkmal (nachfragen), `duplicateOf` = Name des vorhandenen Eintrags. */
+/**
+ * Vorab-Prüfung einer eigenen Datei: `kind` null = Zip ohne eindeutiges Merkmal (nachfragen), `duplicateOf` = Name des
+ * vorhandenen Eintrags, `error` = warum die Datei nicht passt.
+ */
 export interface FileCheck {
   path: string;
   kind: ModKind | null;
   duplicateOf: string | null;
+  error: string | null;
 }
 
 /** Herkunft einer aus einem Modpack installierten Instanz. */

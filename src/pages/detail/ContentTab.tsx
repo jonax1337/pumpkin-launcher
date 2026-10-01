@@ -236,7 +236,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
           actions={
             <>
               <Button icon="plus" onClick={onAdd}>Hinzufügen</Button>
-              {local.pick && <Button icon="ul" onClick={local.pick}>Datei hinzufügen…</Button>}
+              {local.pick && <Button icon="ul" disabled={!!active} onClick={local.pick}>Datei hinzufügen…</Button>}
             </>
           }
         >
@@ -460,7 +460,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
         </span>
         {/* Sekundär: auf dieser Seite ist nur Spielen Akzent-Primär. */}
         <Button size="s" icon="plus" onClick={onAdd}>Hinzufügen</Button>
-        {local.pick && <Button size="s" icon="ul" compactBelow={1096} onClick={local.pick}>Datei hinzufügen…</Button>}
+        {local.pick && <Button size="s" icon="ul" compactBelow={1096} disabled={!!active} onClick={local.pick}>Datei hinzufügen…</Button>}
       </Toolbar>
 
       {visible.length === 0 ? (

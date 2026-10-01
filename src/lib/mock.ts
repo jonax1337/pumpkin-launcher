@@ -232,5 +232,10 @@ export function createContentMock(db: { instances: Instance[] }, emit: (event: s
       progress("complete", modIds.length, modIds.length);
       return save(inst);
     },
+    /** Im Browser kennt Modrinth keine Datei: die Einträge bleiben lokal. */
+    async identify(instanceId: string): Promise<Instance> {
+      await wait(600);
+      return find(instanceId);
+    },
   };
 }

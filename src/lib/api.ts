@@ -155,11 +155,6 @@ const mock = {
     db.instances.push(inst);
     return clone(inst);
   },
-  /** Im Browser kennt Modrinth keine Datei: die Einträge bleiben lokal. */
-  async modrinthIdentify(instanceId: string) {
-    await delay(600);
-    return clone(findInstance(instanceId));
-  },
 };
 
 const mockGame = {
@@ -315,7 +310,7 @@ export const api = {
     tauri ? call("modrinth_update_mods", { instanceId, modIds, operationId }) : mockContent!.updateMods(instanceId, modIds, operationId),
   /** Lokale Einträge `modIds` per SHA-1 mit Modrinth abgleichen; erkannte bekommen Updates von dort. */
   modrinthIdentify: (instanceId: string, modIds: string[]): Promise<Instance> =>
-    tauri ? call("modrinth_identify", { instanceId, modIds }) : mock.modrinthIdentify(instanceId),
+    tauri ? call("modrinth_identify", { instanceId, modIds }) : mockContent!.identify(instanceId),
   /** Eigene Dateien (absolute Pfade) vorab prüfen: Art und ob die Instanz sie schon hat. */
   checkLocalFiles: (instanceId: string, paths: string[]): Promise<FileCheck[]> =>
     tauri ? call("instance_check_files", { instanceId, paths }) : Promise.reject(new Error(LOCAL_FILES_IN_APP)),

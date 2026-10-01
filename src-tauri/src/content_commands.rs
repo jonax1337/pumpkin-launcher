@@ -308,7 +308,7 @@ pub async fn instance_check_files(
     instance_id: String,
     paths: Vec<String>,
 ) -> AppResult<Vec<local_files::FileCheck>> {
-    local_files::check(&state, &instance_id, &paths)
+    local_files::check(&state, &instance_id, paths).await
 }
 /// Eigene .jar-/.zip-Dateien in die Instanz; was Modrinth per SHA-1 kennt, bekommt Updates von dort.
 #[tauri::command]
@@ -320,7 +320,7 @@ pub async fn instance_add_files(
     operation_id: String,
 ) -> AppResult<Instance> {
     let _operation = state.operation(Some(&instance_id))?;
-    local_files::add(&state, &instance_id, &files, &progress(app, operation_id)).await
+    local_files::add(&state, &instance_id, files, progress(app, operation_id)).await
 }
 #[tauri::command]
 pub async fn modrinth_identify(
@@ -328,7 +328,7 @@ pub async fn modrinth_identify(
     instance_id: String,
     mod_ids: Vec<String>,
 ) -> AppResult<Instance> {
-    let _operation = state.operation(None)?;
+    let _operation = state.operation(Some(&instance_id))?;
     local_files::identify(&state, &instance_id, &mod_ids).await
 }
 #[tauri::command]
