@@ -30,6 +30,7 @@
 - **Library groups** — sort instances into collapsible groups right from the instance menu
 - **Mods & modpacks from [Modrinth](https://modrinth.com)** — browse, search and install directly in the launcher
 - **`.mrpack` import** — drag in local modpack files
+- **Screenshots** — browse every instance's F2 screenshots by day, flip through them full size, open them in your image viewer, show them in Explorer or move them to the Recycle Bin
 - **Duplicate & export** — copy an instance to experiment safely, or share it as a `.mrpack` (Modrinth mods linked, everything else embedded; worlds optional)
 - **Presets** — reusable collections of mods, settings and JVM args that can be applied to any instance
 - **Microsoft login** via device code (see [status](#status) below), plus offline player profiles
