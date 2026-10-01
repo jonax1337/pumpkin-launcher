@@ -3,14 +3,16 @@
 //! aber nur über `net::download_public` (HTTPS, öffentliche Adressen) und entpackt sie mit denselben
 //! Pfad- und Größenregeln wie ein `.mrpack`. Loader und Minecraft-Version stehen in `bin/version.json`.
 use crate::services::progress::{Phase, ProgressFn};
-use super::{json, net, segment, zip_files, MIB, ZIP_LIMIT};
+use super::{json, mib_progress, net, segment, zip_files};
 use crate::{
     error::{AppError, AppResult},
     models::{instance_name, Instance, ModLoader, NewInstance},
     services::{
         content::{Blob, Pack, TempFile},
         forge,
+        limits::{CATALOG_CONCURRENCY, PAGE_SIZE, QUERY_MAX, SUMMARY_MAX, ZIP_JSON_LIMIT, ZIP_LIMIT},
         modrinth::{identifier, File, Hit, Project, SearchResponse, Version},
+        transport::read_capped_io,
         Dirs,
     },
 };
@@ -19,7 +21,6 @@ use serde::Deserialize;
 use std::{
     collections::{BTreeMap, HashMap},
     fs,
-    io::Read,
     sync::{Arc, Mutex},
 };
 
@@ -83,7 +84,12 @@ fn plain(s: &str) -> String {
         }
     }
     let text = out.split_whitespace().collect::<Vec<_>>().join(" ");
-    if text.chars().count() > 220 { format!("{}…", text.chars().take(219).collect::<String>().trim_end()) } else { text }
+    if text.chars().count() > SUMMARY_MAX {
+        // Eine Stelle bleibt für das „…“.
+        format!("{}…", text.chars().take(SUMMARY_MAX - 1).collect::<String>().trim_end())
+    } else {
+        text
+    }
 }
 
 fn title(d: &Detail) -> String {
@@ -128,10 +134,10 @@ pub async fn search(
     offset: u32,
     index: Option<&str>,
 ) -> AppResult<SearchResponse> {
-    if query.len() > 512 {
+    if query.len() > QUERY_MAX {
         return Err(AppError::invalid("Ungültige Suche"));
     }
-    let empty = SearchResponse { hits: Vec::new(), total_hits: 0, offset, limit: 20 };
+    let empty = SearchResponse { hits: Vec::new(), total_hits: 0, offset, limit: PAGE_SIZE };
     // Technic liefert eine einzige Seite ohne Versatz.
     if kind != "modpack" || offset > 0 {
         return Ok(empty);
@@ -144,9 +150,11 @@ pub async fn search(
         url.query_pairs_mut().append_pair("q", query);
     }
     let listing: Listing = json(client, url.as_str()).await?;
-    let details: Vec<Detail> = futures::stream::iter(listing.modpacks.into_iter().filter(|e| segment(&e.slug).is_ok()).take(20))
-        .map(|e| async move { detail(client, &e.slug).await.ok() })
-        .buffered(8)
+    let details: Vec<Detail> = futures::stream::iter(listing.modpacks.into_iter().filter(|e| segment(&e.slug).is_ok()).take(PAGE_SIZE as usize))
+        .map(|e| async move {
+            detail(client, &e.slug).await.inspect_err(|err| tracing::warn!(slug = %e.slug, %err, "Technic-Pack nicht geladen")).ok()
+        })
+        .buffered(CATALOG_CONCURRENCY)
         .filter_map(|d| async move { d })
         .collect()
         .await;
@@ -157,7 +165,7 @@ pub async fn search(
         Some(_) => return Err(AppError::invalid("Ungültige Sortierung")),
     }
     let hits: Vec<Hit> = details.iter().map(hit).collect();
-    Ok(SearchResponse { total_hits: hits.len() as u64, hits, offset, limit: 20 })
+    Ok(SearchResponse { total_hits: hits.len() as u64, hits, offset, limit: PAGE_SIZE })
 }
 
 pub async fn project(client: &reqwest::Client, slug: &str) -> AppResult<Project> {
@@ -253,12 +261,7 @@ fn inspect(temp: TempFile, name: &str) -> AppResult<Pack> {
     };
     let profile: serde_json::Value = {
         let entry = zip.by_name(&format!("{prefix}bin/version.json"))?;
-        let mut bytes = Vec::new();
-        entry.take(8 * MIB + 1).read_to_end(&mut bytes)?;
-        if bytes.len() as u64 > 8 * MIB {
-            return Err(AppError::invalid("version.json zu groß"));
-        }
-        serde_json::from_slice(&bytes)?
+        serde_json::from_slice(&read_capped_io(entry, ZIP_JSON_LIMIT, "version.json zu groß")?)?
     };
     let (mc, loader, loader_version) = loader_from(&profile)?;
 
@@ -289,18 +292,9 @@ pub(crate) async fn plan(
         return Err(AppError::invalid("Dieses Modpack nutzt Technic Solder (ältere Technik) und lässt sich nicht installieren"));
     }
     let url = d.url.filter(|u| !u.is_empty()).ok_or_else(|| AppError::invalid("Das Modpack hat keine Download-Adresse"))?;
-    let tmp = dirs.root.join("cache").join("tmp");
-    fs::create_dir_all(&tmp)?;
-    let temp = TempFile(tmp.join(format!("{}.zip", crate::models::new_id())));
+    let temp = TempFile::in_cache(dirs)?;
     progress(Phase::Download, 0, 0);
-    // Nur bei jedem vollen MiB melden, nicht bei jedem Netzwerk-Häppchen.
-    let last = std::sync::atomic::AtomicU64::new(u64::MAX);
-    net::download_public(&url, &temp.0, ZIP_LIMIT, &|done, total| {
-        if last.swap(done / MIB, std::sync::atomic::Ordering::Relaxed) != done / MIB {
-            progress(Phase::Download, done / MIB, total / MIB);
-        }
-    })
-    .await?;
+    net::download_public(&url, &temp.0, ZIP_LIMIT, &mib_progress(progress)).await?;
     inspect(temp, name)
 }
 

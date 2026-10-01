@@ -4,14 +4,17 @@
 //! außerhalb von CurseForge verbieten (`downloadUrl` fehlt), werden nicht umgangen, sondern als „manuell laden“ gemeldet
 //! (`Blocked`).
 use crate::services::progress::{Phase, ProgressFn};
-use super::{zip_files, RemoteFile, JSON_LIMIT, MIB, ZIP_LIMIT};
+use super::{mib_progress, zip_files, RemoteFile};
 use crate::{
     error::{AppError, AppResult},
     models::{instance_name, Instance, Mod, ModKind, ModLoader, ModSource, NewInstance},
     services::{
         content::{self, Blob, Pack, TempFile},
         forge,
+        limits::{FILE_LIMIT, MANIFEST_LIMIT, PAGE_SIZE, PLAN_FILES, PROVIDER_JSON_LIMIT, ZIP_LIMIT},
         modrinth::{self, identifier, Dependency, File, Hit, Project, SearchResponse, Version},
+        transport::{read_capped, read_capped_io},
+        zip_guard::ensure_no_file_as_parent,
         Dirs,
     },
     state::AppState,
@@ -21,7 +24,6 @@ use std::{
     cmp::Reverse,
     collections::{BTreeMap, HashMap, HashSet},
     fs,
-    io::Read,
     path::PathBuf,
     sync::{Arc, Mutex},
     time::Duration,
@@ -32,12 +34,22 @@ use std::{
 /// eigenen Schlüssel, betreiben einen eigenen Worker (`proxy/`) und setzen `PUMPKIN_CF_PROXY` (Laufzeit oder beim Bauen).
 const DEFAULT_PROXY: &str = "https://pumpkin-curseforge.jonas-laux.workers.dev";
 const GAME_MINECRAFT: u32 = 432;
-const PAGE: u32 = 20;
+const WEBSITE: &str = "https://www.curseforge.com/";
+/// Dateien je Seite der Dateiliste eines Projekts.
+const FILES_PAGE_SIZE: u32 = 50;
+/// Die Suche von CurseForge liefert nur die ersten 10 000 Treffer; `index + pageSize` darf sie nicht überschreiten.
+const MAX_SEARCH_OFFSET: u32 = 9_900;
+const MAX_SEARCH_TOTAL: u64 = 10_000;
+const MAX_QUERY_LEN: usize = 256;
 const MAX_DEPENDENCIES: usize = 64;
 /// Größte Liste für `POST /v1/mods` und `/v1/mods/files`, die der Worker annimmt.
 const BATCH: usize = 200;
-/// `releaseType` stabiler Dateien (2 = Beta, 3 = Alpha).
+/// `releaseType` einer Datei.
 const RELEASE: u8 = 1;
+const BETA: u8 = 2;
+const ALPHA: u8 = 3;
+/// `algo` des SHA-1 in der Hash-Liste einer Datei.
+const HASH_SHA1: u8 = 1;
 /// Pause nach der ersten 429-Antwort ohne `Retry-After` in Sekunden; sie verdoppelt sich je Versuch.
 const BASE_WAIT_SECS: u64 = 5;
 /// Neue Versuche nach „zu viele Anfragen“ (429), bevor der Fehler beim Nutzer landet.
@@ -107,14 +119,7 @@ async fn parse_response<T: DeserializeOwned>(response: reqwest::Response) -> App
         return Err(AppError::invalid("Bei CurseForge nicht gefunden"));
     }
     let mut response = response.error_for_status()?;
-    let mut data = Vec::new();
-    while let Some(chunk) = response.chunk().await? {
-        if data.len() as u64 + chunk.len() as u64 > JSON_LIMIT {
-            return Err(AppError::invalid("Antwort zu groß"));
-        }
-        data.extend_from_slice(&chunk);
-    }
-    Ok(serde_json::from_slice(&data)?)
+    Ok(serde_json::from_slice(&read_capped(&mut response, PROVIDER_JSON_LIMIT, "Antwort zu groß").await?)?)
 }
 async fn get<T: DeserializeOwned>(client: &reqwest::Client, path: &str, query: &[(&str, String)]) -> AppResult<T> {
     get_at(client, &proxy(), path, query).await
@@ -257,6 +262,18 @@ const REQUIRED: u8 = 3;
 const OPTIONAL: u8 = 2;
 const INCOMPATIBLE: u8 = 5;
 
+/// `modLoaderType` der API.
+const LOADER_FORGE: u8 = 1;
+const LOADER_FABRIC: u8 = 4;
+const LOADER_QUILT: u8 = 5;
+const LOADER_NEOFORGE: u8 = 6;
+
+/// `sortField` der Suche (1 wäre „Hervorgehoben“, 11 „Veröffentlicht“).
+const SORT_POPULARITY: u8 = 2;
+const SORT_UPDATED: u8 = 3;
+const SORT_DOWNLOADS: u8 = 6;
+const SORT_NEWEST: u8 = 11;
+
 const CLASS_MOD: u32 = 6;
 const CLASS_MODPACK: u32 = 4471;
 const CLASS_RESOURCEPACK: u32 = 12;
@@ -291,10 +308,10 @@ fn mod_kind(class_id: Option<u32>) -> AppResult<ModKind> {
 /// CurseForge-Nummer des Loaders; Vanilla hat keine.
 fn loader_type(loader: ModLoader) -> Option<u8> {
     match loader {
-        ModLoader::Forge => Some(1),
-        ModLoader::Fabric => Some(4),
-        ModLoader::Quilt => Some(5),
-        ModLoader::NeoForge => Some(6),
+        ModLoader::Forge => Some(LOADER_FORGE),
+        ModLoader::Fabric => Some(LOADER_FABRIC),
+        ModLoader::Quilt => Some(LOADER_QUILT),
+        ModLoader::NeoForge => Some(LOADER_NEOFORGE),
         ModLoader::Vanilla => None,
     }
 }
@@ -314,12 +331,12 @@ fn file_minecraft(file: &CfFile) -> Vec<String> {
     file.game_versions.iter().filter(|v| v.starts_with(|c: char| c.is_ascii_digit()) && v.contains('.')).cloned().collect()
 }
 fn sha1_of(file: &CfFile) -> Option<String> {
-    file.hashes.iter().find(|h| h.algo == 1).map(|h| h.value.to_ascii_lowercase())
+    file.hashes.iter().find(|h| h.algo == HASH_SHA1).map(|h| h.value.to_ascii_lowercase())
 }
 fn release(file: &CfFile) -> &'static str {
     match file.release_type {
-        2 => "beta",
-        3 => "alpha",
+        BETA => "beta",
+        ALPHA => "alpha",
         _ => "release",
     }
 }
@@ -388,16 +405,15 @@ pub async fn search(
     offset: u32,
     index: Option<&str>,
 ) -> AppResult<SearchResponse> {
-    if query.len() > 256 || offset > 9_900 {
+    if query.len() > MAX_QUERY_LEN || offset > MAX_SEARCH_OFFSET {
         return Err(AppError::invalid("Ungültige Suche"));
     }
-    // CurseForge: 1 Hervorgehoben, 2 Beliebtheit, 3 Zuletzt aktualisiert, 6 Downloads, 11 Veröffentlicht.
     let sort = match index {
-        None if query.trim().is_empty() => 6,
-        None | Some("relevance" | "follows") => 2,
-        Some("downloads") => 6,
-        Some("updated") => 3,
-        Some("newest") => 11,
+        None if query.trim().is_empty() => SORT_DOWNLOADS,
+        None | Some("relevance" | "follows") => SORT_POPULARITY,
+        Some("downloads") => SORT_DOWNLOADS,
+        Some("updated") => SORT_UPDATED,
+        Some("newest") => SORT_NEWEST,
         Some(_) => return Err(AppError::invalid("Ungültige Sortierung")),
     };
     let mut q = vec![
@@ -407,7 +423,7 @@ pub async fn search(
         ("sortField", sort.to_string()),
         ("sortOrder", "desc".into()),
         ("index", offset.to_string()),
-        ("pageSize", PAGE.to_string()),
+        ("pageSize", PAGE_SIZE.to_string()),
     ];
     if let Some(mc) = mc {
         identifier(mc)?;
@@ -417,8 +433,8 @@ pub async fn search(
         q.push(("modLoaderType", t.to_string()));
     }
     let page: Page<CfMod> = get(client, "mods/search", &q).await?;
-    let total = page.pagination.map_or(page.data.len() as u64, |p| p.total_count).min(10_000);
-    Ok(SearchResponse { hits: page.data.iter().map(hit).collect(), total_hits: total, offset, limit: PAGE })
+    let total = page.pagination.map_or(page.data.len() as u64, |p| p.total_count).min(MAX_SEARCH_TOTAL);
+    Ok(SearchResponse { hits: page.data.iter().map(hit).collect(), total_hits: total, offset, limit: PAGE_SIZE })
 }
 
 async fn mod_of(client: &reqwest::Client, id: u32) -> AppResult<CfMod> {
@@ -430,6 +446,11 @@ async fn file_of(client: &reqwest::Client, project: u32, file: u32) -> AppResult
         return Err(AppError::invalid("Datei gehört nicht zu diesem Projekt"));
     }
     Ok(f)
+}
+
+/// Projektseite auf CurseForge; eine Adresse anderswo wäre ein Link aus fremder Hand.
+fn website(m: &CfMod) -> Option<String> {
+    m.links.as_ref().map(|l| l.website_url.clone()).filter(|u| u.starts_with(WEBSITE))
 }
 
 pub async fn project(client: &reqwest::Client, id: &str) -> AppResult<Project> {
@@ -447,13 +468,13 @@ pub async fn project(client: &reqwest::Client, id: &str) -> AppResult<Project> {
         project_type: kind_name(m.class_id).into(),
         client_side: "optional".into(),
         server_side: "optional".into(),
-        web_url: m.links.as_ref().map(|l| l.website_url.clone()).filter(|u| u.starts_with("https://www.curseforge.com/")),
+        web_url: website(&m),
     })
 }
 
 pub async fn versions(client: &reqwest::Client, id: &str, mc: Option<&str>, loader: Option<&str>) -> AppResult<Vec<Version>> {
     let id = number(id)?;
-    let mut q = vec![("pageSize", "50".to_string())];
+    let mut q = vec![("pageSize", FILES_PAGE_SIZE.to_string())];
     if let Some(mc) = mc {
         identifier(mc)?;
         q.push(("gameVersion", mc.into()));
@@ -575,20 +596,21 @@ fn remote(file: &CfFile) -> AppResult<RemoteFile> {
 }
 
 /// Trägt eine heruntergeladene, geprüfte Datei in die Instanz ein.
-fn mod_entry(m: &CfMod, f: &CfFile, kind: ModKind, sha1: String, required_by: Vec<String>, existing: &[Mod]) -> Mod {
+fn mod_entry(m: &CfMod, f: &CfFile, kind: ModKind, sha1: String, required_by: Vec<String>, existing: &[Mod]) -> AppResult<Mod> {
     let id = format!("cf-{}", m.id);
-    Mod {
+    let too_large = |_| AppError::invalid("Ungültige CurseForge-Nummer");
+    Ok(Mod {
         // Zwei Dateien desselben Projekts behalten verschiedene IDs.
         id: if existing.iter().any(|x| x.id == id) { crate::models::new_id() } else { id },
         name: m.name.clone(),
         version: if f.display_name.is_empty() { f.file_name.clone() } else { f.display_name.clone() },
-        source: ModSource::CurseForge { project_id: m.id as u32, file_id: f.id as u32 },
+        source: ModSource::CurseForge { project_id: u32::try_from(m.id).map_err(too_large)?, file_id: u32::try_from(f.id).map_err(too_large)? },
         file_name: f.file_name.clone(),
         sha1: Some(sha1),
         enabled: true,
         kind,
         required_by,
-    }
+    })
 }
 
 fn check_file_name(name: &str, kind: ModKind) -> AppResult<()> {
@@ -643,7 +665,7 @@ pub async fn install_mod(
         }
         let target = state.dirs.game_dir(instance_id).join(k.folder()).join(&f.file_name);
         content::regular_parents(&state.dirs.root, &target)?;
-        if fs::symlink_metadata(&target).is_ok() {
+        if content::is_occupied(&target)? {
             return Err(AppError::invalid("Mod-Zieldatei existiert bereits"));
         }
         let remote = remote(f).map_err(|e| AppError::invalid(format!("{}: {e}", m.name)))?;
@@ -665,7 +687,7 @@ pub async fn install_mod(
             created.push(target);
             let sha1 = crate::services::mods::cache_bytes(&state.dirs, &data)?;
             let owners = if m.id == u64::from(project) { Vec::new() } else { vec![root_key.clone()] };
-            let entry = mod_entry(m, f, k, sha1, owners, &instance.mods);
+            let entry = mod_entry(m, f, k, sha1, owners, &instance.mods)?;
             instance.mods.push(entry);
         }
         // Schon vorhandene Abhängigkeiten merken den neuen Besitzer, sofern sie selbst Abhängigkeit sind.
@@ -770,32 +792,18 @@ pub(crate) async fn plan_pack(
         return Err(AppError::invalid("Projekt ist kein Modpack"));
     }
     let pack_file = file_of(client, project, file_no).await?;
-    let tmp = dirs.root.join("cache").join("tmp");
-    fs::create_dir_all(&tmp)?;
-    let temp = TempFile(tmp.join(format!("{}.zip", crate::models::new_id())));
+    let temp = TempFile::in_cache(dirs)?;
     let zip_source = RemoteFile { size: pack_file.file_length.min(ZIP_LIMIT), ..remote(&pack_file)? };
     progress(Phase::Download, 0, 0);
-    let last = std::sync::atomic::AtomicU64::new(u64::MAX);
-    zip_source
-        .download_to(&modrinth::download_client()?, &temp.0, &|done, total| {
-            if last.swap(done / MIB, std::sync::atomic::Ordering::Relaxed) != done / MIB {
-                progress(Phase::Download, done / MIB, total / MIB);
-            }
-        })
-        .await?;
+    zip_source.download_to(&modrinth::download_client()?, &temp.0, &mib_progress(progress)).await?;
 
     let mut zip = zip::ZipArchive::new(fs::File::open(&temp.0)?)?;
     let manifest: Manifest = {
         let entry = zip.by_name("manifest.json")?;
-        let mut bytes = Vec::new();
-        entry.take(16 * MIB + 1).read_to_end(&mut bytes)?;
-        if bytes.len() as u64 > 16 * MIB {
-            return Err(AppError::invalid("manifest.json zu groß"));
-        }
-        serde_json::from_slice(&bytes)?
+        serde_json::from_slice(&read_capped_io(entry, MANIFEST_LIMIT, "manifest.json zu groß")?)?
     };
     let (loader, loader_version) = manifest_loader(&manifest.minecraft)?;
-    if manifest.files.len() > 6000 {
+    if manifest.files.len() > PLAN_FILES {
         return Err(AppError::invalid("Zu viele Pack-Dateien"));
     }
     // Der Ordner mit den Overrides kommt aus dem Manifest: nur einfache Namen.
@@ -822,11 +830,7 @@ pub(crate) async fn plan_pack(
         if f.file_name.is_empty() || f.file_name.contains(['/', '\\']) {
             return Err(AppError::invalid(format!("Unerwarteter Dateiname {}", f.file_name)));
         }
-        let page = m
-            .and_then(|m| m.links.as_ref())
-            .map(|l| l.website_url.clone())
-            .filter(|u| u.starts_with("https://www.curseforge.com/"))
-            .unwrap_or_else(|| "https://www.curseforge.com/minecraft".into());
+        let page = m.and_then(website).unwrap_or_else(|| format!("{WEBSITE}minecraft"));
         match remote(f) {
             Ok(r) => {
                 files.push((format!("{folder}/{}", f.file_name), r));
@@ -850,11 +854,7 @@ pub(crate) async fn plan_pack(
     let mut pack = content::plan_pack(instance, files)?;
     // Overrides und Downloads dürfen sich auch nicht als Datei/Ordner in die Quere kommen.
     let downloads: HashSet<String> = pack.downloads.iter().map(|(p, _)| p.to_string_lossy().to_lowercase()).collect();
-    for path in &override_paths {
-        if path.match_indices('/').any(|(at, _)| downloads.contains(&path[..at])) {
-            return Err(AppError::invalid("Datei/Verzeichnis-Konflikt"));
-        }
-    }
+    ensure_no_file_as_parent(&override_paths, &downloads)?;
     let archive = Arc::new(Mutex::new(zip));
     pack.overrides = overrides.into_iter().map(|(path, index)| (path, Blob::Zip { archive: archive.clone(), index })).collect();
     pack.origins = origins;
@@ -888,7 +888,7 @@ fn download_candidates(dir: &std::path::Path, file_name: &str) -> AppResult<Vec<
 /// Die Kandidatin, deren Größe und SHA-1 zur Datei bei CurseForge passen.
 fn verified_download(candidates: &[PathBuf], file: &CfFile) -> AppResult<Option<Vec<u8>>> {
     let Some(expected) = sha1_of(file) else { return Ok(None) };
-    if file.file_length > modrinth::FILE_LIMIT {
+    if file.file_length > FILE_LIMIT {
         return Ok(None);
     }
     for path in candidates {
@@ -924,7 +924,7 @@ pub async fn adopt_download(state: &AppState, instance_id: &str, project_id: u32
     check_file_name(&f.file_name, kind)?;
     let target = state.dirs.game_dir(instance_id).join(kind.folder()).join(&f.file_name);
     content::regular_parents(&state.dirs.root, &target)?;
-    if instance.mods.iter().any(|x| x.file_name.eq_ignore_ascii_case(&f.file_name)) || fs::symlink_metadata(&target).is_ok() {
+    if instance.mods.iter().any(|x| x.file_name.eq_ignore_ascii_case(&f.file_name)) || content::is_occupied(&target)? {
         return Err(AppError::invalid("Mod-Dateinamen kollidieren"));
     }
     content::write_new(&state.dirs.root, &target, &data)?;
@@ -932,7 +932,10 @@ pub async fn adopt_download(state: &AppState, instance_id: &str, project_id: u32
         Ok(s) => s,
         Err(e) => return Err(content::rollback(&[target], e)),
     };
-    let entry = mod_entry(&m, &f, kind, sha1, Vec::new(), &instance.mods);
+    let entry = match mod_entry(&m, &f, kind, sha1, Vec::new(), &instance.mods) {
+        Ok(entry) => entry,
+        Err(e) => return Err(content::rollback(&[target], e)),
+    };
     instance.mods.push(entry);
     match content::commit_mods(state, instance_id, instance.mods) {
         Ok(i) => Ok(Some(i)),
@@ -967,6 +970,19 @@ mod tests {
         assert_eq!(v.files[0].hashes["sha1"], "abcdef0123456789abcdef0123456789abcdef01");
         let kinds: Vec<_> = v.dependencies.iter().map(|d| (d.project_id.clone().unwrap(), d.dependency_type.clone())).collect();
         assert_eq!(kinds, [("1".to_string(), "required".to_string()), ("2".into(), "optional".into()), ("3".into(), "incompatible".into())]);
+    }
+
+    #[test]
+    fn recorded_numbers_must_fit_the_instance_format() {
+        let m = |id: u64| serde_json::from_value::<CfMod>(json!({"id": id, "name": "Sodium"})).unwrap();
+        let f = |id: u64| file(json!({"id": id, "modId": 10, "fileName": "s.jar"}));
+        let record = |m: &CfMod, f: &CfFile| mod_entry(m, f, ModKind::Mod, "sha".into(), Vec::new(), &[]);
+
+        let ok = record(&m(10), &f(500)).unwrap();
+        assert_eq!((ok.id.as_str(), ok.source), ("cf-10", ModSource::CurseForge { project_id: 10, file_id: 500 }));
+        let too_large = u64::from(u32::MAX) + 1;
+        assert!(record(&m(too_large), &f(500)).is_err());
+        assert!(record(&m(10), &f(too_large)).is_err());
     }
 
     #[test]

@@ -14,6 +14,7 @@ use super::{
     content::{self, CachedFile},
     download::sha1_file,
     free_name,
+    limits::{FILE_LIMIT, MIB},
     modrinth::{self, Version},
     mods, Dirs,
 };
@@ -188,8 +189,8 @@ pub(crate) fn source(path: &str) -> AppResult<(PathBuf, String)> {
     if !meta.is_file() {
         return Err(AppError::invalid(format!("„{name}“ ist keine normale Datei")));
     }
-    if meta.len() == 0 || meta.len() > modrinth::FILE_LIMIT {
-        return Err(AppError::invalid(format!("„{name}“ ist leer oder größer als 256 MiB")));
+    if meta.len() == 0 || meta.len() > FILE_LIMIT {
+        return Err(AppError::invalid(format!("„{name}“ ist leer oder größer als {} MiB", FILE_LIMIT / MIB)));
     }
     Ok((path, name))
 }

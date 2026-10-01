@@ -7,6 +7,7 @@ use crate::{
     services::{
         content::{self, Pack},
         forge,
+        limits::{CATALOG_CONCURRENCY, PAGE_SIZE, QUERY_MAX},
         modrinth::{identifier, Hit, Project, SearchResponse, Version},
     },
 };
@@ -20,8 +21,8 @@ use std::{
 use tokio::sync::Mutex;
 
 const API: &str = "https://api.feed-the-beast.com/v1/modpacks/public";
+const MAX_SEARCH_OFFSET: u32 = 100_000;
 const TTL: Duration = Duration::from_secs(15 * 60);
-const PAGE: usize = 20;
 
 #[derive(Debug, Clone, Deserialize)]
 struct PackDoc {
@@ -169,7 +170,7 @@ async fn catalog(client: &reqwest::Client) -> AppResult<Arc<Vec<PackDoc>>> {
     let ids: Ids = json(client, &format!("{API}/modpack/all")).await?;
     let results: Vec<AppResult<PackDoc>> = futures::stream::iter(ids.packs)
         .map(|id| async move { json::<PackDoc>(client, &format!("{API}/modpack/{id}")).await })
-        .buffer_unordered(8)
+        .buffer_unordered(CATALOG_CONCURRENCY)
         .collect()
         .await;
     let mut packs = Vec::new();
@@ -178,7 +179,10 @@ async fn catalog(client: &reqwest::Client) -> AppResult<Arc<Vec<PackDoc>>> {
         match r {
             Ok(p) if !p.private => packs.push(p),
             Ok(_) => {}
-            Err(e) => failed = Some(e),
+            Err(err) => {
+                tracing::warn!(%err, "FTB-Modpack nicht geladen");
+                failed = Some(err);
+            }
         }
     }
     if packs.is_empty() {
@@ -236,11 +240,11 @@ pub async fn search(
     offset: u32,
     index: Option<&str>,
 ) -> AppResult<SearchResponse> {
-    if query.len() > 512 || offset > 100_000 {
+    if query.len() > QUERY_MAX || offset > MAX_SEARCH_OFFSET {
         return Err(AppError::invalid("Ungültige Suche"));
     }
     if kind != "modpack" {
-        return Ok(SearchResponse { hits: Vec::new(), total_hits: 0, offset, limit: PAGE as u32 });
+        return Ok(SearchResponse { hits: Vec::new(), total_hits: 0, offset, limit: PAGE_SIZE });
     }
     let packs = catalog(client).await?;
     let query = query.trim();
@@ -265,8 +269,8 @@ pub async fn search(
         _ => return Err(AppError::invalid("Ungültige Sortierung")),
     }
     let total = found.len() as u64;
-    let hits = found.into_iter().skip(offset as usize).take(PAGE).map(|(p, _)| hit(p)).collect();
-    Ok(SearchResponse { hits, total_hits: total, offset, limit: PAGE as u32 })
+    let hits = found.into_iter().skip(offset as usize).take(PAGE_SIZE as usize).map(|(p, _)| hit(p)).collect();
+    Ok(SearchResponse { hits, total_hits: total, offset, limit: PAGE_SIZE })
 }
 
 async fn find(client: &reqwest::Client, id: &str) -> AppResult<PackDoc> {

@@ -1,11 +1,15 @@
 //! Kataloge ohne API-Key: FTB (öffentliche API, installierbar), Technic und CurseForge (nur lesend).
 //! Alle liefern dieselben Formen wie Modrinth (`Hit`, `Project`, `Version`), damit die Oberfläche sie gleich zeigt.
-use crate::services::progress::CountFn;
-use super::download;
-use super::modrinth;
+use super::{
+    download,
+    limits::{FILE_LIMIT, MIB, PROVIDER_JSON_LIMIT, PROVIDER_ZIP_ENTRIES, PROVIDER_ZIP_EXPANDED_LIMIT, ZIP_LIMIT},
+    modrinth,
+    progress::{CountFn, Phase, ProgressFn},
+    transport::{follow_redirects, read_capped, save_capped, Digests, DOWNLOAD_TOO_BIG},
+    zip_guard::{check_entry_count, ensure_no_file_dir_conflict, reject_special, ExpandedSize},
+};
 use crate::error::{AppError, AppResult};
 use serde::de::DeserializeOwned;
-use sha2::{Digest, Sha256, Sha512};
 use std::collections::BTreeMap;
 
 pub mod curseforge;
@@ -38,30 +42,17 @@ impl Source {
     }
 }
 
-const JSON_LIMIT: u64 = 16 * 1024 * 1024;
-pub(crate) const MIB: u64 = 1024 * 1024;
-/// Größtes Pack-Zip, das geladen wird, und Grenzen fürs Entpacken.
-pub(crate) const ZIP_LIMIT: u64 = 2 * 1024 * 1024 * 1024;
-const EXPANDED_LIMIT: u64 = 8 * 1024 * 1024 * 1024;
-const MAX_ENTRIES: usize = 20_000;
+/// Anfragen je Download einschließlich der ersten, also höchstens drei Weiterleitungen.
+const MAX_REQUESTS: usize = 4;
 
 /// Dateien eines Pack-Zips wie bei `zip_paths`, dazu Größen- und Kompressionsgrenzen gegen ZIP-Bomben
 /// (Regeln wie beim `.mrpack`).
 pub(crate) fn zip_files(zip: &mut zip::ZipArchive<impl std::io::Read + std::io::Seek>, prefix: &str, skip: &[&str]) -> AppResult<Vec<(std::path::PathBuf, usize)>> {
-    if zip.len() > MAX_ENTRIES {
-        return Err(AppError::invalid("Zu viele ZIP-Einträge"));
-    }
+    check_entry_count(zip.len(), PROVIDER_ZIP_ENTRIES)?;
     let files = zip_paths(zip, prefix, skip)?;
-    let mut expanded = 0u64;
+    let mut expanded = ExpandedSize::new(PROVIDER_ZIP_EXPANDED_LIMIT);
     for (_, index) in &files {
-        let entry = zip.by_index_raw(*index)?;
-        expanded = expanded.checked_add(entry.size()).ok_or_else(|| AppError::invalid("ZIP-Größenüberlauf"))?;
-        if expanded > EXPANDED_LIMIT
-            || entry.size() > modrinth::FILE_LIMIT
-            || entry.size() > entry.compressed_size().saturating_mul(200).saturating_add(MIB)
-        {
-            return Err(AppError::invalid("ZIP-Limit überschritten"));
-        }
+        expanded.add_entry(&zip.by_index_raw(*index)?)?;
     }
     Ok(files)
 }
@@ -83,28 +74,19 @@ pub(crate) fn zip_paths(zip: &mut zip::ZipArchive<impl std::io::Read + std::io::
         }
         let rel = rel.to_string();
         let path = super::content::safe_path(&rel)?;
-        if entry.unix_mode().is_some_and(|m| matches!(m & 0o170000, 0o120000 | 0o060000 | 0o020000 | 0o010000 | 0o140000)) {
-            return Err(AppError::invalid("ZIP-Symlink/Spezialdatei"));
-        }
+        reject_special(&entry)?;
         if !seen.insert(rel.to_lowercase()) {
             return Err(AppError::invalid("Doppelter ZIP-Pfad"));
         }
         files.push((path, index));
     }
-    // Windows unterscheidet keine Groß-/Kleinschreibung, daher kleingeschrieben vergleichen.
-    for path in &seen {
-        for (at, _) in path.match_indices('/') {
-            if seen.contains(&path[..at]) {
-                return Err(AppError::invalid("Datei/Verzeichnis-Konflikt"));
-            }
-        }
-    }
+    ensure_no_file_dir_conflict(&seen)?;
     Ok(files)
 }
 
 /// JSON-GET gegen eine feste API; Weiterleitungen und Fehlerstatus sind Fehler.
 pub(crate) async fn json<T: DeserializeOwned>(client: &reqwest::Client, url: &str) -> AppResult<T> {
-    Ok(serde_json::from_slice(&modrinth::bytes(client.get(url), JSON_LIMIT).await?)?)
+    Ok(serde_json::from_slice(&modrinth::bytes(client.get(url), PROVIDER_JSON_LIMIT).await?)?)
 }
 
 /// Ein Pfadstück einer Anbieter-URL: nur Buchstaben, Ziffern, `-`, `_`, `.`.
@@ -160,42 +142,30 @@ fn ensure_success(response: reqwest::Response) -> AppResult<reqwest::Response> {
     Ok(response.error_for_status()?)
 }
 
-/// GET mit handgeführten Weiterleitungen (höchstens drei), jedes Ziel gegen die Host-Liste geprüft.
+/// GET mit handgeführten Weiterleitungen, jedes Ziel gegen die Host-Liste geprüft.
 async fn get(client: &reqwest::Client, start: &str) -> AppResult<reqwest::Response> {
-    let mut url = reqwest::Url::parse(start).map_err(|e| AppError::invalid(e.to_string()))?;
-    for _ in 0..4 {
+    let response = follow_redirects(start, MAX_REQUESTS, |url| async move {
         check_url(&url)?;
-        let response = client.get(url.clone()).send().await?;
-        if !response.status().is_redirection() {
-            return ensure_success(response);
-        }
-        let location = response
-            .headers()
-            .get(reqwest::header::LOCATION)
-            .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| AppError::invalid("Weiterleitung ohne Ziel"))?;
-        url = url.join(location).map_err(|e| AppError::invalid(e.to_string()))?;
-    }
-    Err(AppError::invalid("Zu viele Weiterleitungen"))
-}
-
-fn ensure_within(size: u64, limit: u64) -> AppResult<()> {
-    if size > limit {
-        return Err(AppError::invalid("Download zu groß"));
-    }
-    Ok(())
+        Ok(client.get(url).send().await?)
+    })
+    .await?;
+    ensure_success(response)
 }
 
 /// Lädt höchstens `limit` Bytes in den Speicher.
 async fn fetch(client: &reqwest::Client, start: &str, limit: u64) -> AppResult<Vec<u8>> {
     let mut response = get(client, start).await?;
-    ensure_within(response.content_length().unwrap_or(0), limit)?;
-    let mut data = Vec::new();
-    while let Some(chunk) = response.chunk().await? {
-        ensure_within(data.len() as u64 + chunk.len() as u64, limit)?;
-        data.extend_from_slice(&chunk);
+    read_capped(&mut response, limit, DOWNLOAD_TOO_BIG).await
+}
+
+/// Fortschritt eines Pack-Downloads in MiB, gemeldet nur bei jedem vollen MiB statt bei jedem Netzwerk-Häppchen.
+fn mib_progress(progress: ProgressFn<'_>) -> impl Fn(u64, u64) + Send + Sync + '_ {
+    let last = std::sync::atomic::AtomicU64::new(u64::MAX);
+    move |done, total| {
+        if last.swap(done / MIB, std::sync::atomic::Ordering::Relaxed) != done / MIB {
+            progress(Phase::Download, done / MIB, total / MIB);
+        }
     }
-    Ok(data)
 }
 
 /// Probiert die Adressen der Reihe nach, jede bis zu `download::ATTEMPTS`-mal, außer der Server lehnt endgültig ab.
@@ -233,30 +203,30 @@ pub struct RemoteFile {
     pub hashes: BTreeMap<&'static str, String>,
 }
 
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
 impl RemoteFile {
     pub fn verify(&self, data: &[u8]) -> AppResult<()> {
+        self.require_hashes()?;
+        self.check_size(data.len() as u64)?;
+        self.check_hashes(&Digests::of(data))
+    }
+
+    fn require_hashes(&self) -> AppResult<()> {
         if self.hashes.is_empty() {
             return Err(AppError::invalid("Datei ohne Prüfsumme"));
         }
-        if self.size != 0 && data.len() as u64 != self.size {
+        Ok(())
+    }
+
+    /// Ohne angegebene Größe (0) gibt es nichts zu vergleichen.
+    fn check_size(&self, actual: u64) -> AppResult<()> {
+        if self.size != 0 && actual != self.size {
             return Err(AppError::invalid("Dateigröße stimmt nicht"));
         }
-        for (algorithm, expected) in &self.hashes {
-            let actual = match *algorithm {
-                "sha1" => super::download::sha1_hex(data),
-                "sha256" => hex(&Sha256::digest(data)),
-                "sha512" => hex(&Sha512::digest(data)),
-                _ => return Err(AppError::invalid("Unbekannter Hash")),
-            };
-            if !expected.eq_ignore_ascii_case(&actual) {
-                return Err(AppError::invalid(format!("{algorithm} stimmt nicht")));
-            }
-        }
         Ok(())
+    }
+
+    fn check_hashes(&self, digests: &Digests) -> AppResult<()> {
+        digests.check(self.hashes.iter().map(|(algorithm, hash)| (*algorithm, hash.as_str())))
     }
 
     /// Höchstens so viele Bytes werden geladen: die angegebene Größe, aber nie mehr als `max`.
@@ -267,13 +237,11 @@ impl RemoteFile {
     /// Wie `download`, aber in eine Datei (für große Pack-Zips). Die Prüfsummen werden an der fertigen Datei
     /// gelesen; bei Abweichung verschwindet sie wieder. `progress(geladen, gesamt)` in Bytes.
     pub async fn download_to(&self, client: &reqwest::Client, dest: &std::path::Path, progress: CountFn<'_>) -> AppResult<()> {
-        if self.hashes.is_empty() {
-            return Err(AppError::invalid("Datei ohne Prüfsumme"));
-        }
+        self.require_hashes()?;
         from_any(&self.urls, |url| async move {
             let saved = self.save(client, url, dest, progress).await.and_then(|()| self.verify_file(dest));
             if saved.is_err() {
-                let _ = tokio::fs::remove_file(dest).await;
+                super::remove_logged(dest);
             }
             saved
         })
@@ -282,58 +250,20 @@ impl RemoteFile {
 
     /// Schreibt die Antwort von `url` nach `dest`, höchstens `ZIP_LIMIT` Bytes.
     async fn save(&self, client: &reqwest::Client, url: &str, dest: &std::path::Path, progress: CountFn<'_>) -> AppResult<()> {
-        use tokio::io::AsyncWriteExt;
-        let limit = self.limit(ZIP_LIMIT);
         let mut response = get(client, url).await?;
         let total = response.content_length().unwrap_or(self.size);
-        ensure_within(total, limit)?;
-        let mut file = tokio::fs::File::create(dest).await?;
-        let mut done = 0u64;
-        while let Some(chunk) = response.chunk().await? {
-            done += chunk.len() as u64;
-            ensure_within(done, limit)?;
-            file.write_all(&chunk).await?;
-            progress(done, total);
-        }
-        file.flush().await?;
-        Ok(())
+        save_capped(&mut response, self.limit(ZIP_LIMIT), total, dest, progress).await
     }
 
     /// Größe und Prüfsummen einer Datei auf der Platte, in einem Durchlauf gelesen.
     fn verify_file(&self, path: &std::path::Path) -> AppResult<()> {
-        use sha1::Sha1;
-        use std::io::Read;
-        let mut file = std::fs::File::open(path)?;
-        if self.size != 0 && file.metadata()?.len() != self.size {
-            return Err(AppError::invalid("Dateigröße stimmt nicht"));
-        }
-        let (mut sha1, mut sha256, mut sha512) = (Sha1::new(), Sha256::new(), Sha512::new());
-        let mut buffer = vec![0u8; 256 * 1024];
-        loop {
-            let n = file.read(&mut buffer)?;
-            if n == 0 {
-                break;
-            }
-            sha1.update(&buffer[..n]);
-            sha256.update(&buffer[..n]);
-            sha512.update(&buffer[..n]);
-        }
-        for (algorithm, expected) in &self.hashes {
-            let actual = match *algorithm {
-                "sha1" => hex(&sha1.clone().finalize()),
-                "sha256" => hex(&sha256.clone().finalize()),
-                "sha512" => hex(&sha512.clone().finalize()),
-                _ => return Err(AppError::invalid("Unbekannter Hash")),
-            };
-            if !expected.eq_ignore_ascii_case(&actual) {
-                return Err(AppError::invalid(format!("{algorithm} stimmt nicht")));
-            }
-        }
-        Ok(())
+        let file = std::fs::File::open(path)?;
+        self.check_size(file.metadata()?.len())?;
+        self.check_hashes(&Digests::of_reader(file)?)
     }
 
     pub async fn download(&self, client: &reqwest::Client) -> AppResult<Vec<u8>> {
-        let limit = self.limit(modrinth::FILE_LIMIT);
+        let limit = self.limit(FILE_LIMIT);
         from_any(&self.urls, |url| async move {
             let data = fetch(client, url, limit).await?;
             self.verify(&data)?;
@@ -349,6 +279,19 @@ mod tests {
 
     fn file(size: u64, sha1: &str) -> RemoteFile {
         RemoteFile { urls: vec![], size, hashes: BTreeMap::from([("sha1", sha1.to_string())]) }
+    }
+
+    #[test]
+    fn pack_download_progress_is_reported_once_per_mib() {
+        let seen = std::sync::Mutex::new(Vec::new());
+        let progress = |phase: Phase, done, total| seen.lock().unwrap().push((phase, done, total));
+        let report = mib_progress(&progress);
+
+        for done in [0, 100, MIB - 1, MIB, MIB + 5, 3 * MIB] {
+            report(done, 4 * MIB);
+        }
+
+        assert_eq!(*seen.lock().unwrap(), [(Phase::Download, 0, 4), (Phase::Download, 1, 4), (Phase::Download, 3, 4)]);
     }
 
     #[test]
@@ -411,14 +354,14 @@ mod tests {
 
     #[test]
     fn files_need_a_matching_hash_and_size() {
-        let sha1 = super::super::download::sha1_hex(b"test");
+        let sha1 = Digests::of(b"test").hex("sha1").unwrap();
         assert!(file(4, &sha1).verify(b"test").is_ok());
         assert!(file(0, &sha1).verify(b"test").is_ok());
         assert!(file(3, &sha1).verify(b"test").is_err());
         assert!(file(4, &sha1).verify(b"evil").is_err());
         let unhashed = RemoteFile { urls: vec![], size: 4, hashes: BTreeMap::new() };
         assert!(unhashed.verify(b"test").is_err());
-        let sha256 = RemoteFile { urls: vec![], size: 4, hashes: BTreeMap::from([("sha256", hex(&Sha256::digest(b"test")))]) };
+        let sha256 = RemoteFile { urls: vec![], size: 4, hashes: BTreeMap::from([("sha256", Digests::of(b"test").hex("sha256").unwrap())]) };
         assert!(sha256.verify(b"test").is_ok() && sha256.verify(b"tesT").is_err());
     }
 }
