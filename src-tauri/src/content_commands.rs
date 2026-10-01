@@ -2,7 +2,7 @@ use crate::{
     error::AppResult,
     models::{Instance, ModpackOrigin, Template},
     services::{
-        content, duplicate, modrinth as api, mrpack,
+        content, duplicate, local_files, modrinth as api, mrpack,
         providers::{self, Source},
         templates,
     },
@@ -300,6 +300,36 @@ pub async fn modrinth_update_mods(
 ) -> AppResult<Instance> {
     let _operation = state.operation(Some(&instance_id))?;
     content::update_mods(&state, &instance_id, &mod_ids, &progress(app, operation_id)).await
+}
+/// Vorab-Prüfung abgelegter oder ausgewählter Dateien: Art und ob die Instanz sie schon hat.
+#[tauri::command]
+pub async fn instance_check_files(
+    state: State<'_, AppState>,
+    instance_id: String,
+    paths: Vec<String>,
+) -> AppResult<Vec<local_files::FileCheck>> {
+    local_files::check(&state, &instance_id, &paths)
+}
+/// Eigene .jar-/.zip-Dateien in die Instanz; was Modrinth per SHA-1 kennt, bekommt Updates von dort.
+#[tauri::command]
+pub async fn instance_add_files(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    instance_id: String,
+    files: Vec<local_files::LocalFile>,
+    operation_id: String,
+) -> AppResult<Instance> {
+    let _operation = state.operation(Some(&instance_id))?;
+    local_files::add(&state, &instance_id, &files, &progress(app, operation_id)).await
+}
+#[tauri::command]
+pub async fn modrinth_identify(
+    state: State<'_, AppState>,
+    instance_id: String,
+    mod_ids: Vec<String>,
+) -> AppResult<Instance> {
+    let _operation = state.operation(None)?;
+    local_files::identify(&state, &instance_id, &mod_ids).await
 }
 #[tauri::command]
 pub async fn template_save(state: State<'_, AppState>, instance_id: String, name: String) -> AppResult<Template> {

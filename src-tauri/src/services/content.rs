@@ -862,10 +862,7 @@ pub(crate) async fn import_plan(
             progress("extract", done, total);
         }
         let hashes: Vec<String> = content.iter().map(|(_, _, sha1)| sha1.clone()).collect();
-        let (known, titles) = identify(&client, &hashes).await.unwrap_or_else(|err| {
-            tracing::warn!(%err, "Pack-Inhalte nicht bei Modrinth erkannt; als lokal erfasst");
-            Default::default()
-        });
+        let (known, titles) = identify_or_local(&client, &hashes).await;
         for (kind, file_name, sha1) in content {
             let mut m = entry(kind, file_name, sha1, &known, &titles, &pack.instance.mods);
             // Von CurseForge bezogen und nicht bei Modrinth erkannt: Herkunft merken statt „lokal“.
@@ -913,8 +910,19 @@ fn content_file(path: &Path) -> Option<(ModKind, String)> {
         .map(|k| (k, name.to_string()))
 }
 
-/// Best effort: sha1 -> Modrinth version plus project id -> title, two requests at most.
-async fn identify(
+/// Wie [`identify`], aber ohne Netz leer: die Inhalte gelten dann als lokal.
+pub(crate) async fn identify_or_local(
+    client: &reqwest::Client,
+    hashes: &[String],
+) -> (HashMap<String, Version>, HashMap<String, String>) {
+    identify(client, hashes).await.unwrap_or_else(|err| {
+        tracing::warn!(%err, "Inhalte nicht bei Modrinth erkannt; als lokal erfasst");
+        Default::default()
+    })
+}
+
+/// sha1 -> Modrinth version plus project id -> title (titles best effort), two requests at most.
+pub(crate) async fn identify(
     client: &reqwest::Client,
     hashes: &[String],
 ) -> AppResult<(HashMap<String, Version>, HashMap<String, String>)> {
@@ -1007,10 +1015,7 @@ pub async fn adopt_untracked(state: &AppState) -> AppResult<usize> {
     let mut hashes: Vec<String> = plan.iter().map(|p| p.4.clone()).collect();
     hashes.sort();
     hashes.dedup();
-    let (known, titles) = identify(&modrinth::client()?, &hashes).await.unwrap_or_else(|err| {
-        tracing::warn!(%err, "Nachgetragene Inhalte nicht bei Modrinth erkannt; als lokal erfasst");
-        Default::default()
-    });
+    let (known, titles) = identify_or_local(&modrinth::client()?, &hashes).await;
     let mut added = 0;
     let mut ids: Vec<&String> = plan.iter().map(|p| &p.0).collect();
     ids.dedup();
@@ -1030,7 +1035,7 @@ pub async fn adopt_untracked(state: &AppState) -> AppResult<usize> {
     Ok(added)
 }
 
-fn entry(
+pub(crate) fn entry(
     kind: ModKind,
     file_name: String,
     sha1: String,

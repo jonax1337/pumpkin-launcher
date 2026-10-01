@@ -18,6 +18,7 @@ pub mod gamelog;
 pub mod install;
 pub mod java;
 pub mod launch;
+pub mod local_files;
 pub mod logshare;
 pub mod mods;
 pub mod modrinth;
