@@ -3,7 +3,6 @@
 use std::{
     fs, io,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicBool, Ordering},
 };
 
 use tokio_util::sync::CancellationToken;
@@ -166,20 +165,31 @@ pub(crate) fn walk(base: &Path, path: &Path, out: &mut Vec<(String, PathBuf)>) -
     Ok(())
 }
 
-/// Kopiert (Ziel, Quelle)-Paare; Fortschritt als Phase `copy` (Dateien). Ist `stop` gesetzt, endet
-/// das Kopieren vor der nächsten Datei mit `AppError::Cancelled`.
-pub(crate) fn copy_files(files: &[(PathBuf, PathBuf)], progress: &dyn Fn(&str, u64, u64), stop: &AtomicBool) -> AppResult<()> {
+/// Ab dieser Dateigröße schreiben ZIP-Archive ZIP64 (Pflicht ab 4 GiB); mit Abstand, weil Deflate Unkomprimierbares
+/// leicht vergrößert.
+pub(crate) const ZIP64_FROM: u64 = 2 * 1024 * 1024 * 1024;
+
+/// Erster freier Name aus `stem<ext>`, `stem (2)<ext>`, `stem (3)<ext>` …, den `taken` nicht als belegt meldet.
+pub(crate) fn free_name(stem: &str, ext: &str, taken: impl Fn(&str) -> bool) -> String {
+    let mut name = format!("{stem}{ext}");
+    let mut n = 1;
+    while taken(&name) {
+        n += 1;
+        name = format!("{stem} ({n}){ext}");
+    }
+    name
+}
+
+/// Kopiert (Ziel, Quelle)-Paare. `step(done, total)` folgt jeder Datei; ein Fehler daraus (etwa ein Abbruch)
+/// beendet das Kopieren.
+pub(crate) fn copy_files(files: &[(PathBuf, PathBuf)], step: &dyn Fn(u64, u64) -> AppResult<()>) -> AppResult<()> {
     let total = files.len() as u64;
-    progress("copy", 0, total);
     for (done, (dest, source)) in (1..).zip(files) {
-        if stop.load(Ordering::SeqCst) {
-            return Err(AppError::Cancelled);
-        }
         if let Some(parent) = dest.parent() {
             fs::create_dir_all(parent)?;
         }
         fs::copy(source, dest)?;
-        progress("copy", done, total);
+        step(done, total)?;
     }
     Ok(())
 }

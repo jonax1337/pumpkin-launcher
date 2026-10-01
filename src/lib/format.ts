@@ -51,12 +51,6 @@ export function formatSize(bytes: number): string {
 /** Tausender mit schmalem Leerzeichen („3 480“), wie im Mockup. */
 export const formatCount = (n: number) => n.toLocaleString("de").replace(/\./g, " ");
 
-/** Dateigröße: „840 KB“, „2,4 MB“. */
-export function formatSize(bytes: number): string {
-  const mb = bytes / 1024 / 1024;
-  return mb < 1 ? `${Math.ceil(bytes / 1024)} KB` : `${mb.toLocaleString("de", { maximumFractionDigits: 1 })} MB`;
-}
-
 export function formatMemory(mb: number | null): string {
   if (mb == null) return "Standard";
   return `${(mb / 1024).toLocaleString("de", { maximumFractionDigits: 1 })} GB`;

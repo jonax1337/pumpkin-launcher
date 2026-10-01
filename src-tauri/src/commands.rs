@@ -66,11 +66,16 @@ pub fn update_instance(state: State<'_, AppState>, instance: Instance) -> AppRes
         }
     }
     let id = instance.id.clone();
-    // Spielzeit und letzten Start führt nur das Backend: ein veralteter Stand im Frontend darf sie nicht zurücksetzen,
-    // auch nicht, wenn das Spielende sie gerade erst speichert.
+    // Spielzeit und letzten Start (samt Quick-Play-Ziel) führt nur das Backend: ein veralteter Stand im Frontend darf
+    // sie nicht zurücksetzen, auch nicht, wenn das Spielende sie gerade erst speichert.
     let commit = |_| {
         state.instances.modify(&id, |current| {
-            *current = Instance { playtime_secs: current.playtime_secs, last_played_at: current.last_played_at, ..instance }
+            *current = Instance {
+                playtime_secs: current.playtime_secs,
+                last_played_at: current.last_played_at,
+                last_quick_play: current.last_quick_play.take(),
+                ..instance
+            }
         })
     };
     mods::sync_commit(&state.dirs, &id, &desired, commit)

@@ -6,7 +6,7 @@ use crate::content_commands::progress;
 use crate::error::AppResult;
 use crate::services::servers::{self, Server};
 use crate::services::worlds::{self, World, WorldBackup};
-use crate::services::{install, launch, modrinth::invalid, Dirs};
+use crate::services::{blocking, install, launch, Dirs};
 use crate::state::AppState;
 
 /// Verzeichnisse einer bestehenden Instanz: ihre ID wird erst nach dieser Prüfung Teil eines Pfads.
@@ -15,15 +15,10 @@ fn dirs_of(state: &AppState, instance_id: &str) -> AppResult<Dirs> {
     Ok(state.dirs.clone())
 }
 
-/// Dateiarbeit abseits der async-Laufzeit; große Welten brauchen eine Weile.
-async fn blocking<T: Send + 'static>(work: impl FnOnce() -> AppResult<T> + Send + 'static) -> AppResult<T> {
-    tokio::task::spawn_blocking(work).await.map_err(|e| invalid(format!("Vorgang abgebrochen: {e}")))?
-}
-
 #[tauri::command]
 pub async fn world_list(state: State<'_, AppState>, instance_id: String) -> AppResult<Vec<World>> {
     let dirs = dirs_of(&state, &instance_id)?;
-    blocking(move || worlds::list(&dirs, &instance_id)).await
+    blocking(move |_| worlds::list(&dirs, &instance_id)).await
 }
 
 /// Sichert eine Welt; Fortschritt als `content-progress` (Phase `backup`).
@@ -37,7 +32,7 @@ pub async fn world_backup(
 ) -> AppResult<WorldBackup> {
     let _operation = state.operation(Some(&instance_id))?;
     let (dirs, on_progress) = (dirs_of(&state, &instance_id)?, progress(app, operation_id));
-    blocking(move || worlds::backup(&dirs, &instance_id, &world_id, &on_progress)).await
+    blocking(move |_| worlds::backup(&dirs, &instance_id, &world_id, &on_progress)).await
 }
 
 #[tauri::command]
@@ -50,7 +45,7 @@ pub fn world_backups(state: State<'_, AppState>, instance_id: String) -> AppResu
 pub async fn world_restore(state: State<'_, AppState>, instance_id: String, backup_id: String) -> AppResult<World> {
     let _operation = state.operation(Some(&instance_id))?;
     let dirs = dirs_of(&state, &instance_id)?;
-    blocking(move || worlds::restore(&dirs, &instance_id, &backup_id)).await
+    blocking(move |_| worlds::restore(&dirs, &instance_id, &backup_id)).await
 }
 
 #[tauri::command]
@@ -69,7 +64,7 @@ pub async fn world_delete(
 ) -> AppResult<WorldBackup> {
     let _operation = state.operation(Some(&instance_id))?;
     let (dirs, on_progress) = (dirs_of(&state, &instance_id)?, progress(app, operation_id));
-    blocking(move || worlds::delete(&dirs, &instance_id, &world_id, &on_progress)).await
+    blocking(move |_| worlds::delete(&dirs, &instance_id, &world_id, &on_progress)).await
 }
 
 /// Kann die Minecraft-Version der Instanz direkt in eine Welt starten? Fehlt die Versions-JSON, wird sie geladen.

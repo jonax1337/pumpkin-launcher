@@ -7,19 +7,15 @@ mod prism;
 
 use std::{
     collections::HashSet,
-    env, fs, io,
+    fs, io,
     path::{Path, PathBuf},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
 };
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use super::{content, copy_files, download::RemoveOnDrop, forge, modrinth, walk, REGENERATED};
+use super::{blocking, check_cancelled, content, copy_files, download::RemoveOnDrop, forge, modrinth, walk, REGENERATED};
 use crate::{
-    error::{AppError, AppResult},
+    error::AppResult,
     models::{Instance, ModLoader, NewInstance},
     state::AppState,
 };
@@ -89,10 +85,11 @@ pub fn detect(state: &AppState, folder: Option<&Path>) -> Vec<ForeignInstance> {
     found
 }
 
-/// Standardorte unter Windows. MultiMC ist portabel und hat keinen; dafür gibt es „Ordner wählen…“.
+/// Standardorte im Datenordner des Systems (unter Windows `%APPDATA%`). MultiMC ist portabel und hat keinen;
+/// dafür gibt es „Ordner wählen…“.
 fn default_roots() -> Vec<PathBuf> {
-    let data = env::var_os("APPDATA").map(PathBuf::from);
-    let home = env::var_os("USERPROFILE").map(PathBuf::from);
+    let data = dirs::data_dir();
+    let home = dirs::home_dir();
     [
         data.as_ref().map(|d| d.join("PrismLauncher")),
         data.as_ref().map(|d| d.join("ModrinthApp")),
@@ -201,17 +198,22 @@ pub async fn import(
         })
     };
     let root = state.dirs.instance(&instance.id);
-    content::regular_parents(&root)?;
-    let mut cleanup = Cleanup::new(root);
+    content::regular_parents(&state.dirs.root, &root)?;
     let (dirs, target, fresh) = (state.dirs.clone(), state.dirs.game_dir(&instance.id), instance.clone());
-    let work = cleanup.guarded(move |stop| {
-        copy_files(&files_to_copy(&game_dir, &target)?, &progress, stop)?;
-        content::cached_untracked(&dirs, &fresh, &progress, stop)
-    });
-    let found = tokio::task::spawn_blocking(work).await.map_err(|e| modrinth::invalid(format!("Kopieren abgebrochen: {e}")))??;
+    // Der Wächter lebt im Thread: bei Abbruch räumt er erst weg, wenn dort nichts mehr geschrieben wird.
+    let (mut guard, found) = blocking(move |stop| {
+        let guard = RemoveOnDrop(Some(root));
+        copy_files(&files_to_copy(&game_dir, &target)?, &|done, total| {
+            check_cancelled(stop)?;
+            progress("copy", done, total);
+            Ok(())
+        })?;
+        Ok((guard, content::cached_untracked(&dirs, &fresh, &progress, stop)?))
+    })
+    .await?;
     content::record_untracked(&mut instance.mods, &found, &origins).await?;
     let instance = state.instances.insert(instance)?;
-    cleanup.root = None;
+    guard.0 = None;
     tracing::info!(id = %instance.id, from = ?instance.imported_from, "Instanz importiert");
     Ok(instance)
 }
@@ -252,45 +254,6 @@ fn relocated(rel: String) -> String {
     }
 }
 
-/// Räumt den Instanzordner bei Abbruch auf. Die Arbeit läuft in einem eigenen Thread weiter, auch wenn der
-/// Vorgang verworfen wird; `done` setzt, wer zuerst fertig ist (Arbeit durch oder Vorgang abgebrochen), und
-/// der Zweite räumt auf. So schreibt nach dem Aufräumen nichts mehr in den Ordner.
-struct Cleanup {
-    root: Option<PathBuf>,
-    done: Arc<AtomicBool>,
-}
-
-impl Cleanup {
-    fn new(root: PathBuf) -> Self {
-        Self { root: Some(root), done: Arc::new(AtomicBool::new(false)) }
-    }
-
-    /// `work` für den eigenen Thread, mit `done` als Stopp-Signal; bei Fehler oder Abbruch entfernt es den
-    /// Instanzordner selbst.
-    fn guarded<T>(
-        &self,
-        work: impl FnOnce(&AtomicBool) -> AppResult<T> + Send + 'static,
-    ) -> impl FnOnce() -> AppResult<T> + Send + 'static {
-        let (root, done) = (self.root.clone(), self.done.clone());
-        move || {
-            let result = work(&done);
-            if done.swap(true, Ordering::SeqCst) || result.is_err() {
-                drop(RemoveOnDrop(root));
-                return result.and(Err(AppError::Cancelled));
-            }
-            result
-        }
-    }
-}
-
-impl Drop for Cleanup {
-    fn drop(&mut self) {
-        if self.root.is_some() && self.done.swap(true, Ordering::SeqCst) {
-            drop(RemoveOnDrop(self.root.take()));
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -302,7 +265,7 @@ mod tests {
 
     #[test]
     fn scan_finds_instances_in_launcher_and_instance_folders() {
-        let root = env::temp_dir().join(crate::models::new_id());
+        let root = std::env::temp_dir().join(crate::models::new_id());
         write_files(
             &root,
             &[
@@ -323,7 +286,7 @@ mod tests {
 
     #[test]
     fn copy_skips_regenerated_and_launcher_files() {
-        let root = env::temp_dir().join(crate::models::new_id());
+        let root = std::env::temp_dir().join(crate::models::new_id());
         let source = root.join("cf");
         write_files(
             &source,
@@ -353,7 +316,7 @@ mod tests {
 
     #[tokio::test]
     async fn import_copies_without_touching_the_source() {
-        let root = env::temp_dir().join(crate::models::new_id());
+        let root = std::env::temp_dir().join(crate::models::new_id());
         let state = AppState::load(&root.join("data")).unwrap();
         let source = root.join("Prism/instances/Welt");
         let cfg = "name=Welt\nOverrideMemory=true\nMaxMemAlloc=4096\n";
@@ -374,7 +337,7 @@ mod tests {
 
     #[tokio::test]
     async fn import_keeps_curseforge_origins_of_unknown_mods() {
-        let root = env::temp_dir().join(crate::models::new_id());
+        let root = std::env::temp_dir().join(crate::models::new_id());
         let state = AppState::load(&root.join("data")).unwrap();
         let source = root.join("Instances/Pack");
         let manifest = r#"{"gameVersion": "1.21.1", "baseModLoader": {"name": "neoforge-21.1.172"},
@@ -392,7 +355,7 @@ mod tests {
 
     #[tokio::test]
     async fn unsupported_or_missing_sources_are_rejected() {
-        let root = env::temp_dir().join(crate::models::new_id());
+        let root = std::env::temp_dir().join(crate::models::new_id());
         let state = AppState::load(&root.join("data")).unwrap();
         add_content(&root.join("da"));
         let setup = Setup {
@@ -411,30 +374,6 @@ mod tests {
             assert!(import(&state, source, |_, _, _| {}).await.is_err());
         }
         assert!(state.instances.list().is_empty());
-        fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn whoever_finishes_last_removes_the_folder() {
-        let root = env::temp_dir().join(crate::models::new_id());
-        add_content(&root.join("quelle"));
-        let target = root.join("instanz");
-        let copy = |cleanup: &Cleanup| {
-            let (source, game_dir) = (root.join("quelle"), target.join("minecraft"));
-            cleanup.guarded(move |stop| copy_files(&files_to_copy(&source, &game_dir)?, &|_, _, _| {}, stop))
-        };
-        // Kopie fertig, danach abgebrochen: der Wächter räumt auf.
-        let cleanup = Cleanup::new(target.clone());
-        copy(&cleanup)().unwrap();
-        assert!(target.join("minecraft/config/a.toml").exists());
-        drop(cleanup);
-        assert!(!target.exists());
-        // Abgebrochen, bevor die Kopie fertig ist: sie hört auf und räumt selbst auf.
-        let cleanup = Cleanup::new(target.clone());
-        let copy = copy(&cleanup);
-        drop(cleanup);
-        assert!(matches!(copy(), Err(AppError::Cancelled)));
-        assert!(!target.exists());
         fs::remove_dir_all(root).unwrap();
     }
 }

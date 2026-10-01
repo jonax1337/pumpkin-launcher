@@ -2,7 +2,7 @@
 //! legt `mods::sync` per Hardlink aus dem Cache ab, statt sie Byte für Byte zu kopieren.
 use std::{fs, path::PathBuf};
 
-use super::{blocking, check_cancelled, content, download::RemoveOnDrop, mods, walk, Dirs};
+use super::{blocking, check_cancelled, content, copy_files, download::RemoveOnDrop, mods, walk, Dirs};
 use crate::{
     error::AppResult,
     models::{new_id, now_ms, Instance, Mod},
@@ -82,23 +82,14 @@ fn copy_instance(dirs: &Dirs, from: &str, to: &str, mods: &[Mod], step: &dyn Fn(
     let files = files_to_copy(dirs, from, to, mods)?;
     let total = (mods.len() + files.len()) as u64;
     step(0, total)?;
-    let mut done = 0;
-    for m in mods {
+    for (done, m) in (1..).zip(mods) {
         let one = std::slice::from_ref(m);
         mods::recache(dirs, from, one)?;
         mods::sync(dirs, to, one)?;
-        done += 1;
         step(done, total)?;
     }
-    for (dest, source) in &files {
-        if let Some(parent) = dest.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::copy(source, dest)?;
-        done += 1;
-        step(done, total)?;
-    }
-    Ok(())
+    let cached = mods.len() as u64;
+    copy_files(&files, &|done, _| step(cached + done, total))
 }
 
 #[cfg(test)]

@@ -14,11 +14,9 @@ use std::{
     fs,
     io::{Cursor, Read, Write},
     path::{Path, PathBuf},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
-    },
+    sync::{Arc, Mutex},
 };
+use tokio_util::sync::CancellationToken;
 
 pub fn safe_path(value: &str) -> AppResult<PathBuf> {
     if value.is_empty() || value.len() > 240 || value.contains('\\') {
@@ -997,7 +995,7 @@ pub async fn adopt_untracked(state: &AppState) -> AppResult<usize> {
     };
     let mut plan = Vec::new();
     for instance in state.instances.list().into_iter().filter(|i| i.mods.is_empty()) {
-        let found = cached_untracked(&state.dirs, &instance, &|_, _, _| {}, &AtomicBool::new(false))?;
+        let found = cached_untracked(&state.dirs, &instance, &|_, _, _| {}, &CancellationToken::new())?;
         if !found.is_empty() {
             plan.push((instance.id, found));
         }
@@ -1035,20 +1033,18 @@ pub(crate) async fn record_untracked(mods: &mut Vec<Mod>, found: &[Untracked], o
 pub(crate) type Untracked = (ModKind, String, bool, String);
 
 /// `untracked` in den Mod-Cache legen; Fortschritt als Phase `hash` (Dateien). Liest jede Datei ganz, beim Import
-/// deshalb im Kopier-Thread. Ist `stop` gesetzt, endet es vor der nächsten Datei mit `AppError::Cancelled`.
+/// deshalb im Kopier-Thread. Ist `stop` abgebrochen, endet es vor der nächsten Datei mit `AppError::Cancelled`.
 pub(crate) fn cached_untracked(
     dirs: &super::Dirs,
     instance: &Instance,
     progress: &dyn Fn(&str, u64, u64),
-    stop: &AtomicBool,
+    stop: &CancellationToken,
 ) -> AppResult<Vec<Untracked>> {
     let files = untracked(dirs, instance)?;
     let total = files.len() as u64;
     let mut found = Vec::with_capacity(files.len());
     for (done, (kind, name, enabled, path)) in (1..).zip(files) {
-        if stop.load(Ordering::SeqCst) {
-            return Err(AppError::Cancelled);
-        }
+        super::check_cancelled(stop)?;
         found.push((kind, name, enabled, super::mods::cache_file(dirs, &path)?));
         progress("hash", done, total);
     }

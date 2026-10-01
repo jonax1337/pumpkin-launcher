@@ -11,7 +11,9 @@ use std::{
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 
-use super::{content, download::RemoveOnDrop, modrinth::invalid, providers::zip_paths, servers, walk, Dirs};
+use super::{
+    content, download::RemoveOnDrop, free_name, modrinth::invalid, providers::zip_paths, servers, walk, Dirs, ZIP64_FROM,
+};
 use crate::{
     error::{AppError, AppResult},
     models::{now_ms, QuickPlay},
@@ -165,7 +167,7 @@ pub fn restore(dirs: &Dirs, instance_id: &str, backup_id: &str) -> AppResult<Wor
     }
     let saves = dirs.saves(instance_id);
     fs::create_dir_all(&saves)?;
-    let id = free_name(&saves, &backup.world);
+    let id = free_name(&backup.world, "", |name| saves.join(name).exists());
     let target = saves.join(&id);
     // `create_dir` statt `create_dir_all`: taucht der Ordner gerade erst auf, wird er nicht befüllt.
     fs::create_dir(&target)?;
@@ -276,17 +278,6 @@ fn backup_name(name: &str) -> Option<(&str, u64)> {
     (!world.is_empty()).then_some((world, at.parse().ok()?))
 }
 
-/// `wanted`, falls unter `parent` frei, sonst „wanted (2)“, „wanted (3)“ …
-fn free_name(parent: &Path, wanted: &str) -> String {
-    let mut name = wanted.to_owned();
-    let mut n = 1;
-    while parent.join(&name).exists() {
-        n += 1;
-        name = format!("{wanted} ({n})");
-    }
-    name
-}
-
 /// Entpackt die geprüften Einträge `files` (aus `zip_paths`) nach `target`.
 fn extract(zip: &mut zip::ZipArchive<fs::File>, files: Vec<(PathBuf, usize)>, target: &Path) -> AppResult<()> {
     for (path, index) in files {
@@ -308,8 +299,7 @@ fn write_zip(path: &Path, files: &[(String, PathBuf)], progress: &dyn Fn(&str, u
     progress(BACKUP_PHASE, 0, total);
     for (done, (name, source)) in (1..).zip(files) {
         let mut file = fs::File::open(source)?;
-        // Ab 4 GiB braucht der Eintrag ZIP64, sonst bricht das Schreiben ab.
-        let large = file.metadata()?.len() >= u64::from(u32::MAX);
+        let large = file.metadata()?.len() >= ZIP64_FROM;
         zip.start_file(name.as_str(), zip::write::SimpleFileOptions::default().large_file(large))?;
         io::copy(&mut file, &mut zip)?;
         progress(BACKUP_PHASE, done, total);

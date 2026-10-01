@@ -13,7 +13,7 @@ use super::{
     blocking, check_cancelled, content,
     download::RemoveOnDrop,
     modrinth::{self, invalid},
-    mods, Dirs,
+    mods, Dirs, ZIP64_FROM,
 };
 use crate::{
     error::AppResult,
@@ -23,9 +23,6 @@ use crate::{
 
 /// Unter der ZIP-Grenze des Imports (4096).
 const MAX_ENTRIES: usize = 4000;
-
-/// Ab dieser Dateigröße ZIP64 (Pflicht ab 4 GiB); mit Abstand, weil Deflate Unkomprimierbares leicht vergrößert.
-const ZIP64_FROM: u64 = 2 * 1024 * 1024 * 1024;
 
 /// Grenzen eines Packs. Vorlagen werden über den eigenen Import wieder zu Instanzen und müssen dessen
 /// Sicherheitsgrenzen einhalten; ein Export ist für den Nutzer und andere Launcher und hat keine.

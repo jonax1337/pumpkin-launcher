@@ -10,8 +10,9 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use super::{
-    content,
+    blocking, content,
     download::sha1_file,
+    free_name,
     modrinth::{self, invalid, Version},
     mods, Dirs,
 };
@@ -49,9 +50,7 @@ struct Staged {
 /// Prüft jede Datei für sich, damit eine unpassende die übrigen nicht aufhält.
 pub async fn check(state: &AppState, instance_id: &str, paths: Vec<String>) -> AppResult<Vec<FileCheck>> {
     let mods = state.instances.get(instance_id)?.mods;
-    tokio::task::spawn_blocking(move || paths.into_iter().map(|path| check_file(path, &mods)).collect())
-        .await
-        .map_err(|e| invalid(format!("Prüfen abgebrochen: {e}")))
+    blocking(move |_| Ok(paths.into_iter().map(|path| check_file(path, &mods)).collect())).await
 }
 
 fn check_file(path: String, mods: &[Mod]) -> FileCheck {
@@ -74,16 +73,14 @@ pub async fn add(
     let progress = Arc::new(progress);
     let staged = {
         let (dirs, instance, progress) = (state.dirs.clone(), instance.clone(), progress.clone());
-        tokio::task::spawn_blocking(move || stage(&dirs, &instance, &files, &*progress))
-            .await
-            .map_err(|e| invalid(format!("Kopieren abgebrochen: {e}")))??
+        blocking(move |_| stage(&dirs, &instance, &files, &*progress)).await?
     };
     progress("resolve", 0, 1);
     let hashes: Vec<String> = staged.iter().map(|s| s.sha1.clone()).collect();
     let (known, titles) = content::identify_or_local(&modrinth::client()?, &hashes).await;
     instance.mods = with_entries(&instance.mods, staged, &known, &titles)?;
     let mods = instance.mods.clone();
-    let result = mods::sync_commit(&state.dirs, instance_id, &mods, |_| state.instances.update(instance))?;
+    let result = mods::sync_commit(&state.dirs, instance_id, &mods, |_| state.instances.modify(instance_id, |current| current.mods = instance.mods))?;
     progress("complete", total, total);
     Ok(result)
 }
@@ -108,6 +105,7 @@ fn stage(
             continue;
         }
         let folder = dirs.game_dir(&instance.id).join(file.kind.folder());
+        // Die Endung immer klein, weil `mods::sync` sie so erwartet.
         let file_name = free_name(stem, file.kind.extension(), |n| {
             instance.mods.iter().any(|m| m.file_name.eq_ignore_ascii_case(n))
                 || staged.iter().any(|s| s.file_name.eq_ignore_ascii_case(n))
@@ -166,7 +164,7 @@ pub async fn identify(state: &AppState, instance_id: &str, mod_ids: &[String]) -
             instance.mods[i] = m;
         }
     }
-    state.instances.update(instance)
+    state.instances.modify(instance_id, |current| current.mods = instance.mods)
 }
 
 /// Von Modrinth erkannter Eintrag anstelle von `m`; Schalter und Abhängigkeiten bleiben.
@@ -241,18 +239,6 @@ fn stem_for(name: &str, kind: ModKind) -> AppResult<&str> {
         return Err(invalid(format!("„{name}“ passt nicht zur gewählten Art")));
     }
     Ok(&name[..name.len() - ext.len()])
-}
-
-/// Erster freier Name aus `stem.jar`, `stem (2).jar`, `stem (3).jar` …; die Endung immer klein,
-/// weil `mods::sync` sie so erwartet.
-fn free_name(stem: &str, ext: &str, taken: impl Fn(&str) -> bool) -> String {
-    let mut name = format!("{stem}{ext}");
-    let mut n = 1;
-    while taken(&name) {
-        n += 1;
-        name = format!("{stem} ({n}){ext}");
-    }
-    name
 }
 
 #[cfg(test)]

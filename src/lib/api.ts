@@ -142,7 +142,7 @@ const mock = {
   async importInstance(source: ForeignInstance, operationId: string) {
     const total = 120;
     for (let done = 0; done <= total; done += 8) {
-      if (db.cancelled.delete(operationId)) throw new Error(INSTALL_CANCELLED);
+      if (db.cancelled.delete(operationId)) throw new Error(CANCELLED);
       emit<ContentProgress>("content-progress", { operationId, phase: "copy", done, total });
       await delay(100);
     }

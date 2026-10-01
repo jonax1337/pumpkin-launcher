@@ -73,12 +73,6 @@ export function useContentInstall() {
   });
 }
 
-/** Laufenden abbrechbaren Vorgang (Modpack, Import) abbrechen; das Ergebnis meldet der zentrale Fehler-Toast neutral. */
-export function cancelActive() {
-  const op = useContentState.getState().active;
-  if (op) void api.packInstallCancel(op).catch((e: Error) => toast.error(e.message));
-}
-
 /** Icons und Titel der installierten Modrinth-Inhalte, ein Aufruf pro Liste. Fehler: Liste zeigt Kacheln und Dateinamen. */
 export function useProjects(projectIds: string[]) {
   const ids = [...new Set(projectIds)].sort();
