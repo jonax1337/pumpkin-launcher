@@ -385,7 +385,7 @@ export const api = {
   shareLog: (instanceId: string, kind: LogKind): Promise<string> =>
     tauri ? call("log_share", { instanceId, kind }) : Promise.reject(new Error("Protokolle lassen sich nur in der Pumpkin Launcher-App teilen.")),
   /** Launcher, System und Instanzen als Klartext ohne persönliche Daten, für Fehlerberichte. */
-  debugInfo: (): Promise<string> => (tauri ? call("debug_info") : mockGame.debugInfo()),
+  debugInfo: (defaultMemoryMb: number): Promise<string> => (tauri ? call("debug_info", { defaultMemoryMb }) : mockGame.debugInfo()),
   /** Datei mit dem Standardprogramm öffnen (z. B. Absturzbericht). */
   openPath: (path: string): Promise<void> =>
     tauri ? openPath(path) : Promise.reject(new Error("Dateien lassen sich nur in der Pumpkin Launcher-App öffnen.")),

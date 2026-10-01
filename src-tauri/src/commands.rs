@@ -213,8 +213,7 @@ async fn install_instance(app: AppHandle, state: &AppState, instance_id: String)
         on_progress(InstallStep::Mods, 1, 1);
         tracing::info!(instance = %instance_id, active, "Mods bereitgestellt");
     }
-    // Marker erst nach vollständigem Erfolg: `instance_status` erkennt so auch abgebrochene Installationen.
-    tokio::fs::write(installed_marker(state, &instance_id), install_key(&instance)).await?;
+    install::mark_installed(&state.dirs, &instance).await?;
     tracing::info!(instance = %instance_id, "Installation abgeschlossen");
     Ok(())
 }
@@ -320,19 +319,6 @@ pub fn instance_kill(state: State<'_, AppState>, instance_id: String) -> AppResu
     Ok(())
 }
 
-fn installed_marker(state: &AppState, instance_id: &str) -> std::path::PathBuf {
-    state.dirs.natives_dir(instance_id).with_file_name("installed")
-}
-
-/// Inhalt der Markerdatei: die MC-Version, bei Mod-Loadern plus Loader und Version. Ein Wechsel
-/// von Loader oder Loader-Version gilt so als nicht installiert; Vanilla-Marker bleiben gültig.
-fn install_key(instance: &Instance) -> String {
-    match instance.loader {
-        ModLoader::Vanilla => instance.minecraft_version.clone(),
-        loader => format!("{} {loader:?} {}", instance.minecraft_version, instance.loader_version.as_deref().unwrap_or("?")),
-    }
-}
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstanceStatus {
@@ -345,12 +331,7 @@ pub struct InstanceStatus {
 #[tauri::command]
 pub fn instance_status(state: State<'_, AppState>, instance_id: String) -> AppResult<InstanceStatus> {
     let instance = state.instances.get(&instance_id)?;
-    Ok(InstanceStatus { installed: is_installed(&state, &instance), running: state.running().contains_key(&instance_id) })
-}
-
-/// Aktuelle Minecraft-Version (samt Loader) der Instanz ist vollständig installiert.
-pub(crate) fn is_installed(state: &AppState, instance: &Instance) -> bool {
-    std::fs::read_to_string(installed_marker(state, &instance.id)).is_ok_and(|v| v == install_key(instance))
+    Ok(InstanceStatus { installed: install::is_installed(&state.dirs, &instance), running: state.running().contains_key(&instance_id) })
 }
 
 /// Spielordner einer Instanz (Welten, Mods, Screenshots) zum Öffnen im Dateimanager; wird bei Bedarf angelegt.

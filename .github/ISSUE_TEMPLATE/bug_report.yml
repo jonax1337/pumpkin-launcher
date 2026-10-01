@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Thanks for reporting! Two buttons in the launcher collect most of what we need:
-        - **Debug-Info kopieren** (Settings › Support, or the instance's *Protokoll* tab) copies launcher version, Windows version and your instances — without names, accounts or paths.
+        - **Debug-Info kopieren** (Einstellungen › Support, or the instance's *Protokoll* tab) copies launcher version, Windows version and your instances — without names, accounts or paths.
         - **Log teilen** (the instance's *Protokoll* tab, or next to *Minecraft ist abgestürzt*) uploads the game log or crash report to mclo.gs and copies the link. Access tokens, your Windows user name and e-mail addresses are removed first.
   - type: textarea
     id: what-happened
@@ -33,7 +33,7 @@ body:
     id: version
     attributes:
       label: Launcher version
-      description: Settings › Über Pumpkin Launcher, or the first line of the debug info.
+      description: Einstellungen › Über Pumpkin Launcher, or the first line of the debug info.
       placeholder: "0.1.0"
     validations:
       required: true
@@ -41,7 +41,7 @@ body:
     id: debug-info
     attributes:
       label: Debug info
-      description: Click **Debug-Info kopieren** in Settings › Support and paste it here.
+      description: Click **Debug-Info kopieren** in Einstellungen › Support and paste it here.
       render: text
   - type: input
     id: log

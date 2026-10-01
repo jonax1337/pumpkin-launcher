@@ -1,9 +1,7 @@
 import type { ComponentProps } from "react";
-import { toast } from "sonner";
 import { create } from "zustand";
 import { Actions, Button, ConfirmDialog, FormRow } from "@/ui";
-import { useCopyDebugInfo, useShareLog } from "@/hooks/useSupport";
-import { api } from "@/lib/api";
+import { openPage, useCopyDebugInfo, useShareLog } from "@/hooks/useSupport";
 import type { ExitPayload, LogKind } from "@/lib/types";
 
 const REPO_URL = "https://github.com/jonax1337/pumpkin-launcher";
@@ -28,7 +26,8 @@ export function ShareLogDialog() {
   return (
     <ConfirmDialog
       open={!!request}
-      onOpenChange={(o) => !o && close()}
+      // Beim Hochladen nicht schließbar: Abbrechen hielte die Veröffentlichung nicht mehr auf.
+      onOpenChange={(o) => !o && !share.isPending && close()}
       danger={false}
       title="Log öffentlich teilen?"
       text={`Pumpkin Launcher lädt ${what} zu mclo.gs hoch. Jeder mit dem Link kann es lesen. Zugangsdaten, dein Windows-Benutzername und E-Mail-Adressen werden vorher entfernt.`}
@@ -45,8 +44,6 @@ export function DebugInfoButton(look: Omit<ComponentProps<typeof Button>, "onCli
   const copy = useCopyDebugInfo();
   return <Button {...look} disabled={copy.isPending} onClick={() => copy.mutate()}>Debug-Info kopieren</Button>;
 }
-
-const openPage = (url: string) => void api.openExternal(url).catch((e: Error) => toast.error(e.message));
 
 /** Einstellungen › Support: Fehler melden mit Debug-Info, Fragen in den Diskussionen. */
 export function SupportSection() {

@@ -2,9 +2,9 @@
 //! Siehe `services::logshare` und `services::debuginfo`.
 use tauri::{AppHandle, State};
 
-use crate::commands::is_installed;
 use crate::error::AppResult;
 use crate::services::debuginfo::{self, InstanceState};
+use crate::services::install;
 use crate::services::logshare::{self, LogKind};
 use crate::state::AppState;
 
@@ -18,9 +18,10 @@ pub async fn log_share(state: State<'_, AppState>, instance_id: String, kind: Lo
     Ok(url)
 }
 
-/// Launcher, System und Instanzen als Klartext ohne persönliche Daten.
+/// Launcher, System und Instanzen als Klartext ohne persönliche Daten. `default_memory_mb` ist der
+/// RAM-Standard aus den Einstellungen, den nur das Frontend kennt (wie bei `instance_launch`).
 #[tauri::command]
-pub fn debug_info(app: AppHandle, state: State<'_, AppState>) -> String {
+pub fn debug_info(app: AppHandle, state: State<'_, AppState>, default_memory_mb: u32) -> String {
     let instances = state.instances.list();
     let states: Vec<InstanceState> = {
         // Lock nur fürs Nachsehen, nicht über die Systemabfragen im Bericht.
@@ -29,10 +30,10 @@ pub fn debug_info(app: AppHandle, state: State<'_, AppState>) -> String {
             .iter()
             .map(|instance| InstanceState {
                 instance,
-                installed: is_installed(&state, instance),
+                installed: install::is_installed(&state.dirs, instance),
                 running: running.contains_key(&instance.id),
             })
             .collect()
     };
-    debuginfo::report(&app.package_info().version.to_string(), &state.dirs.root, &states)
+    debuginfo::report(&app.package_info().version.to_string(), &state.dirs.root, default_memory_mb, &states)
 }

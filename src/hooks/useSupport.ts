@@ -1,7 +1,11 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { defaultMemory } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import type { LogKind } from "@/lib/types";
+
+/** Seite im Browser öffnen; scheitert das, sagt es ein Toast. */
+export const openPage = (url: string) => void api.openExternal(url).catch((e: Error) => toast.error(e.message));
 
 /** Hochladen zu mclo.gs, Link in die Zwischenablage; Fehler beim Hochladen meldet der zentrale Mutations-Toast. */
 export function useShareLog() {
@@ -13,7 +17,7 @@ export function useShareLog() {
       toast.success(copied ? "Link kopiert" : "Log geteilt", {
         description: url,
         duration: 15_000,
-        action: { label: "Öffnen", onClick: () => void api.openExternal(url) },
+        action: { label: "Öffnen", onClick: () => openPage(url) },
       });
     },
   });
@@ -21,9 +25,10 @@ export function useShareLog() {
 
 /** Debug-Info in die Zwischenablage. Scheitern kann praktisch nur das Kopieren. */
 export function useCopyDebugInfo() {
+  const qc = useQueryClient();
   return useMutation({
     meta: { ownErrorToast: true },
-    mutationFn: async () => navigator.clipboard.writeText(await api.debugInfo()),
+    mutationFn: async () => navigator.clipboard.writeText(await api.debugInfo(await defaultMemory(qc))),
     onSuccess: () => toast.success("Debug-Info kopiert", { description: "Füge sie in deinen Fehlerbericht ein." }),
     onError: () => toast.error("Kopieren hat nicht geklappt"),
   });

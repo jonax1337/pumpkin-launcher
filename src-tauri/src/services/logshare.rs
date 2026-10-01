@@ -73,8 +73,9 @@ static REDACTIONS: LazyLock<Vec<(Regex, &str)>> = LazyLock::new(|| {
         (r#"(?i)(access_?token["']?\s*[:=]\s*["']?)[^\s"',;&]+"#, "${1}<redacted>"),
         // JWTs (Minecraft- und Xbox-Tokens): Der Header beginnt immer mit `{"`, Base64 also mit `eyJ`.
         (r"\beyJ[\w-]+\.[\w-]+\.[\w-]*", "<token>"),
-        // Der Name reicht bis zum nächsten Trenner oder Zeilenende, denn er darf Leerzeichen enthalten.
-        (r"(?i)\b([a-z]:[\\/]+users[\\/]+)[^\\/\r\n]+", "${1}<user>"),
+        // Der Name darf Leerzeichen enthalten; er endet erst an einem Trenner, dem Zeilenende oder einem
+        // Zeichen, das Windows in Ordnernamen verbietet (etwa dem schließenden `"` in JSON).
+        (r#"(?i)\b([a-z]:[\\/]+users[\\/]+)[^\\/\r\n"<>|:*?]+"#, "${1}<user>"),
         // Endung aus Buchstaben: Mod-Kennungen wie `fabric-loader@0.16.5` bleiben stehen.
         (r"[\w.+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b", "<email>"),
     ]
@@ -142,6 +143,7 @@ mod tests {
         assert_eq!(redact("Loading c:/users/max/.minecraft/mods"), "Loading c:/users/<user>/.minecraft/mods");
         assert_eq!(redact(r#""path": "C:\\Users\\max\\x""#), r#""path": "C:\\Users\\<user>\\x""#);
         assert_eq!(redact("home=C:\\Users\\max\nnext"), "home=C:\\Users\\<user>\nnext");
+        assert_eq!(redact(r#"{"home":"C:\\Users\\max","x":1}"#), r#"{"home":"C:\\Users\\<user>","x":1}"#);
     }
 
     #[test]
