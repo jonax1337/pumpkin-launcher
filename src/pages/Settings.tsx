@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useView } from "@/app/Layout";
 import { MemoryChooser, MemoryHelp } from "@/components/common";
 import { AccountsSection } from "@/components/PlayerNames";
+import { SupportSection } from "@/components/support";
 import { Actions, Button, Count, FormRow, FormSection, Hint, PageHeader, Radio, Segmented, Select, Switch, TabPanel, Tabs, TextField } from "@/ui";
 import { api } from "@/lib/api";
 import { Buddy, BrandWordmark, useBrand } from "@/branding/Brand";
@@ -18,6 +19,7 @@ const SECTIONS = [
   { value: "spiel", label: "Spiel" },
   { value: "darstellung", label: "Darstellung" },
   { value: "erweitert", label: "Erweitert" },
+  { value: "support", label: "Support" },
   { value: "ueber", label: "Über Pumpkin Launcher" },
 ] as const;
 type SectionId = (typeof SECTIONS)[number]["value"];
@@ -189,6 +191,8 @@ export function SettingsPage() {
               </FormRow>
             </>
           )}
+
+          {tab === "support" && <SupportSection />}
 
           {tab === "ueber" && (
             <>
