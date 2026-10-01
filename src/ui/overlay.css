@@ -1,4 +1,4 @@
-/* Kit-Überlagerungen: Tooltip, Menü/Popover, Dialog, Seitenpanel (Overlay.tsx).
+/* Kit-Überlagerungen: Tooltip (Tip.tsx), Menü/Popover (Menu.tsx, Popover.tsx), Dialog, Seitenpanel (Dialog.tsx).
    Platten mit Bevel und Kerbe (--n2), Einblenden kurz, Ausblenden in Stufen (Radix wartet auf die Animation).
    Bewegung (popin, dlgin, sheetin …) liegt in motion.css. */
 
@@ -15,14 +15,6 @@
 .vx-tip .tu { color: var(--warn); }
 .vx-tip .tw { color: var(--bad); }
 .vx-tip .td { color: #B7AEE0; margin-top: 4px; }
-
-/* Tooltip der Szenenkarte (Card.tsx): gleiche Platte, Inhalt mit Titel/Unterzeile/Bedienhinweis (.vx-tt*).
-   Eigenständige Klasse, weil der Inhalt mehrzeilig aufgebaut ist und über dem Karten-Tooltip liegt. */
-.rtip { position: relative; z-index: 90; max-width: 300px; padding: 10px 12px; color: var(--fg); font-size: 12.5px; line-height: 1.45; isolation: isolate; animation: fade .1s var(--ease); }
-.rtip::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--tip-bg); clip-path: var(--n1); }
-.rtip::after { content: ""; position: absolute; inset: var(--px); z-index: -1; background: linear-gradient(var(--tip-a), var(--tip-b)); clip-path: var(--ring); }
-.rtip[data-state="closed"] { animation: fadeout .08s steps(2, end) forwards; }
-.rtip[data-pass], [data-radix-popper-content-wrapper]:has(> .rtip[data-pass]) { pointer-events: none; }
 
 .vx-trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
@@ -88,7 +80,7 @@
 .vx-sheet-ht { flex: 1; min-width: 0; }
 /* 24 px: schmales Panel (460), eine Stufe unter dem Dialogtitel */
 .vx-sheet-h h2 { font: 800 24px/1.05 var(--f-display); text-transform: uppercase; }
-.vx-sheet-h p { color: var(--fg-2); font-size: 12.5px; margin-top: 4px; }
+.vx-sheet-sub { color: var(--fg-2); font-size: 12.5px; margin-top: 4px; }
 .vx-sheet-t { padding: 0 20px 12px; display: flex; flex-direction: column; gap: 10px; flex: none; }
 .vx-sheet-b { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 12px 20px; scrollbar-gutter: stable; }
 
