@@ -2,8 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { fileName } from "@/lib/format";
+import { doneLabel } from "@/lib/modrinth";
 import type { Datapack, Instance, Server, World, WorldBackup } from "@/lib/types";
-import { doneLabel, trackContent, withTarget, type ContentRun } from "./useContent";
+import { trackContent, withTarget, type ContentRun } from "./useContent";
 import { worldKeys } from "./worldKeys";
 
 /** Welten einer Instanz; auch für die Auswahl der Welt beim Hinzufügen eines Datenpakets aus Entdecken. */

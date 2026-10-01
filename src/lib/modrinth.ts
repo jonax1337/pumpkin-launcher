@@ -62,6 +62,14 @@ export function progressLabel(p: ContentProgress | null): string {
   return "Fertig";
 }
 
+const DONE_VERBS: Record<string, string> = {
+  installieren: "installiert", aktualisieren: "aktualisiert", importieren: "importiert", anlegen: "angelegt", duplizieren: "dupliziert",
+  hinzufügen: "hinzugefügt", abgleichen: "abgeglichen", exportieren: "exportiert", sichern: "gesichert", löschen: "gelöscht", wiederherstellen: "wiederhergestellt",
+};
+
+/** „Sodium installieren“ → „Sodium installiert“ für Verlauf und Meldung. */
+export const doneLabel = (label: string) => label.replace(/\S+$/, (verb) => DONE_VERBS[verb] ?? verb);
+
 /** Ein Wort für schmale Fortschrittsanzeigen in einer Zeile (statt `progressLabel`). */
 export function progressShortLabel(p: ContentProgress | null): string {
   if (!p || p.phase === "resolve" || p.phase === "validate") return "Wird geprüft";

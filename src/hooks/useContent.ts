@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 import { toast } from "sonner";
 import { create } from "zustand";
 import { api } from "@/lib/api";
-import type { ContentProgress, ContentProject } from "@/lib/modrinth";
+import { doneLabel, type ContentProgress, type ContentProject } from "@/lib/modrinth";
 import type { Instance } from "@/lib/types";
 import { useTasks, type DoneTask } from "@/store/tasks";
 import { instanceKeys } from "./useInstances";
@@ -33,14 +33,6 @@ export function cancelContent() {
   const op = useContentState.getState().active;
   if (op) void api.packInstallCancel(op).catch((e: Error) => toast.error(e.message));
 }
-
-const DONE_VERBS: Record<string, string> = {
-  installieren: "installiert", aktualisieren: "aktualisiert", importieren: "importiert", anlegen: "angelegt", duplizieren: "dupliziert",
-  hinzufügen: "hinzugefügt", abgleichen: "abgeglichen", exportieren: "exportiert", sichern: "gesichert", löschen: "gelöscht", wiederherstellen: "wiederhergestellt",
-};
-
-/** „Sodium installieren“ → „Sodium installiert“ für Verlauf und Meldung. */
-export const doneLabel = (label: string) => label.replace(/\S+$/, (verb) => DONE_VERBS[verb] ?? verb);
 
 /**
  * Führt einen Lauf als sichtbaren Vorgang aus (Fortschritt im Store, Eintrag im Verlauf) und gibt sein Ergebnis zurück;

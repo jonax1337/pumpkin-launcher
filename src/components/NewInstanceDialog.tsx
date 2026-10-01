@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Slot } from "radix-ui";
@@ -10,7 +10,7 @@ import {
 import { MemoryChooser } from "@/components/common";
 import { useInstallPack } from "@/components/ContentBrowser";
 import { ImportPane } from "@/components/LauncherImport";
-import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { cancelContent, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { useDebounced } from "@/hooks/useDebounced";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { useForeignSelection, useImportInstances } from "@/hooks/useImport";
@@ -261,7 +261,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
             <Button variant="ghost" aria-label="Installation abbrechen" onClick={packInstall.cancel}>Abbrechen</Button>
           )}
           {tab === "import" && importer.running && (
-            <Button variant="ghost" aria-label="Import abbrechen" onClick={importer.cancel}>Abbrechen</Button>
+            <Button variant="ghost" aria-label="Import abbrechen" onClick={cancelContent}>Abbrechen</Button>
           )}
           <DialogActions cancel={busy ? "Schließen" : "Abbrechen"} confirm={{ label: goLabel, width: 170, disabled: !valid || busy, onClick: go }} />
         </>
@@ -432,7 +432,12 @@ export function NewInstanceDialog({ children, primary }: { children?: ReactNode;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primary, params, setParams]);
 
+  // Wer den Dialog geschlossen hat, lässt den Vorgang im Hintergrund laufen und wird nicht mehr weggeholt;
+  // „Öffnen“ im Aufgaben-Menü führt zur fertigen Instanz.
+  const stillOpen = useRef(open);
+  useEffect(() => void (stillOpen.current = open), [open]);
   function done(id: string) {
+    if (!stillOpen.current) return;
     setOpen(false);
     navigate(`/instances/${id}`);
   }
