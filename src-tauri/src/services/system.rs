@@ -98,11 +98,14 @@ mod unix {
 mod linux {
     use crate::error::{AppError, AppResult};
 
+    /// `/proc/meminfo` zählt in KiB.
+    const KIB_PER_MIB: u64 = 1024;
+
     /// Physischer Arbeitsspeicher in MiB (Grundlage für RAM-Vorgabe und Slider-Obergrenze).
     pub fn total_memory_mb() -> AppResult<u64> {
         let meminfo = std::fs::read_to_string("/proc/meminfo")?;
         let kib = super::meminfo_total_kib(&meminfo).ok_or_else(|| AppError::invalid("Der Arbeitsspeicher ließ sich nicht ermitteln."))?;
-        Ok(kib / 1024)
+        Ok(kib / KIB_PER_MIB)
     }
 
     /// Distribution mit Version, z. B. „Ubuntu 24.04.1 LTS“; ohne `os-release` nur „Linux“.
