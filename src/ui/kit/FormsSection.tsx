@@ -3,7 +3,7 @@
  * Zustände per data-force (hover/press), aus per disabled; Overlay-Kontext in einer Platte.
  */
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { useI18n } from "@/i18n";
+import { useI18n, type TKey } from "@/i18n";
 import {
   Checkbox, Disclosure, Field, FormRow, FormSection, Hint, Icon, NavTabs, Radio, RadioGroup, SearchField, SegSlider, Segmented, Select, Switch,
   TabPanel, Tabs, TextArea, TextField, type TabItem,
@@ -105,7 +105,7 @@ function TabsDemo() {
   );
 }
 
-const OPTS = (t: (key: string) => string) => [
+const OPTS = (t: (key: TKey) => string) => [
   { value: "1.21.4", label: `1.21.4 (${t("ui.kit.optLatest")})` },
   { value: "1.21.3", label: "1.21.3" },
   { value: "1.20.1", label: "1.20.1" },

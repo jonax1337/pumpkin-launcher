@@ -92,7 +92,7 @@ function Toasts() {
       <Button size="s" onClick={() => toast.success(t("hooks.install.readyToast", { name: "Survival" }), { description: t("hooks.install.readySub") })}>{t("ui.kit.success")}</Button>
       <Button size="s" onClick={() => toast.error(t("hooks.game.crashed", { name: "Survival" }), { action: { label: t("ui.kit.showLog"), onClick: () => undefined } })}>{t("ui.kit.errorAction")}</Button>
       <Button size="s" onClick={() => toast.warning(t("ui.kit.memoryLow"))}>{t("ui.kit.warning")}</Button>
-      <Button size="s" onClick={() => toast(t("components.playtime.played", { zeit: "1:24" }))}>{t("ui.kit.noIcon")}</Button>
+      <Button size="s" onClick={() => toast(t("components.playtime.played", { time: "1:24" }))}>{t("ui.kit.noIcon")}</Button>
     </div>
   );
 }

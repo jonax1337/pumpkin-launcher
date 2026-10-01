@@ -1,8 +1,18 @@
 import { de } from "./de.ts";
 import { en } from "./en.ts";
+import type { mockWords } from "./mockWords.ts";
 import type { Dict, Language } from "./types.ts";
 
-const dicts: Record<Language, Dict> = { de, en };
+/** Alle Übersetzungsschlüssel: die der App und die des Browser-Mocks (nur im Dev-Server geladen). */
+export type TKey = keyof typeof de | keyof (typeof mockWords)["de"];
+type Params = Record<string, string | number>;
+
+const dicts: Record<Language, Dict> = { de: { ...de }, en: { ...en } };
+
+/** Ergänzt die Wörterbücher um Schlüssel, die nicht in jedem Build vorkommen (Texte des Browser-Mocks). */
+export function addWords(words: Record<Language, Dict>): void {
+  for (const lang of Object.keys(words) as Language[]) Object.assign(dicts[lang], words[lang]);
+}
 
 // Aktuelle Sprache auch ohne React (lib/format.ts, Prüf-Skript). Der LanguageProvider setzt sie synchron, bevor neu gerendert wird.
 let current: Language = "de";
@@ -16,7 +26,7 @@ export function setCurrentLanguage(lang: Language): void {
 }
 
 /** Übersetzt `key` in die aktuelle Sprache; `{platzhalter}` werden ersetzt, fehlende bleiben sichtbar. */
-export function t(key: string, params?: Record<string, string | number>): string {
+export function t(key: TKey, params?: Params): string {
   const template = dicts[current][key] ?? key;
   return template.replace(/\{(\w+)\}/g, (placeholder, name: string) => (params && name in params ? String(params[name]) : placeholder));
 }
@@ -26,7 +36,7 @@ export function t(key: string, params?: Record<string, string | number>): string
  * Aufrufstelle selbst als React-Knoten, weil `t` nur Zeichenketten einsetzen kann – so bleibt die
  * Satzstellung dennoch vollständig im Wörterbuch.
  */
-export function tAround(key: string, marker: string): [string, string] {
+export function tAround(key: TKey, marker: string): [string, string] {
   const template = dicts[current][key] ?? key;
   const token = `{${marker}}`;
   const at = template.indexOf(token);

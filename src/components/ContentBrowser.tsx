@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } fro
 import { useInfiniteQuery, useQueries, useQuery, useQueryClient, type QueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { t, useI18n } from "@/i18n";
+import { t, useI18n, type TKey } from "@/i18n";
 import {
   BackLink, Button, ButtonLink, Cell, Chip, Count, Dialog, DialogActions, Empty, ErrorBox, Field, Hint, Icon, IconButton, JobProgress, List, ListRow, Menu,
   MenuItem, MenuLabel, MenuNote, MenuScroll, MenuSep, Meta, Panel, ProjectIcon, RowTitle, SceneThumb, SearchField, SectionHeader, Select, Sheet, Skel, SkelRow,
@@ -34,7 +34,7 @@ import { lookOf, useLook, useLookStore } from "@/store/look";
 export const IRIS_PROJECT_ID = "YL57xq9U";
 
 /** Record mit i18n-Schlüsseln, dessen Lesen übersetzt: Komponenten brauchen dazu nichts zu ändern. */
-function lazyLabels(keys: Record<string, string>): Record<string, string> {
+function lazyLabels(keys: Record<string, TKey>): Record<string, string> {
   const labels: Record<string, string> = {};
   for (const [prop, key] of Object.entries(keys)) Object.defineProperty(labels, prop, { enumerable: true, get: () => t(key) });
   return labels;
@@ -68,7 +68,7 @@ const allVersionsQuery = (projectId: string, source: Source = "modrinth") => ({
 });
 
 // Modrinth-Kategorien in Alltagssprache; Loader-Namen sind keine Kategorie für die Anzeige.
-const CATEGORY: Record<string, string> = {
+const CATEGORY: Record<string, TKey> = {
   adventure: "detail.worlds.gameMode.adventure", optimization: "components.category.optimization", technology: "components.category.technology",
   magic: "components.category.magic", decoration: "components.category.decoration", utility: "components.category.utility",
   "game-mechanics": "components.category.gameMechanics", library: "components.category.library", worldgen: "components.category.worldgen",
@@ -138,7 +138,7 @@ function InChip({ instances, small }: { instances?: Instance[]; small?: boolean 
   const one = instances.length === 1;
   const text = shortName(one ? t("components.installedIn.one", { name: instances[0].name }) : t("components.installedIn.other", { n: instances.length }), small ? 28 : 36);
   return (
-    <Tip label={t("components.installedIn.tip", { namen: instances.map((i) => i.name).join(", ") })} describe={!one || text.endsWith("…")}>
+    <Tip label={t("components.installedIn.tip", { names: instances.map((i) => i.name).join(", ") })} describe={!one || text.endsWith("…")}>
       {small ? <Chip size="s" dot>{text}</Chip> : <Chip icon="check">{text}</Chip>}
     </Tip>
   );
@@ -159,7 +159,7 @@ const installDatapack = async (qc: QueryClient, instance: Instance, world: World
 
 /** Wohin ein Inhalt kam: in die Welt (Tab Welten) oder in die Instanz (Tab Inhalte). */
 const destination = (instance: Instance, world?: World): { label: string; tab: InstanceTab } =>
-  world ? { label: t("components.content.destinationWorld", { welt: world.name, instanz: instance.name }), tab: "worlds" } : { label: instance.name, tab: "content" };
+  world ? { label: t("components.content.destinationWorld", { world: world.name, instance: instance.name }), tab: "worlds" } : { label: instance.name, tab: "content" };
 
 /**
  * Wählt die passende Version automatisch (oder nimmt `versionId`) und installiert mit Abhängigkeiten, Datenpakete in
@@ -219,7 +219,7 @@ function useAddContent() {
         const deps = extra > 0 ? t(extra === 1 ? "components.content.deps.one" : "components.content.deps.other", { n: extra }) : "";
         if (!opts.openAction) return void toast.success(t("components.content.added", { name: title }) + deps);
         const { label, tab } = destination(result, world);
-        toast.success(t("components.content.nowIn", { name: title, ziel: label }) + deps, { action: { label: t("components.content.viewAction"), onClick: () => navigate(instanceUrl(result.id, tab)) } });
+        toast.success(t("components.content.nowIn", { name: title, target: label }) + deps, { action: { label: t("components.content.viewAction"), onClick: () => navigate(instanceUrl(result.id, tab)) } });
       },
     });
     return "ok";
@@ -241,7 +241,7 @@ function AddButton({ instance, world, projectId, title, type, versionId, large, 
     setState("checking");
     const r = await addContent(instance, projectId, title, type, { versionId, source, world });
     setState(r === "missing" ? "missing" : "idle");
-    if (r === "missing" && compact) toast.error(t("components.content.notAvailableFor", { name: title, passt: fitsLabel(instance, type) }));
+    if (r === "missing" && compact) toast.error(t("components.content.notAvailableFor", { name: title, fits: fitsLabel(instance, type) }));
   }
 
   if (installed) return <Chip icon="check">{t("components.content.installed")}</Chip>;
@@ -355,10 +355,10 @@ export function AddToWorldMenu({ projectId, title, large }: { projectId: string;
 
 /** Auslöser für „Hinzufügen zu …“: groß im Projektkopf, klein in der Katalogzeile. */
 const addMenuTrigger = (title: string, where: "instance" | "world", disabled: boolean, large?: boolean) => {
-  const ziel = where === "instance" ? t("common.instance") : t("components.common.world");
+  const target = where === "instance" ? t("common.instance") : t("components.common.world");
   return (
-    <Button variant={large ? "primary" : "secondary"} size={large ? "l" : "s"} icon="plus" iconEnd="chevd" disabled={disabled} aria-label={large ? undefined : t("components.content.addToOne", { name: title, ziel })}>
-      {large ? t("components.content.addTo", { ziel }) : t("common.add")}
+    <Button variant={large ? "primary" : "secondary"} size={large ? "l" : "s"} icon="plus" iconEnd="chevd" disabled={disabled} aria-label={large ? undefined : t("components.content.addToOne", { name: title, target })}>
+      {large ? t("components.content.addTo", { target }) : t("common.add")}
     </Button>
   );
 };
@@ -512,7 +512,7 @@ export function PackInstallButton({ projectId, title, onDone, source = "modrinth
 }
 
 // Ein Begriff für alles Unfertige, wie im Dialog „Neue Instanz“.
-const VERSION_TYPE: Record<ContentVersion["version_type"], string | null> = { release: null, beta: "components.version.prerelease", alpha: "components.version.prerelease" };
+const VERSION_TYPE: Record<ContentVersion["version_type"], TKey | null> = { release: null, beta: "components.version.prerelease", alpha: "components.version.prerelease" };
 
 /** Aktionen in den Pack-Details: „Als neue Instanz anlegen“ plus „Andere Version“, beide mit Bestätigung. */
 export function PackActions({ projectId, title, onDone, source = "modrinth" }: { projectId: string; title: string; onDone?: (instanceId: string) => void; source?: Source }) {
@@ -641,7 +641,7 @@ export function ContentResults({ type, instance, world, action, onOpen, query: t
         navigator.onLine === false ? (
           <Offline compact={compact} onRetry={() => void results.refetch()} />
         ) : (
-          <ErrorBox title={t("components.source.unreachable", { quelle: info.label })} error={results.error} onRetry={() => void results.refetch()} />
+          <ErrorBox title={t("components.source.unreachable", { source: info.label })} error={results.error} onRetry={() => void results.refetch()} />
         )
       ) : results.isPending ? (
         <List variant={variant} aria-busy aria-label={t("components.common.loadingAria")}>
@@ -654,7 +654,7 @@ export function ContentResults({ type, instance, world, action, onOpen, query: t
           size={compact ? "pane" : "section"}
           actions={hasFilter && onReset ? <Button onClick={onReset}>{t("components.search.resetFilters")}</Button> : undefined}
         >
-          {instance && fit ? t("components.search.nothingFits", { passt: fitsLabel(instance, type) }) : t("components.search.noneMatch", { art: TYPE_LABELS[type] })}
+          {instance && fit ? t("components.search.nothingFits", { fits: fitsLabel(instance, type) }) : t("components.search.noneMatch", { kind: TYPE_LABELS[type] })}
         </Empty>
       ) : (
         <>
@@ -668,7 +668,7 @@ export function ContentResults({ type, instance, world, action, onOpen, query: t
                   <RowTitle
                     size={feat ? "feature" : "l"}
                     title={hit.title}
-                    aside={compact ? undefined : t("components.search.byAuthor", { autor: hit.author })}
+                    aside={compact ? undefined : t("components.search.byAuthor", { author: hit.author })}
                     sub={hit.description}
                     meta={
                       <>
@@ -799,7 +799,7 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
             <div className="min-w-0">
               <h1 title={title}>{title}</h1>
               <div className="by">
-                {hit && <Meta items={[t("components.search.byAuthor", { autor: hit.author }), <><Count value={formatDownloads(hit.downloads)} /> {t("components.stats.downloads")}</>]} />}
+                {hit && <Meta items={[t("components.search.byAuthor", { author: hit.author }), <><Count value={formatDownloads(hit.downloads)} /> {t("components.stats.downloads")}</>]} />}
                 <Chip size="s">{t(TYPE_ONE_KEYS[type])}</Chip>
                 {hit && categoryNames(hit.categories, 2).map((c) => <Chip key={c} size="s">{c}</Chip>)}
                 {!instance && <InChip instances={installedIn.get(installedKey(source, projectId))} />}
@@ -846,7 +846,7 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
                 </dl>
               </Panel>
               <Panel notch={2} pad="m">
-                <SectionHeader as="h3" size="card" title={instance ? t("components.detail.versionsFor", { passt: fitsLabel(instance, type) }) : t("components.detail.versions")} />
+                <SectionHeader as="h3" size="card" title={instance ? t("components.detail.versionsFor", { fits: fitsLabel(instance, type) }) : t("components.detail.versions")} />
                 {!shown && <Skel h={44} />}
                 {shown?.length === 0 && <Hint>{instance ? `${t("components.content.noVersionFor", { version: fitsLabel(instance, type) })}.` : t("components.detail.noVersionAvailable")}</Hint>}
                 {!!shown?.length && (
@@ -932,8 +932,8 @@ export function AddContentSheet({ instance, world, open, onOpenChange, initialKi
       open={open}
       onOpenChange={onOpenChange}
       acc={acc}
-      title={world ? t("components.sheet.datapacksForWorld", { welt: world.name }) : t("components.sheet.contentForInstance", { name: instance.name })}
-      sub={t("components.sheet.autoVersion", { passt: fitsLabel(instance, world ? "datapack" : "mod") })}
+      title={world ? t("components.sheet.datapacksForWorld", { world: world.name }) : t("components.sheet.contentForInstance", { name: instance.name })}
+      sub={t("components.sheet.autoVersion", { fits: fitsLabel(instance, world ? "datapack" : "mod") })}
       tools={
         projectId ? undefined : (
           <>
@@ -950,7 +950,7 @@ export function AddContentSheet({ instance, world, open, onOpenChange, initialKi
               />
             )}
             <SearchField size="s" value={query} onChange={setQuery} placeholder={t("components.sheet.searchPlaceholder")} autoFocus />
-            <Switch checked={fit} onChange={setFit} label={t("components.sheet.onlyFitting", { passt: fitsLabel(instance, kind) })} visibleLabel />
+            <Switch checked={fit} onChange={setFit} label={t("components.sheet.onlyFitting", { fits: fitsLabel(instance, kind) })} visibleLabel />
           </>
         )
       }

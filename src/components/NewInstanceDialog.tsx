@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Slot } from "radix-ui";
-import { useI18n } from "@/i18n";
+import { useI18n, type TKey } from "@/i18n";
 import {
   Actions, Button, Checkbox, Choice, ConfirmDialog, Count, Dialog, DialogActions, Disclosure, Empty, ErrorBox, Field, Glyph, Hint, Icon, IconButton, Panel,
   ProjectIcon, RowTitle, SearchField, Segmented, Select, Skel, TabPanel, Tabs, TextField, type IconName,
@@ -32,7 +32,7 @@ import { cn } from "@/lib/utils";
 type Tab = "blank" | "pack" | "file" | "tpl" | "import";
 
 // Reiter des Dialogs; Beschriftungen als Schlüssel, übersetzt beim Rendern.
-const TABS: { value: Tab; label: string; icon: IconName }[] = [
+const TABS: { value: Tab; label: TKey; icon: IconName }[] = [
   { value: "blank", label: "components.newInstance.tab.own", icon: "plus" },
   { value: "pack", label: TYPE_ONE_KEYS.modpack, icon: "box" },
   { value: "file", label: "components.newInstance.tab.file", icon: "file" },
@@ -41,7 +41,7 @@ const TABS: { value: Tab; label: string; icon: IconName }[] = [
 ];
 
 // Kurze Erklärung je Loader, steht als Hilfe unter der Wahl.
-const LOADER_HELP: Record<ModLoader, string> = {
+const LOADER_HELP: Record<ModLoader, TKey> = {
   vanilla: "components.loader.help.vanilla",
   fabric: "components.loader.help.fabric",
   quilt: "components.loader.help.quilt",
@@ -80,13 +80,13 @@ function PackPane({ selected, onSelect }: { selected: string | null; onSelect: (
               key={hit.project_id}
               media={<ProjectIcon url={hit.icon_url} seed={hit.project_id} />}
               title={hit.title}
-              sub={t("components.search.byAuthorWithDesc", { autor: hit.author, beschreibung: hit.description })}
+              sub={t("components.search.byAuthorWithDesc", { author: hit.author, description: hit.description })}
               trail={<Count value={formatDownloads(hit.downloads)} />}
               selected={selected === hit.project_id}
               onClick={() => onSelect({ id: hit.project_id, title: hit.title })}
             />
           ))}
-          {results.data && !results.data.hits.length && <Hint>{t("components.pack.noneFound", { suche: query })}</Hint>}
+          {results.data && !results.data.hits.length && <Hint>{t("components.pack.noneFound", { query: query })}</Hint>}
         </div>
       )}
     </>
@@ -123,7 +123,7 @@ function TemplatePane({ selected, onSelect }: { selected: string | null; onSelec
               className="min-w-0 flex-1"
               media={<Glyph name="chest" pal="sand" />}
               title={tpl.name}
-              sub={`${loaderLine(tpl)} · ${t(tpl.modCount === 1 ? "components.template.entryCount.one" : "components.template.entryCount.other", { n: tpl.modCount })} · ${t("components.template.savedAt", { datum: formatDate(tpl.createdAt) })}`}
+              sub={`${loaderLine(tpl)} · ${t(tpl.modCount === 1 ? "components.template.entryCount.one" : "components.template.entryCount.other", { n: tpl.modCount })} · ${t("components.template.savedAt", { date: formatDate(tpl.createdAt) })}`}
               selected={selected === tpl.id}
               onClick={() => onSelect(tpl)}
             />

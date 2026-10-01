@@ -1,6 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { t, useI18n } from "@/i18n";
+import { t, useI18n, type TKey } from "@/i18n";
 import { Button, Chip, ConfirmDialog, Count, Empty, Icon, IconButton, SearchField, Segmented, Spacer, StatusPanel, Tip, Toolbar, type IconName } from "@/ui";
 import { askShareLog, DebugInfoButton, shareKindAfter } from "@/components/support";
 import { askStop, useCancelInstall, useInstanceStatus, useKill, usePlay, useStopAsk } from "@/hooks/useInstances";
@@ -111,7 +111,7 @@ function playState(instance: Instance, phase: Phase, percent: number | null, cod
       return {
         st: "run", icon: "stop", l1: t("components.game.quit"), s1: t("components.game.quit"),
         l2: runMs != null ? <>{t("components.game.runningSince")} <span className="num">{formatClock(runMs)}</span></> : t("components.game.running"),
-        p: 0, aria: t("components.game.ariaRunning", { name }) + (runMs != null ? t("components.game.sinceAria", { zeit: spokenSince(runMs) }) : ""),
+        p: 0, aria: t("components.game.ariaRunning", { name }) + (runMs != null ? t("components.game.sinceAria", { time: spokenSince(runMs) }) : ""),
       };
     case "crashed":
       return { st: "error", icon: "redo", l1: t("components.game.restart"), s1: t("components.game.onceMore"), l2: t("components.game.crashed") + (code != null ? t("components.game.exitCode", { code }) : ""), p: 0, aria: t("components.game.ariaCrashed", { name }) };
@@ -223,7 +223,7 @@ export function PlayStatus({ instance, showLast = true, onScene }: { instance: I
       </>
     );
   } else if (phase === "installed" && showLast) {
-    lead = instance.lastPlayedAt != null ? t("components.game.lastPlayed", { zeit: relativeTime(instance.lastPlayedAt) }) : t("format.neverPlayed");
+    lead = instance.lastPlayedAt != null ? t("components.game.lastPlayed", { time: relativeTime(instance.lastPlayedAt) }) : t("format.neverPlayed");
   }
   return (
     <div className={cn("pstat", phase === "crashed" && "bad", phase === "running" && "run")}>
@@ -294,7 +294,7 @@ export function StopDialog() {
 // ---------- Protokoll ----------
 
 type LogFilter = "all" | "warn" | "err";
-const LOG_FILTERS: { value: LogFilter; label: string }[] = [{ value: "all", label: "common.all" }, { value: "warn", label: "components.log.filterWarn" }, { value: "err", label: "common.error" }];
+const LOG_FILTERS: { value: LogFilter; label: TKey }[] = [{ value: "all", label: "common.all" }, { value: "warn", label: "components.log.filterWarn" }, { value: "err", label: "common.error" }];
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -334,7 +334,7 @@ function LogStat({ instance }: { instance: Instance }) {
     );
   // Wie man zu Ausgabe kommt, sagt der Leerzustand der Konsole; hier nur Stand und Aufbewahrung
   return (
-    <StatusPanel size="s" icon="info" className={place} title={instance.lastPlayedAt != null ? `${t("components.game.lastPlayed", { zeit: relativeTime(instance.lastPlayedAt) })}.` : `${t("format.neverPlayed")}.`}>
+    <StatusPanel size="s" icon="info" className={place} title={instance.lastPlayedAt != null ? `${t("components.game.lastPlayed", { time: relativeTime(instance.lastPlayedAt) })}.` : `${t("format.neverPlayed")}.`}>
       {t("components.log.clearedOnExit")}
     </StatusPanel>
   );

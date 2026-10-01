@@ -131,7 +131,7 @@ export const components = {
   "components.game.ariaInstalling": "Wird installiert: {name}, {percent} %",
   "components.game.ariaStarting": "Startet: {name}",
   "components.game.ariaRunning": "Beenden: {name}, läuft",
-  "components.game.sinceAria": " seit {zeit}",
+  "components.game.sinceAria": " seit {time}",
   "components.game.ariaCrashed": "Erneut starten: {name}, abgestürzt",
   "components.game.ariaPlay": "Spielen: {name}",
   "components.game.needNameFirst": "Erst Spielernamen festlegen",
@@ -147,7 +147,7 @@ export const components = {
   "components.game.viewLog": "Protokoll ansehen",
   "components.game.openCrashReport": "Absturzbericht öffnen",
   "components.game.shareLog": "Log teilen",
-  "components.game.lastPlayed": "Zuletzt gespielt {zeit}",
+  "components.game.lastPlayed": "Zuletzt gespielt {time}",
   "components.game.notInstalled": "Nicht installiert",
   "components.game.stopTitle": "Minecraft beenden?",
   "components.game.stopText": "Nicht gespeicherter Fortschritt geht verloren. Beende das Spiel besser im Spiel selbst.",
@@ -187,7 +187,7 @@ export const components = {
   "components.playerName.placeholder": "z. B. Steve_42",
 
   // ---------- Arbeitsspeicher und Java ----------
-  "components.playtime.played": "{zeit} gespielt",
+  "components.playtime.played": "{time} gespielt",
   "components.memory.tooHigh": "Das ist mehr als drei Viertel deines Arbeitsspeichers ({ram}). Das System und andere Programme können dann stocken.",
   "components.memory.hasTotal": "Der Rechner hat {ram}.",
   "components.memory.general": "Mehr als 8 GB bringt selten etwas.",
@@ -197,8 +197,8 @@ export const components = {
   "components.memory.maxGb": "max. {n} GB",
   "components.memory.autoFromSettings": "Standard aus den Einstellungen",
   "components.java.own": "Eigene Java-Installation",
-  "components.java.pathTo": "Pfad zu {datei}",
-  "components.java.examplePath": "z. B. {pfad}",
+  "components.java.pathTo": "Pfad zu {file}",
+  "components.java.examplePath": "z. B. {path}",
   "components.java.browse": "Durchsuchen",
 
   // ---------- Neue Instanz (Dialog) ----------
@@ -265,7 +265,7 @@ export const components = {
     "Speichere eine Instanz über ihr Menü mit „Als Vorlage speichern“, dann kannst du sie hier als Ausgangspunkt nehmen.",
   "components.template.entryCount.one": "{n} Inhalt",
   "components.template.entryCount.other": "{n} Inhalte",
-  "components.template.savedAt": "gespeichert {datum}",
+  "components.template.savedAt": "gespeichert {date}",
   "components.template.delete": "Vorlage löschen",
   "components.template.deleteNamed": "Vorlage {name} löschen",
   "components.template.deleteQuotedTitle": "Vorlage „{name}“ löschen?",
@@ -291,7 +291,7 @@ export const components = {
   "components.instance.moreActions": "Weitere Aktionen",
   "components.instance.nameField": "Name der Instanz",
   "components.instance.templateName": "Name der Vorlage",
-  "components.instance.templateHelp": "Gespeichert werden Version, Loader, {inhalt} Inhalte und Einstellungen. Welten nicht.",
+  "components.instance.templateHelp": "Gespeichert werden Version, Loader, {count} Inhalte und Einstellungen. Welten nicht.",
   "components.instance.groupName": "Name der Gruppe",
   "components.instance.groupHelp": "„{name}“ kommt in diese Gruppe. Eine Gruppe ohne Instanzen verschwindet von selbst.",
   "components.instance.export": "Exportieren",
@@ -381,20 +381,20 @@ export const components = {
   // ---------- Schon-in-Anzeige ----------
   "components.installedIn.one": "In {name}",
   "components.installedIn.other": "In {n} Instanzen",
-  "components.installedIn.tip": "Schon in {namen}",
+  "components.installedIn.tip": "Schon in {names}",
 
   // ---------- Inhalte hinzufügen ----------
-  "components.content.destinationWorld": "„{welt}“ ({instanz})",
+  "components.content.destinationWorld": "„{world}“ ({instance})",
   "components.content.loadFailed": "{name} konnte nicht geladen werden",
   "components.content.installTask": "{name} installieren",
   "components.content.deps.one": ", dazu {n} benötigte Mod",
   "components.content.deps.other": ", dazu {n} benötigte Mods",
   "components.content.added": "{name} hinzugefügt",
-  "components.content.nowIn": "{name} ist jetzt in {ziel}",
+  "components.content.nowIn": "{name} ist jetzt in {target}",
   "components.content.viewAction": "Ansehen",
   "components.content.installed": "Installiert",
   "components.content.noVersionFor": "Keine Version für {version}",
-  "components.content.notAvailableFor": "{name} gibt es nicht für {passt}",
+  "components.content.notAvailableFor": "{name} gibt es nicht für {fits}",
   "components.content.notForMc": "{name} gibt es nicht für Minecraft {version}",
   "components.content.noVersionForLower": "keine Version für {version}",
   "components.content.noWorldsLower": "keine Welten",
@@ -403,8 +403,8 @@ export const components = {
   "components.content.addAria": "{name} hinzufügen",
   "components.content.addThisVersion": "{name} in dieser Version hinzufügen",
   "components.content.addVersion": "Diese Version hinzufügen",
-  "components.content.addTo": "Zu {ziel} hinzufügen",
-  "components.content.addToOne": "{name} zu {ziel} hinzufügen",
+  "components.content.addTo": "Zu {target} hinzufügen",
+  "components.content.addToOne": "{name} zu {target} hinzufügen",
   "components.content.addToMenu": "Hinzufügen zu …",
   "components.content.noInstancesYet": "Noch keine Instanz.",
   "components.content.checkingVersions": "Prüft passende Versionen …",
@@ -414,7 +414,7 @@ export const components = {
 
   // ---------- Modpack-Installation ----------
   "components.pack.searchPlaceholder": "Modpacks suchen",
-  "components.pack.noneFound": "Kein Modpack gefunden für „{suche}“.",
+  "components.pack.noneFound": "Kein Modpack gefunden für „{query}“.",
   "components.pack.cannotInstall": "{name} lässt sich nicht installieren",
   "components.pack.installTask": "Modpack „{name}“ installieren",
   "components.pack.readyToast": "{name} ist bereit. „Spielen“ lädt beim ersten Start den Rest.",
@@ -436,11 +436,11 @@ export const components = {
   "components.search.searching": "Sucht …",
   "components.search.nothingFound": "Nichts gefunden",
   "components.search.resetFilters": "Filter zurücksetzen",
-  "components.search.nothingFits": "Für {passt} gibt es hier nichts Passendes. Schalte den Filter aus, um alles zu sehen.",
-  "components.search.noneMatch": "Keine {art} passen zu deiner Suche und den Filtern.",
+  "components.search.nothingFits": "Für {fits} gibt es hier nichts Passendes. Schalte den Filter aus, um alles zu sehen.",
+  "components.search.noneMatch": "Keine {kind} passen zu deiner Suche und den Filtern.",
   "components.search.viewProject": "{name} ansehen",
-  "components.search.byAuthor": "von {autor}",
-  "components.search.byAuthorWithDesc": "von {autor} · {beschreibung}",
+  "components.search.byAuthor": "von {author}",
+  "components.search.byAuthorWithDesc": "von {author} · {description}",
   "components.search.loadMore": "Mehr laden",
   "components.search.loadingMore": "Lädt …",
   "components.search.oneResult": "1 Ergebnis",
@@ -466,7 +466,7 @@ export const components = {
   "components.detail.fits": "Passt",
   "components.detail.noVersion": "Keine Version",
   "components.detail.yourInstances": "Deine Instanzen",
-  "components.detail.versionsFor": "Versionen für {passt}",
+  "components.detail.versionsFor": "Versionen für {fits}",
   "components.detail.versions": "Versionen",
   "components.detail.noVersionAvailable": "Keine Version verfügbar.",
   "components.detail.versionAsInstance": "{version} als Instanz anlegen",
@@ -477,13 +477,13 @@ export const components = {
 
   // ---------- Seitenpanel (Inhalte) ----------
   "components.sheet.shaderNeedsIris": "Shader brauchen die Mod „Iris“. Füge sie unter „Mods“ hinzu.",
-  "components.sheet.datapacksForWorld": "Datenpakete für „{welt}“",
+  "components.sheet.datapacksForWorld": "Datenpakete für „{world}“",
   "components.sheet.contentForInstance": "Inhalte für {name}",
-  "components.sheet.autoVersion": "Pumpkin Launcher wählt automatisch die Version für {passt}.",
+  "components.sheet.autoVersion": "Pumpkin Launcher wählt automatisch die Version für {fits}.",
   "components.sheet.kindLabel": "Art",
   "components.sheet.sourceLabel": "Quelle",
   "components.sheet.searchPlaceholder": "Im Katalog suchen",
-  "components.sheet.onlyFitting": "Nur passend zu {passt}",
+  "components.sheet.onlyFitting": "Nur passend zu {fits}",
 
   // ---------- Anforderungs-Seiten (Client/Server) ----------
   "components.side.serverOnly": "Nur Server",
@@ -497,7 +497,7 @@ export const components = {
   "components.stats.downloads": "Downloads",
 
   // ---------- Quellen ----------
-  "components.source.unreachable": "{quelle} ist gerade nicht erreichbar",
+  "components.source.unreachable": "{source} ist gerade nicht erreichbar",
 
   // ---------- Support ----------
   "components.support.copyDebugInfo": "Debug-Info kopieren",
@@ -514,7 +514,7 @@ export const components = {
   "components.share.whatLatestLog": "das Protokoll des letzten Starts",
   "components.share.title": "Log öffentlich teilen?",
   "components.share.text":
-    "Pumpkin Launcher lädt {was} zu mclo.gs hoch. Jeder mit dem Link kann es lesen. Zugangsdaten, der Benutzername in Dateipfaden und E-Mail-Adressen werden vorher entfernt. Dein Spielername bleibt sichtbar.",
+    "Pumpkin Launcher lädt {what} zu mclo.gs hoch. Jeder mit dem Link kann es lesen. Zugangsdaten, der Benutzername in Dateipfaden und E-Mail-Adressen werden vorher entfernt. Dein Spielername bleibt sichtbar.",
   "components.share.upload": "Hochladen",
   "components.share.uploading": "Lädt hoch",
 

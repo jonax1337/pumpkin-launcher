@@ -1,6 +1,6 @@
 import type { Dict } from "../types.ts";
 
-/** Wörter des Bereichs hooks: Hook-Dateien plus Mock und Fehlermeldungen aus lib/api.ts. */
+/** Wörter des Bereichs hooks (Hook-Dateien); die Browser-Fassung von lib/api.ts liegt in mock.ts. */
 export const hooks = {
   "hooks.update.availableToast": "Pumpkin Launcher {version} ist da",
   "hooks.update.availableHint": "Installieren, wann es dir passt.",
@@ -10,10 +10,9 @@ export const hooks = {
   "hooks.update.ready": "Update ist bereit",
   "hooks.update.readyHint": "Pumpkin Launcher startet für die Installation neu.",
 
-
   "hooks.import.noNewInFolder": "In diesem Ordner gibt es keine neuen Instanzen.",
   "hooks.import.instanceTask": "{name} importieren",
-
+  "hooks.import.instanceTaskDone": "{name} importiert",
 
   "hooks.install.doneTask": "{name} installiert",
   "hooks.install.readySub": "Bereit zum Spielen",
@@ -54,36 +53,13 @@ export const hooks = {
 
   "hooks.world.operationRunning": "Es läuft schon ein Vorgang. Warte, bis er fertig ist.",
   "hooks.world.backupTask": "„{name}“ sichern",
+  "hooks.world.backupTaskDone": "„{name}“ gesichert",
   "hooks.world.deleteTask": "„{name}“ löschen",
+  "hooks.world.deleteTaskDone": "„{name}“ gelöscht",
   "hooks.world.deletedHint": "„{name}“ gelöscht. Die Sicherung davon findest du unter „Sicherungen“.",
   "hooks.world.restoreTask": "„{name}“ wiederherstellen",
+  "hooks.world.restoreTaskDone": "„{name}“ wiederhergestellt",
   "hooks.world.restored": "„{name}“ ist wieder da",
   "hooks.world.restoredInFolder": "„{name}“ ist wieder da, im Ordner „{folder}“",
   "hooks.world.serverRemoved": "„{name}“ entfernt",
-
-  "hooks.api.modpacksNeedApp": "Modrinth-Modpacks benötigen die Tauri-App. Im Browser werden keine Modpacks installiert.",
-  "hooks.api.onlyInApp": "{what} geht nur in der Pumpkin Launcher-App.",
-  "hooks.api.addLocalFiles": "Eigene Dateien hinzufügen",
-  "hooks.api.export": "Exportieren",
-  "hooks.api.pickFiles": "Dateien auswählen",
-  "hooks.api.openFolder": "Ordner öffnen",
-  "hooks.api.shareLogs": "Protokolle teilen",
-  "hooks.api.addSkinFiles": "Skin-Dateien hinzufügen",
-  "hooks.api.openFiles": "Dateien öffnen",
-  "hooks.api.restart": "Neu starten",
-  "hooks.api.instanceNotFound": "Instanz „{id}“ nicht gefunden",
-  "hooks.api.duplicateName": "{name} (Kopie)",
-  "hooks.api.templateGone": "Die Vorlage gibt es nicht mehr",
-  "hooks.api.versionNotInstalled": "Version {version} ist nicht installiert",
-  "hooks.api.alreadyRunning": "Ungültige Eingabe: Instanz läuft bereits",
-  "hooks.api.runningGameNotFound": "Laufendes Spiel „{id}“ nicht gefunden",
-  "hooks.api.demoLogLine": "Demo-Logzeile {n}",
-  "hooks.api.loadTestLine": "Lastzeile {n}",
-  "hooks.api.msLoginBrowser": "Melde dich im Browser bei Microsoft an.",
-  "hooks.api.msLoginDevice": "Öffne {url} und gib den Code {code} ein.",
-  "hooks.api.loginCancelled": "Anmeldung abgebrochen",
-  "hooks.import.instanceTaskDone": "{name} importiert",
-  "hooks.world.backupTaskDone": "„{name}“ gesichert",
-  "hooks.world.deleteTaskDone": "„{name}“ gelöscht",
-  "hooks.world.restoreTaskDone": "„{name}“ wiederhergestellt",
 } satisfies Dict;

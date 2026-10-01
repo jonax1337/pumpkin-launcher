@@ -19,14 +19,14 @@ import { formatDateTime, formatSize, relativeTime } from "@/lib/format";
 import { openLocalPath } from "@/lib/links";
 import { progressShare } from "@/lib/modrinth";
 import { toastError } from "@/lib/toast";
-import { t, useI18n } from "@/i18n";
+import { t, useI18n, type TKey } from "@/i18n";
 import type { Instance, QuickPlay, World, WorldBackup } from "@/lib/types";
 import { DropHint, rejectedFileToast } from "./dropFiles";
 import { GuardedButton, useBusyReason, type SectionProps } from "./guards";
 import { ServersSection } from "./ServersSection";
 
 /** Spielart einer Welt als Übersetzungsschlüssel; der Text kommt aus dem Wörterbuch. */
-const GAME_MODE_KEYS: Record<NonNullable<World["gameMode"]>, string> = {
+const GAME_MODE_KEYS: Record<NonNullable<World["gameMode"]>, TKey> = {
   survival: "detail.worlds.gameMode.survival",
   creative: "detail.worlds.gameMode.creative",
   adventure: "detail.worlds.gameMode.adventure",

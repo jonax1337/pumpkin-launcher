@@ -4,7 +4,7 @@
  * Zustände per data-force (hover/press/focus); Pixelstufe oben auf der Seite.
  */
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { useI18n } from "@/i18n";
+import { useI18n, type TKey } from "@/i18n";
 import type { MenuEntry } from "../Overlay";
 import { BIOMES, type Biome } from "@/pixel/scene";
 import type { GlyphName, GlyphPalette } from "@/pixel/icons";
@@ -29,7 +29,7 @@ function Sec({ title, id, children }: { title: string; id: string; children: Rea
 const Lab = ({ children }: { children: ReactNode }) => <span style={{ ...cap, width: 110, flex: "none" }}>{children}</span>;
 
 /** Einträge des Beispielmenüs; `t` übersetzt die Texte zur Renderzeit (nicht auf Modulebene). */
-const menuOf = (t: (key: string) => string): MenuEntry[] => [
+const menuOf = (t: (key: TKey) => string): MenuEntry[] => [
   { id: "open", text: t("common.open"), icon: "ext", onSelect: () => undefined },
   { id: "folder", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => undefined },
   "-",

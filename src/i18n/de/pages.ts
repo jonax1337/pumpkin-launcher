@@ -5,7 +5,7 @@ export const pages = {
   // Startseite
   "pages.home.contentCount.one": "Inhalt",
   "pages.home.contentCount.other": "Inhalte",
-  "pages.home.resumeIn": "Weiterspielen in „{welt}“",
+  "pages.home.resumeIn": "Weiterspielen in „{world}“",
   "pages.home.miniCardTip": "Klick zeigt sie oben, Doppelklick oder Enter öffnet sie.",
   "pages.home.railHint": "Auswählen zeigt die Instanz oben. Enter oder Doppelklick öffnet sie.",
   "pages.home.scrollBack": "Zurückblättern",
@@ -19,7 +19,7 @@ export const pages = {
 
   // Bibliothek
   "pages.instances.openInstance": "{name} öffnen",
-  "pages.instances.createdOn": "erstellt {datum}",
+  "pages.instances.createdOn": "erstellt {date}",
   "pages.instances.colContents": "Inhalte",
   "pages.instances.colLastPlayed": "Zuletzt gespielt",
   "pages.instances.colPlaytime": "Spielzeit",
@@ -54,7 +54,7 @@ export const pages = {
   "pages.skins.loadErrorTitle": "Dein Skin konnte nicht geladen werden",
   "pages.skins.currentSkinLabel": "Aktueller Skin von {name}",
   "pages.skins.capeFigureLabel": "Umhang {name}",
-  "pages.skins.modelLine": "Modell {modell}",
+  "pages.skins.modelLine": "Modell {model}",
   "pages.skins.variant.classic": "Klassisch",
   "pages.skins.variant.slim": "Schlank",
   "pages.skins.defaultSkin": "Standardskin von Minecraft",
@@ -104,7 +104,7 @@ export const pages = {
   "pages.settings.languageHint": "Gilt sofort, ohne Neustart",
   "pages.settings.pumpkinLabel": "Dein Pumpkin",
   "pages.settings.pumpkinHint": "Wähle eine feste Variante für Buddy, Farben und App-Icon oder lass sie mit den Jahreszeiten wechseln.",
-  "pages.settings.pumpkinAutoStatus": "Automatisch · {zeit}",
+  "pages.settings.pumpkinAutoStatus": "Automatisch · {time}",
   "pages.settings.pumpkinBetweenSeasons": "Zwischen den Jahreszeiten",
   "pages.settings.pumpkinFixedStatus": "Fest gewählt · bleibt bis zu deiner nächsten Auswahl",
   "pages.settings.motionLabel": "Bewegte Szenen & Buddy",
