@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Actions, Button, CardGrid, Disclosure, FormRow, FormSection, Hint, Menu, Progress, Radio, SceneCard, StatusPanel, TextArea, TextField } from "@/ui";
+import { Actions, Button, CardGrid, Disclosure, FormRow, FormSection, Hint, Menu, Progress, Radio, StatusPanel, TextArea, TextField, ThumbCard } from "@/ui";
 import { JavaChooser, MemoryChooser, MemoryHelp } from "@/components/common";
 import { isBusy, isGameLive, useInstallPercent, usePhase } from "@/components/game";
 import { askDelete, useGroupMenu } from "@/components/instance";
@@ -93,9 +93,8 @@ export function SettingsTab({ instance }: { instance: Instance }) {
           {/* Name sichtbar unter der Miniatur (dunkle Szenen wie die Höhle sind klein kaum zu erkennen) */}
           <CardGrid variant="thumb" role="group" aria-label={t("detail.settings.sceneAria")}>
             {BIOME_KEYS.map((b) => (
-              <SceneCard
+              <ThumbCard
                 key={b}
-                variant="thumb"
                 look={{ bio: b, seed: look.seed }}
                 title={t(`ui.biome.${b}`)}
                 pressed={look.bio === b}

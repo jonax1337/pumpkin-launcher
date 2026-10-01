@@ -43,28 +43,27 @@ export function HitEl({ hit, fallbackLabel, current, pressed, className, ref, on
       />
     );
   }
-  const h = hit;
   return (
     <button
       ref={ref as Ref<HTMLButtonElement>}
       type="button"
       className={cls}
-      aria-label={h.label ?? fallbackLabel}
-      aria-describedby={h.describedBy}
+      aria-label={hit.label ?? fallbackLabel}
+      aria-describedby={hit.describedBy}
       aria-current={current || undefined}
       aria-pressed={pressed != null ? pressed : undefined}
       {...rest}
       onClick={(e: MouseEvent<HTMLButtonElement>) => {
         onClick?.(e);
-        h.onClick();
+        hit.onClick();
       }}
       onDoubleClick={(e: MouseEvent<HTMLButtonElement>) => {
         onDoubleClick?.(e);
-        h.onDoubleClick?.();
+        hit.onDoubleClick?.();
       }}
       onKeyDown={(e: KeyboardEvent<HTMLButtonElement>) => {
         onKeyDown?.(e);
-        h.onKeyDown?.(e);
+        hit.onKeyDown?.(e);
       }}
     />
   );
