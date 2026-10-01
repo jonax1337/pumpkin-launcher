@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useInfiniteQuery, useQueries, useQuery, useQueryClient, type QueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
+import { t, useI18n } from "@/i18n";
 import {
   BackLink, Button, ButtonLink, Cell, Chip, Count, Dialog, DialogActions, Empty, ErrorBox, Field, Hint, Icon, IconButton, JobProgress, List, ListRow, Menu,
   MenuItem, MenuLabel, MenuNote, MenuScroll, MenuSep, Meta, Panel, ProjectIcon, RowTitle, SceneThumb, SearchField, SectionHeader, Select, Sheet, Skel, SkelRow,
@@ -13,6 +14,7 @@ import { useInstances } from "@/hooks/useInstances";
 import { worldsQuery } from "@/hooks/useWorlds";
 import { worldKeys } from "@/hooks/worldKeys";
 import { api } from "@/lib/api";
+import { formatCount } from "@/lib/format";
 import {
   formatDownloads, installedKey, isPackVersionSupported, modLoadersFor, ownerKey, pickPackVersion, pickVersion, progressLabel, progressShare, progressShortLabel, projectKey, projectOf, SOURCES,
   type CatalogType, type ContentHit, type ContentProject, type ContentVersion, type SearchIndex, type Source,
@@ -24,9 +26,19 @@ import { lookOf, useLook, useLookStore } from "@/store/look";
 
 export const IRIS_PROJECT_ID = "YL57xq9U";
 
-const KIND_LABELS: Record<ModKind, string> = { mod: "Mods", shader: "Shader", resourcepack: "Ressourcenpakete" };
-export const TYPE_LABELS: Record<CatalogType, string> = { modpack: "Modpacks", ...KIND_LABELS, datapack: "Datenpakete" };
-const TYPE_ONE: Record<CatalogType, string> = { modpack: "Modpack", mod: "Mod", shader: "Shader", resourcepack: "Ressourcenpaket", datapack: "Datenpaket" };
+/** Record mit i18n-Schlüsseln, dessen Lesen übersetzt: Komponenten brauchen dazu nichts zu ändern. */
+function lazyLabels(keys: Record<string, string>): Record<string, string> {
+  const labels: Record<string, string> = {};
+  for (const [prop, key] of Object.entries(keys)) Object.defineProperty(labels, prop, { enumerable: true, get: () => t(key) });
+  return labels;
+}
+
+// Beschriftungen als Schlüssel; exportierte Records lesen lazily übersetzt, damit ein Sprachwechsel ohne Neuladen greift.
+const KIND_LABEL_KEYS: Record<ModKind, string> = { mod: "components.catalog.kind.mod", shader: "components.catalog.kind.shader", resourcepack: "components.catalog.kind.resourcepack" };
+export const TYPE_LABELS: Record<CatalogType, string> = lazyLabels({
+  modpack: "components.catalog.kind.modpack", ...KIND_LABEL_KEYS, datapack: "components.catalog.kind.datapack",
+});
+const TYPE_ONE_KEYS: Record<CatalogType, string> = { modpack: "components.catalog.one.modpack", mod: "components.catalog.one.mod", shader: "components.catalog.one.shader", resourcepack: "components.catalog.one.resourcepack", datapack: "components.catalog.one.datapack" };
 
 /** Was in eine Instanz passt: Mods und Shader nur mit Mod-Loader, Ressourcenpakete immer. */
 export const kindsFor = (instance: Instance): ModKind[] =>
@@ -55,20 +67,28 @@ const allVersionsQuery = (projectId: string, source: Source = "modrinth") => ({
 
 // Modrinth-Kategorien in Alltagssprache; Loader-Namen sind keine Kategorie für die Anzeige.
 const CATEGORY: Record<string, string> = {
-  adventure: "Abenteuer", optimization: "Leistung", technology: "Technik", magic: "Magie", decoration: "Deko", utility: "Werkzeug",
-  "game-mechanics": "Spielmechanik", library: "Programmbibliothek", worldgen: "Weltgenerierung", mobs: "Kreaturen", storage: "Lager",
-  equipment: "Ausrüstung", food: "Essen", transportation: "Transport", social: "Mehrspieler", economy: "Wirtschaft", management: "Verwaltung",
-  minigame: "Minispiel", "kitchen-sink": "Alles drin", lightweight: "Leicht", multiplayer: "Mehrspieler", quests: "Quests",
-  challenging: "Fordernd", combat: "Kampf", realistic: "Realistisch", "semi-realistic": "Halbrealistisch", cartoon: "Comic",
-  fantasy: "Fantasy", "vanilla-like": "Wie das Original", simplistic: "Schlicht", themed: "Thema", tweaks: "Anpassungen",
-  audio: "Klang", blocks: "Blöcke", entities: "Wesen", gui: "Oberfläche", items: "Gegenstände", models: "Modelle", fonts: "Schriften",
-  atmosphere: "Atmosphäre", bloom: "Leuchten", shadows: "Schatten", reflections: "Spiegelungen", foliage: "Pflanzen",
-  "colored-lighting": "Farbiges Licht", "path-tracing": "Path Tracing", pbr: "PBR", "high-performance": "Leistung", "low-performance": "Schwache Rechner",
-  "potato": "Sehr schwache Rechner", screenshot: "Bildschirmfotos", cursed: "Verflucht",
+  adventure: "components.category.adventure", optimization: "components.category.optimization", technology: "components.category.technology",
+  magic: "components.category.magic", decoration: "components.category.decoration", utility: "components.category.utility",
+  "game-mechanics": "components.category.gameMechanics", library: "components.category.library", worldgen: "components.category.worldgen",
+  mobs: "components.category.mobs", storage: "components.category.storage", equipment: "components.category.equipment",
+  food: "components.category.food", transportation: "components.category.transportation", social: "components.category.social",
+  economy: "components.category.economy", management: "components.category.management", minigame: "components.category.minigame",
+  "kitchen-sink": "components.category.kitchenSink", lightweight: "components.category.lightweight", multiplayer: "components.category.multiplayer",
+  quests: "components.category.quests", challenging: "components.category.challenging", combat: "components.category.combat",
+  realistic: "components.category.realistic", "semi-realistic": "components.category.semiRealistic", cartoon: "components.category.cartoon",
+  fantasy: "components.category.fantasy", "vanilla-like": "components.category.vanillaLike", simplistic: "components.category.simplistic",
+  themed: "components.category.themed", tweaks: "components.category.tweaks", audio: "components.category.audio",
+  blocks: "components.category.blocks", entities: "components.category.entities", gui: "components.category.gui",
+  items: "components.category.items", models: "components.category.models", fonts: "components.category.fonts",
+  atmosphere: "components.category.atmosphere", bloom: "components.category.bloom", shadows: "components.category.shadows",
+  reflections: "components.category.reflections", foliage: "components.category.foliage", "colored-lighting": "components.category.coloredLighting",
+  "path-tracing": "components.category.pathTracing", pbr: "components.category.pbr", "high-performance": "components.category.highPerformance",
+  "low-performance": "components.category.lowPerformance", "potato": "components.category.potato", screenshot: "components.category.screenshot",
+  cursed: "components.category.cursed",
 };
 const LOADER_CATS = new Set(["fabric", "forge", "quilt", "neoforge", "iris", "optifine", "canvas", "vanilla", "minecraft", "datapack", "liteloader", "modloader", "rift", "bukkit", "paper", "spigot", "purpur", "folia", "velocity", "waterfall", "bungeecord", "sponge"]);
 const categoryNames = (cats: string[], max = 2) =>
-  cats.filter((c) => !LOADER_CATS.has(c) && !/^\d+x/.test(c)).slice(0, max).map((c) => CATEGORY[c] ?? c.charAt(0).toUpperCase() + c.slice(1).replace(/-/g, " "));
+  cats.filter((c) => !LOADER_CATS.has(c) && !/^\d+x/.test(c)).slice(0, max).map((c) => (CATEGORY[c] ? t(CATEGORY[c]) : c.charAt(0).toUpperCase() + c.slice(1).replace(/-/g, " ")));
 
 // ---------- Kleine Zustände in Zeilen ----------
 
@@ -100,11 +120,12 @@ const shortName = (name: string, max: number) => (name.length > max ? `${name.sl
  * In der Katalogzeile klein mit Punkt (Metazeile 22 px), im Projektkopf mit Haken.
  */
 function InChip({ instances, small }: { instances?: Instance[]; small?: boolean }) {
+  const { t } = useI18n();
   if (!instances?.length) return null;
   const one = instances.length === 1;
-  const text = shortName(one ? `In ${instances[0].name}` : `In ${instances.length} Instanzen`, small ? 28 : 36);
+  const text = shortName(one ? t("components.installedIn.one", { name: instances[0].name }) : t("components.installedIn.other", { n: instances.length }), small ? 28 : 36);
   return (
-    <Tip label={`Schon in ${instances.map((i) => i.name).join(", ")}`} describe={!one || text.endsWith("…")}>
+    <Tip label={t("components.installedIn.tip", { namen: instances.map((i) => i.name).join(", ") })} describe={!one || text.endsWith("…")}>
       {small ? <Chip size="s" dot>{text}</Chip> : <Chip icon="check">{text}</Chip>}
     </Tip>
   );
@@ -125,13 +146,14 @@ const installDatapack = async (qc: QueryClient, instance: Instance, world: World
 
 /** Wohin ein Inhalt kam: in die Welt (Tab Welten) oder in die Instanz (Tab Inhalte). */
 const destination = (instance: Instance, world?: World) =>
-  world ? { label: `„${world.name}“ (${instance.name})`, tab: "worlds" } : { label: instance.name, tab: "content" };
+  world ? { label: t("components.content.destinationWorld", { welt: world.name, instanz: instance.name }), tab: "worlds" } : { label: instance.name, tab: "content" };
 
 /**
  * Wählt die passende Version automatisch (oder nimmt `versionId`) und installiert mit Abhängigkeiten, Datenpakete in
  * die Welt `world`. "missing" = keine Version für diese Instanz. Mit `openAction` bekommt der Toast „Ansehen“ (Instanz, Tab Inhalte bzw. Welten).
  */
 function useAddContent() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const install = useContentInstall();
   const navigate = useNavigate();
@@ -155,7 +177,7 @@ function useAddContent() {
         picked = (await qc.fetchQuery(allVersionsQuery(projectId, source))).find((v) => v.id === id);
       }
     } catch (err) {
-      toast.error(`${title} konnte nicht geladen werden`, { description: err instanceof Error ? err.message : String(err) });
+      toast.error(t("components.content.loadFailed", { name: title }), { description: err instanceof Error ? err.message : String(err) });
       return "error";
     }
     if (!id) return "missing";
@@ -174,14 +196,14 @@ function useAddContent() {
     const { world } = opts;
     const perform = (op: string) =>
       world ? installDatapack(qc, instance, world, id, op) : source === "modrinth" ? api.modrinthInstallMod(instance.id, id, op) : api.providerInstallMod(source, instance.id, projectId, id, op);
-    install.mutate(withTarget(projectId, perform, `${title} installieren`), {
+    install.mutate(withTarget(projectId, perform, t("components.content.installTask", { name: title })), {
       onSuccess: (result) => {
         if (!result) return;
         const extra = result.mods.length - before - 1;
-        const deps = extra > 0 ? `, dazu ${extra} ${extra === 1 ? "benötigte Mod" : "benötigte Mods"}` : "";
-        if (!opts.openAction) return void toast.success(`${title} hinzugefügt${deps}`);
+        const deps = extra > 0 ? t(extra === 1 ? "components.content.deps.one" : "components.content.deps.other", { n: extra }) : "";
+        if (!opts.openAction) return void toast.success(t("components.content.added", { name: title }) + deps);
         const { label, tab } = destination(result, world);
-        toast.success(`${title} ist jetzt in ${label}${deps}`, { action: { label: "Ansehen", onClick: () => navigate(`/instances/${result.id}?tab=${tab}`) } });
+        toast.success(t("components.content.nowIn", { name: title, ziel: label }) + deps, { action: { label: t("components.content.viewAction"), onClick: () => navigate(`/instances/${result.id}?tab=${tab}`) } });
       },
     });
     return "ok";
@@ -192,6 +214,7 @@ function useAddContent() {
 function AddButton({ instance, world, projectId, title, type, versionId, large, compact, source = "modrinth" }: {
   instance: Instance; world?: World; projectId: string; title: string; type: CatalogType; versionId?: string; large?: boolean; compact?: boolean; source?: Source;
 }) {
+  const { t } = useI18n();
   const addContent = useAddContent();
   const { active, target, progress } = useContentState();
   const [state, setState] = useState<"idle" | "checking" | "missing">("idle");
@@ -201,24 +224,25 @@ function AddButton({ instance, world, projectId, title, type, versionId, large, 
     setState("checking");
     const r = await addContent(instance, projectId, title, type, { versionId, source, world });
     setState(r === "missing" ? "missing" : "idle");
-    if (r === "missing" && compact) toast.error(`${title} gibt es nicht für ${fitsLabel(instance, type)}`);
+    if (r === "missing" && compact) toast.error(t("components.content.notAvailableFor", { name: title, passt: fitsLabel(instance, type) }));
   }
 
-  if (installed) return <Chip icon="check">Installiert</Chip>;
-  if (state === "checking") return <JobProgress label="Wird geprüft" p={null} width={jobWidth(large, compact)} />;
+  if (installed) return <Chip icon="check">{t("components.content.installed")}</Chip>;
+  if (state === "checking") return <JobProgress label={t("components.common.checking")} p={null} width={jobWidth(large, compact)} />;
   if (active && target === projectId) return <JobProgress label={progressShortLabel(progress)} p={progressShare(progress)} width={jobWidth(large, compact)} />;
-  if (state === "missing" && !compact) return <Hint>Keine Version für {instance.minecraftVersion}</Hint>;
+  if (state === "missing" && !compact) return <Hint>{t("components.content.noVersionFor", { version: instance.minecraftVersion })}</Hint>;
   return large ? (
-    <Button variant="primary" size="l" icon="plus" disabled={!!active} onClick={add}>Hinzufügen</Button>
+    <Button variant="primary" size="l" icon="plus" disabled={!!active} onClick={add}>{t("common.add")}</Button>
   ) : versionId ? (
-    <IconButton size="s" icon="dl" label={`${title} in dieser Version hinzufügen`} tip="Diese Version hinzufügen" disabled={!!active} onClick={add} />
+    <IconButton size="s" icon="dl" label={t("components.content.addThisVersion", { name: title })} tip={t("components.content.addVersion")} disabled={!!active} onClick={add} />
   ) : (
-    <Button size="s" icon="plus" disabled={!!active} aria-label={`${title} hinzufügen`} onClick={add}>Hinzufügen</Button>
+    <Button size="s" icon="plus" disabled={!!active} aria-label={t("components.content.addAria", { name: title })} onClick={add}>{t("common.add")}</Button>
   );
 }
 
 /** Ohne Instanz-Kontext: Menü mit allen Instanzen; unpassende ausgegraut mit Grund, sonst „Neue Instanz anlegen…“. */
 export function AddToInstanceMenu({ projectId, title, type, large, source = "modrinth" }: { projectId: string; title: string; type: ModKind; large?: boolean; source?: Source }) {
+  const { t } = useI18n();
   const instances = useInstances();
   const looks = useLookStore((s) => s.looks);
   const addContent = useAddContent();
@@ -228,9 +252,9 @@ export function AddToInstanceMenu({ projectId, title, type, large, source = "mod
   // Alle Versionen einmal laden, um Instanzen ohne passende Minecraft-Version vorab auszugrauen.
   const all = useQuery({ ...allVersionsQuery(projectId, source), enabled: open });
   const reasonFor = (i: Instance): string | null => {
-    if (!kindsFor(i).includes(type)) return "Geht nur in Instanzen mit Mod-Loader";
-    if (i.mods.some((m) => ownerKey(m) === projectKey(source, projectId))) return "Schon drin";
-    return all.data && !all.data.some((v) => versionFits(v, i, type)) ? `Keine Version für ${i.minecraftVersion}` : null;
+    if (!kindsFor(i).includes(type)) return t("components.content.needsLoader");
+    if (i.mods.some((m) => ownerKey(m) === projectKey(source, projectId))) return t("components.content.alreadyIn");
+    return all.data && !all.data.some((v) => versionFits(v, i, type)) ? t("components.content.noVersionFor", { version: i.minecraftVersion }) : null;
   };
   const rows = (instances.data ?? []).map((i) => ({ i, reason: reasonFor(i) }));
   const usable = rows.some((r) => !r.reason);
@@ -241,9 +265,9 @@ export function AddToInstanceMenu({ projectId, title, type, large, source = "mod
       open={open}
       onOpenChange={setOpen}
       width={300}
-      trigger={addMenuTrigger(title, "Instanz", !!active, large)}
+      trigger={addMenuTrigger(title, "instance", !!active, large)}
     >
-      <MenuLabel>Hinzufügen zu …</MenuLabel>
+      <MenuLabel>{t("components.content.addToMenu")}</MenuLabel>
       <MenuScroll>
         {rows.map(({ i, reason }) => {
           const look = lookOf(looks, i.id);
@@ -255,7 +279,7 @@ export function AddToInstanceMenu({ projectId, title, type, large, source = "mod
               sub={reason ?? fitsLabel(i, type)}
               onSelect={() =>
                 void addContent(i, projectId, title, type, { openAction: true, source }).then(
-                  (r) => r === "missing" && toast.error(`${title} gibt es nicht für Minecraft ${i.minecraftVersion}`),
+                  (r) => r === "missing" && toast.error(t("components.content.notForMc", { name: title, version: i.minecraftVersion })),
                 )
               }
             >
@@ -263,15 +287,15 @@ export function AddToInstanceMenu({ projectId, title, type, large, source = "mod
             </MenuItem>
           );
         })}
-        {rows.length === 0 && !instances.isPending && <MenuNote>Noch keine Instanz.</MenuNote>}
+        {rows.length === 0 && !instances.isPending && <MenuNote>{t("components.content.noInstancesYet")}</MenuNote>}
       </MenuScroll>
-      {all.isPending && rows.length > 0 && <MenuNote>Prüft passende Versionen …</MenuNote>}
+      {all.isPending && rows.length > 0 && <MenuNote>{t("components.content.checkingVersions")}</MenuNote>}
       {!usable && !all.isPending && (
         <>
           <MenuSep />
           <MenuItem onSelect={() => navigate("/instances?neu=1")}>
             <Icon name="plus" size="s" />
-            <span className="vx-trunc">{type === "resourcepack" ? "Neue Instanz anlegen …" : "Neue Fabric-Instanz anlegen …"}</span>
+            <span className="vx-trunc">{type === "resourcepack" ? t("components.content.newInstancePlain") : t("components.content.newInstanceFabric")}</span>
           </MenuItem>
         </>
       )}
@@ -281,6 +305,7 @@ export function AddToInstanceMenu({ projectId, title, type, large, source = "mod
 
 /** Datenpaket ohne Instanz-Kontext: je Instanz ein Untermenü mit ihren Welten. */
 export function AddToWorldMenu({ projectId, title, large }: { projectId: string; title: string; large?: boolean }) {
+  const { t } = useI18n();
   const instances = useInstances();
   const addContent = useAddContent();
   const { active, target, progress } = useContentState();
@@ -291,11 +316,11 @@ export function AddToWorldMenu({ projectId, title, large }: { projectId: string;
   const all = useQuery({ ...allVersionsQuery(projectId), enabled: open });
   const add = (i: Instance, world: World) =>
     void addContent(i, projectId, title, "datapack", { world, openAction: true }).then(
-      (r) => r === "missing" && toast.error(`${title} gibt es nicht für Minecraft ${i.minecraftVersion}`),
+      (r) => r === "missing" && toast.error(t("components.content.notForMc", { name: title, version: i.minecraftVersion })),
     );
   const items: MenuEntry[] = list.map((i, k) => {
     const found = worlds[k].data;
-    const reason = all.data && !all.data.some((v) => versionFits(v, i, "datapack")) ? `keine Version für ${i.minecraftVersion}` : found?.length === 0 ? "keine Welten" : null;
+    const reason = all.data && !all.data.some((v) => versionFits(v, i, "datapack")) ? t("components.content.noVersionForLower", { version: i.minecraftVersion }) : found?.length === 0 ? t("components.content.noWorldsLower") : null;
     return {
       id: i.id,
       text: reason ? `${i.name} (${reason})` : i.name,
@@ -306,22 +331,26 @@ export function AddToWorldMenu({ projectId, title, large }: { projectId: string;
 
   if (active && target === projectId) return <JobProgress label={progressShortLabel(progress)} p={progressShare(progress)} width={jobWidth(large)} />;
   return (
-    <Menu open={open} onOpenChange={setOpen} width={300} trigger={addMenuTrigger(title, "Welt", !!active, large)} items={[{ label: "Hinzufügen zu …" }, ...items]}>
-      {list.length === 0 && !instances.isPending && <MenuNote>Noch keine Instanz.</MenuNote>}
-      {worlds.some((q) => q.isPending) && <MenuNote>Sucht Welten …</MenuNote>}
+    <Menu open={open} onOpenChange={setOpen} width={300} trigger={addMenuTrigger(title, "world", !!active, large)} items={[{ label: t("components.content.addToMenu") }, ...items]}>
+      {list.length === 0 && !instances.isPending && <MenuNote>{t("components.content.noInstancesYet")}</MenuNote>}
+      {worlds.some((q) => q.isPending) && <MenuNote>{t("components.content.searchingWorlds")}</MenuNote>}
     </Menu>
   );
 }
 
 /** Auslöser für „Hinzufügen zu …“: groß im Projektkopf, klein in der Katalogzeile. */
-const addMenuTrigger = (title: string, where: "Instanz" | "Welt", disabled: boolean, large?: boolean) => (
-  <Button variant={large ? "primary" : "secondary"} size={large ? "l" : "s"} icon="plus" iconEnd="chevd" disabled={disabled} aria-label={large ? undefined : `${title} zu ${where} hinzufügen`}>
-    {large ? `Zu ${where} hinzufügen` : "Hinzufügen"}
-  </Button>
-);
+const addMenuTrigger = (title: string, where: "instance" | "world", disabled: boolean, large?: boolean) => {
+  const ziel = where === "instance" ? t("common.instance") : t("components.common.world");
+  return (
+    <Button variant={large ? "primary" : "secondary"} size={large ? "l" : "s"} icon="plus" iconEnd="chevd" disabled={disabled} aria-label={large ? undefined : t("components.content.addToOne", { name: title, ziel })}>
+      {large ? t("components.content.addTo", { ziel }) : t("common.add")}
+    </Button>
+  );
+};
 
 /** Modpack als neue Instanz; ohne `versionId` die neueste stabile Version mit unterstütztem Loader. */
 export function useInstallPack(projectId: string, title: string, onDone?: (instanceId: string) => void, source: Source = "modrinth") {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const install = useContentInstall();
   const navigate = useNavigate();
@@ -334,28 +363,28 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
       setChecking(true);
       try {
         const picked = pickPackVersion(await qc.fetchQuery(allVersionsQuery(projectId, source)));
-        if (picked.reason) toast.error(`${title} lässt sich nicht installieren`, { description: picked.reason });
+        if (picked.reason) toast.error(t("components.pack.cannotInstall", { name: title }), { description: picked.reason });
         id = picked.version?.id;
       } catch (err) {
-        toast.error(`${title} konnte nicht geladen werden`, { description: err instanceof Error ? err.message : String(err) });
+        toast.error(t("components.content.loadFailed", { name: title }), { description: err instanceof Error ? err.message : String(err) });
       } finally {
         setChecking(false);
       }
       if (!id) return;
     }
     const perform = (op: string) => (source === "modrinth" ? api.modrinthInstallPack(id, name, op) : api.providerInstallPack(source, projectId, id, name, op));
-    install.mutate(withTarget(projectId, perform, `Modpack „${name}“ installieren`, { cancellable: true }), {
+    install.mutate(withTarget(projectId, perform, t("components.pack.installTask", { name }), { cancellable: true }), {
       onSuccess: (inst) => {
         if (!inst) return;
-        toast.success(`${inst.name} ist bereit. „Spielen“ lädt beim ersten Start den Rest.`, {
-          action: onDone ? undefined : { label: "Öffnen", onClick: () => navigate(`/instances/${inst.id}`) },
+        toast.success(t("components.pack.readyToast", { name: inst.name }), {
+          action: onDone ? undefined : { label: t("common.open"), onClick: () => navigate(`/instances/${inst.id}`) },
         });
         if (onDone) onDone(inst.id);
         else navigate(`/instances/${inst.id}`);
       },
     });
   }
-  const busy = checking ? "Wird geprüft" : active && target === projectId ? progressLabel(progress).replace(/…$/, "") : null;
+  const busy = checking ? t("components.common.checking") : active && target === projectId ? progressLabel(progress).replace(/…$/, "") : null;
   return { run, busy, p: checking ? null : progressShare(progress), blocked: !!active || checking, cancel: !checking && busy ? cancelContent : undefined };
 }
 
@@ -368,6 +397,7 @@ function PackConfirmBody({ title, versions, picked, onConfirm }: {
   title: string; versions: UseQueryResult<ContentVersion[]>; picked: { version: ContentVersion | null; reason: string | null } | null;
   onConfirm: (versionId: string, name: string) => void;
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState(title);
   const v = picked?.version ?? null;
   // Platzhalter rechtsbündig in der Wertspalte (Zeile bleibt 19 px hoch)
@@ -382,23 +412,23 @@ function PackConfirmBody({ title, versions, picked, onConfirm }: {
         submit();
       }}
     >
-      <Field label="Name der Instanz">
+      <Field label={t("components.instance.nameField")}>
         <TextField value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />
       </Field>
       <dl className="kv">
-        <dt>Modpack-Version</dt>
+        <dt>{t("components.pack.versionLabel")}</dt>
         <dd className="vx-trunc">{val(v?.version_number)}</dd>
         <dt>Minecraft</dt>
         <dd>{val(v?.game_versions.at(-1))}</dd>
-        <dt>Loader</dt>
+        <dt>{t("components.common.loader")}</dt>
         <dd>{val(v && loaderNames(v))}</dd>
       </dl>
       {versions.error ? (
-        <ErrorBox className="mt-3" title="Versionen konnten nicht geladen werden" error={versions.error} onRetry={() => void versions.refetch()} />
+        <ErrorBox className="mt-3" title={t("components.version.loadFailed")} error={versions.error} onRetry={() => void versions.refetch()} />
       ) : picked && !v ? (
         <Hint tone="bad" live>{picked.reason}</Hint>
       ) : (
-        <Hint>Pumpkin Launcher lädt jetzt die Mods des Packs. Minecraft selbst kommt beim ersten Start dazu.</Hint>
+        <Hint>{t("components.pack.confirmHint")}</Hint>
       )}
     </form>
   );
@@ -409,23 +439,24 @@ function PackConfirmBody({ title, versions, picked, onConfirm }: {
  * und lässt den Namen ändern. `ask()` öffnet sie (optional für eine bestimmte Version), `dialog` gehört ins Markup.
  */
 function usePackConfirm(projectId: string, title: string, onDone?: (instanceId: string) => void, source: Source = "modrinth") {
+  const { t } = useI18n();
   const pack = useInstallPack(projectId, title, onDone, source);
   const [ask, setAsk] = useState<{ versionId?: string } | null>(null);
   const versions = useQuery({ ...allVersionsQuery(projectId, source), enabled: !!ask });
   const picked = versions.data
     ? ask?.versionId
-      ? { version: versions.data.find((v) => v.id === ask.versionId) ?? null, reason: "Diese Version gibt es nicht mehr" }
+      ? { version: versions.data.find((v) => v.id === ask.versionId) ?? null, reason: t("components.version.gone") }
       : pickPackVersion(versions.data)
     : null;
   const dialog = (
     <Dialog
       open={!!ask}
       onOpenChange={(o) => !o && setAsk(null)}
-      title="Neue Instanz aus Modpack"
+      title={t("components.pack.newInstanceTitle")}
       sub={title}
       width={480}
       height={380}
-      footer={<DialogActions cancel="Abbrechen" confirm={{ label: "Instanz anlegen", width: 170, form: "pack-confirm", disabled: !picked?.version || pack.blocked }} />}
+      footer={<DialogActions cancel={t("common.cancel")} confirm={{ label: t("components.instance.createAction"), width: 170, form: "pack-confirm", disabled: !picked?.version || pack.blocked }} />}
     >
       <PackConfirmBody
         title={title}
@@ -443,14 +474,15 @@ function usePackConfirm(projectId: string, title: string, onDone?: (instanceId: 
 
 /** Zeilenaktion für Modpacks: erst bestätigen, dann anlegen. */
 export function PackInstallButton({ projectId, title, onDone, source = "modrinth" }: { projectId: string; title: string; onDone?: (instanceId: string) => void; source?: Source }) {
+  const { t } = useI18n();
   const { pack, ask, dialog } = usePackConfirm(projectId, title, onDone, source);
   return (
     <>
       {pack.busy ? (
-        <JobProgress label={pack.busy} p={pack.p} width={120} onCancel={pack.cancel} cancelLabel={`Installation von ${title} abbrechen`} />
+        <JobProgress label={pack.busy} p={pack.p} width={120} onCancel={pack.cancel} cancelLabel={t("components.pack.cancelInstallPack", { name: title })} />
       ) : (
-        <Button size="s" icon="plus" disabled={pack.blocked} aria-label={`${title} als Instanz anlegen`} onClick={() => ask()}>
-          Anlegen
+        <Button size="s" icon="plus" disabled={pack.blocked} aria-label={t("components.pack.createAria", { name: title })} onClick={() => ask()}>
+          {t("components.newInstance.create")}
         </Button>
       )}
       {dialog}
@@ -459,30 +491,31 @@ export function PackInstallButton({ projectId, title, onDone, source = "modrinth
 }
 
 // Ein Begriff für alles Unfertige, wie im Dialog „Neue Instanz“.
-const VERSION_TYPE: Record<ContentVersion["version_type"], string | null> = { release: null, beta: "Vorabversion", alpha: "Vorabversion" };
+const VERSION_TYPE: Record<ContentVersion["version_type"], string | null> = { release: null, beta: "components.version.prerelease", alpha: "components.version.prerelease" };
 
 /** Aktionen in den Pack-Details: „Als neue Instanz anlegen“ plus „Andere Version“, beide mit Bestätigung. */
 export function PackActions({ projectId, title, onDone, source = "modrinth" }: { projectId: string; title: string; onDone?: (instanceId: string) => void; source?: Source }) {
+  const { t } = useI18n();
   const { pack, ask, dialog } = usePackConfirm(projectId, title, onDone, source);
   const versions = useQuery(allVersionsQuery(projectId, source));
   const { version, reason } = versions.data ? pickPackVersion(versions.data) : { version: null, reason: null };
   const fitting = versions.data?.filter(isPackVersionSupported) ?? [];
 
-  if (pack.busy) return <JobProgress label={pack.busy} p={pack.p} width={230} onCancel={pack.cancel} cancelLabel={`Installation von ${title} abbrechen`} />;
+  if (pack.busy) return <JobProgress label={pack.busy} p={pack.p} width={230} onCancel={pack.cancel} cancelLabel={t("components.pack.cancelInstallPack", { name: title })} />;
   return (
     <>
       <Button variant="primary" size="l" icon="plus" disabled={!version || pack.blocked} onClick={() => ask(version?.id)}>
-        {reason ?? "Als neue Instanz anlegen"}
+        {reason ?? t("components.pack.createAsInstance")}
       </Button>
       {fitting.length > 1 && (
         <Menu
-          trigger={<Button iconEnd="chevd" disabled={pack.blocked}>Andere Version</Button>}
+          trigger={<Button iconEnd="chevd" disabled={pack.blocked}>{t("components.pack.otherVersion")}</Button>}
           items={[
-            { label: "Andere Version" },
+            { label: t("components.pack.otherVersion") },
             ...fitting.slice(0, 30).map((v) => ({
               id: v.id,
               text: v.version_number,
-              sub: `${loaderNames(v)} ${v.game_versions.at(-1) ?? ""}${VERSION_TYPE[v.version_type] ? ` · ${VERSION_TYPE[v.version_type]}` : ""}`,
+              sub: `${loaderNames(v)} ${v.game_versions.at(-1) ?? ""}${VERSION_TYPE[v.version_type] ? ` · ${t(VERSION_TYPE[v.version_type]!)}` : ""}`,
               icon: "plus" as const,
               onSelect: () => ask(v.id),
             })),
@@ -496,33 +529,35 @@ export function PackActions({ projectId, title, onDone, source = "modrinth" }: {
 
 // ---------- Suche und Ergebnisse ----------
 
-export const SEARCH_PLACEHOLDER: Record<CatalogType, string> = {
-  mod: "In Mods suchen", shader: "In Shadern suchen", resourcepack: "In Ressourcenpaketen suchen", modpack: "In Modpacks suchen", datapack: "In Datenpaketen suchen",
-};
+export const SEARCH_PLACEHOLDER: Record<CatalogType, string> = lazyLabels({
+  mod: "components.search.placeholder.mod", shader: "components.search.placeholder.shader", resourcepack: "components.search.placeholder.resourcepack",
+  modpack: "components.search.placeholder.modpack", datapack: "components.search.placeholder.datapack",
+});
 
 /** Keine Verbindung: Katalog braucht Internet. */
 function Offline({ onRetry, compact }: { onRetry: () => void; compact?: boolean }) {
+  const { t } = useI18n();
   return (
     <Empty
       ill="plug"
-      title="Keine Verbindung"
+      title={t("components.offline.title")}
       size={compact ? "pane" : "page"}
       actions={
         <>
-          <Button icon="redo" onClick={onRetry}>Erneut versuchen</Button>
-          {!compact && <ButtonLink variant="ghost" to="/instances">Zur Bibliothek</ButtonLink>}
+          <Button icon="redo" onClick={onRetry}>{t("common.retry")}</Button>
+          {!compact && <ButtonLink variant="ghost" to="/instances">{t("components.offline.toLibrary")}</ButtonLink>}
         </>
       }
     >
-      Der Katalog braucht Internet. Deine installierten Instanzen kannst du trotzdem spielen.
+      {t("components.offline.text")}
     </Empty>
   );
 }
 
 /** Überschrift ohne Suchbegriff je Sortierung. */
-export const SORT_HEADINGS: Record<SearchIndex, string> = {
-  relevance: "Nach Relevanz", downloads: "Beliebt", follows: "Meistgefolgt", newest: "Neu", updated: "Zuletzt aktualisiert",
-};
+export const SORT_HEADINGS: Record<SearchIndex, string> = lazyLabels({
+  relevance: "components.sort.relevance", downloads: "components.sort.downloads", follows: "components.sort.follows", newest: "common.new", updated: "components.sort.updated",
+});
 
 /**
  * Suche mit „Beliebt“ als Startzustand. Mit `instance` passend gefiltert und mit „Hinzufügen“ je Zeile,
@@ -544,6 +579,7 @@ export function ContentResults({ type, instance, world, action, onOpen, autoFocu
   /** Mit `instance`: nur Passendes zeigen (Version und Loader der Instanz). */
   fit?: boolean; compact?: boolean; onReset?: () => void; sort?: SearchIndex | null; feature?: boolean;
 }) {
+  const { t } = useI18n();
   const [input, setInput] = useState("");
   const controlled = outerQuery != null;
   const query = useDebounced((controlled ? outerQuery : input).trim(), 300);
@@ -582,7 +618,7 @@ export function ContentResults({ type, instance, world, action, onOpen, autoFocu
           <SectionHeader
             as={compact ? "h3" : "h2"}
             size={compact ? "card" : "section"}
-            title={!query ? SORT_HEADINGS[index] : results.data ? <><Count value={total.toLocaleString("de")} /> Treffer</> : "Sucht …"}
+            title={!query ? SORT_HEADINGS[index] : results.data ? <><Count value={formatCount(total)} /> {t("components.search.hits")}</> : t("components.search.searching")}
           />
         </div>
       )}
@@ -591,20 +627,20 @@ export function ContentResults({ type, instance, world, action, onOpen, autoFocu
         navigator.onLine === false ? (
           <Offline compact={compact} onRetry={() => void results.refetch()} />
         ) : (
-          <ErrorBox title={`${info.label} ist gerade nicht erreichbar`} error={results.error} onRetry={() => void results.refetch()} />
+          <ErrorBox title={t("components.source.unreachable", { quelle: info.label })} error={results.error} onRetry={() => void results.refetch()} />
         )
       ) : results.isPending ? (
-        <List variant={variant} aria-busy aria-label="Wird geladen">
+        <List variant={variant} aria-busy aria-label={t("components.common.loadingAria")}>
           {Array.from({ length: 6 }, (_, i) => <SkelRow key={i} feature={featured && i === 0} />)}
         </List>
       ) : hits.length === 0 ? (
         <Empty
           ill="search"
-          title="Nichts gefunden"
+          title={t("components.search.nothingFound")}
           size={compact ? "pane" : "section"}
-          actions={hasFilter && onReset ? <Button onClick={onReset}>Filter zurücksetzen</Button> : undefined}
+          actions={hasFilter && onReset ? <Button onClick={onReset}>{t("components.search.resetFilters")}</Button> : undefined}
         >
-          {instance && fit ? `Für ${fitsLabel(instance, type)} gibt es hier nichts Passendes. Schalte den Filter aus, um alles zu sehen.` : `Keine ${TYPE_LABELS[type]} passen zu deiner Suche und den Filtern.`}
+          {instance && fit ? t("components.search.nothingFits", { passt: fitsLabel(instance, type) }) : t("components.search.noneMatch", { art: TYPE_LABELS[type] })}
         </Empty>
       ) : (
         <>
@@ -613,16 +649,16 @@ export function ContentResults({ type, instance, world, action, onOpen, autoFocu
               const busy = !instance && !!active && target === hit.project_id && type !== "modpack";
               const feat = featured && k === 0;
               return (
-                <ListRow key={hit.project_id} feature={feat} index={k % 20} hit={{ onClick: () => onOpen(hit.project_id, hit), label: `${hit.title} ansehen` }}>
+                <ListRow key={hit.project_id} feature={feat} index={k % 20} hit={{ onClick: () => onOpen(hit.project_id, hit), label: t("components.search.viewProject", { name: hit.title }) }}>
                   <ProjectIcon url={hit.icon_url} seed={hit.project_id} box={feat ? 104 : compact ? 40 : 72} />
                   <RowTitle
                     size={feat ? "feature" : "l"}
                     title={hit.title}
-                    aside={compact ? undefined : `von ${hit.author}`}
+                    aside={compact ? undefined : t("components.search.byAuthor", { autor: hit.author })}
                     sub={hit.description}
                     meta={
                       <>
-                        <span><Count value={formatDownloads(hit.downloads)} /> Downloads</span>
+                        <span><Count value={formatDownloads(hit.downloads)} /> {t("components.stats.downloads")}</span>
                         {categoryNames(hit.categories, compact ? 0 : 2).map((c) => <Chip key={c} size="s" data-hide="900">{c}</Chip>)}
                         {!instance && <InChip small instances={installedIn.get(installedKey(source, hit.project_id))} />}
                       </>
@@ -646,10 +682,10 @@ export function ContentResults({ type, instance, world, action, onOpen, autoFocu
           <div className="morebar">
             {results.hasNextPage ? (
               <Button disabled={results.isFetchingNextPage} onClick={() => void results.fetchNextPage()}>
-                {results.isFetchingNextPage ? "Lädt …" : "Mehr laden"}
+                {results.isFetchingNextPage ? t("components.search.loadingMore") : t("components.search.loadMore")}
               </Button>
             ) : (
-              <Hint className="self-center">{hits.length === 1 ? "1 Ergebnis" : `Alle ${hits.length} Ergebnisse geladen`}</Hint>
+              <Hint className="self-center">{hits.length === 1 ? t("components.search.oneResult") : t("components.search.allLoaded", { n: hits.length })}</Hint>
             )}
           </div>
         </>
@@ -660,14 +696,14 @@ export function ContentResults({ type, instance, world, action, onOpen, autoFocu
 
 // ---------- Details ----------
 
-/** Wo das Projekt installiert sein muss: Client = dein Spiel, Server = der Server, auf dem du spielst. */
+/** Wo das Projekt installiert sein muss: Client = dein Spiel, Server = der Server, auf dem du spielst. Reine Funktion, deshalb Modul-`t`. */
 const sideText = ({ client_side: c, server_side: s }: ContentProject) => {
-  if (c === "unsupported") return "Nur Server";
-  if (s === "unsupported") return "Nur Client";
-  if (c === "required" && s === "required") return "Client und Server";
-  if (c === "required") return "Client, Server optional";
-  if (s === "required") return "Server, Client optional";
-  return "Client oder Server";
+  if (c === "unsupported") return t("components.side.serverOnly");
+  if (s === "unsupported") return t("components.side.clientOnly");
+  if (c === "required" && s === "required") return t("components.side.both");
+  if (c === "required") return t("components.side.clientServerOptional");
+  if (s === "required") return t("components.side.serverClientOptional");
+  return t("components.side.either");
 };
 
 const cmpMc = (a: string, b: string) => {
@@ -678,14 +714,15 @@ const cmpMc = (a: string, b: string) => {
 
 /** Minecraft-Versionen einer Liste: bis drei einzeln, sonst Spanne und Anzahl („1.21.4 – 1.20.1“, „33 Versionen“). */
 function McSummary({ versions }: { versions: ContentVersion[] }) {
+  const { t } = useI18n();
   const all = [...new Set(versions.flatMap((v) => v.game_versions).filter((g) => /^\d+\.\d+(\.\d+)?$/.test(g)))].sort(cmpMc).reverse();
-  if (!all.length) return <>Unbekannt</>;
+  if (!all.length) return <>{t("components.detail.unknown")}</>;
   if (all.length <= 3) return <>{all.join(", ")}</>;
   // Zwei feste Zeilen statt freiem Umbruch in der rechtsbündigen Spalte
   return (
     <>
       <span className="block">{all[0]} – {all.at(-1)}</span>
-      <span className="block text-fg-3">{all.length} Versionen</span>
+      <span className="block text-fg-3">{t("components.detail.versionCount", { n: all.length })}</span>
     </>
   );
 }
@@ -695,10 +732,11 @@ function McSummary({ versions }: { versions: ContentVersion[] }) {
  * Mit `instance` (Seitenpanel) wird für diese Instanz hinzugefügt, mit `world` in diese Welt; `hit` liefert Autor, Downloads und Kategorien aus der Suche.
  * Im Seitenpanel einspaltig (ui/overlay.css, .vx-sheet .proj-*).
  */
-export function ContentDetail({ projectId, type, instance, world, action, onBack, backLabel = "Zurück", hit, source = "modrinth" }: {
+export function ContentDetail({ projectId, type, instance, world, action, onBack, backLabel = t("common.back"), hit, source = "modrinth" }: {
   projectId: string; type: CatalogType; instance?: Instance; world?: World; action?: (project: ContentProject) => ReactNode; onBack: () => void;
   backLabel?: string; hit?: ContentHit | null; source?: Source;
 }) {
+  const { t } = useI18n();
   const info = SOURCES[source];
   const project = useQuery({
     queryKey: source === "modrinth" ? ["modrinth-project", projectId] : ["catalog-project", source, projectId],
@@ -732,7 +770,7 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
     <section className="proj">
       <BackLink onClick={onBack}>{backLabel}</BackLink>
       {project.isPending && (
-        <div className="proj-h" aria-busy aria-label="Wird geladen">
+        <div className="proj-h" aria-busy aria-label={t("components.common.loadingAria")}>
           <Skel w={64} h={64} />
           <div className="flex flex-col gap-2.5">
             <Skel h={36} w="50%" />
@@ -740,7 +778,7 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
           </div>
         </div>
       )}
-      {project.error && <ErrorBox className="mt-3" title="Das Projekt konnte nicht geladen werden" error={project.error} onRetry={() => void project.refetch()} />}
+      {project.error && <ErrorBox className="mt-3" title={t("components.detail.projectLoadFailed")} error={project.error} onRetry={() => void project.refetch()} />}
       {project.data && (
         <>
           <div className="proj-h">
@@ -748,8 +786,8 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
             <div className="min-w-0">
               <h1 title={title}>{title}</h1>
               <div className="by">
-                {hit && <Meta items={[`von ${hit.author}`, <><Count value={formatDownloads(hit.downloads)} /> Downloads</>]} />}
-                <Chip size="s">{TYPE_ONE[type]}</Chip>
+                {hit && <Meta items={[t("components.search.byAuthor", { autor: hit.author }), <><Count value={formatDownloads(hit.downloads)} /> {t("components.stats.downloads")}</>]} />}
+                <Chip size="s">{t(TYPE_ONE_KEYS[type])}</Chip>
                 {hit && categoryNames(hit.categories, 2).map((c) => <Chip key={c} size="s">{c}</Chip>)}
                 {!instance && <InChip instances={installedIn.get(installedKey(source, projectId))} />}
               </div>
@@ -765,51 +803,51 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
             </div>
             <aside className="side">
               <Panel notch={2} pad="m">
-                <SectionHeader as="h3" size="card" title="Passt zu" />
+                <SectionHeader as="h3" size="card" title={t("components.detail.fitsHeading")} />
                 <dl className="kv">
                   <dt>Minecraft</dt>
                   <dd>{all.data ? <McSummary versions={all.data} /> : "…"}</dd>
                   {type !== "resourcepack" && type !== "datapack" && (
                     <>
-                      <dt>Loader</dt>
-                      <dd>{type === "shader" ? "Iris (Fabric, Quilt, NeoForge)" : loaders.length ? loaders.map((l) => LOADER_LABELS[l as ModLoader] ?? l).join(", ") : all.data ? "Nicht angegeben" : "…"}</dd>
+                      <dt>{t("components.common.loader")}</dt>
+                      <dd>{type === "shader" ? "Iris (Fabric, Quilt, NeoForge)" : loaders.length ? loaders.map((l) => LOADER_LABELS[l as ModLoader] ?? l).join(", ") : all.data ? t("components.detail.notSpecified") : "…"}</dd>
                     </>
                   )}
                   {source === "modrinth" && (
                     <>
-                      <dt>Benötigt auf</dt>
+                      <dt>{t("components.detail.requiredOn")}</dt>
                       <dd>{sideText(project.data)}</dd>
                     </>
                   )}
                   {instance ? (
                     <>
-                      <dt>Diese Instanz</dt>
-                      <dd>{fitting.data ? (fitting.data.length ? "Passt" : "Keine Version") : "…"}</dd>
+                      <dt>{t("components.detail.thisInstance")}</dt>
+                      <dd>{fitting.data ? (fitting.data.length ? t("components.detail.fits") : t("components.detail.noVersion")) : "…"}</dd>
                     </>
                   ) : fitCount != null && instances.data ? (
                     <>
-                      <dt>Deine Instanzen</dt>
-                      <dd>{fitCount} von {instances.data.length}</dd>
+                      <dt>{t("components.detail.yourInstances")}</dt>
+                      <dd>{t("components.game.countOf", { done: fitCount, total: instances.data.length })}</dd>
                     </>
                   ) : null}
                 </dl>
               </Panel>
               <Panel notch={2} pad="m">
-                <SectionHeader as="h3" size="card" title={instance ? `Versionen für ${fitsLabel(instance, type)}` : "Versionen"} />
+                <SectionHeader as="h3" size="card" title={instance ? t("components.detail.versionsFor", { passt: fitsLabel(instance, type) }) : t("components.detail.versions")} />
                 {!shown && <Skel h={44} />}
-                {shown?.length === 0 && <Hint>{instance ? `Keine Version für ${fitsLabel(instance, type)}.` : "Keine Version verfügbar."}</Hint>}
+                {shown?.length === 0 && <Hint>{instance ? `${t("components.content.noVersionFor", { version: fitsLabel(instance, type) })}.` : t("components.detail.noVersionAvailable")}</Hint>}
                 {!!shown?.length && (
-                  <List variant="versions" aria-label="Versionen">
+                  <List variant="versions" aria-label={t("components.detail.versions")}>
                     {shown.map((v) => (
                       <ListRow key={v.id}>
                         <RowTitle
                           title={v.version_number}
-                          sub={`${loaderList(v) || "Alle Loader"} · ${v.game_versions.at(-1)}${VERSION_TYPE[v.version_type] ? ` · ${VERSION_TYPE[v.version_type]}` : ""}`}
+                          sub={`${loaderList(v) || t("components.version.allLoaders")} · ${v.game_versions.at(-1)}${VERSION_TYPE[v.version_type] ? ` · ${t(VERSION_TYPE[v.version_type]!)}` : ""}`}
                         />
                         {instance ? (
                           <AddButton instance={instance} world={world} projectId={projectId} title={title} type={type} versionId={v.id} source={source} />
                         ) : type === "modpack" && info.install ? (
-                          <IconButton size="s" icon="plus" label={`${v.version_number} als Instanz anlegen`} tip="Diese Version als Instanz anlegen" disabled={pack.blocked} onClick={() => askPack(v.id)} />
+                          <IconButton size="s" icon="plus" label={t("components.detail.versionAsInstance", { version: v.version_number })} tip={t("components.detail.addVersionAsInstance")} disabled={pack.blocked} onClick={() => askPack(v.id)} />
                         ) : null}
                       </ListRow>
                     ))}
@@ -831,6 +869,7 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
 export function AddContentSheet({ instance, world, open, onOpenChange, initialKind }: {
   instance: Instance; world?: World; open: boolean; onOpenChange: (open: boolean) => void; initialKind?: ModKind;
 }) {
+  const { t } = useI18n();
   // Datenpakete gibt es hier nur von Modrinth.
   const kinds: CatalogType[] = world ? ["datapack"] : kindsFor(instance);
   const [type, setType] = useState<CatalogType>(initialKind && kinds.includes(initialKind) ? initialKind : kinds[0]);
@@ -856,7 +895,7 @@ export function AddContentSheet({ instance, world, open, onOpenChange, initialKi
 
   const results = (
     <>
-      {kind === "shader" && !hasIris && <Hint tone="warn" className="mb-2">Shader brauchen die Mod „Iris“. Füge sie unter „Mods“ hinzu.</Hint>}
+      {kind === "shader" && !hasIris && <Hint tone="warn" className="mb-2">{t("components.sheet.shaderNeedsIris")}</Hint>}
       <ContentResults
         key={`${source}-${kind}`}
         source={source}
@@ -880,25 +919,25 @@ export function AddContentSheet({ instance, world, open, onOpenChange, initialKi
       open={open}
       onOpenChange={onOpenChange}
       acc={acc}
-      title={world ? `Datenpakete für „${world.name}“` : `Inhalte für ${instance.name}`}
-      sub={`Pumpkin Launcher wählt automatisch die Version für ${fitsLabel(instance, world ? "datapack" : "mod")}.`}
+      title={world ? t("components.sheet.datapacksForWorld", { welt: world.name }) : t("components.sheet.contentForInstance", { name: instance.name })}
+      sub={t("components.sheet.autoVersion", { passt: fitsLabel(instance, world ? "datapack" : "mod") })}
       tools={
         projectId ? undefined : (
           <>
             {tabbed && (
-              <Tabs variant="segment" size="s" idBase="sheet-art" label="Art" value={kind} onChange={setType} items={kinds.map((k) => ({ value: k, label: TYPE_LABELS[k] }))} />
+              <Tabs variant="segment" size="s" idBase="sheet-art" label={t("components.sheet.kindLabel")} value={kind} onChange={setType} items={kinds.map((k) => ({ value: k, label: TYPE_LABELS[k] }))} />
             )}
             {!world && (
               <Select
                 size="s"
-                label="Quelle"
+                label={t("components.sheet.sourceLabel")}
                 value={source}
                 onChange={(v) => setSource(v as Source)}
                 options={[{ value: "modrinth", label: "Modrinth" }, { value: "curseforge", label: "CurseForge" }]}
               />
             )}
-            <SearchField size="s" value={query} onChange={setQuery} placeholder="Im Katalog suchen" autoFocus />
-            <Switch checked={fit} onChange={setFit} label={`Nur passend zu ${fitsLabel(instance, kind)}`} visibleLabel />
+            <SearchField size="s" value={query} onChange={setQuery} placeholder={t("components.sheet.searchPlaceholder")} autoFocus />
+            <Switch checked={fit} onChange={setFit} label={t("components.sheet.onlyFitting", { passt: fitsLabel(instance, kind) })} visibleLabel />
           </>
         )
       }
