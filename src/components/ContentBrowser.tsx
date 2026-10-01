@@ -12,7 +12,7 @@ import { cancelContent, useContentInstall, useContentState, withTarget } from "@
 import { useDebounced } from "@/hooks/useDebounced";
 import { useInstances } from "@/hooks/useInstances";
 import { worldsQuery } from "@/hooks/useWorlds";
-import { worldKeys } from "@/hooks/worldKeys";
+import { catalogKeys, worldKeys } from "@/hooks/queryKeys";
 import { api } from "@/lib/api";
 import { formatCount } from "@/lib/format";
 import {
@@ -48,7 +48,6 @@ export const kindsFor = (instance: Instance): ModKind[] =>
 export const fitsLabel = (instance: Instance, type: CatalogType) =>
   type === "mod" ? `${LOADER_LABELS[instance.loader]} ${instance.minecraftVersion}` : `Minecraft ${instance.minecraftVersion}`;
 
-const versionsKey = (projectId: string, mc: string | null, loader: string | null) => ["modrinth-versions", projectId, mc, loader];
 // Für Quilt fragt das Backend Quilt- und Fabric-Mods an; Datenpakete führt Modrinth unter dem Loader „datapack“.
 const loaderFor = (instance: Instance, type: CatalogType) => (type === "mod" ? instance.loader : type === "datapack" ? "datapack" : null);
 
@@ -59,7 +58,7 @@ const versionFits = (v: ContentVersion, instance: Instance, type: CatalogType) =
 };
 
 const allVersionsQuery = (projectId: string, source: Source = "modrinth") => ({
-  queryKey: source === "modrinth" ? versionsKey(projectId, null, null) : ["catalog-versions", source, projectId],
+  queryKey: catalogKeys.versions(source, projectId, null, null),
   queryFn: () => (source === "modrinth" ? api.modrinthVersions(projectId, null, null) : api.providerVersions(source, projectId)),
   staleTime: 10 * 60_000,
   retry: false,
@@ -167,7 +166,7 @@ function useAddContent() {
     try {
       if (!id) {
         const versions = await qc.fetchQuery({
-          queryKey: source === "modrinth" ? versionsKey(projectId, mc, loader) : ["catalog-versions", source, projectId, mc, loader],
+          queryKey: catalogKeys.versions(source, projectId, mc, loader),
           queryFn: () => (source === "modrinth" ? api.modrinthVersions(projectId, mc, loader) : api.providerVersions(source, projectId, mc, loader)),
           staleTime: 10 * 60_000,
         });
@@ -183,7 +182,7 @@ function useAddContent() {
     if (!id) return "missing";
     // CurseForge: Die Autoren erlauben den Download nur über die Webseite. Nicht umgehen, sondern beim Laden von Hand helfen.
     if (source !== "modrinth" && picked && !picked.files[0]?.url) {
-      const page = await qc.fetchQuery({ queryKey: ["catalog-project", source, projectId], queryFn: () => api.providerProject(source, projectId), staleTime: 10 * 60_000 })
+      const page = await qc.fetchQuery({ queryKey: catalogKeys.project(source, projectId), queryFn: () => api.providerProject(source, projectId), staleTime: 10 * 60_000 })
         .then((p) => p.web_url).catch(() => null);
       openManualDownloads({
         instanceId: instance.id,
@@ -590,7 +589,7 @@ export function ContentResults({ type, instance, world, action, onOpen, autoFocu
   const index: SearchIndex = sort ?? (query ? "relevance" : "downloads");
   const info = SOURCES[source];
   const results = useInfiniteQuery({
-    queryKey: source === "modrinth" ? ["modrinth-search", type, query, mc, loader, index] : ["catalog-search", source, type, query, mc, loader, index],
+    queryKey: catalogKeys.search(source, type, query, mc, loader, index),
     queryFn: ({ pageParam }) =>
       source === "modrinth" ? api.modrinthSearch(query, type, mc, loader, pageParam, index) : api.providerSearch(source, query, type, mc, loader, pageParam, index),
     initialPageParam: 0,
@@ -741,7 +740,7 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
   const { t } = useI18n();
   const info = SOURCES[source];
   const project = useQuery({
-    queryKey: source === "modrinth" ? ["modrinth-project", projectId] : ["catalog-project", source, projectId],
+    queryKey: catalogKeys.project(source, projectId),
     queryFn: () => (source === "modrinth" ? api.modrinthProject(projectId) : api.providerProject(source, projectId)),
     staleTime: 10 * 60_000,
     retry: false,
@@ -749,7 +748,7 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
   const mc = instance?.minecraftVersion ?? null;
   const loader = instance ? loaderFor(instance, type) : null;
   const fitting = useQuery({
-    queryKey: source === "modrinth" ? versionsKey(projectId, mc, loader) : ["catalog-versions", source, projectId, mc, loader],
+    queryKey: catalogKeys.versions(source, projectId, mc, loader),
     queryFn: () => (source === "modrinth" ? api.modrinthVersions(projectId, mc, loader) : api.providerVersions(source, projectId, mc, loader)),
     enabled: !!instance,
     staleTime: 10 * 60_000,

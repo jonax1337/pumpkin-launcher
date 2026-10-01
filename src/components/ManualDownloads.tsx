@@ -7,7 +7,7 @@ import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
 import { openPage } from "@/lib/links";
 import type { BlockedFile } from "@/lib/modrinth";
-import { instanceKeys } from "@/hooks/useInstances";
+import { instanceKeys } from "@/hooks/queryKeys";
 
 interface Target { instanceId: string; instanceName: string; items: BlockedFile[] }
 

@@ -7,7 +7,8 @@ import {
 } from "@/ui";
 import { IRIS_PROJECT_ID } from "@/components/ContentBrowser";
 import { useContentInstall, useContentState, useProjects, withTarget } from "@/hooks/useContent";
-import { instanceKeys, useUpdateMods } from "@/hooks/useInstances";
+import { instanceKeys } from "@/hooks/queryKeys";
+import { useUpdateMods } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import { openPage } from "@/lib/links";
 import { ownerKey, projectOf, removeWithDependencies, undoRemove, type ModUpdate } from "@/lib/modrinth";

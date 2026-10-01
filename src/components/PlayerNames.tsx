@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { t, useI18n } from "@/i18n";
 import { StopDialog } from "@/components/game";
+import { accountKeys } from "@/hooks/queryKeys";
 import { api } from "@/lib/api";
 import { openPage } from "@/lib/links";
 import type { MsLoginStart } from "@/lib/types";
@@ -34,7 +35,7 @@ export async function startMsLogin(qc: QueryClient, method?: "device") {
     const account = await api.msLoginFinish();
     if (mine !== attempt) return;
     useSettings.getState().selectAccount({ kind: "microsoft", id: account.id, username: account.username });
-    void qc.invalidateQueries({ queryKey: ["ms-accounts"] });
+    void qc.invalidateQueries({ queryKey: accountKeys.microsoft });
     // Aus „Spielen“ ohne Namen gekommen: Dialog zu und direkt weiter (der Spielen-Knopf zeigt den Fortschritt).
     const then = useAccountUi.getState().then;
     if (then) {
@@ -181,7 +182,7 @@ export const askPlayerName = (then: AfterName, qc: QueryClient) => {
 };
 
 function useMsAccounts() {
-  const query = useQuery({ queryKey: ["ms-accounts"], queryFn: api.msAccounts, staleTime: 5 * 60_000, retry: false });
+  const query = useQuery({ queryKey: accountKeys.microsoft, queryFn: api.msAccounts, staleTime: 5 * 60_000, retry: false });
   const syncMicrosoft = useSettings((s) => s.syncMicrosoft);
   // Ob Spielernamen erlaubt sind, hängt an den Microsoft-Konten: bei jeder Änderung der Anzahl neu fragen.
   const count = query.data?.length;
@@ -218,7 +219,7 @@ function useRemoveAccount() {
     mutationFn: (id: string) => api.msAccountRemove(id),
     onSuccess: (_, id) => {
       forgetMicrosoft(id);
-      return qc.invalidateQueries({ queryKey: ["ms-accounts"] });
+      return qc.invalidateQueries({ queryKey: accountKeys.microsoft });
     },
   });
   return { remove: (a: ActiveAccount) => (a.kind === "offline" ? removeAccount(a.name) : removeMs.mutate(a.id)), pending: removeMs.isPending };

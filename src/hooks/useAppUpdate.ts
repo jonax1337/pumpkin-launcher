@@ -7,13 +7,14 @@ import { create } from "zustand";
 import { t } from "@/i18n/core";
 import { api } from "@/lib/api";
 import { isGameActive, useGame } from "@/store/game";
+import { appKeys } from "./queryKeys";
 import { anyTaskRunning, subscribeRunningTasks } from "./useRunningTasks";
 
 /**
  * Ein Fund bleibt gültig, bis jemand erneut sucht; `gcTime` hält ihn auch, wenn gerade niemand die Über-Seite zeigt
  * (Fund beim Start, wartendes Update).
  */
-const updateQuery = { queryKey: ["app-update"], queryFn: api.checkAppUpdate, staleTime: Infinity, gcTime: Infinity, retry: false };
+const updateQuery = { queryKey: appKeys.update, queryFn: api.checkAppUpdate, staleTime: Infinity, gcTime: Infinity, retry: false };
 
 /** Erst suchen, wenn der Start durch ist: die Suche soll nicht mit Laden und Szene um das Netz konkurrieren. */
 const START_CHECK_DELAY_MS = 8_000;

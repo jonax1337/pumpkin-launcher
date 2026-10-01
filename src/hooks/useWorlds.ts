@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { fileName } from "@/lib/format";
 import type { Datapack, Instance, Server, World, WorldBackup } from "@/lib/types";
 import { trackContent, withTarget, type ContentRun } from "./useContent";
-import { worldKeys } from "./worldKeys";
+import { worldKeys } from "./queryKeys";
 
 /** Welten einer Instanz; auch für die Auswahl der Welt beim Hinzufügen eines Datenpakets aus Entdecken. */
 export const worldsQuery = (instanceId: string) => ({ queryKey: worldKeys.list(instanceId), queryFn: () => api.worldList(instanceId) });
@@ -34,7 +34,7 @@ export function useServers(instanceId: string) {
 /** Ob die Minecraft-Version direkt in eine Welt starten kann (ab 1.20); undefined, solange unbekannt. */
 export function useWorldQuickPlay(instance: Instance) {
   return useQuery({
-    queryKey: ["world-quick-play", instance.id, instance.minecraftVersion],
+    queryKey: worldKeys.quickPlay(instance.id, instance.minecraftVersion),
     queryFn: () => api.worldQuickPlaySupported(instance.id),
     staleTime: Infinity,
     retry: false,

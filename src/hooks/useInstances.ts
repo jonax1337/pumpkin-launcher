@@ -13,14 +13,7 @@ import { CANCELLED, type Instance, type InstanceStatus, type ModLoader, type New
 import { useGame } from "@/store/game";
 import { accountName, useSettings } from "@/store/settings";
 import { useTasks } from "@/store/tasks";
-import { screenshotKeys } from "./useScreenshots";
-import { worldKeys } from "./worldKeys";
-
-export const instanceKeys = {
-  all: ["instances"] as const,
-  detail: (id: string) => ["instances", id] as const,
-  status: (id: string) => ["instance-status", id] as const,
-};
+import { appKeys, instanceKeys, instanceRelatedKeys, screenshotKeys, worldKeys } from "./queryKeys";
 
 const instanceListQuery = { queryKey: instanceKeys.all, queryFn: api.listInstances };
 
@@ -89,7 +82,7 @@ export function useSetGroup(instanceId: string) {
 export function useUpdateMods(instanceId: string) {
   const qc = useQueryClient();
   const key = instanceKeys.detail(instanceId);
-  const mutationKey = ["instance-mods", instanceId];
+  const mutationKey = instanceKeys.mods(instanceId);
   return useMutation({
     mutationKey,
     scope: { id: mutationKey.join(":") },
@@ -122,7 +115,7 @@ export function useDeleteInstance() {
 
 /** Einträge des Spielordners, aus denen der Export-Dialog wählen lässt. */
 export function useExportEntries(instanceId: string) {
-  return useQuery({ queryKey: ["export-entries", instanceId], queryFn: () => api.exportEntries(instanceId), staleTime: 0 });
+  return useQuery({ queryKey: instanceKeys.exportEntries(instanceId), queryFn: () => api.exportEntries(instanceId), staleTime: 0 });
 }
 
 /** Zuletzt gespielte Instanz (Fallback: zuletzt erstellte; `lastPlayedAt` zeigt, welcher Fall vorliegt). */
@@ -134,19 +127,19 @@ export function pickRecentInstance(instances: Instance[] | undefined): Instance 
 }
 
 export function useVersions() {
-  return useQuery({ queryKey: ["versions"], queryFn: api.versionsList, staleTime: 10 * 60_000 });
+  return useQuery({ queryKey: appKeys.minecraftVersions, queryFn: api.versionsList, staleTime: 10 * 60_000 });
 }
 
 export function useLoaderVersions(loader: ModLoader, mcVersion: string) {
   return useQuery({
-    queryKey: ["loader-versions", loader, mcVersion],
+    queryKey: appKeys.loaderVersions(loader, mcVersion),
     queryFn: () => api.loaderVersions(loader, mcVersion),
     enabled: loader !== "vanilla" && !!mcVersion,
     staleTime: 10 * 60_000,
   });
 }
 
-const systemMemoryQuery = { queryKey: ["system-memory"], queryFn: api.systemMemoryMb, staleTime: Infinity, retry: false } as const;
+const systemMemoryQuery = { queryKey: appKeys.systemMemory, queryFn: api.systemMemoryMb, staleTime: Infinity, retry: false } as const;
 
 /**
  * Arbeitsspeicher: `value` ist der Standard für alle Instanzen (eigene Wahl oder automatisch),
@@ -353,9 +346,7 @@ export function useGameEvents() {
         }
       }),
       // Das Backend hat Instanzen umgebaut (z. B. Migration): Listen und Details neu laden.
-      api.onInstancesChanged(() =>
-        ["instances", "instance-status", "templates"].forEach((key) => void qc.invalidateQueries({ queryKey: [key] })),
-      ),
+      api.onInstancesChanged(() => instanceRelatedKeys.forEach((queryKey) => void qc.invalidateQueries({ queryKey }))),
     ];
     return () => subs.forEach((p) => p.then((unlisten) => unlisten()));
   }, [qc, navigate]);

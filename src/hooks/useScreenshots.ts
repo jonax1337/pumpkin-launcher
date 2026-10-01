@@ -3,8 +3,7 @@ import { toast } from "sonner";
 import { t } from "@/i18n";
 import { api } from "@/lib/api";
 import type { Screenshot } from "@/lib/types";
-
-export const screenshotKeys = { list: (instanceId: string) => ["screenshots", instanceId] as const };
+import { screenshotKeys } from "./queryKeys";
 
 /** Screenshots der Instanz; bei jedem Öffnen des Tabs frisch gelesen, das Spiel legt jederzeit neue ab. */
 export function useScreenshots(instanceId: string) {

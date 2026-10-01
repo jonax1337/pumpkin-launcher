@@ -7,8 +7,8 @@ import { type ContentProgress, type ContentProject } from "@/lib/modrinth";
 import { toastError } from "@/lib/toast";
 import type { Instance } from "@/lib/types";
 import { useTasks, type DoneTask } from "@/store/tasks";
-import { instanceKeys } from "./useInstances";
 import { useOnline } from "./useOnline";
+import { catalogKeys, instanceKeys } from "./queryKeys";
 
 // Keeps progress visible across route changes; only the matching active operation may update it.
 // `target` says what runs (a project ID or "updates"), so rows can show their own progress.
@@ -65,8 +65,8 @@ export async function trackContent<R>(
     unlisten?.();
     useContentState.setState({ active: null, target: null, label: null, cancellable: false });
     void qc.invalidateQueries({ queryKey: instanceKeys.all });
-    void qc.invalidateQueries({ queryKey: ["instance-status"] });
-    void qc.invalidateQueries({ queryKey: ["modrinth-updates"] });
+    void qc.invalidateQueries({ queryKey: instanceKeys.statuses });
+    void qc.invalidateQueries({ queryKey: catalogKeys.allUpdates });
   }
 }
 
@@ -86,7 +86,7 @@ export function useContentInstall() {
 export function useProjects(projectIds: string[]) {
   const ids = [...new Set(projectIds)].sort();
   return useQuery({
-    queryKey: ["modrinth-projects", ids],
+    queryKey: catalogKeys.projects(ids),
     queryFn: async () => new Map((await api.modrinthProjects(ids)).map((p): [string, ContentProject] => [p.id, p])),
     enabled: ids.length > 0,
     staleTime: 60 * 60_000,
@@ -97,7 +97,7 @@ export function useProjects(projectIds: string[]) {
 
 /** Update-Check einer Instanz: gemeinsamer Schlüssel und Cache (10 min) für Detail und Bibliothek. */
 const updatesQuery = (instanceId: string) => ({
-  queryKey: ["modrinth-updates", instanceId],
+  queryKey: catalogKeys.updates(instanceId),
   queryFn: () => api.modrinthCheckUpdates(instanceId),
   staleTime: 10 * 60_000,
   retry: false,

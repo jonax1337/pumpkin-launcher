@@ -10,6 +10,7 @@ import {
 import { MemoryChooser } from "@/components/common";
 import { useInstallPack } from "@/components/ContentBrowser";
 import { ImportPane } from "@/components/LauncherImport";
+import { catalogKeys } from "@/hooks/queryKeys";
 import { cancelContent, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { useDebounced } from "@/hooks/useDebounced";
 import { useFileDrop } from "@/hooks/useFileDrop";
@@ -55,7 +56,7 @@ function PackPane({ selected, onSelect }: { selected: string | null; onSelect: (
   const [input, setInput] = useState("");
   const query = useDebounced(input.trim(), 300);
   const results = useQuery({
-    queryKey: ["modrinth-search", "modpack", query, null, null, "pick"],
+    queryKey: catalogKeys.packPicker(query),
     queryFn: () => api.modrinthSearch(query, "modpack", null, null, 0),
     staleTime: 5 * 60_000,
     retry: false,
