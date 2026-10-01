@@ -48,4 +48,12 @@ export const ui = {
   "ui.memory.label": "Arbeitsspeicher",
   "ui.switch.on": "An",
   "ui.switch.off": "Aus",
+  // ---------- Szenen (Namen der Biome) ----------
+  "ui.biome.forest": "Wald am Abend",
+  "ui.biome.nether": "Nether",
+  "ui.biome.end": "End",
+  "ui.biome.snow": "Schneeberge",
+  "ui.biome.cave": "Höhle",
+  "ui.biome.sea": "Küste",
+  "ui.biome.plains": "Ebene",
 } satisfies Dict;

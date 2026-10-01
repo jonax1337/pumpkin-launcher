@@ -48,4 +48,12 @@ export const ui: typeof deUi = {
   "ui.memory.label": "Memory",
   "ui.switch.on": "On",
   "ui.switch.off": "Off",
+  // ---------- Scenes (biome names) ----------
+  "ui.biome.forest": "Forest at dusk",
+  "ui.biome.nether": "Nether",
+  "ui.biome.end": "The End",
+  "ui.biome.snow": "Snowy mountains",
+  "ui.biome.cave": "Cave",
+  "ui.biome.sea": "Coast",
+  "ui.biome.plains": "Plains",
 };

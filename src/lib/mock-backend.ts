@@ -1,5 +1,6 @@
 // Nur im Browser-Dev-Modus dynamisch geladen (siehe api.ts); im Release-Build nicht enthalten.
 import { t } from "@/i18n";
+import type { TKey } from "@/i18n/core";
 import { allCapabilities, eventSubscriptions, type Backend, type BackendEvents, type Emit, type Subscribe } from "./backend";
 import { createAccountMock } from "./mock-accounts";
 import { createContentMock } from "./mock-content";
@@ -41,7 +42,7 @@ function createEventBus(): { emit: Emit; on: Subscribe } {
 const unavailable = (message: () => string) => (): Promise<never> => Promise.reject(new Error(message()));
 
 /** Meldung für Dinge, die nur die App kann; `whatKey` ist der Wörterbuchschlüssel eines Infinitiv-Satzteils („Ordner öffnen“). */
-const onlyInApp = (whatKey: string) => unavailable(() => t("hooks.api.onlyInApp", { what: t(whatKey) }));
+const onlyInApp = (whatKey: TKey) => unavailable(() => t("hooks.api.onlyInApp", { what: t(whatKey) }));
 
 /** Modpacks und Anbieter ohne Schlüssel brauchen echte Dateien und Downloads. */
 const modpacksNeedApp = unavailable(() => t("hooks.api.modpacksNeedApp"));

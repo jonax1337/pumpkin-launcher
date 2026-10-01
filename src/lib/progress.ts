@@ -1,5 +1,6 @@
 // Import mit Endung: Dieses Modul lädt auch das plain-node-Prüf-Skript (kein Bundler, der Auflösung macht).
 import { t } from "../i18n/core.ts";
+import type { TKey } from "../i18n/core.ts";
 
 /** Abschnitte eines Vorgangs, genau die Namen von `services::progress::Phase` im Backend (kleingeschrieben). */
 export type ContentPhase = "resolve" | "validate" | "download" | "extract" | "copy" | "pack" | "hash" | "backup" | "complete";
@@ -16,10 +17,10 @@ interface PhaseInfo {
 }
 
 /** Phase mit festem Text, ohne Menge. */
-const plain = (key: string, shortKey: string): PhaseInfo => ({ label: () => t(key), short: () => t(shortKey), hasShare: false });
+const plain = (key: TKey, shortKey: TKey): PhaseInfo => ({ label: () => t(key), short: () => t(shortKey), hasShare: false });
 
 /** Phase mit „n von m“, solange die Menge bekannt ist. */
-const counted = (key: string, indeterminateKey: string, shortKey: string): PhaseInfo => ({
+const counted = (key: TKey, indeterminateKey: TKey, shortKey: TKey): PhaseInfo => ({
   label: (done, total) => (total ? t(key, { done, total }) : t(indeterminateKey)),
   short: () => t(shortKey),
   hasShare: true,
