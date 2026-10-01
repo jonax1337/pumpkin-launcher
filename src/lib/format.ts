@@ -41,7 +41,7 @@ export function formatPlaytime(secs: number): string {
 
 const SIZE_UNITS = ["Bytes", "KB", "MB", "GB", "TB"];
 
-/** Dateigröße mit Basis 1024 wie im Explorer: „850 KB“, „12,4 MB“, „1,2 GB“. */
+/** Dateigröße mit Basis 1024: „850 KB“, „12,4 MB“, „1,2 GB“. */
 export function formatSize(bytes: number): string {
   let n = bytes, unit = 0;
   for (; n >= 1024 && unit < SIZE_UNITS.length - 1; unit++) n /= 1024;

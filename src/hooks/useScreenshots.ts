@@ -10,7 +10,7 @@ export function useScreenshots(instanceId: string) {
   return useQuery({ queryKey: screenshotKeys.list(instanceId), queryFn: () => api.screenshots(instanceId), staleTime: 0 });
 }
 
-/** In den Papierkorb; die Liste lädt auch nach einem Fehler neu (Datei z. B. schon im Explorer gelöscht). */
+/** In den Papierkorb; die Liste lädt auch nach einem Fehler neu (Datei z. B. schon im Dateimanager gelöscht). */
 export function useDeleteScreenshot(instanceId: string) {
   const qc = useQueryClient();
   return useMutation({
