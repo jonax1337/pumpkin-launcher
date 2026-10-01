@@ -1,9 +1,9 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { toast } from "sonner";
 import { useMemory } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import { formatMemory, formatPlaytime, memoryTooHigh } from "@/lib/format";
 import { platform } from "@/lib/platform";
+import { toastError } from "@/lib/toast";
 import { LOADER_LABELS, type Instance } from "@/lib/types";
 import { Actions, Button, Hint, Radio, SegSlider, TextField } from "@/ui";
 
@@ -106,7 +106,7 @@ export function JavaChooser({ name, value, onChange, fallback, disabled }: { nam
           onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
           placeholder={own ? `z. B. ${JAVA_PROGRAM.example}` : `Pfad zu ${JAVA_PROGRAM.file}`}
         />
-        {!api.isMock && <Button disabled={disabled || !own} onClick={() => void browse().catch((e: Error) => toast.error(e.message))}>Durchsuchen</Button>}
+        {!api.isMock && <Button disabled={disabled || !own} onClick={() => void browse().catch(toastError)}>Durchsuchen</Button>}
       </Actions>
     </>
   );

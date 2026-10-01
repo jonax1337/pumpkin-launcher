@@ -7,6 +7,7 @@ import { askPlayerName, openAddOffline, startMsLogin } from "@/components/Player
 import { usableAccount, useOfflineAllowed } from "@/store/offline";
 import { api } from "@/lib/api";
 import { autoMemoryMb, formatClock, maxMemoryMb } from "@/lib/format";
+import { toastError } from "@/lib/toast";
 import { CANCELLED, type Instance, type InstanceStatus, type ModLoader, type NewInstance, type QuickPlay } from "@/lib/types";
 import { useGame } from "@/store/game";
 import { accountName, useSettings } from "@/store/settings";
@@ -345,7 +346,7 @@ export function useGameEvents() {
             duration: Infinity,
             description: crashReport ? "Im Absturzbericht steht meist, welche Mod schuld ist." : "Das Protokoll zeigt, was zuletzt passiert ist.",
             action: crashReport
-              ? { label: "Absturzbericht öffnen", onClick: () => void api.openPath(crashReport).catch((e: Error) => toast.error(e.message)) }
+              ? { label: "Absturzbericht öffnen", onClick: () => void api.openPath(crashReport).catch(toastError) }
               : showLog,
             cancel: crashReport ? showLog : undefined,
           });

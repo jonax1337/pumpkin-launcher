@@ -5,6 +5,7 @@ import { Button, Chip, ConfirmDialog, Count, Empty, Icon, IconButton, SearchFiel
 import { askShareLog, DebugInfoButton, shareKindAfter } from "@/components/support";
 import { askStop, useCancelInstall, useInstanceStatus, useKill, usePlay, useStopAsk } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
+import { toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { formatClock, formatCount, relativeTime } from "@/lib/format";
 import { installStepLabel, SUPPORTED_LOADERS, type Instance, type InstallProgress, type InstallStep, type ModLoader } from "@/lib/types";
@@ -207,7 +208,7 @@ export function PlayStatus({ instance, className, style, showLast = true, onScen
     acts = (
       <>
         {crash.crashReport && (
-          <Button variant="ghost" size="s" tone="bad" onScene={onScene} onClick={() => void api.openPath(crash.crashReport!).catch((e: Error) => toast.error(e.message))}>Absturzbericht öffnen</Button>
+          <Button variant="ghost" size="s" tone="bad" onScene={onScene} onClick={() => void api.openPath(crash.crashReport!).catch(toastError)}>Absturzbericht öffnen</Button>
         )}
         <Button variant="ghost" size="s" onScene={onScene} onClick={toLog}>Protokoll ansehen</Button>
         {/* Nur als Symbol: Ausgeschrieben ließe die schmale Zeile keinen Platz für die Meldung. */}
@@ -317,7 +318,7 @@ function LogStat({ instance }: { instance: Instance }) {
         tone="bad"
         className={place}
         title={`Minecraft ist abgestürzt${crash.code != null ? ` (Code ${crash.code})` : ""}.`}
-        actions={crash.crashReport && <Button size="s" onClick={() => void api.openPath(crash.crashReport!).catch((e: Error) => toast.error(e.message))}>Absturzbericht öffnen</Button>}
+        actions={crash.crashReport && <Button size="s" onClick={() => void api.openPath(crash.crashReport!).catch(toastError)}>Absturzbericht öffnen</Button>}
       >
         {crash.crashReport ? "Der Absturzbericht nennt meist die Ursache." : "Die letzten Zeilen unten zeigen, was passiert ist."}
       </StatusPanel>
@@ -415,7 +416,7 @@ export function LogConsole({ instance }: { instance: Instance }) {
         <Button size="s" icon="ul" compactBelow={1180} onClick={() => askShareLog(instance.id, shareKindAfter(crash))}>Log teilen</Button>
         <DebugInfoButton size="s" icon="info" compactBelow={1180} />
         {crash?.logFile && (
-          <Button size="s" icon="folder" compactBelow={900} onClick={() => void api.openPath(crash.logFile!).catch((e: Error) => toast.error(e.message))}>Logdatei</Button>
+          <Button size="s" icon="folder" compactBelow={900} onClick={() => void api.openPath(crash.logFile!).catch(toastError)}>Logdatei</Button>
         )}
         <Button size="s" icon="trash" compactBelow={900} disabled={!lines?.length} onClick={() => clearLog(instance.id)}>Leeren</Button>
       </Toolbar>

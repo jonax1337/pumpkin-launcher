@@ -9,6 +9,7 @@ import { useContentInstall, useContentState, withTarget } from "@/hooks/useConte
 import { askStop, useDeleteInstance, useExportEntries, useGroups, usePlay, useSetGroup } from "@/hooks/useInstances";
 import { useSaveTemplate } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
+import { toastError } from "@/lib/toast";
 import type { Instance } from "@/lib/types";
 
 /** Welche Instanz gerade einen der Dialoge offen hat (einmal im Layout gerendert). */
@@ -26,7 +27,7 @@ const askNewGroup = (instance: Instance) => useInstanceActions.setState({ newGro
 
 /** Spielordner der Instanz im Dateimanager öffnen; Fehler als Toast. */
 export function openInstanceFolder(instance: Instance) {
-  api.instanceDir(instance.id).then(api.openPath).catch((e: unknown) => toast.error(e instanceof Error ? e.message : String(e)));
+  api.instanceDir(instance.id).then(api.openPath).catch(toastError);
 }
 
 /** Instanz duplizieren: Fortschritt und „Abbrechen“ im Aufgaben-Menü, danach ein Toast mit Sprung zur Kopie. */
@@ -54,7 +55,7 @@ function useExport() {
         exported &&
         toast.success(`„${instance.name}“ exportiert`, {
           description: path,
-          action: { label: "Im Ordner zeigen", onClick: () => api.revealPath(path).catch((e: Error) => toast.error(e.message)) },
+          action: { label: "Im Ordner zeigen", onClick: () => api.revealPath(path).catch(toastError) },
         }),
     });
   };

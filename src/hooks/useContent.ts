@@ -1,9 +1,9 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { create } from "zustand";
 import { api } from "@/lib/api";
 import { doneLabel, type ContentProgress, type ContentProject } from "@/lib/modrinth";
+import { toastError } from "@/lib/toast";
 import type { Instance } from "@/lib/types";
 import { useTasks, type DoneTask } from "@/store/tasks";
 import { instanceKeys } from "./useInstances";
@@ -32,7 +32,7 @@ export const withTarget = <R = Instance>(
 /** Bricht den laufenden Vorgang ab; das Ergebnis meldet der zentrale Fehler-Toast neutral. */
 export function cancelContent() {
   const op = useContentState.getState().active;
-  if (op) void api.packInstallCancel(op).catch((e: Error) => toast.error(e.message));
+  if (op) void api.packInstallCancel(op).catch(toastError);
 }
 
 /**
