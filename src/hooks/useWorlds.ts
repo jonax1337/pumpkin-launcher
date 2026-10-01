@@ -50,13 +50,6 @@ function useWorldChange<V, R>(instanceId: string, change: (v: V) => Promise<R>, 
   });
 }
 
-export const useRestoreBackup = (instanceId: string) =>
-  useWorldChange(
-    instanceId,
-    (backup: WorldBackup) => api.worldRestore(instanceId, backup.id),
-    (world, backup) => (world.id === backup.world ? `„${world.name}“ ist wieder da` : `„${world.name}“ ist wieder da, im Ordner „${world.id}“`),
-  );
-
 export const useDeleteBackup = (instanceId: string) => useWorldChange(instanceId, (backup: WorldBackup) => api.worldBackupDelete(instanceId, backup.id));
 
 export const useSaveServer = (instanceId: string) =>
@@ -66,13 +59,14 @@ export const useRemoveServer = (instanceId: string) =>
   useWorldChange(instanceId, ({ index }: { index: number; server: Server }) => api.serverRemove(instanceId, index), (_, { server }) => `„${server.name}“ entfernt`);
 
 /**
- * Laufendes Sichern oder Löschen einer Welt (Löschen sichert vorher): wer, was und wie weit (`p` 0–1, null = noch unbekannt).
+ * Laufendes Sichern, Löschen (sichert vorher) oder Wiederherstellen einer Welt: wer, was und wie weit (`p` 0–1, null = noch
+ * unbekannt). `worldId`: Zeile mit dem Fortschritt; null beim Wiederherstellen, das legt einen neuen Ordner an.
  * Ein Store, damit der Fortschritt Tab- und Seitenwechsel übersteht; das Backend erlaubt ohnehin nur einen Vorgang.
  */
-export const useWorldJob = create<{ job: { instanceId: string; worldId: string; label: string; p: number | null } | null }>(() => ({ job: null }));
+export const useWorldJob = create<{ job: { instanceId: string; worldId: string | null; label: string; p: number | null } | null }>(() => ({ job: null }));
 
 export function useWorldJobs(instance: Instance) {
-  const track = async (world: World, verb: { running: string; done: string }, run: (operationId: string) => Promise<WorldBackup>) => {
+  const track = async <R,>(world: { id: string | null; name: string }, verb: { running: string; done: string }, run: (operationId: string) => Promise<R>) => {
     const operationId = crypto.randomUUID();
     const label = `„${world.name}“ ${verb.running}`;
     const show = (p: number | null) => useWorldJob.setState({ job: { instanceId: instance.id, worldId: world.id, label, p } });
@@ -81,9 +75,9 @@ export function useWorldJobs(instance: Instance) {
       if (e.operationId === operationId && e.total) show(e.done / e.total);
     });
     try {
-      const backup = await run(operationId);
+      const result = await run(operationId);
       useTasks.getState().push({ label: `„${world.name}“ ${verb.done}`, sub: instance.name, state: "done", to: `/instances/${instance.id}?tab=worlds` });
-      return backup;
+      return result;
     } catch (error) {
       useTasks.getState().push({ label, sub: error instanceof Error ? error.message : String(error), state: "fail" });
       throw error;
@@ -102,5 +96,11 @@ export function useWorldJobs(instance: Instance) {
     (world: World) => track(world, { running: "löschen", done: "gelöscht" }, (op) => api.worldDelete(instance.id, world.id, op)),
     (_, world) => `„${world.name}“ gelöscht. Die Sicherung davon findest du unter „Sicherungen“.`,
   );
-  return { backup, remove };
+  const restore = useWorldChange(
+    instance.id,
+    (backup: WorldBackup) =>
+      track({ id: null, name: backup.world }, { running: "wiederherstellen", done: "wiederhergestellt" }, () => api.worldRestore(instance.id, backup.id)),
+    (world, backup) => (world.id === backup.world ? `„${world.name}“ ist wieder da` : `„${world.name}“ ist wieder da, im Ordner „${world.id}“`),
+  );
+  return { backup, remove, restore };
 }

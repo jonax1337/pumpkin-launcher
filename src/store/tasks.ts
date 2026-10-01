@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 /**
  * Abgeschlossene Aufgaben (Downloads, Installationen) für das Aufgaben-Menü in der Fensterleiste.
- * Laufende Aufgaben kommen live aus `useGame.installs`, `useContentState` und `useWorldJob`, nur das Ergebnis landet hier.
+ * Laufende Aufgaben kommen live aus `useRunningTasks`, nur das Ergebnis landet hier.
  */
 export interface DoneTask {
   id: string;

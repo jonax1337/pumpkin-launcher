@@ -9,7 +9,7 @@ import { usePhase } from "@/components/game";
 import { useContentState } from "@/hooks/useContent";
 import { usePlay } from "@/hooks/useInstances";
 import {
-  useDeleteBackup, useRemoveServer, useRestoreBackup, useSaveServer, useServers, useWorldBackups, useWorldJob, useWorldJobs, useWorldQuickPlay,
+  useDeleteBackup, useRemoveServer, useSaveServer, useServers, useWorldBackups, useWorldJob, useWorldJobs, useWorldQuickPlay,
   useWorlds,
 } from "@/hooks/useWorlds";
 import { api } from "@/lib/api";
@@ -23,7 +23,7 @@ function useBusyReason(instanceId: string): string | null {
   const contentBusy = useContentState((s) => s.active != null);
   if (phase === "running") return "Minecraft läuft gerade. Beende es zuerst.";
   if (phase === "preparing" || phase === "starting") return "Minecraft startet gerade.";
-  if (worldJob) return "Gerade wird eine Welt gesichert.";
+  if (worldJob) return "Gerade wird eine Welt gesichert oder wiederhergestellt.";
   if (contentBusy) return "Gerade läuft eine Installation. Warte, bis sie fertig ist.";
   return null;
 }
@@ -135,7 +135,7 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
 /** Sicherungen einer Welt (`world`) oder aller Welten: wiederherstellen (immer als neue Welt) oder löschen. */
 function BackupsDialog({ instance, world, busy, onClose }: { instance: Instance; world: string | null; busy: string | null; onClose: () => void }) {
   const backups = useWorldBackups(instance.id, world);
-  const restore = useRestoreBackup(instance.id);
+  const { restore } = useWorldJobs(instance);
   const remove = useDeleteBackup(instance.id);
   const [removing, setRemoving] = useState<WorldBackup | null>(null);
   return (

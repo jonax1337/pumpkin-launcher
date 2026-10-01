@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { api } from "@/lib/api";
 import { isGameActive, useGame } from "@/store/game";
-import { useContentState } from "./useContent";
+import { anyTaskRunning, subscribeRunningTasks } from "./useRunningTasks";
 
 /**
  * Ein Fund bleibt gültig, bis jemand erneut sucht; `gcTime` hält ihn auch, wenn gerade niemand die Über-Seite zeigt
@@ -49,16 +49,16 @@ function announceUpdate(version: string, show: () => void) {
 
 /**
  * Ablauf „Installieren und neu starten“; liegt außerhalb der Seite, damit er Seitenwechsel übersteht.
- * `wait`: geladen, aber Minecraft oder ein Download läuft noch. `ready`: frei, Neustart wartet auf einen Klick.
+ * `wait`: geladen, aber Minecraft oder eine Aufgabe läuft noch. `ready`: frei, Neustart wartet auf einen Klick.
  * `p`: Anteil des Downloads, null = unbekannt.
  */
 export const useUpdateRun = create<{ phase: "idle" | "download" | "wait" | "ready" | "install"; p: number | null }>(() => ({ phase: "idle", p: null }));
 
-export const WAIT_FOR_IDLE = "Neu starten geht, sobald Minecraft beendet ist und keine Downloads mehr laufen.";
+export const WAIT_FOR_IDLE = "Neu starten geht, sobald Minecraft beendet ist und keine Aufgaben mehr laufen.";
 
 /**
  * Lädt das Update und installiert es, wenn der Launcher frei ist: unter Windows beendet der Installer den Launcher,
- * mitten im Spiel gingen Protokoll, Spielzeit und Absturzerkennung verloren, mitten im Download eine halbe Instanz.
+ * mitten im Spiel gingen Protokoll, Spielzeit und Absturzerkennung verloren, mitten in einer Aufgabe bliebe Halbes liegen.
  * Musste gewartet werden, startet erst der nächste Aufruf (Phase `ready`) neu.
  */
 export async function installAppUpdate(update: Update) {
@@ -106,11 +106,8 @@ async function deferRestart(update: Update) {
   });
 }
 
-/** Startet oder läuft ein Minecraft, oder lädt gerade eine Instanz oder ein Inhalt? */
-function launcherBusy() {
-  const game = useGame.getState();
-  return isGameActive(game) || Object.keys(game.installs).length > 0 || useContentState.getState().active != null;
-}
+/** Startet oder läuft ein Minecraft, oder läuft eine Aufgabe aus dem Aufgaben-Menü? */
+const launcherBusy = () => isGameActive(useGame.getState()) || anyTaskRunning();
 
 /** Erfüllt sich, sobald `launcherBusy` nicht mehr gilt. */
 function launcherIdle() {
@@ -118,10 +115,10 @@ function launcherIdle() {
     const check = () => {
       if (launcherBusy()) return;
       offGame();
-      offContent();
+      offTasks();
       resolve();
     };
     const offGame = useGame.subscribe(check);
-    const offContent = useContentState.subscribe(check);
+    const offTasks = subscribeRunningTasks(check);
   });
 }
