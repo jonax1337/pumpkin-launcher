@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import { useInfiniteQuery, useQueries, useQuery, useQueryClient, type QueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -8,7 +8,8 @@ import {
   MenuItem, MenuLabel, MenuNote, MenuScroll, MenuSep, Meta, Panel, ProjectIcon, RowTitle, SceneThumb, SearchField, SectionHeader, Select, Sheet, Skel, SkelRow,
   Switch, TabPanel, Tabs, TextField, Tip, type MenuEntry,
 } from "@/ui";
-import { cancelContent, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { useBackgroundTask } from "@/hooks/useBackgroundTask";
+import { cancelContent, useContentState } from "@/hooks/useContent";
 import { CATALOG_STALE_MS, SEARCH_STALE_MS } from "@/hooks/staleTimes";
 import { useDebounced } from "@/hooks/useDebounced";
 import { useInstances } from "@/hooks/useInstances";
@@ -93,9 +94,20 @@ const categoryNames = (cats: string[], max = 2) =>
 
 // ---------- Kleine Zustände in Zeilen ----------
 
+type JobWidth = ComponentProps<typeof JobProgress>["width"];
+
 /** Breite des laufenden Vorgangs: Projektkopf 230, Zeile 120, Seitenpanel 112. */
 const jobWidth = (large?: boolean, compact?: boolean) => (large ? 230 : compact ? 112 : 120);
 
+/** Fortschritt des laufenden Vorgangs, wenn er das Projekt `projectId` betrifft; sonst `null`. */
+const progressFor = ({ active, target, progress }: ReturnType<typeof useContentState.getState>, projectId: string, width: JobWidth) =>
+  active && target === projectId ? <JobProgress label={progressShortLabel(progress)} p={progressShare(progress)} width={width} /> : null;
+
+/** Wie `progressFor`, für Komponenten, die den Content-Zustand sonst nicht brauchen. */
+const useJobProgressFor = (projectId: string, width: JobWidth) => progressFor(useContentState(), projectId, width);
+
+/** Meldet, dass es zum Projekt keine Version für die Minecraft-Version der Instanz gibt. */
+const notifyMissing = (instance: Instance, title: string) => toast.error(t("components.content.notForMc", { name: title, version: instance.minecraftVersion }));
 
 /** Instanzen je Projekt-ID: als Inhalt drin oder als Modpack angelegt. */
 function useInstalledIn() {
@@ -156,7 +168,7 @@ const destination = (instance: Instance, world?: World): { label: string; tab: I
 function useAddContent() {
   const { t } = useI18n();
   const qc = useQueryClient();
-  const install = useContentInstall();
+  const { run } = useBackgroundTask();
   const navigate = useNavigate();
   return async (
     instance: Instance, projectId: string, title: string, type: CatalogType, opts: { versionId?: string; openAction?: boolean; source?: Source; world?: World } = {},
@@ -197,9 +209,12 @@ function useAddContent() {
     const { world } = opts;
     const perform = (op: string) =>
       world ? installDatapack(qc, instance, world, id, op) : source === "modrinth" ? api.modrinthInstallMod(instance.id, id, op) : api.providerInstallMod(source, instance.id, projectId, id, op);
-    install.mutate(withTarget(projectId, perform, t("components.content.installTask", { name: title }), { doneLabel: t("components.content.installTaskDone", { name: title }) }), {
-      onSuccess: (result) => {
-        if (!result) return;
+    run({
+      key: projectId,
+      label: t("components.content.installTask", { name: title }),
+      doneLabel: t("components.content.installTaskDone", { name: title }),
+      task: perform,
+      onDone: (result) => {
         const extra = result.mods.length - before - 1;
         const deps = extra > 0 ? t(extra === 1 ? "components.content.deps.one" : "components.content.deps.other", { n: extra }) : "";
         if (!opts.openAction) return void toast.success(t("components.content.added", { name: title }) + deps);
@@ -217,7 +232,8 @@ function AddButton({ instance, world, projectId, title, type, versionId, large, 
 }) {
   const { t } = useI18n();
   const addContent = useAddContent();
-  const { active, target, progress } = useContentState();
+  const active = useContentState((s) => !!s.active);
+  const job = useJobProgressFor(projectId, jobWidth(large, compact));
   const [state, setState] = useState<"idle" | "checking" | "missing">("idle");
   const installed = instance.mods.some((m) => ownerKey(m) === projectKey(source, projectId));
 
@@ -230,14 +246,14 @@ function AddButton({ instance, world, projectId, title, type, versionId, large, 
 
   if (installed) return <Chip icon="check">{t("components.content.installed")}</Chip>;
   if (state === "checking") return <JobProgress label={t("components.common.checking")} p={null} width={jobWidth(large, compact)} />;
-  if (active && target === projectId) return <JobProgress label={progressShortLabel(progress)} p={progressShare(progress)} width={jobWidth(large, compact)} />;
+  if (job) return job;
   if (state === "missing" && !compact) return <Hint>{t("components.content.noVersionFor", { version: instance.minecraftVersion })}</Hint>;
   return large ? (
-    <Button variant="primary" size="l" icon="plus" disabled={!!active} onClick={add}>{t("common.add")}</Button>
+    <Button variant="primary" size="l" icon="plus" disabled={active} onClick={add}>{t("common.add")}</Button>
   ) : versionId ? (
-    <IconButton size="s" icon="dl" label={t("components.content.addThisVersion", { name: title })} tip={t("components.content.addVersion")} disabled={!!active} onClick={add} />
+    <IconButton size="s" icon="dl" label={t("components.content.addThisVersion", { name: title })} tip={t("components.content.addVersion")} disabled={active} onClick={add} />
   ) : (
-    <Button size="s" icon="plus" disabled={!!active} aria-label={t("components.content.addAria", { name: title })} onClick={add}>{t("common.add")}</Button>
+    <Button size="s" icon="plus" disabled={active} aria-label={t("components.content.addAria", { name: title })} onClick={add}>{t("common.add")}</Button>
   );
 }
 
@@ -248,7 +264,8 @@ export function AddToInstanceMenu({ projectId, title, type, large, source = "mod
   const looks = useLookStore((s) => s.looks);
   const addContent = useAddContent();
   const navigate = useNavigate();
-  const { active, target, progress } = useContentState();
+  const active = useContentState((s) => !!s.active);
+  const job = useJobProgressFor(projectId, jobWidth(large));
   const [open, setOpen] = useState(false);
   // Alle Versionen einmal laden, um Instanzen ohne passende Minecraft-Version vorab auszugrauen.
   const all = useQuery({ ...allVersionsQuery(projectId, source), enabled: open });
@@ -260,13 +277,13 @@ export function AddToInstanceMenu({ projectId, title, type, large, source = "mod
   const rows = (instances.data ?? []).map((i) => ({ i, reason: reasonFor(i) }));
   const usable = rows.some((r) => !r.reason);
 
-  if (active && target === projectId) return <JobProgress label={progressShortLabel(progress)} p={progressShare(progress)} width={jobWidth(large)} />;
+  if (job) return job;
   return (
     <Menu
       open={open}
       onOpenChange={setOpen}
       width={300}
-      trigger={addMenuTrigger(title, "instance", !!active, large)}
+      trigger={addMenuTrigger(title, "instance", active, large)}
     >
       <MenuLabel>{t("components.content.addToMenu")}</MenuLabel>
       <MenuScroll>
@@ -279,9 +296,7 @@ export function AddToInstanceMenu({ projectId, title, type, large, source = "mod
               lead={<SceneThumb bio={look.bio} seed={look.seed} size={28} />}
               sub={reason ?? fitsLabel(i, type)}
               onSelect={() =>
-                void addContent(i, projectId, title, type, { openAction: true, source }).then(
-                  (r) => r === "missing" && toast.error(t("components.content.notForMc", { name: title, version: i.minecraftVersion })),
-                )
+                void addContent(i, projectId, title, type, { openAction: true, source }).then((r) => r === "missing" && notifyMissing(i, title))
               }
             >
               {i.name}
@@ -309,16 +324,15 @@ export function AddToWorldMenu({ projectId, title, large }: { projectId: string;
   const { t } = useI18n();
   const instances = useInstances();
   const addContent = useAddContent();
-  const { active, target, progress } = useContentState();
+  const active = useContentState((s) => !!s.active);
+  const job = useJobProgressFor(projectId, jobWidth(large));
   const [open, setOpen] = useState(false);
   const list = instances.data ?? [];
   const worlds = useQueries({ queries: list.map((i) => ({ ...worldsQuery(i.id), enabled: open })) });
   // Wie im Menü für Instanzen: Versionen einmal laden, um Instanzen ohne passende Minecraft-Version vorab auszugrauen.
   const all = useQuery({ ...allVersionsQuery(projectId), enabled: open });
   const add = (i: Instance, world: World) =>
-    void addContent(i, projectId, title, "datapack", { world, openAction: true }).then(
-      (r) => r === "missing" && toast.error(t("components.content.notForMc", { name: title, version: i.minecraftVersion })),
-    );
+    void addContent(i, projectId, title, "datapack", { world, openAction: true }).then((r) => r === "missing" && notifyMissing(i, title));
   const items: MenuEntry[] = list.map((i, k) => {
     const found = worlds[k].data;
     const reason = all.data && !all.data.some((v) => versionFits(v, i, "datapack")) ? t("components.content.noVersionForLower", { version: i.minecraftVersion }) : found?.length === 0 ? t("components.content.noWorldsLower") : null;
@@ -330,9 +344,9 @@ export function AddToWorldMenu({ projectId, title, large }: { projectId: string;
     };
   });
 
-  if (active && target === projectId) return <JobProgress label={progressShortLabel(progress)} p={progressShare(progress)} width={jobWidth(large)} />;
+  if (job) return job;
   return (
-    <Menu open={open} onOpenChange={setOpen} width={300} trigger={addMenuTrigger(title, "world", !!active, large)} items={[{ label: t("components.content.addToMenu") }, ...items]}>
+    <Menu open={open} onOpenChange={setOpen} width={300} trigger={addMenuTrigger(title, "world", active, large)} items={[{ label: t("components.content.addToMenu") }, ...items]}>
       {list.length === 0 && !instances.isPending && <MenuNote>{t("components.content.noInstancesYet")}</MenuNote>}
       {worlds.some((q) => q.isPending) && <MenuNote>{t("components.content.searchingWorlds")}</MenuNote>}
     </Menu>
@@ -353,7 +367,7 @@ const addMenuTrigger = (title: string, where: "instance" | "world", disabled: bo
 export function useInstallPack(projectId: string, title: string, onDone?: (instanceId: string) => void, source: Source = "modrinth") {
   const { t } = useI18n();
   const qc = useQueryClient();
-  const install = useContentInstall();
+  const background = useBackgroundTask();
   const navigate = useNavigate();
   const [checking, setChecking] = useState(false);
   const { active, target, progress } = useContentState();
@@ -374,9 +388,13 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
       if (!id) return;
     }
     const perform = (op: string) => (source === "modrinth" ? api.modrinthInstallPack(id, name, op) : api.providerInstallPack(source, projectId, id, name, op));
-    install.mutate(withTarget(projectId, perform, t("components.pack.installTask", { name }), { cancellable: true, doneLabel: t("components.pack.installTaskDone", { name }) }), {
-      onSuccess: (instance) => {
-        if (!instance) return;
+    background.run({
+      key: projectId,
+      label: t("components.pack.installTask", { name }),
+      doneLabel: t("components.pack.installTaskDone", { name }),
+      cancellable: true,
+      task: perform,
+      onDone: (instance) => {
         toast.success(t("components.pack.readyToast", { name: instance.name }), {
           action: onDone ? undefined : { label: t("common.open"), onClick: () => navigate(instanceUrl(instance.id)) },
         });
@@ -599,7 +617,7 @@ export function ContentResults({ type, instance, world, action, onOpen, query: t
   });
   const hits = results.data?.pages.flatMap((p) => p.hits) ?? [];
   const total = results.data?.pages[0]?.total_hits ?? 0;
-  const { active, target, progress } = useContentState();
+  const content = useContentState();
   const hasFilter = !!(query || outerMc || outerLoader);
   const installedIn = useInstalledIn();
   // Nur eine echte Spitze hervorheben (Downloads, Follower), nicht den zufällig neuesten Upload.
@@ -642,7 +660,7 @@ export function ContentResults({ type, instance, world, action, onOpen, query: t
         <>
           <List variant={variant} aria-label={TYPE_LABELS[type]}>
             {hits.map((hit, k) => {
-              const busy = !instance && !!active && target === hit.project_id && type !== "modpack";
+              const job = !instance && type !== "modpack" ? progressFor(content, hit.project_id, jobWidth(false, compact)) : null;
               const feat = featured && k === 0;
               return (
                 <ListRow key={hit.project_id} feature={feat} index={k % 20} hit={{ onClick: () => onOpen(hit.project_id, hit), label: t("components.search.viewProject", { name: hit.title }) }}>
@@ -661,15 +679,14 @@ export function ContentResults({ type, instance, world, action, onOpen, query: t
                     }
                   />
                   <Cell flex align="end">
-                    {busy ? (
-                      <JobProgress label={progressShortLabel(progress)} p={progressShare(progress)} width={jobWidth(false, compact)} />
-                    ) : instance ? (
-                      <AddButton instance={instance} world={world} projectId={hit.project_id} title={hit.title} type={type} compact={compact} source={source} />
-                    ) : action ? (
-                      action(hit)
-                    ) : (
-                      <Icon name="chev" size="s" tone="muted" />
-                    )}
+                    {job ??
+                      (instance ? (
+                        <AddButton instance={instance} world={world} projectId={hit.project_id} title={hit.title} type={type} compact={compact} source={source} />
+                      ) : action ? (
+                        action(hit)
+                      ) : (
+                        <Icon name="chev" size="s" tone="muted" />
+                      ))}
                   </Cell>
                 </ListRow>
               );

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { useSearchParams } from "react-router";
 import { currentLanguage, useI18n } from "@/i18n";
 import { LOUD_PHASES, PlayButton, StatusChip, usePhase } from "@/components/game";
@@ -6,8 +6,8 @@ import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
 import { loaderLine, playtimeLine } from "@/components/common";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
 import { SkelList } from "@/components/SkelList";
+import { useAnnouncement } from "@/hooks/useAnnouncement";
 import { useBackgroundUpdates, useCurrentUpdates } from "@/hooks/useContent";
-import { ANNOUNCE_DEBOUNCE_MS } from "@/hooks/useDebounced";
 import { byRecent, groupsOf, ungrouped, useInstances } from "@/hooks/useInstances";
 import { WIDTH } from "@/lib/breakpoints";
 import { updatesLabel } from "@/lib/modrinth";
@@ -170,17 +170,7 @@ export function InstancesPage() {
 
   // Ergebnis von Suche, Filter und Sortierung ansagen (nur Screenreader, beim Tippen nach kurzer Pause).
   const total = instances?.length ?? 0;
-  const [said, setSaid] = useState("");
-  const viewKey = `${q}|${loader}|${sort}`;
-  const lastView = useRef(viewKey);
-  useEffect(() => {
-    if (viewKey === lastView.current) return;
-    const timer = setTimeout(() => {
-      lastView.current = viewKey;
-      setSaid(t(total === 1 ? "pages.instances.resultCount.one" : "pages.instances.resultCount.other", { shown: shown.length, total }));
-    }, ANNOUNCE_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [viewKey, shown.length, total]);
+  const [said] = useAnnouncement(`${q}|${loader}|${sort}`, t(total === 1 ? "pages.instances.resultCount.one" : "pages.instances.resultCount.other", { shown: shown.length, total }));
 
   // Leere Bibliothek: keine Werkzeugleiste, der Leerzustand trägt „Neue Instanz“.
   const empty = !error && !isLoading && !instances?.length;

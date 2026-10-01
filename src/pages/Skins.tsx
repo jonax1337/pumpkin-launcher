@@ -1,9 +1,11 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useI18n } from "@/i18n";
+import { NameDialog } from "@/components/NameDialog";
 import { QueryList } from "@/components/QueryList";
 import { SkelList } from "@/components/SkelList";
 import { startMsLogin } from "@/components/PlayerNames";
+import { useConfirmTarget } from "@/hooks/useConfirmTarget";
 import {
   useAddSkin, useDeleteSkin, useResetSkin, useSaveActiveSkin, useSetCape, useSkinLibrary, useSkinProfile, useSkinTexture, useUpdateSkin,
   useUploadSkin,
@@ -15,8 +17,8 @@ import { CapeFigure, SkinFigure } from "@/pixel/SkinFigure";
 import { useUsableAccount } from "@/store/offline";
 import type { ActiveAccount } from "@/store/settings";
 import {
-  Actions, Button, CardGrid, ConfirmDialog, Dialog, DialogActions, Empty, ErrorBox, Field, Hint, IconButton, Menu, PageHeader, Panel, SectionHeader,
-  Segmented, Select, Skel, StatusPanel, TextField, Trunc, type MenuEntry,
+  Actions, Button, CardGrid, ConfirmDialog, Empty, ErrorBox, Field, Hint, IconButton, Menu, PageHeader, Panel, SectionHeader,
+  Segmented, Select, Skel, StatusPanel, Trunc, type MenuEntry,
 } from "@/ui";
 
 // Radix-Auswahlen kennen keinen leeren Wert.
@@ -58,7 +60,7 @@ function CurrentLook({ account }: { account: MicrosoftAccount }) {
   const profile = useSkinProfile(account.id);
   const save = useSaveActiveSkin();
   const reset = useResetSkin();
-  const [confirmReset, setConfirmReset] = useState(false);
+  const resetConfirm = useConfirmTarget<MicrosoftAccount>();
 
   if (profile.error) return <ErrorBox className="mt-4" title={t("pages.skins.loadErrorTitle")} error={profile.error} onRetry={() => void profile.refetch()} />;
   if (!profile.data) return <Skel className="mt-4" h={336} />;
@@ -77,17 +79,17 @@ function CurrentLook({ account }: { account: MicrosoftAccount }) {
           <Button icon="save" disabled={!skin || save.isPending} onClick={() => save.mutate({ accountId: account.id, name: account.username })}>
             {t("pages.skins.saveToLibrary")}
           </Button>
-          <Button variant="ghost" icon="redo" onClick={() => setConfirmReset(true)}>{t("pages.skins.wearDefault")}</Button>
+          <Button variant="ghost" icon="redo" onClick={() => resetConfirm.ask(account)}>{t("pages.skins.wearDefault")}</Button>
         </Actions>
       </div>
       <ConfirmDialog
-        open={confirmReset}
-        onOpenChange={setConfirmReset}
-        title={t("pages.skins.wearDefaultTitle")}
-        text={t("pages.skins.wearDefaultText")}
-        confirmLabel={t("pages.settings.resetLabel")}
-        pending={reset.isPending}
-        onConfirm={() => reset.mutate({ accountId: account.id }, { onSuccess: () => setConfirmReset(false) })}
+        {...resetConfirm.dialogProps({
+          title: () => t("pages.skins.wearDefaultTitle"),
+          text: () => t("pages.skins.wearDefaultText"),
+          confirmLabel: t("pages.settings.resetLabel"),
+          pending: reset.isPending,
+          onConfirm: ({ id }, close) => reset.mutate({ accountId: id }, { onSuccess: close }),
+        })}
       />
     </Panel>
   );
@@ -118,7 +120,7 @@ function Library({ accountId }: { accountId: string | null }) {
   const add = useAddSkin();
   const remove = useDeleteSkin();
   const [renaming, setRenaming] = useState<LibrarySkin | null>(null);
-  const [removing, setRemoving] = useState<LibrarySkin | null>(null);
+  const removal = useConfirmTarget<LibrarySkin>();
 
   async function pickFile() {
     const [path] = await api.pickPaths({ filters: [{ name: t("pages.skins.fileDialogSkin"), extensions: ["png"] }] });
@@ -156,7 +158,7 @@ function Library({ accountId }: { accountId: string | null }) {
           {(list) => (
             <CardGrid>
               {[...list].sort((a, b) => b.addedAt - a.addedAt).map((skin) => (
-                <SkinCard key={skin.id} skin={skin} accountId={accountId} onRename={() => setRenaming(skin)} onDelete={() => setRemoving(skin)} />
+                <SkinCard key={skin.id} skin={skin} accountId={accountId} onRename={() => setRenaming(skin)} onDelete={() => removal.ask(skin)} />
               ))}
             </CardGrid>
           )}
@@ -164,12 +166,12 @@ function Library({ accountId }: { accountId: string | null }) {
       </div>
       {renaming && <RenameDialog key={renaming.id} skin={renaming} onClose={() => setRenaming(null)} />}
       <ConfirmDialog
-        open={!!removing}
-        onOpenChange={(o) => !o && setRemoving(null)}
-        title={t("components.instance.deleteQuotedTitle", { name: removing?.name ?? "" })}
-        text={t("pages.skins.deleteText")}
-        pending={remove.isPending}
-        onConfirm={() => removing && remove.mutate(removing.id, { onSuccess: () => setRemoving(null) })}
+        {...removal.dialogProps({
+          title: (skin) => t("components.instance.deleteQuotedTitle", { name: skin.name }),
+          text: () => t("pages.skins.deleteText"),
+          pending: remove.isPending,
+          onConfirm: (skin, close) => remove.mutate(skin.id, { onSuccess: close }),
+        })}
       />
     </section>
   );
@@ -213,30 +215,16 @@ function SkinCard({ skin, accountId, onRename, onDelete }: { skin: LibrarySkin; 
 
 function RenameDialog({ skin, onClose }: { skin: LibrarySkin; onClose: () => void }) {
   const { t } = useI18n();
-  const [name, setName] = useState(skin.name);
   const update = useUpdateSkin();
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    update.mutate({ id: skin.id, name: name.trim(), variant: skin.variant }, { onSuccess: onClose });
-  }
   return (
-    <Dialog
-      open
-      onOpenChange={(o) => !o && onClose()}
+    <NameDialog
       title={t("pages.skins.renameTitle")}
-      width={480}
-      footer={
-        <DialogActions
-          cancel={t("common.cancel")}
-          confirm={{ label: update.isPending ? t("components.common.saving") : t("common.save"), width: 130, form: "skin-name", disabled: update.isPending || !name.trim() }}
-        />
-      }
-    >
-      <form id="skin-name" onSubmit={submit}>
-        <Field label={t("common.name")}>
-          <TextField value={name} onChange={(e) => setName(e.target.value)} maxLength={64} autoFocus />
-        </Field>
-      </form>
-    </Dialog>
+      label={t("common.name")}
+      initial={skin.name}
+      maxLength={64}
+      pending={update.isPending}
+      onSubmit={(name) => update.mutate({ id: skin.id, name, variant: skin.variant }, { onSuccess: onClose })}
+      onClose={onClose}
+    />
   );
 }

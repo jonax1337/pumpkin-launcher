@@ -12,7 +12,9 @@ import { useInstallPack } from "@/components/ContentBrowser";
 import { ImportPane } from "@/components/LauncherImport";
 import { SkelList } from "@/components/SkelList";
 import { catalogKeys } from "@/hooks/queryKeys";
-import { cancelContent, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { useBackgroundTask } from "@/hooks/useBackgroundTask";
+import { useConfirmTarget } from "@/hooks/useConfirmTarget";
+import { cancelContent, useContentState } from "@/hooks/useContent";
 import { SEARCH_STALE_MS } from "@/hooks/staleTimes";
 import { useDebounced } from "@/hooks/useDebounced";
 import { useFileDrop } from "@/hooks/useFileDrop";
@@ -24,7 +26,7 @@ import { TYPE_ONE_KEYS } from "@/lib/catalog";
 import { fileName, formatDate } from "@/lib/format";
 import { formatDownloads, isMrpack, MRPACK_EXT, progressLabel } from "@/lib/modrinth";
 import { discoverUrl, instanceUrl, readNewInstanceStart } from "@/lib/routes";
-import { ALL_LOADERS, LOADER_LABELS, type ModLoader, type Template } from "@/lib/types";
+import { ALL_LOADERS, LOADER_LABELS, type Instance, type ModLoader, type Template } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Tab = "blank" | "pack" | "file" | "tpl" | "import";
@@ -96,7 +98,7 @@ function TemplatePane({ selected, onSelect }: { selected: string | null; onSelec
   const { t } = useI18n();
   const templates = useTemplates();
   const del = useDeleteTemplate();
-  const [toDelete, setToDelete] = useState<Template | null>(null);
+  const removal = useConfirmTarget<Template>();
 
   if (templates.error) return <ErrorBox title={t("components.template.loadFailed")} error={templates.error} onRetry={() => void templates.refetch()} />;
   if (templates.isPending)
@@ -125,26 +127,24 @@ function TemplatePane({ selected, onSelect }: { selected: string | null; onSelec
               selected={selected === tpl.id}
               onClick={() => onSelect(tpl)}
             />
-            <IconButton size="s" icon="trash" tone="bad" label={t("components.template.deleteNamed", { name: tpl.name })} tip={t("components.template.delete")} disabled={del.isPending} onClick={() => setToDelete(tpl)} />
+            <IconButton size="s" icon="trash" tone="bad" label={t("components.template.deleteNamed", { name: tpl.name })} tip={t("components.template.delete")} disabled={del.isPending} onClick={() => removal.ask(tpl)} />
           </div>
         ))}
       </div>
       <Hint className="mt-3">{t("components.template.saveHint")}</Hint>
       <ConfirmDialog
-        open={!!toDelete}
-        onOpenChange={(o) => !o && setToDelete(null)}
-        title={t("components.template.deleteQuotedTitle", { name: toDelete?.name ?? "" })}
-        text={t("components.template.deleteText")}
-        pending={del.isPending}
-        onConfirm={() =>
-          toDelete &&
-          del.mutate(toDelete.id, {
-            onSuccess: () => {
-              if (selected === toDelete.id) onSelect(null);
-              setToDelete(null);
-            },
-          })
-        }
+        {...removal.dialogProps({
+          title: (tpl) => t("components.template.deleteQuotedTitle", { name: tpl.name }),
+          text: () => t("components.template.deleteText"),
+          pending: del.isPending,
+          onConfirm: (tpl, close) =>
+            del.mutate(tpl.id, {
+              onSuccess: () => {
+                if (selected === tpl.id) onSelect(null);
+                close();
+              },
+            }),
+        })}
       />
     </>
   );
@@ -194,9 +194,9 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
   const foreign = useForeignSelection(tab === "import");
   const importer = useImportInstances();
 
-  const install = useContentInstall();
+  const background = useBackgroundTask();
   const { active, progress } = useContentState();
-  const busy = create.isPending || install.isPending || !!packInstall.busy || importer.running;
+  const busy = create.isPending || background.isPending || !!packInstall.busy || importer.running;
   useEffect(() => onBusy(busy), [busy, onBusy]);
 
   async function chooseFile() {
@@ -213,7 +213,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
 
   function go() {
     if (!valid || busy) return;
-    const done = { onSuccess: (instance: { id: string } | null) => instance && onDone(instance.id) };
+    const openInstance = (instance: Instance) => onDone(instance.id);
     if (tab === "blank") {
       create.mutate(
         {
@@ -223,24 +223,38 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
           loaderVersion: selectedLoader === LATEST ? null : selectedLoader,
           memoryMb: memory,
         },
-        done,
+        { onSuccess: openInstance },
       );
     } else if (tab === "pack") {
       void packInstall.run();
     } else if (tab === "file") {
       const title = customName.trim() || packName(path);
-      install.mutate(withTarget("import", (op) => api.modrinthImportPack(path, title, op), t("components.newInstance.importTask", { name: title }), { cancellable: true, doneLabel: t("hooks.import.instanceTaskDone", { name: title }) }), done);
+      background.run({
+        key: "import",
+        label: t("components.newInstance.importTask", { name: title }),
+        doneLabel: t("hooks.import.instanceTaskDone", { name: title }),
+        cancellable: true,
+        task: (op) => api.modrinthImportPack(path, title, op),
+        onDone: openInstance,
+      });
     } else if (tab === "import") {
       void importer.run(foreign.chosen).then((last) => last && onDone(last.id));
     } else if (template) {
-      install.mutate(withTarget(`template:${template.id}`, (op) => api.templateCreateInstance(template.id, template.name, op), t("components.newInstance.createTemplateTask", { name: template.name }), { cancellable: true, doneLabel: t("components.newInstance.createTemplateTaskDone", { name: template.name }) }), done);
+      background.run({
+        key: `template:${template.id}`,
+        label: t("components.newInstance.createTemplateTask", { name: template.name }),
+        doneLabel: t("components.newInstance.createTemplateTaskDone", { name: template.name }),
+        cancellable: true,
+        task: (op) => api.templateCreateInstance(template.id, template.name, op),
+        onDone: openInstance,
+      });
     }
   }
 
   const goLabel =
     tab === "blank" ? (create.isPending ? t("components.newInstance.creating") : t("components.newInstance.create"))
     : tab === "pack" ? (packInstall.busy ?? t("components.newInstance.create"))
-    : install.isPending || importer.running ? progressLabel(progress)
+    : background.isPending || importer.running ? progressLabel(progress)
     : tab === "file" ? t("components.newInstance.importLabel")
     : tab === "import" ? (foreign.chosen.length > 1 ? t("components.newInstance.importMany", { n: foreign.chosen.length }) : t("components.newInstance.importLabel"))
     : t("components.newInstance.create");

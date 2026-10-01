@@ -6,6 +6,7 @@ import {
 } from "@/ui";
 import { AddContentSheet } from "@/components/ContentBrowser";
 import { QueryList } from "@/components/QueryList";
+import { useConfirmTarget } from "@/hooks/useConfirmTarget";
 import { useContentState } from "@/hooks/useContent";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { usePlay } from "@/hooks/useInstances";
@@ -55,7 +56,7 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
   const startsIntoWorlds = useWorldQuickPlay(instance);
   const { backup, remove } = useWorldJobs(instance);
   const { target, progress } = useContentState();
-  const [removing, setRemoving] = useState<World | null>(null);
+  const removal = useConfirmTarget<World>();
   // Sicherungen einer Welt bzw. (world = null) aller Welten, auch gelöschter.
   const [showBackups, setShowBackups] = useState<{ world: string | null } | null>(null);
   // Datenpakete einer Welt: erst die Liste, `search` = stattdessen der Katalog im Seitenpanel.
@@ -68,7 +69,7 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
     { id: "backups", text: t("detail.worlds.backupsMenu"), icon: "clock", onSelect: () => setShowBackups({ world: w.id }) },
     { id: "packs", text: t("detail.worlds.datapacksMenu"), icon: "box", onSelect: () => setPacks({ world: w, search: false }) },
     "-",
-    { id: "del", text: t("detail.worlds.deleteMenu"), icon: "trash", bad: true, disabled: !!busy, onSelect: () => setRemoving(w) },
+    { id: "del", text: t("detail.worlds.deleteMenu"), icon: "trash", bad: true, disabled: !!busy, onSelect: () => removal.ask(w) },
   ];
 
   return (
@@ -108,14 +109,14 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
         </QueryList>
       </div>
       <ConfirmDialog
-        open={!!removing}
-        onOpenChange={(o) => !o && setRemoving(null)}
-        title={t("components.instance.deleteQuotedTitle", { name: removing?.name ?? "" })}
-        text={t("detail.worlds.deleteText")}
-        onConfirm={() => {
-          if (removing) remove.mutate(removing);
-          setRemoving(null);
-        }}
+        {...removal.dialogProps({
+          title: (world) => t("components.instance.deleteQuotedTitle", { name: world.name }),
+          text: () => t("detail.worlds.deleteText"),
+          onConfirm: (world, close) => {
+            remove.mutate(world);
+            close();
+          },
+        })}
       />
       {showBackups && <BackupsDialog instance={instance} world={showBackups.world} busy={busy} onClose={() => setShowBackups(null)} />}
       {packs && !packs.search && (
@@ -212,7 +213,7 @@ function BackupsDialog({ instance, world, busy, onClose }: { instance: Instance;
   const backups = useWorldBackups(instance.id, world);
   const { restore } = useWorldJobs(instance);
   const remove = useDeleteBackup(instance.id);
-  const [removing, setRemoving] = useState<WorldBackup | null>(null);
+  const removal = useConfirmTarget<WorldBackup>();
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} title={t("detail.worlds.backupsTitle")} sub={world ?? instance.name} width={560} footer={<DialogActions cancel={t("common.close")} />}>
       <QueryList
@@ -234,7 +235,7 @@ function BackupsDialog({ instance, world, busy, onClose }: { instance: Instance;
                   <GuardedButton size="s" icon="redo" blocked={busy} disabled={restore.isPending} onClick={() => restore.mutate(b)}>
                     {t("detail.worlds.restoreAction")}
                   </GuardedButton>
-                  <IconButton size="s" icon="trash" label={t("detail.worlds.backupDeleteAria", { date: formatDateTime(b.createdAt) })} tip={t("common.delete")} onClick={() => setRemoving(b)} />
+                  <IconButton size="s" icon="trash" label={t("detail.worlds.backupDeleteAria", { date: formatDateTime(b.createdAt) })} tip={t("common.delete")} onClick={() => removal.ask(b)} />
                 </Actions>
               </ListRow>
             ))}
@@ -242,12 +243,12 @@ function BackupsDialog({ instance, world, busy, onClose }: { instance: Instance;
         )}
       </QueryList>
       <ConfirmDialog
-        open={!!removing}
-        onOpenChange={(o) => !o && setRemoving(null)}
-        title={t("detail.worlds.backupDeleteTitle")}
-        text={removing && t("detail.worlds.backupDeleteText", { world: removing.world, date: formatDateTime(removing.createdAt) })}
-        pending={remove.isPending}
-        onConfirm={() => removing && remove.mutate(removing, { onSuccess: () => setRemoving(null) })}
+        {...removal.dialogProps({
+          title: () => t("detail.worlds.backupDeleteTitle"),
+          text: (backup) => t("detail.worlds.backupDeleteText", { world: backup.world, date: formatDateTime(backup.createdAt) }),
+          pending: remove.isPending,
+          onConfirm: (backup, close) => remove.mutate(backup, { onSuccess: close }),
+        })}
       />
     </Dialog>
   );

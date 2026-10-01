@@ -4,6 +4,7 @@ import {
   TextField, type MenuEntry,
 } from "@/ui";
 import { QueryList } from "@/components/QueryList";
+import { useConfirmTarget } from "@/hooks/useConfirmTarget";
 import { useRemoveServer, useSaveServer, useServers } from "@/hooks/useWorlds";
 import { useI18n } from "@/i18n";
 import type { Instance, Server } from "@/lib/types";
@@ -18,7 +19,7 @@ export function ServersSection({ instance, busy, onPlay }: SectionProps) {
   const remove = useRemoveServer(instance.id);
   // Server im Dialog; `index` null = neu.
   const [editing, setEditing] = useState<{ index: number | null; server: Server } | null>(null);
-  const [removing, setRemoving] = useState<{ index: number; server: Server } | null>(null);
+  const removal = useConfirmTarget<{ index: number; server: Server }>();
   const addButton = (
     <GuardedButton size="s" icon="plus" blocked={busy} onClick={() => setEditing({ index: null, server: NEW_SERVER })}>
       {t("common.add")}
@@ -28,7 +29,7 @@ export function ServersSection({ instance, busy, onPlay }: SectionProps) {
   const menuFor = (server: Server, index: number): MenuEntry[] => [
     { id: "edit", text: t("detail.servers.editMenu"), icon: "file", disabled: !!busy, onSelect: () => setEditing({ index, server }) },
     "-",
-    { id: "rm", text: t("detail.servers.removeMenu"), icon: "trash", bad: true, disabled: !!busy, onSelect: () => setRemoving({ index, server }) },
+    { id: "rm", text: t("detail.servers.removeMenu"), icon: "trash", bad: true, disabled: !!busy, onSelect: () => removal.ask({ index, server }) },
   ];
 
   return (
@@ -65,13 +66,13 @@ export function ServersSection({ instance, busy, onPlay }: SectionProps) {
       </div>
       {editing && <ServerDialog key={editing.index ?? "new"} instance={instance} {...editing} onClose={() => setEditing(null)} />}
       <ConfirmDialog
-        open={!!removing}
-        onOpenChange={(o) => !o && setRemoving(null)}
-        title={t("detail.servers.removeTitle", { name: removing?.server.name ?? "" })}
-        text={t("detail.servers.removeText")}
-        confirmLabel={t("common.remove")}
-        pending={remove.isPending}
-        onConfirm={() => removing && remove.mutate(removing, { onSuccess: () => setRemoving(null) })}
+        {...removal.dialogProps({
+          title: ({ server }) => t("detail.servers.removeTitle", { name: server.name }),
+          text: () => t("detail.servers.removeText"),
+          confirmLabel: t("common.remove"),
+          pending: remove.isPending,
+          onConfirm: (target, close) => remove.mutate(target, { onSuccess: close }),
+        })}
       />
     </section>
   );

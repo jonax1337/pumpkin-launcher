@@ -3,7 +3,8 @@ import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n";
-import { showNameError, startMsLogin } from "@/components/PlayerNames";
+import { PlayerNameField } from "@/components/PlayerNameField";
+import { startMsLogin } from "@/components/PlayerNames";
 import { importable, useForeignInstances } from "@/hooks/useImport";
 import { useCreateInstance, usePlay, useVersions } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
@@ -11,7 +12,7 @@ import { errorMessage } from "@/lib/errors";
 import type { ContentVersion } from "@/lib/modrinth";
 import { discoverUrl, newInstanceUrl } from "@/lib/routes";
 import { cn } from "@/lib/utils";
-import { Button, Choice, Field, Glyph, Hint, TextField, useRoving } from "@/ui";
+import { Button, Choice, Glyph, Hint, useRoving } from "@/ui";
 import type { GlyphName, GlyphPalette } from "@/pixel/icons";
 import { PixelScene } from "@/pixel/PixelScene";
 import { Buddy } from "@/branding/Brand";
@@ -40,7 +41,6 @@ export function Onboarding() {
   const [name, setName] = useState(active?.kind === "offline" ? active.name : "");
   const [start, setStart] = useState<Start>("mods");
   const [busy, setBusy] = useState(false);
-  const [touched, setTouched] = useState(false);
   const qc = useQueryClient();
   const versions = useVersions();
   const create = useCreateInstance();
@@ -48,7 +48,6 @@ export function Onboarding() {
   const navigate = useNavigate();
   const microsoft = active?.kind === "microsoft";
   const nameOk = isValidPlayerName(name);
-  const invalid = showNameError(name, touched);
   const releases = versions.data?.filter((v) => v.type === "release").map((v) => v.id) ?? [];
   const choice = STARTS.find((s) => s.id === start)!;
   // Pfeiltasten in der Startwahl: Auswahl folgt dem Fokus, ein Tab-Stopp.
@@ -115,15 +114,7 @@ export function Onboarding() {
               {microsoft ? (
                 <p className="ok-msg">{t("components.account.loggedInAs", { name: accountName(active) })}</p>
               ) : !offlineOk ? null : (
-                // Fehler ersetzt den Hilfetext an derselben Stelle: keine leere Reservezeile, kein Springen
-                <Field
-                  label={t("components.playerName.label")}
-                  htmlFor="ob-name"
-                  help={t("components.playerName.helpShort")}
-                  error={invalid ? <>{t("components.playerName.invalid")}</> : undefined}
-                >
-                  <TextField id="ob-name" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => setTouched(true)} maxLength={16} placeholder={t("components.playerName.placeholder")} autoFocus aria-invalid={invalid} width="full" />
-                </Field>
+                <PlayerNameField value={name} onChange={setName} help={t("components.playerName.helpShort")} />
               )}
               {offlineOk && <div className="or">{t("components.common.or")}</div>}
               <Button icon="user" variant={offlineOk ? undefined : "primary"} width="full" onClick={() => void startMsLogin(qc)}>{t("components.account.msLogin")}</Button>

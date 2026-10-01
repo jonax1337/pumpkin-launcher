@@ -1,12 +1,15 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { save as saveFile } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { t, useI18n } from "@/i18n";
-import { Checkbox, ConfirmDialog, Dialog, DialogActions, Field, Hint, IconButton, Menu, Skel, TextField, type MenuEntry } from "@/ui";
+import { Checkbox, ConfirmDialog, Dialog, DialogActions, Field, Hint, IconButton, Menu, Skel, type MenuEntry } from "@/ui";
 import { isBusy, usePhase } from "@/components/game";
-import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { NameDialog } from "@/components/NameDialog";
+import { useBackgroundTask } from "@/hooks/useBackgroundTask";
+import { confirmTargetProps } from "@/hooks/useConfirmTarget";
+import { useContentState } from "@/hooks/useContent";
 import { askStop, useDeleteInstance, useExportEntries, useGroups, usePlay, useSetGroup } from "@/hooks/useInstances";
 import { useSaveTemplate } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
@@ -37,11 +40,16 @@ function openInstanceFolder(instance: Instance) {
 /** Instanz duplizieren: Fortschritt und „Abbrechen“ im Aufgaben-Menü, danach ein Toast mit Sprung zur Kopie. */
 function useDuplicate() {
   const { t } = useI18n();
-  const install = useContentInstall();
+  const { run } = useBackgroundTask();
   const navigate = useNavigate();
   return (instance: Instance) =>
-    install.mutate(withTarget(`duplicate:${instance.id}`, (op) => api.duplicateInstance(instance.id, op), t("components.instance.duplicateTask", { name: instance.name }), { cancellable: true, doneLabel: t("components.instance.duplicateTaskDone", { name: instance.name }) }), {
-      onSuccess: (copy) => copy && toast.success(t("components.instance.createdQuoted", { name: copy.name }), { action: { label: t("common.open"), onClick: () => navigate(instanceUrl(copy.id)) } }),
+    run({
+      key: `duplicate:${instance.id}`,
+      label: t("components.instance.duplicateTask", { name: instance.name }),
+      doneLabel: t("components.instance.duplicateTaskDone", { name: instance.name }),
+      cancellable: true,
+      task: (op) => api.duplicateInstance(instance.id, op),
+      onDone: (copy) => toast.success(t("components.instance.createdQuoted", { name: copy.name }), { action: { label: t("common.open"), onClick: () => navigate(instanceUrl(copy.id)) } }),
     });
 }
 
@@ -51,20 +59,22 @@ function useDuplicate() {
  */
 function useExport() {
   const { t } = useI18n();
-  const install = useContentInstall();
-  return (instance: Instance, include: string[], path: string) => {
-    // Ein Content-Lauf liefert eine Instanz (für „Öffnen“ im Verlauf); beim Export ist es die exportierte, frisch gelesen:
-    // die Kopie vom Öffnen des Dialogs könnte veraltet sein und landete im Cache.
-    const run = (op: string) => api.exportInstance(instance.id, include, path, op).then(() => api.getInstance(instance.id));
-    install.mutate(withTarget(`export:${instance.id}`, run, t("components.instance.exportTask", { name: instance.name }), { cancellable: true, doneLabel: t("components.instance.exportTaskDone", { name: instance.name }) }), {
-      onSuccess: (exported) =>
-        exported &&
+  const { run } = useBackgroundTask();
+  return (instance: Instance, include: string[], path: string) =>
+    run({
+      key: `export:${instance.id}`,
+      label: t("components.instance.exportTask", { name: instance.name }),
+      doneLabel: t("components.instance.exportTaskDone", { name: instance.name }),
+      cancellable: true,
+      // Ein Content-Lauf liefert eine Instanz (für „Öffnen“ im Verlauf); beim Export ist es die exportierte, frisch gelesen:
+      // die Kopie vom Öffnen des Dialogs könnte veraltet sein und landete im Cache.
+      task: (op) => api.exportInstance(instance.id, include, path, op).then(() => api.getInstance(instance.id)),
+      onDone: () =>
         toast.success(t("components.instance.exportedQuoted", { name: instance.name }), {
           description: path,
           action: { label: t("components.instance.revealInFolder"), onClick: () => revealLocalPath(path) },
         }),
     });
-  };
 }
 
 /**
@@ -138,26 +148,19 @@ export function InstanceMenuButton({ instance, small, large, variant = "s", onSc
 
 function SaveTemplateDialog({ instance, onClose }: { instance: Instance; onClose: () => void }) {
   const { t } = useI18n();
-  const [name, setName] = useState(instance.name);
   const save = useSaveTemplate();
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    save.mutate({ instance, name: name.trim() || instance.name }, { onSuccess: onClose });
-  }
   return (
-    <Dialog
-      open
-      onOpenChange={(o) => !o && onClose()}
+    <NameDialog
       title={t("components.instance.saveAsTemplate")}
-      width={480}
-      footer={<DialogActions cancel={t("common.cancel")} confirm={{ label: save.isPending ? t("components.common.saving") : t("common.save"), width: 130, form: "tpl-form", disabled: save.isPending }} />}
-    >
-      <form id="tpl-form" onSubmit={submit}>
-        <Field label={t("components.instance.templateName")} help={t("components.instance.templateHelp", { inhalt: instance.mods.length })}>
-          <TextField value={name} onChange={(e) => setName(e.target.value)} maxLength={100} autoFocus />
-        </Field>
-      </form>
-    </Dialog>
+      label={t("components.instance.templateName")}
+      help={t("components.instance.templateHelp", { inhalt: instance.mods.length })}
+      initial={instance.name}
+      maxLength={100}
+      pending={save.isPending}
+      allowBlank
+      onSubmit={(name) => save.mutate({ instance, name: name || instance.name }, { onSuccess: onClose })}
+      onClose={onClose}
+    />
   );
 }
 
@@ -226,27 +229,18 @@ function ExportDialog({ instance, onExport, onClose }: { instance: Instance; onE
 
 function NewGroupDialog({ instance, onClose }: { instance: Instance; onClose: () => void }) {
   const { t } = useI18n();
-  const [name, setName] = useState("");
   const setGroup = useSetGroup(instance.id);
-  const group = name.trim();
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    if (group) setGroup.mutate(group, { onSuccess: onClose });
-  }
   return (
-    <Dialog
-      open
-      onOpenChange={(o) => !o && onClose()}
+    <NameDialog
       title={t("components.instance.newGroupTitle")}
-      width={480}
-      footer={<DialogActions cancel={t("common.cancel")} confirm={{ label: setGroup.isPending ? t("components.common.saving") : t("common.save"), width: 130, form: "group-form", disabled: !group || setGroup.isPending }} />}
-    >
-      <form id="group-form" onSubmit={submit}>
-        <Field label={t("components.instance.groupName")} help={t("components.instance.groupHelp", { name: instance.name })}>
-          <TextField value={name} onChange={(e) => setName(e.target.value)} maxLength={40} autoFocus />
-        </Field>
-      </form>
-    </Dialog>
+      label={t("components.instance.groupName")}
+      help={t("components.instance.groupHelp", { name: instance.name })}
+      initial=""
+      maxLength={40}
+      pending={setGroup.isPending}
+      onSubmit={(group) => setGroup.mutate(group, { onSuccess: onClose })}
+      onClose={onClose}
+    />
   );
 }
 
@@ -265,20 +259,18 @@ export function InstanceDialogs() {
       {exporting && <ExportDialog key={exporting.id} instance={exporting} onExport={(include, path) => exportPack(exporting, include, path)} onClose={close} />}
       {newGroup && <NewGroupDialog key={newGroup.id} instance={newGroup} onClose={close} />}
       <ConfirmDialog
-        open={!!remove}
-        onOpenChange={(o) => !o && close()}
-        title={t("components.instance.deleteQuotedTitle", { name: remove?.name ?? "" })}
-        text={t("components.instance.deleteText")}
-        pending={del.isPending}
-        onConfirm={() =>
-          remove &&
-          del.mutate(remove.id, {
-            onSuccess: () => {
-              if (pathname.startsWith(`/instances/${remove.id}`)) navigate("/instances");
-              close();
-            },
-          })
-        }
+        {...confirmTargetProps(remove, close, {
+          title: (instance) => t("components.instance.deleteQuotedTitle", { name: instance.name }),
+          text: () => t("components.instance.deleteText"),
+          pending: del.isPending,
+          onConfirm: (instance, closeDialog) =>
+            del.mutate(instance.id, {
+              onSuccess: () => {
+                if (pathname.startsWith(`/instances/${instance.id}`)) navigate("/instances");
+                closeDialog();
+              },
+            }),
+        })}
       />
     </>
   );
