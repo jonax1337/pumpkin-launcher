@@ -4,14 +4,17 @@
 //! außerhalb von CurseForge verbieten (`downloadUrl` fehlt), werden nicht umgangen, sondern als „manuell laden“ gemeldet
 //! (`Blocked`).
 use crate::services::progress::{Phase, ProgressFn};
-use super::{zip_files, RemoteFile, JSON_LIMIT, MIB, ZIP_LIMIT};
+use super::{mib_progress, zip_files, RemoteFile};
 use crate::{
     error::{AppError, AppResult},
     models::{instance_name, Instance, Mod, ModKind, ModLoader, ModSource, NewInstance},
     services::{
         content::{self, Blob, Pack, TempFile},
         forge,
+        limits::{FILE_LIMIT, MANIFEST_LIMIT, PAGE_SIZE, PLAN_FILES, PROVIDER_JSON_LIMIT, ZIP_LIMIT},
         modrinth::{self, identifier, Dependency, File, Hit, Project, SearchResponse, Version},
+        transport::{read_capped, read_capped_io},
+        zip_guard::ensure_no_file_as_parent,
         Dirs,
     },
     state::AppState,
@@ -21,7 +24,6 @@ use std::{
     cmp::Reverse,
     collections::{BTreeMap, HashMap, HashSet},
     fs,
-    io::Read,
     path::PathBuf,
     sync::{Arc, Mutex},
     time::Duration,
@@ -32,7 +34,6 @@ use std::{
 /// eigenen Schlüssel, betreiben einen eigenen Worker (`proxy/`) und setzen `PUMPKIN_CF_PROXY` (Laufzeit oder beim Bauen).
 const DEFAULT_PROXY: &str = "https://pumpkin-curseforge.jonas-laux.workers.dev";
 const GAME_MINECRAFT: u32 = 432;
-const PAGE: u32 = 20;
 const MAX_DEPENDENCIES: usize = 64;
 /// Größte Liste für `POST /v1/mods` und `/v1/mods/files`, die der Worker annimmt.
 const BATCH: usize = 200;
@@ -107,14 +108,7 @@ async fn parse_response<T: DeserializeOwned>(response: reqwest::Response) -> App
         return Err(AppError::invalid("Bei CurseForge nicht gefunden"));
     }
     let mut response = response.error_for_status()?;
-    let mut data = Vec::new();
-    while let Some(chunk) = response.chunk().await? {
-        if data.len() as u64 + chunk.len() as u64 > JSON_LIMIT {
-            return Err(AppError::invalid("Antwort zu groß"));
-        }
-        data.extend_from_slice(&chunk);
-    }
-    Ok(serde_json::from_slice(&data)?)
+    Ok(serde_json::from_slice(&read_capped(&mut response, PROVIDER_JSON_LIMIT, "Antwort zu groß").await?)?)
 }
 async fn get<T: DeserializeOwned>(client: &reqwest::Client, path: &str, query: &[(&str, String)]) -> AppResult<T> {
     get_at(client, &proxy(), path, query).await
@@ -407,7 +401,7 @@ pub async fn search(
         ("sortField", sort.to_string()),
         ("sortOrder", "desc".into()),
         ("index", offset.to_string()),
-        ("pageSize", PAGE.to_string()),
+        ("pageSize", PAGE_SIZE.to_string()),
     ];
     if let Some(mc) = mc {
         identifier(mc)?;
@@ -418,7 +412,7 @@ pub async fn search(
     }
     let page: Page<CfMod> = get(client, "mods/search", &q).await?;
     let total = page.pagination.map_or(page.data.len() as u64, |p| p.total_count).min(10_000);
-    Ok(SearchResponse { hits: page.data.iter().map(hit).collect(), total_hits: total, offset, limit: PAGE })
+    Ok(SearchResponse { hits: page.data.iter().map(hit).collect(), total_hits: total, offset, limit: PAGE_SIZE })
 }
 
 async fn mod_of(client: &reqwest::Client, id: u32) -> AppResult<CfMod> {
@@ -770,32 +764,18 @@ pub(crate) async fn plan_pack(
         return Err(AppError::invalid("Projekt ist kein Modpack"));
     }
     let pack_file = file_of(client, project, file_no).await?;
-    let tmp = dirs.root.join("cache").join("tmp");
-    fs::create_dir_all(&tmp)?;
-    let temp = TempFile(tmp.join(format!("{}.zip", crate::models::new_id())));
+    let temp = TempFile::in_cache(dirs)?;
     let zip_source = RemoteFile { size: pack_file.file_length.min(ZIP_LIMIT), ..remote(&pack_file)? };
     progress(Phase::Download, 0, 0);
-    let last = std::sync::atomic::AtomicU64::new(u64::MAX);
-    zip_source
-        .download_to(&modrinth::download_client()?, &temp.0, &|done, total| {
-            if last.swap(done / MIB, std::sync::atomic::Ordering::Relaxed) != done / MIB {
-                progress(Phase::Download, done / MIB, total / MIB);
-            }
-        })
-        .await?;
+    zip_source.download_to(&modrinth::download_client()?, &temp.0, &mib_progress(progress)).await?;
 
     let mut zip = zip::ZipArchive::new(fs::File::open(&temp.0)?)?;
     let manifest: Manifest = {
         let entry = zip.by_name("manifest.json")?;
-        let mut bytes = Vec::new();
-        entry.take(16 * MIB + 1).read_to_end(&mut bytes)?;
-        if bytes.len() as u64 > 16 * MIB {
-            return Err(AppError::invalid("manifest.json zu groß"));
-        }
-        serde_json::from_slice(&bytes)?
+        serde_json::from_slice(&read_capped_io(entry, MANIFEST_LIMIT, "manifest.json zu groß")?)?
     };
     let (loader, loader_version) = manifest_loader(&manifest.minecraft)?;
-    if manifest.files.len() > 6000 {
+    if manifest.files.len() > PLAN_FILES {
         return Err(AppError::invalid("Zu viele Pack-Dateien"));
     }
     // Der Ordner mit den Overrides kommt aus dem Manifest: nur einfache Namen.
@@ -850,11 +830,7 @@ pub(crate) async fn plan_pack(
     let mut pack = content::plan_pack(instance, files)?;
     // Overrides und Downloads dürfen sich auch nicht als Datei/Ordner in die Quere kommen.
     let downloads: HashSet<String> = pack.downloads.iter().map(|(p, _)| p.to_string_lossy().to_lowercase()).collect();
-    for path in &override_paths {
-        if path.match_indices('/').any(|(at, _)| downloads.contains(&path[..at])) {
-            return Err(AppError::invalid("Datei/Verzeichnis-Konflikt"));
-        }
-    }
+    ensure_no_file_as_parent(&override_paths, &downloads)?;
     let archive = Arc::new(Mutex::new(zip));
     pack.overrides = overrides.into_iter().map(|(path, index)| (path, Blob::Zip { archive: archive.clone(), index })).collect();
     pack.origins = origins;
@@ -888,7 +864,7 @@ fn download_candidates(dir: &std::path::Path, file_name: &str) -> AppResult<Vec<
 /// Die Kandidatin, deren Größe und SHA-1 zur Datei bei CurseForge passen.
 fn verified_download(candidates: &[PathBuf], file: &CfFile) -> AppResult<Option<Vec<u8>>> {
     let Some(expected) = sha1_of(file) else { return Ok(None) };
-    if file.file_length > modrinth::FILE_LIMIT {
+    if file.file_length > FILE_LIMIT {
         return Ok(None);
     }
     for path in candidates {

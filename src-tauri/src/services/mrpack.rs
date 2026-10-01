@@ -10,16 +10,15 @@ use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
 use super::{
-    add_zip_file, blocking, check_cancelled, content, modrinth, mods, write_zip_atomic, Dirs,
+    add_zip_file, blocking, check_cancelled, content,
+    limits::{FILE_LIMIT, MIB, MRPACK_EXPORT_ENTRIES},
+    modrinth, mods, write_zip_atomic, Dirs,
 };
 use crate::{
     error::{AppError, AppResult},
     models::{Instance, Mod, ModLoader, ModSource},
     state::AppState,
 };
-
-/// Unter der ZIP-Grenze des Imports (4096).
-const MAX_ENTRIES: usize = 4000;
 
 /// Grenzen eines Packs. Vorlagen werden über den eigenen Import wieder zu Instanzen und müssen dessen
 /// Sicherheitsgrenzen einhalten; ein Export ist für den Nutzer und andere Launcher und hat keine.
@@ -36,14 +35,17 @@ impl PackLimit {
         if matches!(self, PackLimit::Unlimited) {
             return Ok(());
         }
-        if files.len() > MAX_ENTRIES {
-            return Err(AppError::invalid(format!("Zu viele Dateien für ein Pack (höchstens {MAX_ENTRIES})")));
+        if files.len() > MRPACK_EXPORT_ENTRIES {
+            return Err(AppError::invalid(format!("Zu viele Dateien für ein Pack (höchstens {MRPACK_EXPORT_ENTRIES})")));
         }
         let mut total = 0;
         for (name, source) in files {
             total += fs::metadata(source).map_err(|e| AppError::invalid(format!("{name} nicht lesbar: {e}")))?.len();
-            if total > modrinth::FILE_LIMIT {
-                return Err(AppError::invalid("Das Pack wäre größer als 256 MiB und ließe sich nicht wieder importieren"));
+            if total > FILE_LIMIT {
+                return Err(AppError::invalid(format!(
+                    "Das Pack wäre größer als {} MiB und ließe sich nicht wieder importieren",
+                    FILE_LIMIT / MIB
+                )));
             }
         }
         Ok(())
@@ -281,10 +283,10 @@ mod tests {
     fn only_importable_packs_are_limited() {
         let file = std::env::temp_dir().join(format!("{}.txt", new_id()));
         fs::write(&file, "x").unwrap();
-        let files = vec![("a.txt".to_string(), file.clone()); MAX_ENTRIES + 1];
+        let files = vec![("a.txt".to_string(), file.clone()); MRPACK_EXPORT_ENTRIES + 1];
 
         assert!(PackLimit::Importable.check(&files).is_err());
-        assert!(PackLimit::Importable.check(&files[..MAX_ENTRIES]).is_ok());
+        assert!(PackLimit::Importable.check(&files[..MRPACK_EXPORT_ENTRIES]).is_ok());
         assert!(PackLimit::Unlimited.check(&files).is_ok());
         fs::remove_file(file).unwrap();
     }

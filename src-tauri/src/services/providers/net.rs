@@ -1,16 +1,20 @@
 //! Download von beliebigen öffentlichen HTTPS-Adressen (Technic-Packs liegen auf Dropbox, GitHub, eigenen
 //! Servern). Ohne Prüfsumme als Gegengewicht: nur HTTPS auf Port 443, nur öffentliche Zieladressen
 //! (kein localhost, kein Heimnetz), jede Weiterleitung einzeln geprüft, die geprüfte Adresse wird fest verwendet.
-use crate::services::progress::CountFn;
 use crate::error::{AppError, AppResult};
+use crate::services::{
+    progress::CountFn,
+    remove_logged,
+    transport::{base_client_builder, follow_redirects, save_capped},
+};
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     path::Path,
     time::Duration,
 };
-use tokio::io::AsyncWriteExt;
 
-const MAX_HOPS: usize = 5;
+/// Anfragen je Download einschließlich der ersten, also höchstens vier Weiterleitungen.
+const MAX_REQUESTS: usize = 5;
 
 fn public_v4(ip: Ipv4Addr) -> bool {
     let [a, b, c, _] = ip.octets();
@@ -71,55 +75,26 @@ async fn resolve(host: &str) -> AppResult<Vec<SocketAddr>> {
 /// Lädt `url` nach `dest`. `progress(geladen, gesamt)` in Bytes (gesamt 0 = unbekannt). Überschreitet die
 /// Datei `limit`, bricht der Download ab und die Teildatei wird gelöscht.
 pub async fn download_public(url: &str, dest: &Path, limit: u64, progress: CountFn<'_>) -> AppResult<()> {
-    let mut url = reqwest::Url::parse(url).map_err(|e| AppError::invalid(e.to_string()))?;
-    for _ in 0..MAX_HOPS {
-        let host = check(&url)?;
-        let addrs = resolve(&host).await?;
-        let client = reqwest::Client::builder()
-            .user_agent(concat!("pumpkin-launcher/", env!("CARGO_PKG_VERSION")))
-            .redirect(reqwest::redirect::Policy::none())
-            .connect_timeout(Duration::from_secs(15))
-            .timeout(Duration::from_secs(3600))
-            .resolve_to_addrs(&host, &addrs)
-            .build()?;
-        let response = client.get(url.clone()).send().await?;
-        if response.status().is_redirection() {
-            let location = response
-                .headers()
-                .get(reqwest::header::LOCATION)
-                .and_then(|v| v.to_str().ok())
-                .ok_or_else(|| AppError::invalid("Weiterleitung ohne Ziel"))?;
-            url = url.join(location).map_err(|e| AppError::invalid(e.to_string()))?;
-            continue;
-        }
-        let mut response = response.error_for_status()?;
-        let total = response.content_length().unwrap_or(0);
-        if total > limit {
-            return Err(AppError::invalid("Download zu groß"));
-        }
-        let mut file = tokio::fs::File::create(dest).await?;
-        let mut done = 0u64;
-        let result: AppResult<()> = async {
-            while let Some(chunk) = response.chunk().await? {
-                done += chunk.len() as u64;
-                if done > limit {
-                    return Err(AppError::invalid("Download zu groß"));
-                }
-                file.write_all(&chunk).await?;
-                progress(done, total);
-            }
-            file.flush().await?;
-            Ok(())
-        }
-        .await;
-        drop(file);
-        if let Err(e) = result {
-            let _ = tokio::fs::remove_file(dest).await;
-            return Err(e);
-        }
-        return Ok(());
+    let response = follow_redirects(url, MAX_REQUESTS, send_pinned).await?;
+    let mut response = response.error_for_status()?;
+    let total = response.content_length().unwrap_or(0);
+    let saved = save_capped(&mut response, limit, total, dest, progress).await;
+    if saved.is_err() {
+        remove_logged(dest);
     }
-    Err(AppError::invalid("Zu viele Weiterleitungen"))
+    saved
+}
+
+/// Eine Anfrage an `url`: erst prüfen und auflösen, dann an die geprüfte Adresse gebunden senden.
+async fn send_pinned(url: reqwest::Url) -> AppResult<reqwest::Response> {
+    let host = check(&url)?;
+    let addrs = resolve(&host).await?;
+    Ok(build_pinned_client(&host, &addrs)?.get(url).send().await?)
+}
+
+/// Client, der `host` nur zu den geprüften `addrs` auflöst; ein späteres DNS-Ergebnis kann die Prüfung nicht umgehen.
+fn build_pinned_client(host: &str, addrs: &[SocketAddr]) -> AppResult<reqwest::Client> {
+    Ok(base_client_builder().timeout(Duration::from_secs(3600)).resolve_to_addrs(host, addrs).build()?)
 }
 
 #[cfg(test)]

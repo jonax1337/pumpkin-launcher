@@ -1,8 +1,11 @@
 //! Modrinth v2: GET plus der lesende `POST version_files/update`, feste Origins, begrenzte Antworten.
+use super::{
+    limits::{API_JSON_LIMIT, FILE_LIMIT, PAGE_SIZE, QUERY_MAX},
+    transport::{base_client_builder, read_capped, Digests, DOWNLOAD_TOO_BIG},
+};
 use crate::{
     error::{AppError, AppResult},
     models::{Instance, ModKind},
-    services::download::sha1_hex,
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
@@ -10,8 +13,23 @@ use std::{
     time::Duration,
 };
 
-pub const FILE_LIMIT: u64 = 256 * 1024 * 1024;
 const API: &str = "https://api.modrinth.com/v2";
+const MAX_IDENTIFIER_LEN: usize = 128;
+const MAX_SEARCH_OFFSET: u32 = 100_000;
+/// Projekte je Sammelabfrage der Inhaltsliste.
+const MAX_PROJECT_IDS: usize = 500;
+/// So viele IDs nimmt `GET versions` je Aufruf.
+const VERSION_IDS_PER_CALL: usize = 100;
+/// Mods einer Instanz, die ein Abhängigkeitsabgleich noch berücksichtigt.
+const MAX_INSTALLED_MODS: usize = 1000;
+/// Anfragen, die ein Abhängigkeitsabgleich an Modrinth stellen darf.
+const MAX_API_CALLS: u32 = 192;
+/// Neue Projekte (ohne die schon vorhandenen), die eine Installation hinzufügen darf.
+const MAX_NEW_PROJECTS: usize = 64;
+/// Wartende Versionen im Abhängigkeitsabgleich über die schon vorhandenen Mods hinaus.
+const MAX_QUEUE_SLACK: usize = 128;
+/// Wie oft ein exakt festgelegter Stand den Abhängigkeitsgraphen neu aufbauen darf.
+const MAX_REBUILDS: u32 = 16;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResponse {
     pub hits: Vec<Hit>,
@@ -84,26 +102,16 @@ pub struct Dependency {
 }
 
 pub fn client() -> AppResult<reqwest::Client> {
-    Ok(reqwest::Client::builder()
-        .user_agent(concat!("pumpkin-launcher/", env!("CARGO_PKG_VERSION")))
-        .redirect(reqwest::redirect::Policy::none())
-        .connect_timeout(Duration::from_secs(15))
-        .timeout(Duration::from_secs(120))
-        .build()?)
+    Ok(base_client_builder().timeout(Duration::from_secs(120)).build()?)
 }
 /// Client für große Dateien (Modpack-Zips, Mod-JARs): kein Gesamt-Timeout, nur Verbindungsaufbau und Stillstand
 /// (60 s ohne ein einziges Byte). Ein 500-MB-Pack auf langsamer Leitung darf Minuten brauchen, ein hängender Server nicht.
 pub fn download_client() -> AppResult<reqwest::Client> {
-    Ok(reqwest::Client::builder()
-        .user_agent(concat!("pumpkin-launcher/", env!("CARGO_PKG_VERSION")))
-        .redirect(reqwest::redirect::Policy::none())
-        .connect_timeout(Duration::from_secs(15))
-        .read_timeout(Duration::from_secs(60))
-        .build()?)
+    Ok(base_client_builder().read_timeout(Duration::from_secs(60)).build()?)
 }
 pub fn identifier(s: &str) -> AppResult<()> {
     if s.is_empty()
-        || s.len() > 128
+        || s.len() > MAX_IDENTIFIER_LEN
         || !s
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.')
@@ -119,17 +127,7 @@ pub async fn bytes(request: reqwest::RequestBuilder, limit: u64) -> AppResult<Ve
     if !response.status().is_success() {
         return Err(AppError::invalid("Redirects werden nicht akzeptiert"));
     }
-    if response.content_length().is_some_and(|n| n > limit) {
-        return Err(AppError::invalid("Download zu groß"));
-    }
-    let mut data = Vec::new();
-    while let Some(chunk) = response.chunk().await? {
-        if data.len() as u64 + chunk.len() as u64 > limit {
-            return Err(AppError::invalid("Download zu groß"));
-        }
-        data.extend_from_slice(&chunk);
-    }
-    Ok(data)
+    read_capped(&mut response, limit, DOWNLOAD_TOO_BIG).await
 }
 async fn api<T: DeserializeOwned>(
     client: &reqwest::Client,
@@ -139,9 +137,7 @@ async fn api<T: DeserializeOwned>(
     let mut url =
         reqwest::Url::parse(&format!("{API}/{path}")).map_err(|e| AppError::invalid(e.to_string()))?;
     url.query_pairs_mut().extend_pairs(query);
-    Ok(serde_json::from_slice(
-        &bytes(client.get(url), 8 * 1024 * 1024).await?,
-    )?)
+    Ok(serde_json::from_slice(&bytes(client.get(url), API_JSON_LIMIT).await?)?)
 }
 /// Quilt lädt auch Fabric-Mods: Katalog und Versionen fragen dann beide Loader an (ODER).
 fn with_fabric(loader: &str) -> Vec<&str> {
@@ -157,7 +153,7 @@ pub async fn search(
     offset: u32,
     index: Option<String>,
 ) -> AppResult<SearchResponse> {
-    if !matches!(kind.as_str(), "mod" | "modpack" | "resourcepack" | "shader" | "datapack") || query.len() > 512 || offset > 100_000 {
+    if !matches!(kind.as_str(), "mod" | "modpack" | "resourcepack" | "shader" | "datapack") || query.len() > QUERY_MAX || offset > MAX_SEARCH_OFFSET {
         return Err(AppError::invalid("Ungültige Suche"));
     }
     if !matches!(index.as_deref(), None | Some("relevance" | "downloads" | "follows" | "newest" | "updated")) {
@@ -182,14 +178,14 @@ pub async fn search(
             ("facets".into(), serde_json::to_string(&facets)?),
             ("index".into(), index),
             ("offset".into(), offset.to_string()),
-            ("limit".into(), "20".into()),
+            ("limit".into(), PAGE_SIZE.to_string()),
         ],
     )
     .await
 }
 /// Mehrere Projekte in einem Aufruf (Icons und Namen für die Inhaltsliste einer Instanz).
 pub async fn projects(client: &reqwest::Client, ids: &[String]) -> AppResult<Vec<Project>> {
-    if ids.len() > 500 {
+    if ids.len() > MAX_PROJECT_IDS {
         return Err(AppError::invalid("Zu viele Projekte"));
     }
     ids.iter().try_for_each(|id| identifier(id))?;
@@ -231,7 +227,7 @@ pub async fn versions(
 /// Mehrere Versionen in einem Aufruf je 100 IDs; jede angefragte muss genau so zurückkommen.
 pub async fn versions_by_ids(client: &reqwest::Client, ids: &[String]) -> AppResult<Vec<Version>> {
     let mut out = Vec::new();
-    for chunk in ids.chunks(100) {
+    for chunk in ids.chunks(VERSION_IDS_PER_CALL) {
         chunk.iter().try_for_each(|id| identifier(id))?;
         let got: Vec<Version> = api(client, "versions", &[("ids".into(), serde_json::to_string(chunk)?)]).await?;
         if got.len() != chunk.len() || !got.iter().all(|v| chunk.contains(&v.id)) {
@@ -259,9 +255,7 @@ pub async fn latest_by_hash(
         // Nur stabile Versionen anbieten; Betas bleiben eine bewusste Wahl über „Andere Version“.
         "version_types": ["release"]
     });
-    Ok(serde_json::from_slice(
-        &bytes(client.post(url).json(&body), 8 * 1024 * 1024).await?,
-    )?)
+    Ok(serde_json::from_slice(&bytes(client.post(url).json(&body), API_JSON_LIMIT).await?)?)
 }
 /// Version je SHA-1 (`POST version_files`); nur Antworten, deren Dateien den Hash wirklich tragen.
 pub async fn versions_by_hash(
@@ -275,7 +269,7 @@ pub async fn versions_by_hash(
         .map_err(|e| AppError::invalid(e.to_string()))?;
     let body = serde_json::json!({ "hashes": hashes, "algorithm": "sha1" });
     let found: HashMap<String, Version> =
-        serde_json::from_slice(&bytes(client.post(url).json(&body), 8 * 1024 * 1024).await?)?;
+        serde_json::from_slice(&bytes(client.post(url).json(&body), API_JSON_LIMIT).await?)?;
     Ok(found
         .into_iter()
         .filter(|(sha1, v)| {
@@ -301,28 +295,17 @@ pub fn download_url(s: &str) -> AppResult<reqwest::Url> {
     }
     Ok(url)
 }
+/// Modrinth nennt für jede Datei SHA-1 und SHA-512; beide müssen angegeben sein und stimmen.
 pub fn verify(data: &[u8], size: u64, hashes: &BTreeMap<String, String>) -> AppResult<()> {
-    use sha2::{Digest, Sha512};
     if data.len() as u64 != size {
         return Err(AppError::invalid("Dateigröße stimmt nicht"));
     }
-    for (key, len, actual) in [
-        ("sha1", 40, sha1_hex(data)),
-        (
-            "sha512",
-            128,
-            Sha512::digest(data)
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect::<String>(),
-        ),
-    ] {
+    let digests = Digests::of(data);
+    for key in ["sha1", "sha512"] {
         let hash = hashes
             .get(key)
             .ok_or_else(|| AppError::invalid(format!("{key} fehlt")))?;
-        if hash.len() != len || !hash.eq_ignore_ascii_case(&actual) {
-            return Err(AppError::invalid(format!("{key} stimmt nicht")));
-        }
+        digests.check_one(key, hash)?;
     }
     Ok(())
 }
@@ -398,6 +381,14 @@ fn pin_and_rebuild(
     }
     Ok(false)
 }
+/// Erklärt eine der gewählten Versionen eine andere der gewählten für unverträglich?
+pub fn has_incompatibility(selected: &HashMap<String, Version>) -> bool {
+    selected.values().flat_map(|v| &v.dependencies).filter(|d| d.dependency_type == "incompatible").any(|d| {
+        selected.values().any(|other| {
+            d.version_id.as_ref().map_or_else(|| d.project_id.as_ref() == Some(&other.project_id), |id| id == &other.id)
+        })
+    })
+}
 pub async fn resolve(
     client: &reqwest::Client,
     root: &str,
@@ -416,7 +407,7 @@ pub async fn resolve(
         .collect();
     installed.sort();
     installed.dedup();
-    if installed.len() > 1000 {
+    if installed.len() > MAX_INSTALLED_MODS {
         return Err(AppError::invalid("Zu viele installierte Mods"));
     }
     let installed = versions_by_ids(client, &installed).await?;
@@ -430,13 +421,13 @@ pub async fn resolve(
     let mut queue = VecDeque::from([root]);
     queue.extend(installed);
     // Only requests count against the limits; installed versions cost one bulk request per 100.
-    let mut calls = 1;
+    let mut calls: u32 = 1;
     let mut pinned = HashMap::new();
     for v in &queue {
         select(&mut pinned, v.clone())?;
     }
     let mut deferred: VecDeque<String> = VecDeque::new();
-    let mut rebuilds = 0;
+    let mut rebuilds = 0u32;
     loop {
         if queue.is_empty() {
             let Some(id) = deferred.pop_front() else {
@@ -446,7 +437,7 @@ pub async fn resolve(
                 continue;
             }
             calls += 1;
-            if calls > 192 {
+            if calls > MAX_API_CALLS {
                 return Err(AppError::invalid("Dependency-Limit erreicht"));
             }
             // Ohne Loader-Filter anfragen: Quilt nimmt Quilt- und Fabric-Versionen.
@@ -467,7 +458,7 @@ pub async fn resolve(
         }
         if new {
             calls += 1;
-            if calls > 192 || selected.keys().filter(|p| !known.contains(*p)).count() > 64 {
+            if calls > MAX_API_CALLS || selected.keys().filter(|p| !known.contains(*p)).count() > MAX_NEW_PROJECTS {
                 return Err(AppError::invalid("Dependency-Limit erreicht"));
             }
             let p = project(client, &v.project_id).await?;
@@ -479,7 +470,7 @@ pub async fn resolve(
             if d.dependency_type != "required" {
                 continue;
             }
-            if calls > 192 || queue.len() > 128 + known.len() {
+            if calls > MAX_API_CALLS || queue.len() > MAX_QUEUE_SLACK + known.len() {
                 return Err(AppError::invalid("Dependency-Limit erreicht"));
             }
             let child = if let Some(id) = &d.version_id {
@@ -518,7 +509,7 @@ pub async fn resolve(
                 )?
             {
                 rebuilds += 1;
-                if rebuilds > 16 {
+                if rebuilds > MAX_REBUILDS {
                     return Err(AppError::invalid("Dependency rebuild limit erreicht"));
                 }
                 break;
@@ -526,19 +517,8 @@ pub async fn resolve(
             queue.push_back(child);
         }
     }
-    for v in selected.values() {
-        for d in &v.dependencies {
-            if d.dependency_type == "incompatible"
-                && selected.values().any(|other| {
-                    d.version_id.as_ref().map_or_else(
-                        || d.project_id.as_ref() == Some(&other.project_id),
-                        |id| id == &other.id,
-                    )
-                })
-            {
-                return Err(AppError::invalid("Inkompatible Dependencies"));
-            }
-        }
+    if has_incompatibility(&selected) {
+        return Err(AppError::invalid("Inkompatible Dependencies"));
     }
     let mut result: Vec<_> = selected.into_values().collect();
     result.sort_by(|a, b| a.project_id.cmp(&b.project_id));
@@ -606,18 +586,36 @@ mod tests {
         .is_err());
     }
     #[test]
+    fn incompatibility_matches_the_exact_version_or_the_whole_project() {
+        let incompatible = |version_id: Option<&str>, kind: &str| Dependency {
+            version_id: version_id.map(String::from),
+            project_id: Some("b".into()),
+            file_name: None,
+            dependency_type: kind.into(),
+        };
+        let mut a = v("a1");
+        a.project_id = "a".into();
+        let mut b = v("b1");
+        b.project_id = "b".into();
+        let with = |dependency: Dependency| {
+            let mut a = a.clone();
+            a.dependencies = vec![dependency];
+            HashMap::from([("a".to_string(), a), ("b".to_string(), b.clone())])
+        };
+
+        assert!(has_incompatibility(&with(incompatible(None, "incompatible"))));
+        assert!(has_incompatibility(&with(incompatible(Some("b1"), "incompatible"))));
+        assert!(!has_incompatibility(&with(incompatible(Some("b2"), "incompatible"))));
+        assert!(!has_incompatibility(&with(incompatible(None, "required"))));
+        assert!(!has_incompatibility(&HashMap::new()));
+    }
+    #[test]
     fn hashes_and_size_are_required() {
-        use sha2::{Digest, Sha512};
         let data = b"test";
+        let digests = Digests::of(data);
         let hashes = BTreeMap::from([
-            ("sha1".into(), sha1_hex(data)),
-            (
-                "sha512".into(),
-                Sha512::digest(data)
-                    .iter()
-                    .map(|b| format!("{b:02x}"))
-                    .collect(),
-            ),
+            ("sha1".into(), digests.hex("sha1").unwrap()),
+            ("sha512".into(), digests.hex("sha512").unwrap()),
         ]);
         assert!(verify(data, 4, &hashes).is_ok());
         assert!(verify(data, 3, &hashes).is_err());

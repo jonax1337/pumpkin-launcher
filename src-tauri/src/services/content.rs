@@ -1,5 +1,13 @@
 //! Transaktionaler Content-Import. Ziele werden exklusiv neu angelegt, niemals ersetzt.
+use super::limits::{
+    DOWNLOAD_CONCURRENCY, FILE_LIMIT, MIB, MRPACK_ENTRIES, MRPACK_EXPANDED_LIMIT, MRPACK_INDEX_FILES, PLAN_FILES,
+    PLAN_LIMIT, ZIP_JSON_LIMIT,
+};
 use super::progress::{Phase, ProgressFn};
+use super::transport::read_capped_io;
+use super::zip_guard::{
+    check_entry_count, ensure_no_file_dir_conflict, read_entry, reject_special, ExpandedSize,
+};
 use super::{download::RemoveOnDrop, none_if_missing, remove_logged};
 use super::modrinth::{self, File, Version};
 use super::providers::RemoteFile;
@@ -14,7 +22,7 @@ use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
     fs,
-    io::{Cursor, Read, Write},
+    io::{Cursor, Write},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
@@ -124,19 +132,8 @@ pub async fn install_mod(
         }
         selected.insert(root_project.clone(), root);
     }
-    for v in selected.values() {
-        for d in &v.dependencies {
-            if d.dependency_type == "incompatible"
-                && selected.values().any(|o| {
-                    d.version_id.as_ref().map_or_else(
-                        || d.project_id.as_ref() == Some(&o.project_id),
-                        |id| id == &o.id,
-                    )
-                })
-            {
-                return Err(AppError::invalid("Inkompatible vorhandene Mod"));
-            }
-        }
+    if modrinth::has_incompatibility(&selected) {
+        return Err(AppError::invalid("Inkompatible vorhandene Mod"));
     }
     let mut files = Vec::new();
     let mut fresh = HashSet::new();
@@ -219,11 +216,12 @@ pub async fn install_mod(
 pub(crate) fn budget(mut sizes: impl Iterator<Item = u64>) -> AppResult<()> {
     if sizes
         .try_fold(0u64, |a, b| a.checked_add(b))
-        .is_none_or(|n| n > modrinth::FILE_LIMIT)
+        .is_none_or(|n| n > FILE_LIMIT)
     {
-        return Err(AppError::invalid(
-            "Gesamtbudget für Mod-Download überschritten (256 MiB)",
-        ));
+        return Err(AppError::invalid(format!(
+            "Gesamtbudget für Mod-Download überschritten ({} MiB)",
+            FILE_LIMIT / MIB
+        )));
     }
     Ok(())
 }
@@ -530,13 +528,7 @@ impl Blob {
             Self::Mem(data) => Ok(Cow::Borrowed(data)),
             Self::Zip { archive, index } => {
                 let mut zip = archive.lock().map_err(|_| AppError::invalid("Zip nicht lesbar"))?;
-                let mut entry = zip.by_index(*index)?;
-                let expected = entry.size();
-                let mut data = Vec::new();
-                entry.by_ref().take(modrinth::FILE_LIMIT + 1).read_to_end(&mut data)?;
-                if data.len() as u64 != expected || expected > modrinth::FILE_LIMIT {
-                    return Err(AppError::invalid("ZIP-Dateigröße ungültig"));
-                }
+                let data = read_entry(&mut zip.by_index(*index)?, FILE_LIMIT)?;
                 Ok(Cow::Owned(data))
             }
         }
@@ -544,6 +536,14 @@ impl Blob {
 }
 /// Temporäre Datei, die beim Verwerfen verschwindet (auch bei Abbruch des Vorgangs).
 pub(crate) struct TempFile(pub PathBuf);
+impl TempFile {
+    /// Pfad einer neuen `.zip` im Zwischenspeicher der App (`cache/tmp`, wird angelegt); die Datei entsteht erst beim Schreiben.
+    pub(crate) fn in_cache(dirs: &super::Dirs) -> AppResult<Self> {
+        let tmp = dirs.root.join("cache").join("tmp");
+        fs::create_dir_all(&tmp)?;
+        Ok(Self(tmp.join(format!("{}.zip", crate::models::new_id()))))
+    }
+}
 impl Drop for TempFile {
     fn drop(&mut self) {
         remove_logged(&self.0);
@@ -560,9 +560,6 @@ pub(crate) struct Pack {
     /// Zuletzt: wird nach `overrides` verworfen, damit das Zip vor dem Löschen geschlossen ist.
     pub(crate) temp: Option<TempFile>,
 }
-const PLAN_FILES: usize = 6000;
-/// Summe aller Mod-Dateien eines Anbieter-Packs; fette Packs (All the Mods & Co.) haben mehrere GiB.
-const PLAN_LIMIT: u64 = 32 * 1024 * 1024 * 1024;
 /// Installationsplan eines Anbieters: nur Dateien zum Laden, relativ zum Spielordner.
 /// Gleiche Regeln wie beim `.mrpack`: sichere Pfade, keine Doppelten, Größenlimits.
 pub(crate) fn plan_pack(instance: Instance, files: Vec<(String, RemoteFile)>) -> AppResult<Pack> {
@@ -571,28 +568,16 @@ pub(crate) fn plan_pack(instance: Instance, files: Vec<(String, RemoteFile)>) ->
     }
     let mut paths = HashSet::new();
     let mut downloads = Vec::new();
-    let mut expanded = 0u64;
+    let mut expanded = ExpandedSize::new(PLAN_LIMIT);
     for (name, file) in files {
         let path = safe_path(&name)?;
-        expanded = expanded
-            .checked_add(file.size)
-            .ok_or_else(|| AppError::invalid("Pack-Größenüberlauf"))?;
-        if expanded > PLAN_LIMIT || file.size > modrinth::FILE_LIMIT {
-            return Err(AppError::invalid("Pack-Dateilimit überschritten"));
-        }
+        expanded.add_file(file.size)?;
         if !paths.insert(name.to_lowercase()) {
             return Err(AppError::invalid("Doppelte Pack-Zieldatei"));
         }
         downloads.push((path, Fetch::Remote(file)));
     }
-    // A file must never also be another file's parent (case insensitive on Windows).
-    for path in &paths {
-        for (at, _) in path.match_indices('/') {
-            if paths.contains(&path[..at]) {
-                return Err(AppError::invalid("Datei/Verzeichnis-Konflikt"));
-            }
-        }
-    }
+    ensure_no_file_dir_conflict(&paths)?;
     Ok(Pack { instance, downloads, overrides: Vec::new(), required_by: HashMap::new(), origins: HashMap::new(), temp: None })
 }
 /// Eigene Zusatzdatei in Vorlagen-`.mrpack`s; andere Launcher ignorieren sie.
@@ -603,17 +588,14 @@ struct PumpkinMeta {
     #[serde(default)]
     required_by: HashMap<String, Vec<String>>,
 }
-const PACK_LIMIT: u64 = 1024 * 1024 * 1024;
 fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
     let name = instance_name(name)?;
-    if data.len() as u64 > modrinth::FILE_LIMIT {
+    if data.len() as u64 > FILE_LIMIT {
         return Err(AppError::invalid("Pack zu groß"));
     }
     let mut zip = zip::ZipArchive::new(Cursor::new(data))?;
-    if zip.len() > 4096 {
-        return Err(AppError::invalid("Zu viele ZIP-Einträge"));
-    }
-    let mut expanded = 0u64;
+    check_entry_count(zip.len(), MRPACK_ENTRIES)?;
+    let mut expanded = ExpandedSize::new(MRPACK_EXPANDED_LIMIT);
     let mut entries = HashSet::new();
     let mut overrides = Vec::new();
     let mut manifest = None;
@@ -627,27 +609,8 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
         if !entries.insert(clean.to_lowercase()) {
             return Err(AppError::invalid("Doppelter ZIP-Pfad"));
         }
-        if entry.unix_mode().is_some_and(|m| {
-            matches!(
-                m & 0o170000,
-                0o120000 | 0o060000 | 0o020000 | 0o010000 | 0o140000
-            )
-        }) {
-            return Err(AppError::invalid("ZIP-Symlink/Spezialdatei"));
-        }
-        expanded = expanded
-            .checked_add(entry.size())
-            .ok_or_else(|| AppError::invalid("ZIP-Größenüberlauf"))?;
-        if expanded > PACK_LIMIT
-            || entry.size() > modrinth::FILE_LIMIT
-            || entry.size()
-                > entry
-                    .compressed_size()
-                    .saturating_mul(200)
-                    .saturating_add(1024 * 1024)
-        {
-            return Err(AppError::invalid("ZIP-Limit überschritten"));
-        }
+        reject_special(&entry)?;
+        expanded.add_entry(&entry)?;
         if entry.is_dir() {
             continue;
         }
@@ -661,16 +624,8 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
         if !is_index && !is_meta && target.is_none() {
             continue;
         }
-        let limit = if is_index || is_meta {
-            8 * 1024 * 1024
-        } else {
-            modrinth::FILE_LIMIT
-        };
-        let mut bytes = Vec::new();
-        entry.by_ref().take(limit + 1).read_to_end(&mut bytes)?;
-        if bytes.len() as u64 > limit || bytes.len() as u64 != entry.size() {
-            return Err(AppError::invalid("ZIP-Dateigröße ungültig"));
-        }
+        let limit = if is_index || is_meta { ZIP_JSON_LIMIT } else { FILE_LIMIT };
+        let bytes = read_entry(&mut entry, limit)?;
         if is_index {
             manifest = Some(serde_json::from_slice::<Index>(&bytes)?);
         } else if is_meta {
@@ -694,7 +649,7 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
         }
     }
     let index = manifest.ok_or_else(|| AppError::invalid("modrinth.index.json fehlt"))?;
-    if index.format_version != 1 || index.game != "minecraft" || index.files.len() > 2048 {
+    if index.format_version != 1 || index.game != "minecraft" || index.files.len() > MRPACK_INDEX_FILES {
         return Err(AppError::invalid("Nicht unterstütztes Packformat"));
     }
     let loaders: Vec<(ModLoader, String)> = ModLoader::PACK_KEYS
@@ -740,12 +695,7 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
                 continue;
             }
         }
-        expanded = expanded
-            .checked_add(f.file_size)
-            .ok_or_else(|| AppError::invalid("Pack-Größenüberlauf"))?;
-        if expanded > PACK_LIMIT || f.file_size > modrinth::FILE_LIMIT {
-            return Err(AppError::invalid("Pack-Dateilimit überschritten"));
-        }
+        expanded.add_file(f.file_size)?;
         for url in &f.downloads {
             modrinth::download_url(url)?;
         }
@@ -780,14 +730,7 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
             return Err(AppError::invalid("Overrides kollidieren mit Pack-Dateien"));
         }
     }
-    // A file must never also be another file's parent (case insensitive on Windows).
-    for path in &paths {
-        for (at, _) in path.match_indices('/') {
-            if paths.contains(&path[..at]) {
-                return Err(AppError::invalid("Datei/Verzeichnis-Konflikt"));
-            }
-        }
-    }
+    ensure_no_file_dir_conflict(&paths)?;
     Ok(Pack {
         instance,
         downloads,
@@ -835,12 +778,12 @@ pub(crate) async fn import_plan(
             }
             Ok(())
         };
-        // Bis zu sechs Dateien gleichzeitig (FTB-Packs haben über tausend), abgelegt in Plan-Reihenfolge.
+        // `buffered` liefert in Plan-Reihenfolge, auch wenn spätere Dateien früher fertig sind (FTB-Packs haben über tausend).
         let mut fetched = futures::stream::iter(pack.downloads.into_iter().map(|(path, file)| {
             let client = &downloader;
             async move { Ok::<_, AppError>((path, file.download(client).await?)) }
         }))
-        .buffered(6);
+        .buffered(DOWNLOAD_CONCURRENCY);
         while let Some(item) = fetched.next().await {
             let (path, data) = item?;
             progress(Phase::Download, done, total);
@@ -1167,18 +1110,11 @@ pub fn local_pack(path: &Path) -> AppResult<Vec<u8>> {
     if !path.is_absolute() || path.extension().and_then(|s| s.to_str()) != Some("mrpack") {
         return Err(AppError::invalid("Absoluter .mrpack-Pfad erforderlich"));
     }
-    let mut file = fs::File::open(path)?;
+    let file = fs::File::open(path)?;
     if !file.metadata()?.is_file() {
         return Err(AppError::invalid("Keine reguläre Datei"));
     }
-    let mut data = Vec::new();
-    Read::by_ref(&mut file)
-        .take(modrinth::FILE_LIMIT + 1)
-        .read_to_end(&mut data)?;
-    if data.len() as u64 > modrinth::FILE_LIMIT {
-        return Err(AppError::invalid("Pack zu groß"));
-    }
-    Ok(data)
+    read_capped_io(file, FILE_LIMIT, "Pack zu groß")
 }
 
 #[cfg(test)]
@@ -1460,6 +1396,28 @@ mod tests {
             assert!(modrinth::download_url(url).is_err());
         }
     }
+    #[test]
+    fn temp_files_live_in_the_cache_and_vanish_on_drop() {
+        let dirs = crate::services::Dirs::new(std::env::temp_dir().join(crate::models::new_id()));
+        let temp = TempFile::in_cache(&dirs).unwrap();
+        let path = temp.0.clone();
+        assert!(path.starts_with(dirs.root.join("cache").join("tmp")) && path.extension().is_some_and(|e| e == "zip"));
+
+        fs::write(&path, "x").unwrap();
+        drop(temp);
+
+        assert!(!path.exists());
+        fs::remove_dir_all(&dirs.root).unwrap();
+    }
+
+    #[test]
+    fn the_download_budget_names_the_file_limit() {
+        assert!(budget([FILE_LIMIT].into_iter()).is_ok());
+        let err = budget([FILE_LIMIT, 1].into_iter()).unwrap_err();
+        assert_eq!(err.to_string(), "Gesamtbudget für Mod-Download überschritten (256 MiB)");
+        assert!(budget([u64::MAX, 1].into_iter()).is_err());
+    }
+
     fn archive(entries: &[(&str, &[u8])]) -> Vec<u8> {
         let mut w = zip::ZipWriter::new(Cursor::new(Vec::new()));
         for (name, data) in entries {
