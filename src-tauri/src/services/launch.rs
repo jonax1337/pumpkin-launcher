@@ -142,7 +142,8 @@ pub fn build_args_for(spec: &LaunchSpec, env: &Env, session: Option<&Session>) -
     args.push(version.main_class.clone());
     args.extend(game.iter().map(|a| substitute(a, &vars)));
     args.extend(window_args(spec.window));
-    // Eigene Spielargumente zuletzt: Minecraft nimmt bei doppelten Optionen den letzten Wert.
+    // Eigene Spielargumente zuletzt. Sie überschreiben nichts: doppelte Optionen lehnt Minecraft ab
+    // (je nach Version Standardwert oder Startabbruch).
     args.extend(spec.extra_game_args.iter().cloned());
     Ok(args)
 }

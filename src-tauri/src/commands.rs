@@ -28,7 +28,7 @@ fn require_launch_settings(instance: &Instance, old: &Instance) -> AppResult<()>
         return Err(AppError::Invalid("Breite und Höhe des Fensters müssen größer als 0 sein".into()));
     }
     match &instance.java_path {
-        Some(path) if instance.java_path != old.java_path => java::custom_java(path).map(drop),
+        Some(path) if instance.java_path != old.java_path => java::custom_java(path, java::JavaSetting::Instance).map(drop),
         _ => Ok(()),
     }
 }
