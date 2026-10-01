@@ -5,7 +5,8 @@ import type { ContentVersion } from "./content-types";
 import { blankInstanceFields } from "./mock-data";
 import { clone, modrinthFetch, newId, wait, type MockContext } from "./mock-util";
 import type { ContentPhase } from "./progress";
-import { CANCELLED, type Instance, type ModLoader } from "./types";
+import { cancelledError } from "./errors";
+import type { Instance, ModLoader } from "./types";
 
 // Stellvertreter für die Pack-Inhalte: echte .mrpack-Dateien werden im Browser nicht gelesen.
 const PACK_MODS = [
@@ -27,7 +28,7 @@ export function createPackMock({ db, emit }: MockContext) {
         throw new Error(t("mock.pack.loaderUnsupported"));
       const mods = loader === "fabric" ? PACK_MODS : [];
       for (let i = 0; i < mods.length; i++) {
-        if (db.cancelled.delete(operationId)) throw new Error(CANCELLED);
+        if (db.cancelled.delete(operationId)) throw cancelledError();
         progress("download", i, mods.length);
         await wait(MOD_DOWNLOAD_MS);
       }

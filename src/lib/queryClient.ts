@@ -1,7 +1,6 @@
 import { MutationCache, QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { isCancelled } from "@/lib/errors";
-import { CANCELLED } from "@/lib/types";
 
 /** Abfragen ohne eigene Angabe gelten kurz als frisch; was seltener wechselt, setzt `staleTime` selbst (hooks/staleTimes.ts). */
 const DEFAULT_STALE_MS = 30_000;
@@ -16,7 +15,7 @@ export const queryClient = new QueryClient({
     onError: (err, _vars, _ctx, mutation) => {
       if (mutation.meta?.ownErrorToast) return;
       // Abbrechen war Absicht: neutral melden, nicht als Fehler.
-      if (isCancelled(err)) toast(CANCELLED);
+      if (isCancelled(err)) toast(err.message);
       else toast.error(err.message);
     },
   }),

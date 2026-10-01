@@ -5,11 +5,11 @@ import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { allCapabilities, eventSubscriptions, type Backend, type BackendEvents, type SearchOptions } from "./backend";
-import { errorMessage } from "./errors";
+import { toBackendError } from "./errors";
 
-/** Fehler der Tauri-Aufrufe kommen als string (oder Plugin-Fehlerobjekt); hier werden sie zu `Error`, die Ursache bleibt in `cause`. */
+/** Fehler der Tauri-Aufrufe kommen als `{ code, message }` (oder Plugin-String bzw. -Objekt); hier werden sie zu `BackendError`. */
 const rethrowAsError = (err: unknown): never => {
-  throw new Error(errorMessage(err), { cause: err });
+  throw toBackendError(err);
 };
 
 async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {

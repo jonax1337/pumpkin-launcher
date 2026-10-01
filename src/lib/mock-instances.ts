@@ -3,7 +3,8 @@ import { t } from "@/i18n";
 import type { Backend } from "./backend";
 import { blankInstanceFields, MOCK_FOREIGN } from "./mock-data";
 import { clone, findInstance, newId, wait, type MockContext } from "./mock-util";
-import { CANCELLED, type Instance, type Template } from "./types";
+import { cancelledError } from "./errors";
+import type { Instance, Template } from "./types";
 
 /** Einträge, die ein Export aus dem Spielordner mitnehmen kann. */
 const EXPORTABLE_ENTRIES = ["config", "mods", "options.txt", "resourcepacks", "saves", "screenshots"];
@@ -16,7 +17,7 @@ const IMPORT_STEP_MS = 100;
 /** Instanzen, Vorlagen und Import: alles nur im Speicher. */
 export function createInstanceMock({ db, emit }: MockContext) {
   const throwIfCancelled = (operationId: string) => {
-    if (db.cancelled.delete(operationId)) throw new Error(CANCELLED);
+    if (db.cancelled.delete(operationId)) throw cancelledError();
   };
   /** Neue Instanz aus einer vorhandenen: eigene ID, nie gespielt, mit `overrides`. */
   const derived = (source: Instance, overrides: Partial<Instance>): Instance => ({

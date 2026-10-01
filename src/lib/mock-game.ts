@@ -3,7 +3,8 @@ import { currentLanguage, t } from "@/i18n";
 import type { Backend } from "./backend";
 import { MOCK_VERSIONS } from "./mock-data";
 import { clone, findInstance, wait, type MockContext } from "./mock-util";
-import { CANCELLED, quickPlayTarget, type InstallStep, type ModLoader } from "./types";
+import { cancelledError } from "./errors";
+import { quickPlayTarget, type InstallStep, type ModLoader } from "./types";
 
 /** Arbeitsspeicher des vorgetäuschten PCs. */
 const MOCK_SYSTEM_MEMORY_MB = 16384;
@@ -85,7 +86,7 @@ export function createGameMock({ db, emit }: MockContext) {
       db.cancelled.delete(instanceId);
       for (const [step, total] of installSteps(inst.loader)) {
         for (let done = 0; done <= total; done += Math.ceil(total / INSTALL_PARTS)) {
-          if (db.cancelled.delete(instanceId)) throw new Error(CANCELLED);
+          if (db.cancelled.delete(instanceId)) throw cancelledError();
           emit("install-progress", { instanceId, step, done: Math.min(done, total), total });
           await wait(INSTALL_STEP_MS);
         }
