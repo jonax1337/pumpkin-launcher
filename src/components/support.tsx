@@ -26,8 +26,7 @@ export function ShareLogDialog() {
   return (
     <ConfirmDialog
       open={!!request}
-      // Beim Hochladen nicht schließbar: Abbrechen hielte die Veröffentlichung nicht mehr auf.
-      onOpenChange={(o) => !o && !share.isPending && close()}
+      onOpenChange={(o) => !o && close()}
       danger={false}
       title="Log öffentlich teilen?"
       text={`Pumpkin Launcher lädt ${what} zu mclo.gs hoch. Jeder mit dem Link kann es lesen. Zugangsdaten, dein Windows-Benutzername und E-Mail-Adressen werden vorher entfernt.`}

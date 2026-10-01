@@ -66,16 +66,20 @@ export function SettingsTab({ instance }: { instance: Instance }) {
   }
 
   const busy = phase === "preparing" || phase === "starting" || phase === "running" || install.isPending;
+  // Solange das Spiel läuft, lehnt das Backend jede Änderung an der Instanz ab; das Bild lebt nur lokal.
+  const locked = phase === "starting" || phase === "running";
   const repairing = percent != null;
   const groupText = instance.group ?? UNGROUPED;
 
   return (
     <div className="max-w-[var(--page-max)] pt-2">
+      {locked && <Hint className="mb-4">Während das Spiel läuft, nicht änderbar: Name, Gruppe und alles unter „Spiel“.</Hint>}
       <FormSection title="Allgemein">
         <FormRow label="Name" htmlFor="inst-name">
           <TextField
             id="inst-name"
             value={name}
+            disabled={locked}
             maxLength={64}
             onChange={(e) => setName(e.target.value)}
             onBlur={saveName}
@@ -84,7 +88,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
         </FormRow>
         <FormRow label="Gruppe" hint="Abschnitt in der Bibliothek">
           <Actions>
-            <Menu align="start" items={groupItems} trigger={<Button iconEnd="chevd" aria-label={`Gruppe: ${groupText}`}>{groupText}</Button>} />
+            <Menu align="start" items={groupItems} trigger={<Button iconEnd="chevd" disabled={locked} aria-label={`Gruppe: ${groupText}`}>{groupText}</Button>} />
           </Actions>
         </FormRow>
         <FormRow label="Bild" hint="Erscheint auf Start, Poster und Kopf." wide>
@@ -106,7 +110,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
 
       <FormSection title="Spiel">
         <FormRow label="Arbeitsspeicher" hint="Automatisch nimmt den Standard aus den Einstellungen." group="radiogroup" aside={<MemoryHelp value={memory} />}>
-          <MemoryChooser name="inst-mem" value={memory} onChange={changeMemory} help={false} />
+          <MemoryChooser name="inst-mem" value={memory} onChange={changeMemory} help={false} disabled={locked} />
         </FormRow>
         <FormRow
           label="Java"
@@ -118,11 +122,12 @@ export function SettingsTab({ instance }: { instance: Instance }) {
             name="inst-java"
             value={instance.javaPath ?? ""}
             onChange={(path) => save({ javaPath: path || null }, "Java gespeichert")}
+            disabled={locked}
             fallback={<>Wie in den Einstellungen <span className="text-fg-3">({globalJava ? "eigene Installation" : "automatisch"})</span></>}
           />
         </FormRow>
         <FormRow label="Fenster" hint="Beim Start des Spiels" group="radiogroup">
-          <WindowChooser value={instance.window} onChange={(window, done) => save({ window }, done)} />
+          <WindowChooser value={instance.window} onChange={(window, done) => save({ window }, done)} disabled={locked} />
         </FormRow>
         <FormRow label="Erweitert">
           <Disclosure summary="Java-Startoptionen" open={instance.jvmArgs.length > 0}>
@@ -132,6 +137,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
               aria-describedby="inst-args-h"
               placeholder="-XX:+UseG1GC"
               value={jvmArgs}
+              disabled={locked}
               onChange={(e) => setJvmArgs(e.target.value)}
               onBlur={() => saveArgs("jvmArgs", jvmArgs)}
             />
@@ -144,6 +150,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
               aria-describedby="inst-game-args-h"
               placeholder="--quickPlayMultiplayer play.example.net"
               value={gameArgs}
+              disabled={locked}
               onChange={(e) => setGameArgs(e.target.value)}
               onBlur={() => saveArgs("gameArgs", gameArgs)}
             />
@@ -191,7 +198,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
  * Fenster beim Start: wie Minecraft es öffnet, feste Größe oder Vollbild. Die Felder für die Größe bleiben stehen
  * und sind nur gesperrt (wie der Pfad bei Java); sie speichern beim Verlassen, Ungültiges springt zurück.
  */
-function WindowChooser({ value, onChange }: { value: GameWindow; onChange: (window: GameWindow, done?: string) => void }) {
+function WindowChooser({ value, onChange, disabled }: { value: GameWindow; onChange: (window: GameWindow, done?: string) => void; disabled?: boolean }) {
   const saved = value.type === "size" ? value : DEFAULT_SIZE;
   const [width, setWidth] = useState(String(saved.width));
   const [height, setHeight] = useState(String(saved.height));
@@ -213,7 +220,7 @@ function WindowChooser({ value, onChange }: { value: GameWindow; onChange: (wind
       inputMode="numeric"
       maxLength={5}
       aria-label={label}
-      disabled={!sized}
+      disabled={disabled || !sized}
       value={text}
       onChange={(e) => setText(e.target.value)}
       onBlur={commitSize}
@@ -223,16 +230,16 @@ function WindowChooser({ value, onChange }: { value: GameWindow; onChange: (wind
 
   return (
     <>
-      <Radio name="inst-window" checked={value.type === "default"} onChange={() => onChange({ type: "default" })}>
+      <Radio name="inst-window" checked={value.type === "default"} disabled={disabled} onChange={() => onChange({ type: "default" })}>
         Standard <span className="text-fg-3">(wie Minecraft es öffnet)</span>
       </Radio>
-      <Radio name="inst-window" checked={sized} onChange={() => onChange(draft)}>Feste Größe</Radio>
+      <Radio name="inst-window" checked={sized} disabled={disabled} onChange={() => onChange(draft)}>Feste Größe</Radio>
       <Actions>
         {sizeField("Fensterbreite in Pixeln", width, setWidth)}
         <span className="text-fg-3" aria-hidden>×</span>
         {sizeField("Fensterhöhe in Pixeln", height, setHeight)}
       </Actions>
-      <Radio name="inst-window" checked={value.type === "fullscreen"} onChange={() => onChange({ type: "fullscreen" })}>Vollbild</Radio>
+      <Radio name="inst-window" checked={value.type === "fullscreen"} disabled={disabled} onChange={() => onChange({ type: "fullscreen" })}>Vollbild</Radio>
     </>
   );
 }

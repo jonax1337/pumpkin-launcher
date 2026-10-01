@@ -143,6 +143,7 @@ function InstanceView({ instances, mode, looks }: { instances: Instance[]; mode:
 export function InstancesPage() {
   const { data: instances, isLoading, error, refetch } = useInstances();
   const looks = useLookStore((s) => s.looks);
+  const collapsed = useLookStore((s) => s.collapsed);
   const [query, setQuery] = useState("");
   const [loader, setLoader] = useState<ModLoader | "all">("all");
   const [sort, setSort] = useState<Sort>("recent");
@@ -216,13 +217,22 @@ export function InstancesPage() {
       </Empty>
     );
   } else if (shown.some((i) => i.group)) {
-    // Gruppen als aufklappbare Abschnitte; zugeklappt bleibt ein Abschnitt, solange die Seite offen ist.
-    // Schlüssel ist die Gruppe selbst: eine Gruppe darf auch „Ohne Gruppe“ heißen.
-    body = sectionsOf(shown).map(([group, members]) => (
-      <Disclosure key={group ?? ""} open className="mb-4" summary={<>{group ?? UNGROUPED} <Count value={members.length} muted /></>}>
-        <InstanceView instances={members} mode={mode} looks={looks} />
-      </Disclosure>
-    ));
+    // Gruppen als aufklappbare Abschnitte; zugeklappte merkt sich der Look-Store über den Neustart hinaus.
+    // Schlüssel ist die Gruppe selbst ("" = ohne Gruppe): eine Gruppe darf auch „Ohne Gruppe“ heißen.
+    body = sectionsOf(shown).map(([group, members]) => {
+      const key = group ?? "";
+      return (
+        <Disclosure
+          key={key}
+          open={!collapsed.includes(key)}
+          onToggle={(open) => useLookStore.getState().setCollapsed(key, !open)}
+          className="mb-4"
+          summary={<>{group ?? UNGROUPED} <Count value={members.length} muted /></>}
+        >
+          <InstanceView instances={members} mode={mode} looks={looks} />
+        </Disclosure>
+      );
+    });
   } else {
     body = <InstanceView instances={shown} mode={mode} looks={looks} />;
   }

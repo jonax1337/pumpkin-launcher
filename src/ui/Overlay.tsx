@@ -428,18 +428,20 @@ function syncTabStops(root: Element | null) {
  * Dialog mit fester Höhe (kein Nachrutschen, wenn sich der Inhalt ändert): Kopf (Titel 26 px, Schließen = IconButton m),
  * scrollender Körper, Fuß. `height` fest in px; ohne passt er sich an. Fuß: `footer` (meist <DialogActions>) und `footLeft`.
  * Startfokus: [data-autofocus] → erstes Eingabefeld im Körper → Primärknopf im Fuß → erstes Bedienbare; nie das Kreuz.
+ * `busy`: die Aktion läuft und ließe sich nicht mehr aufhalten; Kreuz, Esc und Klick daneben schließen dann nicht.
  */
-export function Dialog({ open, onOpenChange, trigger, title, sub, width = 560, height, footer, footLeft, children, onOpenAutoFocus, role = "dialog", describedBy }: {
+export function Dialog({ open, onOpenChange, trigger, title, sub, width = 560, height, footer, footLeft, children, onOpenAutoFocus, role = "dialog", describedBy, busy }: {
   open?: boolean; onOpenChange?: (o: boolean) => void; trigger?: ReactNode; title: ReactNode; sub?: ReactNode; width?: number; height?: number;
   footer?: ReactNode; footLeft?: ReactNode; children: ReactNode; onOpenAutoFocus?: (e: Event) => void;
   /** alertdialog für Rückfragen, die eine Entscheidung verlangen. */
   role?: "dialog" | "alertdialog";
   /** id des Texts, der den Dialog beschreibt (wird beim Öffnen vorgelesen). */
   describedBy?: string;
+  busy?: boolean;
 }) {
   const ret = useReturnFocus(open);
   return (
-    <D.Root open={open} onOpenChange={onOpenChange}>
+    <D.Root open={open} onOpenChange={(o) => !busy && onOpenChange?.(o)}>
       {trigger && <D.Trigger asChild>{trigger}</D.Trigger>}
       <D.Portal>
         <D.Overlay className="vx-scrim" />
@@ -476,7 +478,7 @@ export function Dialog({ open, onOpenChange, trigger, title, sub, width = 560, h
                 {sub && <p className="vx-dlg-sub">{sub}</p>}
               </div>
               <D.Close asChild>
-                <IconButton icon="x" label="Schließen" tip={false} />
+                <IconButton icon="x" label="Schließen" tip={false} disabled={busy} />
               </D.Close>
             </div>
             <div className="vx-dlg-b">{children}</div>
@@ -506,7 +508,7 @@ type ConfirmSpec = {
   form?: string;
   onClick?: () => void;
 };
-type CancelSpec = { label: ReactNode; width?: number; autoFocus?: boolean };
+type CancelSpec = { label: ReactNode; width?: number; autoFocus?: boolean; disabled?: boolean };
 const isCancelSpec = (c: unknown): c is CancelSpec => !!c && typeof c === "object" && !isValidElement(c) && "label" in c;
 
 /**
@@ -520,7 +522,7 @@ export function DialogActions({ cancel, confirm, left }: { cancel?: ReactNode | 
       {left && <span className="vx-dlg-left">{left}</span>}
       {c && (
         <D.Close asChild>
-          <Button width={c.width} data-autofocus={c.autoFocus || undefined}>{c.label}</Button>
+          <Button width={c.width} disabled={c.disabled} data-autofocus={c.autoFocus || undefined}>{c.label}</Button>
         </D.Close>
       )}
       {confirm && (
@@ -544,6 +546,7 @@ export function DialogActions({ cancel, confirm, left }: { cancel?: ReactNode | 
  * Rückfrage vor einer Aktion, z. B. Löschen oder „Minecraft beenden?“.
  * `danger` (Standard): roter Hauptknopf, Startfokus auf „Abbrechen“ (Enter löst nichts Unumkehrbares aus), role=alertdialog.
  * Ohne `danger`: Akzentknopf mit Startfokus. `text` beschreibt den Dialog (aria-describedby).
+ * Während `pending` ist alles gesperrt: die Aktion läuft schon, „Abbrechen“ hielte sie nicht mehr auf.
  */
 export function ConfirmDialog({ open, onOpenChange, title, text, confirmLabel = "Löschen", cancelLabel = "Abbrechen", pendingLabel = "Einen Moment", pending, danger = true, onConfirm }: {
   open: boolean; onOpenChange: (o: boolean) => void; title: string; text?: ReactNode; confirmLabel?: string; cancelLabel?: string; pendingLabel?: string;
@@ -558,9 +561,10 @@ export function ConfirmDialog({ open, onOpenChange, title, text, confirmLabel = 
       width={460}
       role={danger ? "alertdialog" : "dialog"}
       describedBy={text ? textId : undefined}
+      busy={pending}
       footer={
         <DialogActions
-          cancel={{ label: cancelLabel, autoFocus: danger }}
+          cancel={{ label: cancelLabel, autoFocus: danger, disabled: pending }}
           confirm={{ label: pending ? pendingLabel : confirmLabel, variant: danger ? "danger" : "primary", width: 130, disabled: pending, onClick: onConfirm }}
         />
       }
