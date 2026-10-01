@@ -28,33 +28,33 @@ use std::{
 };
 use tokio_util::sync::CancellationToken;
 
+const MAX_PATH_LEN: usize = 240;
+
 pub fn safe_path(value: &str) -> AppResult<PathBuf> {
-    if value.is_empty() || value.len() > 240 || value.contains('\\') {
+    if value.is_empty() || value.len() > MAX_PATH_LEN || value.contains('\\') {
         return Err(AppError::invalid("Unsicherer Pfad"));
     }
-    for part in value.split('/') {
-        let base = part.split('.').next().unwrap_or("").to_ascii_uppercase();
-        if part.is_empty()
-            || part == "."
-            || part == ".."
-            || part.ends_with(['.', ' '])
-            || part
-                .chars()
-                .any(|c| c.is_control() || "<>:\"|?*".contains(c))
-            || matches!(
-                base.as_str(),
-                "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
-            )
-            || (base.starts_with("COM") || base.starts_with("LPT"))
-                && matches!(
-                    &base[3..],
-                    "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
-                )
-        {
-            return Err(AppError::invalid(format!("Unsicherer Windows-Pfad: {value}")));
-        }
+    if value.split('/').any(is_unsafe_component) {
+        return Err(AppError::invalid(format!("Unsicherer Windows-Pfad: {value}")));
     }
     Ok(PathBuf::from(value))
+}
+
+/// Ein Pfadstück, das unter Windows nicht anlegbar ist oder aus dem Ordner führt.
+fn is_unsafe_component(part: &str) -> bool {
+    part.is_empty() || part == "." || part == ".." || part.ends_with(['.', ' ']) || has_unsafe_chars(part) || is_reserved_windows_name(part)
+}
+
+fn has_unsafe_chars(part: &str) -> bool {
+    part.chars().any(|c| c.is_control() || "<>:\"|?*".contains(c))
+}
+
+/// Gerätenamen wie `CON` oder `COM1`, auch mit Endung (`CON.txt`).
+fn is_reserved_windows_name(part: &str) -> bool {
+    let base = part.split('.').next().unwrap_or("").to_ascii_uppercase();
+    let numbered = (base.starts_with("COM") || base.starts_with("LPT"))
+        && matches!(&base[3..], "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³");
+    numbered || matches!(base.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$")
 }
 /// Kein Symlink zwischen `root` und `path`. Oberhalb von `root` zählt nichts: Unter macOS ist schon `/var`
 /// ein Symlink, unter manchen Linux-Systemen `/home`.
@@ -975,7 +975,7 @@ fn untracked(dirs: &super::Dirs, instance: &Instance) -> AppResult<Vec<Untracked
     Ok(found)
 }
 
-/// Nachpflege nach dem Start für vor a9f2691 importierte Packs: Instanzen ganz ohne Inhalts-Liste
+/// Nachpflege nach dem Start für Packs, die vor der Inhalts-Liste importiert wurden: Instanzen ganz ohne Inhalts-Liste
 /// bekommen die Dateien aus `mods/`, `resourcepacks/`, `shaderpacks/` gecacht eingetragen;
 /// erkannt per Modrinth-Sammelabfrage, ohne Netz als lokal. Liefert die Anzahl neuer Einträge.
 /// Nur leere Listen: sonst kämen vom Nutzer entfernte Mods zurück, deren Datei nicht löschbar war.
@@ -1396,6 +1396,24 @@ mod tests {
             assert!(modrinth::download_url(url).is_err());
         }
     }
+    #[test]
+    fn windows_device_names_are_reserved_with_or_without_extension() {
+        for name in ["CON", "con.txt", "Nul", "COM1", "lpt9.log", "COM¹", "CONIN$", "aux.tar.gz"] {
+            assert!(is_reserved_windows_name(name), "{name}");
+        }
+        for name in ["COM0", "COM10", "console", "LPT", "a.CON"] {
+            assert!(!is_reserved_windows_name(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn characters_windows_cannot_store_are_unsafe() {
+        for name in ["a:b", "a*", "a\tb", "a|b", "a?", "a\"b", "<a>"] {
+            assert!(has_unsafe_chars(name), "{name:?}");
+        }
+        assert!(!has_unsafe_chars("sodium-fabric-0.5.8+mc1.20.4.jar"));
+    }
+
     #[test]
     fn temp_files_live_in_the_cache_and_vanish_on_drop() {
         let dirs = crate::services::Dirs::new(std::env::temp_dir().join(crate::models::new_id()));
