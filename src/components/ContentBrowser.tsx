@@ -495,7 +495,7 @@ export function PackInstallButton({ projectId, title, onDone, source = "modrinth
 // Ein Begriff für alles Unfertige, wie im Dialog „Neue Instanz“.
 const VERSION_TYPE: Record<ContentVersion["version_type"], string | null> = { release: null, beta: "components.version.prerelease", alpha: "components.version.prerelease" };
 
-/** Aktionen in den Pack-Details: „Als neue Instanz anlegen“ plus „Andere Version“, beide mit Bestätigung. */
+/** Aktion in den Pack-Details: „Als neue Instanz anlegen“, daneben im Menü „Andere Version“; beides mit Bestätigung. */
 export function PackActions({ projectId, title, onDone, source = "modrinth" }: { projectId: string; title: string; onDone?: (instanceId: string) => void; source?: Source }) {
   const { t } = useI18n();
   const { pack, ask, dialog } = usePackConfirm(projectId, title, onDone, source);
@@ -506,24 +506,26 @@ export function PackActions({ projectId, title, onDone, source = "modrinth" }: {
   if (pack.busy) return <JobProgress label={pack.busy} p={pack.p} width={230} onCancel={pack.cancel} cancelLabel={t("components.pack.cancelInstallPack", { name: title })} />;
   return (
     <>
-      <Button variant="primary" size="l" icon="plus" disabled={!version || pack.blocked} onClick={() => ask(version?.id)}>
-        {reason ?? t("components.pack.createAsInstance")}
-      </Button>
-      {fitting.length > 1 && (
-        <Menu
-          trigger={<Button iconEnd="chevd" disabled={pack.blocked}>{t("components.pack.otherVersion")}</Button>}
-          items={[
-            { label: t("components.pack.otherVersion") },
-            ...fitting.slice(0, 30).map((v) => ({
-              id: v.id,
-              text: v.version_number,
-              sub: `${loaderNames(v)} ${v.game_versions.at(-1) ?? ""}${VERSION_TYPE[v.version_type] ? ` · ${t(VERSION_TYPE[v.version_type]!)}` : ""}`,
-              icon: "plus" as const,
-              onSelect: () => ask(v.id),
-            })),
-          ]}
-        />
-      )}
+      <div className="vx-split">
+        <Button variant="primary" size="l" icon="plus" disabled={!version || pack.blocked} onClick={() => ask(version?.id)}>
+          {reason ?? t("components.pack.createAsInstance")}
+        </Button>
+        {fitting.length > 1 && (
+          <Menu
+            trigger={<IconButton variant="primary" size="l" icon="chevd" label={t("components.pack.otherVersion")} disabled={pack.blocked} />}
+            items={[
+              { label: t("components.pack.otherVersion") },
+              ...fitting.slice(0, 30).map((v) => ({
+                id: v.id,
+                text: v.version_number,
+                sub: `${loaderNames(v)} ${v.game_versions.at(-1) ?? ""}${VERSION_TYPE[v.version_type] ? ` · ${t(VERSION_TYPE[v.version_type]!)}` : ""}`,
+                icon: "plus" as const,
+                onSelect: () => ask(v.id),
+              })),
+            ]}
+          />
+        )}
+      </div>
       {dialog}
     </>
   );
@@ -803,7 +805,7 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
               {project.data.description && <p className="lead">{project.data.description}</p>}
               <Description body={project.data.body} />
             </div>
-            <aside className="side">
+            <aside className="proj-side">
               <Panel notch={2} pad="m">
                 <SectionHeader as="h3" size="card" title={t("components.detail.fitsHeading")} />
                 <dl className="kv">

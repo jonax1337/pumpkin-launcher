@@ -24,6 +24,9 @@
 .vx-btn.vx-ib[data-bleed="start"] { margin-inline-start: calc((var(--b-h) - var(--b-ico)) / -2); }
 .vx-btn.vx-ib[data-bleed="end"] { margin-inline-end: calc((var(--b-h) - var(--b-ico)) / -2); }
 .vx-bc { position: relative; display: inline-flex; align-items: center; gap: var(--b-gap); min-width: 0; }
+/* Geteilter Knopf: Hauptaktion plus schmaler Menü-Teil, durch eine Fuge getrennt */
+.vx-split { display: inline-flex; gap: var(--u2); }
+.vx-split > .vx-btn.vx-ib { width: var(--vx-h-m); }
 
 .vx-btn:is([data-tone="acc"], .vx-btn--acc) { --b-tone: var(--acc-hi); --b-tint: var(--acc); }
 .vx-btn:is([data-tone="warn"], .vx-btn--warn) { --b-tone: var(--warn); --b-tint: var(--warn); }
