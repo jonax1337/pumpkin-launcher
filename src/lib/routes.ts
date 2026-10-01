@@ -64,4 +64,5 @@ export const instanceUrl = (id: string, tab?: InstanceTab) => (tab ? `/instances
 export const instanceTabParams = (tab: InstanceTab) => ({ tab });
 
 /** Der Tab der Adresse; unbekannt oder fehlend = Inhalte. */
-export const readInstanceTab = (params: URLSearchParams): InstanceTab => INSTANCE_TABS.find((tab) => tab === params.get("tab")) ?? "content";
+export const readInstanceTab = (params: URLSearchParams): InstanceTab =>
+  INSTANCE_TABS.find((tab) => tab === params.get("tab")) ?? "content";

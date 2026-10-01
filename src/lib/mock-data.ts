@@ -60,9 +60,21 @@ const byId = (slug: string): Mod => {
 };
 
 /** Was eine neue Instanz wie im Backend (`Instance::from_new`) ohne eigene Werte mitbringt. */
-export const blankInstanceFields = (): Pick<
-  Instance, "modpack" | "memoryMb" | "jvmArgs" | "javaPath" | "window" | "gameArgs" | "playtimeSecs" | "group" | "importedFrom" | "lastPlayedAt" | "lastQuickPlay"
-> => ({ modpack: null, memoryMb: null, jvmArgs: [], javaPath: null, window: { type: "default" }, gameArgs: [], playtimeSecs: 0, group: null, importedFrom: null, lastPlayedAt: null, lastQuickPlay: null });
+type DerivedInstanceFields = "id" | "name" | "minecraftVersion" | "loader" | "loaderVersion" | "mods" | "createdAt";
+
+export const blankInstanceFields = (): Omit<Instance, DerivedInstanceFields> => ({
+  modpack: null,
+  memoryMb: null,
+  jvmArgs: [],
+  javaPath: null,
+  window: { type: "default" },
+  gameArgs: [],
+  playtimeSecs: 0,
+  group: null,
+  importedFrom: null,
+  lastPlayedAt: null,
+  lastQuickPlay: null,
+});
 
 export function initialInstances(): Instance[] {
   return [
@@ -109,7 +121,10 @@ export function initialInstances(): Instance[] {
     ...(
       [
         ["inst-quilt", "Quilt Kreativ", "1.21.1", "quilt", ["sodium", "modmenu"], 12, null],
-        ["inst-neo", "NeoForge Abenteuer mit sehr langem Namen für den Test", "1.21.1", "neoforge", ["jei", "xaeros-minimap", "ferritecore"], 20, "Modpacks"],
+        [
+          "inst-neo", "NeoForge Abenteuer mit sehr langem Namen für den Test", "1.21.1", "neoforge",
+          ["jei", "xaeros-minimap", "ferritecore"], 20, "Modpacks",
+        ],
         ["inst-pvp", "PvP Training", "1.21.4", "fabric", ["sodium", "lithium", "fabric-api"], 30, "Mit Freunden"],
         ["inst-retro", "Retro 1.16", "1.16.5", "vanilla", [], 60, null],
       ] as const
@@ -143,5 +158,6 @@ export const MOCK_FOREIGN: ForeignInstance[] = (
     ["curseforge", "All the Mods 10", "1.21.1", "neoforge", "21.1.172", "curseforge\\minecraft\\Instances"],
   ] as const
 ).map(([launcher, name, minecraftVersion, loader, loaderVersion, dir]) => ({
-  launcher, name, minecraftVersion, loader, loaderVersion, path: `C:\\Users\\Steve\\${dir}\\${name}`, gameDir: "", imported: false, unsupported: null, memoryMb: 6144, jvmArgs: [],
+  launcher, name, minecraftVersion, loader, loaderVersion, path: `C:\\Users\\Steve\\${dir}\\${name}`,
+  gameDir: "", imported: false, unsupported: null, memoryMb: 6144, jvmArgs: [],
 }));

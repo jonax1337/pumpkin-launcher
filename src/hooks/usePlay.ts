@@ -35,8 +35,9 @@ export function useInstall() {
     },
     onError: (err, instance) => {
       if (isCancelled(err)) return void toast(t("hooks.install.cancelled", { name: instance.name }));
-      useTasks.getState().push({ label: t("hooks.install.failed", { name: instance.name }), sub: err.message, state: "fail", to: `/instances/${instance.id}` });
-      toast.error(t("hooks.install.failed", { name: instance.name }), {
+      const failed = t("hooks.install.failed", { name: instance.name });
+      useTasks.getState().push({ label: failed, sub: err.message, state: "fail", to: `/instances/${instance.id}` });
+      toast.error(failed, {
         description: err.message,
         duration: LONG_TOAST_MS,
         action: { label: t("common.retry"), onClick: () => install.mutate(instance) },

@@ -13,7 +13,9 @@ import { useOnline } from "./useOnline";
 import { catalogKeys, instanceKeys } from "./queryKeys";
 import { CATALOG_STALE_MS } from "./staleTimes";
 
-export type ContentRun<R = Instance> = ((operationId: string) => Promise<R>) & { target?: string; label?: string; doneLabel?: string; cancellable?: boolean };
+export type ContentRun<R = Instance> = ((operationId: string) => Promise<R>) & {
+  target?: string; label?: string; doneLabel?: string; cancellable?: boolean;
+};
 
 /**
  * Hängt an einen Lauf, was er betrifft (für den Fortschritt in der passenden Zeile)

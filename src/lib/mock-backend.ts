@@ -46,7 +46,7 @@ const onlyInApp = (whatKey: string) => unavailable(() => t("hooks.api.onlyInApp"
 /** Modpacks und Anbieter ohne Schlüssel brauchen echte Dateien und Downloads. */
 const modpacksNeedApp = unavailable(() => t("hooks.api.modpacksNeedApp"));
 
-/** In-Memory-Backend für den reinen `pnpm dev` im Browser, damit die UI vorführbar bleibt. Katalog echt von Modrinth, der Rest simuliert. */
+/** In-Memory-Backend für den reinen `pnpm dev` im Browser: Katalog echt von Modrinth, der Rest simuliert. */
 export function createMockBackend(): Backend {
   const { emit, on } = createEventBus();
   const context = { db: createDb(), emit };

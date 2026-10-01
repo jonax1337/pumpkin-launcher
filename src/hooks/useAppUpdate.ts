@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { t } from "@/i18n/core";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
+import { ACTION_TOAST_MS } from "@/lib/toast";
 import { isGameActive, useGame } from "@/store/game";
 import { useUpdateRun } from "@/store/updateRun";
 import { appKeys } from "./queryKeys";
@@ -44,7 +45,7 @@ export function useUpdateCheckOnStart() {
 function announceUpdate(version: string, show: () => void) {
   toast.info(t("hooks.update.availableToast", { version }), {
     id: "app-update",
-    duration: 15_000,
+    duration: ACTION_TOAST_MS,
     description: t("hooks.update.availableHint"),
     action: { label: t("components.content.viewAction"), onClick: show },
   });

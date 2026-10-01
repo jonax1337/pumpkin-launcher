@@ -55,7 +55,8 @@ export function undoRemove(current: Mod[], before: Mod[], removed: Mod[]): Mod[]
 const PACK_LOADERS = ["fabric", "quilt", "forge", "neoforge", "minecraft", "vanilla"];
 
 /** Modrinth-Loader, deren Mods eine Instanz ausführt: Quilt lädt auch Fabric-Mods (wie `ModLoader::modrinth_loaders` im Backend). */
-export const modLoadersFor = (loader: string): string[] => (loader === "quilt" ? ["quilt", "fabric"] : loader === "vanilla" ? [] : [loader]);
+export const modLoadersFor = (loader: string): string[] =>
+  loader === "quilt" ? ["quilt", "fabric"] : loader === "vanilla" ? [] : [loader];
 
 /** Ohne Loader-Angabe (Technic) erkennt das Backend den Loader erst beim Laden des Packs. */
 export const isPackVersionSupported = (v: ContentVersion) => v.loaders.length === 0 || v.loaders.some((l) => PACK_LOADERS.includes(l));

@@ -11,7 +11,12 @@ import { useSettings } from "@/store/settings";
 
 // ---------- Microsoft-Anmeldung (ein Dialog für Kontomenü, Einstellungen und Onboarding) ----------
 
-type LoginState = { step: "idle" } | { step: "starting" } | { step: "code"; info: MsLoginStart } | { step: "done"; name: string } | { step: "error"; message: string };
+type LoginState =
+  | { step: "idle" }
+  | { step: "starting" }
+  | { step: "code"; info: MsLoginStart }
+  | { step: "done"; name: string }
+  | { step: "error"; message: string };
 export const useMsLogin = create<LoginState>(() => ({ step: "idle" }));
 // Jeder Versuch bekommt eine Nummer; Antworten eines abgebrochenen Versuchs werden verworfen.
 let attempt = 0;
@@ -20,9 +25,16 @@ let attempt = 0;
 export type AfterName = { label: string; run: () => void };
 
 /** Offene Kontenteile: Menü in der Fensterleiste und Dialog „Spielername hinzufügen“. */
-export const useAccountUi = create<{ menu: boolean; offline: boolean; then: AfterName | null }>(() => ({ menu: false, offline: false, then: null }));
+export const useAccountUi = create<{ menu: boolean; offline: boolean; then: AfterName | null }>(() => ({
+  menu: false,
+  offline: false,
+  then: null,
+}));
 
-/** `method: "device"` erzwingt den Gerätecode (Knopf „Stattdessen Code verwenden“); sonst Anmeldung im Browser. Außerhalb React, deshalb Modul-`t`. */
+/**
+ * `method: "device"` erzwingt den Gerätecode (Knopf „Stattdessen Code verwenden“); sonst Anmeldung im Browser.
+ * Außerhalb React, deshalb Modul-`t`.
+ */
 export async function startMsLogin(qc: QueryClient, method?: "device") {
   const mine = ++attempt;
   useMsLogin.setState({ step: "starting" }, true);

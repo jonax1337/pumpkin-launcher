@@ -31,7 +31,9 @@ export const useLookStore = create<LookState>()(
       // <details> meldet beim Einhängen schon offen; ohne Änderung bleibt der Zustand gleich, kein Neu-Rendern.
       setCollapsed: (group, collapsed) =>
         set((s) =>
-          s.collapsed.includes(group) === collapsed ? s : { collapsed: collapsed ? [...s.collapsed, group] : s.collapsed.filter((g) => g !== group) },
+          s.collapsed.includes(group) === collapsed
+            ? s
+            : { collapsed: collapsed ? [...s.collapsed, group] : s.collapsed.filter((g) => g !== group) },
         ),
     }),
     { name: "launcher-look", version: 1 },

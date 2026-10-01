@@ -15,7 +15,10 @@ import { instanceKeys, instanceRelatedKeys, screenshotKeys, worldKeys } from "./
 
 type ToastAction = { label: string; onClick: () => void };
 
-/** Nach dem Ende des Spiels: Das Backend hat die Spielzeit der Sitzung angerechnet, das Spiel Welten, Serverliste und Screenshots geändert. */
+/**
+ * Nach dem Ende des Spiels: Das Backend hat die Spielzeit der Sitzung angerechnet,
+ * das Spiel Welten, Serverliste und Screenshots geändert.
+ */
 function refreshAfterExit(qc: QueryClient, instanceId: string) {
   qc.setQueryData<InstanceStatus>(instanceKeys.status(instanceId), (s) => s && { ...s, running: false });
   void qc.invalidateQueries({ queryKey: instanceKeys.all });
@@ -41,7 +44,8 @@ function notifyCrash({ instanceId, crashReport }: ExitPayload, name: string, sho
 function notifyExit(exit: ExitPayload, name: string, since: number | undefined, showLog: ToastAction) {
   const { instanceId, code, crashed } = exit;
   if (consumeStoppedByUser(instanceId)) {
-    toast(since ? t("hooks.game.exitedPlayed", { duration: formatClock(Date.now() - since) }) : t("hooks.game.exited"), { action: showLog });
+    const message = since ? t("hooks.game.exitedPlayed", { duration: formatClock(Date.now() - since) }) : t("hooks.game.exited");
+    toast(message, { action: showLog });
   } else if (crashed) {
     useGame.getState().setCrash(exit);
     notifyCrash(exit, name, showLog);

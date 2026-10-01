@@ -40,7 +40,8 @@ export function createContentMock({ db, emit }: MockContext) {
       return { hits: r.hits, total_hits: r.total_hits, offset: r.offset, limit: r.limit };
     },
     modrinthProject: (id) => modrinthFetch<ContentProject>(`/project/${id}`),
-    modrinthProjects: (ids) => (ids.length ? modrinthFetch<ContentProject[]>("/projects", { ids: JSON.stringify(ids) }) : Promise.resolve([])),
+    modrinthProjects: (ids) =>
+      ids.length ? modrinthFetch<ContentProject[]>("/projects", { ids: JSON.stringify(ids) }) : Promise.resolve([]),
     modrinthVersions: versions,
     async modrinthInstallMod(instanceId, versionId, operationId) {
       const progress = progressFor(operationId);

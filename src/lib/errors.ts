@@ -6,8 +6,8 @@ import { CANCELLED } from "./types";
  */
 export function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
-  if (typeof err === "object" && err !== null) return "message" in err && typeof err.message === "string" ? err.message : JSON.stringify(err);
-  return String(err);
+  if (typeof err !== "object" || err === null) return String(err);
+  return "message" in err && typeof err.message === "string" ? err.message : JSON.stringify(err);
 }
 
 /** Hat der Nutzer den Vorgang abgebrochen? Das ist kein Fehler und wird neutral gemeldet. */

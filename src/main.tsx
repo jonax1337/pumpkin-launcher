@@ -7,6 +7,7 @@ import { TipProvider, Toaster } from "@/ui";
 import { LanguageProvider } from "@/i18n";
 import { Layout } from "@/app/Layout";
 import { BrandProvider } from "@/branding/Brand";
+import { isCancelled } from "@/lib/errors";
 import { CANCELLED } from "@/lib/types";
 import { discoverUrl } from "@/lib/routes";
 import { HomePage } from "@/pages/Home";
@@ -28,7 +29,7 @@ const queryClient = new QueryClient({
     onError: (err, _vars, _ctx, mutation) => {
       if (mutation.meta?.ownErrorToast) return;
       // Abbrechen war Absicht: neutral melden, nicht als Fehler.
-      if (err.message === CANCELLED) toast(CANCELLED);
+      if (isCancelled(err)) toast(CANCELLED);
       else toast.error(err.message);
     },
   }),
@@ -37,8 +38,8 @@ const queryClient = new QueryClient({
   },
 });
 
-// Nur Entwicklung: Layoutshift-Summe (PIXELKINO.md §4) in window.__cls
-if (import.meta.env.DEV && typeof PerformanceObserver !== "undefined") {
+/** Nur Entwicklung: Layoutshift-Summe (PIXELKINO.md §4) in window.__cls. */
+function trackLayoutShift() {
   const w = window as Window & { __cls?: number };
   w.__cls = 0;
   try {
@@ -51,6 +52,8 @@ if (import.meta.env.DEV && typeof PerformanceObserver !== "undefined") {
     // layout-shift nicht unterstützt
   }
 }
+
+if (import.meta.env.DEV && typeof PerformanceObserver !== "undefined") trackLayoutShift();
 
 const router = createBrowserRouter([
   {

@@ -4,6 +4,7 @@ import { t } from "@/i18n";
 import { defaultMemory } from "@/hooks/useMemory";
 import { api } from "@/lib/api";
 import { openPage } from "@/lib/links";
+import { ACTION_TOAST_MS } from "@/lib/toast";
 import type { LogKind } from "@/lib/types";
 
 /** Hochladen zu mclo.gs, Link in die Zwischenablage; Fehler beim Hochladen meldet der zentrale Mutations-Toast. */
@@ -15,7 +16,7 @@ export function useShareLog() {
       const copied = await navigator.clipboard.writeText(url).then(() => true, () => false);
       toast.success(copied ? t("hooks.support.linkCopied") : t("hooks.support.logShared"), {
         description: url,
-        duration: 15_000,
+        duration: ACTION_TOAST_MS,
         action: { label: t("common.open"), onClick: () => openPage(url) },
       });
     },

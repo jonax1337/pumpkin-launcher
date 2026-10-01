@@ -63,7 +63,8 @@ export function createGameMock({ db, emit }: MockContext) {
   async function logBurst(instanceId: string, count = DEFAULT_BURST_LINES) {
     for (let i = 0; i < count; i++) {
       const level = i % BURST_WARN_EVERY ? "INFO" : "WARN";
-      emit("instance-log", { instanceId, stream: "stdout", line: `[Render thread/${level}]: ${t("hooks.api.loadTestLine", { n: i + 1 })}` });
+      const line = `[Render thread/${level}]: ${t("hooks.api.loadTestLine", { n: i + 1 })}`;
+      emit("instance-log", { instanceId, stream: "stdout", line });
       if (i % BURST_CHUNK === BURST_CHUNK - 1) await wait(BURST_PAUSE_MS);
     }
   }

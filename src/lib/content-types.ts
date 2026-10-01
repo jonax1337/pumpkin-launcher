@@ -27,7 +27,9 @@ export interface SourceInfo {
   versions: boolean;
 }
 export const SOURCES: Record<Source, SourceInfo> = {
-  modrinth: { label: "Modrinth", types: ["modpack", "mod", "shader", "resourcepack", "datapack"], install: true, filters: true, versions: true },
+  modrinth: {
+    label: "Modrinth", types: ["modpack", "mod", "shader", "resourcepack", "datapack"], install: true, filters: true, versions: true,
+  },
   ftb: { label: "FTB", types: ["modpack"], install: true, filters: true, versions: true },
   technic: { label: "Technic", types: ["modpack"], install: true, filters: false, versions: true },
   curseforge: { label: "CurseForge", types: ["modpack", "mod", "shader", "resourcepack"], install: true, filters: true, versions: true },

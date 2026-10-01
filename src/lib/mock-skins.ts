@@ -52,7 +52,8 @@ export function createSkinMock() {
     textures.set(`mock-skin-${i}`, paintSkin(look));
     return { id: `mock-skin-${i}`, name, variant, addedAt: Date.now() - days * DAY };
   });
-  const defaultSkin = { url: paintSkin({ skin: "#E0A882", hair: "#3B2A1E", eyes: "#3E5A9A", shirt: "#5C9DB3", pants: "#5F5888" }), variant: "classic" as const };
+  const defaultLook: Look = { skin: "#E0A882", hair: "#3B2A1E", eyes: "#3E5A9A", shirt: "#5C9DB3", pants: "#5F5888" };
+  const defaultSkin = { url: paintSkin(defaultLook), variant: "classic" as const };
   let skin: SkinProfile["skin"] = defaultSkin;
   const capes: Cape[] = [
     { id: "mock-cape-migrator", alias: "Migrator", url: paintCape("#7F96B8", "#E5B85F"), active: true },

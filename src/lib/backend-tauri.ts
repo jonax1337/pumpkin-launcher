@@ -118,7 +118,8 @@ export function createTauriBackend(): Backend {
     worldQuickPlaySupported: (instanceId) => call("world_quick_play_supported", { instanceId }),
     datapackList: (instanceId, worldId) => call("datapack_list", { instanceId, worldId }),
     datapackAdd: (instanceId, worldId, paths) => call("datapack_add", { instanceId, worldId, paths }),
-    datapackInstall: (instanceId, worldId, versionId, operationId) => call("datapack_install", { instanceId, worldId, versionId, operationId }),
+    datapackInstall: (instanceId, worldId, versionId, operationId) =>
+      call("datapack_install", { instanceId, worldId, versionId, operationId }),
     datapackRemove: (instanceId, worldId, packId) => call("datapack_remove", { instanceId, worldId, packId }),
     serverList: (instanceId) => call("server_list", { instanceId }),
     serverSave: (instanceId, index, server) => call("server_save", { instanceId, index, server }),

@@ -60,7 +60,10 @@ function useProfileChange<V extends { accountId: string }>(change: (v: V) => Pro
 }
 
 export const useUploadSkin = () =>
-  useProfileChange(({ accountId, skin }: { accountId: string; skin: LibrarySkin }) => api.skinUpload(accountId, skin.id), ({ skin }) => t("hooks.skin.nowWearing", { name: skin.name }));
+  useProfileChange(
+    ({ accountId, skin }: { accountId: string; skin: LibrarySkin }) => api.skinUpload(accountId, skin.id),
+    ({ skin }) => t("hooks.skin.nowWearing", { name: skin.name }),
+  );
 
 export const useResetSkin = () =>
   useProfileChange(({ accountId }: { accountId: string }) => api.skinReset(accountId), () => t("hooks.skin.wearingDefault"));

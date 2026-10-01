@@ -59,7 +59,12 @@ export interface Backend {
 
   /** `index` = Sortierung; ohne: Downloads ohne Suchbegriff, sonst Relevanz. */
   modrinthSearch(
-    query: string, projectType: CatalogType, minecraftVersion: string | null, loader: string | null, offset?: number, index?: SearchIndex | null,
+    query: string,
+    projectType: CatalogType,
+    minecraftVersion: string | null,
+    loader: string | null,
+    offset?: number,
+    index?: SearchIndex | null,
   ): Promise<ContentSearch>;
   modrinthProject(projectId: string): Promise<ContentProject>;
   modrinthProjects(projectIds: string[]): Promise<ContentProject[]>;
@@ -123,7 +128,10 @@ export interface Backend {
   versionsList(): Promise<VersionEntry[]>;
   loaderVersions(loader: ModLoader, mcVersion: string): Promise<LoaderVersion[]>;
   installCancel(instanceId: string): Promise<void>;
-  /** Bricht einen abbrechbaren Content-Vorgang ab (Modpack, Import, Vorlage, Duplizieren, Export). Einzige Stelle, die den Command-Namen kennt. */
+  /**
+   * Bricht einen abbrechbaren Content-Vorgang ab (Modpack, Import, Vorlage, Duplizieren, Export).
+   * Einzige Stelle, die den Command-Namen kennt.
+   */
   packInstallCancel(operationId: string): Promise<void>;
   systemMemoryMb(): Promise<number>;
   instanceStatus(instanceId: string): Promise<InstanceStatus>;

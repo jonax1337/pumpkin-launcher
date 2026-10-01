@@ -8,6 +8,9 @@ import type { Datapack, GameMode, Server, World, WorldBackup } from "./types";
 
 const MB = 1024 * 1024;
 
+/** Eine gesicherte Welt ist gepackt kleiner als der Ordner. */
+const BACKUP_SIZE_SHARE = 0.6;
+
 /** Ordner einer Welt im vorgetäuschten Launcher. */
 const savePath = (id: string) => `C:\\Pumpkin Launcher\\saves\\${id}`;
 
@@ -83,7 +86,12 @@ export function createWorldMock({ db, emit }: MockContext) {
       emit("content-progress", { operationId, phase: "backup", done, total });
       await wait(120);
     }
-    const created: WorldBackup = { id: `${worldId}-${Date.now()}.zip`, world: worldId, createdAt: Date.now(), sizeBytes: Math.round(saved.sizeBytes * 0.6) };
+    const created: WorldBackup = {
+      id: `${worldId}-${Date.now()}.zip`,
+      world: worldId,
+      createdAt: Date.now(),
+      sizeBytes: Math.round(saved.sizeBytes * BACKUP_SIZE_SHARE),
+    };
     backupsOf(instanceId).unshift(created);
     return clone(created);
   }
@@ -150,7 +158,8 @@ export function createWorldMock({ db, emit }: MockContext) {
       emit("content-progress", { operationId, phase: "download", done: 0, total: 1 });
       await wait(600);
       const file = version.files.find((f) => f.primary) ?? version.files[0];
-      packsOf(instanceId, worldId).push({ id: file.filename, name: file.filename.replace(/\.zip$/i, ""), description: version.name, enabled: null });
+      const name = file.filename.replace(/\.zip$/i, "");
+      packsOf(instanceId, worldId).push({ id: file.filename, name, description: version.name, enabled: null });
     },
     async datapackRemove(instanceId: string, worldId: string, packId: string) {
       notRunning(instanceId);
