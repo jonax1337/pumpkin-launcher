@@ -179,7 +179,7 @@ fn recognized(
 }
 
 /// Absoluter Pfad einer normalen .jar- oder .zip-Datei mit brauchbarem Namen und sinnvoller Größe.
-fn source(path: &str) -> AppResult<(PathBuf, String)> {
+pub(crate) fn source(path: &str) -> AppResult<(PathBuf, String)> {
     let path = PathBuf::from(path);
     let name = path
         .file_name()

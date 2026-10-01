@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
-import { useInfiniteQuery, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueries, useQuery, useQueryClient, type QueryClient, type UseQueryResult } from "@tanstack/react-query";
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { useNavigate } from "react-router";
@@ -7,25 +7,26 @@ import { toast } from "sonner";
 import {
   BackLink, Button, ButtonLink, Cell, Chip, Count, Dialog, DialogActions, Empty, ErrorBox, Field, Hint, Icon, IconButton, JobProgress, List, ListRow, Menu,
   MenuItem, MenuLabel, MenuNote, MenuScroll, MenuSep, Meta, Panel, ProjectIcon, RowTitle, SceneThumb, SearchField, SectionHeader, Select, Sheet, Skel, SkelRow,
-  Switch, TabPanel, Tabs, TextField, Tip, Toolbar,
+  Switch, TabPanel, Tabs, TextField, Tip, Toolbar, type MenuEntry,
 } from "@/ui";
 import { cancelContent, cancellable, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { useInstances } from "@/hooks/useInstances";
+import { worldKeys, worldsQuery } from "@/hooks/useWorlds";
 import { api } from "@/lib/api";
 import {
   formatDownloads, installedKey, isPackVersionSupported, modLoadersFor, ownerKey, pickPackVersion, pickVersion, progressLabel, progressShare, projectKey, projectOf, SOURCES,
   type CatalogType, type ContentHit, type ContentProgress, type ContentProject, type ContentVersion, type SearchIndex, type Source,
 } from "@/lib/modrinth";
 import { openManualDownloads } from "@/components/ManualDownloads";
-import { LOADER_LABELS, type Instance, type ModKind, type ModLoader } from "@/lib/types";
+import { LOADER_LABELS, type Instance, type ModKind, type ModLoader, type World } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { lookOf, useLook, useLookStore } from "@/store/look";
 
 export const IRIS_PROJECT_ID = "YL57xq9U";
 
 export const KIND_LABELS: Record<ModKind, string> = { mod: "Mods", shader: "Shader", resourcepack: "Ressourcenpakete" };
-const TYPE_LABELS: Record<CatalogType, string> = { modpack: "Modpacks", ...KIND_LABELS };
-const TYPE_ONE: Record<CatalogType, string> = { modpack: "Modpack", mod: "Mod", shader: "Shader", resourcepack: "Ressourcenpaket" };
+export const TYPE_LABELS: Record<CatalogType, string> = { modpack: "Modpacks", ...KIND_LABELS, datapack: "Datenpakete" };
+const TYPE_ONE: Record<CatalogType, string> = { modpack: "Modpack", mod: "Mod", shader: "Shader", resourcepack: "Ressourcenpaket", datapack: "Datenpaket" };
 
 /** Was in eine Instanz passt: Mods und Shader nur mit Mod-Loader, Ressourcenpakete immer. */
 export const kindsFor = (instance: Instance): ModKind[] =>
@@ -36,8 +37,14 @@ export const fitsLabel = (instance: Instance, type: CatalogType) =>
   type === "mod" ? `${LOADER_LABELS[instance.loader]} ${instance.minecraftVersion}` : `Minecraft ${instance.minecraftVersion}`;
 
 const versionsKey = (projectId: string, mc: string | null, loader: string | null) => ["modrinth-versions", projectId, mc, loader];
-// Für Quilt fragt das Backend Quilt- und Fabric-Mods an.
-const loaderFor = (instance: Instance, type: CatalogType) => (type === "mod" ? instance.loader : null);
+// Für Quilt fragt das Backend Quilt- und Fabric-Mods an; Datenpakete führt Modrinth unter dem Loader „datapack“.
+const loaderFor = (instance: Instance, type: CatalogType) => (type === "mod" ? instance.loader : type === "datapack" ? "datapack" : null);
+
+/** Passt die Version zur Instanz: Minecraft-Version, bei Mods und Datenpaketen auch der Loader. */
+const versionFits = (v: ContentVersion, instance: Instance, type: CatalogType) => {
+  const loader = loaderFor(instance, type);
+  return v.game_versions.includes(instance.minecraftVersion) && (loader == null || v.loaders.some((l) => modLoadersFor(loader).includes(l)));
+};
 
 const allVersionsQuery = (projectId: string, source: Source = "modrinth") => ({
   queryKey: source === "modrinth" ? versionsKey(projectId, null, null) : ["catalog-versions", source, projectId],
@@ -155,14 +162,31 @@ function InChip({ instances, small }: { instances?: Instance[]; small?: boolean 
 // ---------- Hinzufügen ----------
 
 /**
- * Wählt die passende Version automatisch (oder nimmt `versionId`) und installiert mit Abhängigkeiten.
- * "missing" = keine Version für diese Instanz. Mit `openAction` bekommt der Toast „Öffnen“ (Instanz, Tab Inhalte).
+ * Datenpaket in die Welt. Der Lauf gibt die Instanz unverändert zurück (keine Abhängigkeiten), damit Fortschritt und
+ * Aufgaben-Menü wie bei Mods laufen. Die Liste der Welt wird hier aufgefrischt, nicht erst im Erfolgs-Callback, der
+ * bei einer inzwischen verlassenen Seite nicht mehr läuft.
+ */
+const installDatapack = async (qc: QueryClient, instance: Instance, world: World, versionId: string, op: string) => {
+  await api.datapackInstall(instance.id, world.id, versionId, op);
+  void qc.invalidateQueries({ queryKey: worldKeys.datapacks(instance.id, world.id) });
+  return instance;
+};
+
+/** Wohin ein Inhalt kam: in die Welt (Tab Welten) oder in die Instanz (Tab Inhalte). */
+const destination = (instance: Instance, world?: World) =>
+  world ? { label: `„${world.name}“ (${instance.name})`, tab: "worlds" } : { label: instance.name, tab: "content" };
+
+/**
+ * Wählt die passende Version automatisch (oder nimmt `versionId`) und installiert mit Abhängigkeiten, Datenpakete in
+ * die Welt `world`. "missing" = keine Version für diese Instanz. Mit `openAction` bekommt der Toast „Ansehen“ (Instanz, Tab Inhalte bzw. Welten).
  */
 function useAddContent() {
   const qc = useQueryClient();
   const install = useContentInstall();
   const navigate = useNavigate();
-  return async (instance: Instance, projectId: string, title: string, type: CatalogType, opts: { versionId?: string; openAction?: boolean; source?: Source } = {}) => {
+  return async (
+    instance: Instance, projectId: string, title: string, type: CatalogType, opts: { versionId?: string; openAction?: boolean; source?: Source; world?: World } = {},
+  ) => {
     const source = opts.source ?? "modrinth";
     let id = opts.versionId;
     let picked: ContentVersion | undefined;
@@ -196,25 +220,26 @@ function useAddContent() {
       return "blocked";
     }
     const before = instance.mods.length;
-    const perform = (op: string) => (source === "modrinth" ? api.modrinthInstallMod(instance.id, id, op) : api.providerInstallMod(source, instance.id, projectId, id, op));
+    const { world } = opts;
+    const perform = (op: string) =>
+      world ? installDatapack(qc, instance, world, id, op) : source === "modrinth" ? api.modrinthInstallMod(instance.id, id, op) : api.providerInstallMod(source, instance.id, projectId, id, op);
     install.mutate(withTarget(projectId, perform, `${title} installieren`), {
       onSuccess: (result) => {
         if (!result) return;
         const extra = result.mods.length - before - 1;
         const deps = extra > 0 ? `, dazu ${extra} ${extra === 1 ? "benötigte Mod" : "benötigte Mods"}` : "";
         if (!opts.openAction) return void toast.success(`${title} hinzugefügt${deps}`);
-        toast.success(`${title} ist jetzt in ${result.name}${deps}`, {
-          action: { label: "Ansehen", onClick: () => navigate(`/instances/${result.id}?tab=content`) },
-        });
+        const { label, tab } = destination(result, world);
+        toast.success(`${title} ist jetzt in ${label}${deps}`, { action: { label: "Ansehen", onClick: () => navigate(`/instances/${result.id}?tab=${tab}`) } });
       },
     });
     return "ok";
   };
 }
 
-/** Hinzufügen im Kontext einer Instanz: Knopf, „Installiert“, Fortschritt oder „Keine Version“. */
-function AddButton({ instance, projectId, title, type, versionId, large, compact, source = "modrinth" }: {
-  instance: Instance; projectId: string; title: string; type: CatalogType; versionId?: string; large?: boolean; compact?: boolean; source?: Source;
+/** Hinzufügen im Kontext einer Instanz (Datenpakete: einer Welt darin): Knopf, „Installiert“, Fortschritt oder „Keine Version“. */
+function AddButton({ instance, world, projectId, title, type, versionId, large, compact, source = "modrinth" }: {
+  instance: Instance; world?: World; projectId: string; title: string; type: CatalogType; versionId?: string; large?: boolean; compact?: boolean; source?: Source;
 }) {
   const addContent = useAddContent();
   const { active, target, progress } = useContentState();
@@ -223,7 +248,7 @@ function AddButton({ instance, projectId, title, type, versionId, large, compact
 
   async function add() {
     setState("checking");
-    const r = await addContent(instance, projectId, title, type, { versionId, source });
+    const r = await addContent(instance, projectId, title, type, { versionId, source, world });
     setState(r === "missing" ? "missing" : "idle");
     if (r === "missing" && compact) toast.error(`${title} gibt es nicht für ${fitsLabel(instance, type)}`);
   }
@@ -254,8 +279,7 @@ export function AddToInstanceMenu({ projectId, title, type, large, source = "mod
   const reasonFor = (i: Instance): string | null => {
     if (!kindsFor(i).includes(type)) return "Geht nur in Instanzen mit Mod-Loader";
     if (i.mods.some((m) => ownerKey(m) === projectKey(source, projectId))) return "Schon drin";
-    const fits = all.data?.some((v) => v.game_versions.includes(i.minecraftVersion) && (type !== "mod" || v.loaders.some((l) => modLoadersFor(i.loader).includes(l))));
-    return all.data && !fits ? `Keine Version für ${i.minecraftVersion}` : null;
+    return all.data && !all.data.some((v) => versionFits(v, i, type)) ? `Keine Version für ${i.minecraftVersion}` : null;
   };
   const rows = (instances.data ?? []).map((i) => ({ i, reason: reasonFor(i) }));
   const usable = rows.some((r) => !r.reason);
@@ -266,18 +290,7 @@ export function AddToInstanceMenu({ projectId, title, type, large, source = "mod
       open={open}
       onOpenChange={setOpen}
       width={300}
-      trigger={
-        <Button
-          variant={large ? "primary" : "secondary"}
-          size={large ? "l" : "s"}
-          icon="plus"
-          iconEnd="chevd"
-          disabled={!!active}
-          aria-label={large ? undefined : `${title} zu Instanz hinzufügen`}
-        >
-          {large ? "Zu Instanz hinzufügen" : "Hinzufügen"}
-        </Button>
-      }
+      trigger={addMenuTrigger(title, "Instanz", !!active, large)}
     >
       <MenuLabel>Hinzufügen zu …</MenuLabel>
       <MenuScroll>
@@ -314,6 +327,47 @@ export function AddToInstanceMenu({ projectId, title, type, large, source = "mod
     </Menu>
   );
 }
+
+/** Datenpaket ohne Instanz-Kontext: je Instanz ein Untermenü mit ihren Welten. */
+export function AddToWorldMenu({ projectId, title, large }: { projectId: string; title: string; large?: boolean }) {
+  const instances = useInstances();
+  const addContent = useAddContent();
+  const { active, target, progress } = useContentState();
+  const [open, setOpen] = useState(false);
+  const list = instances.data ?? [];
+  const worlds = useQueries({ queries: list.map((i) => ({ ...worldsQuery(i.id), enabled: open })) });
+  // Wie im Menü für Instanzen: Versionen einmal laden, um Instanzen ohne passende Minecraft-Version vorab auszugrauen.
+  const all = useQuery({ ...allVersionsQuery(projectId), enabled: open });
+  const add = (i: Instance, world: World) =>
+    void addContent(i, projectId, title, "datapack", { world, openAction: true }).then(
+      (r) => r === "missing" && toast.error(`${title} gibt es nicht für Minecraft ${i.minecraftVersion}`),
+    );
+  const items: MenuEntry[] = list.map((i, k) => {
+    const found = worlds[k].data;
+    const reason = all.data && !all.data.some((v) => versionFits(v, i, "datapack")) ? `keine Version für ${i.minecraftVersion}` : found?.length === 0 ? "keine Welten" : null;
+    return {
+      id: i.id,
+      text: reason ? `${i.name} (${reason})` : i.name,
+      disabled: !!reason || !found?.length,
+      items: (found ?? []).map((w) => ({ id: w.id, text: w.name, onSelect: () => add(i, w) })),
+    };
+  });
+
+  if (active && target === projectId) return <JobProgress label={shortLabel(progress)} p={progressShare(progress)} width={jobWidth(large)} />;
+  return (
+    <Menu open={open} onOpenChange={setOpen} width={300} trigger={addMenuTrigger(title, "Welt", !!active, large)} items={[{ label: "Hinzufügen zu …" }, ...items]}>
+      {list.length === 0 && !instances.isPending && <MenuNote>Noch keine Instanz.</MenuNote>}
+      {worlds.some((q) => q.isPending) && <MenuNote>Sucht Welten …</MenuNote>}
+    </Menu>
+  );
+}
+
+/** Auslöser für „Hinzufügen zu …“: groß im Projektkopf, klein in der Katalogzeile. */
+const addMenuTrigger = (title: string, where: "Instanz" | "Welt", disabled: boolean, large?: boolean) => (
+  <Button variant={large ? "primary" : "secondary"} size={large ? "l" : "s"} icon="plus" iconEnd="chevd" disabled={disabled} aria-label={large ? undefined : `${title} zu ${where} hinzufügen`}>
+    {large ? `Zu ${where} hinzufügen` : "Hinzufügen"}
+  </Button>
+);
 
 /** Modpack als neue Instanz; ohne `versionId` die neueste stabile Version mit unterstütztem Loader. */
 export function useInstallPack(projectId: string, title: string, onDone?: (instanceId: string) => void, source: Source = "modrinth") {
@@ -499,8 +553,8 @@ function useDebounced<T>(value: T, ms: number): T {
   return debounced;
 }
 
-const SEARCH_PLACEHOLDER: Record<CatalogType, string> = {
-  mod: "In Mods suchen", shader: "In Shadern suchen", resourcepack: "In Ressourcenpaketen suchen", modpack: "In Modpacks suchen",
+export const SEARCH_PLACEHOLDER: Record<CatalogType, string> = {
+  mod: "In Mods suchen", shader: "In Shadern suchen", resourcepack: "In Ressourcenpaketen suchen", modpack: "In Modpacks suchen", datapack: "In Datenpaketen suchen",
 };
 
 /** Keine Verbindung: Katalog braucht Internet. */
@@ -533,8 +587,10 @@ export const SORT_HEADINGS: Record<SearchIndex, string> = {
  * was außen steht (Entdecken, Seitenpanel). `compact` = schmale Zeilen im Seitenpanel.
  * `sort` fehlt = Downloads ohne Suchbegriff, sonst Relevanz. `feature` hebt ohne Suchbegriff den meistgeladenen bzw. meistgefolgten Treffer als Karte hervor.
  */
-export function ContentResults({ type, instance, action, onOpen, autoFocus = true, query: outerQuery, mc: outerMc, loader: outerLoader, fit = true, compact, onReset, sort, feature, source = "modrinth" }: {
+export function ContentResults({ type, instance, world, action, onOpen, autoFocus = true, query: outerQuery, mc: outerMc, loader: outerLoader, fit = true, compact, onReset, sort, feature, source = "modrinth" }: {
   type: CatalogType; instance?: Instance; action?: (hit: ContentHit) => ReactNode; onOpen: (projectId: string, hit?: ContentHit) => void;
+  /** Mit `instance`: Welt darin, in die Datenpakete kommen. */
+  world?: World;
   /** Katalog-Quelle; ohne Angabe Modrinth. Anbieter ohne Schlüssel liefern nur Modpacks (CurseForge: Nachschlagen per Link). */
   source?: Source;
   /** Früher: Hintergrund der klebenden Suchleiste; ohne Wirkung. */
@@ -633,7 +689,7 @@ export function ContentResults({ type, instance, action, onOpen, autoFocus = tru
                     {busy ? (
                       <JobProgress label={shortLabel(progress)} p={progressShare(progress)} width={jobWidth(false, compact)} />
                     ) : instance ? (
-                      <AddButton instance={instance} projectId={hit.project_id} title={hit.title} type={type} compact={compact} source={source} />
+                      <AddButton instance={instance} world={world} projectId={hit.project_id} title={hit.title} type={type} compact={compact} source={source} />
                     ) : action ? (
                       action(hit)
                     ) : (
@@ -693,11 +749,11 @@ function McSummary({ versions }: { versions: ContentVersion[] }) {
 
 /**
  * Projektseite: Kopf mit Bild und Aktion, links Beschreibung, rechts „Passt zu“ und Versionen.
- * Mit `instance` (Seitenpanel) wird für diese Instanz hinzugefügt; `hit` liefert Autor, Downloads und Kategorien aus der Suche.
+ * Mit `instance` (Seitenpanel) wird für diese Instanz hinzugefügt, mit `world` in diese Welt; `hit` liefert Autor, Downloads und Kategorien aus der Suche.
  * Im Seitenpanel einspaltig (ui/overlay.css, .vx-sheet .proj-*).
  */
-export function ContentDetail({ projectId, type, instance, action, onBack, backLabel = "Zurück", hit, source = "modrinth" }: {
-  projectId: string; type: CatalogType; instance?: Instance; action?: (project: ContentProject) => ReactNode; onBack: () => void;
+export function ContentDetail({ projectId, type, instance, world, action, onBack, backLabel = "Zurück", hit, source = "modrinth" }: {
+  projectId: string; type: CatalogType; instance?: Instance; world?: World; action?: (project: ContentProject) => ReactNode; onBack: () => void;
   backLabel?: string; hit?: ContentHit | null; source?: Source;
 }) {
   const info = SOURCES[source];
@@ -716,7 +772,8 @@ export function ContentDetail({ projectId, type, instance, action, onBack, backL
     staleTime: 10 * 60_000,
     retry: false,
   });
-  const all = useQuery(allVersionsQuery(projectId, source));
+  // Datenpaket-Projekte bieten oft auch Mod-Versionen an; hier zählen nur die Datenpakete.
+  const all = useQuery({ ...allVersionsQuery(projectId, source), select: (list) => (type === "datapack" ? list.filter((v) => v.loaders.includes("datapack")) : list) });
   const instances = useInstances();
   const title = project.data?.title ?? hit?.title ?? "";
   const { pack, ask: askPack, dialog: packDialog } = usePackConfirm(projectId, title, undefined, source);
@@ -724,7 +781,7 @@ export function ContentDetail({ projectId, type, instance, action, onBack, backL
   const shown = (instance ? fitting.data : type === "modpack" && info.install ? all.data?.filter(isPackVersionSupported) : all.data)?.slice(0, 5);
   const fitCount =
     source === "modrinth" && type !== "modpack" && all.data && instances.data
-      ? instances.data.filter((i) => kindsFor(i).includes(type as ModKind) && all.data!.some((v) => v.game_versions.includes(i.minecraftVersion) && (type !== "mod" || v.loaders.some((l) => modLoadersFor(i.loader).includes(l))))).length
+      ? instances.data.filter((i) => (type === "datapack" || kindsFor(i).includes(type as ModKind)) && all.data!.some((v) => versionFits(v, i, type))).length
       : null;
   const loaders = all.data ? [...new Set(all.data.flatMap((v) => v.loaders))].filter((l) => l !== "minecraft") : [];
 
@@ -755,7 +812,7 @@ export function ContentDetail({ projectId, type, instance, action, onBack, backL
               </div>
             </div>
             <div className="projact">
-              {instance ? <AddButton instance={instance} projectId={projectId} title={title} type={type} large source={source} /> : action?.(project.data)}
+              {instance ? <AddButton instance={instance} world={world} projectId={projectId} title={title} type={type} large source={source} /> : action?.(project.data)}
             </div>
           </div>
           <div className="proj-b">
@@ -769,7 +826,7 @@ export function ContentDetail({ projectId, type, instance, action, onBack, backL
                 <dl className="kv">
                   <dt>Minecraft</dt>
                   <dd>{all.data ? <McSummary versions={all.data} /> : "…"}</dd>
-                  {type !== "resourcepack" && (
+                  {type !== "resourcepack" && type !== "datapack" && (
                     <>
                       <dt>Loader</dt>
                       <dd>{type === "shader" ? "Iris (Fabric, Quilt, NeoForge)" : loaders.length ? loaders.map((l) => LOADER_LABELS[l as ModLoader] ?? l).join(", ") : all.data ? "Nicht angegeben" : "…"}</dd>
@@ -807,7 +864,7 @@ export function ContentDetail({ projectId, type, instance, action, onBack, backL
                           sub={`${v.loaders.filter((l) => l !== "minecraft").map((l) => LOADER_LABELS[l as ModLoader] ?? l).join(", ") || "Alle Loader"} · ${v.game_versions.at(-1)}${VERSION_TYPE[v.version_type] ? ` · ${VERSION_TYPE[v.version_type]}` : ""}`}
                         />
                         {instance ? (
-                          <AddButton instance={instance} projectId={projectId} title={title} type={type} versionId={v.id} source={source} />
+                          <AddButton instance={instance} world={world} projectId={projectId} title={title} type={type} versionId={v.id} source={source} />
                         ) : type === "modpack" && info.install ? (
                           <IconButton size="s" icon="plus" label={`${v.version_number} als Instanz anlegen`} tip="Diese Version als Instanz anlegen" disabled={pack.blocked} onClick={() => askPack(v.id)} />
                         ) : null}
@@ -827,9 +884,13 @@ export function ContentDetail({ projectId, type, instance, action, onBack, backL
 
 // ---------- Seitenpanel in der Instanz ----------
 
-export function AddContentSheet({ instance, open, onOpenChange, initialKind }: { instance: Instance; open: boolean; onOpenChange: (open: boolean) => void; initialKind?: ModKind }) {
-  const kinds = kindsFor(instance);
-  const [type, setType] = useState<ModKind>(initialKind && kinds.includes(initialKind) ? initialKind : kinds[0]);
+/** Katalog im Seitenpanel einer Instanz; mit `world` nur Datenpakete für diese Welt. */
+export function AddContentSheet({ instance, world, open, onOpenChange, initialKind }: {
+  instance: Instance; world?: World; open: boolean; onOpenChange: (open: boolean) => void; initialKind?: ModKind;
+}) {
+  // Datenpakete gibt es hier nur von Modrinth.
+  const kinds: CatalogType[] = world ? ["datapack"] : kindsFor(instance);
+  const [type, setType] = useState<CatalogType>(initialKind && kinds.includes(initialKind) ? initialKind : kinds[0]);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [hit, setHit] = useState<ContentHit | null>(null);
   const [query, setQuery] = useState("");
@@ -858,6 +919,7 @@ export function AddContentSheet({ instance, open, onOpenChange, initialKind }: {
         source={source}
         type={kind}
         instance={instance}
+        world={world}
         query={query}
         fit={fit}
         compact
@@ -875,21 +937,23 @@ export function AddContentSheet({ instance, open, onOpenChange, initialKind }: {
       open={open}
       onOpenChange={onOpenChange}
       acc={acc}
-      title={`Inhalte für ${instance.name}`}
-      sub={`Pumpkin Launcher wählt automatisch die Version für ${fitsLabel(instance, "mod")}.`}
+      title={world ? `Datenpakete für „${world.name}“` : `Inhalte für ${instance.name}`}
+      sub={`Pumpkin Launcher wählt automatisch die Version für ${fitsLabel(instance, world ? "datapack" : "mod")}.`}
       tools={
         projectId ? undefined : (
           <>
             {tabbed && (
-              <Tabs variant="segment" size="s" idBase="sheet-art" label="Art" value={kind} onChange={setType} items={kinds.map((k) => ({ value: k, label: KIND_LABELS[k] }))} />
+              <Tabs variant="segment" size="s" idBase="sheet-art" label="Art" value={kind} onChange={setType} items={kinds.map((k) => ({ value: k, label: TYPE_LABELS[k] }))} />
             )}
-            <Select
-              size="s"
-              label="Quelle"
-              value={source}
-              onChange={(v) => setSource(v as Source)}
-              options={[{ value: "modrinth", label: "Modrinth" }, { value: "curseforge", label: "CurseForge" }]}
-            />
+            {!world && (
+              <Select
+                size="s"
+                label="Quelle"
+                value={source}
+                onChange={(v) => setSource(v as Source)}
+                options={[{ value: "modrinth", label: "Modrinth" }, { value: "curseforge", label: "CurseForge" }]}
+              />
+            )}
             <SearchField size="s" value={query} onChange={setQuery} placeholder="Im Katalog suchen" autoFocus />
             <Switch checked={fit} onChange={setFit} label={`Nur passend zu ${fitsLabel(instance, kind)}`} visibleLabel />
           </>
@@ -897,7 +961,7 @@ export function AddContentSheet({ instance, open, onOpenChange, initialKind }: {
       }
     >
       {projectId && (
-        <ContentDetail projectId={projectId} type={kind} instance={instance} hit={hit} source={source} backLabel={KIND_LABELS[kind]} onBack={() => setProjectId(null)} />
+        <ContentDetail projectId={projectId} type={kind} instance={instance} world={world} hit={hit} source={source} backLabel={TYPE_LABELS[kind]} onBack={() => setProjectId(null)} />
       )}
       {/* Bleibt beim Öffnen von Details erhalten, damit Suche und geladene Seiten nicht verloren gehen. */}
       {tabbed ? (

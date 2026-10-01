@@ -5,7 +5,7 @@ export interface ContentHit {
   project_id: string; slug: string; title: string; description: string;
   icon_url: string | null; project_type: string; downloads: number; author: string; categories: string[];
 }
-export type CatalogType = "mod" | "modpack" | "resourcepack" | "shader";
+export type CatalogType = "mod" | "modpack" | "resourcepack" | "shader" | "datapack";
 /** Sortierung der Modrinth-Suche. */
 export type SearchIndex = "relevance" | "downloads" | "follows" | "newest" | "updated";
 export interface ContentSearch { hits: ContentHit[]; total_hits: number; offset: number; limit: number }
@@ -29,7 +29,7 @@ export interface SourceInfo {
   versions: boolean;
 }
 export const SOURCES: Record<Source, SourceInfo> = {
-  modrinth: { label: "Modrinth", types: ["modpack", "mod", "shader", "resourcepack"], install: true, filters: true, versions: true },
+  modrinth: { label: "Modrinth", types: ["modpack", "mod", "shader", "resourcepack", "datapack"], install: true, filters: true, versions: true },
   ftb: { label: "FTB", types: ["modpack"], install: true, filters: true, versions: true },
   technic: { label: "Technic", types: ["modpack"], install: true, filters: false, versions: true },
   curseforge: { label: "CurseForge", types: ["modpack", "mod", "shader", "resourcepack"], install: true, filters: true, versions: true },

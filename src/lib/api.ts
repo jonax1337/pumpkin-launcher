@@ -6,6 +6,7 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import {
   CANCELLED,
   type Account,
+  type Datapack,
   type ExitPayload,
   type FileCheck,
   type ForeignInstance,
@@ -510,6 +511,18 @@ export const api = {
   /** Kann die Minecraft-Version der Instanz direkt in eine Welt starten (ab 1.20)? */
   worldQuickPlaySupported: (instanceId: string): Promise<boolean> =>
     tauri ? call("world_quick_play_supported", { instanceId }) : mockWorlds!.quickPlaySupported(instanceId),
+  /** Datenpakete einer Welt, nach Namen sortiert. */
+  datapackList: (instanceId: string, worldId: string): Promise<Datapack[]> =>
+    tauri ? call("datapack_list", { instanceId, worldId }) : mockWorlds!.datapacks(instanceId, worldId),
+  /** Eigene Datenpaket-Zips (absolute Pfade) in die Welt; passt eins nicht, kommt keins hinein. */
+  datapackAdd: (instanceId: string, worldId: string, paths: string[]): Promise<void> =>
+    tauri ? call("datapack_add", { instanceId, worldId, paths }) : Promise.reject(new Error(LOCAL_FILES_IN_APP)),
+  /** Datenpaket-Version von Modrinth in die Welt; Fortschritt als `content-progress`. */
+  datapackInstall: (instanceId: string, worldId: string, versionId: string, operationId: string): Promise<void> =>
+    tauri ? call("datapack_install", { instanceId, worldId, versionId, operationId }) : mockWorlds!.installDatapack(instanceId, worldId, versionId, operationId),
+  /** Legt das Datenpaket in den Papierkorb. */
+  datapackRemove: (instanceId: string, worldId: string, packId: string): Promise<void> =>
+    tauri ? call("datapack_remove", { instanceId, worldId, packId }) : mockWorlds!.removeDatapack(instanceId, worldId, packId),
   serverList: (instanceId: string): Promise<Server[]> => (tauri ? call("server_list", { instanceId }) : mockWorlds!.servers(instanceId)),
   /** Legt einen Server an (`index` null) oder ändert den an Stelle `index` der Liste. */
   serverSave: (instanceId: string, index: number | null, server: Server): Promise<void> =>

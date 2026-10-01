@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { api } from "@/lib/api";
-import type { Instance, Server, World, WorldBackup } from "@/lib/types";
+import { fileName } from "@/lib/format";
+import type { Datapack, Instance, Server, World, WorldBackup } from "@/lib/types";
 import { useTasks } from "@/store/tasks";
 
 export const worldKeys = {
@@ -11,10 +12,14 @@ export const worldKeys = {
   list: (instanceId: string) => ["worlds", instanceId, "list"] as const,
   backups: (instanceId: string) => ["worlds", instanceId, "backups"] as const,
   servers: (instanceId: string) => ["worlds", instanceId, "servers"] as const,
+  datapacks: (instanceId: string, worldId: string) => ["worlds", instanceId, "datapacks", worldId] as const,
 };
 
+/** Welten einer Instanz; auch für die Auswahl der Welt beim Hinzufügen eines Datenpakets aus Entdecken. */
+export const worldsQuery = (instanceId: string) => ({ queryKey: worldKeys.list(instanceId), queryFn: () => api.worldList(instanceId) });
+
 export function useWorlds(instanceId: string) {
-  return useQuery({ queryKey: worldKeys.list(instanceId), queryFn: () => api.worldList(instanceId) });
+  return useQuery(worldsQuery(instanceId));
 }
 
 /** Sicherungen der Welt `world` (Ordnername) oder, mit null, aller Welten der Instanz. */
@@ -24,6 +29,10 @@ export function useWorldBackups(instanceId: string, world: string | null) {
     queryFn: () => api.worldBackups(instanceId),
     select: (list) => (world == null ? list : list.filter((b) => b.world === world)),
   });
+}
+
+export function useDatapacks(instanceId: string, worldId: string) {
+  return useQuery({ queryKey: worldKeys.datapacks(instanceId, worldId), queryFn: () => api.datapackList(instanceId, worldId) });
 }
 
 export function useServers(instanceId: string) {
@@ -58,6 +67,16 @@ export const useRestoreBackup = (instanceId: string) =>
   );
 
 export const useDeleteBackup = (instanceId: string) => useWorldChange(instanceId, (backup: WorldBackup) => api.worldBackupDelete(instanceId, backup.id));
+
+export const useAddDatapacks = (instanceId: string, worldId: string) =>
+  useWorldChange(
+    instanceId,
+    (paths: string[]) => api.datapackAdd(instanceId, worldId, paths),
+    (_, paths) => (paths.length === 1 ? `„${fileName(paths[0])}“ hinzugefügt` : `${paths.length} Datenpakete hinzugefügt`),
+  );
+
+export const useRemoveDatapack = (instanceId: string, worldId: string) =>
+  useWorldChange(instanceId, (pack: Datapack) => api.datapackRemove(instanceId, worldId, pack.id), (_, pack) => `„${pack.name}“ liegt jetzt im Papierkorb`);
 
 export const useSaveServer = (instanceId: string) =>
   useWorldChange(instanceId, ({ index, server }: { index: number | null; server: Server }) => api.serverSave(instanceId, index, server));

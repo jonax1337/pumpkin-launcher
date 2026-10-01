@@ -11,6 +11,7 @@ use crate::error::{AppError, AppResult};
 use modrinth::invalid;
 
 pub mod auth;
+pub mod datapacks;
 pub mod debuginfo;
 pub mod download;
 pub mod duplicate;

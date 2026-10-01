@@ -2,15 +2,15 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useView } from "@/app/Layout";
 import { PageHeader, SearchField, Select, Spacer, TabPanel, Tabs, Toolbar } from "@/ui";
-import { AddToInstanceMenu, ContentDetail, ContentResults, KIND_LABELS, PackActions, PackInstallButton } from "@/components/ContentBrowser";
+import {
+  AddToInstanceMenu, AddToWorldMenu, ContentDetail, ContentResults, PackActions, PackInstallButton, SEARCH_PLACEHOLDER, TYPE_LABELS,
+} from "@/components/ContentBrowser";
 import { useVersions } from "@/hooks/useInstances";
 import { SOURCES, type CatalogType, type ContentHit, type SearchIndex, type Source } from "@/lib/modrinth";
 import { ALL_LOADERS, LOADER_LABELS } from "@/lib/types";
 
-const TABS: CatalogType[] = ["modpack", "mod", "shader", "resourcepack"];
+const TABS: CatalogType[] = ["modpack", "mod", "shader", "resourcepack", "datapack"];
 const SOURCE_KEYS = Object.keys(SOURCES) as Source[];
-const LABELS: Record<CatalogType, string> = { modpack: "Modpacks", ...KIND_LABELS };
-const IN_LABEL: Record<CatalogType, string> = { modpack: "In Modpacks suchen", mod: "In Mods suchen", shader: "In Shadern suchen", resourcepack: "In Ressourcenpaketen suchen" };
 const LOADERS = [{ value: "all", label: "Alle" }, ...ALL_LOADERS.filter((l) => l !== "vanilla").map((l) => ({ value: l, label: LOADER_LABELS[l] }))];
 const SORTS: { value: SearchIndex; label: string }[] = [
   { value: "relevance", label: "Relevanz" },
@@ -20,7 +20,7 @@ const SORTS: { value: SearchIndex; label: string }[] = [
   { value: "updated", label: "Zuletzt aktualisiert" },
 ];
 
-/** Stöbern ohne Instanz: Modpacks werden zu neuen Instanzen, alles andere landet in einer bestehenden. */
+/** Stöbern ohne Instanz: Modpacks werden zu neuen Instanzen, Datenpakete landen in einer Welt, alles andere in einer bestehenden Instanz. */
 export function DiscoverPage() {
   const [params, setParams] = useSearchParams();
   // ?quelle= wählt Modrinth (Standard) oder einen Anbieter ohne Schlüssel.
@@ -72,11 +72,13 @@ export function DiscoverPage() {
             projectId={projectId}
             type={type}
             hit={hit?.project_id === projectId ? hit : null}
-            backLabel={LABELS[type]}
+            backLabel={TYPE_LABELS[type]}
             onBack={() => setParams(link(type))}
             action={(p) =>
               type === "modpack" ? (
                 <PackActions projectId={p.id} title={p.title} source={source} />
+              ) : type === "datapack" ? (
+                <AddToWorldMenu projectId={p.id} title={p.title} large />
               ) : (
                 <AddToInstanceMenu projectId={p.id} title={p.title} type={type} large source={source} />
               )
@@ -98,13 +100,13 @@ export function DiscoverPage() {
                 if (t !== "mod" && t !== "modpack") setLoader("all");
                 setParams(link(t), { replace: true });
               }}
-              items={tabs.map((t) => ({ value: t, label: LABELS[t] }))}
+              items={tabs.map((t) => ({ value: t, label: TYPE_LABELS[t] }))}
             />
           )}
         </PageHeader>
         {/* Suchfeld bewusst breiter als in der Bibliothek; unter 1096 px bricht die Leiste um */}
         <Toolbar search="l" wrapBelow={1096} label="Suche und Filter" className="mt-4 mb-3.5">
-          <SearchField value={query} onChange={setQuery} placeholder={IN_LABEL[type]} autoFocus />
+          <SearchField value={query} onChange={setQuery} placeholder={SEARCH_PLACEHOLDER[type]} autoFocus />
           <Select
             label="Quelle"
             value={source}
@@ -136,6 +138,8 @@ export function DiscoverPage() {
                 ? (h) =>
                     type === "modpack" ? (
                       <PackInstallButton projectId={h.project_id} title={h.title} source={source} />
+                    ) : type === "datapack" ? (
+                      <AddToWorldMenu projectId={h.project_id} title={h.title} />
                     ) : (
                       <AddToInstanceMenu projectId={h.project_id} title={h.title} type={type} source={source} />
                     )
