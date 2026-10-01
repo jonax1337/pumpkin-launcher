@@ -223,9 +223,6 @@ export interface ExitPayload {
 /** Welches Protokoll `log_share` hochlädt: `logs/latest.log` oder den neuesten Absturzbericht. */
 export type LogKind = "latest" | "crashReport";
 
-/** Fehlertext des Backends, wenn der Nutzer einen Vorgang abbricht (kein Fehler, neutral melden). */
-export const CANCELLED = "Vorgang abgebrochen";
-
 // ---------- Konten ----------
 
 /** Microsoft-Konto aus `ms_accounts` / `ms_login_finish`. */

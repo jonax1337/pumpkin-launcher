@@ -55,7 +55,7 @@ export function useInstall() {
   return install;
 }
 
-/** Bricht die laufende Installation ab; das Backend beendet `instance_install` dann mit CANCELLED. */
+/** Bricht die laufende Installation ab; das Backend beendet `instance_install` dann mit dem Fehlercode „cancelled“. */
 export function useCancelInstall() {
   return useMutation({ mutationFn: (instanceId: string) => api.installCancel(instanceId) });
 }
