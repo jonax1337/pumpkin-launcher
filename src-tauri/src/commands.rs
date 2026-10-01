@@ -1,9 +1,12 @@
 //! Tauri-Commands. Dünne Schicht über `AppState`; Argumentnamen kommen im Frontend als camelCase an.
+use std::path::PathBuf;
+use std::time::SystemTime;
+
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::error::{AppError, AppResult};
-use crate::models::{now_ms, GameWindow, Instance, LaunchOptions, ModLoader, NewInstance};
+use crate::models::{now_ms, Account, GameWindow, Instance, LaunchOptions, ModLoader, NewInstance, QuickPlay};
 use crate::services::install::{self, InstallProgress, InstallStep, INSTALL_PROGRESS_EVENT};
 use crate::services::launch::{self, LaunchSpec, LogStream, EXIT_EVENT, LOG_EVENT};
 use crate::services::mojang::{VersionEntry, VersionManifest, MANIFEST_URL};
@@ -28,7 +31,7 @@ fn require_launch_settings(instance: &Instance, old: &Instance) -> AppResult<()>
         return Err(AppError::Invalid("Breite und Höhe des Fensters müssen größer als 0 sein".into()));
     }
     match &instance.java_path {
-        Some(path) if instance.java_path != old.java_path => java::custom_java(path, java::JavaSetting::Instance).map(drop),
+        Some(path) if instance.java_path != old.java_path => java::custom_java(path.trim(), java::JavaSetting::Instance).map(drop),
         _ => Ok(()),
     }
 }
@@ -255,17 +258,7 @@ pub async fn instance_launch(app: AppHandle, state: State<'_, AppState>, instanc
         worlds::require_target(&state.dirs, &instance_id, target)?;
     }
     mods::sync(&state.dirs,&instance_id,&instance.mods)?;
-    // Mit Microsoft-Konto: echte Sitzung (bei Bedarf erneuert); sonst Offline mit `username`.
-    let (account, session) = match account_id.filter(|id| !id.is_empty()) {
-        Some(id) => {
-            let (account, session) = auth::session(&state, &id).await?;
-            (account, Some(session))
-        }
-        None => {
-            auth::require_offline(&state)?;
-            (auth::offline_account(&username)?, None)
-        }
-    };
+    let (account, session) = launch_account(&state, account_id, &username).await?;
     let version = installed_version(&state, &instance).await?;
     let component = install::java_component(&version);
     let java = java::resolve(&state.dirs, component, instance.java_path.as_deref(), java_path.as_deref())?;
@@ -294,7 +287,7 @@ pub async fn instance_launch(app: AppHandle, state: State<'_, AppState>, instanc
     }
     let (log_app, log_id) = (app.clone(), instance_id.clone());
     let (exit_app, exit_id) = (app.clone(), instance_id.clone());
-    let started = std::time::SystemTime::now();
+    let started = SystemTime::now();
     let game = launch::spawn(
         &java,
         &args,
@@ -303,42 +296,69 @@ pub async fn instance_launch(app: AppHandle, state: State<'_, AppState>, instanc
             tracing::info!(target: "minecraft", instance = %log_id, ?stream, "{line}");
             emit(&log_app, LOG_EVENT, LogPayload { instance_id: log_id.clone(), stream, line });
         },
-        move |code| {
-            let state = exit_app.state::<AppState>();
-            // `instance_kill` hat den Eintrag schon entfernt: dann hat der Nutzer gestoppt.
-            let stopped = state.running().remove(&exit_id).is_none();
-            let crashed = code != Some(0) && !stopped;
-            let game_dir = state.dirs.game_dir(&exit_id);
-            let text = |p: std::path::PathBuf| p.to_string_lossy().into_owned();
-            let crash_report = launch::crash_report(&game_dir, started).map(text);
-            let log_file = Some(state.dirs.latest_log(&exit_id)).filter(|p| p.is_file()).map(text);
-            record_playtime(&state, &exit_id, started);
-            tracing::info!(instance = %exit_id, ?code, crashed, "Spiel beendet");
-            emit(&exit_app, EXIT_EVENT, ExitPayload { instance_id: exit_id, code, crashed, crash_report, log_file });
-        },
+        move |code| on_game_exit(&exit_app, exit_id, started, code),
     )?;
     let pid = game.pid;
     running.insert(instance_id.clone(), game);
     // Noch unter dem Lock: `instance-exit` eines sofort beendeten Spiels kommt so erst nach diesem Stand.
-    state.instances.modify(&instance_id, |i| {
-        i.last_played_at = Some(now_ms());
-        if quick_play.is_some() {
-            i.last_quick_play = quick_play;
-        }
-    })?;
+    record_launch(&state, &instance_id, quick_play);
     drop(running);
     tracing::info!(instance = %instance_id, pid, user = %account.username, "Spiel gestartet");
     Ok(pid)
 }
 
+/// Mit Microsoft-Konto: echte Sitzung (bei Bedarf erneuert); sonst Offline mit `username`.
+async fn launch_account(state: &AppState, account_id: Option<String>, username: &str) -> AppResult<(Account, Option<auth::McSession>)> {
+    match account_id.filter(|id| !id.is_empty()) {
+        Some(id) => {
+            let (account, session) = auth::session(state, &id).await?;
+            Ok((account, Some(session)))
+        }
+        None => {
+            auth::require_offline(state)?;
+            Ok((auth::offline_account(username)?, None))
+        }
+    }
+}
+
+/// Merkt sich Startzeit und Quick-Play-Ziel. Das Spiel läuft schon: ein Schreibfehler (etwa durch ein
+/// kurz gesperrtes `instances.json`) wird nur geloggt, damit der Start nicht als gescheitert gemeldet wird.
+fn record_launch(state: &AppState, instance_id: &str, quick_play: Option<QuickPlay>) {
+    let result = state.instances.modify(instance_id, |i| {
+        i.last_played_at = Some(now_ms());
+        if quick_play.is_some() {
+            i.last_quick_play = quick_play;
+        }
+    });
+    if let Err(err) = result {
+        tracing::warn!(instance = %instance_id, %err, "Startzeit nicht gespeichert");
+    }
+}
+
+/// Aufräumen nach dem Ende des Spiels: Eintrag entfernen, Spielzeit buchen, `instance-exit` senden.
+fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, code: Option<i32>) {
+    let state = app.state::<AppState>();
+    // `instance_kill` hat den Eintrag schon entfernt: dann hat der Nutzer gestoppt.
+    let stopped = state.running().remove(&instance_id).is_none();
+    let crashed = code != Some(0) && !stopped;
+    let game_dir = state.dirs.game_dir(&instance_id);
+    let text = |p: PathBuf| p.to_string_lossy().into_owned();
+    let crash_report = launch::crash_report(&game_dir, started).map(text);
+    let log_file = Some(state.dirs.latest_log(&instance_id)).filter(|p| p.is_file()).map(text);
+    record_playtime(&state, &instance_id, started);
+    tracing::info!(instance = %instance_id, ?code, crashed, "Spiel beendet");
+    emit(app, EXIT_EVENT, ExitPayload { instance_id, code, crashed, crash_report, log_file });
+}
+
 /// Spielzeit der Sitzung seit `started` speichern; unplausible Dauern und Fehler nur loggen,
 /// damit `instance-exit` trotzdem ankommt.
-fn record_playtime(state: &AppState, instance_id: &str, started: std::time::SystemTime) {
-    let Some(secs) = launch::session_secs(started, std::time::SystemTime::now()) else {
+fn record_playtime(state: &AppState, instance_id: &str, started: SystemTime) {
+    let Some(secs) = launch::session_secs(started, SystemTime::now()) else {
         tracing::warn!(instance = %instance_id, "Spielzeit verworfen: Sitzungsdauer unplausibel");
         return;
     };
-    if let Err(err) = state.add_playtime(instance_id, secs) {
+    let result = state.instances.modify(instance_id, |i| i.playtime_secs = i.playtime_secs.saturating_add(secs));
+    if let Err(err) = result {
         tracing::warn!(instance = %instance_id, %err, "Spielzeit nicht gespeichert");
     }
 }
@@ -383,4 +403,43 @@ pub fn instance_dir(state: State<'_, AppState>, instance_id: String) -> AppResul
 #[tauri::command]
 pub fn system_memory_mb() -> AppResult<u64> {
     system::total_memory_mb()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn state_with_instance() -> (AppState, String, PathBuf) {
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        let state = AppState::load(&root).unwrap();
+        let new = NewInstance { name: "Start".into(), minecraft_version: "1.21.4".into(), loader: ModLoader::Vanilla, loader_version: None };
+        let id = state.instances.insert(Instance::from_new(new)).unwrap().id;
+        (state, id, root)
+    }
+
+    #[test]
+    fn launch_bookkeeping_keeps_last_target_and_survives_write_errors() {
+        let (state, id, root) = state_with_instance();
+        let target = QuickPlay::Server { address: "lobby.example.net".into() };
+        record_launch(&state, &id, Some(target.clone()));
+        let instance = state.instances.get(&id).unwrap();
+        assert!(instance.last_played_at.is_some());
+        assert_eq!(instance.last_quick_play, Some(target.clone()));
+        record_launch(&state, &id, None);
+        assert_eq!(state.instances.get(&id).unwrap().last_quick_play, Some(target), "ohne Ziel bleibt das letzte erhalten");
+        record_launch(&state, "weg", None);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn playtime_adds_up_per_session() {
+        let (state, id, root) = state_with_instance();
+        let ago = |secs| SystemTime::now() - Duration::from_secs(secs);
+        record_playtime(&state, &id, ago(90));
+        record_playtime(&state, &id, ago(30));
+        assert!((120..=122).contains(&state.instances.get(&id).unwrap().playtime_secs));
+        record_playtime(&state, "weg", ago(1));
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }
