@@ -20,7 +20,7 @@ const useInstanceActions = create<{ template: Instance | null; exporting: Instan
 }));
 
 export const askSaveTemplate = (instance: Instance) => useInstanceActions.setState({ template: instance });
-export const askExport = (instance: Instance) => useInstanceActions.setState({ exporting: instance });
+const askExport = (instance: Instance) => useInstanceActions.setState({ exporting: instance });
 export const askDelete = (instance: Instance) => useInstanceActions.setState({ remove: instance });
 const askNewGroup = (instance: Instance) => useInstanceActions.setState({ newGroup: instance });
 
