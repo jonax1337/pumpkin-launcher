@@ -17,8 +17,8 @@ const toneOf = ({ stream, line }: LogPayload): LogLine["tone"] =>
 let pending: LogPayload[] = [];
 let timer: ReturnType<typeof setTimeout> | undefined;
 
-// ponytail: Log-Puffer auf die letzten MAX_LOG_LINES Zeilen je Instanz begrenzt; für vollständige Logs Datei im Backend lesen.
-export const MAX_LOG_LINES = 2000;
+// Der Puffer hält je Instanz nur die letzten Zeilen; vollständige Logs liest man aus der Datei im Backend.
+const MAX_LOG_LINES = 2000;
 let nextLogId = 0;
 
 /** Flüchtiger Laufzeitzustand aus den Backend-Events (nicht persistiert). */

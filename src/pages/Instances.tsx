@@ -256,7 +256,7 @@ export function InstancesPage() {
       {/* An fester Stelle für beide Knöpfe: füllt der erste Import die leere Bibliothek, bleibt der Dialog mit den übrigen offen */}
       <NewInstanceDialog primary />
       <div className="sr" role="status" aria-live="polite" aria-atomic="true">{said}</div>
-      {/* Abstände wie bisher: 16 über, 18 unter der Werkzeugleiste */}
+      {/* Abstände: 16 über, 18 unter der Werkzeugleiste */}
       {!empty && (
         <Toolbar search="m" className="mt-4 mb-4.5">
           <SearchField value={query} onChange={setQuery} placeholder={t("pages.instances.searchPlaceholder")} />

@@ -214,7 +214,7 @@ export function useCancelInstall() {
   return useMutation({ mutationFn: (instanceId: string) => api.installCancel(instanceId) });
 }
 
-export function useLaunch() {
+function useLaunch() {
   const qc = useQueryClient();
   return useMutation({
     meta: { ownErrorToast: true },

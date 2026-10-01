@@ -5,7 +5,7 @@ import { JavaChooser, MemoryChooser, MemoryHelp } from "@/components/common";
 import { useInstallPercent, usePhase } from "@/components/game";
 import { askDelete, useGroupMenu } from "@/components/instance";
 import { useInstall, useUpdateInstance } from "@/hooks/useInstances";
-import { LOADER_LABELS, SUPPORTED_LOADERS, type GameWindow, type Instance } from "@/lib/types";
+import { LOADER_LABELS, type GameWindow, type Instance } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n";
 import { BIOME_KEYS } from "@/pixel/scene";
@@ -161,17 +161,15 @@ export function SettingsTab({ instance }: { instance: Instance }) {
           {/* Reiner Text: auf Höhe des Labels (10 px wie dessen Innenabstand) */}
           <span className="pt-2.5">{versionText(instance)}</span>
         </FormRow>
-        {SUPPORTED_LOADERS.includes(instance.loader) && (
-          <FormRow label={t("detail.settings.repairLabel")} hint={t("detail.settings.repairHint")}>
-            <Actions>
-              <Button icon="redo" width={160} disabled={busy} onClick={() => install.mutate(instance)}>
-                {repairing ? t("detail.settings.repairing") : t("detail.settings.repairLabel")}
-              </Button>
-              {/* Platz bleibt reserviert: der Balken erscheint, ohne dass etwas springt */}
-              <Progress p={(percent ?? 0) / 100} width={180} className={cn(!repairing && "invisible")} label={t("detail.settings.repairProgress")} />
-            </Actions>
-          </FormRow>
-        )}
+        <FormRow label={t("detail.settings.repairLabel")} hint={t("detail.settings.repairHint")}>
+          <Actions>
+            <Button icon="redo" width={160} disabled={busy} onClick={() => install.mutate(instance)}>
+              {repairing ? t("detail.settings.repairing") : t("detail.settings.repairLabel")}
+            </Button>
+            {/* Platz bleibt reserviert: der Balken erscheint, ohne dass etwas springt */}
+            <Progress p={(percent ?? 0) / 100} width={180} className={cn(!repairing && "invisible")} label={t("detail.settings.repairProgress")} />
+          </Actions>
+        </FormRow>
       </FormSection>
 
       <FormSection title={t("detail.settings.dangerSection")}>

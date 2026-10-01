@@ -31,7 +31,7 @@ export const useLookStore = create<LookState>()(
   ),
 );
 
-export function defaultLook(id: string) {
+function defaultLook(id: string) {
   const h = hash(id);
   return { bio: BIOME_KEYS[h % BIOME_KEYS.length], seed: (h >>> 7) % 60 };
 }

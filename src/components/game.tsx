@@ -299,7 +299,7 @@ function LogStat({ instance }: { instance: Instance }) {
   const crash = useGame((s) => s.crashes[instance.id]);
   const since = useGame((s) => s.started[instance.id]);
   const now = useNow(phase === "running");
-  // Abstände wie bisher (oben 12, unten 10): die Höhe der Konsole rechnet damit (.console).
+  // Abstände oben 12, unten 10: die Höhe der Konsole rechnet damit (.console).
   const place = "mt-3 mb-2.5";
   if (phase === "running")
     return (

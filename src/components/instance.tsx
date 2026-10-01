@@ -23,13 +23,13 @@ const useInstanceActions = create<{ template: Instance | null; exporting: Instan
   newGroup: null,
 }));
 
-export const askSaveTemplate = (instance: Instance) => useInstanceActions.setState({ template: instance });
-export const askExport = (instance: Instance) => useInstanceActions.setState({ exporting: instance });
+const askSaveTemplate = (instance: Instance) => useInstanceActions.setState({ template: instance });
+const askExport = (instance: Instance) => useInstanceActions.setState({ exporting: instance });
 export const askDelete = (instance: Instance) => useInstanceActions.setState({ remove: instance });
-export const askNewGroup = (instance: Instance) => useInstanceActions.setState({ newGroup: instance });
+const askNewGroup = (instance: Instance) => useInstanceActions.setState({ newGroup: instance });
 
 /** Spielordner der Instanz im Dateimanager öffnen; Fehler als Toast. */
-export function openInstanceFolder(instance: Instance) {
+function openInstanceFolder(instance: Instance) {
   api.instanceDir(instance.id).then(api.openPath).catch(toastError);
 }
 

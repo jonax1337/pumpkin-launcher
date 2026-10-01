@@ -6,7 +6,7 @@ import { t, useI18n } from "@/i18n";
 import {
   BackLink, Button, ButtonLink, Cell, Chip, Count, Dialog, DialogActions, Empty, ErrorBox, Field, Hint, Icon, IconButton, JobProgress, List, ListRow, Menu,
   MenuItem, MenuLabel, MenuNote, MenuScroll, MenuSep, Meta, Panel, ProjectIcon, RowTitle, SceneThumb, SearchField, SectionHeader, Select, Sheet, Skel, SkelRow,
-  Switch, TabPanel, Tabs, TextField, Tip, Toolbar, type MenuEntry,
+  Switch, TabPanel, Tabs, TextField, Tip, type MenuEntry,
 } from "@/ui";
 import { cancelContent, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { useDebounced } from "@/hooks/useDebounced";
@@ -41,11 +41,11 @@ function lazyLabels(keys: Record<string, string>): Record<string, string> {
 export const TYPE_LABELS: Record<CatalogType, string> = lazyLabels(TYPE_LABEL_KEYS);
 
 /** Was in eine Instanz passt: Mods und Shader nur mit Mod-Loader, Ressourcenpakete immer. */
-export const kindsFor = (instance: Instance): ModKind[] =>
+const kindsFor = (instance: Instance): ModKind[] =>
   instance.loader !== "vanilla" ? ["mod", "shader", "resourcepack"] : ["resourcepack"];
 
 /** „Fabric 1.21.4“ für Mods, sonst nur die Minecraft-Version. */
-export const fitsLabel = (instance: Instance, type: CatalogType) =>
+const fitsLabel = (instance: Instance, type: CatalogType) =>
   type === "mod" ? loaderLine(instance) : `Minecraft ${instance.minecraftVersion}`;
 
 // Für Quilt fragt das Backend Quilt- und Fabric-Mods an; Datenpakete führt Modrinth unter dem Loader „datapack“.
@@ -556,34 +556,29 @@ function Offline({ onRetry, compact }: { onRetry: () => void; compact?: boolean 
 }
 
 /** Überschrift ohne Suchbegriff je Sortierung. */
-export const SORT_HEADINGS: Record<SearchIndex, string> = lazyLabels({
+const SORT_HEADINGS: Record<SearchIndex, string> = lazyLabels({
   relevance: "components.sort.relevance", downloads: "components.sort.downloads", follows: "components.sort.follows", newest: "common.new", updated: "components.sort.updated",
 });
 
 /**
  * Suche mit „Beliebt“ als Startzustand. Mit `instance` passend gefiltert und mit „Hinzufügen“ je Zeile,
- * sonst mit `action` je Zeile. Ohne `query` bringt sie ihr eigenes Suchfeld mit; mit `query` sucht sie,
- * was außen steht (Entdecken, Seitenpanel). `compact` = schmale Zeilen im Seitenpanel.
+ * sonst mit `action` je Zeile. `compact` = schmale Zeilen im Seitenpanel.
  * `sort` fehlt = Downloads ohne Suchbegriff, sonst Relevanz. `feature` hebt ohne Suchbegriff den meistgeladenen bzw. meistgefolgten Treffer als Karte hervor.
  */
-export function ContentResults({ type, instance, world, action, onOpen, autoFocus = true, query: outerQuery, mc: outerMc, loader: outerLoader, fit = true, compact, onReset, sort, feature, source = "modrinth" }: {
+export function ContentResults({ type, instance, world, action, onOpen, query: typed, mc: outerMc, loader: outerLoader, fit = true, compact, onReset, sort, feature, source = "modrinth" }: {
   type: CatalogType; instance?: Instance; action?: (hit: ContentHit) => ReactNode; onOpen: (projectId: string, hit?: ContentHit) => void;
   /** Mit `instance`: Welt darin, in die Datenpakete kommen. */
   world?: World;
   /** Katalog-Quelle; ohne Angabe Modrinth. Anbieter ohne Schlüssel liefern nur Modpacks (CurseForge: Nachschlagen per Link). */
   source?: Source;
-  /** Früher: Hintergrund der klebenden Suchleiste; ohne Wirkung. */
-  barClassName?: string;
-  /** Früher: Kacheln im Raster; Pixelkino zeigt immer Zeilen. */
-  grid?: boolean;
-  autoFocus?: boolean; query?: string; mc?: string | null; loader?: string | null;
+  /** Suchtext von außen (Entdecken, Seitenpanel); die Suche wartet auf eine Tippause. */
+  query: string;
+  mc?: string | null; loader?: string | null;
   /** Mit `instance`: nur Passendes zeigen (Version und Loader der Instanz). */
   fit?: boolean; compact?: boolean; onReset?: () => void; sort?: SearchIndex | null; feature?: boolean;
 }) {
   const { t } = useI18n();
-  const [input, setInput] = useState("");
-  const controlled = outerQuery != null;
-  const query = useDebounced((controlled ? outerQuery : input).trim(), 300);
+  const query = useDebounced(typed.trim(), 300);
   const mc = instance ? (fit ? instance.minecraftVersion : null) : (outerMc ?? null);
   const loader = instance ? (fit ? loaderFor(instance, type) : null) : (outerLoader ?? null);
   const index: SearchIndex = sort ?? (query ? "relevance" : "downloads");
@@ -608,11 +603,6 @@ export function ContentResults({ type, instance, world, action, onOpen, autoFocu
 
   return (
     <div>
-      {!controlled && (
-        <Toolbar search="l" className="mb-3.5">
-          <SearchField value={input} onChange={setInput} placeholder={SEARCH_PLACEHOLDER[type]} autoFocus={autoFocus} />
-        </Toolbar>
-      )}
       {/* Ohne Suchbegriff die Sortierung als Abschnittsüberschrift (wie auf Start), mit Suchbegriff die Trefferzahl; gleiche Höhe */}
       {!results.error && (
         <div aria-live="polite" className="mb-2.5">

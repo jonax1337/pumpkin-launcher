@@ -166,8 +166,6 @@ function MsLoginDialog() {
 type AfterName = { label: string; run: () => void };
 /** Offene Kontenteile: Menü in der Fensterleiste und Dialog „Spielername hinzufügen“. */
 const useAccountUi = create<{ menu: boolean; offline: boolean; then: AfterName | null }>(() => ({ menu: false, offline: false, then: null }));
-/** Öffnet das Kontomenü oben rechts. */
-export const openAccounts = () => useAccountUi.setState({ menu: true });
 /** Spielername hinzufügen; ohne Erlaubnis des Backends (`offline_allowed`) gibt es den Dialog nicht. */
 export const openAddOffline = () => {
   if (useOfflineAllowed.getState().allowed) useAccountUi.setState({ offline: true, menu: false, then: null });
@@ -321,7 +319,7 @@ function AddOfflineDialog() {
     then?.run();
   }
 
-  /** Beim Spielen: statt Namen mit Microsoft anmelden; `then` bleibt stehen und startet nach der Anmeldung. */
+  // Beim Spielen: statt Namen mit Microsoft anmelden; `then` bleibt stehen und startet nach der Anmeldung.
   function microsoft() {
     useAccountUi.setState({ offline: false });
     setName("");
