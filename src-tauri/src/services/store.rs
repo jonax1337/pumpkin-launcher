@@ -14,33 +14,19 @@ pub trait Entity: Clone + Serialize + DeserializeOwned {
     fn id(&self) -> &str;
 }
 
-impl Entity for Instance {
-    const KIND: &'static str = "Instanz";
-    fn id(&self) -> &str {
-        &self.id
-    }
+/// Alle Entitäten tragen ihre ID im Feld `id`; nur der Anzeigename für Fehlermeldungen unterscheidet sich.
+macro_rules! entity {
+    ($($ty:ty => $kind:literal),* $(,)?) => {$(
+        impl Entity for $ty {
+            const KIND: &'static str = $kind;
+            fn id(&self) -> &str {
+                &self.id
+            }
+        }
+    )*};
 }
 
-impl Entity for Template {
-    const KIND: &'static str = "Vorlage";
-    fn id(&self) -> &str {
-        &self.id
-    }
-}
-
-impl Entity for MsAccount {
-    const KIND: &'static str = "Konto";
-    fn id(&self) -> &str {
-        &self.id
-    }
-}
-
-impl Entity for LibrarySkin {
-    const KIND: &'static str = "Skin";
-    fn id(&self) -> &str {
-        &self.id
-    }
-}
+entity!(Instance => "Instanz", Template => "Vorlage", MsAccount => "Konto", LibrarySkin => "Skin");
 
 // ponytail: hält die ganze Collection im Speicher und schreibt bei jeder Änderung
 // die komplette Datei neu. Reicht für Dutzende Einträge; bei Bedarf auf SQLite wechseln.
@@ -73,21 +59,12 @@ impl<T: Entity> JsonStore<T> {
     }
 
     pub fn get(&self, id: &str) -> AppResult<T> {
-        lock(&self.items)
-            .iter()
-            .find(|x| x.id() == id)
-            .cloned()
-            .ok_or_else(|| not_found::<T>(id))
+        let items = lock(&self.items);
+        Ok(items[index_of(&items, id)?].clone())
     }
 
     pub fn insert(&self, item: T) -> AppResult<T> {
-        let mut items = lock(&self.items);
-        items.push(item.clone());
-        if let Err(err) = persist(&self.path, &items) {
-            items.pop();
-            return Err(err);
-        }
-        Ok(item)
+        self.push(&mut lock(&self.items), item)
     }
 
     pub fn update(&self, item: T) -> AppResult<T> {
@@ -95,30 +72,62 @@ impl<T: Entity> JsonStore<T> {
         self.modify(&id, |current| *current = item)
     }
 
+    /// Ersetzt den Eintrag mit derselben ID oder legt ihn an, beides unter einem Lock.
+    pub fn upsert(&self, item: T) -> AppResult<T> {
+        let mut items = lock(&self.items);
+        match position(&items, item.id()) {
+            Some(idx) => self.change_at(&mut items, idx, |current| *current = item),
+            None => self.push(&mut items, item),
+        }
+    }
+
     /// Ändert einen Eintrag unter dem Lock des Stores: kein anderer Schreiber kommt zwischen Lesen und
     /// Schreiben. `change` darf den Store nicht selbst aufrufen (Deadlock).
     pub fn modify(&self, id: &str, change: impl FnOnce(&mut T)) -> AppResult<T> {
         let mut items = lock(&self.items);
-        let idx = items.iter().position(|x| x.id() == id).ok_or_else(|| not_found::<T>(id))?;
-        let old = items[idx].clone();
-        change(&mut items[idx]);
-        if let Err(err) = persist(&self.path, &items) {
-            items[idx] = old;
-            return Err(err);
-        }
-        Ok(items[idx].clone())
+        let idx = index_of(&items, id)?;
+        self.change_at(&mut items, idx, change)
     }
 
     pub fn remove(&self, id: &str) -> AppResult<()> {
         let mut items = lock(&self.items);
-        let idx = items.iter().position(|x| x.id() == id).ok_or_else(|| not_found::<T>(id))?;
+        let idx = index_of(&items, id)?;
         let old = items.remove(idx);
-        if let Err(err) = persist(&self.path, &items) {
-            items.insert(idx, old);
+        self.commit(&mut items, |items| items.insert(idx, old))
+    }
+
+    fn push(&self, items: &mut Vec<T>, item: T) -> AppResult<T> {
+        items.push(item.clone());
+        self.commit(items, |items| {
+            items.pop();
+        })?;
+        Ok(item)
+    }
+
+    fn change_at(&self, items: &mut Vec<T>, idx: usize, change: impl FnOnce(&mut T)) -> AppResult<T> {
+        let old = items[idx].clone();
+        change(&mut items[idx]);
+        self.commit(items, |items| items[idx] = old)?;
+        Ok(items[idx].clone())
+    }
+
+    /// Schreibt die geänderte Collection; scheitert das, macht `rollback` die Änderung im Speicher rückgängig,
+    /// damit Speicher und Datei nicht auseinanderlaufen.
+    fn commit(&self, items: &mut Vec<T>, rollback: impl FnOnce(&mut Vec<T>)) -> AppResult<()> {
+        if let Err(err) = persist(&self.path, items) {
+            rollback(items);
             return Err(err);
         }
         Ok(())
     }
+}
+
+fn position<T: Entity>(items: &[T], id: &str) -> Option<usize> {
+    items.iter().position(|x| x.id() == id)
+}
+
+fn index_of<T: Entity>(items: &[T], id: &str) -> AppResult<usize> {
+    position(items, id).ok_or_else(|| not_found::<T>(id))
 }
 
 fn not_found<T: Entity>(id: &str) -> AppError {
@@ -142,14 +151,7 @@ mod tests {
         let path = dir.join("instances.json");
 
         let store = JsonStore::<Instance>::open(path.clone()).unwrap();
-        let inst = store
-            .insert(Instance::from_new(NewInstance {
-                name: "Test".into(),
-                minecraft_version: "1.21.4".into(),
-                loader: ModLoader::Fabric,
-                loader_version: None,
-            }))
-            .unwrap();
+        let inst = store.insert(new_instance("Test")).unwrap();
 
         let mut renamed = inst.clone();
         renamed.name = "Umbenannt".into();
@@ -167,12 +169,15 @@ mod tests {
         fs::remove_dir_all(dir).unwrap();
     }
 
+    fn new_instance(name: &str) -> Instance {
+        Instance::from_new(NewInstance { name: name.into(), minecraft_version: "1.21.4".into(), loader: ModLoader::Vanilla, loader_version: None })
+    }
+
     fn store_with_instance() -> (PathBuf, JsonStore<Instance>, String) {
         let dir = std::env::temp_dir().join(format!("launcher-test-{}", new_id()));
         fs::create_dir_all(&dir).unwrap();
         let store = JsonStore::<Instance>::open(dir.join("instances.json")).unwrap();
-        let new = NewInstance { name: "Test".into(), minecraft_version: "1.21.4".into(), loader: ModLoader::Vanilla, loader_version: None };
-        let id = store.insert(Instance::from_new(new)).unwrap().id;
+        let id = store.insert(new_instance("Test")).unwrap().id;
         (dir, store, id)
     }
 
@@ -199,5 +204,18 @@ mod tests {
         fs::remove_dir_all(&dir).unwrap();
         assert!(store.modify(&id, |i| i.name = "Neu".into()).is_err());
         assert_eq!(store.get(&id).unwrap().name, "Test");
+    }
+
+    #[test]
+    fn upsert_replaces_existing_and_adds_missing() {
+        let (dir, store, id) = store_with_instance();
+        let mut renamed = store.get(&id).unwrap();
+        renamed.name = "Umbenannt".into();
+        store.upsert(renamed).unwrap();
+        let second = store.upsert(new_instance("Zweite")).unwrap();
+        assert_eq!(store.list().len(), 2);
+        assert_eq!(store.get(&id).unwrap().name, "Umbenannt");
+        assert_eq!(store.get(&second.id).unwrap().name, "Zweite");
+        fs::remove_dir_all(dir).unwrap();
     }
 }
