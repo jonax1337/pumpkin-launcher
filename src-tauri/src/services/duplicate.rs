@@ -23,6 +23,7 @@ pub async fn duplicate(
         name: copy_name(&source.name, &taken),
         created_at: now_ms(),
         last_played_at: None,
+        playtime_secs: 0,
         ..source
     };
     let target = state.dirs.instance(&copy.id);
@@ -120,6 +121,7 @@ mod tests {
         });
         source.mods = mods;
         source.last_played_at = Some(1);
+        source.playtime_secs = 3600;
         state.instances.insert(source).unwrap()
     }
 
@@ -155,7 +157,10 @@ mod tests {
 
         assert_eq!((copy.name.as_str(), again.name.as_str()), ("Quelle (Kopie)", "Quelle (Kopie 2)"));
         assert_ne!(copy.id, source.id);
-        assert_eq!((copy.mods.clone(), copy.loader_version.clone(), copy.last_played_at), (source.mods, source.loader_version, None));
+        assert_eq!(
+            (copy.mods.clone(), copy.loader_version.clone(), copy.last_played_at, copy.playtime_secs),
+            (source.mods, source.loader_version, None, 0)
+        );
         let dir = state.dirs.instance(&copy.id);
         for (path, data) in [
             ("minecraft/saves/w/level.dat", "welt"),

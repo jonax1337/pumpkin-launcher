@@ -117,7 +117,7 @@ const mock = {
   async duplicateInstance(instanceId: string) {
     await delay(800);
     const source = findInstance(instanceId);
-    const inst: Instance = { ...clone(source), id: newId("inst"), name: `${source.name} (Kopie)`, createdAt: Date.now(), lastPlayedAt: null };
+    const inst: Instance = { ...clone(source), id: newId("inst"), name: `${source.name} (Kopie)`, createdAt: Date.now(), lastPlayedAt: null, playtimeSecs: 0 };
     db.instances.push(inst);
     return clone(inst);
   },

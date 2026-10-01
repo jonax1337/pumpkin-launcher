@@ -1,4 +1,5 @@
-//! Services: Persistenz, Auth, Installation (Mojang-Formate, Downloads, Java), Spielstart und Support.
+//! Services: Persistenz, Auth, Installation (Mojang-Formate, Downloads, Java), Spielstart, Kopie und Export
+//! von Instanzen, Skins und Support.
 use std::{
     fs, io,
     path::{Path, PathBuf},
