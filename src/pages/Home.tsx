@@ -7,7 +7,7 @@ import { loaderLine } from "@/components/common";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
 import { Onboarding } from "@/components/Onboarding";
 import { useModUpdates } from "@/hooks/useContent";
-import { pickRecentInstance, useInstances } from "@/hooks/useInstances";
+import { pickRecentInstance, useInstances, usePlay } from "@/hooks/useInstances";
 import { relativeTime } from "@/lib/format";
 import type { Instance } from "@/lib/types";
 import { PixelScene } from "@/pixel/PixelScene";
@@ -27,15 +27,17 @@ function HomeBuddy({ instanceId, awake }: { instanceId: string; awake: boolean }
   return <Buddy mood={mood} size={120} className="buddy-rest" />;
 }
 
-/** Titel und Metazeile der ausgewählten Instanz (Infos als Text; nur „Updates“ ist ein Knopf). */
+/** Titel und Metazeile der ausgewählten Instanz (Infos als Text; Knöpfe nur für „Updates“ und „Weiterspielen in …“). */
 function HeroInfo({ instance }: { instance: Instance }) {
   // Update-Abfrage nur für die Hero-Instanz und nur mit Inhalten; 10 Minuten gecacht (wie im Detail).
   const updates = useModUpdates(instance.id, instance.mods.length > 0);
   const phase = usePhase(instance.id);
+  const play = usePlay();
   const n = instance.mods.length;
   const u = updates.data?.length ?? 0;
   // Während des Spiels sagt der Knopf „Läuft seit …“; „Zuletzt gespielt in dieser Minute“ wäre doppelt.
   const playing = phase === "starting" || phase === "running";
+  const resume = playing || phase === "preparing" ? null : instance.lastQuickPlay;
   return (
     <div className="hero-k rise">
       <div className="titlebox">
@@ -55,6 +57,11 @@ function HeroInfo({ instance }: { instance: Instance }) {
           <ButtonLink to={`/instances/${instance.id}?tab=content`} size="s" icon="up" count={u} onScene>
             {u === 1 ? "Update" : "Updates"}
           </ButtonLink>
+        )}
+        {resume && (
+          <Button size="s" icon="play" onScene onClick={() => void play(instance, undefined, resume)}>
+            Weiterspielen in „{resume.type === "world" ? resume.id : resume.address}“
+          </Button>
         )}
       </div>
     </div>
