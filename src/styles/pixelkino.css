@@ -131,13 +131,13 @@ a { color: inherit; }
 /* ---------- App-Gerüst ---------- */
 .app { position: fixed; inset: 0; display: grid; grid-template-columns: var(--side) minmax(0, 1fr); grid-template-rows: var(--bar) 1fr; background: var(--bg); opacity: 0; visibility: hidden; transition: opacity .4s var(--ease); }
 .app.ready { opacity: 1; visibility: visible; }
-/* Keine native Spur: die Scrollbar liegt als .vbar darüber (Layout.tsx), Szenen reichen bis an den Rand, nichts springt */
+/* Keine native Spur: die Scrollbar liegt als .vbar darüber (app/ViewScrollbar.tsx), Szenen reichen bis an den Rand, nichts springt */
 .view { grid-column: 2; grid-row: 2; position: relative; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; scrollbar-gutter: auto; overscroll-behavior: contain; min-height: 0; }
 .vbar { position: absolute; z-index: 30; top: var(--bar); right: 0; bottom: 0; width: 12px; visibility: hidden; }
 .vbar[data-on] { visibility: visible; }
 .vthumb { position: absolute; top: 0; right: 2px; width: 8px; background: var(--line-2); box-shadow: inset 0 0 0 1px rgba(3,5,10,.7), inset var(--px) var(--px) 0 var(--hi); clip-path: var(--n1); will-change: transform; }
 .vbar:hover .vthumb, .vbar[data-drag] .vthumb { background: color-mix(in srgb, var(--line-2) 55%, var(--fg-3)); }
-/* Start scrollt nicht, solange er passt (Layout.tsx, useFits); bei Zoom/kleinem Fenster normal scrollbar statt abgeschnitten */
+/* Start scrollt nicht, solange er passt (app/useFits.ts); bei Zoom/kleinem Fenster normal scrollbar statt abgeschnitten */
 .view.noscroll { overflow-y: hidden; }
 
 /* ---------- Fensterleiste ---------- */
