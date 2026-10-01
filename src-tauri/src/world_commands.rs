@@ -116,7 +116,11 @@ pub fn server_list(state: State<'_, AppState>, instance_id: String) -> AppResult
 #[tauri::command]
 pub fn server_save(state: State<'_, AppState>, instance_id: String, index: Option<usize>, server: ServerInput) -> AppResult<()> {
     let _operation = state.exclusive(&instance_id)?;
-    servers::save(&state.dirs.game_dir(&instance_id), index, &server)
+    let game_dir = state.dirs.game_dir(&instance_id);
+    match index {
+        Some(index) => servers::update(&game_dir, index, &server),
+        None => servers::add(&game_dir, &server),
+    }
 }
 
 #[tauri::command]

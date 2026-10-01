@@ -10,6 +10,16 @@ use crate::error::{AppError, AppResult};
 use crate::models::{require_name, NO_NAME_LIMIT};
 
 const FILE: &str = "servers.dat";
+/// Längste Serveradresse in Bytes.
+const MAX_ADDRESS_LEN: usize = 255;
+
+/// Tags der Datei, die der Launcher liest oder schreibt.
+const SERVERS: &str = "servers";
+const NAME: &str = "name";
+const ADDRESS: &str = "ip";
+const ICON: &str = "icon";
+const ACCEPT_TEXTURES: &str = "acceptTextures";
+const HIDDEN: &str = "hidden";
 
 type Compound = HashMap<String, Value>;
 
@@ -41,24 +51,28 @@ pub fn list(game_dir: &Path) -> AppResult<Vec<Server>> {
     Ok(visible(entries(&mut root)?).map(|(_, entry)| to_server(entry)).collect())
 }
 
-/// Legt einen Server an (`index` = None) oder ändert den Eintrag an Stelle `index` der Liste aus [`list`].
-pub fn save(game_dir: &Path, index: Option<usize>, server: &ServerInput) -> AppResult<()> {
-    let name = require_name(&server.name, NO_NAME_LIMIT, "Gib dem Server einen Namen")?;
-    let address = require_address(&server.address)?;
-    update(game_dir, |list| {
-        let entry = entry_at(list, index)?;
-        entry.insert("name".into(), Value::String(name.into()));
-        entry.insert("ip".into(), Value::String(address.into()));
-        match server.accept_textures {
-            Some(accept) => entry.insert("acceptTextures".into(), Value::Byte(accept.into())),
-            None => entry.remove("acceptTextures"),
-        };
+/// Hängt einen neuen Server ans Ende der Liste.
+pub fn add(game_dir: &Path, server: &ServerInput) -> AppResult<()> {
+    let edit = Edit::validated(server)?;
+    modify_list(game_dir, |list| {
+        let mut entry = Compound::new();
+        edit.write_to(&mut entry);
+        list.push(Value::Compound(entry));
+        Ok(())
+    })
+}
+
+/// Ändert den Eintrag an Stelle `index` der Liste aus [`list`].
+pub fn update(game_dir: &Path, index: usize, server: &ServerInput) -> AppResult<()> {
+    let edit = Edit::validated(server)?;
+    modify_list(game_dir, |list| {
+        edit.write_to(visible_mut(list, index)?);
         Ok(())
     })
 }
 
 pub fn remove(game_dir: &Path, index: usize) -> AppResult<()> {
-    update(game_dir, |list| {
+    modify_list(game_dir, |list| {
         list.remove(position(list, index)?);
         Ok(())
     })
@@ -68,14 +82,47 @@ pub fn remove(game_dir: &Path, index: usize) -> AppResult<()> {
 /// deshalb nicht wie eine Option (`--…`) aussehen.
 pub fn require_address(address: &str) -> AppResult<&str> {
     let address = address.trim();
-    if address.is_empty() || address.len() > 255 || address.starts_with('-') || address.contains(|c: char| c.is_whitespace() || c.is_control()) {
+    if !is_usable_address(address) {
         return Err(AppError::invalid("Gib eine Serveradresse wie play.example.net oder play.example.net:25565 ein"));
     }
     Ok(address)
 }
 
+fn is_usable_address(address: &str) -> bool {
+    let looks_like_option = address.starts_with('-');
+    let has_blank_or_control = address.contains(|c: char| c.is_whitespace() || c.is_control());
+    !address.is_empty() && address.len() <= MAX_ADDRESS_LEN && !looks_like_option && !has_blank_or_control
+}
+
+/// Geprüfte Eingaben, bereit für einen Eintrag der Datei.
+struct Edit<'a> {
+    name: &'a str,
+    address: &'a str,
+    accept_textures: Option<bool>,
+}
+
+impl<'a> Edit<'a> {
+    fn validated(server: &'a ServerInput) -> AppResult<Self> {
+        Ok(Self {
+            name: require_name(&server.name, NO_NAME_LIMIT, "Gib dem Server einen Namen")?,
+            address: require_address(&server.address)?,
+            accept_textures: server.accept_textures,
+        })
+    }
+
+    /// Setzt nur, was der Launcher ändert; alle anderen Tags des Eintrags bleiben.
+    fn write_to(&self, entry: &mut Compound) {
+        entry.insert(NAME.into(), Value::String(self.name.into()));
+        entry.insert(ADDRESS.into(), Value::String(self.address.into()));
+        match self.accept_textures {
+            Some(accept) => entry.insert(ACCEPT_TEXTURES.into(), Value::Byte(accept.into())),
+            None => entry.remove(ACCEPT_TEXTURES),
+        };
+    }
+}
+
 /// Liest die Serverliste, ändert sie und schreibt sie zurück.
-fn update(game_dir: &Path, change: impl FnOnce(&mut Vec<Value>) -> AppResult<()>) -> AppResult<()> {
+fn modify_list(game_dir: &Path, change: impl FnOnce(&mut Vec<Value>) -> AppResult<()>) -> AppResult<()> {
     let path = game_dir.join(FILE);
     let mut root = read(&path)?;
     change(entries(&mut root)?)?;
@@ -92,42 +139,43 @@ fn read(path: &Path) -> AppResult<Compound> {
 
 /// Die Liste `servers` der Datei; fehlt sie, wird sie angelegt.
 fn entries(root: &mut Compound) -> AppResult<&mut Vec<Value>> {
-    match root.entry("servers".into()).or_insert_with(|| Value::List(Vec::new())) {
+    match root.entry(SERVERS.into()).or_insert_with(|| Value::List(Vec::new())) {
         Value::List(list) => Ok(list),
         _ => Err(AppError::invalid("servers.dat hat ein unbekanntes Format")),
     }
 }
 
-/// Einträge mit ihrer Stelle in der Datei, ohne versteckte: die legt das Spiel selbst für Quick Play an
-/// und zeigt sie nicht in der Serverliste.
+/// Versteckte Einträge legt das Spiel selbst für Quick Play an und zeigt sie nicht in der Serverliste.
+fn is_hidden(entry: &Compound) -> bool {
+    matches!(entry.get(HIDDEN), Some(Value::Byte(hidden)) if *hidden != 0)
+}
+
+/// Einträge mit ihrer Stelle in der Datei, ohne versteckte.
 fn visible(list: &[Value]) -> impl Iterator<Item = (usize, &Compound)> {
     list.iter().enumerate().filter_map(|(at, entry)| match entry {
-        Value::Compound(c) if !matches!(c.get("hidden"), Some(Value::Byte(hidden)) if *hidden != 0) => Some((at, c)),
+        Value::Compound(c) if !is_hidden(c) => Some((at, c)),
         _ => None,
     })
 }
 
-/// Der sichtbare Eintrag `index` der Liste aus [`list`]; ohne `index` ein neuer, leerer am Ende.
-fn entry_at(list: &mut Vec<Value>, index: Option<usize>) -> AppResult<&mut Compound> {
-    let at = match index {
-        Some(index) => position(list, index)?,
-        None => {
-            list.push(Value::Compound(Compound::new()));
-            list.len() - 1
-        }
-    };
-    match list.get_mut(at) {
-        Some(Value::Compound(entry)) => Ok(entry),
-        _ => Err(AppError::invalid("servers.dat hat ein unbekanntes Format")),
-    }
+/// Der sichtbare Eintrag `index` der Liste aus [`list`].
+fn visible_mut(list: &mut [Value], index: usize) -> AppResult<&mut Compound> {
+    list.iter_mut()
+        .filter_map(|entry| match entry {
+            Value::Compound(c) if !is_hidden(c) => Some(c),
+            _ => None,
+        })
+        .nth(index)
+        .ok_or_else(|| server_not_found(index))
 }
 
 /// Stelle des sichtbaren Eintrags `index` in der Datei.
 fn position(list: &[Value], index: usize) -> AppResult<usize> {
-    visible(list)
-        .nth(index)
-        .map(|(at, _)| at)
-        .ok_or_else(|| AppError::NotFound { kind: "Server", id: (index + 1).to_string() })
+    visible(list).nth(index).map(|(at, _)| at).ok_or_else(|| server_not_found(index))
+}
+
+fn server_not_found(index: usize) -> AppError {
+    AppError::NotFound { kind: "Server", id: (index + 1).to_string() }
 }
 
 fn to_server(entry: &Compound) -> Server {
@@ -136,13 +184,13 @@ fn to_server(entry: &Compound) -> Server {
         _ => String::new(),
     };
     Server {
-        name: text("name"),
-        address: text("ip"),
-        icon: match entry.get("icon") {
+        name: text(NAME),
+        address: text(ADDRESS),
+        icon: match entry.get(ICON) {
             Some(Value::String(png)) if !png.is_empty() => Some(format!("{PNG_DATA_URL}{png}")),
             _ => None,
         },
-        accept_textures: match entry.get("acceptTextures") {
+        accept_textures: match entry.get(ACCEPT_TEXTURES) {
             Some(Value::Byte(accept)) => Some(*accept != 0),
             _ => None,
         },
@@ -207,9 +255,9 @@ mod tests {
     fn edits_keep_unknown_tags_and_hidden_entries() {
         let dir = game_dir();
         // Index 1 ist „Bau“: der versteckte Eintrag dazwischen zählt nicht mit.
-        save(&dir, Some(1), &input(" Baustelle ", "bau.example.net", Some(false))).unwrap();
-        save(&dir, Some(0), &input("Lobby", "lobby.example.net", None)).unwrap();
-        save(&dir, None, &input("Neu", "neu.example.net", None)).unwrap();
+        update(&dir, 1, &input(" Baustelle ", "bau.example.net", Some(false))).unwrap();
+        update(&dir, 0, &input("Lobby", "lobby.example.net", None)).unwrap();
+        add(&dir, &input("Neu", "neu.example.net", None)).unwrap();
 
         let entries = raw(&dir);
         assert_eq!(entries.len(), 4);
@@ -230,11 +278,13 @@ mod tests {
     #[test]
     fn rejects_unusable_input() {
         let dir = game_dir();
-        assert!(save(&dir, None, &input(" ", "a.example.net", None)).is_err());
+        assert!(add(&dir, &input(" ", "a.example.net", None)).is_err());
         for address in ["", "mit leerzeichen", "--demo", "a\nb"] {
             assert!(require_address(address).is_err(), "{address:?}");
         }
         assert_eq!(require_address(" play.example.net:25565 ").unwrap(), "play.example.net:25565");
+        assert!(require_address(&"a".repeat(MAX_ADDRESS_LEN)).is_ok());
+        assert!(require_address(&"a".repeat(MAX_ADDRESS_LEN + 1)).is_err());
         assert_eq!(raw(&dir).len(), 3);
         fs::remove_dir_all(dir).unwrap();
     }
