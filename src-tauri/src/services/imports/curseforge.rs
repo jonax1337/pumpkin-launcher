@@ -1,5 +1,9 @@
-//! CurseForge App: `minecraftinstance.json` im Instanzordner, der zugleich Spielordner ist.
-use std::path::Path;
+//! CurseForge App: `minecraftinstance.json` im Instanzordner, der zugleich Spielordner ist. Unter `installedAddons`
+//! steht, welche Dateien die App von CurseForge geladen hat.
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use serde::Deserialize;
 
@@ -22,9 +26,49 @@ struct BaseModLoader {
     name: String,
 }
 
-pub fn read(dir: &Path) -> AppResult<Option<Setup>> {
-    let Some(data) = read_marker(&dir.join("minecraftinstance.json"))? else { return Ok(None) };
-    setup(&data, &folder_name(dir)).map(Some)
+/// Nur für die Herkunft gelesen, damit eine fremde Addon-Liste das Erkennen der Instanz nicht stört.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Installed {
+    #[serde(default)]
+    installed_addons: Vec<Addon>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Addon {
+    #[serde(rename = "addonID")]
+    addon_id: u32,
+    installed_file: InstalledFile,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InstalledFile {
+    id: u32,
+    /// Name ohne `.disabled`, auch wenn die Datei deaktiviert ist.
+    file_name: String,
+}
+
+const MANIFEST: &str = "minecraftinstance.json";
+
+pub fn read(dir: &Path) -> AppResult<Option<(PathBuf, Setup)>> {
+    let Some(data) = read_marker(&dir.join(MANIFEST))? else { return Ok(None) };
+    Ok(Some((dir.to_owned(), setup(&data, &folder_name(dir))?)))
+}
+
+/// Dateiname -> (CurseForge-Projekt, Datei) der Inhalte, die die App von CurseForge geladen hat; leer, wenn `dir`
+/// keine Instanz der CurseForge App ist. Ist die Liste unlesbar, bleiben die Mods lokal.
+pub fn origins(dir: &Path) -> HashMap<String, (u32, u32)> {
+    let read = || -> AppResult<_> {
+        let Some(data) = read_marker(&dir.join(MANIFEST))? else { return Ok(HashMap::new()) };
+        let installed: Installed = from_json(&data)?;
+        Ok(installed.installed_addons.into_iter().map(|a| (a.installed_file.file_name, (a.addon_id, a.installed_file.id))).collect())
+    };
+    read().unwrap_or_else(|err| {
+        tracing::warn!(dir = %dir.display(), %err, "Herkunft der CurseForge-Inhalte nicht lesbar; als lokal erfasst");
+        HashMap::new()
+    })
 }
 
 /// Der Loader steht als `<loader>-<version>` in `baseModLoader.name`, bei Fabric mit `-<Minecraft-Version>` dahinter.
@@ -56,7 +100,11 @@ mod tests {
     const FABRIC: &str = r#"{
         "baseModLoader": {"name": "fabric-0.15.11-1.20.4"},
         "gameVersion": "1.20.4",
-        "name": "Fabulously Optimized"
+        "name": "Fabulously Optimized",
+        "installedAddons": [
+            {"addonID": 394468, "installedFile": {"id": 5126735, "displayName": "Sodium", "fileName": "sodium-fabric-0.5.8+mc1.20.4.jar",
+                "FileNameOnDisk": "sodium-fabric-0.5.8+mc1.20.4.jar.disabled"}}
+        ]
     }"#;
 
     #[test]
@@ -76,5 +124,17 @@ mod tests {
         let vanilla = setup(b"\xEF\xBB\xBF{\"gameVersion\": \"1.21.1\", \"name\": \"Pur\", \"baseModLoader\": null}", "x").unwrap();
         assert_eq!((vanilla.loader, vanilla.loader_version), (ModLoader::Vanilla, None));
         assert!(setup(br#"{"gameVersion": "1.7.10", "baseModLoader": {"name": "liteloader-1.7.10"}}"#, "x").is_err());
+    }
+
+    #[test]
+    fn origins_map_file_names_to_curseforge_project_and_file() {
+        let dir = std::env::temp_dir().join(crate::models::new_id());
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(origins(&dir).is_empty());
+        std::fs::write(dir.join(MANIFEST), FABRIC).unwrap();
+        assert_eq!(origins(&dir), HashMap::from([("sodium-fabric-0.5.8+mc1.20.4.jar".to_owned(), (394468, 5126735))]));
+        std::fs::write(dir.join(MANIFEST), r#"{"gameVersion": "1.20.4", "installedAddons": [{"addonID": "kaputt"}]}"#).unwrap();
+        assert!(origins(&dir).is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

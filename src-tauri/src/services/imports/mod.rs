@@ -57,19 +57,25 @@ pub struct ForeignInstance {
     /// Aus diesem Ordner wurde schon einmal importiert.
     #[serde(default)]
     pub imported: bool,
+    /// Warum Pumpkin Launcher die Instanz nicht starten kann (z. B. Forge vor 1.17); dann gibt es keinen Import.
+    #[serde(default)]
+    pub unsupported: Option<String>,
     #[serde(flatten)]
     pub setup: Setup,
 }
 
 impl ForeignInstance {
-    fn new(launcher: Launcher, dir: &Path, setup: Setup) -> Self {
-        let game_dir = if launcher == Launcher::Prism { prism::game_dir(dir) } else { dir.to_owned() };
-        Self { launcher, path: text(dir), game_dir: text(&game_dir), imported: false, setup }
+    fn new(launcher: Launcher, dir: &Path, (game_dir, setup): (PathBuf, Setup)) -> Self {
+        let unsupported = forge::check_loader(setup.loader, &setup.minecraft_version).err().map(|e| e.to_string());
+        Self { launcher, path: text(dir), game_dir: text(&game_dir), imported: false, unsupported, setup }
     }
 }
 
 /// Neben den Ordnern, die Minecraft neu anlegt, bleiben die Dateien der anderen Launcher zurück.
 const SKIPPED: [&str; 3] = [".cache", "instance.json", "minecraftinstance.json"];
+
+/// ATLauncher deaktiviert Mods, indem es sie hierher verschiebt; Pumpkin Launcher kennt sie als `mods/<name>.disabled`.
+const DISABLED_MODS: &str = "disabledmods/";
 
 /// Instanzen anderer Launcher an den bekannten Orten oder, mit `folder`, in diesem Ordner, nach Namen sortiert.
 pub fn detect(state: &AppState, folder: Option<&Path>) -> Vec<ForeignInstance> {
@@ -102,23 +108,24 @@ fn default_roots() -> Vec<PathBuf> {
 fn scan(root: &Path) -> Vec<ForeignInstance> {
     let mut found: Vec<ForeignInstance> = skip_unreadable(root, modrinth_app::scan(root))
         .into_iter()
-        .map(|(dir, setup)| ForeignInstance::new(Launcher::Modrinth, &dir, setup))
+        .filter_map(|row| skip_unreadable(root, row.map(Some)))
+        .map(|(dir, setup)| ForeignInstance::new(Launcher::Modrinth, &dir, (dir.clone(), setup)))
         .collect();
     let candidates = std::iter::once(root.to_owned()).chain(subdirs(root)).chain(subdirs(&root.join("instances")));
     found.extend(candidates.filter_map(|dir| skip_unreadable(&dir, read(&dir))));
     found
 }
 
-/// Liest die Instanz eines Launchers in einem Ordner; `None`, wenn der Ordner keine ist.
-type Reader = fn(&Path) -> AppResult<Option<Setup>>;
+/// Liest die Instanz eines Launchers in einem Ordner als (Spielordner, Einstellungen); `None`, wenn der Ordner keine ist.
+type Reader = fn(&Path) -> AppResult<Option<(PathBuf, Setup)>>;
 
 /// Instanz in `dir`, erkannt an der Datei, die der jeweilige Launcher dort ablegt.
 fn read(dir: &Path) -> AppResult<Option<ForeignInstance>> {
     let readers: [(Launcher, Reader); 3] =
         [(Launcher::Prism, prism::read), (Launcher::CurseForge, curseforge::read), (Launcher::AtLauncher, atlauncher::read)];
     for (launcher, read) in readers {
-        if let Some(setup) = read(dir)? {
-            return Ok(Some(ForeignInstance::new(launcher, dir, setup)));
+        if let Some(found) = read(dir)? {
+            return Ok(Some(ForeignInstance::new(launcher, dir, found)));
         }
     }
     Ok(None)
@@ -170,14 +177,17 @@ fn text(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
-/// Neue Instanz aus `source`: Einstellungen übernehmen, Spielordner kopieren (Fortschritt als Phase `copy`),
-/// Inhalte eintragen, damit Updates gehen. Bei Fehler oder Abbruch verschwindet die halbe Instanz wieder.
+/// Neue Instanz aus `source`: Einstellungen übernehmen, Spielordner kopieren und Inhalte in den Mod-Cache legen
+/// (Fortschritt als Phasen `copy` und `hash`), dann eintragen, damit Updates gehen. Bei Fehler oder Abbruch
+/// verschwindet die halbe Instanz wieder.
 pub async fn import(
     state: &AppState,
     source: ForeignInstance,
     progress: impl Fn(&str, u64, u64) + Send + 'static,
 ) -> AppResult<Instance> {
     check(&source)?;
+    let game_dir = PathBuf::from(source.game_dir);
+    let origins = curseforge::origins(&game_dir);
     let setup = source.setup;
     let mut instance = Instance {
         memory_mb: setup.memory_mb,
@@ -193,9 +203,13 @@ pub async fn import(
     let root = state.dirs.instance(&instance.id);
     content::regular_parents(&root)?;
     let mut cleanup = Cleanup::new(root);
-    let copy = cleanup.copier(PathBuf::from(source.game_dir), state.dirs.game_dir(&instance.id), progress);
-    tokio::task::spawn_blocking(copy).await.map_err(|e| modrinth::invalid(format!("Kopieren abgebrochen: {e}")))??;
-    content::record_untracked(&state.dirs, &mut instance).await?;
+    let (dirs, target, fresh) = (state.dirs.clone(), state.dirs.game_dir(&instance.id), instance.clone());
+    let work = cleanup.guarded(move |stop| {
+        copy_files(&files_to_copy(&game_dir, &target)?, &progress, stop)?;
+        content::cached_untracked(&dirs, &fresh, &progress, stop)
+    });
+    let found = tokio::task::spawn_blocking(work).await.map_err(|e| modrinth::invalid(format!("Kopieren abgebrochen: {e}")))??;
+    content::record_untracked(&mut instance.mods, &found, &origins).await?;
     let instance = state.instances.insert(instance)?;
     cleanup.root = None;
     tracing::info!(id = %instance.id, from = ?instance.imported_from, "Instanz importiert");
@@ -218,6 +232,7 @@ fn check(source: &ForeignInstance) -> AppResult<()> {
 }
 
 /// Der Spielordner ohne Neuerzeugtes und ohne die Dateien des anderen Launchers, als (Ziel, Quelle).
+/// Deaktivierte Mods aus `disabledmods` landen deaktiviert in `mods`.
 fn files_to_copy(source: &Path, target: &Path) -> AppResult<Vec<(PathBuf, PathBuf)>> {
     let mut files = Vec::new();
     for entry in fs::read_dir(source)? {
@@ -227,11 +242,18 @@ fn files_to_copy(source: &Path, target: &Path) -> AppResult<Vec<(PathBuf, PathBu
             walk(source, &path, &mut files)?;
         }
     }
-    Ok(files.into_iter().map(|(rel, path)| (target.join(rel), path)).collect())
+    Ok(files.into_iter().map(|(rel, path)| (target.join(relocated(rel)), path)).collect())
 }
 
-/// Räumt den Instanzordner bei Abbruch auf. Das Kopieren läuft in einem eigenen Thread weiter, auch wenn der
-/// Vorgang verworfen wird; `done` setzt, wer zuerst fertig ist (Kopie durch oder Vorgang abgebrochen), und
+fn relocated(rel: String) -> String {
+    match rel.strip_prefix(DISABLED_MODS) {
+        Some(name) => format!("mods/{name}.disabled"),
+        None => rel,
+    }
+}
+
+/// Räumt den Instanzordner bei Abbruch auf. Die Arbeit läuft in einem eigenen Thread weiter, auch wenn der
+/// Vorgang verworfen wird; `done` setzt, wer zuerst fertig ist (Arbeit durch oder Vorgang abgebrochen), und
 /// der Zweite räumt auf. So schreibt nach dem Aufräumen nichts mehr in den Ordner.
 struct Cleanup {
     root: Option<PathBuf>,
@@ -243,21 +265,20 @@ impl Cleanup {
         Self { root: Some(root), done: Arc::new(AtomicBool::new(false)) }
     }
 
-    /// Kopiert `source` nach `target`; bei Fehler oder Abbruch entfernt es den Instanzordner selbst.
-    fn copier(
+    /// `work` für den eigenen Thread, mit `done` als Stopp-Signal; bei Fehler oder Abbruch entfernt es den
+    /// Instanzordner selbst.
+    fn guarded<T>(
         &self,
-        source: PathBuf,
-        target: PathBuf,
-        progress: impl Fn(&str, u64, u64) + Send + 'static,
-    ) -> impl FnOnce() -> AppResult<()> + Send + 'static {
+        work: impl FnOnce(&AtomicBool) -> AppResult<T> + Send + 'static,
+    ) -> impl FnOnce() -> AppResult<T> + Send + 'static {
         let (root, done) = (self.root.clone(), self.done.clone());
         move || {
-            let result = files_to_copy(&source, &target).and_then(|files| copy_files(&files, &progress, &done));
+            let result = work(&done);
             if done.swap(true, Ordering::SeqCst) || result.is_err() {
                 drop(RemoveOnDrop(root));
                 return result.and(Err(AppError::Cancelled));
             }
-            Ok(())
+            result
         }
     }
 }
@@ -273,7 +294,7 @@ impl Drop for Cleanup {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::duplicate::tests::write_files;
+    use crate::{models::ModSource, services::write_files};
 
     const PACK: &str = r#"{"formatVersion": 1, "components": [
         {"uid": "net.minecraft", "version": "1.21.1", "important": true},
@@ -313,6 +334,7 @@ mod tests {
                 ("options.txt", "fov:1"),
                 ("logs/latest.log", "log"),
                 ("crash-reports/c.txt", "c"),
+                ("disabledmods/off.jar", "off"),
             ],
         );
         let mut got: Vec<String> = files_to_copy(&source, &root.join("ziel"))
@@ -321,7 +343,7 @@ mod tests {
             .map(|(dest, _)| text(dest.strip_prefix(root.join("ziel")).unwrap()).replace('\\', "/"))
             .collect();
         got.sort();
-        assert_eq!(got, ["mods/a.jar", "options.txt", "saves/w/level.dat"]);
+        assert_eq!(got, ["mods/a.jar", "mods/off.jar.disabled", "options.txt", "saves/w/level.dat"]);
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -351,6 +373,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn import_keeps_curseforge_origins_of_unknown_mods() {
+        let root = env::temp_dir().join(crate::models::new_id());
+        let state = AppState::load(&root.join("data")).unwrap();
+        let source = root.join("Instances/Pack");
+        let manifest = r#"{"gameVersion": "1.21.1", "baseModLoader": {"name": "neoforge-21.1.172"},
+            "installedAddons": [{"addonID": 238222, "installedFile": {"id": 5846880, "fileName": "jei.jar"}}]}"#;
+        write_files(&source, &[("minecraftinstance.json", manifest), ("mods/jei.jar", "jei"), ("mods/own.jar", "own")]);
+        let from = detect(&state, Some(&source)).remove(0);
+
+        let instance = import(&state, from, |_, _, _| {}).await.unwrap();
+
+        let sources: Vec<_> = instance.mods.iter().map(|m| (m.id.as_str(), &m.source)).collect();
+        assert_eq!(sources[0], ("cf-238222", &ModSource::CurseForge { project_id: 238222, file_id: 5846880 }));
+        assert_eq!(sources[1].1, &ModSource::Local);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
     async fn unsupported_or_missing_sources_are_rejected() {
         let root = env::temp_dir().join(crate::models::new_id());
         let state = AppState::load(&root.join("data")).unwrap();
@@ -363,11 +403,10 @@ mod tests {
             memory_mb: None,
             jvm_args: Vec::new(),
         };
-        let old_forge = ForeignInstance::new(Launcher::CurseForge, &root.join("da"), setup);
-        let missing = ForeignInstance {
-            setup: Setup { loader: ModLoader::Vanilla, loader_version: None, ..old_forge.setup.clone() },
-            ..ForeignInstance::new(Launcher::CurseForge, &root.join("weg"), old_forge.setup.clone())
-        };
+        let old_forge = ForeignInstance::new(Launcher::CurseForge, &root.join("da"), (root.join("da"), setup));
+        assert!(old_forge.unsupported.is_some());
+        let vanilla = Setup { loader: ModLoader::Vanilla, loader_version: None, ..old_forge.setup.clone() };
+        let missing = ForeignInstance::new(Launcher::CurseForge, &root.join("weg"), (root.join("weg"), vanilla));
         for source in [old_forge, missing] {
             assert!(import(&state, source, |_, _, _| {}).await.is_err());
         }
@@ -380,15 +419,19 @@ mod tests {
         let root = env::temp_dir().join(crate::models::new_id());
         add_content(&root.join("quelle"));
         let target = root.join("instanz");
+        let copy = |cleanup: &Cleanup| {
+            let (source, game_dir) = (root.join("quelle"), target.join("minecraft"));
+            cleanup.guarded(move |stop| copy_files(&files_to_copy(&source, &game_dir)?, &|_, _, _| {}, stop))
+        };
         // Kopie fertig, danach abgebrochen: der Wächter räumt auf.
         let cleanup = Cleanup::new(target.clone());
-        cleanup.copier(root.join("quelle"), target.join("minecraft"), |_, _, _| {})().unwrap();
+        copy(&cleanup)().unwrap();
         assert!(target.join("minecraft/config/a.toml").exists());
         drop(cleanup);
         assert!(!target.exists());
         // Abgebrochen, bevor die Kopie fertig ist: sie hört auf und räumt selbst auf.
         let cleanup = Cleanup::new(target.clone());
-        let copy = cleanup.copier(root.join("quelle"), target.join("minecraft"), |_, _, _| {});
+        let copy = copy(&cleanup);
         drop(cleanup);
         assert!(matches!(copy(), Err(AppError::Cancelled)));
         assert!(!target.exists());

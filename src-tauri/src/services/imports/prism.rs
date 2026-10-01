@@ -33,14 +33,15 @@ const LOADERS: [(&str, ModLoader); 4] = [
     ("net.neoforged", ModLoader::NeoForge),
 ];
 
-pub fn read(dir: &Path) -> AppResult<Option<Setup>> {
+pub fn read(dir: &Path) -> AppResult<Option<(PathBuf, Setup)>> {
     let Some(cfg) = read_marker(&dir.join("instance.cfg"))? else { return Ok(None) };
     let pack = read_marker(&dir.join("mmc-pack.json"))?.ok_or_else(|| invalid("mmc-pack.json fehlt"))?;
-    setup(&String::from_utf8_lossy(&cfg), &pack, &folder_name(dir)).map(Some)
+    let setup = setup(&String::from_utf8_lossy(&cfg), &pack, &folder_name(dir))?;
+    Ok(Some((game_dir(dir), setup)))
 }
 
 /// Spielordner wie bei Prism: `.minecraft`, wenn es nur diesen gibt, sonst `minecraft`.
-pub fn game_dir(dir: &Path) -> PathBuf {
+fn game_dir(dir: &Path) -> PathBuf {
     let dot = dir.join(".minecraft");
     if dot.is_dir() && !dir.join("minecraft").exists() {
         dot

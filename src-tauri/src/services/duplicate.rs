@@ -73,10 +73,10 @@ fn files_to_copy(dirs: &Dirs, from: &str, to: &str, mods: &[Mod]) -> AppResult<V
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+mod tests {
     use super::*;
     use crate::models::{ModKind, ModLoader, ModSource, NewInstance};
-    use std::path::Path;
+    use crate::services::write_files;
 
     fn local_mod(state: &AppState, name: &str) -> Mod {
         Mod {
@@ -89,13 +89,6 @@ pub(crate) mod tests {
             enabled: true,
             kind: ModKind::Mod,
             required_by: Vec::new(),
-        }
-    }
-
-    pub(crate) fn write_files(dir: &Path, files: &[(&str, &str)]) {
-        for (path, data) in files {
-            fs::create_dir_all(dir.join(path).parent().unwrap()).unwrap();
-            fs::write(dir.join(path), data).unwrap();
         }
     }
 

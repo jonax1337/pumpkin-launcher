@@ -162,3 +162,12 @@ pub(crate) fn copy_files(files: &[(PathBuf, PathBuf)], progress: &dyn Fn(&str, u
     }
     Ok(())
 }
+
+/// Testdateien unter `dir` anlegen: (relativer Pfad, Inhalt).
+#[cfg(test)]
+pub(crate) fn write_files(dir: &Path, files: &[(&str, &str)]) {
+    for (path, data) in files {
+        fs::create_dir_all(dir.join(path).parent().unwrap()).unwrap();
+        fs::write(dir.join(path), data).unwrap();
+    }
+}
