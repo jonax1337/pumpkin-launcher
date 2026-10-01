@@ -6,6 +6,10 @@ export interface ContentHit {
 export type CatalogType = "mod" | "modpack" | "resourcepack" | "shader" | "datapack";
 /** Sortierung der Modrinth-Suche. */
 export type SearchIndex = "relevance" | "downloads" | "follows" | "newest" | "updated";
+/** Ohne Wahl: Downloads ohne Suchbegriff, sonst Relevanz. */
+export const defaultSort = (query: string): SearchIndex => (query ? "relevance" : "downloads");
+/** Ein Projekt mit Titel, wie es Aktionen und Dialoge brauchen; jedes `ContentProject` erfüllt das. */
+export interface ProjectRef { id: string; title: string }
 export interface ContentSearch { hits: ContentHit[]; total_hits: number; offset: number; limit: number }
 export interface ContentProject {
   id: string; slug: string; title: string; description: string; body: string;

@@ -2,7 +2,7 @@ import type { UnlistenFn } from "@tauri-apps/api/event";
 import type { OpenDialogOptions } from "@tauri-apps/plugin-dialog";
 import type { Update } from "@tauri-apps/plugin-updater";
 import type {
-  CatalogType, ContentBlocked, ContentProject, ContentSearch, ContentVersion, ModUpdate, SearchIndex, Source,
+  BlockedFile, CatalogType, ContentBlocked, ContentProject, ContentSearch, ContentVersion, ModUpdate, SearchIndex, Source,
 } from "./content-types";
 import type { ContentProgress } from "./progress";
 import type {
@@ -24,6 +24,34 @@ export interface BackendEvents {
 export type Subscribe = <E extends keyof BackendEvents>(event: E, cb: (payload: BackendEvents[E]) => void) => Promise<UnlistenFn>;
 
 export type Emit = <E extends keyof BackendEvents>(event: E, payload: BackendEvents[E]) => void;
+
+/** Minecraft-Version und Loader, auf die ein Katalog-Aufruf einschränkt; `null` = alle. */
+export interface VersionFilter {
+  mc: string | null;
+  loader: string | null;
+}
+
+/** Eine Seite der Katalogsuche; `index` ist die Sortierung. */
+export interface SearchOptions extends VersionFilter {
+  query: string;
+  type: CatalogType;
+  offset: number;
+  index: SearchIndex;
+}
+
+/** Ein Modpack-Projekt in einer Version, das als Instanz `name` angelegt wird. */
+export interface PackInstall {
+  projectId: string;
+  versionId: string;
+  name: string;
+}
+
+/** Eine Mod-Version, die in die Instanz `instanceId` kommt. */
+export interface ModInstall {
+  instanceId: string;
+  projectId: string;
+  versionId: string;
+}
 
 /**
  * Was nur die App kann. Der Browser-Mock hat es nicht: die Oberfläche blendet es dann aus,
@@ -57,15 +85,7 @@ export const allCapabilities = (available: boolean): Capabilities => ({
 export interface Backend {
   capabilities: Capabilities;
 
-  /** `index` = Sortierung; ohne: Downloads ohne Suchbegriff, sonst Relevanz. */
-  modrinthSearch(
-    query: string,
-    projectType: CatalogType,
-    minecraftVersion: string | null,
-    loader: string | null,
-    offset?: number,
-    index?: SearchIndex | null,
-  ): Promise<ContentSearch>;
+  modrinthSearch(options: SearchOptions): Promise<ContentSearch>;
   modrinthProject(projectId: string): Promise<ContentProject>;
   modrinthProjects(projectIds: string[]): Promise<ContentProject[]>;
   modrinthVersions(projectId: string, minecraftVersion: string | null, loader: string | null): Promise<ContentVersion[]>;
@@ -80,18 +100,15 @@ export interface Backend {
   modrinthInstallPack(versionId: string, name: string, operationId: string): Promise<Instance>;
   modrinthImportPack(path: string, name: string, operationId: string): Promise<Instance>;
   /** Anbieter ohne API-Key (FTB, Technic, CurseForge); gleiche Formen wie bei Modrinth. Nur in der App. */
-  providerSearch(
-    source: Source, query: string, projectType: CatalogType, minecraftVersion: string | null, loader: string | null, offset?: number,
-    index?: SearchIndex | null,
-  ): Promise<ContentSearch>;
+  providerSearch(source: Source, options: SearchOptions): Promise<ContentSearch>;
   providerProject(source: Source, projectId: string): Promise<ContentProject>;
-  /** `minecraftVersion`/`loader` filtern nur bei CurseForge mit Schlüssel; die anderen Anbieter liefern alle Versionen. */
-  providerVersions(source: Source, projectId: string, minecraftVersion?: string | null, loader?: string | null): Promise<ContentVersion[]>;
-  providerInstallPack(source: Source, projectId: string, versionId: string, name: string, operationId: string): Promise<Instance>;
+  /** `filter` wirkt nur bei CurseForge mit Schlüssel; die anderen Anbieter liefern alle Versionen. */
+  providerVersions(source: Source, projectId: string, filter: VersionFilter): Promise<ContentVersion[]>;
+  providerInstallPack(source: Source, pack: PackInstall, operationId: string): Promise<Instance>;
   /** Mod, Shader oder Ressourcenpaket von CurseForge in eine Instanz, samt Abhängigkeiten. */
-  providerInstallMod(source: Source, instanceId: string, projectId: string, versionId: string, operationId: string): Promise<Instance>;
+  providerInstallMod(source: Source, mod: ModInstall, operationId: string): Promise<Instance>;
   /** Holt eine von Hand geladene CurseForge-Datei aus dem Downloads-Ordner; null = noch nicht da. */
-  curseforgeAdoptDownload(instanceId: string, projectId: number, fileId: number, fileName: string): Promise<Instance | null>;
+  curseforgeAdoptDownload(instanceId: string, file: Pick<BlockedFile, "projectId" | "fileId" | "fileName">): Promise<Instance | null>;
   onContentBlocked(cb: (p: ContentBlocked) => void): Promise<UnlistenFn>;
   onContentProgress(cb: (p: ContentProgress) => void): Promise<UnlistenFn>;
   /** Links aus Beschreibungen im Standardbrowser öffnen, nie im Launcher-Fenster. */

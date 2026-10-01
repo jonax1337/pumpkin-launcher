@@ -1,16 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { useI18n, type TKey } from "@/i18n";
 import { PlayerNameField } from "@/components/PlayerNameField";
 import { startMsLogin } from "@/store/accountUi";
 import { importable, useForeignInstances } from "@/hooks/useImport";
-import { useCreateInstance, useVersions } from "@/hooks/useInstances";
-import { usePlay } from "@/hooks/usePlay";
-import { api } from "@/lib/api";
-import { errorMessage } from "@/lib/errors";
-import type { ContentVersion } from "@/lib/content-types";
+import { useStarterInstance } from "@/hooks/useStarterInstance";
 import { discoverUrl, newInstanceUrl } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { Button, Choice, Glyph, Hint, useRoving } from "@/ui";
@@ -19,8 +14,6 @@ import { PixelScene } from "@/pixel/PixelScene";
 import { Buddy } from "@/branding/Brand";
 import { useOfflineAllowed, useUsableAccount } from "@/store/offline";
 import { accountName, isValidPlayerName, useSettings } from "@/store/settings";
-
-const SODIUM = "AANobbMI";
 
 type Start = "vanilla" | "mods" | "modpack";
 
@@ -41,15 +34,11 @@ export function Onboarding() {
   const [step, setStep] = useState<1 | 2>(active ? 2 : 1);
   const [name, setName] = useState(active?.kind === "offline" ? active.name : "");
   const [start, setStart] = useState<Start>("mods");
-  const [busy, setBusy] = useState(false);
   const qc = useQueryClient();
-  const versions = useVersions();
-  const create = useCreateInstance();
-  const play = usePlay();
+  const starter = useStarterInstance();
   const navigate = useNavigate();
   const microsoft = active?.kind === "microsoft";
   const nameOk = isValidPlayerName(name);
-  const releases = versions.data?.filter((v) => v.type === "release").map((v) => v.id) ?? [];
   const choice = STARTS.find((s) => s.id === start)!;
   // Pfeiltasten in der Startwahl: Auswahl folgt dem Fokus, ein Tab-Stopp.
   const roveStarts = useRoving<HTMLDivElement>("xy");
@@ -65,30 +54,7 @@ export function Onboarding() {
     setStep(2);
   }
 
-  async function go() {
-    if (start === "modpack") return navigate(discoverUrl());
-    setBusy(true);
-    try {
-      if (start === "vanilla") {
-        const instance = await create.mutateAsync({ name: `Minecraft ${releases[0]}`, minecraftVersion: releases[0], loader: "vanilla", loaderVersion: null, memoryMb: null });
-        void play(instance);
-        return;
-      }
-      // Neueste Minecraft-Version, für die es Sodium schon gibt; Release-Versionen von Sodium bevorzugt.
-      const sodium = (await api.modrinthVersions(SODIUM, null, "fabric")) as ContentVersion[];
-      const ranked = [...sodium.filter((v) => (v.version_type ?? "release") === "release"), ...sodium];
-      const mc = releases.find((r) => ranked.some((v) => v.game_versions.includes(r)));
-      const version = ranked.find((v) => mc && v.game_versions.includes(mc));
-      if (!mc || !version) throw new Error(t("components.onboarding.noSodium"));
-      const instance = await create.mutateAsync({ name: `Fabric ${mc}`, minecraftVersion: mc, loader: "fabric", loaderVersion: null, memoryMb: null });
-      const withMods = await api.modrinthInstallMod(instance.id, version.id, crypto.randomUUID());
-      void play(withMods);
-    } catch (err) {
-      toast.error(t("components.onboarding.goFailed"), { description: errorMessage(err) });
-    } finally {
-      setBusy(false);
-    }
-  }
+  const go = () => (start === "modpack" ? navigate(discoverUrl()) : void starter[start]());
 
   const steps = (
     <div className="steps" aria-label={t("components.onboarding.stepOf", { step })}>
@@ -134,7 +100,7 @@ export function Onboarding() {
           <>
             {steps}
             <div className="onb-heading">
-              <Buddy mood={busy ? 'loading' : 'hello'} size={72} />
+              <Buddy mood={starter.busy ? "loading" : "hello"} size={72} />
               <h1 id="onb-t">{t("components.onboarding.pickStart")}</h1>
             </div>
             <p>{t("components.onboarding.moreLater")}</p>
@@ -156,7 +122,7 @@ export function Onboarding() {
               </div>
               <p className="help onb-next" aria-live="polite">{t(choice.next)}</p>
               {/* Der Dialog der Bibliothek, nicht ein eigener: das Onboarding verschwindet mit der ersten importierten Instanz */}
-              <Button variant="ghost" size="s" icon="swap" bleed="start" disabled={busy} onClick={() => navigate(newInstanceUrl({ type: "import" }))}>
+              <Button variant="ghost" size="s" icon="swap" bleed="start" disabled={starter.busy} onClick={() => navigate(newInstanceUrl({ type: "import" }))}>
                 {foreign
                   ? t(foreign === 1 ? "components.onboarding.importForeign.one" : "components.onboarding.importForeign.other", { n: foreign })
                   : t("components.onboarding.importForeignNone")}
@@ -166,18 +132,18 @@ export function Onboarding() {
               {microsoft ? (
                 <span className="faint" style={{ fontSize: 12.5 }}>{t("components.account.loggedInAs", { name: accountName(active) })}</span>
               ) : (
-                <Button variant="ghost" onClick={() => setStep(1)} disabled={busy}>{t("common.back")}</Button>
+                <Button variant="ghost" onClick={() => setStep(1)} disabled={starter.busy}>{t("common.back")}</Button>
               )}
               {/* Symbol links wie bei allen Knöpfen; beim Anlegen die Sanduhr */}
               <Button
                 variant="primary"
                 size="l"
-                icon={busy ? "hour" : start === "modpack" ? "grid" : "play"}
+                icon={starter.busy ? "hour" : start === "modpack" ? "grid" : "play"}
                 width={232}
-                disabled={busy || (start !== "modpack" && !releases.length)}
-                onClick={() => void go()}
+                disabled={starter.busy || (start !== "modpack" && !starter.ready)}
+                onClick={go}
               >
-                {busy ? t("components.newInstance.creating") : t(choice.cta)}
+                {starter.busy ? t("components.newInstance.creating") : t(choice.cta)}
               </Button>
             </div>
           </>

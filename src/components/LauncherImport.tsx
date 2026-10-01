@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { loaderLine } from "@/components/common";
-import { SkelList } from "@/components/SkelList";
+import { ChoiceList, ChoiceListSkeleton } from "@/components/newInstance/ChoiceList";
 import { Button, Chip, Choice, Empty, ErrorBox, Field, Glyph, JobProgress } from "@/ui";
 import { useContentState } from "@/store/contentState";
 import { importTarget, type ForeignSelection } from "@/hooks/useImport";
@@ -8,6 +8,8 @@ import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
 import { progressShare, progressShortLabel } from "@/lib/progress";
 import { FOREIGN_LAUNCHER_LABELS, FOREIGN_LAUNCHERS, type ForeignInstance } from "@/lib/types";
+
+const SKELETON_ROWS = 3;
 
 /** Import aus anderen Launchern im Dialog „Neue Instanz“: Instanzen nach Launcher gruppiert, Fortschritt in der Zeile. */
 export function ImportPane({ selection, busy }: { selection: ForeignSelection; busy: boolean }) {
@@ -30,9 +32,7 @@ export function ImportPane({ selection, busy }: { selection: ForeignSelection; b
       {detected.error ? (
         <ErrorBox title={t("components.import.searchFailed")} error={detected.error} onRetry={() => void detected.refetch()} />
       ) : detected.isPending ? (
-        <div className="flex flex-col gap-1">
-          <SkelList n={3} h={56} />
-        </div>
+        <ChoiceListSkeleton n={SKELETON_ROWS} />
       ) : !all.length ? (
         <Empty ill={<Glyph name="chest" pal="sand" box={64} />} title={t("components.import.noneFound")} size="pane">
           {t("components.import.noneFoundHint")}
@@ -40,7 +40,7 @@ export function ImportPane({ selection, busy }: { selection: ForeignSelection; b
       ) : (
         FOREIGN_LAUNCHERS.filter((l) => all.some((f) => f.launcher === l)).map((launcher) => (
           <Field key={launcher} label={FOREIGN_LAUNCHER_LABELS[launcher]} group>
-            <div className="flex flex-col gap-1">
+            <ChoiceList>
               {all.filter((f) => f.launcher === launcher).map((f) => (
                 <Choice
                   key={f.path}
@@ -53,7 +53,7 @@ export function ImportPane({ selection, busy }: { selection: ForeignSelection; b
                   onClick={() => selection.toggle(f)}
                 />
               ))}
-            </div>
+            </ChoiceList>
           </Field>
         ))
       )}

@@ -28,14 +28,14 @@ export function createContentMock({ db, emit }: MockContext) {
     emit("content-progress", { operationId, phase, done, total });
 
   return {
-    async modrinthSearch(query, type, mc, loader, offset = 0, index = null): Promise<ContentSearch> {
+    async modrinthSearch({ query, type, mc, loader, offset, index }): Promise<ContentSearch> {
       const facets = [[`project_type:${type}`], ...(mc ? [[`versions:${mc}`]] : []), ...(loader ? [[`categories:${loader}`]] : [])];
       const r = await modrinthFetch<ContentSearch>("/search", {
         query,
         facets: JSON.stringify(facets),
         offset: String(offset),
         limit: String(SEARCH_PAGE_SIZE),
-        index: index ?? (query ? "relevance" : "downloads"),
+        index,
       });
       return { hits: r.hits, total_hits: r.total_hits, offset: r.offset, limit: r.limit };
     },
