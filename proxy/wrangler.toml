@@ -4,9 +4,8 @@ compatibility_date = "2025-09-01"
 # api.curseforge.com liegt selbst bei Cloudflare; ohne das scheitert der Abruf aus dem Worker mit Fehler 1042.
 compatibility_flags = ["global_fetch_strictly_public"]
 
-# Begrenzung pro Nutzer-IP: 60 Anfragen pro Minute.
-[[unsafe.bindings]]
+# Begrenzung pro Nutzer-IP: 60 Anfragen pro Minute (Cloudflare erlaubt als Zeitraum nur 10 oder 60 Sekunden).
+[[ratelimits]]
 name = "LIMITER"
-type = "ratelimit"
 namespace_id = "1001"
 simple = { limit = 60, period = 60 }

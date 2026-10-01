@@ -258,9 +258,15 @@ pub async fn provider_install_mod(
 /// Holt eine Datei, die der Nutzer auf CurseForge von Hand geladen hat, aus dem Downloads-Ordner in die Instanz.
 /// `None` = noch nicht da oder der Launcher ist gerade beschäftigt; die Oberfläche fragt wieder.
 #[tauri::command]
-pub async fn curseforge_adopt_download(state: State<'_, AppState>, instance_id: String, project_id: u32, file_id: u32) -> AppResult<Option<Instance>> {
+pub async fn curseforge_adopt_download(
+    state: State<'_, AppState>,
+    instance_id: String,
+    project_id: u32,
+    file_id: u32,
+    file_name: String,
+) -> AppResult<Option<Instance>> {
     let Ok(_operation) = state.operation(Some(&instance_id)) else { return Ok(None) };
-    providers::curseforge::adopt_download(&state, &instance_id, project_id, file_id).await
+    providers::curseforge::adopt_download(&state, &instance_id, project_id, file_id, &file_name).await
 }
 /// Bricht `modrinth_install_pack`, `modrinth_import_pack`, `template_create_instance` oder `instance_import`
 /// mit dieser `operationId` ab; der Vorgang endet mit „Installation abgebrochen“.

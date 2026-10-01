@@ -374,8 +374,8 @@ export const api = {
   providerInstallMod: (source: Source, instanceId: string, projectId: string, versionId: string, operationId: string): Promise<Instance> =>
     contentCall("provider_install_mod", { source, instanceId, projectId, versionId, operationId }),
   /** Holt eine von Hand geladene CurseForge-Datei aus dem Downloads-Ordner; null = noch nicht da. */
-  curseforgeAdoptDownload: (instanceId: string, projectId: number, fileId: number): Promise<Instance | null> =>
-    contentCall("curseforge_adopt_download", { instanceId, projectId, fileId }),
+  curseforgeAdoptDownload: (instanceId: string, projectId: number, fileId: number, fileName: string): Promise<Instance | null> =>
+    contentCall("curseforge_adopt_download", { instanceId, projectId, fileId, fileName }),
   onContentBlocked: (cb: (p: ContentBlocked) => void) => on("content-blocked", cb),
   /** Links aus Beschreibungen im Standardbrowser öffnen, nie im Launcher-Fenster. */
   openExternal: (url: string): Promise<void> =>

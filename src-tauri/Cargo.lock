@@ -2307,6 +2307,7 @@ dependencies = [
  "keyring",
  "libc",
  "md-5",
+ "percent-encoding",
  "regex",
  "reqwest",
  "rusqlite",

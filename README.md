@@ -105,9 +105,10 @@ docs/           architecture, design spec, account setup
 website/        standalone marketing website (static, no tracker)
 media/          launch video source (HyperFrames, YouTube + TikTok cuts)
 scripts/        build helper scripts
+proxy/          Cloudflare Worker holding the CurseForge API key (forks need their own key and worker)
 ```
 
-Details: [Architecture](docs/ARCHITECTURE.md) · [Releasing](docs/RELEASING.md) · [Pixelkino design spec](docs/design/PIXELKINO.md) · [Branding](branding/pumpkin-launcher/README.md) · [Website](website/README.md) · [Launch video](media/launch-video/README.md)
+Details: [Architecture](docs/ARCHITECTURE.md) · [Releasing](docs/RELEASING.md) · [Pixelkino design spec](docs/design/PIXELKINO.md) · [Branding](branding/pumpkin-launcher/README.md) · [Website](website/README.md) · [Launch video](media/launch-video/README.md) · [CurseForge proxy](proxy/README.md)
 
 Instances, presets and settings are stored as JSON in the app data directory (Windows: `%APPDATA%\dev.laux.launcher\`, Linux: `~/.local/share/dev.laux.launcher/`, macOS: `~/Library/Application Support/dev.laux.launcher/`). The technical identifier stays `dev.laux.launcher` so existing data keeps being found.
 

@@ -53,15 +53,17 @@ export function ManualDownloads() {
     }
   }, [target]);
 
-  // Solange der Dialog offen ist, nach den Dateien im Downloads-Ordner sehen.
+  // Solange der Dialog offen ist, nach den Dateien im Downloads-Ordner sehen. Die nächste Runde startet erst nach der
+  // vorigen, damit sich wartende Anfragen (CurseForge drosselt) nicht stapeln.
   useEffect(() => {
     if (!target || pending.length === 0) return;
     let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
     const tick = async () => {
       for (const item of pending) {
         if (stopped) return;
         try {
-          const updated = await api.curseforgeAdoptDownload(target.instanceId, item.projectId, item.fileId);
+          const updated = await api.curseforgeAdoptDownload(target.instanceId, item.projectId, item.fileId, item.fileName);
           if (updated) {
             setDone((d) => new Set(d).add(item.fileId));
             qc.setQueryData(instanceKeys.detail(updated.id), updated);
@@ -72,11 +74,12 @@ export function ManualDownloads() {
           setDone((d) => new Set(d).add(item.fileId));
         }
       }
+      if (!stopped) timer = setTimeout(() => void tick(), POLL_MS);
     };
-    const timer = setInterval(() => void tick(), POLL_MS);
+    timer = setTimeout(() => void tick(), POLL_MS);
     return () => {
       stopped = true;
-      clearInterval(timer);
+      clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target, pending.length]);
