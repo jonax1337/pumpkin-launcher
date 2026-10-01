@@ -4,6 +4,7 @@
  */
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { toast } from "sonner";
+import { useI18n } from "@/i18n";
 import {
   Actions, Button, ConfirmDialog, ContextMenu, Dialog, DialogActions, Empty, ErrorBox, Heading, Icon, IconButton, JobProgress, Menu, PageHeader,
   Popover, Progress, SearchField, SectionHeader, Sheet, Skel, Spacer, StatusPanel, TextField, Tip, Toolbar, Trunc, type IconName, type MenuEntry,
@@ -22,18 +23,9 @@ function Sec({ title, id, children }: { title: string; id: string; children: Rea
   );
 }
 
-const ITEMS: MenuEntry[] = [
-  { label: "Instanz" },
-  { id: "play", text: "Spielen", icon: "play", onSelect: () => undefined },
-  { id: "dir", text: "Ordner öffnen", icon: "folder", onSelect: () => undefined },
-  { id: "log", text: "Protokoll", icon: "term", disabled: true, onSelect: () => undefined },
-  { id: "acc", text: "Steve_42", sub: "Offline-Name", lead: <Icon name="user" size="l" tone="muted" />, checked: true, onSelect: () => undefined },
-  "-",
-  { id: "del", text: "Löschen", icon: "trash", bad: true, onSelect: () => undefined },
-];
-
 /** Stehende Menüfläche: gleiche Klassen wie Radix, Zustände erzwungen. */
 function MenuStates() {
+  const { t } = useI18n();
   const it = (text: string, icon: IconName, extra: Record<string, string> = {}, cls = "") => (
     <div className={`vx-mi ${cls}`} {...extra}>
       <Icon name={icon} size="s" />
@@ -42,16 +34,16 @@ function MenuStates() {
   );
   return (
     <div className="vx-pop" data-ctx="overlay" style={{ width: 260, animation: "none" }}>
-      <div className="vx-mlabel">Zustände</div>
+      <div className="vx-mlabel">{t("ui.kit.states")}</div>
       {it("Normal", "folder")}
-      {it("Markiert", "copy", { "data-highlighted": "" })}
-      {it("Aus", "term", { "data-disabled": "" })}
-      {it("Gefahr", "trash", { "data-tone": "bad" })}
-      {it("Gefahr markiert", "trash", { "data-tone": "bad", "data-highlighted": "" })}
+      {it(t("ui.kit.highlighted"), "copy", { "data-highlighted": "" })}
+      {it(t("ui.kit.stateOff"), "term", { "data-disabled": "" })}
+      {it(t("ui.kit.danger"), "trash", { "data-tone": "bad" })}
+      {it(t("ui.kit.dangerHighlighted"), "trash", { "data-tone": "bad", "data-highlighted": "" })}
       <div className="vx-msep" />
       <div className="vx-mi" data-tall="">
         <Icon name="user" size="l" tone="muted" />
-        <span className="vx-mi-t2"><b className="vx-trunc">Zweizeilig</b><span className="vx-trunc">Unterzeile</span></span>
+        <span className="vx-mi-t2"><b className="vx-trunc">{t("ui.kit.twoLine")}</b><span className="vx-trunc">{t("ui.kit.subline")}</span></span>
         <Icon name="check" size="s" className="vx-mi-ck" />
       </div>
     </div>
@@ -59,6 +51,7 @@ function MenuStates() {
 }
 
 function Dialogs() {
+  const { t } = useI18n();
   const [dlg, setDlg] = useState(false);
   const [del, setDel] = useState(false);
   const [ok, setOk] = useState(false);
@@ -66,53 +59,55 @@ function Dialogs() {
   const [name, setName] = useState("Survival");
   return (
     <div style={row}>
-      <Button icon="plus" onClick={() => setDlg(true)}>Dialog mit Feld</Button>
-      <Button variant="danger" icon="trash" onClick={() => setDel(true)}>Rückfrage Gefahr</Button>
-      <Button onClick={() => setOk(true)}>Rückfrage neutral</Button>
-      <Button onClick={() => setSheet(true)}>Seitenpanel</Button>
+      <Button icon="plus" onClick={() => setDlg(true)}>{t("ui.kit.dialogWithField")}</Button>
+      <Button variant="danger" icon="trash" onClick={() => setDel(true)}>{t("ui.kit.confirmDanger")}</Button>
+      <Button onClick={() => setOk(true)}>{t("ui.kit.confirmNeutral")}</Button>
+      <Button onClick={() => setSheet(true)}>{t("ui.kit.sheetDemo")}</Button>
       <Dialog
         open={dlg}
         onOpenChange={setDlg}
-        title="Als Vorlage speichern"
-        sub="Mods und Einstellungen werden übernommen."
+        title={t("ui.kit.saveAsTemplate")}
+        sub={t("ui.kit.templateSub")}
         width={480}
-        footer={<DialogActions left="Enter speichert" cancel="Abbrechen" confirm={{ label: "Speichern", width: 130, form: "kit-dlg-form" }} />}
+        footer={<DialogActions left={t("ui.kit.enterSaves")} cancel={t("common.cancel")} confirm={{ label: t("common.save"), width: 130, form: "kit-dlg-form" }} />}
       >
-        <form id="kit-dlg-form" onSubmit={(e) => { e.preventDefault(); setDlg(false); toast.success(`Vorlage „${name}“ gespeichert`); }}>
-          <p style={{ marginBottom: 12 }}>Der Name erscheint unter Neu › Vorlage.</p>
-          <TextField id="kit-dlg-name" value={name} onChange={(e) => setName(e.target.value)} aria-label="Name" width="full" />
+        <form id="kit-dlg-form" onSubmit={(e) => { e.preventDefault(); setDlg(false); toast.success(t("ui.kit.templateSaved", { name })); }}>
+          <p style={{ marginBottom: 12 }}>{t("ui.kit.templateNameHint")}</p>
+          <TextField id="kit-dlg-name" value={name} onChange={(e) => setName(e.target.value)} aria-label={t("ui.kit.nameField")} width="full" />
         </form>
       </Dialog>
-      <ConfirmDialog open={del} onOpenChange={setDel} title="Survival löschen?" text="Welten, Mods und Einstellungen dieser Instanz werden entfernt." onConfirm={() => setDel(false)} />
-      <ConfirmDialog open={ok} onOpenChange={setOk} danger={false} title="Minecraft beenden?" text="Nicht gespeicherter Fortschritt geht verloren." confirmLabel="Beenden" onConfirm={() => setOk(false)} />
-      <Sheet open={sheet} onOpenChange={setSheet} title="Mods hinzufügen" sub="Survival · Fabric 1.21.4" tools={<SearchField value="" onChange={() => undefined} placeholder="Im Katalog suchen" width="full" />}>
-        <Empty size="pane" ill="search" title="Nichts gefunden">Andere Suchbegriffe probieren.</Empty>
+      <ConfirmDialog open={del} onOpenChange={setDel} title={t("ui.kit.deleteTitle", { name: "Survival" })} text={t("ui.kit.deleteText")} onConfirm={() => setDel(false)} />
+      <ConfirmDialog open={ok} onOpenChange={setOk} danger={false} title={t("ui.kit.quitTitle")} text={t("ui.kit.quitText")} confirmLabel={t("ui.kit.quit")} onConfirm={() => setOk(false)} />
+      <Sheet open={sheet} onOpenChange={setSheet} title={t("ui.kit.addMods")} sub="Survival · Fabric 1.21.4" tools={<SearchField value="" onChange={() => undefined} placeholder={t("ui.kit.searchCatalog")} width="full" />}>
+        <Empty size="pane" ill="search" title={t("ui.kit.nothingFound")}>{t("ui.kit.tryOtherTerms")}</Empty>
       </Sheet>
     </div>
   );
 }
 
 function Toasts() {
+  const { t } = useI18n();
   return (
     <div style={row}>
-      <Button size="s" onClick={() => toast.success("Survival ist bereit", { description: "„Spielen“ lädt beim ersten Start den Rest." })}>Erfolg</Button>
-      <Button size="s" onClick={() => toast.error("Survival ist abgestürzt", { action: { label: "Protokoll zeigen", onClick: () => undefined } })}>Fehler + Aktion</Button>
-      <Button size="s" onClick={() => toast.warning("Speicher knapp")}>Warnung</Button>
-      <Button size="s" onClick={() => toast("Minecraft beendet. Gespielt: 1:24")}>Ohne Icon</Button>
+      <Button size="s" onClick={() => toast.success(t("ui.kit.readyToast", { name: "Survival" }), { description: t("ui.kit.readyDesc") })}>{t("ui.kit.success")}</Button>
+      <Button size="s" onClick={() => toast.error(t("ui.kit.crashedToast", { name: "Survival" }), { action: { label: t("ui.kit.showLog"), onClick: () => undefined } })}>{t("ui.kit.errorAction")}</Button>
+      <Button size="s" onClick={() => toast.warning(t("ui.kit.memoryLow"))}>{t("ui.kit.warning")}</Button>
+      <Button size="s" onClick={() => toast(t("ui.kit.playedToast", { time: "1:24" }))}>{t("ui.kit.noIcon")}</Button>
     </div>
   );
 }
 
 function Toolbars() {
+  const { t } = useI18n();
   const [picking, setPicking] = useState(false);
   const [q, setQ] = useState("");
   return (
     <>
       <Toolbar search="m" wrapBelow={1096}>
-        <SearchField value={q} onChange={setQ} placeholder="Instanzen durchsuchen" />
-        <Button variant="ghost" icon="list">Sortieren</Button>
+        <SearchField value={q} onChange={setQ} placeholder={t("ui.kit.searchInstances")} />
+        <Button variant="ghost" icon="list">{t("ui.kit.sort")}</Button>
         <Spacer />
-        <Button variant="primary" icon="plus">Neue Instanz</Button>
+        <Button variant="primary" icon="plus">{t("ui.kit.newInstance")}</Button>
       </Toolbar>
       <Toolbar
         height={56}
@@ -121,100 +116,109 @@ function Toolbars() {
         altActive={picking}
         alt={
           <>
-            <b style={{ minWidth: "12ch" }}>3 gewählt</b>
-            <Button size="s" icon="up">Aktualisieren</Button>
-            <Button size="s" variant="ghost" tone="bad" icon="trash">Entfernen</Button>
+            <b style={{ minWidth: "12ch" }}>{t("ui.kit.selectedCount", { n: 3 })}</b>
+            <Button size="s" icon="up">{t("common.refresh")}</Button>
+            <Button size="s" variant="ghost" tone="bad" icon="trash">{t("common.remove")}</Button>
             <Spacer />
-            <Button size="s" variant="ghost" onClick={() => setPicking(false)}>Fertig</Button>
+            <Button size="s" variant="ghost" onClick={() => setPicking(false)}>{t("common.done")}</Button>
           </>
         }
       >
-        <SearchField value="" onChange={() => undefined} placeholder="Mods durchsuchen" size="s" />
+        <SearchField value="" onChange={() => undefined} placeholder={t("ui.kit.searchMods")} size="s" />
         <Spacer />
-        <Button size="s" onClick={() => setPicking(true)}>Auswählen</Button>
+        <Button size="s" onClick={() => setPicking(true)}>{t("ui.kit.select")}</Button>
       </Toolbar>
     </>
   );
 }
 
 export function OverlaySection() {
+  const { t } = useI18n();
+  const ITEMS: MenuEntry[] = [
+    { label: t("common.instance") },
+    { id: "play", text: t("common.play"), icon: "play", onSelect: () => undefined },
+    { id: "dir", text: t("ui.menu.openFolder"), icon: "folder", onSelect: () => undefined },
+    { id: "log", text: t("ui.kit.tabLog"), icon: "term", disabled: true, onSelect: () => undefined },
+    { id: "acc", text: "Steve_42", sub: t("ui.kit.offlineName"), lead: <Icon name="user" size="l" tone="muted" />, checked: true, onSelect: () => undefined },
+    "-",
+    { id: "del", text: t("common.delete"), icon: "trash", bad: true, onSelect: () => undefined },
+  ];
   return (
     <>
-      <Sec title="Tooltip, Trunc" id="tip">
+      <Sec title={t("ui.kit.secTooltip")} id="tip">
         <div style={row}>
-          <Tip label="Einfacher Tooltip"><Button variant="ghost">Hover</Button></Tip>
-          <Tip label={<><div className="tn">Survival 1.21</div><div className="tv">Fabric · 42 Mods</div><div className="tu">2 Updates</div><div className="td">Zuletzt gespielt vor 2 Std.</div></>} describe>
-            <Button variant="ghost" icon="info">Reich</Button>
+          <Tip label={t("ui.kit.simpleTip")}><Button variant="ghost">Hover</Button></Tip>
+          <Tip label={<><div className="tn">Survival 1.21</div><div className="tv">Fabric · 42 Mods</div><div className="tu">2 Updates</div><div className="td">{t("ui.kit.lastPlayedAgo", { n: 2 })}</div></>} describe>
+            <Button variant="ghost" icon="info">{t("ui.kit.richTip")}</Button>
           </Tip>
-          <IconButton icon="gear" label="Einstellungen" />
+          <IconButton icon="gear" label={t("common.settings")} />
           <button type="button" className="fx" style={{ width: 140, padding: "6px 8px", background: "var(--panel)" }}>
-            <Trunc text="Ein sehr langer Instanzname, der abgeschnitten wird" style={{ display: "block" }} />
+            <Trunc text={t("ui.kit.longName")} style={{ display: "block" }} />
           </button>
         </div>
       </Sec>
 
-      <Sec title="Menü, Kontextmenü, Popover" id="menu">
+      <Sec title={t("ui.kit.secMenu")} id="menu">
         <div style={{ ...row, alignItems: "flex-start" }}>
           <MenuStates />
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <Menu items={ITEMS} align="start" trigger={<IconButton icon="more" label="Weitere Aktionen" variant="secondary" />} />
+            <Menu items={ITEMS} align="start" trigger={<IconButton icon="more" label={t("ui.kit.moreActions")} variant="secondary" />} />
             <ContextMenu items={ITEMS}>
-              <div tabIndex={0} className="fx" style={{ width: 220, height: 64, display: "grid", placeItems: "center", background: "var(--panel)", ...cap }}>Rechtsklick hier</div>
+              <div tabIndex={0} className="fx" style={{ width: 220, height: 64, display: "grid", placeItems: "center", background: "var(--panel)", ...cap }}>{t("ui.kit.rightClickHere")}</div>
             </ContextMenu>
-            <Popover label="Aufgaben" tip="Aufgaben" width={400} trigger={<IconButton icon="tasks" label="Aufgaben" tip={false} />}>
+            <Popover label={t("ui.tasks.title")} tip={t("ui.tasks.title")} width={400} trigger={<IconButton icon="tasks" label={t("ui.tasks.title")} tip={false} />}>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <SectionHeader title="Aufgaben" size="card" actions={<Button variant="ghost" size="s">Fertige entfernen</Button>} />
-                <JobProgress label="Survival wird installiert" sub="Bibliotheken laden" p={0.42} onCancel={() => undefined} />
-                <JobProgress label="Inhalte laden" sub="Wird geprüft" p={null} />
+                <SectionHeader title={t("ui.tasks.title")} size="card" actions={<Button variant="ghost" size="s">{t("ui.tasks.clearDone")}</Button>} />
+                <JobProgress label={t("ui.tasks.installing", { name: "Survival" })} sub={t("ui.kit.loadingLibs")} p={0.42} onCancel={() => undefined} />
+                <JobProgress label={t("ui.tasks.loadingContents")} sub={t("ui.kit.checking")} p={null} />
               </div>
             </Popover>
           </div>
         </div>
       </Sec>
 
-      <Sec title="Dialog, Rückfrage, Seitenpanel, Toasts" id="dlg">
+      <Sec title={t("ui.kit.secDialog")} id="dlg">
         <Dialogs />
         <Toasts />
       </Sec>
 
-      <Sec title="Statusplatte, Fehler" id="status">
-        <StatusPanel tone="bad" icon="warn" title="Survival ist abgestürzt" actions={<Button size="s" icon="term">Protokoll</Button>}>Code 1 · Absturzbericht liegt im Ordner crash-reports</StatusPanel>
-        <StatusPanel tone="warn" title="Speicher knapp">Mehr als 8 GB lassen dem System zu wenig übrig.</StatusPanel>
-        <StatusPanel tone="run" size="s" title="Läuft">seit 12:04 · 1.824 Zeilen</StatusPanel>
-        <StatusPanel size="s" icon="info" title="Kein Protokoll">Starte die Instanz, um hier etwas zu sehen.</StatusPanel>
-        <StatusPanel tone="bad" icon="trash" title="Instanz löschen" actions={<Button variant="danger" size="s">Löschen</Button>}>Entfernt Welten, Mods und Einstellungen.</StatusPanel>
-        <ErrorBox title="Modrinth ist gerade nicht erreichbar" error={new Error("fetch failed: 503")} onRetry={() => undefined} />
+      <Sec title={t("ui.kit.secStatus")} id="status">
+        <StatusPanel tone="bad" icon="warn" title={t("ui.kit.crashedToast", { name: "Survival" })} actions={<Button size="s" icon="term">{t("ui.kit.tabLog")}</Button>}>{t("ui.kit.crashLine")}</StatusPanel>
+        <StatusPanel tone="warn" title={t("ui.kit.memoryLow")}>{t("ui.kit.memoryLowDetail")}</StatusPanel>
+        <StatusPanel tone="run" size="s" title={t("ui.kit.running")}>{t("ui.kit.runningSince", { time: "12:04", lines: "1.824" })}</StatusPanel>
+        <StatusPanel size="s" icon="info" title={t("ui.kit.noLog")}>{t("ui.kit.noLogHint")}</StatusPanel>
+        <StatusPanel tone="bad" icon="trash" title={t("ui.kit.deleteInstance")} actions={<Button variant="danger" size="s">{t("common.delete")}</Button>}>{t("ui.kit.deleteInstanceText")}</StatusPanel>
+        <ErrorBox title={t("ui.kit.modrinthDown")} error={new Error("fetch failed: 503")} onRetry={() => undefined} />
       </Sec>
 
-      <Sec title="Fortschritt, Vorgang, Laden" id="prog">
+      <Sec title={t("ui.kit.secProgress")} id="prog">
         <div style={{ display: "grid", gridTemplateColumns: "110px 240px 240px", gap: "12px 16px", alignItems: "center" }}>
-          <span style={cap}>normal</span><Progress p={0.37} /><Progress p={null} label="Lädt" />
+          <span style={cap}>normal</span><Progress p={0.37} /><Progress p={null} label={t("ui.kit.loading")} />
           <span style={cap}>thin</span><Progress thin p={0.62} /><Progress thin tone="bad" p={0.8} />
-          <span style={cap}>Job 112</span><JobProgress label="Lädt" p={0.3} width={112} /><JobProgress label="Wird geprüft" p={null} width={120} onCancel={() => undefined} />
-          <span style={cap}>Job 230</span><div style={{ gridColumn: "span 2" }}><JobProgress label="Modpack wird installiert" p={0.55} width={230} onCancel={() => undefined} /></div>
+          <span style={cap}>Job 112</span><JobProgress label={t("ui.kit.loading")} p={0.3} width={112} /><JobProgress label={t("ui.kit.checking")} p={null} width={120} onCancel={() => undefined} />
+          <span style={cap}>Job 230</span><div style={{ gridColumn: "span 2" }}><JobProgress label={t("ui.tasks.installing", { name: t("ui.kit.wayModpack") })} p={0.55} width={230} onCancel={() => undefined} /></div>
           <span style={cap}>Skel</span><Skel h={40} /><Skel w={160} h={16} />
         </div>
       </Sec>
 
-      <Sec title="Leerzustand" id="empty">
+      <Sec title={t("ui.kit.secEmpty")} id="empty">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 }}>
-          <div className="plate"><Empty size="page" ill="box" title="Noch keine Instanz" actions={<Button variant="primary" icon="plus">Neue Instanz</Button>}>Leg eine an oder zieh eine Datei hierher.</Empty></div>
-          <div className="plate"><Empty ill="search" title="Nichts gefunden">Andere Suchbegriffe probieren.</Empty></div>
-          <div className="plate"><Empty size="pane" ill="file" title="Nur in der App" /></div>
+          <div className="plate"><Empty size="page" ill="box" title={t("ui.kit.noInstances")} actions={<Button variant="primary" icon="plus">{t("ui.kit.newInstance")}</Button>}>{t("ui.kit.noInstancesBody")}</Empty></div>
+          <div className="plate"><Empty ill="search" title={t("ui.kit.nothingFound")}>{t("ui.kit.tryOtherTerms")}</Empty></div>
+          <div className="plate"><Empty size="pane" ill="file" title={t("ui.kit.appOnly")} /></div>
         </div>
       </Sec>
 
-      <Sec title="Seitengerüst" id="layout">
-        <PageHeader title="Bibliothek" count={12}><Button variant="primary" icon="plus">Neue Instanz</Button></PageHeader>
+      <Sec title={t("ui.kit.secLayout")} id="layout">
+        <PageHeader title={t("ui.nav.library")} count={12}><Button variant="primary" icon="plus">{t("ui.kit.newInstance")}</Button></PageHeader>
         <Toolbars />
-        <SectionHeader title="Weiterspielen" actions={<Button variant="ghost" size="s" iconEnd="chev" bleed="end">Alle</Button>} />
-        <SectionHeader title="Unterabschnitt" size="sub" as="h3" />
-        <SectionHeader title="Karte" size="card" as="h3" actions={<IconButton icon="more" size="s" label="Mehr" />} />
+        <SectionHeader title={t("ui.kit.continue")} actions={<Button variant="ghost" size="s" iconEnd="chev" bleed="end">{t("ui.kit.all")}</Button>} />
+        <SectionHeader title={t("ui.kit.subsection")} size="sub" as="h3" />
         <div style={row}>
           {(["page", "dialog", "section", "sub", "card"] as const).map((l) => <Heading key={l} level={l} as="h3">{l}</Heading>)}
         </div>
-        <Actions align="between"><Button variant="ghost">Links</Button><Actions><Button>Abbrechen</Button><Button variant="primary">Speichern</Button></Actions></Actions>
-        <Actions align="end" gap={4}><IconButton icon="list" label="Liste" /><IconButton icon="grid" label="Raster" /></Actions>
+        <Actions align="between"><Button variant="ghost">{t("ui.kit.left")}</Button><Actions><Button>{t("common.cancel")}</Button><Button variant="primary">{t("common.save")}</Button></Actions></Actions>
+        <Actions align="end" gap={4}><IconButton icon="list" label={t("ui.kit.viewList")} /><IconButton icon="grid" label={t("ui.kit.grid")} /></Actions>
       </Sec>
     </>
   );

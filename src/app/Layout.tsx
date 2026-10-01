@@ -9,7 +9,7 @@ import { useUpdateCheckOnStart } from "@/hooks/useAppUpdate";
 import { useCancelInstall, useGameEvents, useInstances } from "@/hooks/useInstances";
 import { cancelContent } from "@/hooks/useContent";
 import { useOnline } from "@/hooks/useOnline";
-import { LanguageProvider } from "@/i18n";
+import { LanguageProvider, useI18n } from "@/i18n";
 import { useRunningTasks } from "@/hooks/useRunningTasks";
 import { api } from "@/lib/api";
 import { progressLabel, progressShare } from "@/lib/modrinth";
@@ -29,12 +29,13 @@ import type { IconName } from "@/ui/types";
 const ViewContext = createContext<RefObject<HTMLElement | null>>({ current: null });
 export const useView = () => useContext(ViewContext);
 
-type Section = { to: string; label: string; icon: IconName; match: (pathname: string) => boolean; shortcut: string };
+type Section = { to: string; key: string; icon: IconName; match: (pathname: string) => boolean; shortcut: string };
 
+// Hauptbereiche; `key` ist der Wörterbuchschlüssel, die Beschriftung entsteht erst beim Rendern.
 const TABS: Section[] = [
-  { to: "/", label: "Start", icon: "home", match: (p) => p === "/", shortcut: "Control+1" },
-  { to: "/instances", label: "Bibliothek", icon: "box", match: (p) => p.startsWith("/instances"), shortcut: "Control+2" },
-  { to: "/discover", label: "Entdecken", icon: "search", match: (p) => p.startsWith("/discover"), shortcut: "Control+3" },
+  { to: "/", key: "ui.nav.home", icon: "home", match: (p) => p === "/", shortcut: "Control+1" },
+  { to: "/instances", key: "ui.nav.library", icon: "box", match: (p) => p.startsWith("/instances"), shortcut: "Control+2" },
+  { to: "/discover", key: "ui.nav.discover", icon: "search", match: (p) => p.startsWith("/discover"), shortcut: "Control+3" },
 ];
 
 /** Offener Dialog (auch Rückfrage); Popover und Menüs zählen nicht. */
@@ -87,17 +88,18 @@ const APP = "Pumpkin Launcher";
 
 /** Fenstertitel je Bereich; bei einer Instanz ihr Name. */
 function usePageTitle(pathname: string) {
+  const { t } = useI18n();
   const { data: instances } = useInstances();
   const id = pathname.match(/^\/instances\/([^/]+)/)?.[1];
   const name = id ? instances?.find((i) => i.id === decodeURIComponent(id))?.name : undefined;
   const page =
-    pathname === "/" ? "Start"
-    : id ? (name ?? "Bibliothek")
-    : pathname.startsWith("/instances") ? "Bibliothek"
-    : pathname.startsWith("/discover") ? "Entdecken"
-    : pathname.startsWith("/settings") ? "Einstellungen"
-    : pathname.startsWith("/skins") ? "Skins"
-    : "Seite nicht gefunden";
+    pathname === "/" ? t("ui.nav.home")
+    : id ? (name ?? t("ui.nav.library"))
+    : pathname.startsWith("/instances") ? t("ui.nav.library")
+    : pathname.startsWith("/discover") ? t("ui.nav.discover")
+    : pathname.startsWith("/settings") ? t("common.settings")
+    : pathname.startsWith("/skins") ? t("ui.nav.skins")
+    : t("ui.pageTitle.notFound");
   useEffect(() => {
     document.title = `${page} · ${APP}`;
     if (!api.isMock) void getCurrentWindow().setTitle(document.title).catch(console.error);
@@ -178,14 +180,15 @@ type LiveTask = { id: string; label: string; sub: string; p: number | null; canc
 
 /** Zeilen der laufenden Aufgaben, mit „Abbrechen“, wo das Backend es kann. */
 function useLiveTasks(): LiveTask[] {
+  const { t } = useI18n();
   const { installs, content } = useRunningTasks();
   const cancelInstall = useCancelInstall();
   const { data: instances } = useInstances();
-  const name = (id: string) => instances?.find((i) => i.id === id)?.name ?? "Instanz";
+  const name = (id: string) => instances?.find((i) => i.id === id)?.name ?? t("common.instance");
   const loader = (id: string) => instances?.find((i) => i.id === id)?.loader ?? "vanilla";
   const live = Object.values(installs ?? {}).map((p): LiveTask => ({
     id: `i-${p.instanceId}`,
-    label: `${name(p.instanceId)} wird installiert`,
+    label: t("ui.tasks.installing", { name: name(p.instanceId) }),
     sub: installStepLabel(p.step, loader(p.instanceId)),
     p: p.total > 0 ? p.done / p.total : null,
     cancel: () => cancelInstall.mutate(p.instanceId),
@@ -193,7 +196,7 @@ function useLiveTasks(): LiveTask[] {
   if (content)
     live.push({
       id: `c-${content.active}`,
-      label: content.label ?? "Inhalte laden",
+      label: content.label ?? t("ui.tasks.loadingContents"),
       sub: progressLabel(content.progress),
       p: progressShare(content.progress),
       cancel: content.cancellable ? cancelContent : undefined,
@@ -202,6 +205,7 @@ function useLiveTasks(): LiveTask[] {
 }
 
 function TasksButton() {
+  const { t } = useI18n();
   const live = useLiveTasks();
   const history = useTasks((s) => s.history);
   const clear = useTasks((s) => s.clear);
@@ -210,44 +214,45 @@ function TasksButton() {
   const known = live.filter((t) => t.p != null);
   const avg = known.length ? known.reduce((s, t) => s + (t.p ?? 0), 0) / known.length : null;
   const busy = live.length > 0;
+  const runningAria = t(live.length === 1 ? "ui.tasks.ariaRunning.one" : "ui.tasks.ariaRunning.other", { count: live.length });
 
   return (
     <Popover
       open={open}
       onOpenChange={setOpen}
-      label="Aufgaben"
-      tip="Aufgaben"
+      label={t("ui.tasks.title")}
+      tip={t("ui.tasks.title")}
       width={400}
       side="right"
       trigger={
         // Feste Glyphe; Zähler und Mini-Balken liegen daneben bzw. darunter, nie darauf
-        <BarButton side activity={{ count: live.length, p: avg }} aria-label={busy ? `Aufgaben, ${live.length} ${live.length === 1 ? "läuft" : "laufen"}` : "Aufgaben"}>
+        <BarButton side activity={{ count: live.length, p: avg }} aria-label={busy ? runningAria : t("ui.tasks.title")}>
           <Icon name="tasks" />
         </BarButton>
       }
     >
       {/* Ohne Fertige kein Knopf; der Kopf bleibt 32 px hoch */}
-      <SectionHeader title="Aufgaben" as="h2" size="card" actions={history.length > 0 && <Button variant="ghost" size="s" bleed="end" onClick={clear}>Fertige entfernen</Button>} />
+      <SectionHeader title={t("ui.tasks.title")} as="h2" size="card" actions={history.length > 0 && <Button variant="ghost" size="s" bleed="end" onClick={clear}>{t("ui.tasks.clearDone")}</Button>} />
       {live.length || history.length ? (
-        <List variant="tasks" divided aria-label="Aufgaben">
-          {live.map((t) => (
-            <ListRow key={t.id}>
+        <List variant="tasks" divided aria-label={t("ui.tasks.title")}>
+          {live.map((job) => (
+            <ListRow key={job.id}>
               <Icon name="dl" tone="acc" />
-              <JobProgress label={t.label} sub={t.sub} p={t.p} onCancel={t.cancel} cancelLabel={`${t.label} abbrechen`} />
+              <JobProgress label={job.label} sub={job.sub} p={job.p} onCancel={job.cancel} cancelLabel={t("ui.job.cancelAria", { label: job.label })} />
             </ListRow>
           ))}
-          {history.map((t) => (
-            <ListRow key={t.id}>
-              <Icon name={t.state === "done" ? "check" : "warn"} tone={t.state === "done" ? "run" : "bad"} />
-              <RowTitle title={t.label} sub={t.sub} />
+          {history.map((done) => (
+            <ListRow key={done.id}>
+              <Icon name={done.state === "done" ? "check" : "warn"} tone={done.state === "done" ? "run" : "bad"} />
+              <RowTitle title={done.label} sub={done.sub} />
               <Cell align="end" flex>
-                {t.to && <Button size="s" onClick={() => { setOpen(false); navigate(t.to!); }}>Öffnen</Button>}
+                {done.to && <Button size="s" onClick={() => { setOpen(false); navigate(done.to!); }}>{t("common.open")}</Button>}
               </Cell>
             </ListRow>
           ))}
         </List>
       ) : (
-        <Empty size="pane" ill="tasks" title="Keine Aufgaben">Downloads und Installationen erscheinen hier.</Empty>
+        <Empty size="pane" ill="tasks" title={t("ui.tasks.emptyTitle")}>{t("ui.tasks.emptyBody")}</Empty>
       )}
     </Popover>
   );
@@ -255,22 +260,24 @@ function TasksButton() {
 
 /** Fensterknöpfe des rahmenlosen Fensters (nur in der App, im Browser nicht nötig). Sonderform: volle Leistenhöhe, bündig am Rand. */
 function WindowButtons() {
+  const { t } = useI18n();
   if (api.isMock) return null;
   const win = getCurrentWindow();
   return (
     <div className="win">
-      <button type="button" className="winbtn" aria-label="Minimieren" onClick={() => void win.minimize()}><Icon name="wmin" size="s" /></button>
-      <button type="button" className="winbtn" aria-label="Maximieren" onClick={() => void win.toggleMaximize()}><Icon name="wmax" size="s" /></button>
-      <button type="button" className="winbtn close" aria-label="Schließen" onClick={() => void win.close()}><Icon name="x" size="s" /></button>
+      <button type="button" className="winbtn" aria-label={t("ui.window.minimize")} onClick={() => void win.minimize()}><Icon name="wmin" size="s" /></button>
+      <button type="button" className="winbtn" aria-label={t("ui.window.maximize")} onClick={() => void win.toggleMaximize()}><Icon name="wmax" size="s" /></button>
+      <button type="button" className="winbtn close" aria-label={t("common.close")} onClick={() => void win.close()}><Icon name="x" size="s" /></button>
     </div>
   );
 }
 
 /** Fensterleiste: Marke links, Konto und Fensterknöpfe rechts; die Bereiche liegen in der Seitenleiste. */
 function TitleBar({ online }: { online: boolean }) {
+  const { t } = useI18n();
   return (
     <header className="bar" data-tauri-drag-region>
-      <Link to="/" className="wm fx" aria-label="Pumpkin Launcher, zum Start">
+      <Link to="/" className="wm fx" aria-label={t("ui.titlebar.homeAria")}>
         <BrandMark />
         <BrandWordmark />
       </Link>
@@ -280,7 +287,7 @@ function TitleBar({ online }: { online: boolean }) {
         <span className="pointer-events-none absolute top-1/2 right-[calc(100%+8px)] flex -translate-y-1/2" role="status">
           {!online && (
             <Chip tone="warn" icon="plug">
-              Offline<span className="sr">: keine Internetverbindung, Katalog und Downloads sind nicht verfügbar</span>
+              {t("ui.offline.label")}<span className="sr">{t("ui.offline.detail")}</span>
             </Chip>
           )}
         </span>
@@ -296,22 +303,23 @@ function TitleBar({ online }: { online: boolean }) {
  * unten Aufgaben und Einstellungen. Der Name steht im Tooltip und als aria-label.
  */
 function Sidebar() {
+  const { t } = useI18n();
   const { pathname } = useLocation();
   return (
-    <nav className="side" aria-label="Hauptbereiche">
+    <nav className="side" aria-label={t("ui.nav.mainAreas")}>
       <div className="side-grp">
-        {TABS.map((t) => (
-          <Tip key={t.to} label={t.label} side="right">
-            <BarButton side to={t.to} aria-label={t.label} aria-keyshortcuts={t.shortcut} current={t.match(pathname)}>
-              <Icon name={t.icon} />
+        {TABS.map((tab) => (
+          <Tip key={tab.to} label={t(tab.key)} side="right">
+            <BarButton side to={tab.to} aria-label={t(tab.key)} aria-keyshortcuts={tab.shortcut} current={tab.match(pathname)}>
+              <Icon name={tab.icon} />
             </BarButton>
           </Tip>
         ))}
       </div>
       <div className="side-grp">
         <TasksButton />
-        <Tip label="Einstellungen" side="right">
-          <BarButton side to="/settings" aria-label="Einstellungen" aria-keyshortcuts="Control+," current={pathname.startsWith("/settings")}>
+        <Tip label={t("common.settings")} side="right">
+          <BarButton side to="/settings" aria-label={t("common.settings")} aria-keyshortcuts="Control+," current={pathname.startsWith("/settings")}>
             <Icon name="gear" />
           </BarButton>
         </Tip>

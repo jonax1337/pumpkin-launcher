@@ -1,5 +1,6 @@
 import { useCallback, useRef, type ComponentProps, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useLocation } from "react-router";
+import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { Tip } from "./Overlay";
 import { Icon } from "./Icon";
@@ -179,13 +180,14 @@ export type NavTab = {
 /**
  * Hauptbereiche als normale Links (Seiten, keine Tabs): gleiche Optik wie Tabs, aktueller Bereich mit aria-current="page".
  */
-export function NavTabs({ items, label = "Hauptbereiche", className }: { items: NavTab[]; label?: string; className?: string }) {
+export function NavTabs({ items, label, className }: { items: NavTab[]; label?: string; className?: string }) {
+  const { t } = useI18n();
   const { pathname } = useLocation();
   return (
-    <nav className={cn("vx-navtabs", className)} aria-label={label}>
-      {items.map((t) => (
-        <Link key={t.to} to={t.to} className="vx-tab fx" data-size="m" aria-current={t.match(pathname) ? "page" : undefined} aria-keyshortcuts={t.shortcut}>
-          <span className="vx-tc">{t.label}</span>
+    <nav className={cn("vx-navtabs", className)} aria-label={label ?? t("ui.nav.mainAreas")}>
+      {items.map((tab) => (
+        <Link key={tab.to} to={tab.to} className="vx-tab fx" data-size="m" aria-current={tab.match(pathname) ? "page" : undefined} aria-keyshortcuts={tab.shortcut}>
+          <span className="vx-tc">{tab.label}</span>
           <i className="vx-tab-tick" aria-hidden />
         </Link>
       ))}

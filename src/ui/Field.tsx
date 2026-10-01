@@ -1,5 +1,6 @@
 import { createContext, useContext, useId, type ComponentProps, type CSSProperties, type ReactNode } from "react";
 import { Select as S } from "radix-ui";
+import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { Icon } from "./Icon";
 import { IconButton } from "./Button";
@@ -78,6 +79,7 @@ export function FormRow({ label, hint, htmlFor, group, aside, wide, children }: 
 export function Field({ label, htmlFor, help, error, optional, reserveLines, group, className, children }: {
   label: ReactNode; htmlFor?: string; help?: ReactNode; error?: ReactNode; optional?: boolean; reserveLines?: 1 | 2; group?: boolean; className?: string; children: ReactNode;
 }) {
+  const { t } = useI18n();
   const uid = useId();
   const id = htmlFor ?? `${uid}-i`;
   const bad = error != null && error !== false && error !== "";
@@ -86,7 +88,7 @@ export function Field({ label, htmlFor, help, error, optional, reserveLines, gro
   const lab = (
     <>
       {label}
-      {optional && <span className="vx-opt"> (optional)</span>}
+      {optional && <span className="vx-opt"> {t("ui.field.optional")}</span>}
     </>
   );
   return (
@@ -158,6 +160,7 @@ export function TextArea({ width, className, style, id, "aria-describedby": desc
 export function SearchField({ value, onChange, placeholder, size = "m", width, autoFocus, label, id, className }: {
   value: string; onChange: (v: string) => void; placeholder: string; autoFocus?: boolean; label?: string; id?: string; className?: string;
 } & FieldLook) {
+  const { t } = useI18n();
   const f = useFieldProps(id);
   return (
     <label className={cn("vx-input", className)} data-size={size} data-lead="" data-w={widthData(width)} data-has={value ? "" : undefined} style={widthStyle(width)}>
@@ -174,7 +177,7 @@ export function SearchField({ value, onChange, placeholder, size = "m", width, a
         onKeyDown={(e) => e.key === "Escape" && value && (e.stopPropagation(), onChange(""))}
         {...f}
       />
-      <IconButton icon="x" label="Suche leeren" tip={false} size="s" className="vx-clear" tabIndex={-1} onClick={() => onChange("")} />
+      <IconButton icon="x" label={t("ui.search.clearAria")} tip={false} size="s" className="vx-clear" tabIndex={-1} onClick={() => onChange("")} />
     </label>
   );
 }
@@ -186,10 +189,12 @@ export type Option = { value: string; label: string; disabled?: boolean };
  * Die Breite richtet sich nach der längsten Option (bis 40 Optionen), damit beim Wechseln nichts springt.
  * `label`: sichtbares Präfix im Knopf („Sortieren: …“) und Name; sonst `ariaLabel` oder ein Field/FormRow darum.
  */
-export function Select({ value, onChange, options, label, size = "m", className, id, ariaLabel, disabled, placeholder = "Keine Auswahl" }: {
+export function Select({ value, onChange, options, label, size = "m", className, id, ariaLabel, disabled, placeholder }: {
   value: string; onChange: (v: string) => void; options: Option[]; label?: string; size?: "s" | "m"; className?: string; id?: string; ariaLabel?: string; disabled?: boolean; placeholder?: string;
 }) {
+  const { t } = useI18n();
   const f = useFieldProps(id);
+  const none = placeholder ?? t("ui.select.placeholder");
   // Radix erlaubt keine leeren Werte: „“ gilt als „nichts gewählt“.
   const items = options.filter((o) => o.value !== "");
   return (
@@ -198,7 +203,7 @@ export function Select({ value, onChange, options, label, size = "m", className,
       <S.Trigger className={cn("vx-select fx", className)} data-size={size} aria-label={ariaLabel ?? label} {...f}>
         {label && <span className="vx-sel-lab">{label}</span>}
         <span className="vx-sel-val">
-          <S.Value placeholder={placeholder} />
+          <S.Value placeholder={none} />
           {items.length <= 40 && items.map((o) => <span key={o.value} className="vx-sel-sizer" aria-hidden>{o.label}</span>)}
         </span>
         <S.Icon asChild>

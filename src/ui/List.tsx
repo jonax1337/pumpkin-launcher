@@ -1,5 +1,6 @@
 import { createContext, useContext, useId, type ComponentProps, type CSSProperties, type ReactNode } from "react";
 import { ContextMenu, Trunc, type MenuEntry } from "./Overlay";
+import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { Button } from "./Button";
 import { HitEl, type Hit } from "./Hit";
@@ -121,6 +122,7 @@ export function Cell({ hide, align, flex, className, children, ...props }: { hid
  * Ohne `onUndo` (Teil einer Gruppe, deren Knopf an der Hauptzeile steht) nur der Text.
  */
 export function GhostRow({ variant, text, media, undoId, onUndo }: { variant: "content" | "tile"; text: string; media?: ReactNode; undoId?: string; onUndo?: () => void }) {
+  const { t } = useI18n();
   const tid = useId();
   return (
     <div role="listitem" className="vx-row" data-ghost={variant}>
@@ -128,7 +130,7 @@ export function GhostRow({ variant, text, media, undoId, onUndo }: { variant: "c
       {variant === "content" && <span className="vx-ghost-m">{media}</span>}
       <b className="vx-ghost-t ell" id={tid}>{text}</b>
       {onUndo ? (
-        <Button size="s" icon="redo" data-undo={undoId} aria-describedby={tid} onClick={onUndo}>Rückgängig</Button>
+        <Button size="s" icon="redo" data-undo={undoId} aria-describedby={tid} onClick={onUndo}>{t("ui.list.undo")}</Button>
       ) : (
         <span />
       )}
