@@ -1,4 +1,3 @@
-import { open as openFolder } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { Button, Chip, Choice, Empty, ErrorBox, Field, Glyph, JobProgress, Skel } from "@/ui";
 import { useContentState } from "@/hooks/useContent";
@@ -13,7 +12,7 @@ export function ImportPane({ selection, busy }: { selection: ForeignSelection; b
   const { active, target, progress } = useContentState();
 
   async function chooseFolder() {
-    const folder = await openFolder({ directory: true, multiple: false, title: "Ordner des Launchers oder einer Instanz" });
+    const [folder] = await api.pickPaths({ directory: true, title: "Ordner des Launchers oder einer Instanz" });
     if (folder) await selection.addFolder(folder).catch((e: Error) => toast.error("Der Ordner ließ sich nicht durchsuchen", { description: e.message }));
   }
 

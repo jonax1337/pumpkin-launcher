@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Slot } from "radix-ui";
-import { open as openFile } from "@tauri-apps/plugin-dialog";
 import {
   Actions, Button, Checkbox, Choice, ConfirmDialog, Count, Dialog, DialogActions, Disclosure, Empty, ErrorBox, Field, Glyph, Hint, Icon, IconButton, Panel,
   ProjectIcon, RowTitle, SearchField, Segmented, Select, Skel, TabPanel, Tabs, TextField, type IconName,
@@ -190,7 +189,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
   useEffect(() => onBusy(busy), [busy, onBusy]);
 
   async function chooseFile() {
-    const picked = await openFile({ multiple: false, directory: false, filters: [{ name: "Modpack", extensions: ["mrpack"] }] });
+    const [picked] = await api.pickPaths({ filters: [{ name: "Modpack", extensions: ["mrpack"] }] });
     if (picked) setPath(picked);
   }
 

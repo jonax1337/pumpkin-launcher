@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { open as openFile } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import {
   Actions, Button, Cell, Chip, ConfirmDialog, Dialog, DialogActions, Empty, Glyph, Hint, IconButton, JobProgress, List, ListRow, Menu, ProjectIcon,
@@ -141,8 +140,8 @@ function DatapacksDialog({ instance, world, busy, onSearch, onClose }: { instanc
   }
 
   async function pick() {
-    const picked = await openFile({ multiple: true, directory: false, filters: [{ name: "Datenpakete", extensions: ["zip"] }] });
-    if (picked) take(picked);
+    const picked = await api.pickPaths({ multiple: true, filters: [{ name: "Datenpakete", extensions: ["zip"] }] });
+    if (picked.length) take(picked);
   }
 
   return (

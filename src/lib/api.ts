@@ -1,5 +1,6 @@
 import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { open as openDialog, type OpenDialogOptions } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type Update } from "@tauri-apps/plugin-updater";
@@ -410,6 +411,12 @@ export const api = {
   /** Schreibt die Instanz als `.mrpack` nach `path` (absolut); `include` aus `exportEntries`. Abbrechbar wie ein Pack. */
   exportInstance: (instanceId: string, include: string[], path: string, operationId: string): Promise<void> =>
     tauri ? call("instance_export", { instanceId, include, path, operationId }) : onlyInApp("Exportieren"),
+  /** Auswahldialog des Systems (Dateien oder, mit `directory`, Ordner); abgebrochen = leere Liste. Im Browser gibt es keine Pfade. */
+  pickPaths: async (options: OpenDialogOptions): Promise<string[]> => {
+    if (!tauri) return onlyInApp("Dateien auswählen");
+    const picked = await openDialog(options).catch(rethrowAsError);
+    return picked === null ? [] : [picked].flat();
+  },
   /** Datei im Dateimanager markieren (z. B. ein Export). */
   revealPath: (path: string): Promise<void> =>
     tauri

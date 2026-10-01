@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { open as openFile } from "@tauri-apps/plugin-dialog";
 import { QueryList } from "@/components/QueryList";
 import { startMsLogin } from "@/components/PlayerNames";
 import {
@@ -116,8 +115,8 @@ function Library({ accountId }: { accountId: string | null }) {
   const [removing, setRemoving] = useState<LibrarySkin | null>(null);
 
   async function pickFile() {
-    const path = await openFile({ multiple: false, directory: false, filters: [{ name: "Skin", extensions: ["png"] }] });
-    if (typeof path === "string") add.mutate(path);
+    const [path] = await api.pickPaths({ filters: [{ name: "Skin", extensions: ["png"] }] });
+    if (path) add.mutate(path);
   }
 
   return (

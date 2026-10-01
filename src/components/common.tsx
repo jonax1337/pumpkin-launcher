@@ -1,5 +1,4 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { open as openFile } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { useMemory } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
@@ -83,8 +82,8 @@ export function JavaChooser({ name, value, onChange, fallback, disabled }: { nam
   }
   async function browse() {
     const { extensions } = JAVA_PROGRAM;
-    const picked = await openFile({ multiple: false, directory: false, filters: extensions ? [{ name: "Java", extensions }] : undefined });
-    if (typeof picked === "string") commit(picked);
+    const [picked] = await api.pickPaths({ filters: extensions ? [{ name: "Java", extensions }] : undefined });
+    if (picked) commit(picked);
   }
   function chooseDefault() {
     setOwn(false);

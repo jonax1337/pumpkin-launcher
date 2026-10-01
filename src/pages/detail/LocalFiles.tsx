@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { open as openFile } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { Dialog, DialogActions, Field, Segmented } from "@/ui";
 import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
@@ -95,8 +94,8 @@ export function useLocalFiles(instance: Instance, active: boolean) {
   }
 
   async function pick() {
-    const picked = await openFile({ multiple: true, directory: false, filters: [{ name: "Mods, Ressourcenpakete, Shader", extensions: ["jar", "zip"] }] });
-    if (picked) await take(picked);
+    const picked = await api.pickPaths({ multiple: true, filters: [{ name: "Mods, Ressourcenpakete, Shader", extensions: ["jar", "zip"] }] });
+    if (picked.length) await take(picked);
   }
 
   function identify(m: Mod) {
