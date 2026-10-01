@@ -73,6 +73,8 @@ export interface Instance {
   playtimeSecs: number;
   /** Gruppe in der Bibliothek; null = ohne Gruppe. */
   group: string | null;
+  /** Instanzordner im anderen Launcher, aus dem die Instanz importiert wurde. */
+  importedFrom: string | null;
   mods: Mod[];
   createdAt: number;
   lastPlayedAt: number | null;
@@ -117,6 +119,38 @@ export const SOURCE_LABELS: Record<ModSourceType, string> = {
   url: "URL",
   local: "Lokal",
 };
+
+// ---------- Import aus anderen Launchern ----------
+
+export type ForeignLauncher = "prism" | "modrinth" | "curseforge" | "atlauncher";
+
+/** Feste Reihenfolge der Gruppen im Import. */
+export const FOREIGN_LAUNCHERS: ForeignLauncher[] = ["prism", "modrinth", "curseforge", "atlauncher"];
+
+export const FOREIGN_LAUNCHER_LABELS: Record<ForeignLauncher, string> = {
+  prism: "Prism Launcher / MultiMC",
+  modrinth: "Modrinth App",
+  curseforge: "CurseForge App",
+  atlauncher: "ATLauncher",
+};
+
+/** Instanz eines anderen Launchers aus `import_detect`; geht unverändert an `instance_import`. */
+export interface ForeignInstance {
+  launcher: ForeignLauncher;
+  /** Instanzordner im anderen Launcher, eindeutig je Instanz. */
+  path: string;
+  gameDir: string;
+  /** Aus diesem Ordner wurde schon einmal importiert. */
+  imported: boolean;
+  /** Warum Pumpkin Launcher die Instanz nicht starten kann (z. B. Forge vor 1.17); dann gibt es keinen Import. */
+  unsupported: string | null;
+  name: string;
+  minecraftVersion: string;
+  loader: ModLoader;
+  loaderVersion: string | null;
+  memoryMb: number | null;
+  jvmArgs: string[];
+}
 
 // ---------- Installation & Spielstart ----------
 

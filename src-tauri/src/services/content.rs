@@ -14,7 +14,10 @@ use std::{
     fs,
     io::{Cursor, Read, Write},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
 };
 
 pub fn safe_path(value: &str) -> AppResult<PathBuf> {
@@ -725,11 +728,7 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
         modrinth::identifier(v)?;
     }
     // Vor dem Download ablehnen, was Pumpkin Launcher nicht starten kann (z. B. Forge vor 1.17).
-    match loader {
-        ModLoader::Forge => crate::services::forge::check_supported(crate::services::forge::Kind::Forge, &mc)?,
-        ModLoader::NeoForge => crate::services::forge::check_supported(crate::services::forge::Kind::NeoForge, &mc)?,
-        _ => {}
-    }
+    crate::services::forge::check_loader(loader, &mc)?;
     let instance = Instance::from_new(NewInstance {
         name: name.trim().into(),
         minecraft_version: mc,
@@ -871,17 +870,7 @@ pub(crate) async fn import_plan(
         let (known, titles) = identify_or_local(&client, &hashes).await;
         for (kind, file_name, sha1) in content {
             let mut m = entry(kind, file_name, sha1, &known, &titles, &pack.instance.mods);
-            // Von CurseForge bezogen und nicht bei Modrinth erkannt: Herkunft merken statt „lokal“.
-            if m.source == ModSource::Local {
-                if let Some(&(project_id, file_id)) = pack.origins.get(&m.file_name) {
-                    let id = format!("cf-{project_id}");
-                    // Zwei Dateien desselben Projekts behalten verschiedene IDs.
-                    if !pack.instance.mods.iter().any(|x| x.id == id) {
-                        m.id = id;
-                    }
-                    m.source = ModSource::CurseForge { project_id, file_id };
-                }
-            }
+            apply_origin(&mut m, &pack.origins, &pack.instance.mods);
             pack.instance.mods.push(m);
         }
         if pack.required_by.is_empty() {
@@ -1010,35 +999,85 @@ pub async fn adopt_untracked(state: &AppState) -> AppResult<usize> {
     };
     let mut plan = Vec::new();
     for instance in state.instances.list().into_iter().filter(|i| i.mods.is_empty()) {
-        for (kind, name, enabled, path) in untracked(&state.dirs, &instance)? {
-            let sha1 = super::mods::cache_file(&state.dirs, &path)?;
-            plan.push((instance.id.clone(), kind, name, enabled, sha1));
+        let found = cached_untracked(&state.dirs, &instance, &|_, _, _| {}, &AtomicBool::new(false))?;
+        if !found.is_empty() {
+            plan.push((instance.id, found));
         }
     }
     if plan.is_empty() {
         return Ok(0);
     }
-    let mut hashes: Vec<String> = plan.iter().map(|p| p.4.clone()).collect();
+    let mut hashes: Vec<String> = plan.iter().flat_map(|(_, found)| found.iter().map(|f| f.3.clone())).collect();
     hashes.sort();
     hashes.dedup();
     let (known, titles) = identify_or_local(&modrinth::client()?, &hashes).await;
     let mut added = 0;
-    let mut ids: Vec<&String> = plan.iter().map(|p| &p.0).collect();
-    ids.dedup();
-    for id in ids {
-        let Ok(mut instance) = state.instances.get(id) else { continue };
-        let before = instance.mods.len();
-        for (_, kind, name, enabled, sha1) in plan.iter().filter(|p| &p.0 == id) {
-            let m = entry(*kind, name.clone(), sha1.clone(), &known, &titles, &instance.mods);
-            instance.mods.push(Mod { enabled: *enabled, ..m });
-        }
-        if instance.mods.len() > before {
-            added += instance.mods.len() - before;
-            derive_required_by(&mut instance.mods, &known);
-            state.instances.update(instance)?;
-        }
+    for (id, found) in plan {
+        let Ok(mut instance) = state.instances.get(&id) else { continue };
+        added += found.len();
+        record(&mut instance.mods, &found, &known, &titles, &HashMap::new());
+        state.instances.update(instance)?;
     }
     Ok(added)
+}
+
+/// Import aus einem anderen Launcher: trägt die gecachten Inhalte des kopierten Spielordners ein, erkannt per
+/// Modrinth-Sammelabfrage; ohne Netz als lokal, mit `origins` (Dateiname -> CurseForge-Projekt, Datei) als CurseForge.
+pub(crate) async fn record_untracked(mods: &mut Vec<Mod>, found: &[Untracked], origins: &HashMap<String, (u32, u32)>) -> AppResult<()> {
+    let hashes: Vec<String> = found.iter().map(|f| f.3.clone()).collect();
+    let (known, titles) = identify_or_local(&modrinth::client()?, &hashes).await;
+    record(mods, found, &known, &titles, origins);
+    Ok(())
+}
+
+/// Inhalt aus `untracked`, im Mod-Cache abgelegt: (Art, Dateiname, aktiv, SHA-1).
+pub(crate) type Untracked = (ModKind, String, bool, String);
+
+/// `untracked` in den Mod-Cache legen; Fortschritt als Phase `hash` (Dateien). Liest jede Datei ganz, beim Import
+/// deshalb im Kopier-Thread. Ist `stop` gesetzt, endet es vor der nächsten Datei mit `AppError::Cancelled`.
+pub(crate) fn cached_untracked(
+    dirs: &super::Dirs,
+    instance: &Instance,
+    progress: &dyn Fn(&str, u64, u64),
+    stop: &AtomicBool,
+) -> AppResult<Vec<Untracked>> {
+    let files = untracked(dirs, instance)?;
+    let total = files.len() as u64;
+    let mut found = Vec::with_capacity(files.len());
+    for (done, (kind, name, enabled, path)) in (1..).zip(files) {
+        if stop.load(Ordering::SeqCst) {
+            return Err(AppError::Cancelled);
+        }
+        found.push((kind, name, enabled, super::mods::cache_file(dirs, &path)?));
+        progress("hash", done, total);
+    }
+    Ok(found)
+}
+
+fn record(
+    mods: &mut Vec<Mod>,
+    found: &[Untracked],
+    known: &HashMap<String, Version>,
+    titles: &HashMap<String, String>,
+    origins: &HashMap<String, (u32, u32)>,
+) {
+    for (kind, name, enabled, sha1) in found {
+        let mut m = entry(*kind, name.clone(), sha1.clone(), known, titles, mods);
+        apply_origin(&mut m, origins, mods);
+        mods.push(Mod { enabled: *enabled, ..m });
+    }
+    derive_required_by(mods, known);
+}
+
+/// Von CurseForge bezogen und nicht bei Modrinth erkannt: Herkunft merken statt „lokal“.
+fn apply_origin(m: &mut Mod, origins: &HashMap<String, (u32, u32)>, existing: &[Mod]) {
+    let Some(&(project_id, file_id)) = origins.get(&m.file_name).filter(|_| m.source == ModSource::Local) else { return };
+    let id = format!("cf-{project_id}");
+    // Zwei Dateien desselben Projekts behalten verschiedene IDs.
+    if !existing.iter().any(|x| x.id == id) {
+        m.id = id;
+    }
+    m.source = ModSource::CurseForge { project_id, file_id };
 }
 
 pub(crate) fn entry(

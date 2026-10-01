@@ -1,4 +1,4 @@
-import type { Instance, Mod, ModKind, VersionEntry } from "@/lib/types";
+import type { ForeignInstance, Instance, Mod, ModKind, VersionEntry } from "@/lib/types";
 import type { CatalogType, ContentProgress, ContentProject, ContentSearch, ContentVersion, ModUpdate } from "@/lib/modrinth";
 
 const DAY = 86_400_000;
@@ -60,8 +60,8 @@ const byId = (slug: string): Mod => {
 
 /** Was eine neue Instanz wie im Backend (`Instance::from_new`) ohne eigene Werte mitbringt. */
 export const blankInstanceFields = (): Pick<
-  Instance, "modpack" | "memoryMb" | "jvmArgs" | "javaPath" | "window" | "gameArgs" | "playtimeSecs" | "group" | "lastPlayedAt" | "lastQuickPlay"
-> => ({ modpack: null, memoryMb: null, jvmArgs: [], javaPath: null, window: { type: "default" }, gameArgs: [], playtimeSecs: 0, group: null, lastPlayedAt: null, lastQuickPlay: null });
+  Instance, "modpack" | "memoryMb" | "jvmArgs" | "javaPath" | "window" | "gameArgs" | "playtimeSecs" | "group" | "importedFrom" | "lastPlayedAt" | "lastQuickPlay"
+> => ({ modpack: null, memoryMb: null, jvmArgs: [], javaPath: null, window: { type: "default" }, gameArgs: [], playtimeSecs: 0, group: null, importedFrom: null, lastPlayedAt: null, lastQuickPlay: null });
 
 export function initialInstances(): Instance[] {
   return [
@@ -133,6 +133,18 @@ export const MOCK_VERSIONS: VersionEntry[] = (
     ["1.16.5", "release"],
   ] as const
 ).map(([id, type], i) => ({ id, type, url: "", sha1: "", releaseTime: new Date(now - i * 40 * DAY).toISOString() }));
+
+/** Instanzen anderer Launcher, wie `import_detect` sie an den Standardorten fände. */
+export const MOCK_FOREIGN: ForeignInstance[] = (
+  [
+    ["prism", "Create Above & Beyond", "1.18.2", "forge", "40.2.0", "AppData\\Roaming\\PrismLauncher\\instances"],
+    ["prism", "Survival mit Freunden", "1.21.1", "fabric", "0.16.10", "AppData\\Roaming\\PrismLauncher\\instances"],
+    ["modrinth", "Fabulously Optimized", "1.21.4", "fabric", "0.16.14", "AppData\\Roaming\\ModrinthApp\\profiles"],
+    ["curseforge", "All the Mods 10", "1.21.1", "neoforge", "21.1.172", "curseforge\\minecraft\\Instances"],
+  ] as const
+).map(([launcher, name, minecraftVersion, loader, loaderVersion, dir]) => ({
+  launcher, name, minecraftVersion, loader, loaderVersion, path: `C:\\Users\\Steve\\${dir}\\${name}`, gameDir: "", imported: false, unsupported: null, memoryMb: 6144, jvmArgs: [],
+}));
 
 // ---------- Modrinth im Browser-Modus ----------
 

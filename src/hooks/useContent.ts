@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { create } from "zustand";
 import { api } from "@/lib/api";
 import type { ContentProgress, ContentProject } from "@/lib/modrinth";
@@ -61,6 +62,12 @@ export function useContentInstall() {
     },
     retry: false,
   });
+}
+
+/** Laufenden abbrechbaren Vorgang (Modpack, Import) abbrechen; das Ergebnis meldet der zentrale Fehler-Toast neutral. */
+export function cancelActive() {
+  const op = useContentState.getState().active;
+  if (op) void api.packInstallCancel(op).catch((e: Error) => toast.error(e.message));
 }
 
 /** Icons und Titel der installierten Modrinth-Inhalte, ein Aufruf pro Liste. Fehler: Liste zeigt Kacheln und Dateinamen. */

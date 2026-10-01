@@ -44,6 +44,7 @@ regex = "1.13.1"
 fastnbt = "2.6.3"
 flate2 = "1.1.10"
 trash = "5.2.9"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Wdk_System_SystemServices", "Win32_Storage_FileSystem", "Win32_System_SystemInformation"] }

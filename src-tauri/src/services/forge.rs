@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 use crate::error::{AppError, AppResult};
+use crate::models::ModLoader;
 use crate::services::download::{self, Job};
 use crate::services::fabric::{compare_versions, is_sha1, maven_path, maven_sha1, merge_parts, segment, LoaderVersion};
 use crate::services::mojang::{Arguments, Download, Library, LibraryDownloads, VersionJson};
@@ -139,6 +140,15 @@ pub fn check_supported(kind: Kind, mc: &str) -> AppResult<()> {
         Kind::NeoForge => "1.20.1",
     };
     Err(AppError::Invalid(format!("{} gibt es in Pumpkin Launcher erst ab Minecraft {from}, nicht für {mc}", kind.name())))
+}
+
+/// `check_supported` für jeden Loader: Vanilla, Fabric und Quilt gibt es für alle Versionen.
+pub fn check_loader(loader: ModLoader, mc: &str) -> AppResult<()> {
+    match loader {
+        ModLoader::Forge => check_supported(Kind::Forge, mc),
+        ModLoader::NeoForge => check_supported(Kind::NeoForge, mc),
+        _ => Ok(()),
+    }
 }
 
 /// NeoForge für 1.20.1 liegt als Forge-Abzweig unter `net.neoforged:forge:1.20.1-<version>`.

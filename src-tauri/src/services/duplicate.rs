@@ -1,8 +1,8 @@
 //! Instanz duplizieren: neuer Eintrag mit eigener ID und eine Kopie des Instanzordners. Verwaltete Inhalte
 //! legt `mods::sync` per Hardlink aus dem Cache ab, statt sie Byte für Byte zu kopieren.
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, sync::atomic::AtomicBool};
 
-use super::{content, download::RemoveOnDrop, modrinth::invalid, mods, walk, Dirs};
+use super::{content, copy_files, download::RemoveOnDrop, modrinth::invalid, mods, walk, Dirs};
 use crate::{
     error::AppResult,
     models::{new_id, now_ms, Instance, Mod},
@@ -34,7 +34,7 @@ pub async fn duplicate(
     tokio::task::spawn_blocking(move || {
         mods::recache(&dirs, &from, &mods)?;
         mods::sync(&dirs, &to, &mods)?;
-        copy_files(&files_to_copy(&dirs, &from, &to, &mods)?, &progress)
+        copy_files(&files_to_copy(&dirs, &from, &to, &mods)?, &progress, &AtomicBool::new(false))
     })
     .await
     .map_err(|e| invalid(format!("Kopieren abgebrochen: {e}")))??;
@@ -72,24 +72,11 @@ fn files_to_copy(dirs: &Dirs, from: &str, to: &str, mods: &[Mod]) -> AppResult<V
     Ok(files)
 }
 
-fn copy_files(files: &[(PathBuf, PathBuf)], progress: &dyn Fn(&str, u64, u64)) -> AppResult<()> {
-    let total = files.len() as u64;
-    progress("copy", 0, total);
-    for (done, (dest, source)) in (1..).zip(files) {
-        if let Some(parent) = dest.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::copy(source, dest)?;
-        progress("copy", done, total);
-    }
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::models::{ModKind, ModLoader, ModSource, NewInstance};
-    use std::path::Path;
+    use crate::services::write_files;
 
     fn local_mod(state: &AppState, name: &str) -> Mod {
         Mod {
@@ -102,13 +89,6 @@ mod tests {
             enabled: true,
             kind: ModKind::Mod,
             required_by: Vec::new(),
-        }
-    }
-
-    fn write_files(dir: &Path, files: &[(&str, &str)]) {
-        for (path, data) in files {
-            fs::create_dir_all(dir.join(path).parent().unwrap()).unwrap();
-            fs::write(dir.join(path), data).unwrap();
         }
     }
 

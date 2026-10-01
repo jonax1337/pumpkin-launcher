@@ -24,6 +24,8 @@ pub enum AppError {
     Keyring(#[from] keyring::Error),
     #[error("Die Datei konnte nicht in den Papierkorb verschoben werden – Details: {0}")]
     Trash(#[from] trash::Error),
+    #[error("Die Datenbank eines anderen Launchers ist nicht lesbar – Details: {0}")]
+    Sqlite(#[from] rusqlite::Error),
     #[error("{kind} „{id}“ wurde nicht gefunden")]
     NotFound { kind: &'static str, id: String },
     #[error("{0}")]

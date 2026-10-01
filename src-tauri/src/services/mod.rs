@@ -1,11 +1,12 @@
-//! Services: Persistenz, Auth, Installation (Mojang-Formate, Downloads, Java), Spielstart, Kopie und Export
-//! von Instanzen, Welten und Server, Skins und Support.
+//! Services: Persistenz, Auth, Installation (Mojang-Formate, Downloads, Java), Spielstart, Kopie, Export und
+//! Import von Instanzen, Welten und Server, Skins und Support.
 use std::{
     fs, io,
     path::{Path, PathBuf},
+    sync::atomic::{AtomicBool, Ordering},
 };
 
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use modrinth::invalid;
 
 pub mod auth;
@@ -15,6 +16,7 @@ pub mod duplicate;
 pub mod fabric;
 pub mod forge;
 pub mod gamelog;
+pub mod imports;
 pub mod install;
 pub mod java;
 pub mod launch;
@@ -37,7 +39,7 @@ pub mod worlds;
 
 /// Ordner im Spielverzeichnis, die Minecraft und Loader von selbst neu anlegen (Fabric: `.fabric`
 /// mit umgemappten JARs); Kopien und Exporte lassen sie weg.
-const REGENERATED: [&str; 3] = ["logs", "crash-reports", ".fabric"];
+pub(crate) const REGENERATED: [&str; 3] = ["logs", "crash-reports", ".fabric"];
 
 /// Verzeichnislayout unter dem App-Datenverzeichnis. Libraries, Assets, Versionen und
 /// Java-Runtimes teilen sich alle Instanzen; jede Instanz hat ihr eigenes Spiel- und Natives-Verzeichnis.
@@ -160,4 +162,31 @@ pub(crate) fn walk(base: &Path, path: &Path, out: &mut Vec<(String, PathBuf)>) -
         out.push((rel, path.to_owned()));
     }
     Ok(())
+}
+
+/// Kopiert (Ziel, Quelle)-Paare; Fortschritt als Phase `copy` (Dateien). Ist `stop` gesetzt, endet
+/// das Kopieren vor der nächsten Datei mit `AppError::Cancelled`.
+pub(crate) fn copy_files(files: &[(PathBuf, PathBuf)], progress: &dyn Fn(&str, u64, u64), stop: &AtomicBool) -> AppResult<()> {
+    let total = files.len() as u64;
+    progress("copy", 0, total);
+    for (done, (dest, source)) in (1..).zip(files) {
+        if stop.load(Ordering::SeqCst) {
+            return Err(AppError::Cancelled);
+        }
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::copy(source, dest)?;
+        progress("copy", done, total);
+    }
+    Ok(())
+}
+
+/// Testdateien unter `dir` anlegen: (relativer Pfad, Inhalt).
+#[cfg(test)]
+pub(crate) fn write_files(dir: &Path, files: &[(&str, &str)]) {
+    for (path, data) in files {
+        fs::create_dir_all(dir.join(path).parent().unwrap()).unwrap();
+        fs::write(dir.join(path), data).unwrap();
+    }
 }

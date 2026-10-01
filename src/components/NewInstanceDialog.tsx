@@ -9,8 +9,10 @@ import {
 } from "@/ui";
 import { MemoryChooser } from "@/components/common";
 import { useInstallPack } from "@/components/ContentBrowser";
+import { ImportPane } from "@/components/LauncherImport";
 import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { useFileDrop } from "@/hooks/useFileDrop";
+import { useForeignSelection, useImportInstances } from "@/hooks/useImport";
 import { useCreateInstance, useLoaderVersions, useVersions } from "@/hooks/useInstances";
 import { useDeleteTemplate, useTemplates } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
@@ -19,13 +21,14 @@ import { formatDownloads, isMrpack, progressLabel } from "@/lib/modrinth";
 import { ALL_LOADERS, LOADER_LABELS, type ModLoader, type Template } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-type Tab = "blank" | "pack" | "file" | "tpl";
+type Tab = "blank" | "pack" | "file" | "tpl" | "import";
 
 const TABS: { value: Tab; label: string; icon: IconName }[] = [
   { value: "blank", label: "Eigene Instanz", icon: "plus" },
   { value: "pack", label: "Modpack", icon: "box" },
   { value: "file", label: "Datei", icon: "file" },
   { value: "tpl", label: "Vorlage", icon: "save" },
+  { value: "import", label: "Anderer Launcher", icon: "swap" },
 ];
 
 const LOADER_HELP: Record<ModLoader, string> = {
@@ -185,9 +188,13 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
   // Vorlage
   const [template, setTemplate] = useState<Template | null>(null);
 
+  // Anderer Launcher
+  const foreign = useForeignSelection(tab === "import");
+  const importer = useImportInstances();
+
   const install = useContentInstall();
   const { progress } = useContentState();
-  const busy = create.isPending || install.isPending || !!packInstall.busy;
+  const busy = create.isPending || install.isPending || !!packInstall.busy || importer.running;
   useEffect(() => onBusy(busy), [busy, onBusy]);
 
   async function chooseFile() {
@@ -199,6 +206,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
     tab === "blank" ? !!selectedVersion && !loaderUnavailable
     : tab === "pack" ? !!pack && !packInstall.blocked
     : tab === "file" ? !!path && !api.isMock
+    : tab === "import" ? foreign.chosen.length > 0
     : !!template;
 
   function go() {
@@ -220,6 +228,8 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
     } else if (tab === "file") {
       const title = fileName.trim() || packName(path);
       install.mutate(withTarget("import", (op) => api.modrinthImportPack(path, title, op), `${title} importieren`), done);
+    } else if (tab === "import") {
+      void importer.run(foreign.chosen).then((last) => last && onDone(last.id));
     } else if (template) {
       install.mutate(withTarget(`template:${template.id}`, (op) => api.templateCreateInstance(template.id, template.name, op), `${template.name} anlegen`), done);
     }
@@ -228,13 +238,16 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
   const goLabel =
     tab === "blank" ? (create.isPending ? "Wird angelegt" : "Anlegen")
     : tab === "pack" ? (packInstall.busy ?? "Anlegen")
-    : install.isPending ? progressLabel(progress)
-    : tab === "file" ? "Importieren" : "Anlegen";
+    : install.isPending || importer.running ? progressLabel(progress)
+    : tab === "file" ? "Importieren"
+    : tab === "import" ? (foreign.chosen.length > 1 ? `${foreign.chosen.length} importieren` : "Importieren")
+    : "Anlegen";
 
   const hint =
     tab === "blank" ? "Das Spiel wird beim ersten Start geladen."
     : tab === "pack" ? (pack ? "Die Installation läuft im Hintergrund." : "Wähle ein Modpack.")
     : tab === "file" ? (path ? "Alle Inhalte aus der Datei werden übernommen." : "Unterstützt: .mrpack")
+    : tab === "import" ? "Welten, Mods und Einstellungen werden kopiert. Der andere Launcher bleibt unverändert."
     : template ? "Welten sind nicht Teil einer Vorlage." : "Wähle eine Vorlage.";
 
   const navigate = useNavigate();
@@ -251,6 +264,9 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
         <>
           {tab === "pack" && packInstall.cancel && (
             <Button variant="ghost" aria-label="Installation abbrechen" onClick={packInstall.cancel}>Abbrechen</Button>
+          )}
+          {tab === "import" && importer.running && (
+            <Button variant="ghost" aria-label="Import abbrechen" onClick={importer.cancel}>Abbrechen</Button>
           )}
           <DialogActions cancel={busy ? "Schließen" : "Abbrechen"} confirm={{ label: goLabel, width: 170, disabled: !valid || busy, onClick: go }} />
         </>
@@ -375,6 +391,8 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
             ))}
 
           {tab === "tpl" && <TemplatePane selected={template?.id ?? null} onSelect={setTemplate} />}
+
+          {tab === "import" && <ImportPane selection={foreign} busy={busy} />}
         </TabPanel>
       </div>
     </Dialog>
@@ -382,10 +400,11 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
 }
 
 /**
- * „Neue Instanz“ um einen beliebigen Auslöser (`children`). Eigene, Modpack, Datei oder Vorlage.
- * Die `primary`-Instanz nimmt aufs Fenster gezogene .mrpack-Dateien und Strg+N (`?neu=1`) an.
+ * „Neue Instanz“ um einen beliebigen Auslöser (`children`): Eigene, Modpack, Datei, Vorlage oder anderer Launcher.
+ * Die `primary`-Instanz der Bibliothek braucht keinen Auslöser: Sie öffnet über `?neu=1` (Strg+N, Knöpfe der Bibliothek)
+ * bzw. `?neu=import` (Onboarding) und nimmt aufs Fenster gezogene .mrpack-Dateien an.
  */
-export function NewInstanceDialog({ children, primary }: { children: ReactNode; primary?: boolean }) {
+export function NewInstanceDialog({ children, primary }: { children?: ReactNode; primary?: boolean }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [session, setSession] = useState(0);
@@ -406,12 +425,14 @@ export function NewInstanceDialog({ children, primary }: { children: ReactNode; 
     if (file) show("file", file);
   });
 
-  // Strg+N führt zu /instances?neu=1 (siehe Layout), ein auf die Inhalte gezogenes Modpack zu ?neu=1&datei=<Pfad>.
+  // Strg+N führt zu /instances?neu=1 (siehe Layout), ein auf die Inhalte gezogenes Modpack zu ?neu=1&datei=<Pfad>,
+  // das Onboarding zu ?neu=import.
   const [params, setParams] = useSearchParams();
   useEffect(() => {
     if (!primary || !params.has("neu")) return;
     const file = params.get("datei");
-    show(file ? "file" : "blank", file ?? "");
+    if (file) show("file", file);
+    else show(params.get("neu") === "import" ? "import" : "blank");
     setParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primary, params, setParams]);
@@ -423,7 +444,7 @@ export function NewInstanceDialog({ children, primary }: { children: ReactNode; 
 
   return (
     <>
-      <Slot.Root onClick={() => show("blank")}>{children}</Slot.Root>
+      {children && <Slot.Root onClick={() => show("blank")}>{children}</Slot.Root>}
       {(open || busy) && <NewInstanceForm key={session} open={open} onOpenChange={setOpen} initial={initial} onBusy={setBusy} onDone={done} />}
     </>
   );

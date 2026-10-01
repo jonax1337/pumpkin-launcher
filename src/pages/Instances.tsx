@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useSearchParams } from "react-router";
 import { LOUD_PHASES, PlayButton, StatusChip, usePhase } from "@/components/game";
 import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
 import { loaderLine, playtimeLine } from "@/components/common";
@@ -174,8 +175,12 @@ export function InstancesPage() {
     return () => clearTimeout(t);
   }, [viewKey, shown.length, total]);
 
-  // Leere Bibliothek: keine Werkzeugleiste, der Leerzustand trägt die einzige „Neue Instanz“ (mit Strg+N und Dateiablage).
+  // Leere Bibliothek: keine Werkzeugleiste, der Leerzustand trägt „Neue Instanz“.
   const empty = !error && !isLoading && !instances?.length;
+  const [, setParams] = useSearchParams();
+  const newInstance = (
+    <Button variant="primary" icon="plus" aria-keyshortcuts="Control+N" onClick={() => setParams({ neu: "1" }, { replace: true })}>Neue Instanz</Button>
+  );
 
   let body;
   if (error) {
@@ -194,9 +199,7 @@ export function InstancesPage() {
         title="Deine Bibliothek ist leer"
         actions={
           <>
-            <NewInstanceDialog primary>
-              <Button variant="primary" icon="plus" aria-keyshortcuts="Control+N">Neue Instanz</Button>
-            </NewInstanceDialog>
+            {newInstance}
             <ButtonLink to="/discover">Modpacks entdecken</ButtonLink>
           </>
         }
@@ -230,6 +233,8 @@ export function InstancesPage() {
   return (
     <section className="page lib">
       <PageHeader title="Bibliothek" count={instances?.length ?? 0} />
+      {/* An fester Stelle für beide Knöpfe: füllt der erste Import die leere Bibliothek, bleibt der Dialog mit den übrigen offen */}
+      <NewInstanceDialog primary />
       <div className="sr" role="status" aria-live="polite" aria-atomic="true">{said}</div>
       {/* Abstände wie bisher: 16 über, 18 unter der Werkzeugleiste */}
       {!empty && (
@@ -256,9 +261,7 @@ export function InstancesPage() {
             items={[{ value: "poster", label: "Poster", icon: "grid" }, { value: "list", label: "Liste", icon: "list" }]}
           />
           <Spacer />
-          <NewInstanceDialog primary>
-            <Button variant="primary" icon="plus" aria-keyshortcuts="Control+N">Neue Instanz</Button>
-          </NewInstanceDialog>
+          {newInstance}
         </Toolbar>
       )}
       {body}
