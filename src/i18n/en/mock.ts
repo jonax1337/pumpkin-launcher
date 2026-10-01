@@ -3,7 +3,6 @@ import { mock as deMock } from "../de/mock.ts";
 // Gleiche Schlüssel wie Deutsch (erzwingt der Typ), natürliches Launcher-Englisch.
 export const mock: typeof deMock = {
   "mock.mods.missingEntry": "Mock mod {slug} is missing",
-  "mock.instance.notFound": "Instance \"{id}\" not found",
   "mock.instance.stillRunning": "Instance is still running",
   "mock.modrinth.unreachable": "Modrinth is not responding ({status})",
   "mock.content.requiredModMissing": "A required mod is not available for this Minecraft version.",

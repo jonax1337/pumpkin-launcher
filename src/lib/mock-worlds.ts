@@ -54,7 +54,7 @@ export function createWorldMock(
   };
   const instance = (id: string) => {
     const found = db.instances.find((i) => i.id === id);
-    if (!found) throw new Error(t("mock.instance.notFound", { id }));
+    if (!found) throw new Error(t("hooks.api.instanceNotFound", { id }));
     return found;
   };
   /** Wie `AppState::operation` im Backend: Spieldateien bleiben unangetastet, solange das Spiel läuft. */

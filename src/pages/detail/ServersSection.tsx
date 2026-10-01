@@ -52,11 +52,11 @@ export function ServersSection({ instance, busy, onPlay }: SectionProps) {
                   <ProjectIcon url={server.icon} seed={server.address} />
                   <RowTitle title={server.name || server.address} sub={server.address} />
                   <Cell flex align="end">
-                    <GuardedButton size="s" icon="play" blocked={busy} aria-label={t("detail.servers.playAria", { name: server.name })} onClick={() => onPlay({ type: "server", address: server.address })}>
+                    <GuardedButton size="s" icon="play" blocked={busy} aria-label={t("components.game.ariaPlay", { name: server.name })} onClick={() => onPlay({ type: "server", address: server.address })}>
                       {t("common.play")}
                     </GuardedButton>
                   </Cell>
-                  <Menu items={menuFor(server, index)} trigger={<IconButton size="s" icon="more" tip={false} label={t("detail.servers.moreAbout", { name: server.name })} />} />
+                  <Menu items={menuFor(server, index)} trigger={<IconButton size="s" icon="more" tip={false} label={t("detail.content.moreAbout", { name: server.name })} />} />
                 </ListRow>
               ))}
             </List>
@@ -109,7 +109,7 @@ function ServerDialog({ instance, index, server, onClose }: { instance: Instance
       footer={<DialogActions cancel={t("common.cancel")} confirm={{ label: save.isPending ? t("detail.servers.saving") : t("common.save"), width: 130, form: "server-form", disabled: !ready || save.isPending }} />}
     >
       <form id="server-form" onSubmit={submit}>
-        <Field label={t("detail.servers.nameLabel")}>
+        <Field label={t("common.name")}>
           <TextField value={name} onChange={(e) => setName(e.target.value)} maxLength={64} autoFocus />
         </Field>
         <Field label={t("detail.servers.addressLabel")} help={t("detail.servers.addressHelp")}>

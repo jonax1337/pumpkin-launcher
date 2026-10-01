@@ -9,7 +9,7 @@ import {
 } from "@/hooks/useSkins";
 import { api } from "@/lib/api";
 import { toastError } from "@/lib/toast";
-import { SKIN_VARIANT_LABELS, type Cape, type LibrarySkin, type SkinVariant } from "@/lib/types";
+import { type Cape, type LibrarySkin, type SkinVariant } from "@/lib/types";
 import { CapeFigure, SkinFigure } from "@/pixel/SkinFigure";
 import { useUsableAccount } from "@/store/offline";
 import type { ActiveAccount } from "@/store/settings";
@@ -18,7 +18,6 @@ import {
   Segmented, Select, Skel, StatusPanel, TextField, Trunc, type MenuEntry,
 } from "@/ui";
 
-const VARIANTS = (Object.keys(SKIN_VARIANT_LABELS) as SkinVariant[]).map((value) => ({ value, label: SKIN_VARIANT_LABELS[value] }));
 // Radix-Auswahlen kennen keinen leeren Wert.
 const NO_CAPE = "none";
 
@@ -30,7 +29,7 @@ export function SkinsPage() {
   const account = active?.kind === "microsoft" ? active : null;
   return (
     <section className="page skins">
-      <PageHeader title={t("pages.skins.heading")} />
+      <PageHeader title={t("ui.nav.skins")} />
       {account ? <CurrentLook account={account} /> : <NeedsMicrosoft />}
       <Library accountId={account?.id ?? null} />
     </section>
@@ -45,7 +44,7 @@ function NeedsMicrosoft() {
       className="mt-4"
       icon="user"
       title={t("pages.skins.needsMsTitle")}
-      actions={<Button icon="user" onClick={() => void startMsLogin(qc)}>{t("pages.skins.msLoginButton")}</Button>}
+      actions={<Button icon="user" onClick={() => void startMsLogin(qc)}>{t("components.account.msLogin")}</Button>}
     >
       {t("pages.skins.needsMsBody")}
     </StatusPanel>
@@ -71,7 +70,7 @@ function CurrentLook({ account }: { account: MicrosoftAccount }) {
       {cape && <CapeFigure src={cape.url} zoom={3} label={t("pages.skins.capeFigureLabel", { name: cape.alias })} />}
       <div className="skin-now-t">
         <SectionHeader title={account.username} size="sub" />
-        <Hint>{skin ? t("pages.skins.modelLine", { modell: SKIN_VARIANT_LABELS[skin.variant] }) : t("pages.skins.defaultSkin")}</Hint>
+        <Hint>{skin ? t("pages.skins.modelLine", { modell: t(`pages.skins.variant.${skin.variant}`) }) : t("pages.skins.defaultSkin")}</Hint>
         <CapeChoice accountId={account.id} capes={capes} />
         <Actions wrap>
           <Button icon="save" disabled={!skin || save.isPending} onClick={() => save.mutate({ accountId: account.id, name: account.username })}>
@@ -85,7 +84,7 @@ function CurrentLook({ account }: { account: MicrosoftAccount }) {
         onOpenChange={setConfirmReset}
         title={t("pages.skins.wearDefaultTitle")}
         text={t("pages.skins.wearDefaultText")}
-        confirmLabel={t("pages.skins.resetConfirm")}
+        confirmLabel={t("pages.settings.resetLabel")}
         pending={reset.isPending}
         onConfirm={() => reset.mutate({ accountId: account.id }, { onSuccess: () => setConfirmReset(false) })}
       />
@@ -129,7 +128,7 @@ function Library({ accountId }: { accountId: string | null }) {
     <section className="mt-6" aria-labelledby="skin-lib">
       <SectionHeader
         id="skin-lib"
-        title={t("pages.skins.libraryHeading")}
+        title={t("ui.nav.library")}
         actions={
           !api.isMock && (
             <Button icon="plus" disabled={add.isPending} onClick={() => void pickFile().catch(toastError)}>
@@ -141,9 +140,9 @@ function Library({ accountId }: { accountId: string | null }) {
       <div className="mt-3">
         <QueryList
           query={library}
-          error={t("pages.skins.libraryLoadError")}
+          error={t("pages.instances.loadErrorTitle")}
           loading={
-            <CardGrid aria-busy aria-label={t("pages.skins.loadingLabel")}>
+            <CardGrid aria-busy aria-label={t("components.common.loadingAria")}>
               {[0, 1, 2].map((k) => <Skel key={k} h={308} />)}
             </CardGrid>
           }
@@ -166,7 +165,7 @@ function Library({ accountId }: { accountId: string | null }) {
       <ConfirmDialog
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
-        title={t("pages.skins.deleteTitle", { name: removing?.name ?? "" })}
+        title={t("components.instance.deleteQuotedTitle", { name: removing?.name ?? "" })}
         text={t("pages.skins.deleteText")}
         pending={remove.isPending}
         onConfirm={() => removing && remove.mutate(removing.id, { onSuccess: () => setRemoving(null) })}
@@ -189,13 +188,13 @@ function SkinCard({ skin, accountId, onRename, onDelete }: { skin: LibrarySkin; 
       <SkinFigure src={texture} variant={skin.variant} label={t("pages.skins.previewLabel", { name: skin.name })} />
       <div className="skin-card-h">
         <Trunc as="b" text={skin.name} className="min-w-0 flex-1" />
-        <Menu items={menu} trigger={<IconButton icon="more" size="s" label={t("pages.skins.moreActionsFor", { name: skin.name })} tip={t("pages.skins.moreActionsTip")} />} />
+        <Menu items={menu} trigger={<IconButton icon="more" size="s" label={t("components.instance.moreActionsFor", { name: skin.name })} tip={t("components.instance.moreActions")} />} />
       </div>
       <Segmented
         size="s"
         label={t("pages.skins.modelOf", { name: skin.name })}
         value={skin.variant}
-        items={VARIANTS}
+        items={(["classic", "slim"] as SkinVariant[]).map((value) => ({ value, label: t(`pages.skins.variant.${value}`) }))}
         onChange={(variant) => update.mutate({ id: skin.id, name: skin.name, variant })}
       />
       <Button
@@ -228,12 +227,12 @@ function RenameDialog({ skin, onClose }: { skin: LibrarySkin; onClose: () => voi
       footer={
         <DialogActions
           cancel={t("common.cancel")}
-          confirm={{ label: update.isPending ? t("pages.skins.saving") : t("common.save"), width: 130, form: "skin-name", disabled: update.isPending || !name.trim() }}
+          confirm={{ label: update.isPending ? t("components.common.saving") : t("common.save"), width: 130, form: "skin-name", disabled: update.isPending || !name.trim() }}
         />
       }
     >
       <form id="skin-name" onSubmit={submit}>
-        <Field label={t("pages.skins.nameField")}>
+        <Field label={t("common.name")}>
           <TextField value={name} onChange={(e) => setName(e.target.value)} maxLength={64} autoFocus />
         </Field>
       </form>

@@ -29,6 +29,6 @@ export function useCopyDebugInfo() {
     meta: { ownErrorToast: true },
     mutationFn: async () => navigator.clipboard.writeText(await api.debugInfo(await defaultMemory(qc))),
     onSuccess: () => toast.success(t("hooks.support.debugCopied"), { description: t("hooks.support.debugHint") }),
-    onError: () => toast.error(t("hooks.support.copyFailed")),
+    onError: () => toast.error(t("components.common.copyFailed")),
   });
 }

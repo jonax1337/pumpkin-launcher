@@ -33,4 +33,9 @@ export const common: typeof deCommon = {
   "common.version": "Version",
   "common.retry": "Try again",
   "common.language": "Language",
+  "common.all": "All",
+  "common.name": "Name",
+  "common.status": "Status",
+  "common.update": "Update",
+  "common.updates": "Updates",
 };

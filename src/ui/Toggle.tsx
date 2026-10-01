@@ -159,7 +159,7 @@ export function SegSlider({ value, onChange, disabled, max = 16, label, id, show
       <div className="vx-slw-c" style={{ "--free": `${((16 - top) / 16) * 100}%` } as CSSProperties}>
         {slider}
         {/* Grenze unter dem letzten freien Segment; bei 16 unter dem Ende */}
-        {showMax && <span className="vx-slw-cap" aria-hidden>{t("ui.memory.max", { n: top })}</span>}
+        {showMax && <span className="vx-slw-cap" aria-hidden>{t("components.memory.maxGb", { n: top })}</span>}
       </div>
       {showValue && <Count value={`${v} GB`} size={26} muted={disabled} />}
     </div>

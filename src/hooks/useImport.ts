@@ -60,7 +60,7 @@ export function useImportInstances() {
     let last: Instance | null = null;
     try {
       for (const source of sources) {
-        const task = withTarget(importTarget(source), (op) => api.importInstance(source, op), t("hooks.import.instanceTask", { name: source.name }), { cancellable: true });
+        const task = withTarget(importTarget(source), (op) => api.importInstance(source, op), t("hooks.import.instanceTask", { name: source.name }), { cancellable: true, doneLabel: t("hooks.import.instanceTaskDone", { name: source.name }) });
         try {
           last = (await install.mutateAsync(task)) ?? last;
         } catch (err) {

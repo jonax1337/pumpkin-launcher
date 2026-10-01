@@ -1,4 +1,5 @@
 // Backend-Vertrag (serde camelCase). Zeiten = Unix-Millisekunden.
+import { t } from "../i18n/core.ts";
 
 export type ModLoader = "vanilla" | "fabric" | "quilt" | "forge" | "neoforge";
 export type ModSource =
@@ -121,21 +122,13 @@ export const ALL_LOADERS: ModLoader[] = ["vanilla", "fabric", "quilt", "forge", 
 /** Loader, die das Backend installieren und starten kann; die übrigen erscheinen als „bald verfügbar“. */
 export const SUPPORTED_LOADERS: ModLoader[] = ["vanilla", "fabric", "quilt", "forge", "neoforge"];
 
-/** Auch „datapack“: so nennt Modrinth den Loader von Datenpaketen. */
-export const LOADER_LABELS: Record<ModLoader | "datapack", string> = {
-  datapack: "Datenpaket",
+/** Loader-Namen sind Marken; „datapack“ übersetzt die Oberfläche am Verwendungsort (siehe `loaderLine`-Verbraucher). */
+export const LOADER_LABELS: Record<ModLoader, string> = {
   vanilla: "Vanilla",
   fabric: "Fabric",
   quilt: "Quilt",
   forge: "Forge",
   neoforge: "NeoForge",
-};
-
-export const SOURCE_LABELS: Record<ModSourceType, string> = {
-  modrinth: "Modrinth",
-  curseforge: "CurseForge",
-  url: "URL",
-  local: "Lokal",
 };
 
 // ---------- Import aus anderen Launchern ----------
@@ -189,21 +182,21 @@ export interface LoaderVersion {
 
 export type InstallStep = "java" | "client" | "libraries" | "natives" | "assets" | "loader" | "mods";
 
-/** Schritte der Vorbereitung in Alltagssprache (Anzeige beim Fortschritt). */
+/** Schritte der Vorbereitung in Alltagssprache (Anzeige beim Fortschritt); Loader-Name ist Marke und bleibt unübersetzt. */
 export function installStepLabel(step: InstallStep, loader: ModLoader): string {
   switch (step) {
     case "java":
-      return "Java wird eingerichtet";
+      return t("components.install.java");
     case "client":
     case "assets":
-      return "Lade Spieldateien";
+      return t("components.install.gameFiles");
     case "libraries":
     case "natives":
-      return "Lade Bibliotheken";
+      return t("components.install.libraries");
     case "loader":
-      return `${LOADER_LABELS[loader]} wird eingerichtet`;
+      return t("components.install.loader", { loader: LOADER_LABELS[loader] });
     case "mods":
-      return "Lade Mods";
+      return t("components.install.mods");
   }
 }
 
@@ -279,10 +272,8 @@ export interface Screenshot {
 
 // ---------- Skins ----------
 
-/** Spielermodell: breite (Steve) oder schmale Arme (Alex). */
+/** Spielermodell: breite (Steve) oder schmale Arme (Alex); Benennung in `pages.skins.variant.*`. */
 export type SkinVariant = "classic" | "slim";
-
-export const SKIN_VARIANT_LABELS: Record<SkinVariant, string> = { classic: "Klassisch", slim: "Schlank" };
 
 /** Skin in der lokalen Bibliothek; `id` ist der SHA-1 der PNG, die Textur kommt über `skin_texture`. */
 export interface LibrarySkin {
@@ -309,8 +300,6 @@ export interface SkinProfile {
 // ---------- Welten und Server ----------
 
 export type GameMode = "survival" | "creative" | "adventure" | "spectator";
-
-export const GAME_MODE_LABELS: Record<GameMode, string> = { survival: "Überleben", creative: "Kreativ", adventure: "Abenteuer", spectator: "Zuschauer" };
 
 /** Welt unter `saves/`; `id` ist ihr Ordnername. */
 export interface World {

@@ -164,7 +164,7 @@ export function createContentMock(db: { instances: Instance[] }, emit: (event: s
   const outdated = new Set([PROJECT_IDS.lithium, PROJECT_IDS.appleskin, PROJECT_IDS.modmenu]);
   const find = (id: string) => {
     const inst = db.instances.find((i) => i.id === id);
-    if (!inst) throw new Error(t("mock.instance.notFound", { id }));
+    if (!inst) throw new Error(t("hooks.api.instanceNotFound", { id }));
     return structuredClone(inst);
   };
   const save = (inst: Instance) => {

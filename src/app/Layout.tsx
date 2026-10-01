@@ -9,7 +9,7 @@ import { useUpdateCheckOnStart } from "@/hooks/useAppUpdate";
 import { useCancelInstall, useGameEvents, useInstances } from "@/hooks/useInstances";
 import { cancelContent } from "@/hooks/useContent";
 import { useOnline } from "@/hooks/useOnline";
-import { LanguageProvider, useI18n } from "@/i18n";
+import { useI18n } from "@/i18n";
 import { useRunningTasks } from "@/hooks/useRunningTasks";
 import { api } from "@/lib/api";
 import { progressLabel, progressShare } from "@/lib/modrinth";
@@ -442,8 +442,7 @@ export function Layout() {
   }, [pathname]);
 
   return (
-    <LanguageProvider>
-      <ViewContext.Provider value={view}>
+    <ViewContext.Provider value={view}>
         <div className={cn("app", ready && "ready")} data-offline={online ? undefined : ""}>
           <TitleBar online={online} />
           <Sidebar />
@@ -455,7 +454,6 @@ export function Layout() {
         <InstanceDialogs />
         <ShareLogDialog />
         <ManualDownloads />
-      </ViewContext.Provider>
-    </LanguageProvider>
+    </ViewContext.Provider>
   );
 }

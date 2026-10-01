@@ -115,7 +115,7 @@ function Lightbox({ instanceId, shots, current, onShow }: { instanceId: string; 
           >
             {t("common.delete")}
           </Button>
-          <Button icon="folder" onClick={() => void api.revealPath(current.path).catch(toastError)}>{t("detail.screenshots.showInFolder")}</Button>
+          <Button icon="folder" onClick={() => void api.revealPath(current.path).catch(toastError)}>{t("components.instance.revealInFolder")}</Button>
           <Button variant="primary" icon="ext" onClick={() => void api.openPath(current.path).catch(toastError)}>{t("common.open")}</Button>
         </>
       }

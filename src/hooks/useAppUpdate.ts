@@ -4,11 +4,9 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { create } from "zustand";
-import { setCurrentLanguage, t } from "@/i18n/core";
-import { resolveChoice } from "@/i18n/types";
+import { t } from "@/i18n/core";
 import { api } from "@/lib/api";
 import { isGameActive, useGame } from "@/store/game";
-import { useSettings } from "@/store/settings";
 import { anyTaskRunning, subscribeRunningTasks } from "./useRunningTasks";
 
 /**
@@ -46,7 +44,7 @@ function announceUpdate(version: string, show: () => void) {
     id: "app-update",
     duration: 15_000,
     description: t("hooks.update.availableHint"),
-    action: { label: t("hooks.update.viewAction"), onClick: show },
+    action: { label: t("components.content.viewAction"), onClick: show },
   });
 }
 
@@ -57,15 +55,8 @@ function announceUpdate(version: string, show: () => void) {
  */
 export const useUpdateRun = create<{ phase: "idle" | "download" | "wait" | "ready" | "install"; p: number | null }>(() => ({ phase: "idle", p: null }));
 
-/**
- * Live-Export statt fester Konstante: Der Text wird mit der Sprachwahl neu berechnet. Dieses Abo läuft vor dem
- * LanguageProvider (Persistenz lädt nachträglich), deshalb setzt es die Modul-Sprache selbst.
- */
-export let WAIT_FOR_IDLE = t("hooks.update.waitForIdle");
-useSettings.subscribe((s) => {
-  setCurrentLanguage(resolveChoice(s.language));
-  WAIT_FOR_IDLE = t("hooks.update.waitForIdle");
-});
+/** Hinweis, während der Neustart auf Spiel und Aufgaben wartet; live berechnet, kein fester Text. */
+export const waitForIdle = () => t("hooks.update.waitForIdle");
 
 /**
  * Lädt das Update und installiert es, wenn der Launcher frei ist: unter Windows beendet der Installer den Launcher,
@@ -106,14 +97,14 @@ async function download(update: Update) {
  */
 async function deferRestart(update: Update) {
   useUpdateRun.setState({ phase: "wait", p: null });
-  toast.info(t("hooks.update.loaded"), { description: WAIT_FOR_IDLE });
+  toast.info(t("hooks.update.loaded"), { description: waitForIdle() });
   await launcherIdle();
   useUpdateRun.setState({ phase: "ready" });
   toast.info(t("hooks.update.ready"), {
     id: "app-update",
     duration: Infinity,
     description: t("hooks.update.readyHint"),
-    action: { label: t("hooks.update.restartNow"), onClick: () => void installAppUpdate(update) },
+    action: { label: t("components.update.restartNow"), onClick: () => void installAppUpdate(update) },
   });
 }
 

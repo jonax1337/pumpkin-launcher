@@ -27,7 +27,7 @@ type Tab = "blank" | "pack" | "file" | "tpl" | "import";
 // Reiter des Dialogs; Beschriftungen als Schlüssel, übersetzt beim Rendern.
 const TABS: { value: Tab; label: string; icon: IconName }[] = [
   { value: "blank", label: "components.newInstance.tab.own", icon: "plus" },
-  { value: "pack", label: "components.newInstance.tab.modpack", icon: "box" },
+  { value: "pack", label: "components.catalog.one.modpack", icon: "box" },
   { value: "file", label: "components.newInstance.tab.file", icon: "file" },
   { value: "tpl", label: "components.newInstance.tab.template", icon: "save" },
   { value: "import", label: "components.newInstance.tab.import", icon: "swap" },
@@ -224,11 +224,11 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
       void packInstall.run();
     } else if (tab === "file") {
       const title = customName.trim() || packName(path);
-      install.mutate(withTarget("import", (op) => api.modrinthImportPack(path, title, op), t("components.newInstance.importTask", { name: title }), { cancellable: true }), done);
+      install.mutate(withTarget("import", (op) => api.modrinthImportPack(path, title, op), t("components.newInstance.importTask", { name: title }), { cancellable: true, doneLabel: t("hooks.import.instanceTaskDone", { name: title }) }), done);
     } else if (tab === "import") {
       void importer.run(foreign.chosen).then((last) => last && onDone(last.id));
     } else if (template) {
-      install.mutate(withTarget(`template:${template.id}`, (op) => api.templateCreateInstance(template.id, template.name, op), t("components.newInstance.createTemplateTask", { name: template.name }), { cancellable: true }), done);
+      install.mutate(withTarget(`template:${template.id}`, (op) => api.templateCreateInstance(template.id, template.name, op), t("components.newInstance.createTemplateTask", { name: template.name }), { cancellable: true, doneLabel: t("components.newInstance.createTemplateTaskDone", { name: template.name }) }), done);
     }
   }
 
@@ -277,7 +277,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
         <TabPanel idBase="ni" value={tab} className="npane">
           {tab === "blank" && (
             <>
-              <Field label={t("components.newInstance.nameField")} help={t("components.newInstance.nameHelp")}>
+              <Field label={t("common.name")} help={t("components.newInstance.nameHelp")}>
                 <TextField
                   value={nameEdited ? name : suggestion}
                   maxLength={64}
@@ -335,7 +335,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
                     />
                   )}
                 </Field>
-                <Field label={t("components.newInstance.memory")} group>
+                <Field label={t("ui.memory.label")} group>
                   <MemoryChooser name="ni-ram" value={memory} onChange={setMemory} autoText={t("components.memory.autoFromSettings")} />
                 </Field>
               </Disclosure>
@@ -383,7 +383,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
                   <IconButton size="s" icon="x" label={t("components.newInstance.removeFile")} disabled={!path} onClick={() => setPath("")} />
                 </Panel>
                 {path && (
-                  <Field label={t("components.newInstance.nameField")} optional className="mt-4">
+                  <Field label={t("common.name")} optional className="mt-4">
                     <TextField value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder={packName(path)} maxLength={64} />
                   </Field>
                 )}

@@ -8,7 +8,7 @@ import { useInstall, useUpdateInstance } from "@/hooks/useInstances";
 import { LOADER_LABELS, SUPPORTED_LOADERS, type GameWindow, type Instance } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n";
-import { BIOME_KEYS, BIOMES } from "@/pixel/scene";
+import { BIOME_KEYS } from "@/pixel/scene";
 import { useLook, useLookStore } from "@/store/look";
 import { useSettings } from "@/store/settings";
 
@@ -72,7 +72,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
     <div className="max-w-[var(--page-max)] pt-2">
       {locked && <Hint className="mb-4">{t("detail.settings.lockedHint")}</Hint>}
       <FormSection title={t("detail.settings.generalSection")}>
-        <FormRow label={t("detail.settings.nameLabel")} htmlFor="inst-name">
+        <FormRow label={t("common.name")} htmlFor="inst-name">
           <TextField
             id="inst-name"
             value={name}
@@ -83,7 +83,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
             onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
           />
         </FormRow>
-        <FormRow label={t("detail.settings.groupLabel")} hint={t("detail.settings.groupHint")}>
+        <FormRow label={t("components.instance.group")} hint={t("detail.settings.groupHint")}>
           <Actions>
             <Menu align="start" items={groupItems} trigger={<Button iconEnd="chevd" disabled={locked} aria-label={t("detail.settings.groupAria", { name: groupText })}>{groupText}</Button>} />
           </Actions>
@@ -96,7 +96,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
                 key={b}
                 variant="thumb"
                 look={{ bio: b, seed: look.seed }}
-                title={BIOMES[b].n}
+                title={t(`ui.biome.${b}`)}
                 pressed={look.bio === b}
                 hit={{ onClick: () => useLookStore.getState().setBiome(instance.id, b) }}
               />
@@ -105,8 +105,8 @@ export function SettingsTab({ instance }: { instance: Instance }) {
         </FormRow>
       </FormSection>
 
-      <FormSection title={t("detail.settings.gameSection")}>
-        <FormRow label={t("detail.settings.memoryLabel")} hint={t("detail.settings.memoryHint")} group="radiogroup" aside={<MemoryHelp value={memory} />}>
+      <FormSection title={t("pages.settings.tabGame")}>
+        <FormRow label={t("ui.memory.label")} hint={t("detail.settings.memoryHint")} group="radiogroup" aside={<MemoryHelp value={memory} />}>
           <MemoryChooser name="inst-mem" value={memory} onChange={changeMemory} help={false} disabled={locked} />
         </FormRow>
         <FormRow
@@ -126,7 +126,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
         <FormRow label={t("detail.settings.windowLabel")} hint={t("detail.settings.windowHint")} group="radiogroup">
           <WindowChooser value={instance.window} onChange={(window, done) => save({ window }, done)} disabled={locked} />
         </FormRow>
-        <FormRow label={t("detail.settings.advancedLabel")}>
+        <FormRow label={t("components.newInstance.advanced")}>
           <Disclosure summary={t("detail.settings.jvmOptionsLabel")} open={instance.jvmArgs.length > 0}>
             <TextArea
               rows={3}
@@ -156,7 +156,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
         </FormRow>
       </FormSection>
 
-      <FormSection title={t("detail.settings.versionSection")}>
+      <FormSection title={t("common.version")}>
         <FormRow label={t("detail.settings.gameVersionLabel")} aside={t("detail.settings.versionAside")}>
           {/* Reiner Text: auf Höhe des Labels (10 px wie dessen Innenabstand) */}
           <span className="pt-2.5">{versionText(instance)}</span>

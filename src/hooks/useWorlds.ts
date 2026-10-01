@@ -3,7 +3,6 @@ import { toast } from "sonner";
 import { t } from "@/i18n";
 import { api } from "@/lib/api";
 import { fileName } from "@/lib/format";
-import { doneLabel } from "@/lib/modrinth";
 import type { Datapack, Instance, Server, World, WorldBackup } from "@/lib/types";
 import { trackContent, withTarget, type ContentRun } from "./useContent";
 import { worldKeys } from "./worldKeys";
@@ -77,24 +76,24 @@ export const worldTarget = (instanceId: string, worldId: string) => `world:${ins
 export function useWorldJobs(instance: Instance) {
   const qc = useQueryClient();
   const track = async <R,>(run: ContentRun<R>) => {
-    const result = await trackContent(qc, run, (_, label) => ({ label: doneLabel(label), sub: instance.name, to: `/instances/${instance.id}?tab=worlds` }));
+    const result = await trackContent(qc, run, (_, label) => ({ label, sub: instance.name, to: `/instances/${instance.id}?tab=worlds` }));
     if (result == null) throw new Error(t("hooks.world.operationRunning"));
     return result;
   };
   const backupLabel = (world: World) => t("hooks.world.backupTask", { name: world.name });
   const backup = useWorldChange(
     instance.id,
-    (world: World) => track(withTarget(worldTarget(instance.id, world.id), (op) => api.worldBackup(instance.id, world.id, op), backupLabel(world))),
-    (_, world) => doneLabel(backupLabel(world)),
+    (world: World) => track(withTarget(worldTarget(instance.id, world.id), (op) => api.worldBackup(instance.id, world.id, op), backupLabel(world), { doneLabel: t("hooks.world.backupTaskDone", { name: world.name }) })),
+    (_, world) => t("hooks.world.backupTaskDone", { name: world.name }),
   );
   const remove = useWorldChange(
     instance.id,
-    (world: World) => track(withTarget(worldTarget(instance.id, world.id), (op) => api.worldDelete(instance.id, world.id, op), t("hooks.world.deleteTask", { name: world.name }))),
+    (world: World) => track(withTarget(worldTarget(instance.id, world.id), (op) => api.worldDelete(instance.id, world.id, op), t("hooks.world.deleteTask", { name: world.name }), { doneLabel: t("hooks.world.deleteTaskDone", { name: world.name }) })),
     (_, world) => t("hooks.world.deletedHint", { name: world.name }),
   );
   const restore = useWorldChange(
     instance.id,
-    (backup: WorldBackup) => track(withTarget(`restore:${backup.id}`, () => api.worldRestore(instance.id, backup.id), t("hooks.world.restoreTask", { name: backup.world }))),
+    (backup: WorldBackup) => track(withTarget(`restore:${backup.id}`, () => api.worldRestore(instance.id, backup.id), t("hooks.world.restoreTask", { name: backup.world }), { doneLabel: t("hooks.world.restoreTaskDone", { name: backup.world }) })),
     (world, backup) => (world.id === backup.world ? t("hooks.world.restored", { name: world.name }) : t("hooks.world.restoredInFolder", { name: world.name, folder: world.id })),
   );
   return { backup, remove, restore };

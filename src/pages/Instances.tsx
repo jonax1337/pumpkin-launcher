@@ -6,7 +6,7 @@ import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
 import { loaderLine, playtimeLine } from "@/components/common";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
 import { useBackgroundUpdates, useModUpdates } from "@/hooks/useContent";
-import { groupsOf, UNGROUPED, useInstances } from "@/hooks/useInstances";
+import { groupsOf, ungrouped, useInstances } from "@/hooks/useInstances";
 import { formatDate, formatPlaytime, relativeTime } from "@/lib/format";
 import { ALL_LOADERS, LOADER_LABELS, type Instance, type ModLoader } from "@/lib/types";
 import { lookOf, useLookStore } from "@/store/look";
@@ -64,7 +64,7 @@ function LibStatus({ inst }: { inst: Instance }) {
   if (nUpd > 0)
     return (
       <Chip icon="up">
-        <Count value={nUpd} /> {nUpd === 1 ? t("pages.instances.updateCount.one") : t("pages.instances.updateCount.other")}
+        <Count value={nUpd} /> {nUpd === 1 ? t("common.update") : t("common.updates")}
       </Chip>
     );
   return null;
@@ -130,12 +130,12 @@ function InstanceView({ instances, mode, looks }: { instances: Instance[]; mode:
       head={
         <>
           <span />
-          <Cell>{t("pages.instances.colName")}</Cell>
+          <Cell>{t("common.name")}</Cell>
           <Cell>{t("common.version")}</Cell>
           <Cell hide={1040}>{t("pages.instances.colContents")}</Cell>
           <Cell hide={1040}>{t("pages.instances.colLastPlayed")}</Cell>
           <Cell hide={1180}>{t("pages.instances.colPlaytime")}</Cell>
-          <Cell>{t("pages.instances.colStatus")}</Cell>
+          <Cell>{t("common.status")}</Cell>
           <span />
           <span />
         </>
@@ -187,7 +187,7 @@ export function InstancesPage() {
   // Leere Bibliothek: keine Werkzeugleiste, der Leerzustand trägt „Neue Instanz“.
   const empty = !error && !isLoading && !instances?.length;
   const newInstance = (
-    <Button variant="primary" icon="plus" aria-keyshortcuts="Control+N" onClick={() => setParams({ neu: "1" }, { replace: true })}>{t("pages.instances.newInstance")}</Button>
+    <Button variant="primary" icon="plus" aria-keyshortcuts="Control+N" onClick={() => setParams({ neu: "1" }, { replace: true })}>{t("components.newInstance.title")}</Button>
   );
 
   let body;
@@ -195,7 +195,7 @@ export function InstancesPage() {
     body = <ErrorBox title={t("pages.instances.loadErrorTitle")} error={error} onRetry={() => void refetch()} />;
   } else if (isLoading) {
     body = (
-      <CardGrid aria-busy aria-label={t("pages.instances.loadingLabel")}>
+      <CardGrid aria-busy aria-label={t("components.common.loadingAria")}>
         {[0, 1, 2, 3].map((k) => <Skel key={k} className="aspect-[4/5]" />)}
       </CardGrid>
     );
@@ -239,7 +239,7 @@ export function InstancesPage() {
           open={!collapsed.includes(key)}
           onToggle={(open) => setCollapsed(key, !open)}
           className="mb-4"
-          summary={<>{group ?? UNGROUPED} <Count value={members.length} muted /></>}
+          summary={<>{group ?? ungrouped()} <Count value={members.length} muted /></>}
         >
           <InstanceView instances={members} mode={mode} looks={looks} />
         </Disclosure>
@@ -251,7 +251,7 @@ export function InstancesPage() {
 
   return (
     <section className="page lib">
-      <PageHeader title={t("pages.instances.heading")} count={instances?.length ?? 0} />
+      <PageHeader title={t("ui.nav.library")} count={instances?.length ?? 0} />
       {/* An fester Stelle für beide Knöpfe: füllt der erste Import die leere Bibliothek, bleibt der Dialog mit den übrigen offen */}
       <NewInstanceDialog primary />
       <div className="sr" role="status" aria-live="polite" aria-atomic="true">{said}</div>
@@ -260,10 +260,10 @@ export function InstancesPage() {
         <Toolbar search="m" className="mt-4 mb-4.5">
           <SearchField value={query} onChange={setQuery} placeholder={t("pages.instances.searchPlaceholder")} />
           <Select
-            label={t("pages.instances.loaderLabel")}
+            label={t("components.common.loader")}
             value={loader}
             onChange={(v) => setLoader(v as ModLoader | "all")}
-            options={[{ value: "all", label: t("pages.instances.filterAll") }, ...ALL_LOADERS.map((l) => ({ value: l, label: LOADER_LABELS[l] }))]}
+            options={[{ value: "all", label: t("common.all") }, ...ALL_LOADERS.map((l) => ({ value: l, label: LOADER_LABELS[l] }))]}
           />
           <Select
             label={t("pages.instances.sortLabel")}
@@ -271,8 +271,8 @@ export function InstancesPage() {
             value={sort}
             onChange={(v) => setSort(v as Sort)}
             options={[
-              { value: "recent", label: t("pages.instances.sortRecent") },
-              { value: "name", label: t("pages.instances.sortName") },
+              { value: "recent", label: t("pages.instances.colLastPlayed") },
+              { value: "name", label: t("common.name") },
               { value: "created", label: t("pages.instances.sortCreated") },
             ]}
           />

@@ -18,10 +18,10 @@ import pkg from "../../package.json";
 
 // Abschnitte als Wert + Schlüssel; die Beschriftung löst die Oberfläche erst beim Rendern auf.
 const SECTION_KEYS = [
-  { value: "konten", key: "pages.settings.tabAccounts" },
+  { value: "konten", key: "components.account.accounts" },
   { value: "spiel", key: "pages.settings.tabGame" },
   { value: "darstellung", key: "pages.settings.tabAppearance" },
-  { value: "erweitert", key: "pages.settings.tabAdvanced" },
+  { value: "erweitert", key: "components.newInstance.advanced" },
   { value: "support", key: "pages.settings.tabSupport" },
   { value: "ueber", key: "pages.settings.tabAbout" },
 ] as const;
@@ -61,7 +61,7 @@ function JavaRow() {
         name="gjava"
         value={javaPath}
         onChange={(path) => set({ javaPath: path })}
-        fallback={<>{t("pages.settings.javaAutomatic")} <span className="text-fg-3">{t("pages.settings.javaAutomaticNote")}</span></>}
+        fallback={<>{t("components.memory.auto")} <span className="text-fg-3">{t("pages.settings.javaAutomaticNote")}</span></>}
       />
     </FormRow>
   );
@@ -122,7 +122,7 @@ export function SettingsPage() {
 
           {tab === "spiel" && (
             <>
-              <FormRow label={t("pages.settings.memoryLabel")} hint={t("pages.settings.memoryHint")} group="radiogroup" aside={<MemoryHelp value={s.memoryMb} />}>
+              <FormRow label={t("ui.memory.label")} hint={t("pages.settings.memoryHint")} group="radiogroup" aside={<MemoryHelp value={s.memoryMb} />}>
                 <MemoryChooser name="gram" value={s.memoryMb} onChange={(mb) => s.set({ memoryMb: mb })} help={false} />
               </FormRow>
               <JavaRow />
@@ -157,7 +157,7 @@ export function SettingsPage() {
                     disabled={reduced}
                     onChange={(motion) => s.set({ motion })}
                     label={t("pages.settings.motionLabel")}
-                    stateText={reduced ? undefined : [t("pages.settings.switchOn"), t("pages.settings.switchOff")]}
+                    stateText={reduced ? undefined : [t("ui.switch.on"), t("ui.switch.off")]}
                   />
                   {reduced && <Hint icon="info">{t("pages.settings.motionReducedHint")}</Hint>}
                 </Actions>

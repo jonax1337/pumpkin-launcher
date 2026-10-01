@@ -4,6 +4,7 @@ import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react
 import { toast } from "sonner";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { TipProvider, Toaster } from "@/ui";
+import { LanguageProvider } from "@/i18n";
 import { Layout } from "@/app/Layout";
 import { BrandProvider } from "@/branding/Brand";
 import { CANCELLED } from "@/lib/types";
@@ -72,12 +73,14 @@ const router = createBrowserRouter([
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <TipProvider delayDuration={450}>
-        <BrandProvider>
-          <RouterProvider router={router} />
-          <Toaster />
-        </BrandProvider>
-      </TipProvider>
+      <LanguageProvider>
+        <TipProvider delayDuration={450}>
+          <BrandProvider>
+            <RouterProvider router={router} />
+            <Toaster />
+          </BrandProvider>
+        </TipProvider>
+      </LanguageProvider>
     </QueryClientProvider>
   </React.StrictMode>,
 );

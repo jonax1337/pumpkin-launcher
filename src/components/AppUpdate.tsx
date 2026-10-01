@@ -1,6 +1,6 @@
 import type { Update } from "@tauri-apps/plugin-updater";
 import { Description } from "@/components/Description";
-import { installAppUpdate, useAppUpdate, useUpdateRun, WAIT_FOR_IDLE } from "@/hooks/useAppUpdate";
+import { installAppUpdate, useAppUpdate, useUpdateRun, waitForIdle } from "@/hooks/useAppUpdate";
 import { Actions, Button, Count, ErrorBox, FormRow, Hint, JobProgress } from "@/ui";
 import { useI18n } from "@/i18n";
 
@@ -10,7 +10,7 @@ export function UpdateRow() {
   const { data: update, error, isFetching, isFetched, refetch } = useAppUpdate();
   const busy = useUpdateRun((s) => s.phase !== "idle");
   return (
-    <FormRow label={t("components.update.label")} hint={t("components.update.hint")}>
+    <FormRow label={t("common.updates")} hint={t("components.update.hint")}>
       {update ? (
         <UpdateOffer update={update} />
       ) : error ? (
@@ -47,7 +47,7 @@ function UpdateOffer({ update }: { update: Update }) {
         </Actions>
       )}
       {phase === "download" && <JobProgress label={t("components.update.downloading")} p={p} />}
-      {phase === "wait" && <Hint icon="info">{WAIT_FOR_IDLE}</Hint>}
+      {phase === "wait" && <Hint icon="info">{waitForIdle()}</Hint>}
       {phase === "ready" && (
         <Actions>
           <Button variant="primary" icon="redo" onClick={() => void installAppUpdate(update)}>

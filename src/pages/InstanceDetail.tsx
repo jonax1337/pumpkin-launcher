@@ -74,20 +74,20 @@ function InstanceDetail({ id }: { id: string }) {
   if (error)
     return (
       <section className="page">
-        <BackLink to="/instances">{t("pages.detail.backToLibrary")}</BackLink>
+        <BackLink to="/instances">{t("ui.nav.library")}</BackLink>
         <ErrorBox className="mt-4" title={t("pages.detail.loadErrorTitle")} error={error} onRetry={() => void refetch()} />
       </section>
     );
 
   if (!instance)
     return (
-      <section className="detail" aria-busy aria-label={t("pages.detail.loadingLabel")}>
+      <section className="detail" aria-busy aria-label={t("components.common.loadingAria")}>
         <header className="dhead">
           <PixelScene bio={look.bio} seed={look.seed} mode="live" className="scene" />
           <div className="shade-head" />
           <div className="dh-full">
             <div className="dh-info">
-              <div className="flex"><BackLink to="/instances" onScene>{t("pages.detail.backToLibrary")}</BackLink></div>
+              <div className="flex"><BackLink to="/instances" onScene>{t("ui.nav.library")}</BackLink></div>
               <Skel h={48} w="min(460px, 60%)" />
               <Skel h={28} w={280} />
             </div>
@@ -145,8 +145,8 @@ function Loaded({ instance, tab, setTab, head, compact }: {
       tip: warnText || undefined,
     },
     { value: "worlds", label: t("common.worlds") },
-    { value: "screenshots", label: t("pages.detail.tabScreenshots") },
-    { value: "console", label: t("pages.detail.tabConsole") },
+    { value: "screenshots", label: t("components.export.entry.screenshots") },
+    { value: "console", label: t("components.log.ariaLabel") },
     { value: "settings", label: t("common.settings") },
   ];
 
@@ -157,7 +157,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
         <div className="shade-head" />
         <div className="dh-full" aria-hidden={compact || undefined}>
           <div className="dh-info">
-            <div className="flex"><BackLink to="/instances" onScene>{t("pages.detail.backToLibrary")}</BackLink></div>
+            <div className="flex"><BackLink to="/instances" onScene>{t("ui.nav.library")}</BackLink></div>
             <h1 title={instance.name}>{instance.name}</h1>
             {/* Infos als ruhiger Text, Absturz als Chip, Updates als Knopf: was klickbar ist, sieht so aus. */}
             <div className="dh-meta">
@@ -165,12 +165,12 @@ function Loaded({ instance, tab, setTab, head, compact }: {
                 size="l"
                 onScene
                 className="overflow-hidden"
-                items={[version, !narrow && instance.loaderVersion && <>{t("pages.detail.loaderWord")} <Count value={instance.loaderVersion} size={20} /></>, !narrow && playtimeLine(instance)]}
+                items={[version, !narrow && instance.loaderVersion && <>{t("components.common.loader")} <Count value={instance.loaderVersion} size={20} /></>, !narrow && playtimeLine(instance)]}
               />
               {crashed && <StatusChip instance={instance} />}
               {nUpd > 0 && (
                 <Button size="s" icon="up" count={nUpd} onScene onClick={showUpdates} tabIndex={compact ? -1 : undefined}>
-                  {nUpd === 1 ? t("pages.detail.updateCount.one") : t("pages.detail.updateCount.other")}
+                  {nUpd === 1 ? t("common.update") : t("common.updates")}
                 </Button>
               )}
             </div>

@@ -83,7 +83,7 @@ function PlayBar({ p, thin, bad, className, style, label, decorative }: { p?: nu
   return (
     <span
       role="progressbar"
-      aria-label={label ?? t("components.game.progress")}
+      aria-label={label ?? t("ui.progress.label")}
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={ind(p) ? undefined : Math.round(Math.max(0, Math.min(1, p!)) * 100)}
@@ -101,7 +101,7 @@ function playState(instance: Instance, phase: Phase, percent: number | null, cod
   switch (phase) {
     case "preparing":
       // Kein Knopf, sondern Vorgang: Abbrechen steht in der Statuszeile.
-      return { st: "prep", icon: "dl", l1: t("components.game.installing"), s1: t("components.game.installedShort"), l2: "", p: (percent ?? 0) / 100, pct: `${percent ?? 0}%`, dis: true, aria: t("components.game.ariaInstalling", { name, percent: percent ?? 0 }) };
+      return { st: "prep", icon: "dl", l1: t("components.game.installing"), s1: t("components.content.installed"), l2: "", p: (percent ?? 0) / 100, pct: `${percent ?? 0}%`, dis: true, aria: t("components.game.ariaInstalling", { name, percent: percent ?? 0 }) };
     case "starting":
       return { st: "start", icon: "hour", l1: t("components.game.starting"), s1: t("components.game.starting"), l2: "", p: null, dis: true, aria: t("components.game.ariaStarting", { name }) };
     case "running":
@@ -114,7 +114,7 @@ function playState(instance: Instance, phase: Phase, percent: number | null, cod
     case "crashed":
       return { st: "error", icon: "redo", l1: t("components.game.restart"), s1: t("components.game.onceMore"), l2: t("components.game.crashed") + (code != null ? t("components.game.exitCode", { code }) : ""), p: 0, aria: t("components.game.ariaCrashed", { name }) };
     case "loading":
-      return { st: "idle", icon: "play", l1: t("common.play"), s1: t("common.play"), l2: t("components.game.oneMoment"), p: 0, dis: true, aria: t("components.game.ariaPlay", { name }) };
+      return { st: "idle", icon: "play", l1: t("common.play"), s1: t("common.play"), l2: t("ui.dialog.pending"), p: 0, dis: true, aria: t("components.game.ariaPlay", { name }) };
   }
   if (phase === "missing" && !SUPPORTED_LOADERS.includes(instance.loader))
     return { st: "blocked", icon: "plug", l1: t("components.game.cannotStart"), s1: t("components.game.blocked"), l2: t("components.game.loaderUnsupported"), p: 0, dis: true, aria: t("components.game.ariaCannotStart", { name }) };
@@ -295,7 +295,7 @@ export function StopDialog() {
 // ---------- Protokoll ----------
 
 type LogFilter = "all" | "warn" | "err";
-const LOG_FILTERS: { value: LogFilter; label: string }[] = [{ value: "all", label: "components.log.filterAll" }, { value: "warn", label: "components.log.filterWarn" }, { value: "err", label: "common.error" }];
+const LOG_FILTERS: { value: LogFilter; label: string }[] = [{ value: "all", label: "common.all" }, { value: "warn", label: "components.log.filterWarn" }, { value: "err", label: "common.error" }];
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 

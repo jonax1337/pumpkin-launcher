@@ -67,7 +67,7 @@ const allVersionsQuery = (projectId: string, source: Source = "modrinth") => ({
 
 // Modrinth-Kategorien in Alltagssprache; Loader-Namen sind keine Kategorie für die Anzeige.
 const CATEGORY: Record<string, string> = {
-  adventure: "components.category.adventure", optimization: "components.category.optimization", technology: "components.category.technology",
+  adventure: "detail.worlds.gameMode.adventure", optimization: "components.category.optimization", technology: "components.category.technology",
   magic: "components.category.magic", decoration: "components.category.decoration", utility: "components.category.utility",
   "game-mechanics": "components.category.gameMechanics", library: "components.category.library", worldgen: "components.category.worldgen",
   mobs: "components.category.mobs", storage: "components.category.storage", equipment: "components.category.equipment",
@@ -196,7 +196,7 @@ function useAddContent() {
     const { world } = opts;
     const perform = (op: string) =>
       world ? installDatapack(qc, instance, world, id, op) : source === "modrinth" ? api.modrinthInstallMod(instance.id, id, op) : api.providerInstallMod(source, instance.id, projectId, id, op);
-    install.mutate(withTarget(projectId, perform, t("components.content.installTask", { name: title })), {
+    install.mutate(withTarget(projectId, perform, t("components.content.installTask", { name: title }), { doneLabel: t("components.content.installTaskDone", { name: title }) }), {
       onSuccess: (result) => {
         if (!result) return;
         const extra = result.mods.length - before - 1;
@@ -373,7 +373,7 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
       if (!id) return;
     }
     const perform = (op: string) => (source === "modrinth" ? api.modrinthInstallPack(id, name, op) : api.providerInstallPack(source, projectId, id, name, op));
-    install.mutate(withTarget(projectId, perform, t("components.pack.installTask", { name }), { cancellable: true }), {
+    install.mutate(withTarget(projectId, perform, t("components.pack.installTask", { name }), { cancellable: true, doneLabel: t("components.pack.installTaskDone", { name }) }), {
       onSuccess: (inst) => {
         if (!inst) return;
         toast.success(t("components.pack.readyToast", { name: inst.name }), {
@@ -388,8 +388,10 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
   return { run, busy, p: checking ? null : progressShare(progress), blocked: !!active || checking, cancel: !checking && busy ? cancelContent : undefined };
 }
 
-/** „Fabric, Quilt“ aus den Loadern einer Version; „minecraft“ ist Modrinths Marke für Ressourcen ohne Loader. */
-const loaderList = (v: ContentVersion) => v.loaders.filter((l) => l !== "minecraft").map((l) => LOADER_LABELS[l as ModLoader] ?? l).join(", ");
+/** Loader-Namen; „minecraft“ ist Modrinths Marke für Ressourcen ohne Loader, „datapack“ der von Datenpaketen. */
+const loaderNamesOf = (loaders: string[]) =>
+  loaders.map((l) => (l === "datapack" ? t("components.catalog.kind.datapack") : (LOADER_LABELS[l as ModLoader] ?? l))).join(", ");
+const loaderList = (v: ContentVersion) => loaderNamesOf(v.loaders.filter((l) => l !== "minecraft"));
 const loaderNames = (v: ContentVersion) => loaderList(v) || "Vanilla";
 
 /** Inhalt der Bestätigung; wird beim Schließen verworfen, der Name beginnt also immer beim Pack-Titel. */
@@ -810,7 +812,7 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
                   {type !== "resourcepack" && type !== "datapack" && (
                     <>
                       <dt>{t("components.common.loader")}</dt>
-                      <dd>{type === "shader" ? "Iris (Fabric, Quilt, NeoForge)" : loaders.length ? loaders.map((l) => LOADER_LABELS[l as ModLoader] ?? l).join(", ") : all.data ? t("components.detail.notSpecified") : "…"}</dd>
+                      <dd>{type === "shader" ? "Iris (Fabric, Quilt, NeoForge)" : loaders.length ? loaderNamesOf(loaders) : all.data ? t("components.detail.notSpecified") : "…"}</dd>
                     </>
                   )}
                   {source === "modrinth" && (

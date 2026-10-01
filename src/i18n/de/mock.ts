@@ -3,7 +3,6 @@ import type { Dict } from "../types.ts";
 // Fehlermeldungen der Browser-Mocks (Instanz/Welt/Sicherung/Datenpaket/Screenshot/Skin). Deutsch ist Quelle der Wahrheit.
 export const mock = {
   "mock.mods.missingEntry": "Mock-Mod {slug} fehlt",
-  "mock.instance.notFound": "Instanz \"{id}\" nicht gefunden",
   "mock.instance.stillRunning": "Instanz läuft noch",
   "mock.modrinth.unreachable": "Modrinth antwortet nicht ({status})",
   "mock.content.requiredModMissing": "Eine benötigte Mod gibt es nicht für diese Minecraft-Version.",

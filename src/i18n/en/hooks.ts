@@ -4,20 +4,16 @@ import { hooks as deHooks } from "../de/hooks.ts";
 export const hooks: typeof deHooks = {
   "hooks.update.availableToast": "Pumpkin Launcher {version} is here",
   "hooks.update.availableHint": "Install it whenever it suits you.",
-  "hooks.update.viewAction": "View",
   "hooks.update.waitForIdle": "Restarting becomes available once Minecraft has closed and no tasks are running.",
   "hooks.update.installFailed": "The update could not be installed",
   "hooks.update.loaded": "Update downloaded",
   "hooks.update.ready": "Update is ready",
   "hooks.update.readyHint": "Pumpkin Launcher will restart to install it.",
-  "hooks.update.restartNow": "Restart now",
 
-  "hooks.content.defaultLabel": "Loading content",
 
   "hooks.import.noNewInFolder": "There are no new instances in this folder.",
   "hooks.import.instanceTask": "Import {name}",
 
-  "hooks.groups.ungrouped": "No group",
 
   "hooks.install.doneTask": "{name} installed",
   "hooks.install.readySub": "Ready to play",
@@ -28,16 +24,13 @@ export const hooks: typeof deHooks = {
   "hooks.launch.needPlayerName": "Set a player name first.",
   "hooks.launch.needMicrosoft": "Sign in with your Microsoft account first.",
   "hooks.launch.setPlayerName": "Set player name",
-  "hooks.launch.signInMicrosoft": "Sign in with Microsoft",
 
-  "hooks.game.logAction": "Log",
   "hooks.game.exited": "Minecraft closed",
   "hooks.game.exitedPlayed": "Minecraft closed. Time played: {duration}",
   "hooks.game.exitedWithCode": "{name} exited unexpectedly (code {code})",
   "hooks.game.crashed": "{name} has crashed",
   "hooks.game.crashReportHint": "The crash report usually says which mod is at fault.",
   "hooks.game.logHint": "The log shows what happened last.",
-  "hooks.game.openCrashReport": "Open crash report",
 
   "hooks.screenshot.trashed": "Screenshot moved to the recycle bin",
 
@@ -51,7 +44,6 @@ export const hooks: typeof deHooks = {
   "hooks.support.logShared": "Log shared",
   "hooks.support.debugCopied": "Debug info copied",
   "hooks.support.debugHint": "Paste it into your bug report.",
-  "hooks.support.copyFailed": "Couldn't copy",
 
   "hooks.template.saved": "Template \"{name}\" saved",
   "hooks.template.savedHint": "You'll find it under New › Template.",
@@ -90,4 +82,8 @@ export const hooks: typeof deHooks = {
   "hooks.api.msLoginBrowser": "Sign in to Microsoft in your browser.",
   "hooks.api.msLoginDevice": "Open {url} and enter the code {code}.",
   "hooks.api.loginCancelled": "Sign-in cancelled",
+  "hooks.import.instanceTaskDone": "Imported {name}",
+  "hooks.world.backupTaskDone": "Backed up “{name}”",
+  "hooks.world.deleteTaskDone": "Deleted “{name}”",
+  "hooks.world.restoreTaskDone": "Restored “{name}”",
 };

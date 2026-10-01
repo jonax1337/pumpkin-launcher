@@ -4,20 +4,16 @@ import type { Dict } from "../types.ts";
 export const hooks = {
   "hooks.update.availableToast": "Pumpkin Launcher {version} ist da",
   "hooks.update.availableHint": "Installieren, wann es dir passt.",
-  "hooks.update.viewAction": "Ansehen",
   "hooks.update.waitForIdle": "Neu starten geht, sobald Minecraft beendet ist und keine Aufgaben mehr laufen.",
   "hooks.update.installFailed": "Das Update ließ sich nicht installieren",
   "hooks.update.loaded": "Update ist geladen",
   "hooks.update.ready": "Update ist bereit",
   "hooks.update.readyHint": "Pumpkin Launcher startet für die Installation neu.",
-  "hooks.update.restartNow": "Jetzt neu starten",
 
-  "hooks.content.defaultLabel": "Inhalte laden",
 
   "hooks.import.noNewInFolder": "In diesem Ordner gibt es keine neuen Instanzen.",
   "hooks.import.instanceTask": "{name} importieren",
 
-  "hooks.groups.ungrouped": "Ohne Gruppe",
 
   "hooks.install.doneTask": "{name} installiert",
   "hooks.install.readySub": "Bereit zum Spielen",
@@ -28,16 +24,13 @@ export const hooks = {
   "hooks.launch.needPlayerName": "Leg zuerst einen Spielernamen fest.",
   "hooks.launch.needMicrosoft": "Melde dich zuerst mit deinem Microsoft-Konto an.",
   "hooks.launch.setPlayerName": "Spielername festlegen",
-  "hooks.launch.signInMicrosoft": "Mit Microsoft anmelden",
 
-  "hooks.game.logAction": "Protokoll",
   "hooks.game.exited": "Minecraft beendet",
   "hooks.game.exitedPlayed": "Minecraft beendet. Gespielt: {duration}",
   "hooks.game.exitedWithCode": "{name} wurde unerwartet beendet (Code {code})",
   "hooks.game.crashed": "{name} ist abgestürzt",
   "hooks.game.crashReportHint": "Im Absturzbericht steht meist, welche Mod schuld ist.",
   "hooks.game.logHint": "Das Protokoll zeigt, was zuletzt passiert ist.",
-  "hooks.game.openCrashReport": "Absturzbericht öffnen",
 
   "hooks.screenshot.trashed": "Screenshot in den Papierkorb gelegt",
 
@@ -51,7 +44,6 @@ export const hooks = {
   "hooks.support.logShared": "Log geteilt",
   "hooks.support.debugCopied": "Debug-Info kopiert",
   "hooks.support.debugHint": "Füge sie in deinen Fehlerbericht ein.",
-  "hooks.support.copyFailed": "Kopieren hat nicht geklappt",
 
   "hooks.template.saved": "Vorlage „{name}“ gespeichert",
   "hooks.template.savedHint": "Du findest sie unter Neu › Vorlage.",
@@ -90,4 +82,8 @@ export const hooks = {
   "hooks.api.msLoginBrowser": "Melde dich im Browser bei Microsoft an.",
   "hooks.api.msLoginDevice": "Öffne {url} und gib den Code {code} ein.",
   "hooks.api.loginCancelled": "Anmeldung abgebrochen",
+  "hooks.import.instanceTaskDone": "{name} importiert",
+  "hooks.world.backupTaskDone": "„{name}“ gesichert",
+  "hooks.world.deleteTaskDone": "„{name}“ gelöscht",
+  "hooks.world.restoreTaskDone": "„{name}“ wiederhergestellt",
 } satisfies Dict;

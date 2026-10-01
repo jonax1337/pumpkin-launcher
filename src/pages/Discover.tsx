@@ -82,7 +82,7 @@ export function DiscoverPage() {
       )}
       {/* Bleibt beim Öffnen von Details erhalten, damit Suche und geladene Seiten nicht verloren gehen. */}
       <section className="page disc" hidden={!!projectId}>
-        <PageHeader title={t("pages.discover.heading")}>
+        <PageHeader title={t("ui.nav.discover")}>
           {tabs.length > 1 && (
             <Tabs
               variant="segment"
@@ -102,7 +102,7 @@ export function DiscoverPage() {
         <Toolbar search="l" wrapBelow={1096} label={t("pages.discover.searchFilterLabel")} className="mt-4 mb-3.5">
           <SearchField value={query} onChange={setQuery} placeholder={SEARCH_PLACEHOLDER[type]} autoFocus />
           <Select
-            label={t("pages.discover.sourceLabel")}
+            label={t("components.sheet.sourceLabel")}
             value={source}
             onChange={(s) => {
               reset();
@@ -115,15 +115,15 @@ export function DiscoverPage() {
               label={t("common.version")}
               value={ver}
               onChange={setVer}
-              options={[{ value: "all", label: t("pages.discover.filterAll") }, ...releases.map((v) => ({ value: v.id, label: v.id }))]}
+              options={[{ value: "all", label: t("common.all") }, ...releases.map((v) => ({ value: v.id, label: v.id }))]}
             />
           )}
           {withLoader && (
             <Select
-              label={t("pages.discover.loaderLabel")}
+              label={t("components.common.loader")}
               value={loader}
               onChange={setLoader}
-              options={[{ value: "all", label: t("pages.discover.filterAll") }, ...ALL_LOADERS.filter((l) => l !== "vanilla").map((l) => ({ value: l, label: LOADER_LABELS[l] }))]}
+              options={[{ value: "all", label: t("common.all") }, ...ALL_LOADERS.filter((l) => l !== "vanilla").map((l) => ({ value: l, label: LOADER_LABELS[l] }))]}
             />
           )}
           <Spacer />
@@ -137,7 +137,7 @@ export function DiscoverPage() {
                 { value: "downloads", label: t("pages.discover.sortDownloads") },
                 { value: "follows", label: t("pages.discover.sortFollows") },
                 { value: "newest", label: t("pages.discover.sortNewest") },
-                { value: "updated", label: t("pages.discover.sortUpdated") },
+                { value: "updated", label: t("components.sort.updated") },
               ]}
             />
           )}

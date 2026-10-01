@@ -8,7 +8,7 @@ export function NotFoundPage() {
     <section className="page">
       <Empty
         ill={<Buddy mood="oops" size={144} />}
-        title={t("pages.notFound.title")}
+        title={t("ui.pageTitle.notFound")}
         asPage
         actions={<ButtonLink to="/" variant="primary" icon="back">{t("pages.notFound.backToHome")}</ButtonLink>}
       >

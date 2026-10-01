@@ -4,8 +4,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { askPlayerName, openAddOffline, startMsLogin } from "@/components/PlayerNames";
-import { setCurrentLanguage, t } from "@/i18n/core";
-import { resolveChoice } from "@/i18n/types";
+import { t } from "@/i18n/core";
 import { usableAccount, useOfflineAllowed } from "@/store/offline";
 import { api } from "@/lib/api";
 import { autoMemoryMb, formatClock, maxMemoryMb } from "@/lib/format";
@@ -33,16 +32,8 @@ export function useInstances() {
 export const groupsOf = (instances: Instance[]) =>
   [...new Set(instances.flatMap((i) => (i.group ? [i.group] : [])))].sort((a, b) => a.localeCompare(b, "de"));
 
-/**
- * Anzeige für Instanzen ohne Gruppe (Bibliothek und Einstellungen). Live-Export, kein fester Text: Er wird mit der
- * Sprachwahl neu berechnet. Dieses Abo läuft vor dem LanguageProvider (Persistenz lädt nachträglich), deshalb
- * setzt es die Modul-Sprache selbst.
- */
-export let UNGROUPED = t("hooks.groups.ungrouped");
-useSettings.subscribe((s) => {
-  setCurrentLanguage(resolveChoice(s.language));
-  UNGROUPED = t("hooks.groups.ungrouped");
-});
+/** Anzeige für Instanzen ohne Gruppe (Bibliothek und Einstellungen); live berechnet, kein fester Text. */
+export const ungrouped = () => t("detail.settings.noGroup");
 
 export function useGroups() {
   return useQuery({ ...instanceListQuery, select: groupsOf }).data ?? [];
@@ -262,7 +253,7 @@ export function useLaunch() {
       if (usableAccount(useSettings.getState().active, offlineOk)) return void toast.error(err.message);
       const action = offlineOk
         ? { label: t("hooks.launch.setPlayerName"), onClick: openAddOffline }
-        : { label: t("hooks.launch.signInMicrosoft"), onClick: () => void startMsLogin(qc) };
+        : { label: t("components.account.msLogin"), onClick: () => void startMsLogin(qc) };
       toast.error(err.message, { duration: 10_000, action });
     },
   });
@@ -339,7 +330,7 @@ export function useGameEvents() {
         void qc.invalidateQueries({ queryKey: instanceKeys.all });
         void qc.invalidateQueries({ queryKey: worldKeys.all(instanceId) });
         void qc.invalidateQueries({ queryKey: screenshotKeys.list(instanceId) });
-        const showLog = { label: t("hooks.game.logAction"), onClick: () => navigate(`/instances/${instanceId}?tab=console`) };
+        const showLog = { label: t("components.log.ariaLabel"), onClick: () => navigate(`/instances/${instanceId}?tab=console`) };
         if (stopping.delete(instanceId)) {
           toast(since ? t("hooks.game.exitedPlayed", { duration: formatClock(Date.now() - since) }) : t("hooks.game.exited"), { action: showLog });
           return;
@@ -353,7 +344,7 @@ export function useGameEvents() {
             duration: Infinity,
             description: crashReport ? t("hooks.game.crashReportHint") : t("hooks.game.logHint"),
             action: crashReport
-              ? { label: t("hooks.game.openCrashReport"), onClick: () => void api.openPath(crashReport).catch(toastError) }
+              ? { label: t("components.game.openCrashReport"), onClick: () => void api.openPath(crashReport).catch(toastError) }
               : showLog,
             cancel: crashReport ? showLog : undefined,
           });

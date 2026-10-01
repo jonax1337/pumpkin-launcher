@@ -53,12 +53,12 @@ function HeroInfo({ instance }: { instance: Instance }) {
           items={[
             loaderLine(instance),
             <><Count value={n} /> {n === 1 ? t("pages.home.contentCount.one") : t("pages.home.contentCount.other")}</>,
-            !playing && (instance.lastPlayedAt != null ? t("pages.home.lastPlayed", { zeit: relativeTime(instance.lastPlayedAt) }) : t("format.neverPlayed")),
+            !playing && (instance.lastPlayedAt != null ? t("components.game.lastPlayed", { zeit: relativeTime(instance.lastPlayedAt) }) : t("format.neverPlayed")),
           ]}
         />
         {u > 0 && (
           <ButtonLink to={`/instances/${instance.id}?tab=content`} size="s" icon="up" count={u} onScene>
-            {u === 1 ? t("pages.home.updateCount.one") : t("pages.home.updateCount.other")}
+            {u === 1 ? t("common.update") : t("common.updates")}
           </ButtonLink>
         )}
         {resume && (
@@ -161,7 +161,7 @@ function Rail({ instances, current, onPick }: { instances: Instance[]; current: 
         ))}
         <li>
           <NewInstanceDialog>
-            <AddCard label={t("pages.home.newInstance")} />
+            <AddCard label={t("components.newInstance.title")} />
           </NewInstanceDialog>
         </li>
       </ul>
@@ -176,7 +176,7 @@ function Rail({ instances, current, onPick }: { instances: Instance[]; current: 
 function HomeSkeleton() {
   const { t } = useI18n();
   return (
-    <section className="home" aria-busy aria-label={t("pages.home.loadingLabel")}>
+    <section className="home" aria-busy aria-label={t("components.common.loadingAria")}>
       <div className="hero">
         <div className="hero-k">
           <div className="titlebox"><Skel h={72} w="min(520px, 80%)" /></div>
@@ -237,12 +237,12 @@ export function HomePage() {
       <div className="cont">
         <div className="library-heading">
           <SectionHeader
-            title={t("pages.home.yourInstances")}
+            title={t("components.detail.yourInstances")}
             id="cont-h"
             actions={
               <>
                 <NewInstanceDialog>
-                  <Button variant="ghost" size="s" icon="plus">{t("pages.home.newInstance")}</Button>
+                  <Button variant="ghost" size="s" icon="plus">{t("components.newInstance.title")}</Button>
                 </NewInstanceDialog>
                 <ButtonLink to="/instances" variant="ghost" size="s" iconEnd="chev" bleed="end">{t("pages.home.allInLibrary")}</ButtonLink>
               </>

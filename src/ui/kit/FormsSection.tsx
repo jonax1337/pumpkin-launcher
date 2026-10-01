@@ -34,19 +34,19 @@ function TabsDemo() {
   const { t } = useI18n();
   // Einträge erst hier, damit die Beschriftungen in der aktuellen Sprache entstehen.
   const TABS: TabItem<T>[] = [
-    { value: "content", label: t("ui.kit.tabContents"), count: 42, badge: <Icon name="warn" size="s" tone="warn" /> },
-    { value: "console", label: t("ui.kit.tabLog") },
+    { value: "content", label: t("pages.instances.colContents"), count: 42, badge: <Icon name="warn" size="s" tone="warn" /> },
+    { value: "console", label: t("components.log.ariaLabel") },
     { value: "settings", label: t("common.settings") },
     { value: "off", label: t("common.worlds"), disabled: true },
   ];
   const WAYS: TabItem<W>[] = [
     { value: "blank", label: t("ui.kit.empty"), icon: "plus" },
-    { value: "pack", label: t("ui.kit.wayModpack"), icon: "box" },
+    { value: "pack", label: t("components.catalog.one.modpack"), icon: "box" },
     { value: "file", label: t("ui.kit.wayFromFile"), icon: "file" },
   ];
   const VIEWS: TabItem<V>[] = [
-    { value: "grid", label: t("ui.kit.viewPoster"), icon: "grid" },
-    { value: "list", label: t("ui.kit.viewList"), icon: "list" },
+    { value: "grid", label: t("pages.instances.viewPoster"), icon: "grid" },
+    { value: "list", label: t("pages.instances.viewList"), icon: "list" },
   ];
   const [tab, setTab] = useState<T>("content");
   const [w, setW] = useState<W>("blank");
@@ -57,7 +57,7 @@ function TabsDemo() {
     <>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <span style={cap}>underline m · idBase + TabPanel · Zähler + Badge · aus</span>
-        <Tabs label={t("ui.kit.instanceTabs")} items={TABS} value={tab} onChange={setTab} idBase="kit-dt" />
+        <Tabs label={t("pages.detail.tabsLabel")} items={TABS} value={tab} onChange={setTab} idBase="kit-dt" />
         <TabPanel idBase="kit-dt" value={tab} style={{ padding: "10px 0", color: "var(--fg-2)" }}>{t("ui.kit.tabPanelDemo", { value: tab })}</TabPanel>
         <span style={cap}>underline s mit Icons · erzwungen hover / press</span>
         <div style={row}>
@@ -89,13 +89,13 @@ function TabsDemo() {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }} data-kit="segments">
           <span style={cap}>Segmented m · s · nur Symbole · tablist</span>
-          <Segmented label={t("ui.kit.view")} items={VIEWS} value={v} onChange={setV} />
-          <Segmented size="s" label={t("ui.kit.pxSize")} items={[{ value: "s", label: t("ui.kit.pxSmall") }, { value: "m", label: t("ui.kit.pxMedium") }, { value: "l", label: t("ui.kit.large") }, { value: "x", label: t("ui.kit.pxHuge"), disabled: true }]} value={px} onChange={setPx} />
+          <Segmented label={t("pages.instances.viewLabel")} items={VIEWS} value={v} onChange={setV} />
+          <Segmented size="s" label={t("ui.kit.pxSize")} items={[{ value: "s", label: t("pages.settings.pxSizeSmall") }, { value: "m", label: t("pages.settings.pxSizeMedium") }, { value: "l", label: t("pages.settings.pxSizeLarge") }, { value: "x", label: t("ui.kit.pxHuge"), disabled: true }]} value={px} onChange={setPx} />
           <div style={row}>
             <Segmented iconsOnly label={t("ui.kit.viewIcons")} items={VIEWS} value={v} onChange={setV} />
             <Segmented iconsOnly size="s" label={t("ui.kit.viewIconsSmall")} items={VIEWS} value={v} onChange={setV} />
           </div>
-          <Tabs variant="segment" label={t("ui.kit.filter")} items={[{ value: "all", label: t("ui.kit.all"), count: 42 }, { value: "mod", label: "Mods", count: 38 }, { value: "rp", label: t("ui.kit.packs"), count: 4 }]} value={f} onChange={setF} />
+          <Tabs variant="segment" label={t("components.log.filter")} items={[{ value: "all", label: t("common.all"), count: 42 }, { value: "mod", label: "Mods", count: 38 }, { value: "rp", label: t("ui.kit.packs"), count: 4 }]} value={f} onChange={setF} />
           <div className="plate" style={{ padding: 12 }}>
             <Segmented size="s" label={t("ui.kit.viewPlate")} items={VIEWS} value={v} onChange={setV} />
           </div>
@@ -121,20 +121,20 @@ function FormDemo() {
   const [args, setArgs] = useState("");
   return (
     <div style={{ maxWidth: "var(--page-max)" }} data-kit="form">
-      <FormSection title={t("ui.kit.general")}>
-        <FormRow label={t("ui.kit.nameField")} htmlFor="kit-name" aside={t("ui.kit.nameHelp")}>
+      <FormSection title={t("detail.settings.generalSection")}>
+        <FormRow label={t("common.name")} htmlFor="kit-name" aside={t("ui.kit.nameHelp")}>
           <TextField id="kit-name" value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />
         </FormRow>
-        <FormRow label="Java" hint={t("ui.kit.javaHint")} group="radiogroup" aside={t("ui.kit.javaAside")}>
-          <RadioGroup name="kit-java" value={java} onChange={setJava} options={[{ value: "auto", label: <>{t("ui.kit.javaAuto")} <span className="faint">{t("ui.kit.javaAutoDetail")}</span></> }, { value: "own", label: t("ui.kit.javaOwn") }]} />
+        <FormRow label="Java" hint={t("pages.settings.javaHint")} group="radiogroup" aside={t("ui.kit.javaAside")}>
+          <RadioGroup name="kit-java" value={java} onChange={setJava} options={[{ value: "auto", label: <>{t("components.memory.auto")} <span className="faint">{t("ui.kit.javaAutoDetail")}</span></> }, { value: "own", label: t("components.java.own") }]} />
           <TextField disabled={java === "auto"} aria-label={t("ui.kit.javaPath")} placeholder={t("ui.kit.javaPath")} />
         </FormRow>
         <FormRow label={t("ui.kit.motionLabel")} hint={t("ui.kit.motionHint")}>
           <Switch checked={motion} onChange={setMotion} label={t("ui.kit.motionLabel")} stateText={[t("ui.switch.on"), t("ui.switch.off")]} />
         </FormRow>
-        <FormRow label={t("ui.kit.advanced")}>
-          <Disclosure summary={t("ui.kit.javaArgs")}>
-            <TextArea rows={3} aria-label={t("ui.kit.javaArgs")} placeholder="-XX:+UseG1GC" value={args} onChange={(e) => setArgs(e.target.value)} />
+        <FormRow label={t("components.newInstance.advanced")}>
+          <Disclosure summary={t("detail.settings.jvmOptionsLabel")}>
+            <TextArea rows={3} aria-label={t("detail.settings.jvmOptionsLabel")} placeholder="-XX:+UseG1GC" value={args} onChange={(e) => setArgs(e.target.value)} />
           </Disclosure>
         </FormRow>
         <FormRow label={t("ui.kit.wide")} hint={t("ui.kit.wideHint")} wide>
@@ -163,7 +163,7 @@ function FieldsDemo() {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: "8px 40px", alignItems: "start" }} data-kit="fields">
       <div>
-        <Field label={t("ui.kit.nameField")} help={t("ui.kit.nameSuggestion")} reserveLines={1}>
+        <Field label={t("common.name")} help={t("ui.kit.nameSuggestion")} reserveLines={1}>
           <TextField value={n} onChange={(e) => setN(e.target.value)} placeholder="Fabric 1.21.4" />
         </Field>
         <Field label={t("ui.kit.nameErrorField")} error={n.length > 3 ? undefined : t("ui.kit.nameMinLength")} reserveLines={1}>
@@ -172,7 +172,7 @@ function FieldsDemo() {
         <Field label={t("common.server")} optional>
           <TextField size="s" width="m" placeholder="play.example.net" />
         </Field>
-        <Field label={t("ui.kit.mcVersion")} htmlFor="kit-mc">
+        <Field label={t("components.newInstance.mcVersion")} htmlFor="kit-mc">
           <div className="flex flex-wrap items-center gap-2">
             <Select id="kit-mc" value={ver} onChange={setVer} options={options} />
             <Checkbox checked={snap} onChange={setSnap}>{t("ui.kit.showSnapshots")}</Checkbox>
@@ -190,9 +190,9 @@ function FieldsDemo() {
           <TextField width={120} size="s" disabled placeholder={t("ui.kit.stateOff")} />
         </div>
         <div style={row}>
-          <Select label={t("ui.kit.sort")} value={sort} onChange={setSort} options={[{ value: "dl", label: t("ui.kit.sortDownloads") }, { value: "new", label: t("ui.kit.sortNewest") }, { value: "rel", label: t("ui.kit.sortRelevance") }]} />
+          <Select label={t("pages.instances.sortLabel")} value={sort} onChange={setSort} options={[{ value: "dl", label: t("pages.discover.sortDownloads") }, { value: "new", label: t("pages.discover.sortNewest") }, { value: "rel", label: t("pages.discover.sortRelevance") }]} />
           <Select size="s" ariaLabel={t("ui.kit.versionSmall")} value={ver} onChange={setVer} options={options} />
-          <Select size="s" ariaLabel={t("ui.kit.empty")} value="" onChange={() => undefined} options={[]} placeholder={t("ui.kit.noVersions")} />
+          <Select size="s" ariaLabel={t("ui.kit.empty")} value="" onChange={() => undefined} options={[]} placeholder={t("components.version.none")} />
         </div>
         <TextArea rows={2} width="full" defaultValue={"-Xmx4G\n-XX:+UseG1GC"} aria-label={t("ui.kit.args")} />
         <Hint>{t("ui.kit.memHint")}</Hint>
@@ -233,7 +233,7 @@ function TogglesDemo() {
       </div>
       <div style={{ ...row, alignItems: "flex-start" }}>
         <Lab>Radio</Lab>
-        <RadioGroup name="kit-r" label={t("ui.kit.radioGroup")} value={r} onChange={setR} options={[{ value: "a", label: t("ui.kit.javaAuto") }, { value: "b", label: t("ui.kit.customValue") }, { value: "c", label: t("ui.kit.locked"), disabled: true }]} />
+        <RadioGroup name="kit-r" label={t("ui.kit.radioGroup")} value={r} onChange={setR} options={[{ value: "a", label: t("components.memory.auto") }, { value: "b", label: t("components.memory.ownValue") }, { value: "c", label: t("ui.kit.locked"), disabled: true }]} />
         <Radio name="kit-r2" checked={false} onChange={() => undefined}>{t("ui.kit.single")}</Radio>
       </div>
       <div style={row}>

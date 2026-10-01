@@ -66,20 +66,20 @@ function Dialogs() {
       <Dialog
         open={dlg}
         onOpenChange={setDlg}
-        title={t("ui.kit.saveAsTemplate")}
+        title={t("components.instance.saveAsTemplate")}
         sub={t("ui.kit.templateSub")}
         width={480}
         footer={<DialogActions left={t("ui.kit.enterSaves")} cancel={t("common.cancel")} confirm={{ label: t("common.save"), width: 130, form: "kit-dlg-form" }} />}
       >
         <form id="kit-dlg-form" onSubmit={(e) => { e.preventDefault(); setDlg(false); toast.success(t("ui.kit.templateSaved", { name })); }}>
           <p style={{ marginBottom: 12 }}>{t("ui.kit.templateNameHint")}</p>
-          <TextField id="kit-dlg-name" value={name} onChange={(e) => setName(e.target.value)} aria-label={t("ui.kit.nameField")} width="full" />
+          <TextField id="kit-dlg-name" value={name} onChange={(e) => setName(e.target.value)} aria-label={t("common.name")} width="full" />
         </form>
       </Dialog>
       <ConfirmDialog open={del} onOpenChange={setDel} title={t("ui.kit.deleteTitle", { name: "Survival" })} text={t("ui.kit.deleteText")} onConfirm={() => setDel(false)} />
-      <ConfirmDialog open={ok} onOpenChange={setOk} danger={false} title={t("ui.kit.quitTitle")} text={t("ui.kit.quitText")} confirmLabel={t("ui.kit.quit")} onConfirm={() => setOk(false)} />
-      <Sheet open={sheet} onOpenChange={setSheet} title={t("ui.kit.addMods")} sub="Survival · Fabric 1.21.4" tools={<SearchField value="" onChange={() => undefined} placeholder={t("ui.kit.searchCatalog")} width="full" />}>
-        <Empty size="pane" ill="search" title={t("ui.kit.nothingFound")}>{t("ui.kit.tryOtherTerms")}</Empty>
+      <ConfirmDialog open={ok} onOpenChange={setOk} danger={false} title={t("components.game.stopTitle")} text={t("ui.kit.quitText")} confirmLabel={t("components.game.quit")} onConfirm={() => setOk(false)} />
+      <Sheet open={sheet} onOpenChange={setSheet} title={t("ui.kit.addMods")} sub="Survival · Fabric 1.21.4" tools={<SearchField value="" onChange={() => undefined} placeholder={t("components.sheet.searchPlaceholder")} width="full" />}>
+        <Empty size="pane" ill="search" title={t("components.search.nothingFound")}>{t("ui.kit.tryOtherTerms")}</Empty>
       </Sheet>
     </div>
   );
@@ -105,9 +105,9 @@ function Toolbars() {
     <>
       <Toolbar search="m" wrapBelow={1096}>
         <SearchField value={q} onChange={setQ} placeholder={t("ui.kit.searchInstances")} />
-        <Button variant="ghost" icon="list">{t("ui.kit.sort")}</Button>
+        <Button variant="ghost" icon="list">{t("pages.instances.sortLabel")}</Button>
         <Spacer />
-        <Button variant="primary" icon="plus">{t("ui.kit.newInstance")}</Button>
+        <Button variant="primary" icon="plus">{t("components.newInstance.title")}</Button>
       </Toolbar>
       <Toolbar
         height={56}
@@ -138,7 +138,7 @@ export function OverlaySection() {
     { label: t("common.instance") },
     { id: "play", text: t("common.play"), icon: "play", onSelect: () => undefined },
     { id: "dir", text: t("ui.menu.openFolder"), icon: "folder", onSelect: () => undefined },
-    { id: "log", text: t("ui.kit.tabLog"), icon: "term", disabled: true, onSelect: () => undefined },
+    { id: "log", text: t("components.log.ariaLabel"), icon: "term", disabled: true, onSelect: () => undefined },
     { id: "acc", text: "Steve_42", sub: t("ui.kit.offlineName"), lead: <Icon name="user" size="l" tone="muted" />, checked: true, onSelect: () => undefined },
     "-",
     { id: "del", text: t("common.delete"), icon: "trash", bad: true, onSelect: () => undefined },
@@ -162,7 +162,7 @@ export function OverlaySection() {
         <div style={{ ...row, alignItems: "flex-start" }}>
           <MenuStates />
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <Menu items={ITEMS} align="start" trigger={<IconButton icon="more" label={t("ui.kit.moreActions")} variant="secondary" />} />
+            <Menu items={ITEMS} align="start" trigger={<IconButton icon="more" label={t("components.instance.moreActions")} variant="secondary" />} />
             <ContextMenu items={ITEMS}>
               <div tabIndex={0} className="fx" style={{ width: 220, height: 64, display: "grid", placeItems: "center", background: "var(--panel)", ...cap }}>{t("ui.kit.rightClickHere")}</div>
             </ContextMenu>
@@ -170,7 +170,7 @@ export function OverlaySection() {
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <SectionHeader title={t("ui.tasks.title")} size="card" actions={<Button variant="ghost" size="s">{t("ui.tasks.clearDone")}</Button>} />
                 <JobProgress label={t("ui.tasks.installing", { name: "Survival" })} sub={t("ui.kit.loadingLibs")} p={0.42} onCancel={() => undefined} />
-                <JobProgress label={t("ui.tasks.loadingContents")} sub={t("ui.kit.checking")} p={null} />
+                <JobProgress label={t("ui.tasks.loadingContents")} sub={t("components.common.checking")} p={null} />
               </div>
             </Popover>
           </div>
@@ -183,11 +183,11 @@ export function OverlaySection() {
       </Sec>
 
       <Sec title={t("ui.kit.secStatus")} id="status">
-        <StatusPanel tone="bad" icon="warn" title={t("ui.kit.crashedToast", { name: "Survival" })} actions={<Button size="s" icon="term">{t("ui.kit.tabLog")}</Button>}>{t("ui.kit.crashLine")}</StatusPanel>
+        <StatusPanel tone="bad" icon="warn" title={t("ui.kit.crashedToast", { name: "Survival" })} actions={<Button size="s" icon="term">{t("components.log.ariaLabel")}</Button>}>{t("ui.kit.crashLine")}</StatusPanel>
         <StatusPanel tone="warn" title={t("ui.kit.memoryLow")}>{t("ui.kit.memoryLowDetail")}</StatusPanel>
-        <StatusPanel tone="run" size="s" title={t("ui.kit.running")}>{t("ui.kit.runningSince", { time: "12:04", lines: "1.824" })}</StatusPanel>
+        <StatusPanel tone="run" size="s" title={t("components.game.running")}>{t("ui.kit.runningSince", { time: "12:04", lines: "1.824" })}</StatusPanel>
         <StatusPanel size="s" icon="info" title={t("ui.kit.noLog")}>{t("ui.kit.noLogHint")}</StatusPanel>
-        <StatusPanel tone="bad" icon="trash" title={t("ui.kit.deleteInstance")} actions={<Button variant="danger" size="s">{t("common.delete")}</Button>}>{t("ui.kit.deleteInstanceText")}</StatusPanel>
+        <StatusPanel tone="bad" icon="trash" title={t("detail.settings.deleteInstance")} actions={<Button variant="danger" size="s">{t("common.delete")}</Button>}>{t("ui.kit.deleteInstanceText")}</StatusPanel>
         <ErrorBox title={t("ui.kit.modrinthDown")} error={new Error("fetch failed: 503")} onRetry={() => undefined} />
       </Sec>
 
@@ -195,30 +195,30 @@ export function OverlaySection() {
         <div style={{ display: "grid", gridTemplateColumns: "110px 240px 240px", gap: "12px 16px", alignItems: "center" }}>
           <span style={cap}>normal</span><Progress p={0.37} /><Progress p={null} label={t("ui.kit.loading")} />
           <span style={cap}>thin</span><Progress thin p={0.62} /><Progress thin tone="bad" p={0.8} />
-          <span style={cap}>Job 112</span><JobProgress label={t("ui.kit.loading")} p={0.3} width={112} /><JobProgress label={t("ui.kit.checking")} p={null} width={120} onCancel={() => undefined} />
-          <span style={cap}>Job 230</span><div style={{ gridColumn: "span 2" }}><JobProgress label={t("ui.tasks.installing", { name: t("ui.kit.wayModpack") })} p={0.55} width={230} onCancel={() => undefined} /></div>
+          <span style={cap}>Job 112</span><JobProgress label={t("ui.kit.loading")} p={0.3} width={112} /><JobProgress label={t("components.common.checking")} p={null} width={120} onCancel={() => undefined} />
+          <span style={cap}>Job 230</span><div style={{ gridColumn: "span 2" }}><JobProgress label={t("ui.tasks.installing", { name: t("components.catalog.one.modpack") })} p={0.55} width={230} onCancel={() => undefined} /></div>
           <span style={cap}>Skel</span><Skel h={40} /><Skel w={160} h={16} />
         </div>
       </Sec>
 
       <Sec title={t("ui.kit.secEmpty")} id="empty">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16 }}>
-          <div className="plate"><Empty size="page" ill="box" title={t("ui.kit.noInstances")} actions={<Button variant="primary" icon="plus">{t("ui.kit.newInstance")}</Button>}>{t("ui.kit.noInstancesBody")}</Empty></div>
-          <div className="plate"><Empty ill="search" title={t("ui.kit.nothingFound")}>{t("ui.kit.tryOtherTerms")}</Empty></div>
+          <div className="plate"><Empty size="page" ill="box" title={t("ui.kit.noInstances")} actions={<Button variant="primary" icon="plus">{t("components.newInstance.title")}</Button>}>{t("ui.kit.noInstancesBody")}</Empty></div>
+          <div className="plate"><Empty ill="search" title={t("components.search.nothingFound")}>{t("ui.kit.tryOtherTerms")}</Empty></div>
           <div className="plate"><Empty size="pane" ill="file" title={t("ui.kit.appOnly")} /></div>
         </div>
       </Sec>
 
       <Sec title={t("ui.kit.secLayout")} id="layout">
-        <PageHeader title={t("ui.nav.library")} count={12}><Button variant="primary" icon="plus">{t("ui.kit.newInstance")}</Button></PageHeader>
+        <PageHeader title={t("ui.nav.library")} count={12}><Button variant="primary" icon="plus">{t("components.newInstance.title")}</Button></PageHeader>
         <Toolbars />
-        <SectionHeader title={t("ui.kit.continue")} actions={<Button variant="ghost" size="s" iconEnd="chev" bleed="end">{t("ui.kit.all")}</Button>} />
+        <SectionHeader title={t("ui.kit.continue")} actions={<Button variant="ghost" size="s" iconEnd="chev" bleed="end">{t("common.all")}</Button>} />
         <SectionHeader title={t("ui.kit.subsection")} size="sub" as="h3" />
         <div style={row}>
           {(["page", "dialog", "section", "sub", "card"] as const).map((l) => <Heading key={l} level={l} as="h3">{l}</Heading>)}
         </div>
         <Actions align="between"><Button variant="ghost">{t("ui.kit.left")}</Button><Actions><Button>{t("common.cancel")}</Button><Button variant="primary">{t("common.save")}</Button></Actions></Actions>
-        <Actions align="end" gap={4}><IconButton icon="list" label={t("ui.kit.viewList")} /><IconButton icon="grid" label={t("ui.kit.grid")} /></Actions>
+        <Actions align="end" gap={4}><IconButton icon="list" label={t("pages.instances.viewList")} /><IconButton icon="grid" label={t("detail.content.viewGrid")} /></Actions>
       </Sec>
     </>
   );

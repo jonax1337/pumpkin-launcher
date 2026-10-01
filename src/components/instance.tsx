@@ -37,7 +37,7 @@ function useDuplicate() {
   const install = useContentInstall();
   const navigate = useNavigate();
   return (instance: Instance) =>
-    install.mutate(withTarget(`duplicate:${instance.id}`, (op) => api.duplicateInstance(instance.id, op), t("components.instance.duplicateTask", { name: instance.name }), { cancellable: true }), {
+    install.mutate(withTarget(`duplicate:${instance.id}`, (op) => api.duplicateInstance(instance.id, op), t("components.instance.duplicateTask", { name: instance.name }), { cancellable: true, doneLabel: t("components.instance.duplicateTaskDone", { name: instance.name }) }), {
       onSuccess: (copy) => copy && toast.success(t("components.instance.createdQuoted", { name: copy.name }), { action: { label: t("common.open"), onClick: () => navigate(`/instances/${copy.id}`) } }),
     });
 }
@@ -53,7 +53,7 @@ function useExport() {
     // Ein Content-Lauf liefert eine Instanz (für „Öffnen“ im Verlauf); beim Export ist es die exportierte, frisch gelesen:
     // die Kopie vom Öffnen des Dialogs könnte veraltet sein und landete im Cache.
     const run = (op: string) => api.exportInstance(instance.id, include, path, op).then(() => api.getInstance(instance.id));
-    install.mutate(withTarget(`export:${instance.id}`, run, t("components.instance.exportTask", { name: instance.name }), { cancellable: true }), {
+    install.mutate(withTarget(`export:${instance.id}`, run, t("components.instance.exportTask", { name: instance.name }), { cancellable: true, doneLabel: t("components.instance.exportTaskDone", { name: instance.name }) }), {
       onSuccess: (exported) =>
         exported &&
         toast.success(t("components.instance.exportedQuoted", { name: instance.name }), {
@@ -97,7 +97,7 @@ export function useInstanceMenu(instance: Instance, opts: { open?: boolean } = {
       ? { id: "stop", text: t("components.game.quitEllipsis"), icon: "stop", onSelect: () => askStop(instance) }
       : { id: "play", text: t("common.play"), icon: "play", disabled: busy || phase === "loading", onSelect: () => void play(instance) },
     ...(opts.open ? [{ id: "open", text: t("components.instance.openInstance"), icon: "chev" as const, onSelect: () => navigate(`/instances/${instance.id}`) }] : []),
-    { id: "log", text: t("components.instance.logItem"), icon: "term", onSelect: () => navigate(`/instances/${instance.id}?tab=console`) },
+    { id: "log", text: t("components.log.ariaLabel"), icon: "term", onSelect: () => navigate(`/instances/${instance.id}?tab=console`) },
     { id: "dir", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => openInstanceFolder(instance) },
     { id: "group", text: t("components.instance.group"), icon: "box", disabled: running || busy, items: groupItems },
     "-",

@@ -51,7 +51,7 @@ function ButtonMatrix({ size }: { size: Size }) {
       <Head cols={STATES} />
       {VARIANTS.map((v) => (
         <Row key={v} label={v}>
-          {STATES.map((s) => <Button key={s} variant={v} size={size} icon="plus" {...stateProps(s)}>{t("ui.kit.buttonCreate")}</Button>)}
+          {STATES.map((s) => <Button key={s} variant={v} size={size} icon="plus" {...stateProps(s)}>{t("components.newInstance.create")}</Button>)}
         </Row>
       ))}
       {TONES.map((tone) => (
@@ -72,7 +72,7 @@ function ButtonMatrix({ size }: { size: Size }) {
       <Row label="count / iconEnd">
         {STATES.map((s) => (
           <span key={s} style={{ display: "flex", gap: 6 }}>
-            <Button size={size} icon="up" count={12} {...stateProps(s)}>{t("ui.kit.all")}</Button>
+            <Button size={size} icon="up" count={12} {...stateProps(s)}>{t("common.all")}</Button>
             <Button variant="ghost" size={size} iconEnd="chevd" {...stateProps(s)}>{t("ui.kit.more")}</Button>
           </span>
         ))}
@@ -147,7 +147,7 @@ export function KitPage() {
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <Button variant="primary" width={160}>{t("common.save")}</Button>
           <Button width={160}>{t("common.cancel")}</Button>
-          <Button icon="up" count={3} compactBelow={1180}>{t("ui.kit.updateAll")}</Button>
+          <Button icon="up" count={3} compactBelow={1180}>{t("detail.content.updateAll")}</Button>
           <BackLink onClick={() => undefined}>{t("ui.nav.library")}</BackLink>
           <span style={{ width: 240 }}><Button variant="primary" icon="play" width="full">{t("ui.kit.fullWidth")}</Button></span>
         </div>
@@ -194,10 +194,10 @@ export function KitPage() {
           <Head cols={["neutral", "acc", "warn", "bad", "run", t("ui.kit.fixedCol")]} />
           <Row label="m">
             <Chip>Fabric</Chip>
-            <Chip tone="acc" icon="play">{t("ui.kit.running")}</Chip>
+            <Chip tone="acc" icon="play">{t("components.game.running")}</Chip>
             <Chip tone="warn" icon="warn">{t("ui.kit.warnings")}</Chip>
             <Chip tone="bad" dot>{t("common.error")}</Chip>
-            <Chip tone="run" dot>{t("ui.kit.installing")} <Count value={7} minDigits={3} /></Chip>
+            <Chip tone="run" dot>{t("components.game.installing")} <Count value={7} minDigits={3} /></Chip>
             <Chip fixed={120} tone="run" dot>{t("ui.kit.installingLong")}</Chip>
           </Row>
           <Row label="s">
@@ -214,7 +214,7 @@ export function KitPage() {
           <Count value={5} minDigits={3} muted />
         </div>
         <Meta items={["Minecraft 1.21.4", <><Icon name="plug" size="s" /> <Count value={42} /> Mods</>, "vor 2 Std."]} />
-        <Meta size="l" items={[t("ui.kit.large"), <><Count value={3} /> {t("common.worlds")}</>, null, t("ui.kit.end")]} />
+        <Meta size="l" items={[t("pages.settings.pxSizeLarge"), <><Count value={3} /> {t("common.worlds")}</>, null, t("ui.kit.end")]} />
       </Section>
 
       <FormsSection />

@@ -22,7 +22,7 @@ type Ask = { sure: LocalFile[]; unsure: string[] };
 /** „Sodium hinzugefügt, von Modrinth erkannt“ bzw. „3 Dateien hinzugefügt, 2 davon von Modrinth erkannt“. */
 function addedText(added: Mod[]) {
   const known = added.filter((m) => m.source.type === "modrinth").length;
-  if (added.length === 1) return known ? t("detail.files.addedOneKnown", { name: added[0].name }) : t("detail.files.addedOne", { name: added[0].name });
+  if (added.length === 1) return known ? t("detail.files.addedOneKnown", { name: added[0].name }) : t("components.content.added", { name: added[0].name });
   return known ? t("detail.files.addedManyKnown", { n: added.length, k: known }) : t("detail.files.addedMany", { n: added.length });
 }
 
@@ -31,7 +31,7 @@ function announceModpack(paths: string[], open: (url: string) => void) {
   const pack = paths.find(isMrpack);
   if (!pack) return;
   toast(t("detail.files.modpackToast"), {
-    action: { label: t("detail.files.importAction"), onClick: () => open(`/instances?neu=1&datei=${encodeURIComponent(pack)}`) },
+    action: { label: t("components.newInstance.importLabel"), onClick: () => open(`/instances?neu=1&datei=${encodeURIComponent(pack)}`) },
   });
 }
 
@@ -85,7 +85,8 @@ export function useLocalFiles(instance: Instance, active: boolean) {
     if (!files.length) return;
     const before = instance.mods.length;
     const label = files.length === 1 ? t("detail.files.addOneLabel", { file: fileName(files[0].path) }) : t("detail.files.addManyLabel", { n: files.length });
-    install.mutate(withTarget("files", (op) => api.addLocalFiles(instance.id, files, op), label), {
+    const doneLabel = files.length === 1 ? t("detail.files.addOneDone", { file: fileName(files[0].path) }) : t("detail.files.addedMany", { n: files.length });
+    install.mutate(withTarget("files", (op) => api.addLocalFiles(instance.id, files, op), label, { doneLabel }), {
       // Das Backend hängt neue Einträge hinten an.
       onSuccess: (result) => void (result && toast.success(addedText(result.mods.slice(before)))),
     });
@@ -97,7 +98,7 @@ export function useLocalFiles(instance: Instance, active: boolean) {
   }
 
   function identify(m: Mod) {
-    install.mutate(withTarget(`identify:${m.id}`, () => api.modrinthIdentify(instance.id, [m.id]), t("detail.files.matchLabel", { name: m.name })), {
+    install.mutate(withTarget(`identify:${m.id}`, () => api.modrinthIdentify(instance.id, [m.id]), t("detail.files.matchLabel", { name: m.name }), { doneLabel: t("detail.files.matchDone", { name: m.name }) }), {
       onSuccess: (result) => {
         const now = result?.mods.find((x) => x.fileName === m.fileName);
         if (now?.source.type === "modrinth") toast.success(t("detail.files.identified", { name: m.name, match: now.name, version: now.version }));
@@ -154,8 +155,8 @@ function KindDialog({ paths, onClose, onConfirm }: { paths: string[]; onClose: (
             value={kinds[i]}
             onChange={(k) => setKinds((ks) => ks.map((x, j) => (j === i ? k : x)))}
             items={[
-              { value: "resourcepack", label: t("detail.content.kind.resourcepack") },
-              { value: "shader", label: t("detail.content.kind.shader") },
+              { value: "resourcepack", label: t("components.catalog.one.resourcepack") },
+              { value: "shader", label: t("components.catalog.one.shader") },
             ]}
           />
         </Field>

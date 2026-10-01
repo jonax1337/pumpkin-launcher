@@ -33,4 +33,9 @@ export const common = {
   "common.version": "Version",
   "common.retry": "Erneut versuchen",
   "common.language": "Sprache",
+  "common.all": "Alle",
+  "common.name": "Name",
+  "common.status": "Status",
+  "common.update": "Update",
+  "common.updates": "Updates",
 } satisfies Dict;

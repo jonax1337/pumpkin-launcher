@@ -18,14 +18,14 @@ import { useLocalFiles } from "./LocalFiles";
 
 /** Art eines Inhalts im Singular bzw. Plural – Schlüssel statt Texte, übersetzt erst bei der Ausgabe. */
 const KIND1_KEYS: Record<ModKind, string> = {
-  mod: "detail.content.kind.mod",
-  shader: "detail.content.kind.shader",
-  resourcepack: "detail.content.kind.resourcepack",
+  mod: "components.catalog.one.mod",
+  shader: "components.catalog.one.shader",
+  resourcepack: "components.catalog.one.resourcepack",
 };
 const KINDS_KEYS: Record<ModKind, string> = {
-  mod: "detail.content.kinds.mod",
-  shader: "detail.content.kinds.shader",
-  resourcepack: "detail.content.kinds.resourcepack",
+  mod: "components.catalog.kind.mod",
+  shader: "components.catalog.kind.shader",
+  resourcepack: "components.catalog.kind.resourcepack",
 };
 /** Hinweis auf das Umschalten von Ressourcenpaketen im Spiel. */
 const RP_HINT_KEY = "detail.content.resourcePackHint";
@@ -189,7 +189,12 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     const one = modIds.length === 1 ? instance.mods.find((m) => m.id === modIds[0]) : undefined;
     const name = one ? title(one) : "";
     install.mutate(
-      withTarget(one ? one.id : "updates", (op) => api.modrinthUpdateMods(instance.id, modIds, op), name ? t("detail.content.updateOneLabel", { name }) : t("detail.content.updateManyLabel", { n: modIds.length })),
+      withTarget(
+        one ? one.id : "updates",
+        (op) => api.modrinthUpdateMods(instance.id, modIds, op),
+        name ? t("detail.content.updateOneLabel", { name }) : t("detail.content.updateManyLabel", { n: modIds.length }),
+        { doneLabel: name ? t("detail.content.updateOneDone", { name }) : t("detail.content.updateManyDone", { n: modIds.length }) },
+      ),
       { onSuccess: (result) => { if (result) toast.success(name ? t("detail.content.oneUpToDate", { name }) : t("detail.content.manyUpdated", { n: modIds.length })); } },
     );
   }
@@ -247,7 +252,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
         : t("detail.content.removedToast", { things }),
       {
         duration: 6500,
-        action: { label: t("detail.content.undoAction"), onClick: () => undo(group) },
+        action: { label: t("ui.list.undo"), onClick: () => undo(group) },
       },
     );
   }
@@ -350,7 +355,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
       </Tip>
     ) : (
       // Kachel: „Aus“ nur im ausgeschalteten Zustand (spart dem Namen Platz); Zeile: Platz bleibt reserviert.
-      <Switch checked={m.enabled} onChange={(v) => setEnabled([m.id], v)} label={t("detail.content.enabledLabel", { name: title(m) })} stateText={tile && m.enabled ? undefined : ["", t("detail.content.stateOff")]} />
+      <Switch checked={m.enabled} onChange={(v) => setEnabled([m.id], v)} label={t("detail.content.enabledLabel", { name: title(m) })} stateText={tile && m.enabled ? undefined : ["", t("ui.switch.off")]} />
     );
 
   const moreBtn = (m: Mod, described = false) => (
@@ -452,14 +457,14 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
         <SearchField size="s" value={search} onChange={setSearch} placeholder={t("detail.content.searchPlaceholder")} />
         <Segmented
           size="s"
-          label={t("detail.content.filterKindLabel")}
+          label={t("components.sheet.kindLabel")}
           value={kind}
           onChange={setKind}
           items={[
-            { value: "all", label: t("detail.content.allKinds"), count: counts.all },
-            { value: "mod", label: kindLabel(t("detail.content.kinds.mod"), counts.mod), count: counts.mod },
-            { value: "shader", label: kindLabel(t("detail.content.kinds.shader"), counts.shader), count: counts.shader },
-            { value: "resourcepack", label: kindLabel(t("detail.content.kinds.resourcepack"), counts.resourcepack), count: counts.resourcepack },
+            { value: "all", label: t("common.all"), count: counts.all },
+            { value: "mod", label: kindLabel(t("components.catalog.kind.mod"), counts.mod), count: counts.mod },
+            { value: "shader", label: kindLabel(t("components.catalog.kind.shader"), counts.shader), count: counts.shader },
+            { value: "resourcepack", label: kindLabel(t("components.catalog.kind.resourcepack"), counts.resourcepack), count: counts.resourcepack },
           ]}
         />
         <Spacer />
@@ -470,7 +475,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
           label={t("detail.content.viewLabel")}
           value={mode}
           onChange={setMode}
-          items={[{ value: "list", label: t("detail.content.viewList"), icon: "list" }, { value: "grid", label: t("detail.content.viewGrid"), icon: "grid" }]}
+          items={[{ value: "list", label: t("pages.instances.viewList"), icon: "list" }, { value: "grid", label: t("detail.content.viewGrid"), icon: "grid" }]}
         />
         {/* Knopf und „Alles aktuell“ liegen übereinander: die Breite bleibt, ob Updates da sind oder nicht (kein toter Knopf). */}
         <span className="grid items-center justify-items-end *:col-start-1 *:row-start-1">
@@ -497,11 +502,11 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
       {visible.length === 0 ? (
         <Empty
           ill="search"
-          title={t("detail.content.noResultsTitle")}
+          title={t("components.search.nothingFound")}
           actions={
             <>
-              <Button onClick={() => { setSearch(""); setKind("all"); }}>{t("detail.content.resetFilters")}</Button>
-              <Button onClick={onAdd}>{t("detail.content.searchCatalog")}</Button>
+              <Button onClick={() => { setSearch(""); setKind("all"); }}>{t("components.search.resetFilters")}</Button>
+              <Button onClick={onAdd}>{t("components.sheet.searchPlaceholder")}</Button>
             </>
           }
         >
@@ -525,10 +530,10 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
                 />
               </span>
               <span />
-              <Cell>{t("detail.content.nameColumn")}</Cell>
+              <Cell>{t("common.name")}</Cell>
               {hasWarns && <Cell>{t("detail.content.warningsColumn")}</Cell>}
-              <Cell align="end">{t("detail.content.updateColumn")}</Cell>
-              <Cell align="end">{t("detail.content.onColumn")}</Cell>
+              <Cell align="end">{t("common.update")}</Cell>
+              <Cell align="end">{t("ui.switch.on")}</Cell>
               <span />
             </>
           }

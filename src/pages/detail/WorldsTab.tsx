@@ -61,7 +61,7 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
   const playBlocked = busy ?? (startsIntoWorlds === false ? t("detail.worlds.quickPlayUnsupported", { version: instance.minecraftVersion }) : null);
 
   const menuFor = (w: World): MenuEntry[] => [
-    { id: "dir", text: t("detail.worlds.openFolderMenu"), icon: "folder", onSelect: () => void api.openPath(w.path).catch(toastError) },
+    { id: "dir", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => void api.openPath(w.path).catch(toastError) },
     { id: "backup", text: t("detail.worlds.backupNow"), icon: "save", disabled: !!busy, onSelect: () => backup.mutate(w) },
     { id: "backups", text: t("detail.worlds.backupsMenu"), icon: "clock", onSelect: () => setShowBackups({ world: w.id }) },
     { id: "packs", text: t("detail.worlds.datapacksMenu"), icon: "box", onSelect: () => setPacks({ world: w, search: false }) },
@@ -74,7 +74,7 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
       <SectionHeader
         id="worlds-h"
         title={t("common.worlds")}
-        actions={<Button variant="ghost" size="s" icon="clock" bleed="end" onClick={() => setShowBackups({ world: null })}>{t("detail.worlds.allBackups")}</Button>}
+        actions={<Button variant="ghost" size="s" icon="clock" bleed="end" onClick={() => setShowBackups({ world: null })}>{t("detail.worlds.backupsTitle")}</Button>}
       />
       <div className="mt-3">
         <QueryList
@@ -93,12 +93,12 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
                     {target === worldTarget(instance.id, w.id) ? (
                       <JobProgress label={t("detail.worlds.backingUp")} p={progressShare(progress)} width={120} />
                     ) : (
-                      <GuardedButton size="s" icon="play" blocked={playBlocked} aria-label={t("detail.worlds.playAria", { name: w.name })} onClick={() => onPlay({ type: "world", id: w.id })}>
+                      <GuardedButton size="s" icon="play" blocked={playBlocked} aria-label={t("components.game.ariaPlay", { name: w.name })} onClick={() => onPlay({ type: "world", id: w.id })}>
                         {t("common.play")}
                       </GuardedButton>
                     )}
                   </Cell>
-                  <Menu items={menuFor(w)} trigger={<IconButton size="s" icon="more" tip={false} label={t("detail.worlds.moreAbout", { name: w.name })} />} />
+                  <Menu items={menuFor(w)} trigger={<IconButton size="s" icon="more" tip={false} label={t("detail.content.moreAbout", { name: w.name })} />} />
                 </ListRow>
               ))}
             </List>
@@ -108,7 +108,7 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
       <ConfirmDialog
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
-        title={t("detail.worlds.deleteTitle", { name: removing?.name ?? "" })}
+        title={t("components.instance.deleteQuotedTitle", { name: removing?.name ?? "" })}
         text={t("detail.worlds.deleteText")}
         onConfirm={() => {
           if (removing) remove.mutate(removing);
@@ -152,17 +152,17 @@ function DatapacksDialog({ instance, world, busy, onSearch, onClose }: { instanc
   }
 
   async function pick() {
-    const picked = await api.pickPaths({ multiple: true, filters: [{ name: t("detail.worlds.packFilter"), extensions: ["zip"] }] });
+    const picked = await api.pickPaths({ multiple: true, filters: [{ name: t("components.catalog.kind.datapack"), extensions: ["zip"] }] });
     if (picked.length) take(picked);
   }
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title={t("detail.worlds.packsTitle")} sub={world.name} width={560} footer={<DialogActions cancel={t("common.close")} />}>
+    <Dialog open onOpenChange={(o) => !o && onClose()} title={t("components.catalog.kind.datapack")} sub={world.name} width={560} footer={<DialogActions cancel={t("common.close")} />}>
       <Actions className="mb-3">
         {/* Eigene Dateien gibt es nur in der App: der Browser liefert keine Pfade. */}
         {!api.isMock && (
           <GuardedButton size="s" icon="ul" blocked={busy} disabled={add.isPending} onClick={() => void pick().catch(toastError)}>
-            {t("detail.worlds.addFile")}
+            {t("detail.content.addFile")}
           </GuardedButton>
         )}
         <GuardedButton size="s" icon="search" blocked={busy} onClick={onSearch}>{t("detail.worlds.searchModrinth")}</GuardedButton>
@@ -178,7 +178,7 @@ function DatapacksDialog({ instance, world, busy, onSearch, onClose }: { instanc
           empty={<Empty size="pane" ill="box" title={t("detail.worlds.packsEmptyTitle")}>{t("detail.worlds.packsEmptyHint")}</Empty>}
         >
           {(list) => (
-            <List variant="versions" aria-label={t("detail.worlds.packsListAria")}>
+            <List variant="versions" aria-label={t("components.catalog.kind.datapack")}>
               {list.map((pack) => (
                 <ListRow key={pack.id}>
                   <RowTitle title={pack.name} sub={pack.description} />
@@ -219,7 +219,7 @@ function BackupsDialog({ instance, world, busy, onClose }: { instance: Instance;
         empty={<Empty size="pane" ill="clock" title={t("detail.worlds.backupsEmptyTitle")}>{t("detail.worlds.backupsEmptyHint")}</Empty>}
       >
         {(list) => (
-          <List variant="versions" aria-label={t("detail.worlds.backupsListAria")}>
+          <List variant="versions" aria-label={t("detail.worlds.backupsTitle")}>
             {list.map((b) => (
               <ListRow key={b.id}>
                 {/* Für eine Welt zählt der Zeitpunkt; in der Liste aller Welten zuerst, welche es ist. */}

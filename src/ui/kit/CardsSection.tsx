@@ -85,7 +85,7 @@ function Posters() {
   const menu = menuOf(t);
   const primary = <Button variant="primary" icon="play" width={176}>{t("common.play")}</Button>;
   const actions = <IconButton onScene size="s" icon="more" label={t("ui.kit.more")} tip={false} />;
-  const status = (k: number) => (k === 1 ? <Chip size="s" tone="run" dot>{t("ui.kit.running")}</Chip> : k === 2 ? <Chip icon="up"><Count value={3} /> Updates</Chip> : null);
+  const status = (k: number) => (k === 1 ? <Chip size="s" tone="run" dot>{t("components.game.running")}</Chip> : k === 2 ? <Chip icon="up"><Count value={3} /> Updates</Chip> : null);
   const force = [undefined, "hover", "focus", "press", undefined] as const;
   return (
     <CardGrid data-kit="posters">
@@ -99,13 +99,13 @@ function Posters() {
           status={status(k)}
           actions={actions}
           primary={primary}
-          hit={{ to: "/_kit", label: t("ui.kit.openInstance", { name: i.name }) }}
+          hit={{ to: "/_kit", label: t("pages.instances.openInstance", { name: i.name }) }}
           menu={menu}
           index={k}
           data-force={force[k]}
         />
       ))}
-      <AddCard variant="poster" label={t("ui.kit.newInstance")} />
+      <AddCard variant="poster" label={t("components.newInstance.title")} />
     </CardGrid>
   );
 }
@@ -125,14 +125,14 @@ function Minis() {
           title={i.name}
           sub={i.sub}
           current={cur === i.id}
-          status={i.id === "b" ? <Chip size="s" tone="run" dot>{t("ui.kit.running")}</Chip> : undefined}
+          status={i.id === "b" ? <Chip size="s" tone="run" dot>{t("components.game.running")}</Chip> : undefined}
           primary={<IconButton variant="primary" size="s" icon="play" label={t("common.play")} tip={false} />}
           hit={{ onClick: () => setCur(i.id), onDoubleClick: () => undefined }}
           tip={t("ui.kit.miniTip")}
           menu={menu}
         />
       ))}
-      <AddCard label={t("ui.kit.newInstance")} />
+      <AddCard label={t("components.newInstance.title")} />
     </div>
   );
 }
@@ -141,7 +141,7 @@ function Thumbs() {
   const { t } = useI18n();
   const [bio, setBio] = useState<Biome>("forest");
   return (
-    <CardGrid variant="thumb" role="group" aria-label={t("ui.kit.pickScene")} data-kit="thumbs">
+    <CardGrid variant="thumb" role="group" aria-label={t("detail.settings.sceneAria")} data-kit="thumbs">
       {(Object.keys(BIOMES) as Biome[]).map((b) => (
         <SceneCard key={b} variant="thumb" look={{ bio: b, seed: 7 }} title={t(`ui.biome.${b}`)} pressed={bio === b} hit={{ onClick: () => setBio(b) }} data-force={b === "snow" ? "hover" : b === "sea" ? "focus" : undefined} />
       ))}
@@ -183,7 +183,7 @@ function Choices() {
       <div role="radiogroup" aria-label={t("ui.nav.home")} style={{ display: "flex", flexDirection: "column", gap: 8 }} data-kit="choice-l">
         {[
           { id: "blank", g: "cube" as GlyphName, p: "copper" as GlyphPalette, t: t("ui.kit.blankInstance"), s: t("ui.kit.blankSub") },
-          { id: "pack", g: "chest" as GlyphName, p: "sand" as GlyphPalette, t: t("ui.kit.wayModpack"), s: t("ui.kit.modpackSub") },
+          { id: "pack", g: "chest" as GlyphName, p: "sand" as GlyphPalette, t: t("components.catalog.one.modpack"), s: t("ui.kit.modpackSub") },
           { id: "file", g: "compass" as GlyphName, p: "ice" as GlyphPalette, t: t("ui.kit.wayFromFile"), s: t("ui.kit.fromFileSub") },
         ].map((s) => (
           <Choice key={s.id} size="l" role="radio" media={<Glyph name={s.g} pal={s.p} />} title={s.t} sub={s.s} selected={st === s.id} onClick={() => setSt(s.id)} />
@@ -223,11 +223,11 @@ function InstanceList() {
   const head = (
     <>
       <span />
-      <Cell>{t("ui.kit.nameField")}</Cell>
+      <Cell>{t("common.name")}</Cell>
       <Cell>{t("common.version")}</Cell>
-      <Cell hide={1040}>{t("ui.kit.tabContents")}</Cell>
-      <Cell hide={1040}>{t("ui.kit.lastPlayed")}</Cell>
-      <Cell>{t("ui.kit.statusCol")}</Cell>
+      <Cell hide={1040}>{t("pages.instances.colContents")}</Cell>
+      <Cell hide={1040}>{t("pages.instances.colLastPlayed")}</Cell>
+      <Cell>{t("common.status")}</Cell>
       <span />
       <span />
     </>
@@ -235,13 +235,13 @@ function InstanceList() {
   return (
     <List variant="instances" head={head} divided data-kit="list-instances">
       {INST.map((i, k) => (
-        <ListRow key={i.id} hit={{ to: "/_kit", label: t("ui.kit.openInstance", { name: i.name }) }} menu={menu} index={k} style={{ "--acc": BIOMES[i.bio].acc } as CSSProperties} {...(k === 1 ? { "data-force": "hover" } : {})}>
+        <ListRow key={i.id} hit={{ to: "/_kit", label: t("pages.instances.openInstance", { name: i.name }) }} menu={menu} index={k} style={{ "--acc": BIOMES[i.bio].acc } as CSSProperties} {...(k === 1 ? { "data-force": "hover" } : {})}>
           <SceneThumb bio={i.bio} seed={i.seed} />
           <RowTitle title={i.name} sub={t("ui.kit.createdSub", { date: "12.03.2026" })} />
           <Cell>{i.sub.split(" · ")[0]}</Cell>
           <Cell hide={1040}><Count value={i.mods} /></Cell>
           <Cell hide={1040}>{i.last}</Cell>
-          <Cell flex>{k === 1 ? <Chip size="s" tone="run" dot>{t("ui.kit.running")}</Chip> : k === 2 ? <Chip icon="up"><Count value={3} /> Updates</Chip> : null}</Cell>
+          <Cell flex>{k === 1 ? <Chip size="s" tone="run" dot>{t("components.game.running")}</Chip> : k === 2 ? <Chip icon="up"><Count value={3} /> Updates</Chip> : null}</Cell>
           <IconButton variant="secondary" icon="play" label={t("common.play")} tip={false} />
           <IconButton icon="more" label={t("ui.kit.moreAbout", { name: i.name })} tip={false} />
         </ListRow>
@@ -264,9 +264,9 @@ function ContentLists() {
   const pick = (id: string, v: boolean) => setPicked((p) => { const n = new Set(p); if (v) n.add(id); else n.delete(id); return n; });
   const head = (nw: boolean) => (
     <>
-      <span><Checkbox checked={false} indeterminate={picked.size > 0} onChange={() => undefined} label={t("ui.kit.selectAll")} /></span>
+      <span><Checkbox checked={false} indeterminate={picked.size > 0} onChange={() => undefined} label={t("detail.content.selectAll")} /></span>
       <span />
-      <Cell>{t("ui.kit.nameField")}</Cell>
+      <Cell>{t("common.name")}</Cell>
       {!nw && <Cell>{t("ui.kit.notesCol")}</Cell>}
       <Cell align="end">Update</Cell>
       <Cell align="end">{t("ui.switch.on")}</Cell>
@@ -277,12 +277,12 @@ function ContentLists() {
     <>
       {MODS.map((m) => (
         <ListRow key={m.id} selected={picked.has(m.id)} off={!m.on} dep={m.dep}>
-          <Checkbox checked={picked.has(m.id)} onChange={(v) => pick(m.id, v)} label={t("ui.kit.selectItem", { name: m.t })} />
+          <Checkbox checked={picked.has(m.id)} onChange={(v) => pick(m.id, v)} label={t("detail.content.selectItem", { name: m.t })} />
           <ProjectIcon seed={m.id} />
           <RowTitle title={m.t} sub={m.s} />
           {!nw && <Cell flex>{m.warn && <><Chip size="s" tone="warn" dot data-hide="1040">{m.warn}</Chip><Button variant="ghost" size="s" tone="warn">{t("ui.kit.fix")}</Button></>}</Cell>}
           <Cell flex align="end">{m.id === "sodium" ? <Button size="s" icon="up" width={96}>0.6.6</Button> : null}</Cell>
-          <Cell flex align="end"><Switch checked={m.on} onChange={() => undefined} label={t("ui.kit.toggleOnAria", { name: m.t })} /></Cell>
+          <Cell flex align="end"><Switch checked={m.on} onChange={() => undefined} label={t("detail.content.enabledLabel", { name: m.t })} /></Cell>
           <IconButton size="s" icon="more" label={t("ui.kit.moreAbout", { name: m.t })} tip={false} />
         </ListRow>
       ))}
@@ -301,7 +301,7 @@ function ContentLists() {
           <ListRow key={m.id} selected={picked.has(m.id)} off={!m.on}>
             <ProjectIcon seed={m.id} box={52} />
             <RowTitle title={m.t} />
-            <span><Switch checked={m.on} onChange={() => undefined} label={t("ui.kit.toggleOnAria", { name: m.t })} /><IconButton size="s" icon="more" label={t("ui.kit.moreAbout", { name: m.t })} tip={false} /></span>
+            <span><Switch checked={m.on} onChange={() => undefined} label={t("detail.content.enabledLabel", { name: m.t })} /><IconButton size="s" icon="more" label={t("ui.kit.moreAbout", { name: m.t })} tip={false} /></span>
             <span>{m.warn ? <Chip size="s" tone="warn" dot>{m.warn}</Chip> : <span className="ell">{m.s}</span>}</span>
             <span>{m.id === "sodium" ? <Button size="s" icon="up" width={96}>0.6.6</Button> : null}</span>
           </ListRow>
@@ -331,7 +331,7 @@ function CatalogLists() {
     <>
       <List variant="catalog" data-kit="list-catalog">
         {HITS.map((h, k) => (
-          <ListRow key={h.id} feature={k === 0} index={k} hit={{ onClick: () => undefined, label: t("ui.kit.viewEntry", { name: h.t }) }} {...(k === 2 ? { "data-force": "hover" } : {})}>
+          <ListRow key={h.id} feature={k === 0} index={k} hit={{ onClick: () => undefined, label: t("components.search.viewProject", { name: h.t }) }} {...(k === 2 ? { "data-force": "hover" } : {})}>
             <ProjectIcon seed={h.id} box={k === 0 ? 104 : 72} />
             <RowTitle size={k === 0 ? "feature" : "l"} title={h.t} aside={h.a} sub={h.d} meta={meta(h.n)} />
             <Cell flex align="end"><Button size="s" icon="plus">{t("common.add")}</Button></Cell>
@@ -342,7 +342,7 @@ function CatalogLists() {
       <Panel pad="s" style={{ maxWidth: 520 }}>
         <List variant="catalog-compact" data-kit="list-compact">
           {HITS.map((h) => (
-            <ListRow key={h.id} hit={{ onClick: () => undefined, label: t("ui.kit.viewEntry", { name: h.t }) }}>
+            <ListRow key={h.id} hit={{ onClick: () => undefined, label: t("components.search.viewProject", { name: h.t }) }}>
               <ProjectIcon seed={h.id} box={40} />
               <RowTitle size="l" title={h.t} sub={h.d} meta={<span><Count value={h.n} /> Downloads</span>} />
               <Cell flex align="end"><Button size="s" icon="plus">{t("common.add")}</Button></Cell>
@@ -359,7 +359,7 @@ function SmallLists() {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 360px))", gap: 24, alignItems: "start" }}>
       <Panel pad="m" data-kit="list-versions">
-        <h3 style={{ ...cap, marginBottom: 6 }}>{t("ui.kit.secVersions")}</h3>
+        <h3 style={{ ...cap, marginBottom: 6 }}>{t("components.detail.versions")}</h3>
         <List variant="versions">
           {["mc1.21.4-0.6.5", "mc1.21.4-0.6.4-beta", "mc1.21.1-0.6.0"].map((v, k) => (
             <ListRow key={v}>
@@ -374,7 +374,7 @@ function SmallLists() {
           {[
             { t: t("ui.tasks.installing", { name: "Sodium" }), s: t("ui.kit.filesProgress", { done: 3, total: 7 }), p: "42 %", i: "dl" as const, c: "var(--copper)" },
             { t: t("ui.kit.instanceCreated", { name: "Überlebenswelt" }), s: t("ui.kit.minutesAgo"), p: "", i: "check" as const, c: "var(--run)" },
-            { t: t("ui.kit.downloadFailed"), s: t("ui.kit.noConnection"), p: "", i: "warn" as const, c: "var(--bad)" },
+            { t: t("ui.kit.downloadFailed"), s: t("components.offline.title"), p: "", i: "warn" as const, c: "var(--bad)" },
           ].map((task) => (
             <ListRow key={task.t}>
               <span style={{ color: task.c }}><Icon name={task.i} /></span>
@@ -391,8 +391,8 @@ function SmallLists() {
             <ListRow key={n} selected={k === 0}>
               <Avatar name={n} />
               <RowTitle title={n} sub={k === 0 ? t("ui.kit.msActive") : t("ui.offline.label")} />
-              {k > 0 && <Button size="s">{t("ui.kit.switchAccount")}</Button>}
-              <Button variant="ghost" size="s">{k === 0 ? t("ui.kit.signOut") : t("common.remove")}</Button>
+              {k > 0 && <Button size="s">{t("components.account.switch")}</Button>}
+              <Button variant="ghost" size="s">{k === 0 ? t("components.account.signOutPlain") : t("common.remove")}</Button>
             </ListRow>
           ))}
         </List>
