@@ -11,6 +11,7 @@ import { Actions, Button, Count, FormRow, FormSection, Hint, PageHeader, Segment
 import { api } from "@/lib/api";
 import { Buddy, BrandWordmark, useBrand } from "@/branding/Brand";
 import { SEASONS, type PumpkinChoice } from "@/branding/calendar";
+import type { LanguageChoice } from "@/i18n";
 import { useSettings, type PxSize } from "@/store/settings";
 import pkg from "../../package.json";
 
@@ -25,6 +26,11 @@ const SECTIONS = [
 type SectionId = (typeof SECTIONS)[number]["value"];
 
 const PX_SIZES: { value: PxSize; label: string }[] = [{ value: "s", label: "Klein" }, { value: "m", label: "Mittel" }, { value: "l", label: "Groß" }];
+const LANGUAGES: { value: LanguageChoice; label: string }[] = [
+  { value: "system", label: "System" },
+  { value: "de", label: "Deutsch" },
+  { value: "en", label: "English" },
+];
 const PUMPKINS = [
   { value: "auto", label: "Automatisch · nach Jahreszeit" },
   ...SEASONS.map((season) => ({ value: season.id, label: `${season.name} · ${season.label}` })),
@@ -119,6 +125,9 @@ export function SettingsPage() {
 
           {tab === "darstellung" && (
             <>
+              <FormRow label="Sprache" hint="Gilt sofort, ohne Neustart">
+                <Segmented<LanguageChoice> size="s" label="Sprache" value={s.language} onChange={(language) => s.set({ language })} items={LANGUAGES} />
+              </FormRow>
               <FormRow label="Dein Pumpkin" htmlFor="pumpkin-choice" hint="Wähle eine feste Variante für Buddy, Farben und App-Icon oder lass sie mit den Jahreszeiten wechseln.">
                 <Select
                   id="pumpkin-choice"
