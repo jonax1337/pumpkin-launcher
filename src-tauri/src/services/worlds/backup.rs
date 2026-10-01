@@ -13,13 +13,12 @@ use serde::Serialize;
 use super::{read_world, world_dir, World};
 use crate::services::progress::{Phase, ProgressFn};
 use crate::services::{
-    add_zip_file, download::RemoveOnDrop, entries, free_name, providers::zip_paths, remove_logged,
+    add_zip_file, content, download::RemoveOnDrop, entries, free_name, providers::zip_paths, remove_logged,
     require_plain_name, walk, write_zip_atomic, Dirs,
 };
 use crate::{
     error::{AppError, AppResult},
     models::now_ms,
-    services::content,
 };
 
 /// Sperrdatei des laufenden Spiels; gehört nicht in eine Sicherung.

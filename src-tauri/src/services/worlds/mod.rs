@@ -1,5 +1,5 @@
 //! Welten einer Instanz (`saves/<Ordner>`; der Ordnername ist die ID): Anzeige aus `level.dat`, Sicherungen
-//! ([`backup`]), Wiederherstellen und Löschen sowie das Aufräumen unterbrochener Vorgänge beim Start.
+//! (Modul `backup`), Wiederherstellen und Löschen sowie das Aufräumen unterbrochener Vorgänge beim Start.
 use std::{
     cmp::Reverse,
     fs,
