@@ -8,13 +8,12 @@ use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::{auth, modrinth::invalid, Dirs};
+use super::{auth::{self, MC_PROFILE}, modrinth::{self, invalid}, Dirs};
 use crate::error::AppResult;
 use crate::models::{now_ms, LibrarySkin, SkinVariant};
 use crate::services::download::sha1_hex;
 use crate::state::AppState;
 
-const PROFILE: &str = "https://api.minecraftservices.com/minecraft/profile";
 const TEXTURE_BASE: &str = "textures.minecraft.net/texture/";
 /// Echte Skins haben wenige KiB; die Grenze fängt nur versehentlich gewählte große Bilder ab.
 const MAX_FILE: u64 = 256 * 1024;
@@ -130,7 +129,7 @@ async fn send(state: &AppState, account_id: &str, request: reqwest::RequestBuild
 }
 
 pub async fn profile(state: &AppState, account_id: &str) -> AppResult<SkinProfile> {
-    let (status, body) = send(state, account_id, state.http.get(PROFILE)).await?;
+    let (status, body) = send(state, account_id, state.http.get(MC_PROFILE)).await?;
     parse_profile(status, &body)
 }
 
@@ -141,19 +140,19 @@ pub async fn upload(state: &AppState, account_id: &str, skin_id: &str) -> AppRes
     let form = Form::new()
         .text("variant", skin.variant.as_str())
         .part("file", Part::bytes(png).file_name("skin.png").mime_str("image/png")?);
-    let (status, body) = send(state, account_id, state.http.post(format!("{PROFILE}/skins")).multipart(form)).await?;
+    let (status, body) = send(state, account_id, state.http.post(format!("{MC_PROFILE}/skins")).multipart(form)).await?;
     check(status, &body)
 }
 
 /// Zurück zum Standardskin von Minecraft.
 pub async fn reset(state: &AppState, account_id: &str) -> AppResult<()> {
-    let (status, body) = send(state, account_id, state.http.delete(format!("{PROFILE}/skins/active"))).await?;
+    let (status, body) = send(state, account_id, state.http.delete(format!("{MC_PROFILE}/skins/active"))).await?;
     check(status, &body)
 }
 
 /// Zeigt den Umhang `cape_id`; `None` blendet den aktiven aus.
 pub async fn set_cape(state: &AppState, account_id: &str, cape_id: Option<&str>) -> AppResult<()> {
-    let url = format!("{PROFILE}/capes/active");
+    let url = format!("{MC_PROFILE}/capes/active");
     let request = match cape_id {
         Some(id) => state.http.put(url).json(&json!({ "capeId": id })),
         None => state.http.delete(url),
@@ -185,7 +184,7 @@ fn skin_name(name: &str) -> AppResult<String> {
 
 /// Nur mit IDs aus dem Store aufrufen: die ID wird Teil des Pfads.
 fn file(dirs: &Dirs, id: &str) -> PathBuf {
-    dirs.root.join("skins").join(format!("{id}.png"))
+    dirs.skins().join(format!("{id}.png"))
 }
 
 /// Nimmt eine PNG-Datei in die Bibliothek auf; Name ist der Dateiname, das Modell zunächst klassisch.
@@ -204,7 +203,7 @@ pub async fn save_active(state: &AppState, account_id: &str, name: &str) -> AppR
         .await?
         .skin
         .ok_or_else(|| invalid("Minecraft meldet für dieses Konto gerade keinen Skin."))?;
-    let png = state.http.get(&skin.url).send().await?.error_for_status()?.bytes().await?;
+    let png = modrinth::bytes(state.http.get(&skin.url), MAX_FILE).await?;
     add(state, &png, name, skin.variant)
 }
 
@@ -215,7 +214,7 @@ fn add(state: &AppState, png: &[u8], name: &str, variant: SkinVariant) -> AppRes
         return Err(invalid(format!("Dieser Skin ist schon in der Bibliothek: „{}“.", existing.name)));
     }
     let path = file(&state.dirs, &skin.id);
-    fs::create_dir_all(state.dirs.root.join("skins"))?;
+    fs::create_dir_all(state.dirs.skins())?;
     let tmp = path.with_extension("png.part");
     fs::write(&tmp, png)?;
     fs::rename(&tmp, &path)?;

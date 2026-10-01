@@ -23,7 +23,7 @@ const XBOX_AUTH: &str = "https://user.auth.xboxlive.com/user/authenticate";
 const XSTS_AUTH: &str = "https://xsts.auth.xboxlive.com/xsts/authorize";
 const MC_LOGIN: &str = "https://api.minecraftservices.com/authentication/login_with_xbox";
 const MC_ENTITLEMENTS: &str = "https://api.minecraftservices.com/entitlements/mcstore";
-const MC_PROFILE: &str = "https://api.minecraftservices.com/minecraft/profile";
+pub(crate) const MC_PROFILE: &str = "https://api.minecraftservices.com/minecraft/profile";
 const KEYRING_SERVICE: &str = "dev.laux.launcher";
 pub(crate) const RELOGIN: &str = "Die Anmeldung ist abgelaufen. Bitte melde dich erneut mit deinem Microsoft-Konto an.";
 

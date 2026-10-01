@@ -66,6 +66,11 @@ impl Dirs {
         self.root.join("cache").join("mods")
     }
 
+    /// Skin-Bibliothek, Dateien als `<sha1>.png`.
+    pub fn skins(&self) -> PathBuf {
+        self.root.join("skins")
+    }
+
     pub fn natives_dir(&self, instance_id: &str) -> PathBuf {
         self.instance(instance_id).join("natives")
     }
