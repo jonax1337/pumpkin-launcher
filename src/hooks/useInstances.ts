@@ -91,6 +91,23 @@ export function useDeleteInstance() {
   });
 }
 
+/** Einträge des Spielordners, aus denen der Export-Dialog wählen lässt. */
+export function useExportEntries(instanceId: string) {
+  return useQuery({ queryKey: ["export-entries", instanceId], queryFn: () => api.exportEntries(instanceId), staleTime: 0 });
+}
+
+/** Export als `.mrpack`; der Erfolgs-Toast führt zur Datei im Dateimanager. */
+export function useExportInstance() {
+  return useMutation({
+    mutationFn: ({ instance, include, path }: { instance: Instance; include: string[]; path: string }) => api.exportInstance(instance.id, include, path),
+    onSuccess: (_, { instance, path }) =>
+      toast.success(`„${instance.name}“ exportiert`, {
+        description: path,
+        action: { label: "Im Ordner zeigen", onClick: () => api.revealPath(path).catch((e: Error) => toast.error(e.message)) },
+      }),
+  });
+}
+
 /** Zuletzt gespielte Instanz (Fallback: zuletzt erstellte; `lastPlayedAt` zeigt, welcher Fall vorliegt). */
 export function pickRecentInstance(instances: Instance[] | undefined): Instance | undefined {
   if (!instances?.length) return undefined;

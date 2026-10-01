@@ -64,10 +64,6 @@ pub async fn installed_version(dirs: &Dirs, version_id: &str) -> AppResult<Versi
     })
 }
 
-fn installed_marker(dirs: &Dirs, instance_id: &str) -> PathBuf {
-    dirs.natives_dir(instance_id).with_file_name("installed")
-}
-
 /// Inhalt der Markerdatei: die MC-Version, bei Mod-Loadern plus Loader und Version. Ein Wechsel
 /// von Loader oder Loader-Version gilt so als nicht installiert; Vanilla-Marker bleiben gültig.
 fn install_key(instance: &Instance) -> String {
@@ -80,12 +76,12 @@ fn install_key(instance: &Instance) -> String {
 /// Vermerkt die Instanz als installiert. Erst nach vollständigem Erfolg: `is_installed` erkennt so auch
 /// abgebrochene Installationen.
 pub async fn mark_installed(dirs: &Dirs, instance: &Instance) -> AppResult<()> {
-    Ok(tokio::fs::write(installed_marker(dirs, &instance.id), install_key(instance)).await?)
+    Ok(tokio::fs::write(dirs.installed_marker(&instance.id), install_key(instance)).await?)
 }
 
 /// Aktuelle Minecraft-Version (samt Loader) der Instanz ist vollständig installiert.
 pub fn is_installed(dirs: &Dirs, instance: &Instance) -> bool {
-    fs::read_to_string(installed_marker(dirs, &instance.id)).is_ok_and(|v| v == install_key(instance))
+    fs::read_to_string(dirs.installed_marker(&instance.id)).is_ok_and(|v| v == install_key(instance))
 }
 
 /// Java-Komponente der Version; sehr alte Versions-JSONs haben keine Angabe → Java 8.

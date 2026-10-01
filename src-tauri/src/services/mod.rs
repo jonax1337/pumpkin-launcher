@@ -1,9 +1,16 @@
 //! Services: Persistenz, Auth, Installation (Mojang-Formate, Downloads, Java), Spielstart und Support.
-use std::path::{Path, PathBuf};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
+
+use crate::error::AppResult;
+use modrinth::invalid;
 
 pub mod auth;
 pub mod debuginfo;
 pub mod download;
+pub mod duplicate;
 pub mod fabric;
 pub mod forge;
 pub mod gamelog;
@@ -15,11 +22,16 @@ pub mod mods;
 pub mod modrinth;
 pub mod content;
 pub mod mojang;
+pub mod mrpack;
 pub mod providers;
 pub mod rules;
 pub mod store;
 pub mod system;
 pub mod templates;
+
+/// Ordner im Spielverzeichnis, die Minecraft und Loader von selbst neu anlegen (Fabric: `.fabric`
+/// mit umgemappten JARs); Kopien und Exporte lassen sie weg.
+const REGENERATED: [&str; 3] = ["logs", "crash-reports", ".fabric"];
 
 /// Verzeichnislayout unter dem App-Datenverzeichnis. Libraries, Assets, Versionen und
 /// Java-Runtimes teilen sich alle Instanzen; jede Instanz hat ihr eigenes Spiel- und Natives-Verzeichnis.
@@ -77,7 +89,49 @@ impl Dirs {
         self.instance(instance_id).join("natives")
     }
 
+    /// Markerdatei einer vollständigen Installation; ihr Inhalt hängt nur an Version und Loader.
+    pub fn installed_marker(&self, instance_id: &str) -> PathBuf {
+        self.instance(instance_id).join("installed")
+    }
+
+    /// Ordner und Dateien direkt im Spielverzeichnis, sortiert und ohne Neuerzeugtes.
+    pub fn game_entries(&self, instance_id: &str) -> io::Result<Vec<String>> {
+        let entries = match fs::read_dir(self.game_dir(instance_id)) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(e),
+        };
+        let mut names = Vec::new();
+        for entry in entries {
+            if let Some(name) = entry?.file_name().to_str().filter(|n| !REGENERATED.contains(n)) {
+                names.push(name.to_owned());
+            }
+        }
+        names.sort();
+        Ok(names)
+    }
+
     pub fn library(&self, path: &str) -> PathBuf {
         self.libraries().join(Path::new(path))
     }
+}
+
+/// Dateien unter `path` (Datei oder Ordner, rekursiv, ohne Symlinks/Junctions) als
+/// (Pfad relativ zu `base` mit `/`, Pfad). Fehlt `path`, kommt nichts hinzu.
+pub(crate) fn walk(base: &Path, path: &Path, out: &mut Vec<(String, PathBuf)>) -> AppResult<()> {
+    let kind = match fs::symlink_metadata(path) {
+        Ok(meta) => meta.file_type(),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e.into()),
+    };
+    if kind.is_dir() {
+        for entry in fs::read_dir(path)? {
+            walk(base, &entry?.path(), out)?;
+        }
+    } else if kind.is_file() {
+        let rel = path.strip_prefix(base).map_err(|_| invalid("Pfad außerhalb des Spielordners"))?;
+        let rel = rel.to_str().ok_or_else(|| invalid("Dateiname ist kein gültiger Text"))?.replace('\\', "/");
+        out.push((rel, path.to_owned()));
+    }
+    Ok(())
 }

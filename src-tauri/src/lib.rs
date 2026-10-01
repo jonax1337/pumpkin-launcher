@@ -86,6 +86,9 @@ pub fn run() {
             content_commands::template_create_instance,
             support_commands::log_share,
             support_commands::debug_info,
+            content_commands::instance_duplicate,
+            content_commands::instance_export_entries,
+            content_commands::instance_export,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

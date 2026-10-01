@@ -55,8 +55,13 @@ export function progressLabel(p: ContentProgress | null): string {
   if (!p || p.phase === "resolve" || p.phase === "validate") return "Wird geprüft…";
   if (p.phase === "download") return p.total ? `Lädt ${Math.min(p.done + 1, p.total)} von ${p.total}…` : "Lädt…";
   if (p.phase === "extract") return "Wird entpackt…";
+  if (p.phase === "copy") return p.total ? `Kopiert ${p.done} von ${p.total}…` : "Wird kopiert…";
   return "Fertig";
 }
+
+/** Anteil für Fortschrittsbalken; nur Phasen mit bekannter Menge (Downloads, kopierte Dateien). */
+export const progressShare = (p: ContentProgress | null) =>
+  (p?.phase === "download" || p?.phase === "copy") && p.total ? Math.min(1, p.done / p.total) : null;
 
 export const formatDownloads = (n: number) => new Intl.NumberFormat("de", { notation: "compact" }).format(n);
 

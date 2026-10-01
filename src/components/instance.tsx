@@ -1,18 +1,25 @@
 import { useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router";
+import { save as saveFile } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { create } from "zustand";
-import { ConfirmDialog, Dialog, DialogActions, Field, IconButton, Menu, TextField, type MenuEntry } from "@/ui";
+import { Checkbox, ConfirmDialog, Dialog, DialogActions, Field, Hint, IconButton, Menu, Skel, TextField, type MenuEntry } from "@/ui";
 import { usePhase } from "@/components/game";
-import { askStop, useDeleteInstance, usePlay } from "@/hooks/useInstances";
+import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { askStop, useDeleteInstance, useExportEntries, useExportInstance, usePlay } from "@/hooks/useInstances";
 import { useSaveTemplate } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
 import type { Instance } from "@/lib/types";
 
-/** Welche Instanz gerade einen der beiden Dialoge offen hat (einmal im Layout gerendert). */
-const useInstanceActions = create<{ template: Instance | null; remove: Instance | null }>(() => ({ template: null, remove: null }));
+/** Welche Instanz gerade einen der Dialoge offen hat (einmal im Layout gerendert). */
+const useInstanceActions = create<{ template: Instance | null; exporting: Instance | null; remove: Instance | null }>(() => ({
+  template: null,
+  exporting: null,
+  remove: null,
+}));
 
 export const askSaveTemplate = (instance: Instance) => useInstanceActions.setState({ template: instance });
+export const askExport = (instance: Instance) => useInstanceActions.setState({ exporting: instance });
 export const askDelete = (instance: Instance) => useInstanceActions.setState({ remove: instance });
 
 /** Spielordner der Instanz im Dateimanager öffnen; Fehler als Toast. */
@@ -20,10 +27,22 @@ export function openInstanceFolder(instance: Instance) {
   api.instanceDir(instance.id).then(api.openPath).catch((e: unknown) => toast.error(e instanceof Error ? e.message : String(e)));
 }
 
+/** Instanz duplizieren: Fortschritt im Aufgaben-Menü, danach ein Toast mit Sprung zur Kopie. */
+function useDuplicate() {
+  const install = useContentInstall();
+  const navigate = useNavigate();
+  return (instance: Instance) =>
+    install.mutate(withTarget(`duplicate:${instance.id}`, (op) => api.duplicateInstance(instance.id, op), `${instance.name} duplizieren`), {
+      onSuccess: (copy) => copy && toast.success(`„${copy.name}“ angelegt`, { action: { label: "Öffnen", onClick: () => navigate(`/instances/${copy.id}`) } }),
+    });
+}
+
 /** Einträge für das Menü einer Instanz: Knopf „…“ und Rechtsklick teilen sie sich. */
 export function useInstanceMenu(instance: Instance, opts: { open?: boolean } = { open: true }): MenuEntry[] {
   const phase = usePhase(instance.id);
   const play = usePlay();
+  const duplicate = useDuplicate();
+  const contentBusy = useContentState((s) => !!s.active);
   const navigate = useNavigate();
   const running = phase === "running";
   const busy = phase === "preparing" || phase === "starting";
@@ -35,6 +54,8 @@ export function useInstanceMenu(instance: Instance, opts: { open?: boolean } = {
     { id: "log", text: "Protokoll", icon: "term", onSelect: () => navigate(`/instances/${instance.id}?tab=console`) },
     { id: "dir", text: "Ordner öffnen", icon: "folder", onSelect: () => openInstanceFolder(instance) },
     "-",
+    { id: "dup", text: "Duplizieren", icon: "copy", disabled: running || busy || contentBusy, onSelect: () => duplicate(instance) },
+    { id: "exp", text: "Exportieren…", icon: "ul", disabled: running || busy, onSelect: () => askExport(instance) },
     { id: "tpl", text: "Als Vorlage speichern", icon: "save", onSelect: () => askSaveTemplate(instance) },
     "-",
     { id: "del", text: "Löschen", icon: "trash", bad: true, disabled: running || busy, onSelect: () => askDelete(instance) },
@@ -88,16 +109,78 @@ function SaveTemplateDialog({ instance, onClose }: { instance: Instance; onClose
   );
 }
 
+/** Dateiname für den Speichern-Dialog: Windows lehnt `:` & Co. ab, `/` läse der Dialog als Ordner. */
+const packFileName = (name: string) => `${name.replace(/[<>:"/\\|?*]/g, "_").trim() || "Instanz"}.mrpack`;
+
+/** Was ein Export ohne Zutun mitnimmt; Welten nur auf Wunsch (groß und persönlich). */
+const EXPORT_DEFAULTS = ["config", "mods", "resourcepacks", "shaderpacks", "options.txt"];
+
+/** Lesbare Namen bekannter Einträge im Spielordner. */
+const ENTRY_LABELS: Record<string, string> = {
+  config: "Mod-Einstellungen",
+  mods: "Mods",
+  resourcepacks: "Ressourcenpakete",
+  shaderpacks: "Shader",
+  "options.txt": "Spieleinstellungen",
+  saves: "Welten",
+  screenshots: "Screenshots",
+  "servers.dat": "Serverliste",
+};
+
+function ExportDialog({ instance, onClose }: { instance: Instance; onClose: () => void }) {
+  const entries = useExportEntries(instance.id);
+  const [picked, setPicked] = useState<Set<string> | null>(null);
+  const chosen = picked ?? new Set(entries.data?.filter((name) => EXPORT_DEFAULTS.includes(name)));
+  const exp = useExportInstance();
+  const toggle = (name: string, on: boolean) => setPicked(new Set(on ? [...chosen, name] : [...chosen].filter((n) => n !== name)));
+
+  async function submit() {
+    const path = await saveFile({ defaultPath: packFileName(instance.name), filters: [{ name: "Modrinth-Modpack", extensions: ["mrpack"] }] });
+    if (path) exp.mutate({ instance, include: [...chosen], path }, { onSuccess: onClose });
+  }
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(o) => !o && onClose()}
+      title="Exportieren"
+      sub={instance.name}
+      width={480}
+      footLeft={api.isMock ? "Nur in der App." : undefined}
+      footer={<DialogActions cancel="Abbrechen" confirm={{ label: exp.isPending ? "Exportiert" : "Exportieren", width: 150, disabled: api.isMock || !entries.data || exp.isPending, onClick: submit }} />}
+    >
+      <Field label="Mitnehmen" group help="Inhalte von Modrinth werden verlinkt, alles andere kommt mit in die Datei. CurseForge-Dateien darfst du so nicht unbedingt öffentlich teilen.">
+        {entries.error ? (
+          <Hint tone="bad">{entries.error.message}</Hint>
+        ) : !entries.data ? (
+          <Skel h={120} />
+        ) : entries.data.length ? (
+          <div className="flex flex-col gap-2">
+            {entries.data.map((name) => (
+              <Checkbox key={name} checked={chosen.has(name)} disabled={exp.isPending} onChange={(on) => toggle(name, on)}>
+                {ENTRY_LABELS[name] ? `${ENTRY_LABELS[name]} (${name})` : name}
+              </Checkbox>
+            ))}
+          </div>
+        ) : (
+          <Hint>Der Spielordner ist noch leer. Exportiert werden Version und Loader.</Hint>
+        )}
+      </Field>
+    </Dialog>
+  );
+}
+
 /** Dialoge der Instanz-Aktionen; einmal im Layout. */
 export function InstanceDialogs() {
-  const { template, remove } = useInstanceActions();
+  const { template, exporting, remove } = useInstanceActions();
   const del = useDeleteInstance();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const close = () => useInstanceActions.setState({ template: null, remove: null });
+  const close = () => useInstanceActions.setState({ template: null, exporting: null, remove: null });
   return (
     <>
       {template && <SaveTemplateDialog key={template.id} instance={template} onClose={close} />}
+      {exporting && <ExportDialog key={exporting.id} instance={exporting} onClose={close} />}
       <ConfirmDialog
         open={!!remove}
         onOpenChange={(o) => !o && close()}
