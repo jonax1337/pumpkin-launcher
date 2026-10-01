@@ -32,6 +32,39 @@ document.querySelectorAll("[data-icon]").forEach((element) => {
   element.innerHTML = `<svg viewBox="0 0 7 7" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true">${rows.flatMap((row, y) => [...row].flatMap((pixel, x) => pixel === "#" ? `<rect x="${x}" y="${y}" width="1" height="1"/>` : [])).join("")}</svg>`;
 });
 
+// The muted trailer starts from the beginning once its section is reached and pauses when it leaves.
+// Reduced motion starts it paused; the toggle always wins.
+const trailerTrack = document.querySelector(".trailer-track");
+const trailer = trailerTrack.querySelector(".trailer");
+const trailerVideo = trailer.querySelector("video");
+const trailerToggle = trailer.querySelector(".trailer-toggle");
+let trailerWanted = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+let trailerVisible = false;
+function syncTrailer() {
+  if (trailerWanted && trailerVisible) trailerVideo.play().catch(ignoreInterruptedPlay);
+  else trailerVideo.pause();
+}
+function ignoreInterruptedPlay(error) {
+  if (error.name !== "AbortError") throw error;
+}
+function renderTrailerToggle() {
+  const playing = !trailerVideo.paused;
+  trailer.toggleAttribute("data-playing", playing);
+  trailerToggle.querySelector(".trailer-toggle-label").textContent = playing ? "PAUSE" : "ABSPIELEN";
+}
+function preloadTrailer() {
+  trailerVideo.preload = "auto";
+}
+function restartTrailer() {
+  trailerVideo.currentTime = 0;
+}
+const trailerPreloadTrigger = ScrollTrigger.create({ trigger: trailerTrack, start: "top bottom", once: true, onEnter: preloadTrailer });
+const trailerTrigger = ScrollTrigger.create({ trigger: trailerTrack, start: "top 10%", end: "bottom top", onEnter: restartTrailer, onToggle: ({ isActive }) => { trailerVisible = isActive; syncTrailer(); } });
+trailerToggle.addEventListener("click", () => { trailerWanted = trailerVideo.paused; syncTrailer(); });
+trailerVideo.addEventListener("play", renderTrailerToggle);
+trailerVideo.addEventListener("pause", renderTrailerToggle);
+trailerToggle.hidden = false;
+
 const media = gsap.matchMedia();
 media.add("(prefers-reduced-motion: no-preference)", () => {
   // Entrance and one parallax scene; the rest of the motion tells the product story.
@@ -45,6 +78,10 @@ media.add("(prefers-reduced-motion: no-preference)", () => {
   gsap.utils.toArray(".reveal").forEach((element) => {
     gsap.from(element, { y: 40, autoAlpha: 0, duration: .85, ease: "power3.out", scrollTrigger: { trigger: element, start: "top 92%", once: true } });
   });
+  // Pinned on large screens, the stage opens fully exactly when the track reaches the top.
+  gsap.fromTo(".trailer-stage", { clipPath: "inset(14% 9%)" }, { clipPath: "inset(0% 0%)", ease: "none", scrollTrigger: { trigger: trailerTrack, start: "top bottom", end: () => trailer.classList.contains("is-pinned") ? "top top" : "center center", scrub: .7, invalidateOnRefresh: true } });
+  gsap.fromTo(".trailer-video", { yPercent: -7, scale: 1.2 }, { yPercent: 7, scale: 1.08, ease: "none", scrollTrigger: { trigger: trailerTrack, start: "top bottom", end: "bottom top", scrub: .7 } });
+  gsap.from(".trailer-content > *", { y: 45, autoAlpha: 0, duration: 1, stagger: .12, ease: "power3.out", scrollTrigger: { trigger: trailerTrack, start: "top 10%", once: true } });
   gsap.from(".outro-content > *", { y: 45, autoAlpha: 0, duration: 1, stagger: .12, ease: "power3.out", scrollTrigger: { trigger: ".outro", start: "top 65%", once: true } });
 });
 
@@ -63,7 +100,14 @@ media.add("(min-width: 900px) and (min-height: 680px) and (prefers-reduced-motio
       .to({}, { duration: index === shots.length - 2 ? .6 : .7 });
   });
   gsap.from(".world-card", { y: 130, rotation: (index) => [4,-3,3][index], autoAlpha: 0, stagger: .15, ease: "power2.out", scrollTrigger: { trigger: ".world-grid", start: "top 90%", end: "top 25%", scrub: .8 } });
-  return () => showcase.classList.remove("is-pinned");
+  trailer.classList.add("is-pinned");
+  // Snap into the opened trailer, then through the short hold straight to the next section.
+  const trailerOpenedAt = (self) => innerHeight / (self.end - self.start);
+  ScrollTrigger.create({ trigger: trailerTrack, start: "top bottom", end: "bottom top", snap: { snapTo: (progress, self) => ScrollTrigger.snapDirectional([0, trailerOpenedAt(self), 1])(progress, self.direction), duration: { min: .3, max: .9 }, delay: .08, ease: "power2.inOut" } });
+  return () => {
+    showcase.classList.remove("is-pinned");
+    trailer.classList.remove("is-pinned");
+  };
 });
 
 // Refresh the triggers in document order after sizing the sticky product tour.
@@ -73,6 +117,8 @@ window.addEventListener("load", () => ScrollTrigger.refresh(), { once: true });
 document.querySelectorAll("details").forEach((item) => item.addEventListener("toggle", () => ScrollTrigger.refresh()));
 if (import.meta.hot) import.meta.hot.dispose(() => {
   media.revert();
+  trailerPreloadTrigger.kill();
+  trailerTrigger.kill();
   clearTimeout(seasonTimer);
   window.removeEventListener("focus", syncSeason);
   document.removeEventListener("visibilitychange", syncSeason);
