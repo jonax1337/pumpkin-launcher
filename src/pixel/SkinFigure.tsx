@@ -2,12 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { SkinVariant } from "@/lib/types";
 import { CAPE, drawCape, drawSkin, FIGURE } from "./skin";
 
-/** Lädt eine Textur (Adresse oder data:-URL); bis die nächste da ist, bleibt die vorige stehen. */
+/**
+ * Lädt eine Textur (Adresse oder data:-URL); bis die nächste da ist, bleibt die vorige stehen.
+ * CORS-Anfrage, damit `drawSkin` die Pixel lesen darf: Mojangs Texturserver erlaubt jeden Ursprung.
+ */
 function useTexture(src: string | undefined) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
     if (!src) return;
     const next = new Image();
+    next.crossOrigin = "anonymous";
     next.onload = () => setImg(next);
     next.src = src;
     return () => void (next.onload = null);
