@@ -96,6 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         window: GameWindow::Default,
         extra_game_args: &[],
         quick_play: None,
+        session: None,
     };
     let args = launch::build_args(&spec, &Env::current())?;
     let (exit_tx, mut exit_rx) = tokio::sync::oneshot::channel();

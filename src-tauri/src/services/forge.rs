@@ -532,8 +532,7 @@ pub fn merge(version: VersionJson, profile: &Profile) -> AppResult<VersionJson> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::GameWindow;
-    use crate::services::launch::{build_args, LaunchSpec};
+    use crate::services::launch::{build_args, test_support::plain_spec};
 
     #[test]
     fn supported_versions() {
@@ -617,18 +616,8 @@ mod tests {
 
         let dirs = Dirs::new("/d");
         let account = crate::services::auth::offline_account("Notch").unwrap();
-        let spec = LaunchSpec {
-            version: &merged,
-            dirs: &dirs,
-            instance_id: "i",
-            account: &account,
-            memory_mb: 2048,
-            extra_jvm_args: &[],
-            window: GameWindow::Default,
-            extra_game_args: &[],
-            quick_play: None,
-        };
-        let args = build_args(&spec, &Env { os: "windows", arch: "x86_64", features: Vec::new() }).unwrap();
+        let windows = Env { os: "windows", arch: "x86_64", features: Vec::new() };
+        let args = build_args(&plain_spec(&merged, &dirs, &account), &windows).unwrap();
         let libs = dirs.libraries().to_string_lossy().into_owned();
         assert!(args.contains(&"-DignoreList=client-extra,1.21.1.jar".to_owned()));
         assert!(args.contains(&format!("-DlibraryDirectory={libs}")));

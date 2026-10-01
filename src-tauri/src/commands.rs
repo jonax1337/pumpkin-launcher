@@ -260,8 +260,7 @@ pub async fn instance_launch(app: AppHandle, state: State<'_, AppState>, instanc
     let version = installed_version(&state, &instance).await?;
     let component = version.java_component();
     let java = java::resolve(&state.dirs, component, instance.java_path.as_deref(), java_path.as_deref())?;
-    let session = session.as_ref().map(|s| launch::Session { access_token: &s.access_token, xuid: &s.xuid });
-    let args = launch::build_args_for(
+    let args = launch::build_args(
         &LaunchSpec {
             version: &version,
             dirs: &state.dirs,
@@ -272,9 +271,9 @@ pub async fn instance_launch(app: AppHandle, state: State<'_, AppState>, instanc
             window: instance.window,
             extra_game_args: &instance.game_args,
             quick_play: quick_play.as_ref(),
+            session: session.as_ref().map(launch::Session::from),
         },
         &Env::current(),
-        session.as_ref(),
     )?;
 
     let pid = state.spawn_running(&instance_id, || {
