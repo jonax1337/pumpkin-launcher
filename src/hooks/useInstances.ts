@@ -22,6 +22,17 @@ export function useInstances() {
   return useQuery({ queryKey: instanceKeys.all, queryFn: api.listInstances });
 }
 
+/** Gruppennamen aller Instanzen, alphabetisch; Gruppen gibt es nur über die Instanzen, die sie tragen. */
+export const groupsOf = (instances: Instance[]) =>
+  [...new Set(instances.flatMap((i) => (i.group ? [i.group] : [])))].sort((a, b) => a.localeCompare(b, "de"));
+
+/** Anzeige für Instanzen ohne Gruppe (Bibliothek und Einstellungen). */
+export const UNGROUPED = "Ohne Gruppe";
+
+export function useGroups() {
+  return useQuery({ queryKey: instanceKeys.all, queryFn: api.listInstances, select: groupsOf }).data ?? [];
+}
+
 export function useInstance(id: string | undefined) {
   return useQuery({
     queryKey: instanceKeys.detail(id ?? ""),
@@ -304,6 +315,8 @@ export function useGameEvents() {
         const since = useGame.getState().started[instanceId];
         useGame.getState().setStarted(instanceId, null);
         qc.setQueryData<InstanceStatus>(instanceKeys.status(instanceId), (s) => s && { ...s, running: false });
+        // Das Backend hat die Spielzeit der Sitzung angerechnet.
+        void qc.invalidateQueries({ queryKey: instanceKeys.all });
         const showLog = { label: "Protokoll", onClick: () => navigate(`/instances/${instanceId}?tab=console`) };
         if (stopping.delete(instanceId)) {
           toast(since ? `Minecraft beendet. Gespielt: ${formatClock(Date.now() - since)}` : "Minecraft beendet", { action: showLog });

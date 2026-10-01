@@ -26,6 +26,8 @@
 ## Features
 
 - **Instances** — create, configure and launch isolated game instances for Vanilla, **Fabric, Forge, NeoForge and Quilt**
+- **Per-instance launch settings** — own Java, window size or fullscreen, extra game arguments; total playtime per instance
+- **Library groups** — sort instances into collapsible groups right from the instance menu
 - **Mods & modpacks from [Modrinth](https://modrinth.com)** — browse, search and install directly in the launcher
 - **`.mrpack` import** — drag in local modpack files
 - **Duplicate & export** — copy an instance to experiment safely, or share it as a `.mrpack` (Modrinth mods linked, everything else embedded; worlds optional)

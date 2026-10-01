@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { LOUD_PHASES, PlayButton, StatusChip, usePhase } from "@/components/game";
 import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
-import { loaderLine } from "@/components/common";
+import { loaderLine, playtimeLine } from "@/components/common";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
 import { useBackgroundUpdates, useModUpdates } from "@/hooks/useContent";
-import { useInstances } from "@/hooks/useInstances";
-import { formatDate, relativeTime } from "@/lib/format";
+import { groupsOf, UNGROUPED, useInstances } from "@/hooks/useInstances";
+import { formatDate, formatPlaytime, relativeTime } from "@/lib/format";
 import { ALL_LOADERS, LOADER_LABELS, type Instance, type ModLoader } from "@/lib/types";
 import { lookOf, useLookStore } from "@/store/look";
 import {
-  Button, ButtonLink, CardGrid, Cell, Chip, Count, Empty, ErrorBox, Glyph, List, ListRow, PageHeader, RowTitle, SceneCard, SceneThumb,
+  Button, ButtonLink, CardGrid, Cell, Chip, Count, Disclosure, Empty, ErrorBox, Glyph, List, ListRow, PageHeader, RowTitle, SceneCard, SceneThumb,
   SearchField, Segmented, Select, Skel, Spacer, Toolbar,
 } from "@/ui";
 
@@ -40,6 +40,13 @@ const SORTS: Record<Sort, (a: Instance, b: Instance) => number> = {
 
 type Looks = ReturnType<typeof useLookStore.getState>["looks"];
 
+/** Abschnitte je Gruppe (alphabetisch), Instanzen ohne Gruppe (`null`) zuletzt; leere Abschnitte entfallen. */
+function sectionsOf(instances: Instance[]): [group: string | null, members: Instance[]][] {
+  const groups = groupsOf(instances).map((group): [string | null, Instance[]] => [group, instances.filter((i) => i.group === group)]);
+  const ungrouped = instances.filter((i) => !i.group);
+  return ungrouped.length ? [...groups, [null, ungrouped]] : groups;
+}
+
 /** Anzahl bekannter Updates aus dem Cache (gefüllt vom Detail oder von `useBackgroundUpdates`). */
 function useCachedUpdates(inst: Instance) {
   const { data } = useModUpdates(inst.id, false);
@@ -60,7 +67,10 @@ function LibStatus({ inst }: { inst: Instance }) {
   return null;
 }
 
-/** Poster 4:5: Szene, Ausnahme-Status oben links, beim Überfahren oder Fokus großer Spielen-Knopf mittig und Menü oben rechts, Name unten. Rechtsklick öffnet das Menü. */
+/**
+ * Poster 4:5: Szene, Ausnahme-Status oben links, beim Überfahren oder Fokus großer Spielen-Knopf mittig und Menü oben rechts, Name unten.
+ * Rechtsklick öffnet das Menü. Unter dem Namen ist nur Platz für eine Angabe neben der Version: Spielzeit, sonst „zuletzt gespielt“.
+ */
 function PosterCard({ inst, index, looks }: { inst: Instance; index: number; looks: Looks }) {
   const items = useInstanceMenu(inst);
   return (
@@ -68,7 +78,7 @@ function PosterCard({ inst, index, looks }: { inst: Instance; index: number; loo
       variant="poster"
       look={lookOf(looks, inst.id)}
       title={inst.name}
-      sub={`${loaderLine(inst)} · ${relativeTime(inst.lastPlayedAt)}`}
+      sub={`${loaderLine(inst)} · ${playtimeLine(inst) || relativeTime(inst.lastPlayedAt)}`}
       status={<LibStatus inst={inst} />}
       primary={<PlayButton instance={inst} size="m" />}
       actions={<InstanceMenuButton instance={inst} small variant="g" onScene />}
@@ -90,10 +100,43 @@ function InstanceRow({ inst, index, looks }: { inst: Instance; index: number; lo
       <Cell title={loaderLine(inst)}>{loaderLine(inst)}</Cell>
       <Cell hide={1040}><Count value={inst.mods.length} /></Cell>
       <Cell hide={1040}>{relativeTime(inst.lastPlayedAt)}</Cell>
+      <Cell hide={1180}>{inst.playtimeSecs > 0 ? formatPlaytime(inst.playtimeSecs) : "–"}</Cell>
       <Cell flex><LibStatus inst={inst} /></Cell>
       <PlayButton instance={inst} size="i" />
       <InstanceMenuButton instance={inst} variant="g" small />
     </ListRow>
+  );
+}
+
+/** Instanzen als Poster oder Liste. */
+function InstanceView({ instances, mode, looks }: { instances: Instance[]; mode: Mode; looks: Looks }) {
+  if (mode === "poster")
+    return (
+      <CardGrid>
+        {instances.map((inst, k) => <PosterCard key={inst.id} inst={inst} index={k} looks={looks} />)}
+      </CardGrid>
+    );
+  return (
+    <List
+      variant="instances"
+      divided
+      aria-label="Instanzen"
+      head={
+        <>
+          <span />
+          <Cell>Name</Cell>
+          <Cell>Version</Cell>
+          <Cell hide={1040}>Inhalte</Cell>
+          <Cell hide={1040}>Zuletzt gespielt</Cell>
+          <Cell hide={1180}>Spielzeit</Cell>
+          <Cell>Status</Cell>
+          <span />
+          <span />
+        </>
+      }
+    >
+      {instances.map((inst, k) => <InstanceRow key={inst.id} inst={inst} index={k} looks={looks} />)}
+    </List>
   );
 }
 
@@ -172,34 +215,16 @@ export function InstancesPage() {
         Keine Instanz passt zu „{query.trim() || LOADER_LABELS[loader as ModLoader]}“{q && loader !== "all" ? ` mit ${LOADER_LABELS[loader]}` : ""}.
       </Empty>
     );
-  } else if (mode === "poster") {
-    body = (
-      <CardGrid>
-        {shown.map((inst, k) => <PosterCard key={inst.id} inst={inst} index={k} looks={looks} />)}
-      </CardGrid>
-    );
+  } else if (shown.some((i) => i.group)) {
+    // Gruppen als aufklappbare Abschnitte; zugeklappt bleibt ein Abschnitt, solange die Seite offen ist.
+    // Schlüssel ist die Gruppe selbst: eine Gruppe darf auch „Ohne Gruppe“ heißen.
+    body = sectionsOf(shown).map(([group, members]) => (
+      <Disclosure key={group ?? ""} open className="mb-4" summary={<>{group ?? UNGROUPED} <Count value={members.length} muted /></>}>
+        <InstanceView instances={members} mode={mode} looks={looks} />
+      </Disclosure>
+    ));
   } else {
-    body = (
-      <List
-        variant="instances"
-        divided
-        aria-label="Instanzen"
-        head={
-          <>
-            <span />
-            <Cell>Name</Cell>
-            <Cell>Version</Cell>
-            <Cell hide={1040}>Inhalte</Cell>
-            <Cell hide={1040}>Zuletzt gespielt</Cell>
-            <Cell>Status</Cell>
-            <span />
-            <span />
-          </>
-        }
-      >
-        {shown.map((inst, k) => <InstanceRow key={inst.id} inst={inst} index={k} looks={looks} />)}
-      </List>
-    );
+    body = <InstanceView instances={shown} mode={mode} looks={looks} />;
   }
 
   return (

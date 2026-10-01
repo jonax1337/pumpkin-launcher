@@ -35,7 +35,7 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `services/mojang.rs` | serde-Formate von piston-meta: Version-Manifest v2, Versions-JSON, Asset-Index |
 | `services/rules.rs` | Mojang-`rules` (os/arch/features), Arch-Filter für Natives-Classifier |
 | `services/download.rs` | HTTP-Client, SHA-1-geprüfte Downloads mit Retry, 16 parallel (`buffer_unordered`), gestreamt auf Platte, Fortsetzen per HTTP-Range auf `.part` |
-| `services/java.rs` | Mojangs Java-Runtime (`java-runtime/…/all.json`, Komponente aus `javaVersion.component`) |
+| `services/java.rs` | Mojangs Java-Runtime (`java-runtime/…/all.json`, Komponente aus `javaVersion.component`); Wahl beim Start: eigener Pfad der Instanz → Einstellung des Launchers → mitgelieferte Runtime, eigene Pfade müssen auf eine vorhandene `javaw.exe`/`java.exe` zeigen |
 | `services/install.rs` | Installation in Schritten, `InstallStep`, `InstallProgress`, Event `install-progress`; Installiert-Marker je Instanz (`mark_installed`, `is_installed`) |
 | `services/fabric.rs` | Fabric-Meta (`meta.fabricmc.net/v2`): Loader-Versionen, Launcher-Profil (`inheritsFrom` Vanilla), Merge mit der Vanilla-Versions-JSON |
 | `services/mods.rs` | Globaler Mod-Cache (`cache/mods/<sha1>.jar`) und Abgleich nach `mods/` der Instanz (Hardlink, Fallback Kopie; bestehende fremde Dateien werden nicht ersetzt); fehlt ein Cache-Eintrag, stellt `recache` ihn für Kopie und Export aus der abgelegten Datei wieder her |
@@ -46,7 +46,7 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `services/content.rs` | Sichere Modinstallation und `.mrpack`-Import in neue Instanzen; `plan_pack`/`import_plan` für Packs von Anbietern |
 | `content_commands.rs` | Modrinth-IPC und korrelierte `content-progress`-Events |
 | `support_commands.rs` | Fehlerberichte: Log teilen, Debug-Info |
-| `services/launch.rs` | Classpath, JVM-/Game-Args mit `${…}`-Ersetzung, Prozessstart, Log-Streaming |
+| `services/launch.rs` | Classpath, JVM-/Game-Args mit `${…}`-Ersetzung (danach Fenster `--width/--height` bzw. `--fullscreen` und eigene Spielargumente), Prozessstart, Log-Streaming, Sitzungsdauer für die Spielzeit |
 | `services/gamelog.rs` | log4j-XML auf stdout (Mojangs Logging-Config) → lesbare Zeilen |
 | `services/logshare.rs` | Log teilen über mclo.gs (`POST https://api.mclo.gs/1/log`, JSON `{ content, source }`): liest höchstens die letzten 5 MiB, entfernt lokal Zugangstokens (`--accessToken`, `accessToken=`, JWTs), den Benutzernamen in `C:\Users\<name>\` und E-Mail-Adressen, behält die letzten 24.999 Zeilen plus Kürzungshinweis (Grenzen von mclo.gs: 10 MiB, 25.000 Zeilen) |
 | `services/debuginfo.rs` | Debug-Info als englischer Klartext fürs GitHub-Issue: Launcher-Version, Windows-Version und Architektur, RAM, freier Platz im Datenordner, WebView2-Version, je Instanz (nummeriert, ohne Namen) MC-Version, Loader, aktive Mods, RAM (ohne eigene Einstellung der übergebene Standard), installiert/läuft |
@@ -80,6 +80,9 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 - **`ModSource`** (getaggt über `type`): `{type:"local"}` · `{type:"url", url}` · `{type:"modrinth", projectId, versionId}` · `{type:"curseforge", projectId, fileId}`.
 - **`Instance.modpack`** (`ModpackOrigin?`): merkt sich, aus welchem Modrinth-/CurseForge-Pack (Projekt + Version/Datei) die Instanz stammt – Grundlage für Pack-Updates.
 - **`LogKind`** (`log_share`): `latest` = `logs/latest.log` des letzten Starts · `crashReport` = neuester Bericht in `crash-reports/`.
+- **Startoptionen der Instanz**: `javaPath?` (eigene `javaw.exe`, sonst Einstellung des Launchers bzw. mitgelieferte Runtime), `window` (`{type:"default"}` · `{type:"size", width, height}` · `{type:"fullscreen"}`), `gameArgs` (nach den Argumenten der Version), dazu wie bisher `memoryMb?` und `jvmArgs`. `update_instance` prüft einen geänderten Java-Pfad und lehnt Fenstergrößen von 0 ab.
+- **`Instance.playtimeSecs`**: Summe aller Sitzungen; das Backend rechnet sie beim Spielende an (unplausible Dauern über 7 Tage oder bei zurückgestellter Uhr zählen nicht). `update_instance` übernimmt sie nie vom Frontend.
+- **`Instance.group?`**: Gruppe in der Bibliothek (getrimmt, leer = keine). Es gibt keine eigene Gruppen-Entität: Gruppen sind die Namen, die Instanzen tragen.
 - Neue Felder tragen `#[serde(default)]`, damit ältere JSON-Dateien weiter laden.
 
 ### Commands
@@ -99,7 +102,7 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `versions_list` | – | `VersionEntry[]` (`id`, `type`, `url`, `sha1`, `releaseTime`) |
 | `instance_install` | `instanceId` | – (Events `install-progress`); abgebrochen → Fehler „Installation abgebrochen“ |
 | `instance_install_cancel` | `instanceId` | – |
-| `instance_launch` | `instanceId`, `username` (Offline), `javaPath?`, `defaultMemoryMb?`, `accountId?` (Microsoft) | PID (`number`) |
+| `instance_launch` | `instanceId`, `username` (Offline), `javaPath?` (Einstellung des Launchers; der Pfad der Instanz geht vor), `defaultMemoryMb?`, `accountId?` (Microsoft) | PID (`number`) |
 | `system_memory_mb` | – | physischer RAM in MiB (`number`) |
 | `ms_login_start` | `clientId?` | `{ userCode, verificationUri, expiresIn, interval, message }` |
 | `ms_login_finish` | – | `Account` (wartet auf Bestätigung im Browser) |
@@ -128,7 +131,7 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 
 Content-Fortschritt: `content-progress` `{ operationId, phase, done, total }` (Phasen `resolve`, `validate`, `download`, `extract`, `copy`, `complete`). Der Aufrufer vergibt die `operationId`; späte oder fremde Events dürfen keinen anderen Auftrag aktualisieren. Modpack-Import und Minecraft-Installation sind getrennte Schritte: nach dem Import installiert `instance_install` die passende Minecraft-/Fabric-Runtime.
 
-Events: `install-progress` `{ instanceId, step, done, total }` · `instance-log` `{ instanceId, stream: "stdout"|"stderr", line }` · `instance-exit` `{ instanceId, code: number|null, crashed: boolean, crashReport: string|null, logFile: string|null }` (`crashed` = Fehlercode ohne Stopp durch den Nutzer; Pfade absolut, öffnbar per `openPath`, Scope `$APPDATA/**`) · `instances-changed` (ohne Daten; nach dem Nachtragen von Ordner-Inhalten beim Start). Installation und Start gibt es für `loader = vanilla` und `fabric`.
+Events: `install-progress` `{ instanceId, step, done, total }` · `instance-log` `{ instanceId, stream: "stdout"|"stderr", line }` · `instance-exit` `{ instanceId, code: number|null, crashed: boolean, crashReport: string|null, logFile: string|null }` (kommt nach dem Speichern der Spielzeit; `crashed` = Fehlercode ohne Stopp durch den Nutzer; Pfade absolut, öffnbar per `openPath`, Scope `$APPDATA/**`) · `instances-changed` (ohne Daten; nach dem Nachtragen von Ordner-Inhalten beim Start). Installation und Start gibt es für `loader = vanilla` und `fabric`.
 
 ### Fabric
 
@@ -194,10 +197,11 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 **Oberfläche**
 
 - `app/Layout.tsx` – rahmenloses Fenster: Fensterleiste mit Wortzeichen, Kontomenü und eigenen Fensterknöpfen, links eine Icon-Seitenleiste (Start · Bibliothek · Entdecken, unten Aufgaben-Menü und Einstellungen) (`@tauri-apps/api/window`, Ziehen per `data-tauri-drag-region`); setzt `--px`, pausiert Szenen, solange Minecraft läuft
-- `pages/` – Start (Szene, Weiterspielen-Reihe, Onboarding), Bibliothek (Poster/Liste), Instanz (klebender Kopf, Inhalte, Protokoll, Einstellungen; `pages/detail/`), Entdecken (Katalog, Projektseite), Einstellungen
+- `pages/` – Start (Szene, Weiterspielen-Reihe, Onboarding), Bibliothek (Poster/Liste, mit Gruppen als aufklappbare Abschnitte, ohne Gruppe zuletzt), Instanz (klebender Kopf mit Spielzeit, Inhalte, Protokoll, Einstellungen mit Java, Fenster und Spielargumenten; `pages/detail/`), Entdecken (Katalog, Projektseite), Einstellungen
 - `components/px.tsx` – Bausteine: Knopf, Chip, Fortschritt, Suchfeld, Auswahl, Segmente, Checkbox, Schalter, Radio, Speicher-Slider, Tooltip, Menü/Kontextmenü, Dialog, Seitenpanel, Leer- und Fehlerzustände, Toasts. Verhalten von Radix, Aussehen aus `styles/`
 - `components/game.tsx` – Spielen-Knopf (feste Größe in allen Zuständen), Statuszeile, Status-Chip, Protokoll mit Filter/Suche/Mitscrollen
-- `components/instance.tsx` – Instanz-Menü (Knopf und Rechtsklick): „Duplizieren“ (Fortschritt im Aufgaben-Menü), Dialoge „Exportieren…“ (Auswahl der Ordner, Speichern-Dialog, Toast mit „Im Ordner zeigen“), „Als Vorlage speichern“ und „Löschen“
+- `components/instance.tsx` – Instanz-Menü (Knopf und Rechtsklick, Untermenü „Gruppe“): „Duplizieren“ (Fortschritt im Aufgaben-Menü), Dialoge „Exportieren…“ (Auswahl der Ordner, Speichern-Dialog, Toast mit „Im Ordner zeigen“), „Als Vorlage speichern“, „Neue Gruppe“ und „Löschen“
+- `components/common.tsx` – geteilte Formularbausteine: Arbeitsspeicher (`MemoryChooser`), Java (`JavaChooser`, global und je Instanz)
 - `components/support.tsx` – Rückfrage „Log öffentlich teilen?“ (einmal im Layout, `askShareLog`), Knopf „Debug-Info kopieren“, Einstellungen › Support (GitHub-Issues und -Diskussionen). „Log teilen“ steht in der Protokoll-Leiste und als Symbol in der Absturz-Statuszeile; nach einem Absturz mit Bericht wird der Bericht geteilt, sonst `latest.log`
 - `components/ContentBrowser.tsx`, `NewInstanceDialog.tsx`, `PlayerNames.tsx`, `Onboarding.tsx` – Katalog und Seitenpanel, Neue Instanz, Konten und Microsoft-Anmeldung, erster Start
 - `components/AppUpdate.tsx` – Zeile „Updates“ in *Einstellungen › Über*: Version suchen, Versionshinweise, „Installieren und neu starten“, nach dem Warten auf Spiel und Downloads „Jetzt neu starten“

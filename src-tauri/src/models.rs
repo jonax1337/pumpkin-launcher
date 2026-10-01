@@ -122,6 +122,17 @@ pub enum ModpackOrigin {
     Provider { source: String, project_id: String, version_id: String },
 }
 
+/// Spielfenster beim Start. Getaggt als `{"type": "size", "width": …, "height": …}`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum GameWindow {
+    /// Wie Minecraft es selbst öffnet.
+    #[default]
+    Default,
+    Size { width: u32, height: u32 },
+    Fullscreen,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Instance {
@@ -134,6 +145,20 @@ pub struct Instance {
     pub modpack: Option<ModpackOrigin>,
     pub memory_mb: Option<u32>,
     pub jvm_args: Vec<String>,
+    /// Eigene Java-Programmdatei; ohne gilt die Einstellung des Launchers bzw. die mitgelieferte Runtime.
+    #[serde(default)]
+    pub java_path: Option<String>,
+    #[serde(default)]
+    pub window: GameWindow,
+    /// Eigene Spielargumente, angehängt nach denen der Version.
+    #[serde(default)]
+    pub game_args: Vec<String>,
+    /// Summe aller beendeten Sitzungen in Sekunden. Zählt nur das Backend.
+    #[serde(default)]
+    pub playtime_secs: u64,
+    /// Gruppe in der Bibliothek; Gruppen gibt es nur über die Instanzen, die sie tragen.
+    #[serde(default)]
+    pub group: Option<String>,
     pub mods: Vec<Mod>,
     pub created_at: u64,
     pub last_played_at: Option<u64>,
@@ -159,6 +184,11 @@ impl Instance {
             modpack: None,
             memory_mb: None,
             jvm_args: Vec::new(),
+            java_path: None,
+            window: GameWindow::Default,
+            game_args: Vec::new(),
+            playtime_secs: 0,
+            group: None,
             mods: Vec::new(),
             created_at: now_ms(),
             last_played_at: None,
@@ -228,6 +258,16 @@ mod tests {
         }))
         .unwrap();
         assert_eq!((i.name.as_str(), i.loader), ("Alt", ModLoader::Fabric));
+        assert_eq!((i.java_path, i.window, i.game_args.len(), i.playtime_secs, i.group), (None, GameWindow::Default, 0, 0, None));
+    }
+
+    #[test]
+    fn game_window_json_shape() {
+        assert_eq!(
+            serde_json::to_value(GameWindow::Size { width: 1280, height: 720 }).unwrap(),
+            serde_json::json!({"type": "size", "width": 1280, "height": 720})
+        );
+        assert_eq!(serde_json::to_value(GameWindow::Fullscreen).unwrap(), serde_json::json!({"type": "fullscreen"}));
     }
 
     #[test]

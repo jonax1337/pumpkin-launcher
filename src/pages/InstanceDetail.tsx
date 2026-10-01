@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router";
 import { useView } from "@/app/Layout";
 import { Actions, BackLink, Button, Count, ErrorBox, Icon, IconButton, Meta, Skel, TabPanel, Tabs, type TabItem } from "@/ui";
 import { LogConsole, PlayButton, PlayStatus, StatusChip, usePhase } from "@/components/game";
+import { playtimeLine } from "@/components/common";
 import { InstanceMenuButton } from "@/components/instance";
 import { AddContentSheet, IRIS_PROJECT_ID } from "@/components/ContentBrowser";
 import { useModUpdates } from "@/hooks/useContent";
@@ -156,7 +157,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
                 size="l"
                 onScene
                 className="overflow-hidden"
-                items={[version, !narrow && instance.loaderVersion && <>Loader <Count value={instance.loaderVersion} size={20} /></>]}
+                items={[version, !narrow && instance.loaderVersion && <>Loader <Count value={instance.loaderVersion} size={20} /></>, !narrow && playtimeLine(instance)]}
               />
               {crashed && <StatusChip instance={instance} />}
               {nUpd > 0 && (

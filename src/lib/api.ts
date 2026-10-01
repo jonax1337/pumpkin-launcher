@@ -95,16 +95,7 @@ const mock = {
   },
   async createInstance(input: NewInstance) {
     await delay();
-    const inst: Instance = {
-      ...input,
-      id: newId("inst"),
-      modpack: null,
-      memoryMb: null,
-      jvmArgs: [],
-      mods: [],
-      createdAt: Date.now(),
-      lastPlayedAt: null,
-    };
+    const inst: Instance = { ...mockData!.blankInstanceFields(), ...input, id: newId("inst"), mods: [], createdAt: Date.now() };
     db.instances.push(inst);
     return clone(inst);
   },
@@ -152,7 +143,7 @@ const mock = {
     await delay(800);
     const found = db.templates.find((t) => t.template.id === templateId);
     if (!found) throw new Error("Die Vorlage gibt es nicht mehr");
-    const inst: Instance = { ...clone(found.instance), id: newId("inst"), name, createdAt: Date.now(), lastPlayedAt: null };
+    const inst: Instance = { ...clone(found.instance), id: newId("inst"), name, createdAt: Date.now(), lastPlayedAt: null, playtimeSecs: 0 };
     db.instances.push(inst);
     return clone(inst);
   },
@@ -206,11 +197,16 @@ const mockGame = {
     findInstance(instanceId).lastPlayedAt = Date.now();
     return 4242;
   },
-  async kill(instanceId: string) {
-    const timer = db.running.get(instanceId);
-    if (timer == null) throw new Error(`Laufendes Spiel '${instanceId}' nicht gefunden`);
-    clearInterval(timer);
+  /** Beendet das simulierte Spiel und rechnet wie das Backend die Spielzeit seit dem Start an. */
+  stop(instanceId: string) {
+    clearInterval(db.running.get(instanceId));
     db.running.delete(instanceId);
+    const inst = findInstance(instanceId);
+    inst.playtimeSecs += Math.round((Date.now() - (inst.lastPlayedAt ?? Date.now())) / 1000);
+  },
+  async kill(instanceId: string) {
+    if (!db.running.has(instanceId)) throw new Error(`Laufendes Spiel '${instanceId}' nicht gefunden`);
+    mockGame.stop(instanceId);
     emit<ExitPayload>("instance-exit", { instanceId, code: null, crashed: false, crashReport: null, logFile: null });
   },
   /** Lasttest fürs Protokoll: `pumpkinMock.logBurst("inst-vanilla")` schickt 5000 Zeilen in etwa 1–2 s. */
@@ -222,8 +218,7 @@ const mockGame = {
   },
   /** Nur zum Vorführen: `pumpkinMock.crash("inst-survival")` in der Browser-Konsole. */
   crash(instanceId: string) {
-    clearInterval(db.running.get(instanceId));
-    db.running.delete(instanceId);
+    mockGame.stop(instanceId);
     emit<ExitPayload>("instance-exit", {
       instanceId,
       code: -1,

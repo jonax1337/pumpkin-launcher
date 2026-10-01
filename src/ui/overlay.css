@@ -39,9 +39,9 @@
 .vx-mi[data-tall] { height: 52px; }
 .vx-mi::before { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--n1); }
 .vx-mi .vx-ico { color: var(--fg-2); }
-.vx-mi:is(:hover, :focus-visible, [data-highlighted])::before { background: var(--hl); box-shadow: inset var(--u2) 0 0 var(--copper); }
-.vx-mi:is(:hover, :focus-visible, [data-highlighted]) { color: var(--fg); }
-.vx-mi:is(:hover, :focus-visible, [data-highlighted]) .vx-ico { color: var(--fg); }
+.vx-mi:is(:hover, :focus-visible, [data-highlighted], [data-state="open"])::before { background: var(--hl); box-shadow: inset var(--u2) 0 0 var(--copper); }
+.vx-mi:is(:hover, :focus-visible, [data-highlighted], [data-state="open"]) { color: var(--fg); }
+.vx-mi:is(:hover, :focus-visible, [data-highlighted], [data-state="open"]) .vx-ico { color: var(--fg); }
 .vx-mi:active:not([data-disabled])::before { background: var(--panel-2); }
 .vx-mi:active:not([data-disabled]) > * { translate: 0 var(--px); }
 .vx-mi[data-tone="bad"], .vx-mi[data-tone="bad"] .vx-ico { color: var(--bad); }
@@ -53,6 +53,7 @@
 .vx-mi-t2 { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
 .vx-mi-t2 > span { font-size: 12px; color: var(--fg-3); font-weight: 400; }
 .vx-mi .vx-mi-ck { margin-left: auto; color: var(--copper); }
+.vx-mi .vx-mi-sub { margin-left: auto; }
 .vx-msep { height: var(--px); margin: 6px 4px; background: var(--line); }
 .vx-mlabel { padding: 8px 10px 4px; color: var(--fg-3); font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
 /* Scrollbereich (MenuScroll): höchstens 320 px bzw. was unter dem Auslöser Platz hat, abzüglich Kopf und Fuß */

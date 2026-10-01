@@ -32,6 +32,9 @@ export type ModpackOrigin =
   | { type: "curseforge"; projectId: number; fileId: number }
   | { type: "provider"; source: string; projectId: string; versionId: string };
 
+/** Spielfenster beim Start; `default` = wie Minecraft es selbst öffnet. */
+export type GameWindow = { type: "default" } | { type: "size"; width: number; height: number } | { type: "fullscreen" };
+
 export interface Instance {
   id: string;
   name: string;
@@ -41,6 +44,15 @@ export interface Instance {
   modpack: ModpackOrigin | null;
   memoryMb: number | null;
   jvmArgs: string[];
+  /** Eigene java(w).exe; null = Einstellung des Launchers bzw. mitgelieferte Runtime. */
+  javaPath: string | null;
+  window: GameWindow;
+  /** Eigene Spielargumente nach denen der Version. */
+  gameArgs: string[];
+  /** Gesamte Spielzeit in Sekunden; zählt nur das Backend (beim Beenden des Spiels). */
+  playtimeSecs: number;
+  /** Gruppe in der Bibliothek; null = ohne Gruppe. */
+  group: string | null;
   mods: Mod[];
   createdAt: number;
   lastPlayedAt: number | null;

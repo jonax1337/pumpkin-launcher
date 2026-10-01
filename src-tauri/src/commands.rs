@@ -3,7 +3,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::error::{AppError, AppResult};
-use crate::models::{now_ms, Instance, ModLoader, NewInstance};
+use crate::models::{now_ms, GameWindow, Instance, ModLoader, NewInstance};
 use crate::services::install::{self, InstallProgress, InstallStep, INSTALL_PROGRESS_EVENT};
 use crate::services::launch::{self, LaunchSpec, LogStream, EXIT_EVENT, LOG_EVENT};
 use crate::services::mojang::{VersionEntry, VersionManifest, MANIFEST_URL};
@@ -19,6 +19,18 @@ pub(crate) fn require_name(name: &str) -> AppResult<()> {
         return Err(AppError::Invalid("Name darf nicht leer sein".into()));
     }
     Ok(())
+}
+
+/// Eigene Startoptionen prüfen. Ein unveränderter Java-Pfad wird nicht erneut geprüft,
+/// damit andere Änderungen nicht an einem inzwischen entfernten Java scheitern.
+fn require_launch_settings(instance: &Instance, old: &Instance) -> AppResult<()> {
+    if matches!(instance.window, GameWindow::Size { width: 0, .. } | GameWindow::Size { height: 0, .. }) {
+        return Err(AppError::Invalid("Breite und Höhe des Fensters müssen größer als 0 sein".into()));
+    }
+    match &instance.java_path {
+        Some(path) if instance.java_path != old.java_path => java::custom_java(path, java::JavaSetting::Instance).map(drop),
+        _ => Ok(()),
+    }
 }
 
 #[tauri::command]
@@ -45,6 +57,13 @@ pub fn update_instance(state: State<'_, AppState>, instance: Instance) -> AppRes
     let _operation = state.operation(Some(&instance.id))?;
     require_name(&instance.name)?;
     let old = state.instances.get(&instance.id)?;
+    require_launch_settings(&instance, &old)?;
+    let instance = Instance {
+        group: instance.group.map(|g| g.trim().to_owned()).filter(|g| !g.is_empty()),
+        // Spielzeit zählt nur das Backend: ein veralteter Stand im Frontend darf sie nicht zurücksetzen.
+        playtime_secs: old.playtime_secs,
+        ..instance
+    };
     let mut desired = instance.mods.clone();
     for removed in &old.mods {
         if !desired.iter().any(|m|m.file_name==removed.file_name) {
@@ -245,14 +264,8 @@ pub async fn instance_launch(
         }
     };
     let version = installed_version(&state, &instance).await?;
-    // Eigener Java-Pfad aus den Einstellungen hat Vorrang vor der mitgelieferten Runtime.
-    let java = match java_path.filter(|p| !p.trim().is_empty()) {
-        Some(p) => std::path::PathBuf::from(p.trim()),
-        None => java::java_exe(&state.dirs, install::java_component(&version)),
-    };
-    if !java.exists() {
-        return Err(AppError::Invalid(format!("Java nicht gefunden: {}", java.display())));
-    }
+    let component = install::java_component(&version);
+    let java = java::resolve(&state.dirs, component, instance.java_path.as_deref(), java_path.as_deref())?;
     let session = session.as_ref().map(|s| launch::Session { access_token: &s.access_token, xuid: &s.xuid });
     let args = launch::build_args_for(
         &LaunchSpec {
@@ -262,6 +275,8 @@ pub async fn instance_launch(
             account: &account,
             memory_mb: instance.memory_mb.or(default_memory_mb).unwrap_or(launch::DEFAULT_MEMORY_MB),
             extra_jvm_args: &instance.jvm_args,
+            window: instance.window,
+            extra_game_args: &instance.game_args,
         },
         &Env::current(),
         session.as_ref(),
@@ -293,18 +308,32 @@ pub async fn instance_launch(
             let text = |p: std::path::PathBuf| p.to_string_lossy().into_owned();
             let crash_report = launch::crash_report(&game_dir, started).map(text);
             let log_file = Some(state.dirs.latest_log(&exit_id)).filter(|p| p.is_file()).map(text);
+            record_playtime(&state, &exit_id, started);
             tracing::info!(instance = %exit_id, ?code, crashed, "Spiel beendet");
             emit(&exit_app, EXIT_EVENT, ExitPayload { instance_id: exit_id, code, crashed, crash_report, log_file });
         },
     )?;
     let pid = game.pid;
     running.insert(instance_id.clone(), game);
-    drop(running);
-    tracing::info!(instance = %instance_id, pid, user = %account.username, "Spiel gestartet");
-
+    // Noch unter dem Lock speichern: ein sofort beendetes Spiel rechnet seine Spielzeit sonst
+    // auf einen Stand an, den dieses Update gleich wieder überschreibt.
     instance.last_played_at = Some(now_ms());
     state.instances.update(instance)?;
+    drop(running);
+    tracing::info!(instance = %instance_id, pid, user = %account.username, "Spiel gestartet");
     Ok(pid)
+}
+
+/// Spielzeit der Sitzung seit `started` speichern; unplausible Dauern und Fehler nur loggen,
+/// damit `instance-exit` trotzdem ankommt.
+fn record_playtime(state: &AppState, instance_id: &str, started: std::time::SystemTime) {
+    let Some(secs) = launch::session_secs(started, std::time::SystemTime::now()) else {
+        tracing::warn!(instance = %instance_id, "Spielzeit verworfen: Sitzungsdauer unplausibel");
+        return;
+    };
+    if let Err(err) = state.add_playtime(instance_id, secs) {
+        tracing::warn!(instance = %instance_id, %err, "Spielzeit nicht gespeichert");
+    }
 }
 
 /// Beendet das laufende Spiel einer Instanz; `instance-exit` folgt.

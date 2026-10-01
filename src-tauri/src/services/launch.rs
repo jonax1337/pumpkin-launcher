@@ -4,13 +4,14 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 use serde::Serialize;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::sync::oneshot;
 
 use crate::error::{AppError, AppResult};
-use crate::models::Account;
+use crate::models::{Account, GameWindow};
 use crate::services::gamelog::XmlLog;
 use crate::services::install;
 use crate::services::mojang::{Argument, OneOrMany, VersionJson};
@@ -24,6 +25,9 @@ pub const DEFAULT_MEMORY_MB: u32 = 4096;
 /// JVM-Args für Versionen vor 1.13 (dort stehen nur Game-Args in der JSON).
 const LEGACY_JVM_ARGS: [&str; 3] = ["-Djava.library.path=${natives_directory}", "-cp", "${classpath}"];
 
+/// Längere Sitzungen zählen nicht als Spielzeit: dann wurde eher die Uhr verstellt.
+const MAX_SESSION: Duration = Duration::from_secs(7 * 24 * 3600);
+
 /// Was für einen Start gebraucht wird.
 pub struct LaunchSpec<'a> {
     pub version: &'a VersionJson,
@@ -32,6 +36,8 @@ pub struct LaunchSpec<'a> {
     pub account: &'a Account,
     pub memory_mb: u32,
     pub extra_jvm_args: &'a [String],
+    pub window: GameWindow,
+    pub extra_game_args: &'a [String],
 }
 
 /// Ersetzt `${name}` durch Werte aus `vars`. Unbekannte Platzhalter bleiben stehen; eingesetzte
@@ -135,11 +141,30 @@ pub fn build_args_for(spec: &LaunchSpec, env: &Env, session: Option<&Session>) -
     args.extend(spec.extra_jvm_args.iter().cloned());
     args.push(version.main_class.clone());
     args.extend(game.iter().map(|a| substitute(a, &vars)));
+    args.extend(window_args(spec.window));
+    // Eigene Spielargumente zuletzt. Sie überschreiben nichts: doppelte Optionen lehnt Minecraft ab
+    // (je nach Version Standardwert oder Startabbruch).
+    args.extend(spec.extra_game_args.iter().cloned());
     Ok(args)
 }
 
+/// Fensteroptionen von Minecraft (seit 1.6 in jeder Version verstanden).
+fn window_args(window: GameWindow) -> Vec<String> {
+    match window {
+        GameWindow::Default => Vec::new(),
+        GameWindow::Size { width, height } => vec!["--width".into(), width.to_string(), "--height".into(), height.to_string()],
+        GameWindow::Fullscreen => vec!["--fullscreen".into()],
+    }
+}
+
+/// Dauer einer beendeten Sitzung in Sekunden; `None`, wenn sie nicht stimmen kann
+/// (Uhr zurückgestellt oder länger als `MAX_SESSION`).
+pub fn session_secs(started: SystemTime, ended: SystemTime) -> Option<u64> {
+    ended.duration_since(started).ok().filter(|d| *d <= MAX_SESSION).map(|d| d.as_secs())
+}
+
 /// Neuester Absturzbericht (`crash-reports/*.txt`), der seit `since` entstanden ist.
-pub fn crash_report(game_dir: &Path, since: std::time::SystemTime) -> Option<PathBuf> {
+pub fn crash_report(game_dir: &Path, since: SystemTime) -> Option<PathBuf> {
     std::fs::read_dir(game_dir.join("crash-reports"))
         .ok()?
         .filter_map(Result::ok)
@@ -246,7 +271,6 @@ mod tests {
 
     #[test]
     fn newest_crash_report_after_start() {
-        use std::time::{Duration, SystemTime};
         let game = std::env::temp_dir().join(crate::models::new_id());
         let reports = game.join("crash-reports");
         assert_eq!(crash_report(&game, SystemTime::UNIX_EPOCH), None);
@@ -269,9 +293,8 @@ mod tests {
         assert_eq!(substitute("plain", &vars), "plain");
     }
 
-    #[test]
-    fn args_from_version_json() {
-        let version: VersionJson = serde_json::from_value(serde_json::json!({
+    fn test_version() -> VersionJson {
+        serde_json::from_value(serde_json::json!({
             "id": "1.21.11", "type": "release", "mainClass": "net.minecraft.client.main.Main",
             "assetIndex": {"id": "29", "sha1": "x", "url": "u"},
             "downloads": {"client": {"sha1": "x", "url": "u"}},
@@ -290,24 +313,35 @@ mod tests {
             "logging": {"client": {"argument": "-Dlog4j.configurationFile=${path}",
                                    "file": {"id": "client-1.21.2.xml", "sha1": "x", "url": "u"}}}
         }))
-        .unwrap();
-        let dirs = Dirs::new("/data");
-        let account = Account {
-            id: "b50ad385-829d-3141-a216-7e7d7539ba7f".into(),
-            username: "Notch".into(),
-            kind: AccountKind::Offline,
-            active: true,
-        };
-        let spec = LaunchSpec {
-            version: &version,
-            dirs: &dirs,
+        .unwrap()
+    }
+
+    fn notch() -> Account {
+        Account { id: "b50ad385-829d-3141-a216-7e7d7539ba7f".into(), username: "Notch".into(), kind: AccountKind::Offline, active: true }
+    }
+
+    /// Start ohne eigene Fenster- und Spieloptionen.
+    fn plain_spec<'a>(version: &'a VersionJson, dirs: &'a Dirs, account: &'a Account) -> LaunchSpec<'a> {
+        LaunchSpec {
+            version,
+            dirs,
             instance_id: "i1",
-            account: &account,
+            account,
             memory_mb: 2048,
-            extra_jvm_args: &["-Dfoo=1".to_owned()],
-        };
-        let env = Env { os: "linux", arch: "x86_64", features: Vec::new() };
-        let args = build_args(&spec, &env).unwrap();
+            extra_jvm_args: &[],
+            window: GameWindow::Default,
+            extra_game_args: &[],
+        }
+    }
+
+    const LINUX: Env = Env { os: "linux", arch: "x86_64", features: Vec::new() };
+
+    #[test]
+    fn args_from_version_json() {
+        let (version, dirs, account) = (test_version(), Dirs::new("/data"), notch());
+        let jvm_args = ["-Dfoo=1".to_owned()];
+        let spec = LaunchSpec { extra_jvm_args: &jvm_args, ..plain_spec(&version, &dirs, &account) };
+        let args = build_args(&spec, &LINUX).unwrap();
         let natives = dirs.natives_dir("i1").to_string_lossy().into_owned();
         let cp = [dirs.library("a/b/1/b-1.jar"), dirs.version_file("1.21.11", "jar")]
             .map(|p| p.to_string_lossy().into_owned())
@@ -334,8 +368,32 @@ mod tests {
             ]
         );
         let session = Session { access_token: "eyJ.token", xuid: "2535" };
-        let args = build_args_for(&spec, &env, Some(&session)).unwrap();
+        let args = build_args_for(&spec, &LINUX, Some(&session)).unwrap();
         let token = args.iter().position(|a| a == "--accessToken").unwrap();
         assert_eq!(args[token + 1], "eyJ.token");
+    }
+
+    #[test]
+    fn window_and_own_game_args_come_last() {
+        let (version, dirs, account) = (test_version(), Dirs::new("/data"), notch());
+        let game_args = ["--quickPlaySingleplayer".to_owned(), "Welt 1".to_owned()];
+        let sized = LaunchSpec {
+            window: GameWindow::Size { width: 1280, height: 720 },
+            extra_game_args: &game_args,
+            ..plain_spec(&version, &dirs, &account)
+        };
+        let args = build_args(&sized, &LINUX).unwrap();
+        assert_eq!(args[args.len() - 6..], ["--width", "1280", "--height", "720", "--quickPlaySingleplayer", "Welt 1"]);
+
+        let fullscreen = LaunchSpec { window: GameWindow::Fullscreen, ..plain_spec(&version, &dirs, &account) };
+        assert_eq!(build_args(&fullscreen, &LINUX).unwrap().last().map(String::as_str), Some("--fullscreen"));
+    }
+
+    #[test]
+    fn implausible_sessions_do_not_count() {
+        let start = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
+        assert_eq!(session_secs(start, start + Duration::from_secs(5400)), Some(5400));
+        assert_eq!(session_secs(start, start - Duration::from_secs(1)), None);
+        assert_eq!(session_secs(start, start + MAX_SESSION + Duration::from_secs(1)), None);
     }
 }

@@ -21,6 +21,14 @@ export function formatClock(ms: number): string {
   return `${h ? `${h}:${String(m).padStart(2, "0")}` : m}:${String(s % 60).padStart(2, "0")}`;
 }
 
+/** Gesamte Spielzeit kompakt: „unter 1 Min.“, „45 Min.“, „3,5 Std.“, ab 10 Stunden ganze Stunden („37 Std.“). */
+export function formatPlaytime(secs: number): string {
+  if (secs < 60) return "unter 1 Min.";
+  if (secs < 3600) return `${Math.floor(secs / 60)} Min.`;
+  const hours = secs / 3600;
+  return `${hours.toLocaleString("de", { maximumFractionDigits: hours < 10 ? 1 : 0 })} Std.`;
+}
+
 /** Tausender mit schmalem Leerzeichen („3 480“), wie im Mockup. */
 export const formatCount = (n: number) => n.toLocaleString("de").replace(/\./g, " ");
 
