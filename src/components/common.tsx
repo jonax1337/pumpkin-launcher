@@ -1,6 +1,6 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 import { useI18n, t } from "@/i18n";
-import { useMemory } from "@/hooks/useInstances";
+import { useMemory } from "@/hooks/useMemory";
 import { api } from "@/lib/api";
 import { blurOnEnter } from "@/lib/dom";
 import { formatMemory, formatPlaytime, MB_PER_GB, memoryTooHigh } from "@/lib/format";

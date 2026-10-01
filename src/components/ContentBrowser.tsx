@@ -9,7 +9,8 @@ import {
   Switch, TabPanel, Tabs, TextField, Tip, type MenuEntry,
 } from "@/ui";
 import { useBackgroundTask } from "@/hooks/useBackgroundTask";
-import { cancelContent, useContentState } from "@/hooks/useContent";
+import { cancelContent } from "@/hooks/useContent";
+import { useContentState } from "@/store/contentState";
 import { CATALOG_STALE_MS, SEARCH_STALE_MS } from "@/hooks/staleTimes";
 import { useDebounced } from "@/hooks/useDebounced";
 import { useInstances } from "@/hooks/useInstances";

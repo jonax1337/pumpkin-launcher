@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import { loaderLine } from "@/components/common";
 import { SkelList } from "@/components/SkelList";
 import { Button, Chip, Choice, Empty, ErrorBox, Field, Glyph, JobProgress } from "@/ui";
-import { useContentState } from "@/hooks/useContent";
+import { useContentState } from "@/store/contentState";
 import { importTarget, type ForeignSelection } from "@/hooks/useImport";
 import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";

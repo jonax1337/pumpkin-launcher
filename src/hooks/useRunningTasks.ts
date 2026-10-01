@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { shallow } from "zustand/shallow";
+import { useContentState } from "@/store/contentState";
 import { useGame } from "@/store/game";
-import { useContentState } from "./useContent";
 
 /**
  * Laufende Aufgaben aus ihren Stores (null = keine): Vorbereitungen der Instanzen, Inhalts- und Instanz-Vorgänge

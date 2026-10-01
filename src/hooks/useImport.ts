@@ -3,11 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { t } from "@/i18n";
 import { api } from "@/lib/api";
+import { isCancelled } from "@/lib/errors";
 import { MINUTE } from "@/lib/time";
 import type { ForeignInstance, Instance } from "@/lib/types";
 import { useContentInstall, withTarget } from "./useContent";
 import { importKeys } from "./queryKeys";
-import { isCancelled } from "./useInstances";
 
 /** Instanzen anderer Launcher an den Standardorten; die Suche liest nur die Platte. */
 export function useForeignInstances(enabled = true) {

@@ -1,24 +1,17 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { create } from "zustand";
 import { t } from "@/i18n";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import type { ContentProject, ModUpdate } from "@/lib/content-types";
-import type { ContentProgress } from "@/lib/progress";
 import { toastError } from "@/lib/toast";
 import { HOUR } from "@/lib/time";
 import type { Instance } from "@/lib/types";
+import { useContentState } from "@/store/contentState";
 import { useTasks, type DoneTask } from "@/store/tasks";
 import { useOnline } from "./useOnline";
 import { catalogKeys, instanceKeys } from "./queryKeys";
 import { CATALOG_STALE_MS } from "./staleTimes";
-
-// Keeps progress visible across route changes; only the matching active operation may update it.
-// `target` says what runs (a project ID or "updates"), so rows can show their own progress.
-export const useContentState = create<{
-  active: string | null; target: string | null; label: string | null; cancellable: boolean; progress: ContentProgress | null;
-}>(() => ({ active: null, target: null, label: null, cancellable: false, progress: null }));
 
 export type ContentRun<R = Instance> = ((operationId: string) => Promise<R>) & { target?: string; label?: string; doneLabel?: string; cancellable?: boolean };
 

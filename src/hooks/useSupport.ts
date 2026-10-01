@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { t } from "@/i18n";
-import { defaultMemory } from "@/hooks/useInstances";
+import { defaultMemory } from "@/hooks/useMemory";
 import { api } from "@/lib/api";
 import { openPage } from "@/lib/links";
 import type { LogKind } from "@/lib/types";

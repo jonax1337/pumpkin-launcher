@@ -8,7 +8,8 @@ import {
 import { IRIS_PROJECT_ID } from "@/components/ContentBrowser";
 import { useAnnouncement } from "@/hooks/useAnnouncement";
 import { useBackgroundTask } from "@/hooks/useBackgroundTask";
-import { useContentState, useProjects } from "@/hooks/useContent";
+import { useProjects } from "@/hooks/useContent";
+import { useContentState } from "@/store/contentState";
 import { instanceKeys } from "@/hooks/queryKeys";
 import { useUpdateMods } from "@/hooks/useInstances";
 import { api } from "@/lib/api";

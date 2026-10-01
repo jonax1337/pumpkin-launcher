@@ -7,9 +7,9 @@ import {
 import { AddContentSheet } from "@/components/ContentBrowser";
 import { QueryList } from "@/components/QueryList";
 import { useConfirmTarget } from "@/hooks/useConfirmTarget";
-import { useContentState } from "@/hooks/useContent";
+import { useContentState } from "@/store/contentState";
 import { useFileDrop } from "@/hooks/useFileDrop";
-import { usePlay } from "@/hooks/useInstances";
+import { usePlay } from "@/hooks/usePlay";
 import {
   useAddDatapacks, useDatapacks, useDeleteBackup, useRemoveDatapack, useWorldBackups, useWorldJobs, useWorldQuickPlay, useWorlds, worldTarget,
 } from "@/hooks/useWorlds";

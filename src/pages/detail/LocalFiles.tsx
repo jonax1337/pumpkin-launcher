@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Dialog, DialogActions, Field, Segmented } from "@/ui";
 import { useBackgroundTask } from "@/hooks/useBackgroundTask";
-import { useContentState } from "@/hooks/useContent";
+import { useContentState } from "@/store/contentState";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { api } from "@/lib/api";
 import { TYPE_ONE_KEYS } from "@/lib/catalog";
