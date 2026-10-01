@@ -191,6 +191,18 @@ export interface InstanceStatus {
   running: boolean;
 }
 
+// ---------- Screenshots ----------
+
+/** PNG aus `screenshots/` der Instanz (`screenshot_list`, neueste zuerst). */
+export interface Screenshot {
+  fileName: string;
+  /** Absoluter Pfad; die Vorschau kommt über `api.screenshotSrc`. */
+  path: string;
+  takenAt: number;
+  /** Bytes. */
+  size: number;
+}
+
 // ---------- Skins ----------
 
 /** Spielermodell: breite (Steve) oder schmale Arme (Alex). */

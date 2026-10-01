@@ -14,10 +14,11 @@ import { cn } from "@/lib/utils";
 import { PixelScene } from "@/pixel/PixelScene";
 import { useLook } from "@/store/look";
 import { ContentTab, useWarnings } from "./detail/ContentTab";
+import { ScreenshotsTab } from "./detail/ScreenshotsTab";
 import { SettingsTab } from "./detail/SettingsTab";
 
-type Tab = "content" | "console" | "settings";
-const TABS: Tab[] = ["content", "console", "settings"];
+type Tab = "content" | "screenshots" | "console" | "settings";
+const TABS: Tab[] = ["content", "screenshots", "console", "settings"];
 
 /** Schmales Fenster (bis 900 px): Loader-Version und Kurzinfo im kompakten Kopf entfallen. */
 const NARROW = "(max-width: 900px)";
@@ -138,6 +139,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
       ),
       tip: warnText || undefined,
     },
+    { value: "screenshots", label: "Screenshots" },
     { value: "console", label: "Protokoll" },
     { value: "settings", label: "Einstellungen" },
   ];
@@ -191,6 +193,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
         <div hidden={tab !== "content"} className="flow-root">
           <ContentTab instance={instance} updateFor={updateFor} warnsOf={warnsOf} onAdd={() => setAdding(true)} showUpdates={updCall} />
         </div>
+        {tab === "screenshots" && <ScreenshotsTab instance={instance} />}
         {tab === "console" && <LogConsole instance={instance} />}
         {tab === "settings" && <SettingsTab instance={instance} />}
       </TabPanel>

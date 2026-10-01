@@ -1,4 +1,4 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -18,6 +18,7 @@ import {
   type LogPayload,
   type ModLoader,
   type NewInstance,
+  type Screenshot,
   type SkinProfile,
   type SkinVariant,
   type Template,
@@ -70,6 +71,7 @@ const emit = <T>(event: string, payload: T) => bus.dispatchEvent(new CustomEvent
 const mockContent = mockData?.createContentMock(db, emit);
 const mockPack = tauri ? null : (await import("@/lib/mock-pack")).createPackMock(db, emit);
 const mockSkins = tauri ? null : (await import("@/lib/mock-skins")).createSkinMock();
+const mockScreenshots = tauri ? null : (await import("@/lib/mock-screenshots")).createScreenshotMock();
 
 function on<T>(event: string, cb: (payload: T) => void): Promise<UnlistenFn> {
   if (tauri) return listen<T>(event, (e) => cb(e.payload));
@@ -430,6 +432,15 @@ export const api = {
   /** Umhang zeigen; `null` blendet den aktiven aus. */
   skinCape: (accountId: string, capeId: string | null): Promise<void> =>
     tauri ? call("skin_cape", { accountId, capeId }) : mockSkins!.cape(capeId),
+
+  /** Screenshots der Instanz, neueste zuerst. */
+  screenshots: (instanceId: string): Promise<Screenshot[]> =>
+    tauri ? call("screenshot_list", { instanceId }) : mockScreenshots!.list(instanceId),
+  /** Legt den Screenshot in den Papierkorb. */
+  screenshotDelete: (instanceId: string, fileName: string): Promise<void> =>
+    tauri ? call("screenshot_delete", { instanceId, fileName }) : mockScreenshots!.remove(instanceId, fileName),
+  /** Bildquelle über das Asset-Protokoll (Scope: screenshots/ der Instanzen); im Mock ist `path` schon eine data:-URL. */
+  screenshotSrc: (shot: Screenshot): string => (tauri ? convertFileSrc(shot.path) : shot.path),
 
   /** Datei mit dem Standardprogramm öffnen (z. B. Absturzbericht). */
   openPath: (path: string): Promise<void> =>
