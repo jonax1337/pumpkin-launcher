@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { t, useI18n, type TKey } from "@/i18n";
 import { Checkbox, ConfirmDialog, Dialog, DialogActions, Field, Hint, IconButton, Menu, Skel, type MenuEntry } from "@/ui";
-import { isBusy, usePhase } from "@/components/game";
+import { isBusy, usePhase } from "@/components/play/phase";
 import { NameDialog } from "@/components/NameDialog";
 import { useBackgroundTask } from "@/hooks/useBackgroundTask";
 import { confirmTargetProps } from "@/hooks/useConfirmTarget";
@@ -22,12 +22,9 @@ import { toastError } from "@/lib/toast";
 import type { Instance } from "@/lib/types";
 
 /** Welche Instanz gerade einen der Dialoge offen hat (einmal im Layout gerendert). */
-const useInstanceActions = create<{ template: Instance | null; exporting: Instance | null; remove: Instance | null; newGroup: Instance | null }>(() => ({
-  template: null,
-  exporting: null,
-  remove: null,
-  newGroup: null,
-}));
+type InstanceActions = { template: Instance | null; exporting: Instance | null; remove: Instance | null; newGroup: Instance | null };
+const NO_DIALOG: InstanceActions = { template: null, exporting: null, remove: null, newGroup: null };
+const useInstanceActions = create<InstanceActions>(() => NO_DIALOG);
 
 const askSaveTemplate = (instance: Instance) => useInstanceActions.setState({ template: instance });
 const askExport = (instance: Instance) => useInstanceActions.setState({ exporting: instance });
@@ -51,7 +48,10 @@ function useDuplicate() {
       doneLabel: t("components.instance.duplicateTaskDone", { name: instance.name }),
       cancellable: true,
       task: (op) => api.duplicateInstance(instance.id, op),
-      onDone: (copy) => toast.success(t("components.instance.createdQuoted", { name: copy.name }), { action: { label: t("common.open"), onClick: () => navigate(instanceUrl(copy.id)) } }),
+      onDone: (copy) =>
+        toast.success(t("components.instance.createdQuoted", { name: copy.name }), {
+          action: { label: t("common.open"), onClick: () => navigate(instanceUrl(copy.id)) },
+        }),
     });
 }
 
@@ -92,12 +92,17 @@ export function useGroupMenu(instance: Instance): MenuEntry[] {
     ...groups.map((group) => ({ id: `group:${group}`, text: group, checked: group === instance.group, onSelect: () => assign(group) })),
     ...(groups.length ? ["-" as const] : []),
     { id: "group-new", text: t("components.instance.newGroupMenu"), icon: "plus", onSelect: () => askNewGroup(instance) },
-    ...(instance.group ? [{ id: "group-none", text: t("components.instance.removeFromGroup"), icon: "x" as const, onSelect: () => assign(null) }] : []),
+    ...(instance.group
+      ? [{ id: "group-none", text: t("components.instance.removeFromGroup"), icon: "x" as const, onSelect: () => assign(null) }]
+      : []),
   ];
 }
 
-/** Einträge für das Menü einer Instanz: Knopf „…“ und Rechtsklick teilen sie sich. */
-export function useInstanceMenu(instance: Instance, opts: { open?: boolean } = { open: true }): MenuEntry[] {
+/**
+ * Einträge für das Menü einer Instanz: Knopf „…“ und Rechtsklick teilen sie sich.
+ * `showOpen = false` lässt „Instanz öffnen“ weg, wo die Instanz schon offen ist oder die Karte selbst sie öffnet.
+ */
+export function useInstanceMenu(instance: Instance, { showOpen = true }: { showOpen?: boolean } = {}): MenuEntry[] {
   const { t } = useI18n();
   const phase = usePhase(instance.id);
   const play = usePlay();
@@ -111,33 +116,61 @@ export function useInstanceMenu(instance: Instance, opts: { open?: boolean } = {
     running
       ? { id: "stop", text: t("components.game.quitEllipsis"), icon: "stop", onSelect: () => askStop(instance) }
       : { id: "play", text: t("common.play"), icon: "play", disabled: locked || phase === "loading", onSelect: () => void play(instance) },
-    ...(opts.open ? [{ id: "open", text: t("components.instance.openInstance"), icon: "chev" as const, onSelect: () => navigate(instanceUrl(instance.id)) }] : []),
+    ...(showOpen
+      ? [
+          {
+            id: "open",
+            text: t("components.instance.openInstance"),
+            icon: "chev" as const,
+            onSelect: () => navigate(instanceUrl(instance.id)),
+          },
+        ]
+      : []),
     { id: "log", text: t("components.log.ariaLabel"), icon: "term", onSelect: () => navigate(instanceUrl(instance.id, "console")) },
     { id: "dir", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => openInstanceFolder(instance) },
     { id: "group", text: t("components.instance.group"), icon: "box", disabled: locked, items: groupItems },
     "-",
-    { id: "dup", text: t("components.instance.duplicate"), icon: "copy", disabled: locked || contentBusy, onSelect: () => duplicate(instance) },
-    { id: "exp", text: t("components.instance.exportEllipsis"), icon: "ul", disabled: locked || contentBusy, onSelect: () => askExport(instance) },
+    {
+      id: "dup",
+      text: t("components.instance.duplicate"),
+      icon: "copy",
+      disabled: locked || contentBusy,
+      onSelect: () => duplicate(instance),
+    },
+    {
+      id: "exp",
+      text: t("components.instance.exportEllipsis"),
+      icon: "ul",
+      disabled: locked || contentBusy,
+      onSelect: () => askExport(instance),
+    },
     { id: "tpl", text: t("components.instance.saveAsTemplate"), icon: "save", onSelect: () => askSaveTemplate(instance) },
     "-",
     { id: "del", text: t("common.delete"), icon: "trash", bad: true, disabled: locked, onSelect: () => askDelete(instance) },
   ];
 }
 
-/**
- * Symbolknopf „Weitere Aktionen“ mit dem Instanz-Menü. `small`: 32 statt 40 px, `large`: 56 px (neben dem großen Spielen-Knopf); `variant`: s = Platte, g = Geist;
- * `onScene`: über einer Szene (Grundplatte, harter Schatten).
- */
-export function InstanceMenuButton({ instance, small, large, variant = "s", onScene, open }: { instance: Instance; small?: boolean; large?: boolean; variant?: "s" | "g"; onScene?: boolean; open?: boolean }) {
+type MenuButtonProps = {
+  instance: Instance;
+  /** 32 (`s`), 40 (`m`) oder 56 px (`l`, neben dem großen Spielen-Knopf). */
+  size?: "s" | "m" | "l";
+  variant?: "secondary" | "ghost";
+  /** Über einer Szene (Grundplatte, harter Schatten). */
+  onScene?: boolean;
+  showOpen?: boolean;
+};
+
+/** Symbolknopf „Weitere Aktionen“ mit dem Instanz-Menü. */
+export function InstanceMenuButton({ instance, size = "m", variant = "secondary", onScene, showOpen }: MenuButtonProps) {
   const { t } = useI18n();
-  const items = useInstanceMenu(instance, { open });
+  const items = useInstanceMenu(instance, { showOpen });
   return (
     <Menu
       items={items}
       trigger={
         <IconButton
-          variant={variant === "g" ? "ghost" : "secondary"}
-          size={small ? "s" : large ? "l" : "m"}
+          variant={variant}
+          size={size}
           onScene={onScene}
           icon="more"
           label={t("components.instance.moreActionsFor", { name: instance.name })}
@@ -184,7 +217,9 @@ const ENTRY_LABELS: Record<string, TKey> = {
   "servers.dat": "components.export.entry.servers",
 };
 
-function ExportDialog({ instance, onExport, onClose }: { instance: Instance; onExport: (include: string[], path: string) => void; onClose: () => void }) {
+function ExportDialog({ instance, onExport, onClose }: {
+  instance: Instance; onExport: (include: string[], path: string) => void; onClose: () => void;
+}) {
   const { t } = useI18n();
   const entries = useExportEntries(instance.id);
   const [picked, setPicked] = useState<Set<string> | null>(null);
@@ -192,7 +227,10 @@ function ExportDialog({ instance, onExport, onClose }: { instance: Instance; onE
   const toggle = (name: string, on: boolean) => setPicked(new Set(on ? [...chosen, name] : [...chosen].filter((n) => n !== name)));
 
   async function submit() {
-    const path = await saveFile({ defaultPath: packFileName(instance.name), filters: [{ name: t("components.export.fileFilter"), extensions: ["mrpack"] }] });
+    const path = await saveFile({
+      defaultPath: packFileName(instance.name),
+      filters: [{ name: t("components.export.fileFilter"), extensions: ["mrpack"] }],
+    });
     if (!path) return;
     onExport([...chosen], path);
     onClose();
@@ -206,26 +244,41 @@ function ExportDialog({ instance, onExport, onClose }: { instance: Instance; onE
       sub={instance.name}
       width={480}
       footLeft={api.capabilities.exportInstance ? undefined : t("components.export.appOnly")}
-      footer={<DialogActions cancel={t("common.cancel")} confirm={{ label: t("components.instance.export"), width: 150, disabled: !api.capabilities.exportInstance || !entries.data, onClick: submit }} />}
+      footer={
+        <DialogActions
+          cancel={t("common.cancel")}
+          confirm={{
+            label: t("components.instance.export"),
+            width: 150,
+            disabled: !api.capabilities.exportInstance || !entries.data,
+            onClick: submit,
+          }}
+        />
+      }
     >
       <Field label={t("components.export.include")} group help={t("components.export.includeHelp")}>
-        {entries.error ? (
-          <Hint tone="bad">{entries.error.message}</Hint>
-        ) : !entries.data ? (
-          <Skel h={120} />
-        ) : entries.data.length ? (
-          <div className="flex flex-col gap-2">
-            {entries.data.map((name) => (
-              <Checkbox key={name} checked={chosen.has(name)} onChange={(on) => toggle(name, on)}>
-                {ENTRY_LABELS[name] ? `${t(ENTRY_LABELS[name])} (${name})` : name}
-              </Checkbox>
-            ))}
-          </div>
-        ) : (
-          <Hint>{t("components.export.folderEmpty")}</Hint>
-        )}
+        <ExportEntries entries={entries} chosen={chosen} onToggle={toggle} />
       </Field>
     </Dialog>
+  );
+}
+
+/** Die wählbaren Einträge des Spielordners; solange sie laden oder wenn das fehlschlägt, ein Platzhalter. */
+function ExportEntries({ entries, chosen, onToggle }: {
+  entries: ReturnType<typeof useExportEntries>; chosen: Set<string>; onToggle: (name: string, on: boolean) => void;
+}) {
+  const { t } = useI18n();
+  if (entries.error) return <Hint tone="bad">{entries.error.message}</Hint>;
+  if (!entries.data) return <Skel h={120} />;
+  if (!entries.data.length) return <Hint>{t("components.export.folderEmpty")}</Hint>;
+  return (
+    <div className="flex flex-col gap-2">
+      {entries.data.map((name) => (
+        <Checkbox key={name} checked={chosen.has(name)} onChange={(on) => onToggle(name, on)}>
+          {ENTRY_LABELS[name] ? `${t(ENTRY_LABELS[name])} (${name})` : name}
+        </Checkbox>
+      ))}
+    </div>
   );
 }
 
@@ -254,11 +307,18 @@ export function InstanceDialogs() {
   const exportPack = useExport();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const close = () => useInstanceActions.setState({ template: null, exporting: null, remove: null, newGroup: null });
+  const close = () => useInstanceActions.setState(NO_DIALOG);
   return (
     <>
       {template && <SaveTemplateDialog key={template.id} instance={template} onClose={close} />}
-      {exporting && <ExportDialog key={exporting.id} instance={exporting} onExport={(include, path) => exportPack(exporting, include, path)} onClose={close} />}
+      {exporting && (
+        <ExportDialog
+          key={exporting.id}
+          instance={exporting}
+          onExport={(include, path) => exportPack(exporting, include, path)}
+          onClose={close}
+        />
+      )}
       {newGroup && <NewGroupDialog key={newGroup.id} instance={newGroup} onClose={close} />}
       <ConfirmDialog
         {...confirmTargetProps(remove, close, {
@@ -268,7 +328,7 @@ export function InstanceDialogs() {
           onConfirm: (instance, closeDialog) =>
             del.mutate(instance.id, {
               onSuccess: () => {
-                if (pathname.startsWith(`/instances/${instance.id}`)) navigate("/instances");
+                if (pathname.startsWith(instanceUrl(instance.id))) navigate("/instances");
                 closeDialog();
               },
             }),
