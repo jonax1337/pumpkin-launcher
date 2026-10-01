@@ -1,5 +1,6 @@
 // Nur im Browser-Dev-Modus dynamisch geladen (siehe api.ts); im Release-Build nicht enthalten.
 import type { ContentProgress, ContentVersion } from "./modrinth";
+import { blankInstanceFields } from "./mock";
 import { INSTALL_CANCELLED, type Instance, type ModLoader } from "./types";
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -27,20 +28,18 @@ export function createPackMock(db: { instances: Instance[]; cancelled: Set<strin
       await wait(900);
     }
     const inst: Instance = {
+      ...blankInstanceFields(),
       id: `inst-${crypto.randomUUID().slice(0, 8)}`,
       name,
       minecraftVersion: version.game_versions.at(-1) ?? "1.21.1",
       loader,
       loaderVersion: null,
       modpack: { type: "modrinth", projectId: version.project_id, versionId },
-      memoryMb: null,
-      jvmArgs: [],
       mods: mods.map(([id, modName]) => ({
         id, name: modName, version: "1.0.0", kind: "mod", requiredBy: [], enabled: true, sha1: null,
         source: { type: "modrinth", projectId: id, versionId: `mock-${id}` }, fileName: `${id}.jar`,
       })),
       createdAt: Date.now(),
-      lastPlayedAt: null,
     };
     db.instances.push(inst);
     progress("complete", mods.length, mods.length);

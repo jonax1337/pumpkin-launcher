@@ -1,12 +1,11 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useLocation, useSearchParams } from "react-router";
 import { getVersion } from "@tauri-apps/api/app";
-import { open as openFile } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { useView } from "@/app/Layout";
-import { MemoryChooser, MemoryHelp } from "@/components/common";
+import { JavaChooser, MemoryChooser, MemoryHelp } from "@/components/common";
 import { AccountsSection } from "@/components/PlayerNames";
-import { Actions, Button, Count, FormRow, FormSection, Hint, PageHeader, Radio, Segmented, Select, Switch, TabPanel, Tabs, TextField } from "@/ui";
+import { Actions, Button, Count, FormRow, FormSection, Hint, PageHeader, Segmented, Select, Switch, TabPanel, Tabs, TextField } from "@/ui";
 import { api } from "@/lib/api";
 import { Buddy, BrandWordmark, useBrand } from "@/branding/Brand";
 import { SEASONS, type PumpkinChoice } from "@/branding/calendar";
@@ -39,11 +38,6 @@ const subscribeRm = (cb: () => void) => {
 function JavaRow() {
   const javaPath = useSettings((s) => s.javaPath);
   const set = useSettings((s) => s.set);
-  const [own, setOwn] = useState(javaPath !== "");
-  async function browse() {
-    const picked = await openFile({ multiple: false, directory: false, filters: [{ name: "Java", extensions: ["exe"] }] });
-    if (typeof picked === "string") set({ javaPath: picked });
-  }
   return (
     <FormRow
       label="Java"
@@ -51,23 +45,12 @@ function JavaRow() {
       group="radiogroup"
       aside="Automatisch passt fast immer: Pumpkin Launcher lädt für jede Minecraft-Version die richtige Java-Version. Eine eigene Installation brauchst du nur, wenn eine Anleitung es verlangt."
     >
-      <Radio name="gjava" checked={!own} onChange={() => (setOwn(false), set({ javaPath: "" }))}>
-        Automatisch <span className="text-fg-3">(Pumpkin Launcher lädt die passende Version)</span>
-      </Radio>
-      <Radio name="gjava" checked={own} onChange={() => setOwn(true)}>Eigene Java-Installation</Radio>
-      {/* Bleibt stehen und ist nur gesperrt, wie der Regler bei „Automatisch“: kein Sprung, keine Lücke.
-          Gesperrt ohne Beispielpfad, sonst wirkt es, als wäre schon ein Pfad gesetzt. */}
-      <Actions>
-        <TextField
-          width="full"
-          disabled={!own}
-          aria-label="Pfad zu javaw.exe"
-          value={javaPath}
-          onChange={(e) => set({ javaPath: e.target.value })}
-          placeholder={own ? "z. B. C:\\Program Files\\Java\\jdk-21\\bin\\javaw.exe" : "Pfad zu javaw.exe"}
-        />
-        {!api.isMock && <Button disabled={!own} onClick={() => void browse().catch((e: Error) => toast.error(e.message))}>Durchsuchen</Button>}
-      </Actions>
+      <JavaChooser
+        name="gjava"
+        value={javaPath}
+        onChange={(path) => set({ javaPath: path })}
+        fallback={<>Automatisch <span className="text-fg-3">(Pumpkin Launcher lädt die passende Version)</span></>}
+      />
     </FormRow>
   );
 }

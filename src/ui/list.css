@@ -67,7 +67,7 @@
 .vx-ghost-t { font-weight: 500; font-size: 14px; color: var(--fg-2); }
 
 /* ---------- Bibliothek: 56 px ---------- */
-.vx-list[data-variant="instances"] { --l-cols: 44px minmax(0, 1fr) 150px 84px 150px 150px 40px 40px; }
+.vx-list[data-variant="instances"] { --l-cols: 44px minmax(0, 1fr) 150px 84px 150px 96px 150px 40px 40px; }
 .vx-list[data-variant="instances"] .vx-rt { padding-right: 12px; }
 
 /* ---------- Inhalte: 48 px, Spalte „Hinweise“ entfällt ohne Hinweise (noWarnCol) ---------- */

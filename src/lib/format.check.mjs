@@ -1,6 +1,6 @@
 // Run: node src/lib/format.check.mjs (Node with TypeScript stripping).
 import assert from 'node:assert/strict';
-import { autoMemoryMb, maxMemoryMb, memoryTooHigh } from './format.ts';
+import { autoMemoryMb, formatPlaytime, maxMemoryMb, memoryTooHigh } from './format.ts';
 
 assert.equal(autoMemoryMb(16384), 8192);
 assert.equal(autoMemoryMb(32768), 8192, 'höchstens 8 GB');
@@ -10,4 +10,9 @@ assert.equal(maxMemoryMb(16384), 14336);
 assert.equal(maxMemoryMb(16000), 13824, 'abgerundet auf 512');
 assert.equal(maxMemoryMb(3000), 2048);
 assert.ok(memoryTooHigh(12800, 16384) && !memoryTooHigh(12288, 16384));
+assert.equal(formatPlaytime(59), 'unter 1 Min.');
+assert.equal(formatPlaytime(45 * 60 + 59), '45 Min.', 'Minuten abgerundet');
+assert.equal(formatPlaytime(3.5 * 3600), '3,5 Std.');
+assert.equal(formatPlaytime(37 * 3600 + 25 * 60), '37 Std.', 'ab 10 Stunden ganze Stunden');
+assert.equal(formatPlaytime(1200 * 3600), '1.200 Std.');
 console.log('format ok');

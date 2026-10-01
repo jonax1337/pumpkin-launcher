@@ -1,11 +1,17 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
+import { open as openFile } from "@tauri-apps/plugin-dialog";
+import { toast } from "sonner";
 import { useMemory } from "@/hooks/useInstances";
-import { formatMemory, memoryTooHigh } from "@/lib/format";
+import { api } from "@/lib/api";
+import { formatMemory, formatPlaytime, memoryTooHigh } from "@/lib/format";
 import { LOADER_LABELS, type Instance } from "@/lib/types";
-import { Hint, Radio, SegSlider } from "@/ui";
+import { Actions, Button, Hint, Radio, SegSlider, TextField } from "@/ui";
 
 /** „Fabric 1.21.4“ bzw. „Vanilla 1.21.4“. */
 export const loaderLine = (i: Pick<Instance, "loader" | "minecraftVersion">) => `${LOADER_LABELS[i.loader]} ${i.minecraftVersion}`;
+
+/** „37 Std. gespielt“; ohne Spielzeit leer. */
+export const playtimeLine = (i: Pick<Instance, "playtimeSecs">) => (i.playtimeSecs > 0 ? `${formatPlaytime(i.playtimeSecs)} gespielt` : "");
 
 /**
  * Hinweis zum Arbeitsspeicher. Zu viel für den PC: Warnung mit Symbol (nie nur Farbe) an derselben Stelle.
@@ -52,6 +58,44 @@ export function MemoryChooser({ name, value, onChange, autoText, help = true }: 
         <span className="num" style={{ color: isAuto ? "var(--fg-3)" : undefined }}>{gb} GB</span>
       </div>
       {help && <MemoryHelp value={value} />}
+    </>
+  );
+}
+
+/**
+ * Java: ohne eigenen Pfad (`value` leer; was dann gilt, beschreibt `fallback`) oder eigene javaw.exe.
+ * Gemeldet wird erst beim Verlassen des Felds, mit Enter oder nach „Durchsuchen“, nicht je Tastendruck.
+ */
+export function JavaChooser({ name, value, onChange, fallback }: { name: string; value: string; onChange: (path: string) => void; fallback: ReactNode }) {
+  const [own, setOwn] = useState(value !== "");
+  const [draft, setDraft] = useState(value);
+  function commit(path: string) {
+    setDraft(path);
+    if (path.trim() !== value) onChange(path.trim());
+  }
+  async function browse() {
+    const picked = await openFile({ multiple: false, directory: false, filters: [{ name: "Java", extensions: ["exe"] }] });
+    if (typeof picked === "string") commit(picked);
+  }
+  return (
+    <>
+      <Radio name={name} checked={!own} onChange={() => (setOwn(false), commit(""))}>{fallback}</Radio>
+      <Radio name={name} checked={own} onChange={() => setOwn(true)}>Eigene Java-Installation</Radio>
+      {/* Bleibt stehen und ist nur gesperrt, wie der Regler bei „Automatisch“: kein Sprung, keine Lücke.
+          Gesperrt ohne Beispielpfad, sonst wirkt es, als wäre schon ein Pfad gesetzt. */}
+      <Actions>
+        <TextField
+          width="full"
+          disabled={!own}
+          aria-label="Pfad zu javaw.exe"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => commit(draft)}
+          onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+          placeholder={own ? "z. B. C:\\Program Files\\Java\\jdk-21\\bin\\javaw.exe" : "Pfad zu javaw.exe"}
+        />
+        {!api.isMock && <Button disabled={!own} onClick={() => void browse().catch((e: Error) => toast.error(e.message))}>Durchsuchen</Button>}
+      </Actions>
     </>
   );
 }
