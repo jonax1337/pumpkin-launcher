@@ -233,6 +233,7 @@ export function AccountMenu() {
     ...(accounts.length ? ["-" as const] : []),
     { id: "ms", text: "Mit Microsoft anmelden", icon: "user", onSelect: () => void startMsLogin(qc) },
     ...(allowed ? [{ id: "off", text: "Spielername hinzufügen", icon: "plus" as const, onSelect: openAddOffline }] : []),
+    { id: "skins", text: "Skins und Umhänge", icon: "shirt", onSelect: () => navigate("/skins") },
     { id: "set", text: "Einstellungen", icon: "gear", onSelect: () => navigate("/settings#konten") },
     ...(active?.kind === "microsoft"
       ? ["-" as const, { id: "out", text: `Abmelden (${name})`, icon: "power" as const, bad: true, onSelect: () => remove(active) }]

@@ -5,6 +5,7 @@ import {
   INSTALL_CANCELLED,
   type Account,
   type ExitPayload,
+  type LibrarySkin,
   type MsLoginStart,
   type Instance,
   type InstallProgress,
@@ -14,6 +15,8 @@ import {
   type LogPayload,
   type ModLoader,
   type NewInstance,
+  type SkinProfile,
+  type SkinVariant,
   type Template,
   type VersionEntry,
 } from "@/lib/types";
@@ -63,6 +66,7 @@ const emit = <T>(event: string, payload: T) => bus.dispatchEvent(new CustomEvent
 // Modrinth im Browser: Katalog live von api.modrinth.com, Installieren und Updates nur simuliert.
 const mockContent = mockData?.createContentMock(db, emit);
 const mockPack = tauri ? null : (await import("@/lib/mock-pack")).createPackMock(db, emit);
+const mockSkins = tauri ? null : (await import("@/lib/mock-skins")).createSkinMock();
 
 function on<T>(event: string, cb: (payload: T) => void): Promise<UnlistenFn> {
   if (tauri) return listen<T>(event, (e) => cb(e.payload));
@@ -376,6 +380,29 @@ export const api = {
   offlineAllowed: (): Promise<boolean> => (tauri ? call("offline_allowed") : Promise.resolve(true)),
   msAccountRemove: (id: string): Promise<void> =>
     tauri ? call("ms_account_remove", { id }) : Promise.resolve(void (db.accounts = db.accounts.filter((a) => a.id !== id))),
+
+  /** Was das Microsoft-Konto gerade trägt. Im Browser ein Beispielprofil. */
+  skinProfile: (accountId: string): Promise<SkinProfile> => (tauri ? call("skin_profile", { accountId }) : mockSkins!.profile()),
+  skinLibrary: (): Promise<LibrarySkin[]> => (tauri ? call("skin_library") : mockSkins!.library()),
+  /** PNG eines Bibliotheks-Skins als data:-URL. */
+  skinTexture: (id: string): Promise<string> => (tauri ? call("skin_texture", { id }) : mockSkins!.texture(id)),
+  /** PNG-Datei (absoluter Pfad aus dem Dateidialog) in die Bibliothek aufnehmen. */
+  skinAdd: (path: string): Promise<LibrarySkin> =>
+    tauri ? call("skin_add", { path }) : Promise.reject(new Error("Skin-Dateien lassen sich nur in der Pumpkin Launcher-App hinzufügen.")),
+  skinUpdate: (id: string, name: string, variant: SkinVariant): Promise<LibrarySkin> =>
+    tauri ? call("skin_update", { id, name, variant }) : mockSkins!.update(id, name, variant),
+  skinDelete: (id: string): Promise<void> => (tauri ? call("skin_delete", { id }) : mockSkins!.remove(id)),
+  /** Den gerade getragenen Skin unter `name` in der Bibliothek ablegen. */
+  skinSaveActive: (accountId: string, name: string): Promise<LibrarySkin> =>
+    tauri ? call("skin_save_active", { accountId, name }) : mockSkins!.saveActive(name),
+  skinUpload: (accountId: string, skinId: string): Promise<void> =>
+    tauri ? call("skin_upload", { accountId, skinId }) : mockSkins!.upload(skinId),
+  /** Zurück zum Standardskin von Minecraft. */
+  skinReset: (accountId: string): Promise<void> => (tauri ? call("skin_reset", { accountId }) : mockSkins!.reset()),
+  /** Umhang zeigen; `null` blendet den aktiven aus. */
+  skinCape: (accountId: string, capeId: string | null): Promise<void> =>
+    tauri ? call("skin_cape", { accountId, capeId }) : mockSkins!.cape(capeId),
+
   /** Datei mit dem Standardprogramm öffnen (z. B. Absturzbericht). */
   openPath: (path: string): Promise<void> =>
     tauri ? openPath(path) : Promise.reject(new Error("Dateien lassen sich nur in der Pumpkin Launcher-App öffnen.")),

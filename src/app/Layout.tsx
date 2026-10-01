@@ -84,6 +84,7 @@ function usePageTitle(pathname: string) {
     : pathname.startsWith("/instances") ? "Bibliothek"
     : pathname.startsWith("/discover") ? "Entdecken"
     : pathname.startsWith("/settings") ? "Einstellungen"
+    : pathname.startsWith("/skins") ? "Skins"
     : "Seite nicht gefunden";
   useEffect(() => {
     document.title = `${page} · ${APP}`;
