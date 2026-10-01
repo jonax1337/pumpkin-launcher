@@ -4,7 +4,7 @@ import { useDeleteScreenshot, useScreenshots } from "@/hooks/useScreenshots";
 import { api } from "@/lib/api";
 import { formatDate, formatSize } from "@/lib/format";
 import type { Instance, Screenshot } from "@/lib/types";
-import { Actions, Button, Count, Dialog, Empty, ErrorBox, Glyph, IconButton, SectionHeader, Skel } from "@/ui";
+import { Actions, Button, CardGrid, Count, Dialog, Empty, ErrorBox, Glyph, IconButton, SectionHeader, Skel } from "@/ui";
 
 const DAY = 86_400_000;
 const dayStart = (ms: number) => new Date(ms).setHours(0, 0, 0, 0);
@@ -36,9 +36,9 @@ export function ScreenshotsTab({ instance }: { instance: Instance }) {
   if (shots.error) return <ErrorBox className="mt-4" title="Die Screenshots konnten nicht geladen werden" error={shots.error} onRetry={() => void shots.refetch()} />;
   if (!shots.data)
     return (
-      <div className="shots mt-4" aria-busy aria-label="Wird geladen">
+      <CardGrid className="mt-4" aria-busy aria-label="Wird geladen">
         {[0, 1, 2, 3].map((k) => <Skel key={k} className="aspect-video" />)}
-      </div>
+      </CardGrid>
     );
   if (!shots.data.length)
     return (
@@ -54,14 +54,14 @@ export function ScreenshotsTab({ instance }: { instance: Instance }) {
       {byDay(list).map(([day, group]) => (
         <section key={day} className="mt-4">
           <SectionHeader title={<>{dayTitle(day)} <Count value={group.length} size={20} muted /></>} size="sub" />
-          <div className="shots mt-2">
+          <CardGrid className="mt-2">
             {group.map((shot) => (
               <button key={shot.fileName} type="button" className="shot fx" aria-label={`Screenshot vom ${shotTime.format(shot.takenAt)}`} onClick={() => setShown(shot.fileName)}>
                 {/* Hunderte Bilder in voller Auflösung: erst laden, wenn sie in den Sichtbereich kommen. */}
                 <img src={api.screenshotSrc(shot)} alt="" loading="lazy" decoding="async" />
               </button>
             ))}
-          </div>
+          </CardGrid>
         </section>
       ))}
       {current && <Lightbox instanceId={instance.id} shots={list} current={current} onShow={(s) => setShown(s?.fileName ?? null)} />}

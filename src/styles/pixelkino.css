@@ -288,8 +288,7 @@ a { color: inherit; }
 .skin-card-h { display: flex; align-items: center; gap: 4px; width: 100%; }
 
 /* ---------- Instanz: Screenshots ---------- */
-/* Raster in 16:9; Kerbe am Bild statt am Knopf, sonst schnitte sie den Fokusring ab */
-.shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+/* Kacheln in 16:9; Kerbe am Bild statt am Knopf, sonst schnitte sie den Fokusring ab */
 .shot { display: block; aspect-ratio: 16 / 9; }
 .shot img { display: block; width: 100%; height: 100%; object-fit: cover; background: var(--sunk); clip-path: var(--n1); transition: filter var(--st); }
 .shot:hover img { filter: brightness(1.12); }

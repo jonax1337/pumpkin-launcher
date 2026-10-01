@@ -444,7 +444,9 @@ export const api = {
 
   /** Datei mit dem Standardprogramm öffnen (z. B. Absturzbericht). */
   openPath: (path: string): Promise<void> =>
-    tauri ? openPath(path) : Promise.reject(new Error("Dateien lassen sich nur in der Pumpkin Launcher-App öffnen.")),
+    tauri
+      ? openPath(path).catch((err: unknown) => Promise.reject(new Error(String(err))))
+      : Promise.reject(new Error("Dateien lassen sich nur in der Pumpkin Launcher-App öffnen.")),
 
   /** Neuere Launcher-Version aus den GitHub-Releases, sonst null. Im Browser gibt es keine Updates. */
   checkAppUpdate: (): Promise<Update | null> => (tauri ? check() : Promise.resolve(null)),

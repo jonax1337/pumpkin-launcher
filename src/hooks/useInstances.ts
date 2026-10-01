@@ -8,7 +8,7 @@ import { usableAccount, useOfflineAllowed } from "@/store/offline";
 import { api } from "@/lib/api";
 import { autoMemoryMb, formatClock, maxMemoryMb } from "@/lib/format";
 import { INSTALL_CANCELLED, type Instance, type InstanceStatus, type ModLoader, type NewInstance } from "@/lib/types";
-import { screenshotsKey } from "@/hooks/useScreenshots";
+import { screenshotKeys } from "@/hooks/useScreenshots";
 import { useGame } from "@/store/game";
 import { accountName, useSettings } from "@/store/settings";
 import { useTasks } from "@/store/tasks";
@@ -318,7 +318,7 @@ export function useGameEvents() {
         qc.setQueryData<InstanceStatus>(instanceKeys.status(instanceId), (s) => s && { ...s, running: false });
         // Das Backend hat die Spielzeit der Sitzung angerechnet; neue Screenshots liegen im Ordner.
         void qc.invalidateQueries({ queryKey: instanceKeys.all });
-        void qc.invalidateQueries({ queryKey: screenshotsKey(instanceId) });
+        void qc.invalidateQueries({ queryKey: screenshotKeys.list(instanceId) });
         const showLog = { label: "Protokoll", onClick: () => navigate(`/instances/${instanceId}?tab=console`) };
         if (stopping.delete(instanceId)) {
           toast(since ? `Minecraft beendet. Gespielt: ${formatClock(Date.now() - since)}` : "Minecraft beendet", { action: showLog });
