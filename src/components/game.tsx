@@ -156,7 +156,7 @@ export function PlayButton({ instance, size = "l", onLaunched, tabIndex }: { ins
   const btn = (
     <button
       type="button"
-      className={cn("btn btn-p fx play", size !== "l" && size)}
+      className={cn("fx play", size !== "l" && size)}
       data-st={s.st}
       aria-label={s.aria}
       aria-disabled={s.dis || undefined}
