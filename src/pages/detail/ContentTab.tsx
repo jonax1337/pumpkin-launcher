@@ -11,12 +11,24 @@ import { instanceKeys, useUpdateMods } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import { openPage } from "@/lib/links";
 import { ownerKey, projectOf, removeWithDependencies, undoRemove, type ModUpdate } from "@/lib/modrinth";
+import { useI18n } from "@/i18n";
 import type { Instance, Mod, ModKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useLocalFiles } from "./LocalFiles";
 
-const KIND1: Record<ModKind, string> = { mod: "Mod", shader: "Shader", resourcepack: "Ressourcenpaket" };
-const KINDS: Record<ModKind, string> = { mod: "Mods", shader: "Shader", resourcepack: "Ressourcenpakete" };
+/** Art eines Inhalts im Singular bzw. Plural – Schlüssel statt Texte, übersetzt erst bei der Ausgabe. */
+const KIND1_KEYS: Record<ModKind, string> = {
+  mod: "detail.content.kind.mod",
+  shader: "detail.content.kind.shader",
+  resourcepack: "detail.content.kind.resourcepack",
+};
+const KINDS_KEYS: Record<ModKind, string> = {
+  mod: "detail.content.kinds.mod",
+  shader: "detail.content.kinds.shader",
+  resourcepack: "detail.content.kinds.resourcepack",
+};
+/** Hinweis auf das Umschalten von Ressourcenpaketen im Spiel. */
+const RP_HINT_KEY = "detail.content.resourcePackHint";
 
 type KindFilter = "all" | ModKind;
 type Warn = { t: string; lab: string; fix: () => void };
@@ -35,14 +47,17 @@ function focusSoon(find: () => HTMLElement | null | undefined) {
   setTimeout(go, 0);
 }
 
-const RP_HINT = "Ressourcenpakete schaltest du im Spiel unter Optionen › Ressourcenpakete ein.";
-
 /** Hinweise je Inhalt und ihre Anzahl (für den Warnpunkt am Tab). */
 export function useWarnings(instance: Instance, onAddIris: () => void, turnOnIris: () => void) {
+  const { t } = useI18n();
   const iris = instance.mods.find((m) => projectOf(m) === IRIS_PROJECT_ID);
   const warnsOf = (m: Mod): Warn[] => {
     if (m.kind !== "shader" || (iris && iris.enabled)) return [];
-    return [iris ? { t: "Shader brauchen Iris", lab: "Iris einschalten", fix: turnOnIris } : { t: "Shader brauchen Iris", lab: "Iris hinzufügen", fix: onAddIris }];
+    return [
+      iris
+        ? { t: t("detail.content.shaderNeedsIris"), lab: t("detail.content.turnIrisOn"), fix: turnOnIris }
+        : { t: t("detail.content.shaderNeedsIris"), lab: t("detail.content.addIris"), fix: onAddIris },
+    ];
   };
   const total = instance.mods.reduce((n, m) => n + warnsOf(m).length, 0);
   return { warnsOf, total };
@@ -56,6 +71,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
   /** Zählt hoch, wenn der Kopf „Updates“ angeklickt wurde. */
   showUpdates?: number;
 }) {
+  const { t } = useI18n();
   const qc = useQueryClient();
   const update = useUpdateMods(instance.id);
   const install = useContentInstall();
@@ -134,7 +150,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     if (nPicked === lastPicked.current) return;
     lastPicked.current = nPicked;
     if (quietPick.current) return void (quietPick.current = false);
-    setSaid(nPicked ? `${nPicked} ausgewählt` : "Auswahl aufgehoben");
+    setSaid(nPicked ? t("detail.content.selectedCount", { n: nPicked }) : t("detail.content.selectionCleared"));
   }, [nPicked]);
 
   // Trefferzahl nach dem Filtern, beim Tippen erst nach einer kurzen Pause.
@@ -144,11 +160,11 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
   const lastFilter = useRef(filterKey);
   useEffect(() => {
     if (filterKey === lastFilter.current) return;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       lastFilter.current = filterKey;
-      setSaid(`${nVisible} von ${nAll} ${nAll === 1 ? "Inhalt" : "Inhalten"}`);
+      setSaid(t(nAll === 1 ? "detail.content.visibleCount.one" : "detail.content.visibleCount.other", { visible: nVisible, total: nAll }));
     }, 500);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [filterKey, nVisible, nAll]);
 
   /** Nach Bulk-Aktionen, die die Leiste schließen: Kopf-Checkbox (Liste) oder Suchfeld (Raster). */
@@ -173,8 +189,8 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     const one = modIds.length === 1 ? instance.mods.find((m) => m.id === modIds[0]) : undefined;
     const name = one ? title(one) : "";
     install.mutate(
-      withTarget(one ? one.id : "updates", (op) => api.modrinthUpdateMods(instance.id, modIds, op), name ? `${name} aktualisieren` : `${modIds.length} Inhalte aktualisieren`),
-      { onSuccess: (result) => { if (result) toast.success(name ? `${name} ist aktuell` : `${modIds.length} Inhalte aktualisiert`); } },
+      withTarget(one ? one.id : "updates", (op) => api.modrinthUpdateMods(instance.id, modIds, op), name ? t("detail.content.updateOneLabel", { name }) : t("detail.content.updateManyLabel", { n: modIds.length })),
+      { onSuccess: (result) => { if (result) toast.success(name ? t("detail.content.oneUpToDate", { name }) : t("detail.content.manyUpdated", { n: modIds.length })); } },
     );
   }
 
@@ -191,7 +207,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     // Der Platzhalter verschwindet: Fokus auf das Menü der wiederhergestellten Zeile statt auf body.
     const main = back.find((x) => x.main) ?? back[0];
     if (main) {
-      setSaid(`${main.title} wiederhergestellt`);
+      setSaid(t("detail.content.restoredAnnouncement", { name: main.title }));
       if (rootRef.current?.contains(document.activeElement)) focusSoon(() => rootRef.current?.querySelector<HTMLElement>(`[data-more="${CSS.escape(main.mod.id)}"]`));
     }
   }
@@ -221,10 +237,19 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     else focusHead();
     const main = removed.filter((m) => ids.includes(m.id));
     const extra = removed.length - main.length;
-    toast(`${main.length === 1 ? title(main[0]) : `${main.length} Inhalte`}${extra ? ` und ${extra} ${extra === 1 ? "Abhängigkeit" : "Abhängigkeiten"}` : ""} entfernt`, {
-      duration: 6500,
-      action: { label: "Rückgängig", onClick: () => undo(group) },
-    });
+    const things = main.length === 1 ? title(main[0]) : t(main.length === 1 ? "detail.content.itemsCount.one" : "detail.content.itemsCount.other", { n: main.length });
+    toast(
+      extra
+        ? t("detail.content.removedToastWithDeps", {
+            things,
+            deps: t(extra === 1 ? "detail.content.dependencies.one" : "detail.content.dependencies.other", { n: extra }),
+          })
+        : t("detail.content.removedToast", { things }),
+      {
+        duration: 6500,
+        action: { label: t("detail.content.undoAction"), onClick: () => undo(group) },
+      },
+    );
   }
 
   if (instance.mods.length === 0 && shownGhosts.length === 0) {
@@ -233,17 +258,17 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
         {local.overlay}
         <Empty
           ill={<Glyph name="cube" pal="steel" box={64} />}
-          title="Noch keine Inhalte"
+          title={t("detail.content.emptyTitle")}
           actions={
             <>
-              <Button icon="plus" onClick={onAdd}>Hinzufügen</Button>
-              {local.pick && <Button icon="ul" disabled={!!active} onClick={local.pick}>Datei hinzufügen…</Button>}
+              <Button icon="plus" onClick={onAdd}>{t("common.add")}</Button>
+              {local.pick && <Button icon="ul" disabled={!!active} onClick={local.pick}>{t("detail.content.addFile")}</Button>}
             </>
           }
         >
           {instance.loader === "vanilla"
-            ? "Diese Instanz ist Minecraft pur. Ressourcenpakete gehen trotzdem, Mods brauchen einen Loader wie Fabric."
-            : "Füge Mods, Shader oder Ressourcenpakete hinzu. Pumpkin Launcher wählt passende Versionen aus."}
+            ? t("detail.content.emptyVanilla")
+            : t("detail.content.emptyHint")}
         </Empty>
       </div>
     );
@@ -261,12 +286,12 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     const pid = projectOf(m);
     const own = m.source.type === "local";
     return [
-      ...(up ? [{ id: "up", text: `Auf ${up.versionNumber} aktualisieren`, icon: "up" as const, disabled: !!active, onSelect: () => runUpdates([m.id]) }] : []),
-      ...(own ? [{ id: "identify", text: "Mit Modrinth abgleichen", icon: "search" as const, disabled: !!active, onSelect: () => local.identify(m) }] : []),
-      ...(pid ? [{ id: "web", text: "Auf Modrinth ansehen", icon: "ext" as const, onSelect: () => openPage(`https://modrinth.com/project/${pid}`) }] : []),
-      ...(m.source.type === "curseforge" ? [{ id: "web", text: "Auf CurseForge ansehen", icon: "ext" as const, onSelect: () => openPage(`https://www.curseforge.com/projects/${(m.source as { projectId: number }).projectId}`) }] : []),
+      ...(up ? [{ id: "up", text: t("detail.content.updateVersionTo", { version: up.versionNumber }), icon: "up" as const, disabled: !!active, onSelect: () => runUpdates([m.id]) }] : []),
+      ...(own ? [{ id: "identify", text: t("detail.content.matchOnModrinth"), icon: "search" as const, disabled: !!active, onSelect: () => local.identify(m) }] : []),
+      ...(pid ? [{ id: "web", text: t("detail.content.viewOnModrinth"), icon: "ext" as const, onSelect: () => openPage(`https://modrinth.com/project/${pid}`) }] : []),
+      ...(m.source.type === "curseforge" ? [{ id: "web", text: t("detail.content.viewOnCurseForge"), icon: "ext" as const, onSelect: () => openPage(`https://www.curseforge.com/projects/${(m.source as { projectId: number }).projectId}`) }] : []),
       ...(up || own || pid || m.source.type === "curseforge" ? ["-" as const] : []),
-      { id: "rm", text: "Entfernen", icon: "trash", bad: true, onSelect: () => remove([m.id]) },
+      { id: "rm", text: t("common.remove"), icon: "trash", bad: true, onSelect: () => remove([m.id]) },
     ];
   };
 
@@ -275,9 +300,12 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     return (
       <>
         <div className="tn">{title(m)}</div>
-        <div className="tv">{KIND1[m.kind]} · Version {m.version}{m.enabled ? "" : " · ausgeschaltet"}</div>
-        {r.owners.length > 0 && <div className="tr">Benötigt von {r.owners.join(", ")}</div>}
-        {up && <div className="tu">Update auf {up.versionNumber} verfügbar</div>}
+        <div className="tv">
+          {t(KIND1_KEYS[m.kind])} · {t("common.version")} {m.version}
+          {m.enabled ? "" : ` · ${t("detail.content.turnedOffInline")}`}
+        </div>
+        {r.owners.length > 0 && <div className="tr">{t("detail.content.requiredBy", { names: r.owners.join(", ") })}</div>}
+        {up && <div className="tu">{t("detail.content.updateAvailable", { version: up.versionNumber })}</div>}
         {warns.map((w) => <div key={w.t} className="tw">{w.t}</div>)}
         {desc && <div className="td">{desc}</div>}
       </>
@@ -289,8 +317,8 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
   const descOf = (r: Row, warns: Warn[]) => {
     const m = r.mod, up = updateFor.get(m.id), desc = project(m)?.description;
     return [
-      !m.enabled && "Ausgeschaltet",
-      up && `Update auf ${up.versionNumber} verfügbar`,
+      !m.enabled && t("detail.content.offState"),
+      up && t("detail.content.updateAvailable", { version: up.versionNumber }),
       ...warns.map((w) => w.t),
       desc,
     ].filter(Boolean).join(". ");
@@ -298,16 +326,16 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
   const srDesc = (m: Mod, text: string) => text && <span id={descId(m)} className="sr">{text}</span>;
 
   const subOf = (r: Row) =>
-    r.owners.length ? `Benötigt von ${r.owners.join(", ")} · ${r.mod.version}` : `${KIND1[r.mod.kind]} · ${r.mod.version}`;
+    r.owners.length ? `${t("detail.content.requiredBy", { names: r.owners.join(", ") })} · ${r.mod.version}` : `${t(KIND1_KEYS[r.mod.kind])} · ${r.mod.version}`;
 
   /** Update je Inhalt: Fortschritt beim Aktualisieren, sonst Knopf mit fester Breite (Version mit Auslassung, voller Text im Tooltip). */
   const updCell = (m: Mod, tile = false) => {
-    if (busyFor(m)) return <JobProgress label="Wird aktualisiert" p={pct} width={tile ? 112 : undefined} className={tile ? undefined : "w-full"} />;
+    if (busyFor(m)) return <JobProgress label={t("detail.content.updating")} p={pct} width={tile ? 112 : undefined} className={tile ? undefined : "w-full"} />;
     const up = updateFor.get(m.id);
     if (!up) return null;
     return (
-      <Tip label={`${title(m)} von ${m.version} auf ${up.versionNumber} aktualisieren`}>
-        <Button size="s" icon="up" width={96} disabled={!!active} aria-label={`${title(m)} auf ${up.versionNumber} aktualisieren`} onClick={() => runUpdates([m.id])}>
+      <Tip label={t("detail.content.updateFromTo", { name: title(m), from: m.version, to: up.versionNumber })}>
+        <Button size="s" icon="up" width={96} disabled={!!active} aria-label={t("detail.content.updateTo", { name: title(m), version: up.versionNumber })} onClick={() => runUpdates([m.id])}>
           <span className="truncate">{up.versionNumber}</span>
         </Button>
       </Tip>
@@ -317,18 +345,18 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
   /** An/Aus: Schalter mit sichtbarem „Aus“; Ressourcenpakete haben keinen (das Spiel schaltet sie ein). */
   const onCell = (m: Mod, tile = false) =>
     m.kind === "resourcepack" ? (
-      <Tip label={RP_HINT}>
-        <span>Im Spiel<span className="sr"> einschalten</span></span>
+      <Tip label={t(RP_HINT_KEY)}>
+        <span>{t("detail.content.inGame")}<span className="sr"> {t("detail.content.turnOnSr")}</span></span>
       </Tip>
     ) : (
       // Kachel: „Aus“ nur im ausgeschalteten Zustand (spart dem Namen Platz); Zeile: Platz bleibt reserviert.
-      <Switch checked={m.enabled} onChange={(v) => setEnabled([m.id], v)} label={`${title(m)} eingeschaltet`} stateText={tile && m.enabled ? undefined : ["", "Aus"]} />
+      <Switch checked={m.enabled} onChange={(v) => setEnabled([m.id], v)} label={t("detail.content.enabledLabel", { name: title(m) })} stateText={tile && m.enabled ? undefined : ["", t("detail.content.stateOff")]} />
     );
 
   const moreBtn = (m: Mod, described = false) => (
     <Menu
       items={menuFor(m)}
-      trigger={<IconButton size="s" icon="more" tip={false} data-more={m.id} label={`Mehr zu ${title(m)}`} aria-describedby={described ? descId(m) : undefined} />}
+      trigger={<IconButton size="s" icon="more" tip={false} data-more={m.id} label={t("detail.content.moreAbout", { name: title(m) })} aria-describedby={described ? descId(m) : undefined} />}
     />
   );
 
@@ -336,7 +364,9 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     <GhostRow
       key={`g-${g.mod.id}`}
       variant={mode === "grid" ? "tile" : "content"}
-      text={`${g.title} entfernt${g.by && mode !== "grid" ? ` (mit ${g.by})` : ""}`}
+      text={g.by && mode !== "grid"
+        ? t("detail.content.removedGhostWith", { name: g.title, by: g.by })
+        : t("detail.content.removedGhost", { name: g.title })}
       media={mode === "grid" ? undefined : <ProjectIcon url={project(g.mod)?.icon_url} seed={g.mod.id} />}
       undoId={g.main ? g.group : undefined}
       onUndo={g.main ? () => undo(g.group) : undefined}
@@ -347,7 +377,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     const m = r.mod, warns = warnsOf(m), on = picked.has(m.id), desc = descOf(r, warns);
     return (
       <ListRow key={m.id} selected={on} off={!m.enabled} dep={r.owners.length > 0}>
-        <Checkbox checked={on} onChange={(v) => togglePick(m.id, v)} label={`${title(m)} auswählen`} />
+        <Checkbox checked={on} onChange={(v) => togglePick(m.id, v)} label={t("detail.content.selectItem", { name: title(m) })} />
         <ProjectIcon url={project(m)?.icon_url} seed={m.id} />
         <Tip label={tipFor(r, warns)}>
           <div><RowTitle title={title(m)} sub={subOf(r)} trunc={false}>{srDesc(m, desc)}</RowTitle></div>
@@ -378,7 +408,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
       <ListRow key={m.id} selected={on} off={!m.enabled}>
         <span>
           <ProjectIcon url={project(m)?.icon_url} seed={m.id} box={52} />
-          <Checkbox checked={on} onChange={(v) => togglePick(m.id, v)} label={`${title(m)} auswählen`} />
+          <Checkbox checked={on} onChange={(v) => togglePick(m.id, v)} label={t("detail.content.selectItem", { name: title(m) })} />
         </span>
         <Tip label={tipFor(r, warns)}>
           <div><RowTitle title={title(m)} trunc={false}>{srDesc(m, desc)}</RowTitle></div>
@@ -404,13 +434,13 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
 
   const bulk = (
     <>
-      <span><Count value={pickedLive.length} minDigits={2} /> ausgewählt</span>
-      <Button size="s" disabled={!pickedSwitchable.length} onClick={() => setEnabled(pickedSwitchable, false)}>Ausschalten</Button>
-      <Button size="s" disabled={!pickedSwitchable.length} onClick={() => setEnabled(pickedSwitchable, true)}>Einschalten</Button>
-      <Button size="s" icon="up" disabled={!!active || !pickedLive.some((id) => updateFor.has(id))} onClick={() => runUpdates(pickedLive.filter((id) => updateFor.has(id)))}>Aktualisieren</Button>
-      <Button size="s" icon="trash" onClick={() => remove(pickedLive)}>Entfernen</Button>
+      <span><Count value={pickedLive.length} minDigits={2} /> {t("detail.content.selectedCount", { n: pickedLive.length })}</span>
+      <Button size="s" disabled={!pickedSwitchable.length} onClick={() => setEnabled(pickedSwitchable, false)}>{t("detail.content.switchOff")}</Button>
+      <Button size="s" disabled={!pickedSwitchable.length} onClick={() => setEnabled(pickedSwitchable, true)}>{t("detail.content.switchOn")}</Button>
+      <Button size="s" icon="up" disabled={!!active || !pickedLive.some((id) => updateFor.has(id))} onClick={() => runUpdates(pickedLive.filter((id) => updateFor.has(id)))}>{t("detail.content.updateAction")}</Button>
+      <Button size="s" icon="trash" onClick={() => remove(pickedLive)}>{t("common.remove")}</Button>
       <Spacer />
-      <Button variant="ghost" size="s" onClick={clearPicked}>Auswahl aufheben</Button>
+      <Button variant="ghost" size="s" onClick={clearPicked}>{t("detail.content.clearSelection")}</Button>
     </>
   );
 
@@ -419,17 +449,17 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
       {local.overlay}
       <div className="sr" role="status" aria-live="polite" aria-atomic="true">{said}</div>
       <Toolbar height={56} search="s" wrapBelow={800} alt={bulk} altActive={pickedLive.length > 0}>
-        <SearchField size="s" value={search} onChange={setSearch} placeholder="Inhalte suchen" />
+        <SearchField size="s" value={search} onChange={setSearch} placeholder={t("detail.content.searchPlaceholder")} />
         <Segmented
           size="s"
-          label="Art"
+          label={t("detail.content.filterKindLabel")}
           value={kind}
           onChange={setKind}
           items={[
-            { value: "all", label: "Alle", count: counts.all },
-            { value: "mod", label: kindLabel("Mods", counts.mod), count: counts.mod },
-            { value: "shader", label: kindLabel("Shader", counts.shader), count: counts.shader },
-            { value: "resourcepack", label: kindLabel("Ressourcenpakete", counts.resourcepack), count: counts.resourcepack },
+            { value: "all", label: t("detail.content.allKinds"), count: counts.all },
+            { value: "mod", label: kindLabel(t("detail.content.kinds.mod"), counts.mod), count: counts.mod },
+            { value: "shader", label: kindLabel(t("detail.content.kinds.shader"), counts.shader), count: counts.shader },
+            { value: "resourcepack", label: kindLabel(t("detail.content.kinds.resourcepack"), counts.resourcepack), count: counts.resourcepack },
           ]}
         />
         <Spacer />
@@ -437,10 +467,10 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
           size="s"
           iconsOnly
           className="max-[900px]:hidden"
-          label="Darstellung"
+          label={t("detail.content.viewLabel")}
           value={mode}
           onChange={setMode}
-          items={[{ value: "list", label: "Liste", icon: "list" }, { value: "grid", label: "Raster", icon: "grid" }]}
+          items={[{ value: "list", label: t("detail.content.viewList"), icon: "list" }, { value: "grid", label: t("detail.content.viewGrid"), icon: "grid" }]}
         />
         {/* Knopf und „Alles aktuell“ liegen übereinander: die Breite bleibt, ob Updates da sind oder nicht (kein toter Knopf). */}
         <span className="grid items-center justify-items-end *:col-start-1 *:row-start-1">
@@ -451,31 +481,31 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
             count={nUpd}
             compactBelow={1096}
             className={cn(!upShown && "invisible")}
-            aria-label={updatingAll ? "Wird aktualisiert" : undefined}
+            aria-label={updatingAll ? t("detail.content.updating") : undefined}
             disabled={!!active || !upShown}
             onClick={() => runUpdates([...updateFor.keys()])}
           >
-            Alle aktualisieren
+            {t("detail.content.updateAll")}
           </Button>
-          {!upShown && <Hint tone="ok" className="max-[1096px]:invisible">Alles aktuell</Hint>}
+          {!upShown && <Hint tone="ok" className="max-[1096px]:invisible">{t("detail.content.allUpToDate")}</Hint>}
         </span>
         {/* Sekundär: auf dieser Seite ist nur Spielen Akzent-Primär. */}
-        <Button size="s" icon="plus" onClick={onAdd}>Hinzufügen</Button>
-        {local.pick && <Button size="s" icon="ul" compactBelow={1096} disabled={!!active} onClick={local.pick}>Datei hinzufügen…</Button>}
+        <Button size="s" icon="plus" onClick={onAdd}>{t("common.add")}</Button>
+        {local.pick && <Button size="s" icon="ul" compactBelow={1096} disabled={!!active} onClick={local.pick}>{t("detail.content.addFile")}</Button>}
       </Toolbar>
 
       {visible.length === 0 ? (
         <Empty
           ill="search"
-          title="Nichts gefunden"
+          title={t("detail.content.noResultsTitle")}
           actions={
             <>
-              <Button onClick={() => { setSearch(""); setKind("all"); }}>Filter zurücksetzen</Button>
-              <Button onClick={onAdd}>Im Katalog suchen</Button>
+              <Button onClick={() => { setSearch(""); setKind("all"); }}>{t("detail.content.resetFilters")}</Button>
+              <Button onClick={onAdd}>{t("detail.content.searchCatalog")}</Button>
             </>
           }
         >
-          Kein Inhalt passt zu „{search.trim() || (kind !== "all" ? KINDS[kind] : "")}“.
+          {t("detail.content.noMatch", { filter: search.trim() || (kind !== "all" ? t(KINDS_KEYS[kind]) : "") })}
         </Empty>
       ) : mode === "grid" ? (
         <List variant="tiles">{visible.map((e) => (e.type === "row" ? tile(e) : ghostRow(e)))}</List>
@@ -488,17 +518,17 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
             <>
               <span>
                 <Checkbox
-                  label="Alle auswählen"
+                  label={t("detail.content.selectAll")}
                   checked={pickedVisible > 0 && pickedVisible === visibleLive.length}
                   indeterminate={pickedVisible > 0 && pickedVisible < visibleLive.length}
                   onChange={(v) => setPicked((p) => { const n = new Set(p); visibleLive.forEach((r) => (v ? n.add(r.mod.id) : n.delete(r.mod.id))); return n; })}
                 />
               </span>
               <span />
-              <Cell>Name</Cell>
-              {hasWarns && <Cell>Hinweise</Cell>}
-              <Cell align="end">Update</Cell>
-              <Cell align="end">An</Cell>
+              <Cell>{t("detail.content.nameColumn")}</Cell>
+              {hasWarns && <Cell>{t("detail.content.warningsColumn")}</Cell>}
+              <Cell align="end">{t("detail.content.updateColumn")}</Cell>
+              <Cell align="end">{t("detail.content.onColumn")}</Cell>
               <span />
             </>
           }
@@ -507,7 +537,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
         </List>
       )}
 
-      {instance.mods.some((m) => m.kind === "resourcepack") && <Hint icon="info" className="mt-2">{RP_HINT}</Hint>}
+      {instance.mods.some((m) => m.kind === "resourcepack") && <Hint icon="info" className="mt-2">{t(RP_HINT_KEY)}</Hint>}
     </div>
   );
 }

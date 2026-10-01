@@ -5,6 +5,7 @@ import {
 } from "@/ui";
 import { QueryList } from "@/components/QueryList";
 import { useRemoveServer, useSaveServer, useServers } from "@/hooks/useWorlds";
+import { useI18n } from "@/i18n";
 import type { Instance, Server } from "@/lib/types";
 import { GuardedButton, type SectionProps } from "./guards";
 
@@ -12,6 +13,7 @@ const NEW_SERVER: Server = { name: "", address: "", icon: null, acceptTextures: 
 
 /** Serverliste der Instanz (`servers.dat`): hineinspielen, hinzufügen, bearbeiten, entfernen. */
 export function ServersSection({ instance, busy, onPlay }: SectionProps) {
+  const { t } = useI18n();
   const servers = useServers(instance.id);
   const remove = useRemoveServer(instance.id);
   // Server im Dialog; `index` null = neu.
@@ -19,42 +21,42 @@ export function ServersSection({ instance, busy, onPlay }: SectionProps) {
   const [removing, setRemoving] = useState<{ index: number; server: Server } | null>(null);
   const addButton = (
     <GuardedButton size="s" icon="plus" blocked={busy} onClick={() => setEditing({ index: null, server: NEW_SERVER })}>
-      Hinzufügen
+      {t("common.add")}
     </GuardedButton>
   );
 
   const menuFor = (server: Server, index: number): MenuEntry[] => [
-    { id: "edit", text: "Bearbeiten…", icon: "file", disabled: !!busy, onSelect: () => setEditing({ index, server }) },
+    { id: "edit", text: t("detail.servers.editMenu"), icon: "file", disabled: !!busy, onSelect: () => setEditing({ index, server }) },
     "-",
-    { id: "rm", text: "Entfernen…", icon: "trash", bad: true, disabled: !!busy, onSelect: () => setRemoving({ index, server }) },
+    { id: "rm", text: t("detail.servers.removeMenu"), icon: "trash", bad: true, disabled: !!busy, onSelect: () => setRemoving({ index, server }) },
   ];
 
   return (
     <section className="mt-8" aria-labelledby="servers-h">
-      <SectionHeader id="servers-h" title="Server" actions={addButton} />
+      <SectionHeader id="servers-h" title={t("common.server")} actions={addButton} />
       <div className="mt-3">
         <QueryList
           query={servers}
-          error="Die Serverliste konnte nicht geladen werden"
+          error={t("detail.servers.loadError")}
           empty={
-            <Empty ill={<Glyph name="compass" pal="copper" box={64} />} title="Noch keine Server" actions={addButton}>
-              Füge einen Server hinzu, dann landest du mit einem Klick direkt dort.
+            <Empty ill={<Glyph name="compass" pal="copper" box={64} />} title={t("detail.servers.emptyTitle")} actions={addButton}>
+              {t("detail.servers.emptyHint")}
             </Empty>
           }
         >
           {(list) => (
-            <List variant="worlds" divided aria-label="Server">
+            <List variant="worlds" divided aria-label={t("common.server")}>
               {list.map((server, index) => (
                 // Die Serverliste darf denselben Server mehrmals enthalten; die Stelle ist der Schlüssel.
                 <ListRow key={index} menu={menuFor(server, index)}>
                   <ProjectIcon url={server.icon} seed={server.address} />
                   <RowTitle title={server.name || server.address} sub={server.address} />
                   <Cell flex align="end">
-                    <GuardedButton size="s" icon="play" blocked={busy} aria-label={`Spielen: ${server.name}`} onClick={() => onPlay({ type: "server", address: server.address })}>
-                      Spielen
+                    <GuardedButton size="s" icon="play" blocked={busy} aria-label={t("detail.servers.playAria", { name: server.name })} onClick={() => onPlay({ type: "server", address: server.address })}>
+                      {t("common.play")}
                     </GuardedButton>
                   </Cell>
-                  <Menu items={menuFor(server, index)} trigger={<IconButton size="s" icon="more" tip={false} label={`Mehr zu ${server.name}`} />} />
+                  <Menu items={menuFor(server, index)} trigger={<IconButton size="s" icon="more" tip={false} label={t("detail.servers.moreAbout", { name: server.name })} />} />
                 </ListRow>
               ))}
             </List>
@@ -65,9 +67,9 @@ export function ServersSection({ instance, busy, onPlay }: SectionProps) {
       <ConfirmDialog
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
-        title={`„${removing?.server.name ?? ""}“ entfernen?`}
-        text="Der Server verschwindet aus der Serverliste im Spiel."
-        confirmLabel="Entfernen"
+        title={t("detail.servers.removeTitle", { name: removing?.server.name ?? "" })}
+        text={t("detail.servers.removeText")}
+        confirmLabel={t("common.remove")}
         pending={remove.isPending}
         onConfirm={() => removing && remove.mutate(removing, { onSuccess: () => setRemoving(null) })}
       />
@@ -78,13 +80,14 @@ export function ServersSection({ instance, busy, onPlay }: SectionProps) {
 type TexturePolicy = "prompt" | "accept" | "reject";
 
 /** Ressourcenpakete des Servers, wie im Spiel unter „Server bearbeiten“; `accept` ist der Wert von `acceptTextures`. */
-const TEXTURE_POLICIES: { value: TexturePolicy; label: string; accept: boolean | null }[] = [
-  { value: "prompt", label: "Nachfragen", accept: null },
-  { value: "accept", label: "Annehmen", accept: true },
-  { value: "reject", label: "Ablehnen", accept: false },
+const TEXTURE_POLICIES: { value: TexturePolicy; accept: boolean | null }[] = [
+  { value: "prompt", accept: null },
+  { value: "accept", accept: true },
+  { value: "reject", accept: false },
 ];
 
 function ServerDialog({ instance, index, server, onClose }: { instance: Instance; index: number | null; server: Server; onClose: () => void }) {
+  const { t } = useI18n();
   const [name, setName] = useState(server.name);
   const [address, setAddress] = useState(server.address);
   const [policy, setPolicy] = useState(TEXTURE_POLICIES.find((p) => p.accept === server.acceptTextures)?.value ?? "prompt");
@@ -101,19 +104,29 @@ function ServerDialog({ instance, index, server, onClose }: { instance: Instance
     <Dialog
       open
       onOpenChange={(o) => !o && onClose()}
-      title={index == null ? "Server hinzufügen" : "Server bearbeiten"}
+      title={index == null ? t("detail.servers.addTitle") : t("detail.servers.editTitle")}
       width={480}
-      footer={<DialogActions cancel="Abbrechen" confirm={{ label: save.isPending ? "Speichert" : "Speichern", width: 130, form: "server-form", disabled: !ready || save.isPending }} />}
+      footer={<DialogActions cancel={t("common.cancel")} confirm={{ label: save.isPending ? t("detail.servers.saving") : t("common.save"), width: 130, form: "server-form", disabled: !ready || save.isPending }} />}
     >
       <form id="server-form" onSubmit={submit}>
-        <Field label="Name">
+        <Field label={t("detail.servers.nameLabel")}>
           <TextField value={name} onChange={(e) => setName(e.target.value)} maxLength={64} autoFocus />
         </Field>
-        <Field label="Adresse" help="Zum Beispiel play.example.net oder play.example.net:25565">
+        <Field label={t("detail.servers.addressLabel")} help={t("detail.servers.addressHelp")}>
           <TextField value={address} onChange={(e) => setAddress(e.target.value)} maxLength={255} spellCheck={false} />
         </Field>
-        <Field label="Ressourcenpakete des Servers" group>
-          <Segmented size="s" label="Ressourcenpakete des Servers" value={policy} onChange={setPolicy} items={TEXTURE_POLICIES} />
+        <Field label={t("detail.servers.texturePolicyLabel")} group>
+          <Segmented
+            size="s"
+            label={t("detail.servers.texturePolicyLabel")}
+            value={policy}
+            onChange={setPolicy}
+            items={[
+              { value: "prompt", label: t("detail.servers.textures.ask") },
+              { value: "accept", label: t("detail.servers.textures.allow") },
+              { value: "reject", label: t("detail.servers.textures.reject") },
+            ]}
+          />
         </Field>
       </form>
     </Dialog>

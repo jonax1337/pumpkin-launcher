@@ -16,14 +16,23 @@ import { api } from "@/lib/api";
 import { formatDateTime, formatSize, relativeTime } from "@/lib/format";
 import { progressShare } from "@/lib/modrinth";
 import { toastError } from "@/lib/toast";
-import { GAME_MODE_LABELS, type Instance, type QuickPlay, type World, type WorldBackup } from "@/lib/types";
+import { t, useI18n } from "@/i18n";
+import type { Instance, QuickPlay, World, WorldBackup } from "@/lib/types";
 import { DropHint, rejectedFileToast } from "./dropFiles";
 import { GuardedButton, useBusyReason, type SectionProps } from "./guards";
 import { ServersSection } from "./ServersSection";
 
+/** Spielart einer Welt als Übersetzungsschlüssel; der Text kommt aus dem Wörterbuch. */
+const GAME_MODE_KEYS: Record<NonNullable<World["gameMode"]>, string> = {
+  survival: "detail.worlds.gameMode.survival",
+  creative: "detail.worlds.gameMode.creative",
+  adventure: "detail.worlds.gameMode.adventure",
+  spectator: "detail.worlds.gameMode.spectator",
+};
+
 /** „Hardcore · 1.21.4 · 182 MB · vor 2 Stunden“ */
 const worldLine = (w: World) =>
-  [w.hardcore ? "Hardcore" : w.gameMode && GAME_MODE_LABELS[w.gameMode], w.version, formatSize(w.sizeBytes), relativeTime(w.lastPlayed)].filter(Boolean).join(" · ");
+  [w.hardcore ? "Hardcore" : w.gameMode && t(GAME_MODE_KEYS[w.gameMode]), w.version, formatSize(w.sizeBytes), relativeTime(w.lastPlayed)].filter(Boolean).join(" · ");
 
 /** Welten und Server einer Instanz: direkt hineinspielen, Welten sichern und wiederherstellen, Serverliste pflegen. */
 export function WorldsTab({ instance, onLaunched }: { instance: Instance; onLaunched: () => void }) {
@@ -39,6 +48,7 @@ export function WorldsTab({ instance, onLaunched }: { instance: Instance; onLaun
 }
 
 function WorldsSection({ instance, busy, onPlay }: SectionProps) {
+  const { t } = useI18n();
   const worlds = useWorlds(instance.id);
   const startsIntoWorlds = useWorldQuickPlay(instance);
   const { backup, remove } = useWorldJobs(instance);
@@ -48,32 +58,32 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
   const [showBackups, setShowBackups] = useState<{ world: string | null } | null>(null);
   // Datenpakete einer Welt: erst die Liste, `search` = stattdessen der Katalog im Seitenpanel.
   const [packs, setPacks] = useState<{ world: World; search: boolean } | null>(null);
-  const playBlocked = busy ?? (startsIntoWorlds === false ? `Minecraft ${instance.minecraftVersion} kann nicht direkt in eine Welt starten, das geht erst ab 1.20.` : null);
+  const playBlocked = busy ?? (startsIntoWorlds === false ? t("detail.worlds.quickPlayUnsupported", { version: instance.minecraftVersion }) : null);
 
   const menuFor = (w: World): MenuEntry[] => [
-    { id: "dir", text: "Ordner öffnen", icon: "folder", onSelect: () => void api.openPath(w.path).catch(toastError) },
-    { id: "backup", text: "Sichern", icon: "save", disabled: !!busy, onSelect: () => backup.mutate(w) },
-    { id: "backups", text: "Sicherungen…", icon: "clock", onSelect: () => setShowBackups({ world: w.id }) },
-    { id: "packs", text: "Datenpakete…", icon: "box", onSelect: () => setPacks({ world: w, search: false }) },
+    { id: "dir", text: t("detail.worlds.openFolderMenu"), icon: "folder", onSelect: () => void api.openPath(w.path).catch(toastError) },
+    { id: "backup", text: t("detail.worlds.backupNow"), icon: "save", disabled: !!busy, onSelect: () => backup.mutate(w) },
+    { id: "backups", text: t("detail.worlds.backupsMenu"), icon: "clock", onSelect: () => setShowBackups({ world: w.id }) },
+    { id: "packs", text: t("detail.worlds.datapacksMenu"), icon: "box", onSelect: () => setPacks({ world: w, search: false }) },
     "-",
-    { id: "del", text: "Löschen…", icon: "trash", bad: true, disabled: !!busy, onSelect: () => setRemoving(w) },
+    { id: "del", text: t("detail.worlds.deleteMenu"), icon: "trash", bad: true, disabled: !!busy, onSelect: () => setRemoving(w) },
   ];
 
   return (
     <section aria-labelledby="worlds-h">
       <SectionHeader
         id="worlds-h"
-        title="Welten"
-        actions={<Button variant="ghost" size="s" icon="clock" bleed="end" onClick={() => setShowBackups({ world: null })}>Sicherungen</Button>}
+        title={t("common.worlds")}
+        actions={<Button variant="ghost" size="s" icon="clock" bleed="end" onClick={() => setShowBackups({ world: null })}>{t("detail.worlds.allBackups")}</Button>}
       />
       <div className="mt-3">
         <QueryList
           query={worlds}
-          error="Die Welten konnten nicht geladen werden"
-          empty={<Empty ill={<Glyph name="mountain" pal="teal" box={64} />} title="Noch keine Welten">Leg im Spiel eine Welt an, dann startest du sie hier mit einem Klick.</Empty>}
+          error={t("detail.worlds.loadError")}
+          empty={<Empty ill={<Glyph name="mountain" pal="teal" box={64} />} title={t("detail.worlds.emptyTitle")}>{t("detail.worlds.emptyHint")}</Empty>}
         >
           {(list) => (
-            <List variant="worlds" divided aria-label="Welten">
+            <List variant="worlds" divided aria-label={t("common.worlds")}>
               {list.map((w) => (
                 <ListRow key={w.id} menu={menuFor(w)}>
                   <ProjectIcon url={w.icon} seed={w.id} />
@@ -81,14 +91,14 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
                   <RowTitle title={w.name} aside={w.name === w.id ? undefined : w.id} sub={worldLine(w)} />
                   <Cell flex align="end">
                     {target === worldTarget(instance.id, w.id) ? (
-                      <JobProgress label="Wird gesichert" p={progressShare(progress)} width={120} />
+                      <JobProgress label={t("detail.worlds.backingUp")} p={progressShare(progress)} width={120} />
                     ) : (
-                      <GuardedButton size="s" icon="play" blocked={playBlocked} aria-label={`Spielen: ${w.name}`} onClick={() => onPlay({ type: "world", id: w.id })}>
-                        Spielen
+                      <GuardedButton size="s" icon="play" blocked={playBlocked} aria-label={t("detail.worlds.playAria", { name: w.name })} onClick={() => onPlay({ type: "world", id: w.id })}>
+                        {t("common.play")}
                       </GuardedButton>
                     )}
                   </Cell>
-                  <Menu items={menuFor(w)} trigger={<IconButton size="s" icon="more" tip={false} label={`Mehr zu ${w.name}`} />} />
+                  <Menu items={menuFor(w)} trigger={<IconButton size="s" icon="more" tip={false} label={t("detail.worlds.moreAbout", { name: w.name })} />} />
                 </ListRow>
               ))}
             </List>
@@ -98,8 +108,8 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
       <ConfirmDialog
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
-        title={`„${removing?.name ?? ""}“ löschen?`}
-        text="Vorher legt Pumpkin Launcher eine Sicherung an. Unter „Sicherungen“ holst du die Welt zurück, solange es die Instanz gibt."
+        title={t("detail.worlds.deleteTitle", { name: removing?.name ?? "" })}
+        text={t("detail.worlds.deleteText")}
         onConfirm={() => {
           if (removing) remove.mutate(removing);
           setRemoving(null);
@@ -120,12 +130,14 @@ const isZip = (path: string) => /\.zip$/i.test(path);
 
 /** Was `level.dat` über ein Datenpaket sagt; schalten kann es nur das Spiel. */
 function PackState({ enabled }: { enabled: boolean | null }) {
-  if (enabled == null) return <Chip size="s">Noch nicht geladen</Chip>;
-  return <Chip size="s" dot tone={enabled ? "run" : "neutral"}>{enabled ? "Aktiv" : "Abgeschaltet"}</Chip>;
+  const { t } = useI18n();
+  if (enabled == null) return <Chip size="s">{t("detail.worlds.packNotLoaded")}</Chip>;
+  return <Chip size="s" dot tone={enabled ? "run" : "neutral"}>{enabled ? t("detail.worlds.packActive") : t("detail.worlds.packOff")}</Chip>;
 }
 
 /** Datenpakete einer Welt: eigene Zips (Auswahl oder aufs Fenster ziehen), Katalog über `onSearch`, Papierkorb. */
 function DatapacksDialog({ instance, world, busy, onSearch, onClose }: { instance: Instance; world: World; busy: string | null; onSearch: () => void; onClose: () => void }) {
+  const { t } = useI18n();
   const packs = useDatapacks(instance.id, world.id);
   const add = useAddDatapacks(instance.id, world.id);
   const remove = useRemoveDatapack(instance.id, world.id);
@@ -134,39 +146,39 @@ function DatapacksDialog({ instance, world, busy, onSearch, onClose }: { instanc
   function take(paths: string[]) {
     if (busy) return void toast.error(busy);
     const other = paths.find((p) => !isZip(p));
-    if (other) rejectedFileToast(other, "Datenpakete sind .zip-Dateien.");
+    if (other) rejectedFileToast(other, t("detail.worlds.packsAllowed"));
     const zips = paths.filter(isZip);
     if (zips.length) add.mutate(zips);
   }
 
   async function pick() {
-    const picked = await api.pickPaths({ multiple: true, filters: [{ name: "Datenpakete", extensions: ["zip"] }] });
+    const picked = await api.pickPaths({ multiple: true, filters: [{ name: t("detail.worlds.packFilter"), extensions: ["zip"] }] });
     if (picked.length) take(picked);
   }
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title="Datenpakete" sub={world.name} width={560} footer={<DialogActions cancel="Schließen" />}>
+    <Dialog open onOpenChange={(o) => !o && onClose()} title={t("detail.worlds.packsTitle")} sub={world.name} width={560} footer={<DialogActions cancel={t("common.close")} />}>
       <Actions className="mb-3">
         {/* Eigene Dateien gibt es nur in der App: der Browser liefert keine Pfade. */}
         {!api.isMock && (
           <GuardedButton size="s" icon="ul" blocked={busy} disabled={add.isPending} onClick={() => void pick().catch(toastError)}>
-            Datei hinzufügen…
+            {t("detail.worlds.addFile")}
           </GuardedButton>
         )}
-        <GuardedButton size="s" icon="search" blocked={busy} onClick={onSearch}>Auf Modrinth suchen</GuardedButton>
+        <GuardedButton size="s" icon="search" blocked={busy} onClick={onSearch}>{t("detail.worlds.searchModrinth")}</GuardedButton>
       </Actions>
       {dragging ? (
         <div className="drop over" aria-hidden>
-          <DropHint>Datenpakete (.zip)</DropHint>
+          <DropHint>{t("detail.worlds.packDropHint")}</DropHint>
         </div>
       ) : (
         <QueryList
           query={packs}
-          error="Die Datenpakete konnten nicht geladen werden"
-          empty={<Empty size="pane" ill="box" title="Noch keine Datenpakete">Füge .zip-Dateien hinzu oder such auf Modrinth.</Empty>}
+          error={t("detail.worlds.packsLoadError")}
+          empty={<Empty size="pane" ill="box" title={t("detail.worlds.packsEmptyTitle")}>{t("detail.worlds.packsEmptyHint")}</Empty>}
         >
           {(list) => (
-            <List variant="versions" aria-label="Datenpakete">
+            <List variant="versions" aria-label={t("detail.worlds.packsListAria")}>
               {list.map((pack) => (
                 <ListRow key={pack.id}>
                   <RowTitle title={pack.name} sub={pack.description} />
@@ -175,8 +187,8 @@ function DatapacksDialog({ instance, world, busy, onSearch, onClose }: { instanc
                     <IconButton
                       size="s"
                       icon="trash"
-                      label={`${pack.name} in den Papierkorb legen`}
-                      tip="In den Papierkorb"
+                      label={t("detail.worlds.packTrashAria", { name: pack.name })}
+                      tip={t("detail.worlds.toTrash")}
                       disabled={!!busy || remove.isPending}
                       onClick={() => remove.mutate(pack)}
                     />
@@ -187,26 +199,27 @@ function DatapacksDialog({ instance, world, busy, onSearch, onClose }: { instanc
           )}
         </QueryList>
       )}
-      <Hint className="mt-3">Ob ein Paket aktiv ist, steuert das Spiel (Befehl /datapack). Neue Pakete nimmt es beim nächsten Öffnen der Welt dazu.</Hint>
+      <Hint className="mt-3">{t("detail.worlds.packActiveHint")}</Hint>
     </Dialog>
   );
 }
 
 /** Sicherungen einer Welt (`world`) oder aller Welten: wiederherstellen (immer als neue Welt) oder löschen. */
 function BackupsDialog({ instance, world, busy, onClose }: { instance: Instance; world: string | null; busy: string | null; onClose: () => void }) {
+  const { t } = useI18n();
   const backups = useWorldBackups(instance.id, world);
   const { restore } = useWorldJobs(instance);
   const remove = useDeleteBackup(instance.id);
   const [removing, setRemoving] = useState<WorldBackup | null>(null);
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title="Sicherungen" sub={world ?? instance.name} width={560} footer={<DialogActions cancel="Schließen" />}>
+    <Dialog open onOpenChange={(o) => !o && onClose()} title={t("detail.worlds.backupsTitle")} sub={world ?? instance.name} width={560} footer={<DialogActions cancel={t("common.close")} />}>
       <QueryList
         query={backups}
-        error="Die Sicherungen konnten nicht geladen werden"
-        empty={<Empty size="pane" ill="clock" title="Noch keine Sicherungen">Sichere eine Welt über ihr Menü. Beim Löschen legt Pumpkin Launcher selbst eine an.</Empty>}
+        error={t("detail.worlds.backupsLoadError")}
+        empty={<Empty size="pane" ill="clock" title={t("detail.worlds.backupsEmptyTitle")}>{t("detail.worlds.backupsEmptyHint")}</Empty>}
       >
         {(list) => (
-          <List variant="versions" aria-label="Sicherungen">
+          <List variant="versions" aria-label={t("detail.worlds.backupsListAria")}>
             {list.map((b) => (
               <ListRow key={b.id}>
                 {/* Für eine Welt zählt der Zeitpunkt; in der Liste aller Welten zuerst, welche es ist. */}
@@ -217,9 +230,9 @@ function BackupsDialog({ instance, world, busy, onClose }: { instance: Instance;
                 )}
                 <Actions gap={4}>
                   <GuardedButton size="s" icon="redo" blocked={busy} disabled={restore.isPending} onClick={() => restore.mutate(b)}>
-                    Wiederherstellen
+                    {t("detail.worlds.restoreAction")}
                   </GuardedButton>
-                  <IconButton size="s" icon="trash" label={`Sicherung vom ${formatDateTime(b.createdAt)} löschen`} tip="Löschen" onClick={() => setRemoving(b)} />
+                  <IconButton size="s" icon="trash" label={t("detail.worlds.backupDeleteAria", { date: formatDateTime(b.createdAt) })} tip={t("common.delete")} onClick={() => setRemoving(b)} />
                 </Actions>
               </ListRow>
             ))}
@@ -229,8 +242,8 @@ function BackupsDialog({ instance, world, busy, onClose }: { instance: Instance;
       <ConfirmDialog
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
-        title="Sicherung löschen?"
-        text={removing && `Die Sicherung von „${removing.world}“ vom ${formatDateTime(removing.createdAt)} ist danach weg.`}
+        title={t("detail.worlds.backupDeleteTitle")}
+        text={removing && t("detail.worlds.backupDeleteText", { world: removing.world, date: formatDateTime(removing.createdAt) })}
         pending={remove.isPending}
         onConfirm={() => removing && remove.mutate(removing, { onSuccess: () => setRemoving(null) })}
       />
