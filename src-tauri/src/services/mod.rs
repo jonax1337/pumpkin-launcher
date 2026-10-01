@@ -15,6 +15,7 @@ pub mod content;
 pub mod mojang;
 pub mod providers;
 pub mod rules;
+pub mod skins;
 pub mod store;
 pub mod templates;
 

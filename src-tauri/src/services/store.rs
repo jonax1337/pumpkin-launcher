@@ -6,7 +6,7 @@ use std::sync::{Mutex, MutexGuard};
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::error::{AppError, AppResult};
-use crate::models::{Instance, MsAccount, Template};
+use crate::models::{Instance, LibrarySkin, MsAccount, Template};
 
 pub trait Entity: Clone + Serialize + DeserializeOwned {
     const KIND: &'static str;
@@ -29,6 +29,13 @@ impl Entity for Template {
 
 impl Entity for MsAccount {
     const KIND: &'static str = "Konto";
+    fn id(&self) -> &str {
+        &self.id
+    }
+}
+
+impl Entity for LibrarySkin {
+    const KIND: &'static str = "Skin";
     fn id(&self) -> &str {
         &self.id
     }

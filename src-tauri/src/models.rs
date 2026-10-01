@@ -216,6 +216,36 @@ impl MsAccount {
     }
 }
 
+/// Spielermodell eines Skins: breite (Steve) oder schmale Arme (Alex). Die Minecraft-API schreibt es groß.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SkinVariant {
+    #[default]
+    #[serde(alias = "CLASSIC")]
+    Classic,
+    #[serde(alias = "SLIM")]
+    Slim,
+}
+
+impl SkinVariant {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Classic => "classic",
+            Self::Slim => "slim",
+        }
+    }
+}
+
+/// Skin in der lokalen Bibliothek (`skins.json`); die ID ist der SHA-1 der Datei `skins/<id>.png`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibrarySkin {
+    pub id: String,
+    pub name: String,
+    pub variant: SkinVariant,
+    pub added_at: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -237,6 +267,13 @@ mod tests {
         let keys: Vec<_> = json.as_object().unwrap().keys().map(String::as_str).collect();
         assert_eq!(keys, ["clientId", "id", "kind", "username"]);
         assert_eq!(serde_json::to_value(a.account()).unwrap()["kind"], "microsoft");
+    }
+
+    #[test]
+    fn skin_variant_reads_api_spelling() {
+        assert_eq!(serde_json::from_value::<SkinVariant>(serde_json::json!("SLIM")).unwrap(), SkinVariant::Slim);
+        assert_eq!(serde_json::from_value::<SkinVariant>(serde_json::json!("classic")).unwrap(), SkinVariant::Classic);
+        assert_eq!(serde_json::to_value(SkinVariant::Slim).unwrap(), "slim");
     }
 
     #[test]

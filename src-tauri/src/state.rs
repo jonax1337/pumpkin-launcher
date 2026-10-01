@@ -7,7 +7,7 @@ use std::sync::{Mutex, MutexGuard};
 use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, AppResult};
-use crate::models::{Instance, MsAccount, Template};
+use crate::models::{Instance, LibrarySkin, MsAccount, Template};
 use crate::services::auth::MsState;
 use crate::services::download::http_client;
 use crate::services::launch::Running;
@@ -21,6 +21,8 @@ pub struct AppState {
     pub templates: JsonStore<Template>,
     /// Microsoft-Konten (nur Metadaten, Tokens im Schlüsselbund bzw. in `ms`).
     pub accounts: JsonStore<MsAccount>,
+    /// Lokale Skin-Bibliothek; die PNG-Dateien liegen unter `skins/`.
+    pub skins: JsonStore<LibrarySkin>,
     pub ms: MsState,
     pub dirs: Dirs,
     pub http: reqwest::Client,
@@ -39,6 +41,7 @@ impl AppState {
             instances: JsonStore::open(data_dir.join("instances.json"))?,
             templates: JsonStore::open(data_dir.join("templates.json"))?,
             accounts: JsonStore::open(data_dir.join("accounts.json"))?,
+            skins: JsonStore::open(data_dir.join("skins.json"))?,
             ms: MsState::default(),
             dirs: Dirs::new(data_dir),
             http: http_client()?,
