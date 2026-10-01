@@ -230,11 +230,7 @@ fn loader_from(profile: &serde_json::Value) -> AppResult<(String, ModLoader, Opt
     if let Some(v) = &found.1 {
         identifier(v)?;
     }
-    match found.0 {
-        ModLoader::Forge => forge::check_supported(forge::Kind::Forge, &mc)?,
-        ModLoader::NeoForge => forge::check_supported(forge::Kind::NeoForge, &mc)?,
-        _ => {}
-    }
+    forge::check_loader(found.0, &mc)?;
     Ok((mc, found.0, found.1))
 }
 

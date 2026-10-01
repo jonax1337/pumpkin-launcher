@@ -749,11 +749,7 @@ fn manifest_loader(m: &ManifestMinecraft) -> AppResult<(ModLoader, Option<String
     };
     identifier(version)?;
     identifier(&m.version)?;
-    match loader {
-        ModLoader::Forge => forge::check_supported(forge::Kind::Forge, &m.version)?,
-        ModLoader::NeoForge => forge::check_supported(forge::Kind::NeoForge, &m.version)?,
-        _ => {}
-    }
+    forge::check_loader(loader, &m.version)?;
     Ok((loader, Some(version.to_string())))
 }
 

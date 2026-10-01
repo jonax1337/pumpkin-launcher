@@ -62,12 +62,6 @@ impl AppState {
         Ok(guard)
     }
 
-    /// Rechnet eine beendete Sitzung auf die Spielzeit der Instanz an.
-    pub fn add_playtime(&self, id: &str, secs: u64) -> AppResult<()> {
-        self.instances.modify(id, |i| i.playtime_secs = i.playtime_secs.saturating_add(secs))?;
-        Ok(())
-    }
-
     /// Führt `work` abbrechbar unter `key` aus; `cancel(key)` verwirft das Future (Aufräumen
     /// über `RemoveOnDrop`) und liefert `AppError::Cancelled`.
     pub async fn cancellable<T>(&self, key: &str, work: impl Future<Output = AppResult<T>>) -> AppResult<T> {
@@ -97,7 +91,6 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ModLoader, NewInstance};
 
     #[tokio::test]
     async fn cancel_stops_work_and_reports_cancelled() {
@@ -111,19 +104,6 @@ mod tests {
         assert_eq!(result.unwrap_err().to_string(), "Vorgang abgebrochen");
         assert!(state.cancels().is_empty());
         assert_eq!(state.cancellable("op", async { Ok(1) }).await.unwrap(), 1);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    #[test]
-    fn playtime_adds_up_per_session() {
-        let root = std::env::temp_dir().join(crate::models::new_id());
-        let state = AppState::load(&root).unwrap();
-        let new = NewInstance { name: "Zeit".into(), minecraft_version: "1.21.4".into(), loader: ModLoader::Vanilla, loader_version: None };
-        let id = state.instances.insert(Instance::from_new(new)).unwrap().id;
-        state.add_playtime(&id, 90).unwrap();
-        state.add_playtime(&id, 30).unwrap();
-        assert_eq!(state.instances.get(&id).unwrap().playtime_secs, 120);
-        assert!(state.add_playtime("weg", 1).is_err());
         std::fs::remove_dir_all(root).unwrap();
     }
 }

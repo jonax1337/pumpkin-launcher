@@ -13,6 +13,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::sync::CancellationToken;
 
+use super::data_url;
 use crate::error::{AppError, AppResult};
 use crate::models::{Account, AccountKind, MsAccount};
 use crate::state::AppState;
@@ -513,19 +514,17 @@ const FAVICON: &[u8] = include_bytes!("../../../branding/pumpkin-launcher/web/fa
 
 /// Die Seite, die der Browser nach dem Rücksprung zeigt (nur feste Texte, nichts aus der Anfrage).
 fn result_page(success: bool) -> String {
-    use base64::Engine;
-    let data = |mime: &str, bytes: &[u8]| format!("data:{mime};base64,{}", base64::engine::general_purpose::STANDARD.encode(bytes));
     let (buddy, class, title, text) = if success {
         (BUDDY_SUCCESS, "", "Angemeldet", "Du kannst dieses Fenster schließen und zu Pumpkin Launcher zurückkehren.")
     } else {
         (BUDDY_OOPS, "bad", "Das hat nicht geklappt", "Schließe dieses Fenster und versuch die Anmeldung in Pumpkin Launcher noch einmal.")
     };
     // Das Stylesheet zuletzt einsetzen: seine Zeichen sollen nicht von den übrigen Platzhaltern erfasst werden.
-    PAGE.replace("@FAVICON@", &data("image/svg+xml", FAVICON))
-        .replace("@F_BIG@", &data("font/woff2", FONT_BIG))
-        .replace("@F_HANKEN@", &data("font/woff2", FONT_HANKEN))
-        .replace("@BUDDY@", &data("image/svg+xml", buddy))
-        .replace("@WORDMARK@", &data("image/svg+xml", WORDMARK))
+    PAGE.replace("@FAVICON@", &data_url("image/svg+xml", FAVICON))
+        .replace("@F_BIG@", &data_url("font/woff2", FONT_BIG))
+        .replace("@F_HANKEN@", &data_url("font/woff2", FONT_HANKEN))
+        .replace("@BUDDY@", &data_url("image/svg+xml", buddy))
+        .replace("@WORDMARK@", &data_url("image/svg+xml", WORDMARK))
         .replace("@CLASS@", class)
         .replace("@TITLE@", title)
         .replace("@TEXT@", text)

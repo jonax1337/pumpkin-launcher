@@ -12,7 +12,7 @@ use std::{
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use super::{
-    add_zip_file, blocking, content, download::RemoveOnDrop, entries, free_name, modrinth::invalid, png_data_url,
+    add_zip_file, blocking, content, data_url, download::RemoveOnDrop, entries, free_name, modrinth::invalid,
     providers::zip_paths, servers, walk, write_zip_atomic, Dirs,
 };
 use crate::{
@@ -294,7 +294,7 @@ fn icon(path: &Path) -> Option<String> {
     if fs::metadata(path).ok()?.len() > ICON_LIMIT {
         return None;
     }
-    Some(png_data_url(&fs::read(path).ok()?))
+    Some(data_url("image/png", &fs::read(path).ok()?))
 }
 
 /// Belegter Platz eines Ordners, nur zur Anzeige: Unlesbares zählt nicht, Verknüpfungen werden nicht verfolgt.

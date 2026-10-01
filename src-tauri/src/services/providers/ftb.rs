@@ -157,11 +157,7 @@ fn supported(v: &VersionDoc) -> Option<Supported> {
             (loader, Some(t.version.clone()))
         }
     };
-    match loader {
-        ModLoader::Forge => forge::check_supported(forge::Kind::Forge, &mc).ok()?,
-        ModLoader::NeoForge => forge::check_supported(forge::Kind::NeoForge, &mc).ok()?,
-        _ => {}
-    }
+    forge::check_loader(loader, &mc).ok()?;
     Some(Supported { mc, loader, loader_version })
 }
 

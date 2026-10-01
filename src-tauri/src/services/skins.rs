@@ -7,7 +7,7 @@ use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::{auth::{self, MC_PROFILE}, modrinth::{self, invalid}, png_data_url, write_atomic, Dirs};
+use super::{auth::{self, MC_PROFILE}, data_url, modrinth::{self, invalid}, write_atomic, Dirs};
 use crate::error::AppResult;
 use crate::models::{now_ms, LibrarySkin, SkinVariant};
 use crate::services::download::sha1_hex;
@@ -244,7 +244,7 @@ fn remove_file(path: &Path) {
 pub fn texture(state: &AppState, id: &str) -> AppResult<String> {
     let skin = state.skins.get(id)?;
     let png = fs::read(file(&state.dirs, &skin.id))?;
-    Ok(png_data_url(&png))
+    Ok(data_url("image/png", &png))
 }
 
 #[cfg(test)]
