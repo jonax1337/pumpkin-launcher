@@ -7,7 +7,7 @@ import {
   Actions, Button, Checkbox, Choice, ConfirmDialog, Count, Dialog, DialogActions, Disclosure, Empty, ErrorBox, Field, Glyph, Hint, Icon, IconButton, Panel,
   ProjectIcon, RowTitle, SearchField, Segmented, Select, Skel, TabPanel, Tabs, TextField, type IconName,
 } from "@/ui";
-import { MemoryChooser } from "@/components/common";
+import { loaderLine, MemoryChooser } from "@/components/common";
 import { useInstallPack } from "@/components/ContentBrowser";
 import { ImportPane } from "@/components/LauncherImport";
 import { catalogKeys } from "@/hooks/queryKeys";
@@ -18,6 +18,7 @@ import { useForeignSelection, useImportInstances } from "@/hooks/useImport";
 import { useCreateInstance, useLoaderVersions, useVersions } from "@/hooks/useInstances";
 import { useDeleteTemplate, useTemplates } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
+import { TYPE_ONE_KEYS } from "@/lib/catalog";
 import { fileName, formatDate } from "@/lib/format";
 import { formatDownloads, isMrpack, MRPACK_EXT, progressLabel } from "@/lib/modrinth";
 import { discoverUrl, instanceUrl, readNewInstanceStart } from "@/lib/routes";
@@ -29,7 +30,7 @@ type Tab = "blank" | "pack" | "file" | "tpl" | "import";
 // Reiter des Dialogs; Beschriftungen als Schlüssel, übersetzt beim Rendern.
 const TABS: { value: Tab; label: string; icon: IconName }[] = [
   { value: "blank", label: "components.newInstance.tab.own", icon: "plus" },
-  { value: "pack", label: "components.catalog.one.modpack", icon: "box" },
+  { value: "pack", label: TYPE_ONE_KEYS.modpack, icon: "box" },
   { value: "file", label: "components.newInstance.tab.file", icon: "file" },
   { value: "tpl", label: "components.newInstance.tab.template", icon: "save" },
   { value: "import", label: "components.newInstance.tab.import", icon: "swap" },
@@ -118,7 +119,7 @@ function TemplatePane({ selected, onSelect }: { selected: string | null; onSelec
               className="min-w-0 flex-1"
               media={<Glyph name="chest" pal="sand" />}
               title={tpl.name}
-              sub={`${LOADER_LABELS[tpl.loader]} ${tpl.minecraftVersion} · ${t(tpl.modCount === 1 ? "components.template.entryCount.one" : "components.template.entryCount.other", { n: tpl.modCount })} · ${t("components.template.savedAt", { datum: formatDate(tpl.createdAt) })}`}
+              sub={`${loaderLine(tpl)} · ${t(tpl.modCount === 1 ? "components.template.entryCount.one" : "components.template.entryCount.other", { n: tpl.modCount })} · ${t("components.template.savedAt", { datum: formatDate(tpl.createdAt) })}`}
               selected={selected === tpl.id}
               onClick={() => onSelect(tpl)}
             />

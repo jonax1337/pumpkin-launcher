@@ -13,6 +13,7 @@ import {
   useAddDatapacks, useDatapacks, useDeleteBackup, useRemoveDatapack, useWorldBackups, useWorldJobs, useWorldQuickPlay, useWorlds, worldTarget,
 } from "@/hooks/useWorlds";
 import { api } from "@/lib/api";
+import { TYPE_LABEL_KEYS } from "@/lib/catalog";
 import { formatDateTime, formatSize, relativeTime } from "@/lib/format";
 import { progressShare } from "@/lib/modrinth";
 import { toastError } from "@/lib/toast";
@@ -152,12 +153,12 @@ function DatapacksDialog({ instance, world, busy, onSearch, onClose }: { instanc
   }
 
   async function pick() {
-    const picked = await api.pickPaths({ multiple: true, filters: [{ name: t("components.catalog.kind.datapack"), extensions: ["zip"] }] });
+    const picked = await api.pickPaths({ multiple: true, filters: [{ name: t(TYPE_LABEL_KEYS.datapack), extensions: ["zip"] }] });
     if (picked.length) take(picked);
   }
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title={t("components.catalog.kind.datapack")} sub={world.name} width={560} footer={<DialogActions cancel={t("common.close")} />}>
+    <Dialog open onOpenChange={(o) => !o && onClose()} title={t(TYPE_LABEL_KEYS.datapack)} sub={world.name} width={560} footer={<DialogActions cancel={t("common.close")} />}>
       <Actions className="mb-3">
         {/* Eigene Dateien gibt es nur in der App: der Browser liefert keine Pfade. */}
         {!api.isMock && (
@@ -178,7 +179,7 @@ function DatapacksDialog({ instance, world, busy, onSearch, onClose }: { instanc
           empty={<Empty size="pane" ill="box" title={t("detail.worlds.packsEmptyTitle")}>{t("detail.worlds.packsEmptyHint")}</Empty>}
         >
           {(list) => (
-            <List variant="versions" aria-label={t("components.catalog.kind.datapack")}>
+            <List variant="versions" aria-label={t(TYPE_LABEL_KEYS.datapack)}>
               {list.map((pack) => (
                 <ListRow key={pack.id}>
                   <RowTitle title={pack.name} sub={pack.description} />

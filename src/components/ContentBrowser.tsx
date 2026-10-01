@@ -14,12 +14,14 @@ import { useInstances } from "@/hooks/useInstances";
 import { worldsQuery } from "@/hooks/useWorlds";
 import { catalogKeys, worldKeys } from "@/hooks/queryKeys";
 import { api } from "@/lib/api";
+import { TYPE_LABEL_KEYS, TYPE_ONE_KEYS } from "@/lib/catalog";
 import { errorMessage } from "@/lib/errors";
 import { formatCount } from "@/lib/format";
 import {
   formatDownloads, installedKey, isPackVersionSupported, modLoadersFor, ownerKey, pickPackVersion, pickVersion, progressLabel, progressShare, progressShortLabel, projectKey, projectOf, SOURCES,
   type CatalogType, type ContentHit, type ContentProject, type ContentVersion, type SearchIndex, type Source,
 } from "@/lib/modrinth";
+import { loaderLine } from "@/components/common";
 import { Description } from "@/components/Description";
 import { openManualDownloads } from "@/components/ManualDownloads";
 import { instanceUrl, newInstanceUrl, type InstanceTab } from "@/lib/routes";
@@ -35,12 +37,8 @@ function lazyLabels(keys: Record<string, string>): Record<string, string> {
   return labels;
 }
 
-// Beschriftungen als Schlüssel; exportierte Records lesen lazily übersetzt, damit ein Sprachwechsel ohne Neuladen greift.
-const KIND_LABEL_KEYS: Record<ModKind, string> = { mod: "components.catalog.kind.mod", shader: "components.catalog.kind.shader", resourcepack: "components.catalog.kind.resourcepack" };
-export const TYPE_LABELS: Record<CatalogType, string> = lazyLabels({
-  modpack: "components.catalog.kind.modpack", ...KIND_LABEL_KEYS, datapack: "components.catalog.kind.datapack",
-});
-const TYPE_ONE_KEYS: Record<CatalogType, string> = { modpack: "components.catalog.one.modpack", mod: "components.catalog.one.mod", shader: "components.catalog.one.shader", resourcepack: "components.catalog.one.resourcepack", datapack: "components.catalog.one.datapack" };
+// Exportierte Records lesen lazily übersetzt, damit ein Sprachwechsel ohne Neuladen greift.
+export const TYPE_LABELS: Record<CatalogType, string> = lazyLabels(TYPE_LABEL_KEYS);
 
 /** Was in eine Instanz passt: Mods und Shader nur mit Mod-Loader, Ressourcenpakete immer. */
 export const kindsFor = (instance: Instance): ModKind[] =>
@@ -48,7 +46,7 @@ export const kindsFor = (instance: Instance): ModKind[] =>
 
 /** „Fabric 1.21.4“ für Mods, sonst nur die Minecraft-Version. */
 export const fitsLabel = (instance: Instance, type: CatalogType) =>
-  type === "mod" ? `${LOADER_LABELS[instance.loader]} ${instance.minecraftVersion}` : `Minecraft ${instance.minecraftVersion}`;
+  type === "mod" ? loaderLine(instance) : `Minecraft ${instance.minecraftVersion}`;
 
 // Für Quilt fragt das Backend Quilt- und Fabric-Mods an; Datenpakete führt Modrinth unter dem Loader „datapack“.
 const loaderFor = (instance: Instance, type: CatalogType) => (type === "mod" ? instance.loader : type === "datapack" ? "datapack" : null);

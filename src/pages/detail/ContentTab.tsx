@@ -10,24 +10,14 @@ import { useContentInstall, useContentState, useProjects, withTarget } from "@/h
 import { instanceKeys } from "@/hooks/queryKeys";
 import { useUpdateMods } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
-import { openPage } from "@/lib/links";
+import { KIND_LABEL_KEYS, TYPE_ONE_KEYS } from "@/lib/catalog";
+import { openPage, projectUrl } from "@/lib/links";
 import { ownerKey, projectOf, removeWithDependencies, undoRemove, type ModUpdate } from "@/lib/modrinth";
 import { useI18n } from "@/i18n";
 import type { Instance, Mod, ModKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useLocalFiles } from "./LocalFiles";
 
-/** Art eines Inhalts im Singular bzw. Plural – Schlüssel statt Texte, übersetzt erst bei der Ausgabe. */
-const KIND1_KEYS: Record<ModKind, string> = {
-  mod: "components.catalog.one.mod",
-  shader: "components.catalog.one.shader",
-  resourcepack: "components.catalog.one.resourcepack",
-};
-const KINDS_KEYS: Record<ModKind, string> = {
-  mod: "components.catalog.kind.mod",
-  shader: "components.catalog.kind.shader",
-  resourcepack: "components.catalog.kind.resourcepack",
-};
 /** Hinweis auf das Umschalten von Ressourcenpaketen im Spiel. */
 const RP_HINT_KEY = "detail.content.resourcePackHint";
 
@@ -289,14 +279,13 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
 
   const menuFor = (m: Mod): MenuEntry[] => {
     const up = updateFor.get(m.id);
-    const pid = projectOf(m);
+    const web = projectUrl(m.source);
     const own = m.source.type === "local";
     return [
       ...(up ? [{ id: "up", text: t("detail.content.updateVersionTo", { version: up.versionNumber }), icon: "up" as const, disabled: !!active, onSelect: () => runUpdates([m.id]) }] : []),
       ...(own ? [{ id: "identify", text: t("detail.content.matchOnModrinth"), icon: "search" as const, disabled: !!active, onSelect: () => local.identify(m) }] : []),
-      ...(pid ? [{ id: "web", text: t("detail.content.viewOnModrinth"), icon: "ext" as const, onSelect: () => openPage(`https://modrinth.com/project/${pid}`) }] : []),
-      ...(m.source.type === "curseforge" ? [{ id: "web", text: t("detail.content.viewOnCurseForge"), icon: "ext" as const, onSelect: () => openPage(`https://www.curseforge.com/projects/${(m.source as { projectId: number }).projectId}`) }] : []),
-      ...(up || own || pid || m.source.type === "curseforge" ? ["-" as const] : []),
+      ...(web ? [{ id: "web", text: t(m.source.type === "curseforge" ? "detail.content.viewOnCurseForge" : "detail.content.viewOnModrinth"), icon: "ext" as const, onSelect: () => openPage(web) }] : []),
+      ...(up || own || web ? ["-" as const] : []),
       { id: "rm", text: t("common.remove"), icon: "trash", bad: true, onSelect: () => remove([m.id]) },
     ];
   };
@@ -307,7 +296,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
       <>
         <div className="tn">{title(m)}</div>
         <div className="tv">
-          {t(KIND1_KEYS[m.kind])} · {t("common.version")} {m.version}
+          {t(TYPE_ONE_KEYS[m.kind])} · {t("common.version")} {m.version}
           {m.enabled ? "" : ` · ${t("detail.content.turnedOffInline")}`}
         </div>
         {r.owners.length > 0 && <div className="tr">{t("detail.content.requiredBy", { names: r.owners.join(", ") })}</div>}
@@ -332,7 +321,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
   const srDesc = (m: Mod, text: string) => text && <span id={descId(m)} className="sr">{text}</span>;
 
   const subOf = (r: Row) =>
-    r.owners.length ? `${t("detail.content.requiredBy", { names: r.owners.join(", ") })} · ${r.mod.version}` : `${t(KIND1_KEYS[r.mod.kind])} · ${r.mod.version}`;
+    r.owners.length ? `${t("detail.content.requiredBy", { names: r.owners.join(", ") })} · ${r.mod.version}` : `${t(TYPE_ONE_KEYS[r.mod.kind])} · ${r.mod.version}`;
 
   /** Update je Inhalt: Fortschritt beim Aktualisieren, sonst Knopf mit fester Breite (Version mit Auslassung, voller Text im Tooltip). */
   const updCell = (m: Mod, tile = false) => {
@@ -463,9 +452,9 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
           onChange={setKind}
           items={[
             { value: "all", label: t("common.all"), count: counts.all },
-            { value: "mod", label: kindLabel(t("components.catalog.kind.mod"), counts.mod), count: counts.mod },
-            { value: "shader", label: kindLabel(t("components.catalog.kind.shader"), counts.shader), count: counts.shader },
-            { value: "resourcepack", label: kindLabel(t("components.catalog.kind.resourcepack"), counts.resourcepack), count: counts.resourcepack },
+            { value: "mod", label: kindLabel(t(KIND_LABEL_KEYS.mod), counts.mod), count: counts.mod },
+            { value: "shader", label: kindLabel(t(KIND_LABEL_KEYS.shader), counts.shader), count: counts.shader },
+            { value: "resourcepack", label: kindLabel(t(KIND_LABEL_KEYS.resourcepack), counts.resourcepack), count: counts.resourcepack },
           ]}
         />
         <Spacer />
@@ -511,7 +500,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
             </>
           }
         >
-          {t("detail.content.noMatch", { filter: search.trim() || (kind !== "all" ? t(KINDS_KEYS[kind]) : "") })}
+          {t("detail.content.noMatch", { filter: search.trim() || (kind !== "all" ? t(KIND_LABEL_KEYS[kind]) : "") })}
         </Empty>
       ) : mode === "grid" ? (
         <List variant="tiles">{visible.map((e) => (e.type === "row" ? tile(e) : ghostRow(e)))}</List>

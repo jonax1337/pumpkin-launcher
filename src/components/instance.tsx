@@ -10,6 +10,7 @@ import { useContentInstall, useContentState, withTarget } from "@/hooks/useConte
 import { askStop, useDeleteInstance, useExportEntries, useGroups, usePlay, useSetGroup } from "@/hooks/useInstances";
 import { useSaveTemplate } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
+import { KIND_LABEL_KEYS } from "@/lib/catalog";
 import { instanceUrl } from "@/lib/routes";
 import { toastError } from "@/lib/toast";
 import type { Instance } from "@/lib/types";
@@ -168,9 +169,9 @@ const EXPORT_DEFAULTS = ["config", "mods", "resourcepacks", "shaderpacks", "opti
 /** Lesbare Namen bekannter Einträge im Spielordner. */
 const ENTRY_LABELS: Record<string, string> = {
   config: "components.export.entry.config",
-  mods: "components.catalog.kind.mod",
-  resourcepacks: "components.catalog.kind.resourcepack",
-  shaderpacks: "components.catalog.kind.shader",
+  mods: KIND_LABEL_KEYS.mod,
+  resourcepacks: KIND_LABEL_KEYS.resourcepack,
+  shaderpacks: KIND_LABEL_KEYS.shader,
   "options.txt": "components.export.entry.options",
   saves: "common.worlds",
   screenshots: "components.export.entry.screenshots",

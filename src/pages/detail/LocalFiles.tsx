@@ -5,6 +5,7 @@ import { Dialog, DialogActions, Field, Segmented } from "@/ui";
 import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { api } from "@/lib/api";
+import { TYPE_ONE_KEYS } from "@/lib/catalog";
 import { fileName } from "@/lib/format";
 import { isMrpack } from "@/lib/modrinth";
 import { newInstanceUrl } from "@/lib/routes";
@@ -156,8 +157,8 @@ function KindDialog({ paths, onClose, onConfirm }: { paths: string[]; onClose: (
             value={kinds[i]}
             onChange={(k) => setKinds((ks) => ks.map((x, j) => (j === i ? k : x)))}
             items={[
-              { value: "resourcepack", label: t("components.catalog.one.resourcepack") },
-              { value: "shader", label: t("components.catalog.one.shader") },
+              { value: "resourcepack", label: t(TYPE_ONE_KEYS.resourcepack) },
+              { value: "shader", label: t(TYPE_ONE_KEYS.shader) },
             ]}
           />
         </Field>
