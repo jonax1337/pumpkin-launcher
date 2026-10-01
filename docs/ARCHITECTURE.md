@@ -43,8 +43,12 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `services/providers/` | Weitere Kataloge in Modrinth-Formen: `ftb.rs` (öffentliche FTB-API, installierbar, Downloads nur von festen Hosts mit Prüfsumme), `technic.rs` (Suche, Details und Installation: Pack-Zip des Autors über `net.rs` = nur HTTPS und öffentliche Adressen, Loader aus `bin/version.json`), `curseforge.rs` (CurseForge über den Cloudflare Worker in `proxy/`, der den API-Schlüssel hält: Suche, Mods mit Abhängigkeiten, Modpacks per `manifest.json`; der Launcher selbst kennt keinen Schlüssel, die Dateien kommen direkt vom CDN; nur über die Webseite erlaubte Dateien werden nicht umgangen, sondern vom Nutzer geladen und aus dem Downloads-Ordner übernommen). Pack-Zips werden von der Platte entpackt (`content::Blob::Zip`), nicht im Speicher gehalten |
 | `services/content.rs` | Sichere Modinstallation und `.mrpack`-Import in neue Instanzen; `plan_pack`/`import_plan` für Packs von Anbietern |
 | `content_commands.rs` | Modrinth-IPC und korrelierte `content-progress`-Events |
+| `support_commands.rs` | Fehlerberichte: Log teilen, Debug-Info |
 | `services/launch.rs` | Classpath, JVM-/Game-Args mit `${…}`-Ersetzung, Prozessstart, Log-Streaming |
 | `services/gamelog.rs` | log4j-XML auf stdout (Mojangs Logging-Config) → lesbare Zeilen |
+| `services/logshare.rs` | Log teilen über mclo.gs (`POST https://api.mclo.gs/1/log`, JSON `{ content, source }`): liest höchstens die letzten 5 MiB, entfernt lokal Zugangstokens (`--accessToken`, `accessToken=`, JWTs), den Benutzernamen in `C:\Users\<name>\` und E-Mail-Adressen, behält die letzten 24.999 Zeilen plus Kürzungshinweis (Grenzen von mclo.gs: 10 MiB, 25.000 Zeilen) |
+| `services/debuginfo.rs` | Debug-Info als englischer Klartext fürs GitHub-Issue: Launcher-Version, Windows-Version und Architektur, RAM, freier Platz im Datenordner, WebView2-Version, je Instanz (nummeriert, ohne Namen) MC-Version, Loader, aktive Mods, RAM, installiert/läuft |
+| `services/system.rs` | Win32-Abfragen: Arbeitsspeicher (`GlobalMemoryStatusEx`), freier Platz (`GetDiskFreeSpaceExW`), Windows-Version (`RtlGetVersion`) |
 
 ### Persistenz
 
@@ -62,6 +66,7 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 - **`Mod`**: `id`, `name`, `version`, `fileName`, `sha1?`, `enabled`, `source`.
 - **`ModSource`** (getaggt über `type`): `{type:"local"}` · `{type:"url", url}` · `{type:"modrinth", projectId, versionId}` · `{type:"curseforge", projectId, fileId}`.
 - **`Instance.modpack`** (`ModpackOrigin?`): merkt sich, aus welchem Modrinth-/CurseForge-Pack (Projekt + Version/Datei) die Instanz stammt – Grundlage für Pack-Updates.
+- **`LogKind`** (`log_share`): `latest` = `logs/latest.log` des letzten Starts · `crashReport` = neuester Bericht in `crash-reports/`.
 - Neue Felder tragen `#[serde(default)]`, damit ältere JSON-Dateien weiter laden.
 
 ### Commands
@@ -102,6 +107,8 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `modrinth_install_pack` | `versionId`, `name`, `operationId` | Neue `Instance` |
 | `modrinth_import_pack` | absoluter `path`, `name`, `operationId` | Neue `Instance` |
 | `pack_install_cancel` | `operationId` | – (bricht `modrinth_install_pack`/`modrinth_import_pack`/`template_create_instance` ab) |
+| `log_share` | `instanceId`, `kind: LogKind` | öffentlicher mclo.gs-Link (`string`); fehlt die Datei, eine Meldung in Alltagssprache |
+| `debug_info` | – | Klartext ohne Instanz-/Kontonamen und Pfade (`string`) |
 
 Content-Fortschritt: `content-progress` `{ operationId, phase, done, total }`. Der Aufrufer vergibt die `operationId`; späte oder fremde Events dürfen keinen anderen Auftrag aktualisieren. Modpack-Import und Minecraft-Installation sind getrennte Schritte: nach dem Import installiert `instance_install` die passende Minecraft-/Fabric-Runtime.
 
@@ -160,7 +167,7 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 
 - `lib/types.ts` – TS-Spiegel der Rust-Modelle
 - `lib/api.ts` – `invoke`-Wrapper; außerhalb von Tauri (reiner `pnpm dev` im Browser) Fallback auf Mockdaten aus `lib/mock.ts`
-- `hooks/` – TanStack Query; Mutations invalidieren die betroffenen Queries. `useInstances` (Spielen = bei Bedarf installieren, dann starten; Backend-Events), `useContent` (Modrinth-Vorgänge mit Fortschritt), `useTemplates`
+- `hooks/` – TanStack Query; Mutations invalidieren die betroffenen Queries. `useInstances` (Spielen = bei Bedarf installieren, dann starten; Backend-Events), `useContent` (Modrinth-Vorgänge mit Fortschritt), `useTemplates`, `useSupport` (Log teilen: Link kopieren, Toast mit „Öffnen“; Debug-Info kopieren)
 - `store/settings.ts` – Launcher-Einstellungen, lokal persistiert: Java, RAM, Konten (Offline-Namen, aktives Konto), Pixelgröße, bewegte Szenen
 - `store/game.ts` – flüchtiger Laufzeitzustand aus den Events: Installationsfortschritt, Starten, Protokoll (gepuffert, max. 2000 Zeilen je Instanz), Absturz, Startzeit
 - `store/look.ts` – Szenenbild (Biom) je Instanz, lokal persistiert (das Backend hat dafür kein Feld; ohne Wahl fest aus der Instanz-ID)
@@ -175,6 +182,7 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 - `components/px.tsx` – Bausteine: Knopf, Chip, Fortschritt, Suchfeld, Auswahl, Segmente, Checkbox, Schalter, Radio, Speicher-Slider, Tooltip, Menü/Kontextmenü, Dialog, Seitenpanel, Leer- und Fehlerzustände, Toasts. Verhalten von Radix, Aussehen aus `styles/`
 - `components/game.tsx` – Spielen-Knopf (feste Größe in allen Zuständen), Statuszeile, Status-Chip, Protokoll mit Filter/Suche/Mitscrollen
 - `components/instance.tsx` – Instanz-Menü (Knopf und Rechtsklick) mit Dialogen „Als Vorlage speichern“ und „Löschen“
+- `components/support.tsx` – Rückfrage „Log öffentlich teilen?“ (einmal im Layout, `askShareLog`), Knopf „Debug-Info kopieren“, Einstellungen › Support (GitHub-Issues und -Diskussionen). „Log teilen“ steht in der Protokoll-Leiste und als Symbol in der Absturz-Statuszeile; nach einem Absturz mit Bericht wird der Bericht geteilt, sonst `latest.log`
 - `components/ContentBrowser.tsx`, `NewInstanceDialog.tsx`, `PlayerNames.tsx`, `Onboarding.tsx` – Katalog und Seitenpanel, Neue Instanz, Konten und Microsoft-Anmeldung, erster Start
 - `pixel/` – `unit.ts` (Pixeleinheit auf ganze Gerätepixel), `scene.ts` (Szenen-Engine: 7 Biome, 12 fps, Pausenregeln, Cache), `PixelScene.tsx`, `icons.tsx` (Pixel-Icons, Mod-Glyphen, Wortzeichen, Spielerkopf)
 - `styles/pixelkino.css` (aus dem Mockup übernommen), `styles/states.css` (Auswahlliste, Hover/Druck/Fokus, Ein- und Ausblenden) plus kleine Ergänzungen je Bereich; beide in der Tailwind-Schicht `components`, deren Reihenfolge `index.html` vor allen Stylesheets festlegt
