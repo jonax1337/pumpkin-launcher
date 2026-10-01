@@ -30,6 +30,7 @@
 - **Library groups** — sort instances into collapsible groups right from the instance menu
 - **Mods & modpacks from [Modrinth](https://modrinth.com)** — browse, search and install directly in the launcher
 - **`.mrpack` import** — drag in local modpack files
+- **Switch in one click** — import instances from Prism Launcher / MultiMC, Modrinth App, CurseForge App and ATLauncher with worlds, mods and settings; the other launcher stays untouched
 - **Duplicate & export** — copy an instance to experiment safely, or share it as a `.mrpack` (Modrinth mods linked, everything else embedded; worlds optional)
 - **Presets** — reusable collections of mods, settings and JVM args that can be applied to any instance
 - **Microsoft login** via device code (see [status](#status) below), plus offline player profiles
