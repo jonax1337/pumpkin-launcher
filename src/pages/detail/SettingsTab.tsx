@@ -13,11 +13,6 @@ import { useSettings } from "@/store/settings";
 
 const splitArgs = (s: string) => s.split(/\s+/).filter(Boolean);
 
-type Size = { width: number; height: number };
-/** Vorschlag, wenn zum ersten Mal „Feste Größe“ gewählt wird. */
-const DEFAULT_SIZE: Size = { width: 1280, height: 720 };
-const validSize = ({ width, height }: Size) => Number.isInteger(width) && Number.isInteger(height) && width > 0 && height > 0;
-
 /** „Minecraft 1.21.4 · Fabric 0.16.10“; ohne Loader nur die Minecraft-Version. */
 const versionText = (i: Instance) =>
   i.loader === "vanilla" ? `Minecraft ${i.minecraftVersion}` : `Minecraft ${i.minecraftVersion} · ${LOADER_LABELS[i.loader]}${i.loaderVersion ? ` ${i.loaderVersion}` : ""}`;
@@ -52,9 +47,9 @@ export function SettingsTab({ instance }: { instance: Instance }) {
     if (next !== latest.current.name) save({ name: next }, "Name gespeichert");
   }
 
-  function saveArgs(field: "jvmArgs" | "gameArgs", text: string) {
+  function saveArgs(field: "jvmArgs" | "gameArgs", text: string, done: string) {
     const next = splitArgs(text);
-    if (next.join(" ") !== latest.current[field].join(" ")) save({ [field]: next }, "Startoptionen gespeichert");
+    if (next.join(" ") !== latest.current[field].join(" ")) save({ [field]: next }, done);
   }
 
   function changeMemory(mb: number | null) {
@@ -139,7 +134,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
               value={jvmArgs}
               disabled={locked}
               onChange={(e) => setJvmArgs(e.target.value)}
-              onBlur={() => saveArgs("jvmArgs", jvmArgs)}
+              onBlur={() => saveArgs("jvmArgs", jvmArgs, "Java-Startoptionen gespeichert")}
             />
             <Hint id="inst-args-h" className="mt-1.5">Nur ändern, wenn eine Mod-Anleitung es verlangt.</Hint>
           </Disclosure>
@@ -152,7 +147,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
               value={gameArgs}
               disabled={locked}
               onChange={(e) => setGameArgs(e.target.value)}
-              onBlur={() => saveArgs("gameArgs", gameArgs)}
+              onBlur={() => saveArgs("gameArgs", gameArgs, "Spielargumente gespeichert")}
             />
             <Hint id="inst-game-args-h" className="mt-1.5">Gehen an Minecraft selbst, z. B. um direkt einem Server beizutreten. Leerzeichen trennen. Die Fenstergröße stellst du unter „Fenster“ ein.</Hint>
           </Disclosure>
@@ -194,15 +189,20 @@ export function SettingsTab({ instance }: { instance: Instance }) {
   );
 }
 
+type Size = { width: number; height: number };
+/** Vorschlag, wenn zum ersten Mal „Feste Größe“ gewählt wird. */
+const DEFAULT_SIZE: Size = { width: 1280, height: 720 };
+const validSize = ({ width, height }: Size) => Number.isInteger(width) && Number.isInteger(height) && width > 0 && height > 0;
+
 /**
  * Fenster beim Start: wie Minecraft es öffnet, feste Größe oder Vollbild. Die Felder für die Größe bleiben stehen
  * und sind nur gesperrt (wie der Pfad bei Java); sie speichern beim Verlassen, Ungültiges springt zurück.
  */
 function WindowChooser({ value, onChange, disabled }: { value: GameWindow; onChange: (window: GameWindow, done?: string) => void; disabled?: boolean }) {
-  const saved = value.type === "size" ? value : DEFAULT_SIZE;
+  const sized = value.type === "size";
+  const saved = sized ? value : DEFAULT_SIZE;
   const [width, setWidth] = useState(String(saved.width));
   const [height, setHeight] = useState(String(saved.height));
-  const sized = value.type === "size";
   const draft = { type: "size" as const, width: Number(width), height: Number(height) };
 
   function commitSize() {

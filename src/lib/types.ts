@@ -52,6 +52,9 @@ export type ModpackOrigin =
 /** Quick Play: direkt in eine Welt (`id` = Ordnername) oder auf einen Server (`host[:port]`). */
 export type QuickPlay = { type: "world"; id: string } | { type: "server"; address: string };
 
+/** Wohin ein Schnellstart führt: Ordnername der Welt oder Adresse des Servers. */
+export const quickPlayTarget = (q: QuickPlay) => (q.type === "world" ? q.id : q.address);
+
 /** Was der Start vom Launcher mitbekommt; die Startoptionen der Instanz liest das Backend aus ihr. */
 export interface LaunchOptions {
   /** Offline-Spielername; mit `accountId` (Microsoft-Konto) ohne Bedeutung. */

@@ -1,13 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { open as openFile } from "@tauri-apps/plugin-dialog";
-import { toast } from "sonner";
+import { QueryList } from "@/components/QueryList";
 import { startMsLogin } from "@/components/PlayerNames";
 import {
   useAddSkin, useDeleteSkin, useResetSkin, useSaveActiveSkin, useSetCape, useSkinLibrary, useSkinProfile, useSkinTexture, useUpdateSkin,
   useUploadSkin,
 } from "@/hooks/useSkins";
 import { api } from "@/lib/api";
+import { toastError } from "@/lib/toast";
 import { SKIN_VARIANT_LABELS, type Cape, type LibrarySkin, type SkinVariant } from "@/lib/types";
 import { CapeFigure, SkinFigure } from "@/pixel/SkinFigure";
 import { useUsableAccount } from "@/store/offline";
@@ -113,36 +114,10 @@ function Library({ accountId }: { accountId: string | null }) {
   const remove = useDeleteSkin();
   const [renaming, setRenaming] = useState<LibrarySkin | null>(null);
   const [removing, setRemoving] = useState<LibrarySkin | null>(null);
-  const skins = [...(library.data ?? [])].sort((a, b) => b.addedAt - a.addedAt);
 
   async function pickFile() {
     const path = await openFile({ multiple: false, directory: false, filters: [{ name: "Skin", extensions: ["png"] }] });
     if (typeof path === "string") add.mutate(path);
-  }
-
-  let body;
-  if (library.error) {
-    body = <ErrorBox title="Die Bibliothek konnte nicht geladen werden" error={library.error} onRetry={() => void library.refetch()} />;
-  } else if (library.isPending) {
-    body = (
-      <CardGrid aria-busy aria-label="Wird geladen">
-        {[0, 1, 2].map((k) => <Skel key={k} h={308} />)}
-      </CardGrid>
-    );
-  } else if (!skins.length) {
-    body = (
-      <Empty ill="shirt" title="Noch keine Skins">
-        Füge eine PNG-Datei mit 64×64 Pixeln hinzu oder speichere den Skin, den du gerade trägst.
-      </Empty>
-    );
-  } else {
-    body = (
-      <CardGrid>
-        {skins.map((skin) => (
-          <SkinCard key={skin.id} skin={skin} accountId={accountId} onRename={() => setRenaming(skin)} onDelete={() => setRemoving(skin)} />
-        ))}
-      </CardGrid>
-    );
   }
 
   return (
@@ -152,13 +127,36 @@ function Library({ accountId }: { accountId: string | null }) {
         title="Bibliothek"
         actions={
           !api.isMock && (
-            <Button icon="plus" disabled={add.isPending} onClick={() => void pickFile().catch((e: Error) => toast.error(e.message))}>
+            <Button icon="plus" disabled={add.isPending} onClick={() => void pickFile().catch(toastError)}>
               Skin hinzufügen
             </Button>
           )
         }
       />
-      <div className="mt-3">{body}</div>
+      <div className="mt-3">
+        <QueryList
+          query={library}
+          error="Die Bibliothek konnte nicht geladen werden"
+          loading={
+            <CardGrid aria-busy aria-label="Wird geladen">
+              {[0, 1, 2].map((k) => <Skel key={k} h={308} />)}
+            </CardGrid>
+          }
+          empty={
+            <Empty ill="shirt" title="Noch keine Skins">
+              Füge eine PNG-Datei mit 64×64 Pixeln hinzu oder speichere den Skin, den du gerade trägst.
+            </Empty>
+          }
+        >
+          {(list) => (
+            <CardGrid>
+              {[...list].sort((a, b) => b.addedAt - a.addedAt).map((skin) => (
+                <SkinCard key={skin.id} skin={skin} accountId={accountId} onRename={() => setRenaming(skin)} onDelete={() => setRemoving(skin)} />
+              ))}
+            </CardGrid>
+          )}
+        </QueryList>
+      </div>
       {renaming && <RenameDialog key={renaming.id} skin={renaming} onClose={() => setRenaming(null)} />}
       <ConfirmDialog
         open={!!removing}
@@ -212,7 +210,7 @@ function RenameDialog({ skin, onClose }: { skin: LibrarySkin; onClose: () => voi
   const update = useUpdateSkin();
   function submit(e: FormEvent) {
     e.preventDefault();
-    update.mutate({ id: skin.id, name, variant: skin.variant }, { onSuccess: onClose });
+    update.mutate({ id: skin.id, name: name.trim(), variant: skin.variant }, { onSuccess: onClose });
   }
   return (
     <Dialog

@@ -2,13 +2,15 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { open as openFile } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
-import { Dialog, DialogActions, Field, Icon, Segmented } from "@/ui";
+import { Dialog, DialogActions, Field, Segmented } from "@/ui";
 import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { api } from "@/lib/api";
 import { fileName } from "@/lib/format";
 import { isMrpack } from "@/lib/modrinth";
-import type { Instance, LocalFile, Mod } from "@/lib/types";
+import { toastError } from "@/lib/toast";
+import type { Instance, FileCheck, LocalFile, Mod } from "@/lib/types";
+import { DropHint, rejectedFileToast } from "./dropFiles";
 
 const CONTENT_FILE = /\.(jar|zip)$/i;
 
@@ -21,13 +23,40 @@ const ZIP_KINDS: { value: ZipKind; label: string }[] = [
 /** Dateien, deren Art feststeht, und Zips, bei denen der Nutzer wählt. */
 type Ask = { sure: LocalFile[]; unsure: string[] };
 
-const showError = (e: Error) => void toast.error(e.message);
-
 /** „Sodium hinzugefügt, von Modrinth erkannt“ bzw. „3 Dateien hinzugefügt, 2 davon von Modrinth erkannt“. */
 function addedText(added: Mod[]) {
   const known = added.filter((m) => m.source.type === "modrinth").length;
   if (added.length === 1) return `${added[0].name} hinzugefügt${known ? ", von Modrinth erkannt" : ""}`;
   return `${added.length} Dateien hinzugefügt${known ? `, ${known} davon von Modrinth erkannt` : ""}`;
+}
+
+/** Ein Modpack gehört nicht in die Inhalte; der Toast bietet den Import als eigene Instanz an. */
+function announceModpack(paths: string[], open: (url: string) => void) {
+  const pack = paths.find(isMrpack);
+  if (!pack) return;
+  toast("Modpacks werden als eigene Instanz importiert.", {
+    action: { label: "Importieren", onClick: () => open(`/instances?neu=1&datei=${encodeURIComponent(pack)}`) },
+  });
+}
+
+/** Die Jars und Zips unter `paths`; für alles andere (außer Modpacks) meldet ein Toast, was passt. */
+function contentFiles(paths: string[]) {
+  const other = paths.find((p) => !isMrpack(p) && !CONTENT_FILE.test(p));
+  if (other) rejectedFileToast(other, "Mods sind .jar-Dateien, Ressourcenpakete und Shader .zip-Dateien.");
+  return paths.filter((p) => CONTENT_FILE.test(p));
+}
+
+/** Meldet Fehler und Doppelte der Prüfung per Toast; übrig bleiben Dateien mit klarer Art (`sure`) und Zips zum Nachfragen (`unsure`). */
+function classify(checks: FileCheck[]): Ask {
+  for (const c of checks) {
+    if (c.error) toast.error(c.error);
+    else if (c.duplicateOf) toast.error(`„${fileName(c.path)}“ ist schon in dieser Instanz (${c.duplicateOf}).`);
+  }
+  const fresh = checks.filter((c) => !c.error && !c.duplicateOf);
+  return {
+    sure: fresh.flatMap(({ path, kind }) => (kind ? [{ path, kind }] : [])),
+    unsure: fresh.filter((c) => !c.kind).map((c) => c.path),
+  };
 }
 
 /**
@@ -39,7 +68,7 @@ export function useLocalFiles(instance: Instance, active: boolean) {
   const navigate = useNavigate();
   const [ask, setAsk] = useState<Ask | null>(null);
   // Während der Rückfrage würde ein weiterer Ablage-Vorgang die offenen Dateien ersetzen.
-  const dragging = useFileDrop(active && !ask, (paths) => void take(paths).catch(showError));
+  const dragging = useFileDrop(active && !ask, (paths) => void take(paths).catch(toastError));
 
   async function take(paths: string[]) {
     // Sonst verwirft `useContentInstall` die Dateien kommentarlos.
@@ -47,26 +76,12 @@ export function useLocalFiles(instance: Instance, active: boolean) {
       toast.error("Warte, bis der laufende Vorgang fertig ist.");
       return;
     }
-    const pack = paths.find(isMrpack);
-    if (pack) {
-      toast("Modpacks werden als eigene Instanz importiert.", {
-        action: { label: "Importieren", onClick: () => navigate(`/instances?neu=1&datei=${encodeURIComponent(pack)}`) },
-      });
-    }
-    const other = paths.find((p) => !isMrpack(p) && !CONTENT_FILE.test(p));
-    if (other) toast.error(`„${fileName(other)}“ passt hier nicht. Mods sind .jar-Dateien, Ressourcenpakete und Shader .zip-Dateien.`);
-    const files = paths.filter((p) => CONTENT_FILE.test(p));
+    announceModpack(paths, navigate);
+    const files = contentFiles(paths);
     if (!files.length) return;
-    const checks = await api.checkLocalFiles(instance.id, files);
-    for (const c of checks) {
-      if (c.error) toast.error(c.error);
-      else if (c.duplicateOf) toast.error(`„${fileName(c.path)}“ ist schon in dieser Instanz (${c.duplicateOf}).`);
-    }
-    const fresh = checks.filter((c) => !c.error && !c.duplicateOf);
-    const sure = fresh.flatMap(({ path, kind }) => (kind ? [{ path, kind }] : []));
-    const unsure = fresh.filter((c) => !c.kind).map((c) => c.path);
-    if (unsure.length) setAsk({ sure, unsure });
-    else add(sure);
+    const sorted = classify(await api.checkLocalFiles(instance.id, files));
+    if (sorted.unsure.length) setAsk(sorted);
+    else add(sorted.sure);
   }
 
   function add(files: LocalFile[]) {
@@ -99,9 +114,7 @@ export function useLocalFiles(instance: Instance, active: boolean) {
       {dragging && (
         <div className="drop over absolute inset-0 z-10 h-auto justify-start" aria-hidden>
           <div className="sticky top-[30vh] flex flex-col items-center gap-2 py-10">
-            <Icon name="ul" size="xl" />
-            <b>Zum Hinzufügen loslassen</b>
-            <span>Mods (.jar), Ressourcenpakete und Shader (.zip)</span>
+            <DropHint>Mods (.jar), Ressourcenpakete und Shader (.zip)</DropHint>
           </div>
         </div>
       )}
@@ -122,7 +135,7 @@ export function useLocalFiles(instance: Instance, active: boolean) {
   );
 
   // Eigene Dateien gibt es nur in der App: der Browser liefert keine Pfade.
-  return { pick: api.isMock ? undefined : () => void pick().catch(showError), identify, overlay };
+  return { pick: api.isMock ? undefined : () => void pick().catch(toastError), identify, overlay };
 }
 
 /** Rückfrage für Zips, die am Inhalt weder eindeutig Ressourcenpaket noch Shader sind. */

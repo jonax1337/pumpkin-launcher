@@ -1,62 +1,61 @@
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { QueryList } from "@/components/QueryList";
 import { useDeleteScreenshot, useScreenshots } from "@/hooks/useScreenshots";
 import { api } from "@/lib/api";
-import { formatDate, formatSize } from "@/lib/format";
+import { dayLabel, dayStart, formatDateTime, formatSize } from "@/lib/format";
+import { toastError } from "@/lib/toast";
 import type { Instance, Screenshot } from "@/lib/types";
-import { Actions, Button, CardGrid, Count, Dialog, Empty, ErrorBox, Glyph, IconButton, SectionHeader, Skel } from "@/ui";
-
-const DAY = 86_400_000;
-const dayStart = (ms: number) => new Date(ms).setHours(0, 0, 0, 0);
-const shotTime = new Intl.DateTimeFormat("de", { dateStyle: "medium", timeStyle: "short" });
-
-/** „Heute“, „Gestern“, sonst das Datum. Gerundet, weil Tage mit Zeitumstellung 23 oder 25 Stunden haben. */
-function dayTitle(day: number) {
-  const ago = Math.round((dayStart(Date.now()) - day) / DAY);
-  return ago === 0 ? "Heute" : ago === 1 ? "Gestern" : formatDate(day);
-}
+import { Actions, Button, CardGrid, Count, Dialog, Empty, Glyph, IconButton, SectionHeader, Skel } from "@/ui";
 
 /** Screenshots je Kalendertag; die Liste kommt neueste zuerst, die Map behält diese Reihenfolge. */
 function byDay(shots: Screenshot[]) {
   const days = new Map<number, Screenshot[]>();
   for (const shot of shots) {
     const day = dayStart(shot.takenAt);
-    days.set(day, [...(days.get(day) ?? []), shot]);
+    const group = days.get(day);
+    if (group) group.push(shot);
+    else days.set(day, [shot]);
   }
   return [...days];
 }
 
-const fail = (e: Error) => toast.error(e.message);
-
 /** Screenshots der Instanz als Raster nach Tagen; ein Klick öffnet die große Ansicht. */
 export function ScreenshotsTab({ instance }: { instance: Instance }) {
   const shots = useScreenshots(instance.id);
-  const [shown, setShown] = useState<string | null>(null);
-
-  if (shots.error) return <ErrorBox className="mt-4" title="Die Screenshots konnten nicht geladen werden" error={shots.error} onRetry={() => void shots.refetch()} />;
-  if (!shots.data)
-    return (
-      <CardGrid className="mt-4" aria-busy aria-label="Wird geladen">
-        {[0, 1, 2, 3].map((k) => <Skel key={k} className="aspect-video" />)}
-      </CardGrid>
-    );
-  if (!shots.data.length)
-    return (
-      <Empty ill={<Glyph name="picture" pal="sand" box={64} />} title="Noch keine Screenshots">
-        Drück im Spiel F2. Minecraft legt das Bild in dieser Instanz ab, und es erscheint hier.
-      </Empty>
-    );
-
-  const list = shots.data;
-  const current = list.find((s) => s.fileName === shown);
   return (
     <div className="pt-2">
-      {byDay(list).map(([day, group]) => (
+      <QueryList
+        query={shots}
+        error="Die Screenshots konnten nicht geladen werden"
+        loading={
+          <CardGrid aria-busy aria-label="Wird geladen">
+            {[0, 1, 2, 3].map((k) => <Skel key={k} className="aspect-video" />)}
+          </CardGrid>
+        }
+        empty={
+          <Empty ill={<Glyph name="picture" pal="sand" box={64} />} title="Noch keine Screenshots">
+            Drück im Spiel F2. Minecraft legt das Bild in dieser Instanz ab, und es erscheint hier.
+          </Empty>
+        }
+      >
+        {(list) => <Gallery instanceId={instance.id} shots={list} />}
+      </QueryList>
+    </div>
+  );
+}
+
+function Gallery({ instanceId, shots }: { instanceId: string; shots: Screenshot[] }) {
+  // Dateiname des gezeigten Bilds; `null` = keins.
+  const [shown, setShown] = useState<string | null>(null);
+  const current = shots.find((s) => s.fileName === shown);
+  return (
+    <>
+      {byDay(shots).map(([day, group]) => (
         <section key={day} className="mt-4">
-          <SectionHeader title={<>{dayTitle(day)} <Count value={group.length} size={20} muted /></>} size="sub" />
+          <SectionHeader title={<>{dayLabel(day)} <Count value={group.length} size={20} muted /></>} size="sub" />
           <CardGrid className="mt-2">
             {group.map((shot) => (
-              <button key={shot.fileName} type="button" className="shot fx" aria-label={`Screenshot vom ${shotTime.format(shot.takenAt)}`} onClick={() => setShown(shot.fileName)}>
+              <button key={shot.fileName} type="button" className="shot fx" aria-label={`Screenshot vom ${formatDateTime(shot.takenAt)}`} onClick={() => setShown(shot.fileName)}>
                 {/* Hunderte Bilder in voller Auflösung: erst laden, wenn sie in den Sichtbereich kommen. */}
                 <img src={api.screenshotSrc(shot)} alt="" loading="lazy" decoding="async" />
               </button>
@@ -64,28 +63,28 @@ export function ScreenshotsTab({ instance }: { instance: Instance }) {
           </CardGrid>
         </section>
       ))}
-      {current && <Lightbox instanceId={instance.id} shots={list} current={current} onShow={(s) => setShown(s?.fileName ?? null)} />}
-    </div>
+      {current && <Lightbox instanceId={instanceId} shots={shots} current={current} onShow={setShown} />}
+    </>
   );
 }
 
 /** Große Ansicht mit Blättern (auch ← →), Öffnen im Bildbetrachter, Zeigen im Ordner und Löschen in den Papierkorb. */
-function Lightbox({ instanceId, shots, current, onShow }: { instanceId: string; shots: Screenshot[]; current: Screenshot; onShow: (shot: Screenshot | null) => void }) {
+function Lightbox({ instanceId, shots, current, onShow }: { instanceId: string; shots: Screenshot[]; current: Screenshot; onShow: (fileName: string | null) => void }) {
   const remove = useDeleteScreenshot(instanceId);
   const index = shots.indexOf(current);
-  const prev = shots[index - 1];
-  const next = shots[index + 1];
+  const prev = shots[index - 1]?.fileName ?? null;
+  const next = shots[index + 1]?.fileName ?? null;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const target = e.key === "ArrowLeft" ? prev : e.key === "ArrowRight" ? next : undefined;
+      const target = e.key === "ArrowLeft" ? prev : e.key === "ArrowRight" ? next : null;
       if (target) onShow(target);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [prev, next, onShow]);
 
-  const title = shotTime.format(current.takenAt);
+  const title = formatDateTime(current.takenAt);
   return (
     <Dialog
       open
@@ -108,12 +107,12 @@ function Lightbox({ instanceId, shots, current, onShow }: { instanceId: string; 
             tone="bad"
             icon="trash"
             disabled={remove.isPending}
-            onClick={() => remove.mutate(current, { onSuccess: () => onShow(next ?? prev ?? null) })}
+            onClick={() => remove.mutate(current, { onSuccess: () => onShow(next ?? prev) })}
           >
             Löschen
           </Button>
-          <Button icon="folder" onClick={() => void api.revealPath(current.path).catch(fail)}>Im Ordner zeigen</Button>
-          <Button variant="primary" icon="ext" onClick={() => void api.openPath(current.path).catch(fail)}>Öffnen</Button>
+          <Button icon="folder" onClick={() => void api.revealPath(current.path).catch(toastError)}>Im Ordner zeigen</Button>
+          <Button variant="primary" icon="ext" onClick={() => void api.openPath(current.path).catch(toastError)}>Öffnen</Button>
         </>
       }
     >
