@@ -1,6 +1,6 @@
 //! Modrinth v2: GET plus der lesende `POST version_files/update`, feste Origins, begrenzte Antworten.
 use super::{
-    content::safe_path,
+    content::fs_safety::safe_path,
     limits::{API_JSON_LIMIT, FILE_LIMIT, PAGE_SIZE, QUERY_MAX},
     transport::{base_client_builder, read_capped, Digests, DOWNLOAD_TOO_BIG},
 };
@@ -423,6 +423,22 @@ impl ResolveBudget {
         Ok(())
     }
 
+    /// Noch Platz für weitere Abhängigkeiten: `queued` wartende Versionen bei `installed` vorhandenen Projekten.
+    fn check_queue(&self, queued: usize, installed: usize) -> AppResult<()> {
+        self.check_calls()?;
+        if queued > MAX_QUEUE_SLACK + installed {
+            return Err(limit_reached());
+        }
+        Ok(())
+    }
+
+    fn check_added_projects(&self, added: usize) -> AppResult<()> {
+        if added > MAX_NEW_PROJECTS {
+            return Err(limit_reached());
+        }
+        Ok(())
+    }
+
     fn spend_rebuild(&mut self) -> AppResult<()> {
         self.rebuilds += 1;
         if self.rebuilds > MAX_REBUILDS {
@@ -546,9 +562,7 @@ impl<'a> Resolver<'a> {
     /// Ein hinzukommendes Projekt passt noch ins Budget neuer Projekte und ist eine Client-Mod.
     async fn check_added_project(&mut self, v: &Version) -> AppResult<()> {
         self.budget.spend_call()?;
-        if self.graph.selected.keys().filter(|p| !self.installed.contains(*p)).count() > MAX_NEW_PROJECTS {
-            return Err(limit_reached());
-        }
+        self.budget.check_added_projects(self.graph.selected.keys().filter(|p| !self.installed.contains(*p)).count())?;
         let p = project(self.client, &v.project_id).await?;
         if p.id != v.project_id || p.project_type != "mod" || p.client_side == "unsupported" {
             return Err(AppError::invalid("Projekt ist keine Client-Mod"));
@@ -558,10 +572,7 @@ impl<'a> Resolver<'a> {
 
     async fn enqueue_dependencies(&mut self, v: &Version) -> AppResult<()> {
         for d in v.dependencies.iter().filter(|d| d.dependency_type == "required") {
-            self.budget.check_calls()?;
-            if self.graph.queue.len() > MAX_QUEUE_SLACK + self.installed.len() {
-                return Err(limit_reached());
-            }
+            self.budget.check_queue(self.graph.queue.len(), self.installed.len())?;
             let Some(child) = self.next_child(d).await? else { continue };
             if d.project_id.as_ref().is_some_and(|p| p != &child.project_id) {
                 return Err(AppError::invalid("Dependency-Projekt stimmt nicht"));
@@ -677,6 +688,19 @@ mod tests {
         assert!(!has_incompatibility(&with(incompatible(Some("b2"), "incompatible"))));
         assert!(!has_incompatibility(&with(incompatible(None, "required"))));
         assert!(!has_incompatibility(&HashMap::new()));
+    }
+    #[test]
+    fn only_the_modrinth_cdn_is_a_download_origin() {
+        for url in [
+            "http://cdn.modrinth.com/a",
+            "https://localhost/a",
+            "https://cdn.modrinth.com.evil/a",
+            "https://cdn.modrinth.com:444/a",
+            "https://user@cdn.modrinth.com/a",
+        ] {
+            assert!(download_url(url).is_err(), "{url}");
+        }
+        assert!(download_url("https://cdn.modrinth.com/data/a.jar").is_ok());
     }
     #[test]
     fn hashes_and_size_are_required() {

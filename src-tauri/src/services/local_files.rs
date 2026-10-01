@@ -1,7 +1,6 @@
 //! Eigene Dateien des Nutzers (Ziehen und Ablegen, Dateiauswahl) als Inhalte einer Instanz. Was Modrinth
 //! per SHA-1 kennt, wird als Modrinth-Inhalt eingetragen, damit Updates greifen; der Rest bleibt lokal.
 use std::{
-    collections::HashMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -11,11 +10,10 @@ use serde::{Deserialize, Serialize};
 use super::progress::{Phase, ProgressFn, SharedProgress};
 use super::{
     blocking,
-    content::{self, CachedFile},
+    content::{self, CachedFile, ContentFile, Recognition},
     download::sha1_file,
     free_name,
     limits::{FILE_LIMIT, MIB},
-    modrinth::{self, Version},
     mods, Dirs,
 };
 use crate::{
@@ -71,8 +69,8 @@ pub async fn add(
     };
     progress(Phase::Resolve, 0, 1);
     let hashes: Vec<String> = staged.iter().map(|s| s.sha1.clone()).collect();
-    let (known, titles) = content::identify_or_local(&modrinth::client()?, &hashes).await;
-    let mods = with_entries(&instance.mods, staged, &known, &titles)?;
+    let recognition = content::identify_or_local(&content::catalog()?, &hashes).await;
+    let mods = with_entries(&instance.mods, staged, &recognition)?;
     let result = mods::sync_commit(&state.dirs, instance_id, &mods, |_| content::commit_mods(state, instance_id, mods.clone()))?;
     progress(Phase::Complete, total, total);
     Ok(result)
@@ -101,10 +99,10 @@ fn stage(
         // Die Endung immer klein, weil `mods::sync` sie so erwartet.
         let file_name = free_name(stem, file.kind.extension(), |n| {
             instance.mods.iter().any(|m| m.file_name.eq_ignore_ascii_case(n))
-                || staged.iter().any(|s| s.file_name.eq_ignore_ascii_case(n))
+                || staged.iter().any(|s| s.file.file_name.eq_ignore_ascii_case(n))
                 || foreign(&folder.join(n), &sha1)
         });
-        staged.push(CachedFile { kind: file.kind, file_name, enabled: true, sha1 });
+        staged.push(CachedFile { file: ContentFile { kind: file.kind, file_name, enabled: true }, sha1 });
     }
     Ok(staged)
 }
@@ -119,12 +117,11 @@ fn foreign(path: &Path, sha1: &str) -> bool {
 fn with_entries(
     mods: &[Mod],
     staged: Vec<CachedFile>,
-    known: &HashMap<String, Version>,
-    titles: &HashMap<String, String>,
+    recognition: &Recognition,
 ) -> AppResult<Vec<Mod>> {
     let mut all = mods.to_vec();
     for file in staged {
-        let m = content::entry(file.kind, file.file_name, file.sha1, known, titles, &all);
+        let m = recognition.mod_from_file(&file, &all);
         ensure_new_project(&all, &m)?;
         all.push(m);
     }
@@ -147,12 +144,12 @@ pub async fn identify_local(state: &AppState, instance_id: &str, mod_ids: &[Stri
     content::ensure_known(&instance, mod_ids)?;
     let picked = |m: &Mod| m.source == ModSource::Local && mod_ids.contains(&m.id);
     let hashes: Vec<String> = instance.mods.iter().filter(|m| picked(m)).filter_map(|m| m.sha1.clone()).collect();
-    let (known, titles) = content::identify(&modrinth::client()?, &hashes).await?;
+    let recognition = content::identify(&content::catalog()?, &hashes).await?;
     for i in 0..instance.mods.len() {
         if !picked(&instance.mods[i]) {
             continue;
         }
-        if let Some(m) = recognized(&instance.mods[i], &known, &titles, &instance.mods) {
+        if let Some(m) = recognized(&instance.mods[i], &recognition, &instance.mods) {
             ensure_new_project(&instance.mods, &m)?;
             instance.mods[i] = m;
         }
@@ -161,14 +158,10 @@ pub async fn identify_local(state: &AppState, instance_id: &str, mod_ids: &[Stri
 }
 
 /// Von Modrinth erkannter Eintrag anstelle von `m`; Schalter und Abhängigkeiten bleiben.
-fn recognized(
-    m: &Mod,
-    known: &HashMap<String, Version>,
-    titles: &HashMap<String, String>,
-    mods: &[Mod],
-) -> Option<Mod> {
-    let found = content::entry(m.kind, m.file_name.clone(), m.sha1.clone()?, known, titles, mods);
-    (found.source != ModSource::Local).then(|| Mod { enabled: m.enabled, required_by: m.required_by.clone(), ..found })
+fn recognized(m: &Mod, recognition: &Recognition, mods: &[Mod]) -> Option<Mod> {
+    let file = ContentFile { kind: m.kind, file_name: m.file_name.clone(), enabled: m.enabled };
+    let found = recognition.mod_from_file(&CachedFile { file, sha1: m.sha1.clone()? }, mods);
+    (found.source != ModSource::Local).then(|| Mod { required_by: m.required_by.clone(), ..found })
 }
 
 /// Absoluter Pfad einer normalen .jar- oder .zip-Datei mit brauchbarem Namen und sinnvoller Größe.
@@ -238,6 +231,8 @@ fn stem_for(name: &str, kind: ModKind) -> AppResult<&str> {
 mod tests {
     use super::*;
     use crate::models::{ModLoader, NewInstance};
+    use crate::services::modrinth::Version;
+    use std::collections::HashMap;
     use crate::services::progress::ignored;
     use std::io::Write;
 
@@ -298,28 +293,29 @@ mod tests {
     }
 
     fn staged(sha1: &str) -> CachedFile {
-        CachedFile { kind: ModKind::Mod, file_name: format!("{sha1}.jar"), enabled: true, sha1: sha1.into() }
+        CachedFile { file: ContentFile { kind: ModKind::Mod, file_name: format!("{sha1}.jar"), enabled: true }, sha1: sha1.into() }
     }
 
     #[test]
     fn recognized_keeps_switch_and_skips_unknown() {
-        let (known, titles) = (sodium(&["a"]), HashMap::from([("sodium".to_string(), "Sodium".to_string())]));
-        let off = Mod { enabled: false, ..content::entry(ModKind::Mod, "s.jar".into(), "a".into(), &Default::default(), &titles, &[]) };
-        let m = recognized(&off, &known, &titles, &[]).unwrap();
+        let titles = HashMap::from([("sodium".to_string(), "Sodium".to_string())]);
+        let recognition = Recognition { versions: sodium(&["a"]), titles };
+        let off = Mod { enabled: false, ..Recognition::default().mod_from_file(&staged("a"), &[]) };
+        let m = recognized(&off, &recognition, &[]).unwrap();
         assert_eq!((m.id.as_str(), m.name.as_str(), m.enabled), ("sodium", "Sodium", false));
         assert_eq!(m.source, ModSource::Modrinth { project_id: "sodium".into(), version_id: "v-a".into() });
         let other = Mod { sha1: Some("b".into()), ..off };
-        assert!(recognized(&other, &known, &titles, &[]).is_none());
+        assert!(recognized(&other, &recognition, &[]).is_none());
     }
 
     #[test]
     fn with_entries_allows_each_project_once() {
-        let (known, titles) = (sodium(&["a", "b"]), HashMap::new());
-        let have = with_entries(&[], vec![staged("a"), staged("local")], &known, &titles).unwrap();
+        let recognition = Recognition { versions: sodium(&["a", "b"]), titles: HashMap::new() };
+        let have = with_entries(&[], vec![staged("a"), staged("local")], &recognition).unwrap();
         assert_eq!(have[0].id, "sodium");
         // Eine andere Sodium-Version, ob schon in der Instanz oder im selben Auftrag, käme doppelt in den Spielordner.
-        assert!(with_entries(&have, vec![staged("b")], &known, &titles).is_err());
-        assert!(with_entries(&[], vec![staged("a"), staged("b")], &known, &titles).is_err());
+        assert!(with_entries(&have, vec![staged("b")], &recognition).is_err());
+        assert!(with_entries(&[], vec![staged("a"), staged("b")], &recognition).is_err());
     }
 
     #[tokio::test]
