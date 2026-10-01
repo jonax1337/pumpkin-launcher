@@ -5,7 +5,7 @@
 //! (`Blocked`).
 use super::{zip_files, RemoteFile, JSON_LIMIT, MIB, ZIP_LIMIT};
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     models::{Instance, Mod, ModKind, ModLoader, ModSource, NewInstance},
     services::{
         content::{self, Blob, Pack, TempFile},
@@ -17,19 +17,28 @@ use crate::{
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet, VecDeque},
+    cmp::Reverse,
+    collections::{BTreeMap, HashMap, HashSet},
     fs,
     io::Read,
     path::PathBuf,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
-/// Der Worker dieses Projekts. Die Adresse ist kein Geheimnis (der Schlüssel liegt nur bei Cloudflare); Forks und Tests
-/// können einen eigenen über `PUMPKIN_CF_PROXY` (Laufzeit) oder beim Bauen angeben.
+/// Der Worker dieses Projekts. Die Adresse ist kein Geheimnis (der Schlüssel liegt nur bei Cloudflare), aber der
+/// Schlüssel ist an Pumpkin Launcher vergeben: Forks nutzen diesen Worker nicht, sondern beantragen bei CurseForge einen
+/// eigenen Schlüssel, betreiben einen eigenen Worker (`proxy/`) und setzen `PUMPKIN_CF_PROXY` (Laufzeit oder beim Bauen).
 const DEFAULT_PROXY: &str = "https://pumpkin-curseforge.jonas-laux.workers.dev";
 const GAME_MINECRAFT: u32 = 432;
 const PAGE: u32 = 20;
 const MAX_DEPENDENCIES: usize = 64;
+/// Größte Liste für `POST /v1/mods` und `/v1/mods/files`, die der Worker annimmt.
+const BATCH: usize = 200;
+/// Neue Versuche nach „zu viele Anfragen“ (429), bevor der Fehler beim Nutzer landet.
+const RATE_LIMIT_RETRIES: u32 = 3;
+/// Längste Pause, die ein `Retry-After` erzwingen darf; länger soll die Oberfläche nicht hängen.
+const MAX_WAIT: Duration = Duration::from_secs(30);
 
 // ---------- Proxy ----------
 
@@ -56,17 +65,40 @@ fn parse_proxy(raw: &str) -> Option<String> {
 
 // ---------- Anfragen ----------
 
+/// Wartet bei 429 und versucht es erneut, statt sofort zu scheitern: Große Installationen stoßen an das Minutenlimit des Workers.
 async fn send<T: DeserializeOwned>(request: reqwest::RequestBuilder) -> AppResult<T> {
-    let response = request.header(reqwest::header::ACCEPT, "application/json").send().await?;
+    let request = request.header(reqwest::header::ACCEPT, "application/json");
+    let mut attempt = 0;
+    loop {
+        let response = request.try_clone().ok_or_else(|| invalid("Anfrage lässt sich nicht wiederholen"))?.send().await?;
+        if response.status() != reqwest::StatusCode::TOO_MANY_REQUESTS {
+            return read(response).await;
+        }
+        let retry_after = response.headers().get(reqwest::header::RETRY_AFTER).and_then(|v| v.to_str().ok());
+        let Some(wait) = rate_limit_wait(retry_after, attempt) else {
+            return Err(invalid("Zu viele Anfragen an CurseForge, bitte kurz warten"));
+        };
+        tracing::info!(?wait, attempt, "CurseForge-Proxy drosselt, neuer Versuch");
+        tokio::time::sleep(wait).await;
+        attempt += 1;
+    }
+}
+/// Pause vor dem nächsten Versuch nach einer 429-Antwort, `None` = aufgeben. `Retry-After` (Sekunden) gilt, sonst wächst
+/// die Pause (5, 10, 20 s), damit das Minutenfenster des Workers wieder Luft hat.
+fn rate_limit_wait(retry_after: Option<&str>, attempt: u32) -> Option<Duration> {
+    if attempt >= RATE_LIMIT_RETRIES {
+        return None;
+    }
+    let wait = retry_after.and_then(|s| s.trim().parse().ok()).map_or(Duration::from_secs(5 << attempt), Duration::from_secs);
+    Some(wait.min(MAX_WAIT))
+}
+async fn read<T: DeserializeOwned>(response: reqwest::Response) -> AppResult<T> {
     let status = response.status();
     if matches!(status.as_u16(), 401 | 403) {
         return Err(invalid("Der CurseForge-Dienst lehnt die Anfrage ab"));
     }
     if status.as_u16() == 404 {
         return Err(invalid("Bei CurseForge nicht gefunden"));
-    }
-    if status.as_u16() == 429 {
-        return Err(invalid("Zu viele Anfragen an CurseForge, bitte kurz warten"));
     }
     let mut response = response.error_for_status()?;
     let mut data = Vec::new();
@@ -91,6 +123,20 @@ async fn get_at<T: DeserializeOwned>(client: &reqwest::Client, proxy: &str, path
 }
 async fn post_at<T: DeserializeOwned>(client: &reqwest::Client, proxy: &str, path: &str, body: &serde_json::Value) -> AppResult<T> {
     send(client.post(format!("{proxy}/v1/{path}")).json(body)).await
+}
+/// Viele Projekte oder Dateien mit wenigen Sammelabfragen statt einer je Nummer.
+async fn batch<T: DeserializeOwned>(client: &reqwest::Client, path: &str, field: &str, ids: &[u64]) -> AppResult<Vec<T>> {
+    let mut all = Vec::new();
+    for chunk in ids.chunks(BATCH) {
+        all.extend(post::<Page<T>>(client, path, &serde_json::json!({ field: chunk })).await?.data);
+    }
+    Ok(all)
+}
+async fn mods_by_id(client: &reqwest::Client, ids: &[u64]) -> AppResult<HashMap<u64, CfMod>> {
+    Ok(batch::<CfMod>(client, "mods", "modIds", ids).await?.into_iter().map(|m| (m.id, m)).collect())
+}
+async fn files_by_id(client: &reqwest::Client, ids: &[u64]) -> AppResult<HashMap<u64, CfFile>> {
+    Ok(batch::<CfFile>(client, "mods/files", "fileIds", ids).await?.into_iter().map(|f| (f.id, f)).collect())
 }
 
 // ---------- Datenformen der API ----------
@@ -131,6 +177,20 @@ struct CfMod {
     class_id: Option<u32>,
     #[serde(default)]
     links: Option<Links>,
+    #[serde(rename = "latestFilesIndexes", default)]
+    latest_files_indexes: Vec<FileIndex>,
+}
+/// Neueste Datei je Minecraft-Version, Loader und Release-Art; reicht, um eine Abhängigkeit ohne Dateiliste zu wählen.
+#[derive(Debug, Clone, Deserialize)]
+struct FileIndex {
+    #[serde(rename = "gameVersion", default)]
+    game_version: String,
+    #[serde(rename = "fileId")]
+    file_id: u64,
+    #[serde(rename = "releaseType", default)]
+    release_type: u8,
+    #[serde(rename = "modLoader", default)]
+    mod_loader: Option<u8>,
 }
 #[derive(Debug, Clone, Deserialize)]
 struct Logo {
@@ -422,25 +482,91 @@ fn runs(instance: &Instance, kind: ModKind, file: &CfFile) -> bool {
         })
 }
 
-/// Bevorzugt die neueste Release-Datei, die in der Instanz läuft.
-async fn pick_file(client: &reqwest::Client, project: u64, instance: &Instance, kind: ModKind) -> AppResult<Option<CfFile>> {
-    let mut types: Vec<Option<u8>> = vec![loader_type(instance.loader)];
-    if instance.loader == ModLoader::Quilt {
-        types.push(Some(4));
+/// CurseForge-Loader der Instanz in Vorzugsreihenfolge; Quilt lädt auch Fabric-Mods.
+fn loader_types(loader: ModLoader) -> Vec<u8> {
+    match loader {
+        ModLoader::Quilt => vec![5, 4],
+        other => loader_type(other).into_iter().collect(),
     }
-    for t in types {
-        let mut q = vec![("pageSize", "30".to_string()), ("gameVersion", instance.minecraft_version.clone())];
-        if let (Some(t), ModKind::Mod) = (t, kind) {
-            q.push(("modLoaderType", t.to_string()));
+}
+
+/// Neueste Datei laut Index, die zur Instanz passt; Release (1) vor Beta und Alpha. Datei-Nummern wachsen mit der Zeit.
+fn indexed_file(m: &CfMod, instance: &Instance) -> Option<u64> {
+    loader_types(instance.loader).into_iter().find_map(|t| {
+        m.latest_files_indexes
+            .iter()
+            .filter(|i| i.game_version == instance.minecraft_version && i.mod_loader == Some(t))
+            .min_by_key(|i| (i.release_type != 1, Reverse(i.file_id)))
+            .map(|i| i.file_id)
+    })
+}
+
+fn required(file: &CfFile) -> impl Iterator<Item = u64> + '_ {
+    file.dependencies.iter().filter(|d| d.relation_type == REQUIRED).map(|d| d.mod_id)
+}
+
+/// CurseForge-Projekte, die schon in der Instanz stecken.
+fn curseforge_projects(instance: &Instance) -> HashSet<u64> {
+    instance
+        .mods
+        .iter()
+        .filter_map(|m| match m.source {
+            ModSource::CurseForge { project_id, .. } => Some(u64::from(project_id)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn no_matching_file(m: &CfMod) -> AppError {
+    invalid(format!("Keine passende Version von {}", m.name))
+}
+
+/// Wählt für die Projekte einer Ebene die Datei-Nummer aus dem Index. Dieselbe Mod, die schon von Modrinth stammt,
+/// wird nicht noch einmal geholt.
+fn pick_files(ids: &[u64], mut mods: HashMap<u64, CfMod>, instance: &Instance) -> AppResult<Vec<(CfMod, u64)>> {
+    let installed: HashSet<String> = instance.mods.iter().map(|m| norm(&m.name)).collect();
+    let mut picks = Vec::new();
+    for id in ids {
+        let m = mods.remove(id).ok_or_else(|| invalid(format!("Die Abhängigkeit {id} gibt es bei CurseForge nicht mehr")))?;
+        if installed.contains(&norm(&m.name)) {
+            continue;
         }
-        let page: Page<CfFile> = get(client, &format!("mods/{project}/files"), &q).await?;
-        let mut files: Vec<CfFile> = page.data.into_iter().filter(|f| runs(instance, kind, f)).collect();
-        files.sort_by(|a, b| b.file_date.cmp(&a.file_date));
-        if let Some(f) = files.iter().find(|f| f.release_type == 1).or(files.first()) {
-            return Ok(Some(f.clone()));
-        }
+        let file = indexed_file(&m, instance).ok_or_else(|| no_matching_file(&m))?;
+        picks.push((m, file));
     }
-    Ok(None)
+    Ok(picks)
+}
+
+/// Ordnet den gewählten Projekten ihre Dateien zu; eine Datei, die doch nicht in der Instanz läuft, ist ein Fehler.
+fn attach_files(picks: Vec<(CfMod, u64)>, mut files: HashMap<u64, CfFile>, instance: &Instance) -> AppResult<Vec<(CfMod, CfFile)>> {
+    picks
+        .into_iter()
+        .map(|(m, file_id)| match files.remove(&file_id).filter(|f| runs(instance, ModKind::Mod, f)) {
+            Some(f) => Ok((m, f)),
+            None => Err(no_matching_file(&m)),
+        })
+        .collect()
+}
+
+/// Benötigte Abhängigkeiten Ebene für Ebene, mit je einer Sammelabfrage für Projekte und für Dateien. Einzeln (Projekt
+/// plus Dateiliste je Mod) sprengten große Bäume das Minutenlimit des Workers.
+async fn dependencies(client: &reqwest::Client, instance: &Instance, root: &CfFile) -> AppResult<Vec<(CfMod, CfFile)>> {
+    let installed = curseforge_projects(instance);
+    let mut seen = HashSet::from([root.mod_id]);
+    let mut found = Vec::new();
+    let mut level: Vec<u64> = required(root).collect();
+    while !level.is_empty() {
+        level.retain(|id| !installed.contains(id) && seen.insert(*id));
+        if found.len() + level.len() > MAX_DEPENDENCIES {
+            return Err(invalid("Dependency-Limit erreicht"));
+        }
+        let picks = pick_files(&level, mods_by_id(client, &level).await?, instance)?;
+        let file_ids: Vec<u64> = picks.iter().map(|(_, file_id)| *file_id).collect();
+        let resolved = attach_files(picks, files_by_id(client, &file_ids).await?, instance)?;
+        level = resolved.iter().flat_map(|(_, f)| required(f)).collect();
+        found.extend(resolved);
+    }
+    Ok(found)
 }
 
 fn remote(file: &CfFile) -> AppResult<RemoteFile> {
@@ -495,33 +621,8 @@ pub async fn install_mod(
     let root_key = format!("cf-{project}");
     let mut plan: Vec<(CfMod, CfFile)> = vec![(root_mod, root_file)];
     if kind == ModKind::Mod {
-        let installed: HashSet<String> = instance.mods.iter().map(|m| norm(&m.name)).collect();
-        let installed_cf: HashSet<u64> = instance
-            .mods
-            .iter()
-            .filter_map(|m| match m.source {
-                ModSource::CurseForge { project_id, .. } => Some(u64::from(project_id)),
-                _ => None,
-            })
-            .collect();
-        let mut seen: HashSet<u64> = HashSet::from([u64::from(project)]);
-        let mut queue: VecDeque<u64> = plan[0].1.dependencies.iter().filter(|d| d.relation_type == REQUIRED).map(|d| d.mod_id).collect();
-        while let Some(dep) = queue.pop_front() {
-            if !seen.insert(dep) || installed_cf.contains(&dep) {
-                continue;
-            }
-            if plan.len() > MAX_DEPENDENCIES {
-                return Err(invalid("Dependency-Limit erreicht"));
-            }
-            let m = mod_of(&client, dep as u32).await?;
-            // Dieselbe Mod, die schon von Modrinth stammt, nicht noch einmal holen.
-            if installed.contains(&norm(&m.name)) {
-                continue;
-            }
-            let f = pick_file(&client, dep, &instance, ModKind::Mod).await?.ok_or_else(|| invalid(format!("Keine passende Version von {}", m.name)))?;
-            queue.extend(f.dependencies.iter().filter(|d| d.relation_type == REQUIRED).map(|d| d.mod_id));
-            plan.push((m, f));
-        }
+        plan.extend(dependencies(&client, &instance, &plan[0].1).await?);
+        let installed_cf = curseforge_projects(&instance);
         // Unverträglichkeiten gegen das, was schon drin ist oder jetzt dazukommt.
         for (_, f) in &plan {
             if let Some(d) = f
@@ -715,20 +816,12 @@ pub(crate) async fn plan_pack(
     let prefix = format!("{}/", manifest.overrides);
 
     // Datei- und Projektangaben in Blöcken holen.
-    let ids: Vec<u32> = manifest.files.iter().map(|f| f.file_id).collect();
-    let mut infos: HashMap<u64, CfFile> = HashMap::new();
-    for chunk in ids.chunks(200) {
-        let got: Page<CfFile> = post(client, "mods/files", &serde_json::json!({ "fileIds": chunk })).await?;
-        infos.extend(got.data.into_iter().map(|f| (f.id, f)));
-    }
-    let mut project_ids: Vec<u32> = manifest.files.iter().map(|f| f.project_id).collect();
+    let ids: Vec<u64> = manifest.files.iter().map(|f| u64::from(f.file_id)).collect();
+    let infos = files_by_id(client, &ids).await?;
+    let mut project_ids: Vec<u64> = manifest.files.iter().map(|f| u64::from(f.project_id)).collect();
     project_ids.sort_unstable();
     project_ids.dedup();
-    let mut mods: HashMap<u64, CfMod> = HashMap::new();
-    for chunk in project_ids.chunks(200) {
-        let got: Page<CfMod> = post(client, "mods", &serde_json::json!({ "modIds": chunk })).await?;
-        mods.extend(got.data.into_iter().map(|m| (m.id, m)));
-    }
+    let mods = mods_by_id(client, &project_ids).await?;
 
     let mut files = Vec::new();
     let mut origins = HashMap::new();
@@ -878,9 +971,88 @@ mod tests {
         assert_eq!(remote(&jei()).unwrap().hashes["sha1"], "abcdef0123456789abcdef0123456789abcdef01");
     }
 
+    fn inst(loader: ModLoader, mc: &str) -> Instance {
+        Instance::from_new(NewInstance { name: "t".into(), minecraft_version: mc.into(), loader, loader_version: None })
+    }
+
+    /// Antwort von `POST /v1/mods` in der Form der API (gekürzt, ohne gespeicherte Katalogdaten).
+    fn mods_response() -> HashMap<u64, CfMod> {
+        let index = |mc: &str, file: u64, release: u8, loader: u8| json!({"gameVersion": mc, "fileId": file, "filename": "x.jar", "releaseType": release, "gameVersionTypeId": 1, "modLoader": loader});
+        let page: Page<CfMod> = serde_json::from_value(json!({"data": [
+            {"id": 10, "name": "Sodium", "classId": 6, "latestFilesIndexes": [
+                index("1.20.1", 500, 1, 4), index("1.20.1", 600, 2, 4), index("1.20.1", 700, 1, 6), index("1.20.4", 800, 1, 4)
+            ]},
+            {"id": 20, "name": "Fabric API", "classId": 6, "latestFilesIndexes": [index("1.20.1", 300, 2, 4), index("1.20.1", 200, 3, 4)]}
+        ], "pagination": {"totalCount": 2}}))
+        .unwrap();
+        page.data.into_iter().map(|m| (m.id, m)).collect()
+    }
+
+    #[test]
+    fn a_dependency_level_picks_files_from_the_index() {
+        let picks = pick_files(&[10, 20], mods_response(), &inst(ModLoader::Fabric, "1.20.1")).unwrap();
+        // Release vor der neueren Beta; ohne Release die neueste Datei.
+        assert_eq!(picks.iter().map(|(m, f)| (m.id, *f)).collect::<Vec<_>>(), [(10, 500), (20, 300)]);
+        // Quilt nimmt Fabric-Dateien, NeoForge nur die eigenen.
+        assert_eq!(pick_files(&[10], mods_response(), &inst(ModLoader::Quilt, "1.20.1")).unwrap()[0].1, 500);
+        assert_eq!(pick_files(&[10], mods_response(), &inst(ModLoader::NeoForge, "1.20.1")).unwrap()[0].1, 700);
+        assert!(pick_files(&[20], mods_response(), &inst(ModLoader::Forge, "1.20.1")).is_err());
+        assert!(pick_files(&[99], mods_response(), &inst(ModLoader::Fabric, "1.20.1")).is_err(), "fehlendes Projekt");
+    }
+
+    #[test]
+    fn mods_already_installed_from_modrinth_are_skipped() {
+        let mut instance = inst(ModLoader::Fabric, "1.20.1");
+        instance.mods.push(Mod {
+            id: "m".into(),
+            name: "fabric-api".into(),
+            version: "1".into(),
+            source: ModSource::Local,
+            file_name: "fabric-api.jar".into(),
+            sha1: None,
+            enabled: true,
+            kind: ModKind::Mod,
+            required_by: Vec::new(),
+        });
+        let picks = pick_files(&[10, 20], mods_response(), &instance).unwrap();
+        assert_eq!(picks.iter().map(|(m, _)| m.id).collect::<Vec<_>>(), [10]);
+    }
+
+    #[test]
+    fn picked_files_are_attached_and_checked() {
+        let instance = inst(ModLoader::Fabric, "1.20.1");
+        let picks = || pick_files(&[10, 20], mods_response(), &instance).unwrap();
+        // Antwort von `POST /v1/mods/files` für die gewählten Nummern.
+        let files = |sodium_mc: &str| -> HashMap<u64, CfFile> {
+            [
+                file(json!({"id": 500, "modId": 10, "gameVersions": ["Fabric", sodium_mc], "dependencies": [{"modId": 20, "relationType": 3}]})),
+                file(json!({"id": 300, "modId": 20, "gameVersions": ["Fabric", "1.20.1"]})),
+            ]
+            .into_iter()
+            .map(|f| (f.id, f))
+            .collect()
+        };
+        let resolved = attach_files(picks(), files("1.20.1"), &instance).unwrap();
+        assert_eq!(resolved.iter().map(|(m, f)| (m.id, f.id)).collect::<Vec<_>>(), [(10, 500), (20, 300)]);
+        assert_eq!(required(&resolved[0].1).collect::<Vec<_>>(), [20]);
+        // Passt die Datei trotz Index nicht zur Instanz oder fehlt sie in der Antwort, wird nichts installiert.
+        assert!(attach_files(picks(), files("1.19.2"), &instance).is_err());
+        assert!(attach_files(picks(), HashMap::new(), &instance).is_err());
+    }
+
+    #[test]
+    fn rate_limits_are_waited_out_a_few_times() {
+        assert_eq!(rate_limit_wait(Some("7"), 0), Some(Duration::from_secs(7)));
+        assert_eq!(rate_limit_wait(None, 0), Some(Duration::from_secs(5)));
+        assert_eq!(rate_limit_wait(None, 2), Some(Duration::from_secs(20)));
+        // Ein Datum statt Sekunden zählt nicht, ein zu langes Warten wird gekürzt.
+        assert_eq!(rate_limit_wait(Some("Wed, 21 Oct 2026 07:28:00 GMT"), 1), Some(Duration::from_secs(10)));
+        assert_eq!(rate_limit_wait(Some("3600"), 0), Some(MAX_WAIT));
+        assert_eq!(rate_limit_wait(Some("1"), RATE_LIMIT_RETRIES), None);
+    }
+
     #[test]
     fn instance_compatibility_follows_minecraft_and_loader() {
-        let inst = |loader, mc: &str| Instance::from_new(NewInstance { name: "t".into(), minecraft_version: mc.into(), loader, loader_version: None });
         let f = jei();
         assert!(runs(&inst(ModLoader::NeoForge, "26.3"), ModKind::Mod, &f));
         assert!(!runs(&inst(ModLoader::Fabric, "26.3"), ModKind::Mod, &f));

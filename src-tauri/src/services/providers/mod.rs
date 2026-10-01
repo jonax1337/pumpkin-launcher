@@ -126,6 +126,21 @@ fn check_url(url: &reqwest::Url) -> AppResult<()> {
     Ok(())
 }
 
+/// CurseForge hat angekündigt, Downloads vom CDN nur noch mit API-Schlüssel auszuliefern (sonst 401). Dann soll der
+/// Nutzer erfahren, was zu tun ist, statt einen nackten HTTP-Fehler zu sehen.
+fn cdn_wants_key(url: &reqwest::Url, status: reqwest::StatusCode) -> bool {
+    url.host_str().is_some_and(|h| h.ends_with(".forgecdn.net")) && matches!(status.as_u16(), 401 | 403)
+}
+
+fn ok_status(response: reqwest::Response) -> AppResult<reqwest::Response> {
+    if cdn_wants_key(response.url(), response.status()) {
+        return Err(invalid(
+            "CurseForge gibt diese Datei nur noch mit Schlüssel heraus. Bitte aktualisiere Pumpkin Launcher oder lade die Datei von Hand auf curseforge.com.",
+        ));
+    }
+    Ok(response.error_for_status()?)
+}
+
 /// GET mit handgeführten Weiterleitungen (höchstens drei), jedes Ziel gegen die Host-Liste geprüft.
 async fn fetch(client: &reqwest::Client, start: &str, limit: u64) -> AppResult<Vec<u8>> {
     let mut url = reqwest::Url::parse(start).map_err(|e| invalid(e.to_string()))?;
@@ -141,7 +156,7 @@ async fn fetch(client: &reqwest::Client, start: &str, limit: u64) -> AppResult<V
             url = url.join(location).map_err(|e| invalid(e.to_string()))?;
             continue;
         }
-        let mut response = response.error_for_status()?;
+        let mut response = ok_status(response)?;
         if response.content_length().is_some_and(|n| n > limit) {
             return Err(invalid("Download zu groß"));
         }
@@ -218,7 +233,7 @@ impl RemoteFile {
                         url = url.join(location).map_err(|e| invalid(e.to_string()))?;
                         continue;
                     }
-                    let mut response = response.error_for_status()?;
+                    let mut response = ok_status(response)?;
                     let total = response.content_length().unwrap_or(self.size);
                     if total > limit {
                         return Err(invalid("Download zu groß"));
@@ -341,6 +356,16 @@ mod tests {
         ] {
             assert!(check_url(&reqwest::Url::parse(bad).unwrap()).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn only_a_refusing_curseforge_cdn_asks_for_a_key() {
+        let url = |u: &str| reqwest::Url::parse(u).unwrap();
+        let cdn = url("https://edge.forgecdn.net/files/4013/966/a.jar");
+        assert!(cdn_wants_key(&cdn, reqwest::StatusCode::UNAUTHORIZED));
+        assert!(cdn_wants_key(&url("https://mediafilez.forgecdn.net/files/1/2/a.jar"), reqwest::StatusCode::FORBIDDEN));
+        assert!(!cdn_wants_key(&cdn, reqwest::StatusCode::NOT_FOUND));
+        assert!(!cdn_wants_key(&url("https://files.feed-the-beast.com/blob/aa/x.jar"), reqwest::StatusCode::UNAUTHORIZED));
     }
 
     #[test]
