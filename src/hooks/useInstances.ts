@@ -4,7 +4,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { askPlayerName, openAddOffline, startMsLogin } from "@/components/PlayerNames";
-import { t } from "@/i18n/core";
+import { currentLanguage, t } from "@/i18n/core";
 import { usableAccount, useOfflineAllowed } from "@/store/offline";
 import { api } from "@/lib/api";
 import { autoMemoryMb, formatClock, MEMORY_FALLBACK_MAX_MB, MEMORY_FALLBACK_MB, maxMemoryMb } from "@/lib/format";
@@ -25,7 +25,7 @@ export function useInstances() {
 
 /** Gruppennamen aller Instanzen, alphabetisch; Gruppen gibt es nur über die Instanzen, die sie tragen. */
 export const groupsOf = (instances: Instance[]) =>
-  [...new Set(instances.flatMap((i) => (i.group ? [i.group] : [])))].sort((a, b) => a.localeCompare(b, "de"));
+  [...new Set(instances.flatMap((i) => (i.group ? [i.group] : [])))].sort((a, b) => a.localeCompare(b, currentLanguage()));
 
 /** Anzeige für Instanzen ohne Gruppe (Bibliothek und Einstellungen); live berechnet, kein fester Text. */
 export const ungrouped = () => t("detail.settings.noGroup");

@@ -307,6 +307,7 @@ export const components = {
   "components.export.entry.screenshots": "Screenshots",
   "components.export.entry.servers": "Serverliste",
   "components.export.include": "Mitnehmen",
+  "components.export.fileFilter": "Modrinth-Modpack",
   "components.export.includeHelp":
     "Inhalte von Modrinth werden verlinkt, alles andere kommt mit in die Datei. CurseForge-Dateien darfst du so nicht unbedingt öffentlich teilen.",
   "components.export.folderEmpty": "Der Spielordner ist noch leer. Exportiert werden Version und Loader.",
@@ -460,6 +461,7 @@ export const components = {
   "components.detail.projectLoadFailed": "Das Projekt konnte nicht geladen werden",
   "components.detail.fitsHeading": "Passt zu",
   "components.detail.notSpecified": "Nicht angegeben",
+  "components.detail.shaderLoaders": "Iris (Fabric, Quilt, NeoForge)",
   "components.detail.thisInstance": "Diese Instanz",
   "components.detail.fits": "Passt",
   "components.detail.noVersion": "Keine Version",

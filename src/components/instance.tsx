@@ -186,7 +186,7 @@ function ExportDialog({ instance, onExport, onClose }: { instance: Instance; onE
   const toggle = (name: string, on: boolean) => setPicked(new Set(on ? [...chosen, name] : [...chosen].filter((n) => n !== name)));
 
   async function submit() {
-    const path = await saveFile({ defaultPath: packFileName(instance.name), filters: [{ name: "Modrinth-Modpack", extensions: ["mrpack"] }] });
+    const path = await saveFile({ defaultPath: packFileName(instance.name), filters: [{ name: t("components.export.fileFilter"), extensions: ["mrpack"] }] });
     if (!path) return;
     onExport([...chosen], path);
     onClose();

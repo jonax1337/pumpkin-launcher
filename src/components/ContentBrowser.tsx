@@ -393,7 +393,7 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
 const loaderNamesOf = (loaders: string[]) =>
   loaders.map((l) => (l === "datapack" ? t("components.catalog.kind.datapack") : (LOADER_LABELS[l as ModLoader] ?? l))).join(", ");
 const loaderList = (v: ContentVersion) => loaderNamesOf(v.loaders.filter((l) => l !== "minecraft"));
-const loaderNames = (v: ContentVersion) => loaderList(v) || "Vanilla";
+const loaderNames = (v: ContentVersion) => loaderList(v) || LOADER_LABELS.vanilla;
 
 /** Inhalt der Bestätigung; wird beim Schließen verworfen, der Name beginnt also immer beim Pack-Titel. */
 function PackConfirmBody({ title, versions, picked, onConfirm }: {
@@ -803,7 +803,7 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
                   {type !== "resourcepack" && type !== "datapack" && (
                     <>
                       <dt>{t("components.common.loader")}</dt>
-                      <dd>{type === "shader" ? "Iris (Fabric, Quilt, NeoForge)" : loaders.length ? loaderNamesOf(loaders) : all.data ? t("components.detail.notSpecified") : "…"}</dd>
+                      <dd>{type === "shader" ? t("components.detail.shaderLoaders") : loaders.length ? loaderNamesOf(loaders) : all.data ? t("components.detail.notSpecified") : "…"}</dd>
                     </>
                   )}
                   {source === "modrinth" && (
@@ -926,7 +926,7 @@ export function AddContentSheet({ instance, world, open, onOpenChange, initialKi
                 label={t("components.sheet.sourceLabel")}
                 value={source}
                 onChange={(v) => setSource(v as Source)}
-                options={[{ value: "modrinth", label: "Modrinth" }, { value: "curseforge", label: "CurseForge" }]}
+                options={[{ value: "modrinth", label: SOURCES.modrinth.label }, { value: "curseforge", label: SOURCES.curseforge.label }]}
               />
             )}
             <SearchField size="s" value={query} onChange={setQuery} placeholder={t("components.sheet.searchPlaceholder")} autoFocus />

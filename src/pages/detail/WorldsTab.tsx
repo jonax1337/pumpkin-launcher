@@ -33,7 +33,7 @@ const GAME_MODE_KEYS: Record<NonNullable<World["gameMode"]>, string> = {
 
 /** „Hardcore · 1.21.4 · 182 MB · vor 2 Stunden“ */
 const worldLine = (w: World) =>
-  [w.hardcore ? "Hardcore" : w.gameMode && t(GAME_MODE_KEYS[w.gameMode]), w.version, formatSize(w.sizeBytes), relativeTime(w.lastPlayed)].filter(Boolean).join(" · ");
+  [w.hardcore ? t("detail.worlds.hardcore") : w.gameMode && t(GAME_MODE_KEYS[w.gameMode]), w.version, formatSize(w.sizeBytes), relativeTime(w.lastPlayed)].filter(Boolean).join(" · ");
 
 /** Welten und Server einer Instanz: direkt hineinspielen, Welten sichern und wiederherstellen, Serverliste pflegen. */
 export function WorldsTab({ instance, onLaunched }: { instance: Instance; onLaunched: () => void }) {

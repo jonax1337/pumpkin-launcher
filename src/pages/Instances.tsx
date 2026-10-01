@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useSearchParams } from "react-router";
-import { useI18n } from "@/i18n";
+import { currentLanguage, useI18n } from "@/i18n";
 import { LOUD_PHASES, PlayButton, StatusChip, usePhase } from "@/components/game";
 import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
 import { loaderLine, playtimeLine } from "@/components/common";
@@ -39,7 +39,7 @@ function saveMode(mode: Mode) {
 
 const SORTS: Record<Sort, (a: Instance, b: Instance) => number> = {
   recent: (a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0) || b.createdAt - a.createdAt,
-  name: (a, b) => a.name.localeCompare(b.name, "de"),
+  name: (a, b) => a.name.localeCompare(b.name, currentLanguage()),
   created: (a, b) => b.createdAt - a.createdAt,
 };
 

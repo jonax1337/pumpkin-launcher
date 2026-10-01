@@ -307,6 +307,7 @@ export const components: typeof deComponents = {
   "components.export.entry.screenshots": "Screenshots",
   "components.export.entry.servers": "Server list",
   "components.export.include": "Include",
+  "components.export.fileFilter": "Modrinth modpack",
   "components.export.includeHelp":
     "Modrinth content is linked, everything else goes into the file. You may not be allowed to share CurseForge files publicly.",
   "components.export.folderEmpty": "The game folder is still empty. Version and loader will be exported.",
@@ -460,6 +461,7 @@ export const components: typeof deComponents = {
   "components.detail.projectLoadFailed": "Couldn’t load the project",
   "components.detail.fitsHeading": "Fits",
   "components.detail.notSpecified": "Not specified",
+  "components.detail.shaderLoaders": "Iris (Fabric, Quilt, NeoForge)",
   "components.detail.thisInstance": "This instance",
   "components.detail.fits": "Fits",
   "components.detail.noVersion": "No version",

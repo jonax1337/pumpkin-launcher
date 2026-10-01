@@ -200,7 +200,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
   useEffect(() => onBusy(busy), [busy, onBusy]);
 
   async function chooseFile() {
-    const [picked] = await api.pickPaths({ filters: [{ name: "Modpack", extensions: ["mrpack"] }] });
+    const [picked] = await api.pickPaths({ filters: [{ name: t(TYPE_ONE_KEYS.modpack), extensions: ["mrpack"] }] });
     if (picked) setPath(picked);
   }
 
