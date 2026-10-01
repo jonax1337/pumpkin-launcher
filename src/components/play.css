@@ -1,4 +1,4 @@
-/* Spielen: der große Knopf (PlayButton in game.tsx) mit seinen Zuständen, der Balken darin (PlayBar, .prog),
+/* Spielen: der große Knopf (PlayButton in play/PlayButton.tsx) mit seinen Zuständen, der Balken darin (PlayBar, .prog),
    die Statuszeile darunter (PlayStatus) und die Protokoll-Konsole (LogConsole).
    Domänen-Baustein außerhalb des Kits: eigene Maße und Farben (.play .pbar nutzt die Knopffarben).
    Eingebunden in src/index.css hinter dem Kit (gleiche Schicht). */
