@@ -142,6 +142,21 @@ pub enum QuickPlay {
     Server { address: String },
 }
 
+/// Was das Frontend zum Start mitgibt; die Startoptionen der Instanz selbst liest das Backend aus ihr.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchOptions {
+    /// Offline-Spielername; mit `account_id` (Microsoft-Konto) ohne Bedeutung.
+    pub username: String,
+    pub account_id: Option<String>,
+    /// Java-Einstellung des Launchers; der Pfad der Instanz geht vor.
+    pub java_path: Option<String>,
+    /// RAM-Standard des Launchers für Instanzen ohne eigenen Wert.
+    pub default_memory_mb: Option<u32>,
+    /// Direkt in eine Welt oder auf einen Server.
+    pub quick_play: Option<QuickPlay>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Instance {
