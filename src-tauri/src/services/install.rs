@@ -55,9 +55,12 @@ pub async fn fetch_version(client: &reqwest::Client, dirs: &Dirs, version_id: &s
 
 /// Liest eine bereits installierte Versions-JSON (für den Start ohne Netz).
 pub async fn installed_version(dirs: &Dirs, version_id: &str) -> AppResult<VersionJson> {
-    download::read_json(&dirs.version_file(version_id, "json")).await.map_err(|err| match err {
-        err if is_missing(&err) => AppError::Invalid(format!("Version {version_id} ist nicht installiert")),
-        other => other,
+    download::read_json(&dirs.version_file(version_id, "json")).await.map_err(|err| {
+        if is_missing(&err) {
+            AppError::Invalid(format!("Version {version_id} ist nicht installiert"))
+        } else {
+            err
+        }
     })
 }
 

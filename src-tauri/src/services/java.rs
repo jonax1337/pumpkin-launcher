@@ -105,10 +105,10 @@ pub fn resolve(dirs: &Dirs, component: &str, instance_path: Option<&str>, global
     Ok(java)
 }
 
-/// Prüft einen eigenen Java-Pfad: Er muss auf eine vorhandene `javaw.exe` bzw. `java.exe` zeigen
+/// Prüft einen (bereits getrimmten) eigenen Java-Pfad: Er muss auf eine vorhandene `javaw.exe` bzw. `java.exe` zeigen
 /// (unter Linux/macOS `java`).
 pub fn custom_java(path: &str, setting: JavaSetting) -> AppResult<PathBuf> {
-    let path = PathBuf::from(path.trim());
+    let path = PathBuf::from(path);
     let name = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
     if !JAVA_FILE_NAMES.contains(&name.as_str()) {
         return Err(AppError::Invalid(format!(
@@ -209,6 +209,7 @@ mod tests {
 
         assert_eq!(resolve(&dirs, "delta", Some(&own), Some(&global)).unwrap(), PathBuf::from(&own));
         assert_eq!(resolve(&dirs, "delta", Some("  "), Some(&global)).unwrap(), PathBuf::from(&global));
+        assert_eq!(resolve(&dirs, "delta", Some(&format!(" {own} ")), None).unwrap(), PathBuf::from(&own));
         // Ein fehlendes Java nennt die Stelle, an der der Pfad eingestellt ist.
         let gone = root.join("gone").join(JAVA_FILE_NAMES[0]).to_string_lossy().into_owned();
         let own_gone = resolve(&dirs, "delta", Some(&gone), Some(&global)).unwrap_err().to_string();
@@ -230,7 +231,7 @@ mod tests {
         let gone = root.join(JAVA_FILE_NAMES[0]).to_string_lossy().into_owned();
         assert!(custom_java(&gone, JavaSetting::Instance).unwrap_err().to_string().starts_with("Java nicht gefunden"));
         let java = fake_java(&root, &JAVA_FILE_NAMES[0].to_uppercase());
-        assert_eq!(custom_java(&format!(" {java} "), JavaSetting::Instance).unwrap(), PathBuf::from(&java));
+        assert_eq!(custom_java(&java, JavaSetting::Instance).unwrap(), PathBuf::from(&java));
         std::fs::remove_dir_all(root).unwrap();
     }
 }

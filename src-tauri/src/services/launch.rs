@@ -29,8 +29,14 @@ const LEGACY_JVM_ARGS: [&str; 3] = ["-Djava.library.path=${natives_directory}", 
 const MAX_SESSION: Duration = Duration::from_secs(7 * 24 * 3600);
 
 /// Quick Play ab 1.20: Launcher-Feature in den Regeln der Spielargumente und dessen Platzhalter.
-const WORLD_FEATURE: (&str, &str) = ("is_quick_play_singleplayer", "quickPlaySingleplayer");
-const SERVER_FEATURE: (&str, &str) = ("is_quick_play_multiplayer", "quickPlayMultiplayer");
+#[derive(Clone, Copy)]
+struct QuickPlayFeature {
+    rule: &'static str,
+    placeholder: &'static str,
+}
+
+const WORLD_FEATURE: QuickPlayFeature = QuickPlayFeature { rule: "is_quick_play_singleplayer", placeholder: "quickPlaySingleplayer" };
+const SERVER_FEATURE: QuickPlayFeature = QuickPlayFeature { rule: "is_quick_play_multiplayer", placeholder: "quickPlayMultiplayer" };
 const DEFAULT_PORT: &str = "25565";
 
 /// Was für einen Start gebraucht wird.
@@ -133,9 +139,9 @@ pub fn build_args_for(spec: &LaunchSpec, env: &Env, session: Option<&Session>) -
     ]);
     let quick_play = spec.quick_play.map(|target| quick_play_args(version, target)).transpose()?;
     let mut env = env.clone();
-    if let Some(QuickPlayArgs::Feature { feature, var, value }) = &quick_play {
-        env.features.push(feature);
-        vars.insert(var, value.clone());
+    if let Some(QuickPlayArgs::Feature { feature, value }) = &quick_play {
+        env.features.push(feature.rule);
+        vars.insert(feature.placeholder, value.clone());
     }
 
     let (jvm, game) = match (&version.arguments, &version.minecraft_arguments) {
@@ -175,7 +181,7 @@ fn window_args(window: GameWindow) -> Vec<String> {
 
 /// Kann die Version direkt in eine Welt starten? Auf Server geht es immer (vor 1.20 über `--server`).
 pub fn starts_into_worlds(version: &VersionJson) -> bool {
-    offers_feature(version, WORLD_FEATURE.0)
+    offers_feature(version, WORLD_FEATURE.rule)
 }
 
 /// Ob eine Regel der Spielargumente nach diesem Launcher-Feature fragt.
@@ -188,18 +194,18 @@ fn offers_feature(version: &VersionJson, feature: &str) -> bool {
 /// Wie Minecraft das Quick-Play-Ziel bekommt.
 enum QuickPlayArgs {
     /// Ab 1.20: Feature einschalten, Ziel in seinen Platzhalter; die Argumente stehen in der Versions-JSON.
-    Feature { feature: &'static str, var: &'static str, value: String },
+    Feature { feature: QuickPlayFeature, value: String },
     /// Ältere Versionen kennen nur Server, als `--server`/`--port`.
     Legacy(Vec<String>),
 }
 
 fn quick_play_args(version: &VersionJson, target: &QuickPlay) -> AppResult<QuickPlayArgs> {
-    let ((feature, var), value) = match target {
+    let (feature, value) = match target {
         QuickPlay::World { id } => (WORLD_FEATURE, id),
         QuickPlay::Server { address } => (SERVER_FEATURE, address),
     };
-    if offers_feature(version, feature) {
-        return Ok(QuickPlayArgs::Feature { feature, var, value: value.clone() });
+    if offers_feature(version, feature.rule) {
+        return Ok(QuickPlayArgs::Feature { feature, value: value.clone() });
     }
     match target {
         QuickPlay::World { .. } => {
