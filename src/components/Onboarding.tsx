@@ -2,7 +2,9 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { NewInstanceDialog } from "@/components/NewInstanceDialog";
 import { showNameError, startMsLogin } from "@/components/PlayerNames";
+import { useForeignInstances } from "@/hooks/useImport";
 import { useCreateInstance, usePlay, useVersions } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import type { ContentVersion } from "@/lib/modrinth";
@@ -47,6 +49,8 @@ export function Onboarding() {
   const choice = STARTS.find((s) => s.id === start)!;
   // Pfeiltasten in der Startwahl: Auswahl folgt dem Fokus, ein Tab-Stopp.
   const roveStarts = useRoving<HTMLDivElement>("xy");
+  // Wer schon einen anderen Launcher nutzt, übernimmt seine Instanzen statt neu anzufangen.
+  const foreign = useForeignInstances(step === 2).data?.filter((f) => !f.imported).length ?? 0;
 
   function next(e: FormEvent) {
     e.preventDefault();
@@ -155,6 +159,11 @@ export function Onboarding() {
                 ))}
               </div>
               <p className="help onb-next" aria-live="polite">{choice.next}</p>
+              <NewInstanceDialog tab="import">
+                <Button variant="ghost" size="s" icon="swap" bleed="start" disabled={busy}>
+                  {foreign ? `${foreign} ${foreign === 1 ? "Instanz" : "Instanzen"} aus anderen Launchern übernehmen` : "Aus anderem Launcher importieren"}
+                </Button>
+              </NewInstanceDialog>
             </div>
             <div className="of">
               {microsoft ? (

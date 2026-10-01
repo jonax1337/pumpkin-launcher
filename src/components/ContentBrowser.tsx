@@ -9,7 +9,7 @@ import {
   MenuItem, MenuLabel, MenuNote, MenuScroll, MenuSep, Meta, Panel, ProjectIcon, RowTitle, SceneThumb, SearchField, SectionHeader, Select, Sheet, Skel, SkelRow,
   Switch, TabPanel, Tabs, TextField, Tip, Toolbar,
 } from "@/ui";
-import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { cancelActive, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { useInstances } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import {
@@ -239,12 +239,6 @@ function AddButton({ instance, projectId, title, type, versionId, large, compact
   ) : (
     <Button size="s" icon="plus" disabled={!!active} aria-label={`${title} hinzufügen`} onClick={add}>Hinzufügen</Button>
   );
-}
-
-/** Laufende Modpack-Installation abbrechen; das Ergebnis meldet der zentrale Fehler-Toast neutral. */
-function cancelActive() {
-  const op = useContentState.getState().active;
-  if (op) void api.packInstallCancel(op).catch((e: Error) => toast.error(e.message));
 }
 
 /** Ohne Instanz-Kontext: Menü mit allen Instanzen; unpassende ausgegraut mit Grund, sonst „Neue Instanz anlegen…“. */

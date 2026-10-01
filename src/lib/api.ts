@@ -7,6 +7,7 @@ import {
   INSTALL_CANCELLED,
   type Account,
   type ExitPayload,
+  type ForeignInstance,
   type LibrarySkin,
   type MsLoginStart,
   type Instance,
@@ -118,6 +119,35 @@ const mock = {
     await delay(800);
     const source = findInstance(instanceId);
     const inst: Instance = { ...clone(source), id: newId("inst"), name: `${source.name} (Kopie)`, createdAt: Date.now(), lastPlayedAt: null, playtimeSecs: 0 };
+    db.instances.push(inst);
+    return clone(inst);
+  },
+  async importDetect(): Promise<ForeignInstance[]> {
+    await delay(500);
+    return mockData!.MOCK_FOREIGN.map((f) => ({ ...f, imported: db.instances.some((i) => i.importedFrom === f.path) }));
+  },
+  /** Wie `instance_import`: Kopierfortschritt, abbrechbar, danach eine Instanz ohne Inhalte. */
+  async importInstance(source: ForeignInstance, operationId: string) {
+    const total = 120;
+    for (let done = 0; done <= total; done += 8) {
+      if (db.cancelled.delete(operationId)) throw new Error(INSTALL_CANCELLED);
+      emit<ContentProgress>("content-progress", { operationId, phase: "copy", done, total });
+      await delay(100);
+    }
+    const { name, minecraftVersion, loader, loaderVersion, memoryMb, jvmArgs, path } = source;
+    const inst: Instance = {
+      ...mockData!.blankInstanceFields(),
+      id: newId("inst"),
+      name,
+      minecraftVersion,
+      loader,
+      loaderVersion,
+      memoryMb,
+      jvmArgs,
+      importedFrom: path,
+      mods: [],
+      createdAt: Date.now(),
+    };
     db.instances.push(inst);
     return clone(inst);
   },
@@ -353,6 +383,13 @@ export const api = {
     tauri
       ? revealItemInDir(path).catch((err: unknown) => Promise.reject(new Error(String(err))))
       : Promise.reject(new Error("Ordner lassen sich nur in der Pumpkin Launcher-App öffnen.")),
+
+  /** Instanzen anderer Launcher an den Standardorten oder, mit `folder` (absolut), in diesem Ordner. */
+  importDetect: (folder: string | null): Promise<ForeignInstance[]> =>
+    tauri ? call("import_detect", { folder }) : mock.importDetect(),
+  /** Neue Instanz aus einer Instanz eines anderen Launchers; Fortschritt als `content-progress`, Abbruch über `packInstallCancel`. */
+  importInstance: (source: ForeignInstance, operationId: string): Promise<Instance> =>
+    tauri ? call("instance_import", { source, operationId }) : mock.importInstance(source, operationId),
 
   templateSave: (instanceId: string, name: string): Promise<Template> =>
     tauri ? call("template_save", { instanceId, name }) : mock.templateSave(instanceId, name),
