@@ -1,6 +1,6 @@
 // Adressen und Query-Parameter der Seiten an einer Stelle: Absender (Menüs, Toasts, Tastenkürzel, Weiterleitungen)
 // und Empfänger (Bibliothek, Entdecken, Instanz) können so nicht auseinanderlaufen.
-import type { CatalogType, Source } from "./modrinth";
+import type { CatalogType, Source } from "./content-types";
 
 // ---------- Bibliothek: Dialog „Neue Instanz“ ----------
 

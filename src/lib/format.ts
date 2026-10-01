@@ -89,6 +89,12 @@ export const formatCount = (n: number) => {
   return lang === "de" ? s.replace(/\./g, " ") : s;
 };
 
+/** Downloadzahl kompakt („1,2 Mio.“). */
+export const formatDownloads = (n: number) => new Intl.NumberFormat(currentLanguage(), { notation: "compact" }).format(n);
+
+/** „Update“ bzw. „Updates“ neben einer Anzahl. */
+export const updatesLabel = (n: number) => t(n === 1 ? "common.update" : "common.updates");
+
 export function formatMemory(mb: number | null): string {
   if (mb == null) return t("format.memoryDefault");
   return `${(mb / MB_PER_GB).toLocaleString(currentLanguage(), { maximumFractionDigits: 1 })} GB`;

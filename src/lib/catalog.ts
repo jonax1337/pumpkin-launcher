@@ -1,4 +1,4 @@
-import type { CatalogType } from "./modrinth";
+import type { CatalogType } from "./content-types";
 import type { ModKind } from "./types";
 
 // Beschriftungen als Wörterbuchschlüssel: Der Text entsteht erst bei der Ausgabe, damit ein Sprachwechsel sofort greift.

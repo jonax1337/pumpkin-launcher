@@ -9,7 +9,7 @@ import { importable, useForeignInstances } from "@/hooks/useImport";
 import { useCreateInstance, usePlay, useVersions } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
-import type { ContentVersion } from "@/lib/modrinth";
+import type { ContentVersion } from "@/lib/content-types";
 import { discoverUrl, newInstanceUrl } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { Button, Choice, Glyph, Hint, useRoving } from "@/ui";

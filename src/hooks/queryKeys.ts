@@ -1,6 +1,6 @@
 // Alle Query-Schlüssel an einer Stelle (eigene Datei, damit sich die Hook-Module nicht gegenseitig importieren müssen).
 // Wer eine Abfrage auffrischen will, nennt den Schlüssel hier statt eine Zeichenkette zu tippen.
-import type { CatalogType, SearchIndex, Source } from "@/lib/modrinth";
+import type { CatalogType, SearchIndex, Source } from "@/lib/content-types";
 import type { ModLoader } from "@/lib/types";
 
 export const instanceKeys = {
