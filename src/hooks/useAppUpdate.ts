@@ -114,11 +114,10 @@ function launcherIdle() {
   return new Promise<void>((resolve) => {
     const check = () => {
       if (launcherBusy()) return;
-      offGame();
       offTasks();
       resolve();
     };
-    const offGame = useGame.subscribe(check);
+    // Enthält den Game-Store: Spiel und Aufgaben melden sich über denselben Abonnenten.
     const offTasks = subscribeRunningTasks(check);
   });
 }

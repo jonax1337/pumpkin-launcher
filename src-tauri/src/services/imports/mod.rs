@@ -86,11 +86,11 @@ pub fn detect(state: &AppState, folder: Option<&Path>) -> Vec<ForeignInstance> {
 }
 
 /// Standardorte im Datenordner des Systems (unter Windows `%APPDATA%`). MultiMC ist portabel und hat keinen;
-/// dafür gibt es „Ordner wählen…“. Die CurseForge App legt ihren Ordner im Benutzerordner an, unter macOS in
-/// „Dokumente“ (CurseForge-Hilfe „Minecraft - Getting Started“).
+/// dafür gibt es „Ordner wählen…“. Die CurseForge App legt ihren Ordner unter Windows im Benutzerordner an, sonst
+/// in „Dokumente“ (CurseForge-Hilfe „Minecraft - Getting Started“).
 fn default_roots() -> Vec<PathBuf> {
     let data = dirs::data_dir();
-    let curseforge = if cfg!(target_os = "macos") { dirs::document_dir() } else { dirs::home_dir() };
+    let curseforge = if cfg!(windows) { dirs::home_dir() } else { dirs::document_dir() };
     [
         data.as_ref().map(|d| d.join("PrismLauncher")),
         data.as_ref().map(|d| d.join("ModrinthApp")),

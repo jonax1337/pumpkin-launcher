@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { api } from "@/lib/api";
 import type { Instance, Server, World, WorldBackup } from "@/lib/types";
 import { useTasks } from "@/store/tasks";
+import { instanceKeys } from "./useInstances";
 
 export const worldKeys = {
   /** Welten, Sicherungen und Serverliste einer Instanz (z. B. nach dem Spielen neu laden). */
@@ -66,6 +67,7 @@ export const useRemoveServer = (instanceId: string) =>
 export const useWorldJob = create<{ job: { instanceId: string; worldId: string | null; label: string; p: number | null } | null }>(() => ({ job: null }));
 
 export function useWorldJobs(instance: Instance) {
+  const qc = useQueryClient();
   const track = async <R,>(world: { id: string | null; name: string }, verb: { running: string; done: string }, run: (operationId: string) => Promise<R>) => {
     const operationId = crypto.randomUUID();
     const label = `„${world.name}“ ${verb.running}`;
@@ -93,7 +95,13 @@ export function useWorldJobs(instance: Instance) {
   );
   const remove = useWorldChange(
     instance.id,
-    (world: World) => track(world, { running: "löschen", done: "gelöscht" }, (op) => api.worldDelete(instance.id, world.id, op)),
+    (world: World) =>
+      track(world, { running: "löschen", done: "gelöscht" }, async (op) => {
+        const backup = await api.worldDelete(instance.id, world.id, op);
+        // Das Backend vergisst die Welt als Quick-Play-Ziel; Home soll „Weiterspielen“ nicht mehr zeigen.
+        await qc.invalidateQueries({ queryKey: instanceKeys.all });
+        return backup;
+      }),
     (_, world) => `„${world.name}“ gelöscht. Die Sicherung davon findest du unter „Sicherungen“.`,
   );
   const restore = useWorldChange(

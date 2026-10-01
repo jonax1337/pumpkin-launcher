@@ -1,5 +1,6 @@
 //! Kataloge ohne API-Key: FTB (öffentliche API, installierbar), Technic und CurseForge (nur lesend).
 //! Alle liefern dieselben Formen wie Modrinth (`Hit`, `Project`, `Version`), damit die Oberfläche sie gleich zeigt.
+use super::download;
 use super::modrinth::{self, invalid};
 use crate::error::{AppError, AppResult};
 use serde::de::DeserializeOwned;
@@ -41,9 +42,6 @@ pub(crate) const MIB: u64 = 1024 * 1024;
 /// Größtes Pack-Zip, das geladen wird, und Grenzen fürs Entpacken.
 pub(crate) const ZIP_LIMIT: u64 = 2 * 1024 * 1024 * 1024;
 const EXPANDED_LIMIT: u64 = 8 * 1024 * 1024 * 1024;
-/// Versuche je Download-Adresse; die Pause davor wächst mit jedem Versuch.
-const ATTEMPTS: u32 = 3;
-const RETRY_PAUSE: std::time::Duration = std::time::Duration::from_secs(1);
 const MAX_ENTRIES: usize = 20_000;
 
 /// Dateien eines Pack-Zips wie bei `zip_paths`, dazu Größen- und Kompressionsgrenzen gegen ZIP-Bomben
@@ -195,7 +193,7 @@ async fn fetch(client: &reqwest::Client, start: &str, limit: u64) -> AppResult<V
     Ok(data)
 }
 
-/// Versucht `attempt` je Adresse bis zu `ATTEMPTS`-mal, dann mit der nächsten Adresse: bei Hunderten Dateien fällt mal
+/// Versucht `attempt` je Adresse bis zu `download::ATTEMPTS`-mal, dann mit der nächsten Adresse: bei Hunderten Dateien fällt mal
 /// eine Verbindung aus. Lehnt der Server endgültig ab, kommt gleich die nächste Adresse dran.
 async fn from_any<'a, T, Fut>(urls: &'a [String], mut attempt: impl FnMut(&'a str) -> Fut) -> AppResult<T>
 where
@@ -203,9 +201,9 @@ where
 {
     let mut last: Option<AppError> = None;
     for url in urls {
-        for n in 0..ATTEMPTS {
+        for n in 0..download::ATTEMPTS {
             if n > 0 {
-                tokio::time::sleep(RETRY_PAUSE * n).await;
+                tokio::time::sleep(download::retry_pause(n)).await;
             }
             match attempt(url).await {
                 Ok(value) => return Ok(value),

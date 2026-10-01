@@ -207,24 +207,31 @@ pub fn delete_backup(dirs: &Dirs, instance_id: &str, backup_id: &str) -> AppResu
 pub async fn remove_leftovers(state: &AppState) -> AppResult<usize> {
     let Ok(_guard) = state.operation(None) else { return Ok(0) };
     let dirs: Vec<PathBuf> = state.instances.list().iter().map(|i| state.dirs.backups(&i.id)).collect();
-    blocking(move |_| dirs.iter().map(|dir| remove_leftovers_in(dir)).sum()).await
+    blocking(move |_| Ok(dirs.iter().map(|dir| remove_leftovers_in(dir)).sum())).await
 }
 
-/// Was sich nicht entfernen lässt (unter Windows etwa eine noch geöffnete Datei), bleibt bis zum nächsten Start.
-fn remove_leftovers_in(dir: &Path) -> AppResult<usize> {
-    let mut removed = 0;
-    for entry in entries(dir)? {
-        if !entry.file_name().to_str().is_some_and(is_leftover) {
-            continue;
-        }
-        let path = entry.path();
-        let result = if entry.file_type()?.is_dir() { fs::remove_dir_all(&path) } else { fs::remove_file(&path) };
-        match result {
-            Ok(()) => removed += 1,
-            Err(err) => tracing::warn!(path = %path.display(), %err, "Rest eines unterbrochenen Vorgangs nicht entfernt"),
-        }
-    }
-    Ok(removed)
+/// Was sich nicht entfernen lässt (unter Windows etwa eine noch geöffnete Datei) oder nicht lesbar ist, bleibt bis zum
+/// nächsten Start und hält die übrigen Instanzen nicht auf.
+fn remove_leftovers_in(dir: &Path) -> usize {
+    let entries = entries(dir).unwrap_or_else(|err| {
+        tracing::warn!(path = %dir.display(), %err, "Sicherungsordner nicht lesbar");
+        Vec::new()
+    });
+    let leftovers = entries.iter().filter(|entry| entry.file_name().to_str().is_some_and(is_leftover));
+    leftovers
+        .filter(|entry| match remove_entry(entry) {
+            Ok(()) => true,
+            Err(err) => {
+                tracing::warn!(path = %entry.path().display(), %err, "Rest eines unterbrochenen Vorgangs nicht entfernt");
+                false
+            }
+        })
+        .count()
+}
+
+fn remove_entry(entry: &fs::DirEntry) -> io::Result<()> {
+    let path = entry.path();
+    if entry.file_type()?.is_dir() { fs::remove_dir_all(path) } else { fs::remove_file(path) }
 }
 
 /// Namen, die nur `backup` (`<Welt>-<Unix-ms>.zip.part`) und `delete` (`<Welt>-<Unix-ms>.deleting`) vergeben.

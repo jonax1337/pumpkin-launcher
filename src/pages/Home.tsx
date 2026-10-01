@@ -37,6 +37,7 @@ function HeroInfo({ instance }: { instance: Instance }) {
   const u = updates.data?.length ?? 0;
   // Während des Spiels sagt der Knopf „Läuft seit …“; „Zuletzt gespielt in dieser Minute“ wäre doppelt.
   const playing = phase === "starting" || phase === "running";
+  // Der Ordnername statt des Weltnamens: den kennt nur die Weltenliste, und die liest jede Welt vom Datenträger.
   const resume = playing || phase === "preparing" ? null : instance.lastQuickPlay;
   return (
     <div className="hero-k rise">

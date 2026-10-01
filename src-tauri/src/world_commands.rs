@@ -4,6 +4,7 @@ use tauri::{AppHandle, State};
 
 use crate::content_commands::progress;
 use crate::error::AppResult;
+use crate::models::QuickPlay;
 use crate::services::servers::{self, Server};
 use crate::services::worlds::{self, World, WorldBackup};
 use crate::services::{blocking, install, launch, Dirs};
@@ -54,6 +55,7 @@ pub fn world_backup_delete(state: State<'_, AppState>, instance_id: String, back
 }
 
 /// Löscht eine Welt, nachdem sie gesichert wurde (Fortschritt wie `world_backup`); liefert die Sicherung.
+/// War die Welt das letzte Quick-Play-Ziel der Instanz, ist es damit vergessen: „Weiterspielen“ liefe ins Leere.
 #[tauri::command]
 pub async fn world_delete(
     app: AppHandle,
@@ -64,7 +66,15 @@ pub async fn world_delete(
 ) -> AppResult<WorldBackup> {
     let _operation = state.operation(Some(&instance_id))?;
     let (dirs, on_progress) = (dirs_of(&state, &instance_id)?, progress(app, operation_id));
-    blocking(move |_| worlds::delete(&dirs, &instance_id, &world_id, &on_progress)).await
+    let deleted = Some(QuickPlay::World { id: world_id.clone() });
+    let target = instance_id.clone();
+    let backup = blocking(move |_| worlds::delete(&dirs, &target, &world_id, &on_progress)).await?;
+    state.instances.modify(&instance_id, |i| {
+        if i.last_quick_play == deleted {
+            i.last_quick_play = None;
+        }
+    })?;
+    Ok(backup)
 }
 
 /// Kann die Minecraft-Version der Instanz direkt in eine Welt starten? Fehlt die Versions-JSON, wird sie geladen.

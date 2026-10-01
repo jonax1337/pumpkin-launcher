@@ -10,7 +10,13 @@ use sha1::{Digest, Sha1};
 use crate::error::{AppError, AppResult};
 
 const PARALLEL: usize = 16;
-const ATTEMPTS: u32 = 3;
+/// Versuche je Adresse; die Pause davor wächst mit jedem Fehlversuch (`retry_pause`).
+pub(crate) const ATTEMPTS: u32 = 3;
+
+/// Pause nach dem `failed`-ten Fehlversuch; gilt für alle Download-Wege, damit sie gleich wiederholen.
+pub(crate) fn retry_pause(failed: u32) -> Duration {
+    Duration::from_millis(500) * failed
+}
 
 /// Eine herunterzuladende Datei. Ohne `sha1` gilt eine vorhandene Datei als aktuell.
 #[derive(Debug, Clone)]
@@ -172,7 +178,7 @@ pub async fn fetch(client: &reqwest::Client, job: &Job) -> AppResult<()> {
             Ok(()) => return Ok(()),
             Err(err) if attempt < ATTEMPTS && err.is_retryable() => {
                 tracing::warn!(url = %job.url, attempt, %err, "Download fehlgeschlagen, neuer Versuch");
-                tokio::time::sleep(Duration::from_millis(500 * u64::from(attempt))).await;
+                tokio::time::sleep(retry_pause(attempt)).await;
                 attempt += 1;
             }
             Err(err) => return Err(err),
