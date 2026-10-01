@@ -1,19 +1,20 @@
 use crate::{
     commands::require_instance_name,
     error::{AppError, AppResult},
-    models::{Instance, ModpackOrigin, Template},
+    models::{Instance, Template},
     services::{
         content, duplicate,
         imports::{self, ForeignInstance},
         local_files, modrinth as api, mrpack,
         progress::{emit, progress, Phase},
-        providers::{self, Source},
+        providers::{self, PackRequest, ProjectType, SearchQuery, SortIndex, Source, VersionFilter},
         templates,
     },
     state::AppState,
 };
 use serde::Serialize;
 use tauri::{AppHandle, State};
+
 #[tauri::command]
 pub async fn modrinth_search(
     query: String,
@@ -23,25 +24,27 @@ pub async fn modrinth_search(
     offset: u32,
     index: Option<String>,
 ) -> AppResult<api::SearchResponse> {
-    api::search(
-        &api::client()?,
+    let search = SearchQuery {
         query,
-        project_type,
-        minecraft_version,
+        project_type: ProjectType::parse(&project_type)?,
+        mc: minecraft_version,
         loader,
         offset,
-        index,
-    )
-    .await
+        index: SortIndex::parse(index.as_deref())?,
+    };
+    api::search(&api::client()?, &search).await
 }
+
 #[tauri::command]
 pub async fn modrinth_project(project_id: String) -> AppResult<api::Project> {
     api::project(&api::client()?, &project_id).await
 }
+
 #[tauri::command]
 pub async fn modrinth_projects(project_ids: Vec<String>) -> AppResult<Vec<api::Project>> {
     api::projects(&api::client()?, &project_ids).await
 }
+
 #[tauri::command]
 pub async fn modrinth_versions(
     project_id: String,
@@ -56,6 +59,7 @@ pub async fn modrinth_versions(
     )
     .await
 }
+
 #[tauri::command]
 pub async fn modrinth_install_mod(
     app: AppHandle,
@@ -67,6 +71,7 @@ pub async fn modrinth_install_mod(
     let _operation = state.begin_instance_operation(&instance_id)?;
     content::install_mod(&state, &instance_id, &version_id, &*progress(app, operation_id)).await
 }
+
 #[tauri::command]
 pub async fn modrinth_install_pack(
     app: AppHandle,
@@ -83,6 +88,7 @@ pub async fn modrinth_install_pack(
         })
         .await
 }
+
 #[tauri::command]
 pub async fn modrinth_import_pack(
     app: AppHandle,
@@ -100,6 +106,7 @@ pub async fn modrinth_import_pack(
         })
         .await
 }
+
 /// Katalog der Anbieter (FTB, Technic, CurseForge über den Worker); gleiche Formen wie bei Modrinth.
 #[tauri::command]
 pub async fn provider_search(
@@ -111,29 +118,22 @@ pub async fn provider_search(
     offset: u32,
     index: Option<String>,
 ) -> AppResult<api::SearchResponse> {
-    if !matches!(project_type.as_str(), "mod" | "modpack" | "resourcepack" | "shader") {
-        return Err(AppError::invalid("Ungültige Suche"));
-    }
-    for v in minecraft_version.iter().chain(loader.iter()) {
-        api::identifier(v)?;
-    }
-    let client = api::client()?;
-    let (mc, loader, index) = (minecraft_version.as_deref(), loader.as_deref(), index.as_deref());
-    match Source::parse(&source)? {
-        Source::Ftb => providers::ftb::search(&client, &query, &project_type, mc, loader, offset, index).await,
-        Source::Technic => providers::technic::search(&client, &query, &project_type, mc, offset, index).await,
-        Source::CurseForge => providers::curseforge::search(&client, &query, &project_type, mc, loader, offset, index).await,
-    }
+    let search = SearchQuery {
+        query,
+        project_type: ProjectType::parse(&project_type)?,
+        mc: minecraft_version,
+        loader,
+        offset,
+        index: SortIndex::parse(index.as_deref())?,
+    };
+    providers::search(&api::client()?, Source::parse(&source)?, &search).await
 }
+
 #[tauri::command]
 pub async fn provider_project(source: String, project_id: String) -> AppResult<api::Project> {
-    let client = api::client()?;
-    match Source::parse(&source)? {
-        Source::Ftb => providers::ftb::project(&client, &project_id).await,
-        Source::Technic => providers::technic::project(&client, &project_id).await,
-        Source::CurseForge => providers::curseforge::project(&client, &project_id).await,
-    }
+    providers::project(&api::client()?, Source::parse(&source)?, &project_id).await
 }
+
 #[tauri::command]
 pub async fn provider_versions(
     source: String,
@@ -141,23 +141,19 @@ pub async fn provider_versions(
     minecraft_version: Option<String>,
     loader: Option<String>,
 ) -> AppResult<Vec<api::Version>> {
-    let client = api::client()?;
-    match Source::parse(&source)? {
-        Source::Ftb => providers::ftb::versions(&client, &project_id).await,
-        Source::Technic => providers::technic::versions(&client, &project_id).await,
-        Source::CurseForge => {
-            providers::curseforge::versions(&client, &project_id, minecraft_version.as_deref(), loader.as_deref()).await
-        }
-    }
+    let filter = VersionFilter { mc: minecraft_version, loader };
+    providers::versions(&api::client()?, Source::parse(&source)?, &project_id, &filter).await
 }
+
 /// Dateien, die CurseForge nur über die Webseite ausliefert; die Oberfläche führt den Nutzer durch das manuelle Laden.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct BlockedEvent {
     operation_id: String,
     instance_id: String,
-    items: Vec<providers::curseforge::Blocked>,
+    items: Vec<providers::Blocked>,
 }
+
 /// Modpack als neue Instanz: FTB (Dateiliste), Technic (Pack-Zip des Autors) und CurseForge (mit Schlüssel).
 #[tauri::command]
 pub async fn provider_install_pack(
@@ -169,40 +165,26 @@ pub async fn provider_install_pack(
     name: String,
     operation_id: String,
 ) -> AppResult<Instance> {
-    let source = Source::parse(&source)?;
+    let request = PackRequest { source: Source::parse(&source)?, project_id, version_id, name };
     let _operation = state.begin_operation()?;
-    let (state, app, operation_id) = (state.inner(), &app, &operation_id);
-    state
-        .run_cancellable(app, operation_id, |on_progress| async move {
-            on_progress(Phase::Resolve, 0, 1);
-            let client = api::client()?;
-            let mut blocked = Vec::new();
-            let (pack, origin) = match source {
-                Source::Technic => (
-                    providers::technic::plan(&client, &state.dirs, &project_id, &name, &*on_progress).await?,
-                    ModpackOrigin::Provider { source: source.key().into(), project_id, version_id },
-                ),
-                Source::CurseForge => {
-                    let (pack, b) = providers::curseforge::plan_pack(&client, &state.dirs, &project_id, &version_id, &name, &*on_progress).await?;
-                    blocked = b;
-                    let curseforge_number = |text: &str| text.parse().map_err(|_| AppError::invalid("Ungültige CurseForge-Nummer"));
-                    let origin = ModpackOrigin::CurseForge { project_id: curseforge_number(&project_id)?, file_id: curseforge_number(&version_id)? };
-                    (pack, origin)
-                }
-                Source::Ftb => (
-                    providers::ftb::plan(&client, &project_id, &version_id, &name).await?,
-                    ModpackOrigin::Provider { source: source.key().into(), project_id, version_id },
-                ),
-            };
-            let instance = content::import_plan(state, pack, Some(origin), &*on_progress).await?;
-            if !blocked.is_empty() {
-                let event = BlockedEvent { operation_id: operation_id.clone(), instance_id: instance.id.clone(), items: blocked };
-                emit(app, "content-blocked", event);
-            }
-            Ok(instance)
+    let state = state.inner();
+    let (instance, blocked) = state
+        .run_cancellable(&app, &operation_id, |on_progress| async move {
+            providers::install_pack(state, &request, &*on_progress).await
         })
-        .await
+        .await?;
+    announce_blocked(&app, &operation_id, &instance, blocked);
+    Ok(instance)
 }
+
+fn announce_blocked(app: &AppHandle, operation_id: &str, instance: &Instance, items: Vec<providers::Blocked>) {
+    if items.is_empty() {
+        return;
+    }
+    let event = BlockedEvent { operation_id: operation_id.to_owned(), instance_id: instance.id.clone(), items };
+    emit(app, "content-blocked", event);
+}
+
 /// Mod, Shader oder Ressourcenpaket von CurseForge in eine Instanz, samt benötigter Abhängigkeiten.
 #[tauri::command]
 pub async fn provider_install_mod(
@@ -220,6 +202,7 @@ pub async fn provider_install_mod(
     let _operation = state.begin_instance_operation(&instance_id)?;
     providers::curseforge::install_mod(&state, &instance_id, &project_id, &version_id, &*progress(app, operation_id)).await
 }
+
 /// Holt eine Datei, die der Nutzer auf CurseForge von Hand geladen hat, aus dem Downloads-Ordner in die Instanz.
 /// `None` = noch nicht da oder der Launcher ist gerade beschäftigt; die Oberfläche fragt wieder.
 #[tauri::command]
@@ -231,8 +214,10 @@ pub async fn curseforge_adopt_download(
     file_name: String,
 ) -> AppResult<Option<Instance>> {
     let Ok(_operation) = state.begin_instance_operation(&instance_id) else { return Ok(None) };
-    providers::curseforge::adopt_download(&state, &instance_id, project_id, file_id, &file_name).await
+    let wanted = providers::curseforge::ManualDownload { project_id, file_id, file_name: &file_name };
+    providers::curseforge::adopt_download(&state, &instance_id, &wanted).await
 }
+
 /// Bricht `modrinth_install_pack`, `modrinth_import_pack`, `provider_install_pack`, `template_create_instance`,
 /// `instance_import`, `instance_duplicate` oder `instance_export` mit dieser `operationId` ab; der Vorgang endet mit
 /// „Vorgang abgebrochen“.
@@ -240,11 +225,13 @@ pub async fn curseforge_adopt_download(
 pub fn pack_install_cancel(state: State<'_, AppState>, operation_id: String) {
     state.cancel(&operation_id);
 }
+
 #[tauri::command]
 pub async fn modrinth_check_updates(state: State<'_, AppState>, instance_id: String) -> AppResult<Vec<content::ModUpdate>> {
     let instance = state.instances.get(&instance_id)?;
     content::check_updates(&api::client()?, &instance).await
 }
+
 #[tauri::command]
 pub async fn modrinth_update_mods(
     app: AppHandle,
@@ -256,6 +243,7 @@ pub async fn modrinth_update_mods(
     let _operation = state.begin_instance_operation(&instance_id)?;
     content::update_mods(&state, &instance_id, &mod_ids, &*progress(app, operation_id)).await
 }
+
 /// Vorab-Prüfung abgelegter oder ausgewählter Dateien: Art und ob die Instanz sie schon hat.
 #[tauri::command]
 pub async fn instance_check_files(
@@ -265,6 +253,7 @@ pub async fn instance_check_files(
 ) -> AppResult<Vec<local_files::FileCheck>> {
     local_files::check(&state, &instance_id, paths).await
 }
+
 /// Eigene .jar-/.zip-Dateien in die Instanz; was Modrinth per SHA-1 kennt, bekommt Updates von dort.
 #[tauri::command]
 pub async fn instance_add_files(
@@ -277,6 +266,7 @@ pub async fn instance_add_files(
     let _operation = state.begin_instance_operation(&instance_id)?;
     local_files::add(&state, &instance_id, files, progress(app, operation_id)).await
 }
+
 /// Gleicht lokale Einträge der Instanz per SHA-1 mit Modrinth ab; erkannte bekommen Updates von dort.
 #[tauri::command]
 pub async fn modrinth_identify(
@@ -287,19 +277,23 @@ pub async fn modrinth_identify(
     let _operation = state.begin_instance_operation(&instance_id)?;
     local_files::identify_local(&state, &instance_id, &mod_ids).await
 }
+
 #[tauri::command]
 pub async fn template_save(state: State<'_, AppState>, instance_id: String, name: String) -> AppResult<Template> {
     let _operation = state.begin_instance_operation(&instance_id)?;
     templates::save(&state, &instance_id, &name).await
 }
+
 #[tauri::command]
 pub fn template_list(state: State<'_, AppState>) -> Vec<Template> {
     state.templates.list()
 }
+
 #[tauri::command]
 pub fn template_delete(state: State<'_, AppState>, id: String) -> AppResult<()> {
     templates::delete(&state, &id)
 }
+
 #[tauri::command]
 pub async fn template_create_instance(
     app: AppHandle,
@@ -316,6 +310,7 @@ pub async fn template_create_instance(
         })
         .await
 }
+
 /// Kopie einer Instanz unter neuem Namen; Fortschritt als `content-progress` (Phase `copy`).
 #[tauri::command]
 pub async fn instance_duplicate(
@@ -329,6 +324,7 @@ pub async fn instance_duplicate(
         .run_cancellable(&app, &operation_id, |on_progress| duplicate::duplicate(&state, &instance_id, on_progress))
         .await
 }
+
 /// Instanzen anderer Launcher an den bekannten Orten oder im gewählten Ordner (absolut).
 #[tauri::command]
 pub async fn import_detect(state: State<'_, AppState>, folder: Option<String>) -> AppResult<Vec<ForeignInstance>> {
@@ -338,6 +334,7 @@ pub async fn import_detect(state: State<'_, AppState>, folder: Option<String>) -
     }
     imports::detect(&state, folder.as_deref()).await
 }
+
 /// Neue Instanz aus einer Instanz eines anderen Launchers; Fortschritt als `content-progress` (Phase `copy`),
 /// abbrechbar über `pack_install_cancel`.
 #[tauri::command]
@@ -353,11 +350,13 @@ pub async fn instance_import(
         .run_cancellable(&app, &operation_id, |on_progress| imports::import(&state, source, on_progress))
         .await
 }
+
 /// Einträge des Spielordners, die `instance_export` mitnehmen kann.
 #[tauri::command]
 pub fn instance_export_entries(state: State<'_, AppState>, instance_id: String) -> AppResult<Vec<String>> {
     mrpack::entries(&state.dirs, &state.instances.get(&instance_id)?)
 }
+
 /// Schreibt die Instanz als `.mrpack` an den vom Nutzer gewählten Pfad (Phase `pack`).
 #[tauri::command]
 pub async fn instance_export(

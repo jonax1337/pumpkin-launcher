@@ -14,7 +14,7 @@ pub(crate) use adopt::{
     cached_untracked, catalog, identify, identify_or_local, record_untracked, CachedFile, ContentFile, Recognition,
 };
 pub use fs_safety::safe_path;
-pub(crate) use fs_safety::{is_occupied, regular_parents, rollback, write_new, StagedInstall};
+pub(crate) use fs_safety::{regular_parents, rollback, write_new, StagedInstall};
 pub use install::install_mod;
 pub(crate) use install::budget;
 pub use pack::{import, install_modrinth_pack, local_pack, PUMPKIN_FILE};
