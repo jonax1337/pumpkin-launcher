@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { useI18n } from "@/i18n";
-import { Button, Dialog, DialogActions, ErrorBox, Field, Hint, JobProgress, Menu, Skel, TextField } from "@/ui";
+import { Button, Dialog, DialogActions, ErrorBox, Field, Hint, IconButton, JobProgress, Menu, Skel, TextField } from "@/ui";
 import { useInstallPack } from "@/hooks/usePackInstall";
 import { catalogApi } from "@/lib/catalogApi";
 import type { ContentVersion, ProjectRef, Source } from "@/lib/content-types";
@@ -112,7 +112,7 @@ export function PackInstallButton({ project, source }: { project: ProjectRef; so
   );
 }
 
-/** Aktionen in den Pack-Details: „Als neue Instanz anlegen“ plus „Andere Version“, beide mit Bestätigung. */
+/** Aktion in den Pack-Details: „Als neue Instanz anlegen“, daneben im Menü „Andere Version“; beides mit Bestätigung. */
 export function PackActions({ project, source }: { project: ProjectRef; source: Source }) {
   const { t } = useI18n();
   const { install, ask, dialog } = usePackConfirm(project, source);
@@ -125,24 +125,26 @@ export function PackActions({ project, source }: { project: ProjectRef; source: 
   }
   return (
     <>
-      <Button variant="primary" size="l" icon="plus" disabled={!version || install.blocked} onClick={() => ask(version?.id)}>
-        {reason ?? t("components.pack.createAsInstance")}
-      </Button>
-      {fitting.length > 1 && (
-        <Menu
-          trigger={<Button iconEnd="chevd" disabled={install.blocked}>{t("components.pack.otherVersion")}</Button>}
-          items={[
-            { label: t("components.pack.otherVersion") },
-            ...fitting.slice(0, MAX_OTHER_VERSIONS).map((v) => ({
-              id: v.id,
-              text: v.version_number,
-              sub: `${versionLoadersOrVanilla(v)} ${v.game_versions.at(-1) ?? ""}${versionTypeSuffix(v)}`,
-              icon: "plus" as const,
-              onSelect: () => ask(v.id),
-            })),
-          ]}
-        />
-      )}
+      <div className="vx-split">
+        <Button variant="primary" size="l" icon="plus" disabled={!version || install.blocked} onClick={() => ask(version?.id)}>
+          {reason ?? t("components.pack.createAsInstance")}
+        </Button>
+        {fitting.length > 1 && (
+          <Menu
+            trigger={<IconButton variant="primary" size="l" icon="chevd" label={t("components.pack.otherVersion")} disabled={install.blocked} />}
+            items={[
+              { label: t("components.pack.otherVersion") },
+              ...fitting.slice(0, MAX_OTHER_VERSIONS).map((v) => ({
+                id: v.id,
+                text: v.version_number,
+                sub: `${versionLoadersOrVanilla(v)} ${v.game_versions.at(-1) ?? ""}${versionTypeSuffix(v)}`,
+                icon: "plus" as const,
+                onSelect: () => ask(v.id),
+              })),
+            ]}
+          />
+        )}
+      </div>
       {dialog}
     </>
   );
