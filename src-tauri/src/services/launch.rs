@@ -147,7 +147,7 @@ pub fn build_args_for(spec: &LaunchSpec, env: &Env, session: Option<&Session>) -
     let (jvm, game) = match (&version.arguments, &version.minecraft_arguments) {
         (Some(a), _) => (flatten(&a.jvm, &env), flatten(&a.game, &env)),
         (None, Some(legacy)) => (LEGACY_JVM_ARGS.to_vec(), legacy.split_whitespace().collect()),
-        (None, None) => return Err(AppError::Invalid(format!("Version {} ohne Startargumente", version.id))),
+        (None, None) => return Err(AppError::invalid(format!("Version {} ohne Startargumente", version.id))),
     };
 
     let mut args = vec![format!("-Xmx{}M", spec.memory_mb)];
@@ -209,7 +209,7 @@ fn quick_play_args(version: &VersionJson, target: &QuickPlay) -> AppResult<Quick
     }
     match target {
         QuickPlay::World { .. } => {
-            Err(AppError::Invalid(format!("Minecraft {} kann nicht direkt in eine Welt starten, das geht erst ab 1.20", version.id)))
+            Err(AppError::invalid(format!("Minecraft {} kann nicht direkt in eine Welt starten, das geht erst ab 1.20", version.id)))
         }
         QuickPlay::Server { address } => {
             let (host, port) = split_address(address);
@@ -341,10 +341,9 @@ pub fn spawn(
 fn spawn_error(err: std::io::Error) -> AppError {
     #[cfg(target_os = "macos")]
     if err.raw_os_error() == Some(libc::EBADARCH) {
-        return AppError::Invalid(
+        return AppError::invalid(
             "Dieses Java ist für Intel-Macs gebaut und braucht Rosetta 2. Installiere es im Terminal mit \
              `softwareupdate --install-rosetta --agree-to-license` und starte erneut."
-                .into(),
         );
     }
     err.into()

@@ -5,7 +5,7 @@ use std::{collections::HashMap, fs, io, path::Path};
 use fastnbt::Value;
 use serde::{Deserialize, Serialize};
 
-use super::{modrinth::invalid, write_atomic, PNG_DATA_URL};
+use super::{write_atomic, PNG_DATA_URL};
 use crate::error::{AppError, AppResult};
 
 const FILE: &str = "servers.dat";
@@ -44,7 +44,7 @@ pub fn list(game_dir: &Path) -> AppResult<Vec<Server>> {
 pub fn save(game_dir: &Path, index: Option<usize>, server: &ServerInput) -> AppResult<()> {
     let name = server.name.trim();
     if name.is_empty() {
-        return Err(invalid("Gib dem Server einen Namen"));
+        return Err(AppError::invalid("Gib dem Server einen Namen"));
     }
     let address = require_address(&server.address)?;
     update(game_dir, |list| {
@@ -71,7 +71,7 @@ pub fn remove(game_dir: &Path, index: usize) -> AppResult<()> {
 pub fn require_address(address: &str) -> AppResult<&str> {
     let address = address.trim();
     if address.is_empty() || address.len() > 255 || address.starts_with('-') || address.contains(|c: char| c.is_whitespace() || c.is_control()) {
-        return Err(invalid("Gib eine Serveradresse wie play.example.net oder play.example.net:25565 ein"));
+        return Err(AppError::invalid("Gib eine Serveradresse wie play.example.net oder play.example.net:25565 ein"));
     }
     Ok(address)
 }
@@ -97,7 +97,7 @@ fn read(path: &Path) -> AppResult<Compound> {
 fn entries(root: &mut Compound) -> AppResult<&mut Vec<Value>> {
     match root.entry("servers".into()).or_insert_with(|| Value::List(Vec::new())) {
         Value::List(list) => Ok(list),
-        _ => Err(invalid("servers.dat hat ein unbekanntes Format")),
+        _ => Err(AppError::invalid("servers.dat hat ein unbekanntes Format")),
     }
 }
 
@@ -121,7 +121,7 @@ fn entry_at(list: &mut Vec<Value>, index: Option<usize>) -> AppResult<&mut Compo
     };
     match list.get_mut(at) {
         Some(Value::Compound(entry)) => Ok(entry),
-        _ => Err(invalid("servers.dat hat ein unbekanntes Format")),
+        _ => Err(AppError::invalid("servers.dat hat ein unbekanntes Format")),
     }
 }
 

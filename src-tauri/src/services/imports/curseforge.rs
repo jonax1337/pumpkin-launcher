@@ -5,7 +5,7 @@ use std::{collections::HashMap, path::Path};
 use serde::Deserialize;
 
 use super::{folder_name, from_json, loader_named, read_marker, Found, Setup};
-use crate::{error::AppResult, models::ModLoader, services::modrinth::invalid};
+use crate::{error::{AppError, AppResult}, models::ModLoader};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -75,7 +75,7 @@ fn setup(data: &[u8], folder: &str) -> AppResult<Setup> {
     let (loader, loader_version) = match &manifest.base_mod_loader {
         None => (ModLoader::Vanilla, None),
         Some(base) => {
-            let (kind, version) = base.name.split_once('-').ok_or_else(|| invalid(format!("Unbekannter Loader „{}“", base.name)))?;
+            let (kind, version) = base.name.split_once('-').ok_or_else(|| AppError::invalid(format!("Unbekannter Loader „{}“", base.name)))?;
             let version = version.strip_suffix(&format!("-{}", manifest.game_version)).unwrap_or(version);
             (loader_named(kind)?, Some(version.to_owned()))
         }

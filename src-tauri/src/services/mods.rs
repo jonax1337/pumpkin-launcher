@@ -12,7 +12,7 @@ use crate::services::Dirs;
 /// Pfad eines Cache-Eintrags. Der Hash wird Teil des Pfads, daher nur echte SHA-1-Hex-Strings.
 pub fn cached(dirs: &Dirs, sha1: &str) -> AppResult<PathBuf> {
     if sha1.len() != 40 || !sha1.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err(AppError::Invalid(format!("ungültiger SHA-1 '{sha1}'")));
+        return Err(AppError::invalid(format!("ungültiger SHA-1 '{sha1}'")));
     }
     Ok(dirs
         .mod_cache()
@@ -44,7 +44,7 @@ fn file_name(m: &Mod) -> AppResult<&str> {
     let plain =
         Path::new(name).file_name().is_some_and(|f| f == name) && !name.contains(['/', '\\', ':']);
     if !plain || !name.ends_with(m.kind.extension()) {
-        return Err(AppError::Invalid(format!(
+        return Err(AppError::invalid(format!(
             "ungültiger Dateiname '{name}' für Mod {}",
             m.name
         )));
@@ -136,13 +136,13 @@ pub fn sync_commit<T>(
     for m in mods.iter().filter(|m| m.sha1.is_some()) {
         let path = dirs.game_dir(instance_id).join(m.kind.folder()).join(file_name(m)?);
         if !names.insert(m.file_name.to_lowercase()) {
-            return Err(AppError::Invalid("Doppelte Mod-Zieldatei".into()));
+            return Err(AppError::invalid("Doppelte Mod-Zieldatei"));
         }
         super::content::regular_parents(&dirs.root, &path)?;
         let current = match fs::symlink_metadata(&path) {
             Ok(meta) => {
                 if !meta.is_file() {
-                    return Err(AppError::Invalid("Kein regulaeres Mod-Ziel".into()));
+                    return Err(AppError::invalid("Kein regulaeres Mod-Ziel"));
                 }
                 Some(sha1_file(&path)?)
             }
@@ -159,9 +159,7 @@ pub fn sync_commit<T>(
                 continue;
             }
             if current.is_some() {
-                return Err(AppError::Invalid(
-                    "Mod-Konflikt: vorhandene Zieldatei".into(),
-                ));
+                return Err(AppError::invalid("Mod-Konflikt: vorhandene Zieldatei"));
             }
             let cache = cached(dirs, hash)?;
             super::content::regular_parents(&dirs.root, &cache)?;
@@ -172,7 +170,7 @@ pub fn sync_commit<T>(
                 });
             }
             if !sha1_file(&cache)?.eq_ignore_ascii_case(hash) {
-                return Err(AppError::Invalid("Mod-Cache-Hash stimmt nicht".into()));
+                return Err(AppError::invalid("Mod-Cache-Hash stimmt nicht"));
             }
             changes.push((path, Some(cache)));
         } else if ours {
@@ -219,7 +217,7 @@ pub fn sync_commit<T>(
                             Err(e) if e.kind() == io::ErrorKind::NotFound => place(&backup, &path)?,
                             Ok(_) if sha1_file(&path)? == sha1_file(&backup)? => {}
                             Ok(_) => {
-                                return Err(AppError::Invalid(format!(
+                                return Err(AppError::invalid(format!(
                                     "Rollback-Ziel belegt; Backup: {}",
                                     backup.display()
                                 )))
@@ -239,7 +237,7 @@ pub fn sync_commit<T>(
             if errors.is_empty() {
                 Err(original)
             } else {
-                Err(AppError::Invalid(format!(
+                Err(AppError::invalid(format!(
                     "{original}; Rollback: {}",
                     errors.join("; ")
                 )))
@@ -297,7 +295,7 @@ mod tests {
             ..m.clone()
         };
         let failed: AppResult<()> = sync_commit(&dirs, "i", &[disabled], |_| {
-            Err(AppError::Invalid("store failure".into()))
+            Err(AppError::invalid("store failure"))
         });
         assert!(failed.is_err());
         assert_eq!(sha1_file(&path).unwrap(), m.sha1.unwrap());
@@ -354,7 +352,7 @@ mod tests {
         assert_eq!(fs::read(&installed).unwrap(), b"sodium");
         m.enabled = false;
         let result: AppResult<()> = sync_commit(&dirs, "i1", std::slice::from_ref(&m), |_| {
-            Err(AppError::Invalid("store failure".into()))
+            Err(AppError::invalid("store failure"))
         });
         assert!(result.is_err());
         assert_eq!(fs::read(&installed).unwrap(), b"sodium");

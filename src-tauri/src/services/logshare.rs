@@ -43,9 +43,9 @@ fn log_path(dirs: &Dirs, instance_id: &str, kind: LogKind) -> AppResult<PathBuf>
     match kind {
         LogKind::Latest => Some(dirs.latest_log(instance_id))
             .filter(|path| path.is_file())
-            .ok_or_else(|| AppError::Invalid("Es gibt noch kein Protokoll. Starte die Instanz einmal, dann lässt es sich teilen.".into())),
+            .ok_or_else(|| AppError::invalid("Es gibt noch kein Protokoll. Starte die Instanz einmal, dann lässt es sich teilen.")),
         LogKind::CrashReport => launch::crash_report(&dirs.game_dir(instance_id), SystemTime::UNIX_EPOCH)
-            .ok_or_else(|| AppError::Invalid("Für diese Instanz gibt es keinen Absturzbericht.".into())),
+            .ok_or_else(|| AppError::invalid("Für diese Instanz gibt es keinen Absturzbericht.")),
     }
 }
 

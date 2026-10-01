@@ -57,7 +57,7 @@ pub async fn fetch_version(client: &reqwest::Client, dirs: &Dirs, version_id: &s
 pub async fn installed_version(dirs: &Dirs, version_id: &str) -> AppResult<VersionJson> {
     download::read_json(&dirs.version_file(version_id, "json")).await.map_err(|err| {
         if is_missing(&err) {
-            AppError::Invalid(format!("Version {version_id} ist nicht installiert"))
+            AppError::invalid(format!("Version {version_id} ist nicht installiert"))
         } else {
             err
         }
@@ -131,7 +131,7 @@ fn native_jars<'a>(version: &'a VersionJson, env: &'a Env) -> Vec<(&'a Library, 
 }
 
 fn library_job(dirs: &Dirs, lib: &Library, d: &crate::services::mojang::Download) -> AppResult<Job> {
-    let path = d.path.as_deref().ok_or_else(|| AppError::Invalid(format!("Library {} ohne Pfad", lib.name)))?;
+    let path = d.path.as_deref().ok_or_else(|| AppError::invalid(format!("Library {} ohne Pfad", lib.name)))?;
     Ok(Job { url: d.url.clone(), path: dirs.library(path), sha1: Some(d.sha1.clone()) })
 }
 
@@ -222,7 +222,7 @@ pub async fn install(
         .map(|o| {
             // Der Hash wird Teil des Pfads: nur echte SHA-1-Hex-Strings zulassen.
             if o.hash.len() != 40 || !o.hash.bytes().all(|b| b.is_ascii_hexdigit()) {
-                return Err(AppError::Invalid(format!("ungültiger Asset-Hash '{}'", o.hash)));
+                return Err(AppError::invalid(format!("ungültiger Asset-Hash '{}'", o.hash)));
             }
             Ok(Job {
                 url: format!("{RESOURCES_URL}/{}/{}", &o.hash[..2], o.hash),

@@ -2,12 +2,12 @@
 //! geladen, zwischengespeichert und lokal durchsucht. Installation über die Dateiliste einer Version.
 use super::{check_url, json, segment, RemoteFile};
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     models::{Instance, ModLoader, NewInstance},
     services::{
         content::{self, Pack},
         forge,
-        modrinth::{identifier, invalid, Hit, Project, SearchResponse, Version},
+        modrinth::{identifier, Hit, Project, SearchResponse, Version},
     },
 };
 use futures::StreamExt;
@@ -198,7 +198,7 @@ async fn catalog(client: &reqwest::Client) -> AppResult<Arc<Vec<PackDoc>>> {
         }
     }
     if packs.is_empty() {
-        return Err(failed.unwrap_or_else(|| invalid("FTB lieferte keine Modpacks")));
+        return Err(failed.unwrap_or_else(|| AppError::invalid("FTB lieferte keine Modpacks")));
     }
     let packs = Arc::new(packs);
     *cache = Some((Instant::now(), packs.clone()));
@@ -253,7 +253,7 @@ pub async fn search(
     index: Option<&str>,
 ) -> AppResult<SearchResponse> {
     if query.len() > 512 || offset > 100_000 {
-        return Err(invalid("Ungültige Suche"));
+        return Err(AppError::invalid("Ungültige Suche"));
     }
     if kind != "modpack" {
         return Ok(SearchResponse { hits: Vec::new(), total_hits: 0, offset, limit: PAGE as u32 });
@@ -278,7 +278,7 @@ pub async fn search(
         "newest" => found.sort_by_key(|(p, _)| std::cmp::Reverse(p.released)),
         "updated" => found.sort_by_key(|(p, _)| std::cmp::Reverse(p.updated)),
         "relevance" => found.sort_by_key(|(p, score)| (std::cmp::Reverse(*score), std::cmp::Reverse(p.installs))),
-        _ => return Err(invalid("Ungültige Sortierung")),
+        _ => return Err(AppError::invalid("Ungültige Sortierung")),
     }
     let total = found.len() as u64;
     let hits = found.into_iter().skip(offset as usize).take(PAGE).map(|(p, _)| hit(p)).collect();
@@ -292,7 +292,7 @@ async fn find(client: &reqwest::Client, id: &str) -> AppResult<PackDoc> {
         .iter()
         .find(|p| p.id.to_string() == id)
         .cloned()
-        .ok_or_else(|| invalid("Dieses Modpack gibt es bei FTB nicht"))
+        .ok_or_else(|| AppError::invalid("Dieses Modpack gibt es bei FTB nicht"))
 }
 
 pub async fn project(client: &reqwest::Client, id: &str) -> AppResult<Project> {
@@ -342,7 +342,7 @@ fn remote(doc: &FileDoc) -> AppResult<RemoteFile> {
     urls.sort_by_key(|u| !u.contains("feed-the-beast.com"));
     urls.dedup();
     for u in &urls {
-        check_url(&reqwest::Url::parse(u).map_err(|e| invalid(e.to_string()))?)?;
+        check_url(&reqwest::Url::parse(u).map_err(|e| AppError::invalid(e.to_string()))?)?;
     }
     let mut hashes = BTreeMap::new();
     for (key, value, len) in [
@@ -355,7 +355,7 @@ fn remote(doc: &FileDoc) -> AppResult<RemoteFile> {
         }
     }
     if hashes.is_empty() {
-        return Err(invalid(format!("Datei {} ohne Prüfsumme", doc.name)));
+        return Err(AppError::invalid(format!("Datei {} ohne Prüfsumme", doc.name)));
     }
     Ok(RemoteFile { urls, size: doc.size, hashes })
 }
@@ -364,13 +364,13 @@ fn remote(doc: &FileDoc) -> AppResult<RemoteFile> {
 pub(crate) async fn plan(client: &reqwest::Client, pack_id: &str, version_id: &str, name: &str) -> AppResult<Pack> {
     segment(version_id)?;
     if name.trim().is_empty() || name.len() > 200 {
-        return Err(invalid("Ungültiger Instanzname"));
+        return Err(AppError::invalid("Ungültiger Instanzname"));
     }
     let pack = find(client, pack_id).await?;
     let (_, s) = usable(&pack)
         .into_iter()
         .find(|(v, _)| v.id.to_string() == version_id)
-        .ok_or_else(|| invalid("Diese Version kann Pumpkin Launcher nicht starten"))?;
+        .ok_or_else(|| AppError::invalid("Diese Version kann Pumpkin Launcher nicht starten"))?;
     let listing: VersionFiles = json(client, &format!("{API}/modpack/{pack_id}/{version_id}")).await?;
     let files = listing
         .files

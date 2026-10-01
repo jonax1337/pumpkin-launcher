@@ -57,8 +57,8 @@ impl AppState {
     }
 
     pub fn operation(&self, id: Option<&str>) -> AppResult<tokio::sync::MutexGuard<'_, ()>> {
-        let guard = self.operation.try_lock().map_err(|_| AppError::Invalid("Eine Installation/Änderung läuft bereits".into()))?;
-        if id.is_some_and(|id| self.running().contains_key(id)) { return Err(AppError::Invalid("Instanz läuft noch".into())); }
+        let guard = self.operation.try_lock().map_err(|_| AppError::invalid("Eine Installation/Änderung läuft bereits"))?;
+        if id.is_some_and(|id| self.running().contains_key(id)) { return Err(AppError::invalid("Instanz läuft noch")); }
         Ok(guard)
     }
 

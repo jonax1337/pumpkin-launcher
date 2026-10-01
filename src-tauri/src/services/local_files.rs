@@ -14,11 +14,11 @@ use super::{
     content::{self, CachedFile},
     download::sha1_file,
     free_name,
-    modrinth::{self, invalid, Version},
+    modrinth::{self, Version},
     mods, Dirs,
 };
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     models::{Instance, Mod, ModKind, ModSource},
     state::AppState,
 };
@@ -92,7 +92,7 @@ fn stage(
         let stem = stem_for(&name, file.kind)?;
         let sha1 = mods::cache_file(dirs, &path)?;
         if let Some(m) = holder(&instance.mods, &sha1) {
-            return Err(invalid(format!("„{name}“ ist schon in dieser Instanz ({})", m.name)));
+            return Err(AppError::invalid(format!("„{name}“ ist schon in dieser Instanz ({})", m.name)));
         }
         if staged.iter().any(|s| s.sha1 == sha1) {
             continue;
@@ -135,7 +135,7 @@ fn with_entries(
 fn ensure_new_project(mods: &[Mod], m: &Mod) -> AppResult<()> {
     let Some(project) = content::project_of(m) else { return Ok(()) };
     match mods.iter().find(|o| content::project_of(o) == Some(project)) {
-        Some(have) => Err(invalid(format!("„{}“ ist {}, das schon in dieser Instanz ist", m.file_name, have.name))),
+        Some(have) => Err(AppError::invalid(format!("„{}“ ist {}, das schon in dieser Instanz ist", m.file_name, have.name))),
         None => Ok(()),
     }
 }
@@ -178,19 +178,19 @@ pub(crate) fn source(path: &str) -> AppResult<(PathBuf, String)> {
         .file_name()
         .and_then(|n| n.to_str())
         .filter(|_| path.is_absolute())
-        .ok_or_else(|| invalid("Die Datei muss mit ihrem vollständigen Pfad angegeben werden"))?
+        .ok_or_else(|| AppError::invalid("Die Datei muss mit ihrem vollständigen Pfad angegeben werden"))?
         .to_string();
     let lower = name.to_ascii_lowercase();
     if !lower.ends_with(".jar") && !lower.ends_with(".zip") {
-        return Err(invalid(format!("„{name}“ ist keine .jar- oder .zip-Datei")));
+        return Err(AppError::invalid(format!("„{name}“ ist keine .jar- oder .zip-Datei")));
     }
     content::safe_path(&name)?;
-    let meta = fs::symlink_metadata(&path).map_err(|_| invalid(format!("„{name}“ ist nicht lesbar")))?;
+    let meta = fs::symlink_metadata(&path).map_err(|_| AppError::invalid(format!("„{name}“ ist nicht lesbar")))?;
     if !meta.is_file() {
-        return Err(invalid(format!("„{name}“ ist keine normale Datei")));
+        return Err(AppError::invalid(format!("„{name}“ ist keine normale Datei")));
     }
     if meta.len() == 0 || meta.len() > modrinth::FILE_LIMIT {
-        return Err(invalid(format!("„{name}“ ist leer oder größer als 256 MiB")));
+        return Err(AppError::invalid(format!("„{name}“ ist leer oder größer als 256 MiB")));
     }
     Ok((path, name))
 }
@@ -201,7 +201,7 @@ fn detect_kind(path: &Path, name: &str) -> AppResult<Option<ModKind>> {
         return Ok(Some(ModKind::Mod));
     }
     let zip = zip::ZipArchive::new(fs::File::open(path)?)
-        .map_err(|_| invalid(format!("„{name}“ ist kein lesbares Zip-Archiv")))?;
+        .map_err(|_| AppError::invalid(format!("„{name}“ ist kein lesbares Zip-Archiv")))?;
     Ok(zip_kind(zip.file_names()))
 }
 
@@ -229,7 +229,7 @@ fn holder<'a>(mods: &'a [Mod], sha1: &str) -> Option<&'a Mod> {
 fn stem_for(name: &str, kind: ModKind) -> AppResult<&str> {
     let ext = kind.extension();
     if !name.to_ascii_lowercase().ends_with(ext) {
-        return Err(invalid(format!("„{name}“ passt nicht zur gewählten Art")));
+        return Err(AppError::invalid(format!("„{name}“ passt nicht zur gewählten Art")));
     }
     Ok(&name[..name.len() - ext.len()])
 }

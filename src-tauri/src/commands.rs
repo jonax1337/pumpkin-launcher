@@ -19,7 +19,7 @@ use crate::state::AppState;
 
 pub(crate) fn require_name(name: &str) -> AppResult<()> {
     if name.trim().is_empty() {
-        return Err(AppError::Invalid("Name darf nicht leer sein".into()));
+        return Err(AppError::invalid("Name darf nicht leer sein"));
     }
     Ok(())
 }
@@ -28,7 +28,7 @@ pub(crate) fn require_name(name: &str) -> AppResult<()> {
 /// damit andere Änderungen nicht an einem inzwischen entfernten Java scheitern.
 fn require_launch_settings(instance: &Instance, old: &Instance) -> AppResult<()> {
     if matches!(instance.window, GameWindow::Size { width: 0, .. } | GameWindow::Size { height: 0, .. }) {
-        return Err(AppError::Invalid("Breite und Höhe des Fensters müssen größer als 0 sein".into()));
+        return Err(AppError::invalid("Breite und Höhe des Fensters müssen größer als 0 sein"));
     }
     match &instance.java_path {
         Some(path) if instance.java_path != old.java_path => java::custom_java(path.trim(), java::JavaSetting::Instance).map(drop),
@@ -99,7 +99,7 @@ pub fn instance_set_group(state: State<'_, AppState>, instance_id: String, group
 pub fn delete_instance(state: State<'_, AppState>, id: String) -> AppResult<()> {
     let _operation = state.operation(Some(&id))?;
     if state.running().contains_key(&id) {
-        return Err(AppError::Invalid("Instanz läuft noch".into()));
+        return Err(AppError::invalid("Instanz läuft noch"));
     }
     // Erst den Store-Eintrag: nur eine existierende Id wird zum Pfad, und bleibt das
     // Verzeichnis liegen (Datei gesperrt), ist die Instanz trotzdem weg.
@@ -160,7 +160,7 @@ fn loader_version(instance: &Instance) -> AppResult<&str> {
     instance
         .loader_version
         .as_deref()
-        .ok_or_else(|| AppError::Invalid("Instanz ohne Loader-Version: bitte neu installieren".into()))
+        .ok_or_else(|| AppError::invalid("Instanz ohne Loader-Version: bitte neu installieren"))
 }
 
 /// Versions-JSON zum Start: Vanilla, mit Mod-Loader mit dessen installiertem Profil zusammengeführt.
@@ -294,7 +294,7 @@ pub async fn instance_launch(app: AppHandle, state: State<'_, AppState>, instanc
     // Prozess seinen Eintrag entfernen, bevor er eingetragen ist.
     let mut running = state.running();
     if running.contains_key(&instance_id) {
-        return Err(AppError::Invalid("Instanz läuft bereits".into()));
+        return Err(AppError::invalid("Instanz läuft bereits"));
     }
     let (log_app, log_id) = (app.clone(), instance_id.clone());
     let (exit_app, exit_id) = (app.clone(), instance_id.clone());

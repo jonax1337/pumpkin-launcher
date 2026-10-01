@@ -1,6 +1,6 @@
 use crate::{
     commands::require_name,
-    error::AppResult,
+    error::{AppError, AppResult},
     models::{Instance, ModpackOrigin, Template},
     services::{
         content, duplicate,
@@ -111,7 +111,7 @@ pub async fn modrinth_install_pack(
         let version = api::version(&client, &version_id).await?;
         let project = api::project(&client, &version.project_id).await?;
         if project.project_type != "modpack" {
-            return Err(api::invalid("Projekt ist kein Modpack"));
+            return Err(AppError::invalid("Projekt ist kein Modpack"));
         }
         let file = api::primary(&version, ".mrpack")?;
         on_progress("download", 0, 1);
@@ -147,7 +147,7 @@ pub async fn provider_search(
     index: Option<String>,
 ) -> AppResult<api::SearchResponse> {
     if !matches!(project_type.as_str(), "mod" | "modpack" | "resourcepack" | "shader") {
-        return Err(api::invalid("Ungültige Suche"));
+        return Err(AppError::invalid("Ungültige Suche"));
     }
     for v in minecraft_version.iter().chain(loader.iter()) {
         api::identifier(v)?;
@@ -219,7 +219,7 @@ pub async fn provider_install_pack(
             Source::CurseForge => {
                 let (pack, b) = providers::curseforge::plan_pack(&client, &state.dirs, &project_id, &version_id, &name, &on_progress).await?;
                 blocked = b;
-                let origin = ModpackOrigin::CurseForge { project_id: project_id.parse().map_err(|_| api::invalid("Ungültige CurseForge-Nummer"))?, file_id: version_id.parse().map_err(|_| api::invalid("Ungültige CurseForge-Nummer"))? };
+                let origin = ModpackOrigin::CurseForge { project_id: project_id.parse().map_err(|_| AppError::invalid("Ungültige CurseForge-Nummer"))?, file_id: version_id.parse().map_err(|_| AppError::invalid("Ungültige CurseForge-Nummer"))? };
                 (pack, origin)
             }
             Source::Ftb => (
@@ -250,7 +250,7 @@ pub async fn provider_install_mod(
     operation_id: String,
 ) -> AppResult<Instance> {
     if Source::parse(&source)? != Source::CurseForge {
-        return Err(api::invalid("Dieser Anbieter liefert nur Modpacks"));
+        return Err(AppError::invalid("Dieser Anbieter liefert nur Modpacks"));
     }
     let _operation = state.operation(Some(&instance_id))?;
     providers::curseforge::install_mod(&state, &instance_id, &project_id, &version_id, &progress(app, operation_id)).await
@@ -385,7 +385,7 @@ pub async fn instance_duplicate(
 pub async fn import_detect(state: State<'_, AppState>, folder: Option<String>) -> AppResult<Vec<ForeignInstance>> {
     let folder = folder.map(std::path::PathBuf::from);
     if folder.as_ref().is_some_and(|f| !f.is_absolute()) {
-        return Err(api::invalid("Bitte einen vollständigen Ordnerpfad angeben"));
+        return Err(AppError::invalid("Bitte einen vollständigen Ordnerpfad angeben"));
     }
     imports::detect(&state, folder.as_deref()).await
 }

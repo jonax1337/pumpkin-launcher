@@ -1,7 +1,7 @@
 //! Download von beliebigen öffentlichen HTTPS-Adressen (Technic-Packs liegen auf Dropbox, GitHub, eigenen
 //! Servern). Ohne Prüfsumme als Gegengewicht: nur HTTPS auf Port 443, nur öffentliche Zieladressen
 //! (kein localhost, kein Heimnetz), jede Weiterleitung einzeln geprüft, die geprüfte Adresse wird fest verwendet.
-use crate::{error::AppResult, services::modrinth::invalid};
+use crate::error::{AppError, AppResult};
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     path::Path,
@@ -54,15 +54,15 @@ pub fn is_public(ip: IpAddr) -> bool {
 /// Nur `https://host/…` auf Port 443, ohne Zugangsdaten; der Host ist kein IP-Literal.
 fn check(url: &reqwest::Url) -> AppResult<String> {
     if url.scheme() != "https" || url.port_or_known_default() != Some(443) || !url.username().is_empty() || url.password().is_some() {
-        return Err(invalid("Nur https-Adressen auf Port 443 sind erlaubt"));
+        return Err(AppError::invalid("Nur https-Adressen auf Port 443 sind erlaubt"));
     }
-    url.domain().map(str::to_string).ok_or_else(|| invalid("Adresse ohne Hostnamen nicht erlaubt"))
+    url.domain().map(str::to_string).ok_or_else(|| AppError::invalid("Adresse ohne Hostnamen nicht erlaubt"))
 }
 
 async fn resolve(host: &str) -> AppResult<Vec<SocketAddr>> {
-    let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host, 443)).await.map_err(|e| invalid(format!("{host} nicht erreichbar: {e}")))?.collect();
+    let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host, 443)).await.map_err(|e| AppError::invalid(format!("{host} nicht erreichbar: {e}")))?.collect();
     if addrs.is_empty() || !addrs.iter().all(|a| is_public(a.ip())) {
-        return Err(invalid(format!("{host} zeigt auf keine öffentliche Adresse")));
+        return Err(AppError::invalid(format!("{host} zeigt auf keine öffentliche Adresse")));
     }
     Ok(addrs)
 }
@@ -70,7 +70,7 @@ async fn resolve(host: &str) -> AppResult<Vec<SocketAddr>> {
 /// Lädt `url` nach `dest`. `progress(geladen, gesamt)` in Bytes (gesamt 0 = unbekannt). Überschreitet die
 /// Datei `limit`, bricht der Download ab und die Teildatei wird gelöscht.
 pub async fn download_public(url: &str, dest: &Path, limit: u64, progress: &(dyn Fn(u64, u64) + Send + Sync)) -> AppResult<()> {
-    let mut url = reqwest::Url::parse(url).map_err(|e| invalid(e.to_string()))?;
+    let mut url = reqwest::Url::parse(url).map_err(|e| AppError::invalid(e.to_string()))?;
     for _ in 0..MAX_HOPS {
         let host = check(&url)?;
         let addrs = resolve(&host).await?;
@@ -87,14 +87,14 @@ pub async fn download_public(url: &str, dest: &Path, limit: u64, progress: &(dyn
                 .headers()
                 .get(reqwest::header::LOCATION)
                 .and_then(|v| v.to_str().ok())
-                .ok_or_else(|| invalid("Weiterleitung ohne Ziel"))?;
-            url = url.join(location).map_err(|e| invalid(e.to_string()))?;
+                .ok_or_else(|| AppError::invalid("Weiterleitung ohne Ziel"))?;
+            url = url.join(location).map_err(|e| AppError::invalid(e.to_string()))?;
             continue;
         }
         let mut response = response.error_for_status()?;
         let total = response.content_length().unwrap_or(0);
         if total > limit {
-            return Err(invalid("Download zu groß"));
+            return Err(AppError::invalid("Download zu groß"));
         }
         let mut file = tokio::fs::File::create(dest).await?;
         let mut done = 0u64;
@@ -102,7 +102,7 @@ pub async fn download_public(url: &str, dest: &Path, limit: u64, progress: &(dyn
             while let Some(chunk) = response.chunk().await? {
                 done += chunk.len() as u64;
                 if done > limit {
-                    return Err(invalid("Download zu groß"));
+                    return Err(AppError::invalid("Download zu groß"));
                 }
                 file.write_all(&chunk).await?;
                 progress(done, total);
@@ -118,7 +118,7 @@ pub async fn download_public(url: &str, dest: &Path, limit: u64, progress: &(dyn
         }
         return Ok(());
     }
-    Err(invalid("Zu viele Weiterleitungen"))
+    Err(AppError::invalid("Zu viele Weiterleitungen"))
 }
 
 #[cfg(test)]

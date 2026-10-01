@@ -10,7 +10,7 @@ use crate::{
     services::{
         content::{self, Blob, Pack, TempFile},
         forge,
-        modrinth::{self, identifier, invalid, Dependency, File, Hit, Project, SearchResponse, Version},
+        modrinth::{self, identifier, Dependency, File, Hit, Project, SearchResponse, Version},
         Dirs,
     },
     state::AppState,
@@ -80,7 +80,7 @@ async fn send<T: DeserializeOwned>(build: impl Fn() -> reqwest::RequestBuilder) 
         }
         let retry_after = response.headers().get(reqwest::header::RETRY_AFTER).and_then(|v| v.to_str().ok());
         let Some(wait) = rate_limit_wait(retry_after, attempt) else {
-            return Err(invalid("Zu viele Anfragen an CurseForge, bitte kurz warten"));
+            return Err(AppError::invalid("Zu viele Anfragen an CurseForge, bitte kurz warten"));
         };
         tracing::info!(?wait, attempt, "CurseForge-Proxy drosselt, neuer Versuch");
         tokio::time::sleep(wait).await;
@@ -100,16 +100,16 @@ fn rate_limit_wait(retry_after: Option<&str>, attempt: u32) -> Option<Duration> 
 async fn parse_response<T: DeserializeOwned>(response: reqwest::Response) -> AppResult<T> {
     let status = response.status();
     if matches!(status.as_u16(), 401 | 403) {
-        return Err(invalid("Der CurseForge-Dienst lehnt die Anfrage ab"));
+        return Err(AppError::invalid("Der CurseForge-Dienst lehnt die Anfrage ab"));
     }
     if status.as_u16() == 404 {
-        return Err(invalid("Bei CurseForge nicht gefunden"));
+        return Err(AppError::invalid("Bei CurseForge nicht gefunden"));
     }
     let mut response = response.error_for_status()?;
     let mut data = Vec::new();
     while let Some(chunk) = response.chunk().await? {
         if data.len() as u64 + chunk.len() as u64 > JSON_LIMIT {
-            return Err(invalid("Antwort zu groß"));
+            return Err(AppError::invalid("Antwort zu groß"));
         }
         data.extend_from_slice(&chunk);
     }
@@ -122,7 +122,7 @@ async fn post<T: DeserializeOwned>(client: &reqwest::Client, path: &str, body: &
     post_at(client, &proxy(), path, body).await
 }
 async fn get_at<T: DeserializeOwned>(client: &reqwest::Client, proxy: &str, path: &str, query: &[(&str, String)]) -> AppResult<T> {
-    let mut url = reqwest::Url::parse(&format!("{proxy}/v1/{path}")).map_err(|e| invalid(e.to_string()))?;
+    let mut url = reqwest::Url::parse(&format!("{proxy}/v1/{path}")).map_err(|e| AppError::invalid(e.to_string()))?;
     url.query_pairs_mut().extend_pairs(query.iter().map(|(k, v)| (*k, v.as_str())));
     send(|| client.get(url.clone())).await
 }
@@ -267,7 +267,7 @@ fn class_of(kind: &str) -> AppResult<u32> {
         "modpack" => Ok(CLASS_MODPACK),
         "resourcepack" => Ok(CLASS_RESOURCEPACK),
         "shader" => Ok(CLASS_SHADER),
-        _ => Err(invalid("Ungültige Suche")),
+        _ => Err(AppError::invalid("Ungültige Suche")),
     }
 }
 fn kind_name(class_id: Option<u32>) -> &'static str {
@@ -284,7 +284,7 @@ fn mod_kind(class_id: Option<u32>) -> AppResult<ModKind> {
         Some(CLASS_MOD) => Ok(ModKind::Mod),
         Some(CLASS_RESOURCEPACK) => Ok(ModKind::ResourcePack),
         Some(CLASS_SHADER) => Ok(ModKind::Shader),
-        _ => Err(invalid("Das ist keine Mod, kein Ressourcenpaket und kein Shader")),
+        _ => Err(AppError::invalid("Das ist keine Mod, kein Ressourcenpaket und kein Shader")),
     }
 }
 /// CurseForge-Nummer des Loaders; Vanilla hat keine.
@@ -379,7 +379,7 @@ fn version(f: &CfFile) -> Version {
 }
 
 fn number(id: &str) -> AppResult<u32> {
-    id.parse().map_err(|_| invalid("Ungültige CurseForge-Nummer"))
+    id.parse().map_err(|_| AppError::invalid("Ungültige CurseForge-Nummer"))
 }
 
 // ---------- Katalog ----------
@@ -394,7 +394,7 @@ pub async fn search(
     index: Option<&str>,
 ) -> AppResult<SearchResponse> {
     if query.len() > 256 || offset > 9_900 {
-        return Err(invalid("Ungültige Suche"));
+        return Err(AppError::invalid("Ungültige Suche"));
     }
     // CurseForge: 1 Hervorgehoben, 2 Beliebtheit, 3 Zuletzt aktualisiert, 6 Downloads, 11 Veröffentlicht.
     let sort = match index {
@@ -403,7 +403,7 @@ pub async fn search(
         Some("downloads") => 6,
         Some("updated") => 3,
         Some("newest") => 11,
-        Some(_) => return Err(invalid("Ungültige Sortierung")),
+        Some(_) => return Err(AppError::invalid("Ungültige Sortierung")),
     };
     let mut q = vec![
         ("gameId", GAME_MINECRAFT.to_string()),
@@ -432,7 +432,7 @@ async fn mod_of(client: &reqwest::Client, id: u32) -> AppResult<CfMod> {
 async fn file_of(client: &reqwest::Client, project: u32, file: u32) -> AppResult<CfFile> {
     let f = get::<One<CfFile>>(client, &format!("mods/{project}/files/{file}"), &[]).await?.data;
     if f.id != u64::from(file) || f.mod_id != u64::from(project) {
-        return Err(invalid("Datei gehört nicht zu diesem Projekt"));
+        return Err(AppError::invalid("Datei gehört nicht zu diesem Projekt"));
     }
     Ok(f)
 }
@@ -522,7 +522,7 @@ fn curseforge_projects(instance: &Instance) -> HashSet<u64> {
 }
 
 fn no_matching_file(m: &CfMod) -> AppError {
-    invalid(format!("Keine passende Version von {}", m.name))
+    AppError::invalid(format!("Keine passende Version von {}", m.name))
 }
 
 /// Wählt für die Projekte einer Ebene die Datei-Nummer aus dem Index. Dieselbe Mod, die schon von Modrinth stammt,
@@ -531,7 +531,7 @@ fn pick_files(ids: &[u64], mut mods: HashMap<u64, CfMod>, instance: &Instance) -
     let installed: HashSet<String> = instance.mods.iter().map(|m| norm(&m.name)).collect();
     let mut picks = Vec::new();
     for id in ids {
-        let m = mods.remove(id).ok_or_else(|| invalid(format!("Die Abhängigkeit {id} gibt es bei CurseForge nicht mehr")))?;
+        let m = mods.remove(id).ok_or_else(|| AppError::invalid(format!("Die Abhängigkeit {id} gibt es bei CurseForge nicht mehr")))?;
         if installed.contains(&norm(&m.name)) {
             continue;
         }
@@ -562,7 +562,7 @@ async fn dependencies(client: &reqwest::Client, instance: &Instance, root: &CfFi
     while !level.is_empty() {
         level.retain(|id| !installed.contains(id) && seen.insert(*id));
         if found.len() + level.len() > MAX_DEPENDENCIES {
-            return Err(invalid("Dependency-Limit erreicht"));
+            return Err(AppError::invalid("Dependency-Limit erreicht"));
         }
         let picks = pick_files(&level, mods_by_id(client, &level).await?, instance)?;
         let file_ids: Vec<u64> = picks.iter().map(|(_, file_id)| *file_id).collect();
@@ -574,8 +574,8 @@ async fn dependencies(client: &reqwest::Client, instance: &Instance, root: &CfFi
 }
 
 fn remote(file: &CfFile) -> AppResult<RemoteFile> {
-    let url = file.download_url.clone().filter(|u| !u.is_empty()).ok_or_else(|| invalid("Die Autoren erlauben den Download nur über CurseForge"))?;
-    let sha1 = sha1_of(file).ok_or_else(|| invalid("Datei ohne Prüfsumme"))?;
+    let url = file.download_url.clone().filter(|u| !u.is_empty()).ok_or_else(|| AppError::invalid("Die Autoren erlauben den Download nur über CurseForge"))?;
+    let sha1 = sha1_of(file).ok_or_else(|| AppError::invalid("Datei ohne Prüfsumme"))?;
     Ok(RemoteFile { urls: vec![url], size: file.file_length, hashes: BTreeMap::from([("sha1", sha1)]) })
 }
 
@@ -599,7 +599,7 @@ fn mod_entry(m: &CfMod, f: &CfFile, kind: ModKind, sha1: String, required_by: Ve
 fn check_file_name(name: &str, kind: ModKind) -> AppResult<()> {
     content::safe_path(name)?;
     if name.contains('/') || !name.ends_with(kind.extension()) {
-        return Err(invalid(format!("Unerwarteter Dateiname {name}")));
+        return Err(AppError::invalid(format!("Unerwarteter Dateiname {name}")));
     }
     Ok(())
 }
@@ -620,7 +620,7 @@ pub async fn install_mod(
     let kind = mod_kind(root_mod.class_id)?;
     let root_file = file_of(&client, project, file_no).await?;
     if !runs(&instance, kind, &root_file) {
-        return Err(invalid(format!("{} passt nicht zu dieser Instanz ({})", root_file.display_name, instance.minecraft_version)));
+        return Err(AppError::invalid(format!("{} passt nicht zu dieser Instanz ({})", root_file.display_name, instance.minecraft_version)));
     }
     let root_key = format!("cf-{project}");
     let mut plan: Vec<(CfMod, CfFile)> = vec![(root_mod, root_file)];
@@ -634,7 +634,7 @@ pub async fn install_mod(
                 .iter()
                 .find(|d| d.relation_type == INCOMPATIBLE && (installed_cf.contains(&d.mod_id) || plan.iter().any(|(m, _)| m.id == d.mod_id)))
             {
-                return Err(invalid(format!("{} ist mit einer vorhandenen Mod unverträglich (Projekt {})", f.display_name, d.mod_id)));
+                return Err(AppError::invalid(format!("{} ist mit einer vorhandenen Mod unverträglich (Projekt {})", f.display_name, d.mod_id)));
             }
         }
     }
@@ -644,14 +644,14 @@ pub async fn install_mod(
         let k = if m.id == u64::from(project) { kind } else { ModKind::Mod };
         check_file_name(&f.file_name, k)?;
         if !names.insert(f.file_name.to_lowercase()) {
-            return Err(invalid("Mod-Dateinamen kollidieren"));
+            return Err(AppError::invalid("Mod-Dateinamen kollidieren"));
         }
         let target = state.dirs.game_dir(instance_id).join(k.folder()).join(&f.file_name);
         content::regular_parents(&state.dirs.root, &target)?;
         if fs::symlink_metadata(&target).is_ok() {
-            return Err(invalid("Mod-Zieldatei existiert bereits"));
+            return Err(AppError::invalid("Mod-Zieldatei existiert bereits"));
         }
-        let remote = remote(f).map_err(|e| invalid(format!("{}: {e}", m.name)))?;
+        let remote = remote(f).map_err(|e| AppError::invalid(format!("{}: {e}", m.name)))?;
         files.push((m, f, k, target, remote));
     }
     content::budget(files.iter().map(|(_, f, ..)| f.file_length))?;
@@ -739,13 +739,13 @@ struct ManifestFile {
 /// `forge-47.1.3` -> (Forge, 47.1.3); Loader, die Pumpkin Launcher nicht kennt, sind ein Fehler.
 fn manifest_loader(m: &ManifestMinecraft) -> AppResult<(ModLoader, Option<String>)> {
     let Some(l) = m.mod_loaders.iter().find(|l| l.primary).or(m.mod_loaders.first()) else { return Ok((ModLoader::Vanilla, None)) };
-    let (name, version) = l.id.split_once('-').ok_or_else(|| invalid("Loader im Pack nicht lesbar"))?;
+    let (name, version) = l.id.split_once('-').ok_or_else(|| AppError::invalid("Loader im Pack nicht lesbar"))?;
     let loader = match name {
         "forge" => ModLoader::Forge,
         "neoforge" => ModLoader::NeoForge,
         "fabric" => ModLoader::Fabric,
         "quilt" => ModLoader::Quilt,
-        other => return Err(invalid(format!("Das Pack braucht den Loader „{other}“, den Pumpkin Launcher nicht kennt"))),
+        other => return Err(AppError::invalid(format!("Das Pack braucht den Loader „{other}“, den Pumpkin Launcher nicht kennt"))),
     };
     identifier(version)?;
     identifier(&m.version)?;
@@ -773,12 +773,12 @@ pub(crate) async fn plan_pack(
     progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
 ) -> AppResult<(Pack, Vec<Blocked>)> {
     if name.trim().is_empty() || name.len() > 200 {
-        return Err(invalid("Ungültiger Instanzname"));
+        return Err(AppError::invalid("Ungültiger Instanzname"));
     }
     let (project, file_no) = (number(project_id)?, number(file_id)?);
     let pack_mod = mod_of(client, project).await?;
     if pack_mod.class_id != Some(CLASS_MODPACK) {
-        return Err(invalid("Projekt ist kein Modpack"));
+        return Err(AppError::invalid("Projekt ist kein Modpack"));
     }
     let pack_file = file_of(client, project, file_no).await?;
     let tmp = dirs.root.join("cache").join("tmp");
@@ -801,17 +801,17 @@ pub(crate) async fn plan_pack(
         let mut bytes = Vec::new();
         entry.take(16 * MIB + 1).read_to_end(&mut bytes)?;
         if bytes.len() as u64 > 16 * MIB {
-            return Err(invalid("manifest.json zu groß"));
+            return Err(AppError::invalid("manifest.json zu groß"));
         }
         serde_json::from_slice(&bytes)?
     };
     let (loader, loader_version) = manifest_loader(&manifest.minecraft)?;
     if manifest.files.len() > 6000 {
-        return Err(invalid("Zu viele Pack-Dateien"));
+        return Err(AppError::invalid("Zu viele Pack-Dateien"));
     }
     // Der Ordner mit den Overrides kommt aus dem Manifest: nur einfache Namen.
     if manifest.overrides.is_empty() || manifest.overrides.contains(['/', '\\', ':']) || manifest.overrides.starts_with('.') {
-        return Err(invalid("Ungültiger Overrides-Ordner im Pack"));
+        return Err(AppError::invalid("Ungültiger Overrides-Ordner im Pack"));
     }
     let prefix = format!("{}/", manifest.overrides);
 
@@ -827,11 +827,11 @@ pub(crate) async fn plan_pack(
     let mut origins = HashMap::new();
     let mut blocked = Vec::new();
     for mf in &manifest.files {
-        let f = infos.get(&u64::from(mf.file_id)).ok_or_else(|| invalid(format!("Datei {} gibt es bei CurseForge nicht mehr", mf.file_id)))?;
+        let f = infos.get(&u64::from(mf.file_id)).ok_or_else(|| AppError::invalid(format!("Datei {} gibt es bei CurseForge nicht mehr", mf.file_id)))?;
         let m = mods.get(&u64::from(mf.project_id));
         let Some(folder) = folder_of(m.and_then(|m| m.class_id)) else { continue };
         if f.file_name.is_empty() || f.file_name.contains(['/', '\\']) {
-            return Err(invalid(format!("Unerwarteter Dateiname {}", f.file_name)));
+            return Err(AppError::invalid(format!("Unerwarteter Dateiname {}", f.file_name)));
         }
         let page = m
             .and_then(|m| m.links.as_ref())
@@ -863,7 +863,7 @@ pub(crate) async fn plan_pack(
     let downloads: HashSet<String> = pack.downloads.iter().map(|(p, _)| p.to_string_lossy().to_lowercase()).collect();
     for path in &override_paths {
         if path.match_indices('/').any(|(at, _)| downloads.contains(&path[..at])) {
-            return Err(invalid("Datei/Verzeichnis-Konflikt"));
+            return Err(AppError::invalid("Datei/Verzeichnis-Konflikt"));
         }
     }
     let archive = Arc::new(Mutex::new(zip));
@@ -936,7 +936,7 @@ pub async fn adopt_download(state: &AppState, instance_id: &str, project_id: u32
     let target = state.dirs.game_dir(instance_id).join(kind.folder()).join(&f.file_name);
     content::regular_parents(&state.dirs.root, &target)?;
     if instance.mods.iter().any(|x| x.file_name.eq_ignore_ascii_case(&f.file_name)) || fs::symlink_metadata(&target).is_ok() {
-        return Err(invalid("Mod-Dateinamen kollidieren"));
+        return Err(AppError::invalid("Mod-Dateinamen kollidieren"));
     }
     content::write_new(&state.dirs.root, &target, &data)?;
     let sha1 = match crate::services::mods::cache_bytes(&state.dirs, &data) {

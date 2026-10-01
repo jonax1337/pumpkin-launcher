@@ -4,12 +4,12 @@
 //! Pfad- und Größenregeln wie ein `.mrpack`. Loader und Minecraft-Version stehen in `bin/version.json`.
 use super::{json, net, segment, zip_files, MIB, ZIP_LIMIT};
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     models::{Instance, ModLoader, NewInstance},
     services::{
         content::{Blob, Pack, TempFile},
         forge,
-        modrinth::{identifier, invalid, File, Hit, Project, SearchResponse, Version},
+        modrinth::{identifier, File, Hit, Project, SearchResponse, Version},
         Dirs,
     },
 };
@@ -114,7 +114,7 @@ async fn detail(client: &reqwest::Client, slug: &str) -> AppResult<Detail> {
     segment(slug)?;
     let d: Detail = json(client, &format!("{API}/modpack/{slug}?build={BUILD}")).await?;
     if d.name != slug {
-        return Err(invalid("Technic-Pack stimmt nicht überein"));
+        return Err(AppError::invalid("Technic-Pack stimmt nicht überein"));
     }
     Ok(d)
 }
@@ -128,7 +128,7 @@ pub async fn search(
     index: Option<&str>,
 ) -> AppResult<SearchResponse> {
     if query.len() > 512 {
-        return Err(invalid("Ungültige Suche"));
+        return Err(AppError::invalid("Ungültige Suche"));
     }
     let empty = SearchResponse { hits: Vec::new(), total_hits: 0, offset, limit: 20 };
     // Technic liefert eine einzige Seite ohne Versatz.
@@ -137,7 +137,7 @@ pub async fn search(
     }
     let query = query.trim();
     let mut url = reqwest::Url::parse(&format!("{API}/{}", if query.is_empty() { "trending" } else { "search" }))
-        .map_err(|e| invalid(e.to_string()))?;
+        .map_err(|e| AppError::invalid(e.to_string()))?;
     url.query_pairs_mut().append_pair("build", BUILD);
     if !query.is_empty() {
         url.query_pairs_mut().append_pair("q", query);
@@ -153,7 +153,7 @@ pub async fn search(
     match index {
         Some("downloads") => details.sort_by_key(|d| std::cmp::Reverse(d.installs)),
         None | Some("relevance" | "follows" | "newest" | "updated") => {}
-        Some(_) => return Err(invalid("Ungültige Sortierung")),
+        Some(_) => return Err(AppError::invalid("Ungültige Sortierung")),
     }
     let hits: Vec<Hit> = details.iter().map(hit).collect();
     Ok(SearchResponse { total_hits: hits.len() as u64, hits, offset, limit: 20 })
@@ -207,7 +207,7 @@ fn loader_from(profile: &serde_json::Value) -> AppResult<(String, ModLoader, Opt
         .map(str::to_string)
         // Ältere Profile heißen `1.20.1-forge-47.1.3`.
         .or_else(|| id.split('-').next().filter(|s| s.starts_with(|c: char| c.is_ascii_digit())).map(str::to_string))
-        .ok_or_else(|| invalid("Minecraft-Version im Pack nicht erkennbar"))?;
+        .ok_or_else(|| AppError::invalid("Minecraft-Version im Pack nicht erkennbar"))?;
     identifier(&mc)?;
     let names: Vec<&str> = profile["libraries"].as_array().map(|a| a.iter().filter_map(|l| l["name"].as_str()).collect()).unwrap_or_default();
     let version = |prefix: &str| -> Option<String> {
@@ -247,7 +247,7 @@ fn inspect(temp: TempFile, name: &str) -> AppResult<Pack> {
         let mut wrapped = names.iter().filter_map(|n| n.strip_suffix("/bin/version.json")).filter(|p| !p.contains('/'));
         match (wrapped.next(), wrapped.next()) {
             (Some(p), None) => format!("{p}/"),
-            _ => return Err(invalid("Das ist kein Technic-Pack: bin/version.json fehlt")),
+            _ => return Err(AppError::invalid("Das ist kein Technic-Pack: bin/version.json fehlt")),
         }
     };
     let profile: serde_json::Value = {
@@ -255,7 +255,7 @@ fn inspect(temp: TempFile, name: &str) -> AppResult<Pack> {
         let mut bytes = Vec::new();
         entry.take(8 * MIB + 1).read_to_end(&mut bytes)?;
         if bytes.len() as u64 > 8 * MIB {
-            return Err(invalid("version.json zu groß"));
+            return Err(AppError::invalid("version.json zu groß"));
         }
         serde_json::from_slice(&bytes)?
     };
@@ -283,13 +283,13 @@ pub(crate) async fn plan(
     progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
 ) -> AppResult<Pack> {
     if name.trim().is_empty() || name.len() > 200 {
-        return Err(invalid("Ungültiger Instanzname"));
+        return Err(AppError::invalid("Ungültiger Instanzname"));
     }
     let d = detail(client, slug).await?;
     if d.solder.is_some() {
-        return Err(invalid("Dieses Modpack nutzt Technic Solder (ältere Technik) und lässt sich nicht installieren"));
+        return Err(AppError::invalid("Dieses Modpack nutzt Technic Solder (ältere Technik) und lässt sich nicht installieren"));
     }
-    let url = d.url.filter(|u| !u.is_empty()).ok_or_else(|| invalid("Das Modpack hat keine Download-Adresse"))?;
+    let url = d.url.filter(|u| !u.is_empty()).ok_or_else(|| AppError::invalid("Das Modpack hat keine Download-Adresse"))?;
     let tmp = dirs.root.join("cache").join("tmp");
     fs::create_dir_all(&tmp)?;
     let temp = TempFile(tmp.join(format!("{}.zip", crate::models::new_id())));

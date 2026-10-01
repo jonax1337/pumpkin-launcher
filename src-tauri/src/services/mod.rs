@@ -9,7 +9,6 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, AppResult};
 use download::RemoveOnDrop;
-use modrinth::invalid;
 
 pub mod auth;
 pub mod datapacks;
@@ -160,8 +159,8 @@ pub(crate) fn walk(base: &Path, path: &Path, out: &mut Vec<(String, PathBuf)>) -
             walk(base, &entry?.path(), out)?;
         }
     } else if kind.is_file() {
-        let rel = path.strip_prefix(base).map_err(|_| invalid("Pfad außerhalb des Spielordners"))?;
-        let rel = rel.to_str().ok_or_else(|| invalid("Dateiname ist kein gültiger Text"))?.replace('\\', "/");
+        let rel = path.strip_prefix(base).map_err(|_| AppError::invalid("Pfad außerhalb des Spielordners"))?;
+        let rel = rel.to_str().ok_or_else(|| AppError::invalid("Dateiname ist kein gültiger Text"))?.replace('\\', "/");
         out.push((rel, path.to_owned()));
     }
     Ok(())
@@ -275,7 +274,7 @@ pub(crate) async fn blocking<T: Send + 'static>(
     let _stop_on_drop = stop.clone().drop_guard();
     tokio::task::spawn_blocking(move || work(&stop))
         .await
-        .map_err(|e| invalid(format!("Der Vorgang ist unerwartet abgebrochen: {e}")))?
+        .map_err(|e| AppError::invalid(format!("Der Vorgang ist unerwartet abgebrochen: {e}")))?
 }
 
 pub(crate) fn check_cancelled(stop: &CancellationToken) -> AppResult<()> {

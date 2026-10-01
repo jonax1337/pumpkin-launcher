@@ -3,7 +3,7 @@
 //! Neue Instanzen entstehen über den normalen Pack-Import (`content::import`).
 use std::{fs, path::PathBuf};
 
-use super::{content, modrinth::invalid, mrpack::{self, PackLimit}, Dirs};
+use super::{content, mrpack::{self, PackLimit}, Dirs};
 use crate::{
     error::{AppError, AppResult},
     models::{new_id, now_ms, Instance, Template},
@@ -20,7 +20,7 @@ fn file(dirs: &Dirs, id: &str) -> PathBuf {
 pub async fn save(state: &AppState, instance_id: &str, name: &str) -> AppResult<Template> {
     let name = name.trim();
     if name.is_empty() || name.chars().count() > 100 {
-        return Err(invalid("Der Name der Vorlage muss 1 bis 100 Zeichen lang sein"));
+        return Err(AppError::invalid("Der Name der Vorlage muss 1 bis 100 Zeichen lang sein"));
     }
     let instance = state.instances.get(instance_id)?;
     let template = Template {
@@ -61,7 +61,7 @@ pub async fn create_instance(
 ) -> AppResult<Instance> {
     let template = state.templates.get(template_id)?;
     let data = content::local_pack(&file(&state.dirs, &template.id)).map_err(|e| match e {
-        AppError::Io(e) if e.kind() == std::io::ErrorKind::NotFound => invalid("Die Vorlagendatei fehlt"),
+        AppError::Io(e) if e.kind() == std::io::ErrorKind::NotFound => AppError::invalid("Die Vorlagendatei fehlt"),
         e => e,
     })?;
     content::import(state, &data, name, None, progress).await

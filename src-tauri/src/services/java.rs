@@ -100,7 +100,7 @@ pub fn resolve(dirs: &Dirs, component: &str, instance_path: Option<&str>, global
     }
     let java = java_exe(dirs, component);
     if !java.exists() {
-        return Err(AppError::Invalid(format!("Java nicht gefunden: {}", java.display())));
+        return Err(AppError::invalid(format!("Java nicht gefunden: {}", java.display())));
     }
     Ok(java)
 }
@@ -111,7 +111,7 @@ pub fn custom_java(path: &str, setting: JavaSetting) -> AppResult<PathBuf> {
     let path = PathBuf::from(path);
     let name = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
     if !JAVA_FILE_NAMES.contains(&name.as_str()) {
-        return Err(AppError::Invalid(format!(
+        return Err(AppError::invalid(format!(
             "„{}“ ist kein Java-Programm. Wähle {} die {} im bin-Ordner deiner Java-Installation.",
             path.display(),
             setting.place(),
@@ -119,7 +119,7 @@ pub fn custom_java(path: &str, setting: JavaSetting) -> AppResult<PathBuf> {
         )));
     }
     if !path.is_file() {
-        return Err(AppError::Invalid(format!(
+        return Err(AppError::invalid(format!(
             "Java nicht gefunden: {}. Prüfe Java {}.",
             path.display(),
             setting.place()

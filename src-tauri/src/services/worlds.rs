@@ -12,7 +12,7 @@ use std::{
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use super::{
-    add_zip_file, blocking, content, data_url, download::RemoveOnDrop, entries, free_name, modrinth::invalid,
+    add_zip_file, blocking, content, data_url, download::RemoveOnDrop, entries, free_name,
     providers::zip_paths, servers, walk, write_zip_atomic, Dirs,
 };
 use crate::{
@@ -156,7 +156,7 @@ pub fn backup(dirs: &Dirs, instance_id: &str, id: &str, progress: &dyn Fn(&str, 
 /// verfolgt) und Namen, die unter Windows nicht gehen oder sich nur in der Schreibweise unterscheiden; Linux und
 /// macOS lassen beides in einer Welt zu.
 fn ensure_restorable(files: &[(String, PathBuf)], prefix: &str) -> AppResult<()> {
-    let refuse = |why: String| invalid(format!("Die Welt lässt sich nicht wiederherstellen, daher wird sie nicht gesichert: {why}"));
+    let refuse = |why: String| AppError::invalid(format!("Die Welt lässt sich nicht wiederherstellen, daher wird sie nicht gesichert: {why}"));
     if files.is_empty() {
         return Err(refuse("sie enthält keine Dateien".into()));
     }
@@ -191,7 +191,7 @@ pub fn restore(dirs: &Dirs, instance_id: &str, backup_id: &str) -> AppResult<Wor
     // Nur Pfadregeln: die Grenzen gegen ZIP-Bomben aus Pack-Importen würden große Welten aussperren, die `backup` sichert.
     let files = zip_paths(&mut zip, &format!("{}/", backup.world), &[])?;
     if files.is_empty() {
-        return Err(invalid("Die Sicherung enthält keine Welt"));
+        return Err(AppError::invalid("Die Sicherung enthält keine Welt"));
     }
     let saves = dirs.saves(instance_id);
     fs::create_dir_all(&saves)?;
@@ -313,7 +313,7 @@ fn dir_size(dir: &Path) -> u64 {
 /// Ein einzelner, unter Windows gültiger Datei- oder Ordnername (kein Pfad); sonst ein Fehler.
 fn require_file_name(name: &str) -> AppResult<&str> {
     if name.contains('/') {
-        return Err(invalid(format!("Ungültiger Name: {name}")));
+        return Err(AppError::invalid(format!("Ungültiger Name: {name}")));
     }
     content::safe_path(name)?;
     Ok(name)

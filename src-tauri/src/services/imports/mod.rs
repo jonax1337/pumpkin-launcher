@@ -15,7 +15,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use super::{blocking, check_cancelled, content, copy_files, forge, modrinth, walk, REGENERATED};
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     models::{Instance, ModLoader, NewInstance},
     state::AppState,
 };
@@ -173,7 +173,7 @@ fn from_json<T: DeserializeOwned>(data: &[u8]) -> AppResult<T> {
 /// Loader nach dem Namen, den die anderen Launcher schreiben: wie der serde-Name, Groß- und Kleinschreibung egal.
 fn loader_named(name: &str) -> AppResult<ModLoader> {
     serde_json::from_value(name.to_ascii_lowercase().into())
-        .map_err(|_| modrinth::invalid(format!("Den Loader „{name}“ kann Pumpkin Launcher nicht starten")))
+        .map_err(|_| AppError::invalid(format!("Den Loader „{name}“ kann Pumpkin Launcher nicht starten")))
 }
 
 /// JVM-Argumente aus einer Zeile, wie die Launcher sie speichern.
@@ -239,7 +239,7 @@ fn check(source: &ForeignInstance) -> AppResult<()> {
     forge::check_loader(setup.loader, &setup.minecraft_version)?;
     let game_dir = Path::new(&source.game_dir);
     if !game_dir.is_absolute() || !game_dir.is_dir() {
-        return Err(modrinth::invalid(format!("Den Spielordner {} gibt es nicht mehr", source.game_dir)));
+        return Err(AppError::invalid(format!("Den Spielordner {} gibt es nicht mehr", source.game_dir)));
     }
     Ok(())
 }
