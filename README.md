@@ -31,6 +31,7 @@
 - **Presets** — reusable collections of mods, settings and JVM args that can be applied to any instance
 - **Microsoft login** via device code (see [status](#status) below), plus offline player profiles
 - **Quality-of-life** — crash detection with per-instance logs, resumable downloads, automatic RAM detection
+- **Auto-updates** — signed updates from GitHub Releases, installed only when you say so and never while Minecraft is running; a second launch just focuses the open window
 - **Seasonal branding** 🎃 — mascot, accent colors and window/taskbar icon switch automatically with the calendar (spring, summer, Halloween, winter)
 - **Pixelkino UI** — a custom pixel design system with a canvas scene engine, pixel icons and a frameless window. See [the design spec](docs/design/PIXELKINO.md)
 
@@ -69,7 +70,7 @@ Log level via `RUST_LOG`, e.g. `RUST_LOG=debug pnpm tauri dev`.
 pnpm build                        # frontend (sync branding icons, tsc, vite build)
 cd src-tauri && cargo check       # backend
 cd src-tauri && cargo test        # backend tests (JsonStore)
-pnpm tauri build                  # NSIS installer
+pnpm tauri build                  # NSIS installer (needs the updater signing key, see docs/RELEASING.md)
 pnpm check:branding               # seasonal calendar & branding assets
 ```
 
@@ -85,7 +86,7 @@ media/          launch video source (HyperFrames, YouTube + TikTok cuts)
 scripts/        build helper scripts
 ```
 
-Details: [Architecture](docs/ARCHITECTURE.md) · [Pixelkino design spec](docs/design/PIXELKINO.md) · [Branding](branding/pumpkin-launcher/README.md) · [Website](website/README.md) · [Launch video](media/launch-video/README.md)
+Details: [Architecture](docs/ARCHITECTURE.md) · [Releasing](docs/RELEASING.md) · [Pixelkino design spec](docs/design/PIXELKINO.md) · [Branding](branding/pumpkin-launcher/README.md) · [Website](website/README.md) · [Launch video](media/launch-video/README.md)
 
 Instances, presets and settings are stored as JSON in the app data directory (Windows: `%APPDATA%\dev.laux.launcher\`). The technical identifier stays `dev.laux.launcher` so existing data keeps being found.
 
