@@ -9,7 +9,7 @@ import { api } from "@/lib/api";
 import { toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { formatClock, formatCount, relativeTime } from "@/lib/format";
-import { installStepLabel, SUPPORTED_LOADERS, type Instance, type InstallProgress, type InstallStep, type ModLoader } from "@/lib/types";
+import { installStepLabel, type Instance, type InstallProgress, type InstallStep, type ModLoader } from "@/lib/types";
 import { useGame, type LogLine } from "@/store/game";
 import { useUsableAccount } from "@/store/offline";
 
@@ -65,29 +65,24 @@ function spokenSince(ms: number) {
   return `${t(h === 1 ? "components.game.sinceHours.one" : "components.game.sinceHours.other", { n: h })}${m % 60 ? ` ${t("components.game.sinceMinutes.other", { n: m % 60 })}` : ""}`;
 }
 
-type PlayState = { st: "idle" | "prep" | "start" | "run" | "error" | "blocked"; icon: IconName; l1: string; s1: string; l2: ReactNode; p: number | null; pct?: string; dis?: boolean; aria: string };
+type PlayState = { st: "idle" | "prep" | "start" | "run" | "error"; icon: IconName; l1: string; s1: string; l2: ReactNode; p: number | null; pct?: string; dis?: boolean; aria: string };
 
 /**
  * Balken im Spielen-Knopf (`.play .pbar`): segmentierter Fortschritt in den Knopf-Farben
- * (`--prog-on: var(--ink)` auf der Akzentfläche, siehe components/play.css). `p` 0–1, ohne `p` unbestimmt.
- * `label` ist der zugängliche Name; `decorative` blendet ihn aus, wenn derselbe Fortschritt schon anders angesagt wird.
+ * (`--prog-on: var(--ink)` auf der Akzentfläche, siehe components/play.css). `p` 0–1, `null` = unbestimmt (`.ind`).
  */
-const ind = (p: number | null | undefined) => p == null;
-
-function PlayBar({ p, thin, bad, className, style, label, decorative }: { p?: number | null; thin?: boolean; bad?: boolean; className?: string; style?: CSSProperties; label?: string; decorative?: boolean }) {
-  const look = {
-    className: cn("prog", thin && "thin", ind(p), bad && "bad", className),
-    style: { ...style, ["--p" as string]: ind(p) ? 0 : Math.max(0, Math.min(1, p!)) },
-  };
-  if (decorative) return <span aria-hidden {...look} />;
+function PlayBar({ p, className }: { p: number | null; className?: string }) {
+  const indeterminate = p == null;
+  const share = indeterminate ? 0 : Math.max(0, Math.min(1, p));
   return (
     <span
       role="progressbar"
-      aria-label={label ?? t("ui.progress.label")}
+      aria-label={t("ui.progress.label")}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-valuenow={ind(p) ? undefined : Math.round(Math.max(0, Math.min(1, p!)) * 100)}
-      {...look}
+      aria-valuenow={indeterminate ? undefined : Math.round(share * 100)}
+      className={cn("prog", indeterminate && "ind", className)}
+      style={{ "--p": share } as CSSProperties}
     />
   );
 }
@@ -116,8 +111,6 @@ function playState(instance: Instance, phase: Phase, percent: number | null, cod
     case "loading":
       return { st: "idle", icon: "play", l1: t("common.play"), s1: t("common.play"), l2: t("ui.dialog.pending"), p: 0, dis: true, aria: t("components.game.ariaPlay", { name }) };
   }
-  if (phase === "missing" && !SUPPORTED_LOADERS.includes(instance.loader))
-    return { st: "blocked", icon: "plug", l1: t("components.game.cannotStart"), s1: t("components.game.blocked"), l2: t("components.game.loaderUnsupported"), p: 0, dis: true, aria: t("components.game.ariaCannotStart", { name }) };
   const [l2, hint] = !hasAccount
     ? [t("components.game.needNameFirst"), t("components.game.needNameFirstAria")]
     : phase === "installed"
@@ -187,7 +180,7 @@ export function PlayButton({ instance, size = "l", onLaunched, tabIndex }: { ins
  * `showLast={false}`: „Zuletzt gespielt“ steht schon woanders (Start: Metazeile im Hero).
  * `onScene`: Knöpfe über einer Szene (Grundplatte, harter Schatten).
  */
-export function PlayStatus({ instance, className, style, showLast = true, onScene }: { instance: Instance; className?: string; style?: CSSProperties; showLast?: boolean; onScene?: boolean }) {
+export function PlayStatus({ instance, showLast = true, onScene }: { instance: Instance; showLast?: boolean; onScene?: boolean }) {
   const { t } = useI18n();
   const phase = usePhase(instance.id);
   const progress = useGame((s) => s.installs[instance.id]);
@@ -226,7 +219,7 @@ export function PlayStatus({ instance, className, style, showLast = true, onScen
     lead = instance.lastPlayedAt != null ? t("components.game.lastPlayed", { zeit: relativeTime(instance.lastPlayedAt) }) : t("format.neverPlayed");
   }
   return (
-    <div className={cn("pstat", phase === "crashed" && "bad", phase === "running" && "run", className)} style={style}>
+    <div className={cn("pstat", phase === "crashed" && "bad", phase === "running" && "run")}>
       <span className="ptxt">
         <span aria-live="polite">{lead}</span>
         {tail}
@@ -243,9 +236,8 @@ export const LOUD_PHASES: Phase[] = ["preparing", "starting", "running", "crashe
  * Status als Chip (Poster, Mini-Karte, Listen-Statusspalte, oben links): Breite nach Inhalt, feste Höhe.
  * Die Prozentzahl steht in Pixelschrift mit fester Stellenbreite, damit der Chip beim Zählen nicht springt.
  * `loudOnly`: im ruhigen Normalfall nichts zeigen. `small`: Chip s (22 px), sonst m (28 px).
- * `fixed` bleibt für Aufrufer erhalten, ohne Wirkung (die Breite folgt dem Inhalt, die Zahl reserviert ihre Stellen).
  */
-export function StatusChip({ instance, small, loudOnly }: { instance: Instance; small?: boolean; fixed?: boolean; loudOnly?: boolean }) {
+export function StatusChip({ instance, small, loudOnly }: { instance: Instance; small?: boolean; loudOnly?: boolean }) {
   const { t } = useI18n();
   const phase = usePhase(instance.id);
   const percent = useInstallPercent(instance);
