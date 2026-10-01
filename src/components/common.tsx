@@ -62,7 +62,7 @@ export function MemoryChooser({ name, value, onChange, autoText, help = true, di
       </Radio>
       <div className="memrow">
         <div className="memsl" style={{ "--free": `${((MEMORY_SEGMENTS - top) / MEMORY_SEGMENTS) * 100}%` } as CSSProperties}>
-          <SegSlider value={gb} max={top} disabled={disabled || isAuto} onChange={(v) => onChange(v * MB_PER_GB)} />
+          <SegSlider value={gb} max={top} disabled={disabled || isAuto} label={t("ui.memory.label")} unit="GB" onChange={(v) => onChange(v * MB_PER_GB)} />
           {/* Grenze unter dem letzten freien Segment; bei 16 unter dem Ende */}
           <span className="cap" aria-hidden>{t("components.memory.maxGb", { n: top })}</span>
         </div>

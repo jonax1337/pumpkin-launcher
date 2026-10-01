@@ -87,7 +87,6 @@ export function DiscoverPage() {
           {tabs.length > 1 && (
             <Tabs
               variant="segment"
-              role="tablist"
               idBase="disc"
               label={t("pages.discover.categoryLabel")}
               value={type}
