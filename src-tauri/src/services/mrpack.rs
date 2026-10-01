@@ -162,7 +162,7 @@ fn overrides(dirs: &Dirs, instance: &Instance, include: &[String], remote: &[Val
     for (m, sha1) in active_content(instance).filter(|(m, _)| included(include, m)) {
         let path = mods::game_path(m);
         if !covered.contains(&path.as_str()) {
-            files.push((path, mods::cached(dirs, sha1)?));
+            files.push((path, mods::cache_path(dirs, sha1)?));
         }
     }
     files.extend(mods::unmanaged_files(dirs, &instance.id, include, &instance.mods)?);
