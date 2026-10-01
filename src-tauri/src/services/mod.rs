@@ -10,20 +10,20 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::{AppError, AppResult};
 use download::RemoveOnDrop;
+pub use loader::forge;
 
 pub mod auth;
 pub mod datapacks;
 pub mod debuginfo;
 pub mod download;
 pub mod duplicate;
-pub mod fabric;
-pub mod forge;
 pub mod gamelog;
 pub mod imports;
 pub mod install;
 pub mod java;
 pub mod launch;
 pub mod limits;
+pub mod loader;
 pub mod local_files;
 pub mod logshare;
 pub mod mods;

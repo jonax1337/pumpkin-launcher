@@ -7,10 +7,12 @@ use serde::Serialize;
 
 use crate::error::{AppError, AppResult};
 use crate::models::{Instance, ModLoader};
-use crate::services::download::{self, Job};
-use crate::services::mojang::{AssetIndex, Library, VersionJson, VersionManifest, MANIFEST_URL, RESOURCES_URL};
+use crate::services::download::{self, dedup_by_path, is_sha1, Job};
+use crate::services::mojang::{
+    AssetIndex, Download, Library, LoggingClient, VersionJson, VersionManifest, MANIFEST_URL, RESOURCES_URL,
+};
 use crate::services::rules::{self, Env};
-use crate::services::{java, Dirs};
+use crate::services::{blocking, java, Dirs};
 
 /// Name des Tauri-Events, über das `InstallProgress` ans Frontend geht.
 pub const INSTALL_PROGRESS_EVENT: &str = "install-progress";
@@ -89,23 +91,104 @@ pub fn is_installed(dirs: &Dirs, instance: &Instance) -> bool {
     fs::read_to_string(dirs.installed_marker(&instance.id)).is_ok_and(|v| v == install_key(instance))
 }
 
-/// Java-Komponente der Version; sehr alte Versions-JSONs haben keine Angabe → Java 8.
-pub fn java_component(version: &VersionJson) -> &str {
-    version.java_version.as_ref().map_or("jre-legacy", |j| j.component.as_str())
+/// Ablage der Logging-Config, die die Version per JVM-Argument einbindet.
+pub fn log_config_path(dirs: &Dirs, log: &LoggingClient) -> PathBuf {
+    dirs.assets().join("log_configs").join(&log.file.id)
 }
 
-/// Library-Artefakte, die laut Regeln auf diese Plattform gehören (Classpath und Download).
-pub fn artifacts<'a>(version: &'a VersionJson, env: &'a Env) -> impl Iterator<Item = (&'a Library, &'a crate::services::mojang::Download)> {
-    version
-        .libraries
-        .iter()
-        .filter(|l| rules::allowed(&l.rules, env))
-        .filter_map(|l| l.downloads.artifact.as_ref().map(|a| (l, a)))
+/// Installiert `version` für eine Instanz und liefert den Pfad der Java-Programmdatei.
+///
+/// Der geteilte Cache hat keine Dateisperren: Installationen laufen nacheinander (globale Sperre in `AppState`),
+/// zwei gleichzeitige schrieben sonst dieselben `.part`-Dateien.
+pub async fn install(
+    client: &reqwest::Client,
+    dirs: &Dirs,
+    version: &VersionJson,
+    instance_id: &str,
+    on_progress: OnProgress<'_>,
+) -> AppResult<PathBuf> {
+    let setup = Setup { client, dirs, version, env: Env::current(), on_progress };
+    let java = setup.install_java().await?;
+    setup.install_client().await?;
+    setup.install_libraries().await?;
+    setup.install_natives(instance_id).await?;
+    setup.install_assets().await?;
+    Ok(java)
+}
+
+/// Was alle Schritte einer Installation teilen.
+struct Setup<'a> {
+    client: &'a reqwest::Client,
+    dirs: &'a Dirs,
+    version: &'a VersionJson,
+    env: Env,
+    on_progress: OnProgress<'a>,
+}
+
+impl Setup<'_> {
+    /// Fortschritt eines Schritts als `(erledigt, gesamt)`.
+    fn counter(&self, step: InstallStep) -> impl Fn(u64, u64) + Send + Sync + '_ {
+        move |done, total| (self.on_progress)(step, done, total)
+    }
+
+    async fn install_java(&self) -> AppResult<PathBuf> {
+        java::ensure(self.client, self.dirs, self.version.java_component(), &self.counter(InstallStep::Java)).await
+    }
+
+    /// Client-JAR und, falls die Version eine nennt, ihre Logging-Config.
+    async fn install_client(&self) -> AppResult<()> {
+        let version = self.version;
+        let mut jobs = vec![Job::from_download(&version.downloads.client, self.dirs.version_file(&version.id, "jar"))];
+        if let Some(log) = &version.logging.client {
+            jobs.push(Job::from_download(&log.file.download, log_config_path(self.dirs, log)));
+        }
+        download::fetch_all(self.client, jobs, &self.counter(InstallStep::Client)).await
+    }
+
+    async fn install_libraries(&self) -> AppResult<()> {
+        let natives = native_jars(self.version, &self.env);
+        let jobs = self
+            .version
+            .artifacts(&self.env)
+            .chain(natives)
+            .map(|(lib, d)| library_job(self.dirs, lib, d))
+            .collect::<AppResult<Vec<_>>>()?;
+        download::fetch_all(self.client, dedup_by_path(jobs), &self.counter(InstallStep::Libraries)).await
+    }
+
+    /// Natives immer frisch entpacken, damit nach einem Versionswechsel keine alten DLLs liegen bleiben.
+    async fn install_natives(&self, instance_id: &str) -> AppResult<()> {
+        let natives_dir = self.dirs.natives_dir(instance_id);
+        let jars: Vec<(PathBuf, Vec<String>)> = native_jars(self.version, &self.env)
+            .into_iter()
+            .map(|(lib, d)| Ok((library_job(self.dirs, lib, d)?.path, lib.extract.exclude.clone())))
+            .collect::<AppResult<_>>()?;
+        let total = jars.len() as u64;
+        (self.on_progress)(InstallStep::Natives, 0, total);
+        let extracted = blocking(move |_| replace_natives(&natives_dir, &jars)).await?;
+        (self.on_progress)(InstallStep::Natives, total, total);
+        tracing::debug!(extracted, "Natives entpackt");
+        Ok(())
+    }
+
+    async fn install_assets(&self) -> AppResult<()> {
+        let index = self.asset_index().await?;
+        let objects = self.dirs.assets().join("objects");
+        let jobs = index.objects.values().map(|o| asset_job(&objects, &o.hash)).collect::<AppResult<Vec<_>>>()?;
+        download::fetch_all(self.client, dedup_by_path(jobs), &self.counter(InstallStep::Assets)).await
+    }
+
+    async fn asset_index(&self) -> AppResult<AssetIndex> {
+        let index = &self.version.asset_index;
+        let path = self.dirs.assets().join("indexes").join(format!("{}.json", index.id));
+        download::fetch(self.client, &Job::from_download(&index.download, path.clone())).await?;
+        download::read_json(&path).await
+    }
 }
 
 /// JARs, aus denen Natives entpackt werden: neue Versionen (`…:natives-windows` als eigenes
 /// Artefakt, nur passende Architektur) und alte (`natives`-Map → Classifier).
-fn native_jars<'a>(version: &'a VersionJson, env: &'a Env) -> Vec<(&'a Library, &'a crate::services::mojang::Download)> {
+fn native_jars<'a>(version: &'a VersionJson, env: &'a Env) -> Vec<(&'a Library, &'a Download)> {
     let mut jars = Vec::new();
     for lib in version.libraries.iter().filter(|l| rules::allowed(&l.rules, env)) {
         if let (Some(c), Some(a)) = (lib.classifier(), &lib.downloads.artifact) {
@@ -123,9 +206,27 @@ fn native_jars<'a>(version: &'a VersionJson, env: &'a Env) -> Vec<(&'a Library, 
     jars
 }
 
-fn library_job(dirs: &Dirs, lib: &Library, d: &crate::services::mojang::Download) -> AppResult<Job> {
+fn library_job(dirs: &Dirs, lib: &Library, d: &Download) -> AppResult<Job> {
     let path = d.path.as_deref().ok_or_else(|| AppError::invalid(format!("Library {} ohne Pfad", lib.name)))?;
-    Ok(Job { url: d.url.clone(), path: dirs.library(path), sha1: Some(d.sha1.clone()) })
+    Ok(Job::from_download(d, dirs.library(path)))
+}
+
+fn asset_job(objects: &Path, hash: &str) -> AppResult<Job> {
+    // Der Hash wird Teil des Pfads: nur echte SHA-1-Hex-Strings zulassen.
+    if !is_sha1(hash) {
+        return Err(AppError::invalid(format!("ungültiger Asset-Hash '{hash}'")));
+    }
+    let prefix = &hash[..2];
+    Ok(Job { url: format!("{RESOURCES_URL}/{prefix}/{hash}"), path: objects.join(prefix).join(hash), sha1: Some(hash.to_owned()) })
+}
+
+/// Leert `natives_dir` und entpackt die Natives aller `jars` (JAR, ausgeschlossene Präfixe) hinein.
+fn replace_natives(natives_dir: &Path, jars: &[(PathBuf, Vec<String>)]) -> AppResult<u64> {
+    if natives_dir.exists() {
+        fs::remove_dir_all(natives_dir)?;
+    }
+    fs::create_dir_all(natives_dir)?;
+    jars.iter().map(|(jar, exclude)| extract_natives(jar, natives_dir, exclude)).sum()
 }
 
 /// Entpackt native Bibliotheken (`.dll`/`.so`/`.dylib`/`.jnilib`) flach nach `dest`.
@@ -145,90 +246,6 @@ fn extract_natives(jar: &Path, dest: &Path, exclude: &[String]) -> AppResult<u64
         count += 1;
     }
     Ok(count)
-}
-
-// ponytail: kein Dateisperren-Schutz im geteilten Cache. Zwei gleichzeitige Installationen
-// derselben Datei schreiben dieselbe `.part`-Datei; bei Bedarf `fs4`-Lock pro Datei.
-/// Installiert `version` für eine Instanz und liefert den Pfad der Java-Programmdatei.
-pub async fn install(
-    client: &reqwest::Client,
-    dirs: &Dirs,
-    version: &VersionJson,
-    instance_id: &str,
-    on_progress: OnProgress<'_>,
-) -> AppResult<PathBuf> {
-    let env = Env::current();
-
-    let java = java::ensure(client, dirs, java_component(version), &|d, t| on_progress(InstallStep::Java, d, t)).await?;
-
-    let mut client_jobs = vec![Job {
-        url: version.downloads.client.url.clone(),
-        path: dirs.version_file(&version.id, "jar"),
-        sha1: Some(version.downloads.client.sha1.clone()),
-    }];
-    if let Some(log) = &version.logging.client {
-        client_jobs.push(Job {
-            url: log.file.url.clone(),
-            path: dirs.assets().join("log_configs").join(&log.file.id),
-            sha1: Some(log.file.sha1.clone()),
-        });
-    }
-    download::fetch_all(client, client_jobs, &|d, t| on_progress(InstallStep::Client, d, t)).await?;
-
-    let natives = native_jars(version, &env);
-    let mut lib_jobs = artifacts(version, &env).map(|(l, a)| library_job(dirs, l, a)).collect::<AppResult<Vec<_>>>()?;
-    for (lib, d) in &natives {
-        lib_jobs.push(library_job(dirs, lib, d)?);
-    }
-    lib_jobs.sort_by(|a, b| a.path.cmp(&b.path));
-    lib_jobs.dedup_by(|a, b| a.path == b.path);
-    download::fetch_all(client, lib_jobs, &|d, t| on_progress(InstallStep::Libraries, d, t)).await?;
-
-    // Natives immer frisch entpacken, damit nach einem Versionswechsel keine alten DLLs liegen bleiben.
-    let natives_dir = dirs.natives_dir(instance_id);
-    let jars: Vec<(PathBuf, Vec<String>)> = natives
-        .iter()
-        .map(|(lib, d)| Ok((library_job(dirs, lib, d)?.path, lib.extract.exclude.clone())))
-        .collect::<AppResult<_>>()?;
-    let total = jars.len() as u64;
-    on_progress(InstallStep::Natives, 0, total);
-    let extracted = tokio::task::spawn_blocking(move || -> AppResult<u64> {
-        if natives_dir.exists() {
-            fs::remove_dir_all(&natives_dir)?;
-        }
-        fs::create_dir_all(&natives_dir)?;
-        jars.iter().map(|(jar, exclude)| extract_natives(jar, &natives_dir, exclude)).sum()
-    })
-    .await
-    .map_err(|e| AppError::Download(format!("Natives-Entpacken abgebrochen: {e}")))??;
-    on_progress(InstallStep::Natives, total, total);
-    tracing::debug!(extracted, "Natives entpackt");
-
-    let index_path = dirs.assets().join("indexes").join(format!("{}.json", version.asset_index.id));
-    let index_job = Job { url: version.asset_index.url.clone(), path: index_path.clone(), sha1: Some(version.asset_index.sha1.clone()) };
-    download::fetch(client, &index_job).await?;
-    let index: AssetIndex = download::read_json(&index_path).await?;
-    let objects = dirs.assets().join("objects");
-    let mut asset_jobs = index
-        .objects
-        .values()
-        .map(|o| {
-            // Der Hash wird Teil des Pfads: nur echte SHA-1-Hex-Strings zulassen.
-            if o.hash.len() != 40 || !o.hash.bytes().all(|b| b.is_ascii_hexdigit()) {
-                return Err(AppError::invalid(format!("ungültiger Asset-Hash '{}'", o.hash)));
-            }
-            Ok(Job {
-                url: format!("{RESOURCES_URL}/{}/{}", &o.hash[..2], o.hash),
-                path: objects.join(&o.hash[..2]).join(&o.hash),
-                sha1: Some(o.hash.clone()),
-            })
-        })
-        .collect::<AppResult<Vec<_>>>()?;
-    asset_jobs.sort_by(|a, b| a.path.cmp(&b.path));
-    asset_jobs.dedup_by(|a, b| a.path == b.path);
-    download::fetch_all(client, asset_jobs, &|d, t| on_progress(InstallStep::Assets, d, t)).await?;
-
-    Ok(java)
 }
 
 #[cfg(test)]

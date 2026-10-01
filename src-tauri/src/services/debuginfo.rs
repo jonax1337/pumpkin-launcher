@@ -6,6 +6,7 @@ use crate::models::{Instance, ModKind};
 use crate::services::system;
 
 const UNKNOWN: &str = "unknown";
+const MIB_PER_GIB: f64 = 1024.0;
 
 /// Eine Instanz mit ihrem Zustand, den nur der AppState kennt.
 pub struct InstanceState<'a> {
@@ -30,7 +31,7 @@ pub fn report(launcher_version: &str, data_dir: &Path, default_memory_mb: u32, i
 }
 
 fn gib(mb: u64) -> String {
-    format!("{:.1} GiB", mb as f64 / 1024.0)
+    format!("{:.1} GiB", mb as f64 / MIB_PER_GIB)
 }
 
 /// Nummeriert statt benannt: Instanznamen wählt der Nutzer frei, sie können Persönliches enthalten.

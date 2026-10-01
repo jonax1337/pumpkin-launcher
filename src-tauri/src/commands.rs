@@ -7,17 +7,16 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::error::{AppError, AppResult};
 use crate::models::{
-    now_ms, require_name, Account, GameWindow, Instance, LaunchOptions, ModLoader, NewInstance, QuickPlay, NO_NAME_LIMIT,
+    now_ms, require_name, Account, GameWindow, Instance, LaunchOptions, Mod, ModLoader, NewInstance, QuickPlay,
+    NO_NAME_LIMIT,
 };
-use crate::services::install::{self, InstallProgress, InstallStep, INSTALL_PROGRESS_EVENT};
-use crate::services::launch::{self, LaunchSpec, LogStream, EXIT_EVENT, LOG_EVENT};
+use crate::services::install::{self, InstallProgress, InstallStep, OnProgress, INSTALL_PROGRESS_EVENT};
+use crate::services::launch::{self, LaunchSpec, LogStream, Running, Session, EXIT_EVENT, LOG_EVENT};
+use crate::services::loader::{self, LoaderVersion};
 use crate::services::mojang::{VersionEntry, VersionManifest, MANIFEST_URL};
-use crate::services::rules::Env;
-use crate::services::fabric::{self, LoaderVersion};
-use crate::services::forge;
-use crate::services::mojang::VersionJson;
 use crate::services::progress::emit;
-use crate::services::{auth, download, java, mods, remove_logged, system, worlds};
+use crate::services::rules::Env;
+use crate::services::{auth, download, gamelog, java, mods, remove_logged, system, worlds};
 use crate::state::AppState;
 
 pub(crate) fn require_instance_name(name: &str) -> AppResult<()> {
@@ -48,7 +47,7 @@ pub fn get_instance(state: State<'_, AppState>, id: String) -> AppResult<Instanc
 
 #[tauri::command]
 pub fn create_instance(state: State<'_, AppState>, input: NewInstance) -> AppResult<Instance> {
-    let _operation = state.operation(None)?;
+    let _operation = state.begin_operation()?;
     require_instance_name(&input.name)?;
     let instance = state.instances.insert(Instance::from_new(input))?;
     tracing::info!(id = %instance.id, name = %instance.name, "Instanz angelegt");
@@ -57,17 +56,12 @@ pub fn create_instance(state: State<'_, AppState>, input: NewInstance) -> AppRes
 
 #[tauri::command]
 pub fn update_instance(state: State<'_, AppState>, instance: Instance) -> AppResult<Instance> {
-    let _operation = state.operation(Some(&instance.id))?;
+    let _operation = state.begin_instance_operation(&instance.id)?;
     require_instance_name(&instance.name)?;
     let old = state.instances.get(&instance.id)?;
     require_launch_settings(&instance, &old)?;
     let instance = Instance { group: normalized_group(instance.group), ..instance };
-    let mut desired = instance.mods.clone();
-    for removed in &old.mods {
-        if !desired.iter().any(|m|m.file_name==removed.file_name) {
-            let mut removed=removed.clone();removed.enabled=false;desired.push(removed);
-        }
-    }
+    let desired = with_removed_disabled(&instance.mods, &old.mods);
     let id = instance.id.clone();
     // Spielzeit und letzten Start (samt Quick-Play-Ziel) führt nur das Backend: ein veralteter Stand im Frontend darf
     // sie nicht zurücksetzen, auch nicht, wenn das Spielende sie gerade erst speichert.
@@ -84,6 +78,18 @@ pub fn update_instance(state: State<'_, AppState>, instance: Instance) -> AppRes
     mods::sync_commit(&state.dirs, &id, &desired, commit)
 }
 
+/// Der gewünschte Mod-Stand: die Mods der Instanz plus die aus `old` entfernten, deaktiviert, damit
+/// `mods::sync_commit` ihre Dateien wegräumt.
+fn with_removed_disabled(mods: &[Mod], old: &[Mod]) -> Vec<Mod> {
+    let mut desired = mods.to_vec();
+    for removed in old {
+        if !desired.iter().any(|m| m.file_name == removed.file_name) {
+            desired.push(Mod { enabled: false, ..removed.clone() });
+        }
+    }
+    desired
+}
+
 /// Gruppenname getrimmt; leer heißt keine Gruppe.
 fn normalized_group(group: Option<String>) -> Option<String> {
     group.map(|g| g.trim().to_owned()).filter(|g| !g.is_empty())
@@ -97,7 +103,7 @@ pub fn instance_set_group(state: State<'_, AppState>, instance_id: String, group
 
 #[tauri::command]
 pub fn delete_instance(state: State<'_, AppState>, id: String) -> AppResult<()> {
-    let _operation = state.operation(Some(&id))?;
+    let _operation = state.begin_instance_operation(&id)?;
     // Erst den Store-Eintrag: nur eine existierende Id wird zum Pfad, und bleibt das
     // Verzeichnis liegen (Datei gesperrt), ist die Instanz trotzdem weg.
     state.instances.remove(&id)?;
@@ -126,47 +132,6 @@ struct ExitPayload {
     log_file: Option<String>,
 }
 
-/// Wie ein Mod-Loader installiert wird: Profil vom Meta-Server (Fabric, Quilt) oder Installer (Forge, NeoForge).
-enum LoaderKind {
-    Profile(fabric::Flavor),
-    Installer(forge::Kind),
-}
-
-fn loader_kind(loader: ModLoader) -> Option<LoaderKind> {
-    match loader {
-        ModLoader::Vanilla => None,
-        ModLoader::Fabric => Some(LoaderKind::Profile(fabric::Flavor::Fabric)),
-        ModLoader::Quilt => Some(LoaderKind::Profile(fabric::Flavor::Quilt)),
-        ModLoader::Forge => Some(LoaderKind::Installer(forge::Kind::Forge)),
-        ModLoader::NeoForge => Some(LoaderKind::Installer(forge::Kind::NeoForge)),
-    }
-}
-
-/// Loader-Version einer installierten bzw. zu startenden Instanz.
-fn loader_version(instance: &Instance) -> AppResult<&str> {
-    instance
-        .loader_version
-        .as_deref()
-        .ok_or_else(|| AppError::invalid("Instanz ohne Loader-Version: bitte neu installieren"))
-}
-
-/// Versions-JSON zum Start: Vanilla, mit Mod-Loader mit dessen installiertem Profil zusammengeführt.
-async fn installed_version(state: &AppState, instance: &Instance) -> AppResult<VersionJson> {
-    let version = install::installed_version(&state.dirs, &instance.minecraft_version).await?;
-    let mc = &instance.minecraft_version;
-    match loader_kind(instance.loader) {
-        None => Ok(version),
-        Some(LoaderKind::Profile(flavor)) => {
-            let profile = fabric::installed_profile(&state.dirs, flavor, mc, loader_version(instance)?).await?;
-            fabric::merge(version, &profile)
-        }
-        Some(LoaderKind::Installer(kind)) => {
-            let profile = forge::installed_profile(&state.dirs, kind, mc, loader_version(instance)?).await?;
-            forge::merge(version, &profile)
-        }
-    }
-}
-
 /// Loader-Versionen zu einer Minecraft-Version, neueste zuerst (Vanilla: leer).
 #[tauri::command]
 pub async fn loader_versions(
@@ -174,11 +139,7 @@ pub async fn loader_versions(
     loader: ModLoader,
     mc_version: String,
 ) -> AppResult<Vec<LoaderVersion>> {
-    match loader_kind(loader) {
-        None => Ok(Vec::new()),
-        Some(LoaderKind::Profile(flavor)) => fabric::loader_versions(&state.http, flavor, &mc_version).await,
-        Some(LoaderKind::Installer(kind)) => forge::loader_versions(&state.http, kind, &mc_version).await,
-    }
+    loader::versions(&state.http, loader, &mc_version).await
 }
 
 /// Alle Minecraft-Versionen aus Mojangs Manifest (neueste zuerst).
@@ -191,7 +152,7 @@ pub async fn versions_list(state: State<'_, AppState>) -> AppResult<Vec<VersionE
 /// Installiert die Version der Instanz; Fortschritt kommt als `install-progress`.
 #[tauri::command]
 pub async fn instance_install(app: AppHandle, state: State<'_, AppState>, instance_id: String) -> AppResult<()> {
-    let _operation = state.operation(Some(&instance_id))?;
+    let _operation = state.begin_instance_operation(&instance_id)?;
     state.cancellable(&instance_id, install_instance(app.clone(), &state, instance_id.clone())).await
 }
 
@@ -202,46 +163,40 @@ pub fn instance_install_cancel(state: State<'_, AppState>, instance_id: String) 
 }
 
 async fn install_instance(app: AppHandle, state: &AppState, instance_id: String) -> AppResult<()> {
-    let mut instance = state.instances.get(&instance_id)?;
+    let instance = state.instances.get(&instance_id)?;
     tracing::info!(instance = %instance_id, version = %instance.minecraft_version, loader = ?instance.loader, "Installation gestartet");
     let on_progress = |step, done, total| {
         emit(&app, INSTALL_PROGRESS_EVENT, InstallProgress { instance_id: instance_id.clone(), step, done, total });
     };
-    let mut version = install::fetch_version(&state.http, &state.dirs, &instance.minecraft_version).await?;
-    let mc = instance.minecraft_version.clone();
-    let kind = loader_kind(instance.loader);
-    if let Some(kind) = &kind {
-        on_progress(InstallStep::Loader, 0, 1);
-        // Ohne gewählte Version die neueste stabile nehmen und festhalten, damit der Start dieselbe nutzt.
-        let wanted = instance.loader_version.as_deref();
-        let loader = match kind {
-            LoaderKind::Profile(flavor) => fabric::resolve_loader(&state.http, *flavor, &mc, wanted).await?,
-            LoaderKind::Installer(k) => forge::resolve_loader(&state.http, *k, &mc, wanted).await?,
-        };
-        if let LoaderKind::Profile(flavor) = kind {
-            let profile = fabric::fetch_profile(&state.http, &state.dirs, *flavor, &mc, &loader).await?;
-            version = fabric::merge(version, &profile)?;
-        }
-        if instance.loader_version.as_deref() != Some(loader.as_str()) {
-            instance = state.instances.modify(&instance_id, |i| i.loader_version = Some(loader))?;
-        }
-        on_progress(InstallStep::Loader, 1, 1);
-    }
-    // Forge/NeoForge brauchen Vanilla-Client und Java zuerst: ihre Processors patchen das Client-JAR.
-    let java = install::install(&state.http, &state.dirs, &version, &instance_id, &on_progress).await?;
-    if let Some(LoaderKind::Installer(k)) = kind {
-        let loader = loader_version(&instance)?.to_owned();
-        let on_loader = |done, total| on_progress(InstallStep::Loader, done, total);
-        forge::install(&state.http, &state.dirs, k, &mc, &loader, &java, &on_loader).await?;
-    }
-    if instance.loader != ModLoader::Vanilla {
-        on_progress(InstallStep::Mods, 0, 1);
-        let active = mods::sync(&state.dirs, &instance_id, &instance.mods)?;
-        on_progress(InstallStep::Mods, 1, 1);
-        tracing::info!(instance = %instance_id, active, "Mods bereitgestellt");
-    }
+    let plan = loader::plan_install(&state.http, &state.dirs, (&instance).into(), &on_progress).await?;
+    let instance = remember_loader_version(state, instance, plan.loader_version())?;
+    plan.install(&state.http, &state.dirs, &instance_id, &on_progress).await?;
+    provide_mods(state, &instance, &on_progress)?;
     install::mark_installed(&state.dirs, &instance).await?;
     tracing::info!(instance = %instance_id, "Installation abgeschlossen");
+    Ok(())
+}
+
+/// Hält die aufgelöste Loader-Version fest (ohne Wahl die neueste stabile), damit der Start dieselbe nutzt.
+fn remember_loader_version(state: &AppState, instance: Instance, resolved: Option<&str>) -> AppResult<Instance> {
+    match resolved {
+        Some(version) if instance.loader_version.as_deref() != Some(version) => {
+            let version = version.to_owned();
+            state.instances.modify(&instance.id, |i| i.loader_version = Some(version))
+        }
+        _ => Ok(instance),
+    }
+}
+
+/// Bringt die Mods in den Spielordner; ohne Mod-Loader hat eine Instanz keine.
+fn provide_mods(state: &AppState, instance: &Instance, on_progress: OnProgress<'_>) -> AppResult<()> {
+    if instance.loader == ModLoader::Vanilla {
+        return Ok(());
+    }
+    on_progress(InstallStep::Mods, 0, 1);
+    let active = mods::sync(&state.dirs, &instance.id, &instance.mods)?;
+    on_progress(InstallStep::Mods, 1, 1);
+    tracing::info!(instance = %instance.id, active, "Mods bereitgestellt");
     Ok(())
 }
 
@@ -249,68 +204,82 @@ async fn install_instance(app: AppHandle, state: &AppState, instance_id: String)
 /// Server. Ausgaben kommen als `instance-log`, das Ende als `instance-exit`.
 #[tauri::command]
 pub async fn instance_launch(app: AppHandle, state: State<'_, AppState>, instance_id: String, options: LaunchOptions) -> AppResult<u32> {
-    let LaunchOptions { username, account_id, java_path, default_memory_mb, quick_play } = options;
-    let _operation = state.operation(Some(&instance_id))?;
+    let _operation = state.begin_instance_operation(&instance_id)?;
     let instance = state.instances.get(&instance_id)?;
-    if let Some(target) = &quick_play {
-        worlds::require_target(&state.dirs, &instance_id, target)?;
-    }
-    mods::sync(&state.dirs,&instance_id,&instance.mods)?;
-    let (account, session) = launch_account(&state, account_id, &username).await?;
-    let version = installed_version(&state, &instance).await?;
-    let component = install::java_component(&version);
-    let java = java::resolve(&state.dirs, component, instance.java_path.as_deref(), java_path.as_deref())?;
-    let session = session.as_ref().map(|s| launch::Session { access_token: &s.access_token, xuid: &s.xuid });
-    let args = launch::build_args_for(
-        &LaunchSpec {
-            version: &version,
-            dirs: &state.dirs,
-            instance_id: &instance_id,
-            account: &account,
-            memory_mb: instance.memory_mb.or(default_memory_mb).unwrap_or(launch::DEFAULT_MEMORY_MB),
-            extra_jvm_args: &instance.jvm_args,
-            window: instance.window,
-            extra_game_args: &instance.game_args,
-            quick_play: quick_play.as_ref(),
-        },
-        &Env::current(),
-        session.as_ref(),
-    )?;
-
+    let prepared = prepare_launch(&state, &instance, &options).await?;
     let pid = state.spawn_running(&instance_id, || {
-        let (log_app, log_id) = (app.clone(), instance_id.clone());
-        let (exit_app, exit_id) = (app.clone(), instance_id.clone());
-        let started = SystemTime::now();
-        let game = launch::spawn(
-            &java,
-            &args,
-            &state.dirs.game_dir(&instance_id),
-            move |stream, line| {
-                tracing::info!(target: "minecraft", instance = %log_id, ?stream, "{line}");
-                emit(&log_app, LOG_EVENT, LogPayload { instance_id: log_id.clone(), stream, line });
-            },
-            move |code| on_game_exit(&exit_app, exit_id, started, code),
-        )?;
+        let game = spawn_game(&app, &instance_id, &prepared)?;
         // Noch unter der Sperre: `instance-exit` eines sofort beendeten Spiels kommt so erst nach diesem Stand.
-        record_launch(&state, &instance_id, quick_play);
+        record_launch(&state, &instance_id, options.quick_play);
         Ok(game)
     })?;
-    tracing::info!(instance = %instance_id, pid, user = %account.username, "Spiel gestartet");
+    tracing::info!(instance = %instance_id, pid, user = %prepared.player, "Spiel gestartet");
     Ok(pid)
 }
 
-/// Mit Microsoft-Konto: echte Sitzung (bei Bedarf erneuert); sonst Offline mit `username`.
-async fn launch_account(state: &AppState, account_id: Option<String>, username: &str) -> AppResult<(Account, Option<auth::McSession>)> {
-    match account_id.filter(|id| !id.is_empty()) {
+/// Was für einen Start feststeht, bevor das Spiel läuft.
+struct PreparedLaunch {
+    java: PathBuf,
+    args: Vec<String>,
+    game_dir: PathBuf,
+    /// Spielername, nur fürs Protokoll.
+    player: String,
+}
+
+/// Prüft das Quick-Play-Ziel, bringt die Mods auf Stand, meldet das Konto an und baut die Startargumente.
+async fn prepare_launch(state: &AppState, instance: &Instance, options: &LaunchOptions) -> AppResult<PreparedLaunch> {
+    if let Some(target) = &options.quick_play {
+        worlds::require_target(&state.dirs, &instance.id, target)?;
+    }
+    mods::sync(&state.dirs, &instance.id, &instance.mods)?;
+    let (account, session) = launch_account(state, options).await?;
+    let version = loader::installed_version(&state.dirs, instance.into()).await?;
+    let java = java::resolve(&state.dirs, version.java_component(), instance.java_path.as_deref(), options.java_path.as_deref())?;
+    let spec = LaunchSpec {
+        version: &version,
+        dirs: &state.dirs,
+        instance_id: &instance.id,
+        account: &account,
+        memory_mb: instance.memory_mb.or(options.default_memory_mb).unwrap_or(launch::DEFAULT_MEMORY_MB),
+        extra_jvm_args: &instance.jvm_args,
+        window: instance.window,
+        extra_game_args: &instance.game_args,
+        quick_play: options.quick_play.as_ref(),
+        session: session.as_ref().map(Session::from),
+    };
+    let args = launch::build_args(&spec, &Env::current())?;
+    Ok(PreparedLaunch { java, args, game_dir: state.dirs.game_dir(&instance.id), player: account.username })
+}
+
+/// Mit Microsoft-Konto: echte Sitzung (bei Bedarf erneuert); sonst Offline mit dem Spielernamen der Optionen.
+async fn launch_account(state: &AppState, options: &LaunchOptions) -> AppResult<(Account, Option<auth::McSession>)> {
+    match options.account_id.as_deref().filter(|id| !id.is_empty()) {
         Some(id) => {
-            let (account, session) = auth::session(state, &id).await?;
+            let (account, session) = auth::session(state, id).await?;
             Ok((account, Some(session)))
         }
         None => {
             auth::require_offline(state)?;
-            Ok((auth::offline_account(username)?, None))
+            Ok((auth::offline_account(&options.username)?, None))
         }
     }
+}
+
+/// Startet das Spiel: Ausgabezeilen gehen als `instance-log` ans Frontend, das Ende an `on_game_exit`.
+fn spawn_game(app: &AppHandle, instance_id: &str, prepared: &PreparedLaunch) -> AppResult<Running> {
+    let (log_app, log_id) = (app.clone(), instance_id.to_owned());
+    let (exit_app, exit_id) = (app.clone(), instance_id.to_owned());
+    let started = SystemTime::now();
+    launch::spawn(
+        &prepared.java,
+        &prepared.args,
+        &prepared.game_dir,
+        move |stream, line| {
+            tracing::info!(target: "minecraft", instance = %log_id, ?stream, "{line}");
+            emit(&log_app, LOG_EVENT, LogPayload { instance_id: log_id.clone(), stream, line });
+        },
+        move |code| on_game_exit(&exit_app, exit_id, started, code),
+    )
 }
 
 /// Merkt sich Startzeit und Quick-Play-Ziel. Das Spiel läuft schon: ein Schreibfehler (etwa durch ein
@@ -335,7 +304,7 @@ fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, code:
     let crashed = code != Some(0) && !stopped;
     let game_dir = state.dirs.game_dir(&instance_id);
     let text = |p: PathBuf| p.to_string_lossy().into_owned();
-    let crash_report = launch::crash_report(&game_dir, started).map(text);
+    let crash_report = gamelog::crash_report(&game_dir, started).map(text);
     let log_file = Some(state.dirs.latest_log(&instance_id)).filter(|p| p.is_file()).map(text);
     record_playtime(&state, &instance_id, started);
     tracing::info!(instance = %instance_id, ?code, crashed, "Spiel beendet");
@@ -345,7 +314,7 @@ fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, code:
 /// Spielzeit der Sitzung seit `started` speichern; unplausible Dauern und Fehler nur loggen,
 /// damit `instance-exit` trotzdem ankommt.
 fn record_playtime(state: &AppState, instance_id: &str, started: SystemTime) {
-    let Some(secs) = launch::session_secs(started, SystemTime::now()) else {
+    let Some(secs) = gamelog::session_secs(started, SystemTime::now()) else {
         tracing::warn!(instance = %instance_id, "Spielzeit verworfen: Sitzungsdauer unplausibel");
         return;
     };

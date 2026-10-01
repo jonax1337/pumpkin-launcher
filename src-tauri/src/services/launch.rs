@@ -4,16 +4,18 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
 
 use serde::Serialize;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
+use tokio::process::Child;
 use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 
 use crate::error::{AppError, AppResult};
 use crate::models::{Account, GameWindow, QuickPlay};
+use crate::services::auth::McSession;
 use crate::services::gamelog::XmlLog;
-use crate::services::install;
+use crate::services::install::log_config_path;
 use crate::services::mojang::{Argument, OneOrMany, VersionJson};
 use crate::services::rules::{self, Env};
 use crate::services::Dirs;
@@ -25,8 +27,8 @@ pub const DEFAULT_MEMORY_MB: u32 = 4096;
 /// JVM-Args für Versionen vor 1.13 (dort stehen nur Game-Args in der JSON).
 const LEGACY_JVM_ARGS: [&str; 3] = ["-Djava.library.path=${natives_directory}", "-cp", "${classpath}"];
 
-/// Längere Sitzungen zählen nicht als Spielzeit: dann wurde eher die Uhr verstellt.
-const MAX_SESSION: Duration = Duration::from_secs(7 * 24 * 3600);
+/// Steht ohne Microsoft-Sitzung für Token und xuid (Offline-Start).
+const OFFLINE_PLACEHOLDER: &str = "0";
 
 /// Quick Play ab 1.20: Launcher-Feature in den Regeln der Spielargumente und dessen Platzhalter.
 #[derive(Clone, Copy)]
@@ -51,6 +53,21 @@ pub struct LaunchSpec<'a> {
     pub extra_game_args: &'a [String],
     /// Direkt in eine Welt oder auf einen Server.
     pub quick_play: Option<&'a QuickPlay>,
+    /// Ohne Microsoft-Sitzung startet das Spiel offline.
+    pub session: Option<Session<'a>>,
+}
+
+/// Echte Anmeldung eines Microsoft-Kontos (nur im Speicher, nie auf Platte).
+#[derive(Clone, Copy)]
+pub struct Session<'a> {
+    pub access_token: &'a str,
+    pub xuid: &'a str,
+}
+
+impl<'a> From<&'a McSession> for Session<'a> {
+    fn from(session: &'a McSession) -> Self {
+        Self { access_token: &session.access_token, xuid: &session.xuid }
+    }
 }
 
 /// Ersetzt `${name}` durch Werte aus `vars`. Unbekannte Platzhalter bleiben stehen; eingesetzte
@@ -90,70 +107,30 @@ fn flatten<'a>(args: &'a [Argument], env: &Env) -> Vec<&'a str> {
 
 /// Libraries (nach Regeln) plus Client-JAR.
 pub fn classpath(version: &VersionJson, dirs: &Dirs, env: &Env) -> Vec<PathBuf> {
-    let mut cp: Vec<PathBuf> = install::artifacts(version, env)
+    let mut cp: Vec<PathBuf> = version
+        .artifacts(env)
         .filter_map(|(_, a)| a.path.as_deref().map(|p| dirs.library(p)))
         .collect();
     cp.push(dirs.version_file(&version.id, "jar"));
     cp
 }
 
-/// Echte Anmeldung eines Microsoft-Kontos (nur im Speicher, nie auf Platte).
-pub struct Session<'a> {
-    pub access_token: &'a str,
-    pub xuid: &'a str,
-}
-
-/// Alle Argumente nach der Java-Programmdatei: JVM-Args, Main-Class, Game-Args (offline).
+/// Alle Argumente nach der Java-Programmdatei: JVM-Args, Main-Class, Game-Args.
 pub fn build_args(spec: &LaunchSpec, env: &Env) -> AppResult<Vec<String>> {
-    build_args_for(spec, env, None)
-}
-
-/// Wie `build_args`, mit Microsoft-Sitzung: echter Token und xuid statt der Offline-Platzhalter.
-pub fn build_args_for(spec: &LaunchSpec, env: &Env, session: Option<&Session>) -> AppResult<Vec<String>> {
-    let LaunchSpec { version, dirs, instance_id, account, .. } = spec;
-    let sep = env.classpath_separator();
-    let path = |p: PathBuf| p.to_string_lossy().into_owned();
-    let cp = classpath(version, dirs, env).into_iter().map(path).collect::<Vec<_>>().join(sep);
-
-    let mut vars: HashMap<&str, String> = HashMap::from([
-        ("auth_player_name", account.username.clone()),
-        ("auth_uuid", account.id.replace('-', "")),
-        ("auth_access_token", session.map_or("0", |s| s.access_token).into()),
-        ("auth_session", session.map_or("0", |s| s.access_token).into()),
-        ("auth_xuid", session.map_or("0", |s| s.xuid).into()),
-        ("clientid", "0".into()),
-        ("user_type", "msa".into()),
-        ("user_properties", "{}".into()),
-        ("version_name", version.id.clone()),
-        ("version_type", version.kind.clone()),
-        ("game_directory", path(dirs.game_dir(instance_id))),
-        ("assets_root", path(dirs.assets())),
-        ("game_assets", path(dirs.assets())),
-        ("assets_index_name", version.asset_index.id.clone()),
-        ("natives_directory", path(dirs.natives_dir(instance_id))),
-        ("library_directory", path(dirs.libraries())),
-        ("classpath_separator", sep.into()),
-        ("classpath", cp),
-        ("launcher_name", "pumpkin-launcher".into()),
-        ("launcher_version", env!("CARGO_PKG_VERSION").into()),
-    ]);
+    let version = spec.version;
+    let mut vars = launch_vars(spec, env);
     let quick_play = spec.quick_play.map(|target| quick_play_args(version, target)).transpose()?;
     let mut env = env.clone();
     if let Some(QuickPlayArgs::Feature { feature, value }) = &quick_play {
         env.features.push(feature.rule);
         vars.insert(feature.placeholder, value.clone());
     }
-
-    let (jvm, game) = match (&version.arguments, &version.minecraft_arguments) {
-        (Some(a), _) => (flatten(&a.jvm, &env), flatten(&a.game, &env)),
-        (None, Some(legacy)) => (LEGACY_JVM_ARGS.to_vec(), legacy.split_whitespace().collect()),
-        (None, None) => return Err(AppError::invalid(format!("Version {} ohne Startargumente", version.id))),
-    };
+    let (jvm, game) = version_args(version, &env)?;
 
     let mut args = vec![format!("-Xmx{}M", spec.memory_mb)];
     args.extend(jvm.iter().map(|a| substitute(a, &vars)));
     if let Some(log) = &version.logging.client {
-        let file = path(dirs.assets().join("log_configs").join(&log.file.id));
+        let file = path_text(log_config_path(spec.dirs, log));
         args.push(substitute(&log.argument, &HashMap::from([("path", file)])));
     }
     // Eigene JVM-Args der Instanz zuletzt, damit sie Vorgaben der Version überschreiben.
@@ -168,6 +145,49 @@ pub fn build_args_for(spec: &LaunchSpec, env: &Env, session: Option<&Session>) -
     // (je nach Version Standardwert oder Startabbruch).
     args.extend(spec.extra_game_args.iter().cloned());
     Ok(args)
+}
+
+fn path_text(path: PathBuf) -> String {
+    path.to_string_lossy().into_owned()
+}
+
+/// Werte der `${…}`-Platzhalter in den Argumenten der Versions-JSON.
+fn launch_vars(spec: &LaunchSpec, env: &Env) -> HashMap<&'static str, String> {
+    let LaunchSpec { version, dirs, instance_id, account, session, .. } = spec;
+    let sep = env.classpath_separator();
+    let cp = classpath(version, dirs, env).into_iter().map(path_text).collect::<Vec<_>>().join(sep);
+    let token = session.map_or(OFFLINE_PLACEHOLDER, |s| s.access_token);
+    HashMap::from([
+        ("auth_player_name", account.username.clone()),
+        ("auth_uuid", account.id.replace('-', "")),
+        ("auth_access_token", token.into()),
+        ("auth_session", token.into()),
+        ("auth_xuid", session.map_or(OFFLINE_PLACEHOLDER, |s| s.xuid).into()),
+        ("clientid", "0".into()),
+        ("user_type", "msa".into()),
+        ("user_properties", "{}".into()),
+        ("version_name", version.id.clone()),
+        ("version_type", version.kind.clone()),
+        ("game_directory", path_text(dirs.game_dir(instance_id))),
+        ("assets_root", path_text(dirs.assets())),
+        ("game_assets", path_text(dirs.assets())),
+        ("assets_index_name", version.asset_index.id.clone()),
+        ("natives_directory", path_text(dirs.natives_dir(instance_id))),
+        ("library_directory", path_text(dirs.libraries())),
+        ("classpath_separator", sep.into()),
+        ("classpath", cp),
+        ("launcher_name", "pumpkin-launcher".into()),
+        ("launcher_version", env!("CARGO_PKG_VERSION").into()),
+    ])
+}
+
+/// (JVM-, Spielargumente) der Version, nach Regeln gefiltert; vor 1.13 mit den festen JVM-Args.
+fn version_args<'a>(version: &'a VersionJson, env: &Env) -> AppResult<(Vec<&'a str>, Vec<&'a str>)> {
+    match (&version.arguments, &version.minecraft_arguments) {
+        (Some(a), _) => Ok((flatten(&a.jvm, env), flatten(&a.game, env))),
+        (None, Some(legacy)) => Ok((LEGACY_JVM_ARGS.to_vec(), legacy.split_whitespace().collect())),
+        (None, None) => Err(AppError::invalid(format!("Version {} ohne Startargumente", version.id))),
+    }
 }
 
 /// Fensteroptionen von Minecraft (seit 1.6 in jeder Version verstanden).
@@ -228,24 +248,6 @@ fn split_address(address: &str) -> (&str, &str) {
     }
 }
 
-/// Dauer einer beendeten Sitzung in Sekunden; `None`, wenn sie nicht stimmen kann
-/// (Uhr zurückgestellt oder länger als `MAX_SESSION`).
-pub fn session_secs(started: SystemTime, ended: SystemTime) -> Option<u64> {
-    ended.duration_since(started).ok().filter(|d| *d <= MAX_SESSION).map(|d| d.as_secs())
-}
-
-/// Neuester Absturzbericht (`crash-reports/*.txt`), der seit `since` entstanden ist.
-pub fn crash_report(game_dir: &Path, since: SystemTime) -> Option<PathBuf> {
-    std::fs::read_dir(game_dir.join("crash-reports"))
-        .ok()?
-        .filter_map(Result::ok)
-        .filter(|e| e.path().extension().is_some_and(|x| x == "txt"))
-        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
-        .filter(|(modified, _)| *modified >= since)
-        .max_by_key(|(modified, _)| *modified)
-        .map(|(_, path)| path)
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LogStream {
@@ -253,23 +255,30 @@ pub enum LogStream {
     Stderr,
 }
 
-async fn pump(
-    stream: impl AsyncRead + Unpin,
-    kind: LogStream,
-    on_line: Arc<dyn Fn(LogStream, String) + Send + Sync>,
-) {
+/// Rückruf für jede Ausgabezeile des Spiels.
+type LineFn = Arc<dyn Fn(LogStream, String) + Send + Sync>;
+
+async fn pump(stream: impl AsyncRead + Unpin, kind: LogStream, on_line: LineFn) {
     let mut reader = BufReader::new(stream);
     let mut xml = XmlLog::default();
     let mut buf = Vec::new();
-    // Zeilen byteweise lesen: das Spiel schreibt nicht garantiert gültiges UTF-8.
-    while reader.read_until(b'\n', &mut buf).await.is_ok_and(|n| n > 0) {
+    loop {
+        buf.clear();
+        // Zeilen byteweise lesen: das Spiel schreibt nicht garantiert gültiges UTF-8.
+        match reader.read_until(b'\n', &mut buf).await {
+            Ok(0) => return,
+            Ok(_) => {}
+            Err(err) => {
+                tracing::warn!(?kind, %err, "Ausgabe des Spiels nicht mehr lesbar");
+                return;
+            }
+        }
         let raw = String::from_utf8_lossy(&buf);
         let raw = raw.trim_end_matches(['\r', '\n']);
         let line = if kind == LogStream::Stdout { xml.line(raw) } else { Some(raw.to_owned()) };
         if let Some(line) = line {
             on_line(kind, line);
         }
-        buf.clear();
     }
 }
 
@@ -282,7 +291,9 @@ pub struct Running {
 
 impl Running {
     pub fn kill(self) {
-        let _ = self.kill.send(());
+        if self.kill.send(()).is_err() {
+            tracing::debug!(pid = self.pid, "Spiel war schon beendet");
+        }
     }
 }
 
@@ -305,35 +316,48 @@ pub fn spawn(
         .spawn()
         .map_err(spawn_error)?;
     let pid = child.id().unwrap_or_default();
-    let on_line: Arc<dyn Fn(LogStream, String) + Send + Sync> = Arc::new(on_line);
-    let out = child.stdout.take().map(|s| tokio::spawn(pump(s, LogStream::Stdout, on_line.clone())));
-    let err = child.stderr.take().map(|s| tokio::spawn(pump(s, LogStream::Stderr, on_line)));
-    let (kill, mut kill_rx) = oneshot::channel::<()>();
-
-    tokio::spawn(async move {
-        let status = tokio::select! {
-            status = child.wait() => status,
-            // Ein verworfener Sender (Err) ist kein Kill-Wunsch: dann greift nur `wait`.
-            Ok(()) = &mut kill_rx => {
-                if let Err(err) = child.start_kill() {
-                    tracing::warn!(pid, %err, "Prozess ließ sich nicht beenden");
-                }
-                child.wait().await
-            }
-        };
-        for task in [out, err].into_iter().flatten() {
-            let _ = task.await;
-        }
-        let code = match status {
-            Ok(s) => s.code(),
-            Err(err) => {
-                tracing::error!(pid, %err, "Warten auf den Spielprozess fehlgeschlagen");
-                None
-            }
-        };
-        on_exit(code);
-    });
+    let on_line: LineFn = Arc::new(on_line);
+    let pumps = [
+        child.stdout.take().map(|s| tokio::spawn(pump(s, LogStream::Stdout, on_line.clone()))),
+        child.stderr.take().map(|s| tokio::spawn(pump(s, LogStream::Stderr, on_line))),
+    ];
+    let (kill, kill_rx) = oneshot::channel::<()>();
+    tokio::spawn(supervise(child, kill_rx, pumps.into_iter().flatten().collect(), on_exit));
     Ok(Running { pid, kill })
+}
+
+/// Wartet auf das Ende des Spiels oder beendet es auf Wunsch, liest die restlichen Ausgaben und meldet dann
+/// den Exit-Code.
+async fn supervise(
+    mut child: Child,
+    mut kill_rx: oneshot::Receiver<()>,
+    pumps: Vec<JoinHandle<()>>,
+    on_exit: impl FnOnce(Option<i32>),
+) {
+    let pid = child.id().unwrap_or_default();
+    let status = tokio::select! {
+        status = child.wait() => status,
+        // Ein verworfener Sender (Err) ist kein Kill-Wunsch: dann greift nur `wait`.
+        Ok(()) = &mut kill_rx => {
+            if let Err(err) = child.start_kill() {
+                tracing::warn!(pid, %err, "Prozess ließ sich nicht beenden");
+            }
+            child.wait().await
+        }
+    };
+    for pump in pumps {
+        if let Err(err) = pump.await {
+            tracing::warn!(pid, %err, "Weiterreichen der Spielausgabe abgebrochen");
+        }
+    }
+    let code = match status {
+        Ok(s) => s.code(),
+        Err(err) => {
+            tracing::error!(pid, %err, "Warten auf den Spielprozess fehlgeschlagen");
+            None
+        }
+    };
+    on_exit(code);
 }
 
 /// Auf Apple Silicon startet eine x64-Runtime (Minecraft bis 1.18.2, siehe `java`) nur mit Rosetta 2,
@@ -349,26 +373,33 @@ fn spawn_error(err: std::io::Error) -> AppError {
     err.into()
 }
 
+/// Vorlagen für Tests, die Startargumente bauen.
+#[cfg(test)]
+pub(crate) mod test_support {
+    use super::*;
+
+    /// Offline-Start ohne eigene Fenster- und Spieloptionen.
+    pub fn plain_spec<'a>(version: &'a VersionJson, dirs: &'a Dirs, account: &'a Account) -> LaunchSpec<'a> {
+        LaunchSpec {
+            version,
+            dirs,
+            instance_id: "i1",
+            account,
+            memory_mb: 2048,
+            extra_jvm_args: &[],
+            window: GameWindow::Default,
+            extra_game_args: &[],
+            quick_play: None,
+            session: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::test_support::plain_spec;
     use super::*;
     use crate::models::AccountKind;
-
-    #[test]
-    fn newest_crash_report_after_start() {
-        let game = std::env::temp_dir().join(crate::models::new_id());
-        let reports = game.join("crash-reports");
-        assert_eq!(crash_report(&game, SystemTime::UNIX_EPOCH), None);
-        std::fs::create_dir_all(&reports).unwrap();
-        let start = SystemTime::now();
-        for (name, age) in [("old.txt", 3600), ("new.txt", 0), ("newer.log", 0)] {
-            let file = std::fs::File::create(reports.join(name)).unwrap();
-            file.set_modified(start + Duration::from_secs(5) - Duration::from_secs(age)).unwrap();
-        }
-        assert_eq!(crash_report(&game, start), Some(reports.join("new.txt")));
-        assert_eq!(crash_report(&game, start + Duration::from_secs(60)), None);
-        std::fs::remove_dir_all(game).unwrap();
-    }
 
     #[test]
     fn substitution() {
@@ -405,21 +436,6 @@ mod tests {
         Account { id: "b50ad385-829d-3141-a216-7e7d7539ba7f".into(), username: "Notch".into(), kind: AccountKind::Offline, active: true }
     }
 
-    /// Start ohne eigene Fenster- und Spieloptionen.
-    fn plain_spec<'a>(version: &'a VersionJson, dirs: &'a Dirs, account: &'a Account) -> LaunchSpec<'a> {
-        LaunchSpec {
-            version,
-            dirs,
-            instance_id: "i1",
-            account,
-            memory_mb: 2048,
-            extra_jvm_args: &[],
-            window: GameWindow::Default,
-            extra_game_args: &[],
-            quick_play: None,
-        }
-    }
-
     const LINUX: Env = Env { os: "linux", arch: "x86_64", features: Vec::new() };
 
     #[test]
@@ -453,8 +469,8 @@ mod tests {
                 "msa".into(),
             ]
         );
-        let session = Session { access_token: "eyJ.token", xuid: "2535" };
-        let args = build_args_for(&spec, &LINUX, Some(&session)).unwrap();
+        let online = LaunchSpec { session: Some(Session { access_token: "eyJ.token", xuid: "2535" }), ..spec };
+        let args = build_args(&online, &LINUX).unwrap();
         let token = args.iter().position(|a| a == "--accessToken").unwrap();
         assert_eq!(args[token + 1], "eyJ.token");
     }
@@ -534,14 +550,6 @@ mod tests {
         assert_eq!(split_address("mc.example.net:25570"), ("mc.example.net", "25570"));
         assert_eq!(split_address("[::1]:25566"), ("::1", "25566"));
         assert_eq!(split_address("::1"), ("::1", "25565"));
-    }
-
-    #[test]
-    fn implausible_sessions_do_not_count() {
-        let start = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
-        assert_eq!(session_secs(start, start + Duration::from_secs(5400)), Some(5400));
-        assert_eq!(session_secs(start, start - Duration::from_secs(1)), None);
-        assert_eq!(session_secs(start, start + MAX_SESSION + Duration::from_secs(1)), None);
     }
 
     #[test]

@@ -988,7 +988,7 @@ fn untracked(dirs: &super::Dirs, instance: &Instance) -> AppResult<Vec<Untracked
 /// Nur leere Listen: sonst kämen vom Nutzer entfernte Mods zurück, deren Datei nicht löschbar war.
 /// Läuft unter dem Operations-Lock; ist er belegt, entfällt der Lauf bis zum nächsten Start.
 pub async fn adopt_untracked(state: &AppState) -> AppResult<usize> {
-    let Ok(_guard) = state.operation(None) else {
+    let Ok(_guard) = state.begin_operation() else {
         tracing::info!("Nachtragen übersprungen: ein anderer Vorgang läuft");
         return Ok(0);
     };
@@ -1369,7 +1369,7 @@ mod tests {
         let empty_mods = state.dirs.game_dir(&empty.id).join("mods");
         fs::create_dir_all(&empty_mods).unwrap();
         fs::write(empty_mods.join("b.jar"), "b").unwrap();
-        let busy = state.operation(None).unwrap();
+        let busy = state.begin_operation().unwrap();
         assert_eq!(adopt_untracked(&state).await.unwrap(), 0);
         drop(busy);
         assert_eq!(adopt_untracked(&state).await.unwrap(), 1);
