@@ -1,2 +1,9 @@
-/** Text für Toasts und Aufgabenverlauf: Fehler des Backends kommen als `Error`, alles andere (Plugins) als beliebiger Wert. */
-export const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+/**
+ * Text für Toasts und Aufgabenverlauf: Fehler des Backends kommen als `Error`, Plugins auch als string
+ * oder als Objekt (mit `message`, sonst als JSON, damit nie „[object Object]“ erscheint).
+ */
+export function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "object" && err !== null) return "message" in err && typeof err.message === "string" ? err.message : JSON.stringify(err);
+  return String(err);
+}

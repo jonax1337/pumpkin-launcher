@@ -1,12 +1,15 @@
 // Nur im Browser-Dev-Modus dynamisch geladen (siehe api.ts); im Release-Build nicht enthalten.
 import { t } from "@/i18n";
-import { modrinth } from "./mock";
-import type { ContentProgress, ContentVersion } from "./modrinth";
-import type { Datapack, GameMode, Instance, Server, World, WorldBackup } from "./types";
+import type { Backend } from "./backend";
+import type { ContentVersion } from "./content-types";
+import { clone, findInstance, modrinthFetch, wait, type MockContext } from "./mock-util";
+import { DAY } from "./time";
+import type { Datapack, GameMode, Server, World, WorldBackup } from "./types";
 
-const DAY = 86_400_000;
 const MB = 1024 * 1024;
-const wait = (ms = 160) => new Promise((r) => setTimeout(r, ms));
+
+/** Ordner einer Welt im vorgetäuschten Launcher. */
+const savePath = (id: string) => `C:\\Pumpkin Launcher\\saves\\${id}`;
 
 const WORLDS: [id: string, name: string, mode: GameMode, hardcore: boolean, days: number, mb: number][] = [
   ["Neue Welt", "Kürbisinsel", "survival", false, 0.1, 182],
@@ -26,10 +29,7 @@ const DATAPACKS: Datapack[] = [
 ];
 
 /** Gleiche Formen wie die Welt-, Datenpaket- und Server-Commands, alles nur im Speicher; je Instanz dieselben Beispiele. */
-export function createWorldMock(
-  db: { instances: Instance[]; running: Map<string, number> },
-  emit: (event: string, payload: ContentProgress) => void,
-) {
+export function createWorldMock({ db, emit }: MockContext) {
   const worlds = new Map<string, World[]>();
   const servers = new Map<string, Server[]>();
   const backups = new Map<string, WorldBackup[]>();
@@ -39,23 +39,26 @@ export function createWorldMock(
   const worldsOf = (instanceId: string) => {
     if (!worlds.has(instanceId)) {
       worlds.set(instanceId, WORLDS.map(([id, name, gameMode, hardcore, days, mb]) => ({
-        id, name, gameMode, hardcore, lastPlayed: now - days * DAY, version: instance(instanceId).minecraftVersion, sizeBytes: mb * MB, icon: null, path: `C:\\Pumpkin Launcher\\saves\\${id}`,
+        id,
+        name,
+        gameMode,
+        hardcore,
+        lastPlayed: now - days * DAY,
+        version: findInstance(db, instanceId).minecraftVersion,
+        sizeBytes: mb * MB,
+        icon: null,
+        path: savePath(id),
       })));
     }
     return worlds.get(instanceId)!;
   };
   const serversOf = (instanceId: string) => {
-    if (!servers.has(instanceId)) servers.set(instanceId, structuredClone(SERVERS));
+    if (!servers.has(instanceId)) servers.set(instanceId, clone(SERVERS));
     return servers.get(instanceId)!;
   };
   const backupsOf = (instanceId: string) => {
     if (!backups.has(instanceId)) backups.set(instanceId, []);
     return backups.get(instanceId)!;
-  };
-  const instance = (id: string) => {
-    const found = db.instances.find((i) => i.id === id);
-    if (!found) throw new Error(t("hooks.api.instanceNotFound", { id }));
-    return found;
   };
   /** Wie `AppState::operation` im Backend: Spieldateien bleiben unangetastet, solange das Spiel läuft. */
   const notRunning = (instanceId: string) => {
@@ -68,7 +71,7 @@ export function createWorldMock(
   };
   const packsOf = (instanceId: string, worldId: string) => {
     const key = `${instanceId}/${world(instanceId, worldId).id}`;
-    if (!datapacks.has(key)) datapacks.set(key, structuredClone(DATAPACKS));
+    if (!datapacks.has(key)) datapacks.set(key, clone(DATAPACKS));
     return datapacks.get(key)!;
   };
 
@@ -82,20 +85,20 @@ export function createWorldMock(
     }
     const created: WorldBackup = { id: `${worldId}-${Date.now()}.zip`, world: worldId, createdAt: Date.now(), sizeBytes: Math.round(saved.sizeBytes * 0.6) };
     backupsOf(instanceId).unshift(created);
-    return structuredClone(created);
+    return clone(created);
   }
 
   return {
-    async list(instanceId: string) {
+    async worldList(instanceId: string) {
       await wait();
-      return structuredClone(worldsOf(instanceId));
+      return clone(worldsOf(instanceId));
     },
-    backup,
-    async backups(instanceId: string) {
+    worldBackup: backup,
+    async worldBackups(instanceId: string) {
       await wait();
-      return structuredClone(backupsOf(instanceId));
+      return clone(backupsOf(instanceId));
     },
-    async restore(instanceId: string, backupId: string) {
+    async worldRestore(instanceId: string, backupId: string) {
       notRunning(instanceId);
       await wait(600);
       const source = backupsOf(instanceId).find((b) => b.id === backupId);
@@ -103,43 +106,53 @@ export function createWorldMock(
       const list = worldsOf(instanceId);
       let id = source.world;
       for (let n = 2; list.some((w) => w.id === id); n++) id = `${source.world} (${n})`;
-      const restored: World = { id, name: id, lastPlayed: source.createdAt, gameMode: "survival", hardcore: false, version: null, sizeBytes: source.sizeBytes, icon: null, path: `C:\\Pumpkin Launcher\\saves\\${id}` };
+      const restored: World = {
+        id,
+        name: id,
+        lastPlayed: source.createdAt,
+        gameMode: "survival",
+        hardcore: false,
+        version: null,
+        sizeBytes: source.sizeBytes,
+        icon: null,
+        path: savePath(id),
+      };
       list.unshift(restored);
-      return structuredClone(restored);
+      return clone(restored);
     },
-    async deleteBackup(instanceId: string, backupId: string) {
+    async worldBackupDelete(instanceId: string, backupId: string) {
       await wait();
       backups.set(instanceId, backupsOf(instanceId).filter((b) => b.id !== backupId));
     },
-    async remove(instanceId: string, worldId: string, operationId: string) {
+    async worldDelete(instanceId: string, worldId: string, operationId: string) {
       const safety = await backup(instanceId, worldId, operationId);
       worlds.set(instanceId, worldsOf(instanceId).filter((w) => w.id !== worldId));
       // Wie `world_delete`: eine gelöschte Welt ist kein Quick-Play-Ziel mehr.
-      const owner = instance(instanceId);
+      const owner = findInstance(db, instanceId);
       if (owner.lastQuickPlay?.type === "world" && owner.lastQuickPlay.id === worldId) owner.lastQuickPlay = null;
       return safety;
     },
     /** Wie die Versions-JSON ab 1.20 (Feature `is_quick_play_singleplayer`). */
-    async quickPlaySupported(instanceId: string) {
+    async worldQuickPlaySupported(instanceId: string) {
       await wait();
-      const [, minor] = instance(instanceId).minecraftVersion.split(".").map(Number);
+      const [, minor] = findInstance(db, instanceId).minecraftVersion.split(".").map(Number);
       return minor >= 20;
     },
-    async datapacks(instanceId: string, worldId: string) {
+    async datapackList(instanceId: string, worldId: string) {
       await wait();
-      return structuredClone(packsOf(instanceId, worldId));
+      return clone(packsOf(instanceId, worldId));
     },
     /** Wie `datapack_install`: Version echt von Modrinth, der Download nur vorgetäuscht. */
-    async installDatapack(instanceId: string, worldId: string, versionId: string, operationId: string) {
+    async datapackInstall(instanceId: string, worldId: string, versionId: string, operationId: string) {
       notRunning(instanceId);
       emit("content-progress", { operationId, phase: "resolve", done: 0, total: 1 });
-      const version = await modrinth<ContentVersion>(`/version/${versionId}`);
+      const version = await modrinthFetch<ContentVersion>(`/version/${versionId}`);
       emit("content-progress", { operationId, phase: "download", done: 0, total: 1 });
       await wait(600);
       const file = version.files.find((f) => f.primary) ?? version.files[0];
       packsOf(instanceId, worldId).push({ id: file.filename, name: file.filename.replace(/\.zip$/i, ""), description: version.name, enabled: null });
     },
-    async removeDatapack(instanceId: string, worldId: string, packId: string) {
+    async datapackRemove(instanceId: string, worldId: string, packId: string) {
       notRunning(instanceId);
       await wait();
       const list = packsOf(instanceId, worldId);
@@ -147,11 +160,11 @@ export function createWorldMock(
       if (at < 0) throw new Error(t("mock.datapack.notFound", { id: packId }));
       list.splice(at, 1);
     },
-    async servers(instanceId: string) {
+    async serverList(instanceId: string) {
       await wait();
-      return structuredClone(serversOf(instanceId));
+      return clone(serversOf(instanceId));
     },
-    async saveServer(instanceId: string, index: number | null, server: Server) {
+    async serverSave(instanceId: string, index: number | null, server: Server) {
       notRunning(instanceId);
       await wait();
       const list = serversOf(instanceId);
@@ -159,10 +172,10 @@ export function createWorldMock(
       if (index == null) list.push({ ...saved, icon: null });
       else list[index] = { ...saved, icon: list[index].icon };
     },
-    async removeServer(instanceId: string, index: number) {
+    async serverRemove(instanceId: string, index: number) {
       notRunning(instanceId);
       await wait();
       serversOf(instanceId).splice(index, 1);
     },
-  };
+  } satisfies Partial<Backend>;
 }

@@ -1,9 +1,9 @@
 // Nur im Browser-Dev-Modus dynamisch geladen (siehe api.ts); im Release-Build nicht enthalten.
 import { t } from "@/i18n";
+import type { Backend } from "./backend";
+import { canvas2d, clone, wait } from "./mock-util";
+import { DAY } from "./time";
 import type { Cape, LibrarySkin, SkinProfile, SkinVariant } from "./types";
-
-const DAY = 86_400_000;
-const wait = (ms = 160) => new Promise((r) => setTimeout(r, ms));
 
 type Look = { skin: string; hair: string; eyes: string; shirt: string; pants: string };
 
@@ -39,11 +39,6 @@ function paintCape(color: string, sign: string): string {
   return canvas.toDataURL();
 }
 
-function canvas2d(w: number, h: number): [CanvasRenderingContext2D, HTMLCanvasElement] {
-  const canvas = Object.assign(document.createElement("canvas"), { width: w, height: h });
-  return [canvas.getContext("2d")!, canvas];
-}
-
 const LOOKS: [name: string, variant: SkinVariant, look: Look, days: number][] = [
   ["Kürbisbauer", "classic", { skin: "#E0A882", hair: "#B8763A", eyes: "#2E6A7A", shirt: "#D98A54", pants: "#4F6382" }, 2],
   ["Nachtwache", "slim", { skin: "#C98E6A", hair: "#1E1A18", eyes: "#6A4A8A", shirt: "#376A7C", pants: "#1C2536" }, 9],
@@ -70,26 +65,26 @@ export function createSkinMock() {
   };
 
   return {
-    async profile(): Promise<SkinProfile> {
+    async skinProfile(): Promise<SkinProfile> {
       await wait(400);
-      return structuredClone({ skin, capes });
+      return clone({ skin, capes });
     },
-    async library() {
+    async skinLibrary() {
       await wait();
-      return structuredClone(library);
+      return clone(library);
     },
-    async texture(id: string) {
+    async skinTexture(id: string) {
       return textures.get(find(id).id)!;
     },
-    async update(id: string, name: string, variant: SkinVariant) {
+    async skinUpdate(id: string, name: string, variant: SkinVariant) {
       await wait();
-      return structuredClone(Object.assign(find(id), { name: name.trim(), variant }));
+      return clone(Object.assign(find(id), { name: name.trim(), variant }));
     },
-    async remove(id: string) {
+    async skinDelete(id: string) {
       await wait();
       library.splice(library.indexOf(find(id)), 1);
     },
-    async saveActive(name: string) {
+    async skinSaveActive(_accountId: string, name: string) {
       await wait(500);
       if (!skin) throw new Error(t("mock.skin.noneOnAccount"));
       const existing = library.find((s) => textures.get(s.id) === skin!.url);
@@ -97,20 +92,20 @@ export function createSkinMock() {
       const saved: LibrarySkin = { id: `mock-skin-${crypto.randomUUID()}`, name, variant: skin.variant, addedAt: Date.now() };
       textures.set(saved.id, skin.url);
       library.push(saved);
-      return structuredClone(saved);
+      return clone(saved);
     },
-    async upload(skinId: string) {
+    async skinUpload(_accountId: string, skinId: string) {
       await wait(800);
       const chosen = find(skinId);
       skin = { url: textures.get(chosen.id)!, variant: chosen.variant };
     },
-    async reset() {
+    async skinReset() {
       await wait(500);
       skin = defaultSkin;
     },
-    async cape(capeId: string | null) {
+    async skinCape(_accountId: string, capeId: string | null) {
       await wait(500);
       for (const c of capes) c.active = c.id === capeId;
     },
-  };
+  } satisfies Partial<Backend>;
 }
