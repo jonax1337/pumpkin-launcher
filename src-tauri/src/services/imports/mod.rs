@@ -86,15 +86,16 @@ pub fn detect(state: &AppState, folder: Option<&Path>) -> Vec<ForeignInstance> {
 }
 
 /// Standardorte im Datenordner des Systems (unter Windows `%APPDATA%`). MultiMC ist portabel und hat keinen;
-/// dafür gibt es „Ordner wählen…“.
+/// dafür gibt es „Ordner wählen…“. Die CurseForge App legt ihren Ordner im Benutzerordner an, unter macOS in
+/// „Dokumente“ (CurseForge-Hilfe „Minecraft - Getting Started“).
 fn default_roots() -> Vec<PathBuf> {
     let data = dirs::data_dir();
-    let home = dirs::home_dir();
+    let curseforge = if cfg!(target_os = "macos") { dirs::document_dir() } else { dirs::home_dir() };
     [
         data.as_ref().map(|d| d.join("PrismLauncher")),
         data.as_ref().map(|d| d.join("ModrinthApp")),
         data.as_ref().map(|d| d.join("ATLauncher")),
-        home.map(|h| h.join("curseforge").join("minecraft")),
+        curseforge.map(|d| d.join("curseforge").join("minecraft")),
     ]
     .into_iter()
     .flatten()
@@ -350,6 +351,38 @@ mod tests {
         let sources: Vec<_> = instance.mods.iter().map(|m| (m.id.as_str(), &m.source)).collect();
         assert_eq!(sources[0], ("cf-238222", &ModSource::CurseForge { project_id: 238222, file_id: 5846880 }));
         assert_eq!(sources[1].1, &ModSource::Local);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancelled_import_leaves_nothing_behind() {
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        let state = AppState::load(&root.join("data")).unwrap();
+        let source = root.join("Prism/instances/Welt");
+        write_files(&source, &[("instance.cfg", "name=Welt\n"), ("mmc-pack.json", PACK)]);
+        add_content(&source.join("minecraft"));
+        let from = detect(&state, Some(&source)).remove(0);
+        // Die erste kopierte Datei hält an, bis abgebrochen ist; endet der Thread, schließt sich `started`.
+        let (reached, started) = std::sync::mpsc::channel();
+        let (resume, hold) = std::sync::mpsc::channel::<()>();
+        let progress = move |_: &str, done: u64, _: u64| {
+            if done == 1 {
+                reached.send(()).unwrap();
+                hold.recv().ok();
+            }
+        };
+
+        let work = state.cancellable("op", import(&state, from, progress));
+        let (result, ()) = tokio::join!(work, async {
+            started.recv().unwrap();
+            state.cancel("op");
+        });
+        drop(resume);
+        assert!(started.recv().is_err());
+
+        assert!(matches!(result, Err(crate::error::AppError::Cancelled)));
+        assert!(state.instances.list().is_empty());
+        assert_eq!(fs::read_dir(state.dirs.root.join("instances")).unwrap().count(), 0);
         fs::remove_dir_all(root).unwrap();
     }
 
