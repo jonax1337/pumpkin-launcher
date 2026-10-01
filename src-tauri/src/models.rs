@@ -133,6 +133,15 @@ pub enum GameWindow {
     Fullscreen,
 }
 
+/// Quick Play: direkt in eine Welt (ID = Ordnername unter `saves/`) oder auf einen Server (`host[:port]`).
+/// Getaggt als `{"type": "world", "id": …}`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum QuickPlay {
+    World { id: String },
+    Server { address: String },
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Instance {
@@ -162,6 +171,9 @@ pub struct Instance {
     pub mods: Vec<Mod>,
     pub created_at: u64,
     pub last_played_at: Option<u64>,
+    /// Ziel des letzten Starts per Quick Play.
+    #[serde(default)]
+    pub last_quick_play: Option<QuickPlay>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -192,6 +204,7 @@ impl Instance {
             mods: Vec::new(),
             created_at: now_ms(),
             last_played_at: None,
+            last_quick_play: None,
         }
     }
 
@@ -298,6 +311,18 @@ mod tests {
             serde_json::json!({"type": "size", "width": 1280, "height": 720})
         );
         assert_eq!(serde_json::to_value(GameWindow::Fullscreen).unwrap(), serde_json::json!({"type": "fullscreen"}));
+    }
+
+    #[test]
+    fn quick_play_json_shape() {
+        assert_eq!(
+            serde_json::to_value(QuickPlay::World { id: "Neue Welt".into() }).unwrap(),
+            serde_json::json!({"type": "world", "id": "Neue Welt"})
+        );
+        assert_eq!(
+            serde_json::to_value(QuickPlay::Server { address: "mc.example.net:25570".into() }).unwrap(),
+            serde_json::json!({"type": "server", "address": "mc.example.net:25570"})
+        );
     }
 
     #[test]

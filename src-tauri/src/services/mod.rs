@@ -1,5 +1,5 @@
 //! Services: Persistenz, Auth, Installation (Mojang-Formate, Downloads, Java), Spielstart, Kopie und Export
-//! von Instanzen, Skins und Support.
+//! von Instanzen, Welten und Server, Skins und Support.
 use std::{
     fs, io,
     path::{Path, PathBuf},
@@ -26,10 +26,12 @@ pub mod mojang;
 pub mod mrpack;
 pub mod providers;
 pub mod rules;
+pub mod servers;
 pub mod skins;
 pub mod store;
 pub mod system;
 pub mod templates;
+pub mod worlds;
 
 /// Ordner im Spielverzeichnis, die Minecraft und Loader von selbst neu anlegen (Fabric: `.fabric`
 /// mit umgemappten JARs); Kopien und Exporte lassen sie weg.
@@ -80,6 +82,16 @@ impl Dirs {
     /// `mods/` im Spielverzeichnis, dort sucht Fabric (und jeder andere Loader).
     pub fn mods_dir(&self, instance_id: &str) -> PathBuf {
         self.game_dir(instance_id).join("mods")
+    }
+
+    /// Welten des Spiels, je eine als Ordner.
+    pub fn saves(&self, instance_id: &str) -> PathBuf {
+        self.game_dir(instance_id).join("saves")
+    }
+
+    /// Sicherungen der Welten; außerhalb des Spielordners, damit Exporte und Kopien sie nicht mitnehmen.
+    pub fn backups(&self, instance_id: &str) -> PathBuf {
+        self.instance(instance_id).join("backups")
     }
 
     /// Globaler Mod-Cache, Dateien als `<sha1>.jar`.

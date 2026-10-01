@@ -7,6 +7,7 @@ pub mod models;
 pub mod services;
 mod state;
 mod support_commands;
+mod world_commands;
 
 use tauri::{Emitter, Manager};
 use tracing_subscriber::EnvFilter;
@@ -100,6 +101,16 @@ pub fn run() {
             skin_commands::skin_upload,
             skin_commands::skin_reset,
             skin_commands::skin_cape,
+            world_commands::world_list,
+            world_commands::world_backup,
+            world_commands::world_backups,
+            world_commands::world_restore,
+            world_commands::world_backup_delete,
+            world_commands::world_delete,
+            world_commands::world_quick_play_supported,
+            world_commands::server_list,
+            world_commands::server_save,
+            world_commands::server_remove,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

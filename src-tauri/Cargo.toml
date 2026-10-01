@@ -41,6 +41,8 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-single-instance = "2"
 regex = "1.13.1"
+fastnbt = "2.6.3"
+flate2 = "1.1.10"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Wdk_System_SystemServices", "Win32_Storage_FileSystem", "Win32_System_SystemInformation"] }

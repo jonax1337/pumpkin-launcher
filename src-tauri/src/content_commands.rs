@@ -18,7 +18,7 @@ struct Progress {
     done: u64,
     total: u64,
 }
-fn progress(app: AppHandle, id: String) -> impl Fn(&str, u64, u64) + Send + Sync {
+pub(crate) fn progress(app: AppHandle, id: String) -> impl Fn(&str, u64, u64) + Send + Sync {
     move |phase, done, total| {
         if let Err(e) = app.emit(
             "content-progress",

@@ -12,6 +12,8 @@ pub enum AppError {
     Http(#[from] reqwest::Error),
     #[error("Das Archiv ist beschädigt oder kein gültiges Paket – Details: {0}")]
     Zip(#[from] zip::result::ZipError),
+    #[error("Eine Spieldatei ist beschädigt oder hat ein unbekanntes Format – Details: {0}")]
+    Nbt(#[from] fastnbt::error::Error),
     #[error("Ein Download ist fehlgeschlagen – Details: {0}")]
     Download(String),
     #[error("Das Hochladen hat nicht geklappt – Details: {0}")]
