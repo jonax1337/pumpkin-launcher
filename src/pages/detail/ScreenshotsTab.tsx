@@ -4,7 +4,7 @@ import { SkelList } from "@/components/SkelList";
 import { useDeleteScreenshot, useScreenshots } from "@/hooks/useScreenshots";
 import { api } from "@/lib/api";
 import { dayLabel, dayStart, formatDateTime, formatSize } from "@/lib/format";
-import { toastError } from "@/lib/toast";
+import { openLocalPath, revealLocalPath } from "@/lib/links";
 import { useI18n } from "@/i18n";
 import type { Instance, Screenshot } from "@/lib/types";
 import { Actions, Button, CardGrid, Count, Dialog, Empty, Glyph, IconButton, SectionHeader } from "@/ui";
@@ -116,8 +116,8 @@ function Lightbox({ instanceId, shots, current, onShow }: { instanceId: string; 
           >
             {t("common.delete")}
           </Button>
-          <Button icon="folder" onClick={() => void api.revealPath(current.path).catch(toastError)}>{t("components.instance.revealInFolder")}</Button>
-          <Button variant="primary" icon="ext" onClick={() => void api.openPath(current.path).catch(toastError)}>{t("common.open")}</Button>
+          <Button icon="folder" onClick={() => revealLocalPath(current.path)}>{t("components.instance.revealInFolder")}</Button>
+          <Button variant="primary" icon="ext" onClick={() => openLocalPath(current.path)}>{t("common.open")}</Button>
         </>
       }
     >

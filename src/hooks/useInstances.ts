@@ -8,14 +8,17 @@ import { currentLanguage, t } from "@/i18n/core";
 import { usableAccount, useOfflineAllowed } from "@/store/offline";
 import { api } from "@/lib/api";
 import { autoMemoryMb, formatClock, MEMORY_FALLBACK_MAX_MB, MEMORY_FALLBACK_MB, maxMemoryMb } from "@/lib/format";
+import { openLocalPath } from "@/lib/links";
 import { instanceUrl } from "@/lib/routes";
-import { toastError } from "@/lib/toast";
 import { CANCELLED, type Instance, type InstanceStatus, type ModLoader, type NewInstance, type QuickPlay } from "@/lib/types";
 import { useGame } from "@/store/game";
 import { accountName, useSettings } from "@/store/settings";
 import { useTasks } from "@/store/tasks";
 import { CATALOG_STALE_MS } from "./staleTimes";
 import { appKeys, instanceKeys, instanceRelatedKeys, screenshotKeys, worldKeys } from "./queryKeys";
+
+/** Fehler und Absturz bleiben länger stehen als eine gewöhnliche Meldung, damit man sie lesen und darauf reagieren kann. */
+const LONG_TOAST_MS = 10_000;
 
 const instanceListQuery = { queryKey: instanceKeys.all, queryFn: api.listInstances };
 
@@ -195,7 +198,7 @@ export function useInstall() {
       useTasks.getState().push({ label: t("hooks.install.failed", { name: instance.name }), sub: err.message, state: "fail", to: `/instances/${instance.id}` });
       toast.error(t("hooks.install.failed", { name: instance.name }), {
         description: err.message,
-        duration: 10_000,
+        duration: LONG_TOAST_MS,
         action: { label: t("common.retry"), onClick: () => install.mutate(instance) },
       });
     },
@@ -250,7 +253,7 @@ function useLaunch() {
       const action = offlineOk
         ? { label: t("hooks.launch.setPlayerName"), onClick: openAddOffline }
         : { label: t("components.account.msLogin"), onClick: () => void startMsLogin(qc) };
-      toast.error(err.message, { duration: 10_000, action });
+      toast.error(err.message, { duration: LONG_TOAST_MS, action });
     },
   });
 }
@@ -340,12 +343,12 @@ export function useGameEvents() {
             duration: Infinity,
             description: crashReport ? t("hooks.game.crashReportHint") : t("hooks.game.logHint"),
             action: crashReport
-              ? { label: t("components.game.openCrashReport"), onClick: () => void api.openPath(crashReport).catch(toastError) }
+              ? { label: t("components.game.openCrashReport"), onClick: () => openLocalPath(crashReport) }
               : showLog,
             cancel: crashReport ? showLog : undefined,
           });
         } else if (code != null && code !== 0) {
-          toast.error(t("hooks.game.exitedWithCode", { name, code }), { duration: 10_000, action: showLog });
+          toast.error(t("hooks.game.exitedWithCode", { name, code }), { duration: LONG_TOAST_MS, action: showLog });
         }
       }),
       // Das Backend hat Instanzen umgebaut (z. B. Migration): Listen und Details neu laden.

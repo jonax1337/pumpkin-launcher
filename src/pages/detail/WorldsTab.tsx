@@ -15,6 +15,7 @@ import {
 import { api } from "@/lib/api";
 import { TYPE_LABEL_KEYS } from "@/lib/catalog";
 import { formatDateTime, formatSize, relativeTime } from "@/lib/format";
+import { openLocalPath } from "@/lib/links";
 import { progressShare } from "@/lib/modrinth";
 import { toastError } from "@/lib/toast";
 import { t, useI18n } from "@/i18n";
@@ -62,7 +63,7 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
   const playBlocked = busy ?? (startsIntoWorlds === false ? t("detail.worlds.quickPlayUnsupported", { version: instance.minecraftVersion }) : null);
 
   const menuFor = (w: World): MenuEntry[] => [
-    { id: "dir", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => void api.openPath(w.path).catch(toastError) },
+    { id: "dir", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => openLocalPath(w.path) },
     { id: "backup", text: t("detail.worlds.backupNow"), icon: "save", disabled: !!busy, onSelect: () => backup.mutate(w) },
     { id: "backups", text: t("detail.worlds.backupsMenu"), icon: "clock", onSelect: () => setShowBackups({ world: w.id }) },
     { id: "packs", text: t("detail.worlds.datapacksMenu"), icon: "box", onSelect: () => setPacks({ world: w, search: false }) },

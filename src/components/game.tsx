@@ -1,14 +1,13 @@
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { toast } from "sonner";
 import { t, useI18n } from "@/i18n";
 import { Button, Chip, ConfirmDialog, Count, Empty, Icon, IconButton, SearchField, Segmented, Spacer, StatusPanel, Tip, Toolbar, type IconName } from "@/ui";
 import { askShareLog, DebugInfoButton, shareKindAfter } from "@/components/support";
 import { askStop, useCancelInstall, useInstanceStatus, useKill, usePlay, useStopAsk } from "@/hooks/useInstances";
-import { api } from "@/lib/api";
 import { WIDTH } from "@/lib/breakpoints";
+import { copyWithToast } from "@/lib/clipboard";
+import { openLocalPath } from "@/lib/links";
 import { instanceUrl } from "@/lib/routes";
-import { toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { formatClock, formatCount, relativeTime } from "@/lib/format";
 import { installStepLabel, type Instance, type InstallProgress, type InstallStep, type ModLoader } from "@/lib/types";
@@ -216,7 +215,7 @@ export function PlayStatus({ instance, showLast = true, onScene }: { instance: I
     acts = (
       <>
         {crash.crashReport && (
-          <Button variant="ghost" size="s" tone="bad" onScene={onScene} onClick={() => void api.openPath(crash.crashReport!).catch(toastError)}>{t("components.game.openCrashReport")}</Button>
+          <Button variant="ghost" size="s" tone="bad" onScene={onScene} onClick={() => openLocalPath(crash.crashReport!)}>{t("components.game.openCrashReport")}</Button>
         )}
         <Button variant="ghost" size="s" onScene={onScene} onClick={toLog}>{t("components.game.viewLog")}</Button>
         {/* Nur als Symbol: Ausgeschrieben ließe die schmale Zeile keinen Platz für die Meldung. */}
@@ -328,7 +327,7 @@ function LogStat({ instance }: { instance: Instance }) {
         tone="bad"
         className={place}
         title={<>{t("components.game.mcCrashed")}{crash.code != null ? t("components.game.exitCode", { code: crash.code }) : ""}.</>}
-        actions={crash.crashReport && <Button size="s" onClick={() => void api.openPath(crash.crashReport!).catch(toastError)}>{t("components.game.openCrashReport")}</Button>}
+        actions={crash.crashReport && <Button size="s" onClick={() => openLocalPath(crash.crashReport!)}>{t("components.game.openCrashReport")}</Button>}
       >
         {crash.crashReport ? t("components.log.crashReportHelp") : t("components.log.tailShowsCause")}
       </StatusPanel>
@@ -412,12 +411,7 @@ export function LogConsole({ instance }: { instance: Instance }) {
     if (el && follow) el.scrollTop = el.scrollHeight;
   }, [shown, follow]);
 
-  function copy() {
-    void navigator.clipboard.writeText((lines ?? []).map((l) => l.line).join("\n")).then(
-      () => toast.success(t("components.log.copySuccess")),
-      () => toast.error(t("components.common.copyFailed")),
-    );
-  }
+  const copy = () => copyWithToast((lines ?? []).map((l) => l.line).join("\n"), t("components.log.copySuccess"));
 
   return (
     <>
@@ -430,7 +424,7 @@ export function LogConsole({ instance }: { instance: Instance }) {
         <Button size="s" icon="ul" compactBelow={WIDTH.xl} onClick={() => askShareLog(instance.id, shareKindAfter(crash))}>{t("components.game.shareLog")}</Button>
         <DebugInfoButton size="s" icon="info" compactBelow={WIDTH.xl} />
         {crash?.logFile && (
-          <Button size="s" icon="folder" compactBelow={WIDTH.sm} onClick={() => void api.openPath(crash.logFile!).catch(toastError)}>{t("components.log.logFile")}</Button>
+          <Button size="s" icon="folder" compactBelow={WIDTH.sm} onClick={() => openLocalPath(crash.logFile!)}>{t("components.log.logFile")}</Button>
         )}
         <Button size="s" icon="trash" compactBelow={WIDTH.sm} disabled={!lines?.length} onClick={() => clearLog(instance.id)}>{t("components.log.clear")}</Button>
       </Toolbar>

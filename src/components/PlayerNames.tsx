@@ -8,6 +8,7 @@ import { StopDialog } from "@/components/game";
 import { accountKeys } from "@/hooks/queryKeys";
 import { api } from "@/lib/api";
 import { WIDTH } from "@/lib/breakpoints";
+import { copyWithToast } from "@/lib/clipboard";
 import { errorMessage } from "@/lib/errors";
 import { openPage } from "@/lib/links";
 import { MINUTE } from "@/lib/time";
@@ -61,6 +62,9 @@ function closeMsLogin() {
   if (running) void api.msLoginCancel().catch(() => undefined);
 }
 
+/** So viele ganze Minuten läuft die Anmeldung noch, mindestens eine. */
+const validMinutes = (info: MsLoginStart) => Math.max(1, Math.round(info.expiresIn / 60));
+
 /** Dialog-Untertitel „Danach startet {name}.“ – der Name bleibt als React-Knoten fett. */
 function ThenSub({ label }: { label: string }) {
   const { tAround } = useI18n();
@@ -80,13 +84,6 @@ function MsLoginDialog() {
   const then = useAccountUi((s) => s.then);
   const offlineAllowed = useOfflineAllowed((s) => s.allowed);
   const qc = useQueryClient();
-
-  function copy(code: string) {
-    void navigator.clipboard.writeText(code).then(
-      () => toast.success(t("components.ms.codeCopied")),
-      () => toast.error(t("components.common.copyFailed")),
-    );
-  }
 
   return (
     <Dialog
@@ -124,7 +121,7 @@ function MsLoginDialog() {
           <p>{t("components.ms.browserOpened")}</p>
           <div className="flex h-8 items-center gap-3" aria-live="polite">
             <Progress width={120} label={t("components.ms.waiting")} />
-            <Hint>{t("components.ms.windowWaits", { min: Math.max(1, Math.round(state.info.expiresIn / 60)) })}</Hint>
+            <Hint>{t("components.ms.windowWaits", { min: validMinutes(state.info) })}</Hint>
           </div>
           <Hint className="mt-3">{t("components.ms.nothingHappens")}</Hint>
         </>
@@ -135,11 +132,11 @@ function MsLoginDialog() {
           {/* Code-Anzeige (Sonderform: große Pixelschrift in eingelassener Platte) */}
           <div className="codebox">
             <span className="code select-all" aria-label={t("components.ms.codeSpaced", { code: state.info.userCode.split("").join(" ") })}>{state.info.userCode}</span>
-            <Button icon="copy" onClick={() => copy(state.info.userCode)}>{t("common.copy")}</Button>
+            <Button icon="copy" onClick={() => copyWithToast(state.info.userCode, t("components.ms.codeCopied"))}>{t("common.copy")}</Button>
           </div>
           <div className="flex h-8 items-center gap-3" aria-live="polite">
             <Progress width={120} label={t("components.ms.waiting")} />
-            <Hint>{t("components.ms.codeValid", { min: Math.max(1, Math.round(state.info.expiresIn / 60)) })}</Hint>
+            <Hint>{t("components.ms.codeValid", { min: validMinutes(state.info) })}</Hint>
           </div>
         </>
       )}

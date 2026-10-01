@@ -557,6 +557,9 @@ function Offline({ onRetry, compact }: { onRetry: () => void; compact?: boolean 
   );
 }
 
+/** Platzhalter, solange die erste Seite der Treffer lädt. */
+const SKELETON_ROWS = 6;
+
 /** Überschrift ohne Suchbegriff je Sortierung. */
 const SORT_HEADINGS: Record<SearchIndex, string> = lazyLabels({
   relevance: "components.sort.relevance", downloads: "components.sort.downloads", follows: "components.sort.follows", newest: "common.new", updated: "components.sort.updated",
@@ -624,7 +627,7 @@ export function ContentResults({ type, instance, world, action, onOpen, query: t
         )
       ) : results.isPending ? (
         <List variant={variant} aria-busy aria-label={t("components.common.loadingAria")}>
-          {Array.from({ length: 6 }, (_, i) => <SkelRow key={i} feature={featured && i === 0} />)}
+          {Array.from({ length: SKELETON_ROWS }, (_, i) => <SkelRow key={i} feature={featured && i === 0} />)}
         </List>
       ) : hits.length === 0 ? (
         <Empty

@@ -7,6 +7,7 @@ import { loaderLine, playtimeLine } from "@/components/common";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
 import { SkelList } from "@/components/SkelList";
 import { useBackgroundUpdates, useCurrentUpdates } from "@/hooks/useContent";
+import { ANNOUNCE_DEBOUNCE_MS } from "@/hooks/useDebounced";
 import { byRecent, groupsOf, ungrouped, useInstances } from "@/hooks/useInstances";
 import { WIDTH } from "@/lib/breakpoints";
 import { updatesLabel } from "@/lib/modrinth";
@@ -177,7 +178,7 @@ export function InstancesPage() {
     const timer = setTimeout(() => {
       lastView.current = viewKey;
       setSaid(t(total === 1 ? "pages.instances.resultCount.one" : "pages.instances.resultCount.other", { shown: shown.length, total }));
-    }, 500);
+    }, ANNOUNCE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [viewKey, shown.length, total]);
 

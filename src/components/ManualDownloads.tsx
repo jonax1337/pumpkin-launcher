@@ -18,6 +18,8 @@ const useManual = create<{ target: Target | null; set: (t: Target | null) => voi
 export const openManualDownloads = (target: Target) => useManual.getState().set(target);
 
 const POLL_MS = 2500;
+/** So lange bleibt der Dialog nach der letzten gefundenen Datei stehen, damit man „Eingebaut“ noch sieht. */
+const AUTO_CLOSE_MS = 1200;
 
 /**
  * Manche Autoren erlauben den Download ihrer Mods nur über CurseForge. Das umgeht Pumpkin Launcher nicht: Der Nutzer lädt
@@ -92,7 +94,7 @@ export function ManualDownloads() {
     if (target && items.length > 0 && pending.length === 0 && !reported.current) {
       reported.current = true;
       toast.success(items.length === 1 ? t("components.manual.installedOne", { name: items[0].name }) : t("components.manual.installedAll", { n: items.length }));
-      const timer = setTimeout(() => set(null), 1200);
+      const timer = setTimeout(() => set(null), AUTO_CLOSE_MS);
       return () => clearTimeout(timer);
     }
   }, [target, items.length, pending.length, set, items]);

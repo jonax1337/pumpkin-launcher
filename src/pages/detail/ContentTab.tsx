@@ -7,6 +7,7 @@ import {
 } from "@/ui";
 import { IRIS_PROJECT_ID } from "@/components/ContentBrowser";
 import { useContentInstall, useContentState, useProjects, withTarget } from "@/hooks/useContent";
+import { ANNOUNCE_DEBOUNCE_MS } from "@/hooks/useDebounced";
 import { instanceKeys } from "@/hooks/queryKeys";
 import { useUpdateMods } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
@@ -155,7 +156,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     const timer = setTimeout(() => {
       lastFilter.current = filterKey;
       setSaid(t(nAll === 1 ? "detail.content.visibleCount.one" : "detail.content.visibleCount.other", { visible: nVisible, total: nAll }));
-    }, 500);
+    }, ANNOUNCE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [filterKey, nVisible, nAll]);
 

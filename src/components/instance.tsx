@@ -11,6 +11,7 @@ import { askStop, useDeleteInstance, useExportEntries, useGroups, usePlay, useSe
 import { useSaveTemplate } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
 import { KIND_LABEL_KEYS } from "@/lib/catalog";
+import { revealLocalPath } from "@/lib/links";
 import { instanceUrl } from "@/lib/routes";
 import { toastError } from "@/lib/toast";
 import type { Instance } from "@/lib/types";
@@ -60,7 +61,7 @@ function useExport() {
         exported &&
         toast.success(t("components.instance.exportedQuoted", { name: instance.name }), {
           description: path,
-          action: { label: t("components.instance.revealInFolder"), onClick: () => api.revealPath(path).catch(toastError) },
+          action: { label: t("components.instance.revealInFolder"), onClick: () => revealLocalPath(path) },
         }),
     });
   };
