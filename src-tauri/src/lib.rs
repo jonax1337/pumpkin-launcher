@@ -79,6 +79,9 @@ pub fn run() {
             content_commands::template_list,
             content_commands::template_delete,
             content_commands::template_create_instance,
+            content_commands::instance_duplicate,
+            content_commands::instance_export_entries,
+            content_commands::instance_export,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -214,7 +214,7 @@ async fn install_instance(app: AppHandle, state: &AppState, instance_id: String)
         tracing::info!(instance = %instance_id, active, "Mods bereitgestellt");
     }
     // Marker erst nach vollständigem Erfolg: `instance_status` erkennt so auch abgebrochene Installationen.
-    tokio::fs::write(installed_marker(state, &instance_id), install_key(&instance)).await?;
+    tokio::fs::write(state.dirs.installed_marker(&instance_id), install_key(&instance)).await?;
     tracing::info!(instance = %instance_id, "Installation abgeschlossen");
     Ok(())
 }
@@ -320,10 +320,6 @@ pub fn instance_kill(state: State<'_, AppState>, instance_id: String) -> AppResu
     Ok(())
 }
 
-fn installed_marker(state: &AppState, instance_id: &str) -> std::path::PathBuf {
-    state.dirs.natives_dir(instance_id).with_file_name("installed")
-}
-
 /// Inhalt der Markerdatei: die MC-Version, bei Mod-Loadern plus Loader und Version. Ein Wechsel
 /// von Loader oder Loader-Version gilt so als nicht installiert; Vanilla-Marker bleiben gültig.
 fn install_key(instance: &Instance) -> String {
@@ -345,7 +341,7 @@ pub struct InstanceStatus {
 #[tauri::command]
 pub fn instance_status(state: State<'_, AppState>, instance_id: String) -> AppResult<InstanceStatus> {
     let instance = state.instances.get(&instance_id)?;
-    let installed = std::fs::read_to_string(installed_marker(&state, &instance_id))
+    let installed = std::fs::read_to_string(state.dirs.installed_marker(&instance_id))
         .is_ok_and(|v| v == install_key(&instance));
     Ok(InstanceStatus { installed, running: state.running().contains_key(&instance_id) })
 }

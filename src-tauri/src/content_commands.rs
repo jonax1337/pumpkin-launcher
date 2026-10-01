@@ -2,7 +2,7 @@ use crate::{
     error::AppResult,
     models::{Instance, ModpackOrigin, Template},
     services::{
-        content, modrinth as api,
+        content, duplicate, modrinth as api, mrpack,
         providers::{self, Source},
         templates,
     },
@@ -326,4 +326,31 @@ pub async fn template_create_instance(
     let on_progress = progress(app, operation_id.clone());
     let work = templates::create_instance(&state, &template_id, &name, &on_progress);
     state.cancellable(&operation_id, work).await
+}
+/// Kopie einer Instanz unter neuem Namen; Fortschritt als `content-progress` (Phase `copy`).
+#[tauri::command]
+pub async fn instance_duplicate(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    instance_id: String,
+    operation_id: String,
+) -> AppResult<Instance> {
+    let _operation = state.operation(Some(&instance_id))?;
+    duplicate::duplicate(&state, &instance_id, progress(app, operation_id)).await
+}
+/// Einträge des Spielordners, die `instance_export` mitnehmen kann.
+#[tauri::command]
+pub fn instance_export_entries(state: State<'_, AppState>, instance_id: String) -> AppResult<Vec<String>> {
+    mrpack::entries(&state.dirs, &state.instances.get(&instance_id)?)
+}
+/// Schreibt die Instanz als `.mrpack` an den vom Nutzer gewählten Pfad.
+#[tauri::command]
+pub async fn instance_export(
+    state: State<'_, AppState>,
+    instance_id: String,
+    include: Vec<String>,
+    path: String,
+) -> AppResult<()> {
+    let _operation = state.operation(Some(&instance_id))?;
+    mrpack::export(&state, &instance_id, include, std::path::Path::new(&path)).await
 }
