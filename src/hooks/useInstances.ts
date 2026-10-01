@@ -11,6 +11,7 @@ import { INSTALL_CANCELLED, type Instance, type InstanceStatus, type ModLoader, 
 import { useGame } from "@/store/game";
 import { accountName, useSettings } from "@/store/settings";
 import { useTasks } from "@/store/tasks";
+import { screenshotKeys } from "./useScreenshots";
 import { worldKeys } from "./useWorlds";
 
 export const instanceKeys = {
@@ -316,9 +317,10 @@ export function useGameEvents() {
         const since = useGame.getState().started[instanceId];
         useGame.getState().setStarted(instanceId, null);
         qc.setQueryData<InstanceStatus>(instanceKeys.status(instanceId), (s) => s && { ...s, running: false });
-        // Das Backend hat die Spielzeit der Sitzung angerechnet, das Spiel Welten und Serverliste geändert.
+        // Das Backend hat die Spielzeit der Sitzung angerechnet, das Spiel Welten, Serverliste und Screenshots geändert.
         void qc.invalidateQueries({ queryKey: instanceKeys.all });
         void qc.invalidateQueries({ queryKey: worldKeys.all(instanceId) });
+        void qc.invalidateQueries({ queryKey: screenshotKeys.list(instanceId) });
         const showLog = { label: "Protokoll", onClick: () => navigate(`/instances/${instanceId}?tab=console`) };
         if (stopping.delete(instanceId)) {
           toast(since ? `Minecraft beendet. Gespielt: ${formatClock(Date.now() - since)}` : "Minecraft beendet", { action: showLog });

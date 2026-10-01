@@ -287,6 +287,15 @@ a { color: inherit; }
 .skin-card { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .skin-card-h { display: flex; align-items: center; gap: 4px; width: 100%; }
 
+/* ---------- Instanz: Screenshots ---------- */
+/* Kacheln in 16:9; Kerbe am Bild statt am Knopf, sonst schnitte sie den Fokusring ab */
+.shot { display: block; aspect-ratio: 16 / 9; }
+.shot img { display: block; width: 100%; height: 100%; object-fit: cover; background: var(--sunk); clip-path: var(--n1); transition: filter var(--st); }
+.shot:hover img { filter: brightness(1.12); }
+.shot:active img { filter: brightness(.9); }
+/* Große Ansicht: ganzes Bild, Kopf und Fuß des Dialogs bleiben im Fenster */
+.shot-full { display: block; width: 100%; max-height: calc(calc(var(--vh1, 1vh) * 100) - 300px); object-fit: contain; background: var(--sunk); }
+
 /* ---------- Dialog-Inhalte ---------- */
 /* „Neue Instanz“: senkrechte Tabs (Kit) links, Formular rechts */
 .nwrap { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 20px; height: min(430px, calc(calc(var(--vh1, 1vh) * 100) - 260px)); }

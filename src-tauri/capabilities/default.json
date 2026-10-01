@@ -18,7 +18,8 @@
         { "path": "$APPDATA/instances/*/minecraft" },
         { "path": "$APPDATA/instances/*/minecraft/crash-reports/**" },
         { "path": "$APPDATA/instances/*/minecraft/logs/**" },
-        { "path": "$APPDATA/instances/*/minecraft/saves/**" }
+        { "path": "$APPDATA/instances/*/minecraft/saves/**" },
+        { "path": "$APPDATA/instances/*/minecraft/screenshots/**" }
       ]
     },
     "dialog:default",

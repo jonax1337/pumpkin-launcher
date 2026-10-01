@@ -1,4 +1,4 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -20,6 +20,7 @@ import {
   type NewInstance,
   type QuickPlay,
   type Server,
+  type Screenshot,
   type SkinProfile,
   type SkinVariant,
   type Template,
@@ -75,6 +76,7 @@ const mockContent = mockData?.createContentMock(db, emit);
 const mockPack = tauri ? null : (await import("@/lib/mock-pack")).createPackMock(db, emit);
 const mockSkins = tauri ? null : (await import("@/lib/mock-skins")).createSkinMock();
 const mockWorlds = tauri ? null : (await import("@/lib/mock-worlds")).createWorldMock(db, emit);
+const mockScreenshots = tauri ? null : (await import("@/lib/mock-screenshots")).createScreenshotMock();
 
 function on<T>(event: string, cb: (payload: T) => void): Promise<UnlistenFn> {
   if (tauri) return listen<T>(event, (e) => cb(e.payload));
@@ -464,10 +466,20 @@ export const api = {
     tauri ? call("server_save", { instanceId, index, server }) : mockWorlds!.saveServer(instanceId, index, server),
   serverRemove: (instanceId: string, index: number): Promise<void> =>
     tauri ? call("server_remove", { instanceId, index }) : mockWorlds!.removeServer(instanceId, index),
+  /** Screenshots der Instanz, neueste zuerst. */
+  screenshots: (instanceId: string): Promise<Screenshot[]> =>
+    tauri ? call("screenshot_list", { instanceId }) : mockScreenshots!.list(instanceId),
+  /** Legt den Screenshot in den Papierkorb. */
+  screenshotDelete: (instanceId: string, fileName: string): Promise<void> =>
+    tauri ? call("screenshot_delete", { instanceId, fileName }) : mockScreenshots!.remove(instanceId, fileName),
+  /** Bildquelle über das Asset-Protokoll (Scope: screenshots/ der Instanzen); im Mock ist `path` schon eine data:-URL. */
+  screenshotSrc: (shot: Screenshot): string => (tauri ? convertFileSrc(shot.path) : shot.path),
 
   /** Datei mit dem Standardprogramm öffnen (z. B. Absturzbericht). */
   openPath: (path: string): Promise<void> =>
-    tauri ? openPath(path) : Promise.reject(new Error("Dateien lassen sich nur in der Pumpkin Launcher-App öffnen.")),
+    tauri
+      ? openPath(path).catch((err: unknown) => Promise.reject(new Error(String(err))))
+      : Promise.reject(new Error("Dateien lassen sich nur in der Pumpkin Launcher-App öffnen.")),
 
   /** Neuere Launcher-Version aus den GitHub-Releases, sonst null. Im Browser gibt es keine Updates. */
   checkAppUpdate: (): Promise<Update | null> => (tauri ? check() : Promise.resolve(null)),

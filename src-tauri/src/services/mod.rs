@@ -27,6 +27,7 @@ pub mod mrpack;
 pub mod providers;
 pub mod rules;
 pub mod servers;
+pub mod screenshots;
 pub mod skins;
 pub mod store;
 pub mod system;
@@ -92,6 +93,11 @@ impl Dirs {
     /// Sicherungen der Welten; außerhalb des Spielordners, damit Exporte und Kopien sie nicht mitnehmen.
     pub fn backups(&self, instance_id: &str) -> PathBuf {
         self.instance(instance_id).join("backups")
+    }
+
+    /// `screenshots/` im Spielverzeichnis, dort legt Minecraft mit F2 ab.
+    pub fn screenshots_dir(&self, instance_id: &str) -> PathBuf {
+        self.game_dir(instance_id).join("screenshots")
     }
 
     /// Globaler Mod-Cache, Dateien als `<sha1>.jar`.

@@ -56,6 +56,8 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `services/system.rs` | Win32-Abfragen: Arbeitsspeicher (`GlobalMemoryStatusEx`), freier Platz (`GetDiskFreeSpaceExW`), Windows-Version (`RtlGetVersion`) |
 | `services/skins.rs` | Skins und Umhänge über die offizielle Minecraft-Services-API (`/minecraft/profile`, nur Microsoft-Konten, Token aus `auth::session`): Profil lesen, Skin hochladen (multipart, `variant` + PNG), zurücksetzen, Umhang zeigen/ausblenden; Fehlerstatus (401, 429, 4xx, 5xx) in Alltagssprache. Lokale Bibliothek `skins/<sha1>.png` + `skins.json`; PNG-Prüfung über den IHDR-Kopf (64×64 oder 64×32). Texturen nur von `textures.minecraft.net`, per HTTPS |
 | `skin_commands.rs` | Dünne Skin-Commands |
+| `services/screenshots.rs` | Screenshots einer Instanz: PNGs in `screenshots/` mit Name, Aufnahmezeit (Änderungszeit) und Größe, neueste zuerst; Löschen nur für Namen aus dieser Liste und über die Crate `trash` in den Papierkorb (umkehrbar, daher ohne Rückfrage in der UI). `trash` braucht COM im STA-Modus, deshalb ist `screenshot_delete` synchron und läuft auf dem Hauptthread, den das Fenster schon so eingerichtet hat |
+| `screenshot_commands.rs` | Dünne Screenshot-Commands |
 
 ### Plugins und Berechtigungen
 
@@ -66,7 +68,9 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `updater` | Neue Version von GitHub Releases (`latest.json`), Signatur gegen `plugins.updater.pubkey` in `tauri.conf.json` geprüft; Ablauf in `docs/RELEASING.md` |
 | `process` | Neustart nach dem Update (`relaunch`) |
 
-`capabilities/default.json` gibt dem Hauptfenster nur, was das Frontend braucht: Fensterknöpfe, `opener` (Dateipfade nur unter `$APPDATA/instances/*/minecraft`, darin `logs/`, `crash-reports/` und `saves/`), `dialog:default`, `updater:allow-check`/`allow-download`/`allow-install` (suchen, laden, installieren; ohne `download-and-install`) und `process:allow-restart` (kein `exit`).
+`capabilities/default.json` gibt dem Hauptfenster nur, was das Frontend braucht: Fensterknöpfe, `opener` (Dateipfade nur der Spielordner `$APPDATA/instances/*/minecraft` selbst sowie darin `crash-reports/`, `logs/`, `saves/` und `screenshots/`; „Im Ordner zeigen“ kommt aus `opener:default`), `dialog:default`, `updater:allow-check`/`allow-download`/`allow-install` (suchen, laden, installieren; ohne `download-and-install`) und `process:allow-restart` (kein `exit`).
+
+Asset-Protokoll (`app.security.assetProtocol` in `tauri.conf.json`, Cargo-Feature `protocol-asset`): nur für die Vorschau der Screenshots, Scope `$APPDATA/instances/*/minecraft/screenshots/**` (`*` trifft genau einen Pfadteil, also nur die Ordner der Instanzen). Das Frontend macht aus dem Pfad mit `convertFileSrc` eine URL, die WebView lädt die PNG direkt von der Platte; ohne IPC, Base64 oder Verkleinern im Backend. Andere Dateien des Datenordners (Konten, Logs) bleiben darüber unerreichbar. Die CSP ist aus (`csp: null`), braucht also keinen Eintrag.
 
 ### Persistenz
 
@@ -90,6 +94,7 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 - **`Instance.playtimeSecs`**: Summe aller Sitzungen; das Backend rechnet sie beim Spielende an (unplausible Dauern über 7 Tage oder bei zurückgestellter Uhr zählen nicht). `update_instance` übernimmt sie nie vom Frontend.
 - **`Instance.group?`**: Gruppe in der Bibliothek (getrimmt, leer = keine). Es gibt keine eigene Gruppen-Entität: Gruppen sind die Namen, die Instanzen tragen.
 - **`LibrarySkin`**: `id` (SHA-1 der PNG), `name`, `variant` (`classic | slim`), `addedAt`. Dieselbe Datei kommt nur einmal in die Bibliothek.
+- **`Screenshot`** (nur Antwort, nicht gespeichert): `fileName`, `path` (absolut), `takenAt` (Änderungszeit in ms), `size` (Bytes).
 - **`SkinProfile`** (nur Antwort, nicht gespeichert): `skin: { url, variant } | null`, `capes: { id, alias, url, active }[]`.
 - **`QuickPlay`** (getaggt über `type`): `{type:"world", id}` (Ordnername unter `saves/`) · `{type:"server", address}` (`host[:port]`). **`Instance.lastQuickPlay?`** merkt sich das Ziel des letzten Starts per Quick Play.
 - **`World`** (nur Antwort): `id` (Ordnername; Grundlage für spätere Erweiterungen je Welt), `name`, `lastPlayed?`, `gameMode?` (`survival | creative | adventure | spectator`), `hardcore`, `version?`, `sizeBytes`, `icon?` (`data:`-URL), `path`. **`WorldBackup`**: `id` (Dateiname), `world` (Ordnername), `createdAt`, `sizeBytes`. **`Server`**: `name`, `address`, `icon?` (setzt nur das Spiel), `acceptTextures?` (`null` = im Spiel nachfragen).
@@ -158,6 +163,8 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `skin_upload` | `accountId`, `skinId` | – (Skin der Bibliothek wird aktiver Skin) |
 | `skin_reset` | `accountId` | – (Standardskin) |
 | `skin_cape` | `accountId`, `capeId?` | – (ohne `capeId`: Umhang ausblenden) |
+| `screenshot_list` | `instanceId` | `Screenshot[]`, neueste zuerst; ohne Ordner `[]` |
+| `screenshot_delete` | `instanceId`, `fileName` (aus `screenshot_list`) | – (Datei im Papierkorb); unbekannter Name → „Screenshot … wurde nicht gefunden“ |
 
 Sichern, Wiederherstellen und Löschen von Welten sowie Änderungen an der Serverliste gehen nur, solange die Instanz nicht läuft (`AppState::operation`): das Spiel hält die Dateien offen und schreibt sie beim Beenden neu.
 
@@ -219,7 +226,7 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 
 - `lib/types.ts` – TS-Spiegel der Rust-Modelle
 - `lib/api.ts` – `invoke`-Wrapper; außerhalb von Tauri (reiner `pnpm dev` im Browser) Fallback auf Mockdaten aus `lib/mock.ts`
-- `hooks/` – TanStack Query; Mutations invalidieren die betroffenen Queries. `useInstances` (Spielen = bei Bedarf installieren, dann starten; Backend-Events), `useContent` (Modrinth-Vorgänge mit Fortschritt), `useTemplates`, `useAppUpdate` (Launcher-Update: stille Suche nach dem Start im Release-Build, Download mit Fortschritt, Installation erst nach Zustimmung und erst, wenn kein Minecraft mehr läuft), `useSupport` (Log teilen: Link kopieren, Toast mit „Öffnen“; Debug-Info kopieren), `useSkins` (Bibliothek, Texturen, Profil des Microsoft-Kontos), `useWorlds` (Welten, Sicherungen und Serverliste; Sichern/Löschen mit Fortschritt im Store `useWorldJob`, auch im Aufgaben-Menü; nach Spielende neu geladen)
+- `hooks/` – TanStack Query; Mutations invalidieren die betroffenen Queries. `useInstances` (Spielen = bei Bedarf installieren, dann starten; Backend-Events), `useContent` (Modrinth-Vorgänge mit Fortschritt), `useTemplates`, `useAppUpdate` (Launcher-Update: stille Suche nach dem Start im Release-Build, Download mit Fortschritt, Installation erst nach Zustimmung und erst, wenn kein Minecraft mehr läuft), `useSupport` (Log teilen: Link kopieren, Toast mit „Öffnen“; Debug-Info kopieren), `useSkins` (Bibliothek, Texturen, Profil des Microsoft-Kontos), `useWorlds` (Welten, Sicherungen und Serverliste; Sichern/Löschen mit Fortschritt im Store `useWorldJob`, auch im Aufgaben-Menü; nach Spielende neu geladen), `useScreenshots` (Liste bei jedem Öffnen des Tabs neu, nach `instance-exit` invalidiert; Löschen)
 - `store/settings.ts` – Launcher-Einstellungen, lokal persistiert: Java, RAM, Konten (Offline-Namen, aktives Konto), Pixelgröße, bewegte Szenen
 - `store/game.ts` – flüchtiger Laufzeitzustand aus den Events: Installationsfortschritt, Starten, Protokoll (gepuffert, max. 2000 Zeilen je Instanz), Absturz, Startzeit
 - `store/look.ts` – Szenenbild (Biom) je Instanz, lokal persistiert (das Backend hat dafür kein Feld; ohne Wahl fest aus der Instanz-ID)
@@ -227,12 +234,13 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 - Mods/Modpacks verwenden in Tauri den echten Modrinth-Katalog; neue Content-Installationen melden im Browser ohne Tauri keine vorgetäuschten Erfolge.
 - Konten: Offline-Spielernamen lokal, Microsoft-Konten über den Gerätecode-Login des Backends.
 - Welten und Server im Browser: Beispiele aus `lib/mock-worlds.ts` (je Instanz, nur im Speicher; Sichern mit vorgetäuschtem Fortschritt).
+- Screenshots im Browser: fünf auf einem Canvas gemalte Platzhalter je Instanz aus `lib/mock-screenshots.ts` (`path` ist dort die data:-URL); Öffnen und Im-Ordner-Zeigen gehen nur in der App.
 - Skins im Browser: Beispielprofil und -bibliothek aus `lib/mock-skins.ts` (Texturen auf einem Canvas gemalt); Dateien hinzufügen geht nur in der App.
 
 **Oberfläche**
 
 - `app/Layout.tsx` – rahmenloses Fenster: Fensterleiste mit Wortzeichen, Kontomenü und eigenen Fensterknöpfen, links eine Icon-Seitenleiste (Start · Bibliothek · Entdecken, unten Aufgaben-Menü und Einstellungen) (`@tauri-apps/api/window`, Ziehen per `data-tauri-drag-region`); setzt `--px`, pausiert Szenen, solange Minecraft läuft
-- `pages/` – Start (Szene, Weiterspielen-Reihe, Onboarding), Bibliothek (Poster/Liste, mit Gruppen als aufklappbare Abschnitte, ohne Gruppe zuletzt), Instanz (klebender Kopf mit Spielzeit, Inhalte, Welten mit den Abschnitten Welten und Server – „Spielen“ startet per Quick Play, gesperrt mit Tooltip, solange das Spiel läuft oder die Version keine Welten unterstützt –, Protokoll, Einstellungen mit Java, Fenster und Spielargumenten; `pages/detail/`), Entdecken (Katalog, Projektseite), Einstellungen, Skins (`/skins`, über das Kontomenü: aktueller Skin und Umhang des Microsoft-Kontos, Bibliothek als Raster; Offline-Konten sehen einen Hinweis auf die Microsoft-Anmeldung)
+- `pages/` – Start (Szene, Weiterspielen-Reihe, Onboarding), Bibliothek (Poster/Liste, mit Gruppen als aufklappbare Abschnitte, ohne Gruppe zuletzt), Instanz (klebender Kopf mit Spielzeit, Inhalte, Welten mit den Abschnitten Welten und Server – „Spielen“ startet per Quick Play, gesperrt mit Tooltip, solange das Spiel läuft oder die Version keine Welten unterstützt –, Screenshots – Raster nach Tagen, Vorschau per Asset-Protokoll mit `loading=lazy`/`decoding=async`, große Ansicht mit ← →, Öffnen, Im Ordner zeigen, Papierkorb –, Protokoll, Einstellungen mit Java, Fenster und Spielargumenten; `pages/detail/`), Entdecken (Katalog, Projektseite), Einstellungen, Skins (`/skins`, über das Kontomenü: aktueller Skin und Umhang des Microsoft-Kontos, Bibliothek als Raster; Offline-Konten sehen einen Hinweis auf die Microsoft-Anmeldung)
 - `components/px.tsx` – Bausteine: Knopf, Chip, Fortschritt, Suchfeld, Auswahl, Segmente, Checkbox, Schalter, Radio, Speicher-Slider, Tooltip, Menü/Kontextmenü, Dialog, Seitenpanel, Leer- und Fehlerzustände, Toasts. Verhalten von Radix, Aussehen aus `styles/`
 - `components/game.tsx` – Spielen-Knopf (feste Größe in allen Zuständen), Statuszeile, Status-Chip, Protokoll mit Filter/Suche/Mitscrollen
 - `components/instance.tsx` – Instanz-Menü (Knopf und Rechtsklick, Untermenü „Gruppe“): „Duplizieren“ (Fortschritt im Aufgaben-Menü), Dialoge „Exportieren…“ (Auswahl der Ordner, Speichern-Dialog, Toast mit „Im Ordner zeigen“), „Als Vorlage speichern“, „Neue Gruppe“ und „Löschen“

@@ -14,11 +14,12 @@ import { cn } from "@/lib/utils";
 import { PixelScene } from "@/pixel/PixelScene";
 import { useLook } from "@/store/look";
 import { ContentTab, useWarnings } from "./detail/ContentTab";
+import { ScreenshotsTab } from "./detail/ScreenshotsTab";
 import { SettingsTab } from "./detail/SettingsTab";
 import { WorldsTab } from "./detail/WorldsTab";
 
-type Tab = "content" | "worlds" | "console" | "settings";
-const TABS: Tab[] = ["content", "worlds", "console", "settings"];
+type Tab = "content" | "worlds" | "screenshots" | "console" | "settings";
+const TABS: Tab[] = ["content", "worlds", "screenshots", "console", "settings"];
 
 /** Schmales Fenster (bis 900 px): Loader-Version und Kurzinfo im kompakten Kopf entfallen. */
 const NARROW = "(max-width: 900px)";
@@ -140,6 +141,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
       tip: warnText || undefined,
     },
     { value: "worlds", label: "Welten" },
+    { value: "screenshots", label: "Screenshots" },
     { value: "console", label: "Protokoll" },
     { value: "settings", label: "Einstellungen" },
   ];
@@ -194,6 +196,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
           <ContentTab instance={instance} updateFor={updateFor} warnsOf={warnsOf} onAdd={() => setAdding(true)} showUpdates={updCall} />
         </div>
         {tab === "worlds" && <WorldsTab instance={instance} onLaunched={toLog} />}
+        {tab === "screenshots" && <ScreenshotsTab instance={instance} />}
         {tab === "console" && <LogConsole instance={instance} />}
         {tab === "settings" && <SettingsTab instance={instance} />}
       </TabPanel>

@@ -22,6 +22,8 @@ pub enum AppError {
     Tauri(#[from] tauri::Error),
     #[error("Der Windows-Anmeldespeicher ist nicht erreichbar – Details: {0}")]
     Keyring(#[from] keyring::Error),
+    #[error("Die Datei konnte nicht in den Papierkorb verschoben werden – Details: {0}")]
+    Trash(#[from] trash::Error),
     #[error("{kind} „{id}“ wurde nicht gefunden")]
     NotFound { kind: &'static str, id: String },
     #[error("{0}")]
