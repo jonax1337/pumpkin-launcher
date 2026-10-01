@@ -58,7 +58,7 @@ Pumpkin Launcher is in active, early development (v0.1.x). Core install/launch f
 |---|---|---|
 | **Windows** 10/11 (x64) | NSIS installer | Not code-signed yet: SmartScreen asks once |
 | **Linux** (x64) | AppImage, `.deb` | Needs WebKitGTK 4.1 (e.g. Ubuntu 22.04+, Debian 12+); Microsoft accounts need a Secret Service keyring (GNOME Keyring, KWallet) |
-| **macOS** (Apple Silicon and Intel) | Universal `.dmg` | Not notarized: open it once via right-click → Open, see [Releasing](docs/RELEASING.md#macos-gatekeeper). Minecraft up to 1.17 runs on Intel Java and needs Rosetta 2 on Apple Silicon (`softwareupdate --install-rosetta --agree-to-license`) |
+| **macOS** (Apple Silicon and Intel) | Universal `.dmg` | Not notarized: open it once via right-click → Open, see [Releasing](docs/RELEASING.md#macos-gatekeeper). Minecraft up to 1.18.2 runs on Intel Java and needs Rosetta 2 on Apple Silicon (`softwareupdate --install-rosetta --agree-to-license`) |
 
 ### Prerequisites
 

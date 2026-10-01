@@ -79,14 +79,26 @@ mod tests {
 
     #[test]
     fn io_errors_read_like_sentences() {
-        starts(Error::from_raw_os_error(112).into(), "Auf der Festplatte ist nicht genug Platz");
         starts(Error::from(ErrorKind::StorageFull).into(), "Auf der Festplatte ist nicht genug Platz");
-        starts(Error::from_raw_os_error(32).into(), "Eine Datei wird gerade von einem anderen Programm benutzt");
         starts(Error::from(ErrorKind::PermissionDenied).into(), "Zugriff auf eine Datei wurde verweigert");
         starts(Error::other("x").into(), "Beim Lesen oder Schreiben");
         assert!(AppError::from(Error::other("kaputt")).to_string().ends_with(" – Details: kaputt"));
         assert_eq!(AppError::Cancelled.to_string(), "Installation abgebrochen");
         assert_eq!(AppError::Invalid("Instanz läuft noch".into()).to_string(), "Instanz läuft noch");
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn windows_codes_read_like_sentences() {
+        starts(Error::from_raw_os_error(112).into(), "Auf der Festplatte ist nicht genug Platz");
+        starts(Error::from_raw_os_error(32).into(), "Eine Datei wird gerade von einem anderen Programm benutzt");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn unix_codes_read_by_kind() {
+        starts(Error::from_raw_os_error(libc::ENOSPC).into(), "Auf der Festplatte ist nicht genug Platz");
+        starts(Error::from_raw_os_error(libc::EPIPE).into(), "Beim Lesen oder Schreiben");
     }
 
     #[tokio::test]

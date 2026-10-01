@@ -43,8 +43,9 @@ struct RuntimeManifest {
     files: BTreeMap<String, RuntimeFile>,
 }
 
-/// Plattform-Schlüssel in `all.json`, der passendste zuerst. Für ARM fehlen alte Runtimes (Java 8 und 16);
-/// dann läuft die x64-Runtime in der Emulation (Rosetta 2 bzw. die x64-Emulation von Windows).
+/// Plattform-Schlüssel in `all.json`, der passendste zuerst. Für ARM fehlen alte Runtimes (Java 8, 16 und
+/// 17 „beta“, also Minecraft bis 1.18.2); dann läuft die x64-Runtime in der Emulation (Rosetta 2 bzw. die
+/// x64-Emulation von Windows).
 fn runtime_platforms(os: &str, arch: &str) -> &'static [&'static str] {
     match (os, arch) {
         ("windows", "x86_64") => &["windows-x64"],

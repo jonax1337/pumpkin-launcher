@@ -959,13 +959,14 @@ fn derive_required_by(mods: &mut [Mod], known: &HashMap<String, Version>) {
 fn untracked(dirs: &super::Dirs, instance: &Instance) -> AppResult<Vec<(ModKind, String, bool, PathBuf)>> {
     let mut found: Vec<(ModKind, String, bool, PathBuf)> = Vec::new();
     for kind in [ModKind::Mod, ModKind::ResourcePack, ModKind::Shader] {
-        let entries = match fs::read_dir(dirs.game_dir(&instance.id).join(kind.folder())) {
-            Ok(entries) => entries,
+        let mut entries = match fs::read_dir(dirs.game_dir(&instance.id).join(kind.folder())) {
+            Ok(entries) => entries.collect::<Result<Vec<_>, _>>()?,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
             Err(e) => return Err(e.into()),
         };
+        // read_dir liefert je Dateisystem eine andere Reihenfolge (NTFS sortiert, ext4/APFS nicht).
+        entries.sort_by_key(|e| e.file_name());
         for e in entries {
-            let e = e?;
             let Some(raw) = e.file_name().to_str().map(str::to_owned) else { continue };
             let (name, enabled) = match raw.strip_suffix(".disabled") {
                 Some(name) => (name.to_owned(), false),

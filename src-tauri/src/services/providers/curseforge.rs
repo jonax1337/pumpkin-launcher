@@ -783,8 +783,9 @@ pub(crate) async fn plan_pack(
 // ---------- Manuell geladene Dateien ----------
 
 /// Downloads-Ordner des Systems: auch verschoben (Windows) oder mit übersetztem Namen (XDG unter Linux).
+/// Ohne `user-dirs.dirs` (minimale Linux-Systeme) kennt `dirs` keinen, dann gilt `~/Downloads`.
 fn downloads_dir() -> Option<PathBuf> {
-    dirs::download_dir().filter(|dir| dir.is_dir())
+    dirs::download_dir().or_else(|| dirs::home_dir().map(|home| home.join("Downloads"))).filter(|dir| dir.is_dir())
 }
 
 /// Sucht im Downloads-Ordner nach der Datei, die der Nutzer auf CurseForge geladen hat (Größe und SHA-1 müssen

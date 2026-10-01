@@ -231,7 +231,8 @@ pub fn spawn(
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn()?;
+        .spawn()
+        .map_err(spawn_error)?;
     let pid = child.id().unwrap_or_default();
     let on_line: Arc<dyn Fn(LogStream, String) + Send + Sync> = Arc::new(on_line);
     let out = child.stdout.take().map(|s| tokio::spawn(pump(s, LogStream::Stdout, on_line.clone())));
@@ -262,6 +263,20 @@ pub fn spawn(
         on_exit(code);
     });
     Ok(Running { pid, kill })
+}
+
+/// Auf Apple Silicon startet eine x64-Runtime (Minecraft bis 1.18.2, siehe `java`) nur mit Rosetta 2,
+/// das frische Macs nicht mitbringen; sonst meldet macOS nur „Bad CPU type in executable“.
+fn spawn_error(err: std::io::Error) -> AppError {
+    #[cfg(target_os = "macos")]
+    if err.raw_os_error() == Some(libc::EBADARCH) {
+        return AppError::Invalid(
+            "Dieses Java ist für Intel-Macs gebaut und braucht Rosetta 2. Installiere es im Terminal mit \
+             `softwareupdate --install-rosetta --agree-to-license` und starte erneut."
+                .into(),
+        );
+    }
+    err.into()
 }
 
 #[cfg(test)]
@@ -404,5 +419,12 @@ mod tests {
         assert_eq!(session_secs(start, start + Duration::from_secs(5400)), Some(5400));
         assert_eq!(session_secs(start, start - Duration::from_secs(1)), None);
         assert_eq!(session_secs(start, start + MAX_SESSION + Duration::from_secs(1)), None);
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn intel_java_without_rosetta_names_the_fix() {
+        let text = spawn_error(std::io::Error::from_raw_os_error(libc::EBADARCH)).to_string();
+        assert!(text.contains("softwareupdate --install-rosetta"), "{text}");
     }
 }
