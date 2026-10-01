@@ -498,6 +498,7 @@ export const components = {
 
   // ---------- Quellen ----------
   "components.source.unreachable": "{source} ist gerade nicht erreichbar",
+  "components.source.partial": "Nicht erreichbar: {sources}. Die Liste ist unvollständig.",
 
   // ---------- Support ----------
   "components.support.copyDebugInfo": "Debug-Info kopieren",

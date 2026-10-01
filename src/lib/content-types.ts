@@ -38,6 +38,28 @@ export const SOURCES: Record<Source, SourceInfo> = {
   technic: { label: "Technic", types: ["modpack"], install: true, filters: false, versions: true },
   curseforge: { label: "CurseForge", types: ["modpack", "mod", "shader", "resourcepack"], install: true, filters: true, versions: true },
 };
+export const SOURCE_KEYS = Object.keys(SOURCES) as Source[];
+/** Alle Quellen, die den Katalogtyp führen, in einer Liste („Alle Quellen“ in Entdecken). */
+export const ALL_SOURCES = "all";
+export type SourceChoice = Source | typeof ALL_SOURCES;
+/** Was eine Auswahl kann: bei „Alle“ alles, was mindestens eine Quelle kann. */
+export function choiceInfo(choice: SourceChoice): Pick<SourceInfo, "types" | "filters" | "versions"> {
+  if (choice !== ALL_SOURCES) return SOURCES[choice];
+  const all = Object.values(SOURCES);
+  return {
+    types: [...new Set(all.flatMap((s) => s.types))],
+    filters: all.some((s) => s.filters),
+    versions: all.some((s) => s.versions),
+  };
+}
+/** Die Quellen, die Projekte dieses Typs führen. */
+export const sourcesFor = (type: CatalogType) => SOURCE_KEYS.filter((s) => SOURCES[s].types.includes(type));
+/** Ein Treffer samt der Quelle, aus der er kommt. */
+export interface CatalogHit extends ContentHit { source: Source }
+/** Ab welchem Versatz jede Quelle weitersucht; fehlt eine Quelle, hat sie nichts mehr. */
+export type SearchOffsets = Partial<Record<Source, number>>;
+/** Eine Seite der Suche über eine oder mehrere Quellen. `failed`: Quellen, die nicht antworteten. */
+export interface SearchPage { hits: CatalogHit[]; total: number; next: SearchOffsets | null; failed: Source[] }
 /** Eine Datei, die CurseForge nur über die Webseite ausliefert (Event `content-blocked`). */
 export interface BlockedFile { projectId: number; fileId: number; name: string; fileName: string; url: string }
 export interface ContentBlocked { operationId: string; instanceId: string; items: BlockedFile[] }

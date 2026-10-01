@@ -4,9 +4,9 @@ import { useI18n } from "@/i18n";
 import { Button, ButtonLink, Cell, Chip, Count, Empty, ErrorBox, Hint, Icon, List, ListRow, ProjectIcon, RowTitle, SectionHeader, SkelRow, type GlyphBox, type ListVariant } from "@/ui";
 import { useDebounced } from "@/hooks/useDebounced";
 import { WIDTH } from "@/lib/breakpoints";
-import { catalogApi } from "@/lib/catalogApi";
+import { catalogSearchQuery } from "@/lib/catalogSearch";
 import {
-  defaultSort, installedKey, SOURCES, type CatalogType, type ContentHit, type SearchIndex, type Source,
+  ALL_SOURCES, defaultSort, installedKey, SOURCES, type CatalogHit, type CatalogType, type SearchIndex, type Source, type SourceChoice,
 } from "@/lib/content-types";
 import { formatCount, formatDownloads } from "@/lib/format";
 import type { Instance, World } from "@/lib/types";
@@ -14,7 +14,8 @@ import { AddRowButton } from "./AddButtons";
 import { ContentAction } from "./ContentAction";
 import { fitFilter, fitsLabel } from "./fit";
 import { InstalledChipRow, useInstalledIn } from "./InstalledIn";
-import { categoryNames, sortHeading, typeLabel } from "./labels";
+import { categoryNames, sortHeading, sourceChoiceLabel, typeLabel } from "./labels";
+import { SourceTag } from "./SourceTag";
 
 /** Platzhalter, solange die erste Seite der Treffer lädt. */
 const SKELETON_ROWS = 6;
@@ -63,13 +64,14 @@ interface RowParts {
 }
 
 /** Die Suche mit Tippause; weitere Seiten lädt `fetchNextPage`. */
-function useCatalogSearch(source: Source, type: CatalogType, filter: SearchFilter) {
+function useCatalogSearch(source: SourceChoice, type: CatalogType, filter: SearchFilter) {
   const query = useDebounced(filter.query.trim());
   const index = filter.sort ?? defaultSort(query);
-  const results = useInfiniteQuery(catalogApi(source).searchQuery({ query, type, mc: filter.mc, loader: filter.loader, index }));
+  const results = useInfiniteQuery(catalogSearchQuery(source, { query, type, mc: filter.mc, loader: filter.loader, index }));
   const hits = results.data?.pages.flatMap((p) => p.hits) ?? [];
-  const total = results.data?.pages[0]?.total_hits ?? 0;
-  return { results, query, index, hits, total };
+  const total = results.data?.pages[0]?.total ?? 0;
+  const failed = [...new Set(results.data?.pages.flatMap((p) => p.failed))];
+  return { results, query, index, hits, total, failed };
 }
 
 type CatalogSearch = ReturnType<typeof useCatalogSearch>;
@@ -93,8 +95,8 @@ function Offline({ onRetry, layout }: { onRetry: () => void; layout: ResultsLayo
   );
 }
 
-function ResultRow({ hit, index, feature, layout, parts, onOpen }: {
-  hit: ContentHit; index: number; feature: boolean; layout: ResultsLayout; parts: RowParts; onOpen: (projectId: string, hit: ContentHit) => void;
+function ResultRow({ hit, index, feature, layout, showSource, parts, onOpen }: {
+  hit: CatalogHit; index: number; feature: boolean; layout: ResultsLayout; showSource: boolean; parts: RowParts; onOpen: (projectId: string, hit: CatalogHit) => void;
 }) {
   const { t } = useI18n();
   return (
@@ -107,6 +109,7 @@ function ResultRow({ hit, index, feature, layout, parts, onOpen }: {
         sub={hit.description}
         meta={
           <>
+            {showSource && <SourceTag source={hit.source} />}
             <span><Count value={formatDownloads(hit.downloads)} /> {t("components.stats.downloads")}</span>
             {categoryNames(hit.categories, layout.categories).map((c) => <Chip key={c} size="s" data-hide={WIDTH.sm}>{c}</Chip>)}
             {parts.meta}
@@ -120,11 +123,11 @@ function ResultRow({ hit, index, feature, layout, parts, onOpen }: {
 
 /** Überschrift, Zustände (Fehler, lädt, leer) und Trefferzeilen samt „Mehr laden“. */
 function ResultsList({ search, source, type, layout, featured, emptyText, onReset, onOpen, rowParts }: {
-  search: CatalogSearch; source: Source; type: CatalogType; layout: ResultsLayout; featured: boolean;
-  emptyText: string; onReset?: () => void; onOpen: (projectId: string, hit: ContentHit) => void; rowParts: (hit: ContentHit) => RowParts;
+  search: CatalogSearch; source: SourceChoice; type: CatalogType; layout: ResultsLayout; featured: boolean;
+  emptyText: string; onReset?: () => void; onOpen: (projectId: string, hit: CatalogHit) => void; rowParts: (hit: CatalogHit) => RowParts;
 }) {
   const { t } = useI18n();
-  const { results, hits, total, query, index } = search;
+  const { results, hits, total, query, index, failed } = search;
   return (
     <div>
       {/* Ohne Suchbegriff die Sortierung als Abschnittsüberschrift (wie auf Start), mit Suchbegriff die Trefferzahl; gleiche Höhe */}
@@ -142,7 +145,7 @@ function ResultsList({ search, source, type, layout, featured, emptyText, onRese
         navigator.onLine === false ? (
           <Offline layout={layout} onRetry={() => void results.refetch()} />
         ) : (
-          <ErrorBox title={t("components.source.unreachable", { source: SOURCES[source].label })} error={results.error} onRetry={() => void results.refetch()} />
+          <ErrorBox title={t("components.source.unreachable", { source: sourceChoiceLabel(source) })} error={results.error} onRetry={() => void results.refetch()} />
         )
       ) : results.isPending ? (
         <List variant={layout.list} aria-busy aria-label={t("components.common.loadingAria")}>
@@ -158,9 +161,19 @@ function ResultsList({ search, source, type, layout, featured, emptyText, onRese
         </Empty>
       ) : (
         <>
+          {failed.length > 0 && <Hint tone="warn" className="mb-2">{t("components.source.partial", { sources: failed.map((s) => SOURCES[s].label).join(", ") })}</Hint>}
           <List variant={layout.list} aria-label={typeLabel(type)}>
             {hits.map((hit, k) => (
-              <ResultRow key={hit.project_id} hit={hit} index={k} feature={featured && k === 0} layout={layout} parts={rowParts(hit)} onOpen={onOpen} />
+              <ResultRow
+                key={`${hit.source}-${hit.project_id}`}
+                hit={hit}
+                index={k}
+                feature={featured && k === 0}
+                layout={layout}
+                showSource={source === ALL_SOURCES}
+                parts={rowParts(hit)}
+                onOpen={onOpen}
+              />
             ))}
           </List>
           <div className="morebar">
@@ -184,7 +197,7 @@ function ResultsList({ search, source, type, layout, featured, emptyText, onRese
  * (CurseForge: Nachschlagen per Link).
  */
 export function ContentResults({ source, type, filter, onReset, onOpen }: {
-  source: Source; type: CatalogType; filter: SearchFilter; onReset: () => void; onOpen: (projectId: string, hit: ContentHit) => void;
+  source: SourceChoice; type: CatalogType; filter: SearchFilter; onReset: () => void; onOpen: (projectId: string, hit: CatalogHit) => void;
 }) {
   const { t } = useI18n();
   const search = useCatalogSearch(source, type, filter);
@@ -203,9 +216,9 @@ export function ContentResults({ source, type, filter, onReset, onOpen }: {
       onReset={hasFilter ? onReset : undefined}
       onOpen={onOpen}
       rowParts={(hit) => ({
-        meta: <InstalledChipRow instances={installedIn.get(installedKey(source, hit.project_id))} />,
-        action: SOURCES[source].install ? (
-          <ContentAction type={type} project={{ id: hit.project_id, title: hit.title }} source={source} />
+        meta: <InstalledChipRow instances={installedIn.get(installedKey(hit.source, hit.project_id))} />,
+        action: SOURCES[hit.source].install ? (
+          <ContentAction type={type} project={{ id: hit.project_id, title: hit.title }} source={hit.source} />
         ) : (
           <Icon name="chev" size="s" tone="muted" />
         ),
@@ -220,7 +233,7 @@ export function ContentResults({ source, type, filter, onReset, onOpen }: {
  */
 export function CompactContentResults({ source, type, instance, world, query, fit, onReset, onOpen }: {
   source: Source; type: CatalogType; instance: Instance; world?: World; query: string; fit: boolean;
-  onReset: () => void; onOpen: (projectId: string, hit: ContentHit) => void;
+  onReset: () => void; onOpen: (projectId: string, hit: CatalogHit) => void;
 }) {
   const { t } = useI18n();
   const search = useCatalogSearch(source, type, { query, ...(fit ? fitFilter(instance, type) : { mc: null, loader: null }), sort: null });

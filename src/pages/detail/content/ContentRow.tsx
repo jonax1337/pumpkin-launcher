@@ -3,6 +3,8 @@ import { useI18n } from "@/i18n";
 import { Button, Cell, Checkbox, Chip, GhostRow, ListRow, ProjectIcon, RowTitle, Tip } from "@/ui";
 import { WIDTH } from "@/lib/breakpoints";
 import { TYPE_ONE_KEYS } from "@/lib/catalog";
+import { SourceTag } from "@/components/catalog/SourceTag";
+import type { Mod } from "@/lib/types";
 import { useContentModel } from "./ContentModel";
 import { EnabledCell, MoreMenu, UpdateCell } from "./RowCells";
 import type { Ghost, Row, Warn } from "./types";
@@ -57,7 +59,22 @@ function useSubline(row: Row) {
     : `${t(TYPE_ONE_KEYS[row.mod.kind])} · ${row.mod.version}`;
 }
 
-/** Inhalt als Listenzeile: Auswahl, Symbol, Name, Hinweise, Update, An/Aus, Menü. */
+/** Woher der Inhalt kommt: Anbieter, Link oder eigene Datei. */
+function ModSourceTag({ mod }: { mod: Mod }) {
+  const { t } = useI18n();
+  const { source } = mod;
+  switch (source.type) {
+    case "modrinth":
+    case "curseforge":
+      return <SourceTag source={source.type} />;
+    case "url":
+      return <Chip size="s">{t("detail.content.sourceUrl")}</Chip>;
+    case "local":
+      return <Chip size="s">{t("detail.content.sourceLocal")}</Chip>;
+  }
+}
+
+/** Inhalt als Listenzeile: Auswahl, Symbol, Name, Herkunft, Hinweise, Update, An/Aus, Menü. */
 export function ContentRow({ row }: { row: Row }) {
   const { t } = useI18n();
   const model = useContentModel();
@@ -76,7 +93,7 @@ export function ContentRow({ row }: { row: Row }) {
       <ProjectIcon url={model.iconOf(mod)} seed={mod.id} />
       <Tip label={<RowTip row={row} warns={warns} />}>
         <div>
-          <RowTitle title={model.titleOf(mod)} sub={subline} trunc={false}><ReaderDescription row={row} text={description} /></RowTitle>
+          <RowTitle title={model.titleOf(mod)} aside={<ModSourceTag mod={mod} />} sub={subline} trunc={false}><ReaderDescription row={row} text={description} /></RowTitle>
         </div>
       </Tip>
       {model.hasWarnings && (

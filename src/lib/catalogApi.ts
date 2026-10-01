@@ -1,6 +1,6 @@
-import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import { queryOptions } from "@tanstack/react-query";
 import { catalogKeys } from "@/hooks/queryKeys";
-import { CATALOG_STALE_MS, SEARCH_STALE_MS } from "@/hooks/staleTimes";
+import { CATALOG_STALE_MS } from "@/hooks/staleTimes";
 import { api } from "./api";
 import type { ModInstall, PackInstall, SearchOptions, VersionFilter } from "./backend";
 import type { ContentProject, ContentSearch, ContentVersion, Source } from "./content-types";
@@ -58,16 +58,6 @@ export function catalogApi(source: Source) {
         queryKey: catalogKeys.versions(source, projectId, filter.mc, filter.loader),
         queryFn: () => backend.versions(projectId, filter),
         staleTime: CATALOG_STALE_MS,
-        retry: false,
-      }),
-    /** Trefferseiten der Suche; weitere Seiten laden ab dem Versatz der letzten. */
-    searchQuery: (options: Omit<SearchOptions, "offset">) =>
-      infiniteQueryOptions({
-        queryKey: catalogKeys.search(source, options.type, options.query, options.mc, options.loader, options.index),
-        queryFn: ({ pageParam }) => backend.search({ ...options, offset: pageParam }),
-        initialPageParam: 0,
-        getNextPageParam: (last) => (last.offset + last.hits.length < last.total_hits ? last.offset + last.limit : undefined),
-        staleTime: SEARCH_STALE_MS,
         retry: false,
       }),
   };

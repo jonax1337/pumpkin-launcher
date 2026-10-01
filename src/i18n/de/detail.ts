@@ -67,6 +67,8 @@ export const detail = {
   "detail.content.matchOnModrinth": "Mit Modrinth abgleichen",
   "detail.content.viewOnModrinth": "Auf Modrinth ansehen",
   "detail.content.viewOnCurseForge": "Auf CurseForge ansehen",
+  "detail.content.sourceLocal": "Lokal",
+  "detail.content.sourceUrl": "Link",
 
   // Eigene Dateien (LocalFiles.tsx)
   "detail.files.addedOneKnown": "{name} hinzugefügt, von Modrinth erkannt",

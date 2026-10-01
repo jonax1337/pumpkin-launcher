@@ -12,12 +12,18 @@ for (const start of [{ type: 'blank' }, { type: 'import' }, { type: 'file', path
 }
 assert.equal(readNewInstanceStart(params('/instances')), null);
 
-// Entdecken: Modrinth bleibt aus der Adresse, die Quelle eines Anbieters nicht; die alte Adresse /mods führt zu „mod“.
+// Entdecken: „alle Quellen“ bleibt aus der Adresse, jede einzelne Quelle nicht; ein Projekt nennt seine Quelle als „anbieter“.
 assert.equal(discoverUrl(), '/discover');
-assert.equal(discoverUrl({ tab: 'mod' }), '/discover?tab=mod');
-assert.equal(discoverUrl({ tab: 'modpack', source: 'modrinth', project: 'abc' }), '/discover?tab=modpack&projekt=abc');
-const ftbPack = { tab: 'modpack', source: 'ftb', project: 'abc' };
+assert.equal(discoverUrl({ tab: 'mod', source: 'all' }), '/discover?tab=mod');
+assert.equal(discoverUrl({ tab: 'mod', source: 'modrinth' }), '/discover?tab=mod&quelle=modrinth');
+assert.equal(
+  discoverUrl({ tab: 'modpack', project: 'abc', projectSource: 'curseforge' }),
+  '/discover?tab=modpack&projekt=abc&anbieter=curseforge',
+);
+const ftbPack = { tab: 'modpack', source: 'ftb', project: 'abc', projectSource: 'ftb' };
 assert.deepEqual(readDiscoverParams(params(discoverUrl(ftbPack))), ftbPack);
+// Ohne Projekt gibt es keinen Anbieter in der Adresse.
+assert.equal(discoverUrl({ source: 'ftb', projectSource: 'ftb' }), '/discover?quelle=ftb');
 
 // Instanz: unbekannte Tabs fallen auf die Inhalte zurück.
 assert.equal(instanceUrl('x1'), '/instances/x1');

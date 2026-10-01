@@ -498,6 +498,7 @@ export const components: typeof deComponents = {
 
   // ---------- Quellen ----------
   "components.source.unreachable": "{source} is currently unavailable",
+  "components.source.partial": "Unavailable: {sources}. The list is incomplete.",
 
   // ---------- Support ----------
   "components.support.copyDebugInfo": "Copy debug info",

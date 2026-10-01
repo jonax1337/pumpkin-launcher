@@ -5,15 +5,17 @@ import { useI18n } from "@/i18n";
 import { PageHeader, SearchField, Select, Spacer, TabPanel, Tabs, Toolbar } from "@/ui";
 import { ContentDetail } from "@/components/catalog/ContentDetail";
 import { ContentResults } from "@/components/catalog/ContentResults";
-import { searchPlaceholder, typeLabel } from "@/components/catalog/labels";
+import { searchPlaceholder, sourceChoiceLabel, typeLabel } from "@/components/catalog/labels";
 import { useVersions } from "@/hooks/useInstances";
-import { defaultSort, SOURCES, type CatalogType, type ContentHit, type SearchIndex, type Source } from "@/lib/content-types";
+import {
+  ALL_SOURCES, choiceInfo, defaultSort, SOURCE_KEYS, type CatalogHit, type CatalogType, type SearchIndex, type SourceChoice,
+} from "@/lib/content-types";
 import { WIDTH } from "@/lib/breakpoints";
 import { discoverParams, readDiscoverParams } from "@/lib/routes";
 import { ALL_LOADERS, LOADER_LABELS } from "@/lib/types";
 
 const TABS: CatalogType[] = ["modpack", "mod", "shader", "resourcepack", "datapack"];
-const SOURCE_KEYS = Object.keys(SOURCES) as Source[];
+const SOURCE_CHOICES: SourceChoice[] = [ALL_SOURCES, ...SOURCE_KEYS];
 
 const ALL = "all";
 
@@ -32,14 +34,15 @@ export function DiscoverPage() {
   const { t } = useI18n();
   const [params, setParams] = useSearchParams();
   const requested = readDiscoverParams(params);
-  // Die Quelle wählt Modrinth (Standard) oder einen Anbieter ohne Schlüssel.
-  const source = SOURCE_KEYS.find((s) => s === requested.source) ?? "modrinth";
-  const info = SOURCES[source];
+  // Die Liste zeigt eine einzelne Quelle oder, ohne Angabe, alle.
+  const source: SourceChoice = SOURCE_KEYS.find((s) => s === requested.source) ?? ALL_SOURCES;
+  const info = choiceInfo(source);
   const tabs = TABS.filter((tab) => info.types.includes(tab));
   const type = tabs.find((tab) => tab === requested.tab) ?? tabs[0];
-  // Ein Projekt in der Adresse öffnet direkt die Details (z. B. aus dem Dialog „Neue Instanz“).
+  // Ein Projekt in der Adresse öffnet direkt die Details (z. B. aus dem Dialog „Neue Instanz“); ohne Anbieter ist es von Modrinth.
   const projectId = requested.project;
-  const [hit, setHit] = useState<ContentHit | null>(null);
+  const projectSource = SOURCE_KEYS.find((s) => s === requested.projectSource) ?? (source === ALL_SOURCES ? "modrinth" : source);
+  const [hit, setHit] = useState<CatalogHit | null>(null);
   const [filters, setFilters] = useState(NO_FILTERS);
   const versions = useVersions();
   const releases = versions.data?.filter((v) => v.type === "release").slice(0, 12) ?? [];
@@ -56,10 +59,10 @@ export function DiscoverPage() {
     if (el) el.scrollTop = projectId ? 0 : listScroll.current;
   }, [projectId, view]);
 
-  const open = (id: string, h: ContentHit) => {
+  const open = (id: string, h: CatalogHit) => {
     listScroll.current = view.current?.scrollTop ?? 0;
     setHit(h);
-    setParams(discoverParams({ tab: type, source, project: id }));
+    setParams(discoverParams({ tab: type, source, project: id, projectSource: h.source }));
   };
 
   return (
@@ -67,11 +70,11 @@ export function DiscoverPage() {
       {projectId && (
         <div className="page disc-proj">
           <ContentDetail
-            key={`${source}-${projectId}`}
-            source={source}
+            key={`${projectSource}-${projectId}`}
+            source={projectSource}
             projectId={projectId}
             type={type}
-            hit={hit?.project_id === projectId ? hit : null}
+            hit={hit?.project_id === projectId && hit.source === projectSource ? hit : null}
             backLabel={typeLabel(type)}
             onBack={() => setParams(discoverParams({ tab: type, source }))}
           />
@@ -102,9 +105,9 @@ export function DiscoverPage() {
             value={source}
             onChange={(next) => {
               reset();
-              setParams(discoverParams({ source: next as Source }), { replace: true });
+              setParams(discoverParams({ source: next as SourceChoice }), { replace: true });
             }}
-            options={SOURCE_KEYS.map((s) => ({ value: s, label: SOURCES[s].label }))}
+            options={SOURCE_CHOICES.map((s) => ({ value: s, label: sourceChoiceLabel(s) }))}
           />
           {info.versions && (
             <Select
@@ -145,9 +148,9 @@ export function DiscoverPage() {
             type={type}
             filter={{
               query: filters.query,
-              mc: info.versions && filters.version !== ALL ? filters.version : null,
+              mc: filters.version === ALL ? null : filters.version,
               loader: withLoader && filters.loader !== ALL ? filters.loader : null,
-              sort: info.filters ? filters.sort : null,
+              sort: filters.sort,
             }}
             onReset={reset}
             onOpen={open}

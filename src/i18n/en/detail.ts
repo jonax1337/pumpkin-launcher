@@ -67,6 +67,8 @@ export const detail: typeof deDetail = {
   "detail.content.matchOnModrinth": "Match on Modrinth",
   "detail.content.viewOnModrinth": "View on Modrinth",
   "detail.content.viewOnCurseForge": "View on CurseForge",
+  "detail.content.sourceLocal": "Local",
+  "detail.content.sourceUrl": "Link",
 
   // Eigene Dateien (LocalFiles.tsx)
   "detail.files.addedOneKnown": "Added {name}, recognized by Modrinth",

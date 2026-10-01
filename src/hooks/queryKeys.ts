@@ -1,6 +1,6 @@
 // Alle Query-Schlüssel an einer Stelle (eigene Datei, damit sich die Hook-Module nicht gegenseitig importieren müssen).
 // Wer eine Abfrage auffrischen will, nennt den Schlüssel hier statt eine Zeichenkette zu tippen.
-import type { CatalogType, SearchIndex, Source } from "@/lib/content-types";
+import type { CatalogType, SearchIndex, Source, SourceChoice } from "@/lib/content-types";
 import type { ModLoader } from "@/lib/types";
 
 export const instanceKeys = {
@@ -50,7 +50,7 @@ export const appKeys = {
 
 /** Modrinth hat eigene Schlüssel, die übrigen Anbieter teilen sich die `catalog-…`-Schlüssel mit der Quelle als Teil. */
 export const catalogKeys = {
-  search: (source: Source, type: CatalogType, query: string, mc: string | null, loader: string | null, index: SearchIndex) =>
+  search: (source: SourceChoice, type: CatalogType, query: string, mc: string | null, loader: string | null, index: SearchIndex) =>
     source === "modrinth"
       ? (["modrinth-search", type, query, mc, loader, index] as const)
       : (["catalog-search", source, type, query, mc, loader, index] as const),

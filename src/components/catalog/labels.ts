@@ -1,6 +1,6 @@
 import { t, type TKey } from "@/i18n";
 import { TYPE_LABEL_KEYS } from "@/lib/catalog";
-import type { CatalogType, ContentProject, ContentVersion, SearchIndex } from "@/lib/content-types";
+import { ALL_SOURCES, SOURCES, type CatalogType, type ContentProject, type ContentVersion, type SearchIndex, type SourceChoice } from "@/lib/content-types";
 import { LOADER_LABELS, type ModLoader } from "@/lib/types";
 
 // Reine Funktionen auf Modul-`t`: Der Text entsteht bei jedem Aufruf neu, die aufrufende Komponente rendert bei
@@ -63,6 +63,8 @@ export const typeLabel = (type: CatalogType) => t(TYPE_LABEL_KEYS[type]);
 export const searchPlaceholder = (type: CatalogType) => t(SEARCH_PLACEHOLDER_KEYS[type]);
 
 export const sortHeading = (index: SearchIndex) => t(SORT_HEADING_KEYS[index]);
+
+export const sourceChoiceLabel = (choice: SourceChoice) => (choice === ALL_SOURCES ? t("pages.discover.allSources") : SOURCES[choice].label);
 
 /** „ · Vorabversion“ für Beta und Alpha, sonst nichts; hängt an der Zeile einer Version. */
 export const versionTypeSuffix = (version: ContentVersion) => {

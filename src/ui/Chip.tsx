@@ -6,26 +6,31 @@ import type { IconName, Tone } from "./types";
 
 type ChipBase = {
   tone?: Tone;
+  /** Eigene Farbe (CSS-Farbe, z. B. einer Marke) statt der Statusfarbe: färbt wie `acc`. */
+  color?: string;
   /** Pixelquadrat vor dem Text (Status). */
   dot?: boolean;
+  /** Pixel-Icon vor dem Text (Icon-Slot s). */
+  icon?: IconName;
+  size?: "m" | "s";
 };
-type ChipSize = { size?: "m"; icon?: IconName } | { size: "s"; icon?: never };
 
 /**
- * Status-Etikett: 28 px (m, optional Icon s) oder 22 px (s, nur Text + dot). 1-Einheit-Rahmen, Kerbe.
+ * Status-Etikett: 28 px (m) oder 22 px (s). 1-Einheit-Rahmen, Kerbe. Optional Icon (Slot s) oder `dot` vor dem Text.
  * Zahlen darin als <Count> (Pixelschrift, feste Stellenbreite).
  */
-export function Chip({ tone, dot, size = "m", icon, className, children, ...props }: ChipBase & ChipSize & ComponentProps<"span">) {
+export function Chip({ tone, color, dot, size = "m", icon, className, style, children, ...props }: ChipBase & ComponentProps<"span">) {
   return (
     <span
       className={cn("vx-chip", className)}
       data-size={size}
-      data-tone={tone && tone !== "neutral" ? tone : undefined}
+      data-tone={color ? "acc" : tone && tone !== "neutral" ? tone : undefined}
       data-lead={flag(icon)}
+      style={color ? { ...style, ...cssVars({ "--acc": color }) } : style}
       {...props}
     >
       {dot && <i className="vx-dot" aria-hidden />}
-      {icon && size === "m" && <Icon name={icon} size="s" />}
+      {icon && <Icon name={icon} size="s" />}
       {children}
     </span>
   );

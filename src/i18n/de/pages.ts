@@ -45,6 +45,7 @@ export const pages = {
   "pages.discover.sortDownloads": "Downloads",
   "pages.discover.sortFollows": "Follower",
   "pages.discover.sortNewest": "Neueste",
+  "pages.discover.allSources": "Alle Quellen",
   "pages.discover.categoryLabel": "Kategorie",
   "pages.discover.searchFilterLabel": "Suche und Filter",
 

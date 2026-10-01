@@ -1,6 +1,6 @@
 // Adressen und Query-Parameter der Seiten an einer Stelle: Absender (Menüs, Toasts, Tastenkürzel, Weiterleitungen)
 // und Empfänger (Bibliothek, Entdecken, Instanz) können so nicht auseinanderlaufen.
-import type { CatalogType, Source } from "./content-types";
+import { ALL_SOURCES, type CatalogType, type Source, type SourceChoice } from "./content-types.ts";
 
 // ---------- Bibliothek: Dialog „Neue Instanz“ ----------
 
@@ -31,14 +31,18 @@ export function readNewInstanceStart(params: URLSearchParams): NewInstanceStart 
 
 // ---------- Entdecken ----------
 
-/** Was „Entdecken“ zeigt; Modrinth ist die Standardquelle und steht nicht in der Adresse. */
-export type DiscoverTarget = { tab?: CatalogType; source?: Source; project?: string };
+/**
+ * Was „Entdecken“ zeigt. `source` ist die Quelle der Liste; „alle“ ist der Standard und steht nicht in der Adresse.
+ * Ein geöffnetes Projekt nennt seine eigene Quelle in `projectSource`; fehlt sie, ist es ein Modrinth-Projekt.
+ */
+export type DiscoverTarget = { tab?: CatalogType; source?: SourceChoice; project?: string; projectSource?: Source };
 
-export function discoverParams({ tab, source, project }: DiscoverTarget = {}): Record<string, string> {
+export function discoverParams({ tab, source, project, projectSource }: DiscoverTarget = {}): Record<string, string> {
   const params: Record<string, string> = {};
   if (tab) params.tab = tab;
-  if (source && source !== "modrinth") params.quelle = source;
+  if (source && source !== ALL_SOURCES) params.quelle = source;
   if (project) params.projekt = project;
+  if (project && projectSource) params.anbieter = projectSource;
   return params;
 }
 
@@ -52,6 +56,7 @@ export const readDiscoverParams = (params: URLSearchParams) => ({
   tab: params.get("tab"),
   source: params.get("quelle"),
   project: params.get("projekt"),
+  projectSource: params.get("anbieter"),
 });
 
 // ---------- Instanz ----------

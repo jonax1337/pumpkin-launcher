@@ -45,6 +45,7 @@ export const pages: typeof dePages = {
   "pages.discover.sortDownloads": "Downloads",
   "pages.discover.sortFollows": "Follows",
   "pages.discover.sortNewest": "Newest",
+  "pages.discover.allSources": "All sources",
   "pages.discover.categoryLabel": "Category",
   "pages.discover.searchFilterLabel": "Search and filters",
 
