@@ -7,8 +7,8 @@ import { ShareLogDialog } from "@/components/support";
 import { ManualDownloads } from "@/components/ManualDownloads";
 import { useUpdateCheckOnStart } from "@/hooks/useAppUpdate";
 import { useCancelInstall, useGameEvents, useInstances } from "@/hooks/useInstances";
-import { cancelContent, useContentState } from "@/hooks/useContent";
-import { useWorldJob } from "@/hooks/useWorlds";
+import { cancelContent } from "@/hooks/useContent";
+import { useRunningTasks } from "@/hooks/useRunningTasks";
 import { api } from "@/lib/api";
 import { progressLabel, progressShare } from "@/lib/modrinth";
 import { platform } from "@/lib/platform";
@@ -184,23 +184,21 @@ const useOnline = () => useSyncExternalStore(subscribeOnline, () => navigator.on
 
 type LiveTask = { id: string; label: string; sub: string; p: number | null; cancel?: () => void };
 
-/** Laufende Aufgaben: Vorbereitungen der Instanzen, Katalog-Vorgänge und Weltsicherungen, mit „Abbrechen“, wo das Backend es kann. */
+/** Zeilen der laufenden Aufgaben, mit „Abbrechen“, wo das Backend es kann. */
 function useLiveTasks(): LiveTask[] {
-  const installs = useGame((s) => s.installs);
-  const content = useContentState();
-  const world = useWorldJob((s) => s.job);
+  const { installs, content, world } = useRunningTasks();
   const cancelInstall = useCancelInstall();
   const { data: instances } = useInstances();
   const name = (id: string) => instances?.find((i) => i.id === id)?.name ?? "Instanz";
   const loader = (id: string) => instances?.find((i) => i.id === id)?.loader ?? "vanilla";
-  const live = Object.values(installs).map((p): LiveTask => ({
+  const live = Object.values(installs ?? {}).map((p): LiveTask => ({
     id: `i-${p.instanceId}`,
     label: `${name(p.instanceId)} wird installiert`,
     sub: installStepLabel(p.step, loader(p.instanceId)),
     p: p.total > 0 ? p.done / p.total : null,
     cancel: () => cancelInstall.mutate(p.instanceId),
   }));
-  if (content.active)
+  if (content)
     live.push({
       id: `c-${content.active}`,
       label: content.label ?? "Inhalte laden",

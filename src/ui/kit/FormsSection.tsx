@@ -123,7 +123,7 @@ function FormDemo() {
         </FormRow>
         <FormRow label="Java" hint="Standard für alle Instanzen" group="radiogroup" aside="Automatisch passt fast immer.">
           <RadioGroup name="kit-java" value={java} onChange={setJava} options={[{ value: "auto", label: <>Automatisch <span className="faint">(Pumpkin Launcher lädt die passende Version)</span></> }, { value: "own", label: "Eigene Java-Installation" }]} />
-          <TextField disabled={java === "auto"} aria-label="Pfad zu javaw.exe" placeholder="Pfad zu javaw.exe" />
+          <TextField disabled={java === "auto"} aria-label="Pfad zu Java" placeholder="Pfad zu Java" />
         </FormRow>
         <FormRow label="Bewegte Szenen" hint="Sterne, Wolken, Glut.">
           <Switch checked={motion} onChange={setMotion} label="Bewegte Szenen" stateText={["An", "Aus"]} />

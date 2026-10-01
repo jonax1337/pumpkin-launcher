@@ -215,8 +215,13 @@ export function useLaunch() {
       if (!active) throw new Error(offlineOk ? "Leg zuerst einen Spielernamen fest." : "Melde dich zuerst mit deinem Microsoft-Konto an.");
       useGame.getState().clearLog(instance.id);
       useGame.getState().clearCrash(instance.id);
-      const accountId = active.kind === "microsoft" ? active.id : null;
-      return api.launchInstance(instance.id, accountName(active), accountId, javaPath, await defaultMemory(qc), quickPlay);
+      return api.launchInstance(instance.id, {
+        username: accountName(active),
+        accountId: active.kind === "microsoft" ? active.id : null,
+        javaPath: javaPath || null,
+        defaultMemoryMb: await defaultMemory(qc),
+        quickPlay,
+      });
     },
     onSuccess: (_, { instance }) => {
       useGame.getState().setStarted(instance.id, Date.now());

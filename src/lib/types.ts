@@ -52,6 +52,19 @@ export type ModpackOrigin =
 /** Quick Play: direkt in eine Welt (`id` = Ordnername) oder auf einen Server (`host[:port]`). */
 export type QuickPlay = { type: "world"; id: string } | { type: "server"; address: string };
 
+/** Was der Start vom Launcher mitbekommt; die Startoptionen der Instanz liest das Backend aus ihr. */
+export interface LaunchOptions {
+  /** Offline-Spielername; mit `accountId` (Microsoft-Konto) ohne Bedeutung. */
+  username: string;
+  accountId: string | null;
+  /** Java-Einstellung des Launchers (null = mitgelieferte Runtime); der Pfad der Instanz geht vor. */
+  javaPath: string | null;
+  /** RAM-Standard für Instanzen ohne eigenen Wert. */
+  defaultMemoryMb: number;
+  /** Direkt in eine Welt oder auf einen Server. */
+  quickPlay: QuickPlay | null;
+}
+
 /** Spielfenster beim Start; `default` = wie Minecraft es selbst öffnet. */
 export type GameWindow = { type: "default" } | { type: "size"; width: number; height: number } | { type: "fullscreen" };
 

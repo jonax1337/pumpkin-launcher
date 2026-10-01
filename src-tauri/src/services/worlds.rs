@@ -12,11 +12,13 @@ use base64::Engine;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use super::{
-    content, download::RemoveOnDrop, free_name, modrinth::invalid, providers::zip_paths, servers, walk, Dirs, ZIP64_FROM,
+    blocking, content, download::RemoveOnDrop, free_name, modrinth::invalid, providers::zip_paths, servers, walk, Dirs,
+    ZIP64_FROM,
 };
 use crate::{
     error::{AppError, AppResult},
     models::{now_ms, QuickPlay},
+    state::AppState,
 };
 
 /// `icon.png` ist im Spiel 64 × 64; größere Dateien zeigt die Liste nicht.
@@ -25,6 +27,8 @@ const ICON_LIMIT: u64 = 256 * 1024;
 const SESSION_LOCK: &str = "session.lock";
 /// Endung einer gelöschten Welt, solange ihr Ordner unter `backups/` noch entfernt wird.
 const DELETING: &str = "deleting";
+/// Endung einer Sicherung, solange sie geschrieben wird.
+const PART: &str = "zip.part";
 /// Phase der `content-progress`-Events beim Sichern (Dateien).
 const BACKUP_PHASE: &str = "backup";
 
@@ -198,6 +202,43 @@ pub fn delete_backup(dirs: &Dirs, instance_id: &str, backup_id: &str) -> AppResu
     Ok(())
 }
 
+/// Räumt beim Start unter `backups/` aller Instanzen auf, was ein unterbrochener Vorgang liegen ließ: halbe Sicherungen
+/// und gelöschte Welten, deren Ordner nicht ganz wegging. Läuft schon ein anderer Vorgang, bleibt alles bis zum nächsten Start.
+pub async fn remove_leftovers(state: &AppState) -> AppResult<usize> {
+    let Ok(_guard) = state.operation(None) else { return Ok(0) };
+    let dirs: Vec<PathBuf> = state.instances.list().iter().map(|i| state.dirs.backups(&i.id)).collect();
+    blocking(move |_| Ok(dirs.iter().map(|dir| remove_leftovers_in(dir)).sum())).await
+}
+
+/// Was sich nicht entfernen lässt (unter Windows etwa eine noch geöffnete Datei) oder nicht lesbar ist, bleibt bis zum
+/// nächsten Start und hält die übrigen Instanzen nicht auf.
+fn remove_leftovers_in(dir: &Path) -> usize {
+    let entries = entries(dir).unwrap_or_else(|err| {
+        tracing::warn!(path = %dir.display(), %err, "Sicherungsordner nicht lesbar");
+        Vec::new()
+    });
+    let leftovers = entries.iter().filter(|entry| entry.file_name().to_str().is_some_and(is_leftover));
+    leftovers
+        .filter(|entry| match remove_entry(entry) {
+            Ok(()) => true,
+            Err(err) => {
+                tracing::warn!(path = %entry.path().display(), %err, "Rest eines unterbrochenen Vorgangs nicht entfernt");
+                false
+            }
+        })
+        .count()
+}
+
+fn remove_entry(entry: &fs::DirEntry) -> io::Result<()> {
+    let path = entry.path();
+    if entry.file_type()?.is_dir() { fs::remove_dir_all(path) } else { fs::remove_file(path) }
+}
+
+/// Namen, die nur `backup` (`<Welt>-<Unix-ms>.zip.part`) und `delete` (`<Welt>-<Unix-ms>.deleting`) vergeben.
+fn is_leftover(name: &str) -> bool {
+    [PART, DELETING].iter().any(|ext| name.strip_suffix(ext).and_then(|n| n.strip_suffix('.')).and_then(backup_stem).is_some())
+}
+
 /// Eine Welt aus ihrem Ordner. Ist `level.dat` unlesbar, heißt sie wie der Ordner und lässt sich trotzdem
 /// sichern und löschen.
 fn read_world(dir: &Path, id: &str) -> World {
@@ -272,9 +313,14 @@ fn read_backup(dir: &Path, id: &str) -> AppResult<WorldBackup> {
     Ok(WorldBackup { id: id.into(), world: world.into(), created_at, size_bytes })
 }
 
-/// `<Welt>-<Unix-ms>.zip` → (Welt, Zeitpunkt). Der Weltname darf selbst Bindestriche enthalten.
+/// `<Welt>-<Unix-ms>.zip` → (Welt, Zeitpunkt).
 fn backup_name(name: &str) -> Option<(&str, u64)> {
-    let (world, at) = name.strip_suffix(".zip")?.rsplit_once('-')?;
+    backup_stem(name.strip_suffix(".zip")?)
+}
+
+/// `<Welt>-<Unix-ms>` → (Welt, Zeitpunkt). Der Weltname darf selbst Bindestriche enthalten.
+fn backup_stem(stem: &str) -> Option<(&str, u64)> {
+    let (world, at) = stem.rsplit_once('-')?;
     (!world.is_empty()).then_some((world, at.parse().ok()?))
 }
 
@@ -292,7 +338,7 @@ fn extract(zip: &mut zip::ZipArchive<fs::File>, files: Vec<(PathBuf, usize)>, ta
 
 /// Schreibt das Archiv über `<path>.part`; bei einem Fehler bleibt nichts Halbes liegen.
 fn write_zip(path: &Path, files: &[(String, PathBuf)], progress: &dyn Fn(&str, u64, u64)) -> AppResult<()> {
-    let tmp = path.with_extension("zip.part");
+    let tmp = path.with_extension(PART);
     let mut guard = RemoveOnDrop(Some(tmp.clone()));
     let mut zip = zip::ZipWriter::new(fs::File::create(&tmp)?);
     let total = files.len() as u64;
@@ -314,7 +360,7 @@ fn write_zip(path: &Path, files: &[(String, PathBuf)], progress: &dyn Fn(&str, u
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::new_id;
+    use crate::models::{new_id, Instance, ModLoader, NewInstance};
     use fastnbt::Value;
     use std::{collections::HashMap, io::Write};
 
@@ -414,6 +460,32 @@ mod tests {
         let safety = delete(&dirs, "i", "Alt", &|_, _, _| {}).unwrap();
         restore(&dirs, "i", &safety.id).unwrap();
         assert_eq!(fs::read(dirs.saves("i").join("Alt/data/karte.dat")).unwrap(), zeros);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn only_names_of_interrupted_backups_and_deletes_are_leftovers() {
+        assert!(is_leftover("Meine-Welt-1700000000000.zip.part"));
+        assert!(is_leftover("Meine Welt-1700000000000.deleting"));
+        for name in ["Welt-1700000000000.zip", "Welt.zip.part", "Welt-gestern.deleting", "-1.deleting", "notiz.part", "Welt-1.deleting.txt"] {
+            assert!(!is_leftover(name), "{name}");
+        }
+    }
+
+    #[tokio::test]
+    async fn startup_removes_leftovers_but_keeps_backups() {
+        let root = std::env::temp_dir().join(new_id());
+        let state = AppState::load(&root).unwrap();
+        let new = NewInstance { name: "Welten".into(), minecraft_version: "1.21.4".into(), loader: ModLoader::Vanilla, loader_version: None };
+        let id = state.instances.insert(Instance::from_new(new)).unwrap().id;
+        let backups = state.dirs.backups(&id);
+        write_files(&backups, &[("Alt-1.zip", b"zip"), ("Alt-2.zip.part", b"halb"), ("Neu-3.deleting/level.dat", b"weg"), ("notiz.txt", b"x")]);
+
+        assert_eq!(remove_leftovers(&state).await.unwrap(), 2);
+
+        let mut left: Vec<_> = entries(&backups).unwrap().iter().map(|e| e.file_name().into_string().unwrap()).collect();
+        left.sort();
+        assert_eq!(left, ["Alt-1.zip", "notiz.txt"]);
         fs::remove_dir_all(root).unwrap();
     }
 

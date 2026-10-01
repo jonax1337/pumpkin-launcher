@@ -30,10 +30,17 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             tracing::info!(?data_dir, "lade Daten");
             app.manage(state::AppState::load(&data_dir)?);
-            // Alte Pack-Instanzen: Inhalte im Ordner nachtragen, die nicht in der Instanz stehen.
+            // Reste unterbrochener Weltvorgänge entfernen, dann bei alten Pack-Instanzen Inhalte im Ordner nachtragen,
+            // die nicht in der Instanz stehen.
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                match services::content::adopt_untracked(&handle.state::<state::AppState>()).await {
+                let state = handle.state::<state::AppState>();
+                match services::worlds::remove_leftovers(&state).await {
+                    Ok(0) => {}
+                    Ok(removed) => tracing::info!(removed, "Reste unterbrochener Weltvorgänge entfernt"),
+                    Err(err) => tracing::warn!(%err, "Aufräumen der Sicherungsordner fehlgeschlagen"),
+                }
+                match services::content::adopt_untracked(&state).await {
                     Ok(0) => {}
                     Ok(added) => {
                         tracing::info!(added, "Inhalte in Instanzen nachgetragen");

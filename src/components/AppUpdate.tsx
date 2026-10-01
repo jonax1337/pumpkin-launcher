@@ -27,7 +27,7 @@ export function UpdateRow() {
   );
 }
 
-/** Gefundene Version mit Versionshinweisen und dem Ablauf Laden → (Spiel und Downloads abwarten, erneut bestätigen) → Installieren. */
+/** Gefundene Version mit Versionshinweisen und dem Ablauf Laden → (Spiel und Aufgaben abwarten, erneut bestätigen) → Installieren. */
 function UpdateOffer({ update }: { update: Update }) {
   const { phase, p } = useUpdateRun();
   return (

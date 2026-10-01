@@ -1,5 +1,6 @@
 //! Kataloge ohne API-Key: FTB (öffentliche API, installierbar), Technic und CurseForge (nur lesend).
 //! Alle liefern dieselben Formen wie Modrinth (`Hit`, `Project`, `Version`), damit die Oberfläche sie gleich zeigt.
+use super::download;
 use super::modrinth::{self, invalid};
 use crate::error::{AppError, AppResult};
 use serde::de::DeserializeOwned;
@@ -41,8 +42,6 @@ pub(crate) const MIB: u64 = 1024 * 1024;
 /// Größtes Pack-Zip, das geladen wird, und Grenzen fürs Entpacken.
 pub(crate) const ZIP_LIMIT: u64 = 2 * 1024 * 1024 * 1024;
 const EXPANDED_LIMIT: u64 = 8 * 1024 * 1024 * 1024;
-/// Versuche je Download-Adresse.
-const ATTEMPTS: u32 = 3;
 const MAX_ENTRIES: usize = 20_000;
 
 /// Dateien eines Pack-Zips wie bei `zip_paths`, dazu Größen- und Kompressionsgrenzen gegen ZIP-Bomben
@@ -151,7 +150,7 @@ fn file_name(url: &reqwest::Url) -> String {
 
 fn ok_status(response: reqwest::Response) -> AppResult<reqwest::Response> {
     if cdn_wants_key(response.url(), response.status()) {
-        return Err(invalid(format!(
+        return Err(AppError::Refused(format!(
             "CurseForge gibt {} nur noch mit Schlüssel heraus. Bitte aktualisiere Pumpkin Launcher oder lade die Datei von Hand auf curseforge.com.",
             file_name(response.url())
         )));
@@ -160,34 +159,66 @@ fn ok_status(response: reqwest::Response) -> AppResult<reqwest::Response> {
 }
 
 /// GET mit handgeführten Weiterleitungen (höchstens drei), jedes Ziel gegen die Host-Liste geprüft.
-async fn fetch(client: &reqwest::Client, start: &str, limit: u64) -> AppResult<Vec<u8>> {
+async fn get(client: &reqwest::Client, start: &str) -> AppResult<reqwest::Response> {
     let mut url = reqwest::Url::parse(start).map_err(|e| invalid(e.to_string()))?;
     for _ in 0..4 {
         check_url(&url)?;
         let response = client.get(url.clone()).send().await?;
-        if response.status().is_redirection() {
-            let location = response
-                .headers()
-                .get(reqwest::header::LOCATION)
-                .and_then(|v| v.to_str().ok())
-                .ok_or_else(|| invalid("Weiterleitung ohne Ziel"))?;
-            url = url.join(location).map_err(|e| invalid(e.to_string()))?;
-            continue;
+        if !response.status().is_redirection() {
+            return ok_status(response);
         }
-        let mut response = ok_status(response)?;
-        if response.content_length().is_some_and(|n| n > limit) {
-            return Err(invalid("Download zu groß"));
-        }
-        let mut data = Vec::new();
-        while let Some(chunk) = response.chunk().await? {
-            if data.len() as u64 + chunk.len() as u64 > limit {
-                return Err(invalid("Download zu groß"));
-            }
-            data.extend_from_slice(&chunk);
-        }
-        return Ok(data);
+        let location = response
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| invalid("Weiterleitung ohne Ziel"))?;
+        url = url.join(location).map_err(|e| invalid(e.to_string()))?;
     }
     Err(invalid("Zu viele Weiterleitungen"))
+}
+
+/// Lädt höchstens `limit` Bytes in den Speicher.
+async fn fetch(client: &reqwest::Client, start: &str, limit: u64) -> AppResult<Vec<u8>> {
+    let mut response = get(client, start).await?;
+    if response.content_length().is_some_and(|n| n > limit) {
+        return Err(invalid("Download zu groß"));
+    }
+    let mut data = Vec::new();
+    while let Some(chunk) = response.chunk().await? {
+        if data.len() as u64 + chunk.len() as u64 > limit {
+            return Err(invalid("Download zu groß"));
+        }
+        data.extend_from_slice(&chunk);
+    }
+    Ok(data)
+}
+
+/// Versucht `attempt` je Adresse bis zu `download::ATTEMPTS`-mal, dann mit der nächsten Adresse: bei Hunderten Dateien fällt mal
+/// eine Verbindung aus. Lehnt der Server endgültig ab, kommt gleich die nächste Adresse dran.
+async fn from_any<'a, T, Fut>(urls: &'a [String], mut attempt: impl FnMut(&'a str) -> Fut) -> AppResult<T>
+where
+    Fut: std::future::Future<Output = AppResult<T>>,
+{
+    let mut last: Option<AppError> = None;
+    for url in urls {
+        for n in 0..download::ATTEMPTS {
+            if n > 0 {
+                tokio::time::sleep(download::retry_pause(n)).await;
+            }
+            match attempt(url).await {
+                Ok(value) => return Ok(value),
+                Err(err) => {
+                    tracing::warn!(%err, url, attempt = n, "Download fehlgeschlagen");
+                    let retry = err.is_retryable();
+                    last = Some(err);
+                    if !retry {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    Err(last.unwrap_or_else(|| invalid("Keine Download-Adresse")))
 }
 
 /// Datei eines Packs mit Ausweich-Adressen. Ohne mindestens einen Hash wird nichts akzeptiert.
@@ -224,65 +255,48 @@ impl RemoteFile {
         Ok(())
     }
 
+    /// Höchstens so viele Bytes werden geladen: die angegebene Größe, aber nie mehr als `max`.
+    fn limit(&self, max: u64) -> u64 {
+        if self.size == 0 { max } else { self.size.min(max) }
+    }
+
     /// Wie `download`, aber in eine Datei (für große Pack-Zips). Die Prüfsummen werden an der fertigen Datei
     /// gelesen; bei Abweichung verschwindet sie wieder. `progress(geladen, gesamt)` in Bytes.
     pub async fn download_to(&self, client: &reqwest::Client, dest: &std::path::Path, progress: &(dyn Fn(u64, u64) + Send + Sync)) -> AppResult<()> {
-        use tokio::io::AsyncWriteExt;
         if self.hashes.is_empty() {
             return Err(invalid("Datei ohne Prüfsumme"));
         }
-        let limit = if self.size == 0 { 2 * 1024 * 1024 * 1024 } else { self.size.min(2 * 1024 * 1024 * 1024) };
-        let mut last: Option<AppError> = None;
-        for (start, attempt_no) in self.urls.iter().flat_map(|u| (0..ATTEMPTS).map(move |n| (u, n))) {
-            if attempt_no > 0 {
-                tokio::time::sleep(std::time::Duration::from_millis(1500 * u64::from(attempt_no))).await;
+        from_any(&self.urls, |url| async move {
+            let saved = self.save(client, url, dest, progress).await.and_then(|()| self.verify_file(dest));
+            if saved.is_err() {
+                let _ = tokio::fs::remove_file(dest).await;
             }
-            let attempt: AppResult<()> = async {
-                let mut url = reqwest::Url::parse(start).map_err(|e| invalid(e.to_string()))?;
-                for _ in 0..4 {
-                    check_url(&url)?;
-                    let response = client.get(url.clone()).send().await?;
-                    if response.status().is_redirection() {
-                        let location = response
-                            .headers()
-                            .get(reqwest::header::LOCATION)
-                            .and_then(|v| v.to_str().ok())
-                            .ok_or_else(|| invalid("Weiterleitung ohne Ziel"))?;
-                        url = url.join(location).map_err(|e| invalid(e.to_string()))?;
-                        continue;
-                    }
-                    let mut response = ok_status(response)?;
-                    let total = response.content_length().unwrap_or(self.size);
-                    if total > limit {
-                        return Err(invalid("Download zu groß"));
-                    }
-                    let mut file = tokio::fs::File::create(dest).await?;
-                    let mut done = 0u64;
-                    while let Some(chunk) = response.chunk().await? {
-                        done += chunk.len() as u64;
-                        if done > limit {
-                            return Err(invalid("Download zu groß"));
-                        }
-                        file.write_all(&chunk).await?;
-                        progress(done, total);
-                    }
-                    file.flush().await?;
-                    return Ok(());
-                }
-                Err(invalid("Zu viele Weiterleitungen"))
-            }
-            .await;
-            let verified = attempt.and_then(|()| self.verify_file(dest));
-            match verified {
-                Ok(()) => return Ok(()),
-                Err(err) => {
-                    let _ = tokio::fs::remove_file(dest).await;
-                    tracing::warn!(%err, url = start, "Quelle fehlgeschlagen, nächste wird versucht");
-                    last = Some(err);
-                }
-            }
+            saved
+        })
+        .await
+    }
+
+    /// Schreibt die Antwort von `url` nach `dest`, höchstens `ZIP_LIMIT` Bytes.
+    async fn save(&self, client: &reqwest::Client, url: &str, dest: &std::path::Path, progress: &(dyn Fn(u64, u64) + Send + Sync)) -> AppResult<()> {
+        use tokio::io::AsyncWriteExt;
+        let limit = self.limit(ZIP_LIMIT);
+        let mut response = get(client, url).await?;
+        let total = response.content_length().unwrap_or(self.size);
+        if total > limit {
+            return Err(invalid("Download zu groß"));
         }
-        Err(last.unwrap_or_else(|| invalid("Keine Download-Adresse")))
+        let mut file = tokio::fs::File::create(dest).await?;
+        let mut done = 0u64;
+        while let Some(chunk) = response.chunk().await? {
+            done += chunk.len() as u64;
+            if done > limit {
+                return Err(invalid("Download zu groß"));
+            }
+            file.write_all(&chunk).await?;
+            progress(done, total);
+        }
+        file.flush().await?;
+        Ok(())
     }
 
     /// Größe und Prüfsummen einer Datei auf der Platte, in einem Durchlauf gelesen.
@@ -319,24 +333,13 @@ impl RemoteFile {
     }
 
     pub async fn download(&self, client: &reqwest::Client) -> AppResult<Vec<u8>> {
-        let limit = if self.size == 0 { modrinth::FILE_LIMIT } else { self.size.min(modrinth::FILE_LIMIT) };
-        let mut last: Option<AppError> = None;
-        for url in &self.urls {
-            // Bei Hunderten Dateien fällt mal eine Verbindung aus: dreimal versuchen, bevor die nächste Quelle drankommt.
-            for attempt in 0..ATTEMPTS {
-                if attempt > 0 {
-                    tokio::time::sleep(std::time::Duration::from_millis(800 * u64::from(attempt))).await;
-                }
-                match fetch(client, url, limit).await.and_then(|data| self.verify(&data).map(|()| data)) {
-                    Ok(data) => return Ok(data),
-                    Err(err) => {
-                        tracing::warn!(%err, url, attempt, "Download fehlgeschlagen");
-                        last = Some(err);
-                    }
-                }
-            }
-        }
-        Err(last.unwrap_or_else(|| invalid("Keine Download-Adresse")))
+        let limit = self.limit(modrinth::FILE_LIMIT);
+        from_any(&self.urls, |url| async move {
+            let data = fetch(client, url, limit).await?;
+            self.verify(&data)?;
+            Ok(data)
+        })
+        .await
     }
 }
 
@@ -385,6 +388,19 @@ mod tests {
         assert!(!cdn_wants_key(&url("https://mediafilez.forgecdn.net/files/1/2/a.jar"), reqwest::StatusCode::FORBIDDEN));
         assert!(!cdn_wants_key(&cdn, reqwest::StatusCode::NOT_FOUND));
         assert!(!cdn_wants_key(&url("https://files.feed-the-beast.com/blob/aa/x.jar"), reqwest::StatusCode::UNAUTHORIZED));
+    }
+
+    #[tokio::test]
+    async fn a_refusal_skips_to_the_next_address() {
+        let urls = ["https://a.example/x.jar".to_string(), "https://b.example/x.jar".to_string()];
+        let mut tried = Vec::new();
+        let result = from_any(&urls, |url| {
+            tried.push(url);
+            async move { if url.contains("a.example") { Err(AppError::Refused("nein".into())) } else { Ok(url) } }
+        })
+        .await;
+        assert_eq!(result.unwrap(), urls[1]);
+        assert_eq!(tried, [&urls[0], &urls[1]]);
     }
 
     #[test]

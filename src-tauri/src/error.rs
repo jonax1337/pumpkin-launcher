@@ -30,8 +30,23 @@ pub enum AppError {
     NotFound { kind: &'static str, id: String },
     #[error("{0}")]
     Invalid(String),
+    /// Der Server lehnt endgültig ab, die Meldung sagt, was zu tun ist; ein neuer Versuch ändert nichts.
+    #[error("{0}")]
+    Refused(String),
     #[error("Vorgang abgebrochen")]
     Cancelled,
+}
+
+impl AppError {
+    /// Ob ein neuer Versuch helfen kann. Nicht, wenn der Server die Anfrage selbst ablehnt (4xx außer 408 Zeitüberschreitung
+    /// und 429 zu viele Anfragen): dieselbe Anfrage bekäme dieselbe Antwort.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Self::Refused(_) => false,
+            Self::Http(err) => !err.status().is_some_and(|s| s.is_client_error() && !matches!(s.as_u16(), 408 | 429)),
+            _ => true,
+        }
+    }
 }
 
 fn io_text(err: &std::io::Error) -> String {
@@ -114,6 +129,18 @@ mod tests {
         starts(err.into(), "Keine Verbindung zum Internet");
         starts(http_error(404).into(), "Die Datei gibt es auf dem Server nicht");
         starts(http_error(503).into(), "Der Server hat gerade Probleme");
+    }
+
+    #[test]
+    fn only_refusals_of_the_request_are_final() {
+        for status in [401, 403, 404] {
+            assert!(!AppError::from(http_error(status)).is_retryable(), "{status}");
+        }
+        for status in [408, 429, 500, 503] {
+            assert!(AppError::from(http_error(status)).is_retryable(), "{status}");
+        }
+        assert!(!AppError::Refused("Schlüssel fehlt".into()).is_retryable());
+        assert!(AppError::Download("SHA-1 stimmt nicht".into()).is_retryable());
     }
 
     /// reqwest-Fehler mit Status, wie ihn `error_for_status` liefert.

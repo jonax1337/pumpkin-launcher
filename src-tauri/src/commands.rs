@@ -3,7 +3,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::error::{AppError, AppResult};
-use crate::models::{now_ms, GameWindow, Instance, ModLoader, NewInstance, QuickPlay};
+use crate::models::{now_ms, GameWindow, Instance, LaunchOptions, ModLoader, NewInstance};
 use crate::services::install::{self, InstallProgress, InstallStep, INSTALL_PROGRESS_EVENT};
 use crate::services::launch::{self, LaunchSpec, LogStream, EXIT_EVENT, LOG_EVENT};
 use crate::services::mojang::{VersionEntry, VersionManifest, MANIFEST_URL};
@@ -244,21 +244,11 @@ async fn install_instance(app: AppHandle, state: &AppState, instance_id: String)
     Ok(())
 }
 
-/// Startet eine installierte Instanz mit Offline-Account und liefert die Prozess-ID; mit `quickPlay`
-/// direkt in eine Welt oder auf einen Server. Ausgaben kommen als `instance-log`, das Ende als `instance-exit`.
-// Jedes Argument ist ein Feld des IPC-Aufrufs aus dem Frontend.
-#[allow(clippy::too_many_arguments)]
+/// Startet eine installierte Instanz und liefert die Prozess-ID; mit `quickPlay` direkt in eine Welt oder auf einen
+/// Server. Ausgaben kommen als `instance-log`, das Ende als `instance-exit`.
 #[tauri::command]
-pub async fn instance_launch(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    instance_id: String,
-    username: String,
-    java_path: Option<String>,
-    default_memory_mb: Option<u32>,
-    account_id: Option<String>,
-    quick_play: Option<QuickPlay>,
-) -> AppResult<u32> {
+pub async fn instance_launch(app: AppHandle, state: State<'_, AppState>, instance_id: String, options: LaunchOptions) -> AppResult<u32> {
+    let LaunchOptions { username, account_id, java_path, default_memory_mb, quick_play } = options;
     let _operation = state.operation(Some(&instance_id))?;
     let instance = state.instances.get(&instance_id)?;
     if let Some(target) = &quick_play {

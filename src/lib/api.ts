@@ -16,13 +16,13 @@ import {
   type InstallProgress,
   type InstallStep,
   type InstanceStatus,
+  type LaunchOptions,
   type LoaderVersion,
   type LocalFile,
   type LogKind,
   type LogPayload,
   type ModLoader,
   type NewInstance,
-  type QuickPlay,
   type Server,
   type Screenshot,
   type SkinProfile,
@@ -232,7 +232,7 @@ const mockGame = {
   async installCancel(instanceId: string) {
     db.cancelled.add(instanceId);
   },
-  async launch(instanceId: string, username: string, quickPlay: QuickPlay | null) {
+  async launch(instanceId: string, { username, quickPlay }: LaunchOptions) {
     await delay(300);
     if (!db.installed.has(instanceId)) throw new Error(`Version ${findInstance(instanceId).minecraftVersion} ist nicht installiert`);
     if (db.running.has(instanceId)) throw new Error("Ungültige Eingabe: Instanz läuft bereits");
@@ -439,14 +439,9 @@ export const api = {
     tauri ? call("instance_dir", { instanceId }) : Promise.reject(new Error("Ordner lassen sich nur in der Pumpkin Launcher-App öffnen.")),
   installInstance: (instanceId: string): Promise<void> =>
     tauri ? call("instance_install", { instanceId }) : mockGame.install(instanceId),
-  /**
-   * Startet das Spiel; liefert die Prozess-ID. Leerer `javaPath` = mitgelieferte Runtime.
-   * `accountId` nur bei Microsoft-Konten, sonst null (Offline-Name in `username`). `quickPlay`: direkt in eine Welt oder auf einen Server.
-   */
-  launchInstance: (instanceId: string, username: string, accountId: string | null, javaPath: string, defaultMemoryMb: number, quickPlay: QuickPlay | null): Promise<number> =>
-    tauri
-      ? call("instance_launch", { instanceId, username, accountId, javaPath: javaPath || null, defaultMemoryMb, quickPlay })
-      : mockGame.launch(instanceId, username, quickPlay),
+  /** Startet das Spiel; liefert die Prozess-ID. */
+  launchInstance: (instanceId: string, options: LaunchOptions): Promise<number> =>
+    tauri ? call("instance_launch", { instanceId, options }) : mockGame.launch(instanceId, options),
   killInstance: (instanceId: string): Promise<void> =>
     tauri ? call("instance_kill", { instanceId }) : mockGame.kill(instanceId),
 
