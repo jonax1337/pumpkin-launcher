@@ -6,8 +6,9 @@ import {
   SearchField, Segmented, Spacer, Switch, Tip, Toolbar, type MenuEntry,
 } from "@/ui";
 import { IRIS_PROJECT_ID } from "@/components/ContentBrowser";
-import { useContentInstall, useContentState, useProjects, withTarget } from "@/hooks/useContent";
-import { ANNOUNCE_DEBOUNCE_MS } from "@/hooks/useDebounced";
+import { useAnnouncement } from "@/hooks/useAnnouncement";
+import { useBackgroundTask } from "@/hooks/useBackgroundTask";
+import { useContentState, useProjects } from "@/hooks/useContent";
 import { instanceKeys } from "@/hooks/queryKeys";
 import { useUpdateMods } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
@@ -29,15 +30,33 @@ type Row = { type: "row"; mod: Mod; owners: string[] };
 type Ghost = { type: "ghost"; mod: Mod; title: string; at: number; group: string; main: boolean; by?: string };
 type Entry = Row | Ghost;
 
+/** Frames, die Fokus-Versuche auf ein noch unsichtbares Ziel warten (Platzhalter, Menüs). */
+const FOCUS_RETRY_FRAMES = 60;
+
+/** Der Tabwechsel zu „Updates“ läuft als Navigation und kann ein paar Frames später sichtbar werden. */
+const UPDATE_FOCUS_RETRY_FRAMES = 30;
+
+/** Ruft `attempt` je Frame auf, bis es gelingt (höchstens `tries` Mal); die Rückgabe bricht die weiteren Versuche ab. */
+function retryPerFrame(attempt: () => boolean, tries: number) {
+  let frame = 0, failed = 0;
+  const go = () => {
+    if (!attempt() && ++failed < tries) frame = requestAnimationFrame(go);
+  };
+  frame = requestAnimationFrame(go);
+  return () => cancelAnimationFrame(frame);
+}
+
 /** Fokus setzen, sobald das Ziel sichtbar ist (Platzhalter erscheinen erst nach dem optimistischen Update, Menüs geben den Fokus einen Takt später ab). */
 function focusSoon(find: () => HTMLElement | null | undefined) {
-  let n = 0;
-  const go = () => {
+  const focusIfVisible = () => {
     const el = find();
-    if (el?.isConnected && el.checkVisibility()) el.focus({ focusVisible: true } as FocusOptions);
-    else if (++n < 60) requestAnimationFrame(go);
+    if (!el?.isConnected || !el.checkVisibility()) return false;
+    el.focus({ focusVisible: true } as FocusOptions);
+    return true;
   };
-  setTimeout(go, 0);
+  setTimeout(() => {
+    if (!focusIfVisible()) retryPerFrame(focusIfVisible, FOCUS_RETRY_FRAMES - 1);
+  }, 0);
 }
 
 /** Hinweise je Inhalt und ihre Anzahl (für den Warnpunkt am Tab). */
@@ -67,7 +86,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
   const { t } = useI18n();
   const qc = useQueryClient();
   const update = useUpdateMods(instance.id);
-  const install = useContentInstall();
+  const background = useBackgroundTask();
   const local = useLocalFiles(instance, shown);
   const { active, target, progress } = useContentState();
   const [search, setSearch] = useState("");
@@ -79,8 +98,6 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
   const updRef = useRef<HTMLButtonElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const uid = useId();
-  // Eigene Statusregion (nur für Screenreader): Auswahl, Treffer, Wiederherstellen. Die Leisten selbst sind nicht live.
-  const [said, setSaid] = useState("");
   const quietPick = useRef(false);
 
   // Vom Kopf „Updates“: Filter lösen und „Alle aktualisieren“ in den Blick holen und fokussieren.
@@ -89,17 +106,13 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     setSearch("");
     setKind("all");
     setPicked(new Set());
-    // Der Tabwechsel läuft als Navigation und kann ein paar Frames später sichtbar werden: so lange warten.
-    let raf = 0, tries = 0;
-    const go = () => {
-      const b = updRef.current;
-      if (b && b.checkVisibility({ visibilityProperty: true } as CheckVisibilityOptions)) {
-        b.scrollIntoView({ block: "nearest" });
-        b.focus({ preventScroll: true, focusVisible: true } as FocusOptions);
-      } else if (++tries < 30) raf = requestAnimationFrame(go);
-    };
-    raf = requestAnimationFrame(go);
-    return () => cancelAnimationFrame(raf);
+    return retryPerFrame(() => {
+      const button = updRef.current;
+      if (!button?.checkVisibility({ visibilityProperty: true } as CheckVisibilityOptions)) return false;
+      button.scrollIntoView({ block: "nearest" });
+      button.focus({ preventScroll: true, focusVisible: true } as FocusOptions);
+      return true;
+    }, UPDATE_FOCUS_RETRY_FRAMES);
   }, [showUpdates]);
   const projects = useProjects(instance.mods.flatMap((m) => projectOf(m) ?? []));
   const project = (m: Mod) => projects.data?.get(projectOf(m) ?? "");
@@ -136,6 +149,15 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     return c;
   }, [instance.mods]);
 
+  // Eigene Statusregion (nur für Screenreader): Auswahl, Treffer, Wiederherstellen. Die Leisten selbst sind nicht live.
+  // Die Trefferzahl nach dem Filtern kommt beim Tippen erst nach einer kurzen Pause.
+  const nVisible = visibleLive.length;
+  const nAll = instance.mods.length;
+  const [said, say] = useAnnouncement(
+    `${kind}|${needle}`,
+    t(nAll === 1 ? "detail.content.visibleCount.one" : "detail.content.visibleCount.other", { visible: nVisible, total: nAll }),
+  );
+
   // Auswahl ansagen (Entfernen sagt der Toast selbst an).
   const nPicked = pickedLive.length;
   const lastPicked = useRef(nPicked);
@@ -143,22 +165,8 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     if (nPicked === lastPicked.current) return;
     lastPicked.current = nPicked;
     if (quietPick.current) return void (quietPick.current = false);
-    setSaid(nPicked ? t("detail.content.selectedCount", { n: nPicked }) : t("detail.content.selectionCleared"));
+    say(nPicked ? t("detail.content.selectedCount", { n: nPicked }) : t("detail.content.selectionCleared"));
   }, [nPicked]);
-
-  // Trefferzahl nach dem Filtern, beim Tippen erst nach einer kurzen Pause.
-  const nVisible = visibleLive.length;
-  const nAll = instance.mods.length;
-  const filterKey = `${kind}|${needle}`;
-  const lastFilter = useRef(filterKey);
-  useEffect(() => {
-    if (filterKey === lastFilter.current) return;
-    const timer = setTimeout(() => {
-      lastFilter.current = filterKey;
-      setSaid(t(nAll === 1 ? "detail.content.visibleCount.one" : "detail.content.visibleCount.other", { visible: nVisible, total: nAll }));
-    }, ANNOUNCE_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [filterKey, nVisible, nAll]);
 
   // Nach Bulk-Aktionen, die die Leiste schließen: Kopf-Checkbox (Liste) oder Suchfeld (Raster).
   const focusHead = () =>
@@ -181,15 +189,13 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     if (!modIds.length) return;
     const one = modIds.length === 1 ? instance.mods.find((m) => m.id === modIds[0]) : undefined;
     const name = one ? title(one) : "";
-    install.mutate(
-      withTarget(
-        one ? one.id : "updates",
-        (op) => api.modrinthUpdateMods(instance.id, modIds, op),
-        name ? t("detail.content.updateOneLabel", { name }) : t("detail.content.updateManyLabel", { n: modIds.length }),
-        { doneLabel: name ? t("detail.content.updateOneDone", { name }) : t("detail.content.updateManyDone", { n: modIds.length }) },
-      ),
-      { onSuccess: (result) => { if (result) toast.success(name ? t("detail.content.oneUpToDate", { name }) : t("detail.content.manyUpdated", { n: modIds.length })); } },
-    );
+    background.run({
+      key: one ? one.id : "updates",
+      label: name ? t("detail.content.updateOneLabel", { name }) : t("detail.content.updateManyLabel", { n: modIds.length }),
+      doneLabel: name ? t("detail.content.updateOneDone", { name }) : t("detail.content.updateManyDone", { n: modIds.length }),
+      task: (op) => api.modrinthUpdateMods(instance.id, modIds, op),
+      onDone: () => toast.success(name ? t("detail.content.oneUpToDate", { name }) : t("detail.content.manyUpdated", { n: modIds.length })),
+    });
   }
 
   function undo(group: string) {
@@ -205,7 +211,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     // Der Platzhalter verschwindet: Fokus auf das Menü der wiederhergestellten Zeile statt auf body.
     const main = back.find((x) => x.main) ?? back[0];
     if (main) {
-      setSaid(t("detail.content.restoredAnnouncement", { name: main.title }));
+      say(t("detail.content.restoredAnnouncement", { name: main.title }));
       if (rootRef.current?.contains(document.activeElement)) focusSoon(() => rootRef.current?.querySelector<HTMLElement>(`[data-more="${CSS.escape(main.mod.id)}"]`));
     }
   }
