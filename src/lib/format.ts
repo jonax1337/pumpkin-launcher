@@ -2,6 +2,11 @@
 // Import mit Endung: Dieses Modul lädt auch das plain-node-Prüf-Skript (kein Bundler, der Auflösung macht).
 import { currentLanguage, t } from "../i18n/core.ts";
 import type { Language } from "../i18n/types.ts";
+import { DAY, HOUR, MINUTE } from "./time.ts";
+
+/** Ab so vielen Tagen Abstand zeigt `relativeTime` das Datum statt „vor 12 Tagen“. */
+const RELATIVE_TIME_MAX_DAYS = 30;
+export const MB_PER_GB = 1024;
 
 /** Letzter Teil eines Windows- oder Unix-Pfads. */
 export const fileName = (path: string) => path.split(/[\\/]/).pop()!;
@@ -29,9 +34,9 @@ export function relativeTime(ms: number | null): string {
   if (ms == null) return t("format.neverPlayed");
   const diff = ms - Date.now();
   const abs = Math.abs(diff);
-  if (abs < 3_600_000) return formatters().relative.format(Math.round(diff / 60_000), "minute");
-  if (abs < 86_400_000) return formatters().relative.format(Math.round(diff / 3_600_000), "hour");
-  if (abs < 30 * 86_400_000) return formatters().relative.format(Math.round(diff / 86_400_000), "day");
+  if (abs < HOUR) return formatters().relative.format(Math.round(diff / MINUTE), "minute");
+  if (abs < DAY) return formatters().relative.format(Math.round(diff / HOUR), "hour");
+  if (abs < RELATIVE_TIME_MAX_DAYS * DAY) return formatters().relative.format(Math.round(diff / DAY), "day");
   return formatDate(ms);
 }
 
@@ -43,8 +48,6 @@ export function formatDate(ms: number): string {
 export function formatDateTime(ms: number): string {
   return formatters().dateTime.format(ms);
 }
-
-const DAY = 86_400_000;
 
 /** Beginn des (lokalen) Kalendertags, in dem `ms` liegt. */
 export const dayStart = (ms: number) => new Date(ms).setHours(0, 0, 0, 0);
@@ -70,11 +73,12 @@ export function formatPlaytime(secs: number): string {
 }
 
 const SIZE_UNITS = ["bytes", "kb", "mb", "gb", "tb"] as const;
+const BYTES_PER_UNIT = 1024;
 
 /** Dateigröße mit Basis 1024: „850 KB“, „12,4 MB“, „1,2 GB“. */
 export function formatSize(bytes: number): string {
   let n = bytes, unit = 0;
-  for (; n >= 1024 && unit < SIZE_UNITS.length - 1; unit++) n /= 1024;
+  for (; n >= BYTES_PER_UNIT && unit < SIZE_UNITS.length - 1; unit++) n /= BYTES_PER_UNIT;
   return `${n.toLocaleString(currentLanguage(), { maximumFractionDigits: unit && n < 100 ? 1 : 0 })} ${t(`format.size.${SIZE_UNITS[unit]}`)}`;
 }
 
@@ -87,16 +91,32 @@ export const formatCount = (n: number) => {
 
 export function formatMemory(mb: number | null): string {
   if (mb == null) return t("format.memoryDefault");
-  return `${(mb / 1024).toLocaleString(currentLanguage(), { maximumFractionDigits: 1 })} GB`;
+  return `${(mb / MB_PER_GB).toLocaleString(currentLanguage(), { maximumFractionDigits: 1 })} GB`;
 }
 
-const floor512 = (mb: number) => Math.floor(mb / 512) * 512;
+/** Untergrenze des Arbeitsspeichers für Standard und Regler. */
+const MEMORY_MIN_MB = 2048;
+/** Der automatische Standard wächst auch auf großen PCs nicht über diese Grenze. */
+const MEMORY_AUTO_MAX_MB = 8192;
+/** Schrittweite, auf die Standard und Obergrenze des Reglers gerundet werden. */
+const MEMORY_STEP_MB = 512;
+/** So viel bleibt dem System und anderen Programmen, wenn der Regler an seine Obergrenze geht. */
+const MEMORY_SYSTEM_RESERVE_MB = 2048;
+/** Anteil des PCs, ab dem eine Wahl zu hoch ist: Das System wird knapp. */
+const MEMORY_WARN_SHARE = 0.75;
+/** Standard, solange der Arbeitsspeicher des PCs unbekannt ist (Abfrage offen oder fehlgeschlagen). */
+export const MEMORY_FALLBACK_MB = 4096;
+/** Obergrenze des Reglers, solange der Arbeitsspeicher des PCs unbekannt ist. */
+export const MEMORY_FALLBACK_MAX_MB = 16384;
+
+const floorToStep = (mb: number) => Math.floor(mb / MEMORY_STEP_MB) * MEMORY_STEP_MB;
 
 /** Standard-Arbeitsspeicher: Hälfte des PCs, auf 512 MB gerundet, zwischen 2 und 8 GB. */
-export const autoMemoryMb = (totalMb: number) => Math.min(8192, Math.max(2048, Math.round(totalMb / 1024) * 512));
+export const autoMemoryMb = (totalMb: number) =>
+  Math.min(MEMORY_AUTO_MAX_MB, Math.max(MEMORY_MIN_MB, Math.round(totalMb / MB_PER_GB) * MEMORY_STEP_MB));
 
 /** Obergrenze für den Regler: 2 GB bleiben für das System und andere Programme. */
-export const maxMemoryMb = (totalMb: number) => Math.max(2048, floor512(totalMb - 2048));
+export const maxMemoryMb = (totalMb: number) => Math.max(MEMORY_MIN_MB, floorToStep(totalMb - MEMORY_SYSTEM_RESERVE_MB));
 
 /** Mehr als drei Viertel des PCs: Das System wird knapp. */
-export const memoryTooHigh = (mb: number, totalMb: number) => mb > totalMb * 0.75;
+export const memoryTooHigh = (mb: number, totalMb: number) => mb > totalMb * MEMORY_WARN_SHARE;

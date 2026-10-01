@@ -3,12 +3,15 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 import { create } from "zustand";
 import { t } from "@/i18n";
 import { api } from "@/lib/api";
-import { type ContentProgress, type ContentProject } from "@/lib/modrinth";
+import { errorMessage } from "@/lib/errors";
+import { type ContentProgress, type ContentProject, type ModUpdate } from "@/lib/modrinth";
 import { toastError } from "@/lib/toast";
+import { HOUR } from "@/lib/time";
 import type { Instance } from "@/lib/types";
 import { useTasks, type DoneTask } from "@/store/tasks";
-import { instanceKeys } from "./useInstances";
 import { useOnline } from "./useOnline";
+import { catalogKeys, instanceKeys } from "./queryKeys";
+import { CATALOG_STALE_MS } from "./staleTimes";
 
 // Keeps progress visible across route changes; only the matching active operation may update it.
 // `target` says what runs (a project ID or "updates"), so rows can show their own progress.
@@ -59,14 +62,14 @@ export async function trackContent<R>(
     useTasks.getState().push({ ...finish(result, run.doneLabel ?? label), state: "done" });
     return result;
   } catch (error) {
-    useTasks.getState().push({ label, sub: error instanceof Error ? error.message : String(error), state: "fail" });
+    useTasks.getState().push({ label, sub: errorMessage(error), state: "fail" });
     throw error;
   } finally {
     unlisten?.();
     useContentState.setState({ active: null, target: null, label: null, cancellable: false });
     void qc.invalidateQueries({ queryKey: instanceKeys.all });
-    void qc.invalidateQueries({ queryKey: ["instance-status"] });
-    void qc.invalidateQueries({ queryKey: ["modrinth-updates"] });
+    void qc.invalidateQueries({ queryKey: instanceKeys.statuses });
+    void qc.invalidateQueries({ queryKey: catalogKeys.allUpdates });
   }
 }
 
@@ -82,14 +85,17 @@ export function useContentInstall() {
   });
 }
 
+/** Titel und Icons eines Projekts ändern sich praktisch nie. */
+const PROJECT_INFO_STALE_MS = HOUR;
+
 /** Icons und Titel der installierten Modrinth-Inhalte, ein Aufruf pro Liste. Fehler: Liste zeigt Kacheln und Dateinamen. */
 export function useProjects(projectIds: string[]) {
   const ids = [...new Set(projectIds)].sort();
   return useQuery({
-    queryKey: ["modrinth-projects", ids],
+    queryKey: catalogKeys.projects(ids),
     queryFn: async () => new Map((await api.modrinthProjects(ids)).map((p): [string, ContentProject] => [p.id, p])),
     enabled: ids.length > 0,
-    staleTime: 60 * 60_000,
+    staleTime: PROJECT_INFO_STALE_MS,
     placeholderData: (prev) => prev,
     retry: false,
   });
@@ -97,15 +103,25 @@ export function useProjects(projectIds: string[]) {
 
 /** Update-Check einer Instanz: gemeinsamer Schlüssel und Cache (10 min) für Detail und Bibliothek. */
 const updatesQuery = (instanceId: string) => ({
-  queryKey: ["modrinth-updates", instanceId],
+  queryKey: catalogKeys.updates(instanceId),
   queryFn: () => api.modrinthCheckUpdates(instanceId),
-  staleTime: 10 * 60_000,
+  staleTime: CATALOG_STALE_MS,
   retry: false,
 });
 
 /** Update-Check einer Instanz; still, wenn Modrinth nicht erreichbar ist. */
 export function useModUpdates(instanceId: string, enabled: boolean) {
   return useQuery({ ...updatesQuery(instanceId), enabled });
+}
+
+/**
+ * Update-Hinweise je Mod-ID, deren Stand noch stimmt: direkt nach dem Aktualisieren läuft der Check erst neu.
+ * `enabled` false liest nur, was im Cache liegt (Bibliothek, gefüllt von `useBackgroundUpdates`).
+ */
+export function useCurrentUpdates(instance: Instance, enabled: boolean): Map<string, ModUpdate> {
+  const { data } = useModUpdates(instance.id, enabled);
+  const current = (data ?? []).filter((u) => instance.mods.some((m) => m.id === u.modId && m.version === u.currentVersion));
+  return new Map(current.map((u) => [u.modId, u]));
 }
 
 /**

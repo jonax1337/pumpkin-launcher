@@ -3,12 +3,7 @@ import { toast } from "sonner";
 import { t } from "@/i18n";
 import { api } from "@/lib/api";
 import type { Cape, LibrarySkin, SkinVariant } from "@/lib/types";
-
-const skinKeys = {
-  library: ["skins"] as const,
-  texture: (id: string) => ["skins", "texture", id] as const,
-  profile: (accountId: string) => ["skin-profile", accountId] as const,
-};
+import { skinKeys } from "./queryKeys";
 
 export function useSkinLibrary() {
   return useQuery({ queryKey: skinKeys.library, queryFn: api.skinLibrary });

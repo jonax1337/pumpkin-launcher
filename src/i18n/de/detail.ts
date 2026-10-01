@@ -162,6 +162,7 @@ export const detail = {
   "detail.worlds.gameMode.creative": "Kreativ",
   "detail.worlds.gameMode.adventure": "Abenteuer",
   "detail.worlds.gameMode.spectator": "Zuschauer",
+  "detail.worlds.hardcore": "Hardcore",
   "detail.worlds.loadError": "Die Welten konnten nicht geladen werden",
   "detail.worlds.emptyTitle": "Noch keine Welten",
   "detail.worlds.emptyHint": "Leg im Spiel eine Welt an, dann startest du sie hier mit einem Klick.",

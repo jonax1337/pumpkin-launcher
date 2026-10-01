@@ -40,6 +40,9 @@ interface SettingsState {
 
 const defaults = { javaPath: "", memoryMb: null };
 
+/** Bis Version 2 der feste Standard für den Arbeitsspeicher; seitdem bedeutet `null` „automatisch“. */
+const LEGACY_DEFAULT_MEMORY_MB = 4096;
+
 function withoutClientId(old: unknown) {
   const { msClientId: _dropped, ...rest } = old as Record<string, unknown>;
   return rest;
@@ -98,8 +101,7 @@ export const useSettings = create<SettingsState>()(
         const accounts = version >= 2 ? (prev.offlineAccounts ?? []) : name ? [name] : [];
         return {
           javaPath: prev.javaPath ?? "",
-          // 4096 war bis v2 der feste Standard; der gilt jetzt als „automatisch“.
-          memoryMb: prev.memoryMb == null || prev.memoryMb === 4096 ? null : prev.memoryMb,
+          memoryMb: prev.memoryMb == null || prev.memoryMb === LEGACY_DEFAULT_MEMORY_MB ? null : prev.memoryMb,
           active: offline(name),
           offlineAccounts: accounts,
           pxSize: "m",

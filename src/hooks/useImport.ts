@@ -3,15 +3,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { t } from "@/i18n";
 import { api } from "@/lib/api";
+import { MINUTE } from "@/lib/time";
 import type { ForeignInstance, Instance } from "@/lib/types";
 import { useContentInstall, withTarget } from "./useContent";
+import { importKeys } from "./queryKeys";
 import { isCancelled } from "./useInstances";
-
-const foreignKey = ["foreign-instances"];
 
 /** Instanzen anderer Launcher an den Standardorten; die Suche liest nur die Platte. */
 export function useForeignInstances(enabled = true) {
-  return useQuery({ queryKey: foreignKey, queryFn: () => api.importDetect(null), enabled, staleTime: 60_000, retry: false });
+  return useQuery({ queryKey: importKeys.foreign, queryFn: () => api.importDetect(null), enabled, staleTime: MINUTE, retry: false });
 }
 
 /** Noch nicht importiert und von Pumpkin Launcher startbar: vorgewählt und im Onboarding gezählt. */
@@ -70,7 +70,7 @@ export function useImportInstances() {
       }
     } finally {
       setRunning(false);
-      void qc.invalidateQueries({ queryKey: foreignKey });
+      void qc.invalidateQueries({ queryKey: importKeys.foreign });
     }
     return last;
   }

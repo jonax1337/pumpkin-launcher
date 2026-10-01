@@ -1,18 +1,23 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useSearchParams } from "react-router";
-import { useI18n } from "@/i18n";
+import { currentLanguage, useI18n } from "@/i18n";
 import { LOUD_PHASES, PlayButton, StatusChip, usePhase } from "@/components/game";
 import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
 import { loaderLine, playtimeLine } from "@/components/common";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
-import { useBackgroundUpdates, useModUpdates } from "@/hooks/useContent";
-import { groupsOf, ungrouped, useInstances } from "@/hooks/useInstances";
+import { SkelList } from "@/components/SkelList";
+import { useBackgroundUpdates, useCurrentUpdates } from "@/hooks/useContent";
+import { ANNOUNCE_DEBOUNCE_MS } from "@/hooks/useDebounced";
+import { byRecent, groupsOf, ungrouped, useInstances } from "@/hooks/useInstances";
+import { WIDTH } from "@/lib/breakpoints";
+import { updatesLabel } from "@/lib/modrinth";
 import { formatDate, formatPlaytime, relativeTime } from "@/lib/format";
+import { instanceUrl, newInstanceParams } from "@/lib/routes";
 import { ALL_LOADERS, LOADER_LABELS, type Instance, type ModLoader } from "@/lib/types";
 import { lookOf, useLookStore } from "@/store/look";
 import {
   Button, ButtonLink, CardGrid, Cell, Chip, Count, Disclosure, Empty, ErrorBox, Glyph, List, ListRow, PageHeader, RowTitle, SceneCard, SceneThumb,
-  SearchField, Segmented, Select, Skel, Spacer, Toolbar,
+  SearchField, Segmented, Select, Spacer, Toolbar,
 } from "@/ui";
 
 type Mode = "poster" | "list";
@@ -35,8 +40,8 @@ function saveMode(mode: Mode) {
 }
 
 const SORTS: Record<Sort, (a: Instance, b: Instance) => number> = {
-  recent: (a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0) || b.createdAt - a.createdAt,
-  name: (a, b) => a.name.localeCompare(b.name, "de"),
+  recent: byRecent,
+  name: (a, b) => a.name.localeCompare(b.name, currentLanguage()),
   created: (a, b) => b.createdAt - a.createdAt,
 };
 
@@ -45,26 +50,19 @@ type Looks = ReturnType<typeof useLookStore.getState>["looks"];
 /** Abschnitte je Gruppe (alphabetisch), Instanzen ohne Gruppe (`null`) zuletzt; leere Abschnitte entfallen. */
 function sectionsOf(instances: Instance[]): [group: string | null, members: Instance[]][] {
   const groups = groupsOf(instances).map((group): [string | null, Instance[]] => [group, instances.filter((i) => i.group === group)]);
-  const ungrouped = instances.filter((i) => !i.group);
-  return ungrouped.length ? [...groups, [null, ungrouped]] : groups;
-}
-
-/** Anzahl bekannter Updates aus dem Cache (gefüllt vom Detail oder von `useBackgroundUpdates`). */
-function useCachedUpdates(inst: Instance) {
-  const { data } = useModUpdates(inst.id, false);
-  return (data ?? []).filter((u) => inst.mods.some((m) => m.id === u.modId && m.version === u.currentVersion)).length;
+  const withoutGroup = instances.filter((i) => !i.group);
+  return withoutGroup.length ? [...groups, [null, withoutGroup]] : groups;
 }
 
 /** Status nur als Ausnahme: installiert gerade, startet, läuft, abgestürzt oder mit Updates. Der Normalfall bleibt leer. */
-function LibStatus({ inst }: { inst: Instance }) {
-  const { t } = useI18n();
-  const phase = usePhase(inst.id);
-  const nUpd = useCachedUpdates(inst);
-  if (LOUD_PHASES.includes(phase)) return <StatusChip instance={inst} small />;
+function LibStatus({ instance }: { instance: Instance }) {
+  const phase = usePhase(instance.id);
+  const nUpd = useCurrentUpdates(instance, false).size;
+  if (LOUD_PHASES.includes(phase)) return <StatusChip instance={instance} small />;
   if (nUpd > 0)
     return (
       <Chip icon="up">
-        <Count value={nUpd} /> {nUpd === 1 ? t("common.update") : t("common.updates")}
+        <Count value={nUpd} /> {updatesLabel(nUpd)}
       </Chip>
     );
   return null;
@@ -74,19 +72,19 @@ function LibStatus({ inst }: { inst: Instance }) {
  * Poster 4:5: Szene, Ausnahme-Status oben links, beim Überfahren oder Fokus großer Spielen-Knopf mittig und Menü oben rechts, Name unten.
  * Rechtsklick öffnet das Menü. Unter dem Namen ist nur Platz für eine Angabe neben der Version: Spielzeit, sonst „zuletzt gespielt“.
  */
-function PosterCard({ inst, index, looks }: { inst: Instance; index: number; looks: Looks }) {
+function PosterCard({ instance, index, looks }: { instance: Instance; index: number; looks: Looks }) {
   const { t } = useI18n();
-  const items = useInstanceMenu(inst);
+  const items = useInstanceMenu(instance);
   return (
     <SceneCard
       variant="poster"
-      look={lookOf(looks, inst.id)}
-      title={inst.name}
-      sub={`${loaderLine(inst)} · ${playtimeLine(inst) || relativeTime(inst.lastPlayedAt)}`}
-      status={<LibStatus inst={inst} />}
-      primary={<PlayButton instance={inst} size="m" />}
-      actions={<InstanceMenuButton instance={inst} small variant="g" onScene />}
-      hit={{ to: `/instances/${inst.id}`, label: t("pages.instances.openInstance", { name: inst.name }) }}
+      look={lookOf(looks, instance.id)}
+      title={instance.name}
+      sub={`${loaderLine(instance)} · ${playtimeLine(instance) || relativeTime(instance.lastPlayedAt)}`}
+      status={<LibStatus instance={instance} />}
+      primary={<PlayButton instance={instance} size="m" />}
+      actions={<InstanceMenuButton instance={instance} small variant="g" onScene />}
+      hit={{ to: instanceUrl(instance.id), label: t("pages.instances.openInstance", { name: instance.name }) }}
       menu={items}
       index={index}
     />
@@ -94,21 +92,21 @@ function PosterCard({ inst, index, looks }: { inst: Instance; index: number; loo
 }
 
 /** Listenzeile, 56 px, feste Spalten. Die ganze Zeile öffnet die Instanz; Spielen und Menü liegen darüber. */
-function InstanceRow({ inst, index, looks }: { inst: Instance; index: number; looks: Looks }) {
+function InstanceRow({ instance, index, looks }: { instance: Instance; index: number; looks: Looks }) {
   const { t } = useI18n();
-  const items = useInstanceMenu(inst);
-  const look = lookOf(looks, inst.id);
+  const items = useInstanceMenu(instance);
+  const look = lookOf(looks, instance.id);
   return (
-    <ListRow hit={{ to: `/instances/${inst.id}`, label: t("pages.instances.openInstance", { name: inst.name }) }} menu={items} index={Math.min(index, 12)} style={{ "--acc": look.acc } as CSSProperties}>
+    <ListRow hit={{ to: instanceUrl(instance.id), label: t("pages.instances.openInstance", { name: instance.name }) }} menu={items} index={Math.min(index, 12)} style={{ "--acc": look.acc } as CSSProperties}>
       <SceneThumb bio={look.bio} seed={look.seed} />
-      <RowTitle title={inst.name} sub={t("pages.instances.createdOn", { datum: formatDate(inst.createdAt) })} />
-      <Cell title={loaderLine(inst)}>{loaderLine(inst)}</Cell>
-      <Cell hide={1040}><Count value={inst.mods.length} /></Cell>
-      <Cell hide={1040}>{relativeTime(inst.lastPlayedAt)}</Cell>
-      <Cell hide={1180}>{inst.playtimeSecs > 0 ? formatPlaytime(inst.playtimeSecs) : "–"}</Cell>
-      <Cell flex><LibStatus inst={inst} /></Cell>
-      <PlayButton instance={inst} size="i" />
-      <InstanceMenuButton instance={inst} variant="g" small />
+      <RowTitle title={instance.name} sub={t("pages.instances.createdOn", { datum: formatDate(instance.createdAt) })} />
+      <Cell title={loaderLine(instance)}>{loaderLine(instance)}</Cell>
+      <Cell hide={WIDTH.md}><Count value={instance.mods.length} /></Cell>
+      <Cell hide={WIDTH.md}>{relativeTime(instance.lastPlayedAt)}</Cell>
+      <Cell hide={WIDTH.xl}>{instance.playtimeSecs > 0 ? formatPlaytime(instance.playtimeSecs) : "–"}</Cell>
+      <Cell flex><LibStatus instance={instance} /></Cell>
+      <PlayButton instance={instance} size="i" />
+      <InstanceMenuButton instance={instance} variant="g" small />
     </ListRow>
   );
 }
@@ -119,7 +117,7 @@ function InstanceView({ instances, mode, looks }: { instances: Instance[]; mode:
   if (mode === "poster")
     return (
       <CardGrid>
-        {instances.map((inst, k) => <PosterCard key={inst.id} inst={inst} index={k} looks={looks} />)}
+        {instances.map((instance, k) => <PosterCard key={instance.id} instance={instance} index={k} looks={looks} />)}
       </CardGrid>
     );
   return (
@@ -132,16 +130,16 @@ function InstanceView({ instances, mode, looks }: { instances: Instance[]; mode:
           <span />
           <Cell>{t("common.name")}</Cell>
           <Cell>{t("common.version")}</Cell>
-          <Cell hide={1040}>{t("pages.instances.colContents")}</Cell>
-          <Cell hide={1040}>{t("pages.instances.colLastPlayed")}</Cell>
-          <Cell hide={1180}>{t("pages.instances.colPlaytime")}</Cell>
+          <Cell hide={WIDTH.md}>{t("pages.instances.colContents")}</Cell>
+          <Cell hide={WIDTH.md}>{t("pages.instances.colLastPlayed")}</Cell>
+          <Cell hide={WIDTH.xl}>{t("pages.instances.colPlaytime")}</Cell>
           <Cell>{t("common.status")}</Cell>
           <span />
           <span />
         </>
       }
     >
-      {instances.map((inst, k) => <InstanceRow key={inst.id} inst={inst} index={k} looks={looks} />)}
+      {instances.map((instance, k) => <InstanceRow key={instance.id} instance={instance} index={k} looks={looks} />)}
     </List>
   );
 }
@@ -180,14 +178,14 @@ export function InstancesPage() {
     const timer = setTimeout(() => {
       lastView.current = viewKey;
       setSaid(t(total === 1 ? "pages.instances.resultCount.one" : "pages.instances.resultCount.other", { shown: shown.length, total }));
-    }, 500);
+    }, ANNOUNCE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [viewKey, shown.length, total]);
 
   // Leere Bibliothek: keine Werkzeugleiste, der Leerzustand trägt „Neue Instanz“.
   const empty = !error && !isLoading && !instances?.length;
   const newInstance = (
-    <Button variant="primary" icon="plus" aria-keyshortcuts="Control+N" onClick={() => setParams({ neu: "1" }, { replace: true })}>{t("components.newInstance.title")}</Button>
+    <Button variant="primary" icon="plus" aria-keyshortcuts="Control+N" onClick={() => setParams(newInstanceParams(), { replace: true })}>{t("components.newInstance.title")}</Button>
   );
 
   let body;
@@ -196,7 +194,7 @@ export function InstancesPage() {
   } else if (isLoading) {
     body = (
       <CardGrid aria-busy aria-label={t("components.common.loadingAria")}>
-        {[0, 1, 2, 3].map((k) => <Skel key={k} className="aspect-[4/5]" />)}
+        <SkelList n={4} className="aspect-[4/5]" />
       </CardGrid>
     );
   } else if (!instances?.length) {
@@ -255,7 +253,7 @@ export function InstancesPage() {
       {/* An fester Stelle für beide Knöpfe: füllt der erste Import die leere Bibliothek, bleibt der Dialog mit den übrigen offen */}
       <NewInstanceDialog primary />
       <div className="sr" role="status" aria-live="polite" aria-atomic="true">{said}</div>
-      {/* Abstände wie bisher: 16 über, 18 unter der Werkzeugleiste */}
+      {/* Abstände: 16 über, 18 unter der Werkzeugleiste */}
       {!empty && (
         <Toolbar search="m" className="mt-4 mb-4.5">
           <SearchField value={query} onChange={setQuery} placeholder={t("pages.instances.searchPlaceholder")} />

@@ -7,7 +7,9 @@ import { showNameError, startMsLogin } from "@/components/PlayerNames";
 import { importable, useForeignInstances } from "@/hooks/useImport";
 import { useCreateInstance, usePlay, useVersions } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
+import { errorMessage } from "@/lib/errors";
 import type { ContentVersion } from "@/lib/modrinth";
+import { discoverUrl, newInstanceUrl } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { Button, Choice, Field, Glyph, Hint, TextField, useRoving } from "@/ui";
 import type { GlyphName, GlyphPalette } from "@/pixel/icons";
@@ -64,12 +66,12 @@ export function Onboarding() {
   }
 
   async function go() {
-    if (start === "modpack") return navigate("/discover");
+    if (start === "modpack") return navigate(discoverUrl());
     setBusy(true);
     try {
       if (start === "vanilla") {
-        const inst = await create.mutateAsync({ name: `Minecraft ${releases[0]}`, minecraftVersion: releases[0], loader: "vanilla", loaderVersion: null, memoryMb: null });
-        void play(inst);
+        const instance = await create.mutateAsync({ name: `Minecraft ${releases[0]}`, minecraftVersion: releases[0], loader: "vanilla", loaderVersion: null, memoryMb: null });
+        void play(instance);
         return;
       }
       // Neueste Minecraft-Version, für die es Sodium schon gibt; Release-Versionen von Sodium bevorzugt.
@@ -78,11 +80,11 @@ export function Onboarding() {
       const mc = releases.find((r) => ranked.some((v) => v.game_versions.includes(r)));
       const version = ranked.find((v) => mc && v.game_versions.includes(mc));
       if (!mc || !version) throw new Error(t("components.onboarding.noSodium"));
-      const inst = await create.mutateAsync({ name: `Fabric ${mc}`, minecraftVersion: mc, loader: "fabric", loaderVersion: null, memoryMb: null });
-      const withMods = await api.modrinthInstallMod(inst.id, version.id, crypto.randomUUID());
+      const instance = await create.mutateAsync({ name: `Fabric ${mc}`, minecraftVersion: mc, loader: "fabric", loaderVersion: null, memoryMb: null });
+      const withMods = await api.modrinthInstallMod(instance.id, version.id, crypto.randomUUID());
       void play(withMods);
     } catch (err) {
-      toast.error(t("components.onboarding.goFailed"), { description: err instanceof Error ? err.message : String(err) });
+      toast.error(t("components.onboarding.goFailed"), { description: errorMessage(err) });
     } finally {
       setBusy(false);
     }
@@ -162,7 +164,7 @@ export function Onboarding() {
               </div>
               <p className="help onb-next" aria-live="polite">{t(choice.next)}</p>
               {/* Der Dialog der Bibliothek, nicht ein eigener: das Onboarding verschwindet mit der ersten importierten Instanz */}
-              <Button variant="ghost" size="s" icon="swap" bleed="start" disabled={busy} onClick={() => navigate("/instances?neu=import")}>
+              <Button variant="ghost" size="s" icon="swap" bleed="start" disabled={busy} onClick={() => navigate(newInstanceUrl({ type: "import" }))}>
                 {foreign
                   ? t(foreign === 1 ? "components.onboarding.importForeign.one" : "components.onboarding.importForeign.other", { n: foreign })
                   : t("components.onboarding.importForeignNone")}

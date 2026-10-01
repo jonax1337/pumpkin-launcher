@@ -7,18 +7,23 @@ import {
   Actions, Button, Checkbox, Choice, ConfirmDialog, Count, Dialog, DialogActions, Disclosure, Empty, ErrorBox, Field, Glyph, Hint, Icon, IconButton, Panel,
   ProjectIcon, RowTitle, SearchField, Segmented, Select, Skel, TabPanel, Tabs, TextField, type IconName,
 } from "@/ui";
-import { MemoryChooser } from "@/components/common";
+import { loaderLine, MemoryChooser } from "@/components/common";
 import { useInstallPack } from "@/components/ContentBrowser";
 import { ImportPane } from "@/components/LauncherImport";
+import { SkelList } from "@/components/SkelList";
+import { catalogKeys } from "@/hooks/queryKeys";
 import { cancelContent, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { SEARCH_STALE_MS } from "@/hooks/staleTimes";
 import { useDebounced } from "@/hooks/useDebounced";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { useForeignSelection, useImportInstances } from "@/hooks/useImport";
 import { useCreateInstance, useLoaderVersions, useVersions } from "@/hooks/useInstances";
 import { useDeleteTemplate, useTemplates } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
+import { TYPE_ONE_KEYS } from "@/lib/catalog";
 import { fileName, formatDate } from "@/lib/format";
 import { formatDownloads, isMrpack, MRPACK_EXT, progressLabel } from "@/lib/modrinth";
+import { discoverUrl, instanceUrl, readNewInstanceStart } from "@/lib/routes";
 import { ALL_LOADERS, LOADER_LABELS, type ModLoader, type Template } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -27,7 +32,7 @@ type Tab = "blank" | "pack" | "file" | "tpl" | "import";
 // Reiter des Dialogs; Beschriftungen als Schlüssel, übersetzt beim Rendern.
 const TABS: { value: Tab; label: string; icon: IconName }[] = [
   { value: "blank", label: "components.newInstance.tab.own", icon: "plus" },
-  { value: "pack", label: "components.catalog.one.modpack", icon: "box" },
+  { value: "pack", label: TYPE_ONE_KEYS.modpack, icon: "box" },
   { value: "file", label: "components.newInstance.tab.file", icon: "file" },
   { value: "tpl", label: "components.newInstance.tab.template", icon: "save" },
   { value: "import", label: "components.newInstance.tab.import", icon: "swap" },
@@ -53,11 +58,11 @@ const packName = (path: string) => fileName(path).replace(MRPACK_EXT, "");
 function PackPane({ selected, onSelect }: { selected: string | null; onSelect: (p: { id: string; title: string }) => void }) {
   const { t } = useI18n();
   const [input, setInput] = useState("");
-  const query = useDebounced(input.trim(), 300);
+  const query = useDebounced(input.trim());
   const results = useQuery({
-    queryKey: ["modrinth-search", "modpack", query, null, null, "pick"],
+    queryKey: catalogKeys.packPicker(query),
     queryFn: () => api.modrinthSearch(query, "modpack", null, null, 0),
-    staleTime: 5 * 60_000,
+    staleTime: SEARCH_STALE_MS,
     retry: false,
   });
   return (
@@ -67,7 +72,7 @@ function PackPane({ selected, onSelect }: { selected: string | null; onSelect: (
         <ErrorBox title={t("components.catalog.unreachable")} error={results.error} onRetry={() => void results.refetch()} />
       ) : (
         <div className="flex flex-col gap-1" aria-busy={results.isPending || undefined}>
-          {results.isPending && [0, 1, 2, 3].map((k) => <Skel key={k} h={56} />)}
+          {results.isPending && <SkelList n={4} h={56} />}
           {results.data?.hits.map((hit) => (
             <Choice
               key={hit.project_id}
@@ -97,7 +102,7 @@ function TemplatePane({ selected, onSelect }: { selected: string | null; onSelec
   if (templates.isPending)
     return (
       <div className="flex flex-col gap-1">
-        {[0, 1].map((k) => <Skel key={k} h={56} />)}
+        <SkelList n={2} h={56} />
       </div>
     );
   if (!templates.data.length)
@@ -116,7 +121,7 @@ function TemplatePane({ selected, onSelect }: { selected: string | null; onSelec
               className="min-w-0 flex-1"
               media={<Glyph name="chest" pal="sand" />}
               title={tpl.name}
-              sub={`${LOADER_LABELS[tpl.loader]} ${tpl.minecraftVersion} · ${t(tpl.modCount === 1 ? "components.template.entryCount.one" : "components.template.entryCount.other", { n: tpl.modCount })} · ${t("components.template.savedAt", { datum: formatDate(tpl.createdAt) })}`}
+              sub={`${loaderLine(tpl)} · ${t(tpl.modCount === 1 ? "components.template.entryCount.one" : "components.template.entryCount.other", { n: tpl.modCount })} · ${t("components.template.savedAt", { datum: formatDate(tpl.createdAt) })}`}
               selected={selected === tpl.id}
               onClick={() => onSelect(tpl)}
             />
@@ -195,7 +200,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
   useEffect(() => onBusy(busy), [busy, onBusy]);
 
   async function chooseFile() {
-    const [picked] = await api.pickPaths({ filters: [{ name: "Modpack", extensions: ["mrpack"] }] });
+    const [picked] = await api.pickPaths({ filters: [{ name: t(TYPE_ONE_KEYS.modpack), extensions: ["mrpack"] }] });
     if (picked) setPath(picked);
   }
 
@@ -208,7 +213,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
 
   function go() {
     if (!valid || busy) return;
-    const done = { onSuccess: (inst: { id: string } | null) => inst && onDone(inst.id) };
+    const done = { onSuccess: (instance: { id: string } | null) => instance && onDone(instance.id) };
     if (tab === "blank") {
       create.mutate(
         {
@@ -353,7 +358,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
                 className="mt-2.5"
                 onClick={() => {
                   onOpenChange(false);
-                  navigate(pack ? `/discover?projekt=${pack.id}` : "/discover");
+                  navigate(discoverUrl({ project: pack?.id }));
                 }}
               >
                 {t("components.newInstance.moreInDiscover")}
@@ -425,14 +430,12 @@ export function NewInstanceDialog({ children, primary }: { children?: ReactNode;
     if (file) show("file", file);
   });
 
-  // Strg+N führt zu /instances?neu=1 (siehe Layout), ein auf die Inhalte gezogenes Modpack zu ?neu=1&datei=<Pfad>,
-  // das Onboarding zu ?neu=import.
+  // Strg+N, ein auf die Inhalte gezogenes Modpack und das Onboarding öffnen den Dialog über die Adresse (lib/routes).
   const [params, setParams] = useSearchParams();
   useEffect(() => {
-    if (!primary || !params.has("neu")) return;
-    const file = params.get("datei");
-    if (file) show("file", file);
-    else show(params.get("neu") === "import" ? "import" : "blank");
+    const start = readNewInstanceStart(params);
+    if (!primary || !start) return;
+    show(start.type, start.type === "file" ? start.path : undefined);
     setParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primary, params, setParams]);
@@ -444,7 +447,7 @@ export function NewInstanceDialog({ children, primary }: { children?: ReactNode;
   function done(id: string) {
     if (!stillOpen.current) return;
     setOpen(false);
-    navigate(`/instances/${id}`);
+    navigate(instanceUrl(id));
   }
 
   return (

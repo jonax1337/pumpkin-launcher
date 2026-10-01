@@ -4,23 +4,21 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { askPlayerName, openAddOffline, startMsLogin } from "@/components/PlayerNames";
-import { t } from "@/i18n/core";
+import { currentLanguage, t } from "@/i18n/core";
 import { usableAccount, useOfflineAllowed } from "@/store/offline";
 import { api } from "@/lib/api";
-import { autoMemoryMb, formatClock, maxMemoryMb } from "@/lib/format";
-import { toastError } from "@/lib/toast";
+import { autoMemoryMb, formatClock, MEMORY_FALLBACK_MAX_MB, MEMORY_FALLBACK_MB, maxMemoryMb } from "@/lib/format";
+import { openLocalPath } from "@/lib/links";
+import { instanceUrl } from "@/lib/routes";
 import { CANCELLED, type Instance, type InstanceStatus, type ModLoader, type NewInstance, type QuickPlay } from "@/lib/types";
 import { useGame } from "@/store/game";
 import { accountName, useSettings } from "@/store/settings";
 import { useTasks } from "@/store/tasks";
-import { screenshotKeys } from "./useScreenshots";
-import { worldKeys } from "./worldKeys";
+import { CATALOG_STALE_MS } from "./staleTimes";
+import { appKeys, instanceKeys, instanceRelatedKeys, screenshotKeys, worldKeys } from "./queryKeys";
 
-export const instanceKeys = {
-  all: ["instances"] as const,
-  detail: (id: string) => ["instances", id] as const,
-  status: (id: string) => ["instance-status", id] as const,
-};
+/** Fehler und Absturz bleiben länger stehen als eine gewöhnliche Meldung, damit man sie lesen und darauf reagieren kann. */
+const LONG_TOAST_MS = 10_000;
 
 const instanceListQuery = { queryKey: instanceKeys.all, queryFn: api.listInstances };
 
@@ -30,7 +28,7 @@ export function useInstances() {
 
 /** Gruppennamen aller Instanzen, alphabetisch; Gruppen gibt es nur über die Instanzen, die sie tragen. */
 export const groupsOf = (instances: Instance[]) =>
-  [...new Set(instances.flatMap((i) => (i.group ? [i.group] : [])))].sort((a, b) => a.localeCompare(b, "de"));
+  [...new Set(instances.flatMap((i) => (i.group ? [i.group] : [])))].sort((a, b) => a.localeCompare(b, currentLanguage()));
 
 /** Anzeige für Instanzen ohne Gruppe (Bibliothek und Einstellungen); live berechnet, kein fester Text. */
 export const ungrouped = () => t("detail.settings.noGroup");
@@ -52,16 +50,16 @@ export function useCreateInstance() {
   return useMutation({
     // RAM ist nicht Teil von `NewInstance` und wird direkt danach gesetzt.
     mutationFn: async ({ memoryMb, ...input }: NewInstance & { memoryMb: number | null }) => {
-      const inst = await api.createInstance(input);
-      return memoryMb == null ? inst : api.updateInstance({ ...inst, memoryMb });
+      const instance = await api.createInstance(input);
+      return memoryMb == null ? instance : api.updateInstance({ ...instance, memoryMb });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: instanceKeys.all }),
   });
 }
 
 /** Gespeicherte Instanz in den Cache übernehmen und die Liste neu laden. */
-function instanceSaved(qc: QueryClient, inst: Instance) {
-  qc.setQueryData(instanceKeys.detail(inst.id), inst);
+function instanceSaved(qc: QueryClient, instance: Instance) {
+  qc.setQueryData(instanceKeys.detail(instance.id), instance);
   return qc.invalidateQueries({ queryKey: instanceKeys.all });
 }
 
@@ -69,7 +67,7 @@ export function useUpdateInstance() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (instance: Instance) => api.updateInstance(instance),
-    onSuccess: (inst) => instanceSaved(qc, inst),
+    onSuccess: (instance) => instanceSaved(qc, instance),
   });
 }
 
@@ -78,7 +76,7 @@ export function useSetGroup(instanceId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (group: string | null) => api.setInstanceGroup(instanceId, group),
-    onSuccess: (inst) => instanceSaved(qc, inst),
+    onSuccess: (instance) => instanceSaved(qc, instance),
   });
 }
 
@@ -89,7 +87,7 @@ export function useSetGroup(instanceId: string) {
 export function useUpdateMods(instanceId: string) {
   const qc = useQueryClient();
   const key = instanceKeys.detail(instanceId);
-  const mutationKey = ["instance-mods", instanceId];
+  const mutationKey = instanceKeys.mods(instanceId);
   return useMutation({
     mutationKey,
     scope: { id: mutationKey.join(":") },
@@ -101,9 +99,9 @@ export function useUpdateMods(instanceId: string) {
       return { previous };
     },
     onError: (_, __, ctx) => ctx?.previous && qc.setQueryData(key, ctx.previous),
-    onSuccess: (inst) => {
+    onSuccess: (instance) => {
       // Nur die letzte Änderung übernimmt den Serverstand, sonst springen noch wartende Schalter zurück.
-      if (qc.isMutating({ mutationKey }) === 1) qc.setQueryData(key, inst);
+      if (qc.isMutating({ mutationKey }) === 1) qc.setQueryData(key, instance);
     },
     onSettled: () => qc.invalidateQueries({ queryKey: instanceKeys.all, exact: true }),
   });
@@ -122,31 +120,32 @@ export function useDeleteInstance() {
 
 /** Einträge des Spielordners, aus denen der Export-Dialog wählen lässt. */
 export function useExportEntries(instanceId: string) {
-  return useQuery({ queryKey: ["export-entries", instanceId], queryFn: () => api.exportEntries(instanceId), staleTime: 0 });
+  return useQuery({ queryKey: instanceKeys.exportEntries(instanceId), queryFn: () => api.exportEntries(instanceId), staleTime: 0 });
 }
+
+/** Zuletzt gespielte zuerst, nie gespielte dahinter (neueste zuerst). */
+export const byRecent = (a: Instance, b: Instance) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0) || b.createdAt - a.createdAt;
 
 /** Zuletzt gespielte Instanz (Fallback: zuletzt erstellte; `lastPlayedAt` zeigt, welcher Fall vorliegt). */
 export function pickRecentInstance(instances: Instance[] | undefined): Instance | undefined {
   if (!instances?.length) return undefined;
-  return [...instances].sort(
-    (a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0) || b.createdAt - a.createdAt,
-  )[0];
+  return [...instances].sort(byRecent)[0];
 }
 
 export function useVersions() {
-  return useQuery({ queryKey: ["versions"], queryFn: api.versionsList, staleTime: 10 * 60_000 });
+  return useQuery({ queryKey: appKeys.minecraftVersions, queryFn: api.versionsList, staleTime: CATALOG_STALE_MS });
 }
 
 export function useLoaderVersions(loader: ModLoader, mcVersion: string) {
   return useQuery({
-    queryKey: ["loader-versions", loader, mcVersion],
+    queryKey: appKeys.loaderVersions(loader, mcVersion),
     queryFn: () => api.loaderVersions(loader, mcVersion),
     enabled: loader !== "vanilla" && !!mcVersion,
-    staleTime: 10 * 60_000,
+    staleTime: CATALOG_STALE_MS,
   });
 }
 
-const systemMemoryQuery = { queryKey: ["system-memory"], queryFn: api.systemMemoryMb, staleTime: Infinity, retry: false } as const;
+const systemMemoryQuery = { queryKey: appKeys.systemMemory, queryFn: api.systemMemoryMb, staleTime: Infinity, retry: false } as const;
 
 /**
  * Arbeitsspeicher: `value` ist der Standard für alle Instanzen (eigene Wahl oder automatisch),
@@ -155,8 +154,8 @@ const systemMemoryQuery = { queryKey: ["system-memory"], queryFn: api.systemMemo
 export function useMemory() {
   const chosen = useSettings((s) => s.memoryMb);
   const { data: total = null } = useQuery(systemMemoryQuery);
-  const auto = total == null ? 4096 : autoMemoryMb(total);
-  return { value: chosen ?? auto, auto, total, max: total == null ? 16384 : maxMemoryMb(total), isAuto: chosen == null };
+  const auto = total == null ? MEMORY_FALLBACK_MB : autoMemoryMb(total);
+  return { value: chosen ?? auto, auto, total, max: total == null ? MEMORY_FALLBACK_MAX_MB : maxMemoryMb(total), isAuto: chosen == null };
 }
 
 /** RAM für Instanzen ohne eigene Einstellung, wie ihn der Start übergibt. */
@@ -166,7 +165,7 @@ export async function defaultMemory(qc: ReturnType<typeof useQueryClient>) {
   try {
     return autoMemoryMb(await qc.fetchQuery(systemMemoryQuery));
   } catch {
-    return 4096;
+    return MEMORY_FALLBACK_MB;
   }
 }
 
@@ -199,7 +198,7 @@ export function useInstall() {
       useTasks.getState().push({ label: t("hooks.install.failed", { name: instance.name }), sub: err.message, state: "fail", to: `/instances/${instance.id}` });
       toast.error(t("hooks.install.failed", { name: instance.name }), {
         description: err.message,
-        duration: 10_000,
+        duration: LONG_TOAST_MS,
         action: { label: t("common.retry"), onClick: () => install.mutate(instance) },
       });
     },
@@ -220,7 +219,7 @@ export function useCancelInstall() {
   return useMutation({ mutationFn: (instanceId: string) => api.installCancel(instanceId) });
 }
 
-export function useLaunch() {
+function useLaunch() {
   const qc = useQueryClient();
   return useMutation({
     meta: { ownErrorToast: true },
@@ -254,7 +253,7 @@ export function useLaunch() {
       const action = offlineOk
         ? { label: t("hooks.launch.setPlayerName"), onClick: openAddOffline }
         : { label: t("components.account.msLogin"), onClick: () => void startMsLogin(qc) };
-      toast.error(err.message, { duration: 10_000, action });
+      toast.error(err.message, { duration: LONG_TOAST_MS, action });
     },
   });
 }
@@ -330,7 +329,7 @@ export function useGameEvents() {
         void qc.invalidateQueries({ queryKey: instanceKeys.all });
         void qc.invalidateQueries({ queryKey: worldKeys.all(instanceId) });
         void qc.invalidateQueries({ queryKey: screenshotKeys.list(instanceId) });
-        const showLog = { label: t("components.log.ariaLabel"), onClick: () => navigate(`/instances/${instanceId}?tab=console`) };
+        const showLog = { label: t("components.log.ariaLabel"), onClick: () => navigate(instanceUrl(instanceId, "console")) };
         if (stopping.delete(instanceId)) {
           toast(since ? t("hooks.game.exitedPlayed", { duration: formatClock(Date.now() - since) }) : t("hooks.game.exited"), { action: showLog });
           return;
@@ -344,18 +343,16 @@ export function useGameEvents() {
             duration: Infinity,
             description: crashReport ? t("hooks.game.crashReportHint") : t("hooks.game.logHint"),
             action: crashReport
-              ? { label: t("components.game.openCrashReport"), onClick: () => void api.openPath(crashReport).catch(toastError) }
+              ? { label: t("components.game.openCrashReport"), onClick: () => openLocalPath(crashReport) }
               : showLog,
             cancel: crashReport ? showLog : undefined,
           });
         } else if (code != null && code !== 0) {
-          toast.error(t("hooks.game.exitedWithCode", { name, code }), { duration: 10_000, action: showLog });
+          toast.error(t("hooks.game.exitedWithCode", { name, code }), { duration: LONG_TOAST_MS, action: showLog });
         }
       }),
       // Das Backend hat Instanzen umgebaut (z. B. Migration): Listen und Details neu laden.
-      api.onInstancesChanged(() =>
-        ["instances", "instance-status", "templates"].forEach((key) => void qc.invalidateQueries({ queryKey: [key] })),
-      ),
+      api.onInstancesChanged(() => instanceRelatedKeys.forEach((queryKey) => void qc.invalidateQueries({ queryKey }))),
     ];
     return () => subs.forEach((p) => p.then((unlisten) => unlisten()));
   }, [qc, navigate]);

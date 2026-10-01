@@ -5,8 +5,13 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { t, useI18n } from "@/i18n";
 import { StopDialog } from "@/components/game";
+import { accountKeys } from "@/hooks/queryKeys";
 import { api } from "@/lib/api";
+import { WIDTH } from "@/lib/breakpoints";
+import { copyWithToast } from "@/lib/clipboard";
+import { errorMessage } from "@/lib/errors";
 import { openPage } from "@/lib/links";
+import { MINUTE } from "@/lib/time";
 import type { MsLoginStart } from "@/lib/types";
 import {
   Actions, Avatar, BarButton, Button, Dialog, DialogActions, Empty, ErrorBox, Field, Hint, Icon, List, ListRow, Menu, Progress, RowTitle, Skel,
@@ -34,7 +39,7 @@ export async function startMsLogin(qc: QueryClient, method?: "device") {
     const account = await api.msLoginFinish();
     if (mine !== attempt) return;
     useSettings.getState().selectAccount({ kind: "microsoft", id: account.id, username: account.username });
-    void qc.invalidateQueries({ queryKey: ["ms-accounts"] });
+    void qc.invalidateQueries({ queryKey: accountKeys.microsoft });
     // Aus „Spielen“ ohne Namen gekommen: Dialog zu und direkt weiter (der Spielen-Knopf zeigt den Fortschritt).
     const then = useAccountUi.getState().then;
     if (then) {
@@ -45,7 +50,7 @@ export async function startMsLogin(qc: QueryClient, method?: "device") {
     }
     useMsLogin.setState({ step: "done", name: account.username }, true);
   } catch (err) {
-    if (mine === attempt) useMsLogin.setState({ step: "error", message: err instanceof Error ? err.message : String(err) }, true);
+    if (mine === attempt) useMsLogin.setState({ step: "error", message: errorMessage(err) }, true);
   }
 }
 
@@ -56,6 +61,9 @@ function closeMsLogin() {
   useMsLogin.setState({ step: "idle" }, true);
   if (running) void api.msLoginCancel().catch(() => undefined);
 }
+
+/** So viele ganze Minuten läuft die Anmeldung noch, mindestens eine. */
+const validMinutes = (info: MsLoginStart) => Math.max(1, Math.round(info.expiresIn / 60));
 
 /** Dialog-Untertitel „Danach startet {name}.“ – der Name bleibt als React-Knoten fett. */
 function ThenSub({ label }: { label: string }) {
@@ -76,13 +84,6 @@ function MsLoginDialog() {
   const then = useAccountUi((s) => s.then);
   const offlineAllowed = useOfflineAllowed((s) => s.allowed);
   const qc = useQueryClient();
-
-  function copy(code: string) {
-    void navigator.clipboard.writeText(code).then(
-      () => toast.success(t("components.ms.codeCopied")),
-      () => toast.error(t("components.common.copyFailed")),
-    );
-  }
 
   return (
     <Dialog
@@ -120,7 +121,7 @@ function MsLoginDialog() {
           <p>{t("components.ms.browserOpened")}</p>
           <div className="flex h-8 items-center gap-3" aria-live="polite">
             <Progress width={120} label={t("components.ms.waiting")} />
-            <Hint>{t("components.ms.windowWaits", { min: Math.max(1, Math.round(state.info.expiresIn / 60)) })}</Hint>
+            <Hint>{t("components.ms.windowWaits", { min: validMinutes(state.info) })}</Hint>
           </div>
           <Hint className="mt-3">{t("components.ms.nothingHappens")}</Hint>
         </>
@@ -131,11 +132,11 @@ function MsLoginDialog() {
           {/* Code-Anzeige (Sonderform: große Pixelschrift in eingelassener Platte) */}
           <div className="codebox">
             <span className="code select-all" aria-label={t("components.ms.codeSpaced", { code: state.info.userCode.split("").join(" ") })}>{state.info.userCode}</span>
-            <Button icon="copy" onClick={() => copy(state.info.userCode)}>{t("common.copy")}</Button>
+            <Button icon="copy" onClick={() => copyWithToast(state.info.userCode, t("components.ms.codeCopied"))}>{t("common.copy")}</Button>
           </div>
           <div className="flex h-8 items-center gap-3" aria-live="polite">
             <Progress width={120} label={t("components.ms.waiting")} />
-            <Hint>{t("components.ms.codeValid", { min: Math.max(1, Math.round(state.info.expiresIn / 60)) })}</Hint>
+            <Hint>{t("components.ms.codeValid", { min: validMinutes(state.info) })}</Hint>
           </div>
         </>
       )}
@@ -164,8 +165,6 @@ function MsLoginDialog() {
 type AfterName = { label: string; run: () => void };
 /** Offene Kontenteile: Menü in der Fensterleiste und Dialog „Spielername hinzufügen“. */
 const useAccountUi = create<{ menu: boolean; offline: boolean; then: AfterName | null }>(() => ({ menu: false, offline: false, then: null }));
-/** Öffnet das Kontomenü oben rechts. */
-export const openAccounts = () => useAccountUi.setState({ menu: true });
 /** Spielername hinzufügen; ohne Erlaubnis des Backends (`offline_allowed`) gibt es den Dialog nicht. */
 export const openAddOffline = () => {
   if (useOfflineAllowed.getState().allowed) useAccountUi.setState({ offline: true, menu: false, then: null });
@@ -180,8 +179,11 @@ export const askPlayerName = (then: AfterName, qc: QueryClient) => {
   void startMsLogin(qc);
 };
 
+/** Konten ändern sich nur durch Anmelden und Abmelden hier; der Abgleich mit Microsoft eilt nicht. */
+const ACCOUNTS_STALE_MS = 5 * MINUTE;
+
 function useMsAccounts() {
-  const query = useQuery({ queryKey: ["ms-accounts"], queryFn: api.msAccounts, staleTime: 5 * 60_000, retry: false });
+  const query = useQuery({ queryKey: accountKeys.microsoft, queryFn: api.msAccounts, staleTime: ACCOUNTS_STALE_MS, retry: false });
   const syncMicrosoft = useSettings((s) => s.syncMicrosoft);
   // Ob Spielernamen erlaubt sind, hängt an den Microsoft-Konten: bei jeder Änderung der Anzahl neu fragen.
   const count = query.data?.length;
@@ -218,7 +220,7 @@ function useRemoveAccount() {
     mutationFn: (id: string) => api.msAccountRemove(id),
     onSuccess: (_, id) => {
       forgetMicrosoft(id);
-      return qc.invalidateQueries({ queryKey: ["ms-accounts"] });
+      return qc.invalidateQueries({ queryKey: accountKeys.microsoft });
     },
   });
   return { remove: (a: ActiveAccount) => (a.kind === "offline" ? removeAccount(a.name) : removeMs.mutate(a.id)), pending: removeMs.isPending };
@@ -270,7 +272,7 @@ export function AccountMenu() {
             label={name || (allowed ? t("components.account.noName") : t("components.account.notLoggedIn"))}
             tone={name ? undefined : "warn"}
             iconEnd="chevd"
-            compactBelow={900}
+            compactBelow={WIDTH.sm}
           >
             {/* Ohne Namen: Warnsymbol statt Kopf (Form, nicht nur gelbe Schrift; bleibt auch schmal sichtbar, wenn der Text wegfällt) */}
             {name ? <Avatar name={name} /> : <Icon name="warn" tone="warn" />}
@@ -319,7 +321,7 @@ function AddOfflineDialog() {
     then?.run();
   }
 
-  /** Beim Spielen: statt Namen mit Microsoft anmelden; `then` bleibt stehen und startet nach der Anmeldung. */
+  // Beim Spielen: statt Namen mit Microsoft anmelden; `then` bleibt stehen und startet nach der Anmeldung.
   function microsoft() {
     useAccountUi.setState({ offline: false });
     setName("");

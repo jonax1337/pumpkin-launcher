@@ -8,8 +8,6 @@ export type ModSource =
   | { type: "modrinth"; projectId: string; versionId: string }
   | { type: "curseforge"; projectId: number; fileId: number };
 
-export type ModSourceType = ModSource["type"];
-
 export interface Mod {
   id: string;
   name: string;
@@ -118,9 +116,6 @@ export interface NewInstance {
 
 /** Feste Reihenfolge überall (Dialog „Neue Instanz“, Filter). */
 export const ALL_LOADERS: ModLoader[] = ["vanilla", "fabric", "quilt", "forge", "neoforge"];
-
-/** Loader, die das Backend installieren und starten kann; die übrigen erscheinen als „bald verfügbar“. */
-export const SUPPORTED_LOADERS: ModLoader[] = ["vanilla", "fabric", "quilt", "forge", "neoforge"];
 
 /** Loader-Namen sind Marken; „datapack“ übersetzt die Oberfläche am Verwendungsort (siehe `loaderLine`-Verbraucher). */
 export const LOADER_LABELS: Record<ModLoader, string> = {

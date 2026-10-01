@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Actions, Button, CardGrid, Disclosure, FormRow, FormSection, Hint, Menu, Progress, Radio, SceneCard, StatusPanel, TextArea, TextField } from "@/ui";
 import { JavaChooser, MemoryChooser, MemoryHelp } from "@/components/common";
-import { useInstallPercent, usePhase } from "@/components/game";
+import { isBusy, isGameLive, useInstallPercent, usePhase } from "@/components/game";
 import { askDelete, useGroupMenu } from "@/components/instance";
 import { useInstall, useUpdateInstance } from "@/hooks/useInstances";
-import { LOADER_LABELS, SUPPORTED_LOADERS, type GameWindow, type Instance } from "@/lib/types";
+import { blurOnEnter } from "@/lib/dom";
+import { LOADER_LABELS, type GameWindow, type Instance } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/i18n";
 import { BIOME_KEYS } from "@/pixel/scene";
@@ -62,9 +63,9 @@ export function SettingsTab({ instance }: { instance: Instance }) {
     }, 400);
   }
 
-  const busy = phase === "preparing" || phase === "starting" || phase === "running" || install.isPending;
+  const busy = isBusy(phase) || install.isPending;
   // Solange das Spiel läuft, lehnt das Backend jede Änderung an der Instanz ab; das Bild lebt nur lokal.
-  const locked = phase === "starting" || phase === "running";
+  const locked = isGameLive(phase);
   const repairing = percent != null;
   const groupText = instance.group ?? t("detail.settings.noGroup");
 
@@ -80,7 +81,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
             maxLength={64}
             onChange={(e) => setName(e.target.value)}
             onBlur={saveName}
-            onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+            onKeyDown={blurOnEnter}
           />
         </FormRow>
         <FormRow label={t("components.instance.group")} hint={t("detail.settings.groupHint")}>
@@ -161,17 +162,15 @@ export function SettingsTab({ instance }: { instance: Instance }) {
           {/* Reiner Text: auf Höhe des Labels (10 px wie dessen Innenabstand) */}
           <span className="pt-2.5">{versionText(instance)}</span>
         </FormRow>
-        {SUPPORTED_LOADERS.includes(instance.loader) && (
-          <FormRow label={t("detail.settings.repairLabel")} hint={t("detail.settings.repairHint")}>
-            <Actions>
-              <Button icon="redo" width={160} disabled={busy} onClick={() => install.mutate(instance)}>
-                {repairing ? t("detail.settings.repairing") : t("detail.settings.repairLabel")}
-              </Button>
-              {/* Platz bleibt reserviert: der Balken erscheint, ohne dass etwas springt */}
-              <Progress p={(percent ?? 0) / 100} width={180} className={cn(!repairing && "invisible")} label={t("detail.settings.repairProgress")} />
-            </Actions>
-          </FormRow>
-        )}
+        <FormRow label={t("detail.settings.repairLabel")} hint={t("detail.settings.repairHint")}>
+          <Actions>
+            <Button icon="redo" width={160} disabled={busy} onClick={() => install.mutate(instance)}>
+              {repairing ? t("detail.settings.repairing") : t("detail.settings.repairLabel")}
+            </Button>
+            {/* Platz bleibt reserviert: der Balken erscheint, ohne dass etwas springt */}
+            <Progress p={(percent ?? 0) / 100} width={180} className={cn(!repairing && "invisible")} label={t("detail.settings.repairProgress")} />
+          </Actions>
+        </FormRow>
       </FormSection>
 
       <FormSection title={t("detail.settings.dangerSection")}>
@@ -179,7 +178,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
           tone="bad"
           title={t("detail.settings.deleteInstance")}
           actions={
-            <Button variant="danger" icon="trash" disabled={phase === "running" || phase === "preparing" || phase === "starting"} onClick={() => askDelete(instance)}>
+            <Button variant="danger" icon="trash" disabled={isBusy(phase)} onClick={() => askDelete(instance)}>
               {t("common.delete")}
             </Button>
           }
@@ -227,7 +226,7 @@ function WindowChooser({ value, onChange, disabled }: { value: GameWindow; onCha
       value={text}
       onChange={(e) => setText(e.target.value)}
       onBlur={commitSize}
-      onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+      onKeyDown={blurOnEnter}
     />
   );
 

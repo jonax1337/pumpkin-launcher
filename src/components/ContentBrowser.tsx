@@ -6,21 +6,27 @@ import { t, useI18n } from "@/i18n";
 import {
   BackLink, Button, ButtonLink, Cell, Chip, Count, Dialog, DialogActions, Empty, ErrorBox, Field, Hint, Icon, IconButton, JobProgress, List, ListRow, Menu,
   MenuItem, MenuLabel, MenuNote, MenuScroll, MenuSep, Meta, Panel, ProjectIcon, RowTitle, SceneThumb, SearchField, SectionHeader, Select, Sheet, Skel, SkelRow,
-  Switch, TabPanel, Tabs, TextField, Tip, Toolbar, type MenuEntry,
+  Switch, TabPanel, Tabs, TextField, Tip, type MenuEntry,
 } from "@/ui";
 import { cancelContent, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { CATALOG_STALE_MS, SEARCH_STALE_MS } from "@/hooks/staleTimes";
 import { useDebounced } from "@/hooks/useDebounced";
 import { useInstances } from "@/hooks/useInstances";
 import { worldsQuery } from "@/hooks/useWorlds";
-import { worldKeys } from "@/hooks/worldKeys";
+import { catalogKeys, worldKeys } from "@/hooks/queryKeys";
 import { api } from "@/lib/api";
+import { WIDTH } from "@/lib/breakpoints";
+import { TYPE_LABEL_KEYS, TYPE_ONE_KEYS } from "@/lib/catalog";
+import { errorMessage } from "@/lib/errors";
 import { formatCount } from "@/lib/format";
 import {
   formatDownloads, installedKey, isPackVersionSupported, modLoadersFor, ownerKey, pickPackVersion, pickVersion, progressLabel, progressShare, progressShortLabel, projectKey, projectOf, SOURCES,
   type CatalogType, type ContentHit, type ContentProject, type ContentVersion, type SearchIndex, type Source,
 } from "@/lib/modrinth";
+import { loaderLine } from "@/components/common";
 import { Description } from "@/components/Description";
 import { openManualDownloads } from "@/components/ManualDownloads";
+import { instanceUrl, newInstanceUrl, type InstanceTab } from "@/lib/routes";
 import { LOADER_LABELS, type Instance, type ModKind, type ModLoader, type World } from "@/lib/types";
 import { lookOf, useLook, useLookStore } from "@/store/look";
 
@@ -33,22 +39,17 @@ function lazyLabels(keys: Record<string, string>): Record<string, string> {
   return labels;
 }
 
-// Beschriftungen als Schlüssel; exportierte Records lesen lazily übersetzt, damit ein Sprachwechsel ohne Neuladen greift.
-const KIND_LABEL_KEYS: Record<ModKind, string> = { mod: "components.catalog.kind.mod", shader: "components.catalog.kind.shader", resourcepack: "components.catalog.kind.resourcepack" };
-export const TYPE_LABELS: Record<CatalogType, string> = lazyLabels({
-  modpack: "components.catalog.kind.modpack", ...KIND_LABEL_KEYS, datapack: "components.catalog.kind.datapack",
-});
-const TYPE_ONE_KEYS: Record<CatalogType, string> = { modpack: "components.catalog.one.modpack", mod: "components.catalog.one.mod", shader: "components.catalog.one.shader", resourcepack: "components.catalog.one.resourcepack", datapack: "components.catalog.one.datapack" };
+// Exportierte Records lesen lazily übersetzt, damit ein Sprachwechsel ohne Neuladen greift.
+export const TYPE_LABELS: Record<CatalogType, string> = lazyLabels(TYPE_LABEL_KEYS);
 
 /** Was in eine Instanz passt: Mods und Shader nur mit Mod-Loader, Ressourcenpakete immer. */
-export const kindsFor = (instance: Instance): ModKind[] =>
+const kindsFor = (instance: Instance): ModKind[] =>
   instance.loader !== "vanilla" ? ["mod", "shader", "resourcepack"] : ["resourcepack"];
 
 /** „Fabric 1.21.4“ für Mods, sonst nur die Minecraft-Version. */
-export const fitsLabel = (instance: Instance, type: CatalogType) =>
-  type === "mod" ? `${LOADER_LABELS[instance.loader]} ${instance.minecraftVersion}` : `Minecraft ${instance.minecraftVersion}`;
+const fitsLabel = (instance: Instance, type: CatalogType) =>
+  type === "mod" ? loaderLine(instance) : `Minecraft ${instance.minecraftVersion}`;
 
-const versionsKey = (projectId: string, mc: string | null, loader: string | null) => ["modrinth-versions", projectId, mc, loader];
 // Für Quilt fragt das Backend Quilt- und Fabric-Mods an; Datenpakete führt Modrinth unter dem Loader „datapack“.
 const loaderFor = (instance: Instance, type: CatalogType) => (type === "mod" ? instance.loader : type === "datapack" ? "datapack" : null);
 
@@ -59,9 +60,9 @@ const versionFits = (v: ContentVersion, instance: Instance, type: CatalogType) =
 };
 
 const allVersionsQuery = (projectId: string, source: Source = "modrinth") => ({
-  queryKey: source === "modrinth" ? versionsKey(projectId, null, null) : ["catalog-versions", source, projectId],
+  queryKey: catalogKeys.versions(source, projectId, null, null),
   queryFn: () => (source === "modrinth" ? api.modrinthVersions(projectId, null, null) : api.providerVersions(source, projectId)),
-  staleTime: 10 * 60_000,
+  staleTime: CATALOG_STALE_MS,
   retry: false,
 });
 
@@ -145,7 +146,7 @@ const installDatapack = async (qc: QueryClient, instance: Instance, world: World
 };
 
 /** Wohin ein Inhalt kam: in die Welt (Tab Welten) oder in die Instanz (Tab Inhalte). */
-const destination = (instance: Instance, world?: World) =>
+const destination = (instance: Instance, world?: World): { label: string; tab: InstanceTab } =>
   world ? { label: t("components.content.destinationWorld", { welt: world.name, instanz: instance.name }), tab: "worlds" } : { label: instance.name, tab: "content" };
 
 /**
@@ -167,9 +168,9 @@ function useAddContent() {
     try {
       if (!id) {
         const versions = await qc.fetchQuery({
-          queryKey: source === "modrinth" ? versionsKey(projectId, mc, loader) : ["catalog-versions", source, projectId, mc, loader],
+          queryKey: catalogKeys.versions(source, projectId, mc, loader),
           queryFn: () => (source === "modrinth" ? api.modrinthVersions(projectId, mc, loader) : api.providerVersions(source, projectId, mc, loader)),
-          staleTime: 10 * 60_000,
+          staleTime: CATALOG_STALE_MS,
         });
         picked = pickVersion(versions) ?? undefined;
         id = picked?.id;
@@ -177,13 +178,13 @@ function useAddContent() {
         picked = (await qc.fetchQuery(allVersionsQuery(projectId, source))).find((v) => v.id === id);
       }
     } catch (err) {
-      toast.error(t("components.content.loadFailed", { name: title }), { description: err instanceof Error ? err.message : String(err) });
+      toast.error(t("components.content.loadFailed", { name: title }), { description: errorMessage(err) });
       return "error";
     }
     if (!id) return "missing";
     // CurseForge: Die Autoren erlauben den Download nur über die Webseite. Nicht umgehen, sondern beim Laden von Hand helfen.
     if (source !== "modrinth" && picked && !picked.files[0]?.url) {
-      const page = await qc.fetchQuery({ queryKey: ["catalog-project", source, projectId], queryFn: () => api.providerProject(source, projectId), staleTime: 10 * 60_000 })
+      const page = await qc.fetchQuery({ queryKey: catalogKeys.project(source, projectId), queryFn: () => api.providerProject(source, projectId), staleTime: CATALOG_STALE_MS })
         .then((p) => p.web_url).catch(() => null);
       openManualDownloads({
         instanceId: instance.id,
@@ -203,7 +204,7 @@ function useAddContent() {
         const deps = extra > 0 ? t(extra === 1 ? "components.content.deps.one" : "components.content.deps.other", { n: extra }) : "";
         if (!opts.openAction) return void toast.success(t("components.content.added", { name: title }) + deps);
         const { label, tab } = destination(result, world);
-        toast.success(t("components.content.nowIn", { name: title, ziel: label }) + deps, { action: { label: t("components.content.viewAction"), onClick: () => navigate(`/instances/${result.id}?tab=${tab}`) } });
+        toast.success(t("components.content.nowIn", { name: title, ziel: label }) + deps, { action: { label: t("components.content.viewAction"), onClick: () => navigate(instanceUrl(result.id, tab)) } });
       },
     });
     return "ok";
@@ -293,7 +294,7 @@ export function AddToInstanceMenu({ projectId, title, type, large, source = "mod
       {!usable && !all.isPending && (
         <>
           <MenuSep />
-          <MenuItem onSelect={() => navigate("/instances?neu=1")}>
+          <MenuItem onSelect={() => navigate(newInstanceUrl())}>
             <Icon name="plus" size="s" />
             <span className="vx-trunc">{type === "resourcepack" ? t("components.content.newInstancePlain") : t("components.content.newInstanceFabric")}</span>
           </MenuItem>
@@ -366,7 +367,7 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
         if (picked.reason) toast.error(t("components.pack.cannotInstall", { name: title }), { description: picked.reason });
         id = picked.version?.id;
       } catch (err) {
-        toast.error(t("components.content.loadFailed", { name: title }), { description: err instanceof Error ? err.message : String(err) });
+        toast.error(t("components.content.loadFailed", { name: title }), { description: errorMessage(err) });
       } finally {
         setChecking(false);
       }
@@ -374,13 +375,13 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
     }
     const perform = (op: string) => (source === "modrinth" ? api.modrinthInstallPack(id, name, op) : api.providerInstallPack(source, projectId, id, name, op));
     install.mutate(withTarget(projectId, perform, t("components.pack.installTask", { name }), { cancellable: true, doneLabel: t("components.pack.installTaskDone", { name }) }), {
-      onSuccess: (inst) => {
-        if (!inst) return;
-        toast.success(t("components.pack.readyToast", { name: inst.name }), {
-          action: onDone ? undefined : { label: t("common.open"), onClick: () => navigate(`/instances/${inst.id}`) },
+      onSuccess: (instance) => {
+        if (!instance) return;
+        toast.success(t("components.pack.readyToast", { name: instance.name }), {
+          action: onDone ? undefined : { label: t("common.open"), onClick: () => navigate(instanceUrl(instance.id)) },
         });
-        if (onDone) onDone(inst.id);
-        else navigate(`/instances/${inst.id}`);
+        if (onDone) onDone(instance.id);
+        else navigate(instanceUrl(instance.id));
       },
     });
   }
@@ -392,7 +393,7 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
 const loaderNamesOf = (loaders: string[]) =>
   loaders.map((l) => (l === "datapack" ? t("components.catalog.kind.datapack") : (LOADER_LABELS[l as ModLoader] ?? l))).join(", ");
 const loaderList = (v: ContentVersion) => loaderNamesOf(v.loaders.filter((l) => l !== "minecraft"));
-const loaderNames = (v: ContentVersion) => loaderList(v) || "Vanilla";
+const loaderNames = (v: ContentVersion) => loaderList(v) || LOADER_LABELS.vanilla;
 
 /** Inhalt der Bestätigung; wird beim Schließen verworfen, der Name beginnt also immer beim Pack-Titel. */
 function PackConfirmBody({ title, versions, picked, onConfirm }: {
@@ -556,46 +557,44 @@ function Offline({ onRetry, compact }: { onRetry: () => void; compact?: boolean 
   );
 }
 
+/** Platzhalter, solange die erste Seite der Treffer lädt. */
+const SKELETON_ROWS = 6;
+
 /** Überschrift ohne Suchbegriff je Sortierung. */
-export const SORT_HEADINGS: Record<SearchIndex, string> = lazyLabels({
+const SORT_HEADINGS: Record<SearchIndex, string> = lazyLabels({
   relevance: "components.sort.relevance", downloads: "components.sort.downloads", follows: "components.sort.follows", newest: "common.new", updated: "components.sort.updated",
 });
 
 /**
  * Suche mit „Beliebt“ als Startzustand. Mit `instance` passend gefiltert und mit „Hinzufügen“ je Zeile,
- * sonst mit `action` je Zeile. Ohne `query` bringt sie ihr eigenes Suchfeld mit; mit `query` sucht sie,
- * was außen steht (Entdecken, Seitenpanel). `compact` = schmale Zeilen im Seitenpanel.
+ * sonst mit `action` je Zeile. `compact` = schmale Zeilen im Seitenpanel.
  * `sort` fehlt = Downloads ohne Suchbegriff, sonst Relevanz. `feature` hebt ohne Suchbegriff den meistgeladenen bzw. meistgefolgten Treffer als Karte hervor.
  */
-export function ContentResults({ type, instance, world, action, onOpen, autoFocus = true, query: outerQuery, mc: outerMc, loader: outerLoader, fit = true, compact, onReset, sort, feature, source = "modrinth" }: {
+export function ContentResults({ type, instance, world, action, onOpen, query: typed, mc: outerMc, loader: outerLoader, fit = true, compact, onReset, sort, feature, source = "modrinth" }: {
   type: CatalogType; instance?: Instance; action?: (hit: ContentHit) => ReactNode; onOpen: (projectId: string, hit?: ContentHit) => void;
   /** Mit `instance`: Welt darin, in die Datenpakete kommen. */
   world?: World;
   /** Katalog-Quelle; ohne Angabe Modrinth. Anbieter ohne Schlüssel liefern nur Modpacks (CurseForge: Nachschlagen per Link). */
   source?: Source;
-  /** Früher: Hintergrund der klebenden Suchleiste; ohne Wirkung. */
-  barClassName?: string;
-  /** Früher: Kacheln im Raster; Pixelkino zeigt immer Zeilen. */
-  grid?: boolean;
-  autoFocus?: boolean; query?: string; mc?: string | null; loader?: string | null;
+  /** Suchtext von außen (Entdecken, Seitenpanel); die Suche wartet auf eine Tippause. */
+  query: string;
+  mc?: string | null; loader?: string | null;
   /** Mit `instance`: nur Passendes zeigen (Version und Loader der Instanz). */
   fit?: boolean; compact?: boolean; onReset?: () => void; sort?: SearchIndex | null; feature?: boolean;
 }) {
   const { t } = useI18n();
-  const [input, setInput] = useState("");
-  const controlled = outerQuery != null;
-  const query = useDebounced((controlled ? outerQuery : input).trim(), 300);
+  const query = useDebounced(typed.trim());
   const mc = instance ? (fit ? instance.minecraftVersion : null) : (outerMc ?? null);
   const loader = instance ? (fit ? loaderFor(instance, type) : null) : (outerLoader ?? null);
   const index: SearchIndex = sort ?? (query ? "relevance" : "downloads");
   const info = SOURCES[source];
   const results = useInfiniteQuery({
-    queryKey: source === "modrinth" ? ["modrinth-search", type, query, mc, loader, index] : ["catalog-search", source, type, query, mc, loader, index],
+    queryKey: catalogKeys.search(source, type, query, mc, loader, index),
     queryFn: ({ pageParam }) =>
       source === "modrinth" ? api.modrinthSearch(query, type, mc, loader, pageParam, index) : api.providerSearch(source, query, type, mc, loader, pageParam, index),
     initialPageParam: 0,
     getNextPageParam: (last) => (last.offset + last.hits.length < last.total_hits ? last.offset + last.limit : undefined),
-    staleTime: 5 * 60_000,
+    staleTime: SEARCH_STALE_MS,
     retry: false,
   });
   const hits = results.data?.pages.flatMap((p) => p.hits) ?? [];
@@ -609,11 +608,6 @@ export function ContentResults({ type, instance, world, action, onOpen, autoFocu
 
   return (
     <div>
-      {!controlled && (
-        <Toolbar search="l" className="mb-3.5">
-          <SearchField value={input} onChange={setInput} placeholder={SEARCH_PLACEHOLDER[type]} autoFocus={autoFocus} />
-        </Toolbar>
-      )}
       {/* Ohne Suchbegriff die Sortierung als Abschnittsüberschrift (wie auf Start), mit Suchbegriff die Trefferzahl; gleiche Höhe */}
       {!results.error && (
         <div aria-live="polite" className="mb-2.5">
@@ -633,7 +627,7 @@ export function ContentResults({ type, instance, world, action, onOpen, autoFocu
         )
       ) : results.isPending ? (
         <List variant={variant} aria-busy aria-label={t("components.common.loadingAria")}>
-          {Array.from({ length: 6 }, (_, i) => <SkelRow key={i} feature={featured && i === 0} />)}
+          {Array.from({ length: SKELETON_ROWS }, (_, i) => <SkelRow key={i} feature={featured && i === 0} />)}
         </List>
       ) : hits.length === 0 ? (
         <Empty
@@ -661,7 +655,7 @@ export function ContentResults({ type, instance, world, action, onOpen, autoFocu
                     meta={
                       <>
                         <span><Count value={formatDownloads(hit.downloads)} /> {t("components.stats.downloads")}</span>
-                        {categoryNames(hit.categories, compact ? 0 : 2).map((c) => <Chip key={c} size="s" data-hide="900">{c}</Chip>)}
+                        {categoryNames(hit.categories, compact ? 0 : 2).map((c) => <Chip key={c} size="s" data-hide={WIDTH.sm}>{c}</Chip>)}
                         {!instance && <InChip small instances={installedIn.get(installedKey(source, hit.project_id))} />}
                       </>
                     }
@@ -741,18 +735,18 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
   const { t } = useI18n();
   const info = SOURCES[source];
   const project = useQuery({
-    queryKey: source === "modrinth" ? ["modrinth-project", projectId] : ["catalog-project", source, projectId],
+    queryKey: catalogKeys.project(source, projectId),
     queryFn: () => (source === "modrinth" ? api.modrinthProject(projectId) : api.providerProject(source, projectId)),
-    staleTime: 10 * 60_000,
+    staleTime: CATALOG_STALE_MS,
     retry: false,
   });
   const mc = instance?.minecraftVersion ?? null;
   const loader = instance ? loaderFor(instance, type) : null;
   const fitting = useQuery({
-    queryKey: source === "modrinth" ? versionsKey(projectId, mc, loader) : ["catalog-versions", source, projectId, mc, loader],
+    queryKey: catalogKeys.versions(source, projectId, mc, loader),
     queryFn: () => (source === "modrinth" ? api.modrinthVersions(projectId, mc, loader) : api.providerVersions(source, projectId, mc, loader)),
     enabled: !!instance,
-    staleTime: 10 * 60_000,
+    staleTime: CATALOG_STALE_MS,
     retry: false,
   });
   // Datenpaket-Projekte bieten oft auch Mod-Versionen an; hier zählen nur die Datenpakete.
@@ -812,7 +806,7 @@ export function ContentDetail({ projectId, type, instance, world, action, onBack
                   {type !== "resourcepack" && type !== "datapack" && (
                     <>
                       <dt>{t("components.common.loader")}</dt>
-                      <dd>{type === "shader" ? "Iris (Fabric, Quilt, NeoForge)" : loaders.length ? loaderNamesOf(loaders) : all.data ? t("components.detail.notSpecified") : "…"}</dd>
+                      <dd>{type === "shader" ? t("components.detail.shaderLoaders") : loaders.length ? loaderNamesOf(loaders) : all.data ? t("components.detail.notSpecified") : "…"}</dd>
                     </>
                   )}
                   {source === "modrinth" && (
@@ -935,7 +929,7 @@ export function AddContentSheet({ instance, world, open, onOpenChange, initialKi
                 label={t("components.sheet.sourceLabel")}
                 value={source}
                 onChange={(v) => setSource(v as Source)}
-                options={[{ value: "modrinth", label: "Modrinth" }, { value: "curseforge", label: "CurseForge" }]}
+                options={[{ value: "modrinth", label: SOURCES.modrinth.label }, { value: "curseforge", label: SOURCES.curseforge.label }]}
               />
             )}
             <SearchField size="s" value={query} onChange={setQuery} placeholder={t("components.sheet.searchPlaceholder")} autoFocus />

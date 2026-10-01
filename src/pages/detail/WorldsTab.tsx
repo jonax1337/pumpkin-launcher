@@ -13,7 +13,9 @@ import {
   useAddDatapacks, useDatapacks, useDeleteBackup, useRemoveDatapack, useWorldBackups, useWorldJobs, useWorldQuickPlay, useWorlds, worldTarget,
 } from "@/hooks/useWorlds";
 import { api } from "@/lib/api";
+import { TYPE_LABEL_KEYS } from "@/lib/catalog";
 import { formatDateTime, formatSize, relativeTime } from "@/lib/format";
+import { openLocalPath } from "@/lib/links";
 import { progressShare } from "@/lib/modrinth";
 import { toastError } from "@/lib/toast";
 import { t, useI18n } from "@/i18n";
@@ -32,7 +34,7 @@ const GAME_MODE_KEYS: Record<NonNullable<World["gameMode"]>, string> = {
 
 /** „Hardcore · 1.21.4 · 182 MB · vor 2 Stunden“ */
 const worldLine = (w: World) =>
-  [w.hardcore ? "Hardcore" : w.gameMode && t(GAME_MODE_KEYS[w.gameMode]), w.version, formatSize(w.sizeBytes), relativeTime(w.lastPlayed)].filter(Boolean).join(" · ");
+  [w.hardcore ? t("detail.worlds.hardcore") : w.gameMode && t(GAME_MODE_KEYS[w.gameMode]), w.version, formatSize(w.sizeBytes), relativeTime(w.lastPlayed)].filter(Boolean).join(" · ");
 
 /** Welten und Server einer Instanz: direkt hineinspielen, Welten sichern und wiederherstellen, Serverliste pflegen. */
 export function WorldsTab({ instance, onLaunched }: { instance: Instance; onLaunched: () => void }) {
@@ -61,7 +63,7 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
   const playBlocked = busy ?? (startsIntoWorlds === false ? t("detail.worlds.quickPlayUnsupported", { version: instance.minecraftVersion }) : null);
 
   const menuFor = (w: World): MenuEntry[] => [
-    { id: "dir", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => void api.openPath(w.path).catch(toastError) },
+    { id: "dir", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => openLocalPath(w.path) },
     { id: "backup", text: t("detail.worlds.backupNow"), icon: "save", disabled: !!busy, onSelect: () => backup.mutate(w) },
     { id: "backups", text: t("detail.worlds.backupsMenu"), icon: "clock", onSelect: () => setShowBackups({ world: w.id }) },
     { id: "packs", text: t("detail.worlds.datapacksMenu"), icon: "box", onSelect: () => setPacks({ world: w, search: false }) },
@@ -152,12 +154,12 @@ function DatapacksDialog({ instance, world, busy, onSearch, onClose }: { instanc
   }
 
   async function pick() {
-    const picked = await api.pickPaths({ multiple: true, filters: [{ name: t("components.catalog.kind.datapack"), extensions: ["zip"] }] });
+    const picked = await api.pickPaths({ multiple: true, filters: [{ name: t(TYPE_LABEL_KEYS.datapack), extensions: ["zip"] }] });
     if (picked.length) take(picked);
   }
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title={t("components.catalog.kind.datapack")} sub={world.name} width={560} footer={<DialogActions cancel={t("common.close")} />}>
+    <Dialog open onOpenChange={(o) => !o && onClose()} title={t(TYPE_LABEL_KEYS.datapack)} sub={world.name} width={560} footer={<DialogActions cancel={t("common.close")} />}>
       <Actions className="mb-3">
         {/* Eigene Dateien gibt es nur in der App: der Browser liefert keine Pfade. */}
         {!api.isMock && (
@@ -178,7 +180,7 @@ function DatapacksDialog({ instance, world, busy, onSearch, onClose }: { instanc
           empty={<Empty size="pane" ill="box" title={t("detail.worlds.packsEmptyTitle")}>{t("detail.worlds.packsEmptyHint")}</Empty>}
         >
           {(list) => (
-            <List variant="versions" aria-label={t("components.catalog.kind.datapack")}>
+            <List variant="versions" aria-label={t(TYPE_LABEL_KEYS.datapack)}>
               {list.map((pack) => (
                 <ListRow key={pack.id}>
                   <RowTitle title={pack.name} sub={pack.description} />

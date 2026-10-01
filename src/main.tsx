@@ -8,6 +8,7 @@ import { LanguageProvider } from "@/i18n";
 import { Layout } from "@/app/Layout";
 import { BrandProvider } from "@/branding/Brand";
 import { CANCELLED } from "@/lib/types";
+import { discoverUrl } from "@/lib/routes";
 import { HomePage } from "@/pages/Home";
 import { InstancesPage } from "@/pages/Instances";
 import { InstanceDetailPage } from "@/pages/InstanceDetail";
@@ -16,6 +17,9 @@ import { SettingsPage } from "@/pages/Settings";
 import { SkinsPage } from "@/pages/Skins";
 import { NotFoundPage } from "@/pages/NotFound";
 import "./index.css";
+
+/** Abfragen ohne eigene Angabe gelten kurz als frisch; was seltener wechselt, setzt `staleTime` selbst (hooks/staleTimes.ts). */
+const DEFAULT_STALE_MS = 30_000;
 
 // Mutations-Fehler zentral als Toast; Mutationen mit eigenem Fehler-Toast setzen `meta.ownErrorToast`.
 // Query-Fehler zeigen die Seiten inline.
@@ -29,7 +33,7 @@ const queryClient = new QueryClient({
     },
   }),
   defaultOptions: {
-    queries: { staleTime: 30_000, refetchOnWindowFocus: false, retry: 1 },
+    queries: { staleTime: DEFAULT_STALE_MS, refetchOnWindowFocus: false, retry: 1 },
   },
 });
 
@@ -60,8 +64,8 @@ const router = createBrowserRouter([
       { path: "settings", element: <SettingsPage /> },
       { path: "skins", element: <SkinsPage /> },
       // Alte Adressen aus früheren Versionen
-      { path: "mods", element: <Navigate to="/discover?tab=mods" replace /> },
-      { path: "modpacks", element: <Navigate to="/discover" replace /> },
+      { path: "mods", element: <Navigate to={discoverUrl({ tab: "mod" })} replace /> },
+      { path: "modpacks", element: <Navigate to={discoverUrl()} replace /> },
       { path: "account", element: <Navigate to="/settings" replace /> },
       // Nur Entwicklung: Vorschau des Pixel-Kits (fällt im Build weg)
       ...(import.meta.env.DEV ? [{ path: "_kit", lazy: async () => ({ Component: (await import("@/ui/KitPage")).KitPage }) }] : []),

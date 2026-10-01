@@ -68,6 +68,9 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 
 // ---------- In-Memory-Mock ----------
 
+/** Arbeitsspeicher des vorgetäuschten PCs. */
+const MOCK_SYSTEM_MEMORY_MB = 16384;
+
 // Dynamisch und nur ohne Tauri: im Release-Build fällt der Import samt mock.ts weg.
 const mockData = tauri ? null : await import("@/lib/mock");
 
@@ -294,7 +297,7 @@ const mockGame = {
     });
   },
   async systemMemory() {
-    return 16384;
+    return MOCK_SYSTEM_MEMORY_MB;
   },
   async status(instanceId: string): Promise<InstanceStatus> {
     await delay();

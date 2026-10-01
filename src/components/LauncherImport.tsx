@@ -1,11 +1,13 @@
 import { toast } from "sonner";
-import { Button, Chip, Choice, Empty, ErrorBox, Field, Glyph, JobProgress, Skel } from "@/ui";
+import { loaderLine } from "@/components/common";
+import { SkelList } from "@/components/SkelList";
+import { Button, Chip, Choice, Empty, ErrorBox, Field, Glyph, JobProgress } from "@/ui";
 import { useContentState } from "@/hooks/useContent";
 import { importTarget, type ForeignSelection } from "@/hooks/useImport";
 import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
 import { progressShare, progressShortLabel } from "@/lib/modrinth";
-import { FOREIGN_LAUNCHER_LABELS, FOREIGN_LAUNCHERS, LOADER_LABELS, type ForeignInstance } from "@/lib/types";
+import { FOREIGN_LAUNCHER_LABELS, FOREIGN_LAUNCHERS, type ForeignInstance } from "@/lib/types";
 
 /** Import aus anderen Launchern im Dialog „Neue Instanz“: Instanzen nach Launcher gruppiert, Fortschritt in der Zeile. */
 export function ImportPane({ selection, busy }: { selection: ForeignSelection; busy: boolean }) {
@@ -29,7 +31,7 @@ export function ImportPane({ selection, busy }: { selection: ForeignSelection; b
         <ErrorBox title={t("components.import.searchFailed")} error={detected.error} onRetry={() => void detected.refetch()} />
       ) : detected.isPending ? (
         <div className="flex flex-col gap-1">
-          {[0, 1, 2].map((k) => <Skel key={k} h={56} />)}
+          <SkelList n={3} h={56} />
         </div>
       ) : !all.length ? (
         <Empty ill={<Glyph name="chest" pal="sand" box={64} />} title={t("components.import.noneFound")} size="pane">
@@ -44,7 +46,7 @@ export function ImportPane({ selection, busy }: { selection: ForeignSelection; b
                   key={f.path}
                   media={<Glyph name="chest" pal="copper" />}
                   title={f.name}
-                  sub={f.unsupported ?? `${LOADER_LABELS[f.loader]} ${f.minecraftVersion}`}
+                  sub={f.unsupported ?? loaderLine(f)}
                   trail={trail(f)}
                   selected={selection.isChosen(f)}
                   disabled={busy || !!f.unsupported}

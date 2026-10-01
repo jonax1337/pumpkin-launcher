@@ -35,6 +35,9 @@ jobs:
       - name: Check branding calendar & assets
         run: pnpm check:branding
 
+      - name: Check frontend helpers (Modrinth, formatting, routes)
+        run: pnpm check:lib
+
       - name: Check website links & assets
         run: pnpm check:website
 

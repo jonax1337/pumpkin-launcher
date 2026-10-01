@@ -5,11 +5,14 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { t, useI18n } from "@/i18n";
 import { Checkbox, ConfirmDialog, Dialog, DialogActions, Field, Hint, IconButton, Menu, Skel, TextField, type MenuEntry } from "@/ui";
-import { usePhase } from "@/components/game";
+import { isBusy, usePhase } from "@/components/game";
 import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { askStop, useDeleteInstance, useExportEntries, useGroups, usePlay, useSetGroup } from "@/hooks/useInstances";
 import { useSaveTemplate } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
+import { KIND_LABEL_KEYS } from "@/lib/catalog";
+import { revealLocalPath } from "@/lib/links";
+import { instanceUrl } from "@/lib/routes";
 import { toastError } from "@/lib/toast";
 import type { Instance } from "@/lib/types";
 
@@ -21,13 +24,13 @@ const useInstanceActions = create<{ template: Instance | null; exporting: Instan
   newGroup: null,
 }));
 
-export const askSaveTemplate = (instance: Instance) => useInstanceActions.setState({ template: instance });
-export const askExport = (instance: Instance) => useInstanceActions.setState({ exporting: instance });
+const askSaveTemplate = (instance: Instance) => useInstanceActions.setState({ template: instance });
+const askExport = (instance: Instance) => useInstanceActions.setState({ exporting: instance });
 export const askDelete = (instance: Instance) => useInstanceActions.setState({ remove: instance });
-export const askNewGroup = (instance: Instance) => useInstanceActions.setState({ newGroup: instance });
+const askNewGroup = (instance: Instance) => useInstanceActions.setState({ newGroup: instance });
 
 /** Spielordner der Instanz im Dateimanager öffnen; Fehler als Toast. */
-export function openInstanceFolder(instance: Instance) {
+function openInstanceFolder(instance: Instance) {
   api.instanceDir(instance.id).then(api.openPath).catch(toastError);
 }
 
@@ -38,7 +41,7 @@ function useDuplicate() {
   const navigate = useNavigate();
   return (instance: Instance) =>
     install.mutate(withTarget(`duplicate:${instance.id}`, (op) => api.duplicateInstance(instance.id, op), t("components.instance.duplicateTask", { name: instance.name }), { cancellable: true, doneLabel: t("components.instance.duplicateTaskDone", { name: instance.name }) }), {
-      onSuccess: (copy) => copy && toast.success(t("components.instance.createdQuoted", { name: copy.name }), { action: { label: t("common.open"), onClick: () => navigate(`/instances/${copy.id}`) } }),
+      onSuccess: (copy) => copy && toast.success(t("components.instance.createdQuoted", { name: copy.name }), { action: { label: t("common.open"), onClick: () => navigate(instanceUrl(copy.id)) } }),
     });
 }
 
@@ -58,7 +61,7 @@ function useExport() {
         exported &&
         toast.success(t("components.instance.exportedQuoted", { name: instance.name }), {
           description: path,
-          action: { label: t("components.instance.revealInFolder"), onClick: () => api.revealPath(path).catch(toastError) },
+          action: { label: t("components.instance.revealInFolder"), onClick: () => revealLocalPath(path) },
         }),
     });
   };
@@ -91,21 +94,21 @@ export function useInstanceMenu(instance: Instance, opts: { open?: boolean } = {
   const navigate = useNavigate();
   const groupItems = useGroupMenu(instance);
   const running = phase === "running";
-  const busy = phase === "preparing" || phase === "starting";
+  const locked = isBusy(phase);
   return [
     running
       ? { id: "stop", text: t("components.game.quitEllipsis"), icon: "stop", onSelect: () => askStop(instance) }
-      : { id: "play", text: t("common.play"), icon: "play", disabled: busy || phase === "loading", onSelect: () => void play(instance) },
-    ...(opts.open ? [{ id: "open", text: t("components.instance.openInstance"), icon: "chev" as const, onSelect: () => navigate(`/instances/${instance.id}`) }] : []),
-    { id: "log", text: t("components.log.ariaLabel"), icon: "term", onSelect: () => navigate(`/instances/${instance.id}?tab=console`) },
+      : { id: "play", text: t("common.play"), icon: "play", disabled: locked || phase === "loading", onSelect: () => void play(instance) },
+    ...(opts.open ? [{ id: "open", text: t("components.instance.openInstance"), icon: "chev" as const, onSelect: () => navigate(instanceUrl(instance.id)) }] : []),
+    { id: "log", text: t("components.log.ariaLabel"), icon: "term", onSelect: () => navigate(instanceUrl(instance.id, "console")) },
     { id: "dir", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => openInstanceFolder(instance) },
-    { id: "group", text: t("components.instance.group"), icon: "box", disabled: running || busy, items: groupItems },
+    { id: "group", text: t("components.instance.group"), icon: "box", disabled: locked, items: groupItems },
     "-",
-    { id: "dup", text: t("components.instance.duplicate"), icon: "copy", disabled: running || busy || contentBusy, onSelect: () => duplicate(instance) },
-    { id: "exp", text: t("components.instance.exportEllipsis"), icon: "ul", disabled: running || busy || contentBusy, onSelect: () => askExport(instance) },
+    { id: "dup", text: t("components.instance.duplicate"), icon: "copy", disabled: locked || contentBusy, onSelect: () => duplicate(instance) },
+    { id: "exp", text: t("components.instance.exportEllipsis"), icon: "ul", disabled: locked || contentBusy, onSelect: () => askExport(instance) },
     { id: "tpl", text: t("components.instance.saveAsTemplate"), icon: "save", onSelect: () => askSaveTemplate(instance) },
     "-",
-    { id: "del", text: t("common.delete"), icon: "trash", bad: true, disabled: running || busy, onSelect: () => askDelete(instance) },
+    { id: "del", text: t("common.delete"), icon: "trash", bad: true, disabled: locked, onSelect: () => askDelete(instance) },
   ];
 }
 
@@ -167,9 +170,9 @@ const EXPORT_DEFAULTS = ["config", "mods", "resourcepacks", "shaderpacks", "opti
 /** Lesbare Namen bekannter Einträge im Spielordner. */
 const ENTRY_LABELS: Record<string, string> = {
   config: "components.export.entry.config",
-  mods: "components.catalog.kind.mod",
-  resourcepacks: "components.catalog.kind.resourcepack",
-  shaderpacks: "components.catalog.kind.shader",
+  mods: KIND_LABEL_KEYS.mod,
+  resourcepacks: KIND_LABEL_KEYS.resourcepack,
+  shaderpacks: KIND_LABEL_KEYS.shader,
   "options.txt": "components.export.entry.options",
   saves: "common.worlds",
   screenshots: "components.export.entry.screenshots",
@@ -184,7 +187,7 @@ function ExportDialog({ instance, onExport, onClose }: { instance: Instance; onE
   const toggle = (name: string, on: boolean) => setPicked(new Set(on ? [...chosen, name] : [...chosen].filter((n) => n !== name)));
 
   async function submit() {
-    const path = await saveFile({ defaultPath: packFileName(instance.name), filters: [{ name: "Modrinth-Modpack", extensions: ["mrpack"] }] });
+    const path = await saveFile({ defaultPath: packFileName(instance.name), filters: [{ name: t("components.export.fileFilter"), extensions: ["mrpack"] }] });
     if (!path) return;
     onExport([...chosen], path);
     onClose();

@@ -7,31 +7,24 @@ import {
 } from "@/ui";
 import { IRIS_PROJECT_ID } from "@/components/ContentBrowser";
 import { useContentInstall, useContentState, useProjects, withTarget } from "@/hooks/useContent";
-import { instanceKeys, useUpdateMods } from "@/hooks/useInstances";
+import { ANNOUNCE_DEBOUNCE_MS } from "@/hooks/useDebounced";
+import { instanceKeys } from "@/hooks/queryKeys";
+import { useUpdateMods } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
-import { openPage } from "@/lib/links";
+import { WIDTH } from "@/lib/breakpoints";
+import { KIND_LABEL_KEYS, TYPE_ONE_KEYS } from "@/lib/catalog";
+import { openPage, projectUrl } from "@/lib/links";
 import { ownerKey, projectOf, removeWithDependencies, undoRemove, type ModUpdate } from "@/lib/modrinth";
 import { useI18n } from "@/i18n";
 import type { Instance, Mod, ModKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useLocalFiles } from "./LocalFiles";
 
-/** Art eines Inhalts im Singular bzw. Plural – Schlüssel statt Texte, übersetzt erst bei der Ausgabe. */
-const KIND1_KEYS: Record<ModKind, string> = {
-  mod: "components.catalog.one.mod",
-  shader: "components.catalog.one.shader",
-  resourcepack: "components.catalog.one.resourcepack",
-};
-const KINDS_KEYS: Record<ModKind, string> = {
-  mod: "components.catalog.kind.mod",
-  shader: "components.catalog.kind.shader",
-  resourcepack: "components.catalog.kind.resourcepack",
-};
 /** Hinweis auf das Umschalten von Ressourcenpaketen im Spiel. */
 const RP_HINT_KEY = "detail.content.resourcePackHint";
 
 type KindFilter = "all" | ModKind;
-type Warn = { t: string; lab: string; fix: () => void };
+type Warn = { text: string; actionLabel: string; fix: () => void };
 type Row = { type: "row"; mod: Mod; owners: string[] };
 type Ghost = { type: "ghost"; mod: Mod; title: string; at: number; group: string; main: boolean; by?: string };
 type Entry = Row | Ghost;
@@ -55,8 +48,8 @@ export function useWarnings(instance: Instance, onAddIris: () => void, turnOnIri
     if (m.kind !== "shader" || (iris && iris.enabled)) return [];
     return [
       iris
-        ? { t: t("detail.content.shaderNeedsIris"), lab: t("detail.content.turnIrisOn"), fix: turnOnIris }
-        : { t: t("detail.content.shaderNeedsIris"), lab: t("detail.content.addIris"), fix: onAddIris },
+        ? { text: t("detail.content.shaderNeedsIris"), actionLabel: t("detail.content.turnIrisOn"), fix: turnOnIris }
+        : { text: t("detail.content.shaderNeedsIris"), actionLabel: t("detail.content.addIris"), fix: onAddIris },
     ];
   };
   const total = instance.mods.reduce((n, m) => n + warnsOf(m).length, 0);
@@ -163,11 +156,11 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     const timer = setTimeout(() => {
       lastFilter.current = filterKey;
       setSaid(t(nAll === 1 ? "detail.content.visibleCount.one" : "detail.content.visibleCount.other", { visible: nVisible, total: nAll }));
-    }, 500);
+    }, ANNOUNCE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [filterKey, nVisible, nAll]);
 
-  /** Nach Bulk-Aktionen, die die Leiste schließen: Kopf-Checkbox (Liste) oder Suchfeld (Raster). */
+  // Nach Bulk-Aktionen, die die Leiste schließen: Kopf-Checkbox (Liste) oder Suchfeld (Raster).
   const focusHead = () =>
     focusSoon(() => rootRef.current?.querySelector<HTMLElement>(".vx-lhead input[type=checkbox]") ?? rootRef.current?.querySelector<HTMLElement>(".vx-tb-main input[type=search]"));
   const clearPicked = () => {
@@ -288,14 +281,13 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
 
   const menuFor = (m: Mod): MenuEntry[] => {
     const up = updateFor.get(m.id);
-    const pid = projectOf(m);
+    const web = projectUrl(m.source);
     const own = m.source.type === "local";
     return [
       ...(up ? [{ id: "up", text: t("detail.content.updateVersionTo", { version: up.versionNumber }), icon: "up" as const, disabled: !!active, onSelect: () => runUpdates([m.id]) }] : []),
       ...(own ? [{ id: "identify", text: t("detail.content.matchOnModrinth"), icon: "search" as const, disabled: !!active, onSelect: () => local.identify(m) }] : []),
-      ...(pid ? [{ id: "web", text: t("detail.content.viewOnModrinth"), icon: "ext" as const, onSelect: () => openPage(`https://modrinth.com/project/${pid}`) }] : []),
-      ...(m.source.type === "curseforge" ? [{ id: "web", text: t("detail.content.viewOnCurseForge"), icon: "ext" as const, onSelect: () => openPage(`https://www.curseforge.com/projects/${(m.source as { projectId: number }).projectId}`) }] : []),
-      ...(up || own || pid || m.source.type === "curseforge" ? ["-" as const] : []),
+      ...(web ? [{ id: "web", text: t(m.source.type === "curseforge" ? "detail.content.viewOnCurseForge" : "detail.content.viewOnModrinth"), icon: "ext" as const, onSelect: () => openPage(web) }] : []),
+      ...(up || own || web ? ["-" as const] : []),
       { id: "rm", text: t("common.remove"), icon: "trash", bad: true, onSelect: () => remove([m.id]) },
     ];
   };
@@ -306,34 +298,34 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
       <>
         <div className="tn">{title(m)}</div>
         <div className="tv">
-          {t(KIND1_KEYS[m.kind])} · {t("common.version")} {m.version}
+          {t(TYPE_ONE_KEYS[m.kind])} · {t("common.version")} {m.version}
           {m.enabled ? "" : ` · ${t("detail.content.turnedOffInline")}`}
         </div>
         {r.owners.length > 0 && <div className="tr">{t("detail.content.requiredBy", { names: r.owners.join(", ") })}</div>}
         {up && <div className="tu">{t("detail.content.updateAvailable", { version: up.versionNumber })}</div>}
-        {warns.map((w) => <div key={w.t} className="tw">{w.t}</div>)}
+        {warns.map((w) => <div key={w.text} className="tw">{w.text}</div>)}
         {desc && <div className="td">{desc}</div>}
       </>
     );
   };
 
-  /** Was sonst nur im Tooltip steht, als Text für Screenreader (per aria-describedby am Menüknopf der Zeile). */
+  // Was sonst nur im Tooltip steht, als Text für Screenreader (per aria-describedby am Menüknopf der Zeile).
   const descId = (m: Mod) => `${uid}-d-${m.id}`;
   const descOf = (r: Row, warns: Warn[]) => {
     const m = r.mod, up = updateFor.get(m.id), desc = project(m)?.description;
     return [
       !m.enabled && t("detail.content.offState"),
       up && t("detail.content.updateAvailable", { version: up.versionNumber }),
-      ...warns.map((w) => w.t),
+      ...warns.map((w) => w.text),
       desc,
     ].filter(Boolean).join(". ");
   };
   const srDesc = (m: Mod, text: string) => text && <span id={descId(m)} className="sr">{text}</span>;
 
   const subOf = (r: Row) =>
-    r.owners.length ? `${t("detail.content.requiredBy", { names: r.owners.join(", ") })} · ${r.mod.version}` : `${t(KIND1_KEYS[r.mod.kind])} · ${r.mod.version}`;
+    r.owners.length ? `${t("detail.content.requiredBy", { names: r.owners.join(", ") })} · ${r.mod.version}` : `${t(TYPE_ONE_KEYS[r.mod.kind])} · ${r.mod.version}`;
 
-  /** Update je Inhalt: Fortschritt beim Aktualisieren, sonst Knopf mit fester Breite (Version mit Auslassung, voller Text im Tooltip). */
+  // Update je Inhalt: Fortschritt beim Aktualisieren, sonst Knopf mit fester Breite (Version mit Auslassung, voller Text im Tooltip).
   const updCell = (m: Mod, tile = false) => {
     if (busyFor(m)) return <JobProgress label={t("detail.content.updating")} p={pct} width={tile ? 112 : undefined} className={tile ? undefined : "w-full"} />;
     const up = updateFor.get(m.id);
@@ -347,7 +339,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     );
   };
 
-  /** An/Aus: Schalter mit sichtbarem „Aus“; Ressourcenpakete haben keinen (das Spiel schaltet sie ein). */
+  // An/Aus: Schalter mit sichtbarem „Aus“; Ressourcenpakete haben keinen (das Spiel schaltet sie ein).
   const onCell = (m: Mod, tile = false) =>
     m.kind === "resourcepack" ? (
       <Tip label={t(RP_HINT_KEY)}>
@@ -390,9 +382,9 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
         {hasWarns && (
           <Cell flex>
             {warns.map((w) => (
-              <Fragment key={w.t}>
-                <Chip size="s" dot tone="warn" data-hide="1040">{w.t}</Chip>
-                <Button variant="ghost" size="s" tone="warn" onClick={w.fix}>{w.lab}</Button>
+              <Fragment key={w.text}>
+                <Chip size="s" dot tone="warn" data-hide={WIDTH.md}>{w.text}</Chip>
+                <Button variant="ghost" size="s" tone="warn" onClick={w.fix}>{w.actionLabel}</Button>
               </Fragment>
             ))}
           </Cell>
@@ -404,7 +396,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     );
   };
 
-  /** Kachel, 88 px: Icon (Auswahlfeld darüber) · Name · rechts oben Schalter und Menü · eine Zeile Beschreibung bzw. Hinweis · rechts unten Update. */
+  // Kachel, 88 px: Icon (Auswahlfeld darüber) · Name · rechts oben Schalter und Menü · eine Zeile Beschreibung bzw. Hinweis · rechts unten Update.
   const tile = (r: Row) => {
     const m = r.mod, warns = warnsOf(m), on = picked.has(m.id), desc = descOf(r, warns);
     // Beschreibung steht schon im Screenreader-Text (srDesc); Art/Version nur hier.
@@ -424,7 +416,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
         </span>
         <span>
           {warns.length
-            ? warns.map((w) => <Chip key={w.t} size="s" dot tone="warn">{w.t}</Chip>)
+            ? warns.map((w) => <Chip key={w.text} size="s" dot tone="warn">{w.text}</Chip>)
             : about ? <span className="truncate" aria-hidden>{about}</span> : <span className="truncate">{subOf(r)}</span>}
         </span>
         <span>{updCell(m, true)}</span>
@@ -453,7 +445,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
     <div className="relative max-w-[var(--page-max)]" ref={rootRef}>
       {local.overlay}
       <div className="sr" role="status" aria-live="polite" aria-atomic="true">{said}</div>
-      <Toolbar height={56} search="s" wrapBelow={800} alt={bulk} altActive={pickedLive.length > 0}>
+      <Toolbar height={56} search="s" wrapBelow={WIDTH.xs} alt={bulk} altActive={pickedLive.length > 0}>
         <SearchField size="s" value={search} onChange={setSearch} placeholder={t("detail.content.searchPlaceholder")} />
         <Segmented
           size="s"
@@ -462,9 +454,9 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
           onChange={setKind}
           items={[
             { value: "all", label: t("common.all"), count: counts.all },
-            { value: "mod", label: kindLabel(t("components.catalog.kind.mod"), counts.mod), count: counts.mod },
-            { value: "shader", label: kindLabel(t("components.catalog.kind.shader"), counts.shader), count: counts.shader },
-            { value: "resourcepack", label: kindLabel(t("components.catalog.kind.resourcepack"), counts.resourcepack), count: counts.resourcepack },
+            { value: "mod", label: kindLabel(t(KIND_LABEL_KEYS.mod), counts.mod), count: counts.mod },
+            { value: "shader", label: kindLabel(t(KIND_LABEL_KEYS.shader), counts.shader), count: counts.shader },
+            { value: "resourcepack", label: kindLabel(t(KIND_LABEL_KEYS.resourcepack), counts.resourcepack), count: counts.resourcepack },
           ]}
         />
         <Spacer />
@@ -484,7 +476,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
             size="s"
             icon="up"
             count={nUpd}
-            compactBelow={1096}
+            compactBelow={WIDTH.lg}
             className={cn(!upShown && "invisible")}
             aria-label={updatingAll ? t("detail.content.updating") : undefined}
             disabled={!!active || !upShown}
@@ -496,7 +488,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
         </span>
         {/* Sekundär: auf dieser Seite ist nur Spielen Akzent-Primär. */}
         <Button size="s" icon="plus" onClick={onAdd}>{t("common.add")}</Button>
-        {local.pick && <Button size="s" icon="ul" compactBelow={1096} disabled={!!active} onClick={local.pick}>{t("detail.content.addFile")}</Button>}
+        {local.pick && <Button size="s" icon="ul" compactBelow={WIDTH.lg} disabled={!!active} onClick={local.pick}>{t("detail.content.addFile")}</Button>}
       </Toolbar>
 
       {visible.length === 0 ? (
@@ -510,7 +502,7 @@ export function ContentTab({ instance, shown, updateFor, onAdd, warnsOf, showUpd
             </>
           }
         >
-          {t("detail.content.noMatch", { filter: search.trim() || (kind !== "all" ? t(KINDS_KEYS[kind]) : "") })}
+          {t("detail.content.noMatch", { filter: search.trim() || (kind !== "all" ? t(KIND_LABEL_KEYS[kind]) : "") })}
         </Empty>
       ) : mode === "grid" ? (
         <List variant="tiles">{visible.map((e) => (e.type === "row" ? tile(e) : ghostRow(e)))}</List>

@@ -2,14 +2,17 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { Buddy } from "@/branding/Brand";
 import { useI18n } from "@/i18n";
 import { useNavigate } from "react-router";
-import { PlayButton, PlayStatus, StatusChip, usePhase } from "@/components/game";
+import { isGameLive, PlayButton, PlayStatus, StatusChip, usePhase } from "@/components/game";
 import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
 import { loaderLine } from "@/components/common";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
+import { SkelList } from "@/components/SkelList";
 import { Onboarding } from "@/components/Onboarding";
 import { useModUpdates } from "@/hooks/useContent";
-import { pickRecentInstance, useInstances, usePlay } from "@/hooks/useInstances";
+import { byRecent, pickRecentInstance, useInstances, usePlay } from "@/hooks/useInstances";
 import { relativeTime } from "@/lib/format";
+import { updatesLabel } from "@/lib/modrinth";
+import { instanceUrl } from "@/lib/routes";
 import { quickPlayTarget, type Instance } from "@/lib/types";
 import { PixelScene } from "@/pixel/PixelScene";
 import { motionOff } from "@/pixel/scene";
@@ -38,7 +41,7 @@ function HeroInfo({ instance }: { instance: Instance }) {
   const n = instance.mods.length;
   const u = updates.data?.length ?? 0;
   // Während des Spiels sagt der Knopf „Läuft seit …“; „Zuletzt gespielt in dieser Minute“ wäre doppelt.
-  const playing = phase === "starting" || phase === "running";
+  const playing = isGameLive(phase);
   // Der Ordnername statt des Weltnamens: den kennt nur die Weltenliste, und die liest jede Welt vom Datenträger.
   const resume = playing || phase === "preparing" ? null : instance.lastQuickPlay;
   return (
@@ -57,8 +60,8 @@ function HeroInfo({ instance }: { instance: Instance }) {
           ]}
         />
         {u > 0 && (
-          <ButtonLink to={`/instances/${instance.id}?tab=content`} size="s" icon="up" count={u} onScene>
-            {u === 1 ? t("common.update") : t("common.updates")}
+          <ButtonLink to={instanceUrl(instance.id, "content")} size="s" icon="up" count={u} onScene>
+            {updatesLabel(u)}
           </ButtonLink>
         )}
         {resume && (
@@ -80,7 +83,7 @@ function MiniCard({ instance, current, onPick, hintId }: { instance: Instance; c
   const look = useLook(instance.id);
   const items = useInstanceMenu(instance);
   const navigate = useNavigate();
-  const open = () => navigate(`/instances/${instance.id}`);
+  const open = () => navigate(instanceUrl(instance.id));
   return (
     <li data-id={instance.id}>
       <SceneCard
@@ -108,6 +111,12 @@ function MiniCard({ instance, current, onPick, hintId }: { instance: Instance; c
     </li>
   );
 }
+
+/** Größe der Kacheln (`SceneCard` mini) und Abstand in der Leiste „Deine Instanzen“; wie in ui/card.css und .rail (styles/pixelkino.css). */
+const TILE_W = 184;
+const TILE_H = 104;
+const TILE_GAP = 12;
+const TILE_STEP = TILE_W + TILE_GAP;
 
 /** Leiste „Deine Instanzen“ (Klick wählt die Instanz für den Hero, Doppelklick/Enter öffnet sie): Liste mit Knöpfen, Pfeile nur in Richtungen, in die noch etwas kommt. */
 function Rail({ instances, current, onPick }: { instances: Instance[]; current: string; onPick: (id: string) => void }) {
@@ -145,11 +154,11 @@ function Rail({ instances, current, onPick }: { instances: Instance[]; current: 
     if (to !== null) el.scrollTo({ left: to, behavior: motionOff() ? "auto" : "smooth" });
   }, [current]);
 
-  // Blättert um ganze Kacheln (184 + 12 Lücke), mindestens eine.
+  // Blättert um ganze Kacheln, mindestens eine.
   function page(dir: 1 | -1) {
     const el = rail.current;
     if (!el) return;
-    const step = Math.max(1, Math.floor(el.clientWidth / 196) - 1) * 196;
+    const step = Math.max(1, Math.floor(el.clientWidth / TILE_STEP) - 1) * TILE_STEP;
     el.scrollBy({ left: dir * step, behavior: motionOff() ? "auto" : "smooth" });
   }
 
@@ -187,7 +196,7 @@ function HomeSkeleton() {
       </div>
       <div className="cont">
         <div className="library-heading"><Skel h={22} w={150} /></div>
-        <div className="railwrap"><div className="rail">{[0, 1, 2, 3].map((k) => <Skel key={k} w={184} h={104} className="flex-none" />)}</div></div>
+        <div className="railwrap"><div className="rail"><SkelList n={4} w={TILE_W} h={TILE_H} className="flex-none" /></div></div>
       </div>
     </section>
   );
@@ -211,9 +220,7 @@ export function HomePage() {
     );
   if (!instances?.length || !current) return <Onboarding />;
 
-  // Gespielte zuerst (zuletzt gespielt vorn), nie gespielte dahinter (neueste zuerst)
-  const sorted = [...instances].sort((a, b) =>
-    (a.lastPlayedAt == null ? 1 : 0) - (b.lastPlayedAt == null ? 1 : 0) || (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0) || b.createdAt - a.createdAt);
+  const sorted = [...instances].sort(byRecent);
 
   return (
     <section className="home">

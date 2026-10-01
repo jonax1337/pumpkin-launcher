@@ -162,6 +162,7 @@ export const detail: typeof deDetail = {
   "detail.worlds.gameMode.creative": "Creative",
   "detail.worlds.gameMode.adventure": "Adventure",
   "detail.worlds.gameMode.spectator": "Spectator",
+  "detail.worlds.hardcore": "Hardcore",
   "detail.worlds.loadError": "Couldn’t load the worlds",
   "detail.worlds.emptyTitle": "No worlds yet",
   "detail.worlds.emptyHint": "Create a world in game, then launch it from here with one click.",

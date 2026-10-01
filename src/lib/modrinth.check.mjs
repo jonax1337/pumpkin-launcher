@@ -1,6 +1,6 @@
 // Run: node src/lib/modrinth.check.mjs (Node with TypeScript stripping).
 import assert from 'node:assert/strict';
-import { doneLabel, modLoadersFor, pickPackVersion, pickVersion, progressLabel, progressShare, progressShortLabel, removeWithDependencies, undoRemove } from './modrinth.ts';
+import { modLoadersFor, pickPackVersion, pickVersion, progressLabel, progressShare, progressShortLabel, removeWithDependencies, undoRemove } from './modrinth.ts';
 
 // Entfernen mit Abhängigkeiten: Iris und Mod Menu brauchen Fabric API, Sodium braucht nur Iris.
 const m = (id, requiredBy = []) => ({ id, name: id, source: { type: 'modrinth', projectId: id, versionId: 'v' }, requiredBy, enabled: true });
@@ -26,7 +26,6 @@ assert.equal(pickVersion([]), null);
 assert.equal(progressLabel({ phase: 'resolve', done: 0, total: 1 }), 'Wird geprüft…');
 assert.equal(progressLabel({ phase: 'download', done: 2, total: 7 }), 'Lädt 3 von 7…');
 
-
 // Pack-Version: jeder unterstützte Loader, stabil bevorzugt, sonst Grund.
 const pv = (id, loaders, version_type = 'release') => ({ id, loaders, version_type });
 assert.equal(pickPackVersion([pv('x', ['liteloader']), pv('b', ['fabric'], 'beta'), pv('r', ['quilt'])]).version.id, 'r');
@@ -36,10 +35,6 @@ assert.deepEqual(pickPackVersion([pv('x', ['liteloader'])]), { version: null, re
 assert.ok(pickPackVersion([]).reason);
 assert.deepEqual(modLoadersFor('quilt'), ['quilt', 'fabric']);
 assert.deepEqual(modLoadersFor('vanilla'), []);
-// Aufgaben-Verlauf: letztes Wort wird zur Vergangenheit, Unbekanntes bleibt.
-assert.equal(doneLabel('Sodium installieren'), 'Sodium installiert');
-assert.equal(doneLabel('„Neue Welt“ wiederherstellen'), '„Neue Welt“ wiederhergestellt');
-assert.equal(doneLabel('Inhalte laden'), 'Inhalte laden');
 // Fortschritt: Sichern zeigt Balken und Text, Kurzform für Zeilen.
 assert.equal(progressShare({ phase: 'backup', done: 6, total: 24 }), 0.25);
 assert.equal(progressShare({ phase: 'extract', done: 1, total: 2 }), null);

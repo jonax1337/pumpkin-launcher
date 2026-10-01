@@ -3,8 +3,7 @@ import { toast } from "sonner";
 import { t } from "@/i18n";
 import { api } from "@/lib/api";
 import type { Instance } from "@/lib/types";
-
-const templateKeys = { all: ["templates"] as const };
+import { templateKeys } from "./queryKeys";
 
 export function useTemplates() {
   return useQuery({ queryKey: templateKeys.all, queryFn: api.templateList });
