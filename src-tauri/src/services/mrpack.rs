@@ -69,7 +69,7 @@ pub fn entries(dirs: &Dirs, instance: &Instance) -> AppResult<Vec<String>> {
 /// Exportiert die Instanz nach `path`; `include` sind Einträge aus [`entries`].
 pub async fn export(state: &AppState, instance_id: &str, include: Vec<String>, path: &Path) -> AppResult<()> {
     if !path.is_absolute() || path.extension().and_then(|e| e.to_str()) != Some("mrpack") {
-        return Err(invalid("Absoluter .mrpack-Pfad erforderlich"));
+        return Err(invalid("Bitte einen Speicherort für die .mrpack-Datei wählen"));
     }
     let instance = state.instances.get(instance_id)?;
     let available = entries(&state.dirs, &instance)?;
@@ -102,13 +102,16 @@ fn included(include: &[String], m: &Mod) -> bool {
 }
 
 /// Index-Einträge für Modrinth-Inhalte, deren installierte Datei (sha1) Modrinth kennt; eine Sammelabfrage.
-/// Alles ohne Treffer landet als Override aus dem Cache im Pack.
+/// Alles ohne Treffer landet als Override aus dem Cache im Pack, auch ohne Netz: die Dateien liegen ja schon da.
 async fn remote_files(client: &reqwest::Client, instance: &Instance, include: &[String]) -> AppResult<Vec<Value>> {
     let candidates: Vec<(&Mod, &str)> = active_content(instance)
         .filter(|(m, _)| included(include, m) && matches!(m.source, ModSource::Modrinth { .. }))
         .collect();
     let hashes: Vec<String> = candidates.iter().map(|(_, sha1)| sha1.to_string()).collect();
-    let known = modrinth::versions_by_hash(client, &hashes).await?;
+    let known = modrinth::versions_by_hash(client, &hashes).await.unwrap_or_else(|err| {
+        tracing::warn!(%err, "Modrinth nicht erreichbar; die Inhalte kommen als Overrides ins Pack");
+        Default::default()
+    });
     Ok(candidates
         .into_iter()
         .filter_map(|(m, sha1)| {
@@ -246,6 +249,34 @@ mod tests {
         assert_eq!(files, ["extra.jar", "own.jar"]);
         assert_eq!((copy.loader, copy.loader_version.as_deref()), (ModLoader::Fabric, Some("0.16.10")));
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn without_network_modrinth_content_goes_into_the_pack_as_overrides() {
+        let modrinth = Mod {
+            id: "sodium".into(),
+            name: "Sodium".into(),
+            version: "1".into(),
+            source: ModSource::Modrinth { project_id: "sodium".into(), version_id: "v1".into() },
+            file_name: "sodium.jar".into(),
+            sha1: Some("a".repeat(40)),
+            enabled: true,
+            kind: ModKind::Mod,
+            required_by: Vec::new(),
+        };
+        let mut instance = Instance::from_new(NewInstance {
+            name: "Offline".into(),
+            minecraft_version: "1.21.1".into(),
+            loader: ModLoader::Fabric,
+            loader_version: Some("0.16.10".into()),
+        });
+        instance.mods = vec![modrinth];
+        // Ein Proxy, bei dem nichts lauscht: jede Anfrage scheitert sofort.
+        let offline = reqwest::Client::builder().proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap()).build().unwrap();
+
+        let remote = remote_files(&offline, &instance, &["mods".to_string()]).await.unwrap();
+
+        assert!(remote.is_empty());
     }
 
     #[test]

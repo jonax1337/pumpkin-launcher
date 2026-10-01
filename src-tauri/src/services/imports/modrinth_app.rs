@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, OpenFlags, OptionalExtension, Row};
 
-use super::{loader_named, Setup};
-use crate::error::AppResult;
+use super::{loader_named, Found, Setup};
+use crate::error::{AppError, AppResult};
 
 /// Beide Abfragen liefern: Name, Pfad, Minecraft-Version, Loader, Loader-Version, RAM (MiB) und JVM-Argumente
 /// (JSON-Liste); fehlende Werte gelten wie in der App als „Einstellung der App“.
@@ -23,9 +23,8 @@ const LEGACY_QUERY: &str = "
         override_mc_memory_max, json(override_extra_launch_args)
     FROM profiles";
 
-/// Instanzen der Modrinth App als (Spielordner, Einstellungen); ohne `app.db` in `root` keine. Eine unlesbare
-/// Zeile kommt als Fehler, damit sie nur sich selbst verbirgt.
-pub fn scan(root: &Path) -> AppResult<Vec<AppResult<(PathBuf, Setup)>>> {
+/// Instanzen der Modrinth App; ohne `app.db` in `root` keine. Eine unlesbare Zeile verbirgt nur sich selbst.
+pub fn scan(root: &Path) -> AppResult<Vec<Found>> {
     let db = root.join("app.db");
     if !db.is_file() {
         return Ok(Vec::new());
@@ -36,10 +35,11 @@ pub fn scan(root: &Path) -> AppResult<Vec<AppResult<(PathBuf, Setup)>>> {
     let migrated = conn.query_row("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'instances'", [], |_| Ok(())).optional()?;
     let mut statement = conn.prepare(if migrated.is_some() { QUERY } else { LEGACY_QUERY })?;
     let rows = statement.query_map([], |row| Ok(instance(row, &profiles)))?;
-    Ok(rows.map(|row| row?).collect())
+    let unreadable = |err: &AppError| tracing::warn!(db = %db.display(), %err, "Instanz der Modrinth App übersprungen");
+    Ok(rows.map(|row| row?).filter_map(|row| row.inspect_err(unreadable).ok()).collect())
 }
 
-fn instance(row: &Row, profiles: &Path) -> AppResult<(PathBuf, Setup)> {
+fn instance(row: &Row, profiles: &Path) -> AppResult<Found> {
     let path: String = row.get(1)?;
     let args: Option<String> = row.get(6)?;
     let setup = Setup {
@@ -50,7 +50,7 @@ fn instance(row: &Row, profiles: &Path) -> AppResult<(PathBuf, Setup)> {
         memory_mb: row.get(5)?,
         jvm_args: args.map(|a| serde_json::from_str(&a)).transpose()?.unwrap_or_default(),
     };
-    Ok((profiles.join(path), setup))
+    Ok(Found { game_dir: profiles.join(path), setup })
 }
 
 #[cfg(test)]
@@ -82,12 +82,10 @@ mod tests {
         conn
     }
 
-    /// Lesbare Instanzen nach Namen sortiert, dazu die Anzahl unlesbarer.
-    fn scan_sorted(root: &Path) -> (Vec<(PathBuf, Setup)>, usize) {
-        let (ok, bad): (Vec<_>, Vec<_>) = scan(root).unwrap().into_iter().partition(Result::is_ok);
-        let mut found: Vec<_> = ok.into_iter().map(Result::unwrap).collect();
-        found.sort_by(|a, b| a.1.name.cmp(&b.1.name));
-        (found, bad.len())
+    fn scan_sorted(root: &Path) -> Vec<Found> {
+        let mut found = scan(root).unwrap();
+        found.sort_by(|a, b| a.setup.name.cmp(&b.setup.name));
+        found
     }
 
     #[test]
@@ -106,11 +104,12 @@ mod tests {
         .unwrap();
         drop(conn);
 
-        let (found, unreadable) = scan_sorted(&root);
+        // „Alt“ hat einen Loader, den es bei Pumpkin Launcher nicht gibt, und verschwindet allein.
+        let found = scan_sorted(&root);
 
-        assert_eq!(found[0].0, root.join("profiles").join("Fabric Welt"));
+        assert_eq!(found[0].game_dir, root.join("profiles").join("Fabric Welt"));
         assert_eq!(
-            found[0].1,
+            found[0].setup,
             Setup {
                 name: "Fabric Welt".into(),
                 minecraft_version: "1.21.1".into(),
@@ -120,8 +119,8 @@ mod tests {
                 jvm_args: vec!["-Dx=1".into()],
             }
         );
-        assert_eq!((found[1].1.loader, found[1].1.memory_mb, found[1].1.jvm_args.len()), (ModLoader::Vanilla, None, 0));
-        assert_eq!((found.len(), unreadable), (2, 1));
+        assert_eq!((found[1].setup.loader, found[1].setup.memory_mb, found[1].setup.jvm_args.len()), (ModLoader::Vanilla, None, 0));
+        assert_eq!(found.len(), 2);
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -136,14 +135,14 @@ mod tests {
         .unwrap();
         drop(conn);
 
-        let (found, _) = scan_sorted(&root);
+        let found = scan_sorted(&root);
 
-        assert_eq!(found[0].0, root.join("profiles").join("Neo"));
+        assert_eq!(found[0].game_dir, root.join("profiles").join("Neo"));
         assert_eq!(
-            (found[0].1.loader, found[0].1.loader_version.as_deref(), found[0].1.memory_mb, found[0].1.jvm_args.as_slice()),
+            (found[0].setup.loader, found[0].setup.loader_version.as_deref(), found[0].setup.memory_mb, found[0].setup.jvm_args.as_slice()),
             (ModLoader::NeoForge, Some("21.1.172"), Some(6144), ["-XX:+UseZGC".to_owned()].as_slice())
         );
-        assert_eq!((found[1].1.loader, found[1].1.memory_mb, found[1].1.jvm_args.len()), (ModLoader::Vanilla, None, 0));
+        assert_eq!((found[1].setup.loader, found[1].setup.memory_mb, found[1].setup.jvm_args.len()), (ModLoader::Vanilla, None, 0));
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -157,7 +156,7 @@ mod tests {
         )
         .unwrap();
         drop(conn);
-        assert_eq!(scan_sorted(&root).0[0].0, PathBuf::from("D:\\Modrinth").join("profiles").join("Welt"));
+        assert_eq!(scan_sorted(&root)[0].game_dir, PathBuf::from("D:\\Modrinth").join("profiles").join("Welt"));
         assert!(scan(&root.join("leer")).unwrap().is_empty());
         std::fs::remove_dir_all(root).unwrap();
     }

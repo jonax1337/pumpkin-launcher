@@ -35,6 +35,10 @@ const PAGE: u32 = 20;
 const MAX_DEPENDENCIES: usize = 64;
 /// Größte Liste für `POST /v1/mods` und `/v1/mods/files`, die der Worker annimmt.
 const BATCH: usize = 200;
+/// `releaseType` stabiler Dateien (2 = Beta, 3 = Alpha).
+const RELEASE: u8 = 1;
+/// Pause nach der ersten 429-Antwort ohne `Retry-After` in Sekunden; sie verdoppelt sich je Versuch.
+const BASE_WAIT_SECS: u64 = 5;
 /// Neue Versuche nach „zu viele Anfragen“ (429), bevor der Fehler beim Nutzer landet.
 const RATE_LIMIT_RETRIES: u32 = 3;
 /// Längste Pause, die ein `Retry-After` erzwingen darf; länger soll die Oberfläche nicht hängen.
@@ -65,14 +69,14 @@ fn parse_proxy(raw: &str) -> Option<String> {
 
 // ---------- Anfragen ----------
 
-/// Wartet bei 429 und versucht es erneut, statt sofort zu scheitern: Große Installationen stoßen an das Minutenlimit des Workers.
-async fn send<T: DeserializeOwned>(request: reqwest::RequestBuilder) -> AppResult<T> {
-    let request = request.header(reqwest::header::ACCEPT, "application/json");
+/// Sendet die Anfrage, die `build` jedes Mal neu zusammensetzt, und wartet bei 429 auf einen neuen Versuch, statt
+/// sofort zu scheitern: Große Installationen stoßen an das Minutenlimit des Workers.
+async fn send<T: DeserializeOwned>(build: impl Fn() -> reqwest::RequestBuilder) -> AppResult<T> {
     let mut attempt = 0;
     loop {
-        let response = request.try_clone().ok_or_else(|| invalid("Anfrage lässt sich nicht wiederholen"))?.send().await?;
+        let response = build().header(reqwest::header::ACCEPT, "application/json").send().await?;
         if response.status() != reqwest::StatusCode::TOO_MANY_REQUESTS {
-            return read(response).await;
+            return parse_response(response).await;
         }
         let retry_after = response.headers().get(reqwest::header::RETRY_AFTER).and_then(|v| v.to_str().ok());
         let Some(wait) = rate_limit_wait(retry_after, attempt) else {
@@ -89,10 +93,11 @@ fn rate_limit_wait(retry_after: Option<&str>, attempt: u32) -> Option<Duration> 
     if attempt >= RATE_LIMIT_RETRIES {
         return None;
     }
-    let wait = retry_after.and_then(|s| s.trim().parse().ok()).map_or(Duration::from_secs(5 << attempt), Duration::from_secs);
+    let wait = retry_after.and_then(|s| s.trim().parse().ok()).map_or(Duration::from_secs(BASE_WAIT_SECS << attempt), Duration::from_secs);
     Some(wait.min(MAX_WAIT))
 }
-async fn read<T: DeserializeOwned>(response: reqwest::Response) -> AppResult<T> {
+/// Übersetzt die Ablehnungen des Workers in verständliche Meldungen und liest die (begrenzte) JSON-Antwort.
+async fn parse_response<T: DeserializeOwned>(response: reqwest::Response) -> AppResult<T> {
     let status = response.status();
     if matches!(status.as_u16(), 401 | 403) {
         return Err(invalid("Der CurseForge-Dienst lehnt die Anfrage ab"));
@@ -119,10 +124,11 @@ async fn post<T: DeserializeOwned>(client: &reqwest::Client, path: &str, body: &
 async fn get_at<T: DeserializeOwned>(client: &reqwest::Client, proxy: &str, path: &str, query: &[(&str, String)]) -> AppResult<T> {
     let mut url = reqwest::Url::parse(&format!("{proxy}/v1/{path}")).map_err(|e| invalid(e.to_string()))?;
     url.query_pairs_mut().extend_pairs(query.iter().map(|(k, v)| (*k, v.as_str())));
-    send(client.get(url)).await
+    send(|| client.get(url.clone())).await
 }
 async fn post_at<T: DeserializeOwned>(client: &reqwest::Client, proxy: &str, path: &str, body: &serde_json::Value) -> AppResult<T> {
-    send(client.post(format!("{proxy}/v1/{path}")).json(body)).await
+    let url = format!("{proxy}/v1/{path}");
+    send(|| client.post(&url).json(body)).await
 }
 /// Viele Projekte oder Dateien mit wenigen Sammelabfragen statt einer je Nummer.
 async fn batch<T: DeserializeOwned>(client: &reqwest::Client, path: &str, field: &str, ids: &[u64]) -> AppResult<Vec<T>> {
@@ -483,20 +489,18 @@ fn runs(instance: &Instance, kind: ModKind, file: &CfFile) -> bool {
 }
 
 /// CurseForge-Loader der Instanz in Vorzugsreihenfolge; Quilt lädt auch Fabric-Mods.
-fn loader_types(loader: ModLoader) -> Vec<u8> {
-    match loader {
-        ModLoader::Quilt => vec![5, 4],
-        other => loader_type(other).into_iter().collect(),
-    }
+fn loader_types(loader: ModLoader) -> impl Iterator<Item = u8> {
+    let fallback = (loader == ModLoader::Quilt).then_some(ModLoader::Fabric);
+    [Some(loader), fallback].into_iter().flatten().filter_map(loader_type)
 }
 
-/// Neueste Datei laut Index, die zur Instanz passt; Release (1) vor Beta und Alpha. Datei-Nummern wachsen mit der Zeit.
+/// Neueste Datei laut Index, die zur Instanz passt; Release vor Beta und Alpha. Datei-Nummern wachsen mit der Zeit.
 fn indexed_file(m: &CfMod, instance: &Instance) -> Option<u64> {
-    loader_types(instance.loader).into_iter().find_map(|t| {
+    loader_types(instance.loader).find_map(|t| {
         m.latest_files_indexes
             .iter()
             .filter(|i| i.game_version == instance.minecraft_version && i.mod_loader == Some(t))
-            .min_by_key(|i| (i.release_type != 1, Reverse(i.file_id)))
+            .min_by_key(|i| (i.release_type != RELEASE, Reverse(i.file_id)))
             .map(|i| i.file_id)
     })
 }
@@ -676,7 +680,7 @@ pub async fn install_mod(
                 existing.required_by.push(root_key.clone());
             }
         }
-        state.instances.modify(instance_id, |current| current.mods = instance.mods)
+        content::commit_mods(state, instance_id, instance.mods)
     })();
     match result {
         Err(e) => Err(content::rollback(&created, e)),
@@ -945,7 +949,7 @@ pub async fn adopt_download(state: &AppState, instance_id: &str, project_id: u32
     };
     let entry = mod_entry(&m, &f, kind, sha1, Vec::new(), &instance.mods);
     instance.mods.push(entry);
-    match state.instances.modify(instance_id, |current| current.mods = instance.mods) {
+    match content::commit_mods(state, instance_id, instance.mods) {
         Ok(i) => Ok(Some(i)),
         Err(e) => Err(content::rollback(&[target], e)),
     }

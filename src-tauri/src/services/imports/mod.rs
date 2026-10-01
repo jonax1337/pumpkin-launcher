@@ -13,7 +13,7 @@ use std::{
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use super::{blocking, check_cancelled, content, copy_files, download::RemoveOnDrop, forge, modrinth, walk, REGENERATED};
+use super::{blocking, check_cancelled, content, copy_files, forge, modrinth, walk, REGENERATED};
 use crate::{
     error::AppResult,
     models::{Instance, ModLoader, NewInstance},
@@ -42,6 +42,13 @@ pub struct Setup {
     pub jvm_args: Vec<String>,
 }
 
+/// Was ein Reader in einem Ordner findet: der Spielordner, der kopiert wird (bei Prism `minecraft` bzw. `.minecraft`
+/// im Instanzordner), und die Einstellungen.
+pub(super) struct Found {
+    game_dir: PathBuf,
+    setup: Setup,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ForeignInstance {
@@ -61,28 +68,32 @@ pub struct ForeignInstance {
 }
 
 impl ForeignInstance {
-    fn new(launcher: Launcher, dir: &Path, (game_dir, setup): (PathBuf, Setup)) -> Self {
+    fn new(launcher: Launcher, dir: &Path, Found { game_dir, setup }: Found) -> Self {
         let unsupported = forge::check_loader(setup.loader, &setup.minecraft_version).err().map(|e| e.to_string());
         Self { launcher, path: text(dir), game_dir: text(&game_dir), imported: false, unsupported, setup }
     }
 }
 
 /// Neben den Ordnern, die Minecraft neu anlegt, bleiben die Dateien der anderen Launcher zurück.
-const SKIPPED: [&str; 3] = [".cache", "instance.json", "minecraftinstance.json"];
+const SKIPPED: [&str; 3] = [".cache", atlauncher::MANIFEST, curseforge::MANIFEST];
 
 /// ATLauncher deaktiviert Mods, indem es sie hierher verschiebt; Pumpkin Launcher kennt sie als `mods/<name>.disabled`.
 const DISABLED_MODS: &str = "disabledmods/";
 
 /// Instanzen anderer Launcher an den bekannten Orten oder, mit `folder`, in diesem Ordner, nach Namen sortiert.
-pub fn detect(state: &AppState, folder: Option<&Path>) -> Vec<ForeignInstance> {
+/// Liest Datenbanken und Ordner, deshalb im eigenen Thread.
+pub async fn detect(state: &AppState, folder: Option<&Path>) -> AppResult<Vec<ForeignInstance>> {
     let roots = folder.map_or_else(default_roots, |f| vec![f.to_owned()]);
     let imported: HashSet<String> = state.instances.list().into_iter().filter_map(|i| i.imported_from).collect();
-    let mut found: Vec<ForeignInstance> = roots.iter().flat_map(|root| scan(root)).collect();
-    for instance in &mut found {
-        instance.imported = imported.contains(&instance.path);
-    }
-    found.sort_by_key(|i| i.setup.name.to_lowercase());
-    found
+    blocking(move |_| {
+        let mut found: Vec<ForeignInstance> = roots.iter().flat_map(|root| scan(root)).collect();
+        for instance in &mut found {
+            instance.imported = imported.contains(&instance.path);
+        }
+        found.sort_by_key(|i| i.setup.name.to_lowercase());
+        Ok(found)
+    })
+    .await
 }
 
 /// Standardorte im Datenordner des Systems (unter Windows `%APPDATA%`). MultiMC ist portabel und hat keinen;
@@ -106,16 +117,19 @@ fn default_roots() -> Vec<PathBuf> {
 fn scan(root: &Path) -> Vec<ForeignInstance> {
     let mut found: Vec<ForeignInstance> = skip_unreadable(root, modrinth_app::scan(root))
         .into_iter()
-        .filter_map(|row| skip_unreadable(root, row.map(Some)))
-        .map(|(dir, setup)| ForeignInstance::new(Launcher::Modrinth, &dir, (dir.clone(), setup)))
+        .map(|found| ForeignInstance::new(Launcher::Modrinth, &found.game_dir.clone(), found))
         .collect();
-    let candidates = std::iter::once(root.to_owned()).chain(subdirs(root)).chain(subdirs(&root.join("instances")));
+    let folders = subdirs(root);
+    // Die CurseForge App nennt ihn `Instances`; Linux unterscheidet das von `instances`.
+    let instances: Vec<PathBuf> =
+        folders.iter().filter(|dir| folder_name(dir).eq_ignore_ascii_case("instances")).flat_map(|dir| subdirs(dir)).collect();
+    let candidates = std::iter::once(root.to_owned()).chain(folders).chain(instances);
     found.extend(candidates.filter_map(|dir| skip_unreadable(&dir, read(&dir))));
     found
 }
 
-/// Liest die Instanz eines Launchers in einem Ordner als (Spielordner, Einstellungen); `None`, wenn der Ordner keine ist.
-type Reader = fn(&Path) -> AppResult<Option<(PathBuf, Setup)>>;
+/// Liest die Instanz eines Launchers in einem Ordner; `None`, wenn der Ordner keine ist.
+type Reader = fn(&Path) -> AppResult<Option<Found>>;
 
 /// Instanz in `dir`, erkannt an der Datei, die der jeweilige Launcher dort ablegt.
 fn read(dir: &Path) -> AppResult<Option<ForeignInstance>> {
@@ -198,18 +212,14 @@ pub async fn import(
             loader_version: setup.loader_version,
         })
     };
-    let root = state.dirs.instance(&instance.id);
-    content::regular_parents(&state.dirs.root, &root)?;
     let (dirs, target, fresh) = (state.dirs.clone(), state.dirs.game_dir(&instance.id), instance.clone());
-    // Der Wächter lebt im Thread: bei Abbruch räumt er erst weg, wenn dort nichts mehr geschrieben wird.
-    let (mut guard, found) = blocking(move |stop| {
-        let guard = RemoveOnDrop(Some(root));
+    let (mut guard, found) = content::populate_new_dir(&state.dirs, state.dirs.instance(&instance.id), move |stop| {
         copy_files(&files_to_copy(&game_dir, &target)?, &|done, total| {
             check_cancelled(stop)?;
             progress("copy", done, total);
             Ok(())
         })?;
-        Ok((guard, content::cached_untracked(&dirs, &fresh, &progress, stop)?))
+        content::cached_untracked(&dirs, &fresh, &progress, stop)
     })
     .await?;
     content::record_untracked(&mut instance.mods, &found, &origins).await?;
@@ -286,6 +296,17 @@ mod tests {
     }
 
     #[test]
+    fn scan_finds_curseforge_instances_in_a_capitalized_instances_folder() {
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        write_files(&root, &[("Instances/Pack/minecraftinstance.json", r#"{"gameVersion": "1.21.1", "name": "Pack"}"#)]);
+
+        let found = scan(&root);
+
+        assert_eq!(found.iter().map(|i| (i.launcher, i.setup.name.as_str())).collect::<Vec<_>>(), [(Launcher::CurseForge, "Pack")]);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn copy_skips_regenerated_and_launcher_files() {
         let root = std::env::temp_dir().join(crate::models::new_id());
         let source = root.join("cf");
@@ -323,7 +344,7 @@ mod tests {
         let cfg = "name=Welt\nOverrideMemory=true\nMaxMemAlloc=4096\n";
         write_files(&source, &[("instance.cfg", cfg), ("mmc-pack.json", PACK)]);
         add_content(&source.join("minecraft"));
-        let from = detect(&state, Some(&source)).remove(0);
+        let from = detect(&state, Some(&source)).await.unwrap().remove(0);
 
         let instance = import(&state, from, |_, _, _| {}).await.unwrap();
 
@@ -332,7 +353,7 @@ mod tests {
         assert_eq!(mods, [("off.jar", false), ("own.jar", true)]);
         assert_eq!(fs::read_to_string(state.dirs.game_dir(&instance.id).join("config/a.toml")).unwrap(), "x=1");
         assert!(source.join("minecraft/mods/off.jar.disabled").exists() && !source.join("minecraft/mods/off.jar").exists());
-        assert!(detect(&state, Some(&source)).iter().all(|i| i.imported));
+        assert!(detect(&state, Some(&source)).await.unwrap().iter().all(|i| i.imported));
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -344,7 +365,7 @@ mod tests {
         let manifest = r#"{"gameVersion": "1.21.1", "baseModLoader": {"name": "neoforge-21.1.172"},
             "installedAddons": [{"addonID": 238222, "installedFile": {"id": 5846880, "fileName": "jei.jar"}}]}"#;
         write_files(&source, &[("minecraftinstance.json", manifest), ("mods/jei.jar", "jei"), ("mods/own.jar", "own")]);
-        let from = detect(&state, Some(&source)).remove(0);
+        let from = detect(&state, Some(&source)).await.unwrap().remove(0);
 
         let instance = import(&state, from, |_, _, _| {}).await.unwrap();
 
@@ -361,24 +382,10 @@ mod tests {
         let source = root.join("Prism/instances/Welt");
         write_files(&source, &[("instance.cfg", "name=Welt\n"), ("mmc-pack.json", PACK)]);
         add_content(&source.join("minecraft"));
-        let from = detect(&state, Some(&source)).remove(0);
-        // Die erste kopierte Datei hält an, bis abgebrochen ist; endet der Thread, schließt sich `started`.
-        let (reached, started) = std::sync::mpsc::channel();
-        let (resume, hold) = std::sync::mpsc::channel::<()>();
-        let progress = move |_: &str, done: u64, _: u64| {
-            if done == 1 {
-                reached.send(()).unwrap();
-                hold.recv().ok();
-            }
-        };
+        let from = detect(&state, Some(&source)).await.unwrap().remove(0);
 
-        let work = state.cancellable("op", import(&state, from, progress));
-        let (result, ()) = tokio::join!(work, async {
-            started.recv().unwrap();
-            state.cancel("op");
-        });
-        drop(resume);
-        assert!(started.recv().is_err());
+        // Die erste kopierte Datei hält an.
+        let result = content::cancel_at_step(&state, 1, |progress| import(&state, from, progress)).await;
 
         assert!(matches!(result, Err(crate::error::AppError::Cancelled)));
         assert!(state.instances.list().is_empty());
@@ -399,10 +406,10 @@ mod tests {
             memory_mb: None,
             jvm_args: Vec::new(),
         };
-        let old_forge = ForeignInstance::new(Launcher::CurseForge, &root.join("da"), (root.join("da"), setup));
+        let old_forge = ForeignInstance::new(Launcher::CurseForge, &root.join("da"), Found { game_dir: root.join("da"), setup });
         assert!(old_forge.unsupported.is_some());
         let vanilla = Setup { loader: ModLoader::Vanilla, loader_version: None, ..old_forge.setup.clone() };
-        let missing = ForeignInstance::new(Launcher::CurseForge, &root.join("weg"), (root.join("weg"), vanilla));
+        let missing = ForeignInstance::new(Launcher::CurseForge, &root.join("weg"), Found { game_dir: root.join("weg"), setup: vanilla });
         for source in [old_forge, missing] {
             assert!(import(&state, source, |_, _, _| {}).await.is_err());
         }

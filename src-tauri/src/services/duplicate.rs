@@ -1,8 +1,8 @@
 //! Instanz duplizieren: neuer Eintrag mit eigener ID und eine Kopie des Instanzordners. Verwaltete Inhalte
 //! legt `mods::sync` per Hardlink aus dem Cache ab, statt sie Byte für Byte zu kopieren.
-use std::{fs, path::PathBuf};
+use std::path::PathBuf;
 
-use super::{blocking, check_cancelled, content, copy_files, download::RemoveOnDrop, mods, walk, Dirs};
+use super::{check_cancelled, content, copy_files, mods, walk, Dirs};
 use crate::{
     error::AppResult,
     models::{new_id, now_ms, Instance, Mod},
@@ -26,19 +26,14 @@ pub async fn duplicate(
         playtime_secs: 0,
         ..source
     };
-    let target = state.dirs.instance(&copy.id);
-    content::regular_parents(&state.dirs.root, &target)?;
-    let (dirs, from, to, mods) = (state.dirs.clone(), instance_id.to_owned(), copy.id.clone(), copy.mods.clone());
-    // Der Wächter lebt im Thread: bei Abbruch räumt er erst weg, wenn dort nichts mehr geschrieben wird.
-    let mut guard = blocking(move |stop| {
-        fs::create_dir_all(&target)?;
-        let guard = RemoveOnDrop(Some(target));
+    let dirs = state.dirs.clone();
+    let (from, to, mods) = (instance_id.to_owned(), copy.id.clone(), copy.mods.clone());
+    let (mut guard, ()) = content::populate_new_dir(&state.dirs, dirs.instance(&copy.id), move |stop| {
         copy_instance(&dirs, &from, &to, &mods, &|done, total| {
             check_cancelled(stop)?;
             progress("copy", done, total);
             Ok(())
-        })?;
-        Ok(guard)
+        })
     })
     .await?;
     let copy = state.instances.insert(copy)?;
@@ -67,7 +62,8 @@ fn files_to_copy(dirs: &Dirs, from: &str, to: &str, mods: &[Mod]) -> AppResult<V
         .into_iter()
         .map(|(rel, path)| (game.join(rel), path))
         .collect();
-    let (base, mut rest) = (dirs.instance(from), Vec::new());
+    let base = dirs.instance(from);
+    let mut rest = Vec::new();
     walk(&base, &dirs.natives_dir(from), &mut rest)?;
     walk(&base, &dirs.installed_marker(from), &mut rest)?;
     let instance = dirs.instance(to);
@@ -95,6 +91,7 @@ fn copy_instance(dirs: &Dirs, from: &str, to: &str, mods: &[Mod], step: &dyn Fn(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use crate::models::{ModKind, ModLoader, ModSource, NewInstance};
     use crate::services::write_files;
 
@@ -199,23 +196,8 @@ mod tests {
         let state = AppState::load(&root).unwrap();
         let source = source_instance(&state, Vec::new());
         write_files(&state.dirs.game_dir(&source.id), &[("options.txt", "fov:1")]);
-        // Der erste Schritt hält an, bis abgebrochen ist; endet der Thread, schließt sich `started`.
-        let (reached, started) = std::sync::mpsc::channel();
-        let (resume, hold) = std::sync::mpsc::channel::<()>();
-        let progress = move |_: &str, done: u64, _: u64| {
-            if done == 0 {
-                reached.send(()).unwrap();
-                hold.recv().ok();
-            }
-        };
 
-        let work = state.cancellable("op", duplicate(&state, &source.id, progress));
-        let (result, ()) = tokio::join!(work, async {
-            started.recv().unwrap();
-            state.cancel("op");
-        });
-        drop(resume);
-        assert!(started.recv().is_err());
+        let result = content::cancel_at_step(&state, 0, |progress| duplicate(&state, &source.id, progress)).await;
 
         assert!(matches!(result, Err(crate::error::AppError::Cancelled)));
         assert_eq!(state.instances.list(), vec![source]);

@@ -332,6 +332,7 @@ pub async fn instance_add_files(
     let _operation = state.operation(Some(&instance_id))?;
     local_files::add(&state, &instance_id, files, progress(app, operation_id)).await
 }
+/// Gleicht lokale Einträge der Instanz per SHA-1 mit Modrinth ab; erkannte bekommen Updates von dort.
 #[tauri::command]
 pub async fn modrinth_identify(
     state: State<'_, AppState>,
@@ -339,7 +340,7 @@ pub async fn modrinth_identify(
     mod_ids: Vec<String>,
 ) -> AppResult<Instance> {
     let _operation = state.operation(Some(&instance_id))?;
-    local_files::identify(&state, &instance_id, &mod_ids).await
+    local_files::identify_local(&state, &instance_id, &mod_ids).await
 }
 #[tauri::command]
 pub async fn template_save(state: State<'_, AppState>, instance_id: String, name: String) -> AppResult<Template> {
@@ -384,9 +385,9 @@ pub async fn instance_duplicate(
 pub async fn import_detect(state: State<'_, AppState>, folder: Option<String>) -> AppResult<Vec<ForeignInstance>> {
     let folder = folder.map(std::path::PathBuf::from);
     if folder.as_ref().is_some_and(|f| !f.is_absolute()) {
-        return Err(api::invalid("Ordner nicht gefunden"));
+        return Err(api::invalid("Bitte einen vollständigen Ordnerpfad angeben"));
     }
-    Ok(imports::detect(&state, folder.as_deref()))
+    imports::detect(&state, folder.as_deref()).await
 }
 /// Neue Instanz aus einer Instanz eines anderen Launchers; Fortschritt als `content-progress` (Phase `copy`),
 /// abbrechbar über `pack_install_cancel`.
@@ -418,6 +419,7 @@ pub async fn instance_export(
     operation_id: String,
 ) -> AppResult<()> {
     let _operation = state.operation(Some(&instance_id))?;
+    // Das Packen meldet keinen Fortschritt; die Oberfläche soll die Phase trotzdem von Anfang an zeigen.
     progress(app, operation_id.clone())("pack", 0, 0);
     let work = mrpack::export(&state, &instance_id, include, std::path::Path::new(&path));
     state.cancellable(&operation_id, work).await

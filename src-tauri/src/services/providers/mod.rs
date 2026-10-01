@@ -148,7 +148,8 @@ fn file_name(url: &reqwest::Url) -> String {
     percent_encoding::percent_decode_str(last).decode_utf8_lossy().into_owned()
 }
 
-fn ok_status(response: reqwest::Response) -> AppResult<reqwest::Response> {
+/// Fehlerstatus der Antwort als Fehler; das CDN, das nur noch mit Schlüssel liefert, bekommt eine eigene Meldung.
+fn ensure_success(response: reqwest::Response) -> AppResult<reqwest::Response> {
     if cdn_wants_key(response.url(), response.status()) {
         return Err(AppError::Refused(format!(
             "CurseForge gibt {} nur noch mit Schlüssel heraus. Bitte aktualisiere Pumpkin Launcher oder lade die Datei von Hand auf curseforge.com.",
@@ -165,7 +166,7 @@ async fn get(client: &reqwest::Client, start: &str) -> AppResult<reqwest::Respon
         check_url(&url)?;
         let response = client.get(url.clone()).send().await?;
         if !response.status().is_redirection() {
-            return ok_status(response);
+            return ensure_success(response);
         }
         let location = response
             .headers()
@@ -177,24 +178,26 @@ async fn get(client: &reqwest::Client, start: &str) -> AppResult<reqwest::Respon
     Err(invalid("Zu viele Weiterleitungen"))
 }
 
+fn ensure_within(size: u64, limit: u64) -> AppResult<()> {
+    if size > limit {
+        return Err(invalid("Download zu groß"));
+    }
+    Ok(())
+}
+
 /// Lädt höchstens `limit` Bytes in den Speicher.
 async fn fetch(client: &reqwest::Client, start: &str, limit: u64) -> AppResult<Vec<u8>> {
     let mut response = get(client, start).await?;
-    if response.content_length().is_some_and(|n| n > limit) {
-        return Err(invalid("Download zu groß"));
-    }
+    ensure_within(response.content_length().unwrap_or(0), limit)?;
     let mut data = Vec::new();
     while let Some(chunk) = response.chunk().await? {
-        if data.len() as u64 + chunk.len() as u64 > limit {
-            return Err(invalid("Download zu groß"));
-        }
+        ensure_within(data.len() as u64 + chunk.len() as u64, limit)?;
         data.extend_from_slice(&chunk);
     }
     Ok(data)
 }
 
-/// Versucht `attempt` je Adresse bis zu `download::ATTEMPTS`-mal, dann mit der nächsten Adresse: bei Hunderten Dateien fällt mal
-/// eine Verbindung aus. Lehnt der Server endgültig ab, kommt gleich die nächste Adresse dran.
+/// Probiert die Adressen der Reihe nach, jede bis zu `download::ATTEMPTS`-mal, außer der Server lehnt endgültig ab.
 async fn from_any<'a, T, Fut>(urls: &'a [String], mut attempt: impl FnMut(&'a str) -> Fut) -> AppResult<T>
 where
     Fut: std::future::Future<Output = AppResult<T>>,
@@ -282,16 +285,12 @@ impl RemoteFile {
         let limit = self.limit(ZIP_LIMIT);
         let mut response = get(client, url).await?;
         let total = response.content_length().unwrap_or(self.size);
-        if total > limit {
-            return Err(invalid("Download zu groß"));
-        }
+        ensure_within(total, limit)?;
         let mut file = tokio::fs::File::create(dest).await?;
         let mut done = 0u64;
         while let Some(chunk) = response.chunk().await? {
             done += chunk.len() as u64;
-            if done > limit {
-                return Err(invalid("Download zu groß"));
-            }
+            ensure_within(done, limit)?;
             file.write_all(&chunk).await?;
             progress(done, total);
         }

@@ -1,4 +1,5 @@
 //! Transaktionaler Content-Import. Ziele werden exklusiv neu angelegt, niemals ersetzt.
+use super::download::RemoveOnDrop;
 use super::modrinth::{self, invalid, File, Version};
 use super::providers::RemoteFile;
 use crate::{
@@ -207,7 +208,7 @@ pub async fn install_mod(
             });
         }
         mark_dependencies(&mut instance.mods, &selected, &fresh);
-        state.instances.modify(id, |current| current.mods = instance.mods)
+        commit_mods(state, id, instance.mods)
     })();
     match result {
         Err(e) => Err(rollback(&created, e)),
@@ -394,6 +395,11 @@ fn drop_pinned(
     }
 }
 
+/// Speichert `mods` als neue Inhaltsliste der Instanz und liefert die gespeicherte Instanz.
+pub(crate) fn commit_mods(state: &AppState, id: &str, mods: Vec<Mod>) -> AppResult<Instance> {
+    state.instances.modify(id, |current| current.mods = mods)
+}
+
 /// Jede der `mod_ids` muss ein Eintrag der Instanz sein.
 pub(crate) fn ensure_known(instance: &Instance, mod_ids: &[String]) -> AppResult<()> {
     match mod_ids.iter().find(|id| !instance.mods.iter().any(|m| &m.id == *id)) {
@@ -484,7 +490,7 @@ pub async fn update_mods(
     mark_dependencies(&mut mods, &selected, &fresh);
     // sync places the new files and removes the old ones in one journal; metadata commits last.
     let desired: Vec<Mod> = mods.iter().cloned().chain(old).collect();
-    let commit = |_| state.instances.modify(id, |current| current.mods = mods);
+    let commit = |_| commit_mods(state, id, mods);
     let result = super::mods::sync_commit(&state.dirs, id, &desired, commit)?;
     progress("complete", total, total);
     Ok(result)
@@ -828,7 +834,7 @@ pub(crate) async fn import_plan(
     fs::create_dir_all(state.dirs.root.join("instances"))?;
     fs::create_dir(&root)?;
     // Abbruch (Future verworfen) räumt die halbe Instanz weg; Fehler räumt unten `match` auf.
-    let mut guard = super::download::RemoveOnDrop(Some(root.clone()));
+    let mut guard = RemoveOnDrop(Some(root.clone()));
     let result = async {
         let client = modrinth::client()?;
         let downloader = modrinth::download_client()?;
@@ -891,6 +897,59 @@ pub(crate) async fn import_plan(
         Ok(i) => Ok(i),
     }
 }
+/// Legt den Ordner einer neuen Instanz an und befüllt ihn im Thread mit `work`, das `stop` regelmäßig prüft. Der
+/// Wächter räumt den Ordner weg, bis der Aufrufer ihn nach dem Eintragen der Instanz mit `guard.0 = None` entschärft.
+/// Er lebt im Thread: bei Abbruch räumt er erst weg, wenn dort nichts mehr geschrieben wird.
+pub(crate) async fn populate_new_dir<T: Send + 'static>(
+    dirs: &super::Dirs,
+    dir: PathBuf,
+    work: impl FnOnce(&CancellationToken) -> AppResult<T> + Send + 'static,
+) -> AppResult<(RemoveOnDrop, T)> {
+    regular_parents(&dirs.root, &dir)?;
+    super::blocking(move |stop| {
+        let guard = RemoveOnDrop(Some(dir.clone()));
+        fs::create_dir_all(&dir)?;
+        Ok((guard, work(stop)?))
+    })
+    .await
+}
+
+/// Testhilfe: startet `run` mit einem Fortschrittsrückruf, der beim Schritt `step` anhält, bricht dann ab und gibt
+/// das Ergebnis zurück, sobald der Thread zu Ende ist und der Wächter den neuen Instanzordner weggeräumt hat.
+#[cfg(test)]
+pub(crate) async fn cancel_at_step<T, F: std::future::Future<Output = AppResult<T>>>(
+    state: &AppState,
+    step: u64,
+    run: impl FnOnce(Box<dyn Fn(&str, u64, u64) + Send>) -> F,
+) -> AppResult<T> {
+    let instances = state.dirs.root.join("instances");
+    let folders = || fs::read_dir(&instances).map_or(0, Iterator::count);
+    let before = folders();
+    let (reached, started) = std::sync::mpsc::channel();
+    let (resume, hold) = std::sync::mpsc::channel::<()>();
+    let progress = move |_: &str, done: u64, _: u64| {
+        if done == step {
+            reached.send(()).unwrap();
+            hold.recv().ok();
+        }
+    };
+    let work = state.cancellable("op", run(Box::new(progress)));
+    let (result, ()) = tokio::join!(work, async {
+        started.recv().unwrap();
+        state.cancel("op");
+    });
+    drop(resume);
+    // Endet der Thread, schließt sich `started`; der Wächter räumt gleich danach auf.
+    assert!(started.recv().is_err());
+    for _ in 0..500 {
+        if folders() == before {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    result
+}
+
 /// `mods/*.jar`, `resourcepacks/*.zip`, `shaderpacks/*.zip` directly in the folder, else None.
 fn content_file(path: &Path) -> Option<(ModKind, String)> {
     let (folder, name) = path.to_str()?.split_once('/')?;
@@ -954,10 +1013,17 @@ fn derive_required_by(mods: &mut [Mod], known: &HashMap<String, Version>) {
     mark_dependencies(mods, &selected, &fresh);
 }
 
-/// Inhalte im Spielordner, die nicht in `instance.mods` stehen: (Art, Dateiname, aktiv, Pfad).
-/// `name.jar.disabled` zählt als deaktiviertes `name.jar`.
-fn untracked(dirs: &super::Dirs, instance: &Instance) -> AppResult<Vec<(ModKind, String, bool, PathBuf)>> {
-    let mut found: Vec<(ModKind, String, bool, PathBuf)> = Vec::new();
+/// Inhalt im Spielordner, der nicht in `instance.mods` steht.
+struct UntrackedFile {
+    kind: ModKind,
+    file_name: String,
+    enabled: bool,
+    path: PathBuf,
+}
+
+/// Inhalte im Spielordner, die nicht in `instance.mods` stehen. `name.jar.disabled` zählt als deaktiviertes `name.jar`.
+fn untracked(dirs: &super::Dirs, instance: &Instance) -> AppResult<Vec<UntrackedFile>> {
+    let mut found: Vec<UntrackedFile> = Vec::new();
     for kind in [ModKind::Mod, ModKind::ResourcePack, ModKind::Shader] {
         let mut entries = match fs::read_dir(dirs.game_dir(&instance.id).join(kind.folder())) {
             Ok(entries) => entries.collect::<Result<Vec<_>, _>>()?,
@@ -973,11 +1039,11 @@ fn untracked(dirs: &super::Dirs, instance: &Instance) -> AppResult<Vec<(ModKind,
                 None => (raw, true),
             };
             let seen = instance.mods.iter().any(|m| m.kind == kind && m.file_name.eq_ignore_ascii_case(&name))
-                || found.iter().any(|(k, n, ..)| *k == kind && n.eq_ignore_ascii_case(&name));
+                || found.iter().any(|f| f.kind == kind && f.file_name.eq_ignore_ascii_case(&name));
             if seen || !e.file_type()?.is_file() || !name.ends_with(kind.extension()) || safe_path(&name).is_err() {
                 continue;
             }
-            found.push((kind, name, enabled, e.path()));
+            found.push(UntrackedFile { kind, file_name: name, enabled, path: e.path() });
         }
     }
     Ok(found)
@@ -1003,7 +1069,7 @@ pub async fn adopt_untracked(state: &AppState) -> AppResult<usize> {
     if plan.is_empty() {
         return Ok(0);
     }
-    let mut hashes: Vec<String> = plan.iter().flat_map(|(_, found)| found.iter().map(|f| f.3.clone())).collect();
+    let mut hashes: Vec<String> = plan.iter().flat_map(|(_, found)| found.iter().map(|f| f.sha1.clone())).collect();
     hashes.sort();
     hashes.dedup();
     let (known, titles) = identify_or_local(&modrinth::client()?, &hashes).await;
@@ -1022,15 +1088,20 @@ pub async fn adopt_untracked(state: &AppState) -> AppResult<usize> {
 
 /// Import aus einem anderen Launcher: trägt die gecachten Inhalte des kopierten Spielordners ein, erkannt per
 /// Modrinth-Sammelabfrage; ohne Netz als lokal, mit `origins` (Dateiname -> CurseForge-Projekt, Datei) als CurseForge.
-pub(crate) async fn record_untracked(mods: &mut Vec<Mod>, found: &[Untracked], origins: &HashMap<String, (u32, u32)>) -> AppResult<()> {
-    let hashes: Vec<String> = found.iter().map(|f| f.3.clone()).collect();
+pub(crate) async fn record_untracked(mods: &mut Vec<Mod>, found: &[CachedFile], origins: &HashMap<String, (u32, u32)>) -> AppResult<()> {
+    let hashes: Vec<String> = found.iter().map(|f| f.sha1.clone()).collect();
     let (known, titles) = identify_or_local(&modrinth::client()?, &hashes).await;
     record(mods, found, &known, &titles, origins);
     Ok(())
 }
 
-/// Inhalt aus `untracked`, im Mod-Cache abgelegt: (Art, Dateiname, aktiv, SHA-1).
-pub(crate) type Untracked = (ModKind, String, bool, String);
+/// Inhaltsdatei, die im Mod-Cache liegt und unter `file_name` im Spielordner steht (oder dorthin kommt).
+pub(crate) struct CachedFile {
+    pub kind: ModKind,
+    pub file_name: String,
+    pub enabled: bool,
+    pub sha1: String,
+}
 
 /// `untracked` in den Mod-Cache legen; Fortschritt als Phase `hash` (Dateien). Liest jede Datei ganz, beim Import
 /// deshalb im Kopier-Thread. Ist `stop` abgebrochen, endet es vor der nächsten Datei mit `AppError::Cancelled`.
@@ -1039,13 +1110,14 @@ pub(crate) fn cached_untracked(
     instance: &Instance,
     progress: &dyn Fn(&str, u64, u64),
     stop: &CancellationToken,
-) -> AppResult<Vec<Untracked>> {
+) -> AppResult<Vec<CachedFile>> {
     let files = untracked(dirs, instance)?;
     let total = files.len() as u64;
     let mut found = Vec::with_capacity(files.len());
-    for (done, (kind, name, enabled, path)) in (1..).zip(files) {
+    for (done, file) in (1..).zip(files) {
         super::check_cancelled(stop)?;
-        found.push((kind, name, enabled, super::mods::cache_file(dirs, &path)?));
+        let sha1 = super::mods::cache_file(dirs, &file.path)?;
+        found.push(CachedFile { kind: file.kind, file_name: file.file_name, enabled: file.enabled, sha1 });
         progress("hash", done, total);
     }
     Ok(found)
@@ -1053,15 +1125,15 @@ pub(crate) fn cached_untracked(
 
 fn record(
     mods: &mut Vec<Mod>,
-    found: &[Untracked],
+    found: &[CachedFile],
     known: &HashMap<String, Version>,
     titles: &HashMap<String, String>,
     origins: &HashMap<String, (u32, u32)>,
 ) {
-    for (kind, name, enabled, sha1) in found {
-        let mut m = entry(*kind, name.clone(), sha1.clone(), known, titles, mods);
+    for file in found {
+        let mut m = entry(file.kind, file.file_name.clone(), file.sha1.clone(), known, titles, mods);
         apply_origin(&mut m, origins, mods);
-        mods.push(Mod { enabled: *enabled, ..m });
+        mods.push(Mod { enabled: file.enabled, ..m });
     }
     derive_required_by(mods, known);
 }

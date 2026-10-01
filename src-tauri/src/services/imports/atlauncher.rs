@@ -1,10 +1,10 @@
 //! ATLauncher: `instance.json` im Instanzordner, der zugleich Spielordner ist. `id` ist die Minecraft-Version,
 //! der Rest steht unter `launcher`.
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde::Deserialize;
 
-use super::{from_json, loader_named, read_marker, split_args, Setup};
+use super::{from_json, loader_named, read_marker, split_args, Found, Setup};
 use crate::{error::AppResult, models::ModLoader};
 
 #[derive(Deserialize)]
@@ -33,9 +33,12 @@ struct LoaderVersion {
     r#type: String,
 }
 
-pub fn read(dir: &Path) -> AppResult<Option<(PathBuf, Setup)>> {
-    let Some(data) = read_marker(&dir.join("instance.json"))? else { return Ok(None) };
-    Ok(Some((dir.to_owned(), setup(&data)?)))
+/// Kennungsdatei der Instanz.
+pub(super) const MANIFEST: &str = "instance.json";
+
+pub fn read(dir: &Path) -> AppResult<Option<Found>> {
+    let Some(data) = read_marker(&dir.join(MANIFEST))? else { return Ok(None) };
+    Ok(Some(Found { game_dir: dir.to_owned(), setup: setup(&data)? }))
 }
 
 fn setup(data: &[u8]) -> AppResult<Setup> {
