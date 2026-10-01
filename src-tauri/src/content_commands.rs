@@ -64,7 +64,7 @@ pub async fn modrinth_install_mod(
     version_id: String,
     operation_id: String,
 ) -> AppResult<Instance> {
-    let _operation = state.operation(Some(&instance_id))?;
+    let _operation = state.begin_instance_operation(&instance_id)?;
     content::install_mod(&state, &instance_id, &version_id, &*progress(app, operation_id)).await
 }
 #[tauri::command]
@@ -75,7 +75,7 @@ pub async fn modrinth_install_pack(
     name: String,
     operation_id: String,
 ) -> AppResult<Instance> {
-    let _operation = state.operation(None)?;
+    let _operation = state.begin_operation()?;
     let state = state.inner();
     state
         .run_cancellable(&app, &operation_id, |on_progress| async move {
@@ -102,7 +102,7 @@ pub async fn modrinth_import_pack(
     name: String,
     operation_id: String,
 ) -> AppResult<Instance> {
-    let _operation = state.operation(None)?;
+    let _operation = state.begin_operation()?;
     let data = content::local_pack(std::path::Path::new(&path))?;
     let state = state.inner();
     state
@@ -181,7 +181,7 @@ pub async fn provider_install_pack(
     operation_id: String,
 ) -> AppResult<Instance> {
     let source = Source::parse(&source)?;
-    let _operation = state.operation(None)?;
+    let _operation = state.begin_operation()?;
     let (state, app, operation_id) = (state.inner(), &app, &operation_id);
     state
         .run_cancellable(app, operation_id, |on_progress| async move {
@@ -228,7 +228,7 @@ pub async fn provider_install_mod(
     if Source::parse(&source)? != Source::CurseForge {
         return Err(AppError::invalid("Dieser Anbieter liefert nur Modpacks"));
     }
-    let _operation = state.operation(Some(&instance_id))?;
+    let _operation = state.begin_instance_operation(&instance_id)?;
     providers::curseforge::install_mod(&state, &instance_id, &project_id, &version_id, &*progress(app, operation_id)).await
 }
 /// Holt eine Datei, die der Nutzer auf CurseForge von Hand geladen hat, aus dem Downloads-Ordner in die Instanz.
@@ -241,7 +241,7 @@ pub async fn curseforge_adopt_download(
     file_id: u32,
     file_name: String,
 ) -> AppResult<Option<Instance>> {
-    let Ok(_operation) = state.operation(Some(&instance_id)) else { return Ok(None) };
+    let Ok(_operation) = state.begin_instance_operation(&instance_id) else { return Ok(None) };
     providers::curseforge::adopt_download(&state, &instance_id, project_id, file_id, &file_name).await
 }
 /// Bricht `modrinth_install_pack`, `modrinth_import_pack`, `provider_install_pack`, `template_create_instance`,
@@ -284,7 +284,7 @@ pub async fn modrinth_update_mods(
     mod_ids: Vec<String>,
     operation_id: String,
 ) -> AppResult<Instance> {
-    let _operation = state.operation(Some(&instance_id))?;
+    let _operation = state.begin_instance_operation(&instance_id)?;
     content::update_mods(&state, &instance_id, &mod_ids, &*progress(app, operation_id)).await
 }
 /// Vorab-Prüfung abgelegter oder ausgewählter Dateien: Art und ob die Instanz sie schon hat.
@@ -305,7 +305,7 @@ pub async fn instance_add_files(
     files: Vec<local_files::LocalFile>,
     operation_id: String,
 ) -> AppResult<Instance> {
-    let _operation = state.operation(Some(&instance_id))?;
+    let _operation = state.begin_instance_operation(&instance_id)?;
     local_files::add(&state, &instance_id, files, progress(app, operation_id)).await
 }
 /// Gleicht lokale Einträge der Instanz per SHA-1 mit Modrinth ab; erkannte bekommen Updates von dort.
@@ -315,12 +315,12 @@ pub async fn modrinth_identify(
     instance_id: String,
     mod_ids: Vec<String>,
 ) -> AppResult<Instance> {
-    let _operation = state.operation(Some(&instance_id))?;
+    let _operation = state.begin_instance_operation(&instance_id)?;
     local_files::identify_local(&state, &instance_id, &mod_ids).await
 }
 #[tauri::command]
 pub async fn template_save(state: State<'_, AppState>, instance_id: String, name: String) -> AppResult<Template> {
-    let _operation = state.operation(Some(&instance_id))?;
+    let _operation = state.begin_instance_operation(&instance_id)?;
     templates::save(&state, &instance_id, &name).await
 }
 #[tauri::command]
@@ -339,7 +339,7 @@ pub async fn template_create_instance(
     name: String,
     operation_id: String,
 ) -> AppResult<Instance> {
-    let _operation = state.operation(None)?;
+    let _operation = state.begin_operation()?;
     let state = state.inner();
     state
         .run_cancellable(&app, &operation_id, |on_progress| async move {
@@ -355,7 +355,7 @@ pub async fn instance_duplicate(
     instance_id: String,
     operation_id: String,
 ) -> AppResult<Instance> {
-    let _operation = state.operation(Some(&instance_id))?;
+    let _operation = state.begin_instance_operation(&instance_id)?;
     state
         .run_cancellable(&app, &operation_id, |on_progress| duplicate::duplicate(&state, &instance_id, on_progress))
         .await
@@ -379,7 +379,7 @@ pub async fn instance_import(
     operation_id: String,
 ) -> AppResult<Instance> {
     require_instance_name(&source.setup.name)?;
-    let _operation = state.operation(None)?;
+    let _operation = state.begin_operation()?;
     state
         .run_cancellable(&app, &operation_id, |on_progress| imports::import(&state, source, on_progress))
         .await
@@ -399,7 +399,7 @@ pub async fn instance_export(
     path: String,
     operation_id: String,
 ) -> AppResult<()> {
-    let _operation = state.operation(Some(&instance_id))?;
+    let _operation = state.begin_instance_operation(&instance_id)?;
     state
         .run_cancellable(&app, &operation_id, |on_progress| {
             // Das Packen meldet keinen Fortschritt; die Oberfläche soll die Phase trotzdem von Anfang an zeigen.

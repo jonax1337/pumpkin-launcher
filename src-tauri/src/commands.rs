@@ -48,7 +48,7 @@ pub fn get_instance(state: State<'_, AppState>, id: String) -> AppResult<Instanc
 
 #[tauri::command]
 pub fn create_instance(state: State<'_, AppState>, input: NewInstance) -> AppResult<Instance> {
-    let _operation = state.operation(None)?;
+    let _operation = state.begin_operation()?;
     require_instance_name(&input.name)?;
     let instance = state.instances.insert(Instance::from_new(input))?;
     tracing::info!(id = %instance.id, name = %instance.name, "Instanz angelegt");
@@ -57,7 +57,7 @@ pub fn create_instance(state: State<'_, AppState>, input: NewInstance) -> AppRes
 
 #[tauri::command]
 pub fn update_instance(state: State<'_, AppState>, instance: Instance) -> AppResult<Instance> {
-    let _operation = state.operation(Some(&instance.id))?;
+    let _operation = state.begin_instance_operation(&instance.id)?;
     require_instance_name(&instance.name)?;
     let old = state.instances.get(&instance.id)?;
     require_launch_settings(&instance, &old)?;
@@ -97,7 +97,7 @@ pub fn instance_set_group(state: State<'_, AppState>, instance_id: String, group
 
 #[tauri::command]
 pub fn delete_instance(state: State<'_, AppState>, id: String) -> AppResult<()> {
-    let _operation = state.operation(Some(&id))?;
+    let _operation = state.begin_instance_operation(&id)?;
     // Erst den Store-Eintrag: nur eine existierende Id wird zum Pfad, und bleibt das
     // Verzeichnis liegen (Datei gesperrt), ist die Instanz trotzdem weg.
     state.instances.remove(&id)?;
@@ -191,7 +191,7 @@ pub async fn versions_list(state: State<'_, AppState>) -> AppResult<Vec<VersionE
 /// Installiert die Version der Instanz; Fortschritt kommt als `install-progress`.
 #[tauri::command]
 pub async fn instance_install(app: AppHandle, state: State<'_, AppState>, instance_id: String) -> AppResult<()> {
-    let _operation = state.operation(Some(&instance_id))?;
+    let _operation = state.begin_instance_operation(&instance_id)?;
     state.cancellable(&instance_id, install_instance(app.clone(), &state, instance_id.clone())).await
 }
 
@@ -250,7 +250,7 @@ async fn install_instance(app: AppHandle, state: &AppState, instance_id: String)
 #[tauri::command]
 pub async fn instance_launch(app: AppHandle, state: State<'_, AppState>, instance_id: String, options: LaunchOptions) -> AppResult<u32> {
     let LaunchOptions { username, account_id, java_path, default_memory_mb, quick_play } = options;
-    let _operation = state.operation(Some(&instance_id))?;
+    let _operation = state.begin_instance_operation(&instance_id)?;
     let instance = state.instances.get(&instance_id)?;
     if let Some(target) = &quick_play {
         worlds::require_target(&state.dirs, &instance_id, target)?;

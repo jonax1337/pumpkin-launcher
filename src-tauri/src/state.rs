@@ -32,9 +32,13 @@ pub struct AppState {
     running: Mutex<HashMap<String, Running>>,
     /// Abbrechbare Vorgänge je Instanz- bzw. operationId.
     cancels: Mutex<HashMap<String, CancellationToken>>,
-    // ponytail: global try-lock serialisiert Content/Start/Mutationen; bei Bedarf pro Instanz aufteilen.
+    /// Eine Sperre für alle Instanzen: Installationen, Inhalte, Starts und Änderungen laufen nacheinander.
+    /// TODO: je Instanz aufteilen, falls parallele Vorgänge auf verschiedenen Instanzen gebraucht werden.
     operation: tokio::sync::Mutex<()>,
 }
+
+/// Hält die Vorgangssperre von `AppState`, bis er fallen gelassen wird.
+pub type OperationGuard<'a> = tokio::sync::MutexGuard<'a, ()>;
 
 impl AppState {
     pub fn load(data_dir: &Path) -> AppResult<Self> {
@@ -58,17 +62,23 @@ impl AppState {
         self.instances.get(id).map(drop)
     }
 
-    pub fn operation(&self, id: Option<&str>) -> AppResult<tokio::sync::MutexGuard<'_, ()>> {
-        let guard = self.operation.try_lock().map_err(|_| AppError::invalid("Eine Installation/Änderung läuft bereits"))?;
-        if id.is_some_and(|id| self.is_running(id)) {
+    /// Beginnt einen Vorgang unter der Sperre (siehe `operation`); läuft schon einer, ist das ein Fehler.
+    pub fn begin_operation(&self) -> AppResult<OperationGuard<'_>> {
+        self.operation.try_lock().map_err(|_| AppError::invalid("Eine Installation/Änderung läuft bereits"))
+    }
+
+    /// Wie `begin_operation` für eine Instanz, die dabei nicht laufen darf.
+    pub fn begin_instance_operation(&self, id: &str) -> AppResult<OperationGuard<'_>> {
+        let guard = self.begin_operation()?;
+        if self.is_running(id) {
             return Err(AppError::invalid("Instanz läuft noch"));
         }
         Ok(guard)
     }
 
-    /// Wie `operation` für eine bestimmte Instanz, die es auch geben muss.
-    pub fn exclusive(&self, id: &str) -> AppResult<tokio::sync::MutexGuard<'_, ()>> {
-        let guard = self.operation(Some(id))?;
+    /// Wie `begin_instance_operation` für eine Instanz, die es auch geben muss.
+    pub fn exclusive(&self, id: &str) -> AppResult<OperationGuard<'_>> {
+        let guard = self.begin_instance_operation(id)?;
         self.require_instance(id)?;
         Ok(guard)
     }

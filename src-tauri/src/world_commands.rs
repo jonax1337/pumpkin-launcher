@@ -104,7 +104,7 @@ pub async fn datapack_install(
     version_id: String,
     operation_id: String,
 ) -> AppResult<()> {
-    let _operation = state.operation(Some(&instance_id))?;
+    let _operation = state.begin_instance_operation(&instance_id)?;
     datapacks::install(&state, &instance_id, &world_id, &version_id, &*progress(app, operation_id)).await
 }
 
