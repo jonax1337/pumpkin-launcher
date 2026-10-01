@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { t } from "@/i18n";
 import { api } from "@/lib/api";
 import type { Screenshot } from "@/lib/types";
 
@@ -15,7 +16,7 @@ export function useDeleteScreenshot(instanceId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (shot: Screenshot) => api.screenshotDelete(instanceId, shot.fileName),
-    onSuccess: () => toast.success("Screenshot in den Papierkorb gelegt"),
+    onSuccess: () => toast.success(t("hooks.screenshot.trashed")),
     onSettled: () => qc.invalidateQueries({ queryKey: screenshotKeys.list(instanceId) }),
   });
 }

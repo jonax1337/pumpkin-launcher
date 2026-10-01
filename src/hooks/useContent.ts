@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { create } from "zustand";
+import { t } from "@/i18n";
 import { api } from "@/lib/api";
 import { doneLabel, type ContentProgress, type ContentProject } from "@/lib/modrinth";
 import { toastError } from "@/lib/toast";
@@ -47,7 +48,7 @@ export async function trackContent<R>(
   // A second submit while one runs is ignored: the running operation is already shown.
   if (useContentState.getState().active) return null;
   const operationId = crypto.randomUUID();
-  const label = run.label ?? "Inhalte laden";
+  const label = run.label ?? t("hooks.content.defaultLabel");
   useContentState.setState({ active: operationId, target: run.target ?? null, label, cancellable: !!run.cancellable, progress: null });
   let unlisten: (() => void) | undefined;
   try {
