@@ -1,4 +1,5 @@
 // Nur im Browser-Dev-Modus dynamisch geladen (siehe api.ts); im Release-Build nicht enthalten.
+import { t } from "@/i18n";
 import type { ContentProgress, ContentVersion } from "./modrinth";
 import { blankInstanceFields } from "./mock";
 import { CANCELLED, type Instance, type ModLoader } from "./types";
@@ -16,11 +17,11 @@ export function createPackMock(db: { instances: Instance[]; cancelled: Set<strin
     const progress = (phase: string, done: number, total: number) => emit("content-progress", { operationId, phase, done, total });
     progress("resolve", 0, 1);
     const res = await fetch(`https://api.modrinth.com/v2/version/${versionId}`);
-    if (!res.ok) throw new Error(`Modrinth antwortet nicht (${res.status})`);
+    if (!res.ok) throw new Error(t("mock.modrinth.unreachable", { status: res.status }));
     const version: ContentVersion = await res.json();
     const loader: ModLoader = version.loaders.includes("fabric") ? "fabric" : "vanilla";
     if (loader === "vanilla" && !version.loaders.some((l) => l === "minecraft" || l === "vanilla"))
-      throw new Error("Dieses Modpack braucht einen Mod-Loader, den Pumpkin Launcher noch nicht kann.");
+      throw new Error(t("mock.pack.loaderUnsupported"));
     const mods = loader === "fabric" ? PACK_MODS : [];
     for (let i = 0; i < mods.length; i++) {
       if (db.cancelled.delete(operationId)) throw new Error(CANCELLED);

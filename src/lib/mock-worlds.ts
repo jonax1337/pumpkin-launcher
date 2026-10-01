@@ -1,4 +1,5 @@
 // Nur im Browser-Dev-Modus dynamisch geladen (siehe api.ts); im Release-Build nicht enthalten.
+import { t } from "@/i18n";
 import { modrinth } from "./mock";
 import type { ContentProgress, ContentVersion } from "./modrinth";
 import type { Datapack, GameMode, Instance, Server, World, WorldBackup } from "./types";
@@ -53,16 +54,16 @@ export function createWorldMock(
   };
   const instance = (id: string) => {
     const found = db.instances.find((i) => i.id === id);
-    if (!found) throw new Error(`Instanz "${id}" nicht gefunden`);
+    if (!found) throw new Error(t("mock.instance.notFound", { id }));
     return found;
   };
   /** Wie `AppState::operation` im Backend: Spieldateien bleiben unangetastet, solange das Spiel läuft. */
   const notRunning = (instanceId: string) => {
-    if (db.running.has(instanceId)) throw new Error("Instanz läuft noch");
+    if (db.running.has(instanceId)) throw new Error(t("mock.instance.stillRunning"));
   };
   const world = (instanceId: string, id: string) => {
     const found = worldsOf(instanceId).find((w) => w.id === id);
-    if (!found) throw new Error(`Welt „${id}“ wurde nicht gefunden`);
+    if (!found) throw new Error(t("mock.world.notFound", { id }));
     return found;
   };
   const packsOf = (instanceId: string, worldId: string) => {
@@ -98,7 +99,7 @@ export function createWorldMock(
       notRunning(instanceId);
       await wait(600);
       const source = backupsOf(instanceId).find((b) => b.id === backupId);
-      if (!source) throw new Error(`Sicherung „${backupId}“ wurde nicht gefunden`);
+      if (!source) throw new Error(t("mock.backup.notFound", { id: backupId }));
       const list = worldsOf(instanceId);
       let id = source.world;
       for (let n = 2; list.some((w) => w.id === id); n++) id = `${source.world} (${n})`;
@@ -143,7 +144,7 @@ export function createWorldMock(
       await wait();
       const list = packsOf(instanceId, worldId);
       const at = list.findIndex((p) => p.id === packId);
-      if (at < 0) throw new Error(`Datenpaket „${packId}“ wurde nicht gefunden`);
+      if (at < 0) throw new Error(t("mock.datapack.notFound", { id: packId }));
       list.splice(at, 1);
     },
     async servers(instanceId: string) {

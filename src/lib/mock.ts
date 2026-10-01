@@ -1,3 +1,4 @@
+import { t } from "@/i18n";
 import type { ForeignInstance, Instance, Mod, ModKind, VersionEntry } from "@/lib/types";
 import type { CatalogType, ContentProgress, ContentProject, ContentSearch, ContentVersion, ModUpdate } from "@/lib/modrinth";
 
@@ -54,7 +55,7 @@ export const MOCK_MODS: Mod[] = [
 
 const byId = (slug: string): Mod => {
   const found = MOCK_MODS.find((m) => m.id === (PROJECT_IDS[slug] ?? slug));
-  if (!found) throw new Error(`Mock-Mod ${slug} fehlt`);
+  if (!found) throw new Error(t("mock.mods.missingEntry", { slug }));
   return { ...found };
 };
 
@@ -153,7 +154,7 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function modrinth<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   const res = await fetch(`${MODRINTH}${path}?${new URLSearchParams(params)}`);
-  if (!res.ok) throw new Error(`Modrinth antwortet nicht (${res.status})`);
+  if (!res.ok) throw new Error(t("mock.modrinth.unreachable", { status: res.status }));
   return res.json();
 }
 
@@ -163,7 +164,7 @@ export function createContentMock(db: { instances: Instance[] }, emit: (event: s
   const outdated = new Set([PROJECT_IDS.lithium, PROJECT_IDS.appleskin, PROJECT_IDS.modmenu]);
   const find = (id: string) => {
     const inst = db.instances.find((i) => i.id === id);
-    if (!inst) throw new Error(`Instanz "${id}" nicht gefunden`);
+    if (!inst) throw new Error(t("mock.instance.notFound", { id }));
     return structuredClone(inst);
   };
   const save = (inst: Instance) => {
@@ -203,7 +204,7 @@ export function createContentMock(db: { instances: Instance[] }, emit: (event: s
       for (const d of kind === "mod" ? root.dependencies : []) {
         if (d.dependency_type !== "required" || !d.project_id || have.has(d.project_id)) continue;
         const v = (await versions(d.project_id, inst.minecraftVersion, inst.loader))[0];
-        if (!v) throw new Error("Eine benötigte Mod gibt es nicht für diese Minecraft-Version.");
+        if (!v) throw new Error(t("mock.content.requiredModMissing"));
         fresh.push(v);
       }
       const todo = fresh.filter((v) => !have.has(v.project_id));
