@@ -170,7 +170,7 @@ pub async fn fetch(client: &reqwest::Client, job: &Job) -> AppResult<()> {
     loop {
         match download_once(client, job).await {
             Ok(()) => return Ok(()),
-            Err(err) if attempt < ATTEMPTS => {
+            Err(err) if attempt < ATTEMPTS && err.is_retryable() => {
                 tracing::warn!(url = %job.url, attempt, %err, "Download fehlgeschlagen, neuer Versuch");
                 tokio::time::sleep(Duration::from_millis(500 * u64::from(attempt))).await;
                 attempt += 1;
