@@ -23,7 +23,8 @@
     "build:website": "vite build --config website/vite.config.mjs",
     "preview:website": "vite preview --config website/vite.config.mjs",
     "check:website": "node website/check.mjs",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "tauri:remote": "node scripts/tauri-remote.mjs"
   },
   "dependencies": {
     "@fontsource-variable/hanken-grotesk": "^5.3.0",
