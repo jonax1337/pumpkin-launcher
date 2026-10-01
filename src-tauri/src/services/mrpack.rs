@@ -193,6 +193,8 @@ fn write_zip(path: &Path, index: &Value, meta: &Value, files: Vec<(String, PathB
     }
     // Erst schließen, dann umbenennen: Windows verschiebt keine offene Datei.
     drop(zip.finish()?);
+    // Ein Abbruch während der letzten Datei darf kein fertiges Pack am Ziel hinterlassen.
+    check_cancelled(stop)?;
     fs::rename(&tmp, path)?;
     guard.0 = None;
     Ok(())

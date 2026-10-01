@@ -39,7 +39,10 @@ function useDuplicate() {
     });
 }
 
-/** Export als `.mrpack` wie Duplizieren im Aufgaben-Menü; der Erfolgs-Toast führt zur Datei im Dateimanager. */
+/**
+ * Export als `.mrpack` wie Duplizieren im Aufgaben-Menü; der Erfolgs-Toast führt zur Datei im Dateimanager.
+ * Gehört in InstanceDialogs, nicht in den Dialog: der schließt sofort, und mit ihm fiele der Erfolgs-Toast weg.
+ */
 function useExport() {
   const install = useContentInstall();
   return (instance: Instance, include: string[], path: string) => {
@@ -164,17 +167,16 @@ const ENTRY_LABELS: Record<string, string> = {
   "servers.dat": "Serverliste",
 };
 
-function ExportDialog({ instance, onClose }: { instance: Instance; onClose: () => void }) {
+function ExportDialog({ instance, onExport, onClose }: { instance: Instance; onExport: (include: string[], path: string) => void; onClose: () => void }) {
   const entries = useExportEntries(instance.id);
   const [picked, setPicked] = useState<Set<string> | null>(null);
   const chosen = picked ?? new Set(entries.data?.filter((name) => EXPORT_DEFAULTS.includes(name)));
-  const exportPack = useExport();
   const toggle = (name: string, on: boolean) => setPicked(new Set(on ? [...chosen, name] : [...chosen].filter((n) => n !== name)));
 
   async function submit() {
     const path = await saveFile({ defaultPath: packFileName(instance.name), filters: [{ name: "Modrinth-Modpack", extensions: ["mrpack"] }] });
     if (!path) return;
-    exportPack(instance, [...chosen], path);
+    onExport([...chosen], path);
     onClose();
   }
 
@@ -238,13 +240,14 @@ function NewGroupDialog({ instance, onClose }: { instance: Instance; onClose: ()
 export function InstanceDialogs() {
   const { template, exporting, remove, newGroup } = useInstanceActions();
   const del = useDeleteInstance();
+  const exportPack = useExport();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const close = () => useInstanceActions.setState({ template: null, exporting: null, remove: null, newGroup: null });
   return (
     <>
       {template && <SaveTemplateDialog key={template.id} instance={template} onClose={close} />}
-      {exporting && <ExportDialog key={exporting.id} instance={exporting} onClose={close} />}
+      {exporting && <ExportDialog key={exporting.id} instance={exporting} onExport={(include, path) => exportPack(exporting, include, path)} onClose={close} />}
       {newGroup && <NewGroupDialog key={newGroup.id} instance={newGroup} onClose={close} />}
       <ConfirmDialog
         open={!!remove}

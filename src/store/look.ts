@@ -21,8 +21,11 @@ export const useLookStore = create<LookState>()(
       looks: {},
       collapsed: [],
       setBiome: (id, bio) => set((s) => ({ looks: { ...s.looks, [id]: { bio, seed: s.looks[id]?.seed ?? defaultLook(id).seed } } })),
+      // <details> meldet beim Einhängen schon offen; ohne Änderung bleibt der Zustand gleich, kein Neu-Rendern.
       setCollapsed: (group, collapsed) =>
-        set((s) => ({ collapsed: collapsed ? [...new Set([...s.collapsed, group])] : s.collapsed.filter((g) => g !== group) })),
+        set((s) =>
+          s.collapsed.includes(group) === collapsed ? s : { collapsed: collapsed ? [...s.collapsed, group] : s.collapsed.filter((g) => g !== group) },
+        ),
     }),
     { name: "launcher-look", version: 1 },
   ),

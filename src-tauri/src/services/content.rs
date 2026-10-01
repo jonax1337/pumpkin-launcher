@@ -1014,16 +1014,19 @@ pub async fn adopt_untracked(state: &AppState) -> AppResult<usize> {
     let mut ids: Vec<&String> = plan.iter().map(|p| &p.0).collect();
     ids.dedup();
     for id in ids {
-        let Ok(mut instance) = state.instances.get(id) else { continue };
-        let before = instance.mods.len();
-        for (_, kind, name, enabled, sha1) in plan.iter().filter(|p| &p.0 == id) {
-            let m = entry(*kind, name.clone(), sha1.clone(), &known, &titles, &instance.mods);
-            instance.mods.push(Mod { enabled: *enabled, ..m });
-        }
-        if instance.mods.len() > before {
-            added += instance.mods.len() - before;
-            derive_required_by(&mut instance.mods, &known);
-            state.instances.update(instance)?;
+        let files: Vec<_> = plan.iter().filter(|p| &p.0 == id).collect();
+        let adopted = state.instances.modify(id, |current| {
+            for (_, kind, name, enabled, sha1) in &files {
+                let m = entry(*kind, name.clone(), sha1.clone(), &known, &titles, &current.mods);
+                current.mods.push(Mod { enabled: *enabled, ..m });
+            }
+            derive_required_by(&mut current.mods, &known);
+        });
+        match adopted {
+            Ok(_) => added += files.len(),
+            // Inzwischen gelöscht: nichts nachzutragen.
+            Err(AppError::NotFound { .. }) => {}
+            Err(err) => return Err(err),
         }
     }
     Ok(added)
