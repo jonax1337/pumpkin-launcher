@@ -13,7 +13,7 @@ import { useContentInstall, useContentState, withTarget } from "@/hooks/useConte
 import { useInstances } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import {
-  formatDownloads, installedKey, isPackVersionSupported, modLoadersFor, ownerKey, pickPackVersion, pickVersion, progressLabel, projectKey, projectOf, SOURCES,
+  formatDownloads, installedKey, isPackVersionSupported, modLoadersFor, ownerKey, pickPackVersion, pickVersion, progressLabel, progressShare, projectKey, projectOf, SOURCES,
   type CatalogType, type ContentHit, type ContentProgress, type ContentProject, type ContentVersion, type SearchIndex, type Source,
 } from "@/lib/modrinth";
 import { openManualDownloads } from "@/components/ManualDownloads";
@@ -64,7 +64,6 @@ const categoryNames = (cats: string[], max = 2) =>
   cats.filter((c) => !LOADER_CATS.has(c) && !/^\d+x/.test(c)).slice(0, max).map((c) => CATEGORY[c] ?? c.charAt(0).toUpperCase() + c.slice(1).replace(/-/g, " "));
 
 /** Anteil 0–1 für Fortschrittsbalken; null = unbestimmt. */
-const progressShare = (p: ContentProgress | null) => (p?.phase === "download" && p.total ? Math.min(1, p.done / p.total) : null);
 
 // ---------- Beschreibung (Markdown mit HTML von Modrinth) ----------
 

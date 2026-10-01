@@ -7,7 +7,7 @@ import { ManualDownloads } from "@/components/ManualDownloads";
 import { useCancelInstall, useGameEvents, useInstances } from "@/hooks/useInstances";
 import { useContentState } from "@/hooks/useContent";
 import { api } from "@/lib/api";
-import { progressLabel } from "@/lib/modrinth";
+import { progressLabel, progressShare } from "@/lib/modrinth";
 import { installStepLabel } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BrandMark, BrandWordmark } from "@/branding/Brand";
@@ -191,7 +191,7 @@ function useLiveTasks() {
       instanceId: "",
       label: content.label ?? "Inhalte laden",
       sub: progressLabel(content.progress),
-      p: content.progress?.phase === "download" && content.progress.total ? content.progress.done / content.progress.total : null,
+      p: progressShare(content.progress),
     });
   return live;
 }

@@ -28,6 +28,7 @@
 - **Instances** — create, configure and launch isolated game instances for Vanilla, **Fabric, Forge, NeoForge and Quilt**
 - **Mods & modpacks from [Modrinth](https://modrinth.com)** — browse, search and install directly in the launcher
 - **`.mrpack` import** — drag in local modpack files
+- **Duplicate & export** — copy an instance to experiment safely, or share it as a `.mrpack` (Modrinth mods linked, everything else embedded; worlds optional)
 - **Presets** — reusable collections of mods, settings and JVM args that can be applied to any instance
 - **Microsoft login** via device code (see [status](#status) below), plus offline player profiles
 - **Quality-of-life** — crash detection with per-instance logs, resumable downloads, automatic RAM detection

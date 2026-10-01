@@ -41,6 +41,8 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `services/mods.rs` | Globaler Mod-Cache (`cache/mods/<sha1>.jar`) und Abgleich nach `mods/` der Instanz (Hardlink, Fallback Kopie; bestehende fremde Dateien werden nicht ersetzt) |
 | `services/modrinth.rs` | Modrinth-v2-Katalog, Versions-/Dependency-Auflösung und hashgeprüfte Downloads |
 | `services/providers/` | Weitere Kataloge in Modrinth-Formen: `ftb.rs` (öffentliche FTB-API, installierbar, Downloads nur von festen Hosts mit Prüfsumme), `technic.rs` (Suche, Details und Installation: Pack-Zip des Autors über `net.rs` = nur HTTPS und öffentliche Adressen, Loader aus `bin/version.json`), `curseforge.rs` (CurseForge über den Cloudflare Worker in `proxy/`, der den API-Schlüssel hält: Suche, Mods mit Abhängigkeiten, Modpacks per `manifest.json`; der Launcher selbst kennt keinen Schlüssel, die Dateien kommen direkt vom CDN; nur über die Webseite erlaubte Dateien werden nicht umgangen, sondern vom Nutzer geladen und aus dem Downloads-Ordner übernommen). Pack-Zips werden von der Platte entpackt (`content::Blob::Zip`), nicht im Speicher gehalten |
+| `services/mrpack.rs` | `.mrpack`-Export einer Instanz (Vorlagen und „Exportieren…“): Modrinth-Inhalte per SHA-1-Sammelabfrage als Download im Index, alles andere unter `overrides/`, dazu `pumpkin.json`; Grenzen so, dass der eigene Import das Pack wieder liest |
+| `services/duplicate.rs` | Instanz duplizieren: neuer Eintrag (neue ID, „<Name> (Kopie)“, `lastPlayedAt` leer), Kopie von Spielordner, Natives und Installiert-Marker ohne `logs/`, `crash-reports/`, `.fabric/`; verwaltete Inhalte legt `mods::sync` per Hardlink ab; bei Fehler wird die halbe Kopie entfernt |
 | `services/content.rs` | Sichere Modinstallation und `.mrpack`-Import in neue Instanzen; `plan_pack`/`import_plan` für Packs von Anbietern |
 | `content_commands.rs` | Modrinth-IPC und korrelierte `content-progress`-Events |
 | `services/launch.rs` | Classpath, JVM-/Game-Args mit `${…}`-Ersetzung, Prozessstart, Log-Streaming |
@@ -101,9 +103,12 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `modrinth_install_mod` | `instanceId`, `versionId`, `operationId` | Aktualisierte `Instance` |
 | `modrinth_install_pack` | `versionId`, `name`, `operationId` | Neue `Instance` |
 | `modrinth_import_pack` | absoluter `path`, `name`, `operationId` | Neue `Instance` |
+| `instance_duplicate` | `instanceId`, `operationId` | Neue `Instance` (Fortschritt als `content-progress`, Phase `copy`); läuft die Instanz, Fehler |
+| `instance_export_entries` | `instanceId` | `string[]`: Ordner und Dateien im Spielordner (ohne Neuerzeugtes) plus Ordner aktiver Inhalte |
+| `instance_export` | `instanceId`, `include` (Einträge aus `instance_export_entries`), absoluter `path` (`.mrpack`) | – |
 | `pack_install_cancel` | `operationId` | – (bricht `modrinth_install_pack`/`modrinth_import_pack`/`template_create_instance` ab) |
 
-Content-Fortschritt: `content-progress` `{ operationId, phase, done, total }`. Der Aufrufer vergibt die `operationId`; späte oder fremde Events dürfen keinen anderen Auftrag aktualisieren. Modpack-Import und Minecraft-Installation sind getrennte Schritte: nach dem Import installiert `instance_install` die passende Minecraft-/Fabric-Runtime.
+Content-Fortschritt: `content-progress` `{ operationId, phase, done, total }` (Phasen `resolve`, `validate`, `download`, `extract`, `copy`, `complete`). Der Aufrufer vergibt die `operationId`; späte oder fremde Events dürfen keinen anderen Auftrag aktualisieren. Modpack-Import und Minecraft-Installation sind getrennte Schritte: nach dem Import installiert `instance_install` die passende Minecraft-/Fabric-Runtime.
 
 Events: `install-progress` `{ instanceId, step, done, total }` · `instance-log` `{ instanceId, stream: "stdout"|"stderr", line }` · `instance-exit` `{ instanceId, code: number|null, crashed: boolean, crashReport: string|null, logFile: string|null }` (`crashed` = Fehlercode ohne Stopp durch den Nutzer; Pfade absolut, öffnbar per `openPath`, Scope `$APPDATA/**`) · `instances-changed` (ohne Daten; nach dem Nachtragen von Ordner-Inhalten beim Start). Installation und Start gibt es für `loader = vanilla` und `fabric`.
 
@@ -174,7 +179,7 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 - `pages/` – Start (Szene, Weiterspielen-Reihe, Onboarding), Bibliothek (Poster/Liste), Instanz (klebender Kopf, Inhalte, Protokoll, Einstellungen; `pages/detail/`), Entdecken (Katalog, Projektseite), Einstellungen
 - `components/px.tsx` – Bausteine: Knopf, Chip, Fortschritt, Suchfeld, Auswahl, Segmente, Checkbox, Schalter, Radio, Speicher-Slider, Tooltip, Menü/Kontextmenü, Dialog, Seitenpanel, Leer- und Fehlerzustände, Toasts. Verhalten von Radix, Aussehen aus `styles/`
 - `components/game.tsx` – Spielen-Knopf (feste Größe in allen Zuständen), Statuszeile, Status-Chip, Protokoll mit Filter/Suche/Mitscrollen
-- `components/instance.tsx` – Instanz-Menü (Knopf und Rechtsklick) mit Dialogen „Als Vorlage speichern“ und „Löschen“
+- `components/instance.tsx` – Instanz-Menü (Knopf und Rechtsklick): „Duplizieren“ (Fortschritt im Aufgaben-Menü), Dialoge „Exportieren…“ (Auswahl der Ordner, Speichern-Dialog, Toast mit „Im Ordner zeigen“), „Als Vorlage speichern“ und „Löschen“
 - `components/ContentBrowser.tsx`, `NewInstanceDialog.tsx`, `PlayerNames.tsx`, `Onboarding.tsx` – Katalog und Seitenpanel, Neue Instanz, Konten und Microsoft-Anmeldung, erster Start
 - `pixel/` – `unit.ts` (Pixeleinheit auf ganze Gerätepixel), `scene.ts` (Szenen-Engine: 7 Biome, 12 fps, Pausenregeln, Cache), `PixelScene.tsx`, `icons.tsx` (Pixel-Icons, Mod-Glyphen, Wortzeichen, Spielerkopf)
 - `styles/pixelkino.css` (aus dem Mockup übernommen), `styles/states.css` (Auswahlliste, Hover/Druck/Fokus, Ein- und Ausblenden) plus kleine Ergänzungen je Bereich; beide in der Tailwind-Schicht `components`, deren Reihenfolge `index.html` vor allen Stylesheets festlegt

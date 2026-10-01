@@ -1,6 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { openPath, openUrl } from "@tauri-apps/plugin-opener";
+import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   INSTALL_CANCELLED,
   type Account,
@@ -115,6 +115,13 @@ const mock = {
     await delay();
     findInstance(id);
     db.instances = db.instances.filter((i) => i.id !== id);
+  },
+  async duplicateInstance(instanceId: string) {
+    await delay(800);
+    const source = findInstance(instanceId);
+    const inst: Instance = { ...clone(source), id: newId("inst"), name: `${source.name} (Kopie)`, createdAt: Date.now(), lastPlayedAt: null };
+    db.instances.push(inst);
+    return clone(inst);
   },
   async templateSave(instanceId: string, name: string) {
     await delay(600);
@@ -326,6 +333,18 @@ export const api = {
     tauri ? call("update_instance", { instance }) : mock.updateInstance(instance),
   deleteInstance: (id: string): Promise<void> =>
     tauri ? call("delete_instance", { id }) : mock.deleteInstance(id),
+  /** Kopie mit Spielordner unter „<Name> (Kopie)“; Fortschritt als `content-progress`. */
+  duplicateInstance: (instanceId: string, operationId: string): Promise<Instance> =>
+    tauri ? call("instance_duplicate", { instanceId, operationId }) : mock.duplicateInstance(instanceId),
+  /** Einträge des Spielordners, die ein Export mitnehmen kann (Ordner und Dateien). */
+  exportEntries: (instanceId: string): Promise<string[]> =>
+    tauri ? call("instance_export_entries", { instanceId }) : Promise.resolve(["config", "mods", "options.txt", "resourcepacks", "saves", "screenshots"]),
+  /** Schreibt die Instanz als `.mrpack` nach `path` (absolut); `include` aus `exportEntries`. */
+  exportInstance: (instanceId: string, include: string[], path: string): Promise<void> =>
+    tauri ? call("instance_export", { instanceId, include, path }) : Promise.reject(new Error("Exportieren geht nur in der Pumpkin Launcher-App.")),
+  /** Datei im Dateimanager markieren (z. B. ein Export). */
+  revealPath: (path: string): Promise<void> =>
+    tauri ? revealItemInDir(path) : Promise.reject(new Error("Ordner lassen sich nur in der Pumpkin Launcher-App öffnen.")),
 
   templateSave: (instanceId: string, name: string): Promise<Template> =>
     tauri ? call("template_save", { instanceId, name }) : mock.templateSave(instanceId, name),
