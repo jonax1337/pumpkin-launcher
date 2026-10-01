@@ -3,10 +3,11 @@
 //! Neue Instanzen entstehen über den normalen Pack-Import (`content::import`).
 use std::{fs, path::PathBuf};
 
-use super::{content, mrpack::{self, PackLimit}, Dirs};
+use super::progress::ProgressFn;
+use super::{content, mrpack::{self, PackLimit}, remove_logged, Dirs};
 use crate::{
     error::{AppError, AppResult},
-    models::{new_id, now_ms, Instance, Template},
+    models::{new_id, now_ms, require_name, Instance, Template, MAX_TEMPLATE_NAME_LEN},
     state::AppState,
 };
 
@@ -18,10 +19,7 @@ fn file(dirs: &Dirs, id: &str) -> PathBuf {
 }
 
 pub async fn save(state: &AppState, instance_id: &str, name: &str) -> AppResult<Template> {
-    let name = name.trim();
-    if name.is_empty() || name.chars().count() > 100 {
-        return Err(AppError::invalid("Der Name der Vorlage muss 1 bis 100 Zeichen lang sein"));
-    }
+    let name = require_name(name, MAX_TEMPLATE_NAME_LEN, format!("Der Name der Vorlage muss 1 bis {MAX_TEMPLATE_NAME_LEN} Zeichen lang sein"))?;
     let instance = state.instances.get(instance_id)?;
     let template = Template {
         id: new_id(),
@@ -34,22 +32,13 @@ pub async fn save(state: &AppState, instance_id: &str, name: &str) -> AppResult<
     let path = file(&state.dirs, &template.id);
     fs::create_dir_all(state.dirs.root.join("templates"))?;
     mrpack::write(&state.dirs, instance, CONTENT.map(String::from).to_vec(), &path, PackLimit::Importable).await?;
-    state.templates.insert(template).inspect_err(|_| {
-        if let Err(err) = fs::remove_file(&path) {
-            tracing::warn!(%err, path = %path.display(), "Vorlagendatei nach Fehler nicht entfernt");
-        }
-    })
+    state.templates.insert(template).inspect_err(|_| remove_logged(&path))
 }
 
 pub fn delete(state: &AppState, id: &str) -> AppResult<()> {
     // Erst der Store-Eintrag: nur eine existierende Id wird zum Pfad.
     state.templates.remove(id)?;
-    match fs::remove_file(file(&state.dirs, id)) {
-        Err(err) if err.kind() != std::io::ErrorKind::NotFound => {
-            tracing::warn!(%id, %err, "Vorlagendatei nicht gelöscht")
-        }
-        _ => {}
-    }
+    remove_logged(&file(&state.dirs, id));
     Ok(())
 }
 
@@ -57,12 +46,11 @@ pub async fn create_instance(
     state: &AppState,
     template_id: &str,
     name: &str,
-    progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
+    progress: ProgressFn<'_>,
 ) -> AppResult<Instance> {
     let template = state.templates.get(template_id)?;
-    let data = content::local_pack(&file(&state.dirs, &template.id)).map_err(|e| match e {
-        AppError::Io(e) if e.kind() == std::io::ErrorKind::NotFound => AppError::invalid("Die Vorlagendatei fehlt"),
-        e => e,
+    let data = content::local_pack(&file(&state.dirs, &template.id)).map_err(|e| {
+        if e.is_not_found() { AppError::invalid("Die Vorlagendatei fehlt") } else { e }
     })?;
     content::import(state, &data, name, None, progress).await
 }

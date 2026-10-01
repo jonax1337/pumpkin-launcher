@@ -3,6 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
+use crate::error::{AppError, AppResult};
 
 pub fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
@@ -16,6 +17,29 @@ pub fn now_ms() -> u64 {
         .unwrap_or_default()
 }
 
+/// Längster Instanzname (in Zeichen), den Packs und Imports mitbringen dürfen.
+pub const MAX_NAME_LEN: usize = 200;
+/// Längster Name einer Vorlage (in Zeichen).
+pub const MAX_TEMPLATE_NAME_LEN: usize = 100;
+/// Längster Name eines Skins der Bibliothek (in Zeichen).
+pub const MAX_SKIN_NAME_LEN: usize = 64;
+/// Für Namen, die nur nicht leer sein müssen.
+pub const NO_NAME_LIMIT: usize = usize::MAX;
+
+/// Der Name ohne Randleerraum; leer oder länger als `max_chars` Zeichen lehnt er mit `message` ab.
+pub fn require_name(name: &str, max_chars: usize, message: impl Into<String>) -> AppResult<&str> {
+    let name = name.trim();
+    if name.is_empty() || name.chars().count() > max_chars {
+        return Err(AppError::invalid(message));
+    }
+    Ok(name)
+}
+
+/// Name einer neuen Instanz aus einem Pack oder Anbieter.
+pub fn instance_name(raw: &str) -> AppResult<&str> {
+    require_name(raw, MAX_NAME_LEN, "Ungültiger Instanzname")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ModLoader {
@@ -27,6 +51,40 @@ pub enum ModLoader {
 }
 
 impl ModLoader {
+    const ALL: [ModLoader; 5] = [Self::Vanilla, Self::Fabric, Self::Quilt, Self::Forge, Self::NeoForge];
+
+    /// Schlüssel in JSON und Schnittstellen, kleingeschrieben wie der serde-Name.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Vanilla => "vanilla",
+            Self::Fabric => "fabric",
+            Self::Quilt => "quilt",
+            Self::Forge => "forge",
+            Self::NeoForge => "neoforge",
+        }
+    }
+
+    /// Der Loader zu einem Namen wie [`name`](Self::name); Unbekanntes ist keiner.
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|loader| loader.name() == name)
+    }
+
+    /// Wie [`from_name`](Self::from_name), aber ohne Vanilla: so nennen Anbieter und Packs ihre Mod-Loader.
+    pub fn from_modded_name(name: &str) -> Option<Self> {
+        Self::from_name(name).filter(|loader| *loader != Self::Vanilla)
+    }
+
+    /// Schreibweise für Menschen (Berichte, Meldungen).
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::Vanilla => "Vanilla",
+            Self::Fabric => "Fabric",
+            Self::Quilt => "Quilt",
+            Self::Forge => "Forge",
+            Self::NeoForge => "NeoForge",
+        }
+    }
+
     /// Loader mit ihrem Schlüssel unter `dependencies` in `modrinth.index.json`.
     pub const PACK_KEYS: [(ModLoader, &'static str); 4] =
         [(Self::Fabric, "fabric-loader"), (Self::Quilt, "quilt-loader"), (Self::Forge, "forge"), (Self::NeoForge, "neoforge")];
@@ -76,6 +134,18 @@ pub enum ModKind {
 }
 
 impl ModKind {
+    pub const ALL: [ModKind; 3] = [Self::Mod, Self::ResourcePack, Self::Shader];
+
+    /// Modrinth-Loader-Namen, unter denen Updates dieser Art gesucht werden: Mods laufen unter den Loadern der
+    /// Instanz, Ressourcenpakete unter `minecraft`, Shader unter den Shader-Loadern.
+    pub fn update_loaders(self, loader: ModLoader) -> &'static [&'static str] {
+        match self {
+            Self::Mod => loader.modrinth_loaders(),
+            Self::ResourcePack => &["minecraft"],
+            Self::Shader => &["iris", "optifine", "canvas", "vanilla"],
+        }
+    }
+
     pub fn folder(self) -> &'static str {
         match self {
             Self::Mod => "mods",
@@ -369,6 +439,37 @@ mod tests {
         assert!(!ModLoader::Vanilla.runs(&names(&["fabric"])));
         assert_eq!(ModLoader::NeoForge.pack_key(), Some("neoforge"));
         assert_eq!(serde_json::to_value(ModLoader::NeoForge).unwrap(), "neoforge");
+    }
+
+    #[test]
+    fn loader_name_matches_the_serialized_name_and_reads_back() {
+        for loader in ModLoader::ALL {
+            assert_eq!(serde_json::to_value(loader).unwrap(), loader.name());
+            assert_eq!(ModLoader::from_name(loader.name()), Some(loader));
+            assert_eq!(ModLoader::from_modded_name(loader.name()), (loader != ModLoader::Vanilla).then_some(loader));
+        }
+        assert_eq!(ModLoader::from_name("NeoForge"), None, "nur kleingeschrieben");
+        assert_eq!(ModLoader::NeoForge.display_name(), "NeoForge");
+        assert_eq!(format!("{:?}", ModLoader::Quilt), ModLoader::Quilt.display_name(), "der Installations-Marker hängt daran");
+    }
+
+    #[test]
+    fn content_kinds_search_updates_under_their_own_loaders() {
+        assert_eq!(ModKind::ALL.map(ModKind::folder), ["mods", "resourcepacks", "shaderpacks"]);
+        assert_eq!(ModKind::Mod.update_loaders(ModLoader::Quilt), ["quilt", "fabric"]);
+        assert_eq!(ModKind::ResourcePack.update_loaders(ModLoader::Forge), ["minecraft"]);
+        assert_eq!(ModKind::Shader.update_loaders(ModLoader::Vanilla), ["iris", "optifine", "canvas", "vanilla"]);
+    }
+
+    #[test]
+    fn names_are_trimmed_and_bounded_in_characters() {
+        assert_eq!(require_name("  Technik ", 10, "x").unwrap(), "Technik");
+        assert_eq!(require_name(&"ä".repeat(10), 10, "x").unwrap().chars().count(), 10);
+        assert_eq!(require_name(&"ä".repeat(11), 10, "zu lang").unwrap_err().to_string(), "zu lang");
+        assert_eq!(require_name("   ", NO_NAME_LIMIT, "leer").unwrap_err().to_string(), "leer");
+        assert_eq!(instance_name("").unwrap_err().to_string(), "Ungültiger Instanzname");
+        assert!(instance_name(&"a".repeat(MAX_NAME_LEN)).is_ok());
+        assert!(instance_name(&"a".repeat(MAX_NAME_LEN + 1)).is_err());
     }
 
     #[test]

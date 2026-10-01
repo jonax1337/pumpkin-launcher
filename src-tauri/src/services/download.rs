@@ -7,6 +7,7 @@ use futures::{StreamExt, TryStreamExt};
 use serde::de::DeserializeOwned;
 use sha1::{Digest, Sha1};
 
+use super::progress::CountFn;
 use crate::error::{AppError, AppResult};
 
 const PARALLEL: usize = 16;
@@ -72,16 +73,25 @@ pub fn sha1_file(path: &Path) -> std::io::Result<String> {
     Ok(hash.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
-/// Entfernt Datei bzw. Ordner beim Verwerfen, solange nicht entschärft (`0 = None`). Greift, wenn
+/// Entfernt Datei bzw. Ordner beim Verwerfen, solange nicht entschärft (`disarm`). Greift, wenn
 /// ein laufender Vorgang abgebrochen wird (Future verworfen) und kein normaler Fehlerpfad aufräumt.
-pub struct RemoveOnDrop(pub Option<PathBuf>);
+pub struct RemoveOnDrop(Option<PathBuf>);
+
+impl RemoveOnDrop {
+    pub fn new(path: PathBuf) -> Self {
+        Self(Some(path))
+    }
+
+    /// Der Vorgang ist gelungen (oder räumt selbst auf): `path` bleibt liegen.
+    pub fn disarm(mut self) {
+        self.0 = None;
+    }
+}
 
 impl Drop for RemoveOnDrop {
     fn drop(&mut self) {
-        let Some(path) = self.0.take() else { return };
-        let result = if path.is_dir() { std::fs::remove_dir_all(&path) } else { std::fs::remove_file(&path) };
-        if let Err(err) = result.or_else(|e| if e.kind() == std::io::ErrorKind::NotFound { Ok(()) } else { Err(e) }) {
-            tracing::warn!(path = %path.display(), %err, "Aufräumen nach Abbruch fehlgeschlagen");
+        if let Some(path) = self.0.take() {
+            super::remove_logged(&path);
         }
     }
 }
@@ -113,7 +123,7 @@ async fn download_once(client: &reqwest::Client, job: &Job) -> AppResult<()> {
     tmp.push(".part");
     let tmp = PathBuf::from(tmp);
     // Abbruch durch den Nutzer (Future verworfen) räumt die `.part` weg; Netzfehler lassen sie für Resume liegen.
-    let mut guard = RemoveOnDrop(Some(tmp.clone()));
+    let guard = RemoveOnDrop::new(tmp.clone());
     let part_len = tokio::fs::metadata(&tmp).await.map(|m| m.len()).unwrap_or(0);
     let mut request = client.get(&job.url);
     if part_len > 0 {
@@ -129,7 +139,7 @@ async fn download_once(client: &reqwest::Client, job: &Job) -> AppResult<()> {
         let range = response.headers().get(CONTENT_RANGE).and_then(|v| v.to_str().ok());
         let Some(offset) = resume_offset(response.status().as_u16(), range, part_len) else {
             // Nächster Versuch ohne Range.
-            tokio::fs::remove_file(&tmp).await.or_else(|e| if e.kind() == std::io::ErrorKind::NotFound { Ok(()) } else { Err(e) })?;
+            super::none_if_missing(tokio::fs::remove_file(&tmp).await)?;
             return Err(AppError::Download(format!("{}: Server setzt an falscher Stelle fort, lade neu", job.url)));
         };
         let mut hash = Sha1::new();
@@ -163,7 +173,7 @@ async fn download_once(client: &reqwest::Client, job: &Job) -> AppResult<()> {
         Ok(())
     }
     .await;
-    guard.0 = None;
+    guard.disarm();
     result
 }
 
@@ -191,7 +201,7 @@ pub async fn fetch(client: &reqwest::Client, job: &Job) -> AppResult<()> {
 pub async fn fetch_all(
     client: &reqwest::Client,
     jobs: Vec<Job>,
-    on_done: &(dyn Fn(u64, u64) + Send + Sync),
+    on_done: CountFn<'_>,
 ) -> AppResult<()> {
     let total = jobs.len() as u64;
     let done = AtomicU64::new(0);
@@ -216,7 +226,7 @@ mod tests {
         let path = std::env::temp_dir().join(crate::models::new_id());
         std::fs::write(&path, b"abc").unwrap();
         assert_eq!(sha1_file(&path).unwrap(), sha1_hex(b"abc"));
-        drop(RemoveOnDrop(Some(path.clone())));
+        drop(RemoveOnDrop::new(path.clone()));
         assert!(!path.exists());
     }
 

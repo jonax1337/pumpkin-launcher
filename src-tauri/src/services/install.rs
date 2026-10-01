@@ -1,8 +1,7 @@
 //! Vanilla-Installation einer Version: Versions-JSON, Java, Client, Libraries, Natives,
 //! Assets, Logging-Config. Alles außer den Natives landet im geteilten Cache (`Dirs`).
-use std::fs;
-use std::io;
 use std::path::{Path, PathBuf};
+use std::{fs, io};
 
 use serde::Serialize;
 
@@ -55,25 +54,17 @@ pub async fn fetch_version(client: &reqwest::Client, dirs: &Dirs, version_id: &s
 
 /// Liest eine bereits installierte Versions-JSON (für den Start ohne Netz).
 pub async fn installed_version(dirs: &Dirs, version_id: &str) -> AppResult<VersionJson> {
-    download::read_json(&dirs.version_file(version_id, "json")).await.map_err(|err| {
-        if is_missing(&err) {
-            AppError::invalid(format!("Version {version_id} ist nicht installiert"))
-        } else {
-            err
-        }
-    })
+    download::read_json(&dirs.version_file(version_id, "json"))
+        .await
+        .map_err(|err| err.or_not_installed(format!("Version {version_id}")))
 }
 
 /// Die installierte Versions-JSON oder, fehlt sie, die von Mojang (dabei abgelegt wie bei `fetch_version`).
 pub async fn installed_or_fetched_version(client: &reqwest::Client, dirs: &Dirs, version_id: &str) -> AppResult<VersionJson> {
     match download::read_json(&dirs.version_file(version_id, "json")).await {
-        Err(err) if is_missing(&err) => fetch_version(client, dirs, version_id).await,
+        Err(err) if err.is_not_found() => fetch_version(client, dirs, version_id).await,
         read => read,
     }
-}
-
-fn is_missing(err: &AppError) -> bool {
-    matches!(err, AppError::Io(e) if e.kind() == io::ErrorKind::NotFound)
 }
 
 /// Inhalt der Markerdatei: die MC-Version, bei Mod-Loadern plus Loader und Version. Ein Wechsel
@@ -81,7 +72,9 @@ fn is_missing(err: &AppError) -> bool {
 fn install_key(instance: &Instance) -> String {
     match instance.loader {
         ModLoader::Vanilla => instance.minecraft_version.clone(),
-        loader => format!("{} {loader:?} {}", instance.minecraft_version, instance.loader_version.as_deref().unwrap_or("?")),
+        loader => {
+            format!("{} {} {}", instance.minecraft_version, loader.display_name(), instance.loader_version.as_deref().unwrap_or("?"))
+        }
     }
 }
 
@@ -242,6 +235,21 @@ pub async fn install(
 mod tests {
     use super::*;
     use crate::models::NewInstance;
+
+    #[test]
+    fn marker_text_stays_readable_by_installations_of_older_launchers() {
+        let instance = |loader, version: Option<&str>| {
+            Instance::from_new(NewInstance {
+                name: "Test".into(),
+                minecraft_version: "1.21.1".into(),
+                loader,
+                loader_version: version.map(Into::into),
+            })
+        };
+        assert_eq!(install_key(&instance(ModLoader::Vanilla, None)), "1.21.1");
+        assert_eq!(install_key(&instance(ModLoader::NeoForge, Some("21.1.172"))), "1.21.1 NeoForge 21.1.172");
+        assert_eq!(install_key(&instance(ModLoader::Fabric, None)), "1.21.1 Fabric ?");
+    }
 
     #[tokio::test]
     async fn loader_change_invalidates_the_installed_marker() {

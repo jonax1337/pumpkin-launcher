@@ -11,8 +11,9 @@ use std::{
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
+use super::progress::{Phase, ProgressFn};
 use super::{
-    add_zip_file, blocking, content, data_url, download::RemoveOnDrop, entries, free_name,
+    add_zip_file, blocking, content, data_url, download::RemoveOnDrop, entries, free_name, remove_logged,
     providers::zip_paths, servers, walk, write_zip_atomic, Dirs,
 };
 use crate::{
@@ -29,8 +30,6 @@ const SESSION_LOCK: &str = "session.lock";
 const DELETING: &str = "deleting";
 /// Endung einer Sicherung, solange sie geschrieben wird.
 const PART: &str = "zip.part";
-/// Phase der `content-progress`-Events beim Sichern (Dateien).
-const BACKUP_PHASE: &str = "backup";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -136,7 +135,7 @@ pub fn require_target(dirs: &Dirs, instance_id: &str, target: &QuickPlay) -> App
 }
 
 /// Sichert die Welt als ZIP mit dem Ordner als oberstem Eintrag (wie die Sicherung im Spiel), ohne `session.lock`.
-pub fn backup(dirs: &Dirs, instance_id: &str, id: &str, progress: &dyn Fn(&str, u64, u64)) -> AppResult<WorldBackup> {
+pub fn backup(dirs: &Dirs, instance_id: &str, id: &str, progress: ProgressFn<'_>) -> AppResult<WorldBackup> {
     let dir = world_dir(dirs, instance_id, id)?;
     let mut files = Vec::new();
     walk(&dirs.saves(instance_id), &dir, &mut files)?;
@@ -199,22 +198,20 @@ pub fn restore(dirs: &Dirs, instance_id: &str, backup_id: &str) -> AppResult<Wor
     let target = saves.join(&id);
     // `create_dir` statt `create_dir_all`: taucht der Ordner gerade erst auf, wird er nicht befüllt.
     fs::create_dir(&target)?;
-    let mut guard = RemoveOnDrop(Some(target.clone()));
+    let guard = RemoveOnDrop::new(target.clone());
     extract(&mut zip, files, &target)?;
-    guard.0 = None;
+    guard.disarm();
     tracing::info!(instance = %instance_id, backup = %backup_id, world = %id, "Welt wiederhergestellt");
     Ok(read_world(&target, &id))
 }
 
 /// Löscht die Welt, nachdem sie gesichert wurde; die Sicherung kommt zurück. Der Ordner verlässt zuerst `saves/`:
 /// hält unter Windows ein anderes Programm eine Datei offen, bleibt so keine halbe Welt in der Liste.
-pub fn delete(dirs: &Dirs, instance_id: &str, id: &str, progress: &dyn Fn(&str, u64, u64)) -> AppResult<WorldBackup> {
+pub fn delete(dirs: &Dirs, instance_id: &str, id: &str, progress: ProgressFn<'_>) -> AppResult<WorldBackup> {
     let backup = backup(dirs, instance_id, id, progress)?;
     let doomed = dirs.backups(instance_id).join(&backup.id).with_extension(DELETING);
     fs::rename(world_dir(dirs, instance_id, id)?, &doomed)?;
-    if let Err(err) = fs::remove_dir_all(&doomed) {
-        tracing::warn!(path = %doomed.display(), %err, "Gelöschte Welt nicht vollständig entfernt");
-    }
+    remove_logged(&doomed);
     tracing::info!(instance = %instance_id, world = %id, "Welt gelöscht");
     Ok(backup)
 }
@@ -351,13 +348,13 @@ fn extract(zip: &mut zip::ZipArchive<fs::File>, files: Vec<(PathBuf, usize)>, ta
 }
 
 /// Schreibt das Archiv über `<path>.part`; bei einem Fehler bleibt nichts Halbes liegen.
-fn write_zip(path: &Path, files: &[(String, PathBuf)], progress: &dyn Fn(&str, u64, u64)) -> AppResult<()> {
+fn write_zip(path: &Path, files: &[(String, PathBuf)], progress: ProgressFn<'_>) -> AppResult<()> {
     let total = files.len() as u64;
-    progress(BACKUP_PHASE, 0, total);
+    progress(Phase::Backup, 0, total);
     write_zip_atomic(path, PART, |zip| {
         for (done, (name, source)) in (1..).zip(files) {
             add_zip_file(zip, name, &mut fs::File::open(source)?)?;
-            progress(BACKUP_PHASE, done, total);
+            progress(Phase::Backup, done, total);
         }
         Ok(())
     })

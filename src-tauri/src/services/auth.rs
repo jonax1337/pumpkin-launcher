@@ -2,7 +2,7 @@
 //! Minecraft-Token. Refresh-Tokens liegen im OS-Schlüsselbund (`keyring`), nie in JSON;
 //! Minecraft-Tokens nur im Speicher und mit Ablaufzeit. Anleitung: `docs/ACCOUNT-SETUP.md`.
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use md5::{Digest, Md5};
@@ -13,7 +13,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_util::sync::CancellationToken;
 
-use super::data_url;
+use super::{data_url, lock};
 use crate::error::{AppError, AppResult};
 use crate::models::{Account, AccountKind, MsAccount};
 use crate::state::AppState;
@@ -74,10 +74,6 @@ impl McSession {
     fn valid(&self) -> bool {
         Instant::now() + Duration::from_secs(300) < self.expires_at
     }
-}
-
-fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 /// Client-ID der Azure-App „Pumpkin Launcher“ (öffentlicher Client, kein Geheimnis). Forks müssen eine eigene

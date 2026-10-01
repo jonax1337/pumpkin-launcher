@@ -3,7 +3,7 @@
 use super::{check_url, json, segment, RemoteFile};
 use crate::{
     error::{AppError, AppResult},
-    models::{Instance, ModLoader, NewInstance},
+    models::{instance_name, Instance, ModLoader, NewInstance},
     services::{
         content::{self, Pack},
         forge,
@@ -130,16 +130,6 @@ struct Supported {
     loader_version: Option<String>,
 }
 
-fn loader_name(loader: ModLoader) -> &'static str {
-    match loader {
-        ModLoader::Vanilla => "vanilla",
-        ModLoader::Fabric => "fabric",
-        ModLoader::Quilt => "quilt",
-        ModLoader::Forge => "forge",
-        ModLoader::NeoForge => "neoforge",
-    }
-}
-
 fn supported(v: &VersionDoc) -> Option<Supported> {
     let mc = v.targets.iter().find(|t| t.kind == "game" && t.name == "minecraft")?.version.clone();
     identifier(&mc).ok()?;
@@ -147,13 +137,7 @@ fn supported(v: &VersionDoc) -> Option<Supported> {
         None => (ModLoader::Vanilla, None),
         Some(t) => {
             identifier(&t.version).ok()?;
-            let loader = match t.name.as_str() {
-                "fabric" => ModLoader::Fabric,
-                "quilt" => ModLoader::Quilt,
-                "forge" => ModLoader::Forge,
-                "neoforge" => ModLoader::NeoForge,
-                _ => return None,
-            };
+            let loader = ModLoader::from_modded_name(&t.name)?;
             (loader, Some(t.version.clone()))
         }
     };
@@ -266,7 +250,7 @@ pub async fn search(
             let versions = usable(p);
             !versions.is_empty()
                 && mc.is_none_or(|mc| versions.iter().any(|(_, s)| s.mc == mc))
-                && loader.is_none_or(|l| versions.iter().any(|(_, s)| loader_name(s.loader) == l))
+                && loader.is_none_or(|l| versions.iter().any(|(_, s)| s.loader.name() == l))
         })
         .map(|p| (p, if query.is_empty() { 1 } else { relevance(p, query) }))
         .filter(|(_, score)| *score > 0)
@@ -321,7 +305,7 @@ pub async fn versions(client: &reqwest::Client, id: &str) -> AppResult<Vec<Versi
             name: v.name.clone(),
             version_number: v.name.clone(),
             game_versions: vec![s.mc],
-            loaders: vec![loader_name(s.loader).into()],
+            loaders: vec![s.loader.name().into()],
             version_type: v.kind.clone(),
             date_published: String::new(),
             files: Vec::new(),
@@ -363,9 +347,7 @@ fn remote(doc: &FileDoc) -> AppResult<RemoteFile> {
 /// Pack-Version als Installationsplan: Instanz mit Loader und Dateiliste, serverseitige Dateien entfallen.
 pub(crate) async fn plan(client: &reqwest::Client, pack_id: &str, version_id: &str, name: &str) -> AppResult<Pack> {
     segment(version_id)?;
-    if name.trim().is_empty() || name.len() > 200 {
-        return Err(AppError::invalid("Ungültiger Instanzname"));
-    }
+    let name = instance_name(name)?;
     let pack = find(client, pack_id).await?;
     let (_, s) = usable(&pack)
         .into_iter()
@@ -379,7 +361,7 @@ pub(crate) async fn plan(client: &reqwest::Client, pack_id: &str, version_id: &s
         .map(|f| Ok((target(&f.path, &f.name), remote(f)?)))
         .collect::<AppResult<Vec<_>>>()?;
     let instance = Instance::from_new(NewInstance {
-        name: name.trim().into(),
+        name: name.into(),
         minecraft_version: s.mc,
         loader: s.loader,
         loader_version: s.loader_version,
@@ -429,7 +411,7 @@ mod tests {
         let last = std::sync::atomic::AtomicU64::new(0);
         let instance = content::import_plan(&state, pack, origin, &|phase, done, total| {
             if done / 25 != last.swap(done / 25, std::sync::atomic::Ordering::Relaxed) {
-                eprintln!("{phase}: {done}/{total}");
+                eprintln!("{phase:?}: {done}/{total}");
             }
         })
         .await

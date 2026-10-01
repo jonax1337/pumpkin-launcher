@@ -10,6 +10,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use super::progress::{Phase, ProgressFn};
 use super::{
     blocking, content, entries, has_extension, local_files, move_to_trash,
     modrinth::{self, Version},
@@ -118,23 +119,23 @@ pub async fn install(
     instance_id: &str,
     world_id: &str,
     version_id: &str,
-    progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
+    progress: ProgressFn<'_>,
 ) -> AppResult<()> {
     let mc = state.instances.get(instance_id)?.minecraft_version;
     let world = worlds::world_dir(&state.dirs, instance_id, world_id)?;
-    progress("resolve", 0, 1);
+    progress(Phase::Resolve, 0, 1);
     let client = modrinth::client()?;
     let version = modrinth::version(&client, version_id).await?;
     if !fits(&version, &mc) {
         return Err(AppError::invalid(format!("„{}“ ist kein Datenpaket für Minecraft {mc}", version.name)));
     }
     let file = modrinth::primary(&version, ".zip")?;
-    progress("download", 0, 1);
+    progress(Phase::Download, 0, 1);
     let data = modrinth::download(&client, &file).await?;
     let root = state.dirs.root.clone();
     blocking(move |_| place(&root, &world, vec![(file.filename, data)])).await?;
     tracing::info!(instance = %instance_id, world = %world_id, version = %version_id, "Datenpaket installiert");
-    progress("complete", 1, 1);
+    progress(Phase::Complete, 1, 1);
     Ok(())
 }
 

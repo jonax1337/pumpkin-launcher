@@ -1,10 +1,11 @@
 //! Transaktionaler Content-Import. Ziele werden exklusiv neu angelegt, niemals ersetzt.
-use super::download::RemoveOnDrop;
+use super::progress::{Phase, ProgressFn};
+use super::{download::RemoveOnDrop, none_if_missing, remove_logged};
 use super::modrinth::{self, File, Version};
 use super::providers::RemoteFile;
 use crate::{
     error::{AppError, AppResult},
-    models::{Instance, Mod, ModKind, ModLoader, ModSource, NewInstance},
+    models::{instance_name, Instance, Mod, ModKind, ModLoader, ModSource, NewInstance},
     state::AppState,
 };
 use futures::StreamExt;
@@ -51,15 +52,13 @@ pub fn safe_path(value: &str) -> AppResult<PathBuf> {
 /// ein Symlink, unter manchen Linux-Systemen `/home`.
 pub(crate) fn regular_parents(root: &Path, path: &Path) -> AppResult<()> {
     for ancestor in path.ancestors().take_while(|ancestor| *ancestor != root) {
-        match fs::symlink_metadata(ancestor) {
-            Ok(m) if m.file_type().is_symlink() => return Err(AppError::invalid("Symlink im Zielpfad")),
+        match none_if_missing(fs::symlink_metadata(ancestor))? {
+            Some(m) if m.file_type().is_symlink() => return Err(AppError::invalid("Symlink im Zielpfad")),
             #[cfg(windows)]
-            Ok(m) if std::os::windows::fs::MetadataExt::file_attributes(&m) & 0x400 != 0 => {
+            Some(m) if std::os::windows::fs::MetadataExt::file_attributes(&m) & 0x400 != 0 => {
                 return Err(AppError::invalid("Reparse-Point im Zielpfad"))
             }
-            Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e.into()),
+            Some(_) | None => {}
         }
     }
     Ok(())
@@ -98,11 +97,11 @@ pub async fn install_mod(
     state: &AppState,
     id: &str,
     version: &str,
-    progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
+    progress: ProgressFn<'_>,
 ) -> AppResult<Instance> {
     let mut instance = state.instances.get(id)?;
     let client = modrinth::client()?;
-    progress("resolve", 0, 1);
+    progress(Phase::Resolve, 0, 1);
     let root = modrinth::version(&client, version).await?;
     let project = modrinth::project(&client, &root.project_id).await?;
     let kind = match project.project_type.as_str() {
@@ -167,10 +166,8 @@ pub async fn install_mod(
         }
         let target = state.dirs.game_dir(id).join(kind.folder()).join(&file.filename);
         regular_parents(&state.dirs.root, &target)?;
-        match fs::symlink_metadata(&target) {
-            Ok(_) => return Err(AppError::invalid("Mod-Zieldatei existiert bereits")),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e.into()),
+        if none_if_missing(fs::symlink_metadata(&target))?.is_some() {
+            return Err(AppError::invalid("Mod-Zieldatei existiert bereits"));
         }
         if v.project_id != root_project {
             fresh.insert(v.project_id.clone());
@@ -181,7 +178,7 @@ pub async fn install_mod(
     let mut ready = Vec::new();
     let total = files.len() as u64;
     for (v, file, target) in files {
-        progress("download", ready.len() as u64, total);
+        progress(Phase::Download, ready.len() as u64, total);
         let data = modrinth::download(&client, &file).await?;
         ready.push((v, file, target, data));
     }
@@ -213,7 +210,7 @@ pub async fn install_mod(
     match result {
         Err(e) => Err(rollback(&created, e)),
         Ok(i) => {
-            progress("complete", total, total);
+            progress(Phase::Complete, total, total);
             Ok(i)
         }
     }
@@ -307,20 +304,15 @@ pub async fn check_updates(
     instance: &Instance,
 ) -> AppResult<Vec<(usize, Version)>> {
     let mut found = Vec::new();
-    for kind in [ModKind::Mod, ModKind::ResourcePack, ModKind::Shader] {
+    for kind in ModKind::ALL {
         let hashes: Vec<String> = instance
             .mods
             .iter()
             .filter(|m| m.kind == kind && project_of(m).is_some())
             .filter_map(|m| m.sha1.as_ref().map(|h| h.to_ascii_lowercase()))
             .collect();
-        let loaders = match kind {
-            ModKind::Mod => instance.loader.modrinth_loaders().to_vec(),
-            ModKind::ResourcePack => vec!["minecraft"],
-            ModKind::Shader => vec!["iris", "optifine", "canvas", "vanilla"],
-        };
-        let latest =
-            modrinth::latest_by_hash(client, &hashes, &loaders, &instance.minecraft_version).await?;
+        let loaders = kind.update_loaders(instance.loader);
+        let latest = modrinth::latest_by_hash(client, &hashes, loaders, &instance.minecraft_version).await?;
         found.extend(
             newer(&instance.mods, &latest, &instance.minecraft_version)
                 .into_iter()
@@ -412,12 +404,12 @@ pub async fn update_mods(
     state: &AppState,
     id: &str,
     mod_ids: &[String],
-    progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
+    progress: ProgressFn<'_>,
 ) -> AppResult<Instance> {
     let instance = state.instances.get(id)?;
     ensure_known(&instance, mod_ids)?;
     let client = modrinth::client()?;
-    progress("resolve", 0, 1);
+    progress(Phase::Resolve, 0, 1);
     let updates: Vec<_> = check_updates(&client, &instance)
         .await?
         .into_iter()
@@ -483,7 +475,7 @@ pub async fn update_mods(
     budget(downloads.iter().map(|(_, f)| f.size))?;
     let total = downloads.len() as u64;
     for (n, (i, file)) in downloads.iter().enumerate() {
-        progress("download", n as u64, total);
+        progress(Phase::Download, n as u64, total);
         let data = modrinth::download(&client, file).await?;
         mods[*i].sha1 = Some(super::mods::cache_bytes(&state.dirs, &data)?);
     }
@@ -492,7 +484,7 @@ pub async fn update_mods(
     let desired: Vec<Mod> = mods.iter().cloned().chain(old).collect();
     let commit = |_| commit_mods(state, id, mods);
     let result = super::mods::sync_commit(&state.dirs, id, &desired, commit)?;
-    progress("complete", total, total);
+    progress(Phase::Complete, total, total);
     Ok(result)
 }
 
@@ -554,11 +546,7 @@ impl Blob {
 pub(crate) struct TempFile(pub PathBuf);
 impl Drop for TempFile {
     fn drop(&mut self) {
-        if let Err(e) = fs::remove_file(&self.0) {
-            if e.kind() != std::io::ErrorKind::NotFound {
-                tracing::warn!(%e, path = %self.0.display(), "Temporäre Datei nicht entfernt");
-            }
-        }
+        remove_logged(&self.0);
     }
 }
 pub(crate) struct Pack {
@@ -617,9 +605,7 @@ struct PumpkinMeta {
 }
 const PACK_LIMIT: u64 = 1024 * 1024 * 1024;
 fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
-    if name.trim().is_empty() || name.len() > 200 {
-        return Err(AppError::invalid("Ungültiger Instanzname"));
-    }
+    let name = instance_name(name)?;
     if data.len() as u64 > modrinth::FILE_LIMIT {
         return Err(AppError::invalid("Pack zu groß"));
     }
@@ -731,7 +717,7 @@ fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
     // Vor dem Download ablehnen, was Pumpkin Launcher nicht starten kann (z. B. Forge vor 1.17).
     crate::services::forge::check_loader(loader, &mc)?;
     let instance = Instance::from_new(NewInstance {
-        name: name.trim().into(),
+        name: name.into(),
         minecraft_version: mc,
         loader,
         loader_version,
@@ -816,9 +802,9 @@ pub async fn import(
     data: &[u8],
     name: &str,
     origin: Option<crate::models::ModpackOrigin>,
-    progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
+    progress: ProgressFn<'_>,
 ) -> AppResult<Instance> {
-    progress("validate", 0, 1);
+    progress(Phase::Validate, 0, 1);
     import_plan(state, unpack(data, name)?, origin, progress).await
 }
 /// Legt die Instanz aus einem fertigen Plan an: laden, prüfen, ablegen; bei Fehler oder Abbruch restlos zurück.
@@ -826,7 +812,7 @@ pub(crate) async fn import_plan(
     state: &AppState,
     mut pack: Pack,
     origin: Option<crate::models::ModpackOrigin>,
-    progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
+    progress: ProgressFn<'_>,
 ) -> AppResult<Instance> {
     pack.instance.modpack = origin;
     let root = state.dirs.instance(&pack.instance.id);
@@ -834,7 +820,7 @@ pub(crate) async fn import_plan(
     fs::create_dir_all(state.dirs.root.join("instances"))?;
     fs::create_dir(&root)?;
     // Abbruch (Future verworfen) räumt die halbe Instanz weg; Fehler räumt unten `match` auf.
-    let mut guard = RemoveOnDrop(Some(root.clone()));
+    let guard = RemoveOnDrop::new(root.clone());
     let result = async {
         let client = modrinth::client()?;
         let downloader = modrinth::download_client()?;
@@ -857,7 +843,7 @@ pub(crate) async fn import_plan(
         .buffered(6);
         while let Some(item) = fetched.next().await {
             let (path, data) = item?;
-            progress("download", done, total);
+            progress(Phase::Download, done, total);
             stage(&path, &data)?;
             done += 1;
         }
@@ -865,7 +851,7 @@ pub(crate) async fn import_plan(
         for (path, blob) in std::mem::take(&mut pack.overrides) {
             stage(&path, &blob.bytes()?)?;
             done += 1;
-            progress("extract", done, total);
+            progress(Phase::Extract, done, total);
         }
         let hashes: Vec<String> = content.iter().map(|(_, _, sha1)| sha1.clone()).collect();
         let (known, titles) = identify_or_local(&client, &hashes).await;
@@ -882,11 +868,11 @@ pub(crate) async fn import_plan(
             }
         }
         let instance = state.instances.insert(pack.instance)?;
-        progress("complete", total, total);
+        progress(Phase::Complete, total, total);
         Ok(instance)
     }
     .await;
-    guard.0 = None;
+    guard.disarm();
     match result {
         Err(e) => {
             if let Err(cleanup) = fs::remove_dir_all(&root) {
@@ -898,7 +884,7 @@ pub(crate) async fn import_plan(
     }
 }
 /// Legt den Ordner einer neuen Instanz an und befüllt ihn im Thread mit `work`, das `stop` regelmäßig prüft. Der
-/// Wächter räumt den Ordner weg, bis der Aufrufer ihn nach dem Eintragen der Instanz mit `guard.0 = None` entschärft.
+/// Wächter räumt den Ordner weg, bis der Aufrufer ihn nach dem Eintragen der Instanz mit `disarm` entschärft.
 /// Er lebt im Thread: bei Abbruch räumt er erst weg, wenn dort nichts mehr geschrieben wird.
 pub(crate) async fn populate_new_dir<T: Send + 'static>(
     dirs: &super::Dirs,
@@ -907,7 +893,7 @@ pub(crate) async fn populate_new_dir<T: Send + 'static>(
 ) -> AppResult<(RemoveOnDrop, T)> {
     regular_parents(&dirs.root, &dir)?;
     super::blocking(move |stop| {
-        let guard = RemoveOnDrop(Some(dir.clone()));
+        let guard = RemoveOnDrop::new(dir.clone());
         fs::create_dir_all(&dir)?;
         Ok((guard, work(stop)?))
     })
@@ -920,20 +906,21 @@ pub(crate) async fn populate_new_dir<T: Send + 'static>(
 pub(crate) async fn cancel_at_step<T, F: std::future::Future<Output = AppResult<T>>>(
     state: &AppState,
     step: u64,
-    run: impl FnOnce(Box<dyn Fn(&str, u64, u64) + Send>) -> F,
+    run: impl FnOnce(super::progress::SharedProgress) -> F,
 ) -> AppResult<T> {
     let instances = state.dirs.root.join("instances");
     let folders = || fs::read_dir(&instances).map_or(0, Iterator::count);
     let before = folders();
     let (reached, started) = std::sync::mpsc::channel();
     let (resume, hold) = std::sync::mpsc::channel::<()>();
-    let progress = move |_: &str, done: u64, _: u64| {
+    let hold = std::sync::Mutex::new(hold);
+    let progress = move |_: Phase, done: u64, _: u64| {
         if done == step {
             reached.send(()).unwrap();
-            hold.recv().ok();
+            hold.lock().unwrap().recv().ok();
         }
     };
-    let work = state.cancellable("op", run(Box::new(progress)));
+    let work = state.cancellable("op", run(std::sync::Arc::new(progress)));
     let (result, ()) = tokio::join!(work, async {
         started.recv().unwrap();
         state.cancel("op");
@@ -953,7 +940,7 @@ pub(crate) async fn cancel_at_step<T, F: std::future::Future<Output = AppResult<
 /// `mods/*.jar`, `resourcepacks/*.zip`, `shaderpacks/*.zip` directly in the folder, else None.
 fn content_file(path: &Path) -> Option<(ModKind, String)> {
     let (folder, name) = path.to_str()?.split_once('/')?;
-    [ModKind::Mod, ModKind::ResourcePack, ModKind::Shader]
+    ModKind::ALL
         .into_iter()
         .find(|k| k.folder() == folder && !name.contains('/') && name.ends_with(k.extension()))
         .map(|k| (k, name.to_string()))
@@ -1024,15 +1011,11 @@ struct UntrackedFile {
 /// Inhalte im Spielordner, die nicht in `instance.mods` stehen. `name.jar.disabled` zählt als deaktiviertes `name.jar`.
 fn untracked(dirs: &super::Dirs, instance: &Instance) -> AppResult<Vec<UntrackedFile>> {
     let mut found: Vec<UntrackedFile> = Vec::new();
-    for kind in [ModKind::Mod, ModKind::ResourcePack, ModKind::Shader] {
-        let mut entries = match fs::read_dir(dirs.game_dir(&instance.id).join(kind.folder())) {
-            Ok(entries) => entries.collect::<Result<Vec<_>, _>>()?,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(e) => return Err(e.into()),
-        };
+    for kind in ModKind::ALL {
+        let mut listing = super::entries(&dirs.game_dir(&instance.id).join(kind.folder()))?;
         // read_dir liefert je Dateisystem eine andere Reihenfolge (NTFS sortiert, ext4/APFS nicht).
-        entries.sort_by_key(|e| e.file_name());
-        for e in entries {
+        listing.sort_by_key(|e| e.file_name());
+        for e in listing {
             let Some(raw) = e.file_name().to_str().map(str::to_owned) else { continue };
             let (name, enabled) = match raw.strip_suffix(".disabled") {
                 Some(name) => (name.to_owned(), false),
@@ -1108,7 +1091,7 @@ pub(crate) struct CachedFile {
 pub(crate) fn cached_untracked(
     dirs: &super::Dirs,
     instance: &Instance,
-    progress: &dyn Fn(&str, u64, u64),
+    progress: ProgressFn<'_>,
     stop: &CancellationToken,
 ) -> AppResult<Vec<CachedFile>> {
     let files = untracked(dirs, instance)?;
@@ -1118,7 +1101,7 @@ pub(crate) fn cached_untracked(
         super::check_cancelled(stop)?;
         let sha1 = super::mods::cache_file(dirs, &file.path)?;
         found.push(CachedFile { kind: file.kind, file_name: file.file_name, enabled: file.enabled, sha1 });
-        progress("hash", done, total);
+        progress(Phase::Hash, done, total);
     }
     Ok(found)
 }

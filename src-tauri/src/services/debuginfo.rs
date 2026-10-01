@@ -37,8 +37,8 @@ fn gib(mb: u64) -> String {
 fn instance_line(number: usize, state: &InstanceState, default_memory_mb: u32) -> String {
     let instance = state.instance;
     let loader = match &instance.loader_version {
-        Some(version) => format!("{:?} {version}", instance.loader),
-        None => format!("{:?}", instance.loader),
+        Some(version) => format!("{} {version}", instance.loader.display_name()),
+        None => instance.loader.display_name().to_owned(),
     };
     let mods = instance.mods.iter().filter(|m| m.kind == ModKind::Mod && m.enabled).count();
     let memory = instance.memory_mb.map_or_else(|| format!("{default_memory_mb} MiB (default)"), |mb| format!("{mb} MiB"));

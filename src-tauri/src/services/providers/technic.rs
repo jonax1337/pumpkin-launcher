@@ -2,10 +2,11 @@
 //! Servern der Autoren (meist Dropbox oder GitHub), ohne Prüfsumme. Pumpkin Launcher lädt sie trotzdem,
 //! aber nur über `net::download_public` (HTTPS, öffentliche Adressen) und entpackt sie mit denselben
 //! Pfad- und Größenregeln wie ein `.mrpack`. Loader und Minecraft-Version stehen in `bin/version.json`.
+use crate::services::progress::{Phase, ProgressFn};
 use super::{json, net, segment, zip_files, MIB, ZIP_LIMIT};
 use crate::{
     error::{AppError, AppResult},
-    models::{Instance, ModLoader, NewInstance},
+    models::{instance_name, Instance, ModLoader, NewInstance},
     services::{
         content::{Blob, Pack, TempFile},
         forge,
@@ -280,11 +281,9 @@ pub(crate) async fn plan(
     dirs: &Dirs,
     slug: &str,
     name: &str,
-    progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
+    progress: ProgressFn<'_>,
 ) -> AppResult<Pack> {
-    if name.trim().is_empty() || name.len() > 200 {
-        return Err(AppError::invalid("Ungültiger Instanzname"));
-    }
+    let name = instance_name(name)?;
     let d = detail(client, slug).await?;
     if d.solder.is_some() {
         return Err(AppError::invalid("Dieses Modpack nutzt Technic Solder (ältere Technik) und lässt sich nicht installieren"));
@@ -293,12 +292,12 @@ pub(crate) async fn plan(
     let tmp = dirs.root.join("cache").join("tmp");
     fs::create_dir_all(&tmp)?;
     let temp = TempFile(tmp.join(format!("{}.zip", crate::models::new_id())));
-    progress("download", 0, 0);
+    progress(Phase::Download, 0, 0);
     // Nur bei jedem vollen MiB melden, nicht bei jedem Netzwerk-Häppchen.
     let last = std::sync::atomic::AtomicU64::new(u64::MAX);
     net::download_public(&url, &temp.0, ZIP_LIMIT, &|done, total| {
         if last.swap(done / MIB, std::sync::atomic::Ordering::Relaxed) != done / MIB {
-            progress("download", done / MIB, total / MIB);
+            progress(Phase::Download, done / MIB, total / MIB);
         }
     })
     .await?;
@@ -338,7 +337,7 @@ mod tests {
         let client = crate::services::modrinth::client().unwrap();
         let root = std::env::temp_dir().join(crate::models::new_id());
         let state = AppState::load(&root).unwrap();
-        let pack = plan(&client, &state.dirs, "deadwood-fabric", "Live-Test", &|phase, done, total| eprintln!("{phase}: {done}/{total} MiB")).await.unwrap();
+        let pack = plan(&client, &state.dirs, "deadwood-fabric", "Live-Test", &|phase, done, total| eprintln!("{phase:?}: {done}/{total} MiB")).await.unwrap();
         let instance = content::import_plan(&state, pack, None, &|_, _, _| {}).await.unwrap();
         let jars = std::fs::read_dir(state.dirs.game_dir(&instance.id).join("mods")).unwrap().count();
         eprintln!("{} {:?} {:?}, {jars} Mods, {} erfasst", instance.minecraft_version, instance.loader, instance.loader_version, instance.mods.len());

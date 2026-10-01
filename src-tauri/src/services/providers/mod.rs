@@ -1,5 +1,6 @@
 //! Kataloge ohne API-Key: FTB (öffentliche API, installierbar), Technic und CurseForge (nur lesend).
 //! Alle liefern dieselben Formen wie Modrinth (`Hit`, `Project`, `Version`), damit die Oberfläche sie gleich zeigt.
+use crate::services::progress::CountFn;
 use super::download;
 use super::modrinth;
 use crate::error::{AppError, AppResult};
@@ -265,7 +266,7 @@ impl RemoteFile {
 
     /// Wie `download`, aber in eine Datei (für große Pack-Zips). Die Prüfsummen werden an der fertigen Datei
     /// gelesen; bei Abweichung verschwindet sie wieder. `progress(geladen, gesamt)` in Bytes.
-    pub async fn download_to(&self, client: &reqwest::Client, dest: &std::path::Path, progress: &(dyn Fn(u64, u64) + Send + Sync)) -> AppResult<()> {
+    pub async fn download_to(&self, client: &reqwest::Client, dest: &std::path::Path, progress: CountFn<'_>) -> AppResult<()> {
         if self.hashes.is_empty() {
             return Err(AppError::invalid("Datei ohne Prüfsumme"));
         }
@@ -280,7 +281,7 @@ impl RemoteFile {
     }
 
     /// Schreibt die Antwort von `url` nach `dest`, höchstens `ZIP_LIMIT` Bytes.
-    async fn save(&self, client: &reqwest::Client, url: &str, dest: &std::path::Path, progress: &(dyn Fn(u64, u64) + Send + Sync)) -> AppResult<()> {
+    async fn save(&self, client: &reqwest::Client, url: &str, dest: &std::path::Path, progress: CountFn<'_>) -> AppResult<()> {
         use tokio::io::AsyncWriteExt;
         let limit = self.limit(ZIP_LIMIT);
         let mut response = get(client, url).await?;

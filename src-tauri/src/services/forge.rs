@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use super::progress::CountFn;
 use crate::error::{AppError, AppResult};
 use crate::models::ModLoader;
 use crate::services::download::{self, Job};
@@ -248,12 +249,9 @@ fn installer_coord(kind: Kind, mc: &str, loader: &str) -> String {
 /// Liest ein installiertes Profil (für den Start ohne Netz).
 pub async fn installed_profile(dirs: &Dirs, kind: Kind, mc: &str, loader: &str) -> AppResult<Profile> {
     let path = dirs.version_file(&profile_id(kind, segment(mc)?, segment(loader)?), "json");
-    download::read_json(&path).await.map_err(|err| match err {
-        AppError::Io(e) if e.kind() == io::ErrorKind::NotFound => {
-            AppError::invalid(format!("{} {loader} für {mc} ist nicht installiert", kind.name()))
-        }
-        other => other,
-    })
+    download::read_json(&path)
+        .await
+        .map_err(|err| err.or_not_installed(format!("{} {loader} für {mc}", kind.name())))
 }
 
 /// Ersetzt ein Processor-Argument: `[koordinate]` → Library-Pfad, `'text'` → Text,
@@ -323,10 +321,10 @@ fn read_installer(installer: &Path, libraries: &Path, tmp: &Path) -> AppResult<(
         let mut part = target.clone().into_os_string();
         part.push(".part");
         let part = PathBuf::from(part);
-        let mut guard = download::RemoveOnDrop(Some(part.clone()));
+        let guard = download::RemoveOnDrop::new(part.clone());
         io::copy(&mut entry, &mut fs::File::create(&part)?)?;
         fs::rename(&part, &target)?;
-        guard.0 = None;
+        guard.disarm();
     }
 
     fs::create_dir_all(tmp)?;
@@ -367,7 +365,7 @@ pub async fn install(
     mc: &str,
     loader: &str,
     java: &Path,
-    on_progress: &(dyn Fn(u64, u64) + Send + Sync),
+    on_progress: CountFn<'_>,
 ) -> AppResult<Profile> {
     check_supported(kind, segment(mc)?)?;
     let id = profile_id(kind, mc, segment(loader)?);

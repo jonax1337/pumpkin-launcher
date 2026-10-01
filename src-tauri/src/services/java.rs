@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use super::progress::CountFn;
 use crate::error::{AppError, AppResult};
 use crate::services::download::{self, Job};
 use crate::services::mojang::Download;
@@ -134,7 +135,7 @@ pub async fn ensure(
     client: &reqwest::Client,
     dirs: &Dirs,
     component: &str,
-    on_done: &(dyn Fn(u64, u64) + Send + Sync),
+    on_done: CountFn<'_>,
 ) -> AppResult<PathBuf> {
     let (os, arch) = (std::env::consts::OS, std::env::consts::ARCH);
     let mut all: HashMap<String, HashMap<String, Vec<RuntimeEntry>>> =

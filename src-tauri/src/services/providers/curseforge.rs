@@ -3,10 +3,11 @@
 //! Damit geht alles im Launcher: Suche, Mods mit Abhängigkeiten, Modpacks (auch sehr große). Mods, deren Autoren Downloads
 //! außerhalb von CurseForge verbieten (`downloadUrl` fehlt), werden nicht umgangen, sondern als „manuell laden“ gemeldet
 //! (`Blocked`).
+use crate::services::progress::{Phase, ProgressFn};
 use super::{zip_files, RemoteFile, JSON_LIMIT, MIB, ZIP_LIMIT};
 use crate::{
     error::{AppError, AppResult},
-    models::{Instance, Mod, ModKind, ModLoader, ModSource, NewInstance},
+    models::{instance_name, Instance, Mod, ModKind, ModLoader, ModSource, NewInstance},
     services::{
         content::{self, Blob, Pack, TempFile},
         forge,
@@ -298,13 +299,7 @@ fn loader_type(loader: ModLoader) -> Option<u8> {
     }
 }
 fn loader_type_of(name: &str) -> Option<u8> {
-    match name {
-        "forge" => Some(1),
-        "fabric" => Some(4),
-        "quilt" => Some(5),
-        "neoforge" => Some(6),
-        _ => None,
-    }
+    ModLoader::from_name(name).and_then(loader_type)
 }
 
 /// Loader-Namen einer Datei (Schreibweise wie bei Modrinth).
@@ -312,7 +307,7 @@ fn file_loaders(file: &CfFile) -> Vec<String> {
     file.game_versions
         .iter()
         .map(|v| v.to_ascii_lowercase())
-        .filter(|v| matches!(v.as_str(), "forge" | "fabric" | "neoforge" | "quilt"))
+        .filter(|v| ModLoader::from_modded_name(v).is_some())
         .collect()
 }
 fn file_minecraft(file: &CfFile) -> Vec<String> {
@@ -610,12 +605,12 @@ pub async fn install_mod(
     instance_id: &str,
     project_id: &str,
     file_id: &str,
-    progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
+    progress: ProgressFn<'_>,
 ) -> AppResult<Instance> {
     let (project, file_no) = (number(project_id)?, number(file_id)?);
     let mut instance = state.instances.get(instance_id)?;
     let client = modrinth::client()?;
-    progress("resolve", 0, 1);
+    progress(Phase::Resolve, 0, 1);
     let root_mod = mod_of(&client, project).await?;
     let kind = mod_kind(root_mod.class_id)?;
     let root_file = file_of(&client, project, file_no).await?;
@@ -659,7 +654,7 @@ pub async fn install_mod(
     let downloader = modrinth::download_client()?;
     let mut ready = Vec::new();
     for (n, (m, f, k, target, remote)) in files.into_iter().enumerate() {
-        progress("download", n as u64, total);
+        progress(Phase::Download, n as u64, total);
         let data = remote.download(&downloader).await?;
         ready.push((m, f, k, target, data));
     }
@@ -685,7 +680,7 @@ pub async fn install_mod(
     match result {
         Err(e) => Err(content::rollback(&created, e)),
         Ok(i) => {
-            progress("complete", total, total);
+            progress(Phase::Complete, total, total);
             Ok(i)
         }
     }
@@ -740,12 +735,8 @@ struct ManifestFile {
 fn manifest_loader(m: &ManifestMinecraft) -> AppResult<(ModLoader, Option<String>)> {
     let Some(l) = m.mod_loaders.iter().find(|l| l.primary).or(m.mod_loaders.first()) else { return Ok((ModLoader::Vanilla, None)) };
     let (name, version) = l.id.split_once('-').ok_or_else(|| AppError::invalid("Loader im Pack nicht lesbar"))?;
-    let loader = match name {
-        "forge" => ModLoader::Forge,
-        "neoforge" => ModLoader::NeoForge,
-        "fabric" => ModLoader::Fabric,
-        "quilt" => ModLoader::Quilt,
-        other => return Err(AppError::invalid(format!("Das Pack braucht den Loader „{other}“, den Pumpkin Launcher nicht kennt"))),
+    let Some(loader) = ModLoader::from_modded_name(name) else {
+        return Err(AppError::invalid(format!("Das Pack braucht den Loader „{name}“, den Pumpkin Launcher nicht kennt")));
     };
     identifier(version)?;
     identifier(&m.version)?;
@@ -770,11 +761,9 @@ pub(crate) async fn plan_pack(
     project_id: &str,
     file_id: &str,
     name: &str,
-    progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
+    progress: ProgressFn<'_>,
 ) -> AppResult<(Pack, Vec<Blocked>)> {
-    if name.trim().is_empty() || name.len() > 200 {
-        return Err(AppError::invalid("Ungültiger Instanzname"));
-    }
+    let name = instance_name(name)?;
     let (project, file_no) = (number(project_id)?, number(file_id)?);
     let pack_mod = mod_of(client, project).await?;
     if pack_mod.class_id != Some(CLASS_MODPACK) {
@@ -785,12 +774,12 @@ pub(crate) async fn plan_pack(
     fs::create_dir_all(&tmp)?;
     let temp = TempFile(tmp.join(format!("{}.zip", crate::models::new_id())));
     let zip_source = RemoteFile { size: pack_file.file_length.min(ZIP_LIMIT), ..remote(&pack_file)? };
-    progress("download", 0, 0);
+    progress(Phase::Download, 0, 0);
     let last = std::sync::atomic::AtomicU64::new(u64::MAX);
     zip_source
         .download_to(&modrinth::download_client()?, &temp.0, &|done, total| {
             if last.swap(done / MIB, std::sync::atomic::Ordering::Relaxed) != done / MIB {
-                progress("download", done / MIB, total / MIB);
+                progress(Phase::Download, done / MIB, total / MIB);
             }
         })
         .await?;
@@ -857,7 +846,7 @@ pub(crate) async fn plan_pack(
     let overrides = zip_files(&mut zip, &prefix, &[])?;
     let override_paths: HashSet<String> = overrides.iter().map(|(p, _)| p.to_string_lossy().to_lowercase()).collect();
     files.retain(|(path, _)| !override_paths.contains(&path.to_lowercase()));
-    let instance = Instance::from_new(NewInstance { name: name.trim().into(), minecraft_version: manifest.minecraft.version.clone(), loader, loader_version });
+    let instance = Instance::from_new(NewInstance { name: name.into(), minecraft_version: manifest.minecraft.version.clone(), loader, loader_version });
     let mut pack = content::plan_pack(instance, files)?;
     // Overrides und Downloads dürfen sich auch nicht als Datei/Ordner in die Quere kommen.
     let downloads: HashSet<String> = pack.downloads.iter().map(|(p, _)| p.to_string_lossy().to_lowercase()).collect();
@@ -1151,7 +1140,7 @@ mod tests {
             .instances
             .insert(Instance::from_new(NewInstance { name: "Live".into(), minecraft_version: "1.20.1".into(), loader: ModLoader::Fabric, loader_version: None }))
             .unwrap();
-        let done = install_mod(&state, &instance.id, &extra.project_id, &file.id, &|p, d, t| eprintln!("{p}: {d}/{t}")).await.unwrap();
+        let done = install_mod(&state, &instance.id, &extra.project_id, &file.id, &|p, d, t| eprintln!("{p:?}: {d}/{t}")).await.unwrap();
         for m in &done.mods {
             eprintln!("{} {} ({}) von {:?} für {:?}", m.name, m.version, m.file_name, m.source, m.required_by);
         }
@@ -1179,7 +1168,7 @@ mod tests {
         eprintln!("Pack-Datei {} ({} Bytes)", file.name, file.files[0].size);
         let root = std::env::temp_dir().join(crate::models::new_id());
         let state = AppState::load(&root).unwrap();
-        let (plan, blocked) = plan_pack(&client, &state.dirs, &pack.project_id, &file.id, "Live-Pack", &|p, d, t| eprintln!("{p}: {d}/{t}")).await.unwrap();
+        let (plan, blocked) = plan_pack(&client, &state.dirs, &pack.project_id, &file.id, "Live-Pack", &|p, d, t| eprintln!("{p:?}: {d}/{t}")).await.unwrap();
         eprintln!("{} Downloads, {} Overrides, {} gesperrt", plan.downloads.len(), plan.overrides.len(), blocked.len());
         let instance = content::import_plan(&state, plan, None, &|_, _, _| {}).await.unwrap();
         let jars = std::fs::read_dir(state.dirs.game_dir(&instance.id).join("mods")).unwrap().count();

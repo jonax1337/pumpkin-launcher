@@ -1,6 +1,7 @@
 //! Download von beliebigen öffentlichen HTTPS-Adressen (Technic-Packs liegen auf Dropbox, GitHub, eigenen
 //! Servern). Ohne Prüfsumme als Gegengewicht: nur HTTPS auf Port 443, nur öffentliche Zieladressen
 //! (kein localhost, kein Heimnetz), jede Weiterleitung einzeln geprüft, die geprüfte Adresse wird fest verwendet.
+use crate::services::progress::CountFn;
 use crate::error::{AppError, AppResult};
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
@@ -69,7 +70,7 @@ async fn resolve(host: &str) -> AppResult<Vec<SocketAddr>> {
 
 /// Lädt `url` nach `dest`. `progress(geladen, gesamt)` in Bytes (gesamt 0 = unbekannt). Überschreitet die
 /// Datei `limit`, bricht der Download ab und die Teildatei wird gelöscht.
-pub async fn download_public(url: &str, dest: &Path, limit: u64, progress: &(dyn Fn(u64, u64) + Send + Sync)) -> AppResult<()> {
+pub async fn download_public(url: &str, dest: &Path, limit: u64, progress: CountFn<'_>) -> AppResult<()> {
     let mut url = reqwest::Url::parse(url).map_err(|e| AppError::invalid(e.to_string()))?;
     for _ in 0..MAX_HOPS {
         let host = check(&url)?;

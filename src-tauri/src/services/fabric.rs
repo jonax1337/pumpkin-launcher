@@ -3,7 +3,6 @@
 //! Vanilla-Version, die hier mit ihr zusammengeführt wird. Beide Meta-Server liefern dasselbe Format.
 use std::cmp::Ordering;
 use std::collections::HashSet;
-use std::io;
 
 use serde::{Deserialize, Serialize};
 
@@ -214,12 +213,9 @@ pub async fn fetch_profile(client: &reqwest::Client, dirs: &Dirs, flavor: Flavor
 /// Liest ein bereits installiertes Profil.
 pub async fn installed_profile(dirs: &Dirs, flavor: Flavor, mc_version: &str, loader: &str) -> AppResult<Profile> {
     let path = dirs.version_file(&profile_id(flavor, segment(mc_version)?, segment(loader)?), "json");
-    download::read_json(&path).await.map_err(|err| match err {
-        AppError::Io(e) if e.kind() == io::ErrorKind::NotFound => {
-            AppError::invalid(format!("{} {loader} für {mc_version} ist nicht installiert", flavor.name()))
-        }
-        other => other,
-    })
+    download::read_json(&path)
+        .await
+        .map_err(|err| err.or_not_installed(format!("{} {loader} für {mc_version}", flavor.name())))
 }
 
 /// Vanilla-Versions-JSON plus Profil: Loader-Main-Class, Loader-Libraries vor den Vanilla-

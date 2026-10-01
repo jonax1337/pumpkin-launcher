@@ -3,10 +3,12 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::error::{AppError, AppResult};
-use crate::models::{now_ms, Account, GameWindow, Instance, LaunchOptions, ModLoader, NewInstance, QuickPlay};
+use crate::models::{
+    now_ms, require_name, Account, GameWindow, Instance, LaunchOptions, ModLoader, NewInstance, QuickPlay, NO_NAME_LIMIT,
+};
 use crate::services::install::{self, InstallProgress, InstallStep, INSTALL_PROGRESS_EVENT};
 use crate::services::launch::{self, LaunchSpec, LogStream, EXIT_EVENT, LOG_EVENT};
 use crate::services::mojang::{VersionEntry, VersionManifest, MANIFEST_URL};
@@ -14,14 +16,12 @@ use crate::services::rules::Env;
 use crate::services::fabric::{self, LoaderVersion};
 use crate::services::forge;
 use crate::services::mojang::VersionJson;
-use crate::services::{auth, download, java, mods, system, worlds};
+use crate::services::progress::emit;
+use crate::services::{auth, download, java, mods, remove_logged, system, worlds};
 use crate::state::AppState;
 
-pub(crate) fn require_name(name: &str) -> AppResult<()> {
-    if name.trim().is_empty() {
-        return Err(AppError::invalid("Name darf nicht leer sein"));
-    }
-    Ok(())
+pub(crate) fn require_instance_name(name: &str) -> AppResult<()> {
+    require_name(name, NO_NAME_LIMIT, "Name darf nicht leer sein").map(drop)
 }
 
 /// Eigene Startoptionen prüfen. Ein unveränderter Java-Pfad wird nicht erneut geprüft,
@@ -49,7 +49,7 @@ pub fn get_instance(state: State<'_, AppState>, id: String) -> AppResult<Instanc
 #[tauri::command]
 pub fn create_instance(state: State<'_, AppState>, input: NewInstance) -> AppResult<Instance> {
     let _operation = state.operation(None)?;
-    require_name(&input.name)?;
+    require_instance_name(&input.name)?;
     let instance = state.instances.insert(Instance::from_new(input))?;
     tracing::info!(id = %instance.id, name = %instance.name, "Instanz angelegt");
     Ok(instance)
@@ -58,7 +58,7 @@ pub fn create_instance(state: State<'_, AppState>, input: NewInstance) -> AppRes
 #[tauri::command]
 pub fn update_instance(state: State<'_, AppState>, instance: Instance) -> AppResult<Instance> {
     let _operation = state.operation(Some(&instance.id))?;
-    require_name(&instance.name)?;
+    require_instance_name(&instance.name)?;
     let old = state.instances.get(&instance.id)?;
     require_launch_settings(&instance, &old)?;
     let instance = Instance { group: normalized_group(instance.group), ..instance };
@@ -98,17 +98,10 @@ pub fn instance_set_group(state: State<'_, AppState>, instance_id: String, group
 #[tauri::command]
 pub fn delete_instance(state: State<'_, AppState>, id: String) -> AppResult<()> {
     let _operation = state.operation(Some(&id))?;
-    if state.running().contains_key(&id) {
-        return Err(AppError::invalid("Instanz läuft noch"));
-    }
     // Erst den Store-Eintrag: nur eine existierende Id wird zum Pfad, und bleibt das
     // Verzeichnis liegen (Datei gesperrt), ist die Instanz trotzdem weg.
     state.instances.remove(&id)?;
-    match std::fs::remove_dir_all(state.dirs.instance(&id)) {
-        Ok(()) => {}
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-        Err(err) => tracing::warn!(%id, %err, "Instanzverzeichnis nicht vollständig gelöscht"),
-    }
+    remove_logged(&state.dirs.instance(&id));
     tracing::info!(%id, "Instanz gelöscht");
     Ok(())
 }
@@ -131,12 +124,6 @@ struct ExitPayload {
     /// Absolute Pfade (für `openPath`), falls vorhanden.
     crash_report: Option<String>,
     log_file: Option<String>,
-}
-
-fn emit<T: Serialize + Clone>(app: &AppHandle, event: &str, payload: T) {
-    if let Err(err) = app.emit(event, payload) {
-        tracing::warn!(event, %err, "Event konnte nicht gesendet werden");
-    }
 }
 
 /// Wie ein Mod-Loader installiert wird: Profil vom Meta-Server (Fabric, Quilt) oder Installer (Forge, NeoForge).
@@ -290,30 +277,24 @@ pub async fn instance_launch(app: AppHandle, state: State<'_, AppState>, instanc
         session.as_ref(),
     )?;
 
-    // Lock über Prüfen, Starten und Eintragen halten: sonst könnte ein sofort beendeter
-    // Prozess seinen Eintrag entfernen, bevor er eingetragen ist.
-    let mut running = state.running();
-    if running.contains_key(&instance_id) {
-        return Err(AppError::invalid("Instanz läuft bereits"));
-    }
-    let (log_app, log_id) = (app.clone(), instance_id.clone());
-    let (exit_app, exit_id) = (app.clone(), instance_id.clone());
-    let started = SystemTime::now();
-    let game = launch::spawn(
-        &java,
-        &args,
-        &state.dirs.game_dir(&instance_id),
-        move |stream, line| {
-            tracing::info!(target: "minecraft", instance = %log_id, ?stream, "{line}");
-            emit(&log_app, LOG_EVENT, LogPayload { instance_id: log_id.clone(), stream, line });
-        },
-        move |code| on_game_exit(&exit_app, exit_id, started, code),
-    )?;
-    let pid = game.pid;
-    running.insert(instance_id.clone(), game);
-    // Noch unter dem Lock: `instance-exit` eines sofort beendeten Spiels kommt so erst nach diesem Stand.
-    record_launch(&state, &instance_id, quick_play);
-    drop(running);
+    let pid = state.spawn_running(&instance_id, || {
+        let (log_app, log_id) = (app.clone(), instance_id.clone());
+        let (exit_app, exit_id) = (app.clone(), instance_id.clone());
+        let started = SystemTime::now();
+        let game = launch::spawn(
+            &java,
+            &args,
+            &state.dirs.game_dir(&instance_id),
+            move |stream, line| {
+                tracing::info!(target: "minecraft", instance = %log_id, ?stream, "{line}");
+                emit(&log_app, LOG_EVENT, LogPayload { instance_id: log_id.clone(), stream, line });
+            },
+            move |code| on_game_exit(&exit_app, exit_id, started, code),
+        )?;
+        // Noch unter der Sperre: `instance-exit` eines sofort beendeten Spiels kommt so erst nach diesem Stand.
+        record_launch(&state, &instance_id, quick_play);
+        Ok(game)
+    })?;
     tracing::info!(instance = %instance_id, pid, user = %account.username, "Spiel gestartet");
     Ok(pid)
 }
@@ -350,7 +331,7 @@ fn record_launch(state: &AppState, instance_id: &str, quick_play: Option<QuickPl
 fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, code: Option<i32>) {
     let state = app.state::<AppState>();
     // `instance_kill` hat den Eintrag schon entfernt: dann hat der Nutzer gestoppt.
-    let stopped = state.running().remove(&instance_id).is_none();
+    let stopped = state.take_running(&instance_id).is_none();
     let crashed = code != Some(0) && !stopped;
     let game_dir = state.dirs.game_dir(&instance_id);
     let text = |p: PathBuf| p.to_string_lossy().into_owned();
@@ -378,8 +359,7 @@ fn record_playtime(state: &AppState, instance_id: &str, started: SystemTime) {
 #[tauri::command]
 pub fn instance_kill(state: State<'_, AppState>, instance_id: String) -> AppResult<()> {
     let game = state
-        .running()
-        .remove(&instance_id)
+        .take_running(&instance_id)
         .ok_or_else(|| AppError::NotFound { kind: "Laufendes Spiel", id: instance_id.clone() })?;
     game.kill();
     tracing::info!(instance = %instance_id, "Spiel wird beendet");
@@ -398,7 +378,7 @@ pub struct InstanceStatus {
 #[tauri::command]
 pub fn instance_status(state: State<'_, AppState>, instance_id: String) -> AppResult<InstanceStatus> {
     let instance = state.instances.get(&instance_id)?;
-    Ok(InstanceStatus { installed: install::is_installed(&state.dirs, &instance), running: state.running().contains_key(&instance_id) })
+    Ok(InstanceStatus { installed: install::is_installed(&state.dirs, &instance), running: state.is_running(&instance_id) })
 }
 
 /// Spielordner einer Instanz (Welten, Mods, Screenshots) zum Öffnen im Dateimanager; wird bei Bedarf angelegt.

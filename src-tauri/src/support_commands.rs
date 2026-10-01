@@ -22,17 +22,13 @@ pub async fn log_share(state: State<'_, AppState>, instance_id: String, kind: Lo
 #[tauri::command]
 pub fn debug_info(app: AppHandle, state: State<'_, AppState>, default_memory_mb: u32) -> String {
     let instances = state.instances.list();
-    let states: Vec<InstanceState> = {
-        // Lock nur fürs Nachsehen, nicht über die Systemabfragen im Bericht.
-        let running = state.running();
-        instances
-            .iter()
-            .map(|instance| InstanceState {
-                instance,
-                installed: install::is_installed(&state.dirs, instance),
-                running: running.contains_key(&instance.id),
-            })
-            .collect()
-    };
+    let states: Vec<InstanceState> = instances
+        .iter()
+        .map(|instance| InstanceState {
+            instance,
+            installed: install::is_installed(&state.dirs, instance),
+            running: state.is_running(&instance.id),
+        })
+        .collect();
     debuginfo::report(&app.package_info().version.to_string(), &state.dirs.root, default_memory_mb, &states)
 }

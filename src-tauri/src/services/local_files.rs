@@ -4,11 +4,11 @@ use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use serde::{Deserialize, Serialize};
 
+use super::progress::{Phase, ProgressFn, SharedProgress};
 use super::{
     blocking,
     content::{self, CachedFile},
@@ -60,21 +60,20 @@ pub async fn add(
     state: &AppState,
     instance_id: &str,
     files: Vec<LocalFile>,
-    progress: impl Fn(&str, u64, u64) + Send + Sync + 'static,
+    progress: SharedProgress,
 ) -> AppResult<Instance> {
     let instance = state.instances.get(instance_id)?;
     let total = files.len() as u64;
-    let progress = Arc::new(progress);
     let staged = {
         let (dirs, instance, progress) = (state.dirs.clone(), instance.clone(), progress.clone());
         blocking(move |_| stage(&dirs, &instance, &files, &*progress)).await?
     };
-    progress("resolve", 0, 1);
+    progress(Phase::Resolve, 0, 1);
     let hashes: Vec<String> = staged.iter().map(|s| s.sha1.clone()).collect();
     let (known, titles) = content::identify_or_local(&modrinth::client()?, &hashes).await;
     let mods = with_entries(&instance.mods, staged, &known, &titles)?;
     let result = mods::sync_commit(&state.dirs, instance_id, &mods, |_| content::commit_mods(state, instance_id, mods.clone()))?;
-    progress("complete", total, total);
+    progress(Phase::Complete, total, total);
     Ok(result)
 }
 
@@ -83,11 +82,11 @@ fn stage(
     dirs: &Dirs,
     instance: &Instance,
     files: &[LocalFile],
-    progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
+    progress: ProgressFn<'_>,
 ) -> AppResult<Vec<CachedFile>> {
     let mut staged: Vec<CachedFile> = Vec::new();
     for (done, file) in files.iter().enumerate() {
-        progress("copy", done as u64, files.len() as u64);
+        progress(Phase::Copy, done as u64, files.len() as u64);
         let (path, name) = source(&file.path)?;
         let stem = stem_for(&name, file.kind)?;
         let sha1 = mods::cache_file(dirs, &path)?;
@@ -238,6 +237,7 @@ fn stem_for(name: &str, kind: ModKind) -> AppResult<&str> {
 mod tests {
     use super::*;
     use crate::models::{ModLoader, NewInstance};
+    use crate::services::progress::ignored;
     use std::io::Write;
 
     fn zip_with(names: &[&str]) -> Vec<u8> {
@@ -357,7 +357,7 @@ mod tests {
             local(&drop.join("look.zip"), ModKind::ResourcePack),
             local(&drop.join("Same.jar"), ModKind::Mod),
         ];
-        let added = add(&state, &i.id, files, |_, _, _| {}).await.unwrap();
+        let added = add(&state, &i.id, files, ignored()).await.unwrap();
         let got: Vec<_> = added.mods.iter().map(|m| (m.kind, m.file_name.as_str(), m.name.as_str())).collect();
         assert_eq!(
             got,
@@ -370,7 +370,7 @@ mod tests {
 
         // Dieselbe Datei noch einmal: Vorab-Prüfung nennt den Eintrag, Hinzufügen lehnt ab.
         assert_eq!(check(&state, &i.id, paths[..1].to_vec()).await.unwrap()[0].duplicate_of.as_deref(), Some("Tool (2)"));
-        assert!(add(&state, &i.id, vec![local(&drop.join("Tool.JAR"), ModKind::Mod)], |_, _, _| {}).await.is_err());
+        assert!(add(&state, &i.id, vec![local(&drop.join("Tool.JAR"), ModKind::Mod)], ignored()).await.is_err());
         assert_eq!(state.instances.get(&i.id).unwrap().mods.len(), 3);
         fs::remove_dir_all(root).unwrap();
     }

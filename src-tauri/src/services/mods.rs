@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use crate::error::{AppError, AppResult};
 use crate::models::Mod;
 use crate::services::download::{sha1_file, sha1_hex};
-use crate::services::Dirs;
+use crate::services::{none_if_missing, remove_logged, Dirs};
 
 /// Pfad eines Cache-Eintrags. Der Hash wird Teil des Pfads, daher nur echte SHA-1-Hex-Strings.
 pub fn cached(dirs: &Dirs, sha1: &str) -> AppResult<PathBuf> {
@@ -84,13 +84,9 @@ pub fn recache(dirs: &Dirs, instance_id: &str, mods: &[Mod]) -> AppResult<()> {
             continue;
         }
         let placed = dirs.game_dir(instance_id).join(m.kind.folder()).join(file_name(m)?);
-        match fs::read(&placed) {
-            Ok(bytes) if sha1_hex(&bytes).eq_ignore_ascii_case(hash) => {
-                cache_bytes(dirs, &bytes)?;
-            }
-            Ok(_) => {}
-            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e.into()),
+        let placed = none_if_missing(fs::read(&placed))?;
+        if let Some(bytes) = placed.filter(|bytes| sha1_hex(bytes).eq_ignore_ascii_case(hash)) {
+            cache_bytes(dirs, &bytes)?;
         }
     }
     Ok(())
@@ -139,15 +135,10 @@ pub fn sync_commit<T>(
             return Err(AppError::invalid("Doppelte Mod-Zieldatei"));
         }
         super::content::regular_parents(&dirs.root, &path)?;
-        let current = match fs::symlink_metadata(&path) {
-            Ok(meta) => {
-                if !meta.is_file() {
-                    return Err(AppError::invalid("Kein regulaeres Mod-Ziel"));
-                }
-                Some(sha1_file(&path)?)
-            }
-            Err(e) if e.kind() == io::ErrorKind::NotFound => None,
-            Err(e) => return Err(e.into()),
+        let current = match none_if_missing(fs::symlink_metadata(&path))? {
+            Some(meta) if !meta.is_file() => return Err(AppError::invalid("Kein regulaeres Mod-Ziel")),
+            Some(_) => Some(sha1_file(&path)?),
+            None => None,
         };
         let Some(hash) = m.sha1.as_ref() else { continue };
         let ours = current
@@ -198,13 +189,9 @@ pub fn sync_commit<T>(
     })();
     match result {
         Ok(value) => {
-            for (_, backup) in journal {
-                if let Some(backup) = backup {
-                    // Metadata is committed: a cleanup failure must not pretend the operation failed.
-                    if let Err(err) = fs::remove_file(&backup) {
-                        tracing::warn!(%err,path=%backup.display(),"Mod rollback backup cleanup failed");
-                    }
-                }
+            // Metadata is committed: a cleanup failure must not pretend the operation failed.
+            for backup in journal.into_iter().filter_map(|(_, backup)| backup) {
+                remove_logged(&backup);
             }
             Ok(value)
         }
@@ -213,16 +200,15 @@ pub fn sync_commit<T>(
             for (path, backup) in journal.into_iter().rev() {
                 let restore = (|| -> AppResult<()> {
                     if let Some(backup) = backup {
-                        match fs::symlink_metadata(&path) {
-                            Err(e) if e.kind() == io::ErrorKind::NotFound => place(&backup, &path)?,
-                            Ok(_) if sha1_file(&path)? == sha1_file(&backup)? => {}
-                            Ok(_) => {
+                        match none_if_missing(fs::symlink_metadata(&path))? {
+                            None => place(&backup, &path)?,
+                            Some(_) if sha1_file(&path)? == sha1_file(&backup)? => {}
+                            Some(_) => {
                                 return Err(AppError::invalid(format!(
                                     "Rollback-Ziel belegt; Backup: {}",
                                     backup.display()
                                 )))
                             }
-                            Err(e) => return Err(e.into()),
                         }
                         fs::remove_file(&backup)?;
                     } else {

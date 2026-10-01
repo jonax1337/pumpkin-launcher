@@ -7,16 +7,15 @@ use reqwest::multipart::{Form, Part};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::{auth::{self, MC_PROFILE}, data_url, modrinth, write_atomic, Dirs};
+use super::{auth::{self, MC_PROFILE}, data_url, modrinth, remove_logged, write_atomic, Dirs};
 use crate::error::{AppError, AppResult};
-use crate::models::{now_ms, LibrarySkin, SkinVariant};
+use crate::models::{now_ms, require_name, LibrarySkin, SkinVariant, MAX_SKIN_NAME_LEN};
 use crate::services::download::sha1_hex;
 use crate::state::AppState;
 
 const TEXTURE_BASE: &str = "textures.minecraft.net/texture/";
 /// Echte Skins haben wenige KiB; die Grenze fängt nur versehentlich gewählte große Bilder ab.
 const MAX_FILE: u64 = 256 * 1024;
-const MAX_NAME: usize = 64;
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
 
 /// Was das Konto gerade trägt: aktiver Skin (fehlt, wenn Minecraft keinen meldet) und alle Umhänge.
@@ -174,11 +173,8 @@ fn validate_png(bytes: &[u8]) -> AppResult<()> {
 }
 
 fn skin_name(name: &str) -> AppResult<String> {
-    let name = name.trim();
-    if name.is_empty() || name.chars().count() > MAX_NAME {
-        return Err(AppError::invalid(format!("Der Name des Skins muss 1 bis {MAX_NAME} Zeichen lang sein.")));
-    }
-    Ok(name.into())
+    let message = format!("Der Name des Skins muss 1 bis {MAX_SKIN_NAME_LEN} Zeichen lang sein.");
+    require_name(name, MAX_SKIN_NAME_LEN, message).map(str::to_owned)
 }
 
 /// Nur mit IDs aus dem Store aufrufen: die ID wird Teil des Pfads.
@@ -192,7 +188,7 @@ pub fn add_file(state: &AppState, path: &Path) -> AppResult<LibrarySkin> {
         return Err(AppError::invalid("Die Datei ist zu groß für einen Skin."));
     }
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Skin");
-    let name: String = stem.chars().take(MAX_NAME).collect();
+    let name: String = stem.chars().take(MAX_SKIN_NAME_LEN).collect();
     add(state, &fs::read(path)?, &name, SkinVariant::Classic)
 }
 
@@ -215,7 +211,7 @@ fn add(state: &AppState, png: &[u8], name: &str, variant: SkinVariant) -> AppRes
     let path = file(&state.dirs, &skin.id);
     fs::create_dir_all(state.dirs.skins())?;
     write_atomic(&path, png)?;
-    state.skins.insert(skin).inspect_err(|_| remove_file(&path))
+    state.skins.insert(skin).inspect_err(|_| remove_logged(&path))
 }
 
 /// Neuer Name und neues Modell; die Datei bleibt dieselbe.
@@ -227,17 +223,8 @@ pub fn update(state: &AppState, id: &str, name: &str, variant: SkinVariant) -> A
 pub fn delete(state: &AppState, id: &str) -> AppResult<()> {
     // Erst der Store-Eintrag: nur eine existierende ID wird zum Pfad.
     state.skins.remove(id)?;
-    remove_file(&file(&state.dirs, id));
+    remove_logged(&file(&state.dirs, id));
     Ok(())
-}
-
-fn remove_file(path: &Path) {
-    match fs::remove_file(path) {
-        Err(err) if err.kind() != std::io::ErrorKind::NotFound => {
-            tracing::warn!(%err, path = %path.display(), "Skin-Datei nicht gelöscht")
-        }
-        _ => {}
-    }
 }
 
 /// Die PNG eines Bibliotheks-Skins als `data:`-URL für die Vorschau.

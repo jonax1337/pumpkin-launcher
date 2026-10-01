@@ -1,12 +1,13 @@
 //! Serverliste des Spiels: `servers.dat` im Spielordner, NBT ohne Kompression mit der Liste `servers`.
 //! Der Launcher ändert nur Name, Adresse und `acceptTextures`; alle anderen Tags (Icon, `hidden` …) bleiben erhalten.
-use std::{collections::HashMap, fs, io, path::Path};
+use std::{collections::HashMap, fs, path::Path};
 
 use fastnbt::Value;
 use serde::{Deserialize, Serialize};
 
-use super::{write_atomic, PNG_DATA_URL};
+use super::{none_if_missing, write_atomic, PNG_DATA_URL};
 use crate::error::{AppError, AppResult};
+use crate::models::{require_name, NO_NAME_LIMIT};
 
 const FILE: &str = "servers.dat";
 
@@ -42,10 +43,7 @@ pub fn list(game_dir: &Path) -> AppResult<Vec<Server>> {
 
 /// Legt einen Server an (`index` = None) oder ändert den Eintrag an Stelle `index` der Liste aus [`list`].
 pub fn save(game_dir: &Path, index: Option<usize>, server: &ServerInput) -> AppResult<()> {
-    let name = server.name.trim();
-    if name.is_empty() {
-        return Err(AppError::invalid("Gib dem Server einen Namen"));
-    }
+    let name = require_name(&server.name, NO_NAME_LIMIT, "Gib dem Server einen Namen")?;
     let address = require_address(&server.address)?;
     update(game_dir, |list| {
         let entry = entry_at(list, index)?;
@@ -86,10 +84,9 @@ fn update(game_dir: &Path, change: impl FnOnce(&mut Vec<Value>) -> AppResult<()>
 }
 
 fn read(path: &Path) -> AppResult<Compound> {
-    match fs::read(path) {
-        Ok(bytes) => Ok(fastnbt::from_bytes(&bytes)?),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Compound::new()),
-        Err(e) => Err(e.into()),
+    match none_if_missing(fs::read(path))? {
+        Some(bytes) => Ok(fastnbt::from_bytes(&bytes)?),
+        None => Ok(Compound::new()),
     }
 }
 
