@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useSearchParams } from "react-router";
 import { getVersion } from "@tauri-apps/api/app";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ import { JavaChooser, MemoryChooser, MemoryHelp } from "@/components/common";
 import { AccountsSection } from "@/components/PlayerNames";
 import { SupportSection } from "@/components/support";
 import { Actions, Button, Count, FormRow, FormSection, Hint, PageHeader, Segmented, Select, Switch, TabPanel, Tabs } from "@/ui";
+import { useReducedMotion } from "@/hooks/useMediaQuery";
 import { api } from "@/lib/api";
 import { Buddy, BrandWordmark, useBrand } from "@/branding/Brand";
 import { SEASONS, type PumpkinChoice } from "@/branding/calendar";
@@ -37,13 +38,6 @@ const LANGUAGE_KEYS: { value: LanguageChoice; key: string }[] = [
   { value: "de", key: "pages.settings.langGerman" },
   { value: "en", key: "pages.settings.langEnglish" },
 ];
-
-const RM = "(prefers-reduced-motion: reduce)";
-const subscribeRm = (cb: () => void) => {
-  const mq = matchMedia(RM);
-  mq.addEventListener("change", cb);
-  return () => mq.removeEventListener("change", cb);
-};
 
 /** Java: automatisch (mitgelieferte Runtime) oder eigene Java-Installation. */
 function JavaRow() {
@@ -80,7 +74,7 @@ export function SettingsPage() {
   // Abschnitts-Beschriftungen erst hier auflösen, damit ein Sprachwechsel sofort greift.
   const sections = SECTION_KEYS.map(({ value, key }) => ({ value, label: t(key) }));
   const [version, setVersion] = useState<string>(pkg.version);
-  const reduced = useSyncExternalStore(subscribeRm, () => matchMedia(RM).matches);
+  const reduced = useReducedMotion();
 
   useEffect(() => {
     if (!api.isMock) void getVersion().then(setVersion).catch(() => undefined);

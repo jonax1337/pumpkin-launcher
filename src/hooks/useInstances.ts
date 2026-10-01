@@ -120,12 +120,13 @@ export function useExportEntries(instanceId: string) {
   return useQuery({ queryKey: instanceKeys.exportEntries(instanceId), queryFn: () => api.exportEntries(instanceId), staleTime: 0 });
 }
 
+/** Zuletzt gespielte zuerst, nie gespielte dahinter (neueste zuerst). */
+export const byRecent = (a: Instance, b: Instance) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0) || b.createdAt - a.createdAt;
+
 /** Zuletzt gespielte Instanz (Fallback: zuletzt erstellte; `lastPlayedAt` zeigt, welcher Fall vorliegt). */
 export function pickRecentInstance(instances: Instance[] | undefined): Instance | undefined {
   if (!instances?.length) return undefined;
-  return [...instances].sort(
-    (a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0) || b.createdAt - a.createdAt,
-  )[0];
+  return [...instances].sort(byRecent)[0];
 }
 
 export function useVersions() {

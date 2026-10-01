@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Actions, Button, CardGrid, Disclosure, FormRow, FormSection, Hint, Menu, Progress, Radio, SceneCard, StatusPanel, TextArea, TextField } from "@/ui";
 import { JavaChooser, MemoryChooser, MemoryHelp } from "@/components/common";
-import { useInstallPercent, usePhase } from "@/components/game";
+import { isBusy, isGameLive, useInstallPercent, usePhase } from "@/components/game";
 import { askDelete, useGroupMenu } from "@/components/instance";
 import { useInstall, useUpdateInstance } from "@/hooks/useInstances";
 import { blurOnEnter } from "@/lib/dom";
@@ -63,9 +63,9 @@ export function SettingsTab({ instance }: { instance: Instance }) {
     }, 400);
   }
 
-  const busy = phase === "preparing" || phase === "starting" || phase === "running" || install.isPending;
+  const busy = isBusy(phase) || install.isPending;
   // Solange das Spiel läuft, lehnt das Backend jede Änderung an der Instanz ab; das Bild lebt nur lokal.
-  const locked = phase === "starting" || phase === "running";
+  const locked = isGameLive(phase);
   const repairing = percent != null;
   const groupText = instance.group ?? t("detail.settings.noGroup");
 
@@ -178,7 +178,7 @@ export function SettingsTab({ instance }: { instance: Instance }) {
           tone="bad"
           title={t("detail.settings.deleteInstance")}
           actions={
-            <Button variant="danger" icon="trash" disabled={phase === "running" || phase === "preparing" || phase === "starting"} onClick={() => askDelete(instance)}>
+            <Button variant="danger" icon="trash" disabled={isBusy(phase)} onClick={() => askDelete(instance)}>
               {t("common.delete")}
             </Button>
           }

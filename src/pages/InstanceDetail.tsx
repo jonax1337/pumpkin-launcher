@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { useView } from "@/app/Layout";
 import { useI18n } from "@/i18n";
@@ -7,9 +7,11 @@ import { LogConsole, PlayButton, PlayStatus, StatusChip, usePhase } from "@/comp
 import { playtimeLine } from "@/components/common";
 import { InstanceMenuButton } from "@/components/instance";
 import { AddContentSheet, IRIS_PROJECT_ID } from "@/components/ContentBrowser";
-import { useModUpdates } from "@/hooks/useContent";
+import { useCurrentUpdates } from "@/hooks/useContent";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useInstance, useUpdateMods } from "@/hooks/useInstances";
-import { projectOf } from "@/lib/modrinth";
+import { WIDTH } from "@/lib/breakpoints";
+import { projectOf, updatesLabel } from "@/lib/modrinth";
 import { instanceTabParams, readInstanceTab, type InstanceTab } from "@/lib/routes";
 import { LOADER_LABELS, type Instance } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -20,14 +22,8 @@ import { ScreenshotsTab } from "./detail/ScreenshotsTab";
 import { SettingsTab } from "./detail/SettingsTab";
 import { WorldsTab } from "./detail/WorldsTab";
 
-/** Schmales Fenster (bis 900 px): Loader-Version und Kurzinfo im kompakten Kopf entfallen. */
-const NARROW = "(max-width: 900px)";
-const subscribeNarrow = (cb: () => void) => {
-  const mq = matchMedia(NARROW);
-  mq.addEventListener("change", cb);
-  return () => mq.removeEventListener("change", cb);
-};
-const useNarrow = () => useSyncExternalStore(subscribeNarrow, () => matchMedia(NARROW).matches);
+/** Schmales Fenster: Loader-Version und Kurzinfo im kompakten Kopf entfallen. */
+const useNarrow = () => useMediaQuery(`(max-width: ${WIDTH.sm}px)`);
 
 export function InstanceDetailPage() {
   const { id = "" } = useParams();
@@ -112,11 +108,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
   const look = useLook(instance.id);
   const [adding, setAdding] = useState(false);
   const mods = useUpdateMods(instance.id);
-  const updates = useModUpdates(instance.id, instance.mods.length > 0);
-  // Nur Updates, deren Stand noch stimmt: direkt nach dem Aktualisieren läuft der Check erst neu.
-  const updateFor = new Map(
-    (updates.data ?? []).filter((u) => instance.mods.some((m) => m.id === u.modId && m.version === u.currentVersion)).map((u) => [u.modId, u]),
-  );
+  const updateFor = useCurrentUpdates(instance, instance.mods.length > 0);
   const { warnsOf, total: warnTotal } = useWarnings(
     instance,
     () => setAdding(true),
@@ -173,7 +165,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
               {crashed && <StatusChip instance={instance} />}
               {nUpd > 0 && (
                 <Button size="s" icon="up" count={nUpd} onScene onClick={showUpdates} tabIndex={compact ? -1 : undefined}>
-                  {nUpd === 1 ? t("common.update") : t("common.updates")}
+                  {updatesLabel(nUpd)}
                 </Button>
               )}
             </div>

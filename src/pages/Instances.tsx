@@ -6,9 +6,10 @@ import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
 import { loaderLine, playtimeLine } from "@/components/common";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
 import { SkelList } from "@/components/SkelList";
-import { useBackgroundUpdates, useModUpdates } from "@/hooks/useContent";
-import { groupsOf, ungrouped, useInstances } from "@/hooks/useInstances";
+import { useBackgroundUpdates, useCurrentUpdates } from "@/hooks/useContent";
+import { byRecent, groupsOf, ungrouped, useInstances } from "@/hooks/useInstances";
 import { WIDTH } from "@/lib/breakpoints";
+import { updatesLabel } from "@/lib/modrinth";
 import { formatDate, formatPlaytime, relativeTime } from "@/lib/format";
 import { newInstanceParams } from "@/lib/routes";
 import { ALL_LOADERS, LOADER_LABELS, type Instance, type ModLoader } from "@/lib/types";
@@ -38,7 +39,7 @@ function saveMode(mode: Mode) {
 }
 
 const SORTS: Record<Sort, (a: Instance, b: Instance) => number> = {
-  recent: (a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0) || b.createdAt - a.createdAt,
+  recent: byRecent,
   name: (a, b) => a.name.localeCompare(b.name, currentLanguage()),
   created: (a, b) => b.createdAt - a.createdAt,
 };
@@ -52,22 +53,15 @@ function sectionsOf(instances: Instance[]): [group: string | null, members: Inst
   return ungrouped.length ? [...groups, [null, ungrouped]] : groups;
 }
 
-/** Anzahl bekannter Updates aus dem Cache (gefüllt vom Detail oder von `useBackgroundUpdates`). */
-function useCachedUpdates(inst: Instance) {
-  const { data } = useModUpdates(inst.id, false);
-  return (data ?? []).filter((u) => inst.mods.some((m) => m.id === u.modId && m.version === u.currentVersion)).length;
-}
-
 /** Status nur als Ausnahme: installiert gerade, startet, läuft, abgestürzt oder mit Updates. Der Normalfall bleibt leer. */
 function LibStatus({ inst }: { inst: Instance }) {
-  const { t } = useI18n();
   const phase = usePhase(inst.id);
-  const nUpd = useCachedUpdates(inst);
+  const nUpd = useCurrentUpdates(inst, false).size;
   if (LOUD_PHASES.includes(phase)) return <StatusChip instance={inst} small />;
   if (nUpd > 0)
     return (
       <Chip icon="up">
-        <Count value={nUpd} /> {nUpd === 1 ? t("common.update") : t("common.updates")}
+        <Count value={nUpd} /> {updatesLabel(nUpd)}
       </Chip>
     );
   return null;

@@ -2,15 +2,16 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { Buddy } from "@/branding/Brand";
 import { useI18n } from "@/i18n";
 import { useNavigate } from "react-router";
-import { PlayButton, PlayStatus, StatusChip, usePhase } from "@/components/game";
+import { isGameLive, PlayButton, PlayStatus, StatusChip, usePhase } from "@/components/game";
 import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
 import { loaderLine } from "@/components/common";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
 import { SkelList } from "@/components/SkelList";
 import { Onboarding } from "@/components/Onboarding";
 import { useModUpdates } from "@/hooks/useContent";
-import { pickRecentInstance, useInstances, usePlay } from "@/hooks/useInstances";
+import { byRecent, pickRecentInstance, useInstances, usePlay } from "@/hooks/useInstances";
 import { relativeTime } from "@/lib/format";
+import { updatesLabel } from "@/lib/modrinth";
 import { instanceUrl } from "@/lib/routes";
 import { quickPlayTarget, type Instance } from "@/lib/types";
 import { PixelScene } from "@/pixel/PixelScene";
@@ -40,7 +41,7 @@ function HeroInfo({ instance }: { instance: Instance }) {
   const n = instance.mods.length;
   const u = updates.data?.length ?? 0;
   // Während des Spiels sagt der Knopf „Läuft seit …“; „Zuletzt gespielt in dieser Minute“ wäre doppelt.
-  const playing = phase === "starting" || phase === "running";
+  const playing = isGameLive(phase);
   // Der Ordnername statt des Weltnamens: den kennt nur die Weltenliste, und die liest jede Welt vom Datenträger.
   const resume = playing || phase === "preparing" ? null : instance.lastQuickPlay;
   return (
@@ -60,7 +61,7 @@ function HeroInfo({ instance }: { instance: Instance }) {
         />
         {u > 0 && (
           <ButtonLink to={instanceUrl(instance.id, "content")} size="s" icon="up" count={u} onScene>
-            {u === 1 ? t("common.update") : t("common.updates")}
+            {updatesLabel(u)}
           </ButtonLink>
         )}
         {resume && (
@@ -219,9 +220,7 @@ export function HomePage() {
     );
   if (!instances?.length || !current) return <Onboarding />;
 
-  // Gespielte zuerst (zuletzt gespielt vorn), nie gespielte dahinter (neueste zuerst)
-  const sorted = [...instances].sort((a, b) =>
-    (a.lastPlayedAt == null ? 1 : 0) - (b.lastPlayedAt == null ? 1 : 0) || (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0) || b.createdAt - a.createdAt);
+  const sorted = [...instances].sort(byRecent);
 
   return (
     <section className="home">

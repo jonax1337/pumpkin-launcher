@@ -28,6 +28,12 @@ function overallPercent(p: InstallProgress, steps: InstallStep[]) {
 
 export type Phase = "loading" | "preparing" | "starting" | "running" | "crashed" | "installed" | "missing";
 
+/** Minecraft startet oder läuft: das Backend lehnt dann jede Änderung an der Instanz ab. */
+export const isGameLive = (phase: Phase) => phase === "starting" || phase === "running";
+
+/** Es ist etwas im Gang (Installation, Start oder laufendes Spiel): Löschen, Reparieren und Kopieren sind gesperrt. */
+export const isBusy = (phase: Phase) => phase === "preparing" || isGameLive(phase);
+
 export function usePhase(instanceId: string): Phase {
   const status = useInstanceStatus(instanceId);
   const preparing = useGame((s) => !!s.installs[instanceId]);

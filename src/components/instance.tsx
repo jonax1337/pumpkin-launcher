@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { t, useI18n } from "@/i18n";
 import { Checkbox, ConfirmDialog, Dialog, DialogActions, Field, Hint, IconButton, Menu, Skel, TextField, type MenuEntry } from "@/ui";
-import { usePhase } from "@/components/game";
+import { isBusy, usePhase } from "@/components/game";
 import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { askStop, useDeleteInstance, useExportEntries, useGroups, usePlay, useSetGroup } from "@/hooks/useInstances";
 import { useSaveTemplate } from "@/hooks/useTemplates";
@@ -93,21 +93,21 @@ export function useInstanceMenu(instance: Instance, opts: { open?: boolean } = {
   const navigate = useNavigate();
   const groupItems = useGroupMenu(instance);
   const running = phase === "running";
-  const busy = phase === "preparing" || phase === "starting";
+  const locked = isBusy(phase);
   return [
     running
       ? { id: "stop", text: t("components.game.quitEllipsis"), icon: "stop", onSelect: () => askStop(instance) }
-      : { id: "play", text: t("common.play"), icon: "play", disabled: busy || phase === "loading", onSelect: () => void play(instance) },
+      : { id: "play", text: t("common.play"), icon: "play", disabled: locked || phase === "loading", onSelect: () => void play(instance) },
     ...(opts.open ? [{ id: "open", text: t("components.instance.openInstance"), icon: "chev" as const, onSelect: () => navigate(instanceUrl(instance.id)) }] : []),
     { id: "log", text: t("components.log.ariaLabel"), icon: "term", onSelect: () => navigate(instanceUrl(instance.id, "console")) },
     { id: "dir", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => openInstanceFolder(instance) },
-    { id: "group", text: t("components.instance.group"), icon: "box", disabled: running || busy, items: groupItems },
+    { id: "group", text: t("components.instance.group"), icon: "box", disabled: locked, items: groupItems },
     "-",
-    { id: "dup", text: t("components.instance.duplicate"), icon: "copy", disabled: running || busy || contentBusy, onSelect: () => duplicate(instance) },
-    { id: "exp", text: t("components.instance.exportEllipsis"), icon: "ul", disabled: running || busy || contentBusy, onSelect: () => askExport(instance) },
+    { id: "dup", text: t("components.instance.duplicate"), icon: "copy", disabled: locked || contentBusy, onSelect: () => duplicate(instance) },
+    { id: "exp", text: t("components.instance.exportEllipsis"), icon: "ul", disabled: locked || contentBusy, onSelect: () => askExport(instance) },
     { id: "tpl", text: t("components.instance.saveAsTemplate"), icon: "save", onSelect: () => askSaveTemplate(instance) },
     "-",
-    { id: "del", text: t("common.delete"), icon: "trash", bad: true, disabled: running || busy, onSelect: () => askDelete(instance) },
+    { id: "del", text: t("common.delete"), icon: "trash", bad: true, disabled: locked, onSelect: () => askDelete(instance) },
   ];
 }
 

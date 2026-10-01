@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { t } from "@/i18n";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
-import { type ContentProgress, type ContentProject } from "@/lib/modrinth";
+import { type ContentProgress, type ContentProject, type ModUpdate } from "@/lib/modrinth";
 import { toastError } from "@/lib/toast";
 import { HOUR } from "@/lib/time";
 import type { Instance } from "@/lib/types";
@@ -112,6 +112,16 @@ const updatesQuery = (instanceId: string) => ({
 /** Update-Check einer Instanz; still, wenn Modrinth nicht erreichbar ist. */
 export function useModUpdates(instanceId: string, enabled: boolean) {
   return useQuery({ ...updatesQuery(instanceId), enabled });
+}
+
+/**
+ * Update-Hinweise je Mod-ID, deren Stand noch stimmt: direkt nach dem Aktualisieren läuft der Check erst neu.
+ * `enabled` false liest nur, was im Cache liegt (Bibliothek, gefüllt von `useBackgroundUpdates`).
+ */
+export function useCurrentUpdates(instance: Instance, enabled: boolean): Map<string, ModUpdate> {
+  const { data } = useModUpdates(instance.id, enabled);
+  const current = (data ?? []).filter((u) => instance.mods.some((m) => m.id === u.modId && m.version === u.currentVersion));
+  return new Map(current.map((u) => [u.modId, u]));
 }
 
 /**

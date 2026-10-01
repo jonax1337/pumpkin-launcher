@@ -81,6 +81,9 @@ const SHARE_PHASES = ["download", "copy", "hash", "backup"];
 export const progressShare = (p: ContentProgress | null) =>
   p && SHARE_PHASES.includes(p.phase) && p.total ? Math.min(1, p.done / p.total) : null;
 
+/** „Update“ bzw. „Updates“ neben einer Anzahl. */
+export const updatesLabel = (n: number) => t(n === 1 ? "common.update" : "common.updates");
+
 export const formatDownloads = (n: number) => new Intl.NumberFormat(currentLanguage(), { notation: "compact" }).format(n);
 
 /** Modpack-Datei im Modrinth-Format; wird immer eine eigene Instanz. */
