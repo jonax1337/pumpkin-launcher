@@ -14,6 +14,7 @@ import { useInstances } from "@/hooks/useInstances";
 import { worldsQuery } from "@/hooks/useWorlds";
 import { catalogKeys, worldKeys } from "@/hooks/queryKeys";
 import { api } from "@/lib/api";
+import { errorMessage } from "@/lib/errors";
 import { formatCount } from "@/lib/format";
 import {
   formatDownloads, installedKey, isPackVersionSupported, modLoadersFor, ownerKey, pickPackVersion, pickVersion, progressLabel, progressShare, progressShortLabel, projectKey, projectOf, SOURCES,
@@ -176,7 +177,7 @@ function useAddContent() {
         picked = (await qc.fetchQuery(allVersionsQuery(projectId, source))).find((v) => v.id === id);
       }
     } catch (err) {
-      toast.error(t("components.content.loadFailed", { name: title }), { description: err instanceof Error ? err.message : String(err) });
+      toast.error(t("components.content.loadFailed", { name: title }), { description: errorMessage(err) });
       return "error";
     }
     if (!id) return "missing";
@@ -365,7 +366,7 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
         if (picked.reason) toast.error(t("components.pack.cannotInstall", { name: title }), { description: picked.reason });
         id = picked.version?.id;
       } catch (err) {
-        toast.error(t("components.content.loadFailed", { name: title }), { description: err instanceof Error ? err.message : String(err) });
+        toast.error(t("components.content.loadFailed", { name: title }), { description: errorMessage(err) });
       } finally {
         setChecking(false);
       }

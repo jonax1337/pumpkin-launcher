@@ -7,6 +7,7 @@ import { showNameError, startMsLogin } from "@/components/PlayerNames";
 import { importable, useForeignInstances } from "@/hooks/useImport";
 import { useCreateInstance, usePlay, useVersions } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
+import { errorMessage } from "@/lib/errors";
 import type { ContentVersion } from "@/lib/modrinth";
 import { cn } from "@/lib/utils";
 import { Button, Choice, Field, Glyph, Hint, TextField, useRoving } from "@/ui";
@@ -82,7 +83,7 @@ export function Onboarding() {
       const withMods = await api.modrinthInstallMod(inst.id, version.id, crypto.randomUUID());
       void play(withMods);
     } catch (err) {
-      toast.error(t("components.onboarding.goFailed"), { description: err instanceof Error ? err.message : String(err) });
+      toast.error(t("components.onboarding.goFailed"), { description: errorMessage(err) });
     } finally {
       setBusy(false);
     }

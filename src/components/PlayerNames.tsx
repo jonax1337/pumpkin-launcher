@@ -7,6 +7,7 @@ import { t, useI18n } from "@/i18n";
 import { StopDialog } from "@/components/game";
 import { accountKeys } from "@/hooks/queryKeys";
 import { api } from "@/lib/api";
+import { errorMessage } from "@/lib/errors";
 import { openPage } from "@/lib/links";
 import type { MsLoginStart } from "@/lib/types";
 import {
@@ -46,7 +47,7 @@ export async function startMsLogin(qc: QueryClient, method?: "device") {
     }
     useMsLogin.setState({ step: "done", name: account.username }, true);
   } catch (err) {
-    if (mine === attempt) useMsLogin.setState({ step: "error", message: err instanceof Error ? err.message : String(err) }, true);
+    if (mine === attempt) useMsLogin.setState({ step: "error", message: errorMessage(err) }, true);
   }
 }
 

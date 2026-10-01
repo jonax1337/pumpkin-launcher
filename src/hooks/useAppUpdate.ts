@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { t } from "@/i18n/core";
 import { api } from "@/lib/api";
+import { errorMessage } from "@/lib/errors";
 import { isGameActive, useGame } from "@/store/game";
 import { appKeys } from "./queryKeys";
 import { anyTaskRunning, subscribeRunningTasks } from "./useRunningTasks";
@@ -76,7 +77,7 @@ export async function installAppUpdate(update: Update) {
     await api.restartApp();
   } catch (err) {
     useUpdateRun.setState({ phase: "idle", p: null });
-    toast.error(t("hooks.update.installFailed"), { description: err instanceof Error ? err.message : String(err) });
+    toast.error(t("hooks.update.installFailed"), { description: errorMessage(err) });
   }
 }
 

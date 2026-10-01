@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 import { create } from "zustand";
 import { t } from "@/i18n";
 import { api } from "@/lib/api";
+import { errorMessage } from "@/lib/errors";
 import { type ContentProgress, type ContentProject } from "@/lib/modrinth";
 import { toastError } from "@/lib/toast";
 import type { Instance } from "@/lib/types";
@@ -59,7 +60,7 @@ export async function trackContent<R>(
     useTasks.getState().push({ ...finish(result, run.doneLabel ?? label), state: "done" });
     return result;
   } catch (error) {
-    useTasks.getState().push({ label, sub: error instanceof Error ? error.message : String(error), state: "fail" });
+    useTasks.getState().push({ label, sub: errorMessage(error), state: "fail" });
     throw error;
   } finally {
     unlisten?.();

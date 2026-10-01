@@ -5,6 +5,7 @@ import { create } from "zustand";
 import { Button, Chip, Dialog, DialogActions, Hint, List, ListRow, RowTitle } from "@/ui";
 import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
+import { errorMessage } from "@/lib/errors";
 import { openPage } from "@/lib/links";
 import type { BlockedFile } from "@/lib/modrinth";
 import { instanceKeys } from "@/hooks/queryKeys";
@@ -73,7 +74,7 @@ export function ManualDownloads() {
             void qc.invalidateQueries({ queryKey: instanceKeys.all });
           }
         } catch (err) {
-          toast.error(t("components.manual.adoptFailed", { name: item.name }), { description: err instanceof Error ? err.message : String(err) });
+          toast.error(t("components.manual.adoptFailed", { name: item.name }), { description: errorMessage(err) });
           setDone((d) => new Set(d).add(item.fileId));
         }
       }
