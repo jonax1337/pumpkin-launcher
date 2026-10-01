@@ -86,9 +86,13 @@ export function JavaChooser({ name, value, onChange, fallback, disabled }: { nam
     const picked = await openFile({ multiple: false, directory: false, filters: extensions ? [{ name: "Java", extensions }] : undefined });
     if (typeof picked === "string") commit(picked);
   }
+  function chooseDefault() {
+    setOwn(false);
+    commit("");
+  }
   return (
     <>
-      <Radio name={name} checked={!own} disabled={disabled} onChange={() => (setOwn(false), commit(""))}>{fallback}</Radio>
+      <Radio name={name} checked={!own} disabled={disabled} onChange={chooseDefault}>{fallback}</Radio>
       <Radio name={name} checked={own} disabled={disabled} onChange={() => setOwn(true)}>Eigene Java-Installation</Radio>
       {/* Bleibt stehen und ist nur gesperrt, wie der Regler bei „Automatisch“: kein Sprung, keine Lücke.
           Gesperrt ohne Beispielpfad, sonst wirkt es, als wäre schon ein Pfad gesetzt. */}

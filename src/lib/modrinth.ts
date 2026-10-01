@@ -62,6 +62,16 @@ export function progressLabel(p: ContentProgress | null): string {
   return "Fertig";
 }
 
+/** Ein Wort für schmale Fortschrittsanzeigen in einer Zeile (statt `progressLabel`). */
+export function progressShortLabel(p: ContentProgress | null): string {
+  if (!p || p.phase === "resolve" || p.phase === "validate") return "Wird geprüft";
+  if (p.phase === "download") return "Lädt";
+  if (p.phase === "extract") return "Wird entpackt";
+  if (p.phase === "copy") return "Kopiert";
+  if (p.phase === "hash") return "Erkennt";
+  return "Fertig";
+}
+
 const SHARE_PHASES = ["download", "copy", "hash", "backup"];
 
 /** Anteil für Fortschrittsbalken; nur Phasen mit bekannter Menge (Downloads, kopierte, erkannte und gesicherte Dateien). */
@@ -71,7 +81,8 @@ export const progressShare = (p: ContentProgress | null) =>
 export const formatDownloads = (n: number) => new Intl.NumberFormat("de", { notation: "compact" }).format(n);
 
 /** Modpack-Datei im Modrinth-Format; wird immer eine eigene Instanz. */
-export const isMrpack = (path: string) => /\.mrpack$/i.test(path);
+export const MRPACK_EXT = /\.mrpack$/i;
+export const isMrpack = (path: string) => MRPACK_EXT.test(path);
 
 export const projectOf = (m: Mod): string | null => (m.source.type === "modrinth" ? m.source.projectId : null);
 

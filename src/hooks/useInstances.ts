@@ -20,8 +20,10 @@ export const instanceKeys = {
   status: (id: string) => ["instance-status", id] as const,
 };
 
+const instanceListQuery = { queryKey: instanceKeys.all, queryFn: api.listInstances };
+
 export function useInstances() {
-  return useQuery({ queryKey: instanceKeys.all, queryFn: api.listInstances });
+  return useQuery(instanceListQuery);
 }
 
 /** Gruppennamen aller Instanzen, alphabetisch; Gruppen gibt es nur über die Instanzen, die sie tragen. */
@@ -32,7 +34,7 @@ export const groupsOf = (instances: Instance[]) =>
 export const UNGROUPED = "Ohne Gruppe";
 
 export function useGroups() {
-  return useQuery({ queryKey: instanceKeys.all, queryFn: api.listInstances, select: groupsOf }).data ?? [];
+  return useQuery({ ...instanceListQuery, select: groupsOf }).data ?? [];
 }
 
 export function useInstance(id: string | undefined) {

@@ -11,13 +11,14 @@ import { MemoryChooser } from "@/components/common";
 import { useInstallPack } from "@/components/ContentBrowser";
 import { ImportPane } from "@/components/LauncherImport";
 import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { useDebounced } from "@/hooks/useDebounced";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { useForeignSelection, useImportInstances } from "@/hooks/useImport";
 import { useCreateInstance, useLoaderVersions, useVersions } from "@/hooks/useInstances";
 import { useDeleteTemplate, useTemplates } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
 import { fileName, formatDate } from "@/lib/format";
-import { formatDownloads, isMrpack, progressLabel } from "@/lib/modrinth";
+import { formatDownloads, isMrpack, MRPACK_EXT, progressLabel } from "@/lib/modrinth";
 import { ALL_LOADERS, LOADER_LABELS, type ModLoader, type Template } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -44,16 +45,7 @@ const LOADER_ITEMS = ALL_LOADERS.map((l) => ({ value: l, label: LOADER_LABELS[l]
 // Leerer Wert steht für loaderVersion = null („neueste stabile“).
 const LATEST = "latest";
 
-const packName = (path: string) => fileName(path).replace(/\.mrpack$/i, "");
-
-function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return debounced;
-}
+const packName = (path: string) => fileName(path).replace(MRPACK_EXT, "");
 
 /** Modpack aus dem Katalog als neue Instanz: Suche und Auswahlliste. */
 function PackPane({ selected, onSelect }: { selected: string | null; onSelect: (p: { id: string; title: string }) => void }) {
@@ -183,7 +175,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
 
   // Datei
   const [path, setPath] = useState(initial.path);
-  const [fileName, setFileName] = useState("");
+  const [customName, setCustomName] = useState("");
 
   // Vorlage
   const [template, setTemplate] = useState<Template | null>(null);
@@ -193,7 +185,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
   const importer = useImportInstances();
 
   const install = useContentInstall();
-  const { progress } = useContentState();
+  const { active, progress } = useContentState();
   const busy = create.isPending || install.isPending || !!packInstall.busy || importer.running;
   useEffect(() => onBusy(busy), [busy, onBusy]);
 
@@ -205,9 +197,9 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
   const valid =
     tab === "blank" ? !!selectedVersion && !loaderUnavailable
     : tab === "pack" ? !!pack && !packInstall.blocked
-    : tab === "file" ? !!path && !api.isMock
-    : tab === "import" ? foreign.chosen.length > 0
-    : !!template;
+    : tab === "file" ? !!path && !api.isMock && !active
+    : tab === "import" ? foreign.chosen.length > 0 && !active
+    : !!template && !active;
 
   function go() {
     if (!valid || busy) return;
@@ -226,7 +218,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
     } else if (tab === "pack") {
       void packInstall.run();
     } else if (tab === "file") {
-      const title = fileName.trim() || packName(path);
+      const title = customName.trim() || packName(path);
       install.mutate(withTarget("import", (op) => api.modrinthImportPack(path, title, op), `${title} importieren`, { cancellable: true }), done);
     } else if (tab === "import") {
       void importer.run(foreign.chosen).then((last) => last && onDone(last.id));
@@ -243,8 +235,11 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
     : tab === "import" ? (foreign.chosen.length > 1 ? `${foreign.chosen.length} importieren` : "Importieren")
     : "Anlegen";
 
+  // Ein zweiter Vorgang würde still verworfen; deshalb ist der Knopf gesperrt und der Grund steht da.
+  const waiting = tab !== "blank" && !!active && !busy;
   const hint =
-    tab === "blank" ? "Das Spiel wird beim ersten Start geladen."
+    waiting ? "Warte, bis der laufende Vorgang fertig ist."
+    : tab === "blank" ? "Das Spiel wird beim ersten Start geladen."
     : tab === "pack" ? (pack ? "Die Installation läuft im Hintergrund." : "Wähle ein Modpack.")
     : tab === "file" ? (path ? "Alle Inhalte aus der Datei werden übernommen." : "Unterstützt: .mrpack")
     : tab === "import" ? "Welten, Mods und Einstellungen werden kopiert. Der andere Launcher bleibt unverändert."
@@ -384,7 +379,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
                 </Panel>
                 {path && (
                   <Field label="Name" optional className="mt-4">
-                    <TextField value={fileName} onChange={(e) => setFileName(e.target.value)} placeholder={packName(path)} maxLength={64} />
+                    <TextField value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder={packName(path)} maxLength={64} />
                   </Field>
                 )}
               </>

@@ -4,7 +4,7 @@ import { Button, Chip, Choice, Empty, ErrorBox, Field, Glyph, JobProgress, Skel 
 import { useContentState } from "@/hooks/useContent";
 import { importTarget, type ForeignSelection } from "@/hooks/useImport";
 import { api } from "@/lib/api";
-import { progressShare } from "@/lib/modrinth";
+import { progressShare, progressShortLabel } from "@/lib/modrinth";
 import { FOREIGN_LAUNCHER_LABELS, FOREIGN_LAUNCHERS, LOADER_LABELS, type ForeignInstance } from "@/lib/types";
 
 /** Import aus anderen Launchern im Dialog „Neue Instanz“: Instanzen nach Launcher gruppiert, Fortschritt in der Zeile. */
@@ -17,10 +17,10 @@ export function ImportPane({ selection, busy }: { selection: ForeignSelection; b
     if (folder) await selection.addFolder(folder).catch((e: Error) => toast.error("Der Ordner ließ sich nicht durchsuchen", { description: e.message }));
   }
 
-  const trail = (f: ForeignInstance) =>
-    active && target === importTarget(f) ? <JobProgress label={progress?.phase === "hash" ? "Erkennt" : "Kopiert"} p={progressShare(progress)} width={120} />
-    : f.imported ? <Chip>Schon importiert</Chip>
-    : undefined;
+  const trail = (f: ForeignInstance) => {
+    if (active && target === importTarget(f)) return <JobProgress label={progressShortLabel(progress)} p={progressShare(progress)} width={120} />;
+    return f.imported ? <Chip>Schon importiert</Chip> : undefined;
+  };
 
   return (
     <>
