@@ -69,9 +69,10 @@ pub struct ForeignInstance {
 }
 
 impl ForeignInstance {
-    fn new(launcher: Launcher, dir: &Path, Found { game_dir, setup }: Found) -> Self {
+    /// `path` ist der Instanzordner im anderen Launcher.
+    fn new(launcher: Launcher, path: String, Found { game_dir, setup }: Found) -> Self {
         let unsupported = forge::check_loader(setup.loader, &setup.minecraft_version).err().map(|e| e.to_string());
-        Self { launcher, path: text(dir), game_dir: text(&game_dir), imported: false, unsupported, setup }
+        Self { launcher, path, game_dir: text(&game_dir), imported: false, unsupported, setup }
     }
 }
 
@@ -116,18 +117,20 @@ fn default_roots() -> Vec<PathBuf> {
 
 /// Instanzen unter `root`: Datenordner eines Launchers, dessen Instanzordner oder eine einzelne Instanz.
 fn scan(root: &Path) -> Vec<ForeignInstance> {
-    let mut found: Vec<ForeignInstance> = skip_unreadable(root, modrinth_app::scan(root))
+    let mut found: Vec<ForeignInstance> = skip_unreadable(root, modrinth_app::scan(root), INSTANCE_SKIPPED)
         .into_iter()
-        .map(|found| ForeignInstance::new(Launcher::Modrinth, &found.game_dir.clone(), found))
+        .map(|found| ForeignInstance::new(Launcher::Modrinth, text(&found.game_dir), found))
         .collect();
     let folders = subdirs(root);
     // Die CurseForge App nennt ihn `Instances`; Linux unterscheidet das von `instances`.
     let instances: Vec<PathBuf> =
         folders.iter().filter(|dir| folder_name(dir).eq_ignore_ascii_case("instances")).flat_map(|dir| subdirs(dir)).collect();
     let candidates = std::iter::once(root.to_owned()).chain(folders).chain(instances);
-    found.extend(candidates.filter_map(|dir| skip_unreadable(&dir, read(&dir))));
+    found.extend(candidates.filter_map(|dir| skip_unreadable(&dir, read(&dir), INSTANCE_SKIPPED)));
     found
 }
+
+const INSTANCE_SKIPPED: &str = "Instanz eines anderen Launchers übersprungen";
 
 /// Liest die Instanz eines Launchers in einem Ordner; `None`, wenn der Ordner keine ist.
 type Reader = fn(&Path) -> AppResult<Option<Found>>;
@@ -138,16 +141,17 @@ fn read(dir: &Path) -> AppResult<Option<ForeignInstance>> {
         [(Launcher::Prism, prism::read), (Launcher::CurseForge, curseforge::read), (Launcher::AtLauncher, atlauncher::read)];
     for (launcher, read) in readers {
         if let Some(found) = read(dir)? {
-            return Ok(Some(ForeignInstance::new(launcher, dir, found)));
+            return Ok(Some(ForeignInstance::new(launcher, text(dir), found)));
         }
     }
     Ok(None)
 }
 
-/// Eine unlesbare Instanz oder Datenbank darf die Suche nicht abbrechen: protokollieren und weiter.
-fn skip_unreadable<T: Default>(path: &Path, result: AppResult<T>) -> T {
+/// Eine unlesbare Datei eines anderen Launchers darf den Vorgang nicht abbrechen: mit `consequence` protokollieren
+/// und mit dem leeren Wert weiter.
+fn skip_unreadable<T: Default>(path: &Path, result: AppResult<T>, consequence: &str) -> T {
     result.unwrap_or_else(|err| {
-        tracing::warn!(path = %path.display(), %err, "Instanz eines anderen Launchers übersprungen");
+        tracing::warn!(path = %path.display(), %err, "{consequence}");
         T::default()
     })
 }
@@ -403,10 +407,10 @@ mod tests {
             memory_mb: None,
             jvm_args: Vec::new(),
         };
-        let old_forge = ForeignInstance::new(Launcher::CurseForge, &root.join("da"), Found { game_dir: root.join("da"), setup });
+        let old_forge = ForeignInstance::new(Launcher::CurseForge, text(&root.join("da")), Found { game_dir: root.join("da"), setup });
         assert!(old_forge.unsupported.is_some());
         let vanilla = Setup { loader: ModLoader::Vanilla, loader_version: None, ..old_forge.setup.clone() };
-        let missing = ForeignInstance::new(Launcher::CurseForge, &root.join("weg"), Found { game_dir: root.join("weg"), setup: vanilla });
+        let missing = ForeignInstance::new(Launcher::CurseForge, text(&root.join("weg")), Found { game_dir: root.join("weg"), setup: vanilla });
         for source in [old_forge, missing] {
             assert!(import(&state, source, ignored()).await.is_err());
         }

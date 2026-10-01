@@ -4,7 +4,7 @@ use std::{collections::HashMap, path::Path};
 
 use serde::Deserialize;
 
-use super::{folder_name, from_json, loader_named, read_marker, Found, Setup};
+use super::{folder_name, from_json, loader_named, read_marker, skip_unreadable, Found, Setup};
 use crate::{error::{AppError, AppResult}, models::ModLoader};
 
 #[derive(Deserialize)]
@@ -58,15 +58,13 @@ pub fn read(dir: &Path) -> AppResult<Option<Found>> {
 /// Dateiname -> (CurseForge-Projekt, Datei) der Inhalte, die die App von CurseForge geladen hat; leer, wenn `dir`
 /// keine Instanz der CurseForge App ist. Ist die Liste unlesbar, bleiben die Mods lokal.
 pub fn origins(dir: &Path) -> HashMap<String, (u32, u32)> {
-    let read = || -> AppResult<_> {
-        let Some(data) = read_marker(&dir.join(MANIFEST))? else { return Ok(HashMap::new()) };
-        let installed: Installed = from_json(&data)?;
-        Ok(installed.installed_addons.into_iter().map(|a| (a.installed_file.file_name, (a.addon_id, a.installed_file.id))).collect())
-    };
-    read().unwrap_or_else(|err| {
-        tracing::warn!(dir = %dir.display(), %err, "Herkunft der CurseForge-Inhalte nicht lesbar; als lokal erfasst");
-        HashMap::new()
-    })
+    skip_unreadable(dir, read_origins(dir), "Herkunft der CurseForge-Inhalte nicht lesbar; als lokal erfasst")
+}
+
+fn read_origins(dir: &Path) -> AppResult<HashMap<String, (u32, u32)>> {
+    let Some(data) = read_marker(&dir.join(MANIFEST))? else { return Ok(HashMap::new()) };
+    let installed: Installed = from_json(&data)?;
+    Ok(installed.installed_addons.into_iter().map(|a| (a.installed_file.file_name, (a.addon_id, a.installed_file.id))).collect())
 }
 
 /// Der Loader steht als `<loader>-<version>` in `baseModLoader.name`, bei Fabric mit `-<Minecraft-Version>` dahinter.

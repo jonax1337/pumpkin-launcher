@@ -10,12 +10,12 @@ use crate::{error::AppResult, models::ModLoader};
 #[derive(Deserialize)]
 struct Manifest {
     id: String,
-    launcher: Launcher,
+    launcher: LauncherSection,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Launcher {
+struct LauncherSection {
     name: String,
     /// Fehlt bei Vanilla.
     #[serde(default)]

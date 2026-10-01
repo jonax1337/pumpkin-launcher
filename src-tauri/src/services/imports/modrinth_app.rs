@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, OpenFlags, OptionalExtension, Row};
 
-use super::{loader_named, Found, Setup};
-use crate::error::{AppError, AppResult};
+use super::{loader_named, skip_unreadable, Found, Setup};
+use crate::error::AppResult;
 
 /// Beide Abfragen liefern: Name, Pfad, Minecraft-Version, Loader, Loader-Version, RAM (MiB) und JVM-Argumente
 /// (JSON-Liste); fehlende Werte gelten wie in der App als „Einstellung der App“.
@@ -35,8 +35,8 @@ pub fn scan(root: &Path) -> AppResult<Vec<Found>> {
     let migrated = conn.query_row("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'instances'", [], |_| Ok(())).optional()?;
     let mut statement = conn.prepare(if migrated.is_some() { QUERY } else { LEGACY_QUERY })?;
     let rows = statement.query_map([], |row| Ok(instance(row, &profiles)))?;
-    let unreadable = |err: &AppError| tracing::warn!(db = %db.display(), %err, "Instanz der Modrinth App übersprungen");
-    Ok(rows.map(|row| row?).filter_map(|row| row.inspect_err(unreadable).ok()).collect())
+    let readable = rows.map(|row| row?).filter_map(|row| skip_unreadable(&db, row.map(Some), "Instanz der Modrinth App übersprungen"));
+    Ok(readable.collect())
 }
 
 fn instance(row: &Row, profiles: &Path) -> AppResult<Found> {
