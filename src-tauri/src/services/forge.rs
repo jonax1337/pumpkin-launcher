@@ -14,6 +14,7 @@ use crate::models::ModLoader;
 use crate::services::download::{self, Job};
 use crate::services::fabric::{compare_versions, is_sha1, maven_path, maven_sha1, merge_parts, segment, LoaderVersion};
 use crate::services::mojang::{Arguments, Download, Library, LibraryDownloads, VersionJson};
+use crate::services::rules::Env;
 use crate::services::Dirs;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -438,7 +439,7 @@ pub async fn install(
         data.insert(key.clone(), value);
     }
 
-    let sep = if cfg!(windows) { ";" } else { ":" };
+    let sep = Env::current().classpath_separator();
     for (i, processor) in processors.iter().enumerate() {
         let outputs = processor
             .outputs
@@ -535,7 +536,6 @@ mod tests {
     use super::*;
     use crate::models::GameWindow;
     use crate::services::launch::{build_args, LaunchSpec};
-    use crate::services::rules::Env;
 
     #[test]
     fn supported_versions() {

@@ -22,7 +22,7 @@ pub fn report(launcher_version: &str, data_dir: &Path, default_memory_mb: u32, i
         format!("OS: {} ({})", system::os_version(), std::env::consts::ARCH),
         format!("RAM: {}", system::total_memory_mb().map_or_else(|_| UNKNOWN.into(), gib)),
         format!("Free space (data folder): {}", system::free_space_mb(data_dir).map_or_else(|_| UNKNOWN.into(), gib)),
-        format!("WebView2: {}", tauri::webview_version().unwrap_or_else(|_| UNKNOWN.into())),
+        format!("WebView: {}", tauri::webview_version().unwrap_or_else(|_| UNKNOWN.into())),
         format!("Instances: {}", instances.len()),
     ];
     lines.extend(instances.iter().enumerate().map(|(index, state)| instance_line(index + 1, state, default_memory_mb)));

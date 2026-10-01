@@ -11,6 +11,7 @@ import { useContentState } from "@/hooks/useContent";
 import { useWorldJob } from "@/hooks/useWorlds";
 import { api } from "@/lib/api";
 import { progressLabel, progressShare } from "@/lib/modrinth";
+import { platform } from "@/lib/platform";
 import { installStepLabel } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BrandMark, BrandWordmark } from "@/branding/Brand";
@@ -44,15 +45,21 @@ function typing(el: Element | null) {
   return el instanceof HTMLInputElement && !["checkbox", "radio", "button", "submit", "reset", "range", "file", "color"].includes(el.type);
 }
 
+/** Befehlstaste allein (ohne Alt/Umschalt): unter macOS Cmd, sonst Strg; die jeweils andere stört. */
+function commandOnly(e: KeyboardEvent) {
+  const [command, other] = platform === "macos" ? [e.metaKey, e.ctrlKey] : [e.ctrlKey, e.metaKey];
+  return command && !other && !e.altKey && !e.shiftKey;
+}
+
 /**
- * Strg+1…3 wechselt den Bereich, Strg+, öffnet die Einstellungen, Strg+N „Neue Instanz“.
+ * Strg+1…3 wechselt den Bereich, Strg+, öffnet die Einstellungen, Strg+N „Neue Instanz“ (macOS: Cmd statt Strg).
  * Bei offenem Dialog nichts (sonst gingen Eingaben verloren); in Textfeldern nur Strg+Zahl.
  */
 function useShortcuts() {
   const navigate = useNavigate();
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (!e.ctrlKey || e.altKey || e.metaKey || e.shiftKey || e.defaultPrevented) return;
+      if (!commandOnly(e) || e.defaultPrevented) return;
       if (dialogOpen()) return;
       const tab = TABS[Number(e.key) - 1];
       if (tab) {

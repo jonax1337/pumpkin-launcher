@@ -48,27 +48,25 @@ pub fn safe_path(value: &str) -> AppResult<PathBuf> {
     }
     Ok(PathBuf::from(value))
 }
-pub(crate) fn regular_parents(path: &Path) -> AppResult<()> {
-    for ancestor in path.ancestors() {
+/// Kein Symlink zwischen `root` und `path`. Oberhalb von `root` zählt nichts: Unter macOS ist schon `/var`
+/// ein Symlink, unter manchen Linux-Systemen `/home`.
+pub(crate) fn regular_parents(root: &Path, path: &Path) -> AppResult<()> {
+    for ancestor in path.ancestors().take_while(|ancestor| *ancestor != root) {
         match fs::symlink_metadata(ancestor) {
             Ok(m) if m.file_type().is_symlink() => return Err(invalid("Symlink im Zielpfad")),
-            Ok(m) => {
-                #[cfg(windows)]
-                {
-                    use std::os::windows::fs::MetadataExt;
-                    if m.file_attributes() & 0x400 != 0 {
-                        return Err(invalid("Reparse-Point im Zielpfad"));
-                    }
-                }
+            #[cfg(windows)]
+            Ok(m) if std::os::windows::fs::MetadataExt::file_attributes(&m) & 0x400 != 0 => {
+                return Err(invalid("Reparse-Point im Zielpfad"))
             }
+            Ok(_) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => return Err(e.into()),
         }
     }
     Ok(())
 }
-pub(crate) fn write_new(path: &Path, data: &[u8]) -> AppResult<()> {
-    regular_parents(path)?;
+pub(crate) fn write_new(root: &Path, path: &Path, data: &[u8]) -> AppResult<()> {
+    regular_parents(root, path)?;
     let parent = path
         .parent()
         .ok_or_else(|| invalid("Fehlender Elternpfad"))?;
@@ -169,7 +167,7 @@ pub async fn install_mod(
             return Err(invalid("Mod-Dateinamen kollidieren"));
         }
         let target = state.dirs.game_dir(id).join(kind.folder()).join(&file.filename);
-        regular_parents(&target)?;
+        regular_parents(&state.dirs.root, &target)?;
         match fs::symlink_metadata(&target) {
             Ok(_) => return Err(invalid("Mod-Zieldatei existiert bereits")),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -191,7 +189,7 @@ pub async fn install_mod(
     let mut created = Vec::new();
     let result = (|| {
         for (v, file, target, data) in ready {
-            write_new(&target, &data)?;
+            write_new(&state.dirs.root, &target, &data)?;
             created.push(target);
             // Cache aus den verifizierten Bytes; Fehler rollen nur die Ziele zurück.
             let sha1 = super::mods::cache_bytes(&state.dirs, &data)?;
@@ -829,7 +827,7 @@ pub(crate) async fn import_plan(
 ) -> AppResult<Instance> {
     pack.instance.modpack = origin;
     let root = state.dirs.instance(&pack.instance.id);
-    regular_parents(&root)?;
+    regular_parents(&state.dirs.root, &root)?;
     fs::create_dir_all(state.dirs.root.join("instances"))?;
     fs::create_dir(&root)?;
     // Abbruch (Future verworfen) räumt die halbe Instanz weg; Fehler räumt unten `match` auf.
@@ -842,7 +840,7 @@ pub(crate) async fn import_plan(
         // (kind, file name, sha1) of every staged content file; bytes go to the cache right away.
         let mut content = Vec::new();
         let mut stage = |path: &Path, data: &[u8]| -> AppResult<()> {
-            write_new(&state.dirs.game_dir(&pack.instance.id).join(path), data)?;
+            write_new(&state.dirs.root, &state.dirs.game_dir(&pack.instance.id).join(path), data)?;
             if let Some((kind, name)) = content_file(path) {
                 content.push((kind, name, super::mods::cache_bytes(&state.dirs, data)?));
             }
@@ -964,13 +962,14 @@ fn derive_required_by(mods: &mut [Mod], known: &HashMap<String, Version>) {
 fn untracked(dirs: &super::Dirs, instance: &Instance) -> AppResult<Vec<(ModKind, String, bool, PathBuf)>> {
     let mut found: Vec<(ModKind, String, bool, PathBuf)> = Vec::new();
     for kind in [ModKind::Mod, ModKind::ResourcePack, ModKind::Shader] {
-        let entries = match fs::read_dir(dirs.game_dir(&instance.id).join(kind.folder())) {
-            Ok(entries) => entries,
+        let mut entries = match fs::read_dir(dirs.game_dir(&instance.id).join(kind.folder())) {
+            Ok(entries) => entries.collect::<Result<Vec<_>, _>>()?,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
             Err(e) => return Err(e.into()),
         };
+        // read_dir liefert je Dateisystem eine andere Reihenfolge (NTFS sortiert, ext4/APFS nicht).
+        entries.sort_by_key(|e| e.file_name());
         for e in entries {
-            let e = e?;
             let Some(raw) = e.file_name().to_str().map(str::to_owned) else { continue };
             let (name, enabled) = match raw.strip_suffix(".disabled") {
                 Some(name) => (name.to_owned(), false),
@@ -1132,6 +1131,21 @@ pub fn local_pack(path: &Path) -> AppResult<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Symlinks anlegen darf unter Windows nicht jeder Benutzer; geprüft wird daher unter Unix.
+    #[cfg(unix)]
+    #[test]
+    fn only_symlinks_below_the_data_root_count() {
+        let base = std::env::temp_dir().join(crate::models::new_id());
+        let real = base.join("real");
+        fs::create_dir_all(real.join("mods")).unwrap();
+        let linked_root = base.join("data");
+        std::os::unix::fs::symlink(&real, &linked_root).unwrap();
+        assert!(regular_parents(&linked_root, &linked_root.join("mods/a.jar")).is_ok());
+        assert!(regular_parents(&base, &linked_root.join("mods/a.jar")).is_err());
+        fs::remove_dir_all(base).unwrap();
+    }
+
     fn modrinth_mod(project: &str, required_by: &[&str]) -> Mod {
         Mod {
             id: project.into(),

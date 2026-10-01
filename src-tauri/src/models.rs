@@ -245,7 +245,8 @@ pub struct Account {
 }
 
 /// Gespeichertes Microsoft-Konto in `accounts.json`: nur Metadaten. Der Refresh-Token liegt im
-/// OS-Schlüsselbund (Windows-Anmeldeinformationsverwaltung), der Minecraft-Token nur im Speicher.
+/// OS-Schlüsselbund (Windows-Anmeldeinformationsverwaltung, macOS-Schlüsselbund, Secret Service unter Linux),
+/// der Minecraft-Token nur im Speicher.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MsAccount {

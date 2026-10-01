@@ -20,7 +20,7 @@ pub enum AppError {
     Upload(String),
     #[error("Interner Fehler der App – Details: {0}")]
     Tauri(#[from] tauri::Error),
-    #[error("Der Windows-Anmeldespeicher ist nicht erreichbar – Details: {0}")]
+    #[error("Der Passwortspeicher des Systems ist nicht erreichbar – Details: {0}")]
     Keyring(#[from] keyring::Error),
     #[error("Die Datei konnte nicht in den Papierkorb verschoben werden – Details: {0}")]
     Trash(#[from] trash::Error),
@@ -30,8 +30,6 @@ pub enum AppError {
     NotFound { kind: &'static str, id: String },
     #[error("{0}")]
     Invalid(String),
-    #[error("{0} gibt es noch nicht")]
-    NotImplemented(&'static str),
     #[error("Installation abgebrochen")]
     Cancelled,
 }
@@ -87,14 +85,26 @@ mod tests {
 
     #[test]
     fn io_errors_read_like_sentences() {
-        starts(Error::from_raw_os_error(112).into(), "Auf der Festplatte ist nicht genug Platz");
         starts(Error::from(ErrorKind::StorageFull).into(), "Auf der Festplatte ist nicht genug Platz");
-        starts(Error::from_raw_os_error(32).into(), "Eine Datei wird gerade von einem anderen Programm benutzt");
         starts(Error::from(ErrorKind::PermissionDenied).into(), "Zugriff auf eine Datei wurde verweigert");
         starts(Error::other("x").into(), "Beim Lesen oder Schreiben");
         assert!(AppError::from(Error::other("kaputt")).to_string().ends_with(" – Details: kaputt"));
         assert_eq!(AppError::Cancelled.to_string(), "Installation abgebrochen");
         assert_eq!(AppError::Invalid("Instanz läuft noch".into()).to_string(), "Instanz läuft noch");
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn windows_codes_read_like_sentences() {
+        starts(Error::from_raw_os_error(112).into(), "Auf der Festplatte ist nicht genug Platz");
+        starts(Error::from_raw_os_error(32).into(), "Eine Datei wird gerade von einem anderen Programm benutzt");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn unix_codes_read_by_kind() {
+        starts(Error::from_raw_os_error(libc::ENOSPC).into(), "Auf der Festplatte ist nicht genug Platz");
+        starts(Error::from_raw_os_error(libc::EPIPE).into(), "Beim Lesen oder Schreiben");
     }
 
     #[tokio::test]

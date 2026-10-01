@@ -43,18 +43,20 @@ struct RuntimeManifest {
     files: BTreeMap<String, RuntimeFile>,
 }
 
-/// Plattform-Schlüssel in `all.json`.
-fn platform() -> Option<&'static str> {
-    Some(match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("windows", "x86_64") => "windows-x64",
-        ("windows", "x86") => "windows-x86",
-        ("windows", "aarch64") => "windows-arm64",
-        ("linux", "x86_64") => "linux",
-        ("linux", "x86") => "linux-i386",
-        ("macos", "x86_64") => "mac-os",
-        ("macos", "aarch64") => "mac-os-arm64",
-        _ => return None,
-    })
+/// Plattform-Schlüssel in `all.json`, der passendste zuerst. Für ARM fehlen alte Runtimes (Java 8, 16 und
+/// 17 „beta“, also Minecraft bis 1.18.2); dann läuft die x64-Runtime in der Emulation (Rosetta 2 bzw. die
+/// x64-Emulation von Windows).
+fn runtime_platforms(os: &str, arch: &str) -> &'static [&'static str] {
+    match (os, arch) {
+        ("windows", "x86_64") => &["windows-x64"],
+        ("windows", "x86") => &["windows-x86"],
+        ("windows", "aarch64") => &["windows-arm64", "windows-x64"],
+        ("linux", "x86_64") => &["linux"],
+        ("linux", "x86") => &["linux-i386"],
+        ("macos", "x86_64") => &["mac-os"],
+        ("macos", "aarch64") => &["mac-os-arm64", "mac-os"],
+        _ => &[],
+    }
 }
 
 /// Pfad der Java-Programmdatei einer installierten Komponente. Unter Windows `javaw.exe`
@@ -110,9 +112,10 @@ pub fn custom_java(path: &str, setting: JavaSetting) -> AppResult<PathBuf> {
     let name = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
     if !JAVA_FILE_NAMES.contains(&name.as_str()) {
         return Err(AppError::Invalid(format!(
-            "„{}“ ist kein Java-Programm. Wähle {} die javaw.exe im bin-Ordner deiner Java-Installation.",
+            "„{}“ ist kein Java-Programm. Wähle {} die {} im bin-Ordner deiner Java-Installation.",
             path.display(),
-            setting.place()
+            setting.place(),
+            JAVA_FILE_NAMES[0]
         )));
     }
     if !path.is_file() {
@@ -133,14 +136,13 @@ pub async fn ensure(
     component: &str,
     on_done: &(dyn Fn(u64, u64) + Send + Sync),
 ) -> AppResult<PathBuf> {
-    let platform = platform().ok_or_else(|| AppError::Invalid("Plattform ohne Mojang-Java-Runtime".into()))?;
+    let (os, arch) = (std::env::consts::OS, std::env::consts::ARCH);
     let mut all: HashMap<String, HashMap<String, Vec<RuntimeEntry>>> =
         download::get_json(client, RUNTIMES_URL).await?;
-    let entry = all
-        .get_mut(platform)
-        .and_then(|c| c.remove(component))
-        .and_then(|v| v.into_iter().next())
-        .ok_or_else(|| AppError::NotFound { kind: "Java-Runtime", id: format!("{component} ({platform})") })?;
+    let entry = runtime_platforms(os, arch)
+        .iter()
+        .find_map(|platform| all.get_mut(*platform)?.remove(component)?.into_iter().next())
+        .ok_or_else(|| AppError::NotFound { kind: "Java-Runtime", id: format!("{component} ({os} {arch})") })?;
     let manifest: RuntimeManifest = download::get_json(client, &entry.manifest.url).await?;
 
     let base = dirs.runtime(component);
@@ -184,6 +186,17 @@ mod tests {
         let file = root.join(name);
         std::fs::write(&file, "").unwrap();
         file.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn runtime_keys_per_platform_with_x64_fallback_on_arm() {
+        assert_eq!(runtime_platforms("windows", "x86_64"), ["windows-x64"]);
+        assert_eq!(runtime_platforms("linux", "x86_64"), ["linux"]);
+        assert_eq!(runtime_platforms("linux", "x86"), ["linux-i386"]);
+        assert_eq!(runtime_platforms("macos", "x86_64"), ["mac-os"]);
+        assert_eq!(runtime_platforms("macos", "aarch64"), ["mac-os-arm64", "mac-os"]);
+        assert_eq!(runtime_platforms("windows", "aarch64"), ["windows-arm64", "windows-x64"]);
+        assert!(runtime_platforms("linux", "aarch64").is_empty());
     }
 
     #[test]

@@ -37,7 +37,7 @@ const subscribeRm = (cb: () => void) => {
   return () => mq.removeEventListener("change", cb);
 };
 
-/** Java: automatisch (mitgelieferte Runtime) oder eigene javaw.exe. */
+/** Java: automatisch (mitgelieferte Runtime) oder eigene Java-Installation. */
 function JavaRow() {
   const javaPath = useSettings((s) => s.javaPath);
   const set = useSettings((s) => s.set);
@@ -185,7 +185,7 @@ export function SettingsPage() {
                 <div>
                   <BrandWordmark />
                   <div className="text-fg-2">
-                    Version <Count value={version} /> · Minecraft-Launcher für Windows
+                    Version <Count value={version} /> · Minecraft-Launcher für Windows, macOS und Linux
                   </div>
                 </div>
               </div>

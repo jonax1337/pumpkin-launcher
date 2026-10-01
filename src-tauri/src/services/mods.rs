@@ -138,7 +138,7 @@ pub fn sync_commit<T>(
         if !names.insert(m.file_name.to_lowercase()) {
             return Err(AppError::Invalid("Doppelte Mod-Zieldatei".into()));
         }
-        super::content::regular_parents(&path)?;
+        super::content::regular_parents(&dirs.root, &path)?;
         let current = match fs::symlink_metadata(&path) {
             Ok(meta) => {
                 if !meta.is_file() {
@@ -164,7 +164,7 @@ pub fn sync_commit<T>(
                 ));
             }
             let cache = cached(dirs, hash)?;
-            super::content::regular_parents(&cache)?;
+            super::content::regular_parents(&dirs.root, &cache)?;
             if !cache.exists() {
                 return Err(AppError::NotFound {
                     kind: "Mod im Cache",

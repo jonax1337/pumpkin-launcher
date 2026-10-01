@@ -1,6 +1,6 @@
 name: Release
 
-# Tag v* pushen → signierter NSIS-Installer + latest.json als Entwurf. Ablauf: docs/RELEASING.md
+# Tag v* pushen → Installer für Windows, Linux und macOS plus ein gemeinsames latest.json als Entwurf. Ablauf: docs/RELEASING.md
 on:
   push:
     tags: ["v*"]
@@ -9,9 +9,12 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: Build & draft release
-    runs-on: windows-latest
+  prepare:
+    name: Check version & create draft
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.draft.outputs.id }}
+      notes: ${{ steps.notes.outputs.body }}
     steps:
       - uses: actions/checkout@v5
 
@@ -43,6 +46,42 @@ jobs:
             echo "RELEASE_NOTES"
           } >> "$GITHUB_OUTPUT"
 
+      # Ein Entwurf vorab für alle Plattformen: parallel angelegt entstünden sonst mehrere.
+      - name: Create draft release
+        id: draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTES: ${{ steps.notes.outputs.body }}
+        run: |
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" -f tag_name="$GITHUB_REF_NAME" \
+            -f name="Pumpkin Launcher $GITHUB_REF_NAME" -f body="$NOTES" -F draft=true --jq .id)
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build (${{ matrix.platform }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: ""
+          - platform: ubuntu-22.04
+            args: ""
+          # Universal-Build: eine App für Apple Silicon und Intel, im latest.json unter beiden Schlüsseln.
+          - platform: macos-latest
+            args: --target universal-apple-darwin
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # Tauri-Voraussetzungen unter Linux: https://v2.tauri.app/start/prerequisites/#linux (patchelf fürs AppImage)
+      - name: Install Linux system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v5
@@ -51,6 +90,8 @@ jobs:
           cache: pnpm
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -65,7 +106,26 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Pumpkin Launcher ${{ github.ref_name }}
-          releaseBody: ${{ steps.notes.outputs.body }}
-          releaseDraft: true
+          releaseId: ${{ needs.prepare.outputs.release_id }}
+          releaseBody: ${{ needs.prepare.outputs.notes }}
+          args: ${{ matrix.args }}
+
+  # Die Builds ergänzen latest.json nacheinander; enden zwei gleichzeitig, kann eine Plattform fehlen.
+  updater-json:
+    name: Check latest.json
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: latest.json lists every platform
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern latest.json
+          status=0
+          for platform in windows-x86_64 linux-x86_64 darwin-x86_64 darwin-aarch64; do
+            if ! jq -e --arg p "$platform" '.platforms[$p]' latest.json > /dev/null; then
+              echo "::error::latest.json has no entry for $platform. Re-run that platform's build job (see docs/RELEASING.md)."
+              status=1
+            fi
+          done
+          exit $status
