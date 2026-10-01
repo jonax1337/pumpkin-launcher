@@ -4,6 +4,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { open as openFile } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { useView } from "@/app/Layout";
+import { UpdateRow } from "@/components/AppUpdate";
 import { MemoryChooser, MemoryHelp } from "@/components/common";
 import { AccountsSection } from "@/components/PlayerNames";
 import { Actions, Button, Count, FormRow, FormSection, Hint, PageHeader, Radio, Segmented, Select, Switch, TabPanel, Tabs, TextField } from "@/ui";
@@ -201,6 +202,7 @@ export function SettingsPage() {
                   </div>
                 </div>
               </div>
+              <UpdateRow />
               <Hint className="mt-3.5">Inhalte und Modpacks kommen von Modrinth, CurseForge, FTB und Technic. Minecraft ist eine Marke von Mojang.</Hint>
             </>
           )}

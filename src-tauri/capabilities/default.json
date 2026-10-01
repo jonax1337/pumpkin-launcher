@@ -20,6 +20,10 @@
         { "path": "$APPDATA/instances/*/minecraft/logs/**" }
       ]
     },
-    "dialog:default"
+    "dialog:default",
+    "updater:allow-check",
+    "updater:allow-download",
+    "updater:allow-install",
+    "process:allow-restart"
   ]
 }

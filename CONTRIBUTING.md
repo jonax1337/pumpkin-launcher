@@ -27,6 +27,10 @@ cargo test
 
 CI runs the same checks on every push and pull request.
 
+## Releases
+
+Releases are built from `v*` tags by `.github/workflows/release.yml`. Version bump, tagging, required secrets and the updater are described in [docs/RELEASING.md](docs/RELEASING.md).
+
 ## Conventions
 
 - **Frontend:** TypeScript, React 19, Tailwind only for layout helpers — the pixel design system (`src/ui/`, `src/pixel/`) is the source of truth for look & feel. Match the existing component patterns.

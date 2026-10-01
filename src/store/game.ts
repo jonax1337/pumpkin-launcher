@@ -42,6 +42,9 @@ interface GameState {
   clearCrash: (instanceId: string) => void;
 }
 
+/** Startet oder läuft gerade ein Minecraft? */
+export const isGameActive = (s: GameState) => Object.keys(s.launching).length > 0 || Object.keys(s.started).length > 0;
+
 export const useGame = create<GameState>()((set) => ({
   installs: {},
   launching: {},

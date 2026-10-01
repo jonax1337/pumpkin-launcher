@@ -24,7 +24,7 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 
 | Modul | Aufgabe |
 |---|---|
-| `lib.rs` | Einstieg: tracing initialisieren, AppState laden, Commands registrieren |
+| `lib.rs` | Einstieg: tracing initialisieren, Plugins registrieren (siehe „Plugins und Berechtigungen“), AppState laden, Commands registrieren |
 | `error.rs` | `AppError` via `thiserror`; serialisiert als Fehlermeldung (String) ans Frontend |
 | `models.rs` | Datenmodelle, `serde(rename_all = "camelCase")` – Spiegel in `src/lib/types.ts` |
 | `state.rs` | `AppState` (Manager): je ein `JsonStore` für Instanzen und Presets plus storeübergreifende Logik (`resolve_preset`, `apply_preset`, `delete_preset`) |
@@ -45,6 +45,17 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `content_commands.rs` | Modrinth-IPC und korrelierte `content-progress`-Events |
 | `services/launch.rs` | Classpath, JVM-/Game-Args mit `${…}`-Ersetzung, Prozessstart, Log-Streaming |
 | `services/gamelog.rs` | log4j-XML auf stdout (Mojangs Logging-Config) → lesbare Zeilen |
+
+### Plugins und Berechtigungen
+
+| Plugin | Zweck |
+|---|---|
+| `single-instance` | Als **erstes** registriert: ein zweiter Start holt das vorhandene Hauptfenster nach vorn (`unminimize`, `show`, `set_focus`) und beendet sich, statt dieselben JSON-Stores zu schreiben |
+| `opener`, `dialog` | Links/Dateien öffnen, Dateiauswahl |
+| `updater` | Neue Version von GitHub Releases (`latest.json`), Signatur gegen `plugins.updater.pubkey` in `tauri.conf.json` geprüft; Ablauf in `docs/RELEASING.md` |
+| `process` | Neustart nach dem Update (`relaunch`) |
+
+`capabilities/default.json` gibt dem Hauptfenster nur, was das Frontend braucht: Fensterknöpfe, `opener` (Dateipfade nur unter `$APPDATA/instances/*/minecraft`), `dialog:default`, `updater:allow-check`/`allow-download`/`allow-install` (suchen, laden, installieren; ohne `download-and-install`) und `process:allow-restart` (kein `exit`).
 
 ### Persistenz
 
@@ -160,7 +171,7 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 
 - `lib/types.ts` – TS-Spiegel der Rust-Modelle
 - `lib/api.ts` – `invoke`-Wrapper; außerhalb von Tauri (reiner `pnpm dev` im Browser) Fallback auf Mockdaten aus `lib/mock.ts`
-- `hooks/` – TanStack Query; Mutations invalidieren die betroffenen Queries. `useInstances` (Spielen = bei Bedarf installieren, dann starten; Backend-Events), `useContent` (Modrinth-Vorgänge mit Fortschritt), `useTemplates`
+- `hooks/` – TanStack Query; Mutations invalidieren die betroffenen Queries. `useInstances` (Spielen = bei Bedarf installieren, dann starten; Backend-Events), `useContent` (Modrinth-Vorgänge mit Fortschritt), `useTemplates`, `useAppUpdate` (Launcher-Update: stille Suche nach dem Start im Release-Build, Download mit Fortschritt, Installation erst nach Zustimmung und erst, wenn kein Minecraft mehr läuft)
 - `store/settings.ts` – Launcher-Einstellungen, lokal persistiert: Java, RAM, Konten (Offline-Namen, aktives Konto), Pixelgröße, bewegte Szenen
 - `store/game.ts` – flüchtiger Laufzeitzustand aus den Events: Installationsfortschritt, Starten, Protokoll (gepuffert, max. 2000 Zeilen je Instanz), Absturz, Startzeit
 - `store/look.ts` – Szenenbild (Biom) je Instanz, lokal persistiert (das Backend hat dafür kein Feld; ohne Wahl fest aus der Instanz-ID)
@@ -176,6 +187,7 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 - `components/game.tsx` – Spielen-Knopf (feste Größe in allen Zuständen), Statuszeile, Status-Chip, Protokoll mit Filter/Suche/Mitscrollen
 - `components/instance.tsx` – Instanz-Menü (Knopf und Rechtsklick) mit Dialogen „Als Vorlage speichern“ und „Löschen“
 - `components/ContentBrowser.tsx`, `NewInstanceDialog.tsx`, `PlayerNames.tsx`, `Onboarding.tsx` – Katalog und Seitenpanel, Neue Instanz, Konten und Microsoft-Anmeldung, erster Start
+- `components/AppUpdate.tsx` – Zeile „Updates“ in *Einstellungen › Über*: Version suchen, Versionshinweise, „Installieren und neu starten“, nach dem Warten auf Spiel und Downloads „Jetzt neu starten“
 - `pixel/` – `unit.ts` (Pixeleinheit auf ganze Gerätepixel), `scene.ts` (Szenen-Engine: 7 Biome, 12 fps, Pausenregeln, Cache), `PixelScene.tsx`, `icons.tsx` (Pixel-Icons, Mod-Glyphen, Wortzeichen, Spielerkopf)
 - `styles/pixelkino.css` (aus dem Mockup übernommen), `styles/states.css` (Auswahlliste, Hover/Druck/Fokus, Ein- und Ausblenden) plus kleine Ergänzungen je Bereich; beide in der Tailwind-Schicht `components`, deren Reihenfolge `index.html` vor allen Stylesheets festlegt
 

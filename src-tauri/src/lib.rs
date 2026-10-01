@@ -16,8 +16,12 @@ pub fn run() {
         .init();
 
     tauri::Builder::default()
+        // Zuerst: ein zweiter Prozess würde dieselben JSON-Stores schreiben.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| focus_main_window(app)))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             tracing::info!(?data_dir, "lade Daten");
@@ -82,4 +86,16 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Zweiter Start: das laufende Fenster nach vorn holen, auch aus der Taskleiste.
+fn focus_main_window(app: &tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    for result in [window.unminimize(), window.show(), window.set_focus()] {
+        if let Err(err) = result {
+            tracing::warn!(%err, "Fenster nicht nach vorn geholt");
+        }
+    }
 }
