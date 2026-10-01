@@ -5,6 +5,7 @@ compatibility_date = "2025-09-01"
 compatibility_flags = ["global_fetch_strictly_public"]
 
 # Begrenzung pro Nutzer-IP: 60 Anfragen pro Minute (Cloudflare erlaubt als Zeitraum nur 10 oder 60 Sekunden).
+# `period` muss zu LIMIT_PERIOD in src/index.js passen, das als Retry-After an den Launcher geht.
 [[ratelimits]]
 name = "LIMITER"
 namespace_id = "1001"

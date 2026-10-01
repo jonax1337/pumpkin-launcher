@@ -10,10 +10,12 @@ const CLASSES = new Set(["6", "4471", "12", "6552"]); // Mods, Modpacks, Ressour
 const PARAMS = new Set(["gameId", "classId", "searchFilter", "sortField", "sortOrder", "gameVersion", "modLoaderType", "index", "pageSize"]);
 // Grenzen von CurseForge: höchstens 50 je Seite, index + pageSize höchstens 10 000.
 const MAX_PAGE = 50;
+const DEFAULT_PAGE_SIZE = 20;
 const MAX_RESULTS = 10_000;
 const MAX_IDS = 200;
 const MAX_BODY = 20_000;
-// Zeitraum der Begrenzung aus wrangler.toml (Sekunden): Nach so langer Pause hat ein gedrosselter Launcher wieder Luft.
+// Zeitraum der Begrenzung in Sekunden, muss zu `period` in wrangler.toml passen (der Worker kann ihn aus der Bindung nicht lesen):
+// Nach so langer Pause hat ein gedrosselter Launcher wieder Luft.
 const LIMIT_PERIOD = "60";
 
 const ROUTES = [
@@ -29,18 +31,17 @@ const ROUTES = [
 const json = (body, status, headers = {}) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", ...headers } });
 
-/** Nicht negative ganze Zahl, sonst NaN (dann scheitert jeder Vergleich). */
+/** Nicht negative ganze Zahl, sonst NaN: NaN besteht keinen Vergleich, so fällt jede Nicht-Zahl durch die Grenzprüfung. */
 const count = (text) => (/^\d{1,5}$/.test(text) ? Number(text) : NaN);
 
 /** Nur bekannte Parameter und eine Seite innerhalb der CurseForge-Grenzen; die Suche nur in Minecraft und den vier Kategorien. */
 function validQuery(url) {
   const q = url.searchParams;
+  if (![...q.keys()].every((key) => PARAMS.has(key))) return false;
   const index = count(q.get("index") ?? "0");
-  const pageSize = count(q.get("pageSize") ?? "20");
-  const known = [...q.keys()].every((key) => PARAMS.has(key));
-  const paged = pageSize >= 1 && pageSize <= MAX_PAGE && index + pageSize <= MAX_RESULTS;
-  const search = url.pathname !== "/v1/mods/search" || (q.get("gameId") === MINECRAFT && CLASSES.has(q.get("classId") ?? ""));
-  return known && paged && search;
+  const pageSize = count(q.get("pageSize") ?? String(DEFAULT_PAGE_SIZE));
+  if (!(pageSize >= 1 && pageSize <= MAX_PAGE && index + pageSize <= MAX_RESULTS)) return false;
+  return url.pathname !== "/v1/mods/search" || (q.get("gameId") === MINECRAFT && CLASSES.has(q.get("classId") ?? ""));
 }
 
 /** `{ [field]: [Nummern] }` mit höchstens MAX_IDS ganzen Zahlen, sonst null. */

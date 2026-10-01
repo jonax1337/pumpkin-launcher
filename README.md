@@ -8,7 +8,7 @@
 <h3 align="center">Every world, one click.</h3>
 
 <p align="center">
-  A desktop launcher for <strong>Minecraft: Java Edition</strong> — instances, mods, modpacks and presets,<br>
+  A desktop launcher for <strong>Minecraft: Java Edition</strong> — instances, mods, modpacks and templates,<br>
   wrapped in a hand-crafted pixel-art UI. Built with Tauri&nbsp;2 (Rust) and React&nbsp;+&nbsp;TypeScript.
 </p>
 
@@ -28,7 +28,7 @@
 - **Instances** — create, configure and launch isolated game instances for Vanilla, **Fabric, Forge, NeoForge and Quilt**
 - **Per-instance launch settings** — own Java, window size or fullscreen, extra game arguments; total playtime per instance
 - **Library groups** — sort instances into collapsible groups right from the instance menu
-- **Mods & modpacks from [Modrinth](https://modrinth.com)** — browse, search and install directly in the launcher
+- **Mods & modpacks** — browse, search and install from [Modrinth](https://modrinth.com), plus CurseForge, FTB and Technic modpacks, directly in the launcher; update installed mods on request
 - **`.mrpack` import** — drag in local modpack files
 - **Your own files** — drop `.jar` mods, resource packs and shader packs onto an instance; files Modrinth knows (by SHA-1) still get updates
 - **Switch in one click** — import instances from Prism Launcher / MultiMC, Modrinth App, CurseForge App and ATLauncher with worlds, mods and settings; the other launcher stays untouched
@@ -36,8 +36,8 @@
 - **Duplicate & export** — copy an instance to experiment safely, or share it as a `.mrpack` (Modrinth mods linked, everything else embedded; worlds optional, no size limit); both run in the task menu and can be cancelled
 - **Worlds & servers** — see an instance's worlds and server list, back up and restore worlds (deleting backs up first), edit servers and jump straight into a world (Minecraft 1.20+) or onto a server with Quick Play; the home screen offers to continue where you last went
 - **Datapacks per world** — add `.zip` datapacks to a world by drag & drop, or install them from Modrinth (in the world's panel or in Discover, picking instance and world); see which ones the game has enabled, move unwanted ones to the recycle bin
-- **Presets** — reusable collections of mods, settings and JVM args that can be applied to any instance
-- **Microsoft login** via device code (see [status](#status) below), plus offline player profiles
+- **Templates** — save an instance (mods, resource and shader packs, config, options) and start new ones from it
+- **Microsoft login** in the browser, with a device code as fallback (see [status](#status) below); offline player names only in development builds or next to a signed-in Microsoft account
 - **Skins & capes** — keep a local skin library (PNG, classic or slim) with pixel-art previews, put a skin on and pick your cape through the official Minecraft API (Microsoft accounts)
 - **Quality-of-life** — crash detection with per-instance logs, resumable downloads, automatic RAM detection, one-click log sharing via mclo.gs (access tokens, your user name in paths and e-mail addresses removed first) and a debug info without personal data for bug reports
 - **Auto-updates** — signed updates from GitHub Releases, installed only when you say so and never while Minecraft or a task (download, import, export, world backup) is running; a second launch just focuses the open window
@@ -51,9 +51,9 @@
 
 ## Status
 
-Pumpkin Launcher is in active, early development (v0.1.x). Core install/launch flows work; polish and a public installer are still on the way. Windows is the main platform; Linux and macOS builds are new and less tested. The Modrinth catalog shows live data.
+Pumpkin Launcher is in beta (v0.1.x). Install, launch, content, worlds, skins, import, duplicate/export and auto-update are in place and tested on Windows. Linux (AppImage, `.deb`) and macOS (universal `.dmg`) are built by the release workflow and their backend is tested in CI on every change, but they have not been tried on real machines yet, so expect rough edges there.
 
-> **Microsoft login:** sign-in, Xbox Live and XSTS work end-to-end, but Microsoft must approve each launcher's Azure app before `minecraftservices.com` accepts it. Until Pumpkin Launcher's own client ID is approved, the final Minecraft step returns 403 and the launcher says so. Everything you need to register and approve your own client ID is documented in [`docs/ACCOUNT-SETUP.md`](docs/ACCOUNT-SETUP.md).
+> **Microsoft login:** sign-in, Xbox Live and XSTS work end-to-end, but Microsoft must approve each launcher's Azure app before `minecraftservices.com` accepts it. Pumpkin Launcher's own client ID is registered and approval is requested; until it comes through, the final Minecraft step returns 403 and the launcher says so. How to register and approve a client ID (for forks) is documented in [`docs/ACCOUNT-SETUP.md`](docs/ACCOUNT-SETUP.md).
 
 ## Getting started
 
@@ -91,7 +91,7 @@ Log level via `RUST_LOG`, e.g. `RUST_LOG=debug pnpm tauri dev`.
 ```bash
 pnpm build                        # frontend (sync branding icons, tsc, vite build)
 cd src-tauri && cargo check       # backend
-cd src-tauri && cargo test        # backend tests (JsonStore)
+cd src-tauri && cargo test        # backend tests
 pnpm tauri build                  # installers for your OS (needs the updater signing key, see docs/RELEASING.md)
 pnpm check:branding               # seasonal calendar & branding assets
 ```
@@ -111,7 +111,7 @@ proxy/          Cloudflare Worker holding the CurseForge API key (forks need the
 
 Details: [Architecture](docs/ARCHITECTURE.md) · [Releasing](docs/RELEASING.md) · [Pixelkino design spec](docs/design/PIXELKINO.md) · [Branding](branding/pumpkin-launcher/README.md) · [Website](website/README.md) · [Launch video](media/launch-video/README.md) · [CurseForge proxy](proxy/README.md)
 
-Instances, presets and settings are stored as JSON in the app data directory (Windows: `%APPDATA%\dev.laux.launcher\`, Linux: `~/.local/share/dev.laux.launcher/`, macOS: `~/Library/Application Support/dev.laux.launcher/`). The technical identifier stays `dev.laux.launcher` so existing data keeps being found.
+Instances, templates, accounts and skins are stored as JSON in the app data directory (Windows: `%APPDATA%\dev.laux.launcher\`, Linux: `~/.local/share/dev.laux.launcher/`, macOS: `~/Library/Application Support/dev.laux.launcher/`). The technical identifier stays `dev.laux.launcher` so existing data keeps being found.
 
 ## Marketing website
 
