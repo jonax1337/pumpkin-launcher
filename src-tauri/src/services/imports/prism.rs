@@ -7,7 +7,7 @@ use std::{
 
 use serde::Deserialize;
 
-use super::{folder_name, from_json, read_marker, split_args, Setup};
+use super::{folder_name, from_json, read_marker, split_args, Found, Setup};
 use crate::{error::AppResult, models::ModLoader, services::modrinth::invalid};
 
 #[derive(Deserialize)]
@@ -33,11 +33,11 @@ const LOADERS: [(&str, ModLoader); 4] = [
     ("net.neoforged", ModLoader::NeoForge),
 ];
 
-pub fn read(dir: &Path) -> AppResult<Option<(PathBuf, Setup)>> {
+pub fn read(dir: &Path) -> AppResult<Option<Found>> {
     let Some(cfg) = read_marker(&dir.join("instance.cfg"))? else { return Ok(None) };
     let pack = read_marker(&dir.join("mmc-pack.json"))?.ok_or_else(|| invalid("mmc-pack.json fehlt"))?;
     let setup = setup(&String::from_utf8_lossy(&cfg), &pack, &folder_name(dir))?;
-    Ok(Some((game_dir(dir), setup)))
+    Ok(Some(Found { game_dir: game_dir(dir), setup }))
 }
 
 /// Spielordner wie bei Prism: `.minecraft`, wenn es nur diesen gibt, sonst `minecraft`.

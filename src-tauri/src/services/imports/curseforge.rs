@@ -1,13 +1,10 @@
 //! CurseForge App: `minecraftinstance.json` im Instanzordner, der zugleich Spielordner ist. Unter `installedAddons`
 //! steht, welche Dateien die App von CurseForge geladen hat.
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, path::Path};
 
 use serde::Deserialize;
 
-use super::{folder_name, from_json, loader_named, read_marker, Setup};
+use super::{folder_name, from_json, loader_named, read_marker, Found, Setup};
 use crate::{error::AppResult, models::ModLoader, services::modrinth::invalid};
 
 #[derive(Deserialize)]
@@ -50,11 +47,12 @@ struct InstalledFile {
     file_name: String,
 }
 
-const MANIFEST: &str = "minecraftinstance.json";
+/// Kennungsdatei der Instanz.
+pub(super) const MANIFEST: &str = "minecraftinstance.json";
 
-pub fn read(dir: &Path) -> AppResult<Option<(PathBuf, Setup)>> {
+pub fn read(dir: &Path) -> AppResult<Option<Found>> {
     let Some(data) = read_marker(&dir.join(MANIFEST))? else { return Ok(None) };
-    Ok(Some((dir.to_owned(), setup(&data, &folder_name(dir))?)))
+    Ok(Some(Found { game_dir: dir.to_owned(), setup: setup(&data, &folder_name(dir))? }))
 }
 
 /// Dateiname -> (CurseForge-Projekt, Datei) der Inhalte, die die App von CurseForge geladen hat; leer, wenn `dir`
