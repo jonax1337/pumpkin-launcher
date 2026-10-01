@@ -35,6 +35,7 @@
 - **Screenshots** — browse every instance's F2 screenshots by day, flip through them full size, open them in your image viewer, show them in Explorer or move them to the Recycle Bin
 - **Duplicate & export** — copy an instance to experiment safely, or share it as a `.mrpack` (Modrinth mods linked, everything else embedded; worlds optional, no size limit); both run in the task menu and can be cancelled
 - **Worlds & servers** — see an instance's worlds and server list, back up and restore worlds (deleting backs up first), edit servers and jump straight into a world (Minecraft 1.20+) or onto a server with Quick Play
+- **Datapacks per world** — add `.zip` datapacks to a world by drag & drop, or install them from Modrinth (in the world's panel or in Discover, picking instance and world); see which ones the game has enabled, move unwanted ones to the recycle bin
 - **Presets** — reusable collections of mods, settings and JVM args that can be applied to any instance
 - **Microsoft login** via device code (see [status](#status) below), plus offline player profiles
 - **Skins & capes** — keep a local skin library (PNG, classic or slim) with pixel-art previews, put a skin on and pick your cape through the official Minecraft API (Microsoft accounts)

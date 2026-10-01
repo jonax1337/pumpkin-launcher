@@ -151,7 +151,7 @@ export const MOCK_FOREIGN: ForeignInstance[] = (
 const MODRINTH = "https://api.modrinth.com/v2";
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function modrinth<T>(path: string, params: Record<string, string> = {}): Promise<T> {
+export async function modrinth<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   const res = await fetch(`${MODRINTH}${path}?${new URLSearchParams(params)}`);
   if (!res.ok) throw new Error(`Modrinth antwortet nicht (${res.status})`);
   return res.json();

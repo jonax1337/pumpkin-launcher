@@ -318,6 +318,17 @@ export interface WorldBackup {
   sizeBytes: number;
 }
 
+/** Datenpaket unter `saves/<Welt>/datapacks/`; `id` ist der Datei- oder Ordnername. */
+export interface Datapack {
+  id: string;
+  /** Name ohne `.zip`. */
+  name: string;
+  /** Beschreibung aus `pack.mcmeta`. */
+  description: string | null;
+  /** Laut `level.dat` aktiv bzw. abgeschaltet; null = das Spiel hat es noch nicht geladen. */
+  enabled: boolean | null;
+}
+
 /** Eintrag der Serverliste des Spiels. */
 export interface Server {
   name: string;

@@ -1,19 +1,22 @@
 import { useState, type ComponentProps, type FormEvent, type ReactNode } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
+import { open as openFile } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import {
-  Actions, Button, Cell, ConfirmDialog, Dialog, DialogActions, Empty, ErrorBox, Field, Glyph, IconButton, JobProgress, List, ListRow, Menu,
-  ProjectIcon, RowTitle, SectionHeader, Segmented, Skel, TextField, Tip, type MenuEntry,
+  Actions, Button, Cell, Chip, ConfirmDialog, Dialog, DialogActions, Empty, ErrorBox, Field, Glyph, Hint, Icon, IconButton, JobProgress, List, ListRow,
+  Menu, ProjectIcon, RowTitle, SectionHeader, Segmented, Skel, TextField, Tip, type MenuEntry,
 } from "@/ui";
+import { AddContentSheet } from "@/components/ContentBrowser";
 import { usePhase } from "@/components/game";
 import { useContentState } from "@/hooks/useContent";
+import { useFileDrop } from "@/hooks/useFileDrop";
 import { usePlay } from "@/hooks/useInstances";
 import {
-  useDeleteBackup, useRemoveServer, useRestoreBackup, useSaveServer, useServers, useWorldBackups, useWorldJob, useWorldJobs, useWorldQuickPlay,
-  useWorlds,
+  useAddDatapacks, useDatapacks, useDeleteBackup, useRemoveDatapack, useRemoveServer, useRestoreBackup, useSaveServer, useServers, useWorldBackups,
+  useWorldJob, useWorldJobs, useWorldQuickPlay, useWorlds,
 } from "@/hooks/useWorlds";
 import { api } from "@/lib/api";
-import { formatDateTime, formatSize, relativeTime } from "@/lib/format";
+import { fileName, formatDateTime, formatSize, relativeTime } from "@/lib/format";
 import { GAME_MODE_LABELS, type Instance, type QuickPlay, type Server, type World, type WorldBackup } from "@/lib/types";
 
 /** Warum Spieldateien gerade nicht angefasst werden und nichts startet (null = frei); das Backend lässt nur einen Vorgang zu. */
@@ -71,12 +74,15 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
   const [removing, setRemoving] = useState<World | null>(null);
   // Sicherungen einer Welt bzw. (world = null) aller Welten, auch gelöschter.
   const [showBackups, setShowBackups] = useState<{ world: string | null } | null>(null);
+  // Datenpakete einer Welt: erst die Liste, `search` = stattdessen der Katalog im Seitenpanel.
+  const [packs, setPacks] = useState<{ world: World; search: boolean } | null>(null);
   const playBlocked = busy ?? (startsIntoWorlds === false ? `Minecraft ${instance.minecraftVersion} kann nicht direkt in eine Welt starten, das geht erst ab 1.20.` : null);
 
   const menuFor = (w: World): MenuEntry[] => [
     { id: "dir", text: "Ordner öffnen", icon: "folder", onSelect: () => void api.openPath(w.path).catch((e: Error) => toast.error(e.message)) },
     { id: "backup", text: "Sichern", icon: "save", disabled: !!busy, onSelect: () => backup.mutate(w) },
     { id: "backups", text: "Sicherungen…", icon: "clock", onSelect: () => setShowBackups({ world: w.id }) },
+    { id: "packs", text: "Datenpakete…", icon: "box", onSelect: () => setPacks({ world: w, search: false }) },
     "-",
     { id: "del", text: "Löschen…", icon: "trash", bad: true, disabled: !!busy, onSelect: () => setRemoving(w) },
   ];
@@ -128,7 +134,91 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
         }}
       />
       {showBackups && <BackupsDialog instance={instance} world={showBackups.world} busy={busy} onClose={() => setShowBackups(null)} />}
+      {packs && !packs.search && (
+        <DatapacksDialog instance={instance} world={packs.world} busy={busy} onSearch={() => setPacks({ ...packs, search: true })} onClose={() => setPacks(null)} />
+      )}
+      {packs && (
+        <AddContentSheet instance={instance} world={packs.world} open={packs.search} onOpenChange={(open) => setPacks({ ...packs, search: open })} />
+      )}
     </section>
+  );
+}
+
+const isZip = (path: string) => /\.zip$/i.test(path);
+
+/** Was `level.dat` über ein Datenpaket sagt; schalten kann es nur das Spiel. */
+function PackState({ enabled }: { enabled: boolean | null }) {
+  if (enabled == null) return <Chip size="s">Noch nicht geladen</Chip>;
+  return <Chip size="s" dot tone={enabled ? "run" : "neutral"}>{enabled ? "Aktiv" : "Abgeschaltet"}</Chip>;
+}
+
+/** Datenpakete einer Welt: eigene Zips (Auswahl oder aufs Fenster ziehen), Katalog über `onSearch`, Papierkorb. */
+function DatapacksDialog({ instance, world, busy, onSearch, onClose }: { instance: Instance; world: World; busy: string | null; onSearch: () => void; onClose: () => void }) {
+  const packs = useDatapacks(instance.id, world.id);
+  const add = useAddDatapacks(instance.id, world.id);
+  const remove = useRemoveDatapack(instance.id, world.id);
+  const dragging = useFileDrop(true, take);
+
+  function take(paths: string[]) {
+    if (busy) return void toast.error(busy);
+    const other = paths.find((p) => !isZip(p));
+    if (other) toast.error(`„${fileName(other)}“ passt hier nicht. Datenpakete sind .zip-Dateien.`);
+    const zips = paths.filter(isZip);
+    if (zips.length) add.mutate(zips);
+  }
+
+  async function pick() {
+    const picked = await openFile({ multiple: true, directory: false, filters: [{ name: "Datenpakete", extensions: ["zip"] }] });
+    if (picked) take(picked);
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()} title="Datenpakete" sub={world.name} width={560} footer={<DialogActions cancel="Schließen" />}>
+      <Actions className="mb-3">
+        {/* Eigene Dateien gibt es nur in der App: der Browser liefert keine Pfade. */}
+        {!api.isMock && (
+          <GuardedButton size="s" icon="ul" blocked={busy} disabled={add.isPending} onClick={() => void pick().catch((e: Error) => toast.error(e.message))}>
+            Datei hinzufügen…
+          </GuardedButton>
+        )}
+        <GuardedButton size="s" icon="search" blocked={busy} onClick={onSearch}>Auf Modrinth suchen</GuardedButton>
+      </Actions>
+      {dragging ? (
+        <div className="drop over" aria-hidden>
+          <Icon name="ul" size="xl" />
+          <b>Zum Hinzufügen loslassen</b>
+          <span>Datenpakete (.zip)</span>
+        </div>
+      ) : (
+        <QueryList
+          query={packs}
+          error="Die Datenpakete konnten nicht geladen werden"
+          empty={<Empty size="pane" ill="box" title="Noch keine Datenpakete">Füge .zip-Dateien hinzu oder such auf Modrinth.</Empty>}
+        >
+          {(list) => (
+            <List variant="versions" aria-label="Datenpakete">
+              {list.map((pack) => (
+                <ListRow key={pack.id}>
+                  <RowTitle title={pack.name} sub={pack.description} />
+                  <Actions gap={4}>
+                    <PackState enabled={pack.enabled} />
+                    <IconButton
+                      size="s"
+                      icon="trash"
+                      label={`${pack.name} in den Papierkorb legen`}
+                      tip="In den Papierkorb"
+                      disabled={!!busy || remove.isPending}
+                      onClick={() => remove.mutate(pack)}
+                    />
+                  </Actions>
+                </ListRow>
+              ))}
+            </List>
+          )}
+        </QueryList>
+      )}
+      <Hint className="mt-3">Ob ein Paket aktiv ist, steuert das Spiel (Befehl /datapack). Neue Pakete nimmt es beim nächsten Öffnen der Welt dazu.</Hint>
+    </Dialog>
   );
 }
 
