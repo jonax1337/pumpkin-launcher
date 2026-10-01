@@ -4,7 +4,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
-import { allCapabilities, eventSubscriptions, type Backend, type BackendEvents } from "./backend";
+import { allCapabilities, eventSubscriptions, type Backend, type BackendEvents, type SearchOptions } from "./backend";
 import { errorMessage } from "./errors";
 
 /** Fehler der Tauri-Aufrufe kommen als string (oder Plugin-Fehlerobjekt); hier werden sie zu `Error`, die Ursache bleibt in `cause`. */
@@ -20,6 +20,10 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
   }
 }
 
+/** Die Command-Argumente der Suche; das Backend nennt Typ, Minecraft-Version und Loader ausgeschrieben. */
+const searchArgs = ({ query, type, mc, loader, offset, index }: SearchOptions) =>
+  ({ query, projectType: type, minecraftVersion: mc, loader, offset, index });
+
 const on = <E extends keyof BackendEvents>(event: E, cb: (payload: BackendEvents[E]) => void) =>
   listen<BackendEvents[E]>(event, (e) => cb(e.payload));
 
@@ -29,8 +33,7 @@ export function createTauriBackend(): Backend {
     capabilities: allCapabilities(true),
     ...eventSubscriptions(on),
 
-    modrinthSearch: (query, projectType, minecraftVersion, loader, offset = 0, index = null) =>
-      call("modrinth_search", { query, projectType, minecraftVersion, loader, offset, index }),
+    modrinthSearch: (options) => call("modrinth_search", searchArgs(options)),
     modrinthProject: (projectId) => call("modrinth_project", { projectId }),
     modrinthProjects: (projectIds) => call("modrinth_projects", { projectIds }),
     modrinthVersions: (projectId, minecraftVersion, loader) => call("modrinth_versions", { projectId, minecraftVersion, loader }),
@@ -42,16 +45,15 @@ export function createTauriBackend(): Backend {
     addLocalFiles: (instanceId, files, operationId) => call("instance_add_files", { instanceId, files, operationId }),
     modrinthInstallPack: (versionId, name, operationId) => call("modrinth_install_pack", { versionId, name, operationId }),
     modrinthImportPack: (path, name, operationId) => call("modrinth_import_pack", { path, name, operationId }),
-    providerSearch: (source, query, projectType, minecraftVersion, loader, offset = 0, index = null) =>
-      call("provider_search", { source, query, projectType, minecraftVersion, loader, offset, index }),
+    providerSearch: (source, options) => call("provider_search", { source, ...searchArgs(options) }),
     providerProject: (source, projectId) => call("provider_project", { source, projectId }),
-    providerVersions: (source, projectId, minecraftVersion = null, loader = null) =>
-      call("provider_versions", { source, projectId, minecraftVersion, loader }),
-    providerInstallPack: (source, projectId, versionId, name, operationId) =>
+    providerVersions: (source, projectId, { mc, loader }) =>
+      call("provider_versions", { source, projectId, minecraftVersion: mc, loader }),
+    providerInstallPack: (source, { projectId, versionId, name }, operationId) =>
       call("provider_install_pack", { source, projectId, versionId, name, operationId }),
-    providerInstallMod: (source, instanceId, projectId, versionId, operationId) =>
+    providerInstallMod: (source, { instanceId, projectId, versionId }, operationId) =>
       call("provider_install_mod", { source, instanceId, projectId, versionId, operationId }),
-    curseforgeAdoptDownload: (instanceId, projectId, fileId, fileName) =>
+    curseforgeAdoptDownload: (instanceId, { projectId, fileId, fileName }) =>
       call("curseforge_adopt_download", { instanceId, projectId, fileId, fileName }),
     openExternal: (url) => openUrl(url).catch(rethrowAsError),
 
