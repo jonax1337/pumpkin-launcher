@@ -1,6 +1,6 @@
 //! Welten einer Instanz (`saves/<Ordner>`; der Ordnername ist die ID): Anzeige aus `level.dat`, Sicherungen als ZIP
-//! unter `instances/<id>/backups/`, Wiederherstellen und Löschen. Löschen sichert vorher: aus der Sicherung lässt sich
-//! die Welt jederzeit wiederherstellen.
+//! unter `instances/<id>/backups/`, Wiederherstellen und Löschen. Löschen sichert vorher, aus der Sicherung lässt sich
+//! die Welt wiederherstellen; die Sicherungen gehören zur Instanz und verschwinden mit ihr.
 use std::{
     cmp::Reverse,
     fs,
@@ -11,7 +11,7 @@ use std::{
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 
-use super::{content, download::RemoveOnDrop, modrinth::invalid, providers::zip_files, servers, walk, Dirs};
+use super::{content, download::RemoveOnDrop, modrinth::invalid, providers::zip_paths, servers, walk, Dirs};
 use crate::{
     error::{AppError, AppResult},
     models::{now_ms, QuickPlay},
@@ -21,6 +21,8 @@ use crate::{
 const ICON_LIMIT: u64 = 256 * 1024;
 /// Sperrdatei des laufenden Spiels; gehört nicht in eine Sicherung.
 const SESSION_LOCK: &str = "session.lock";
+/// Endung einer gelöschten Welt, solange ihr Ordner unter `backups/` noch entfernt wird.
+const DELETING: &str = "deleting";
 /// Phase der `content-progress`-Events beim Sichern (Dateien).
 const BACKUP_PHASE: &str = "backup";
 
@@ -156,7 +158,8 @@ pub fn restore(dirs: &Dirs, instance_id: &str, backup_id: &str) -> AppResult<Wor
     let backups = dirs.backups(instance_id);
     let backup = read_backup(&backups, backup_id)?;
     let mut zip = zip::ZipArchive::new(fs::File::open(backups.join(backup_id))?)?;
-    let files = zip_files(&mut zip, &format!("{}/", backup.world), &[])?;
+    // Nur Pfadregeln: die Grenzen gegen ZIP-Bomben aus Pack-Importen würden große Welten aussperren, die `backup` sichert.
+    let files = zip_paths(&mut zip, &format!("{}/", backup.world), &[])?;
     if files.is_empty() {
         return Err(invalid("Die Sicherung enthält keine Welt"));
     }
@@ -173,10 +176,15 @@ pub fn restore(dirs: &Dirs, instance_id: &str, backup_id: &str) -> AppResult<Wor
     Ok(read_world(&target, &id))
 }
 
-/// Löscht die Welt, nachdem sie gesichert wurde; die Sicherung kommt zurück.
+/// Löscht die Welt, nachdem sie gesichert wurde; die Sicherung kommt zurück. Der Ordner verlässt zuerst `saves/`:
+/// hält unter Windows ein anderes Programm eine Datei offen, bleibt so keine halbe Welt in der Liste.
 pub fn delete(dirs: &Dirs, instance_id: &str, id: &str, progress: &dyn Fn(&str, u64, u64)) -> AppResult<WorldBackup> {
     let backup = backup(dirs, instance_id, id, progress)?;
-    fs::remove_dir_all(world_dir(dirs, instance_id, id)?)?;
+    let doomed = dirs.backups(instance_id).join(&backup.id).with_extension(DELETING);
+    fs::rename(world_dir(dirs, instance_id, id)?, &doomed)?;
+    if let Err(err) = fs::remove_dir_all(&doomed) {
+        tracing::warn!(path = %doomed.display(), %err, "Gelöschte Welt nicht vollständig entfernt");
+    }
     tracing::info!(instance = %instance_id, world = %id, "Welt gelöscht");
     Ok(backup)
 }
@@ -279,7 +287,7 @@ fn free_name(parent: &Path, wanted: &str) -> String {
     name
 }
 
-/// Entpackt die geprüften Einträge `files` (aus `zip_files`) nach `target`.
+/// Entpackt die geprüften Einträge `files` (aus `zip_paths`) nach `target`.
 fn extract(zip: &mut zip::ZipArchive<fs::File>, files: Vec<(PathBuf, usize)>, target: &Path) -> AppResult<()> {
     for (path, index) in files {
         let dest = target.join(path);
@@ -299,8 +307,11 @@ fn write_zip(path: &Path, files: &[(String, PathBuf)], progress: &dyn Fn(&str, u
     let total = files.len() as u64;
     progress(BACKUP_PHASE, 0, total);
     for (done, (name, source)) in (1..).zip(files) {
-        zip.start_file(name.as_str(), zip::write::SimpleFileOptions::default())?;
-        io::copy(&mut fs::File::open(source)?, &mut zip)?;
+        let mut file = fs::File::open(source)?;
+        // Ab 4 GiB braucht der Eintrag ZIP64, sonst bricht das Schreiben ab.
+        let large = file.metadata()?.len() >= u64::from(u32::MAX);
+        zip.start_file(name.as_str(), zip::write::SimpleFileOptions::default().large_file(large))?;
+        io::copy(&mut file, &mut zip)?;
         progress(BACKUP_PHASE, done, total);
     }
     // Erst schließen, dann umbenennen: Windows verschiebt keine offene Datei.
@@ -396,10 +407,23 @@ mod tests {
 
         let safety = delete(&dirs, "i", "Neue Welt", &|_, _, _| {}).unwrap();
         assert!(!dirs.saves("i").join("Neue Welt").exists());
+        assert!(!dirs.backups("i").join(&safety.id).with_extension(DELETING).exists());
         assert_eq!(restore(&dirs, "i", &safety.id).unwrap().id, "Neue Welt");
 
         delete_backup(&dirs, "i", &backup.id).unwrap();
         assert_eq!(backups(&dirs, "i").unwrap().len(), 1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn restores_worlds_beyond_the_pack_import_limits() {
+        let (root, dirs) = setup();
+        // 2 MiB Nullen packen weit über 200:1, wie große, leere Kartendaten: für einen Pack-Import eine ZIP-Bombe.
+        let zeros = vec![0u8; 2 * 1024 * 1024];
+        write_files(&dirs.saves("i"), &[("Alt/data/karte.dat", &zeros)]);
+        let safety = delete(&dirs, "i", "Alt", &|_, _, _| {}).unwrap();
+        restore(&dirs, "i", &safety.id).unwrap();
+        assert_eq!(fs::read(dirs.saves("i").join("Alt/data/karte.dat")).unwrap(), zeros);
         fs::remove_dir_all(root).unwrap();
     }
 

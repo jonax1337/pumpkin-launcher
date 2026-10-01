@@ -76,10 +76,7 @@ pub async fn world_delete(
 #[tauri::command]
 pub async fn world_quick_play_supported(state: State<'_, AppState>, instance_id: String) -> AppResult<bool> {
     let mc = state.instances.get(&instance_id)?.minecraft_version;
-    let version = match install::installed_version(&state.dirs, &mc).await {
-        Ok(version) => version,
-        Err(_) => install::fetch_version(&state.http, &state.dirs, &mc).await?,
-    };
+    let version = install::installed_or_fetched_version(&state.http, &state.dirs, &mc).await?;
     Ok(launch::starts_into_worlds(&version))
 }
 
