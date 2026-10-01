@@ -26,6 +26,19 @@ export interface Mod {
 
 export type ModKind = "mod" | "resourcepack" | "shader";
 
+/** Eigene Datei mit ihrer Art, zum Hinzufügen in eine Instanz. */
+export interface LocalFile {
+  path: string;
+  kind: ModKind;
+}
+
+/** Vorab-Prüfung einer eigenen Datei: `kind` null = Zip ohne eindeutiges Merkmal (nachfragen), `duplicateOf` = Name des vorhandenen Eintrags. */
+export interface FileCheck {
+  path: string;
+  kind: ModKind | null;
+  duplicateOf: string | null;
+}
+
 /** Herkunft einer aus einem Modpack installierten Instanz. */
 export type ModpackOrigin =
   | { type: "modrinth"; projectId: string; versionId: string }

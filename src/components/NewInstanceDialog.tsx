@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Slot } from "radix-ui";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { open as openFile } from "@tauri-apps/plugin-dialog";
 import {
   Actions, Button, Checkbox, Choice, ConfirmDialog, Count, Dialog, DialogActions, Disclosure, Empty, ErrorBox, Field, Glyph, Hint, Icon, IconButton, Panel,
@@ -11,11 +10,12 @@ import {
 import { MemoryChooser } from "@/components/common";
 import { useInstallPack } from "@/components/ContentBrowser";
 import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { useFileDrop } from "@/hooks/useFileDrop";
 import { useCreateInstance, useLoaderVersions, useVersions } from "@/hooks/useInstances";
 import { useDeleteTemplate, useTemplates } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
-import { formatDate } from "@/lib/format";
-import { formatDownloads, progressLabel } from "@/lib/modrinth";
+import { fileName, formatDate } from "@/lib/format";
+import { formatDownloads, isMrpack, progressLabel } from "@/lib/modrinth";
 import { ALL_LOADERS, LOADER_LABELS, type ModLoader, type Template } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +41,7 @@ const LOADER_ITEMS = ALL_LOADERS.map((l) => ({ value: l, label: LOADER_LABELS[l]
 // Leerer Wert steht für loaderVersion = null („neueste stabile“).
 const LATEST = "latest";
 
-const packName = (path: string) => path.split(/[\\/]/).pop()!.replace(/\.mrpack$/i, "");
+const packName = (path: string) => fileName(path).replace(/\.mrpack$/i, "");
 
 function useDebounced<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -401,22 +401,17 @@ export function NewInstanceDialog({ children, primary }: { children: ReactNode; 
     setOpen(true);
   }
 
-  useEffect(() => {
-    if (api.isMock || !primary) return;
-    const unlisten = getCurrentWebview().onDragDropEvent(({ payload }) => {
-      const file = payload.type === "drop" ? payload.paths.find((p) => /\.mrpack$/i.test(p)) : undefined;
-      if (file) show("file", file);
-    });
-    return () => void unlisten.then((f) => f());
-    // `show` liest nur `busy`; der Listener wird einmal registriert.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [primary]);
+  useFileDrop(!!primary, (paths) => {
+    const file = paths.find(isMrpack);
+    if (file) show("file", file);
+  });
 
-  // Strg+N führt zu /instances?neu=1 (siehe Layout).
+  // Strg+N führt zu /instances?neu=1 (siehe Layout), ein auf die Inhalte gezogenes Modpack zu ?neu=1&datei=<Pfad>.
   const [params, setParams] = useSearchParams();
   useEffect(() => {
     if (!primary || !params.has("neu")) return;
-    show("blank");
+    const file = params.get("datei");
+    show(file ? "file" : "blank", file ?? "");
     setParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primary, params, setParams]);

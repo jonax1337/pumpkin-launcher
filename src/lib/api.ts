@@ -7,6 +7,7 @@ import {
   INSTALL_CANCELLED,
   type Account,
   type ExitPayload,
+  type FileCheck,
   type LibrarySkin,
   type MsLoginStart,
   type Instance,
@@ -14,6 +15,7 @@ import {
   type InstallStep,
   type InstanceStatus,
   type LoaderVersion,
+  type LocalFile,
   type LogKind,
   type LogPayload,
   type ModLoader,
@@ -32,6 +34,8 @@ function contentCall<T>(cmd: string, args?: Record<string, unknown>): Promise<T>
   if (!tauri) return Promise.reject(new Error("Modrinth-Modpacks benötigen die Tauri-App. Im Browser werden keine Modpacks installiert."));
   return call<T>(cmd, args);
 }
+
+const LOCAL_FILES_IN_APP = "Eigene Dateien lassen sich nur in der Pumpkin Launcher-App hinzufügen.";
 
 /**
  * Tauri-invoke-Wrapper. Außerhalb von Tauri (reiner `pnpm dev` im Browser)
@@ -150,6 +154,11 @@ const mock = {
     const inst: Instance = { ...clone(found.instance), id: newId("inst"), name, createdAt: Date.now(), lastPlayedAt: null, playtimeSecs: 0 };
     db.instances.push(inst);
     return clone(inst);
+  },
+  /** Im Browser kennt Modrinth keine Datei: die Einträge bleiben lokal. */
+  async modrinthIdentify(instanceId: string) {
+    await delay(600);
+    return clone(findInstance(instanceId));
   },
 };
 
@@ -304,6 +313,14 @@ export const api = {
     tauri ? call("modrinth_check_updates", { instanceId }) : mockContent!.checkUpdates(instanceId),
   modrinthUpdateMods: (instanceId: string, modIds: string[], operationId: string): Promise<Instance> =>
     tauri ? call("modrinth_update_mods", { instanceId, modIds, operationId }) : mockContent!.updateMods(instanceId, modIds, operationId),
+  /** Lokale Einträge `modIds` per SHA-1 mit Modrinth abgleichen; erkannte bekommen Updates von dort. */
+  modrinthIdentify: (instanceId: string, modIds: string[]): Promise<Instance> =>
+    tauri ? call("modrinth_identify", { instanceId, modIds }) : mock.modrinthIdentify(instanceId),
+  /** Eigene Dateien (absolute Pfade) vorab prüfen: Art und ob die Instanz sie schon hat. */
+  checkLocalFiles: (instanceId: string, paths: string[]): Promise<FileCheck[]> =>
+    tauri ? call("instance_check_files", { instanceId, paths }) : Promise.reject(new Error(LOCAL_FILES_IN_APP)),
+  addLocalFiles: (instanceId: string, files: LocalFile[], operationId: string): Promise<Instance> =>
+    tauri ? call("instance_add_files", { instanceId, files, operationId }) : Promise.reject(new Error(LOCAL_FILES_IN_APP)),
   modrinthInstallPack: (versionId: string, name: string, operationId: string): Promise<Instance> =>
     tauri ? call("modrinth_install_pack", { versionId, name, operationId }) : mockPack!(versionId, name, operationId),
   modrinthImportPack: (path: string, name: string, operationId: string): Promise<Instance> =>
