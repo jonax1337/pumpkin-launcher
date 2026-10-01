@@ -10,11 +10,13 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
 use crate::error::{AppError, AppResult};
-use crate::services::{launch, Dirs};
+use crate::services::{gamelog, Dirs};
 
 const UPLOAD_URL: &str = "https://api.mclo.gs/1/log";
-/// Zeilengrenze von mclo.gs; eine Zeile davon braucht der Kürzungshinweis.
+/// Zeilengrenze von mclo.gs.
 const MAX_LINES: usize = 25_000;
+/// Zeilen des Protokolls; eine weitere braucht der Kürzungshinweis.
+const LOG_LINES: usize = MAX_LINES - 1;
 /// Die Hälfte der 10 MiB von mclo.gs: Die Ersetzungen machen den Text höchstens knapp doppelt so lang.
 const MAX_BYTES: u64 = 5 * 1024 * 1024;
 /// Steht im geteilten Log, liest also jeder: deshalb Englisch.
@@ -34,7 +36,7 @@ pub enum LogKind {
 pub async fn share(http: &reqwest::Client, dirs: &Dirs, instance_id: &str, kind: LogKind) -> AppResult<String> {
     let (raw, cut_at_read) = read_tail(&log_path(dirs, instance_id, kind)?).await?;
     let redacted = redact(&raw);
-    let (text, cut_lines) = last_lines(&redacted, MAX_LINES - 1);
+    let (text, cut_lines) = last_lines(&redacted, LOG_LINES);
     let content = if cut_at_read || cut_lines { format!("{OMITTED_NOTE}\n{text}") } else { text.to_owned() };
     upload(http, &content).await
 }
@@ -44,7 +46,7 @@ fn log_path(dirs: &Dirs, instance_id: &str, kind: LogKind) -> AppResult<PathBuf>
         LogKind::Latest => Some(dirs.latest_log(instance_id))
             .filter(|path| path.is_file())
             .ok_or_else(|| AppError::invalid("Es gibt noch kein Protokoll. Starte die Instanz einmal, dann lässt es sich teilen.")),
-        LogKind::CrashReport => launch::crash_report(&dirs.game_dir(instance_id), SystemTime::UNIX_EPOCH)
+        LogKind::CrashReport => gamelog::crash_report(&dirs.game_dir(instance_id), SystemTime::UNIX_EPOCH)
             .ok_or_else(|| AppError::invalid("Für diese Instanz gibt es keinen Absturzbericht.")),
     }
 }
@@ -96,7 +98,9 @@ fn redact(text: &str) -> String {
 /// Die letzten `max` Zeilen von `text` und ob davor etwas wegfiel.
 fn last_lines(text: &str, max: usize) -> (&str, bool) {
     let text = text.trim_end_matches(['\r', '\n']);
-    match text.rmatch_indices('\n').nth(max - 1) {
+    // Die letzten `max` Zeilen beginnen nach dem `max`-ten Zeilenumbruch von hinten (`nth` zählt ab 0).
+    let Some(last_break) = max.checked_sub(1) else { return ("", !text.is_empty()) };
+    match text.rmatch_indices('\n').nth(last_break) {
         Some((newline, _)) => (&text[newline + 1..], true),
         None => (text, false),
     }
@@ -168,6 +172,7 @@ mod tests {
         assert_eq!(last_lines("a\nb\nc\n", 2), ("b\nc", true));
         assert_eq!(last_lines("a\r\nb\r\n", 2), ("a\r\nb", false));
         assert_eq!(last_lines("", 2), ("", false));
+        assert_eq!(last_lines("a\nb", 0), ("", true));
     }
 
     #[tokio::test]

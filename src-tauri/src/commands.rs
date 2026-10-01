@@ -17,7 +17,7 @@ use crate::services::fabric::{self, LoaderVersion};
 use crate::services::forge;
 use crate::services::mojang::VersionJson;
 use crate::services::progress::emit;
-use crate::services::{auth, download, java, mods, remove_logged, system, worlds};
+use crate::services::{auth, download, gamelog, java, mods, remove_logged, system, worlds};
 use crate::state::AppState;
 
 pub(crate) fn require_instance_name(name: &str) -> AppResult<()> {
@@ -335,7 +335,7 @@ fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, code:
     let crashed = code != Some(0) && !stopped;
     let game_dir = state.dirs.game_dir(&instance_id);
     let text = |p: PathBuf| p.to_string_lossy().into_owned();
-    let crash_report = launch::crash_report(&game_dir, started).map(text);
+    let crash_report = gamelog::crash_report(&game_dir, started).map(text);
     let log_file = Some(state.dirs.latest_log(&instance_id)).filter(|p| p.is_file()).map(text);
     record_playtime(&state, &instance_id, started);
     tracing::info!(instance = %instance_id, ?code, crashed, "Spiel beendet");
@@ -345,7 +345,7 @@ fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, code:
 /// Spielzeit der Sitzung seit `started` speichern; unplausible Dauern und Fehler nur loggen,
 /// damit `instance-exit` trotzdem ankommt.
 fn record_playtime(state: &AppState, instance_id: &str, started: SystemTime) {
-    let Some(secs) = launch::session_secs(started, SystemTime::now()) else {
+    let Some(secs) = gamelog::session_secs(started, SystemTime::now()) else {
         tracing::warn!(instance = %instance_id, "Spielzeit verworfen: Sitzungsdauer unplausibel");
         return;
     };

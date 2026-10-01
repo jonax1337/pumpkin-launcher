@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
 
 use serde::Serialize;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
@@ -24,9 +23,6 @@ pub const DEFAULT_MEMORY_MB: u32 = 4096;
 
 /// JVM-Args für Versionen vor 1.13 (dort stehen nur Game-Args in der JSON).
 const LEGACY_JVM_ARGS: [&str; 3] = ["-Djava.library.path=${natives_directory}", "-cp", "${classpath}"];
-
-/// Längere Sitzungen zählen nicht als Spielzeit: dann wurde eher die Uhr verstellt.
-const MAX_SESSION: Duration = Duration::from_secs(7 * 24 * 3600);
 
 /// Quick Play ab 1.20: Launcher-Feature in den Regeln der Spielargumente und dessen Platzhalter.
 #[derive(Clone, Copy)]
@@ -228,24 +224,6 @@ fn split_address(address: &str) -> (&str, &str) {
     }
 }
 
-/// Dauer einer beendeten Sitzung in Sekunden; `None`, wenn sie nicht stimmen kann
-/// (Uhr zurückgestellt oder länger als `MAX_SESSION`).
-pub fn session_secs(started: SystemTime, ended: SystemTime) -> Option<u64> {
-    ended.duration_since(started).ok().filter(|d| *d <= MAX_SESSION).map(|d| d.as_secs())
-}
-
-/// Neuester Absturzbericht (`crash-reports/*.txt`), der seit `since` entstanden ist.
-pub fn crash_report(game_dir: &Path, since: SystemTime) -> Option<PathBuf> {
-    std::fs::read_dir(game_dir.join("crash-reports"))
-        .ok()?
-        .filter_map(Result::ok)
-        .filter(|e| e.path().extension().is_some_and(|x| x == "txt"))
-        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
-        .filter(|(modified, _)| *modified >= since)
-        .max_by_key(|(modified, _)| *modified)
-        .map(|(_, path)| path)
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LogStream {
@@ -353,22 +331,6 @@ fn spawn_error(err: std::io::Error) -> AppError {
 mod tests {
     use super::*;
     use crate::models::AccountKind;
-
-    #[test]
-    fn newest_crash_report_after_start() {
-        let game = std::env::temp_dir().join(crate::models::new_id());
-        let reports = game.join("crash-reports");
-        assert_eq!(crash_report(&game, SystemTime::UNIX_EPOCH), None);
-        std::fs::create_dir_all(&reports).unwrap();
-        let start = SystemTime::now();
-        for (name, age) in [("old.txt", 3600), ("new.txt", 0), ("newer.log", 0)] {
-            let file = std::fs::File::create(reports.join(name)).unwrap();
-            file.set_modified(start + Duration::from_secs(5) - Duration::from_secs(age)).unwrap();
-        }
-        assert_eq!(crash_report(&game, start), Some(reports.join("new.txt")));
-        assert_eq!(crash_report(&game, start + Duration::from_secs(60)), None);
-        std::fs::remove_dir_all(game).unwrap();
-    }
 
     #[test]
     fn substitution() {
@@ -534,14 +496,6 @@ mod tests {
         assert_eq!(split_address("mc.example.net:25570"), ("mc.example.net", "25570"));
         assert_eq!(split_address("[::1]:25566"), ("::1", "25566"));
         assert_eq!(split_address("::1"), ("::1", "25565"));
-    }
-
-    #[test]
-    fn implausible_sessions_do_not_count() {
-        let start = SystemTime::UNIX_EPOCH + Duration::from_secs(1_000_000);
-        assert_eq!(session_secs(start, start + Duration::from_secs(5400)), Some(5400));
-        assert_eq!(session_secs(start, start - Duration::from_secs(1)), None);
-        assert_eq!(session_secs(start, start + MAX_SESSION + Duration::from_secs(1)), None);
     }
 
     #[test]
