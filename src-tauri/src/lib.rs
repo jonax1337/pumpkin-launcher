@@ -58,6 +58,7 @@ pub fn run() {
             commands::get_instance,
             commands::create_instance,
             commands::update_instance,
+            commands::instance_set_group,
             commands::delete_instance,
             commands::versions_list,
             commands::instance_install,

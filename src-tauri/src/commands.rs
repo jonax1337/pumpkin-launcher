@@ -61,7 +61,7 @@ pub fn update_instance(state: State<'_, AppState>, instance: Instance) -> AppRes
     require_name(&instance.name)?;
     let old = state.instances.get(&instance.id)?;
     require_launch_settings(&instance, &old)?;
-    let instance = Instance { group: instance.group.map(|g| g.trim().to_owned()).filter(|g| !g.is_empty()), ..instance };
+    let instance = Instance { group: normalized_group(instance.group), ..instance };
     let mut desired = instance.mods.clone();
     for removed in &old.mods {
         if !desired.iter().any(|m|m.file_name==removed.file_name) {
@@ -82,6 +82,17 @@ pub fn update_instance(state: State<'_, AppState>, instance: Instance) -> AppRes
         })
     };
     mods::sync_commit(&state.dirs, &id, &desired, commit)
+}
+
+/// Gruppenname getrimmt; leer heißt keine Gruppe.
+fn normalized_group(group: Option<String>) -> Option<String> {
+    group.map(|g| g.trim().to_owned()).filter(|g| !g.is_empty())
+}
+
+/// Gruppe allein setzen, ohne die übrige Instanz zu überschreiben: eine Änderung gleichzeitig laufender Vorgänge (Mods, Spielzeit) geht so nicht verloren.
+#[tauri::command]
+pub fn instance_set_group(state: State<'_, AppState>, instance_id: String, group: Option<String>) -> AppResult<Instance> {
+    state.instances.modify(&instance_id, |i| i.group = normalized_group(group))
 }
 
 #[tauri::command]
@@ -430,6 +441,13 @@ mod tests {
         assert_eq!(state.instances.get(&id).unwrap().last_quick_play, Some(target), "ohne Ziel bleibt das letzte erhalten");
         record_launch(&state, "weg", None);
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn group_names_are_trimmed_and_empty_means_none() {
+        assert_eq!(normalized_group(Some("  Technik ".into())), Some("Technik".into()));
+        assert_eq!(normalized_group(Some("   ".into())), None);
+        assert_eq!(normalized_group(None), None);
     }
 
     #[test]

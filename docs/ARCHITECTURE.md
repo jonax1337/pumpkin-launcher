@@ -118,6 +118,7 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 | `get_instance` | `id` | `Instance` |
 | `create_instance` | `input: NewInstance` | `Instance` |
 | `update_instance` | `instance: Instance` | `Instance` |
+| `instance_set_group` | `instanceId`, `group?` (getrimmt, leer = keine) | `Instance`; ändert nur die Gruppe unter dem Store-Lock, ohne die übrige Instanz zu überschreiben und auch während eines Vorgangs |
 | `delete_instance` | `id` | – |
 | `versions_list` | – | `VersionEntry[]` (`id`, `type`, `url`, `sha1`, `releaseTime`) |
 | `instance_install` | `instanceId` | – (Events `install-progress`); abgebrochen → Fehler „Vorgang abgebrochen“ |

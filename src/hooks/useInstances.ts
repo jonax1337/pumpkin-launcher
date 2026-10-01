@@ -72,14 +72,11 @@ export function useUpdateInstance() {
   });
 }
 
-/**
- * Gruppe einer Instanz setzen (null = ohne). Gespeichert wird der aktuelle Stand der Instanz, nicht der beim Öffnen
- * eines Menüs oder Dialogs: das Backend übernimmt die Mod-Liste vollständig, eine alte Kopie machte Installationen rückgängig.
- */
+/** Gruppe einer Instanz setzen (null = ohne); das Backend ändert nur dieses Feld. */
 export function useSetGroup(instanceId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (group: string | null) => api.updateInstance({ ...(await api.getInstance(instanceId)), group }),
+    mutationFn: (group: string | null) => api.setInstanceGroup(instanceId, group),
     onSuccess: (inst) => instanceSaved(qc, inst),
   });
 }

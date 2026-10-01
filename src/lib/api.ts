@@ -130,6 +130,12 @@ const mock = {
     db.instances = db.instances.map((i) => (i.id === instance.id ? clone(instance) : i));
     return clone(instance);
   },
+  async setInstanceGroup(instanceId: string, group: string | null) {
+    await delay();
+    const inst = findInstance(instanceId);
+    inst.group = group?.trim() || null;
+    return clone(inst);
+  },
   async deleteInstance(id: string) {
     await delay();
     findInstance(id);
@@ -400,6 +406,9 @@ export const api = {
     tauri ? call("create_instance", { input }) : mock.createInstance(input),
   updateInstance: (instance: Instance): Promise<Instance> =>
     tauri ? call("update_instance", { instance }) : mock.updateInstance(instance),
+  /** Nur die Gruppe ändern (null oder leer = ohne); überschreibt keinen anderen Stand der Instanz. */
+  setInstanceGroup: (instanceId: string, group: string | null): Promise<Instance> =>
+    tauri ? call("instance_set_group", { instanceId, group }) : mock.setInstanceGroup(instanceId, group),
   deleteInstance: (id: string): Promise<void> =>
     tauri ? call("delete_instance", { id }) : mock.deleteInstance(id),
   /** Kopie mit Spielordner unter „<Name> (Kopie)“; Fortschritt als `content-progress`. */
