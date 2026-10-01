@@ -178,7 +178,7 @@ function DatapacksDialog({ instance, world, busy, onSearch, onClose }: { instanc
         <QueryList
           query={packs}
           error={t("detail.worlds.packsLoadError")}
-          empty={<Empty size="pane" ill="box" title={t("detail.worlds.packsEmptyTitle")}>{t("detail.worlds.packsEmptyHint")}</Empty>}
+          empty={<Empty size="pane" title={t("detail.worlds.packsEmptyTitle")}>{t("detail.worlds.packsEmptyHint")}</Empty>}
         >
           {(list) => (
             <List variant="versions" aria-label={t(TYPE_LABEL_KEYS.datapack)}>
@@ -219,7 +219,7 @@ function BackupsDialog({ instance, world, busy, onClose }: { instance: Instance;
       <QueryList
         query={backups}
         error={t("detail.worlds.backupsLoadError")}
-        empty={<Empty size="pane" ill="clock" title={t("detail.worlds.backupsEmptyTitle")}>{t("detail.worlds.backupsEmptyHint")}</Empty>}
+        empty={<Empty size="pane" title={t("detail.worlds.backupsEmptyTitle")}>{t("detail.worlds.backupsEmptyHint")}</Empty>}
       >
         {(list) => (
           <List variant="versions" aria-label={t("detail.worlds.backupsTitle")}>

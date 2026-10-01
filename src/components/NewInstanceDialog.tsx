@@ -382,7 +382,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
 
           {tab === "file" &&
             (api.isMock ? (
-              <Empty ill="file" title={t("components.newInstance.appOnlyTitle")} size="pane">
+              <Empty title={t("components.newInstance.appOnlyTitle")} size="pane">
                 {t("components.newInstance.appOnlyText")}
               </Empty>
             ) : (

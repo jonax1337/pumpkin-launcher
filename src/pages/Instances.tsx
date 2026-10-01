@@ -207,7 +207,6 @@ export function InstancesPage() {
     body = (
       <Empty
         size="page"
-        ill="search"
         title={t("pages.instances.noResultsTitle")}
         actions={<Button onClick={() => { setQuery(""); setLoader("all"); }}>{t("pages.instances.resetSearch")}</Button>}
       >

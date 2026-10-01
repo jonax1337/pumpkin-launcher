@@ -150,7 +150,7 @@ function Library({ accountId }: { accountId: string | null }) {
             </CardGrid>
           }
           empty={
-            <Empty ill="shirt" title={t("pages.skins.emptyTitle")}>
+            <Empty title={t("pages.skins.emptyTitle")}>
               {t("pages.skins.emptyBody")}
             </Empty>
           }
