@@ -8,9 +8,10 @@ import { Skel } from "./Feedback";
 /**
  * Spaltenraster je Liste (list.css, inkl. Media Queries):
  * instances 56 px · content 48 px (noWarnCol: ohne Spalte „Hinweise“) · catalog 84 px (feature 132) · catalog-compact 76 px ·
- * versions ≥ 44 px (Trennlinie unten) · tasks 64 px · tiles: Raster aus 88-px-Kacheln · accounts: 60-px-Platten.
+ * versions ≥ 44 px (Trennlinie unten) · tasks 64 px · tiles: Raster aus 88-px-Kacheln · accounts: 60-px-Platten ·
+ * worlds 56 px (Welten und Server: Bild, Name, Aktion, Menü).
  */
-export type ListVariant = "instances" | "content" | "catalog" | "catalog-compact" | "versions" | "tasks" | "tiles" | "accounts";
+export type ListVariant = "instances" | "content" | "catalog" | "catalog-compact" | "versions" | "tasks" | "tiles" | "accounts" | "worlds";
 
 const RowCtx = createContext<{ hit: boolean }>({ hit: false });
 

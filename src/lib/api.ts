@@ -18,10 +18,14 @@ import {
   type LogPayload,
   type ModLoader,
   type NewInstance,
+  type QuickPlay,
+  type Server,
   type SkinProfile,
   type SkinVariant,
   type Template,
   type VersionEntry,
+  type World,
+  type WorldBackup,
 } from "@/lib/types";
 
 import type { CatalogType, ContentBlocked, ContentSearch, ContentProject, ContentVersion, ContentProgress, ModUpdate, SearchIndex, Source } from "@/lib/modrinth";
@@ -70,6 +74,7 @@ const emit = <T>(event: string, payload: T) => bus.dispatchEvent(new CustomEvent
 const mockContent = mockData?.createContentMock(db, emit);
 const mockPack = tauri ? null : (await import("@/lib/mock-pack")).createPackMock(db, emit);
 const mockSkins = tauri ? null : (await import("@/lib/mock-skins")).createSkinMock();
+const mockWorlds = tauri ? null : (await import("@/lib/mock-worlds")).createWorldMock(db, emit);
 
 function on<T>(event: string, cb: (payload: T) => void): Promise<UnlistenFn> {
   if (tauri) return listen<T>(event, (e) => cb(e.payload));
@@ -189,7 +194,7 @@ const mockGame = {
   async installCancel(instanceId: string) {
     db.cancelled.add(instanceId);
   },
-  async launch(instanceId: string, username: string) {
+  async launch(instanceId: string, username: string, quickPlay: QuickPlay | null) {
     await delay(300);
     if (!db.installed.has(instanceId)) throw new Error(`Version ${findInstance(instanceId).minecraftVersion} ist nicht installiert`);
     if (db.running.has(instanceId)) throw new Error("Ungültige Eingabe: Instanz läuft bereits");
@@ -197,6 +202,10 @@ const mockGame = {
     const log = (line: string, stream: LogPayload["stream"] = "stdout") =>
       emit<LogPayload>("instance-log", { instanceId, stream, line: `[${new Date().toLocaleTimeString("de")}] ${line}` });
     log(`[main/INFO]: Setting user: ${username}`);
+    if (quickPlay) {
+      log(`[main/INFO]: Quick Play: ${quickPlay.type === "world" ? quickPlay.id : quickPlay.address}`);
+      findInstance(instanceId).lastQuickPlay = quickPlay;
+    }
     db.running.set(instanceId, window.setInterval(() => log(`[Render thread/INFO]: Demo-Logzeile ${++n}`, n % 7 ? "stdout" : "stderr"), 400));
     findInstance(instanceId).lastPlayedAt = Date.now();
     return 4242;
@@ -379,12 +388,12 @@ export const api = {
     tauri ? call("instance_install", { instanceId }) : mockGame.install(instanceId),
   /**
    * Startet das Spiel; liefert die Prozess-ID. Leerer `javaPath` = mitgelieferte Runtime.
-   * `accountId` nur bei Microsoft-Konten, sonst null (Offline-Name in `username`).
+   * `accountId` nur bei Microsoft-Konten, sonst null (Offline-Name in `username`). `quickPlay`: direkt in eine Welt oder auf einen Server.
    */
-  launchInstance: (instanceId: string, username: string, accountId: string | null, javaPath: string, defaultMemoryMb: number): Promise<number> =>
+  launchInstance: (instanceId: string, username: string, accountId: string | null, javaPath: string, defaultMemoryMb: number, quickPlay: QuickPlay | null): Promise<number> =>
     tauri
-      ? call("instance_launch", { instanceId, username, accountId, javaPath: javaPath || null, defaultMemoryMb })
-      : mockGame.launch(instanceId, username),
+      ? call("instance_launch", { instanceId, username, accountId, javaPath: javaPath || null, defaultMemoryMb, quickPlay })
+      : mockGame.launch(instanceId, username, quickPlay),
   killInstance: (instanceId: string): Promise<void> =>
     tauri ? call("instance_kill", { instanceId }) : mockGame.kill(instanceId),
 
@@ -430,6 +439,31 @@ export const api = {
   /** Umhang zeigen; `null` blendet den aktiven aus. */
   skinCape: (accountId: string, capeId: string | null): Promise<void> =>
     tauri ? call("skin_cape", { accountId, capeId }) : mockSkins!.cape(capeId),
+
+  /** Welten der Instanz, zuletzt gespielte zuerst. */
+  worldList: (instanceId: string): Promise<World[]> => (tauri ? call("world_list", { instanceId }) : mockWorlds!.list(instanceId)),
+  /** Sichert eine Welt als ZIP; Fortschritt als `content-progress` (Phase `backup`). */
+  worldBackup: (instanceId: string, worldId: string, operationId: string): Promise<WorldBackup> =>
+    tauri ? call("world_backup", { instanceId, worldId, operationId }) : mockWorlds!.backup(instanceId, worldId, operationId),
+  /** Sicherungen aller Welten der Instanz (auch gelöschter), neueste zuerst. */
+  worldBackups: (instanceId: string): Promise<WorldBackup[]> => (tauri ? call("world_backups", { instanceId }) : mockWorlds!.backups(instanceId)),
+  /** Stellt eine Sicherung als neue Welt her; ist der Ordnername belegt, unter „<Name> (2)“. */
+  worldRestore: (instanceId: string, backupId: string): Promise<World> =>
+    tauri ? call("world_restore", { instanceId, backupId }) : mockWorlds!.restore(instanceId, backupId),
+  worldBackupDelete: (instanceId: string, backupId: string): Promise<void> =>
+    tauri ? call("world_backup_delete", { instanceId, backupId }) : mockWorlds!.deleteBackup(instanceId, backupId),
+  /** Löscht eine Welt, nachdem sie gesichert wurde; liefert die Sicherung. */
+  worldDelete: (instanceId: string, worldId: string, operationId: string): Promise<WorldBackup> =>
+    tauri ? call("world_delete", { instanceId, worldId, operationId }) : mockWorlds!.remove(instanceId, worldId, operationId),
+  /** Kann die Minecraft-Version der Instanz direkt in eine Welt starten (ab 1.20)? */
+  worldQuickPlaySupported: (instanceId: string): Promise<boolean> =>
+    tauri ? call("world_quick_play_supported", { instanceId }) : mockWorlds!.quickPlaySupported(instanceId),
+  serverList: (instanceId: string): Promise<Server[]> => (tauri ? call("server_list", { instanceId }) : mockWorlds!.servers(instanceId)),
+  /** Legt einen Server an (`index` null) oder ändert den an Stelle `index` der Liste. */
+  serverSave: (instanceId: string, index: number | null, server: Server): Promise<void> =>
+    tauri ? call("server_save", { instanceId, index, server }) : mockWorlds!.saveServer(instanceId, index, server),
+  serverRemove: (instanceId: string, index: number): Promise<void> =>
+    tauri ? call("server_remove", { instanceId, index }) : mockWorlds!.removeServer(instanceId, index),
 
   /** Datei mit dem Standardprogramm öffnen (z. B. Absturzbericht). */
   openPath: (path: string): Promise<void> =>
