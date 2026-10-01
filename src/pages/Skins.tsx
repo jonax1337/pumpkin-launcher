@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useI18n } from "@/i18n";
 import { QueryList } from "@/components/QueryList";
 import { startMsLogin } from "@/components/PlayerNames";
 import {
@@ -24,11 +25,12 @@ const NO_CAPE = "none";
 type MicrosoftAccount = Extract<ActiveAccount, { kind: "microsoft" }>;
 
 export function SkinsPage() {
+  const { t } = useI18n();
   const active = useUsableAccount();
   const account = active?.kind === "microsoft" ? active : null;
   return (
     <section className="page skins">
-      <PageHeader title="Skins" />
+      <PageHeader title={t("pages.skins.heading")} />
       {account ? <CurrentLook account={account} /> : <NeedsMicrosoft />}
       <Library accountId={account?.id ?? null} />
     </section>
@@ -36,52 +38,54 @@ export function SkinsPage() {
 }
 
 function NeedsMicrosoft() {
+  const { t } = useI18n();
   const qc = useQueryClient();
   return (
     <StatusPanel
       className="mt-4"
       icon="user"
-      title="Skins brauchen ein Microsoft-Konto"
-      actions={<Button icon="user" onClick={() => void startMsLogin(qc)}>Mit Microsoft anmelden</Button>}
+      title={t("pages.skins.needsMsTitle")}
+      actions={<Button icon="user" onClick={() => void startMsLogin(qc)}>{t("pages.skins.msLoginButton")}</Button>}
     >
-      Minecraft speichert Skin und Umhang in deinem Microsoft-Konto. Deine Bibliothek kannst du auch ohne Anmeldung pflegen.
+      {t("pages.skins.needsMsBody")}
     </StatusPanel>
   );
 }
 
 /** Was das Konto bei Minecraft gerade trägt: Skin und Umhang, dazu Speichern und Zurücksetzen. */
 function CurrentLook({ account }: { account: MicrosoftAccount }) {
+  const { t } = useI18n();
   const profile = useSkinProfile(account.id);
   const save = useSaveActiveSkin();
   const reset = useResetSkin();
   const [confirmReset, setConfirmReset] = useState(false);
 
-  if (profile.error) return <ErrorBox className="mt-4" title="Dein Skin konnte nicht geladen werden" error={profile.error} onRetry={() => void profile.refetch()} />;
+  if (profile.error) return <ErrorBox className="mt-4" title={t("pages.skins.loadErrorTitle")} error={profile.error} onRetry={() => void profile.refetch()} />;
   if (!profile.data) return <Skel className="mt-4" h={336} />;
   const { skin, capes } = profile.data;
   const cape = capes.find((c) => c.active);
 
   return (
     <Panel pad="l" className="skin-now mt-4">
-      <SkinFigure src={skin?.url} variant={skin?.variant ?? "classic"} zoom={3} label={`Aktueller Skin von ${account.username}`} />
-      {cape && <CapeFigure src={cape.url} zoom={3} label={`Umhang ${cape.alias}`} />}
+      <SkinFigure src={skin?.url} variant={skin?.variant ?? "classic"} zoom={3} label={t("pages.skins.currentSkinLabel", { name: account.username })} />
+      {cape && <CapeFigure src={cape.url} zoom={3} label={t("pages.skins.capeFigureLabel", { name: cape.alias })} />}
       <div className="skin-now-t">
         <SectionHeader title={account.username} size="sub" />
-        <Hint>{skin ? `Modell ${SKIN_VARIANT_LABELS[skin.variant]}` : "Standardskin von Minecraft"}</Hint>
+        <Hint>{skin ? t("pages.skins.modelLine", { modell: SKIN_VARIANT_LABELS[skin.variant] }) : t("pages.skins.defaultSkin")}</Hint>
         <CapeChoice accountId={account.id} capes={capes} />
         <Actions wrap>
           <Button icon="save" disabled={!skin || save.isPending} onClick={() => save.mutate({ accountId: account.id, name: account.username })}>
-            In Bibliothek speichern
+            {t("pages.skins.saveToLibrary")}
           </Button>
-          <Button variant="ghost" icon="redo" onClick={() => setConfirmReset(true)}>Standardskin tragen</Button>
+          <Button variant="ghost" icon="redo" onClick={() => setConfirmReset(true)}>{t("pages.skins.wearDefault")}</Button>
         </Actions>
       </div>
       <ConfirmDialog
         open={confirmReset}
         onOpenChange={setConfirmReset}
-        title="Standardskin tragen?"
-        text="Dein jetziger Skin geht dabei verloren. Speichere ihn vorher in der Bibliothek, wenn du ihn behalten willst."
-        confirmLabel="Zurücksetzen"
+        title={t("pages.skins.wearDefaultTitle")}
+        text={t("pages.skins.wearDefaultText")}
+        confirmLabel={t("pages.skins.resetConfirm")}
         pending={reset.isPending}
         onConfirm={() => reset.mutate({ accountId: account.id }, { onSuccess: () => setConfirmReset(false) })}
       />
@@ -90,11 +94,12 @@ function CurrentLook({ account }: { account: MicrosoftAccount }) {
 }
 
 function CapeChoice({ accountId, capes }: { accountId: string; capes: Cape[] }) {
+  const { t } = useI18n();
   const setCape = useSetCape();
-  if (!capes.length) return <Hint>Dieses Konto hat keine Umhänge.</Hint>;
-  const options = [{ value: NO_CAPE, label: "Kein Umhang" }, ...capes.map((c) => ({ value: c.id, label: c.alias }))];
+  if (!capes.length) return <Hint>{t("pages.skins.noCapesHint")}</Hint>;
+  const options = [{ value: NO_CAPE, label: t("pages.skins.noCapeOption") }, ...capes.map((c) => ({ value: c.id, label: c.alias }))];
   return (
-    <Field label="Umhang" htmlFor="skin-cape">
+    <Field label={t("pages.skins.capeField")} htmlFor="skin-cape">
       <Select
         id="skin-cape"
         value={capes.find((c) => c.active)?.id ?? NO_CAPE}
@@ -108,6 +113,7 @@ function CapeChoice({ accountId, capes }: { accountId: string; capes: Cape[] }) 
 
 /** Lokale Skins: hinzufügen, umbenennen, Modell wählen, löschen und mit einem Microsoft-Konto anziehen. */
 function Library({ accountId }: { accountId: string | null }) {
+  const { t } = useI18n();
   const library = useSkinLibrary();
   const add = useAddSkin();
   const remove = useDeleteSkin();
@@ -115,7 +121,7 @@ function Library({ accountId }: { accountId: string | null }) {
   const [removing, setRemoving] = useState<LibrarySkin | null>(null);
 
   async function pickFile() {
-    const [path] = await api.pickPaths({ filters: [{ name: "Skin", extensions: ["png"] }] });
+    const [path] = await api.pickPaths({ filters: [{ name: t("pages.skins.fileDialogSkin"), extensions: ["png"] }] });
     if (path) add.mutate(path);
   }
 
@@ -123,11 +129,11 @@ function Library({ accountId }: { accountId: string | null }) {
     <section className="mt-6" aria-labelledby="skin-lib">
       <SectionHeader
         id="skin-lib"
-        title="Bibliothek"
+        title={t("pages.skins.libraryHeading")}
         actions={
           !api.isMock && (
             <Button icon="plus" disabled={add.isPending} onClick={() => void pickFile().catch(toastError)}>
-              Skin hinzufügen
+              {t("pages.skins.addSkin")}
             </Button>
           )
         }
@@ -135,15 +141,15 @@ function Library({ accountId }: { accountId: string | null }) {
       <div className="mt-3">
         <QueryList
           query={library}
-          error="Die Bibliothek konnte nicht geladen werden"
+          error={t("pages.skins.libraryLoadError")}
           loading={
-            <CardGrid aria-busy aria-label="Wird geladen">
+            <CardGrid aria-busy aria-label={t("pages.skins.loadingLabel")}>
               {[0, 1, 2].map((k) => <Skel key={k} h={308} />)}
             </CardGrid>
           }
           empty={
-            <Empty ill="shirt" title="Noch keine Skins">
-              Füge eine PNG-Datei mit 64×64 Pixeln hinzu oder speichere den Skin, den du gerade trägst.
+            <Empty ill="shirt" title={t("pages.skins.emptyTitle")}>
+              {t("pages.skins.emptyBody")}
             </Empty>
           }
         >
@@ -160,8 +166,8 @@ function Library({ accountId }: { accountId: string | null }) {
       <ConfirmDialog
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
-        title={`„${removing?.name ?? ""}“ löschen?`}
-        text="Der Skin verschwindet aus deiner Bibliothek. Was du gerade trägst, bleibt."
+        title={t("pages.skins.deleteTitle", { name: removing?.name ?? "" })}
+        text={t("pages.skins.deleteText")}
         pending={remove.isPending}
         onConfirm={() => removing && remove.mutate(removing.id, { onSuccess: () => setRemoving(null) })}
       />
@@ -170,23 +176,24 @@ function Library({ accountId }: { accountId: string | null }) {
 }
 
 function SkinCard({ skin, accountId, onRename, onDelete }: { skin: LibrarySkin; accountId: string | null; onRename: () => void; onDelete: () => void }) {
+  const { t } = useI18n();
   const texture = useSkinTexture(skin.id);
   const update = useUpdateSkin();
   const upload = useUploadSkin();
   const menu: MenuEntry[] = [
-    { id: "rename", text: "Umbenennen", icon: "file", onSelect: onRename },
-    { id: "delete", text: "Löschen", icon: "trash", bad: true, onSelect: onDelete },
+    { id: "rename", text: t("common.rename"), icon: "file", onSelect: onRename },
+    { id: "delete", text: t("common.delete"), icon: "trash", bad: true, onSelect: onDelete },
   ];
   return (
     <Panel as="article" pad="m" className="skin-card" aria-label={skin.name}>
-      <SkinFigure src={texture} variant={skin.variant} label={`Vorschau von ${skin.name}`} />
+      <SkinFigure src={texture} variant={skin.variant} label={t("pages.skins.previewLabel", { name: skin.name })} />
       <div className="skin-card-h">
         <Trunc as="b" text={skin.name} className="min-w-0 flex-1" />
-        <Menu items={menu} trigger={<IconButton icon="more" size="s" label={`Weitere Aktionen für ${skin.name}`} tip="Weitere Aktionen" />} />
+        <Menu items={menu} trigger={<IconButton icon="more" size="s" label={t("pages.skins.moreActionsFor", { name: skin.name })} tip={t("pages.skins.moreActionsTip")} />} />
       </div>
       <Segmented
         size="s"
-        label={`Modell von ${skin.name}`}
+        label={t("pages.skins.modelOf", { name: skin.name })}
         value={skin.variant}
         items={VARIANTS}
         onChange={(variant) => update.mutate({ id: skin.id, name: skin.name, variant })}
@@ -198,13 +205,14 @@ function SkinCard({ skin, accountId, onRename, onDelete }: { skin: LibrarySkin; 
         disabled={!accountId || upload.isPending}
         onClick={() => accountId && upload.mutate({ accountId, skin })}
       >
-        {upload.isPending ? "Wird angezogen" : "Anziehen"}
+        {upload.isPending ? t("pages.skins.wearing") : t("pages.skins.wear")}
       </Button>
     </Panel>
   );
 }
 
 function RenameDialog({ skin, onClose }: { skin: LibrarySkin; onClose: () => void }) {
+  const { t } = useI18n();
   const [name, setName] = useState(skin.name);
   const update = useUpdateSkin();
   function submit(e: FormEvent) {
@@ -215,12 +223,17 @@ function RenameDialog({ skin, onClose }: { skin: LibrarySkin; onClose: () => voi
     <Dialog
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Skin umbenennen"
+      title={t("pages.skins.renameTitle")}
       width={480}
-      footer={<DialogActions cancel="Abbrechen" confirm={{ label: update.isPending ? "Speichert" : "Speichern", width: 130, form: "skin-name", disabled: update.isPending || !name.trim() }} />}
+      footer={
+        <DialogActions
+          cancel={t("common.cancel")}
+          confirm={{ label: update.isPending ? t("pages.skins.saving") : t("common.save"), width: 130, form: "skin-name", disabled: update.isPending || !name.trim() }}
+        />
+      }
     >
       <form id="skin-name" onSubmit={submit}>
-        <Field label="Name">
+        <Field label={t("pages.skins.nameField")}>
           <TextField value={name} onChange={(e) => setName(e.target.value)} maxLength={64} autoFocus />
         </Field>
       </form>
