@@ -5,7 +5,7 @@ Thanks for your interest! Issues, discussions and pull requests are all welcome.
 ## Development setup
 
 ```bash
-# Prerequisites: Node 24, pnpm 11, Rust stable (MSVC), WebView2 on Windows
+# Prerequisites: Node 24, pnpm 11, Rust stable; system packages per OS: see README (Prerequisites)
 pnpm install
 pnpm tauri dev     # desktop app with hot reload
 pnpm dev           # frontend only, mock data (http://localhost:1420)
@@ -25,7 +25,7 @@ cargo check
 cargo test
 ```
 
-CI runs the same checks on every push and pull request.
+CI runs the same checks on every push and pull request; the backend checks run on Windows, Linux and macOS.
 
 ## Releases
 

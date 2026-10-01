@@ -16,7 +16,7 @@
   <a href="https://github.com/jonax1337/pumpkin-launcher/actions/workflows/ci.yml"><img src="https://github.com/jonax1337/pumpkin-launcher/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-orange.svg" alt="License: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/Tauri-2-blue.svg" alt="Tauri 2">
-  <img src="https://img.shields.io/badge/platform-Windows-blueviolet.svg" alt="Platform: Windows">
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blueviolet.svg" alt="Platform: Windows | Linux | macOS">
 </p>
 
 <p align="center">
@@ -34,7 +34,7 @@
 - **Presets** — reusable collections of mods, settings and JVM args that can be applied to any instance
 - **Microsoft login** via device code (see [status](#status) below), plus offline player profiles
 - **Skins & capes** — keep a local skin library (PNG, classic or slim) with pixel-art previews, put a skin on and pick your cape through the official Minecraft API (Microsoft accounts)
-- **Quality-of-life** — crash detection with per-instance logs, resumable downloads, automatic RAM detection, one-click log sharing via mclo.gs (access tokens, Windows user name and e-mail addresses removed first) and a debug info without personal data for bug reports
+- **Quality-of-life** — crash detection with per-instance logs, resumable downloads, automatic RAM detection, one-click log sharing via mclo.gs (access tokens, your user name in paths and e-mail addresses removed first) and a debug info without personal data for bug reports
 - **Auto-updates** — signed updates from GitHub Releases, installed only when you say so and never while Minecraft is running; a second launch just focuses the open window
 - **Seasonal branding** 🎃 — mascot, accent colors and window/taskbar icon switch automatically with the calendar (spring, summer, Halloween, winter)
 - **Pixelkino UI** — a custom pixel design system with a canvas scene engine, pixel icons and a frameless window. See [the design spec](docs/design/PIXELKINO.md)
@@ -46,17 +46,30 @@
 
 ## Status
 
-Pumpkin Launcher is in active, early development (v0.1.x). Core install/launch flows work; polish, Linux/macOS support and a public installer are still on the way. The Modrinth catalog shows live data.
+Pumpkin Launcher is in active, early development (v0.1.x). Core install/launch flows work; polish and a public installer are still on the way. Windows is the main platform; Linux and macOS builds are new and less tested. The Modrinth catalog shows live data.
 
 > **Microsoft login:** sign-in, Xbox Live and XSTS work end-to-end, but Microsoft must approve each launcher's Azure app before `minecraftservices.com` accepts it. Until Pumpkin Launcher's own client ID is approved, the final Minecraft step returns 403 and the launcher says so. Everything you need to register and approve your own client ID is documented in [`docs/ACCOUNT-SETUP.md`](docs/ACCOUNT-SETUP.md).
 
 ## Getting started
 
+### Platforms
+
+| | Package | Notes |
+|---|---|---|
+| **Windows** 10/11 (x64) | NSIS installer | Not code-signed yet: SmartScreen asks once |
+| **Linux** (x64) | AppImage, `.deb` | Needs WebKitGTK 4.1 (e.g. Ubuntu 22.04+, Debian 12+); Microsoft accounts need a Secret Service keyring (GNOME Keyring, KWallet) |
+| **macOS** (Apple Silicon and Intel) | Universal `.dmg` | Not notarized: open it once via right-click → Open, see [Releasing](docs/RELEASING.md#macos-gatekeeper). Minecraft up to 1.17 runs on Intel Java and needs Rosetta 2 on Apple Silicon (`softwareupdate --install-rosetta --agree-to-license`) |
+
 ### Prerequisites
 
 - **Node 24** and **pnpm 11** (`corepack enable`)
-- **Rust** (stable toolchain, MSVC)
+- **Rust** (stable toolchain; on Windows MSVC)
 - **Windows**: WebView2 Runtime (preinstalled on Windows 11) and MSVC Build Tools
+- **Linux** (Debian/Ubuntu; other distros see the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/#linux)):
+  ```bash
+  sudo apt install build-essential curl file libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+  ```
+- **macOS**: Xcode Command Line Tools (`xcode-select --install`)
 
 ### Develop
 
@@ -74,7 +87,7 @@ Log level via `RUST_LOG`, e.g. `RUST_LOG=debug pnpm tauri dev`.
 pnpm build                        # frontend (sync branding icons, tsc, vite build)
 cd src-tauri && cargo check       # backend
 cd src-tauri && cargo test        # backend tests (JsonStore)
-pnpm tauri build                  # NSIS installer (needs the updater signing key, see docs/RELEASING.md)
+pnpm tauri build                  # installers for your OS (needs the updater signing key, see docs/RELEASING.md)
 pnpm check:branding               # seasonal calendar & branding assets
 ```
 
@@ -92,7 +105,7 @@ scripts/        build helper scripts
 
 Details: [Architecture](docs/ARCHITECTURE.md) · [Releasing](docs/RELEASING.md) · [Pixelkino design spec](docs/design/PIXELKINO.md) · [Branding](branding/pumpkin-launcher/README.md) · [Website](website/README.md) · [Launch video](media/launch-video/README.md)
 
-Instances, presets and settings are stored as JSON in the app data directory (Windows: `%APPDATA%\dev.laux.launcher\`). The technical identifier stays `dev.laux.launcher` so existing data keeps being found.
+Instances, presets and settings are stored as JSON in the app data directory (Windows: `%APPDATA%\dev.laux.launcher\`, Linux: `~/.local/share/dev.laux.launcher/`, macOS: `~/Library/Application Support/dev.laux.launcher/`). The technical identifier stays `dev.laux.launcher` so existing data keeps being found.
 
 ## Marketing website
 

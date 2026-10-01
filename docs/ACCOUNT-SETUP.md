@@ -33,7 +33,7 @@ Die Client-ID der Azure-App „Pumpkin Launcher“ (`5e27ee41-3be2-4c3a-a156-a3c
   (wird per `option_env!` beim Kompilieren übernommen; nach Änderung neu bauen).
 - **Zur Laufzeit:** das Frontend übergibt sie an `ms_login_start({ clientId })`. Hat es eine Client-ID, gilt diese vor der eingebauten.
 
-Die Client-ID ist kein Geheimnis; das Refresh-Token dagegen schon – es liegt nur in der Windows-Anmeldeinformationsverwaltung (Dienst `dev.laux.launcher`, Benutzer = Minecraft-UUID), nie in `accounts.json`.
+Die Client-ID ist kein Geheimnis; das Refresh-Token dagegen schon – es liegt nur im Schlüsselbund des Systems (Windows-Anmeldeinformationsverwaltung, macOS-Schlüsselbund bzw. Secret Service unter Linux; Dienst `dev.laux.launcher`, Benutzer = Minecraft-UUID), nie in `accounts.json`.
 
 ## Spielen ohne Konto (Offline-Spielername)
 

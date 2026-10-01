@@ -33,9 +33,9 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `services/mod.rs` | `Dirs`: Verzeichnislayout (geteilter Cache, Instanz-Verzeichnisse) |
 | `services/auth.rs` | Microsoft-Konto per Gerätecode → Xbox Live → XSTS → Minecraft (Refresh-Token im OS-Schlüsselbund), Offline-Account (UUID nach `OfflinePlayer:<name>`, MD5/v3) |
 | `services/mojang.rs` | serde-Formate von piston-meta: Version-Manifest v2, Versions-JSON, Asset-Index |
-| `services/rules.rs` | Mojang-`rules` (os/arch/features), Arch-Filter für Natives-Classifier |
+| `services/rules.rs` | Mojang-`rules` (os/arch/features), Arch-Filter für Natives-Classifier (`natives-macos-arm64`, `natives-windows-x86` …), Classpath-Trenner je OS (`;` unter Windows, sonst `:`) |
 | `services/download.rs` | HTTP-Client, SHA-1-geprüfte Downloads mit Retry, 16 parallel (`buffer_unordered`), gestreamt auf Platte, Fortsetzen per HTTP-Range auf `.part` |
-| `services/java.rs` | Mojangs Java-Runtime (`java-runtime/…/all.json`, Komponente aus `javaVersion.component`); Wahl beim Start: eigener Pfad der Instanz → Einstellung des Launchers → mitgelieferte Runtime, eigene Pfade müssen auf eine vorhandene `javaw.exe`/`java.exe` zeigen |
+| `services/java.rs` | Mojangs Java-Runtime (`java-runtime/…/all.json`, Komponente aus `javaVersion.component`; Plattform-Schlüssel `windows-x64`, `windows-arm64`, `linux`, `linux-i386`, `mac-os`, `mac-os-arm64`, auf ARM ohne passende Runtime die x64-Runtime in der Emulation; unter Unix Exec-Bit und Symlinks aus dem Manifest); Wahl beim Start: eigener Pfad der Instanz → Einstellung des Launchers → mitgelieferte Runtime, eigene Pfade müssen auf eine vorhandene `javaw.exe`/`java.exe` (Linux/macOS: `java`) zeigen |
 | `services/install.rs` | Installation in Schritten, `InstallStep`, `InstallProgress`, Event `install-progress`; Installiert-Marker je Instanz (`mark_installed`, `is_installed`) |
 | `services/fabric.rs` | Fabric-Meta (`meta.fabricmc.net/v2`): Loader-Versionen, Launcher-Profil (`inheritsFrom` Vanilla), Merge mit der Vanilla-Versions-JSON |
 | `services/mods.rs` | Globaler Mod-Cache (`cache/mods/<sha1>.jar`) und Abgleich nach `mods/` der Instanz (Hardlink, Fallback Kopie; bestehende fremde Dateien werden nicht ersetzt); fehlt ein Cache-Eintrag, stellt `recache` ihn für Kopie und Export aus der abgelegten Datei wieder her |
@@ -43,14 +43,14 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 | `services/providers/` | Weitere Kataloge in Modrinth-Formen: `ftb.rs` (öffentliche FTB-API, installierbar, Downloads nur von festen Hosts mit Prüfsumme), `technic.rs` (Suche, Details und Installation: Pack-Zip des Autors über `net.rs` = nur HTTPS und öffentliche Adressen, Loader aus `bin/version.json`), `curseforge.rs` (CurseForge über den Cloudflare Worker in `proxy/`, der den API-Schlüssel hält: Suche, Mods mit Abhängigkeiten, Modpacks per `manifest.json`; der Launcher selbst kennt keinen Schlüssel, die Dateien kommen direkt vom CDN; nur über die Webseite erlaubte Dateien werden nicht umgangen, sondern vom Nutzer geladen und aus dem Downloads-Ordner übernommen). Pack-Zips werden von der Platte entpackt (`content::Blob::Zip`), nicht im Speicher gehalten |
 | `services/mrpack.rs` | `.mrpack`-Export einer Instanz (Vorlagen und „Exportieren…“): Modrinth-Inhalte per SHA-1-Sammelabfrage als Download im Index, alles andere unter `overrides/`, dazu `pumpkin.json`; Grenzen so, dass der eigene Import das Pack wieder liest |
 | `services/duplicate.rs` | Instanz duplizieren: neuer Eintrag (neue ID, „<Name> (Kopie)“, `lastPlayedAt` leer, Spielzeit 0), Kopie von Spielordner, Natives und Installiert-Marker ohne `logs/`, `crash-reports/`, `.fabric/`; verwaltete Inhalte legt `mods::sync` per Hardlink ab; bei Fehler wird die halbe Kopie entfernt |
-| `services/content.rs` | Sichere Modinstallation und `.mrpack`-Import in neue Instanzen; `plan_pack`/`import_plan` für Packs von Anbietern |
+| `services/content.rs` | Sichere Modinstallation und `.mrpack`-Import in neue Instanzen (Ziele exklusiv neu angelegt, kein Symlink unterhalb des Datenordners; darüber, etwa `/var` unter macOS, zählt keiner); `plan_pack`/`import_plan` für Packs von Anbietern |
 | `content_commands.rs` | Modrinth-IPC und korrelierte `content-progress`-Events |
 | `support_commands.rs` | Fehlerberichte: Log teilen, Debug-Info |
 | `services/launch.rs` | Classpath, JVM-/Game-Args mit `${…}`-Ersetzung (danach Fenster `--width/--height` bzw. `--fullscreen` und eigene Spielargumente), Prozessstart, Log-Streaming, Sitzungsdauer für die Spielzeit |
 | `services/gamelog.rs` | log4j-XML auf stdout (Mojangs Logging-Config) → lesbare Zeilen |
-| `services/logshare.rs` | Log teilen über mclo.gs (`POST https://api.mclo.gs/1/log`, JSON `{ content, source }`): liest höchstens die letzten 5 MiB, entfernt lokal Zugangstokens (`--accessToken`, `accessToken=`, JWTs), den Benutzernamen in `C:\Users\<name>\` und E-Mail-Adressen, behält die letzten 24.999 Zeilen plus Kürzungshinweis (Grenzen von mclo.gs: 10 MiB, 25.000 Zeilen) |
-| `services/debuginfo.rs` | Debug-Info als englischer Klartext fürs GitHub-Issue: Launcher-Version, Windows-Version und Architektur, RAM, freier Platz im Datenordner, WebView2-Version, je Instanz (nummeriert, ohne Namen) MC-Version, Loader, aktive Mods, RAM (ohne eigene Einstellung der übergebene Standard), installiert/läuft |
-| `services/system.rs` | Win32-Abfragen: Arbeitsspeicher (`GlobalMemoryStatusEx`), freier Platz (`GetDiskFreeSpaceExW`), Windows-Version (`RtlGetVersion`) |
+| `services/logshare.rs` | Log teilen über mclo.gs (`POST https://api.mclo.gs/1/log`, JSON `{ content, source }`): liest höchstens die letzten 5 MiB, entfernt lokal Zugangstokens (`--accessToken`, `accessToken=`, JWTs), den Benutzernamen in `C:\Users\<name>\`, `/home/<name>/` und `/Users/<name>/` sowie E-Mail-Adressen, behält die letzten 24.999 Zeilen plus Kürzungshinweis (Grenzen von mclo.gs: 10 MiB, 25.000 Zeilen) |
+| `services/debuginfo.rs` | Debug-Info als englischer Klartext fürs GitHub-Issue: Launcher-Version, Betriebssystem mit Version (Windows-Build, Linux-Distribution, macOS-Version) und Architektur, RAM, freier Platz im Datenordner, WebView-Version (WebView2, WebKitGTK bzw. WKWebView), je Instanz (nummeriert, ohne Namen) MC-Version, Loader, aktive Mods, RAM (ohne eigene Einstellung der übergebene Standard), installiert/läuft |
+| `services/system.rs` | Arbeitsspeicher, freier Platz und OS-Version, je System ein Untermodul: Windows über Win32 (`GlobalMemoryStatusEx`, `GetDiskFreeSpaceExW`, `RtlGetVersion`), Linux über `/proc/meminfo` und `/etc/os-release`, macOS über `sysctl` (`hw.memsize`, `kern.osproductversion`); freier Platz unter Unix per `statvfs` |
 | `services/skins.rs` | Skins und Umhänge über die offizielle Minecraft-Services-API (`/minecraft/profile`, nur Microsoft-Konten, Token aus `auth::session`): Profil lesen, Skin hochladen (multipart, `variant` + PNG), zurücksetzen, Umhang zeigen/ausblenden; Fehlerstatus (401, 429, 4xx, 5xx) in Alltagssprache. Lokale Bibliothek `skins/<sha1>.png` + `skins.json`; PNG-Prüfung über den IHDR-Kopf (64×64 oder 64×32). Texturen nur von `textures.minecraft.net`, per HTTPS |
 | `skin_commands.rs` | Dünne Skin-Commands |
 
@@ -67,11 +67,11 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 
 ### Persistenz
 
-JSON-Dateien im App-Datenverzeichnis (`app.path().app_data_dir()`, unter Windows `%APPDATA%\dev.laux.launcher\`):
+JSON-Dateien im App-Datenverzeichnis (`app.path().app_data_dir()`; Windows `%APPDATA%\dev.laux.launcher\`, Linux `~/.local/share/dev.laux.launcher/`, macOS `~/Library/Application Support/dev.laux.launcher/`):
 
 - `instances.json`
 - `templates.json`
-- `accounts.json` (nur `id`, `username`, `kind`, `clientId`; Refresh-Tokens in der Windows-Anmeldeinformationsverwaltung, Dienst `dev.laux.launcher`)
+- `accounts.json` (nur `id`, `username`, `kind`, `clientId`; Refresh-Tokens im OS-Schlüsselbund, Dienst `dev.laux.launcher`: Windows-Anmeldeinformationsverwaltung, macOS-Schlüsselbund, unter Linux Secret Service wie GNOME Keyring oder KWallet)
 - `skins.json` (Skin-Bibliothek; die PNG-Dateien liegen unter `skins/<sha1>.png`)
 
 Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht überschrieben), der Store startet leer. Schlägt das Schreiben fehl, wird die In-Memory-Änderung zurückgerollt.
@@ -83,7 +83,7 @@ Eine defekte Datei wird beim Start nach `*.json.corrupt` verschoben (nicht über
 - **`ModSource`** (getaggt über `type`): `{type:"local"}` · `{type:"url", url}` · `{type:"modrinth", projectId, versionId}` · `{type:"curseforge", projectId, fileId}`.
 - **`Instance.modpack`** (`ModpackOrigin?`): merkt sich, aus welchem Modrinth-/CurseForge-Pack (Projekt + Version/Datei) die Instanz stammt – Grundlage für Pack-Updates.
 - **`LogKind`** (`log_share`): `latest` = `logs/latest.log` des letzten Starts · `crashReport` = neuester Bericht in `crash-reports/`.
-- **Startoptionen der Instanz**: `javaPath?` (eigene `javaw.exe`, sonst Einstellung des Launchers bzw. mitgelieferte Runtime), `window` (`{type:"default"}` · `{type:"size", width, height}` · `{type:"fullscreen"}`), `gameArgs` (nach den Argumenten der Version), dazu wie bisher `memoryMb?` und `jvmArgs`. `update_instance` prüft einen geänderten Java-Pfad und lehnt Fenstergrößen von 0 ab.
+- **Startoptionen der Instanz**: `javaPath?` (eigene `javaw.exe` bzw. `java`, sonst Einstellung des Launchers bzw. mitgelieferte Runtime), `window` (`{type:"default"}` · `{type:"size", width, height}` · `{type:"fullscreen"}`), `gameArgs` (nach den Argumenten der Version), dazu wie bisher `memoryMb?` und `jvmArgs`. `update_instance` prüft einen geänderten Java-Pfad und lehnt Fenstergrößen von 0 ab.
 - **`Instance.playtimeSecs`**: Summe aller Sitzungen; das Backend rechnet sie beim Spielende an (unplausible Dauern über 7 Tage oder bei zurückgestellter Uhr zählen nicht). `update_instance` übernimmt sie nie vom Frontend.
 - **`Instance.group?`**: Gruppe in der Bibliothek (getrimmt, leer = keine). Es gibt keine eigene Gruppen-Entität: Gruppen sind die Namen, die Instanzen tragen.
 - **`LibrarySkin`**: `id` (SHA-1 der PNG), `name`, `variant` (`classic | slim`), `addedAt`. Dieselbe Datei kommt nur einmal in die Bibliothek.
@@ -201,6 +201,7 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 **Daten und Zustand**
 
 - `lib/types.ts` – TS-Spiegel der Rust-Modelle
+- `lib/platform.ts` – Betriebssystem aus dem User-Agent der WebView (Java-Auswahl: Dateifilter `.exe` nur unter Windows, Beispielpfad je System)
 - `lib/api.ts` – `invoke`-Wrapper; außerhalb von Tauri (reiner `pnpm dev` im Browser) Fallback auf Mockdaten aus `lib/mock.ts`
 - `hooks/` – TanStack Query; Mutations invalidieren die betroffenen Queries. `useInstances` (Spielen = bei Bedarf installieren, dann starten; Backend-Events), `useContent` (Modrinth-Vorgänge mit Fortschritt), `useTemplates`, `useAppUpdate` (Launcher-Update: stille Suche nach dem Start im Release-Build, Download mit Fortschritt, Installation erst nach Zustimmung und erst, wenn kein Minecraft mehr läuft), `useSupport` (Log teilen: Link kopieren, Toast mit „Öffnen“; Debug-Info kopieren), `useSkins` (Bibliothek, Texturen, Profil des Microsoft-Kontos)
 - `store/settings.ts` – Launcher-Einstellungen, lokal persistiert: Java, RAM, Konten (Offline-Namen, aktives Konto), Pixelgröße, bewegte Szenen
@@ -213,7 +214,7 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 
 **Oberfläche**
 
-- `app/Layout.tsx` – rahmenloses Fenster: Fensterleiste mit Wortzeichen, Kontomenü und eigenen Fensterknöpfen, links eine Icon-Seitenleiste (Start · Bibliothek · Entdecken, unten Aufgaben-Menü und Einstellungen) (`@tauri-apps/api/window`, Ziehen per `data-tauri-drag-region`); setzt `--px`, pausiert Szenen, solange Minecraft läuft
+- `app/Layout.tsx` – rahmenloses Fenster: Fensterleiste mit Wortzeichen, Kontomenü und eigenen Fensterknöpfen (auf allen Systemen, auch unter macOS statt der Ampel), links eine Icon-Seitenleiste (Start · Bibliothek · Entdecken, unten Aufgaben-Menü und Einstellungen) (`@tauri-apps/api/window`, Ziehen per `data-tauri-drag-region`); setzt `--px`, pausiert Szenen, solange Minecraft läuft
 - `pages/` – Start (Szene, Weiterspielen-Reihe, Onboarding), Bibliothek (Poster/Liste, mit Gruppen als aufklappbare Abschnitte, ohne Gruppe zuletzt), Instanz (klebender Kopf mit Spielzeit, Inhalte, Protokoll, Einstellungen mit Java, Fenster und Spielargumenten; `pages/detail/`), Entdecken (Katalog, Projektseite), Einstellungen, Skins (`/skins`, über das Kontomenü: aktueller Skin und Umhang des Microsoft-Kontos, Bibliothek als Raster; Offline-Konten sehen einen Hinweis auf die Microsoft-Anmeldung)
 - `components/px.tsx` – Bausteine: Knopf, Chip, Fortschritt, Suchfeld, Auswahl, Segmente, Checkbox, Schalter, Radio, Speicher-Slider, Tooltip, Menü/Kontextmenü, Dialog, Seitenpanel, Leer- und Fehlerzustände, Toasts. Verhalten von Radix, Aussehen aus `styles/`
 - `components/game.tsx` – Spielen-Knopf (feste Größe in allen Zuständen), Statuszeile, Status-Chip, Protokoll mit Filter/Suche/Mitscrollen
