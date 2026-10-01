@@ -44,7 +44,7 @@ export interface Instance {
   modpack: ModpackOrigin | null;
   memoryMb: number | null;
   jvmArgs: string[];
-  /** Eigene java(w).exe; null = Einstellung des Launchers bzw. mitgelieferte Runtime. */
+  /** Eigene Java-Programmdatei; null = Einstellung des Launchers bzw. mitgelieferte Runtime. */
   javaPath: string | null;
   window: GameWindow;
   /** Eigene Spielargumente nach denen der Version. */

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useMemory } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import { formatMemory, formatPlaytime, memoryTooHigh } from "@/lib/format";
+import { platform } from "@/lib/platform";
 import { LOADER_LABELS, type Instance } from "@/lib/types";
 import { Actions, Button, Hint, Radio, SegSlider, TextField } from "@/ui";
 
@@ -23,7 +24,7 @@ export function MemoryHelp({ value }: { value: number | null }) {
   if (value != null && total != null && memoryTooHigh(gb * 1024, total))
     return (
       <Hint tone="warn" live>
-        Das ist mehr als drei Viertel deines Arbeitsspeichers ({formatMemory(total)}). Windows und andere Programme können dann stocken.
+        Das ist mehr als drei Viertel deines Arbeitsspeichers ({formatMemory(total)}). Das System und andere Programme können dann stocken.
       </Hint>
     );
   return <Hint>{total != null ? `Der Rechner hat ${formatMemory(total)}. ` : ""}Mehr als 8 GB bringt selten etwas.</Hint>;
@@ -62,8 +63,15 @@ export function MemoryChooser({ name, value, onChange, autoText, help = true }: 
   );
 }
 
+/** Java-Programmdatei dieses Systems mit Beispielpfad; nur unter Windows hat sie eine Endung für den Dateifilter. */
+const JAVA_PROGRAM = {
+  windows: { file: "javaw.exe", example: "C:\\Program Files\\Java\\jdk-21\\bin\\javaw.exe", extensions: ["exe"] },
+  macos: { file: "java", example: "/Library/Java/JavaVirtualMachines/jdk-21.jdk/Contents/Home/bin/java", extensions: null },
+  linux: { file: "java", example: "/usr/lib/jvm/java-21-openjdk/bin/java", extensions: null },
+}[platform];
+
 /**
- * Java: ohne eigenen Pfad (`value` leer; was dann gilt, beschreibt `fallback`) oder eigene javaw.exe.
+ * Java: ohne eigenen Pfad (`value` leer; was dann gilt, beschreibt `fallback`) oder eigene Java-Programmdatei.
  * Gemeldet wird erst beim Verlassen des Felds, mit Enter oder nach „Durchsuchen“, nicht je Tastendruck.
  */
 export function JavaChooser({ name, value, onChange, fallback }: { name: string; value: string; onChange: (path: string) => void; fallback: ReactNode }) {
@@ -74,7 +82,8 @@ export function JavaChooser({ name, value, onChange, fallback }: { name: string;
     if (path.trim() !== value) onChange(path.trim());
   }
   async function browse() {
-    const picked = await openFile({ multiple: false, directory: false, filters: [{ name: "Java", extensions: ["exe"] }] });
+    const { extensions } = JAVA_PROGRAM;
+    const picked = await openFile({ multiple: false, directory: false, filters: extensions ? [{ name: "Java", extensions }] : undefined });
     if (typeof picked === "string") commit(picked);
   }
   return (
@@ -87,12 +96,12 @@ export function JavaChooser({ name, value, onChange, fallback }: { name: string;
         <TextField
           width="full"
           disabled={!own}
-          aria-label="Pfad zu javaw.exe"
+          aria-label={`Pfad zu ${JAVA_PROGRAM.file}`}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={() => commit(draft)}
           onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-          placeholder={own ? "z. B. C:\\Program Files\\Java\\jdk-21\\bin\\javaw.exe" : "Pfad zu javaw.exe"}
+          placeholder={own ? `z. B. ${JAVA_PROGRAM.example}` : `Pfad zu ${JAVA_PROGRAM.file}`}
         />
         {!api.isMock && <Button disabled={!own} onClick={() => void browse().catch((e: Error) => toast.error(e.message))}>Durchsuchen</Button>}
       </Actions>

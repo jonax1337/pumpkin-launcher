@@ -30,7 +30,7 @@ export function ShareLogDialog() {
       onOpenChange={(o) => !o && !share.isPending && close()}
       danger={false}
       title="Log öffentlich teilen?"
-      text={`Pumpkin Launcher lädt ${what} zu mclo.gs hoch. Jeder mit dem Link kann es lesen. Zugangsdaten, dein Windows-Benutzername und E-Mail-Adressen werden vorher entfernt.`}
+      text={`Pumpkin Launcher lädt ${what} zu mclo.gs hoch. Jeder mit dem Link kann es lesen. Zugangsdaten, dein Benutzername und E-Mail-Adressen werden vorher entfernt.`}
       confirmLabel="Hochladen"
       pendingLabel="Lädt hoch"
       pending={share.isPending}
