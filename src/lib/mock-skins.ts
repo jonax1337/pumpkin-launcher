@@ -1,4 +1,5 @@
 // Nur im Browser-Dev-Modus dynamisch geladen (siehe api.ts); im Release-Build nicht enthalten.
+import { t } from "@/i18n";
 import type { Cape, LibrarySkin, SkinProfile, SkinVariant } from "./types";
 
 const DAY = 86_400_000;
@@ -64,7 +65,7 @@ export function createSkinMock() {
   ];
   const find = (id: string) => {
     const found = library.find((s) => s.id === id);
-    if (!found) throw new Error(`Skin „${id}“ wurde nicht gefunden`);
+    if (!found) throw new Error(t("mock.skin.notFound", { id }));
     return found;
   };
 
@@ -90,9 +91,9 @@ export function createSkinMock() {
     },
     async saveActive(name: string) {
       await wait(500);
-      if (!skin) throw new Error("Minecraft meldet für dieses Konto gerade keinen Skin.");
+      if (!skin) throw new Error(t("mock.skin.noneOnAccount"));
       const existing = library.find((s) => textures.get(s.id) === skin!.url);
-      if (existing) throw new Error(`Dieser Skin ist schon in der Bibliothek: „${existing.name}“.`);
+      if (existing) throw new Error(t("mock.skin.alreadyInLibrary", { name: existing.name }));
       const saved: LibrarySkin = { id: `mock-skin-${crypto.randomUUID()}`, name, variant: skin.variant, addedAt: Date.now() };
       textures.set(saved.id, skin.url);
       library.push(saved);

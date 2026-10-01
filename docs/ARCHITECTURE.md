@@ -280,6 +280,14 @@ Oberfläche im Pixel-Design „Pixelkino“ (Spezifikation: `docs/design/PIXELKI
 - Screenshots im Browser: fünf auf einem Canvas gemalte Platzhalter je Instanz aus `lib/mock-screenshots.ts` (`path` ist dort die data:-URL); Öffnen und Im-Ordner-Zeigen gehen nur in der App.
 - Skins im Browser: Beispielprofil und -bibliothek aus `lib/mock-skins.ts` (Texturen auf einem Canvas gemalt); Dateien hinzufügen geht nur in der App.
 
+**Sprache (i18n)**
+
+- `i18n/` – Wörterbuch-Modul ohne Abhängigkeit: `de.ts` und `en.ts` sammeln die Namensräume (`de/common.ts`, `de/format.ts` und je Bereich: Seiten, Komponenten, Hooks, Detail, UI, Mock), `core.ts` übersetzt (`t("ns.key")`, Platzhalter `{name}`), `index.tsx` hängt die Sprache über einen `LanguageProvider` in den React-Baum (`useI18n`). Muss die Mitte eines Satzes ein React-Knoten bleiben (etwa `Count` oder `<b>`), teilt `tAround(key, marker)` den übersetzten Satz am Platzhalter – die Satzstellung bleibt im Wörterbuch.
+- Deutsch ist die Quelle der Wahrheit; Englisch muss exakt dieselben Schlüssel definieren – der Typ von `en` erzwingt das beim Bauen. Deshalb kein i18next: Die Wörterbücher sind das ganze System, die Prüfung läuft zur Compile-Zeit statt zur Laufzeit.
+- Der `LanguageProvider` sitzt in `main.tsx` um den Router und setzt die Modul-Sprache (auch `lib/format.ts` formatiert Zahlen und Daten nach ihr) und `lang` am Wurzelelement. Einstellungen › Darstellung › „Sprache“ wählt System/Deutsch/English und wirkt sofort; „system“ folgt der Browsersprache.
+- `node src/lib/format.check.mjs` prüft die Formatierung beider Sprachen.
+- Fehlermeldungen des Backends (Rust) bleiben Deutsch; alle Frontend-Texte liegen in den Wörterbüchern. Mock-Daten (Instanz-, Welt-, Server-, Datenpaket- und Skin-Namen) sind Simuliertes Nutzerelement und bleiben bewusst unübersetzt; Benutzerdaten übersetzt der Launcher nie.
+
 **Oberfläche**
 
 - `app/Layout.tsx` – rahmenloses Fenster: Fensterleiste mit Wortzeichen, Kontomenü und eigenen Fensterknöpfen (auf allen Systemen, auch unter macOS statt der Ampel), links eine Icon-Seitenleiste (Start · Bibliothek · Entdecken, unten Aufgaben-Menü und Einstellungen) (`@tauri-apps/api/window`, Ziehen per `data-tauri-drag-region`); setzt `--px`, pausiert Szenen, solange Minecraft läuft

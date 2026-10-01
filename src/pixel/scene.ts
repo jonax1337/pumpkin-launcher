@@ -16,15 +16,15 @@ export type SceneMode = "flat" | "live" | "hero";
 export type SunAnchor = "left" | "std" | "seed";
 export const sunFor = (mode: SceneMode, sun?: SunAnchor): SunAnchor => sun ?? (mode === "live" ? "left" : mode === "hero" ? "std" : "seed");
 
-/** Biome: Name, Akzent (Spielen-Knopf, Poster-Ring, Kopf) und Grundfarbe für Ränder. */
-export const BIOMES: Record<Biome, { n: string; acc: string; bg: string }> = {
-  forest: { n: "Wald am Abend", acc: "#EB85D6", bg: "#1B2140" },
-  nether: { n: "Nether", acc: "#FF7447", bg: "#1A0708" },
-  end: { n: "End", acc: "#DCD394", bg: "#07060D" },
-  snow: { n: "Schneeberge", acc: "#F4B4A8", bg: "#2A3764" },
-  cave: { n: "Höhle", acc: "#C8ABEE", bg: "#0A0E16" },
-  sea: { n: "Küste", acc: "#4FD8E6", bg: "#13284A" },
-  plains: { n: "Ebene", acc: "#98B0FF", bg: "#3C6FB4" },
+/** Biome: Akzent (Spielen-Knopf, Poster-Ring, Kopf) und Grundfarbe für Ränder; Namen liegen in `ui.biome.*`. */
+export const BIOMES: Record<Biome, { acc: string; bg: string }> = {
+  forest: { acc: "#EB85D6", bg: "#1B2140" },
+  nether: { acc: "#FF7447", bg: "#1A0708" },
+  end: { acc: "#DCD394", bg: "#07060D" },
+  snow: { acc: "#F4B4A8", bg: "#2A3764" },
+  cave: { acc: "#C8ABEE", bg: "#0A0E16" },
+  sea: { acc: "#4FD8E6", bg: "#13284A" },
+  plains: { acc: "#98B0FF", bg: "#3C6FB4" },
 };
 export const BIOME_KEYS = Object.keys(BIOMES) as Biome[];
 

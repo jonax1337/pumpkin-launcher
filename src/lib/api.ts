@@ -36,16 +36,17 @@ import {
 } from "@/lib/types";
 
 import type { CatalogType, ContentBlocked, ContentSearch, ContentProject, ContentVersion, ContentProgress, ModUpdate, SearchIndex, Source } from "@/lib/modrinth";
+import { currentLanguage, t } from "@/i18n";
 
 // Mock nur im Dev-Server: im Release-Build ist das konstant true, Vite wirft Mock und mock.ts heraus.
 const tauri = !import.meta.env.DEV || isTauri();
 function contentCall<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  if (!tauri) return Promise.reject(new Error("Modrinth-Modpacks benötigen die Tauri-App. Im Browser werden keine Modpacks installiert."));
+  if (!tauri) return Promise.reject(new Error(t("hooks.api.modpacksNeedApp")));
   return call<T>(cmd, args);
 }
 
 /** Fehler für Dinge, die der Browser-Mock nicht kann; `what` ist ein Infinitiv-Satzteil („Ordner öffnen“). */
-const onlyInApp = (what: string) => Promise.reject(new Error(`${what} geht nur in der Pumpkin Launcher-App.`));
+const onlyInApp = (what: string) => Promise.reject(new Error(t("hooks.api.onlyInApp", { what })));
 
 /** Fehler der Tauri-Aufrufe kommen als string (oder Plugin-Fehlerobjekt); hier werden sie zu `Error`. */
 const rethrowAsError = (err: unknown): never => {
@@ -105,7 +106,7 @@ const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 8)}`
 
 function findInstance(id: string): Instance {
   const inst = db.instances.find((i) => i.id === id);
-  if (!inst) throw new Error(`Instanz "${id}" nicht gefunden`);
+  if (!inst) throw new Error(t("hooks.api.instanceNotFound", { id }));
   return inst;
 }
 
@@ -145,7 +146,7 @@ const mock = {
     await delay(800);
     if (db.cancelled.delete(operationId)) throw new Error(CANCELLED);
     const source = findInstance(instanceId);
-    const inst: Instance = { ...clone(source), id: newId("inst"), name: `${source.name} (Kopie)`, createdAt: Date.now(), lastPlayedAt: null, playtimeSecs: 0 };
+    const inst: Instance = { ...clone(source), id: newId("inst"), name: t("hooks.api.duplicateName", { name: source.name }), createdAt: Date.now(), lastPlayedAt: null, playtimeSecs: 0 };
     db.instances.push(inst);
     return clone(inst);
   },
@@ -203,7 +204,7 @@ const mock = {
   async templateCreateInstance(templateId: string, name: string) {
     await delay(800);
     const found = db.templates.find((t) => t.template.id === templateId);
-    if (!found) throw new Error("Die Vorlage gibt es nicht mehr");
+    if (!found) throw new Error(t("hooks.api.templateGone"));
     const inst: Instance = { ...clone(found.instance), id: newId("inst"), name, createdAt: Date.now(), lastPlayedAt: null, playtimeSecs: 0 };
     db.instances.push(inst);
     return clone(inst);
@@ -248,17 +249,17 @@ const mockGame = {
   },
   async launch(instanceId: string, { username, quickPlay }: LaunchOptions) {
     await delay(300);
-    if (!db.installed.has(instanceId)) throw new Error(`Version ${findInstance(instanceId).minecraftVersion} ist nicht installiert`);
-    if (db.running.has(instanceId)) throw new Error("Ungültige Eingabe: Instanz läuft bereits");
+    if (!db.installed.has(instanceId)) throw new Error(t("hooks.api.versionNotInstalled", { version: findInstance(instanceId).minecraftVersion }));
+    if (db.running.has(instanceId)) throw new Error(t("hooks.api.alreadyRunning"));
     let n = 0;
     const log = (line: string, stream: LogPayload["stream"] = "stdout") =>
-      emit<LogPayload>("instance-log", { instanceId, stream, line: `[${new Date().toLocaleTimeString("de")}] ${line}` });
+      emit<LogPayload>("instance-log", { instanceId, stream, line: `[${new Date().toLocaleTimeString(currentLanguage())}] ${line}` });
     log(`[main/INFO]: Setting user: ${username}`);
     if (quickPlay) {
       log(`[main/INFO]: Quick Play: ${quickPlayTarget(quickPlay)}`);
       findInstance(instanceId).lastQuickPlay = quickPlay;
     }
-    db.running.set(instanceId, window.setInterval(() => log(`[Render thread/INFO]: Demo-Logzeile ${++n}`, n % 7 ? "stdout" : "stderr"), 400));
+    db.running.set(instanceId, window.setInterval(() => log(`[Render thread/INFO]: ${t("hooks.api.demoLogLine", { n: ++n })}`, n % 7 ? "stdout" : "stderr"), 400));
     findInstance(instanceId).lastPlayedAt = Date.now();
     return 4242;
   },
@@ -270,14 +271,14 @@ const mockGame = {
     inst.playtimeSecs += Math.round((Date.now() - (inst.lastPlayedAt ?? Date.now())) / 1000);
   },
   async kill(instanceId: string) {
-    if (!db.running.has(instanceId)) throw new Error(`Laufendes Spiel '${instanceId}' nicht gefunden`);
+    if (!db.running.has(instanceId)) throw new Error(t("hooks.api.runningGameNotFound", { id: instanceId }));
     mockGame.stop(instanceId);
     emit<ExitPayload>("instance-exit", { instanceId, code: null, crashed: false, crashReport: null, logFile: null });
   },
   /** Lasttest fürs Protokoll: `pumpkinMock.logBurst("inst-vanilla")` schickt 5000 Zeilen in etwa 1–2 s. */
   async logBurst(instanceId: string, count = 5000) {
     for (let i = 0; i < count; i++) {
-      emit<LogPayload>("instance-log", { instanceId, stream: "stdout", line: `[Render thread/${i % 50 ? "INFO" : "WARN"}]: Lastzeile ${i + 1}` });
+      emit<LogPayload>("instance-log", { instanceId, stream: "stdout", line: `[Render thread/${i % 50 ? "INFO" : "WARN"}]: ${t("hooks.api.loadTestLine", { n: i + 1 })}` });
       if (i % 100 === 99) await delay(20);
     }
   },
@@ -311,7 +312,7 @@ const mockAccounts = {
   async start(method?: "device"): Promise<MsLoginStart> {
     await delay(500);
     if (method !== "device") {
-      return { mode: "browser", userCode: "", verificationUri: "https://login.microsoftonline.com/consumers/", expiresIn: 600, interval: 0, message: "Melde dich im Browser bei Microsoft an." };
+      return { mode: "browser", userCode: "", verificationUri: "https://login.microsoftonline.com/consumers/", expiresIn: 600, interval: 0, message: t("hooks.api.msLoginBrowser") };
     }
     return {
       mode: "device",
@@ -319,7 +320,7 @@ const mockAccounts = {
       verificationUri: "https://www.microsoft.com/link",
       expiresIn: 900,
       interval: 5,
-      message: "Öffne https://www.microsoft.com/link und gib den Code B7KQ-X4TZ ein.",
+      message: t("hooks.api.msLoginDevice", { url: "https://www.microsoft.com/link", code: "B7KQ-X4TZ" }),
     };
   },
   finish(): Promise<Account> {
@@ -333,7 +334,7 @@ const mockAccounts = {
       pendingLogin = {
         cancel: () => {
           clearTimeout(timer);
-          reject(new Error("Anmeldung abgebrochen"));
+          reject(new Error(t("hooks.api.loginCancelled")));
         },
       };
     });
@@ -370,9 +371,9 @@ export const api = {
     tauri ? call("modrinth_identify", { instanceId, modIds }) : mockContent!.identify(instanceId),
   /** Eigene Dateien (absolute Pfade) vorab prüfen: Art und ob die Instanz sie schon hat. */
   checkLocalFiles: (instanceId: string, paths: string[]): Promise<FileCheck[]> =>
-    tauri ? call("instance_check_files", { instanceId, paths }) : onlyInApp("Eigene Dateien hinzufügen"),
+    tauri ? call("instance_check_files", { instanceId, paths }) : onlyInApp(t("hooks.api.addLocalFiles")),
   addLocalFiles: (instanceId: string, files: LocalFile[], operationId: string): Promise<Instance> =>
-    tauri ? call("instance_add_files", { instanceId, files, operationId }) : onlyInApp("Eigene Dateien hinzufügen"),
+    tauri ? call("instance_add_files", { instanceId, files, operationId }) : onlyInApp(t("hooks.api.addLocalFiles")),
   modrinthInstallPack: (versionId: string, name: string, operationId: string): Promise<Instance> =>
     tauri ? call("modrinth_install_pack", { versionId, name, operationId }) : mockPack!(versionId, name, operationId),
   modrinthImportPack: (path: string, name: string, operationId: string): Promise<Instance> =>
@@ -419,10 +420,10 @@ export const api = {
     tauri ? call("instance_export_entries", { instanceId }) : Promise.resolve(["config", "mods", "options.txt", "resourcepacks", "saves", "screenshots"]),
   /** Schreibt die Instanz als `.mrpack` nach `path` (absolut); `include` aus `exportEntries`. Abbrechbar wie ein Pack. */
   exportInstance: (instanceId: string, include: string[], path: string, operationId: string): Promise<void> =>
-    tauri ? call("instance_export", { instanceId, include, path, operationId }) : onlyInApp("Exportieren"),
+    tauri ? call("instance_export", { instanceId, include, path, operationId }) : onlyInApp(t("hooks.api.export")),
   /** Auswahldialog des Systems (Dateien oder, mit `directory`, Ordner); abgebrochen = leere Liste. Im Browser gibt es keine Pfade. */
   pickPaths: async (options: OpenDialogOptions): Promise<string[]> => {
-    if (!tauri) return onlyInApp("Dateien auswählen");
+    if (!tauri) return onlyInApp(t("hooks.api.pickFiles"));
     const picked = await openDialog(options).catch(rethrowAsError);
     return picked === null ? [] : [picked].flat();
   },
@@ -430,7 +431,7 @@ export const api = {
   revealPath: (path: string): Promise<void> =>
     tauri
       ? revealItemInDir(path).catch(rethrowAsError)
-      : onlyInApp("Ordner öffnen"),
+      : onlyInApp(t("hooks.api.openFolder")),
 
   /** Instanzen anderer Launcher an den Standardorten oder, mit `folder` (absolut), in diesem Ordner. */
   importDetect: (folder: string | null): Promise<ForeignInstance[]> =>
@@ -459,7 +460,7 @@ export const api = {
     tauri ? call("instance_status", { instanceId }) : mockGame.status(instanceId),
   /** Spielordner der Instanz (wird angelegt, falls er fehlt). */
   instanceDir: (instanceId: string): Promise<string> =>
-    tauri ? call("instance_dir", { instanceId }) : onlyInApp("Ordner öffnen"),
+    tauri ? call("instance_dir", { instanceId }) : onlyInApp(t("hooks.api.openFolder")),
   installInstance: (instanceId: string): Promise<void> =>
     tauri ? call("instance_install", { instanceId }) : mockGame.install(instanceId),
   /** Startet das Spiel; liefert die Prozess-ID. */
@@ -485,7 +486,7 @@ export const api = {
     tauri ? call("ms_account_remove", { id }) : Promise.resolve(void (db.accounts = db.accounts.filter((a) => a.id !== id))),
   /** Lädt ein Protokoll der Instanz bereinigt zu mclo.gs hoch und liefert den öffentlichen Link. */
   shareLog: (instanceId: string, kind: LogKind): Promise<string> =>
-    tauri ? call("log_share", { instanceId, kind }) : onlyInApp("Protokolle teilen"),
+    tauri ? call("log_share", { instanceId, kind }) : onlyInApp(t("hooks.api.shareLogs")),
   /** Launcher, System und Instanzen als Klartext ohne persönliche Daten, für Fehlerberichte. */
   debugInfo: (defaultMemoryMb: number): Promise<string> => (tauri ? call("debug_info", { defaultMemoryMb }) : mockGame.debugInfo()),
 
@@ -496,7 +497,7 @@ export const api = {
   skinTexture: (id: string): Promise<string> => (tauri ? call("skin_texture", { id }) : mockSkins!.texture(id)),
   /** PNG-Datei (absoluter Pfad aus dem Dateidialog) in die Bibliothek aufnehmen. */
   skinAdd: (path: string): Promise<LibrarySkin> =>
-    tauri ? call("skin_add", { path }) : onlyInApp("Skin-Dateien hinzufügen"),
+    tauri ? call("skin_add", { path }) : onlyInApp(t("hooks.api.addSkinFiles")),
   skinUpdate: (id: string, name: string, variant: SkinVariant): Promise<LibrarySkin> =>
     tauri ? call("skin_update", { id, name, variant }) : mockSkins!.update(id, name, variant),
   skinDelete: (id: string): Promise<void> => (tauri ? call("skin_delete", { id }) : mockSkins!.remove(id)),
@@ -534,7 +535,7 @@ export const api = {
     tauri ? call("datapack_list", { instanceId, worldId }) : mockWorlds!.datapacks(instanceId, worldId),
   /** Eigene Datenpaket-Zips (absolute Pfade) in die Welt; passt eins nicht, kommt keins hinein. */
   datapackAdd: (instanceId: string, worldId: string, paths: string[]): Promise<void> =>
-    tauri ? call("datapack_add", { instanceId, worldId, paths }) : onlyInApp("Eigene Dateien hinzufügen"),
+    tauri ? call("datapack_add", { instanceId, worldId, paths }) : onlyInApp(t("hooks.api.addLocalFiles")),
   /** Datenpaket-Version von Modrinth in die Welt; Fortschritt als `content-progress`. */
   datapackInstall: (instanceId: string, worldId: string, versionId: string, operationId: string): Promise<void> =>
     tauri ? call("datapack_install", { instanceId, worldId, versionId, operationId }) : mockWorlds!.installDatapack(instanceId, worldId, versionId, operationId),
@@ -560,11 +561,11 @@ export const api = {
   openPath: (path: string): Promise<void> =>
     tauri
       ? openPath(path).catch(rethrowAsError)
-      : onlyInApp("Dateien öffnen"),
+      : onlyInApp(t("hooks.api.openFiles")),
 
   /** Neuere Launcher-Version aus den GitHub-Releases, sonst null. Im Browser gibt es keine Updates. */
   checkAppUpdate: (): Promise<Update | null> => (tauri ? check() : Promise.resolve(null)),
   /** Launcher neu starten (nach dem Update auf Systemen, deren Installer das nicht selbst tut). */
   restartApp: (): Promise<void> =>
-    tauri ? relaunch() : onlyInApp("Neu starten"),
+    tauri ? relaunch() : onlyInApp(t("hooks.api.restart")),
 };

@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { create } from "zustand";
+import { t } from "@/i18n";
 import { api } from "@/lib/api";
-import { doneLabel, type ContentProgress, type ContentProject } from "@/lib/modrinth";
+import { type ContentProgress, type ContentProject } from "@/lib/modrinth";
 import { toastError } from "@/lib/toast";
 import type { Instance } from "@/lib/types";
 import { useTasks, type DoneTask } from "@/store/tasks";
@@ -15,19 +16,19 @@ export const useContentState = create<{
   active: string | null; target: string | null; label: string | null; cancellable: boolean; progress: ContentProgress | null;
 }>(() => ({ active: null, target: null, label: null, cancellable: false, progress: null }));
 
-export type ContentRun<R = Instance> = ((operationId: string) => Promise<R>) & { target?: string; label?: string; cancellable?: boolean };
+export type ContentRun<R = Instance> = ((operationId: string) => Promise<R>) & { target?: string; label?: string; doneLabel?: string; cancellable?: boolean };
 
 /**
  * Hängt an einen Lauf, was er betrifft (für den Fortschritt in der passenden Zeile)
- * und wie er im Aufgaben-Menü heißt („Sodium installieren“). `cancellable`: Backend-Befehl
- * `pack_install_cancel` bricht ihn ab, das Aufgaben-Menü zeigt dann „Abbrechen“.
+ * und wie er im Aufgaben-Menü heißt („Sodium installieren“, danach „Sodium installiert“).
+ * `cancellable`: Backend-Befehl `pack_install_cancel` bricht ihn ab, das Aufgaben-Menü zeigt dann „Abbrechen“.
  */
 export const withTarget = <R = Instance>(
   target: string,
   run: (operationId: string) => Promise<R>,
   label?: string,
-  options?: { cancellable?: boolean },
-): ContentRun<R> => Object.assign(run, { target, label, cancellable: options?.cancellable });
+  options?: { cancellable?: boolean; doneLabel?: string },
+): ContentRun<R> => Object.assign(run, { target, label, doneLabel: options?.doneLabel, cancellable: options?.cancellable });
 
 /** Bricht den laufenden Vorgang ab; das Ergebnis meldet der zentrale Fehler-Toast neutral. */
 export function cancelContent() {
@@ -47,7 +48,7 @@ export async function trackContent<R>(
   // A second submit while one runs is ignored: the running operation is already shown.
   if (useContentState.getState().active) return null;
   const operationId = crypto.randomUUID();
-  const label = run.label ?? "Inhalte laden";
+  const label = run.label ?? t("ui.tasks.loadingContents");
   useContentState.setState({ active: operationId, target: run.target ?? null, label, cancellable: !!run.cancellable, progress: null });
   let unlisten: (() => void) | undefined;
   try {
@@ -55,7 +56,7 @@ export async function trackContent<R>(
       if (progress.operationId === operationId && useContentState.getState().active === operationId) useContentState.setState({ progress });
     });
     const result = await run(operationId);
-    useTasks.getState().push({ ...finish(result, label), state: "done" });
+    useTasks.getState().push({ ...finish(result, run.doneLabel ?? label), state: "done" });
     return result;
   } catch (error) {
     useTasks.getState().push({ label, sub: error instanceof Error ? error.message : String(error), state: "fail" });
@@ -75,7 +76,7 @@ export function useContentInstall() {
     mutationFn: (install: ContentRun) =>
       trackContent(qc, install, (instance, label) => {
         qc.setQueryData(instanceKeys.detail(instance.id), instance);
-        return { label: doneLabel(label), sub: instance.name, to: `/instances/${instance.id}` };
+        return { label, sub: instance.name, to: `/instances/${instance.id}` };
       }),
     retry: false,
   });

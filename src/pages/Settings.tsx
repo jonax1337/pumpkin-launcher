@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { useLocation, useSearchParams } from "react-router";
 import { getVersion } from "@tauri-apps/api/app";
 import { toast } from "sonner";
+import { useI18n } from "@/i18n";
 import { useView } from "@/app/Layout";
 import { UpdateRow } from "@/components/AppUpdate";
 import { JavaChooser, MemoryChooser, MemoryHelp } from "@/components/common";
@@ -11,23 +12,30 @@ import { Actions, Button, Count, FormRow, FormSection, Hint, PageHeader, Segment
 import { api } from "@/lib/api";
 import { Buddy, BrandWordmark, useBrand } from "@/branding/Brand";
 import { SEASONS, type PumpkinChoice } from "@/branding/calendar";
+import type { LanguageChoice } from "@/i18n";
 import { useSettings, type PxSize } from "@/store/settings";
 import pkg from "../../package.json";
 
-const SECTIONS = [
-  { value: "konten", label: "Konten" },
-  { value: "spiel", label: "Spiel" },
-  { value: "darstellung", label: "Darstellung" },
-  { value: "erweitert", label: "Erweitert" },
-  { value: "support", label: "Support" },
-  { value: "ueber", label: "Über Pumpkin Launcher" },
+// Abschnitte als Wert + Schlüssel; die Beschriftung löst die Oberfläche erst beim Rendern auf.
+const SECTION_KEYS = [
+  { value: "konten", key: "components.account.accounts" },
+  { value: "spiel", key: "pages.settings.tabGame" },
+  { value: "darstellung", key: "pages.settings.tabAppearance" },
+  { value: "erweitert", key: "components.newInstance.advanced" },
+  { value: "support", key: "pages.settings.tabSupport" },
+  { value: "ueber", key: "pages.settings.tabAbout" },
 ] as const;
-type SectionId = (typeof SECTIONS)[number]["value"];
+type SectionId = (typeof SECTION_KEYS)[number]["value"];
 
-const PX_SIZES: { value: PxSize; label: string }[] = [{ value: "s", label: "Klein" }, { value: "m", label: "Mittel" }, { value: "l", label: "Groß" }];
-const PUMPKINS = [
-  { value: "auto", label: "Automatisch · nach Jahreszeit" },
-  ...SEASONS.map((season) => ({ value: season.id, label: `${season.name} · ${season.label}` })),
+const PX_SIZE_KEYS: { value: PxSize; key: string }[] = [
+  { value: "s", key: "pages.settings.pxSizeSmall" },
+  { value: "m", key: "pages.settings.pxSizeMedium" },
+  { value: "l", key: "pages.settings.pxSizeLarge" },
+];
+const LANGUAGE_KEYS: { value: LanguageChoice; key: string }[] = [
+  { value: "system", key: "pages.settings.langSystem" },
+  { value: "de", key: "pages.settings.langGerman" },
+  { value: "en", key: "pages.settings.langEnglish" },
 ];
 
 const RM = "(prefers-reduced-motion: reduce)";
@@ -39,26 +47,28 @@ const subscribeRm = (cb: () => void) => {
 
 /** Java: automatisch (mitgelieferte Runtime) oder eigene Java-Installation. */
 function JavaRow() {
+  const { t } = useI18n();
   const javaPath = useSettings((s) => s.javaPath);
   const set = useSettings((s) => s.set);
   return (
     <FormRow
       label="Java"
-      hint="Standard für alle Instanzen"
+      hint={t("pages.settings.javaHint")}
       group="radiogroup"
-      aside="Automatisch passt fast immer: Pumpkin Launcher lädt für jede Minecraft-Version die richtige Java-Version. Eine eigene Installation brauchst du nur, wenn eine Anleitung es verlangt."
+      aside={t("pages.settings.javaAside")}
     >
       <JavaChooser
         name="gjava"
         value={javaPath}
         onChange={(path) => set({ javaPath: path })}
-        fallback={<>Automatisch <span className="text-fg-3">(Pumpkin Launcher lädt die passende Version)</span></>}
+        fallback={<>{t("components.memory.auto")} <span className="text-fg-3">{t("pages.settings.javaAutomaticNote")}</span></>}
       />
     </FormRow>
   );
 }
 
 export function SettingsPage() {
+  const { t } = useI18n();
   const { season } = useBrand();
   const s = useSettings();
   const view = useView();
@@ -66,7 +76,9 @@ export function SettingsPage() {
   const [params, setParams] = useSearchParams();
   // ?tab=… gewinnt; #konten (aus dem Kontomenü) und die anderen Abschnitts-Anker öffnen ihren Tab.
   const fromHash = decodeURIComponent(hash.slice(1));
-  const tab: SectionId = SECTIONS.find((t) => t.value === params.get("tab"))?.value ?? SECTIONS.find((t) => t.value === fromHash)?.value ?? "konten";
+  const tab: SectionId = SECTION_KEYS.find((sec) => sec.value === params.get("tab"))?.value ?? SECTION_KEYS.find((sec) => sec.value === fromHash)?.value ?? "konten";
+  // Abschnitts-Beschriftungen erst hier auflösen, damit ein Sprachwechsel sofort greift.
+  const sections = SECTION_KEYS.map(({ value, key }) => ({ value, label: t(key) }));
   const [version, setVersion] = useState<string>(pkg.version);
   const reduced = useSyncExternalStore(subscribeRm, () => matchMedia(RM).matches);
 
@@ -83,17 +95,17 @@ export function SettingsPage() {
     if (el.scrollTop > rest) el.scrollTop = rest;
   }
 
-  const label = SECTIONS.find((t) => t.value === tab)!.label;
+  const label = sections.find((sec) => sec.value === tab)!.label;
 
   return (
     <section className="page set">
-      <PageHeader title="Einstellungen" />
+      <PageHeader title={t("common.settings")} />
       <Tabs
         idBase="st"
         sticky
         className="mt-3"
-        label="Bereiche der Einstellungen"
-        items={[...SECTIONS]}
+        label={t("pages.settings.tabsLabel")}
+        items={sections}
         value={tab}
         onChange={(id) => setParams({ tab: id }, { replace: true })}
         onActivate={(_, el) => settle(el)}
@@ -110,7 +122,7 @@ export function SettingsPage() {
 
           {tab === "spiel" && (
             <>
-              <FormRow label="Arbeitsspeicher" hint="Standard für Instanzen ohne eigenen Wert" group="radiogroup" aside={<MemoryHelp value={s.memoryMb} />}>
+              <FormRow label={t("ui.memory.label")} hint={t("pages.settings.memoryHint")} group="radiogroup" aside={<MemoryHelp value={s.memoryMb} />}>
                 <MemoryChooser name="gram" value={s.memoryMb} onChange={(mb) => s.set({ memoryMb: mb })} help={false} />
               </FormRow>
               <JavaRow />
@@ -119,49 +131,55 @@ export function SettingsPage() {
 
           {tab === "darstellung" && (
             <>
-              <FormRow label="Dein Pumpkin" htmlFor="pumpkin-choice" hint="Wähle eine feste Variante für Buddy, Farben und App-Icon oder lass sie mit den Jahreszeiten wechseln.">
+              <FormRow label={t("common.language")} hint={t("pages.settings.languageHint")}>
+                <Segmented<LanguageChoice> size="s" label={t("common.language")} value={s.language} onChange={(language) => s.set({ language })} items={LANGUAGE_KEYS.map(({ value, key }) => ({ value, label: t(key) }))} />
+              </FormRow>
+              <FormRow label={t("pages.settings.pumpkinLabel")} htmlFor="pumpkin-choice" hint={t("pages.settings.pumpkinHint")}>
                 <Select
                   id="pumpkin-choice"
                   value={s.pumpkin}
-                  options={PUMPKINS}
+                  options={[
+                    { value: "auto", label: t("pages.settings.pumpkinAuto") },
+                    ...SEASONS.map((seasonEntry) => ({ value: seasonEntry.id, label: `${seasonEntry.name} · ${seasonEntry.label}` })),
+                  ]}
                   onChange={(value) => s.set({ pumpkin: value as PumpkinChoice })}
                 />
                 <Actions gap={12}>
                   <Buddy size={72} />
-                  <div><b>{season.name}</b><Hint>{s.pumpkin === 'auto' ? `Automatisch · ${season.id === 'standard' ? 'Zwischen den Jahreszeiten' : season.period}` : 'Fest gewählt · bleibt bis zu deiner nächsten Auswahl'}</Hint></div>
+                  <div><b>{season.name}</b><Hint>{s.pumpkin === 'auto' ? t("pages.settings.pumpkinAutoStatus", { zeit: season.id === 'standard' ? t("pages.settings.pumpkinBetweenSeasons") : season.period }) : t("pages.settings.pumpkinFixedStatus")}</Hint></div>
                 </Actions>
               </FormRow>
-              <FormRow label="Bewegte Szenen & Buddy" hint="Sterne, Wolken, Glut und Buddy. Pausiert, solange Minecraft läuft.">
+              <FormRow label={t("pages.settings.motionLabel")} hint={t("pages.settings.motionHint")}>
                 {/* Wünscht das System weniger Bewegung, gewinnt das: Schalter aus und gesperrt, mit Grund daneben. */}
                 <Actions gap={12}>
                   <Switch
                     checked={s.motion && !reduced}
                     disabled={reduced}
                     onChange={(motion) => s.set({ motion })}
-                    label="Bewegte Szenen & Buddy"
-                    stateText={reduced ? undefined : ["An", "Aus"]}
+                    label={t("pages.settings.motionLabel")}
+                    stateText={reduced ? undefined : [t("ui.switch.on"), t("ui.switch.off")]}
                   />
-                  {reduced && <Hint icon="info">Dein System wünscht weniger Bewegung – Szenen und Buddy stehen still.</Hint>}
+                  {reduced && <Hint icon="info">{t("pages.settings.motionReducedHint")}</Hint>}
                 </Actions>
               </FormRow>
-              <FormRow label="Pixelgröße" hint="Größe der Pixel in Szenen, Ecken und Symbolen">
-                <Segmented<PxSize> size="s" label="Pixelgröße" value={s.pxSize} onChange={(pxSize) => s.set({ pxSize })} items={PX_SIZES} />
+              <FormRow label={t("pages.settings.pxSizeLabel")} hint={t("pages.settings.pxSizeHint")}>
+                <Segmented<PxSize> size="s" label={t("pages.settings.pxSizeLabel")} value={s.pxSize} onChange={(pxSize) => s.set({ pxSize })} items={PX_SIZE_KEYS.map(({ value, key }) => ({ value, label: t(key) }))} />
               </FormRow>
             </>
           )}
 
           {tab === "erweitert" && (
             <>
-              <FormRow label="Zurücksetzen" hint="Einstellungen für Java und Arbeitsspeicher">
+              <FormRow label={t("pages.settings.resetLabel")} hint={t("pages.settings.resetHint")}>
                 <Actions>
                   <Button
                     icon="redo"
                     onClick={() => {
                       s.reset();
-                      toast.success("Java und Arbeitsspeicher stehen wieder auf Standard");
+                      toast.success(t("pages.settings.resetDoneToast"));
                     }}
                   >
-                    Auf Standard zurücksetzen
+                    {t("pages.settings.resetButton")}
                   </Button>
                 </Actions>
               </FormRow>
@@ -177,12 +195,12 @@ export function SettingsPage() {
                 <div>
                   <BrandWordmark />
                   <div className="text-fg-2">
-                    Version <Count value={version} /> · Minecraft-Launcher für Windows, macOS und Linux
+                    {t("common.version")} <Count value={version} /> · {t("pages.settings.aboutTagline")}
                   </div>
                 </div>
               </div>
               <UpdateRow />
-              <Hint className="mt-3.5">Inhalte und Modpacks kommen von Modrinth, CurseForge, FTB und Technic. Minecraft ist eine Marke von Mojang.</Hint>
+              <Hint className="mt-3.5">{t("pages.settings.aboutSources")}</Hint>
             </>
           )}
         </FormSection>

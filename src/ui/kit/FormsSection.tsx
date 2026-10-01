@@ -3,6 +3,7 @@
  * Zustände per data-force (hover/press), aus per disabled; Overlay-Kontext in einer Platte.
  */
 import { useState, type CSSProperties, type ReactNode } from "react";
+import { useI18n } from "@/i18n";
 import {
   Checkbox, Disclosure, Field, FormRow, FormSection, Hint, Icon, NavTabs, Radio, RadioGroup, SearchField, SegSlider, Segmented, Select, Switch,
   TabPanel, Tabs, TextArea, TextField, type TabItem,
@@ -26,26 +27,28 @@ function Lab({ children }: { children: ReactNode }) {
 }
 
 type T = "content" | "console" | "settings" | "off";
-const TABS: TabItem<T>[] = [
-  { value: "content", label: "Inhalte", count: 42, badge: <Icon name="warn" size="s" tone="warn" /> },
-  { value: "console", label: "Protokoll" },
-  { value: "settings", label: "Einstellungen" },
-  { value: "off", label: "Welten", disabled: true },
-];
 type W = "blank" | "pack" | "file";
-const WAYS: TabItem<W>[] = [
-  { value: "blank", label: "Leer", icon: "plus" },
-  { value: "pack", label: "Modpack", icon: "box" },
-  { value: "file", label: "Aus Datei", icon: "file" },
-];
 type V = "grid" | "list";
-const VIEWS: TabItem<V>[] = [
-  { value: "grid", label: "Poster", icon: "grid" },
-  { value: "list", label: "Liste", icon: "list" },
-];
 
 function TabsDemo() {
-  const [t, setT] = useState<T>("content");
+  const { t } = useI18n();
+  // Einträge erst hier, damit die Beschriftungen in der aktuellen Sprache entstehen.
+  const TABS: TabItem<T>[] = [
+    { value: "content", label: t("pages.instances.colContents"), count: 42, badge: <Icon name="warn" size="s" tone="warn" /> },
+    { value: "console", label: t("components.log.ariaLabel") },
+    { value: "settings", label: t("common.settings") },
+    { value: "off", label: t("common.worlds"), disabled: true },
+  ];
+  const WAYS: TabItem<W>[] = [
+    { value: "blank", label: t("ui.kit.wayBlank"), icon: "plus" },
+    { value: "pack", label: t("components.catalog.one.modpack"), icon: "box" },
+    { value: "file", label: t("ui.kit.wayFromFile"), icon: "file" },
+  ];
+  const VIEWS: TabItem<V>[] = [
+    { value: "grid", label: t("pages.instances.viewPoster"), icon: "grid" },
+    { value: "list", label: t("pages.instances.viewList"), icon: "list" },
+  ];
+  const [tab, setTab] = useState<T>("content");
   const [w, setW] = useState<W>("blank");
   const [v, setV] = useState<V>("grid");
   const [f, setF] = useState("all");
@@ -54,11 +57,11 @@ function TabsDemo() {
     <>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <span style={cap}>underline m · idBase + TabPanel · Zähler + Badge · aus</span>
-        <Tabs label="Bereiche der Instanz" items={TABS} value={t} onChange={setT} idBase="kit-dt" />
-        <TabPanel idBase="kit-dt" value={t} style={{ padding: "10px 0", color: "var(--fg-2)" }}>Inhalt von „{t}“</TabPanel>
+        <Tabs label={t("pages.detail.tabsLabel")} items={TABS} value={tab} onChange={setTab} idBase="kit-dt" />
+        <TabPanel idBase="kit-dt" value={tab} style={{ padding: "10px 0", color: "var(--fg-2)" }}>{t("ui.kit.tabPanelDemo", { value: tab })}</TabPanel>
         <span style={cap}>underline s mit Icons · erzwungen hover / press</span>
         <div style={row}>
-          <Tabs size="s" label="Weg klein" items={WAYS} value={w} onChange={setW} />
+          <Tabs size="s" label={t("ui.kit.waysSmall")} items={WAYS} value={w} onChange={setW} />
           <span className="vx-tabs" data-variant="underline" style={{ boxShadow: "none" }}>
             <button type="button" className="vx-tab fx" data-force="hover" tabIndex={-1}><span className="vx-tc">hover</span><i className="vx-tab-tick" /></button>
             <button type="button" className="vx-tab fx" data-force="press" tabIndex={-1}><span className="vx-tc">press</span><i className="vx-tab-tick" /></button>
@@ -67,34 +70,34 @@ function TabsDemo() {
         <span style={cap}>NavTabs (Links, aria-current)</span>
         <NavTabs items={[
           { to: "/_kit", label: "Kit", match: (p) => p.startsWith("/_kit"), shortcut: "Control+1" },
-          { to: "/instances", label: "Bibliothek", match: (p) => p.startsWith("/instances"), shortcut: "Control+2" },
-          { to: "/discover", label: "Entdecken", match: (p) => p.startsWith("/discover"), shortcut: "Control+3" },
+          { to: "/instances", label: t("ui.nav.library"), match: (p) => p.startsWith("/instances"), shortcut: "Control+2" },
+          { to: "/discover", label: t("ui.nav.discover"), match: (p) => p.startsWith("/discover"), shortcut: "Control+3" },
         ]} />
       </div>
       <div style={{ ...row, alignItems: "flex-start" }}>
         <div style={{ width: 168 }} data-kit="vertical">
           <span style={cap}>vertical m</span>
-          <Tabs variant="vertical" label="Weg" items={WAYS} value={w} onChange={setW} idBase="kit-ni" />
+          <Tabs variant="vertical" label={t("ui.kit.ways")} items={WAYS} value={w} onChange={setW} idBase="kit-ni" />
         </div>
         <div style={{ width: 168 }}>
           <span style={cap}>vertical s</span>
-          <Tabs variant="vertical" size="s" label="Weg (klein)" items={WAYS} value={w} onChange={setW} />
+          <Tabs variant="vertical" size="s" label={t("ui.kit.waysSmall")} items={WAYS} value={w} onChange={setW} />
         </div>
         <div className="plate" style={{ width: 200, padding: 12 }}>
           <span style={cap}>vertical in Platte</span>
-          <Tabs variant="vertical" label="Weg (Platte)" items={WAYS} value={w} onChange={setW} />
+          <Tabs variant="vertical" label={t("ui.kit.waysPanel")} items={WAYS} value={w} onChange={setW} />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }} data-kit="segments">
           <span style={cap}>Segmented m · s · nur Symbole · tablist</span>
-          <Segmented label="Ansicht" items={VIEWS} value={v} onChange={setV} />
-          <Segmented size="s" label="Pixelgröße" items={[{ value: "s", label: "Klein" }, { value: "m", label: "Mittel" }, { value: "l", label: "Groß" }, { value: "x", label: "Riesig", disabled: true }]} value={px} onChange={setPx} />
+          <Segmented label={t("pages.instances.viewLabel")} items={VIEWS} value={v} onChange={setV} />
+          <Segmented size="s" label={t("ui.kit.pxSize")} items={[{ value: "s", label: t("pages.settings.pxSizeSmall") }, { value: "m", label: t("pages.settings.pxSizeMedium") }, { value: "l", label: t("pages.settings.pxSizeLarge") }, { value: "x", label: t("ui.kit.pxHuge"), disabled: true }]} value={px} onChange={setPx} />
           <div style={row}>
-            <Segmented iconsOnly label="Ansicht (Symbole)" items={VIEWS} value={v} onChange={setV} />
-            <Segmented iconsOnly size="s" label="Ansicht (Symbole, klein)" items={VIEWS} value={v} onChange={setV} />
+            <Segmented iconsOnly label={t("ui.kit.viewIcons")} items={VIEWS} value={v} onChange={setV} />
+            <Segmented iconsOnly size="s" label={t("ui.kit.viewIconsSmall")} items={VIEWS} value={v} onChange={setV} />
           </div>
-          <Tabs variant="segment" label="Filter" items={[{ value: "all", label: "Alle", count: 42 }, { value: "mod", label: "Mods", count: 38 }, { value: "rp", label: "Pakete", count: 4 }]} value={f} onChange={setF} />
+          <Tabs variant="segment" label={t("components.log.filter")} items={[{ value: "all", label: t("common.all"), count: 42 }, { value: "mod", label: "Mods", count: 38 }, { value: "rp", label: t("ui.kit.packs"), count: 4 }]} value={f} onChange={setF} />
           <div className="plate" style={{ padding: 12 }}>
-            <Segmented size="s" label="Ansicht (Platte)" items={VIEWS} value={v} onChange={setV} />
+            <Segmented size="s" label={t("ui.kit.viewPlate")} items={VIEWS} value={v} onChange={setV} />
           </div>
         </div>
       </div>
@@ -102,43 +105,44 @@ function TabsDemo() {
   );
 }
 
-const OPTS = [
-  { value: "1.21.4", label: "1.21.4 (neueste)" },
+const OPTS = (t: (key: string) => string) => [
+  { value: "1.21.4", label: `1.21.4 (${t("ui.kit.optLatest")})` },
   { value: "1.21.3", label: "1.21.3" },
   { value: "1.20.1", label: "1.20.1" },
-  { value: "24w14a", label: "24w14a (Vorabversion)" },
-  { value: "x", label: "Nicht verfügbar", disabled: true },
+  { value: "24w14a", label: `24w14a (${t("ui.kit.optSnapshot")})` },
+  { value: "x", label: t("ui.kit.optUnavailable"), disabled: true },
 ];
 
 function FormDemo() {
+  const { t } = useI18n();
   const [name, setName] = useState("Survival");
   const [java, setJava] = useState<"auto" | "own">("auto");
   const [motion, setMotion] = useState(true);
   const [args, setArgs] = useState("");
   return (
     <div style={{ maxWidth: "var(--page-max)" }} data-kit="form">
-      <FormSection title="Allgemein">
-        <FormRow label="Name" htmlFor="kit-name" aside="Erscheint auf Start, Poster und Kopf. Höchstens 64 Zeichen.">
+      <FormSection title={t("detail.settings.generalSection")}>
+        <FormRow label={t("common.name")} htmlFor="kit-name" aside={t("ui.kit.nameHelp")}>
           <TextField id="kit-name" value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />
         </FormRow>
-        <FormRow label="Java" hint="Standard für alle Instanzen" group="radiogroup" aside="Automatisch passt fast immer.">
-          <RadioGroup name="kit-java" value={java} onChange={setJava} options={[{ value: "auto", label: <>Automatisch <span className="faint">(Pumpkin Launcher lädt die passende Version)</span></> }, { value: "own", label: "Eigene Java-Installation" }]} />
-          <TextField disabled={java === "auto"} aria-label="Pfad zu Java" placeholder="Pfad zu Java" />
+        <FormRow label="Java" hint={t("pages.settings.javaHint")} group="radiogroup" aside={t("ui.kit.javaAside")}>
+          <RadioGroup name="kit-java" value={java} onChange={setJava} options={[{ value: "auto", label: <>{t("components.memory.auto")} <span className="faint">{t("ui.kit.javaAutoDetail")}</span></> }, { value: "own", label: t("components.java.own") }]} />
+          <TextField disabled={java === "auto"} aria-label={t("ui.kit.javaPath")} placeholder={t("ui.kit.javaPath")} />
         </FormRow>
-        <FormRow label="Bewegte Szenen" hint="Sterne, Wolken, Glut.">
-          <Switch checked={motion} onChange={setMotion} label="Bewegte Szenen" stateText={["An", "Aus"]} />
+        <FormRow label={t("ui.kit.motionLabel")} hint={t("ui.kit.motionHint")}>
+          <Switch checked={motion} onChange={setMotion} label={t("ui.kit.motionLabel")} stateText={[t("ui.switch.on"), t("ui.switch.off")]} />
         </FormRow>
-        <FormRow label="Erweitert">
-          <Disclosure summary="Java-Startoptionen">
-            <TextArea rows={3} aria-label="Java-Startoptionen" placeholder="-XX:+UseG1GC" value={args} onChange={(e) => setArgs(e.target.value)} />
+        <FormRow label={t("components.newInstance.advanced")}>
+          <Disclosure summary={t("detail.settings.jvmOptionsLabel")}>
+            <TextArea rows={3} aria-label={t("detail.settings.jvmOptionsLabel")} placeholder="-XX:+UseG1GC" value={args} onChange={(e) => setArgs(e.target.value)} />
           </Disclosure>
         </FormRow>
-        <FormRow label="Breit" hint="wide: über Steuer- und Hilfespalte" wide>
+        <FormRow label={t("ui.kit.wide")} hint={t("ui.kit.wideHint")} wide>
           <div style={{ height: 40, background: "var(--panel)", clipPath: "var(--n1)" }} />
         </FormRow>
       </FormSection>
-      <FormSection title="Nur für Vorleser" srOnlyTitle>
-        <FormRow label="Speicher" group="group" aside={<Hint tone="warn" live>Mehr als drei Viertel deines Arbeitsspeichers.</Hint>}>
+      <FormSection title={t("ui.kit.srOnly")} srOnlyTitle>
+        <FormRow label={t("ui.kit.memory")} group="group" aside={<Hint tone="warn" live>{t("ui.kit.memoryWarn")}</Hint>}>
           <SegSlider value={12} max={14} onChange={() => undefined} />
         </FormRow>
       </FormSection>
@@ -147,6 +151,7 @@ function FormDemo() {
 }
 
 function FieldsDemo() {
+  const { t } = useI18n();
   const [n, setN] = useState("");
   const [q, setQ] = useState("sodium");
   const [qs, setQs] = useState("");
@@ -154,53 +159,55 @@ function FieldsDemo() {
   const [sort, setSort] = useState("dl");
   const [loader, setLoader] = useState("fabric");
   const [snap, setSnap] = useState(false);
+  const options = OPTS(t);
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: "8px 40px", alignItems: "start" }} data-kit="fields">
       <div>
-        <Field label="Name" help="Vorschlag aus Version und Loader. Du kannst ihn später ändern." reserveLines={1}>
+        <Field label={t("common.name")} help={t("ui.kit.nameSuggestion")} reserveLines={1}>
           <TextField value={n} onChange={(e) => setN(e.target.value)} placeholder="Fabric 1.21.4" />
         </Field>
-        <Field label="Name (Fehler)" error={n.length > 3 ? undefined : "Mindestens 4 Zeichen."} reserveLines={1}>
+        <Field label={t("ui.kit.nameErrorField")} error={n.length > 3 ? undefined : t("ui.kit.nameMinLength")} reserveLines={1}>
           <TextField value={n} onChange={(e) => setN(e.target.value)} />
         </Field>
-        <Field label="Server" optional>
+        <Field label={t("common.server")} optional>
           <TextField size="s" width="m" placeholder="play.example.net" />
         </Field>
-        <Field label="Minecraft-Version" htmlFor="kit-mc">
+        <Field label={t("components.newInstance.mcVersion")} htmlFor="kit-mc">
           <div className="flex flex-wrap items-center gap-2">
-            <Select id="kit-mc" value={ver} onChange={setVer} options={OPTS} />
-            <Checkbox checked={snap} onChange={setSnap}>Vorabversionen zeigen</Checkbox>
+            <Select id="kit-mc" value={ver} onChange={setVer} options={options} />
+            <Checkbox checked={snap} onChange={setSnap}>{t("ui.kit.showSnapshots")}</Checkbox>
           </div>
         </Field>
-        <Field label="Loader" group help="Fabric: leicht und schnell, die meisten neuen Mods.">
+        <Field label="Loader" group help={t("ui.kit.loaderHelp")}>
           <Segmented label="Loader" items={[{ value: "vanilla", label: "Vanilla" }, { value: "fabric", label: "Fabric" }, { value: "forge", label: "Forge" }, { value: "quilt", label: "Quilt" }]} value={loader} onChange={setLoader} />
         </Field>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
-        <SearchField value={q} onChange={setQ} placeholder="Mods suchen" width="l" />
-        <SearchField size="s" value={qs} onChange={setQs} placeholder="Suchen (s)" width="m" />
+        <SearchField value={q} onChange={setQ} placeholder={t("ui.kit.searchMods")} width="l" />
+        <SearchField size="s" value={qs} onChange={setQs} placeholder={t("ui.kit.searchSmall")} width="m" />
         <div style={row}>
           <TextField width="s" placeholder="width s" />
-          <TextField width={120} size="s" disabled placeholder="aus" />
+          <TextField width={120} size="s" disabled placeholder={t("ui.kit.stateOff")} />
         </div>
         <div style={row}>
-          <Select label="Sortieren" value={sort} onChange={setSort} options={[{ value: "dl", label: "Downloads" }, { value: "new", label: "Neueste" }, { value: "rel", label: "Relevanz" }]} />
-          <Select size="s" ariaLabel="Version klein" value={ver} onChange={setVer} options={OPTS} />
-          <Select size="s" ariaLabel="Leer" value="" onChange={() => undefined} options={[]} placeholder="Keine Versionen" />
+          <Select label={t("pages.instances.sortLabel")} value={sort} onChange={setSort} options={[{ value: "dl", label: t("pages.discover.sortDownloads") }, { value: "new", label: t("pages.discover.sortNewest") }, { value: "rel", label: t("pages.discover.sortRelevance") }]} />
+          <Select size="s" ariaLabel={t("ui.kit.versionSmall")} value={ver} onChange={setVer} options={options} />
+          <Select size="s" ariaLabel={t("ui.kit.wayBlank")} value="" onChange={() => undefined} options={[]} placeholder={t("components.version.none")} />
         </div>
-        <TextArea rows={2} width="full" defaultValue={"-Xmx4G\n-XX:+UseG1GC"} aria-label="Argumente" />
-        <Hint>Neutral: Mehr als 8 GB bringt selten etwas.</Hint>
-        <Hint tone="ok">Java 21 gefunden.</Hint>
-        <Hint tone="warn">Das ist mehr als drei Viertel deines Arbeitsspeichers.</Hint>
-        <Hint tone="bad">Für Minecraft 1.21.4 gibt es noch kein Quilt.</Hint>
-        <Hint icon="info">Mit eigenem Icon (info).</Hint>
-        <Disclosure summary="Erweitert (offen)" open><span className="muted">Inhalt</span></Disclosure>
+        <TextArea rows={2} width="full" defaultValue={"-Xmx4G\n-XX:+UseG1GC"} aria-label={t("ui.kit.args")} />
+        <Hint>{t("ui.kit.memHint")}</Hint>
+        <Hint tone="ok">{t("ui.kit.javaFound")}</Hint>
+        <Hint tone="warn">{t("ui.kit.memWarn")}</Hint>
+        <Hint tone="bad">{t("ui.kit.noQuilt")}</Hint>
+        <Hint icon="info">{t("ui.kit.customIcon")}</Hint>
+        <Disclosure summary={t("ui.kit.advancedOpen")} open><span className="muted">{t("ui.kit.content")}</span></Disclosure>
       </div>
     </div>
   );
 }
 
 function TogglesDemo() {
+  const { t } = useI18n();
   const [a, setA] = useState(true);
   const [b, setB] = useState(false);
   const [c, setC] = useState(true);
@@ -210,42 +217,43 @@ function TogglesDemo() {
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }} data-kit="toggles">
       <div style={row}>
         <Lab>Switch</Lab>
-        <Switch checked={a} onChange={setA} label="Schalter A" />
-        <Switch checked={!a} onChange={(x) => setA(!x)} label="Schalter B" stateText={["An", "Aus"]} />
-        <Switch checked={b} onChange={setB} label="Mit sichtbarem Namen" visibleLabel stateText={["An", "Aus"]} />
-        <Switch checked={true} onChange={() => undefined} label="aus (an)" disabled />
-        <Switch checked={false} onChange={() => undefined} label="aus (aus)" disabled visibleLabel />
+        <Switch checked={a} onChange={setA} label={t("ui.kit.switchA")} />
+        <Switch checked={!a} onChange={(x) => setA(!x)} label={t("ui.kit.switchB")} stateText={[t("ui.switch.on"), t("ui.switch.off")]} />
+        <Switch checked={b} onChange={setB} label={t("ui.kit.visibleName")} visibleLabel stateText={[t("ui.switch.on"), t("ui.switch.off")]} />
+        <Switch checked={true} onChange={() => undefined} label={t("ui.kit.offOn")} disabled />
+        <Switch checked={false} onChange={() => undefined} label={t("ui.kit.offOff")} disabled visibleLabel />
       </div>
       <div style={row}>
         <Lab>Checkbox</Lab>
-        <Checkbox checked={c} onChange={setC} label="Nackt" />
-        <Checkbox checked={false} indeterminate onChange={() => undefined} label="Teilweise" />
-        <Checkbox checked={b} onChange={setB}>Vorabversionen zeigen</Checkbox>
-        <Checkbox checked={true} onChange={() => undefined} disabled>aus (an)</Checkbox>
-        <Checkbox checked={false} onChange={() => undefined} disabled>aus</Checkbox>
+        <Checkbox checked={c} onChange={setC} label={t("ui.kit.bare")} />
+        <Checkbox checked={false} indeterminate onChange={() => undefined} label={t("ui.kit.indeterminate")} />
+        <Checkbox checked={b} onChange={setB}>{t("ui.kit.showSnapshots")}</Checkbox>
+        <Checkbox checked={true} onChange={() => undefined} disabled>{t("ui.kit.offOn")}</Checkbox>
+        <Checkbox checked={false} onChange={() => undefined} disabled>{t("ui.kit.stateOff")}</Checkbox>
       </div>
       <div style={{ ...row, alignItems: "flex-start" }}>
         <Lab>Radio</Lab>
-        <RadioGroup name="kit-r" label="Radio-Gruppe" value={r} onChange={setR} options={[{ value: "a", label: "Automatisch" }, { value: "b", label: "Eigener Wert" }, { value: "c", label: "Gesperrt", disabled: true }]} />
-        <Radio name="kit-r2" checked={false} onChange={() => undefined}>Einzeln</Radio>
+        <RadioGroup name="kit-r" label={t("ui.kit.radioGroup")} value={r} onChange={setR} options={[{ value: "a", label: t("components.memory.auto") }, { value: "b", label: t("components.memory.ownValue") }, { value: "c", label: t("ui.kit.locked"), disabled: true }]} />
+        <Radio name="kit-r2" checked={false} onChange={() => undefined}>{t("ui.kit.single")}</Radio>
       </div>
       <div style={row}>
         <Lab>SegSlider</Lab>
         <SegSlider value={gb} max={12} onChange={setGb} />
         <span className="num" style={{ fontSize: 24 }}>{gb} GB</span>
-        <SegSlider value={4} disabled onChange={() => undefined} label="Arbeitsspeicher (aus)" />
+        <SegSlider value={4} disabled onChange={() => undefined} label={t("ui.memory.disabledLabel")} />
       </div>
     </div>
   );
 }
 
 export function FormsSection() {
+  const { t } = useI18n();
   return (
     <>
-      <Sec title="Tabs" id="tabs"><TabsDemo /></Sec>
-      <Sec title="Formular (FormSection · FormRow)" id="formrow"><FormDemo /></Sec>
-      <Sec title="Felder, Auswahl, Hinweise" id="fields"><FieldsDemo /></Sec>
-      <Sec title="Umschalter" id="toggles"><TogglesDemo /></Sec>
+      <Sec title={t("ui.kit.secTabs")} id="tabs"><TabsDemo /></Sec>
+      <Sec title={t("ui.kit.secForm")} id="formrow"><FormDemo /></Sec>
+      <Sec title={t("ui.kit.secFields")} id="fields"><FieldsDemo /></Sec>
+      <Sec title={t("ui.kit.secToggles")} id="toggles"><TogglesDemo /></Sec>
     </>
   );
 }

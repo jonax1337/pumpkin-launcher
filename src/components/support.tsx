@@ -1,5 +1,6 @@
 import type { ComponentProps } from "react";
 import { create } from "zustand";
+import { useI18n } from "@/i18n";
 import { Actions, Button, ConfirmDialog, FormRow } from "@/ui";
 import { useCopyDebugInfo, useShareLog } from "@/hooks/useSupport";
 import { openPage } from "@/lib/links";
@@ -20,19 +21,20 @@ export const shareKindAfter = (crash: ExitPayload | undefined): LogKind => (cras
 
 /** Rückfrage vor dem Hochladen: was öffentlich wird und was vorher entfernt wird. Einmal im Layout. */
 export function ShareLogDialog() {
+  const { t } = useI18n();
   const request = useShareAsk((s) => s.request);
   const share = useShareLog();
   const close = () => useShareAsk.setState({ request: null });
-  const what = request?.kind === "crashReport" ? "den Absturzbericht" : "das Protokoll des letzten Starts";
+  const what = request?.kind === "crashReport" ? t("components.share.whatCrashReport") : t("components.share.whatLatestLog");
   return (
     <ConfirmDialog
       open={!!request}
       onOpenChange={(o) => !o && close()}
       danger={false}
-      title="Log öffentlich teilen?"
-      text={`Pumpkin Launcher lädt ${what} zu mclo.gs hoch. Jeder mit dem Link kann es lesen. Zugangsdaten, der Benutzername in Dateipfaden und E-Mail-Adressen werden vorher entfernt. Dein Spielername bleibt sichtbar.`}
-      confirmLabel="Hochladen"
-      pendingLabel="Lädt hoch"
+      title={t("components.share.title")}
+      text={t("components.share.text", { was: what })}
+      confirmLabel={t("components.share.upload")}
+      pendingLabel={t("components.share.uploading")}
       pending={share.isPending}
       onConfirm={() => request && share.mutate(request, { onSettled: close })}
     />
@@ -41,27 +43,29 @@ export function ShareLogDialog() {
 
 /** „Debug-Info kopieren“ im Aussehen des Aufrufers (Größe, Symbol, kompakt). */
 export function DebugInfoButton(look: Omit<ComponentProps<typeof Button>, "onClick" | "children">) {
+  const { t } = useI18n();
   const copy = useCopyDebugInfo();
-  return <Button {...look} disabled={copy.isPending} onClick={() => copy.mutate()}>Debug-Info kopieren</Button>;
+  return <Button {...look} disabled={copy.isPending} onClick={() => copy.mutate()}>{t("components.support.copyDebugInfo")}</Button>;
 }
 
 /** Einstellungen › Support: Fehler melden mit Debug-Info, Fragen in den Diskussionen. */
 export function SupportSection() {
+  const { t } = useI18n();
   return (
     <>
       <FormRow
-        label="Fehler melden"
-        hint="Als Issue auf GitHub"
-        aside="Die Debug-Info nennt Version, System und Instanzen, ohne Namen, Konten oder Pfade. Nach einem Absturz hilft zusätzlich „Log teilen“ im Protokoll der Instanz."
+        label={t("components.support.reportBug")}
+        hint={t("components.support.reportHint")}
+        aside={t("components.support.reportAside")}
       >
         <Actions wrap>
-          <Button icon="ext" onClick={() => openPage(`${REPO_URL}/issues/new/choose`)}>Fehler melden</Button>
+          <Button icon="ext" onClick={() => openPage(`${REPO_URL}/issues/new/choose`)}>{t("components.support.reportBug")}</Button>
           <DebugInfoButton icon="info" />
         </Actions>
       </FormRow>
-      <FormRow label="Fragen und Ideen" hint="In den GitHub-Diskussionen">
+      <FormRow label={t("components.support.questionsLabel")} hint={t("components.support.questionsHint")}>
         <Actions>
-          <Button icon="ext" onClick={() => openPage(`${REPO_URL}/discussions`)}>Diskussionen öffnen</Button>
+          <Button icon="ext" onClick={() => openPage(`${REPO_URL}/discussions`)}>{t("components.support.openDiscussions")}</Button>
         </Actions>
       </FormRow>
     </>

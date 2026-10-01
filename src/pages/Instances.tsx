@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useSearchParams } from "react-router";
+import { useI18n } from "@/i18n";
 import { LOUD_PHASES, PlayButton, StatusChip, usePhase } from "@/components/game";
 import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
 import { loaderLine, playtimeLine } from "@/components/common";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
 import { useBackgroundUpdates, useModUpdates } from "@/hooks/useContent";
-import { groupsOf, UNGROUPED, useInstances } from "@/hooks/useInstances";
+import { groupsOf, ungrouped, useInstances } from "@/hooks/useInstances";
 import { formatDate, formatPlaytime, relativeTime } from "@/lib/format";
 import { ALL_LOADERS, LOADER_LABELS, type Instance, type ModLoader } from "@/lib/types";
 import { lookOf, useLookStore } from "@/store/look";
@@ -56,13 +57,14 @@ function useCachedUpdates(inst: Instance) {
 
 /** Status nur als Ausnahme: installiert gerade, startet, läuft, abgestürzt oder mit Updates. Der Normalfall bleibt leer. */
 function LibStatus({ inst }: { inst: Instance }) {
+  const { t } = useI18n();
   const phase = usePhase(inst.id);
   const nUpd = useCachedUpdates(inst);
   if (LOUD_PHASES.includes(phase)) return <StatusChip instance={inst} small />;
   if (nUpd > 0)
     return (
       <Chip icon="up">
-        <Count value={nUpd} /> {nUpd === 1 ? "Update" : "Updates"}
+        <Count value={nUpd} /> {nUpd === 1 ? t("common.update") : t("common.updates")}
       </Chip>
     );
   return null;
@@ -73,6 +75,7 @@ function LibStatus({ inst }: { inst: Instance }) {
  * Rechtsklick öffnet das Menü. Unter dem Namen ist nur Platz für eine Angabe neben der Version: Spielzeit, sonst „zuletzt gespielt“.
  */
 function PosterCard({ inst, index, looks }: { inst: Instance; index: number; looks: Looks }) {
+  const { t } = useI18n();
   const items = useInstanceMenu(inst);
   return (
     <SceneCard
@@ -83,7 +86,7 @@ function PosterCard({ inst, index, looks }: { inst: Instance; index: number; loo
       status={<LibStatus inst={inst} />}
       primary={<PlayButton instance={inst} size="m" />}
       actions={<InstanceMenuButton instance={inst} small variant="g" onScene />}
-      hit={{ to: `/instances/${inst.id}`, label: `${inst.name} öffnen` }}
+      hit={{ to: `/instances/${inst.id}`, label: t("pages.instances.openInstance", { name: inst.name }) }}
       menu={items}
       index={index}
     />
@@ -92,12 +95,13 @@ function PosterCard({ inst, index, looks }: { inst: Instance; index: number; loo
 
 /** Listenzeile, 56 px, feste Spalten. Die ganze Zeile öffnet die Instanz; Spielen und Menü liegen darüber. */
 function InstanceRow({ inst, index, looks }: { inst: Instance; index: number; looks: Looks }) {
+  const { t } = useI18n();
   const items = useInstanceMenu(inst);
   const look = lookOf(looks, inst.id);
   return (
-    <ListRow hit={{ to: `/instances/${inst.id}`, label: `${inst.name} öffnen` }} menu={items} index={Math.min(index, 12)} style={{ "--acc": look.acc } as CSSProperties}>
+    <ListRow hit={{ to: `/instances/${inst.id}`, label: t("pages.instances.openInstance", { name: inst.name }) }} menu={items} index={Math.min(index, 12)} style={{ "--acc": look.acc } as CSSProperties}>
       <SceneThumb bio={look.bio} seed={look.seed} />
-      <RowTitle title={inst.name} sub={`erstellt ${formatDate(inst.createdAt)}`} />
+      <RowTitle title={inst.name} sub={t("pages.instances.createdOn", { datum: formatDate(inst.createdAt) })} />
       <Cell title={loaderLine(inst)}>{loaderLine(inst)}</Cell>
       <Cell hide={1040}><Count value={inst.mods.length} /></Cell>
       <Cell hide={1040}>{relativeTime(inst.lastPlayedAt)}</Cell>
@@ -111,6 +115,7 @@ function InstanceRow({ inst, index, looks }: { inst: Instance; index: number; lo
 
 /** Instanzen als Poster oder Liste. */
 function InstanceView({ instances, mode, looks }: { instances: Instance[]; mode: Mode; looks: Looks }) {
+  const { t } = useI18n();
   if (mode === "poster")
     return (
       <CardGrid>
@@ -121,16 +126,16 @@ function InstanceView({ instances, mode, looks }: { instances: Instance[]; mode:
     <List
       variant="instances"
       divided
-      aria-label="Instanzen"
+      aria-label={t("common.instances")}
       head={
         <>
           <span />
-          <Cell>Name</Cell>
-          <Cell>Version</Cell>
-          <Cell hide={1040}>Inhalte</Cell>
-          <Cell hide={1040}>Zuletzt gespielt</Cell>
-          <Cell hide={1180}>Spielzeit</Cell>
-          <Cell>Status</Cell>
+          <Cell>{t("common.name")}</Cell>
+          <Cell>{t("common.version")}</Cell>
+          <Cell hide={1040}>{t("pages.instances.colContents")}</Cell>
+          <Cell hide={1040}>{t("pages.instances.colLastPlayed")}</Cell>
+          <Cell hide={1180}>{t("pages.instances.colPlaytime")}</Cell>
+          <Cell>{t("common.status")}</Cell>
           <span />
           <span />
         </>
@@ -142,6 +147,7 @@ function InstanceView({ instances, mode, looks }: { instances: Instance[]; mode:
 }
 
 export function InstancesPage() {
+  const { t } = useI18n();
   const { data: instances, isLoading, error, refetch } = useInstances();
   const looks = useLookStore((s) => s.looks);
   const collapsed = useLookStore((s) => s.collapsed);
@@ -171,25 +177,25 @@ export function InstancesPage() {
   const lastView = useRef(viewKey);
   useEffect(() => {
     if (viewKey === lastView.current) return;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       lastView.current = viewKey;
-      setSaid(`${shown.length} von ${total} ${total === 1 ? "Instanz" : "Instanzen"}`);
+      setSaid(t(total === 1 ? "pages.instances.resultCount.one" : "pages.instances.resultCount.other", { shown: shown.length, total }));
     }, 500);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [viewKey, shown.length, total]);
 
   // Leere Bibliothek: keine Werkzeugleiste, der Leerzustand trägt „Neue Instanz“.
   const empty = !error && !isLoading && !instances?.length;
   const newInstance = (
-    <Button variant="primary" icon="plus" aria-keyshortcuts="Control+N" onClick={() => setParams({ neu: "1" }, { replace: true })}>Neue Instanz</Button>
+    <Button variant="primary" icon="plus" aria-keyshortcuts="Control+N" onClick={() => setParams({ neu: "1" }, { replace: true })}>{t("components.newInstance.title")}</Button>
   );
 
   let body;
   if (error) {
-    body = <ErrorBox title="Die Bibliothek konnte nicht geladen werden" error={error} onRetry={() => void refetch()} />;
+    body = <ErrorBox title={t("pages.instances.loadErrorTitle")} error={error} onRetry={() => void refetch()} />;
   } else if (isLoading) {
     body = (
-      <CardGrid aria-busy aria-label="Wird geladen">
+      <CardGrid aria-busy aria-label={t("components.common.loadingAria")}>
         {[0, 1, 2, 3].map((k) => <Skel key={k} className="aspect-[4/5]" />)}
       </CardGrid>
     );
@@ -198,15 +204,15 @@ export function InstancesPage() {
       <Empty
         size="page"
         ill={<Glyph name="chest" pal="copper" box={64} />}
-        title="Deine Bibliothek ist leer"
+        title={t("pages.instances.emptyTitle")}
         actions={
           <>
             {newInstance}
-            <ButtonLink to="/discover">Modpacks entdecken</ButtonLink>
+            <ButtonLink to="/discover">{t("pages.instances.discoverModpacks")}</ButtonLink>
           </>
         }
       >
-        Leg eine Instanz an, zieh eine .mrpack-Datei ins Fenster oder such dir ein Modpack aus.
+        {t("pages.instances.emptyBody")}
       </Empty>
     );
   } else if (!shown.length) {
@@ -214,10 +220,12 @@ export function InstancesPage() {
       <Empty
         size="page"
         ill="search"
-        title="Keine Treffer"
-        actions={<Button onClick={() => { setQuery(""); setLoader("all"); }}>Suche und Filter zurücksetzen</Button>}
+        title={t("pages.instances.noResultsTitle")}
+        actions={<Button onClick={() => { setQuery(""); setLoader("all"); }}>{t("pages.instances.resetSearch")}</Button>}
       >
-        Keine Instanz passt zu „{query.trim() || LOADER_LABELS[loader as ModLoader]}“{q && loader !== "all" ? ` mit ${LOADER_LABELS[loader]}` : ""}.
+        {q && loader !== "all"
+          ? t("pages.instances.noResultsQueryWithLoader", { filter: query.trim() || LOADER_LABELS[loader as ModLoader], loader: LOADER_LABELS[loader] })
+          : t("pages.instances.noResultsQuery", { filter: query.trim() || LOADER_LABELS[loader as ModLoader] })}
       </Empty>
     );
   } else if (shown.some((i) => i.group)) {
@@ -231,7 +239,7 @@ export function InstancesPage() {
           open={!collapsed.includes(key)}
           onToggle={(open) => setCollapsed(key, !open)}
           className="mb-4"
-          summary={<>{group ?? UNGROUPED} <Count value={members.length} muted /></>}
+          summary={<>{group ?? ungrouped()} <Count value={members.length} muted /></>}
         >
           <InstanceView instances={members} mode={mode} looks={looks} />
         </Disclosure>
@@ -243,33 +251,40 @@ export function InstancesPage() {
 
   return (
     <section className="page lib">
-      <PageHeader title="Bibliothek" count={instances?.length ?? 0} />
+      <PageHeader title={t("ui.nav.library")} count={instances?.length ?? 0} />
       {/* An fester Stelle für beide Knöpfe: füllt der erste Import die leere Bibliothek, bleibt der Dialog mit den übrigen offen */}
       <NewInstanceDialog primary />
       <div className="sr" role="status" aria-live="polite" aria-atomic="true">{said}</div>
       {/* Abstände wie bisher: 16 über, 18 unter der Werkzeugleiste */}
       {!empty && (
         <Toolbar search="m" className="mt-4 mb-4.5">
-          <SearchField value={query} onChange={setQuery} placeholder="Instanz suchen" />
+          <SearchField value={query} onChange={setQuery} placeholder={t("pages.instances.searchPlaceholder")} />
           <Select
-            label="Loader"
+            label={t("components.common.loader")}
             value={loader}
             onChange={(v) => setLoader(v as ModLoader | "all")}
-            options={[{ value: "all", label: "Alle" }, ...ALL_LOADERS.map((l) => ({ value: l, label: LOADER_LABELS[l] }))]}
+            options={[{ value: "all", label: t("common.all") }, ...ALL_LOADERS.map((l) => ({ value: l, label: LOADER_LABELS[l] }))]}
           />
           <Select
-            label="Sortieren"
+            label={t("pages.instances.sortLabel")}
             className="max-[900px]:hidden"
             value={sort}
             onChange={(v) => setSort(v as Sort)}
-            options={[{ value: "recent", label: "Zuletzt gespielt" }, { value: "name", label: "Name" }, { value: "created", label: "Erstellt" }]}
+            options={[
+              { value: "recent", label: t("pages.instances.colLastPlayed") },
+              { value: "name", label: t("common.name") },
+              { value: "created", label: t("pages.instances.sortCreated") },
+            ]}
           />
           <Segmented
             iconsOnly
-            label="Ansicht"
+            label={t("pages.instances.viewLabel")}
             value={mode}
             onChange={setMode}
-            items={[{ value: "poster", label: "Poster", icon: "grid" }, { value: "list", label: "Liste", icon: "list" }]}
+            items={[
+              { value: "poster", label: t("pages.instances.viewPoster"), icon: "grid" },
+              { value: "list", label: t("pages.instances.viewList"), icon: "list" },
+            ]}
           />
           <Spacer />
           {newInstance}

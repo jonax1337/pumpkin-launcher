@@ -1,29 +1,47 @@
-const rtf = new Intl.RelativeTimeFormat("de", { numeric: "auto" });
-const DATE_OPTIONS: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short", year: "numeric" };
-const dtf = new Intl.DateTimeFormat("de", DATE_OPTIONS);
+// Sprache kommt aus dem i18n-Modul; Intl-Formatierer und Wörter wie „Heute“ hängen an sie.
+// Import mit Endung: Dieses Modul lädt auch das plain-node-Prüf-Skript (kein Bundler, der Auflösung macht).
+import { currentLanguage, t } from "../i18n/core.ts";
+import type { Language } from "../i18n/types.ts";
 
 /** Letzter Teil eines Windows- oder Unix-Pfads. */
 export const fileName = (path: string) => path.split(/[\\/]/).pop()!;
 
+const DATE_OPTIONS: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short", year: "numeric" };
+
+/** Intl-Formatierer sind teuer und hängen an der Sprache: je Sprache einmal bauen und behalten. */
+const cache = new Map<Language, { date: Intl.DateTimeFormat; dateTime: Intl.DateTimeFormat; relative: Intl.RelativeTimeFormat }>();
+
+function formatters() {
+  const lang = currentLanguage();
+  let f = cache.get(lang);
+  if (!f) {
+    f = {
+      date: new Intl.DateTimeFormat(lang, DATE_OPTIONS),
+      dateTime: new Intl.DateTimeFormat(lang, { ...DATE_OPTIONS, hour: "2-digit", minute: "2-digit" }),
+      relative: new Intl.RelativeTimeFormat(lang, { numeric: "auto" }),
+    };
+    cache.set(lang, f);
+  }
+  return f;
+}
+
 export function relativeTime(ms: number | null): string {
-  if (ms == null) return "Noch nie gespielt";
+  if (ms == null) return t("format.neverPlayed");
   const diff = ms - Date.now();
   const abs = Math.abs(diff);
-  if (abs < 3_600_000) return rtf.format(Math.round(diff / 60_000), "minute");
-  if (abs < 86_400_000) return rtf.format(Math.round(diff / 3_600_000), "hour");
-  if (abs < 30 * 86_400_000) return rtf.format(Math.round(diff / 86_400_000), "day");
-  return dtf.format(ms);
+  if (abs < 3_600_000) return formatters().relative.format(Math.round(diff / 60_000), "minute");
+  if (abs < 86_400_000) return formatters().relative.format(Math.round(diff / 3_600_000), "hour");
+  if (abs < 30 * 86_400_000) return formatters().relative.format(Math.round(diff / 86_400_000), "day");
+  return formatDate(ms);
 }
 
 export function formatDate(ms: number): string {
-  return dtf.format(ms);
+  return formatters().date.format(ms);
 }
-
-const dtfTime = new Intl.DateTimeFormat("de", { ...DATE_OPTIONS, hour: "2-digit", minute: "2-digit" });
 
 /** Datum mit Uhrzeit, z. B. für mehrere Sicherungen am selben Tag. */
 export function formatDateTime(ms: number): string {
-  return dtfTime.format(ms);
+  return formatters().dateTime.format(ms);
 }
 
 const DAY = 86_400_000;
@@ -34,7 +52,7 @@ export const dayStart = (ms: number) => new Date(ms).setHours(0, 0, 0, 0);
 /** „Heute“, „Gestern“, sonst das Datum von `day` (ein Tagesbeginn). Gerundet, weil Tage mit Zeitumstellung 23 oder 25 Stunden haben. */
 export function dayLabel(day: number, now = Date.now()): string {
   const ago = Math.round((dayStart(now) - day) / DAY);
-  return ago === 0 ? "Heute" : ago === 1 ? "Gestern" : formatDate(day);
+  return ago === 0 ? t("format.today") : ago === 1 ? t("format.yesterday") : formatDate(day);
 }
 
 /** Spielzeit als „12:04“ oder „1:02:09“. */
@@ -45,27 +63,31 @@ export function formatClock(ms: number): string {
 
 /** Gesamte Spielzeit kompakt: „unter 1 Min.“, „45 Min.“, „3,5 Std.“, ab 10 Stunden ganze Stunden („37 Std.“). */
 export function formatPlaytime(secs: number): string {
-  if (secs < 60) return "unter 1 Min.";
-  if (secs < 3600) return `${Math.floor(secs / 60)} Min.`;
+  if (secs < 60) return t("format.underAMinute");
+  if (secs < 3600) return t("format.minutes", { n: Math.floor(secs / 60) });
   const hours = secs / 3600;
-  return `${hours.toLocaleString("de", { maximumFractionDigits: hours < 10 ? 1 : 0 })} Std.`;
+  return t("format.hours", { n: hours.toLocaleString(currentLanguage(), { maximumFractionDigits: hours < 10 ? 1 : 0 }) });
 }
 
-const SIZE_UNITS = ["Bytes", "KB", "MB", "GB", "TB"];
+const SIZE_UNITS = ["bytes", "kb", "mb", "gb", "tb"] as const;
 
 /** Dateigröße mit Basis 1024: „850 KB“, „12,4 MB“, „1,2 GB“. */
 export function formatSize(bytes: number): string {
   let n = bytes, unit = 0;
   for (; n >= 1024 && unit < SIZE_UNITS.length - 1; unit++) n /= 1024;
-  return `${n.toLocaleString("de", { maximumFractionDigits: unit && n < 100 ? 1 : 0 })} ${SIZE_UNITS[unit]}`;
+  return `${n.toLocaleString(currentLanguage(), { maximumFractionDigits: unit && n < 100 ? 1 : 0 })} ${t(`format.size.${SIZE_UNITS[unit]}`)}`;
 }
 
-/** Tausender mit schmalem Leerzeichen („3 480“), wie im Mockup. */
-export const formatCount = (n: number) => n.toLocaleString("de").replace(/\./g, " ");
+/** Tausender mit schmalem Leerzeichen („3 480“), wie im Mockup; das englische Komma bleibt. */
+export const formatCount = (n: number) => {
+  const lang = currentLanguage();
+  const s = n.toLocaleString(lang);
+  return lang === "de" ? s.replace(/\./g, " ") : s;
+};
 
 export function formatMemory(mb: number | null): string {
-  if (mb == null) return "Standard";
-  return `${(mb / 1024).toLocaleString("de", { maximumFractionDigits: 1 })} GB`;
+  if (mb == null) return t("format.memoryDefault");
+  return `${(mb / 1024).toLocaleString(currentLanguage(), { maximumFractionDigits: 1 })} GB`;
 }
 
 const floor512 = (mb: number) => Math.floor(mb / 512) * 512;

@@ -5,6 +5,7 @@
  */
 import { cloneElement, isValidElement, useEffect, useId, useLayoutEffect, useRef, useState, type ComponentProps, type CSSProperties, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
 import { ContextMenu as CM, Dialog as D, DropdownMenu as DM, Popover as P, Tooltip as T } from "radix-ui";
+import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { Icon } from "./Icon";
 import { Button, IconButton } from "./Button";
@@ -440,6 +441,7 @@ export function Dialog({ open, onOpenChange, trigger, title, sub, width = 560, h
   busy?: boolean;
 }) {
   const ret = useReturnFocus(open);
+  const { t } = useI18n();
   return (
     <D.Root open={open} onOpenChange={(o) => !busy && onOpenChange?.(o)}>
       {trigger && <D.Trigger asChild>{trigger}</D.Trigger>}
@@ -478,7 +480,7 @@ export function Dialog({ open, onOpenChange, trigger, title, sub, width = 560, h
                 {sub && <p className="vx-dlg-sub">{sub}</p>}
               </div>
               <D.Close asChild>
-                <IconButton icon="x" label="Schließen" tip={false} disabled={busy} />
+                <IconButton icon="x" label={t("common.close")} tip={false} disabled={busy} />
               </D.Close>
             </div>
             <div className="vx-dlg-b">{children}</div>
@@ -548,10 +550,11 @@ export function DialogActions({ cancel, confirm, left }: { cancel?: ReactNode | 
  * Ohne `danger`: Akzentknopf mit Startfokus. `text` beschreibt den Dialog (aria-describedby).
  * Während `pending` ist alles gesperrt: die Aktion läuft schon, „Abbrechen“ hielte sie nicht mehr auf.
  */
-export function ConfirmDialog({ open, onOpenChange, title, text, confirmLabel = "Löschen", cancelLabel = "Abbrechen", pendingLabel = "Einen Moment", pending, danger = true, onConfirm }: {
+export function ConfirmDialog({ open, onOpenChange, title, text, confirmLabel, cancelLabel, pendingLabel, pending, danger = true, onConfirm }: {
   open: boolean; onOpenChange: (o: boolean) => void; title: string; text?: ReactNode; confirmLabel?: string; cancelLabel?: string; pendingLabel?: string;
   pending?: boolean; danger?: boolean; onConfirm: () => void;
 }) {
+  const { t } = useI18n();
   const textId = useId();
   return (
     <Dialog
@@ -564,8 +567,8 @@ export function ConfirmDialog({ open, onOpenChange, title, text, confirmLabel = 
       busy={pending}
       footer={
         <DialogActions
-          cancel={{ label: cancelLabel, autoFocus: danger, disabled: pending }}
-          confirm={{ label: pending ? pendingLabel : confirmLabel, variant: danger ? "danger" : "primary", width: 130, disabled: pending, onClick: onConfirm }}
+          cancel={{ label: cancelLabel ?? t("common.cancel"), autoFocus: danger, disabled: pending }}
+          confirm={{ label: pending ? (pendingLabel ?? t("ui.dialog.pending")) : (confirmLabel ?? t("common.delete")), variant: danger ? "danger" : "primary", width: 130, disabled: pending, onClick: onConfirm }}
         />
       }
     >
@@ -576,6 +579,7 @@ export function ConfirmDialog({ open, onOpenChange, title, text, confirmLabel = 
 
 /** Seitenpanel rechts (Katalog im Kontext einer Instanz). Nicht modal: die Liste daneben bleibt bedienbar. */
 export function Sheet({ open, onOpenChange, title, sub, acc, children, tools }: { open: boolean; onOpenChange: (o: boolean) => void; title: ReactNode; sub?: ReactNode; acc?: string; children: ReactNode; tools?: ReactNode }) {
+  const { t } = useI18n();
   const ret = useReturnFocus(open);
   return (
     <D.Root open={open} onOpenChange={onOpenChange} modal={false}>
@@ -596,7 +600,7 @@ export function Sheet({ open, onOpenChange, title, sub, acc, children, tools }: 
                 {sub && <p>{sub}</p>}
               </div>
               <D.Close asChild>
-                <IconButton icon="x" label="Panel schließen" tip={false} />
+                <IconButton icon="x" label={t("ui.sheet.closeAria")} tip={false} />
               </D.Close>
             </div>
             {tools && <div className="vx-sheet-t">{tools}</div>}

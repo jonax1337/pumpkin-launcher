@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { create } from "zustand";
+import { t, useI18n } from "@/i18n";
 import { StopDialog } from "@/components/game";
 import { api } from "@/lib/api";
 import { openPage } from "@/lib/links";
@@ -21,7 +22,7 @@ const useMsLogin = create<LoginState>(() => ({ step: "idle" }));
 // Jeder Versuch bekommt eine Nummer; Antworten eines abgebrochenen Versuchs werden verworfen.
 let attempt = 0;
 
-/** `method: "device"` erzwingt den Gerätecode (Knopf „Stattdessen Code verwenden“); sonst Anmeldung im Browser. */
+/** `method: "device"` erzwingt den Gerätecode (Knopf „Stattdessen Code verwenden“); sonst Anmeldung im Browser. Außerhalb React, deshalb Modul-`t`. */
 export async function startMsLogin(qc: QueryClient, method?: "device") {
   const mine = ++attempt;
   useMsLogin.setState({ step: "starting" }, true);
@@ -39,7 +40,7 @@ export async function startMsLogin(qc: QueryClient, method?: "device") {
     if (then) {
       useAccountUi.setState({ then: null });
       useMsLogin.setState({ step: "idle" }, true);
-      toast.success(`Angemeldet als ${account.username}`);
+      toast.success(t("components.account.loggedInAs", { name: account.username }));
       return then.run();
     }
     useMsLogin.setState({ step: "done", name: account.username }, true);
@@ -56,7 +57,21 @@ function closeMsLogin() {
   if (running) void api.msLoginCancel().catch(() => undefined);
 }
 
+/** Dialog-Untertitel „Danach startet {name}.“ – der Name bleibt als React-Knoten fett. */
+function ThenSub({ label }: { label: string }) {
+  const { tAround } = useI18n();
+  const [before, after] = tAround("components.account.then", "name");
+  return (
+    <>
+      {before}
+      <b>{label}</b>
+      {after}
+    </>
+  );
+}
+
 function MsLoginDialog() {
+  const { t } = useI18n();
   const state = useMsLogin();
   const then = useAccountUi((s) => s.then);
   const offlineAllowed = useOfflineAllowed((s) => s.allowed);
@@ -64,8 +79,8 @@ function MsLoginDialog() {
 
   function copy(code: string) {
     void navigator.clipboard.writeText(code).then(
-      () => toast.success("Code kopiert"),
-      () => toast.error("Kopieren hat nicht geklappt"),
+      () => toast.success(t("components.ms.codeCopied")),
+      () => toast.error(t("components.common.copyFailed")),
     );
   }
 
@@ -73,22 +88,22 @@ function MsLoginDialog() {
     <Dialog
       open={state.step !== "idle"}
       onOpenChange={(o) => !o && closeMsLogin()}
-      title="Mit Microsoft anmelden"
-      sub={then && state.step !== "done" ? <>Danach startet <b>{then.label}</b>.</> : undefined}
+      title={t("components.account.msLogin")}
+      sub={then && state.step !== "done" ? <ThenSub label={then.label} /> : undefined}
       width={520}
       height={420}
       footer={
         state.step === "done" ? (
-          <DialogActions confirm={{ label: "Fertig", width: 124, onClick: closeMsLogin }} />
+          <DialogActions confirm={{ label: t("common.done"), width: 124, onClick: closeMsLogin }} />
         ) : (
           <>
             {state.step === "code" && (
-              <Button icon="ext" onClick={() => openPage(state.info.verificationUri)}>Seite öffnen</Button>
+              <Button icon="ext" onClick={() => openPage(state.info.verificationUri)}>{t("common.open")}</Button>
             )}
             {state.step === "code" && state.info.mode === "browser" && (
-              <Button variant="ghost" onClick={() => void startMsLogin(qc, "device")}>Stattdessen Code verwenden</Button>
+              <Button variant="ghost" onClick={() => void startMsLogin(qc, "device")}>{t("components.ms.useCodeInstead")}</Button>
             )}
-            <DialogActions cancel={{ label: state.step === "error" ? "Schließen" : "Abbrechen", width: 124 }} />
+            <DialogActions cancel={{ label: state.step === "error" ? t("common.close") : t("common.cancel"), width: 124 }} />
           </>
         )
       }
@@ -102,25 +117,25 @@ function MsLoginDialog() {
       )}
       {state.step === "code" && state.info.mode === "browser" && (
         <>
-          <p>Die Microsoft-Anmeldung hat sich in deinem Browser geöffnet. Melde dich dort an, danach geht es hier automatisch weiter.</p>
+          <p>{t("components.ms.browserOpened")}</p>
           <div className="flex h-8 items-center gap-3" aria-live="polite">
-            <Progress width={120} label="Warte auf Anmeldung" />
-            <Hint>Warte auf deine Anmeldung. Das Fenster wartet {Math.max(1, Math.round(state.info.expiresIn / 60))} Minuten.</Hint>
+            <Progress width={120} label={t("components.ms.waiting")} />
+            <Hint>{t("components.ms.windowWaits", { min: Math.max(1, Math.round(state.info.expiresIn / 60)) })}</Hint>
           </div>
-          <Hint className="mt-3">Nichts passiert? Über „Seite öffnen“ geht die Anmeldung erneut auf, oder nimm stattdessen einen Code.</Hint>
+          <Hint className="mt-3">{t("components.ms.nothingHappens")}</Hint>
         </>
       )}
       {state.step === "code" && state.info.mode === "device" && (
         <>
-          <p>Öffne <b>{state.info.verificationUri.replace(/^https?:\/\/(www\.)?/, "")}</b> in deinem Browser und gib diesen Code ein:</p>
+          <p>{t("components.ms.openAt")} <b>{state.info.verificationUri.replace(/^https?:\/\/(www\.)?/, "")}</b> {t("components.ms.enterCode")}</p>
           {/* Code-Anzeige (Sonderform: große Pixelschrift in eingelassener Platte) */}
           <div className="codebox">
-            <span className="code select-all" aria-label={`Code ${state.info.userCode.split("").join(" ")}`}>{state.info.userCode}</span>
-            <Button icon="copy" onClick={() => copy(state.info.userCode)}>Kopieren</Button>
+            <span className="code select-all" aria-label={t("components.ms.codeSpaced", { code: state.info.userCode.split("").join(" ") })}>{state.info.userCode}</span>
+            <Button icon="copy" onClick={() => copy(state.info.userCode)}>{t("common.copy")}</Button>
           </div>
           <div className="flex h-8 items-center gap-3" aria-live="polite">
-            <Progress width={120} label="Warte auf Anmeldung" />
-            <Hint>Warte auf deine Anmeldung. Der Code gilt {Math.max(1, Math.round(state.info.expiresIn / 60))} Minuten.</Hint>
+            <Progress width={120} label={t("components.ms.waiting")} />
+            <Hint>{t("components.ms.codeValid", { min: Math.max(1, Math.round(state.info.expiresIn / 60)) })}</Hint>
           </div>
         </>
       )}
@@ -128,15 +143,15 @@ function MsLoginDialog() {
         <div className="mt-2 flex items-center gap-3.5">
           <Avatar name={state.name} />
           <div>
-            <Hint tone="ok">Angemeldet als {state.name}</Hint>
-            <p>Das Konto ist jetzt aktiv. Du kannst jederzeit oben rechts wechseln.</p>
+            <Hint tone="ok">{t("components.account.loggedInAs", { name: state.name })}</Hint>
+            <p>{t("components.ms.accountActive")}</p>
           </div>
         </div>
       )}
       {state.step === "error" && (
         <>
-          <ErrorBox title="Anmeldung hat nicht geklappt" error={state.message} onRetry={() => void startMsLogin(qc)} />
-          {offlineAllowed && <p className="mt-3">Mit einem Spielernamen kannst du auch ohne Anmeldung spielen.</p>}
+          <ErrorBox title={t("components.ms.loginFailed")} error={state.message} onRetry={() => void startMsLogin(qc)} />
+          {offlineAllowed && <p className="mt-3">{t("components.ms.offlinePossible")}</p>}
         </>
       )}
     </Dialog>
@@ -193,7 +208,7 @@ function useAllAccounts(): ActiveAccount[] {
   ];
 }
 
-const kindLabel = (a: ActiveAccount) => (a.kind === "microsoft" ? "Microsoft-Konto" : "Spielername · Einzelspieler und LAN");
+const kindLabel = (a: ActiveAccount) => (a.kind === "microsoft" ? t("components.account.kindMicrosoft") : t("components.account.kindOffline"));
 const keyOf = (a: ActiveAccount) => (a.kind === "microsoft" ? `ms:${a.id}` : `off:${a.name}`);
 
 function useRemoveAccount() {
@@ -211,6 +226,7 @@ function useRemoveAccount() {
 
 /** Kontomenü oben rechts: Kopf + Name, Konten wechseln, anmelden, Spielername hinzufügen. */
 export function AccountMenu() {
+  const { t } = useI18n();
   const active = useUsableAccount();
   const allowed = useOfflineAllowed((s) => s.allowed);
   const select = useSettings((s) => s.selectAccount);
@@ -222,7 +238,7 @@ export function AccountMenu() {
   const name = accountName(active);
 
   const items: MenuEntry[] = [
-    ...(accounts.length ? [{ label: "Konten" } as const] : []),
+    ...(accounts.length ? [{ label: t("components.account.accounts") } as const] : []),
     ...accounts.map((a): MenuEntry => ({
       id: keyOf(a),
       text: accountName(a),
@@ -232,12 +248,12 @@ export function AccountMenu() {
       onSelect: () => select(a),
     })),
     ...(accounts.length ? ["-" as const] : []),
-    { id: "ms", text: "Mit Microsoft anmelden", icon: "user", onSelect: () => void startMsLogin(qc) },
-    ...(allowed ? [{ id: "off", text: "Spielername hinzufügen", icon: "plus" as const, onSelect: openAddOffline }] : []),
-    { id: "skins", text: "Skins und Umhänge", icon: "shirt", onSelect: () => navigate("/skins") },
-    { id: "set", text: "Einstellungen", icon: "gear", onSelect: () => navigate("/settings#konten") },
+    { id: "ms", text: t("components.account.msLogin"), icon: "user", onSelect: () => void startMsLogin(qc) },
+    ...(allowed ? [{ id: "off", text: t("components.account.addPlayerName"), icon: "plus" as const, onSelect: openAddOffline }] : []),
+    { id: "skins", text: t("components.account.skins"), icon: "shirt", onSelect: () => navigate("/skins") },
+    { id: "set", text: t("common.settings"), icon: "gear", onSelect: () => navigate("/settings#konten") },
     ...(active?.kind === "microsoft"
-      ? ["-" as const, { id: "out", text: `Abmelden (${name})`, icon: "power" as const, bad: true, onSelect: () => remove(active) }]
+      ? ["-" as const, { id: "out", text: t("components.account.signOutNamed", { name }), icon: "power" as const, bad: true, onSelect: () => remove(active) }]
       : []),
   ];
 
@@ -250,8 +266,8 @@ export function AccountMenu() {
         items={items}
         trigger={
           <BarButton
-            aria-label={name ? `Konto: ${name}. Wechseln` : allowed ? "Spielername fehlt. Konto wählen" : "Nicht angemeldet. Konto wählen"}
-            label={name || (allowed ? "Spielername fehlt" : "Nicht angemeldet")}
+            aria-label={name ? t("components.account.switchWith", { name }) : allowed ? t("components.account.noNameChoose") : t("components.account.notLoggedInChoose")}
+            label={name || (allowed ? t("components.account.noName") : t("components.account.notLoggedIn"))}
             tone={name ? undefined : "warn"}
             iconEnd="chevd"
             compactBelow={900}
@@ -279,6 +295,7 @@ export function showNameError(name: string, touched: boolean) {
 }
 
 function AddOfflineDialog() {
+  const { t } = useI18n();
   const open = useAccountUi((s) => s.offline);
   const then = useAccountUi((s) => s.then);
   const addAccount = useSettings((s) => s.addAccount);
@@ -297,7 +314,7 @@ function AddOfflineDialog() {
     if (!isValidPlayerName(name)) return;
     addAccount(name);
     // Startet danach das Spiel, zeigt der Spielen-Knopf den Fortschritt; eine Meldung wäre doppelt.
-    if (!then) toast.success(`Spielername „${name}“ ist aktiv`);
+    if (!then) toast.success(t("components.account.playerNameActive", { name }));
     close();
     then?.run();
   }
@@ -313,25 +330,25 @@ function AddOfflineDialog() {
     <Dialog
       open={open}
       onOpenChange={(o) => !o && close()}
-      title={then ? "Wie heißt du im Spiel?" : "Spielername hinzufügen"}
-      sub={then ? <>Danach startet <b>{then.label}</b>.</> : undefined}
+      title={then ? t("components.account.askName") : t("components.account.addPlayerName")}
+      sub={then ? <ThenSub label={then.label} /> : undefined}
       width={480}
       height={then ? 402 : 278}
       footer={
         <DialogActions
-          cancel="Abbrechen"
-          confirm={{ label: then ? "Speichern und spielen" : "Hinzufügen", width: then ? 196 : 140, form: "off-form", icon: then ? "play" : undefined, disabled: !isValidPlayerName(name) }}
+          cancel={t("common.cancel")}
+          confirm={{ label: then ? t("components.account.saveAndPlay") : t("common.add"), width: then ? 196 : 140, form: "off-form", icon: then ? "play" : undefined, disabled: !isValidPlayerName(name) }}
         />
       }
     >
       <form id="off-form" onSubmit={submit}>
         {/* Zwei Zeilen reserviert: der kürzere Fehler ersetzt den Hilfetext, ohne dass etwas nachrückt */}
         <Field
-          label="Spielername"
+          label={t("components.playerName.label")}
           htmlFor="off-name"
           reserveLines={2}
-          help="3 bis 16 Zeichen: Buchstaben, Ziffern und Unterstrich. Reicht für Einzelspieler, LAN und Server ohne Anmeldung."
-          error={invalid && "Nur Buchstaben, Ziffern und Unterstrich, 3 bis 16 Zeichen."}
+          help={t("components.playerName.helpLong")}
+          error={invalid && t("components.playerName.invalid")}
         >
           <TextField
             id="off-name"
@@ -339,16 +356,16 @@ function AddOfflineDialog() {
             onChange={(e) => setName(e.target.value)}
             onBlur={() => setTouched(true)}
             maxLength={16}
-            placeholder="z. B. Steve_42"
+            placeholder={t("components.playerName.placeholder")}
             autoFocus
           />
         </Field>
       </form>
       {then && (
         <>
-          <div className="or">oder</div>
-          <Button icon="user" width="full" onClick={microsoft}>Mit Microsoft anmelden</Button>
-          <Hint className="mt-2">Nötig für die meisten Server und Realms.</Hint>
+          <div className="or">{t("components.common.or")}</div>
+          <Button icon="user" width="full" onClick={microsoft}>{t("components.account.msLogin")}</Button>
+          <Hint className="mt-2">{t("components.account.neededForServers")}</Hint>
         </>
       )}
     </Dialog>
@@ -357,6 +374,7 @@ function AddOfflineDialog() {
 
 /** Konten verwalten (Einstellungen). */
 export function AccountsSection() {
+  const { t } = useI18n();
   const active = useUsableAccount();
   const offlineAllowed = useOfflineAllowed((s) => s.allowed);
   const select = useSettings((s) => s.selectAccount);
@@ -370,34 +388,34 @@ export function AccountsSection() {
       {ms.isPending && accounts.length === 0 ? (
         <Skel h={60} />
       ) : accounts.length ? (
-        <List variant="accounts" aria-label="Konten">
+        <List variant="accounts" aria-label={t("components.account.accounts")}>
           {accounts.map((a) => {
             const on = sameAccount(active, a);
             const name = accountName(a);
             return (
               <ListRow key={keyOf(a)} selected={on}>
                 <Avatar name={name} />
-                <RowTitle title={name} sub={`${kindLabel(a)}${on ? " · aktiv" : ""}`} />
-                {!on && <Button size="s" onClick={() => select(a)}>Wechseln</Button>}
+                <RowTitle title={name} sub={`${kindLabel(a)}${on ? ` · ${t("components.account.active")}` : ""}`} />
+                {!on && <Button size="s" onClick={() => select(a)}>{t("components.account.switch")}</Button>}
                 <Button variant="ghost" size="s" disabled={a.kind === "microsoft" && pending} onClick={() => remove(a)}>
-                  {a.kind === "microsoft" ? "Abmelden" : "Entfernen"}
+                  {a.kind === "microsoft" ? t("components.account.signOutPlain") : t("common.remove")}
                 </Button>
               </ListRow>
             );
           })}
         </List>
       ) : (
-        <Empty size="pane" ill="user" title="Noch kein Konto">{offlineAllowed ? "Melde dich an oder leg einen Spielernamen an." : "Melde dich mit deinem Microsoft-Konto an."}</Empty>
+        <Empty size="pane" ill="user" title={t("components.account.noneYet")}>{offlineAllowed ? t("components.account.noneOfflineAllowed") : t("components.account.msLoginPrompt")}</Empty>
       )}
-      {ms.error && <ErrorBox className="mt-3" title="Microsoft-Konten konnten nicht geladen werden" error={ms.error} onRetry={() => void ms.refetch()} />}
+      {ms.error && <ErrorBox className="mt-3" title={t("components.account.msLoadFailed")} error={ms.error} onRetry={() => void ms.refetch()} />}
       <Actions wrap className="mt-3">
-        <Button icon="user" onClick={() => void startMsLogin(qc)}>Mit Microsoft anmelden</Button>
-        {offlineAllowed && <Button icon="plus" onClick={openAddOffline}>Spielername hinzufügen</Button>}
+        <Button icon="user" onClick={() => void startMsLogin(qc)}>{t("components.account.msLogin")}</Button>
+        {offlineAllowed && <Button icon="plus" onClick={openAddOffline}>{t("components.account.addPlayerName")}</Button>}
       </Actions>
       <Hint className="mt-2.5 max-w-[70ch]">
         {offlineAllowed
-          ? "Mit einem Spielernamen spielst du allein, im LAN und auf Servern ohne Anmeldung. Für die meisten Server brauchst du ein Microsoft-Konto."
-          : "Du brauchst ein Microsoft-Konto, das Minecraft: Java Edition besitzt."}
+          ? t("components.account.offlineHint")
+          : t("components.onboarding.msHintRequired")}
       </Hint>
     </>
   );

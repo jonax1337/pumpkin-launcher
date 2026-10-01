@@ -4,6 +4,7 @@ import { useDeleteScreenshot, useScreenshots } from "@/hooks/useScreenshots";
 import { api } from "@/lib/api";
 import { dayLabel, dayStart, formatDateTime, formatSize } from "@/lib/format";
 import { toastError } from "@/lib/toast";
+import { useI18n } from "@/i18n";
 import type { Instance, Screenshot } from "@/lib/types";
 import { Actions, Button, CardGrid, Count, Dialog, Empty, Glyph, IconButton, SectionHeader, Skel } from "@/ui";
 
@@ -21,20 +22,21 @@ function byDay(shots: Screenshot[]) {
 
 /** Screenshots der Instanz als Raster nach Tagen; ein Klick öffnet die große Ansicht. */
 export function ScreenshotsTab({ instance }: { instance: Instance }) {
+  const { t } = useI18n();
   const shots = useScreenshots(instance.id);
   return (
     <div className="pt-2">
       <QueryList
         query={shots}
-        error="Die Screenshots konnten nicht geladen werden"
+        error={t("detail.screenshots.loadError")}
         loading={
-          <CardGrid aria-busy aria-label="Wird geladen">
+          <CardGrid aria-busy aria-label={t("common.loading")}>
             {[0, 1, 2, 3].map((k) => <Skel key={k} className="aspect-video" />)}
           </CardGrid>
         }
         empty={
-          <Empty ill={<Glyph name="picture" pal="sand" box={64} />} title="Noch keine Screenshots">
-            Drück im Spiel F2. Minecraft legt das Bild in dieser Instanz ab, und es erscheint hier.
+          <Empty ill={<Glyph name="picture" pal="sand" box={64} />} title={t("detail.screenshots.emptyTitle")}>
+            {t("detail.screenshots.emptyHint")}
           </Empty>
         }
       >
@@ -45,6 +47,7 @@ export function ScreenshotsTab({ instance }: { instance: Instance }) {
 }
 
 function Gallery({ instanceId, shots }: { instanceId: string; shots: Screenshot[] }) {
+  const { t } = useI18n();
   // Dateiname des gezeigten Bilds; `null` = keins.
   const [shown, setShown] = useState<string | null>(null);
   const current = shots.find((s) => s.fileName === shown);
@@ -55,7 +58,7 @@ function Gallery({ instanceId, shots }: { instanceId: string; shots: Screenshot[
           <SectionHeader title={<>{dayLabel(day)} <Count value={group.length} size={20} muted /></>} size="sub" />
           <CardGrid className="mt-2">
             {group.map((shot) => (
-              <button key={shot.fileName} type="button" className="shot fx" aria-label={`Screenshot vom ${formatDateTime(shot.takenAt)}`} onClick={() => setShown(shot.fileName)}>
+              <button key={shot.fileName} type="button" className="shot fx" aria-label={t("detail.screenshots.shotAria", { date: formatDateTime(shot.takenAt) })} onClick={() => setShown(shot.fileName)}>
                 {/* Hunderte Bilder in voller Auflösung: erst laden, wenn sie in den Sichtbereich kommen. */}
                 <img src={api.screenshotSrc(shot)} alt="" loading="lazy" decoding="async" />
               </button>
@@ -70,6 +73,7 @@ function Gallery({ instanceId, shots }: { instanceId: string; shots: Screenshot[
 
 /** Große Ansicht mit Blättern (auch ← →), Öffnen im Bildbetrachter, Zeigen im Ordner und Löschen in den Papierkorb. */
 function Lightbox({ instanceId, shots, current, onShow }: { instanceId: string; shots: Screenshot[]; current: Screenshot; onShow: (fileName: string | null) => void }) {
+  const { t } = useI18n();
   const remove = useDeleteScreenshot(instanceId);
   const index = shots.indexOf(current);
   const prev = shots[index - 1]?.fileName ?? null;
@@ -94,9 +98,9 @@ function Lightbox({ instanceId, shots, current, onShow }: { instanceId: string; 
       width={1200}
       footLeft={
         <Actions>
-          <IconButton icon="back" label="Vorheriger Screenshot" disabled={!prev} onClick={() => onShow(prev)} />
+          <IconButton icon="back" label={t("detail.screenshots.prevAria")} disabled={!prev} onClick={() => onShow(prev)} />
           <Count value={`${index + 1} / ${shots.length}`} size={16} />
-          <IconButton icon="chev" label="Nächster Screenshot" disabled={!next} onClick={() => onShow(next)} />
+          <IconButton icon="chev" label={t("detail.screenshots.nextAria")} disabled={!next} onClick={() => onShow(next)} />
         </Actions>
       }
       footer={
@@ -109,14 +113,14 @@ function Lightbox({ instanceId, shots, current, onShow }: { instanceId: string; 
             disabled={remove.isPending}
             onClick={() => remove.mutate(current, { onSuccess: () => onShow(next ?? prev) })}
           >
-            Löschen
+            {t("common.delete")}
           </Button>
-          <Button icon="folder" onClick={() => void api.revealPath(current.path).catch(toastError)}>Im Ordner zeigen</Button>
-          <Button variant="primary" icon="ext" onClick={() => void api.openPath(current.path).catch(toastError)}>Öffnen</Button>
+          <Button icon="folder" onClick={() => void api.revealPath(current.path).catch(toastError)}>{t("components.instance.revealInFolder")}</Button>
+          <Button variant="primary" icon="ext" onClick={() => void api.openPath(current.path).catch(toastError)}>{t("common.open")}</Button>
         </>
       }
     >
-      <img className="shot-full" src={api.screenshotSrc(current)} alt={`Screenshot vom ${title}`} />
+      <img className="shot-full" src={api.screenshotSrc(current)} alt={t("detail.screenshots.shotAria", { date: title })} />
     </Dialog>
   );
 }

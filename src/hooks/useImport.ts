@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { t } from "@/i18n";
 import { api } from "@/lib/api";
 import type { ForeignInstance, Instance } from "@/lib/types";
 import { useContentInstall, withTarget } from "./useContent";
@@ -32,7 +33,7 @@ export function useForeignSelection(enabled: boolean) {
 
   async function addFolder(folder: string) {
     const found = (await api.importDetect(folder)).filter((f) => !all.some((a) => a.path === f.path));
-    if (!found.length) return void toast("In diesem Ordner gibt es keine neuen Instanzen.");
+    if (!found.length) return void toast(t("hooks.import.noNewInFolder"));
     setAdded((a) => [...a, ...found]);
     setPicked((p) => p && new Set([...p, ...found.filter(importable).map((f) => f.path)]));
   }
@@ -59,7 +60,7 @@ export function useImportInstances() {
     let last: Instance | null = null;
     try {
       for (const source of sources) {
-        const task = withTarget(importTarget(source), (op) => api.importInstance(source, op), `${source.name} importieren`, { cancellable: true });
+        const task = withTarget(importTarget(source), (op) => api.importInstance(source, op), t("hooks.import.instanceTask", { name: source.name }), { cancellable: true, doneLabel: t("hooks.import.instanceTaskDone", { name: source.name }) });
         try {
           last = (await install.mutateAsync(task)) ?? last;
         } catch (err) {

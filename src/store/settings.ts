@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { PumpkinChoice } from "@/branding/calendar";
+import type { LanguageChoice } from "@/i18n/types";
 
 export type PxSize = "s" | "m" | "l";
 
@@ -21,7 +22,12 @@ interface SettingsState {
   motion: boolean;
   /** Automatisch nach Jahreszeit oder eine dauerhaft gewählte Pumpkin-Variante. */
   pumpkin: PumpkinChoice;
-  set: (patch: Partial<Pick<SettingsState, "javaPath" | "memoryMb" | "pxSize" | "motion" | "pumpkin">>) => void;
+  /**
+   * Sprachwahl der Oberfläche. „system“ folgt der Browsersprache (beginnt `navigator.language`
+   * mit „de“, gilt Deutsch, sonst Englisch) – der Start soll ohne Rückfrage passen.
+   */
+  language: LanguageChoice;
+  set: (patch: Partial<Pick<SettingsState, "javaPath" | "memoryMb" | "pxSize" | "motion" | "pumpkin" | "language">>) => void;
   reset: () => void;
   addAccount: (name: string) => void;
   selectAccount: (account: ActiveAccount) => void;
@@ -56,6 +62,7 @@ export const useSettings = create<SettingsState>()(
       pxSize: "m",
       motion: true,
       pumpkin: "auto",
+      language: "system",
       set: (patch) => set(patch),
       reset: () => set(defaults),
       addAccount: (name) =>
@@ -77,8 +84,10 @@ export const useSettings = create<SettingsState>()(
     }),
     {
       name: "launcher-settings",
-      version: 5,
+      version: 6,
       migrate: (old, version) => {
+        // v5 kannte noch keine Sprachwahl; „system“ (Browsersprache folgen) ist der neue Standard.
+        if (version === 5) return { ...(old as Record<string, unknown>), language: "system" } as unknown as SettingsState;
         // v4 hatte noch eine eigene Microsoft-Kennung (`msClientId`); der Launcher bringt seine mit.
         if (version === 4) return withoutClientId(old) as unknown as SettingsState;
         // v3 hatte noch die Seitenleiste; Pixelgröße und Bewegung kamen mit Pixelkino.

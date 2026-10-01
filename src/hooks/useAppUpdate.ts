@@ -4,6 +4,7 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { create } from "zustand";
+import { t } from "@/i18n/core";
 import { api } from "@/lib/api";
 import { isGameActive, useGame } from "@/store/game";
 import { anyTaskRunning, subscribeRunningTasks } from "./useRunningTasks";
@@ -39,11 +40,11 @@ export function useUpdateCheckOnStart() {
 
 /** Nur ein Hinweis: installiert wird erst nach „Installieren und neu starten“ in den Einstellungen (`show`). */
 function announceUpdate(version: string, show: () => void) {
-  toast.info(`Pumpkin Launcher ${version} ist da`, {
+  toast.info(t("hooks.update.availableToast", { version }), {
     id: "app-update",
     duration: 15_000,
-    description: "Installieren, wann es dir passt.",
-    action: { label: "Ansehen", onClick: show },
+    description: t("hooks.update.availableHint"),
+    action: { label: t("components.content.viewAction"), onClick: show },
   });
 }
 
@@ -54,7 +55,8 @@ function announceUpdate(version: string, show: () => void) {
  */
 export const useUpdateRun = create<{ phase: "idle" | "download" | "wait" | "ready" | "install"; p: number | null }>(() => ({ phase: "idle", p: null }));
 
-export const WAIT_FOR_IDLE = "Neu starten geht, sobald Minecraft beendet ist und keine Aufgaben mehr laufen.";
+/** Hinweis, während der Neustart auf Spiel und Aufgaben wartet; live berechnet, kein fester Text. */
+export const waitForIdle = () => t("hooks.update.waitForIdle");
 
 /**
  * Lädt das Update und installiert es, wenn der Launcher frei ist: unter Windows beendet der Installer den Launcher,
@@ -73,7 +75,7 @@ export async function installAppUpdate(update: Update) {
     await api.restartApp();
   } catch (err) {
     useUpdateRun.setState({ phase: "idle", p: null });
-    toast.error("Das Update ließ sich nicht installieren", { description: err instanceof Error ? err.message : String(err) });
+    toast.error(t("hooks.update.installFailed"), { description: err instanceof Error ? err.message : String(err) });
   }
 }
 
@@ -95,14 +97,14 @@ async function download(update: Update) {
  */
 async function deferRestart(update: Update) {
   useUpdateRun.setState({ phase: "wait", p: null });
-  toast.info("Update ist geladen", { description: WAIT_FOR_IDLE });
+  toast.info(t("hooks.update.loaded"), { description: waitForIdle() });
   await launcherIdle();
   useUpdateRun.setState({ phase: "ready" });
-  toast.info("Update ist bereit", {
+  toast.info(t("hooks.update.ready"), {
     id: "app-update",
     duration: Infinity,
-    description: "Pumpkin Launcher startet für die Installation neu.",
-    action: { label: "Jetzt neu starten", onClick: () => void installAppUpdate(update) },
+    description: t("hooks.update.readyHint"),
+    action: { label: t("components.update.restartNow"), onClick: () => void installAppUpdate(update) },
   });
 }
 

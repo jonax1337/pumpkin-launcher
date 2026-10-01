@@ -4,6 +4,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { askPlayerName, openAddOffline, startMsLogin } from "@/components/PlayerNames";
+import { t } from "@/i18n/core";
 import { usableAccount, useOfflineAllowed } from "@/store/offline";
 import { api } from "@/lib/api";
 import { autoMemoryMb, formatClock, maxMemoryMb } from "@/lib/format";
@@ -31,8 +32,8 @@ export function useInstances() {
 export const groupsOf = (instances: Instance[]) =>
   [...new Set(instances.flatMap((i) => (i.group ? [i.group] : [])))].sort((a, b) => a.localeCompare(b, "de"));
 
-/** Anzeige für Instanzen ohne Gruppe (Bibliothek und Einstellungen). */
-export const UNGROUPED = "Ohne Gruppe";
+/** Anzeige für Instanzen ohne Gruppe (Bibliothek und Einstellungen); live berechnet, kein fester Text. */
+export const ungrouped = () => t("detail.settings.noGroup");
 
 export function useGroups() {
   return useQuery({ ...instanceListQuery, select: groupsOf }).data ?? [];
@@ -190,16 +191,16 @@ export function useInstall() {
     },
     // Beim Spielen folgt gleich der Start; eine Erfolgsmeldung gibt es nur für Reparieren und „Erneut versuchen“.
     onSuccess: (_, instance) => {
-      useTasks.getState().push({ label: `${instance.name} installiert`, sub: "Bereit zum Spielen", state: "done", to: `/instances/${instance.id}` });
-      if (!useGame.getState().launching[instance.id]) toast.success(`${instance.name} ist bereit`);
+      useTasks.getState().push({ label: t("hooks.install.doneTask", { name: instance.name }), sub: t("hooks.install.readySub"), state: "done", to: `/instances/${instance.id}` });
+      if (!useGame.getState().launching[instance.id]) toast.success(t("hooks.install.readyToast", { name: instance.name }));
     },
     onError: (err, instance) => {
-      if (isCancelled(err)) return void toast(`Installation von ${instance.name} abgebrochen`);
-      useTasks.getState().push({ label: `${instance.name} konnte nicht installiert werden`, sub: err.message, state: "fail", to: `/instances/${instance.id}` });
-      toast.error(`${instance.name} konnte nicht installiert werden`, {
+      if (isCancelled(err)) return void toast(t("hooks.install.cancelled", { name: instance.name }));
+      useTasks.getState().push({ label: t("hooks.install.failed", { name: instance.name }), sub: err.message, state: "fail", to: `/instances/${instance.id}` });
+      toast.error(t("hooks.install.failed", { name: instance.name }), {
         description: err.message,
         duration: 10_000,
-        action: { label: "Erneut versuchen", onClick: () => install.mutate(instance) },
+        action: { label: t("common.retry"), onClick: () => install.mutate(instance) },
       });
     },
     onSettled: (_, __, instance) => {
@@ -227,7 +228,7 @@ export function useLaunch() {
       const { javaPath } = useSettings.getState();
       const offlineOk = useOfflineAllowed.getState().allowed;
       const active = usableAccount(useSettings.getState().active, offlineOk);
-      if (!active) throw new Error(offlineOk ? "Leg zuerst einen Spielernamen fest." : "Melde dich zuerst mit deinem Microsoft-Konto an.");
+      if (!active) throw new Error(offlineOk ? t("hooks.launch.needPlayerName") : t("hooks.launch.needMicrosoft"));
       useGame.getState().clearLog(instance.id);
       useGame.getState().clearCrash(instance.id);
       return api.launchInstance(instance.id, {
@@ -251,8 +252,8 @@ export function useLaunch() {
       const offlineOk = useOfflineAllowed.getState().allowed;
       if (usableAccount(useSettings.getState().active, offlineOk)) return void toast.error(err.message);
       const action = offlineOk
-        ? { label: "Spielername festlegen", onClick: openAddOffline }
-        : { label: "Mit Microsoft anmelden", onClick: () => void startMsLogin(qc) };
+        ? { label: t("hooks.launch.setPlayerName"), onClick: openAddOffline }
+        : { label: t("components.account.msLogin"), onClick: () => void startMsLogin(qc) };
       toast.error(err.message, { duration: 10_000, action });
     },
   });
@@ -329,26 +330,26 @@ export function useGameEvents() {
         void qc.invalidateQueries({ queryKey: instanceKeys.all });
         void qc.invalidateQueries({ queryKey: worldKeys.all(instanceId) });
         void qc.invalidateQueries({ queryKey: screenshotKeys.list(instanceId) });
-        const showLog = { label: "Protokoll", onClick: () => navigate(`/instances/${instanceId}?tab=console`) };
+        const showLog = { label: t("components.log.ariaLabel"), onClick: () => navigate(`/instances/${instanceId}?tab=console`) };
         if (stopping.delete(instanceId)) {
-          toast(since ? `Minecraft beendet. Gespielt: ${formatClock(Date.now() - since)}` : "Minecraft beendet", { action: showLog });
+          toast(since ? t("hooks.game.exitedPlayed", { duration: formatClock(Date.now() - since) }) : t("hooks.game.exited"), { action: showLog });
           return;
         }
         const name = qc.getQueryData<Instance[]>(instanceKeys.all)?.find((i) => i.id === instanceId)?.name ?? "Minecraft";
         if (crashed) {
           useGame.getState().setCrash(exit);
           // Bleibt stehen, bis der Nutzer reagiert: ein Absturz ist keine vorübergehende Meldung.
-          toast.error(`${name} ist abgestürzt`, {
+          toast.error(t("hooks.game.crashed", { name }), {
             id: `crash-${instanceId}`,
             duration: Infinity,
-            description: crashReport ? "Im Absturzbericht steht meist, welche Mod schuld ist." : "Das Protokoll zeigt, was zuletzt passiert ist.",
+            description: crashReport ? t("hooks.game.crashReportHint") : t("hooks.game.logHint"),
             action: crashReport
-              ? { label: "Absturzbericht öffnen", onClick: () => void api.openPath(crashReport).catch(toastError) }
+              ? { label: t("components.game.openCrashReport"), onClick: () => void api.openPath(crashReport).catch(toastError) }
               : showLog,
             cancel: crashReport ? showLog : undefined,
           });
         } else if (code != null && code !== 0) {
-          toast.error(`${name} wurde unerwartet beendet (Code ${code})`, { duration: 10_000, action: showLog });
+          toast.error(t("hooks.game.exitedWithCode", { name, code }), { duration: 10_000, action: showLog });
         }
       }),
       // Das Backend hat Instanzen umgebaut (z. B. Migration): Listen und Details neu laden.

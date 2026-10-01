@@ -1,4 +1,5 @@
 // Nur im Browser-Dev-Modus dynamisch geladen (siehe api.ts); im Release-Build nicht enthalten.
+import { t } from "@/i18n";
 import type { Screenshot } from "./types";
 
 const HOUR = 3_600_000;
@@ -59,7 +60,7 @@ export function createScreenshotMock() {
       await wait();
       const shots = shotsOf(instanceId);
       const index = shots.findIndex((s) => s.fileName === fileName);
-      if (index < 0) throw new Error(`Screenshot „${fileName}“ wurde nicht gefunden`);
+      if (index < 0) throw new Error(t("mock.screenshot.notFound", { datei: fileName }));
       shots.splice(index, 1);
     },
   };

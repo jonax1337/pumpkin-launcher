@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Slot } from "radix-ui";
+import { useI18n } from "@/i18n";
 import {
   Actions, Button, Checkbox, Choice, ConfirmDialog, Count, Dialog, DialogActions, Disclosure, Empty, ErrorBox, Field, Glyph, Hint, Icon, IconButton, Panel,
   ProjectIcon, RowTitle, SearchField, Segmented, Select, Skel, TabPanel, Tabs, TextField, type IconName,
@@ -23,20 +24,22 @@ import { cn } from "@/lib/utils";
 
 type Tab = "blank" | "pack" | "file" | "tpl" | "import";
 
+// Reiter des Dialogs; Beschriftungen als Schlüssel, übersetzt beim Rendern.
 const TABS: { value: Tab; label: string; icon: IconName }[] = [
-  { value: "blank", label: "Eigene Instanz", icon: "plus" },
-  { value: "pack", label: "Modpack", icon: "box" },
-  { value: "file", label: "Datei", icon: "file" },
-  { value: "tpl", label: "Vorlage", icon: "save" },
-  { value: "import", label: "Anderer Launcher", icon: "swap" },
+  { value: "blank", label: "components.newInstance.tab.own", icon: "plus" },
+  { value: "pack", label: "components.catalog.one.modpack", icon: "box" },
+  { value: "file", label: "components.newInstance.tab.file", icon: "file" },
+  { value: "tpl", label: "components.newInstance.tab.template", icon: "save" },
+  { value: "import", label: "components.newInstance.tab.import", icon: "swap" },
 ];
 
+// Kurze Erklärung je Loader, steht als Hilfe unter der Wahl.
 const LOADER_HELP: Record<ModLoader, string> = {
-  vanilla: "Minecraft pur, ohne Mods.",
-  fabric: "Leicht und schnell. Die meisten Leistungs-Mods gibt es für Fabric.",
-  quilt: "Wie Fabric, kann auch die meisten Fabric-Mods laden.",
-  forge: "Für große, klassische Mods wie Create.",
-  neoforge: "Nachfolger von Forge für neuere Versionen.",
+  vanilla: "components.loader.help.vanilla",
+  fabric: "components.loader.help.fabric",
+  quilt: "components.loader.help.quilt",
+  forge: "components.loader.help.forge",
+  neoforge: "components.loader.help.neoforge",
 };
 
 const LOADER_ITEMS = ALL_LOADERS.map((l) => ({ value: l, label: LOADER_LABELS[l] }));
@@ -48,6 +51,7 @@ const packName = (path: string) => fileName(path).replace(MRPACK_EXT, "");
 
 /** Modpack aus dem Katalog als neue Instanz: Suche und Auswahlliste. */
 function PackPane({ selected, onSelect }: { selected: string | null; onSelect: (p: { id: string; title: string }) => void }) {
+  const { t } = useI18n();
   const [input, setInput] = useState("");
   const query = useDebounced(input.trim(), 300);
   const results = useQuery({
@@ -58,9 +62,9 @@ function PackPane({ selected, onSelect }: { selected: string | null; onSelect: (
   });
   return (
     <>
-      <SearchField value={input} onChange={setInput} placeholder="Modpacks suchen" autoFocus className="mb-4" />
+      <SearchField value={input} onChange={setInput} placeholder={t("components.pack.searchPlaceholder")} autoFocus className="mb-4" />
       {results.error ? (
-        <ErrorBox title="Der Katalog ist gerade nicht erreichbar" error={results.error} onRetry={() => void results.refetch()} />
+        <ErrorBox title={t("components.catalog.unreachable")} error={results.error} onRetry={() => void results.refetch()} />
       ) : (
         <div className="flex flex-col gap-1" aria-busy={results.isPending || undefined}>
           {results.isPending && [0, 1, 2, 3].map((k) => <Skel key={k} h={56} />)}
@@ -69,13 +73,13 @@ function PackPane({ selected, onSelect }: { selected: string | null; onSelect: (
               key={hit.project_id}
               media={<ProjectIcon url={hit.icon_url} seed={hit.project_id} />}
               title={hit.title}
-              sub={`von ${hit.author} · ${hit.description}`}
+              sub={t("components.search.byAuthorWithDesc", { autor: hit.author, beschreibung: hit.description })}
               trail={<Count value={formatDownloads(hit.downloads)} />}
               selected={selected === hit.project_id}
               onClick={() => onSelect({ id: hit.project_id, title: hit.title })}
             />
           ))}
-          {results.data && !results.data.hits.length && <Hint>Kein Modpack gefunden für „{query}“.</Hint>}
+          {results.data && !results.data.hits.length && <Hint>{t("components.pack.noneFound", { suche: query })}</Hint>}
         </div>
       )}
     </>
@@ -84,11 +88,12 @@ function PackPane({ selected, onSelect }: { selected: string | null; onSelect: (
 
 /** Neue Instanz aus einer gespeicherten Vorlage; Vorlagen lassen sich hier auch löschen. */
 function TemplatePane({ selected, onSelect }: { selected: string | null; onSelect: (t: Template | null) => void }) {
+  const { t } = useI18n();
   const templates = useTemplates();
   const del = useDeleteTemplate();
   const [toDelete, setToDelete] = useState<Template | null>(null);
 
-  if (templates.error) return <ErrorBox title="Vorlagen konnten nicht geladen werden" error={templates.error} onRetry={() => void templates.refetch()} />;
+  if (templates.error) return <ErrorBox title={t("components.template.loadFailed")} error={templates.error} onRetry={() => void templates.refetch()} />;
   if (templates.isPending)
     return (
       <div className="flex flex-col gap-1">
@@ -97,34 +102,34 @@ function TemplatePane({ selected, onSelect }: { selected: string | null; onSelec
     );
   if (!templates.data.length)
     return (
-      <Empty ill={<Glyph name="chest" pal="sand" box={64} />} title="Noch keine Vorlagen" size="pane">
-        Speichere eine Instanz über ihr Menü mit „Als Vorlage speichern“, dann kannst du sie hier als Ausgangspunkt nehmen.
+      <Empty ill={<Glyph name="chest" pal="sand" box={64} />} title={t("components.template.noneYet")} size="pane">
+        {t("components.template.noneYetHint")}
       </Empty>
     );
 
   return (
     <>
       <div className="flex flex-col gap-1">
-        {templates.data.map((t) => (
-          <div key={t.id} className="flex items-center gap-1">
+        {templates.data.map((tpl) => (
+          <div key={tpl.id} className="flex items-center gap-1">
             <Choice
               className="min-w-0 flex-1"
               media={<Glyph name="chest" pal="sand" />}
-              title={t.name}
-              sub={`${LOADER_LABELS[t.loader]} ${t.minecraftVersion} · ${t.modCount} ${t.modCount === 1 ? "Inhalt" : "Inhalte"} · gespeichert ${formatDate(t.createdAt)}`}
-              selected={selected === t.id}
-              onClick={() => onSelect(t)}
+              title={tpl.name}
+              sub={`${LOADER_LABELS[tpl.loader]} ${tpl.minecraftVersion} · ${t(tpl.modCount === 1 ? "components.template.entryCount.one" : "components.template.entryCount.other", { n: tpl.modCount })} · ${t("components.template.savedAt", { datum: formatDate(tpl.createdAt) })}`}
+              selected={selected === tpl.id}
+              onClick={() => onSelect(tpl)}
             />
-            <IconButton size="s" icon="trash" tone="bad" label={`Vorlage ${t.name} löschen`} tip="Vorlage löschen" disabled={del.isPending} onClick={() => setToDelete(t)} />
+            <IconButton size="s" icon="trash" tone="bad" label={t("components.template.deleteNamed", { name: tpl.name })} tip={t("components.template.delete")} disabled={del.isPending} onClick={() => setToDelete(tpl)} />
           </div>
         ))}
       </div>
-      <Hint className="mt-3">Vorlagen speicherst du über das Menü einer Instanz: „Als Vorlage speichern“.</Hint>
+      <Hint className="mt-3">{t("components.template.saveHint")}</Hint>
       <ConfirmDialog
         open={!!toDelete}
         onOpenChange={(o) => !o && setToDelete(null)}
-        title={`Vorlage „${toDelete?.name ?? ""}“ löschen?`}
-        text="Instanzen, die aus der Vorlage entstanden sind, bleiben erhalten."
+        title={t("components.template.deleteQuotedTitle", { name: toDelete?.name ?? "" })}
+        text={t("components.template.deleteText")}
         pending={del.isPending}
         onConfirm={() =>
           toDelete &&
@@ -147,6 +152,7 @@ function TemplatePane({ selected, onSelect }: { selected: string | null; onSelec
 function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
   open: boolean; onOpenChange: (o: boolean) => void; initial: { tab: Tab; path: string }; onBusy: (busy: boolean) => void; onDone: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const [tab, setTab] = useState<Tab>(initial.tab);
 
   // Eigene
@@ -218,31 +224,31 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
       void packInstall.run();
     } else if (tab === "file") {
       const title = customName.trim() || packName(path);
-      install.mutate(withTarget("import", (op) => api.modrinthImportPack(path, title, op), `${title} importieren`, { cancellable: true }), done);
+      install.mutate(withTarget("import", (op) => api.modrinthImportPack(path, title, op), t("components.newInstance.importTask", { name: title }), { cancellable: true, doneLabel: t("hooks.import.instanceTaskDone", { name: title }) }), done);
     } else if (tab === "import") {
       void importer.run(foreign.chosen).then((last) => last && onDone(last.id));
     } else if (template) {
-      install.mutate(withTarget(`template:${template.id}`, (op) => api.templateCreateInstance(template.id, template.name, op), `${template.name} anlegen`, { cancellable: true }), done);
+      install.mutate(withTarget(`template:${template.id}`, (op) => api.templateCreateInstance(template.id, template.name, op), t("components.newInstance.createTemplateTask", { name: template.name }), { cancellable: true, doneLabel: t("components.newInstance.createTemplateTaskDone", { name: template.name }) }), done);
     }
   }
 
   const goLabel =
-    tab === "blank" ? (create.isPending ? "Wird angelegt" : "Anlegen")
-    : tab === "pack" ? (packInstall.busy ?? "Anlegen")
+    tab === "blank" ? (create.isPending ? t("components.newInstance.creating") : t("components.newInstance.create"))
+    : tab === "pack" ? (packInstall.busy ?? t("components.newInstance.create"))
     : install.isPending || importer.running ? progressLabel(progress)
-    : tab === "file" ? "Importieren"
-    : tab === "import" ? (foreign.chosen.length > 1 ? `${foreign.chosen.length} importieren` : "Importieren")
-    : "Anlegen";
+    : tab === "file" ? t("components.newInstance.importLabel")
+    : tab === "import" ? (foreign.chosen.length > 1 ? t("components.newInstance.importMany", { n: foreign.chosen.length }) : t("components.newInstance.importLabel"))
+    : t("components.newInstance.create");
 
   // Ein zweiter Vorgang würde still verworfen; deshalb ist der Knopf gesperrt und der Grund steht da.
   const waiting = tab !== "blank" && !!active && !busy;
   const hint =
-    waiting ? "Warte, bis der laufende Vorgang fertig ist."
-    : tab === "blank" ? "Das Spiel wird beim ersten Start geladen."
-    : tab === "pack" ? (pack ? "Die Installation läuft im Hintergrund." : "Wähle ein Modpack.")
-    : tab === "file" ? (path ? "Alle Inhalte aus der Datei werden übernommen." : "Unterstützt: .mrpack")
-    : tab === "import" ? "Welten, Mods und Einstellungen werden kopiert. Der andere Launcher bleibt unverändert."
-    : template ? "Welten sind nicht Teil einer Vorlage." : "Wähle eine Vorlage.";
+    waiting ? t("components.newInstance.waitRunning")
+    : tab === "blank" ? t("components.newInstance.gameOnFirstStart")
+    : tab === "pack" ? (pack ? t("components.newInstance.installInBackground") : t("components.newInstance.pickPack"))
+    : tab === "file" ? (path ? t("components.newInstance.fileContentsNote") : t("components.newInstance.supportedMrpack"))
+    : tab === "import" ? t("components.newInstance.importNote")
+    : template ? t("components.newInstance.noWorldsInTemplate") : t("components.newInstance.pickTemplate");
 
   const navigate = useNavigate();
 
@@ -250,28 +256,28 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Neue Instanz"
+      title={t("components.newInstance.title")}
       width={720}
       height={600}
       footLeft={hint}
       footer={
         <>
           {tab === "pack" && packInstall.cancel && (
-            <Button variant="ghost" aria-label="Installation abbrechen" onClick={packInstall.cancel}>Abbrechen</Button>
+            <Button variant="ghost" aria-label={t("components.newInstance.cancelInstall")} onClick={packInstall.cancel}>{t("common.cancel")}</Button>
           )}
           {tab === "import" && importer.running && (
-            <Button variant="ghost" aria-label="Import abbrechen" onClick={cancelContent}>Abbrechen</Button>
+            <Button variant="ghost" aria-label={t("components.newInstance.cancelImport")} onClick={cancelContent}>{t("common.cancel")}</Button>
           )}
-          <DialogActions cancel={busy ? "Schließen" : "Abbrechen"} confirm={{ label: goLabel, width: 170, disabled: !valid || busy, onClick: go }} />
+          <DialogActions cancel={busy ? t("common.close") : t("common.cancel")} confirm={{ label: goLabel, width: 170, disabled: !valid || busy, onClick: go }} />
         </>
       }
     >
       <div className="nwrap">
-        <Tabs variant="vertical" idBase="ni" label="Weg" value={tab} onChange={setTab} items={TABS} />
+        <Tabs variant="vertical" idBase="ni" label={t("components.newInstance.tabsLabel")} value={tab} onChange={setTab} items={TABS.map(({ value, label, icon }) => ({ value, label: t(label), icon }))} />
         <TabPanel idBase="ni" value={tab} className="npane">
           {tab === "blank" && (
             <>
-              <Field label="Name" help="Vorschlag aus Version und Loader. Du kannst ihn später ändern.">
+              <Field label={t("common.name")} help={t("components.newInstance.nameHelp")}>
                 <TextField
                   value={nameEdited ? name : suggestion}
                   maxLength={64}
@@ -281,7 +287,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
                   }}
                 />
               </Field>
-              <Field label="Minecraft-Version">
+              <Field label={t("components.newInstance.mcVersion")}>
                 <Actions gap={12} wrap>
                   {versions.isPending ? (
                     <Skel w={220} h={40} />
@@ -292,45 +298,45 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
                       disabled={!filtered.length}
                       options={
                         filtered.length
-                          ? filtered.map((v, k) => ({ value: v.id, label: `${v.id}${v.type !== "release" ? " (Vorabversion)" : k === 0 ? " (neueste)" : ""}` }))
-                          : [{ value: "", label: versions.error ? "Versionen gerade nicht erreichbar" : "Keine Versionen" }]
+                          ? filtered.map((v, k) => ({ value: v.id, label: `${v.id}${v.type !== "release" ? t("components.version.prereleaseSuffix") : k === 0 ? t("components.version.newestSuffix") : ""}` }))
+                          : [{ value: "", label: versions.error ? t("components.version.unreachable") : t("components.version.none") }]
                       }
                     />
                   )}
-                  <Checkbox checked={snapshots} onChange={setSnapshots}>Vorabversionen zeigen</Checkbox>
+                  <Checkbox checked={snapshots} onChange={setSnapshots}>{t("components.version.showPrereleases")}</Checkbox>
                 </Actions>
               </Field>
               <Field
-                label="Loader"
+                label={t("components.common.loader")}
                 group
                 reserveLines={1}
-                help={LOADER_HELP[loader]}
+                help={t(LOADER_HELP[loader])}
                 error={
                   loaderUnavailable
-                    ? loaderVersions.error ? `${LOADER_LABELS[loader]} ist gerade nicht erreichbar.` : `Für Minecraft ${selectedVersion} gibt es noch kein ${LOADER_LABELS[loader]}.`
+                    ? loaderVersions.error ? t("components.loader.unreachable", { loader: LOADER_LABELS[loader] }) : t("components.loader.notYetFor", { version: selectedVersion, loader: LOADER_LABELS[loader] })
                     : undefined
                 }
               >
-                <Segmented label="Loader" value={loader} onChange={setLoader} items={LOADER_ITEMS} />
+                <Segmented label={t("components.common.loader")} value={loader} onChange={setLoader} items={LOADER_ITEMS} />
               </Field>
-              <Disclosure summary="Erweitert">
-                <Field label="Loader-Version" group={loader === "vanilla"}>
+              <Disclosure summary={t("components.newInstance.advanced")}>
+                <Field label={t("components.newInstance.loaderVersion")} group={loader === "vanilla"}>
                   {loader === "vanilla" ? (
-                    <span className="text-fg-2">Nicht nötig bei Vanilla</span>
+                    <span className="text-fg-2">{t("components.loader.notNeededVanilla")}</span>
                   ) : (
                     <Select
                       value={selectedLoader}
                       onChange={setLoaderVersion}
                       disabled={loaderUnavailable || loaderVersions.isPending}
                       options={[
-                        { value: LATEST, label: "Neueste stabile (empfohlen)" },
-                        ...(loaderVersions.data ?? []).map((v) => ({ value: v.version, label: `${v.version}${v.stable ? "" : " (Vorabversion)"}` })),
+                        { value: LATEST, label: t("components.loader.latestStable") },
+                        ...(loaderVersions.data ?? []).map((v) => ({ value: v.version, label: `${v.version}${v.stable ? "" : t("components.version.prereleaseSuffix")}` })),
                       ]}
                     />
                   )}
                 </Field>
-                <Field label="Arbeitsspeicher" group>
-                  <MemoryChooser name="ni-ram" value={memory} onChange={setMemory} autoText="Standard aus den Einstellungen" />
+                <Field label={t("ui.memory.label")} group>
+                  <MemoryChooser name="ni-ram" value={memory} onChange={setMemory} autoText={t("components.memory.autoFromSettings")} />
                 </Field>
               </Disclosure>
             </>
@@ -350,23 +356,23 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
                   navigate(pack ? `/discover?projekt=${pack.id}` : "/discover");
                 }}
               >
-                Mehr in Entdecken
+                {t("components.newInstance.moreInDiscover")}
               </Button>
             </>
           )}
 
           {tab === "file" &&
             (api.isMock ? (
-              <Empty ill="file" title="Nur in der App" size="pane">
-                Dateien lassen sich nur in der Pumpkin Launcher-App öffnen, nicht im Browser.
+              <Empty ill="file" title={t("components.newInstance.appOnlyTitle")} size="pane">
+                {t("components.newInstance.appOnlyText")}
               </Empty>
             ) : (
               <>
                 <div className="drop">
                   <Icon name="ul" size="xl" tone="muted" />
-                  <b>.mrpack hierher ziehen</b>
-                  <span>oder</span>
-                  <Button onClick={() => void chooseFile()}>Datei auswählen</Button>
+                  <b>{t("components.newInstance.dropHere")}</b>
+                  <span>{t("components.common.or")}</span>
+                  <Button onClick={() => void chooseFile()}>{t("components.newInstance.chooseFile")}</Button>
                 </div>
                 {/* Platz bleibt reserviert (unsichtbar), damit nichts springt, wenn eine Datei gewählt wird */}
                 <Panel level="raised" className={cn("mt-3 flex h-14 items-center gap-2.5 pr-2 pl-3", !path && "invisible")}>
@@ -374,10 +380,10 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
                   <div className="min-w-0 flex-1">
                     <RowTitle title={path ? `${packName(path)}.mrpack` : ""} sub={path} />
                   </div>
-                  <IconButton size="s" icon="x" label="Datei entfernen" disabled={!path} onClick={() => setPath("")} />
+                  <IconButton size="s" icon="x" label={t("components.newInstance.removeFile")} disabled={!path} onClick={() => setPath("")} />
                 </Panel>
                 {path && (
-                  <Field label="Name" optional className="mt-4">
+                  <Field label={t("common.name")} optional className="mt-4">
                     <TextField value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder={packName(path)} maxLength={64} />
                   </Field>
                 )}

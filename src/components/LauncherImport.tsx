@@ -2,37 +2,38 @@ import { toast } from "sonner";
 import { Button, Chip, Choice, Empty, ErrorBox, Field, Glyph, JobProgress, Skel } from "@/ui";
 import { useContentState } from "@/hooks/useContent";
 import { importTarget, type ForeignSelection } from "@/hooks/useImport";
+import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
 import { progressShare, progressShortLabel } from "@/lib/modrinth";
 import { FOREIGN_LAUNCHER_LABELS, FOREIGN_LAUNCHERS, LOADER_LABELS, type ForeignInstance } from "@/lib/types";
 
 /** Import aus anderen Launchern im Dialog „Neue Instanz“: Instanzen nach Launcher gruppiert, Fortschritt in der Zeile. */
 export function ImportPane({ selection, busy }: { selection: ForeignSelection; busy: boolean }) {
+  const { t } = useI18n();
   const { detected, all } = selection;
   const { active, target, progress } = useContentState();
 
   async function chooseFolder() {
-    const [folder] = await api.pickPaths({ directory: true, title: "Ordner des Launchers oder einer Instanz" });
-    if (folder) await selection.addFolder(folder).catch((e: Error) => toast.error("Der Ordner ließ sich nicht durchsuchen", { description: e.message }));
+    const [folder] = await api.pickPaths({ directory: true, title: t("components.import.folderTitle") });
+    if (folder) await selection.addFolder(folder).catch((e: Error) => toast.error(t("components.import.folderScanFailed"), { description: e.message }));
   }
 
   const trail = (f: ForeignInstance) => {
     if (active && target === importTarget(f)) return <JobProgress label={progressShortLabel(progress)} p={progressShare(progress)} width={120} />;
-    return f.imported ? <Chip>Schon importiert</Chip> : undefined;
+    return f.imported ? <Chip>{t("components.import.alreadyImported")}</Chip> : undefined;
   };
 
   return (
     <>
       {detected.error ? (
-        <ErrorBox title="Die Suche hat nicht geklappt" error={detected.error} onRetry={() => void detected.refetch()} />
+        <ErrorBox title={t("components.import.searchFailed")} error={detected.error} onRetry={() => void detected.refetch()} />
       ) : detected.isPending ? (
         <div className="flex flex-col gap-1">
           {[0, 1, 2].map((k) => <Skel key={k} h={56} />)}
         </div>
       ) : !all.length ? (
-        <Empty ill={<Glyph name="chest" pal="sand" box={64} />} title="Keine anderen Launcher gefunden" size="pane">
-          Gesucht wurde dort, wo Prism Launcher, Modrinth App, CurseForge App und ATLauncher ihre Instanzen ablegen.
-          Liegt dein Launcher woanders, zum Beispiel MultiMC, wähle seinen Ordner.
+        <Empty ill={<Glyph name="chest" pal="sand" box={64} />} title={t("components.import.noneFound")} size="pane">
+          {t("components.import.noneFoundHint")}
         </Empty>
       ) : (
         FOREIGN_LAUNCHERS.filter((l) => all.some((f) => f.launcher === l)).map((launcher) => (
@@ -55,7 +56,7 @@ export function ImportPane({ selection, busy }: { selection: ForeignSelection; b
         ))
       )}
       <Button variant="ghost" size="s" icon="folder" bleed="start" className="mt-2.5" disabled={api.isMock || busy} onClick={() => void chooseFolder()}>
-        Ordner wählen…
+        {t("components.import.chooseFolder")}
       </Button>
     </>
   );

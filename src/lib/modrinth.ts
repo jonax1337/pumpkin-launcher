@@ -1,3 +1,4 @@
+import { currentLanguage, t } from "../i18n/core.ts";
 import type { Mod } from "./types";
 
 // Modrinth-Katalog bleibt snake_case; Instanzen und Events sind camelCase.
@@ -52,32 +53,26 @@ export interface ModUpdate { modId: string; currentVersion: string; versionId: s
 
 /** Fortschritt in Alltagssprache statt „resolve: 0 / 1“. */
 export function progressLabel(p: ContentProgress | null): string {
-  if (!p || p.phase === "resolve" || p.phase === "validate") return "Wird geprüft…";
-  if (p.phase === "download") return p.total ? `Lädt ${Math.min(p.done + 1, p.total)} von ${p.total}…` : "Lädt…";
-  if (p.phase === "extract") return "Wird entpackt…";
-  if (p.phase === "copy") return p.total ? `Kopiert ${p.done} von ${p.total}…` : "Wird kopiert…";
-  if (p.phase === "hash") return p.total ? `Erkennt Inhalte ${p.done} von ${p.total}…` : "Erkennt Inhalte…";
-  if (p.phase === "pack") return "Wird gepackt…";
-  if (p.phase === "backup") return p.total ? `Sichert ${p.done} von ${p.total}…` : "Wird gesichert…";
-  return "Fertig";
+  if (!p || p.phase === "resolve" || p.phase === "validate") return t("components.job.checking");
+  if (p.phase === "download")
+    return p.total ? t("components.job.downloading", { done: Math.min(p.done + 1, p.total), total: p.total }) : t("components.job.downloadingIndeterminate");
+  if (p.phase === "extract") return t("components.job.extracting");
+  if (p.phase === "copy") return p.total ? t("components.job.copying", { done: p.done, total: p.total }) : t("components.job.copyingIndeterminate");
+  if (p.phase === "hash") return p.total ? t("components.job.detecting", { done: p.done, total: p.total }) : t("components.job.detectingIndeterminate");
+  if (p.phase === "pack") return t("components.job.packing");
+  if (p.phase === "backup") return p.total ? t("components.job.backingUp", { done: p.done, total: p.total }) : t("components.job.backingUpIndeterminate");
+  return t("common.done");
 }
-
-const DONE_VERBS: Record<string, string> = {
-  installieren: "installiert", aktualisieren: "aktualisiert", importieren: "importiert", anlegen: "angelegt", duplizieren: "dupliziert",
-  hinzufügen: "hinzugefügt", abgleichen: "abgeglichen", exportieren: "exportiert", sichern: "gesichert", löschen: "gelöscht", wiederherstellen: "wiederhergestellt",
-};
-
-/** „Sodium installieren“ → „Sodium installiert“ für Verlauf und Meldung. */
-export const doneLabel = (label: string) => label.replace(/\S+$/, (verb) => DONE_VERBS[verb] ?? verb);
 
 /** Ein Wort für schmale Fortschrittsanzeigen in einer Zeile (statt `progressLabel`). */
 export function progressShortLabel(p: ContentProgress | null): string {
-  if (!p || p.phase === "resolve" || p.phase === "validate") return "Wird geprüft";
-  if (p.phase === "download") return "Lädt";
-  if (p.phase === "extract") return "Wird entpackt";
-  if (p.phase === "copy") return "Kopiert";
-  if (p.phase === "hash") return "Erkennt";
-  return "Fertig";
+  if (!p || p.phase === "resolve" || p.phase === "validate") return t("components.common.checking");
+  if (p.phase === "download") return t("components.job.downloadingShort");
+  if (p.phase === "extract") return t("components.job.extractingShort");
+  if (p.phase === "copy") return t("components.job.copyingShort");
+  if (p.phase === "hash") return t("components.job.detectingShort");
+  if (p.phase === "backup") return t("components.job.backingUpShort");
+  return t("common.done");
 }
 
 const SHARE_PHASES = ["download", "copy", "hash", "backup"];
@@ -86,7 +81,7 @@ const SHARE_PHASES = ["download", "copy", "hash", "backup"];
 export const progressShare = (p: ContentProgress | null) =>
   p && SHARE_PHASES.includes(p.phase) && p.total ? Math.min(1, p.done / p.total) : null;
 
-export const formatDownloads = (n: number) => new Intl.NumberFormat("de", { notation: "compact" }).format(n);
+export const formatDownloads = (n: number) => new Intl.NumberFormat(currentLanguage(), { notation: "compact" }).format(n);
 
 /** Modpack-Datei im Modrinth-Format; wird immer eine eigene Instanz. */
 export const MRPACK_EXT = /\.mrpack$/i;
@@ -149,5 +144,5 @@ export const isPackVersionSupported = (v: ContentVersion) => v.loaders.length ==
 export function pickPackVersion(versions: ContentVersion[]): { version: ContentVersion | null; reason: string | null } {
   const version = pickVersion(versions.filter(isPackVersionSupported));
   if (version) return { version, reason: null };
-  return { version: null, reason: versions.length ? "Keine unterstützte Version" : "Keine Version verfügbar" };
+  return { version: null, reason: versions.length ? t("components.pack.noSupportedVersion") : t("components.pack.noVersionAvailable") };
 }

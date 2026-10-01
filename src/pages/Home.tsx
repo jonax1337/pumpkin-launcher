@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Buddy } from "@/branding/Brand";
+import { useI18n } from "@/i18n";
 import { useNavigate } from "react-router";
 import { PlayButton, PlayStatus, StatusChip, usePhase } from "@/components/game";
 import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
@@ -29,6 +30,7 @@ function HomeBuddy({ instanceId, awake }: { instanceId: string; awake: boolean }
 
 /** Titel und Metazeile der ausgewählten Instanz (Infos als Text; Knöpfe nur für „Updates“ und „Weiterspielen in …“). */
 function HeroInfo({ instance }: { instance: Instance }) {
+  const { t } = useI18n();
   // Update-Abfrage nur für die Hero-Instanz und nur mit Inhalten; 10 Minuten gecacht (wie im Detail).
   const updates = useModUpdates(instance.id, instance.mods.length > 0);
   const phase = usePhase(instance.id);
@@ -50,18 +52,18 @@ function HeroInfo({ instance }: { instance: Instance }) {
           className="overflow-hidden"
           items={[
             loaderLine(instance),
-            <><Count value={n} /> {n === 1 ? "Inhalt" : "Inhalte"}</>,
-            !playing && (instance.lastPlayedAt != null ? `Zuletzt gespielt ${relativeTime(instance.lastPlayedAt)}` : "Noch nie gespielt"),
+            <><Count value={n} /> {n === 1 ? t("pages.home.contentCount.one") : t("pages.home.contentCount.other")}</>,
+            !playing && (instance.lastPlayedAt != null ? t("components.game.lastPlayed", { zeit: relativeTime(instance.lastPlayedAt) }) : t("format.neverPlayed")),
           ]}
         />
         {u > 0 && (
           <ButtonLink to={`/instances/${instance.id}?tab=content`} size="s" icon="up" count={u} onScene>
-            {u === 1 ? "Update" : "Updates"}
+            {u === 1 ? t("common.update") : t("common.updates")}
           </ButtonLink>
         )}
         {resume && (
           <Button size="s" icon="play" onScene onClick={() => void play(instance, undefined, resume)}>
-            Weiterspielen in „{quickPlayTarget(resume)}“
+            {t("pages.home.resumeIn", { welt: quickPlayTarget(resume) })}
           </Button>
         )}
       </div>
@@ -74,6 +76,7 @@ function HeroInfo({ instance }: { instance: Instance }) {
  * Status-Chip oben links, beim Überfahren oder Fokus ein kleiner Spielen-Knopf oben rechts (wie Poster). Rechtsklick: Instanz-Menü.
  */
 function MiniCard({ instance, current, onPick, hintId }: { instance: Instance; current: boolean; onPick: () => void; hintId: string }) {
+  const { t } = useI18n();
   const look = useLook(instance.id);
   const items = useInstanceMenu(instance);
   const navigate = useNavigate();
@@ -89,7 +92,7 @@ function MiniCard({ instance, current, onPick, hintId }: { instance: Instance; c
         status={<StatusChip instance={instance} small loudOnly />}
         primary={<PlayButton instance={instance} size="i" />}
         menu={items}
-        tip="Klick zeigt sie oben, Doppelklick oder Enter öffnet sie."
+        tip={t("pages.home.miniCardTip")}
         hit={{
           onClick: onPick,
           onDoubleClick: open,
@@ -108,6 +111,7 @@ function MiniCard({ instance, current, onPick, hintId }: { instance: Instance; c
 
 /** Leiste „Deine Instanzen“ (Klick wählt die Instanz für den Hero, Doppelklick/Enter öffnet sie): Liste mit Knöpfen, Pfeile nur in Richtungen, in die noch etwas kommt. */
 function Rail({ instances, current, onPick }: { instances: Instance[]; current: string; onPick: (id: string) => void }) {
+  const { t } = useI18n();
   const rail = useRef<HTMLUListElement>(null);
   const [edge, setEdge] = useState({ l: false, r: false });
 
@@ -157,21 +161,22 @@ function Rail({ instances, current, onPick }: { instances: Instance[]; current: 
         ))}
         <li>
           <NewInstanceDialog>
-            <AddCard label="Neue Instanz" />
+            <AddCard label={t("components.newInstance.title")} />
           </NewInstanceDialog>
         </li>
       </ul>
-      <span id="rail-hint" className="sr">Auswählen zeigt die Instanz oben. Enter oder Doppelklick öffnet sie.</span>
+      <span id="rail-hint" className="sr">{t("pages.home.railHint")}</span>
       {/* Nur für die Maus: per Tastatur scrollt die Leiste mit dem Fokus mit. „absolute“ schlägt die Kit-Position (.rarr legt die Lage fest). */}
-      <IconButton onScene icon="back" label="Zurückblättern" tip={false} className="rarr l absolute" tabIndex={-1} aria-hidden onClick={() => page(-1)} />
-      <IconButton onScene icon="chev" label="Weiterblättern" tip={false} className="rarr r absolute" tabIndex={-1} aria-hidden onClick={() => page(1)} />
+      <IconButton onScene icon="back" label={t("pages.home.scrollBack")} tip={false} className="rarr l absolute" tabIndex={-1} aria-hidden onClick={() => page(-1)} />
+      <IconButton onScene icon="chev" label={t("pages.home.scrollForward")} tip={false} className="rarr r absolute" tabIndex={-1} aria-hidden onClick={() => page(1)} />
     </div>
   );
 }
 
 function HomeSkeleton() {
+  const { t } = useI18n();
   return (
-    <section className="home" aria-busy aria-label="Wird geladen">
+    <section className="home" aria-busy aria-label={t("components.common.loadingAria")}>
       <div className="hero">
         <div className="hero-k">
           <div className="titlebox"><Skel h={72} w="min(520px, 80%)" /></div>
@@ -189,6 +194,7 @@ function HomeSkeleton() {
 }
 
 export function HomePage() {
+  const { t } = useI18n();
   const { data: instances, isLoading, error, refetch } = useInstances();
   const [selected, setSelected] = useState<string | null>(null);
   // „Spielen“ überfahren oder fokussiert: weckt das Maskottchen
@@ -200,7 +206,7 @@ export function HomePage() {
   if (error)
     return (
       <section className="page">
-        <ErrorBox title="Deine Instanzen konnten nicht geladen werden" error={error} onRetry={() => void refetch()} />
+        <ErrorBox title={t("pages.home.loadErrorTitle")} error={error} onRetry={() => void refetch()} />
       </section>
     );
   if (!instances?.length || !current) return <Onboarding />;
@@ -231,14 +237,14 @@ export function HomePage() {
       <div className="cont">
         <div className="library-heading">
           <SectionHeader
-            title="Deine Instanzen"
+            title={t("components.detail.yourInstances")}
             id="cont-h"
             actions={
               <>
                 <NewInstanceDialog>
-                  <Button variant="ghost" size="s" icon="plus">Neue Instanz</Button>
+                  <Button variant="ghost" size="s" icon="plus">{t("components.newInstance.title")}</Button>
                 </NewInstanceDialog>
-                <ButtonLink to="/instances" variant="ghost" size="s" iconEnd="chev" bleed="end">Alle in der Bibliothek</ButtonLink>
+                <ButtonLink to="/instances" variant="ghost" size="s" iconEnd="chev" bleed="end">{t("pages.home.allInLibrary")}</ButtonLink>
               </>
             }
           />

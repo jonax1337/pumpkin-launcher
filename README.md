@@ -42,6 +42,7 @@
 - **Quality-of-life** — crash detection with per-instance logs, resumable downloads, automatic RAM detection, one-click log sharing via mclo.gs (access tokens, your user name in paths and e-mail addresses removed first) and a debug info without personal data for bug reports
 - **Auto-updates** — signed updates from GitHub Releases, installed only when you say so and never while Minecraft or a task (download, import, export, world backup) is running; a second launch just focuses the open window
 - **Seasonal branding** 🎃 — mascot, accent colors and window/taskbar icon switch automatically with the calendar (spring, summer, Halloween, winter)
+- **German & English UI** — the interface follows your system language or your choice in Settings (backend errors stay German for now)
 - **Pixelkino UI** — a custom pixel design system with a canvas scene engine, pixel icons and a frameless window. See [the design spec](docs/design/PIXELKINO.md)
 
 <p align="center">

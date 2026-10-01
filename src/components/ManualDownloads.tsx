@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { Button, Chip, Dialog, DialogActions, Hint, List, ListRow, RowTitle } from "@/ui";
+import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
 import { openPage } from "@/lib/links";
 import type { BlockedFile } from "@/lib/modrinth";
@@ -22,6 +23,7 @@ const POLL_MS = 2500;
  * die Datei dort selbst, der Launcher sieht sie im Downloads-Ordner (Größe und Prüfsumme müssen stimmen) und baut sie ein.
  */
 export function ManualDownloads() {
+  const { t } = useI18n();
   const target = useManual((s) => s.target);
   const set = useManual((s) => s.set);
   const qc = useQueryClient();
@@ -38,7 +40,7 @@ export function ManualDownloads() {
       const instance = await api.getInstance(p.instanceId).catch(() => null);
       setDone(new Set());
       reported.current = false;
-      useManual.getState().set({ instanceId: p.instanceId, instanceName: instance?.name ?? "deiner Instanz", items: p.items });
+      useManual.getState().set({ instanceId: p.instanceId, instanceName: instance?.name ?? t("components.manual.fallbackInstance"), items: p.items });
     }).then((fn) => (gone ? fn() : (off = fn)));
     return () => {
       gone = true;
@@ -71,7 +73,7 @@ export function ManualDownloads() {
             void qc.invalidateQueries({ queryKey: instanceKeys.all });
           }
         } catch (err) {
-          toast.error(`${item.name} konnte nicht eingebaut werden`, { description: err instanceof Error ? err.message : String(err) });
+          toast.error(t("components.manual.adoptFailed", { name: item.name }), { description: err instanceof Error ? err.message : String(err) });
           setDone((d) => new Set(d).add(item.fileId));
         }
       }
@@ -88,9 +90,9 @@ export function ManualDownloads() {
   useEffect(() => {
     if (target && items.length > 0 && pending.length === 0 && !reported.current) {
       reported.current = true;
-      toast.success(items.length === 1 ? `${items[0].name} ist eingebaut` : `Alle ${items.length} Dateien sind eingebaut`);
-      const t = setTimeout(() => set(null), 1200);
-      return () => clearTimeout(t);
+      toast.success(items.length === 1 ? t("components.manual.installedOne", { name: items[0].name }) : t("components.manual.installedAll", { n: items.length }));
+      const timer = setTimeout(() => set(null), 1200);
+      return () => clearTimeout(timer);
     }
   }, [target, items.length, pending.length, set, items]);
 
@@ -103,25 +105,22 @@ export function ManualDownloads() {
           setDone(new Set());
         }
       }}
-      title={pending.length === 1 ? "Eine Datei von Hand laden" : `${pending.length || items.length} Dateien von Hand laden`}
+      title={pending.length === 1 ? t("components.manual.titleOne") : t("components.manual.titleMany", { n: pending.length || items.length })}
       sub={target?.instanceName}
       width={560}
-      footer={<DialogActions cancel={pending.length ? "Später" : "Fertig"} />}
+      footer={<DialogActions cancel={pending.length ? t("components.manual.later") : t("common.done")} />}
     >
-      <Hint icon="info">
-        Die Autoren dieser Mods erlauben den Download nur über CurseForge. Öffne die Seite und lade die Datei herunter. Pumpkin Launcher findet sie in deinem
-        Downloads-Ordner, prüft sie und baut sie selbst ein.
-      </Hint>
-      <List variant="versions" aria-label="Dateien zum manuellen Laden" className="mt-3">
+      <Hint icon="info">{t("components.manual.hint")}</Hint>
+      <List variant="versions" aria-label={t("components.manual.listLabel")} className="mt-3">
         {items.map((i) => (
           <ListRow key={i.fileId}>
             <RowTitle title={i.name} sub={i.fileName} />
             {done.has(i.fileId) ? (
-              <Chip icon="check">Eingebaut</Chip>
+              <Chip icon="check">{t("components.manual.builtIn")}</Chip>
             ) : (
               <>
-                <Chip size="s" dot>Wartet auf Download</Chip>
-                <Button size="s" icon="ext" onClick={() => openPage(i.url)}>Seite öffnen</Button>
+                <Chip size="s" dot>{t("components.manual.waiting")}</Chip>
+                <Button size="s" icon="ext" onClick={() => openPage(i.url)}>{t("common.open")}</Button>
               </>
             )}
           </ListRow>
