@@ -10,7 +10,7 @@ import {
 } from "@/ui";
 import { MemoryChooser } from "@/components/common";
 import { useInstallPack } from "@/components/ContentBrowser";
-import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { cancellable, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { useCreateInstance, useLoaderVersions, useVersions } from "@/hooks/useInstances";
 import { useDeleteTemplate, useTemplates } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
@@ -219,9 +219,9 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
       void packInstall.run();
     } else if (tab === "file") {
       const title = fileName.trim() || packName(path);
-      install.mutate(withTarget("import", (op) => api.modrinthImportPack(path, title, op), `${title} importieren`), done);
+      install.mutate(cancellable(withTarget("import", (op) => api.modrinthImportPack(path, title, op), `${title} importieren`)), done);
     } else if (template) {
-      install.mutate(withTarget(`template:${template.id}`, (op) => api.templateCreateInstance(template.id, template.name, op), `${template.name} anlegen`), done);
+      install.mutate(cancellable(withTarget(`template:${template.id}`, (op) => api.templateCreateInstance(template.id, template.name, op), `${template.name} anlegen`)), done);
     }
   }
 

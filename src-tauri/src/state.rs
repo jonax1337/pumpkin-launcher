@@ -103,7 +103,7 @@ mod tests {
             tokio::task::yield_now().await;
             state.cancel("op");
         });
-        assert_eq!(result.unwrap_err().to_string(), "Installation abgebrochen");
+        assert_eq!(result.unwrap_err().to_string(), "Vorgang abgebrochen");
         assert!(state.cancels().is_empty());
         assert_eq!(state.cancellable("op", async { Ok(1) }).await.unwrap(), 1);
         std::fs::remove_dir_all(root).unwrap();

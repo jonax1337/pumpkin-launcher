@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { create } from "zustand";
 import { api } from "@/lib/api";
 import type { ContentProgress, ContentProject } from "@/lib/modrinth";
@@ -10,10 +11,10 @@ import { instanceKeys } from "./useInstances";
 // Keeps progress visible across route changes; only the matching active operation may update it.
 // `target` says what runs (a project ID or "updates"), so rows can show their own progress.
 export const useContentState = create<{
-  active: string | null; target: string | null; label: string | null; progress: ContentProgress | null; error: string | null; result: Instance | null;
-}>(() => ({ active: null, target: null, label: null, progress: null, error: null, result: null }));
+  active: string | null; target: string | null; label: string | null; cancellable: boolean; progress: ContentProgress | null; error: string | null; result: Instance | null;
+}>(() => ({ active: null, target: null, label: null, cancellable: false, progress: null, error: null, result: null }));
 
-export type ContentRun = ((operationId: string) => Promise<Instance>) & { target?: string; label?: string };
+export type ContentRun = ((operationId: string) => Promise<Instance>) & { target?: string; label?: string; cancellable?: boolean };
 
 /**
  * Hängt an einen Lauf, was er betrifft (für den Fortschritt in der passenden Zeile)
@@ -22,9 +23,18 @@ export type ContentRun = ((operationId: string) => Promise<Instance>) & { target
 export const withTarget = (target: string, run: (operationId: string) => Promise<Instance>, label?: string): ContentRun =>
   Object.assign(run, { target, label });
 
+/** Der Lauf lässt sich abbrechen (Backend: `pack_install_cancel`); das Aufgaben-Menü zeigt dann „Abbrechen“. */
+export const cancellable = (run: ContentRun): ContentRun => Object.assign(run, { cancellable: true });
+
+/** Bricht den laufenden Vorgang ab; das Ergebnis meldet der zentrale Fehler-Toast neutral. */
+export function cancelContent() {
+  const op = useContentState.getState().active;
+  if (op) void api.packInstallCancel(op).catch((e: Error) => toast.error(e.message));
+}
+
 /** „installieren“ → „installiert“ für den Verlauf. */
 const doneLabel = (label: string) =>
-  label.replace(/installieren$/, "installiert").replace(/aktualisieren$/, "aktualisiert").replace(/importieren$/, "importiert").replace(/anlegen$/, "angelegt").replace(/duplizieren$/, "dupliziert");
+  label.replace(/installieren$/, "installiert").replace(/aktualisieren$/, "aktualisiert").replace(/importieren$/, "importiert").replace(/anlegen$/, "angelegt").replace(/duplizieren$/, "dupliziert").replace(/exportieren$/, "exportiert");
 
 export function useContentInstall() {
   const qc = useQueryClient();
@@ -34,7 +44,7 @@ export function useContentInstall() {
       if (useContentState.getState().active) return null;
       const operationId = crypto.randomUUID();
       const label = install.label ?? "Inhalte laden";
-      useContentState.setState({ active: operationId, target: install.target ?? null, label, progress: null, error: null, result: null });
+      useContentState.setState({ active: operationId, target: install.target ?? null, label, cancellable: !!install.cancellable, progress: null, error: null, result: null });
       let unlisten: (() => void) | undefined;
       try {
         unlisten = await api.onContentProgress((progress) => {
@@ -52,7 +62,7 @@ export function useContentInstall() {
         throw error;
       } finally {
         unlisten?.();
-        useContentState.setState({ active: null, target: null, label: null });
+        useContentState.setState({ active: null, target: null, label: null, cancellable: false });
         void qc.invalidateQueries({ queryKey: instanceKeys.all });
         void qc.invalidateQueries({ queryKey: ["instance-status"] });
         void qc.invalidateQueries({ queryKey: ["modrinth-updates"] });

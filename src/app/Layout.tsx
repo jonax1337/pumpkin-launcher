@@ -7,7 +7,7 @@ import { ShareLogDialog } from "@/components/support";
 import { ManualDownloads } from "@/components/ManualDownloads";
 import { useUpdateCheckOnStart } from "@/hooks/useAppUpdate";
 import { useCancelInstall, useGameEvents, useInstances } from "@/hooks/useInstances";
-import { useContentState } from "@/hooks/useContent";
+import { cancelContent, useContentState } from "@/hooks/useContent";
 import { api } from "@/lib/api";
 import { progressLabel, progressShare } from "@/lib/modrinth";
 import { installStepLabel } from "@/lib/types";
@@ -174,27 +174,30 @@ const subscribeOnline = (cb: () => void) => {
 };
 const useOnline = () => useSyncExternalStore(subscribeOnline, () => navigator.onLine);
 
-/** Laufende Aufgaben: Vorbereitungen der Instanzen und Katalog-Vorgänge. */
-function useLiveTasks() {
+type LiveTask = { id: string; label: string; sub: string; p: number | null; cancel?: () => void };
+
+/** Laufende Aufgaben: Vorbereitungen der Instanzen und Katalog-Vorgänge, mit „Abbrechen“, wo das Backend es kann. */
+function useLiveTasks(): LiveTask[] {
   const installs = useGame((s) => s.installs);
   const content = useContentState();
+  const cancelInstall = useCancelInstall();
   const { data: instances } = useInstances();
   const name = (id: string) => instances?.find((i) => i.id === id)?.name ?? "Instanz";
   const loader = (id: string) => instances?.find((i) => i.id === id)?.loader ?? "vanilla";
-  const live = Object.values(installs).map((p) => ({
+  const live = Object.values(installs).map((p): LiveTask => ({
     id: `i-${p.instanceId}`,
-    instanceId: p.instanceId,
     label: `${name(p.instanceId)} wird installiert`,
     sub: installStepLabel(p.step, loader(p.instanceId)),
     p: p.total > 0 ? p.done / p.total : null,
+    cancel: () => cancelInstall.mutate(p.instanceId),
   }));
   if (content.active)
     live.push({
       id: `c-${content.active}`,
-      instanceId: "",
       label: content.label ?? "Inhalte laden",
       sub: progressLabel(content.progress),
       p: progressShare(content.progress),
+      cancel: content.cancellable ? cancelContent : undefined,
     });
   return live;
 }
@@ -203,7 +206,6 @@ function TasksButton() {
   const live = useLiveTasks();
   const history = useTasks((s) => s.history);
   const clear = useTasks((s) => s.clear);
-  const cancel = useCancelInstall();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const known = live.filter((t) => t.p != null);
@@ -232,7 +234,7 @@ function TasksButton() {
           {live.map((t) => (
             <ListRow key={t.id}>
               <Icon name="dl" tone="acc" />
-              <JobProgress label={t.label} sub={t.sub} p={t.p} onCancel={t.instanceId ? () => cancel.mutate(t.instanceId) : undefined} cancelLabel={`${t.label} abbrechen`} />
+              <JobProgress label={t.label} sub={t.sub} p={t.p} onCancel={t.cancel} cancelLabel={`${t.label} abbrechen`} />
             </ListRow>
           ))}
           {history.map((t) => (

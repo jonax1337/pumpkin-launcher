@@ -3,7 +3,7 @@
 //! Neue Instanzen entstehen über den normalen Pack-Import (`content::import`).
 use std::{fs, path::PathBuf};
 
-use super::{content, modrinth::invalid, mrpack, Dirs};
+use super::{content, modrinth::invalid, mrpack::{self, PackLimit}, Dirs};
 use crate::{
     error::{AppError, AppResult},
     models::{new_id, now_ms, Instance, Template},
@@ -33,7 +33,7 @@ pub async fn save(state: &AppState, instance_id: &str, name: &str) -> AppResult<
     };
     let path = file(&state.dirs, &template.id);
     fs::create_dir_all(state.dirs.root.join("templates"))?;
-    mrpack::write(&state.dirs, instance, CONTENT.map(String::from).to_vec(), &path).await?;
+    mrpack::write(&state.dirs, instance, CONTENT.map(String::from).to_vec(), &path, PackLimit::Importable).await?;
     state.templates.insert(template).inspect_err(|_| {
         if let Err(err) = fs::remove_file(&path) {
             tracing::warn!(%err, path = %path.display(), "Vorlagendatei nach Fehler nicht entfernt");

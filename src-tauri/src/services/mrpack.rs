@@ -7,9 +7,10 @@ use std::{
 };
 
 use serde_json::{json, Value};
+use tokio_util::sync::CancellationToken;
 
 use super::{
-    content,
+    blocking, check_cancelled, content,
     download::RemoveOnDrop,
     modrinth::{self, invalid},
     mods, Dirs,
@@ -20,8 +21,40 @@ use crate::{
     state::AppState,
 };
 
-/// Unter der ZIP-Grenze des Imports (4096), damit jedes Pack wieder importierbar ist.
+/// Unter der ZIP-Grenze des Imports (4096).
 const MAX_ENTRIES: usize = 4000;
+
+/// Ab dieser Dateigröße ZIP64 (Pflicht ab 4 GiB); mit Abstand, weil Deflate Unkomprimierbares leicht vergrößert.
+const ZIP64_FROM: u64 = 2 * 1024 * 1024 * 1024;
+
+/// Grenzen eines Packs. Vorlagen werden über den eigenen Import wieder zu Instanzen und müssen dessen
+/// Sicherheitsgrenzen einhalten; ein Export ist für den Nutzer und andere Launcher und hat keine.
+#[derive(Clone, Copy)]
+pub enum PackLimit {
+    Importable,
+    Unlimited,
+}
+
+impl PackLimit {
+    /// Prüft vor dem Schreiben, ob die Dateien unter die Grenzen passen. Der Import nimmt höchstens
+    /// `FILE_LIMIT` pro Pack; unkomprimiert gezählt ist das die sichere Seite.
+    fn check(self, files: &[(String, PathBuf)]) -> AppResult<()> {
+        if matches!(self, PackLimit::Unlimited) {
+            return Ok(());
+        }
+        if files.len() > MAX_ENTRIES {
+            return Err(invalid(format!("Zu viele Dateien für ein Pack (höchstens {MAX_ENTRIES})")));
+        }
+        let mut total = 0;
+        for (name, source) in files {
+            total += fs::metadata(source).map_err(|e| invalid(format!("{name} nicht lesbar: {e}")))?.len();
+            if total > modrinth::FILE_LIMIT {
+                return Err(invalid("Das Pack wäre größer als 256 MiB und ließe sich nicht wieder importieren"));
+            }
+        }
+        Ok(())
+    }
+}
 
 /// Was „Exportieren…“ zur Auswahl stellt: die Einträge im Spielordner, dazu die Ordner aktiver
 /// Inhalte, auch wenn sie noch nicht auf der Platte liegen (die Dateien kommen aus dem Cache).
@@ -47,20 +80,20 @@ pub async fn export(state: &AppState, instance_id: &str, include: Vec<String>, p
     if let Some(unknown) = include.iter().find(|n| !available.contains(n)) {
         return Err(invalid(format!("„{unknown}“ gibt es im Spielordner nicht")));
     }
-    write(&state.dirs, instance, include, path).await
+    write(&state.dirs, instance, include, path, PackLimit::Unlimited).await
 }
 
 /// Schreibt das Pack mit den Einträgen `include` des Spielordners nach `path`.
 /// Deaktivierte Inhalte bleiben draußen: der Import kennt kein „deaktiviert“.
-pub async fn write(dirs: &Dirs, instance: Instance, include: Vec<String>, path: &Path) -> AppResult<()> {
+pub async fn write(dirs: &Dirs, instance: Instance, include: Vec<String>, path: &Path, limit: PackLimit) -> AppResult<()> {
     let remote = remote_files(&modrinth::client()?, &instance, &include).await?;
     let (dirs, path) = (dirs.clone(), path.to_owned());
-    tokio::task::spawn_blocking(move || {
+    blocking(move |stop| {
         let files = overrides(&dirs, &instance, &include, &remote)?;
-        write_zip(&path, &index(&instance, &remote)?, &pumpkin_meta(&instance), files)
+        limit.check(&files)?;
+        write_zip(&path, &index(&instance, &remote)?, &pumpkin_meta(&instance), files, stop)
     })
     .await
-    .map_err(|e| invalid(format!("Pack schreiben abgebrochen: {e}")))?
 }
 
 /// Aktive Inhalte samt SHA-1 (Schlüssel im Mod-Cache).
@@ -139,11 +172,8 @@ fn overrides(dirs: &Dirs, instance: &Instance, include: &[String], remote: &[Val
     Ok(files)
 }
 
-/// Schreibt das Archiv über `<path>.part`; bei einem Fehler bleibt am Ziel nichts Halbes liegen.
-fn write_zip(path: &Path, index: &Value, meta: &Value, files: Vec<(String, PathBuf)>) -> AppResult<()> {
-    if files.len() > MAX_ENTRIES {
-        return Err(invalid(format!("Zu viele Dateien für ein Pack (höchstens {MAX_ENTRIES})")));
-    }
+/// Schreibt das Archiv über `<path>.part`; bei einem Fehler oder Abbruch bleibt am Ziel nichts Halbes liegen.
+fn write_zip(path: &Path, index: &Value, meta: &Value, files: Vec<(String, PathBuf)>, stop: &CancellationToken) -> AppResult<()> {
     let tmp = path.with_extension("mrpack.part");
     let mut guard = RemoveOnDrop(Some(tmp.clone()));
     let mut zip = zip::ZipWriter::new(fs::File::create(&tmp)?);
@@ -152,18 +182,13 @@ fn write_zip(path: &Path, index: &Value, meta: &Value, files: Vec<(String, PathB
     zip.write_all(&serde_json::to_vec_pretty(index)?)?;
     zip.start_file(content::PUMPKIN_FILE, options)?;
     zip.write_all(&serde_json::to_vec_pretty(meta)?)?;
-    let mut total = 0u64;
     for (name, source) in files {
+        check_cancelled(stop)?;
         // Gleiche Prüfung wie der Import, der den ganzen Eintragsnamen samt `overrides/` sieht.
         let entry = format!("overrides/{name}");
         content::safe_path(&entry)?;
         let mut file = fs::File::open(&source).map_err(|e| invalid(format!("{name} nicht lesbar: {e}")))?;
-        // Der Import nimmt höchstens FILE_LIMIT pro Pack; unkomprimiert gezählt ist das die sichere Seite.
-        total += file.metadata()?.len();
-        if total > modrinth::FILE_LIMIT {
-            return Err(invalid("Das Pack wäre größer als 256 MiB und ließe sich nicht wieder importieren"));
-        }
-        zip.start_file(entry, options)?;
+        zip.start_file(entry, options.large_file(file.metadata()?.len() >= ZIP64_FROM))?;
         io::copy(&mut file, &mut zip)?;
     }
     // Erst schließen, dann umbenennen: Windows verschiebt keine offene Datei.
@@ -230,5 +255,17 @@ mod tests {
         assert_eq!(files, ["extra.jar", "own.jar"]);
         assert_eq!((copy.loader, copy.loader_version.as_deref()), (ModLoader::Fabric, Some("0.16.10")));
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn only_importable_packs_are_limited() {
+        let file = std::env::temp_dir().join(format!("{}.txt", new_id()));
+        fs::write(&file, "x").unwrap();
+        let files = vec![("a.txt".to_string(), file.clone()); MAX_ENTRIES + 1];
+
+        assert!(PackLimit::Importable.check(&files).is_err());
+        assert!(PackLimit::Importable.check(&files[..MAX_ENTRIES]).is_ok());
+        assert!(PackLimit::Unlimited.check(&files).is_ok());
+        fs::remove_file(file).unwrap();
     }
 }

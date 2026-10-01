@@ -6,7 +6,7 @@ import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { TipProvider, Toaster } from "@/ui";
 import { Layout } from "@/app/Layout";
 import { BrandProvider } from "@/branding/Brand";
-import { INSTALL_CANCELLED } from "@/lib/types";
+import { CANCELLED } from "@/lib/types";
 import { HomePage } from "@/pages/Home";
 import { InstancesPage } from "@/pages/Instances";
 import { InstanceDetailPage } from "@/pages/InstanceDetail";
@@ -23,7 +23,7 @@ const queryClient = new QueryClient({
     onError: (err, _vars, _ctx, mutation) => {
       if (mutation.meta?.ownErrorToast) return;
       // Abbrechen war Absicht: neutral melden, nicht als Fehler.
-      if (err.message === INSTALL_CANCELLED) toast(INSTALL_CANCELLED);
+      if (err.message === CANCELLED) toast(CANCELLED);
       else toast.error(err.message);
     },
   }),

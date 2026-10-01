@@ -259,8 +259,8 @@ pub async fn curseforge_adopt_download(state: State<'_, AppState>, instance_id: 
     let Ok(_operation) = state.operation(Some(&instance_id)) else { return Ok(None) };
     providers::curseforge::adopt_download(&state, &instance_id, project_id, file_id).await
 }
-/// Bricht `modrinth_install_pack`, `modrinth_import_pack` oder `template_create_instance` mit
-/// dieser `operationId` ab; der Vorgang endet mit „Installation abgebrochen“.
+/// Bricht `modrinth_install_pack`, `modrinth_import_pack`, `provider_install_pack`, `template_create_instance`,
+/// `instance_duplicate` oder `instance_export` mit dieser `operationId` ab; der Vorgang endet mit „Vorgang abgebrochen“.
 #[tauri::command]
 pub fn pack_install_cancel(state: State<'_, AppState>, operation_id: String) {
     state.cancel(&operation_id);
@@ -336,21 +336,26 @@ pub async fn instance_duplicate(
     operation_id: String,
 ) -> AppResult<Instance> {
     let _operation = state.operation(Some(&instance_id))?;
-    duplicate::duplicate(&state, &instance_id, progress(app, operation_id)).await
+    let work = duplicate::duplicate(&state, &instance_id, progress(app, operation_id.clone()));
+    state.cancellable(&operation_id, work).await
 }
 /// Einträge des Spielordners, die `instance_export` mitnehmen kann.
 #[tauri::command]
 pub fn instance_export_entries(state: State<'_, AppState>, instance_id: String) -> AppResult<Vec<String>> {
     mrpack::entries(&state.dirs, &state.instances.get(&instance_id)?)
 }
-/// Schreibt die Instanz als `.mrpack` an den vom Nutzer gewählten Pfad.
+/// Schreibt die Instanz als `.mrpack` an den vom Nutzer gewählten Pfad (Phase `pack`).
 #[tauri::command]
 pub async fn instance_export(
+    app: AppHandle,
     state: State<'_, AppState>,
     instance_id: String,
     include: Vec<String>,
     path: String,
+    operation_id: String,
 ) -> AppResult<()> {
     let _operation = state.operation(Some(&instance_id))?;
-    mrpack::export(&state, &instance_id, include, std::path::Path::new(&path)).await
+    progress(app, operation_id.clone())("pack", 0, 0);
+    let work = mrpack::export(&state, &instance_id, include, std::path::Path::new(&path));
+    state.cancellable(&operation_id, work).await
 }

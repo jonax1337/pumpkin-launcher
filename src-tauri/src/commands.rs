@@ -189,7 +189,7 @@ pub async fn instance_install(app: AppHandle, state: State<'_, AppState>, instan
     state.cancellable(&instance_id, install_instance(app.clone(), &state, instance_id.clone())).await
 }
 
-/// Bricht eine laufende `instance_install` ab; sie endet mit „Installation abgebrochen“.
+/// Bricht eine laufende `instance_install` ab; sie endet mit „Vorgang abgebrochen“.
 #[tauri::command]
 pub fn instance_install_cancel(state: State<'_, AppState>, instance_id: String) {
     state.cancel(&instance_id);

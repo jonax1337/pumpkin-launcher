@@ -9,7 +9,7 @@ import {
   MenuItem, MenuLabel, MenuNote, MenuScroll, MenuSep, Meta, Panel, ProjectIcon, RowTitle, SceneThumb, SearchField, SectionHeader, Select, Sheet, Skel, SkelRow,
   Switch, TabPanel, Tabs, TextField, Tip, Toolbar,
 } from "@/ui";
-import { useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
+import { cancelContent, cancellable, useContentInstall, useContentState, withTarget } from "@/hooks/useContent";
 import { useInstances } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import {
@@ -241,12 +241,6 @@ function AddButton({ instance, projectId, title, type, versionId, large, compact
   );
 }
 
-/** Laufende Modpack-Installation abbrechen; das Ergebnis meldet der zentrale Fehler-Toast neutral. */
-function cancelActive() {
-  const op = useContentState.getState().active;
-  if (op) void api.packInstallCancel(op).catch((e: Error) => toast.error(e.message));
-}
-
 /** Ohne Instanz-Kontext: Menü mit allen Instanzen; unpassende ausgegraut mit Grund, sonst „Neue Instanz anlegen…“. */
 export function AddToInstanceMenu({ projectId, title, type, large, source = "modrinth" }: { projectId: string; title: string; type: ModKind; large?: boolean; source?: Source }) {
   const instances = useInstances();
@@ -345,7 +339,7 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
       if (!id) return;
     }
     const perform = (op: string) => (source === "modrinth" ? api.modrinthInstallPack(id, name, op) : api.providerInstallPack(source, projectId, id, name, op));
-    install.mutate(withTarget(projectId, perform, `Modpack „${name}“ installieren`), {
+    install.mutate(cancellable(withTarget(projectId, perform, `Modpack „${name}“ installieren`)), {
       onSuccess: (inst) => {
         if (!inst) return;
         toast.success(`${inst.name} ist bereit. „Spielen“ lädt beim ersten Start den Rest.`, {
@@ -357,7 +351,7 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
     });
   }
   const busy = checking ? "Wird geprüft" : active && target === projectId ? progressLabel(progress).replace(/…$/, "") : null;
-  return { run, busy, p: checking ? null : progressShare(progress), blocked: !!active || checking, cancel: !checking && busy ? cancelActive : undefined };
+  return { run, busy, p: checking ? null : progressShare(progress), blocked: !!active || checking, cancel: !checking && busy ? cancelContent : undefined };
 }
 
 const loaderNames = (v: ContentVersion) =>

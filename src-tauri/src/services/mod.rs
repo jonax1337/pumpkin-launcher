@@ -5,7 +5,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::error::AppResult;
+use tokio_util::sync::CancellationToken;
+
+use crate::error::{AppError, AppResult};
 use modrinth::invalid;
 
 pub mod auth;
@@ -139,6 +141,26 @@ pub(crate) fn walk(base: &Path, path: &Path, out: &mut Vec<(String, PathBuf)>) -
         let rel = path.strip_prefix(base).map_err(|_| invalid("Pfad außerhalb des Spielordners"))?;
         let rel = rel.to_str().ok_or_else(|| invalid("Dateiname ist kein gültiger Text"))?.replace('\\', "/");
         out.push((rel, path.to_owned()));
+    }
+    Ok(())
+}
+
+/// Führt blockierende Dateiarbeit aus. Verwirft der Aufrufer das Future (Abbruch über `AppState::cancellable`),
+/// läuft der Thread weiter, bis `work` das Token prüft ([`check_cancelled`]); aufräumen muss `work` selbst,
+/// erst dann schreibt nichts mehr in das, was weg soll.
+pub(crate) async fn blocking<T: Send + 'static>(
+    work: impl FnOnce(&CancellationToken) -> AppResult<T> + Send + 'static,
+) -> AppResult<T> {
+    let stop = CancellationToken::new();
+    let _stop_on_drop = stop.clone().drop_guard();
+    tokio::task::spawn_blocking(move || work(&stop))
+        .await
+        .map_err(|e| invalid(format!("Der Vorgang ist unerwartet abgebrochen: {e}")))?
+}
+
+pub(crate) fn check_cancelled(stop: &CancellationToken) -> AppResult<()> {
+    if stop.is_cancelled() {
+        return Err(AppError::Cancelled);
     }
     Ok(())
 }
