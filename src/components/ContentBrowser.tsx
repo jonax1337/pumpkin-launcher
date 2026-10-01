@@ -22,6 +22,7 @@ import {
 } from "@/lib/modrinth";
 import { Description } from "@/components/Description";
 import { openManualDownloads } from "@/components/ManualDownloads";
+import { instanceUrl, newInstanceUrl, type InstanceTab } from "@/lib/routes";
 import { LOADER_LABELS, type Instance, type ModKind, type ModLoader, type World } from "@/lib/types";
 import { lookOf, useLook, useLookStore } from "@/store/look";
 
@@ -145,7 +146,7 @@ const installDatapack = async (qc: QueryClient, instance: Instance, world: World
 };
 
 /** Wohin ein Inhalt kam: in die Welt (Tab Welten) oder in die Instanz (Tab Inhalte). */
-const destination = (instance: Instance, world?: World) =>
+const destination = (instance: Instance, world?: World): { label: string; tab: InstanceTab } =>
   world ? { label: t("components.content.destinationWorld", { welt: world.name, instanz: instance.name }), tab: "worlds" } : { label: instance.name, tab: "content" };
 
 /**
@@ -203,7 +204,7 @@ function useAddContent() {
         const deps = extra > 0 ? t(extra === 1 ? "components.content.deps.one" : "components.content.deps.other", { n: extra }) : "";
         if (!opts.openAction) return void toast.success(t("components.content.added", { name: title }) + deps);
         const { label, tab } = destination(result, world);
-        toast.success(t("components.content.nowIn", { name: title, ziel: label }) + deps, { action: { label: t("components.content.viewAction"), onClick: () => navigate(`/instances/${result.id}?tab=${tab}`) } });
+        toast.success(t("components.content.nowIn", { name: title, ziel: label }) + deps, { action: { label: t("components.content.viewAction"), onClick: () => navigate(instanceUrl(result.id, tab)) } });
       },
     });
     return "ok";
@@ -293,7 +294,7 @@ export function AddToInstanceMenu({ projectId, title, type, large, source = "mod
       {!usable && !all.isPending && (
         <>
           <MenuSep />
-          <MenuItem onSelect={() => navigate("/instances?neu=1")}>
+          <MenuItem onSelect={() => navigate(newInstanceUrl())}>
             <Icon name="plus" size="s" />
             <span className="vx-trunc">{type === "resourcepack" ? t("components.content.newInstancePlain") : t("components.content.newInstanceFabric")}</span>
           </MenuItem>
@@ -377,10 +378,10 @@ export function useInstallPack(projectId: string, title: string, onDone?: (insta
       onSuccess: (inst) => {
         if (!inst) return;
         toast.success(t("components.pack.readyToast", { name: inst.name }), {
-          action: onDone ? undefined : { label: t("common.open"), onClick: () => navigate(`/instances/${inst.id}`) },
+          action: onDone ? undefined : { label: t("common.open"), onClick: () => navigate(instanceUrl(inst.id)) },
         });
         if (onDone) onDone(inst.id);
-        else navigate(`/instances/${inst.id}`);
+        else navigate(instanceUrl(inst.id));
       },
     });
   }

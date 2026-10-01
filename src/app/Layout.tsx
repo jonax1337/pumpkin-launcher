@@ -14,6 +14,7 @@ import { useRunningTasks } from "@/hooks/useRunningTasks";
 import { api } from "@/lib/api";
 import { progressLabel, progressShare } from "@/lib/modrinth";
 import { platform } from "@/lib/platform";
+import { newInstanceUrl } from "@/lib/routes";
 import { installStepLabel } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BrandMark, BrandWordmark } from "@/branding/Brand";
@@ -76,7 +77,7 @@ function useShortcuts() {
         navigate("/settings");
       } else if (e.key.toLowerCase() === "n") {
         e.preventDefault();
-        navigate("/instances?neu=1");
+        navigate(newInstanceUrl());
       }
     }
     window.addEventListener("keydown", onKey);

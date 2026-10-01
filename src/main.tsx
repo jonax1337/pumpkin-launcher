@@ -8,6 +8,7 @@ import { LanguageProvider } from "@/i18n";
 import { Layout } from "@/app/Layout";
 import { BrandProvider } from "@/branding/Brand";
 import { CANCELLED } from "@/lib/types";
+import { discoverUrl } from "@/lib/routes";
 import { HomePage } from "@/pages/Home";
 import { InstancesPage } from "@/pages/Instances";
 import { InstanceDetailPage } from "@/pages/InstanceDetail";
@@ -60,8 +61,8 @@ const router = createBrowserRouter([
       { path: "settings", element: <SettingsPage /> },
       { path: "skins", element: <SkinsPage /> },
       // Alte Adressen aus früheren Versionen
-      { path: "mods", element: <Navigate to="/discover?tab=mods" replace /> },
-      { path: "modpacks", element: <Navigate to="/discover" replace /> },
+      { path: "mods", element: <Navigate to={discoverUrl({ tab: "mod" })} replace /> },
+      { path: "modpacks", element: <Navigate to={discoverUrl()} replace /> },
       { path: "account", element: <Navigate to="/settings" replace /> },
       // Nur Entwicklung: Vorschau des Pixel-Kits (fällt im Build weg)
       ...(import.meta.env.DEV ? [{ path: "_kit", lazy: async () => ({ Component: (await import("@/ui/KitPage")).KitPage }) }] : []),

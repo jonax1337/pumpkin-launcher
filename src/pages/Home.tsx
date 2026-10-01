@@ -10,6 +10,7 @@ import { Onboarding } from "@/components/Onboarding";
 import { useModUpdates } from "@/hooks/useContent";
 import { pickRecentInstance, useInstances, usePlay } from "@/hooks/useInstances";
 import { relativeTime } from "@/lib/format";
+import { instanceUrl } from "@/lib/routes";
 import { quickPlayTarget, type Instance } from "@/lib/types";
 import { PixelScene } from "@/pixel/PixelScene";
 import { motionOff } from "@/pixel/scene";
@@ -57,7 +58,7 @@ function HeroInfo({ instance }: { instance: Instance }) {
           ]}
         />
         {u > 0 && (
-          <ButtonLink to={`/instances/${instance.id}?tab=content`} size="s" icon="up" count={u} onScene>
+          <ButtonLink to={instanceUrl(instance.id, "content")} size="s" icon="up" count={u} onScene>
             {u === 1 ? t("common.update") : t("common.updates")}
           </ButtonLink>
         )}
@@ -80,7 +81,7 @@ function MiniCard({ instance, current, onPick, hintId }: { instance: Instance; c
   const look = useLook(instance.id);
   const items = useInstanceMenu(instance);
   const navigate = useNavigate();
-  const open = () => navigate(`/instances/${instance.id}`);
+  const open = () => navigate(instanceUrl(instance.id));
   return (
     <li data-id={instance.id}>
       <SceneCard

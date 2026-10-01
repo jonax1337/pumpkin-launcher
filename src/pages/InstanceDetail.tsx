@@ -10,6 +10,7 @@ import { AddContentSheet, IRIS_PROJECT_ID } from "@/components/ContentBrowser";
 import { useModUpdates } from "@/hooks/useContent";
 import { useInstance, useUpdateMods } from "@/hooks/useInstances";
 import { projectOf } from "@/lib/modrinth";
+import { instanceTabParams, readInstanceTab, type InstanceTab } from "@/lib/routes";
 import { LOADER_LABELS, type Instance } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { PixelScene } from "@/pixel/PixelScene";
@@ -18,9 +19,6 @@ import { ContentTab, useWarnings } from "./detail/ContentTab";
 import { ScreenshotsTab } from "./detail/ScreenshotsTab";
 import { SettingsTab } from "./detail/SettingsTab";
 import { WorldsTab } from "./detail/WorldsTab";
-
-type Tab = "content" | "worlds" | "screenshots" | "console" | "settings";
-const TABS: Tab[] = ["content", "worlds", "screenshots", "console", "settings"];
 
 /** Schmales Fenster (bis 900 px): Loader-Version und Kurzinfo im kompakten Kopf entfallen. */
 const NARROW = "(max-width: 900px)";
@@ -67,8 +65,8 @@ function InstanceDetail({ id }: { id: string }) {
   const { data: instance, error, refetch } = useInstance(id);
   const look = useLook(id);
   const [params, setParams] = useSearchParams();
-  const tab = TABS.find((tb) => tb === params.get("tab")) ?? "content";
-  const setTab = (next: Tab) => setParams({ tab: next }, { replace: true });
+  const tab = readInstanceTab(params);
+  const setTab = (next: InstanceTab) => setParams(instanceTabParams(next), { replace: true });
   const { head, compact } = useCompactHead(!!instance);
 
   if (error)
@@ -101,7 +99,7 @@ function InstanceDetail({ id }: { id: string }) {
 }
 
 function Loaded({ instance, tab, setTab, head, compact }: {
-  instance: Instance; tab: Tab; setTab: (t: Tab) => void; head: React.RefObject<HTMLElement | null>; compact: boolean;
+  instance: Instance; tab: InstanceTab; setTab: (tab: InstanceTab) => void; head: React.RefObject<HTMLElement | null>; compact: boolean;
 }) {
   const navigate = useNavigate();
   const { t } = useI18n();
@@ -130,7 +128,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
   const showUpdates = () => { setTab("content"); setUpdCall((n) => n + 1); };
 
   const version = <>{LOADER_LABELS[instance.loader]} <Count value={instance.minecraftVersion} size={20} /></>;
-  const tabs: TabItem<Tab>[] = [
+  const tabs: TabItem<InstanceTab>[] = [
     {
       value: "content",
       label: t("pages.detail.tabContent"),

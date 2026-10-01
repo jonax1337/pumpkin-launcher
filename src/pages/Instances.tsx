@@ -8,6 +8,7 @@ import { NewInstanceDialog } from "@/components/NewInstanceDialog";
 import { useBackgroundUpdates, useModUpdates } from "@/hooks/useContent";
 import { groupsOf, ungrouped, useInstances } from "@/hooks/useInstances";
 import { formatDate, formatPlaytime, relativeTime } from "@/lib/format";
+import { newInstanceParams } from "@/lib/routes";
 import { ALL_LOADERS, LOADER_LABELS, type Instance, type ModLoader } from "@/lib/types";
 import { lookOf, useLookStore } from "@/store/look";
 import {
@@ -187,7 +188,7 @@ export function InstancesPage() {
   // Leere Bibliothek: keine Werkzeugleiste, der Leerzustand trägt „Neue Instanz“.
   const empty = !error && !isLoading && !instances?.length;
   const newInstance = (
-    <Button variant="primary" icon="plus" aria-keyshortcuts="Control+N" onClick={() => setParams({ neu: "1" }, { replace: true })}>{t("components.newInstance.title")}</Button>
+    <Button variant="primary" icon="plus" aria-keyshortcuts="Control+N" onClick={() => setParams(newInstanceParams(), { replace: true })}>{t("components.newInstance.title")}</Button>
   );
 
   let body;

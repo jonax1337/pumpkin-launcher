@@ -10,6 +10,7 @@ import { useContentInstall, useContentState, withTarget } from "@/hooks/useConte
 import { askStop, useDeleteInstance, useExportEntries, useGroups, usePlay, useSetGroup } from "@/hooks/useInstances";
 import { useSaveTemplate } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
+import { instanceUrl } from "@/lib/routes";
 import { toastError } from "@/lib/toast";
 import type { Instance } from "@/lib/types";
 
@@ -38,7 +39,7 @@ function useDuplicate() {
   const navigate = useNavigate();
   return (instance: Instance) =>
     install.mutate(withTarget(`duplicate:${instance.id}`, (op) => api.duplicateInstance(instance.id, op), t("components.instance.duplicateTask", { name: instance.name }), { cancellable: true, doneLabel: t("components.instance.duplicateTaskDone", { name: instance.name }) }), {
-      onSuccess: (copy) => copy && toast.success(t("components.instance.createdQuoted", { name: copy.name }), { action: { label: t("common.open"), onClick: () => navigate(`/instances/${copy.id}`) } }),
+      onSuccess: (copy) => copy && toast.success(t("components.instance.createdQuoted", { name: copy.name }), { action: { label: t("common.open"), onClick: () => navigate(instanceUrl(copy.id)) } }),
     });
 }
 
@@ -96,8 +97,8 @@ export function useInstanceMenu(instance: Instance, opts: { open?: boolean } = {
     running
       ? { id: "stop", text: t("components.game.quitEllipsis"), icon: "stop", onSelect: () => askStop(instance) }
       : { id: "play", text: t("common.play"), icon: "play", disabled: busy || phase === "loading", onSelect: () => void play(instance) },
-    ...(opts.open ? [{ id: "open", text: t("components.instance.openInstance"), icon: "chev" as const, onSelect: () => navigate(`/instances/${instance.id}`) }] : []),
-    { id: "log", text: t("components.log.ariaLabel"), icon: "term", onSelect: () => navigate(`/instances/${instance.id}?tab=console`) },
+    ...(opts.open ? [{ id: "open", text: t("components.instance.openInstance"), icon: "chev" as const, onSelect: () => navigate(instanceUrl(instance.id)) }] : []),
+    { id: "log", text: t("components.log.ariaLabel"), icon: "term", onSelect: () => navigate(instanceUrl(instance.id, "console")) },
     { id: "dir", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => openInstanceFolder(instance) },
     { id: "group", text: t("components.instance.group"), icon: "box", disabled: running || busy, items: groupItems },
     "-",

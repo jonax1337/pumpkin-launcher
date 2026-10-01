@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { t } from "@/i18n";
 import { api } from "@/lib/api";
 import { fileName } from "@/lib/format";
+import { instanceUrl } from "@/lib/routes";
 import type { Datapack, Instance, Server, World, WorldBackup } from "@/lib/types";
 import { trackContent, withTarget, type ContentRun } from "./useContent";
 import { worldKeys } from "./queryKeys";
@@ -76,7 +77,7 @@ export const worldTarget = (instanceId: string, worldId: string) => `world:${ins
 export function useWorldJobs(instance: Instance) {
   const qc = useQueryClient();
   const track = async <R,>(run: ContentRun<R>) => {
-    const result = await trackContent(qc, run, (_, label) => ({ label, sub: instance.name, to: `/instances/${instance.id}?tab=worlds` }));
+    const result = await trackContent(qc, run, (_, label) => ({ label, sub: instance.name, to: instanceUrl(instance.id, "worlds") }));
     if (result == null) throw new Error(t("hooks.world.operationRunning"));
     return result;
   };

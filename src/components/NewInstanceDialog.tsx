@@ -20,6 +20,7 @@ import { useDeleteTemplate, useTemplates } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
 import { fileName, formatDate } from "@/lib/format";
 import { formatDownloads, isMrpack, MRPACK_EXT, progressLabel } from "@/lib/modrinth";
+import { discoverUrl, instanceUrl, readNewInstanceStart } from "@/lib/routes";
 import { ALL_LOADERS, LOADER_LABELS, type ModLoader, type Template } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -354,7 +355,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
                 className="mt-2.5"
                 onClick={() => {
                   onOpenChange(false);
-                  navigate(pack ? `/discover?projekt=${pack.id}` : "/discover");
+                  navigate(discoverUrl({ project: pack?.id }));
                 }}
               >
                 {t("components.newInstance.moreInDiscover")}
@@ -426,14 +427,12 @@ export function NewInstanceDialog({ children, primary }: { children?: ReactNode;
     if (file) show("file", file);
   });
 
-  // Strg+N führt zu /instances?neu=1 (siehe Layout), ein auf die Inhalte gezogenes Modpack zu ?neu=1&datei=<Pfad>,
-  // das Onboarding zu ?neu=import.
+  // Strg+N, ein auf die Inhalte gezogenes Modpack und das Onboarding öffnen den Dialog über die Adresse (lib/routes).
   const [params, setParams] = useSearchParams();
   useEffect(() => {
-    if (!primary || !params.has("neu")) return;
-    const file = params.get("datei");
-    if (file) show("file", file);
-    else show(params.get("neu") === "import" ? "import" : "blank");
+    const start = readNewInstanceStart(params);
+    if (!primary || !start) return;
+    show(start.type, start.type === "file" ? start.path : undefined);
     setParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [primary, params, setParams]);
@@ -445,7 +444,7 @@ export function NewInstanceDialog({ children, primary }: { children?: ReactNode;
   function done(id: string) {
     if (!stillOpen.current) return;
     setOpen(false);
-    navigate(`/instances/${id}`);
+    navigate(instanceUrl(id));
   }
 
   return (

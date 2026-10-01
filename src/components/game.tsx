@@ -6,6 +6,7 @@ import { Button, Chip, ConfirmDialog, Count, Empty, Icon, IconButton, SearchFiel
 import { askShareLog, DebugInfoButton, shareKindAfter } from "@/components/support";
 import { askStop, useCancelInstall, useInstanceStatus, useKill, usePlay, useStopAsk } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
+import { instanceUrl } from "@/lib/routes";
 import { toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import { formatClock, formatCount, relativeTime } from "@/lib/format";
@@ -187,7 +188,7 @@ export function PlayStatus({ instance, showLast = true, onScene }: { instance: I
   const crash = useGame((s) => s.crashes[instance.id]);
   const cancel = useCancelInstall();
   const navigate = useNavigate();
-  const toLog = () => navigate(`/instances/${instance.id}?tab=console`);
+  const toLog = () => navigate(instanceUrl(instance.id, "console"));
 
   let lead: ReactNode = null;
   let tail: ReactNode = null;

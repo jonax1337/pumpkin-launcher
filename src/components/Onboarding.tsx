@@ -9,6 +9,7 @@ import { useCreateInstance, usePlay, useVersions } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import type { ContentVersion } from "@/lib/modrinth";
+import { discoverUrl, newInstanceUrl } from "@/lib/routes";
 import { cn } from "@/lib/utils";
 import { Button, Choice, Field, Glyph, Hint, TextField, useRoving } from "@/ui";
 import type { GlyphName, GlyphPalette } from "@/pixel/icons";
@@ -65,7 +66,7 @@ export function Onboarding() {
   }
 
   async function go() {
-    if (start === "modpack") return navigate("/discover");
+    if (start === "modpack") return navigate(discoverUrl());
     setBusy(true);
     try {
       if (start === "vanilla") {
@@ -163,7 +164,7 @@ export function Onboarding() {
               </div>
               <p className="help onb-next" aria-live="polite">{t(choice.next)}</p>
               {/* Der Dialog der Bibliothek, nicht ein eigener: das Onboarding verschwindet mit der ersten importierten Instanz */}
-              <Button variant="ghost" size="s" icon="swap" bleed="start" disabled={busy} onClick={() => navigate("/instances?neu=import")}>
+              <Button variant="ghost" size="s" icon="swap" bleed="start" disabled={busy} onClick={() => navigate(newInstanceUrl({ type: "import" }))}>
                 {foreign
                   ? t(foreign === 1 ? "components.onboarding.importForeign.one" : "components.onboarding.importForeign.other", { n: foreign })
                   : t("components.onboarding.importForeignNone")}

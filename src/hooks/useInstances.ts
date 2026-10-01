@@ -8,6 +8,7 @@ import { t } from "@/i18n/core";
 import { usableAccount, useOfflineAllowed } from "@/store/offline";
 import { api } from "@/lib/api";
 import { autoMemoryMb, formatClock, maxMemoryMb } from "@/lib/format";
+import { instanceUrl } from "@/lib/routes";
 import { toastError } from "@/lib/toast";
 import { CANCELLED, type Instance, type InstanceStatus, type ModLoader, type NewInstance, type QuickPlay } from "@/lib/types";
 import { useGame } from "@/store/game";
@@ -323,7 +324,7 @@ export function useGameEvents() {
         void qc.invalidateQueries({ queryKey: instanceKeys.all });
         void qc.invalidateQueries({ queryKey: worldKeys.all(instanceId) });
         void qc.invalidateQueries({ queryKey: screenshotKeys.list(instanceId) });
-        const showLog = { label: t("components.log.ariaLabel"), onClick: () => navigate(`/instances/${instanceId}?tab=console`) };
+        const showLog = { label: t("components.log.ariaLabel"), onClick: () => navigate(instanceUrl(instanceId, "console")) };
         if (stopping.delete(instanceId)) {
           toast(since ? t("hooks.game.exitedPlayed", { duration: formatClock(Date.now() - since) }) : t("hooks.game.exited"), { action: showLog });
           return;

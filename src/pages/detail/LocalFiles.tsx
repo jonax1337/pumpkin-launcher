@@ -7,6 +7,7 @@ import { useFileDrop } from "@/hooks/useFileDrop";
 import { api } from "@/lib/api";
 import { fileName } from "@/lib/format";
 import { isMrpack } from "@/lib/modrinth";
+import { newInstanceUrl } from "@/lib/routes";
 import { toastError } from "@/lib/toast";
 import { t, useI18n } from "@/i18n";
 import type { Instance, FileCheck, LocalFile, Mod } from "@/lib/types";
@@ -31,7 +32,7 @@ function announceModpack(paths: string[], open: (url: string) => void) {
   const pack = paths.find(isMrpack);
   if (!pack) return;
   toast(t("detail.files.modpackToast"), {
-    action: { label: t("components.newInstance.importLabel"), onClick: () => open(`/instances?neu=1&datei=${encodeURIComponent(pack)}`) },
+    action: { label: t("components.newInstance.importLabel"), onClick: () => open(newInstanceUrl({ type: "file", path: pack })) },
   });
 }
 

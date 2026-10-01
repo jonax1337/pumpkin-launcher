@@ -8,6 +8,7 @@ import {
 } from "@/components/ContentBrowser";
 import { useVersions } from "@/hooks/useInstances";
 import { SOURCES, type CatalogType, type ContentHit, type SearchIndex, type Source } from "@/lib/modrinth";
+import { discoverParams, readDiscoverParams } from "@/lib/routes";
 import { ALL_LOADERS, LOADER_LABELS } from "@/lib/types";
 
 const TABS: CatalogType[] = ["modpack", "mod", "shader", "resourcepack", "datapack"];
@@ -17,13 +18,14 @@ const SOURCE_KEYS = Object.keys(SOURCES) as Source[];
 export function DiscoverPage() {
   const { t } = useI18n();
   const [params, setParams] = useSearchParams();
-  // ?quelle= wählt Modrinth (Standard) oder einen Anbieter ohne Schlüssel.
-  const source = SOURCE_KEYS.find((s) => s === params.get("quelle")) ?? "modrinth";
+  const requested = readDiscoverParams(params);
+  // Die Quelle wählt Modrinth (Standard) oder einen Anbieter ohne Schlüssel.
+  const source = SOURCE_KEYS.find((s) => s === requested.source) ?? "modrinth";
   const info = SOURCES[source];
   const tabs = TABS.filter((t) => info.types.includes(t));
-  const type = tabs.find((t) => t === params.get("tab")) ?? tabs[0];
-  // ?projekt= öffnet direkt die Details (z. B. aus dem Dialog „Neue Instanz“).
-  const projectId = params.get("projekt");
+  const type = tabs.find((t) => t === requested.tab) ?? tabs[0];
+  // Ein Projekt in der Adresse öffnet direkt die Details (z. B. aus dem Dialog „Neue Instanz“).
+  const projectId = requested.project;
   const [hit, setHit] = useState<ContentHit | null>(null);
   const [query, setQuery] = useState("");
   const [ver, setVer] = useState("all");
@@ -33,8 +35,6 @@ export function DiscoverPage() {
   const versions = useVersions();
   const releases = versions.data?.filter((v) => v.type === "release").slice(0, 12) ?? [];
   const withLoader = info.filters && (type === "mod" || type === "modpack");
-  /** Adressparameter: die Quelle bleibt in der URL, solange es nicht Modrinth ist. */
-  const link = (tab: CatalogType, extra: Record<string, string> = {}) => ({ tab, ...(source === "modrinth" ? {} : { quelle: source }), ...extra });
   const view = useView();
   const listScroll = useRef(0);
 
@@ -53,7 +53,7 @@ export function DiscoverPage() {
   const open = (id: string, h?: ContentHit) => {
     listScroll.current = view.current?.scrollTop ?? 0;
     setHit(h ?? null);
-    setParams(link(type, { projekt: id }));
+    setParams(discoverParams({ tab: type, source, project: id }));
   };
 
   return (
@@ -67,7 +67,7 @@ export function DiscoverPage() {
             type={type}
             hit={hit?.project_id === projectId ? hit : null}
             backLabel={TYPE_LABELS[type]}
-            onBack={() => setParams(link(type))}
+            onBack={() => setParams(discoverParams({ tab: type, source }))}
             action={(p) =>
               type === "modpack" ? (
                 <PackActions projectId={p.id} title={p.title} source={source} />
@@ -92,7 +92,7 @@ export function DiscoverPage() {
               value={type}
               onChange={(next) => {
                 if (next !== "mod" && next !== "modpack") setLoader("all");
-                setParams(link(next), { replace: true });
+                setParams(discoverParams({ tab: next, source }), { replace: true });
               }}
               items={tabs.map((tabType) => ({ value: tabType, label: TYPE_LABELS[tabType] }))}
             />
@@ -106,7 +106,7 @@ export function DiscoverPage() {
             value={source}
             onChange={(s) => {
               reset();
-              setParams(s === "modrinth" ? {} : { quelle: s }, { replace: true });
+              setParams(discoverParams({ source: s as Source }), { replace: true });
             }}
             options={SOURCE_KEYS.map((s) => ({ value: s, label: SOURCES[s].label }))}
           />
