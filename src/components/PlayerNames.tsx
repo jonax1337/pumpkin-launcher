@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { t, useI18n } from "@/i18n";
 import { StopDialog } from "@/components/game";
+import { PlayerNameField } from "@/components/PlayerNameField";
 import { accountKeys } from "@/hooks/queryKeys";
 import { api } from "@/lib/api";
 import { WIDTH } from "@/lib/breakpoints";
@@ -14,8 +15,7 @@ import { openPage } from "@/lib/links";
 import { MINUTE } from "@/lib/time";
 import type { MsLoginStart } from "@/lib/types";
 import {
-  Actions, Avatar, BarButton, Button, Dialog, DialogActions, Empty, ErrorBox, Field, Hint, Icon, List, ListRow, Menu, Progress, RowTitle, Skel,
-  TextField, type MenuEntry,
+  Actions, Avatar, BarButton, Button, Dialog, DialogActions, Empty, ErrorBox, Hint, Icon, List, ListRow, Menu, Progress, RowTitle, Skel, type MenuEntry,
 } from "@/ui";
 import { refreshOfflineAllowed, useOfflineAllowed, useUsableAccount } from "@/store/offline";
 import { accountName, isValidPlayerName, useSettings, type ActiveAccount } from "@/store/settings";
@@ -287,15 +287,6 @@ export function AccountMenu() {
   );
 }
 
-/**
- * Fehler zum Spielernamen erst zeigen, wenn er etwas bedeutet: nach Verlassen des Felds oder ab 3 Zeichen.
- * Unerlaubte Zeichen sofort (die werden auch mit mehr Tippen nicht richtig).
- */
-export function showNameError(name: string, touched: boolean) {
-  if (!name || isValidPlayerName(name)) return false;
-  return touched || name.length >= 3 || /[^A-Za-z0-9_]/.test(name);
-}
-
 function AddOfflineDialog() {
   const { t } = useI18n();
   const open = useAccountUi((s) => s.offline);
@@ -303,12 +294,9 @@ function AddOfflineDialog() {
   const addAccount = useSettings((s) => s.addAccount);
   const qc = useQueryClient();
   const [name, setName] = useState("");
-  const [touched, setTouched] = useState(false);
-  const invalid = showNameError(name, touched);
   const close = () => {
     useAccountUi.setState({ offline: false, then: null });
     setName("");
-    setTouched(false);
   };
 
   function submit(e: FormEvent) {
@@ -345,23 +333,7 @@ function AddOfflineDialog() {
     >
       <form id="off-form" onSubmit={submit}>
         {/* Zwei Zeilen reserviert: der kürzere Fehler ersetzt den Hilfetext, ohne dass etwas nachrückt */}
-        <Field
-          label={t("components.playerName.label")}
-          htmlFor="off-name"
-          reserveLines={2}
-          help={t("components.playerName.helpLong")}
-          error={invalid && t("components.playerName.invalid")}
-        >
-          <TextField
-            id="off-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={() => setTouched(true)}
-            maxLength={16}
-            placeholder={t("components.playerName.placeholder")}
-            autoFocus
-          />
-        </Field>
+        <PlayerNameField value={name} onChange={setName} help={t("components.playerName.helpLong")} reserveLines={2} />
       </form>
       {then && (
         <>
