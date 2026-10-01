@@ -23,7 +23,7 @@ npm run check            # Lint, Layout, Kontrast für beide Formate
 npm run render           # → yt/renders/…16x9.mp4 und tiktok/renders/…9x16.mp4
 ```
 
-Fertige Videos gehören nicht ins Git (je ~50 MB). Sie werden auf YouTube und TikTok hochgeladen und als Assets an ein GitHub-Release gehängt.
+Die fertigen Videos liegen in [`videos/`](videos/): `pumpkin-launcher-yt-16x9.mp4` (1920×1080) und `pumpkin-launcher-tiktok-9x16.mp4` (1080×1920), beide 44 s, 60 fps, H.264 + AAC. Nach einem neuen Render die Dateien aus `yt/renders/` und `tiktok/renders/` dorthin kopieren.
 
 ## Ablauf (120 BPM, 1 Takt = 2 s)
 
