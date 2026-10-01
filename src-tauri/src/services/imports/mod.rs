@@ -249,7 +249,7 @@ fn files_to_copy(source: &Path, target: &Path) -> AppResult<Vec<(PathBuf, PathBu
         let path = entry?.path();
         let name = folder_name(&path);
         if !REGENERATED.contains(&name.as_str()) && !SKIPPED.contains(&name.as_str()) {
-            walk(source, &path, &mut files)?;
+            files.extend(walk(source, &path)?);
         }
     }
     Ok(files.into_iter().map(|(rel, path)| (target.join(relocated(rel)), path)).collect())

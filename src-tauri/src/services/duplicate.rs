@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use super::progress::{Phase, SharedProgress};
-use super::{check_cancelled, content, copy_files, mods, walk, Dirs};
+use super::{check_cancelled, content, copy_files, first_free_name, mods, walk, Dirs};
 use crate::{
     error::AppResult,
     models::{new_id, now_ms, Instance, Mod},
@@ -45,13 +45,8 @@ pub async fn duplicate(
 
 /// „<Name> (Kopie)“, bei Bedarf durchnummeriert, damit die Kopie in der Bibliothek unterscheidbar bleibt.
 fn copy_name(name: &str, taken: &[String]) -> String {
-    let mut candidate = format!("{name} (Kopie)");
-    let mut n = 1;
-    while taken.contains(&candidate) {
-        n += 1;
-        candidate = format!("{name} (Kopie {n})");
-    }
-    candidate
+    let numbered = |n| if n == 1 { format!("{name} (Kopie)") } else { format!("{name} (Kopie {n})") };
+    first_free_name(numbered, |candidate| taken.iter().any(|t| t == candidate))
 }
 
 /// Was von Instanz `from` nach `to` kopiert wird, als (Ziel, Quelle): der Spielordner ohne Neuerzeugtes und
@@ -64,9 +59,8 @@ fn files_to_copy(dirs: &Dirs, from: &str, to: &str, mods: &[Mod]) -> AppResult<V
         .map(|(rel, path)| (game.join(rel), path))
         .collect();
     let base = dirs.instance(from);
-    let mut rest = Vec::new();
-    walk(&base, &dirs.natives_dir(from), &mut rest)?;
-    walk(&base, &dirs.installed_marker(from), &mut rest)?;
+    let mut rest = walk(&base, &dirs.natives_dir(from))?;
+    rest.extend(walk(&base, &dirs.installed_marker(from))?);
     let instance = dirs.instance(to);
     files.extend(rest.into_iter().map(|(rel, path)| (instance.join(rel), path)));
     Ok(files)

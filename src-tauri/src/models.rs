@@ -86,7 +86,7 @@ impl ModLoader {
     }
 
     /// Loader mit ihrem Schlüssel unter `dependencies` in `modrinth.index.json`.
-    pub const PACK_KEYS: [(ModLoader, &'static str); 4] =
+    pub const PACK_KEYS: [(ModLoader, &str); 4] =
         [(Self::Fabric, "fabric-loader"), (Self::Quilt, "quilt-loader"), (Self::Forge, "forge"), (Self::NeoForge, "neoforge")];
 
     pub fn pack_key(self) -> Option<&'static str> {
@@ -296,7 +296,6 @@ impl Instance {
             last_quick_play: None,
         }
     }
-
 }
 
 /// Vorlage: Schnappschuss einer Instanz als `templates/<id>.mrpack`, ohne Verbindung zur Instanz.

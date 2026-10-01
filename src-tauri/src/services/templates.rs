@@ -14,8 +14,8 @@ use crate::{
 /// Was eine Vorlage aus dem Spielordner mitnimmt; Welten, Logs und Screenshots bleiben draußen.
 const CONTENT: [&str; 5] = ["mods", "resourcepacks", "shaderpacks", "config", "options.txt"];
 
-fn file(dirs: &Dirs, id: &str) -> PathBuf {
-    dirs.root.join("templates").join(format!("{id}.mrpack"))
+fn pack_path(dirs: &Dirs, id: &str) -> PathBuf {
+    dirs.templates().join(format!("{id}.mrpack"))
 }
 
 pub async fn save(state: &AppState, instance_id: &str, name: &str) -> AppResult<Template> {
@@ -29,8 +29,8 @@ pub async fn save(state: &AppState, instance_id: &str, name: &str) -> AppResult<
         mod_count: instance.mods.iter().filter(|m| m.enabled && m.sha1.is_some()).count(),
         created_at: now_ms(),
     };
-    let path = file(&state.dirs, &template.id);
-    fs::create_dir_all(state.dirs.root.join("templates"))?;
+    let path = pack_path(&state.dirs, &template.id);
+    fs::create_dir_all(state.dirs.templates())?;
     mrpack::write(&state.dirs, instance, CONTENT.map(String::from).to_vec(), &path, PackLimit::Importable).await?;
     state.templates.insert(template).inspect_err(|_| remove_logged(&path))
 }
@@ -38,7 +38,7 @@ pub async fn save(state: &AppState, instance_id: &str, name: &str) -> AppResult<
 pub fn delete(state: &AppState, id: &str) -> AppResult<()> {
     // Erst der Store-Eintrag: nur eine existierende Id wird zum Pfad.
     state.templates.remove(id)?;
-    remove_logged(&file(&state.dirs, id));
+    remove_logged(&pack_path(&state.dirs, id));
     Ok(())
 }
 
@@ -49,7 +49,7 @@ pub async fn create_instance(
     progress: ProgressFn<'_>,
 ) -> AppResult<Instance> {
     let template = state.templates.get(template_id)?;
-    let data = content::local_pack(&file(&state.dirs, &template.id)).map_err(|e| {
+    let data = content::local_pack(&pack_path(&state.dirs, &template.id)).map_err(|e| {
         if e.is_not_found() { AppError::invalid("Die Vorlagendatei fehlt") } else { e }
     })?;
     content::import(state, &data, name, None, progress).await
@@ -108,7 +108,7 @@ mod tests {
         assert_eq!((copy.loader, copy.loader_version.as_deref()), (ModLoader::Fabric, Some("0.16.10")));
 
         delete(&state, &t.id).unwrap();
-        assert!(!file(&state.dirs, &t.id).exists() && state.templates.list().is_empty());
+        assert!(!pack_path(&state.dirs, &t.id).exists() && state.templates.list().is_empty());
         fs::remove_dir_all(root).unwrap();
     }
 }

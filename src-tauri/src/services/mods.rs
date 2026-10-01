@@ -1,5 +1,6 @@
 //! Globaler Mod-Cache (`cache/mods/<sha1>.jar`, jede JAR einmal) und der `mods/`-Ordner einer
 //! Instanz, in den die aktivierten Mods per Hardlink (Fallback: Kopie) gelegt werden.
+use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -7,16 +8,14 @@ use std::path::{Path, PathBuf};
 use crate::error::{AppError, AppResult};
 use crate::models::Mod;
 use crate::services::download::{sha1_file, sha1_hex};
-use crate::services::{none_if_missing, remove_logged, Dirs};
+use crate::services::{content, none_if_missing, remove_logged, require_plain_name, walk, Dirs};
 
 /// Pfad eines Cache-Eintrags. Der Hash wird Teil des Pfads, daher nur echte SHA-1-Hex-Strings.
-pub fn cached(dirs: &Dirs, sha1: &str) -> AppResult<PathBuf> {
+pub fn cache_path(dirs: &Dirs, sha1: &str) -> AppResult<PathBuf> {
     if sha1.len() != 40 || !sha1.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(AppError::invalid(format!("ungültiger SHA-1 '{sha1}'")));
     }
-    Ok(dirs
-        .mod_cache()
-        .join(format!("{}.jar", sha1.to_ascii_lowercase())))
+    Ok(dirs.mod_cache().join(format!("{}.jar", sha1.to_ascii_lowercase())))
 }
 
 /// Legt eine JAR im Cache ab (falls noch nicht vorhanden) und liefert ihren SHA-1.
@@ -27,7 +26,7 @@ pub fn cache_file(dirs: &Dirs, src: &Path) -> AppResult<String> {
 /// Legt bereits verifizierte Bytes im Cache ab und liefert ihren SHA-1.
 pub fn cache_bytes(dirs: &Dirs, bytes: &[u8]) -> AppResult<String> {
     let sha1 = sha1_hex(bytes);
-    let dest = cached(dirs, &sha1)?;
+    let dest = cache_path(dirs, &sha1)?;
     if !dest.exists() {
         fs::create_dir_all(dirs.mod_cache())?;
         let tmp = dest.with_extension("jar.part");
@@ -39,17 +38,16 @@ pub fn cache_bytes(dirs: &Dirs, bytes: &[u8]) -> AppResult<String> {
 
 /// Dateiname aus der Instanz-JSON: ein einzelner Name mit der Endung seiner Art, kein Pfad.
 fn file_name(m: &Mod) -> AppResult<&str> {
-    let name = m.file_name.as_str();
-    super::content::safe_path(name)?;
-    let plain =
-        Path::new(name).file_name().is_some_and(|f| f == name) && !name.contains(['/', '\\', ':']);
-    if !plain || !name.ends_with(m.kind.extension()) {
-        return Err(AppError::invalid(format!(
-            "ungültiger Dateiname '{name}' für Mod {}",
-            m.name
-        )));
+    let name = require_plain_name(&m.file_name).map_err(|err| AppError::invalid(format!("Mod {}: {err}", m.name)))?;
+    if !name.ends_with(m.kind.extension()) {
+        return Err(AppError::invalid(format!("ungültiger Dateiname '{name}' für Mod {}", m.name)));
     }
     Ok(name)
+}
+
+/// Pfad der Datei von `m` im Spielordner der Instanz.
+fn target_path(dirs: &Dirs, instance_id: &str, m: &Mod) -> AppResult<PathBuf> {
+    Ok(dirs.game_dir(instance_id).join(m.kind.folder()).join(file_name(m)?))
 }
 
 /// Pfad im Spielordner, z. B. `mods/sodium.jar`.
@@ -69,7 +67,7 @@ pub fn unmanaged_files(
     let managed: Vec<String> = mods.iter().filter(|m| m.sha1.is_some()).map(game_path).collect();
     let mut files = Vec::new();
     for name in names {
-        super::walk(&game, &game.join(name), &mut files)?;
+        files.extend(walk(&game, &game.join(name))?);
     }
     files.retain(|(rel, _)| !managed.iter().any(|m| m.eq_ignore_ascii_case(rel)));
     Ok(files)
@@ -80,11 +78,11 @@ pub fn unmanaged_files(
 pub fn recache(dirs: &Dirs, instance_id: &str, mods: &[Mod]) -> AppResult<()> {
     for m in mods.iter().filter(|m| m.enabled) {
         let Some(hash) = m.sha1.as_deref() else { continue };
-        if cached(dirs, hash)?.exists() {
+        if cache_path(dirs, hash)?.exists() {
             continue;
         }
-        let placed = dirs.game_dir(instance_id).join(m.kind.folder()).join(file_name(m)?);
-        let placed = none_if_missing(fs::read(&placed))?;
+        let target = target_path(dirs, instance_id, m)?;
+        let placed = none_if_missing(fs::read(&target))?;
         if let Some(bytes) = placed.filter(|bytes| sha1_hex(bytes).eq_ignore_ascii_case(hash)) {
             cache_bytes(dirs, &bytes)?;
         }
@@ -94,17 +92,14 @@ pub fn recache(dirs: &Dirs, instance_id: &str, mods: &[Mod]) -> AppResult<()> {
 
 /// Hardlink auf den Cache-Eintrag; klappt das nicht (anderes Laufwerk, FAT32), eine Kopie.
 /// Ein vorhandenes Ziel wird niemals ersetzt, auch nicht im Kopier-Fallback.
-fn place(src: &Path, dest: &Path) -> io::Result<()> {
+fn link_or_copy(src: &Path, dest: &Path) -> io::Result<()> {
     fs::hard_link(src, dest).or_else(|_| {
         let mut source = fs::File::open(src)?;
-        let mut target = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(dest)?;
+        let mut target = fs::OpenOptions::new().write(true).create_new(true).open(dest)?;
         if let Err(original) = io::copy(&mut source, &mut target) {
             drop(target);
             if let Err(cleanup) = fs::remove_file(dest) {
-                return Err(io::Error::other(format!("{original}; cleanup: {cleanup}")));
+                return Err(io::Error::other(format!("{original}; Aufräumen: {cleanup}")));
             }
             return Err(original);
         }
@@ -112,122 +107,163 @@ fn place(src: &Path, dest: &Path) -> io::Result<()> {
     })
 }
 
-/// Bringt `mods/`, `resourcepacks/` und `shaderpacks/` auf den Stand der Liste: aktivierte Mods mit SHA-1 kommen aus dem Cache,
-/// deaktivierte werden entfernt, sofern die Datei dort wirklich diese Mod ist. Dateien, die der
+/// Bringt `mods/`, `resourcepacks/` und `shaderpacks/` auf den Stand der Liste: aktivierte Mods mit SHA-1 kommen
+/// aus dem Cache, deaktivierte werden entfernt, sofern die Datei dort wirklich diese Mod ist. Dateien, die der
 /// Nutzer selbst in `mods/` gelegt hat, bleiben unberührt. Liefert die Zahl der aktiven Mods.
 pub fn sync(dirs: &Dirs, instance_id: &str, mods: &[Mod]) -> AppResult<usize> {
     sync_commit(dirs, instance_id, mods, Ok)
 }
 
-/// Preflight all targets; journal only actual changes on disk until metadata commits.
+/// Prüft vorab alle Ziele und führt nur die nötigen Änderungen aus; `commit` (mit der Zahl der aktiven Mods)
+/// speichert danach die Metadaten. Scheitert eines von beiden, wird alles Geänderte zurückgenommen.
 pub fn sync_commit<T>(
     dirs: &Dirs,
     instance_id: &str,
     mods: &[Mod],
     commit: impl FnOnce(usize) -> AppResult<T>,
 ) -> AppResult<T> {
-    let mut changes = Vec::new();
-    let mut names = std::collections::HashSet::new();
-    let mut active = 0;
-    for m in mods.iter().filter(|m| m.sha1.is_some()) {
-        let path = dirs.game_dir(instance_id).join(m.kind.folder()).join(file_name(m)?);
-        if !names.insert(m.file_name.to_lowercase()) {
-            return Err(AppError::invalid("Doppelte Mod-Zieldatei"));
-        }
-        super::content::regular_parents(&dirs.root, &path)?;
-        let current = match none_if_missing(fs::symlink_metadata(&path))? {
-            Some(meta) if !meta.is_file() => return Err(AppError::invalid("Kein regulaeres Mod-Ziel")),
-            Some(_) => Some(sha1_file(&path)?),
-            None => None,
-        };
-        let Some(hash) = m.sha1.as_ref() else { continue };
-        let ours = current
-            .as_ref()
-            .is_some_and(|s| s.eq_ignore_ascii_case(hash));
-        if m.enabled {
-            active += 1;
-            if ours {
-                continue;
-            }
-            if current.is_some() {
-                return Err(AppError::invalid("Mod-Konflikt: vorhandene Zieldatei"));
-            }
-            let cache = cached(dirs, hash)?;
-            super::content::regular_parents(&dirs.root, &cache)?;
-            if !cache.exists() {
-                return Err(AppError::NotFound {
-                    kind: "Mod im Cache",
-                    id: hash.clone(),
-                });
-            }
-            if !sha1_file(&cache)?.eq_ignore_ascii_case(hash) {
-                return Err(AppError::invalid("Mod-Cache-Hash stimmt nicht"));
-            }
-            changes.push((path, Some(cache)));
-        } else if ours {
-            changes.push((path, None));
-        }
-    }
-    let mut journal: Vec<(PathBuf, Option<PathBuf>)> = Vec::new();
-    let result = (|| {
-        for (path, source) in changes {
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            if let Some(source) = source {
-                // place is exclusive; only record a successfully created target.
-                place(&source, &path)?;
-                journal.push((path, None));
-            } else {
-                let backup = path.with_file_name(format!(".rollback-{}", crate::models::new_id()));
-                place(&path, &backup)?;
-                journal.push((path.clone(), Some(backup)));
-                fs::remove_file(&path)?;
-            }
-        }
-        commit(active)
-    })();
-    match result {
+    let changes = plan_changes(dirs, instance_id, mods)?;
+    let active = mods.iter().filter(|m| m.enabled && m.sha1.is_some()).count();
+    let mut journal = Journal::default();
+    match journal.apply(changes).and_then(|()| commit(active)) {
         Ok(value) => {
-            // Metadata is committed: a cleanup failure must not pretend the operation failed.
-            for backup in journal.into_iter().filter_map(|(_, backup)| backup) {
-                remove_logged(&backup);
-            }
+            journal.discard_backups();
             Ok(value)
         }
-        Err(original) => {
-            let mut errors = Vec::new();
-            for (path, backup) in journal.into_iter().rev() {
-                let restore = (|| -> AppResult<()> {
-                    if let Some(backup) = backup {
-                        match none_if_missing(fs::symlink_metadata(&path))? {
-                            None => place(&backup, &path)?,
-                            Some(_) if sha1_file(&path)? == sha1_file(&backup)? => {}
-                            Some(_) => {
-                                return Err(AppError::invalid(format!(
-                                    "Rollback-Ziel belegt; Backup: {}",
-                                    backup.display()
-                                )))
-                            }
-                        }
-                        fs::remove_file(&backup)?;
-                    } else {
-                        fs::remove_file(&path)?;
+        Err(original) => Err(journal.rollback(original)),
+    }
+}
+
+/// Eine nötige Änderung an `mods/`, `resourcepacks/` oder `shaderpacks/`.
+enum Change {
+    /// `target` neu aus dem Cache-Eintrag `cache` anlegen.
+    Add { target: PathBuf, cache: PathBuf },
+    /// `target` entfernen, weil die Mod deaktiviert ist.
+    Remove { target: PathBuf },
+}
+
+/// Was `Journal::apply` auf der Platte getan hat und wie es sich zurücknehmen lässt.
+enum Done {
+    Added { target: PathBuf },
+    /// Die Datei ist weg; ihr Inhalt liegt noch unter `backup`.
+    Removed { target: PathBuf, backup: PathBuf },
+}
+
+/// Prüft alle Ziele, bevor etwas geändert wird: ein Fehler lässt die Ordner unberührt.
+fn plan_changes(dirs: &Dirs, instance_id: &str, mods: &[Mod]) -> AppResult<Vec<Change>> {
+    let mut names = HashSet::new();
+    let mut changes = Vec::new();
+    for (m, hash) in mods.iter().filter_map(|m| Some((m, m.sha1.as_deref()?))) {
+        let target = target_path(dirs, instance_id, m)?;
+        if !names.insert(m.file_name.to_lowercase()) {
+            return Err(AppError::invalid(format!("Doppelte Mod-Zieldatei: {}", m.file_name)));
+        }
+        changes.extend(plan_change(dirs, m, hash, target)?);
+    }
+    Ok(changes)
+}
+
+/// Die Änderung, die `m` an `target` braucht; `None`, wenn dort schon der gewünschte Stand ist.
+fn plan_change(dirs: &Dirs, m: &Mod, hash: &str, target: PathBuf) -> AppResult<Option<Change>> {
+    content::regular_parents(&dirs.root, &target)?;
+    let on_disk = hash_of_regular_file(&target)?;
+    let ours = on_disk.as_deref().is_some_and(|sha1| sha1.eq_ignore_ascii_case(hash));
+    if !m.enabled {
+        return Ok(ours.then_some(Change::Remove { target }));
+    }
+    if ours {
+        return Ok(None);
+    }
+    if on_disk.is_some() {
+        return Err(AppError::invalid(format!("Mod-Konflikt: vorhandene Zieldatei {}", m.file_name)));
+    }
+    Ok(Some(Change::Add { target, cache: verified_cache_entry(dirs, hash)? }))
+}
+
+/// SHA-1 der Datei an `path`; `None`, wenn dort nichts liegt. Ein Ordner oder Link ist kein gültiges Ziel.
+fn hash_of_regular_file(path: &Path) -> AppResult<Option<String>> {
+    match none_if_missing(fs::symlink_metadata(path))? {
+        Some(meta) if !meta.is_file() => Err(AppError::invalid(format!("Kein reguläres Mod-Ziel: {}", path.display()))),
+        Some(_) => Ok(Some(sha1_file(path)?)),
+        None => Ok(None),
+    }
+}
+
+/// Der Cache-Eintrag zu `hash`, sofern es ihn gibt und sein Inhalt wirklich dazu passt.
+fn verified_cache_entry(dirs: &Dirs, hash: &str) -> AppResult<PathBuf> {
+    let cache = cache_path(dirs, hash)?;
+    content::regular_parents(&dirs.root, &cache)?;
+    if !cache.exists() {
+        return Err(AppError::NotFound { kind: "Mod im Cache", id: hash.to_owned() });
+    }
+    if !sha1_file(&cache)?.eq_ignore_ascii_case(hash) {
+        return Err(AppError::invalid("Mod-Cache-Hash stimmt nicht"));
+    }
+    Ok(cache)
+}
+
+/// Merkt sich, was geändert wurde, bis die Metadaten gespeichert sind: nur Tatsächliches lässt sich zurücknehmen.
+#[derive(Default)]
+struct Journal(Vec<Done>);
+
+impl Journal {
+    /// Führt die Änderungen der Reihe nach aus und trägt jede ein, sobald sie auf der Platte ist.
+    fn apply(&mut self, changes: Vec<Change>) -> AppResult<()> {
+        for change in changes {
+            match change {
+                Change::Add { target, cache } => {
+                    if let Some(parent) = target.parent() {
+                        fs::create_dir_all(parent)?;
                     }
-                    Ok(())
-                })();
-                if let Err(e) = restore {
-                    errors.push(e.to_string());
+                    // Anlegen ist exklusiv: nur ein gelungenes Anlegen kommt ins Journal.
+                    link_or_copy(&cache, &target)?;
+                    self.0.push(Done::Added { target });
+                }
+                Change::Remove { target } => {
+                    let backup = target.with_file_name(format!(".rollback-{}", crate::models::new_id()));
+                    link_or_copy(&target, &backup)?;
+                    self.0.push(Done::Removed { target: target.clone(), backup });
+                    fs::remove_file(&target)?;
                 }
             }
-            if errors.is_empty() {
-                Err(original)
-            } else {
-                Err(AppError::invalid(format!(
-                    "{original}; Rollback: {}",
-                    errors.join("; ")
-                )))
+        }
+        Ok(())
+    }
+
+    /// Die Metadaten sind gespeichert: ein Fehler beim Aufräumen darf den Vorgang nicht als gescheitert melden.
+    fn discard_backups(self) {
+        for done in self.0 {
+            if let Done::Removed { backup, .. } = done {
+                remove_logged(&backup);
             }
+        }
+    }
+
+    /// Nimmt alles in umgekehrter Reihenfolge zurück. Gelingt das nicht ganz, nennt der Fehler neben `original`
+    /// auch, was liegen blieb.
+    fn rollback(self, original: AppError) -> AppError {
+        let failures: Vec<String> =
+            self.0.into_iter().rev().filter_map(|done| undo(done).err()).map(|err| err.to_string()).collect();
+        if failures.is_empty() {
+            original
+        } else {
+            AppError::invalid(format!("{original}; Rollback: {}", failures.join("; ")))
+        }
+    }
+}
+
+fn undo(done: Done) -> AppResult<()> {
+    match done {
+        Done::Added { target } => Ok(fs::remove_file(target)?),
+        Done::Removed { target, backup } => {
+            match none_if_missing(fs::symlink_metadata(&target))? {
+                None => link_or_copy(&backup, &target)?,
+                Some(_) if sha1_file(&target)? == sha1_file(&backup)? => {}
+                Some(_) => {
+                    return Err(AppError::invalid(format!("Rollback-Ziel belegt; Backup: {}", backup.display())))
+                }
+            }
+            Ok(fs::remove_file(&backup)?)
         }
     }
 }
@@ -238,7 +274,7 @@ mod tests {
     use crate::models::ModSource;
 
     #[test]
-    fn place_preserves_existing_target() {
+    fn link_or_copy_preserves_existing_target() {
         let dir =
             std::env::temp_dir().join(format!("launcher-mods-place-{}", crate::models::new_id()));
         fs::create_dir_all(&dir).unwrap();
@@ -247,7 +283,7 @@ mod tests {
         fs::write(&src, b"cached").unwrap();
         fs::write(&dest, b"foreign").unwrap();
         assert_eq!(
-            place(&src, &dest).unwrap_err().kind(),
+            link_or_copy(&src, &dest).unwrap_err().kind(),
             io::ErrorKind::AlreadyExists
         );
         assert_eq!(fs::read(&dest).unwrap(), b"foreign");
@@ -301,7 +337,7 @@ mod tests {
         let sha1 = cache_file(&dirs, &src).unwrap();
         assert_eq!(sha1, sha1_hex(b"sodium"));
         assert_eq!(cache_file(&dirs, &src).unwrap(), sha1);
-        assert_eq!(fs::read(cached(&dirs, &sha1).unwrap()).unwrap(), b"sodium");
+        assert_eq!(fs::read(cache_path(&dirs, &sha1).unwrap()).unwrap(), b"sodium");
 
         let mut m = Mod {
             id: "sodium".into(),
@@ -330,7 +366,7 @@ mod tests {
         let err = sync(&dirs, "i1", std::slice::from_ref(&m)).unwrap_err();
         assert!(matches!(&err, AppError::Invalid(message) if message.contains("Mod-Konflikt")));
         assert_eq!(fs::read(&installed).unwrap(), b"eigene");
-        assert_eq!(fs::read(cached(&dirs, &sha1).unwrap()).unwrap(), b"sodium");
+        assert_eq!(fs::read(cache_path(&dirs, &sha1).unwrap()).unwrap(), b"sodium");
 
         // Nach manuellem Auflösen des Konflikts funktionieren Installation und Deaktivierung.
         fs::remove_file(&installed).unwrap();
@@ -362,7 +398,7 @@ mod tests {
             sync(&dirs, "i1", &[missing]),
             Err(AppError::NotFound { .. })
         ));
-        assert!(cached(&dirs, "../../x").is_err());
+        assert!(cache_path(&dirs, "../../x").is_err());
 
         fs::remove_dir_all(&dirs.root).unwrap();
     }
@@ -393,8 +429,8 @@ mod tests {
 
         recache(&dirs, "i", &[m.clone(), replaced.clone()]).unwrap();
 
-        assert_eq!(fs::read(cached(&dirs, m.sha1.as_ref().unwrap()).unwrap()).unwrap(), b"sodium");
-        assert!(!cached(&dirs, replaced.sha1.as_ref().unwrap()).unwrap().exists());
+        assert_eq!(fs::read(cache_path(&dirs, m.sha1.as_ref().unwrap()).unwrap()).unwrap(), b"sodium");
+        assert!(!cache_path(&dirs, replaced.sha1.as_ref().unwrap()).unwrap().exists());
         fs::remove_dir_all(&dirs.root).unwrap();
     }
 }

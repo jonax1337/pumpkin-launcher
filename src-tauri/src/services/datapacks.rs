@@ -12,10 +12,10 @@ use serde_json::Value;
 
 use super::progress::{Phase, ProgressFn};
 use super::{
-    blocking, content, entries, has_extension, local_files, move_to_trash,
+    blocking, content, entries, has_extension, local_files,
     modrinth::{self, Version},
     providers::zip_files,
-    worlds, Dirs,
+    strip_extension, trash_listed, worlds, Dirs,
 };
 use crate::{
     error::{AppError, AppResult},
@@ -107,7 +107,7 @@ pub fn list(dirs: &Dirs, instance_id: &str, world_id: &str) -> AppResult<Vec<Dat
 pub fn add_files(dirs: &Dirs, instance_id: &str, world_id: &str, paths: &[String]) -> AppResult<()> {
     let world = worlds::world_dir(dirs, instance_id, world_id)?;
     let files = paths.iter().map(|path| read_zip(path)).collect::<AppResult<Vec<_>>>()?;
-    place(&dirs.root, &world, files)?;
+    write_packs(&dirs.root, &world, files)?;
     tracing::info!(instance = %instance_id, world = %world_id, count = paths.len(), "Datenpakete hinzugefügt");
     Ok(())
 }
@@ -133,7 +133,7 @@ pub async fn install(
     progress(Phase::Download, 0, 1);
     let data = modrinth::download(&client, &file).await?;
     let root = state.dirs.root.clone();
-    blocking(move |_| place(&root, &world, vec![(file.filename, data)])).await?;
+    blocking(move |_| write_packs(&root, &world, vec![(file.filename, data)])).await?;
     tracing::info!(instance = %instance_id, world = %world_id, version = %version_id, "Datenpaket installiert");
     progress(Phase::Complete, 1, 1);
     Ok(())
@@ -142,11 +142,7 @@ pub async fn install(
 /// Legt das Paket `id` in den Papierkorb (lässt sich dort wiederherstellen). Nur ein Name aus der Liste wird zum Pfad.
 pub fn remove(dirs: &Dirs, instance_id: &str, world_id: &str, id: &str) -> AppResult<()> {
     let world = worlds::world_dir(dirs, instance_id, world_id)?;
-    let listed = entries(&world.join(DATAPACKS))?.iter().any(|entry| entry.file_name() == id && pack_kind(entry).is_some());
-    if !listed {
-        return Err(AppError::NotFound { kind: "Datenpaket", id: id.to_owned() });
-    }
-    move_to_trash(&world.join(DATAPACKS).join(id))?;
+    trash_listed(&world.join(DATAPACKS), id, "Datenpaket", |entry| pack_kind(entry).is_some())?;
     tracing::info!(instance = %instance_id, world = %world_id, pack = %id, "Datenpaket in den Papierkorb gelegt");
     Ok(())
 }
@@ -245,7 +241,7 @@ fn is_zip(name: &str) -> bool {
 }
 
 fn pack_name(id: &str) -> &str {
-    if is_zip(id) { &id[..id.len() - ".zip".len()] } else { id }
+    strip_extension(id, "zip").unwrap_or(id)
 }
 
 /// Modrinth-Version mit Datenpaket für diese Minecraft-Version.
@@ -264,7 +260,7 @@ fn read_zip(path: &str) -> AppResult<(String, Vec<u8>)> {
 
 /// Prüft alle Zips und legt sie dann unter `datapacks/` ab, ohne Vorhandenes zu ersetzen. Schlägt das Ablegen fehl,
 /// verschwinden die schon abgelegten wieder.
-fn place(root: &Path, world: &Path, files: Vec<(String, Vec<u8>)>) -> AppResult<()> {
+fn write_packs(root: &Path, world: &Path, files: Vec<(String, Vec<u8>)>) -> AppResult<()> {
     let folder = world.join(DATAPACKS);
     for (name, data) in &files {
         check(name, data)?;

@@ -4,7 +4,6 @@
 use tauri::{AppHandle, State};
 
 use crate::error::AppResult;
-use crate::models::QuickPlay;
 use crate::services::datapacks::{self, Datapack};
 use crate::services::progress::progress;
 use crate::services::servers::{self, Server, ServerInput};
@@ -62,15 +61,7 @@ pub async fn world_delete(
     operation_id: String,
 ) -> AppResult<WorldBackup> {
     let _operation = state.exclusive(&instance_id)?;
-    let on_progress = progress(app, operation_id);
-    let instance = instance_id.clone();
-    let backup = state.blocking_with_dirs(move |dirs| worlds::delete(dirs, &instance, &world_id, &*on_progress)).await?;
-    state.instances.modify(&instance_id, |i| {
-        if matches!(&i.last_quick_play, Some(QuickPlay::World { id }) if *id == backup.world) {
-            i.last_quick_play = None;
-        }
-    })?;
-    Ok(backup)
+    worlds::delete_and_forget_target(&state, &instance_id, &world_id, progress(app, operation_id)).await
 }
 
 /// Kann die Minecraft-Version der Instanz direkt in eine Welt starten? Fehlt die Versions-JSON, wird sie geladen.
@@ -125,7 +116,11 @@ pub fn server_list(state: State<'_, AppState>, instance_id: String) -> AppResult
 #[tauri::command]
 pub fn server_save(state: State<'_, AppState>, instance_id: String, index: Option<usize>, server: ServerInput) -> AppResult<()> {
     let _operation = state.exclusive(&instance_id)?;
-    servers::save(&state.dirs.game_dir(&instance_id), index, &server)
+    let game_dir = state.dirs.game_dir(&instance_id);
+    match index {
+        Some(index) => servers::update(&game_dir, index, &server),
+        None => servers::add(&game_dir, &server),
+    }
 }
 
 #[tauri::command]
