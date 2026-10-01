@@ -5,20 +5,23 @@ import { useUpdateRun } from "@/store/updateRun";
 import { Actions, Button, Count, ErrorBox, FormRow, Hint, JobProgress } from "@/ui";
 import { useI18n } from "@/i18n";
 
+/** Ergebnis der Suche: die gefundene Version, der Fehler oder, nach einer erfolgreichen Suche ohne Fund, „aktuell“. */
+function UpdateStatus() {
+  const { t } = useI18n();
+  const { data: update, error, isFetching, isFetched } = useAppUpdate();
+  if (update) return <UpdateOffer update={update} />;
+  if (error) return <ErrorBox title={t("components.update.searchFailed")} error={error} />;
+  return isFetched && !isFetching ? <Hint tone="ok">{t("components.update.upToDate")}</Hint> : null;
+}
+
 /** Einstellungen › Über: nach einer neuen Version suchen und sie erst auf Wunsch installieren. */
 export function UpdateRow() {
   const { t } = useI18n();
-  const { data: update, error, isFetching, isFetched, refetch } = useAppUpdate();
+  const { isFetching, refetch } = useAppUpdate();
   const busy = useUpdateRun((s) => s.phase !== "idle");
   return (
     <FormRow label={t("common.updates")} hint={t("components.update.hint")}>
-      {update ? (
-        <UpdateOffer update={update} />
-      ) : error ? (
-        <ErrorBox title={t("components.update.searchFailed")} error={error} />
-      ) : (
-        isFetched && !isFetching && <Hint tone="ok">{t("components.update.upToDate")}</Hint>
-      )}
+      <UpdateStatus />
       {!busy && (
         <Actions>
           <Button icon="redo" disabled={isFetching} onClick={() => void refetch()}>

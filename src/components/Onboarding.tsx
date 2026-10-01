@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
-import { useQueryClient } from "@tanstack/react-query";
 import { useI18n, type TKey } from "@/i18n";
 import { PlayerNameField } from "@/components/PlayerNameField";
 import { startMsLogin } from "@/store/accountUi";
@@ -34,7 +33,6 @@ export function Onboarding() {
   const [step, setStep] = useState<1 | 2>(active ? 2 : 1);
   const [name, setName] = useState(active?.kind === "offline" ? active.name : "");
   const [start, setStart] = useState<Start>("mods");
-  const qc = useQueryClient();
   const starter = useStarterInstance();
   const navigate = useNavigate();
   const microsoft = active?.kind === "microsoft";
@@ -84,7 +82,7 @@ export function Onboarding() {
                 <PlayerNameField value={name} onChange={setName} help={t("components.playerName.helpShort")} />
               )}
               {offlineOk && <div className="or">{t("components.common.or")}</div>}
-              <Button icon="user" variant={offlineOk ? undefined : "primary"} width="full" onClick={() => void startMsLogin(qc)}>{t("components.account.msLogin")}</Button>
+              <Button icon="user" variant={offlineOk ? undefined : "primary"} width="full" onClick={() => void startMsLogin()}>{t("components.account.msLogin")}</Button>
               <Hint className="ob-ms">
                 {offlineOk ? t("components.onboarding.msHintOfflineOk") : t("components.onboarding.msHintRequired")}
               </Hint>

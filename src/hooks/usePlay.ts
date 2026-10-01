@@ -100,7 +100,7 @@ function useLaunch() {
       if (currentUsableAccount()) return void toast.error(err.message);
       const action = useOfflineAllowed.getState().allowed
         ? { label: t("hooks.launch.setPlayerName"), onClick: openAddOffline }
-        : { label: t("components.account.msLogin"), onClick: () => void startMsLogin(qc) };
+        : { label: t("components.account.msLogin"), onClick: () => void startMsLogin() };
       toast.error(err.message, { duration: LONG_TOAST_MS, action });
     },
   });
@@ -119,7 +119,7 @@ export function usePlay() {
     const game = useGame.getState();
     if (game.launching[instance.id] || game.installs[instance.id]) return;
     if (!currentUsableAccount()) {
-      return askPlayerName({ label: instance.name, run: () => void play(instance, onLaunched, quickPlay) }, qc);
+      return askPlayerName({ label: instance.name, run: () => void play(instance, onLaunched, quickPlay) });
     }
     game.setLaunching(instance.id, true);
     try {

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useI18n } from "@/i18n";
 import { NameDialog } from "@/components/NameDialog";
 import { QueryList } from "@/components/QueryList";
@@ -24,6 +23,10 @@ import {
 // Radix-Auswahlen kennen keinen leeren Wert.
 const NO_CAPE = "none";
 
+const SKIN_VARIANTS: SkinVariant[] = ["classic", "slim"];
+
+const newestFirst = (a: LibrarySkin, b: LibrarySkin) => b.addedAt - a.addedAt;
+
 type MicrosoftAccount = Extract<ActiveAccount, { kind: "microsoft" }>;
 
 export function SkinsPage() {
@@ -41,13 +44,12 @@ export function SkinsPage() {
 
 function NeedsMicrosoft() {
   const { t } = useI18n();
-  const qc = useQueryClient();
   return (
     <StatusPanel
       className="mt-4"
       icon="user"
       title={t("pages.skins.needsMsTitle")}
-      actions={<Button icon="user" onClick={() => void startMsLogin(qc)}>{t("components.account.msLogin")}</Button>}
+      actions={<Button icon="user" onClick={() => void startMsLogin()}>{t("components.account.msLogin")}</Button>}
     >
       {t("pages.skins.needsMsBody")}
     </StatusPanel>
@@ -62,21 +64,33 @@ function CurrentLook({ account }: { account: MicrosoftAccount }) {
   const reset = useResetSkin();
   const resetConfirm = useConfirmTarget<MicrosoftAccount>();
 
-  if (profile.error) return <ErrorBox className="mt-4" title={t("pages.skins.loadErrorTitle")} error={profile.error} onRetry={() => void profile.refetch()} />;
+  if (profile.error) {
+    const retry = () => void profile.refetch();
+    return <ErrorBox className="mt-4" title={t("pages.skins.loadErrorTitle")} error={profile.error} onRetry={retry} />;
+  }
   if (!profile.data) return <Skel className="mt-4" h={336} />;
   const { skin, capes } = profile.data;
   const cape = capes.find((c) => c.active);
 
   return (
     <Panel pad="l" className="skin-now mt-4">
-      <SkinFigure src={skin?.url} variant={skin?.variant ?? "classic"} zoom={3} label={t("pages.skins.currentSkinLabel", { name: account.username })} />
+      <SkinFigure
+        src={skin?.url}
+        variant={skin?.variant ?? "classic"}
+        zoom={3}
+        label={t("pages.skins.currentSkinLabel", { name: account.username })}
+      />
       {cape && <CapeFigure src={cape.url} zoom={3} label={t("pages.skins.capeFigureLabel", { name: cape.alias })} />}
       <div className="skin-now-t">
         <SectionHeader title={account.username} size="sub" />
         <Hint>{skin ? t("pages.skins.modelLine", { model: t(`pages.skins.variant.${skin.variant}`) }) : t("pages.skins.defaultSkin")}</Hint>
         <CapeChoice accountId={account.id} capes={capes} />
         <Actions wrap>
-          <Button icon="save" disabled={!skin || save.isPending} onClick={() => save.mutate({ accountId: account.id, name: account.username })}>
+          <Button
+            icon="save"
+            disabled={!skin || save.isPending}
+            onClick={() => save.mutate({ accountId: account.id, name: account.username })}
+          >
             {t("pages.skins.saveToLibrary")}
           </Button>
           <Button variant="ghost" icon="redo" onClick={() => resetConfirm.ask(account)}>{t("pages.skins.wearDefault")}</Button>
@@ -157,8 +171,14 @@ function Library({ accountId }: { accountId: string | null }) {
         >
           {(list) => (
             <CardGrid>
-              {[...list].sort((a, b) => b.addedAt - a.addedAt).map((skin) => (
-                <SkinCard key={skin.id} skin={skin} accountId={accountId} onRename={() => setRenaming(skin)} onDelete={() => removal.ask(skin)} />
+              {[...list].sort(newestFirst).map((skin) => (
+                <SkinCard
+                  key={skin.id}
+                  skin={skin}
+                  accountId={accountId}
+                  onRename={() => setRenaming(skin)}
+                  onDelete={() => removal.ask(skin)}
+                />
               ))}
             </CardGrid>
           )}
@@ -177,7 +197,9 @@ function Library({ accountId }: { accountId: string | null }) {
   );
 }
 
-function SkinCard({ skin, accountId, onRename, onDelete }: { skin: LibrarySkin; accountId: string | null; onRename: () => void; onDelete: () => void }) {
+function SkinCard({ skin, accountId, onRename, onDelete }: {
+  skin: LibrarySkin; accountId: string | null; onRename: () => void; onDelete: () => void;
+}) {
   const { t } = useI18n();
   const texture = useSkinTexture(skin.id);
   const update = useUpdateSkin();
@@ -191,13 +213,23 @@ function SkinCard({ skin, accountId, onRename, onDelete }: { skin: LibrarySkin; 
       <SkinFigure src={texture} variant={skin.variant} label={t("pages.skins.previewLabel", { name: skin.name })} />
       <div className="skin-card-h">
         <Trunc as="b" text={skin.name} className="min-w-0 flex-1" />
-        <Menu items={menu} trigger={<IconButton icon="more" size="s" label={t("components.instance.moreActionsFor", { name: skin.name })} tip={t("components.instance.moreActions")} />} />
+        <Menu
+          items={menu}
+          trigger={
+            <IconButton
+              icon="more"
+              size="s"
+              label={t("components.instance.moreActionsFor", { name: skin.name })}
+              tip={t("components.instance.moreActions")}
+            />
+          }
+        />
       </div>
       <Segmented
         size="s"
         label={t("pages.skins.modelOf", { name: skin.name })}
         value={skin.variant}
-        items={(["classic", "slim"] as SkinVariant[]).map((value) => ({ value, label: t(`pages.skins.variant.${value}`) }))}
+        items={SKIN_VARIANTS.map((value) => ({ value, label: t(`pages.skins.variant.${value}`) }))}
         onChange={(variant) => update.mutate({ id: skin.id, name: skin.name, variant })}
       />
       <Button

@@ -3,7 +3,7 @@ import { useI18n, t } from "@/i18n";
 import { useMemory } from "@/hooks/useMemory";
 import { api } from "@/lib/api";
 import { blurOnEnter } from "@/lib/dom";
-import { formatMemory, formatPlaytime, MB_PER_GB, memoryTooHigh } from "@/lib/format";
+import { formatMemory, formatPlaytime, MB_PER_GB, memoryTooHigh, relativeTime } from "@/lib/format";
 import { platform } from "@/lib/platform";
 import { toastError } from "@/lib/toast";
 import { LOADER_LABELS, type Instance } from "@/lib/types";
@@ -15,6 +15,10 @@ export const loaderLine = (i: Pick<Instance, "loader" | "minecraftVersion">) => 
 /** „37 Std. gespielt“; ohne Spielzeit leer. Reine Funktion, deshalb Modul-`t` ohne Hook. */
 export const playtimeLine = (i: Pick<Instance, "playtimeSecs">) =>
   i.playtimeSecs > 0 ? t("components.playtime.played", { time: formatPlaytime(i.playtimeSecs) }) : "";
+
+/** „Zuletzt gespielt vor 2 Stunden“ bzw. „Noch nie gespielt“. Reine Funktion, deshalb Modul-`t`. */
+export const lastPlayedLine = (i: Pick<Instance, "lastPlayedAt">) =>
+  i.lastPlayedAt != null ? t("components.game.lastPlayed", { time: relativeTime(i.lastPlayedAt) }) : t("format.neverPlayed");
 
 /** Segmente des Reglers: 1 bis 16 GB. */
 const MEMORY_SEGMENTS = 16;
@@ -36,7 +40,8 @@ export function MemoryHelp({ value }: { value: number | null }) {
         {t("components.memory.tooHigh", { ram: formatMemory(total) })}
       </Hint>
     );
-  return <Hint>{total != null ? t("components.memory.hasTotal", { ram: formatMemory(total) }) + " " : ""}{t("components.memory.general")}</Hint>;
+  const totalText = total != null ? `${t("components.memory.hasTotal", { ram: formatMemory(total) })} ` : "";
+  return <Hint>{totalText}{t("components.memory.general")}</Hint>;
 }
 
 /**
@@ -55,14 +60,22 @@ export function MemoryChooser({ name, value, onChange, autoText, help = true, di
   return (
     <>
       <Radio name={name} checked={isAuto} disabled={disabled} onChange={() => onChange(null)}>
-        {t("components.memory.auto")} <span className="faint">({autoText ?? t("components.memory.currently", { ram: formatMemory(auto) })})</span>
+        {t("components.memory.auto")}{" "}
+        <span className="faint">({autoText ?? t("components.memory.currently", { ram: formatMemory(auto) })})</span>
       </Radio>
       <Radio name={name} checked={!isAuto} disabled={disabled} onChange={() => onChange(gb * MB_PER_GB)}>
         {t("components.memory.ownValue")}
       </Radio>
       <div className="memrow">
         <div className="memsl" style={{ "--free": `${((MEMORY_SEGMENTS - top) / MEMORY_SEGMENTS) * 100}%` } as CSSProperties}>
-          <SegSlider value={gb} max={top} disabled={disabled || isAuto} label={t("ui.memory.label")} unit="GB" onChange={(v) => onChange(v * MB_PER_GB)} />
+          <SegSlider
+            value={gb}
+            max={top}
+            disabled={disabled || isAuto}
+            label={t("ui.memory.label")}
+            unit="GB"
+            onChange={(v) => onChange(v * MB_PER_GB)}
+          />
           {/* Grenze unter dem letzten freien Segment; bei 16 unter dem Ende */}
           <span className="cap" aria-hidden>{t("components.memory.maxGb", { n: top })}</span>
         </div>
@@ -84,7 +97,9 @@ const JAVA_PROGRAM = {
  * Java: ohne eigenen Pfad (`value` leer; was dann gilt, beschreibt `fallback`) oder eigene Java-Programmdatei.
  * Gemeldet wird erst beim Verlassen des Felds, mit Enter oder nach „Durchsuchen“, nicht je Tastendruck.
  */
-export function JavaChooser({ name, value, onChange, fallback, disabled }: { name: string; value: string; onChange: (path: string) => void; fallback: ReactNode; disabled?: boolean }) {
+export function JavaChooser({ name, value, onChange, fallback, disabled }: {
+  name: string; value: string; onChange: (path: string) => void; fallback: ReactNode; disabled?: boolean;
+}) {
   const { t } = useI18n();
   const [own, setOwn] = useState(value !== "");
   const [draft, setDraft] = useState(value);
@@ -116,9 +131,15 @@ export function JavaChooser({ name, value, onChange, fallback, disabled }: { nam
           onChange={(e) => setDraft(e.target.value)}
           onBlur={() => commit(draft)}
           onKeyDown={blurOnEnter}
-          placeholder={own ? t("components.java.examplePath", { path: JAVA_PROGRAM.example }) : t("components.java.pathTo", { file: JAVA_PROGRAM.file })}
+          placeholder={
+            own
+              ? t("components.java.examplePath", { path: JAVA_PROGRAM.example })
+              : t("components.java.pathTo", { file: JAVA_PROGRAM.file })
+          }
         />
-        {api.capabilities.pickPaths && <Button disabled={disabled || !own} onClick={() => void browse().catch(toastError)}>{t("components.java.browse")}</Button>}
+        {api.capabilities.pickPaths && (
+          <Button disabled={disabled || !own} onClick={() => void browse().catch(toastError)}>{t("components.java.browse")}</Button>
+        )}
       </Actions>
     </>
   );

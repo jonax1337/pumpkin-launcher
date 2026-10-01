@@ -13,11 +13,12 @@ type ShareRequest = { instanceId: string; kind: LogKind };
 /** Offene Rückfrage „Log öffentlich teilen?“ (ShareLogDialog, einmal im Layout). */
 const useShareAsk = create<{ request: ShareRequest | null }>(() => ({ request: null }));
 
-/** „Log teilen“: erst die Rückfrage, dort lädt „Hochladen“ hoch und kopiert den Link. */
-export const askShareLog = (instanceId: string, kind: LogKind) => useShareAsk.setState({ request: { instanceId, kind } });
-
 /** Nach einem Absturz mit Bericht ist der Bericht das aufschlussreichere Log, sonst das des letzten Starts. */
-export const shareKindAfter = (crash: ExitPayload | undefined): LogKind => (crash?.crashReport ? "crashReport" : "latest");
+const shareKindAfter = (crash: ExitPayload | undefined): LogKind => (crash?.crashReport ? "crashReport" : "latest");
+
+/** „Log teilen“ (nach einem Absturz mit dessen Daten): erst die Rückfrage, dort lädt „Hochladen“ hoch und kopiert den Link. */
+export const askShareLog = (instanceId: string, crash?: ExitPayload) =>
+  useShareAsk.setState({ request: { instanceId, kind: shareKindAfter(crash) } });
 
 /** Rückfrage vor dem Hochladen: was öffentlich wird und was vorher entfernt wird. Einmal im Layout. */
 export function ShareLogDialog() {
@@ -32,7 +33,7 @@ export function ShareLogDialog() {
       onOpenChange={(o) => !o && close()}
       danger={false}
       title={t("components.share.title")}
-      text={t("components.share.text", { what: what })}
+      text={t("components.share.text", { what })}
       confirmLabel={t("components.share.upload")}
       pendingLabel={t("components.share.uploading")}
       pending={share.isPending}

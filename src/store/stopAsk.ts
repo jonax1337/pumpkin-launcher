@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { Instance } from "@/lib/types";
 
-/** Offene Rückfrage „Minecraft beenden?“ (StopDialog in game.tsx, einmal global eingehängt). */
+/** Offene Rückfrage „Minecraft beenden?“ (StopDialog in components/play/StopDialog.tsx, einmal global eingehängt). */
 export const useStopAsk = create<{ instance: Instance | null }>(() => ({ instance: null }));
 
 /**

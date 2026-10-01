@@ -9,6 +9,12 @@ import { useI18n } from "@/i18n";
 import type { Instance, Screenshot } from "@/lib/types";
 import { Actions, Button, CardGrid, Count, Dialog, Empty, Glyph, IconButton, SectionHeader } from "@/ui";
 
+/** So viele Platzhalter zeigt das Raster, solange die Liste lädt. */
+const SKELETON_COUNT = 4;
+
+/** Breite (px) der großen Ansicht. */
+const LIGHTBOX_WIDTH = 1200;
+
 /** Screenshots je Kalendertag; die Liste kommt neueste zuerst, die Map behält diese Reihenfolge. */
 function byDay(shots: Screenshot[]) {
   const days = new Map<number, Screenshot[]>();
@@ -32,7 +38,7 @@ export function ScreenshotsTab({ instance }: { instance: Instance }) {
         error={t("detail.screenshots.loadError")}
         loading={
           <CardGrid aria-busy aria-label={t("common.loading")}>
-            <SkelList n={4} className="aspect-video" />
+            <SkelList n={SKELETON_COUNT} className="aspect-video" />
           </CardGrid>
         }
         empty={
@@ -59,7 +65,13 @@ function Gallery({ instanceId, shots }: { instanceId: string; shots: Screenshot[
           <SectionHeader title={<>{dayLabel(day)} <Count value={group.length} size={20} muted /></>} size="sub" />
           <CardGrid className="mt-2">
             {group.map((shot) => (
-              <button key={shot.fileName} type="button" className="shot fx" aria-label={t("detail.screenshots.shotAria", { date: formatDateTime(shot.takenAt) })} onClick={() => setShown(shot.fileName)}>
+              <button
+                key={shot.fileName}
+                type="button"
+                className="shot fx"
+                aria-label={t("detail.screenshots.shotAria", { date: formatDateTime(shot.takenAt) })}
+                onClick={() => setShown(shot.fileName)}
+              >
                 {/* Hunderte Bilder in voller Auflösung: erst laden, wenn sie in den Sichtbereich kommen. */}
                 <img src={api.screenshotSrc(shot)} alt="" loading="lazy" decoding="async" />
               </button>
@@ -72,14 +84,8 @@ function Gallery({ instanceId, shots }: { instanceId: string; shots: Screenshot[
   );
 }
 
-/** Große Ansicht mit Blättern (auch ← →), Öffnen im Bildbetrachter, Zeigen im Ordner und Löschen in den Papierkorb. */
-function Lightbox({ instanceId, shots, current, onShow }: { instanceId: string; shots: Screenshot[]; current: Screenshot; onShow: (fileName: string | null) => void }) {
-  const { t } = useI18n();
-  const remove = useDeleteScreenshot(instanceId);
-  const index = shots.indexOf(current);
-  const prev = shots[index - 1]?.fileName ?? null;
-  const next = shots[index + 1]?.fileName ?? null;
-
+/** Blättern mit ← und →, solange es ein Ziel gibt (`null` = am Rand). */
+function useArrowKeyPaging(prev: string | null, next: string | null, onShow: (fileName: string) => void) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.key === "ArrowLeft" ? prev : e.key === "ArrowRight" ? next : null;
@@ -88,6 +94,19 @@ function Lightbox({ instanceId, shots, current, onShow }: { instanceId: string; 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [prev, next, onShow]);
+}
+
+/** Große Ansicht mit Blättern (auch ← →), Öffnen im Bildbetrachter, Zeigen im Ordner und Löschen in den Papierkorb. */
+function Lightbox({ instanceId, shots, current, onShow }: {
+  instanceId: string; shots: Screenshot[]; current: Screenshot; onShow: (fileName: string | null) => void;
+}) {
+  const { t } = useI18n();
+  const remove = useDeleteScreenshot(instanceId);
+  const index = shots.indexOf(current);
+  const prev = shots[index - 1]?.fileName ?? null;
+  const next = shots[index + 1]?.fileName ?? null;
+
+  useArrowKeyPaging(prev, next, onShow);
 
   const title = formatDateTime(current.takenAt);
   return (
@@ -96,7 +115,7 @@ function Lightbox({ instanceId, shots, current, onShow }: { instanceId: string; 
       onOpenChange={(o) => !o && onShow(null)}
       title={title}
       sub={`${current.fileName} · ${formatSize(current.size)}`}
-      width={1200}
+      width={LIGHTBOX_WIDTH}
       footLeft={
         <Actions>
           <IconButton icon="back" label={t("detail.screenshots.prevAria")} disabled={!prev} onClick={() => onShow(prev)} />

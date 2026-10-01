@@ -1,14 +1,13 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { MutationCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { toast } from "sonner";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { TipProvider, Toaster } from "@/ui";
 import { LanguageProvider } from "@/i18n";
 import { Layout } from "@/app/Layout";
 import { BrandProvider } from "@/branding/Brand";
-import { isCancelled } from "@/lib/errors";
-import { CANCELLED } from "@/lib/types";
+import { trackLayoutShift } from "@/dev/layoutShift";
+import { queryClient } from "@/lib/queryClient";
 import { discoverUrl } from "@/lib/routes";
 import { HomePage } from "@/pages/Home";
 import { InstancesPage } from "@/pages/Instances";
@@ -19,41 +18,7 @@ import { SkinsPage } from "@/pages/Skins";
 import { NotFoundPage } from "@/pages/NotFound";
 import "./index.css";
 
-/** Abfragen ohne eigene Angabe gelten kurz als frisch; was seltener wechselt, setzt `staleTime` selbst (hooks/staleTimes.ts). */
-const DEFAULT_STALE_MS = 30_000;
-
-// Mutations-Fehler zentral als Toast; Mutationen mit eigenem Fehler-Toast setzen `meta.ownErrorToast`.
-// Query-Fehler zeigen die Seiten inline.
-const queryClient = new QueryClient({
-  mutationCache: new MutationCache({
-    onError: (err, _vars, _ctx, mutation) => {
-      if (mutation.meta?.ownErrorToast) return;
-      // Abbrechen war Absicht: neutral melden, nicht als Fehler.
-      if (isCancelled(err)) toast(CANCELLED);
-      else toast.error(err.message);
-    },
-  }),
-  defaultOptions: {
-    queries: { staleTime: DEFAULT_STALE_MS, refetchOnWindowFocus: false, retry: 1 },
-  },
-});
-
-/** Nur Entwicklung: Layoutshift-Summe (PIXELKINO.md §4) in window.__cls. */
-function trackLayoutShift() {
-  const w = window as Window & { __cls?: number };
-  w.__cls = 0;
-  try {
-    new PerformanceObserver((list) => {
-      for (const e of list.getEntries() as (PerformanceEntry & { value: number; hadRecentInput: boolean })[]) {
-        if (!e.hadRecentInput) w.__cls = (w.__cls ?? 0) + e.value;
-      }
-    }).observe({ type: "layout-shift", buffered: true });
-  } catch {
-    // layout-shift nicht unterstützt
-  }
-}
-
-if (import.meta.env.DEV && typeof PerformanceObserver !== "undefined") trackLayoutShift();
+if (import.meta.env.DEV) trackLayoutShift();
 
 const router = createBrowserRouter([
   {

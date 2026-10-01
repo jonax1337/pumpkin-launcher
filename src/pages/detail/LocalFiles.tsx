@@ -1,31 +1,28 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { Dialog, DialogActions, Field, Segmented } from "@/ui";
 import { useBackgroundTask } from "@/hooks/useBackgroundTask";
 import { useContentState } from "@/store/contentState";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { api } from "@/lib/api";
-import { TYPE_ONE_KEYS } from "@/lib/catalog";
 import { fileName } from "@/lib/format";
 import { isMrpack } from "@/lib/mods";
 import { newInstanceUrl } from "@/lib/routes";
 import { toastError } from "@/lib/toast";
 import { t, useI18n } from "@/i18n";
 import type { Instance, FileCheck, LocalFile, Mod } from "@/lib/types";
-import { DropHint, rejectedFileToast } from "./dropFiles";
+import { rejectedFileToast } from "./dropFiles";
+import type { Ask, DropzoneState } from "./LocalFilesDropzone";
 
 const CONTENT_FILE = /\.(jar|zip)$/i;
-
-type ZipKind = "resourcepack" | "shader";
-
-/** Dateien, deren Art feststeht, und Zips, bei denen der Nutzer wählt. */
-type Ask = { sure: LocalFile[]; unsure: string[] };
 
 /** „Sodium hinzugefügt, von Modrinth erkannt“ bzw. „3 Dateien hinzugefügt, 2 davon von Modrinth erkannt“. */
 function addedText(added: Mod[]) {
   const known = added.filter((m) => m.source.type === "modrinth").length;
-  if (added.length === 1) return known ? t("detail.files.addedOneKnown", { name: added[0].name }) : t("components.content.added", { name: added[0].name });
+  if (added.length === 1) {
+    const { name } = added[0];
+    return known ? t("detail.files.addedOneKnown", { name }) : t("components.content.added", { name });
+  }
   return known ? t("detail.files.addedManyKnown", { n: added.length, k: known }) : t("detail.files.addedMany", { n: added.length });
 }
 
@@ -60,7 +57,7 @@ function classify(checks: FileCheck[]): Ask {
 
 /**
  * Eigene Dateien in den Inhalten einer Instanz: aufs Fenster ziehen (solange `active`), „Datei hinzufügen…“ (`pick`, nur
- * in der App) und „Mit Modrinth abgleichen“. `overlay` (Ablage-Fläche, Rückfrage bei unklaren Zips) gehört in einen `relative`-Container.
+ * in der App) und „Mit Modrinth abgleichen“. `dropzone` gehört an `LocalFilesDropzone` in einem `relative`-Container.
  */
 export function useLocalFiles(instance: Instance, active: boolean) {
   const { t } = useI18n();
@@ -87,12 +84,11 @@ export function useLocalFiles(instance: Instance, active: boolean) {
   function add(files: LocalFile[]) {
     if (!files.length) return;
     const before = instance.mods.length;
-    const label = files.length === 1 ? t("detail.files.addOneLabel", { file: fileName(files[0].path) }) : t("detail.files.addManyLabel", { n: files.length });
-    const doneLabel = files.length === 1 ? t("detail.files.addOneDone", { file: fileName(files[0].path) }) : t("detail.files.addedMany", { n: files.length });
+    const single = files.length === 1 ? fileName(files[0].path) : null;
     background.run({
       key: "files",
-      label,
-      doneLabel,
+      label: single ? t("detail.files.addOneLabel", { file: single }) : t("detail.files.addManyLabel", { n: files.length }),
+      doneLabel: single ? t("detail.files.addOneDone", { file: single }) : t("detail.files.addedMany", { n: files.length }),
       task: (op) => api.addLocalFiles(instance.id, files, op),
       // Das Backend hängt neue Einträge hinten an.
       onDone: (result) => toast.success(addedText(result.mods.slice(before))),
@@ -112,66 +108,23 @@ export function useLocalFiles(instance: Instance, active: boolean) {
       task: () => api.modrinthIdentify(instance.id, [m.id]),
       onDone: (result) => {
         const now = result.mods.find((x) => x.fileName === m.fileName);
-        if (now?.source.type === "modrinth") toast.success(t("detail.files.identified", { name: m.name, match: now.name, version: now.version }));
+        if (now?.source.type === "modrinth") {
+          toast.success(t("detail.files.identified", { name: m.name, match: now.name, version: now.version }));
+        }
         else if (now) toast(t("detail.files.notFoundOnModrinth", { name: m.name }));
       },
     });
   }
 
-  const overlay = (
-    <>
-      {dragging && (
-        <div className="drop over absolute inset-0 z-10 h-auto justify-start" aria-hidden>
-          <div className="sticky top-[30vh] flex flex-col items-center gap-2 py-10">
-            <DropHint>{t("detail.files.dropHintContent")}</DropHint>
-          </div>
-        </div>
-      )}
-      {ask && (
-        <KindDialog
-          paths={ask.unsure}
-          onClose={() => {
-            setAsk(null);
-            add(ask.sure);
-          }}
-          onConfirm={(chosen) => {
-            setAsk(null);
-            add([...ask.sure, ...chosen]);
-          }}
-        />
-      )}
-    </>
-  );
+  const dropzone: DropzoneState = {
+    dragging,
+    ask,
+    onAdd: (files) => {
+      setAsk(null);
+      add(files);
+    },
+  };
 
   // Eigene Dateien gibt es nur in der App: der Browser liefert keine Pfade.
-  return { pick: api.capabilities.pickPaths ? () => void pick().catch(toastError) : undefined, identify, overlay };
-}
-
-/** Rückfrage für Zips, die am Inhalt weder eindeutig Ressourcenpaket noch Shader sind. */
-function KindDialog({ paths, onClose, onConfirm }: { paths: string[]; onClose: () => void; onConfirm: (files: LocalFile[]) => void }) {
-  const { t } = useI18n();
-  const [kinds, setKinds] = useState<ZipKind[]>(() => paths.map(() => "resourcepack"));
-  return (
-    <Dialog
-      open
-      onOpenChange={(o) => !o && onClose()}
-      title={t("detail.files.kindDialogTitle")}
-      sub={t("detail.files.kindDialogSub")}
-      footer={<DialogActions cancel={t("detail.files.skipAction")} confirm={{ label: t("common.add"), onClick: () => onConfirm(paths.map((path, i) => ({ path, kind: kinds[i] }))) }} />}
-    >
-      {paths.map((path, i) => (
-        <Field key={path} label={fileName(path)} group>
-          <Segmented
-            label={fileName(path)}
-            value={kinds[i]}
-            onChange={(k) => setKinds((ks) => ks.map((x, j) => (j === i ? k : x)))}
-            items={[
-              { value: "resourcepack", label: t(TYPE_ONE_KEYS.resourcepack) },
-              { value: "shader", label: t(TYPE_ONE_KEYS.shader) },
-            ]}
-          />
-        </Field>
-      ))}
-    </Dialog>
-  );
+  return { pick: api.capabilities.pickPaths ? () => void pick().catch(toastError) : undefined, identify, dropzone };
 }

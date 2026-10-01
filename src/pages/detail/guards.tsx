@@ -1,6 +1,6 @@
 import type { ComponentProps } from "react";
 import { Button, Tip } from "@/ui";
-import { usePhase } from "@/components/game";
+import { usePhase } from "@/components/play/phase";
 import { useContentState } from "@/store/contentState";
 import { useI18n } from "@/i18n";
 import type { Instance, QuickPlay } from "@/lib/types";
