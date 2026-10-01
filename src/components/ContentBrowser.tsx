@@ -63,8 +63,6 @@ const LOADER_CATS = new Set(["fabric", "forge", "quilt", "neoforge", "iris", "op
 const categoryNames = (cats: string[], max = 2) =>
   cats.filter((c) => !LOADER_CATS.has(c) && !/^\d+x/.test(c)).slice(0, max).map((c) => CATEGORY[c] ?? c.charAt(0).toUpperCase() + c.slice(1).replace(/-/g, " "));
 
-/** Anteil 0–1 für Fortschrittsbalken; null = unbestimmt. */
-
 // ---------- Beschreibung (Markdown mit HTML von Modrinth) ----------
 
 // Nur https-Bilder, nur http(s)-Links; Skripte und Event-Handler entfernt DOMPurify ohnehin.

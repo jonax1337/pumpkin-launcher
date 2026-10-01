@@ -109,6 +109,9 @@ function SaveTemplateDialog({ instance, onClose }: { instance: Instance; onClose
   );
 }
 
+/** Dateiname für den Speichern-Dialog: Windows lehnt `:` & Co. ab, `/` läse der Dialog als Ordner. */
+const packFileName = (name: string) => `${name.replace(/[<>:"/\\|?*]/g, "_").trim() || "Instanz"}.mrpack`;
+
 /** Was ein Export ohne Zutun mitnimmt; Welten nur auf Wunsch (groß und persönlich). */
 const EXPORT_DEFAULTS = ["config", "mods", "resourcepacks", "shaderpacks", "options.txt"];
 
@@ -132,7 +135,7 @@ function ExportDialog({ instance, onClose }: { instance: Instance; onClose: () =
   const toggle = (name: string, on: boolean) => setPicked(new Set(on ? [...chosen, name] : [...chosen].filter((n) => n !== name)));
 
   async function submit() {
-    const path = await saveFile({ defaultPath: `${instance.name}.mrpack`, filters: [{ name: "Modrinth-Modpack", extensions: ["mrpack"] }] });
+    const path = await saveFile({ defaultPath: packFileName(instance.name), filters: [{ name: "Modrinth-Modpack", extensions: ["mrpack"] }] });
     if (path) exp.mutate({ instance, include: [...chosen], path }, { onSuccess: onClose });
   }
 

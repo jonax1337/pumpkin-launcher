@@ -52,6 +52,50 @@ fn file_name(m: &Mod) -> AppResult<&str> {
     Ok(name)
 }
 
+/// Pfad im Spielordner, z. B. `mods/sodium.jar`.
+pub fn game_path(m: &Mod) -> String {
+    format!("{}/{}", m.kind.folder(), m.file_name)
+}
+
+/// Dateien der Einträge `names` im Spielordner (Pfade relativ mit `/`) ohne die verwalteter Inhalte:
+/// die kommen aus dem Cache, [`sync`] legt sie ab.
+pub fn unmanaged_files(
+    dirs: &Dirs,
+    instance_id: &str,
+    names: &[String],
+    mods: &[Mod],
+) -> AppResult<Vec<(String, PathBuf)>> {
+    let game = dirs.game_dir(instance_id);
+    let managed: Vec<String> = mods.iter().filter(|m| m.sha1.is_some()).map(game_path).collect();
+    let mut files = Vec::new();
+    for name in names {
+        super::walk(&game, &game.join(name), &mut files)?;
+    }
+    files.retain(|(rel, _)| !managed.iter().any(|m| m.eq_ignore_ascii_case(rel)));
+    Ok(files)
+}
+
+/// Legt fehlende Cache-Einträge aktiver Inhalte aus der abgelegten Datei der Instanz neu an, sofern ihr
+/// Hash passt: die Instanz läuft auch mit geleertem Cache, Kopie und Export brauchen ihn aber.
+pub fn recache(dirs: &Dirs, instance_id: &str, mods: &[Mod]) -> AppResult<()> {
+    for m in mods.iter().filter(|m| m.enabled) {
+        let Some(hash) = m.sha1.as_deref() else { continue };
+        if cached(dirs, hash)?.exists() {
+            continue;
+        }
+        let placed = dirs.game_dir(instance_id).join(m.kind.folder()).join(file_name(m)?);
+        match fs::read(&placed) {
+            Ok(bytes) if sha1_hex(&bytes).eq_ignore_ascii_case(hash) => {
+                cache_bytes(dirs, &bytes)?;
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Ok(())
+}
+
 /// Hardlink auf den Cache-Eintrag; klappt das nicht (anderes Laufwerk, FAT32), eine Kopie.
 /// Ein vorhandenes Ziel wird niemals ersetzt, auch nicht im Kopier-Fallback.
 fn place(src: &Path, dest: &Path) -> io::Result<()> {
@@ -336,6 +380,37 @@ mod tests {
         ));
         assert!(cached(&dirs, "../../x").is_err());
 
+        fs::remove_dir_all(&dirs.root).unwrap();
+    }
+
+    #[test]
+    fn recache_restores_entries_from_placed_files() {
+        let dirs = Dirs::new(std::env::temp_dir().join(crate::models::new_id()));
+        let m = Mod {
+            id: "sodium".into(),
+            name: "Sodium".into(),
+            version: "1".into(),
+            source: ModSource::Local,
+            file_name: "sodium.jar".into(),
+            sha1: Some(cache_bytes(&dirs, b"sodium").unwrap()),
+            enabled: true,
+            kind: Default::default(),
+            required_by: Vec::new(),
+        };
+        sync(&dirs, "i", std::slice::from_ref(&m)).unwrap();
+        // Liegt unter dem Namen etwas anderes, bleibt der Eintrag weg.
+        let replaced = Mod {
+            file_name: "other.jar".into(),
+            sha1: Some(sha1_hex(b"other")),
+            ..m.clone()
+        };
+        fs::write(dirs.mods_dir("i").join("other.jar"), b"fremd").unwrap();
+        fs::remove_dir_all(dirs.mod_cache()).unwrap();
+
+        recache(&dirs, "i", &[m.clone(), replaced.clone()]).unwrap();
+
+        assert_eq!(fs::read(cached(&dirs, m.sha1.as_ref().unwrap()).unwrap()).unwrap(), b"sodium");
+        assert!(!cached(&dirs, replaced.sha1.as_ref().unwrap()).unwrap().exists());
         fs::remove_dir_all(&dirs.root).unwrap();
     }
 }

@@ -4,6 +4,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::error::AppResult;
+use modrinth::invalid;
+
 pub mod auth;
 pub mod download;
 pub mod duplicate;
@@ -103,4 +106,24 @@ impl Dirs {
     pub fn library(&self, path: &str) -> PathBuf {
         self.libraries().join(Path::new(path))
     }
+}
+
+/// Dateien unter `path` (Datei oder Ordner, rekursiv, ohne Symlinks/Junctions) als
+/// (Pfad relativ zu `base` mit `/`, Pfad). Fehlt `path`, kommt nichts hinzu.
+pub(crate) fn walk(base: &Path, path: &Path, out: &mut Vec<(String, PathBuf)>) -> AppResult<()> {
+    let kind = match fs::symlink_metadata(path) {
+        Ok(meta) => meta.file_type(),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e.into()),
+    };
+    if kind.is_dir() {
+        for entry in fs::read_dir(path)? {
+            walk(base, &entry?.path(), out)?;
+        }
+    } else if kind.is_file() {
+        let rel = path.strip_prefix(base).map_err(|_| invalid("Pfad außerhalb des Spielordners"))?;
+        let rel = rel.to_str().ok_or_else(|| invalid("Dateiname ist kein gültiger Text"))?.replace('\\', "/");
+        out.push((rel, path.to_owned()));
+    }
+    Ok(())
 }

@@ -1,11 +1,8 @@
 //! Instanz duplizieren: neuer Eintrag mit eigener ID und eine Kopie des Instanzordners. Verwaltete Inhalte
 //! legt `mods::sync` per Hardlink aus dem Cache ab, statt sie Byte für Byte zu kopieren.
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::PathBuf};
 
-use super::{content, download::RemoveOnDrop, modrinth::invalid, mods, mrpack::walk, Dirs};
+use super::{content, download::RemoveOnDrop, modrinth::invalid, mods, walk, Dirs};
 use crate::{
     error::AppResult,
     models::{new_id, now_ms, Instance, Mod},
@@ -28,16 +25,19 @@ pub async fn duplicate(
         last_played_at: None,
         ..source
     };
-    let files = files_to_copy(&state.dirs, instance_id, &copy.mods)?;
     let target = state.dirs.instance(&copy.id);
     content::regular_parents(&target)?;
     fs::create_dir_all(&target)?;
-    let mut guard = RemoveOnDrop(Some(target.clone()));
-    tokio::task::spawn_blocking(move || copy_files(&target, &files, &progress))
-        .await
-        .map_err(|e| invalid(format!("Kopieren abgebrochen: {e}")))??;
-    let (id, mods) = (copy.id.clone(), copy.mods.clone());
-    let copy = mods::sync_commit(&state.dirs, &id, &mods, |_| state.instances.insert(copy))?;
+    let mut guard = RemoveOnDrop(Some(target));
+    let (dirs, from, to, mods) = (state.dirs.clone(), instance_id.to_owned(), copy.id.clone(), copy.mods.clone());
+    tokio::task::spawn_blocking(move || {
+        mods::recache(&dirs, &from, &mods)?;
+        mods::sync(&dirs, &to, &mods)?;
+        copy_files(&files_to_copy(&dirs, &from, &to, &mods)?, &progress)
+    })
+    .await
+    .map_err(|e| invalid(format!("Kopieren abgebrochen: {e}")))??;
+    let copy = state.instances.insert(copy)?;
     guard.0 = None;
     tracing::info!(source = %instance_id, id = %copy.id, "Instanz dupliziert");
     Ok(copy)
@@ -54,33 +54,31 @@ fn copy_name(name: &str, taken: &[String]) -> String {
     candidate
 }
 
-/// Was in die Kopie gehört, relativ zum Instanzordner: der Spielordner ohne Neuerzeugtes und ohne die
-/// Dateien verwalteter Inhalte, dazu Natives und Installiert-Marker. Der Marker hängt nur an Version und
-/// Loader, so startet die Kopie einer installierten Instanz ohne Neuinstallation.
-fn files_to_copy(dirs: &Dirs, instance_id: &str, mods: &[Mod]) -> AppResult<Vec<(String, PathBuf)>> {
-    let base = dirs.instance(instance_id);
-    let game = dirs.game_dir(instance_id);
-    let mut files = Vec::new();
-    for name in dirs.game_entries(instance_id)? {
-        walk(&base, &game.join(name), &mut files)?;
-    }
-    walk(&base, &dirs.natives_dir(instance_id), &mut files)?;
-    walk(&base, &dirs.installed_marker(instance_id), &mut files)?;
-    let managed: Vec<PathBuf> =
-        mods.iter().filter(|m| m.sha1.is_some()).map(|m| game.join(m.kind.folder()).join(&m.file_name)).collect();
-    files.retain(|(_, path)| !managed.contains(path));
+/// Was von Instanz `from` nach `to` kopiert wird, als (Ziel, Quelle): der Spielordner ohne Neuerzeugtes und
+/// ohne die Dateien verwalteter Inhalte, dazu Natives und Installiert-Marker. Der Marker hängt nur an Version
+/// und Loader, so startet die Kopie einer installierten Instanz ohne Neuinstallation.
+fn files_to_copy(dirs: &Dirs, from: &str, to: &str, mods: &[Mod]) -> AppResult<Vec<(PathBuf, PathBuf)>> {
+    let game = dirs.game_dir(to);
+    let mut files: Vec<(PathBuf, PathBuf)> = mods::unmanaged_files(dirs, from, &dirs.game_entries(from)?, mods)?
+        .into_iter()
+        .map(|(rel, path)| (game.join(rel), path))
+        .collect();
+    let (base, mut rest) = (dirs.instance(from), Vec::new());
+    walk(&base, &dirs.natives_dir(from), &mut rest)?;
+    walk(&base, &dirs.installed_marker(from), &mut rest)?;
+    let instance = dirs.instance(to);
+    files.extend(rest.into_iter().map(|(rel, path)| (instance.join(rel), path)));
     Ok(files)
 }
 
-fn copy_files(target: &Path, files: &[(String, PathBuf)], progress: &dyn Fn(&str, u64, u64)) -> AppResult<()> {
+fn copy_files(files: &[(PathBuf, PathBuf)], progress: &dyn Fn(&str, u64, u64)) -> AppResult<()> {
     let total = files.len() as u64;
     progress("copy", 0, total);
-    for (done, (rel, source)) in (1..).zip(files) {
-        let dest = target.join(rel);
+    for (done, (dest, source)) in (1..).zip(files) {
         if let Some(parent) = dest.parent() {
             fs::create_dir_all(parent)?;
         }
-        fs::copy(source, &dest)?;
+        fs::copy(source, dest)?;
         progress("copy", done, total);
     }
     Ok(())
@@ -90,6 +88,7 @@ fn copy_files(target: &Path, files: &[(String, PathBuf)], progress: &dyn Fn(&str
 mod tests {
     use super::*;
     use crate::models::{ModKind, ModLoader, ModSource, NewInstance};
+    use std::path::Path;
 
     fn local_mod(state: &AppState, name: &str) -> Mod {
         Mod {

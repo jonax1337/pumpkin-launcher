@@ -344,7 +344,9 @@ export const api = {
     tauri ? call("instance_export", { instanceId, include, path }) : Promise.reject(new Error("Exportieren geht nur in der Pumpkin Launcher-App.")),
   /** Datei im Dateimanager markieren (z. B. ein Export). */
   revealPath: (path: string): Promise<void> =>
-    tauri ? revealItemInDir(path) : Promise.reject(new Error("Ordner lassen sich nur in der Pumpkin Launcher-App öffnen.")),
+    tauri
+      ? revealItemInDir(path).catch((err: unknown) => Promise.reject(new Error(String(err))))
+      : Promise.reject(new Error("Ordner lassen sich nur in der Pumpkin Launcher-App öffnen.")),
 
   templateSave: (instanceId: string, name: string): Promise<Template> =>
     tauri ? call("template_save", { instanceId, name }) : mock.templateSave(instanceId, name),

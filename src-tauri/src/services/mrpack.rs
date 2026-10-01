@@ -72,11 +72,6 @@ fn included(include: &[String], m: &Mod) -> bool {
     include.iter().any(|name| name == m.kind.folder())
 }
 
-/// Pfad im Spielordner, z. B. `mods/sodium.jar`.
-fn content_path(m: &Mod) -> String {
-    format!("{}/{}", m.kind.folder(), m.file_name)
-}
-
 /// Index-Einträge für Modrinth-Inhalte, deren installierte Datei (sha1) Modrinth kennt; eine Sammelabfrage.
 /// Alles ohne Treffer landet als Override aus dem Cache im Pack.
 async fn remote_files(client: &reqwest::Client, instance: &Instance, include: &[String]) -> AppResult<Vec<Value>> {
@@ -94,7 +89,7 @@ async fn remote_files(client: &reqwest::Client, instance: &Instance, include: &[
                     && modrinth::download_url(&f.url).is_ok()
             })?;
             Some(json!({
-                "path": content_path(m),
+                "path": mods::game_path(m),
                 "hashes": { "sha1": file.hashes["sha1"], "sha512": file.hashes["sha512"] },
                 "downloads": [file.url],
                 "fileSize": file.size,
@@ -132,20 +127,15 @@ fn pumpkin_meta(instance: &Instance) -> Value {
 /// Einträge des Spielordners ohne die Dateien verwalteter Inhalte (die kommen aus Index bzw. Cache).
 fn overrides(dirs: &Dirs, instance: &Instance, include: &[String], remote: &[Value]) -> AppResult<Vec<(String, PathBuf)>> {
     let covered: Vec<&str> = remote.iter().filter_map(|f| f["path"].as_str()).collect();
+    mods::recache(dirs, &instance.id, &instance.mods)?;
     let mut files = Vec::new();
     for (m, sha1) in active_content(instance).filter(|(m, _)| included(include, m)) {
-        let path = content_path(m);
+        let path = mods::game_path(m);
         if !covered.contains(&path.as_str()) {
             files.push((path, mods::cached(dirs, sha1)?));
         }
     }
-    let managed: Vec<String> = instance.mods.iter().filter(|m| m.sha1.is_some()).map(content_path).collect();
-    let game = dirs.game_dir(&instance.id);
-    let mut found = Vec::new();
-    for name in include {
-        walk(&game, &game.join(name), &mut found)?;
-    }
-    files.extend(found.into_iter().filter(|(rel, _)| !managed.iter().any(|m| m.eq_ignore_ascii_case(rel))));
+    files.extend(mods::unmanaged_files(dirs, &instance.id, include, &instance.mods)?);
     Ok(files)
 }
 
@@ -164,40 +154,22 @@ fn write_zip(path: &Path, index: &Value, meta: &Value, files: Vec<(String, PathB
     zip.write_all(&serde_json::to_vec_pretty(meta)?)?;
     let mut total = 0u64;
     for (name, source) in files {
-        content::safe_path(&name)?;
+        // Gleiche Prüfung wie der Import, der den ganzen Eintragsnamen samt `overrides/` sieht.
+        let entry = format!("overrides/{name}");
+        content::safe_path(&entry)?;
         let mut file = fs::File::open(&source).map_err(|e| invalid(format!("{name} nicht lesbar: {e}")))?;
         // Der Import nimmt höchstens FILE_LIMIT pro Pack; unkomprimiert gezählt ist das die sichere Seite.
         total += file.metadata()?.len();
         if total > modrinth::FILE_LIMIT {
             return Err(invalid("Das Pack wäre größer als 256 MiB und ließe sich nicht wieder importieren"));
         }
-        zip.start_file(format!("overrides/{name}"), options)?;
+        zip.start_file(entry, options)?;
         io::copy(&mut file, &mut zip)?;
     }
     // Erst schließen, dann umbenennen: Windows verschiebt keine offene Datei.
     drop(zip.finish()?);
     fs::rename(&tmp, path)?;
     guard.0 = None;
-    Ok(())
-}
-
-/// Dateien unter `path` (Datei oder Ordner, rekursiv, ohne Symlinks/Junctions) als
-/// (Pfad relativ zu `base` mit `/`, Pfad). Fehlt `path`, kommt nichts hinzu.
-pub(crate) fn walk(base: &Path, path: &Path, out: &mut Vec<(String, PathBuf)>) -> AppResult<()> {
-    let kind = match fs::symlink_metadata(path) {
-        Ok(meta) => meta.file_type(),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => return Err(e.into()),
-    };
-    if kind.is_dir() {
-        for entry in fs::read_dir(path)? {
-            walk(base, &entry?.path(), out)?;
-        }
-    } else if kind.is_file() {
-        let rel = path.strip_prefix(base).map_err(|_| invalid("Pfad außerhalb des Spielordners"))?;
-        let rel = rel.to_str().ok_or_else(|| invalid("Dateiname ist kein gültiger Text"))?.replace('\\', "/");
-        out.push((rel, path.to_owned()));
-    }
     Ok(())
 }
 
@@ -230,6 +202,8 @@ mod tests {
         source.mods = vec![own];
         let source = state.instances.insert(source).unwrap();
         mods::sync(&state.dirs, &source.id, &source.mods).unwrap();
+        // Geleerter Cache: der Export greift auf die abgelegte Datei zurück.
+        fs::remove_dir_all(state.dirs.mod_cache()).unwrap();
         let game = state.dirs.game_dir(&source.id);
         for (path, data) in [("mods/extra.jar", "eigene"), ("saves/w/level.dat", "welt"), ("options.txt", "fov:1"), ("logs/latest.log", "log")] {
             fs::create_dir_all(game.join(path).parent().unwrap()).unwrap();
