@@ -23,8 +23,9 @@ import { useCreateInstance, useLoaderVersions, useVersions } from "@/hooks/useIn
 import { useDeleteTemplate, useTemplates } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
 import { TYPE_ONE_KEYS } from "@/lib/catalog";
-import { fileName, formatDate } from "@/lib/format";
-import { formatDownloads, isMrpack, MRPACK_EXT, progressLabel } from "@/lib/modrinth";
+import { fileName, formatDate, formatDownloads } from "@/lib/format";
+import { isMrpack, MRPACK_EXT } from "@/lib/mods";
+import { progressLabel } from "@/lib/progress";
 import { discoverUrl, instanceUrl, readNewInstanceStart } from "@/lib/routes";
 import { ALL_LOADERS, LOADER_LABELS, type Instance, type ModLoader, type Template } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -207,7 +208,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
   const valid =
     tab === "blank" ? !!selectedVersion && !loaderUnavailable
     : tab === "pack" ? !!pack && !packInstall.blocked
-    : tab === "file" ? !!path && !api.isMock && !active
+    : tab === "file" ? !!path && api.capabilities.pickPaths && !active
     : tab === "import" ? foreign.chosen.length > 0 && !active
     : !!template && !active;
 
@@ -381,7 +382,7 @@ function NewInstanceForm({ open, onOpenChange, initial, onBusy, onDone }: {
           )}
 
           {tab === "file" &&
-            (api.isMock ? (
+            (!api.capabilities.pickPaths ? (
               <Empty ill="file" title={t("components.newInstance.appOnlyTitle")} size="pane">
                 {t("components.newInstance.appOnlyText")}
               </Empty>

@@ -77,7 +77,7 @@ export function SettingsPage() {
   const reduced = useReducedMotion();
 
   useEffect(() => {
-    if (!api.isMock) void getVersion().then(setVersion).catch(() => undefined);
+    if (api.capabilities.appVersion) void getVersion().then(setVersion).catch(() => undefined);
   }, []);
 
   // Tabwechsel: klebt die Leiste oben, geht die Seite auf deren Ruhelage zurück, damit der neue Inhalt direkt darunter beginnt.

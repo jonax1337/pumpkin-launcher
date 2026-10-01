@@ -14,7 +14,7 @@ export function useFileDrop(enabled: boolean, onDrop: (paths: string[]) => void)
     handler.current = onDrop;
   });
   useEffect(() => {
-    if (api.isMock || !enabled) return;
+    if (!api.capabilities.fileDrop || !enabled) return;
     const unlisten = getCurrentWebview().onDragDropEvent(({ payload }) => {
       setOver(payload.type === "enter" || payload.type === "over");
       if (payload.type === "drop") handler.current(payload.paths);

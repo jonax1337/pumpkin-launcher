@@ -203,8 +203,8 @@ function ExportDialog({ instance, onExport, onClose }: { instance: Instance; onE
       title={t("components.instance.export")}
       sub={instance.name}
       width={480}
-      footLeft={api.isMock ? t("components.export.appOnly") : undefined}
-      footer={<DialogActions cancel={t("common.cancel")} confirm={{ label: t("components.instance.export"), width: 150, disabled: api.isMock || !entries.data, onClick: submit }} />}
+      footLeft={api.capabilities.exportInstance ? undefined : t("components.export.appOnly")}
+      footer={<DialogActions cancel={t("common.cancel")} confirm={{ label: t("components.instance.export"), width: 150, disabled: !api.capabilities.exportInstance || !entries.data, onClick: submit }} />}
     >
       <Field label={t("components.export.include")} group help={t("components.export.includeHelp")}>
         {entries.error ? (

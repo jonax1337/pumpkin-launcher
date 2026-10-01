@@ -8,7 +8,7 @@ import { useFileDrop } from "@/hooks/useFileDrop";
 import { api } from "@/lib/api";
 import { TYPE_ONE_KEYS } from "@/lib/catalog";
 import { fileName } from "@/lib/format";
-import { isMrpack } from "@/lib/modrinth";
+import { isMrpack } from "@/lib/mods";
 import { newInstanceUrl } from "@/lib/routes";
 import { toastError } from "@/lib/toast";
 import { t, useI18n } from "@/i18n";
@@ -144,7 +144,7 @@ export function useLocalFiles(instance: Instance, active: boolean) {
   );
 
   // Eigene Dateien gibt es nur in der App: der Browser liefert keine Pfade.
-  return { pick: api.isMock ? undefined : () => void pick().catch(toastError), identify, overlay };
+  return { pick: api.capabilities.pickPaths ? () => void pick().catch(toastError) : undefined, identify, overlay };
 }
 
 /** Rückfrage für Zips, die am Inhalt weder eindeutig Ressourcenpaket noch Shader sind. */

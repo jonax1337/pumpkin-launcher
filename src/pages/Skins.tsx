@@ -133,7 +133,7 @@ function Library({ accountId }: { accountId: string | null }) {
         id="skin-lib"
         title={t("ui.nav.library")}
         actions={
-          !api.isMock && (
+          api.capabilities.pickPaths && (
             <Button icon="plus" disabled={add.isPending} onClick={() => void pickFile().catch(toastError)}>
               {t("pages.skins.addSkin")}
             </Button>

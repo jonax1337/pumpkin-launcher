@@ -118,7 +118,7 @@ export function JavaChooser({ name, value, onChange, fallback, disabled }: { nam
           onKeyDown={blurOnEnter}
           placeholder={own ? t("components.java.examplePath", { pfad: JAVA_PROGRAM.example }) : t("components.java.pathTo", { datei: JAVA_PROGRAM.file })}
         />
-        {!api.isMock && <Button disabled={disabled || !own} onClick={() => void browse().catch(toastError)}>{t("components.java.browse")}</Button>}
+        {api.capabilities.pickPaths && <Button disabled={disabled || !own} onClick={() => void browse().catch(toastError)}>{t("components.java.browse")}</Button>}
       </Actions>
     </>
   );
