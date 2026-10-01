@@ -1,9 +1,12 @@
 // Run: node src/lib/modrinth.check.mjs (Node with TypeScript stripping).
 import assert from 'node:assert/strict';
-import { modLoadersFor, pickPackVersion, pickVersion, progressLabel, progressShare, progressShortLabel, removeWithDependencies, undoRemove } from './modrinth.ts';
+import { modLoadersFor, pickPackVersion, pickVersion, removeWithDependencies, undoRemove } from './mods.ts';
+import { progressLabel, progressShare, progressShortLabel } from './progress.ts';
 
 // Entfernen mit Abhängigkeiten: Iris und Mod Menu brauchen Fabric API, Sodium braucht nur Iris.
-const m = (id, requiredBy = []) => ({ id, name: id, source: { type: 'modrinth', projectId: id, versionId: 'v' }, requiredBy, enabled: true });
+const m = (id, requiredBy = []) => ({
+  id, name: id, source: { type: 'modrinth', projectId: id, versionId: 'v' }, requiredBy, enabled: true,
+});
 const mods = [m('iris'), m('sodium', ['iris']), m('api', ['iris', 'menu']), m('menu'), { ...m('local'), source: { type: 'local' } }];
 const r = removeWithDependencies(mods, 'iris');
 assert.deepEqual(r.removed.map((x) => x.id), ['iris', 'sodium']);

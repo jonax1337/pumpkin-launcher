@@ -1,15 +1,15 @@
 // Nur im Browser-Dev-Modus dynamisch geladen (siehe api.ts); im Release-Build nicht enthalten.
 import { t } from "@/i18n";
+import type { Backend } from "./backend";
+import { canvas2d, clone, wait } from "./mock-util";
+import { HOUR } from "./time";
 import type { Screenshot } from "./types";
 
-const HOUR = 3_600_000;
 const BLOCK = 20;
-const wait = (ms = 160) => new Promise((r) => setTimeout(r, ms));
 
 /** Platzhalter im Format 16:9: Himmel, Sonne, Gelände in Blöcken. */
 function paintShot(sky: string, ground: string, seed: number): string {
-  const canvas = Object.assign(document.createElement("canvas"), { width: 320, height: 180 });
-  const ctx = canvas.getContext("2d")!;
+  const [ctx, canvas] = canvas2d(320, 180);
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, 320, 180);
   ctx.fillStyle = "#F6DA98";
@@ -52,16 +52,16 @@ export function createScreenshotMock() {
   };
 
   return {
-    async list(instanceId: string) {
+    async screenshots(instanceId: string) {
       await wait();
-      return structuredClone(shotsOf(instanceId));
+      return clone(shotsOf(instanceId));
     },
-    async remove(instanceId: string, fileName: string) {
+    async screenshotDelete(instanceId: string, fileName: string) {
       await wait();
       const shots = shotsOf(instanceId);
       const index = shots.findIndex((s) => s.fileName === fileName);
       if (index < 0) throw new Error(t("mock.screenshot.notFound", { datei: fileName }));
       shots.splice(index, 1);
     },
-  };
+  } satisfies Partial<Backend>;
 }

@@ -9,7 +9,8 @@ import {
   Switch, TabPanel, Tabs, TextField, Tip, type MenuEntry,
 } from "@/ui";
 import { useBackgroundTask } from "@/hooks/useBackgroundTask";
-import { cancelContent, useContentState } from "@/hooks/useContent";
+import { cancelContent } from "@/hooks/useContent";
+import { useContentState } from "@/store/contentState";
 import { CATALOG_STALE_MS, SEARCH_STALE_MS } from "@/hooks/staleTimes";
 import { useDebounced } from "@/hooks/useDebounced";
 import { useInstances } from "@/hooks/useInstances";
@@ -19,11 +20,13 @@ import { api } from "@/lib/api";
 import { WIDTH } from "@/lib/breakpoints";
 import { TYPE_LABEL_KEYS, TYPE_ONE_KEYS } from "@/lib/catalog";
 import { errorMessage } from "@/lib/errors";
-import { formatCount } from "@/lib/format";
+import { formatCount, formatDownloads } from "@/lib/format";
 import {
-  formatDownloads, installedKey, isPackVersionSupported, modLoadersFor, ownerKey, pickPackVersion, pickVersion, progressLabel, progressShare, progressShortLabel, projectKey, projectOf, SOURCES,
+  installedKey, projectKey, SOURCES,
   type CatalogType, type ContentHit, type ContentProject, type ContentVersion, type SearchIndex, type Source,
-} from "@/lib/modrinth";
+} from "@/lib/content-types";
+import { isPackVersionSupported, modLoadersFor, ownerKey, pickPackVersion, pickVersion, projectOf } from "@/lib/mods";
+import { progressLabel, progressShare, progressShortLabel } from "@/lib/progress";
 import { loaderLine } from "@/components/common";
 import { Description } from "@/components/Description";
 import { openManualDownloads } from "@/components/ManualDownloads";

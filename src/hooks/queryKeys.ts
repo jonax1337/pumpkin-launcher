@@ -1,6 +1,6 @@
 // Alle Query-Schlüssel an einer Stelle (eigene Datei, damit sich die Hook-Module nicht gegenseitig importieren müssen).
 // Wer eine Abfrage auffrischen will, nennt den Schlüssel hier statt eine Zeichenkette zu tippen.
-import type { CatalogType, SearchIndex, Source } from "@/lib/modrinth";
+import type { CatalogType, SearchIndex, Source } from "@/lib/content-types";
 import type { ModLoader } from "@/lib/types";
 
 export const instanceKeys = {
@@ -51,13 +51,18 @@ export const appKeys = {
 /** Modrinth hat eigene Schlüssel, die übrigen Anbieter teilen sich die `catalog-…`-Schlüssel mit der Quelle als Teil. */
 export const catalogKeys = {
   search: (source: Source, type: CatalogType, query: string, mc: string | null, loader: string | null, index: SearchIndex) =>
-    source === "modrinth" ? (["modrinth-search", type, query, mc, loader, index] as const) : (["catalog-search", source, type, query, mc, loader, index] as const),
+    source === "modrinth"
+      ? (["modrinth-search", type, query, mc, loader, index] as const)
+      : (["catalog-search", source, type, query, mc, loader, index] as const),
   /** Modpack-Auswahl im Dialog „Neue Instanz“ (andere Seitenzahl als die Suche in Entdecken). */
   packPicker: (query: string) => ["modrinth-search", "modpack", query, null, null, "pick"] as const,
-  project: (source: Source, projectId: string) => (source === "modrinth" ? (["modrinth-project", projectId] as const) : (["catalog-project", source, projectId] as const)),
+  project: (source: Source, projectId: string) =>
+    source === "modrinth" ? (["modrinth-project", projectId] as const) : (["catalog-project", source, projectId] as const),
   /** Versionen eines Projekts, mit `null` für Minecraft-Version und Loader alle. */
   versions: (source: Source, projectId: string, mc: string | null, loader: string | null) =>
-    source === "modrinth" ? (["modrinth-versions", projectId, mc, loader] as const) : (["catalog-versions", source, projectId, mc, loader] as const),
+    source === "modrinth"
+      ? (["modrinth-versions", projectId, mc, loader] as const)
+      : (["catalog-versions", source, projectId, mc, loader] as const),
   /** Titel und Icons der installierten Modrinth-Inhalte einer Liste. */
   projects: (ids: string[]) => ["modrinth-projects", ids] as const,
   /** Update-Check aller Instanzen (Präfix von `updates`). */

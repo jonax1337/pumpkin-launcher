@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { fileName } from "@/lib/format";
 import { instanceUrl } from "@/lib/routes";
 import type { Datapack, Instance, Server, World, WorldBackup } from "@/lib/types";
-import { trackContent, withTarget, type ContentRun } from "./useContent";
+import { trackContent, withTarget } from "./useContent";
 import { worldKeys } from "./queryKeys";
 
 /** Welten einer Instanz; auch für die Auswahl der Welt beim Hinzufügen eines Datenpakets aus Entdecken. */
@@ -52,50 +52,89 @@ function useWorldChange<V, R>(instanceId: string, change: (v: V) => Promise<R>, 
   });
 }
 
-export const useDeleteBackup = (instanceId: string) => useWorldChange(instanceId, (backup: WorldBackup) => api.worldBackupDelete(instanceId, backup.id));
+export const useDeleteBackup = (instanceId: string) =>
+  useWorldChange(instanceId, (backup: WorldBackup) => api.worldBackupDelete(instanceId, backup.id));
 
 export const useAddDatapacks = (instanceId: string, worldId: string) =>
   useWorldChange(
     instanceId,
     (paths: string[]) => api.datapackAdd(instanceId, worldId, paths),
-    (_, paths) => (paths.length === 1 ? t("hooks.datapack.added.one", { name: fileName(paths[0]) }) : t("hooks.datapack.added.other", { count: paths.length })),
+    (_, paths) =>
+      paths.length === 1
+        ? t("hooks.datapack.added.one", { name: fileName(paths[0]) })
+        : t("hooks.datapack.added.other", { count: paths.length }),
   );
 
 export const useRemoveDatapack = (instanceId: string, worldId: string) =>
-  useWorldChange(instanceId, (pack: Datapack) => api.datapackRemove(instanceId, worldId, pack.id), (_, pack) => t("hooks.datapack.trashed", { name: pack.name }));
+  useWorldChange(
+    instanceId,
+    (pack: Datapack) => api.datapackRemove(instanceId, worldId, pack.id),
+    (_, pack) => t("hooks.datapack.trashed", { name: pack.name }),
+  );
 
 export const useSaveServer = (instanceId: string) =>
   useWorldChange(instanceId, ({ index, server }: { index: number | null; server: Server }) => api.serverSave(instanceId, index, server));
 
 export const useRemoveServer = (instanceId: string) =>
-  useWorldChange(instanceId, ({ index }: { index: number; server: Server }) => api.serverRemove(instanceId, index), (_, { server }) => t("hooks.world.serverRemoved", { name: server.name }));
+  useWorldChange(
+    instanceId,
+    ({ index }: { index: number; server: Server }) => api.serverRemove(instanceId, index),
+    (_, { server }) => t("hooks.world.serverRemoved", { name: server.name }),
+  );
 
 /** Ziel eines Welt-Vorgangs im Inhalts-Store: die Zeile der Welt zeigt dann ihren Fortschritt. */
 export const worldTarget = (instanceId: string, worldId: string) => `world:${instanceId}:${worldId}`;
 
-/** Sichern, Löschen (sichert vorher) und Wiederherstellen laufen wie Inhalts-Vorgänge: Fortschritt im Aufgaben-Menü, ein Vorgang zur Zeit. */
+/** Wie ein Welt-Vorgang im Aufgaben-Menü heißt, während er läuft und danach. */
+type JobLabels = { label: string; doneLabel: string };
+
+/**
+ * Sichern, Löschen (sichert vorher) und Wiederherstellen laufen wie Inhalts-Vorgänge:
+ * Fortschritt im Aufgaben-Menü, ein Vorgang zur Zeit.
+ */
 export function useWorldJobs(instance: Instance) {
   const qc = useQueryClient();
-  const track = async <R,>(run: ContentRun<R>) => {
-    const result = await trackContent(qc, run, (_, label) => ({ label, sub: instance.name, to: instanceUrl(instance.id, "worlds") }));
+  const job = async <R,>(target: string, labels: JobLabels, run: (operationId: string) => Promise<R>) => {
+    const tracked = withTarget(target, run, labels.label, { doneLabel: labels.doneLabel });
+    const result = await trackContent(qc, tracked, (_, label) => ({ label, sub: instance.name, to: instanceUrl(instance.id, "worlds") }));
     if (result == null) throw new Error(t("hooks.world.operationRunning"));
     return result;
   };
-  const backupLabel = (world: World) => t("hooks.world.backupTask", { name: world.name });
   const backup = useWorldChange(
     instance.id,
-    (world: World) => track(withTarget(worldTarget(instance.id, world.id), (op) => api.worldBackup(instance.id, world.id, op), backupLabel(world), { doneLabel: t("hooks.world.backupTaskDone", { name: world.name }) })),
+    (world: World) => {
+      const labels = {
+        label: t("hooks.world.backupTask", { name: world.name }),
+        doneLabel: t("hooks.world.backupTaskDone", { name: world.name }),
+      };
+      return job(worldTarget(instance.id, world.id), labels, (op) => api.worldBackup(instance.id, world.id, op));
+    },
     (_, world) => t("hooks.world.backupTaskDone", { name: world.name }),
   );
   const remove = useWorldChange(
     instance.id,
-    (world: World) => track(withTarget(worldTarget(instance.id, world.id), (op) => api.worldDelete(instance.id, world.id, op), t("hooks.world.deleteTask", { name: world.name }), { doneLabel: t("hooks.world.deleteTaskDone", { name: world.name }) })),
+    (world: World) => {
+      const labels = {
+        label: t("hooks.world.deleteTask", { name: world.name }),
+        doneLabel: t("hooks.world.deleteTaskDone", { name: world.name }),
+      };
+      return job(worldTarget(instance.id, world.id), labels, (op) => api.worldDelete(instance.id, world.id, op));
+    },
     (_, world) => t("hooks.world.deletedHint", { name: world.name }),
   );
   const restore = useWorldChange(
     instance.id,
-    (backup: WorldBackup) => track(withTarget(`restore:${backup.id}`, () => api.worldRestore(instance.id, backup.id), t("hooks.world.restoreTask", { name: backup.world }), { doneLabel: t("hooks.world.restoreTaskDone", { name: backup.world }) })),
-    (world, backup) => (world.id === backup.world ? t("hooks.world.restored", { name: world.name }) : t("hooks.world.restoredInFolder", { name: world.name, folder: world.id })),
+    (backup: WorldBackup) => {
+      const labels = {
+        label: t("hooks.world.restoreTask", { name: backup.world }),
+        doneLabel: t("hooks.world.restoreTaskDone", { name: backup.world }),
+      };
+      return job(`restore:${backup.id}`, labels, () => api.worldRestore(instance.id, backup.id));
+    },
+    (world, backup) =>
+      world.id === backup.world
+        ? t("hooks.world.restored", { name: world.name })
+        : t("hooks.world.restoredInFolder", { name: world.name, folder: world.id }),
   );
   return { backup, remove, restore };
 }

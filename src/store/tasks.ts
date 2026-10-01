@@ -14,6 +14,9 @@ export interface DoneTask {
   to?: string;
 }
 
+/** So viele abgeschlossene Aufgaben merkt sich das Menü; die ältesten fallen heraus. */
+const MAX_HISTORY = 12;
+
 interface TasksState {
   history: DoneTask[];
   push: (task: Omit<DoneTask, "id" | "at">) => void;
@@ -24,6 +27,6 @@ let next = 0;
 
 export const useTasks = create<TasksState>()((set) => ({
   history: [],
-  push: (task) => set((s) => ({ history: [{ ...task, id: `t${next++}`, at: Date.now() }, ...s.history].slice(0, 12) })),
+  push: (task) => set((s) => ({ history: [{ ...task, id: `t${next++}`, at: Date.now() }, ...s.history].slice(0, MAX_HISTORY) })),
   clear: () => set({ history: [] }),
 }));

@@ -1,6 +1,7 @@
 import type { Update } from "@tauri-apps/plugin-updater";
 import { Description } from "@/components/Description";
-import { installAppUpdate, useAppUpdate, useUpdateRun, waitForIdle } from "@/hooks/useAppUpdate";
+import { installAppUpdate, useAppUpdate, waitForIdle } from "@/hooks/useAppUpdate";
+import { useUpdateRun } from "@/store/updateRun";
 import { Actions, Button, Count, ErrorBox, FormRow, Hint, JobProgress } from "@/ui";
 import { useI18n } from "@/i18n";
 

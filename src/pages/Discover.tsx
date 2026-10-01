@@ -7,7 +7,7 @@ import {
   AddToInstanceMenu, AddToWorldMenu, ContentDetail, ContentResults, PackActions, PackInstallButton, SEARCH_PLACEHOLDER, TYPE_LABELS,
 } from "@/components/ContentBrowser";
 import { useVersions } from "@/hooks/useInstances";
-import { SOURCES, type CatalogType, type ContentHit, type SearchIndex, type Source } from "@/lib/modrinth";
+import { SOURCES, type CatalogType, type ContentHit, type SearchIndex, type Source } from "@/lib/content-types";
 import { WIDTH } from "@/lib/breakpoints";
 import { discoverParams, readDiscoverParams } from "@/lib/routes";
 import { ALL_LOADERS, LOADER_LABELS } from "@/lib/types";

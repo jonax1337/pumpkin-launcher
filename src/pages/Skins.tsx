@@ -4,7 +4,7 @@ import { useI18n } from "@/i18n";
 import { NameDialog } from "@/components/NameDialog";
 import { QueryList } from "@/components/QueryList";
 import { SkelList } from "@/components/SkelList";
-import { startMsLogin } from "@/components/PlayerNames";
+import { startMsLogin } from "@/store/accountUi";
 import { useConfirmTarget } from "@/hooks/useConfirmTarget";
 import {
   useAddSkin, useDeleteSkin, useResetSkin, useSaveActiveSkin, useSetCape, useSkinLibrary, useSkinProfile, useSkinTexture, useUpdateSkin,
@@ -133,7 +133,7 @@ function Library({ accountId }: { accountId: string | null }) {
         id="skin-lib"
         title={t("ui.nav.library")}
         actions={
-          !api.isMock && (
+          api.capabilities.pickPaths && (
             <Button icon="plus" disabled={add.isPending} onClick={() => void pickFile().catch(toastError)}>
               {t("pages.skins.addSkin")}
             </Button>

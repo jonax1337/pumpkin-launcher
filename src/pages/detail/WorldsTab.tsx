@@ -7,9 +7,9 @@ import {
 import { AddContentSheet } from "@/components/ContentBrowser";
 import { QueryList } from "@/components/QueryList";
 import { useConfirmTarget } from "@/hooks/useConfirmTarget";
-import { useContentState } from "@/hooks/useContent";
+import { useContentState } from "@/store/contentState";
 import { useFileDrop } from "@/hooks/useFileDrop";
-import { usePlay } from "@/hooks/useInstances";
+import { usePlay } from "@/hooks/usePlay";
 import {
   useAddDatapacks, useDatapacks, useDeleteBackup, useRemoveDatapack, useWorldBackups, useWorldJobs, useWorldQuickPlay, useWorlds, worldTarget,
 } from "@/hooks/useWorlds";
@@ -17,7 +17,7 @@ import { api } from "@/lib/api";
 import { TYPE_LABEL_KEYS } from "@/lib/catalog";
 import { formatDateTime, formatSize, relativeTime } from "@/lib/format";
 import { openLocalPath } from "@/lib/links";
-import { progressShare } from "@/lib/modrinth";
+import { progressShare } from "@/lib/progress";
 import { toastError } from "@/lib/toast";
 import { t, useI18n } from "@/i18n";
 import type { Instance, QuickPlay, World, WorldBackup } from "@/lib/types";
@@ -163,7 +163,7 @@ function DatapacksDialog({ instance, world, busy, onSearch, onClose }: { instanc
     <Dialog open onOpenChange={(o) => !o && onClose()} title={t(TYPE_LABEL_KEYS.datapack)} sub={world.name} width={560} footer={<DialogActions cancel={t("common.close")} />}>
       <Actions className="mb-3">
         {/* Eigene Dateien gibt es nur in der App: der Browser liefert keine Pfade. */}
-        {!api.isMock && (
+        {api.capabilities.pickPaths && (
           <GuardedButton size="s" icon="ul" blocked={busy} disabled={add.isPending} onClick={() => void pick().catch(toastError)}>
             {t("detail.content.addFile")}
           </GuardedButton>

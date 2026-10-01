@@ -4,7 +4,8 @@ import { Actions, Button, CardGrid, Disclosure, FormRow, FormSection, Hint, Menu
 import { JavaChooser, MemoryChooser, MemoryHelp } from "@/components/common";
 import { isBusy, isGameLive, useInstallPercent, usePhase } from "@/components/game";
 import { askDelete, useGroupMenu } from "@/components/instance";
-import { useInstall, useUpdateInstance } from "@/hooks/useInstances";
+import { useUpdateInstance } from "@/hooks/useInstances";
+import { useInstall } from "@/hooks/usePlay";
 import { blurOnEnter } from "@/lib/dom";
 import { LOADER_LABELS, type GameWindow, type Instance } from "@/lib/types";
 import { cn } from "@/lib/utils";

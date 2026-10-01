@@ -79,7 +79,8 @@ const BYTES_PER_UNIT = 1024;
 export function formatSize(bytes: number): string {
   let n = bytes, unit = 0;
   for (; n >= BYTES_PER_UNIT && unit < SIZE_UNITS.length - 1; unit++) n /= BYTES_PER_UNIT;
-  return `${n.toLocaleString(currentLanguage(), { maximumFractionDigits: unit && n < 100 ? 1 : 0 })} ${t(`format.size.${SIZE_UNITS[unit]}`)}`;
+  const digits = unit && n < 100 ? 1 : 0;
+  return `${n.toLocaleString(currentLanguage(), { maximumFractionDigits: digits })} ${t(`format.size.${SIZE_UNITS[unit]}`)}`;
 }
 
 /** Tausender mit schmalem Leerzeichen („3 480“), wie im Mockup; das englische Komma bleibt. */
@@ -88,6 +89,12 @@ export const formatCount = (n: number) => {
   const s = n.toLocaleString(lang);
   return lang === "de" ? s.replace(/\./g, " ") : s;
 };
+
+/** Downloadzahl kompakt („1,2 Mio.“). */
+export const formatDownloads = (n: number) => new Intl.NumberFormat(currentLanguage(), { notation: "compact" }).format(n);
+
+/** „Update“ bzw. „Updates“ neben einer Anzahl. */
+export const updatesLabel = (n: number) => t(n === 1 ? "common.update" : "common.updates");
 
 export function formatMemory(mb: number | null): string {
   if (mb == null) return t("format.memoryDefault");

@@ -3,11 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { create } from "zustand";
 import { t } from "@/i18n/core";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
+import { ACTION_TOAST_MS } from "@/lib/toast";
 import { isGameActive, useGame } from "@/store/game";
+import { useUpdateRun } from "@/store/updateRun";
 import { appKeys } from "./queryKeys";
 import { anyTaskRunning, subscribeRunningTasks } from "./useRunningTasks";
 
@@ -44,18 +45,11 @@ export function useUpdateCheckOnStart() {
 function announceUpdate(version: string, show: () => void) {
   toast.info(t("hooks.update.availableToast", { version }), {
     id: "app-update",
-    duration: 15_000,
+    duration: ACTION_TOAST_MS,
     description: t("hooks.update.availableHint"),
     action: { label: t("components.content.viewAction"), onClick: show },
   });
 }
-
-/**
- * Ablauf „Installieren und neu starten“; liegt außerhalb der Seite, damit er Seitenwechsel übersteht.
- * `wait`: geladen, aber Minecraft oder eine Aufgabe läuft noch. `ready`: frei, Neustart wartet auf einen Klick.
- * `p`: Anteil des Downloads, null = unbekannt.
- */
-export const useUpdateRun = create<{ phase: "idle" | "download" | "wait" | "ready" | "install"; p: number | null }>(() => ({ phase: "idle", p: null }));
 
 /** Hinweis, während der Neustart auf Spiel und Aufgaben wartet; live berechnet, kein fester Text. */
 export const waitForIdle = () => t("hooks.update.waitForIdle");

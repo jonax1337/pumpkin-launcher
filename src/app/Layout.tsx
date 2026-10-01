@@ -6,13 +6,15 @@ import { InstanceDialogs } from "@/components/instance";
 import { ShareLogDialog } from "@/components/support";
 import { ManualDownloads } from "@/components/ManualDownloads";
 import { useUpdateCheckOnStart } from "@/hooks/useAppUpdate";
-import { useCancelInstall, useGameEvents, useInstances } from "@/hooks/useInstances";
+import { useGameEvents } from "@/hooks/useGameEvents";
+import { useInstances } from "@/hooks/useInstances";
+import { useCancelInstall } from "@/hooks/usePlay";
 import { cancelContent } from "@/hooks/useContent";
 import { useOnline } from "@/hooks/useOnline";
 import { useI18n } from "@/i18n";
 import { useRunningTasks } from "@/hooks/useRunningTasks";
 import { api } from "@/lib/api";
-import { progressLabel, progressShare } from "@/lib/modrinth";
+import { progressLabel, progressShare } from "@/lib/progress";
 import { platform } from "@/lib/platform";
 import { newInstanceUrl } from "@/lib/routes";
 import { installStepLabel } from "@/lib/types";
@@ -103,7 +105,7 @@ function usePageTitle(pathname: string) {
     : t("ui.pageTitle.notFound");
   useEffect(() => {
     document.title = `${page} · ${APP}`;
-    if (!api.isMock) void getCurrentWindow().setTitle(document.title).catch(console.error);
+    if (api.capabilities.nativeWindow) void getCurrentWindow().setTitle(document.title).catch(console.error);
   }, [page]);
 }
 
@@ -268,7 +270,7 @@ function TasksButton() {
 /** Fensterknöpfe des rahmenlosen Fensters (nur in der App, im Browser nicht nötig). Sonderform: volle Leistenhöhe, bündig am Rand. */
 function WindowButtons() {
   const { t } = useI18n();
-  if (api.isMock) return null;
+  if (!api.capabilities.nativeWindow) return null;
   const win = getCurrentWindow();
   return (
     <div className="win">

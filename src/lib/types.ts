@@ -17,7 +17,7 @@ export interface Mod {
   /** SHA-1 der JAR, Schlüssel im globalen Mod-Cache. */
   sha1: string | null;
   enabled: boolean;
-  /** Fehlt bei alten Einträgen nie: das Backend liefert dann "mod". */
+  /** Art des Eintrags (bestimmt den Zielordner); in alten Dateien ohne Angabe liefert das Backend "mod". */
   kind: ModKind;
   /** Modrinth-Projekt-IDs der direkt installierten Mods, die diese mitgebracht haben. Leer = vom Nutzer. */
   requiredBy: string[];
@@ -117,7 +117,7 @@ export interface NewInstance {
 /** Feste Reihenfolge überall (Dialog „Neue Instanz“, Filter). */
 export const ALL_LOADERS: ModLoader[] = ["vanilla", "fabric", "quilt", "forge", "neoforge"];
 
-/** Loader-Namen sind Marken; „datapack“ übersetzt die Oberfläche am Verwendungsort (siehe `loaderLine`-Verbraucher). */
+/** Loader-Namen sind Marken und bleiben unübersetzt. */
 export const LOADER_LABELS: Record<ModLoader, string> = {
   vanilla: "Vanilla",
   fabric: "Fabric",

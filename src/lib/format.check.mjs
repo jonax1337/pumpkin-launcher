@@ -1,6 +1,8 @@
 // Run: node src/lib/format.check.mjs (Node with TypeScript stripping).
 import assert from 'node:assert/strict';
-import { autoMemoryMb, dayLabel, dayStart, formatCount, formatDate, formatPlaytime, formatSize, maxMemoryMb, memoryTooHigh } from './format.ts';
+import {
+  autoMemoryMb, dayLabel, dayStart, formatCount, formatDate, formatPlaytime, formatSize, maxMemoryMb, memoryTooHigh,
+} from './format.ts';
 import { setCurrentLanguage } from '../i18n/core.ts';
 
 assert.equal(autoMemoryMb(16384), 8192);

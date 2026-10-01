@@ -38,15 +38,21 @@ interface SettingsState {
   syncMicrosoft: (ids: string[]) => void;
 }
 
-const defaults = { javaPath: "", memoryMb: null };
+/** Die Werte, auf die „Zurücksetzen“ in den Einstellungen Java und Arbeitsspeicher stellt. */
+const RESETTABLE_DEFAULTS = { javaPath: "", memoryMb: null };
+
+const DEFAULT_SETTINGS = {
+  ...RESETTABLE_DEFAULTS,
+  active: null,
+  offlineAccounts: [],
+  pxSize: "m",
+  motion: true,
+  pumpkin: "auto",
+  language: "system",
+} satisfies Partial<SettingsState>;
 
 /** Bis Version 2 der feste Standard für den Arbeitsspeicher; seitdem bedeutet `null` „automatisch“. */
 const LEGACY_DEFAULT_MEMORY_MB = 4096;
-
-function withoutClientId(old: unknown) {
-  const { msClientId: _dropped, ...rest } = old as Record<string, unknown>;
-  return rest;
-}
 
 /** Wie im Spiel und im Backend (`auth::offline_account`). */
 export const isValidPlayerName = (name: string) => /^[A-Za-z0-9_]{3,16}$/.test(name);
@@ -56,18 +62,53 @@ export const accountName = (a: ActiveAccount | null) => (a ? (a.kind === "offlin
 
 const offline = (name: string | undefined): ActiveAccount | null => (name ? { kind: "offline", name } : null);
 
+// ---------- Migration gespeicherter Einstellungen ----------
+
+type Stored = Record<string, unknown>;
+
+/** Version des gespeicherten Formats; jede Änderung braucht einen Schritt in `migrate`. */
+const SETTINGS_VERSION = 6;
+
+/** v1 kannte nur einen Offline-Namen, v2 eine Liste mit `offlineName` als aktivem Namen; ab v3 gilt `active` mit `offlineAccounts`. */
+function migrateAccounts(old: Stored, version: number): Stored {
+  const prev = old as { javaPath?: string; memoryMb?: number; offlineName?: string; offlineAccounts?: string[] };
+  const name = prev.offlineName && isValidPlayerName(prev.offlineName) ? prev.offlineName : "";
+  const accounts = version >= 2 ? (prev.offlineAccounts ?? []) : name ? [name] : [];
+  return {
+    javaPath: prev.javaPath ?? DEFAULT_SETTINGS.javaPath,
+    memoryMb: prev.memoryMb == null || prev.memoryMb === LEGACY_DEFAULT_MEMORY_MB ? DEFAULT_SETTINGS.memoryMb : prev.memoryMb,
+    active: offline(name),
+    offlineAccounts: accounts,
+  };
+}
+
+/** v4 hatte noch eine eigene Microsoft-Kennung (`msClientId`); der Launcher bringt seine mit. */
+function withoutClientId(old: Stored): Stored {
+  const { msClientId: _dropped, ...rest } = old;
+  return rest;
+}
+
+/**
+ * Hebt gespeicherte Einstellungen Schritt für Schritt auf die aktuelle Version. Felder, die ein Schritt nicht
+ * kennt, ergänzt `persist` aus dem Anfangszustand, deshalb braucht nur ein Schritt zu ändern, was sich wandelt.
+ */
+function migrate(persisted: unknown, version: number): SettingsState {
+  let state = persisted as Stored;
+  if (version < 3) state = migrateAccounts(state, version);
+  // v3 hatte noch die Seitenleiste; Pixelgröße und Bewegung kamen mit Pixelkino.
+  if (version < 4) state = { ...state, pxSize: DEFAULT_SETTINGS.pxSize, motion: DEFAULT_SETTINGS.motion };
+  if (version < 5) state = withoutClientId(state);
+  // v5 kannte noch keine Sprachwahl; „system“ (Browsersprache folgen) ist der neue Standard.
+  if (version < 6) state = { ...state, language: DEFAULT_SETTINGS.language };
+  return state as unknown as SettingsState;
+}
+
 export const useSettings = create<SettingsState>()(
   persist(
     (set) => ({
-      ...defaults,
-      active: null,
-      offlineAccounts: [],
-      pxSize: "m",
-      motion: true,
-      pumpkin: "auto",
-      language: "system",
+      ...DEFAULT_SETTINGS,
       set: (patch) => set(patch),
-      reset: () => set(defaults),
+      reset: () => set(RESETTABLE_DEFAULTS),
       addAccount: (name) =>
         set((s) => ({
           offlineAccounts: s.offlineAccounts.includes(name) ? s.offlineAccounts : [...s.offlineAccounts, name],
@@ -85,29 +126,6 @@ export const useSettings = create<SettingsState>()(
       syncMicrosoft: (ids) =>
         set((s) => (s.active?.kind === "microsoft" && !ids.includes(s.active.id) ? { active: offline(s.offlineAccounts[0]) } : {})),
     }),
-    {
-      name: "launcher-settings",
-      version: 6,
-      migrate: (old, version) => {
-        // v5 kannte noch keine Sprachwahl; „system“ (Browsersprache folgen) ist der neue Standard.
-        if (version === 5) return { ...(old as Record<string, unknown>), language: "system" } as unknown as SettingsState;
-        // v4 hatte noch eine eigene Microsoft-Kennung (`msClientId`); der Launcher bringt seine mit.
-        if (version === 4) return withoutClientId(old) as unknown as SettingsState;
-        // v3 hatte noch die Seitenleiste; Pixelgröße und Bewegung kamen mit Pixelkino.
-        if (version === 3) return { ...withoutClientId(old), pxSize: "m", motion: true } as unknown as SettingsState;
-        // v1 kannte nur einen Offline-Namen, v2 eine Liste mit `offlineName` als aktivem Namen.
-        const prev = old as { javaPath?: string; memoryMb?: number; offlineName?: string; offlineAccounts?: string[] };
-        const name = prev.offlineName && isValidPlayerName(prev.offlineName) ? prev.offlineName : "";
-        const accounts = version >= 2 ? (prev.offlineAccounts ?? []) : name ? [name] : [];
-        return {
-          javaPath: prev.javaPath ?? "",
-          memoryMb: prev.memoryMb == null || prev.memoryMb === LEGACY_DEFAULT_MEMORY_MB ? null : prev.memoryMb,
-          active: offline(name),
-          offlineAccounts: accounts,
-          pxSize: "m",
-          motion: true,
-        } as unknown as SettingsState;
-      },
-    },
+    { name: "launcher-settings", version: SETTINGS_VERSION, migrate },
   ),
 );

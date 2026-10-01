@@ -3,11 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { t } from "@/i18n";
 import { api } from "@/lib/api";
+import { isCancelled } from "@/lib/errors";
 import { MINUTE } from "@/lib/time";
 import type { ForeignInstance, Instance } from "@/lib/types";
 import { useContentInstall, withTarget } from "./useContent";
 import { importKeys } from "./queryKeys";
-import { isCancelled } from "./useInstances";
 
 /** Instanzen anderer Launcher an den Standardorten; die Suche liest nur die Platte. */
 export function useForeignInstances(enabled = true) {
@@ -46,6 +46,15 @@ export type ForeignSelection = ReturnType<typeof useForeignSelection>;
 /** Ziel des Imports im Content-Zustand, damit die Zeile der Instanz ihren Fortschritt zeigt. */
 export const importTarget = (source: ForeignInstance) => `import:${source.path}`;
 
+/** Der Import einer Instanz als abbrechbarer Vorgang im Aufgaben-Menü. */
+const importTask = (source: ForeignInstance) =>
+  withTarget(
+    importTarget(source),
+    (op) => api.importInstance(source, op),
+    t("hooks.import.instanceTask", { name: source.name }),
+    { cancellable: true, doneLabel: t("hooks.import.instanceTaskDone", { name: source.name }) },
+  );
+
 /**
  * Importiert Instanzen nacheinander (das Backend erlaubt nur einen Vorgang zur Zeit); jede erscheint mit Fortschritt
  * im Aufgaben-Menü. Wird eine abgebrochen, im Dialog oder im Aufgaben-Menü, entfällt der Rest. `run` liefert die zuletzt importierte.
@@ -60,9 +69,8 @@ export function useImportInstances() {
     let last: Instance | null = null;
     try {
       for (const source of sources) {
-        const task = withTarget(importTarget(source), (op) => api.importInstance(source, op), t("hooks.import.instanceTask", { name: source.name }), { cancellable: true, doneLabel: t("hooks.import.instanceTaskDone", { name: source.name }) });
         try {
-          last = (await install.mutateAsync(task)) ?? last;
+          last = (await install.mutateAsync(importTask(source))) ?? last;
         } catch (err) {
           // Andere Fehler meldet der zentrale Toast und das Aufgaben-Menü; die übrigen Instanzen laufen weiter.
           if (isCancelled(err)) break;

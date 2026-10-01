@@ -2,11 +2,11 @@ import { toast } from "sonner";
 import { loaderLine } from "@/components/common";
 import { SkelList } from "@/components/SkelList";
 import { Button, Chip, Choice, Empty, ErrorBox, Field, Glyph, JobProgress } from "@/ui";
-import { useContentState } from "@/hooks/useContent";
+import { useContentState } from "@/store/contentState";
 import { importTarget, type ForeignSelection } from "@/hooks/useImport";
 import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
-import { progressShare, progressShortLabel } from "@/lib/modrinth";
+import { progressShare, progressShortLabel } from "@/lib/progress";
 import { FOREIGN_LAUNCHER_LABELS, FOREIGN_LAUNCHERS, type ForeignInstance } from "@/lib/types";
 
 /** Import aus anderen Launchern im Dialog „Neue Instanz“: Instanzen nach Launcher gruppiert, Fortschritt in der Zeile. */
@@ -57,7 +57,7 @@ export function ImportPane({ selection, busy }: { selection: ForeignSelection; b
           </Field>
         ))
       )}
-      <Button variant="ghost" size="s" icon="folder" bleed="start" className="mt-2.5" disabled={api.isMock || busy} onClick={() => void chooseFolder()}>
+      <Button variant="ghost" size="s" icon="folder" bleed="start" className="mt-2.5" disabled={!api.capabilities.pickPaths || busy} onClick={() => void chooseFolder()}>
         {t("components.import.chooseFolder")}
       </Button>
     </>

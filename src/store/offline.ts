@@ -12,7 +12,10 @@ export const useOfflineAllowed = create<{ allowed: boolean }>(() => ({ allowed: 
 export function refreshOfflineAllowed() {
   return api.offlineAllowed().then(
     (allowed) => useOfflineAllowed.setState({ allowed }),
-    () => useOfflineAllowed.setState({ allowed: false }),
+    (err: unknown) => {
+      console.warn("Abfrage „Offline erlaubt“ fehlgeschlagen", err);
+      useOfflineAllowed.setState({ allowed: false });
+    },
   );
 }
 
@@ -26,3 +29,7 @@ export function useUsableAccount(): ActiveAccount | null {
   const allowed = useOfflineAllowed((s) => s.allowed);
   return usableAccount(active, allowed);
 }
+
+/** Wie `useUsableAccount`, aber außerhalb von React gelesen (Mutationen, Ereignisse). */
+export const currentUsableAccount = (): ActiveAccount | null =>
+  usableAccount(useSettings.getState().active, useOfflineAllowed.getState().allowed);

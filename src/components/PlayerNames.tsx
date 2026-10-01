@@ -1,8 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
-import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { create } from "zustand";
 import { t, useI18n } from "@/i18n";
 import { StopDialog } from "@/components/game";
 import { PlayerNameField } from "@/components/PlayerNameField";
@@ -10,57 +9,17 @@ import { accountKeys } from "@/hooks/queryKeys";
 import { api } from "@/lib/api";
 import { WIDTH } from "@/lib/breakpoints";
 import { copyWithToast } from "@/lib/clipboard";
-import { errorMessage } from "@/lib/errors";
 import { openPage } from "@/lib/links";
 import { MINUTE } from "@/lib/time";
 import type { MsLoginStart } from "@/lib/types";
 import {
   Actions, Avatar, BarButton, Button, Dialog, DialogActions, Empty, ErrorBox, Hint, Icon, List, ListRow, Menu, Progress, RowTitle, Skel, type MenuEntry,
 } from "@/ui";
+import { closeMsLogin, openAddOffline, startMsLogin, useAccountUi, useMsLogin } from "@/store/accountUi";
 import { refreshOfflineAllowed, useOfflineAllowed, useUsableAccount } from "@/store/offline";
 import { accountName, isValidPlayerName, useSettings, type ActiveAccount } from "@/store/settings";
 
 // ---------- Microsoft-Anmeldung (ein Dialog für Kontomenü, Einstellungen und Onboarding) ----------
-
-type LoginState = { step: "idle" } | { step: "starting" } | { step: "code"; info: MsLoginStart } | { step: "done"; name: string } | { step: "error"; message: string };
-const useMsLogin = create<LoginState>(() => ({ step: "idle" }));
-// Jeder Versuch bekommt eine Nummer; Antworten eines abgebrochenen Versuchs werden verworfen.
-let attempt = 0;
-
-/** `method: "device"` erzwingt den Gerätecode (Knopf „Stattdessen Code verwenden“); sonst Anmeldung im Browser. Außerhalb React, deshalb Modul-`t`. */
-export async function startMsLogin(qc: QueryClient, method?: "device") {
-  const mine = ++attempt;
-  useMsLogin.setState({ step: "starting" }, true);
-  try {
-    const info = await api.msLoginStart(method);
-    if (mine !== attempt) return;
-    useMsLogin.setState({ step: "code", info }, true);
-    void api.openExternal(info.verificationUri).catch(() => undefined);
-    const account = await api.msLoginFinish();
-    if (mine !== attempt) return;
-    useSettings.getState().selectAccount({ kind: "microsoft", id: account.id, username: account.username });
-    void qc.invalidateQueries({ queryKey: accountKeys.microsoft });
-    // Aus „Spielen“ ohne Namen gekommen: Dialog zu und direkt weiter (der Spielen-Knopf zeigt den Fortschritt).
-    const then = useAccountUi.getState().then;
-    if (then) {
-      useAccountUi.setState({ then: null });
-      useMsLogin.setState({ step: "idle" }, true);
-      toast.success(t("components.account.loggedInAs", { name: account.username }));
-      return then.run();
-    }
-    useMsLogin.setState({ step: "done", name: account.username }, true);
-  } catch (err) {
-    if (mine === attempt) useMsLogin.setState({ step: "error", message: errorMessage(err) }, true);
-  }
-}
-
-function closeMsLogin() {
-  const running = ["starting", "code"].includes(useMsLogin.getState().step);
-  attempt++;
-  useAccountUi.setState({ then: null });
-  useMsLogin.setState({ step: "idle" }, true);
-  if (running) void api.msLoginCancel().catch(() => undefined);
-}
 
 /** So viele ganze Minuten läuft die Anmeldung noch, mindestens eine. */
 const validMinutes = (info: MsLoginStart) => Math.max(1, Math.round(info.expiresIn / 60));
@@ -160,24 +119,6 @@ function MsLoginDialog() {
 }
 
 // ---------- Konten ----------
-
-/** Was nach dem Speichern des Namens passiert (z. B. „Spielen“ fortsetzen); `label` nennt die Instanz. */
-type AfterName = { label: string; run: () => void };
-/** Offene Kontenteile: Menü in der Fensterleiste und Dialog „Spielername hinzufügen“. */
-const useAccountUi = create<{ menu: boolean; offline: boolean; then: AfterName | null }>(() => ({ menu: false, offline: false, then: null }));
-/** Spielername hinzufügen; ohne Erlaubnis des Backends (`offline_allowed`) gibt es den Dialog nicht. */
-export const openAddOffline = () => {
-  if (useOfflineAllowed.getState().allowed) useAccountUi.setState({ offline: true, menu: false, then: null });
-};
-/**
- * „Spielen“ ohne Konto: Dialog für den Namen öffnen, danach geht es mit `then` weiter.
- * Ist Offline nicht erlaubt (offizieller Build ohne Microsoft-Konto), startet stattdessen die Anmeldung.
- */
-export const askPlayerName = (then: AfterName, qc: QueryClient) => {
-  if (useOfflineAllowed.getState().allowed) return useAccountUi.setState({ offline: true, menu: false, then });
-  useAccountUi.setState({ menu: false, then });
-  void startMsLogin(qc);
-};
 
 /** Konten ändern sich nur durch Anmelden und Abmelden hier; der Abgleich mit Microsoft eilt nicht. */
 const ACCOUNTS_STALE_MS = 5 * MINUTE;

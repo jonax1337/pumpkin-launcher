@@ -16,7 +16,8 @@ assert.equal(readNewInstanceStart(params('/instances')), null);
 assert.equal(discoverUrl(), '/discover');
 assert.equal(discoverUrl({ tab: 'mod' }), '/discover?tab=mod');
 assert.equal(discoverUrl({ tab: 'modpack', source: 'modrinth', project: 'abc' }), '/discover?tab=modpack&projekt=abc');
-assert.deepEqual(readDiscoverParams(params(discoverUrl({ tab: 'modpack', source: 'ftb', project: 'abc' }))), { tab: 'modpack', source: 'ftb', project: 'abc' });
+const ftbPack = { tab: 'modpack', source: 'ftb', project: 'abc' };
+assert.deepEqual(readDiscoverParams(params(discoverUrl(ftbPack))), ftbPack);
 
 // Instanz: unbekannte Tabs fallen auf die Inhalte zurück.
 assert.equal(instanceUrl('x1'), '/instances/x1');

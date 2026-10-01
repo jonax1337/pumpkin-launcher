@@ -1,6 +1,6 @@
 // Adressen und Query-Parameter der Seiten an einer Stelle: Absender (Menüs, Toasts, Tastenkürzel, Weiterleitungen)
 // und Empfänger (Bibliothek, Entdecken, Instanz) können so nicht auseinanderlaufen.
-import type { CatalogType, Source } from "./modrinth";
+import type { CatalogType, Source } from "./content-types";
 
 // ---------- Bibliothek: Dialog „Neue Instanz“ ----------
 
@@ -64,4 +64,5 @@ export const instanceUrl = (id: string, tab?: InstanceTab) => (tab ? `/instances
 export const instanceTabParams = (tab: InstanceTab) => ({ tab });
 
 /** Der Tab der Adresse; unbekannt oder fehlend = Inhalte. */
-export const readInstanceTab = (params: URLSearchParams): InstanceTab => INSTANCE_TABS.find((tab) => tab === params.get("tab")) ?? "content";
+export const readInstanceTab = (params: URLSearchParams): InstanceTab =>
+  INSTANCE_TABS.find((tab) => tab === params.get("tab")) ?? "content";

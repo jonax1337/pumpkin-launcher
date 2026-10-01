@@ -8,14 +8,16 @@ import {
 import { IRIS_PROJECT_ID } from "@/components/ContentBrowser";
 import { useAnnouncement } from "@/hooks/useAnnouncement";
 import { useBackgroundTask } from "@/hooks/useBackgroundTask";
-import { useContentState, useProjects } from "@/hooks/useContent";
+import { useProjects } from "@/hooks/useContent";
+import { useContentState } from "@/store/contentState";
 import { instanceKeys } from "@/hooks/queryKeys";
 import { useUpdateMods } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
 import { WIDTH } from "@/lib/breakpoints";
 import { KIND_LABEL_KEYS, TYPE_ONE_KEYS } from "@/lib/catalog";
 import { openPage, projectUrl } from "@/lib/links";
-import { ownerKey, projectOf, removeWithDependencies, undoRemove, type ModUpdate } from "@/lib/modrinth";
+import type { ModUpdate } from "@/lib/content-types";
+import { ownerKey, projectOf, removeWithDependencies, undoRemove } from "@/lib/mods";
 import { useI18n } from "@/i18n";
 import type { Instance, Mod, ModKind } from "@/lib/types";
 import { cn } from "@/lib/utils";
