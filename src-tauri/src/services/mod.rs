@@ -26,6 +26,7 @@ pub mod mojang;
 pub mod mrpack;
 pub mod providers;
 pub mod rules;
+pub mod screenshots;
 pub mod skins;
 pub mod store;
 pub mod system;
@@ -80,6 +81,11 @@ impl Dirs {
     /// `mods/` im Spielverzeichnis, dort sucht Fabric (und jeder andere Loader).
     pub fn mods_dir(&self, instance_id: &str) -> PathBuf {
         self.game_dir(instance_id).join("mods")
+    }
+
+    /// `screenshots/` im Spielverzeichnis, dort legt Minecraft mit F2 ab.
+    pub fn screenshots_dir(&self, instance_id: &str) -> PathBuf {
+        self.game_dir(instance_id).join("screenshots")
     }
 
     /// Globaler Mod-Cache, Dateien als `<sha1>.jar`.

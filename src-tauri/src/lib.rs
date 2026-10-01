@@ -1,6 +1,7 @@
 mod account_commands;
 mod commands;
 mod content_commands;
+mod screenshot_commands;
 mod skin_commands;
 pub mod error;
 pub mod models;
@@ -100,6 +101,8 @@ pub fn run() {
             skin_commands::skin_upload,
             skin_commands::skin_reset,
             skin_commands::skin_cape,
+            screenshot_commands::screenshot_list,
+            screenshot_commands::screenshot_delete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
