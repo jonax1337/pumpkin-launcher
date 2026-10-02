@@ -46,6 +46,7 @@
 - **Seasonal branding** 🎃 — mascot, accent colors and window/taskbar icon switch automatically with the calendar (spring, summer, Halloween, winter)
 - **German & English UI** — the interface follows your system language or your choice in Settings; backend errors are translated too, only a few remaining messages stay German
 - **Accessibility** — keyboard shortcuts (Ctrl/Cmd+1…4 switch area, Ctrl/Cmd+, settings, Ctrl/Cmd+N new instance, Ctrl/Cmd+Enter play, Ctrl/Cmd+F or `/` search, `?` lists them all), a skip link, text size (normal, large, larger), motion off, and a Windows high-contrast mode
+- **Discord Rich Presence** — optional and off by default: shows friends that you are playing, with version, loader and start time, never the world, server or instance name; the launcher only talks to the local Discord app
 - **Pixelkino UI** — a custom pixel design system with a canvas scene engine, pixel icons and a frameless window. See [the design spec](docs/design/PIXELKINO.md)
 
 <p align="center">

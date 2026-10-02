@@ -246,6 +246,8 @@ pub struct LaunchOptions {
     pub default_jvm_args: Vec<String>,
     /// Fenster des Launchers für Instanzen, die ihres nicht selbst festlegen.
     pub default_window: Option<GameWindow>,
+    /// Launcher-Einstellung „In Discord anzeigen“, was Spieler gerade spielen; ohne Angabe aus.
+    pub discord_presence: Option<bool>,
     /// Direkt in eine Welt oder auf einen Server.
     pub quick_play: Option<QuickPlay>,
 }

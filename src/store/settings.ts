@@ -39,6 +39,8 @@ interface SettingsState {
   motion: boolean;
   /** Automatisch nach Jahreszeit oder eine dauerhaft gewählte Pumpkin-Variante. */
   pumpkin: PumpkinChoice;
+  /** Das laufende Spiel in Discord zeigen (Version und Loader, sonst nichts); aus, bis der Spieler es einschaltet. */
+  discordPresence: boolean;
   /**
    * Sprachwahl der Oberfläche. „system“ folgt der Browsersprache (beginnt `navigator.language`
    * mit „de“, gilt Deutsch, sonst Englisch) – der Start soll ohne Rückfrage passen.
@@ -59,7 +61,7 @@ interface SettingsState {
 type SettingsPatch = Partial<
   Pick<
     SettingsState,
-    "javaPath" | "memoryMb" | "minMemoryMb" | "jvmPreset" | "jvmArgs" | "window" | "launcherOnPlay" | "pxSize" | "textSize" | "motion" | "pumpkin" | "language"
+    "javaPath" | "memoryMb" | "minMemoryMb" | "jvmPreset" | "jvmArgs" | "window" | "launcherOnPlay" | "pxSize" | "textSize" | "motion" | "pumpkin" | "discordPresence" | "language"
   >
 >;
 
@@ -82,6 +84,7 @@ const DEFAULT_SETTINGS = {
   textSize: "m",
   motion: true,
   pumpkin: "auto",
+  discordPresence: false,
   language: "system",
 } satisfies Partial<SettingsState>;
 

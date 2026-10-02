@@ -55,6 +55,7 @@ export function PrivacyNotice() {
       {SERVICES.map((service) => (
         <ServiceRow key={service.name} label={service.name} purpose={t(service.purpose)} hosts={service.hosts} />
       ))}
+      <ServiceRow label="Discord" purpose={t("components.privacy.discord")} hosts={[t("components.privacy.discordWhere")]} />
       <ServiceRow label={t("components.privacy.imagesName")} purpose={t("components.privacy.images")} hosts={TRUSTED_IMAGE_HOSTS} />
       <Hint icon="info" className="mt-3.5">{t("components.security.noScan")}</Hint>
     </FormSection>

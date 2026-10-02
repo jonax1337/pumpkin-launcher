@@ -38,6 +38,8 @@ export const components: typeof deComponents = {
   "components.privacy.loaders": "Version lists and installers of the mod loaders.",
   "components.privacy.github": "Launcher updates: a silent check shortly after start and the download when you trigger it.",
   "components.privacy.mclogs": "Only after you click “Share log”: the cleaned log is uploaded.",
+  "components.privacy.discord": "Only if you turn on “Show in Discord”: the version and loader of the running game go to the Discord app on your computer, which shows them to your friends.",
+  "components.privacy.discordWhere": "local only, no network host",
   "components.privacy.imagesName": "Images in descriptions",
   "components.privacy.images": "These hosts load images without asking. Any other host would see your IP address, so its image loads only after you click.",
 
