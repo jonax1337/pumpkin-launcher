@@ -1,10 +1,11 @@
 import { useI18n } from "@/i18n";
-import { Avatar, Button, Dialog, DialogActions, ErrorBox, Hint, Panel, Progress, Skel } from "@/ui";
+import { Button, Dialog, DialogActions, ErrorBox, Hint, Panel, Progress, Skel } from "@/ui";
 import { copyWithToast } from "@/lib/clipboard";
 import { openPage } from "@/lib/links";
 import type { MsLoginStart } from "@/lib/types";
 import { closeMsLogin, startMsLogin, useAccountUi, useMsLogin, type LoginState } from "@/store/accountUi";
 import { useOfflineAllowed } from "@/store/offline";
+import { AccountAvatar } from "./AccountAvatar";
 import { ThenSub } from "./ThenSub";
 
 /** So viele ganze Minuten läuft die Anmeldung noch, mindestens eine. */
@@ -61,7 +62,7 @@ function MsLoginStep({ state }: { state: LoginState }) {
     case "code":
       return state.info.mode === "browser" ? <BrowserStep info={state.info} /> : <DeviceStep info={state.info} />;
     case "done":
-      return <DoneStep name={state.name} />;
+      return <DoneStep id={state.id} name={state.name} />;
     case "error":
       return <ErrorStep message={state.message} />;
   }
@@ -137,11 +138,11 @@ function DeviceStep({ info }: { info: MsLoginStart }) {
   );
 }
 
-function DoneStep({ name }: { name: string }) {
+function DoneStep({ id, name }: { id: string; name: string }) {
   const { t } = useI18n();
   return (
     <div className="mt-2 flex items-center gap-3.5">
-      <Avatar name={name} />
+      <AccountAvatar account={{ kind: "microsoft", id, username: name }} />
       <div>
         <Hint tone="ok">{t("components.account.loggedInAs", { name })}</Hint>
         <p>{t("components.ms.accountActive")}</p>
