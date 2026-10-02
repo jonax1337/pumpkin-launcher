@@ -1,10 +1,11 @@
 import { useNavigate } from "react-router";
 import { useI18n } from "@/i18n";
 import { StopDialog } from "@/components/play/StopDialog";
-import { Avatar, BarButton, Icon, Menu, type MenuEntry } from "@/ui";
+import { BarButton, Icon, Menu, type MenuEntry } from "@/ui";
 import { openAddOffline, startMsLogin, useAccountUi } from "@/store/accountUi";
 import { useOfflineAllowed, useUsableAccount } from "@/store/offline";
 import { accountName, useSettings } from "@/store/settings";
+import { AccountAvatar } from "./AccountAvatar";
 import { AddOfflineDialog } from "./AddOfflineDialog";
 import { MsLoginDialog } from "./MsLoginDialog";
 import { isActiveAccount, keyOf, kindLabel, useAllAccounts, useRemoveAccount } from "./useAccounts";
@@ -27,7 +28,7 @@ export function AccountMenu() {
       id: keyOf(account),
       text: accountName(account),
       sub: kindLabel(account),
-      lead: <Avatar name={accountName(account)} />,
+      lead: <AccountAvatar account={account} />,
       checked: isActiveAccount(active, account),
       onSelect: () => select(account),
     })),
@@ -69,7 +70,7 @@ export function AccountMenu() {
             iconEnd="chevd"
           >
             {/* Ohne Namen: Warnsymbol statt Kopf (Form, nicht nur gelbe Schrift) */}
-            {name ? <Avatar name={name} /> : <Icon name="warn" tone="warn" />}
+            {active ? <AccountAvatar account={active} /> : <Icon name="warn" tone="warn" />}
           </BarButton>
         }
       />

@@ -11,7 +11,7 @@ const FIGURE_DENSITY_PER_ZOOM = 6;
  * Lädt eine Textur (Adresse oder data:-URL); bis die nächste da ist, bleibt die vorige stehen, ohne Adresse gibt es keine.
  * CORS-Anfrage, damit die Pixel lesbar sind: Mojangs Texturserver erlaubt jeden Ursprung.
  */
-function useTexture(src: string | undefined) {
+export function useTexture(src: string | undefined) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
     if (!src) return;

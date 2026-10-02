@@ -15,7 +15,7 @@ export type LoginState =
   | { step: "idle" }
   | { step: "starting" }
   | { step: "code"; info: MsLoginStart }
-  | { step: "done"; name: string }
+  | { step: "done"; id: string; name: string }
   | { step: "error"; message: string };
 export const useMsLogin = create<LoginState>(() => ({ step: "idle" }));
 // Jeder Versuch bekommt eine Nummer; Antworten eines abgebrochenen Versuchs werden verworfen.
@@ -57,7 +57,7 @@ function loggedIn(account: Account) {
   useSettings.getState().selectAccount({ kind: "microsoft", id: account.id, username: account.username });
   void queryClient.invalidateQueries({ queryKey: accountKeys.microsoft });
   const then = useAccountUi.getState().then;
-  if (!then) return useMsLogin.setState({ step: "done", name: account.username }, true);
+  if (!then) return useMsLogin.setState({ step: "done", id: account.id, name: account.username }, true);
   useAccountUi.setState({ then: null });
   useMsLogin.setState({ step: "idle" }, true);
   toast.success(t("components.account.loggedInAs", { name: account.username }));

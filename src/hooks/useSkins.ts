@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { pixelSignature } from "@/lib/pixelSignature";
 import type { Cape, LibrarySkin, SkinVariant } from "@/lib/types";
 import { skinKeys } from "./queryKeys";
+import { SKIN_PROFILE_STALE_MS } from "./staleTimes";
 
 export function useSkinLibrary() {
   return useQuery({ queryKey: skinKeys.library, queryFn: api.skinLibrary });
@@ -35,6 +36,7 @@ export function useSkinProfile(accountId: string | null) {
     queryKey: skinKeys.profile(accountId ?? ""),
     queryFn: () => api.skinProfile(accountId!),
     enabled: accountId != null,
+    staleTime: SKIN_PROFILE_STALE_MS,
     retry: false,
   });
 }

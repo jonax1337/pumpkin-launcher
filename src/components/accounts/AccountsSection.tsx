@@ -1,8 +1,9 @@
 import { useI18n } from "@/i18n";
-import { Actions, Avatar, Button, Empty, ErrorBox, Hint, List, ListRow, RowTitle, Skel } from "@/ui";
+import { Actions, Button, Empty, ErrorBox, Hint, List, ListRow, RowTitle, Skel } from "@/ui";
 import { openAddOffline, startMsLogin } from "@/store/accountUi";
 import { useOfflineAllowed, useUsableAccount } from "@/store/offline";
 import { accountName, useSettings, type ActiveAccount } from "@/store/settings";
+import { AccountAvatar } from "./AccountAvatar";
 import { isActiveAccount, keyOf, kindLabel, useAllAccounts, useRemoveAccount } from "./useAccounts";
 
 /** Konten verwalten (Einstellungen). */
@@ -55,7 +56,7 @@ function AccountRow({ account, active, onRemove, removing }: {
   const isActive = isActiveAccount(active, account);
   return (
     <ListRow selected={isActive}>
-      <Avatar name={name} />
+      <AccountAvatar account={account} />
       <RowTitle title={name} sub={`${kindLabel(account)}${isActive ? ` · ${t("components.account.active")}` : ""}`} />
       {!isActive && <Button size="s" onClick={() => select(account)}>{t("components.account.switch")}</Button>}
       <Button variant="ghost" size="s" disabled={account.kind === "microsoft" && removing} onClick={() => onRemove(account)}>

@@ -2,6 +2,7 @@ import { memo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { ICON_DATA, rowsPath } from "@/pixel/icon-data";
 import { Face, glyphFor, GlyphSvg, type GlyphName, type GlyphPalette } from "@/pixel/icons";
+import { SkinHead } from "@/pixel/SkinHead";
 import type { IconName, IconSize, Tone } from "./types";
 import { cssVars } from "./util";
 
@@ -76,11 +77,16 @@ export function ProjectIcon({ url, seed, box = 40, className }: { url?: string |
   );
 }
 
-/** Spielerkopf (8×8) in fester Box 28 oder 32; Kantenlänge ganzzahlige Zellen (--avs bzw. --av-32). */
-export function Avatar({ name, box = 32, className }: { name: string; box?: 28 | 32; className?: string }) {
+/**
+ * Spielerkopf (8×8) in fester Box 28 oder 32; Kantenlänge ganzzahlige Zellen (--avs bzw. --av-32). Mit `skin` (Adresse der
+ * Skin-Textur) der echte Kopf, solange sie lädt oder wenn sie fehlt ein Pixelgesicht, fest aus dem Namen abgeleitet.
+ */
+export function Avatar({ name, skin, box = 32, className }: { name: string; skin?: string | null; box?: 28 | 32; className?: string }) {
+  const size = box === 32 ? "var(--av-32, calc(var(--iu, 3px) * 8))" : "var(--avs, calc(var(--iu, 3px) * 8))";
+  const face = <Face name={name} size={size} />;
   return (
     <span className={cn("vx-av", className)} data-box={box} aria-hidden>
-      <Face name={name} size={box === 32 ? "var(--av-32, calc(var(--iu, 3px) * 8))" : "var(--avs, calc(var(--iu, 3px) * 8))"} />
+      {skin ? <SkinHead src={skin} size={size} fallback={face} /> : face}
     </span>
   );
 }
