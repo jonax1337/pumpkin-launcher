@@ -112,6 +112,10 @@ svg, canvas { display: block; }
 a { color: inherit; }
 :focus { outline: none; }
 ::selection { background: var(--copper); color: var(--ink); }
+/* Wie eine App, nicht wie eine Webseite: Text lässt sich nur markieren, wo man ihn bearbeitet oder kopieren will (Eingabefelder, Log).
+   Das Präfix braucht WKWebView (macOS). Einzelne Stellen wie die Anmeldecodes setzen `select-all` selbst. */
+body { -webkit-user-select: none; user-select: none; }
+input, textarea, .console .cbody { -webkit-user-select: text; user-select: text; }
 .sr { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .num { font-family: var(--f-px); font-weight: 400; letter-spacing: .02em; }
 
