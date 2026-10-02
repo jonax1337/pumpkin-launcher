@@ -10,7 +10,7 @@ const SKIN_VARIANTS: SkinVariant[] = ["classic", "slim"];
 /** Was das Konto gerade trägt, als Fingerabdruck seiner Textur samt Modell; damit erkennt eine Karte, ob es ihr Skin ist. */
 export type WornLook = { signature: string; variant: SkinVariant };
 
-/** Ein Skin der Bibliothek: drehbare Vorschau (mit dem gewählten Umhang), Modell wählen, anziehen, umbenennen, löschen. */
+/** Ein Skin der Bibliothek: drehbare Vorschau (mit dem gewählten Umhang), Modell wählen, verwenden, umbenennen, löschen. */
 export function SkinCard({ skin, accountId, capeUrl, worn, onRename, onDelete }: {
   skin: LibrarySkin;
   accountId: string | null;
@@ -32,7 +32,7 @@ export function SkinCard({ skin, accountId, capeUrl, worn, onRename, onDelete }:
   ];
   return (
     <Panel as="article" pad="m" className="skin-card" aria-label={skin.name}>
-      {isWorn && <Chip className="absolute -top-[11px] left-3 z-[1]" tone="acc" icon="check" size="s">{t("pages.skins.wornBadge")}</Chip>}
+      {isWorn && <Chip className="absolute -top-[11px] left-3 z-[1]" tone="acc" icon="check" size="s">{t("pages.skins.inUseBadge")}</Chip>}
       <SkinViewer src={texture} variant={skin.variant} capeSrc={capeUrl} label={t("pages.skins.previewLabel", { name: skin.name })} />
       <div className="skin-card-h">
         <Trunc as="b" text={skin.name} className="min-w-0 flex-1" />
@@ -56,7 +56,7 @@ export function SkinCard({ skin, accountId, capeUrl, worn, onRename, onDelete }:
         onChange={(variant) => update.mutate({ id: skin.id, name: skin.name, variant })}
       />
       {/* Ohne Konto bleibt der Knopf erreichbar und nennt den Grund, statt wortlos grau zu sein. */}
-      <Tip label={accountId ? null : t("pages.skins.wearNeedsAccount")} describe>
+      <Tip label={accountId ? null : t("pages.skins.useNeedsAccount")} describe>
         <Button
           variant="primary"
           size="s"
@@ -65,7 +65,7 @@ export function SkinCard({ skin, accountId, capeUrl, worn, onRename, onDelete }:
           aria-disabled={accountId ? undefined : true}
           onClick={() => accountId && upload.mutate({ accountId, skin })}
         >
-          {upload.isPending ? t("pages.skins.wearing") : t("pages.skins.wear")}
+          {upload.isPending ? t("pages.skins.using") : t("pages.skins.use")}
         </Button>
       </Tip>
     </Panel>

@@ -1,9 +1,7 @@
 /*
- * Texturen für die Skin-Vorschau: der Skin, wie Minecraft ihn zeichnet (64×64, altes Format 64×32), und der Umhang.
- * Die drehbare Figur steht in skinTurn.ts. Gezeichnet wird in Texturpixeln (Umhang 10×16); vergrößert wird per CSS (pixelated).
+ * Textur für die Skin-Vorschau: der Skin, wie Minecraft ihn zeichnet (64×64, altes Format 64×32).
+ * Die drehbare 3D-Figur steht in skinModel.ts und skinGl.ts.
  */
-
-export const CAPE = { w: 10, h: 16 } as const;
 
 /** Bereich in Texturpixeln: [x0, y0, x1, y1). */
 type Rect = readonly [x0: number, y0: number, x1: number, y1: number];
@@ -22,7 +20,7 @@ export function textureScale(img: HTMLImageElement) {
  * Bereitet die Textur auf wie Minecraft: Die Grundschicht ist deckend, und hat ein alter 64×32-Skin in der
  * Hutschicht keinen einzigen durchsichtigen Pixel, gilt sie als leer – viele alte Skins füllen sie einfarbig.
  */
-function prepare(img: HTMLImageElement, unit: number, rows: number): CanvasImageSource {
+function prepare(img: HTMLImageElement, unit: number, rows: number): HTMLCanvasElement | HTMLImageElement {
   const canvas = Object.assign(document.createElement("canvas"), { width: img.naturalWidth, height: img.naturalHeight });
   const ctx = canvas.getContext("2d");
   if (!ctx) return img;
@@ -47,16 +45,10 @@ function prepare(img: HTMLImageElement, unit: number, rows: number): CanvasImage
 }
 
 /** Textur, wie Minecraft sie zeichnet (siehe `prepare`), samt Maßen: einmal je Bild bereiten, dann beliebig oft zeichnen. */
-export type SkinSheet = { texture: CanvasImageSource; unit: number; rows: number };
+export type SkinSheet = { texture: HTMLCanvasElement | HTMLImageElement; unit: number; rows: number };
 
 export function prepareSkin(img: HTMLImageElement): SkinSheet {
   const { unit, rows } = textureScale(img);
   return { texture: prepare(img, unit, rows), unit, rows };
 }
 
-/** Außenseite des Umhangs (so, wie andere ihn von hinten sehen). */
-export function drawCape(ctx: CanvasRenderingContext2D, img: HTMLImageElement) {
-  const { unit } = textureScale(img);
-  ctx.clearRect(0, 0, CAPE.w, CAPE.h);
-  ctx.drawImage(img, unit, unit, CAPE.w * unit, CAPE.h * unit, 0, 0, CAPE.w, CAPE.h);
-}

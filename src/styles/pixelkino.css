@@ -322,15 +322,16 @@ a { color: inherit; }
 .memrow > .num { width: 64px; height: 32px; line-height: 32px; font-size: 24px; flex: none; }
 
 /* ---------- Skins ---------- */
-/* Figur und Umhang: Canvas in Texturpixeln, per CSS um ganze Icon-Einheiten vergrößert (SkinFigure) */
-.skin-fig { flex: none; image-rendering: pixelated; }
+/* 3D-Figur: Canvas, per CSS um ganze Icon-Einheiten je Texturpixel vergrößert und fein genug aufgelöst (SkinFigure) */
+.skin-fig { flex: none; }
 .skin-now { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 24px; }
 .skin-now-t { flex: 1; min-width: 260px; max-width: 480px; display: flex; flex-direction: column; gap: 12px; }
 .skin-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 /* Drehbare Figur: Ziehen und Pfeiltasten (SkinViewer); der Knopf zum Umdrehen sitzt absolut oben rechts (SkinViewer) */
 .skin-turn { position: relative; display: flex; justify-content: center; }
-.skin-turn-view { display: block; cursor: grab; touch-action: none; }
-.skin-turn-view:active { cursor: grabbing; }
+.skin-turn-view { display: block; cursor: grab; touch-action: none; isolation: isolate; }
+/* Ein weicher Lichtschein in der Akzentfarbe hinter der Figur, damit sich ihre Umrisse vom Panel lösen */
+.skin-turn-view::before { content: ""; position: absolute; inset: 0 -12%; z-index: -1; pointer-events: none; background: radial-gradient(ellipse 52% 48% at 50% 50%, color-mix(in srgb, var(--acc) 16%, transparent), transparent); }.skin-turn-view:active { cursor: grabbing; }
 .skin-card .skin-turn { align-self: stretch; }
 .skin-now .skin-turn { padding-right: 36px; }
 .skin-card-h { display: flex; align-items: center; gap: 4px; width: 100%; }

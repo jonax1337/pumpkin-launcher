@@ -12,7 +12,6 @@ import {
 import { api } from "@/lib/api";
 import { toastError } from "@/lib/toast";
 import { type Cape, type LibrarySkin } from "@/lib/types";
-import { CapeFigure } from "@/pixel/SkinFigure";
 import { useUsableAccount } from "@/store/offline";
 import type { ActiveAccount } from "@/store/settings";
 import {
@@ -94,7 +93,6 @@ function CurrentLook({ account }: { account: MicrosoftAccount }) {
         zoom={3}
         label={t("pages.skins.currentSkinLabel", { name: account.username })}
       />
-      {cape && <CapeFigure src={cape.url} zoom={3} label={t("pages.skins.capeFigureLabel", { name: cape.alias })} />}
       <div className="skin-now-t">
         <SectionHeader title={account.username} size="sub" as="h2" />
         <Hint>{skin ? t("pages.skins.modelLine", { model: t(`pages.skins.variant.${skin.variant}`) }) : t("pages.skins.defaultSkin")}</Hint>
@@ -107,13 +105,13 @@ function CurrentLook({ account }: { account: MicrosoftAccount }) {
           >
             {t("pages.skins.saveToLibrary")}
           </Button>
-          <Button variant="ghost" icon="redo" onClick={() => resetConfirm.ask(account)}>{t("pages.skins.wearDefault")}</Button>
+          <Button variant="ghost" icon="redo" onClick={() => resetConfirm.ask(account)}>{t("pages.skins.useDefault")}</Button>
         </Actions>
       </div>
       <ConfirmDialog
         {...resetConfirm.dialogProps({
-          title: () => t("pages.skins.wearDefaultTitle"),
-          text: () => t("pages.skins.wearDefaultText"),
+          title: () => t("pages.skins.useDefaultTitle"),
+          text: () => t("pages.skins.useDefaultText"),
           confirmLabel: t("pages.settings.resetLabel"),
           pending: reset.isPending,
           onConfirm: ({ id }, close) => reset.mutate({ accountId: id }, { onSuccess: close }),
@@ -148,7 +146,7 @@ function useWornLook(skin: { url: string; variant: WornLook["variant"] } | null 
   return skin && signature ? { signature, variant: skin.variant } : null;
 }
 
-/** Lokale Skins: hinzufügen, umbenennen, Modell wählen, löschen und mit einem Microsoft-Konto anziehen. */
+/** Lokale Skins: hinzufügen, umbenennen, Modell wählen, löschen und mit einem Microsoft-Konto verwenden. */
 function Library({ account }: { account: MicrosoftAccount | null }) {
   const { t } = useI18n();
   const library = useSkinLibrary();

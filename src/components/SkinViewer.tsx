@@ -10,11 +10,21 @@ import { IconButton } from "@/ui";
 const KEY_STEP_DEG = 15;
 /** Grad je Pixel, den der Zeiger beim Ziehen wandert. */
 const DRAG_DEG_PER_PX = 2;
+/** Neigung nach vorn (0 = waagerechter Blick): Grundstellung, Grenzen, Pfeiltaste in Grad und Grad je Pixel beim Ziehen. */
+const REST_TILT_DEG = 10;
+const MIN_TILT_DEG = 0;
+const MAX_TILT_DEG = 40;
+const KEY_TILT_STEP_DEG = 5;
+const DRAG_TILT_DEG_PER_PX = 0.5;
+/** Grundstellung der Drehung: leicht von der Seite, damit man die Figur schon vor dem ersten Ziehen als räumlich sieht. */
+const REST_TURN_DEG = 28;
 /** Umdrehung von vorn nach hinten: Dauer und Zahl der Stufen (Bewegungen im Kit springen in ganzen Stufen). */
 const FLIP_MS = 320;
 const FLIP_STEPS = 8;
 const FULL_TURN = 360;
 const HALF_TURN = 180;
+
+const clampTilt = (deg: number) => Math.min(MAX_TILT_DEG, Math.max(MIN_TILT_DEG, deg));
 
 const normalized = (deg: number) => ((deg % FULL_TURN) + FULL_TURN) % FULL_TURN;
 
@@ -37,8 +47,8 @@ const viewName = (turn: number): TKey => [...VIEW_NAMES].reverse().find(([from])
  * sonst springt es.
  */
 function useTurn(animate: boolean) {
-  const [turn, setTurnState] = useState(0);
-  const current = useRef(0);
+  const [turn, setTurnState] = useState(REST_TURN_DEG);
+  const current = useRef(REST_TURN_DEG);
   const frame = useRef(0);
   const set = (deg: number) => {
     current.current = normalized(deg);
@@ -71,7 +81,7 @@ function useTurn(animate: boolean) {
 }
 
 /**
- * Spielerfigur zum Drehen: Ziehen mit der Maus, ← → in 15°-Schritten, Pos1/Ende für vorn/hinten. Der Knopf daneben
+ * Spielerfigur zum Drehen und Neigen: Ziehen mit der Maus, ← → in 15°-Schritten (↑ ↓ neigen), Pos1/Ende für vorn/hinten. Der Knopf daneben
  * wechselt zwischen Vorder- und Rückseite, beim Umhang die Seite, auf der er hängt. Reduzierte Bewegung: kein Auslaufen.
  */
 export function SkinViewer({ src, variant, capeSrc, zoom, label }: { src: string | undefined; variant: SkinVariant; capeSrc?: string; zoom?: number; label: string }) {
@@ -79,12 +89,16 @@ export function SkinViewer({ src, variant, capeSrc, zoom, label }: { src: string
   const reducedMotion = useReducedMotion();
   const sceneMotion = useSettings((s) => s.motion);
   const { turn, flip, rotate } = useTurn(sceneMotion && !reducedMotion);
-  const dragFrom = useRef<number | null>(null);
+  const [tilt, setTilt] = useState(REST_TILT_DEG);
+  const dragFrom = useRef<{ x: number; y: number } | null>(null);
+  const tiltBy = (delta: number) => setTilt((deg) => clampTilt(deg + delta));
 
   function onKeyDown(e: KeyboardEvent) {
     const steps: Record<string, () => void> = {
       ArrowLeft: () => rotate(KEY_STEP_DEG),
       ArrowRight: () => rotate(-KEY_STEP_DEG),
+      ArrowUp: () => tiltBy(-KEY_TILT_STEP_DEG),
+      ArrowDown: () => tiltBy(KEY_TILT_STEP_DEG),
       Home: () => rotate(-turn),
       End: () => rotate(HALF_TURN - turn),
     };
@@ -96,8 +110,9 @@ export function SkinViewer({ src, variant, capeSrc, zoom, label }: { src: string
 
   function onPointerMove(e: PointerEvent) {
     if (dragFrom.current == null) return;
-    rotate(-(e.clientX - dragFrom.current) * DRAG_DEG_PER_PX);
-    dragFrom.current = e.clientX;
+    rotate(-(e.clientX - dragFrom.current.x) * DRAG_DEG_PER_PX);
+    tiltBy((e.clientY - dragFrom.current.y) * DRAG_TILT_DEG_PER_PX);
+    dragFrom.current = { x: e.clientX, y: e.clientY };
   }
 
   return (
@@ -112,17 +127,17 @@ export function SkinViewer({ src, variant, capeSrc, zoom, label }: { src: string
         aria-valuemax={FULL_TURN - 1}
         aria-valuenow={Math.round(turn)}
         aria-valuetext={t(viewName(turn))}
-        aria-keyshortcuts="ArrowLeft ArrowRight Home End"
+        aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Home End"
         onKeyDown={onKeyDown}
         onPointerDown={(e) => {
-          dragFrom.current = e.clientX;
+          dragFrom.current = { x: e.clientX, y: e.clientY };
           e.currentTarget.setPointerCapture(e.pointerId);
         }}
         onPointerMove={onPointerMove}
         onPointerUp={() => (dragFrom.current = null)}
         onPointerCancel={() => (dragFrom.current = null)}
       >
-        <TurnedSkin src={src} variant={variant} capeSrc={capeSrc} turn={turn} zoom={zoom} />
+        <TurnedSkin src={src} variant={variant} capeSrc={capeSrc} turn={turn} tilt={tilt} zoom={zoom} />
       </div>
       <IconButton className="absolute right-0 top-0" icon="redo" size="s" label={t("pages.skins.turnAround")} onClick={flip} />
     </div>
