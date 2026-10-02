@@ -120,8 +120,8 @@ pub(crate) async fn cancel_at_step<T, F: std::future::Future<Output = AppResult<
         state.cancel("op");
         drop(resume);
     });
-    // Endet der Thread, schließt sich `started`; der Wächter räumt gleich danach auf.
-    assert!(started.recv().is_err());
+    // Endet der Thread, schließt sich `started`; bis dahin darf der Rückruf noch einmal melden. Der Wächter räumt gleich danach auf.
+    for _ in started {}
     for _ in 0..CLEANUP_POLLS {
         if folders() == before {
             break;

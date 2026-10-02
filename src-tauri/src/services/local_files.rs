@@ -340,9 +340,10 @@ mod tests {
         fs::write(drop.join("Same.jar"), "same").unwrap();
         fs::write(drop.join("broken.zip"), "kein zip").unwrap();
         // Im Mods-Ordner liegen schon eine fremde Datei gleichen Namens und dieselbe Datei, nur nicht erfasst.
+        // Die fremde Datei trägt die Endung schon klein: auf Linux sind `tool.jar` und `Tool.jar` zwei Dateien.
         let mods_dir = state.dirs.mods_dir(&i.id);
         fs::create_dir_all(&mods_dir).unwrap();
-        fs::write(mods_dir.join("tool.jar"), "fremd").unwrap();
+        fs::write(mods_dir.join("Tool.jar"), "fremd").unwrap();
         fs::write(mods_dir.join("Same.jar"), "same").unwrap();
 
         let paths: Vec<String> =
@@ -364,7 +365,7 @@ mod tests {
         );
         assert!(added.mods.iter().all(|m| m.source == ModSource::Local));
         assert_eq!(fs::read(mods_dir.join("Tool (2).jar")).unwrap(), b"tool");
-        assert_eq!(fs::read(mods_dir.join("tool.jar")).unwrap(), b"fremd");
+        assert_eq!(fs::read(mods_dir.join("Tool.jar")).unwrap(), b"fremd");
         assert!(!mods_dir.join("Same (2).jar").exists());
 
         // Dieselbe Datei noch einmal: Vorab-Prüfung nennt den Eintrag, Hinzufügen lehnt ab.
