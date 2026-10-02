@@ -24,6 +24,7 @@ export const errors: typeof deErrors = {
   "errors.http.unreadable": "The server's response was incomplete or unreadable.",
   "errors.http.interrupted": "The connection to the server was interrupted. Try again.",
   "errors.json": "The data could not be read",
+  "errors.store.newerEntry": "An entry with this ID comes from a newer version of the launcher and is left unchanged. Update the launcher to edit it.",
   "errors.zip": "The archive is damaged or not a valid package",
   "errors.nbt": "A game file is damaged or has an unknown format",
   "errors.download": "A download failed",

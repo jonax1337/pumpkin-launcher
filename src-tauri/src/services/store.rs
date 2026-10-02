@@ -4,8 +4,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::{de::DeserializeOwned, Serialize};
+use serde_json::Value;
 
-use super::{lock, none_if_missing, write_atomic};
+use super::{free_name, lock, none_if_missing, write_atomic};
 use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::{Instance, LibrarySkin, MsAccount, Template};
@@ -42,25 +43,39 @@ entity!(
 pub struct JsonStore<T> {
     path: PathBuf,
     items: Mutex<Vec<T>>,
+    /// Einträge, die dieser Build nicht lesen kann (etwa von einer neueren Version): unsichtbar für Aufrufer,
+    /// aber bei jedem Speichern unverändert wieder in der Datei.
+    unreadable: Vec<Unreadable>,
+}
+
+/// Eintrag der Datei, den dieser Build nicht versteht, mit seiner Position in der Datei.
+struct Unreadable {
+    index: usize,
+    value: Value,
+}
+
+impl Unreadable {
+    fn id(&self) -> Option<&str> {
+        self.value.get("id").and_then(Value::as_str)
+    }
 }
 
 impl<T: Entity> JsonStore<T> {
-    /// Lädt die Datei. Fehlt sie, startet der Store leer. Ist sie defekt, wird sie
-    /// nach `*.json.corrupt` verschoben statt beim nächsten Speichern überschrieben.
+    /// Lädt die Datei. Fehlt sie, startet der Store leer. Ist sie keine JSON-Liste, wird sie nach `*.corrupt`
+    /// verschoben statt beim nächsten Speichern überschrieben. Einzelne unlesbare Einträge bleiben erhalten.
     pub fn open(path: PathBuf) -> AppResult<Self> {
-        let items = match none_if_missing(fs::read_to_string(&path))? {
+        let entries = match none_if_missing(fs::read_to_string(&path))? {
             Some(raw) => match serde_json::from_str(&raw) {
-                Ok(items) => items,
+                Ok(entries) => entries,
                 Err(err) => {
-                    let backup = path.with_extension("json.corrupt");
-                    tracing::warn!(?path, ?backup, %err, "defekte JSON-Datei gesichert, starte leer");
-                    fs::rename(&path, &backup)?;
+                    set_aside(&path, &err)?;
                     Vec::new()
                 }
             },
             None => Vec::new(),
         };
-        Ok(Self { path, items: Mutex::new(items) })
+        let (items, unreadable) = split_readable(&path, entries);
+        Ok(Self { path, items: Mutex::new(items), unreadable })
     }
 
     pub fn list(&self) -> Vec<T> {
@@ -105,7 +120,11 @@ impl<T: Entity> JsonStore<T> {
         self.commit(&mut items, |items| items.insert(idx, old))
     }
 
+    /// Ein neuer Eintrag darf keinen unlesbaren mit derselben ID verdrängen: der gehört einer neueren Version.
     fn push(&self, items: &mut Vec<T>, item: T) -> AppResult<T> {
+        if self.unreadable.iter().any(|u| u.id() == Some(item.id())) {
+            return Err(AppError::invalid(coded!("errors.store.newerEntry")));
+        }
         items.push(item.clone());
         self.commit(items, |items| {
             items.pop();
@@ -123,7 +142,7 @@ impl<T: Entity> JsonStore<T> {
     /// Schreibt die geänderte Collection; scheitert das, macht `rollback` die Änderung im Speicher rückgängig,
     /// damit Speicher und Datei nicht auseinanderlaufen.
     fn commit(&self, items: &mut Vec<T>, rollback: impl FnOnce(&mut Vec<T>)) -> AppResult<()> {
-        if let Err(err) = persist(&self.path, items) {
+        if let Err(err) = persist(&self.path, &with_unreadable(items, &self.unreadable)) {
             rollback(items);
             return Err(err);
         }
@@ -139,6 +158,51 @@ fn index_of<T: Entity>(items: &[T], id: &str) -> AppResult<usize> {
     position(items, id).ok_or_else(|| T::not_found(id))
 }
 
+/// Verschiebt eine nicht lesbare Datei nach `<name>.corrupt`, ab der zweiten nach `<name> (2).corrupt` usw.:
+/// eine frühere Sicherung wird nie überschrieben.
+fn set_aside(path: &Path, err: &serde_json::Error) -> AppResult<()> {
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let backup = path.with_file_name(free_name(&name, ".corrupt", |n| path.with_file_name(n).exists()));
+    tracing::warn!(?path, ?backup, %err, "defekte JSON-Datei gesichert, starte leer");
+    fs::rename(path, &backup)?;
+    Ok(())
+}
+
+/// Teilt die Einträge in lesbare und unlesbare. Protokolliert werden nur Position und ID, nie Inhalte.
+fn split_readable<T: Entity>(path: &Path, entries: Vec<Value>) -> (Vec<T>, Vec<Unreadable>) {
+    let mut items = Vec::new();
+    let mut unreadable = Vec::new();
+    for (index, value) in entries.into_iter().enumerate() {
+        match T::deserialize(&value) {
+            Ok(item) => items.push(item),
+            Err(_) => unreadable.push(Unreadable { index, value }),
+        }
+    }
+    if !unreadable.is_empty() {
+        let at: Vec<_> = unreadable.iter().map(|u| (u.index, u.id())).collect();
+        tracing::warn!(?path, count = unreadable.len(), ?at, "unlesbare Einträge (neuere Version?) bleiben unverändert erhalten");
+    }
+    (items, unreadable)
+}
+
+/// Ein Eintrag der Datei, wie er geschrieben wird.
+#[derive(Serialize)]
+#[serde(untagged)]
+enum Stored<'a, T> {
+    Readable(&'a T),
+    Unreadable(&'a Value),
+}
+
+/// Die lesbaren Einträge in ihrer Reihenfolge, die unlesbaren an ihrer alten Position (bzw. am Ende, wenn die
+/// Liste inzwischen kürzer ist).
+fn with_unreadable<'a, T>(items: &'a [T], unreadable: &'a [Unreadable]) -> Vec<Stored<'a, T>> {
+    let mut stored: Vec<_> = items.iter().map(Stored::Readable).collect();
+    for u in unreadable {
+        stored.insert(u.index.min(stored.len()), Stored::Unreadable(&u.value));
+    }
+    stored
+}
+
 /// Schreibt atomar: erst in eine Temp-Datei, dann umbenennen.
 fn persist<T: Serialize>(path: &Path, items: &[T]) -> AppResult<()> {
     write_atomic(path, &serde_json::to_vec_pretty(items)?)
@@ -148,6 +212,7 @@ fn persist<T: Serialize>(path: &Path, items: &[T]) -> AppResult<()> {
 mod tests {
     use super::*;
     use crate::models::{new_id, ModLoader, NewInstance};
+    use serde::Deserialize;
 
     #[test]
     fn crud_roundtrip_and_corrupt_file() {
@@ -171,6 +236,115 @@ mod tests {
         assert!(JsonStore::<Instance>::open(path.clone()).unwrap().list().is_empty());
         assert!(path.with_extension("json.corrupt").exists());
 
+        fs::write(&path, "{}").unwrap();
+        assert!(JsonStore::<Instance>::open(path.clone()).unwrap().list().is_empty());
+        assert_eq!(fs::read_to_string(path.with_extension("json.corrupt")).unwrap(), "{kaputt");
+        assert_eq!(fs::read_to_string(dir.join("instances.json (2).corrupt")).unwrap(), "{}");
+
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Schreibt `entries` als Store-Datei in einen neuen Testordner.
+    fn file_with(entries: &[Value]) -> (PathBuf, PathBuf) {
+        let dir = std::env::temp_dir().join(format!("launcher-test-{}", new_id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("instances.json");
+        fs::write(&path, serde_json::to_vec_pretty(entries).unwrap()).unwrap();
+        (dir, path)
+    }
+
+    fn entries_in(path: &Path) -> Vec<Value> {
+        serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
+    }
+
+    /// Drei Instanzen; die mittlere stammt von einer neueren Version mit einer hier unbekannten Pack-Herkunft.
+    fn instances_with_newer_middle() -> Vec<Value> {
+        let mut entries: Vec<Value> =
+            ["Eins", "Zwei", "Drei"].map(|name| serde_json::to_value(new_instance(name)).unwrap()).to_vec();
+        entries[1]["modpack"] = serde_json::json!({ "type": "zukunft", "packId": "p" });
+        entries
+    }
+
+    #[test]
+    fn unreadable_entry_survives_load_and_save_in_place() {
+        let original = instances_with_newer_middle();
+        let (dir, path) = file_with(&original);
+        let store = JsonStore::<Instance>::open(path.clone()).unwrap();
+        assert_eq!(store.list().iter().map(|i| i.name.as_str()).collect::<Vec<_>>(), ["Eins", "Drei"]);
+
+        let third = store.list()[1].id.clone();
+        store.modify(&third, |i| i.name = "Geändert".into()).unwrap();
+        let saved = entries_in(&path);
+        assert_eq!(saved.len(), 3);
+        assert_eq!(saved[1], original[1]);
+        assert_eq!(saved[2]["name"], "Geändert");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn saving_without_change_keeps_the_file() {
+        let original = instances_with_newer_middle();
+        let (dir, path) = file_with(&original);
+        let store = JsonStore::<Instance>::open(path.clone()).unwrap();
+        store.modify(&store.list()[0].id, |_| {}).unwrap();
+        assert_eq!(entries_in(&path), original);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn new_entry_does_not_displace_unreadable_with_same_id() {
+        let original = instances_with_newer_middle();
+        let (dir, path) = file_with(&original);
+        let store = JsonStore::<Instance>::open(path.clone()).unwrap();
+        let clash = Instance { id: original[1]["id"].as_str().unwrap().into(), ..new_instance("Neu") };
+        assert!(matches!(store.insert(clash.clone()), Err(AppError::Invalid(_))));
+        assert!(matches!(store.upsert(clash), Err(AppError::Invalid(_))));
+        assert_eq!(store.list().len(), 2);
+        assert_eq!(entries_in(&path), original);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Eintrag eines älteren Builds, der nur Modrinth als Herkunft kennt.
+    #[derive(Clone, Serialize, Deserialize)]
+    struct OldEntry {
+        id: String,
+        origin: OldOrigin,
+    }
+
+    #[derive(Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "lowercase")]
+    enum OldOrigin {
+        Modrinth,
+    }
+
+    /// Derselbe Eintrag in einem späteren Build, der auch Dateien als Herkunft kennt.
+    #[derive(Clone, Serialize, Deserialize)]
+    struct NewEntry {
+        id: String,
+        origin: NewOrigin,
+    }
+
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[serde(rename_all = "lowercase")]
+    enum NewOrigin {
+        Modrinth,
+        File,
+    }
+
+    entity!(OldEntry => "errors.app.notFound.instance", NewEntry => "errors.app.notFound.instance");
+
+    #[test]
+    fn later_build_reads_entry_an_older_build_kept() {
+        let entry = |id: &str, origin: NewOrigin| serde_json::to_value(NewEntry { id: id.into(), origin }).unwrap();
+        let (dir, path) = file_with(&[entry("a", NewOrigin::Modrinth), entry("b", NewOrigin::File)]);
+
+        let old = JsonStore::<OldEntry>::open(path.clone()).unwrap();
+        old.modify("a", |_| {}).unwrap();
+        old.insert(OldEntry { id: "c".into(), origin: OldOrigin::Modrinth }).unwrap();
+
+        let later = JsonStore::<NewEntry>::open(path).unwrap();
+        let origins: Vec<_> = later.list().into_iter().map(|e| (e.id, e.origin)).collect();
+        assert_eq!(origins, [("a", NewOrigin::Modrinth), ("b", NewOrigin::File), ("c", NewOrigin::Modrinth)].map(|(id, o)| (id.to_owned(), o)));
         fs::remove_dir_all(dir).unwrap();
     }
 

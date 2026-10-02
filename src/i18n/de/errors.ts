@@ -28,6 +28,7 @@ const errorsCore = {
   "errors.http.unreadable": "Die Antwort des Servers war unvollständig oder unlesbar.",
   "errors.http.interrupted": "Die Verbindung zum Server ist abgebrochen. Versuch es erneut.",
   "errors.json": "Die Daten konnten nicht gelesen werden",
+  "errors.store.newerEntry": "Ein Eintrag mit dieser ID stammt aus einer neueren Version des Launchers und bleibt unverändert. Aktualisiere den Launcher, um ihn zu bearbeiten.",
   "errors.zip": "Das Archiv ist beschädigt oder kein gültiges Paket",
   "errors.nbt": "Eine Spieldatei ist beschädigt oder hat ein unbekanntes Format",
   "errors.download": "Ein Download ist fehlgeschlagen",
