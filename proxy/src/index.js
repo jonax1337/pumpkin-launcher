@@ -65,10 +65,11 @@ export default {
     if (!ROUTES.some(([method, re]) => method === request.method && re.test(url.pathname))) return json({ error: "Nicht erlaubt" }, 404);
     if (!env.CURSEFORGE_API_KEY) return json({ error: "Proxy ist nicht eingerichtet" }, 500);
 
-    if (env.LIMITER) {
-      const { success } = await env.LIMITER.limit({ key: request.headers.get("cf-connecting-ip") ?? "unbekannt" });
-      if (!success) return json({ error: "Zu viele Anfragen, bitte kurz warten" }, 429, { "retry-after": LIMIT_PERIOD });
-    }
+    // Ohne Begrenzung nutzte jeder den Schlüssel unbegrenzt mit: lieber gar nicht antworten.
+    if (!env.LIMITER) return json({ error: "Proxy ist nicht eingerichtet" }, 503);
+    // Schlüssel der Begrenzung ist die IP des Nutzers; Anfragen ohne `cf-connecting-ip` teilen sich einen Eimer.
+    const { success } = await env.LIMITER.limit({ key: request.headers.get("cf-connecting-ip") ?? "unbekannt" });
+    if (!success) return json({ error: "Zu viele Anfragen, bitte kurz warten" }, 429, { "retry-after": LIMIT_PERIOD });
 
     if (!validQuery(url)) return json({ error: "Ungültige Anfrage" }, 400);
 

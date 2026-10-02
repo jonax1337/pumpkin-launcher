@@ -31,6 +31,10 @@ npx wrangler secret put CURSEFORGE_API_KEY   # Schlüssel einfügen, er wird nir
 [beantragt einen eigenen Schlüssel](https://console.curseforge.com/) bei CurseForge, richtet einen eigenen Worker ein
 und setzt `PUMPKIN_CF_PROXY=<adresse>` (zur Laufzeit oder beim Bauen).
 
+Die Begrenzung ist Pflicht: Fehlt die Bindung `LIMITER` (zum Beispiel nach einem Deploy ohne `[[ratelimits]]`), antwortet
+der Worker mit 503 statt ohne Begrenzung zu arbeiten. Ihr Schlüssel ist die IP-Adresse des Nutzers (`cf-connecting-ip`);
+Anfragen ohne diesen Header teilen sich einen gemeinsamen Eimer.
+
 Die Logik lässt sich ohne Cloudflare prüfen: `node test.mjs` (simuliert Cloudflare und CurseForge).
 
 Der Worker läuft für dieses Projekt unter `https://pumpkin-curseforge.jonas-laux.workers.dev`. Die Begrenzung (60 Anfragen

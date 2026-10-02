@@ -36,6 +36,14 @@ const throttled = await worker.fetch(new Request("https://p.example/v1/mods/1"),
 await check("Limit", throttled.status, 429);
 await check("Limit nennt Wartezeit", throttled.headers.get("retry-after"), "60");
 await check("ohne Secret", (await worker.fetch(new Request("https://p.example/v1/mods/1"), {})).status, 500);
+const callsBefore = calls.length;
+await check("ohne Begrenzung (fail-closed)", (await worker.fetch(new Request("https://p.example/v1/mods/1"), { CURSEFORGE_API_KEY: "TESTKEY" })).status, 503);
+await check("ohne Begrenzung nichts an CurseForge", calls.length, callsBefore);
+const keys = [];
+const spy = { ...env, LIMITER: { async limit({ key }) { keys.push(key); return { success: true }; } } };
+await worker.fetch(new Request("https://p.example/v1/mods/1", { headers: { "cf-connecting-ip": "203.0.113.7" } }), spy);
+await worker.fetch(new Request("https://p.example/v1/mods/1"), spy);
+await check("Begrenzung je IP, ohne IP ein gemeinsamer Eimer", keys.join(","), "203.0.113.7,unbekannt");
 globalThis.fetch = async () => new Response("{}", { status: 429, headers: { "content-type": "application/json", "retry-after": "17" } });
 await check("Wartezeit von CurseForge kommt durch", (await worker.fetch(new Request("https://p.example/v1/mods/1"), env)).headers.get("retry-after"), "17");
 globalThis.fetch = async () => { throw new DOMException("timeout", "TimeoutError"); };
