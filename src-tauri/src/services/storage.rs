@@ -156,7 +156,7 @@ mod tests {
         fs::create_dir_all(dirs.assets()).unwrap();
         fs::write(dirs.assets().join("index.json"), [0u8; 25]).unwrap();
 
-        let overview = overview(&dirs, &[instance.clone()]).unwrap();
+        let overview = overview(&dirs, std::slice::from_ref(&instance)).unwrap();
         assert_eq!(overview.instances, [InstanceUsage { id: instance.id, bytes: 104 }]);
         assert_eq!(overview.shared_bytes, 75);
         assert_eq!(overview.mod_cache_bytes, 0);
