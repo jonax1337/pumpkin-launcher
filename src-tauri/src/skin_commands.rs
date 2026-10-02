@@ -30,6 +30,12 @@ pub fn skin_add(state: State<'_, AppState>, path: String) -> AppResult<LibrarySk
     skins::add_file(&state, Path::new(&path))
 }
 
+/// Lädt den Skin, den der Spieler `name` gerade trägt, in die Bibliothek (öffentliche Mojang-Endpunkte, kein Konto nötig).
+#[tauri::command]
+pub async fn skin_add_player(state: State<'_, AppState>, name: String) -> AppResult<LibrarySkin> {
+    skins::add_player_skin(&state, &name).await
+}
+
 #[tauri::command]
 pub fn skin_update(state: State<'_, AppState>, id: String, name: String, variant: SkinVariant) -> AppResult<LibrarySkin> {
     skins::update(&state, &id, &name, variant)

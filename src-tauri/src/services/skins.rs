@@ -15,6 +15,10 @@ use crate::services::download::sha1_hex;
 use crate::state::AppState;
 
 const TEXTURE_BASE: &str = "textures.minecraft.net/texture/";
+/// Öffentliche Endpunkte von Mojang (ohne Konto): Name → UUID und UUID → Profil mit Skin.
+const PLAYER_LOOKUP: &str = "https://api.minecraftservices.com/minecraft/profile/lookup/name/";
+const SESSION_PROFILE: &str = "https://sessionserver.mojang.com/session/minecraft/profile/";
+const MAX_PLAYER_NAME_LEN: usize = 16;
 /// Echte Skins haben wenige KiB; die Grenze fängt nur versehentlich gewählte große Bilder ab.
 const MAX_FILE: u64 = 256 * 1024;
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
@@ -211,6 +215,114 @@ pub async fn save_active(state: &AppState, account_id: &str, name: &str) -> AppR
     add(state, &png, name, skin.variant)
 }
 
+/// Ergebnis der Namenssuche: UUID und Name in der Schreibweise des Spielers.
+#[derive(Deserialize)]
+struct Player {
+    id: String,
+    name: String,
+}
+
+/// Profil vom Session-Server; seine Eigenschaft `textures` ist base64-codiertes JSON mit dem Skin.
+#[derive(Deserialize)]
+struct SessionProfile {
+    #[serde(default)]
+    properties: Vec<Property>,
+}
+
+#[derive(Deserialize)]
+struct Property {
+    name: String,
+    value: String,
+}
+
+#[derive(Deserialize)]
+struct TexturesValue {
+    #[serde(default)]
+    textures: PlayerTextures,
+}
+
+/// Fehlt `SKIN`, trägt der Spieler den Standardskin.
+#[derive(Default, Deserialize)]
+struct PlayerTextures {
+    #[serde(rename = "SKIN")]
+    skin: Option<PlayerSkin>,
+}
+
+#[derive(Deserialize)]
+struct PlayerSkin {
+    url: String,
+    #[serde(default)]
+    metadata: SkinMetadata,
+}
+
+/// `model` steht nur bei schmalen Armen da (`slim`).
+#[derive(Default, Deserialize)]
+struct SkinMetadata {
+    #[serde(default)]
+    model: SkinVariant,
+}
+
+/// Buchstaben, Ziffern und Unterstriche, höchstens 16: Minecraft-Spielernamen. Die Prüfung schützt auch den Pfad der Anfrage.
+fn valid_player_name(name: &str) -> bool {
+    (1..=MAX_PLAYER_NAME_LEN).contains(&name.len()) && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+}
+
+fn unreadable_player() -> AppError {
+    AppError::invalid(coded!("errors.app.skin.unreadablePlayer"))
+}
+
+/// 204 und 404 heißen, dass es den Spieler nicht gibt; jede andere Absage liest sich wie bei der Konto-API.
+fn check_player(status: u16, name: &str) -> AppResult<()> {
+    match status {
+        204 | 404 => Err(AppError::invalid(coded!("errors.app.skin.playerNotFound", name = name))),
+        200..=299 => Ok(()),
+        s => Err(AppError::invalid(status_text(s))),
+    }
+}
+
+fn parse_player(body: &[u8]) -> AppResult<Player> {
+    let player: Player = serde_json::from_slice(body)?;
+    // Die UUID wird Teil der nächsten Anfrage.
+    let is_uuid = player.id.len() == 32 && player.id.bytes().all(|b| b.is_ascii_hexdigit());
+    if is_uuid { Ok(player) } else { Err(unreadable_player()) }
+}
+
+/// Der Skin aus dem Profil des Session-Servers; `None` bei Spielern mit Standardskin, dann nennt das Profil keinen.
+fn parse_player_skin(body: &[u8]) -> AppResult<Option<OnlineSkin>> {
+    use base64::Engine;
+    let profile: SessionProfile = serde_json::from_slice(body)?;
+    let Some(textures) = profile.properties.iter().find(|p| p.name == "textures") else {
+        return Ok(None);
+    };
+    let json = base64::engine::general_purpose::STANDARD.decode(&textures.value).map_err(|_| unreadable_player())?;
+    let value: TexturesValue = serde_json::from_slice(&json)?;
+    value.textures.skin.map(|skin| Ok(OnlineSkin { url: texture_url(&skin.url)?, variant: skin.metadata.model })).transpose()
+}
+
+async fn find_player(state: &AppState, name: &str) -> AppResult<Player> {
+    let (status, body) = auth::send(state.http.get(format!("{PLAYER_LOOKUP}{name}"))).await?;
+    check_player(status, name)?;
+    parse_player(&body)
+}
+
+async fn player_skin(state: &AppState, player: &Player) -> AppResult<OnlineSkin> {
+    let (status, body) = auth::send(state.http.get(format!("{SESSION_PROFILE}{}", player.id))).await?;
+    check_player(status, &player.name)?;
+    parse_player_skin(&body)?.ok_or_else(|| AppError::invalid(coded!("errors.app.skin.playerHasDefaultSkin", name = player.name)))
+}
+
+/// Legt den Skin, den ein Spieler gerade trägt, in der Bibliothek ab; dafür genügt sein Name, ein Konto braucht es nicht.
+pub async fn add_player_skin(state: &AppState, name: &str) -> AppResult<LibrarySkin> {
+    let name = name.trim();
+    if !valid_player_name(name) {
+        return Err(AppError::invalid(coded!("errors.app.skin.invalidPlayerName")));
+    }
+    let player = find_player(state, name).await?;
+    let skin = player_skin(state, &player).await?;
+    let png = modrinth::bytes(state.http.get(&skin.url), MAX_FILE).await?;
+    add(state, &png, &player.name, skin.variant)
+}
+
 fn add(state: &AppState, png: &[u8], name: &str, variant: SkinVariant) -> AppResult<LibrarySkin> {
     validate_png(png)?;
     let skin = LibrarySkin { id: sha1_hex(png), name: skin_name(name)?, variant, added_at: now_ms() };
@@ -331,6 +443,60 @@ mod tests {
         for bad in ["https://evil.example/texture/ab12", "http://textures.minecraft.net/texture/../x", "http://textures.minecraft.net/texture/", "file:///C:/x.png"] {
             assert!(texture_url(bad).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn player_names_follow_minecraft_rules() {
+        for good in ["Notch", "jeb_", "a", "Name_With_16_chr", "x2"] {
+            assert!(valid_player_name(good), "{good}");
+        }
+        for bad in ["", "17_characters_xxx", "mit Leerzeichen", "../etc", "Zoë", "a/b", "name?x=1"] {
+            assert!(!valid_player_name(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn player_lookup_answers() {
+        let error = |status| check_player(status, "Nobody").unwrap_err().to_string();
+        assert_eq!(error(404), "Es gibt keinen Spieler namens „Nobody“.");
+        assert_eq!(error(204), error(404), "kein Inhalt heißt auch: unbekannt");
+        assert!(error(429).contains("in einer Minute"));
+        assert!(error(503).starts_with("Die Minecraft-Server haben gerade Probleme"));
+        assert!(check_player(200, "Notch").is_ok());
+
+        let player = parse_player(br#"{"id":"069a79f444e94726a5befca90e38aaf5","name":"Notch"}"#).unwrap();
+        assert_eq!((player.id.as_str(), player.name.as_str()), ("069a79f444e94726a5befca90e38aaf5", "Notch"));
+        assert!(parse_player(br#"{"id":"../../x","name":"Notch"}"#).is_err(), "die ID wird Teil eines Pfads");
+        assert!(parse_player(b"").is_err());
+    }
+
+    /// Profil vom Session-Server mit `textures` als base64-JSON, wie Mojang es liefert.
+    fn session_profile(textures: &str) -> Vec<u8> {
+        use base64::Engine;
+        let value = base64::engine::general_purpose::STANDARD.encode(textures);
+        format!(r#"{{"id":"069a79f444e94726a5befca90e38aaf5","name":"Notch","properties":[{{"name":"textures","value":"{value}"}}]}}"#).into_bytes()
+    }
+
+    #[test]
+    fn player_skin_comes_from_the_session_profile() {
+        // Aufgezeichnet von sessionserver.mojang.com (Notch): ohne `metadata`, also klassisch.
+        const RECORDED: &[u8] = br#"{"id":"069a79f444e94726a5befca90e38aaf5","name":"Notch","properties":[{"name":"textures","value":"ewogICJ0aW1lc3RhbXAiIDogMTc5MDk0MTk1MzE0MSwKICAicHJvZmlsZUlkIiA6ICIwNjlhNzlmNDQ0ZTk0NzI2YTViZWZjYTkwZTM4YWFmNSIsCiAgInByb2ZpbGVOYW1lIiA6ICJOb3RjaCIsCiAgInRleHR1cmVzIiA6IHsKICAgICJTS0lOIiA6IHsKICAgICAgInVybCIgOiAiaHR0cDovL3RleHR1cmVzLm1pbmVjcmFmdC5uZXQvdGV4dHVyZS8yOTIwMDlhNDkyNWI1OGYwMmM3N2RhZGMzZWNlZjA3ZWE0Yzc0NzJmNjRlMGZkYzMyY2U1NTIyNDg5MzYyNjgwIgogICAgfQogIH0KfQ=="}],"profileActions":[]}"#;
+        let skin = parse_player_skin(RECORDED).unwrap().unwrap();
+        assert_eq!(skin.variant, SkinVariant::Classic);
+        assert_eq!(skin.url, "https://textures.minecraft.net/texture/292009a4925b58f02c77dadc3ecef07ea4c7472f64e0fdc32ce5522489362680");
+
+        let slim = session_profile(r#"{"textures":{"SKIN":{"url":"http://textures.minecraft.net/texture/ab12","metadata":{"model":"slim"}}}}"#);
+        assert_eq!(parse_player_skin(&slim).unwrap().unwrap().variant, SkinVariant::Slim);
+    }
+
+    #[test]
+    fn player_without_skin_or_with_bad_data() {
+        assert!(parse_player_skin(br#"{"id":"x","name":"n","properties":[]}"#).unwrap().is_none(), "Standardskin: keine Eigenschaft");
+        assert!(parse_player_skin(&session_profile(r#"{"textures":{}}"#)).unwrap().is_none(), "Standardskin: kein SKIN");
+        let foreign = session_profile(r#"{"textures":{"SKIN":{"url":"https://evil.example/texture/ab12"}}}"#);
+        assert!(parse_player_skin(&foreign).is_err(), "Texturen nur von Mojangs Server");
+        let garbage = br#"{"properties":[{"name":"textures","value":"***nicht base64***"}]}"#;
+        assert!(parse_player_skin(garbage).unwrap_err().to_string().contains("unlesbare Daten"));
     }
 
     #[test]

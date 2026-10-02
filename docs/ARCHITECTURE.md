@@ -243,6 +243,7 @@ Der Store liest jeden Eintrag einzeln: Einträge, die dieser Build nicht versteh
 | `skin_library` | – | `LibrarySkin[]` |
 | `skin_texture` | `id` | PNG als `data:`-URL |
 | `skin_add` | absoluter `path` einer PNG | `LibrarySkin` (Name = Dateiname, Modell `classic`) |
+| `skin_add_player` | Spielername (`name`) | `LibrarySkin` (Name = Spielername, Modell vom Spieler); löst den Namen über Mojangs öffentliche Endpunkte auf (`api.minecraftservices.com/…/lookup/name`, `sessionserver.mojang.com`), lädt die PNG von `textures.minecraft.net`, kein Konto nötig |
 | `skin_update` | `id`, `name`, `variant` | `LibrarySkin` |
 | `skin_delete` | `id` | – |
 | `skin_save_active` | `accountId`, `name` | `LibrarySkin` (der gerade getragene Skin) |

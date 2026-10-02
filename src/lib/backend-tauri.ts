@@ -148,6 +148,7 @@ export function createTauriBackend(): Backend {
     skinLibrary: () => call("skin_library"),
     skinTexture: (id) => call("skin_texture", { id }),
     skinAdd: (path) => call("skin_add", { path }),
+    skinAddPlayer: (name) => call("skin_add_player", { name }),
     skinUpdate: (id, name, variant) => call("skin_update", { id, name, variant }),
     skinDelete: (id) => call("skin_delete", { id }),
     skinSaveActive: (accountId, name) => call("skin_save_active", { accountId, name }),

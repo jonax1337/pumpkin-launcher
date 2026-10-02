@@ -18,7 +18,7 @@ import {
   Actions, Button, CardGrid, ConfirmDialog, Empty, ErrorBox, Field, Hint, PageHeader, Panel, SectionHeader, Select, Skel, StatusPanel,
 } from "@/ui";
 import { DropHint, rejectedFileToast } from "./detail/dropFiles";
-import { RenameDialog, SkinCard, type WornLook } from "./skins/SkinCard";
+import { PlayerSkinDialog, RenameDialog, SkinCard, type WornLook } from "./skins/SkinCard";
 
 // Radix-Auswahlen kennen keinen leeren Wert.
 const NO_CAPE = "none";
@@ -155,6 +155,7 @@ function Library({ account }: { account: MicrosoftAccount | null }) {
   const add = useAddSkin();
   const remove = useDeleteSkin();
   const [renaming, setRenaming] = useState<LibrarySkin | null>(null);
+  const [loadingPlayer, setLoadingPlayer] = useState(false);
   const removal = useConfirmTarget<LibrarySkin>();
   // Umhang der Vorschau: ohne Wahl der, den das Konto trägt.
   const [chosenCape, setChosenCape] = useState<string>();
@@ -173,9 +174,12 @@ function Library({ account }: { account: MicrosoftAccount | null }) {
         id="skin-lib"
         title={t("pages.skins.libraryTitle")}
         actions={
-          <Button icon="plus" disabled={add.isPending} onClick={() => void pickFile().catch(toastError)}>
-            {t("pages.skins.addSkin")}
-          </Button>
+          <Actions>
+            <Button icon="user" variant="ghost" onClick={() => setLoadingPlayer(true)}>{t("pages.skins.addByName")}</Button>
+            <Button icon="plus" disabled={add.isPending} onClick={() => void pickFile().catch(toastError)}>
+              {t("pages.skins.addSkin")}
+            </Button>
+          </Actions>
         }
       />
       <Hint className="mt-1">{t("pages.skins.libraryHelp")}</Hint>
@@ -217,6 +221,7 @@ function Library({ account }: { account: MicrosoftAccount | null }) {
         </QueryList>
       </div>
       {renaming && <RenameDialog key={renaming.id} skin={renaming} onClose={() => setRenaming(null)} />}
+      {loadingPlayer && <PlayerSkinDialog onClose={() => setLoadingPlayer(false)} />}
       <ConfirmDialog
         {...removal.dialogProps({
           title: (skin) => t("components.instance.deleteQuotedTitle", { name: skin.name }),

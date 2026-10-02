@@ -40,6 +40,10 @@ export const errorsApp = {
   "errors.app.skin.tooLarge": "Die Datei ist zu groß für einen Skin.",
   "errors.app.skin.noActive": "Minecraft meldet für dieses Konto gerade keinen Skin.",
   "errors.app.skin.alreadySaved": "Dieser Skin ist schon in der Bibliothek: „{name}“.",
+  "errors.app.skin.invalidPlayerName": "Ein Spielername besteht aus höchstens 16 Buchstaben, Ziffern und Unterstrichen.",
+  "errors.app.skin.playerNotFound": "Es gibt keinen Spieler namens „{name}“.",
+  "errors.app.skin.playerHasDefaultSkin": "„{name}“ trägt den Standardskin, da gibt es nichts zu laden.",
+  "errors.app.skin.unreadablePlayer": "Minecraft hat unlesbare Daten zu diesem Spieler geliefert.",
 
   "errors.app.notFound.instance": "Instanz „{id}“ wurde nicht gefunden",
   "errors.app.notFound.template": "Vorlage „{id}“ wurde nicht gefunden",

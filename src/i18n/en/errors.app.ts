@@ -40,6 +40,10 @@ export const errorsApp: typeof deErrorsApp = {
   "errors.app.skin.tooLarge": "The file is too large for a skin.",
   "errors.app.skin.noActive": "Minecraft reports no skin for this account right now.",
   "errors.app.skin.alreadySaved": "This skin is already in the library: “{name}”.",
+  "errors.app.skin.invalidPlayerName": "A player name has at most 16 letters, digits and underscores.",
+  "errors.app.skin.playerNotFound": "There is no player named “{name}”.",
+  "errors.app.skin.playerHasDefaultSkin": "“{name}” wears a default skin, so there is nothing to load.",
+  "errors.app.skin.unreadablePlayer": "Minecraft returned unreadable data for this player.",
 
   "errors.app.notFound.instance": "Instance “{id}” was not found",
   "errors.app.notFound.template": "Template “{id}” was not found",

@@ -264,6 +264,8 @@ export interface Backend {
   skinTexture(id: string): Promise<string>;
   /** PNG-Datei (absoluter Pfad aus dem Dateidialog) in die Bibliothek aufnehmen. */
   skinAdd(path: string): Promise<LibrarySkin>;
+  /** Lädt den Skin, den der Spieler `name` gerade trägt, in die Bibliothek (öffentliche Mojang-Endpunkte, ohne Konto). */
+  skinAddPlayer(name: string): Promise<LibrarySkin>;
   skinUpdate(id: string, name: string, variant: SkinVariant): Promise<LibrarySkin>;
   skinDelete(id: string): Promise<void>;
   /** Den gerade getragenen Skin unter `name` in der Bibliothek ablegen. */

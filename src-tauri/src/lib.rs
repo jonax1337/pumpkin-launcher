@@ -122,6 +122,7 @@ pub fn run() {
             skin_commands::skin_library,
             skin_commands::skin_texture,
             skin_commands::skin_add,
+            skin_commands::skin_add_player,
             skin_commands::skin_update,
             skin_commands::skin_delete,
             skin_commands::skin_save_active,

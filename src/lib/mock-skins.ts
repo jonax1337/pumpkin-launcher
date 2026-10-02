@@ -46,6 +46,13 @@ const LOOKS: [name: string, variant: SkinVariant, look: Look, days: number][] = 
   ["Schneeläufer", "classic", { skin: "#F2C4A0", hair: "#D8C080", eyes: "#3E5A9A", shirt: "#CFE2F3", pants: "#587594" }, 30],
 ];
 
+/** Aus einem Spielernamen eine Farbgebung ableiten: derselbe Name malt immer denselben Skin. */
+function lookOf(name: string): Look {
+  const seed = [...name].reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) >>> 0, 7);
+  const color = (shift: number, lightness: number) => `hsl(${(seed + shift) % 360} 45% ${lightness}%)`;
+  return { skin: "#E0A882", hair: color(0, 25), eyes: color(120, 45), shirt: color(200, 45), pants: color(40, 35) };
+}
+
 /** Gleiche Formen wie die Skin-Commands: ein Beispielprofil und eine Bibliothek, alles nur im Speicher. */
 export function createSkinMock() {
   const textures = new Map<string, string>();
@@ -82,16 +89,27 @@ export function createSkinMock() {
     return url;
   }
 
+  /** Nimmt eine Textur in die Bibliothek auf, jede nur einmal wie `skins::add`. */
+  function remember(name: string, variant: SkinVariant, url: string) {
+    const existing = library.find((s) => textures.get(s.id) === url);
+    if (existing) throw new Error(t("mock.skin.alreadyInLibrary", { name: existing.name }));
+    const added: LibrarySkin = { id: `mock-skin-${crypto.randomUUID()}`, name, variant, addedAt: Date.now() };
+    textures.set(added.id, url);
+    library.push(added);
+    return clone(added);
+  }
+
   return {
     async skinAdd(path: string) {
       await wait();
-      const url = await readSkinFile(path);
-      const existing = library.find((s) => textures.get(s.id) === url);
-      if (existing) throw new Error(t("mock.skin.alreadyInLibrary", { name: existing.name }));
-      const added: LibrarySkin = { id: `mock-skin-${crypto.randomUUID()}`, name: pickedName(path).slice(0, 64) || "Skin", variant: "classic", addedAt: Date.now() };
-      textures.set(added.id, url);
-      library.push(added);
-      return clone(added);
+      return remember(pickedName(path).slice(0, 64) || "Skin", "classic", await readSkinFile(path));
+    },
+    /** Jeder gültige Name hat einen Skin: im Browser gibt es kein Mojang, also malt der Mock ihn aus dem Namen. */
+    async skinAddPlayer(name: string) {
+      await wait(500);
+      const player = name.trim();
+      if (!/^\w{1,16}$/.test(player)) throw new Error(t("errors.app.skin.invalidPlayerName"));
+      return remember(player, "classic", paintSkin(lookOf(player)));
     },
     async skinProfile(): Promise<SkinProfile> {
       await wait(400);
@@ -115,12 +133,7 @@ export function createSkinMock() {
     async skinSaveActive(_accountId: string, name: string) {
       await wait(500);
       if (!skin) throw new Error(t("mock.skin.noneOnAccount"));
-      const existing = library.find((s) => textures.get(s.id) === skin!.url);
-      if (existing) throw new Error(t("mock.skin.alreadyInLibrary", { name: existing.name }));
-      const saved: LibrarySkin = { id: `mock-skin-${crypto.randomUUID()}`, name, variant: skin.variant, addedAt: Date.now() };
-      textures.set(saved.id, skin.url);
-      library.push(saved);
-      return clone(saved);
+      return remember(name, skin.variant, skin.url);
     },
     async skinUpload(_accountId: string, skinId: string) {
       await wait(800);

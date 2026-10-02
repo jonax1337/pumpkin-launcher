@@ -54,6 +54,8 @@ const inLibrary = (skin: LibrarySkin) => t("hooks.skin.inLibrary", { name: skin.
 
 export const useAddSkin = () => useLibraryChange(api.skinAdd, inLibrary);
 
+export const useAddPlayerSkin = () => useLibraryChange(api.skinAddPlayer, inLibrary);
+
 export const useUpdateSkin = () =>
   useLibraryChange(({ id, name, variant }: { id: string; name: string; variant: SkinVariant }) => api.skinUpdate(id, name, variant));
 

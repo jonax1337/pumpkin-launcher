@@ -1,7 +1,7 @@
 import { useI18n } from "@/i18n";
 import { SkinViewer } from "@/components/SkinViewer";
 import { NameDialog } from "@/components/NameDialog";
-import { useSkinSignature, useSkinTexture, useUpdateSkin, useUploadSkin } from "@/hooks/useSkins";
+import { useAddPlayerSkin, useSkinSignature, useSkinTexture, useUpdateSkin, useUploadSkin } from "@/hooks/useSkins";
 import type { LibrarySkin, SkinVariant } from "@/lib/types";
 import { Button, Chip, IconButton, Menu, Panel, Segmented, Tip, Trunc, type MenuEntry } from "@/ui";
 
@@ -69,6 +69,28 @@ export function SkinCard({ skin, accountId, capeUrl, worn, onRename, onDelete }:
         </Button>
       </Tip>
     </Panel>
+  );
+}
+
+/** Minecraft-Spielernamen sind höchstens 16 Zeichen lang. */
+const MAX_PLAYER_NAME_LEN = 16;
+
+/** Fragt nach einem Spielernamen und legt den Skin, den dieser Spieler trägt, in der Bibliothek ab. */
+export function PlayerSkinDialog({ onClose }: { onClose: () => void }) {
+  const { t } = useI18n();
+  const add = useAddPlayerSkin();
+  return (
+    <NameDialog
+      title={t("pages.skins.playerDialogTitle")}
+      label={t("pages.skins.playerField")}
+      help={t("pages.skins.playerHelp")}
+      initial=""
+      maxLength={MAX_PLAYER_NAME_LEN}
+      pending={add.isPending}
+      confirm={{ label: t("pages.skins.playerLoad"), pending: t("pages.skins.playerLoading") }}
+      onSubmit={(name) => add.mutate(name, { onSuccess: onClose })}
+      onClose={onClose}
+    />
   );
 }
 
