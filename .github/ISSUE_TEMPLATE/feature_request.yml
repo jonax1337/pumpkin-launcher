@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest a feature or improvement for the launcher
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: For open questions or rough ideas, the [Discussions](https://github.com/jonax1337/pumpkin-launcher/discussions) are the better place.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that the launcher does not support (well) yet?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should the launcher do instead? Sketches and screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds, other launchers that solve it, or features you would not want.

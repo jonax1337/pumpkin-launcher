@@ -209,3 +209,16 @@ h2 { font-size: clamp(64px,7vw,100px); line-height: 1; letter-spacing: -1.2px; }
   .footer-bottom { align-items: flex-start; flex-direction: column; gap: 15px; margin-top: 28px; font-size: 9px; }
 }
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation: none !important; transition: none !important; } }
+
+.footer-legal { display: flex; gap: 18px; }
+.legal { max-width: 760px; padding-block: 140px 70px; }
+.legal h1 { font-size: clamp(48px,6vw,84px); margin: 0 0 24px; }
+.legal h2 { font-size: 30px; letter-spacing: .01em; text-transform: uppercase; margin: 40px 0 12px; }
+.legal p, .legal li { color: #b7c1d3; font-size: 15px; line-height: 1.8; }
+.legal p + p, .legal ul + p { margin-top: 14px; }
+.legal ul { margin: 14px 0 0; padding-left: 22px; }
+.legal li + li { margin-top: 10px; }
+.legal strong { color: var(--text); }
+.legal mark { background: var(--copper); color: #160e08; padding: 0 5px; }
+.legal-note { padding: 14px 18px; border: 1px solid var(--line); }
+@media (max-width: 1000px) { .legal { padding-block: 120px 50px; } }

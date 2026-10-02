@@ -2,14 +2,18 @@
 //! Servern der Autoren (meist Dropbox oder GitHub), ohne Prüfsumme. Pumpkin Launcher lädt sie trotzdem,
 //! aber nur über `net::download_public` (HTTPS, öffentliche Adressen) und entpackt sie mit denselben
 //! Pfad- und Größenregeln wie ein `.mrpack`. Loader und Minecraft-Version stehen in `bin/version.json`.
-use super::{json, net, segment, zip_files, MIB, ZIP_LIMIT};
+use super::{json, net, remote_file::mib_progress, segment, zip_files, PackRequest, ProjectType, SearchQuery, SortIndex};
 use crate::{
-    error::AppResult,
-    models::{Instance, ModLoader, NewInstance},
+    coded,
+    error::{AppError, AppResult},
+    models::{instance_name, Instance, ModLoader, NewInstance},
     services::{
         content::{Blob, Pack, TempFile},
         forge,
-        modrinth::{identifier, invalid, File, Hit, Project, SearchResponse, Version},
+        limits::{CATALOG_CONCURRENCY, PAGE_SIZE, QUERY_MAX, SUMMARY_MAX, ZIP_JSON_LIMIT, ZIP_LIMIT},
+        modrinth::{identifier, File, Hit, Project, SearchResponse, Version},
+        progress::{Phase, ProgressFn},
+        transport::read_capped_io,
         Dirs,
     },
 };
@@ -18,7 +22,6 @@ use serde::Deserialize;
 use std::{
     collections::{BTreeMap, HashMap},
     fs,
-    io::Read,
     sync::{Arc, Mutex},
 };
 
@@ -82,7 +85,12 @@ fn plain(s: &str) -> String {
         }
     }
     let text = out.split_whitespace().collect::<Vec<_>>().join(" ");
-    if text.chars().count() > 220 { format!("{}…", text.chars().take(219).collect::<String>().trim_end()) } else { text }
+    if text.chars().count() > SUMMARY_MAX {
+        // Eine Stelle bleibt für das „…“.
+        format!("{}…", text.chars().take(SUMMARY_MAX - 1).collect::<String>().trim_end())
+    } else {
+        text
+    }
 }
 
 fn title(d: &Detail) -> String {
@@ -114,49 +122,42 @@ async fn detail(client: &reqwest::Client, slug: &str) -> AppResult<Detail> {
     segment(slug)?;
     let d: Detail = json(client, &format!("{API}/modpack/{slug}?build={BUILD}")).await?;
     if d.name != slug {
-        return Err(invalid("Technic-Pack stimmt nicht überein"));
+        return Err(AppError::invalid(coded!("errors.providers.technicPackMismatch")));
     }
     Ok(d)
 }
 
-pub async fn search(
-    client: &reqwest::Client,
-    query: &str,
-    kind: &str,
-    mc: Option<&str>,
-    offset: u32,
-    index: Option<&str>,
-) -> AppResult<SearchResponse> {
-    if query.len() > 512 {
-        return Err(invalid("Ungültige Suche"));
-    }
-    let empty = SearchResponse { hits: Vec::new(), total_hits: 0, offset, limit: 20 };
-    // Technic liefert eine einzige Seite ohne Versatz.
-    if kind != "modpack" || offset > 0 {
+/// Technic nennt keinen Loader und liefert nur eine Seite ohne Versatz; ohne Sortierwunsch bleibt es bei der Reihenfolge
+/// der API (bei leerem Suchbegriff die angesagten Packs).
+pub async fn search(client: &reqwest::Client, request: &SearchQuery) -> AppResult<SearchResponse> {
+    request.ensure_within(QUERY_MAX, u32::MAX)?;
+    let empty = SearchResponse { hits: Vec::new(), total_hits: 0, offset: request.offset, limit: PAGE_SIZE };
+    if request.project_type != ProjectType::Modpack || request.offset > 0 {
         return Ok(empty);
     }
-    let query = query.trim();
+    let query = request.query.trim();
     let mut url = reqwest::Url::parse(&format!("{API}/{}", if query.is_empty() { "trending" } else { "search" }))
-        .map_err(|e| invalid(e.to_string()))?;
+        .map_err(|e| AppError::invalid(e.to_string()))?;
     url.query_pairs_mut().append_pair("build", BUILD);
     if !query.is_empty() {
         url.query_pairs_mut().append_pair("q", query);
     }
     let listing: Listing = json(client, url.as_str()).await?;
-    let details: Vec<Detail> = futures::stream::iter(listing.modpacks.into_iter().filter(|e| segment(&e.slug).is_ok()).take(20))
-        .map(|e| async move { detail(client, &e.slug).await.ok() })
-        .buffered(8)
+    let details: Vec<Detail> = futures::stream::iter(listing.modpacks.into_iter().filter(|e| segment(&e.slug).is_ok()).take(PAGE_SIZE as usize))
+        .map(|e| async move {
+            detail(client, &e.slug).await.inspect_err(|err| tracing::warn!(slug = %e.slug, %err, "Technic-Pack nicht geladen")).ok()
+        })
+        .buffered(CATALOG_CONCURRENCY)
         .filter_map(|d| async move { d })
         .collect()
         .await;
+    let mc = request.mc.as_deref();
     let mut details: Vec<Detail> = details.into_iter().filter(|d| mc.is_none_or(|mc| d.minecraft.as_deref() == Some(mc))).collect();
-    match index {
-        Some("downloads") => details.sort_by_key(|d| std::cmp::Reverse(d.installs)),
-        None | Some("relevance" | "follows" | "newest" | "updated") => {}
-        Some(_) => return Err(invalid("Ungültige Sortierung")),
+    if request.index == Some(SortIndex::Downloads) {
+        details.sort_by_key(|d| std::cmp::Reverse(d.installs));
     }
     let hits: Vec<Hit> = details.iter().map(hit).collect();
-    Ok(SearchResponse { total_hits: hits.len() as u64, hits, offset, limit: 20 })
+    Ok(SearchResponse { total_hits: hits.len() as u64, hits, offset: request.offset, limit: PAGE_SIZE })
 }
 
 pub async fn project(client: &reqwest::Client, slug: &str) -> AppResult<Project> {
@@ -173,6 +174,7 @@ pub async fn project(client: &reqwest::Client, slug: &str) -> AppResult<Project>
         client_side: "optional".into(),
         server_side: "optional".into(),
         web_url: d.platform_url.clone(),
+        ..Project::default()
     })
 }
 
@@ -189,6 +191,7 @@ pub async fn versions(client: &reqwest::Client, slug: &str) -> AppResult<Vec<Ver
         loaders: Vec::new(),
         version_type: "release".into(),
         date_published: String::new(),
+        changelog: None,
         files: d
             .platform_url
             .iter()
@@ -197,6 +200,15 @@ pub async fn versions(client: &reqwest::Client, slug: &str) -> AppResult<Vec<Ver
         dependencies: Vec::new(),
     }])
 }
+
+/// Maven-Koordinaten, an denen ein Loader in den Bibliotheken des Launcher-Profils zu erkennen ist; die Reihenfolge
+/// entscheidet, wenn mehrere vorkommen.
+const LOADER_LIBRARIES: [(ModLoader, &[&str]); 4] = [
+    (ModLoader::Fabric, &["net.fabricmc:fabric-loader:"]),
+    (ModLoader::Quilt, &["org.quiltmc:quilt-loader:"]),
+    (ModLoader::NeoForge, &["net.neoforged:neoforge:", "net.neoforged:forge:"]),
+    (ModLoader::Forge, &["net.minecraftforge:forge:", "net.minecraftforge:fmlloader:"]),
+];
 
 /// Minecraft-Version, Loader und Loader-Version aus dem Launcher-Profil `bin/version.json`.
 /// Der Loader steht in den Bibliotheken (`net.fabricmc:fabric-loader:0.15.3`, `net.minecraftforge:forge:1.20.1-47.1.3` …).
@@ -207,7 +219,7 @@ fn loader_from(profile: &serde_json::Value) -> AppResult<(String, ModLoader, Opt
         .map(str::to_string)
         // Ältere Profile heißen `1.20.1-forge-47.1.3`.
         .or_else(|| id.split('-').next().filter(|s| s.starts_with(|c: char| c.is_ascii_digit())).map(str::to_string))
-        .ok_or_else(|| invalid("Minecraft-Version im Pack nicht erkennbar"))?;
+        .ok_or_else(|| AppError::invalid(coded!("errors.providers.minecraftVersionUnknown")))?;
     identifier(&mc)?;
     let names: Vec<&str> = profile["libraries"].as_array().map(|a| a.iter().filter_map(|l| l["name"].as_str()).collect()).unwrap_or_default();
     let version = |prefix: &str| -> Option<String> {
@@ -216,26 +228,15 @@ fn loader_from(profile: &serde_json::Value) -> AppResult<(String, ModLoader, Opt
         let v = v.split(':').next()?;
         Some(v.strip_prefix(&format!("{mc}-")).unwrap_or(v).to_string())
     };
-    let found = if let Some(v) = version("net.fabricmc:fabric-loader:") {
-        (ModLoader::Fabric, Some(v))
-    } else if let Some(v) = version("org.quiltmc:quilt-loader:") {
-        (ModLoader::Quilt, Some(v))
-    } else if let Some(v) = version("net.neoforged:neoforge:").or_else(|| version("net.neoforged:forge:")) {
-        (ModLoader::NeoForge, Some(v))
-    } else if let Some(v) = version("net.minecraftforge:forge:").or_else(|| version("net.minecraftforge:fmlloader:")) {
-        (ModLoader::Forge, Some(v))
-    } else {
-        (ModLoader::Vanilla, None)
-    };
-    if let Some(v) = &found.1 {
+    let (loader, loader_version) = LOADER_LIBRARIES
+        .iter()
+        .find_map(|(loader, prefixes)| prefixes.iter().find_map(|prefix| version(prefix)).map(|v| (*loader, Some(v))))
+        .unwrap_or((ModLoader::Vanilla, None));
+    if let Some(v) = &loader_version {
         identifier(v)?;
     }
-    match found.0 {
-        ModLoader::Forge => forge::check_supported(forge::Kind::Forge, &mc)?,
-        ModLoader::NeoForge => forge::check_supported(forge::Kind::NeoForge, &mc)?,
-        _ => {}
-    }
-    Ok((mc, found.0, found.1))
+    forge::check_loader(loader, &mc)?;
+    Ok((mc, loader, loader_version))
 }
 
 /// Liest das Pack-Zip (nur das Inhaltsverzeichnis) und plant die Dateien. Regeln wie beim `.mrpack`:
@@ -251,17 +252,12 @@ fn inspect(temp: TempFile, name: &str) -> AppResult<Pack> {
         let mut wrapped = names.iter().filter_map(|n| n.strip_suffix("/bin/version.json")).filter(|p| !p.contains('/'));
         match (wrapped.next(), wrapped.next()) {
             (Some(p), None) => format!("{p}/"),
-            _ => return Err(invalid("Das ist kein Technic-Pack: bin/version.json fehlt")),
+            _ => return Err(AppError::invalid(coded!("errors.providers.notTechnicPack"))),
         }
     };
     let profile: serde_json::Value = {
         let entry = zip.by_name(&format!("{prefix}bin/version.json"))?;
-        let mut bytes = Vec::new();
-        entry.take(8 * MIB + 1).read_to_end(&mut bytes)?;
-        if bytes.len() as u64 > 8 * MIB {
-            return Err(invalid("version.json zu groß"));
-        }
-        serde_json::from_slice(&bytes)?
+        serde_json::from_slice(&read_capped_io(entry, ZIP_JSON_LIMIT, "version.json zu groß")?)?
     };
     let (mc, loader, loader_version) = loader_from(&profile)?;
 
@@ -282,30 +278,18 @@ fn inspect(temp: TempFile, name: &str) -> AppResult<Pack> {
 pub(crate) async fn plan(
     client: &reqwest::Client,
     dirs: &Dirs,
-    slug: &str,
-    name: &str,
-    progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
+    request: &PackRequest,
+    progress: ProgressFn<'_>,
 ) -> AppResult<Pack> {
-    if name.trim().is_empty() || name.len() > 200 {
-        return Err(invalid("Ungültiger Instanzname"));
-    }
-    let d = detail(client, slug).await?;
+    let name = instance_name(&request.name)?;
+    let d = detail(client, &request.project_id).await?;
     if d.solder.is_some() {
-        return Err(invalid("Dieses Modpack nutzt Technic Solder (ältere Technik) und lässt sich nicht installieren"));
+        return Err(AppError::invalid(coded!("errors.providers.solderPack")));
     }
-    let url = d.url.filter(|u| !u.is_empty()).ok_or_else(|| invalid("Das Modpack hat keine Download-Adresse"))?;
-    let tmp = dirs.root.join("cache").join("tmp");
-    fs::create_dir_all(&tmp)?;
-    let temp = TempFile(tmp.join(format!("{}.zip", crate::models::new_id())));
-    progress("download", 0, 0);
-    // Nur bei jedem vollen MiB melden, nicht bei jedem Netzwerk-Häppchen.
-    let last = std::sync::atomic::AtomicU64::new(u64::MAX);
-    net::download_public(&url, &temp.0, ZIP_LIMIT, &|done, total| {
-        if last.swap(done / MIB, std::sync::atomic::Ordering::Relaxed) != done / MIB {
-            progress("download", done / MIB, total / MIB);
-        }
-    })
-    .await?;
+    let url = d.url.filter(|u| !u.is_empty()).ok_or_else(|| AppError::invalid(coded!("errors.providers.noDownloadUrl")))?;
+    let temp = TempFile::in_cache(dirs)?;
+    progress(Phase::Download, 0, 0);
+    net::download_public(&url, &temp.0, ZIP_LIMIT, &mib_progress(progress)).await?;
     inspect(temp, name)
 }
 
@@ -323,9 +307,11 @@ mod tests {
     #[ignore = "braucht Netzwerk"]
     async fn live_trending_search_and_detail() {
         let client = crate::services::modrinth::client().unwrap();
-        let trending = search(&client, "", "modpack", None, 0, Some("downloads")).await.unwrap();
+        let by_downloads = SearchQuery { index: Some(SortIndex::Downloads), ..SearchQuery::of("", ProjectType::Modpack) };
+        let trending = search(&client, &by_downloads).await.unwrap();
         assert!(trending.hits.len() > 3, "Trending leer");
-        let found = search(&client, "cobblemon", "modpack", Some("1.21.1"), 0, None).await.unwrap();
+        let cobblemon = SearchQuery { mc: Some("1.21.1".into()), ..SearchQuery::of("cobblemon", ProjectType::Modpack) };
+        let found = search(&client, &cobblemon).await.unwrap();
         eprintln!("{} Treffer, erster: {:?}", found.hits.len(), found.hits.first().map(|h| (&h.title, h.downloads)));
         assert!(found.hits.iter().all(|h| !h.title.is_empty()));
         let slug = &trending.hits[0].project_id;
@@ -338,11 +324,15 @@ mod tests {
     #[tokio::test]
     #[ignore = "braucht Netzwerk und lädt rund 32 MB"]
     async fn live_install_small_pack() {
-        use crate::{services::content, state::AppState};
+        use crate::{
+            services::{content, providers::Source},
+            state::AppState,
+        };
         let client = crate::services::modrinth::client().unwrap();
         let root = std::env::temp_dir().join(crate::models::new_id());
         let state = AppState::load(&root).unwrap();
-        let pack = plan(&client, &state.dirs, "deadwood-fabric", "Live-Test", &|phase, done, total| eprintln!("{phase}: {done}/{total} MiB")).await.unwrap();
+        let request = PackRequest { source: Source::Technic, project_id: "deadwood-fabric".into(), version_id: "1".into(), name: "Live-Test".into() };
+        let pack = plan(&client, &state.dirs, &request, &|phase, done, total| eprintln!("{phase:?}: {done}/{total} MiB")).await.unwrap();
         let instance = content::import_plan(&state, pack, None, &|_, _, _| {}).await.unwrap();
         let jars = std::fs::read_dir(state.dirs.game_dir(&instance.id).join("mods")).unwrap().count();
         eprintln!("{} {:?} {:?}, {jars} Mods, {} erfasst", instance.minecraft_version, instance.loader, instance.loader_version, instance.mods.len());
@@ -364,7 +354,7 @@ mod tests {
 
     #[test]
     fn loader_comes_from_the_profile_libraries() {
-        let got = |p| loader_from(&p).map(|(mc, l, v)| (mc, l, v));
+        let got = |p: serde_json::Value| loader_from(&p);
         assert_eq!(
             got(profile("1.20.4", Some("1.20.4"), &["net.fabricmc:sponge-mixin:0.12.5", "net.fabricmc:fabric-loader:0.15.3"])).unwrap(),
             ("1.20.4".to_string(), ModLoader::Fabric, Some("0.15.3".to_string()))

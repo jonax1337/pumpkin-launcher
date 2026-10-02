@@ -1,5 +1,5 @@
-/* Pixel-Kit (src/ui): Tokens. Liegt in der Komponenten-Schicht hinter pixelkino.css/states.css
-   und nutzt deren Farben, Kerben (--n1/--n2/--ring) und Bevel. Alles hier ist neu; der Altbestand liest nichts davon. */
+/* Pixel-Kit (src/ui): Tokens. Liegt in der Komponenten-Schicht hinter pixelkino.css
+   und nutzt deren Farben, Kerben (--n1/--n2/--ring) und Bevel. Alles hier ist neu. */
 :root {
   /* Komponentengrößen (fest, nie von --px abhängig) */
   --vx-h-s: 32px;
@@ -25,11 +25,16 @@
   --scene-shadow: 0 var(--px) 0 rgba(3,5,10,.85);
 
   /* Auswahl: „gewählt“ = Kupferrahmen 1 Einheit + 10 % Kupfertönung; „aktuell“ = Akzentbalken unten (2 Einheiten).
-     --sel-ring liest states.css schon als Rückfall (Doppelring bei Fokus auf Gewähltem). */
+     --sel-ring: Doppelring bei Fokus auf Gewähltem (card.css). */
   --sel-ring: var(--copper);
   --sel-edge: inset 0 0 0 var(--px) var(--sel-ring);
   --sel-bg: color-mix(in srgb, var(--copper) 10%, var(--panel));
   --sel-cur: var(--acc);
+
+  /* Bevel des „an“-Zustands (Schalter, Checkbox): aus --copper abgeleitet, weil die Saison die Marke zur Laufzeit umfärbt (Brand.tsx).
+     Gleiche Mischung wie --acc-hi/--acc-mid (OKLab, mit --bg). */
+  --copper-hi: color-mix(in oklab, var(--copper) 58%, #fff);
+  --copper-lo: color-mix(in oklab, var(--copper) 76%, #070A11);
 
   /* Übergänge nur in ganzen Stufen; Bewegungen um 1 Einheit springen (kein Übergang, sonst halbe Pixel) */
   --st: 90ms steps(2, end);

@@ -1,0 +1,170 @@
+name: Release
+
+# Tag v* pushen → Installer für Windows, Linux und macOS plus ein gemeinsames latest.json als Entwurf. Ablauf: docs/RELEASING.md
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Check version & create draft
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release_id: ${{ steps.draft.outputs.id }}
+      notes: ${{ steps.notes.outputs.body }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Check tag matches app version
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          status=0
+          check() {
+            if [ "$2" != "$tag" ]; then
+              echo "::error file=$1::$1 has version $2, but the tag is $GITHUB_REF_NAME. Bump all three files (see docs/RELEASING.md)."
+              status=1
+            fi
+          }
+          check package.json "$(node -p "require('./package.json').version")"
+          check src-tauri/tauri.conf.json "$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          check src-tauri/Cargo.toml "$(grep -m1 '^version = ' src-tauri/Cargo.toml | cut -d '"' -f2)"
+          exit $status
+
+      # checkout legt den Tag ohne Nachricht an; die Nachricht des annotierten Tags sind die Versionshinweise.
+      - name: Read release notes from tag
+        id: notes
+        shell: bash
+        run: |
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          {
+            echo "body<<RELEASE_NOTES"
+            git tag -l --format='%(contents:subject)%0a%0a%(contents:body)' "$GITHUB_REF_NAME"
+            echo "RELEASE_NOTES"
+          } >> "$GITHUB_OUTPUT"
+
+      # Ein Entwurf vorab für alle Plattformen: parallel angelegt entstünden sonst mehrere.
+      - name: Create draft release
+        id: draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTES: ${{ steps.notes.outputs.body }}
+        run: |
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" -f tag_name="$GITHUB_REF_NAME" \
+            -f name="Pumpkin Launcher $GITHUB_REF_NAME" -f body="$NOTES" -F draft=true --jq .id)
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build (${{ matrix.platform }})
+    needs: prepare
+    # Der Signaturschlüssel liegt als Secret dieser Umgebung; ihre Pflichtprüfer geben jeden Build frei (docs/RELEASING.md).
+    environment: release
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: ""
+          - platform: ubuntu-22.04
+            args: ""
+          # Universal-Build: eine App für Apple Silicon und Intel, im latest.json unter beiden Schlüsseln.
+          - platform: macos-latest
+            args: --target universal-apple-darwin
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: ./.github/actions/linux-deps
+        if: runner.os == 'Linux'
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: stable
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          releaseId: ${{ needs.prepare.outputs.release_id }}
+          # Der Entwurf hat den Text schon; tauri-action schreibt ihn als `notes` in latest.json, das der Updater anzeigt.
+          releaseBody: ${{ needs.prepare.outputs.notes }}
+          args: ${{ matrix.args }}
+
+  # Die Builds ergänzen latest.json nacheinander; enden zwei gleichzeitig, kann eine Plattform fehlen.
+  updater-json:
+    name: Check latest.json
+    needs: build
+    runs-on: ubuntu-latest
+    # Entwürfe sieht nur, wer Schreibrechte hat.
+    permissions:
+      contents: write
+    steps:
+      - name: latest.json lists every platform
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern latest.json
+          status=0
+          for platform in windows-x86_64 linux-x86_64 darwin-x86_64 darwin-aarch64; do
+            if ! jq -e --arg p "$platform" '.platforms[$p]' latest.json > /dev/null; then
+              echo "::error::latest.json has no entry for $platform. Re-run that platform's build job (see docs/RELEASING.md)."
+              status=1
+            fi
+          done
+          exit $status
+
+  # Prüfsummen und Herkunftsnachweis erst, wenn alle Dateien im Entwurf liegen.
+  checksums:
+    name: SHA256SUMS & provenance
+    needs: updater-json
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download the release files
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir dist
+
+      - name: Create SHA256SUMS
+        run: |
+          cd dist
+          rm -f SHA256SUMS
+          sha256sum -- * > ../SHA256SUMS
+          mv ../SHA256SUMS .
+          cat SHA256SUMS
+
+      - uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+        with:
+          subject-path: dist/*
+
+      - name: Attach SHA256SUMS to the draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" dist/SHA256SUMS --repo "$GITHUB_REPOSITORY" --clobber

@@ -1,9 +1,11 @@
-import { createContext, useContext, useId, type ComponentProps, type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, useId, type ComponentProps, type ReactNode, type Ref } from "react";
 import { Select as S } from "radix-ui";
+import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { Icon } from "./Icon";
 import { IconButton } from "./Button";
-import type { IconName } from "./types";
+import { flag, hasContent, widthStyle } from "./util";
+import type { IconName, Tone } from "./types";
 
 // ---------- Kontext: Beschriftung und Beschreibung automatisch ----------
 
@@ -14,13 +16,16 @@ import type { IconName } from "./types";
 type FieldCtx = { id?: string; describedBy?: string; invalid?: boolean };
 const FieldContext = createContext<FieldCtx>({});
 
-/** Props der Eingabe mit Kontext zusammenführen (eigene Angaben zuerst). */
-function useFieldProps(id?: string, describedBy?: string, invalid?: ComponentProps<"input">["aria-invalid"]) {
+type FieldA11y = Pick<ComponentProps<"input">, "id" | "aria-describedby" | "aria-invalid">;
+
+/** Props der Eingabe mit dem Kontext zusammenführen (eigene Angaben zuerst); die übrigen Props bleiben unverändert dabei. */
+function useFieldProps<P extends FieldA11y>({ id, "aria-describedby": describedBy, "aria-invalid": invalid, ...rest }: P) {
   const ctx = useContext(FieldContext);
   return {
     id: id ?? ctx.id,
     "aria-describedby": cn(describedBy, ctx.describedBy) || undefined,
     "aria-invalid": invalid ?? (ctx.invalid || undefined),
+    ...rest,
   };
 }
 
@@ -30,10 +35,12 @@ function useFieldProps(id?: string, describedBy?: string, invalid?: ComponentPro
  * Formularabschnitt mit Überschrift (20 px, Versalien) und Linie unten (nicht beim letzten).
  * Container für das Zeilenraster: unter 1100 px Breite rutscht die Hilfe unter das Steuerelement.
  */
-export function FormSection({ title, srOnlyTitle, level = 2, className, children }: { title: string; srOnlyTitle?: boolean; level?: 2 | 3; className?: string; children: ReactNode }) {
+export function FormSection({ title, srOnlyTitle, level = 2, className, ref, children }: {
+  title: string; srOnlyTitle?: boolean; level?: 2 | 3; className?: string; ref?: Ref<HTMLElement>; children: ReactNode;
+}) {
   const H = level === 3 ? "h3" : "h2";
   return (
-    <section className={cn("vx-fsec", className)}>
+    <section ref={ref} className={cn("vx-fsec", className)}>
       <H className={srOnlyTitle ? "sr" : "vx-fsec-h"}>{title}</H>
       {children}
     </section>
@@ -51,16 +58,15 @@ export function FormRow({ label, hint, htmlFor, group, aside, wide, children }: 
 }) {
   const id = useId();
   const desc = cn(hint && `${id}-h`, aside && `${id}-a`) || undefined;
-  const lab = (
-    <>
-      <span id={`${id}-l`}>{label}</span>
-      {hint && <small id={`${id}-h`}>{hint}</small>}
-    </>
-  );
+  const name = <span id={`${id}-l`}>{label}</span>;
   return (
     <div className="vx-frow">
-      {htmlFor ? <label htmlFor={htmlFor} className="vx-fl">{lab}</label> : <div className="vx-fl">{lab}</div>}
-      <div className="vx-fc" data-wide={wide ? "" : undefined} role={group} aria-labelledby={group ? `${id}-l` : undefined} aria-describedby={group ? desc : undefined}>
+      {/* Der Hinweis steht neben dem Label, nicht darin: sonst gehörte er zum Namen der Eingabe statt zu ihrer Beschreibung. */}
+      <div className="vx-fl">
+        {htmlFor ? <label htmlFor={htmlFor}>{name}</label> : name}
+        {hint && <small id={`${id}-h`}>{hint}</small>}
+      </div>
+      <div className="vx-fc" data-wide={flag(wide)} role={group} aria-labelledby={group ? `${id}-l` : undefined} aria-describedby={group ? desc : undefined}>
         <FieldContext value={{ describedBy: htmlFor ? desc : undefined }}>{children}</FieldContext>
       </div>
       {aside && <div className="vx-fh" id={`${id}-a`}>{aside}</div>}
@@ -71,26 +77,27 @@ export function FormRow({ label, hint, htmlFor, group, aside, wide, children }: 
 // ---------- Feld (Label über der Eingabe) ----------
 
 /**
- * Label über der Eingabe, darunter Hilfe oder Fehler (Nachfolger von .nf). Die Eingabe darin bekommt id (ohne `htmlFor`),
+ * Label über der Eingabe, darunter Hilfe oder Fehler. Die Eingabe darin bekommt id (ohne `htmlFor`),
  * aria-describedby und aria-invalid automatisch. `reserveLines`: Platz für 1–2 Zeilen Hilfe/Fehler, damit nichts springt.
  * `group`: Inhalt ist eine Gruppe (Segmente, Radios); Label und Hilfe gehen an ein role=group darum.
  */
 export function Field({ label, htmlFor, help, error, optional, reserveLines, group, className, children }: {
   label: ReactNode; htmlFor?: string; help?: ReactNode; error?: ReactNode; optional?: boolean; reserveLines?: 1 | 2; group?: boolean; className?: string; children: ReactNode;
 }) {
+  const { t } = useI18n();
   const uid = useId();
   const id = htmlFor ?? `${uid}-i`;
-  const bad = error != null && error !== false && error !== "";
-  const hasHelp = bad || (help != null && help !== false && help !== "");
+  const bad = hasContent(error);
+  const hasHelp = bad || hasContent(help);
   const descId = `${uid}-d`;
   const lab = (
     <>
       {label}
-      {optional && <span className="vx-opt"> (optional)</span>}
+      {optional && <span className="vx-opt"> {t("ui.field.optional")}</span>}
     </>
   );
   return (
-    <div className={cn("vx-field", className)} data-invalid={bad ? "" : undefined}>
+    <div className={cn("vx-field", className)} data-invalid={flag(bad)}>
       {group ? <span className="vx-field-l" id={`${uid}-l`}>{lab}</span> : <label className="vx-field-l" htmlFor={id}>{lab}</label>}
       {group ? (
         <div role="group" aria-labelledby={`${uid}-l`} aria-describedby={hasHelp ? descId : undefined}>{children}</div>
@@ -106,13 +113,15 @@ export function Field({ label, htmlFor, help, error, optional, reserveLines, gro
   );
 }
 
-const HINT_ICON: Record<"neutral" | "warn" | "bad" | "ok", IconName | undefined> = { neutral: undefined, warn: "warn", bad: "warn", ok: "check" };
+type HintTone = Extract<Tone, "neutral" | "warn" | "bad"> | "ok";
+
+const HINT_ICON: Record<HintTone, IconName | undefined> = { neutral: undefined, warn: "warn", bad: "warn", ok: "check" };
 
 /**
- * Kurzer Hinweis unter/neben einem Steuerelement (12,5 px). Warnung und Fehler immer mit Symbol (nie nur Farbe).
+ * Kurzer Hinweis unter/neben einem Steuerelement (13 px). Warnung und Fehler immer mit Symbol (nie nur Farbe).
  * `live`: wird angesagt, wenn er erscheint oder sich ändert (Fehler als alert, sonst status).
  */
-export function Hint({ tone = "neutral", icon, live, id, className, children }: { tone?: "neutral" | "warn" | "bad" | "ok"; icon?: IconName | false; live?: boolean; id?: string; className?: string; children: ReactNode }) {
+export function Hint({ tone = "neutral", icon, live, id, className, children }: { tone?: HintTone; icon?: IconName | false; live?: boolean; id?: string; className?: string; children: ReactNode }) {
   const ico = icon === false ? undefined : (icon ?? HINT_ICON[tone]);
   return (
     <span id={id} className={cn("vx-hint", className)} data-tone={tone === "neutral" ? undefined : tone} role={live ? (tone === "bad" ? "alert" : "status") : undefined}>
@@ -132,24 +141,23 @@ type FieldLook = {
 };
 
 const widthData = (width: FieldLook["width"]) => (typeof width === "string" ? width : undefined);
-const widthStyle = (width: FieldLook["width"], style?: CSSProperties) => (typeof width === "number" ? { ...style, width } : style);
 
 /** Eingabefeld in der eingelassenen Platte. Props (auch ref) gehen an das <input>. */
-export function TextField({ size = "m", width, className, style, id, "aria-describedby": describedBy, "aria-invalid": invalid, ...props }: FieldLook & Omit<ComponentProps<"input">, "size">) {
-  const f = useFieldProps(id, describedBy, invalid);
+export function TextField({ size = "m", width, className, style, ...props }: FieldLook & Omit<ComponentProps<"input">, "size">) {
+  const input = useFieldProps(props);
   return (
     <label className={cn("vx-input", className)} data-size={size} data-w={widthData(width)} style={widthStyle(width, style)}>
-      <input autoComplete="off" spellCheck={false} {...f} {...props} />
+      <input autoComplete="off" spellCheck={false} {...input} />
     </label>
   );
 }
 
 /** Mehrzeilig (Konsole-Schrift), ohne Größenziehen. */
-export function TextArea({ width, className, style, id, "aria-describedby": describedBy, "aria-invalid": invalid, ...props }: Pick<FieldLook, "width"> & ComponentProps<"textarea">) {
-  const f = useFieldProps(id, describedBy, invalid);
+export function TextArea({ width, className, style, ...props }: Pick<FieldLook, "width"> & ComponentProps<"textarea">) {
+  const input = useFieldProps(props);
   return (
     <label className={cn("vx-input", className)} data-area="" data-w={widthData(width)} style={widthStyle(width, style)}>
-      <textarea spellCheck={false} {...f} {...props} />
+      <textarea spellCheck={false} {...input} />
     </label>
   );
 }
@@ -158,9 +166,10 @@ export function TextArea({ width, className, style, id, "aria-describedby": desc
 export function SearchField({ value, onChange, placeholder, size = "m", width, autoFocus, label, id, className }: {
   value: string; onChange: (v: string) => void; placeholder: string; autoFocus?: boolean; label?: string; id?: string; className?: string;
 } & FieldLook) {
-  const f = useFieldProps(id);
+  const { t } = useI18n();
+  const f = useFieldProps({ id });
   return (
-    <label className={cn("vx-input", className)} data-size={size} data-lead="" data-w={widthData(width)} data-has={value ? "" : undefined} style={widthStyle(width)}>
+    <label className={cn("vx-input", className)} data-size={size} data-lead="" data-w={widthData(width)} data-has={flag(value)} style={widthStyle(width)}>
       <Icon name="search" size="s" />
       <input
         type="search"
@@ -174,32 +183,37 @@ export function SearchField({ value, onChange, placeholder, size = "m", width, a
         onKeyDown={(e) => e.key === "Escape" && value && (e.stopPropagation(), onChange(""))}
         {...f}
       />
-      <IconButton icon="x" label="Suche leeren" tip={false} size="s" className="vx-clear" tabIndex={-1} onClick={() => onChange("")} />
+      <IconButton icon="x" label={t("ui.search.clearAria")} tip={false} size="s" className="vx-clear" tabIndex={-1} onClick={() => onChange("")} />
     </label>
   );
 }
 
 export type Option = { value: string; label: string; disabled?: boolean };
 
+/** Bis zu dieser Zahl bestimmen unsichtbare Platzhalter aller Optionen die Breite; bei mehr bleibt sie nach dem Wert. */
+const SIZER_MAX_OPTIONS = 40;
+
 /**
  * Auswahl als erhabene Platte mit eigener Pixel-Liste (Radix Select: Tastatur, Tippsuche, Scrollen).
- * Die Breite richtet sich nach der längsten Option (bis 40 Optionen), damit beim Wechseln nichts springt.
+ * Die Breite richtet sich nach der längsten Option (bis `SIZER_MAX_OPTIONS`), damit beim Wechseln nichts springt.
  * `label`: sichtbares Präfix im Knopf („Sortieren: …“) und Name; sonst `ariaLabel` oder ein Field/FormRow darum.
  */
-export function Select({ value, onChange, options, label, size = "m", className, id, ariaLabel, disabled, placeholder = "Keine Auswahl" }: {
+export function Select({ value, onChange, options, label, size = "m", className, id, ariaLabel, disabled, placeholder }: {
   value: string; onChange: (v: string) => void; options: Option[]; label?: string; size?: "s" | "m"; className?: string; id?: string; ariaLabel?: string; disabled?: boolean; placeholder?: string;
 }) {
-  const f = useFieldProps(id);
+  const { t } = useI18n();
+  const f = useFieldProps({ id });
+  const none = placeholder ?? t("ui.select.placeholder");
   // Radix erlaubt keine leeren Werte: „“ gilt als „nichts gewählt“.
   const items = options.filter((o) => o.value !== "");
   return (
-    <S.Root value={value || undefined} onValueChange={onChange} disabled={disabled || !items.length}>
+    <S.Root value={value} onValueChange={onChange} disabled={disabled || !items.length}>
       {/* Name: ariaLabel, sonst die sichtbare Beschriftung (der Wert gehört nicht in den Namen) */}
       <S.Trigger className={cn("vx-select fx", className)} data-size={size} aria-label={ariaLabel ?? label} {...f}>
         {label && <span className="vx-sel-lab">{label}</span>}
         <span className="vx-sel-val">
-          <S.Value placeholder={placeholder} />
-          {items.length <= 40 && items.map((o) => <span key={o.value} className="vx-sel-sizer" aria-hidden>{o.label}</span>)}
+          <S.Value placeholder={none} />
+          {items.length <= SIZER_MAX_OPTIONS && items.map((o) => <span key={o.value} className="vx-sel-sizer" aria-hidden>{o.label}</span>)}
         </span>
         <S.Icon asChild>
           <span className="vx-sel-chev"><Icon name="chevd" size="s" /></span>
@@ -225,11 +239,13 @@ export function Select({ value, onChange, options, label, size = "m", className,
 
 /**
  * Aufklappbarer Bereich („Erweitert“): Zusammenfassung wie ein Geist-Knopf s (Hover-Platte, bündig mit der Kante),
- * Pfeil dreht sich, echter Fokusring. `open` = Startzustand.
+ * Pfeil dreht sich, echter Fokusring. `open` = Startzustand; `onToggle` meldet Auf- und Zuklappen.
  */
-export function Disclosure({ summary, open, className, children }: { summary: ReactNode; open?: boolean; className?: string; children: ReactNode }) {
+export function Disclosure({ summary, open, onToggle, className, children }: {
+  summary: ReactNode; open?: boolean; onToggle?: (open: boolean) => void; className?: string; children: ReactNode;
+}) {
   return (
-    <details className={cn("vx-disc", className)} open={open || undefined}>
+    <details className={cn("vx-disc", className)} open={open || undefined} onToggle={(e) => onToggle?.(e.currentTarget.open)}>
       <summary className="vx-disc-s fx">
         <span className="vx-disc-c">
           <Icon name="chev" size="s" />

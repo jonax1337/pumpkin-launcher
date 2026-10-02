@@ -9,17 +9,50 @@ export interface LogLine {
   tone: "error" | "warn" | "normal";
 }
 
-const toneOf = ({ stream, line }: LogPayload): LogLine["tone"] =>
+/** Schweregrad einer Zeile: Fehlerstrom oder ERROR/FATAL, WARN, sonst normal. */
+export const toneOf = ({ stream, line }: Pick<LogPayload, "stream" | "line">): LogLine["tone"] =>
   stream === "stderr" || /\/(ERROR|FATAL)\]/.test(line) ? "error" : /\/WARN\]/.test(line) ? "warn" : "normal";
 
-// Log-Events kommen zeilenweise; gebündelt anhängen statt pro Zeile Array kopieren und rendern.
-// Timer statt requestAnimationFrame: rAF pausiert bei minimiertem Fenster, dann wüchse `pending` unbegrenzt.
-let pending: LogPayload[] = [];
-let timer: ReturnType<typeof setTimeout> | undefined;
+// Der Puffer hält je Instanz nur die letzten Zeilen; vollständige Logs liest man aus der Datei im Backend.
+const MAX_LOG_LINES = 2000;
 
-// ponytail: Log-Puffer auf die letzten MAX_LOG_LINES Zeilen je Instanz begrenzt; für vollständige Logs Datei im Backend lesen.
-export const MAX_LOG_LINES = 2000;
-let nextLogId = 0;
+/** So lange sammelt der Puffer Zeilen, bevor sie gebündelt in den Store gehen. */
+const LOG_BATCH_MS = 50;
+
+/**
+ * Sammelt Log-Events und gibt sie gebündelt ab: Sie kommen zeilenweise, aber pro Zeile Array kopieren und rendern wäre zu teuer.
+ * Timer statt requestAnimationFrame: rAF pausiert bei minimiertem Fenster, dann wüchse der Puffer unbegrenzt.
+ */
+function createLogBuffer(onFlush: (added: Record<string, LogLine[]>) => void) {
+  let pending: LogPayload[] = [];
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let nextLogId = 0;
+
+  function flush() {
+    const added: Record<string, LogLine[]> = {};
+    for (const p of pending) (added[p.instanceId] ??= []).push({ id: nextLogId++, stream: p.stream, line: p.line, tone: toneOf(p) });
+    pending = [];
+    timer = undefined;
+    onFlush(added);
+  }
+
+  return {
+    push(p: LogPayload) {
+      pending.push(p);
+      timer ??= setTimeout(flush, LOG_BATCH_MS);
+    },
+    /** Verwirft die noch nicht abgelieferten Zeilen einer Instanz. */
+    discard(instanceId: string) {
+      pending = pending.filter((p) => p.instanceId !== instanceId);
+    },
+  };
+}
+
+/** Das Record ohne den Eintrag `id` (neues Objekt, damit der Store ändert). */
+function omitKey<V>(record: Record<string, V>, id: string): Record<string, V> {
+  const { [id]: _, ...rest } = record;
+  return rest;
+}
 
 /** Flüchtiger Laufzeitzustand aus den Backend-Events (nicht persistiert). */
 interface GameState {
@@ -40,53 +73,50 @@ interface GameState {
   clearLog: (instanceId: string) => void;
   setCrash: (exit: ExitPayload) => void;
   clearCrash: (instanceId: string) => void;
+  /** Vor einem Start: Protokoll und letzten Absturz der Instanz verwerfen. */
+  beginRun: (instanceId: string) => void;
 }
 
-export const useGame = create<GameState>()((set) => ({
-  installs: {},
-  launching: {},
-  logs: {},
-  crashes: {},
-  started: {},
-  setStarted: (id, at) =>
+/** Startet oder läuft gerade ein Minecraft? */
+export const isGameActive = (s: GameState) => Object.keys(s.launching).length > 0 || Object.keys(s.started).length > 0;
+
+export const useGame = create<GameState>()((set, get) => {
+  const logBuffer = createLogBuffer((added) =>
     set((s) => {
-      const { [id]: _, ...rest } = s.started;
-      return { started: at == null ? rest : { ...rest, [id]: at } };
+      const logs = { ...s.logs };
+      for (const [id, lines] of Object.entries(added)) logs[id] = [...(logs[id] ?? []), ...lines].slice(-MAX_LOG_LINES);
+      return { logs };
     }),
-  setProgress: (p) => set((s) => ({ installs: { ...s.installs, [p.instanceId]: p } })),
-  clearProgress: (id) =>
-    set((s) => {
-      const { [id]: _, ...installs } = s.installs;
-      return { installs };
-    }),
-  setLaunching: (id, launching) =>
-    set((s) => {
-      const { [id]: _, ...rest } = s.launching;
-      return { launching: launching ? { ...rest, [id]: true } : rest };
-    }),
-  appendLog: (p) => {
-    pending.push(p);
-    timer ??= setTimeout(() => {
-      const batch = pending;
-      pending = [];
-      timer = undefined;
+  );
+
+  return {
+    installs: {},
+    launching: {},
+    logs: {},
+    crashes: {},
+    started: {},
+    setStarted: (id, at) =>
       set((s) => {
-        const logs = { ...s.logs };
-        const added: Record<string, LogLine[]> = {};
-        for (const b of batch) (added[b.instanceId] ??= []).push({ id: nextLogId++, stream: b.stream, line: b.line, tone: toneOf(b) });
-        for (const [id, items] of Object.entries(added)) logs[id] = [...(logs[id] ?? []), ...items].slice(-MAX_LOG_LINES);
-        return { logs };
-      });
-    }, 50);
-  },
-  clearLog: (id) => {
-    pending = pending.filter((p) => p.instanceId !== id);
-    set((s) => ({ logs: { ...s.logs, [id]: [] } }));
-  },
-  setCrash: (exit) => set((s) => ({ crashes: { ...s.crashes, [exit.instanceId]: exit } })),
-  clearCrash: (id) =>
-    set((s) => {
-      const { [id]: _, ...crashes } = s.crashes;
-      return { crashes };
-    }),
-}));
+        const rest = omitKey(s.started, id);
+        return { started: at == null ? rest : { ...rest, [id]: at } };
+      }),
+    setProgress: (p) => set((s) => ({ installs: { ...s.installs, [p.instanceId]: p } })),
+    clearProgress: (id) => set((s) => ({ installs: omitKey(s.installs, id) })),
+    setLaunching: (id, launching) =>
+      set((s) => {
+        const rest = omitKey(s.launching, id);
+        return { launching: launching ? { ...rest, [id]: true } : rest };
+      }),
+    appendLog: logBuffer.push,
+    clearLog: (id) => {
+      logBuffer.discard(id);
+      set((s) => ({ logs: { ...s.logs, [id]: [] } }));
+    },
+    setCrash: (exit) => set((s) => ({ crashes: { ...s.crashes, [exit.instanceId]: exit } })),
+    clearCrash: (id) => set((s) => ({ crashes: omitKey(s.crashes, id) })),
+    beginRun: (id) => {
+      get().clearLog(id);
+      get().clearCrash(id);
+    },
+  };
+});

@@ -12,11 +12,17 @@ for (const season of ["standard", "spring", "summer", "halloween", "winter"]) {
 }
 copyFileSync(new URL("web/favicon.svg", branding), new URL("favicon.svg", assets));
 
+const page = (name) => fileURLToPath(new URL(name, import.meta.url));
+
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   base: "./",
   publicDir: false,
   server: { host: "127.0.0.1", port: 1430, strictPort: true },
   preview: { host: "127.0.0.1", port: 1431, strictPort: true },
-  build: { outDir: "dist", assetsInlineLimit: 0 },
+  build: {
+    outDir: "dist",
+    assetsInlineLimit: 0,
+    rollupOptions: { input: { index: page("index.html"), datenschutz: page("datenschutz.html"), impressum: page("impressum.html") } },
+  },
 });

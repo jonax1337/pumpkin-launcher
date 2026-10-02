@@ -1,0 +1,6 @@
+# Einstellungen für `cargo deny` (CI-Job „Dependencies“, nur Advisories). Die Action läuft im Repo-Stamm und liest diese Datei dort.
+
+[advisories]
+ignore = [
+    { id = "RUSTSEC-2024-0370", reason = "proc-macro-error ist unmaintained, kommt aber nur über gtk3-macros (Tauris Linux-Fensterschicht) und läuft allein beim Kompilieren. Wir können es nicht ersetzen; entfällt, sobald Tauri die gtk3-Bindungen ablöst." },
+]

@@ -30,7 +30,7 @@ pnpm preview:website   # http://127.0.0.1:1431
 - `assets/trailer.mp4` und `assets/trailer-poster.jpg`: Web-Fassung von `media/launch-video/videos/pumpkin-launcher-yt-16x9.mp4` (`ffmpeg -c:v libx264 -preset slow -crf 30 -pix_fmt yuv420p -an -movflags +faststart`, ≈ 9 MB, ohne Ton), Poster bei Sekunde 22,5. Nach einem neuen Render des Videos neu erzeugen.
 - Schriften: Big Shoulders Display, Hanken Grotesk und Jersey 10 aus den vorhandenen Font-Paketen.
 
-Der Name ist überall **Pumpkin Launcher** (früher stand auf der Seite versehentlich „Pumkpin“). Zum Erstellungszeitpunkt gibt es keinen öffentlichen Installer; die Seite weist deshalb auf den Entwicklungsstand hin. Vor Veröffentlichung die tatsächliche Download-Adresse und Betreiberangaben ergänzen. Die Seite wurde lokal gebaut, nicht veröffentlicht.
+Der Name ist überall **Pumpkin Launcher** (früher stand auf der Seite versehentlich „Pumkpin“). Die FAQ nennt die Beta und verweist für die Installer auf die Releases im GitHub-Repository (Stand wie im Haupt-README). `datenschutz.html` (Hostliste, keine Tracker) und `impressum.html` nennen den Betreiber mit Name, Anschrift und E-Mail; `pnpm check:website` warnt, falls dort wieder Platzhalter (`[NAME]`, `[ANSCHRIFT]`, `[E-MAIL]`) stehen. Beide Seiten sind in `vite.config.mjs` als weitere Eingänge eingetragen und teilen sich `style.css`; ihre Schriften lädt `legal.js`.
 
 ## Prüfung
 

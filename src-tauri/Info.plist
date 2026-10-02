@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Eine Minecraft-Mod (z. B. ein Sprachchat) möchte auf dein Mikrofon zugreifen.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Minecraft sucht im lokalen Netzwerk nach LAN-Welten.</string>
+</dict>
+</plist>

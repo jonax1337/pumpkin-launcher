@@ -1,16 +1,19 @@
 /* Kit-Chip, Zähler, Metazeile */
-.vx-chip { --c-line: var(--line); position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; font-size: 12.5px; font-weight: 600; color: var(--fg-2); white-space: nowrap; flex: none; }
-.vx-chip::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--vx-chip-bg, rgba(10,14,23,.78)); box-shadow: inset 0 0 0 var(--px) var(--c-line); clip-path: var(--n1); }
+.vx-chip { --c-line: var(--line); position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; font-size: calc(13px * var(--tz)); font-weight: 600; color: var(--fg-2); white-space: nowrap; flex: none; }
+.vx-chip::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--vx-chip-bg, rgba(10,14,23,.9)); box-shadow: inset 0 0 0 var(--px) var(--c-line); clip-path: var(--n1); }
 /* Führendes Icon (Box 20 mit Luft um die Glyphe): links 2px weniger, engerer Abstand */
 .vx-chip[data-lead] { padding-left: 8px; gap: 4px; }
-.vx-chip[data-size="s"] { --cnt-fs: 16px; height: 22px; padding: 0 7px; gap: 5px; font-size: 11.5px; }
+.vx-chip[data-size="s"] { --cnt-fs: 16px; height: 22px; padding: 0 7px; gap: 5px; font-size: calc(13px * var(--tz)); }
+/* Icon-Box 20 passt in die 22 px des kleinen Chips; ihre Luft um die Glyphe ersetzt den Innenabstand */
+.vx-chip[data-size="s"][data-lead] { padding-left: 1px; gap: 1px; }
 .vx-chip[data-tone="acc"] { color: var(--acc-hi); --c-line: color-mix(in srgb, var(--acc) 45%, transparent); }
 .vx-chip[data-tone="warn"] { color: var(--warn); --c-line: color-mix(in srgb, var(--warn) 40%, transparent); }
 .vx-chip[data-tone="bad"] { color: var(--bad); --c-line: color-mix(in srgb, var(--bad) 45%, transparent); }
 .vx-chip[data-tone="run"] { color: var(--run); --c-line: color-mix(in srgb, var(--run) 45%, transparent); }
 .vx-chip:not([data-tone]) .vx-count { color: var(--fg); }
-.vx-chip[data-fixed] { justify-content: flex-start; }
-.vx-chip-t { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.vx-chip[data-press] { cursor: pointer; }
+.vx-chip[data-press]:not([data-tone]):hover { color: var(--fg); --c-line: var(--fg-3); }
+.vx-chip[data-press][data-tone="acc"]:hover { --c-line: var(--acc); }
 .vx-dot { width: var(--u2); height: var(--u2); background: currentColor; flex: none; }
 
 /* Zahl in Pixelschrift; --dg Stellen reserviert (rechtsbündig), damit wechselnde Werte nichts verschieben */
@@ -19,11 +22,14 @@
 .vx-count[data-size="18"] { --cnt-fs: 18px; }
 .vx-count[data-size="20"] { --cnt-fs: 20px; }
 .vx-count[data-size="26"] { --cnt-fs: 26px; }
+.vx-count[data-size="32"] { --cnt-fs: 32px; }
 .vx-count[data-muted] { color: var(--fg-3); }
 
 /* Metazeile: Text + Pixelquadrat-Trenner, ohne Rahmen und Hover */
-.vx-meta { display: flex; align-items: center; min-width: 0; height: 28px; font-size: 13px; font-weight: 500; color: var(--fg-2); white-space: nowrap; }
-.vx-meta[data-size="l"] { height: 32px; font-size: 14px; }
+.vx-meta { display: flex; align-items: center; min-width: 0; height: 28px; font-size: calc(13px * var(--tz)); font-weight: 500; color: var(--fg-2); white-space: nowrap; }
+.vx-meta[data-size="l"] { height: 32px; font-size: calc(14px * var(--tz)); }
+.vx-meta[data-wrap] { flex-wrap: wrap; height: auto; min-height: 28px; row-gap: 2px; }
+.vx-meta[data-size="l"][data-wrap] { min-height: 32px; }
 .vx-meta-i { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
 .vx-meta-i + .vx-meta-i::before { content: ""; width: var(--u2); height: var(--u2); margin: 0 10px; flex: none; background: var(--fg-3); }
 .vx-meta .vx-count { color: var(--fg); }

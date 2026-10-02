@@ -1,8 +1,11 @@
 /**
  * Pixel-Icons des Kits: jedes Icon in zwei Rastern, 7×7 (Knöpfe m/l, Illustration) und 5×5 (klein).
- * Regel: 1 Icon-Pixel = genau 1 Icon-Einheit (--iu, nicht die Pixelstufe --px); welches Raster gezeichnet wird, entscheidet der Größen-Slot (ui/Icon).
- * Beide Raster sind Pflicht (Typ prüft Zeilenzahl). Der Altbestand (pixel/icons.tsx) liest seine Daten hier ab.
+ * Regel: 1 Icon-Pixel = genau 1 Icon-Einheit (--iu, nicht die Pixelstufe --px);
+ * welches Raster gezeichnet wird, entscheidet der Größen-Slot (ui/Icon).
+ * Beide Raster sind Pflicht (der Typ prüft die Zeilenzahl, nicht die Breite).
  */
+import { rowRuns } from "./rows.ts";
+
 type R7 = readonly [string, string, string, string, string, string, string];
 type R5 = readonly [string, string, string, string, string];
 export type IconRows = { g7: R7; g5: R5 };
@@ -21,13 +24,17 @@ export const ICON_DATA = {
     g7: ["...#...", "...#...", "...#...", "#######", "...#...", "...#...", "...#..."],
     g5: ["..#..", "..#..", "#####", "..#..", "..#.."],
   },
+  minus: {
+    g7: [".......", ".......", ".......", "#######", ".......", ".......", "......."],
+    g5: [".....", ".....", "#####", ".....", "....."],
+  },
   x: {
     g7: ["#.....#", ".#...#.", "..#.#..", "...#...", "..#.#..", ".#...#.", "#.....#"],
     g5: ["#...#", ".#.#.", "..#..", ".#.#.", "#...#"],
   },
   search: {
     g7: [".###...", "#...#..", "#...#..", "#...#..", ".###...", "....##.", ".....##"],
-    // neu: Ring 4×4, Griff läuft aus der unteren Ecke
+    // Ring 4×4, Griff läuft aus der unteren Ecke
     g5: [".##..", "#..#.", "#..#.", ".###.", "....#"],
   },
   check: {
@@ -74,17 +81,17 @@ export const ICON_DATA = {
     g7: ["###.###", "###.###", "###.###", ".......", "###.###", "###.###", "###.###"],
     g5: ["##.##", "##.##", ".....", "##.##", "##.##"],
   },
+  // Pfeilspitzen (back, chev, chevd): ungerade Ausdehnung in beiden Richtungen, damit die Spitze exakt auf der Rastermitte liegt
   back: {
-    g7: ["....#..", "...#...", "..#....", ".#.....", "..#....", "...#...", "....#.."],
-    g5: ["..#..", ".#...", "#....", ".#...", "..#.."],
+    g7: [".......", "....#..", "...#...", "..#....", "...#...", "....#..", "......."],
+    g5: ["...#.", "..#..", ".#...", "..#..", "...#."],
   },
   chev: {
-    g7: ["..#....", "...#...", "....#..", ".....#.", "....#..", "...#...", "..#...."],
+    g7: [".......", "..#....", "...#...", "....#..", "...#...", "..#....", "......."],
     g5: [".#...", "..#..", "...#.", "..#..", ".#..."],
   },
   chevd: {
-    // neu: chev gedreht, gleiche Armlänge
-    g7: [".......", ".......", "#.....#", ".#...#.", "..#.#..", "...#...", "......."],
+    g7: [".......", ".......", ".#...#.", "..#.#..", "...#...", ".......", "......."],
     g5: [".....", "#...#", ".#.#.", "..#..", "....."],
   },
   more: {
@@ -112,6 +119,10 @@ export const ICON_DATA = {
     g7: ["..###..", ".#####.", ".#####.", "..###..", ".......", ".#####.", "#######"],
     g5: [".###.", ".###.", ".....", ".###.", "#####"],
   },
+  shirt: {
+    g7: [".##.##.", "#######", "#######", ".#####.", ".#####.", ".#####.", ".#####."],
+    g5: ["##.##", "#####", ".###.", ".###.", ".###."],
+  },
   plug: {
     g7: [".#.#...", ".#.#...", "#####..", "#####..", ".###...", "..#....", "..#...."],
     g5: ["#.#..", "#.#..", "####.", ".##..", "..#.."],
@@ -122,7 +133,6 @@ export const ICON_DATA = {
   },
   file: {
     g7: ["####...", "#..#...", "#..###.", "#....#.", "#....#.", "#....#.", "######."],
-    // neu: Blatt mit Eselsohr oben rechts
     g5: ["###..", "#..#.", "#...#", "#...#", "#####"],
   },
   save: {
@@ -131,12 +141,10 @@ export const ICON_DATA = {
   },
   clock: {
     g7: [".#####.", "#..#..#", "#..#..#", "#..##.#", "#.....#", "#.....#", ".#####."],
-    // neu: Zeiger auf 12 und 3
     g5: [".###.", "#.#.#", "#.###", "#...#", ".###."],
   },
   hour: {
     g7: ["#######", ".#...#.", "..#.#..", "...#...", "..#.#..", ".#.#.#.", "#######"],
-    // neu: Sand unten
     g5: ["#####", ".#.#.", "..#..", ".###.", "#####"],
   },
   power: {
@@ -149,7 +157,6 @@ export const ICON_DATA = {
   },
   box: {
     g7: [".#####.", "#.....#", "#######", "#.....#", "#..#..#", "#.....#", "#######"],
-    // neu: Deckel + Schloss
     g5: [".###.", "#####", "#...#", "#.#.#", "#####"],
   },
   eye: {
@@ -159,11 +166,10 @@ export const ICON_DATA = {
   // Klemmbrett mit Zeilen (Aufgaben)
   tasks: {
     g7: ["..###..", "###.###", "#.....#", "#.###.#", "#.....#", "#.###.#", "#######"],
-    // neu: Klemme oben, eine Zeile
     g5: [".###.", "##.##", "#...#", "#.#.#", "#####"],
   },
   dot: {
-    // neu: 3×3 wie die 5×5-Fassung
+    // 3×3 wie die 5×5-Fassung
     g7: [".......", ".......", "..###..", "..###..", "..###..", ".......", "......."],
     g5: [".....", ".###.", ".###.", ".###.", "....."],
   },
@@ -173,13 +179,30 @@ export const ICON_DATA = {
     g5: ["..#..", ".###.", "#####", ".#.#.", ".#.#."],
   },
   wmin: {
-    // neu: Strich eine Zeile unter der Mitte wie in 5×5
+    // Strich eine Zeile unter der Mitte wie in 5×5
     g7: [".......", ".......", ".......", ".......", "#######", ".......", "......."],
     g5: [".....", ".....", ".....", "#####", "....."],
   },
   wmax: {
     g7: ["#######", "#######", "#.....#", "#.....#", "#.....#", "#.....#", "#######"],
     g5: ["#####", "#####", "#...#", "#...#", "#####"],
+  },
+  // Kataloganbieter (Marken-Logos stark vereinfacht; die Farbe trägt die Wiedererkennung)
+  modrinth: {
+    g7: ["..###..", ".#...#.", "#..#..#", "#.###.#", "#..#..#", ".#...#.", "..###.."],
+    g5: [".###.", "#...#", "#.#.#", "#...#", ".###."],
+  },
+  curseforge: {
+    g7: ["#######", "#######", ".#####.", "..###..", "..###..", ".#####.", "#######"],
+    g5: ["#####", ".####", "..#..", ".###.", "#####"],
+  },
+  ftb: {
+    g7: ["...#...", "..##...", "..###..", ".####.#", ".######", "#######", ".#####."],
+    g5: ["..#..", ".##..", ".###.", "#####", ".###."],
+  },
+  technic: {
+    g7: ["#######", "#######", "..###..", "..###..", "..###..", "..###..", "..###.."],
+    g5: ["#####", "..#..", "..#..", "..#..", "..#.."],
   },
 } as const satisfies Record<string, IconRows>;
 
@@ -192,17 +215,7 @@ const PATHS = new Map<string, string>();
 export function rowsPath(key: string, rows: readonly string[]) {
   let d = PATHS.get(key);
   if (d == null) {
-    d = "";
-    rows.forEach((r, y) => {
-      let x = 0;
-      while (x < r.length) {
-        if (r[x] !== "#") { x++; continue; }
-        let e = x;
-        while (e < r.length && r[e] === "#") e++;
-        d += `M${x} ${y}h${e - x}v1h${x - e}z`;
-        x = e;
-      }
-    });
+    d = rowRuns(rows).map(({ x, y, length }) => `M${x} ${y}h${length}v1h${-length}z`).join("");
     PATHS.set(key, d);
   }
   return d;

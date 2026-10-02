@@ -1,75 +1,62 @@
-//! Services: Persistenz, Auth, Installation (Mojang-Formate, Downloads, Java) und Spielstart.
-use std::path::{Path, PathBuf};
+//! Services: Persistenz, Auth, Installation (Mojang-Formate, Downloads, Java), Spielstart, Kopie, Export und
+//! Import von Instanzen, Welten und Server, Skins und Support.
+mod dataurl;
+mod dirs;
+mod fsutil;
+mod server_srv;
+mod tasks;
+#[cfg(test)]
+mod testutil;
 
 pub mod auth;
+pub mod content;
+pub mod datapacks;
+pub mod crashreport;
+pub mod debuginfo;
 pub mod download;
-pub mod fabric;
-pub mod forge;
+pub mod duplicate;
 pub mod gamelog;
+pub mod imports;
 pub mod install;
 pub mod java;
+pub mod javadetect;
 pub mod launch;
-pub mod mods;
+pub mod launch_args;
+pub mod limits;
+pub mod loader;
+pub mod local_files;
+pub mod logshare;
+pub mod migrate;
 pub mod modrinth;
-pub mod content;
+pub mod mods;
 pub mod mojang;
+pub mod mrpack;
+pub mod pack_update;
+pub mod pack_selection;
+pub mod progress;
 pub mod providers;
 pub mod rules;
+pub mod screenshots;
+pub mod server_ping;
+pub mod servers;
+pub mod sessionlog;
+pub mod skins;
+pub mod storage;
 pub mod store;
+pub mod system;
 pub mod templates;
+pub mod transport;
+pub mod worlds;
+pub mod zip_guard;
 
-/// Verzeichnislayout unter dem App-Datenverzeichnis. Libraries, Assets, Versionen und
-/// Java-Runtimes teilen sich alle Instanzen; jede Instanz hat ihr eigenes Spiel- und Natives-Verzeichnis.
-#[derive(Debug, Clone)]
-pub struct Dirs {
-    pub root: PathBuf,
-}
-
-impl Dirs {
-    pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
-    }
-
-    pub fn libraries(&self) -> PathBuf {
-        self.root.join("libraries")
-    }
-
-    pub fn assets(&self) -> PathBuf {
-        self.root.join("assets")
-    }
-
-    pub fn runtime(&self, component: &str) -> PathBuf {
-        self.root.join("runtime").join(component)
-    }
-
-    /// `versions/<id>/<id>.<ext>` (Versions-JSON und Client-JAR).
-    pub fn version_file(&self, id: &str, ext: &str) -> PathBuf {
-        self.root.join("versions").join(id).join(format!("{id}.{ext}"))
-    }
-
-    pub fn instance(&self, instance_id: &str) -> PathBuf {
-        self.root.join("instances").join(instance_id)
-    }
-
-    pub fn game_dir(&self, instance_id: &str) -> PathBuf {
-        self.instance(instance_id).join("minecraft")
-    }
-
-    /// `mods/` im Spielverzeichnis, dort sucht Fabric (und jeder andere Loader).
-    pub fn mods_dir(&self, instance_id: &str) -> PathBuf {
-        self.game_dir(instance_id).join("mods")
-    }
-
-    /// Globaler Mod-Cache, Dateien als `<sha1>.jar`.
-    pub fn mod_cache(&self) -> PathBuf {
-        self.root.join("cache").join("mods")
-    }
-
-    pub fn natives_dir(&self, instance_id: &str) -> PathBuf {
-        self.instance(instance_id).join("natives")
-    }
-
-    pub fn library(&self, path: &str) -> PathBuf {
-        self.libraries().join(Path::new(path))
-    }
-}
+pub(crate) use dataurl::{data_url, PNG_DATA_URL};
+pub use dirs::Dirs;
+pub use loader::forge;
+pub(crate) use dirs::REGENERATED;
+pub(crate) use fsutil::{
+    add_zip_file, copy_files, entries, find_listed, first_free_name, free_name, has_extension, none_if_missing,
+    remove_logged, require_plain_name, strip_extension, trash_listed, walk, write_atomic, write_zip_atomic,
+};
+pub(crate) use tasks::{blocking, check_cancelled, lock, until_phases_end};
+#[cfg(test)]
+pub(crate) use testutil::{compound, gzip_nbt, write_files};

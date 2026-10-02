@@ -1,13 +1,15 @@
 //! FTB: öffentliche API ohne Schlüssel. Das Verzeichnis ist klein (rund 100 Packs) und wird einmal
 //! geladen, zwischengespeichert und lokal durchsucht. Installation über die Dateiliste einer Version.
-use super::{check_url, json, segment, RemoteFile};
+use super::{cdn::check_url, json, segment, PackRequest, ProjectType, RemoteFile, SearchQuery, SortIndex};
 use crate::{
-    error::AppResult,
-    models::{Instance, ModLoader, NewInstance},
+    coded,
+    error::{AppError, AppResult},
+    models::{instance_name, Instance, ModLoader, NewInstance},
     services::{
         content::{self, Pack},
         forge,
-        modrinth::{identifier, invalid, Hit, Project, SearchResponse, Version},
+        limits::{CATALOG_CONCURRENCY, PAGE_SIZE, QUERY_MAX},
+        modrinth::{identifier, Hit, Project, SearchResponse, Version},
     },
 };
 use futures::StreamExt;
@@ -20,8 +22,8 @@ use std::{
 use tokio::sync::Mutex;
 
 const API: &str = "https://api.feed-the-beast.com/v1/modpacks/public";
+const MAX_SEARCH_OFFSET: u32 = 100_000;
 const TTL: Duration = Duration::from_secs(15 * 60);
-const PAGE: usize = 20;
 
 #[derive(Debug, Clone, Deserialize)]
 struct PackDoc {
@@ -130,16 +132,6 @@ struct Supported {
     loader_version: Option<String>,
 }
 
-fn loader_name(loader: ModLoader) -> &'static str {
-    match loader {
-        ModLoader::Vanilla => "vanilla",
-        ModLoader::Fabric => "fabric",
-        ModLoader::Quilt => "quilt",
-        ModLoader::Forge => "forge",
-        ModLoader::NeoForge => "neoforge",
-    }
-}
-
 fn supported(v: &VersionDoc) -> Option<Supported> {
     let mc = v.targets.iter().find(|t| t.kind == "game" && t.name == "minecraft")?.version.clone();
     identifier(&mc).ok()?;
@@ -147,21 +139,11 @@ fn supported(v: &VersionDoc) -> Option<Supported> {
         None => (ModLoader::Vanilla, None),
         Some(t) => {
             identifier(&t.version).ok()?;
-            let loader = match t.name.as_str() {
-                "fabric" => ModLoader::Fabric,
-                "quilt" => ModLoader::Quilt,
-                "forge" => ModLoader::Forge,
-                "neoforge" => ModLoader::NeoForge,
-                _ => return None,
-            };
+            let loader = ModLoader::from_modded_name(&t.name)?;
             (loader, Some(t.version.clone()))
         }
     };
-    match loader {
-        ModLoader::Forge => forge::check_supported(forge::Kind::Forge, &mc).ok()?,
-        ModLoader::NeoForge => forge::check_supported(forge::Kind::NeoForge, &mc).ok()?,
-        _ => {}
-    }
+    forge::check_loader(loader, &mc).ok()?;
     Some(Supported { mc, loader, loader_version })
 }
 
@@ -189,7 +171,7 @@ async fn catalog(client: &reqwest::Client) -> AppResult<Arc<Vec<PackDoc>>> {
     let ids: Ids = json(client, &format!("{API}/modpack/all")).await?;
     let results: Vec<AppResult<PackDoc>> = futures::stream::iter(ids.packs)
         .map(|id| async move { json::<PackDoc>(client, &format!("{API}/modpack/{id}")).await })
-        .buffer_unordered(8)
+        .buffer_unordered(CATALOG_CONCURRENCY)
         .collect()
         .await;
     let mut packs = Vec::new();
@@ -198,11 +180,14 @@ async fn catalog(client: &reqwest::Client) -> AppResult<Arc<Vec<PackDoc>>> {
         match r {
             Ok(p) if !p.private => packs.push(p),
             Ok(_) => {}
-            Err(e) => failed = Some(e),
+            Err(err) => {
+                tracing::warn!(%err, "FTB-Modpack nicht geladen");
+                failed = Some(err);
+            }
         }
     }
     if packs.is_empty() {
-        return Err(failed.unwrap_or_else(|| invalid("FTB lieferte keine Modpacks")));
+        return Err(failed.unwrap_or_else(|| AppError::invalid(coded!("errors.providers.noFtbModpacks"))));
     }
     let packs = Arc::new(packs);
     *cache = Some((Instant::now(), packs.clone()));
@@ -247,46 +232,36 @@ fn relevance(pack: &PackDoc, query: &str) -> u8 {
     }
 }
 
-pub async fn search(
-    client: &reqwest::Client,
-    query: &str,
-    kind: &str,
-    mc: Option<&str>,
-    loader: Option<&str>,
-    offset: u32,
-    index: Option<&str>,
-) -> AppResult<SearchResponse> {
-    if query.len() > 512 || offset > 100_000 {
-        return Err(invalid("Ungültige Suche"));
-    }
-    if kind != "modpack" {
-        return Ok(SearchResponse { hits: Vec::new(), total_hits: 0, offset, limit: PAGE as u32 });
+pub async fn search(client: &reqwest::Client, request: &SearchQuery) -> AppResult<SearchResponse> {
+    request.ensure_within(QUERY_MAX, MAX_SEARCH_OFFSET)?;
+    let offset = request.offset;
+    if request.project_type != ProjectType::Modpack {
+        return Ok(SearchResponse { hits: Vec::new(), total_hits: 0, offset, limit: PAGE_SIZE });
     }
     let packs = catalog(client).await?;
-    let query = query.trim();
+    let query = request.query.trim();
+    let (mc, loader) = (request.mc.as_deref(), request.loader.as_deref());
     let mut found: Vec<(&PackDoc, u8)> = packs
         .iter()
         .filter(|p| {
             let versions = usable(p);
             !versions.is_empty()
                 && mc.is_none_or(|mc| versions.iter().any(|(_, s)| s.mc == mc))
-                && loader.is_none_or(|l| versions.iter().any(|(_, s)| loader_name(s.loader) == l))
+                && loader.is_none_or(|l| versions.iter().any(|(_, s)| s.loader.name() == l))
         })
         .map(|p| (p, if query.is_empty() { 1 } else { relevance(p, query) }))
         .filter(|(_, score)| *score > 0)
         .collect();
-    let index = index.unwrap_or(if query.is_empty() { "downloads" } else { "relevance" });
-    match index {
-        "downloads" => found.sort_by_key(|(p, _)| std::cmp::Reverse(p.installs)),
-        "follows" => found.sort_by_key(|(p, _)| std::cmp::Reverse(p.plays)),
-        "newest" => found.sort_by_key(|(p, _)| std::cmp::Reverse(p.released)),
-        "updated" => found.sort_by_key(|(p, _)| std::cmp::Reverse(p.updated)),
-        "relevance" => found.sort_by_key(|(p, score)| (std::cmp::Reverse(*score), std::cmp::Reverse(p.installs))),
-        _ => return Err(invalid("Ungültige Sortierung")),
+    match request.sort() {
+        SortIndex::Downloads => found.sort_by_key(|(p, _)| std::cmp::Reverse(p.installs)),
+        SortIndex::Follows => found.sort_by_key(|(p, _)| std::cmp::Reverse(p.plays)),
+        SortIndex::Newest => found.sort_by_key(|(p, _)| std::cmp::Reverse(p.released)),
+        SortIndex::Updated => found.sort_by_key(|(p, _)| std::cmp::Reverse(p.updated)),
+        SortIndex::Relevance => found.sort_by_key(|(p, score)| (std::cmp::Reverse(*score), std::cmp::Reverse(p.installs))),
     }
     let total = found.len() as u64;
-    let hits = found.into_iter().skip(offset as usize).take(PAGE).map(|(p, _)| hit(p)).collect();
-    Ok(SearchResponse { hits, total_hits: total, offset, limit: PAGE as u32 })
+    let hits = found.into_iter().skip(offset as usize).take(PAGE_SIZE as usize).map(|(p, _)| hit(p)).collect();
+    Ok(SearchResponse { hits, total_hits: total, offset, limit: PAGE_SIZE })
 }
 
 async fn find(client: &reqwest::Client, id: &str) -> AppResult<PackDoc> {
@@ -296,7 +271,7 @@ async fn find(client: &reqwest::Client, id: &str) -> AppResult<PackDoc> {
         .iter()
         .find(|p| p.id.to_string() == id)
         .cloned()
-        .ok_or_else(|| invalid("Dieses Modpack gibt es bei FTB nicht"))
+        .ok_or_else(|| AppError::invalid(coded!("errors.providers.ftbModpackNotFound")))
 }
 
 pub async fn project(client: &reqwest::Client, id: &str) -> AppResult<Project> {
@@ -312,6 +287,7 @@ pub async fn project(client: &reqwest::Client, id: &str) -> AppResult<Project> {
         client_side: "optional".into(),
         server_side: "optional".into(),
         web_url: None,
+        ..Project::default()
     })
 }
 
@@ -325,13 +301,26 @@ pub async fn versions(client: &reqwest::Client, id: &str) -> AppResult<Vec<Versi
             name: v.name.clone(),
             version_number: v.name.clone(),
             game_versions: vec![s.mc],
-            loaders: vec![loader_name(s.loader).into()],
+            loaders: vec![s.loader.name().into()],
             version_type: v.kind.clone(),
             date_published: String::new(),
+            changelog: None,
             files: Vec::new(),
             dependencies: Vec::new(),
         })
         .collect())
+}
+
+/// Änderungsprotokoll einer Pack-Version (Markdown); `None`, wenn FTB keins führt.
+pub async fn changelog(client: &reqwest::Client, pack_id: &str, version_id: &str) -> AppResult<Option<String>> {
+    #[derive(Deserialize)]
+    struct Notes {
+        #[serde(default)]
+        content: String,
+    }
+    let url = format!("{API}/modpack/{}/{}/changelog", segment(pack_id)?, segment(version_id)?);
+    let notes: Notes = json(client, &url).await?;
+    Ok(Some(notes.content).filter(|text| !text.trim().is_empty()))
 }
 
 /// `./mods/` + `a.jar` -> `mods/a.jar`; Prüfung auf unsichere Pfade übernimmt `plan_pack`.
@@ -346,7 +335,7 @@ fn remote(doc: &FileDoc) -> AppResult<RemoteFile> {
     urls.sort_by_key(|u| !u.contains("feed-the-beast.com"));
     urls.dedup();
     for u in &urls {
-        check_url(&reqwest::Url::parse(u).map_err(|e| invalid(e.to_string()))?)?;
+        check_url(&reqwest::Url::parse(u).map_err(|e| AppError::invalid(e.to_string()))?)?;
     }
     let mut hashes = BTreeMap::new();
     for (key, value, len) in [
@@ -359,22 +348,21 @@ fn remote(doc: &FileDoc) -> AppResult<RemoteFile> {
         }
     }
     if hashes.is_empty() {
-        return Err(invalid(format!("Datei {} ohne Prüfsumme", doc.name)));
+        return Err(AppError::invalid(coded!("errors.providers.namedFileWithoutChecksum", name = doc.name)));
     }
     Ok(RemoteFile { urls, size: doc.size, hashes })
 }
 
 /// Pack-Version als Installationsplan: Instanz mit Loader und Dateiliste, serverseitige Dateien entfallen.
-pub(crate) async fn plan(client: &reqwest::Client, pack_id: &str, version_id: &str, name: &str) -> AppResult<Pack> {
+pub(crate) async fn plan(client: &reqwest::Client, request: &PackRequest) -> AppResult<Pack> {
+    let PackRequest { project_id: pack_id, version_id, name, .. } = request;
     segment(version_id)?;
-    if name.trim().is_empty() || name.len() > 200 {
-        return Err(invalid("Ungültiger Instanzname"));
-    }
+    let name = instance_name(name)?;
     let pack = find(client, pack_id).await?;
     let (_, s) = usable(&pack)
         .into_iter()
-        .find(|(v, _)| v.id.to_string() == version_id)
-        .ok_or_else(|| invalid("Diese Version kann Pumpkin Launcher nicht starten"))?;
+        .find(|(v, _)| &v.id.to_string() == version_id)
+        .ok_or_else(|| AppError::invalid(coded!("errors.providers.versionNotLaunchable")))?;
     let listing: VersionFiles = json(client, &format!("{API}/modpack/{pack_id}/{version_id}")).await?;
     let files = listing
         .files
@@ -383,7 +371,7 @@ pub(crate) async fn plan(client: &reqwest::Client, pack_id: &str, version_id: &s
         .map(|f| Ok((target(&f.path, &f.name), remote(f)?)))
         .collect::<AppResult<Vec<_>>>()?;
     let instance = Instance::from_new(NewInstance {
-        name: name.trim().into(),
+        name: name.into(),
         minecraft_version: s.mc,
         loader: s.loader,
         loader_version: s.loader_version,
@@ -420,20 +408,22 @@ mod tests {
     #[tokio::test]
     #[ignore = "braucht Netzwerk und lädt rund 170 MB"]
     async fn live_search_and_install() {
-        use crate::{models::ModpackOrigin, state::AppState};
+        use crate::{models::ModpackOrigin, services::providers::Source, state::AppState};
         let client = crate::services::modrinth::client().unwrap();
-        let found = search(&client, "unstable", "modpack", None, Some("fabric"), 0, None).await.unwrap();
+        let fabric = SearchQuery { loader: Some("fabric".into()), ..SearchQuery::of("unstable", ProjectType::Modpack) };
+        let found = search(&client, &fabric).await.unwrap();
         assert!(found.hits.iter().any(|h| h.project_id == "109"), "FTB Unstable 1.20: Fabric fehlt in der Suche");
         let all = versions(&client, "109").await.unwrap();
         assert!(all.iter().any(|v| v.id == "6571" && v.loaders == ["fabric"] && v.game_versions == ["1.20.1"]));
         let root = std::env::temp_dir().join(crate::models::new_id());
         let state = AppState::load(&root).unwrap();
-        let pack = plan(&client, "109", "6571", "Live-Test").await.unwrap();
+        let request = PackRequest { source: Source::Ftb, project_id: "109".into(), version_id: "6571".into(), name: "Live-Test".into() };
+        let pack = plan(&client, &request).await.unwrap();
         let origin = Some(ModpackOrigin::Provider { source: "ftb".into(), project_id: "109".into(), version_id: "6571".into() });
         let last = std::sync::atomic::AtomicU64::new(0);
         let instance = content::import_plan(&state, pack, origin, &|phase, done, total| {
             if done / 25 != last.swap(done / 25, std::sync::atomic::Ordering::Relaxed) {
-                eprintln!("{phase}: {done}/{total}");
+                eprintln!("{phase:?}: {done}/{total}");
             }
         })
         .await

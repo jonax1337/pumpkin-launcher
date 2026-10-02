@@ -3,6 +3,10 @@ import { cn } from "@/lib/utils";
 import { ICON_DATA, rowsPath } from "@/pixel/icon-data";
 import { Face, glyphFor, GlyphSvg, type GlyphName, type GlyphPalette } from "@/pixel/icons";
 import type { IconName, IconSize, Tone } from "./types";
+import { cssVars } from "./util";
+
+/** Leere Spalten rechts von den sichtbaren Pixeln, in Icon-Einheiten. */
+const blankColumnsAtEnd = (rows: readonly string[]) => rows[0].length - 1 - Math.max(...rows.map((row) => row.lastIndexOf("#")));
 
 function Raster({ name, g }: { name: IconName; g: 7 | 5 }) {
   const rows = g === 7 ? ICON_DATA[name].g7 : ICON_DATA[name].g5;
@@ -18,15 +22,25 @@ function Raster({ name, g }: { name: IconName; g: 7 | 5 }) {
  * s: Box 20, 5×5 · m: Box 24, 7×7 (5×5 nur, wenn 7 Einheiten nicht passen; unit.ts setzt data-ico-m) · l: Box 28, 7×7 · xl: Box 56, 7×7 × 2.
  * Farbe: currentColor, außer `tone`.
  */
-export const Icon = memo(function Icon({ name, size = "m", tone, flip, className }: {
+export const Icon = memo(function Icon({ name, size = "m", tone, flip, edge, className }: {
   name: IconName;
   size?: IconSize;
   tone?: Tone | "muted";
   flip?: "x" | "y";
+  /** Steht das Icon am Ende eines Knopfes, schneidet es die Luft der Box und die leeren Rasterspalten rechts ab: der sichtbare Rand liegt dann am Innenabstand. */
+  edge?: "end";
   className?: string;
 }) {
   return (
-    <span className={cn("vx-ico", className)} data-size={size} data-tone={tone} data-flip={flip} aria-hidden>
+    <span
+      className={cn("vx-ico", className)}
+      data-size={size}
+      data-tone={tone}
+      data-flip={flip}
+      data-edge={edge}
+      style={edge && cssVars({ "--e5": blankColumnsAtEnd(ICON_DATA[name].g5), "--e7": blankColumnsAtEnd(ICON_DATA[name].g7) })}
+      aria-hidden
+    >
       {size !== "s" && <Raster name={name} g={7} />}
       {(size === "s" || size === "m") && <Raster name={name} g={5} />}
     </span>

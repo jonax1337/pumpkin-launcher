@@ -18,7 +18,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["image-png"] }
+tauri = { version = "2", features = ["image-png", "protocol-asset"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -32,14 +32,32 @@ sha1 = "0.11.0"
 sha2 = "0.11"
 md-5 = "0.11.0"
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
-reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls"] }
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "multipart", "rustls"] }
 tauri-plugin-dialog = "2"
 tokio-util = "0.7.19"
 base64 = "0.22"
-keyring = { version = "3", features = ["windows-native"] }
+keyring = { version = "3", features = ["apple-native", "crypto-rust", "sync-secret-service", "windows-native"] }
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+tauri-plugin-single-instance = "2"
+regex = "1.13.1"
+fastnbt = "2.6.3"
+flate2 = "1.1.10"
+trash = "5.2.9"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+dirs = "7"
+percent-encoding = "2.3.2"
+toml = { version = "1.1", default-features = false, features = ["std", "serde", "parse"] }
+hickory-resolver = { version = "0.26.3", default-features = false, features = ["system-config", "tokio"] }
+
+[dev-dependencies]
+tokio = { version = "1.53.1", features = ["test-util"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_System_SystemInformation"] }
+windows-sys = { version = "0.61", features = ["Wdk_System_SystemServices", "Win32_Storage_FileSystem", "Win32_System_SystemInformation"] }
+
+[target."cfg(unix)".dependencies]
+libc = "0.2.189"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

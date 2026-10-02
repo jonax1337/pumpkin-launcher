@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use crate::error::{AppError, AppResult};
+use super::progress::CountFn;
+use crate::coded;
+use crate::error::{AppError, AppResult, Coded};
 use crate::services::download::{self, Job};
 use crate::services::mojang::Download;
 use crate::services::Dirs;
@@ -43,18 +45,20 @@ struct RuntimeManifest {
     files: BTreeMap<String, RuntimeFile>,
 }
 
-/// Plattform-Schlüssel in `all.json`.
-fn platform() -> Option<&'static str> {
-    Some(match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("windows", "x86_64") => "windows-x64",
-        ("windows", "x86") => "windows-x86",
-        ("windows", "aarch64") => "windows-arm64",
-        ("linux", "x86_64") => "linux",
-        ("linux", "x86") => "linux-i386",
-        ("macos", "x86_64") => "mac-os",
-        ("macos", "aarch64") => "mac-os-arm64",
-        _ => return None,
-    })
+/// Plattform-Schlüssel in `all.json`, der passendste zuerst. Für ARM fehlen alte Runtimes (Java 8, 16 und
+/// 17 „beta“, also Minecraft bis 1.18.2); dann läuft die x64-Runtime in der Emulation (Rosetta 2 bzw. die
+/// x64-Emulation von Windows).
+fn runtime_platforms(os: &str, arch: &str) -> &'static [&'static str] {
+    match (os, arch) {
+        ("windows", "x86_64") => &["windows-x64"],
+        ("windows", "x86") => &["windows-x86"],
+        ("windows", "aarch64") => &["windows-arm64", "windows-x64"],
+        ("linux", "x86_64") => &["linux"],
+        ("linux", "x86") => &["linux-i386"],
+        ("macos", "x86_64") => &["mac-os"],
+        ("macos", "aarch64") => &["mac-os-arm64", "mac-os"],
+        _ => &[],
+    }
 }
 
 /// Pfad der Java-Programmdatei einer installierten Komponente. Unter Windows `javaw.exe`
@@ -68,52 +72,183 @@ pub fn java_exe(dirs: &Dirs, component: &str) -> PathBuf {
     }
 }
 
+/// Dateinamen, die als eigene Java-Programmdatei gelten (verglichen in Kleinbuchstaben).
+pub(crate) const JAVA_FILE_NAMES: &[&str] = if cfg!(windows) { &["javaw.exe", "java.exe"] } else { &["java"] };
+
+/// Wo ein eigener Java-Pfad eingestellt ist. Es gibt zwei Stellen; Fehlermeldungen nennen die richtige.
+#[derive(Debug, Clone, Copy)]
+pub enum JavaSetting {
+    Instance,
+    Launcher,
+}
+
+impl JavaSetting {
+    fn not_java_program(self, path: &Path) -> Coded {
+        let (path, file) = (path.display(), JAVA_FILE_NAMES[0]);
+        match self {
+            Self::Instance => coded!("errors.game.notJavaProgram.instance", path = path, file = file),
+            Self::Launcher => coded!("errors.game.notJavaProgram.launcher", path = path, file = file),
+        }
+    }
+
+    fn java_missing(self, path: &Path) -> Coded {
+        let path = path.display();
+        match self {
+            Self::Instance => coded!("errors.game.javaPathNotFound.instance", path = path),
+            Self::Launcher => coded!("errors.game.javaPathNotFound.launcher", path = path),
+        }
+    }
+}
+
+/// Java für den Start: eigener Pfad der Instanz vor dem aus den Einstellungen vor der mitgelieferten Runtime.
+pub fn resolve(dirs: &Dirs, component: &str, instance_path: Option<&str>, global_path: Option<&str>) -> AppResult<PathBuf> {
+    let custom = [(instance_path, JavaSetting::Instance), (global_path, JavaSetting::Launcher)]
+        .into_iter()
+        .filter_map(|(path, setting)| Some((path?.trim(), setting)))
+        .find(|(path, _)| !path.is_empty());
+    if let Some((path, setting)) = custom {
+        return custom_java(path, setting);
+    }
+    let java = java_exe(dirs, component);
+    if !java.exists() {
+        return Err(AppError::invalid(coded!("errors.game.javaNotFound", path = java.display())));
+    }
+    Ok(java)
+}
+
+/// Prüft einen (bereits getrimmten) eigenen Java-Pfad: Er muss auf eine vorhandene `javaw.exe` bzw. `java.exe` zeigen
+/// (unter Linux/macOS `java`).
+pub fn custom_java(path: &str, setting: JavaSetting) -> AppResult<PathBuf> {
+    let path = PathBuf::from(path);
+    let name = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+    if !JAVA_FILE_NAMES.contains(&name.as_str()) {
+        return Err(AppError::invalid(setting.not_java_program(&path)));
+    }
+    if !path.is_file() {
+        return Err(AppError::invalid(setting.java_missing(&path)));
+    }
+    Ok(path)
+}
+
+/// Rechte ausführbarer Runtime-Dateien (`rwxr-xr-x`).
+#[cfg(unix)]
+const EXECUTABLE_MODE: u32 = 0o755;
+
 /// Lädt die Runtime `component` (z. B. `java-runtime-delta`) nach `runtime/<component>/`
 /// und liefert den Pfad der Java-Programmdatei.
-pub async fn ensure(
-    client: &reqwest::Client,
-    dirs: &Dirs,
-    component: &str,
-    on_done: &(dyn Fn(u64, u64) + Send + Sync),
-) -> AppResult<PathBuf> {
-    let platform = platform().ok_or_else(|| AppError::Invalid("Plattform ohne Mojang-Java-Runtime".into()))?;
-    let mut all: HashMap<String, HashMap<String, Vec<RuntimeEntry>>> =
-        download::get_json(client, RUNTIMES_URL).await?;
-    let entry = all
-        .get_mut(platform)
-        .and_then(|c| c.remove(component))
-        .and_then(|v| v.into_iter().next())
-        .ok_or_else(|| AppError::NotFound { kind: "Java-Runtime", id: format!("{component} ({platform})") })?;
-    let manifest: RuntimeManifest = download::get_json(client, &entry.manifest.url).await?;
-
+pub async fn ensure(client: &reqwest::Client, dirs: &Dirs, component: &str, on_done: CountFn<'_>) -> AppResult<PathBuf> {
+    let manifest = runtime_manifest(client, component).await?;
     let base = dirs.runtime(component);
+    let jobs = runtime_files(&manifest, &base).await?;
+    download::fetch_all(client, jobs, on_done).await?;
+    #[cfg(unix)]
+    apply_unix_modes(&manifest, &base).await?;
+
+    let exe = java_exe(dirs, component);
+    if !exe.exists() {
+        return Err(AppError::Download(coded!("errors.game.javaRuntimeIncomplete", path = exe.display()).into()));
+    }
+    Ok(exe)
+}
+
+/// Dateiliste der Runtime für diese Plattform (siehe `runtime_platforms`).
+async fn runtime_manifest(client: &reqwest::Client, component: &str) -> AppResult<RuntimeManifest> {
+    let (os, arch) = (std::env::consts::OS, std::env::consts::ARCH);
+    let mut all: HashMap<String, HashMap<String, Vec<RuntimeEntry>>> = download::get_json(client, RUNTIMES_URL).await?;
+    let entry = runtime_platforms(os, arch)
+        .iter()
+        .find_map(|platform| all.get_mut(*platform)?.remove(component)?.into_iter().next())
+        .ok_or_else(|| AppError::NotFound(coded!("errors.game.javaRuntimeNotFound", runtime = format!("{component} ({os} {arch})")).into()))?;
+    download::get_json(client, &entry.manifest.url).await
+}
+
+/// Legt die Ordner der Runtime an und liefert die Downloads ihrer Dateien. Links entstehen erst danach
+/// (`apply_unix_modes`), weil sie auf geladene Dateien zeigen.
+async fn runtime_files(manifest: &RuntimeManifest, base: &Path) -> AppResult<Vec<Job>> {
     let mut jobs = Vec::new();
     for (path, file) in &manifest.files {
         let target = base.join(Path::new(path));
         match (file.kind.as_str(), &file.downloads) {
             ("directory", _) => tokio::fs::create_dir_all(&target).await?,
-            ("file", Some(d)) => jobs.push(Job { url: d.raw.url.clone(), path: target, sha1: Some(d.raw.sha1.clone()) }),
-            _ => {} // Links: siehe unten
+            ("file", Some(d)) => jobs.push(Job::from_download(&d.raw, target)),
+            _ => {}
         }
     }
-    download::fetch_all(client, jobs, on_done).await?;
+    Ok(jobs)
+}
 
-    #[cfg(unix)]
+/// Links anlegen und Exec-Bits setzen; beides kennt nur Unix.
+#[cfg(unix)]
+async fn apply_unix_modes(manifest: &RuntimeManifest, base: &Path) -> AppResult<()> {
+    use std::os::unix::fs::PermissionsExt;
     for (path, file) in &manifest.files {
-        use std::os::unix::fs::PermissionsExt;
         let target = base.join(path);
         if file.kind == "link" {
             if let (Some(link), Err(_)) = (&file.target, tokio::fs::symlink_metadata(&target).await) {
                 tokio::fs::symlink(link, &target).await?;
             }
         } else if file.executable {
-            tokio::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).await?;
+            tokio::fs::set_permissions(&target, std::fs::Permissions::from_mode(EXECUTABLE_MODE)).await?;
         }
     }
+    Ok(())
+}
 
-    let exe = java_exe(dirs, component);
-    if !exe.exists() {
-        return Err(AppError::Download(format!("Java-Runtime unvollständig: {} fehlt", exe.display())));
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Leere Datei `<root>/<name>`; liefert ihren Pfad als Text.
+    fn fake_java(root: &Path, name: &str) -> String {
+        let file = root.join(name);
+        std::fs::write(&file, "").unwrap();
+        file.to_string_lossy().into_owned()
     }
-    Ok(exe)
+
+    #[test]
+    fn runtime_keys_per_platform_with_x64_fallback_on_arm() {
+        assert_eq!(runtime_platforms("windows", "x86_64"), ["windows-x64"]);
+        assert_eq!(runtime_platforms("linux", "x86_64"), ["linux"]);
+        assert_eq!(runtime_platforms("linux", "x86"), ["linux-i386"]);
+        assert_eq!(runtime_platforms("macos", "x86_64"), ["mac-os"]);
+        assert_eq!(runtime_platforms("macos", "aarch64"), ["mac-os-arm64", "mac-os"]);
+        assert_eq!(runtime_platforms("windows", "aarch64"), ["windows-arm64", "windows-x64"]);
+        assert!(runtime_platforms("linux", "aarch64").is_empty());
+    }
+
+    #[test]
+    fn instance_path_wins_over_setting_and_runtime() {
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        std::fs::create_dir_all(root.join("jdk")).unwrap();
+        let own = fake_java(&root, JAVA_FILE_NAMES[0]);
+        let global = fake_java(&root.join("jdk"), JAVA_FILE_NAMES[0]);
+        let dirs = Dirs::new(&root);
+
+        assert_eq!(resolve(&dirs, "delta", Some(&own), Some(&global)).unwrap(), PathBuf::from(&own));
+        assert_eq!(resolve(&dirs, "delta", Some("  "), Some(&global)).unwrap(), PathBuf::from(&global));
+        assert_eq!(resolve(&dirs, "delta", Some(&format!(" {own} ")), None).unwrap(), PathBuf::from(&own));
+        // Ein fehlendes Java nennt die Stelle, an der der Pfad eingestellt ist.
+        let gone = root.join("gone").join(JAVA_FILE_NAMES[0]).to_string_lossy().into_owned();
+        let own_gone = resolve(&dirs, "delta", Some(&gone), Some(&global)).unwrap_err().to_string();
+        assert!(own_gone.contains("in den Einstellungen der Instanz"), "{own_gone}");
+        let global_gone = resolve(&dirs, "delta", None, Some(&gone)).unwrap_err().to_string();
+        assert!(global_gone.contains("in den Einstellungen des Launchers"), "{global_gone}");
+        // Ohne eigenen Pfad die Runtime; die fehlt hier.
+        let missing = resolve(&dirs, "delta", None, Some("")).unwrap_err().to_string();
+        assert!(missing.starts_with("Java nicht gefunden"), "{missing}");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn custom_java_must_exist_and_be_java() {
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        std::fs::create_dir_all(&root).unwrap();
+        let other = fake_java(&root, "notepad.exe");
+        assert!(custom_java(&other, JavaSetting::Instance).unwrap_err().to_string().contains("ist kein Java-Programm"));
+        let gone = root.join(JAVA_FILE_NAMES[0]).to_string_lossy().into_owned();
+        assert!(custom_java(&gone, JavaSetting::Instance).unwrap_err().to_string().starts_with("Java nicht gefunden"));
+        let java = fake_java(&root, &JAVA_FILE_NAMES[0].to_uppercase());
+        assert_eq!(custom_java(&java, JavaSetting::Instance).unwrap(), PathBuf::from(&java));
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

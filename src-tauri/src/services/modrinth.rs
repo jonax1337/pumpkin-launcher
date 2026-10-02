@@ -1,8 +1,14 @@
 //! Modrinth v2: GET plus der lesende `POST version_files/update`, feste Origins, begrenzte Antworten.
+use super::{
+    content::fs_safety::safe_path,
+    limits::{API_JSON_LIMIT, FILE_LIMIT, PAGE_SIZE, QUERY_MAX},
+    providers::SearchQuery,
+    transport::{base_client_builder, read_capped, Digests, DOWNLOAD_TOO_BIG},
+};
 use crate::{
+    coded,
     error::{AppError, AppResult},
-    models::{Instance, ModKind},
-    services::download::sha1_hex,
+    models::{Instance, ModKind, ModSource},
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
@@ -10,11 +16,23 @@ use std::{
     time::Duration,
 };
 
-pub fn invalid(message: impl Into<String>) -> AppError {
-    AppError::Invalid(message.into())
-}
-pub const FILE_LIMIT: u64 = 256 * 1024 * 1024;
 const API: &str = "https://api.modrinth.com/v2";
+const MAX_IDENTIFIER_LEN: usize = 128;
+const MAX_SEARCH_OFFSET: u32 = 100_000;
+/// Projekte je Sammelabfrage der Inhaltsliste.
+const MAX_PROJECT_IDS: usize = 500;
+/// So viele IDs nimmt `GET versions` je Aufruf.
+const VERSION_IDS_PER_CALL: usize = 100;
+/// Mods einer Instanz, die ein Abhängigkeitsabgleich noch berücksichtigt.
+const MAX_INSTALLED_MODS: usize = 1000;
+/// Anfragen, die ein Abhängigkeitsabgleich an Modrinth stellen darf.
+const MAX_API_CALLS: u32 = 192;
+/// Neue Projekte (ohne die schon vorhandenen), die eine Installation hinzufügen darf.
+const MAX_NEW_PROJECTS: usize = 64;
+/// Wartende Versionen im Abhängigkeitsabgleich über die schon vorhandenen Mods hinaus.
+const MAX_QUEUE_SLACK: usize = 128;
+/// Wie oft ein exakt festgelegter Stand den Abhängigkeitsgraphen neu aufbauen darf.
+const MAX_REBUILDS: u32 = 16;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchResponse {
     pub hits: Vec<Hit>,
@@ -35,7 +53,7 @@ pub struct Hit {
     #[serde(default)]
     pub categories: Vec<String>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Project {
     pub id: String,
     pub slug: String,
@@ -49,6 +67,23 @@ pub struct Project {
     /// Projektseite bei Anbietern ohne eigene Installation (Technic, CurseForge); Modrinth sendet sie nicht.
     #[serde(default)]
     pub web_url: Option<String>,
+    #[serde(default)]
+    pub downloads: u64,
+    #[serde(default)]
+    pub categories: Vec<String>,
+    /// Bilder der Projektseite; nur Modrinth liefert sie.
+    #[serde(default)]
+    pub gallery: Vec<GalleryImage>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GalleryImage {
+    pub url: String,
+    #[serde(default)]
+    pub featured: bool,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Version {
@@ -59,15 +94,18 @@ pub struct Version {
     pub game_versions: Vec<String>,
     pub loaders: Vec<String>,
     /// release, beta oder alpha; fehlt es, gilt die Version als Release.
-    #[serde(default = "release")]
+    #[serde(default = "default_release")]
     pub version_type: String,
     /// ISO-8601 (UTC, gleiches Format bei Modrinth), daher als Text vergleichbar.
     #[serde(default)]
     pub date_published: String,
+    /// Änderungsprotokoll (Markdown); Anbieter ohne Protokoll lassen es leer.
+    #[serde(default)]
+    pub changelog: Option<String>,
     pub files: Vec<File>,
     pub dependencies: Vec<Dependency>,
 }
-fn release() -> String {
+fn default_release() -> String {
     "release".into()
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,113 +125,82 @@ pub struct Dependency {
 }
 
 pub fn client() -> AppResult<reqwest::Client> {
-    Ok(reqwest::Client::builder()
-        .user_agent(concat!("pumpkin-launcher/", env!("CARGO_PKG_VERSION")))
-        .redirect(reqwest::redirect::Policy::none())
-        .connect_timeout(Duration::from_secs(15))
-        .timeout(Duration::from_secs(120))
-        .build()?)
+    Ok(base_client_builder().timeout(Duration::from_secs(120)).build()?)
 }
 /// Client für große Dateien (Modpack-Zips, Mod-JARs): kein Gesamt-Timeout, nur Verbindungsaufbau und Stillstand
 /// (60 s ohne ein einziges Byte). Ein 500-MB-Pack auf langsamer Leitung darf Minuten brauchen, ein hängender Server nicht.
 pub fn download_client() -> AppResult<reqwest::Client> {
-    Ok(reqwest::Client::builder()
-        .user_agent(concat!("pumpkin-launcher/", env!("CARGO_PKG_VERSION")))
-        .redirect(reqwest::redirect::Policy::none())
-        .connect_timeout(Duration::from_secs(15))
-        .read_timeout(Duration::from_secs(60))
-        .build()?)
+    Ok(base_client_builder().read_timeout(Duration::from_secs(60)).build()?)
 }
 pub fn identifier(s: &str) -> AppResult<()> {
     if s.is_empty()
-        || s.len() > 128
+        || s.len() > MAX_IDENTIFIER_LEN
         || !s
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'.')
         || s == "."
         || s == ".."
     {
-        return Err(invalid("Ungültige ID/Version"));
+        return Err(AppError::invalid(coded!("errors.modrinth.invalidIdentifier")));
     }
     Ok(())
 }
 pub async fn bytes(request: reqwest::RequestBuilder, limit: u64) -> AppResult<Vec<u8>> {
     let mut response = request.send().await?.error_for_status()?;
     if !response.status().is_success() {
-        return Err(invalid("Redirects werden nicht akzeptiert"));
+        return Err(AppError::invalid(coded!("errors.modrinth.redirectRejected")));
     }
-    if response.content_length().is_some_and(|n| n > limit) {
-        return Err(invalid("Download zu groß"));
-    }
-    let mut data = Vec::new();
-    while let Some(chunk) = response.chunk().await? {
-        if data.len() as u64 + chunk.len() as u64 > limit {
-            return Err(invalid("Download zu groß"));
-        }
-        data.extend_from_slice(&chunk);
-    }
-    Ok(data)
+    read_capped(&mut response, limit, DOWNLOAD_TOO_BIG).await
 }
 async fn api<T: DeserializeOwned>(
     client: &reqwest::Client,
     path: &str,
     query: &[(String, String)],
 ) -> AppResult<T> {
-    let mut url =
-        reqwest::Url::parse(&format!("{API}/{path}")).map_err(|e| invalid(e.to_string()))?;
+    let mut url = parse_url(&format!("{API}/{path}"))?;
     url.query_pairs_mut().extend_pairs(query);
-    Ok(serde_json::from_slice(
-        &bytes(client.get(url), 8 * 1024 * 1024).await?,
-    )?)
+    Ok(serde_json::from_slice(&bytes(client.get(url), API_JSON_LIMIT).await?)?)
 }
 /// Quilt lädt auch Fabric-Mods: Katalog und Versionen fragen dann beide Loader an (ODER).
-fn with_fabric(loader: &str) -> Vec<&str> {
+fn loaders_to_query(loader: &str) -> Vec<&str> {
     if loader == "quilt" { vec!["quilt", "fabric"] } else { vec![loader] }
 }
 
-pub async fn search(
-    client: &reqwest::Client,
-    query: String,
-    kind: String,
-    mc: Option<String>,
-    loader: Option<String>,
-    offset: u32,
-    index: Option<String>,
-) -> AppResult<SearchResponse> {
-    if !matches!(kind.as_str(), "mod" | "modpack" | "resourcepack" | "shader") || query.len() > 512 || offset > 100_000 {
-        return Err(invalid("Ungültige Suche"));
-    }
-    if !matches!(index.as_deref(), None | Some("relevance" | "downloads" | "follows" | "newest" | "updated")) {
-        return Err(invalid("Ungültige Sortierung"));
-    }
-    let mut facets = vec![vec![format!("project_type:{kind}")]];
-    if let Some(mc) = mc {
-        identifier(&mc)?;
+/// Die Filter der Suche als Modrinth-Facetten: zwischen den Gruppen UND, innerhalb einer ODER.
+fn search_facets(request: &SearchQuery) -> Vec<Vec<String>> {
+    let mut facets = vec![vec![format!("project_type:{}", request.project_type.name())]];
+    if let Some(mc) = &request.mc {
         facets.push(vec![format!("versions:{mc}")]);
     }
-    if let Some(loader) = loader {
-        identifier(&loader)?;
-        facets.push(with_fabric(&loader).iter().map(|l| format!("categories:{l}")).collect());
+    if let Some(loader) = &request.loader {
+        facets.push(loaders_to_query(loader).iter().map(|l| format!("categories:{l}")).collect());
     }
-    // Ohne Sortierung: ohne Suchbegriff die beliebtesten Projekte zuerst.
-    let index = index.unwrap_or_else(|| if query.trim().is_empty() { "downloads" } else { "relevance" }.into());
+    if let Some(category) = &request.category {
+        facets.push(vec![format!("categories:{category}")]);
+    }
+    facets
+}
+
+pub async fn search(client: &reqwest::Client, request: &SearchQuery) -> AppResult<SearchResponse> {
+    request.ensure_within(QUERY_MAX, MAX_SEARCH_OFFSET)?;
+    let facets = search_facets(request);
     api(
         client,
         "search",
         &[
-            ("query".into(), query),
+            ("query".into(), request.query.clone()),
             ("facets".into(), serde_json::to_string(&facets)?),
-            ("index".into(), index),
-            ("offset".into(), offset.to_string()),
-            ("limit".into(), "20".into()),
+            ("index".into(), request.sort().name().into()),
+            ("offset".into(), request.offset.to_string()),
+            ("limit".into(), PAGE_SIZE.to_string()),
         ],
     )
     .await
 }
 /// Mehrere Projekte in einem Aufruf (Icons und Namen für die Inhaltsliste einer Instanz).
 pub async fn projects(client: &reqwest::Client, ids: &[String]) -> AppResult<Vec<Project>> {
-    if ids.len() > 500 {
-        return Err(invalid("Zu viele Projekte"));
+    if ids.len() > MAX_PROJECT_IDS {
+        return Err(AppError::invalid(coded!("errors.modrinth.tooManyProjects")));
     }
     ids.iter().try_for_each(|id| identifier(id))?;
     if ids.is_empty() {
@@ -209,9 +216,20 @@ pub async fn version(client: &reqwest::Client, id: &str) -> AppResult<Version> {
     identifier(id)?;
     let v: Version = api(client, &format!("version/{id}"), &[]).await?;
     if v.id != id {
-        return Err(invalid("Versions-ID stimmt nicht überein"));
+        return Err(AppError::invalid(coded!("errors.modrinth.versionIdMismatch")));
     }
     Ok(v)
+}
+/// Änderungsprotokoll einer Version (Markdown); `None`, wenn die Autoren keins geschrieben haben.
+pub async fn changelog(client: &reqwest::Client, id: &str) -> AppResult<Option<String>> {
+    #[derive(Deserialize)]
+    struct Notes {
+        #[serde(default)]
+        changelog: Option<String>,
+    }
+    identifier(id)?;
+    let notes: Notes = api(client, &format!("version/{id}"), &[]).await?;
+    Ok(notes.changelog.filter(|text| !text.trim().is_empty()))
 }
 pub async fn versions(
     client: &reqwest::Client,
@@ -227,18 +245,18 @@ pub async fn versions(
     }
     if let Some(loader) = loader {
         identifier(loader)?;
-        q.push(("loaders".into(), serde_json::to_string(&with_fabric(loader))?));
+        q.push(("loaders".into(), serde_json::to_string(&loaders_to_query(loader))?));
     }
     api(client, &format!("project/{id}/version"), &q).await
 }
 /// Mehrere Versionen in einem Aufruf je 100 IDs; jede angefragte muss genau so zurückkommen.
 pub async fn versions_by_ids(client: &reqwest::Client, ids: &[String]) -> AppResult<Vec<Version>> {
     let mut out = Vec::new();
-    for chunk in ids.chunks(100) {
+    for chunk in ids.chunks(VERSION_IDS_PER_CALL) {
         chunk.iter().try_for_each(|id| identifier(id))?;
         let got: Vec<Version> = api(client, "versions", &[("ids".into(), serde_json::to_string(chunk)?)]).await?;
         if got.len() != chunk.len() || !got.iter().all(|v| chunk.contains(&v.id)) {
-            return Err(invalid("Versionen stimmen nicht überein"));
+            return Err(AppError::invalid(coded!("errors.modrinth.versionsMismatch")));
         }
         out.extend(got);
     }
@@ -255,16 +273,13 @@ pub async fn latest_by_hash(
     if hashes.is_empty() {
         return Ok(HashMap::new());
     }
-    let url = reqwest::Url::parse(&format!("{API}/version_files/update"))
-        .map_err(|e| invalid(e.to_string()))?;
+    let url = parse_url(&format!("{API}/version_files/update"))?;
     let body = serde_json::json!({
         "hashes": hashes, "algorithm": "sha1", "loaders": loaders, "game_versions": [mc],
         // Nur stabile Versionen anbieten; Betas bleiben eine bewusste Wahl über „Andere Version“.
         "version_types": ["release"]
     });
-    Ok(serde_json::from_slice(
-        &bytes(client.post(url).json(&body), 8 * 1024 * 1024).await?,
-    )?)
+    Ok(serde_json::from_slice(&bytes(client.post(url).json(&body), API_JSON_LIMIT).await?)?)
 }
 /// Version je SHA-1 (`POST version_files`); nur Antworten, deren Dateien den Hash wirklich tragen.
 pub async fn versions_by_hash(
@@ -274,11 +289,10 @@ pub async fn versions_by_hash(
     if hashes.is_empty() {
         return Ok(HashMap::new());
     }
-    let url = reqwest::Url::parse(&format!("{API}/version_files"))
-        .map_err(|e| invalid(e.to_string()))?;
+    let url = parse_url(&format!("{API}/version_files"))?;
     let body = serde_json::json!({ "hashes": hashes, "algorithm": "sha1" });
     let found: HashMap<String, Version> =
-        serde_json::from_slice(&bytes(client.post(url).json(&body), 8 * 1024 * 1024).await?)?;
+        serde_json::from_slice(&bytes(client.post(url).json(&body), API_JSON_LIMIT).await?)?;
     Ok(found
         .into_iter()
         .filter(|(sha1, v)| {
@@ -289,8 +303,12 @@ pub async fn versions_by_hash(
         .map(|(sha1, v)| (sha1.to_ascii_lowercase(), v))
         .collect())
 }
+fn parse_url(s: &str) -> AppResult<reqwest::Url> {
+    reqwest::Url::parse(s)
+        .map_err(|e| AppError::invalid(coded!("errors.modrinth.invalidUrl").with_details(e.to_string())))
+}
 pub fn download_url(s: &str) -> AppResult<reqwest::Url> {
-    let url = reqwest::Url::parse(s).map_err(|e| invalid(e.to_string()))?;
+    let url = parse_url(s)?;
     if url.scheme() != "https"
         || url.host_str() != Some("cdn.modrinth.com")
         || url.port_or_known_default() != Some(443)
@@ -298,254 +316,327 @@ pub fn download_url(s: &str) -> AppResult<reqwest::Url> {
         || url.password().is_some()
         || url.fragment().is_some()
     {
-        return Err(invalid(
-            "Download-Origin nicht erlaubt (nur https://cdn.modrinth.com)",
-        ));
+        return Err(AppError::invalid(coded!("errors.modrinth.downloadOriginNotAllowed")));
     }
     Ok(url)
 }
+/// Modrinth nennt für jede Datei SHA-1 und SHA-512; beide müssen angegeben sein und stimmen.
 pub fn verify(data: &[u8], size: u64, hashes: &BTreeMap<String, String>) -> AppResult<()> {
-    use sha2::{Digest, Sha512};
     if data.len() as u64 != size {
-        return Err(invalid("Dateigröße stimmt nicht"));
+        return Err(AppError::invalid(coded!("errors.modrinth.fileSizeMismatch")));
     }
-    for (key, len, actual) in [
-        ("sha1", 40, sha1_hex(data)),
-        (
-            "sha512",
-            128,
-            Sha512::digest(data)
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect::<String>(),
-        ),
-    ] {
+    let digests = Digests::of(data);
+    for key in ["sha1", "sha512"] {
         let hash = hashes
             .get(key)
-            .ok_or_else(|| invalid(format!("{key} fehlt")))?;
-        if hash.len() != len || !hash.eq_ignore_ascii_case(&actual) {
-            return Err(invalid(format!("{key} stimmt nicht")));
-        }
+            .ok_or_else(|| AppError::invalid(coded!("errors.modrinth.hashMissing", algorithm = key)))?;
+        digests.check_one(key, hash)?;
     }
     Ok(())
 }
 pub async fn download(client: &reqwest::Client, file: &File) -> AppResult<Vec<u8>> {
     if file.size > FILE_LIMIT {
-        return Err(invalid("Datei zu groß"));
+        return Err(AppError::invalid(coded!("errors.modrinth.fileTooLarge")));
     }
     let data = bytes(client.get(download_url(&file.url)?), file.size).await?;
     verify(&data, file.size, &file.hashes)?;
     Ok(data)
 }
+/// Die als primär markierte Datei mit der Endung `extension`, sonst die einzige; ein bloßer Dateiname.
 pub fn primary(version: &Version, extension: &str) -> AppResult<File> {
-    let files: Vec<_> = version
-        .files
-        .iter()
-        .filter(|f| f.filename.ends_with(extension))
-        .collect();
+    let files: Vec<&File> = version.files.iter().filter(|f| f.filename.ends_with(extension)).collect();
+    let only = || match files.as_slice() {
+        [only] => Some(*only),
+        _ => None,
+    };
     let selected = files
         .iter()
         .find(|f| f.primary)
         .copied()
-        .or_else(|| {
-            if files.len() == 1 {
-                Some(files[0])
-            } else {
-                None
-            }
-        })
-        .ok_or_else(|| invalid("Keine eindeutige primäre Datei"))?;
-    super::content::safe_path(&selected.filename)?;
+        .or_else(only)
+        .ok_or_else(|| AppError::invalid(coded!("errors.modrinth.noPrimaryFile")))?;
+    safe_path(&selected.filename)?;
     if selected.filename.contains('/') {
-        return Err(invalid("Dateiname enthält Verzeichnis"));
+        return Err(AppError::invalid(coded!("errors.modrinth.fileNameHasDirectory")));
     }
     Ok(selected.clone())
 }
 pub fn compatible(v: &Version, instance: &Instance) -> AppResult<()> {
     if !v.game_versions.contains(&instance.minecraft_version) || !instance.loader.runs(&v.loaders) {
-        return Err(invalid(format!("Inkompatible Mod-Version {}", v.id)));
+        return Err(AppError::invalid(coded!("errors.modrinth.incompatibleModVersion", version = v.id)));
     }
     Ok(())
 }
-pub fn select(selected: &mut HashMap<String, Version>, v: Version) -> AppResult<bool> {
+/// Nimmt `v` in `selected` auf, sofern das Projekt dort noch fehlt; `true`, wenn es neu hinzukam. Eine andere
+/// Version desselben Projekts ist ein Fehler.
+pub fn insert_if_consistent(selected: &mut HashMap<String, Version>, v: Version) -> AppResult<bool> {
     if let Some(old) = selected.get(&v.project_id) {
         if old.id != v.id {
-            return Err(invalid(format!("Zwei Mods brauchen unterschiedliche Versionen von {}", v.project_id)));
+            return Err(AppError::invalid(coded!("errors.modrinth.conflictingVersions", project = v.project_id)));
         }
         return Ok(false);
     }
     selected.insert(v.project_id.clone(), v);
     Ok(true)
 }
-/// Exact constraints supersede provisional latest selections; rebuild to remove their descendants.
-/// ponytail: conservative retained pins, no SAT/backtracking; conflicting exact pins fail closed.
-fn pin_and_rebuild(
-    pinned: &mut HashMap<String, Version>,
-    selected: &mut HashMap<String, Version>,
-    queue: &mut VecDeque<Version>,
-    deferred: &mut VecDeque<String>,
-    child: &Version,
-) -> AppResult<bool> {
-    select(pinned, child.clone())?;
-    if selected
-        .get(&child.project_id)
-        .is_some_and(|v| v.id != child.id)
-    {
-        selected.clear();
-        deferred.clear();
-        queue.clear();
-        let mut roots: Vec<_> = pinned.values().cloned().collect();
-        roots.sort_by(|a, b| a.project_id.cmp(&b.project_id));
-        queue.extend(roots);
-        return Ok(true);
-    }
-    Ok(false)
+
+/// Erklärt eine der gewählten Versionen eine andere der gewählten für unverträglich?
+pub fn has_incompatibility(selected: &HashMap<String, Version>) -> bool {
+    selected.values().flat_map(|v| &v.dependencies).filter(|d| d.dependency_type == "incompatible").any(|d| {
+        selected.values().any(|other| {
+            d.version_id.as_ref().map_or_else(|| d.project_id.as_ref() == Some(&other.project_id), |id| id == &other.id)
+        })
+    })
 }
-pub async fn resolve(
-    client: &reqwest::Client,
-    root: &str,
-    instance: &Instance,
-) -> AppResult<Vec<Version>> {
+
+/// Löst die Pflicht-Abhängigkeiten der Version `root` gegen die aktiven Modrinth-Mods der Instanz auf und liefert
+/// alle beteiligten Versionen nach Projekt sortiert.
+pub async fn resolve(client: &reqwest::Client, root: &str, instance: &Instance) -> AppResult<Vec<Version>> {
     let root = version(client, root).await?;
-    let mut selected = HashMap::new();
-    let mut installed: Vec<String> = instance
+    let installed = installed_versions(client, instance).await?;
+    let mut resolver = Resolver::new(client, instance, root, installed)?;
+    resolver.run().await?;
+    resolver.finish()
+}
+
+/// Versionen der aktiven Modrinth-Mods der Instanz, eine Sammelabfrage je 100.
+async fn installed_versions(client: &reqwest::Client, instance: &Instance) -> AppResult<Vec<Version>> {
+    let mut ids: Vec<String> = instance
         .mods
         .iter()
         .filter(|m| m.enabled && m.kind == ModKind::Mod)
         .filter_map(|m| match &m.source {
-            crate::models::ModSource::Modrinth { version_id, .. } => Some(version_id.clone()),
+            ModSource::Modrinth { version_id, .. } => Some(version_id.clone()),
             _ => None,
         })
         .collect();
-    installed.sort();
-    installed.dedup();
-    if installed.len() > 1000 {
-        return Err(invalid("Zu viele installierte Mods"));
+    ids.sort();
+    ids.dedup();
+    if ids.len() > MAX_INSTALLED_MODS {
+        return Err(AppError::invalid(coded!("errors.modrinth.tooManyInstalledMods")));
     }
-    let installed = versions_by_ids(client, &installed).await?;
-    // Already installed projects came with the instance (often from a pack): they only pin the graph.
-    // The client/compatibility checks apply to what this operation adds, the root included.
-    let known: HashSet<String> = installed
-        .iter()
-        .map(|v| v.project_id.clone())
-        .filter(|p| p != &root.project_id)
-        .collect();
-    let mut queue = VecDeque::from([root]);
-    queue.extend(installed);
-    // Only requests count against the limits; installed versions cost one bulk request per 100.
-    let mut calls = 1;
-    let mut pinned = HashMap::new();
-    for v in &queue {
-        select(&mut pinned, v.clone())?;
+    versions_by_ids(client, &ids).await
+}
+
+/// Zählt die Anfragen eines Abhängigkeitsabgleichs und die Neuaufbauten des Graphen gegen ihre Grenzen.
+struct ResolveBudget {
+    calls: u32,
+    rebuilds: u32,
+}
+
+impl ResolveBudget {
+    /// Die Wurzelversion ist schon geladen; die Sammelabfragen der installierten Versionen zählen nicht.
+    fn new() -> Self {
+        Self { calls: 1, rebuilds: 0 }
     }
-    let mut deferred: VecDeque<String> = VecDeque::new();
-    let mut rebuilds = 0;
-    loop {
-        if queue.is_empty() {
-            let Some(id) = deferred.pop_front() else {
-                break;
-            };
-            if selected.contains_key(&id) {
-                continue;
+
+    /// Zählt eine Anfrage, deren Grenze erst die nächste Prüfung zieht.
+    fn count_call(&mut self) {
+        self.calls += 1;
+    }
+
+    fn spend_call(&mut self) -> AppResult<()> {
+        self.count_call();
+        self.check_calls()
+    }
+
+    fn check_calls(&self) -> AppResult<()> {
+        if self.calls > MAX_API_CALLS {
+            return Err(limit_reached());
+        }
+        Ok(())
+    }
+
+    /// Noch Platz für weitere Abhängigkeiten: `queued` wartende Versionen bei `installed` vorhandenen Projekten.
+    fn check_queue(&self, queued: usize, installed: usize) -> AppResult<()> {
+        self.check_calls()?;
+        if queued > MAX_QUEUE_SLACK + installed {
+            return Err(limit_reached());
+        }
+        Ok(())
+    }
+
+    fn check_added_projects(&self, added: usize) -> AppResult<()> {
+        if added > MAX_NEW_PROJECTS {
+            return Err(limit_reached());
+        }
+        Ok(())
+    }
+
+    fn spend_rebuild(&mut self) -> AppResult<()> {
+        self.rebuilds += 1;
+        if self.rebuilds > MAX_REBUILDS {
+            return Err(AppError::invalid(coded!("errors.modrinth.rebuildLimitReached")));
+        }
+        Ok(())
+    }
+}
+
+fn limit_reached() -> AppError {
+    AppError::invalid(coded!("errors.modrinth.dependencyLimitReached"))
+}
+
+/// Zustand des Abhängigkeitsgraphen: exakt festgelegte und vorläufig gewählte Versionen, dazu die Versionen und
+/// Projekte, die noch zu besuchen sind.
+#[derive(Default)]
+struct Graph {
+    pinned: HashMap<String, Version>,
+    selected: HashMap<String, Version>,
+    queue: VecDeque<Version>,
+    deferred: VecDeque<String>,
+}
+
+impl Graph {
+    /// Exakte Vorgaben schlagen vorläufig gewählte neueste Versionen; dann wird neu aufgebaut, damit deren
+    /// Nachfahren verschwinden. `true`, wenn neu aufgebaut wird.
+    /// ponytail: festgelegte Stände bleiben, kein SAT/Backtracking; widersprüchliche exakte Vorgaben scheitern.
+    fn pin_and_rebuild(&mut self, child: &Version) -> AppResult<bool> {
+        insert_if_consistent(&mut self.pinned, child.clone())?;
+        let superseded = self.selected.get(&child.project_id).is_some_and(|v| v.id != child.id);
+        if !superseded {
+            return Ok(false);
+        }
+        self.selected.clear();
+        self.deferred.clear();
+        self.queue.clear();
+        let mut roots: Vec<_> = self.pinned.values().cloned().collect();
+        roots.sort_by(|a, b| a.project_id.cmp(&b.project_id));
+        self.queue.extend(roots);
+        Ok(true)
+    }
+
+    /// Festgelegte oder gewählte Version des Projekts `project_id`.
+    fn chosen_of_project(&self, project_id: &str) -> Option<&Version> {
+        self.pinned.get(project_id).or_else(|| self.selected.get(project_id))
+    }
+
+    /// Festgelegte oder gewählte Version mit der Versions-ID `version_id`.
+    fn chosen_version(&self, version_id: &str) -> Option<&Version> {
+        self.pinned.values().chain(self.selected.values()).find(|v| v.id == version_id)
+    }
+}
+
+/// Breitensuche über die Pflicht-Abhängigkeiten innerhalb der Grenzen von [`ResolveBudget`].
+struct Resolver<'a> {
+    client: &'a reqwest::Client,
+    instance: &'a Instance,
+    /// Schon installierte Projekte kamen mit der Instanz (oft aus einem Pack) und legen den Graphen nur fest. Die
+    /// Client- und Verträglichkeitsprüfungen gelten dem, was dieser Vorgang hinzufügt, die Wurzel eingeschlossen.
+    installed: HashSet<String>,
+    graph: Graph,
+    budget: ResolveBudget,
+}
+
+impl<'a> Resolver<'a> {
+    fn new(client: &'a reqwest::Client, instance: &'a Instance, root: Version, installed: Vec<Version>) -> AppResult<Self> {
+        let installed_projects = installed.iter().map(|v| v.project_id.clone()).filter(|p| p != &root.project_id).collect();
+        let mut graph = Graph { queue: VecDeque::from([root]), ..Graph::default() };
+        graph.queue.extend(installed);
+        for v in &graph.queue {
+            insert_if_consistent(&mut graph.pinned, v.clone())?;
+        }
+        Ok(Self { client, instance, installed: installed_projects, graph, budget: ResolveBudget::new() })
+    }
+
+    async fn run(&mut self) -> AppResult<()> {
+        while let Some(v) = self.next_version().await? {
+            self.visit(v).await?;
+        }
+        Ok(())
+    }
+
+    /// Nächste Version aus der Warteschlange; ist sie leer, die passende eines zurückgestellten Projekts.
+    async fn next_version(&mut self) -> AppResult<Option<Version>> {
+        if let Some(v) = self.graph.queue.pop_front() {
+            return Ok(Some(v));
+        }
+        while let Some(project_id) = self.graph.deferred.pop_front() {
+            if !self.graph.selected.contains_key(&project_id) {
+                self.budget.spend_call()?;
+                return self.runnable_version_of(&project_id).await.map(Some);
             }
-            calls += 1;
-            if calls > 192 {
-                return Err(invalid("Dependency-Limit erreicht"));
-            }
-            // Ohne Loader-Filter anfragen: Quilt nimmt Quilt- und Fabric-Versionen.
-            let child = versions(client, &id, Some(&instance.minecraft_version), None)
+        }
+        Ok(None)
+    }
+
+    /// Neueste Version des Projekts, die die Instanz starten kann. Ohne Loader-Filter angefragt: Quilt nimmt Quilt-
+    /// und Fabric-Versionen.
+    async fn runnable_version_of(&self, project_id: &str) -> AppResult<Version> {
+        versions(self.client, project_id, Some(&self.instance.minecraft_version), None)
             .await?
             .into_iter()
-            .find(|v| instance.loader.runs(&v.loaders))
-            .ok_or_else(|| invalid("Keine kompatible Dependency"))?;
-            queue.push_back(child);
-        }
-        let Some(v) = queue.pop_front() else { continue };
-        let new = !known.contains(&v.project_id);
-        if new {
-            compatible(&v, instance)?;
-        }
-        if !select(&mut selected, v.clone())? {
-            continue;
-        }
-        if new {
-            calls += 1;
-            if calls > 192 || selected.keys().filter(|p| !known.contains(*p)).count() > 64 {
-                return Err(invalid("Dependency-Limit erreicht"));
-            }
-            let p = project(client, &v.project_id).await?;
-            if p.id != v.project_id || p.project_type != "mod" || p.client_side == "unsupported" {
-                return Err(invalid("Projekt ist keine Client-Mod"));
-            }
-        }
-        for d in &v.dependencies {
-            if d.dependency_type != "required" {
-                continue;
-            }
-            if calls > 192 || queue.len() > 128 + known.len() {
-                return Err(invalid("Dependency-Limit erreicht"));
-            }
-            let child = if let Some(id) = &d.version_id {
-                match pinned.values().chain(selected.values()).find(|p| &p.id == id) {
-                    Some(same) => same.clone(),
-                    None => {
-                        calls += 1;
-                        version(client, id).await?
-                    }
-                }
-            } else if let Some(id) = &d.project_id {
-                if let Some(existing) = pinned.get(id).or_else(|| selected.get(id)) {
-                    existing.clone()
-                } else {
-                    deferred.push_back(id.clone());
-                    continue;
-                }
-            } else {
-                return Err(invalid(
-                    "Required Datei-Dependency ohne Projekt/Version nicht unterstützt",
-                ));
-            };
-            if d.project_id
-                .as_ref()
-                .is_some_and(|p| p != &child.project_id)
-            {
-                return Err(invalid("Dependency-Projekt stimmt nicht"));
-            }
-            if d.version_id.is_some()
-                && pin_and_rebuild(
-                    &mut pinned,
-                    &mut selected,
-                    &mut queue,
-                    &mut deferred,
-                    &child,
-                )?
-            {
-                rebuilds += 1;
-                if rebuilds > 16 {
-                    return Err(invalid("Dependency rebuild limit erreicht"));
-                }
-                break;
-            }
-            queue.push_back(child);
-        }
+            .find(|v| self.instance.loader.runs(&v.loaders))
+            .ok_or_else(|| AppError::invalid(coded!("errors.modrinth.noCompatibleDependency")))
     }
-    for v in selected.values() {
-        for d in &v.dependencies {
-            if d.dependency_type == "incompatible"
-                && selected.values().any(|other| {
-                    d.version_id.as_ref().map_or_else(
-                        || d.project_id.as_ref() == Some(&other.project_id),
-                        |id| id == &other.id,
-                    )
-                })
-            {
-                return Err(invalid("Inkompatible Dependencies"));
-            }
+
+    async fn visit(&mut self, v: Version) -> AppResult<()> {
+        let added = !self.installed.contains(&v.project_id);
+        if added {
+            compatible(&v, self.instance)?;
         }
+        if !insert_if_consistent(&mut self.graph.selected, v.clone())? {
+            return Ok(());
+        }
+        if added {
+            self.check_added_project(&v).await?;
+        }
+        self.enqueue_dependencies(&v).await
     }
-    let mut result: Vec<_> = selected.into_values().collect();
-    result.sort_by(|a, b| a.project_id.cmp(&b.project_id));
-    Ok(result)
+
+    /// Ein hinzukommendes Projekt passt noch ins Budget neuer Projekte und ist eine Client-Mod.
+    async fn check_added_project(&mut self, v: &Version) -> AppResult<()> {
+        self.budget.spend_call()?;
+        self.budget.check_added_projects(self.graph.selected.keys().filter(|p| !self.installed.contains(*p)).count())?;
+        let p = project(self.client, &v.project_id).await?;
+        if p.id != v.project_id || p.project_type != "mod" || p.client_side == "unsupported" {
+            return Err(AppError::invalid(coded!("errors.modrinth.notClientMod")));
+        }
+        Ok(())
+    }
+
+    async fn enqueue_dependencies(&mut self, v: &Version) -> AppResult<()> {
+        for d in v.dependencies.iter().filter(|d| d.dependency_type == "required") {
+            self.budget.check_queue(self.graph.queue.len(), self.installed.len())?;
+            let Some(child) = self.next_child(d).await? else { continue };
+            if d.project_id.as_ref().is_some_and(|p| p != &child.project_id) {
+                return Err(AppError::invalid(coded!("errors.modrinth.dependencyProjectMismatch")));
+            }
+            if d.version_id.is_some() && self.graph.pin_and_rebuild(&child)? {
+                return self.budget.spend_rebuild();
+            }
+            self.graph.queue.push_back(child);
+        }
+        Ok(())
+    }
+
+    /// Version, die `d` verlangt: die exakt genannte oder die schon gewählte des Projekts. `None`, wenn das Projekt
+    /// zurückgestellt wird, bis die Warteschlange leer ist.
+    async fn next_child(&mut self, d: &Dependency) -> AppResult<Option<Version>> {
+        if let Some(version_id) = &d.version_id {
+            if let Some(same) = self.graph.chosen_version(version_id) {
+                return Ok(Some(same.clone()));
+            }
+            self.budget.count_call();
+            return version(self.client, version_id).await.map(Some);
+        }
+        let Some(project_id) = &d.project_id else {
+            return Err(AppError::invalid(coded!("errors.modrinth.fileDependencyUnsupported")));
+        };
+        if let Some(existing) = self.graph.chosen_of_project(project_id) {
+            return Ok(Some(existing.clone()));
+        }
+        self.graph.deferred.push_back(project_id.clone());
+        Ok(None)
+    }
+
+    fn finish(self) -> AppResult<Vec<Version>> {
+        if has_incompatibility(&self.graph.selected) {
+            return Err(AppError::invalid(coded!("errors.modrinth.incompatibleDependencies")));
+        }
+        let mut result: Vec<_> = self.graph.selected.into_values().collect();
+        result.sort_by(|a, b| a.project_id.cmp(&b.project_id));
+        Ok(result)
+    }
 }
 
 #[cfg(test)]
@@ -559,18 +650,60 @@ mod tests {
             version_number: "1".into(),
             game_versions: vec!["1.21.1".into()],
             loaders: vec!["fabric".into()],
-            version_type: release(),
+            version_type: default_release(),
             date_published: String::new(),
+            changelog: None,
             files: vec![],
             dependencies: vec![],
         }
     }
     #[test]
+    fn search_facets_combine_type_version_loader_and_category() {
+        use super::super::providers::ProjectType;
+        let mut search = SearchQuery::of("sodium", ProjectType::Mod);
+        assert_eq!(search_facets(&search), vec![vec!["project_type:mod"]]);
+        search.mc = Some("1.21.1".into());
+        search.loader = Some("quilt".into());
+        search.category = Some("optimization".into());
+        assert_eq!(
+            search_facets(&search),
+            vec![
+                vec!["project_type:mod"],
+                vec!["versions:1.21.1"],
+                vec!["categories:quilt", "categories:fabric"],
+                vec!["categories:optimization"],
+            ]
+        );
+    }
+    #[test]
+    fn project_and_version_keep_gallery_and_changelog_when_present() {
+        let project: Project = serde_json::from_value(serde_json::json!({
+            "id": "p", "slug": "p", "title": "P", "description": "", "body": "", "icon_url": null,
+            "project_type": "modpack", "client_side": "optional", "server_side": "optional",
+            "downloads": 12, "categories": ["adventure"],
+            "gallery": [{ "url": "https://cdn.modrinth.com/a.png", "featured": true, "title": "A", "description": null }]
+        }))
+        .unwrap();
+        assert_eq!((project.downloads, project.gallery.len(), project.gallery[0].featured), (12, 1, true));
+        let bare: Project = serde_json::from_value(serde_json::json!({
+            "id": "p", "slug": "p", "title": "P", "description": "", "body": "", "icon_url": null,
+            "project_type": "mod", "client_side": "required", "server_side": "optional"
+        }))
+        .unwrap();
+        assert!(bare.gallery.is_empty() && bare.categories.is_empty());
+        let version: Version = serde_json::from_value(serde_json::json!({
+            "id": "v", "project_id": "p", "name": "N", "version_number": "1", "game_versions": [], "loaders": [],
+            "files": [], "dependencies": [], "changelog": "- fixed", "date_published": "2026-01-02T03:04:05Z"
+        }))
+        .unwrap();
+        assert_eq!(version.changelog.as_deref(), Some("- fixed"));
+    }
+    #[test]
     fn dependency_dedup_cycle_and_conflict() {
         let mut selected = HashMap::new();
-        assert!(select(&mut selected, v("v1")).unwrap());
-        assert!(!select(&mut selected, v("v1")).unwrap());
-        assert!(select(&mut selected, v("v2")).is_err());
+        assert!(insert_if_consistent(&mut selected, v("v1")).unwrap());
+        assert!(!insert_if_consistent(&mut selected, v("v1")).unwrap());
+        assert!(insert_if_consistent(&mut selected, v("v2")).is_err());
         assert_eq!(selected["project"].id, "v1");
     }
     #[test]
@@ -583,44 +716,65 @@ mod tests {
         b1.id = "b1".into();
         let mut c = v("c1");
         c.project_id = "c".into();
-        let mut pinned = HashMap::from([("a".into(), a.clone())]);
-        let mut selected = HashMap::from([("a".into(), a), ("b".into(), b2), ("c".into(), c)]);
-        let mut queue = VecDeque::new();
-        let mut deferred = VecDeque::from(["old-child".into()]);
-        assert!(
-            pin_and_rebuild(&mut pinned, &mut selected, &mut queue, &mut deferred, &b1).unwrap()
-        );
-        assert!(selected.is_empty());
-        assert!(deferred.is_empty());
-        assert_eq!(
-            queue.iter().map(|v| v.id.as_str()).collect::<Vec<_>>(),
-            vec!["a1", "b1"]
-        );
-        assert_eq!(pinned["b"].id, "b1");
+        let mut graph = Graph {
+            pinned: HashMap::from([("a".into(), a.clone())]),
+            selected: HashMap::from([("a".into(), a), ("b".into(), b2), ("c".into(), c)]),
+            queue: VecDeque::new(),
+            deferred: VecDeque::from(["old-child".into()]),
+        };
+        assert!(graph.pin_and_rebuild(&b1).unwrap());
+        assert!(graph.selected.is_empty());
+        assert!(graph.deferred.is_empty());
+        assert_eq!(graph.queue.iter().map(|v| v.id.as_str()).collect::<Vec<_>>(), vec!["a1", "b1"]);
+        assert_eq!(graph.pinned["b"].id, "b1");
         let mut conflicting = b1.clone();
         conflicting.id = "b3".into();
-        assert!(pin_and_rebuild(
-            &mut pinned,
-            &mut selected,
-            &mut queue,
-            &mut deferred,
-            &conflicting
-        )
-        .is_err());
+        assert!(graph.pin_and_rebuild(&conflicting).is_err());
+    }
+    #[test]
+    fn incompatibility_matches_the_exact_version_or_the_whole_project() {
+        let incompatible = |version_id: Option<&str>, kind: &str| Dependency {
+            version_id: version_id.map(String::from),
+            project_id: Some("b".into()),
+            file_name: None,
+            dependency_type: kind.into(),
+        };
+        let mut a = v("a1");
+        a.project_id = "a".into();
+        let mut b = v("b1");
+        b.project_id = "b".into();
+        let with = |dependency: Dependency| {
+            let mut a = a.clone();
+            a.dependencies = vec![dependency];
+            HashMap::from([("a".to_string(), a), ("b".to_string(), b.clone())])
+        };
+
+        assert!(has_incompatibility(&with(incompatible(None, "incompatible"))));
+        assert!(has_incompatibility(&with(incompatible(Some("b1"), "incompatible"))));
+        assert!(!has_incompatibility(&with(incompatible(Some("b2"), "incompatible"))));
+        assert!(!has_incompatibility(&with(incompatible(None, "required"))));
+        assert!(!has_incompatibility(&HashMap::new()));
+    }
+    #[test]
+    fn only_the_modrinth_cdn_is_a_download_origin() {
+        for url in [
+            "http://cdn.modrinth.com/a",
+            "https://localhost/a",
+            "https://cdn.modrinth.com.evil/a",
+            "https://cdn.modrinth.com:444/a",
+            "https://user@cdn.modrinth.com/a",
+        ] {
+            assert!(download_url(url).is_err(), "{url}");
+        }
+        assert!(download_url("https://cdn.modrinth.com/data/a.jar").is_ok());
     }
     #[test]
     fn hashes_and_size_are_required() {
-        use sha2::{Digest, Sha512};
         let data = b"test";
+        let digests = Digests::of(data);
         let hashes = BTreeMap::from([
-            ("sha1".into(), sha1_hex(data)),
-            (
-                "sha512".into(),
-                Sha512::digest(data)
-                    .iter()
-                    .map(|b| format!("{b:02x}"))
-                    .collect(),
-            ),
+            ("sha1".into(), digests.hex("sha1").unwrap()),
+            ("sha512".into(), digests.hex("sha512").unwrap()),
         ]);
         assert!(verify(data, 4, &hashes).is_ok());
         assert!(verify(data, 3, &hashes).is_err());

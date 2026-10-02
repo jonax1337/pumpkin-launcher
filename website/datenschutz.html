@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#070a11" />
+  <meta name="description" content="Datenschutz bei Pumpkin Launcher: keine Tracker, keine Telemetrie, und welche Hosts der Launcher wofür kontaktiert." />
+  <title>Datenschutz · Pumpkin Launcher</title>
+  <link rel="icon" type="image/svg+xml" href="./assets/brand/favicon.svg" />
+  <link rel="stylesheet" href="./style.css" />
+  <script type="module" src="./legal.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Zum Inhalt springen</a>
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="Pumpkin Launcher, zur Startseite"><img src="./assets/brand/standard/mark.svg" width="38" height="38" alt="" /><span>PUMPKIN <span>LAUNCHER</span></span></a>
+    <nav aria-label="Hauptnavigation"><a href="./">Zur Startseite</a></nav>
+  </header>
+  <main id="main" class="legal wrap">
+    <h1>DATENSCHUTZ</h1>
+    <h2>1. Verantwortlicher</h2>
+    <p>Jonas Laux<br />Potsdamer Chaussee 30<br />14129 Berlin<br />E-Mail: <a href="mailto:jonas@laux.digital">jonas@laux.digital</a></p>
+
+    <h2>2. Diese Website</h2>
+    <p>Die Website ist statisch und wird über GitHub Pages ausgeliefert. Sie setzt keine Cookies, nutzt keine Analyse- oder Werbedienste und lädt keine Schriften, Skripte oder Bilder von fremden Servern; alles kommt von derselben Adresse.</p>
+    <p>Beim Aufruf verarbeitet der Hosting-Anbieter GitHub, Inc. technisch notwendige Verbindungsdaten (IP-Adresse, Zeitpunkt, angeforderte Datei, Browser). Darauf haben wir keinen Einfluss. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO (sicherer und stabiler Betrieb der Website). Näheres steht in der Datenschutzerklärung von GitHub.</p>
+
+    <h2>3. Der Launcher</h2>
+    <p>Pumpkin Launcher sendet keine Telemetrie und hat keine Tracker. Es gibt kein Benutzerkonto bei uns. Instanzen, Einstellungen und Konten liegen nur auf deinem Rechner; das Anmelde-Token des Microsoft-Kontos liegt im Passwortspeicher deines Betriebssystems (Windows-Anmeldeinformationsverwaltung, macOS-Schlüsselbund oder ein Secret Service wie GNOME Keyring oder KWallet).</p>
+    <p>Der Launcher verbindet sich nur mit den folgenden Diensten, und nur, wenn du die jeweilige Funktion nutzt. Dabei sieht der jeweilige Dienst deine IP-Adresse:</p>
+    <ul>
+      <li><strong>Modrinth</strong> (api.modrinth.com, cdn.modrinth.com): Suche, Projektseiten und Downloads von Mods und Modpacks.</li>
+      <li><strong>CurseForge</strong>: Suche und Projektdaten über einen Proxy auf Cloudflare Workers (pumpkin-curseforge.jonas-laux.workers.dev), der den API-Schlüssel hält und nichts speichert oder protokolliert; Cloudflare verarbeitet die Anfrage technisch, unter anderem die IP-Adresse für die Begrenzung der Anfragen. Dateien lädt der Launcher direkt von edge.forgecdn.net, mediafilez.forgecdn.net und media.forgecdn.net.</li>
+      <li><strong>Feed The Beast</strong> (api.feed-the-beast.com, files.feed-the-beast.com, cdn.feed-the-beast.com): Modpacks.</li>
+      <li><strong>Technic</strong> (api.technicpack.net, www.technicpack.net, cdn.technicpack.net) sowie die Server der Pack-Autoren, auf denen die Dateien liegen, etwa Dropbox, GitHub oder eigene Server.</li>
+      <li><strong>Mojang</strong> (piston-meta.mojang.com, piston-data.mojang.com, launchermeta.mojang.com, libraries.minecraft.net, resources.download.minecraft.net, textures.minecraft.net): Minecraft, Java-Laufzeit, Bibliotheken, Assets und Skin-Texturen.</li>
+      <li><strong>Microsoft und Xbox</strong> (login.microsoftonline.com, user.auth.xboxlive.com, xsts.auth.xboxlive.com, api.minecraftservices.com): Anmeldung, Profil, Skins und Umhänge, nur wenn du dich anmeldest.</li>
+      <li><strong>Mod-Loader</strong> (meta.fabricmc.net, maven.fabricmc.net, meta.quiltmc.org, maven.quiltmc.org, maven.minecraftforge.net, files.minecraftforge.net, maven.neoforged.net, repo1.maven.org): Versionslisten und Installer von Fabric, Quilt, Forge und NeoForge.</li>
+      <li><strong>GitHub</strong> (github.com, githubusercontent.com): Updates des Launchers, eine stille Suche kurz nach dem Start und der Download auf deinen Wunsch.</li>
+      <li><strong>mclo.gs</strong> (api.mclo.gs): nur nach deinem Klick auf „Log teilen“; das bereinigte Log wird öffentlich hochgeladen.</li>
+      <li><strong>Bild-Hosts in Projektbeschreibungen</strong>: cdn.modrinth.com, media.forgecdn.net, raw.githubusercontent.com, avatars.githubusercontent.com, user-images.githubusercontent.com, media.githubusercontent.com und i.imgur.com laden Bilder ohne Rückfrage. Bilder aller anderen Hosts lädt der Launcher erst nach deinem Klick.</li>
+    </ul>
+    <p>Der Launcher prüft Mods, Modpacks und Technic-Packs nicht auf Schadsoftware. Er prüft Größen und Prüfsummen, wo der Anbieter sie veröffentlicht.</p>
+
+    <h2>4. Deine Rechte</h2>
+    <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch. Außerdem kannst du dich bei einer Datenschutz-Aufsichtsbehörde beschweren. Wende dich für Anfragen an die E-Mail-Adresse oben.</p>
+
+    <p class="legal-date">Stand: Oktober 2026</p>
+  </main>
+  <footer class="site-footer wrap"><div class="footer-bottom"><span>© 2026 Pumpkin Launcher</span><nav class="footer-legal" aria-label="Rechtliches"><a href="./datenschutz.html">Datenschutz</a><a href="./impressum.html">Impressum</a></nav></div></footer>
+</body>
+</html>

@@ -1,15 +1,21 @@
 //! Download von beliebigen öffentlichen HTTPS-Adressen (Technic-Packs liegen auf Dropbox, GitHub, eigenen
 //! Servern). Ohne Prüfsumme als Gegengewicht: nur HTTPS auf Port 443, nur öffentliche Zieladressen
 //! (kein localhost, kein Heimnetz), jede Weiterleitung einzeln geprüft, die geprüfte Adresse wird fest verwendet.
-use crate::{error::AppResult, services::modrinth::invalid};
+use crate::coded;
+use crate::error::{AppError, AppResult};
+use crate::services::{
+    progress::CountFn,
+    remove_logged,
+    transport::{base_client_builder, follow_redirects, save_capped},
+};
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     path::Path,
     time::Duration,
 };
-use tokio::io::AsyncWriteExt;
 
-const MAX_HOPS: usize = 5;
+/// Anfragen je Download einschließlich der ersten, also höchstens vier Weiterleitungen.
+const MAX_REQUESTS: usize = 5;
 
 fn public_v4(ip: Ipv4Addr) -> bool {
     let [a, b, c, _] = ip.octets();
@@ -34,14 +40,23 @@ fn public_v6(ip: Ipv6Addr) -> bool {
     if let Some(v4) = ip.to_ipv4_mapped() {
         return public_v4(v4);
     }
-    let first = ip.segments()[0];
+    let segments = ip.segments();
+    let first = segments[0];
     !(ip.is_loopback()
         || ip.is_unspecified()
         || ip.is_multicast()
         // Eindeutige lokale Adressen (fc00::/7), Link-Local (fe80::/10), Dokumentation (2001:db8::/32).
         || (first & 0xfe00) == 0xfc00
         || (first & 0xffc0) == 0xfe80
-        || (first == 0x2001 && ip.segments()[1] == 0x0db8))
+        || (first == 0x2001 && segments[1] == 0x0db8)
+        || embeds_ipv4(segments))
+}
+
+/// Übergangsadressen, die eine IPv4-Adresse einbetten und so ein Ziel im Heimnetz erreichen können: NAT64
+/// (64:ff9b::/96 und 64:ff9b:1::/48), 6to4 (2002::/16) und Teredo (2001::/32).
+fn embeds_ipv4(segments: [u16; 8]) -> bool {
+    let nat64 = segments[0] == 0x0064 && segments[1] == 0xff9b && (segments[2..6] == [0; 4] || segments[2] == 1);
+    nat64 || segments[0] == 0x2002 || (segments[0] == 0x2001 && segments[1] == 0)
 }
 
 pub fn is_public(ip: IpAddr) -> bool {
@@ -54,71 +69,42 @@ pub fn is_public(ip: IpAddr) -> bool {
 /// Nur `https://host/…` auf Port 443, ohne Zugangsdaten; der Host ist kein IP-Literal.
 fn check(url: &reqwest::Url) -> AppResult<String> {
     if url.scheme() != "https" || url.port_or_known_default() != Some(443) || !url.username().is_empty() || url.password().is_some() {
-        return Err(invalid("Nur https-Adressen auf Port 443 sind erlaubt"));
+        return Err(AppError::invalid(coded!("errors.providers.httpsOnly")));
     }
-    url.domain().map(str::to_string).ok_or_else(|| invalid("Adresse ohne Hostnamen nicht erlaubt"))
+    url.domain().map(str::to_string).ok_or_else(|| AppError::invalid(coded!("errors.providers.hostMissing")))
 }
 
 async fn resolve(host: &str) -> AppResult<Vec<SocketAddr>> {
-    let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host, 443)).await.map_err(|e| invalid(format!("{host} nicht erreichbar: {e}")))?.collect();
+    let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host, 443)).await.map_err(|e| AppError::invalid(coded!("errors.providers.hostUnreachable", host = host, reason = e)))?.collect();
     if addrs.is_empty() || !addrs.iter().all(|a| is_public(a.ip())) {
-        return Err(invalid(format!("{host} zeigt auf keine öffentliche Adresse")));
+        return Err(AppError::invalid(coded!("errors.providers.hostNotPublic", host = host)));
     }
     Ok(addrs)
 }
 
 /// Lädt `url` nach `dest`. `progress(geladen, gesamt)` in Bytes (gesamt 0 = unbekannt). Überschreitet die
 /// Datei `limit`, bricht der Download ab und die Teildatei wird gelöscht.
-pub async fn download_public(url: &str, dest: &Path, limit: u64, progress: &(dyn Fn(u64, u64) + Send + Sync)) -> AppResult<()> {
-    let mut url = reqwest::Url::parse(url).map_err(|e| invalid(e.to_string()))?;
-    for _ in 0..MAX_HOPS {
-        let host = check(&url)?;
-        let addrs = resolve(&host).await?;
-        let client = reqwest::Client::builder()
-            .user_agent(concat!("pumpkin-launcher/", env!("CARGO_PKG_VERSION")))
-            .redirect(reqwest::redirect::Policy::none())
-            .connect_timeout(Duration::from_secs(15))
-            .timeout(Duration::from_secs(3600))
-            .resolve_to_addrs(&host, &addrs)
-            .build()?;
-        let response = client.get(url.clone()).send().await?;
-        if response.status().is_redirection() {
-            let location = response
-                .headers()
-                .get(reqwest::header::LOCATION)
-                .and_then(|v| v.to_str().ok())
-                .ok_or_else(|| invalid("Weiterleitung ohne Ziel"))?;
-            url = url.join(location).map_err(|e| invalid(e.to_string()))?;
-            continue;
-        }
-        let mut response = response.error_for_status()?;
-        let total = response.content_length().unwrap_or(0);
-        if total > limit {
-            return Err(invalid("Download zu groß"));
-        }
-        let mut file = tokio::fs::File::create(dest).await?;
-        let mut done = 0u64;
-        let result: AppResult<()> = async {
-            while let Some(chunk) = response.chunk().await? {
-                done += chunk.len() as u64;
-                if done > limit {
-                    return Err(invalid("Download zu groß"));
-                }
-                file.write_all(&chunk).await?;
-                progress(done, total);
-            }
-            file.flush().await?;
-            Ok(())
-        }
-        .await;
-        drop(file);
-        if let Err(e) = result {
-            let _ = tokio::fs::remove_file(dest).await;
-            return Err(e);
-        }
-        return Ok(());
+pub async fn download_public(url: &str, dest: &Path, limit: u64, progress: CountFn<'_>) -> AppResult<()> {
+    let response = follow_redirects(url, MAX_REQUESTS, send_pinned).await?;
+    let mut response = response.error_for_status()?;
+    let total = response.content_length().unwrap_or(0);
+    let saved = save_capped(&mut response, limit, total, dest, progress).await;
+    if saved.is_err() {
+        remove_logged(dest);
     }
-    Err(invalid("Zu viele Weiterleitungen"))
+    saved
+}
+
+/// Eine Anfrage an `url`: erst prüfen und auflösen, dann an die geprüfte Adresse gebunden senden.
+async fn send_pinned(url: reqwest::Url) -> AppResult<reqwest::Response> {
+    let host = check(&url)?;
+    let addrs = resolve(&host).await?;
+    Ok(build_pinned_client(&host, &addrs)?.get(url).send().await?)
+}
+
+/// Client, der `host` nur zu den geprüften `addrs` auflöst; ein späteres DNS-Ergebnis kann die Prüfung nicht umgehen.
+fn build_pinned_client(host: &str, addrs: &[SocketAddr]) -> AppResult<reqwest::Client> {
+    Ok(base_client_builder().timeout(Duration::from_secs(3600)).resolve_to_addrs(host, addrs).build()?)
 }
 
 #[cfg(test)]
@@ -127,12 +113,22 @@ mod tests {
 
     #[test]
     fn only_public_addresses_pass() {
-        for ok in ["8.8.8.8", "162.125.1.18", "140.82.112.3", "2606:4700::1111"] {
+        for ok in ["8.8.8.8", "162.125.1.18", "140.82.112.3", "2606:4700::1111", "2001:4860:4860::8888"] {
             assert!(is_public(ok.parse().unwrap()), "{ok}");
         }
         for bad in [
             "127.0.0.1", "10.0.0.5", "172.16.0.1", "192.168.1.1", "169.254.169.254", "0.0.0.0", "100.64.0.1", "224.0.0.1", "255.255.255.255",
             "198.18.0.1", "::1", "::", "fe80::1", "fc00::1", "fd12::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1", "2001:db8::1",
+        ] {
+            assert!(!is_public(bad.parse().unwrap()), "{bad}");
+        }
+    }
+
+    #[test]
+    fn transition_addresses_embedding_ipv4_are_refused() {
+        for bad in [
+            "64:ff9b::7f00:1", "64:ff9b::a00:1", "64:ff9b::808:808", "64:ff9b:1::1", "2002:7f00:1::", "2002:c0a8:101::1",
+            "2001:0:4136:e378:8000:63bf:3fff:fdd2",
         ] {
             assert!(!is_public(bad.parse().unwrap()), "{bad}");
         }

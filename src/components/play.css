@@ -1,27 +1,24 @@
-/* Spielen: der große Knopf (PlayButton in game.tsx) mit seinen Zuständen, der Balken darin (PlayBar, .prog),
+/* Spielen: der große Knopf (PlayButton in play/PlayButton.tsx) mit seinen Zuständen, der Balken darin (PlayBar, .prog),
    die Statuszeile darunter (PlayStatus) und die Protokoll-Konsole (LogConsole).
    Domänen-Baustein außerhalb des Kits: eigene Maße und Farben (.play .pbar nutzt die Knopffarben).
    Eingebunden in src/index.css hinter dem Kit (gleiche Schicht). */
 
-/* ---------- Knopfgerüst (nur der Spielen-Knopf nutzt .btn) ---------- */
-.btn { position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: var(--h-m); padding: 0 16px; font-weight: 600; font-size: 14px; white-space: nowrap; color: var(--fg); flex: none; user-select: none; }
-.btn .bc { position: relative; display: inline-flex; align-items: center; gap: inherit; }
+/* ---------- Spielen-Knopf: Gerüst (feste Größe in allen Zuständen) ---------- */
+.play { position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: flex-start; width: 272px; height: var(--h-l); padding: 0; font-weight: 600; font-size: 14px; white-space: nowrap; color: var(--ink); flex: none; user-select: none; }
+.play .bc { position: relative; display: inline-flex; align-items: center; width: 100%; height: 100%; padding: 0 16px 0 10px; gap: 12px; transform: translateY(round(calc(var(--px) * -.5), 1px)); }
 
 /* Primärfläche: Sockel (::before) + Fläche (.bf, Licht oben/links, Schatten unten/rechts).
    Hover hebt die Fläche um 1 Einheit, gedrückt sinkt sie und das Bevel kehrt sich um (alles transform). */
-.btn-p { color: var(--ink); }
-.btn-p::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--acc-lo); clip-path: var(--n1); }
-.btn-p .bf { position: absolute; inset: 0 0 var(--px) 0; z-index: -1; background: var(--acc); clip-path: var(--n1); box-shadow: inset var(--px) var(--px) 0 var(--acc-hi), inset calc(var(--px) * -1) calc(var(--px) * -1) 0 var(--acc-mid); }
-.btn-p .bc { transform: translateY(round(calc(var(--px) * -.5), 1px)); }
-.btn-p:hover:not(:disabled):not([aria-disabled="true"]) .bf { transform: translateY(calc(var(--px) * -1)); }
-.btn-p:hover:not(:disabled):not([aria-disabled="true"]) .bc { transform: translateY(round(calc(var(--px) * -1.5), 1px)); }
-.btn-p:active:not(:disabled):not([aria-disabled="true"]) .bf { transform: translateY(var(--px)); box-shadow: inset var(--px) var(--px) 0 var(--acc-mid), inset calc(var(--px) * -1) calc(var(--px) * -1) 0 var(--acc-hi); }
-.btn-p:active:not(:disabled):not([aria-disabled="true"]) .bc { transform: translateY(round(calc(var(--px) * .5), 1px)); }
-.btn:disabled, .btn[aria-disabled="true"] { color: var(--fg-3); }
-.btn-p:disabled, .btn-p[aria-disabled="true"] { cursor: default; }
+.play::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--acc-lo); clip-path: var(--n1); }
+.play .bf { position: absolute; inset: 0 0 var(--px) 0; z-index: -1; background: var(--acc); clip-path: var(--n1); box-shadow: inset var(--px) var(--px) 0 var(--acc-hi), inset calc(var(--px) * -1) calc(var(--px) * -1) 0 var(--acc-mid); }
+.play:hover:not(:disabled):not([aria-disabled="true"]) .bf { transform: translateY(calc(var(--px) * -1)); }
+.play:hover:not(:disabled):not([aria-disabled="true"]) .bc { transform: translateY(round(calc(var(--px) * -1.5), 1px)); }
+.play:active:not(:disabled):not([aria-disabled="true"]) .bf { transform: translateY(var(--px)); box-shadow: inset var(--px) var(--px) 0 var(--acc-mid), inset calc(var(--px) * -1) calc(var(--px) * -1) 0 var(--acc-hi); }
+.play:active:not(:disabled):not([aria-disabled="true"]) .bc { transform: translateY(round(calc(var(--px) * .5), 1px)); }
+.play:disabled, .play[aria-disabled="true"] { color: var(--fg-3); cursor: default; }
 /* Aus: flach und neutral (kein Bevel, keine Akzentfarbe), aber mit gestricheltem Steuerrahmen
    (2 Einheiten Strich, 1 Lücke) – bleibt als „Hauptaktion, noch gesperrt“ lesbar. */
-.btn-p:disabled::before, .btn-p[aria-disabled="true"]::before {
+.play:disabled::before, .play[aria-disabled="true"]::before {
   box-shadow: none;
   background:
     repeating-linear-gradient(90deg, var(--ctl) 0 var(--u2), transparent var(--u2) var(--u3)) 0 0 / 100% var(--px) no-repeat,
@@ -30,62 +27,52 @@
     repeating-linear-gradient(180deg, var(--ctl) 0 var(--u2), transparent var(--u2) var(--u3)) 100% 0 / var(--px) 100% no-repeat,
     var(--panel-2);
 }
-.btn-p:disabled .bf, .btn-p[aria-disabled="true"] .bf { opacity: 0; }
-.btn-p:disabled .bc, .btn-p[aria-disabled="true"] .bc { transform: none; }
-.btn-p[aria-disabled="true"]:hover .bf, .btn-p[aria-disabled="true"]:hover .bc { transform: none; }
+.play:disabled .bf, .play[aria-disabled="true"] .bf { opacity: 0; }
+.play:disabled .bc, .play[aria-disabled="true"] .bc { transform: none; }
+.play[aria-disabled="true"]:hover .bf, .play[aria-disabled="true"]:hover .bc { transform: none; }
 
-/* ---------- Spielen-Knopf (feste Größe in allen Zuständen) ---------- */
-.play { --acc: var(--copper); width: 272px; height: var(--h-l); padding: 0; justify-content: flex-start; }
-.play .bc { width: 100%; height: 100%; padding: 0 16px 0 10px; gap: 12px; align-items: center; }
+/* ---------- Spielen-Knopf: Inhalt und Zustände ---------- */
 .play .pic { width: 36px; height: 36px; display: grid; place-items: center; background: var(--ink); color: var(--acc); flex: none; clip-path: var(--n1); }
 .play .lab { display: flex; flex-direction: column; justify-content: center; min-width: 0; flex: 1; text-align: left; }
 .play .l1 { font: 800 25px/1 var(--f-display); letter-spacing: .02em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.play .l2 { font-size: 12px; font-weight: 600; opacity: .78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
-.play .pct { font: 400 26px/1 var(--f-px); width: 3.2ch; text-align: right; flex: none; visibility: hidden; }
-.play .pbar { position: absolute; left: 10px; right: 10px; bottom: calc(var(--px) * 2 + 3px); --prog-on: var(--ink); --prog-off: rgba(18,12,7,.2); visibility: hidden; }
-.play[data-st="run"], .play[data-st="error"] { color: var(--acc-hi); }
+.play .l2 { font-size: calc(13px * var(--tz)); font-weight: 600; opacity: .78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
+.play .pct { font: 400 26px/1 var(--f-px); width: 3.2ch; text-align: right; flex: none; display: none; visibility: visible; }
+.play .pbar { position: absolute; left: 58px; right: 16px; bottom: 12px; height: var(--u2); --prog-on: var(--ink); --prog-off: rgba(18,12,7,.2); visibility: hidden; }
+.play[data-st="run"] { color: var(--acc-hi); }
 .play[data-st="run"] .bf { background: #0B111B; box-shadow: inset 0 0 0 var(--px) var(--acc), inset var(--u2) var(--u2) 0 var(--hi-2); }
 .play[data-st="run"] .pic { background: var(--acc); color: var(--ink); }
-.play[data-st="error"] { --acc: var(--bad); }
+.play[data-st="error"] { --acc: var(--bad); color: var(--bad); }
 .play[data-st="error"] .bf { background: #1A0E10; box-shadow: inset 0 0 0 var(--px) var(--bad), inset var(--u2) var(--u2) 0 var(--hi-2); }
-.play[data-st="error"] { color: var(--bad); }
 .play[data-st="error"] .pic { background: var(--bad); color: var(--ink); }
-.play[data-st="blocked"] .pic { background: var(--panel-2); color: var(--fg-3); }
-.play[data-st="blocked"] { color: var(--fg-3); }
 .play.m { width: 176px; height: var(--h-m); }
 .play.m .bc { padding: 0 10px 0 6px; gap: 8px; }
 .play.m .pic { width: 28px; height: 28px; }
 .play.m .l1 { font-size: 19px; }
 .play.m .l2 { display: none; }
 .play.m .pct { font-size: 20px; }
-.play.m .pbar { left: 6px; right: 6px; bottom: calc(var(--px) + 2px); height: var(--px); }
-.play.i { width: var(--h-s); height: var(--h-s); }
+.play.m .pbar { left: 40px; right: 10px; bottom: 6px; height: var(--px); }
+.play.i { width: var(--h-s); height: var(--h-s); color: var(--acc); }
 .play.i .bc { padding: 0; justify-content: center; }
 .play.i .pic { background: none; color: inherit; width: 28px; height: 28px; }
 .play.i .lab, .play.i .pct { display: none; }
-.play.i .pbar { left: 4px; right: 4px; bottom: calc(var(--px) + 1px); height: var(--px); }
+.play.i .pbar { left: 4px; right: 4px; bottom: 3px; height: var(--px); }
 
 /* Prozent nur beim Vorbereiten; Fortschritt ersetzt die Unterzeile an fester Stelle */
-.play .pct { display: none; visibility: visible; }
 .play[data-st="prep"] .pct { display: block; }
-.play[data-st="prep"] .pct, .play[data-st="prep"] .pbar, .play[data-st="start"] .pbar { visibility: visible; }
+.play[data-st="prep"] .pbar, .play[data-st="start"] .pbar { visibility: visible; }
 .play[data-st="prep"] .l2, .play[data-st="start"] .l2 { visibility: hidden; }
-.play .pbar { left: 58px; right: 16px; bottom: 12px; height: var(--u2); }
-.play.m .pbar { left: 40px; right: 10px; bottom: 6px; height: var(--px); }
-.play.i .pbar { left: 4px; right: 4px; bottom: 3px; height: var(--px); }
 /* „Wird installiert“ passt mit Prozent in 272 px (m: „Installiert“) */
 .play[data-st="prep"]:not(.m) .l1 { font-size: 21px; }
 /* Laufzeit in der Unterzeile: Zahl in Pixelschrift */
 .play .l2 .num { font: 400 16px/1 var(--f-px); letter-spacing: .02em; opacity: 1; }
 /* Wird installiert / Startet: Vorgang, kein Knopf. Akzentfläche bleibt, aber flach (ohne Bevel, Hover, Druck); Abbrechen steht in der Statuszeile */
-.play.btn-p:is([data-st="prep"], [data-st="start"]) { cursor: progress; }
-.play.btn-p:is([data-st="prep"], [data-st="start"]):not(.i) { color: var(--ink); }
-.play.btn-p:is([data-st="prep"], [data-st="start"]):not(.i)::before { background: var(--acc-lo); box-shadow: none; }
-.play.btn-p:is([data-st="prep"], [data-st="start"]) .bf { opacity: 1; transform: none; box-shadow: none; }
-.play.btn-p:is([data-st="prep"], [data-st="start"]) .bc { transform: none; }
-.play.btn-p.i:is([data-st="prep"], [data-st="start"]) .bf { box-shadow: inset 0 0 0 var(--px) var(--line-2); }
+.play:is([data-st="prep"], [data-st="start"]) { cursor: progress; }
+.play:is([data-st="prep"], [data-st="start"]):not(.i) { color: var(--ink); }
+.play:is([data-st="prep"], [data-st="start"]):not(.i)::before { background: var(--acc-lo); box-shadow: none; }
+.play:is([data-st="prep"], [data-st="start"]) .bf { opacity: 1; transform: none; box-shadow: none; }
+.play:is([data-st="prep"], [data-st="start"]) .bc { transform: none; }
+.play.i:is([data-st="prep"], [data-st="start"]) .bf { box-shadow: inset 0 0 0 var(--px) var(--line-2); }
 /* Spielen in Listen (Symbolknopf): dunkle Platte, Akzent nur im Symbol; deutlich aktiv, aber neutral (helle Glyphe auf Platte), Akzent erst beim Überfahren */
-.play.i { color: var(--acc); }
 .play.i::before { background: var(--edge); }
 .play.i .bf { background: var(--panel-2); box-shadow: inset 0 0 0 var(--px) var(--line-2), inset var(--px) var(--px) 0 var(--hi); }
 .play.i:hover:not([aria-disabled="true"]) { color: var(--ink); }
@@ -102,10 +89,9 @@
 .prog.bad { --prog-on: var(--bad); }
 
 /* ---------- Statuszeile unter dem Spielen-Knopf (32 px, feste Höhe) ---------- */
-.pstat { height: 32px; display: flex; align-items: center; gap: 6px; color: var(--fg-2); font-size: 13px; min-width: 0; }
+.pstat { height: 32px; display: flex; align-items: center; gap: 6px; color: var(--fg-2); font-size: calc(13px * var(--tz)); min-width: 0; }
 .pstat .ptxt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .pstat .ptxt b { font-weight: 600; color: var(--fg); }
-.pstat.bad .ptxt { color: var(--bad); }
 /* Laufzeit in Pixelschrift: Mindestgröße 18 px, Zeile bleibt 32 px */
 .pstat .ptxt .num { font: 400 18px/1 var(--f-px); color: var(--fg); letter-spacing: .02em; }
 /* Abbrechen / Protokoll: eigener Knopf mit Abstand, nicht Fließtext */
@@ -116,9 +102,8 @@
 
 /* ---------- Protokoll (Konsole) ---------- */
 .console { position: relative; height: max(260px, calc(calc(var(--vh1, 1vh) * 100) - var(--bar) - var(--dc) - 48px - 44px - 22px - 50px - 32px)); }
-.console .cbody { position: absolute; inset: 0; overflow: auto; padding: 12px 14px; font: 12.5px/1.65 var(--f-mono); background: #05080D; box-shadow: var(--bv-sunk); clip-path: var(--n1); white-space: pre; scrollbar-gutter: stable; }
+.console .cbody { position: absolute; inset: 0; overflow: auto; padding: 12px 14px; font: calc(13px * var(--tz))/1.65 var(--f-mono); background: #05080D; box-shadow: var(--bv-sunk); clip-path: var(--n1); white-space: pre; scrollbar-gutter: stable; }
 .console .ln { display: block; color: #B9C3D4; }
-.console .ln .ts { color: #6E7B92; }
 .console .ln.w { color: var(--warn); }
 .console .ln.e { color: var(--bad); }
 .console .ln mark { background: color-mix(in srgb, var(--copper) 45%, transparent); color: inherit; }
@@ -127,3 +112,8 @@
 .console .none { position: absolute; inset: 0; display: grid; place-items: center; color: var(--fg-3); pointer-events: none; }
 /* Ring am Rahmen (der Körper selbst ist gekerbt und schneidet ::after ab) */
 .console:has(> .cbody:focus-visible)::after { content: ""; position: absolute; inset: calc(var(--u2) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; z-index: 5; }
+/* Kontrastmodus: steht hier, weil dieselbe Regel in ui/a11y.css vor der Basisregel oben geladen wird und ihr unterliegt */
+@media (forced-colors: active) {
+  .console .cbody { border: 1px solid CanvasText; }
+  .console:has(> .cbody:focus-visible)::after { background: Highlight; }
+}

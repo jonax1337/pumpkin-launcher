@@ -1,51 +1,36 @@
 /**
- * Nur Entwicklung (/_kit): Vorschau Tabs, Formular und Umschalter (Kit-Paket A2/1).
+ * Nur Entwicklung (/_kit): Vorschau Tabs, Formular und Umschalter.
  * Zustände per data-force (hover/press), aus per disabled; Overlay-Kontext in einer Platte.
  */
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useState } from "react";
 import {
-  Checkbox, Disclosure, Field, FormRow, FormSection, Hint, Icon, NavTabs, Radio, RadioGroup, SearchField, SegSlider, Segmented, Select, Switch,
+  Checkbox, Disclosure, Field, FormRow, FormSection, Hint, Icon, Radio, SearchField, SegSlider, Segmented, Select, Switch,
   TabPanel, Tabs, TextArea, TextField, type TabItem,
 } from "@/ui";
-
-const cap: CSSProperties = { fontSize: 12, color: "var(--fg-3)", fontWeight: 600 };
-const sec: CSSProperties = { display: "flex", flexDirection: "column", gap: 14, padding: "22px 0", boxShadow: "inset 0 calc(var(--px) * -1) 0 var(--line)" };
-const row: CSSProperties = { display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" };
-
-function Sec({ title, id, children }: { title: string; id: string; children: ReactNode }) {
-  return (
-    <section style={sec} data-kit={`sec-${id}`}>
-      <h2 className="vx-h">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function Lab({ children }: { children: ReactNode }) {
-  return <span style={{ ...cap, width: 110, flex: "none" }}>{children}</span>;
-}
+import { cap, Lab, row, Sec } from "./kit-ui";
 
 type T = "content" | "console" | "settings" | "off";
+type W = "blank" | "pack" | "file";
+type V = "grid" | "list";
+
 const TABS: TabItem<T>[] = [
   { value: "content", label: "Inhalte", count: 42, badge: <Icon name="warn" size="s" tone="warn" /> },
   { value: "console", label: "Protokoll" },
   { value: "settings", label: "Einstellungen" },
   { value: "off", label: "Welten", disabled: true },
 ];
-type W = "blank" | "pack" | "file";
 const WAYS: TabItem<W>[] = [
   { value: "blank", label: "Leer", icon: "plus" },
   { value: "pack", label: "Modpack", icon: "box" },
   { value: "file", label: "Aus Datei", icon: "file" },
 ];
-type V = "grid" | "list";
 const VIEWS: TabItem<V>[] = [
   { value: "grid", label: "Poster", icon: "grid" },
   { value: "list", label: "Liste", icon: "list" },
 ];
 
 function TabsDemo() {
-  const [t, setT] = useState<T>("content");
+  const [tab, setTab] = useState<T>("content");
   const [w, setW] = useState<W>("blank");
   const [v, setV] = useState<V>("grid");
   const [f, setF] = useState("all");
@@ -54,8 +39,8 @@ function TabsDemo() {
     <>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <span style={cap}>underline m · idBase + TabPanel · Zähler + Badge · aus</span>
-        <Tabs label="Bereiche der Instanz" items={TABS} value={t} onChange={setT} idBase="kit-dt" />
-        <TabPanel idBase="kit-dt" value={t} style={{ padding: "10px 0", color: "var(--fg-2)" }}>Inhalt von „{t}“</TabPanel>
+        <Tabs label="Bereiche der Instanz" items={TABS} value={tab} onChange={setTab} idBase="kit-dt" />
+        <TabPanel idBase="kit-dt" value={tab} style={{ padding: "10px 0", color: "var(--fg-2)" }}>Inhalt von „{tab}“</TabPanel>
         <span style={cap}>underline s mit Icons · erzwungen hover / press</span>
         <div style={row}>
           <Tabs size="s" label="Weg klein" items={WAYS} value={w} onChange={setW} />
@@ -64,12 +49,6 @@ function TabsDemo() {
             <button type="button" className="vx-tab fx" data-force="press" tabIndex={-1}><span className="vx-tc">press</span><i className="vx-tab-tick" /></button>
           </span>
         </div>
-        <span style={cap}>NavTabs (Links, aria-current)</span>
-        <NavTabs items={[
-          { to: "/_kit", label: "Kit", match: (p) => p.startsWith("/_kit"), shortcut: "Control+1" },
-          { to: "/instances", label: "Bibliothek", match: (p) => p.startsWith("/instances"), shortcut: "Control+2" },
-          { to: "/discover", label: "Entdecken", match: (p) => p.startsWith("/discover"), shortcut: "Control+3" },
-        ]} />
       </div>
       <div style={{ ...row, alignItems: "flex-start" }}>
         <div style={{ width: 168 }} data-kit="vertical">
@@ -78,21 +57,21 @@ function TabsDemo() {
         </div>
         <div style={{ width: 168 }}>
           <span style={cap}>vertical s</span>
-          <Tabs variant="vertical" size="s" label="Weg (klein)" items={WAYS} value={w} onChange={setW} />
+          <Tabs variant="vertical" size="s" label="Weg klein" items={WAYS} value={w} onChange={setW} />
         </div>
         <div className="plate" style={{ width: 200, padding: 12 }}>
           <span style={cap}>vertical in Platte</span>
           <Tabs variant="vertical" label="Weg (Platte)" items={WAYS} value={w} onChange={setW} />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }} data-kit="segments">
-          <span style={cap}>Segmented m · s · nur Symbole · tablist</span>
+          <span style={cap}>Segmented m · s · nur Symbole · radiogroup</span>
           <Segmented label="Ansicht" items={VIEWS} value={v} onChange={setV} />
-          <Segmented size="s" label="Pixelgröße" items={[{ value: "s", label: "Klein" }, { value: "m", label: "Mittel" }, { value: "l", label: "Groß" }, { value: "x", label: "Riesig", disabled: true }]} value={px} onChange={setPx} />
+          <Segmented size="s" label="Pixelstufe" items={[{ value: "s", label: "Klein" }, { value: "m", label: "Mittel" }, { value: "l", label: "Groß" }, { value: "x", label: "Riesig", disabled: true }]} value={px} onChange={setPx} />
           <div style={row}>
             <Segmented iconsOnly label="Ansicht (Symbole)" items={VIEWS} value={v} onChange={setV} />
             <Segmented iconsOnly size="s" label="Ansicht (Symbole, klein)" items={VIEWS} value={v} onChange={setV} />
           </div>
-          <Tabs variant="segment" label="Filter" items={[{ value: "all", label: "Alle", count: 42 }, { value: "mod", label: "Mods", count: 38 }, { value: "rp", label: "Pakete", count: 4 }]} value={f} onChange={setF} />
+          <Tabs variant="segment" label="Filter" items={[{ value: "all", label: "Alle", count: 42 }, { value: "mod", label: "Mods", count: 38 }, { value: "rp", label: "Ressourcenpakete", count: 4 }]} value={f} onChange={setF} />
           <div className="plate" style={{ padding: 12 }}>
             <Segmented size="s" label="Ansicht (Platte)" items={VIEWS} value={v} onChange={setV} />
           </div>
@@ -102,12 +81,12 @@ function TabsDemo() {
   );
 }
 
-const OPTS = [
-  { value: "1.21.4", label: "1.21.4 (neueste)" },
+const MC_VERSIONS = [
+  { value: "1.21.4", label: "1.21.4 (neueste Version)" },
   { value: "1.21.3", label: "1.21.3" },
   { value: "1.20.1", label: "1.20.1" },
-  { value: "24w14a", label: "24w14a (Vorabversion)" },
-  { value: "x", label: "Nicht verfügbar", disabled: true },
+  { value: "24w14a", label: "24w14a (Snapshot)" },
+  { value: "x", label: "nicht verfügbar", disabled: true },
 ];
 
 function FormDemo() {
@@ -122,8 +101,9 @@ function FormDemo() {
           <TextField id="kit-name" value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />
         </FormRow>
         <FormRow label="Java" hint="Standard für alle Instanzen" group="radiogroup" aside="Automatisch passt fast immer.">
-          <RadioGroup name="kit-java" value={java} onChange={setJava} options={[{ value: "auto", label: <>Automatisch <span className="faint">(Pumpkin Launcher lädt die passende Version)</span></> }, { value: "own", label: "Eigene Java-Installation" }]} />
-          <TextField disabled={java === "auto"} aria-label="Pfad zu javaw.exe" placeholder="Pfad zu javaw.exe" />
+          <Radio name="kit-java" checked={java === "auto"} onChange={() => setJava("auto")}>Automatisch <span className="faint">(Pumpkin Launcher lädt die passende Version)</span></Radio>
+          <Radio name="kit-java" checked={java === "own"} onChange={() => setJava("own")}>Eigene Java-Installation</Radio>
+          <TextField disabled={java === "auto"} aria-label="Pfad zu Java" placeholder="Pfad zu Java" />
         </FormRow>
         <FormRow label="Bewegte Szenen" hint="Sterne, Wolken, Glut.">
           <Switch checked={motion} onChange={setMotion} label="Bewegte Szenen" stateText={["An", "Aus"]} />
@@ -139,7 +119,7 @@ function FormDemo() {
       </FormSection>
       <FormSection title="Nur für Vorleser" srOnlyTitle>
         <FormRow label="Speicher" group="group" aside={<Hint tone="warn" live>Mehr als drei Viertel deines Arbeitsspeichers.</Hint>}>
-          <SegSlider value={12} max={14} onChange={() => undefined} />
+          <SegSlider value={12} max={14} onChange={() => undefined} label="Arbeitsspeicher" unit="GB" />
         </FormRow>
       </FormSection>
     </div>
@@ -157,10 +137,10 @@ function FieldsDemo() {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: "8px 40px", alignItems: "start" }} data-kit="fields">
       <div>
-        <Field label="Name" help="Vorschlag aus Version und Loader. Du kannst ihn später ändern." reserveLines={1}>
+        <Field label="Name" help="Zum Beispiel „Fabric 1.21.4“" reserveLines={1}>
           <TextField value={n} onChange={(e) => setN(e.target.value)} placeholder="Fabric 1.21.4" />
         </Field>
-        <Field label="Name (Fehler)" error={n.length > 3 ? undefined : "Mindestens 4 Zeichen."} reserveLines={1}>
+        <Field label="Name (mit Fehler)" error={n.length > 3 ? undefined : "Mindestens 4 Zeichen"} reserveLines={1}>
           <TextField value={n} onChange={(e) => setN(e.target.value)} />
         </Field>
         <Field label="Server" optional>
@@ -168,7 +148,7 @@ function FieldsDemo() {
         </Field>
         <Field label="Minecraft-Version" htmlFor="kit-mc">
           <div className="flex flex-wrap items-center gap-2">
-            <Select id="kit-mc" value={ver} onChange={setVer} options={OPTS} />
+            <Select id="kit-mc" value={ver} onChange={setVer} options={MC_VERSIONS} />
             <Checkbox checked={snap} onChange={setSnap}>Vorabversionen zeigen</Checkbox>
           </div>
         </Field>
@@ -185,7 +165,7 @@ function FieldsDemo() {
         </div>
         <div style={row}>
           <Select label="Sortieren" value={sort} onChange={setSort} options={[{ value: "dl", label: "Downloads" }, { value: "new", label: "Neueste" }, { value: "rel", label: "Relevanz" }]} />
-          <Select size="s" ariaLabel="Version klein" value={ver} onChange={setVer} options={OPTS} />
+          <Select size="s" ariaLabel="Version klein" value={ver} onChange={setVer} options={MC_VERSIONS} />
           <Select size="s" ariaLabel="Leer" value="" onChange={() => undefined} options={[]} placeholder="Keine Versionen" />
         </div>
         <TextArea rows={2} width="full" defaultValue={"-Xmx4G\n-XX:+UseG1GC"} aria-label="Argumente" />
@@ -226,14 +206,18 @@ function TogglesDemo() {
       </div>
       <div style={{ ...row, alignItems: "flex-start" }}>
         <Lab>Radio</Lab>
-        <RadioGroup name="kit-r" label="Radio-Gruppe" value={r} onChange={setR} options={[{ value: "a", label: "Automatisch" }, { value: "b", label: "Eigener Wert" }, { value: "c", label: "Gesperrt", disabled: true }]} />
+        <div role="radiogroup" aria-label="Radio-Gruppe">
+          <Radio name="kit-r" checked={r === "a"} onChange={() => setR("a")}>Automatisch</Radio>
+          <Radio name="kit-r" checked={r === "b"} onChange={() => setR("b")}>Eigener Wert</Radio>
+          <Radio name="kit-r" checked={false} onChange={() => undefined} disabled>Gesperrt</Radio>
+        </div>
         <Radio name="kit-r2" checked={false} onChange={() => undefined}>Einzeln</Radio>
       </div>
       <div style={row}>
         <Lab>SegSlider</Lab>
-        <SegSlider value={gb} max={12} onChange={setGb} />
+        <SegSlider value={gb} max={12} onChange={setGb} label="Arbeitsspeicher" unit="GB" />
         <span className="num" style={{ fontSize: 24 }}>{gb} GB</span>
-        <SegSlider value={4} disabled onChange={() => undefined} label="Arbeitsspeicher (aus)" />
+        <SegSlider value={4} disabled onChange={() => undefined} label="Arbeitsspeicher (aus)" unit="GB" />
       </div>
     </div>
   );

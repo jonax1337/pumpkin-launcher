@@ -1,9 +1,12 @@
 // Run: node src/lib/modrinth.check.mjs (Node with TypeScript stripping).
 import assert from 'node:assert/strict';
-import { modLoadersFor, pickPackVersion, pickVersion, progressLabel, removeWithDependencies, undoRemove } from './modrinth.ts';
+import { CURSEFORGE_PACK_EXT, isMrpack, modLoadersFor, pickPackVersion, pickVersion, removeWithDependencies, undoRemove } from './mods.ts';
+import { progressLabel, progressShare, progressShortLabel } from './progress.ts';
 
 // Entfernen mit Abhängigkeiten: Iris und Mod Menu brauchen Fabric API, Sodium braucht nur Iris.
-const m = (id, requiredBy = []) => ({ id, name: id, source: { type: 'modrinth', projectId: id, versionId: 'v' }, requiredBy, enabled: true });
+const m = (id, requiredBy = []) => ({
+  id, name: id, source: { type: 'modrinth', projectId: id, versionId: 'v' }, requiredBy, enabled: true,
+});
 const mods = [m('iris'), m('sodium', ['iris']), m('api', ['iris', 'menu']), m('menu'), { ...m('local'), source: { type: 'local' } }];
 const r = removeWithDependencies(mods, 'iris');
 assert.deepEqual(r.removed.map((x) => x.id), ['iris', 'sodium']);
@@ -26,7 +29,6 @@ assert.equal(pickVersion([]), null);
 assert.equal(progressLabel({ phase: 'resolve', done: 0, total: 1 }), 'Wird geprüft…');
 assert.equal(progressLabel({ phase: 'download', done: 2, total: 7 }), 'Lädt 3 von 7…');
 
-
 // Pack-Version: jeder unterstützte Loader, stabil bevorzugt, sonst Grund.
 const pv = (id, loaders, version_type = 'release') => ({ id, loaders, version_type });
 assert.equal(pickPackVersion([pv('x', ['liteloader']), pv('b', ['fabric'], 'beta'), pv('r', ['quilt'])]).version.id, 'r');
@@ -36,4 +38,12 @@ assert.deepEqual(pickPackVersion([pv('x', ['liteloader'])]), { version: null, re
 assert.ok(pickPackVersion([]).reason);
 assert.deepEqual(modLoadersFor('quilt'), ['quilt', 'fabric']);
 assert.deepEqual(modLoadersFor('vanilla'), []);
+// Fortschritt: Sichern zeigt Balken und Text, Kurzform für Zeilen.
+assert.equal(progressShare({ phase: 'backup', done: 6, total: 24 }), 0.25);
+assert.equal(progressShare({ phase: 'extract', done: 1, total: 2 }), null);
+assert.equal(progressLabel({ phase: 'backup', done: 6, total: 24 }), 'Sichert 6 von 24…');
+assert.equal(progressShortLabel({ phase: 'hash', done: 1, total: 2 }), 'Erkennt');
+// Pack-Dateien: .mrpack ist Modrinth, .zip ein CurseForge-Pack (ohne Rücksicht auf Groß-/Kleinschreibung).
+assert.ok(isMrpack('C:/Packs/a.MRPACK') && !isMrpack('a.zip'));
+assert.ok(CURSEFORGE_PACK_EXT.test('C:/Packs/Pack.ZIP') && !CURSEFORGE_PACK_EXT.test('pack.zip.txt'));
 console.log('Modrinth checks passed');

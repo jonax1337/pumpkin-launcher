@@ -1,144 +1,30 @@
 //! Vorlagen: Schnappschuss einer Instanz als lokales `.mrpack` unter `templates/<id>.mrpack`.
-//! Modrinth-Inhalte stehen als Download im Index, alles andere liegt unter `overrides/`.
+//! Geschrieben wird es über `mrpack` (Modrinth-Inhalte im Index, alles andere unter `overrides/`).
 //! Neue Instanzen entstehen über den normalen Pack-Import (`content::import`).
 use std::{
     fs,
-    io::{Cursor, Write},
     path::{Path, PathBuf},
 };
 
-use serde_json::{json, Value};
-
-use super::{content, modrinth::{self, invalid}, mods, Dirs};
+use super::progress::ProgressFn;
+use super::{content, mrpack::{self, PackSpec}, remove_logged, write_atomic, Dirs};
 use crate::{
+    coded,
     error::{AppError, AppResult},
-    models::{new_id, now_ms, Instance, ModLoader, ModSource, Template},
+    models::{new_id, now_ms, require_name, Instance, Template, MAX_TEMPLATE_NAME_LEN},
     state::AppState,
 };
 
-/// Unter der ZIP-Grenze des Imports (4096), damit jede Vorlage wieder importierbar ist.
-const MAX_ENTRIES: usize = 4000;
+/// Was eine Vorlage aus dem Spielordner mitnimmt; Welten, Logs und Screenshots bleiben draußen.
+const CONTENT: [&str; 5] = ["mods", "resourcepacks", "shaderpacks", "config", "options.txt"];
 
-fn file(dirs: &Dirs, id: &str) -> PathBuf {
-    dirs.root.join("templates").join(format!("{id}.mrpack"))
-}
-
-/// Index-Einträge für aktive Modrinth-Inhalte, deren installierte Datei (sha1) Modrinth kennt.
-/// Alles ohne Treffer landet später als Override aus dem Cache.
-// ponytail: eine Anfrage pro Mod; bei großen Instanzen auf POST /version_files bündeln.
-async fn remote_files(client: &reqwest::Client, instance: &Instance) -> AppResult<Vec<Value>> {
-    let mut files = Vec::new();
-    for m in instance.mods.iter().filter(|m| m.enabled) {
-        let (ModSource::Modrinth { version_id, .. }, Some(sha1)) = (&m.source, &m.sha1) else { continue };
-        let version = modrinth::version(client, version_id).await?;
-        let found = version.files.into_iter().find(|f| {
-            f.hashes.get("sha1").is_some_and(|h| h.eq_ignore_ascii_case(sha1))
-                && f.hashes.contains_key("sha512")
-                && modrinth::download_url(&f.url).is_ok()
-        });
-        if let Some(f) = found {
-            files.push(json!({
-                "path": format!("{}/{}", m.kind.folder(), m.file_name),
-                "hashes": { "sha1": f.hashes["sha1"], "sha512": f.hashes["sha512"] },
-                "downloads": [f.url],
-                "fileSize": f.size,
-            }));
-        }
-    }
-    Ok(files)
-}
-
-/// Dateien unter `dir` (rekursiv, ohne Symlinks/Junctions) als (Pfad relativ zu `base`, Pfad).
-fn walk(base: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) -> AppResult<()> {
-    let entries = match fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => return Err(e.into()),
-    };
-    for entry in entries {
-        let entry = entry?;
-        let kind = entry.file_type()?;
-        if kind.is_dir() {
-            walk(base, &entry.path(), out)?;
-        } else if kind.is_file() {
-            let rel = entry.path().strip_prefix(base).map_err(|_| invalid("Pfad außerhalb des Spielordners"))?.to_owned();
-            let rel = rel.to_str().ok_or_else(|| invalid("Dateiname ist kein gültiger Text"))?.replace('\\', "/");
-            out.push((rel, entry.path()));
-        }
-    }
-    Ok(())
-}
-
-/// Baut das `.mrpack`: Index mit `remote`, aktive Inhalte ohne Index-Eintrag aus dem Cache,
-/// dazu `config/` und `options.txt`. Welten, Logs und Screenshots bleiben draußen.
-/// Deaktivierte Inhalte werden weggelassen: der Import kennt kein „deaktiviert“.
-fn write_pack(dirs: &Dirs, instance: &Instance, remote: &[Value]) -> AppResult<Vec<u8>> {
-    let mut dependencies = json!({ "minecraft": instance.minecraft_version });
-    match (instance.loader, &instance.loader_version) {
-        (ModLoader::Vanilla, _) => {}
-        (loader, Some(v)) => {
-            let key = loader.pack_key().ok_or_else(|| invalid("Loader ohne Pack-Schlüssel"))?;
-            dependencies[key] = json!(v);
-        }
-        (_, None) => return Err(invalid("Instanz ohne Loader-Version: bitte erst einmal starten")),
-    }
-    let index = json!({
-        "formatVersion": 1, "game": "minecraft", "versionId": "1", "name": instance.name,
-        "files": remote, "dependencies": dependencies,
-    });
-    let covered: Vec<&str> = remote.iter().filter_map(|f| f["path"].as_str()).collect();
-    let mut files = Vec::new();
-    for m in instance.mods.iter().filter(|m| m.enabled) {
-        let Some(sha1) = &m.sha1 else { continue };
-        let path = format!("{}/{}", m.kind.folder(), m.file_name);
-        if !covered.contains(&path.as_str()) {
-            files.push((path, mods::cached(dirs, sha1)?));
-        }
-    }
-    let game = dirs.game_dir(&instance.id);
-    walk(&game, &game.join("config"), &mut files)?;
-    if game.join("options.txt").is_file() {
-        files.push(("options.txt".into(), game.join("options.txt")));
-    }
-    if files.len() > MAX_ENTRIES {
-        return Err(invalid(format!("Zu viele Dateien für eine Vorlage (höchstens {MAX_ENTRIES})")));
-    }
-    let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-    let options = zip::write::SimpleFileOptions::default();
-    zip.start_file("modrinth.index.json", options)?;
-    zip.write_all(&serde_json::to_vec_pretty(&index)?)?;
-    // „benötigt von“ kennt das mrpack-Format nicht: eigene Datei, die der Import auswertet.
-    let required_by: serde_json::Map<String, Value> = instance
-        .mods
-        .iter()
-        .filter(|m| m.enabled && m.sha1.is_some() && !m.required_by.is_empty())
-        .map(|m| (m.file_name.clone(), json!(m.required_by)))
-        .collect();
-    zip.start_file(content::PUMPKIN_FILE, options)?;
-    zip.write_all(&serde_json::to_vec_pretty(&json!({ "requiredBy": required_by }))?)?;
-    let mut total = 0u64;
-    for (path, source) in files {
-        content::safe_path(&path)?;
-        let data = fs::read(&source).map_err(|e| invalid(format!("{path} nicht lesbar: {e}")))?;
-        // Der Import nimmt höchstens FILE_LIMIT pro Pack; unkomprimiert gezählt ist das die sichere Seite.
-        total += data.len() as u64;
-        if total > modrinth::FILE_LIMIT {
-            return Err(invalid("Vorlage wäre größer als 256 MiB"));
-        }
-        zip.start_file(format!("overrides/{path}"), options)?;
-        zip.write_all(&data)?;
-    }
-    Ok(zip.finish()?.into_inner())
+fn pack_path(dirs: &Dirs, id: &str) -> PathBuf {
+    dirs.templates().join(format!("{id}.mrpack"))
 }
 
 pub async fn save(state: &AppState, instance_id: &str, name: &str) -> AppResult<Template> {
-    let name = name.trim();
-    if name.is_empty() || name.chars().count() > 100 {
-        return Err(invalid("Der Name der Vorlage muss 1 bis 100 Zeichen lang sein"));
-    }
+    let name = require_name(name, MAX_TEMPLATE_NAME_LEN, coded!("errors.app.template.nameLength", max = MAX_TEMPLATE_NAME_LEN))?;
     let instance = state.instances.get(instance_id)?;
-    let remote = remote_files(&modrinth::client()?, &instance).await?;
-    let data = write_pack(&state.dirs, &instance, &remote)?;
     let template = Template {
         id: new_id(),
         name: name.into(),
@@ -147,27 +33,66 @@ pub async fn save(state: &AppState, instance_id: &str, name: &str) -> AppResult<
         mod_count: instance.mods.iter().filter(|m| m.enabled && m.sha1.is_some()).count(),
         created_at: now_ms(),
     };
-    let path = file(&state.dirs, &template.id);
-    fs::create_dir_all(state.dirs.root.join("templates"))?;
-    let tmp = path.with_extension("mrpack.part");
-    fs::write(&tmp, &data)?;
-    fs::rename(&tmp, &path)?;
-    state.templates.insert(template).inspect_err(|_| {
-        if let Err(err) = fs::remove_file(&path) {
-            tracing::warn!(%err, path = %path.display(), "Vorlagendatei nach Fehler nicht entfernt");
-        }
+    let path = pack_path(&state.dirs, &template.id);
+    fs::create_dir_all(state.dirs.templates())?;
+    let spec = PackSpec::template(&instance, CONTENT.map(String::from).to_vec());
+    mrpack::write(&state.dirs, instance, spec, &path).await?;
+    state.templates.insert(template).inspect_err(|_| remove_logged(&path))
+}
+
+/// Legt die Vorlage als `.mrpack` nach `path`: so lässt sie sich weitergeben und mit [`import_file`] wieder aufnehmen.
+pub async fn export_file(state: &AppState, id: &str, path: &Path) -> AppResult<()> {
+    mrpack::require_pack_target(path)?;
+    let template = state.templates.get(id)?;
+    let path = path.to_owned();
+    state.blocking_with_dirs(move |dirs| write_atomic(&path, &read_template(dirs, &template)?)).await
+}
+
+/// Nimmt eine `.mrpack`-Datei als Vorlage auf; sie wird wie beim Import einer Instanz geprüft.
+pub async fn import_file(state: &AppState, path: &Path) -> AppResult<Template> {
+    let path = path.to_owned();
+    let (template, target) = state.blocking_with_dirs(move |dirs| store_pack(dirs, &path)).await?;
+    state.templates.insert(template).inspect_err(|_| remove_logged(&target))
+}
+
+/// Liest und prüft die `.mrpack`-Datei `path` und legt sie unter einer neuen Vorlagen-ID ab.
+fn store_pack(dirs: &Dirs, path: &Path) -> AppResult<(Template, PathBuf)> {
+    let data = content::local_pack(path)?;
+    let info = content::inspect(&data, dirs)?;
+    let template = Template {
+        id: new_id(),
+        name: imported_name(&info.name, path),
+        minecraft_version: info.minecraft_version,
+        loader: info.loader,
+        mod_count: info.content_count,
+        created_at: now_ms(),
+    };
+    let target = pack_path(dirs, &template.id);
+    fs::create_dir_all(dirs.templates())?;
+    write_atomic(&target, &data)?;
+    Ok((template, target))
+}
+
+/// Der Name aus dem Pack, sonst der Dateiname; auf die Länge eines Vorlagennamens gekürzt.
+fn imported_name(pack_name: &str, path: &Path) -> String {
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default();
+    [pack_name, stem]
+        .into_iter()
+        .map(|name| name.trim().chars().take(MAX_TEMPLATE_NAME_LEN).collect::<String>())
+        .find(|name| !name.is_empty())
+        .unwrap_or_else(|| "Importierte Vorlage".into())
+}
+
+fn read_template(dirs: &Dirs, template: &Template) -> AppResult<Vec<u8>> {
+    content::local_pack(&pack_path(dirs, &template.id)).map_err(|e| {
+        if e.is_not_found() { AppError::invalid(coded!("errors.app.template.fileMissing")) } else { e }
     })
 }
 
 pub fn delete(state: &AppState, id: &str) -> AppResult<()> {
     // Erst der Store-Eintrag: nur eine existierende Id wird zum Pfad.
     state.templates.remove(id)?;
-    match fs::remove_file(file(&state.dirs, id)) {
-        Err(err) if err.kind() != std::io::ErrorKind::NotFound => {
-            tracing::warn!(%id, %err, "Vorlagendatei nicht gelöscht")
-        }
-        _ => {}
-    }
+    remove_logged(&pack_path(&state.dirs, id));
     Ok(())
 }
 
@@ -175,20 +100,18 @@ pub async fn create_instance(
     state: &AppState,
     template_id: &str,
     name: &str,
-    progress: &(dyn Fn(&str, u64, u64) + Send + Sync),
+    progress: ProgressFn<'_>,
 ) -> AppResult<Instance> {
     let template = state.templates.get(template_id)?;
-    let data = content::local_pack(&file(&state.dirs, &template.id)).map_err(|e| match e {
-        AppError::Io(e) if e.kind() == std::io::ErrorKind::NotFound => invalid("Die Vorlagendatei fehlt"),
-        e => e,
-    })?;
+    let data = state.blocking_with_dirs(move |dirs| read_template(dirs, &template)).await?;
     content::import(state, &data, name, None, progress).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{Mod, ModKind, NewInstance};
+    use crate::models::{Mod, ModKind, ModLoader, ModSource, NewInstance};
+    use crate::services::mods;
 
     #[tokio::test]
     async fn template_roundtrip_without_network() {
@@ -204,6 +127,8 @@ mod tests {
             enabled,
             kind: ModKind::Mod,
             required_by: Vec::new(),
+            pinned: false,
+            pack_managed: false,
         };
         let mut source = Instance::from_new(NewInstance {
             name: "Quelle".into(),
@@ -236,8 +161,27 @@ mod tests {
         assert!(!new.join("mods/off.jar").exists() && !new.join("saves").exists());
         assert_eq!((copy.loader, copy.loader_version.as_deref()), (ModLoader::Fabric, Some("0.16.10")));
 
+        let shared = root.join("Vorlage.mrpack");
+        export_file(&state, &t.id, &shared).await.unwrap();
+        assert!(export_file(&state, &t.id, Path::new("Vorlage.mrpack")).await.is_err());
+        let imported = import_file(&state, &shared).await.unwrap();
+        assert_eq!((imported.name.as_str(), imported.mod_count, imported.loader), ("Quelle", 2, ModLoader::Fabric));
+        assert_eq!(imported.minecraft_version, "1.21.1");
+        let again = create_instance(&state, &imported.id, "Aus Datei", &|_, _, _| {}).await.unwrap();
+        assert_eq!(fs::read(state.dirs.game_dir(&again.id).join("mods/own.jar")).unwrap(), b"own");
+        assert!(import_file(&state, &root.join("fehlt.mrpack")).await.is_err());
+
         delete(&state, &t.id).unwrap();
-        assert!(!file(&state.dirs, &t.id).exists() && state.templates.list().is_empty());
+        assert!(!pack_path(&state.dirs, &t.id).exists() && state.templates.list() == vec![imported]);
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn imported_templates_fall_back_to_the_file_name() {
+        let path = Path::new("/packs/Mein Pack.mrpack");
+
+        assert_eq!(imported_name(" Aus dem Pack ", path), "Aus dem Pack");
+        assert_eq!(imported_name("  ", path), "Mein Pack");
+        assert_eq!(imported_name(&"x".repeat(MAX_TEMPLATE_NAME_LEN + 5), path).chars().count(), MAX_TEMPLATE_NAME_LEN);
     }
 }

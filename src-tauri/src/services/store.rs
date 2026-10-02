@@ -1,134 +1,218 @@
 //! Einfache JSON-Persistenz: eine Datei pro Collection unter dem App-Datenverzeichnis.
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::Mutex;
 
 use serde::{de::DeserializeOwned, Serialize};
+use serde_json::Value;
 
+use super::{free_name, lock, none_if_missing, write_atomic};
+use crate::coded;
 use crate::error::{AppError, AppResult};
-use crate::models::{Instance, MsAccount, Template};
+use crate::models::{Instance, LibrarySkin, MsAccount, Template};
 
 pub trait Entity: Clone + Serialize + DeserializeOwned {
-    const KIND: &'static str;
     fn id(&self) -> &str;
+    /// Fehler für eine ID, die der Store nicht kennt.
+    fn not_found(id: &str) -> AppError;
 }
 
-impl Entity for Instance {
-    const KIND: &'static str = "Instanz";
-    fn id(&self) -> &str {
-        &self.id
-    }
+/// Alle Entitäten tragen ihre ID im Feld `id`; nur der Fehlercode „nicht gefunden“ unterscheidet sich.
+macro_rules! entity {
+    ($($ty:ty => $not_found:literal),* $(,)?) => {$(
+        impl Entity for $ty {
+            fn id(&self) -> &str {
+                &self.id
+            }
+            fn not_found(id: &str) -> AppError {
+                AppError::NotFound(coded!($not_found, id = id).into())
+            }
+        }
+    )*};
 }
 
-impl Entity for Template {
-    const KIND: &'static str = "Vorlage";
-    fn id(&self) -> &str {
-        &self.id
-    }
-}
-
-impl Entity for MsAccount {
-    const KIND: &'static str = "Konto";
-    fn id(&self) -> &str {
-        &self.id
-    }
-}
+entity!(
+    Instance => "errors.app.notFound.instance",
+    Template => "errors.app.notFound.template",
+    MsAccount => "errors.app.notFound.account",
+    LibrarySkin => "errors.app.notFound.skin",
+);
 
 // ponytail: hält die ganze Collection im Speicher und schreibt bei jeder Änderung
 // die komplette Datei neu. Reicht für Dutzende Einträge; bei Bedarf auf SQLite wechseln.
 pub struct JsonStore<T> {
     path: PathBuf,
     items: Mutex<Vec<T>>,
+    /// Einträge, die dieser Build nicht lesen kann (etwa von einer neueren Version): unsichtbar für Aufrufer,
+    /// aber bei jedem Speichern unverändert wieder in der Datei.
+    unreadable: Vec<Unreadable>,
+}
+
+/// Eintrag der Datei, den dieser Build nicht versteht, mit seiner Position in der Datei.
+struct Unreadable {
+    index: usize,
+    value: Value,
+}
+
+impl Unreadable {
+    fn id(&self) -> Option<&str> {
+        self.value.get("id").and_then(Value::as_str)
+    }
 }
 
 impl<T: Entity> JsonStore<T> {
-    /// Lädt die Datei. Fehlt sie, startet der Store leer. Ist sie defekt, wird sie
-    /// nach `*.json.corrupt` verschoben statt beim nächsten Speichern überschrieben.
+    /// Lädt die Datei. Fehlt sie, startet der Store leer. Ist sie keine JSON-Liste, wird sie nach `*.corrupt`
+    /// verschoben statt beim nächsten Speichern überschrieben. Einzelne unlesbare Einträge bleiben erhalten.
     pub fn open(path: PathBuf) -> AppResult<Self> {
-        let items = match fs::read_to_string(&path) {
-            Ok(raw) => match serde_json::from_str(&raw) {
-                Ok(items) => items,
+        let entries = match none_if_missing(fs::read_to_string(&path))? {
+            Some(raw) => match serde_json::from_str(&raw) {
+                Ok(entries) => entries,
                 Err(err) => {
-                    let backup = path.with_extension("json.corrupt");
-                    tracing::warn!(?path, ?backup, %err, "defekte JSON-Datei gesichert, starte leer");
-                    fs::rename(&path, &backup)?;
+                    set_aside(&path, &err)?;
                     Vec::new()
                 }
             },
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Vec::new(),
-            Err(err) => return Err(err.into()),
+            None => Vec::new(),
         };
-        Ok(Self { path, items: Mutex::new(items) })
-    }
-
-    fn lock(&self) -> MutexGuard<'_, Vec<T>> {
-        self.items.lock().unwrap_or_else(|e| e.into_inner())
+        let (items, unreadable) = split_readable(&path, entries);
+        Ok(Self { path, items: Mutex::new(items), unreadable })
     }
 
     pub fn list(&self) -> Vec<T> {
-        self.lock().clone()
+        lock(&self.items).clone()
     }
 
     pub fn get(&self, id: &str) -> AppResult<T> {
-        self.lock()
-            .iter()
-            .find(|x| x.id() == id)
-            .cloned()
-            .ok_or_else(|| not_found::<T>(id))
+        let items = lock(&self.items);
+        Ok(items[index_of(&items, id)?].clone())
     }
 
     pub fn insert(&self, item: T) -> AppResult<T> {
-        let mut items = self.lock();
-        items.push(item.clone());
-        if let Err(err) = persist(&self.path, &items) {
-            items.pop();
-            return Err(err);
-        }
-        Ok(item)
+        self.push(&mut lock(&self.items), item)
     }
 
     pub fn update(&self, item: T) -> AppResult<T> {
-        let mut items = self.lock();
-        let idx = items
-            .iter()
-            .position(|x| x.id() == item.id())
-            .ok_or_else(|| not_found::<T>(item.id()))?;
-        let old = std::mem::replace(&mut items[idx], item.clone());
-        if let Err(err) = persist(&self.path, &items) {
-            items[idx] = old;
-            return Err(err);
+        let id = item.id().to_owned();
+        self.modify(&id, |current| *current = item)
+    }
+
+    /// Ersetzt den Eintrag mit derselben ID oder legt ihn an, beides unter einem Lock.
+    pub fn upsert(&self, item: T) -> AppResult<T> {
+        let mut items = lock(&self.items);
+        match position(&items, item.id()) {
+            Some(idx) => self.change_at(&mut items, idx, |current| *current = item),
+            None => self.push(&mut items, item),
         }
-        Ok(item)
+    }
+
+    /// Ändert einen Eintrag unter dem Lock des Stores: kein anderer Schreiber kommt zwischen Lesen und
+    /// Schreiben. `change` darf den Store nicht selbst aufrufen (Deadlock).
+    pub fn modify(&self, id: &str, change: impl FnOnce(&mut T)) -> AppResult<T> {
+        let mut items = lock(&self.items);
+        let idx = index_of(&items, id)?;
+        self.change_at(&mut items, idx, change)
     }
 
     pub fn remove(&self, id: &str) -> AppResult<()> {
-        let mut items = self.lock();
-        let idx = items.iter().position(|x| x.id() == id).ok_or_else(|| not_found::<T>(id))?;
+        let mut items = lock(&self.items);
+        let idx = index_of(&items, id)?;
         let old = items.remove(idx);
-        if let Err(err) = persist(&self.path, &items) {
-            items.insert(idx, old);
+        self.commit(&mut items, |items| items.insert(idx, old))
+    }
+
+    /// Ein neuer Eintrag darf keinen unlesbaren mit derselben ID verdrängen: der gehört einer neueren Version.
+    fn push(&self, items: &mut Vec<T>, item: T) -> AppResult<T> {
+        if self.unreadable.iter().any(|u| u.id() == Some(item.id())) {
+            return Err(AppError::invalid(coded!("errors.store.newerEntry")));
+        }
+        items.push(item.clone());
+        self.commit(items, |items| {
+            items.pop();
+        })?;
+        Ok(item)
+    }
+
+    fn change_at(&self, items: &mut Vec<T>, idx: usize, change: impl FnOnce(&mut T)) -> AppResult<T> {
+        let old = items[idx].clone();
+        change(&mut items[idx]);
+        self.commit(items, |items| items[idx] = old)?;
+        Ok(items[idx].clone())
+    }
+
+    /// Schreibt die geänderte Collection; scheitert das, macht `rollback` die Änderung im Speicher rückgängig,
+    /// damit Speicher und Datei nicht auseinanderlaufen.
+    fn commit(&self, items: &mut Vec<T>, rollback: impl FnOnce(&mut Vec<T>)) -> AppResult<()> {
+        if let Err(err) = persist(&self.path, &with_unreadable(items, &self.unreadable)) {
+            rollback(items);
             return Err(err);
         }
         Ok(())
     }
 }
 
-fn not_found<T: Entity>(id: &str) -> AppError {
-    AppError::NotFound { kind: T::KIND, id: id.to_owned() }
+fn position<T: Entity>(items: &[T], id: &str) -> Option<usize> {
+    items.iter().position(|x| x.id() == id)
+}
+
+fn index_of<T: Entity>(items: &[T], id: &str) -> AppResult<usize> {
+    position(items, id).ok_or_else(|| T::not_found(id))
+}
+
+/// Verschiebt eine nicht lesbare Datei nach `<name>.corrupt`, ab der zweiten nach `<name> (2).corrupt` usw.:
+/// eine frühere Sicherung wird nie überschrieben.
+fn set_aside(path: &Path, err: &serde_json::Error) -> AppResult<()> {
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let backup = path.with_file_name(free_name(&name, ".corrupt", |n| path.with_file_name(n).exists()));
+    tracing::warn!(?path, ?backup, %err, "defekte JSON-Datei gesichert, starte leer");
+    fs::rename(path, &backup)?;
+    Ok(())
+}
+
+/// Teilt die Einträge in lesbare und unlesbare. Protokolliert werden nur Position und ID, nie Inhalte.
+fn split_readable<T: Entity>(path: &Path, entries: Vec<Value>) -> (Vec<T>, Vec<Unreadable>) {
+    let mut items = Vec::new();
+    let mut unreadable = Vec::new();
+    for (index, value) in entries.into_iter().enumerate() {
+        match T::deserialize(&value) {
+            Ok(item) => items.push(item),
+            Err(_) => unreadable.push(Unreadable { index, value }),
+        }
+    }
+    if !unreadable.is_empty() {
+        let at: Vec<_> = unreadable.iter().map(|u| (u.index, u.id())).collect();
+        tracing::warn!(?path, count = unreadable.len(), ?at, "unlesbare Einträge (neuere Version?) bleiben unverändert erhalten");
+    }
+    (items, unreadable)
+}
+
+/// Ein Eintrag der Datei, wie er geschrieben wird.
+#[derive(Serialize)]
+#[serde(untagged)]
+enum Stored<'a, T> {
+    Readable(&'a T),
+    Unreadable(&'a Value),
+}
+
+/// Die lesbaren Einträge in ihrer Reihenfolge, die unlesbaren an ihrer alten Position (bzw. am Ende, wenn die
+/// Liste inzwischen kürzer ist).
+fn with_unreadable<'a, T>(items: &'a [T], unreadable: &'a [Unreadable]) -> Vec<Stored<'a, T>> {
+    let mut stored: Vec<_> = items.iter().map(Stored::Readable).collect();
+    for u in unreadable {
+        stored.insert(u.index.min(stored.len()), Stored::Unreadable(&u.value));
+    }
+    stored
 }
 
 /// Schreibt atomar: erst in eine Temp-Datei, dann umbenennen.
 fn persist<T: Serialize>(path: &Path, items: &[T]) -> AppResult<()> {
-    let tmp = path.with_extension("json.tmp");
-    fs::write(&tmp, serde_json::to_vec_pretty(items)?)?;
-    fs::rename(&tmp, path)?;
-    Ok(())
+    write_atomic(path, &serde_json::to_vec_pretty(items)?)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::models::{new_id, ModLoader, NewInstance};
+    use serde::Deserialize;
 
     #[test]
     fn crud_roundtrip_and_corrupt_file() {
@@ -137,14 +221,7 @@ mod tests {
         let path = dir.join("instances.json");
 
         let store = JsonStore::<Instance>::open(path.clone()).unwrap();
-        let inst = store
-            .insert(Instance::from_new(NewInstance {
-                name: "Test".into(),
-                minecraft_version: "1.21.4".into(),
-                loader: ModLoader::Fabric,
-                loader_version: None,
-            }))
-            .unwrap();
+        let inst = store.insert(new_instance("Test")).unwrap();
 
         let mut renamed = inst.clone();
         renamed.name = "Umbenannt".into();
@@ -153,12 +230,171 @@ mod tests {
         let reopened = JsonStore::<Instance>::open(path.clone()).unwrap();
         assert_eq!(reopened.get(&inst.id).unwrap().name, "Umbenannt");
         reopened.remove(&inst.id).unwrap();
-        assert!(matches!(reopened.get(&inst.id), Err(AppError::NotFound { .. })));
+        assert!(matches!(reopened.get(&inst.id), Err(AppError::NotFound(_))));
 
         fs::write(&path, "{kaputt").unwrap();
         assert!(JsonStore::<Instance>::open(path.clone()).unwrap().list().is_empty());
         assert!(path.with_extension("json.corrupt").exists());
 
+        fs::write(&path, "{}").unwrap();
+        assert!(JsonStore::<Instance>::open(path.clone()).unwrap().list().is_empty());
+        assert_eq!(fs::read_to_string(path.with_extension("json.corrupt")).unwrap(), "{kaputt");
+        assert_eq!(fs::read_to_string(dir.join("instances.json (2).corrupt")).unwrap(), "{}");
+
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Schreibt `entries` als Store-Datei in einen neuen Testordner.
+    fn file_with(entries: &[Value]) -> (PathBuf, PathBuf) {
+        let dir = std::env::temp_dir().join(format!("launcher-test-{}", new_id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("instances.json");
+        fs::write(&path, serde_json::to_vec_pretty(entries).unwrap()).unwrap();
+        (dir, path)
+    }
+
+    fn entries_in(path: &Path) -> Vec<Value> {
+        serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
+    }
+
+    /// Drei Instanzen; die mittlere stammt von einer neueren Version mit einer hier unbekannten Pack-Herkunft.
+    fn instances_with_newer_middle() -> Vec<Value> {
+        let mut entries: Vec<Value> =
+            ["Eins", "Zwei", "Drei"].map(|name| serde_json::to_value(new_instance(name)).unwrap()).to_vec();
+        entries[1]["modpack"] = serde_json::json!({ "type": "zukunft", "packId": "p" });
+        entries
+    }
+
+    #[test]
+    fn unreadable_entry_survives_load_and_save_in_place() {
+        let original = instances_with_newer_middle();
+        let (dir, path) = file_with(&original);
+        let store = JsonStore::<Instance>::open(path.clone()).unwrap();
+        assert_eq!(store.list().iter().map(|i| i.name.as_str()).collect::<Vec<_>>(), ["Eins", "Drei"]);
+
+        let third = store.list()[1].id.clone();
+        store.modify(&third, |i| i.name = "Geändert".into()).unwrap();
+        let saved = entries_in(&path);
+        assert_eq!(saved.len(), 3);
+        assert_eq!(saved[1], original[1]);
+        assert_eq!(saved[2]["name"], "Geändert");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn saving_without_change_keeps_the_file() {
+        let original = instances_with_newer_middle();
+        let (dir, path) = file_with(&original);
+        let store = JsonStore::<Instance>::open(path.clone()).unwrap();
+        store.modify(&store.list()[0].id, |_| {}).unwrap();
+        assert_eq!(entries_in(&path), original);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn new_entry_does_not_displace_unreadable_with_same_id() {
+        let original = instances_with_newer_middle();
+        let (dir, path) = file_with(&original);
+        let store = JsonStore::<Instance>::open(path.clone()).unwrap();
+        let clash = Instance { id: original[1]["id"].as_str().unwrap().into(), ..new_instance("Neu") };
+        assert!(matches!(store.insert(clash.clone()), Err(AppError::Invalid(_))));
+        assert!(matches!(store.upsert(clash), Err(AppError::Invalid(_))));
+        assert_eq!(store.list().len(), 2);
+        assert_eq!(entries_in(&path), original);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    /// Eintrag eines älteren Builds, der nur Modrinth als Herkunft kennt.
+    #[derive(Clone, Serialize, Deserialize)]
+    struct OldEntry {
+        id: String,
+        origin: OldOrigin,
+    }
+
+    #[derive(Clone, Serialize, Deserialize)]
+    #[serde(rename_all = "lowercase")]
+    enum OldOrigin {
+        Modrinth,
+    }
+
+    /// Derselbe Eintrag in einem späteren Build, der auch Dateien als Herkunft kennt.
+    #[derive(Clone, Serialize, Deserialize)]
+    struct NewEntry {
+        id: String,
+        origin: NewOrigin,
+    }
+
+    #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+    #[serde(rename_all = "lowercase")]
+    enum NewOrigin {
+        Modrinth,
+        File,
+    }
+
+    entity!(OldEntry => "errors.app.notFound.instance", NewEntry => "errors.app.notFound.instance");
+
+    #[test]
+    fn later_build_reads_entry_an_older_build_kept() {
+        let entry = |id: &str, origin: NewOrigin| serde_json::to_value(NewEntry { id: id.into(), origin }).unwrap();
+        let (dir, path) = file_with(&[entry("a", NewOrigin::Modrinth), entry("b", NewOrigin::File)]);
+
+        let old = JsonStore::<OldEntry>::open(path.clone()).unwrap();
+        old.modify("a", |_| {}).unwrap();
+        old.insert(OldEntry { id: "c".into(), origin: OldOrigin::Modrinth }).unwrap();
+
+        let later = JsonStore::<NewEntry>::open(path).unwrap();
+        let origins: Vec<_> = later.list().into_iter().map(|e| (e.id, e.origin)).collect();
+        assert_eq!(origins, [("a", NewOrigin::Modrinth), ("b", NewOrigin::File), ("c", NewOrigin::Modrinth)].map(|(id, o)| (id.to_owned(), o)));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    fn new_instance(name: &str) -> Instance {
+        Instance::from_new(NewInstance { name: name.into(), minecraft_version: "1.21.4".into(), loader: ModLoader::Vanilla, loader_version: None })
+    }
+
+    fn store_with_instance() -> (PathBuf, JsonStore<Instance>, String) {
+        let dir = std::env::temp_dir().join(format!("launcher-test-{}", new_id()));
+        fs::create_dir_all(&dir).unwrap();
+        let store = JsonStore::<Instance>::open(dir.join("instances.json")).unwrap();
+        let id = store.insert(new_instance("Test")).unwrap().id;
+        (dir, store, id)
+    }
+
+    #[test]
+    fn concurrent_modifies_lose_no_change() {
+        let (dir, store, id) = store_with_instance();
+        std::thread::scope(|s| {
+            for _ in 0..8 {
+                s.spawn(|| {
+                    for _ in 0..10 {
+                        store.modify(&id, |i| i.playtime_secs += 1).unwrap();
+                    }
+                });
+            }
+        });
+        assert_eq!(store.get(&id).unwrap().playtime_secs, 80);
+        assert!(matches!(store.modify("weg", |_| {}), Err(AppError::NotFound(_))));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn failed_write_rolls_modify_back() {
+        let (dir, store, id) = store_with_instance();
+        fs::remove_dir_all(&dir).unwrap();
+        assert!(store.modify(&id, |i| i.name = "Neu".into()).is_err());
+        assert_eq!(store.get(&id).unwrap().name, "Test");
+    }
+
+    #[test]
+    fn upsert_replaces_existing_and_adds_missing() {
+        let (dir, store, id) = store_with_instance();
+        let mut renamed = store.get(&id).unwrap();
+        renamed.name = "Umbenannt".into();
+        store.upsert(renamed).unwrap();
+        let second = store.upsert(new_instance("Zweite")).unwrap();
+        assert_eq!(store.list().len(), 2);
+        assert_eq!(store.get(&id).unwrap().name, "Umbenannt");
+        assert_eq!(store.get(&second.id).unwrap().name, "Zweite");
         fs::remove_dir_all(dir).unwrap();
     }
 }
