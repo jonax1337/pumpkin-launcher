@@ -99,6 +99,7 @@ export const pages: typeof dePages = {
   "pages.skins.capeField": "Cape",
   "pages.skins.fileDialogSkin": "Skin",
   "pages.skins.addSkin": "Add skin",
+  "pages.skins.addFromFile": "From file",
   "pages.skins.addByName": "From player name",
   "pages.skins.playerDialogTitle": "Load a player’s skin",
   "pages.skins.playerField": "Player name",

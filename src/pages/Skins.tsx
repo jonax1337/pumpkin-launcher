@@ -15,7 +15,8 @@ import { type Cape, type LibrarySkin } from "@/lib/types";
 import { useUsableAccount } from "@/store/offline";
 import type { ActiveAccount } from "@/store/settings";
 import {
-  Actions, Button, CardGrid, ConfirmDialog, Empty, ErrorBox, Field, Hint, PageHeader, Panel, SectionHeader, Select, Skel, StatusPanel,
+  Actions, Button, CardGrid, ConfirmDialog, Empty, ErrorBox, Field, Hint, Menu, PageHeader, Panel, SectionHeader, Select, Skel, StatusPanel,
+  type MenuEntry,
 } from "@/ui";
 import { DropHint, rejectedFileToast } from "./detail/dropFiles";
 import { PlayerSkinDialog, RenameDialog, SkinCard, type WornLook } from "./skins/SkinCard";
@@ -168,18 +169,21 @@ function Library({ account }: { account: MicrosoftAccount | null }) {
     if (path) add.mutate(path);
   }
 
+  const addMenu: MenuEntry[] = [
+    { id: "file", text: t("pages.skins.addFromFile"), icon: "file", onSelect: () => void pickFile().catch(toastError) },
+    { id: "player", text: t("pages.skins.addByName"), icon: "user", onSelect: () => setLoadingPlayer(true) },
+  ];
+
   return (
     <section className="mt-6" aria-labelledby="skin-lib">
       <SectionHeader
         id="skin-lib"
         title={t("pages.skins.libraryTitle")}
         actions={
-          <Actions>
-            <Button icon="user" variant="ghost" onClick={() => setLoadingPlayer(true)}>{t("pages.skins.addByName")}</Button>
-            <Button icon="plus" disabled={add.isPending} onClick={() => void pickFile().catch(toastError)}>
-              {t("pages.skins.addSkin")}
-            </Button>
-          </Actions>
+          <Menu
+            items={addMenu}
+            trigger={<Button icon="plus" iconEnd="chevd" disabled={add.isPending}>{t("pages.skins.addSkin")}</Button>}
+          />
         }
       />
       <Hint className="mt-1">{t("pages.skins.libraryHelp")}</Hint>

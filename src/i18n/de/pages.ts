@@ -99,6 +99,7 @@ export const pages = {
   "pages.skins.capeField": "Umhang",
   "pages.skins.fileDialogSkin": "Skin",
   "pages.skins.addSkin": "Skin hinzufügen",
+  "pages.skins.addFromFile": "Aus Datei",
   "pages.skins.addByName": "Von Spielername",
   "pages.skins.playerDialogTitle": "Skin eines Spielers laden",
   "pages.skins.playerField": "Spielername",
