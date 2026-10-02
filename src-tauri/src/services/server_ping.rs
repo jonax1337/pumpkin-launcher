@@ -1,5 +1,6 @@
-//! Server-List-Ping: Handshake und Statusanfrage des Spiels per TCP. Aus der Antwort liest der Launcher nur
-//! Text und Zahlen; nichts daraus wird ausgeführt, nachgeladen oder als Markup angezeigt.
+//! Server-List-Ping: Handshake und Statusanfrage des Spiels per TCP, Ziel nach SRV-Auflösung wie im Spiel (`server_srv`).
+//! Aus der Antwort liest der Launcher nur Text und Zahlen; nichts daraus wird ausgeführt, nachgeladen oder als Markup
+//! angezeigt.
 use std::{
     io,
     time::{Duration, Instant},
@@ -11,7 +12,8 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 use super::limits::SERVER_STATUS_LIMIT;
-use super::servers::{parse_address, ServerAddress};
+use super::server_srv::{resolve_target, SrvLookup, SystemDns};
+use super::servers::{parse_address, ServerAddress, DEFAULT_PORT};
 use crate::coded;
 use crate::error::{AppError, AppResult};
 
@@ -45,11 +47,19 @@ pub struct ServerStatus {
 
 /// Fragt den Status eines Servers ab. Die Adresse prüft der Aufrufer gegen die eigene Serverliste.
 pub async fn ping(address: &str) -> AppResult<ServerStatus> {
+    ping_via(address, &SystemDns).await
+}
+
+/// Verbindet sich wie das Spiel mit dem Ziel nach SRV-Auflösung; das Handshake nennt die Adresse aus der Serverliste.
+async fn ping_via(address: &str, dns: &impl SrvLookup) -> AppResult<ServerStatus> {
     let ServerAddress { host, port } =
         parse_address(address).ok_or_else(|| AppError::invalid(coded!("errors.app.server.addressInvalid")))?;
+    let target = resolve_target(host, port, dns).await;
     let answer = tokio::time::timeout(PING_TIMEOUT, async {
-        let mut stream = TcpStream::connect((host, port)).await.map_err(|_| unreachable_server())?;
-        request_status(&mut stream, host, port).await.map_err(|_| AppError::invalid(coded!("errors.app.server.notMinecraft")))
+        let mut stream = TcpStream::connect(target).await.map_err(|_| unreachable_server())?;
+        request_status(&mut stream, host, port.unwrap_or(DEFAULT_PORT))
+            .await
+            .map_err(|_| AppError::invalid(coded!("errors.app.server.notMinecraft")))
     })
     .await;
     answer.unwrap_or_else(|_| Err(unreachable_server()))
@@ -198,6 +208,7 @@ fn invalid_data(reason: impl Into<Box<dyn std::error::Error + Send + Sync>>) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::server_srv::SrvRecord;
     use tokio::io::duplex;
     use tokio::net::TcpListener;
 
@@ -349,5 +360,31 @@ mod tests {
 
         assert!(ping(&format!("127.0.0.1:{port}")).await.is_err(), "niemand hört mehr zu");
         assert!(ping("not a valid address!!").await.is_err());
+    }
+
+    /// SRV-Eintrag, der jede Adresse auf `127.0.0.1:<port>` umleitet.
+    struct SrvToLocalhost(u16);
+
+    impl SrvLookup for SrvToLocalhost {
+        async fn srv_records(&self, _name: &str) -> io::Result<Vec<SrvRecord>> {
+            Ok(vec![SrvRecord { priority: 0, weight: 0, port: self.0, target: "127.0.0.1.".into() }])
+        }
+    }
+
+    #[tokio::test]
+    async fn follows_the_srv_record_but_names_the_listed_address_in_the_handshake() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let fake_server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let expected = [handshake_packet("play.example.net", DEFAULT_PORT), packet(STATUS_PACKET, |_| {})].concat();
+            let mut received = vec![0; expected.len()];
+            stream.read_exact(&mut received).await.unwrap();
+            assert_eq!(received, expected);
+            stream.write_all(&status_packet(r#"{"description":"per SRV"}"#)).await.unwrap();
+        });
+        let status = ping_via("play.example.net", &SrvToLocalhost(port)).await.unwrap();
+        fake_server.await.unwrap();
+        assert_eq!(status.motd, "per SRV");
     }
 }

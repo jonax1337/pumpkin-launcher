@@ -72,7 +72,7 @@ export const errorsApp = {
 
   "errors.app.server.addressInvalid": "Die Serveradresse ist ungültig",
   "errors.app.server.notMinecraft": "Der Server antwortet nicht wie ein Minecraft-Server",
-  "errors.app.server.unreachable": "Keine Antwort vom Server. Server, die nur über einen SRV-Eintrag erreichbar sind, werden nicht erkannt",
+  "errors.app.server.unreachable": "Keine Antwort vom Server.",
   "errors.app.server.addressExample": "Gib eine Serveradresse wie play.example.net oder play.example.net:25565 ein",
   "errors.app.server.nameMissing": "Gib dem Server einen Namen",
   "errors.app.server.unknownFormat": "servers.dat hat ein unbekanntes Format",

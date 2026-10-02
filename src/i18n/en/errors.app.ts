@@ -72,7 +72,7 @@ export const errorsApp: typeof deErrorsApp = {
 
   "errors.app.server.addressInvalid": "The server address is invalid",
   "errors.app.server.notMinecraft": "The server does not respond like a Minecraft server",
-  "errors.app.server.unreachable": "No answer from the server. Servers reachable only through an SRV record are not detected",
+  "errors.app.server.unreachable": "No answer from the server.",
   "errors.app.server.addressExample": "Enter a server address like play.example.net or play.example.net:25565",
   "errors.app.server.nameMissing": "Give the server a name",
   "errors.app.server.unknownFormat": "servers.dat has an unknown format",

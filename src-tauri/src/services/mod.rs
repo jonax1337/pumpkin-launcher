@@ -3,6 +3,7 @@
 mod dataurl;
 mod dirs;
 mod fsutil;
+mod server_srv;
 mod tasks;
 #[cfg(test)]
 mod testutil;

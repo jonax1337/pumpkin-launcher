@@ -15,8 +15,8 @@ const FILE: &str = "servers.dat";
 const MAX_ADDRESS_LEN: usize = 255;
 const MAX_HOST_LEN: usize = 253;
 const MAX_LABEL_LEN: usize = 63;
-/// Port, den das Spiel nimmt, wenn die Adresse keinen nennt.
-const DEFAULT_PORT: u16 = 25565;
+/// Port, den das Spiel nimmt, wenn die Adresse keinen nennt und kein SRV-Eintrag einen anderen vorgibt.
+pub const DEFAULT_PORT: u16 = 25565;
 
 /// Tags der Datei, die der Launcher liest oder schreibt.
 const SERVERS: &str = "servers";
@@ -87,7 +87,8 @@ pub fn remove(game_dir: &Path, index: usize) -> AppResult<()> {
 #[derive(Debug, PartialEq)]
 pub struct ServerAddress<'a> {
     pub host: &'a str,
-    pub port: u16,
+    /// `None`, wenn die Adresse keinen Port nennt.
+    pub port: Option<u16>,
 }
 
 /// Serveradresse wie im Spiel: `host[:port]` mit Hostname, IPv4 oder `[IPv6]`. Sie wird zum Startargument und darf
@@ -106,7 +107,10 @@ pub fn parse_address(address: &str) -> Option<ServerAddress<'_>> {
         return None;
     }
     let (host, port) = split_host_port(address)?;
-    let port = port.map_or(Some(DEFAULT_PORT), parse_port)?;
+    let port = match port {
+        Some(digits) => Some(parse_port(digits)?),
+        None => None,
+    };
     Some(ServerAddress { host, port })
 }
 
@@ -329,21 +333,22 @@ mod tests {
         fs::remove_dir_all(dir).unwrap();
     }
 
-    fn parsed(address: &str) -> Option<(&str, u16)> {
+    fn parsed(address: &str) -> Option<(&str, Option<u16>)> {
         parse_address(address).map(|a| (a.host, a.port))
     }
 
     #[test]
     fn parses_host_and_port() {
-        assert_eq!(parsed("play.example.net"), Some(("play.example.net", 25565)));
-        assert_eq!(parsed("play.example.net:25570"), Some(("play.example.net", 25570)));
-        assert_eq!(parsed("localhost"), Some(("localhost", 25565)));
-        assert_eq!(parsed("127.0.0.1:1"), Some(("127.0.0.1", 1)));
-        assert_eq!(parsed("mc_1.bär.de:65535"), Some(("mc_1.bär.de", 65535)));
-        assert_eq!(parsed("[::1]"), Some(("::1", 25565)));
-        assert_eq!(parsed("[2001:db8::1]:25570"), Some(("2001:db8::1", 25570)));
+        assert_eq!(parsed("play.example.net"), Some(("play.example.net", None)));
+        assert_eq!(parsed("play.example.net:25570"), Some(("play.example.net", Some(25570))));
+        assert_eq!(parsed("play.example.net:25565"), Some(("play.example.net", Some(25565))));
+        assert_eq!(parsed("localhost"), Some(("localhost", None)));
+        assert_eq!(parsed("127.0.0.1:1"), Some(("127.0.0.1", Some(1))));
+        assert_eq!(parsed("mc_1.bär.de:65535"), Some(("mc_1.bär.de", Some(65535))));
+        assert_eq!(parsed("[::1]"), Some(("::1", None)));
+        assert_eq!(parsed("[2001:db8::1]:25570"), Some(("2001:db8::1", Some(25570))));
         for host in ["::", "1:2:3:4:5:6:7:8", "1:2:3:4:5:6:7::", "::ffff:192.168.0.1", "1:2:3:4:5:6:1.2.3.4"] {
-            assert_eq!(parsed(&format!("[{host}]")), Some((host, 25565)), "{host}");
+            assert_eq!(parsed(&format!("[{host}]")), Some((host, None)), "{host}");
         }
     }
 
