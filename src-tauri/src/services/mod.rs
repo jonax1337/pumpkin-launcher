@@ -33,6 +33,7 @@ pub mod mojang;
 pub mod mrpack;
 pub mod pack_update;
 pub mod pack_selection;
+pub mod presence;
 pub mod progress;
 pub mod providers;
 pub mod rules;

@@ -7,6 +7,7 @@ export const settings = {
   "settings.tabStorage": "Speicher",
   "settings.sectionJava": "Arbeitsspeicher & Java",
   "settings.sectionStart": "Spielstart",
+  "settings.sectionInGame": "Im Spiel",
   "settings.sectionReset": "Zurücksetzen",
 
   // Arbeitsspeicher
@@ -41,6 +42,11 @@ export const settings = {
   "settings.onPlay.minimize": "Minimieren (nach dem Spiel kommt er zurück)",
   "settings.onPlay.close": "Schließen",
   "settings.onPlay.closeWarning": "Ohne laufenden Launcher werden Spielzeit und Absturzhinweise nicht erfasst.",
+
+  // Discord
+  "settings.discord.label": "In Discord anzeigen",
+  "settings.discord.hint": "Zeigt deinen Freunden, dass du Minecraft spielst, mit Version, Loader und Startzeit. Nie Welt, Server oder Instanzname",
+  "settings.discord.aside": "Braucht die Discord-App auf diesem Computer und wirkt ab dem nächsten Spielstart. Der Launcher spricht nur lokal mit ihr.",
 
   // Speicher
   "settings.storage.folderSection": "Datenordner",

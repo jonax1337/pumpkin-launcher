@@ -15,6 +15,7 @@ use crate::services::install::{self, InstallProgress, InstallStep, OnProgress, I
 use crate::services::launch::{self, LaunchSpec, LogStream, Running, Session, EXIT_EVENT, LOG_EVENT};
 use crate::services::loader::{self, LoaderVersion};
 use crate::services::mojang::{VersionEntry, VersionManifest, MANIFEST_URL};
+use crate::services::presence::Activity;
 use crate::services::progress::emit;
 use crate::services::rules::Env;
 use crate::services::launch_args::ArgList;
@@ -249,6 +250,7 @@ pub async fn instance_launch(app: AppHandle, state: State<'_, AppState>, instanc
     let pid = state.spawn_running(&instance_id, || {
         let game = spawn_game(&app, &instance_id, &prepared)?;
         // Noch unter der Sperre: `instance-exit` eines sofort beendeten Spiels kommt so erst nach diesem Stand.
+        announce_in_discord(&state, &instance, &options);
         record_launch(&state, &instance_id, options.quick_play);
         Ok(game)
     })?;
@@ -339,9 +341,17 @@ fn record_launch(state: &AppState, instance_id: &str, quick_play: Option<QuickPl
     }
 }
 
-/// Aufräumen nach dem Ende des Spiels: Eintrag entfernen, Spielzeit buchen, `instance-exit` senden.
+/// Zeigt das Spiel in Discord, wenn der Spieler das will; ohne Angabe bleibt die Anzeige aus.
+fn announce_in_discord(state: &AppState, instance: &Instance, options: &LaunchOptions) {
+    if options.discord_presence.unwrap_or(false) {
+        state.presence.started(&instance.id, Activity::minecraft(&instance.minecraft_version, instance.loader, now_ms() as i64));
+    }
+}
+
+/// Aufräumen nach dem Ende des Spiels: Anzeige in Discord weg, Eintrag entfernen, Spielzeit buchen, `instance-exit` senden.
 fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, code: Option<i32>) {
     let state = app.state::<AppState>();
+    state.presence.stopped(&instance_id);
     // `instance_kill` hat den Eintrag schon entfernt: dann hat der Nutzer gestoppt.
     let stopped = state.take_running(&instance_id).is_none();
     let crashed = code != Some(0) && !stopped;

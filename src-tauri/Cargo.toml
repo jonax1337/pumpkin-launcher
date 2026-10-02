@@ -49,6 +49,7 @@ dirs = "7"
 percent-encoding = "2.3.2"
 toml = { version = "1.1", default-features = false, features = ["std", "serde", "parse"] }
 hickory-resolver = { version = "0.26.3", default-features = false, features = ["system-config", "tokio"] }
+discord-rich-presence = "1.1.0"
 
 [dev-dependencies]
 tokio = { version = "1.53.1", features = ["test-util"] }

@@ -7,6 +7,7 @@ export const settings = {
   "settings.tabStorage": "Storage",
   "settings.sectionJava": "Memory & Java",
   "settings.sectionStart": "Game start",
+  "settings.sectionInGame": "In the game",
   "settings.sectionReset": "Reset",
 
   // Memory
@@ -41,6 +42,11 @@ export const settings = {
   "settings.onPlay.minimize": "Minimize (it comes back after the game)",
   "settings.onPlay.close": "Close",
   "settings.onPlay.closeWarning": "Without the launcher running, playtime and crash hints aren’t recorded.",
+
+  // Discord
+  "settings.discord.label": "Show in Discord",
+  "settings.discord.hint": "Shows your friends that you are playing Minecraft, with version, loader and start time. Never the world, server or instance name",
+  "settings.discord.aside": "Needs the Discord app on this computer and takes effect from the next game start. The launcher talks to it locally only.",
 
   // Storage
   "settings.storage.folderSection": "Data folder",

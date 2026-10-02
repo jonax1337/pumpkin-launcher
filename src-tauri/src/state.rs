@@ -13,6 +13,7 @@ use crate::models::{Instance, LibrarySkin, MsAccount, Template};
 use crate::services::auth::MsState;
 use crate::services::download::http_client;
 use crate::services::launch::Running;
+use crate::services::presence::Presence;
 use crate::services::progress::{progress, SharedProgress};
 use crate::services::store::JsonStore;
 use crate::services::{blocking, lock, until_phases_end, Dirs};
@@ -30,6 +31,8 @@ pub struct AppState {
     pub ms: MsState,
     pub dirs: Dirs,
     pub http: reqwest::Client,
+    /// Die Anzeige in Discord; gezeigt wird nur, was `LaunchOptions::discord_presence` beim Start erlaubt.
+    pub presence: Presence,
     /// Laufende Spiele je Instanz-ID.
     running: Mutex<HashMap<String, Running>>,
     /// Abbrechbare Vorgänge je Instanz- bzw. operationId.
@@ -53,6 +56,7 @@ impl AppState {
             ms: MsState::default(),
             dirs: Dirs::new(data_dir),
             http: http_client()?,
+            presence: Presence::discord(),
             running: Mutex::new(HashMap::new()),
             operation: tokio::sync::Mutex::new(()),
             cancels: Mutex::new(HashMap::new()),

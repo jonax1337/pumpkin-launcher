@@ -72,7 +72,7 @@ async function requireUsableAccount(instance: Instance): Promise<ActiveAccount> 
 }
 
 async function launchOptionsFor(account: ActiveAccount, quickPlay: QuickPlay | null, qc: QueryClient): Promise<LaunchOptions> {
-  const { javaPath, minMemoryMb, jvmPreset, jvmArgs, window } = useSettings.getState();
+  const { javaPath, minMemoryMb, jvmPreset, jvmArgs, window, discordPresence } = useSettings.getState();
   const { enabled: backupWorlds, keep: backupKeep } = useWorldBackup.getState();
   return {
     username: accountName(account),
@@ -84,6 +84,7 @@ async function launchOptionsFor(account: ActiveAccount, quickPlay: QuickPlay | n
     defaultMinMemoryMb: minMemoryMb,
     defaultJvmArgs: presetArgs(jvmPreset, jvmArgs),
     defaultWindow: window.type === "default" ? null : window,
+    discordPresence,
     quickPlay,
   };
 }

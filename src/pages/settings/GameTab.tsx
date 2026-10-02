@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Actions, Button, Disclosure, FormRow, FormSection, Hint, Radio, TextArea } from "@/ui";
+import { Actions, Button, Disclosure, FormRow, FormSection, Hint, Radio, Switch, TextArea } from "@/ui";
 import { useCommitOnUnmount } from "@/hooks/useCommitOnUnmount";
 import { JavaChooser, MemoryChooser, MemoryHelp, MinMemoryChooser } from "@/components/common";
 import { useI18n, type TKey } from "@/i18n";
@@ -104,6 +104,18 @@ function LauncherOnPlayRow() {
   );
 }
 
+/** Das laufende Spiel in Discord zeigen; wirkt ab dem nächsten Start. */
+function DiscordRow() {
+  const { t } = useI18n();
+  const enabled = useSettings((s) => s.discordPresence);
+  const set = useSettings((s) => s.set);
+  return (
+    <FormRow label={t("settings.discord.label")} hint={t("settings.discord.hint")} aside={t("settings.discord.aside")}>
+      <Switch label={t("settings.discord.label")} checked={enabled} onChange={(on) => set({ discordPresence: on })} stateText={[t("ui.switch.on"), t("ui.switch.off")]} />
+    </FormRow>
+  );
+}
+
 /** Alle Spieleinstellungen auf Anfang; Konten und Darstellung bleiben. */
 function ResetRow() {
   const { t } = useI18n();
@@ -154,6 +166,9 @@ export function GameTab() {
           <WindowChooser name="gwindow" value={gameWindow} onChange={(next) => set({ window: next })} />
         </FormRow>
         <LauncherOnPlayRow />
+      </FormSection>
+      <FormSection title={t("settings.sectionInGame")} level={3}>
+        <DiscordRow />
       </FormSection>
       <FormSection title={t("settings.sectionReset")} level={3}>
         <ResetRow />

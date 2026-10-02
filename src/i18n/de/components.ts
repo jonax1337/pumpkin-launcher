@@ -38,6 +38,8 @@ export const components = {
   "components.privacy.loaders": "Versionslisten und Installer der Mod-Loader.",
   "components.privacy.github": "Updates des Launchers: eine stille Suche kurz nach dem Start und der Download, wenn du ihn auslöst.",
   "components.privacy.mclogs": "Nur nach Klick auf „Log teilen“: das bereinigte Log wird hochgeladen.",
+  "components.privacy.discord": "Nur wenn du „In Discord anzeigen“ einschaltest: Version und Loader des laufenden Spiels gehen an die Discord-App auf deinem Computer, die sie deinen Freunden zeigt.",
+  "components.privacy.discordWhere": "nur lokal, kein Netz-Host",
   "components.privacy.imagesName": "Bilder in Beschreibungen",
   "components.privacy.images": "Diese Hosts laden Bilder ohne Rückfrage. Jeder andere Host sähe deine IP-Adresse, darum lädt er sein Bild erst nach deinem Klick.",
 

@@ -165,6 +165,8 @@ export interface LaunchOptions {
   defaultJvmArgs: string[];
   /** Fenster für Instanzen, die keines festgelegt haben; null = wie Minecraft. */
   defaultWindow: GameWindow | null;
+  /** Launcher-Einstellung „In Discord anzeigen“, was gespielt wird. */
+  discordPresence: boolean;
   /** Direkt in eine Welt oder auf einen Server. */
   quickPlay: QuickPlay | null;
 }

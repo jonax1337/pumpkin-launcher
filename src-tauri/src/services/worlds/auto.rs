@@ -128,6 +128,7 @@ mod tests {
             default_min_memory_mb: None,
             default_jvm_args: Vec::new(),
             default_window: None,
+            discord_presence: None,
             backup_worlds,
             backup_keep,
             quick_play: None,
