@@ -25,24 +25,27 @@
 
 ## Features
 
-- **Instances** — create, configure and launch isolated game instances for Vanilla, **Fabric, Forge, NeoForge and Quilt**
-- **Per-instance launch settings** — own Java, window size or fullscreen, extra game arguments; total playtime per instance
-- **Library groups** — sort instances into collapsible groups right from the instance menu
-- **Mods & modpacks** — browse, search and install from [Modrinth](https://modrinth.com), plus CurseForge, FTB and Technic modpacks, directly in the launcher; update installed mods on request
-- **`.mrpack` import** — drag in local modpack files
+- **Instances** — create, configure and launch isolated game instances for Vanilla, **Fabric, Forge, NeoForge and Quilt**; give each its own icon (pixel icon or picture), scene and notes
+- **Per-instance launch settings** — own account, RAM (maximum and minimum), Java, window size or fullscreen, JVM and game arguments; total playtime per instance. Instances without their own values follow the launcher defaults in Settings › Java & Start (RAM, Java, JVM preset, window), which also decide what the launcher does when the game starts
+- **Library** — search, filter by loader and Minecraft version, sort by last played, name, created or playtime; collapsible, reorderable groups; select several instances to group, export or delete them at once
+- **Mods & modpacks** — browse, search and install from [Modrinth](https://modrinth.com), plus CurseForge, FTB and Technic modpacks, directly in the launcher. Installed Modrinth content updates on request (before several updates at once you see the old and new state with the changelog, and afterwards an undo); pick any version (also an older one) or pin a mod to keep it where it is. File sizes, dates and hints from the mod metadata (missing dependency, duplicate, wrong loader or Minecraft version) show in the list
+- **Modpack updates & version switching** — update an instance to a newer pack version (Modrinth, FTB, Technic, CurseForge when every file downloads directly; a newer `.mrpack` file for instances imported from a file) without losing worlds or your own changes: every world is backed up first, files you changed stay, and an interrupted update is rolled back. Change an instance's Minecraft version or loader after a check of what will be updated, added or switched off, in place or as a copy
+- **Resource packs & shaders** — choose which resource packs are active and in which order, and pick the Iris shader pack, right from the content list (written to `options.txt` and the Iris config while the game is not running)
+- **Modpack import** — `.mrpack` files by drag & drop or file picker and CurseForge `.zip` files through the file picker; the installer is set up to register `.mrpack` files so a double-click opens the launcher's import dialog
 - **Your own files** — drop `.jar` mods, resource packs and shader packs onto an instance; files Modrinth knows (by SHA-1) still get updates
-- **Switch in one click** — import instances from Prism Launcher / MultiMC, Modrinth App, CurseForge App and ATLauncher with worlds, mods and settings; the other launcher stays untouched
-- **Screenshots** — browse every instance's F2 screenshots by day, flip through them full size, open them in your image viewer, show them in your file manager or move them to the trash
-- **Duplicate & export** — copy an instance to experiment safely, or share it as a `.mrpack` (Modrinth mods linked, everything else embedded; worlds optional, no size limit); both run in the task menu and can be cancelled
-- **Worlds & servers** — see an instance's worlds and server list, back up and restore worlds (deleting backs up first), edit servers and jump straight into a world (Minecraft 1.20+) or onto a server with Quick Play; the home screen offers to continue where you last went
+- **Switch in one click** — import instances from Prism Launcher / MultiMC, Modrinth App, CurseForge App and ATLauncher with worlds, mods and settings (plus notes, group and icon where the other launcher has them); the other launcher stays untouched, and its commands, Java agents and class-path arguments are never taken over
+- **Screenshots** — browse every instance's F2 screenshots by day, flip through them full window with zoom, copy one to the clipboard, open them in your image viewer, show them in your file manager, or select several and move them to the trash (with undo)
+- **Duplicate & export** — copy an instance to experiment safely, or share it as a `.mrpack` with your own pack name, version and description (Modrinth mods linked, everything else embedded; worlds optional, no size limit); export several instances into one folder in one go without overwriting anything. Both run in the task menu and can be cancelled
+- **Worlds & servers** — see an instance's worlds and server list, back up and restore worlds (deleting backs up first; optionally every changed world is backed up before the game starts, keeping the newest 1–50 automatic backups per world), import a world from a zip, edit servers and see their player count and ping, and jump straight into a world (Minecraft 1.20+) or onto a server with Quick Play; the home screen offers to continue where you last went. Deleting an instance offers to copy its world backups out first
 - **Datapacks per world** — add `.zip` datapacks to a world by drag & drop, or install them from Modrinth (in the world's panel or in Discover, picking instance and world); see which ones the game has enabled, move unwanted ones to the recycle bin
-- **Templates** — save an instance (mods, resource and shader packs, config, options) and start new ones from it
+- **Templates** — save an instance (mods, resource and shader packs, config, options) and start new ones from it; share a template as a `.mrpack` file or add one you received
 - **Microsoft login** in the browser, with a device code as fallback (see [status](#status) below); offline player names only in development builds or next to a signed-in Microsoft account
 - **Skins & capes** — keep a local skin library (PNG, classic or slim) with pixel-art previews, put a skin on and pick your cape through the official Minecraft API (Microsoft accounts)
-- **Quality-of-life** — crash detection with per-instance logs, resumable downloads, automatic RAM detection, one-click log sharing via mclo.gs (access tokens, your user name in paths and e-mail addresses removed first) and a debug info without personal data for bug reports
+- **Quality-of-life** — crash detection with per-instance logs, the logs of the last 10 sessions per instance, likely culprit mods named from the crash report, resumable downloads, automatic RAM detection, Java installations found on your computer, a storage overview (space per instance, shared files, clear the unused mod cache), one-click log sharing via mclo.gs (access tokens, your user name in paths and e-mail addresses removed first) and a debug info without personal data for bug reports
 - **Auto-updates** — signed updates from GitHub Releases, installed only when you say so and never while Minecraft or a task (download, import, export, world backup) is running; a second launch just focuses the open window
 - **Seasonal branding** 🎃 — mascot, accent colors and window/taskbar icon switch automatically with the calendar (spring, summer, Halloween, winter)
-- **German & English UI** — the interface follows your system language or your choice in Settings (backend errors stay German for now)
+- **German & English UI** — the interface follows your system language or your choice in Settings; backend errors are translated too, only a few remaining messages stay German
+- **Accessibility** — keyboard shortcuts (Ctrl/Cmd+1…4 switch area, Ctrl/Cmd+, settings, Ctrl/Cmd+N new instance, Ctrl/Cmd+Enter play, Ctrl/Cmd+F or `/` search, `?` lists them all), a skip link, text size (normal, large, larger), motion off, and a Windows high-contrast mode
 - **Pixelkino UI** — a custom pixel design system with a canvas scene engine, pixel icons and a frameless window. See [the design spec](docs/design/PIXELKINO.md)
 
 <p align="center">
@@ -52,7 +55,7 @@
 
 ## Status
 
-Pumpkin Launcher is in beta (v0.1.x). Install, launch, content, worlds, skins, import, duplicate/export and auto-update are in place and tested on Windows. Linux (AppImage, `.deb`) and macOS (universal `.dmg`) are built by the release workflow and their backend is tested in CI on every change, but they have not been tried on real machines yet, so expect rough edges there.
+Pumpkin Launcher is in beta (v0.1.x). Install, launch, content, worlds, skins, import, duplicate/export and auto-update are in place and tested on Windows. Linux (AppImage, `.deb`) and macOS (universal `.dmg`) are built by the release workflow and their backend is tested in CI on every change, but they have not been tried on real machines yet, so expect rough edges there. Modpack updates, version switching and a few other recent additions (the `.mrpack` file association, Java detection, the window actions of the "When the game starts" setting) are covered by backend tests or the browser mock but have not yet been verified in a real app build.
 
 > **Microsoft login:** sign-in, Xbox Live and XSTS work end-to-end, but Microsoft must approve each launcher's Azure app before `minecraftservices.com` accepts it. Pumpkin Launcher's own client ID is registered and approval is requested; until it comes through, the final Minecraft step returns 403 and the launcher says so. Forks register their own Azure app and change `DEFAULT_CLIENT_ID` in `src-tauri/src/services/auth/mod.rs`; how to register and approve a client ID is documented in [`docs/ACCOUNT-SETUP.md`](docs/ACCOUNT-SETUP.md).
 
@@ -96,8 +99,24 @@ cd src-tauri && cargo check       # backend
 cd src-tauri && cargo test        # backend tests
 pnpm tauri build                  # installers for your OS (needs the updater signing key, see docs/RELEASING.md)
 pnpm check:branding               # seasonal calendar & branding assets
-pnpm check:lib                    # frontend helpers (Modrinth, formatting, errors, routes)
+pnpm check:lib                    # frontend helpers (Modrinth, formatting, errors, routes, image hosts, server addresses, content list, library, names)
+pnpm check:website                # website links & assets
 ```
+
+## Security & verification
+
+Details and how to report a problem: [SECURITY.md](.github/SECURITY.md). The short version:
+
+- **Verify your download.** Every release lists `SHA256SUMS` next to the installers (`sha256sum -c SHA256SUMS`, on Windows `Get-FileHash <file>`), and the files carry a [build provenance attestation](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations): `gh attestation verify <file> --repo jonax1337/pumpkin-launcher`.
+- **Updates are signed.** The updater installs only files whose [minisign](https://jedisct1.github.io/minisign/) signature matches the public key built into the app. Key ID `BB1151480C7B980A`, public key:
+  ```
+  RWQKmHsMSFERuyfnigkfxjS+ihR8oGrniQlrBMQeod7GB1sBtk9Lrqoz
+  ```
+  The same key sits in `plugins.updater.pubkey` of [`src-tauri/tauri.conf.json`](src-tauri/tauri.conf.json) (base64 of the minisign `.pub` file). To check an installer by hand, decode its `.sig` (`base64 -d file.sig > file.minisig`) and run `minisign -V -P <public key> -x file.minisig -m <file>`.
+- **Downloads and archives are restricted.** Minecraft, Java and loader files come only from vetted hosts over HTTPS (Mojang, the loader Maven repositories, Maven Central), including every redirect; modpack archives are checked for path tricks and zip bombs; descriptions load images only from trusted hosts unless you click the placeholder; the app's content security policy lets the web view talk to the backend only.
+- **Mods are not scanned.** The launcher checks hashes and sizes of what it downloads, but it does not check mods, modpacks or Technic packs for malware. Install content from authors you trust.
+- **Your access token is visible to local programs.** Minecraft receives the session token as the `--accessToken` command-line argument, so any program on your computer that can list processes can read it while the game runs. This is how every Minecraft launcher works. Refresh tokens stay in the system keychain (Windows Credential Manager, macOS Keychain, or a Secret Service such as GNOME Keyring or KWallet on Linux), never in plain files.
+- **What the launcher talks to** is listed in *Settings › About › Privacy*. There are no trackers and no telemetry.
 
 ## Project layout
 

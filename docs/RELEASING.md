@@ -6,15 +6,24 @@ Ein Release entsteht aus einem Git-Tag `v<version>`. Der Workflow `.github/workf
 
 Der Updater installiert nur Dateien, deren Signatur zum öffentlichen Schlüssel in `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`) passt. Der private Schlüssel liegt **nie** im Repo.
 
-1. Schlüssel erzeugen (bereits geschehen; nur bei Verlust oder Neuanfang):
+1. Schlüssel erzeugen (bereits geschehen; nur bei Verlust oder Neuanfang), **immer mit Passwort**; der Befehl fragt danach:
    ```bash
    pnpm tauri signer generate -w "$USERPROFILE/.tauri/pumpkin-launcher.key"
    ```
-   Die `.pub`-Datei daneben ist der öffentliche Schlüssel für `tauri.conf.json`.
-2. Im Repo unter **Settings → Secrets and variables → Actions** anlegen:
+   Die `.pub`-Datei daneben ist der öffentliche Schlüssel für `tauri.conf.json`. Ein Schlüssel ohne Passwort wäre bei einem Leck der Secrets sofort missbrauchbar. Schlüssel-ID und öffentlichen Schlüssel nennt das README (Abschnitt „Security & verification“); ändert sich der Schlüssel, dort mit anpassen.
+2. Im Repo unter **Settings → Environments** die Umgebung `release` anlegen, **Required reviewers** eintragen (mindestens dich selbst) und die Tags auf `v*` beschränken (*Deployment branches and tags*). Der Build-Job des Release-Workflows läuft in dieser Umgebung; jeder der drei Builds wartet auf eine Freigabe, bevor er den Schlüssel sieht.
+3. Dieselbe Umgebung unter **Environment secrets** füllen (nicht als Repository-Secret, sonst umgeht jeder Workflow die Freigabe):
    - `TAURI_SIGNING_PRIVATE_KEY` – Inhalt der Datei `pumpkin-launcher.key`
-   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` – das Passwort des Schlüssels. Ohne Passwort das Secret einfach nicht anlegen (GitHub erlaubt keine leeren Secrets).
-3. Schlüssel zusätzlich sicher aufbewahren (Passwortmanager). **Geht er verloren, erreichen bestehende Installationen keine Updates mehr**: ein neuer Schlüssel passt nicht zu deren eingebautem öffentlichem Schlüssel, Tester müssten den Installer von Hand neu laden.
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` – das Passwort des Schlüssels
+4. Schlüssel zusätzlich sicher aufbewahren (Passwortmanager, Offline-Kopie). **Geht er verloren, erreichen bestehende Installationen keine Updates mehr**: ein neuer Schlüssel passt nicht zu deren eingebautem öffentlichem Schlüssel, Tester müssten den Installer von Hand neu laden.
+
+### Zweitschlüssel
+
+Wird der Schlüssel gestohlen, kann der Angreifer signierte Updates ausliefern; ersetzen lässt er sich nur mit einem Release, das ein Zweitschlüssel signiert. Deshalb vorsorgen:
+
+- Einen **zweiten Schlüssel** mit eigenem Passwort erzeugen und **nur offline** ablegen (nicht auf GitHub, nicht im Passwortmanager neben dem ersten). Den öffentlichen Teil heute schon notieren (README oder diese Datei), damit er im Ernstfall nicht erst gesucht werden muss.
+- Tauri prüft Updates gegen genau einen öffentlichen Schlüssel. Der Wechsel auf den Zweitschlüssel gelingt darum nur, solange der alte Schlüssel noch ein Update signieren kann, das den neuen öffentlichen Schlüssel einbaut. Ist der alte Schlüssel kompromittiert, bleibt nur der Installer von Hand: Release mit dem Zweitschlüssel bauen, im README und in einem Security Advisory zum Neuinstallieren aufrufen.
+- Nach einem Wechsel: neuen öffentlichen Schlüssel in `tauri.conf.json` und im README eintragen, den alten Schlüssel aus den Secrets löschen.
 
 ## Ablauf
 
@@ -35,8 +44,9 @@ Der Updater installiert nur Dateien, deren Signatur zum öffentlichen Schlüssel
    - macOS: `…_<version>_universal.dmg` und für den Updater `….app.tar.gz`
    - zu jeder Updater-Datei die Signatur `.sig`
    - `latest.json` (Version, Versionshinweise, je Plattform Download-Adresse und Signatur für den Updater)
+   - `SHA256SUMS` (Prüfsummen aller Dateien; erst nach den Builds erzeugt) und zu jeder Datei ein [Herkunftsnachweis](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations) (`gh attestation verify <datei> --repo jonax1337/pumpkin-launcher`)
 
-   Der letzte Job prüft, dass `latest.json` Windows, Linux und beide Mac-Architekturen enthält. Die Builds schreiben die Datei nacheinander fort; enden zwei im selben Moment, kann ein Eintrag verloren gehen. Dann den Build der fehlenden Plattform erneut starten.
+   Die drei Build-Jobs laufen in der Umgebung `release` und warten auf die Freigabe der Prüfer (Benachrichtigung von GitHub). Danach prüft ein Job, dass `latest.json` Windows, Linux und beide Mac-Architekturen enthält; erst dann entstehen Prüfsummen und Herkunftsnachweis. Die Builds schreiben die Datei nacheinander fort; enden zwei im selben Moment, kann ein Eintrag verloren gehen. Dann den Build der fehlenden Plattform erneut starten.
 4. **Entwurf prüfen und veröffentlichen.** Installer einmal ausprobieren, dann *Publish release*. Den Release-Text kannst du auf GitHub noch ändern; die Versionshinweise im Launcher stammen aber aus `latest.json` und bleiben beim Stand des Tags.
 
 Fehlgeschlagene Builds lassen sich über *Re-run failed jobs* wiederholen; die Dateien landen im selben Entwurf. *Re-run all jobs* legt dagegen einen zweiten Entwurf an (den überzähligen dann löschen). Muss der Code noch geändert werden: Entwurf und Tag löschen, korrigieren, neu taggen.
