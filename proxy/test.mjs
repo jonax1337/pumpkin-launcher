@@ -30,7 +30,7 @@ await check("Download-URL", await run("GET", "/v1/mods/1/files/2/download-url"),
 await check("DELETE", await run("DELETE", "/v1/mods/1"), 404);
 await check("Wurzel", await run("GET", "/"), 404);
 const n = calls.length; await run("GET", "/v1/mods/238222"); await check("Kein Zwischenspeicher (neuer Abruf)", calls.length, n + 1);
-await check("Key, User-Agent und Timeout bei jedem Abruf", calls.every((c) => c.headers["x-api-key"] === "TESTKEY" && c.headers["user-agent"].includes("github.com") && c.signal), true);
+await check("Key, User-Agent und Timeout bei jedem Abruf", calls.every((c) => c.headers["x-api-key"] === "TESTKEY" && c.headers["user-agent"].startsWith("pumpkin-launcher-proxy") && c.signal), true);
 const limited = { ...env, LIMITER: { async limit() { return { success: false }; } } };
 const throttled = await worker.fetch(new Request("https://p.example/v1/mods/1"), limited);
 await check("Limit", throttled.status, 429);

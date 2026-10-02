@@ -62,11 +62,14 @@ function gateUntrustedImages(root: Document, label: (host: string) => string) {
 
 /** Das Bild hinter einem Platzhalter laden, nachdem der Spieler darauf geklickt hat. */
 function loadGatedImage(gate: Element) {
+  // Die Adresse steht als Attribut im DOM: nur eine https-Adresse wird geladen, sonst bleibt der Platzhalter.
+  const url = parseHttpsUrl(gate.getAttribute(GATE_ATTR) ?? "");
+  if (!url) return;
   const img = document.createElement("img");
   img.referrerPolicy = "no-referrer";
   img.loading = "lazy";
   img.alt = gate.getAttribute(GATE_ALT_ATTR) ?? "";
-  img.src = gate.getAttribute(GATE_ATTR) ?? "";
+  img.src = url.href;
   gate.replaceWith(img);
 }
 
