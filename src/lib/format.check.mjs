@@ -1,7 +1,7 @@
 // Run: node src/lib/format.check.mjs (Node with TypeScript stripping).
 import assert from 'node:assert/strict';
 import {
-  autoMemoryMb, dayLabel, dayStart, formatCount, formatDate, formatPlaytime, formatSize, maxMemoryMb, memoryTooHigh,
+  autoMemoryMb, dayLabel, dayStart, formatCount, formatDate, formatPlaytime, formatSize, maxMemoryMb, memoryAdvice, memoryTooHigh,
 } from './format.ts';
 import { setCurrentLanguage } from '../i18n/core.ts';
 
@@ -13,6 +13,12 @@ assert.equal(maxMemoryMb(16384), 14336);
 assert.equal(maxMemoryMb(16000), 13824, 'abgerundet auf 512');
 assert.equal(maxMemoryMb(3000), 2048);
 assert.ok(memoryTooHigh(12800, 16384) && !memoryTooHigh(12288, 16384));
+assert.equal(memoryAdvice(12, 300), 'manyMods', 'große Packs: Empfehlung, kein „bringt nichts“');
+assert.equal(memoryAdvice(4, 151), 'manyMods');
+assert.equal(memoryAdvice(12, 10), 'fewMods', 'wenige Mods und viel RAM');
+assert.equal(memoryAdvice(8, 10), null, 'bis 8 GB ist es in Ordnung');
+assert.equal(memoryAdvice(12, 80), null, 'mittlere Packs: kein Urteil');
+assert.equal(memoryAdvice(12, undefined), null, 'Standard für alle: kein Urteil');
 assert.equal(formatPlaytime(59), 'unter 1 Min.');
 assert.equal(formatPlaytime(45 * 60 + 59), '45 Min.', 'Minuten abgerundet');
 assert.equal(formatPlaytime(3.5 * 3600), '3,5 Std.');

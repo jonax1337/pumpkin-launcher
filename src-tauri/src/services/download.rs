@@ -10,12 +10,36 @@ use serde::de::DeserializeOwned;
 use sha1::{Digest, Sha1};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
+use super::limits::{FILE_LIMIT, META_JSON_LIMIT};
 use super::progress::CountFn;
+use super::transport::{base_client_builder, follow_redirects, read_capped, DOWNLOAD_TOO_BIG};
+use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::services::blocking;
 use crate::services::mojang::Download;
 
 const PARALLEL: usize = 16;
+/// Anfragen je Download einschließlich der ersten, also höchstens vier Weiterleitungen.
+const MAX_REQUESTS: usize = 5;
+/// Hosts, von denen Installationen (Minecraft, Java, Mod-Loader) laden: Mojang, die Loader-Maven und Maven Central.
+/// Adressen aus fremden JSON-Dateien (Libraries, Runtime-Manifeste) und Weiterleitungen müssen hier liegen.
+const TRUSTED_HOSTS: [&str; 15] = [
+    "piston-meta.mojang.com",
+    "piston-data.mojang.com",
+    "launchermeta.mojang.com",
+    "launcher.mojang.com",
+    "libraries.minecraft.net",
+    "resources.download.minecraft.net",
+    "meta.fabricmc.net",
+    "maven.fabricmc.net",
+    "meta.quiltmc.org",
+    "maven.quiltmc.org",
+    "maven.minecraftforge.net",
+    "files.minecraftforge.net",
+    "maven.neoforged.net",
+    "repo1.maven.org",
+    "repo.maven.apache.org",
+];
 /// Versuche je Adresse; die Pause davor wächst mit jedem Fehlversuch (`retry_pause`).
 pub(crate) const ATTEMPTS: u32 = 3;
 /// Puffer beim Hashen vorhandener Dateien.
@@ -48,12 +72,39 @@ pub fn dedup_by_path(mut jobs: Vec<Job>) -> Vec<Job> {
     jobs
 }
 
+/// Client für Mojang, Microsoft und die Loader; Weiterleitungen folgen nur die Downloads dieses Moduls, Hop für Hop.
 pub fn http_client() -> AppResult<reqwest::Client> {
-    Ok(reqwest::Client::builder()
-        .user_agent(concat!("pumpkin-launcher/", env!("CARGO_PKG_VERSION")))
-        .connect_timeout(Duration::from_secs(15))
-        .timeout(Duration::from_secs(300))
-        .build()?)
+    Ok(base_client_builder().timeout(Duration::from_secs(300)).build()?)
+}
+
+/// Nur `https://<vertrauter Host>/…` auf Port 443, ohne Zugangsdaten.
+fn ensure_trusted(url: &reqwest::Url) -> AppResult<()> {
+    let trusted = url.scheme() == "https"
+        && url.port_or_known_default() == Some(443)
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.host_str().is_some_and(|host| TRUSTED_HOSTS.contains(&host));
+    if !trusted {
+        let host = url.host_str().unwrap_or_default();
+        return Err(AppError::Refused(coded!("errors.game.downloadHostNotAllowed", host = host).into()));
+    }
+    Ok(())
+}
+
+/// GET auf eine vertraute Adresse, optional ab Byte `from`; jede Weiterleitung muss ebenfalls auf einen vertrauten Host zeigen.
+async fn get_trusted(client: &reqwest::Client, url: &str, from: u64) -> AppResult<reqwest::Response> {
+    follow_redirects(url, MAX_REQUESTS, |url| async move {
+        ensure_trusted(&url)?;
+        let request = client.get(url);
+        Ok(if from > 0 { request.header(RANGE, format!("bytes={from}-")) } else { request }.send().await?)
+    })
+    .await
+}
+
+/// Antwort einer vertrauten Adresse im Speicher, höchstens `limit` Bytes.
+pub(crate) async fn get_capped(client: &reqwest::Client, url: &str, limit: u64) -> AppResult<Vec<u8>> {
+    let mut response = get_trusted(client, url, 0).await?.error_for_status()?;
+    read_capped(&mut response, limit, DOWNLOAD_TOO_BIG).await
 }
 
 pub fn sha1_hex(bytes: &[u8]) -> String {
@@ -70,7 +121,7 @@ fn hex(digest: &[u8]) -> String {
 }
 
 pub async fn get_json<T: DeserializeOwned>(client: &reqwest::Client, url: &str) -> AppResult<T> {
-    Ok(client.get(url).send().await?.error_for_status()?.json().await?)
+    Ok(serde_json::from_slice(&get_capped(client, url, META_JSON_LIMIT).await?)?)
 }
 
 /// Liest eine lokale JSON-Datei (z. B. eine vorher geladene Versions-JSON).
@@ -172,34 +223,45 @@ async fn download_once(client: &reqwest::Client, job: &Job) -> AppResult<()> {
 /// Lädt in die Teildatei, wo möglich ab ihrem Ende, und übernimmt sie nach der Prüfung.
 async fn transfer(client: &reqwest::Client, job: &Job, part: &Path) -> AppResult<()> {
     let part_len = tokio::fs::metadata(part).await.map(|m| m.len()).unwrap_or(0);
-    let mut request = client.get(&job.url);
-    if part_len > 0 {
-        request = request.header(RANGE, format!("bytes={part_len}-"));
-    }
-    let mut response = request.send().await?;
+    let mut response = get_trusted(client, &job.url, part_len).await?;
     if response.status() == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
         tokio::fs::remove_file(part).await?;
-        return Err(AppError::Download(format!("{}: Teildatei passt nicht, lade neu", job.url)));
+        return Err(AppError::Download(coded!("errors.game.partialFileMismatch", url = job.url).into()));
     }
     response = response.error_for_status()?;
     let range = response.headers().get(CONTENT_RANGE).and_then(|v| v.to_str().ok());
     let Some(offset) = resume_offset(response.status().as_u16(), range, part_len) else {
         // Nächster Versuch ohne Range.
         super::none_if_missing(tokio::fs::remove_file(part).await)?;
-        return Err(AppError::Download(format!("{}: Server setzt an falscher Stelle fort, lade neu", job.url)));
+        return Err(AppError::Download(coded!("errors.game.resumeWrongPosition", url = job.url).into()));
     };
+    if offset + response.content_length().unwrap_or(0) > FILE_LIMIT {
+        return Err(refuse_too_big(part));
+    }
     let (mut file, mut hash) = if offset > 0 {
         hash_existing_part(part).await?
     } else {
         (tokio::fs::File::create(part).await?, Sha1::new())
     };
+    let mut size = offset;
     while let Some(chunk) = response.chunk().await? {
+        size += chunk.len() as u64;
+        if size > FILE_LIMIT {
+            drop(file);
+            return Err(refuse_too_big(part));
+        }
         hash.update(&chunk);
         file.write_all(&chunk).await?;
     }
     file.flush().await?;
     drop(file);
     verify_and_commit(job, part, hash).await
+}
+
+/// Eine Datei über [`FILE_LIMIT`] ist endgültig abgelehnt: ein neuer Versuch brächte dieselbe Datei, die Teildatei fliegt raus.
+fn refuse_too_big(part: &Path) -> AppError {
+    super::remove_logged(part);
+    AppError::Refused(DOWNLOAD_TOO_BIG.into())
 }
 
 /// Öffnet die Teildatei zum Anhängen; der Hash enthält schon ihren bisherigen Inhalt.
@@ -223,7 +285,7 @@ async fn verify_and_commit(job: &Job, part: &Path, hash: Sha1) -> AppResult<()> 
         let actual = hex(&hash.finalize());
         if !actual.eq_ignore_ascii_case(expected) {
             tokio::fs::remove_file(part).await?;
-            return Err(AppError::Download(format!("{}: SHA-1 {actual} statt {expected}", job.url)));
+            return Err(AppError::Download(coded!("errors.game.sha1Mismatch", url = job.url, actual = actual, expected = expected).into()));
         }
     }
     tokio::fs::rename(part, &job.path).await?;
@@ -291,6 +353,40 @@ mod tests {
         assert_eq!(resume_offset(206, Some("bytes 0-199/200"), 100), None);
         assert_eq!(resume_offset(206, Some("kaputt"), 100), None);
         assert_eq!(resume_offset(206, None, 100), None);
+    }
+
+    #[test]
+    fn only_vetted_https_hosts_are_trusted() {
+        for ok in [
+            "https://piston-data.mojang.com/v1/objects/ab/client.jar",
+            "https://libraries.minecraft.net/a/b.jar",
+            "https://maven.fabricmc.net/net/fabricmc/x.jar",
+            "https://maven.neoforged.net/releases/a.jar",
+            "https://repo1.maven.org/maven2/a.jar",
+        ] {
+            assert!(ensure_trusted(&reqwest::Url::parse(ok).unwrap()).is_ok(), "{ok}");
+        }
+        for bad in [
+            "http://libraries.minecraft.net/a.jar",
+            "https://libraries.minecraft.net.evil.example/a.jar",
+            "https://evil.example/libraries.minecraft.net/a.jar",
+            "https://libraries.minecraft.net@evil.example/a.jar",
+            "https://user:pw@libraries.minecraft.net/a.jar",
+            "https://libraries.minecraft.net:8443/a.jar",
+            "https://127.0.0.1/a.jar",
+            "https://sub.maven.fabricmc.net/a.jar",
+        ] {
+            assert!(ensure_trusted(&reqwest::Url::parse(bad).unwrap()).is_err(), "{bad}");
+        }
+    }
+
+    #[tokio::test]
+    async fn untrusted_downloads_are_refused_before_any_request() {
+        let client = http_client().unwrap();
+        let err = get_capped(&client, "https://evil.example/a.jar", 1).await.unwrap_err();
+        assert!(matches!(err, AppError::Refused(_)));
+        assert!(!err.is_retryable());
+        assert!(get_json::<serde_json::Value>(&client, "http://piston-meta.mojang.com/x.json").await.is_err());
     }
 
     #[test]

@@ -8,7 +8,7 @@
  */
 import { hash, rng } from "./random";
 import {
-  abgr, bands, blockCloud, createBuf, disc, oak, pine, pineAt, rect, ridge, ring, scatter, setPixel, spike, streak, type Buf,
+  abgr, bands, createBuf, disc, oak, pine, pineAt, puffCloud, rect, ridge, ring, scatter, setPixel, spike, streak, type Buf,
 } from "./raster";
 import type { Biome, SunAnchor } from "./sceneConfig";
 
@@ -390,8 +390,8 @@ function buildPlains(ctx: SceneCtx) {
   rect(base, sunX, sunY, sunSize, sunSize, abgr("#FFFBEA"));
   if (!tiny) {
     driftClouds(ctx, 5, clouds + 1, (cl, i) => {
-      const x = randInt(W), y = Math.round(horizon * (0.16 + cloudY + i * 0.15)), width = scaled(16 + rand() * 18);
-      blockCloud(cl, x, y, width, Math.max(2, scaled(3)), "#F4F8FF", "#C9D8EA");
+      const x = randInt(W), baseY = Math.round(horizon * (0.2 + cloudY + i * 0.15)), width = scaled(16 + rand() * 18);
+      puffCloud(cl, x, baseY, width, Math.max(3, scaled(5)), "#F4F8FF", "#C9D8EA");
     });
   }
   addLayer(1, (b) => {

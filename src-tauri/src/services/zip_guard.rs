@@ -8,7 +8,10 @@ use super::{
     limits::{FILE_LIMIT, MIB},
     transport::read_capped_io,
 };
-use crate::error::{AppError, AppResult};
+use crate::{
+    coded,
+    error::{AppError, AppResult, Coded},
+};
 
 /// Ein Eintrag darf höchstens so viel größer sein wie das 200-Fache seiner komprimierten Größe (plus 1 MiB Spielraum
 /// für winzige Einträge); darüber ist es eine ZIP-Bombe.
@@ -16,7 +19,7 @@ const MAX_COMPRESSION_RATIO: u64 = 200;
 
 pub(crate) fn check_entry_count(count: usize, max: usize) -> AppResult<()> {
     if count > max {
-        return Err(AppError::invalid("Zu viele ZIP-Einträge"));
+        return Err(AppError::invalid(coded!("errors.providers.tooManyZipEntries")));
     }
     Ok(())
 }
@@ -30,7 +33,7 @@ pub(crate) fn reject_special(entry: &ZipFile<'_, impl Read + ?Sized>) -> AppResu
     const SOCKET: u32 = 0o140000;
     const FILE_TYPE_MASK: u32 = 0o170000;
     if entry.unix_mode().is_some_and(|mode| matches!(mode & FILE_TYPE_MASK, SYMLINK | BLOCK_DEVICE | CHAR_DEVICE | FIFO | SOCKET)) {
-        return Err(AppError::invalid("ZIP-Symlink/Spezialdatei"));
+        return Err(AppError::invalid(coded!("errors.providers.zipSpecialFile")));
     }
     Ok(())
 }
@@ -52,23 +55,23 @@ impl ExpandedSize {
 
     /// Zählt einen ZIP-Eintrag: Gesamtgröße, Einzelgröße ([`FILE_LIMIT`]) und Kompressionsverhältnis.
     pub(crate) fn add_entry(&mut self, entry: &ZipFile<'_, impl Read + ?Sized>) -> AppResult<()> {
-        self.add(entry.size(), "ZIP-Größenüberlauf")?;
+        self.add(entry.size(), coded!("errors.providers.zipSizeOverflow"))?;
         if self.used > self.limit || entry.size() > FILE_LIMIT || exceeds_ratio(entry) {
-            return Err(AppError::invalid("ZIP-Limit überschritten"));
+            return Err(AppError::invalid(coded!("errors.providers.zipLimitExceeded")));
         }
         Ok(())
     }
 
     /// Zählt eine Datei, die das Pack beschreibt und die erst geladen wird: Gesamtgröße und Einzelgröße.
     pub(crate) fn add_file(&mut self, size: u64) -> AppResult<()> {
-        self.add(size, "Pack-Größenüberlauf")?;
+        self.add(size, coded!("errors.providers.packSizeOverflow"))?;
         if self.used > self.limit || size > FILE_LIMIT {
-            return Err(AppError::invalid("Pack-Dateilimit überschritten"));
+            return Err(AppError::invalid(coded!("errors.providers.packFileLimitExceeded")));
         }
         Ok(())
     }
 
-    fn add(&mut self, size: u64, overflow: &str) -> AppResult<()> {
+    fn add(&mut self, size: u64, overflow: Coded) -> AppResult<()> {
         self.used = self.used.checked_add(size).ok_or_else(|| AppError::invalid(overflow))?;
         Ok(())
     }
@@ -76,10 +79,9 @@ impl ExpandedSize {
 
 /// Liest den Inhalt eines Eintrags, höchstens `limit` Bytes; er muss genau so lang sein, wie das Archiv angibt.
 pub(crate) fn read_entry(entry: &mut ZipFile<'_, impl Read + ?Sized>, limit: u64) -> AppResult<Vec<u8>> {
-    const INVALID_SIZE: &str = "ZIP-Dateigröße ungültig";
-    let data = read_capped_io(&mut *entry, limit, INVALID_SIZE)?;
+    let data = read_capped_io(&mut *entry, limit, &coded!("errors.providers.zipSizeInvalid").to_string())?;
     if data.len() as u64 != entry.size() {
-        return Err(AppError::invalid(INVALID_SIZE));
+        return Err(AppError::invalid(coded!("errors.providers.zipSizeInvalid")));
     }
     Ok(data)
 }
@@ -94,7 +96,7 @@ pub(crate) fn ensure_no_file_dir_conflict(files: &HashSet<String>) -> AppResult<
 pub(crate) fn ensure_no_file_as_parent(paths: &HashSet<String>, files: &HashSet<String>) -> AppResult<()> {
     for path in paths {
         if path.match_indices('/').any(|(at, _)| files.contains(&path[..at])) {
-            return Err(AppError::invalid("Datei/Verzeichnis-Konflikt"));
+            return Err(AppError::invalid(coded!("errors.providers.fileDirConflict")));
         }
     }
     Ok(())

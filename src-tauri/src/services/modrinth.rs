@@ -6,6 +6,7 @@ use super::{
     transport::{base_client_builder, read_capped, Digests, DOWNLOAD_TOO_BIG},
 };
 use crate::{
+    coded,
     error::{AppError, AppResult},
     models::{Instance, ModKind, ModSource},
 };
@@ -52,7 +53,7 @@ pub struct Hit {
     #[serde(default)]
     pub categories: Vec<String>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Project {
     pub id: String,
     pub slug: String,
@@ -66,6 +67,23 @@ pub struct Project {
     /// Projektseite bei Anbietern ohne eigene Installation (Technic, CurseForge); Modrinth sendet sie nicht.
     #[serde(default)]
     pub web_url: Option<String>,
+    #[serde(default)]
+    pub downloads: u64,
+    #[serde(default)]
+    pub categories: Vec<String>,
+    /// Bilder der Projektseite; nur Modrinth liefert sie.
+    #[serde(default)]
+    pub gallery: Vec<GalleryImage>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GalleryImage {
+    pub url: String,
+    #[serde(default)]
+    pub featured: bool,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Version {
@@ -81,6 +99,9 @@ pub struct Version {
     /// ISO-8601 (UTC, gleiches Format bei Modrinth), daher als Text vergleichbar.
     #[serde(default)]
     pub date_published: String,
+    /// Änderungsprotokoll (Markdown); Anbieter ohne Protokoll lassen es leer.
+    #[serde(default)]
+    pub changelog: Option<String>,
     pub files: Vec<File>,
     pub dependencies: Vec<Dependency>,
 }
@@ -120,14 +141,14 @@ pub fn identifier(s: &str) -> AppResult<()> {
         || s == "."
         || s == ".."
     {
-        return Err(AppError::invalid("Ungültige ID/Version"));
+        return Err(AppError::invalid(coded!("errors.modrinth.invalidIdentifier")));
     }
     Ok(())
 }
 pub async fn bytes(request: reqwest::RequestBuilder, limit: u64) -> AppResult<Vec<u8>> {
     let mut response = request.send().await?.error_for_status()?;
     if !response.status().is_success() {
-        return Err(AppError::invalid("Redirects werden nicht akzeptiert"));
+        return Err(AppError::invalid(coded!("errors.modrinth.redirectRejected")));
     }
     read_capped(&mut response, limit, DOWNLOAD_TOO_BIG).await
 }
@@ -136,8 +157,7 @@ async fn api<T: DeserializeOwned>(
     path: &str,
     query: &[(String, String)],
 ) -> AppResult<T> {
-    let mut url =
-        reqwest::Url::parse(&format!("{API}/{path}")).map_err(|e| AppError::invalid(e.to_string()))?;
+    let mut url = parse_url(&format!("{API}/{path}"))?;
     url.query_pairs_mut().extend_pairs(query);
     Ok(serde_json::from_slice(&bytes(client.get(url), API_JSON_LIMIT).await?)?)
 }
@@ -146,8 +166,8 @@ fn loaders_to_query(loader: &str) -> Vec<&str> {
     if loader == "quilt" { vec!["quilt", "fabric"] } else { vec![loader] }
 }
 
-pub async fn search(client: &reqwest::Client, request: &SearchQuery) -> AppResult<SearchResponse> {
-    request.ensure_within(QUERY_MAX, MAX_SEARCH_OFFSET)?;
+/// Die Filter der Suche als Modrinth-Facetten: zwischen den Gruppen UND, innerhalb einer ODER.
+fn search_facets(request: &SearchQuery) -> Vec<Vec<String>> {
     let mut facets = vec![vec![format!("project_type:{}", request.project_type.name())]];
     if let Some(mc) = &request.mc {
         facets.push(vec![format!("versions:{mc}")]);
@@ -155,6 +175,15 @@ pub async fn search(client: &reqwest::Client, request: &SearchQuery) -> AppResul
     if let Some(loader) = &request.loader {
         facets.push(loaders_to_query(loader).iter().map(|l| format!("categories:{l}")).collect());
     }
+    if let Some(category) = &request.category {
+        facets.push(vec![format!("categories:{category}")]);
+    }
+    facets
+}
+
+pub async fn search(client: &reqwest::Client, request: &SearchQuery) -> AppResult<SearchResponse> {
+    request.ensure_within(QUERY_MAX, MAX_SEARCH_OFFSET)?;
+    let facets = search_facets(request);
     api(
         client,
         "search",
@@ -171,7 +200,7 @@ pub async fn search(client: &reqwest::Client, request: &SearchQuery) -> AppResul
 /// Mehrere Projekte in einem Aufruf (Icons und Namen für die Inhaltsliste einer Instanz).
 pub async fn projects(client: &reqwest::Client, ids: &[String]) -> AppResult<Vec<Project>> {
     if ids.len() > MAX_PROJECT_IDS {
-        return Err(AppError::invalid("Zu viele Projekte"));
+        return Err(AppError::invalid(coded!("errors.modrinth.tooManyProjects")));
     }
     ids.iter().try_for_each(|id| identifier(id))?;
     if ids.is_empty() {
@@ -187,9 +216,20 @@ pub async fn version(client: &reqwest::Client, id: &str) -> AppResult<Version> {
     identifier(id)?;
     let v: Version = api(client, &format!("version/{id}"), &[]).await?;
     if v.id != id {
-        return Err(AppError::invalid("Versions-ID stimmt nicht überein"));
+        return Err(AppError::invalid(coded!("errors.modrinth.versionIdMismatch")));
     }
     Ok(v)
+}
+/// Änderungsprotokoll einer Version (Markdown); `None`, wenn die Autoren keins geschrieben haben.
+pub async fn changelog(client: &reqwest::Client, id: &str) -> AppResult<Option<String>> {
+    #[derive(Deserialize)]
+    struct Notes {
+        #[serde(default)]
+        changelog: Option<String>,
+    }
+    identifier(id)?;
+    let notes: Notes = api(client, &format!("version/{id}"), &[]).await?;
+    Ok(notes.changelog.filter(|text| !text.trim().is_empty()))
 }
 pub async fn versions(
     client: &reqwest::Client,
@@ -216,7 +256,7 @@ pub async fn versions_by_ids(client: &reqwest::Client, ids: &[String]) -> AppRes
         chunk.iter().try_for_each(|id| identifier(id))?;
         let got: Vec<Version> = api(client, "versions", &[("ids".into(), serde_json::to_string(chunk)?)]).await?;
         if got.len() != chunk.len() || !got.iter().all(|v| chunk.contains(&v.id)) {
-            return Err(AppError::invalid("Versionen stimmen nicht überein"));
+            return Err(AppError::invalid(coded!("errors.modrinth.versionsMismatch")));
         }
         out.extend(got);
     }
@@ -233,8 +273,7 @@ pub async fn latest_by_hash(
     if hashes.is_empty() {
         return Ok(HashMap::new());
     }
-    let url = reqwest::Url::parse(&format!("{API}/version_files/update"))
-        .map_err(|e| AppError::invalid(e.to_string()))?;
+    let url = parse_url(&format!("{API}/version_files/update"))?;
     let body = serde_json::json!({
         "hashes": hashes, "algorithm": "sha1", "loaders": loaders, "game_versions": [mc],
         // Nur stabile Versionen anbieten; Betas bleiben eine bewusste Wahl über „Andere Version“.
@@ -250,8 +289,7 @@ pub async fn versions_by_hash(
     if hashes.is_empty() {
         return Ok(HashMap::new());
     }
-    let url = reqwest::Url::parse(&format!("{API}/version_files"))
-        .map_err(|e| AppError::invalid(e.to_string()))?;
+    let url = parse_url(&format!("{API}/version_files"))?;
     let body = serde_json::json!({ "hashes": hashes, "algorithm": "sha1" });
     let found: HashMap<String, Version> =
         serde_json::from_slice(&bytes(client.post(url).json(&body), API_JSON_LIMIT).await?)?;
@@ -265,8 +303,12 @@ pub async fn versions_by_hash(
         .map(|(sha1, v)| (sha1.to_ascii_lowercase(), v))
         .collect())
 }
+fn parse_url(s: &str) -> AppResult<reqwest::Url> {
+    reqwest::Url::parse(s)
+        .map_err(|e| AppError::invalid(coded!("errors.modrinth.invalidUrl").with_details(e.to_string())))
+}
 pub fn download_url(s: &str) -> AppResult<reqwest::Url> {
-    let url = reqwest::Url::parse(s).map_err(|e| AppError::invalid(e.to_string()))?;
+    let url = parse_url(s)?;
     if url.scheme() != "https"
         || url.host_str() != Some("cdn.modrinth.com")
         || url.port_or_known_default() != Some(443)
@@ -274,29 +316,27 @@ pub fn download_url(s: &str) -> AppResult<reqwest::Url> {
         || url.password().is_some()
         || url.fragment().is_some()
     {
-        return Err(AppError::invalid(
-            "Download-Origin nicht erlaubt (nur https://cdn.modrinth.com)",
-        ));
+        return Err(AppError::invalid(coded!("errors.modrinth.downloadOriginNotAllowed")));
     }
     Ok(url)
 }
 /// Modrinth nennt für jede Datei SHA-1 und SHA-512; beide müssen angegeben sein und stimmen.
 pub fn verify(data: &[u8], size: u64, hashes: &BTreeMap<String, String>) -> AppResult<()> {
     if data.len() as u64 != size {
-        return Err(AppError::invalid("Dateigröße stimmt nicht"));
+        return Err(AppError::invalid(coded!("errors.modrinth.fileSizeMismatch")));
     }
     let digests = Digests::of(data);
     for key in ["sha1", "sha512"] {
         let hash = hashes
             .get(key)
-            .ok_or_else(|| AppError::invalid(format!("{key} fehlt")))?;
+            .ok_or_else(|| AppError::invalid(coded!("errors.modrinth.hashMissing", algorithm = key)))?;
         digests.check_one(key, hash)?;
     }
     Ok(())
 }
 pub async fn download(client: &reqwest::Client, file: &File) -> AppResult<Vec<u8>> {
     if file.size > FILE_LIMIT {
-        return Err(AppError::invalid("Datei zu groß"));
+        return Err(AppError::invalid(coded!("errors.modrinth.fileTooLarge")));
     }
     let data = bytes(client.get(download_url(&file.url)?), file.size).await?;
     verify(&data, file.size, &file.hashes)?;
@@ -314,16 +354,16 @@ pub fn primary(version: &Version, extension: &str) -> AppResult<File> {
         .find(|f| f.primary)
         .copied()
         .or_else(only)
-        .ok_or_else(|| AppError::invalid("Keine eindeutige primäre Datei"))?;
+        .ok_or_else(|| AppError::invalid(coded!("errors.modrinth.noPrimaryFile")))?;
     safe_path(&selected.filename)?;
     if selected.filename.contains('/') {
-        return Err(AppError::invalid("Dateiname enthält Verzeichnis"));
+        return Err(AppError::invalid(coded!("errors.modrinth.fileNameHasDirectory")));
     }
     Ok(selected.clone())
 }
 pub fn compatible(v: &Version, instance: &Instance) -> AppResult<()> {
     if !v.game_versions.contains(&instance.minecraft_version) || !instance.loader.runs(&v.loaders) {
-        return Err(AppError::invalid(format!("Inkompatible Mod-Version {}", v.id)));
+        return Err(AppError::invalid(coded!("errors.modrinth.incompatibleModVersion", version = v.id)));
     }
     Ok(())
 }
@@ -332,7 +372,7 @@ pub fn compatible(v: &Version, instance: &Instance) -> AppResult<()> {
 pub fn insert_if_consistent(selected: &mut HashMap<String, Version>, v: Version) -> AppResult<bool> {
     if let Some(old) = selected.get(&v.project_id) {
         if old.id != v.id {
-            return Err(AppError::invalid(format!("Zwei Mods brauchen unterschiedliche Versionen von {}", v.project_id)));
+            return Err(AppError::invalid(coded!("errors.modrinth.conflictingVersions", project = v.project_id)));
         }
         return Ok(false);
     }
@@ -373,7 +413,7 @@ async fn installed_versions(client: &reqwest::Client, instance: &Instance) -> Ap
     ids.sort();
     ids.dedup();
     if ids.len() > MAX_INSTALLED_MODS {
-        return Err(AppError::invalid("Zu viele installierte Mods"));
+        return Err(AppError::invalid(coded!("errors.modrinth.tooManyInstalledMods")));
     }
     versions_by_ids(client, &ids).await
 }
@@ -426,14 +466,14 @@ impl ResolveBudget {
     fn spend_rebuild(&mut self) -> AppResult<()> {
         self.rebuilds += 1;
         if self.rebuilds > MAX_REBUILDS {
-            return Err(AppError::invalid("Dependency rebuild limit erreicht"));
+            return Err(AppError::invalid(coded!("errors.modrinth.rebuildLimitReached")));
         }
         Ok(())
     }
 }
 
 fn limit_reached() -> AppError {
-    AppError::invalid("Dependency-Limit erreicht")
+    AppError::invalid(coded!("errors.modrinth.dependencyLimitReached"))
 }
 
 /// Zustand des Abhängigkeitsgraphen: exakt festgelegte und vorläufig gewählte Versionen, dazu die Versionen und
@@ -526,7 +566,7 @@ impl<'a> Resolver<'a> {
             .await?
             .into_iter()
             .find(|v| self.instance.loader.runs(&v.loaders))
-            .ok_or_else(|| AppError::invalid("Keine kompatible Dependency"))
+            .ok_or_else(|| AppError::invalid(coded!("errors.modrinth.noCompatibleDependency")))
     }
 
     async fn visit(&mut self, v: Version) -> AppResult<()> {
@@ -549,7 +589,7 @@ impl<'a> Resolver<'a> {
         self.budget.check_added_projects(self.graph.selected.keys().filter(|p| !self.installed.contains(*p)).count())?;
         let p = project(self.client, &v.project_id).await?;
         if p.id != v.project_id || p.project_type != "mod" || p.client_side == "unsupported" {
-            return Err(AppError::invalid("Projekt ist keine Client-Mod"));
+            return Err(AppError::invalid(coded!("errors.modrinth.notClientMod")));
         }
         Ok(())
     }
@@ -559,7 +599,7 @@ impl<'a> Resolver<'a> {
             self.budget.check_queue(self.graph.queue.len(), self.installed.len())?;
             let Some(child) = self.next_child(d).await? else { continue };
             if d.project_id.as_ref().is_some_and(|p| p != &child.project_id) {
-                return Err(AppError::invalid("Dependency-Projekt stimmt nicht"));
+                return Err(AppError::invalid(coded!("errors.modrinth.dependencyProjectMismatch")));
             }
             if d.version_id.is_some() && self.graph.pin_and_rebuild(&child)? {
                 return self.budget.spend_rebuild();
@@ -580,7 +620,7 @@ impl<'a> Resolver<'a> {
             return version(self.client, version_id).await.map(Some);
         }
         let Some(project_id) = &d.project_id else {
-            return Err(AppError::invalid("Required Datei-Dependency ohne Projekt/Version nicht unterstützt"));
+            return Err(AppError::invalid(coded!("errors.modrinth.fileDependencyUnsupported")));
         };
         if let Some(existing) = self.graph.chosen_of_project(project_id) {
             return Ok(Some(existing.clone()));
@@ -591,7 +631,7 @@ impl<'a> Resolver<'a> {
 
     fn finish(self) -> AppResult<Vec<Version>> {
         if has_incompatibility(&self.graph.selected) {
-            return Err(AppError::invalid("Inkompatible Dependencies"));
+            return Err(AppError::invalid(coded!("errors.modrinth.incompatibleDependencies")));
         }
         let mut result: Vec<_> = self.graph.selected.into_values().collect();
         result.sort_by(|a, b| a.project_id.cmp(&b.project_id));
@@ -612,9 +652,51 @@ mod tests {
             loaders: vec!["fabric".into()],
             version_type: default_release(),
             date_published: String::new(),
+            changelog: None,
             files: vec![],
             dependencies: vec![],
         }
+    }
+    #[test]
+    fn search_facets_combine_type_version_loader_and_category() {
+        use super::super::providers::ProjectType;
+        let mut search = SearchQuery::of("sodium", ProjectType::Mod);
+        assert_eq!(search_facets(&search), vec![vec!["project_type:mod"]]);
+        search.mc = Some("1.21.1".into());
+        search.loader = Some("quilt".into());
+        search.category = Some("optimization".into());
+        assert_eq!(
+            search_facets(&search),
+            vec![
+                vec!["project_type:mod"],
+                vec!["versions:1.21.1"],
+                vec!["categories:quilt", "categories:fabric"],
+                vec!["categories:optimization"],
+            ]
+        );
+    }
+    #[test]
+    fn project_and_version_keep_gallery_and_changelog_when_present() {
+        let project: Project = serde_json::from_value(serde_json::json!({
+            "id": "p", "slug": "p", "title": "P", "description": "", "body": "", "icon_url": null,
+            "project_type": "modpack", "client_side": "optional", "server_side": "optional",
+            "downloads": 12, "categories": ["adventure"],
+            "gallery": [{ "url": "https://cdn.modrinth.com/a.png", "featured": true, "title": "A", "description": null }]
+        }))
+        .unwrap();
+        assert_eq!((project.downloads, project.gallery.len(), project.gallery[0].featured), (12, 1, true));
+        let bare: Project = serde_json::from_value(serde_json::json!({
+            "id": "p", "slug": "p", "title": "P", "description": "", "body": "", "icon_url": null,
+            "project_type": "mod", "client_side": "required", "server_side": "optional"
+        }))
+        .unwrap();
+        assert!(bare.gallery.is_empty() && bare.categories.is_empty());
+        let version: Version = serde_json::from_value(serde_json::json!({
+            "id": "v", "project_id": "p", "name": "N", "version_number": "1", "game_versions": [], "loaders": [],
+            "files": [], "dependencies": [], "changelog": "- fixed", "date_published": "2026-01-02T03:04:05Z"
+        }))
+        .unwrap();
+        assert_eq!(version.changelog.as_deref(), Some("- fixed"));
     }
     #[test]
     fn dependency_dedup_cycle_and_conflict() {

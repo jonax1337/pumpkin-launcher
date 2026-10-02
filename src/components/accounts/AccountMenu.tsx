@@ -1,7 +1,6 @@
 import { useNavigate } from "react-router";
 import { useI18n } from "@/i18n";
 import { StopDialog } from "@/components/play/StopDialog";
-import { WIDTH } from "@/lib/breakpoints";
 import { Avatar, BarButton, Icon, Menu, type MenuEntry } from "@/ui";
 import { openAddOffline, startMsLogin, useAccountUi } from "@/store/accountUi";
 import { useOfflineAllowed, useUsableAccount } from "@/store/offline";
@@ -68,9 +67,8 @@ export function AccountMenu() {
             label={name || t(allowed ? "components.account.noName" : "components.account.notLoggedIn")}
             tone={name ? undefined : "warn"}
             iconEnd="chevd"
-            compactBelow={WIDTH.sm}
           >
-            {/* Ohne Namen: Warnsymbol statt Kopf (Form, nicht nur gelbe Schrift; bleibt auch schmal sichtbar, wenn der Text wegfällt) */}
+            {/* Ohne Namen: Warnsymbol statt Kopf (Form, nicht nur gelbe Schrift) */}
             {name ? <Avatar name={name} /> : <Icon name="warn" tone="warn" />}
           </BarButton>
         }

@@ -11,6 +11,7 @@ use tokio::process::Child;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
+use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::{Account, GameWindow, QuickPlay};
 use crate::services::auth::McSession;
@@ -48,6 +49,8 @@ pub struct LaunchSpec<'a> {
     pub instance_id: &'a str,
     pub account: &'a Account,
     pub memory_mb: u32,
+    /// Startgröße des Heaps (`-Xms`); ohne entscheidet die JVM.
+    pub min_memory_mb: Option<u32>,
     pub extra_jvm_args: &'a [String],
     pub window: GameWindow,
     pub extra_game_args: &'a [String],
@@ -128,6 +131,7 @@ pub fn build_args(spec: &LaunchSpec, env: &Env) -> AppResult<Vec<String>> {
     let (jvm, game) = version_args(version, &env)?;
 
     let mut args = vec![format!("-Xmx{}M", spec.memory_mb)];
+    args.extend(min_memory_arg(spec.min_memory_mb, spec.memory_mb));
     args.extend(jvm.iter().map(|a| substitute(a, &vars)));
     if let Some(log) = &version.logging.client {
         let file = path_text(log_config_path(spec.dirs, log));
@@ -145,6 +149,25 @@ pub fn build_args(spec: &LaunchSpec, env: &Env) -> AppResult<Vec<String>> {
     // (je nach Version Standardwert oder Startabbruch).
     args.extend(spec.extra_game_args.iter().cloned());
     Ok(args)
+}
+
+/// `-Xms` für den Heap; über dem Maximum startet die JVM nicht, deshalb wird es darauf begrenzt. 0 gilt als nicht gesetzt.
+fn min_memory_arg(min_mb: Option<u32>, max_mb: u32) -> Option<String> {
+    min_mb.filter(|mb| *mb > 0).map(|mb| format!("-Xms{}M", mb.min(max_mb)))
+}
+
+/// Eigene JVM-Argumente der Instanz ersetzen die des Launchers ganz: zwei Garbage-Collector-Wahlen gleichzeitig
+/// lässt die JVM nicht zu.
+pub fn effective_jvm_args<'a>(instance: &'a [String], launcher: &'a [String]) -> &'a [String] {
+    if instance.is_empty() { launcher } else { instance }
+}
+
+/// Das Fenster der Instanz; hat sie keines festgelegt, das des Launchers.
+pub fn effective_window(instance: GameWindow, launcher: Option<GameWindow>) -> GameWindow {
+    match instance {
+        GameWindow::Default => launcher.unwrap_or_default(),
+        own => own,
+    }
 }
 
 fn path_text(path: PathBuf) -> String {
@@ -186,7 +209,7 @@ fn version_args<'a>(version: &'a VersionJson, env: &Env) -> AppResult<(Vec<&'a s
     match (&version.arguments, &version.minecraft_arguments) {
         (Some(a), _) => Ok((flatten(&a.jvm, env), flatten(&a.game, env))),
         (None, Some(legacy)) => Ok((LEGACY_JVM_ARGS.to_vec(), legacy.split_whitespace().collect())),
-        (None, None) => Err(AppError::invalid(format!("Version {} ohne Startargumente", version.id))),
+        (None, None) => Err(AppError::invalid(coded!("errors.game.versionWithoutArguments", version = version.id))),
     }
 }
 
@@ -229,7 +252,7 @@ fn quick_play_args(version: &VersionJson, target: &QuickPlay) -> AppResult<Quick
     }
     match target {
         QuickPlay::World { .. } => {
-            Err(AppError::invalid(format!("Minecraft {} kann nicht direkt in eine Welt starten, das geht erst ab 1.20", version.id)))
+            Err(AppError::invalid(coded!("errors.game.quickPlayWorldUnsupported", version = version.id)))
         }
         QuickPlay::Server { address } => {
             let (host, port) = split_address(address);
@@ -365,10 +388,7 @@ async fn supervise(
 fn spawn_error(err: std::io::Error) -> AppError {
     #[cfg(target_os = "macos")]
     if err.raw_os_error() == Some(libc::EBADARCH) {
-        return AppError::invalid(
-            "Dieses Java ist für Intel-Macs gebaut und braucht Rosetta 2. Installiere es im Terminal mit \
-             `softwareupdate --install-rosetta --agree-to-license` und starte erneut."
-        );
+        return AppError::invalid(coded!("errors.game.rosettaRequired"));
     }
     err.into()
 }
@@ -386,6 +406,7 @@ pub(crate) mod test_support {
             instance_id: "i1",
             account,
             memory_mb: 2048,
+            min_memory_mb: None,
             extra_jvm_args: &[],
             window: GameWindow::Default,
             extra_game_args: &[],
@@ -473,6 +494,31 @@ mod tests {
         let args = build_args(&online, &LINUX).unwrap();
         let token = args.iter().position(|a| a == "--accessToken").unwrap();
         assert_eq!(args[token + 1], "eyJ.token");
+    }
+
+    #[test]
+    fn min_memory_follows_the_max_and_never_exceeds_it() {
+        assert_eq!(min_memory_arg(Some(1024), 2048).as_deref(), Some("-Xms1024M"));
+        assert_eq!(min_memory_arg(Some(4096), 2048).as_deref(), Some("-Xms2048M"));
+        assert_eq!(min_memory_arg(Some(0), 2048), None);
+        assert_eq!(min_memory_arg(None, 2048), None);
+
+        let (version, dirs, account) = (test_version(), Dirs::new("/data"), notch());
+        let spec = LaunchSpec { min_memory_mb: Some(512), ..plain_spec(&version, &dirs, &account) };
+        assert_eq!(build_args(&spec, &LINUX).unwrap()[..2], ["-Xmx2048M", "-Xms512M"]);
+    }
+
+    #[test]
+    fn instance_settings_beat_launcher_defaults() {
+        let own = vec!["-XX:+UseZGC".to_owned()];
+        let default = vec!["-XX:+UseG1GC".to_owned()];
+        assert_eq!(effective_jvm_args(&own, &default), own);
+        assert_eq!(effective_jvm_args(&[], &default), default);
+
+        let size = GameWindow::Size { width: 800, height: 600 };
+        assert_eq!(effective_window(GameWindow::Default, Some(size)), size);
+        assert_eq!(effective_window(GameWindow::Fullscreen, Some(size)), GameWindow::Fullscreen);
+        assert_eq!(effective_window(GameWindow::Default, None), GameWindow::Default);
     }
 
     #[test]

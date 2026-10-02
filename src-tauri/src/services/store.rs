@@ -6,27 +6,36 @@ use std::sync::Mutex;
 use serde::{de::DeserializeOwned, Serialize};
 
 use super::{lock, none_if_missing, write_atomic};
+use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::{Instance, LibrarySkin, MsAccount, Template};
 
 pub trait Entity: Clone + Serialize + DeserializeOwned {
-    const KIND: &'static str;
     fn id(&self) -> &str;
+    /// Fehler für eine ID, die der Store nicht kennt.
+    fn not_found(id: &str) -> AppError;
 }
 
-/// Alle Entitäten tragen ihre ID im Feld `id`; nur der Anzeigename für Fehlermeldungen unterscheidet sich.
+/// Alle Entitäten tragen ihre ID im Feld `id`; nur der Fehlercode „nicht gefunden“ unterscheidet sich.
 macro_rules! entity {
-    ($($ty:ty => $kind:literal),* $(,)?) => {$(
+    ($($ty:ty => $not_found:literal),* $(,)?) => {$(
         impl Entity for $ty {
-            const KIND: &'static str = $kind;
             fn id(&self) -> &str {
                 &self.id
+            }
+            fn not_found(id: &str) -> AppError {
+                AppError::NotFound(coded!($not_found, id = id).into())
             }
         }
     )*};
 }
 
-entity!(Instance => "Instanz", Template => "Vorlage", MsAccount => "Konto", LibrarySkin => "Skin");
+entity!(
+    Instance => "errors.app.notFound.instance",
+    Template => "errors.app.notFound.template",
+    MsAccount => "errors.app.notFound.account",
+    LibrarySkin => "errors.app.notFound.skin",
+);
 
 // ponytail: hält die ganze Collection im Speicher und schreibt bei jeder Änderung
 // die komplette Datei neu. Reicht für Dutzende Einträge; bei Bedarf auf SQLite wechseln.
@@ -127,11 +136,7 @@ fn position<T: Entity>(items: &[T], id: &str) -> Option<usize> {
 }
 
 fn index_of<T: Entity>(items: &[T], id: &str) -> AppResult<usize> {
-    position(items, id).ok_or_else(|| not_found::<T>(id))
-}
-
-fn not_found<T: Entity>(id: &str) -> AppError {
-    AppError::NotFound { kind: T::KIND, id: id.to_owned() }
+    position(items, id).ok_or_else(|| T::not_found(id))
 }
 
 /// Schreibt atomar: erst in eine Temp-Datei, dann umbenennen.
@@ -160,7 +165,7 @@ mod tests {
         let reopened = JsonStore::<Instance>::open(path.clone()).unwrap();
         assert_eq!(reopened.get(&inst.id).unwrap().name, "Umbenannt");
         reopened.remove(&inst.id).unwrap();
-        assert!(matches!(reopened.get(&inst.id), Err(AppError::NotFound { .. })));
+        assert!(matches!(reopened.get(&inst.id), Err(AppError::NotFound(_))));
 
         fs::write(&path, "{kaputt").unwrap();
         assert!(JsonStore::<Instance>::open(path.clone()).unwrap().list().is_empty());
@@ -194,7 +199,7 @@ mod tests {
             }
         });
         assert_eq!(store.get(&id).unwrap().playtime_secs, 80);
-        assert!(matches!(store.modify("weg", |_| {}), Err(AppError::NotFound { .. })));
+        assert!(matches!(store.modify("weg", |_| {}), Err(AppError::NotFound(_))));
         fs::remove_dir_all(dir).unwrap();
     }
 

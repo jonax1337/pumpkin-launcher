@@ -28,8 +28,13 @@ export function createContentMock({ db, emit }: MockContext) {
     emit("content-progress", { operationId, phase, done, total });
 
   return {
-    async modrinthSearch({ query, type, mc, loader, offset, index }): Promise<ContentSearch> {
-      const facets = [[`project_type:${type}`], ...(mc ? [[`versions:${mc}`]] : []), ...(loader ? [[`categories:${loader}`]] : [])];
+    async modrinthSearch({ query, type, mc, loader, category, offset, index }): Promise<ContentSearch> {
+      const facets = [
+        [`project_type:${type}`],
+        ...(mc ? [[`versions:${mc}`]] : []),
+        ...(loader ? [[`categories:${loader}`]] : []),
+        ...(category ? [[`categories:${category}`]] : []),
+      ];
       const r = await modrinthFetch<ContentSearch>("/search", {
         query,
         facets: JSON.stringify(facets),
@@ -69,7 +74,7 @@ export function createContentMock({ db, emit }: MockContext) {
           id: v.project_id, name: v.name, version: v.version_number, kind: v === root ? kind : "mod",
           requiredBy: v === root ? [] : [root.project_id],
           source: { type: "modrinth", projectId: v.project_id, versionId: v.id },
-          fileName: v.files[0]?.filename ?? `${v.project_id}.jar`, sha1: null, enabled: true,
+          fileName: v.files[0]?.filename ?? `${v.project_id}.jar`, sha1: null, enabled: true, pinned: false, packManaged: false,
         });
       }
       // Direkt hinzugefügt macht eine vorhandene Abhängigkeit zu einem direkten Eintrag.
@@ -81,7 +86,7 @@ export function createContentMock({ db, emit }: MockContext) {
     async modrinthCheckUpdates(instanceId): Promise<ModUpdate[]> {
       await wait(600);
       return findInstance(db, instanceId).mods
-        .filter((m) => outdated.has(m.id))
+        .filter((m) => outdated.has(m.id) && !m.pinned)
         .map((m) => ({ modId: m.id, currentVersion: m.version, versionId: `mock-${m.id}`, versionNumber: bump(m.version) }));
     },
     async modrinthUpdateMods(instanceId, modIds, operationId) {
@@ -95,6 +100,22 @@ export function createContentMock({ db, emit }: MockContext) {
       const inst = clone(findInstance(db, instanceId));
       for (const m of inst.mods) if (modIds.includes(m.id) && outdated.delete(m.id)) m.version = bump(m.version);
       progress("complete", modIds.length, modIds.length);
+      return save(inst);
+    },
+    async modrinthSwitchVersion(instanceId, modId, versionId, operationId) {
+      const progress = progressFor(operationId);
+      progress("resolve", 0, 1);
+      const version = await modrinthFetch<ContentVersion>(`/version/${versionId}`);
+      progress("download", 0, 1);
+      await wait(400);
+      const inst = clone(findInstance(db, instanceId));
+      const target = inst.mods.find((m) => m.id === modId);
+      if (!target) throw new Error(t("hooks.api.instanceNotFound", { id: modId }));
+      target.version = version.version_number;
+      target.fileName = version.files[0]?.filename ?? target.fileName;
+      if (target.source.type === "modrinth") target.source = { ...target.source, versionId: version.id };
+      outdated.delete(modId);
+      progress("complete", 1, 1);
       return save(inst);
     },
     /** Im Browser kennt Modrinth keine Datei: die Einträge bleiben lokal. */

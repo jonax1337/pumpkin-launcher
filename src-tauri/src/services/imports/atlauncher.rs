@@ -4,7 +4,7 @@ use std::path::Path;
 
 use serde::Deserialize;
 
-use super::{from_json, loader_named, read_marker, split_args, Found, Setup};
+use super::{foreign_commands, from_json, loader_named, read_icon, read_marker, split_args, Found, Setup};
 use crate::{error::AppResult, models::ModLoader};
 
 #[derive(Deserialize)]
@@ -25,6 +25,14 @@ struct LauncherSection {
     maximum_memory: Option<u32>,
     #[serde(default)]
     java_arguments: Option<String>,
+    #[serde(default)]
+    java_path: Option<String>,
+    #[serde(default)]
+    pre_launch_command: Option<String>,
+    #[serde(default)]
+    post_exit_command: Option<String>,
+    #[serde(default)]
+    wrapper_command: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -36,9 +44,13 @@ struct LoaderVersion {
 /// Kennungsdatei der Instanz.
 pub(super) const MANIFEST: &str = "instance.json";
 
+/// Das eigene Bild der Instanz im Instanzordner.
+const ICON: &str = "instance.png";
+
 pub fn read(dir: &Path) -> AppResult<Option<Found>> {
     let Some(data) = read_marker(&dir.join(MANIFEST))? else { return Ok(None) };
-    Ok(Some(Found { game_dir: dir.to_owned(), setup: setup(&data)? }))
+    let setup = Setup { icon: read_icon(&dir.join(ICON)), ..setup(&data)? };
+    Ok(Some(Found { game_dir: dir.to_owned(), setup }))
 }
 
 fn setup(data: &[u8]) -> AppResult<Setup> {
@@ -48,18 +60,22 @@ fn setup(data: &[u8]) -> AppResult<Setup> {
         Some(l) => (loader_named(&l.r#type)?, Some(l.version)),
     };
     Ok(Setup {
-        name: launcher.name,
-        minecraft_version: id,
-        loader,
-        loader_version,
         memory_mb: launcher.maximum_memory,
         jvm_args: launcher.java_arguments.as_deref().map(split_args).unwrap_or_default(),
+        java_path: launcher.java_path.filter(|path| !path.is_empty()),
+        not_adopted: foreign_commands(
+            launcher.pre_launch_command.as_deref(),
+            launcher.post_exit_command.as_deref(),
+            launcher.wrapper_command.as_deref(),
+        ),
+        ..Setup::new(launcher.name, id, loader, loader_version)
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::imports::NotAdopted;
 
     /// Auszug einer `instance.json` (Gson, Feldnamen wie in ATLauncher `Instance`/`InstanceLauncher`).
     const NEOFORGE: &str = r#"{
@@ -71,6 +87,9 @@ mod tests {
             "loaderVersion": {"version": "21.1.172", "rawVersion": "21.1.172", "recommended": false, "type": "NeoForge"},
             "maximumMemory": 8192,
             "javaArguments": "-XX:+UseZGC  -XX:+ZGenerational",
+            "javaPath": "C:/Java/bin/javaw.exe",
+            "preLaunchCommand": "backup.cmd",
+            "wrapperCommand": "",
             "mods": []
         }
     }"#;
@@ -81,12 +100,11 @@ mod tests {
         assert_eq!(
             setup,
             Setup {
-                name: "Mein Pack".into(),
-                minecraft_version: "1.21.1".into(),
-                loader: ModLoader::NeoForge,
-                loader_version: Some("21.1.172".into()),
                 memory_mb: Some(8192),
                 jvm_args: vec!["-XX:+UseZGC".into(), "-XX:+ZGenerational".into()],
+                java_path: Some("C:/Java/bin/javaw.exe".into()),
+                not_adopted: vec![NotAdopted::PreLaunchCommand],
+                ..Setup::new("Mein Pack".into(), "1.21.1".into(), ModLoader::NeoForge, Some("21.1.172".into()))
             }
         );
     }

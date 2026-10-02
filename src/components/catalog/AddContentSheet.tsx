@@ -2,17 +2,23 @@ import { useState } from "react";
 import { useI18n } from "@/i18n";
 import { Hint, SearchField, Select, Sheet, Switch, TabPanel, Tabs } from "@/ui";
 import { SOURCES, type CatalogType, type ContentHit, type Source } from "@/lib/content-types";
-import { projectOf } from "@/lib/mods";
-import type { Instance, World } from "@/lib/types";
+import { LOADER_LABELS, type Instance, type World } from "@/lib/types";
 import { useLook } from "@/store/look";
 import { ContentDetail } from "./ContentDetail";
 import { CompactContentResults } from "./ContentResults";
 import { fitsLabel, kindsFor } from "./fit";
+import { hasIris, irisSupported } from "./iris";
 import { typeLabel } from "./labels";
 
-export const IRIS_PROJECT_ID = "YL57xq9U";
-
 const SOURCE_OPTIONS = (["modrinth", "curseforge"] as const).map((source) => ({ value: source, label: SOURCES[source].label }));
+
+/** Was Shadern in der Instanz fehlt: Iris, oder die Unterstützung ganz (Forge, NeoForge); nichts, wenn Iris da ist. */
+function ShaderHint({ instance }: { instance: Instance }) {
+  const { t } = useI18n();
+  if (!irisSupported(instance))
+    return <Hint tone="warn" className="mb-2">{t("components.sheet.shadersUnsupported", { loader: LOADER_LABELS[instance.loader] })}</Hint>;
+  return hasIris(instance) ? null : <Hint tone="warn" className="mb-2">{t("components.sheet.shaderNeedsIris")}</Hint>;
+}
 
 /** Katalog im Seitenpanel einer Instanz; mit `world` nur Datenpakete für diese Welt. */
 export function AddContentSheet({ instance, world, open, onOpenChange }: {
@@ -29,13 +35,12 @@ export function AddContentSheet({ instance, world, open, onOpenChange }: {
   // Modrinth oder CurseForge; der Shader-Hinweis zu Iris gilt für beide.
   const [source, setSource] = useState<Source>("modrinth");
   const { acc } = useLook(instance.id);
-  const hasIris = instance.mods.some((m) => projectOf(m) === IRIS_PROJECT_ID || (m.source.type === "curseforge" && /iris/i.test(m.name)));
   const kind = kinds.includes(type) ? type : kinds[0];
   const tabbed = kinds.length > 1;
 
   const results = (
     <>
-      {kind === "shader" && !hasIris && <Hint tone="warn" className="mb-2">{t("components.sheet.shaderNeedsIris")}</Hint>}
+      {kind === "shader" && <ShaderHint instance={instance} />}
       <CompactContentResults
         key={`${source}-${kind}`}
         source={source}

@@ -31,8 +31,9 @@ const TABS: { value: Tab; label: TKey; icon: IconName }[] = [
  * Inhalt des Dialogs. Ist nur eingehängt, solange der Dialog offen ist oder etwas daraus noch läuft,
  * damit Versionslisten erst beim Öffnen geladen werden und laufende Installationen ihr Ende melden.
  */
-function NewInstanceForm({ open, onOpenChange, start, onBusy, onDone }: {
-  open: boolean; onOpenChange: (o: boolean) => void; start: NewInstanceStart; onBusy: (busy: boolean) => void; onDone: (id: string) => void;
+function NewInstanceForm({ open, onOpenChange, start, onBusy, onDone, onImported }: {
+  open: boolean; onOpenChange: (o: boolean) => void; start: NewInstanceStart; onBusy: (busy: boolean) => void;
+  onDone: (id: string) => void; onImported: () => void;
 }) {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>(start.type);
@@ -44,6 +45,7 @@ function NewInstanceForm({ open, onOpenChange, start, onBusy, onDone }: {
     tab,
     close: () => onOpenChange(false),
     onCreated: (instance) => onDone(instance.id),
+    onImported,
     active: !!active,
     background,
     importer,
@@ -139,11 +141,17 @@ export function NewInstanceDialog({ children, primary }: { children?: ReactNode;
     setOpen(false);
     navigate(instanceUrl(id));
   }
+  // Importierte Instanzen zeigt die Bibliothek hervorgehoben; eine einzelne Detailseite würde die übrigen verstecken.
+  function doneImporting() {
+    if (!stillOpen.current) return;
+    setOpen(false);
+    navigate("/instances");
+  }
 
   return (
     <>
       {children && <Slot.Root onClick={() => show({ type: "blank" })}>{children}</Slot.Root>}
-      {(open || busy) && <NewInstanceForm key={session} open={open} onOpenChange={setOpen} start={start} onBusy={setBusy} onDone={done} />}
+      {(open || busy) && <NewInstanceForm key={session} open={open} onOpenChange={setOpen} start={start} onBusy={setBusy} onDone={done} onImported={doneImporting} />}
     </>
   );
 }

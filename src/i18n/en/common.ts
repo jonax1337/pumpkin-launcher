@@ -19,7 +19,6 @@ export const common: typeof deCommon = {
   "common.play": "Play",
   "common.remove": "Remove",
   "common.new": "New",
-  "common.refresh": "Refresh",
   "common.error": "Error",
   "common.add": "Add",
   "common.rename": "Rename",

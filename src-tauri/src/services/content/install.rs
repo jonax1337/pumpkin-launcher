@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use super::{commit_mods, mod_from_version, project_of, StagedInstall};
 use crate::{
+    coded,
     error::{AppError, AppResult},
     models::{Instance, Mod, ModKind},
     services::{
@@ -64,7 +65,7 @@ async fn resolve_install(client: &reqwest::Client, version: &str, instance: &Ins
         _ => lone_version(root, &project, instance)?,
     };
     if modrinth::has_incompatibility(&selected) {
-        return Err(AppError::invalid("Inkompatible vorhandene Mod"));
+        return Err(AppError::invalid(coded!("errors.modrinth.incompatibleExistingMod")));
     }
     Ok(Resolved { kind, root_project, selected })
 }
@@ -74,7 +75,7 @@ fn kind_of(project: &Project) -> AppResult<ModKind> {
         "mod" => Ok(ModKind::Mod),
         "resourcepack" => Ok(ModKind::ResourcePack),
         "shader" => Ok(ModKind::Shader),
-        _ => Err(AppError::invalid("Projekt ist keine Mod, kein Ressourcenpaket und kein Shader")),
+        _ => Err(AppError::invalid(coded!("errors.modrinth.unsupportedProjectType"))),
     }
 }
 
@@ -91,7 +92,7 @@ async fn resolve_mods(client: &reqwest::Client, version: &str, instance: &Instan
 /// Ressourcenpakete und Shader haben keinen Loader-Graphen: nur die Minecraft-Version zählt, keine Abhängigkeiten.
 fn lone_version(root: Version, project: &Project, instance: &Instance) -> AppResult<HashMap<String, Version>> {
     if project.id != root.project_id || !root.game_versions.contains(&instance.minecraft_version) {
-        return Err(AppError::invalid(format!("Inkompatible Version {}", root.id)));
+        return Err(AppError::invalid(coded!("errors.modrinth.incompatibleVersion", version = root.id)));
     }
     Ok(HashMap::from([(root.project_id.clone(), root)]))
 }
@@ -102,7 +103,7 @@ fn keep_present(mods: &mut [Mod], selected: &HashMap<String, Version>, root_proj
     for v in selected.values() {
         let Some(existing) = mods.iter_mut().find(|m| project_of(m) == Some(&v.project_id)) else { continue };
         if !existing.enabled {
-            return Err(AppError::invalid("Benötigte vorhandene Mod ist deaktiviert"));
+            return Err(AppError::invalid(coded!("errors.modrinth.requiredModDisabled")));
         }
         if v.project_id == root_project {
             existing.required_by.clear();
@@ -124,7 +125,7 @@ fn new_files(mods: &[Mod], selected: &HashMap<String, Version>, kind: ModKind) -
     for v in selected.values().filter(|v| !mods.iter().any(|m| project_of(m) == Some(&v.project_id))) {
         let file = modrinth::primary(v, kind.extension())?;
         if !names.insert(file.filename.to_lowercase()) {
-            return Err(AppError::invalid("Mod-Dateinamen kollidieren"));
+            return Err(AppError::invalid(coded!("errors.modrinth.fileNamesCollide")));
         }
         planned.push(PlannedFile { version: v.clone(), file });
     }
@@ -148,10 +149,7 @@ pub(super) async fn download_all<'f>(
 
 pub(crate) fn budget(mut sizes: impl Iterator<Item = u64>) -> AppResult<()> {
     if sizes.try_fold(0u64, |a, b| a.checked_add(b)).is_none_or(|n| n > FILE_LIMIT) {
-        return Err(AppError::invalid(format!(
-            "Gesamtbudget für Mod-Download überschritten ({} MiB)",
-            FILE_LIMIT / MIB
-        )));
+        return Err(AppError::invalid(coded!("errors.modrinth.downloadBudgetExceeded", limit = FILE_LIMIT / MIB)));
     }
     Ok(())
 }

@@ -4,6 +4,7 @@
 //! Pfad- und Größenregeln wie ein `.mrpack`. Loader und Minecraft-Version stehen in `bin/version.json`.
 use super::{json, net, remote_file::mib_progress, segment, zip_files, PackRequest, ProjectType, SearchQuery, SortIndex};
 use crate::{
+    coded,
     error::{AppError, AppResult},
     models::{instance_name, Instance, ModLoader, NewInstance},
     services::{
@@ -121,7 +122,7 @@ async fn detail(client: &reqwest::Client, slug: &str) -> AppResult<Detail> {
     segment(slug)?;
     let d: Detail = json(client, &format!("{API}/modpack/{slug}?build={BUILD}")).await?;
     if d.name != slug {
-        return Err(AppError::invalid("Technic-Pack stimmt nicht überein"));
+        return Err(AppError::invalid(coded!("errors.providers.technicPackMismatch")));
     }
     Ok(d)
 }
@@ -173,6 +174,7 @@ pub async fn project(client: &reqwest::Client, slug: &str) -> AppResult<Project>
         client_side: "optional".into(),
         server_side: "optional".into(),
         web_url: d.platform_url.clone(),
+        ..Project::default()
     })
 }
 
@@ -189,6 +191,7 @@ pub async fn versions(client: &reqwest::Client, slug: &str) -> AppResult<Vec<Ver
         loaders: Vec::new(),
         version_type: "release".into(),
         date_published: String::new(),
+        changelog: None,
         files: d
             .platform_url
             .iter()
@@ -216,7 +219,7 @@ fn loader_from(profile: &serde_json::Value) -> AppResult<(String, ModLoader, Opt
         .map(str::to_string)
         // Ältere Profile heißen `1.20.1-forge-47.1.3`.
         .or_else(|| id.split('-').next().filter(|s| s.starts_with(|c: char| c.is_ascii_digit())).map(str::to_string))
-        .ok_or_else(|| AppError::invalid("Minecraft-Version im Pack nicht erkennbar"))?;
+        .ok_or_else(|| AppError::invalid(coded!("errors.providers.minecraftVersionUnknown")))?;
     identifier(&mc)?;
     let names: Vec<&str> = profile["libraries"].as_array().map(|a| a.iter().filter_map(|l| l["name"].as_str()).collect()).unwrap_or_default();
     let version = |prefix: &str| -> Option<String> {
@@ -249,7 +252,7 @@ fn inspect(temp: TempFile, name: &str) -> AppResult<Pack> {
         let mut wrapped = names.iter().filter_map(|n| n.strip_suffix("/bin/version.json")).filter(|p| !p.contains('/'));
         match (wrapped.next(), wrapped.next()) {
             (Some(p), None) => format!("{p}/"),
-            _ => return Err(AppError::invalid("Das ist kein Technic-Pack: bin/version.json fehlt")),
+            _ => return Err(AppError::invalid(coded!("errors.providers.notTechnicPack"))),
         }
     };
     let profile: serde_json::Value = {
@@ -281,9 +284,9 @@ pub(crate) async fn plan(
     let name = instance_name(&request.name)?;
     let d = detail(client, &request.project_id).await?;
     if d.solder.is_some() {
-        return Err(AppError::invalid("Dieses Modpack nutzt Technic Solder (ältere Technik) und lässt sich nicht installieren"));
+        return Err(AppError::invalid(coded!("errors.providers.solderPack")));
     }
-    let url = d.url.filter(|u| !u.is_empty()).ok_or_else(|| AppError::invalid("Das Modpack hat keine Download-Adresse"))?;
+    let url = d.url.filter(|u| !u.is_empty()).ok_or_else(|| AppError::invalid(coded!("errors.providers.noDownloadUrl")))?;
     let temp = TempFile::in_cache(dirs)?;
     progress(Phase::Download, 0, 0);
     net::download_public(&url, &temp.0, ZIP_LIMIT, &mib_progress(progress)).await?;

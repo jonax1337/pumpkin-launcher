@@ -1,25 +1,46 @@
 import { FormRow, FormSection } from "@/ui";
-import { JavaChooser, MemoryChooser, MemoryHelp } from "@/components/common";
+import { JavaChooser, MemoryChooser, MemoryHelp, MinMemoryChooser } from "@/components/common";
 import { useI18n } from "@/i18n";
 import type { Instance } from "@/lib/types";
 import { useSettings } from "@/store/settings";
+import { AccountField } from "./AccountField";
 import { ArgsField } from "./ArgsField";
 import type { InstanceForm } from "./useInstanceForm";
 import { WindowChooser } from "./WindowChooser";
 
-/** Arbeitsspeicher, Java, Fenster und Startargumente der Instanz. */
+/** Mods, die wirklich laufen: nur Mods (keine Ressourcenpakete oder Shader), nur eingeschaltete. */
+const activeModCount = (instance: Instance) => instance.mods.filter((m) => m.kind === "mod" && m.enabled).length;
+
+/** Konto, Arbeitsspeicher, Java, Fenster und Startargumente der Instanz. */
 export function GameSection({ instance, form, locked }: { instance: Instance; form: InstanceForm; locked: boolean }) {
   const { t } = useI18n();
   const globalJava = useSettings((s) => s.javaPath);
   return (
     <FormSection title={t("pages.settings.tabGame")}>
+      <FormRow label={t("settings.account.label")} htmlFor="inst-account" hint={t("settings.account.hint")}>
+        <AccountField
+          id="inst-account"
+          value={instance.defaultAccount}
+          disabled={locked}
+          onChange={(accountKey) => form.save({ defaultAccount: accountKey }, t("settings.account.saved"))}
+        />
+      </FormRow>
       <FormRow
         label={t("ui.memory.label")}
         hint={t("detail.settings.memoryHint")}
         group="radiogroup"
-        aside={<MemoryHelp value={form.memory} />}
+        aside={<MemoryHelp value={form.memory} modCount={activeModCount(instance)} />}
       >
         <MemoryChooser name="inst-mem" value={form.memory} onChange={form.changeMemory} help={false} disabled={locked} />
+      </FormRow>
+      <FormRow label={t("settings.memory.minLabel")} htmlFor="inst-min-ram" hint={t("settings.memory.minInstanceHint")} aside={t("settings.memory.minAside")}>
+        <MinMemoryChooser
+          id="inst-min-ram"
+          value={instance.minMemoryMb}
+          disabled={locked}
+          autoLabel={t("detail.settings.javaFallback")}
+          onChange={(mb) => form.save({ minMemoryMb: mb })}
+        />
       </FormRow>
       <FormRow
         label={t("detail.settings.javaLabel")}
@@ -41,7 +62,7 @@ export function GameSection({ instance, form, locked }: { instance: Instance; fo
         />
       </FormRow>
       <FormRow label={t("detail.settings.windowLabel")} hint={t("detail.settings.windowHint")} group="radiogroup">
-        <WindowChooser value={instance.window} onChange={(window, done) => form.save({ window }, done)} disabled={locked} />
+        <WindowChooser name="inst-window" value={instance.window} onChange={(window, done) => form.save({ window }, done)} disabled={locked} />
       </FormRow>
       <FormRow label={t("components.newInstance.advanced")}>
         <ArgsField

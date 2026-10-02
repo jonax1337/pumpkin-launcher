@@ -3,13 +3,12 @@ import { useParams, useSearchParams } from "react-router";
 import { useI18n } from "@/i18n";
 import { BackLink, ErrorBox, Icon, Skel, TabPanel, Tabs, type TabItem } from "@/ui";
 import { LogConsole } from "@/components/log/LogConsole";
-import { AddContentSheet, IRIS_PROJECT_ID } from "@/components/ContentBrowser";
+import { AddContentSheet } from "@/components/ContentBrowser";
+import { useContentAnalysis } from "@/hooks/useContentAnalysis";
 import { useCurrentUpdates } from "@/hooks/useContent";
-import { useInstance, useUpdateMods } from "@/hooks/useInstances";
-import { projectOf } from "@/lib/mods";
+import { useInstance } from "@/hooks/useInstances";
 import { instanceTabParams, readInstanceTab, type InstanceTab } from "@/lib/routes";
 import type { Instance } from "@/lib/types";
-import { cn } from "@/lib/utils";
 import { PixelScene } from "@/pixel/PixelScene";
 import { useLook } from "@/store/look";
 import { ContentTab } from "./detail/ContentTab";
@@ -78,13 +77,13 @@ function useDetailTabs(modCount: number, warnTotal: number): TabItem<InstanceTab
       value: "content",
       label: t("pages.detail.tabContent"),
       count: modCount,
-      // Warnsymbol: Platz bleibt reserviert (kein Springen); die Anzahl auch für Screenreader, nicht nur im Tooltip.
-      badge: (
+      // Warnsymbol nur mit Hinweisen (sonst bliebe eine Lücke hinter der Zahl); die Anzahl auch für Screenreader, nicht nur im Tooltip.
+      badge: warnText ? (
         <>
-          <Icon name="warn" size="s" tone="warn" className={cn(!warnText && "invisible")} />
-          {warnText && <span className="sr">, {warnText}</span>}
+          <Icon name="warn" size="s" tone="warn" />
+          <span className="sr">, {warnText}</span>
         </>
-      ),
+      ) : undefined,
       tip: warnText || undefined,
     },
     { value: "worlds", label: t("common.worlds") },
@@ -99,11 +98,9 @@ function Loaded({ instance, tab, setTab, head, compact }: {
 }) {
   const { t } = useI18n();
   const [adding, setAdding] = useState(false);
-  const mods = useUpdateMods(instance.id);
   const updateFor = useCurrentUpdates(instance, instance.mods.length > 0);
-  const turnOnIris = () =>
-    mods.mutate({ ...instance, mods: instance.mods.map((m) => (projectOf(m) === IRIS_PROJECT_ID ? { ...m, enabled: true } : m)) });
-  const { warnsOf, total: warnTotal } = useWarnings(instance, () => setAdding(true), turnOnIris);
+  const analysis = useContentAnalysis(instance).data;
+  const { findingsOf, total: warnTotal } = useWarnings(instance, analysis?.issues ?? []);
   const tabs = useDetailTabs(instance.mods.length, warnTotal);
   const toLog = () => setTab("console");
   // Klick auf „Updates“ im Kopf: Inhalte zeigen und „Alle aktualisieren“ in den Blick holen.
@@ -111,6 +108,13 @@ function Loaded({ instance, tab, setTab, head, compact }: {
   const showUpdates = () => {
     setTab("content");
     setUpdateClicks((n) => n + 1);
+  };
+
+  // Klick auf „Pack-Update“ im Kopf: Einstellungen zeigen und den Modpack-Abschnitt in den Blick holen.
+  const [packRequested, setPackRequested] = useState(false);
+  const showPack = () => {
+    setTab("settings");
+    setPackRequested(true);
   };
 
   return (
@@ -121,6 +125,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
         compact={compact}
         updateCount={updateFor.size}
         onShowUpdates={showUpdates}
+        onShowPack={showPack}
         onLaunched={toLog}
       />
 
@@ -142,7 +147,8 @@ function Loaded({ instance, tab, setTab, head, compact }: {
             instance={instance}
             shown={tab === "content"}
             updateFor={updateFor}
-            warnsOf={warnsOf}
+            analysis={analysis}
+            findingsOf={findingsOf}
             onAdd={() => setAdding(true)}
             showUpdates={updateClicks}
           />
@@ -150,7 +156,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
         {tab === "worlds" && <WorldsTab instance={instance} onLaunched={toLog} />}
         {tab === "screenshots" && <ScreenshotsTab instance={instance} />}
         {tab === "console" && <LogConsole instance={instance} />}
-        {tab === "settings" && <SettingsTab instance={instance} />}
+        {tab === "settings" && <SettingsTab instance={instance} packRequested={packRequested} onPackShown={() => setPackRequested(false)} />}
       </TabPanel>
 
       <AddContentSheet instance={instance} open={adding} onOpenChange={setAdding} />

@@ -3,12 +3,18 @@ import { Buddy, useBrand } from "@/branding/Brand";
 import { SEASONS, type PumpkinChoice } from "@/branding/calendar";
 import { useI18n, type LanguageChoice, type TKey } from "@/i18n";
 import { useReducedMotion } from "@/hooks/useMediaQuery";
-import { useSettings, type PxSize } from "@/store/settings";
+import { useSettings, type PxSize, type TextSize } from "@/store/settings";
 
 const PX_SIZE_KEYS: { value: PxSize; key: TKey }[] = [
   { value: "s", key: "pages.settings.pxSizeSmall" },
   { value: "m", key: "pages.settings.pxSizeMedium" },
   { value: "l", key: "pages.settings.pxSizeLarge" },
+];
+
+const TEXT_SIZE_KEYS: { value: TextSize; key: TKey }[] = [
+  { value: "m", key: "pages.settings.textSizeNormal" },
+  { value: "l", key: "pages.settings.textSizeLarge" },
+  { value: "xl", key: "pages.settings.textSizeLarger" },
 ];
 
 const LANGUAGE_KEYS: { value: LanguageChoice; key: TKey }[] = [
@@ -36,13 +42,14 @@ function SeasonStatus() {
   );
 }
 
-/** Einstellungen › Darstellung: Sprache, Kürbis, Bewegung, Pixelgröße. */
+/** Einstellungen › Darstellung: Sprache, Textgröße, Kürbis, Bewegung, Pixelgröße. */
 export function AppearanceTab() {
   const { t } = useI18n();
   const language = useSettings((s) => s.language);
   const pumpkin = useSettings((s) => s.pumpkin);
   const motion = useSettings((s) => s.motion);
   const pxSize = useSettings((s) => s.pxSize);
+  const textSize = useSettings((s) => s.textSize);
   const set = useSettings((s) => s.set);
   const reduced = useReducedMotion();
   return (
@@ -54,6 +61,15 @@ export function AppearanceTab() {
           value={language}
           onChange={(choice) => set({ language: choice })}
           items={LANGUAGE_KEYS.map(({ value, key }) => ({ value, label: t(key) }))}
+        />
+      </FormRow>
+      <FormRow label={t("pages.settings.textSizeLabel")} hint={t("pages.settings.textSizeHint")}>
+        <Segmented<TextSize>
+          size="s"
+          label={t("pages.settings.textSizeLabel")}
+          value={textSize}
+          onChange={(size) => set({ textSize: size })}
+          items={TEXT_SIZE_KEYS.map(({ value, key }) => ({ value, label: t(key) }))}
         />
       </FormRow>
       <FormRow label={t("pages.settings.pumpkinLabel")} htmlFor="pumpkin-choice" hint={t("pages.settings.pumpkinHint")}>

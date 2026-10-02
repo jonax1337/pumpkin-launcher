@@ -1,6 +1,7 @@
 //! Download von beliebigen öffentlichen HTTPS-Adressen (Technic-Packs liegen auf Dropbox, GitHub, eigenen
 //! Servern). Ohne Prüfsumme als Gegengewicht: nur HTTPS auf Port 443, nur öffentliche Zieladressen
 //! (kein localhost, kein Heimnetz), jede Weiterleitung einzeln geprüft, die geprüfte Adresse wird fest verwendet.
+use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::services::{
     progress::CountFn,
@@ -39,14 +40,23 @@ fn public_v6(ip: Ipv6Addr) -> bool {
     if let Some(v4) = ip.to_ipv4_mapped() {
         return public_v4(v4);
     }
-    let first = ip.segments()[0];
+    let segments = ip.segments();
+    let first = segments[0];
     !(ip.is_loopback()
         || ip.is_unspecified()
         || ip.is_multicast()
         // Eindeutige lokale Adressen (fc00::/7), Link-Local (fe80::/10), Dokumentation (2001:db8::/32).
         || (first & 0xfe00) == 0xfc00
         || (first & 0xffc0) == 0xfe80
-        || (first == 0x2001 && ip.segments()[1] == 0x0db8))
+        || (first == 0x2001 && segments[1] == 0x0db8)
+        || embeds_ipv4(segments))
+}
+
+/// Übergangsadressen, die eine IPv4-Adresse einbetten und so ein Ziel im Heimnetz erreichen können: NAT64
+/// (64:ff9b::/96 und 64:ff9b:1::/48), 6to4 (2002::/16) und Teredo (2001::/32).
+fn embeds_ipv4(segments: [u16; 8]) -> bool {
+    let nat64 = segments[0] == 0x0064 && segments[1] == 0xff9b && (segments[2..6] == [0; 4] || segments[2] == 1);
+    nat64 || segments[0] == 0x2002 || (segments[0] == 0x2001 && segments[1] == 0)
 }
 
 pub fn is_public(ip: IpAddr) -> bool {
@@ -59,15 +69,15 @@ pub fn is_public(ip: IpAddr) -> bool {
 /// Nur `https://host/…` auf Port 443, ohne Zugangsdaten; der Host ist kein IP-Literal.
 fn check(url: &reqwest::Url) -> AppResult<String> {
     if url.scheme() != "https" || url.port_or_known_default() != Some(443) || !url.username().is_empty() || url.password().is_some() {
-        return Err(AppError::invalid("Nur https-Adressen auf Port 443 sind erlaubt"));
+        return Err(AppError::invalid(coded!("errors.providers.httpsOnly")));
     }
-    url.domain().map(str::to_string).ok_or_else(|| AppError::invalid("Adresse ohne Hostnamen nicht erlaubt"))
+    url.domain().map(str::to_string).ok_or_else(|| AppError::invalid(coded!("errors.providers.hostMissing")))
 }
 
 async fn resolve(host: &str) -> AppResult<Vec<SocketAddr>> {
-    let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host, 443)).await.map_err(|e| AppError::invalid(format!("{host} nicht erreichbar: {e}")))?.collect();
+    let addrs: Vec<SocketAddr> = tokio::net::lookup_host((host, 443)).await.map_err(|e| AppError::invalid(coded!("errors.providers.hostUnreachable", host = host, reason = e)))?.collect();
     if addrs.is_empty() || !addrs.iter().all(|a| is_public(a.ip())) {
-        return Err(AppError::invalid(format!("{host} zeigt auf keine öffentliche Adresse")));
+        return Err(AppError::invalid(coded!("errors.providers.hostNotPublic", host = host)));
     }
     Ok(addrs)
 }
@@ -103,12 +113,22 @@ mod tests {
 
     #[test]
     fn only_public_addresses_pass() {
-        for ok in ["8.8.8.8", "162.125.1.18", "140.82.112.3", "2606:4700::1111"] {
+        for ok in ["8.8.8.8", "162.125.1.18", "140.82.112.3", "2606:4700::1111", "2001:4860:4860::8888"] {
             assert!(is_public(ok.parse().unwrap()), "{ok}");
         }
         for bad in [
             "127.0.0.1", "10.0.0.5", "172.16.0.1", "192.168.1.1", "169.254.169.254", "0.0.0.0", "100.64.0.1", "224.0.0.1", "255.255.255.255",
             "198.18.0.1", "::1", "::", "fe80::1", "fc00::1", "fd12::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1", "2001:db8::1",
+        ] {
+            assert!(!is_public(bad.parse().unwrap()), "{bad}");
+        }
+    }
+
+    #[test]
+    fn transition_addresses_embedding_ipv4_are_refused() {
+        for bad in [
+            "64:ff9b::7f00:1", "64:ff9b::a00:1", "64:ff9b::808:808", "64:ff9b:1::1", "2002:7f00:1::", "2002:c0a8:101::1",
+            "2001:0:4136:e378:8000:63bf:3fff:fdd2",
         ] {
             assert!(!is_public(bad.parse().unwrap()), "{bad}");
         }

@@ -1,6 +1,7 @@
 // Nur im Browser-Dev-Modus dynamisch geladen (siehe api.ts); im Release-Build nicht enthalten.
 import { t } from "@/i18n";
 import type { Backend } from "./backend";
+import { pickedName, readPicked } from "./mock-files";
 import { canvas2d, clone, wait } from "./mock-util";
 import { DAY } from "./time";
 import type { Cape, LibrarySkin, SkinProfile, SkinVariant } from "./types";
@@ -65,7 +66,33 @@ export function createSkinMock() {
     return found;
   };
 
+  /** Wie `skins::add`: nur PNGs mit 64×64 oder 64×32 Pixeln, und jede Textur nur einmal. */
+  async function readSkinFile(path: string) {
+    const blob = await readPicked(path);
+    if (blob.type !== "image/png") throw new Error(t("mock.skin.notAPng"));
+    const url = await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.readAsDataURL(blob);
+    });
+    const image = await createImageBitmap(blob);
+    const { width, height } = image;
+    image.close();
+    if (width !== 64 || ![32, 64].includes(height)) throw new Error(t("mock.skin.wrongSize", { width, height }));
+    return url;
+  }
+
   return {
+    async skinAdd(path: string) {
+      await wait();
+      const url = await readSkinFile(path);
+      const existing = library.find((s) => textures.get(s.id) === url);
+      if (existing) throw new Error(t("mock.skin.alreadyInLibrary", { name: existing.name }));
+      const added: LibrarySkin = { id: `mock-skin-${crypto.randomUUID()}`, name: pickedName(path).slice(0, 64) || "Skin", variant: "classic", addedAt: Date.now() };
+      textures.set(added.id, url);
+      library.push(added);
+      return clone(added);
+    },
     async skinProfile(): Promise<SkinProfile> {
       await wait(400);
       return clone({ skin, capes });

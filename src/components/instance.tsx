@@ -1,31 +1,41 @@
-import { useState } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { save as saveFile } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { create } from "zustand";
-import { t, useI18n, type TKey } from "@/i18n";
-import { Checkbox, ConfirmDialog, Dialog, DialogActions, Field, Hint, IconButton, Menu, Skel, type MenuEntry } from "@/ui";
+import { useI18n } from "@/i18n";
+import { ConfirmDialog, IconButton, Menu, type MenuEntry } from "@/ui";
 import { isBusy, usePhase } from "@/components/play/phase";
+import { DeleteInstanceText } from "@/components/DeleteInstanceText";
+import { ExportDialog } from "@/components/ExportDialog";
 import { NameDialog } from "@/components/NameDialog";
 import { useBackgroundTask } from "@/hooks/useBackgroundTask";
 import { confirmTargetProps } from "@/hooks/useConfirmTarget";
 import { useContentState } from "@/store/contentState";
-import { useDeleteInstance, useExportEntries, useGroups, useSetGroup } from "@/hooks/useInstances";
+import { useDeleteInstance, useGroups, useRenameInstance, useSetGroup } from "@/hooks/useInstances";
 import { usePlay } from "@/hooks/usePlay";
 import { askStop } from "@/store/stopAsk";
 import { useSaveTemplate } from "@/hooks/useTemplates";
 import { api } from "@/lib/api";
-import { KIND_LABEL_KEYS } from "@/lib/catalog";
+import type { ExportRequest } from "@/lib/backend";
 import { revealLocalPath } from "@/lib/links";
 import { instanceUrl } from "@/lib/routes";
 import { toastError } from "@/lib/toast";
 import type { Instance } from "@/lib/types";
 
+/** Maximale Länge des Instanznamens. */
+export const NAME_MAX_LENGTH = 64;
+
 /** Welche Instanz gerade einen der Dialoge offen hat (einmal im Layout gerendert). */
-type InstanceActions = { template: Instance | null; exporting: Instance | null; remove: Instance | null; newGroup: Instance | null };
-const NO_DIALOG: InstanceActions = { template: null, exporting: null, remove: null, newGroup: null };
+type InstanceActions = {
+  template: Instance | null;
+  exporting: Instance | null;
+  remove: Instance | null;
+  newGroup: Instance | null;
+  renaming: Instance | null;
+};
+const NO_DIALOG: InstanceActions = { template: null, exporting: null, remove: null, newGroup: null, renaming: null };
 const useInstanceActions = create<InstanceActions>(() => NO_DIALOG);
 
+const askRename = (instance: Instance) => useInstanceActions.setState({ renaming: instance });
 const askSaveTemplate = (instance: Instance) => useInstanceActions.setState({ template: instance });
 const askExport = (instance: Instance) => useInstanceActions.setState({ exporting: instance });
 export const askDelete = (instance: Instance) => useInstanceActions.setState({ remove: instance });
@@ -62,7 +72,7 @@ function useDuplicate() {
 function useExport() {
   const { t } = useI18n();
   const { run } = useBackgroundTask();
-  return (instance: Instance, include: string[], path: string) =>
+  return (instance: Instance, request: ExportRequest, path: string) =>
     run({
       key: `export:${instance.id}`,
       label: t("components.instance.exportTask", { name: instance.name }),
@@ -70,7 +80,7 @@ function useExport() {
       cancellable: true,
       // Ein Content-Lauf liefert eine Instanz (für „Öffnen“ im Verlauf); beim Export ist es die exportierte, frisch gelesen:
       // die Kopie vom Öffnen des Dialogs könnte veraltet sein und landete im Cache.
-      task: (op) => api.exportInstance(instance.id, include, path, op).then(() => api.getInstance(instance.id)),
+      task: (op) => api.exportInstance(instance.id, request, path, op).then(() => api.getInstance(instance.id)),
       onDone: () =>
         toast.success(t("components.instance.exportedQuoted", { name: instance.name }), {
           description: path,
@@ -126,10 +136,12 @@ export function useInstanceMenu(instance: Instance, { showOpen = true }: { showO
           },
         ]
       : []),
+    { id: "settings", text: t("common.settings"), icon: "gear", onSelect: () => navigate(instanceUrl(instance.id, "settings")) },
     { id: "log", text: t("components.log.ariaLabel"), icon: "term", onSelect: () => navigate(instanceUrl(instance.id, "console")) },
     { id: "dir", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => openInstanceFolder(instance) },
-    { id: "group", text: t("components.instance.group"), icon: "box", disabled: locked, items: groupItems },
     "-",
+    { id: "rename", text: t("common.rename"), icon: "file", disabled: locked, onSelect: () => askRename(instance) },
+    { id: "group", text: t("components.instance.group"), icon: "box", disabled: locked, items: groupItems },
     {
       id: "dup",
       text: t("components.instance.duplicate"),
@@ -181,6 +193,27 @@ export function InstanceMenuButton({ instance, size = "m", variant = "secondary"
   );
 }
 
+function RenameDialog({ instance, onClose }: { instance: Instance; onClose: () => void }) {
+  const { t } = useI18n();
+  const rename = useRenameInstance(instance.id);
+  function renamed() {
+    toast.success(t("detail.settings.nameSaved"));
+    onClose();
+  }
+  const submit = (name: string) => (name === instance.name ? onClose() : rename.mutate(name, { onSuccess: renamed }));
+  return (
+    <NameDialog
+      title={t("components.instance.renameTitle")}
+      label={t("components.instance.nameField")}
+      initial={instance.name}
+      maxLength={NAME_MAX_LENGTH}
+      pending={rename.isPending}
+      onSubmit={submit}
+      onClose={onClose}
+    />
+  );
+}
+
 function SaveTemplateDialog({ instance, onClose }: { instance: Instance; onClose: () => void }) {
   const { t } = useI18n();
   const save = useSaveTemplate();
@@ -196,89 +229,6 @@ function SaveTemplateDialog({ instance, onClose }: { instance: Instance; onClose
       onSubmit={(name) => save.mutate({ instance, name: name || instance.name }, { onSuccess: onClose })}
       onClose={onClose}
     />
-  );
-}
-
-/** Dateiname für den Speichern-Dialog: Windows lehnt `:` & Co. ab, `/` läse der Dialog als Ordner. */
-const packFileName = (name: string) => `${name.replace(/[<>:"/\\|?*]/g, "_").trim() || t("common.instance")}.mrpack`;
-
-/** Was ein Export ohne Zutun mitnimmt; Welten nur auf Wunsch (groß und persönlich). */
-const EXPORT_DEFAULTS = ["config", "mods", "resourcepacks", "shaderpacks", "options.txt"];
-
-/** Lesbare Namen bekannter Einträge im Spielordner. */
-const ENTRY_LABELS: Record<string, TKey> = {
-  config: "components.export.entry.config",
-  mods: KIND_LABEL_KEYS.mod,
-  resourcepacks: KIND_LABEL_KEYS.resourcepack,
-  shaderpacks: KIND_LABEL_KEYS.shader,
-  "options.txt": "components.export.entry.options",
-  saves: "common.worlds",
-  screenshots: "components.export.entry.screenshots",
-  "servers.dat": "components.export.entry.servers",
-};
-
-function ExportDialog({ instance, onExport, onClose }: {
-  instance: Instance; onExport: (include: string[], path: string) => void; onClose: () => void;
-}) {
-  const { t } = useI18n();
-  const entries = useExportEntries(instance.id);
-  const [picked, setPicked] = useState<Set<string> | null>(null);
-  const chosen = picked ?? new Set(entries.data?.filter((name) => EXPORT_DEFAULTS.includes(name)));
-  const toggle = (name: string, on: boolean) => setPicked(new Set(on ? [...chosen, name] : [...chosen].filter((n) => n !== name)));
-
-  async function submit() {
-    const path = await saveFile({
-      defaultPath: packFileName(instance.name),
-      filters: [{ name: t("components.export.fileFilter"), extensions: ["mrpack"] }],
-    });
-    if (!path) return;
-    onExport([...chosen], path);
-    onClose();
-  }
-
-  return (
-    <Dialog
-      open
-      onOpenChange={(o) => !o && onClose()}
-      title={t("components.instance.export")}
-      sub={instance.name}
-      width={480}
-      footLeft={api.capabilities.exportInstance ? undefined : t("components.export.appOnly")}
-      footer={
-        <DialogActions
-          cancel={t("common.cancel")}
-          confirm={{
-            label: t("components.instance.export"),
-            width: 150,
-            disabled: !api.capabilities.exportInstance || !entries.data,
-            onClick: submit,
-          }}
-        />
-      }
-    >
-      <Field label={t("components.export.include")} group help={t("components.export.includeHelp")}>
-        <ExportEntries entries={entries} chosen={chosen} onToggle={toggle} />
-      </Field>
-    </Dialog>
-  );
-}
-
-/** Die wählbaren Einträge des Spielordners; solange sie laden oder wenn das fehlschlägt, ein Platzhalter. */
-function ExportEntries({ entries, chosen, onToggle }: {
-  entries: ReturnType<typeof useExportEntries>; chosen: Set<string>; onToggle: (name: string, on: boolean) => void;
-}) {
-  const { t } = useI18n();
-  if (entries.error) return <Hint tone="bad">{entries.error.message}</Hint>;
-  if (!entries.data) return <Skel h={120} />;
-  if (!entries.data.length) return <Hint>{t("components.export.folderEmpty")}</Hint>;
-  return (
-    <div className="flex flex-col gap-2">
-      {entries.data.map((name) => (
-        <Checkbox key={name} checked={chosen.has(name)} onChange={(on) => onToggle(name, on)}>
-          {ENTRY_LABELS[name] ? `${t(ENTRY_LABELS[name])} (${name})` : name}
-        </Checkbox>
-      ))}
-    </div>
   );
 }
 
@@ -302,7 +252,7 @@ function NewGroupDialog({ instance, onClose }: { instance: Instance; onClose: ()
 /** Dialoge der Instanz-Aktionen; einmal im Layout. */
 export function InstanceDialogs() {
   const { t } = useI18n();
-  const { template, exporting, remove, newGroup } = useInstanceActions();
+  const { template, exporting, remove, newGroup, renaming } = useInstanceActions();
   const del = useDeleteInstance();
   const exportPack = useExport();
   const navigate = useNavigate();
@@ -315,15 +265,16 @@ export function InstanceDialogs() {
         <ExportDialog
           key={exporting.id}
           instance={exporting}
-          onExport={(include, path) => exportPack(exporting, include, path)}
+          onExport={(request, path) => exportPack(exporting, request, path)}
           onClose={close}
         />
       )}
       {newGroup && <NewGroupDialog key={newGroup.id} instance={newGroup} onClose={close} />}
+      {renaming && <RenameDialog key={renaming.id} instance={renaming} onClose={close} />}
       <ConfirmDialog
         {...confirmTargetProps(remove, close, {
           title: (instance) => t("components.instance.deleteQuotedTitle", { name: instance.name }),
-          text: () => t("components.instance.deleteText"),
+          text: (instance) => <DeleteInstanceText instance={instance} />,
           pending: del.isPending,
           onConfirm: (instance, closeDialog) =>
             del.mutate(instance.id, {

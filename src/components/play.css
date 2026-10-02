@@ -4,7 +4,7 @@
    Eingebunden in src/index.css hinter dem Kit (gleiche Schicht). */
 
 /* ---------- Spielen-Knopf: Gerüst (feste Größe in allen Zuständen) ---------- */
-.play { position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: flex-start; --acc: var(--copper); width: 272px; height: var(--h-l); padding: 0; font-weight: 600; font-size: 14px; white-space: nowrap; color: var(--ink); flex: none; user-select: none; }
+.play { position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: flex-start; width: 272px; height: var(--h-l); padding: 0; font-weight: 600; font-size: 14px; white-space: nowrap; color: var(--ink); flex: none; user-select: none; }
 .play .bc { position: relative; display: inline-flex; align-items: center; width: 100%; height: 100%; padding: 0 16px 0 10px; gap: 12px; transform: translateY(round(calc(var(--px) * -.5), 1px)); }
 
 /* Primärfläche: Sockel (::before) + Fläche (.bf, Licht oben/links, Schatten unten/rechts).
@@ -35,7 +35,7 @@
 .play .pic { width: 36px; height: 36px; display: grid; place-items: center; background: var(--ink); color: var(--acc); flex: none; clip-path: var(--n1); }
 .play .lab { display: flex; flex-direction: column; justify-content: center; min-width: 0; flex: 1; text-align: left; }
 .play .l1 { font: 800 25px/1 var(--f-display); letter-spacing: .02em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.play .l2 { font-size: 12px; font-weight: 600; opacity: .78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
+.play .l2 { font-size: calc(13px * var(--tz)); font-weight: 600; opacity: .78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
 .play .pct { font: 400 26px/1 var(--f-px); width: 3.2ch; text-align: right; flex: none; display: none; visibility: visible; }
 .play .pbar { position: absolute; left: 58px; right: 16px; bottom: 12px; height: var(--u2); --prog-on: var(--ink); --prog-off: rgba(18,12,7,.2); visibility: hidden; }
 .play[data-st="run"] { color: var(--acc-hi); }
@@ -89,10 +89,9 @@
 .prog.bad { --prog-on: var(--bad); }
 
 /* ---------- Statuszeile unter dem Spielen-Knopf (32 px, feste Höhe) ---------- */
-.pstat { height: 32px; display: flex; align-items: center; gap: 6px; color: var(--fg-2); font-size: 13px; min-width: 0; }
+.pstat { height: 32px; display: flex; align-items: center; gap: 6px; color: var(--fg-2); font-size: calc(13px * var(--tz)); min-width: 0; }
 .pstat .ptxt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .pstat .ptxt b { font-weight: 600; color: var(--fg); }
-.pstat.bad .ptxt { color: var(--bad); }
 /* Laufzeit in Pixelschrift: Mindestgröße 18 px, Zeile bleibt 32 px */
 .pstat .ptxt .num { font: 400 18px/1 var(--f-px); color: var(--fg); letter-spacing: .02em; }
 /* Abbrechen / Protokoll: eigener Knopf mit Abstand, nicht Fließtext */
@@ -103,7 +102,7 @@
 
 /* ---------- Protokoll (Konsole) ---------- */
 .console { position: relative; height: max(260px, calc(calc(var(--vh1, 1vh) * 100) - var(--bar) - var(--dc) - 48px - 44px - 22px - 50px - 32px)); }
-.console .cbody { position: absolute; inset: 0; overflow: auto; padding: 12px 14px; font: 12.5px/1.65 var(--f-mono); background: #05080D; box-shadow: var(--bv-sunk); clip-path: var(--n1); white-space: pre; scrollbar-gutter: stable; }
+.console .cbody { position: absolute; inset: 0; overflow: auto; padding: 12px 14px; font: calc(13px * var(--tz))/1.65 var(--f-mono); background: #05080D; box-shadow: var(--bv-sunk); clip-path: var(--n1); white-space: pre; scrollbar-gutter: stable; }
 .console .ln { display: block; color: #B9C3D4; }
 .console .ln.w { color: var(--warn); }
 .console .ln.e { color: var(--bad); }
@@ -113,3 +112,8 @@
 .console .none { position: absolute; inset: 0; display: grid; place-items: center; color: var(--fg-3); pointer-events: none; }
 /* Ring am Rahmen (der Körper selbst ist gekerbt und schneidet ::after ab) */
 .console:has(> .cbody:focus-visible)::after { content: ""; position: absolute; inset: calc(var(--u2) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; z-index: 5; }
+/* Kontrastmodus: steht hier, weil dieselbe Regel in ui/a11y.css vor der Basisregel oben geladen wird und ihr unterliegt */
+@media (forced-colors: active) {
+  .console .cbody { border: 1px solid CanvasText; }
+  .console:has(> .cbody:focus-visible)::after { background: Highlight; }
+}

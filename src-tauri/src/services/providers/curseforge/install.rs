@@ -7,6 +7,7 @@ use super::{
     proxy::{file_of, files_by_id, mod_of, mods_by_id},
 };
 use crate::{
+    coded,
     error::{AppError, AppResult},
     models::{new_id, Instance, Mod, ModKind, ModSource},
     services::{
@@ -36,7 +37,7 @@ impl Planned {
     /// Eintrag der Instanz für die geladene, geprüfte Datei.
     pub(super) fn mod_entry(&self, sha1: String, required_by: Vec<String>, existing: &[Mod]) -> AppResult<Mod> {
         let id = format!("cf-{}", self.project.id);
-        let too_large = |_| AppError::invalid("Ungültige CurseForge-Nummer");
+        let too_large = |_| AppError::invalid(coded!("errors.providers.invalidCurseForgeId"));
         Ok(Mod {
             // Zwei Dateien desselben Projekts behalten verschiedene IDs.
             id: if existing.iter().any(|x| x.id == id) { new_id() } else { id },
@@ -51,6 +52,8 @@ impl Planned {
             enabled: true,
             kind: self.kind,
             required_by,
+            pinned: false,
+            pack_managed: false,
         })
     }
 
@@ -90,9 +93,10 @@ impl Plan {
                 .iter()
                 .find(|d| d.relation_type == INCOMPATIBLE && (installed.contains(&d.mod_id) || self.all().any(|p| p.project.id == d.mod_id)));
             if let Some(d) = clash {
-                return Err(AppError::invalid(format!(
-                    "{} ist mit einer vorhandenen Mod unverträglich (Projekt {})",
-                    planned.file.display_name, d.mod_id
+                return Err(AppError::invalid(coded!(
+                    "errors.providers.incompatibleMod",
+                    name = planned.file.display_name,
+                    project = d.mod_id
                 )));
             }
         }
@@ -157,7 +161,7 @@ async fn plan_install(client: &reqwest::Client, instance: &Instance, project: u3
     let kind = mod_kind(root_mod.class_id)?;
     let root_file = file_of(client, project, file_no).await?;
     if !runs(instance, kind, &root_file) {
-        return Err(AppError::invalid(format!("{} passt nicht zu dieser Instanz ({})", root_file.display_name, instance.minecraft_version)));
+        return Err(AppError::invalid(coded!("errors.providers.fileNotForInstance", name = root_file.display_name, version = instance.minecraft_version)));
     }
     let root = Planned { project: root_mod, file: root_file, kind };
     if kind != ModKind::Mod {
@@ -180,11 +184,11 @@ fn reserve_targets<'a>(plan: &'a Plan, instance: &Instance, game_dir: &Path, sta
     for planned in plan.all() {
         check_file_name(&planned.file.file_name, planned.kind)?;
         if !names.insert(planned.file.file_name.to_lowercase()) {
-            return Err(AppError::invalid("Mod-Dateinamen kollidieren"));
+            return Err(AppError::invalid(coded!("errors.providers.modFileNameClash")));
         }
         let target = planned.target(game_dir);
         staged.reserve(&target)?;
-        let remote = planned.file.remote_file().map_err(|e| AppError::invalid(format!("{}: {e}", planned.project.name)))?;
+        let remote = planned.file.remote_file().map_err(|e| AppError::invalid(coded!("errors.providers.projectFileFailed", name = planned.project.name, reason = e)))?;
         downloads.push(Download { planned, target, remote });
     }
     Ok(downloads)
@@ -205,7 +209,7 @@ async fn download_all(downloads: &[Download<'_>], progress: ProgressFn<'_>) -> A
 pub(super) fn check_file_name(name: &str, kind: ModKind) -> AppResult<()> {
     content::safe_path(name)?;
     if name.contains('/') || !name.ends_with(kind.extension()) {
-        return Err(AppError::invalid(format!("Unerwarteter Dateiname {name}")));
+        return Err(AppError::invalid(coded!("errors.providers.unexpectedFileName", name = name)));
     }
     Ok(())
 }
@@ -248,7 +252,7 @@ fn curseforge_projects(instance: &Instance) -> HashSet<u64> {
 }
 
 fn no_matching_file(m: &CfMod) -> AppError {
-    AppError::invalid(format!("Keine passende Version von {}", m.name))
+    AppError::invalid(coded!("errors.providers.noMatchingVersion", name = m.name))
 }
 
 /// Wählt für die Projekte einer Ebene die Datei-Nummer aus dem Index. Dieselbe Mod, die schon von Modrinth stammt,
@@ -257,7 +261,7 @@ fn pick_files(ids: &[u64], mut mods: HashMap<u64, CfMod>, instance: &Instance) -
     let installed: HashSet<String> = instance.mods.iter().map(|m| norm(&m.name)).collect();
     let mut picks = Vec::new();
     for id in ids {
-        let m = mods.remove(id).ok_or_else(|| AppError::invalid(format!("Die Abhängigkeit {id} gibt es bei CurseForge nicht mehr")))?;
+        let m = mods.remove(id).ok_or_else(|| AppError::invalid(coded!("errors.providers.dependencyGone", id = id)))?;
         if installed.contains(&norm(&m.name)) {
             continue;
         }
@@ -288,7 +292,7 @@ async fn resolve_dependencies(client: &reqwest::Client, instance: &Instance, roo
     while !level.is_empty() {
         level.retain(|id| !installed.contains(id) && seen.insert(*id));
         if found.len() + level.len() > MAX_DEPENDENCIES {
-            return Err(AppError::invalid("Dependency-Limit erreicht"));
+            return Err(AppError::invalid(coded!("errors.providers.dependencyLimit")));
         }
         let picks = pick_files(&level, mods_by_id(client, &level).await?, instance)?;
         let file_ids: Vec<u64> = picks.iter().map(|(_, file_id)| *file_id).collect();
@@ -347,6 +351,8 @@ mod tests {
             enabled: true,
             kind: ModKind::Mod,
             required_by: Vec::new(),
+            pinned: false,
+            pack_managed: false,
         });
         let picks = pick_files(&[10, 20], mods_response(), &instance).unwrap();
         assert_eq!(picks.iter().map(|(m, _)| m.id).collect::<Vec<_>>(), [10]);

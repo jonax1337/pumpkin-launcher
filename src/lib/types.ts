@@ -1,5 +1,7 @@
 // Backend-Vertrag (serde camelCase). Zeiten = Unix-Millisekunden.
 import { t } from "../i18n/core.ts";
+import type { GlyphName, GlyphPalette } from "../pixel/icons.tsx";
+import type { Biome } from "../pixel/sceneConfig.ts";
 
 export type ModLoader = "vanilla" | "fabric" | "quilt" | "forge" | "neoforge";
 export type ModSource =
@@ -21,9 +23,47 @@ export interface Mod {
   kind: ModKind;
   /** Modrinth-Projekt-IDs der direkt installierten Mods, die diese mitgebracht haben. Leer = vom Nutzer. */
   requiredBy: string[];
+  /** Festgehalten: die Update-Prüfung überspringt den Inhalt, er bleibt auf seiner Version. */
+  pinned: boolean;
+  /** Kam mit einem Modpack oder einer Vorlage in die Instanz; für ihn sind Pack-Updates der vorgesehene Weg. */
+  packManaged: boolean;
 }
 
 export type ModKind = "mod" | "resourcepack" | "shader";
+
+/** Größe und Änderungsdatum (Unix-ms) der Datei eines Inhalts. */
+export interface FileFacts {
+  modId: string;
+  sizeBytes: number;
+  modifiedMs: number;
+}
+
+/**
+ * Hinweis aus den Metadaten einer Mod-Datei; `subject` je Art: `missingDependency` die ID der fehlenden Mod,
+ * `duplicate` die anderen Dateien derselben Mod, `wrongLoader` die Loader der Datei, `wrongMinecraft` ihre Bedingung.
+ */
+export type IssueKind = "missingDependency" | "duplicate" | "wrongLoader" | "wrongMinecraft";
+export interface ContentIssue {
+  modId: string;
+  kind: IssueKind;
+  subject: string;
+}
+
+/** Dateien und Hinweise einer Instanz, gelesen aus den Mod-JARs. */
+export interface ContentAnalysis {
+  files: FileFacts[];
+  issues: ContentIssue[];
+}
+
+/**
+ * Gewählte Pakete laut `options.txt` und Iris. `resourcePacks` in Dateireihenfolge: das letzte gewinnt;
+ * eigene Pakete stehen als `file/<Dateiname>`, eingebaute (`vanilla`, `fabric`) ohne Präfix.
+ */
+export interface PackSelection {
+  resourcePacks: string[];
+  incompatible: string[];
+  shaderPack: string | null;
+}
 
 /** Eigene Datei mit ihrer Art, zum Hinzufügen in eine Instanz. */
 export interface LocalFile {
@@ -42,11 +82,63 @@ export interface FileCheck {
   error: string | null;
 }
 
-/** Herkunft einer aus einem Modpack installierten Instanz. */
+/** Herkunft einer aus einem Modpack installierten Instanz; `file` = selbst gewählte `.mrpack` (Name und Version aus ihr). */
 export type ModpackOrigin =
   | { type: "modrinth"; projectId: string; versionId: string }
   | { type: "curseforge"; projectId: number; fileId: number }
-  | { type: "provider"; source: string; projectId: string; versionId: string };
+  | { type: "provider"; source: string; projectId: string; versionId: string }
+  | { type: "file"; name: string; version: string };
+
+/** Wohin ein Pack-Update führt: eine Version der Quelle oder eine neuere `.mrpack`-Datei (absoluter Pfad). */
+export type PackTarget = { type: "version"; versionId: string } | { type: "file"; path: string };
+
+/** Was ein Pack-Update geändert hat, als Pfade im Spielordner; `kept` = vom Spieler geändert, blieb stehen. */
+export interface PackChanges {
+  added: string[];
+  updated: string[];
+  removed: string[];
+  kept: string[];
+}
+
+export interface PackUpdateOutcome {
+  instance: Instance;
+  changes: PackChanges;
+  /** Welten, die vorher gesichert wurden. */
+  worldBackups: number;
+}
+
+/** Ziel eines Wechsels von Minecraft-Version oder Loader; ohne Loader-Version gilt die neueste stabile. */
+export interface MigrationTarget {
+  minecraftVersion: string;
+  loader: ModLoader;
+  loaderVersion: string | null;
+}
+
+/** Was ein Wechsel mit einem Inhalt tut; `modId` ist bei neuen Abhängigkeiten ihr Modrinth-Projekt. */
+export interface ModChange {
+  modId: string;
+  name: string;
+  outcome: "update" | "add" | "disable";
+  /** Neue Version bei `update` und `add`. */
+  version: string | null;
+}
+
+/** Warum ein Wechsel nur als Kopie geht; die Oberfläche übersetzt den Grund über `errors.game.migrate.<Grund>`. */
+export type MigrationBlock = "packInstance" | "downgradeWithWorlds";
+
+/** Vorschau eines Wechsels; `blocked` nennt den Grund, warum er nur als Kopie geht. */
+export interface MigrationCheck {
+  changes: ModChange[];
+  downgrade: boolean;
+  worlds: number;
+  blocked: MigrationBlock | null;
+}
+
+export interface MigrationOutcome {
+  instance: Instance;
+  changes: ModChange[];
+  worldBackups: number;
+}
 
 /** Quick Play: direkt in eine Welt (`id` = Ordnername) oder auf einen Server (`host[:port]`). */
 export type QuickPlay = { type: "world"; id: string } | { type: "server"; address: string };
@@ -63,12 +155,31 @@ export interface LaunchOptions {
   javaPath: string | null;
   /** RAM-Standard für Instanzen ohne eigenen Wert. */
   defaultMemoryMb: number;
+  /** Launcher-Einstellung „Welten vor dem Start sichern“; die Wahl der Instanz (`backupWorlds`) geht vor. */
+  backupWorlds: boolean;
+  /** So viele automatische Sicherungen je Welt bleiben erhalten. */
+  backupKeep: number;
+  /** Minimaler RAM (-Xms) für Instanzen ohne eigenen Wert; null = die JVM entscheidet. */
+  defaultMinMemoryMb: number | null;
+  /** JVM-Argumente für Instanzen ohne eigene. */
+  defaultJvmArgs: string[];
+  /** Fenster für Instanzen, die keines festgelegt haben; null = wie Minecraft. */
+  defaultWindow: GameWindow | null;
   /** Direkt in eine Welt oder auf einen Server. */
   quickPlay: QuickPlay | null;
 }
 
 /** Spielfenster beim Start; `default` = wie Minecraft es selbst öffnet. */
 export type GameWindow = { type: "default" } | { type: "size"; width: number; height: number } | { type: "fullscreen" };
+
+/** Vom Nutzer gewähltes Icon einer Instanz: ein Pixel-Icon oder ein eigenes Bild (quadratisch, als Datenadresse). */
+export type IconChoice = { type: "glyph"; glyph: GlyphName; palette: GlyphPalette } | { type: "image"; src: string };
+
+/** Gewählte Szene einer Instanz: Biom und Variante des Aufbaus. */
+export interface InstanceScene {
+  biome: Biome;
+  seed: number;
+}
 
 export interface Instance {
   id: string;
@@ -78,6 +189,8 @@ export interface Instance {
   loaderVersion: string | null;
   modpack: ModpackOrigin | null;
   memoryMb: number | null;
+  /** Minimaler RAM (-Xms) in MB; null = Einstellung des Launchers. */
+  minMemoryMb: number | null;
   jvmArgs: string[];
   /** Eigene Java-Programmdatei; null = Einstellung des Launchers bzw. mitgelieferte Runtime. */
   javaPath: string | null;
@@ -88,13 +201,23 @@ export interface Instance {
   playtimeSecs: number;
   /** Gruppe in der Bibliothek; null = ohne Gruppe. */
   group: string | null;
+  /** Eigene Notizen zur Instanz, höchstens `NOTES_MAX_LENGTH` Zeichen. */
+  notes: string;
   /** Instanzordner im anderen Launcher, aus dem die Instanz importiert wurde. */
   importedFrom: string | null;
+  /** Eigenes Icon; null = automatisch (Icon des Modpacks, sonst Pixel-Icon aus der ID). */
+  icon: IconChoice | null;
+  /** Gewählte Szene; null = aus der ID abgeleitet. */
+  scene: InstanceScene | null;
+  /** Welten vor dem Start sichern: die Wahl dieser Instanz; null = Einstellung des Launchers. */
+  backupWorlds: boolean | null;
   mods: Mod[];
   createdAt: number;
   lastPlayedAt: number | null;
   /** Ziel des letzten Starts per Quick Play. */
   lastQuickPlay: QuickPlay | null;
+  /** Konto, mit dem diese Instanz startet (Schlüssel aus `keyOf`); null = aktives Konto. */
+  defaultAccount: string | null;
 }
 
 /** Vorlage: gespeicherter Schnappschuss einer Instanz (lokales .mrpack, ohne Welten). */
@@ -107,12 +230,25 @@ export interface Template {
   createdAt: number;
 }
 
+/** Wie ein Export die Inhalte einer Auswahl verteilt (Mods, Ressourcen- und Shaderpakete). */
+export interface ExportSummary {
+  /** Als Download von Modrinth im Pack. */
+  linked: number;
+  /** Als Datei im Pack. */
+  embedded: number;
+  /** Ausgeschaltet, deshalb nicht im Pack. */
+  skippedDisabled: number;
+}
+
 export interface NewInstance {
   name: string;
   minecraftVersion: string;
   loader: ModLoader;
   loaderVersion: string | null;
 }
+
+/** Längste Notiz einer Instanz in Zeichen; das Backend lehnt längere ab. */
+export const NOTES_MAX_LENGTH = 10_000;
 
 /** Feste Reihenfolge überall (Dialog „Neue Instanz“, Filter). */
 export const ALL_LOADERS: ModLoader[] = ["vanilla", "fabric", "quilt", "forge", "neoforge"];
@@ -140,9 +276,21 @@ export const FOREIGN_LAUNCHER_LABELS: Record<ForeignLauncher, string> = {
   atlauncher: "ATLauncher",
 };
 
-/** Instanz eines anderen Launchers aus `import_detect`; geht unverändert an `instance_import`. */
+/** Einstellung einer fremden Instanz, die Pumpkin Launcher nicht übernimmt. */
+export type NotAdopted = "preLaunchCommand" | "postExitCommand" | "wrapperCommand" | "javaPath" | "jvmArgs";
+
+/** Was der Import aus dem Spielordner mitnimmt. */
+export interface ForeignContents {
+  sizeBytes: number;
+  mods: number;
+  worlds: number;
+}
+
+/** Instanz eines anderen Launchers aus `import_detect`; `instance_import` bekommt davon nur `root`, `path` und den Namen. */
 export interface ForeignInstance {
   launcher: ForeignLauncher;
+  /** Ordner, unter dem die Suche die Instanz fand. */
+  root: string;
   /** Instanzordner im anderen Launcher, eindeutig je Instanz. */
   path: string;
   gameDir: string;
@@ -150,12 +298,27 @@ export interface ForeignInstance {
   imported: boolean;
   /** Warum Pumpkin Launcher die Instanz nicht starten kann (z. B. Forge vor 1.17); dann gibt es keinen Import. */
   unsupported: string | null;
+  contents: ForeignContents;
   name: string;
   minecraftVersion: string;
   loader: ModLoader;
   loaderVersion: string | null;
   memoryMb: number | null;
   jvmArgs: string[];
+  javaPath: string | null;
+  window: GameWindow;
+  group: string | null;
+  notes: string;
+  /** Eigenes Icon als `data:`-URL. */
+  icon: string | null;
+  notAdopted: NotAdopted[];
+}
+
+/** Die Wahl für `instance_import`: die erkannte Instanz und ihr Name; alles Weitere liest das Backend selbst. */
+export interface ImportRequest {
+  root: string;
+  path: string;
+  name: string;
 }
 
 // ---------- Installation & Spielstart ----------
@@ -218,6 +381,35 @@ export interface ExitPayload {
   /** Pfad zum Absturzbericht von Minecraft, falls einer geschrieben wurde. */
   crashReport: string | null;
   logFile: string | null;
+  /** Mods, die laut Absturzbericht als Ursache in Frage kommen, wahrscheinlichster zuerst. */
+  suspectedMods: string[];
+}
+
+/** Auf dem Rechner gefundene Java-Installation; `path` ist die Programmdatei. */
+export interface JavaInstall {
+  path: string;
+  version: string;
+  major: number;
+  vendor: string | null;
+}
+
+/** Platz im Datenordner in Bytes. Mods zählen im Cache und in der Instanz (Hardlinks, belegen nur einmal Platz). */
+export interface StorageOverview {
+  dataDir: string;
+  /** Freier Platz auf dem Laufwerk in MB. */
+  freeMb: number | null;
+  instances: { id: string; bytes: number }[];
+  modCacheBytes: number;
+  /** Teil des Mod-Caches, den keine Instanz braucht und „Cache leeren“ löscht. */
+  unusedCacheBytes: number;
+  sharedBytes: number;
+}
+
+/** Gesichertes Protokoll einer früheren Spielsitzung; `id` ist ihre Startzeit. */
+export interface LogSession {
+  id: string;
+  startedAt: number;
+  size: number;
 }
 
 /** Welches Protokoll `log_share` hochlädt: `logs/latest.log` oder den neuesten Absturzbericht. */
@@ -337,4 +529,16 @@ export interface Server {
   icon: string | null;
   /** Ressourcenpakete des Servers annehmen bzw. ablehnen; null = im Spiel nachfragen. */
   acceptTextures: boolean | null;
+}
+
+/** Antwort eines Servers auf die Statusabfrage der Serverliste. */
+export interface ServerStatus {
+  /** MOTD als einzeiliger Text ohne Formatierung. */
+  motd: string;
+  playersOnline: number;
+  playersMax: number;
+  /** Versionsname, wie der Server ihn nennt; leer, wenn er keinen nennt. */
+  version: string;
+  /** Antwortzeit in Millisekunden. */
+  latencyMs: number;
 }

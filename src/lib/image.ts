@@ -3,9 +3,9 @@ export const ICON_SIZE_PX = 256;
 const ICON_FORMAT = "image/webp";
 const ICON_QUALITY = 0.9;
 
-/** Das Bild aus `file` als Datenadresse, mittig quadratisch zugeschnitten und auf `ICON_SIZE_PX` verkleinert. */
-export async function squareIcon(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file);
+/** Das Bild aus `source` (Datei oder geladenes Bild) als Datenadresse, mittig quadratisch zugeschnitten und auf `ICON_SIZE_PX` verkleinert. */
+export async function squareIcon(source: ImageBitmapSource): Promise<string> {
+  const bitmap = await createImageBitmap(source);
   const edge = Math.min(bitmap.width, bitmap.height);
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = Math.min(edge, ICON_SIZE_PX);

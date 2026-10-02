@@ -5,9 +5,9 @@ import { MemoryChooser } from "@/components/common";
 import { IconPicker } from "@/components/IconPicker";
 import { IconView } from "@/components/InstanceIcon";
 import type { Biome } from "@/pixel/scene";
-import { useLookStore, type IconChoice } from "@/store/look";
-import { useCreateInstance, useLoaderVersions, useVersions } from "@/hooks/useInstances";
-import { ALL_LOADERS, LOADER_LABELS, type ModLoader } from "@/lib/types";
+import { useCreateInstance, useInstances, useLoaderVersions, useVersions } from "@/hooks/useInstances";
+import { uniqueName } from "@/lib/names";
+import { ALL_LOADERS, LOADER_LABELS, type IconChoice, type ModLoader } from "@/lib/types";
 import type { TabContext, TabModel } from "./tab";
 
 // Kurze Erklärung je Loader, steht als Hilfe unter der Wahl.
@@ -30,6 +30,7 @@ const LATEST = "latest";
 
 /** Zustand der eigenen Instanz: Name, Minecraft-Version, Loader samt Version und Arbeitsspeicher. */
 function useBlankForm() {
+  const { t } = useI18n();
   // null = der Vorschlag aus Loader und Version, bis der Nutzer selbst einen Namen tippt
   const [customName, setCustomName] = useState<string | null>(null);
   const [snapshots, setSnapshots] = useState(false);
@@ -39,6 +40,7 @@ function useBlankForm() {
   const [memory, setMemory] = useState<number | null>(null);
   const [icon, setIcon] = useState<IconChoice | null>(null);
   const versions = useVersions();
+  const instances = useInstances();
   const filtered = versions.data?.filter((v) => v.type === "release" || snapshots) ?? [];
   // Neueste Version vorauswählen, bis der Nutzer selbst wählt
   const selectedVersion = filtered.some((v) => v.id === version) ? version : (filtered[0]?.id ?? "");
@@ -46,7 +48,8 @@ function useBlankForm() {
   // Gewählte Loader-Version verfällt, wenn es sie für die neue Minecraft-Version nicht gibt
   const selectedLoader = loaderVersions.data?.some((v) => v.version === loaderVersion) ? loaderVersion : LATEST;
   const loaderUnavailable = loader !== "vanilla" && (!!loaderVersions.error || loaderVersions.data?.length === 0);
-  const suggestion = `${loader === "vanilla" ? "Minecraft" : LOADER_LABELS[loader]} ${selectedVersion}`.trim();
+  const friendlyName = t(loader === "vanilla" ? "components.newInstance.defaultName.vanilla" : "components.newInstance.defaultName.modded");
+  const suggestion = uniqueName(friendlyName, instances.data?.map((i) => i.name) ?? []);
   return {
     versions, filtered, selectedVersion, loaderVersions, selectedLoader, loaderUnavailable, suggestion,
     customName, snapshots, loader, memory, icon,
@@ -64,7 +67,7 @@ function BlankPane({ form }: { form: BlankForm }) {
       <Field label={t("common.name")} help={t("components.newInstance.nameHelp")}>
         <TextField value={form.customName ?? form.suggestion} maxLength={64} onChange={(e) => form.setCustomName(e.target.value)} />
       </Field>
-      <Field label={t("components.newInstance.mcVersion")}>
+      <Field label={t("components.newInstance.mcVersion")} reserveLines={2} help={t("components.version.help")}>
         <Actions gap={12} wrap>
           {versions.isPending ? (
             <Skel w={220} h={40} />
@@ -86,8 +89,8 @@ function BlankPane({ form }: { form: BlankForm }) {
       <Field
         label={t("components.common.loader")}
         group
-        reserveLines={1}
-        help={t(LOADER_HELP[loader])}
+        reserveLines={2}
+        help={`${t("components.loader.what")} ${t(LOADER_HELP[loader])}`}
         error={
           loaderUnavailable
             ? loaderVersions.error ? t("components.loader.unreachable", { loader: LOADER_LABELS[loader] }) : t("components.loader.notYetFor", { version: selectedVersion, loader: LOADER_LABELS[loader] })
@@ -119,7 +122,7 @@ function BlankPane({ form }: { form: BlankForm }) {
             />
           )}
         </Field>
-        <Field label={t("ui.memory.label")} group>
+        <Field label={t("ui.memory.label")} group help={t("components.memory.what")}>
           <MemoryChooser name="ni-ram" value={form.memory} onChange={form.setMemory} autoText={t("components.memory.autoFromSettings")} />
         </Field>
       </Disclosure>
@@ -141,13 +144,9 @@ export function useBlankTab(ctx: TabContext): TabModel {
         loader: form.loader,
         loaderVersion: form.selectedLoader === LATEST ? null : form.selectedLoader,
         memoryMb: form.memory,
+        icon: form.icon,
       },
-      {
-        onSuccess: (instance) => {
-          useLookStore.getState().setIcon(instance.id, form.icon);
-          ctx.onCreated(instance);
-        },
-      },
+      { onSuccess: ctx.onCreated },
     );
   }
 

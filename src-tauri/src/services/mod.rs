@@ -10,6 +10,7 @@ mod testutil;
 pub mod auth;
 pub mod content;
 pub mod datapacks;
+pub mod crashreport;
 pub mod debuginfo;
 pub mod download;
 pub mod duplicate;
@@ -17,21 +18,29 @@ pub mod gamelog;
 pub mod imports;
 pub mod install;
 pub mod java;
+pub mod javadetect;
 pub mod launch;
+pub mod launch_args;
 pub mod limits;
 pub mod loader;
 pub mod local_files;
 pub mod logshare;
+pub mod migrate;
 pub mod modrinth;
 pub mod mods;
 pub mod mojang;
 pub mod mrpack;
+pub mod pack_update;
+pub mod pack_selection;
 pub mod progress;
 pub mod providers;
 pub mod rules;
 pub mod screenshots;
+pub mod server_ping;
 pub mod servers;
+pub mod sessionlog;
 pub mod skins;
+pub mod storage;
 pub mod store;
 pub mod system;
 pub mod templates;
@@ -44,9 +53,9 @@ pub use dirs::Dirs;
 pub use loader::forge;
 pub(crate) use dirs::REGENERATED;
 pub(crate) use fsutil::{
-    add_zip_file, copy_files, entries, first_free_name, free_name, has_extension, none_if_missing,
+    add_zip_file, copy_files, entries, find_listed, first_free_name, free_name, has_extension, none_if_missing,
     remove_logged, require_plain_name, strip_extension, trash_listed, walk, write_atomic, write_zip_atomic,
 };
-pub(crate) use tasks::{blocking, check_cancelled, lock};
+pub(crate) use tasks::{blocking, check_cancelled, lock, until_phases_end};
 #[cfg(test)]
 pub(crate) use testutil::{compound, gzip_nbt, write_files};

@@ -154,11 +154,20 @@ export function spike(b: Buf, x: number, y: number, len: number, taper: number, 
   }
 }
 
-export function blockCloud(b: Buf, x: number, y: number, w: number, h: number, color: string, shade: string) {
-  const c = abgr(color), s = abgr(shade), bumpH = Math.max(1, Math.round(h * 0.5));
-  rect(b, x, y, w, h, c);
-  rect(b, x, y + h - 1, w, 1, s);
-  rect(b, x + Math.round(w * 0.2), y - bumpH, Math.round(w * 0.45), bumpH, c);
+/** Gewölbte Kuppe mit flachem Boden `baseY`: je Zeile von oben breiter, nach einem Kreisbogen. */
+function dome(b: Buf, left: number, baseY: number, w: number, h: number, color: number) {
+  for (let row = 0; row < h; row++) {
+    const t = (row + 0.5) / h, rowW = Math.max(1, Math.round(w * Math.sqrt(1 - (1 - t) ** 2)));
+    rect(b, left + ((w - rowW) >> 1), baseY - h + row, rowW, 1, color);
+  }
+}
+
+/** Haufenwolke: flacher Boden `baseY`, zwei Kuppen (links höher), Unterseite in `shade`. */
+export function puffCloud(b: Buf, x: number, baseY: number, w: number, h: number, color: string, shade: string) {
+  const c = abgr(color);
+  dome(b, x, baseY, Math.round(w * 0.62), h, c);
+  dome(b, x + Math.round(w * 0.38), baseY, Math.round(w * 0.62), Math.max(2, Math.round(h * 0.7)), c);
+  rect(b, x, baseY - 1, w, 1, abgr(shade));
 }
 
 export function streak(b: Buf, x: number, y: number, len: number, color: string, underColor: string) {

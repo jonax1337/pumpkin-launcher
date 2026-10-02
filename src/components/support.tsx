@@ -3,10 +3,8 @@ import { create } from "zustand";
 import { useI18n } from "@/i18n";
 import { Actions, Button, ConfirmDialog, FormRow } from "@/ui";
 import { useCopyDebugInfo, useShareLog } from "@/hooks/useSupport";
-import { openPage } from "@/lib/links";
+import { openPage, REPO_URL } from "@/lib/links";
 import type { ExitPayload, LogKind } from "@/lib/types";
-
-const REPO_URL = "https://github.com/jonax1337/pumpkin-launcher";
 
 type ShareRequest = { instanceId: string; kind: LogKind };
 
@@ -42,10 +40,10 @@ export function ShareLogDialog() {
   );
 }
 
-/** „Debug-Info kopieren“ im Aussehen des Aufrufers (Größe, Symbol, kompakt). */
-export function DebugInfoButton(look: Omit<ComponentProps<typeof Button>, "onClick" | "children">) {
+/** „Debug-Info kopieren“ im Aussehen des Aufrufers (Größe, Symbol, kompakt); mit `instanceId` samt deren Mod-Liste. */
+export function DebugInfoButton({ instanceId, ...look }: Omit<ComponentProps<typeof Button>, "onClick" | "children"> & { instanceId?: string }) {
   const { t } = useI18n();
-  const copy = useCopyDebugInfo();
+  const copy = useCopyDebugInfo(instanceId);
   return <Button {...look} disabled={copy.isPending} onClick={() => copy.mutate()}>{t("components.support.copyDebugInfo")}</Button>;
 }
 

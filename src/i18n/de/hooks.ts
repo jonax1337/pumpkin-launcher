@@ -31,7 +31,10 @@ export const hooks = {
   "hooks.game.crashReportHint": "Im Absturzbericht steht meist, welche Mod schuld ist.",
   "hooks.game.logHint": "Das Protokoll zeigt, was zuletzt passiert ist.",
 
-  "hooks.screenshot.trashed": "Screenshot in den Papierkorb gelegt",
+  "hooks.screenshot.trashed.one": "Screenshot in den Papierkorb gelegt",
+  "hooks.screenshot.trashed.other": "{count} Screenshots in den Papierkorb gelegt",
+  "hooks.screenshot.copied": "Screenshot in die Zwischenablage kopiert",
+  "hooks.screenshot.copyFailed": "Der Screenshot ließ sich nicht kopieren.",
 
   "hooks.skin.inLibrary": "„{name}“ liegt jetzt in deiner Bibliothek",
   "hooks.skin.nowWearing": "Du trägst jetzt „{name}“",
@@ -45,7 +48,8 @@ export const hooks = {
   "hooks.support.debugHint": "Füge sie in deinen Fehlerbericht ein.",
 
   "hooks.template.saved": "Vorlage „{name}“ gespeichert",
-  "hooks.template.savedHint": "Du findest sie unter Neu › Vorlage.",
+  "hooks.template.savedHint": "Du findest sie unter Neue Instanz › Vorlage.",
+  "hooks.template.imported": "Vorlage „{name}“ importiert",
 
   "hooks.datapack.added.one": "„{name}“ hinzugefügt",
   "hooks.datapack.added.other": "{count} Datenpakete hinzugefügt",
@@ -61,5 +65,11 @@ export const hooks = {
   "hooks.world.restoreTaskDone": "„{name}“ wiederhergestellt",
   "hooks.world.restored": "„{name}“ ist wieder da",
   "hooks.world.restoredInFolder": "„{name}“ ist wieder da, im Ordner „{folder}“",
+  "hooks.world.importTask": "„{name}“ importieren",
+  "hooks.world.importTaskDone": "„{name}“ importiert",
+  "hooks.world.imported": "„{name}“ importiert",
+  "hooks.world.importedInFolder": "„{name}“ importiert, im Ordner „{folder}“",
+  "hooks.world.exportBackupsPick": "Ordner für die Sicherungen wählen",
+  "hooks.world.backupsExported": "Sicherungen exportiert nach {folder}",
   "hooks.world.serverRemoved": "„{name}“ entfernt",
 } satisfies Dict;

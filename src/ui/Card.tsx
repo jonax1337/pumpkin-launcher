@@ -36,6 +36,10 @@ export type SceneCardProps = {
   hit: Hit;
   /** „aktuell“: Akzentbalken unten (mini), aria-current am Knopf. */
   current?: boolean;
+  /** Auswahlfeld (Checkbox) unten links auf dem Bild; sichtbar bei Hover/Fokus, gewählt oder im Auswahlmodus (siehe card.css). */
+  pick?: ReactNode;
+  /** Gewählt: Kupferring um die Karte. */
+  selected?: boolean;
   /** Kontextmenü (Rechtsklick). */
   menu?: MenuEntry[];
   /** Position für die Einblend-Staffel (40 ms je Karte, höchstens MAX_STAGGER). */
@@ -94,7 +98,7 @@ function CardHit({ hit, title, sub, tip, current, pressed, titleRef, subRef }: {
  * Trefferfläche (`hit`, Link oder Knopf) über allem. Hover: eine Hebung (1 Einheit) + helleres Rahmenlicht; Druck setzt ab.
  * Fokusring an der Karte (über Rahmen und Bildunterschrift).
  */
-export function SceneCard({ variant, look, art, title, sub, status, actions, primary, hit, current, menu, index, tip, className, "data-force": force }: SceneCardProps) {
+export function SceneCard({ variant, look, art, title, sub, status, actions, primary, hit, current, pick, selected, menu, index, tip, className, "data-force": force }: SceneCardProps) {
   const titleRef = useRef<HTMLElement>(null);
   const subRef = useRef<HTMLElement>(null);
   const card = (
@@ -103,6 +107,7 @@ export function SceneCard({ variant, look, art, title, sub, status, actions, pri
       data-variant={variant}
       data-bio={look.bio}
       data-cur={flag(current)}
+      data-pressed={flag(selected)}
       data-rise={flag(index != null)}
       data-force={force}
       style={cardStyle(look, index)}
@@ -121,6 +126,7 @@ export function SceneCard({ variant, look, art, title, sub, status, actions, pri
           {variant === "mini" && primary}
         </div>
       )}
+      {pick && <div className="vx-card-pick">{pick}</div>}
     </div>
   );
   return menu ? <ContextMenu items={menu}>{card}</ContextMenu> : card;

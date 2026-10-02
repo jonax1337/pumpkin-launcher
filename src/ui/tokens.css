@@ -31,6 +31,11 @@
   --sel-bg: color-mix(in srgb, var(--copper) 10%, var(--panel));
   --sel-cur: var(--acc);
 
+  /* Bevel des „an“-Zustands (Schalter, Checkbox): aus --copper abgeleitet, weil die Saison die Marke zur Laufzeit umfärbt (Brand.tsx).
+     Gleiche Mischung wie --acc-hi/--acc-mid (OKLab, mit --bg). */
+  --copper-hi: color-mix(in oklab, var(--copper) 58%, #fff);
+  --copper-lo: color-mix(in oklab, var(--copper) 76%, #070A11);
+
   /* Übergänge nur in ganzen Stufen; Bewegungen um 1 Einheit springen (kein Übergang, sonst halbe Pixel) */
   --st: 90ms steps(2, end);
 

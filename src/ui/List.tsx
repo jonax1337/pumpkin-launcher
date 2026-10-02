@@ -13,9 +13,9 @@ import type { Breakpoint } from "./types";
  * Spaltenraster je Liste (list.css, inkl. Media Queries):
  * instances 56 px · content 48 px (noWarnCol: ohne Spalte „Hinweise“) · catalog 84 px (feature 132) · catalog-compact 76 px ·
  * versions ≥ 44 px (Trennlinie unten) · tasks 64 px · tiles: Raster aus 88-px-Kacheln · accounts: 60-px-Platten ·
- * worlds 56 px (Welten und Server: Bild, Name, Aktion, Menü).
+ * worlds 56 px (Welten: Bild, Name, Aktion, Menü) · servers 56 px (Server: Bild, Name, Status, Aktion, Menü).
  */
-export type ListVariant = "instances" | "content" | "catalog" | "catalog-compact" | "versions" | "tasks" | "tiles" | "accounts" | "worlds";
+export type ListVariant = "instances" | "content" | "catalog" | "catalog-compact" | "versions" | "tasks" | "tiles" | "accounts" | "worlds" | "servers";
 
 /** Was die Zeile ihrem Inhalt verrät: ob sie als Ganzes trifft (Tooltip-Wirt) und ob sie die Katalogkarte ist (Titelgröße). */
 const RowCtx = createContext({ hit: false, feature: false });
@@ -34,6 +34,15 @@ export function List({ variant, head, divided, noWarnCol, className, children, "
     <div className={cn("vx-list", className)} data-variant={variant} data-divided={flag(divided)} data-nw={flag(noWarnCol)} {...props}>
       {head != null && <div className="vx-lhead">{head}</div>}
       <div className="vx-rows" role="list" aria-label={label}>{children}</div>
+    </div>
+  );
+}
+
+/** Kopfzeile allein, im Raster der Variante: einmal über mehreren Listen, die dieselben Spalten teilen (Gruppen). */
+export function ListHeader({ variant, children }: { variant: ListVariant; children: ReactNode }) {
+  return (
+    <div className="vx-list" data-variant={variant}>
+      <div className="vx-lhead">{children}</div>
     </div>
   );
 }

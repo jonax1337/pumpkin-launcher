@@ -1,17 +1,22 @@
 //! Serverliste des Spiels: `servers.dat` im Spielordner, NBT ohne Kompression mit der Liste `servers`.
 //! Der Launcher ändert nur Name, Adresse und `acceptTextures`; alle anderen Tags (Icon, `hidden` …) bleiben erhalten.
-use std::{collections::HashMap, fs, path::Path};
+use std::{collections::HashMap, fs, net::Ipv6Addr, path::Path};
 
 use fastnbt::Value;
 use serde::{Deserialize, Serialize};
 
 use super::{none_if_missing, write_atomic, PNG_DATA_URL};
+use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::{require_name, NO_NAME_LIMIT};
 
 const FILE: &str = "servers.dat";
 /// Längste Serveradresse in Bytes.
 const MAX_ADDRESS_LEN: usize = 255;
+const MAX_HOST_LEN: usize = 253;
+const MAX_LABEL_LEN: usize = 63;
+/// Port, den das Spiel nimmt, wenn die Adresse keinen nennt.
+const DEFAULT_PORT: u16 = 25565;
 
 /// Tags der Datei, die der Launcher liest oder schreibt.
 const SERVERS: &str = "servers";
@@ -78,20 +83,58 @@ pub fn remove(game_dir: &Path, index: usize) -> AppResult<()> {
     })
 }
 
-/// Serveradresse wie im Spiel: `host[:port]` ohne Leerzeichen. Sie wird zum Startargument und darf
+/// Eine geprüfte Serveradresse in ihren Teilen; `host` ohne eckige Klammern.
+#[derive(Debug, PartialEq)]
+pub struct ServerAddress<'a> {
+    pub host: &'a str,
+    pub port: u16,
+}
+
+/// Serveradresse wie im Spiel: `host[:port]` mit Hostname, IPv4 oder `[IPv6]`. Sie wird zum Startargument und darf
 /// deshalb nicht wie eine Option (`--…`) aussehen.
 pub fn require_address(address: &str) -> AppResult<&str> {
     let address = address.trim();
-    if !is_usable_address(address) {
-        return Err(AppError::invalid("Gib eine Serveradresse wie play.example.net oder play.example.net:25565 ein"));
+    if parse_address(address).is_none() {
+        return Err(AppError::invalid(coded!("errors.app.server.addressExample")));
     }
     Ok(address)
 }
 
-fn is_usable_address(address: &str) -> bool {
-    let looks_like_option = address.starts_with('-');
-    let has_blank_or_control = address.contains(|c: char| c.is_whitespace() || c.is_control());
-    !address.is_empty() && address.len() <= MAX_ADDRESS_LEN && !looks_like_option && !has_blank_or_control
+/// Zerlegt eine Adresse; `None`, wenn sie nicht `host[:port]` mit Port 1 bis 65535 ist.
+pub fn parse_address(address: &str) -> Option<ServerAddress<'_>> {
+    if address.len() > MAX_ADDRESS_LEN {
+        return None;
+    }
+    let (host, port) = split_host_port(address)?;
+    let port = port.map_or(Some(DEFAULT_PORT), parse_port)?;
+    Some(ServerAddress { host, port })
+}
+
+fn split_host_port(address: &str) -> Option<(&str, Option<&str>)> {
+    if let Some(bracketed) = address.strip_prefix('[') {
+        let (host, rest) = bracketed.split_once(']')?;
+        let port = if rest.is_empty() { None } else { Some(rest.strip_prefix(':')?) };
+        return host.parse::<Ipv6Addr>().ok().map(|_| (host, port));
+    }
+    let (host, port) = match address.split_once(':') {
+        Some((host, port)) => (host, Some(port)),
+        None => (address, None),
+    };
+    is_hostname(host).then_some((host, port))
+}
+
+fn parse_port(digits: &str) -> Option<u16> {
+    let all_digits = !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit());
+    digits.parse().ok().filter(|&port| all_digits && port != 0)
+}
+
+/// Punktgetrennte Labels aus Buchstaben, Ziffern, `-` und `_`; ein Label beginnt und endet nicht mit `-`.
+fn is_hostname(host: &str) -> bool {
+    let is_label = |label: &str| {
+        let chars_ok = label.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_');
+        (1..=MAX_LABEL_LEN).contains(&label.len()) && chars_ok && !label.starts_with('-') && !label.ends_with('-')
+    };
+    host.len() <= MAX_HOST_LEN && host.split('.').all(is_label)
 }
 
 /// Geprüfte Eingaben, bereit für einen Eintrag der Datei.
@@ -104,7 +147,7 @@ struct Edit<'a> {
 impl<'a> Edit<'a> {
     fn validated(server: &'a ServerInput) -> AppResult<Self> {
         Ok(Self {
-            name: require_name(&server.name, NO_NAME_LIMIT, "Gib dem Server einen Namen")?,
+            name: require_name(&server.name, NO_NAME_LIMIT, coded!("errors.app.server.nameMissing"))?,
             address: require_address(&server.address)?,
             accept_textures: server.accept_textures,
         })
@@ -141,7 +184,7 @@ fn read(path: &Path) -> AppResult<Compound> {
 fn entries(root: &mut Compound) -> AppResult<&mut Vec<Value>> {
     match root.entry(SERVERS.into()).or_insert_with(|| Value::List(Vec::new())) {
         Value::List(list) => Ok(list),
-        _ => Err(AppError::invalid("servers.dat hat ein unbekanntes Format")),
+        _ => Err(AppError::invalid(coded!("errors.app.server.unknownFormat"))),
     }
 }
 
@@ -175,7 +218,7 @@ fn position(list: &[Value], index: usize) -> AppResult<usize> {
 }
 
 fn server_not_found(index: usize) -> AppError {
-    AppError::NotFound { kind: "Server", id: (index + 1).to_string() }
+    AppError::NotFound(coded!("errors.app.notFound.server", id = index + 1).into())
 }
 
 fn to_server(entry: &Compound) -> Server {
@@ -279,13 +322,43 @@ mod tests {
     fn rejects_unusable_input() {
         let dir = game_dir();
         assert!(add(&dir, &input(" ", "a.example.net", None)).is_err());
-        for address in ["", "mit leerzeichen", "--demo", "a\nb"] {
-            assert!(require_address(address).is_err(), "{address:?}");
-        }
+        assert!(add(&dir, &input("Kaputt", "not a valid address!!", None)).is_err());
+        assert!(update(&dir, 0, &input("Kaputt", "host:99999", None)).is_err());
         assert_eq!(require_address(" play.example.net:25565 ").unwrap(), "play.example.net:25565");
-        assert!(require_address(&"a".repeat(MAX_ADDRESS_LEN)).is_ok());
-        assert!(require_address(&"a".repeat(MAX_ADDRESS_LEN + 1)).is_err());
         assert_eq!(raw(&dir).len(), 3);
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    fn parsed(address: &str) -> Option<(&str, u16)> {
+        parse_address(address).map(|a| (a.host, a.port))
+    }
+
+    #[test]
+    fn parses_host_and_port() {
+        assert_eq!(parsed("play.example.net"), Some(("play.example.net", 25565)));
+        assert_eq!(parsed("play.example.net:25570"), Some(("play.example.net", 25570)));
+        assert_eq!(parsed("localhost"), Some(("localhost", 25565)));
+        assert_eq!(parsed("127.0.0.1:1"), Some(("127.0.0.1", 1)));
+        assert_eq!(parsed("mc_1.bär.de:65535"), Some(("mc_1.bär.de", 65535)));
+        assert_eq!(parsed("[::1]"), Some(("::1", 25565)));
+        assert_eq!(parsed("[2001:db8::1]:25570"), Some(("2001:db8::1", 25570)));
+        for host in ["::", "1:2:3:4:5:6:7:8", "1:2:3:4:5:6:7::", "::ffff:192.168.0.1", "1:2:3:4:5:6:1.2.3.4"] {
+            assert_eq!(parsed(&format!("[{host}]")), Some((host, 25565)), "{host}");
+        }
+    }
+
+    #[test]
+    fn rejects_malformed_addresses() {
+        let too_long_label = "a".repeat(MAX_LABEL_LEN + 1);
+        let too_long_host = ["a"; 130].join(".");
+        for address in [
+            "", "mit leerzeichen", "--demo", "-a.net", "a-.net", "a\nb", "not a valid address!!", "a..net", ".net", "net.",
+            "host:", "host:0", "host:65536", "host:-1", "host:12a", "host:1:2", "::1", "[::1", "[::1]x", "[::1]:", "[abc]:25565",
+            "[:::]:25565", "[1:2:3:4:5:6:7:8:9]", "[1:2:3:4:5:6:7]", "[1::2::3]", "[12345::1]", "[g::1]", "[:1:2:3:4:5:6:7]", "[1::2:]",
+            "[::1.2.3]", "[::256.1.1.1]", "[1:2:3:4:5:6:7:1.2.3.4]", "[]", "ho/st", "ho@st", &too_long_label, &too_long_host,
+        ] {
+            assert_eq!(parsed(address), None, "{address:?}");
+        }
+        assert!(require_address(&"a".repeat(MAX_ADDRESS_LEN + 1)).is_err());
     }
 }

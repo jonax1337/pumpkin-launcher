@@ -4,15 +4,17 @@
 use std::path::{Path, PathBuf};
 
 use rusqlite::{Connection, OpenFlags, OptionalExtension, Row};
+use serde::Deserialize;
 
-use super::{loader_named, skip_unreadable, Found, Setup};
-use crate::error::AppResult;
+use super::{foreign_commands, loader_named, skip_unreadable, window_size, Found, Setup};
+use crate::{error::AppResult, models::GameWindow};
 
-/// Beide Abfragen liefern: Name, Pfad, Minecraft-Version, Loader, Loader-Version, RAM (MiB) und JVM-Argumente
-/// (JSON-Liste); fehlende Werte gelten wie in der App als „Einstellung der App“.
+/// Beide Abfragen liefern: Name, Pfad, Minecraft-Version, Loader, Loader-Version, RAM (MiB), JVM-Argumente
+/// (JSON-Liste) und die übrigen Einstellungen als JSON (`Overrides`); fehlende Werte gelten wie in der App als
+/// „Einstellung der App“.
 const QUERY: &str = "
     SELECT i.name, i.path, s.game_version, s.loader, s.loader_version,
-        json_extract(o.overrides, '$.memory.maximum'), json_extract(o.overrides, '$.extra_launch_args')
+        json_extract(o.overrides, '$.memory.maximum'), json_extract(o.overrides, '$.extra_launch_args'), json(o.overrides)
     FROM instances i
     JOIN instance_content_sets s ON s.id = i.applied_content_set_id
     LEFT JOIN instance_launch_overrides o ON o.instance_id = i.id";
@@ -20,8 +22,28 @@ const QUERY: &str = "
 /// Datenbanken, die die App seit der Umstellung nicht mehr geöffnet hat, haben nur `profiles`.
 const LEGACY_QUERY: &str = "
     SELECT name, path, game_version, mod_loader, mod_loader_version,
-        override_mc_memory_max, json(override_extra_launch_args)
+        override_mc_memory_max, json(override_extra_launch_args), NULL
     FROM profiles";
+
+/// Weitere Einstellungen der Instanz. Sie sind nur Zugabe: passt ein Feld nicht, gilt keines davon, und die
+/// Instanz kommt ohne sie.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct Overrides {
+    java_path: Option<String>,
+    force_fullscreen: Option<bool>,
+    /// Breite und Höhe.
+    game_resolution: Option<(u32, u32)>,
+    hooks: Hooks,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct Hooks {
+    pre_launch: Option<String>,
+    wrapper: Option<String>,
+    post_exit: Option<String>,
+}
 
 /// Instanzen der Modrinth App; ohne `app.db` in `root` keine. Eine unlesbare Zeile verbirgt nur sich selbst.
 pub fn scan(root: &Path) -> AppResult<Vec<Found>> {
@@ -42,13 +64,20 @@ pub fn scan(root: &Path) -> AppResult<Vec<Found>> {
 fn instance(row: &Row, profiles: &Path) -> AppResult<Found> {
     let path: String = row.get(1)?;
     let args: Option<String> = row.get(6)?;
+    let extra: Option<String> = row.get(7)?;
+    let Overrides { java_path, force_fullscreen, game_resolution, hooks } =
+        extra.and_then(|json| serde_json::from_str(&json).ok()).unwrap_or_default();
+    let window = match (force_fullscreen, game_resolution) {
+        (Some(true), _) => GameWindow::Fullscreen,
+        (_, resolution) => window_size(resolution.map(|(width, _)| width), resolution.map(|(_, height)| height)),
+    };
     let setup = Setup {
-        name: row.get(0)?,
-        minecraft_version: row.get(2)?,
-        loader: loader_named(&row.get::<_, String>(3)?)?,
-        loader_version: row.get(4)?,
         memory_mb: row.get(5)?,
         jvm_args: args.map(|a| serde_json::from_str(&a)).transpose()?.unwrap_or_default(),
+        java_path: java_path.filter(|path| !path.is_empty()),
+        window,
+        not_adopted: foreign_commands(hooks.pre_launch.as_deref(), hooks.post_exit.as_deref(), hooks.wrapper.as_deref()),
+        ..Setup::new(row.get(0)?, row.get(2)?, loader_named(&row.get::<_, String>(3)?)?, row.get(4)?)
     };
     Ok(Found { game_dir: profiles.join(path), setup })
 }
@@ -56,7 +85,7 @@ fn instance(row: &Row, profiles: &Path) -> AppResult<Found> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::ModLoader;
+    use crate::{models::ModLoader, services::imports::NotAdopted};
 
     /// Ausschnitt des Schemas der Modrinth App (Migrationen `init` und `instances-content-foundation`).
     const SCHEMA: &str = "
@@ -95,7 +124,8 @@ mod tests {
         conn.execute_batch(
             "INSERT INTO instances VALUES ('a', 'Fabric Welt', 'set-a', 'installed', 'Fabric Welt');
              INSERT INTO instance_content_sets VALUES ('set-a', 'a', '1.21.1', 'fabric', '0.16.10');
-             INSERT INTO instance_launch_overrides VALUES ('a', jsonb('{\"memory\": {\"maximum\": 3072}, \"extra_launch_args\": [\"-Dx=1\"], \"hooks\": {}}'));
+             INSERT INTO instance_launch_overrides VALUES ('a', jsonb('{\"memory\": {\"maximum\": 3072}, \"extra_launch_args\": [\"-Dx=1\"],
+                 \"java_path\": \"C:/Java/bin/javaw.exe\", \"game_resolution\": [1280, 720], \"hooks\": {\"wrapper\": \"gamemoderun\", \"post_exit\": \"\"}}'));
              INSERT INTO instances VALUES ('b', 'Pur', 'set-b', 'not_installed', 'Pur');
              INSERT INTO instance_content_sets VALUES ('set-b', 'b', '1.21.4', 'vanilla', NULL);
              INSERT INTO instances VALUES ('c', 'Alt', 'set-c', 'installed', 'Alt');
@@ -111,12 +141,12 @@ mod tests {
         assert_eq!(
             found[0].setup,
             Setup {
-                name: "Fabric Welt".into(),
-                minecraft_version: "1.21.1".into(),
-                loader: ModLoader::Fabric,
-                loader_version: Some("0.16.10".into()),
                 memory_mb: Some(3072),
                 jvm_args: vec!["-Dx=1".into()],
+                java_path: Some("C:/Java/bin/javaw.exe".into()),
+                window: GameWindow::Size { width: 1280, height: 720 },
+                not_adopted: vec![NotAdopted::WrapperCommand],
+                ..Setup::new("Fabric Welt".into(), "1.21.1".into(), ModLoader::Fabric, Some("0.16.10".into()))
             }
         );
         assert_eq!((found[1].setup.loader, found[1].setup.memory_mb, found[1].setup.jvm_args.len()), (ModLoader::Vanilla, None, 0));

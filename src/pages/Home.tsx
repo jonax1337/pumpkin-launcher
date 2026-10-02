@@ -5,6 +5,7 @@ import { NewInstanceDialog } from "@/components/NewInstanceDialog";
 import { SkelList } from "@/components/SkelList";
 import { Onboarding } from "@/components/Onboarding";
 import { byRecent, pickRecentInstance, useInstances } from "@/hooks/useInstances";
+import { useDropPackToImport } from "@/hooks/usePackFiles";
 import { PixelScene } from "@/pixel/PixelScene";
 import { useLook } from "@/store/look";
 import { Button, ButtonLink, ErrorBox, SectionHeader, Skel } from "@/ui";
@@ -35,6 +36,7 @@ function HomeSkeleton() {
 export function HomePage() {
   const { t } = useI18n();
   const { data: instances, isLoading, error, refetch } = useInstances();
+  useDropPackToImport();
   const [selected, setSelected] = useState<string | null>(null);
   const current = instances?.find((i) => i.id === selected) ?? pickRecentInstance(instances);
   const look = useLook(current?.id);

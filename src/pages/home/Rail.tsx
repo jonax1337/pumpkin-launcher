@@ -30,7 +30,7 @@ const scrollBehavior = () => (motionOff() ? "auto" : "smooth");
 
 /**
  * Miniatur in der Leiste „Deine Instanzen“: Klick (Leertaste) zeigt sie oben im Hero, Doppelklick oder Enter öffnet sie.
- * Status-Chip oben links, beim Überfahren oder Fokus ein kleiner Spielen-Knopf oben rechts (wie Poster). Rechtsklick: Instanz-Menü.
+ * Status-Chip oben links (nicht an der gewählten: ihren Zustand zeigt der Spielen-Knopf im Hero), beim Überfahren oder Fokus ein kleiner Spielen-Knopf oben rechts (wie Poster). Rechtsklick: Instanz-Menü.
  */
 function MiniCard({ instance, current, onPick, hintId }: { instance: Instance; current: boolean; onPick: () => void; hintId: string }) {
   const { t } = useI18n();
@@ -47,7 +47,7 @@ function MiniCard({ instance, current, onPick, hintId }: { instance: Instance; c
         title={instance.name}
         sub={`${loaderLine(instance)} · ${relativeTime(instance.lastPlayedAt)}`}
         current={current}
-        status={<StatusChip instance={instance} small loudOnly />}
+        status={current ? undefined : <StatusChip instance={instance} small loudOnly />}
         primary={<PlayButton instance={instance} size="i" />}
         menu={items}
         tip={t("pages.home.miniCardTip")}

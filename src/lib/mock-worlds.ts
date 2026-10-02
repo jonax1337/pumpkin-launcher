@@ -2,9 +2,11 @@
 import { t } from "@/i18n";
 import type { Backend } from "./backend";
 import type { ContentVersion } from "./content-types";
+import { pickedName } from "./mock-files";
 import { clone, findInstance, modrinthFetch, wait, type MockContext } from "./mock-util";
+import { isValidServerAddress } from "./serverAddress";
 import { DAY } from "./time";
-import type { Datapack, GameMode, Server, World, WorldBackup } from "./types";
+import type { Datapack, GameMode, Server, ServerStatus, World, WorldBackup } from "./types";
 
 const MB = 1024 * 1024;
 
@@ -24,6 +26,13 @@ const SERVERS: Server[] = [
   { name: "Pumpkin Lobby", address: "play.example.net", icon: null, acceptTextures: null },
   { name: "Freunde-SMP", address: "smp.example.net:25570", icon: null, acceptTextures: true },
 ];
+
+/** Antworten der Beispiel-Server; null = nicht erreichbar. Jede andere Adresse antwortet wie ein kleiner Server. */
+const SERVER_STATUS: Record<string, ServerStatus | null> = {
+  "play.example.net": { motd: "Willkommen in der Kürbis-Lobby! Heute: Bauwettbewerb", playersOnline: 42, playersMax: 200, version: "Paper 1.21.4", latencyMs: 38 },
+  "smp.example.net:25570": null,
+};
+const OTHER_SERVER_STATUS: ServerStatus = { motd: "Ein Minecraft-Server", playersOnline: 3, playersMax: 20, version: "1.21.4", latencyMs: 74 };
 
 const DATAPACKS: Datapack[] = [
   { id: "Mehr Biome.zip", name: "Mehr Biome", description: "Neue Biome und Höhlen für die Oberwelt", enabled: true },
@@ -132,6 +141,30 @@ export function createWorldMock({ db, emit }: MockContext) {
       await wait();
       backups.set(instanceId, backupsOf(instanceId).filter((b) => b.id !== backupId));
     },
+    /** Wie `world_backups_export`: ein neuer Ordner im gewählten, vorgetäuscht. */
+    async worldBackupsExport(instanceId: string, directory: string) {
+      await wait(600);
+      if (!backupsOf(instanceId).length) throw new Error(t("mock.backup.none"));
+      return `${directory}\\${findInstance(db, instanceId).name} - Weltsicherungen`;
+    },
+    /** Wie `world_import`: eine neue Welt mit dem Namen der Datei, nummeriert, wenn der Ordner schon da ist. */
+    async worldImport(instanceId: string, path: string, operationId: string) {
+      notRunning(instanceId);
+      const total = 12;
+      for (let done = 0; done <= total; done += 3) {
+        emit("content-progress", { operationId, phase: "extract", done, total });
+        await wait(120);
+      }
+      const list = worldsOf(instanceId);
+      const name = pickedName(path) || "Importierte Welt";
+      let id = name;
+      for (let n = 2; list.some((w) => w.id === id); n++) id = `${name} (${n})`;
+      const imported: World = {
+        id, name: id, lastPlayed: null, gameMode: null, hardcore: false, version: null, sizeBytes: 48 * MB, icon: null, path: savePath(id),
+      };
+      list.unshift(imported);
+      return clone(imported);
+    },
     async worldDelete(instanceId: string, worldId: string, operationId: string) {
       const safety = await backup(instanceId, worldId, operationId);
       worlds.set(instanceId, worldsOf(instanceId).filter((w) => w.id !== worldId));
@@ -177,6 +210,7 @@ export function createWorldMock({ db, emit }: MockContext) {
       notRunning(instanceId);
       await wait();
       const list = serversOf(instanceId);
+      if (!isValidServerAddress(server.address)) throw new Error(t("mock.server.invalidAddress"));
       const saved = { ...server, name: server.name.trim(), address: server.address.trim() };
       if (index == null) list.push({ ...saved, icon: null });
       else list[index] = { ...saved, icon: list[index].icon };
@@ -185,6 +219,13 @@ export function createWorldMock({ db, emit }: MockContext) {
       notRunning(instanceId);
       await wait();
       serversOf(instanceId).splice(index, 1);
+    },
+    async serverPing(instanceId: string, address: string) {
+      await wait();
+      if (!serversOf(instanceId).some((server) => server.address === address)) throw new Error(t("mock.server.notListed", { address }));
+      const status = address in SERVER_STATUS ? SERVER_STATUS[address] : OTHER_SERVER_STATUS;
+      if (!status) throw new Error(t("mock.server.unreachable"));
+      return clone(status);
     },
   } satisfies Partial<Backend>;
 }

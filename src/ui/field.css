@@ -9,26 +9,32 @@
 /* ---------- Zeile: Label --form-lab | Steuerelement bis --form-ctl | Hilfe (höchstens ~60 Zeichen, 1-Einheit-Linie links) ---------- */
 .vx-frow { display: grid; grid-template-columns: var(--form-lab) minmax(0, var(--form-ctl, 560px)) minmax(0, 1fr); column-gap: var(--form-gap); row-gap: 8px; align-items: start; padding: 10px 0; }
 .vx-fl { padding-top: 10px; font-weight: 600; }
-.vx-fl small { display: block; margin-top: 2px; font-size: 12.5px; font-weight: 400; color: var(--fg-3); }
+.vx-fl small { display: block; margin-top: 2px; font-size: calc(13px * var(--tz)); font-weight: 400; color: var(--fg-3); }
 .vx-fc { grid-column: 2; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .vx-fc[data-wide] { grid-column: 2 / -1; }
-.vx-fh { grid-column: 3; max-width: 60ch; margin-left: 12px; padding: 8px 0 2px 16px; font-size: 12.5px; line-height: 1.5; color: var(--fg-3); box-shadow: inset var(--px) 0 0 var(--line); }
+.vx-fh { grid-column: 3; max-width: 60ch; margin-left: 12px; padding: 8px 0 2px 16px; font-size: calc(13px * var(--tz)); line-height: 1.5; color: var(--fg-3); box-shadow: inset var(--px) 0 0 var(--line); }
 @container (max-width: 1099px) {
   .vx-frow { grid-template-columns: var(--form-lab) minmax(0, 640px); }
   .vx-fh { grid-column: 2; margin-left: 0; padding: 0; box-shadow: none; }
+}
+/* Schmal (z. B. 200 % Zoom): Label über dem Steuerelement, damit Segmente und Felder die volle Breite haben */
+@container (max-width: 520px) {
+  .vx-frow { grid-template-columns: minmax(0, 1fr); }
+  .vx-fl { padding-top: 0; }
+  .vx-fc, .vx-fc[data-wide], .vx-fh { grid-column: 1; }
 }
 
 /* ---------- Feld: Label über der Eingabe, Hilfe/Fehler darunter ---------- */
 .vx-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
 .vx-field:last-child { margin-bottom: 0; }
-.vx-field-l { font-size: 13px; font-weight: 600; }
+.vx-field-l { font-size: calc(13px * var(--tz)); font-weight: 600; }
 .vx-opt { font-weight: 400; color: var(--fg-3); }
-.vx-help { font-size: 12.5px; line-height: 20px; color: var(--fg-3); }
+.vx-help { font-size: calc(13px * var(--tz)); line-height: 20px; color: var(--fg-3); }
 .vx-help[data-reserve="1"] { min-height: 20px; }
 .vx-help[data-reserve="2"] { min-height: 40px; }
 
 /* ---------- Hinweis: Zeilenhöhe = Icon-Box (20), Symbol an der ersten Zeile ---------- */
-.vx-hint { display: flex; align-items: flex-start; gap: 4px; font-size: 12.5px; line-height: 20px; color: var(--fg-3); }
+.vx-hint { display: flex; align-items: flex-start; gap: 4px; font-size: calc(13px * var(--tz)); line-height: 20px; color: var(--fg-3); }
 .vx-hint > .vx-ico { margin-left: -2px; }
 .vx-hint-t { min-width: 0; }
 .vx-hint[data-tone="warn"] { color: var(--warn); }
@@ -59,15 +65,15 @@
 .vx-input:has([aria-invalid="true"])::before { box-shadow: inset 0 0 0 var(--px) var(--bad), inset var(--u2) var(--u2) 0 var(--lo); }
 /* Mehrzeilig */
 .vx-input[data-area] { height: auto; padding: 10px; align-items: stretch; }
-.vx-input[data-area] textarea { min-height: 84px; resize: none; font: 13px/1.5 var(--f-mono); }
+.vx-input[data-area] textarea { min-height: 84px; resize: none; font: calc(13px * var(--tz))/1.5 var(--f-mono); }
 /* Leeren-Knopf bündig rechts; Platz bleibt, auch wenn er verborgen ist */
 .vx-input .vx-clear { margin-right: -6px; visibility: hidden; }
 .vx-input[data-size="s"] .vx-clear { --b-h: 28px; margin-right: -8px; }
 .vx-input[data-has] .vx-clear { visibility: visible; }
 
 /* ---------- Auswahl: erhabene Platte (wie Sekundärknopf), eigene Liste ---------- */
-.vx-select { position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 6px; flex: none; height: var(--vx-h-m); padding: 0 8px 0 12px; color: var(--fg); font-size: 14px; font-weight: 600; white-space: nowrap; text-align: left; user-select: none; cursor: pointer; }
-.vx-select[data-size="s"] { height: var(--vx-h-s); padding: 0 6px 0 10px; font-size: 13px; }
+.vx-select { position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 6px; flex: none; height: var(--vx-h-m); padding: 0 8px 0 12px; color: var(--fg); font-size: calc(14px * var(--tz)); font-weight: 600; white-space: nowrap; text-align: left; user-select: none; cursor: pointer; }
+.vx-select[data-size="s"] { height: var(--vx-h-s); padding: 0 6px 0 10px; font-size: calc(13px * var(--tz)); }
 .vx-select::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--panel-2); box-shadow: var(--bv-raised); clip-path: var(--n1); transition: background-color var(--st), box-shadow var(--st); }
 .vx-select:is(:hover, [data-state="open"], [data-force="hover"]):not([data-disabled])::before {
   background: var(--panel-3);
@@ -78,7 +84,7 @@
 .vx-select[data-disabled] { color: var(--fg-3); cursor: default; }
 .vx-select[data-disabled]::before { background: var(--panel); box-shadow: inset 0 0 0 var(--px) var(--line); }
 .vx-select[aria-invalid="true"]::before { box-shadow: inset 0 0 0 var(--px) var(--bad), inset var(--u2) var(--u2) 0 var(--hi), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--lo); }
-.vx-sel-lab { color: var(--fg-3); font-size: 12.5px; }
+.vx-sel-lab { color: var(--fg-3); font-size: calc(13px * var(--tz)); }
 /* Wert und unsichtbare Platzhalter übereinander: Breite = längste Option */
 .vx-sel-val { display: grid; min-width: 0; }
 .vx-sel-val > span { grid-area: 1 / 1; overflow: hidden; text-overflow: ellipsis; }
@@ -90,7 +96,7 @@
 
 /* Liste: Fläche aus .rpop (Menü), Einträge 34 px; markiert = Fläche + Kupferstrich links, gewählt = fett + Haken */
 .vx-selpop { min-width: max(var(--radix-select-trigger-width), 180px); max-height: min(360px, var(--radix-select-content-available-height)); display: flex; flex-direction: column; }
-.vx-selitem { position: relative; isolation: isolate; display: flex; align-items: center; gap: 12px; height: 34px; padding: 0 8px 0 12px; color: var(--fg); font-size: 13.5px; font-weight: 500; white-space: nowrap; cursor: pointer; outline: none; user-select: none; }
+.vx-selitem { position: relative; isolation: isolate; display: flex; align-items: center; gap: 12px; height: 34px; padding: 0 8px 0 12px; color: var(--fg); font-size: calc(13.5px * var(--tz)); font-weight: 500; white-space: nowrap; cursor: pointer; outline: none; user-select: none; }
 .vx-selitem::before { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--n1); }
 .vx-selitem[data-highlighted]::before { background: var(--hl); box-shadow: inset var(--u2) 0 0 var(--copper); }
 .vx-selitem:active:not([data-disabled])::before { background: var(--panel-2); }

@@ -9,7 +9,8 @@ export interface LogLine {
   tone: "error" | "warn" | "normal";
 }
 
-const toneOf = ({ stream, line }: LogPayload): LogLine["tone"] =>
+/** Schweregrad einer Zeile: Fehlerstrom oder ERROR/FATAL, WARN, sonst normal. */
+export const toneOf = ({ stream, line }: Pick<LogPayload, "stream" | "line">): LogLine["tone"] =>
   stream === "stderr" || /\/(ERROR|FATAL)\]/.test(line) ? "error" : /\/WARN\]/.test(line) ? "warn" : "normal";
 
 // Der Puffer hält je Instanz nur die letzten Zeilen; vollständige Logs liest man aus der Datei im Backend.

@@ -6,6 +6,7 @@ use sha2::{Digest, Sha256, Sha512};
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use super::progress::CountFn;
+use crate::coded;
 use crate::error::{AppError, AppResult};
 
 const READ_BUFFER: usize = 256 * 1024;
@@ -100,10 +101,10 @@ where
             .headers()
             .get(reqwest::header::LOCATION)
             .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| AppError::invalid("Weiterleitung ohne Ziel"))?;
+            .ok_or_else(|| AppError::invalid(coded!("errors.game.redirectWithoutTarget")))?;
         url = url.join(location).map_err(|e| AppError::invalid(e.to_string()))?;
     }
-    Err(AppError::invalid("Zu viele Weiterleitungen"))
+    Err(AppError::invalid(coded!("errors.game.tooManyRedirects")))
 }
 
 /// SHA-1, SHA-256 und SHA-512 derselben Bytes, in einem Durchlauf berechnet.
@@ -152,9 +153,9 @@ impl Digests {
 
     /// Der Hash `algorithm` muss `expected` sein (Groß- und Kleinschreibung egal).
     pub(crate) fn check_one(&self, algorithm: &str, expected: &str) -> AppResult<()> {
-        let actual = self.hex(algorithm).ok_or_else(|| AppError::invalid("Unbekannter Hash"))?;
+        let actual = self.hex(algorithm).ok_or_else(|| AppError::invalid(coded!("errors.game.unknownHash")))?;
         if !expected.eq_ignore_ascii_case(&actual) {
-            return Err(AppError::invalid(format!("{algorithm} stimmt nicht")));
+            return Err(AppError::invalid(coded!("errors.game.hashMismatch", algorithm = algorithm)));
         }
         Ok(())
     }

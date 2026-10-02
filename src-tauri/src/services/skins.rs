@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use super::{auth::{self, MC_PROFILE}, data_url, modrinth, remove_logged, write_atomic, Dirs};
-use crate::error::{AppError, AppResult};
+use crate::coded;
+use crate::error::{AppError, AppResult, Coded};
 use crate::models::{now_ms, require_name, LibrarySkin, SkinVariant, MAX_SKIN_NAME_LEN};
 use crate::services::download::sha1_hex;
 use crate::state::AppState;
@@ -103,19 +104,19 @@ fn check(status: u16, body: &[u8]) -> AppResult<()> {
     }
     let text = status_text(status);
     Err(AppError::invalid(match serde_json::from_slice::<ApiError>(body) {
-        Ok(ApiError { message }) if !message.is_empty() => format!("{text} – Details: {message}"),
+        Ok(ApiError { message }) if !message.is_empty() => text.with_details(message),
         _ => text,
     }))
 }
 
-fn status_text(status: u16) -> String {
+fn status_text(status: u16) -> Coded {
     match status {
-        400 => "Minecraft hat die Änderung abgelehnt.".to_owned(),
-        401 => auth::RELOGIN.to_owned(),
-        404 => "Minecraft kennt diesen Skin oder Umhang nicht. Lade die Seite neu und versuch es erneut.".to_owned(),
-        429 => "Zu viele Anfragen an Minecraft in kurzer Zeit. Versuch es in einer Minute erneut.".to_owned(),
-        500..=599 => "Die Minecraft-Server haben gerade Probleme. Versuch es später erneut.".to_owned(),
-        s => format!("Minecraft hat die Anfrage abgelehnt (Fehler {s})."),
+        400 => coded!("errors.app.skin.changeRejected"),
+        401 => auth::relogin(),
+        404 => coded!("errors.app.skin.unknown"),
+        429 => coded!("errors.app.skin.tooManyRequests"),
+        500..=599 => coded!("errors.app.skin.serverError"),
+        s => coded!("errors.app.skin.requestRejected", status = s),
     }
 }
 
@@ -126,7 +127,7 @@ fn texture_url(url: &str) -> AppResult<String> {
         .find_map(|scheme| url.strip_prefix(scheme))
         .and_then(|rest| rest.strip_prefix(TEXTURE_BASE))
         .filter(|hash| !hash.is_empty() && hash.bytes().all(|b| b.is_ascii_hexdigit()))
-        .ok_or_else(|| AppError::invalid("Minecraft hat eine unerwartete Texturadresse geliefert."))?;
+        .ok_or_else(|| AppError::invalid(coded!("errors.app.skin.unexpectedTextureUrl")))?;
     Ok(format!("https://{TEXTURE_BASE}{hash}"))
 }
 
@@ -173,17 +174,16 @@ fn validate_png(bytes: &[u8]) -> AppResult<()> {
     let header = bytes
         .get(..PNG_HEADER_LEN)
         .filter(|h| h.starts_with(PNG_SIGNATURE) && &h[IHDR_AT..IHDR_AT + 4] == b"IHDR")
-        .ok_or_else(|| AppError::invalid("Die Datei ist kein PNG-Bild."))?;
+        .ok_or_else(|| AppError::invalid(coded!("errors.app.skin.notPng")))?;
     let dimension = |at: usize| u32::from_be_bytes([header[at], header[at + 1], header[at + 2], header[at + 3]]);
     match (dimension(WIDTH_AT), dimension(HEIGHT_AT)) {
         (64, 64) | (64, 32) => Ok(()),
-        (w, h) => Err(AppError::invalid(format!("Ein Skin muss 64×64 oder 64×32 Pixel groß sein, dieses Bild hat {w}×{h}."))),
+        (w, h) => Err(AppError::invalid(coded!("errors.app.skin.wrongSize", width = w, height = h))),
     }
 }
 
 fn skin_name(name: &str) -> AppResult<String> {
-    let message = format!("Der Name des Skins muss 1 bis {MAX_SKIN_NAME_LEN} Zeichen lang sein.");
-    require_name(name, MAX_SKIN_NAME_LEN, message).map(str::to_owned)
+    require_name(name, MAX_SKIN_NAME_LEN, coded!("errors.app.skin.nameLength", max = MAX_SKIN_NAME_LEN)).map(str::to_owned)
 }
 
 /// Nur mit IDs aus dem Store aufrufen: die ID wird Teil des Pfads.
@@ -194,7 +194,7 @@ fn png_path(dirs: &Dirs, id: &str) -> PathBuf {
 /// Nimmt eine PNG-Datei in die Bibliothek auf; Name ist der Dateiname, das Modell zunächst klassisch.
 pub fn add_file(state: &AppState, path: &Path) -> AppResult<LibrarySkin> {
     if fs::metadata(path)?.len() > MAX_FILE {
-        return Err(AppError::invalid("Die Datei ist zu groß für einen Skin."));
+        return Err(AppError::invalid(coded!("errors.app.skin.tooLarge")));
     }
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("Skin");
     let name: String = stem.chars().take(MAX_SKIN_NAME_LEN).collect();
@@ -206,7 +206,7 @@ pub async fn save_active(state: &AppState, account_id: &str, name: &str) -> AppR
     let skin = profile(state, account_id)
         .await?
         .skin
-        .ok_or_else(|| AppError::invalid("Minecraft meldet für dieses Konto gerade keinen Skin."))?;
+        .ok_or_else(|| AppError::invalid(coded!("errors.app.skin.noActive")))?;
     let png = modrinth::bytes(state.http.get(&skin.url), MAX_FILE).await?;
     add(state, &png, name, skin.variant)
 }
@@ -215,7 +215,7 @@ fn add(state: &AppState, png: &[u8], name: &str, variant: SkinVariant) -> AppRes
     validate_png(png)?;
     let skin = LibrarySkin { id: sha1_hex(png), name: skin_name(name)?, variant, added_at: now_ms() };
     if let Ok(existing) = state.skins.get(&skin.id) {
-        return Err(AppError::invalid(format!("Dieser Skin ist schon in der Bibliothek: „{}“.", existing.name)));
+        return Err(AppError::invalid(coded!("errors.app.skin.alreadySaved", name = existing.name)));
     }
     let path = png_path(&state.dirs, &skin.id);
     fs::create_dir_all(state.dirs.skins())?;
@@ -315,7 +315,7 @@ mod tests {
     #[test]
     fn api_errors_read_like_sentences() {
         let error = |status, body: &[u8]| check(status, body).unwrap_err().to_string();
-        assert_eq!(error(401, b""), auth::RELOGIN);
+        assert_eq!(error(401, b""), auth::relogin().to_string());
         assert!(error(429, b"").contains("in einer Minute"));
         let rejected = error(400, br#"{"path":"/minecraft/profile/skins","errorType":"BAD_REQUEST","errorMessage":"Could not validate image data"}"#);
         assert_eq!(rejected, "Minecraft hat die Änderung abgelehnt. – Details: Could not validate image data");

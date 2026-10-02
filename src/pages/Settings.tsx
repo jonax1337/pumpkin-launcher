@@ -5,22 +5,34 @@ import { AccountsSection } from "@/components/accounts/AccountsSection";
 import { SupportSection } from "@/components/support";
 import { FormSection, PageHeader, TabPanel, Tabs } from "@/ui";
 import { AboutTab } from "./settings/AboutTab";
-import { AdvancedTab } from "./settings/AdvancedTab";
 import { AppearanceTab } from "./settings/AppearanceTab";
 import { GameTab } from "./settings/GameTab";
+import { StorageTab } from "./settings/StorageTab";
 
 // Abschnitte als Wert + Schlüssel; die Beschriftung löst die Oberfläche erst beim Rendern auf.
 const SECTIONS = [
   { value: "konten", key: "components.account.accounts" },
-  { value: "spiel", key: "pages.settings.tabGame" },
+  { value: "spiel", key: "settings.tabJava" },
+  { value: "speicher", key: "settings.tabStorage" },
   { value: "darstellung", key: "pages.settings.tabAppearance" },
-  { value: "erweitert", key: "components.newInstance.advanced" },
-  { value: "support", key: "pages.settings.tabSupport" },
   { value: "ueber", key: "pages.settings.tabAbout" },
 ] as const;
 type SectionId = (typeof SECTIONS)[number]["value"];
 
 const sectionOf = (id: string | null) => SECTIONS.find((section) => section.value === id);
+
+/** Über den Launcher, darunter Hilfe und Fehlermeldungen. */
+function AboutAndSupport() {
+  const { t } = useI18n();
+  return (
+    <>
+      <AboutTab />
+      <FormSection title={t("pages.settings.tabSupport")} level={3}>
+        <SupportSection />
+      </FormSection>
+    </>
+  );
+}
 
 /** Inhalt des gewählten Abschnitts. */
 function SectionBody({ id }: { id: SectionId }) {
@@ -29,14 +41,12 @@ function SectionBody({ id }: { id: SectionId }) {
       return <div className="set-acc"><AccountsSection /></div>;
     case "spiel":
       return <GameTab />;
+    case "speicher":
+      return <StorageTab />;
     case "darstellung":
       return <AppearanceTab />;
-    case "erweitert":
-      return <AdvancedTab />;
-    case "support":
-      return <SupportSection />;
     case "ueber":
-      return <AboutTab />;
+      return <AboutAndSupport />;
   }
 }
 

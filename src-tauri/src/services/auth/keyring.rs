@@ -1,7 +1,7 @@
 //! Refresh-Tokens im OS-Schlüsselbund, ein Eintrag pro Konto (Spieler-UUID).
 use ::keyring::{Entry, Error};
 
-use super::RELOGIN;
+use super::relogin;
 use crate::error::{AppError, AppResult};
 
 const SERVICE: &str = "dev.laux.launcher";
@@ -14,7 +14,7 @@ pub(super) fn save_refresh_token(account_id: &str, token: &str) -> AppResult<()>
 pub(super) fn load_refresh_token(account_id: &str) -> AppResult<String> {
     match load_token(&entry(account_id)?) {
         Ok(token) => Ok(token),
-        Err(Error::NoEntry) => Err(AppError::invalid(RELOGIN)),
+        Err(Error::NoEntry) => Err(AppError::invalid(relogin())),
         Err(err) => Err(err.into()),
     }
 }

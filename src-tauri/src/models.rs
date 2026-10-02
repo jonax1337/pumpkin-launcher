@@ -3,7 +3,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{AppError, AppResult};
+use crate::coded;
+use crate::error::{AppError, AppResult, ErrorText};
+use crate::services::limits::ICON_DATA_URL_LIMIT;
 
 pub fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
@@ -23,11 +25,13 @@ pub const MAX_NAME_LEN: usize = 200;
 pub const MAX_TEMPLATE_NAME_LEN: usize = 100;
 /// Längster Name eines Skins der Bibliothek (in Zeichen).
 pub const MAX_SKIN_NAME_LEN: usize = 64;
+/// Längste Notiz einer Instanz (in Zeichen).
+pub const MAX_NOTES_LEN: usize = 10_000;
 /// Für Namen, die nur nicht leer sein müssen.
 pub const NO_NAME_LIMIT: usize = usize::MAX;
 
 /// Der Name ohne Randleerraum; leer oder länger als `max_chars` Zeichen lehnt er mit `message` ab.
-pub fn require_name(name: &str, max_chars: usize, message: impl Into<String>) -> AppResult<&str> {
+pub fn require_name(name: &str, max_chars: usize, message: impl Into<ErrorText>) -> AppResult<&str> {
     let name = name.trim();
     if name.is_empty() || name.chars().count() > max_chars {
         return Err(AppError::invalid(message));
@@ -37,7 +41,7 @@ pub fn require_name(name: &str, max_chars: usize, message: impl Into<String>) ->
 
 /// Name einer neuen Instanz aus einem Pack oder Anbieter.
 pub fn instance_name(raw: &str) -> AppResult<&str> {
-    require_name(raw, MAX_NAME_LEN, "Ungültiger Instanzname")
+    require_name(raw, MAX_NAME_LEN, coded!("errors.app.instanceNameInvalid"))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -180,6 +184,12 @@ pub struct Mod {
     /// mitgebracht haben. Leer = vom Nutzer direkt hinzugefügt.
     #[serde(default)]
     pub required_by: Vec<String>,
+    /// Festgehalten: Die Update-Prüfung überspringt den Eintrag, er bleibt auf seiner Version.
+    #[serde(default)]
+    pub pinned: bool,
+    /// Kam mit einem Modpack oder einer Vorlage in die Instanz; für solche Inhalte sind Pack-Updates der vorgesehene Weg.
+    #[serde(default)]
+    pub pack_managed: bool,
 }
 
 /// Aus welchem Modpack eine Instanz installiert wurde (für Pack-Updates).
@@ -190,6 +200,8 @@ pub enum ModpackOrigin {
     CurseForge { project_id: u32, file_id: u32 },
     /// Pack eines Anbieters ohne Schlüssel (`source` z. B. "ftb"), siehe `services::providers`.
     Provider { source: String, project_id: String, version_id: String },
+    /// Selbst gewählte `.mrpack`-Datei: Name und Version aus ihrem `modrinth.index.json`.
+    File { name: String, version: String },
 }
 
 /// Spielfenster beim Start. Getaggt als `{"type": "size", "width": …, "height": …}`.
@@ -223,8 +235,70 @@ pub struct LaunchOptions {
     pub java_path: Option<String>,
     /// RAM-Standard des Launchers für Instanzen ohne eigenen Wert.
     pub default_memory_mb: Option<u32>,
+    /// Launcher-Einstellung „Welten vor dem Start sichern“; die Wahl der Instanz geht vor.
+    pub backup_worlds: Option<bool>,
+    /// So viele automatische Sicherungen je Welt bleiben erhalten.
+    pub backup_keep: Option<u32>,
+    /// Minimaler RAM (`-Xms`) des Launchers für Instanzen ohne eigenen Wert.
+    pub default_min_memory_mb: Option<u32>,
+    /// JVM-Argumente des Launchers für Instanzen ohne eigene.
+    #[serde(default)]
+    pub default_jvm_args: Vec<String>,
+    /// Fenster des Launchers für Instanzen, die ihres nicht selbst festlegen.
+    pub default_window: Option<GameWindow>,
     /// Direkt in eine Welt oder auf einen Server.
     pub quick_play: Option<QuickPlay>,
+}
+
+/// Namen, die das Frontend zeichnen kann; sie müssen mit ihm übereinstimmen, sonst stürzt die Ansicht ab bzw. ein gültiges
+/// Icon wird verworfen. Biome: Schlüssel von `BIOMES` in `src/pixel/sceneConfig.ts`; Glyphen und Paletten: Schlüssel von
+/// `GLYPHS` und `GLYPH_PALETTES` in `src/pixel/icons.tsx`.
+const BIOMES: [&str; 7] = ["forest", "nether", "end", "snow", "cave", "sea", "plains"];
+const GLYPHS: [&str; 19] = [
+    "cube", "spool", "gear", "eye", "list", "apple", "picture", "bubble", "mountain", "sun", "rocket", "ball", "star",
+    "chest", "compass", "bolt", "leaf", "brush", "hammer",
+];
+const GLYPH_PALETTES: [&str; 9] = ["copper", "steel", "sand", "violet", "teal", "coral", "ice", "gold", "rose"];
+/// Bildformate, die das Frontend als Instanz-Icon liefert.
+const ICON_IMAGE_FORMATS: [&str; 4] = ["png", "jpeg", "webp", "gif"];
+
+/// Eigenes Icon einer Instanz: ein Pixel-Icon in einer Farbpalette oder ein Bild als `data:`-URL.
+/// Getaggt als `{"type": "glyph", "glyph": …, "palette": …}` bzw. `{"type": "image", "src": …}`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum InstanceIcon {
+    Glyph { glyph: String, palette: String },
+    Image { src: String },
+}
+
+impl InstanceIcon {
+    /// Das Icon, wenn es eine Glyphe aus [`GLYPHS`] in einer Palette aus [`GLYPH_PALETTES`] bzw. ein begrenztes Bild in
+    /// einem der Formate von [`ICON_IMAGE_FORMATS`] ist; Icons kommen auch aus fremden Packs.
+    pub fn validated(self) -> AppResult<Self> {
+        let valid = match &self {
+            Self::Glyph { glyph, palette } => GLYPHS.contains(&glyph.as_str()) && GLYPH_PALETTES.contains(&palette.as_str()),
+            Self::Image { src } => src.len() <= ICON_DATA_URL_LIMIT && is_image_data_url(src),
+        };
+        if valid { Ok(self) } else { Err(AppError::invalid(coded!("errors.app.iconInvalid"))) }
+    }
+}
+
+fn is_image_data_url(src: &str) -> bool {
+    ICON_IMAGE_FORMATS.iter().any(|format| src.strip_prefix(&format!("data:image/{format};base64,")).is_some_and(|data| !data.is_empty()))
+}
+
+/// Szene einer Instanz: Biom (Name wie im Frontend) und Variante des Aufbaus.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstanceScene {
+    pub biome: String,
+    pub seed: u32,
+}
+
+impl InstanceScene {
+    /// Die Szene, wenn ihr Biom eines aus [`BIOMES`] ist.
+    pub fn validated(self) -> AppResult<Self> {
+        if BIOMES.contains(&self.biome.as_str()) { Ok(self) } else { Err(AppError::invalid(coded!("errors.app.sceneInvalid"))) }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -238,6 +312,9 @@ pub struct Instance {
     #[serde(default)]
     pub modpack: Option<ModpackOrigin>,
     pub memory_mb: Option<u32>,
+    /// Minimaler RAM (`-Xms`) in MiB; ohne gilt der Wert des Launchers, sonst entscheidet die JVM.
+    #[serde(default)]
+    pub min_memory_mb: Option<u32>,
     pub jvm_args: Vec<String>,
     /// Eigene Java-Programmdatei; ohne gilt die Einstellung des Launchers bzw. die mitgelieferte Runtime.
     #[serde(default)]
@@ -253,15 +330,30 @@ pub struct Instance {
     /// Gruppe in der Bibliothek; Gruppen gibt es nur über die Instanzen, die sie tragen.
     #[serde(default)]
     pub group: Option<String>,
+    /// Eigene Notizen zur Instanz, höchstens `MAX_NOTES_LEN` Zeichen.
+    #[serde(default)]
+    pub notes: String,
     /// Instanzordner im anderen Launcher, aus dem die Instanz importiert wurde.
     #[serde(default)]
     pub imported_from: Option<String>,
+    /// Eigenes Icon; ohne gilt das des Modpacks, sonst ein Pixel-Icon aus der ID.
+    #[serde(default)]
+    pub icon: Option<InstanceIcon>,
+    /// Gewählte Szene; ohne ergibt sie sich aus der ID.
+    #[serde(default)]
+    pub scene: Option<InstanceScene>,
+    /// Welten vor dem Start sichern: die Wahl dieser Instanz; ohne gilt die Einstellung des Launchers.
+    #[serde(default)]
+    pub backup_worlds: Option<bool>,
     pub mods: Vec<Mod>,
     pub created_at: u64,
     pub last_played_at: Option<u64>,
     /// Ziel des letzten Starts per Quick Play.
     #[serde(default)]
     pub last_quick_play: Option<QuickPlay>,
+    /// Konto, mit dem diese Instanz startet (Schlüssel, den das Frontend vergibt); ohne gilt das aktive Konto.
+    #[serde(default)]
+    pub default_account: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -283,17 +375,23 @@ impl Instance {
             loader_version: input.loader_version,
             modpack: None,
             memory_mb: None,
+            min_memory_mb: None,
             jvm_args: Vec::new(),
             java_path: None,
             window: GameWindow::Default,
             game_args: Vec::new(),
             playtime_secs: 0,
             group: None,
+            notes: String::new(),
             imported_from: None,
+            icon: None,
+            scene: None,
+            backup_worlds: None,
             mods: Vec::new(),
             created_at: now_ms(),
             last_played_at: None,
             last_quick_play: None,
+            default_account: None,
         }
     }
 }
@@ -391,6 +489,43 @@ mod tests {
         .unwrap();
         assert_eq!((i.name.as_str(), i.loader), ("Alt", ModLoader::Fabric));
         assert_eq!((i.java_path, i.window, i.game_args.len(), i.playtime_secs, i.group), (None, GameWindow::Default, 0, 0, None));
+        assert_eq!((i.min_memory_mb, i.default_account), (None, None));
+    }
+
+    #[test]
+    fn old_instance_json_has_no_look_and_follows_the_launcher_backup_setting() {
+        let i: Instance = serde_json::from_value(serde_json::json!({
+            "id": "i", "name": "Alt", "minecraftVersion": "1.21.1", "loader": "vanilla", "loaderVersion": null,
+            "memoryMb": null, "jvmArgs": [], "mods": [], "createdAt": 1, "lastPlayedAt": null
+        }))
+        .unwrap();
+        assert_eq!((i.icon, i.scene, i.backup_worlds), (None, None, None));
+    }
+
+    #[test]
+    fn instance_icon_json_shape() {
+        let glyph: InstanceIcon = serde_json::from_value(serde_json::json!({"type": "glyph", "glyph": "sword", "palette": "teal"})).unwrap();
+        assert_eq!(glyph, InstanceIcon::Glyph { glyph: "sword".into(), palette: "teal".into() });
+        let image = InstanceIcon::Image { src: "data:image/webp;base64,AAAA".into() };
+        assert_eq!(serde_json::to_value(&image).unwrap(), serde_json::json!({"type": "image", "src": "data:image/webp;base64,AAAA"}));
+    }
+
+    #[test]
+    fn only_plain_icons_and_scenes_are_valid() {
+        let glyph = |glyph: &str, palette: &str| InstanceIcon::Glyph { glyph: glyph.into(), palette: palette.into() };
+        let image = |src: &str| InstanceIcon::Image { src: src.into() };
+        assert!(glyph("hammer", "teal").validated().is_ok());
+        for bad in [glyph("", "teal"), glyph("nope", "teal"), glyph("hammer", "nope"), glyph("Hammer", "teal"), glyph("hammer", "../x")] {
+            assert!(bad.validated().is_err());
+        }
+        assert!(image("data:image/png;base64,iVBOR").validated().is_ok());
+        for bad in ["javascript:alert(1)", "data:image/svg+xml;base64,AAAA", "data:text/html;base64,AAAA", "data:image/png;base64,", "https://example.net/a.png"] {
+            assert!(image(bad).validated().is_err(), "{bad}");
+        }
+        assert!(image(&format!("data:image/png;base64,{}", "A".repeat(ICON_DATA_URL_LIMIT))).validated().is_err());
+        assert!(InstanceScene { biome: "forest".into(), seed: 7 }.validated().is_ok());
+        assert!(InstanceScene { biome: "für est".into(), seed: 7 }.validated().is_err());
+        assert!(InstanceScene { biome: "xyz".into(), seed: 7 }.validated().is_err());
     }
 
     #[test]
@@ -469,6 +604,15 @@ mod tests {
         assert_eq!(instance_name("").unwrap_err().to_string(), "Ungültiger Instanzname");
         assert!(instance_name(&"a".repeat(MAX_NAME_LEN)).is_ok());
         assert!(instance_name(&"a".repeat(MAX_NAME_LEN + 1)).is_err());
+    }
+
+    #[test]
+    fn pack_file_origin_json_shape() {
+        let origin = ModpackOrigin::File { name: "Abenteuer".into(), version: "1.2".into() };
+        assert_eq!(
+            serde_json::to_value(origin).unwrap(),
+            serde_json::json!({"type": "file", "name": "Abenteuer", "version": "1.2"})
+        );
     }
 
     #[test]

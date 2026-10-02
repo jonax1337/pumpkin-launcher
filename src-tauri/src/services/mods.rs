@@ -5,6 +5,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::Mod;
 use crate::services::download::{sha1_file, sha1_hex};
@@ -13,7 +14,7 @@ use crate::services::{content, none_if_missing, remove_logged, require_plain_nam
 /// Pfad eines Cache-Eintrags. Der Hash wird Teil des Pfads, daher nur echte SHA-1-Hex-Strings.
 pub fn cache_path(dirs: &Dirs, sha1: &str) -> AppResult<PathBuf> {
     if sha1.len() != 40 || !sha1.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err(AppError::invalid(format!("ungültiger SHA-1 '{sha1}'")));
+        return Err(AppError::invalid(coded!("errors.modrinth.invalidSha1", sha1 = sha1)));
     }
     Ok(dirs.mod_cache().join(format!("{}.jar", sha1.to_ascii_lowercase())))
 }
@@ -38,9 +39,10 @@ pub fn cache_bytes(dirs: &Dirs, bytes: &[u8]) -> AppResult<String> {
 
 /// Dateiname aus der Instanz-JSON: ein einzelner Name mit der Endung seiner Art, kein Pfad.
 fn file_name(m: &Mod) -> AppResult<&str> {
-    let name = require_plain_name(&m.file_name).map_err(|err| AppError::invalid(format!("Mod {}: {err}", m.name)))?;
+    let name = require_plain_name(&m.file_name)
+        .map_err(|err| AppError::invalid(coded!("errors.modrinth.modNameInvalid", name = m.name, reason = err)))?;
     if !name.ends_with(m.kind.extension()) {
-        return Err(AppError::invalid(format!("ungültiger Dateiname '{name}' für Mod {}", m.name)));
+        return Err(AppError::invalid(coded!("errors.modrinth.modFileNameInvalid", file = name, name = m.name)));
     }
     Ok(name)
 }
@@ -156,7 +158,7 @@ fn plan_changes(dirs: &Dirs, instance_id: &str, mods: &[Mod]) -> AppResult<Vec<C
     for (m, hash) in mods.iter().filter_map(|m| Some((m, m.sha1.as_deref()?))) {
         let target = target_path(dirs, instance_id, m)?;
         if !names.insert(m.file_name.to_lowercase()) {
-            return Err(AppError::invalid(format!("Doppelte Mod-Zieldatei: {}", m.file_name)));
+            return Err(AppError::invalid(coded!("errors.modrinth.duplicateTarget", file = m.file_name)));
         }
         changes.extend(plan_change(dirs, m, hash, target)?);
     }
@@ -175,7 +177,7 @@ fn plan_change(dirs: &Dirs, m: &Mod, hash: &str, target: PathBuf) -> AppResult<O
         return Ok(None);
     }
     if on_disk.is_some() {
-        return Err(AppError::invalid(format!("Mod-Konflikt: vorhandene Zieldatei {}", m.file_name)));
+        return Err(AppError::invalid(coded!("errors.modrinth.targetConflict", file = m.file_name)));
     }
     Ok(Some(Change::Add { target, cache: verified_cache_entry(dirs, hash)? }))
 }
@@ -183,7 +185,9 @@ fn plan_change(dirs: &Dirs, m: &Mod, hash: &str, target: PathBuf) -> AppResult<O
 /// SHA-1 der Datei an `path`; `None`, wenn dort nichts liegt. Ein Ordner oder Link ist kein gültiges Ziel.
 fn hash_of_regular_file(path: &Path) -> AppResult<Option<String>> {
     match none_if_missing(fs::symlink_metadata(path))? {
-        Some(meta) if !meta.is_file() => Err(AppError::invalid(format!("Kein reguläres Mod-Ziel: {}", path.display()))),
+        Some(meta) if !meta.is_file() => {
+            Err(AppError::invalid(coded!("errors.modrinth.targetNotRegular", path = path.display())))
+        }
         Some(_) => Ok(Some(sha1_file(path)?)),
         None => Ok(None),
     }
@@ -194,10 +198,10 @@ fn verified_cache_entry(dirs: &Dirs, hash: &str) -> AppResult<PathBuf> {
     let cache = cache_path(dirs, hash)?;
     content::regular_parents(&dirs.root, &cache)?;
     if !cache.exists() {
-        return Err(AppError::NotFound { kind: "Mod im Cache", id: hash.to_owned() });
+        return Err(AppError::NotFound(coded!("errors.modrinth.cacheEntryMissing", hash = hash).into()));
     }
     if !sha1_file(&cache)?.eq_ignore_ascii_case(hash) {
-        return Err(AppError::invalid("Mod-Cache-Hash stimmt nicht"));
+        return Err(AppError::invalid(coded!("errors.modrinth.cacheHashMismatch")));
     }
     Ok(cache)
 }
@@ -247,7 +251,8 @@ impl Journal {
         if failures.is_empty() {
             original
         } else {
-            AppError::invalid(format!("{original}; Rollback: {}", failures.join("; ")))
+            let failures = failures.join("; ");
+            AppError::invalid(coded!("errors.modrinth.rollbackFailed", original = original, failures = failures))
         }
     }
 }
@@ -260,7 +265,8 @@ fn undo(done: Done) -> AppResult<()> {
                 None => link_or_copy(&backup, &target)?,
                 Some(_) if sha1_file(&target)? == sha1_file(&backup)? => {}
                 Some(_) => {
-                    return Err(AppError::invalid(format!("Rollback-Ziel belegt; Backup: {}", backup.display())))
+                    let backup = backup.display();
+                    return Err(AppError::invalid(coded!("errors.modrinth.rollbackTargetOccupied", backup = backup)))
                 }
             }
             Ok(fs::remove_file(&backup)?)
@@ -310,6 +316,8 @@ mod tests {
             enabled: true,
             kind: Default::default(),
             required_by: Vec::new(),
+            pinned: false,
+            pack_managed: false,
         };
         assert_eq!(sync(&dirs, "i", std::slice::from_ref(&m)).unwrap(), 1);
         let disabled = Mod {
@@ -349,6 +357,8 @@ mod tests {
             enabled: true,
             kind: Default::default(),
             required_by: Vec::new(),
+            pinned: false,
+            pack_managed: false,
         };
         let installed = dirs.mods_dir("i1").join("sodium.jar");
         assert_eq!(sync(&dirs, "i1", std::slice::from_ref(&m)).unwrap(), 1);
@@ -364,7 +374,7 @@ mod tests {
         // … und beim Aktivieren auch nicht überschrieben, sondern als Konflikt gemeldet.
         m.enabled = true;
         let err = sync(&dirs, "i1", std::slice::from_ref(&m)).unwrap_err();
-        assert!(matches!(&err, AppError::Invalid(message) if message.contains("Mod-Konflikt")));
+        assert!(matches!(&err, AppError::Invalid(message) if message.to_string().contains("Mod-Konflikt")));
         assert_eq!(fs::read(&installed).unwrap(), b"eigene");
         assert_eq!(fs::read(cache_path(&dirs, &sha1).unwrap()).unwrap(), b"sodium");
 
@@ -396,7 +406,7 @@ mod tests {
         };
         assert!(matches!(
             sync(&dirs, "i1", &[missing]),
-            Err(AppError::NotFound { .. })
+            Err(AppError::NotFound(_))
         ));
         assert!(cache_path(&dirs, "../../x").is_err());
 
@@ -416,6 +426,8 @@ mod tests {
             enabled: true,
             kind: Default::default(),
             required_by: Vec::new(),
+            pinned: false,
+            pack_managed: false,
         };
         sync(&dirs, "i", std::slice::from_ref(&m)).unwrap();
         // Liegt unter dem Namen etwas anderes, bleibt der Eintrag weg.

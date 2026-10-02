@@ -17,6 +17,7 @@ use super::{
     mods, Dirs,
 };
 use crate::{
+    coded,
     error::{AppError, AppResult},
     models::{Instance, Mod, ModKind, ModSource},
     state::AppState,
@@ -90,7 +91,7 @@ fn stage(
         let stem = stem_for(&name, file.kind)?;
         let sha1 = mods::cache_file(dirs, &path)?;
         if let Some(m) = holder(&instance.mods, &sha1) {
-            return Err(AppError::invalid(format!("„{name}“ ist schon in dieser Instanz ({})", m.name)));
+            return Err(AppError::invalid(coded!("errors.packs.local.alreadyInInstance", name = name, holder = m.name)));
         }
         if staged.iter().any(|s| s.sha1 == sha1) {
             continue;
@@ -132,7 +133,7 @@ fn with_entries(
 fn ensure_new_project(mods: &[Mod], m: &Mod) -> AppResult<()> {
     let Some(project) = content::project_of(m) else { return Ok(()) };
     match mods.iter().find(|o| content::project_of(o) == Some(project)) {
-        Some(have) => Err(AppError::invalid(format!("„{}“ ist {}, das schon in dieser Instanz ist", m.file_name, have.name))),
+        Some(have) => Err(AppError::invalid(coded!("errors.packs.local.sameProject", file = m.file_name, project = have.name))),
         None => Ok(()),
     }
 }
@@ -157,11 +158,12 @@ pub async fn identify_local(state: &AppState, instance_id: &str, mod_ids: &[Stri
     content::commit_mods(state, instance_id, instance.mods)
 }
 
-/// Von Modrinth erkannter Eintrag anstelle von `m`; Schalter und Abhängigkeiten bleiben.
+/// Von Modrinth erkannter Eintrag anstelle von `m`; Schalter, Abhängigkeiten, Festhalten und Herkunft vom Pack bleiben.
 fn recognized(m: &Mod, recognition: &Recognition, mods: &[Mod]) -> Option<Mod> {
     let file = ContentFile { kind: m.kind, file_name: m.file_name.clone(), enabled: m.enabled };
     let found = recognition.mod_from_file(&CachedFile { file, sha1: m.sha1.clone()? }, mods);
-    (found.source != ModSource::Local).then(|| Mod { required_by: m.required_by.clone(), ..found })
+    (found.source != ModSource::Local)
+        .then(|| Mod { required_by: m.required_by.clone(), pinned: m.pinned, pack_managed: m.pack_managed, ..found })
 }
 
 /// Absoluter Pfad einer normalen .jar- oder .zip-Datei mit brauchbarem Namen und sinnvoller Größe.
@@ -171,19 +173,19 @@ pub(crate) fn source(path: &str) -> AppResult<(PathBuf, String)> {
         .file_name()
         .and_then(|n| n.to_str())
         .filter(|_| path.is_absolute())
-        .ok_or_else(|| AppError::invalid("Die Datei muss mit ihrem vollständigen Pfad angegeben werden"))?
+        .ok_or_else(|| AppError::invalid(coded!("errors.packs.fullPathRequired")))?
         .to_string();
     let lower = name.to_ascii_lowercase();
     if !lower.ends_with(".jar") && !lower.ends_with(".zip") {
-        return Err(AppError::invalid(format!("„{name}“ ist keine .jar- oder .zip-Datei")));
+        return Err(AppError::invalid(coded!("errors.packs.local.notJarOrZip", name = name)));
     }
     content::safe_path(&name)?;
-    let meta = fs::symlink_metadata(&path).map_err(|_| AppError::invalid(format!("„{name}“ ist nicht lesbar")))?;
+    let meta = fs::symlink_metadata(&path).map_err(|_| AppError::invalid(coded!("errors.packs.unreadableFile", name = name)))?;
     if !meta.is_file() {
-        return Err(AppError::invalid(format!("„{name}“ ist keine normale Datei")));
+        return Err(AppError::invalid(coded!("errors.packs.notNormalFile", name = name)));
     }
     if meta.len() == 0 || meta.len() > FILE_LIMIT {
-        return Err(AppError::invalid(format!("„{name}“ ist leer oder größer als {} MiB", FILE_LIMIT / MIB)));
+        return Err(AppError::invalid(coded!("errors.packs.local.emptyOrTooLarge", name = name, mib = FILE_LIMIT / MIB)));
     }
     Ok((path, name))
 }
@@ -194,7 +196,7 @@ fn detect_kind(path: &Path, name: &str) -> AppResult<Option<ModKind>> {
         return Ok(Some(ModKind::Mod));
     }
     let zip = zip::ZipArchive::new(fs::File::open(path)?)
-        .map_err(|_| AppError::invalid(format!("„{name}“ ist kein lesbares Zip-Archiv")))?;
+        .map_err(|_| AppError::invalid(coded!("errors.packs.unreadableZip", name = name)))?;
     Ok(zip_kind(zip.file_names()))
 }
 
@@ -222,7 +224,7 @@ fn holder<'a>(mods: &'a [Mod], sha1: &str) -> Option<&'a Mod> {
 fn stem_for(name: &str, kind: ModKind) -> AppResult<&str> {
     let ext = kind.extension();
     if !name.to_ascii_lowercase().ends_with(ext) {
-        return Err(AppError::invalid(format!("„{name}“ passt nicht zur gewählten Art")));
+        return Err(AppError::invalid(coded!("errors.packs.local.wrongKind", name = name)));
     }
     Ok(&name[..name.len() - ext.len()])
 }

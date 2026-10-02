@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Actions, Button, FormRow, FormSection, Progress, StatusPanel } from "@/ui";
 import { isBusy, usePhase } from "@/components/play/phase";
 import { useInstallPercent } from "@/components/play/installPercent";
@@ -6,6 +7,8 @@ import { useI18n } from "@/i18n";
 import { useInstall } from "@/hooks/usePlay";
 import { LOADER_LABELS, type Instance } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { GuardedButton, useBusyReason } from "../guards";
+import { MigrateDialog } from "./MigrateDialog";
 
 /** „Minecraft 1.21.4 · Fabric 0.16.10“; ohne Loader nur die Minecraft-Version. */
 function versionText(i: Instance) {
@@ -18,18 +21,24 @@ function versionText(i: Instance) {
 const REPAIR_BUTTON_WIDTH = 160;
 const REPAIR_PROGRESS_WIDTH = 180;
 
-/** Spielversion und Reparieren. */
+/** Spielversion samt Wechsel und Reparieren. */
 export function VersionSection({ instance }: { instance: Instance }) {
   const { t } = useI18n();
   const install = useInstall();
   const phase = usePhase(instance.id);
   const percent = useInstallPercent(instance);
+  const busy = useBusyReason(instance.id);
+  const [changing, setChanging] = useState(false);
   const repairing = percent != null;
   return (
     <FormSection title={t("common.version")}>
       <FormRow label={t("detail.settings.gameVersionLabel")} aside={t("detail.settings.versionAside")}>
-        {/* Reiner Text: auf Höhe des Labels (10 px wie dessen Innenabstand) */}
-        <span className="pt-2.5">{versionText(instance)}</span>
+        <Actions wrap className="min-h-10 items-center">
+          <span>{versionText(instance)}</span>
+          <GuardedButton blocked={busy} size="s" icon="swap" onClick={() => setChanging(true)}>
+            {t("detail.migrate.change")}
+          </GuardedButton>
+        </Actions>
       </FormRow>
       <FormRow label={t("detail.settings.repairLabel")} hint={t("detail.settings.repairHint")}>
         <Actions>
@@ -50,6 +59,7 @@ export function VersionSection({ instance }: { instance: Instance }) {
           />
         </Actions>
       </FormRow>
+      {changing && <MigrateDialog instance={instance} onClose={() => setChanging(false)} />}
     </FormSection>
   );
 }

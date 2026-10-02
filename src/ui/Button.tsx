@@ -137,8 +137,6 @@ type BarLook = {
   tone?: Extract<Tone, "warn">;
   /** Symbol nach der Beschriftung (Icon s, z. B. Menüpfeil). */
   iconEnd?: IconName;
-  /** Unter 900 px Fensterbreite nur der Inhalt, die Beschriftung fällt weg. */
-  compactBelow?: Extract<Compact, 900>;
   /**
    * Laufende Arbeit (Aufgaben): feste Breite 56, Symbol links. Bei `count` > 0 Zähler-Plakette rechts und Mini-Balken
    * unter dem Symbol (`p` 0–1, null = unbestimmt); der Platz bleibt immer, nichts verschiebt sich.
@@ -148,11 +146,10 @@ type BarLook = {
   side?: boolean;
 };
 
-function barData({ label, tone, compactBelow, activity, side }: Pick<BarLook, "label" | "tone" | "compactBelow" | "activity" | "side">) {
+function barData({ label, tone, activity, side }: Pick<BarLook, "label" | "tone" | "activity" | "side">) {
   return {
     "data-side": flag(side),
     "data-tone": label != null ? tone : undefined,
-    "data-compact": label != null ? compactBelow : undefined,
     "data-activity": activity ? (activity.count > 0 ? "busy" : "") : undefined,
   };
 }
@@ -184,13 +181,13 @@ type BarPlainProps = { to?: undefined } & Omit<ComponentProps<"button">, "childr
 
 /**
  * Knopf in der Fensterleiste (36 px): Hover-Platte, `current` = Platte + Kupferstrich (aktueller Bereich),
- * `expanded` = offen (Menü). Mit `to` ein Link. `label`/`tone`/`iconEnd`/`compactBelow`: Konto-Knopf; `activity`: Aufgaben.
+ * `expanded` = offen (Menü). Mit `to` ein Link. `label`/`tone`/`iconEnd`: Konto-Knopf; `activity`: Aufgaben.
  */
 export function BarButton(props: BarLook & (BarLinkProps | BarPlainProps)) {
-  const { current, expanded, className, children, label, tone, iconEnd, compactBelow, activity, side, ...target } = props;
+  const { current, expanded, className, children, label, tone, iconEnd, activity, side, ...target } = props;
   const common = {
     className: cn("vx-bar fx", className),
-    ...barData({ label, tone, compactBelow, activity, side }),
+    ...barData({ label, tone, activity, side }),
     "aria-current": current ? ("page" as const) : undefined,
     "aria-expanded": expanded,
   };

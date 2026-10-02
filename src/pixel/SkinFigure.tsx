@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SkinVariant } from "@/lib/types";
-import { CAPE, drawCape, drawSkin, FIGURE } from "./skin";
+import { CAPE, drawCape, prepareSkin } from "./skin";
+import { drawTurned, TURN, TURN_SCALE } from "./skinTurn";
 
 /**
- * Lädt eine Textur (Adresse oder data:-URL); bis die nächste da ist, bleibt die vorige stehen.
- * CORS-Anfrage, damit `drawSkin` die Pixel lesen darf: Mojangs Texturserver erlaubt jeden Ursprung.
+ * Lädt eine Textur (Adresse oder data:-URL); bis die nächste da ist, bleibt die vorige stehen, ohne Adresse gibt es keine.
+ * CORS-Anfrage, damit die Pixel lesbar sind: Mojangs Texturserver erlaubt jeden Ursprung.
  */
 function useTexture(src: string | undefined) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
@@ -16,14 +17,15 @@ function useTexture(src: string | undefined) {
     next.src = src;
     return () => void (next.onload = null);
   }, [src]);
-  return img;
+  return src ? img : null;
 }
 
 /**
- * Canvas in Texturpixeln, vergrößert um `zoom` ganze Icon-Einheiten (--iu) je Texturpixel: scharf in jeder Skalierung.
+ * Canvas in Texturpixeln (mal `density` Bildpunkte), vergrößert um `zoom` ganze Icon-Einheiten (--iu) je Texturpixel:
+ * scharf in jeder Skalierung. Reine Zeichenfläche: das Beschriften übernimmt der Aufrufer.
  */
-function TextureCanvas({ size, zoom, label, draw }: {
-  size: { w: number; h: number }; zoom: number; label: string; draw: (ctx: CanvasRenderingContext2D) => void;
+function TextureCanvas({ size, zoom, density = 1, label, draw }: {
+  size: { w: number; h: number }; zoom: number; density?: number; label?: string; draw: (ctx: CanvasRenderingContext2D) => void;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -31,16 +33,20 @@ function TextureCanvas({ size, zoom, label, draw }: {
     if (ctx) draw(ctx);
   }, [draw]);
   const style = { width: `calc(var(--iu, 3px) * ${size.w * zoom})`, height: `calc(var(--iu, 3px) * ${size.h * zoom})` };
-  return <canvas ref={ref} className="skin-fig" width={size.w} height={size.h} style={style} role="img" aria-label={label} />;
+  const naming = label ? { role: "img", "aria-label": label } : { "aria-hidden": true };
+  return <canvas ref={ref} className="skin-fig" width={size.w * density} height={size.h * density} style={style} {...naming} />;
 }
 
-type SkinFigureProps = { src: string | undefined; variant: SkinVariant; zoom?: number; label: string };
+type TurnedSkinProps = { src: string | undefined; variant: SkinVariant; capeSrc?: string; turn: number; zoom?: number };
 
-/** Spielerfigur von vorn: Grundschicht und zweite Schicht, schlanke Arme bei `slim`. */
-export function SkinFigure({ src, variant, zoom = 2, label }: SkinFigureProps) {
-  const img = useTexture(src);
-  const draw = useCallback((ctx: CanvasRenderingContext2D) => void (img && drawSkin(ctx, img, variant)), [img, variant]);
-  return <TextureCanvas size={FIGURE} zoom={zoom} label={label} draw={draw} />;
+/** Spielerfigur, um `turn` Grad um die Hochachse gedreht (0 = von vorn, 180 = von hinten), mit Umhang, wenn `capeSrc` da ist. */
+export function TurnedSkin({ src, variant, capeSrc, turn, zoom = 2 }: TurnedSkinProps) {
+  const skin = useTexture(src);
+  const cape = useTexture(capeSrc);
+  // Die Textur einmal bereiten: das Drehen zeichnet sie viele Male neu.
+  const sheet = useMemo(() => skin && prepareSkin(skin), [skin]);
+  const draw = useCallback((ctx: CanvasRenderingContext2D) => void (sheet && drawTurned(ctx, sheet, variant, turn, cape)), [sheet, variant, turn, cape]);
+  return <TextureCanvas size={TURN} zoom={zoom} density={TURN_SCALE} draw={draw} />;
 }
 
 /** Außenseite eines Umhangs. */

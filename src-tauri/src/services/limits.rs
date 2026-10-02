@@ -10,10 +10,14 @@ pub(crate) const FILE_LIMIT: u64 = 256 * MIB;
 pub(crate) const API_JSON_LIMIT: u64 = 8 * MIB;
 /// Größte Antwort der Anbieter-APIs (FTB, Technic, CurseForge-Proxy).
 pub(crate) const PROVIDER_JSON_LIMIT: u64 = 16 * MIB;
+/// Größte JSON-Antwort von Mojang und den Mod-Loader-Servern (Versionslisten, Profile, Runtime-Manifeste).
+pub(crate) const META_JSON_LIMIT: u64 = 16 * MIB;
 /// Größte JSON-Datei in einem Pack-Zip: Index und Zusatzdatei des `.mrpack`, `bin/version.json` bei Technic.
 pub(crate) const ZIP_JSON_LIMIT: u64 = 8 * MIB;
 /// Größte `manifest.json` eines CurseForge-Packs.
 pub(crate) const MANIFEST_LIMIT: u64 = 16 * MIB;
+/// Größtes Bild, das der Import als Icon einer Instanz aus einem anderen Launcher liest.
+pub(crate) const ICON_LIMIT: u64 = MIB;
 
 /// Größtes Pack-Zip eines Anbieters, das geladen wird.
 pub(crate) const ZIP_LIMIT: u64 = 2 * GIB;
@@ -39,8 +43,14 @@ pub(crate) const DOWNLOAD_CONCURRENCY: usize = 6;
 /// Gleichzeitige Anfragen beim Aufbau eines Anbieter-Katalogs.
 pub(crate) const CATALOG_CONCURRENCY: usize = 8;
 
+/// Größte Statusantwort eines Minecraft-Servers beim Anpingen (JSON samt Icon).
+pub(crate) const SERVER_STATUS_LIMIT: u64 = 256 * 1024;
+
 /// Treffer je Seite der Suche, bei jedem Anbieter gleich, damit die Oberfläche einheitlich blättert.
 pub(crate) const PAGE_SIZE: u32 = 20;
 pub(crate) const QUERY_MAX: usize = 512;
 /// Zeichen einer Katalog-Beschreibung; mit `…` gekürzt.
 pub(crate) const SUMMARY_MAX: usize = 220;
+
+/// Größtes Instanz-Icon als `data:`-URL (Zeichen); das Frontend liefert 256 × 256 Pixel, meist unter 50 KiB.
+pub(crate) const ICON_DATA_URL_LIMIT: usize = 512 * 1024;

@@ -31,7 +31,10 @@ export const hooks: typeof deHooks = {
   "hooks.game.crashReportHint": "The crash report usually says which mod is at fault.",
   "hooks.game.logHint": "The log shows what happened last.",
 
-  "hooks.screenshot.trashed": "Screenshot moved to the recycle bin",
+  "hooks.screenshot.trashed.one": "Screenshot moved to the trash",
+  "hooks.screenshot.trashed.other": "{count} screenshots moved to the trash",
+  "hooks.screenshot.copied": "Screenshot copied to the clipboard",
+  "hooks.screenshot.copyFailed": "The screenshot couldn’t be copied.",
 
   "hooks.skin.inLibrary": "“{name}” is now in your library",
   "hooks.skin.nowWearing": "You are now wearing “{name}”",
@@ -45,7 +48,8 @@ export const hooks: typeof deHooks = {
   "hooks.support.debugHint": "Paste it into your bug report.",
 
   "hooks.template.saved": "Template “{name}” saved",
-  "hooks.template.savedHint": "You’ll find it under New › Template.",
+  "hooks.template.savedHint": "You’ll find it under New instance › Template.",
+  "hooks.template.imported": "Template “{name}” imported",
 
   "hooks.datapack.added.one": "“{name}” added",
   "hooks.datapack.added.other": "{count} datapacks added",
@@ -61,5 +65,11 @@ export const hooks: typeof deHooks = {
   "hooks.world.restoreTaskDone": "Restored “{name}”",
   "hooks.world.restored": "“{name}” is back",
   "hooks.world.restoredInFolder": "“{name}” is back, in the folder “{folder}”",
+  "hooks.world.importTask": "Import “{name}”",
+  "hooks.world.importTaskDone": "“{name}” imported",
+  "hooks.world.imported": "“{name}” imported",
+  "hooks.world.importedInFolder": "“{name}” imported, in the folder “{folder}”",
+  "hooks.world.exportBackupsPick": "Choose a folder for the backups",
+  "hooks.world.backupsExported": "Backups exported to {folder}",
   "hooks.world.serverRemoved": "“{name}” removed",
 };

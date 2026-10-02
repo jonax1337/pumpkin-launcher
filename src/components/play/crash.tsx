@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { t, useI18n } from "@/i18n";
+import { t, useI18n, type TKey } from "@/i18n";
 import { Button, IconButton } from "@/ui";
 import { askShareLog } from "@/components/support";
 import { openLocalPath } from "@/lib/links";
@@ -8,6 +8,32 @@ import type { ExitPayload, Instance } from "@/lib/types";
 /** „Minecraft ist abgestürzt (Code 1)“; ohne Exit-Code nur der erste Teil. Reine Funktion, deshalb Modul-`t`. */
 export const crashHeadline = (crash: ExitPayload) =>
   t("components.game.mcCrashed") + (crash.code != null ? t("components.game.exitCode", { code: crash.code }) : "");
+
+/** Exit-Codes, die Alltagssprache verdienen (Windows meldet sie vorzeichenbehaftet, Linux und macOS als 128 + Signal). */
+const EXIT_CODE_TEXTS: Record<number, TKey> = {
+  1: "settings.crash.exit.error",
+  [-1]: "settings.crash.exit.abrupt",
+  255: "settings.crash.exit.abrupt",
+  [-1073741819]: "settings.crash.exit.access",
+  139: "settings.crash.exit.access",
+  [-1073740791]: "settings.crash.exit.native",
+  [-1073740940]: "settings.crash.exit.native",
+  134: "settings.crash.exit.native",
+  137: "settings.crash.exit.memory",
+  143: "settings.crash.exit.killed",
+};
+
+/** Was der Exit-Code in Alltagssprache heißt; für Codes ohne bekannte Bedeutung leer. */
+const exitCodeMeaning = (code: number | null) => {
+  const key = code == null ? undefined : EXIT_CODE_TEXTS[code];
+  return key ? t(key) : "";
+};
+
+/** „Wahrscheinlich: Sodium, Iris.“ aus dem Absturzbericht, dazu der Exit-Code in Alltagssprache; leer, wenn beides fehlt. */
+export const crashCause = (crash: ExitPayload) =>
+  [crash.suspectedMods.length ? t("settings.crash.probably", { mods: crash.suspectedMods.join(", ") }) : "", exitCodeMeaning(crash.code)]
+    .filter(Boolean)
+    .join(" ");
 
 type ButtonLook = Omit<ComponentProps<typeof Button>, "onClick" | "children">;
 

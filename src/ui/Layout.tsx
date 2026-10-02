@@ -2,11 +2,10 @@
  * Seitengerüst des Kits: Seitenkopf, Abschnittskopf, Überschriftenstufen, Werkzeugleiste, Aktionsreihe.
  * Maße fest in px (nie von --px abhängig). Aussehen: ui/layout.css (vx-*).
  */
-import type { ComponentProps, ReactNode } from "react";
+import { Children, isValidElement, type ComponentProps, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Count } from "./Chip";
 import { flag } from "./util";
-import type { Breakpoint } from "./types";
 
 /** Überschriftenstufen (Display, Versalien): Seite 40 · Dialog 26 · Abschnitt 22 · Unterabschnitt 20 · Karte 18. */
 export type HeadingLevel = "page" | "dialog" | "section" | "sub" | "card";
@@ -36,11 +35,15 @@ export function PageHeader({ title, count, id, children, className }: { title: R
 
 /**
  * Abschnittskopf: 32 px, Titel links (Stufe section 22 / sub 20 / card 18), Aktionen rechts (meist Geist s, bündig per bleed="end").
+ * `info` steht neben dem Titel, aber außerhalb der Überschrift (z. B. ein Info-Knopf): sein Text gehört nicht zum Namen der Überschrift.
  */
-export function SectionHeader({ title, as, size = "section", id, actions, className }: { title: ReactNode; as?: "h2" | "h3" | "h4"; size?: "section" | "sub" | "card"; id?: string; actions?: ReactNode; className?: string }) {
+export function SectionHeader({ title, as, size = "section", id, info, actions, className }: {
+  title: ReactNode; as?: "h2" | "h3" | "h4"; size?: "section" | "sub" | "card"; id?: string; info?: ReactNode; actions?: ReactNode; className?: string;
+}) {
+  const heading = <Heading level={size} as={as} id={id} className="vx-trunc">{title}</Heading>;
   return (
     <div className={cn("vx-sech", className)} data-size={size}>
-      <Heading level={size} as={as} id={id} className="vx-trunc">{title}</Heading>
+      {info ? <div className="vx-sech-t">{heading}{info}</div> : heading}
       {actions && <div className="vx-sech-a">{actions}</div>}
     </div>
   );
@@ -49,18 +52,18 @@ export function SectionHeader({ title, as, size = "section", id, actions, classN
 /**
  * Werkzeugleiste unter dem Seitenkopf: Höhe 40 (Suche, Sortieren, Ansicht) oder 56 (Inhalte mit Auswahl), Abstand 8.
  * `alt`: zweite Leiste deckungsgleich darüber (Auswahl-/Bulk-Leiste), sichtbar bei `altActive`; die Höhe bleibt, nichts springt.
- * `wrapBelow`: unter dieser Fensterbreite bricht die Leiste um (Höhe wird Mindesthöhe).
- * `search`: Breite der Suchfelder darin (zentral, schrumpft mit dem Fenster): s 220→128 · m 260→180 · l 320.
+ * Die Leiste bricht um, wenn die Breite nicht reicht (die Höhe ist Mindesthöhe); alles nach einem `Spacer` bildet eine Gruppe,
+ * die rechts bleibt und beim Umbruch zusammenbleibt.
+ * `search`: Breite der Suchfelder darin (zentral, nie breiter als die Leiste): s 220 · m 260 · l 320, unter 1180 px Fensterbreite 184 · 240 · 280.
  * `label`: macht die Leiste zur benannten Gruppe (role=toolbar nur mit echter Pfeiltasten-Bedienung, daher group).
  */
-export function Toolbar({ height = 40, wrapBelow, alt, altActive, search, label, className, children }: {
-  height?: 40 | 56; wrapBelow?: Extract<Breakpoint, 800 | 1096>; alt?: ReactNode; altActive?: boolean; search?: "s" | "m" | "l"; label?: string; className?: string; children: ReactNode;
+export function Toolbar({ height = 40, alt, altActive, search, label, className, children }: {
+  height?: 40 | 56; alt?: ReactNode; altActive?: boolean; search?: "s" | "m" | "l"; label?: string; className?: string; children: ReactNode;
 }) {
   return (
     <div
       className={cn("vx-toolbar", className)}
       data-h={height}
-      data-wrap={wrapBelow}
       data-search={search}
       data-alt={alt != null ? (altActive ? "on" : "off") : undefined}
       role={label ? "group" : undefined}
@@ -68,17 +71,31 @@ export function Toolbar({ height = 40, wrapBelow, alt, altActive, search, label,
     >
       {alt != null ? (
         <>
-          <div className="vx-tb-main" inert={altActive || undefined}>{children}</div>
-          <div className="vx-tb-alt" inert={!altActive || undefined}>{alt}</div>
+          <div className="vx-tb-main" inert={altActive || undefined}><ToolbarItems>{children}</ToolbarItems></div>
+          <div className="vx-tb-alt" inert={!altActive || undefined}><ToolbarItems>{alt}</ToolbarItems></div>
         </>
       ) : (
-        children
+        <ToolbarItems>{children}</ToolbarItems>
       )}
     </div>
   );
 }
 
-/** Freier Raum in Toolbar/Actions: schiebt alles Folgende nach rechts. */
+/** Teilt die Kinder einer Leiste am `Spacer`: davor steht links, danach die rechte Gruppe. */
+function ToolbarItems({ children }: { children: ReactNode }) {
+  const items = Children.toArray(children);
+  const split = items.findIndex((item) => isValidElement(item) && item.type === Spacer);
+  if (split < 0) return <>{items}</>;
+  const end = items.slice(split + 1);
+  return (
+    <>
+      {items.slice(0, split)}
+      {end.length > 0 && <div className="vx-tb-end">{end}</div>}
+    </>
+  );
+}
+
+/** Freier Raum in der Werkzeugleiste: alles danach steht rechts. */
 export function Spacer() {
   return <span className="vx-sp" aria-hidden />;
 }

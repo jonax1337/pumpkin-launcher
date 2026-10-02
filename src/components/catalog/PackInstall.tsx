@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { useI18n } from "@/i18n";
-import { Button, Dialog, DialogActions, ErrorBox, Field, Hint, IconButton, JobProgress, Menu, Skel, TextField } from "@/ui";
+import { Button, Chip, Dialog, DialogActions, ErrorBox, Field, Hint, IconButton, JobProgress, Menu, Skel, TextField } from "@/ui";
 import { useInstallPack } from "@/hooks/usePackInstall";
 import { catalogApi } from "@/lib/catalogApi";
 import type { ContentVersion, ProjectRef, Source } from "@/lib/content-types";
@@ -16,8 +16,8 @@ const MAX_OTHER_VERSIONS = 30;
 type PickedPack = { version: ContentVersion | null; reason: string | null };
 
 /** Inhalt der Bestätigung; wird beim Schließen verworfen, der Name beginnt also immer beim Pack-Titel. */
-function PackConfirmBody({ title, versions, picked, onConfirm }: {
-  title: string; versions: UseQueryResult<ContentVersion[]>; picked: PickedPack | null; onConfirm: (versionId: string, name: string) => void;
+function PackConfirmBody({ title, source, versions, picked, onConfirm }: {
+  title: string; source: Source; versions: UseQueryResult<ContentVersion[]>; picked: PickedPack | null; onConfirm: (versionId: string, name: string) => void;
 }) {
   const { t } = useI18n();
   const [name, setName] = useState(title);
@@ -52,6 +52,7 @@ function PackConfirmBody({ title, versions, picked, onConfirm }: {
       ) : (
         <Hint>{t("components.pack.confirmHint")}</Hint>
       )}
+      {source === "technic" && <Hint icon="info" className="mt-2">{t("components.security.technicHosts")}</Hint>}
     </form>
   );
 }
@@ -82,6 +83,7 @@ export function usePackConfirm(pack: ProjectRef, source: Source) {
     >
       <PackConfirmBody
         title={pack.title}
+        source={source}
         versions={versions}
         picked={picked}
         onConfirm={(versionId, name) => {
@@ -102,6 +104,8 @@ export function PackInstallButton({ project, source }: { project: ProjectRef; so
     <>
       {install.busy ? (
         <JobProgress label={install.busy} p={install.p} width={ROW_JOB_WIDTH} onCancel={install.cancel} cancelLabel={t("components.pack.cancelInstallPack", { name: project.title })} />
+      ) : install.queued ? (
+        <Chip icon="clock">{t("components.pack.queuedChip")}</Chip>
       ) : (
         <Button size="s" icon="plus" disabled={install.blocked} aria-label={t("components.pack.createAria", { name: project.title })} onClick={() => ask()}>
           {t("components.newInstance.create")}
@@ -123,6 +127,7 @@ export function PackActions({ project, source }: { project: ProjectRef; source: 
   if (install.busy) {
     return <JobProgress label={install.busy} p={install.p} width={HEAD_JOB_WIDTH} onCancel={install.cancel} cancelLabel={t("components.pack.cancelInstallPack", { name: project.title })} />;
   }
+  if (install.queued) return <Chip icon="clock">{t("components.pack.queuedChip")}</Chip>;
   return (
     <>
       <div className="vx-split">

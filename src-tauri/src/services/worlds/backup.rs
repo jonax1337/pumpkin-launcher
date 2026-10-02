@@ -4,25 +4,27 @@ use std::{
     cmp::Reverse,
     collections::HashSet,
     fs,
-    io,
+    io::{self, Read},
     path::{Path, PathBuf},
 };
 
 use serde::Serialize;
+use tokio_util::sync::CancellationToken;
 
 use super::{read_world, world_dir, World};
 use crate::services::progress::{Phase, ProgressFn};
 use crate::services::{
-    add_zip_file, content, download::RemoveOnDrop, entries, free_name, providers::zip_paths, remove_logged,
+    add_zip_file, check_cancelled, content, download::RemoveOnDrop, entries, free_name, providers::zip_paths, remove_logged,
     require_plain_name, walk, write_zip_atomic, Dirs,
 };
 use crate::{
+    coded,
     error::{AppError, AppResult},
     models::now_ms,
 };
 
 /// Sperrdatei des laufenden Spiels; gehört nicht in eine Sicherung.
-const SESSION_LOCK: &str = "session.lock";
+pub(super) const SESSION_LOCK: &str = "session.lock";
 /// Endung einer gelöschten Welt, solange ihr Ordner unter `backups/` noch entfernt wird.
 pub(super) const DELETING: &str = "deleting";
 /// Endung einer Sicherung, solange sie geschrieben wird.
@@ -39,8 +41,48 @@ pub struct WorldBackup {
     pub size_bytes: u64,
 }
 
+/// Kommentar im ZIP einer automatischen Sicherung (vor dem Spielstart): so unterscheidet sie sich von einer
+/// eigenen und nur sie wird aufgeräumt.
+const AUTOMATIC_COMMENT: &str = "pumpkin:automatic";
+
 /// Sichert die Welt als ZIP mit dem Ordner als oberstem Eintrag (wie die Sicherung im Spiel), ohne `session.lock`.
 pub fn backup(dirs: &Dirs, instance_id: &str, id: &str, progress: ProgressFn<'_>) -> AppResult<WorldBackup> {
+    backup_cancellable(dirs, instance_id, id, progress, &CancellationToken::new())
+}
+
+/// Wie [`backup`]; ist `stop` abgebrochen, endet es vor der nächsten Datei mit `AppError::Cancelled` und lässt keine
+/// halbe Sicherung liegen.
+pub fn backup_cancellable(
+    dirs: &Dirs,
+    instance_id: &str,
+    id: &str,
+    progress: ProgressFn<'_>,
+    stop: &CancellationToken,
+) -> AppResult<WorldBackup> {
+    create_backup(dirs, instance_id, id, "", progress, stop)
+}
+
+/// Wie [`backup`], aber als automatische Sicherung, die [`super::auto`] später aufräumen darf.
+pub(super) fn backup_automatic(dirs: &Dirs, instance_id: &str, id: &str) -> AppResult<WorldBackup> {
+    create_backup(dirs, instance_id, id, AUTOMATIC_COMMENT, &|_, _, _| {}, &CancellationToken::new())
+}
+
+/// Ob die Sicherung `backup_id` automatisch entstanden ist; was sich nicht lesen lässt, gilt als eigene.
+pub(super) fn is_automatic(dirs: &Dirs, instance_id: &str, backup_id: &str) -> bool {
+    fs::File::open(dirs.backups(instance_id).join(backup_id))
+        .ok()
+        .and_then(|file| zip::ZipArchive::new(file).ok())
+        .is_some_and(|zip| zip.comment() == AUTOMATIC_COMMENT.as_bytes())
+}
+
+fn create_backup(
+    dirs: &Dirs,
+    instance_id: &str,
+    id: &str,
+    comment: &str,
+    progress: ProgressFn<'_>,
+    stop: &CancellationToken,
+) -> AppResult<WorldBackup> {
     let dir = world_dir(dirs, instance_id, id)?;
     let mut files = walk(&dirs.saves(instance_id), &dir)?;
     let prefix = format!("{id}/");
@@ -49,7 +91,7 @@ pub fn backup(dirs: &Dirs, instance_id: &str, id: &str, progress: ProgressFn<'_>
     let backup_dir = dirs.backups(instance_id);
     fs::create_dir_all(&backup_dir)?;
     let backup_id = format!("{id}-{}.zip", now_ms());
-    write_zip(&backup_dir.join(&backup_id), &files, progress)?;
+    write_zip(&backup_dir.join(&backup_id), &files, comment, progress, stop)?;
     tracing::info!(instance = %instance_id, world = %id, backup = %backup_id, "Welt gesichert");
     read_backup(&backup_dir, &backup_id)
 }
@@ -59,16 +101,15 @@ pub fn backup(dirs: &Dirs, instance_id: &str, id: &str, progress: ProgressFn<'_>
 /// verfolgt) und Namen, die unter Windows nicht gehen oder sich nur in der Schreibweise unterscheiden; Linux und
 /// macOS lassen beides in einer Welt zu.
 fn ensure_restorable(files: &[(String, PathBuf)], prefix: &str) -> AppResult<()> {
-    let refuse = |why: String| AppError::invalid(format!("Die Welt lässt sich nicht wiederherstellen, daher wird sie nicht gesichert: {why}"));
     if files.is_empty() {
-        return Err(refuse("sie enthält keine Dateien".into()));
+        return Err(AppError::invalid(coded!("errors.packs.backup.unrestorableEmpty")));
     }
     let mut seen = HashSet::new();
     for (name, _) in files {
         let rel = name.strip_prefix(prefix).unwrap_or(name);
-        content::safe_path(rel).map_err(|err| refuse(err.to_string()))?;
+        content::safe_path(rel).map_err(|err| AppError::invalid(coded!("errors.packs.backup.unrestorablePath", reason = err)))?;
         if !seen.insert(rel.to_lowercase()) {
-            return Err(refuse(format!("{rel} gibt es nur in anderer Schreibweise ein zweites Mal")));
+            return Err(AppError::invalid(coded!("errors.packs.backup.unrestorableDuplicate", name = rel)));
         }
     }
     Ok(())
@@ -94,7 +135,7 @@ pub fn restore(dirs: &Dirs, instance_id: &str, backup_id: &str) -> AppResult<Wor
     // Nur Pfadregeln: die Grenzen gegen ZIP-Bomben aus Pack-Importen würden große Welten aussperren, die `backup` sichert.
     let files = zip_paths(&mut zip, &format!("{}/", saved.world), &[])?;
     if files.is_empty() {
-        return Err(AppError::invalid("Die Sicherung enthält keine Welt"));
+        return Err(AppError::invalid(coded!("errors.packs.backup.noWorld")));
     }
     let saves = dirs.saves(instance_id);
     fs::create_dir_all(&saves)?;
@@ -103,7 +144,7 @@ pub fn restore(dirs: &Dirs, instance_id: &str, backup_id: &str) -> AppResult<Wor
     // `create_dir` statt `create_dir_all`: taucht der Ordner gerade erst auf, wird er nicht befüllt.
     fs::create_dir(&target)?;
     let guard = RemoveOnDrop::new(target.clone());
-    extract(&mut zip, files, &target)?;
+    extract(&mut zip, files, &target, &|_, _, _| {})?;
     guard.disarm();
     tracing::info!(instance = %instance_id, backup = %backup_id, world = %id, "Welt wiederhergestellt");
     Ok(read_world(&target, &id))
@@ -129,7 +170,7 @@ pub fn delete_backup(dirs: &Dirs, instance_id: &str, backup_id: &str) -> AppResu
 
 /// Sicherung `id` in `dir`; ihr Name verrät Welt und Zeitpunkt.
 fn read_backup(dir: &Path, id: &str) -> AppResult<WorldBackup> {
-    let not_found = || AppError::NotFound { kind: "Sicherung", id: id.into() };
+    let not_found = || AppError::NotFound(coded!("errors.packs.backup.notFound", id = id).into());
     let (world, created_at) = backup_name(require_plain_name(id)?).ok_or_else(not_found)?;
     let size_bytes = fs::metadata(dir.join(id)).map_err(|_| not_found())?.len();
     Ok(WorldBackup { id: id.into(), world: world.into(), created_at, size_bytes })
@@ -146,24 +187,46 @@ pub(super) fn backup_stem(stem: &str) -> Option<(&str, u64)> {
     (!world.is_empty()).then_some((world, at.parse().ok()?))
 }
 
-/// Entpackt die geprüften Einträge `files` (aus `zip_paths`) nach `target`.
-fn extract(zip: &mut zip::ZipArchive<fs::File>, files: Vec<(PathBuf, usize)>, target: &Path) -> AppResult<()> {
-    for (path, index) in files {
+/// Entpackt die geprüften Einträge `files` (aus `zip_paths`) nach `target`. Jede Datei hat genau die Länge, die das
+/// Archiv angibt: eine längere (ein Archiv, das über seine Größe lügt) füllte sonst die Platte.
+pub(super) fn extract(
+    zip: &mut zip::ZipArchive<fs::File>,
+    files: Vec<(PathBuf, usize)>,
+    target: &Path,
+    progress: ProgressFn<'_>,
+) -> AppResult<()> {
+    let total = files.len() as u64;
+    progress(Phase::Extract, 0, total);
+    for (done, (path, index)) in (1..).zip(files) {
         let dest = target.join(path);
         if let Some(parent) = dest.parent() {
             fs::create_dir_all(parent)?;
         }
-        io::copy(&mut zip.by_index(index)?, &mut fs::File::create(&dest)?)?;
+        let entry = zip.by_index(index)?;
+        let size = entry.size();
+        let written = io::copy(&mut entry.take(size + 1), &mut fs::File::create(&dest)?)?;
+        if written != size {
+            return Err(AppError::invalid(coded!("errors.packs.backup.badZipSize")));
+        }
+        progress(Phase::Extract, done, total);
     }
     Ok(())
 }
 
 /// Schreibt das Archiv über `<path>.part`; bei einem Fehler bleibt nichts Halbes liegen.
-fn write_zip(path: &Path, files: &[(String, PathBuf)], progress: ProgressFn<'_>) -> AppResult<()> {
+fn write_zip(
+    path: &Path,
+    files: &[(String, PathBuf)],
+    comment: &str,
+    progress: ProgressFn<'_>,
+    stop: &CancellationToken,
+) -> AppResult<()> {
     let total = files.len() as u64;
     progress(Phase::Backup, 0, total);
     write_zip_atomic(path, PART, |zip| {
+        zip.set_comment(comment)?;
         for (done, (name, source)) in (1..).zip(files) {
+            check_cancelled(stop)?;
             add_zip_file(zip, name, &mut fs::File::open(source)?)?;
             progress(Phase::Backup, done, total);
         }

@@ -1,13 +1,15 @@
 // Nur im Browser-Dev-Modus dynamisch geladen (siehe api.ts); im Release-Build nicht enthalten.
 import { t } from "@/i18n";
 import type { Backend } from "./backend";
-import { blankInstanceFields, MOCK_FOREIGN } from "./mock-data";
+import { blankInstanceFields, importedMods, mockForeign } from "./mock-data";
 import { clone, findInstance, newId, wait, type MockContext } from "./mock-util";
 import { cancelledError } from "./errors";
-import type { Instance, Template } from "./types";
+import type { Instance, ModKind, Template } from "./types";
 
 /** Einträge, die ein Export aus dem Spielordner mitnehmen kann. */
-const EXPORTABLE_ENTRIES = ["config", "mods", "options.txt", "resourcepacks", "saves", "screenshots"];
+const EXPORTABLE_ENTRIES = ["config", "mods", "options.txt", "resourcepacks", "saves", "screenshots", "servers.dat"];
+
+const KIND_FOLDERS: Record<ModKind, string> = { mod: "mods", resourcepack: "resourcepacks", shader: "shaderpacks" };
 
 /** Kopierschritte und Dauer des vorgetäuschten Imports. */
 const IMPORT_TOTAL = 120;
@@ -47,13 +49,26 @@ export function createInstanceMock({ db, emit }: MockContext) {
     async updateInstance(instance) {
       await wait();
       findInstance(db, instance.id);
-      db.instances = db.instances.map((i) => (i.id === instance.id ? clone(instance) : i));
-      return clone(instance);
+      // Wie `update_instance`: Icon und Szene ändern nur ihre eigenen Aufrufe.
+      db.instances = db.instances.map((i) => (i.id === instance.id ? { ...clone(instance), icon: i.icon, scene: i.scene } : i));
+      return clone(findInstance(db, instance.id));
     },
     async setInstanceGroup(instanceId, group) {
       await wait();
       const inst = findInstance(db, instanceId);
       inst.group = group?.trim() || null;
+      return clone(inst);
+    },
+    async setInstanceIcon(instanceId, icon) {
+      await wait();
+      const inst = findInstance(db, instanceId);
+      inst.icon = icon;
+      return clone(inst);
+    },
+    async setInstanceScene(instanceId, scene) {
+      await wait();
+      const inst = findInstance(db, instanceId);
+      inst.scene = scene;
       return clone(inst);
     },
     async deleteInstance(id) {
@@ -70,29 +85,44 @@ export function createInstanceMock({ db, emit }: MockContext) {
       return clone(inst);
     },
     exportEntries: () => Promise.resolve([...EXPORTABLE_ENTRIES]),
+    exportTargets: (folder, fileNames) => Promise.resolve(fileNames.map((name) => `${folder}\\${name}`)),
+    /** Wie das Backend ohne Netz: Modrinth-Inhalte gelten als verlinkt, der Rest als eingebettet. */
+    async exportSummary(instanceId, include) {
+      await wait();
+      const chosen = findInstance(db, instanceId).mods.filter((m) => include.includes(KIND_FOLDERS[m.kind]));
+      const active = chosen.filter((m) => m.enabled);
+      const linked = active.filter((m) => m.source.type === "modrinth").length;
+      return { linked, embedded: active.length - linked, skippedDisabled: chosen.length - active.length };
+    },
     async importDetect() {
       await wait(500);
-      return MOCK_FOREIGN.map((f) => ({ ...f, imported: db.instances.some((i) => i.importedFrom === f.path) }));
+      return mockForeign().map((f) => ({ ...f, imported: db.instances.some((i) => i.importedFrom === f.path) }));
     },
-    /** Wie `instance_import`: Kopierfortschritt, abbrechbar, danach eine Instanz ohne Inhalte. */
-    async importInstance(source, operationId) {
+    /** Wie `instance_import`: Kopierfortschritt, abbrechbar, danach die Instanz mit den Einstellungen der erkannten. */
+    async importInstance({ path, name }, operationId) {
+      const found = mockForeign().find((f) => f.path === path);
+      if (!found || found.unsupported) throw new Error(found?.unsupported ?? t("hooks.api.importSourceGone"));
       for (let done = 0; done <= IMPORT_TOTAL; done += IMPORT_STEP) {
         throwIfCancelled(operationId);
         emit("content-progress", { operationId, phase: "copy", done, total: IMPORT_TOTAL });
         await wait(IMPORT_STEP_MS);
       }
-      const { name, minecraftVersion, loader, loaderVersion, memoryMb, jvmArgs, path } = source;
+      const { minecraftVersion, loader, loaderVersion, memoryMb, jvmArgs, javaPath, window, group, notes } = found;
       const inst: Instance = {
         ...blankInstanceFields(),
         id: newId("inst"),
-        name,
+        name: name.trim(),
         minecraftVersion,
         loader,
         loaderVersion,
         memoryMb,
         jvmArgs,
+        javaPath,
+        window,
+        group,
+        notes,
         importedFrom: path,
-        mods: [],
+        mods: importedMods(found),
         createdAt: Date.now(),
       };
       db.instances.push(inst);

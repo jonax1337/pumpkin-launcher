@@ -1,10 +1,11 @@
-import { Actions, ConfirmDialog, Dialog, DialogActions, Empty, IconButton, List, ListRow, RowTitle } from "@/ui";
+import { Actions, ConfirmDialog, Dialog, DialogActions, Empty, Hint, IconButton, List, ListRow, RowTitle } from "@/ui";
 import { QueryList } from "@/components/QueryList";
 import { useConfirmTarget } from "@/hooks/useConfirmTarget";
 import { useDeleteBackup, useWorldBackups, useWorldJobs } from "@/hooks/useWorlds";
 import { formatDateTime, formatSize } from "@/lib/format";
 import { useI18n } from "@/i18n";
 import type { Instance, WorldBackup } from "@/lib/types";
+import { AutoBackupSettings } from "./AutoBackupSettings";
 import { GuardedButton } from "./guards";
 import { WORLD_DIALOG_WIDTH } from "./worldDialog";
 
@@ -26,6 +27,8 @@ export function BackupsDialog({ instance, world, busy, onClose }: {
       width={WORLD_DIALOG_WIDTH}
       footer={<DialogActions cancel={t("common.close")} />}
     >
+      <AutoBackupSettings instance={instance} />
+      <Hint className="mb-2 mt-3">{t("detail.worlds.restoreHint")}</Hint>
       <QueryList
         query={backups}
         error={t("detail.worlds.backupsLoadError")}

@@ -1,6 +1,7 @@
 //! Datenformen der CurseForge-API, wie der Proxy sie durchreicht (nur die Felder, die der Launcher braucht), und
 //! die Zahlencodes ihrer Felder.
 use crate::{
+    coded,
     error::{AppError, AppResult},
     models::ModLoader,
     services::providers::RemoteFile,
@@ -201,8 +202,8 @@ impl CfFile {
             .download_url
             .clone()
             .filter(|u| !u.is_empty())
-            .ok_or_else(|| AppError::invalid("Die Autoren erlauben den Download nur über CurseForge"))?;
-        let sha1 = self.sha1().ok_or_else(|| AppError::invalid("Datei ohne Prüfsumme"))?;
+            .ok_or_else(|| AppError::invalid(coded!("errors.providers.downloadOnlyOnCurseForge")))?;
+        let sha1 = self.sha1().ok_or_else(|| AppError::invalid(coded!("errors.providers.fileWithoutChecksum")))?;
         Ok(RemoteFile { urls: vec![url], size: self.file_length, hashes: BTreeMap::from([("sha1", sha1)]) })
     }
 }

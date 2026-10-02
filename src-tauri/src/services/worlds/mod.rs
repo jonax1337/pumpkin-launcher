@@ -12,18 +12,23 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use super::progress::SharedProgress;
 use super::{data_url, entries, require_plain_name, servers, Dirs};
 use crate::{
+    coded,
     error::{AppError, AppResult},
     models::QuickPlay,
     state::AppState,
 };
 
+mod auto;
 mod backup;
 mod leftovers;
+mod transfer;
 #[cfg(test)]
 mod fixtures;
 
-pub use backup::{backup, backups, delete, delete_backup, restore, WorldBackup};
+pub use auto::backup_before_launch;
+pub use backup::{backup, backup_cancellable, backups, delete, delete_backup, restore, WorldBackup};
 pub use leftovers::remove_leftovers;
+pub use transfer::{export_backups, import};
 
 /// `icon.png` ist im Spiel 64 × 64; größere Dateien zeigt die Liste nicht.
 const ICON_LIMIT: u64 = 256 * 1024;
@@ -102,7 +107,7 @@ pub fn list(dirs: &Dirs, instance_id: &str) -> AppResult<Vec<World>> {
 pub fn world_dir(dirs: &Dirs, instance_id: &str, id: &str) -> AppResult<PathBuf> {
     let dir = dirs.saves(instance_id).join(require_plain_name(id)?);
     if !is_world(&dir) {
-        return Err(AppError::NotFound { kind: "Welt", id: id.into() });
+        return Err(AppError::NotFound(coded!("errors.packs.world.notFound", id = id).into()));
     }
     Ok(dir)
 }

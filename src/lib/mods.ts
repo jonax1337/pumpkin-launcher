@@ -7,6 +7,11 @@ import type { Mod } from "./types";
 export const MRPACK_EXT = /\.mrpack$/i;
 export const isMrpack = (path: string) => MRPACK_EXT.test(path);
 
+/** Dateiname für den Speichern-Dialog: Windows lehnt `:` & Co. ab, `/` läse der Dialog als Ordner. */
+export const packFileName = (name: string, fallback: string) => `${name.replace(/[<>:"/\\|?*]/g, "_").trim() || fallback}.mrpack`;
+/** Modpack-Datei von CurseForge (Zip mit `manifest.json`); als Instanz importierbar wie ein `.mrpack`. */
+export const CURSEFORGE_PACK_EXT = /\.zip$/i;
+
 export const projectOf = (m: Mod): string | null => (m.source.type === "modrinth" ? m.source.projectId : null);
 
 /** Wie `projectOf`, aber auch für CurseForge (`cf-<Nummer>`): so verweisen `requiredBy` und Besitzer aufeinander. */
@@ -49,6 +54,27 @@ export function undoRemove(current: Mod[], before: Mod[], removed: Mod[]): Mod[]
     }),
     ...current.filter((m) => !known.has(m.id)),
   ];
+}
+
+/**
+ * Rückgängig nach einem Update (`before` → `after`): Inhalte, die es auf eine andere Datei gesetzt hat, gehen zurück auf
+ * den alten Stand, was es neu mitbrachte (Abhängigkeiten), fällt weg. Änderungen seitdem (Schalter, Festhalten,
+ * neue Inhalte) bleiben. Die alten Dateien liegen noch im Cache des Backends.
+ */
+export function undoUpdate(current: Mod[], before: Mod[], after: Mod[]): Mod[] {
+  const earlier = new Map(before.map((m) => [m.id, m]));
+  const brought = new Set(after.filter((m) => !earlier.has(m.id)).map((m) => m.id));
+  const changed = new Set(
+    after.filter((m) => {
+      const old = earlier.get(m.id);
+      return old && (old.fileName !== m.fileName || old.version !== m.version);
+    }).map((m) => m.id),
+  );
+  return current.flatMap((m) => {
+    const old = earlier.get(m.id);
+    if (brought.has(m.id)) return [];
+    return old && changed.has(m.id) ? [{ ...old, enabled: m.enabled, pinned: m.pinned, requiredBy: m.requiredBy }] : [m];
+  });
 }
 
 // Pumpkin Launcher installiert Packs mit jedem unterstützten Loader.

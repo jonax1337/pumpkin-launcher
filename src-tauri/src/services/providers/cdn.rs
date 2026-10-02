@@ -1,5 +1,6 @@
 //! Downloads von den CDNs, auf die FTB-Packs verweisen: nur feste Hosts, Weiterleitungen einzeln geprüft.
 use crate::{
+    coded,
     error::{AppError, AppResult},
     services::transport::{follow_redirects, read_capped, DOWNLOAD_TOO_BIG},
 };
@@ -25,7 +26,7 @@ pub(super) fn check_url(url: &reqwest::Url) -> AppResult<()> {
         || url.password().is_some()
         || url.fragment().is_some()
     {
-        return Err(AppError::invalid("Download-Origin nicht erlaubt"));
+        return Err(AppError::invalid(coded!("errors.game.downloadOriginNotAllowed")));
     }
     Ok(())
 }
@@ -46,10 +47,7 @@ fn file_name(url: &reqwest::Url) -> String {
 /// Fehlerstatus der Antwort als Fehler; das CDN, das nur noch mit Schlüssel liefert, bekommt eine eigene Meldung.
 fn ensure_success(response: reqwest::Response) -> AppResult<reqwest::Response> {
     if cdn_wants_key(response.url(), response.status()) {
-        return Err(AppError::Refused(format!(
-            "CurseForge gibt {} nur noch mit Schlüssel heraus. Bitte aktualisiere Pumpkin Launcher oder lade die Datei von Hand auf curseforge.com.",
-            file_name(response.url())
-        )));
+        return Err(AppError::Refused(coded!("errors.game.curseForgeNeedsKey", file = file_name(response.url())).into()));
     }
     Ok(response.error_for_status()?)
 }

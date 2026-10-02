@@ -7,6 +7,7 @@ use super::{
     proxy::{file_of, files_by_id, mod_of, mods_by_id},
 };
 use crate::{
+    coded,
     error::{AppError, AppResult},
     models::{instance_name, Instance, ModKind, ModLoader, NewInstance},
     services::{
@@ -25,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     fs,
+    path::Path,
     sync::{Arc, Mutex},
 };
 
@@ -78,7 +80,7 @@ struct ManifestFile {
 impl Manifest {
     fn ensure_file_count(&self) -> AppResult<()> {
         if self.files.len() > PLAN_FILES {
-            return Err(AppError::invalid("Zu viele Pack-Dateien"));
+            return Err(AppError::invalid(coded!("errors.providers.tooManyPackFiles")));
         }
         Ok(())
     }
@@ -86,7 +88,7 @@ impl Manifest {
     /// Zip-Ordner der Overrides. Er kommt aus dem Manifest: nur einfache Namen.
     fn overrides_prefix(&self) -> AppResult<String> {
         if self.overrides.is_empty() || self.overrides.contains(['/', '\\', ':']) || self.overrides.starts_with('.') {
-            return Err(AppError::invalid("Ungültiger Overrides-Ordner im Pack"));
+            return Err(AppError::invalid(coded!("errors.providers.invalidOverridesFolder")));
         }
         Ok(format!("{}/", self.overrides))
     }
@@ -105,9 +107,9 @@ struct Listed {
 /// `forge-47.1.3` -> (Forge, 47.1.3); Loader, die Pumpkin Launcher nicht kennt, sind ein Fehler.
 fn manifest_loader(m: &ManifestMinecraft) -> AppResult<(ModLoader, Option<String>)> {
     let Some(l) = m.mod_loaders.iter().find(|l| l.primary).or(m.mod_loaders.first()) else { return Ok((ModLoader::Vanilla, None)) };
-    let (name, version) = l.id.split_once('-').ok_or_else(|| AppError::invalid("Loader im Pack nicht lesbar"))?;
+    let (name, version) = l.id.split_once('-').ok_or_else(|| AppError::invalid(coded!("errors.providers.packLoaderUnreadable")))?;
     let Some(loader) = ModLoader::from_modded_name(name) else {
-        return Err(AppError::invalid(format!("Das Pack braucht den Loader „{name}“, den Pumpkin Launcher nicht kennt")));
+        return Err(AppError::invalid(coded!("errors.providers.packLoaderUnknown", name = name)));
     };
     identifier(version)?;
     identifier(&m.version)?;
@@ -127,7 +129,37 @@ pub(crate) async fn plan_pack(
     let (project, file_no) = (parse_cf_id(&request.project_id)?, parse_cf_id(&request.version_id)?);
     let pack_file = modpack_file(client, project, file_no).await?;
     let temp = download_pack_zip(dirs, &pack_file, progress).await?;
-    let mut zip = zip::ZipArchive::new(fs::File::open(&temp.0)?)?;
+    let (mut pack, blocked) = plan_zip(client, fs::File::open(&temp.0)?, name).await?;
+    pack.temp = Some(temp);
+    Ok((pack, blocked))
+}
+
+/// Plant ein CurseForge-Modpack, das der Nutzer als Zip vorliegen hat (Export des CurseForge-Launchers oder Download
+/// von der Webseite). Die Datei bleibt unangetastet; Dateien und Projekte löst der Proxy wie bei jedem Pack auf.
+pub(crate) async fn plan_local_pack(client: &reqwest::Client, path: &Path, name: &str) -> AppResult<(Pack, Vec<Blocked>)> {
+    let file = open_local_zip(path)?;
+    plan_zip(client, file, instance_name(name)?).await
+}
+
+/// Nur ein absoluter Pfad auf eine reguläre `.zip`-Datei, die nicht größer als ein Pack-Zip sein darf.
+fn open_local_zip(path: &Path) -> AppResult<fs::File> {
+    if !path.is_absolute() || !path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("zip")) {
+        return Err(AppError::invalid(coded!("errors.providers.zipPathRequired")));
+    }
+    let file = fs::File::open(path)?;
+    let meta = file.metadata()?;
+    if !meta.is_file() {
+        return Err(AppError::invalid(coded!("errors.providers.notRegularFile")));
+    }
+    if meta.len() > ZIP_LIMIT {
+        return Err(AppError::invalid(coded!("errors.providers.packTooLarge")));
+    }
+    Ok(file)
+}
+
+/// Aus dem geöffneten Pack-Zip: `manifest.json` lesen, Dateien auflösen, Overrides übernehmen.
+async fn plan_zip(client: &reqwest::Client, file: fs::File, name: &str) -> AppResult<(Pack, Vec<Blocked>)> {
+    let mut zip = zip::ZipArchive::new(file).map_err(|_| AppError::invalid(coded!("errors.providers.packZipUnreadable")))?;
     let manifest = read_manifest(&mut zip)?;
     let (loader, loader_version) = manifest_loader(&manifest.minecraft)?;
     manifest.ensure_file_count()?;
@@ -137,7 +169,6 @@ pub(crate) async fn plan_pack(
     let instance = Instance::from_new(NewInstance { name: name.into(), minecraft_version: manifest.minecraft.version, loader, loader_version });
     let mut pack = merge_overrides(zip, &prefix, instance, listed.files)?;
     pack.origins = listed.origins;
-    pack.temp = Some(temp);
     Ok((pack, listed.blocked))
 }
 
@@ -145,7 +176,7 @@ pub(crate) async fn plan_pack(
 async fn modpack_file(client: &reqwest::Client, project: u32, file_no: u32) -> AppResult<CfFile> {
     let pack_mod = mod_of(client, project).await?;
     if pack_mod.class_id != Some(CLASS_MODPACK) {
-        return Err(AppError::invalid("Projekt ist kein Modpack"));
+        return Err(AppError::invalid(coded!("errors.providers.projectNotModpack")));
     }
     file_of(client, project, file_no).await
 }
@@ -160,7 +191,7 @@ async fn download_pack_zip(dirs: &Dirs, pack_file: &CfFile, progress: ProgressFn
 }
 
 fn read_manifest(zip: &mut zip::ZipArchive<fs::File>) -> AppResult<Manifest> {
-    let entry = zip.by_name("manifest.json")?;
+    let entry = zip.by_name("manifest.json").map_err(|_| AppError::invalid(coded!("errors.providers.packManifestMissing")))?;
     Ok(serde_json::from_slice(&read_capped_io(entry, MANIFEST_LIMIT, "manifest.json zu groß")?)?)
 }
 
@@ -185,11 +216,11 @@ fn classify_files(manifest: &Manifest, infos: &HashMap<u64, CfFile>, mods: &Hash
     for entry in &manifest.files {
         let file = infos
             .get(&u64::from(entry.file_id))
-            .ok_or_else(|| AppError::invalid(format!("Datei {} gibt es bei CurseForge nicht mehr", entry.file_id)))?;
+            .ok_or_else(|| AppError::invalid(coded!("errors.providers.packFileGone", id = entry.file_id)))?;
         let project = mods.get(&u64::from(entry.project_id));
         let Some(folder) = mod_kind(project.and_then(|m| m.class_id)).ok().map(ModKind::folder) else { continue };
         if file.file_name.is_empty() || file.file_name.contains(['/', '\\']) {
-            return Err(AppError::invalid(format!("Unerwarteter Dateiname {}", file.file_name)));
+            return Err(AppError::invalid(coded!("errors.providers.unexpectedFileName", name = file.file_name)));
         }
         match file.remote_file() {
             Ok(remote) => {
@@ -231,6 +262,46 @@ fn merge_overrides(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// Eine Zip-Datei im Temp-Ordner mit diesen Einträgen; der Ordner gehört dem Test.
+    fn zip_in(dir: &Path, name: &str, entries: &[(&str, &str)]) -> std::path::PathBuf {
+        use std::io::Write;
+        fs::create_dir_all(dir).unwrap();
+        let path = dir.join(name);
+        let mut w = zip::ZipWriter::new(fs::File::create(&path).unwrap());
+        for (entry, data) in entries {
+            w.start_file(*entry, zip::write::SimpleFileOptions::default()).unwrap();
+            w.write_all(data.as_bytes()).unwrap();
+        }
+        w.finish().unwrap();
+        path
+    }
+
+    #[test]
+    fn local_zips_must_be_absolute_regular_zip_files() {
+        let dir = std::env::temp_dir().join(crate::models::new_id());
+        let pack = zip_in(&dir, "Pack.ZIP", &[("manifest.json", "{}")]);
+        assert!(open_local_zip(&pack).is_ok(), "Endung ohne Rücksicht auf Groß-/Kleinschreibung");
+        assert!(open_local_zip(Path::new("pack.zip")).is_err(), "relativer Pfad");
+        assert!(open_local_zip(&dir.join("pack.mrpack")).is_err(), "falsche Endung");
+        let folder = dir.join("folder.zip");
+        fs::create_dir(&folder).unwrap();
+        assert!(open_local_zip(&folder).is_err(), "Ordner statt Datei");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_local_zip_without_a_manifest_is_refused_before_any_request() {
+        let dir = std::env::temp_dir().join(crate::models::new_id());
+        let not_a_pack = zip_in(&dir, "other.zip", &[("readme.txt", "hi")]);
+        let error = plan_local_pack(&reqwest::Client::new(), &not_a_pack, "Pack").await.err().expect("Fehler erwartet");
+        assert_eq!(error.to_string(), "Kein CurseForge-Pack: manifest.json fehlt");
+        let broken = dir.join("broken.zip");
+        fs::write(&broken, "kein zip").unwrap();
+        assert!(plan_local_pack(&reqwest::Client::new(), &broken, "Pack").await.is_err());
+        assert!(plan_local_pack(&reqwest::Client::new(), &not_a_pack, "").await.is_err(), "Name geprüft");
+        fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn manifest_loader_ids() {

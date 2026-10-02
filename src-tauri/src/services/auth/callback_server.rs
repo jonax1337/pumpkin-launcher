@@ -7,6 +7,7 @@ use tokio::net::{TcpListener, TcpStream};
 
 use super::oauth::{oauth_text, OAuthError};
 use super::Pending;
+use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::services::data_url;
 
@@ -39,8 +40,8 @@ pub(super) async fn wait_for_code(p: &Pending, listener: &TcpListener, expected_
 async fn accept(p: &Pending, listener: &TcpListener) -> AppResult<TcpStream> {
     let left = p.expires_at.saturating_duration_since(Instant::now());
     match p.cancel.run_until_cancelled(tokio::time::timeout(left, listener.accept())).await {
-        None => Err(AppError::invalid("Anmeldung abgebrochen.")),
-        Some(Err(_)) => Err(AppError::invalid("Die Anmeldung ist abgelaufen. Starte sie bitte neu.")),
+        None => Err(AppError::invalid(coded!("errors.auth.cancelled"))),
+        Some(Err(_)) => Err(AppError::invalid(coded!("errors.auth.expired"))),
         Some(Ok(Err(err))) => Err(err.into()),
         Some(Ok(Ok((stream, _)))) => Ok(stream),
     }

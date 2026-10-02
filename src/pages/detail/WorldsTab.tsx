@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Button, Cell, ConfirmDialog, Empty, Glyph, IconButton, JobProgress, List, ListRow, Menu, ProjectIcon, RowTitle, SectionHeader,
+  Actions, Button, Cell, ConfirmDialog, Empty, Glyph, IconButton, JobProgress, List, ListRow, Menu, ProjectIcon, RowTitle, SectionHeader,
   type MenuEntry,
 } from "@/ui";
 import { AddContentSheet } from "@/components/ContentBrowser";
@@ -9,6 +9,8 @@ import { useConfirmTarget } from "@/hooks/useConfirmTarget";
 import { useContentState } from "@/store/contentState";
 import { usePlay } from "@/hooks/usePlay";
 import { useWorldJobs, useWorldQuickPlay, useWorlds, worldTarget } from "@/hooks/useWorlds";
+import { api } from "@/lib/api";
+import { toastError } from "@/lib/toast";
 import { formatSize, relativeTime } from "@/lib/format";
 import { openLocalPath } from "@/lib/links";
 import { progressShare } from "@/lib/progress";
@@ -91,7 +93,7 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
   const { t } = useI18n();
   const worlds = useWorlds(instance.id);
   const startsIntoWorlds = useWorldQuickPlay(instance);
-  const { backup, remove } = useWorldJobs(instance);
+  const { backup, remove, importWorld } = useWorldJobs(instance);
   const removal = useConfirmTarget<World>();
   // Sicherungen einer Welt bzw. (world = null) aller Welten, auch gelöschter.
   const [showBackups, setShowBackups] = useState<{ world: string | null } | null>(null);
@@ -100,6 +102,14 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
   const quickPlayUnsupported =
     startsIntoWorlds === false ? t("detail.worlds.quickPlayUnsupported", { version: instance.minecraftVersion }) : null;
   const playBlocked = busy ?? quickPlayUnsupported;
+
+  async function pickWorld() {
+    const [path] = await api.pickPaths({
+      title: t("detail.worlds.importPickTitle"),
+      filters: [{ name: t("detail.worlds.importFilter"), extensions: ["zip"] }],
+    });
+    if (path) importWorld.mutate(path);
+  }
 
   const menuFor = (w: World): MenuEntry[] => [
     { id: "dir", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => openLocalPath(w.path) },
@@ -116,9 +126,14 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
         id="worlds-h"
         title={t("common.worlds")}
         actions={
-          <Button variant="ghost" size="s" icon="clock" bleed="end" onClick={() => setShowBackups({ world: null })}>
-            {t("detail.worlds.backupsTitle")}
-          </Button>
+          <Actions gap={4}>
+            <GuardedButton variant="ghost" size="s" icon="ul" blocked={busy} onClick={() => void pickWorld().catch(toastError)}>
+              {t("detail.worlds.importAction")}
+            </GuardedButton>
+            <Button variant="ghost" size="s" icon="clock" bleed="end" onClick={() => setShowBackups({ world: null })}>
+              {t("detail.worlds.backupsTitle")}
+            </Button>
+          </Actions>
         }
       />
       <div className="mt-3">

@@ -1,5 +1,5 @@
 //! Screenshots einer Instanz. Siehe `services::screenshots`.
-use tauri::State;
+use tauri::{ipc::Response, State};
 
 use crate::error::AppResult;
 use crate::services::screenshots::{self, Screenshot};
@@ -20,4 +20,12 @@ pub fn screenshot_delete(state: State<'_, AppState>, instance_id: String, file_n
     screenshots::delete(&state.dirs.screenshots_dir(&instance_id), &file_name)?;
     tracing::info!(instance = %instance_id, %file_name, "Screenshot in den Papierkorb gelegt");
     Ok(())
+}
+
+/// Der Inhalt eines Screenshots als rohe Bytes (kein JSON-Umweg), zum Kopieren in die Zwischenablage.
+#[tauri::command]
+pub async fn screenshot_read(state: State<'_, AppState>, instance_id: String, file_name: String) -> AppResult<Response> {
+    state.require_instance(&instance_id)?;
+    let bytes = state.blocking_with_dirs(move |dirs| screenshots::read(&dirs.screenshots_dir(&instance_id), &file_name)).await?;
+    Ok(Response::new(bytes))
 }

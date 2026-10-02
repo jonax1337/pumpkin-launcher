@@ -3,7 +3,7 @@ import { useI18n } from "@/i18n";
 import { toastError } from "@/lib/toast";
 import { squareIcon } from "@/lib/image";
 import { GLYPH_NAMES, GLYPH_PALETTES, PALETTE_NAMES } from "@/pixel/icons";
-import type { IconChoice } from "@/store/look";
+import type { IconChoice } from "@/lib/types";
 import { Button, Glyph, Hint, PickTile, Segmented } from "@/ui";
 
 type Mode = "auto" | "glyph" | "image";

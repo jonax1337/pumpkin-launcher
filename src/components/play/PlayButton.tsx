@@ -1,7 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
+import { SHORTCUT } from "@/app/shortcuts";
 import { Icon, Tip } from "@/ui";
 import { useUsableAccount } from "@/store/offline";
 import { useGame } from "@/store/game";
+import { useLook } from "@/store/look";
 import { askStop } from "@/store/stopAsk";
 import { usePlay } from "@/hooks/usePlay";
 import type { Instance } from "@/lib/types";
@@ -26,15 +28,17 @@ function useMounted() {
  * Ein Knopf für alles, feste Größe in allen Zuständen: Spielen (installiert bei Bedarf), Wird installiert x %,
  * Startet (beide nicht klickbar), Beenden (Klick fragt „Minecraft beenden?“), Erneut starten nach Absturz.
  * `l` 272×56, `m` 176×40, `i` 32×32.
+ * `main`: der Spielen-Knopf der Seite (Start, Instanzkopf); Strg+Enter klickt ihn.
  */
-export function PlayButton({ instance, size = "l", onLaunched, tabIndex }: {
-  instance: Instance; size?: "l" | "m" | "i"; onLaunched?: () => void; tabIndex?: number;
+export function PlayButton({ instance, size = "l", onLaunched, tabIndex, main }: {
+  instance: Instance; size?: "l" | "m" | "i"; onLaunched?: () => void; tabIndex?: number; main?: boolean;
 }) {
   const phase = usePhase(instance.id);
   const percent = useInstallPercent(instance);
   const exitCode = useGame((s) => s.crashes[instance.id]?.code ?? null);
   const since = useGame((s) => s.started[instance.id]);
   const hasAccount = !!useUsableAccount();
+  const { acc } = useLook(instance.id);
   const play = usePlay();
   const mounted = useMounted();
   const now = useNow(phase === "running" && !!since);
@@ -54,7 +58,11 @@ export function PlayButton({ instance, size = "l", onLaunched, tabIndex }: {
       data-st={state.state}
       aria-label={state.ariaLabel}
       aria-disabled={state.disabled || undefined}
+      aria-keyshortcuts={main ? SHORTCUT.play : undefined}
+      data-main-play={main ? "" : undefined}
       tabIndex={tabIndex}
+      // Akzent der Instanz (Biom); im Fehlerzustand setzt play.css --bad (Inline würde es überstimmen)
+      style={state.state === "error" ? undefined : ({ "--acc": acc } as CSSProperties)}
       onClick={click}
     >
       <span className="bf" />

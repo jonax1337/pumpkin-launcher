@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { openPage } from "@/lib/links";
 import { ACTION_TOAST_MS } from "@/lib/toast";
 import type { LogKind } from "@/lib/types";
+import { useSettings } from "@/store/settings";
 
 /** Hochladen zu mclo.gs, Link in die Zwischenablage; Fehler beim Hochladen meldet der zentrale Mutations-Toast. */
 export function useShareLog() {
@@ -23,12 +24,15 @@ export function useShareLog() {
   });
 }
 
-/** Debug-Info in die Zwischenablage. Scheitern kann praktisch nur das Kopieren. */
-export function useCopyDebugInfo() {
+/** Debug-Info in die Zwischenablage, mit der Mod-Liste von `instanceId`. Scheitern kann praktisch nur das Kopieren. */
+export function useCopyDebugInfo(instanceId: string | null = null) {
   const qc = useQueryClient();
   return useMutation({
     meta: { ownErrorToast: true },
-    mutationFn: async () => navigator.clipboard.writeText(await api.debugInfo(await defaultMemory(qc))),
+    mutationFn: async () => {
+      const javaPath = useSettings.getState().javaPath || null;
+      return navigator.clipboard.writeText(await api.debugInfo({ defaultMemoryMb: await defaultMemory(qc), javaPath, instanceId }));
+    },
     onSuccess: () => toast.success(t("hooks.support.debugCopied"), { description: t("hooks.support.debugHint") }),
     onError: () => toast.error(t("components.common.copyFailed")),
   });

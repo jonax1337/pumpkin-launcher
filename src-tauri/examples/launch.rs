@@ -105,6 +105,7 @@ fn start(dirs: &Dirs, game: &InstalledGame, instance_id: &str, username: &str) -
         instance_id,
         account: &account,
         memory_mb: launch::DEFAULT_MEMORY_MB,
+        min_memory_mb: None,
         extra_jvm_args: &[],
         window: GameWindow::Default,
         extra_game_args: &[],

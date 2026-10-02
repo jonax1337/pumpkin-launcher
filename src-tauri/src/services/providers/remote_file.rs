@@ -1,6 +1,7 @@
 //! Datei eines Anbieter-Packs: Ausweich-Adressen, Wiederholungen und Prüfung gegen Größe und Prüfsummen.
 use super::cdn;
 use crate::{
+    coded,
     error::{AppError, AppResult},
     services::{
         download,
@@ -46,7 +47,7 @@ where
             }
         }
     }
-    Err(last.unwrap_or_else(|| AppError::invalid("Keine Download-Adresse")))
+    Err(last.unwrap_or_else(|| AppError::invalid(coded!("errors.game.noDownloadAddress"))))
 }
 
 /// Datei eines Packs mit Ausweich-Adressen. Ohne mindestens einen Hash wird nichts akzeptiert.
@@ -66,7 +67,7 @@ impl RemoteFile {
 
     fn require_hashes(&self) -> AppResult<()> {
         if self.hashes.is_empty() {
-            return Err(AppError::invalid("Datei ohne Prüfsumme"));
+            return Err(AppError::invalid(coded!("errors.game.fileWithoutChecksum")));
         }
         Ok(())
     }
@@ -74,7 +75,7 @@ impl RemoteFile {
     /// Ohne angegebene Größe (0) gibt es nichts zu vergleichen.
     fn check_size(&self, actual: u64) -> AppResult<()> {
         if self.size != 0 && actual != self.size {
-            return Err(AppError::invalid("Dateigröße stimmt nicht"));
+            return Err(AppError::invalid(coded!("errors.game.fileSizeMismatch")));
         }
         Ok(())
     }

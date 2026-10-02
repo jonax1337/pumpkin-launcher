@@ -7,35 +7,41 @@ import { importable, useForeignInstances } from "@/hooks/useImport";
 import { useStarterInstance } from "@/hooks/useStarterInstance";
 import { discoverUrl, newInstanceUrl } from "@/lib/routes";
 import { cn } from "@/lib/utils";
-import { Button, Choice, Glyph, Hint, useRoving } from "@/ui";
+import { Button, Choice, Glyph, Hint, Icon, useRoving, type IconName } from "@/ui";
 import type { GlyphName, GlyphPalette } from "@/pixel/icons";
 import { PixelScene } from "@/pixel/PixelScene";
 import { Buddy } from "@/branding/Brand";
 import { useOfflineAllowed, useUsableAccount } from "@/store/offline";
 import { accountName, isValidPlayerName, useSettings } from "@/store/settings";
 
-type Start = "vanilla" | "mods" | "modpack";
+type Start = "vanilla" | "faster" | "modpack" | "file" | "import";
 
 // Beschriftungen als Schlüssel; übersetzt wird beim Rendern, damit ein Sprachwechsel sofort greift.
-const STARTS: { id: Start; glyph: GlyphName; pal: GlyphPalette; title: TKey; text: TKey; cta: TKey; next: TKey }[] = [
-  { id: "vanilla", glyph: "cube", pal: "steel", title: "components.onboarding.start.vanilla.title", text: "components.onboarding.start.vanilla.text", cta: "components.onboarding.ctaCreatePlay", next: "components.onboarding.start.vanilla.next" },
-  { id: "mods", glyph: "bolt", pal: "gold", title: "components.onboarding.start.mods.title", text: "components.onboarding.start.mods.text", cta: "components.onboarding.ctaCreatePlay", next: "components.onboarding.start.mods.next" },
-  { id: "modpack", glyph: "chest", pal: "violet", title: "components.onboarding.start.modpack.title", text: "components.onboarding.start.modpack.text", cta: "components.onboarding.start.modpack.cta", next: "components.onboarding.start.modpack.next" },
+const STARTS: { id: Start; glyph: GlyphName; pal: GlyphPalette; title: TKey; text: TKey; cta: TKey; ctaIcon: IconName }[] = [
+  { id: "vanilla", glyph: "cube", pal: "steel", title: "components.onboarding.start.vanilla.title", text: "components.onboarding.start.vanilla.text", cta: "components.onboarding.ctaCreatePlay", ctaIcon: "play" },
+  { id: "faster", glyph: "rocket", pal: "gold", title: "components.onboarding.start.faster.title", text: "components.onboarding.start.faster.text", cta: "components.onboarding.ctaCreatePlay", ctaIcon: "play" },
+  { id: "modpack", glyph: "chest", pal: "violet", title: "components.onboarding.start.modpack.title", text: "components.onboarding.start.modpack.text", cta: "components.onboarding.start.modpack.cta", ctaIcon: "grid" },
+  { id: "file", glyph: "spool", pal: "teal", title: "components.onboarding.start.file.title", text: "components.onboarding.start.file.text", cta: "components.onboarding.start.file.cta", ctaIcon: "file" },
+  { id: "import", glyph: "compass", pal: "sand", title: "components.onboarding.importForeignNone", text: "components.onboarding.start.import.text", cta: "components.onboarding.start.import.cta", ctaIcon: "swap" },
 ];
 
-/** Erster Start ohne Instanz: zwei Schritte über der Szene. Name (oder Microsoft), dann womit es losgeht. */
+/**
+ * Erster Start ohne Instanz: zwei Schritte über der Szene. Name (oder Microsoft), dann womit es losgeht.
+ * Mit Microsoft-Konto entfällt der Name: der zweite Schritt folgt der Anmeldung sofort.
+ */
 export function Onboarding() {
   const { t } = useI18n();
   const active = useUsableAccount();
   // Offizieller Build ohne Microsoft-Konto: nur die Anmeldung, kein Spielername (Backend: `offline_allowed`).
   const offlineOk = useOfflineAllowed((s) => s.allowed);
   const addAccount = useSettings((s) => s.addAccount);
-  const [step, setStep] = useState<1 | 2>(active ? 2 : 1);
+  const [nameDone, setNameDone] = useState(!!active);
   const [name, setName] = useState(active?.kind === "offline" ? active.name : "");
-  const [start, setStart] = useState<Start>("mods");
+  const [start, setStart] = useState<Start>("faster");
   const starter = useStarterInstance();
   const navigate = useNavigate();
   const microsoft = active?.kind === "microsoft";
+  const step = nameDone || microsoft ? 2 : 1;
   const nameOk = isValidPlayerName(name);
   const choice = STARTS.find((s) => s.id === start)!;
   // Pfeiltasten in der Startwahl: Auswahl folgt dem Fokus, ein Tab-Stopp.
@@ -45,14 +51,31 @@ export function Onboarding() {
 
   function next(e: FormEvent) {
     e.preventDefault();
-    if (!microsoft) {
-      if (!offlineOk || !nameOk) return;
-      if (name !== accountName(active)) addAccount(name);
-    }
-    setStep(2);
+    if (!offlineOk || !nameOk) return;
+    if (name !== accountName(active)) addAccount(name);
+    setNameDone(true);
   }
 
-  const go = () => (start === "modpack" ? navigate(discoverUrl()) : void starter[start]());
+  // Datei und Import öffnen den Dialog der Bibliothek, nicht einen eigenen: das Onboarding verschwindet mit der ersten Instanz
+  function go() {
+    switch (start) {
+      case "vanilla":
+        return void starter.vanilla();
+      case "faster":
+        return void starter.faster();
+      case "modpack":
+        return navigate(discoverUrl());
+      case "file":
+        return navigate(newInstanceUrl({ type: "file", path: "" }));
+      case "import":
+        return navigate(newInstanceUrl({ type: "import" }));
+    }
+  }
+
+  const importTitle = foreign
+    ? t(foreign === 1 ? "components.onboarding.importForeign.one" : "components.onboarding.importForeign.other", { n: foreign })
+    : null;
+  const createsHere = start === "vanilla" || start === "faster";
 
   const steps = (
     <div className="steps" aria-label={t("components.onboarding.stepOf", { step })}>
@@ -74,13 +97,9 @@ export function Onboarding() {
               <Buddy mood="hello" size={72} />
               <h1 id="onb-t">{t("components.onboarding.welcome")}</h1>
             </div>
-            <p>{offlineOk || microsoft ? t("components.account.askName") : t("components.account.msLoginPrompt")}</p>
+            <p>{offlineOk ? t("components.account.askName") : t("components.account.msLoginPrompt")}</p>
             <div className="ob">
-              {microsoft ? (
-                <p className="ok-msg">{t("components.account.loggedInAs", { name: accountName(active) })}</p>
-              ) : !offlineOk ? null : (
-                <PlayerNameField value={name} onChange={setName} help={t("components.playerName.helpShort")} />
-              )}
+              {offlineOk && <PlayerNameField value={name} onChange={setName} help={t("components.playerName.helpShort")} />}
               {offlineOk && <div className="or">{t("components.common.or")}</div>}
               <Button icon="user" variant={offlineOk ? undefined : "primary"} width="full" onClick={() => void startMsLogin()}>{t("components.account.msLogin")}</Button>
               <Hint className="ob-ms">
@@ -88,8 +107,8 @@ export function Onboarding() {
               </Hint>
             </div>
             <div className="of">
-              <span className="faint" style={{ fontSize: 12.5 }}>{t("components.onboarding.stepOf", { step: 1 })}</span>
-              <Button type="submit" variant="primary" width={140} iconEnd="chev" disabled={!microsoft && (!offlineOk || !nameOk)}>
+              <span className="help">{t("components.onboarding.stepOf", { step: 1 })}</span>
+              <Button type="submit" variant="primary" width={140} iconEnd="chev" disabled={!offlineOk || !nameOk}>
                 {t("common.next")}
               </Button>
             </div>
@@ -107,38 +126,32 @@ export function Onboarding() {
                 {STARTS.map((s) => (
                   <Choice
                     key={s.id}
-                    size="l"
                     role="radio"
                     media={<Glyph name={s.glyph} pal={s.pal} box={40} />}
-                    title={t(s.title)}
+                    title={s.id === "import" && importTitle ? importTitle : t(s.title)}
                     sub={t(s.text)}
+                    trail={start === s.id ? <Icon name="check" /> : undefined}
                     selected={start === s.id}
                     tabIndex={start === s.id ? 0 : -1}
+                    disabled={starter.busy}
                     onClick={() => setStart(s.id)}
                   />
                 ))}
               </div>
-              <p className="help onb-next" aria-live="polite">{t(choice.next)}</p>
-              {/* Der Dialog der Bibliothek, nicht ein eigener: das Onboarding verschwindet mit der ersten importierten Instanz */}
-              <Button variant="ghost" size="s" icon="swap" bleed="start" disabled={starter.busy} onClick={() => navigate(newInstanceUrl({ type: "import" }))}>
-                {foreign
-                  ? t(foreign === 1 ? "components.onboarding.importForeign.one" : "components.onboarding.importForeign.other", { n: foreign })
-                  : t("components.onboarding.importForeignNone")}
-              </Button>
             </div>
             <div className="of">
               {microsoft ? (
-                <span className="faint" style={{ fontSize: 12.5 }}>{t("components.account.loggedInAs", { name: accountName(active) })}</span>
+                <span className="help">{t("components.account.loggedInAs", { name: accountName(active) })}</span>
               ) : (
-                <Button variant="ghost" onClick={() => setStep(1)} disabled={starter.busy}>{t("common.back")}</Button>
+                <Button variant="ghost" onClick={() => setNameDone(false)} disabled={starter.busy}>{t("common.back")}</Button>
               )}
               {/* Symbol links wie bei allen Knöpfen; beim Anlegen die Sanduhr */}
               <Button
                 variant="primary"
                 size="l"
-                icon={starter.busy ? "hour" : start === "modpack" ? "grid" : "play"}
+                icon={starter.busy ? "hour" : choice.ctaIcon}
                 width={232}
-                disabled={starter.busy || (start !== "modpack" && !starter.ready)}
+                disabled={starter.busy || (createsHere && !starter.ready)}
                 onClick={go}
               >
                 {starter.busy ? t("components.newInstance.creating") : t(choice.cta)}

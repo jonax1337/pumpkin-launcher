@@ -29,7 +29,6 @@ export function HeroInfo({ instance }: { instance: Instance }) {
       <div className="hmeta">
         <Meta
           onScene
-          className="overflow-hidden"
           items={[
             loaderLine(instance),
             <>

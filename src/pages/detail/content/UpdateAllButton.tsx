@@ -1,7 +1,6 @@
 import type { Ref } from "react";
 import { useI18n } from "@/i18n";
 import { Button, Hint } from "@/ui";
-import { WIDTH } from "@/lib/breakpoints";
 import { cn } from "@/lib/utils";
 import { useContentModel } from "./ContentModel";
 
@@ -21,15 +20,14 @@ export function UpdateAllButton({ buttonRef }: { buttonRef: Ref<HTMLButtonElemen
         size="s"
         icon="up"
         count={count}
-        compactBelow={WIDTH.lg}
         className={cn(!shown && "invisible")}
         aria-label={model.updatingAll ? t("detail.content.updating") : undefined}
         disabled={model.locked || !shown}
-        onClick={() => model.runUpdates([...model.updateFor.keys()])}
+        onClick={() => model.askUpdates([...model.updateFor.keys()])}
       >
         {t("detail.content.updateAll")}
       </Button>
-      {!shown && <Hint tone="ok" className="max-[1096px]:invisible">{t("detail.content.allUpToDate")}</Hint>}
+      {!shown && <Hint tone="ok">{t("detail.content.allUpToDate")}</Hint>}
     </span>
   );
 }

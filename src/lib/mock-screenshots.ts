@@ -5,19 +5,21 @@ import { canvas2d, clone, wait } from "./mock-util";
 import { HOUR } from "./time";
 import type { Screenshot } from "./types";
 
-const BLOCK = 20;
+const BLOCK = 80;
+const WIDTH = 1280;
+const HEIGHT = 720;
 
-/** Platzhalter im Format 16:9: Himmel, Sonne, Gelände in Blöcken. */
+/** Platzhalter im Format 16:9 in Spielgröße (so passt das Bild größer als die große Ansicht): Himmel, Sonne, Gelände in Blöcken. */
 function paintShot(sky: string, ground: string, seed: number): string {
-  const [ctx, canvas] = canvas2d(320, 180);
+  const [ctx, canvas] = canvas2d(WIDTH, HEIGHT);
   ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, 320, 180);
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
   ctx.fillStyle = "#F6DA98";
-  ctx.fillRect(240, 20, 2 * BLOCK, 2 * BLOCK);
+  ctx.fillRect(WIDTH - 5 * BLOCK, BLOCK, 2 * BLOCK, 2 * BLOCK);
   ctx.fillStyle = ground;
-  for (let x = 0; x < 320; x += BLOCK) {
+  for (let x = 0; x < WIDTH; x += BLOCK) {
     const height = BLOCK * Math.round(3 + 1.5 * Math.sin((x / BLOCK + seed) / 2));
-    ctx.fillRect(x, 180 - height, BLOCK, height);
+    ctx.fillRect(x, HEIGHT - height, BLOCK, height);
   }
   return canvas.toDataURL();
 }
@@ -55,6 +57,11 @@ export function createScreenshotMock() {
     async screenshots(instanceId: string) {
       await wait();
       return clone(shotsOf(instanceId));
+    },
+    async screenshotRead(instanceId: string, fileName: string) {
+      const shot = shotsOf(instanceId).find((s) => s.fileName === fileName);
+      if (!shot) throw new Error(t("mock.screenshot.notFound", { file: fileName }));
+      return (await fetch(shot.path)).arrayBuffer();
     },
     async screenshotDelete(instanceId: string, fileName: string) {
       await wait();

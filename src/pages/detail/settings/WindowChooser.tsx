@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Actions, Radio, TextField } from "@/ui";
+import { useCommitOnUnmount } from "@/hooks/useCommitOnUnmount";
 import { useI18n } from "@/i18n";
 import { blurOnEnter } from "@/lib/dom";
 import type { GameWindow } from "@/lib/types";
@@ -17,10 +18,10 @@ const validSize = ({ width, height }: Size) => Number.isInteger(width) && Number
 
 /**
  * Fenster beim Start: wie Minecraft es öffnet, feste Größe oder Vollbild. Die Felder für die Größe bleiben stehen
- * und sind nur gesperrt (wie der Pfad bei Java); sie speichern beim Verlassen, Ungültiges springt zurück.
+ * und sind nur gesperrt (wie der Pfad bei Java); sie speichern beim Verlassen des Felds oder der Seite, Ungültiges springt zurück.
  */
-export function WindowChooser({ value, onChange, disabled }: {
-  value: GameWindow; onChange: (window: GameWindow, done?: string) => void; disabled?: boolean;
+export function WindowChooser({ name, value, onChange, disabled }: {
+  name: string; value: GameWindow; onChange: (window: GameWindow, done?: string) => void; disabled?: boolean;
 }) {
   const { t } = useI18n();
   const sized = value.type === "size";
@@ -38,6 +39,11 @@ export function WindowChooser({ value, onChange, disabled }: {
     }
   }
 
+  // Nur bei fester Größe: sonst stünde im gesperrten Feld noch ein alter Entwurf, der beim Verlassen die Wahl überschriebe.
+  useCommitOnUnmount(() => {
+    if (sized) commitSize();
+  });
+
   const sizeField = (label: string, text: string, setText: (v: string) => void) => (
     <TextField
       width={SIZE_FIELD_WIDTH}
@@ -54,11 +60,11 @@ export function WindowChooser({ value, onChange, disabled }: {
 
   return (
     <>
-      <Radio name="inst-window" checked={value.type === "default"} disabled={disabled} onChange={() => onChange({ type: "default" })}>
+      <Radio name={name} checked={value.type === "default"} disabled={disabled} onChange={() => onChange({ type: "default" })}>
         {t("format.memoryDefault")} <span className="text-fg-3">({t("detail.settings.windowAsMinecraft")})</span>
       </Radio>
       <Radio
-        name="inst-window"
+        name={name}
         checked={sized}
         disabled={disabled}
         onChange={() => onChange(draft)}
@@ -71,7 +77,7 @@ export function WindowChooser({ value, onChange, disabled }: {
         {sizeField(t("detail.settings.windowHeightAria"), height, setHeight)}
       </Actions>
       <Radio
-        name="inst-window"
+        name={name}
         checked={value.type === "fullscreen"}
         disabled={disabled}
         onChange={() => onChange({ type: "fullscreen" })}

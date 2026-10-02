@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use super::progress::{Phase, SharedProgress};
-use super::{check_cancelled, content, copy_files, first_free_name, mods, walk, Dirs};
+use super::{check_cancelled, content, copy_files, first_free_name, mods, pack_update::PackFiles, walk, Dirs};
 use crate::{
     error::AppResult,
     models::{new_id, now_ms, Instance, Mod},
@@ -50,8 +50,9 @@ fn copy_name(name: &str, taken: &[String]) -> String {
 }
 
 /// Was von Instanz `from` nach `to` kopiert wird, als (Ziel, Quelle): der Spielordner ohne Neuerzeugtes und
-/// ohne die Dateien verwalteter Inhalte, dazu Natives und Installiert-Marker. Der Marker hängt nur an Version
-/// und Loader, so startet die Kopie einer installierten Instanz ohne Neuinstallation.
+/// ohne die Dateien verwalteter Inhalte, dazu Natives, Installiert-Marker und die Dateiliste des Packs. Der Marker
+/// hängt nur an Version und Loader, so startet die Kopie einer installierten Instanz ohne Neuinstallation; mit der
+/// Dateiliste lässt sich die Kopie eines Datei- oder Technic-Packs weiter aktualisieren.
 fn files_to_copy(dirs: &Dirs, from: &str, to: &str, mods: &[Mod]) -> AppResult<Vec<(PathBuf, PathBuf)>> {
     let game = dirs.game_dir(to);
     let mut files: Vec<(PathBuf, PathBuf)> = mods::unmanaged_files(dirs, from, &dirs.game_entries(from)?, mods)?
@@ -61,6 +62,7 @@ fn files_to_copy(dirs: &Dirs, from: &str, to: &str, mods: &[Mod]) -> AppResult<V
     let base = dirs.instance(from);
     let mut rest = walk(&base, &dirs.natives_dir(from))?;
     rest.extend(walk(&base, &dirs.installed_marker(from))?);
+    rest.extend(walk(&base, &PackFiles::path_of(dirs, from))?);
     let instance = dirs.instance(to);
     files.extend(rest.into_iter().map(|(rel, path)| (instance.join(rel), path)));
     Ok(files)
@@ -101,6 +103,8 @@ mod tests {
             enabled: true,
             kind: ModKind::Mod,
             required_by: Vec::new(),
+            pinned: false,
+            pack_managed: false,
         }
     }
 
@@ -141,6 +145,7 @@ mod tests {
                 ("minecraft/.fabric/remapped.jar", "cache"),
                 ("natives/lwjgl.dll", "dll"),
                 ("installed", "1.21.1 Fabric 0.16.10"),
+                ("pack-files.json", "{\"files\":{}}"),
             ],
         );
 
@@ -161,6 +166,7 @@ mod tests {
             ("minecraft/mods/extra.jar", "eigene"),
             ("natives/lwjgl.dll", "dll"),
             ("installed", "1.21.1 Fabric 0.16.10"),
+            ("pack-files.json", "{\"files\":{}}"),
         ] {
             assert_eq!(fs::read_to_string(dir.join(path)).unwrap(), data, "{path}");
         }

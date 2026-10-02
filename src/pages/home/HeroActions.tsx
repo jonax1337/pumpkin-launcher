@@ -46,7 +46,7 @@ export function HeroActions({ instance }: { instance: Instance }) {
       onFocus={(e) => wakeIfPlay(e.target)}
       onBlur={() => setAwake(false)}
     >
-      <PlayButton key={instance.id} instance={instance} />
+      <PlayButton key={instance.id} instance={instance} main />
       <InstanceMenuButton instance={instance} onScene size="l" />
       <HomeBuddy key={`buddy-${instance.id}`} instanceId={instance.id} awake={awake} />
     </div>

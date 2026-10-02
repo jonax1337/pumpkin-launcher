@@ -2,20 +2,24 @@
 //! zu brechen, und die gewählten samt neuer Pflicht-Abhängigkeiten in einem Zug ablegen.
 use std::collections::{HashMap, HashSet};
 
+use futures::StreamExt;
 use serde::Serialize;
 
 use super::{
     commit_mods, ensure_known,
-    install::{budget, download_all, mark_dependencies},
+    install::{budget, mark_dependencies},
     mod_from_version, project_of,
 };
 use crate::{
+    coded,
     error::{AppError, AppResult},
     models::{Instance, Mod, ModKind, ModSource},
     services::{
+        limits::DOWNLOAD_CONCURRENCY,
         modrinth::{self, File, Version},
         mods,
         progress::{Phase, ProgressFn},
+        Dirs,
     },
     state::AppState,
 };
@@ -47,11 +51,13 @@ pub async fn check_updates(client: &reqwest::Client, instance: &Instance) -> App
     Ok(found.into_iter().map(|(i, newer)| ModUpdate::new(&instance.mods[i], newer)).collect())
 }
 
-/// Updates der Modrinth-Inhalte als (Index in `instance.mods`, neue Version).
+/// Updates der Modrinth-Inhalte als (Index in `instance.mods`, neue Version). Festgehaltene (`Mod::pinned`) prüft
+/// niemand; ihre Versionen zählen nur als installierter Stand (nicht zu verwechseln mit `drop_pinned`: dort legt eine
+/// andere Mod eine Version fest).
 async fn find_updates(client: &reqwest::Client, instance: &Instance) -> AppResult<Vec<(usize, Version)>> {
     let mut found = Vec::new();
     for kind in ModKind::ALL {
-        let hashes = hashes_of(&instance.mods, |m| m.kind == kind);
+        let hashes = hashes_of(&instance.mods, |m| m.kind == kind && !m.pinned);
         let loaders = kind.update_loaders(instance.loader);
         let latest = modrinth::latest_by_hash(client, &hashes, loaders, &instance.minecraft_version).await?;
         found.extend(
@@ -86,6 +92,7 @@ fn by_hash<'v>(m: &Mod, versions: &'v HashMap<String, Version>) -> Option<&'v Ve
 fn candidate_updates(mods: &[Mod], latest: &HashMap<String, Version>, mc: &str) -> Vec<(usize, Version)> {
     mods.iter()
         .enumerate()
+        .filter(|(_, m)| !m.pinned)
         .filter_map(|(i, m)| {
             let ModSource::Modrinth { project_id, version_id } = &m.source else {
                 return None;
@@ -153,6 +160,62 @@ pub async fn update_mods(state: &AppState, id: &str, mod_ids: &[String], progres
         .into_iter()
         .filter(|(i, _)| mod_ids.contains(&instance.mods[*i].id))
         .collect();
+    apply_versions(state, &client, &instance, updates, progress).await
+}
+
+/// Setzt den Eintrag `mod_id` der Instanz `id` auf die Modrinth-Version `version_id`, neuer oder älter, samt neuer
+/// Pflicht-Abhängigkeiten. Ein festgehaltener Eintrag bleibt festgehalten, jetzt auf der gewählten Version.
+pub async fn switch_version(
+    state: &AppState,
+    id: &str,
+    mod_id: &str,
+    version_id: &str,
+    progress: ProgressFn<'_>,
+) -> AppResult<Instance> {
+    let instance = state.instances.get(id)?;
+    let client = modrinth::client()?;
+    progress(Phase::Resolve, 0, 1);
+    let version = modrinth::version(&client, version_id).await?;
+    let i = switch_target(&instance, mod_id, &version)?;
+    apply_versions(state, &client, &instance, vec![(i, version)], progress).await
+}
+
+/// Index des Eintrags `mod_id`, wenn er auf `version` wechseln darf: gleiches Projekt, andere Version, passend zu
+/// Minecraft-Version und Loader der Instanz.
+fn switch_target(instance: &Instance, mod_id: &str, version: &Version) -> AppResult<usize> {
+    let i = instance
+        .mods
+        .iter()
+        .position(|m| m.id == mod_id)
+        .ok_or_else(|| AppError::invalid(coded!("errors.modrinth.unknownMod")))?;
+    let m = &instance.mods[i];
+    let ModSource::Modrinth { project_id, version_id } = &m.source else {
+        return Err(AppError::invalid(coded!("errors.modrinth.notFromModrinth")));
+    };
+    if &version.project_id != project_id {
+        return Err(AppError::invalid(coded!("errors.modrinth.versionOfOtherProject")));
+    }
+    if &version.id == version_id {
+        return Err(AppError::invalid(coded!("errors.modrinth.versionAlreadyInstalled")));
+    }
+    let loaders = m.kind.update_loaders(instance.loader);
+    let fits = version.game_versions.iter().any(|g| g == &instance.minecraft_version)
+        && version.loaders.iter().any(|l| loaders.contains(&l.as_str()));
+    if !fits {
+        return Err(AppError::invalid(coded!("errors.modrinth.versionDoesNotFitInstance")));
+    }
+    Ok(i)
+}
+
+/// Legt die Einträge `updates` (Index in `instance.mods`, neue Version) samt neuer Pflicht-Abhängigkeiten in einem Zug ab.
+async fn apply_versions(
+    state: &AppState,
+    client: &reqwest::Client,
+    instance: &Instance,
+    updates: Vec<(usize, Version)>,
+    progress: ProgressFn<'_>,
+) -> AppResult<Instance> {
+    let id = instance.id.as_str();
     let mut plan = UpdatePlan::new(&instance.mods);
     for (i, v) in &updates {
         plan.update(*i, v)?;
@@ -160,14 +223,11 @@ pub async fn update_mods(state: &AppState, id: &str, mod_ids: &[String], progres
     // Neue Pflicht-Abhängigkeiten aktiver Mods; jede andere aktive Mod bleibt festgelegt.
     if let Some(root) = plan.first_active_mod(&updates) {
         let planned = Instance { mods: plan.mods.clone(), ..instance.clone() };
-        plan.add_dependencies(modrinth::resolve(&client, &root.id, &planned).await?)?;
+        plan.add_dependencies(modrinth::resolve(client, &root.id, &planned).await?)?;
     }
     budget(plan.downloads.iter().map(|(_, file)| file.size))?;
     let total = plan.downloads.len() as u64;
-    let loaded = download_all(&client, plan.downloads.iter().map(|(_, file)| file), progress).await?;
-    for ((i, _), data) in plan.downloads.iter().zip(loaded) {
-        plan.mods[*i].sha1 = Some(mods::cache_bytes(&state.dirs, &data)?);
-    }
+    plan.download(&state.dirs, progress).await?;
     let result = plan.commit(state, id)?;
     progress(Phase::Complete, total, total);
     Ok(result)
@@ -175,17 +235,17 @@ pub async fn update_mods(state: &AppState, id: &str, mod_ids: &[String], progres
 
 /// Neue Inhaltsliste eines Updates: aktualisierte und neu nötige Einträge, die alten Einträge der aktualisierten
 /// (deaktiviert, damit `sync` ihre Dateien entfernt) und die Dateien, die dafür zu laden sind.
-struct UpdatePlan {
-    mods: Vec<Mod>,
+pub(crate) struct UpdatePlan {
+    pub(crate) mods: Vec<Mod>,
     names: HashSet<String>,
-    replaced: Vec<Mod>,
-    downloads: Vec<(usize, File)>,
+    pub(crate) replaced: Vec<Mod>,
+    pub(crate) downloads: Vec<(usize, File)>,
     selected: HashMap<String, Version>,
     fresh: HashSet<String>,
 }
 
 impl UpdatePlan {
-    fn new(mods: &[Mod]) -> Self {
+    pub(crate) fn new(mods: &[Mod]) -> Self {
         Self {
             mods: mods.to_vec(),
             names: mods.iter().map(|m| m.file_name.to_lowercase()).collect(),
@@ -197,7 +257,7 @@ impl UpdatePlan {
     }
 
     /// Setzt den Eintrag `i` auf die Version `v`.
-    fn update(&mut self, i: usize, v: &Version) -> AppResult<()> {
+    pub(crate) fn update(&mut self, i: usize, v: &Version) -> AppResult<()> {
         let file = modrinth::primary(v, self.mods[i].kind.extension())?;
         // Gleicher Name wie die alte Datei: mit der Versions-ID davor statt sie zu ersetzen.
         let file_name = [file.filename.clone(), format!("{}-{}", v.id, file.filename)]
@@ -223,22 +283,50 @@ impl UpdatePlan {
         for v in resolved {
             modrinth::insert_if_consistent(&mut self.selected, v)?;
         }
-        let mut deps: Vec<&Version> = self.selected.values().collect();
+        let mut deps: Vec<Version> = self.selected.values().cloned().collect();
         deps.sort_by(|a, b| a.project_id.cmp(&b.project_id));
-        for v in deps {
+        for v in &deps {
             if let Some(existing) = self.mods.iter().find(|m| project_of(m) == Some(&v.project_id)) {
                 if !existing.enabled {
-                    return Err(AppError::invalid("Benötigte vorhandene Mod ist deaktiviert"));
+                    return Err(AppError::invalid(coded!("errors.modrinth.requiredModDisabled")));
                 }
                 continue;
             }
-            let file = modrinth::primary(v, ModKind::Mod.extension())?;
-            if !self.names.insert(file.filename.to_lowercase()) {
-                return Err(names_collide());
-            }
-            self.fresh.insert(v.project_id.clone());
-            self.mods.push(mod_from_version(v, file.filename.clone(), ModKind::Mod));
-            self.downloads.push((self.mods.len() - 1, file));
+            self.add(v, Vec::new())?;
+        }
+        Ok(())
+    }
+
+    /// Hängt die Mod `v` neu an; `required_by` nennt, wer sie braucht.
+    pub(crate) fn add(&mut self, v: &Version, required_by: Vec<String>) -> AppResult<()> {
+        let file = modrinth::primary(v, ModKind::Mod.extension())?;
+        if !self.names.insert(file.filename.to_lowercase()) {
+            return Err(names_collide());
+        }
+        self.fresh.insert(v.project_id.clone());
+        self.mods.push(Mod { required_by, ..mod_from_version(v, file.filename.clone(), ModKind::Mod) });
+        self.downloads.push((self.mods.len() - 1, file));
+        Ok(())
+    }
+
+    /// Lädt die neuen Dateien in den Mod-Cache und trägt ihren SHA-1 ein; die Größe prüft der Aufrufer vorher.
+    pub(crate) async fn download(&mut self, dirs: &Dirs, progress: ProgressFn<'_>) -> AppResult<()> {
+        let client = modrinth::download_client()?;
+        let total = self.downloads.len() as u64;
+        let mut loaded = futures::stream::iter(std::mem::take(&mut self.downloads).into_iter().map(|(i, file)| {
+            let client = &client;
+            async move { Ok::<_, AppError>((i, modrinth::download(client, &file).await?)) }
+        }))
+        .buffer_unordered(DOWNLOAD_CONCURRENCY);
+        let mut hashes = Vec::new();
+        while let Some(item) = loaded.next().await {
+            let (i, data) = item?;
+            hashes.push((i, mods::cache_bytes(dirs, &data)?));
+            progress(Phase::Download, hashes.len() as u64, total);
+        }
+        drop(loaded);
+        for (i, sha1) in hashes {
+            self.mods[i].sha1 = Some(sha1);
         }
         Ok(())
     }
@@ -252,13 +340,13 @@ impl UpdatePlan {
 }
 
 fn names_collide() -> AppError {
-    AppError::invalid("Mod-Dateinamen kollidieren")
+    AppError::invalid(coded!("errors.modrinth.fileNamesCollide"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::content::fixtures::modrinth_mod;
+    use crate::{models::{ModLoader, NewInstance}, services::content::fixtures::modrinth_mod};
 
     #[test]
     fn older_release_is_no_update() {
@@ -328,6 +416,44 @@ mod tests {
         let found = candidate_updates(&[stale.clone(), current, foreign, local], &answer, "1.21.1");
         assert_eq!(found.iter().map(|(i, v)| (*i, v.id.as_str())).collect::<Vec<_>>(), [(0, "sodium2")]);
         assert!(candidate_updates(&[stale], &answer, "1.20.1").is_empty());
+    }
+
+    fn version_json(id: &str, project: &str, mc: &str, loader: &str) -> Version {
+        serde_json::from_value(serde_json::json!({
+            "id": id, "project_id": project, "name": id, "version_number": id,
+            "game_versions": [mc], "loaders": [loader], "files": [], "dependencies": []
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn pinned_entries_are_left_out_of_the_update_check() {
+        let pinned = Mod { sha1: Some("a".repeat(40)), pinned: true, ..modrinth_mod("sodium", &[]) };
+        let answer = HashMap::from([("a".repeat(40), version_json("sodium2", "sodium", "1.21.1", "fabric"))]);
+
+        assert!(candidate_updates(std::slice::from_ref(&pinned), &answer, "1.21.1").is_empty());
+        let loose = Mod { pinned: false, ..pinned };
+        assert_eq!(candidate_updates(&[loose], &answer, "1.21.1").len(), 1);
+    }
+
+    #[test]
+    fn switching_needs_another_version_of_the_same_project_that_fits() {
+        let mut instance = Instance::from_new(NewInstance {
+            name: "i".into(),
+            minecraft_version: "1.21.1".into(),
+            loader: ModLoader::Fabric,
+            loader_version: None,
+        });
+        instance.mods = vec![modrinth_mod("sodium", &[]), Mod { source: ModSource::Local, ..modrinth_mod("own", &[]) }];
+        let target = |mod_id: &str, version: &Version| switch_target(&instance, mod_id, version).map_err(|e| e.to_string());
+
+        assert_eq!(target("sodium", &version_json("sodium2", "sodium", "1.21.1", "fabric")), Ok(0));
+        assert!(target("sodium", &version_json("sodium1", "sodium", "1.21.1", "fabric")).unwrap_err().contains("schon installiert"));
+        assert!(target("sodium", &version_json("x", "lithium", "1.21.1", "fabric")).unwrap_err().contains("anderen Projekt"));
+        assert!(target("sodium", &version_json("sodium2", "sodium", "1.20.1", "fabric")).unwrap_err().contains("passt nicht"));
+        assert!(target("sodium", &version_json("sodium2", "sodium", "1.21.1", "forge")).unwrap_err().contains("passt nicht"));
+        assert!(target("own", &version_json("own2", "own", "1.21.1", "fabric")).unwrap_err().contains("nicht von Modrinth"));
+        assert!(target("missing", &version_json("v", "p", "1.21.1", "fabric")).unwrap_err().contains("Unbekannte Mod"));
     }
 
     #[test]

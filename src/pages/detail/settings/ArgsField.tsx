@@ -1,15 +1,17 @@
 import { useState } from "react";
+import { useCommitOnUnmount } from "@/hooks/useCommitOnUnmount";
 import { Disclosure, Hint, TextArea } from "@/ui";
 
 /**
  * Aufklappbares Textfeld für Startargumente (JVM oder Spiel), je Leerzeichen ein Argument. Klappt von selbst auf, wenn es
- * schon welche gibt; `onCommit` meldet den Text beim Verlassen des Felds.
+ * schon welche gibt; `onCommit` meldet den Text beim Verlassen des Felds oder der Seite.
  */
 export function ArgsField({ label, hint, hintId, placeholder, rows, args, disabled, onCommit }: {
   label: string; hint: string; hintId: string; placeholder: string; rows: number; args: string[]; disabled: boolean;
   onCommit: (text: string) => void;
 }) {
   const [text, setText] = useState(args.join(" "));
+  useCommitOnUnmount(() => onCommit(text));
   return (
     <Disclosure summary={label} open={args.length > 0}>
       <TextArea

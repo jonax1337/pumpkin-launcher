@@ -9,7 +9,7 @@ import { instanceUrl } from "@/lib/routes";
 import { installStepLabel, type ExitPayload, type Instance, type InstallProgress } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useGame } from "@/store/game";
-import { CrashActions, crashHeadline } from "./crash";
+import { CrashActions } from "./crash";
 import { usePhase, type Phase } from "./phase";
 
 /** Gemeinsame Optik der Statuszeilen: `lead` wird vorgelesen, `tail` (Zähler) und `acts` (Knöpfe) nicht. */
@@ -70,15 +70,13 @@ function CrashedStatus({ crash, instance, onScene, onViewLog }: {
   crash: ExitPayload; instance: Instance; onScene?: boolean; onViewLog: () => void;
 }) {
   return (
-    <StatusLine
-      lead={<b>{crashHeadline(crash)}</b>}
-      acts={<CrashActions crash={crash} instance={instance} onScene={onScene} onViewLog={onViewLog} />}
-    />
+    // Dass es abgestürzt ist, sagen Knopf, Hinweis und Protokoll schon; hier stehen nur die Wege weiter.
+    <StatusLine acts={<CrashActions crash={crash} instance={instance} onScene={onScene} onViewLog={onViewLog} />} />
   );
 }
 
 /**
- * Statuszeile unter dem Spielen-Knopf (32 px, feste Höhe): Schritt mit Abbrechen, Weg zum Protokoll, Absturz.
+ * Statuszeile unter dem Spielen-Knopf (32 px, feste Höhe): Schritt mit Abbrechen, Weg zum Protokoll, nach einem Absturz Bericht und Protokoll.
  * Die Laufzeit steht im Knopf, nicht hier.
  * Vorgelesen wird nur der Anfang (`lead`, ändert sich mit dem Zustand); Zähler und Uhr stehen außerhalb der Live-Region.
  * Ein fehlender Spielername steht nur im Knopf („Erst Spielernamen festlegen“), „Nicht installiert“ nur im Knopf/Chip.
@@ -88,7 +86,7 @@ function CrashedStatus({ crash, instance, onScene, onViewLog }: {
 export function PlayStatus({ instance, showLast = true, onScene }: { instance: Instance; showLast?: boolean; onScene?: boolean }) {
   const phase = usePhase(instance.id);
   return (
-    <div className={cn("pstat", phase === "crashed" && "bad", phase === "running" && "run")}>
+    <div className={cn("pstat", phase === "running" && "run")}>
       <PhaseStatus instance={instance} phase={phase} showLast={showLast} onScene={onScene} />
     </div>
   );

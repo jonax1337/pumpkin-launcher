@@ -50,6 +50,11 @@ impl Dirs {
         self.game_dir(instance_id).join("logs").join("latest.log")
     }
 
+    /// Gesicherte Protokolle früherer Sitzungen; außerhalb des Spielordners, damit Exporte und Kopien sie nicht mitnehmen.
+    pub fn session_logs(&self, instance_id: &str) -> PathBuf {
+        self.instance(instance_id).join("session-logs")
+    }
+
     /// `mods/` im Spielverzeichnis, dort sucht Fabric (und jeder andere Loader).
     pub fn mods_dir(&self, instance_id: &str) -> PathBuf {
         self.game_dir(instance_id).join("mods")

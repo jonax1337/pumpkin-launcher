@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "@/i18n";
-import { BackLink, Chip, Count, ErrorBox, Hint, IconButton, List, ListRow, Meta, Panel, ProjectIcon, RowTitle, SectionHeader, Skel } from "@/ui";
+import { BackLink, Button, Chip, Count, ErrorBox, Hint, List, ListRow, Meta, Panel, ProjectIcon, RowTitle, SectionHeader, Skel } from "@/ui";
 import { Description } from "@/components/Description";
 import { useInstances } from "@/hooks/useInstances";
 import { ALL_VERSIONS, catalogApi } from "@/lib/catalogApi";
@@ -12,11 +12,13 @@ import type { Instance, ModKind, World } from "@/lib/types";
 import { AddProjectButton, AddVersionButton } from "./AddButtons";
 import { ContentAction } from "./ContentAction";
 import { fitFilter, fitsLabel, kindsFor, versionFits } from "./fit";
+import { Gallery } from "./Gallery";
 import { InstalledChipHead, useInstalledIn } from "./InstalledIn";
 import { categoryNames, loaderText, sideText, versionLoaders, versionTypeSuffix } from "./labels";
 import { usePackConfirm } from "./PackInstall";
+import { VersionTable } from "./VersionTable";
 
-/** So viele Versionen zeigt die Seite. */
+/** So viele passende Versionen zeigt das Seitenpanel einer Instanz. */
 const SHOWN_VERSIONS = 5;
 
 /** Bis zu so viele Minecraft-Versionen stehen einzeln, darüber Spanne und Anzahl. */
@@ -153,38 +155,71 @@ function FitsPanel({ project, scope }: { project: ContentProject; scope: DetailS
   );
 }
 
-/** Die jüngsten Versionen, bei einer Instanz die passenden; mit Knopf je Version zum Hinzufügen bzw. Anlegen als Instanz. */
-function VersionsPanel({ project, scope }: { project: ContentProject; scope: DetailScope }) {
+/** Seitenpanel einer Instanz: die jüngsten Versionen, die zu ihr passen, mit Knopf je Version zum Hinzufügen. */
+function FittingVersionsPanel({ project, scope, instance }: { project: ContentProject; scope: DetailScope; instance: Instance }) {
   const { t } = useI18n();
-  const { projectId, type, source, instance, world } = scope;
-  const all = useAllVersions(scope);
+  const { projectId, type, source, world } = scope;
   const fitting = useFittingVersions(scope);
   const ref = { id: projectId, title: project.title };
-  const { install, ask: askPack, dialog: packDialog } = usePackConfirm(ref, source);
-  const asInstance = type === "modpack" && SOURCES[source].install;
-  const shown = (instance ? fitting.data : asInstance ? all.data?.filter(isPackVersionSupported) : all.data)?.slice(0, SHOWN_VERSIONS);
+  const shown = fitting.data?.slice(0, SHOWN_VERSIONS);
 
   return (
     <Panel notch={2} pad="m">
-      <SectionHeader as="h3" size="card" title={instance ? t("components.detail.versionsFor", { fits: fitsLabel(instance, type) }) : t("components.detail.versions")} />
+      <SectionHeader as="h3" size="card" title={t("components.detail.versionsFor", { fits: fitsLabel(instance, type) })} />
       {!shown && <Skel h={44} />}
-      {shown?.length === 0 && <Hint>{instance ? `${t("components.content.noVersionFor", { version: fitsLabel(instance, type) })}.` : t("components.detail.noVersionAvailable")}</Hint>}
+      {shown?.length === 0 && <Hint>{`${t("components.content.noVersionFor", { version: fitsLabel(instance, type) })}.`}</Hint>}
       {!!shown?.length && (
         <List variant="versions" aria-label={t("components.detail.versions")}>
           {shown.map((v) => (
             <ListRow key={v.id}>
               <RowTitle title={v.version_number} sub={`${versionLoaders(v) || t("components.version.allLoaders")} · ${v.game_versions.at(-1)}${versionTypeSuffix(v)}`} />
-              {instance ? (
-                <AddVersionButton instance={instance} world={world} project={ref} type={type} source={source} versionId={v.id} />
-              ) : asInstance ? (
-                <IconButton size="s" icon="plus" label={t("components.detail.versionAsInstance", { version: v.version_number })} tip={t("components.detail.addVersionAsInstance")} disabled={install.blocked} onClick={() => askPack(v.id)} />
-              ) : null}
+              <AddVersionButton instance={instance} world={world} project={ref} type={type} source={source} versionId={v.id} />
             </ListRow>
           ))}
         </List>
       )}
-      {packDialog}
+      {!!shown?.length && <Hint icon="info" className="mt-2.5">{t("components.security.noScan")}</Hint>}
     </Panel>
+  );
+}
+
+/** Versionen eines Modpacks als Tabelle mit „Anlegen“ je Version (nach Bestätigung); was Pumpkin Launcher nicht installieren kann, ist gekennzeichnet. */
+function PackVersionTable({ project, scope, versions }: { project: ContentProject; scope: DetailScope; versions: ContentVersion[] }) {
+  const { t } = useI18n();
+  const { install, ask, dialog } = usePackConfirm({ id: scope.projectId, title: project.title }, scope.source);
+  return (
+    <>
+      <VersionTable
+        versions={versions}
+        action={(v) =>
+          isPackVersionSupported(v) ? (
+            <Button size="s" icon="plus" disabled={install.blocked} aria-label={t("components.detail.versionAsInstance", { version: v.version_number })} onClick={() => ask(v.id)}>
+              {t("components.newInstance.create")}
+            </Button>
+          ) : (
+            <Chip size="s" tone="warn">{t("components.pack.noSupportedVersion")}</Chip>
+          )
+        }
+      />
+      <Hint icon="info" className="mt-2.5">{t("components.security.noScan")}</Hint>
+      {dialog}
+    </>
+  );
+}
+
+/** Alle Versionen des Projekts mit Art, Minecraft, Loader, Datum und Änderungen; bei Modpacks mit „Anlegen“ je Version. */
+function VersionsSection({ project, scope }: { project: ContentProject; scope: DetailScope }) {
+  const { t } = useI18n();
+  const all = useAllVersions(scope);
+  const asInstance = scope.type === "modpack" && SOURCES[scope.source].install;
+  return (
+    <section className="vtab-sec">
+      <SectionHeader as="h2" size="section" title={t("components.detail.allVersions")} className="mb-2.5" />
+      {all.isPending && <Skel h={44} />}
+      {all.error && <ErrorBox title={t("components.version.loadFailed")} error={all.error} onRetry={() => void all.refetch()} />}
+      {all.data?.length === 0 && <Hint>{t("components.detail.noVersionAvailable")}</Hint>}
+      {!!all.data?.length && (asInstance ? <PackVersionTable project={project} scope={scope} versions={all.data} /> : <VersionTable versions={all.data} />)}
+    </section>
   );
 }
 
@@ -211,11 +246,13 @@ export function ContentDetail({ projectId, type, source, instance, world, onBack
           <div className="proj-b">
             <div>
               {project.data.description && <p className="lead">{project.data.description}</p>}
+              <Gallery images={project.data.gallery} project={project.data.title} />
               <Description body={project.data.body} />
+              {!instance && <VersionsSection project={project.data} scope={scope} />}
             </div>
             <aside className="proj-side">
               <FitsPanel project={project.data} scope={scope} />
-              <VersionsPanel project={project.data} scope={scope} />
+              {instance && <FittingVersionsPanel project={project.data} scope={scope} instance={instance} />}
             </aside>
           </div>
         </>

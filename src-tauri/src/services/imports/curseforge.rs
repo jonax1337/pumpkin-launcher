@@ -3,9 +3,10 @@
 use std::{collections::HashMap, path::Path};
 
 use serde::Deserialize;
+use serde_json::Value;
 
-use super::{folder_name, from_json, loader_named, read_marker, skip_unreadable, Found, Setup};
-use crate::{error::{AppError, AppResult}, models::ModLoader};
+use super::{folder_name, from_json, loader_named, read_marker, skip_unreadable, split_args, Found, Setup};
+use crate::{coded, error::{AppError, AppResult}, models::ModLoader};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,6 +17,13 @@ struct Manifest {
     /// Fehlt bei Vanilla.
     #[serde(default)]
     base_mod_loader: Option<BaseModLoader>,
+    /// Eigene Einstellungen der Instanz; als `Value` gelesen, damit ein anderer Typ die Instanz nicht unlesbar macht.
+    #[serde(default)]
+    is_memory_override: Option<Value>,
+    #[serde(default)]
+    allocated_memory: Option<Value>,
+    #[serde(default)]
+    java_args_override: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -73,18 +81,16 @@ fn setup(data: &[u8], folder: &str) -> AppResult<Setup> {
     let (loader, loader_version) = match &manifest.base_mod_loader {
         None => (ModLoader::Vanilla, None),
         Some(base) => {
-            let (kind, version) = base.name.split_once('-').ok_or_else(|| AppError::invalid(format!("Unbekannter Loader „{}“", base.name)))?;
+            let (kind, version) = base.name.split_once('-').ok_or_else(|| AppError::invalid(coded!("errors.app.import.unknownLoader", name = base.name)))?;
             let version = version.strip_suffix(&format!("-{}", manifest.game_version)).unwrap_or(version);
             (loader_named(kind)?, Some(version.to_owned()))
         }
     };
+    let overrides_memory = manifest.is_memory_override.as_ref().and_then(Value::as_bool).unwrap_or(false);
     Ok(Setup {
-        name: manifest.name.unwrap_or_else(|| folder.into()),
-        minecraft_version: manifest.game_version,
-        loader,
-        loader_version,
-        memory_mb: None,
-        jvm_args: Vec::new(),
+        memory_mb: manifest.allocated_memory.as_ref().filter(|_| overrides_memory).and_then(Value::as_u64).and_then(|mb| u32::try_from(mb).ok()),
+        jvm_args: manifest.java_args_override.as_ref().and_then(Value::as_str).map(split_args).unwrap_or_default(),
+        ..Setup::new(manifest.name.unwrap_or_else(|| folder.into()), manifest.game_version, loader, loader_version)
     })
 }
 
@@ -113,6 +119,16 @@ mod tests {
         let neo = br#"{"baseModLoader": {"name": "neoforge-20.4.237-beta"}, "gameVersion": "1.20.4"}"#;
         let neo = setup(neo, "Neo").unwrap();
         assert_eq!((neo.name.as_str(), neo.loader, neo.loader_version.as_deref()), ("Neo", ModLoader::NeoForge, Some("20.4.237-beta")));
+    }
+
+    #[test]
+    fn own_memory_and_java_arguments_count_only_when_the_instance_overrides_the_app() {
+        let own = br#"{"gameVersion": "1.21.1", "isMemoryOverride": true, "allocatedMemory": 6144, "javaArgsOverride": "-Xss2M -XX:+UseZGC"}"#;
+        let own = setup(own, "x").unwrap();
+        assert_eq!((own.memory_mb, own.jvm_args), (Some(6144), vec!["-Xss2M".to_owned(), "-XX:+UseZGC".to_owned()]));
+        let app = setup(br#"{"gameVersion": "1.21.1", "isMemoryOverride": false, "allocatedMemory": 4096, "javaArgsOverride": null}"#, "x").unwrap();
+        assert_eq!((app.memory_mb, app.jvm_args.len()), (None, 0));
+        assert!(setup(br#"{"gameVersion": "1.21.1", "isMemoryOverride": "ja", "allocatedMemory": 4.5}"#, "x").is_ok());
     }
 
     #[test]

@@ -3,19 +3,21 @@ import { toast } from "sonner";
 import { t } from "@/i18n";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
+import { uniqueName } from "@/lib/names";
 import type { Instance, ModLoader } from "@/lib/types";
-import { useCreateInstance, useVersions } from "./useInstances";
+import { useCreateInstance, useInstances, useVersions } from "./useInstances";
 import { usePlay } from "./usePlay";
 
-/** Sodium in Modrinth: Das Onboarding legt „Fabric mit Mods“ um diesen Mod herum an. */
+/** Sodium in Modrinth: Das Onboarding legt „Schneller spielen“ (Fabric mit Sodium) um diesen Mod herum an. */
 const SODIUM_PROJECT_ID = "AANobbMI";
 
 /**
- * Die Instanzen, mit denen das Onboarding startet: Vanilla mit der neuesten Version oder Fabric mit Sodium.
+ * Die Instanzen, mit denen das Onboarding startet: Vanilla mit der neuesten Version oder „Schneller spielen“ (Fabric mit Sodium).
  * Beide legen die Instanz an und starten sie gleich; `busy` gilt, bis das Anlegen fertig ist.
  */
 export function useStarterInstance() {
   const versions = useVersions();
+  const instances = useInstances();
   const create = useCreateInstance();
   const play = usePlay();
   const [busy, setBusy] = useState(false);
@@ -33,9 +35,9 @@ export function useStarterInstance() {
   }
 
   const newInstance = (name: string, minecraftVersion: string, loader: ModLoader) =>
-    create.mutateAsync({ name, minecraftVersion, loader, loaderVersion: null, memoryMb: null });
+    create.mutateAsync({ name: uniqueName(name, instances.data?.map((i) => i.name) ?? []), minecraftVersion, loader, loaderVersion: null, memoryMb: null });
 
-  const vanilla = () => createAndPlay(() => newInstance(`Minecraft ${releases[0]}`, releases[0], "vanilla"));
+  const vanilla = () => createAndPlay(() => newInstance(t("components.newInstance.defaultName.vanilla"), releases[0], "vanilla"));
 
   /** Neueste Minecraft-Version, für die es Sodium schon gibt; Release-Versionen von Sodium bevorzugt. */
   async function fabricWithSodium() {
@@ -44,9 +46,9 @@ export function useStarterInstance() {
     const minecraftVersion = releases.find((r) => ranked.some((v) => v.game_versions.includes(r)));
     const version = ranked.find((v) => minecraftVersion && v.game_versions.includes(minecraftVersion));
     if (!minecraftVersion || !version) throw new Error(t("components.onboarding.noSodium"));
-    const instance = await newInstance(`Fabric ${minecraftVersion}`, minecraftVersion, "fabric");
+    const instance = await newInstance(t("components.newInstance.defaultName.modded"), minecraftVersion, "fabric");
     return api.modrinthInstallMod(instance.id, version.id, crypto.randomUUID());
   }
 
-  return { busy, ready: releases.length > 0, vanilla, mods: () => createAndPlay(fabricWithSodium) };
+  return { busy, ready: releases.length > 0, vanilla, faster: () => createAndPlay(fabricWithSodium) };
 }

@@ -57,6 +57,7 @@ export function createGameMock({ db, emit }: MockContext) {
       crashed: true,
       crashReport: "C:\Pumpkin Launcher\instances\survival\crash-reports\crash-2026-09-29.txt",
       logFile: "C:\Pumpkin Launcher\instances\survival\logs\latest.log",
+      suspectedMods: ["Sodium", "Iris Shaders"],
     });
   }
 
@@ -118,7 +119,7 @@ export function createGameMock({ db, emit }: MockContext) {
     async killInstance(instanceId) {
       if (!db.running.has(instanceId)) throw new Error(t("hooks.api.runningGameNotFound", { id: instanceId }));
       stop(instanceId);
-      emit("instance-exit", { instanceId, code: null, crashed: false, crashReport: null, logFile: null });
+      emit("instance-exit", { instanceId, code: null, crashed: false, crashReport: null, logFile: null, suspectedMods: [] });
     },
     systemMemoryMb: () => Promise.resolve(MOCK_SYSTEM_MEMORY_MB),
     async instanceStatus(instanceId) {

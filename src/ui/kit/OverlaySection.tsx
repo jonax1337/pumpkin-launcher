@@ -103,7 +103,7 @@ function Toolbars() {
   const [q, setQ] = useState("");
   return (
     <>
-      <Toolbar search="m" wrapBelow={1096}>
+      <Toolbar search="m">
         <SearchField value={q} onChange={setQ} placeholder="Instanzen durchsuchen" />
         <Button variant="ghost" icon="list">Sortieren</Button>
         <Spacer />
@@ -112,7 +112,6 @@ function Toolbars() {
       <Toolbar
         height={56}
         search="s"
-        wrapBelow={800}
         altActive={picking}
         alt={
           <>

@@ -1,0 +1,130 @@
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useI18n, type TKey } from "@/i18n";
+import { useReducedMotion } from "@/hooks/useMediaQuery";
+import type { SkinVariant } from "@/lib/types";
+import { TurnedSkin } from "@/pixel/SkinFigure";
+import { useSettings } from "@/store/settings";
+import { IconButton } from "@/ui";
+
+/** Schritt einer Pfeiltaste in Grad. */
+const KEY_STEP_DEG = 15;
+/** Grad je Pixel, den der Zeiger beim Ziehen wandert. */
+const DRAG_DEG_PER_PX = 2;
+/** Umdrehung von vorn nach hinten: Dauer und Zahl der Stufen (Bewegungen im Kit springen in ganzen Stufen). */
+const FLIP_MS = 320;
+const FLIP_STEPS = 8;
+const FULL_TURN = 360;
+const HALF_TURN = 180;
+
+const normalized = (deg: number) => ((deg % FULL_TURN) + FULL_TURN) % FULL_TURN;
+
+/** Der kürzeste Weg von `from` nach `to` in Grad, positiv oder negativ. */
+const shortestWay = (from: number, to: number) => normalized(to - from + HALF_TURN) - HALF_TURN;
+
+const VIEW_NAMES: [from: number, key: TKey][] = [
+  [0, "pages.skins.view.front"],
+  [45, "pages.skins.view.left"],
+  [135, "pages.skins.view.back"],
+  [225, "pages.skins.view.right"],
+  [315, "pages.skins.view.front"],
+];
+
+/** Was man bei diesem Winkel sieht, für Vorleser. */
+const viewName = (turn: number): TKey => [...VIEW_NAMES].reverse().find(([from]) => turn >= from)![1];
+
+/**
+ * Winkel der Drehung (0 = von vorn). `flip` dreht mit Zwischenschritten auf die andere Seite, solange `animate`;
+ * sonst springt es.
+ */
+function useTurn(animate: boolean) {
+  const [turn, setTurnState] = useState(0);
+  const current = useRef(0);
+  const frame = useRef(0);
+  const set = (deg: number) => {
+    current.current = normalized(deg);
+    setTurnState(current.current);
+  };
+  const stop = () => cancelAnimationFrame(frame.current);
+  useEffect(() => stop, []);
+
+  /** Zeigt die andere Seite: war es näher an vorn, die Rückseite, sonst die Vorderseite. */
+  function flip() {
+    stop();
+    const from = current.current;
+    const delta = shortestWay(from, from < HALF_TURN / 2 || from > FULL_TURN - HALF_TURN / 2 ? HALF_TURN : 0);
+    if (!animate) return set(from + delta);
+    const start = performance.now();
+    const tick = (now: number) => {
+      const done = Math.min(1, (now - start) / FLIP_MS);
+      set(from + (delta * Math.ceil(done * FLIP_STEPS)) / FLIP_STEPS);
+      if (done < 1) frame.current = requestAnimationFrame(tick);
+    };
+    frame.current = requestAnimationFrame(tick);
+  }
+
+  /** Dreht um `delta` Grad (negativ = nach rechts); eine laufende Umdrehung hört auf. */
+  function rotate(delta: number) {
+    stop();
+    set(current.current + delta);
+  }
+  return { turn, flip, rotate };
+}
+
+/**
+ * Spielerfigur zum Drehen: Ziehen mit der Maus, ← → in 15°-Schritten, Pos1/Ende für vorn/hinten. Der Knopf daneben
+ * wechselt zwischen Vorder- und Rückseite, beim Umhang die Seite, auf der er hängt. Reduzierte Bewegung: kein Auslaufen.
+ */
+export function SkinViewer({ src, variant, capeSrc, zoom, label }: { src: string | undefined; variant: SkinVariant; capeSrc?: string; zoom?: number; label: string }) {
+  const { t } = useI18n();
+  const reducedMotion = useReducedMotion();
+  const sceneMotion = useSettings((s) => s.motion);
+  const { turn, flip, rotate } = useTurn(sceneMotion && !reducedMotion);
+  const dragFrom = useRef<number | null>(null);
+
+  function onKeyDown(e: KeyboardEvent) {
+    const steps: Record<string, () => void> = {
+      ArrowLeft: () => rotate(KEY_STEP_DEG),
+      ArrowRight: () => rotate(-KEY_STEP_DEG),
+      Home: () => rotate(-turn),
+      End: () => rotate(HALF_TURN - turn),
+    };
+    const step = steps[e.key];
+    if (!step) return;
+    e.preventDefault();
+    step();
+  }
+
+  function onPointerMove(e: PointerEvent) {
+    if (dragFrom.current == null) return;
+    rotate(-(e.clientX - dragFrom.current) * DRAG_DEG_PER_PX);
+    dragFrom.current = e.clientX;
+  }
+
+  return (
+    <div className="skin-turn">
+      <div
+        className="skin-turn-view fx"
+        role="slider"
+        tabIndex={0}
+        aria-label={label}
+        aria-orientation="horizontal"
+        aria-valuemin={0}
+        aria-valuemax={FULL_TURN - 1}
+        aria-valuenow={Math.round(turn)}
+        aria-valuetext={t(viewName(turn))}
+        aria-keyshortcuts="ArrowLeft ArrowRight Home End"
+        onKeyDown={onKeyDown}
+        onPointerDown={(e) => {
+          dragFrom.current = e.clientX;
+          e.currentTarget.setPointerCapture(e.pointerId);
+        }}
+        onPointerMove={onPointerMove}
+        onPointerUp={() => (dragFrom.current = null)}
+        onPointerCancel={() => (dragFrom.current = null)}
+      >
+        <TurnedSkin src={src} variant={variant} capeSrc={capeSrc} turn={turn} zoom={zoom} />
+      </div>
+      <IconButton className="absolute right-0 top-0" icon="redo" size="s" label={t("pages.skins.turnAround")} onClick={flip} />
+    </div>
+  );
+}

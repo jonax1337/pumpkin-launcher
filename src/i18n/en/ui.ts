@@ -19,6 +19,8 @@ export const ui: typeof deUi = {
   "ui.tasks.emptyBody": "Downloads and installations will appear here.",
   "ui.tasks.installing": "Installing {name}",
   "ui.tasks.loadingContents": "Loading content",
+  "ui.tasks.queuedSub": "Waiting for the running task",
+  "ui.tasks.unqueueAria": "Remove {label} from the queue",
   "ui.job.cancelAria": "Cancel {label}",
 
   // ---------- Window ----------
@@ -48,6 +50,18 @@ export const ui: typeof deUi = {
   "ui.memory.label": "Memory",
   "ui.switch.on": "On",
   "ui.switch.off": "Off",
+  // ---------- Keyboard shortcuts ----------
+  "ui.skipToContent": "Skip to content",
+  "ui.shortcut.ctrl": "Ctrl",
+  "ui.shortcut.title": "Keyboard shortcuts",
+  "ui.shortcut.goTo": "Go to {name}",
+  "ui.shortcut.settings": "Open settings",
+  "ui.shortcut.newInstance": "New instance",
+  "ui.shortcut.play": "Play (Home and instance)",
+  "ui.shortcut.search": "Search the page",
+  "ui.shortcut.help": "This overview",
+  "ui.shortcut.tabHint": "Tab moves through all controls, the arrow keys move through lists and tabs, Esc closes windows and menus.",
+  "ui.shortcut.windowHint": "Arrange the window with Win+arrow keys; minimize, maximize and close at the top right are reachable with Tab.",
   // ---------- Scenes (biome names) ----------
   "ui.biome.forest": "Forest at dusk",
   "ui.biome.nether": "Nether",

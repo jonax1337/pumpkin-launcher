@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use super::maven::{artifact_url, maven_path, maven_sha1};
 use super::{compare_versions, save_profile, segment, LoaderProfile, LoaderTarget, LoaderVersion};
+use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::ModLoader;
 use crate::services::download::{self, is_sha1};
@@ -58,7 +59,7 @@ impl MavenLibrary {
 
     fn to_library(&self) -> AppResult<Library> {
         let sha1 = self.sha1.clone().filter(|s| is_sha1(s));
-        let sha1 = sha1.ok_or_else(|| AppError::invalid(format!("Loader-Library {} ohne SHA-1", self.name)))?;
+        let sha1 = sha1.ok_or_else(|| AppError::invalid(coded!("errors.game.loaderLibraryWithoutSha1", name = self.name)))?;
         Ok(Library::from_artifact(&self.name, Download { path: Some(maven_path(&self.name)?), sha1, url: self.artifact_url()? }))
     }
 }
@@ -119,7 +120,12 @@ pub(super) async fn fetch_profile(client: &reqwest::Client, dirs: &Dirs, target:
     let url = format!("{}/versions/loader/{}/{}/profile/json", meta(target.loader).url, target.mc, target.version);
     let mut profile: Profile = download::get_json(client, &url).await.map_err(|err| target.unknown_on_client_error(err))?;
     if profile.inherits_from != target.mc {
-        return Err(AppError::invalid(format!("{}-Profil erbt von {} statt {}", target.name(), profile.inherits_from, target.mc)));
+        return Err(AppError::invalid(coded!(
+            "errors.game.loaderProfileInherits",
+            loader = target.name(),
+            inherits = profile.inherits_from,
+            mc = target.mc
+        )));
     }
     for lib in profile.libraries.iter_mut().filter(|l| l.sha1.is_none()) {
         lib.sha1 = Some(maven_sha1(client, &lib.artifact_url()?).await?);

@@ -1,24 +1,33 @@
 import { useI18n } from "@/i18n";
 import { Button, Count, StatusPanel } from "@/ui";
 import { lastPlayedLine } from "@/components/common";
-import { crashHeadline, OpenCrashReportButton } from "@/components/play/crash";
+import { crashCause, crashHeadline, OpenCrashReportButton } from "@/components/play/crash";
 import { usePhase } from "@/components/play/phase";
 import { useNow } from "@/components/play/useNow";
-import { formatClock } from "@/lib/format";
-import type { Instance } from "@/lib/types";
+import { formatClock, formatDateTime } from "@/lib/format";
+import type { Instance, LogSession } from "@/lib/types";
 import { useGame } from "@/store/game";
 import { askStop } from "@/store/stopAsk";
+
+/** So viele frühere Sitzungen sichert das Backend je Instanz (`sessionlog::KEPT_SESSIONS`). */
+const KEPT_SESSIONS = 10;
 
 // Abstände oben 12, unten 10: die Höhe der Konsole rechnet damit (.console).
 const PLACE = "mt-3 mb-2.5";
 
-/** Kopfzeile des Protokolls: läuft, abgestürzt oder Ruhe. */
-export function LogStat({ instance }: { instance: Instance }) {
+/** Kopfzeile des Protokolls: gesicherte Sitzung (`session`), läuft, abgestürzt oder Ruhe. */
+export function LogStat({ instance, session }: { instance: Instance; session?: LogSession }) {
   const { t } = useI18n();
   const phase = usePhase(instance.id);
   const crash = useGame((s) => s.crashes[instance.id]);
   const since = useGame((s) => s.started[instance.id]);
   const now = useNow(phase === "running");
+  if (session)
+    return (
+      <StatusPanel size="s" icon="info" className={PLACE} title={t("settings.log.archivedTitle", { date: formatDateTime(session.startedAt) })}>
+        {t("settings.log.archivedNote")}
+      </StatusPanel>
+    );
   if (phase === "running")
     return (
       <StatusPanel
@@ -35,19 +44,18 @@ export function LogStat({ instance }: { instance: Instance }) {
   if (crash)
     return (
       <StatusPanel
-        size="s"
         tone="bad"
         className={PLACE}
         title={`${crashHeadline(crash)}.`}
         actions={crash.crashReport && <OpenCrashReportButton path={crash.crashReport} size="s" />}
       >
-        {crash.crashReport ? t("components.log.crashReportHelp") : t("components.log.tailShowsCause")}
+        {[crashCause(crash), crash.crashReport ? t("components.log.crashReportHelp") : t("components.log.tailShowsCause")].filter(Boolean).join(" ")}
       </StatusPanel>
     );
   // Wie man zu Ausgabe kommt, sagt der Leerzustand der Konsole; hier nur Stand und Aufbewahrung
   return (
     <StatusPanel size="s" icon="info" className={PLACE} title={`${lastPlayedLine(instance)}.`}>
-      {t("components.log.clearedOnExit")}
+      {t("settings.log.keptNote", { n: KEPT_SESSIONS })}
     </StatusPanel>
   );
 }

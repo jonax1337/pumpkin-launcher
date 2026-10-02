@@ -6,10 +6,12 @@ import {
 } from "@/ui";
 import { QueryList } from "@/components/QueryList";
 import { useConfirmTarget } from "@/hooks/useConfirmTarget";
-import { useRemoveServer, useSaveServer, useServers } from "@/hooks/useWorlds";
+import { useRefreshServerStatus, useRemoveServer, useSaveServer, useServers, useServerStatus } from "@/hooks/useWorlds";
 import { useI18n, type TKey } from "@/i18n";
+import { isValidServerAddress, serverNameFromAddress, SERVER_ADDRESS_MAX_LENGTH } from "@/lib/serverAddress";
 import type { Instance, Server } from "@/lib/types";
 import { GuardedButton, type SectionProps } from "./guards";
+import { ServerStatusCell } from "./ServerStatusCell";
 
 const NEW_SERVER: Server = { name: "", address: "", icon: null, acceptTextures: null };
 
@@ -17,7 +19,6 @@ const SERVER_FORM_ID = "server-form";
 const SERVER_DIALOG_WIDTH = 480;
 const SAVE_BUTTON_WIDTH = 130;
 const NAME_MAX_LENGTH = 64;
-const ADDRESS_MAX_LENGTH = 255;
 
 /** Serverliste der Instanz (`servers.dat`): hineinspielen, hinzufügen, bearbeiten, entfernen. */
 export function ServersSection({ instance, busy, onPlay }: SectionProps) {
@@ -27,10 +28,14 @@ export function ServersSection({ instance, busy, onPlay }: SectionProps) {
   // Server im Dialog; `index` null = neu.
   const [editing, setEditing] = useState<{ index: number | null; server: Server } | null>(null);
   const removal = useConfirmTarget<{ index: number; server: Server }>();
+  const { fetching, refresh } = useRefreshServerStatus(instance.id);
   const addButton = (
     <GuardedButton size="s" icon="plus" blocked={busy} onClick={() => setEditing({ index: null, server: NEW_SERVER })}>
       {t("common.add")}
     </GuardedButton>
+  );
+  const refreshButton = (
+    <IconButton size="s" icon="redo" label={t("detail.servers.refresh")} disabled={fetching} onClick={() => void refresh()} />
   );
 
   const menuFor = (server: Server, index: number): MenuEntry[] => [
@@ -48,7 +53,7 @@ export function ServersSection({ instance, busy, onPlay }: SectionProps) {
 
   return (
     <section className="mt-8" aria-labelledby="servers-h">
-      <SectionHeader id="servers-h" title={t("common.server")} actions={addButton} />
+      <SectionHeader id="servers-h" title={t("common.server")} actions={<>{(servers.data?.length ?? 0) > 0 && refreshButton}{addButton}</>} />
       <div className="mt-3">
         <QueryList
           query={servers}
@@ -60,28 +65,10 @@ export function ServersSection({ instance, busy, onPlay }: SectionProps) {
           }
         >
           {(list) => (
-            <List variant="worlds" divided aria-label={t("common.server")}>
+            <List variant="servers" divided aria-label={t("common.server")}>
               {list.map((server, index) => (
                 // Die Serverliste darf denselben Server mehrmals enthalten; die Stelle ist der Schlüssel.
-                <ListRow key={index} menu={menuFor(server, index)}>
-                  <ProjectIcon url={server.icon} seed={server.address} />
-                  <RowTitle title={server.name || server.address} sub={server.address} />
-                  <Cell flex align="end">
-                    <GuardedButton
-                      size="s"
-                      icon="play"
-                      blocked={busy}
-                      aria-label={t("components.game.ariaPlay", { name: server.name })}
-                      onClick={() => onPlay({ type: "server", address: server.address })}
-                    >
-                      {t("common.play")}
-                    </GuardedButton>
-                  </Cell>
-                  <Menu
-                    items={menuFor(server, index)}
-                    trigger={<IconButton size="s" icon="more" tip={false} label={t("detail.content.moreAbout", { name: server.name })} />}
-                  />
-                </ListRow>
+                <ServerRow key={index} instance={instance} server={server} menu={menuFor(server, index)} busy={busy} onPlay={onPlay} />
               ))}
             </List>
           )}
@@ -101,6 +88,34 @@ export function ServersSection({ instance, busy, onPlay }: SectionProps) {
   );
 }
 
+function ServerRow({ instance, server, menu, busy, onPlay }: SectionProps & { server: Server; menu: MenuEntry[] }) {
+  const { t } = useI18n();
+  const status = useServerStatus(instance.id, server.address);
+  const { motd, version } = status.data ?? {};
+  return (
+    <ListRow menu={menu}>
+      <ProjectIcon url={server.icon} seed={server.address} />
+      <RowTitle title={server.name || server.address} sub={motd ? `${server.address} · ${motd}` : server.address} aside={version} />
+      <ServerStatusCell status={status} />
+      <Cell flex align="end">
+        <GuardedButton
+          size="s"
+          icon="play"
+          blocked={busy}
+          aria-label={t("components.game.ariaPlay", { name: server.name })}
+          onClick={() => onPlay({ type: "server", address: server.address })}
+        >
+          {t("common.play")}
+        </GuardedButton>
+      </Cell>
+      <Menu
+        items={menu}
+        trigger={<IconButton size="s" icon="more" tip={false} label={t("detail.content.moreAbout", { name: server.name })} />}
+      />
+    </ListRow>
+  );
+}
+
 type TexturePolicy = "prompt" | "accept" | "reject";
 
 /** Ressourcenpakete des Servers, wie im Spiel unter „Server bearbeiten“; `accept` ist der Wert von `acceptTextures`. */
@@ -114,11 +129,16 @@ function ServerDialog({ instance, index, server, onClose }: {
   instance: Instance; index: number | null; server: Server; onClose: () => void;
 }) {
   const { t } = useI18n();
-  const [name, setName] = useState(server.name);
+  // Neue Server nehmen ihren Namen aus der Adresse, bis er selbst getippt wird.
+  const [typedName, setTypedName] = useState<string | null>(index == null ? null : server.name);
   const [address, setAddress] = useState(server.address);
   const [policy, setPolicy] = useState(TEXTURE_POLICIES.find((p) => p.accept === server.acceptTextures)?.value ?? "prompt");
   const save = useSaveServer(instance.id);
-  const ready = name.trim() !== "" && address.trim() !== "";
+  const name = typedName ?? serverNameFromAddress(address).slice(0, NAME_MAX_LENGTH);
+  const addressMissing = address.trim() === "";
+  const addressInvalid = !addressMissing && !isValidServerAddress(address);
+  const ready = !addressMissing && !addressInvalid && name.trim() !== "";
+  const blocker = addressMissing ? t("detail.servers.needAddress") : !addressInvalid && !ready ? t("detail.servers.needName") : null;
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -132,6 +152,7 @@ function ServerDialog({ instance, index, server, onClose }: {
       onOpenChange={(o) => !o && onClose()}
       title={index == null ? t("detail.servers.addTitle") : t("detail.servers.editTitle")}
       width={SERVER_DIALOG_WIDTH}
+      footLeft={blocker}
       footer={
         <DialogActions
           cancel={t("common.cancel")}
@@ -145,11 +166,16 @@ function ServerDialog({ instance, index, server, onClose }: {
       }
     >
       <form id={SERVER_FORM_ID} onSubmit={submit}>
-        <Field label={t("common.name")}>
-          <TextField value={name} onChange={(e) => setName(e.target.value)} maxLength={NAME_MAX_LENGTH} autoFocus />
+        <Field
+          label={t("detail.servers.addressLabel")}
+          help={t("detail.servers.addressHelp")}
+          error={addressInvalid && t("detail.servers.addressInvalid")}
+          reserveLines={2}
+        >
+          <TextField value={address} onChange={(e) => setAddress(e.target.value)} maxLength={SERVER_ADDRESS_MAX_LENGTH} spellCheck={false} autoFocus />
         </Field>
-        <Field label={t("detail.servers.addressLabel")} help={t("detail.servers.addressHelp")}>
-          <TextField value={address} onChange={(e) => setAddress(e.target.value)} maxLength={ADDRESS_MAX_LENGTH} spellCheck={false} />
+        <Field label={t("common.name")}>
+          <TextField value={name} onChange={(e) => setTypedName(e.target.value)} maxLength={NAME_MAX_LENGTH} />
         </Field>
         <Field label={t("detail.servers.texturePolicyLabel")} group>
           <Segmented

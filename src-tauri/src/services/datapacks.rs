@@ -18,6 +18,7 @@ use super::{
     strip_extension, trash_listed, worlds, Dirs,
 };
 use crate::{
+    coded,
     error::{AppError, AppResult},
     state::AppState,
 };
@@ -127,7 +128,7 @@ pub async fn install(
     let client = modrinth::client()?;
     let version = modrinth::version(&client, version_id).await?;
     if !fits(&version, &mc) {
-        return Err(AppError::invalid(format!("„{}“ ist kein Datenpaket für Minecraft {mc}", version.name)));
+        return Err(AppError::invalid(coded!("errors.packs.datapack.wrongVersion", name = version.name, mc = mc)));
     }
     let file = modrinth::primary(&version, ".zip")?;
     progress(Phase::Download, 0, 1);
@@ -253,7 +254,7 @@ fn fits(version: &Version, mc: &str) -> bool {
 fn read_zip(path: &str) -> AppResult<(String, Vec<u8>)> {
     let (path, name) = local_files::source(path)?;
     if !is_zip(&name) {
-        return Err(AppError::invalid(format!("„{name}“ ist keine .zip-Datei")));
+        return Err(AppError::invalid(coded!("errors.packs.notZip", name = name)));
     }
     Ok((name, fs::read(path)?))
 }
@@ -265,7 +266,7 @@ fn write_packs(root: &Path, world: &Path, files: Vec<(String, Vec<u8>)>) -> AppR
     for (name, data) in &files {
         check(name, data)?;
         if folder.join(name).exists() {
-            return Err(AppError::invalid(format!("„{name}“ liegt schon in dieser Welt")));
+            return Err(AppError::invalid(coded!("errors.packs.datapack.alreadyInWorld", name = name)));
         }
     }
     let mut created = Vec::new();
@@ -280,10 +281,10 @@ fn write_packs(root: &Path, world: &Path, files: Vec<(String, Vec<u8>)>) -> AppR
 /// Ein Datenpaket-Zip: Einträge nach den Regeln der Pack-Importe, ganz oben eine lesbare `pack.mcmeta` und `data/`.
 fn check(name: &str, data: &[u8]) -> AppResult<()> {
     let not_a_pack =
-        || AppError::invalid(format!("„{name}“ ist kein Datenpaket: ganz oben im Zip fehlen pack.mcmeta oder der Ordner data/"));
+        || AppError::invalid(coded!("errors.packs.datapack.notDatapack", name = name));
     let mut zip = zip::ZipArchive::new(Cursor::new(data))
-        .map_err(|_| AppError::invalid(format!("„{name}“ ist kein lesbares Zip-Archiv")))?;
-    let files = zip_files(&mut zip, "", &[]).map_err(|err| AppError::invalid(format!("„{name}“: {err}")))?;
+        .map_err(|_| AppError::invalid(coded!("errors.packs.unreadableZip", name = name)))?;
+    let files = zip_files(&mut zip, "", &[]).map_err(|err| AppError::invalid(coded!("errors.packs.zipProblem", name = name, reason = err)))?;
     if !has_pack_layout(files.iter().map(|(path, _)| path.as_path())) {
         return Err(not_a_pack());
     }
@@ -413,7 +414,7 @@ mod tests {
         assert_eq!(list(&dirs, "i", "Welt").unwrap()[0].id, "Biome.zip");
         // Ein vorhandenes Paket wird nicht ersetzt.
         assert!(add_files(&dirs, "i", "Welt", &[path("Biome.zip")]).is_err());
-        assert!(matches!(remove(&dirs, "i", "Welt", "../level.dat"), Err(AppError::NotFound { .. })));
+        assert!(matches!(remove(&dirs, "i", "Welt", "../level.dat"), Err(AppError::NotFound(_))));
         fs::remove_dir_all(root).unwrap();
     }
 }

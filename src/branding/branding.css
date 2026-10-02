@@ -12,6 +12,11 @@
 .library-heading > .vx-sech { flex: 1; min-width: 0; }
 .onb-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .onb-heading h1 { font-size: 36px; margin: 0; }
+@media (max-height: 700px) {
+  .onb-heading { margin-bottom: 8px; }
+  .onb-heading h1 { font-size: 30px; }
+  .onb-heading .buddy { width: 52px; height: 52px; }
+}
 .vx-toast:has(.buddy) { grid-template-columns: 48px minmax(0, 1fr) 32px; }
 .vx-toast:has(.buddy) [data-icon] { width: 48px; height: 48px; }
 :root[data-season] {

@@ -12,6 +12,8 @@ export interface TabContext {
   close: () => void;
   /** Eine Instanz ist fertig: der Dialog geht zu ihr, falls er noch offen ist. */
   onCreated: (instance: Instance) => void;
+  /** Der Import ist durch: der Dialog geht zur Bibliothek, falls er noch offen ist. */
+  onImported: () => void;
   /** Ein Inhalts-Vorgang läuft (aus diesem Dialog oder woanders). */
   active: boolean;
   background: ReturnType<typeof useBackgroundTask>;

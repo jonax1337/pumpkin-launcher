@@ -156,6 +156,8 @@ type ConfirmSpec = {
   variant?: "primary" | "danger";
   icon?: IconName;
   disabled?: boolean;
+  /** Fokus beim Einblenden, wenn die Hauptaktion erst nach dem Öffnen erscheint (Fokus läge sonst auf dem Dialog). */
+  autoFocus?: boolean;
   /** id eines <form>: Knopf ist dann dessen Absenden (type=submit). */
   form?: string;
   onClick?: () => void;
@@ -182,6 +184,7 @@ export function DialogActions({ cancel, confirm }: { cancel?: ReactNode | Cancel
           width={confirm.width}
           icon={confirm.icon}
           disabled={confirm.disabled}
+          autoFocus={confirm.autoFocus}
           type={confirm.form ? "submit" : "button"}
           form={confirm.form}
           onClick={confirm.onClick}

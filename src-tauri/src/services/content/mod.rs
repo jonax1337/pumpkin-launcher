@@ -1,15 +1,19 @@
 //! Transaktionaler Content-Import. Ziele werden exklusiv neu angelegt, niemals ersetzt.
 mod adopt;
+mod analysis;
 pub(crate) mod fs_safety;
 mod install;
+mod jar_meta;
 mod pack;
 mod update;
+mod version_range;
 
 use std::{fs, path::PathBuf};
 
 use tokio_util::sync::CancellationToken;
 
 pub use adopt::adopt_untracked;
+pub use analysis::{analyze, ContentAnalysis};
 pub(crate) use adopt::{
     cached_untracked, catalog, identify, identify_or_local, record_untracked, CachedFile, ContentFile, Recognition,
 };
@@ -17,11 +21,15 @@ pub use fs_safety::safe_path;
 pub(crate) use fs_safety::{regular_parents, rollback, write_new, StagedInstall};
 pub use install::install_mod;
 pub(crate) use install::budget;
-pub use pack::{import, install_modrinth_pack, local_pack, PUMPKIN_FILE};
-pub(crate) use pack::{import_plan, plan_pack, Blob, Pack, TempFile};
-pub use update::{check_updates, update_mods, ModUpdate};
+pub use pack::{import, import_file, inspect, install_modrinth_pack, local_pack, PackInfo, PUMPKIN_FILE};
+pub(crate) use pack::{
+    content_file, file_origin, import_plan, modrinth_pack, plan_pack, unpack, Blob, Fetch, Pack, TempFile,
+};
+pub use update::{check_updates, switch_version, update_mods, ModUpdate};
+pub(crate) use update::UpdatePlan;
 
 use crate::{
+    coded,
     error::{AppError, AppResult},
     models::{Instance, Mod, ModKind, ModSource},
     services::{blocking, download::RemoveOnDrop, modrinth::Version, Dirs},
@@ -36,7 +44,7 @@ pub(crate) fn commit_mods(state: &AppState, id: &str, mods: Vec<Mod>) -> AppResu
 /// Jede der `mod_ids` muss ein Eintrag der Instanz sein.
 pub(crate) fn ensure_known(instance: &Instance, mod_ids: &[String]) -> AppResult<()> {
     match mod_ids.iter().find(|id| !instance.mods.iter().any(|m| &m.id == *id)) {
-        Some(unknown) => Err(AppError::invalid(format!("Unbekannte Mod {unknown}"))),
+        Some(unknown) => Err(AppError::invalid(coded!("errors.modrinth.unknownModId", id = unknown))),
         None => Ok(()),
     }
 }
@@ -61,6 +69,8 @@ pub(crate) fn mod_from_version(v: &Version, file_name: String, kind: ModKind) ->
         enabled: true,
         kind,
         required_by: Vec::new(),
+        pinned: false,
+        pack_managed: false,
     }
 }
 
@@ -104,11 +114,12 @@ pub(crate) async fn cancel_at_step<T, F: std::future::Future<Output = AppResult<
         }
     };
     let work = state.cancellable("op", run(std::sync::Arc::new(progress)));
+    // Erst nach dem Abbruch geht der Thread weiter: `cancellable` wartet, bis er am nächsten Prüfpunkt endet.
     let (result, ()) = tokio::join!(work, async {
         started.recv().unwrap();
         state.cancel("op");
+        drop(resume);
     });
-    drop(resume);
     // Endet der Thread, schließt sich `started`; der Wächter räumt gleich danach auf.
     assert!(started.recv().is_err());
     for _ in 0..CLEANUP_POLLS {
@@ -142,6 +153,8 @@ pub(crate) mod fixtures {
             enabled: true,
             kind: ModKind::Mod,
             required_by: required_by.iter().map(|s| s.to_string()).collect(),
+            pinned: false,
+            pack_managed: false,
         }
     }
 

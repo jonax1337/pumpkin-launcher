@@ -1,24 +1,27 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 import { Icon } from "./Icon";
 import { flag } from "./util";
 
 /**
  * Schalter 40×22: Bahn eingelassen, Knauf als Block; an = Kupferbahn, Knauf rechts (Stufen).
  * `label` ist der Name; `visibleLabel` zeigt ihn rechts daneben (klickbar). `stateText` = [an, aus] als leiser Text
- * daneben (feste Breite, nur sichtbar; der Zustand selbst wird vom Schalter angesagt).
+ * daneben (feste Breite, nur sichtbar; der Zustand selbst wird vom Schalter angesagt). `description`: was „an“ bedeutet,
+ * nur für Screenreader (der Name bleibt rein).
  */
-export function Switch({ checked, onChange, label, stateText, visibleLabel, disabled, id }: {
-  checked: boolean; onChange: (v: boolean) => void; label: string; stateText?: [on: string, off: string]; visibleLabel?: boolean; disabled?: boolean; id?: string;
+export function Switch({ checked, onChange, label, description, stateText, visibleLabel, disabled, id }: {
+  checked: boolean; onChange: (v: boolean) => void; label: string; description?: string; stateText?: [on: string, off: string]; visibleLabel?: boolean; disabled?: boolean; id?: string;
 }) {
+  const descriptionId = useId();
   return (
     <label className="vx-switch" data-disabled={flag(disabled)}>
       <span className="vx-sw">
-        <input id={id} type="checkbox" role="switch" checked={checked} disabled={disabled} aria-label={visibleLabel ? undefined : label} onChange={(e) => onChange(e.target.checked)} />
+        <input id={id} type="checkbox" role="switch" checked={checked} disabled={disabled} aria-label={visibleLabel ? undefined : label} aria-describedby={description ? descriptionId : undefined} onChange={(e) => onChange(e.target.checked)} />
         <span className="vx-sw-tr" />
         <span className="vx-sw-kn" />
         <span className="vx-fring" />
       </span>
       {visibleLabel && <span className="vx-tl">{label}</span>}
+      {description && <span id={descriptionId} className="sr">{description}</span>}
       {stateText && (
         <span className="vx-sw-st" aria-hidden>
           <span data-on={flag(checked)}>{stateText[0]}</span>

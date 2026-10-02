@@ -5,6 +5,7 @@ use std::{fs, io};
 
 use serde::Serialize;
 
+use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::{Instance, ModLoader};
 use crate::services::download::{self, dedup_by_path, is_sha1, Job};
@@ -48,7 +49,7 @@ pub async fn fetch_version(client: &reqwest::Client, dirs: &Dirs, version_id: &s
         .versions
         .into_iter()
         .find(|v| v.id == version_id)
-        .ok_or_else(|| AppError::NotFound { kind: "Minecraft-Version", id: version_id.into() })?;
+        .ok_or_else(|| AppError::NotFound(coded!("errors.game.minecraftVersionNotFound", id = version_id).into()))?;
     let path = dirs.version_file(version_id, "json");
     download::fetch(client, &Job { url: entry.url, path: path.clone(), sha1: Some(entry.sha1) }).await?;
     download::read_json(&path).await
@@ -207,14 +208,14 @@ fn native_jars<'a>(version: &'a VersionJson, env: &'a Env) -> Vec<(&'a Library, 
 }
 
 fn library_job(dirs: &Dirs, lib: &Library, d: &Download) -> AppResult<Job> {
-    let path = d.path.as_deref().ok_or_else(|| AppError::invalid(format!("Library {} ohne Pfad", lib.name)))?;
+    let path = d.path.as_deref().ok_or_else(|| AppError::invalid(coded!("errors.game.libraryWithoutPath", name = lib.name)))?;
     Ok(Job::from_download(d, dirs.library(path)))
 }
 
 fn asset_job(objects: &Path, hash: &str) -> AppResult<Job> {
     // Der Hash wird Teil des Pfads: nur echte SHA-1-Hex-Strings zulassen.
     if !is_sha1(hash) {
-        return Err(AppError::invalid(format!("ungültiger Asset-Hash '{hash}'")));
+        return Err(AppError::invalid(coded!("errors.game.invalidAssetHash", hash = hash)));
     }
     let prefix = &hash[..2];
     Ok(Job { url: format!("{RESOURCES_URL}/{prefix}/{hash}"), path: objects.join(prefix).join(hash), sha1: Some(hash.to_owned()) })

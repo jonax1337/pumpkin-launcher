@@ -2,8 +2,14 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { PumpkinChoice } from "@/branding/calendar";
 import type { LanguageChoice } from "@/i18n/types";
+import type { JvmPreset } from "@/lib/jvm";
+import type { GameWindow } from "@/lib/types";
 
 export type PxSize = "s" | "m" | "l";
+export type TextSize = "m" | "l" | "xl";
+
+/** Was der Launcher beim Spielstart mit seinem Fenster tut. */
+export type LauncherOnPlay = "keep" | "minimize" | "close";
 
 /** Aktives Konto: Offline-Spielername oder Microsoft-Konto (der Name wird für die Anzeige mitgemerkt). */
 export type ActiveAccount = { kind: "offline"; name: string } | { kind: "microsoft"; id: string; username: string };
@@ -14,10 +20,21 @@ interface SettingsState {
   javaPath: string;
   /** RAM für Instanzen ohne eigenen Wert; null = automatisch nach Arbeitsspeicher des PCs. */
   memoryMb: number | null;
+  /** Minimaler RAM (-Xms) für Instanzen ohne eigenen Wert; null = die JVM entscheidet. */
+  minMemoryMb: number | null;
+  /** JVM-Argumente für Instanzen ohne eigene: eine Vorgabe oder der Text unter `jvmArgs`. */
+  jvmPreset: JvmPreset;
+  /** Eigener Text der JVM-Argumente, gilt bei der Vorgabe „Eigene“. */
+  jvmArgs: string;
+  /** Fenster für Instanzen, die keines festlegen. */
+  window: GameWindow;
+  launcherOnPlay: LauncherOnPlay;
   active: ActiveAccount | null;
   offlineAccounts: string[];
   /** Pixelgröße: 2/3/4 CSS-Pixel bei 100 % Skalierung. */
   pxSize: PxSize;
+  /** Textgröße der ganzen Oberfläche: normal, groß, größer (Faktoren: app/useAppearance.ts). */
+  textSize: TextSize;
   /** Bewegte Szenen (Sterne, Wolken, Glut); pausieren ohnehin, solange Minecraft läuft. */
   motion: boolean;
   /** Automatisch nach Jahreszeit oder eine dauerhaft gewählte Pumpkin-Variante. */
@@ -27,7 +44,7 @@ interface SettingsState {
    * mit „de“, gilt Deutsch, sonst Englisch) – der Start soll ohne Rückfrage passen.
    */
   language: LanguageChoice;
-  set: (patch: Partial<Pick<SettingsState, "javaPath" | "memoryMb" | "pxSize" | "motion" | "pumpkin" | "language">>) => void;
+  set: (patch: SettingsPatch) => void;
   reset: () => void;
   addAccount: (name: string) => void;
   selectAccount: (account: ActiveAccount) => void;
@@ -38,14 +55,31 @@ interface SettingsState {
   syncMicrosoft: (ids: string[]) => void;
 }
 
-/** Die Werte, auf die „Zurücksetzen“ in den Einstellungen Java und Arbeitsspeicher stellt. */
-const RESETTABLE_DEFAULTS = { javaPath: "", memoryMb: null };
+/** Einstellungen, die `set` ändert; Konten haben eigene Aktionen. */
+type SettingsPatch = Partial<
+  Pick<
+    SettingsState,
+    "javaPath" | "memoryMb" | "minMemoryMb" | "jvmPreset" | "jvmArgs" | "window" | "launcherOnPlay" | "pxSize" | "textSize" | "motion" | "pumpkin" | "language"
+  >
+>;
+
+/** Die Werte, auf die „Zurücksetzen“ die Spieleinstellungen stellt. */
+const RESETTABLE_DEFAULTS = {
+  javaPath: "",
+  memoryMb: null,
+  minMemoryMb: null,
+  jvmPreset: "balanced",
+  jvmArgs: "",
+  window: { type: "default" },
+  launcherOnPlay: "keep",
+} satisfies Partial<SettingsState>;
 
 const DEFAULT_SETTINGS = {
   ...RESETTABLE_DEFAULTS,
   active: null,
   offlineAccounts: [],
   pxSize: "m",
+  textSize: "m",
   motion: true,
   pumpkin: "auto",
   language: "system",

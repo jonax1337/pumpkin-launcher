@@ -11,9 +11,12 @@ export const defaultSort = (query: string): SearchIndex => (query ? "relevance" 
 /** Ein Projekt mit Titel, wie es Aktionen und Dialoge brauchen; jedes `ContentProject` erfüllt das. */
 export interface ProjectRef { id: string; title: string }
 export interface ContentSearch { hits: ContentHit[]; total_hits: number; offset: number; limit: number }
+/** Ein Bild der Projektseite (Modrinth-Galerie). */
+export interface GalleryImage { url: string; featured: boolean; title: string | null; description: string | null }
 export interface ContentProject {
   id: string; slug: string; title: string; description: string; body: string;
   icon_url: string | null; project_type: string; client_side: string; server_side: string;
+  downloads: number; categories: string[]; gallery: GalleryImage[];
   /** Projektseite bei Anbietern ohne Installation (Technic, CurseForge). */
   web_url?: string | null;
 }
@@ -27,28 +30,31 @@ export interface SourceInfo {
   install: boolean;
   /** Sortierung und Loader-Filter stehen zur Verfügung. */
   filters: boolean;
+  /** Treffer lassen sich auf eine Kategorie des Anbieters eingrenzen. */
+  categories: boolean;
   /** Minecraft-Version lässt sich filtern. */
   versions: boolean;
 }
 export const SOURCES: Record<Source, SourceInfo> = {
   modrinth: {
-    label: "Modrinth", types: ["modpack", "mod", "shader", "resourcepack", "datapack"], install: true, filters: true, versions: true,
+    label: "Modrinth", types: ["modpack", "mod", "shader", "resourcepack", "datapack"], install: true, filters: true, categories: true, versions: true,
   },
-  ftb: { label: "FTB", types: ["modpack"], install: true, filters: true, versions: true },
-  technic: { label: "Technic", types: ["modpack"], install: true, filters: false, versions: true },
-  curseforge: { label: "CurseForge", types: ["modpack", "mod", "shader", "resourcepack"], install: true, filters: true, versions: true },
+  ftb: { label: "FTB", types: ["modpack"], install: true, filters: true, categories: false, versions: true },
+  technic: { label: "Technic", types: ["modpack"], install: true, filters: false, categories: false, versions: true },
+  curseforge: { label: "CurseForge", types: ["modpack", "mod", "shader", "resourcepack"], install: true, filters: true, categories: false, versions: true },
 };
 export const SOURCE_KEYS = Object.keys(SOURCES) as Source[];
 /** Alle Quellen, die den Katalogtyp führen, in einer Liste („Alle Quellen“ in Entdecken). */
 export const ALL_SOURCES = "all";
 export type SourceChoice = Source | typeof ALL_SOURCES;
 /** Was eine Auswahl kann: bei „Alle“ alles, was mindestens eine Quelle kann. */
-export function choiceInfo(choice: SourceChoice): Pick<SourceInfo, "types" | "filters" | "versions"> {
+export function choiceInfo(choice: SourceChoice): Pick<SourceInfo, "types" | "filters" | "categories" | "versions"> {
   if (choice !== ALL_SOURCES) return SOURCES[choice];
   const all = Object.values(SOURCES);
   return {
     types: [...new Set(all.flatMap((s) => s.types))],
     filters: all.some((s) => s.filters),
+    categories: all.some((s) => s.categories),
     versions: all.some((s) => s.versions),
   };
 }
@@ -70,6 +76,10 @@ export const installedKey = (source: Source, id: string) => (source === "modrint
 export interface ContentVersion {
   id: string; project_id: string; name: string; version_number: string;
   game_versions: string[]; loaders: string[]; version_type: "release" | "beta" | "alpha";
+  /** ISO-8601; leer, wo der Anbieter kein Datum nennt. */
+  date_published: string;
+  /** Änderungsprotokoll (Markdown); null, wo der Anbieter keins führt. */
+  changelog: string | null;
   files: { filename: string; primary: boolean; url: string; size: number; hashes: Record<string, string> }[];
   dependencies: { project_id: string | null; version_id: string | null; dependency_type: string }[];
 }

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { t } from "@/i18n";
 import { api } from "@/lib/api";
+import { pixelSignature } from "@/lib/pixelSignature";
 import type { Cape, LibrarySkin, SkinVariant } from "@/lib/types";
 import { skinKeys } from "./queryKeys";
 
@@ -12,6 +13,20 @@ export function useSkinLibrary() {
 /** Textur eines Bibliotheks-Skins; die ID ist ihr SHA-1, die Datei ändert sich also nie. */
 export function useSkinTexture(id: string) {
   return useQuery({ queryKey: skinKeys.texture(id), queryFn: () => api.skinTexture(id), staleTime: Infinity }).data;
+}
+
+/**
+ * Pixel-Fingerabdruck einer Textur: so erkennt die Seite, welcher Skin der Bibliothek gerade getragen wird, obwohl
+ * Minecraft die Datei neu packt. `key` benennt die Textur (ändert sich nie), `src` ist ihre Adresse.
+ */
+export function useSkinSignature(key: string | undefined, src: string | undefined) {
+  return useQuery({
+    queryKey: skinKeys.signature(key ?? ""),
+    queryFn: () => pixelSignature(src!),
+    enabled: key != null && src != null,
+    staleTime: Infinity,
+    retry: false,
+  }).data;
 }
 
 /** Aktueller Skin und Umhänge eines Microsoft-Kontos; ohne Konto keine Anfrage. */

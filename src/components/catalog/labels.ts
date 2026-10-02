@@ -23,6 +23,19 @@ const SORT_HEADING_KEYS: Record<SearchIndex, TKey> = {
   updated: "components.sort.updated",
 };
 
+/** Was eine Sortierung über die Zahlen aussagt, soweit sie Beliebtheit meint. */
+const SORT_HINT_KEYS: Partial<Record<SearchIndex, TKey>> = {
+  downloads: "components.sort.downloadsHint",
+  follows: "components.sort.followsHint",
+};
+
+/** Die Art einer Version für die Tabelle; Vorabversionen heißen dort wie beim Anbieter. */
+const VERSION_TYPE_NAME_KEYS: Record<ContentVersion["version_type"], TKey> = {
+  release: "components.version.type.release",
+  beta: "components.version.type.beta",
+  alpha: "components.version.type.alpha",
+};
+
 /** Ein Begriff für alles Unfertige, wie im Dialog „Neue Instanz“. */
 const VERSION_TYPE_KEYS: Record<ContentVersion["version_type"], TKey | null> = {
   release: null,
@@ -64,6 +77,14 @@ export const searchPlaceholder = (type: CatalogType) => t(SEARCH_PLACEHOLDER_KEY
 
 export const sortHeading = (index: SearchIndex) => t(SORT_HEADING_KEYS[index]);
 
+/** Erklärung zur Sortierung als Tooltip; `undefined`, wo die Überschrift schon alles sagt. */
+export const sortHint = (index: SearchIndex) => {
+  const key = SORT_HINT_KEYS[index];
+  return key && t(key);
+};
+
+export const versionTypeName = ({ version_type: type }: ContentVersion) => t(VERSION_TYPE_NAME_KEYS[type]);
+
 export const sourceChoiceLabel = (choice: SourceChoice) => (choice === ALL_SOURCES ? t("pages.discover.allSources") : SOURCES[choice].label);
 
 /** „ · Vorabversion“ für Beta und Alpha, sonst nichts; hängt an der Zeile einer Version. */
@@ -72,12 +93,20 @@ export const versionTypeSuffix = (version: ContentVersion) => {
   return key ? ` · ${t(key)}` : "";
 };
 
-const categoryName = (category: string) =>
+/** Eine Kategorie des Anbieters: `slug` filtert dort, `name` steht in der Oberfläche. */
+export interface Category {
+  slug: string;
+  name: string;
+}
+
+export const categoryName = (category: string) =>
   CATEGORY_KEYS[category] ? t(CATEGORY_KEYS[category]) : category.charAt(0).toUpperCase() + category.slice(1).replace(/-/g, " ");
 
 /** Die ersten `max` Kategorien eines Treffers ohne Loader-Namen und Auflösungen („16x“). */
-export const categoryNames = (categories: string[], max: number) =>
-  categories.filter((c) => !LOADER_CATEGORIES.has(c) && !/^\d+x/.test(c)).slice(0, max).map(categoryName);
+export const categoryList = (categories: string[], max: number): Category[] =>
+  categories.filter((c) => !LOADER_CATEGORIES.has(c) && !/^\d+x/.test(c)).slice(0, max).map((slug) => ({ slug, name: categoryName(slug) }));
+
+export const categoryNames = (categories: string[], max: number) => categoryList(categories, max).map((c) => c.name);
 
 /** Loader-Namen; „minecraft“ ist Modrinths Marke für Ressourcen ohne Loader, „datapack“ der von Datenpaketen. */
 export const loaderText = (loaders: string[]) =>

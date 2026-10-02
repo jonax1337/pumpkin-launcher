@@ -5,7 +5,7 @@
   --t-h: 36px; --t-pad: 16px; --t-gap: 8px; --t-fs: 14px;
   position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; flex: none;
   height: var(--t-h); padding: 0 var(--t-pad) 0 var(--t-pl, var(--t-pad));
-  color: var(--fg-2); font-size: var(--t-fs); font-weight: 600; white-space: nowrap; text-decoration: none; user-select: none; cursor: pointer;
+  color: var(--fg-2); font-size: calc(var(--t-fs) * var(--tz)); font-weight: 600; white-space: nowrap; text-decoration: none; user-select: none; cursor: pointer;
 }
 .vx-tabs[data-size="s"] .vx-tab { --t-h: 32px; --t-pad: 12px; --t-gap: 6px; --t-fs: 13px; }
 /* Führendes Icon: die Box hat Luft um die Glyphe, links 2px weniger */
@@ -30,9 +30,9 @@
 @keyframes vx-tick-x { from { clip-path: inset(0 50%); } }
 @keyframes vx-tick-y { from { clip-path: inset(50% 0); } }
 
-/* ---------- Leiste: 48 px (s 40) mit Linie unten ---------- */
-.vx-tabs[data-variant="underline"] { display: flex; align-items: center; gap: 4px; height: 48px; box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); }
-.vx-tabs[data-variant="underline"][data-size="s"] { height: 40px; }
+/* ---------- Leiste: 48 px (s 40) mit Linie unten; bricht in die nächste Zeile um, wenn die Breite nicht reicht ---------- */
+.vx-tabs[data-variant="underline"] { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 48px; box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); }
+.vx-tabs[data-variant="underline"][data-size="s"] { min-height: 40px; }
 .vx-tabs[data-sticky] { position: sticky; top: var(--vx-tabs-top, 0); z-index: 6; background: var(--bg); }
 
 /* ---------- Senkrecht: volle Breite, 44 px (s 36), Strich links ---------- */
@@ -43,7 +43,8 @@
 .vx-tabs[data-variant="vertical"] .vx-tab[aria-selected="true"] > .vx-tab-tick { animation-name: vx-tick-y; }
 
 /* ---------- Segment: eingelassene Gruppe 40 px (s 32); gewählt = Platte mit Steuerrahmen und Kupferkante unten ---------- */
-.vx-tabs[data-variant="segment"] { position: relative; isolation: isolate; display: inline-flex; flex: none; width: fit-content; height: var(--vx-h-m); padding: var(--px); }
+/* Reicht die Breite nicht (Zoom), lässt sich die Gruppe waagerecht verschieben statt abgeschnitten zu werden */
+.vx-tabs[data-variant="segment"] { position: relative; isolation: isolate; display: inline-flex; flex: none; width: fit-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; height: var(--vx-h-m); padding: var(--px); }
 .vx-tabs[data-variant="segment"][data-size="s"] { height: var(--vx-h-s); }
 .vx-tabs[data-variant="segment"]::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--sunk); box-shadow: var(--bv-sunk); clip-path: var(--n1); }
 .vx-tabs[data-variant="segment"] .vx-tab { --t-h: 100%; --t-pad: 12px; }

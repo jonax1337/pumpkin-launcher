@@ -1,6 +1,6 @@
 // Run: node src/lib/modrinth.check.mjs (Node with TypeScript stripping).
 import assert from 'node:assert/strict';
-import { modLoadersFor, pickPackVersion, pickVersion, removeWithDependencies, undoRemove } from './mods.ts';
+import { CURSEFORGE_PACK_EXT, isMrpack, modLoadersFor, pickPackVersion, pickVersion, removeWithDependencies, undoRemove } from './mods.ts';
 import { progressLabel, progressShare, progressShortLabel } from './progress.ts';
 
 // Entfernen mit Abhängigkeiten: Iris und Mod Menu brauchen Fabric API, Sodium braucht nur Iris.
@@ -43,4 +43,7 @@ assert.equal(progressShare({ phase: 'backup', done: 6, total: 24 }), 0.25);
 assert.equal(progressShare({ phase: 'extract', done: 1, total: 2 }), null);
 assert.equal(progressLabel({ phase: 'backup', done: 6, total: 24 }), 'Sichert 6 von 24…');
 assert.equal(progressShortLabel({ phase: 'hash', done: 1, total: 2 }), 'Erkennt');
+// Pack-Dateien: .mrpack ist Modrinth, .zip ein CurseForge-Pack (ohne Rücksicht auf Groß-/Kleinschreibung).
+assert.ok(isMrpack('C:/Packs/a.MRPACK') && !isMrpack('a.zip'));
+assert.ok(CURSEFORGE_PACK_EXT.test('C:/Packs/Pack.ZIP') && !CURSEFORGE_PACK_EXT.test('pack.zip.txt'));
 console.log('Modrinth checks passed');

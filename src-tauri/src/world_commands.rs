@@ -1,11 +1,15 @@
 //! Alles, was im Spielordner einer Instanz unter `saves/` und in `servers.dat` liegt: Welten, Sicherungen,
 //! Datenpakete und Serverliste, siehe `services::worlds`, `services::datapacks` und `services::servers`.
 //! Was Spieldateien ändert, geht nur, solange die Instanz nicht läuft (`AppState::operation`).
+use std::path::Path;
+
 use tauri::{AppHandle, State};
 
-use crate::error::AppResult;
+use crate::coded;
+use crate::error::{AppError, AppResult};
 use crate::services::datapacks::{self, Datapack};
 use crate::services::progress::progress;
+use crate::services::server_ping::{self, ServerStatus};
 use crate::services::servers::{self, Server, ServerInput};
 use crate::services::worlds::{self, World, WorldBackup};
 use crate::services::{install, launch};
@@ -48,6 +52,31 @@ pub async fn world_restore(state: State<'_, AppState>, instance_id: String, back
 pub fn world_backup_delete(state: State<'_, AppState>, instance_id: String, backup_id: String) -> AppResult<()> {
     state.require_instance(&instance_id)?;
     worlds::delete_backup(&state.dirs, &instance_id, &backup_id)
+}
+
+/// Holt eine Welt aus einem Zip (absoluter Pfad aus dem Dateidialog) als neue Welt, nie über eine bestehende;
+/// Fortschritt als `content-progress` (Phase `extract`).
+#[tauri::command]
+pub async fn world_import(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    instance_id: String,
+    path: String,
+    operation_id: String,
+) -> AppResult<World> {
+    let _operation = state.exclusive(&instance_id)?;
+    let on_progress = progress(app, operation_id);
+    state.blocking_with_dirs(move |dirs| worlds::import(dirs, &instance_id, Path::new(&path), &*on_progress)).await
+}
+
+/// Kopiert alle Sicherungen der Instanz in einen neuen Ordner in `path` (absolut, bestehend); liefert den neuen Ordner.
+/// Die Sicherungen verschwinden mit der Instanz, so lassen sie sich vorher retten.
+#[tauri::command]
+pub async fn world_backups_export(state: State<'_, AppState>, instance_id: String, path: String) -> AppResult<String> {
+    let _operation = state.begin_operation()?;
+    let name = state.instances.get(&instance_id)?.name;
+    let folder = state.blocking_with_dirs(move |dirs| worlds::export_backups(dirs, &instance_id, &name, Path::new(&path))).await?;
+    Ok(folder.to_string_lossy().into_owned())
 }
 
 /// Löscht eine Welt, nachdem sie gesichert wurde (Fortschritt wie `world_backup`); liefert die Sicherung.
@@ -121,6 +150,18 @@ pub fn server_save(state: State<'_, AppState>, instance_id: String, index: Optio
         Some(index) => servers::update(&game_dir, index, &server),
         None => servers::add(&game_dir, &server),
     }
+}
+
+/// Fragt den Status eines Servers der Instanz ab. Angepingt wird nur, was in deren Serverliste steht.
+#[tauri::command]
+pub async fn server_ping(state: State<'_, AppState>, instance_id: String, address: String) -> AppResult<ServerStatus> {
+    state.require_instance(&instance_id)?;
+    let game_dir = state.dirs.game_dir(&instance_id);
+    let listed = state.blocking_with_dirs(move |_| servers::list(&game_dir)).await?;
+    if !listed.iter().any(|server| server.address == address) {
+        return Err(AppError::NotFound(coded!("errors.app.notFound.server", id = address).into()));
+    }
+    server_ping::ping(&address).await
 }
 
 #[tauri::command]

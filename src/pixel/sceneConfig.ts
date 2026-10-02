@@ -21,3 +21,6 @@ export const BIOMES: Record<Biome, { acc: string; bg: string }> = {
   plains: { acc: "#98B0FF", bg: "#3C6FB4" },
 };
 export const BIOME_KEYS = Object.keys(BIOMES) as Biome[];
+
+/** Ob `name` ein bekanntes Biom ist; ein Modpack bringt beliebige Namen mit (`pumpkin.json`). */
+export const isBiome = (name: string): name is Biome => Object.hasOwn(BIOMES, name);

@@ -1,21 +1,46 @@
-import type { ComponentType } from "react";
+import { memo, type ComponentType } from "react";
 import { useI18n } from "@/i18n";
 import { Cell, Checkbox, List } from "@/ui";
-import { useContentModel } from "./ContentModel";
+import { useRovingItems } from "@/hooks/useRovingItems";
+import { ContentModelProvider, useContentModel, type ContentModel } from "./ContentModel";
 import { ContentRow, ContentTile, GhostEntry } from "./ContentRow";
+import { entrySignature, sameSignature } from "./entrySignature";
 import type { Entry, Row } from "./types";
 
 const isRow = (entry: Entry): entry is Row => entry.type === "row";
 
-/** Jeder Eintrag als `Item` (Zeile oder Kachel), entfernte als Platzhalter. */
-const renderEntries = (entries: Entry[], Item: ComponentType<{ row: Row }>) =>
-  entries.map((entry) => (isRow(entry) ? <Item key={entry.mod.id} row={entry} /> : <GhostEntry key={`g-${entry.mod.id}`} ghost={entry} />));
+type ItemComponent = ComponentType<{ row: Row }>;
 
-/** Zeilen oder Kacheln samt Platzhaltern; in der Liste mit Kopf (Alle wählen, Spaltennamen). */
+/**
+ * Ein Eintrag mit dem Modell als eigenem Kontext: er rendert nur neu, wenn sich seine `signature` ändert (siehe
+ * `entrySignature`), nicht bei jeder Änderung des Tabs.
+ */
+const EntryItem = memo(
+  function EntryItem({ model, entry, Item }: { model: ContentModel; entry: Entry; Item: ItemComponent; signature: unknown[] }) {
+    return (
+      <ContentModelProvider value={model}>
+        {isRow(entry) ? <Item row={entry} /> : <GhostEntry ghost={entry} />}
+      </ContentModelProvider>
+    );
+  },
+  (prev, next) => prev.Item === next.Item && sameSignature(prev.signature, next.signature),
+);
+
+/** Jeder Eintrag als `Item` (Zeile oder Kachel), entfernte als Platzhalter. */
+const renderEntries = (entries: Entry[], model: ContentModel, Item: ItemComponent) =>
+  entries.map((entry) => (
+    <EntryItem key={isRow(entry) ? entry.mod.id : `g-${entry.mod.id}`} model={model} entry={entry} Item={Item} signature={entrySignature(model, entry)} />
+  ));
+
+/** Pfeiltasten wandern zwischen den Einträgen; Träger ist ihr Auswahlfeld (Platzhalter haben keins und zählen nicht). */
+const ROVING = { item: ".vx-row:has(input[type=checkbox])", primary: "input[type=checkbox]" };
+
+/** Zeilen oder Kacheln samt Platzhaltern; in der Liste mit Kopf (Alle wählen, Spaltennamen). Ein Tab-Stopp für alle Einträge. */
 export function ContentList({ entries }: { entries: Entry[] }) {
   const { t } = useI18n();
   const model = useContentModel();
-  if (model.mode === "grid") return <List variant="tiles">{renderEntries(entries, ContentTile)}</List>;
+  const roving = useRovingItems<HTMLDivElement>(ROVING);
+  if (model.mode === "grid") return <List variant="tiles" {...roving}>{renderEntries(entries, model, ContentTile)}</List>;
 
   const liveIds = entries.filter(isRow).map((row) => row.mod.id);
   const pickedCount = liveIds.filter((id) => model.picked.has(id)).length;
@@ -24,6 +49,7 @@ export function ContentList({ entries }: { entries: Entry[] }) {
       variant="content"
       noWarnCol={!model.hasWarnings}
       divided
+      {...roving}
       head={
         <>
           <span>
@@ -43,7 +69,7 @@ export function ContentList({ entries }: { entries: Entry[] }) {
         </>
       }
     >
-      {renderEntries(entries, ContentRow)}
+      {renderEntries(entries, model, ContentRow)}
     </List>
   );
 }

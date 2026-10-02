@@ -150,8 +150,9 @@ export function Skel({ w, h, className, style }: { w?: number | string; h?: numb
 const TOAST_DURATION_MS = 6500;
 
 /**
- * Toasts (Sonner) unten rechts: Platte mit Bevel, Icon m (Farbe je Art), Text, Aktion als Geist-Knopf s darunter,
- * Schließen als Symbolknopf s. Einmal in main.tsx eingehängt.
+ * Toasts (Sonner) unten rechts: Platte mit Bevel, Icon m (Farbe je Art), Text, Aktion als Geist-Knopf s rechts daneben,
+ * Schließen als Symbolknopf s. Fehler und Warnung tragen Warnsymbol, Rahmen und Tönung in der Statusfarbe.
+ * Einmal in main.tsx eingehängt.
  */
 export function Toaster() {
   const { t } = useI18n();
@@ -167,7 +168,7 @@ export function Toaster() {
         success: <Buddy mood="success" size={48} />,
         info: <Buddy mood="hello" size={48} />,
         warning: <Icon name="warn" />,
-        error: <Buddy mood="oops" size={48} />,
+        error: <Icon name="warn" />,
         loading: <Buddy mood="loading" size={48} />,
         close: <Icon name="x" size="s" />,
       }}

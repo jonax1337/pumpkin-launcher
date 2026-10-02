@@ -17,10 +17,13 @@ use super::{
     fs_safety::{regular_parents, safe_path, write_new},
 };
 use crate::{
+    coded,
     error::{AppError, AppResult},
-    models::{instance_name, new_id, Instance, ModKind, ModLoader, ModpackOrigin, NewInstance},
+    models::{
+        instance_name, new_id, Instance, InstanceIcon, InstanceScene, ModKind, ModLoader, ModpackOrigin, NewInstance, MAX_NAME_LEN,
+    },
     services::{
-        download::RemoveOnDrop,
+        download::{sha1_hex, RemoveOnDrop},
         forge,
         limits::{
             DOWNLOAD_CONCURRENCY, FILE_LIMIT, MRPACK_ENTRIES, MRPACK_EXPANDED_LIMIT, MRPACK_INDEX_FILES, PLAN_FILES,
@@ -28,6 +31,7 @@ use crate::{
         },
         modrinth::{self, File},
         mods,
+        pack_update::PackFiles,
         progress::{Phase, ProgressFn},
         providers::RemoteFile,
         remove_logged,
@@ -49,8 +53,20 @@ const SUPPORTED_FORMAT: u32 = 1;
 struct Index {
     format_version: u32,
     game: String,
+    #[serde(default)]
+    name: String,
     files: Vec<PackFile>,
     dependencies: BTreeMap<String, String>,
+}
+
+/// Name und Version, unter denen sich ein `.mrpack` selbst führt.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct IndexLabel {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    version_id: String,
 }
 
 #[derive(Deserialize)]
@@ -68,6 +84,23 @@ struct PackFile {
 struct PumpkinMeta {
     #[serde(default)]
     required_by: HashMap<String, Vec<String>>,
+    /// Icon und Szene der exportierten Instanz; erst beim Übernehmen geprüft, damit ein unlesbares Icon den Import nicht kippt.
+    #[serde(default)]
+    icon: Option<serde_json::Value>,
+    #[serde(default)]
+    scene: Option<serde_json::Value>,
+}
+
+impl PumpkinMeta {
+    /// Icon und Szene aus der Zusatzdatei für die neue Instanz; Ungültiges fällt weg.
+    fn apply_look(&mut self, instance: &mut Instance) {
+        instance.icon = parse_look(self.icon.take()).and_then(|icon: InstanceIcon| icon.validated().ok());
+        instance.scene = parse_look(self.scene.take()).and_then(|scene: InstanceScene| scene.validated().ok());
+    }
+}
+
+fn parse_look<T: serde::de::DeserializeOwned>(value: Option<serde_json::Value>) -> Option<T> {
+    serde_json::from_value(value?).ok()
 }
 
 /// Woher eine Pack-Datei kommt: Modrinth-CDN (SHA-1 und SHA-512) oder ein Anbieter ohne Schlüssel.
@@ -77,31 +110,35 @@ pub(crate) enum Fetch {
 }
 
 impl Fetch {
-    async fn download(&self, client: &reqwest::Client) -> AppResult<Vec<u8>> {
+    pub(crate) async fn download(&self, client: &reqwest::Client) -> AppResult<Vec<u8>> {
         match self {
             Self::Modrinth(file) => modrinth::download(client, file).await,
             Self::Remote(file) => file.download(client).await,
         }
     }
+
+    /// SHA-1 der Datei laut Quelle (kleingeschrieben), falls sie eine nennt.
+    pub(crate) fn sha1(&self) -> Option<String> {
+        let sha1 = match self {
+            Self::Modrinth(file) => file.hashes.get("sha1"),
+            Self::Remote(file) => file.hashes.get("sha1"),
+        };
+        sha1.map(|h| h.to_ascii_lowercase())
+    }
 }
 
-/// Inhalt einer Datei im Plan: im Speicher (`.mrpack`) oder bei Bedarf aus einem geöffneten Zip auf der
-/// Platte (Technic), damit große Packs nicht ganz im Arbeitsspeicher liegen müssen.
+/// Inhalt einer Datei im Plan: ein Eintrag eines geöffneten Zips auf der Platte (`.mrpack`, Technic, CurseForge), erst
+/// beim Ablegen gelesen, damit große Packs nicht ganz im Arbeitsspeicher liegen müssen.
 pub(crate) enum Blob {
-    Mem(Vec<u8>),
     Zip { archive: Arc<Mutex<zip::ZipArchive<fs::File>>>, index: usize },
 }
 
 impl Blob {
     pub(crate) fn bytes(&self) -> AppResult<Cow<'_, [u8]>> {
-        match self {
-            Self::Mem(data) => Ok(Cow::Borrowed(data)),
-            Self::Zip { archive, index } => {
-                let mut zip = archive.lock().map_err(|_| AppError::invalid("Zip nicht lesbar"))?;
-                let data = read_entry(&mut zip.by_index(*index)?, FILE_LIMIT)?;
-                Ok(Cow::Owned(data))
-            }
-        }
+        let Self::Zip { archive, index } = self;
+        let mut zip = archive.lock().map_err(|_| AppError::invalid(coded!("errors.packs.zipUnreadable")))?;
+        let data = read_entry(&mut zip.by_index(*index)?, FILE_LIMIT)?;
+        Ok(Cow::Owned(data))
     }
 }
 
@@ -139,7 +176,7 @@ pub(crate) struct Pack {
 /// Gleiche Regeln wie beim `.mrpack`: sichere Pfade, keine Doppelten, Größenlimits.
 pub(crate) fn plan_pack(instance: Instance, files: Vec<(String, RemoteFile)>) -> AppResult<Pack> {
     if files.len() > PLAN_FILES {
-        return Err(AppError::invalid("Zu viele Pack-Dateien"));
+        return Err(AppError::invalid(coded!("errors.packs.tooManyFiles")));
     }
     let mut paths = HashSet::new();
     let mut downloads = Vec::new();
@@ -157,7 +194,7 @@ pub(crate) fn plan_pack(instance: Instance, files: Vec<(String, RemoteFile)>) ->
 }
 
 fn duplicate_target() -> AppError {
-    AppError::invalid("Doppelte Pack-Zieldatei")
+    AppError::invalid(coded!("errors.packs.duplicateTarget"))
 }
 
 /// Installiert die Modrinth-Modpack-Version `version_id` als neue Instanz `name`.
@@ -168,17 +205,40 @@ pub async fn install_modrinth_pack(
     progress: ProgressFn<'_>,
 ) -> AppResult<Instance> {
     progress(Phase::Resolve, 0, 1);
-    let client = modrinth::client()?;
-    let version = modrinth::version(&client, version_id).await?;
-    let project = modrinth::project(&client, &version.project_id).await?;
+    let (version, data) = modrinth_pack(&modrinth::client()?, version_id, progress).await?;
+    let origin = ModpackOrigin::Modrinth { project_id: version.project_id, version_id: version.id };
+    import(state, &data, name, Some(origin), progress).await
+}
+
+/// Die Modrinth-Modpack-Version `version_id` samt ihrer geladenen und geprüften `.mrpack`-Datei.
+pub(crate) async fn modrinth_pack(
+    client: &reqwest::Client,
+    version_id: &str,
+    progress: ProgressFn<'_>,
+) -> AppResult<(modrinth::Version, Vec<u8>)> {
+    let version = modrinth::version(client, version_id).await?;
+    let project = modrinth::project(client, &version.project_id).await?;
     if project.project_type != "modpack" {
-        return Err(AppError::invalid("Projekt ist kein Modpack"));
+        return Err(AppError::invalid(coded!("errors.packs.notModpack")));
     }
     let file = modrinth::primary(&version, ".mrpack")?;
     progress(Phase::Download, 0, 1);
-    let data = modrinth::download(&client, &file).await?;
-    let origin = ModpackOrigin::Modrinth { project_id: version.project_id, version_id: version.id };
-    import(state, &data, name, Some(origin), progress).await
+    let data = modrinth::download(client, &file).await?;
+    Ok((version, data))
+}
+
+/// Importiert eine selbst gewählte `.mrpack`-Datei; die Instanz merkt sich Name und Version des Packs.
+pub async fn import_file(state: &AppState, data: &[u8], name: &str, progress: ProgressFn<'_>) -> AppResult<Instance> {
+    let origin = file_origin(data)?;
+    import(state, data, name, Some(origin), progress).await
+}
+
+/// Herkunft einer `.mrpack`-Datei: Name und Version aus ihrem `modrinth.index.json`, auf Namenslänge gekürzt.
+pub(crate) fn file_origin(data: &[u8]) -> AppResult<ModpackOrigin> {
+    let mut zip = zip::ZipArchive::new(Cursor::new(data))?;
+    let label: IndexLabel = serde_json::from_slice(&read_entry(&mut zip.by_name(INDEX_FILE)?, ZIP_JSON_LIMIT)?)?;
+    let clip = |text: &str| text.trim().chars().take(MAX_NAME_LEN).collect();
+    Ok(ModpackOrigin::File { name: clip(&label.name), version: clip(&label.version_id) })
 }
 
 pub async fn import(
@@ -189,24 +249,71 @@ pub async fn import(
     progress: ProgressFn<'_>,
 ) -> AppResult<Instance> {
     progress(Phase::Validate, 0, 1);
-    import_plan(state, unpack(data, name)?, origin, progress).await
+    import_plan(state, unpack(data, name, &state.dirs)?, origin, progress).await
 }
 
 /// Plan aus einem `.mrpack`: Index-Dateien zum Laden, Overrides aus dem Archiv, `required_by` aus der Zusatzdatei.
-fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
+/// Das Archiv liegt dazu im Zwischenspeicher: Overrides werden erst beim Ablegen einzeln gelesen und nie alle zugleich
+/// im Speicher gehalten.
+pub(crate) fn unpack(data: &[u8], name: &str, dirs: &Dirs) -> AppResult<Pack> {
     let name = instance_name(name)?;
+    plan_archive(read_archive(data, dirs)?, name)
+}
+
+/// Ein geprüftes `.mrpack`, als Datei im Zwischenspeicher abgelegt und geöffnet.
+struct StoredArchive {
+    archive: Archive,
+    zip: zip::ZipArchive<fs::File>,
+    temp: TempFile,
+}
+
+fn read_archive(data: &[u8], dirs: &Dirs) -> AppResult<StoredArchive> {
     if data.len() as u64 > FILE_LIMIT {
-        return Err(AppError::invalid("Pack zu groß"));
+        return Err(AppError::invalid(coded!("errors.packs.tooLarge")));
     }
-    let Archive { index, meta, overrides, mut expanded } = scan_archive(data)?;
+    let temp = TempFile::in_cache(dirs)?;
+    fs::write(&temp.0, data)?;
+    let mut zip = zip::ZipArchive::new(fs::File::open(&temp.0)?)?;
+    let archive = scan_archive(&mut zip)?;
+    let index = &archive.index;
     if index.format_version != SUPPORTED_FORMAT || index.game != "minecraft" || index.files.len() > MRPACK_INDEX_FILES {
-        return Err(AppError::invalid("Nicht unterstütztes Packformat"));
+        return Err(AppError::invalid(coded!("errors.packs.unsupportedFormat")));
     }
-    let instance = new_instance(name, &index.dependencies)?;
+    Ok(StoredArchive { archive, zip, temp })
+}
+
+fn plan_archive(stored: StoredArchive, name: &str) -> AppResult<Pack> {
+    let StoredArchive { archive: Archive { index, mut meta, overrides, mut expanded }, zip, temp } = stored;
+    let mut instance = new_instance(name, &index.dependencies)?;
+    meta.apply_look(&mut instance);
     let downloads = plan_index_files(index.files, &mut expanded)?;
-    let overrides = merge_overrides(overrides);
+    let overrides = merge_overrides(overrides, &Arc::new(Mutex::new(zip)));
     check_targets(&downloads, &overrides)?;
-    Ok(Pack { instance, downloads, overrides, required_by: meta.required_by, origins: HashMap::new(), temp: None })
+    Ok(Pack { instance, downloads, overrides, required_by: meta.required_by, origins: HashMap::new(), temp: Some(temp) })
+}
+
+/// Was eine Pack-Datei über sich verrät, ohne dass eine Instanz entsteht.
+pub struct PackInfo {
+    /// Name aus dem Index; leer, wenn das Pack keinen nennt.
+    pub name: String,
+    pub minecraft_version: String,
+    pub loader: ModLoader,
+    /// Mods, Ressourcenpakete und Shader, ob verlinkt oder mitgeliefert.
+    pub content_count: usize,
+}
+
+/// Prüft ein `.mrpack` mit denselben Regeln wie der Import und beschreibt es.
+pub fn inspect(data: &[u8], dirs: &Dirs) -> AppResult<PackInfo> {
+    let stored = read_archive(data, dirs)?;
+    let name = stored.archive.index.name.trim().to_owned();
+    let pack = plan_archive(stored, &name)?;
+    let content_paths = pack.downloads.iter().map(|(path, _)| path).chain(pack.overrides.iter().map(|(path, _)| path));
+    Ok(PackInfo {
+        name,
+        minecraft_version: pack.instance.minecraft_version.clone(),
+        loader: pack.instance.loader,
+        content_count: content_paths.filter(|path| content_file(path).is_some()).count(),
+    })
 }
 
 /// Was die Einträge eines `.mrpack` enthalten; jeder ist dabei auf Pfad, Eindeutigkeit, Art und Größe geprüft.
@@ -218,10 +325,10 @@ struct Archive {
     expanded: ExpandedSize,
 }
 
-/// Datei unter `overrides/` oder `client-overrides/`.
+/// Datei unter `overrides/` oder `client-overrides/`: ihr Eintrag im Archiv.
 struct Override {
     path: PathBuf,
-    data: Vec<u8>,
+    index: usize,
     client: bool,
 }
 
@@ -252,8 +359,7 @@ impl<'a> Role<'a> {
     }
 }
 
-fn scan_archive(data: &[u8]) -> AppResult<Archive> {
-    let mut zip = zip::ZipArchive::new(Cursor::new(data))?;
+fn scan_archive(zip: &mut zip::ZipArchive<fs::File>) -> AppResult<Archive> {
     check_entry_count(zip.len(), MRPACK_ENTRIES)?;
     let mut expanded = ExpandedSize::new(MRPACK_EXPANDED_LIMIT);
     let mut seen = HashSet::new();
@@ -264,7 +370,7 @@ fn scan_archive(data: &[u8]) -> AppResult<Archive> {
         let clean = name.strip_suffix('/').unwrap_or(&name);
         safe_path(clean)?;
         if !seen.insert(clean.to_lowercase()) {
-            return Err(AppError::invalid("Doppelter ZIP-Pfad"));
+            return Err(AppError::invalid(coded!("errors.packs.duplicateZipPath")));
         }
         reject_special(&entry)?;
         expanded.add_entry(&entry)?;
@@ -274,14 +380,11 @@ fn scan_archive(data: &[u8]) -> AppResult<Archive> {
         match Role::of(&name) {
             Role::Index => index = Some(serde_json::from_slice::<Index>(&read_entry(&mut entry, ZIP_JSON_LIMIT)?)?),
             Role::Meta => meta.offer(&name, &read_entry(&mut entry, ZIP_JSON_LIMIT)?)?,
-            Role::Override { target, client } => {
-                let data = read_entry(&mut entry, FILE_LIMIT)?;
-                overrides.push(Override { path: safe_path(target)?, data, client });
-            }
+            Role::Override { target, client } => overrides.push(Override { path: safe_path(target)?, index: i, client }),
             Role::Ignored => {}
         }
     }
-    let index = index.ok_or_else(|| AppError::invalid("modrinth.index.json fehlt"))?;
+    let index = index.ok_or_else(|| AppError::invalid(coded!("errors.packs.indexMissing")))?;
     Ok(Archive { index, meta: meta.meta, overrides, expanded })
 }
 
@@ -317,7 +420,7 @@ impl MetaSearch {
 fn new_instance(name: &str, dependencies: &BTreeMap<String, String>) -> AppResult<Instance> {
     let (loader, loader_version) = loader_of(dependencies)?;
     let minecraft_version =
-        dependencies.get("minecraft").ok_or_else(|| AppError::invalid("Minecraft-Version fehlt"))?.clone();
+        dependencies.get("minecraft").ok_or_else(|| AppError::invalid(coded!("errors.packs.minecraftVersionMissing")))?.clone();
     modrinth::identifier(&minecraft_version)?;
     if let Some(v) = &loader_version {
         modrinth::identifier(v)?;
@@ -333,7 +436,7 @@ fn loader_of(dependencies: &BTreeMap<String, String>) -> AppResult<(ModLoader, O
         .filter_map(|(l, k)| dependencies.get(*k).map(|v| (*l, v.clone())))
         .collect();
     if loaders.len() > 1 || dependencies.len() > loaders.len() + 1 {
-        return Err(AppError::invalid("Das Pack braucht einen Loader, den Pumpkin Launcher nicht kennt"));
+        return Err(AppError::invalid(coded!("errors.packs.unknownLoader")));
     }
     Ok(loaders.into_iter().next().map_or((ModLoader::Vanilla, None), |(l, v)| (l, Some(v))))
 }
@@ -351,7 +454,7 @@ fn plan_index_files(files: Vec<PackFile>, expanded: &mut ExpandedSize) -> AppRes
         for url in &f.downloads {
             modrinth::download_url(url)?;
         }
-        let url = f.downloads.first().ok_or_else(|| AppError::invalid("Download-URL fehlt"))?.clone();
+        let url = f.downloads.first().ok_or_else(|| AppError::invalid(coded!("errors.packs.downloadUrlMissing")))?.clone();
         if !paths.insert(f.path.to_lowercase()) {
             return Err(duplicate_target());
         }
@@ -365,19 +468,19 @@ fn plan_index_files(files: Vec<PackFile>, expanded: &mut ExpandedSize) -> AppRes
 fn needed_on_client(env: Option<&BTreeMap<String, String>>) -> AppResult<bool> {
     let Some(env) = env else { return Ok(true) };
     if env.values().any(|v| !matches!(v.as_str(), "required" | "optional" | "unsupported")) {
-        return Err(AppError::invalid("Unbekannte Pack-Umgebung"));
+        return Err(AppError::invalid(coded!("errors.packs.unknownEnvironment")));
     }
     Ok(!env.get("client").is_some_and(|v| v == "unsupported" || v == "optional"))
 }
 
 /// Client-Overrides schlagen allgemeine, aber nur innerhalb dieses frischen Plans.
-fn merge_overrides(mut overrides: Vec<Override>) -> Vec<(PathBuf, Blob)> {
+fn merge_overrides(mut overrides: Vec<Override>, archive: &Arc<Mutex<zip::ZipArchive<fs::File>>>) -> Vec<(PathBuf, Blob)> {
     overrides.sort_by_key(|o| o.client);
     let mut merged = BTreeMap::new();
     for o in overrides {
-        merged.insert(lowercase(&o.path), (o.path, o.data));
+        merged.insert(lowercase(&o.path), (o.path, o.index));
     }
-    merged.into_values().map(|(path, data)| (path, Blob::Mem(data))).collect()
+    merged.into_values().map(|(path, index)| (path, Blob::Zip { archive: archive.clone(), index })).collect()
 }
 
 /// Overrides dürfen keine Pack-Datei treffen, und keine Datei darf zugleich Ordner einer anderen sein.
@@ -385,7 +488,7 @@ fn check_targets(downloads: &[(PathBuf, Fetch)], overrides: &[(PathBuf, Blob)]) 
     let mut paths: HashSet<String> = downloads.iter().map(|(path, _)| lowercase(path)).collect();
     for (path, _) in overrides {
         if !paths.insert(lowercase(path)) {
-            return Err(AppError::invalid("Overrides kollidieren mit Pack-Dateien"));
+            return Err(AppError::invalid(coded!("errors.packs.overridesCollide")));
         }
     }
     ensure_no_file_dir_conflict(&paths)
@@ -423,19 +526,22 @@ async fn fill_instance(state: &AppState, mut pack: Pack, progress: ProgressFn<'_
         total: (pack.downloads.len() + pack.overrides.len()) as u64,
         done: 0,
         content: Vec::new(),
+        placed: PackFiles::default(),
     };
     staging.download_all(std::mem::take(&mut pack.downloads)).await?;
     staging.extract_overrides(std::mem::take(&mut pack.overrides))?;
     let hashes: Vec<String> = staging.content.iter().map(|f| f.sha1.clone()).collect();
     let recognition = identify_or_local(&catalog, &hashes).await;
     build_mod_list(&mut pack, &staging.content, &recognition);
+    staging.placed.save(&state.dirs, &pack.instance.id)?;
     let instance = state.instances.insert(pack.instance)?;
     progress(Phase::Complete, staging.total, staging.total);
     Ok(instance)
 }
 
 /// Legt die Dateien eines Plans im Spielordner der neuen Instanz ab, meldet den Fortschritt und merkt sich die
-/// Inhaltsdateien samt Cache-SHA-1; ihre Bytes kommen gleich in den Mod-Cache.
+/// Inhaltsdateien samt Cache-SHA-1 (ihre Bytes kommen gleich in den Mod-Cache) und jede abgelegte Datei für
+/// spätere Pack-Updates.
 struct Staging<'a> {
     dirs: &'a Dirs,
     game_dir: PathBuf,
@@ -443,6 +549,7 @@ struct Staging<'a> {
     total: u64,
     done: u64,
     content: Vec<CachedFile>,
+    placed: PackFiles,
 }
 
 impl Staging<'_> {
@@ -472,16 +579,22 @@ impl Staging<'_> {
 
     fn put(&mut self, path: &Path, data: &[u8]) -> AppResult<()> {
         write_new(&self.dirs.root, &self.game_dir.join(path), data)?;
-        if let Some(file) = content_file(path) {
-            self.content.push(CachedFile { file, sha1: mods::cache_bytes(self.dirs, data)? });
-        }
+        let sha1 = match content_file(path) {
+            Some(file) => {
+                let sha1 = mods::cache_bytes(self.dirs, data)?;
+                self.content.push(CachedFile { file, sha1: sha1.clone() });
+                sha1
+            }
+            None => sha1_hex(data),
+        };
+        self.placed.record(path, sha1);
         self.done += 1;
         Ok(())
     }
 }
 
 /// `mods/*.jar`, `resourcepacks/*.zip`, `shaderpacks/*.zip` direkt im Ordner, sonst `None`.
-fn content_file(path: &Path) -> Option<ContentFile> {
+pub(crate) fn content_file(path: &Path) -> Option<ContentFile> {
     let (folder, name) = path.to_str()?.split_once('/')?;
     ModKind::ALL
         .into_iter()
@@ -489,27 +602,29 @@ fn content_file(path: &Path) -> Option<ContentFile> {
         .map(|kind| ContentFile { kind, file_name: name.to_string(), enabled: true })
 }
 
-/// Trägt die Inhaltsdateien ein; `required_by` aus `pumpkin.json` eigener Vorlagen, sonst aus den erkannten Versionen.
+/// Trägt die Inhaltsdateien ein, alle als vom Pack verwaltet; `required_by` aus `pumpkin.json` eigener Vorlagen, sonst
+/// aus den erkannten Versionen.
 fn build_mod_list(pack: &mut Pack, content: &[CachedFile], recognition: &Recognition) {
     let mods = &mut pack.instance.mods;
     if pack.required_by.is_empty() {
         recognition.append_recorded(mods, content, &pack.origins);
-        return;
+    } else {
+        recognition.append_entries(mods, content, &pack.origins);
+        for m in mods.iter_mut() {
+            m.required_by = pack.required_by.remove(&m.file_name).unwrap_or_default();
+        }
     }
-    recognition.append_entries(mods, content, &pack.origins);
-    for m in mods.iter_mut() {
-        m.required_by = pack.required_by.remove(&m.file_name).unwrap_or_default();
-    }
+    mods.iter_mut().for_each(|m| m.pack_managed = true);
 }
 
 /// Liest ein `.mrpack` von der Platte.
 pub fn local_pack(path: &Path) -> AppResult<Vec<u8>> {
-    if !path.is_absolute() || path.extension().and_then(|s| s.to_str()) != Some("mrpack") {
-        return Err(AppError::invalid("Absoluter .mrpack-Pfad erforderlich"));
+    if !path.is_absolute() || !path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("mrpack")) {
+        return Err(AppError::invalid(coded!("errors.packs.mrpackPathRequired")));
     }
     let file = fs::File::open(path)?;
     if !file.metadata()?.is_file() {
-        return Err(AppError::invalid("Keine reguläre Datei"));
+        return Err(AppError::invalid(coded!("errors.packs.notRegularFile")));
     }
     read_capped_io(file, FILE_LIMIT, "Pack zu groß")
 }
@@ -518,7 +633,15 @@ pub fn local_pack(path: &Path) -> AppResult<Vec<u8>> {
 mod tests {
     use super::*;
     use crate::models::{Mod, ModSource};
-    use std::io::Write;
+    use std::io::{Cursor, Write};
+
+    fn test_dirs() -> Dirs {
+        Dirs::new(std::env::temp_dir().join("pumpkin-pack-tests"))
+    }
+
+    fn unpack(data: &[u8], name: &str) -> AppResult<Pack> {
+        super::unpack(data, name, &test_dirs())
+    }
 
     #[test]
     fn temp_files_live_in_the_cache_and_vanish_on_drop() {
@@ -565,6 +688,14 @@ mod tests {
         ] {
             assert!(unpack(&archive(&entries), "test").unwrap().required_by.is_empty());
         }
+        let look = br#"{"icon":{"type":"image","src":"javascript:alert(1)"},"scene":{"biome":"end","seed":3}}"#;
+        let with_look = unpack(&archive(&[("modrinth.index.json", index), (PUMPKIN_FILE, look)]), "test").unwrap();
+        assert_eq!((with_look.instance.icon, with_look.instance.scene), (None, Some(InstanceScene { biome: "end".into(), seed: 3 })));
+        let unknown = br#"{"scene":{"biome":"xyz","seed":1},"icon":{"type":"glyph","glyph":"nope","palette":"nope"}}"#;
+        let with_unknown = unpack(&archive(&[("modrinth.index.json", index), (PUMPKIN_FILE, unknown)]), "test").unwrap();
+        assert_eq!((with_unknown.instance.icon, with_unknown.instance.scene), (None, None));
+        let unreadable = br#"{"icon":{"type":"unbekannt"}}"#;
+        assert!(unpack(&archive(&[("modrinth.index.json", index), (PUMPKIN_FILE, unreadable)]), "test").is_ok());
         assert!(unpack(&archive(&[("modrinth.index.json", index), ("other.json", b"not metadata")]), "test").is_ok());
         assert!(unpack(&archive(&[("modrinth.index.json", index), (PUMPKIN_FILE, b"broken")]), "test").is_err());
         assert_eq!(pack.instance.loader, ModLoader::Fabric);
@@ -587,6 +718,37 @@ mod tests {
     }
 
     #[test]
+    fn overrides_are_read_lazily_from_a_temp_archive() {
+        let index = br#"{"formatVersion":1,"game":"minecraft","files":[],"dependencies":{"minecraft":"1.21.1"}}"#;
+        let pack = unpack(&archive(&[("modrinth.index.json", index), ("overrides/config/a.txt", b"inhalt")]), "test").unwrap();
+        let temp = pack.temp.as_ref().unwrap().0.clone();
+
+        assert!(temp.exists());
+        assert_eq!(pack.overrides[0].1.bytes().unwrap().as_ref(), b"inhalt");
+        drop(pack);
+        assert!(!temp.exists());
+        assert!(unpack(b"kein zip", "test").is_err());
+    }
+
+    #[test]
+    fn inspect_describes_a_pack_without_importing_it() {
+        let index = br#"{"formatVersion":1,"game":"minecraft","name":" Mein Pack ","files":[],"dependencies":{"minecraft":"1.21.1","fabric-loader":"0.16.10"}}"#;
+        let data = archive(&[
+            ("modrinth.index.json", index),
+            ("overrides/mods/a.jar", b"a"),
+            ("overrides/shaderpacks/s.zip", b"s"),
+            ("overrides/config/c.toml", b"c"),
+        ]);
+
+        let info = inspect(&data, &test_dirs()).unwrap();
+
+        assert_eq!((info.name.as_str(), info.minecraft_version.as_str(), info.loader), ("Mein Pack", "1.21.1", ModLoader::Fabric));
+        assert_eq!(info.content_count, 2);
+        assert!(inspect(b"broken", &test_dirs()).is_err());
+        assert!(inspect(&archive(&[("modrinth.index.json", index), ("overrides/../evil", b"x")]), &test_dirs()).is_err());
+    }
+
+    #[test]
     fn index_files_for_the_server_only_are_skipped_and_unknown_environments_rejected() {
         let env = |pairs: &[(&str, &str)]| pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect::<BTreeMap<_, _>>();
 
@@ -595,6 +757,21 @@ mod tests {
         assert!(!needed_on_client(Some(&env(&[("client", "optional")]))).unwrap());
         assert!(!needed_on_client(Some(&env(&[("client", "unsupported")]))).unwrap());
         assert!(needed_on_client(Some(&env(&[("client", "sometimes")]))).is_err());
+    }
+
+    #[tokio::test]
+    async fn a_chosen_file_keeps_its_name_and_every_import_its_placed_files() {
+        let root = std::env::temp_dir().join(new_id());
+        let state = AppState::load(&root).unwrap();
+        let index = br#"{"formatVersion":1,"game":"minecraft","name":"Abenteuer","versionId":"1.2","files":[],"dependencies":{"minecraft":"1.21.1"}}"#;
+        let data = archive(&[("modrinth.index.json", index), ("overrides/config/a.txt", b"a")]);
+
+        let i = import_file(&state, &data, "Instanz", &|_, _, _| {}).await.unwrap();
+
+        assert_eq!(i.modpack, Some(ModpackOrigin::File { name: "Abenteuer".into(), version: "1.2".into() }));
+        let placed = PackFiles::load(&state.dirs, &i.id).unwrap().unwrap();
+        assert_eq!(placed.iter().collect::<Vec<_>>(), [("config/a.txt", sha1_hex(b"a").as_str())]);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[tokio::test]
@@ -620,6 +797,8 @@ mod tests {
             [(ModKind::Mod, "a.jar", "a", ""), (ModKind::ResourcePack, "r.zip", "r", ""), (ModKind::Shader, "s.zip", "s", "")]
         );
         assert!(i.mods.iter().all(|m| m.source == ModSource::Local && m.enabled && m.required_by.is_empty()));
+        // Alles aus dem Pack gilt als vom Pack verwaltet, aber nicht als festgehalten.
+        assert!(i.mods.iter().all(|m| m.pack_managed && !m.pinned));
         assert_eq!(state.instances.get(&i.id).unwrap().mods, i.mods);
         // Dateien und Cache liegen schon: `sync` hat nichts zu tun, Aus- und wieder Einschalten klappt.
         let game = state.dirs.game_dir(&i.id);

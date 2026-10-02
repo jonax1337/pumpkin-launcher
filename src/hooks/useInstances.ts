@@ -1,7 +1,7 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { currentLanguage, t } from "@/i18n/core";
 import { api } from "@/lib/api";
-import type { Instance, ModLoader, NewInstance } from "@/lib/types";
+import type { IconChoice, Instance, InstanceScene, ModLoader, NewInstance } from "@/lib/types";
 import { CATALOG_STALE_MS } from "./staleTimes";
 import { appKeys, instanceKeys } from "./queryKeys";
 
@@ -22,6 +22,11 @@ export function useGroups() {
   return useQuery({ ...instanceListQuery, select: groupsOf }).data ?? [];
 }
 
+/** Gewählte Szene der Instanz (null = aus der ID abgeleitet); aus der Instanzliste, die ohnehin geladen ist. */
+export function useInstanceScene(id: string | undefined) {
+  return useQuery({ ...instanceListQuery, select: (list) => list.find((i) => i.id === id)?.scene ?? null }).data;
+}
+
 export function useInstance(id: string | undefined) {
   return useQuery({
     queryKey: instanceKeys.detail(id ?? ""),
@@ -33,17 +38,19 @@ export function useInstance(id: string | undefined) {
 export function useCreateInstance() {
   const qc = useQueryClient();
   return useMutation({
-    // RAM ist nicht Teil von `NewInstance` und wird direkt danach gesetzt.
-    mutationFn: async ({ memoryMb, ...input }: NewInstance & { memoryMb: number | null }) => {
-      const instance = await api.createInstance(input);
-      return memoryMb == null ? instance : api.updateInstance({ ...instance, memoryMb });
+    // RAM und Icon sind nicht Teil von `NewInstance` und werden direkt danach gesetzt.
+    mutationFn: async ({ memoryMb, icon, ...input }: NewInstance & { memoryMb: number | null; icon?: IconChoice | null }) => {
+      let instance = await api.createInstance(input);
+      if (memoryMb != null) instance = await api.updateInstance({ ...instance, memoryMb });
+      return icon ? api.setInstanceIcon(instance.id, icon) : instance;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: instanceKeys.all }),
+    // Auch nach einem Teilfehler: die Instanz gibt es dann schon.
+    onSettled: () => qc.invalidateQueries({ queryKey: instanceKeys.all }),
   });
 }
 
 /** Gespeicherte Instanz in den Cache übernehmen und die Liste neu laden. */
-function instanceSaved(qc: QueryClient, instance: Instance) {
+export function instanceSaved(qc: QueryClient, instance: Instance) {
   qc.setQueryData(instanceKeys.detail(instance.id), instance);
   return qc.invalidateQueries({ queryKey: instanceKeys.all });
 }
@@ -61,6 +68,33 @@ export function useSetGroup(instanceId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (group: string | null) => api.setInstanceGroup(instanceId, group),
+    onSuccess: (instance) => instanceSaved(qc, instance),
+  });
+}
+
+/** Eigenes Icon einer Instanz setzen (null = automatisch); das Backend ändert nur dieses Feld. */
+export function useSetIcon(instanceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (icon: IconChoice | null) => api.setInstanceIcon(instanceId, icon),
+    onSuccess: (instance) => instanceSaved(qc, instance),
+  });
+}
+
+/** Szene einer Instanz setzen (null = aus der ID abgeleitet); das Backend ändert nur dieses Feld. */
+export function useSetScene(instanceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (scene: InstanceScene | null) => api.setInstanceScene(instanceId, scene),
+    onSuccess: (instance) => instanceSaved(qc, instance),
+  });
+}
+
+/** Instanz umbenennen, auf dem frisch gelesenen Stand: so überschreibt der Name nichts, was sich seit der Liste geändert hat. */
+export function useRenameInstance(instanceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (name: string) => api.updateInstance({ ...(await api.getInstance(instanceId)), name }),
     onSuccess: (instance) => instanceSaved(qc, instance),
   });
 }
@@ -106,6 +140,17 @@ export function useDeleteInstance() {
 /** Einträge des Spielordners, aus denen der Export-Dialog wählen lässt. */
 export function useExportEntries(instanceId: string) {
   return useQuery({ queryKey: instanceKeys.exportEntries(instanceId), queryFn: () => api.exportEntries(instanceId), staleTime: 0 });
+}
+
+/** Wie ein Export die Inhalte der Auswahl verteilen würde; die letzte Zahl bleibt stehen, bis die neue da ist. */
+export function useExportSummary(instanceId: string, include: string[], enabled: boolean) {
+  return useQuery({
+    enabled,
+    queryKey: instanceKeys.exportSummary(instanceId, include),
+    queryFn: () => api.exportSummary(instanceId, include),
+    staleTime: 0,
+    placeholderData: keepPreviousData,
+  });
 }
 
 /** Zuletzt gespielte zuerst, nie gespielte dahinter (neueste zuerst). */

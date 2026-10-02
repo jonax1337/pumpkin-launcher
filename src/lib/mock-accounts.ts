@@ -6,6 +6,10 @@ import type { Account, MsLoginStart } from "./types";
 
 const MOCK_USERNAME = "Jonax1337";
 
+/** Wie im echten Backend: die Anmelde-URL samt PKCE-Query. */
+const BROWSER_LOGIN_URL =
+  "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?client_id=00000000-0000-0000-0000-000000000000&response_type=code&redirect_uri=http%3A%2F%2F127.0.0.1%3A53682%2F&scope=XboxLive.signin%20offline_access&code_challenge=mock&code_challenge_method=S256&state=mock";
+
 /** Das Gerätecode-Verfahren: Seite und Code, die der Mock anzeigt. */
 const DEVICE_LOGIN_URL = "https://www.microsoft.com/link";
 const DEVICE_LOGIN_CODE = "B7KQ-X4TZ";
@@ -24,7 +28,7 @@ export function createAccountMock({ db }: MockContext) {
         return {
           mode: "browser",
           userCode: "",
-          verificationUri: "https://login.microsoftonline.com/consumers/",
+          verificationUri: BROWSER_LOGIN_URL,
           expiresIn: 600,
           interval: 0,
           message: t("hooks.api.msLoginBrowser"),

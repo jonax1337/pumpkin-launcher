@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 use super::progress::CountFn;
-use crate::error::{AppError, AppResult};
+use crate::coded;
+use crate::error::{AppError, AppResult, Coded};
 use crate::services::download::{self, Job};
 use crate::services::mojang::Download;
 use crate::services::Dirs;
@@ -72,7 +73,7 @@ pub fn java_exe(dirs: &Dirs, component: &str) -> PathBuf {
 }
 
 /// Dateinamen, die als eigene Java-Programmdatei gelten (verglichen in Kleinbuchstaben).
-const JAVA_FILE_NAMES: &[&str] = if cfg!(windows) { &["javaw.exe", "java.exe"] } else { &["java"] };
+pub(crate) const JAVA_FILE_NAMES: &[&str] = if cfg!(windows) { &["javaw.exe", "java.exe"] } else { &["java"] };
 
 /// Wo ein eigener Java-Pfad eingestellt ist. Es gibt zwei Stellen; Fehlermeldungen nennen die richtige.
 #[derive(Debug, Clone, Copy)]
@@ -82,10 +83,19 @@ pub enum JavaSetting {
 }
 
 impl JavaSetting {
-    fn place(self) -> &'static str {
+    fn not_java_program(self, path: &Path) -> Coded {
+        let (path, file) = (path.display(), JAVA_FILE_NAMES[0]);
         match self {
-            Self::Instance => "in den Einstellungen der Instanz",
-            Self::Launcher => "in den Einstellungen des Launchers",
+            Self::Instance => coded!("errors.game.notJavaProgram.instance", path = path, file = file),
+            Self::Launcher => coded!("errors.game.notJavaProgram.launcher", path = path, file = file),
+        }
+    }
+
+    fn java_missing(self, path: &Path) -> Coded {
+        let path = path.display();
+        match self {
+            Self::Instance => coded!("errors.game.javaPathNotFound.instance", path = path),
+            Self::Launcher => coded!("errors.game.javaPathNotFound.launcher", path = path),
         }
     }
 }
@@ -101,7 +111,7 @@ pub fn resolve(dirs: &Dirs, component: &str, instance_path: Option<&str>, global
     }
     let java = java_exe(dirs, component);
     if !java.exists() {
-        return Err(AppError::invalid(format!("Java nicht gefunden: {}", java.display())));
+        return Err(AppError::invalid(coded!("errors.game.javaNotFound", path = java.display())));
     }
     Ok(java)
 }
@@ -112,19 +122,10 @@ pub fn custom_java(path: &str, setting: JavaSetting) -> AppResult<PathBuf> {
     let path = PathBuf::from(path);
     let name = path.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
     if !JAVA_FILE_NAMES.contains(&name.as_str()) {
-        return Err(AppError::invalid(format!(
-            "„{}“ ist kein Java-Programm. Wähle {} die {} im bin-Ordner deiner Java-Installation.",
-            path.display(),
-            setting.place(),
-            JAVA_FILE_NAMES[0]
-        )));
+        return Err(AppError::invalid(setting.not_java_program(&path)));
     }
     if !path.is_file() {
-        return Err(AppError::invalid(format!(
-            "Java nicht gefunden: {}. Prüfe Java {}.",
-            path.display(),
-            setting.place()
-        )));
+        return Err(AppError::invalid(setting.java_missing(&path)));
     }
     Ok(path)
 }
@@ -145,7 +146,7 @@ pub async fn ensure(client: &reqwest::Client, dirs: &Dirs, component: &str, on_d
 
     let exe = java_exe(dirs, component);
     if !exe.exists() {
-        return Err(AppError::Download(format!("Java-Runtime unvollständig: {} fehlt", exe.display())));
+        return Err(AppError::Download(coded!("errors.game.javaRuntimeIncomplete", path = exe.display()).into()));
     }
     Ok(exe)
 }
@@ -157,7 +158,7 @@ async fn runtime_manifest(client: &reqwest::Client, component: &str) -> AppResul
     let entry = runtime_platforms(os, arch)
         .iter()
         .find_map(|platform| all.get_mut(*platform)?.remove(component)?.into_iter().next())
-        .ok_or_else(|| AppError::NotFound { kind: "Java-Runtime", id: format!("{component} ({os} {arch})") })?;
+        .ok_or_else(|| AppError::NotFound(coded!("errors.game.javaRuntimeNotFound", runtime = format!("{component} ({os} {arch})")).into()))?;
     download::get_json(client, &entry.manifest.url).await
 }
 
@@ -229,9 +230,9 @@ mod tests {
         // Ein fehlendes Java nennt die Stelle, an der der Pfad eingestellt ist.
         let gone = root.join("gone").join(JAVA_FILE_NAMES[0]).to_string_lossy().into_owned();
         let own_gone = resolve(&dirs, "delta", Some(&gone), Some(&global)).unwrap_err().to_string();
-        assert!(own_gone.contains(JavaSetting::Instance.place()), "{own_gone}");
+        assert!(own_gone.contains("in den Einstellungen der Instanz"), "{own_gone}");
         let global_gone = resolve(&dirs, "delta", None, Some(&gone)).unwrap_err().to_string();
-        assert!(global_gone.contains(JavaSetting::Launcher.place()), "{global_gone}");
+        assert!(global_gone.contains("in den Einstellungen des Launchers"), "{global_gone}");
         // Ohne eigenen Pfad die Runtime; die fehlt hier.
         let missing = resolve(&dirs, "delta", None, Some("")).unwrap_err().to_string();
         assert!(missing.starts_with("Java nicht gefunden"), "{missing}");

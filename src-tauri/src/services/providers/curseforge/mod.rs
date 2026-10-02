@@ -13,10 +13,11 @@ mod proxy;
 pub use install::install_mod;
 pub use manual::{adopt_download, ManualDownload};
 pub use pack::Blocked;
-pub(crate) use pack::plan_pack;
+pub(crate) use pack::{plan_local_pack, plan_pack};
 
 use super::{SearchQuery, VersionFilter};
 use crate::{
+    coded,
     error::{AppError, AppResult},
     services::{
         limits::PAGE_SIZE,
@@ -38,7 +39,7 @@ const MAX_QUERY_LEN: usize = 256;
 
 /// Die Nummer eines Projekts oder einer Datei bei CurseForge.
 pub(super) fn parse_cf_id(id: &str) -> AppResult<u32> {
-    id.parse().map_err(|_| AppError::invalid("Ungültige CurseForge-Nummer"))
+    id.parse().map_err(|_| AppError::invalid(coded!("errors.providers.invalidCurseForgeId")))
 }
 
 pub async fn search(client: &reqwest::Client, request: &SearchQuery) -> AppResult<SearchResponse> {
@@ -87,6 +88,7 @@ pub async fn project(client: &reqwest::Client, id: &str) -> AppResult<Project> {
         client_side: "optional".into(),
         server_side: "optional".into(),
         web_url: m.website(),
+        ..Project::default()
     })
 }
 
@@ -125,6 +127,7 @@ fn version(f: &CfFile) -> Version {
         loaders: f.loaders(),
         version_type: f.release_kind().into(),
         date_published: f.file_date.clone(),
+        changelog: None,
         files: vec![File {
             hashes: f.sha1().map(|h| BTreeMap::from([("sha1".to_string(), h)])).unwrap_or_default(),
             // Leer = die Autoren erlauben den Download nur über die Webseite.

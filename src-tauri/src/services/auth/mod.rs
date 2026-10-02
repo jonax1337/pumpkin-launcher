@@ -18,12 +18,17 @@ use tokio_util::sync::CancellationToken;
 use self::oauth::{AuthorizationCode, Poll, Tokens};
 use self::xbox::{McLogin, MinecraftLogin, Profile};
 use super::lock;
-use crate::error::{AppError, AppResult};
+use crate::coded;
+use crate::error::{AppError, AppResult, Coded};
 use crate::models::{Account, AccountKind, MsAccount};
 use crate::state::AppState;
 
 pub(crate) const MC_PROFILE: &str = "https://api.minecraftservices.com/minecraft/profile";
-pub(crate) const RELOGIN: &str = "Die Anmeldung ist abgelaufen. Bitte melde dich erneut mit deinem Microsoft-Konto an.";
+
+/// Das Refresh-Token fehlt oder gilt nicht mehr: der Nutzer muss sich neu anmelden.
+pub(crate) fn relogin() -> Coded {
+    coded!("errors.app.auth.relogin")
+}
 
 /// Client-ID der Azure-App „Pumpkin Launcher“ (öffentlicher Client, kein Geheimnis). Forks müssen eine eigene
 /// Azure-App registrieren und von Microsoft freischalten lassen (`docs/ACCOUNT-SETUP.md`) und diese Konstante ändern.
@@ -188,7 +193,7 @@ async fn start_device(state: &AppState, client_id: &str) -> AppResult<LoginStart
 pub async fn finish_login(state: &AppState) -> AppResult<Account> {
     // Nicht `take`: `cancel_login`/`start_login` müssen die laufende Anmeldung noch abbrechen können.
     // `claimed` sorgt dafür, dass ein zweiter paralleler Aufruf sofort „keine Anmeldung“ bekommt.
-    let pending = claim(&mut lock(&state.ms.pending)).ok_or_else(|| AppError::invalid("Es läuft gerade keine Anmeldung. Starte sie bitte neu."))?;
+    let pending = claim(&mut lock(&state.ms.pending)).ok_or_else(|| AppError::invalid(coded!("errors.app.auth.noneRunning")))?;
     let result = poll(state, &pending).await;
     // Nur die eigene Anmeldung aufräumen, nicht eine inzwischen neu gestartete.
     let mut slot = lock(&state.ms.pending);
@@ -212,7 +217,7 @@ async fn poll(state: &AppState, p: &Pending) -> AppResult<Account> {
             let auth = AuthorizationCode { client_id: &p.client_id, code: &code, redirect_uri, verifier };
             match oauth::redeem_code(&state.http, &auth).await? {
                 Poll::Done(tokens) => complete(state, &p.client_id, tokens).await,
-                _ => Err(AppError::invalid("Microsoft hat die Anmeldung nicht abgeschlossen. Versuch es bitte erneut.")),
+                _ => Err(AppError::invalid(coded!("errors.app.auth.notFinished"))),
             }
         }
     }
@@ -222,10 +227,10 @@ async fn poll_device(state: &AppState, p: &Pending, device_code: &str, first_int
     let mut interval = first_interval.max(1);
     loop {
         if p.cancel.run_until_cancelled(tokio::time::sleep(Duration::from_secs(interval))).await.is_none() {
-            return Err(AppError::invalid("Anmeldung abgebrochen."));
+            return Err(AppError::invalid(coded!("errors.auth.cancelled")));
         }
         if Instant::now() >= p.expires_at {
-            return Err(AppError::invalid("Der Anmeldecode ist abgelaufen. Starte die Anmeldung neu."));
+            return Err(AppError::invalid(coded!("errors.app.auth.codeExpired")));
         }
         match oauth::poll_device_code(&state.http, &p.client_id, device_code).await? {
             Poll::Pending => {}
@@ -236,7 +241,7 @@ async fn poll_device(state: &AppState, p: &Pending, device_code: &str, first_int
 }
 
 async fn complete(state: &AppState, client_id: &str, tokens: Tokens) -> AppResult<Account> {
-    let refresh = tokens.refresh_token.ok_or_else(|| AppError::invalid("Microsoft hat keine dauerhafte Anmeldung erlaubt."))?;
+    let refresh = tokens.refresh_token.ok_or_else(|| AppError::invalid(coded!("errors.app.auth.noRefreshToken")))?;
     let MinecraftLogin { profile, session } = xbox::login_to_minecraft(&state.http, &tokens.access_token).await?;
     keyring::save_refresh_token(&profile.id, &refresh)?;
     let account = state.accounts.upsert(MsAccount {
@@ -287,7 +292,7 @@ fn cached_session(state: &AppState, id: &str) -> Option<McSession> {
 async fn refresh_session(state: &AppState, stored: MsAccount) -> AppResult<(MsAccount, McSession)> {
     let refresh = keyring::load_refresh_token(&stored.id)?;
     let Poll::Done(tokens) = oauth::redeem_refresh_token(&state.http, &stored.client_id, &refresh).await? else {
-        return Err(AppError::invalid(RELOGIN));
+        return Err(AppError::invalid(relogin()));
     };
     let MinecraftLogin { profile, session } = xbox::login_to_minecraft(&state.http, &tokens.access_token).await?;
     ensure_same_profile(&stored, &profile)?;
@@ -298,7 +303,7 @@ async fn refresh_session(state: &AppState, stored: MsAccount) -> AppResult<(MsAc
 
 fn ensure_same_profile(stored: &MsAccount, profile: &Profile) -> AppResult<()> {
     if profile.id != stored.id {
-        return Err(AppError::invalid("Microsoft hat ein anderes Minecraft-Profil geliefert. Bitte melde dich erneut an."));
+        return Err(AppError::invalid(coded!("errors.app.auth.otherProfile")));
     }
     Ok(())
 }
@@ -331,7 +336,7 @@ pub fn require_offline(state: &AppState) -> AppResult<()> {
     if offline_allowed(state) {
         return Ok(());
     }
-    Err(AppError::invalid("Spielen ohne Konto ist in dieser Version nicht möglich. Melde dich mit einem Microsoft-Konto an, das Minecraft: Java Edition besitzt."))
+    Err(AppError::invalid(coded!("errors.app.auth.offlineNotAllowed")))
 }
 
 /// UUID eines Offline-Spielers wie im Spiel selbst: MD5 von `OfflinePlayer:<name>`
@@ -346,7 +351,7 @@ pub fn offline_uuid(username: &str) -> uuid::Uuid {
 pub fn offline_account(username: &str) -> AppResult<Account> {
     let valid = (3..=16).contains(&username.len()) && username.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');
     if !valid {
-        return Err(AppError::invalid(format!("Ungültiger Spielername '{username}' (3–16 Zeichen, A-Z, 0-9, _)")));
+        return Err(AppError::invalid(coded!("errors.app.auth.invalidUsername", username = username)));
     }
     Ok(Account {
         id: offline_uuid(username).to_string(),

@@ -4,16 +4,16 @@ import { ALL_SOURCES, type CatalogType, type Source, type SourceChoice } from ".
 
 // ---------- Bibliothek: Dialog „Neue Instanz“ ----------
 
-/** Womit der Dialog „Neue Instanz“ startet: leer, mit anderem Launcher oder mit einer .mrpack-Datei. */
+/** Womit der Dialog „Neue Instanz“ startet: leer, mit anderem Launcher oder mit einer .mrpack-Datei (leerer Pfad: noch keine gewählt). */
 export type NewInstanceStart = { type: "blank" } | { type: "import" } | { type: "file"; path: string };
 
-/** Query-Parameter der Bibliothek, die den Dialog öffnen (`neu=1`, `neu=import`, `neu=1&datei=<Pfad>`). */
+/** Query-Parameter der Bibliothek, die den Dialog öffnen (`neu=1`, `neu=import`, `neu=file`, `neu=1&datei=<Pfad>`). */
 export function newInstanceParams(start: NewInstanceStart = { type: "blank" }): Record<string, string> {
   switch (start.type) {
     case "import":
       return { neu: "import" };
     case "file":
-      return { neu: "1", datei: start.path };
+      return start.path ? { neu: "1", datei: start.path } : { neu: "file" };
     case "blank":
       return { neu: "1" };
   }
@@ -26,7 +26,9 @@ export function readNewInstanceStart(params: URLSearchParams): NewInstanceStart 
   if (!params.has("neu")) return null;
   const path = params.get("datei");
   if (path) return { type: "file", path };
-  return { type: params.get("neu") === "import" ? "import" : "blank" };
+  const kind = params.get("neu");
+  if (kind === "file") return { type: "file", path: "" };
+  return { type: kind === "import" ? "import" : "blank" };
 }
 
 // ---------- Entdecken ----------

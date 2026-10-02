@@ -2,6 +2,9 @@ import { api } from "@/lib/api";
 import { toastError } from "@/lib/toast";
 import type { ModSource } from "@/lib/types";
 
+/** Quellcode und Fehlermeldungen des Launchers. */
+export const REPO_URL = "https://github.com/jonax1337/pumpkin-launcher";
+
 /** Seite im Browser öffnen; scheitert das, sagt es ein Toast. */
 export const openPage = (url: string) => void api.openExternal(url).catch(toastError);
 

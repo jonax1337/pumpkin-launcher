@@ -1,48 +1,46 @@
-use serde::ser::SerializeStruct;
+mod text;
+
+use std::fmt;
+
 use serde::{Serialize, Serializer};
 
-/// Zentraler Fehlertyp des Backends. Wird an das Frontend als `{ code, message }` serialisiert:
-/// `message` ist ein lesbarer Satz (technische Details folgen nach „ – Details: “), `code` ein stabiler
-/// Schlüssel, an dem das Frontend Fälle erkennt, ohne den Text zu vergleichen.
+pub use text::{is_translated, Coded, ErrorText};
+
+use crate::coded;
+
+/// Zentraler Fehlertyp des Backends. Wird an das Frontend als `{ code, message }` serialisiert: `code` ist die
+/// stabile Fehlerart, an der das Frontend Fälle erkennt, `message` der deutsche Satz (Details nach „ – Details: “).
+/// Ist der Text schon ein Fehlercode (`coded!`), kommen `key`, `params` und `details` dazu; das Frontend übersetzt
+/// sie in die Sprache der Oberfläche und zeigt sonst `message`.
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
-    #[error("{}", io_text(.0))]
     Io(#[from] std::io::Error),
-    #[error("Die Daten konnten nicht gelesen werden – Details: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("{}", http_text(.0))]
     Http(#[from] reqwest::Error),
-    #[error("Das Archiv ist beschädigt oder kein gültiges Paket – Details: {0}")]
     Zip(#[from] zip::result::ZipError),
-    #[error("Eine Spieldatei ist beschädigt oder hat ein unbekanntes Format – Details: {0}")]
     Nbt(#[from] fastnbt::error::Error),
-    #[error("Ein Download ist fehlgeschlagen – Details: {0}")]
-    Download(String),
-    #[error("Das Hochladen hat nicht geklappt – Details: {0}")]
-    Upload(String),
-    #[error("Interner Fehler der App – Details: {0}")]
+    Download(ErrorText),
+    Upload(ErrorText),
     Tauri(#[from] tauri::Error),
-    #[error("Der Passwortspeicher des Systems ist nicht erreichbar – Details: {0}")]
     Keyring(#[from] keyring::Error),
-    #[error("Die Datei konnte nicht in den Papierkorb verschoben werden – Details: {0}")]
     Trash(#[from] trash::Error),
-    #[error("Die Datenbank eines anderen Launchers ist nicht lesbar – Details: {0}")]
     Sqlite(#[from] rusqlite::Error),
-    #[error("{kind} „{id}“ wurde nicht gefunden")]
-    NotFound { kind: &'static str, id: String },
-    #[error("{0}")]
-    Invalid(String),
+    NotFound(ErrorText),
+    Invalid(ErrorText),
     /// Der Server lehnt endgültig ab, die Meldung sagt, was zu tun ist; ein neuer Versuch ändert nichts.
-    #[error("{0}")]
-    Refused(String),
-    #[error("Vorgang abgebrochen")]
+    Refused(ErrorText),
     Cancelled,
 }
 
 impl AppError {
     /// Fehler mit einer Meldung, die der Nutzer so lesen soll.
-    pub fn invalid(message: impl Into<String>) -> Self {
+    pub fn invalid(message: impl Into<ErrorText>) -> Self {
         Self::Invalid(message.into())
+    }
+
+    /// `kind` (etwa „Welt“) mit der ID `id` gibt es nicht.
+    pub fn not_found(kind: &str, id: impl fmt::Display) -> Self {
+        Self::NotFound(format!("{kind} „{id}“ wurde nicht gefunden").into())
     }
 
     /// Stabiler Schlüssel der Fehlerart für das Frontend; ändert sich nie, auch wenn der Text umformuliert wird.
@@ -59,7 +57,7 @@ impl AppError {
             Self::Keyring(_) => "keyring",
             Self::Trash(_) => "trash",
             Self::Sqlite(_) => "sqlite",
-            Self::NotFound { .. } => "not_found",
+            Self::NotFound(_) => "not_found",
             Self::Invalid(_) => "invalid",
             Self::Refused(_) => "refused",
             Self::Cancelled => "cancelled",
@@ -72,8 +70,8 @@ impl AppError {
     }
 
     /// Fehlte die Datei, ist `what` nicht installiert; jeder andere Fehler bleibt, wie er ist.
-    pub fn or_not_installed(self, what: impl std::fmt::Display) -> Self {
-        if self.is_not_found() { Self::invalid(format!("{what} ist nicht installiert")) } else { self }
+    pub fn or_not_installed(self, what: impl fmt::Display) -> Self {
+        if self.is_not_found() { Self::invalid(coded!("errors.notInstalled", what = what)) } else { self }
     }
 
     /// Ob ein neuer Versuch helfen kann. Nicht, wenn der Server die Anfrage selbst ablehnt (4xx außer 408 Zeitüberschreitung
@@ -85,45 +83,83 @@ impl AppError {
             _ => true,
         }
     }
+
+    /// Die Meldung für den Nutzer, als Fehlercode, sobald die Stelle umgestellt ist.
+    fn text(&self) -> ErrorText {
+        match self {
+            Self::Io(err) => io_text(err).into(),
+            Self::Json(err) => coded!("errors.json").with_details(err.to_string()).into(),
+            Self::Http(err) => http_text(err).into(),
+            Self::Zip(err) => coded!("errors.zip").with_details(err.to_string()).into(),
+            Self::Nbt(err) => coded!("errors.nbt").with_details(err.to_string()).into(),
+            Self::Download(details) => coded!("errors.download").with_details(details.clone()).into(),
+            Self::Upload(details) => coded!("errors.upload").with_details(details.clone()).into(),
+            Self::Tauri(err) => coded!("errors.tauri").with_details(err.to_string()).into(),
+            Self::Keyring(err) => keyring_text(err).into(),
+            Self::Trash(err) => coded!("errors.trash").with_details(err.to_string()).into(),
+            Self::Sqlite(err) => coded!("errors.sqlite").with_details(err.to_string()).into(),
+            Self::NotFound(text) | Self::Invalid(text) | Self::Refused(text) => text.clone(),
+            Self::Cancelled => coded!("errors.cancelled").into(),
+        }
+    }
 }
 
-fn io_text(err: &std::io::Error) -> String {
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.text().fmt(f)
+    }
+}
+
+fn io_text(err: &std::io::Error) -> Coded {
     use std::io::ErrorKind::*;
     // Windows: 32 = Datei von anderem Prozess geöffnet, 33 = Bereich gesperrt, 39/112 = Datenträger voll.
     // Rohe Codes nur unter Windows deuten; unter Unix bedeuten 32/33/39 anderes (EPIPE, EDOM, ENOTEMPTY).
     let code = if cfg!(windows) { err.raw_os_error() } else { None };
     let text = match (err.kind(), code) {
-        (StorageFull, _) | (_, Some(39 | 112)) => "Auf der Festplatte ist nicht genug Platz frei. Schaffe Platz und versuch es erneut.",
-        (_, Some(32 | 33)) => "Eine Datei wird gerade von einem anderen Programm benutzt. Schließe es (z. B. Minecraft) und versuch es erneut.",
-        (PermissionDenied, _) => "Zugriff auf eine Datei wurde verweigert. Prüfe, ob ein anderes Programm sie sperrt oder schützt.",
-        (NotFound, _) => "Eine benötigte Datei oder ein Ordner fehlt.",
-        (TimedOut, _) => "Der Vorgang hat zu lange gedauert. Versuch es erneut.",
-        _ => "Beim Lesen oder Schreiben einer Datei ist ein Fehler aufgetreten.",
+        (StorageFull, _) | (_, Some(39 | 112)) => coded!("errors.io.storageFull"),
+        (_, Some(32 | 33)) => coded!("errors.io.fileInUse"),
+        (PermissionDenied, _) => coded!("errors.io.permissionDenied"),
+        (NotFound, _) => coded!("errors.io.notFound"),
+        (TimedOut, _) => coded!("errors.io.timedOut"),
+        _ => coded!("errors.io.other"),
     };
-    format!("{text} – Details: {err}")
+    text.with_details(err.to_string())
 }
 
-fn http_text(err: &reqwest::Error) -> String {
+fn http_text(err: &reqwest::Error) -> Coded {
     let text = match err.status().map(|s| s.as_u16()) {
-        Some(404 | 410) => "Die Datei gibt es auf dem Server nicht (mehr).",
-        Some(401 | 403) => "Der Server hat den Zugriff verweigert.",
-        Some(429) => "Zu viele Anfragen in kurzer Zeit. Warte einen Moment und versuch es erneut.",
-        Some(500..=599) => "Der Server hat gerade Probleme. Versuch es später erneut.",
-        Some(_) => "Der Server hat die Anfrage abgelehnt.",
-        None if err.is_timeout() => "Der Server antwortet nicht rechtzeitig. Prüfe deine Verbindung und versuch es erneut.",
-        None if err.is_connect() => "Keine Verbindung zum Internet. Prüfe deine Verbindung und versuch es erneut.",
-        None if err.is_decode() => "Die Antwort des Servers war unvollständig oder unlesbar.",
-        None => "Die Verbindung zum Server ist abgebrochen. Versuch es erneut.",
+        Some(404 | 410) => coded!("errors.http.gone"),
+        Some(401 | 403) => coded!("errors.http.forbidden"),
+        Some(429) => coded!("errors.http.tooManyRequests"),
+        Some(500..=599) => coded!("errors.http.serverError"),
+        Some(_) => coded!("errors.http.rejected"),
+        None if err.is_timeout() => coded!("errors.http.timeout"),
+        None if err.is_connect() => coded!("errors.http.offline"),
+        None if err.is_decode() => coded!("errors.http.unreadable"),
+        None => coded!("errors.http.interrupted"),
     };
-    format!("{text} – Details: {err}")
+    text.with_details(err.to_string())
+}
+
+fn keyring_text(err: &keyring::Error) -> Coded {
+    // Unter Linux fehlt oft der Secret-Service-Dienst; dort sagt die Meldung, welcher gebraucht wird.
+    let text = if cfg!(target_os = "linux") { coded!("errors.keyring.linux") } else { coded!("errors.keyring") };
+    text.with_details(err.to_string())
+}
+
+/// Was das Frontend von einem Fehler bekommt; `coded` liefert `key`, `params` und `details` mit.
+#[derive(Serialize)]
+struct Wire<'a> {
+    code: &'static str,
+    message: String,
+    #[serde(flatten)]
+    coded: Option<&'a Coded>,
 }
 
 impl Serialize for AppError {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut wire = serializer.serialize_struct("AppError", 2)?;
-        wire.serialize_field("code", self.code())?;
-        wire.serialize_field("message", &self.to_string())?;
-        wire.end()
+        let text = self.text();
+        Wire { code: self.code(), message: text.to_string(), coded: text.as_coded() }.serialize(serializer)
     }
 }
 
@@ -150,6 +186,14 @@ mod tests {
     }
 
     #[test]
+    fn an_unreachable_keyring_names_the_linux_service() {
+        let text = AppError::from(keyring::Error::NoStorageAccess("dienst fehlt".into())).to_string();
+        assert!(text.starts_with("Der Passwortspeicher des Systems ist nicht erreichbar."), "{text}");
+        assert_eq!(text.contains("GNOME Keyring oder KWallet"), cfg!(target_os = "linux"), "{text}");
+        assert!(text.contains(" – Details: ") && text.ends_with("dienst fehlt"), "{text}");
+    }
+
+    #[test]
     fn only_missing_files_read_as_not_installed() {
         let missing = AppError::from(Error::from(ErrorKind::NotFound));
         assert!(missing.is_not_found());
@@ -157,7 +201,7 @@ mod tests {
         let locked = AppError::from(Error::from(ErrorKind::PermissionDenied));
         assert!(!locked.is_not_found());
         assert!(locked.or_not_installed("Version 1.21").to_string().starts_with("Zugriff auf eine Datei"));
-        assert!(!AppError::NotFound { kind: "Welt", id: "x".into() }.is_not_found());
+        assert!(!AppError::not_found("Welt", "x").is_not_found());
     }
 
     #[test]
@@ -174,16 +218,43 @@ mod tests {
         starts(Error::from_raw_os_error(libc::EPIPE).into(), "Beim Lesen oder Schreiben");
     }
 
+    fn json(err: AppError) -> serde_json::Value {
+        serde_json::to_value(err).unwrap()
+    }
+
     #[test]
-    fn errors_reach_the_frontend_as_code_and_message() {
-        let json = |err: AppError| serde_json::to_value(err).unwrap();
-        assert_eq!(json(AppError::Cancelled), serde_json::json!({ "code": "cancelled", "message": "Vorgang abgebrochen" }));
+    fn raw_errors_reach_the_frontend_as_code_and_message() {
         assert_eq!(
-            json(AppError::NotFound { kind: "Welt", id: "x".into() }),
+            json(AppError::not_found("Welt", "x")),
             serde_json::json!({ "code": "not_found", "message": "Welt „x“ wurde nicht gefunden" })
         );
         assert_eq!(json(AppError::invalid("Instanz läuft noch")), serde_json::json!({ "code": "invalid", "message": "Instanz läuft noch" }));
-        assert_eq!(json(Error::other("kaputt").into())["code"], "io");
+    }
+
+    #[test]
+    fn coded_errors_reach_the_frontend_with_key_params_and_details() {
+        assert_eq!(
+            json(AppError::Cancelled),
+            serde_json::json!({ "code": "cancelled", "message": "Vorgang abgebrochen", "key": "errors.cancelled" })
+        );
+        assert_eq!(
+            json(AppError::from(Error::from(ErrorKind::NotFound)).or_not_installed("Fabric")),
+            serde_json::json!({
+                "code": "invalid",
+                "message": "Fabric ist nicht installiert",
+                "key": "errors.notInstalled",
+                "params": { "what": "Fabric" },
+            })
+        );
+        let io = json(Error::other("kaputt").into());
+        assert_eq!((&io["code"], &io["key"], &io["details"]), (&"io".into(), &"errors.io.other".into(), &"kaputt".into()));
+    }
+
+    #[test]
+    fn download_details_keep_their_own_code() {
+        let wire = json(AppError::Download(coded!("errors.instance.stillRunning").into()));
+        assert_eq!(wire["message"], "Ein Download ist fehlgeschlagen – Details: Instanz läuft noch");
+        assert_eq!(wire["details"], serde_json::json!({ "key": "errors.instance.stillRunning" }));
     }
 
     #[tokio::test]

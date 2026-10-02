@@ -1,5 +1,5 @@
 import { useI18n } from "@/i18n";
-import { Avatar, Button, Dialog, DialogActions, ErrorBox, Hint, Progress, Skel } from "@/ui";
+import { Avatar, Button, Dialog, DialogActions, ErrorBox, Hint, Panel, Progress, Skel } from "@/ui";
 import { copyWithToast } from "@/lib/clipboard";
 import { openPage } from "@/lib/links";
 import type { MsLoginStart } from "@/lib/types";
@@ -9,6 +9,11 @@ import { ThenSub } from "./ThenSub";
 
 /** So viele ganze Minuten läuft die Anmeldung noch, mindestens eine. */
 const validMinutes = (info: MsLoginStart) => Math.max(1, Math.round(info.expiresIn / 60));
+
+/** Die Adresse, wie der Browser sie zeigt: ohne „https://“, „www.“ und ohne Query (die Anmelde-URL trägt PKCE-Parameter). */
+const addressOf = (info: MsLoginStart) => info.verificationUri.replace(/^https?:\/\/(www\.)?/, "").replace(/[?#].*$/, "");
+
+const JAVA_EDITION_URL = "https://www.minecraft.net/en-us/store/minecraft-java-bedrock-edition-pc";
 
 /** Microsoft-Anmeldung: ein Dialog für Kontomenü, Einstellungen und Onboarding. */
 export function MsLoginDialog() {
@@ -21,21 +26,24 @@ export function MsLoginDialog() {
       onOpenChange={(open) => !open && closeMsLogin()}
       title={t("components.account.msLogin")}
       sub={then && state.step !== "done" ? <ThenSub label={then.label} /> : undefined}
-      width={520}
-      height={420}
+      width={540}
+      height={state.step === "done" ? undefined : 580}
       footer={<MsLoginFooter state={state} />}
     >
-      <MsLoginStep state={state} />
+      <div className="flex min-h-full flex-col gap-3">
+        <MsLoginStep state={state} />
+        {state.step !== "done" && <MsLoginInfo />}
+      </div>
     </Dialog>
   );
 }
 
 function MsLoginFooter({ state }: { state: LoginState }) {
   const { t } = useI18n();
-  if (state.step === "done") return <DialogActions confirm={{ label: t("common.done"), width: 124, onClick: closeMsLogin }} />;
+  if (state.step === "done") return <DialogActions confirm={{ label: t("common.done"), width: 124, autoFocus: true, onClick: closeMsLogin }} />;
   return (
     <>
-      {state.step === "code" && <Button icon="ext" onClick={() => openPage(state.info.verificationUri)}>{t("common.open")}</Button>}
+      {state.step === "code" && <Button icon="ext" onClick={() => openPage(state.info.verificationUri)}>{t("components.ms.openPage")}</Button>}
       {state.step === "code" && state.info.mode === "browser" && (
         <Button variant="ghost" onClick={() => void startMsLogin("device")}>{t("components.ms.useCodeInstead")}</Button>
       )}
@@ -59,6 +67,23 @@ function MsLoginStep({ state }: { state: LoginState }) {
   }
 }
 
+/** Was vor der Anmeldung zu wissen hilft: welches Konto es sein muss und was mit den Zugangsdaten passiert. */
+function MsLoginInfo() {
+  const { t } = useI18n();
+  return (
+    <Panel level="sunk" pad="m" className="mt-auto flex shrink-0 flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <b>{t("components.ms.javaTitle")}</b>
+        <Button variant="ghost" size="s" icon="ext" bleed="end" onClick={() => openPage(JAVA_EDITION_URL)}>
+          {t("components.ms.javaGet")}
+        </Button>
+      </div>
+      <p>{t("components.ms.javaText")}</p>
+      <Hint icon="check">{t("components.ms.trust")}</Hint>
+    </Panel>
+  );
+}
+
 function StartingStep() {
   return (
     <div className="flex flex-col gap-3 pt-1" aria-busy>
@@ -69,12 +94,12 @@ function StartingStep() {
   );
 }
 
-/** „Wartet auf die Anmeldung“: Balken und ein Satz, wie lange es noch gilt. */
+/** „Wartet auf die Anmeldung“: Balken in eigener Zeile, darunter ein Satz, wie lange es noch gilt. */
 function WaitingRow({ hint }: { hint: string }) {
   const { t } = useI18n();
   return (
-    <div className="flex h-8 items-center gap-3" aria-live="polite">
-      <Progress width={120} label={t("components.ms.waiting")} />
+    <div className="flex flex-col gap-2" aria-live="polite">
+      <Progress label={t("components.ms.waiting")} />
       <Hint>{hint}</Hint>
     </div>
   );
@@ -85,8 +110,9 @@ function BrowserStep({ info }: { info: MsLoginStart }) {
   return (
     <>
       <p>{t("components.ms.browserOpened")}</p>
+      <p>{t("components.ms.checkAddress")} <b className="select-all break-all font-mono">{addressOf(info)}</b></p>
       <WaitingRow hint={t("components.ms.windowWaits", { min: validMinutes(info) })} />
-      <Hint className="mt-3">{t("components.ms.nothingHappens")}</Hint>
+      <Hint>{t("components.ms.nothingHappens")}</Hint>
     </>
   );
 }
@@ -95,7 +121,7 @@ function DeviceStep({ info }: { info: MsLoginStart }) {
   const { t } = useI18n();
   return (
     <>
-      <p>{t("components.ms.openAt")} <b>{info.verificationUri.replace(/^https?:\/\/(www\.)?/, "")}</b> {t("components.ms.enterCode")}</p>
+      <p>{t("components.ms.openAt")} <b className="select-all break-all">{addressOf(info)}</b> {t("components.ms.enterCode")}</p>
       {/* Code-Anzeige (Sonderform: große Pixelschrift in eingelassener Platte) */}
       <div className="codebox">
         <span

@@ -1,5 +1,6 @@
 //! Dateien eines Pack-Zips: Pfadregeln und Größengrenzen, die für Anbieter-Packs wie für das `.mrpack` gelten.
 use crate::{
+    coded,
     error::{AppError, AppResult},
     services::{
         content::safe_path,
@@ -47,7 +48,7 @@ pub(crate) fn zip_paths(
         let path = safe_path(&rel)?;
         reject_special(&entry)?;
         if !seen.insert(rel.to_lowercase()) {
-            return Err(AppError::invalid("Doppelter ZIP-Pfad"));
+            return Err(AppError::invalid(coded!("errors.modrinth.duplicateZipPath")));
         }
         files.push((path, index));
     }

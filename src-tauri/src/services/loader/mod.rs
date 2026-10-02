@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
+use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::{Instance, ModLoader};
 use crate::services::install::{self, InstallStep, OnProgress};
@@ -55,7 +56,7 @@ impl<'a> GameChoice<'a> {
     /// Die gewählte Loader-Version einer installierten Instanz.
     fn installed_target(self) -> AppResult<LoaderTarget<'a>> {
         let version =
-            self.loader_version.ok_or_else(|| AppError::invalid("Instanz ohne Loader-Version: bitte neu installieren"))?;
+            self.loader_version.ok_or_else(|| AppError::invalid(coded!("errors.game.instanceWithoutLoaderVersion")))?;
         LoaderTarget::new(self.loader, self.mc, version)
     }
 }
@@ -82,7 +83,9 @@ impl<'a> LoaderTarget<'a> {
     fn unknown_on_client_error(self, err: AppError) -> AppError {
         match err {
             AppError::Http(e) if e.status().is_some_and(|s| s.is_client_error()) => {
-                AppError::NotFound { kind: "Loader", id: format!("{} {} für Minecraft {}", self.name(), self.version, self.mc) }
+                AppError::NotFound(
+                    coded!("errors.game.loaderVersionNotFound", loader = self.name(), version = self.version, mc = self.mc).into(),
+                )
             }
             other => other,
         }
@@ -98,7 +101,7 @@ impl fmt::Display for LoaderTarget<'_> {
 /// Versions-IDs landen in URLs und Pfaden: nur einzelne, harmlose Segmente zulassen.
 fn segment(s: &str) -> AppResult<&str> {
     if s.is_empty() || s.contains("..") || s.contains(['/', '\\', '?', '#', '%', ':']) {
-        return Err(AppError::invalid(format!("ungültige Version '{s}'")));
+        return Err(AppError::invalid(coded!("errors.game.invalidVersion", version = s)));
     }
     Ok(s)
 }
@@ -140,7 +143,11 @@ async fn resolve_version(client: &reqwest::Client, choice: GameChoice<'_>) -> Ap
     let available = versions(client, choice.loader, choice.mc).await?;
     default_version(choice.loader, &available)
         .map(|v| v.version.clone())
-        .ok_or_else(|| AppError::NotFound { kind: "Loader für Minecraft", id: format!("{} {}", choice.loader.display_name(), choice.mc) })
+        .ok_or_else(|| {
+            AppError::NotFound(
+                coded!("errors.game.loaderForMinecraftNotFound", loader = choice.loader.display_name(), mc = choice.mc).into(),
+            )
+        })
 }
 
 /// Die neueste stabile Version; Forge und NeoForge nehmen ohne stabile die neueste überhaupt.
@@ -269,7 +276,11 @@ async fn save_profile<P: LoaderProfile>(dirs: &Dirs, target: LoaderTarget<'_>, j
 /// über `-DignoreList=…,${version_name}.jar` genau dieses JAR aus.
 fn merge(mut version: VersionJson, profile: &impl LoaderProfile) -> AppResult<VersionJson> {
     if profile.inherits_from() != version.id {
-        return Err(AppError::invalid(format!("Loader-Profil erbt von {} statt {}", profile.inherits_from(), version.id)));
+        return Err(AppError::invalid(coded!(
+            "errors.game.loaderProfileInheritsFrom",
+            inherits = profile.inherits_from(),
+            mc = version.id
+        )));
     }
     let vanilla = std::mem::take(&mut version.libraries);
     version.libraries = replace_libraries(profile.libraries()?, vanilla);

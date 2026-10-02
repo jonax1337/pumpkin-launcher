@@ -1,4 +1,5 @@
 //! Die Anbieter ohne Modrinth, wie das Frontend sie als `source` nennt.
+use crate::coded;
 use crate::error::{AppError, AppResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,7 +15,7 @@ impl Source {
             "ftb" => Ok(Self::Ftb),
             "technic" => Ok(Self::Technic),
             "curseforge" => Ok(Self::CurseForge),
-            _ => Err(AppError::invalid("Unbekannter Anbieter")),
+            _ => Err(AppError::invalid(coded!("errors.providers.unknownProvider"))),
         }
     }
 

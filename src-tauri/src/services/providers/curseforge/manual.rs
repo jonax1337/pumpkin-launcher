@@ -6,6 +6,7 @@ use super::{
     proxy::{file_of, mod_of},
 };
 use crate::{
+    coded,
     error::{AppError, AppResult},
     models::{Instance, ModSource},
     services::{
@@ -91,7 +92,7 @@ fn candidates_in_downloads(file_name: &str) -> AppResult<Option<Vec<PathBuf>>> {
 fn place(state: &AppState, instance_id: &str, mut instance: Instance, planned: &Planned, data: &[u8]) -> AppResult<Instance> {
     let target = planned.target(&state.dirs.game_dir(instance_id));
     if instance.mods.iter().any(|x| x.file_name.eq_ignore_ascii_case(&planned.file.file_name)) {
-        return Err(AppError::invalid("Mod-Dateinamen kollidieren"));
+        return Err(AppError::invalid(coded!("errors.providers.modFileNameClash")));
     }
     let staged = StagedInstall::new(&state.dirs.root);
     staged.reserve(&target)?;

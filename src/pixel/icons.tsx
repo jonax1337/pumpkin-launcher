@@ -272,13 +272,17 @@ function rowsToRects(rows: readonly string[], colors: Record<string, string>) {
   ));
 }
 
+/** Ein Modpack bringt beliebige Namen mit (`pumpkin.json`); unbekannte zeigen die erste Glyphe bzw. Palette statt abzustürzen. */
+const isGlyphName = (name: string): name is GlyphName => Object.hasOwn(GLYPHS, name);
+const isGlyphPalette = (pal: string): pal is GlyphPalette => Object.hasOwn(GLYPH_PALETTES, pal);
+
 /** Nur das SVG der Glyphe (Kit: `Glyph` in @/ui). */
 export const GlyphSvg = memo(function GlyphSvg({ name, pal }: { name: GlyphName; pal: GlyphPalette }) {
-  const p = GLYPH_PALETTES[pal];
+  const p = GLYPH_PALETTES[isGlyphPalette(pal) ? pal : PALETTE_NAMES[0]];
   const colors = { k: GLYPH_OUTLINE, w: GLYPH_WHITE, a: p.a, b: p.b, h: p.h, c: p.c };
   return (
     <svg viewBox="0 0 10 10" className="gl" aria-hidden>
-      {rowsToRects(GLYPHS[name], colors)}
+      {rowsToRects(GLYPHS[isGlyphName(name) ? name : GLYPH_NAMES[0]], colors)}
     </svg>
   );
 });

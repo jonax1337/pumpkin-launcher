@@ -3,7 +3,7 @@
    Bewegung (popin, dlgin, sheetin …) liegt in motion.css. */
 
 /* ---------- Tooltip ---------- */
-.vx-tip { position: relative; z-index: 90; max-width: 300px; padding: 10px 12px; color: var(--fg); font-size: 12.5px; line-height: 1.45; isolation: isolate; animation: fade .1s var(--ease); }
+.vx-tip { position: relative; z-index: 90; max-width: 300px; padding: 10px 12px; color: var(--fg); font-size: calc(13px * var(--tz)); line-height: 1.45; isolation: isolate; animation: fade .1s var(--ease); }
 .vx-tip::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--tip-bg); clip-path: var(--n1); }
 .vx-tip::after { content: ""; position: absolute; inset: var(--px); z-index: -1; background: linear-gradient(var(--tip-a), var(--tip-b)); clip-path: var(--ring); }
 .vx-tip[data-state="closed"] { animation: fadeout .08s steps(2, end) forwards; }
@@ -27,7 +27,7 @@
 
 /* Eintrag 36 px (tall 52), Icon s. Markiert (Hover, Pfeiltasten) = hellere Platte --hl + Kupferbalken 2 Einheiten links.
    Druck: Platte dunkler, Inhalt 1 Einheit tiefer. */
-.vx-mi { position: relative; isolation: isolate; width: 100%; height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 8px; color: var(--fg); font-size: 13.5px; font-weight: 500; white-space: nowrap; cursor: pointer; outline: none; user-select: none; }
+.vx-mi { position: relative; isolation: isolate; width: 100%; height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 8px; color: var(--fg); font-size: calc(13.5px * var(--tz)); font-weight: 500; white-space: nowrap; cursor: pointer; outline: none; user-select: none; }
 .vx-mi[data-tall] { height: 52px; }
 .vx-mi::before { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--n1); }
 .vx-mi .vx-ico { color: var(--fg-2); }
@@ -43,15 +43,15 @@
 .vx-mi[data-disabled]::before { background: none !important; box-shadow: none !important; }
 .vx-mi[data-disabled] .vx-ico { color: var(--fg-3); }
 .vx-mi-t2 { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
-.vx-mi-t2 > span { font-size: 12px; color: var(--fg-3); font-weight: 400; }
+.vx-mi-t2 > span { font-size: calc(13px * var(--tz)); color: var(--fg-3); font-weight: 400; }
 .vx-mi .vx-mi-ck { margin-left: auto; color: var(--copper); }
 .vx-mi .vx-mi-sub { margin-left: auto; }
 .vx-msep { height: var(--px); margin: 6px 4px; background: var(--line); }
-.vx-mlabel { padding: 8px 10px 4px; color: var(--fg-3); font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.vx-mlabel { padding: 8px 10px 4px; color: var(--fg-3); font-size: calc(12px * var(--tz)); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
 /* Scrollbereich (MenuScroll): höchstens 320 px bzw. was unter dem Auslöser Platz hat, abzüglich Kopf und Fuß */
 .vx-mscroll { max-height: min(320px, calc(var(--radix-dropdown-menu-content-available-height, 400px) - 80px)); overflow-y: auto; scrollbar-gutter: stable; }
 /* Leiser Hinweis (MenuNote) */
-.vx-mnote { padding: 6px 10px; color: var(--fg-3); font-size: 12.5px; }
+.vx-mnote { padding: 6px 10px; color: var(--fg-3); font-size: calc(13px * var(--tz)); }
 
 /* ---------- Dialog: Scrim, Platte mit Kerbe 2, Kopf/Körper/Fuß ---------- */
 .vx-scrim { position: fixed; inset: 0; z-index: 64; background: rgba(3,5,10,.72); }
@@ -66,11 +66,11 @@
 .vx-dlg-h { display: flex; align-items: center; gap: 12px; padding: 18px 16px 12px 24px; flex: none; }
 .vx-dlg-ht { flex: 1; min-width: 0; }
 .vx-dlg-h h2 { font: 800 var(--hd-dialog)/1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; }
-.vx-dlg .vx-dlg-sub { color: var(--fg-2); font-size: 13px; margin-top: 6px; font-weight: 400; }
+.vx-dlg .vx-dlg-sub { color: var(--fg-2); font-size: calc(13px * var(--tz)); margin-top: 6px; font-weight: 400; }
 .vx-dlg-b { padding: 4px 24px 20px; overflow-y: auto; min-height: 0; flex: 1; scrollbar-gutter: stable; }
 /* Trennlinie endet innen am Bevel, nicht über dem Rahmen */
 .vx-dlg-f { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 14px 24px 20px; flex: none; background: linear-gradient(var(--line) 0 0) 50% 0 / calc(100% - var(--u2) * 2) var(--px) no-repeat; }
-.vx-dlg-left { margin-right: auto; color: var(--fg-3); font-size: 12.5px; }
+.vx-dlg-left { margin-right: auto; color: var(--fg-3); font-size: calc(13px * var(--tz)); }
 .vx-dlg p { color: var(--fg-2); max-width: 60ch; }
 
 /* ---------- Seitenpanel rechts (nicht modal) ---------- */
@@ -82,7 +82,7 @@
 .vx-sheet-ht { flex: 1; min-width: 0; }
 /* 24 px: schmales Panel (460), eine Stufe unter dem Dialogtitel */
 .vx-sheet-h h2 { font: 800 24px/1.05 var(--f-display); text-transform: uppercase; }
-.vx-sheet-sub { color: var(--fg-2); font-size: 12.5px; margin-top: 4px; }
+.vx-sheet-sub { color: var(--fg-2); font-size: calc(13px * var(--tz)); margin-top: 4px; }
 .vx-sheet-t { padding: 0 20px 12px; display: flex; flex-direction: column; gap: 10px; flex: none; }
 .vx-sheet-b { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 12px 20px; scrollbar-gutter: stable; }
 

@@ -1,14 +1,19 @@
 mod account_commands;
 mod commands;
 mod content_commands;
+mod pack_commands;
+mod pack_open;
 mod screenshot_commands;
 mod skin_commands;
 pub mod error;
 pub mod models;
 pub mod services;
 mod state;
+mod storage_commands;
 mod support_commands;
 mod world_commands;
+
+use std::path::Path;
 
 use tauri::{Emitter, Manager};
 use tracing_subscriber::EnvFilter;
@@ -21,7 +26,10 @@ pub fn run() {
 
     tauri::Builder::default()
         // Zuerst: ein zweiter Prozess würde dieselben JSON-Stores schreiben.
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| focus_main_window(app)))
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            pack_open::announce_args(app, &args, Path::new(&cwd));
+            focus_main_window(app);
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -30,6 +38,7 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             tracing::info!(?data_dir, "lade Daten");
             app.manage(state::AppState::load(&data_dir)?);
+            app.manage(pack_open::OpenedPack::from_process_args());
             spawn_startup_maintenance(app.handle().clone());
             Ok(())
         })
@@ -39,6 +48,8 @@ pub fn run() {
             commands::create_instance,
             commands::update_instance,
             commands::instance_set_group,
+            commands::instance_set_icon,
+            commands::instance_set_scene,
             commands::delete_instance,
             commands::versions_list,
             commands::instance_install,
@@ -62,6 +73,7 @@ pub fn run() {
             content_commands::modrinth_install_mod,
             content_commands::modrinth_install_pack,
             content_commands::modrinth_import_pack,
+            content_commands::curseforge_import_pack,
             content_commands::provider_search,
             content_commands::provider_project,
             content_commands::provider_versions,
@@ -71,20 +83,41 @@ pub fn run() {
             content_commands::pack_install_cancel,
             content_commands::modrinth_check_updates,
             content_commands::modrinth_update_mods,
+            content_commands::modrinth_switch_version,
+            content_commands::instance_content_analysis,
+            content_commands::instance_pack_selection,
+            content_commands::instance_set_resource_packs,
+            content_commands::instance_set_shader_pack,
             content_commands::modrinth_identify,
             content_commands::instance_check_files,
             content_commands::instance_add_files,
             content_commands::template_save,
             content_commands::template_list,
             content_commands::template_delete,
+            content_commands::template_export,
+            content_commands::template_import,
             content_commands::template_create_instance,
             content_commands::instance_duplicate,
             content_commands::instance_export_entries,
+            content_commands::instance_export_summary,
+            content_commands::instance_export_targets,
             content_commands::instance_export,
+            pack_open::pack_open_take,
             content_commands::import_detect,
             content_commands::instance_import,
+            pack_commands::pack_changelog,
+            pack_commands::pack_update,
+            pack_commands::instance_migrate_check,
+            pack_commands::instance_migrate,
+            pack_commands::instance_duplicate_migrate,
             support_commands::log_share,
             support_commands::debug_info,
+            support_commands::log_sessions,
+            support_commands::log_session_read,
+            storage_commands::storage_overview,
+            storage_commands::storage_clear_cache,
+            storage_commands::storage_open_dir,
+            storage_commands::java_detect,
             skin_commands::skin_profile,
             skin_commands::skin_library,
             skin_commands::skin_texture,
@@ -101,6 +134,8 @@ pub fn run() {
             world_commands::world_restore,
             world_commands::world_backup_delete,
             world_commands::world_delete,
+            world_commands::world_import,
+            world_commands::world_backups_export,
             world_commands::world_quick_play_supported,
             world_commands::datapack_list,
             world_commands::datapack_add,
@@ -109,15 +144,33 @@ pub fn run() {
             world_commands::server_list,
             world_commands::server_save,
             world_commands::server_remove,
+            world_commands::server_ping,
             screenshot_commands::screenshot_list,
             screenshot_commands::screenshot_delete,
+            screenshot_commands::screenshot_read,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(handle_run_event);
 }
 
-/// Aufräumen im Hintergrund nach dem Start: Reste unterbrochener Weltvorgänge entfernen, dann bei alten
-/// Pack-Instanzen Inhalte im Ordner nachtragen, die nicht in der Instanz stehen.
+/// macOS meldet geöffnete Dateien (Doppelklick, „Öffnen mit“) als Ereignis statt in der Kommandozeile.
+#[cfg(target_os = "macos")]
+fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
+    let tauri::RunEvent::Opened { urls } = event else {
+        return;
+    };
+    let pack = urls.iter().filter_map(|url| url.to_file_path().ok()).find(|path| pack_open::is_pack_file(path));
+    if let Some(path) = pack {
+        pack_open::announce(app, path);
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn handle_run_event(_: &tauri::AppHandle, _: tauri::RunEvent) {}
+
+/// Aufräumen im Hintergrund nach dem Start: Reste unterbrochener Weltvorgänge entfernen, Dateien eines abgestürzten
+/// Pack-Updates zurückholen, dann bei alten Pack-Instanzen Inhalte im Ordner nachtragen, die nicht in der Instanz stehen.
 fn spawn_startup_maintenance(handle: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         let state = handle.state::<state::AppState>();
@@ -125,6 +178,11 @@ fn spawn_startup_maintenance(handle: tauri::AppHandle) {
             Ok(0) => {}
             Ok(removed) => tracing::info!(removed, "Reste unterbrochener Weltvorgänge entfernt"),
             Err(err) => tracing::warn!(%err, "Aufräumen der Sicherungsordner fehlgeschlagen"),
+        }
+        match services::pack_update::recover_interrupted(&state).await {
+            Ok(0) => {}
+            Ok(recovered) => tracing::info!(recovered, "Dateien unterbrochener Pack-Updates zurückgeholt"),
+            Err(err) => tracing::warn!(%err, "Zurückholen unterbrochener Pack-Updates fehlgeschlagen"),
         }
         match services::content::adopt_untracked(&state).await {
             Ok(0) => {}

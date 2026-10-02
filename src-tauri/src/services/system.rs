@@ -96,6 +96,7 @@ mod unix {
 
 #[cfg(target_os = "linux")]
 mod linux {
+    use crate::coded;
     use crate::error::{AppError, AppResult};
 
     /// `/proc/meminfo` zählt in KiB.
@@ -104,7 +105,7 @@ mod linux {
     /// Physischer Arbeitsspeicher in MiB (Grundlage für RAM-Vorgabe und Slider-Obergrenze).
     pub fn total_memory_mb() -> AppResult<u64> {
         let meminfo = std::fs::read_to_string("/proc/meminfo")?;
-        let kib = super::meminfo_total_kib(&meminfo).ok_or_else(|| AppError::invalid("Der Arbeitsspeicher ließ sich nicht ermitteln."))?;
+        let kib = super::meminfo_total_kib(&meminfo).ok_or_else(|| AppError::invalid(coded!("errors.app.memoryUnknown")))?;
         Ok(kib / KIB_PER_MIB)
     }
 

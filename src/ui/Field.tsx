@@ -1,4 +1,4 @@
-import { createContext, useContext, useId, type ComponentProps, type ReactNode } from "react";
+import { createContext, useContext, useId, type ComponentProps, type ReactNode, type Ref } from "react";
 import { Select as S } from "radix-ui";
 import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
@@ -35,10 +35,12 @@ function useFieldProps<P extends FieldA11y>({ id, "aria-describedby": describedB
  * Formularabschnitt mit Überschrift (20 px, Versalien) und Linie unten (nicht beim letzten).
  * Container für das Zeilenraster: unter 1100 px Breite rutscht die Hilfe unter das Steuerelement.
  */
-export function FormSection({ title, srOnlyTitle, level = 2, className, children }: { title: string; srOnlyTitle?: boolean; level?: 2 | 3; className?: string; children: ReactNode }) {
+export function FormSection({ title, srOnlyTitle, level = 2, className, ref, children }: {
+  title: string; srOnlyTitle?: boolean; level?: 2 | 3; className?: string; ref?: Ref<HTMLElement>; children: ReactNode;
+}) {
   const H = level === 3 ? "h3" : "h2";
   return (
-    <section className={cn("vx-fsec", className)}>
+    <section ref={ref} className={cn("vx-fsec", className)}>
       <H className={srOnlyTitle ? "sr" : "vx-fsec-h"}>{title}</H>
       {children}
     </section>
@@ -56,15 +58,14 @@ export function FormRow({ label, hint, htmlFor, group, aside, wide, children }: 
 }) {
   const id = useId();
   const desc = cn(hint && `${id}-h`, aside && `${id}-a`) || undefined;
-  const lab = (
-    <>
-      <span id={`${id}-l`}>{label}</span>
-      {hint && <small id={`${id}-h`}>{hint}</small>}
-    </>
-  );
+  const name = <span id={`${id}-l`}>{label}</span>;
   return (
     <div className="vx-frow">
-      {htmlFor ? <label htmlFor={htmlFor} className="vx-fl">{lab}</label> : <div className="vx-fl">{lab}</div>}
+      {/* Der Hinweis steht neben dem Label, nicht darin: sonst gehörte er zum Namen der Eingabe statt zu ihrer Beschreibung. */}
+      <div className="vx-fl">
+        {htmlFor ? <label htmlFor={htmlFor}>{name}</label> : name}
+        {hint && <small id={`${id}-h`}>{hint}</small>}
+      </div>
       <div className="vx-fc" data-wide={flag(wide)} role={group} aria-labelledby={group ? `${id}-l` : undefined} aria-describedby={group ? desc : undefined}>
         <FieldContext value={{ describedBy: htmlFor ? desc : undefined }}>{children}</FieldContext>
       </div>
@@ -117,7 +118,7 @@ type HintTone = Extract<Tone, "neutral" | "warn" | "bad"> | "ok";
 const HINT_ICON: Record<HintTone, IconName | undefined> = { neutral: undefined, warn: "warn", bad: "warn", ok: "check" };
 
 /**
- * Kurzer Hinweis unter/neben einem Steuerelement (12,5 px). Warnung und Fehler immer mit Symbol (nie nur Farbe).
+ * Kurzer Hinweis unter/neben einem Steuerelement (13 px). Warnung und Fehler immer mit Symbol (nie nur Farbe).
  * `live`: wird angesagt, wenn er erscheint oder sich ändert (Fehler als alert, sonst status).
  */
 export function Hint({ tone = "neutral", icon, live, id, className, children }: { tone?: HintTone; icon?: IconName | false; live?: boolean; id?: string; className?: string; children: ReactNode }) {
@@ -206,7 +207,7 @@ export function Select({ value, onChange, options, label, size = "m", className,
   // Radix erlaubt keine leeren Werte: „“ gilt als „nichts gewählt“.
   const items = options.filter((o) => o.value !== "");
   return (
-    <S.Root value={value || undefined} onValueChange={onChange} disabled={disabled || !items.length}>
+    <S.Root value={value} onValueChange={onChange} disabled={disabled || !items.length}>
       {/* Name: ariaLabel, sonst die sichtbare Beschriftung (der Wert gehört nicht in den Namen) */}
       <S.Trigger className={cn("vx-select fx", className)} data-size={size} aria-label={ariaLabel ?? label} {...f}>
         {label && <span className="vx-sel-lab">{label}</span>}

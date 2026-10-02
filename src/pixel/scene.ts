@@ -9,7 +9,7 @@ import { buildScene, type Scene } from "./sceneBuilder";
 import { BIOMES, sunFor, type Biome, type SceneMode, type SunAnchor } from "./sceneConfig";
 import { PX, snap } from "./unit";
 
-export { BIOMES, BIOME_KEYS, sunFor, type Biome, type SceneMode, type SunAnchor } from "./sceneConfig";
+export { BIOMES, BIOME_KEYS, isBiome, sunFor, type Biome, type SceneMode, type SunAnchor } from "./sceneConfig";
 
 /** Parallax folgt dem Zeiger je Takt um diesen Anteil des Abstands. */
 const POINTER_EASE = 0.35;

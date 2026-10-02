@@ -30,7 +30,7 @@ export function BulkBar() {
         size="s"
         icon="up"
         disabled={model.locked || !updatable.length}
-        onClick={() => model.runUpdates(updatable)}
+        onClick={() => model.askUpdates(updatable)}
       >
         {t("detail.content.updateAction")}
       </Button>

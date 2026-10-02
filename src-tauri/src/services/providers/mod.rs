@@ -18,6 +18,7 @@ pub use search::{ProjectType, SearchQuery, SortIndex};
 pub use source::Source;
 
 use crate::{
+    coded,
     error::{AppError, AppResult},
     models::{Instance, ModpackOrigin},
     services::{
@@ -30,6 +31,7 @@ use crate::{
     state::AppState,
 };
 use serde::de::DeserializeOwned;
+use std::path::Path;
 
 /// Einschränkung der Versionsliste eines Projekts auf Minecraft-Version und Loader.
 #[derive(Debug, Default)]
@@ -48,7 +50,7 @@ pub struct PackRequest {
 
 impl PackRequest {
     /// Woher die neue Instanz stammt; CurseForge kennt die Nummern, die anderen Anbieter ihre Kennungen.
-    fn origin(&self) -> AppResult<ModpackOrigin> {
+    pub(crate) fn origin(&self) -> AppResult<ModpackOrigin> {
         match self.source {
             Source::CurseForge => Ok(ModpackOrigin::CurseForge {
                 project_id: curseforge::parse_cf_id(&self.project_id)?,
@@ -66,7 +68,7 @@ impl PackRequest {
 /// Sucht im Katalog des Anbieters. Datapacks führt keiner von ihnen.
 pub async fn search(client: &reqwest::Client, source: Source, request: &SearchQuery) -> AppResult<SearchResponse> {
     if request.project_type == ProjectType::Datapack {
-        return Err(AppError::invalid("Ungültige Suche"));
+        return Err(AppError::invalid(coded!("errors.providers.invalidSearch")));
     }
     match source {
         Source::Ftb => ftb::search(client, request).await,
@@ -111,7 +113,22 @@ pub async fn install_pack(
     Ok((instance, blocked))
 }
 
-async fn plan_pack(
+/// Importiert ein CurseForge-Modpack-Zip von der Platte als neue Instanz; dazu die Dateien, die CurseForge nur über
+/// die Webseite ausliefert.
+pub async fn import_curseforge_zip(
+    state: &AppState,
+    path: &Path,
+    name: &str,
+    progress: ProgressFn<'_>,
+) -> AppResult<(Instance, Vec<Blocked>)> {
+    progress(Phase::Resolve, 0, 1);
+    let (pack, blocked) = curseforge::plan_local_pack(&modrinth::client()?, path, name).await?;
+    let instance = content::import_plan(state, pack, None, progress).await?;
+    Ok((instance, blocked))
+}
+
+/// Plan des Packs, das `request` nennt, dazu die Dateien, die CurseForge nur über die Webseite ausliefert.
+pub(crate) async fn plan_pack(
     client: &reqwest::Client,
     dirs: &Dirs,
     request: &PackRequest,

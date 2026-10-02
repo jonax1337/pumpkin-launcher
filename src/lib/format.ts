@@ -127,3 +127,20 @@ export const maxMemoryMb = (totalMb: number) => Math.max(MEMORY_MIN_MB, floorToS
 
 /** Mehr als drei Viertel des PCs: Das System wird knapp. */
 export const memoryTooHigh = (mb: number, totalMb: number) => mb > totalMb * MEMORY_WARN_SHARE;
+
+/** Ab so vielen Mods brauchen Instanzen oft mehr als den Standard. */
+const MANY_MODS = 150;
+/** Bis so viele Mods nutzt ein großer Heap nichts mehr. */
+const FEW_MODS = 30;
+/** Darüber bringt Heap bei wenigen Mods nichts. */
+const FEW_MODS_USEFUL_GB = 8;
+
+/**
+ * Einordnung der Wahl für eine Instanz: `manyMods` (große Packs brauchen oft 8 GB und mehr) oder `fewMods`
+ * (mit wenigen Mods bringt mehr als 8 GB selten etwas); sonst keine. Ohne Mod-Anzahl (Standard für alle) kein Urteil.
+ */
+export function memoryAdvice(gb: number, modCount: number | undefined): "manyMods" | "fewMods" | null {
+  if (modCount === undefined) return null;
+  if (modCount > MANY_MODS) return "manyMods";
+  return modCount <= FEW_MODS && gb > FEW_MODS_USEFUL_GB ? "fewMods" : null;
+}

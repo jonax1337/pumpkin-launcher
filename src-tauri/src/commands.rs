@@ -1,14 +1,15 @@
 //! Tauri-Commands. Dünne Schicht über `AppState`; Argumentnamen kommen im Frontend als camelCase an.
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
+use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::{
-    now_ms, require_name, Account, GameWindow, Instance, LaunchOptions, Mod, ModLoader, NewInstance, QuickPlay,
-    NO_NAME_LIMIT,
+    now_ms, require_name, Account, GameWindow, Instance, InstanceIcon, InstanceScene, LaunchOptions, Mod, ModLoader,
+    NewInstance, QuickPlay, MAX_NOTES_LEN, NO_NAME_LIMIT,
 };
 use crate::services::install::{self, InstallProgress, InstallStep, OnProgress, INSTALL_PROGRESS_EVENT};
 use crate::services::launch::{self, LaunchSpec, LogStream, Running, Session, EXIT_EVENT, LOG_EVENT};
@@ -16,23 +17,41 @@ use crate::services::loader::{self, LoaderVersion};
 use crate::services::mojang::{VersionEntry, VersionManifest, MANIFEST_URL};
 use crate::services::progress::emit;
 use crate::services::rules::Env;
-use crate::services::{auth, download, gamelog, java, mods, remove_logged, system, worlds};
+use crate::services::launch_args::ArgList;
+use crate::services::{auth, crashreport, download, gamelog, java, launch_args, mods, pack_update, remove_logged, sessionlog, system, worlds};
 use crate::state::AppState;
 
 pub(crate) fn require_instance_name(name: &str) -> AppResult<()> {
-    require_name(name, NO_NAME_LIMIT, "Name darf nicht leer sein").map(drop)
+    require_name(name, NO_NAME_LIMIT, coded!("errors.app.instanceNameEmpty")).map(drop)
 }
 
-/// Eigene Startoptionen prüfen. Ein unveränderter Java-Pfad wird nicht erneut geprüft,
+/// Eigene Startoptionen und Notizen prüfen. Ein unveränderter Java-Pfad wird nicht erneut geprüft,
 /// damit andere Änderungen nicht an einem inzwischen entfernten Java scheitern.
 fn require_launch_settings(instance: &Instance, old: &Instance) -> AppResult<()> {
-    if matches!(instance.window, GameWindow::Size { width: 0, .. } | GameWindow::Size { height: 0, .. }) {
-        return Err(AppError::invalid("Breite und Höhe des Fensters müssen größer als 0 sein"));
+    require_window(instance.window)?;
+    launch_args::require_args(&instance.jvm_args, ArgList::Jvm)?;
+    launch_args::require_args(&instance.game_args, ArgList::Game)?;
+    if instance.notes.chars().count() > MAX_NOTES_LEN {
+        return Err(AppError::invalid(coded!("errors.app.notesTooLong", max = MAX_NOTES_LEN)));
     }
     match &instance.java_path {
         Some(path) if instance.java_path != old.java_path => java::custom_java(path.trim(), java::JavaSetting::Instance).map(drop),
         _ => Ok(()),
     }
+}
+
+fn require_window(window: GameWindow) -> AppResult<()> {
+    if matches!(window, GameWindow::Size { width: 0, .. } | GameWindow::Size { height: 0, .. }) {
+        return Err(AppError::invalid(coded!("errors.app.windowSizeZero")));
+    }
+    Ok(())
+}
+
+/// Die Standards des Launchers gelten für jede Instanz ohne eigene Werte; sie kommen aus den Einstellungen des
+/// Frontends und werden wie die der Instanz geprüft, bevor sie in die Startargumente gehen.
+fn require_launcher_defaults(options: &LaunchOptions) -> AppResult<()> {
+    launch_args::require_args(&options.default_jvm_args, ArgList::Jvm)?;
+    options.default_window.map_or(Ok(()), require_window)
 }
 
 #[tauri::command]
@@ -64,13 +83,16 @@ pub fn update_instance(state: State<'_, AppState>, instance: Instance) -> AppRes
     let desired = with_removed_disabled(&instance.mods, &old.mods);
     let id = instance.id.clone();
     // Spielzeit und letzten Start (samt Quick-Play-Ziel) führt nur das Backend: ein veralteter Stand im Frontend darf
-    // sie nicht zurücksetzen, auch nicht, wenn das Spielende sie gerade erst speichert.
+    // sie nicht zurücksetzen, auch nicht, wenn das Spielende sie gerade erst speichert. Icon und Szene ändern
+    // `instance_set_icon` und `instance_set_scene`.
     let commit = |_| {
         state.instances.modify(&id, |current| {
             *current = Instance {
                 playtime_secs: current.playtime_secs,
                 last_played_at: current.last_played_at,
                 last_quick_play: current.last_quick_play.take(),
+                icon: current.icon.take(),
+                scene: current.scene.take(),
                 ..instance
             }
         })
@@ -99,6 +121,20 @@ fn normalized_group(group: Option<String>) -> Option<String> {
 #[tauri::command]
 pub fn instance_set_group(state: State<'_, AppState>, instance_id: String, group: Option<String>) -> AppResult<Instance> {
     state.instances.modify(&instance_id, |i| i.group = normalized_group(group))
+}
+
+/// Eigenes Icon setzen; `None` stellt „automatisch“ wieder her.
+#[tauri::command]
+pub fn instance_set_icon(state: State<'_, AppState>, instance_id: String, icon: Option<InstanceIcon>) -> AppResult<Instance> {
+    let icon = icon.map(InstanceIcon::validated).transpose()?;
+    state.instances.modify(&instance_id, |i| i.icon = icon)
+}
+
+/// Szene setzen; `None` stellt die aus der ID abgeleitete wieder her.
+#[tauri::command]
+pub fn instance_set_scene(state: State<'_, AppState>, instance_id: String, scene: Option<InstanceScene>) -> AppResult<Instance> {
+    let scene = scene.map(InstanceScene::validated).transpose()?;
+    state.instances.modify(&instance_id, |i| i.scene = scene)
 }
 
 #[tauri::command]
@@ -130,6 +166,8 @@ struct ExitPayload {
     /// Absolute Pfade (für `openPath`), falls vorhanden.
     crash_report: Option<String>,
     log_file: Option<String>,
+    /// Mods, die laut Absturzbericht als Ursache in Frage kommen (wahrscheinlichster zuerst).
+    suspected_mods: Vec<String>,
 }
 
 /// Loader-Versionen zu einer Minecraft-Version, neueste zuerst (Vanilla: leer).
@@ -206,6 +244,7 @@ fn provide_mods(state: &AppState, instance: &Instance, on_progress: OnProgress<'
 pub async fn instance_launch(app: AppHandle, state: State<'_, AppState>, instance_id: String, options: LaunchOptions) -> AppResult<u32> {
     let _operation = state.begin_instance_operation(&instance_id)?;
     let instance = state.instances.get(&instance_id)?;
+    worlds::backup_before_launch(&state, &instance, &options).await;
     let prepared = prepare_launch(&state, &instance, &options).await?;
     let pid = state.spawn_running(&instance_id, || {
         let game = spawn_game(&app, &instance_id, &prepared)?;
@@ -226,8 +265,11 @@ struct PreparedLaunch {
     player: String,
 }
 
-/// Prüft das Quick-Play-Ziel, bringt die Mods auf Stand, meldet das Konto an und baut die Startargumente.
+/// Prüft die Standards des Launchers, holt den Stand vor einem unterbrochenen Pack-Update zurück, prüft das
+/// Quick-Play-Ziel, bringt die Mods auf Stand, meldet das Konto an und baut die Startargumente.
 async fn prepare_launch(state: &AppState, instance: &Instance, options: &LaunchOptions) -> AppResult<PreparedLaunch> {
+    require_launcher_defaults(options)?;
+    pack_update::recover_instance(&state.dirs, instance)?;
     if let Some(target) = &options.quick_play {
         worlds::require_target(&state.dirs, &instance.id, target)?;
     }
@@ -241,8 +283,9 @@ async fn prepare_launch(state: &AppState, instance: &Instance, options: &LaunchO
         instance_id: &instance.id,
         account: &account,
         memory_mb: instance.memory_mb.or(options.default_memory_mb).unwrap_or(launch::DEFAULT_MEMORY_MB),
-        extra_jvm_args: &instance.jvm_args,
-        window: instance.window,
+        min_memory_mb: instance.min_memory_mb.or(options.default_min_memory_mb),
+        extra_jvm_args: launch::effective_jvm_args(&instance.jvm_args, &options.default_jvm_args),
+        window: launch::effective_window(instance.window, options.default_window),
         extra_game_args: &instance.game_args,
         quick_play: options.quick_play.as_ref(),
         session: session.as_ref().map(Session::from),
@@ -304,11 +347,27 @@ fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, code:
     let crashed = code != Some(0) && !stopped;
     let game_dir = state.dirs.game_dir(&instance_id);
     let text = |p: PathBuf| p.to_string_lossy().into_owned();
-    let crash_report = gamelog::crash_report(&game_dir, started).map(text);
+    let report = gamelog::crash_report(&game_dir, started);
+    let suspected_mods = report.as_deref().map(|path| suspects_of(&state, &instance_id, path)).unwrap_or_default();
+    let crash_report = report.map(text);
     let log_file = Some(state.dirs.latest_log(&instance_id)).filter(|p| p.is_file()).map(text);
     record_playtime(&state, &instance_id, started);
+    archive_log(&state, &instance_id, started);
     tracing::info!(instance = %instance_id, ?code, crashed, "Spiel beendet");
-    emit(app, EXIT_EVENT, ExitPayload { instance_id, code, crashed, crash_report, log_file });
+    emit(app, EXIT_EVENT, ExitPayload { instance_id, code, crashed, crash_report, log_file, suspected_mods });
+}
+
+/// Verdächtige Mods aus dem Absturzbericht, abgeglichen mit den Mods der Instanz.
+fn suspects_of(state: &AppState, instance_id: &str, report: &Path) -> Vec<String> {
+    let mods = state.instances.get(instance_id).map(|instance| instance.mods).unwrap_or_default();
+    crashreport::suspects_in_file(report, &mods)
+}
+
+/// Sichert das Protokoll der Sitzung, damit es den nächsten Start überlebt; ein Fehler wird nur geloggt.
+fn archive_log(state: &AppState, instance_id: &str, started: SystemTime) {
+    if let Err(err) = sessionlog::archive(&state.dirs, instance_id, started) {
+        tracing::warn!(instance = %instance_id, %err, "Protokoll der Sitzung nicht gesichert");
+    }
 }
 
 /// Spielzeit der Sitzung seit `started` speichern; unplausible Dauern und Fehler nur loggen,
@@ -329,7 +388,7 @@ fn record_playtime(state: &AppState, instance_id: &str, started: SystemTime) {
 pub fn instance_kill(state: State<'_, AppState>, instance_id: String) -> AppResult<()> {
     let game = state
         .take_running(&instance_id)
-        .ok_or_else(|| AppError::NotFound { kind: "Laufendes Spiel", id: instance_id.clone() })?;
+        .ok_or_else(|| AppError::NotFound(coded!("errors.app.notFound.runningGame", id = instance_id).into()))?;
     game.kill();
     tracing::info!(instance = %instance_id, "Spiel wird beendet");
     Ok(())
@@ -397,6 +456,37 @@ mod tests {
         assert_eq!(normalized_group(Some("  Technik ".into())), Some("Technik".into()));
         assert_eq!(normalized_group(Some("   ".into())), None);
         assert_eq!(normalized_group(None), None);
+    }
+
+    #[test]
+    fn instance_updates_with_malformed_arguments_or_overlong_notes_are_refused() {
+        let base = Instance::from_new(NewInstance { name: "Start".into(), minecraft_version: "1.21.4".into(), loader: ModLoader::Vanilla, loader_version: None });
+        let refused = |change: &dyn Fn(&mut Instance)| {
+            let mut instance = base.clone();
+            change(&mut instance);
+            require_launch_settings(&instance, &base).is_err()
+        };
+        assert!(!refused(&|i| i.jvm_args = vec!["-Xss2M".into()]));
+        assert!(refused(&|i| i.jvm_args = vec!["-Dx=1\n-Dy=2".into()]));
+        assert!(refused(&|i| i.game_args = vec!["".into()]));
+        assert!(refused(&|i| i.jvm_args = vec!["-Xss2M".into(); launch_args::MAX_ARGS + 1]));
+        assert!(!refused(&|i| i.notes = "ä".repeat(MAX_NOTES_LEN)));
+        assert!(refused(&|i| i.notes = "ä".repeat(MAX_NOTES_LEN + 1)));
+    }
+
+    #[test]
+    fn launcher_defaults_with_malformed_arguments_or_an_empty_window_are_refused() {
+        let options = |default_jvm_args: Vec<String>, default_window| LaunchOptions {
+            default_jvm_args,
+            default_window,
+            ..serde_json::from_str(r#"{"username":"Alex"}"#).unwrap()
+        };
+        assert!(require_launcher_defaults(&options(vec!["-Xss2M".into()], Some(GameWindow::Size { width: 854, height: 480 }))).is_ok());
+        assert!(require_launcher_defaults(&options(vec![], None)).is_ok());
+        assert!(require_launcher_defaults(&options(vec!["".into()], None)).is_err());
+        assert!(require_launcher_defaults(&options(vec!["-Dx=1
+-Dy=2".into()], None)).is_err());
+        assert!(require_launcher_defaults(&options(vec![], Some(GameWindow::Size { width: 0, height: 480 }))).is_err());
     }
 
     #[test]

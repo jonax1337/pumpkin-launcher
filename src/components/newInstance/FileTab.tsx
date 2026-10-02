@@ -4,11 +4,15 @@ import { Button, Empty, Field, Glyph, Icon, IconButton, Panel, RowTitle, TextFie
 import { api } from "@/lib/api";
 import { TYPE_ONE_KEYS } from "@/lib/catalog";
 import { fileName } from "@/lib/format";
-import { MRPACK_EXT } from "@/lib/mods";
+import { CURSEFORGE_PACK_EXT, isMrpack, MRPACK_EXT } from "@/lib/mods";
 import { cn } from "@/lib/utils";
 import type { TabContext, TabModel } from "./tab";
 
-const packName = (path: string) => fileName(path).replace(MRPACK_EXT, "");
+const packName = (path: string) => fileName(path).replace(MRPACK_EXT, "").replace(CURSEFORGE_PACK_EXT, "");
+
+/** `.mrpack` liest das Backend als Modrinth-Pack, eine `.zip` als CurseForge-Pack (mit `manifest.json`). */
+const importPack = (path: string, name: string, operationId: string) =>
+  isMrpack(path) ? api.modrinthImportPack(path, name, operationId) : api.curseforgeImportPack(path, name, operationId);
 
 function FilePane({ path, customName, setPath, setCustomName }: {
   path: string; customName: string; setPath: (path: string) => void; setCustomName: (name: string) => void;
@@ -16,7 +20,7 @@ function FilePane({ path, customName, setPath, setCustomName }: {
   const { t } = useI18n();
 
   async function chooseFile() {
-    const [picked] = await api.pickPaths({ filters: [{ name: t(TYPE_ONE_KEYS.modpack), extensions: ["mrpack"] }] });
+    const [picked] = await api.pickPaths({ filters: [{ name: t(TYPE_ONE_KEYS.modpack), extensions: ["mrpack", "zip"] }] });
     if (picked) setPath(picked);
   }
 
@@ -39,7 +43,7 @@ function FilePane({ path, customName, setPath, setCustomName }: {
       <Panel level="raised" className={cn("mt-3 flex h-14 items-center gap-2.5 pr-2 pl-3", !path && "invisible")}>
         <Glyph name="chest" pal="copper" />
         <div className="min-w-0 flex-1">
-          <RowTitle title={path ? `${packName(path)}.mrpack` : ""} sub={path} />
+          <RowTitle title={path ? fileName(path) : ""} sub={path} />
         </div>
         <IconButton size="s" icon="x" label={t("components.newInstance.removeFile")} disabled={!path} onClick={() => setPath("")} />
       </Panel>
@@ -52,7 +56,7 @@ function FilePane({ path, customName, setPath, setCustomName }: {
   );
 }
 
-/** Reiter „Datei“: eine .mrpack-Datei als Instanz importieren; `initialPath` kommt von einer aufs Fenster gezogenen Datei. */
+/** Reiter „Datei“: ein .mrpack (Modrinth) oder eine .zip (CurseForge) als Instanz importieren; `initialPath` kommt von einer aufs Fenster gezogenen Datei. */
 export function useFileTab(ctx: TabContext, initialPath: string): TabModel {
   const { t } = useI18n();
   const [path, setPath] = useState(initialPath);
@@ -66,7 +70,7 @@ export function useFileTab(ctx: TabContext, initialPath: string): TabModel {
       label: t("components.newInstance.importTask", { name: title }),
       doneLabel: t("hooks.import.instanceTaskDone", { name: title }),
       cancellable: true,
-      task: (operationId) => api.modrinthImportPack(path, title, operationId),
+      task: (operationId) => importPack(path, title, operationId),
       onDone: ctx.onCreated,
     });
   }

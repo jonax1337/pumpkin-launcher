@@ -19,6 +19,8 @@ export const ui = {
   "ui.tasks.emptyBody": "Downloads und Installationen erscheinen hier.",
   "ui.tasks.installing": "{name} wird installiert",
   "ui.tasks.loadingContents": "Inhalte laden",
+  "ui.tasks.queuedSub": "Wartet auf den laufenden Vorgang",
+  "ui.tasks.unqueueAria": "{label} aus der Warteschlange entfernen",
   "ui.job.cancelAria": "{label} abbrechen",
 
   // ---------- Fenster ----------
@@ -48,6 +50,18 @@ export const ui = {
   "ui.memory.label": "Arbeitsspeicher",
   "ui.switch.on": "An",
   "ui.switch.off": "Aus",
+  // ---------- Tastaturkürzel ----------
+  "ui.skipToContent": "Zum Inhalt springen",
+  "ui.shortcut.ctrl": "Strg",
+  "ui.shortcut.title": "Tastaturkürzel",
+  "ui.shortcut.goTo": "Wechseln zu {name}",
+  "ui.shortcut.settings": "Einstellungen öffnen",
+  "ui.shortcut.newInstance": "Neue Instanz",
+  "ui.shortcut.play": "Spielen (Start und Instanz)",
+  "ui.shortcut.search": "Suche der Seite",
+  "ui.shortcut.help": "Diese Übersicht",
+  "ui.shortcut.tabHint": "Mit Tab springst du durch alle Bedienelemente, mit den Pfeiltasten durch Listen und Reiter, Esc schließt Fenster und Menüs.",
+  "ui.shortcut.windowHint": "Das Fenster ordnest du mit Win+Pfeiltasten an; Minimieren, Maximieren und Schließen oben rechts erreichst du mit Tab.",
   // ---------- Szenen (Namen der Biome) ----------
   "ui.biome.forest": "Wald am Abend",
   "ui.biome.nether": "Nether",

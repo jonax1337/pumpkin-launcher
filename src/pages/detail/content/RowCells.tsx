@@ -1,5 +1,5 @@
 import { useI18n } from "@/i18n";
-import { Button, IconButton, JobProgress, Menu, Switch, Tip } from "@/ui";
+import { Button, Chip, IconButton, JobProgress, Menu, Switch, Tip } from "@/ui";
 import type { Mod } from "@/lib/types";
 import { RP_HINT_KEY } from "./constants";
 import { useContentModel } from "./ContentModel";
@@ -10,8 +10,11 @@ export type CellLayout = "list" | "tile";
 const UPDATE_BUTTON_WIDTH = 96;
 const TILE_PROGRESS_WIDTH = 112;
 
-/** Update je Inhalt: Fortschritt beim Aktualisieren, sonst Knopf mit fester Breite (Version mit Auslassung, voller Text im Tooltip). */
-export function UpdateCell({ mod, layout }: { mod: Mod; layout: CellLayout }) {
+/**
+ * Update je Inhalt: Fortschritt beim Aktualisieren, sonst Knopf mit fester Breite (Version mit Auslassung, voller Text im Tooltip).
+ * `hideNoSource` lässt den Hinweis „Keine Update-Quelle“ weg, damit ein Hinweis der Kachel die Zeile ganz bekommt.
+ */
+export function UpdateCell({ mod, layout, hideNoSource }: { mod: Mod; layout: CellLayout; hideNoSource?: boolean }) {
   const { t } = useI18n();
   const model = useContentModel();
   const tile = layout === "tile";
@@ -26,7 +29,7 @@ export function UpdateCell({ mod, layout }: { mod: Mod; layout: CellLayout }) {
     );
   }
   const update = model.updateFor.get(mod.id);
-  if (!update) return null;
+  if (!update) return <NoUpdateStatus mod={mod} hideNoSource={hideNoSource} />;
   const title = model.titleOf(mod);
   return (
     <Tip label={t("detail.content.updateFromTo", { name: title, from: mod.version, to: update.versionNumber })}>
@@ -44,24 +47,64 @@ export function UpdateCell({ mod, layout }: { mod: Mod; layout: CellLayout }) {
   );
 }
 
-/** An/Aus: Schalter mit sichtbarem „Aus“; Ressourcenpakete haben keinen (das Spiel schaltet sie ein). */
-export function EnabledCell({ mod, layout }: { mod: Mod; layout: CellLayout }) {
+/** Wenn es kein Update gibt, sagt die Zelle warum: festgehalten oder keine Quelle, bei der der Launcher Updates prüfen kann. */
+function NoUpdateStatus({ mod, hideNoSource }: { mod: Mod; hideNoSource?: boolean }) {
   const { t } = useI18n();
-  const model = useContentModel();
-  if (mod.kind === "resourcepack") {
+  if (mod.pinned) {
+    return (
+      <Tip label={t("detail.content.pinnedTip", { version: mod.version })}>
+        <span><Chip size="s" dot>{t("detail.content.pinned")}</Chip></span>
+      </Tip>
+    );
+  }
+  if (mod.source.type === "modrinth" || hideNoSource) return null;
+  const tip = mod.source.type === "local" ? "detail.content.noUpdateSourceLocalTip" : "detail.content.noUpdateSourceTip";
+  return (
+    <Tip label={t(tip)}>
+      <span className="text-fg-3 truncate text-[length:calc(13px*var(--tz))]">{t("detail.content.noUpdateSource")}</span>
+    </Tip>
+  );
+}
+
+/** Ressourcenpaket: „Aktiv“ im Spiel (`options.txt`); bis die Auswahl gelesen ist, der Hinweis aufs Spiel. */
+function PackSwitch({ mod }: { mod: Mod }) {
+  const { t } = useI18n();
+  const { packs, titleOf } = useContentModel();
+  if (!packs.available) {
     return (
       <Tip label={t(RP_HINT_KEY)}>
         <span>{t("detail.content.inGame")}<span className="sr"> {t("detail.content.turnOnSr")}</span></span>
       </Tip>
     );
   }
+  return (
+    <Tip label={packs.blocked} describe>
+      <span>
+        <Switch
+          checked={packs.isActive(mod)}
+          disabled={!!packs.blocked || !mod.enabled}
+          onChange={(on) => packs.setActive(mod, on)}
+          label={titleOf(mod)}
+          description={t("detail.packs.activeDescription")}
+          stateText={["", t("ui.switch.off")]}
+        />
+      </span>
+    </Tip>
+  );
+}
+
+/** An/Aus: Schalter mit sichtbarem „Aus“; Ressourcenpakete schaltet man im Spiel ein (`PackSwitch`). */
+export function EnabledCell({ mod, layout }: { mod: Mod; layout: CellLayout }) {
+  const { t } = useI18n();
+  const model = useContentModel();
+  if (mod.kind === "resourcepack") return <PackSwitch mod={mod} />;
   // Kachel: „Aus“ nur im ausgeschalteten Zustand (spart dem Namen Platz); Zeile: Platz bleibt reserviert.
   const stateText: [string, string] | undefined = layout === "tile" && mod.enabled ? undefined : ["", t("ui.switch.off")];
   return (
     <Switch
       checked={mod.enabled}
       onChange={(on) => model.setEnabled([mod.id], on)}
-      label={t("detail.content.enabledLabel", { name: model.titleOf(mod) })}
+      label={model.titleOf(mod)}
       stateText={stateText}
     />
   );

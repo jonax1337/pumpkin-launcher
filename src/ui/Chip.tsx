@@ -37,10 +37,23 @@ export function Chip({ tone, color, dot, size = "m", icon, className, style, chi
 }
 
 /**
- * Zahl in Pixelschrift (Jersey 10) mit fester Stellenbreite: `minDigits` Stellen sind reserviert, damit
- * wechselnde Werte nichts verschieben. Größe 16/18/20/26 px; ohne Angabe bestimmt der Kontext (Chip s: 16, sonst 18).
+ * Chip als Knopf für Filter: gleiche Optik, mit Hover und Fokusring. `pressed` = gewählt (Akzentfarbe, `aria-pressed`);
+ * `icon` steht wie beim Chip vor dem Text (z. B. „x“ zum Entfernen eines gewählten Filters).
  */
-export function Count({ value, size, minDigits, muted, className }: { value: ReactNode; size?: 16 | 18 | 20 | 26; minDigits?: number; muted?: boolean; className?: string }) {
+export function ChipButton({ pressed, size = "m", icon, className, type = "button", children, ...props }: Pick<ChipBase, "icon" | "size"> & { pressed?: boolean } & ComponentProps<"button">) {
+  return (
+    <button type={type} className={cn("vx-chip fx", className)} data-size={size} data-press data-tone={pressed ? "acc" : undefined} data-lead={flag(icon)} aria-pressed={pressed} {...props}>
+      {icon && <Icon name={icon} size="s" />}
+      {children}
+    </button>
+  );
+}
+
+/**
+ * Zahl in Pixelschrift (Jersey 10) mit fester Stellenbreite: `minDigits` Stellen sind reserviert, damit
+ * wechselnde Werte nichts verschieben. Größe 16/18/20/26/32 px; ohne Angabe bestimmt der Kontext (Chip s: 16, sonst 18).
+ */
+export function Count({ value, size, minDigits, muted, className }: { value: ReactNode; size?: 16 | 18 | 20 | 26 | 32; minDigits?: number; muted?: boolean; className?: string }) {
   return (
     <span
       className={cn("vx-count", className)}
@@ -56,10 +69,11 @@ export function Count({ value, size, minDigits, muted, className }: { value: Rea
 /**
  * Reine Infos als Zeile: Text mit Pixelquadrat als Trenner, ohne Rahmen und Hover (Chips sind Status, Knöpfe Aktionen).
  * `onScene`: harter 1-Einheit-Schatten für Text, Trenner und Icons über Szenen.
+ * `wrap`: für viele oder lange Einträge; sie brechen in weitere Zeilen um, statt sich zu überlappen.
  */
-export function Meta({ items, size = "m", onScene, className }: { items: ReactNode[]; size?: "m" | "l"; onScene?: boolean; className?: string }) {
+export function Meta({ items, size = "m", onScene, wrap, className }: { items: ReactNode[]; size?: "m" | "l"; onScene?: boolean; wrap?: boolean; className?: string }) {
   return (
-    <div className={cn("vx-meta", className)} data-size={size} data-scene={flag(onScene)}>
+    <div className={cn("vx-meta", className)} data-size={size} data-scene={flag(onScene)} data-wrap={flag(wrap)}>
       {items.filter(hasContent).map((it, i) => (
         <span key={i} className="vx-meta-i">{it}</span>
       ))}

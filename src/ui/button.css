@@ -7,7 +7,7 @@
   --b-tone: var(--fg); --b-tint: var(--fg);
   position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; flex: none;
   height: var(--b-h); padding: 0 var(--b-pad) 0 var(--b-pl);
-  font-size: var(--b-fs); font-weight: 600; white-space: nowrap; color: var(--fg); text-decoration: none; user-select: none; cursor: pointer;
+  font-size: calc(var(--b-fs) * var(--tz)); font-weight: 600; white-space: nowrap; color: var(--fg); text-decoration: none; user-select: none; cursor: pointer;
 }
 .vx-btn:is([data-size="s"], .vx-btn--s) { --b-h: var(--vx-h-s); --b-pad: 12px; --b-gap: 6px; --b-fs: 13px; --b-ico: var(--vx-ico-s); }
 .vx-btn:is([data-size="l"], .vx-btn--l) { --b-h: var(--vx-h-l); --b-pad: 22px; --b-gap: 10px; --b-fs: 16px; --b-ico: var(--vx-ico-l); }
@@ -116,10 +116,9 @@
 .vx-bar:is(:active, [data-force="press"]) > .vx-bc { translate: 0 var(--px); }
 .vx-tick { position: absolute; left: var(--u3); right: var(--u3); bottom: var(--u2); height: var(--px); background: var(--copper); opacity: 0; }
 .vx-bar[aria-current="page"] > .vx-tick { opacity: 1; }
-/* Beschriftung (Konto): höchstens 124 px, Warnton; mit compactBelow unter 900 px nur der Inhalt */
+/* Beschriftung (Konto): höchstens 124 px, Warnton */
 .vx-bar-lab { max-width: 124px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--fg); }
 .vx-bar[data-tone="warn"] .vx-bar-lab { color: var(--warn); }
-@media (max-width: 900px) { .vx-bar[data-compact="900"] .vx-bar-lab { display: none; } }
 /* Aufgaben (activity): feste Breite, Symbol links und etwas höher (Platz für den Balken).
    Zähler und Balken nur bei Arbeit sichtbar; ihr Platz bleibt, nichts verschiebt sich. */
 .vx-bar[data-activity] { width: 56px; justify-content: flex-start; padding: 0 0 0 6px; }

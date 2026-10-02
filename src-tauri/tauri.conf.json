@@ -24,10 +24,22 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data: blob: https: asset: http://asset.localhost",
+        "font-src": "'self' data:",
+        "connect-src": "ipc: http://ipc.localhost",
+        "object-src": "'none'",
+        "frame-src": "'none'",
+        "base-uri": "'self'",
+        "form-action": "'none'"
+      },
+      "dangerousDisableAssetCspModification": ["style-src"],
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPDATA/instances/*/minecraft/screenshots/**"]
+        "scope": ["$APPDATA/instances/*/minecraft/screenshots/*"]
       }
     }
   },
@@ -42,6 +54,15 @@
       "dmg"
     ],
     "category": "Game",
+    "fileAssociations": [
+      {
+        "ext": ["mrpack"],
+        "name": "Modrinth Modpack",
+        "description": "Modrinth Modpack",
+        "mimeType": "application/x-modrinth-modpack+zip",
+        "role": "Editor"
+      }
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

@@ -9,12 +9,13 @@
 .vx-art { position: absolute; inset: 0; overflow: hidden; clip-path: var(--n1); background: var(--scene-bg, #111827); }
 .vx-art canvas { position: absolute; image-rendering: pixelated; }
 .vx-sthumb { position: relative; display: block; flex: none; width: 44px; height: 44px; }
-.vx-sthumb[data-size="28"] { width: 28px; height: 28px; }
+.vx-sthumb[data-size="28"] { width: 28px; height: 28px; --iu: 2px; }
 
 /* Instanzbild (InstanceIcon): füllt die quadratische Bildfläche der Karte; das Modpack-Icon in voller Auflösung (cover, quadratisch
    also ohne Zuschnitt), die Pixel-Glyphe steht auf einem Verlauf des Bioms (--tile, --tile-hi) mit k Einheiten je Glyphen-Pixel (--k),
    ganzzahlig, damit die Pixel scharf bleiben. */
 .vx-icon { position: absolute; inset: 0; display: block; width: 100%; height: 100%; max-width: none; object-fit: cover; }
+.vx-icon[data-crisp] { image-rendering: pixelated; }
 .vx-icon[data-default] { --k: 1; display: grid; place-items: center; background: linear-gradient(color-mix(in srgb, var(--tile-hi) 40%, var(--tile)), var(--tile)); }
 .vx-icon[data-default] svg { width: calc(var(--iu, 3px) * 10 * var(--k)); height: calc(var(--iu, 3px) * 10 * var(--k)); }
 .vx-card[data-variant="poster"] .vx-icon { --k: 5; }
@@ -43,14 +44,14 @@
 /* Poster: höchstens zwei Zeilen, Platz für zwei bleibt reserviert (Karten einer Reihe gleich hoch); Zeilenhöhe 1.1 und clip,
    damit Umlautpunkte einer abgeschnittenen dritten Zeile nicht in die zweite ragen */
 .vx-card[data-variant="poster"] .vx-card-cap { padding: 9px 2px 0; min-height: calc(9px + 18px * 1.1 * 2 + 2px + 18px); }
-.vx-card[data-variant="poster"] .vx-card-cap b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: clip; font-size: 18px; line-height: 1.1; max-height: calc(18px * 1.1 * 2); overflow-wrap: anywhere; }
-.vx-card[data-variant="poster"] .vx-card-cap span { font-size: 12px; line-height: 18px; margin-top: 2px; }
+.vx-card[data-variant="poster"] .vx-card-cap b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: clip; font-size: calc(18px * var(--tz)); line-height: 1.1; max-height: calc(18px * 1.1 * 2 * var(--tz)); overflow-wrap: anywhere; }
+.vx-card[data-variant="poster"] .vx-card-cap span { font-size: calc(13px * var(--tz)); line-height: calc(18px * var(--tz)); margin-top: 2px; }
 /* Mini: nur der Name, eine Zeile; Zeilenhöhe 1.15 statt 1, sonst schneidet die Auslassung die Umlautpunkte ab */
 .vx-card[data-variant="mini"] .vx-card-cap { padding: 6px 1px 0; height: 24px; }
-.vx-card[data-variant="mini"] .vx-card-cap b { font-size: 15px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vx-card[data-variant="mini"] .vx-card-cap b { font-size: calc(15px * var(--tz)); line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vx-card[data-variant="mini"] .vx-card-cap span { display: none; }
 /* Thumb: Name unter dem Bild */
-.vx-card-t { display: block; min-width: 0; color: var(--fg-2); font-size: 12px; font-weight: 600; line-height: 16px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vx-card-t { display: block; min-width: 0; color: var(--fg-2); font-size: calc(13px * var(--tz)); font-weight: 600; line-height: calc(16px * var(--tz)); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .vx-card-st { position: absolute; z-index: 2; left: 8px; top: 8px; pointer-events: none; }
 
@@ -64,6 +65,13 @@
 .vx-card-mid { left: 50%; top: 50cqw; translate: -50% -50%; }
 .vx-card:is(:hover, :focus-within, [data-force]) :is(.vx-card-mid, .vx-card-tr),
 .vx-card:has(.vx-card-tr [data-state="open"], .vx-card-mid [data-state="open"]) :is(.vx-card-mid, .vx-card-tr) { opacity: 1; visibility: visible; transition: opacity .12s steps(2, end), visibility 0s; }
+/* Ohne Zeiger (Touch) gibt es kein Hover: die Symbolknöpfe oben rechts bleiben sichtbar; der große Spielen-Knopf nicht (ein Tippen öffnet die Karte) */
+@media (hover: none) {
+  .vx-card .vx-card-tr { opacity: 1; visibility: visible; }
+}
+/* Auswahlfeld unten links auf dem Bild: bei Hover/Fokus, gewählt, oder solange das Raster im Auswahlmodus ist (data-picking) */
+.vx-card-pick { position: absolute; z-index: 3; left: 6px; top: calc(100cqw - 6px - 28px); display: grid; place-items: center; width: 28px; height: 28px; background: rgba(3,5,10,.9); opacity: 0; visibility: hidden; transition: opacity .12s steps(2, end), visibility 0s linear .12s; }
+.vx-card:is(:hover, :focus-within, [data-pressed], [data-force]) .vx-card-pick, [data-picking] .vx-card-pick { opacity: 1; visibility: visible; transition: opacity .12s steps(2, end), visibility 0s; }
 /* Kleiner Spielen-Knopf (PlayButton, play.css) auf der Szene: dunkle Platte */
 .vx-card-tr .play.i::before { background: rgba(3,5,10,.9); }
 
@@ -111,7 +119,7 @@
 /* ---------- Neu-Kachel ---------- */
 .vx-add { position: relative; isolation: isolate; flex: none; display: grid; place-items: center; width: var(--mini); height: calc(var(--mini) + 24px); color: var(--fg-2); cursor: pointer; }
 .vx-add::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--panel); box-shadow: var(--bv-plate); clip-path: var(--n1); transition: background-color var(--st); }
-.vx-add-in { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; }
+.vx-add-in { display: flex; flex-direction: column; align-items: center; gap: 4px; max-width: 100%; padding: 0 4px; text-align: center; font-size: calc(13px * var(--tz)); font-weight: 600; }
 .vx-add:is(:hover, [data-force="hover"]) { color: var(--fg); }
 .vx-add:is(:hover, [data-force="hover"])::before { background: var(--panel-2); }
 .vx-add:is(:active, [data-force="press"])::before { background: var(--panel); box-shadow: var(--bv-sunk); }
@@ -128,8 +136,8 @@
 .vx-choice::before { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--n1); transition: background-color var(--st); }
 .vx-choice-m { display: grid; place-items: center; min-width: 0; }
 .vx-choice-t { min-width: 0; }
-.vx-choice-t b { display: block; font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vx-choice-t span { display: block; font-size: 12px; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vx-choice-t b { display: block; font-weight: 600; font-size: calc(14px * var(--tz)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vx-choice-t span { display: block; font-size: calc(13px * var(--tz)); color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vx-choice-r { display: flex; align-items: center; gap: 6px; color: var(--fg-2); }
 .vx-choice-r .vx-count { color: var(--fg-2); }
 .vx-choice:is(:hover, [data-force="hover"]):not(:disabled)::before { background: var(--hv-row); }
@@ -145,8 +153,8 @@
 /* l: Platte mit Bevel (steht allein, z. B. Onboarding) */
 .vx-choice[data-size="l"] { grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; height: 72px; padding: 0 14px 0 10px; }
 .vx-choice[data-size="l"]::before { background: var(--panel-2); box-shadow: var(--bv-plate); }
-.vx-choice[data-size="l"] .vx-choice-t b { font-weight: 700; font-size: 15px; }
-.vx-choice[data-size="l"] .vx-choice-t span { font-size: 12.5px; color: var(--fg-2); }
+.vx-choice[data-size="l"] .vx-choice-t b { font-weight: 700; font-size: calc(15px * var(--tz)); }
+.vx-choice[data-size="l"] .vx-choice-t span { font-size: calc(13px * var(--tz)); color: var(--fg-2); }
 .vx-choice[data-size="l"]:is(:hover, [data-force="hover"]):not(:disabled)::before { background: var(--panel-3); box-shadow: inset 0 0 0 var(--px) var(--line-hi), inset var(--u2) var(--u2) 0 var(--hi-2); }
 .vx-choice[data-size="l"]:is(:active, [data-force="press"]):not(:disabled)::before { background: var(--panel-2); box-shadow: var(--bv-sunk); }
 .vx-choice[data-size="l"][data-selected]::before, .vx-choice[data-size="l"][data-selected]:hover::before { background: color-mix(in srgb, var(--copper) 10%, var(--panel-2)); box-shadow: var(--sel-edge), inset var(--u2) var(--u2) 0 var(--hi-2); }

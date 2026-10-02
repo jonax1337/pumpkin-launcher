@@ -69,7 +69,13 @@ type ItemLook = {
 function KitItem({ kit: M, className, tall, bad, lead, icon, sub, checked, children, ...props }: ItemLook & { kit: MenuKit } & ComponentProps<typeof DM.Item>) {
   const two = hasContent(sub);
   return (
-    <M.Item className={cn("vx-mi", className)} data-tall={flag(tall || two || lead)} data-tone={bad ? "bad" : undefined} {...props}>
+    <M.Item
+      className={cn("vx-mi", className)}
+      data-tall={flag(tall || two || lead)}
+      data-tone={bad ? "bad" : undefined}
+      {...(checked !== undefined && { role: "menuitemcheckbox", "aria-checked": checked })}
+      {...props}
+    >
       {lead ?? (icon && <Icon name={icon} size="s" />)}
       {two ? <span className="vx-mi-t2"><b className="vx-trunc">{children}</b><span className="vx-trunc">{sub}</span></span> : children}
       {checked && <Icon name="check" size="s" className="vx-mi-ck" />}

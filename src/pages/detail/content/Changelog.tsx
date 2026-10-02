@@ -1,0 +1,33 @@
+import { useQuery } from "@tanstack/react-query";
+import { useI18n } from "@/i18n";
+import { Button, Hint, Skel } from "@/ui";
+import { Description } from "@/components/Description";
+import { fitFilter } from "@/components/catalog/fit";
+import { catalogApi } from "@/lib/catalogApi";
+import { openPage } from "@/lib/links";
+import { projectOf } from "@/lib/mods";
+import type { Instance, Mod } from "@/lib/types";
+
+/** Die Seite einer Version bei Modrinth. */
+const versionPage = (projectId: string, versionId: string) => `https://modrinth.com/project/${projectId}/version/${versionId}`;
+
+/** Änderungsprotokoll der Modrinth-Version `versionId` des Inhalts; ohne Protokoll der Weg zur Seite der Version. */
+export function Changelog({ instance, mod, versionId }: { instance: Instance; mod: Mod; versionId: string }) {
+  const { t } = useI18n();
+  const projectId = projectOf(mod);
+  const versions = useQuery({ ...catalogApi("modrinth").versionsQuery(projectId ?? "", fitFilter(instance, mod.kind)), enabled: !!projectId });
+  const changelog = versions.data?.find((v) => v.id === versionId)?.changelog?.trim();
+
+  if (versions.isPending) return <Skel h={48} />;
+  if (changelog) return <Description body={changelog} className="max-h-60 overflow-y-auto" />;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Hint icon="info">{versions.isError ? t("detail.content.changesLoadError") : t("detail.content.changesNone")}</Hint>
+      {projectId && (
+        <Button variant="ghost" size="s" icon="ext" onClick={() => openPage(versionPage(projectId, versionId))}>
+          {t("detail.content.viewVersionOnModrinth")}
+        </Button>
+      )}
+    </div>
+  );
+}

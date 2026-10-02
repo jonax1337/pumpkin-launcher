@@ -2,6 +2,7 @@
 //! vieler Projekte und Dateien.
 use super::dto::{CfFile, CfMod, One, Page};
 use crate::{
+    coded,
     error::{AppError, AppResult},
     services::{limits::PROVIDER_JSON_LIMIT, transport::read_capped},
 };
@@ -54,7 +55,7 @@ async fn send<T: DeserializeOwned>(build: impl Fn() -> reqwest::RequestBuilder) 
         }
         let retry_after = response.headers().get(reqwest::header::RETRY_AFTER).and_then(|v| v.to_str().ok());
         let Some(wait) = rate_limit_wait(retry_after, attempt) else {
-            return Err(AppError::invalid("Zu viele Anfragen an CurseForge, bitte kurz warten"));
+            return Err(AppError::invalid(coded!("errors.providers.tooManyRequests")));
         };
         tracing::info!(?wait, attempt, "CurseForge-Proxy drosselt, neuer Versuch");
         tokio::time::sleep(wait).await;
@@ -76,10 +77,10 @@ fn rate_limit_wait(retry_after: Option<&str>, attempt: u32) -> Option<Duration> 
 async fn parse_response<T: DeserializeOwned>(response: reqwest::Response) -> AppResult<T> {
     let status = response.status();
     if matches!(status.as_u16(), 401 | 403) {
-        return Err(AppError::invalid("Der CurseForge-Dienst lehnt die Anfrage ab"));
+        return Err(AppError::invalid(coded!("errors.providers.serviceRejected")));
     }
     if status.as_u16() == 404 {
-        return Err(AppError::invalid("Bei CurseForge nicht gefunden"));
+        return Err(AppError::invalid(coded!("errors.providers.notFoundOnCurseForge")));
     }
     let mut response = response.error_for_status()?;
     Ok(serde_json::from_slice(&read_capped(&mut response, PROVIDER_JSON_LIMIT, "Antwort zu groß").await?)?)
@@ -128,7 +129,7 @@ pub(super) async fn mod_of(client: &reqwest::Client, id: u32) -> AppResult<CfMod
 pub(super) async fn file_of(client: &reqwest::Client, project: u32, file: u32) -> AppResult<CfFile> {
     let f = get::<One<CfFile>>(client, &format!("mods/{project}/files/{file}"), &[]).await?.data;
     if f.id != u64::from(file) || f.mod_id != u64::from(project) {
-        return Err(AppError::invalid("Datei gehört nicht zu diesem Projekt"));
+        return Err(AppError::invalid(coded!("errors.providers.fileNotInProject")));
     }
     Ok(f)
 }

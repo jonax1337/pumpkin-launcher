@@ -1,12 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsFetching, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { t } from "@/i18n";
 import { api } from "@/lib/api";
 import { fileName } from "@/lib/format";
+import { revealLocalPath } from "@/lib/links";
 import { instanceUrl } from "@/lib/routes";
 import type { Datapack, Instance, Server, World, WorldBackup } from "@/lib/types";
 import { trackContent, withTarget } from "./useContent";
-import { worldKeys } from "./queryKeys";
+import { serverStatusKeys, worldKeys } from "./queryKeys";
 
 /** Welten einer Instanz; auch für die Auswahl der Welt beim Hinzufügen eines Datenpakets aus Entdecken. */
 export const worldsQuery = (instanceId: string) => ({ queryKey: worldKeys.list(instanceId), queryFn: () => api.worldList(instanceId) });
@@ -30,6 +31,23 @@ export function useDatapacks(instanceId: string, worldId: string) {
 
 export function useServers(instanceId: string) {
   return useQuery({ queryKey: worldKeys.servers(instanceId), queryFn: () => api.serverList(instanceId) });
+}
+
+/** Status eines Servers der Liste; jedes Öffnen der Liste fragt neu an, ein Fehler heißt „nicht erreichbar“. */
+export function useServerStatus(instanceId: string, address: string) {
+  return useQuery({
+    queryKey: serverStatusKeys.one(instanceId, address),
+    queryFn: () => api.serverPing(instanceId, address),
+    staleTime: 0,
+    retry: false,
+  });
+}
+
+/** Fragt den Status aller Server der Instanz neu ab; `fetching`, solange eine Abfrage läuft. */
+export function useRefreshServerStatus(instanceId: string) {
+  const qc = useQueryClient();
+  const fetching = useIsFetching({ queryKey: serverStatusKeys.all(instanceId) }) > 0;
+  return { fetching, refresh: () => qc.refetchQueries({ queryKey: serverStatusKeys.all(instanceId), type: "active" }) };
 }
 
 /** Ob die Minecraft-Version direkt in eine Welt starten kann (ab 1.20); undefined, solange unbekannt. */
@@ -81,6 +99,21 @@ export const useRemoveServer = (instanceId: string) =>
     ({ index }: { index: number; server: Server }) => api.serverRemove(instanceId, index),
     (_, { server }) => t("hooks.world.serverRemoved", { name: server.name }),
   );
+
+/** Kopiert alle Sicherungen der Instanz in einen Ordner nach Wahl; ein Toast zeigt ihn im Dateimanager. */
+export function useExportBackups(instanceId: string) {
+  return useMutation({
+    mutationFn: async () => {
+      const [directory] = await api.pickPaths({ directory: true, title: t("hooks.world.exportBackupsPick") });
+      return directory ? api.worldBackupsExport(instanceId, directory) : null;
+    },
+    onSuccess: (folder) =>
+      folder &&
+      toast.success(t("hooks.world.backupsExported", { folder }), {
+        action: { label: t("components.instance.revealInFolder"), onClick: () => revealLocalPath(folder) },
+      }),
+  });
+}
 
 /** Ziel eines Welt-Vorgangs im Inhalts-Store: die Zeile der Welt zeigt dann ihren Fortschritt. */
 export const worldTarget = (instanceId: string, worldId: string) => `world:${instanceId}:${worldId}`;
@@ -136,5 +169,17 @@ export function useWorldJobs(instance: Instance) {
         ? t("hooks.world.restored", { name: world.name })
         : t("hooks.world.restoredInFolder", { name: world.name, folder: world.id }),
   );
-  return { backup, remove, restore };
+  const importWorld = useWorldChange(
+    instance.id,
+    (path: string) => {
+      const name = fileName(path).replace(/\.zip$/i, "");
+      const labels = { label: t("hooks.world.importTask", { name }), doneLabel: t("hooks.world.importTaskDone", { name }) };
+      return job(`import:${path}`, labels, (op) => api.worldImport(instance.id, path, op));
+    },
+    (world) =>
+      world.id === world.name
+        ? t("hooks.world.imported", { name: world.name })
+        : t("hooks.world.importedInFolder", { name: world.name, folder: world.id }),
+  );
+  return { backup, remove, restore, importWorld };
 }

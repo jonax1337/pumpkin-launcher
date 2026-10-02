@@ -3,7 +3,8 @@ use serde::Deserialize;
 use serde_json::json;
 
 use super::{is_success, send, McSession, MC_PROFILE};
-use crate::error::{AppError, AppResult};
+use crate::coded;
+use crate::error::{AppError, AppResult, Coded};
 
 const XBOX_AUTH: &str = "https://user.auth.xboxlive.com/user/authenticate";
 const XSTS_AUTH: &str = "https://xsts.auth.xboxlive.com/xsts/authorize";
@@ -26,7 +27,7 @@ pub(super) struct Profile {
 
 pub(super) async fn login_to_minecraft(http: &reqwest::Client, ms_access_token: &str) -> AppResult<MinecraftLogin> {
     let xsts = xsts_token(http, ms_access_token).await?;
-    let xui = xsts.display_claims.xui.first().ok_or_else(|| AppError::invalid("Xbox Live hat kein Profil geliefert."))?;
+    let xui = xsts.display_claims.xui.first().ok_or_else(|| AppError::invalid(coded!("errors.app.auth.xbox.noProfileReturned")))?;
     let body = json!({ "identityToken": format!("XBL3.0 x={};{}", xui.uhs, xsts.token) });
     let (status, bytes) = send(http.post(MC_LOGIN).json(&body)).await?;
     let login = parse_mc_login(status, &bytes)?;
@@ -78,16 +79,16 @@ struct Xui {
 }
 
 /// XSTS-Fehlercodes (`XErr`) in Alltagssprache.
-fn xerr_text(code: u64) -> &'static str {
+fn xerr_text(code: u64) -> Coded {
     match code {
-        2148916233 => "Zu diesem Microsoft-Konto gibt es noch kein Xbox-Profil. Melde dich einmal auf xbox.com an, lege dort ein Profil an und versuch es dann erneut.",
-        2148916238 => "Das Konto gehört einem Kind und muss erst von einem Erwachsenen zu einer Microsoft-Familie hinzugefügt werden (account.microsoft.com/family).",
-        2148916235 => "Xbox Live ist in deinem Land nicht verfügbar.",
-        2148916236 | 2148916237 => "Das Konto muss auf xbox.com erst noch bestätigt werden (Altersnachweis). Danach klappt die Anmeldung.",
-        2148916227 => "Dieses Konto ist bei Xbox gesperrt.",
-        2148916229 => "Die Jugendschutz-Einstellungen des Kontos erlauben kein Online-Spielen. Ein Erziehungsberechtigter kann das ändern.",
-        2148916234 => "Die Xbox-Nutzungsbedingungen wurden noch nicht akzeptiert. Melde dich einmal auf xbox.com an.",
-        _ => "Xbox Live hat die Anmeldung abgelehnt.",
+        2148916233 => coded!("errors.app.auth.xbox.noAccount", code = code),
+        2148916238 => coded!("errors.app.auth.xbox.child", code = code),
+        2148916235 => coded!("errors.app.auth.xbox.region", code = code),
+        2148916236 | 2148916237 => coded!("errors.app.auth.xbox.ageProof", code = code),
+        2148916227 => coded!("errors.app.auth.xbox.banned", code = code),
+        2148916229 => coded!("errors.app.auth.xbox.parentalControls", code = code),
+        2148916234 => coded!("errors.app.auth.xbox.terms", code = code),
+        _ => coded!("errors.app.auth.xbox.declined", code = code),
     }
 }
 
@@ -101,8 +102,8 @@ fn parse_xbox(status: u16, body: &[u8]) -> AppResult<XboxToken> {
         code: u64,
     }
     Err(AppError::invalid(match serde_json::from_slice::<XErr>(body) {
-        Ok(XErr { code }) => format!("{} (Fehler {code})", xerr_text(code)),
-        Err(_) => format!("Xbox Live hat die Anmeldung abgelehnt (Fehler {status})."),
+        Ok(XErr { code }) => xerr_text(code),
+        Err(_) => coded!("errors.app.auth.xbox.declinedStatus", status = status),
     }))
 }
 
@@ -115,9 +116,9 @@ pub(super) struct McLogin {
 fn parse_mc_login(status: u16, body: &[u8]) -> AppResult<McLogin> {
     match status {
         s if is_success(s) => Ok(serde_json::from_slice(body)?),
-        403 => Err(AppError::invalid("Microsoft hat diesen Launcher noch nicht für Minecraft freigeschaltet. Die Freigabe der App steht noch aus.")),
-        429 => Err(AppError::invalid("Zu viele Anmeldeversuche in kurzer Zeit. Warte ein paar Minuten und versuch es erneut.")),
-        s => Err(AppError::invalid(format!("Die Anmeldung bei Minecraft ist fehlgeschlagen (Fehler {s})."))),
+        403 => Err(AppError::invalid(coded!("errors.auth.notApproved"))),
+        429 => Err(AppError::invalid(coded!("errors.auth.tooManyAttempts"))),
+        s => Err(AppError::invalid(coded!("errors.auth.minecraftFailed", status = s))),
     }
 }
 
@@ -141,12 +142,12 @@ fn parse_profile(status: u16, body: &[u8], owns: bool) -> AppResult<Profile> {
     match status {
         s if is_success(s) => {
             let p: Profile = serde_json::from_slice(body)?;
-            let id = uuid::Uuid::parse_str(&p.id).map_err(|_| AppError::invalid("Minecraft hat ein ungültiges Profil geliefert."))?;
+            let id = uuid::Uuid::parse_str(&p.id).map_err(|_| AppError::invalid(coded!("errors.app.auth.invalidProfile")))?;
             Ok(Profile { id: id.hyphenated().to_string(), name: p.name })
         }
-        404 if owns => Err(AppError::invalid("Zu diesem Konto gibt es noch kein Minecraft-Profil. Starte einmal den offiziellen Minecraft Launcher und wähle einen Spielernamen.")),
-        404 => Err(AppError::invalid("Dieses Microsoft-Konto besitzt Minecraft: Java Edition nicht.")),
-        s => Err(AppError::invalid(format!("Das Minecraft-Profil konnte nicht geladen werden (Fehler {s})."))),
+        404 if owns => Err(AppError::invalid(coded!("errors.app.auth.noMinecraftProfile"))),
+        404 => Err(AppError::invalid(coded!("errors.app.auth.notOwned"))),
+        s => Err(AppError::invalid(coded!("errors.app.auth.profileLoadFailed", status = s))),
     }
 }
 
@@ -172,8 +173,8 @@ mod tests {
         assert_eq!((x.token.as_str(), x.display_claims.xui[0].uhs.as_str()), ("xbl", "123"));
         let err = parse_xbox(401, br#"{"Identity":"0","XErr":2148916233,"Message":"","Redirect":"https://start.ui.xboxlive.com/CreateAccount"}"#);
         assert!(err.err().unwrap().to_string().starts_with("Zu diesem Microsoft-Konto gibt es noch kein Xbox-Profil"));
-        assert!(xerr_text(2148916238).contains("Kind"));
-        assert_eq!(xerr_text(1), "Xbox Live hat die Anmeldung abgelehnt.");
+        assert!(xerr_text(2148916238).to_string().contains("Kind"));
+        assert_eq!(xerr_text(1).to_string(), "Xbox Live hat die Anmeldung abgelehnt. (Fehler 1)");
         assert!(parse_xbox(503, b"").err().unwrap().to_string().contains("503"));
     }
 
@@ -181,7 +182,8 @@ mod tests {
     fn minecraft_answers() {
         let login = parse_mc_login(200, br#"{"username":"u","roles":[],"access_token":"eyJ","token_type":"Bearer","expires_in":86400}"#).unwrap();
         assert_eq!((login.access_token.as_str(), login.expires_in), ("eyJ", 86400));
-        assert!(parse_mc_login(403, b"{}").err().unwrap().to_string().contains("noch nicht für Minecraft freigeschaltet"));
+        let pending = parse_mc_login(403, b"{}").err().unwrap().to_string();
+        assert!(pending.contains("noch nicht für Minecraft freigeschaltet") && pending.contains("nicht an dir"));
         assert!(owns_game(br#"{"items":[{"name":"product_minecraft","signature":"s"},{"name":"game_minecraft","signature":"s"}],"signature":"s","keyId":"1"}"#));
         assert!(!owns_game(br#"{"items":[],"signature":"s","keyId":"1"}"#));
         let p = parse_profile(200, br#"{"id":"069a79f444e94726a5befca90e38aaf5","name":"Notch","skins":[],"capes":[]}"#, true).unwrap();

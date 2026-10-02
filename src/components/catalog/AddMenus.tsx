@@ -4,6 +4,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n";
 import { Button, Icon, Menu, MenuItem, MenuLabel, MenuNote, MenuScroll, MenuSep, SceneThumb, type MenuEntry } from "@/ui";
+import { InstanceIcon } from "@/components/InstanceIcon";
 import { useContentState } from "@/store/contentState";
 import { useInstances } from "@/hooks/useInstances";
 import { worldsQuery } from "@/hooks/useWorlds";
@@ -12,8 +13,9 @@ import { projectKey, type ProjectRef, type Source } from "@/lib/content-types";
 import { ownerKey } from "@/lib/mods";
 import { newInstanceUrl } from "@/lib/routes";
 import type { Instance, ModKind, World } from "@/lib/types";
-import { lookOf, useLookStore } from "@/store/look";
+import { lookOf } from "@/store/look";
 import { fitsLabel, kindsFor, versionFits } from "./fit";
+import { hasIris, irisSupported } from "./iris";
 import { jobWidthOf, useJobProgressFor } from "./jobProgress";
 import { useAddContent, type AddRequest } from "./useAddContent";
 
@@ -37,16 +39,27 @@ function useAddFromMenu() {
     );
 }
 
-/** Ohne Instanz-Kontext: Menü mit allen Instanzen; unpassende ausgegraut mit Grund, sonst „Neue Instanz anlegen…“. */
+/** Die angehakten Instanzen eines Menüs; wird beim Schließen verworfen. */
+function usePicked() {
+  const [ids, setIds] = useState<string[]>([]);
+  const toggle = (id: string) => setIds((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
+  return { ids, toggle, clear: () => setIds([]) };
+}
+
+/**
+ * Ohne Instanz-Kontext: Menü mit allen Instanzen zum Anhaken, mehrere sind möglich; unpassende ausgegraut mit Grund,
+ * sonst „Neue Instanz anlegen…“. Mehrere Instanzen laufen nacheinander. Bei Shadern steht „Iris fehlt“ an den Instanzen
+ * ohne Iris.
+ */
 export function AddToInstanceMenu({ project, type, large, source }: { project: ProjectRef; type: ModKind; large?: boolean; source: Source }) {
   const { t } = useI18n();
   const instances = useInstances();
-  const looks = useLookStore((s) => s.looks);
   const addFromMenu = useAddFromMenu();
   const navigate = useNavigate();
   const active = useContentState((s) => !!s.active);
   const job = useJobProgressFor(project.id, jobWidthOf(large));
   const [open, setOpen] = useState(false);
+  const picked = usePicked();
   // Alle Versionen einmal laden, um Instanzen ohne passende Minecraft-Version vorab auszugrauen.
   const all = useQuery({ ...catalogApi(source).versionsQuery(project.id), enabled: open });
   const reasonFor = (i: Instance): string | null => {
@@ -54,23 +67,45 @@ export function AddToInstanceMenu({ project, type, large, source }: { project: P
     if (i.mods.some((m) => ownerKey(m) === projectKey(source, project.id))) return t("components.content.alreadyIn");
     return all.data && !all.data.some((v) => versionFits(v, i, type)) ? t("components.content.noVersionFor", { version: i.minecraftVersion }) : null;
   };
+  /** Bei Shadern, was der Instanz dafür fehlt: Iris, oder die Unterstützung ganz. */
+  const shaderNote = (i: Instance) => {
+    if (type !== "shader") return "";
+    if (!irisSupported(i)) return ` · ${t("components.content.shadersUnsupported")}`;
+    return hasIris(i) ? "" : ` · ${t("components.content.irisMissing")}`;
+  };
+  const subFor = (i: Instance, reason: string | null) => reason ?? fitsLabel(i, type) + shaderNote(i);
   const rows = (instances.data ?? []).map((i) => ({ i, reason: reasonFor(i) }));
   const usable = rows.some((r) => !r.reason);
+  const chosen = rows.filter(({ i, reason }) => !reason && picked.ids.includes(i.id)).map(({ i }) => i);
+  const addChosen = () => {
+    for (const instance of chosen) addFromMenu({ instance, project, type, source });
+    picked.clear();
+  };
+  const addChosenLabel = (n: number) =>
+    n === 0 ? t("components.content.pickInstances") : t(n === 1 ? "components.content.addToSelected.one" : "components.content.addToSelected.other", { n });
+  const changeOpen = (next: boolean) => {
+    setOpen(next);
+    if (!next) picked.clear();
+  };
 
   if (job) return job;
   return (
-    <Menu open={open} onOpenChange={setOpen} width={300} trigger={<AddMenuTrigger title={project.title} target={t("common.instance")} disabled={active} large={large} />}>
+    <Menu open={open} onOpenChange={changeOpen} width={300} trigger={<AddMenuTrigger title={project.title} target={t("common.instance")} disabled={active} large={large} />}>
       <MenuLabel>{t("components.content.addToMenu")}</MenuLabel>
       <MenuScroll>
         {rows.map(({ i, reason }) => {
-          const look = lookOf(looks, i.id);
+          const look = lookOf(i);
           return (
             <MenuItem
               key={i.id}
               disabled={!!reason}
-              lead={<SceneThumb bio={look.bio} seed={look.seed} size={28} />}
-              sub={reason ?? fitsLabel(i, type)}
-              onSelect={() => addFromMenu({ instance: i, project, type, source })}
+              checked={picked.ids.includes(i.id)}
+              lead={<SceneThumb bio={look.bio} seed={look.seed} size={28} art={<InstanceIcon instance={i} bio={look.bio} />} />}
+              sub={subFor(i, reason)}
+              onSelect={(event) => {
+                event.preventDefault();
+                picked.toggle(i.id);
+              }}
             >
               {i.name}
             </MenuItem>
@@ -79,6 +114,15 @@ export function AddToInstanceMenu({ project, type, large, source }: { project: P
         {rows.length === 0 && !instances.isPending && <MenuNote>{t("components.content.noInstancesYet")}</MenuNote>}
       </MenuScroll>
       {all.isPending && rows.length > 0 && <MenuNote>{t("components.content.checkingVersions")}</MenuNote>}
+      {usable && (
+        <>
+          <MenuSep />
+          <MenuItem disabled={chosen.length === 0} onSelect={addChosen}>
+            <Icon name="plus" size="s" />
+            <span className="vx-trunc">{addChosenLabel(chosen.length)}</span>
+          </MenuItem>
+        </>
+      )}
       {!usable && !all.isPending && (
         <>
           <MenuSep />

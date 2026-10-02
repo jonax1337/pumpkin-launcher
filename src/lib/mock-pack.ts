@@ -41,7 +41,7 @@ export function createPackMock({ db, emit }: MockContext) {
         loaderVersion: null,
         modpack: { type: "modrinth", projectId: version.project_id, versionId },
         mods: mods.map(([id, modName]) => ({
-          id, name: modName, version: "1.0.0", kind: "mod", requiredBy: [], enabled: true, sha1: null,
+          id, name: modName, version: "1.0.0", kind: "mod", requiredBy: [], enabled: true, sha1: null, pinned: false, packManaged: true,
           source: { type: "modrinth", projectId: id, versionId: `mock-${id}` }, fileName: `${id}.jar`,
         })),
         createdAt: Date.now(),

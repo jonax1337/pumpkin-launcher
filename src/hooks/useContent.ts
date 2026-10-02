@@ -1,9 +1,10 @@
 import { useEffect } from "react";
-import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { MutationObserver, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { t } from "@/i18n";
 import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import type { ContentProject, ModUpdate } from "@/lib/content-types";
+import { queryClient } from "@/lib/queryClient";
 import { toastError } from "@/lib/toast";
 import { HOUR } from "@/lib/time";
 import type { Instance } from "@/lib/types";
@@ -69,17 +70,27 @@ export async function trackContent<R>(
   }
 }
 
+const installMutation = (qc: QueryClient) => ({
+  mutationFn: (install: ContentRun) =>
+    trackContent(qc, install, (instance, label) => {
+      qc.setQueryData(instanceKeys.detail(instance.id), instance);
+      return { label, sub: instance.name, to: `/instances/${instance.id}` };
+    }),
+  retry: false,
+});
+
 export function useContentInstall() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (install: ContentRun) =>
-      trackContent(qc, install, (instance, label) => {
-        qc.setQueryData(instanceKeys.detail(instance.id), instance);
-        return { label, sub: instance.name, to: `/instances/${instance.id}` };
-      }),
-    retry: false,
-  });
+  return useMutation(installMutation(useQueryClient()));
 }
+
+/**
+ * Wie `useContentInstall`, aber ohne Komponente: `onDone` läuft auch, wenn die Seite inzwischen verlassen wurde.
+ * Fehler meldet der zentrale Handler des Clients; das Ergebnis ist da, wenn der Vorgang zu Ende ist.
+ */
+export const startContentInstall = (run: ContentRun, onDone?: (result: Instance) => void) =>
+  new MutationObserver(queryClient, installMutation(queryClient))
+    .mutate(run)
+    .then((result) => result && onDone?.(result), () => undefined);
 
 /** Titel und Icons eines Projekts ändern sich praktisch nie. */
 const PROJECT_INFO_STALE_MS = HOUR;
@@ -116,7 +127,7 @@ export function useModUpdates(instanceId: string, enabled: boolean) {
  */
 export function useCurrentUpdates(instance: Instance, enabled: boolean): Map<string, ModUpdate> {
   const { data } = useModUpdates(instance.id, enabled);
-  const current = (data ?? []).filter((u) => instance.mods.some((m) => m.id === u.modId && m.version === u.currentVersion));
+  const current = (data ?? []).filter((u) => instance.mods.some((m) => m.id === u.modId && m.version === u.currentVersion && !m.pinned));
   return new Map(current.map((u) => [u.modId, u]));
 }
 

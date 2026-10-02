@@ -9,6 +9,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
+use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::services::{gamelog, Dirs};
 
@@ -45,9 +46,9 @@ fn log_path(dirs: &Dirs, instance_id: &str, kind: LogKind) -> AppResult<PathBuf>
     match kind {
         LogKind::Latest => Some(dirs.latest_log(instance_id))
             .filter(|path| path.is_file())
-            .ok_or_else(|| AppError::invalid("Es gibt noch kein Protokoll. Starte die Instanz einmal, dann lässt es sich teilen.")),
+            .ok_or_else(|| AppError::invalid(coded!("errors.app.logshare.noLog"))),
         LogKind::CrashReport => gamelog::crash_report(&dirs.game_dir(instance_id), SystemTime::UNIX_EPOCH)
-            .ok_or_else(|| AppError::invalid("Für diese Instanz gibt es keinen Absturzbericht.")),
+            .ok_or_else(|| AppError::invalid(coded!("errors.app.logshare.noCrashReport"))),
     }
 }
 
@@ -125,7 +126,10 @@ async fn upload(http: &reqwest::Client, content: &str) -> AppResult<String> {
     let status = response.error_for_status_ref().err();
     match response.json::<UploadReply>().await {
         Ok(UploadReply { success: true, url: Some(url), .. }) => Ok(url),
-        Ok(reply) => Err(AppError::Upload(reply.error.unwrap_or_else(|| "mclo.gs hat keinen Link geliefert".into()))),
+        Ok(reply) => Err(AppError::Upload(match reply.error {
+            Some(error) => error.into(),
+            None => coded!("errors.app.logshare.noLink").into(),
+        })),
         Err(err) => Err(status.unwrap_or(err).into()),
     }
 }

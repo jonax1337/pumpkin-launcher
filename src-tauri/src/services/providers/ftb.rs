@@ -2,6 +2,7 @@
 //! geladen, zwischengespeichert und lokal durchsucht. Installation über die Dateiliste einer Version.
 use super::{cdn::check_url, json, segment, PackRequest, ProjectType, RemoteFile, SearchQuery, SortIndex};
 use crate::{
+    coded,
     error::{AppError, AppResult},
     models::{instance_name, Instance, ModLoader, NewInstance},
     services::{
@@ -186,7 +187,7 @@ async fn catalog(client: &reqwest::Client) -> AppResult<Arc<Vec<PackDoc>>> {
         }
     }
     if packs.is_empty() {
-        return Err(failed.unwrap_or_else(|| AppError::invalid("FTB lieferte keine Modpacks")));
+        return Err(failed.unwrap_or_else(|| AppError::invalid(coded!("errors.providers.noFtbModpacks"))));
     }
     let packs = Arc::new(packs);
     *cache = Some((Instant::now(), packs.clone()));
@@ -270,7 +271,7 @@ async fn find(client: &reqwest::Client, id: &str) -> AppResult<PackDoc> {
         .iter()
         .find(|p| p.id.to_string() == id)
         .cloned()
-        .ok_or_else(|| AppError::invalid("Dieses Modpack gibt es bei FTB nicht"))
+        .ok_or_else(|| AppError::invalid(coded!("errors.providers.ftbModpackNotFound")))
 }
 
 pub async fn project(client: &reqwest::Client, id: &str) -> AppResult<Project> {
@@ -286,6 +287,7 @@ pub async fn project(client: &reqwest::Client, id: &str) -> AppResult<Project> {
         client_side: "optional".into(),
         server_side: "optional".into(),
         web_url: None,
+        ..Project::default()
     })
 }
 
@@ -302,10 +304,23 @@ pub async fn versions(client: &reqwest::Client, id: &str) -> AppResult<Vec<Versi
             loaders: vec![s.loader.name().into()],
             version_type: v.kind.clone(),
             date_published: String::new(),
+            changelog: None,
             files: Vec::new(),
             dependencies: Vec::new(),
         })
         .collect())
+}
+
+/// Änderungsprotokoll einer Pack-Version (Markdown); `None`, wenn FTB keins führt.
+pub async fn changelog(client: &reqwest::Client, pack_id: &str, version_id: &str) -> AppResult<Option<String>> {
+    #[derive(Deserialize)]
+    struct Notes {
+        #[serde(default)]
+        content: String,
+    }
+    let url = format!("{API}/modpack/{}/{}/changelog", segment(pack_id)?, segment(version_id)?);
+    let notes: Notes = json(client, &url).await?;
+    Ok(Some(notes.content).filter(|text| !text.trim().is_empty()))
 }
 
 /// `./mods/` + `a.jar` -> `mods/a.jar`; Prüfung auf unsichere Pfade übernimmt `plan_pack`.
@@ -333,7 +348,7 @@ fn remote(doc: &FileDoc) -> AppResult<RemoteFile> {
         }
     }
     if hashes.is_empty() {
-        return Err(AppError::invalid(format!("Datei {} ohne Prüfsumme", doc.name)));
+        return Err(AppError::invalid(coded!("errors.providers.namedFileWithoutChecksum", name = doc.name)));
     }
     Ok(RemoteFile { urls, size: doc.size, hashes })
 }
@@ -347,7 +362,7 @@ pub(crate) async fn plan(client: &reqwest::Client, request: &PackRequest) -> App
     let (_, s) = usable(&pack)
         .into_iter()
         .find(|(v, _)| &v.id.to_string() == version_id)
-        .ok_or_else(|| AppError::invalid("Diese Version kann Pumpkin Launcher nicht starten"))?;
+        .ok_or_else(|| AppError::invalid(coded!("errors.providers.versionNotLaunchable")))?;
     let listing: VersionFiles = json(client, &format!("{API}/modpack/{pack_id}/{version_id}")).await?;
     let files = listing
         .files

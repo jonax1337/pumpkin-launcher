@@ -1,13 +1,15 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { useI18n, t } from "@/i18n";
+import { useCommitOnUnmount } from "@/hooks/useCommitOnUnmount";
+import { useJavaInstalls } from "@/hooks/useJavaInstalls";
 import { useMemory } from "@/hooks/useMemory";
 import { api } from "@/lib/api";
 import { blurOnEnter } from "@/lib/dom";
-import { formatMemory, formatPlaytime, MB_PER_GB, memoryTooHigh, relativeTime } from "@/lib/format";
+import { formatMemory, formatPlaytime, MB_PER_GB, memoryAdvice, memoryTooHigh, relativeTime } from "@/lib/format";
 import { platform } from "@/lib/platform";
 import { toastError } from "@/lib/toast";
-import { LOADER_LABELS, type Instance } from "@/lib/types";
-import { Actions, Button, Hint, Radio, SegSlider, TextField } from "@/ui";
+import { LOADER_LABELS, type Instance, type JavaInstall } from "@/lib/types";
+import { Actions, Button, Hint, Radio, SegSlider, Select, TextField } from "@/ui";
 
 /** „Fabric 1.21.4“ bzw. „Vanilla 1.21.4“. */
 export const loaderLine = (i: Pick<Instance, "loader" | "minecraftVersion">) => `${LOADER_LABELS[i.loader]} ${i.minecraftVersion}`;
@@ -28,9 +30,10 @@ const toGb = (value: number | null, auto: number) => Math.max(1, Math.round((val
 
 /**
  * Hinweis zum Arbeitsspeicher. Zu viel für den PC: Warnung mit Symbol (nie nur Farbe) an derselben Stelle.
- * `value` wie bei MemoryChooser (null = automatisch).
+ * `value` wie bei MemoryChooser (null = automatisch); `modCount` (Mods der Instanz) macht daraus eine Einordnung,
+ * ohne ihn (Standard für alle Instanzen) bleibt es beim Hinweis auf den PC.
  */
-export function MemoryHelp({ value }: { value: number | null }) {
+export function MemoryHelp({ value, modCount }: { value: number | null; modCount?: number }) {
   const { t } = useI18n();
   const { auto, total } = useMemory();
   const gb = toGb(value, auto);
@@ -40,8 +43,36 @@ export function MemoryHelp({ value }: { value: number | null }) {
         {t("components.memory.tooHigh", { ram: formatMemory(total) })}
       </Hint>
     );
-  const totalText = total != null ? `${t("components.memory.hasTotal", { ram: formatMemory(total) })} ` : "";
-  return <Hint>{totalText}{t("components.memory.general")}</Hint>;
+  const totalText = total != null ? t("components.memory.hasTotal", { ram: formatMemory(total) }) : "";
+  const advice = memoryAdvice(gb, modCount);
+  return <Hint>{[totalText, advice && t(`settings.memory.${advice}`, { n: modCount ?? 0 })].filter(Boolean).join(" ")}</Hint>;
+}
+
+/** Wählbare Startgrößen des Heaps (MB). */
+const MIN_MEMORY_OPTIONS_MB = [512, 1024, 2048, 4096];
+const AUTO_MIN_MEMORY = "auto";
+
+/**
+ * Minimaler Arbeitsspeicher (`-Xms`): Der Heap startet mit dieser Größe, statt erst zu wachsen. `value` null = `autoLabel`
+ * (bei Instanzen „wie in den Einstellungen“, dort „Automatisch“); über dem Maximum begrenzt der Start auf das Maximum.
+ */
+export function MinMemoryChooser({ id, value, onChange, autoLabel, disabled }: {
+  id?: string; value: number | null; onChange: (mb: number | null) => void; autoLabel: string; disabled?: boolean;
+}) {
+  const { t } = useI18n();
+  return (
+    <Select
+      id={id}
+      ariaLabel={t("settings.memory.minLabel")}
+      disabled={disabled}
+      value={value == null ? AUTO_MIN_MEMORY : String(value)}
+      options={[
+        { value: AUTO_MIN_MEMORY, label: autoLabel },
+        ...MIN_MEMORY_OPTIONS_MB.map((mb) => ({ value: String(mb), label: formatMemory(mb) })),
+      ]}
+      onChange={(choice) => onChange(choice === AUTO_MIN_MEMORY ? null : Number(choice))}
+    />
+  );
 }
 
 /**
@@ -93,9 +124,12 @@ const JAVA_PROGRAM = {
   linux: { file: "java", example: "/usr/lib/jvm/java-21-openjdk/bin/java", extensions: null },
 }[platform];
 
+/** „Java 21.0.4 · Eclipse Adoptium“ */
+const javaLabel = ({ version, vendor }: JavaInstall) => [`Java ${version}`, vendor].filter(Boolean).join(" · ");
+
 /**
  * Java: ohne eigenen Pfad (`value` leer; was dann gilt, beschreibt `fallback`) oder eigene Java-Programmdatei.
- * Gemeldet wird erst beim Verlassen des Felds, mit Enter oder nach „Durchsuchen“, nicht je Tastendruck.
+ * Gemeldet wird erst beim Verlassen des Felds oder der Seite, mit Enter oder nach „Durchsuchen“, nicht je Tastendruck.
  */
 export function JavaChooser({ name, value, onChange, fallback, disabled }: {
   name: string; value: string; onChange: (path: string) => void; fallback: ReactNode; disabled?: boolean;
@@ -103,10 +137,17 @@ export function JavaChooser({ name, value, onChange, fallback, disabled }: {
   const { t } = useI18n();
   const [own, setOwn] = useState(value !== "");
   const [draft, setDraft] = useState(value);
+  const installs = useJavaInstalls().data ?? [];
+  // Ändert sich der Pfad von außen (z. B. „Auf Standard zurücksetzen“), zieht die Anzeige mit.
+  useEffect(() => {
+    setDraft(value);
+    setOwn(value !== "");
+  }, [value]);
   function commit(path: string) {
     setDraft(path);
     if (path.trim() !== value) onChange(path.trim());
   }
+  useCommitOnUnmount(() => commit(draft));
   async function browse() {
     const { extensions } = JAVA_PROGRAM;
     const [picked] = await api.pickPaths({ filters: extensions ? [{ name: "Java", extensions }] : undefined });
@@ -122,6 +163,16 @@ export function JavaChooser({ name, value, onChange, fallback, disabled }: {
       <Radio name={name} checked={own} disabled={disabled} onChange={() => setOwn(true)}>{t("components.java.own")}</Radio>
       {/* Bleibt stehen und ist nur gesperrt, wie der Regler bei „Automatisch“: kein Sprung, keine Lücke.
           Gesperrt ohne Beispielpfad, sonst wirkt es, als wäre schon ein Pfad gesetzt. */}
+      {installs.length > 0 && (
+        <Select
+          ariaLabel={t("settings.java.detected")}
+          placeholder={t("settings.java.pickDetected")}
+          disabled={disabled || !own}
+          value={installs.some((install) => install.path === draft) ? draft : ""}
+          options={installs.map((install) => ({ value: install.path, label: javaLabel(install) }))}
+          onChange={commit}
+        />
+      )}
       <Actions>
         <TextField
           width="full"

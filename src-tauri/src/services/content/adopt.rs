@@ -96,6 +96,8 @@ impl Recognition {
                 enabled: true,
                 kind: *kind,
                 required_by: Vec::new(),
+                pinned: false,
+                pack_managed: false,
             },
         };
         Mod { sha1: Some(cached.sha1.clone()), enabled: *enabled, ..entry }
@@ -103,7 +105,7 @@ impl Recognition {
 
     /// Hängt je Datei einen Eintrag an `mods` an; was Modrinth nicht kennt, aber laut `origins` von CurseForge kommt,
     /// behält diese Herkunft.
-    pub(super) fn append_entries(&self, mods: &mut Vec<Mod>, found: &[CachedFile], origins: &Origins) {
+    pub(crate) fn append_entries(&self, mods: &mut Vec<Mod>, found: &[CachedFile], origins: &Origins) {
         for file in found {
             let mut m = self.mod_from_file(file, mods);
             apply_origin(&mut m, origins, mods);
@@ -112,7 +114,7 @@ impl Recognition {
     }
 
     /// Wie [`Self::append_entries`], dazu `required_by` aus den erkannten Versionen.
-    pub(super) fn append_recorded(&self, mods: &mut Vec<Mod>, found: &[CachedFile], origins: &Origins) {
+    pub(crate) fn append_recorded(&self, mods: &mut Vec<Mod>, found: &[CachedFile], origins: &Origins) {
         self.append_entries(mods, found, origins);
         derive_required_by(mods, &self.versions);
     }
@@ -231,7 +233,7 @@ pub async fn adopt_untracked(state: &AppState) -> AppResult<usize> {
         match adopted {
             Ok(_) => added += found.len(),
             // Inzwischen gelöscht: nichts nachzutragen.
-            Err(AppError::NotFound { .. }) => {}
+            Err(AppError::NotFound(_)) => {}
             Err(err) => return Err(err),
         }
     }

@@ -5,8 +5,8 @@ import type { Instance, ModpackOrigin } from "@/lib/types";
 
 type PackProject = { source: Source; projectId: string };
 
-/** Das Katalog-Projekt, aus dem die Instanz stammt; `null` bei Instanzen ohne Modpack. */
-function packProject(modpack: ModpackOrigin | null): PackProject | null {
+/** Das Katalog-Projekt, aus dem die Instanz stammt; `null` bei Instanzen ohne Modpack oder aus einer Datei. */
+export function packProject(modpack: ModpackOrigin | null): PackProject | null {
   if (modpack?.type === "modrinth") return { source: "modrinth", projectId: modpack.projectId };
   if (modpack?.type === "curseforge") return { source: "curseforge", projectId: String(modpack.projectId) };
   if (modpack?.type !== "provider") return null;

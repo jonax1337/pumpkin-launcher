@@ -12,13 +12,15 @@ use serde::Deserialize;
 
 use super::maven::{artifact_url, maven_path, maven_sha1};
 use super::{compare_versions, profile_path, save_profile, segment, LoaderProfile, LoaderTarget, LoaderVersion};
+use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::ModLoader;
 use crate::services::download::{self, dedup_by_path, is_sha1, Job};
+use crate::services::limits::{FILE_LIMIT, ZIP_JSON_LIMIT};
 use crate::services::mojang::{Argument, Arguments, Download, Library};
 use crate::services::progress::CountFn;
 use crate::services::rules::Env;
-use crate::services::{blocking, Dirs};
+use crate::services::{blocking, zip_guard, Dirs};
 
 const FORGE_MAVEN: &str = "https://maven.minecraftforge.net";
 const NEOFORGE_MAVEN: &str = "https://maven.neoforged.net/releases";
@@ -210,7 +212,7 @@ pub fn check_loader(loader: ModLoader, mc: &str) -> AppResult<()> {
     if supported {
         return Ok(());
     }
-    Err(AppError::invalid(format!("{} gibt es in Pumpkin Launcher erst ab Minecraft {from}, nicht für {mc}", loader.display_name())))
+    Err(AppError::invalid(coded!("errors.game.loaderUnsupportedMinecraft", loader = loader.display_name(), from = from, mc = mc)))
 }
 
 /// NeoForge-Versionen beginnen mit der Minecraft-Version ohne führende `1.`:
@@ -280,9 +282,9 @@ fn resolve(arg: &str, data: &HashMap<String, String>, libraries: &Path) -> AppRe
     let mut out = String::with_capacity(arg.len());
     let mut rest = arg;
     while let Some(start) = rest.find('{') {
-        let end = rest[start..].find('}').ok_or_else(|| AppError::invalid(format!("Installer-Argument '{arg}' unvollständig")))?;
+        let end = rest[start..].find('}').ok_or_else(|| AppError::invalid(coded!("errors.game.installerArgumentIncomplete", arg = arg)))?;
         let key = &rest[start + 1..start + end];
-        let value = data.get(key).ok_or_else(|| AppError::invalid(format!("Installer-Variable {{{key}}} unbekannt")))?;
+        let value = data.get(key).ok_or_else(|| AppError::invalid(coded!("errors.game.installerVariableUnknown", variable = format!("{{{key}}}"))))?;
         out.push_str(&rest[..start]);
         out.push_str(value);
         rest = &rest[start + end + 1..];
@@ -305,7 +307,7 @@ fn main_class(jar: &Path) -> AppResult<String> {
         .replace("\n ", "")
         .lines()
         .find_map(|l| l.strip_prefix("Main-Class:").map(|v| v.trim().to_owned()))
-        .ok_or_else(|| AppError::invalid(format!("{} hat keine Main-Class", jar.display())))
+        .ok_or_else(|| AppError::invalid(coded!("errors.game.installerNoMainClass", path = jar.display())))
 }
 
 /// Was das Installer-JAR mitbringt.
@@ -324,22 +326,21 @@ type InstallerZip = zip::ZipArchive<fs::File>;
 fn read_installer(installer: &Path, libraries: &Path, tmp: &Path) -> AppResult<Installer> {
     let mut zip = zip::ZipArchive::new(fs::File::open(installer)?)?;
     let profile = read_profile(&mut zip)?;
-    let version_json = read_entry(&mut zip, &profile.json)?;
+    let version_json = read_entry(&mut zip, &profile.json, ZIP_JSON_LIMIT)?;
     extract_maven(&mut zip, libraries)?;
     let data_files = extract_data_files(&mut zip, &profile, tmp)?;
     Ok(Installer { profile, version_json, data_files })
 }
 
-fn read_entry(zip: &mut InstallerZip, name: &str) -> AppResult<Vec<u8>> {
-    let mut buf = Vec::new();
-    zip.by_name(name.trim_start_matches('/'))?.read_to_end(&mut buf)?;
-    Ok(buf)
+/// Eintrag des Installers im Speicher, höchstens `limit` Bytes.
+fn read_entry(zip: &mut InstallerZip, name: &str, limit: u64) -> AppResult<Vec<u8>> {
+    zip_guard::read_entry(&mut zip.by_name(name.trim_start_matches('/'))?, limit)
 }
 
 fn read_profile(zip: &mut InstallerZip) -> AppResult<InstallProfile> {
-    serde_json::from_slice(&read_entry(zip, "install_profile.json")?).map_err(|e| {
+    serde_json::from_slice(&read_entry(zip, "install_profile.json", ZIP_JSON_LIMIT)?).map_err(|e| {
         tracing::warn!(%e, "Install-Profil in altem Format");
-        AppError::invalid("Diese Loader-Version nutzt ein altes Installer-Format, das Pumpkin Launcher nicht unterstützt")
+        AppError::invalid(coded!("errors.game.installerFormatOld"))
     })
 }
 
@@ -368,13 +369,13 @@ fn extract_data_files(zip: &mut InstallerZip, profile: &InstallProfile, tmp: &Pa
     let mut files = HashMap::new();
     for entry in profile.data.values().filter(|d| d.client.starts_with('/')) {
         let name = entry.client.trim_start_matches('/');
-        let invalid = || AppError::invalid(format!("ungültiger Installer-Eintrag '{name}'"));
+        let invalid = || AppError::invalid(coded!("errors.game.installerEntryInvalid", name = name));
         let file_name = Path::new(name).file_name().ok_or_else(invalid)?;
         if name.contains("..") {
             return Err(invalid());
         }
         let target = tmp.join(file_name);
-        fs::write(&target, read_entry(zip, name)?)?;
+        fs::write(&target, read_entry(zip, name, FILE_LIMIT)?)?;
         files.insert(entry.client.clone(), target);
     }
     Ok(files)
@@ -493,7 +494,13 @@ impl<'a> Setup<'a> {
         if profile.inherits_from != self.target.mc {
             let LoaderTarget { mc, version, .. } = self.target;
             let name = self.target.name();
-            return Err(AppError::invalid(format!("{name} {version} gehört zu Minecraft {} statt {mc}", profile.inherits_from)));
+            return Err(AppError::invalid(coded!(
+                "errors.game.loaderVersionWrongMinecraft",
+                loader = name,
+                version = version,
+                inherits = profile.inherits_from,
+                mc = mc
+            )));
         }
         Ok(profile)
     }
@@ -520,7 +527,9 @@ impl<'a> Setup<'a> {
 
     fn verify_libraries(&self, profile: &Profile) -> AppResult<()> {
         match missing_library(profile, &self.libraries) {
-            Some(lib) => Err(AppError::Download(format!("{} unvollständig: {} fehlt", self.target.name(), lib.name))),
+            Some(lib) => Err(AppError::Download(
+                coded!("errors.game.loaderIncomplete", loader = self.target.name(), library = lib.name).into(),
+            )),
             None => Ok(()),
         }
     }
@@ -555,10 +564,12 @@ impl Processing<'_> {
         let name = self.setup.target.name();
         if !output.status.success() {
             let last = failure_line(processor, &output);
-            return Err(AppError::Download(format!("{name} ließ sich nicht einrichten (Schritt {step} von {}): {last}", self.count)));
+            return Err(AppError::Download(
+                coded!("errors.game.loaderSetupStepFailed", loader = name, step = step, count = self.count, last = last).into(),
+            ));
         }
         if !outputs_ok(&outputs).await {
-            return Err(AppError::Download(format!("{name} ließ sich nicht einrichten: Schritt {step} lieferte eine falsche Datei")));
+            return Err(AppError::Download(coded!("errors.game.loaderSetupWrongFile", loader = name, step = step).into()));
         }
         Ok(())
     }
@@ -649,7 +660,7 @@ mod tests {
             resolve("[net.minecraft:client:1.21.1:mappings@tsrg]", &data, libs).unwrap(),
             libs.join("net/minecraft/client/1.21.1/client-1.21.1-mappings.tsrg").to_string_lossy()
         );
-        assert!(resolve("{UNKNOWN}", &data, libs).is_err());
+        assert_eq!(resolve("{UNKNOWN}", &data, libs).unwrap_err().to_string(), "Installer-Variable {UNKNOWN} unbekannt");
         assert!(resolve("[../../x:y:1]", &data, libs).is_err());
     }
 
@@ -722,5 +733,20 @@ mod tests {
         assert_eq!(fs::read_to_string(libs.join("a/c.jar")).unwrap(), "alt");
         assert!(!libs.join("a/b.jar.part").exists());
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn installer_entries_are_read_up_to_the_limit() {
+        use std::io::Write;
+        let path = std::env::temp_dir().join(crate::models::new_id());
+        let mut writer = zip::ZipWriter::new(fs::File::create(&path).unwrap());
+        writer.start_file("version.json", zip::write::SimpleFileOptions::default()).unwrap();
+        writer.write_all(b"12345").unwrap();
+        writer.finish().unwrap();
+        let mut zip = zip::ZipArchive::new(fs::File::open(&path).unwrap()).unwrap();
+
+        assert_eq!(read_entry(&mut zip, "/version.json", 5).unwrap(), b"12345");
+        assert!(read_entry(&mut zip, "/version.json", 4).is_err());
+        fs::remove_file(path).unwrap();
     }
 }

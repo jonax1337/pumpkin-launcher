@@ -2,6 +2,7 @@ import { useLocation } from "react-router";
 import { useI18n } from "@/i18n";
 import { BarButton, Icon, Tip } from "@/ui";
 import { TABS } from "./mainTabs";
+import { SHORTCUT, shortcutLabel } from "./shortcuts";
 import { TasksButton } from "./TasksButton";
 
 /**
@@ -11,11 +12,12 @@ import { TasksButton } from "./TasksButton";
 export function Sidebar() {
   const { t } = useI18n();
   const { pathname } = useLocation();
+  const withShortcut = (name: string, shortcut: string) => `${name} (${shortcutLabel(shortcut, t)})`;
   return (
     <nav className="side" aria-label={t("ui.nav.mainAreas")}>
       <div className="side-grp">
         {TABS.map((tab) => (
-          <Tip key={tab.to} label={t(tab.key)} side="right">
+          <Tip key={tab.to} label={withShortcut(t(tab.key), tab.shortcut)} side="right">
             <BarButton side to={tab.to} aria-label={t(tab.key)} aria-keyshortcuts={tab.shortcut} current={tab.match(pathname)}>
               <Icon name={tab.icon} />
             </BarButton>
@@ -24,12 +26,12 @@ export function Sidebar() {
       </div>
       <div className="side-grp">
         <TasksButton />
-        <Tip label={t("common.settings")} side="right">
+        <Tip label={withShortcut(t("common.settings"), SHORTCUT.settings)} side="right">
           <BarButton
             side
             to="/settings"
             aria-label={t("common.settings")}
-            aria-keyshortcuts="Control+,"
+            aria-keyshortcuts={SHORTCUT.settings}
             current={pathname.startsWith("/settings")}
           >
             <Icon name="gear" />

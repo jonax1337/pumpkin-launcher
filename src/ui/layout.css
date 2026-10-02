@@ -9,41 +9,37 @@
 /* Seitenüberschrift bekommt nach dem Seitenwechsel den Fokus: kein Ring, sie ist nicht bedienbar */
 .vx-h[tabindex="-1"]:focus { outline: none; }
 
-/* ---------- Seitenkopf: 44 px, Titel 40 px unten bündig, Zahl daneben, Aktionen rechts ---------- */
-.vx-pageh { display: flex; align-items: flex-end; gap: 14px; height: 44px; min-width: 0; }
+/* ---------- Seitenkopf: 44 px, Titel 40 px unten bündig, Zahl daneben, Aktionen rechts; bricht um, wenn es eng wird ---------- */
+.vx-pageh { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 14px; min-height: 44px; min-width: 0; }
 .vx-pageh-n { padding-bottom: 3px; }
-.vx-pageh-a { display: flex; align-items: center; gap: 8px; margin-left: auto; flex: none; }
+.vx-pageh-a { display: flex; align-items: center; gap: 8px; margin-left: auto; min-width: 0; }
 
 /* ---------- Abschnittskopf: 32 px, Titel links, Aktionen rechts ---------- */
 .vx-sech { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 32px; min-width: 0; }
-.vx-sech > .vx-h { line-height: 1; padding-top: 2px; }
+.vx-sech > .vx-h, .vx-sech-t > .vx-h { line-height: 1; padding-top: 2px; }
+.vx-sech-t { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .vx-sech-a { display: flex; align-items: center; gap: 2px; flex: none; }
 
 /* ---------- Werkzeugleiste: 40/56 px, Abstand 8; Suchfeldbreite zentral (--tb-search) ---------- */
-.vx-toolbar { --tb-h: 40px; position: relative; display: flex; align-items: center; gap: 8px; height: var(--tb-h); min-width: 0; }
+/* Bricht um, sobald die Breite nicht reicht (Zoom, schmales Fenster): die Höhe ist Mindesthöhe, nichts ragt über den rechten Rand. */
+.vx-toolbar { --tb-h: 40px; position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: var(--tb-h); min-width: 0; }
 .vx-toolbar[data-h="56"] { --tb-h: 56px; }
 .vx-toolbar[data-search="s"] { --tb-search: 220px; }
 .vx-toolbar[data-search="m"] { --tb-search: 260px; }
 .vx-toolbar[data-search="l"] { --tb-search: 320px; }
-.vx-toolbar[data-search] .vx-input[data-lead]:not([data-w]) { width: var(--tb-search); flex: none; }
-@media (max-width: 960px) { .vx-toolbar[data-search="s"] { --tb-search: 128px; } }
-@media (max-width: 900px) { .vx-toolbar[data-search="m"] { --tb-search: 180px; } }
-/* Zweite Leiste (Auswahl) deckungsgleich darüber; Wechsel in Stufen, inaktive Leiste ist inert */
-.vx-toolbar[data-alt] > :is(.vx-tb-main, .vx-tb-alt) { position: absolute; inset: 0; display: flex; align-items: center; gap: 8px; min-width: 0; transition: opacity var(--st), visibility var(--st); }
-.vx-toolbar[data-alt="off"] > .vx-tb-alt, .vx-toolbar[data-alt="on"] > .vx-tb-main { opacity: 0; visibility: hidden; }
-/* Umbruch unter der Breite: feste Höhe wird Mindesthöhe; Hauptleiste fließt, Auswahl liegt weiter darüber */
-@media (max-width: 1096px) {
-  .vx-toolbar[data-wrap="1096"] { flex-wrap: wrap; row-gap: 8px; height: auto; min-height: var(--tb-h); }
+.vx-toolbar[data-search] .vx-input[data-lead]:not([data-w]) { width: var(--tb-search); max-width: 100%; flex: none; }
+/* Etwas schmaler, damit die Leisten im Standardfenster (1100 px) noch in eine Zeile passen */
+@media (max-width: 1180px) {
+  .vx-toolbar[data-search="s"] { --tb-search: 184px; }
+  .vx-toolbar[data-search="m"] { --tb-search: 240px; }
+  .vx-toolbar[data-search="l"] { --tb-search: 280px; }
 }
-@media (max-width: 800px) {
-  .vx-toolbar[data-wrap="800"] { flex-wrap: wrap; row-gap: 8px; height: auto; min-height: var(--tb-h); }
-  .vx-toolbar[data-wrap="800"][data-alt] > .vx-tb-main { position: relative; flex-wrap: wrap; row-gap: 8px; padding: 8px 0; }
-  .vx-toolbar[data-wrap="800"][data-alt] > .vx-tb-alt { flex-wrap: wrap; }
-}
-@media (max-width: 1096px) {
-  .vx-toolbar[data-wrap="1096"][data-alt] > .vx-tb-main { position: relative; flex-wrap: wrap; row-gap: 8px; }
-}
+/* Zweite Leiste (Auswahl) im selben Platz; Wechsel in Stufen, die inaktive Leiste ist inert und liegt darunter */
+.vx-toolbar[data-alt] > :is(.vx-tb-main, .vx-tb-alt) { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1 1 100%; min-width: 0; min-height: var(--tb-h); transition: opacity var(--st), visibility var(--st); }
+.vx-toolbar[data-alt="off"] > .vx-tb-alt, .vx-toolbar[data-alt="on"] > .vx-tb-main { position: absolute; inset: 0; opacity: 0; visibility: hidden; }
 .vx-sp { flex: 1; }
+/* Gruppe rechts vom Freiraum: bleibt zusammen, steht rechts (auch in der zweiten Zeile) und bricht erst innen um */
+.vx-tb-end { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-left: auto; min-width: 0; }
 
 /* ---------- Aktionen ---------- */
 .vx-acts { display: flex; align-items: center; gap: 8px; min-width: 0; }

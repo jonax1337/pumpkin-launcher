@@ -4,8 +4,10 @@ use std::{cmp::Reverse, fs, path::Path, time::UNIX_EPOCH};
 
 use serde::Serialize;
 
-use super::{entries, has_extension, trash_listed};
-use crate::error::AppResult;
+use super::limits::FILE_LIMIT;
+use super::{entries, find_listed, has_extension, trash_listed};
+use crate::coded;
+use crate::error::{AppError, AppResult};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,6 +42,15 @@ pub fn delete(dir: &Path, file_name: &str) -> AppResult<()> {
     trash_listed(dir, file_name, "Screenshot", |entry| screenshot(entry).is_some())
 }
 
+/// Der Inhalt des Screenshots `file_name` aus `dir` (für die Zwischenablage), nur wenn `list` ihn zeigt.
+pub fn read(dir: &Path, file_name: &str) -> AppResult<Vec<u8>> {
+    let entry = find_listed(dir, file_name, "Screenshot", |entry| screenshot(entry).is_some())?;
+    if entry.metadata()?.len() > FILE_LIMIT {
+        return Err(AppError::invalid(coded!("errors.app.screenshotTooLarge")));
+    }
+    Ok(fs::read(entry.path())?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -72,12 +83,25 @@ mod tests {
     }
 
     #[test]
+    fn reads_only_listed_screenshots() {
+        let dir = std::env::temp_dir().join(crate::models::new_id());
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("a.png"), b"bild").unwrap();
+        create(&dir.join("notes.txt"), 1, 0);
+        assert_eq!(read(&dir, "a.png").unwrap(), b"bild");
+        for name in ["notes.txt", "../instances.json", "missing.png"] {
+            assert!(matches!(read(&dir, name), Err(AppError::NotFound(_))), "{name}");
+        }
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn delete_only_listed_screenshots() {
         let dir = std::env::temp_dir().join(crate::models::new_id());
         fs::create_dir_all(&dir).unwrap();
         create(&dir.join("notes.txt"), 1, 0);
         for name in ["notes.txt", "../instances.json", "missing.png"] {
-            assert!(matches!(delete(&dir, name), Err(AppError::NotFound { .. })), "{name}");
+            assert!(matches!(delete(&dir, name), Err(AppError::NotFound(_))), "{name}");
         }
         assert!(dir.join("notes.txt").is_file());
         fs::remove_dir_all(dir).unwrap();

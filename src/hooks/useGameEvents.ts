@@ -4,19 +4,21 @@ import { useNavigate, type NavigateFunction } from "react-router";
 import { toast } from "sonner";
 import { t } from "@/i18n/core";
 import { api } from "@/lib/api";
+import { crashCause } from "@/components/play/crash";
 import { formatClock } from "@/lib/format";
+import { restoreLauncherAfterPlay } from "@/lib/launcherWindow";
 import { openLocalPath } from "@/lib/links";
 import { instanceUrl } from "@/lib/routes";
 import { LONG_TOAST_MS } from "@/lib/toast";
 import type { ExitPayload, Instance, InstanceStatus } from "@/lib/types";
 import { useGame } from "@/store/game";
 import { consumeStoppedByUser } from "@/store/stopAsk";
-import { instanceKeys, instanceRelatedKeys, screenshotKeys, worldKeys } from "./queryKeys";
+import { instanceKeys, instanceRelatedKeys, logKeys, screenshotKeys, worldKeys } from "./queryKeys";
 
 type ToastAction = { label: string; onClick: () => void };
 
 /**
- * Nach dem Ende des Spiels: Das Backend hat die Spielzeit der Sitzung angerechnet,
+ * Nach dem Ende des Spiels: Das Backend hat die Spielzeit der Sitzung angerechnet und ihr Protokoll gesichert,
  * das Spiel Welten, Serverliste und Screenshots geändert.
  */
 function refreshAfterExit(qc: QueryClient, instanceId: string) {
@@ -24,14 +26,16 @@ function refreshAfterExit(qc: QueryClient, instanceId: string) {
   void qc.invalidateQueries({ queryKey: instanceKeys.all });
   void qc.invalidateQueries({ queryKey: worldKeys.all(instanceId) });
   void qc.invalidateQueries({ queryKey: screenshotKeys.list(instanceId) });
+  void qc.invalidateQueries({ queryKey: logKeys.sessions(instanceId) });
 }
 
 /** Bleibt stehen, bis der Nutzer reagiert: ein Absturz ist keine vorübergehende Meldung. */
-function notifyCrash({ instanceId, crashReport }: ExitPayload, name: string, showLog: ToastAction) {
+function notifyCrash(exit: ExitPayload, name: string, showLog: ToastAction) {
+  const { instanceId, crashReport } = exit;
   toast.error(t("hooks.game.crashed", { name }), {
     id: `crash-${instanceId}`,
     duration: Infinity,
-    description: crashReport ? t("hooks.game.crashReportHint") : t("hooks.game.logHint"),
+    description: crashCause(exit) || (crashReport ? t("hooks.game.crashReportHint") : t("hooks.game.logHint")),
     action: crashReport ? { label: t("components.game.openCrashReport"), onClick: () => openLocalPath(crashReport) } : showLog,
     cancel: crashReport ? showLog : undefined,
   });
@@ -58,6 +62,7 @@ function handleExit(exit: ExitPayload, qc: QueryClient, navigate: NavigateFuncti
   const { instanceId } = exit;
   const since = useGame.getState().started[instanceId];
   useGame.getState().setStarted(instanceId, null);
+  restoreLauncherAfterPlay();
   refreshAfterExit(qc, instanceId);
   const name = qc.getQueryData<Instance[]>(instanceKeys.all)?.find((i) => i.id === instanceId)?.name ?? "Minecraft";
   const showLog = { label: t("components.log.ariaLabel"), onClick: () => navigate(instanceUrl(instanceId, "console")) };

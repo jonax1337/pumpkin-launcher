@@ -1,14 +1,16 @@
 import type { UnlistenFn } from "@tauri-apps/api/event";
-import type { OpenDialogOptions } from "@tauri-apps/plugin-dialog";
+import type { OpenDialogOptions, SaveDialogOptions } from "@tauri-apps/plugin-dialog";
 import type { Update } from "@tauri-apps/plugin-updater";
 import type {
   BlockedFile, CatalogType, ContentBlocked, ContentProject, ContentSearch, ContentVersion, ModUpdate, SearchIndex, Source,
 } from "./content-types";
 import type { ContentProgress } from "./progress";
 import type {
-  Account, Datapack, ExitPayload, FileCheck, ForeignInstance, Instance, InstallProgress, InstanceStatus, LaunchOptions, LibrarySkin,
-  LoaderVersion, LocalFile, LogKind, LogPayload, ModLoader, MsLoginStart, NewInstance, Screenshot, Server, SkinProfile, SkinVariant,
-  Template, VersionEntry, World, WorldBackup,
+  Account, ContentAnalysis, Datapack, ExitPayload, ExportSummary, FileCheck, ForeignInstance, IconChoice, ImportRequest, Instance,
+  InstallProgress, InstanceScene, InstanceStatus, JavaInstall, LaunchOptions, LibrarySkin, LoaderVersion, LocalFile, LogKind, LogPayload,
+  LogSession, MigrationCheck, MigrationOutcome, MigrationTarget, ModLoader, MsLoginStart, NewInstance, PackSelection, PackTarget,
+  PackUpdateOutcome, Screenshot, Server, ServerStatus, SkinProfile, SkinVariant, StorageOverview, Template, VersionEntry, World,
+  WorldBackup,
 } from "./types";
 
 /** Events des Backends (Tauri-Events bzw. im Browser-Mock der gleiche Name auf einem EventTarget) mit ihrer Nutzlast. */
@@ -19,6 +21,8 @@ export interface BackendEvents {
   "instance-log": LogPayload;
   "instance-exit": ExitPayload;
   "instances-changed": null;
+  /** Der Launcher wurde mit einer Pack-Datei geöffnet; `takeOpenedPack` liefert sie. */
+  "pack-opened": null;
 }
 
 export type Subscribe = <E extends keyof BackendEvents>(event: E, cb: (payload: BackendEvents[E]) => void) => Promise<UnlistenFn>;
@@ -31,10 +35,11 @@ export interface VersionFilter {
   loader: string | null;
 }
 
-/** Eine Seite der Katalogsuche; `index` ist die Sortierung. */
+/** Eine Seite der Katalogsuche; `index` ist die Sortierung, `category` die Kategorie des Anbieters (nur Modrinth). */
 export interface SearchOptions extends VersionFilter {
   query: string;
   type: CatalogType;
+  category: string | null;
   offset: number;
   index: SearchIndex;
 }
@@ -53,6 +58,24 @@ export interface ModInstall {
   versionId: string;
 }
 
+/** Was ein Export mitnimmt (`include`, Einträge aus `exportEntries`) und was im Index des Packs steht. */
+export interface ExportRequest {
+  include: string[];
+  name: string;
+  versionId: string;
+  /** Beschreibung des Packs; `null` = keine. */
+  summary: string | null;
+}
+
+/** Was in den Bericht der Debug-Info kommt: Einstellungen des Launchers, die nur das Frontend kennt, und die Instanz im Fokus. */
+export interface DebugInfoOptions {
+  defaultMemoryMb: number;
+  javaPath: string | null;
+  instanceId: string | null;
+}
+
+export type LauncherWindowAction = "minimize" | "restore" | "close";
+
 /**
  * Was nur die App kann. Der Browser-Mock hat es nicht: die Oberfläche blendet es dann aus,
  * statt einen Knopf zu zeigen, der nur einen Fehler meldet.
@@ -60,10 +83,12 @@ export interface ModInstall {
 export interface Capabilities {
   /** Systemdialog für Dateien und Ordner (`pickPaths`); der Browser liefert keine Pfade. */
   pickPaths: boolean;
-  /** Instanz als `.mrpack` schreiben (`exportInstance`). */
+  /** Instanz oder Vorlage als `.mrpack` schreiben (`exportInstance`, `templateExport`). */
   exportInstance: boolean;
   /** Dateien aufs Fenster ziehen (`useFileDrop`). */
   fileDrop: boolean;
+  /** Datei im Dateimanager markieren (`revealPath`). */
+  revealPath: boolean;
   /** Fenstertitel und Fensterknöpfe des rahmenlosen Fensters. */
   nativeWindow: boolean;
   /** Version der installierten App (im Browser gilt die aus der `package.json`). */
@@ -74,6 +99,7 @@ export const allCapabilities = (available: boolean): Capabilities => ({
   pickPaths: available,
   exportInstance: available,
   fileDrop: available,
+  revealPath: available,
   nativeWindow: available,
   appVersion: available,
 });
@@ -92,6 +118,16 @@ export interface Backend {
   modrinthInstallMod(instanceId: string, versionId: string, operationId: string): Promise<Instance>;
   modrinthCheckUpdates(instanceId: string): Promise<ModUpdate[]>;
   modrinthUpdateMods(instanceId: string, modIds: string[], operationId: string): Promise<Instance>;
+  /** Setzt einen Modrinth-Inhalt auf eine gewählte Version, neuer oder älter. */
+  modrinthSwitchVersion(instanceId: string, modId: string, versionId: string, operationId: string): Promise<Instance>;
+  /** Größe und Datum der Dateien samt Hinweisen aus den Mod-Metadaten (fehlende Abhängigkeiten, Doppelte, Loader, Version). */
+  contentAnalysis(instanceId: string): Promise<ContentAnalysis>;
+  /** Gewählte Ressourcenpakete und Shader (`options.txt`, Iris). */
+  packSelection(instanceId: string): Promise<PackSelection>;
+  /** Setzt die Ressourcenpakete in `options.txt`; läuft das Spiel, schreibt das Backend nichts. */
+  setResourcePacks(instanceId: string, packs: string[]): Promise<PackSelection>;
+  /** Wählt den Iris-Shader (Dateiname) oder, mit null, keinen; läuft das Spiel, schreibt das Backend nichts. */
+  setShaderPack(instanceId: string, pack: string | null): Promise<PackSelection>;
   /** Lokale Einträge `modIds` per SHA-1 mit Modrinth abgleichen; erkannte bekommen Updates von dort. */
   modrinthIdentify(instanceId: string, modIds: string[]): Promise<Instance>;
   /** Eigene Dateien (absolute Pfade) vorab prüfen: Art und ob die Instanz sie schon hat. */
@@ -99,6 +135,8 @@ export interface Backend {
   addLocalFiles(instanceId: string, files: LocalFile[], operationId: string): Promise<Instance>;
   modrinthInstallPack(versionId: string, name: string, operationId: string): Promise<Instance>;
   modrinthImportPack(path: string, name: string, operationId: string): Promise<Instance>;
+  /** CurseForge-Modpack als `.zip` von der Platte; Dateien nur von der Webseite meldet das Ereignis `content-blocked`. */
+  curseforgeImportPack(path: string, name: string, operationId: string): Promise<Instance>;
   /** Anbieter ohne API-Key (FTB, Technic, CurseForge); gleiche Formen wie bei Modrinth. Nur in der App. */
   providerSearch(source: Source, options: SearchOptions): Promise<ContentSearch>;
   providerProject(source: Source, projectId: string): Promise<ContentProject>;
@@ -120,33 +158,60 @@ export interface Backend {
   updateInstance(instance: Instance): Promise<Instance>;
   /** Nur die Gruppe ändern (null oder leer = ohne); überschreibt keinen anderen Stand der Instanz. */
   setInstanceGroup(instanceId: string, group: string | null): Promise<Instance>;
+  /** Eigenes Icon setzen; null = automatisch. Ändert nichts anderes an der Instanz. */
+  setInstanceIcon(instanceId: string, icon: IconChoice | null): Promise<Instance>;
+  /** Szene setzen; null = aus der ID abgeleitet. Ändert nichts anderes an der Instanz. */
+  setInstanceScene(instanceId: string, scene: InstanceScene | null): Promise<Instance>;
   deleteInstance(id: string): Promise<void>;
   /** Kopie mit Spielordner unter „<Name> (Kopie)“; Fortschritt als `content-progress`. */
   duplicateInstance(instanceId: string, operationId: string): Promise<Instance>;
   /** Einträge des Spielordners, die ein Export mitnehmen kann (Ordner und Dateien). */
   exportEntries(instanceId: string): Promise<string[]>;
-  /** Schreibt die Instanz als `.mrpack` nach `path` (absolut); `include` aus `exportEntries`. Abbrechbar wie ein Pack. */
-  exportInstance(instanceId: string, include: string[], path: string, operationId: string): Promise<void>;
+  /** Wie ein Export die Inhalte der Auswahl `include` verteilen würde (fragt Modrinth, was es kennt). */
+  exportSummary(instanceId: string, include: string[]): Promise<ExportSummary>;
+  /** Zielpfade für mehrere `.mrpack` in `folder`: ein Dateiname, der dort schon liegt oder doppelt vorkommt, bekommt eine Nummer. */
+  exportTargets(folder: string, fileNames: string[]): Promise<string[]>;
+  /** Schreibt die Instanz als `.mrpack` nach `path` (absolut). Abbrechbar wie ein Pack. */
+  exportInstance(instanceId: string, request: ExportRequest, path: string, operationId: string): Promise<void>;
+  /** Änderungsprotokoll einer Version des Packs, aus dem die Instanz stammt (Markdown); null, wo die Quelle keins führt. */
+  packChangelog(instanceId: string, versionId: string): Promise<string | null>;
+  /** Pack-Instanz auf eine andere Pack-Version bringen; vorher werden alle Welten gesichert. Abbrechbar wie ein Pack. */
+  packUpdate(instanceId: string, target: PackTarget, operationId: string): Promise<PackUpdateOutcome>;
+  /** Vorschau eines Wechsels von Minecraft-Version oder Loader, ohne etwas zu ändern. */
+  migrateCheck(instanceId: string, target: MigrationTarget): Promise<MigrationCheck>;
+  /** Wechselt Minecraft-Version oder Loader der Instanz selbst (Welten vorher gesichert). Abbrechbar wie ein Pack. */
+  migrateInstance(instanceId: string, target: MigrationTarget, operationId: string): Promise<MigrationOutcome>;
+  /** Legt eine Kopie an und wechselt nur sie; das Original bleibt. Abbrechbar wie ein Pack. */
+  duplicateMigrate(instanceId: string, target: MigrationTarget, operationId: string): Promise<MigrationOutcome>;
   /** Auswahldialog des Systems (Dateien oder, mit `directory`, Ordner); abgebrochen = leere Liste. Im Browser gibt es keine Pfade. */
   pickPaths(options: OpenDialogOptions): Promise<string[]>;
+  /** Speichern-Dialog des Systems (bestätigt das Überschreiben); abgebrochen = null. */
+  pickSavePath(options: SaveDialogOptions): Promise<string | null>;
   /** Datei im Dateimanager markieren (z. B. ein Export). */
   revealPath(path: string): Promise<void>;
 
   /** Instanzen anderer Launcher an den Standardorten oder, mit `folder` (absolut), in diesem Ordner. */
   importDetect(folder: string | null): Promise<ForeignInstance[]>;
-  /** Neue Instanz aus einer Instanz eines anderen Launchers; Fortschritt als `content-progress`, Abbruch über `packInstallCancel`. */
-  importInstance(source: ForeignInstance, operationId: string): Promise<Instance>;
+  /** Neue Instanz aus einer erkannten Instanz eines anderen Launchers; Fortschritt als `content-progress`, Abbruch über `packInstallCancel`. */
+  importInstance(request: ImportRequest, operationId: string): Promise<Instance>;
 
   templateSave(instanceId: string, name: string): Promise<Template>;
   templateList(): Promise<Template[]>;
   templateDelete(id: string): Promise<void>;
   templateCreateInstance(templateId: string, name: string, operationId: string): Promise<Instance>;
+  /** Schreibt die Vorlage als `.mrpack` nach `path` (absolut), zum Weitergeben. */
+  templateExport(templateId: string, path: string): Promise<void>;
+  /** Nimmt eine `.mrpack`-Datei (absoluter Pfad) als Vorlage auf. */
+  templateImport(path: string): Promise<Template>;
+
+  /** Die `.mrpack`-Datei, mit der der Launcher geöffnet wurde, einmalig; danach `null` bis zur nächsten. */
+  takeOpenedPack(): Promise<string | null>;
 
   versionsList(): Promise<VersionEntry[]>;
   loaderVersions(loader: ModLoader, mcVersion: string): Promise<LoaderVersion[]>;
   installCancel(instanceId: string): Promise<void>;
   /**
-   * Bricht einen abbrechbaren Content-Vorgang ab (Modpack, Import, Vorlage, Duplizieren, Export).
+   * Bricht einen abbrechbaren Content-Vorgang ab (Modpack, Import, Vorlage, Duplizieren, Export, Pack-Update, Wechsel).
    * Einzige Stelle, die den Command-Namen kennt.
    */
   packInstallCancel(operationId: string): Promise<void>;
@@ -163,6 +228,7 @@ export interface Backend {
   onLog(cb: (p: LogPayload) => void): Promise<UnlistenFn>;
   onExit(cb: (p: ExitPayload) => void): Promise<UnlistenFn>;
   onInstancesChanged(cb: () => void): Promise<UnlistenFn>;
+  onPackOpened(cb: () => void): Promise<UnlistenFn>;
 
   /** `method: "device"` erzwingt den Gerätecode; sonst Browser-Anmeldung (Rückfall auf Gerätecode im Backend). */
   msLoginStart(method?: "device"): Promise<MsLoginStart>;
@@ -174,8 +240,22 @@ export interface Backend {
   msAccountRemove(id: string): Promise<void>;
   /** Lädt ein Protokoll der Instanz bereinigt zu mclo.gs hoch und liefert den öffentlichen Link. */
   shareLog(instanceId: string, kind: LogKind): Promise<string>;
-  /** Launcher, System und Instanzen als Klartext ohne persönliche Daten, für Fehlerberichte. */
-  debugInfo(defaultMemoryMb: number): Promise<string>;
+  /** Launcher, System und Instanzen als Klartext ohne persönliche Daten, für Fehlerberichte; mit `instanceId` samt deren Mod-Liste. */
+  debugInfo(options: DebugInfoOptions): Promise<string>;
+  /** Gesicherte Protokolle früherer Sitzungen der Instanz, neueste zuerst. */
+  logSessions(instanceId: string): Promise<LogSession[]>;
+  logSessionRead(instanceId: string, sessionId: string): Promise<string>;
+
+  /** Platz je Instanz, im Mod-Cache und in den geteilten Ordnern. */
+  storageOverview(): Promise<StorageOverview>;
+  /** Löscht, was im Mod-Cache keine Instanz braucht; liefert die freigegebenen Bytes. */
+  storageClearCache(): Promise<number>;
+  /** Datenordner im Dateimanager öffnen. */
+  storageOpenDir(): Promise<void>;
+  /** Auf dem Rechner installierte Java-Versionen, neueste zuerst. */
+  detectJava(): Promise<JavaInstall[]>;
+  /** Launcher-Fenster minimieren, wiederherstellen oder schließen (Einstellung „Beim Spielstart“). */
+  setLauncherWindow(action: LauncherWindowAction): Promise<void>;
 
   /** Was das Microsoft-Konto gerade trägt. Im Browser ein Beispielprofil. */
   skinProfile(accountId: string): Promise<SkinProfile>;
@@ -203,6 +283,10 @@ export interface Backend {
   /** Stellt eine Sicherung als neue Welt her; ist der Ordnername belegt, unter „<Name> (2)“. */
   worldRestore(instanceId: string, backupId: string): Promise<World>;
   worldBackupDelete(instanceId: string, backupId: string): Promise<void>;
+  /** Alle Sicherungen der Instanz in einen neuen Ordner in `directory` (absolut, bestehend) kopieren; liefert den neuen Ordner. */
+  worldBackupsExport(instanceId: string, directory: string): Promise<string>;
+  /** Holt eine Welt aus einem Zip (absoluter Pfad) als neue Welt, unter „<Name> (2)“, wenn der Ordner belegt ist; Fortschritt als `content-progress` (Phase `extract`). */
+  worldImport(instanceId: string, path: string, operationId: string): Promise<World>;
   /** Löscht eine Welt, nachdem sie gesichert wurde; liefert die Sicherung. */
   worldDelete(instanceId: string, worldId: string, operationId: string): Promise<WorldBackup>;
   /** Kann die Minecraft-Version der Instanz direkt in eine Welt starten (ab 1.20)? */
@@ -219,10 +303,14 @@ export interface Backend {
   /** Legt einen Server an (`index` null) oder ändert den an Stelle `index` der Liste. */
   serverSave(instanceId: string, index: number | null, server: Server): Promise<void>;
   serverRemove(instanceId: string, index: number): Promise<void>;
+  /** Status (Ping, Spieler, MOTD, Version) eines Servers aus der Liste der Instanz; Fehler = nicht erreichbar. */
+  serverPing(instanceId: string, address: string): Promise<ServerStatus>;
   /** Screenshots der Instanz, neueste zuerst. */
   screenshots(instanceId: string): Promise<Screenshot[]>;
   /** Legt den Screenshot in den Papierkorb. */
   screenshotDelete(instanceId: string, fileName: string): Promise<void>;
+  /** Der Inhalt eines Screenshots (PNG), etwa für die Zwischenablage. */
+  screenshotRead(instanceId: string, fileName: string): Promise<ArrayBuffer>;
   /** Bildquelle über das Asset-Protokoll (Scope: screenshots/ der Instanzen); im Mock ist `path` schon eine data:-URL. */
   screenshotSrc(shot: Screenshot): string;
 
@@ -235,7 +323,7 @@ export interface Backend {
   restartApp(): Promise<void>;
 }
 
-/** Die sechs `on…`-Abonnements, die beide Backends gleich aus ihrem `Subscribe` bauen. */
+/** Die sieben `on…`-Abonnements, die beide Backends gleich aus ihrem `Subscribe` bauen. */
 export const eventSubscriptions = (on: Subscribe) => ({
   onContentBlocked: (cb) => on("content-blocked", cb),
   onContentProgress: (cb) => on("content-progress", cb),
@@ -243,4 +331,5 @@ export const eventSubscriptions = (on: Subscribe) => ({
   onLog: (cb) => on("instance-log", cb),
   onExit: (cb) => on("instance-exit", cb),
   onInstancesChanged: (cb) => on("instances-changed", cb),
+  onPackOpened: (cb) => on("pack-opened", cb),
 } satisfies Partial<Backend>);

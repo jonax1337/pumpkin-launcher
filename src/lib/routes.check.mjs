@@ -7,7 +7,8 @@ const params = (url) => new URL(url, 'app://launcher').searchParams;
 // Neue Instanz: jede Adresse, die der Absender baut, liest der Dialog wieder als derselbe Start.
 assert.equal(newInstanceUrl(), '/instances?neu=1');
 assert.equal(newInstanceUrl({ type: 'import' }), '/instances?neu=import');
-for (const start of [{ type: 'blank' }, { type: 'import' }, { type: 'file', path: 'C:\Spiele\Mein Pack & mehr.mrpack' }]) {
+assert.equal(newInstanceUrl({ type: 'file', path: '' }), '/instances?neu=file');
+for (const start of [{ type: 'blank' }, { type: 'import' }, { type: 'file', path: '' }, { type: 'file', path: 'C:\Spiele\Mein Pack & mehr.mrpack' }]) {
   assert.deepEqual(readNewInstanceStart(params(newInstanceUrl(start))), start);
 }
 assert.equal(readNewInstanceStart(params('/instances')), null);

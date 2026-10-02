@@ -1,6 +1,7 @@
 //! Suchanfrage an einen Katalog (Modrinth oder Anbieter): die Grenzen und die Sortierung werden einmal geprüft und
 //! überall gleich verstanden.
 use crate::{
+    coded,
     error::{AppError, AppResult},
     services::modrinth::identifier,
 };
@@ -23,7 +24,7 @@ impl ProjectType {
             "resourcepack" => Ok(Self::ResourcePack),
             "shader" => Ok(Self::Shader),
             "datapack" => Ok(Self::Datapack),
-            _ => Err(AppError::invalid("Ungültige Suche")),
+            _ => Err(AppError::invalid(coded!("errors.providers.invalidSearch"))),
         }
     }
 
@@ -58,7 +59,7 @@ impl SortIndex {
             Some("follows") => Ok(Some(Self::Follows)),
             Some("newest") => Ok(Some(Self::Newest)),
             Some("updated") => Ok(Some(Self::Updated)),
-            Some(_) => Err(AppError::invalid("Ungültige Sortierung")),
+            Some(_) => Err(AppError::invalid(coded!("errors.providers.invalidSort"))),
         }
     }
 
@@ -80,6 +81,8 @@ pub struct SearchQuery {
     /// Minecraft-Version.
     pub mc: Option<String>,
     pub loader: Option<String>,
+    /// Kategorie des Anbieters (Modrinth-Name wie `adventure`); nur Modrinth wertet sie aus.
+    pub category: Option<String>,
     pub offset: u32,
     pub index: Option<SortIndex>,
 }
@@ -94,14 +97,14 @@ impl SearchQuery {
     /// unterscheiden sich je Katalog.
     pub fn ensure_within(&self, max_query_len: usize, max_offset: u32) -> AppResult<()> {
         if self.query.len() > max_query_len || self.offset > max_offset {
-            return Err(AppError::invalid("Ungültige Suche"));
+            return Err(AppError::invalid(coded!("errors.providers.invalidSearch")));
         }
-        self.mc.iter().chain(&self.loader).try_for_each(|filter| identifier(filter))
+        self.mc.iter().chain(&self.loader).chain(&self.category).try_for_each(|filter| identifier(filter))
     }
 
     #[cfg(test)]
     pub(crate) fn of(query: &str, project_type: ProjectType) -> Self {
-        Self { query: query.into(), project_type, mc: None, loader: None, offset: 0, index: None }
+        Self { query: query.into(), project_type, mc: None, loader: None, category: None, offset: 0, index: None }
     }
 }
 
@@ -143,6 +146,7 @@ mod tests {
         assert!(search.ensure_within(2, 0).is_err(), "Suchbegriff zu lang");
         assert!(SearchQuery { offset: 1, ..search.clone() }.ensure_within(3, 0).is_err(), "Versatz zu groß");
         assert!(SearchQuery { mc: Some("../x".into()), ..search.clone() }.ensure_within(3, 0).is_err());
-        assert!(SearchQuery { loader: Some("a b".into()), ..search }.ensure_within(3, 0).is_err());
+        assert!(SearchQuery { loader: Some("a b".into()), ..search.clone() }.ensure_within(3, 0).is_err());
+        assert!(SearchQuery { category: Some("a b".into()), ..search }.ensure_within(3, 0).is_err());
     }
 }

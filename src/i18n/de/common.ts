@@ -19,7 +19,6 @@ export const common = {
   "common.play": "Spielen",
   "common.remove": "Entfernen",
   "common.new": "Neu",
-  "common.refresh": "Aktualisieren",
   "common.error": "Fehler",
   "common.add": "Hinzufügen",
   "common.rename": "Umbenennen",

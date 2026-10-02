@@ -1,5 +1,6 @@
 //! Zahlencodes der CurseForge-API für Klassen, Loader und Sortierung und ihre Übersetzung in die Begriffe des Launchers.
 use crate::{
+    coded,
     error::{AppError, AppResult},
     models::{ModKind, ModLoader},
     services::providers::{ProjectType, SortIndex},
@@ -28,7 +29,7 @@ pub(super) fn class_of(kind: ProjectType) -> AppResult<u32> {
         ProjectType::Modpack => Ok(CLASS_MODPACK),
         ProjectType::ResourcePack => Ok(CLASS_RESOURCEPACK),
         ProjectType::Shader => Ok(CLASS_SHADER),
-        ProjectType::Datapack => Err(AppError::invalid("Ungültige Suche")),
+        ProjectType::Datapack => Err(AppError::invalid(coded!("errors.providers.invalidSearch"))),
     }
 }
 
@@ -47,7 +48,7 @@ pub(super) fn mod_kind(class_id: Option<u32>) -> AppResult<ModKind> {
         Some(CLASS_MOD) => Ok(ModKind::Mod),
         Some(CLASS_RESOURCEPACK) => Ok(ModKind::ResourcePack),
         Some(CLASS_SHADER) => Ok(ModKind::Shader),
-        _ => Err(AppError::invalid("Das ist keine Mod, kein Ressourcenpaket und kein Shader")),
+        _ => Err(AppError::invalid(coded!("errors.providers.unsupportedContentType"))),
     }
 }
 

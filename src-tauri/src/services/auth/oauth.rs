@@ -2,8 +2,9 @@
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
-use super::{is_success, send, RELOGIN};
-use crate::error::{AppError, AppResult};
+use super::{is_success, relogin, send};
+use crate::coded;
+use crate::error::{AppError, AppResult, Coded};
 
 const LOGIN: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0";
 const SCOPE: &str = "XboxLive.signin offline_access";
@@ -41,18 +42,19 @@ pub(super) struct OAuthError {
     pub error_description: String,
 }
 
-pub(super) fn oauth_text(e: &OAuthError) -> String {
+pub(super) fn oauth_text(e: &OAuthError) -> Coded {
     let text = match e.error.as_str() {
-        "authorization_declined" | "access_denied" => "Die Anmeldung wurde im Browser abgelehnt.",
-        "expired_token" | "bad_verification_code" => "Der Anmeldecode ist abgelaufen. Starte die Anmeldung neu.",
-        "invalid_grant" => RELOGIN,
-        "invalid_client" | "unauthorized_client" => {
-            "Microsoft kennt diese Launcher-App nicht oder erlaubt ihr die Anmeldung per Code nicht."
-        }
-        _ => "Microsoft hat die Anmeldung abgelehnt.",
+        "authorization_declined" | "access_denied" => coded!("errors.app.auth.declined"),
+        "expired_token" | "bad_verification_code" => coded!("errors.app.auth.codeExpired"),
+        "invalid_grant" => relogin(),
+        "invalid_client" | "unauthorized_client" => coded!("errors.app.auth.clientUnknown"),
+        _ => coded!("errors.app.auth.rejected"),
     };
+    if e.error.is_empty() {
+        return text;
+    }
     let detail = e.error_description.lines().next().unwrap_or_default();
-    if e.error.is_empty() { text.into() } else { format!("{text} – Details: {} {detail}", e.error).trim_end().into() }
+    text.with_details(format!("{} {detail}", e.error).trim_end())
 }
 
 pub(super) enum Poll {
@@ -186,7 +188,7 @@ mod tests {
         assert!(matches!(done, Ok(Poll::Done(Tokens { refresh_token: Some(_), .. }))));
         let expired = parse_poll(400, &body(json!({"error": "expired_token", "error_description": "AADSTS70020: expired\nTrace"})));
         assert_eq!(expired.err().unwrap().to_string(), "Der Anmeldecode ist abgelaufen. Starte die Anmeldung neu. – Details: expired_token AADSTS70020: expired");
-        assert_eq!(parse_poll(400, &body(json!({"error": "invalid_grant"}))).err().unwrap().to_string().split(" – ").next(), Some(RELOGIN));
+        assert_eq!(parse_poll(400, &body(json!({"error": "invalid_grant"}))).err().unwrap().to_string().split(" – ").next(), Some(relogin().to_string().as_str()));
         assert!(parse_poll(500, b"<html>").is_err());
     }
 

@@ -5,6 +5,7 @@ use std::{
 };
 
 use super::download::RemoveOnDrop;
+use crate::coded;
 use crate::error::{AppError, AppResult};
 
 /// Ab dieser Dateigröße schreiben ZIP-Archive ZIP64 (Pflicht ab 4 GiB); mit Abstand, weil Deflate Unkomprimierbares
@@ -30,8 +31,8 @@ pub(crate) fn walk(base: &Path, path: &Path) -> AppResult<Vec<(String, PathBuf)>
 }
 
 fn relative_slashed(base: &Path, path: &Path) -> AppResult<String> {
-    let rel = path.strip_prefix(base).map_err(|_| AppError::invalid("Pfad außerhalb des Spielordners"))?;
-    let rel = rel.to_str().ok_or_else(|| AppError::invalid("Dateiname ist kein gültiger Text"))?;
+    let rel = path.strip_prefix(base).map_err(|_| AppError::invalid(coded!("errors.game.pathOutsideGameDir")))?;
+    let rel = rel.to_str().ok_or_else(|| AppError::invalid(coded!("errors.game.fileNameNotText")))?;
     Ok(rel.replace('\\', "/"))
 }
 
@@ -112,7 +113,7 @@ pub(crate) fn strip_extension<'a>(name: &'a str, ext: &str) -> Option<&'a str> {
 /// Ein einzelner, unter Windows gültiger Datei- oder Ordnername (kein Pfad); sonst ein Fehler.
 pub(crate) fn require_plain_name(name: &str) -> AppResult<&str> {
     if name.contains('/') {
-        return Err(AppError::invalid(format!("Ungültiger Name: {name}")));
+        return Err(AppError::invalid(coded!("errors.game.invalidName", name = name)));
     }
     super::content::safe_path(name)?;
     Ok(name)
@@ -133,19 +134,28 @@ pub(crate) fn move_to_trash(path: &Path) -> AppResult<()> {
     Ok(())
 }
 
-/// Legt den Eintrag `name` aus `dir` in den Papierkorb, sofern `is_listed` ihn gelten lässt (`kind` benennt ihn im
-/// Fehler). Nur ein Name aus der Liste wird zum Pfad: so trifft das Löschen nie etwas außerhalb des Ordners.
+/// Der Eintrag `name` aus `dir`, sofern `is_listed` ihn gelten lässt (`kind` benennt ihn im Fehler). Nur ein Name aus
+/// der Liste wird zum Pfad: so trifft Löschen oder Lesen nie etwas außerhalb des Ordners.
+pub(crate) fn find_listed(
+    dir: &Path,
+    name: &str,
+    kind: &'static str,
+    is_listed: impl Fn(&fs::DirEntry) -> bool,
+) -> AppResult<fs::DirEntry> {
+    entries(dir)?
+        .into_iter()
+        .find(|entry| entry.file_name() == name && is_listed(entry))
+        .ok_or_else(|| AppError::not_found(kind, name))
+}
+
+/// Legt den Eintrag `name` aus `dir` in den Papierkorb, sofern `is_listed` ihn gelten lässt (siehe [`find_listed`]).
 pub(crate) fn trash_listed(
     dir: &Path,
     name: &str,
     kind: &'static str,
     is_listed: impl Fn(&fs::DirEntry) -> bool,
 ) -> AppResult<()> {
-    let entry = entries(dir)?
-        .into_iter()
-        .find(|entry| entry.file_name() == name && is_listed(entry))
-        .ok_or_else(|| AppError::NotFound { kind, id: name.to_owned() })?;
-    move_to_trash(&entry.path())
+    move_to_trash(&find_listed(dir, name, kind, is_listed)?.path())
 }
 
 /// Erster Name aus `numbered(1)`, `numbered(2)`, `numbered(3)` …, den `taken` nicht als belegt meldet.

@@ -74,8 +74,14 @@ export function BrandMark({ size = 32 }: { size?: number }) {
   return <img className="brand-mark" src={brandAsset(season.id, 'mark.svg')} width={size} height={size} alt="" aria-hidden />;
 }
 
+/** Das Bild der Wortmarke; im Windows-Kontrastmodus (a11y.css) tritt der Text daneben an seine Stelle, weil die hellen Buchstaben des Bilds dort nicht lesbar wären. */
 export function BrandWordmark({ className = '' }: { className?: string }) {
-  return <img className={`brand-wordmark ${className}`} src={wordmark} width={214} height={24} alt="Pumpkin Launcher" />;
+  return (
+    <>
+      <img className={`brand-wordmark ${className}`} src={wordmark} width={214} height={24} alt="Pumpkin Launcher" />
+      <span className="brand-wordmark-text">Pumpkin Launcher</span>
+    </>
+  );
 }
 
 export function Buddy({ mood = 'idle', size = 96, className = '' }: { mood?: BuddyMood; size?: number; className?: string }) {

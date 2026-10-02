@@ -7,6 +7,7 @@ use std::{
 };
 
 use crate::{
+    coded,
     error::{AppError, AppResult},
     services::none_if_missing,
 };
@@ -20,10 +21,10 @@ const REPARSE_POINT: u32 = 0x400;
 /// Relativer Pfad mit `/` als Trenner, der unter Windows anlegbar ist und nicht aus dem Zielordner führt.
 pub fn safe_path(value: &str) -> AppResult<PathBuf> {
     if value.is_empty() || value.len() > MAX_PATH_LEN || value.contains('\\') {
-        return Err(AppError::invalid("Unsicherer Pfad"));
+        return Err(AppError::invalid(coded!("errors.modrinth.unsafePath")));
     }
     if value.split('/').any(is_unsafe_component) {
-        return Err(AppError::invalid(format!("Unsicherer Windows-Pfad: {value}")));
+        return Err(AppError::invalid(coded!("errors.modrinth.unsafeWindowsPath", path = value)));
     }
     Ok(PathBuf::from(value))
 }
@@ -55,10 +56,12 @@ fn is_reserved_windows_name(part: &str) -> bool {
 pub(crate) fn regular_parents(root: &Path, path: &Path) -> AppResult<()> {
     for ancestor in path.ancestors().take_while(|ancestor| *ancestor != root) {
         match none_if_missing(fs::symlink_metadata(ancestor))? {
-            Some(m) if m.file_type().is_symlink() => return Err(AppError::invalid("Symlink im Zielpfad")),
+            Some(m) if m.file_type().is_symlink() => {
+                return Err(AppError::invalid(coded!("errors.modrinth.symlinkInTarget")))
+            }
             #[cfg(windows)]
             Some(m) if std::os::windows::fs::MetadataExt::file_attributes(&m) & REPARSE_POINT != 0 => {
-                return Err(AppError::invalid("Reparse-Point im Zielpfad"))
+                return Err(AppError::invalid(coded!("errors.modrinth.reparsePointInTarget")))
             }
             Some(_) | None => {}
         }
@@ -70,14 +73,14 @@ pub(crate) fn regular_parents(root: &Path, path: &Path) -> AppResult<()> {
 /// die halbe Datei wieder.
 pub(crate) fn write_new(root: &Path, path: &Path, data: &[u8]) -> AppResult<()> {
     regular_parents(root, path)?;
-    let parent = path.parent().ok_or_else(|| AppError::invalid("Fehlender Elternpfad"))?;
+    let parent = path.parent().ok_or_else(|| AppError::invalid(coded!("errors.modrinth.missingParentPath")))?;
     fs::create_dir_all(parent)?;
     let mut file = fs::OpenOptions::new().write(true).create_new(true).open(path)?;
     if let Err(e) = file.write_all(data).and_then(|()| file.sync_all()) {
         drop(file);
         return Err(match fs::remove_file(path) {
             Ok(()) => e.into(),
-            Err(cleanup) => AppError::invalid(format!("{e}; Aufräumen: {cleanup}")),
+            Err(cleanup) => AppError::invalid(coded!("errors.modrinth.cleanupFailed", original = e, cleanup = cleanup)),
         });
     }
     Ok(())
@@ -99,7 +102,7 @@ pub(crate) fn rollback(paths: &[PathBuf], original: AppError) -> AppError {
     if errors.is_empty() {
         original
     } else {
-        AppError::invalid(format!("{original}; Rollback: {}", errors.join("; ")))
+        AppError::invalid(coded!("errors.modrinth.rollbackFailed", original = original, failures = errors.join("; ")))
     }
 }
 
@@ -120,7 +123,7 @@ impl<'a> StagedInstall<'a> {
     pub(crate) fn reserve(&self, target: &Path) -> AppResult<()> {
         regular_parents(self.root, target)?;
         if is_occupied(target)? {
-            return Err(AppError::invalid("Mod-Zieldatei existiert bereits"));
+            return Err(AppError::invalid(coded!("errors.modrinth.targetFileExists")));
         }
         Ok(())
     }
