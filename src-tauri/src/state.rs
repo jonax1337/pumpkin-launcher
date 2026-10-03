@@ -12,7 +12,10 @@ use crate::error::{AppError, AppResult};
 use crate::models::{Instance, LibrarySkin, MsAccount, Template};
 use crate::services::auth::MsState;
 use crate::services::download::http_client;
-use crate::services::friends::{Friends, NetOptions};
+use crate::services::friends::lookup::{ModrinthHttp, ModrinthLookup};
+use crate::services::friends::{
+    FriendSessions, Friends, JoinTimers, MojangVersions, NetOptions, SessionContext, PRODUCTION_LIVENESS,
+};
 use crate::services::gamesignal::GameSignals;
 use crate::services::launch::Running;
 use crate::services::modbridge::ModBridge;
@@ -43,6 +46,8 @@ pub struct AppState {
     pub bridge: ModBridge,
     /// Die Freunde-Funktion; aus, bis `lib.rs` sie beim Start (oder der Nutzer beim Aktivieren) startet.
     pub friends: Friends,
+    /// Geteilte Welten, Einladungen, Beitritte und die Mod; hängt sich erst mit `start` in `friends` ein.
+    pub sessions: FriendSessions,
     /// Laufende Spiele je Instanz-ID.
     running: Mutex<HashMap<String, Running>>,
     /// Abbrechbare Vorgänge je Instanz- bzw. operationId.
@@ -63,17 +68,31 @@ impl AppState {
         let bridge = ModBridge::new(signals.clone());
         let friends =
             Friends::new(&dirs, Arc::new(KeyringSecrets), signals.clone(), bridge.clone(), NetOptions::production())?;
+        let instances = Arc::new(JsonStore::open(data_dir.join("instances.json"))?);
+        let http = http_client()?;
+        let sessions = FriendSessions::new(SessionContext {
+            friends: friends.clone(),
+            signals: signals.clone(),
+            bridge: bridge.clone(),
+            instances: instances.clone(),
+            dirs: dirs.clone(),
+            lookup: Arc::new(ModrinthLookup::new(ModrinthHttp::new()?)),
+            versions: Arc::new(MojangVersions::new(http.clone())),
+            timers: JoinTimers::production(),
+            liveness: PRODUCTION_LIVENESS,
+        });
         Ok(Self {
-            instances: Arc::new(JsonStore::open(data_dir.join("instances.json"))?),
+            instances,
             templates: JsonStore::open(data_dir.join("templates.json"))?,
             accounts: JsonStore::open(data_dir.join("accounts.json"))?,
             skins: JsonStore::open(data_dir.join("skins.json"))?,
             ms: MsState::default(),
             dirs,
-            http: http_client()?,
+            http,
             presence: Presence::discord(),
             bridge,
             friends,
+            sessions,
             signals,
             running: Mutex::new(HashMap::new()),
             operation: tokio::sync::Mutex::new(()),

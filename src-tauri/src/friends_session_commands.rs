@@ -1,0 +1,110 @@
+//! Tauri-Commands der geteilten Welten (SPEC 8.4, von `friend_skin` bis `friends_mod_confirm`). Dünne Schicht über
+//! `AppState.sessions`; nur Skin und Mod-Installation brauchen mehr vom App-Zustand.
+use tauri::{AppHandle, State};
+
+use crate::error::{AppError, AppResult};
+use crate::services::friends::contract::{HostSession, Invite, JoinPlan, JoinTicket, LanStatus, ModStatus};
+use crate::services::friends::{avatar, modinstall};
+use crate::services::progress::SharedProgress;
+use crate::state::AppState;
+
+/// Der Skin eines Freundes als PNG-Data-URL; Rust lädt und merkt ihn, die Oberfläche fragt Mojang nie selbst.
+#[tauri::command]
+pub async fn friend_skin(state: State<'_, AppState>, friend_id: String) -> AppResult<Option<String>> {
+    let friends = state.friends.list().await?;
+    let friend = friends.into_iter().find(|friend| friend.id == friend_id).ok_or_else(|| {
+        AppError::NotFound(crate::coded!("errors.friends.notFound.friend", id = friend_id).into())
+    })?;
+    match friend.mc_uuid {
+        Some(mc_uuid) => avatar::skin(&state.http, &state.dirs, &mc_uuid).await,
+        None => Ok(None),
+    }
+}
+
+#[tauri::command]
+pub async fn lan_status(state: State<'_, AppState>, instance_id: String) -> AppResult<Option<LanStatus>> {
+    state.sessions.lan_status(&instance_id).await
+}
+
+#[tauri::command]
+pub async fn host_sessions(state: State<'_, AppState>) -> AppResult<Vec<HostSession>> {
+    state.sessions.host_sessions().await
+}
+
+#[tauri::command]
+pub async fn host_start(
+    state: State<'_, AppState>,
+    instance_id: String,
+    port: Option<u16>,
+    show_world_name: bool,
+) -> AppResult<HostSession> {
+    state.sessions.host_start(&instance_id, port, show_world_name).await
+}
+
+#[tauri::command]
+pub async fn host_invite(
+    state: State<'_, AppState>,
+    session_id: String,
+    friend_ids: Vec<String>,
+) -> AppResult<HostSession> {
+    state.sessions.host_invite(&session_id, friend_ids).await
+}
+
+#[tauri::command]
+pub async fn host_kick(state: State<'_, AppState>, session_id: String, friend_id: String) -> AppResult<HostSession> {
+    state.sessions.host_kick(&session_id, &friend_id).await
+}
+
+#[tauri::command]
+pub async fn host_stop(state: State<'_, AppState>, session_id: String) -> AppResult<()> {
+    state.sessions.host_stop(&session_id).await
+}
+
+#[tauri::command]
+pub async fn invites_list(state: State<'_, AppState>) -> AppResult<Vec<Invite>> {
+    state.sessions.invites().await
+}
+
+#[tauri::command]
+pub async fn invite_decline(state: State<'_, AppState>, invite_id: String) -> AppResult<()> {
+    state.sessions.invite_decline(&invite_id).await
+}
+
+#[tauri::command]
+pub async fn invite_plan(state: State<'_, AppState>, invite_id: String) -> AppResult<JoinPlan> {
+    state.sessions.invite_plan(&invite_id).await
+}
+
+#[tauri::command]
+pub async fn invite_join(state: State<'_, AppState>, invite_id: String, instance_id: String) -> AppResult<JoinTicket> {
+    state.sessions.invite_join(&invite_id, &instance_id).await
+}
+
+#[tauri::command]
+pub async fn join_leave(state: State<'_, AppState>, join_id: String) -> AppResult<()> {
+    state.sessions.join_leave(&join_id).await
+}
+
+#[tauri::command]
+pub async fn friends_mod_status(state: State<'_, AppState>, instance_id: String) -> AppResult<ModStatus> {
+    state.sessions.mod_status(&instance_id).await
+}
+
+/// Installiert die Freunde-Mod (SPEC 11.5) unter der Vorgangssperre; die Instanz darf dabei nicht laufen.
+#[tauri::command]
+pub async fn friends_mod_install(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    instance_id: String,
+    operation_id: String,
+) -> AppResult<()> {
+    let (state, instance_id): (&AppState, &str) = (&state, &instance_id);
+    let _operation = state.exclusive(instance_id)?;
+    let install = |progress: SharedProgress| async move { modinstall::install(state, instance_id, &*progress).await };
+    state.run_cancellable(&app, &operation_id, install).await.map(drop)
+}
+
+#[tauri::command]
+pub async fn friends_mod_confirm(state: State<'_, AppState>, request_id: String, allow: bool) -> AppResult<()> {
+    state.sessions.mod_confirm(&request_id, allow).await
+}

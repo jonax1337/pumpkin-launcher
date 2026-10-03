@@ -26,7 +26,18 @@ mod test_support;
 mod tests;
 #[cfg(test)]
 mod tests_match;
+mod hosting;
+mod invites;
+mod joining;
+mod mcproto;
+mod mod_link;
+pub mod session_events;
+mod sessions;
+#[cfg(test)]
+mod tests_session;
 
 pub use service::{
     AccountProfile, Friends, HandlerAlreadySet, Lifecycle, LifecycleEvent, NetOptions, NotConnected, PeerStreamHandler,
 };
+pub use joining::JoinTimers;
+pub use sessions::{FriendSessions, MojangVersions, SessionContext, VersionCatalog, PRODUCTION_LIVENESS};
