@@ -15,6 +15,7 @@ use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{oneshot, Notify};
+use tokio::time::error::Elapsed;
 use tokio_util::sync::CancellationToken;
 
 use super::contract::{
@@ -479,8 +480,17 @@ fn opening_for(addr: SocketAddr) -> Vec<u8> {
 
 /// Die Verbindung wurde geschlossen (Ende, Fehler oder Zurücksetzen), bevor `wait` um ist.
 async fn is_closed_within(game: &mut TcpStream, wait: Duration) -> bool {
+    is_closed(&read_within(game, wait).await)
+}
+
+/// Was ein Lesen von höchstens einem Byte binnen `wait` ergibt: gelesene Bytes, Fehler oder Zeitablauf.
+async fn read_within(game: &mut TcpStream, wait: Duration) -> Result<std::io::Result<usize>, Elapsed> {
     let mut byte = [0u8; 1];
-    matches!(tokio::time::timeout(wait, game.read(&mut byte)).await, Ok(Ok(0) | Err(_)))
+    tokio::time::timeout(wait, game.read(&mut byte)).await
+}
+
+fn is_closed(read: &Result<std::io::Result<usize>, Elapsed>) -> bool {
+    matches!(read, Ok(Ok(0) | Err(_)))
 }
 
 /// Die Adresse nimmt keine Verbindung mehr an, oder schließt sie sofort.
@@ -663,10 +673,15 @@ async fn a_handshake_naming_another_address_is_refused() {
     tokio::time::sleep(Duration::from_millis(200)).await;
     let before = scene.server.connections();
 
-    let mut game = TcpStream::connect(addr).await.unwrap();
-    game.write_all(&[handshake("127.0.0.1", addr.port(), 2), login_start("Bert")].concat()).await.unwrap();
+    // Nie die Adresse des Beitritts: Windows und Linux lauschen auf 127.a.b.c mit a ≥ 1, macOS auf 127.0.0.1 (SPEC 6.2).
+    let named = "127.0.0.2";
+    assert_ne!(named, addr.ip().to_string(), "the test needs an address other than the listener's");
 
-    assert!(is_closed_within(&mut game, LIMIT).await);
+    let mut game = TcpStream::connect(addr).await.unwrap();
+    game.write_all(&[handshake(named, addr.port(), 2), login_start("Bert")].concat()).await.unwrap();
+
+    let read = read_within(&mut game, LIMIT).await;
+    assert!(is_closed(&read), "handshake naming {named} at listener {addr}: the game connection gave {read:?}");
     assert_eq!(scene.server.connections(), before);
     assert_eq!(scene.host.guest_state(&scene.guest.id()).await, Some((GuestState::Invited, false)));
 }
