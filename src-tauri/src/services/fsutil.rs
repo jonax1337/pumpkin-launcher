@@ -41,9 +41,18 @@ pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> AppResult<()> {
     let mut tmp = path.as_os_str().to_owned();
     tmp.push(".tmp");
     let tmp = PathBuf::from(tmp);
-    fs::write(&tmp, bytes)?;
+    write_durably(&tmp, bytes)?;
     fs::rename(&tmp, path)?;
     Ok(())
+}
+
+/// Schreibt und wartet, bis die Daten auf dem Datenträger sind. Sonst kann nach einem Absturz oder Stromausfall das
+/// Umbenennen bestehen, der Inhalt aber nicht, und am Ziel liegt eine leere oder halbe Datei. Die Datei ist danach
+/// geschlossen, denn Windows benennt keine offene Datei um.
+fn write_durably(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let mut file = fs::File::create(path)?;
+    io::Write::write_all(&mut file, bytes)?;
+    file.sync_all()
 }
 
 /// Schreibt ein ZIP über `<path>.<part_ext>`: `fill` legt die Einträge an, danach wird umbenannt. Bei einem Fehler
@@ -221,6 +230,19 @@ mod tests {
         assert_eq!(found, ["a/b/c.txt", "a/d.txt"]);
         assert_eq!(walk(&root, &root.join("e.txt")).unwrap()[0].0, "e.txt");
         assert!(walk(&root, &root.join("fehlt")).unwrap().is_empty());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn an_atomic_write_replaces_the_whole_file_and_leaves_no_temp_file() {
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        write_files(&root, &[("friends.json", "a much longer old content")]);
+        let path = root.join("friends.json");
+
+        write_atomic(&path, b"new").unwrap();
+
+        assert_eq!(fs::read(&path).unwrap(), b"new");
+        assert!(!root.join("friends.json.tmp").exists());
         fs::remove_dir_all(root).unwrap();
     }
 
