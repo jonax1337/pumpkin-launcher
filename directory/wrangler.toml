@@ -1,0 +1,33 @@
+name = "pumpkin-friends-directory"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+# Wie bei proxy/: Der Worker darf von sich aus nur öffentliche Adressen abrufen (hier: sessionserver.mojang.com).
+compatibility_flags = ["global_fetch_strictly_public"]
+
+# Die Datenbank wird einmalig mit `wrangler d1 create pumpkin-friends-directory --jurisdiction eu` angelegt
+# (die Region lässt sich nur dabei festlegen); die ausgegebene ID kommt anstelle des Platzhalters hierher.
+[[d1_databases]]
+binding = "DB"
+database_name = "pumpkin-friends-directory"
+database_id = "ID-AUS-WRANGLER-D1-CREATE-EINTRAGEN"
+
+# Grobe Begrenzung je Cloudflare-Standort (Cloudflare erlaubt als Zeitraum nur 10 oder 60 Sekunden).
+# `period` muss zu LIMIT_PERIOD in src/index.js passen, das als Retry-After an den Launcher geht.
+# Die genauen Kontingente (Briefe pro Tag, je Paar, je Postfach) zählt die Datenbank, nicht diese Bindung.
+[[ratelimits]]
+name = "LIMITER_IP"
+namespace_id = "1101"
+simple = { limit = 60, period = 60 }
+
+[[ratelimits]]
+name = "LIMITER_ACCOUNT"
+namespace_id = "1102"
+simple = { limit = 30, period = 60 }
+
+# Täglich aufräumen: abgelaufene Briefe, Sendeprotokoll älter als 7 Tage, Einträge ohne Auffrischung seit 30 Tagen.
+[triggers]
+crons = ["17 3 * * *"]
+
+# Keine Anfragedaten in Logs; Cloudflares Zähler (nur Mengen) laufen weiter.
+[observability]
+enabled = false
