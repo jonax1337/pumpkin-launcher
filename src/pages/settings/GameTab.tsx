@@ -2,9 +2,11 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Actions, Button, Disclosure, FormRow, FormSection, Hint, Radio, Switch, TextArea } from "@/ui";
 import { useCommitOnUnmount } from "@/hooks/useCommitOnUnmount";
+import { useFriendsState } from "@/hooks/useFriends";
 import { JavaChooser, MemoryChooser, MemoryHelp, MinMemoryChooser } from "@/components/common";
 import { useI18n, type TKey } from "@/i18n";
 import { JVM_PRESETS, presetArgs, type JvmPreset } from "@/lib/jvm";
+import { effectiveOnPlay } from "@/lib/onPlay";
 import { WindowChooser } from "@/pages/detail/settings/WindowChooser";
 import { useSettings, type LauncherOnPlay } from "@/store/settings";
 
@@ -87,19 +89,20 @@ function JvmRow() {
   );
 }
 
-/** Was der Launcher beim Spielstart mit seinem Fenster tut. */
+/** Was der Launcher beim Spielstart mit seinem Fenster tut; mit Freunden wird aus „Schließen“ ein Minimieren (lib/onPlay.ts). */
 function LauncherOnPlayRow() {
   const { t } = useI18n();
   const mode = useSettings((s) => s.launcherOnPlay);
   const set = useSettings((s) => s.set);
+  const friendsEnabled = useFriendsState().data?.enabled ?? null;
   return (
-    <FormRow label={t("settings.onPlay.label")} hint={t("settings.onPlay.hint")} group="radiogroup">
+    <FormRow label={t("settings.onPlay.label")} hint={t("settings.onPlay.hint")} group="radiogroup" aside={t("friendsSettings.onPlayAside")}>
       {LAUNCHER_ON_PLAY.map((value) => (
         <Radio key={value} name="gonplay" checked={mode === value} onChange={() => set({ launcherOnPlay: value })}>
           {t(LAUNCHER_ON_PLAY_KEYS[value])}
         </Radio>
       ))}
-      {mode === "close" && <Hint tone="warn" live>{t("settings.onPlay.closeWarning")}</Hint>}
+      {effectiveOnPlay(mode, friendsEnabled) === "close" && <Hint tone="warn" live>{t("settings.onPlay.closeWarning")}</Hint>}
     </FormRow>
   );
 }

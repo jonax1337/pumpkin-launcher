@@ -1,0 +1,287 @@
+import { useEffect, useState } from "react";
+import { useQueryClient, type UseMutationResult } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { FriendsOptInDialog } from "@/components/friends/FriendsOptInDialog";
+import { QueryList } from "@/components/QueryList";
+import { friendKeys } from "@/hooks/queryKeys";
+import { useCommitOnUnmount } from "@/hooks/useCommitOnUnmount";
+import { useConfirmTarget } from "@/hooks/useConfirmTarget";
+import {
+  useBlockedPeers, useDisableFriends, useFriendsState, useHostSessions, useResetFriends, useRotateFriendsIdentity, useUnblockPeer,
+  useUpdateFriendsSettings,
+} from "@/hooks/useFriends";
+import { useI18n } from "@/i18n";
+import { api } from "@/lib/api";
+import { blurOnEnter } from "@/lib/dom";
+import { formatDate } from "@/lib/format";
+import { FRIENDS_LIMITS, type FriendsSettings, type FriendsState, type NetworkStatus } from "@/lib/types";
+import { Actions, Button, ConfirmDialog, Count, ErrorBox, FormRow, FormSection, Hint, List, ListRow, RowTitle, Skel, StatusPanel, Switch, TextField, type IconName } from "@/ui";
+
+const SECOND_MS = 1000;
+const ROW_SKELETON_HEIGHT_PX = 60;
+
+const isValidDisplayName = (name: string) =>
+  [...name].length >= FRIENDS_LIMITS.displayNameMin && [...name].length <= FRIENDS_LIMITS.displayNameMax;
+
+/** Hält die Netzwerkzeile aktuell, solange nichts anderes das Ereignis `friends-network` in den Stand der Abfrage übernimmt. */
+function useLiveNetwork() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const subscription = api.onFriendsNetwork((network) =>
+      qc.setQueryData<FriendsState>(friendKeys.state, (state) => state && { ...state, network }),
+    );
+    return () => void subscription.then((unlisten) => unlisten());
+  }, [qc]);
+}
+
+/** Schaltet Freunde ein (öffnet das Opt-in) oder aus; Ausschalten behält die Daten. */
+function EnableRow({ enabled, onEnable }: { enabled: boolean; onEnable: () => void }) {
+  const { t } = useI18n();
+  const disable = useDisableFriends();
+  return (
+    <FormRow label={t("friendsSettings.enableLabel")} hint={t("friendsSettings.enableHint")} aside={t("friendsSettings.enableAside")}>
+      <Switch
+        label={t("friendsSettings.enableLabel")}
+        checked={enabled}
+        disabled={disable.isPending}
+        onChange={(on) => (on ? onEnable() : disable.mutate())}
+        stateText={[t("ui.switch.on"), t("ui.switch.off")]}
+      />
+    </FormRow>
+  );
+}
+
+/** Anzeigename: wird beim Verlassen des Felds gespeichert, sofern er gültig ist. */
+function DisplayNameRow({ settings }: { settings: FriendsSettings }) {
+  const { t } = useI18n();
+  const update = useUpdateFriendsSettings();
+  const [draft, setDraft] = useState<string | null>(null);
+  const name = draft?.trim() ?? settings.displayName;
+  const invalid = draft !== null && !isValidDisplayName(name);
+  const limits = { min: FRIENDS_LIMITS.displayNameMin, max: FRIENDS_LIMITS.displayNameMax };
+
+  function save() {
+    if (draft === null || invalid) return;
+    if (name === settings.displayName) return setDraft(null);
+    update.mutate({ ...settings, displayName: name }, { onSuccess: () => setDraft(null) });
+  }
+  useCommitOnUnmount(save);
+
+  return (
+    <FormRow label={t("friendsSettings.nameLabel")} htmlFor="friends-name" hint={t("friendsSettings.nameHint", limits)} aside={t("friendsSettings.nameAside")}>
+      <TextField
+        id="friends-name"
+        value={draft ?? settings.displayName}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={save}
+        onKeyDown={blurOnEnter}
+        aria-invalid={invalid || undefined}
+      />
+      {invalid && <Hint tone="bad" live>{t("errors.friends.displayNameInvalid", limits)}</Hint>}
+    </FormRow>
+  );
+}
+
+/** „Immer über Relay“; während eine Welt geteilt wird, ist das Umschalten erst nach einer Rückfrage möglich, weil es sie beendet. */
+function AlwaysRelayRow({ settings }: { settings: FriendsSettings }) {
+  const { t } = useI18n();
+  const update = useUpdateFriendsSettings();
+  const sharing = (useHostSessions().data?.length ?? 0) > 0;
+  const confirm = useConfirmTarget<boolean>();
+  const apply = (alwaysRelay: boolean, onDone?: () => void) => update.mutate({ ...settings, alwaysRelay }, { onSuccess: onDone });
+  return (
+    <FormRow label={t("friendsSettings.relayLabel")} hint={t("friendsSettings.relayHint")} aside={t("friendsSettings.relayAside")}>
+      <Switch
+        label={t("friendsSettings.relayLabel")}
+        checked={settings.alwaysRelay}
+        disabled={update.isPending}
+        onChange={(on) => (sharing ? confirm.ask(on) : apply(on))}
+        stateText={[t("ui.switch.on"), t("ui.switch.off")]}
+      />
+      <ConfirmDialog
+        {...confirm.dialogProps({
+          title: () => t("friendsSettings.relayConfirmTitle"),
+          text: () => t("friendsSettings.relayConfirmText"),
+          confirmLabel: t("friendsSettings.relayConfirmButton"),
+          pending: update.isPending,
+          onConfirm: apply,
+        })}
+      />
+    </FormRow>
+  );
+}
+
+function FingerprintRow({ fingerprint }: { fingerprint: string }) {
+  const { t } = useI18n();
+  return (
+    <FormRow label={t("friendsSettings.fingerprintLabel")} hint={t("friendsSettings.fingerprintHint")} aside={t("friendsSettings.fingerprintAside")}>
+      <div><Count value={fingerprint} size={20} className="select-text" /></div>
+    </FormRow>
+  );
+}
+
+function NetworkHint({ network }: { network: NetworkStatus }) {
+  const { t } = useI18n();
+  switch (network.type) {
+    case "online":
+      return <Hint tone="ok">{t("friendsSettings.networkOnline", { relayHost: network.relayHost })}</Hint>;
+    case "degraded":
+      return <Hint tone="bad" live>{t("friendsSettings.networkDegraded", { reason: t(`friendsSettings.degraded.${network.reason}`) })}</Hint>;
+    case "starting":
+      return <Hint icon="info">{t("friendsSettings.networkStarting")}</Hint>;
+    case "off":
+      return <Hint icon="info">{t("friendsSettings.networkOff")}</Hint>;
+  }
+}
+
+function NetworkRow({ network }: { network: NetworkStatus }) {
+  const { t } = useI18n();
+  return (
+    <FormRow label={t("friendsSettings.networkLabel")}>
+      <NetworkHint network={network} />
+    </FormRow>
+  );
+}
+
+/** Die Sperrliste mit „Entsperren“. */
+function BlockedSection() {
+  const { t } = useI18n();
+  const blocked = useBlockedPeers();
+  const unblock = useUnblockPeer();
+  return (
+    <FormSection title={t("friendsSettings.sectionBlocked")} level={3}>
+      <Hint icon="info" className="mb-2.5">{t("friendsSettings.blockedHint")}</Hint>
+      <QueryList
+        query={blocked}
+        error={t("friendsSettings.loadFailed")}
+        loading={<Skel h={ROW_SKELETON_HEIGHT_PX} />}
+        empty={<Hint>{t("friendsSettings.blockedNone")}</Hint>}
+      >
+        {(peers) => (
+          <List variant="accounts" aria-label={t("friendsSettings.sectionBlocked")}>
+            {peers.map((peer) => (
+              <ListRow key={peer.peerId}>
+                <RowTitle title={peer.displayName} sub={t("friendsSettings.blockedSince", { date: formatDate(peer.blockedAt * SECOND_MS) })} />
+                <Button size="s" disabled={unblock.isPending} onClick={() => unblock.mutate(peer.peerId)}>{t("friendsSettings.unblock")}</Button>
+              </ListRow>
+            ))}
+          </List>
+        )}
+      </QueryList>
+    </FormSection>
+  );
+}
+
+/** Gefahrenknopf mit Rückfrage für eine Änderung der Identität; danach eine Bestätigung als Toast. */
+function IdentityAction({ mutation, icon, buttonLabel, title, text, doneMessage }: {
+  mutation: UseMutationResult<FriendsState, Error, void>; icon: IconName; buttonLabel: string; title: string; text: string; doneMessage: string;
+}) {
+  const [asking, setAsking] = useState(false);
+
+  async function confirm() {
+    try {
+      await mutation.mutateAsync();
+    } catch {
+      return; // Den Fehler meldet schon der zentrale Mutations-Toast.
+    }
+    setAsking(false);
+    toast.success(doneMessage);
+  }
+
+  return (
+    <>
+      <Button variant="danger" icon={icon} onClick={() => setAsking(true)}>{buttonLabel}</Button>
+      <ConfirmDialog open={asking} onOpenChange={setAsking} title={title} text={text} confirmLabel={buttonLabel} pending={mutation.isPending} onConfirm={() => void confirm()} />
+    </>
+  );
+}
+
+function ResetIdentityAction() {
+  const { t } = useI18n();
+  const reset = useResetFriends();
+  return (
+    <IdentityAction
+      mutation={reset}
+      icon="trash"
+      buttonLabel={t("friendsSettings.resetButton")}
+      title={t("friendsSettings.resetTitle")}
+      text={t("friendsSettings.resetText")}
+      doneMessage={t("friendsSettings.resetDone")}
+    />
+  );
+}
+
+function DangerSection() {
+  const { t } = useI18n();
+  const rotate = useRotateFriendsIdentity();
+  return (
+    <FormSection title={t("friendsSettings.sectionDanger")} level={3}>
+      <FormRow label={t("friendsSettings.rotateLabel")} hint={t("friendsSettings.rotateHint")}>
+        <Actions>
+          <IdentityAction
+            mutation={rotate}
+            icon="redo"
+            buttonLabel={t("friendsSettings.rotateButton")}
+            title={t("friendsSettings.rotateTitle")}
+            text={t("friendsSettings.rotateText")}
+            doneMessage={t("friendsSettings.rotated")}
+          />
+        </Actions>
+      </FormRow>
+      <FormRow label={t("friendsSettings.resetLabel")} hint={t("friendsSettings.resetHint")}>
+        <Actions>
+          <ResetIdentityAction />
+        </Actions>
+      </FormRow>
+    </FormSection>
+  );
+}
+
+/** Einstellungen bei verfügbarem Schlüsselbund: Schalter und, wenn Freunde an sind, alles Weitere. */
+function AvailableSettings({ state }: { state: FriendsState }) {
+  const { t } = useI18n();
+  const [optingIn, setOptingIn] = useState(false);
+  return (
+    <>
+      <FormSection title={t("friendsSettings.sectionGeneral")} level={3}>
+        <EnableRow enabled={state.enabled} onEnable={() => setOptingIn(true)} />
+        {state.enabled && (
+          <>
+            <DisplayNameRow settings={state.settings} />
+            <AlwaysRelayRow settings={state.settings} />
+            {state.me && <FingerprintRow fingerprint={state.me.fingerprint} />}
+            <NetworkRow network={state.network} />
+          </>
+        )}
+      </FormSection>
+      {state.enabled && (
+        <>
+          <BlockedSection />
+          <DangerSection />
+        </>
+      )}
+      {optingIn && <FriendsOptInDialog onClose={() => setOptingIn(false)} />}
+    </>
+  );
+}
+
+function UnavailableSettings({ availability }: { availability: Exclude<FriendsState["availability"], "available"> }) {
+  const { t } = useI18n();
+  if (availability === "noSecretStore") return <StatusPanel>{t("friendsSettings.noSecretStore")}</StatusPanel>;
+  return (
+    <StatusPanel tone="bad" role="alert" title={t("friendsSettings.identityLostTitle")} actions={<ResetIdentityAction />}>
+      {t("friendsSettings.identityLostText")}
+    </StatusPanel>
+  );
+}
+
+/** Einstellungen › Freunde: ein- und ausschalten, Anzeigename, Relay, Sperrliste und die Identität. */
+export function FriendsTab() {
+  const { t } = useI18n();
+  const query = useFriendsState();
+  useLiveNetwork();
+  if (query.error) return <ErrorBox title={t("friendsSettings.loadFailed")} error={query.error} onRetry={() => void query.refetch()} />;
+  if (!query.data) return <Skel h={ROW_SKELETON_HEIGHT_PX * 3} />;
+  const state = query.data;
+  return state.availability === "available" ? <AvailableSettings state={state} /> : <UnavailableSettings availability={state.availability} />;
+}
