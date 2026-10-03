@@ -137,10 +137,46 @@ jobs:
           done
           exit $status
 
+  # Die Website verlinkt feste Dateinamen unter .../releases/latest/download/; die Namen der Tauri-Installer tragen die Version.
+  # Kopien unter festen Namen, noch im Entwurf, damit Prüfsummen und Herkunftsnachweis sie mit abdecken.
+  # Kein Signaturschlüssel und nicht die Umgebung `release`: nur das eingebaute GITHUB_TOKEN.
+  stable-names:
+    name: Stable download names
+    needs: updater-json
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Copy the installers under their stable names
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir stable
+          status=0
+          copy_as() {
+            local pattern="$1" stable_name="$2"
+            rm -rf source && mkdir source
+            gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern "$pattern" --dir source || true
+            if [ "$(ls source | wc -l)" -ne 1 ]; then
+              echo "::error::Expected exactly one release file matching '$pattern' for $stable_name, found $(ls source | wc -l). Re-run that platform's build job (see docs/RELEASING.md)."
+              status=1
+              return
+            fi
+            mv source/* "stable/$stable_name"
+          }
+          copy_as '*_x64-setup.exe' Pumpkin-Launcher-Windows-x64.exe
+          copy_as '*_universal.dmg' Pumpkin-Launcher-macOS-universal.dmg
+          copy_as '*_amd64.AppImage' Pumpkin-Launcher-Linux-x64.AppImage
+          copy_as '*_amd64.deb' Pumpkin-Launcher-Linux-x64.deb
+          [ "$status" -eq 0 ] || exit 1
+          ls -l stable
+          gh release upload "$GITHUB_REF_NAME" stable/* --repo "$GITHUB_REPOSITORY" --clobber
+
   # Prüfsummen und Herkunftsnachweis erst, wenn alle Dateien im Entwurf liegen.
   checksums:
     name: SHA256SUMS & provenance
-    needs: updater-json
+    needs: stable-names
     runs-on: ubuntu-latest
     permissions:
       contents: write

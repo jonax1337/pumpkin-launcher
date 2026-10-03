@@ -6,6 +6,7 @@ import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { ICON_DATA } from "../src/pixel/icon-data.ts";
 import { currentSeason, nextSeasonCheck } from "../src/branding/calendar.ts";
+import { enhanceDownloadSection } from "./download.js";
 
 const seasonMarks = import.meta.glob("./assets/brand/*/mark.svg", { eager: true, query: "?url", import: "default" });
 let seasonTimer;
@@ -25,6 +26,8 @@ function syncSeason() {
 syncSeason();
 window.addEventListener("focus", syncSeason);
 document.addEventListener("visibilitychange", syncSeason);
+
+enhanceDownloadSection();
 
 gsap.registerPlugin(ScrollTrigger);
 document.querySelectorAll("[data-icon]").forEach((element) => {

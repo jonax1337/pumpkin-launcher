@@ -103,6 +103,67 @@ h2 { font-size: clamp(64px,7vw,100px); line-height: 1; letter-spacing: -1.2px; }
 .feature-list article > [data-icon] { color: var(--copper); margin-top: 5px; }
 .feature-list h3 { font-size: 27px; }
 .feature-list p { color: var(--muted); font-size: 14px; line-height: 1.8; margin-top: 13px; max-width: 400px; }
+[data-download-cta] { text-transform: uppercase; }
+.download { background: #0b0f19; border-top: 1px solid var(--line); overflow: clip; }
+.download { padding-block: 100px; }
+.download-head h2 { font-size: clamp(64px,6.4vw,92px); }
+.download-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; }
+.download-head .eyebrow { margin-bottom: 24px; }
+.download-head .section-description { max-width: 440px; }
+.platform-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; margin-top: 48px; }
+.platform-card { position: relative; display: flex; flex-direction: column; border: 2px solid #333c51; background: #13182b; box-shadow: 6px 6px 0 #03050a; }
+.platform-card[data-recommended] { border-color: var(--copper); box-shadow: 6px 6px 0 #513826; }
+.platform-banner { position: relative; height: 120px; overflow: hidden; }
+.platform-banner img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+.platform-banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(0deg,#13182b 0%,#13182b66 45%,#070a1140 100%); }
+.platform-body { display: flex; flex: 1; flex-direction: column; padding: 4px 28px 28px; }
+.platform-flag { visibility: hidden; margin-bottom: 8px; color: var(--copper); font-size: 9px; font-weight: 700; letter-spacing: 1.5px; }
+.platform-card[data-recommended] .platform-flag { visibility: visible; }
+.platform-card h3 { font-size: 56px; line-height: 1; text-transform: uppercase; }
+.platform-card[data-platform="macos"] h3 { text-transform: none; }
+.platform-req { margin-block: 12px 22px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+.platform-button { flex-direction: column; gap: 5px; width: 100%; text-align: center; }
+.platform-button-label { display: inline-flex; align-items: center; justify-content: center; gap: 12px; text-transform: uppercase; }
+.platform-button small { font-size: 11px; font-weight: 700; letter-spacing: .6px; color: #3a2411; }
+.platform-alt { align-self: center; margin-top: 16px; padding-block: 6px; color: var(--copper); font-size: 13px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.platform-alt:hover, .download-help a:hover, .verify a:hover, .outro p a:hover { color: #f1b27e; }
+.platform-notes { margin-top: auto; padding-top: 22px; }
+.platform-notes summary, .verify summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; border-top: 1px solid var(--line); font-size: 13px; font-weight: 600; cursor: pointer; list-style: none; }
+.platform-notes summary::-webkit-details-marker, .verify summary::-webkit-details-marker { display: none; }
+.platform-notes summary::after, .verify summary::after { content: "+"; color: var(--copper); font: 28px/1 "Jersey 10",monospace; }
+.platform-notes[open] summary::after, .verify[open] summary::after { content: "−"; }
+.platform-notes p { padding-bottom: 4px; color: var(--muted); font-size: 13px; line-height: 1.8; }
+.platform-notes strong { color: var(--text); font-weight: 650; }
+code { padding: 1px 6px; background: #070a11; border: 1px solid var(--line); color: #d8dfec; font: 12px/1.7 ui-monospace,"Cascadia Mono",Consolas,monospace; overflow-wrap: anywhere; }
+.download-foot { display: flex; flex-direction: column; gap: 4px; margin-top: 38px; }
+.download-help, .download-desktop { color: var(--muted); font-size: 13px; line-height: 1.7; }
+.download-help a, .verify a { color: var(--copper); text-decoration: underline; text-underline-offset: 3px; }
+.download-desktop { visibility: hidden; }
+.download-desktop[data-visible] { visibility: visible; }
+.verify { margin-top: 28px; max-width: 760px; border-bottom: 1px solid var(--line); }
+.verify summary { font-size: 14px; }
+.verify > div { padding-bottom: 24px; color: var(--muted); font-size: 14px; line-height: 1.9; }
+.verify p + p { margin-top: 12px; }
+.verify-links { display: flex; flex-wrap: wrap; gap: 8px 26px; }
+.outro p a { color: var(--copper); text-decoration: underline; text-underline-offset: 3px; }
+@media (min-width: 861px) and (max-width: 1240px) { .platform-req { min-height: 3.4em; } }
+@media (max-width: 1000px) {
+  .download-head { align-items: flex-start; flex-direction: column; gap: 28px; }
+  .platform-grid { gap: 14px; margin-top: 44px; }
+  .platform-body { padding-inline: 20px; }
+  .platform-card h3 { font-size: 46px; }
+}
+@media (max-width: 860px) {
+  .platform-grid { grid-template-columns: 1fr; gap: 24px; }
+  .platform-banner { height: 96px; }
+}
+@media (max-width: 767px) {
+  .download-head .section-description { font-size: 14px; }
+  .platform-body { padding-inline: 22px; }
+  .platform-card h3 { font-size: 52px; }
+  .platform-button small { font-size: 10px; }
+  .download-foot { margin-top: 30px; }
+}
 .faq-section { border-top: 1px solid var(--line); display: grid; grid-template-columns: .85fr 1.15fr; gap: 90px; padding-top: 100px; }
 .faq-heading .eyebrow { margin-bottom: 24px; }
 .faq-heading h2 { font-size: 100px; }
