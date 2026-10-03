@@ -1,0 +1,18 @@
+# Single source of truth for the mod build nodes (docs/friends/INGAME.md 2.2, 4.3).
+#
+# Read by: settings.gradle (project tree), the node build scripts, scripts/dev-env.sh and scripts/dev-env.ps1
+# (JDK per node), and .github/workflows/mod.yml (job matrix). Add a node here first, nowhere else.
+#
+# Columns, separated by blanks:
+#   id           Node id and Gradle project name: <minecraft>-<loader>. Never used as a version (see README).
+#   loader       fabric | neoforge | forge
+#   minecraft    Explicit Mojang release ids the jar may serve, comma separated, no ranges, no snapshots.
+#                The LAST id is the version the node is compiled against.
+#   loaderMin    Lowest loader version the jar accepts (Fabric Loader, NeoForge, Forge).
+#   java         JDK major that builds, tests and runs the node. It is also the jar's javaMin.
+#   strategy     How the launcher injects the jar: fabricAddMods | fmlMavenRoot | fmlModFolders.
+#
+# id               loader    minecraft  loaderMin  java  strategy
+26.3-fabric        fabric    26.3       0.19.5     25    fabricAddMods
+1.21.1-neoforge    neoforge  1.21.1     21.1.0     21    fmlMavenRoot
+1.20.1-forge       forge     1.20.1     47.4.0     17    fmlMavenRoot

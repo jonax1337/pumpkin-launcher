@@ -1,9 +1,12 @@
-# Lädt ein vollständiges Temurin-25-JDK von der Adoptium-API nach mod/.jdk (ohne Adminrechte) und setzt
-# JAVA_HOME und PATH. Aus mod/ mit Punkt aufrufen, damit die Variablen in der Shell bleiben: . scripts/dev-env.sh
-# Mojangs Laufzeiten sind nur JREs ohne javac; deshalb immer ein eigenes JDK (SPEC 11.1).
+# Richtet die JDKs für einen Knoten ein: lädt vollständige Temurin-JDKs von der Adoptium-API nach mod/.jdk/<Version>
+# (ohne Adminrechte) und setzt JAVA_HOME (das JDK für Gradle) sowie PUMPKIN_JDK_<Version> (die JDKs, die Gradle als
+# Toolchain findet). Aus mod/ mit Punkt aufrufen, damit die Variablen in der Shell bleiben:
+#   . scripts/dev-env.sh [Knoten-Id]        (Standard: der erste Knoten in nodes.txt)
+# Wo ein Punkt-Aufruf keine Argumente erlaubt: PUMPKIN_NODE=<Knoten-Id> . scripts/dev-env.sh
+# Welches JDK ein Knoten braucht, steht in nodes.txt (Spalte java); Gradle selbst braucht mindestens
+# mod.gradleJdkMin aus gradle.properties (Stonecutter verlangt Java 21). Bereits gesetzte PUMPKIN_JDK_<Version>
+# werden nicht neu geladen. Mojangs Laufzeiten sind nur JREs ohne javac; deshalb immer eigene JDKs (SPEC 11.1).
 # Kein "set -e": beim Einlesen mit "." würde es die aufrufende Shell beenden. "local" gibt es in bash, dash und zsh.
-
-pumpkin_jdk_feature_version=25
 
 pumpkin_jdk_os() {
 	case "$(uname -s)" in
@@ -35,11 +38,11 @@ pumpkin_package_field() {
 }
 
 pumpkin_install_jdk() {
-	local jdk_dir=$1 os arch query assets link checksum staging archive actual
+	local feature_version=$1 jdk_dir=$2 os arch query assets link checksum staging archive actual
 	os=$(pumpkin_jdk_os) || return 1
 	arch=$(pumpkin_jdk_arch) || return 1
 	query="architecture=$arch&image_type=jdk&os=$os&vendor=eclipse"
-	assets=$(curl -fsSL "https://api.adoptium.net/v3/assets/latest/$pumpkin_jdk_feature_version/hotspot?$query") || return 1
+	assets=$(curl -fsSL "https://api.adoptium.net/v3/assets/latest/$feature_version/hotspot?$query") || return 1
 	link=$(printf '%s' "$assets" | pumpkin_package_field link)
 	checksum=$(printf '%s' "$assets" | pumpkin_package_field checksum)
 	case "$checksum" in
@@ -60,10 +63,10 @@ pumpkin_install_jdk() {
 	fi
 	tar -xzf "$archive" -C "$staging" || { rm -rf "$staging"; return 1; }
 	rm -rf "$jdk_dir"
-	# Das Archiv enthält genau einen Ordner jdk-25…; er wird zu mod/.jdk.
+	# Das Archiv enthält genau einen Ordner jdk-<Version>…; er wird zu mod/.jdk/<Version>.
 	mv "$staging"/jdk-* "$jdk_dir" || { rm -rf "$staging"; return 1; }
 	rm -rf "$staging"
-	echo "Temurin $pumpkin_jdk_feature_version nach $jdk_dir installiert (SHA-256 geprüft)."
+	echo "Temurin $feature_version nach $jdk_dir installiert (SHA-256 geprüft)." >&2
 }
 
 pumpkin_java_home() {
@@ -71,17 +74,49 @@ pumpkin_java_home() {
 	if [ -d "$1/Contents/Home" ]; then echo "$1/Contents/Home"; else echo "$1"; fi
 }
 
+# nodes.txt: Spalte 1 Id, Spalte 5 java. Kommentare und Leerzeilen überspringt awk.
+pumpkin_nodes() {
+	awk '{ sub(/#.*/, "") } NF' nodes.txt
+}
+
+pumpkin_node_java() {
+	pumpkin_nodes | awk -v id="$1" '$1 == id { print $5; found = 1 } END { exit !found }'
+}
+
+pumpkin_gradle_jdk_min() {
+	sed -n 's/^mod\.gradleJdkMin=//p' gradle.properties
+}
+
+# Gibt JAVA_HOME des JDKs der Version $1 aus: ein gesetztes PUMPKIN_JDK_<Version> oder das geladene mod/.jdk/<Version>.
+pumpkin_jdk_home() {
+	local feature_version=$1 preset jdk_dir
+	eval "preset=\${PUMPKIN_JDK_$feature_version:-}"
+	if [ -n "$preset" ]; then
+		echo "$preset"
+		return 0
+	fi
+	jdk_dir="$PWD/.jdk/$feature_version"
+	if [ ! -x "$(pumpkin_java_home "$jdk_dir")/bin/javac" ]; then
+		pumpkin_install_jdk "$feature_version" "$jdk_dir" || return 1
+	fi
+	pumpkin_java_home "$jdk_dir"
+}
+
 # Beim Einlesen mit "." kennt POSIX-sh den Skriptpfad nicht; deshalb gilt das aktuelle Verzeichnis (mod/).
 pumpkin_dev_env() {
 	[ -f gradlew ] || { echo "Bitte aus dem Ordner mod/ aufrufen." >&2; return 1; }
-	local jdk_dir="$PWD/.jdk"
-	if [ ! -x "$(pumpkin_java_home "$jdk_dir")/bin/javac" ]; then
-		pumpkin_install_jdk "$jdk_dir" || return 1
-	fi
-	JAVA_HOME=$(pumpkin_java_home "$jdk_dir")
+	local node=${1:-${PUMPKIN_NODE:-$(pumpkin_nodes | awk 'NR == 1 { print $1 }')}} node_java gradle_java home feature_version
+	node_java=$(pumpkin_node_java "$node") || { echo "Unbekannter Knoten: $node (siehe nodes.txt)" >&2; return 1; }
+	gradle_java=$(pumpkin_gradle_jdk_min)
+	[ "$node_java" -gt "$gradle_java" ] && gradle_java=$node_java
+	for feature_version in $node_java $gradle_java; do
+		home=$(pumpkin_jdk_home "$feature_version") || return 1
+		export "PUMPKIN_JDK_$feature_version=$home"
+	done
+	eval "JAVA_HOME=\$PUMPKIN_JDK_$gradle_java"
 	PATH="$JAVA_HOME/bin:$PATH"
 	export JAVA_HOME PATH
-	echo "JAVA_HOME=$JAVA_HOME"
+	echo "Knoten $node: JDK $node_java für das Spiel, JAVA_HOME=$JAVA_HOME (JDK $gradle_java für Gradle)"
 }
 
-pumpkin_dev_env
+pumpkin_dev_env "$@"
