@@ -1,6 +1,6 @@
 # Pumpkin Friends: Design Spec v2 (friends, world sharing via LAN tunnel, Fabric mod)
 
-**Status: FROZEN, 2026-10-03 (v2).** This document replaces v1 (`FRIENDS-SPEC.md`). It applies every finding of the security and feasibility reviews of v1, unless the changelog (Appendix D) says otherwise. It is the only source of truth for the protocol. R0a copies it to `docs/friends/SPEC.md`, and from then on the file in the repo is the spec. There is no separate PROTOCOL.md.
+**Status: FROZEN, 2026-10-03 (v2); synced with the Wave 0 and Wave 1 implementation on 2026-10-03.** This document replaces v1 (`FRIENDS-SPEC.md`). It applies every finding of the security and feasibility reviews of v1, unless the changelog (Appendix D) says otherwise. It is the only source of truth for the protocol. R0a copies it to `docs/friends/SPEC.md`, and from then on the file in the repo is the spec. There is no separate PROTOCOL.md. The deviations reported by the Wave 0/1 packages are written back into the sections they concern (index in D.3). Deviations where the code still has to change are listed in Appendix E and are **not** reflected as done in the normative text.
 
 **Owner decisions (final; recorded here, not open):**
 
@@ -107,22 +107,25 @@ Rules:
 ## 3. Transport
 
 ### 3.1 Library
-- `iroh = "1.3"` with default features. It compiles against tokio 1.53.1, reqwest 0.13.5 and rustls 0.23.45 (v1 probe). Expect about +4.6 MB release binary. R0a records the real delta in `docs/friends/DEPENDENCIES.md`.
-- R0b documents the exact 1.3 API in `docs/friends/IROH-NOTES.md`. Where this spec names an iroh call, the notes are authoritative for the spelling, and this spec for the behaviour.
+- `iroh = "1.3"` with default features (locked at iroh 1.3.0, iroh-relay 1.3.0, noq 1.3.0; the spike `tools/p2p-spike` and the relay image stay in lockstep). It compiles against tokio 1.53.1, reqwest 0.13.5 and rustls 0.23.45. Default features include `tls-ring`; ring and aws-lc-rs were already in the tree, so there is no new TLS backend. R0a measured **+4.9 MiB** release binary on Windows (probe with `presets::N0`, `docs/friends/DEPENDENCIES.md`); the real endpoints use `presets::Minimal`, so I1 re-measures the final figure.
+- The feature `unstable-net-report` (relay-observed public address, `Endpoint::net_report`) has no semver guarantee and is **not** enabled in the launcher. Only the spike enables it to print the QUIC-address-discovery result for G3.
+- R0b documents the exact 1.3 API in `docs/friends/IROH-NOTES.md`. Where this spec names an iroh call, the notes are authoritative for the spelling, and this spec for the behaviour. IROH-NOTES section 10 lists where iroh differs from the v2 draft; every item is written back below.
 
 ### 3.2 Relay map (`services/p2p/relays.rs`)
 ```rust
 #[derive(Debug, Clone)]
 pub struct RelayEntry { pub index: u8, pub url: Cow<'static, str>, pub operator: RelayOperator, pub quic_port: Option<u16> }
-pub enum RelayOperator { Pumpkin, N0 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum RelayOperator { Pumpkin, N0 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum RelaySelection { All, Only(u8) }   // which map entries an endpoint uses
 pub const RELAY_MAP: &[RelayEntry];   // compiled in, per build profile (entries use Cow::Borrowed)
+pub fn find_relay(map: &[RelayEntry], index: u8) -> Option<&RelayEntry>;   // unknown index (e.g. from a peer) -> None
 ```
 - `url` is a `Cow` only so that tests can pass a runtime relay map (3.7). Production code never builds an entry at runtime; the only production source of entries is `RELAY_MAP`.
 - **Index rules.** Indexes are stable forever. Entries are only appended, and a removed relay leaves its index unused. Indexes 0-99 are ours, and 200-209 are n0's.
-- **Release build:** only `RelayOperator::Pumpkin` entries (`https://relay-eu1.<relay-domain>/` = index 0, set by I1 once D1 is deployed), with `quic_port: Some(7842)`.
-- **Debug builds and closed-beta builds** (cargo feature `beta-relays`, off by default): ours plus n0's production relays (URLs copied from iroh's built-in defaults at the locked version, indexes 200+).
+- **Release build** (`not(any(debug_assertions, feature = "beta-relays"))`): only `RelayOperator::Pumpkin` entries (`https://relay-eu1.<relay-domain>/` = index 0, with `quic_port: Some(7842)`). **Current state: `RELAY_MAP = &[]`**, because our relay is not deployed yet. Release builds therefore cannot connect friends until I1 adds index 0 (gate G3).
+- **Debug builds and closed-beta builds** (`any(debug_assertions, feature = "beta-relays")`; the cargo feature `beta-relays` is off by default and lives in its own `[features]` section of `src-tauri/Cargo.toml`): ours plus n0's production relays. **Current state:** only the n0 entries `200 use1-1`, `201 usw1-1`, `202 euc1-1`, `203 aps1-1` (`https://<name>.relay.n0.iroh.link./`, `quic_port: Some(7842)`), copied from `iroh::defaults::prod` of the locked version (not `RelayMode::Default`, which could switch to staging). A unit test keeps them equal to the locked iroh. I1 adds our index 0 to **both** variants.
 - If `RELAY_MAP` contains a `N0` entry, `friends_enable` requires `acceptThirdPartyRelays = true` (else `errors.friends.relayConsentRequired`). The PrivacyNotice and the opt-in dialog name n0 as the operator.
-- The RelayMap is built with the QUIC address-discovery config (`quic_port`) for every entry that has one.
+- **Building the iroh `RelayMap`** (`relays.rs`, `SelectedRelays`, internal): for `quic_port: Some(port)` the entry becomes `RelayConfig::from(url)` with its QUIC address-discovery port set to `port`; for `None` it becomes `RelayConfig::new(url, None)` (no address discovery). An endpoint whose selection is empty runs with `RelayMode::Disabled`; otherwise `RelayMode::Custom(map)`, never iroh's built-in relays. An invalid URL fails the bind with `NetError::InvalidRelayUrl`, and `RelaySelection::Only(i)` with an index not in the map fails with `NetError::UnknownRelay(i)`.
 - **Peer-supplied relay data is an index only.** Never store, dial or log a URL received from a peer. Unknown indexes are ignored. A test asserts that a `hello` whose `homeRelay` is not in the map makes no connection attempt anywhere except the map's relays.
 - The map changes only through a launcher update (the signed updater). There is no setting for it.
 
@@ -133,12 +136,16 @@ pub const RELAY_MAP: &[RelayEntry];   // compiled in, per build profile (entries
 | **Hello** (one per active code, at most 3) | per-code hello key (4.2) | `pumpkin/hello/1` | only the map entry at the code's relay index | **always off** (relay-only; `NetOptions.hello_relay_only`, 3.7) | while the feature is enabled and the code is unexpired |
 | **Retired** (dial-only, transient) | retired key (4.6) | none accepted, dials `pumpkin/peer/1` | whole map | always off | only while delivering one outbox item |
 
-Builder settings for all endpoints:
-- No address lookup (no DNS/pkarr publisher or resolver). Explicit `RelayMode::Custom(map)`.
-- Transport config: keep-alive 15 s, idle timeout 40 s, `max_concurrent_bidi_streams = 16`, `max_concurrent_uni_streams = 0`.
-- `connect` is always wrapped in `tokio::time::timeout(8 s)` (an offline peer otherwise costs 30 s). `online()` is awaited for at most 5 s at startup.
+Builder settings for all endpoints (`p2p/endpoint.rs`):
+- `Endpoint::builder(presets::Minimal)`: no address lookup (no DNS/pkarr publisher or resolver). `secret_key` from `NetConfig.secret`, `alpns` from `NetConfig.alpns`, relay mode as in 3.2, `hooks(GateHooks)` (3.5). `relay_only` maps to `clear_ip_transports()`.
+- Transport config: keep-alive 15 s, idle timeout 40 s, `max_concurrent_bidi_streams = 16`, `max_concurrent_uni_streams = 0` (constants in `endpoint.rs`). The keep-alive is connection-wide; inside, iroh keeps every path alive every 5 s and caps a path's idle time at 15 s whatever is configured (IROH-NOTES 10.7). Offline detection is governed by the connection idle timeout (40 s). The idle timeout is currently a constant without a test seam (Appendix E, E1).
+- Every dial is wrapped in `tokio::time::timeout(DIAL_TIMEOUT = 8 s)` (an offline peer otherwise costs up to the idle timeout). Relay reachability is judged after `ONLINE_WAIT = 5 s` (3.4).
+- **Every endpoint runs an accept loop** for its whole life (`PeerNet::bind` spawns it). Without one, dialers of that endpoint would hang until their timeout instead of being refused (IROH-NOTES 10.5). The retired endpoint has no ALPNs, so any inbound handshake fails at once.
+- **Test builds** (`cfg(test)`): an endpoint with IP transports binds only `127.0.0.1:0` (`clear_ip_transports` + `bind_addr`), so no test causes a firewall prompt or leaves the machine. This applies to every test in the crate, including the later R4 and R5 tests.
 
-Dialing a friend: `EndpointAddr { id, relay URLs = [map[homeRelay] if known] + every other map entry }`. If R0b shows that multi-relay addresses do not work, dial each relay in turn, home first, sharing the 8 s budget.
+**Dialing a peer:** `PeerNet::dial(peer, alpn)` builds `EndpointAddr::from_parts(id, every relay URL of the dialing endpoint's own selection)`. It never uses an address or URL from a peer. iroh sends the first packets to every relay of the address at once (IROH-NOTES 4), so a multi-relay address works and "home relay first" is neither expressible (`EndpointAddr.addrs` is a `BTreeSet`) nor needed. The peer's announced `homeRelay` index therefore does not change how it is dialed; it is stored (`FriendRecord.home_relay`) and must be in the map, otherwise ignored (3.2). An id without any relay URL is not dialable (`NoAddress`), not even on loopback, because no address lookup is configured.
+
+**Accepting:** a background task accepts `Incoming`s. At most 8 handshakes run concurrently; further `Incoming`s are `ignore()`d (3.5). Connections the Gate admitted wait in a queue of 16 for `PeerNet::accept()`; when nobody receives any more, a new connection is closed with `SHUTDOWN`. Dropping a `PeerNet` aborts the task and ends all its connections locally, so a `PeerNet` must outlive its `PeerConn`s.
 
 ### 3.4 Fallback order
 1. Direct UDP path after hole punching.
@@ -146,50 +153,72 @@ Dialing a friend: `EndpointAddr { id, relay URLs = [map[homeRelay] if known] + e
 3. "Always relay": the main endpoint runs without IP transports.
 4. No relay reachable: `NetworkStatus::Degraded { reason: relayUnreachable }`, and all friends show offline.
 
+**Detecting it** (IROH-NOTES 10.4): when no relay of the map can be reached, `online()` never completes and `home_relay_status()` stays empty (an unreachable relay never becomes the home relay), so there is no error to read. `PeerNet::status()` therefore reports a `NetState` (`p2p/endpoint.rs`): it starts as `Starting`; once a home relay is connected, or at the latest after `ONLINE_WAIT` (5 s), it becomes `Online { home_relay }` (the map index of the connected home relay) or `RelayUnreachable`, and from then on follows iroh's home-relay watcher until the endpoint closes. R4 maps it onto the contract:
+
+| `NetState` / bind result | `NetworkStatus` |
+|---|---|
+| `Starting` | `Starting` |
+| `Online { home_relay }` | `Online { relay_host }`, host taken from `find_relay(&net.relay_map, home_relay)` |
+| `RelayUnreachable` | `Degraded { reason: RelayUnreachable }` |
+| `PeerNet::bind` returned `Err` | `Degraded { reason: BindFailed }` |
+
 ### 3.5 Admission (`Gate`, `EndpointHooks::after_handshake`)
 `services/p2p` knows nothing about friends:
 ```rust
 /// Entscheidet nach dem TLS-Handshake über eine eingehende Verbindung; die Peer-ID ist dann authentisch.
 pub trait Gate: Send + Sync + 'static { fn admit(&self, peer: &PeerId, alpn: &[u8]) -> Admission; }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Admission { Accept, Reject(CloseCode), Drop }
 ```
-- `Drop` closes with code 0 and **no frame**. To the remote this looks like a dead end, not a refusal.
+- `Gate::admit` is **synchronous** (it runs inside the iroh hook). Everything it needs (friends, blocked peers, outgoing `awaitingAnswer` requests, hello rate limits) must be held in memory by the caller.
+- The internal `GateHooks` (`p2p/gate.rs`) implements `EndpointHooks::after_handshake`. iroh runs that hook for **outgoing connections too** (IROH-NOTES 10.2); `GateHooks` returns `Accept` for `Side::Client` without asking the Gate, so outgoing connections stay ungated.
+- `Reject(code)` becomes `AfterHandshakeOutcome::Reject { error_code: code, reason: empty }`. The dialer's `connect` **succeeds**, then the connection ends with `CloseReason::Peer(code)`. On the accepting side the handshake fails, so `PeerNet::accept` never sees the connection.
+- `Drop` cannot be frameless after the handshake (IROH-NOTES 10.1): it is `Reject` with code 0 (`NORMAL`) and an empty reason. QUIC still sends a CONNECTION_CLOSE, and the remote sees `CloseReason::Peer(NORMAL)`, exactly like a normal end. **No application frame is ever sent**, so to the remote it looks like a closed dead end, not a refusal. The only fully silent option is `Incoming::ignore()` before the handshake, when the peer id is not known yet (used for the handshake cap below).
 - Main endpoint, `pumpkin/peer/1`: `Accept` if the peer is a stored friend (confirmed or not) and not blocked, **or** we have an outgoing request in state `awaitingAnswer` whose `peerId` is this peer. Otherwise `Reject(NOT_FRIEND)`. A blocked friend therefore sees exactly what a removed friend sees.
 - Hello endpoint, `pumpkin/hello/1`: `Drop` if the peer is blocked or over a hello rate limit (12.4), otherwise `Accept`. The secret is checked on the first frame (5.2).
-- Pre-handshake: if more than 8 handshakes are in flight on an endpoint, new `Incoming`s are `ignore()`d.
-- Outgoing connections are not gated.
+- Pre-handshake: if 8 handshakes are already in flight on an endpoint, new `Incoming`s are `ignore()`d (nothing is sent back). "In flight" = `Incoming`s being awaited in the accept task (semaphore `MAX_HANDSHAKES = 8`). There is no dedicated test of this cap yet (Appendix E, E2).
+- Outgoing connections are not gated (see `GateHooks` above).
 
 ### 3.6 Close codes (QUIC application error codes)
 `0 NORMAL` (also used for silent drops), `1` reserved/unused, `2 NOT_FRIEND`, `3 DUPLICATE`, `4 PROTOCOL` (bad frame, size, or tunnel validation; also the stream reset code), `5 RATE_LIMITED`, `6 SHUTDOWN` (launcher exit, disable, rebind).
+- In code: `pub struct CloseCode(u32)` with the constants `CloseCode::{NORMAL, NOT_FRIEND, DUPLICATE, PROTOCOL, RATE_LIMITED, SHUTDOWN}` (`p2p/conn.rs`). How a connection ended is a `CloseReason { Peer(CloseCode), Local, TimedOut, Lost }` (`TimedOut` = idle timeout, e.g. a crashed peer).
+- `Endpoint::close()` alone would close every open connection with code 0 (IROH-NOTES 10.3). `PeerNet::close(code)` therefore first closes every tracked connection with `code`, then closes the endpoint. R4 calls `close(CloseCode::SHUTDOWN)` before dropping or rebinding an endpoint.
+- `bridge` (6.3) resets its stream with `NORMAL` when its `stop` token is cancelled.
 
 ### 3.7 Network options (normative test seam)
 The friends service never reads `RELAY_MAP` directly. It gets its network configuration injected (`services/friends/service.rs`, R4):
 ```rust
 pub struct NetOptions { pub relay_map: Vec<RelayEntry>, pub hello_relay_only: bool, pub relay_tls: RelayTls }
 impl NetOptions { pub fn production() -> Self; }   // relay_map = RELAY_MAP.to_vec(), hello_relay_only = true, relay_tls = Verify
-pub enum RelayTls { Verify, #[cfg(test)] InsecureForTests }                          // defined in services/p2p (R1)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RelayTls { Verify, #[cfg(test)] InsecureForTests }                          // defined in services/p2p/endpoint.rs (R1)
 impl Friends { pub fn new(dirs: &Dirs, secrets: Arc<dyn SecretStore>, signals: GameSignals, bridge: ModBridge, net: NetOptions) -> Self; }
 ```
 - `lib.rs` passes `NetOptions::production()`. No other production call site exists, and there is no setting for any field.
-- R4 maps the options onto `NetConfig` (8.7): every endpoint gets `relay_map`; hello endpoints get `relay_only = hello_relay_only` and `RelaySelection::Only(code.relay_index)`. This mapping is a pure function (`hello_net_config`) and unit-tested.
-- **Tests** use an in-process relay: iroh's test relay server (`iroh` dev-dependency with the `test-utils` feature, added by R0a; the exact function and the certificate-skip setting are recorded by R0b in IROH-NOTES.md). Its URL becomes the only `relay_map` entry (index 0, operator `Pumpkin`), with `relay_tls = InsecureForTests` and `hello_relay_only = true`. This is the configuration for every test that runs the hello flow. Pure logic tests that never touch a hello endpoint may set `hello_relay_only = false` and use loopback addresses.
-- `InsecureForTests` exists only under `cfg(test)`, so a release build cannot skip relay certificate checks.
+- R4 maps the options onto `NetConfig` (8.7): every endpoint gets `relay_map` and `relay_tls`; hello endpoints get `relay_only = hello_relay_only` and `RelaySelection::Only(code.relay_index)`. This mapping is a pure function (`hello_net_config`) and unit-tested.
+- **Tests** use an in-process relay: `iroh::test_utils::run_relay_server()` (dev-dependency `iroh` with `test-utils`, added by R0a) returns `(RelayMap, RelayUrl, Server)`; the `Server` guard must stay alive. R4 and R5 copy the helper `test_relay()` from `services/p2p/tests.rs`: it returns `(RelayEntry { index: 0, operator: Pumpkin, url, quic_port: the server's random QUIC port }, impl Send guard)`. That entry is the only `relay_map` entry, with `relay_tls = InsecureForTests` (= `ca_tls_config(CaTlsConfig::insecure_skip_verify())`) and `hello_relay_only = true`. This is the configuration for every test that runs the hello flow.
+- **Every** test that connects two endpoints needs that relay entry, because a bare id is not dialable (3.3), even on loopback. Pure logic tests that never touch a hello endpoint may set `hello_relay_only = false`; their endpoints bind `127.0.0.1` only (3.3), and the path usually upgrades from `Relay` to `Direct`.
+- `InsecureForTests` exists only under `cfg(test)`, so a release build cannot skip relay certificate checks. Consequence: it is usable only by tests inside the `src-tauri` crate (unit tests), not by integration tests or examples.
 
 ---
 
 ## 4. Identity, codes, requests, presence, removal, identity operations
 
 ### 4.1 Identity
-- Permanent `SecretKey` (32 bytes), stored through `services/secrets.rs` (a `SecretStore` trait with a keyring implementation and an in-memory fake). Keyring service `dev.laux.launcher`, entries `friends-identity` and `friends-identity-retired`, value = 64 lowercase hex. `auth/keyring.rs` is refactored onto `secrets.rs`.
-- `PeerId` = EndpointId as 64 lowercase hex. **Fingerprint** = the first 16 hex chars in 4 groups of 4 (`3f9a c021 77de 01b4`). It is shown in Settings, in the friend menu, and always next to the name on request and invite dialogs.
+- Permanent `SecretKey` (32 bytes), stored through `services/secrets.rs`: trait `SecretStore { load(name) -> AppResult<Option<String>>, save(name, value), delete(name) }` (a missing entry is `Ok(None)` and deleting it is `Ok`; every other error means "keyring unusable"), the keyring implementation `KeyringSecrets`, and the in-memory fake `MemorySecretStore` (`cfg(test)` only, so in-crate tests only). Keyring service `dev.laux.launcher`, entries `friends-identity` and `friends-identity-retired`, value = 64 lowercase hex. `auth/keyring.rs` is refactored onto `secrets.rs`.
+- A keyring entry that is not 64 hex chars is treated as **missing** (warning in the log), which yields `identityLost` when friends data exists. It is never silently replaced.
+- `PeerId` = EndpointId as 64 lowercase hex. In Rust it is the type `services::p2p::PeerId` (R1, 8.7). The R2 helpers work on plain `&str`/`String` ids (R2 does not depend on R1); R4 converts with `PeerId::from_str`, which accepts exactly the same strict spelling as `identity::parse_peer_id`. **Fingerprint** = the first 16 hex chars in 4 groups of 4 (`3f9a c021 77de 01b4`, `identity::fingerprint`). It is shown in Settings, in the friend menu, and always next to the name on request and invite dialogs. Logs use the 8-char short form (`identity::short_id`, `PeerId::short`, and `PeerId`'s `Debug`).
 - **Availability** (computed at startup and on every enable):
   | State | Condition | Effect |
   |---|---|---|
   | `noSecretStore` | the keyring probe fails with a platform error (not "no entry"), e.g. Linux without a secret service | Every friends command except `friends_state` fails with `errors.friends.unavailable`. The Friends navigation entry is hidden. Settings explains why. Keys are never stored in files. |
   | `identityLost` | no `friends-identity` entry, but `config.enabled` or any record exists | Only `friends_state` and `friends_reset` work. Others fail with `errors.friends.identityLost`. The UI shows "Identität verloren" and the reset action. A new key is never created silently. |
   | `available` | otherwise | normal |
+
+  Computed by `identity::availability(secrets, has_friends_data)`, where R4 passes `config.enabled || stores.any()`. `RecordStores::any()` sees only readable records (D.3).
+- Key operations (`friends/identity.rs`): `identity::create(secrets)` makes and stores a new key without an existence check (R4 checks availability first). `identity::renew(secrets) -> Renewal { retired: Option<Identity>, current: Identity }` is the key move shared by `friends_rotate_identity` and `friends_reset`: the current key (if any) is saved as `friends-identity-retired` first, then a new key becomes `friends-identity`. `load`, `load_retired` and `delete_retired` complete the set.
 - Profile announced to friends (self-asserted, marked as such in the UI): `displayName` (3-32 chars after sanitising), and `mcName`/`mcUuid` of the active Microsoft account at enable time, updated via `profile` when the account changes.
-- Signing: `identity::sign(domain: &[u8], parts: &[&[u8]]) -> [u8; 64]` and `identity::verify(peer, domain, parts, sig) -> bool` (Ed25519 over `domain || parts...`).
+- Signing: `Identity::sign(&self, domain: &[u8], parts: &[&[u8]]) -> [u8; 64]` and the free function `identity::verify(peer_id: &str, domain, parts, sig: &[u8; 64]) -> bool` (Ed25519 over `domain || parts...`; an invalid id counts as a wrong signature). "sign_new"/"sign_permanent" in 4.6 and 5.2 mean `sign` on the respective `Identity`.
 
 ### 4.2 Friend code (`services/friends/code.rs`, `src/lib/friendCode.ts`)
 ```
@@ -198,10 +227,16 @@ check   = SHA-256(version || relay index || hello id || secret)[0..2]
 code    = "pumpkin-" + base32(RFC 4648, lowercase alphabet a-z2-7, no padding)(payload)      // 8 + 72 = 80 chars
 ```
 - Constants (also in TS, checked by fixtures): `FRIEND_CODE_PREFIX = "pumpkin-"`, `FRIEND_CODE_BODY_LENGTH = 72`, `FRIEND_CODE_LENGTH = 80`, display groups of 4.
-- **Hello key:** `hello_secret = SHA-256("pumpkin/hello-key/2" || identity_secret(32) || salt(16))`, with a random 16-byte `salt` per code stored in `CodeRecord`. No extra keyring entries are needed. The permanent id cannot be derived from the code.
+- **Hello key:** `hello_secret = SHA-256("pumpkin/hello-key/2" || identity_secret(32) || salt(16))`, with a random 16-byte `salt` per code stored in `CodeRecord`. No extra keyring entries are needed. The permanent id cannot be derived from the code. In code: `Identity::hello_secret(&salt)` is the `NetConfig.secret` of the code's hello endpoint, and `Identity::hello_id(&salt)` its id.
 - **Parsing** (Rust authoritative, TS checks shape only): trim, lowercase, require the prefix, remove spaces and `-` from the rest, then require exactly 72 chars of the alphabet. Rust then checks the version (`0x02`) and the checksum (`errors.friends.codeInvalid`). A relay index not in our map gives `errors.friends.protocolUnsupported`. A hello id equal to one of our own active codes gives `errors.friends.codeOwn`.
 - **Golden vectors:** Appendix B. Rust (`code.rs` tests) and `friendCode.check.mjs` both assert them.
-- **Inviter storage:** `CodeRecord { id, salt, secretSha256, relayIndex, tail (last 4 chars), createdAt, expiresAt, usedBy? }`. The plain code is returned once, by `friend_code_create`.
+- **Inviter storage:** `CodeRecord { id, salt, secretSha256, relayIndex, tail (last 4 chars), createdAt, expiresAt, usedBy? }`. `salt` is the 16 random bytes as hex; `secretSha256` is the lowercase-hex SHA-256 of the 9 raw secret bytes. The plain code is returned once, by `friend_code_create`.
+- **Rust API** (`friends/code.rs`; randomness from `getrandom`):
+  - `code::issue(identity, relay_index) -> AppResult<IssuedCode { salt: [u8; 16], parts: CodeParts }>`.
+  - `code::parse(input) -> AppResult<CodeParts>` (normalisation, version and checksum; `codeInvalid`).
+  - `CodeParts { relay_index, hello_id: [u8; 32], secret: [u8; 9] }` with `encode()`, `tail()`, `secret_hex()` (18 lowercase hex, the `friendRequest.secret`), `secret_digest()` (= `secretSha256`), `ensure_relay_known(|index| map has index)` (`protocolUnsupported`) and `ensure_not_own(&own_hello_ids)` (`codeOwn`; R4 passes `identity.hello_id(&record.salt)` of every active code). The two checks take their input from the caller because R2 knows neither `RELAY_MAP` nor the active codes.
+  - `code::secret_matches(secret_sha256, secret_hex) -> bool`: the hello check of 5.2.
+- **TS helpers** (`src/lib/friendCode.ts`, shape only): `normalizeFriendCode(input): string | null`, `isFriendCodeShape(input): boolean`, `friendCodeBodyGroups(code): string[]`.
 - Limits: TTL **7 days**, single use, at most **3** active codes (`errors.friends.tooManyCodes`). Revoking or expiring a code shuts its hello endpoint down.
 
 ### 4.3 Friend request (mutual consent)
@@ -223,6 +258,7 @@ close NORMAL
 control hello from A  -> B stores Friend{A, confirmed:true}, deletes Outgoing; B answers hello
                                                           A sets confirmed=true on B's hello
 ```
+- **Dialing the hello endpoint:** B uses its main endpoint: `PeerNet::dial(&PeerId::from_bytes(&parts.hello_id)?, b"pumpkin/hello/1")`. The address carries every relay of B's map (3.3), which includes `relayIndex` (checked by `ensure_relay_known`). `RequestRecord.helloId` is the hex of the hello id, and `RequestRecord.secret` is `parts.secret_hex()`, kept for retries.
 - **Inviter offline when B redeems:** the request stays `delivering`. B's presence loop retries the hello dial with backoff 30 s, 2 min, 5 min, 10 min, then every 30 min, for up to **14 days** from `friend_add`. The UI shows "Wird zugestellt, sobald der Besitzer des Codes online ist". `peerOffline` is never shown for this.
 - **Immediate retry:** `friends_retry_now` (8.4) dials every `delivering` request at once, ignoring its backoff, and then restarts its backoff at the first step (30 s). A request whose attempt is still in flight or started less than 10 s ago is skipped. The UI calls it when the Friends page opens and from the "Jetzt zustellen" button of a `delivering` row (10.2). B cannot see when A comes online, so this is how B gets a prompt delivery; the backoff remains the unattended fallback.
 - **Possibly expired code:** B cannot know the code's expiry, and an expired or revoked code gets no answer (its hello endpoint is gone). When a `delivering` request is older than `CODE_TTL_SECS` (7 days), the UI adds the hint "Der Code ist eventuell abgelaufen; frag nach einem neuen." The retries still continue until the 14-day request TTL.
@@ -239,7 +275,7 @@ control hello from A  -> B stores Friend{A, confirmed:true}, deletes Outgoing; B
 - **Lazy dialing** for all other friends: once, 60 s after startup, then every 60 min. `friends_retry_now` (called when the Friends page opens) also dials every offline friend whose last attempt is more than 2 min old, besides the `delivering` requests (4.3).
 - Backoff per friend after a failed eager dial: 30 s, 2 min, 5 min, 10 min, then every 30 min. An inbound connection from a friend resets the backoff and counts as online.
 - **Control stream:** the dialer opens it. Both sides send `hello` first, then `status`. `status` is re-sent only on change (`online`, or `playing` while any instance runs; no details).
-- **Duplicates:** keep the connection dialed by the peer with the lexicographically lower `PeerId`, and close the other with `DUPLICATE`.
+- **Duplicates:** keep the connection dialed by the peer with the lexicographically lower `PeerId`, and close the other with `DUPLICATE`. In code: `p2p::duplicate_survivor(local, remote) -> Direction` (`Outgoing` when `local < remote`, else `Incoming`; `PeerId` orders bytewise, which equals the hex order) compared with `PeerConn::direction()`.
 - **Offline:** `SHUTDOWN` means offline at once. The idle timeout means offline after at most 40 s. Then lazy or eager dialing resumes.
 - `lastSeen` (unix secs) is updated on disconnect. Profile and status persistence is debounced (at most one `friends.json` write per 5 s).
 - **Hosting is never broadcast.** Only invited friends learn of a session.
@@ -268,7 +304,10 @@ control hello from A  -> B stores Friend{A, confirmed:true}, deletes Outgoing; B
 ## 5. Wire protocol between launchers
 
 ### 5.1 Framing and limits
-- Frame: `u32` big-endian length, then UTF-8 JSON, one object with a `"type"` string. The length is checked before any allocation. Over the limit means close with `PROTOCOL`.
+- Frame: `u32` big-endian length, then UTF-8 JSON, one object with a `"type"` string. The length is checked before any allocation. Over the limit means `PROTOCOL`, in two steps:
+  - `services/p2p` (R1) resets the **stream**: `BiStream::read_frame(limit)` resets both directions with `PROTOCOL` on any frame error (too large, bad JSON, IO). The generic `p2p::frame::read(recv, limit)` / `frame::write(send, &msg, limit)` work on any `AsyncRead`/`AsyncWrite` and never reset; `write` sends nothing over the limit. Errors are `FrameError { TooLarge { len, limit }, Json, Io }`.
+  - The friends service decides about the **connection**: a frame error on the hello stream or the control stream closes the connection with `PROTOCOL` (R4); on a request or tunnel stream the stream reset is enough (R4/R5).
+- The per-context limits below are constants of the friends protocol (R4 for hello, control and request streams; R5 for the tunnel open frame), not of `p2p`.
 
   | Context | Limit per frame |
   |---|---|
@@ -384,9 +423,9 @@ Matching table (normative, tested in R6). A, B, C = mods that the server needs. 
 ### 6.1 Host side (`friends/hosting.rs`, `friends/mcproto.rs`, `p2p/tunnel.rs`)
 - **Preconditions for `host_start`:** the instance is running (`errors.friends.gameNotRunning`), was launched with a Microsoft account (`errors.friends.msAccountRequired`), and its version's `releaseTime >= MIN_MC_RELEASE_TIME` (`errors.friends.versionUnsupported`). At most one session at a time (`errors.friends.sessionActive`).
 - **Port sources:** a mod `lanOpened` hint, the log parser (6.4), or the manual `port` argument (1024-65535, else `errors.friends.portInvalid`). None known: `errors.friends.lanPortUnknown`.
-- **Port verification** (`lan_detect::verify_port(pid, port)`), on every new port from any source and before every switch:
-  1. `sockowner::listens(game_pid, port)` must be true: a TCP LISTEN socket on that port owned by the game process. Otherwise `errors.friends.portNotGame`.
-  2. A server list ping to `127.0.0.1:port` (existing `services/server_ping.rs`, 2 s timeout) must return a status JSON with `version.protocol`. Otherwise `errors.friends.lanUnreachable`.
+- **Port verification** (`lan_detect::verify_port(pid, port) -> PortCheck { Ok, NotOwned, NoAnswer }`), on every new port from any source and before every switch:
+  1. `sockowner::listens(game_pid, port)` must be true: a TCP LISTEN socket on that port owned by the game process (run through `spawn_blocking`). Otherwise `PortCheck::NotOwned` → `errors.friends.portNotGame`. A failed lookup (IO error) also counts as `NotOwned` and logs a warning: in doubt nothing is shared.
+  2. A server list ping to `127.0.0.1:port` through the existing `services::server_ping::ping`, wrapped in a 2 s timeout (`server_ping`'s own limit is 5 s), must succeed: the answer must be a well-formed status response whose payload parses as JSON. `ServerStatus` does not expose `version.protocol`, so that field is not checked; step 1 is the security check, step 2 only confirms that a Minecraft server answers. Otherwise `PortCheck::NoAnswer` → `errors.friends.lanUnreachable`.
   3. The session stores the verified port, and the UI shows "Port {port} · gehört zu Minecraft (PID {pid})".
 - **Liveness:** every 15 s during a session, `sockowner::listens(game_pid, port)` is re-checked. Two consecutive failures end the session with `lanClosed`.
 - **Incoming tunnel stream:**
@@ -396,7 +435,7 @@ Matching table (normative, tested in R6). A, B, C = mods that the server needs. 
      - The first packet is a Handshake: VarInt length at most 1024, packet id `0x00`, protocol VarInt, server address String (at most 255 chars), port u16, next state `1` (status) or `2` (login). Next state `3` (transfer) and the legacy ping byte `0xFE` are refused.
      - For next state 2, the next packet is Login Start: id `0x00`, whose first field (name) matches `^[A-Za-z0-9_]{1,16}$`.
      - On failure, reset the stream with `PROTOCOL` and connect nothing.
-  4. `TcpStream::connect(127.0.0.1:port)` (3 s), `set_nodelay(true)`, write the buffered bytes, then `bridge` (copy both ways). Connect failure: reset the stream.
+  4. `TcpStream::connect(127.0.0.1:port)` (3 s), `set_nodelay(true)`, write the buffered (validated) bytes to the TCP socket, then `bridge(stream, tcp, Bytes::new(), stop)` with an **empty** prefix (6.3: the prefix goes into the stream, which is the guest direction). Connect failure: reset the stream.
   5. The guest is `connected` while at least one stream is open. Emit `host-session`.
 - The host never connects anywhere except `127.0.0.1:<verified session port>`. The peer cannot choose the host, port or session.
 - **Kick:** delete the guest's invite, set its `SessionGuest` to `left` with `kicked: true`, send `inviteRevoke{kicked}`, and cancel the guest's streams. Later streams and manifest requests from that friend get `notInvited` until the host re-invites it with `host_invite` (5.4).
@@ -416,7 +455,7 @@ Matching table (normative, tested in R6). A, B, C = mods that the server needs. 
   - One join at a time: a new `invite_join` ends the previous one with `left`.
 - **Timers** (all durations come from an injected `JoinTimers`, 8.7; production values in brackets):
   - The join starts as `waitingForGame`, and the **spawn wait** (`spawn_wait`, 600 s) starts at `invite_join`.
-  - Every `GameSignal::LaunchProgress{friend_join: joinId}` restarts the spawn wait. A first launch of a fresh instance (client, libraries, assets, Java) therefore keeps the join alive for as long as the launch makes progress.
+  - Every `GameSignal::LaunchProgress{friend_join: joinId}` restarts the spawn wait. `instance_launch` sends it at its phase boundaries (8.6: after the world backup, the mod sync, the account session, the installed-version check and the Java resolution), at most once per second. Downloading a missing version is **not** part of `instance_launch`: it happens in the separate `instance_install` command, which carries no `friend_join` and sends no `LaunchProgress`. Therefore the frontend completes any needed install **before** it calls `invite_join` (10.4 step 3), so the spawn wait never runs during a download.
   - **Absolute cap:** without a spawn within `spawn_wait_cap` (1800 s) of `invite_join`, the join ends (`error`) even if progress continues.
   - `GameSignal::LaunchFailed{friend_join: joinId}` ends the join at once with `error`. The listener is closed in the same step.
   - On `GameSignal::Spawned{friend_join: joinId, pid}` the listener records the PID, the spawn wait stops, and the **first-connection timer** (`first_connection`, 600 s) starts. Without a first valid connection in that time, the join ends (`error`).
@@ -424,31 +463,39 @@ Matching table (normative, tested in R6). A, B, C = mods that the server needs. 
 - **Accepting a local connection** (all checks before any QUIC stream is opened):
   1. `set_nodelay(true)`.
   2. Until the first valid connection, only 1 unvalidated connection is handled at a time. Others are closed at once.
-  3. PID check: `sockowner::connects_from(game_pid, client_addr)` must be true. If the platform lookup itself fails (an IO error), log once and rely on step 4.
+  3. PID check: `sockowner::connects_from(game_pid, client_addr)` must be true: the game process owns a non-LISTEN TCP socket whose local address equals the client address the listener sees. The lookup blocks on Linux (`/proc/<pid>/fd`) and macOS (`lsof`), so run it through `spawn_blocking`. If the platform lookup itself fails (an IO error), log once and rely on step 4.
   4. Nonce check: peek the Handshake (`mcproto`, 2 s, at most 1 KiB). The server-address field, cut at the first NUL, must equal the listener IP string, and the port field must equal the listener port. Legacy `0xFE` is refused.
   5. Failure: close the TCP connection. No stream is opened, and the connection does not count as activity.
   6. Success: open a tunnel stream (redial if needed, 8 s), send the open frame, wait for `tunnelOk` (10 s), write the peeked bytes, then `bridge`. After the first valid connection, up to 4 concurrent connections are allowed, each validated the same way.
+- **Mapping onto `LocalListener` (6.3):** steps 1-5 are R5's `admit` closure, which returns `Some((socket, peeked bytes))` on success; `LocalListener` then calls `open` and passes the peeked bytes to `bridge` as `prefix`, so they go into the stream first. R5's `open` closure sends the open frame and waits for `tunnelOk`; an `error` frame gives `TunnelError::Refused(code)`, no answer in 10 s gives `TunnelError::Timeout`. Limits: `ListenerLimits { before_first_valid: 1, after_first_valid: 4 }`. Cancelling the listener's `stop` token closes the address and resets every running tunnel stream with `NORMAL`.
 - **Status:** `join-session{connected{path, rttMs}}` at most every 5 s while streams are open.
 - **End triggers:** `inviteRevoke` (stopped/kicked), game exit of the joining instance (gameExited), `join_leave` (left), host connection lost and not back within 30 s (hostOffline), timers or `LaunchFailed` (error), `Lifecycle::Disabled` (disabled), `Lifecycle::Rebind` or `Lifecycle::IdentityChanged` (left), `Lifecycle::Shutdown` (app exit; no event).
 
 ### 6.3 Shared tunnel code (`services/p2p/tunnel.rs`, Minecraft-agnostic)
 ```rust
-/// Verbindet einen Tunnel-Stream mit einer lokalen TCP-Verbindung (beide Seiten mit TCP_NODELAY); `prefix` geht zuerst raus.
+/// Verbindet einen Tunnel-Stream mit einer lokalen TCP-Verbindung (beide Seiten mit TCP_NODELAY); `prefix` (schon von
+/// `local` gelesene Bytes) geht zuerst in den Stream. `stop` setzt den Stream zurück und schließt `local`.
 pub async fn bridge(stream: BiStream, local: TcpStream, prefix: Bytes, stop: CancellationToken) -> io::Result<()>;
+#[derive(Debug, thiserror::Error)]
+pub enum TunnelError { Net(NetError), Frame(FrameError), Refused(String /* error code of the peer */), Timeout }
 /// Lokaler Zuhörer auf `ip:0`. `admit` prüft jede Verbindung, bevor ein Stream geöffnet wird, und liefert die
 /// schon gelesenen Bytes zurück; `None` schließt die Verbindung.
+#[derive(Debug)]
 pub struct LocalListener { pub addr: SocketAddr, /* … */ }
 impl LocalListener {
     pub async fn bind(ip: IpAddr) -> io::Result<Self>;
     pub fn serve<A, AF, O, OF>(self, admit: A, open: O, limits: ListenerLimits, stop: CancellationToken) -> JoinHandle<()>
-    where A: Fn(TcpStream, SocketAddr) -> AF + Send + Sync + 'static, AF: Future<Output = Option<(TcpStream, Bytes)>> + Send,
-          O: Fn() -> OF + Send + Sync + 'static, OF: Future<Output = Result<BiStream, TunnelError>> + Send;
+    where A: Fn(TcpStream, SocketAddr) -> AF + Send + Sync + 'static, AF: Future<Output = Option<(TcpStream, Bytes)>> + Send + 'static,
+          O: Fn() -> OF + Send + Sync + 'static, OF: Future<Output = Result<BiStream, TunnelError>> + Send + 'static;
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ListenerLimits { pub before_first_valid: usize /* 1 */, pub after_first_valid: usize /* 4 */ }
 ```
+- `bridge` sets `TCP_NODELAY` on `local`, writes `prefix` into the stream, then copies both ways (`copy_bidirectional`). It is used in both directions: the guest passes the peeked handshake as `prefix`; the host writes its validated buffer to the LAN socket itself and passes an empty prefix (6.1). Cancelling `stop` resets the stream with `NORMAL` and drops `local`.
+- `LocalListener` (in `services/p2p/tunnel.rs`): a connection over the current limit is dropped at once; the limit switches from `before_first_valid` to `after_first_valid` after the first connection `admit` accepted. `admit` runs after `TCP_NODELAY` is set and before any stream is opened. The futures run in spawned tasks, hence the `'static` bounds.
 
 ### 6.4 LAN log parser (`services/lan_detect.rs`)
-- Stateful `LanDetector`, fed **stdout** lines only (behind a `Mutex`, because `on_line` is `Fn`).
+- Stateful `LanDetector` (`Default`), fed **raw stdout** lines only: the lines exactly as the game prints them, before the launcher's log4j XML processing, so that the detector sees the `<log4j:Event …>` start lines and can track multi-line CDATA (otherwise a continuation line could pose as a message). `launch::spawn` delivers them through its `on_stdout_raw` callback (8.7), and `gamesignal::lan_line_forwarder(signals, instance_id)` wraps the detector (behind a `Mutex`, because the callback is `Fn`) and sends `LanOpened { source: Log }` / `LanClosed`. A `LanOpened` from the log is only a hint; R5 calls `verify_port` before using the port.
 - **XML form** (Mojang log4j config, the default for versions with a `logging` entry): an event counts only if its `<log4j:Event …>` start line has `level="INFO"` and `thread="Server thread"`, and its message is a single-line `<log4j:Message><![CDATA[…]]></log4j:Message>`. The whole CDATA text is the message.
 - **Plain form** (no XML config): the line matches `^\[\d{2}:\d{2}:\d{2}\] \[Server thread/INFO\](?:: | \([A-Za-z0-9_.\-]{1,64}\) )(.*)$` (vanilla `]: `, Fabric `] (logger) `). Group 1 is the message.
 - The **whole message** must match one of:
@@ -457,7 +504,7 @@ pub struct ListenerLimits { pub before_first_valid: usize /* 1 */, pub after_fir
 - Chat (`<Name> …`), `/say` (`[Name] …`), disconnect texts and everything else cannot match, because they never form the whole message. Every port still passes 6.1 verification.
 - Table test (R3): real lines for 1.20.1, 1.21.x, 26.1.2, 26.3 in XML and plain form, Fabric's plain form, chat and `/say` spoofs (`<Bob> Published LAN server on port 5432`), a multi-line CDATA, and a forged plain line on another thread.
 
-### 6.5 Close behaviour (normative; the R5 tests assert every row, crash rows with a short idle timeout)
+### 6.5 Close behaviour (normative; the R5 tests assert every row, crash rows with a short idle timeout, which needs the seam of Appendix E, E1)
 | Case | Host launcher sees | Guest launcher sees | Guest game |
 |---|---|---|---|
 | Host clicks stop / mod stopSharing | `host-session-ended{stopped}` | `friend-invite-revoked{stopped}`, `join-session{ended{stopped}}` | disconnected |
@@ -480,16 +527,17 @@ pub struct ListenerLimits { pub before_first_valid: usize /* 1 */, pub after_fir
 ## 7. Launcher to mod IPC (untrusted channel)
 
 ### 7.1 Transport and auth
-- `services/modbridge` listens on `127.0.0.1:0` while the feature is enabled.
-- For each launch of a **Fabric** instance while the bridge runs, `launch_env(instance_id, loader)` returns `PUMPKIN_IPC_PORT`, `PUMPKIN_IPC_TOKEN` (32 random bytes, 64 hex) and `PUMPKIN_IPC_PROTOCOL=1`. They go into the child **environment only**, never into arguments. For other loaders or a stopped bridge, the list is empty and the launch is byte-identical to today.
-- The token binds one connection to one launch. It is dropped on game exit, so a token leaked through `hs_err_pid*.log` or a child process is useless afterwards. Same-user malware is out of scope. **Mods running in the same JVM can read the token**, so every mod request is treated as untrusted (7.4).
+- `services/modbridge` listens on `127.0.0.1:0` while the feature is enabled. `AppState.bridge` is constructed **stopped**; R4 calls `start()` when the feature is enabled and available and `stop()` when it is disabled (R3 never starts it).
+- For each launch of a **Fabric** instance while the bridge runs, `launch_env(instance_id, loader)` returns `PUMPKIN_IPC_PORT`, `PUMPKIN_IPC_TOKEN` and `PUMPKIN_IPC_PROTOCOL=1` (constants `ENV_PORT`, `ENV_TOKEN`, `ENV_PROTOCOL`). The token is 64 lowercase hex made of two UUID v4 (`simple` form), i.e. 244 random bits from the OS random generator. They go into the child **environment only**, never into arguments. For other loaders or a stopped bridge, the list is empty and the launch is byte-identical to today. A new `launch_env` for the same instance invalidates its previous token.
+- The token binds one launch. It stays valid across mod reconnects during that launch (still one connection at a time) and is dropped by `forget` on game exit (or by `stop`), so a token leaked through `hs_err_pid*.log` or a child process is useless afterwards. Same-user malware is out of scope. **Mods running in the same JVM can read the token**, so every mod request is treated as untrusted (7.4).
 - Limits:
-  - Non-loopback peers are refused.
-  - At most 4 unauthenticated connections. `hello` must arrive within 2 s.
+  - Non-loopback peers cannot connect: the listener binds `127.0.0.1` only (there is no separate peer-address check).
+  - At most 4 unauthenticated connections (the 5th is closed at once). `hello` must arrive within 2 s; a missing or malformed `hello` closes the connection without an answer.
   - One connection per token (a second gets `reject{duplicate}`).
-  - JSON lines of at most 16 KiB.
+  - JSON lines of at most 16 KiB; a longer line closes the connection.
   - At most 20 messages/s from the mod. Excess closes the connection.
-  - The outgoing queue holds at most 64 messages; above that, the connection is dropped.
+  - The outgoing queue holds at most 64 messages; when `push` finds it full, the connection is dropped. A write to the mod that takes longer than 5 s also ends the connection.
+  - After `hello`, an unknown, malformed or second `hello` line is ignored (debug log); it still counts toward the 20 messages/s.
 
 ### 7.2 Handshake
 ```jsonc
@@ -497,6 +545,8 @@ pub struct ListenerLimits { pub before_first_valid: usize /* 1 */, pub after_fir
 {"type":"welcome","protocol":1,"launcher":"0.2.0"}                                    // launcher -> mod, then a snapshot
 {"type":"reject","reason":"token"|"protocol"|"duplicate"}                              // then close
 ```
+- `welcome.launcher` is the launcher's crate version (`CARGO_PKG_VERSION`). The first `snapshot` after `welcome` is the latest one `push`ed for this launch, or an empty one.
+- The mod closes the connection on a `welcome` with `protocol != 1`. After any `reject`, or a lost connection, the mod retries on its normal backoff (7.5); only a `welcome` resets the backoff.
 
 ### 7.3 Messages
 **Mod to launcher**
@@ -507,7 +557,11 @@ pub struct ListenerLimits { pub before_first_valid: usize /* 1 */, pub after_fir
 | `share` | `friendIds: string[]` (1..7) | 7.4 |
 | `stopSharing` | | = `host_stop` for this instance's session |
 | `kick` | `friendId` | = `host_kick` |
-| `ping` | | `pong` |
+| `ping` | | `pong` (always answered by the bridge) |
+
+- Exact JSON the mod sends: `{"type":"share","friendIds":[..]}`, `{"type":"stopSharing"}`, `{"type":"kick","friendId":".."}`, `{"type":"lanOpened","port":N}`, `{"type":"lanClosed"}`, `{"type":"ping"}`. After a (re)connect the mod re-sends `lanOpened` if its world is already published.
+- **Ping timing** (mod side): the mod pings every 10 s and drops the connection when nothing arrives from the launcher for 30 s (socket read timeout), then reconnects on its backoff. The launcher therefore answers every `ping` with `pong`.
+- **Bridge filtering before any signal** (R3): `share` with fewer than 1 or more than 7 ids, and `share`/`kick` naming an alias that was never shown to this connection in a snapshot, are ignored with a debug log; there is no error reply. Everything else becomes a `GameSignal` (`LanOpened { source: Mod }`, `LanClosed`, `ModRequest`).
 
 **Launcher to mod**
 | type | fields |
@@ -522,12 +576,14 @@ type ModFriend  = { id: string; name: string; mcUuid: string | null; presence: "
 type ModSession = { guests: { id: string; name: string; state: "invited" | "connected" }[] };
 type ModInvite  = { id: string; fromName: string; title: string };   // join happens in the launcher
 ```
-- `id` in `ModFriend`/`ModSession` is an opaque per-connection alias (`f1`, `f2`, ...), not the peer id. The bridge maps it back.
-- All names are sanitised (12.3) and contain no `§`. The mod strips `§` again and caps lengths at 32 (names) and 64 (titles).
+- `id` in `ModFriend`/`ModSession` is an opaque per-connection alias (`f1`, `f2`, ...), not the peer id. Inside the launcher, `LauncherToMod::Snapshot` carries real peer ids; the bridge replaces them with the connection's aliases on the wire and maps aliases in `share`/`kick` back to peer ids.
+- The bridge keeps the latest snapshot per launch for a mod that connects late, sends the first snapshot at once and then at most one per 250 ms (the latest wins). It does **not** sanitise and does **not** enforce the caps: R5 (`mod_link.rs`) sanitises every name (12.3) and limits `friends` to 50 and `invites` to 20 before it calls `push`.
+- `ModFriend.presence` is a `ModPresence { Offline, Online, Playing }` and a guest's state a `ModGuestState { Invited, Connected }` (`modbridge/protocol.rs`, mirrors of the contract types because R3 does not depend on R2). R5 maps `Presence` 1:1, maps `GuestState::Invited`/`Connected`, and omits `declined` and `left` guests.
+- All names are sanitised (12.3) and contain no `§`. The mod strips `§` again and caps lengths at 32 (names) and 64 (titles). The mod ignores unknown types and fields, maps an unknown presence to `offline` and an unknown guest state to `invited`, drops entries with a null `id`, and shows no toast for unknown `notify` events or `error` codes.
 
 ### 7.4 Untrusted-request rules
-- `share` from the mod: the friend ids must be connected confirmed friends.
-  - The **first** `share` of each launch (mod connection) requires confirmation in the launcher: the launcher emits `friends-mod-confirm`, the mod gets `notify{confirmInLauncher}`, and the user answers with `friends_mod_confirm(requestId, allow)`.
+- `share` from the mod: the friend ids must be connected confirmed friends. The bridge has already dropped shares with 0 or more than 7 ids and ids it never showed to that connection (7.3); `GameSignal::ModRequest` carries real peer ids.
+  - The **first** `share` of each launch requires confirmation in the launcher: the launcher emits `friends-mod-confirm`, the mod gets `notify{confirmInLauncher}`, and the user answers with `friends_mod_confirm(requestId, allow)`. "Launch" means the token's lifetime (from `Spawned` to `Exited` of that instance), not one mod connection: a mod that reconnects with the same token keeps an earlier allow, and R5 tracks the allow per instance launch.
   - Denied, or no answer within 2 min: `error{denied}`.
   - After an allow, later `share`s of the same launch are limited to 3 per minute and to the 7-guest cap. Each one shows a launcher toast "{instance}: geteilt mit {names}".
 - `stopSharing` and `kick` only reduce exposure and need no confirmation.
@@ -535,7 +591,7 @@ type ModInvite  = { id: string; fromName: string; title: string };   // join hap
 
 ### 7.5 Failure behaviour
 - The launcher never blocks on the bridge. Bridge errors are logged, and the only UI effect is `friends-mod{connected:false}`.
-- The mod with no env vars: no threads, no UI, one info log line. On connect failure: backoff 1, 2, 5, 10, then 30 s. While disconnected, the button is hidden. It never throws on the render or client thread.
+- The mod with no env vars: no threads, no UI, one info log line. The mod also treats the env as absent when `PUMPKIN_IPC_PROTOCOL` is not `1`, the port is outside 1..65535, or the token is not 64 lowercase hex (`BridgeEnv`). On connect failure (connect timeout 2 s), after a `reject` and after a lost connection: backoff 1, 2, 5, 10, then 30 s; only a `welcome` resets it. While disconnected, the button is hidden. It never throws on the render or client thread.
 
 ---
 
@@ -556,8 +612,9 @@ type ModInvite  = { id: string; fromName: string; title: string };   // join hap
   | `PathKind`, `PortSource` | `src-tauri/src/services/shared_types.rs` (R0a, complete in Wave 0, not a stub) | R1 (`PeerConn::path`), R3 (`GameSignal::LanOpened`), R2 `contract.rs` (re-export), R4, R5 | R1 and R3 do not depend on R2, so these enums cannot live in `contract.rs`. |
   | `ModLoader` | `src-tauri/src/models.rs` (existing, unchanged; `rename_all = "lowercase"`, which equals camelCase for its one-word variants) | `shared_types.rs` re-exports it; `contract.rs` re-exports it from there | existing type |
   | `FriendJoin` | `src-tauri/src/models.rs` (R3), next to `LaunchOptions` | R3 (`instance_launch`), R5 | Defined once there and nowhere else in Rust. It is not part of `contract.rs` and not a fixture key; R3 asserts its JSON shape (8.6). The TS twin is in `friends-types.ts`. |
+  | `PeerId` | `src-tauri/src/services/p2p/peer_id.rs` (R1) | R1 (`Gate`, `PeerConn`), R4, R5 | The `Gate` signature needs it and R1 does not depend on R2. R2 works with `String` ids; R4 and R5 use `p2p::PeerId` and never define a second id type. |
   | `ModRequest` | `src-tauri/src/services/gamesignal.rs` (R3) | R3 (modbridge), R5 (`mod_link.rs`) | carried by `GameSignal::ModRequest` |
-  | `LauncherToMod` (with `ModFriend`, `ModSession`, `ModInvite`, `ModNotify`, `ModErrorCode`) | `src-tauri/src/services/modbridge/protocol.rs` (R3) | R3, R5 (`mod_link.rs` builds snapshots and notifications) | wire types of section 7 |
+  | `LauncherToMod` (with `ModFriend`, `ModPresence`, `ModSession`, `ModGuest`, `ModGuestState`, `ModInvite`, `ModNotify`, `ModErrorCode`) and `ModToLauncher`, `Handshake`, `RejectReason` | `src-tauri/src/services/modbridge/protocol.rs` (R3) | R3, R5 (`mod_link.rs` builds snapshots and notifications) | wire types of section 7 |
 
   `shared_types.rs` follows the serde rules above (`PathKind`, `PortSource`: unit-only enums with `rename_all = "camelCase"`, deriving `Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize`) and has a unit test of their JSON strings (`"direct"`, `"relay"`, `"mod"`, `"log"`, `"manual"`). It contains no logic.
 
@@ -808,12 +865,14 @@ Thin wrappers. Friends core: `src-tauri/src/friends_commands.rs` (R4). Sessions,
 
 "Create vanilla instance" uses the existing `createInstance` method (`NewInstance` with `loader: "vanilla"` and the host's version). No new command.
 
+`friendsModInstall(instanceId, operationId)` resolves to `void` (F1). `useBackgroundTask` expects a task that resolves to an `Instance`, so F5 wraps the call (for example by refetching the instance afterwards) instead of changing the `Backend` signature.
+
 ### 8.5 Events (via `services::progress::emit`)
 | Event | Payload | When |
 |---|---|---|
-| `friends-changed` | `null` | List, requests, codes, blocked, settings, availability or notices changed. The UI invalidates `friendKeys.all`. |
-| `friends-network` | `NetworkStatus` | |
-| `friend-presence` | `FriendPresenceEvent` | |
+| `friends-changed` | `null` | List, requests, codes, blocked, settings, availability or notices changed. The UI invalidates `friendKeys.all`. **Not** sent for presence or path changes. |
+| `friends-network` | `NetworkStatus` | The UI writes it into the cached `friendKeys.state` (`network`). |
+| `friend-presence` | `FriendPresenceEvent` | Presence or path of one friend changed. The only event for that change; the UI patches the friend in `friendKeys.list`. |
 | `friend-request` | `FriendRequestEvent` | incoming request arrived |
 | `friend-invite` | `InviteEvent` | |
 | `friend-invite-revoked` | `InviteRevokedEvent` | |
@@ -824,20 +883,22 @@ Thin wrappers. Friends core: `src-tauri/src/friends_commands.rs` (R4). Sessions,
 | `friends-mod` | `ModConnectionEvent` | |
 | `friends-mod-confirm` | `ModConfirmEvent` | 7.4 |
 
+Query keys (`src/hooks/queryKeys.ts`, F1): `friendKeys.all = ["friends"]` with the children `state`, `list`, `requests`, `codes`, `blocked`, `invites`, `hostSessions`. On purpose **outside** `friendKeys.all`, so that `friends-changed` does not refetch them: `friendKeys.skin(friendId)`, `plan(inviteId)`, `lan(instanceId)`, `modStatus(instanceId)`. `lan-changed` sets `friendKeys.lan(instanceId)`; `friends-mod` invalidates `friendKeys.modStatus(instanceId)`.
+
 `BackendEvents` gets these twelve, with `on…` methods in `eventSubscriptions`: `onFriendsChanged`, `onFriendsNetwork`, `onFriendPresence`, `onFriendRequest`, `onFriendInvite`, `onFriendInviteRevoked`, `onHostSession`, `onHostSessionEnded`, `onJoinSession`, `onLanChanged`, `onFriendsMod`, `onFriendsModConfirm`. `Capabilities` is **not** changed (Appendix D, F15: `Capabilities` is a static, synchronous object and cannot reflect a runtime keyring probe). Runtime availability comes from `FriendsState.availability` (`noSecretStore` hides the area).
 
 ### 8.6 Launch integration (R3)
 - `LaunchOptions` gets `#[serde(default)] pub friend_join: Option<FriendJoin>` with `FriendJoin { join_id: String, address: String }` (struct rules of 8.1), both in `src-tauri/src/models.rs`. This is the only Rust definition of `FriendJoin` (8.1). TS: `friendJoin?: FriendJoin`. A unit test in `models.rs` asserts that `{"joinId":"j1","address":"127.1.2.3:25565"}` round-trips, and that `LaunchOptions` without the field still deserialises.
 - With `friend_join` set, `instance_launch`:
-  - Requires `account_id` (Microsoft), else `errors.friends.msAccountRequired`.
-  - Requires the address to match `^127\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,5}$`, else `errors.friends.joinAddressInvalid`.
+  - Requires a non-empty `account_id` (Microsoft), else `errors.friends.msAccountRequired`. A non-empty `account_id` is the same rule `launch_account` uses to start online with that account's Microsoft session.
+  - Requires the address to parse as a `SocketAddrV4` with a loopback IP (`127.0.0.0/8`) and a port other than 0, else `errors.friends.joinAddressInvalid`. This is stricter than the pattern `^127\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,5}$`: octets over 255, ports over 65535 and port 0 are refused.
   - Uses `QuickPlay::Server{address}` (any `quick_play` in the options is ignored).
   - **Does not write `last_quick_play`** (it still writes `last_played_at`).
   - The version must offer the quick-play-multiplayer feature (always true from 1.20).
-- After spawn, `instance_launch` sends `GameSignal::Spawned{instance_id, pid, online_account, friend_join: Option<join_id>}`.
-- With `friend_join` set, before spawn:
-  - Wherever that launch emits progress (`progress::emit` for its operation), `instance_launch` also sends `GameSignal::LaunchProgress{instance_id, friend_join}`, throttled to at most one signal per second.
-  - If `instance_launch` fails before the game process is spawned (any error, including the refusals above), it sends `GameSignal::LaunchFailed{instance_id, friend_join}` before returning the error.
+- After spawn, `instance_launch` sends `GameSignal::Spawned{instance_id, pid, online_account, friend_join: Option<join_id>}` with `online_account = account_id is non-empty`. It is sent inside the `spawn_running` closure (under the running lock), so it always precedes that launch's `Exited`. `Exited` is sent in `on_game_exit` right after the running entry is taken, together with `bridge.forget(instance_id)`.
+- With `friend_join` set, before spawn (`gamesignal::LaunchReporter`):
+  - `instance_launch` itself emits no progress events, so it calls `LaunchReporter::progress()` at its phase boundaries: after the world backup, after the mod sync, after the account session, after the installed-version check and after the Java resolution. Each call sends `GameSignal::LaunchProgress{instance_id, friend_join}`, throttled to at most one signal per second. A version install runs in the separate `instance_install` command and sends nothing (6.2).
+  - If `instance_launch` fails before the game process is spawned (any error, including the refusals above), `LaunchReporter::guard` sends `GameSignal::LaunchFailed{instance_id, friend_join}` before returning the error.
   - Without `friend_join`, neither signal is sent.
 
 ### 8.7 Internal seams
@@ -845,60 +906,164 @@ Thin wrappers. Friends core: `src-tauri/src/friends_commands.rs` (R4). Sessions,
 // services/shared_types.rs (R0a): PathKind, PortSource, `pub use crate::models::ModLoader` (8.1). No logic.
 
 // services/gamesignal.rs (R3); PortSource from shared_types
+#[derive(Debug, Clone, PartialEq)]
 pub enum GameSignal {
     LaunchProgress { instance_id: String, friend_join: String },          // only for friend joins, at most 1/s (8.6)
     LaunchFailed { instance_id: String, friend_join: String },            // only for friend joins, failure before spawn (8.6)
-    Spawned { instance_id: String, pid: u32, online_account: bool, friend_join: Option<String> },
-    LanOpened { instance_id: String, port: u16, source: PortSource },      // unverified hint (mod or log)
+    Spawned { instance_id: String, pid: u32, online_account: bool, friend_join: Option<String> },   // always before that launch's Exited (8.6)
+    LanOpened { instance_id: String, port: u16, source: PortSource },      // unverified hint (mod or log); R5 runs verify_port
     LanClosed { instance_id: String },                                     // log or mod; consumer re-checks
     Exited { instance_id: String },
     ModConnected { instance_id: String }, ModDisconnected { instance_id: String },
     ModRequest { instance_id: String, request: ModRequest },
 }
 /// Defined here (8.1). Friend ids are real peer ids: the bridge has already mapped the mod's aliases back.
-pub enum ModRequest { Share { friend_ids: Vec<String> }, StopSharing, Kick { friend_id: String } }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ModRequest { Share { friend_ids: Vec<String> /* 1..=7, all shown to that connection */ }, StopSharing, Kick { friend_id: String } }
+#[derive(Clone, Default)]   // a broadcast channel with capacity 256; a slow consumer gets RecvError::Lagged
 pub struct GameSignals; impl GameSignals { pub fn send(&self, s: GameSignal); pub fn subscribe(&self) -> broadcast::Receiver<GameSignal>; }
+/// The raw-stdout callback for launch::spawn: feeds a LanDetector and sends LanOpened { source: Log } / LanClosed.
+pub fn lan_line_forwarder(signals: GameSignals, instance_id: String) -> impl Fn(&str) + Send + Sync + 'static;
+/// LaunchProgress (throttled to 1/s) and LaunchFailed for friend joins; does nothing when friend_join is None (8.6).
+pub struct LaunchReporter; impl LaunchReporter {
+    pub fn new(signals: GameSignals, instance_id: &str, friend_join: Option<&str>) -> Self;
+    pub fn progress(&self);
+    pub async fn guard<T>(&self, launch: impl Future<Output = AppResult<T>>) -> AppResult<T>;   // LaunchFailed before an Err returns
+}
+// AppState (state.rs, R3): `pub signals: GameSignals`, `pub bridge: ModBridge` (constructed stopped). R4 subscribes with
+// `state.signals.subscribe()` and passes clones of both to `Friends::new`.
 
 // services/sockowner (R3): Windows GetExtendedTcpTable(TCP_TABLE_OWNER_PID_ALL, v4+v6); Linux /proc/net/tcp{,6} + /proc/<pid>/fd inodes;
-// macOS `/usr/sbin/lsof -nP -a -p <pid> -iTCP… -F` with fixed arguments.
-pub fn listens(pid: u32, port: u16) -> io::Result<bool>;
-pub fn connects_from(pid: u32, client: SocketAddr) -> io::Result<bool>;
+// macOS `/usr/sbin/lsof -nP -a -p <pid> -iTCP… -F` with fixed arguments. Other systems: every query fails with ErrorKind::Unsupported.
+// Blocking on Linux and macOS: call through spawn_blocking.
+pub enum TcpState { Listen, Established, Other }
+pub struct TcpSocket { pub local: SocketAddr, pub remote: SocketAddr, pub state: TcpState }
+pub trait SocketTable { fn sockets_of(&self, pid: u32) -> io::Result<Vec<TcpSocket>>; }   // per-OS implementation; test seam
+pub fn listens(pid: u32, port: u16) -> io::Result<bool>;               // a LISTEN socket of pid on port (any address)
+pub fn connects_from(pid: u32, client: SocketAddr) -> io::Result<bool>; // a non-LISTEN socket of pid whose local address == client
 
 // services/lan_detect.rs (R3)
-pub enum LanLine { Opened(u16), Closed }
-pub struct LanDetector; impl LanDetector { pub fn feed(&mut self, raw: &str) -> Option<LanLine>; }
-pub enum PortCheck { Ok, NotOwned, NoAnswer }
-pub async fn verify_port(pid: u32, port: u16) -> PortCheck;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum LanLine { Opened(u16), Closed }
+#[derive(Debug, Default)] pub struct LanDetector; impl LanDetector { pub fn feed(&mut self, raw: &str) -> Option<LanLine>; }   // raw stdout lines (6.4)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum PortCheck { Ok, NotOwned, NoAnswer }
+pub async fn verify_port(pid: u32, port: u16) -> PortCheck;   // 6.1; a failed owner lookup counts as NotOwned
 
 // services/modbridge (R3)
+pub const ENV_PORT: &str = "PUMPKIN_IPC_PORT"; pub const ENV_TOKEN: &str = "PUMPKIN_IPC_TOKEN"; pub const ENV_PROTOCOL: &str = "PUMPKIN_IPC_PROTOCOL";
+#[derive(Clone)]
+pub struct ModBridge;
 impl ModBridge {
-    pub fn new(signals: GameSignals) -> Self; pub async fn start(&self) -> AppResult<()>; pub async fn stop(&self);
-    pub fn launch_env(&self, instance_id: &str, loader: ModLoader) -> Vec<(String, String)>;
+    pub fn new(signals: GameSignals) -> Self;            // stopped
+    pub async fn start(&self) -> AppResult<()>;          // binds 127.0.0.1:0; no await inside; idempotent
+    pub async fn stop(&self);                            // closes every link, drops every token, awaits the accept task: the port is free on return
+    pub fn launch_env(&self, instance_id: &str, loader: ModLoader) -> Vec<(String, String)>;   // empty unless Fabric and running
     pub fn forget(&self, instance_id: &str); pub fn is_connected(&self, instance_id: &str) -> bool;
-    pub fn push(&self, instance_id: &str, message: LauncherToMod);
+    pub fn push(&self, instance_id: &str, message: LauncherToMod);   // keeps the latest Snapshot; full queue (64) -> disconnect
 }
-// services/modbridge/protocol.rs (R3): the wire types of 7.2/7.3. Defined here (8.1).
+// services/modbridge/protocol.rs (R3): the wire types of 7.2/7.3. Defined here (8.1). Per-connection loop: modbridge/connection.rs.
+pub const PROTOCOL_VERSION: u32 = 1;
+pub enum ModToLauncher { Hello { protocols: Vec<u32>, token: String, mod_version: String /* "mod" */, minecraft: String },
+                         LanOpened { port: u16 }, LanClosed, Share { friend_ids: Vec<String> }, StopSharing, Kick { friend_id: String }, Ping }
+pub enum Handshake { Welcome { protocol: u32, launcher: String }, Reject { reason: RejectReason } }
+pub enum RejectReason { Token, Protocol, Duplicate }
 pub enum LauncherToMod { Snapshot { friends: Vec<ModFriend>, session: Option<ModSession>, invites: Vec<ModInvite> },
                          Notify { event: ModNotify, name: Option<String>, mc_uuid: Option<String> },
                          Error { code: ModErrorCode, r#ref: Option<String> }, Pong }
-// ModFriend/ModSession carry real peer ids inside the launcher; the bridge replaces them with per-connection aliases on the wire (7.3).
-// launch.rs (R3): pub fn spawn(java, args, game_dir, env: &[(String, String)], on_line, on_exit) -> AppResult<Running>
+pub struct ModFriend { pub id: String, pub name: String, pub mc_uuid: Option<String>, pub presence: ModPresence }
+pub enum ModPresence { Offline, Online, Playing }
+pub struct ModSession { pub guests: Vec<ModGuest> }
+pub struct ModGuest { pub id: String, pub name: String, pub state: ModGuestState }
+pub enum ModGuestState { Invited, Connected }
+pub struct ModInvite { pub id: String, pub from_name: String, pub title: String }
+pub enum ModNotify { InviteReceived, GuestJoined, GuestLeft, SessionEnded, FriendOnline, ConfirmInLauncher }
+pub enum ModErrorCode { NotEnabled, PeerOffline, GuestLimit, LanPortUnknown, PortNotGame, Denied, VersionUnsupported, Busy, Internal }
+// ModFriend/ModGuest carry real peer ids inside the launcher; the bridge replaces them with per-connection aliases on the wire (7.3).
+// Serde: enums with data `tag = "type"`, camelCase (8.1); ModToLauncher is Deserialize only.
 
-// services/p2p (R1)
-pub struct NetConfig { pub secret: [u8; 32], pub alpns: Vec<&'static [u8]>, pub relay_map: Vec<RelayEntry>,
-                       pub relays: RelaySelection /* All | Only(u8) */, pub relay_only: bool, pub relay_tls: RelayTls /* 3.7 */ }
+// launch.rs (R3): seven parameters; `on_stdout_raw` gets every stdout line unprocessed (for LanDetector), stdout only.
+pub fn spawn(java: &Path, args: &[String], game_dir: &Path, env: &[(String, String)],
+             on_line: impl Fn(LogStream, String) + Send + Sync + 'static, on_stdout_raw: impl Fn(&str) + Send + Sync + 'static,
+             on_exit: impl FnOnce(Option<i32>) + Send + 'static) -> AppResult<Running>;
+
+// services/p2p (R1). Public: mod.rs re-exports everything below; `frame` and `tunnel` are public modules.
+#[derive(Debug, Clone)]
+pub struct NetConfig { pub secret: [u8; 32], pub alpns: Vec<&'static [u8]> /* empty = dial-only */, pub relay_map: Vec<RelayEntry>,
+                       pub relays: RelaySelection, pub relay_only: bool, pub relay_tls: RelayTls /* 3.7 */ }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NetState { Starting, Online { home_relay: u8 }, RelayUnreachable }   // 3.4
+#[derive(Debug, thiserror::Error)]
+pub enum NetError { UnknownRelay(u8), InvalidRelayUrl(String), Bind(String), Timeout, Unreachable, Closed(CloseReason) }
+pub struct PeerNet;   // must outlive its PeerConns; dropping it ends them locally
 impl PeerNet {
-    pub async fn bind(config: NetConfig, gate: Arc<dyn Gate>) -> Result<Self, NetError>;
-    pub fn id(&self) -> PeerId; pub fn home_relay(&self) -> Option<u8>; pub fn status(&self) -> watch::Receiver<NetState>;
-    pub async fn dial(&self, peer: &PeerId, home_relay: Option<u8>, alpn: &'static [u8]) -> Result<PeerConn, NetError>;   // 8 s inside
-    pub async fn accept(&self) -> Option<(Vec<u8> /* alpn */, PeerConn)>;
-    pub async fn close(&self, code: CloseCode);
+    pub async fn bind(config: NetConfig, gate: Arc<dyn Gate>) -> Result<Self, NetError>;   // spawns the accept and status tasks (3.3, 3.4)
+    pub fn id(&self) -> PeerId;
+    pub fn home_relay(&self) -> Option<u8>;                  // Some only while NetState::Online; announce it as `homeRelay`
+    pub fn status(&self) -> watch::Receiver<NetState>;
+    pub async fn dial(&self, peer: &PeerId, alpn: &'static [u8]) -> Result<PeerConn, NetError>;   // own relays only, DIAL_TIMEOUT inside
+    pub async fn accept(&self) -> Option<(Vec<u8> /* alpn */, PeerConn)>;   // queue of 16; None once the endpoint is closed
+    pub async fn close(&self, code: CloseCode);              // every connection with `code`, then the endpoint (3.6)
 }
-impl PeerConn { remote(), open_bi(), accept_bi(), path() -> Option<PathKind /* shared_types */>, rtt() -> Option<Duration>, close(code), closed() }
-pub mod frame { read::<T>(recv, limit), write::<T>(send, &T, limit) }
-pub trait Dialer { … }   // seam so that timeout and backoff tests run on paused time without sockets
+impl Dialer for PeerNet { … }
+#[derive(Clone)]
+pub struct PeerConn;
+impl PeerConn {
+    pub fn remote(&self) -> PeerId; pub fn direction(&self) -> Direction;
+    pub async fn open_bi(&self) -> Result<BiStream, NetError>;   // write the open frame at once: the peer sees the stream only then; waits while 16 are open
+    pub async fn accept_bi(&self) -> Result<BiStream, NetError>;
+    pub fn path(&self) -> Option<PathKind /* shared_types */>; pub fn rtt(&self) -> Option<Duration>;
+    pub fn close(&self, code: CloseCode); pub async fn closed(&self) -> CloseReason;
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)] pub struct CloseCode(u32);   // NORMAL, NOT_FRIEND, DUPLICATE, PROTOCOL, RATE_LIMITED, SHUTDOWN (3.6)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum CloseReason { Peer(CloseCode), Local, TimedOut, Lost }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum Direction { Outgoing, Incoming }
+pub fn duplicate_survivor(local: &PeerId, remote: &PeerId) -> Direction;   // 4.4
+/// Both directions of a QUIC stream; tokio AsyncRead + AsyncWrite (`shutdown()` finishes the send side cleanly). No iroh type in the API.
+#[derive(Debug)] pub struct BiStream;
+impl BiStream {
+    pub async fn read_frame<T: DeserializeOwned>(&mut self, limit: usize) -> Result<T, FrameError>;   // any error resets with PROTOCOL (5.1)
+    pub fn reset(&mut self, code: CloseCode);   // both directions
+}
+pub mod frame {   // generic over AsyncRead / AsyncWrite; never resets
+    pub async fn read<T: DeserializeOwned>(recv: &mut (impl AsyncRead + Unpin), limit: usize) -> Result<T, FrameError>;
+    pub async fn write<T: Serialize>(send: &mut (impl AsyncWrite + Unpin), message: &T, limit: usize) -> Result<(), FrameError>;
+}
+pub enum FrameError { TooLarge { len: usize, limit: usize }, Json(serde_json::Error), Io(io::Error) }
+/// Seam so that timeout and backoff tests run on paused time without sockets; PeerNet implements it.
+pub trait Dialer: Send + Sync + 'static { fn dial<'a>(&'a self, peer: &'a PeerId, alpn: &'static [u8]) -> BoxFuture<'a, Result<PeerConn, NetError>>; }
+pub const DIAL_TIMEOUT: Duration = Duration::from_secs(8);
+/// EndpointId; Display/FromStr exactly 64 lowercase hex (other spellings refused); Debug prints only the 8-char short form; bytewise Ord.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)] pub struct PeerId;
+impl PeerId { pub fn from_bytes(bytes: &[u8; 32]) -> Result<Self, InvalidPeerId>; pub fn as_bytes(&self) -> &[u8; 32]; pub fn short(&self) -> String; }
+pub struct InvalidPeerId;
+// Also re-exported: Gate, Admission (3.5), RelayEntry, RelayOperator, RelaySelection, RELAY_MAP, find_relay (3.2), RelayTls (3.7).
+// p2p::tunnel: bridge, LocalListener, ListenerLimits, TunnelError (6.3).
 
-// services/friends/service.rs (R4): network options (3.7) and the extension seam for R5
+// services/secrets.rs (R2): SecretStore { load, save, delete }, KeyringSecrets, #[cfg(test)] MemorySecretStore (4.1)
+// services/friends (R2). Peer ids are `&str`/`String` at this layer; R4 converts to p2p::PeerId.
+pub struct Identity;   // identity.rs
+impl Identity {
+    pub fn generate() -> Self; pub fn from_secret_bytes(bytes: &[u8; 32]) -> Self; pub fn secret_bytes(&self) -> [u8; 32];   // NetConfig.secret of the main endpoint
+    pub fn peer_id(&self) -> String; pub fn sign(&self, domain: &[u8], parts: &[&[u8]]) -> [u8; 64];
+    pub fn hello_secret(&self, salt: &[u8; 16]) -> [u8; 32]; pub fn hello_id(&self, salt: &[u8; 16]) -> [u8; 32];
+}
+pub fn identity::verify(peer_id: &str, domain: &[u8], parts: &[&[u8]], signature: &[u8; 64]) -> bool;
+pub fn identity::parse_peer_id(peer_id: &str) -> Option<PublicKey>; pub fn identity::fingerprint(peer_id: &str) -> String;
+pub fn identity::short_id(peer_id: &str) -> &str;
+pub fn identity::{load, load_retired}(secrets: &dyn SecretStore) -> AppResult<Option<Identity>>; pub fn identity::delete_retired(secrets) -> AppResult<()>;
+pub fn identity::create(secrets: &dyn SecretStore) -> AppResult<Identity>;
+pub fn identity::renew(secrets: &dyn SecretStore) -> AppResult<Renewal>;   // Renewal { retired: Option<Identity>, current: Identity } (4.1, 4.6)
+pub fn identity::availability(secrets: &dyn SecretStore, has_friends_data: bool) -> Availability;
+// code.rs (4.2): issue, parse, secret_matches, CodeParts { relay_index, hello_id, secret } (+ encode, tail, secret_hex, secret_digest,
+//   ensure_relay_known, ensure_not_own), IssuedCode { salt, parts }.
+// records.rs (9): FriendRecord, RequestRecord, CodeRecord, BlockedRecord, OutboxRecord, OutboxKind { Unfriend, Rotated },
+//   RecordStores { friends, requests, codes, blocked, outbox: JsonStore<_> } with open(dir) and any().
+// config.rs (9): FriendsConfig { version, enabled, settings: FriendsSettings, third_party_relays_accepted } with load(dir), save(dir); friends_dir(&Dirs).
+// sanitize.rs (12.3): display_name(raw, peer_id), own_display_name(raw) -> AppResult<String>, world_or_instance_name, file_name,
+//   alias(raw) -> Option<String>, mc_name(Option<&str>), mc_uuid(Option<&str>).
+// contract.rs (8.2): every contract type and constant; contract_tests.rs (8.3).
+
+// services/friends/service.rs (R4): network options (3.7) and the extension seam for R5.
+// PeerId, PeerConn, BiStream, NetError and CloseCode below are the services::p2p types (R1); no wrapper types.
 pub trait PeerStreamHandler: Send + Sync + 'static {
     /// Request-Stream nach dem Öffnungsrahmen `{"type":"request"}`; der Handler liest die Anfrage und antwortet selbst.
     async fn on_request_stream(&self, peer: &PeerId, stream: BiStream);
@@ -921,7 +1086,8 @@ impl Friends {
 // `async fn` in these traits is shorthand: the real methods return `futures::future::BoxFuture<'_, T>` (T = the shown output)
 // so that the traits stay dyn-compatible without a new crate (`futures` is already a dependency). Same for `ModLookup` below.
 ```
-- **Lifecycle (normative order):** `friends_disable` delivers `Disabled`; `friends_update_settings` with a changed `alwaysRelay` delivers `Rebind`; `friends_rotate_identity` and `friends_reset` deliver `IdentityChanged`; `friends.shutdown()` (from `RunEvent::Exit`) delivers `Shutdown`. R4 sends the event to every subscriber, then waits until every `done` has been sent or dropped, **at most 500 ms in total**, and only then closes or rebinds the endpoints (`SHUTDOWN`). R4 never calls R5 code directly.
+- **Lifecycle (normative order):** `friends_disable` delivers `Disabled`; `friends_update_settings` with a changed `alwaysRelay` delivers `Rebind`; `friends_rotate_identity` and `friends_reset` deliver `IdentityChanged`; `friends.shutdown()` (from `RunEvent::Exit`) delivers `Shutdown`. R4 sends the event to every subscriber, then waits until every `done` has been sent or dropped, **at most 500 ms in total**, and only then closes or rebinds the endpoints with `PeerNet::close(CloseCode::SHUTDOWN)` (3.6). R4 never calls R5 code directly.
+- **R4 and the R1/R3 objects:** R4 keeps one `PeerNet` per endpoint alive for as long as its connections, keeps calling `PeerNet::accept()` (the queue holds 16), dials only through `PeerNet::dial` or its `Dialer` impl (the seam for the paused-time fakes), and holds the Gate's lookups in memory because `Gate::admit` is synchronous (3.5). It starts and stops `state.bridge` with the feature (7.1) and subscribes to `state.signals`.
 - **R5 wiring:** R5 constructs its `FriendSessions` in `lib.rs` `setup` right after `Friends`, calls `register_stream_handler` and `subscribe_lifecycle`, and stores it in `state.rs` (`pub sessions: FriendSessions`). These are the only edits R5 makes to `lib.rs` and `state.rs` besides its `generate_handler!` entries (14). R4 leaves the marker comment `// friends: session wiring (R5)` in `setup` at the place where this goes.
 
 ```rust
@@ -958,8 +1124,10 @@ pub async fn modinstall::{status, install}(…);
 | keyring | secrets | `friends-identity`, `friends-identity-retired` (64 hex each) |
 
 - Sessions, invites, presence, joins and mod confirmations are runtime only.
-- Entities implement `services::store::Entity` in `records.rs`, with not-found keys `errors.friends.notFound.{friend,request,code,blocked}`.
-- Defaults: `enabled = false`, `alwaysRelay = false`, `displayName` = the active MS account name (editable in the opt-in), `thirdPartyRelaysAccepted = false`. `showWorldName` is per session, default false.
+- The folder is `config::friends_dir(&dirs)` = `<dirs.root>/friends`. `RecordStores::open(dir)` creates it and opens the five `JsonStore`s; `RecordStores::any()` is true when any store holds a readable record (unreadable entries of a newer version are kept on save but not counted).
+- Entities implement `services::store::Entity` in `records.rs` (through a local `record!` macro, because `store.rs`'s `entity!` macro is private), with not-found keys `errors.friends.notFound.{friend,request,code,blocked}`; `OutboxRecord` uses `errors.friends.notFound.friend` (its id is a friend's peer id).
+- `config.json`: `FriendsConfig::load(dir)` returns the defaults when the file is missing. A file that cannot be parsed is moved aside to `config.json.corrupt` (a free name, like `JsonStore` does) and the defaults are used. `save(dir)` writes atomically.
+- Defaults: `enabled = false`, `alwaysRelay = false`, `displayName = ""`, `thirdPartyRelaysAccepted = false`. The display name is filled from the active MS account name when the feature is enabled (the opt-in pre-fills it, `FriendsEnableInput.displayName` carries the result). `showWorldName` is per session, default false.
 
 ---
 
@@ -975,34 +1143,38 @@ Kit rules (docs/design/PIXELKINO.md): no border radius, a warning always has a s
 - New icons `users`, `link`, `share` in both the 7x7 and 5x5 grids of `src/pixel/icon-data.ts`.
 
 ### 10.2 Friends page `/friends` (F2)
-- Gates, in this order:
+- Gates, in this order (`friendsGate` in `src/pages/friends/friendsModel.ts`):
+  - `noSecretStore`: the keyring panel (as in 10.8). The navigation entry is hidden anyway (10.1); this gate covers a direct `/friends` URL, so that the page never offers "Freunde aktivieren" on a system without a keyring.
   - `identityLost`: `StatusPanel tone="bad"` "Identität verloren" + "Zurücksetzen" (danger confirm, `friendsReset`).
-  - Not enabled: `Empty size="page"` + "Freunde aktivieren" (opt-in dialog, F3).
+  - Not enabled: `Empty size="page"` + "Freunde aktivieren", which opens the opt-in dialog (F3) on the page: `{optingIn && <FriendsOptInDialog onClose={…} />}` (10.9). The current code links to `/settings?tab=freunde` instead (Appendix E, E3).
   - No MS account: `StatusPanel` + login button.
   - `network.type === "degraded"`: a `StatusPanel tone="bad"` banner. The page stays usable.
 - Header: `PageHeader title count={online}`. Actions "Freund hinzufügen" (`plus`), "Mein Code" (`link`).
 - **Requests** (only if any; `List variant="accounts"`):
-  - Incoming: avatar, name + fingerprint, "Annehmen", "Ablehnen", and a menu with "Blockieren".
+  - Incoming: avatar, name + fingerprint, "Annehmen", "Ablehnen", and a menu with "Blockieren" (danger confirm, as for friends).
   - Outgoing `delivering`: "Code …{tail}: wird zugestellt, sobald der Besitzer online ist" + "Jetzt zustellen" (`friendsRetryNow`, disabled for 10 s after a press) + "Zurückziehen". When the request is older than 7 days (`now - createdAt > codeTtlSecs`), an extra warning line with a symbol: "Der Code ist eventuell abgelaufen; frag nach einem neuen." (4.3).
   - Opening the page calls `friendsRetryNow()` once per mount (4.3, 4.4).
   - Outgoing `awaitingAnswer`: name + fingerprint, "wartet auf Bestätigung" + "Zurückziehen".
 - **Friends** (`List variant="friends"`: 40px avatar | name+sub | 150px status | 120px action | 36px menu):
   - Sub-line: "spielt", "online", "zuletzt online vor 2 h", or for unconfirmed friends "wartet, bis {name} online kommt".
   - Status chip with dot and text (never color alone), and a "Relay" tag when `path === "relay"`.
-  - Action: "Beitreten" when an open invite from this friend exists (opens the InviteDialog). Otherwise "Einladen" when I host a session and the friend is online.
+  - Order: alphabetical by the displayed name (alias, else display name, with the fingerprint suffix for duplicates), never by presence, so rows do not move when someone comes online.
+  - Action: "Beitreten" when an open invite from this friend exists. It calls `requestInviteDialog(inviteId)` (`src/pages/friends/inviteRequest.ts`, a zustand store `useInviteRequest` holding the requested invite id); F4's `FriendDialogs` reads that store, opens the InviteDialog and clears it. Otherwise "Einladen" when I host a session, the friend is confirmed, online and not removed by the peer, and holds no seat in the session (a seat = `invited`, `connected`, or `left` without a kick; a `declined` or kicked guest gets "Einladen" again, 5.4) (`canInvite`).
   - Menu: "Umbenennen" (one `TextField` dialog, `friendRename`), "Fingerabdruck anzeigen", "Entfernen" (danger confirm), "Blockieren" (danger confirm).
-  - `notice` rows show "{alt} heißt jetzt {neu}" or "{name} hat eine neue Identität (Fingerabdruck geändert)", with "OK" (`friendAcknowledge`).
+  - `notice` rows show "{alt} heißt jetzt {neu}" or "{name} hat eine neue Identität (Fingerabdruck geändert)", with "OK" (`friendAcknowledge`). They are separate list rows under the friend's row, so the fixed grid columns stay untouched.
   - `removedByPeer` rows are greyed, with only "Entfernen".
   - Duplicate display names are shown with the fingerprint's first group.
 - Toolbar: search + `Segmented` Alle/Online. Empty state: "Noch keine Freunde" with both actions.
-- `FriendAvatar`: `friendSkin(friendId)` (TanStack Query, `staleTime` 1 h) rendered with the existing `SkinHead`. Fallback: the pixel face from the name. The UI never contacts Mojang directly.
+- `FriendAvatar`: `friendSkin(friendId)` (TanStack Query, `staleTime` 1 h) rendered with the existing `SkinHead`. Fallback: the pixel face from the name. The UI never contacts Mojang directly. `FriendAvatar`, `SelfAsserted` (`components/friends/FriendAvatar.tsx`) and `Fingerprint` (`components/friends/Fingerprint.tsx`) are shared with F3, F4 and F5, as are the pure helpers of `friendsModel.ts` (`canInvite`, `inviteFrom`, `friendLabels`, …).
+- **Live data in the sidebar:** the badge needs the requests, invites and friends lists on every page. `useFriendsNav` (Sidebar) declares those queries with `enabled` only while friends are enabled and available, using the F1 query keys, and calls the interim hook `src/pages/friends/useFriendsLive.ts`, which handles `friends-changed`, `friend-request`, `friend-presence` and `friends-network`. F4's global `useFriendEvents` replaces it (14, hand-off).
 
 ### 10.3 Add friend dialog (F2, width 520, two `Tabs`)
 - **Mein Code:**
   - "Code erzeugen" shows the 80-char code once, in the pixel font, in groups of 4, with "Kopieren".
   - Hint: "Gilt 7 Tage und nur für eine Person. Wer den Code hat, kann dir eine Anfrage schicken: Poste ihn nicht öffentlich."
   - The active codes (tail, expiry, used) with "Widerrufen". "Code erzeugen" is disabled at 3 active codes.
-- **Code eingeben:** a `TextField` with shape validation (`friendCode.ts`). "Anfrage senden" calls `friendAdd`. Toast: "Anfrage wird zugestellt".
+- **Code eingeben:** a `TextField` with shape validation (`friendCode.ts`). "Anfrage senden" calls `friendAdd`. Toast: "Anfrage wird zugestellt". A hint states that the display name and the Minecraft name go to the code owner, who must accept (4.3).
+- The generated code and the fingerprint dialog reuse the existing pixel `.code` class (no new CSS file).
 
 ### 10.4 Invite and join (F4, global `components/friends/FriendDialogs.tsx` in `Layout`)
 1. `friend-invite`: toast "{name} lädt dich ein: {title}" with the action "Ansehen". The badge increases. If another dialog is open, only the toast is shown, and the invite waits in `store/friendsUi.ts`.
@@ -1014,7 +1186,8 @@ Kit rules (docs/design/PIXELKINO.md): no border radius, a warning always has a s
    - `lookupFailed`: an extra info line "Modrinth nicht erreichbar; Client-Mods werden mitgezählt".
    - The active account must be Microsoft. Otherwise "Beitreten" is guarded with "Mit Offline-Konto kann man keiner Welt beitreten".
    - Secondary actions: "Ablehnen" (`inviteDecline`), "Später".
-3. **Beitreten:** `inviteJoin` returns `{joinId, address}`. Then the existing `usePlay` start runs with `friendJoin: {joinId, address}` and no `quickPlay`. `join-session` events drive the session chip. `ended` with a reason other than `left` shows a toast with the translated reason.
+3. **Beitreten:** if the chosen instance is not installed (`instanceKeys.status(id).installed` false or unknown), F4 first runs the install (`useInstall`, `instance_install`) and waits for it. Only then it calls `inviteJoin`, which returns `{joinId, address}`, so the join's spawn wait never runs during a download (6.2). Then the existing `usePlay` start runs with `friendJoin: {joinId, address}` and no `quickPlay` (`LaunchOptions.friendJoin` is optional in TS). `join-session` events drive the session chip. `ended` with a reason other than `left` shows a toast with the translated reason.
+   - The InviteDialog also opens from the Friends page: F4's `FriendDialogs` reads `useInviteRequest` (10.2) and clears it when it opens the dialog.
 4. `friend-invite-revoked`: close the dialog if it shows that invite, and toast "{name} hat das Teilen beendet".
 5. **ModConfirmDialog** on `friends-mod-confirm`: "Die Mod in {instance} möchte deine Welt mit {names} teilen. Erlauben?" with "Erlauben" / "Ablehnen" (`friendsModConfirm`). The window is restored (`setLauncherWindow("restore")`) when the dialog opens.
 
@@ -1031,7 +1204,7 @@ Kit rules (docs/design/PIXELKINO.md): no border radius, a warning always has a s
     - "Eine für LAN geöffnete Welt ist auch für Geräte in deinem Heimnetz erreichbar, wie bei Vanilla."
   - Confirm: `hostStart`, then `hostInvite`.
 - **Sharing:** `StatusPanel tone="run"` "Geteilt mit N Freunden", a guest list (state, path tag, RTT in `Count`, menu "Entfernen" = kick), "Weitere einladen", and "Teilen beenden" (confirm). A kicked guest shows "Entfernt", a declined one "Abgelehnt"; both offer "Erneut einladen" (`hostInvite`), which is the only way to let them in again (5.4).
-- **Mod row** (Fabric 26.3 instances): `ModStatus` `notInstalled` → "Pumpkin Friends-Mod: Teilen direkt im Spiel" + "Mod hinzufügen" (`friendsModInstall` through `useBackgroundTask`, text "kommt von Modrinth"). `installed` → chip "Mod nicht verbunden". `connected` → chip "Mod verbunden". `unavailable` → no row.
+- **Mod row** (Fabric 26.3 instances): `ModStatus` `notInstalled` → "Pumpkin Friends-Mod: Teilen direkt im Spiel" + "Mod hinzufügen" (`friendsModInstall` through `useBackgroundTask`, wrapped because it resolves to `void`, 8.4; text "kommt von Modrinth"). `installed` → chip "Mod nicht verbunden". `connected` → chip "Mod verbunden". `unavailable` → no row.
 
 ### 10.6 Session chip (F5, `app/TitleBar.tsx`)
 - Shown only while a host session or a join is active. "Geteilt · 2 verbunden", or "Bei {name} · Direkt · 38 ms" (fixed width). Click opens a `Popover` with peer, path explanation, RTT, and "Teilen beenden" / "Verlassen".
@@ -1043,22 +1216,25 @@ Kit rules (docs/design/PIXELKINO.md): no border radius, a warning always has a s
   - Pure helper in `src/lib/onPlay.ts`: `resolveFriendsEnabled(cached: boolean | null, fetchEnabled: () => Promise<boolean>, timeoutMs: number): Promise<boolean | null>`. It returns `cached` when that is not null. Otherwise it awaits `fetchEnabled()` raced against `timeoutMs`, and returns the fetched value; only a rejection or a timeout gives `null`.
   - `launcherWindow.ts` adds `async function ensureFriendsEnabled()`: it calls `resolveFriendsEnabled(useFriendsUi.getState().friendsEnabled, () => queryClient.fetchQuery({ queryKey: friendKeys.state, queryFn: () => api.friendsState() }).then((s) => s.enabled), 1500)` and writes a fetched value into `friendsUi`.
   - `applyLauncherOnPlay()` becomes async: `const mode = effectiveOnPlay(useSettings.getState().launcherOnPlay, await ensureFriendsEnabled())`. So "close" stays "close" for every user whose backend answers `enabled: false`, and the fallback "treat as enabled" (null) applies only when `friendsState` fails or takes longer than 1.5 s. `restoreLauncherAfterPlay()` uses the same effective mode.
-- Settings > Spiel shows the hint "Mit aktivierten Freunden wird der Launcher nur minimiert."
+- Settings > Spiel shows the hint "Mit aktivierten Freunden wird der Launcher nur minimiert." `GameTab` reads `useFriendsState` for it, and shows its existing `closeWarning` (no playtime tracking) only while `effectiveOnPlay(mode, friendsEnabled)` is still `"close"`.
 - Closing the TitleBar during an active session or join asks first: "Launcher schließen? Das beendet das Teilen bzw. die Verbindung zu {name}." (F5)
 - Rust: a cross-platform `RunEvent::Exit` handler calls `friends.shutdown()` (1 s timeout), and keeps the macOS `Opened` branch (R4).
 
 ### 10.8 Settings tab "Freunde" (F3, `pages/settings/FriendsTab.tsx`, `SECTIONS` value `freunde`)
+- Tab order: konten, spiel, **freunde**, speicher, darstellung, ueber. The value `freunde` is fixed (the Friends page links to `/settings?tab=freunde`).
 - `noSecretStore`: only a `StatusPanel` "Auf diesem System gibt es keinen Schlüsselbund (Secret Service); Freunde sind hier nicht verfügbar."
 - `identityLost`: only the panel and "Zurücksetzen" (as in 10.2).
 - Otherwise:
-  - `FormRow` "Freunde" `Switch` (on opens the opt-in, off calls `friendsDisable`).
+  - `FormRow` "Freunde" `Switch` (on opens the opt-in, off calls `friendsDisable`). While the feature is off, the tab shows **only** this switch; every row below appears only while it is enabled (rotate and reset need an active identity).
   - "Anzeigename" (3-32, saved on blur).
-  - "Immer über Relay verbinden" (hint: "Freunde sehen deine IP-Adressen nicht. Etwas höhere Latenz. Der Relay-Betreiber sieht, wer mit wem verbunden ist, aber keine Inhalte."; with a confirm while a session is active).
-  - "Mein Fingerabdruck", and "Blockierte" (list + "Entsperren").
-  - Network line "Verbunden über {relayHost}" or "Getrennt: {reason}".
-  - Danger area: "Identität erneuern" (`friendsRotateIdentity`, confirm: "Deine Freunde bekommen die neue Identität automatisch, sobald sie online sind (bis zu 14 Tage). Deine offenen Freundescodes werden widerrufen, und Anfragen, die noch auf Bestätigung warten, werden gelöscht. Läuft gerade eine geteilte Welt oder ein Beitritt, wird er beendet.") and "Identität zurücksetzen und alle Freunde löschen" (`friendsReset`, danger confirm).
+  - "Immer über Relay verbinden" (hint: "Freunde sehen deine IP-Adressen nicht. Etwas höhere Latenz. Der Relay-Betreiber sieht, wer mit wem verbunden ist, aber keine Inhalte."; with a confirm while a host session **or a join** is active, because the rebind ends both). The current code checks only host sessions (Appendix E, E4).
+  - "Mein Fingerabdruck" (pixel-font `Count`) with an action that copies the full 64-char peer id: an abuse report to the relay operator needs it, because the relay keeps no logs and the fingerprint is not enough (`docs/friends/RELAY-OPS.md`; Appendix E, E5). "Blockierte" (list + "Entsperren").
+  - Network line "Verbunden über {relayHost}" or "Getrennt: {reason}". Until F4's `useFriendEvents` writes `friends-network` into `friendKeys.state`, the tab subscribes itself (`useLiveNetwork`); F4 removes that.
+  - Danger area (kit `danger` variant; the reset row label is the full wording below, its button says "Zurücksetzen"): "Identität erneuern" (`friendsRotateIdentity`, confirm: "Deine Freunde bekommen die neue Identität automatisch, sobald sie online sind (bis zu 14 Tage). Deine offenen Freundescodes werden widerrufen, und Anfragen, die noch auf Bestätigung warten, werden gelöscht. Läuft gerade eine geteilte Welt oder ein Beitritt, wird er beendet.") and "Identität zurücksetzen und alle Freunde löschen" (`friendsReset`, danger confirm).
 
 ### 10.9 Opt-in dialog (F3, `FriendsOptInDialog`)
+`FriendsOptInDialog({ onClose })` is mounted only while open (like `NameDialog`): callers render `{open && <FriendsOptInDialog onClose={…} />}`. Relay operators are named "Pumpkin Launcher" and "n0" (`RELAY_OPERATOR_KEYS`, exported from `PrivacyNotice.tsx` and reused here).
+
 Text (plain, final wording reviewed by the owner):
 - Freunde nur über Codes, die ihr selbst austauscht. Wer deinen Code hat, kann dir eine Anfrage schicken; deine IP-Adresse sieht er dadurch nicht.
 - Verschlüsselte Verbindungen zwischen den Launchern. Bei einer direkten Verbindung sehen deine Freunde deine öffentliche IP-Adresse und die Adressen deiner Netzwerke (Heimnetz, VPN). Auch wer deinen Code einlöst oder dessen Code du einlöst, kann deine Adressen sehen, solange „Immer über Relay“ aus ist. „Immer über Relay“ verhindert das.
@@ -1085,6 +1261,7 @@ Primary button: "Freunde aktivieren" (`friendsEnable`). A note says that Windows
   - Default: disabled.
 - `globalThis.pumpkinMock` hooks: `invite(name)`, `friendOnline(name)`, `friendOffline(name)`, `request(name)`, `lanOpened(port)`, `guestJoined(name)`, `hostGone()`, `network("online"|"degraded")`, `modConfirm()`, `notice(name, "renamed"|"identityChanged")`, `cycle()` (toggles presence and RTT for all rows 5 times), `layoutShift()` (returns the summed `layout-shift` entries since the last call, via `PerformanceObserver`).
 - `invitePlan` returns one plan per verdict. `inviteJoin` returns a ticket, and the mock launch then emits `join-session` waitingForGame → connected.
+- Implemented specifics (F1): the host instance of the demo is `inst-survival`, and the `pumpkinMock` hooks target it. Invites from `pumpkinMock.invite(name)` cycle through the plans ready, missing, vanilla, unsupported and lookupFailed; the vanilla scenario turns `ready` once the user has created a vanilla instance for the same MC version through `createInstance`. Like the real backend, a presence change emits only `friend-presence`. The mock has no third-party relay, so the opt-in's consent checkbox is not visible in the stock scenarios. Mock MS login finishes after 6 s and opens `window.open`; the mock DB and the account selection reset on every reload.
 
 ---
 
@@ -1110,20 +1287,23 @@ mod/ build.gradle settings.gradle gradle.properties gradlew gradlew.bat gradle/w
        bridge/ BridgeEnv BridgeClient Protocol (Gson, 16 KiB cap) Messages Backoff      <- Minecraft-free
        state/  Snapshot StateStore Sanitize (strip §, controls, caps)                 <- Minecraft-free
        mc/     PauseMenuButton FriendsScreen LanWatcher LanControl Toasts
-     src/client/resources/fabric.mod.json, assets/pumpkin_friends/lang/{en_us,de_de}.json
+     src/client/resources/fabric.mod.json, assets/pumpkin_friends/{icon.png, lang/{en_us,de_de}.json}
      src/test/java/dev/laux/pumpkin/friends/{ProtocolTest,BackoffTest,StateStoreTest,SanitizeTest,BridgeHarnessTest,ScriptedLauncher}.java
+     .gitattributes (*.bat crlf, *.jar binary; the repo forces eol=lf)   .gitignore (run/ from runClient)
 ```
-- Mod id `pumpkin_friends`, name "Pumpkin Friends". The description contains "NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT." The icon reuses the launcher icon.
+- Mod id `pumpkin_friends`, name "Pumpkin Friends", version `0.1.0`; the build output is `mod/build/libs/pumpkin_friends-0.1.0.jar`. The description contains "NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT." The icon `icon.png` is a copy of `src-tauri/icons/128x128.png`.
+- Start-up seam: `BridgeClient.startIfLaunched(env, versions, listener, timing)` returns `Optional<BridgeClient>` and starts the thread only for a valid env (7.5); `FriendsClient` uses it. All timings are injectable through `BridgeClient.Timing`.
+- Lang keys beyond the features below: `publish_failed`, `no_friends`, `someone`, `section.*`, and the `row` / `invite_row` formats.
 
 ### 11.3 Features
 1. **Pause-menu button** "Pumpkin Friends" (`ScreenEvents.AFTER_INIT`, `PauseScreen`, added idempotently, placed relative to existing widgets). Only while the bridge is connected. Opens `FriendsScreen`.
 2. **FriendsScreen:**
    - (a) A friends list with presence, from the snapshot.
-   - (b) In singleplayer and not published: "Für Freunde öffnen", which calls `publishServer(MultiplayerScope.LAN, false, HttpUtil.getAvailablePort())` on the client thread.
-   - (c) Published: online friends with toggles, and "Einladen" (`share`).
+   - (b) In singleplayer and not published: "Für Freunde öffnen", which calls `publishServer(MultiplayerScope.LAN, false, HttpUtil.getAvailablePort())` on the client thread (the 26.3 three-argument overload; `false` = no commands for guests).
+   - (c) Published: checkboxes for the online friends who are not already guests, and "Einladen" (`share`), enabled for 1 to 7 selected friends. The launcher stays authoritative on the guest limit.
    - (d) Sharing: the guest list with "Entfernen" (`kick`), and "Teilen beenden" (`stopSharing`, then `unpublishServer()`).
-   - (e) Received invites, read-only, with "Im Launcher beitreten".
-   - (f) "Bestätige im Launcher" after `notify{confirmInLauncher}`.
+   - (e) Received invites, read-only, with the text line "Im Launcher beitreten" under the list (a text, not a button: there is no in-game join).
+   - (f) "Bestätige im Launcher" after `notify{confirmInLauncher}` (which also shows a toast). The hint stays until the next `error` message or a snapshot whose session differs from the current one.
 3. **LAN watcher:** polls `isPublished()`/`getPort()` at `END_CLIENT_TICK` and sends `lanOpened`/`lanClosed` on change. This also covers vanilla World Options.
 4. **Toasts:** `FriendToast` with `ResolvableProfile.createUnresolved(uuid)` when `mcUuid` is set, otherwise `SystemToast`. Text from the lang keys per `notify.event` and `error.code`. Names are inserted as literal text after `Sanitize`.
 5. **Degradation:** no env means only an inert initializer. Disconnected means the button is hidden and the screen shows "Launcher nicht verbunden".
@@ -1131,12 +1311,12 @@ mod/ build.gradle settings.gradle gradle.properties gradlew gradlew.bat gradle/w
 No keybinding and no in-game join.
 
 ### 11.4 Threading
-- A daemon reader (blocking socket, connect timeout 2 s) and a writer on a `LinkedBlockingQueue(64)` (oldest `ping` dropped first).
-- Inbound messages go to a `ConcurrentLinkedQueue`, which is drained at `END_CLIENT_TICK` into an immutable `Snapshot` (volatile).
+- A daemon reader (blocking socket, connect timeout 2 s, read timeout 30 s) and a writer on a `LinkedBlockingQueue(64)`. The writer sends a `ping` itself when the queue has been empty for one ping interval (10 s), so pings never sit in the queue. When the queue is full, the new message is dropped and a warning is logged. Messages queued before the launcher's `welcome` are dropped, and the queue is cleared at the start of each connection, so nothing stale goes out before `hello`.
+- Inbound messages go to a `ConcurrentLinkedQueue`, which is drained at `END_CLIENT_TICK` into an immutable `Snapshot` (volatile). `pong` is handled inside `BridgeClient` as a liveness signal and does not enter that queue.
 - All Minecraft calls run on the client thread.
 
 ### 11.5 Distribution and supply chain
-- The owner creates the Modrinth project. Its **project id** is pinned as `MOD_PROJECT_ID` in `services/friends/modinstall.rs`. Until it is set (empty string), `ModState::Unavailable`, and the dev jar is added by hand.
+- The owner creates the Modrinth project. Its **project id** is pinned as `MOD_PROJECT_ID` in `services/friends/modinstall.rs`. Until it is set (empty string), `ModState::Unavailable`, and the dev jar (`mod/build/libs/pumpkin_friends-0.1.0.jar`) is added by hand.
 - `friends_mod_install`: list the pinned project's versions for `26.3` + `fabric`. Take the newest `listed` release whose `project_id` equals the constant, pick the file whose sha512 the API reports, and install it through the existing catalog mod-install path (`Fetch::Modrinth` verification). The target file name is a sanitised leaf `[A-Za-z0-9._+-]+\.jar`.
 - Releases: the manual-dispatch workflow `mod-release.yml` with the Minotaur plugin. It runs in a GitHub **environment** `modrinth-release` with the owner as required reviewer, using the `MODRINTH_TOKEN` environment secret. The owner enables 2FA on the Modrinth account. Nothing publishes automatically.
 
@@ -1167,8 +1347,8 @@ No keybinding and no in-game join.
   - The game itself rejects offline guests at login: the host's integrated server authenticates every login, and the tunnel forwards bytes unchanged to that port. Verified by the owner in E8b (13.4).
 - **Minimum version 1.20** for hosting and joining.
 - **No file transfer between peers.** No downloads on behalf of a manifest in v1. `servers.dat` and `options.txt` are never touched. The only download in the friends feature is our own mod (pinned project id) and friends' skin PNGs (sessionserver → `textures.minecraft.net` only, at most 64 KiB, PNG signature checked).
-- **Untrusted input:** every frame and IPC line is size-limited before parsing. Ids and hashes are format-checked. Peer strings are sanitised (12.3). Unknown fields are ignored. Malformed input closes the connection with `PROTOCOL`.
-- **Dependency hygiene:** `cargo deny check advisories` is green on the final tree (R0a). The new crypto crates (ed25519-dalek 3, curve25519-dalek 5, noq) are listed with their audit status in `DEPENDENCIES.md`.
+- **Untrusted input:** every frame and IPC line is size-limited before parsing. Ids and hashes are format-checked. Peer strings are sanitised (12.3). Unknown fields are ignored. A malformed peer frame resets the stream with `PROTOCOL`, and on the hello and control streams the connection is closed with `PROTOCOL` (5.1). A malformed mod IPC line after `hello` is ignored (debug log) but counts toward the 20 messages/s limit, whose excess closes the connection (7.1).
+- **Dependency hygiene:** `cargo deny check advisories` is green on the final tree (R0a). `deny.toml` ignores two compile-time-only advisories with a reason each: RUSTSEC-2024-0370 (proc-macro-error via gtk3-macros, existing) and RUSTSEC-2024-0436 (paste, unmaintained, via iroh → netwatch → netdev → netlink-packet-core, Linux only). The new crypto crates (ed25519-dalek 3, curve25519-dalek 5, noq) are listed with their audit status in `DEPENDENCIES.md`.
 
 ### 12.3 Peer-string sanitisation (`friends/sanitize.rs`; same rules in the mod's `Sanitize`)
 1. Unicode NFC (`unicode-normalization`).
@@ -1184,6 +1364,10 @@ No keybinding and no in-game join.
    | alias | 32 | — |
 
 5. `mcName` must match `^[A-Za-z0-9_]{1,16}$`, else null. `mcUuid` must be 32 lowercase hex, else null.
+
+Launcher side (`friends/sanitize.rs`): `display_name(raw, peer_id)` (with the `#` fallback), `own_display_name(raw)` (no cut; outside 3-32 chars → `errors.friends.displayNameInvalid`), `world_or_instance_name`, `file_name`, `alias(raw) -> Option<String>`, `mc_name`, `mc_uuid`. A cut never leaves trailing whitespace.
+
+Mod side (`state/Sanitize`): the same steps; Cc controls (tab and newline included) go in step 2, before whitespace is collapsed. The cap is not followed by a second trim, and an empty name stays empty (the mod never sees peer ids, so it cannot build the `#` fallback). Both are harmless because the launcher has already sanitised and capped every name it sends.
 
 ### 12.4 Rate limits and caps (all in memory, sliding windows)
 | What | Limit | On excess |
@@ -1204,11 +1388,12 @@ No keybinding and no in-game join.
 | Mod bridge | 4 unauthenticated connections, 20 msg/s, 3 `share` per minute after confirmation | close / `error` |
 
 ### 12.5 Relay operation (requirements; D1 documents and deploys them)
-- `iroh-relay` at the same iroh version as the launcher (lockstep updates).
-- Ports: TCP 80 (ACME), TCP 443, **UDP 7842** (QUIC address discovery, `enable_quic_addr_discovery = true`, TLS).
-- Per-client rate and bandwidth limits configured. It is an open relay, because launchers cannot be authenticated. Only ciphertext passes, with no amplification.
-- Logging (GDPR): no access logs. Error logs without IPs, or with IPs truncated (/24, /48), retained at most 24 h. Metrics and healthz bound to localhost.
-- The legal basis and info text are in `docs/friends/PRIVACY.md` (relay section), with an abuse contact address.
+- `iroh-relay` at the same iroh version as the launcher (lockstep updates; today 1.3.0). The image is built from the pinned crate (`cargo install iroh-relay --version =1.3.0 --locked --features server` in `rust:1.91-bookworm`, the crate's MSRV) and runs on `debian:bookworm-slim` as a non-root user; no third-party relay image is used, because its origin could not be verified. When iroh is bumped, `IROH_RELAY_VERSION` and the image tag change together (`RELAY-OPS.md` section 9).
+- Ports: TCP 443 (HTTPS relay and ACME: iroh-relay 1.3.0 uses the TLS-ALPN-01 challenge on 443), **UDP 7842** (QUIC address discovery, `enable_quic_addr_discovery = true`, TLS). TCP 80 only serves `/generate_204`; it stays published but is optional. The config binds IPv4 only (`0.0.0.0`), so only an A record is advised until `[::]` on Docker's bridge is verified.
+- Limits: per-client receive bandwidth `limits.client.rx` (token bucket with back pressure; first values 4 MiB/s, 8 MiB burst). iroh-relay's `accept_conn_limit`/`accept_conn_burst` have no effect in 1.3.0, so a connections-per-IP limit has to come from the host or provider (owner task, `RELAY-OPS.md`). It is an open relay, because launchers cannot be authenticated. Only ciphertext passes, with no amplification.
+- Logging (GDPR): no access logs. iroh-relay cannot truncate IPs and puts the peer address into every warning or error logged inside a connection span, so the standing deployment stores **no relay output at all** (logging driver `none`, `RUST_LOG=error`). A temporary debug override (`docker-compose.debug.yml`) keeps one 1 MiB log with IPs, deleted within 24 h by recreating the container. Metrics are bound to `127.0.0.1:9090`; the container health check uses them. `/healthz` cannot be bound separately: it is a handler on the public HTTPS port and returns only status, version and git hash.
+- In memory only, the relay keeps the set of endpoint ids seen since 00:00 UTC (for its unique-clients metric): no IPs, lost on restart. `PRIVACY.md` 3.4 and `RELAY-OPS.md` section 11 state it.
+- The legal basis and info text are in `docs/friends/PRIVACY.md` (relay section), with an abuse contact address. Blocking an abusive endpoint uses `access.denylist` in `relay.toml` (`RELAY-OPS.md` section 13); the report needs the full 64-char peer id (10.8).
 - The domain is auto-renewed, and a second domain is registered as a fallback. Adding it to `RELAY_MAP` needs a launcher update.
 
 ---
@@ -1222,16 +1407,16 @@ CI facts (`.github/workflows/ci.yml`): `cargo check` and `cargo test --locked` r
 
 | Package | Required tests |
 |---|---|
-| R0b | (spike crate) two in-process endpoints, relays disabled, loopback: echo; tunnel to a local `TcpListener`; `relay_only` endpoint has no direct addresses; `after_handshake` reject with code; `ignore()` of an `Incoming`. |
-| R1 | Loopback peers: echo through `bridge` + `LocalListener`. 1-byte ping-pong x1000 through the tunnel: p99 <= 20 ms on CI (record the local value; target <= 5 ms). `TCP_NODELAY` set on both sockets (asserted with `nodelay()`). Gate reject/accept/drop. Frame over limit closes with `PROTOCOL`, without allocating. Dial timeout 8 s (fake dialer). Duplicate tie-break. `SHUTDOWN` on close. QUIC stream limit 16 enforced. Unknown relay index never dialed. **Relay-only binding:** an endpoint bound with `relay_only: true` and `RelaySelection::Only(0)` (the configuration R4 uses for hello endpoints in production, 3.7) reports no direct (IP) addresses (checked through the iroh call named in IROH-NOTES), and a loopback peer dialing its id without any relay URL fails within 8 s; the same endpoint is reachable through an in-process relay (3.7), and the established path is `Relay`, never `Direct`. A `NetConfig` built from `RELAY_MAP` binds (map entries are accepted as given). |
+| R0b | (spike crate) two in-process endpoints, relays disabled, loopback: echo; tunnel to a local `TcpListener`; `after_handshake` reject with code; `ignore()` of an `Incoming`. A `relay_only` endpoint **without** relays fails to bind ("no valid address available"), which is asserted; "a `relay_only` endpoint has no direct addresses" is tested with iroh's in-process relay instead (the setup R1 uses). |
+| R1 | Loopback peers (they dial through the in-process relay with loopback-bound sockets, 3.3/3.7; the path then usually upgrades to `Direct`): echo through `bridge` + `LocalListener`. 1-byte ping-pong x1000 through the tunnel: p99 <= 20 ms on CI (recorded local value on Windows, path Direct: p50 0.97 ms, p99 1.47 ms; target <= 5 ms). `TCP_NODELAY` set on both sockets (asserted with `nodelay()`). Gate reject/accept/drop. Frame over limit closes with `PROTOCOL`, without allocating. Dial timeout 8 s (fake dialer). Duplicate tie-break. `SHUTDOWN` on close. QUIC stream limit 16 enforced. Unknown relay index never dialed. **Relay-only binding:** an endpoint bound with `relay_only: true` and `RelaySelection::Only(0)` (the configuration R4 uses for hello endpoints in production, 3.7) reports no direct (IP) addresses (checked through the iroh call named in IROH-NOTES), and a loopback peer dialing its id without any relay URL fails within 8 s; the same endpoint is reachable through an in-process relay (3.7), and the established path is `Relay`, never `Direct`. A `NetConfig` built from `RELAY_MAP` binds (map entries are accepted as given). |
 | R2 | Code golden vectors (Appendix B), round trip, normalisation, checksum, version, own-code. Hello-key derivation vector. Sign/verify. Contract fixture test (8.3). `SecretStore` keyring + fake; availability matrix (noSecretStore, identityLost, available). Records keep unreadable entries. Sanitisation table (bidi, zero-width, `§`, NFC, caps, empty name). Config defaults all off. Auth refresh-token tests stay green. |
 | R3 | `LanDetector` table (6.4). `sockowner` on the current OS: a test `TcpListener` is reported as owned by `std::process::id()`, and a connection from this process is found by `connects_from`. `verify_port` against a fake status server (ok / not owned / no answer). Modbridge: wrong token, protocol negotiation, duplicate, oversize line, no hello within 2 s, 5th unauthenticated connection refused, rate limit, message → `GameSignal` mapping. `launch_env` empty when stopped or non-Fabric. `spawn` env test with a tiny child printing its env. `friend_join`: no `last_quick_play` write, refusal without `account_id`, bad address refused. `FriendJoin` JSON shape and `LaunchOptions` without the field (8.6). With `friend_join`, a refused or failing launch sends `LaunchFailed` before the error returns; progress sends `LaunchProgress` at most once per second; without `friend_join`, neither is sent. `shared_types` JSON strings (R0a test stays green). `examples/launch.rs` compiles. |
-| R4 | Two `Friends` services with temp dirs, built with `NetOptions` pointing at one in-process relay and `hello_relay_only = true` (3.7): code → hello **through the relay** → request → accept → both friends (inviter online, and inviter offline at redemption: the inviter service starts later, then `friends_retry_now` on the invitee delivers within 5 s); `hello_net_config(NetOptions::production(), ..)` gives `relay_only = true` and `Only(code.relay_index)`; decline is silent; cancel → `removedByPeer`; block looks like removal; unfriend; rotate (friend learns the new id, a thief with the old key is rejected afterwards; **after rotate `friend_codes` is empty, pending incoming and `awaitingAnswer` requests are gone, and redeeming a code created before the rotation gets no frame and stays `delivering`**); reset outbox delivers `unfriend`; `friends_retry_now` (fake dialer, paused time): a `delivering` request in the 10-min backoff step is dialed at once, a second call within 10 s does not dial again; **extension seam:** a fake `PeerStreamHandler` receives request streams, tunnel streams (with `sessionId`) and `invite`/`inviteRevoke`/`inviteDecline`; without a handler the defaults of 5.3 apply; a second `register_stream_handler` fails; a fake lifecycle subscriber gets `Disabled` on `friends_disable`, `Rebind` on an `alwaysRelay` change, `IdentityChanged` on rotate and reset, `Shutdown` on `shutdown()`, each before the endpoint closes (subscriber holds `done` for 200 ms, the remote sees `SHUTDOWN` only afterwards), and a subscriber that never answers delays the close by at most 500 ms; identityLost refuses commands; incoming TTL prune; hello silent drop for a wrong secret (no frame received); hello rate limits; foreign `homeRelay` index ignored; presence online/offline/crash (short idle timeout); lazy-dial schedule (fake clock); 50-friend cap; load test with 50 fake friends, startup dial batch finishes within 4 x 8 s rounds. |
+| R4 | Two `Friends` services with temp dirs, built with `NetOptions` pointing at one in-process relay and `hello_relay_only = true` (3.7): code → hello **through the relay** → request → accept → both friends (inviter online, and inviter offline at redemption: the inviter service starts later, then `friends_retry_now` on the invitee delivers within 5 s); `hello_net_config(NetOptions::production(), ..)` gives `relay_only = true` and `Only(code.relay_index)`; decline is silent; cancel → `removedByPeer`; block looks like removal; unfriend; rotate (friend learns the new id, a thief with the old key is rejected afterwards; **after rotate `friend_codes` is empty, pending incoming and `awaitingAnswer` requests are gone, and redeeming a code created before the rotation gets no frame and stays `delivering`**); reset outbox delivers `unfriend`; `friends_retry_now` (fake dialer, paused time): a `delivering` request in the 10-min backoff step is dialed at once, a second call within 10 s does not dial again; **extension seam:** a fake `PeerStreamHandler` receives request streams, tunnel streams (with `sessionId`) and `invite`/`inviteRevoke`/`inviteDecline`; without a handler the defaults of 5.3 apply; a second `register_stream_handler` fails; a fake lifecycle subscriber gets `Disabled` on `friends_disable`, `Rebind` on an `alwaysRelay` change, `IdentityChanged` on rotate and reset, `Shutdown` on `shutdown()`, each before the endpoint closes (subscriber holds `done` for 200 ms, the remote sees `SHUTDOWN` only afterwards), and a subscriber that never answers delays the close by at most 500 ms; identityLost refuses commands; incoming TTL prune; hello silent drop for a wrong secret (no frame received; the close arrives as `CloseReason::Peer(NORMAL)`, 3.5); hello rate limits; foreign `homeRelay` index ignored; presence online/offline/crash (short idle timeout, through the seam of Appendix E, E1); lazy-dial schedule (fake clock); 50-friend cap; load test with 50 fake friends, startup dial batch finishes within 4 x 8 s rounds. |
 | R5 | Real loopback tunnel to a fake LAN server (a status-answering `TcpListener` owned by the test process): host verification, handshake/login-start validation (legacy ping, transfer state, bad name, oversize rejected), guest nonce + PID check (a foreign handshake address is refused, no stream opened), single-owner limits, 7-guest cap, kick, stop, liveness end, every row of 6.5 (with real `Friends` services from R4 and an in-process relay). **Kick and decline at admission:** after a kick, the kicked guest's launcher ignores `inviteRevoke` and opens a new tunnel stream and a `manifestRequest`: both get `notInvited`, and the guest is `left` with `kicked: true`; after `host_invite` for the same friend, a tunnel stream gets `tunnelOk` again; the same for a guest that sent `inviteDecline` (`declined`). A guest that left on its own can rejoin while its invite is open. **Join timers on real time** with `JoinTimers { spawn_wait: 2 s, spawn_wait_cap: 6 s, first_connection: 3 s }`: no spawn and no progress → the join ends `error` after about 2 s; `LaunchProgress` every 1 s keeps it in `waitingForGame` past 2 s, and it still ends `error` at the 6 s cap; after `Spawned`, a first valid connection at 2 s succeeds, and in a second join no connection by 3 s ends it `error` (a connection at 4 s is refused because the listener is closed); `LaunchFailed` ends the join `error` within 100 ms and the listener address refuses connections. The timer state machine is also tested without sockets on paused time with production values (9 min first connection succeeds, 11 min fails; progress for 25 min keeps the join, 31 min ends it). `Lifecycle` handling: `Disabled`, `Rebind`, `IdentityChanged`, `Shutdown` end host session and join with the reasons of 6.1/6.2, and the `inviteRevoke{stopped}` reaches the guest before `done`. Mod `share` needs confirmation once per launch; denied/timeout. |
 | R6 | Manifest build (excludes disabled mods and non-`Mod` kinds; a jar declaring mod id `pumpkin_friends` stays in), matching ignores our mod only via `MOD_PROJECT_ID`, validation table, sha512 hashing and cache. The matching table (5.6) with a fake `ModLookup`. Lookup failure → `lookupFailed`. Avatar: host check (only `textures.minecraft.net`), size cap, PNG signature, cache TTL. Mod install: wrong `project_id` refused, non-listed refused. |
 
 ### 13.2 Frontend
-- `pnpm build` (tsc strict = types, i18n completeness, fixtures) and `pnpm check:lib`, including the new `friendCode.check.mjs` (golden vectors, shape, grouping, normalisation) and `onPlay.check.mjs`.
+- `pnpm build` (tsc strict = types, i18n completeness, fixtures) and `pnpm check:lib`, including the new `friendCode.check.mjs` (golden vectors, shape, grouping, normalisation), `onPlay.check.mjs` and `src/pages/friends/friendsModel.check.mjs` (F2: gates, badge count, labels, `canInvite`, expired-code hint).
 - `onPlay.check.mjs` (F3) covers: `effectiveOnPlay` for null/true/false × the three modes (null and true turn "close" into "minimize"; false keeps "close"); `resolveFriendsEnabled` returns the cached value without calling the fetch, returns `false` from a fetch that resolves `false` (so "close" stays "close"), and returns `null` for a fetch that rejects and for one that does not settle within the timeout (fake fetch, timeout 50 ms).
 - Mock pass in `pnpm dev`: every scenario and hook, German and English, a narrow window (900 px), forced colors.
 - **Layout shift:** on `/friends?mock=freunde` and with the session chip visible, `pumpkinMock.cycle()` and then `pumpkinMock.layoutShift()` must return **< 0.001**. Run it in the browser (devtools or Playwright MCP) and paste the result into the PR.
@@ -1244,9 +1429,9 @@ CI facts (`.github/workflows/ci.yml`): `cargo check` and `cargo test --locked` r
 - **Scripted protocol harness** `BridgeHarnessTest` (JUnit, no Minecraft classes): `ScriptedLauncher` listens on a loopback port and plays the launcher side of section 7 from a script, while the real `BridgeEnv`, `BridgeClient` and `StateStore` connect to it with env values passed in. Asserted cases:
   1. No env: `BridgeEnv` reports absent, and no thread is started.
   2. Handshake: `hello` with the token and `protocols: [1]`, then `welcome` and a `snapshot`, which `StateStore` exposes (names stripped of `§`, lengths capped).
-  3. `reject{token}`, `reject{protocol}` and `reject{duplicate}`: the client closes and does not retry faster than the backoff.
+  3. `reject{token}`, `reject{protocol}` and `reject{duplicate}`: the client closes and keeps retrying on the normal backoff (1, 2, 5, 10, 30 s), never faster; it does not stop for good. Only a `welcome` resets the backoff.
   4. A line over 16 KiB from the launcher closes the connection; a malformed line is ignored without an exception.
-  5. `notify` and `error` messages reach the state queue; `ping` gets `pong`.
+  5. `notify` and `error` messages reach the state queue; the mod's `ping` is answered by the launcher's `pong` (ping goes mod → launcher only, 7.3), which `BridgeClient` consumes as a liveness signal.
   6. Outgoing `share`, `stopSharing`, `kick`, `lanOpened`, `lanClosed` have the exact JSON of 7.3.
   7. The launcher closes mid-session: the client goes to "disconnected" and reconnects after the backoff 1, 2, 5 s (shortened by an injected clock).
 - No GUI check is part of M1. A `./gradlew runClient` smoke run is optional and not required of the agent.
@@ -1296,14 +1481,14 @@ If a fixture mod has no 26.3 release, substitute another Modrinth mod with the s
 ## 14. Work packages
 
 **Ownership rules.**
-- Files listed under a package are exclusive to it while it runs. The only exceptions are the seams that a later package's row names explicitly (R5: the `state.rs` field and the `lib.rs` wiring at R4's marker, 8.7).
+- Files listed under a package are exclusive to it while it runs. The only exceptions are the seams that a later package's row names explicitly (R5: the `state.rs` field and the `lib.rs` wiring at R4's marker, 8.7). Files of finished packages (Waves 0 and 1) pass to a later package only where that package's row lists them (R4: `p2p/endpoint.rs` and `p2p/tests.rs` for Appendix E, E1/E2; F4: the F2 and F3 files named in its row).
 - **Stubs:** R0a creates every new Rust module file as a stub (overview doc comment only). Ownership then passes to the package named in R0a's list. `services/shared_types.rs` is not a stub: R0a writes it complete (8.1), and changes to it later go through the change rule.
 - **Cross-package seams are defined in R4** (`PeerStreamHandler`, `Lifecycle`, `NetOptions`, 3.7/8.7). R4 is accepted with fake handlers and subscribers; R5 only registers against them.
 - **Append-only shared files** (any package may append; the orchestrator merges both sides):
 
   | File | What may be appended |
   |---|---|
-  | `src-tauri/Cargo.toml` | `[dependencies]` lines and feature lists (state the reason in the PR) |
+  | `src-tauri/Cargo.toml` | `[dependencies]` lines and feature lists (state the reason in the PR). The file may have CRLF line endings in a working copy (autocrlf); keep them. After adding a dependency, regenerate `Cargo.lock` (`cargo metadata --offline`) before `--locked` works. |
   | `src-tauri/Cargo.lock` | regenerated |
   | `src/i18n/{de,en}/errors.friends.ts` | new keys, always in both languages |
   | `src-tauri/src/services/friends/mod.rs` | `mod`/`pub mod` lines |
@@ -1320,8 +1505,9 @@ If a fixture mod has no 26.3 release, substitute another Modrinth mod with the s
   - `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`:
     - `iroh = "1.3"`, `data-encoding = "2"`, `unicode-normalization = "0.1"`.
     - windows-sys features `Win32_NetworkManagement_IpHelper` and `Win32_Networking_WinSock`.
-    - The cargo feature `beta-relays`.
+    - The cargo feature `beta-relays` (in a new `[features]` section).
     - `[dev-dependencies]`: `iroh = { version = "1.3", features = ["test-utils"] }` (in-process relay for tests, 3.7).
+  - `deny.toml` (ignore entry for RUSTSEC-2024-0436 with its reason, 12.2; needed for the `cargo deny` acceptance).
   - `src-tauri/src/services/mod.rs`.
   - `src-tauri/src/services/shared_types.rs` (complete, not a stub: `PathKind`, `PortSource`, `ModLoader` re-export, with its JSON test; 8.1).
   - Stubs:
@@ -1331,7 +1517,7 @@ If a fixture mod has no 26.3 release, substitute another Modrinth mod with the s
   - `src-tauri/src/error/text.rs` (`GERMAN_SOURCES` 6 → 7).
   - `src/i18n/{de,en}/errors.friends.ts` (all Appendix A keys), `src/i18n/{de,en}/errors.ts`.
   - `docs/friends/SPEC.md` (this file), `docs/friends/DEPENDENCIES.md`.
-- Acceptance: CI green on all three OSes (check, test, Linux clippy without new warnings, cargo deny advisories with iroh in the tree); `pnpm check:lib` (`errors.check.mjs`) green; no behaviour change; the `shared_types` JSON test passes; the `test-utils` dev-dependency does not enter the release dependency tree (`cargo tree -e normal -i iroh -f "{p} {f}"` lists no `test-utils`); release binary size delta and crypto-crate audit notes in DEPENDENCIES.md.
+- Acceptance: CI green on all three OSes (check, test, Linux clippy without new warnings, cargo deny advisories with iroh in the tree); `pnpm check:lib` (`errors.check.mjs`) green; no behaviour change; the `shared_types` JSON test passes; the `test-utils` dev-dependency does not enter the release dependency tree (`cargo tree -e normal -i iroh -f "{p} {f}"` lists no `test-utils`); release binary size delta and crypto-crate audit notes in DEPENDENCIES.md. **Done (Wave 0).**
 
 **R0b, rust-net: viability spike CLI (agent part), owner run (gate G1)**
 - Files: `tools/p2p-spike/**` (its own `Cargo.toml` + `Cargo.lock`, same iroh version, not in CI), `docs/friends/IROH-NOTES.md`, `docs/friends/VERIFICATION.md` (template).
@@ -1340,7 +1526,7 @@ If a fixture mod has no 26.3 release, substitute another Modrinth mod with the s
   - `listen [--relay URL] [--relay-only] [--forward 127.0.0.1:PORT]`.
   - `dial <id> [--relay URL] [--relay-only] [--echo 1000] [--throughput 50] [--local 127.0.0.1:PORT]`.
   - Prints path changes, RTT, the relay-observed public address (QUIC address discovery), echo p50/p99 and throughput. `--forward`/`--local` tunnel a real Minecraft LAN world.
-- Acceptance: `cargo build --release` and `cargo test` pass on Windows; the loopback tests of 13.1 (R0b row) pass; IROH-NOTES documents the exact 1.3 calls for every iroh item named in 3.2-3.7 and 8.7, including multi-relay dial, the RelayMap QUIC config, how to read an endpoint's direct addresses, and the in-process test relay with its certificate-skip setting (3.7), the last one shown working in a spike test; README runbook lets the owner run G1 without help; VERIFICATION.md has the G1 table and the 13.4 table ready to fill. **The owner then runs it on two networks** (not agent work; it blocks only the release).
+- Acceptance: `cargo build --release` and `cargo test` pass on Windows; the loopback tests of 13.1 (R0b row) pass; IROH-NOTES documents the exact 1.3 calls for every iroh item named in 3.2-3.7 and 8.7, including multi-relay dial, the RelayMap QUIC config, how to read an endpoint's direct addresses, and the in-process test relay with its certificate-skip setting (3.7), the last one shown working in a spike test; README runbook lets the owner run G1 without help; VERIFICATION.md has the G1 table and the 13.4 table ready to fill. **The owner then runs it on two networks** (not agent work; it blocks only the release). **Agent part done (Wave 0); the owner run (G1) is open.** Without `--relay`, the spike uses n0's production relays (`iroh::defaults::prod`), so n0 sees both IPs during the run (stated in the README); the listener keeps a persistent id in `spike-key.txt`, the dialer uses a throwaway key. Owner: `cargo build --release` in `tools/p2p-spike`, copy `target/release/p2p-spike.exe` to both PCs, follow `tools/p2p-spike/README.md`.
 
 **F1, frontend: contract, fixtures, mock, hooks, i18n scaffolding**
 - Files:
@@ -1358,39 +1544,42 @@ If a fixture mod has no 26.3 release, substitute another Modrinth mod with the s
   - The mock implements every method and the scenarios and hooks of 10.10.
   - `friendsUi` mirrors `friendsEnabled`.
   - `pnpm build`, `pnpm check:lib` and `pnpm dev` work.
+  - **Done (Wave 0).**
 
 ### Wave 1
 **R1, rust-net: P2P transport** (depends R0a, R0b)
-- Files: `src-tauri/src/services/p2p/**` (`mod.rs`, `endpoint.rs`, `relays.rs`, `gate.rs`, `frame.rs`, `stream.rs`, `tunnel.rs`, `dialer.rs`, `tests.rs`).
-- Acceptance: the API of 3 and 6.3/8.7 (including `RelayTls` and `NetConfig.relay_map`, 3.7); R1 tests of 13.1 green on three OSes without network access (the in-process relay runs on loopback); no friends or Minecraft knowledge inside `p2p` (`PathKind` comes from `shared_types`).
+- Files: `src-tauri/src/services/p2p/**` (`mod.rs`, `endpoint.rs`, `relays.rs`, `gate.rs`, `frame.rs`, `stream.rs`, `tunnel.rs`, `dialer.rs`, `conn.rs` (`PeerConn`, `CloseCode`, `CloseReason`, `Direction`, `duplicate_survivor`), `peer_id.rs` (`PeerId`, `InvalidPeerId`), `tests.rs`); `src-tauri/Cargo.toml` (append `bytes = "1"`, already in the lock tree, for `bridge`'s `Bytes`).
+- Acceptance: the API of 3 and 6.3/8.7 (including `RelayTls` and `NetConfig.relay_map`, 3.7); R1 tests of 13.1 green on three OSes without network access (the in-process relay runs on loopback); no friends or Minecraft knowledge inside `p2p` (`PathKind` comes from `shared_types`). **Done (Wave 1).** `p2p/relays.rs` passes to I1 (release map); `p2p/endpoint.rs` and `p2p/tests.rs` pass to R4 for Appendix E, E1/E2.
 
 **R2, rust-friends: identity, secrets, codes, records, config, contract, sanitising** (depends R0a, F1)
-- Files: `services/secrets.rs`, `services/auth/keyring.rs`, `services/friends/{mod.rs, contract.rs, contract_tests.rs, identity.rs, code.rs, records.rs, config.rs, sanitize.rs}`.
-- Acceptance: R2 tests of 13.1; the contract types exactly as 8.2, with `PathKind`, `PortSource` and `ModLoader` re-exported, never redefined (8.1); fixture equality for every row of the 8.3 key table, and the key-set check.
+- Files: `services/secrets.rs`, `services/auth/keyring.rs`, `services/friends/{mod.rs, contract.rs, contract_tests.rs, identity.rs, code.rs, records.rs, config.rs, sanitize.rs, test_support.rs}` (`test_support.rs` is `cfg(test)`: `TempDir`, `error_key`); `src-tauri/Cargo.toml` (append `getrandom = "0.4"`, already in the lock tree via uuid and iroh, for the code secret and salt).
+- Acceptance: R2 tests of 13.1; the contract types exactly as 8.2, with `PathKind`, `PortSource` and `ModLoader` re-exported, never redefined (8.1); fixture equality for every row of the 8.3 key table, and the key-set check. **Done (Wave 1).**
 
 **R3, rust-launch: game signals, LAN detection, socket ownership, mod bridge, launch integration** (depends R0a)
 - Files:
-  - `services/gamesignal.rs`, `services/lan_detect.rs`, `services/sockowner/{mod,windows,linux,macos}.rs`, `services/modbridge/{mod,protocol,server,tests}.rs`.
-  - `services/launch.rs` (`spawn` env parameter) and **`src-tauri/examples/launch.rs` (mandatory)**.
-  - `src-tauri/src/commands.rs`: env injection, stdout → `LanDetector` → `GameSignal`, `LaunchProgress`/`LaunchFailed`/`Spawned`/`Exited` signals, `bridge.forget` on exit, `friend_join` handling.
+  - `services/gamesignal.rs`, `services/lan_detect.rs`, `services/sockowner/{mod,windows,linux,macos}.rs`, `services/modbridge/{mod,protocol,server,connection,tests}.rs` (`connection.rs`: per-connection loop, `LineReader`, aliases, rate window, snapshot debounce).
+  - `services/launch.rs` (`spawn` env and `on_stdout_raw` parameters) and **`src-tauri/examples/launch.rs` (mandatory)**.
+  - `src-tauri/src/commands.rs`: env injection, raw stdout → `lan_line_forwarder` → `GameSignal`, `LaunchProgress`/`LaunchFailed`/`Spawned`/`Exited` signals, `bridge.forget` on exit, `friend_join` handling.
   - `src-tauri/src/models.rs` (`LaunchOptions.friend_join`, `FriendJoin`; the only Rust definition, 8.1).
   - `src-tauri/src/state.rs` (`signals`, `bridge`, constructed stopped).
-- Acceptance: R3 tests of 13.1; `ModRequest` defined in `gamesignal.rs` and `LauncherToMod` in `modbridge/protocol.rs` (8.1); `PortSource` used from `shared_types`; with the bridge stopped, launches are byte-identical to today; all existing launch tests pass.
+  - `src-tauri/src/services/worlds/auto.rs`: one line (`friend_join: None` in a test `LaunchOptions` literal).
+- Acceptance: R3 tests of 13.1; `ModRequest` defined in `gamesignal.rs` and `LauncherToMod` in `modbridge/protocol.rs` (8.1); `PortSource` used from `shared_types`; with the bridge stopped, launches are byte-identical to today; all existing launch tests pass. **Done (Wave 1).**
 
 **M1, mod: Fabric 26.3 client mod** (no dependency; builds against section 7)
-- Files: `mod/**`, `.gitignore` (append `mod/.jdk/`, `mod/build/`, `mod/.gradle/`).
+- Files: `mod/**` (layout 11.2, including `mod/.gitattributes` and `mod/.gitignore`), `.gitignore` (append `mod/.jdk/`, `mod/build/`, `mod/.gradle/`). **Done (Wave 1).**
 - Acceptance (agent-verifiable only, 13.3.1): on Windows without admin rights, `dev-env` (checksum-verified Temurin 25) + `./gradlew build` and `./gradlew test` work; JUnit green, including `BridgeHarnessTest` with all seven cases; the build compiles every 26.3 signature listed in 13.3.1; `mod/README.md` contains the owner GUI checklist 13.3.2 verbatim and the `FakeLauncher.java` usage. The GUI checklist itself is **not** M1 acceptance; the owner runs it in I1 (E10).
 
 **D1, docs-ci: relay infrastructure and relay docs** (no dependency)
-- Files: `infra/relay/**` (docker compose for `iroh-relay` at the launcher's iroh version, config with ACME, UDP 7842 QUIC address discovery, per-client limits, localhost-only metrics/healthz, log policy), `docs/friends/RELAY-OPS.md` (sizing, ports 80/443/7842, updates in lockstep, costs, domain + fallback domain, runbook), `docs/friends/PRIVACY.md` (relay GDPR text, log/retention policy, abuse contact, LAN-port note, skins note).
+- Files: `infra/relay/**` (`Dockerfile` building the pinned `iroh-relay`, `docker-compose.yml`, `docker-compose.debug.yml` (temporary log override), `relay.toml`: ACME via TLS-ALPN-01 on 443, UDP 7842 QUIC address discovery, per-client rx limits, metrics on localhost, no stored logs; 12.5), `docs/friends/RELAY-OPS.md` (sizing, ports 80/443/7842, updates in lockstep, costs, domain + fallback domain, runbook; section 2 lists where the relay differs from the v2 draft of 12.5), `docs/friends/PRIVACY.md` (relay GDPR text, log/retention policy, abuse contact, LAN-port note, skins note, in-app text drafts in section 7, the Appendix C checklist with where each item is met in section 8).
 - Acceptance:
   - `docker compose config` validates.
   - Every item of 12.5 appears in the docs.
   - After the owner deploys, a test with the R0b spike (`--relay`) shows the relay-observed public address and a completed `online()`. Recorded in VERIFICATION.md as G3 input.
+- **Done (Wave 1)**, except the deployment (owner). Unverified container items to expect at the first deploy: the image build, the sysctl `net.ipv4.ip_unprivileged_port_start` for non-root binding of 80/443 (fallback: root user with `cap_add NET_BIND_SERVICE`), volume ownership; the compose service has no `read_only` root filesystem yet. Placeholders: `<relay-domain>`, `<ops-mailbox>`, optionally `<fallback-domain>`; operator, address, hosting provider and AVV are marked "(owner)" in PRIVACY.md. n0's operator details and retention are unverified and must be checked before a beta build with n0 relays ships.
 
 **F2, frontend: Friends page, navigation, add dialog** (depends F1)
-- Files: `src/main.tsx`, `src/app/mainTabs.ts`, `src/app/Sidebar.tsx`, `src/app/usePageTitle.ts`, `src/ui/Button.tsx`, `src/ui/button.css`, `src/ui/a11y.css`, `src/ui/List.tsx`, `src/ui/list.css`, `src/pixel/icon-data.ts`, `src/pages/Friends.tsx`, `src/pages/friends/**`, `src/components/friends/FriendAvatar.tsx`, `src/components/friends/Fingerprint.tsx`, `src/i18n/{de,en}/friends.ts`, `src/i18n/{de,en}/ui.ts`.
-- Acceptance: 10.1-10.3 against all mock scenarios; Ctrl+5 opens Friends and Ctrl+1..4 are unchanged; badge count = requests + invites + notices; icons in both grids; in `?mock=freunde` the page mount calls `friendsRetryNow` once, "Jetzt zustellen" turns the younger delivering request into `awaitingAnswer` and is disabled for 10 s, and only the 8-day-old request shows the expired-code hint; layout shift < 0.001 (13.2); `pnpm build`/`check:lib` green.
+- Files: `src/main.tsx`, `src/app/mainTabs.ts`, `src/app/Sidebar.tsx`, `src/app/usePageTitle.ts`, `src/ui/Button.tsx`, `src/ui/button.css`, `src/ui/a11y.css` (listed, unchanged), `src/ui/List.tsx`, `src/ui/list.css`, `src/pixel/icon-data.ts`, `src/pages/Friends.tsx`, `src/pages/friends/**` (as built: `AddFriendDialog`, `EnterCodeTab`, `MyCodeTab`, `FriendRow`, `FriendsContent`, `FriendsGate`, `FriendsSection`, `RequestsSection`, `NetworkBanner`, `useFriendDialogs`, `useFriendsNav`, `useRetryDeliveries`, `useFriendsLive` (interim), `inviteRequest`, `friendsModel` + `friendsModel.check.mjs`), `src/components/friends/FriendAvatar.tsx` (also `SelfAsserted`), `src/components/friends/Fingerprint.tsx`, `src/i18n/{de,en}/friends.ts`, `src/i18n/{de,en}/ui.ts`, `package.json` (append `friendsModel.check.mjs` to `check:lib`).
+- Acceptance: 10.1-10.3 against all mock scenarios; Ctrl+5 opens Friends and Ctrl+1..4 are unchanged; badge count = requests + invites + notices; icons in both grids; in `?mock=freunde` the page mount calls `friendsRetryNow` once, "Jetzt zustellen" turns the younger delivering request into `awaitingAnswer` and is disabled for 10 s, and only the 8-day-old request shows the expired-code hint; layout shift < 0.001 (13.2); `pnpm build`/`check:lib` green. **Done (Wave 1)**; open: Appendix E, E3 (moved to F4).
 
 **F3, frontend: settings tab, opt-in, privacy notice, window close** (depends F1)
 - Files: `src/pages/Settings.tsx`, `src/pages/settings/FriendsTab.tsx`, `src/pages/settings/GameTab.tsx` (hint), `src/components/friends/FriendsOptInDialog.tsx`, `src/components/PrivacyNotice.tsx`, `src/lib/launcherWindow.ts`, `src/lib/onPlay.ts`, `src/lib/onPlay.check.mjs`, `src/i18n/{de,en}/friendsSettings.ts`, `package.json` (append `check:lib`).
@@ -1400,6 +1589,7 @@ If a fixture mod has no 26.3 release, substitute another Modrinth mod with the s
   - The opt-in cannot finish without "Verstanden", and without third-party consent when n0 relays are listed.
   - `onPlay.check.mjs` covers the cases listed in 13.2, including the null path (fetch rejects or times out → minimize) and the "not enabled" path (fetch resolves false → close).
   - Rotate and reset use confirms; the rotate confirm names revoked codes, dropped waiting requests and ended sessions (10.8). PrivacyNotice lists the relays and sessionserver.
+  - **Done (Wave 1)**; open: Appendix E, E4 and E5 (moved to F4). `usePlay.ts` and `useGameEvents.ts` still call the now async `applyLauncherOnPlay()`/`restoreLauncherAfterPlay()` without `await`; both functions catch their own errors (D.3).
 
 ### Wave 2
 **R4, rust-friends: service, requests, hello endpoints, presence, outbox, block, core commands, lifecycle** (depends R1, R2, R3)
@@ -1408,8 +1598,10 @@ If a fixture mod has no 26.3 release, substitute another Modrinth mod with the s
   - `src-tauri/src/friends_commands.rs`.
   - `src-tauri/src/lib.rs`: register the commands; construct `Friends` with `NetOptions::production()` and start it in `setup` when enabled; leave the marker `// friends: session wiring (R5)`; the cross-platform `RunEvent::Exit` handler.
   - Append `pub friends: Friends` to `state.rs`.
+  - Appendix E, E1 and E2: `services/p2p/endpoint.rs` (the idle-timeout field only) and `services/p2p/tests.rs` (the new tests), handed over from R1.
 - Acceptance:
   - Sections 3.7, 4 and 5.1-5.3 (control and hello). The 8.4 commands `friends_state` through `friends_retry_now`.
+  - Appendix E, E1 and E2 resolved (and 3.3, 3.7, 8.7 updated through the change rule for E1).
   - The extension seam of 8.7 (`PeerStreamHandler`, `SessionControl`, `Lifecycle` with its normative order, `send_control`, `connection`, `dial_friend`), accepted with a fake handler and a fake lifecycle subscriber; no reference to R5 code.
   - The events `friends-changed`, `friends-network`, `friend-presence`, `friend-request`.
   - The bridge starts and stops with the feature. R4 tests of 13.1, including the in-process-relay hello flow.
@@ -1420,7 +1612,8 @@ If a fixture mod has no 26.3 release, substitute another Modrinth mod with the s
 
 **F4, frontend: invites, join, mod confirm, global events** (depends F1, F2)
 - Files: `src/app/Layout.tsx`, `src/hooks/useFriendEvents.ts`, `src/components/friends/{FriendDialogs.tsx, InviteDialog.tsx, ModConfirmDialog.tsx}`, `src/hooks/usePlay.ts` (the `friendJoin` entry only), `src/i18n/{de,en}/friendsInvite.ts`.
-- Acceptance: 10.4 in the mock for every verdict (ready, missingContent with both lists, noInstance + createVanilla, versionUnsupported, lookupFailed); offline account guard; revoke closes the dialog; never two dialogs at once (queue); every event invalidates or updates the right query keys (listed in the PR).
+  - Handed over from F2 and F3 (finished): `src/pages/friends/useFriendsLive.ts` (delete once `useFriendEvents` covers its four events) and its call in `useFriendsNav.ts`; `src/pages/friends/FriendsGate.tsx` and `src/pages/Friends.tsx` (Appendix E, E3); `src/pages/settings/FriendsTab.tsx` (remove `useLiveNetwork`; Appendix E, E4 and E5); `src/i18n/{de,en}/friends.ts` and `friendsSettings.ts` (only the keys these changes need).
+- Acceptance: 10.4 in the mock for every verdict (ready, missingContent with both lists, noInstance + createVanilla, versionUnsupported, lookupFailed); offline account guard; install before `inviteJoin` for an uninstalled instance (10.4 step 3); the Friends page's "Beitreten" (`useInviteRequest`) opens the InviteDialog; revoke closes the dialog; never two dialogs at once (queue); every event invalidates or updates the right query keys (listed in the PR); Appendix E, E3-E5 resolved.
 
 **F5, frontend: hosting UI, session chip, close confirm** (depends F1, F2)
 - Files: `src/pages/detail/WorldsTab.tsx`, `src/pages/detail/ShareSection.tsx`, `src/pages/detail/ShareDialog.tsx`, `src/app/TitleBar.tsx`, `src/components/friends/SessionChip.tsx`, `src/i18n/{de,en}/friendsHost.ts`.
@@ -1428,7 +1621,7 @@ If a fixture mod has no 26.3 release, substitute another Modrinth mod with the s
 
 **D2, docs-ci: mod CI and release workflow** (depends M1)
 - Files: `.github/workflows/ci.yml` (append the `mod` job), `.github/workflows/mod-release.yml`.
-- Acceptance: the `mod` job installs Temurin 25 (`setup-java`), caches Gradle, and runs `./gradlew build test`; the release is manual-dispatch only, in the environment `modrinth-release` with a required reviewer; nothing publishes automatically.
+- Acceptance: the `mod` job installs Temurin 25 (`setup-java`), caches Gradle (including `~/.gradle/caches/fabric-loom`, because Loom downloads Minecraft 26.3), and runs `./gradlew build test` in `mod/`; the release is manual-dispatch only, in the environment `modrinth-release` with a required reviewer; nothing publishes automatically.
 
 ### Wave 3
 **R5, rust-friends: hosting, joining, mc protocol checks, invites, mod link, session commands** (depends R4, R6)
@@ -1446,11 +1639,12 @@ If a fixture mod has no 26.3 release, substitute another Modrinth mod with the s
 
 ### Wave 4
 **I1, docs-ci: end-to-end verification and release readiness** (depends R0b, R5, F3, F4, F5, M1, D1, D2)
-- Files: `docs/friends/VERIFICATION.md` (results), `docs/ARCHITECTURE.md` (Friends section), `src-tauri/src/services/p2p/relays.rs` (release map → our relay; handed over from R1), `docs/friends/SPEC.md` (deviation write-back).
+- Files: `docs/friends/VERIFICATION.md` (results; add a G3 table, which does not exist yet), `docs/ARCHITECTURE.md` (Friends section), `src-tauri/src/services/p2p/relays.rs` (our relay as index 0, `quic_port: Some(7842)`, in **both** `RELAY_MAP` variants; handed over from R1), `src/pages/settings/AboutTab.tsx` (the Appendix C disclaimer line, still missing there; the mod's `fabric.mod.json` already has it), `docs/friends/SPEC.md` (deviation write-back).
 - Acceptance:
-  - The owner has recorded G1 and the 13.4 table, all pass, including E8b (the recorded vanilla refusal message) and E10 (every item of the mod GUI checklist 13.3.2).
-  - G3 verified.
-  - The Appendix C checklist is ticked, and the owner has confirmed the approval scope (G4).
+  - The owner has recorded G1 and the 13.4 table, all pass, including E8b (the recorded vanilla refusal message) and E10 (every item of the mod GUI checklist 13.3.2; run first against `java scripts\FakeLauncher.java`, then `.\gradlew.bat runClient` with the printed env line, as `mod/README.md` says; no GUI behaviour has been verified by an agent).
+  - G3 verified (`RELAY-OPS.md` section 8: spike `--relay` on both PCs, the QAD line equals each PC's public IP).
+  - The Appendix C checklist (drafted in `PRIVACY.md` section 8) is ticked, and the owner has confirmed the approval scope (G4).
+  - The release binary size delta is re-measured with the real endpoints (3.1).
   - The doc-sync checklist (13.5.5) is complete.
 
 ```
@@ -1466,6 +1660,46 @@ Wave 0: R0a ─┬─────────────► R1 ──┐
         R0b (owner run, G1) ───────────────────────────┘
 ```
 Edges into R4: R1, R2, R3 (as its `dependsOn` states). Edges into R5: R4, R6. R0a is also an input of R2 (via the stubs) and of every Rust package through `shared_types.rs`.
+
+### Hand-off facts after Waves 0 and 1 (normative for Waves 2-4)
+Waves 0 and 1 (R0a, R0b agent part, F1, R1, R2, R3, M1, D1, F2, F3) are merged on `feat/friends`. Later packages build on the real code and on these facts; 8.7 lists the exact signatures.
+
+**R4**
+- Transport: `p2p::PeerNet` per endpoint (3.3). Main endpoint: `NetConfig { secret: identity.secret_bytes(), alpns: vec![b"pumpkin/peer/1"], relay_map, relays: All, relay_only: always_relay, relay_tls }`. Hello endpoint: `secret: identity.hello_secret(&salt)`, `alpns: vec![b"pumpkin/hello/1"]`, `relays: Only(code.relay_index)`, `relay_only: hello_relay_only` (`hello_net_config`). Retired endpoint: retired key, `alpns: vec![]`, `relays: All`, `relay_only: true`.
+- Announce `PeerNet::home_relay()` as `homeRelay`; map `NetState` per the table in 3.4; `find_relay(&net.relay_map, index)` turns an index into the host for `RelayInfo` and `NetworkStatus`.
+- `Gate::admit` is synchronous (3.5); a `Drop` arrives at the dialer as `CloseReason::Peer(NORMAL)`. Keep calling `PeerNet::accept()`; a `PeerNet` must outlive its `PeerConn`s; call `close(CloseCode::SHUTDOWN)` before dropping or rebinding.
+- Frames: use `BiStream::read_frame(limit)` and `frame::write`; define the per-context limits of 5.1 in the friends service; close the connection with `PROTOCOL` on a hello/control frame error.
+- Identity and codes (R2): `identity::availability(secrets, config.enabled || stores.any())`; `code::issue` (store `salt` hex, `secret_digest()` as `secretSha256`, `tail()`); on `friend_add`: `code::parse`, then `ensure_relay_known(|i| find_relay(map, i).is_some())` and `ensure_not_own(&own hello ids)`; on the hello endpoint: `code::secret_matches(record.secret_sha256, request.secret)`; `identity::renew` for rotate and reset; `identity::create` only after checking availability. `friendRequest.secret` = `parts.secret_hex()`; `RequestRecord.helloId` = hex of `parts.hello_id`.
+- Every peer string through `sanitize` (12.3); the own name through `sanitize::own_display_name`. Fill `FriendsConfig.settings.display_name` (default `""`) from `FriendsEnableInput.displayName`.
+- Convert R2's `String` ids with `PeerId::from_str`; reuse `p2p::PeerId` everywhere, never a second id type.
+- Start/stop `state.bridge` with the feature; subscribe to `state.signals` (a broadcast of 256; handle `RecvError::Lagged`).
+- Tests: copy `test_relay()` from `services/p2p/tests.rs` (3.7); every endpoint in tests binds `127.0.0.1` only; `MemorySecretStore` and `friends/test_support.rs` (`TempDir`, `error_key`) are available to in-crate tests. A fresh worktree's first `cargo test` takes about 5 min; check free disk space first (`CARGO_INCREMENTAL=0` and `CARGO_PROFILE_DEV_DEBUG=0` keep debug builds small).
+- Events: `friend-presence` is the only event for presence/path changes; do not send `friends-changed` for them (8.5).
+
+**R5**
+- `bridge.push(instance, LauncherToMod::Snapshot{..})` with real peer ids; the bridge aliases them, keeps the latest snapshot per launch, debounces to 250 ms and disconnects a mod whose 64-message queue overflows. R5 sanitises names and caps friends (50) and invites (20) itself (7.3); `ModPresence`/`ModGuestState` mapping per 7.3.
+- `GameSignal::ModRequest` ids are real peer ids already filtered by the bridge (7.3). The first-share confirmation is per launch, not per connection (7.4).
+- `LanOpened` (log or mod) is only a hint: always `lan_detect::verify_port` (6.1). `Spawned.online_account` = non-empty `account_id`; friend joins and hosting need it.
+- Guest side: `LocalListener` with `ListenerLimits { before_first_valid: 1, after_first_valid: 4 }`; `admit` returns the peeked bytes, which `bridge` writes into the stream first; `open` sends the open frame and maps an `error` frame to `TunnelError::Refused(code)` (6.2). Host side: write the validated buffer to the LAN socket, then `bridge` with an empty prefix (6.1). `sockowner::connects_from` and `listens` block on Linux/macOS: `spawn_blocking`.
+- Join timers: `LaunchProgress` comes only from `instance_launch` phase boundaries (8.6); the install runs before `invite_join` (10.4).
+- The crash rows of 6.5 need Appendix E, E1 (R4) first.
+
+**R6**
+- Mod id `pumpkin_friends`; dev jar `mod/build/libs/pumpkin_friends-0.1.0.jar`; `MOD_PROJECT_ID` stays `""` until the owner creates the Modrinth project (`ModState::Unavailable`). Confirm the sessionserver host (`sessionserver.mojang.com`) used in `PRIVACY.md` and the PrivacyNotice.
+
+**F4**
+- Hooks: `src/hooks/useFriends.ts` (queries and `useXxx` mutations). `useFriendEvents` handles: `friends-changed` (invalidate `friendKeys.all`), `friend-request` (invalidate requests), `friend-presence` (patch `friendKeys.list`), `friends-network` (write into `friendKeys.state`, then remove `useLiveNetwork` from `FriendsTab.tsx`), `friend-invite`/`friend-invite-revoked` (invites), `host-session`, `host-session-ended`, `join-session` (session store), `lan-changed` (`setQueryData` on `friendKeys.lan`), `friends-mod` (invalidate `friendKeys.modStatus`), `friends-mod-confirm` (dialog). Then delete `src/pages/friends/useFriendsLive.ts` (double handling meanwhile is harmless).
+- Read `useInviteRequest` in `FriendDialogs` and clear it. `friendsUi` exports `useFriendsUi` and `setFriendsEnabled`.
+- `LaunchOptions.friendJoin` is optional in TS; `usePlay` sets it. `types.ts` re-exports `friends-types.ts` with `export *`: a type of the same name added to `types.ts` collides.
+- Reuse `FriendAvatar`, `SelfAsserted`, `Fingerprint` and the `friendsModel.ts` helpers.
+
+**F5**
+- `friendsModInstall` resolves to `void`; wrap it for `useBackgroundTask` (8.4). Mock host instance `inst-survival` (10.10).
+
+**D2**
+- `mod/`: Gradle 9.7.1 pinned with `distributionSha256Sum`; `gradlew` is committed with the executable bit (100755); JUnit 6.1.3 via the junit-bom; the tests open loopback sockets only and take about 5 s.
+
+**All frontend packages:** `pnpm build` regenerates `src-tauri/icons/icon.icns` (branding sync); never commit it. A fresh worktree needs `pnpm install --frozen-lockfile` once and a placeholder `dist/index.html` before `cargo` can build the Tauri crate without `pnpm build`.
 
 ---
 
@@ -1555,7 +1789,7 @@ Parsing must accept the grouped form (with spaces or `-` inside the body) and an
 - [ ] The owner confirmed that the Microsoft/Mojang app approval covers sharing player names and UUIDs between users (G4).
 - [ ] The Modrinth API is used with the launcher User-Agent and within its rate limits.
 
-## Appendix D: Changelog (v1 → v2)
+## Appendix D: Changelog (v1 → v2, and the Wave 0/1 sync)
 
 Status values: **applied** (in v2 as described), **partly** (applied with a stated exception), **deferred** (moved to the v1.1 backlog or v2, section 15/1.4), **rejected** (not taken, with the reason). IDs: `S<n>` = security review finding n, `F<n>` = feasibility review finding n (zero-based, in review order).
 
@@ -1620,3 +1854,52 @@ Status values: **applied** (in v2 as described), **partly** (applied with a stat
 | V12 | `friendsEnabled` startup source unowned; unsafe default | applied | `ensureFriendsEnabled` via `queryClient.fetchQuery` with a 1.5 s timeout, fallback only on failure; F3 owns it; `onPlay.check.mjs` null path (10.7, 13.2, 14 F1/F3). |
 | V13 | SPEC.md ownership, missing R2→R4 edge, fixture typing | applied | SPEC.md row in the shared-file table; R2→R4 edge in the diagram; `FriendsFixtureTypes` in the TS mirror; fixture key table (8.2, 8.3, 14). |
 | V14 | Silent `delivering` for expired codes; 6.5 disabled row incomplete | applied | Expired-code hint after 7 days, retries kept to 14 days; 6.5 rows for host-disables, guest-disables and rebind/rotate (4.3, 6.5, 10.2, 10.10). |
+
+### D.3 Wave 0/1 implementation notes (2026-10-03)
+
+The ten packages of Waves 0 and 1 reported 109 deviations. IDs: `<package> D<n>` = deviation n of that package's result. Each one was decided as **(a)** reality wins, the normative text now describes the implementation (89), **(b)** the code must change, listed in Appendix E (3), or **(c)** harmless, one line below (17). Two Appendix E items (E1, E5) come from the packages' notes for the next waves, not from a deviation.
+
+**D.3.1 Write-back index (a)**
+
+| Package | Deviations | Written back in |
+|---|---|---|
+| R0a | D2, D3, D6 | 3.1 (+4.9 MiB), 3.2 (`[features]`), 12.2 (`deny.toml`), 14 R0a |
+| R0b | D2-D9, D11-D13 | 3.1 (`unstable-net-report`), 3.3 (accept loop, keep-alive, multi-relay dial), 3.4 (relay unreachable), 3.5 (`Drop`, outgoing hook, reject seen by the dialer), 3.6 (close before endpoint close), 13.1 R0b row, 14 R0b (spike defaults) |
+| F1 | D3, D4, D6 | 4.2 (TS helpers), 8.4 (`friendsModInstall` returns `void`), 8.5 (presence emits only `friend-presence`), 10.5, 10.10 |
+| R1 | D1-D15, D17 | 3.2 (map state, `RelaySelection`, `find_relay`), 3.3, 3.4 (`NetState`), 3.5, 3.6 (`CloseCode`, `CloseReason`), 3.7 (test seam, loopback binding), 4.1/8.1 (`PeerId`), 4.4 (`duplicate_survivor`), 5.1 (stream reset vs connection close, limits in friends), 6.3 (`bridge` prefix and stop, `'static` bounds, `TunnelError`), 8.7, 13.1 R1 row, 14 R1 (`conn.rs`, `peer_id.rs`, `bytes`) |
+| R2 | D1-D8 | 4.1 (`SecretStore`, malformed entry, `Identity::sign`, `renew`, `availability`), 4.2 (code API, `secretSha256`), 8.7, 9 (config default and corrupt file, `RecordStores`, outbox key), 14 R2 (`getrandom`, `test_support.rs`) |
+| R3 | D1, D3-D12 | 6.1 (ping check, owner lookup fails closed), 6.2 (progress at phase boundaries, install before join), 6.4 (raw stdout), 7.1 (loopback by construction, ignored lines), 7.3 (bridge filtering), 8.6 (address check, `online_account`, signal order), 8.7 (`spawn` with seven parameters, `start`/`stop`), 10.4 step 3, 14 R3 (`connection.rs`, `worlds/auto.rs`) |
+| M1 | D1-D11 | 7.2, 7.3 (ping timing, mod tolerance), 7.5 (env validity, backoff after reject), 11.2 (extra files, `startIfLaunched`, lang keys), 11.3 (b, c, e, f), 11.4 (writer queue), 12.3 (mod-side sanitising), 13.3.1 cases 3 and 5 |
+| D1 | D1-D9 | 12.1/12.5 (ACME on 443, healthz, rx limits only, no stored logs, daily id set, image build, IPv4 only), 14 D1 (files, PRIVACY.md section 8, open container items) |
+| F2 | D2-D11 | 10.2 (gates incl. `noSecretStore`, "Einladen" rule, order, notice rows, block confirm, `inviteRequest`, `useFriendsLive`), 10.3 (hint, `.code` class), 14 F2/F4 |
+| F3 | D1, D2, D4-D6, D8, D9 | 10.7 (`GameTab` warning), 10.8 (tab order, off state, `useLiveNetwork`, danger area), 10.9 (mount-only-while-open, operator names), 14 F3/F4 |
+
+**D.3.2 Harmless notes (c)**
+
+| ID | Note |
+|---|---|
+| R0a D1, R0b D1, F1 D1 | The worktrees started at `main`; each package fast-forwarded its own branch to `feat/friends` to get this spec. No history was rewritten. |
+| R0a D4 | The first baseline build embedded an empty `dist/` and is not comparable; the documented size delta compares two builds with the same frontend. "Unused dependencies add nothing" is reasoned (LTO), not measured. |
+| R0a D5 | The binary size was measured on Windows only; I1 re-measures (3.1). |
+| R0a D7 | Drive E: briefly filled up while three agents built into the shared target dir; one release build was re-run. Check free space before cold builds. |
+| R0b D10 | `RelayQuicConfig` is not re-exported by iroh; the QUIC port is set through `RelayConfig::from(url)` and `config.quic`, as 3.2 describes. No `iroh-relay` dependency is needed. |
+| R0b D14, D1 D10 | These packages did not edit SPEC.md; their differences are collected in IROH-NOTES.md section 10 and RELAY-OPS.md section 2 and written back here. |
+| R3 D2, F3 D10 | No conflict with IROH-NOTES (these packages do not touch iroh). |
+| F1 D2 | The mock's error texts use `mock.friends.*` keys (F1's own namespace), because `errors.friends.*` did not exist when F1 ran. They exist now; switching is optional. |
+| F1 D5 | `src-tauri/icons/icon.icns` is regenerated by `pnpm build`/`pnpm dev` (branding sync) and is never committed. |
+| R2 D9 | `RecordStores::any()` counts readable records only. A store with only unreadable entries of a newer version counts as empty; `identityLost` still triggers through `config.enabled`, which is true whenever records were created. |
+| M1 D12 | `build.gradle`: `options.encoding = 'UTF-8'`, `-Xlint:all,-classfile,-serial` (Gson's missing errorprone annotations), the test source set sees `sourceSets.client.output`, JUnit pinned at 6.1.3 through the junit-bom. |
+| M1 D13 | M1's commits carry the session's required co-author trailer instead of the one in the task text. |
+| F3 D7 | `usePlay.ts` and `useGameEvents.ts` call the now async `applyLauncherOnPlay()`/`restoreLauncherAfterPlay()` without `await`; both catch their own errors, and the window action only happens a moment later. |
+
+## Appendix E: Open code fixes
+
+Deviations (and gaps found in the packages' notes) where the code has to change. The normative text above still describes the required behaviour; it does **not** describe these items as done. The owner package resolves each item and removes its row in the same PR.
+
+| # | Owner | Source | Fix |
+|---|---|---|---|
+| E1 | R4 (takes over `p2p/endpoint.rs` for this field) | R1 note N3; needed by 13.1 R4 (presence crash) and 6.5 / 13.1 R5 (crash rows) | The idle timeout is the constant `IDLE_TIMEOUT_MS = 40_000` in `p2p/endpoint.rs`, so the "short idle timeout" crash tests have no seam. Add `pub idle_timeout: Duration` to `NetConfig` (used by `transport_config` instead of the constant; the keep-alive interval becomes `min(15 s, idle_timeout / 3)` so that a short test value cannot idle out an alive connection) and `pub idle_timeout: Duration` to `NetOptions` (`production()` = 40 s; no setting). R4 copies it into every `NetConfig`. Update 3.3, 3.7 and 8.7 through the change rule in the same PR. |
+| E2 | R4 (takes over `p2p/tests.rs` for this test) | R1 D16 | The pre-handshake cap of 8 (3.5, 12.4) is implemented but untested. Add a test that keeps 8 handshakes in flight (for example a test `Gate` whose `admit` waits on a `std::sync::Barrier`, on a multi-thread runtime) and asserts that a 9th dialer gets no answer (its dial runs into `DIAL_TIMEOUT` or a shorter test timeout) while the first 8 are admitted after the barrier is released. |
+| E3 | F4 (takes over `src/pages/friends/FriendsGate.tsx`, `src/pages/Friends.tsx`) | F2 D1 | "Freunde aktivieren" on the Friends page is a link to `/settings?tab=freunde`, where the user must flip the switch again. Open the opt-in on the page instead: `{optingIn && <FriendsOptInDialog onClose={() => setOptingIn(false)} />}` (10.2, 10.9). |
+| E4 | F4 (takes over `src/pages/settings/FriendsTab.tsx`) | F3 D3 | The "Immer über Relay" confirm checks only `useHostSessions`, so an active join is ended by the rebind without a warning. Extend the check to an active join (F4's join-session store) and name the join in the confirm text (10.8). |
+| E5 | F4 (same file) | D1 note N4 | Settings shows only the 16-char fingerprint. Add an action next to "Mein Fingerabdruck" that copies the full 64-char peer id (`FriendsState.me.peerId`), with keys in `friendsSettings` (de + en). An abuse report to the relay needs it (10.8, 12.5, `RELAY-OPS.md` section 13). |
