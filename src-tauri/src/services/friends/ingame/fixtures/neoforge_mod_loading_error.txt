@@ -1,0 +1,7 @@
+[12:00:00] [main/INFO] [net.neoforged.fml.loading.FMLLoader/]: Loading NeoForge 21.1.172 for Minecraft 1.21.1
+[12:00:03] [main/ERROR] [net.neoforged.fml.loading.ModSorter/LOADING]: Missing or unsupported mandatory dependencies:
+	Mod ID: 'neoforge', Requested by: 'pumpkin_friends', Expected range: '[21.2,)', Actual version: '21.1.172'
+[12:00:03] [main/ERROR] [net.neoforged.fml.loading.FMLLoader/LOADING]: Error during mod loading
+net.neoforged.fml.ModLoadingException: Pumpkin Friends (pumpkin_friends) has failed to load correctly
+	at net.neoforged.fml.ModLoader.waitForTransition(ModLoader.java:197)
+	at net.neoforged.fml.ModLoader.dispatchParallelEvent(ModLoader.java:174)

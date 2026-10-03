@@ -67,11 +67,11 @@ mod tests {
 
     // Die Logs unter fixtures/ sind nach den Meldungsformaten der Loader nachgebaut (Fabric Loader, Mixin, FML,
     // JVM), nicht mitgeschnitten. Der Rauchtest (Paket S2) ersetzt sie durch echte Mitschnitte der Zellen.
-    const FABRIC_INCOMPATIBLE: &str = include_str!("fixtures/fabric_incompatible_mod_set.log");
-    const MIXIN_FAILED: &str = include_str!("fixtures/mixin_apply_failed.log");
-    const NEOFORGE_LOADING: &str = include_str!("fixtures/neoforge_mod_loading_error.log");
-    const CLASS_VERSION: &str = include_str!("fixtures/unsupported_class_version.log");
-    const UNRELATED_CRASH: &str = include_str!("fixtures/unrelated_crash.log");
+    const FABRIC_INCOMPATIBLE: &str = include_str!("fixtures/fabric_incompatible_mod_set.txt");
+    const MIXIN_FAILED: &str = include_str!("fixtures/mixin_apply_failed.txt");
+    const NEOFORGE_LOADING: &str = include_str!("fixtures/neoforge_mod_loading_error.txt");
+    const CLASS_VERSION: &str = include_str!("fixtures/unsupported_class_version.txt");
+    const UNRELATED_CRASH: &str = include_str!("fixtures/unrelated_crash.txt");
 
     const QUICK: Duration = Duration::from_secs(12);
 

@@ -1,0 +1,52 @@
+[12:00:00] [main/INFO] (FabricLoader) Loading 4 mods:
+	- fabric-api 0.102.0+1.21.1
+	- fabricloader 0.16.14
+	- pumpkin_friends 2.1.0
+	- othermod 1.4.2
+[12:00:08] [Render thread/INFO] (pumpkin_friends) Verbunden mit dem Launcher
+[12:00:12] [Render thread/ERROR] (mixin) Mixin apply for mod othermod failed othermod.mixins.json:GameRendererMixin from mod othermod -> net.minecraft.client.renderer.GameRenderer: org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException @Inject annotation on render could not find any targets
+	at net.minecraft.client.Minecraft.method1(Minecraft.java:1001)
+	at net.minecraft.client.Minecraft.method2(Minecraft.java:1002)
+	at net.minecraft.client.Minecraft.method3(Minecraft.java:1003)
+	at net.minecraft.client.Minecraft.method4(Minecraft.java:1004)
+	at net.minecraft.client.Minecraft.method5(Minecraft.java:1005)
+	at net.minecraft.client.Minecraft.method6(Minecraft.java:1006)
+	at net.minecraft.client.Minecraft.method7(Minecraft.java:1007)
+	at net.minecraft.client.Minecraft.method8(Minecraft.java:1008)
+	at net.minecraft.client.Minecraft.method9(Minecraft.java:1009)
+	at net.minecraft.client.Minecraft.method10(Minecraft.java:1010)
+	at net.minecraft.client.Minecraft.method11(Minecraft.java:1011)
+	at net.minecraft.client.Minecraft.method12(Minecraft.java:1012)
+	at net.minecraft.client.Minecraft.method13(Minecraft.java:1013)
+	at net.minecraft.client.Minecraft.method14(Minecraft.java:1014)
+	at net.minecraft.client.Minecraft.method15(Minecraft.java:1015)
+	at net.minecraft.client.Minecraft.method16(Minecraft.java:1016)
+	at net.minecraft.client.Minecraft.method17(Minecraft.java:1017)
+	at net.minecraft.client.Minecraft.method18(Minecraft.java:1018)
+	at net.minecraft.client.Minecraft.method19(Minecraft.java:1019)
+	at net.minecraft.client.Minecraft.method20(Minecraft.java:1020)
+	at net.minecraft.client.Minecraft.method21(Minecraft.java:1021)
+	at net.minecraft.client.Minecraft.method22(Minecraft.java:1022)
+	at net.minecraft.client.Minecraft.method23(Minecraft.java:1023)
+	at net.minecraft.client.Minecraft.method24(Minecraft.java:1024)
+	at net.minecraft.client.Minecraft.method25(Minecraft.java:1025)
+	at net.minecraft.client.Minecraft.method26(Minecraft.java:1026)
+	at net.minecraft.client.Minecraft.method27(Minecraft.java:1027)
+	at net.minecraft.client.Minecraft.method28(Minecraft.java:1028)
+	at net.minecraft.client.Minecraft.method29(Minecraft.java:1029)
+	at net.minecraft.client.Minecraft.method30(Minecraft.java:1030)
+	at net.minecraft.client.Minecraft.method31(Minecraft.java:1031)
+	at net.minecraft.client.Minecraft.method32(Minecraft.java:1032)
+	at net.minecraft.client.Minecraft.method33(Minecraft.java:1033)
+	at net.minecraft.client.Minecraft.method34(Minecraft.java:1034)
+	at net.minecraft.client.Minecraft.method35(Minecraft.java:1035)
+[12:00:12] [Render thread/FATAL] (Minecraft) Unreported exception thrown!
+java.lang.NullPointerException: Cannot invoke "Object.toString()" because "value" is null
+	at othermod.Config.read(Config.java:88)
+---- Minecraft Crash Report ----
+Description: Unexpected error
+-- System Details --
+	Fabric Mods:
+		fabric-api: Fabric API 0.102.0+1.21.1
+		pumpkin_friends: Pumpkin Friends 2.1.0
+		othermod: Other Mod 1.4.2
