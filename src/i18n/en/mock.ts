@@ -24,6 +24,27 @@ export const mock: typeof deMock = {
   "mock.skin.wrongSize": "A skin must be 64×64 or 64×32 pixels, this image is {width}×{height}.",
   "mock.skin.notAPng": "The file is not a PNG image.",
 
+  // Freunde (lib/mock-friends.ts)
+  "mock.friends.notFound.friend": "Friend “{id}” was not found",
+  "mock.friends.notFound.request": "Request “{id}” was not found",
+  "mock.friends.notFound.code": "Code “{id}” was not found",
+  "mock.friends.notFound.invite": "Invite “{id}” no longer exists",
+  "mock.friends.notFound.session": "Shared world “{id}” no longer exists",
+  "mock.friends.unavailable": "This system has no keyring; friends are not available here",
+  "mock.friends.identityLost": "Your friends identity is missing from the keyring; reset it in Settings",
+  "mock.friends.disabled": "Friends are not enabled",
+  "mock.friends.displayNameInvalid": "Display name: {min} to {max} characters",
+  "mock.friends.msAccountRequired": "You need a Microsoft account for this",
+  "mock.friends.tooManyCodes": "At most {max} open codes; revoke one first",
+  "mock.friends.codeInvalid": "This friend code is not valid",
+  "mock.friends.friendLimit": "At most {max} friends",
+  "mock.friends.sessionActive": "A world is already being shared",
+  "mock.friends.noSession": "No world is being shared right now",
+  "mock.friends.gameNotRunning": "Start the instance and open the world first",
+  "mock.friends.lanPortUnknown": "The LAN port is not known yet; open the world to LAN in the game or enter the port",
+  "mock.friends.portInvalid": "Port: {min} to {max}",
+  "mock.friends.guestLimit": "At most {max} friends at the same time",
+
   // Browser-Fassung von lib/api.ts
   "hooks.api.modpacksNeedApp": "Modrinth modpacks require the Tauri app. No modpacks are installed in the browser.",
   "hooks.api.onlyInApp": "{what} only works in the Pumpkin Launcher app.",

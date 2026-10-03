@@ -7,6 +7,7 @@ import { createContentMock } from "./mock-content";
 import { createContentFilesMock } from "./mock-content-files";
 import { crowdedInstance, initialInstances } from "./mock-data";
 import { pickPaths, pickSavePath } from "./mock-files";
+import { createFriendsMock } from "./mock-friends";
 import { createGameMock } from "./mock-game";
 import { createInstanceMock } from "./mock-instances";
 import { createLifecycleMock } from "./mock-lifecycle";
@@ -59,21 +60,31 @@ export function createMockBackend(): Backend {
   const { emit, on } = createEventBus();
   const context = { db: createDb(), emit };
   const worlds = createWorldMock(context);
+  const game = createGameMock(context);
+  const skins = createSkinMock();
+  // Nach dem Spiel-Mock: Er legt `pumpkinMock` an, die Freunde-Hooks kommen dazu.
+  const friends = createFriendsMock(context, skins);
 
   return {
     capabilities: allCapabilities(false),
     ...eventSubscriptions(on),
     ...createInstanceMock(context),
-    ...createGameMock(context),
+    ...game,
     ...createAccountMock(context),
     ...createContentMock(context),
     ...createContentFilesMock(context),
     ...createPackMock(context),
     ...createLifecycleMock(context, worlds),
-    ...createSkinMock(),
+    ...skins,
     ...worlds,
     ...createScreenshotMock(),
     ...createSettingsMock(context),
+    ...friends.api,
+    async launchInstance(instanceId, options) {
+      const pid = await game.launchInstance(instanceId, options);
+      friends.joinSpawned(options.friendJoin);
+      return pid;
+    },
 
     checkLocalFiles: onlyInApp("hooks.api.addLocalFiles"),
     addLocalFiles: onlyInApp("hooks.api.addLocalFiles"),
