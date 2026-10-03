@@ -43,8 +43,25 @@
     </ul>
     <p>Der Launcher prüft Mods, Modpacks und Technic-Packs nicht auf Schadsoftware. Er prüft Größen und Prüfsummen, wo der Anbieter sie veröffentlicht.</p>
 
-    <h2>4. Deine Rechte</h2>
-    <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch. Außerdem kannst du dich bei einer Datenschutz-Aufsichtsbehörde beschweren. Wende dich für Anfragen an die E-Mail-Adresse oben.</p>
+    <h2>4. Freunde und gemeinsames Spielen (optional)</h2>
+    <p>Diese Funktion ist standardmäßig aus. Sie wird erst aktiv, wenn du sie in den Einstellungen einschaltest und mit einem Microsoft-Konto angemeldet bist. Solange sie aus ist, verbindet sich der Launcher dafür mit nichts und öffnet keinen Port.</p>
+    <ul>
+      <li><strong>Verbindung zwischen Launchern.</strong> Freunde und geteilte Welten sind über eine verschlüsselte Peer-to-Peer-Verbindung verbunden. Die Inhalte kann niemand mitlesen, auch wir und die Relay-Server nicht. Bei einer direkten Verbindung sieht dein Gegenüber deine IP-Adresse, auch Adressen deines lokalen Netzwerks. Mit der Einstellung „Immer über Relay“ läuft alles über einen Relay-Server, und dein Gegenüber sieht deine IP-Adresse nicht. Eine Verbindung bekommt nur, wer deine Freundschaftsanfrage oder Einladung angenommen hat.</li>
+      <li><strong>Relay-Server von n0.</strong> Zum Verbindungsaufbau und als Ausweichweg nutzt der Launcher in dieser Version die öffentlichen Relay-Server der Number 0, Inc. (use1-1.relay.n0.iroh.link, usw1-1.relay.n0.iroh.link, euc1-1.relay.n0.iroh.link und aps1-1.relay.n0.iroh.link). n0 sieht dabei deine IP-Adresse, die technische Kennung deines Launchers und die Kennung der Gegenseite, aber keine Inhalte. Sobald wir einen eigenen Relay betreiben, steht das hier.</li>
+      <li><strong>Freundescodes.</strong> Einen Code tauscht ihr selbst aus, zum Beispiel per Chat. Dafür gibt es keinen Server von uns. Ein Code gilt sieben Tage und nur einmal.</li>
+      <li><strong>Suche per Minecraft-Namen.</strong> Dafür betreiben wir einen kleinen Dienst auf Cloudflare Workers mit der Datenbank in der EU (pumpkin-friends-directory.jonas-laux.workers.dev). Der Launcher meldet sich dort an, wenn du eine Anfrage per Namen sendest oder „Per Minecraft-Namen auffindbar“ einschaltest (standardmäßig aus). Dabei bestätigt Mojang dem Dienst, dass das Konto dir gehört, auf dem Weg, auf dem auch ein Online-Server einen Spieler prüft (sessionserver.mojang.com). Namen schlägt der Launcher bei Mojang nach (api.minecraftservices.com).
+        <ul>
+          <li>Auffindbar (nur wenn du es einschaltest): deine Minecraft-UUID mit dem Zeitpunkt der ersten und der letzten Anmeldung. Das bleibt, bis du es ausschaltest, die Funktion abschaltest oder 30 Tage keine Auffrischung kam.</li>
+          <li>Anfragen an dich: UUID, Minecraft-Name, Anzeigename und technische Kennung des Absenders sowie ein Einmalcode für die Annahme. Das bleibt, bis du antwortest, die Anfrage zurückgezogen oder der Absender blockiert wird, höchstens 14 Tage.</li>
+          <li>Blockierliste: welche UUIDs du gesperrt hast, bis du die Sperre aufhebst oder die Funktion abschaltest.</li>
+          <li>Sendeprotokoll (wer wann an wen geschrieben hat) zur Missbrauchsabwehr: 7 Tage, auch für Absender, die selbst nicht auffindbar sind.</li>
+        </ul>
+        Nicht gespeichert werden die Namen auffindbarer Personen (sie werden bei Mojang nachgeschlagen), Freundeslisten, Online-Status und ob eine Anfrage angenommen wurde. Wer dir per Namen schreibt, erfährt deine technische Kennung und, wenn „Immer über Relay“ aus ist, deine IP-Adresse erst, nachdem du angenommen hast. Cloudflare verarbeitet Anfragen als Auftragsverarbeiter technisch, unter anderem die IP-Adresse zur Begrenzung der Anfragen, und kann gelöschte Datenbankeinträge bis zu 7 Tage lang wiederherstellen; danach sind sie endgültig weg. Rechtsgrundlagen: Einwilligung für die Auffindbarkeit (Art. 6 Abs. 1 lit. a DSGVO, jederzeit mit einem Schalter widerrufbar, das löscht sofort), Art. 6 Abs. 1 lit. b DSGVO für die Anfrage, die du selbst sendest, und Art. 6 Abs. 1 lit. f DSGVO für das Sendeprotokoll (Schutz vor Missbrauch).</li>
+      <li><strong>Mod im Spiel.</strong> Die optionale Mod „Pumpkin Friends“ spricht nur mit dem Launcher auf deinem eigenen Rechner. Sie baut keine Verbindung ins Internet auf.</li>
+    </ul>
+
+    <h2>5. Deine Rechte</h2>
+    <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch. Außerdem kannst du dich bei einer Datenschutz-Aufsichtsbehörde beschweren. Wende dich für Anfragen an die E-Mail-Adresse oben. Die Daten im Freunde-Verzeichnis sind an deine Minecraft-UUID gebunden: Du löschst sie selbst, indem du „Per Minecraft-Namen auffindbar“ oder die Freunde-Funktion ausschaltest; für alles andere genügt eine E-Mail mit deiner UUID.</p>
 
     <p class="legal-date">Stand: Oktober 2026</p>
   </main>

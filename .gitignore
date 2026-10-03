@@ -37,3 +37,6 @@ dist-ssr
 mod/.jdk/
 mod/build/
 mod/.gradle/
+
+# Worktrees der Agenten und lokale Claude-Daten
+.claude/worktrees/

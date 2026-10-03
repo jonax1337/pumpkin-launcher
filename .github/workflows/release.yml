@@ -108,6 +108,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Öffentliche Adresse des Freunde-Verzeichnisses (siehe directory/README.md); kein Geheimnis. Forks lassen sie leer.
+          PUMPKIN_FRIENDS_DIRECTORY: https://pumpkin-friends-directory.jonas-laux.workers.dev
         with:
           releaseId: ${{ needs.prepare.outputs.release_id }}
           # Der Entwurf hat den Text schon; tauri-action schreibt ihn als `notes` in latest.json, das der Updater anzeigt.
