@@ -4,9 +4,53 @@ pluginManagement {
 			name = 'Fabric'
 			url = 'https://maven.fabricmc.net/'
 		}
+		maven {
+			name = 'KikuGie Releases'
+			url = 'https://maven.kikugie.dev/releases/'
+		}
 		mavenCentral()
 		gradlePluginPortal()
 	}
 }
 
+plugins {
+	id('dev.kikugie.stonecutter').version '0.9.8'
+}
+
 rootProject.name = 'pumpkin_friends'
+
+include 'core'
+
+// nodes.txt ist die einzige Knotenliste. Mit -Pnode=<id>[,<id>] konfiguriert Gradle nur diese Knoten:
+// jede Plattform-Toolchain läuft nur auf dem JDK ihres Knotens, die anderen Plugins werden dann nicht geladen.
+def nodeTable = new File(settingsDir, 'nodes.txt').readLines('UTF-8')
+	.collect { it.replaceFirst(/#.*/, '').trim() }
+	.findAll { !it.isEmpty() }
+	.collect { line ->
+		def (id, loader, minecraft, loaderMin, java, strategy) = line.split(/\s+/) as List
+		[id: id, loader: loader, minecraft: minecraft.split(',') as List, loaderMin: loaderMin,
+		 javaMin: java as int, strategy: strategy]
+	}
+
+def requestedNodeIds = (startParameter.projectProperties['node'] ?: '').split(',').findAll { !it.isEmpty() }
+def unknownIds = requestedNodeIds - nodeTable*.id
+if (!unknownIds.isEmpty()) {
+	throw new GradleException("Unbekannte Knoten in -Pnode: ${unknownIds}. Bekannt: ${nodeTable*.id}")
+}
+def selectedNodes = requestedNodeIds.isEmpty() ? nodeTable : nodeTable.findAll { it.id in requestedNodeIds }
+
+gradle.ext.nodeTable = nodeTable
+gradle.ext.selectedNodes = selectedNodes
+
+stonecutter {
+	kotlinController = false
+
+	create(getRootProject()) {
+		// Knoten-Id und Minecraft-Version sind getrennt: "1.21.1-neoforge" würde als SemVer-Prerelease von 1.21.1
+		// gelesen und läge unter 1.21.1 (README, Abschnitt Knoten-Ids).
+		selectedNodes.each { node ->
+			versions([(node.id): node.minecraft.last()])
+		}
+		mapBuilds { branch, node -> 'build-' + node.project.substring(node.project.lastIndexOf('-') + 1) + '.gradle' }
+	}
+}

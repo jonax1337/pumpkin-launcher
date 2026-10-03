@@ -1,0 +1,29 @@
+plugins {
+	id 'net.neoforged.moddev.legacyforge' version "${moddev_version}"
+}
+
+apply from: rootProject.file('gradle/node.gradle')
+
+// Tracer-Knoten: nur die Einstiegsklasse. compat/ und ui/ kommen mit den Paketen, die sie für diesen Knoten bauen.
+sourceSets.main.java.exclude('dev/laux/pumpkin/friends/compat/**', 'dev/laux/pumpkin/friends/ui/**',
+	'dev/laux/pumpkin/friends/platform/fabric/**', 'dev/laux/pumpkin/friends/platform/neoforge/**')
+
+legacyForge {
+	version = project.forge_version
+
+	runs {
+		client {
+			client()
+		}
+	}
+
+	mods {
+		"pumpkin_friends" {
+			sourceSet sourceSets.main
+			sourceSet project(':core').sourceSets.main
+		}
+	}
+}
+
+// reobfJar bildet das Jar auf die Namen ab, die Forge in der Produktion kennt; erst das ist das Jar des Knotens.
+registerModIndexEntry(tasks.named('reobfJar').flatMap { it.archiveFile })

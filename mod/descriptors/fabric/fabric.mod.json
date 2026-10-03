@@ -15,13 +15,13 @@
 	"environment": "client",
 	"entrypoints": {
 		"client": [
-			"dev.laux.pumpkin.friends.FriendsClient"
+			"dev.laux.pumpkin.friends.platform.fabric.FriendsClient"
 		]
 	},
 	"depends": {
-		"fabricloader": ">=0.19.5",
-		"minecraft": "~26.3",
-		"java": ">=25",
+		"fabricloader": ">=${loaderMin}",
+		"minecraft": [${minecraftList}],
+		"java": ">=${javaMin}",
 		"fabric-api": "*"
 	}
 }
