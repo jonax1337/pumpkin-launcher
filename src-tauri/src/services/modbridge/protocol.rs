@@ -4,6 +4,9 @@
 use serde::{Deserialize, Serialize};
 
 pub const PROTOCOL_VERSION: u32 = 1;
+/// Längste JSON-Zeile samt Zeilenende, in beide Richtungen (SPEC 7.1). Die Mod (`Protocol.MAX_LINE_BYTES`) trennt bei
+/// einer längeren Zeile die Verbindung.
+pub const MAX_LINE_BYTES: usize = 16 * 1024;
 
 /// Was die Mod an den Launcher schickt. Die Freunde-IDs von `Share` und `Kick` sind die Aliasse einer Verbindung.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]

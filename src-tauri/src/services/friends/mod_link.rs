@@ -2,6 +2,7 @@
 //! Mod, ihre Anfragen als nicht vertrauenswürdig behandelt. Das erste Teilen je Spielstart braucht die Zustimmung im
 //! Launcher; Beenden und Rauswerfen verringern nur, was geteilt ist, und gehen ohne.
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
@@ -19,7 +20,7 @@ use crate::models::new_id;
 use crate::services::gamesignal::ModRequest;
 use crate::services::lock;
 use crate::services::modbridge::protocol::{
-    LauncherToMod, ModErrorCode, ModFriend, ModNotify, ModPresence, ModSession,
+    LauncherToMod, ModErrorCode, ModFriend, ModNotify, ModPresence, ModSession, MAX_LINE_BYTES,
 };
 use crate::services::p2p::PeerId;
 
@@ -38,6 +39,8 @@ pub(super) struct ModLink {
     pushed: Mutex<HashMap<String, LauncherToMod>>,
     /// Präsenz der Freunde beim letzten Abgleich; `None` vor dem ersten.
     presence: Mutex<Option<HashMap<String, Presence>>>,
+    /// Ein gekürzter Stand wird nur einmal gemeldet, nicht bei jedem Abgleich.
+    trim_reported: AtomicBool,
 }
 
 /// Was ein Spielstart (Token-Lebensdauer, `Spawned` bis `Exited`) schon darf.
@@ -295,14 +298,38 @@ fn push_if_changed(shared: &Shared, instance_id: &str, snapshot: LauncherToMod) 
 }
 
 /// Der Stand für die Mod mit echten Peer-IDs (die Brücke ersetzt sie durch Aliasse); alle Namen sind bei ihrer
-/// Herkunft schon bereinigt (SPEC 12.3), höchstens 50 Freunde und 20 Einladungen.
+/// Herkunft schon bereinigt (SPEC 12.3), höchstens 50 Freunde und 20 Einladungen und nie länger als eine Zeile.
 fn snapshot(shared: &Shared, instance_id: &str, friends: &[Friend]) -> LauncherToMod {
     let confirmed = friends.iter().filter(|friend| friend.confirmed && !friend.removed_by_peer);
-    LauncherToMod::Snapshot {
+    let (snapshot, dropped) = fit_into_line(LauncherToMod::Snapshot {
         friends: confirmed.take(MAX_MOD_FRIENDS).map(mod_friend).collect(),
         session: shared.hosting.guests_for_mod(instance_id).map(|guests| ModSession { guests }),
         invites: shared.invites.for_mod(),
+    });
+    if dropped > 0 && !shared.mods.trim_reported.swap(true, Ordering::Relaxed) {
+        tracing::warn!(dropped, "Stand für die Mod gekürzt, er passte nicht in eine Zeile");
     }
+    snapshot
+}
+
+/// Lässt am Ende Freunde, dann Einladungen weg, bis der Stand in eine Zeile des Mod-Protokolls passt; die Mod trennte
+/// sonst die Verbindung und bekäme beim Wiederverbinden denselben Stand. Gemessen mit den echten Peer-IDs, die länger
+/// sind als die Aliasse auf der Leitung. Liefert auch die Zahl der weggelassenen Einträge.
+fn fit_into_line(mut snapshot: LauncherToMod) -> (LauncherToMod, usize) {
+    let mut dropped = 0;
+    while line_bytes(&snapshot) > MAX_LINE_BYTES {
+        let LauncherToMod::Snapshot { friends, invites, .. } = &mut snapshot else { break };
+        if friends.pop().is_none() && invites.pop().is_none() {
+            break;
+        }
+        dropped += 1;
+    }
+    (snapshot, dropped)
+}
+
+/// Länge der Nachricht als JSON-Zeile samt Zeilenende.
+fn line_bytes(message: &LauncherToMod) -> usize {
+    serde_json::to_vec(message).map_or(usize::MAX, |json| json.len() + 1)
 }
 
 fn mod_friend(friend: &Friend) -> ModFriend {
@@ -318,6 +345,7 @@ fn mod_friend(friend: &Friend) -> ModFriend {
 mod tests {
     use super::*;
     use crate::services::friends::test_support::error_key;
+    use crate::services::modbridge::protocol::ModInvite;
 
     #[tokio::test(start_paused = true)]
     async fn no_answer_within_two_minutes_counts_as_denied() {
@@ -416,6 +444,45 @@ mod tests {
         let announced: Vec<&str> = link.came_online(&next).into_iter().map(|friend| friend.id.as_str()).collect();
 
         assert_eq!(announced, ["b", "c"]);
+    }
+
+    /// Ein Freund mit 64-stelliger ID und dem längsten Namen aus Zeichen mit vier UTF-8-Bytes.
+    fn widest_friend(index: usize) -> ModFriend {
+        ModFriend {
+            id: format!("{index:064x}"),
+            name: "\u{1F383}".repeat(32),
+            mc_uuid: Some("0".repeat(32)),
+            presence: ModPresence::Playing,
+        }
+    }
+
+    fn widest_invite(index: usize) -> ModInvite {
+        ModInvite { id: format!("{index:036}"), from_name: "\u{1F383}".repeat(32), title: "\u{1F383}".repeat(64) }
+    }
+
+    #[test]
+    fn a_snapshot_at_the_count_caps_still_fits_into_one_line() {
+        let full = LauncherToMod::Snapshot {
+            friends: (0..MAX_MOD_FRIENDS).map(widest_friend).collect(),
+            session: None,
+            invites: (0..20).map(widest_invite).collect(),
+        };
+        assert!(line_bytes(&full) > MAX_LINE_BYTES, "the caps alone allow oversized lines");
+
+        let (fitted, dropped) = fit_into_line(full);
+
+        assert!(line_bytes(&fitted) <= MAX_LINE_BYTES);
+        let LauncherToMod::Snapshot { friends, invites, .. } = fitted else { panic!("{fitted:?}") };
+        assert_eq!(friends.len() + invites.len() + dropped, MAX_MOD_FRIENDS + 20);
+        assert_eq!(friends[0], widest_friend(0), "the head of the list stays");
+        assert_eq!(invites.len(), 20, "friends go first");
+    }
+
+    #[test]
+    fn a_snapshot_that_fits_stays_whole() {
+        let small = LauncherToMod::Snapshot { friends: vec![widest_friend(1)], session: None, invites: Vec::new() };
+
+        assert_eq!(fit_into_line(small.clone()), (small, 0));
     }
 
     #[test]
