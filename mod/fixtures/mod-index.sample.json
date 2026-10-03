@@ -1,0 +1,38 @@
+{
+  "modVersion": "2.1.0",
+  "nodes": [
+    {
+      "id": "1.21.1-fabric",
+      "loader": "fabric",
+      "loaderMin": "0.16.0",
+      "minecraft": ["1.21", "1.21.1"],
+      "javaMin": 21,
+      "strategy": "fabricAddMods",
+      "file": "pumpkin_friends-2.1.0+1.21.1-fabric.jar",
+      "sha256": "5426a63ca01cc6329cb86c12ccbfcc13642bdf39bdb1bf1cfc36d326b886142f",
+      "verified": { "smoke": "2026-10-03", "owner": null }
+    },
+    {
+      "id": "1.21.1-neoforge",
+      "loader": "neoforge",
+      "loaderMin": "21.1.0",
+      "minecraft": ["1.21", "1.21.1"],
+      "javaMin": 21,
+      "strategy": "fmlMavenRoot",
+      "file": "pumpkin_friends-2.1.0+1.21.1-neoforge.jar",
+      "sha256": "7c5c836b99f5d8f355a68b8dedb90b8a108a86c4ccda5f92c16a05518ca32710",
+      "verified": { "smoke": "2026-10-03", "owner": "2026-10-05" }
+    },
+    {
+      "id": "1.20.1-forge",
+      "loader": "forge",
+      "loaderMin": "47.1.0",
+      "minecraft": ["1.20", "1.20.1"],
+      "javaMin": 17,
+      "strategy": "fmlMavenRoot",
+      "file": "pumpkin_friends-2.1.0+1.20.1-forge.jar",
+      "sha256": "206800dc022016162f5d1be5479fd874aeb2fadb3930eb42f3fde801db7a32cc",
+      "verified": null
+    }
+  ]
+}
