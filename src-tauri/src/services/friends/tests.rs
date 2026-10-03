@@ -15,7 +15,7 @@ use super::code;
 use super::config::{friends_dir, FriendsConfig};
 use super::contract::{
     Availability, Friend, FriendNotice, FriendRequest, FriendsEnableInput, FriendsSettings, InstanceSummary,
-    NetworkStatus, Presence, RequestDirection, RequestState, RevokeReason, MAX_FRIENDS,
+    NetworkStatus, Presence, RequestDirection, RequestRefusal, RequestState, RevokeReason, MAX_FRIENDS,
 };
 use super::control::{open_control, ControlMessage, OpenFrame, SessionControl, WireInvite, WireProfile, PEER_ALPN};
 use super::events::{EventSink, FriendsEvent};
@@ -969,4 +969,22 @@ async fn a_peer_replacing_its_connection_too_often_keeps_the_old_one() {
     }
 
     assert_eq!(outcomes, ["new", "replaced", "replaced", "replaced", "replaced", "replaced", "tooFrequent"]);
+}
+
+#[tokio::test]
+async fn a_refused_request_tells_the_ui_why_it_disappeared() {
+    let (relay, _server) = test_relay().await;
+    let (a, b) = two_friends(&relay).await;
+    let code = a.friends.code_create().await.unwrap().code.unwrap();
+
+    let request = b.friends.add(&code).await.unwrap();
+
+    let refused = || {
+        b.events.any(|event| {
+            matches!(event, FriendsEvent::RequestRefused(refused)
+                if refused.request.id == request.id && refused.reason == RequestRefusal::AlreadyFriends)
+        })
+    };
+    until_true("friend-request-refused", refused).await;
+    assert!(b.requests().await.is_empty());
 }

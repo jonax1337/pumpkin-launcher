@@ -8,7 +8,8 @@ use data_encoding::HEXLOWER;
 
 use super::code;
 use super::contract::{
-    FriendRequest, FriendRequestEvent, RequestDirection, RequestState, MAX_FRIENDS, REQUEST_TTL_SECS,
+    FriendRequest, FriendRequestEvent, FriendRequestRefusedEvent, RequestDirection, RequestRefusal, RequestState,
+    MAX_FRIENDS, REQUEST_TTL_SECS,
 };
 use super::control::WireProfile;
 use super::events::FriendsEvent;
@@ -142,14 +143,21 @@ pub(super) async fn deliver(core: &Arc<Core>, runtime: &Runtime, request_id: &st
             mark_received(core, request_id, &peer, profile);
             true
         }
-        Delivery::Refused(HelloRefusal::Full) => false,
-        Delivery::Refused(refusal) => {
-            tracing::info!(?refusal, "Freundschaftsanfrage abgelehnt, wird verworfen");
-            remove_and_announce(core, request_id);
-            true
-        }
-        Delivery::Failed => false,
+        Delivery::Refused(HelloRefusal::Full) | Delivery::Failed => false,
+        Delivery::Refused(HelloRefusal::CodeUsed) => drop_refused(core, request, RequestRefusal::CodeUsed),
+        Delivery::Refused(HelloRefusal::AlreadyFriends) => drop_refused(core, request, RequestRefusal::AlreadyFriends),
+        Delivery::Refused(HelloRefusal::Unsupported) => drop_refused(core, request, RequestRefusal::Unsupported),
     }
+}
+
+/// Eine endgültig abgelehnte Anfrage verschwindet; die Oberfläche erfährt den Grund (`friend-request-refused`).
+fn drop_refused(core: &Core, request: RequestRecord, reason: RequestRefusal) -> bool {
+    tracing::info!(?reason, "Freundschaftsanfrage abgelehnt, wird verworfen");
+    if core.stores.requests.remove(&request.id).is_ok() {
+        core.emit(FriendsEvent::Changed);
+        core.emit(FriendsEvent::RequestRefused(FriendRequestRefusedEvent { request: request_view(request), reason }));
+    }
+    true
 }
 
 /// Eine Anfrage mit richtigem Geheimnis am Hello-Endpunkt (SPEC 4.3): wird als eingehende Anfrage gespeichert, eine
@@ -328,12 +336,6 @@ fn mark_received(core: &Core, request_id: &str, peer: &PeerId, profile: WireProf
         request.secret = None;
     });
     if marked.is_ok() {
-        core.emit(FriendsEvent::Changed);
-    }
-}
-
-fn remove_and_announce(core: &Core, request_id: &str) {
-    if core.stores.requests.remove(request_id).is_ok() {
         core.emit(FriendsEvent::Changed);
     }
 }
