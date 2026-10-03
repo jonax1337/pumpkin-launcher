@@ -77,12 +77,12 @@ impl WorkerApi {
 
 impl DirectoryApi for WorkerApi {
     fn challenge<'a>(&'a self, peer_id: &'a str) -> BoxFuture<'a, Result<Challenge, DirectoryError>> {
-        let request = self.request(Method::POST, "/v1/auth/challenge", None).json(&json!({ "peerId": peer_id }));
+        let request = self.request(Method::POST, "/v2/auth/challenge", None).json(&json!({ "peerId": peer_id }));
         Self::finish_json(request).boxed()
     }
 
     fn session<'a>(&'a self, request: &'a SessionRequest) -> BoxFuture<'a, Result<DirectorySession, DirectoryError>> {
-        Self::finish_json(self.request(Method::POST, "/v1/auth/session", None).json(request)).boxed()
+        Self::finish_json(self.request(Method::POST, "/v2/auth/session", None).json(request)).boxed()
     }
 
     fn register<'a>(&'a self, token: &'a str) -> BoxFuture<'a, Result<(), DirectoryError>> {
@@ -157,13 +157,13 @@ fn map_error(status: u16, body: &[u8], retry_after: Option<&str>) -> DirectoryEr
     let code = serde_json::from_slice::<ErrorBody>(body).ok().map(|body| body.error);
     match code.as_deref() {
         Some("unauthorized") => DirectoryError::Unauthorized,
-        Some("notJoined") => DirectoryError::NotJoined,
+        Some("badCertificate") => DirectoryError::BadCertificate,
+        Some("certificateExpired") => DirectoryError::CertificateExpired,
         Some("notFindable") => DirectoryError::NotFindable,
         Some("notRegistered") => DirectoryError::NotRegistered,
         Some("recipientFull") => DirectoryError::RecipientFull,
         Some("sendQuota") => DirectoryError::SendQuota,
         Some("pairCooldown") => DirectoryError::PairCooldown,
-        Some("mojangUnavailable") => DirectoryError::MojangUnavailable,
         Some("rateLimited") => rate_limited(retry_after),
         Some("notConfigured" | "internal") => DirectoryError::Unreachable,
         Some(other) => INVALID_REQUEST_CODES
@@ -199,13 +199,13 @@ mod tests {
     fn worker_codes_map_to_directory_errors() {
         let table = [
             (401, "unauthorized", DirectoryError::Unauthorized),
-            (401, "notJoined", DirectoryError::NotJoined),
+            (401, "badCertificate", DirectoryError::BadCertificate),
+            (401, "certificateExpired", DirectoryError::CertificateExpired),
             (404, "notFindable", DirectoryError::NotFindable),
             (404, "notRegistered", DirectoryError::NotRegistered),
             (409, "recipientFull", DirectoryError::RecipientFull),
             (429, "sendQuota", DirectoryError::SendQuota),
             (429, "pairCooldown", DirectoryError::PairCooldown),
-            (503, "mojangUnavailable", DirectoryError::MojangUnavailable),
             (503, "notConfigured", DirectoryError::Unreachable),
             (500, "internal", DirectoryError::Unreachable),
         ];

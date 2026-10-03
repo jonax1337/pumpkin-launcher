@@ -1,7 +1,7 @@
 // Briefkasten: Freundesanfragen ("Briefe") ablegen, abholen und zurückziehen (BYNAME 4, O1 bis I2).
-// Ein Brief trägt den einmaligen Freundescode des Absenders; der Worker stempelt Absender-UUID, Name und Peer-ID aus dem Token dazu.
+// A letter carries the sender's single-use friend code; the Worker stamps the sender's UUID and peer id from the token on it.
 import { deleteLetterFrom, deleteLetterTo, discardBlockedLetter, logProbe, readInbox, readSendFacts, storeLetter } from "./store.js";
-import { fail, fromHex, hasExactKeys, isHex, json, noContent, parseObject, utf8, verifySignature } from "./util.js";
+import { bigEndian64, fail, fromHex, hasExactKeys, isHex, json, noContent, parseObject, utf8, verifySignature } from "./util.js";
 
 const LETTER_DOMAIN = "pumpkin/name-request/1";
 const LETTER_FIELDS = ["to", "nonce", "helloId", "relayIndex", "secret", "displayName", "createdAt", "signature"];
@@ -11,12 +11,6 @@ const DAILY_LIMIT = 10;
 const MAX_PENDING = 20;
 const DISPLAY_NAME_MAX = 64;
 const CONTROL_CHARACTERS = /\p{Cc}/u;
-
-const bigEndian64 = (value) => {
-  const bytes = new Uint8Array(8);
-  new DataView(bytes.buffer).setBigUint64(0, BigInt(value));
-  return bytes;
-};
 
 /** Signierte Bytes eines Briefs; alle Teile außer dem Anzeigenamen haben feste Länge, die Aneinanderreihung ist eindeutig. */
 export const letterParts = (fromUuid, letter) => [
@@ -82,7 +76,7 @@ function stampedLetter(id, letter, claims, expiresAt) {
   return {
     id,
     to: letter.to,
-    from: { uuid: claims.u, name: claims.n, peerId: claims.p },
+    from: { uuid: claims.u, peerId: claims.p },
     body: JSON.stringify({ nonce, helloId, relayIndex, secret, displayName, signature }),
     createdAt: letter.createdAt,
     expiresAt,
@@ -91,7 +85,7 @@ function stampedLetter(id, letter, claims, expiresAt) {
 
 const inboxLetter = (row) => ({
   id: row.id,
-  from: { uuid: row.from_uuid, name: row.from_name, peerId: row.from_peer },
+  from: { uuid: row.from_uuid, peerId: row.from_peer },
   to: row.to_uuid,
   ...JSON.parse(row.body),
   createdAt: row.created_at,

@@ -19,9 +19,10 @@ use super::contract::{
 };
 use super::control::WireProfile;
 use super::directory::api::DirectoryApi;
-use super::directory::mojang::{MojangError, MojangProfile};
+use super::directory::certificate::PlayerCertificate;
+use super::directory::mojang::{MojangError, MojangProfile, Privileges};
 use super::directory::proof::{self, LetterFields, NameProof, Recipient, Rejection, StampedLetter};
-use super::directory::wire::{InboxLetter, OutgoingLetter, SentLetter, SessionRequest};
+use super::directory::wire::{InboxLetter, OutgoingLetter, SentLetter};
 use super::directory::{DirectoryDeps, DirectoryError, McIdentity};
 use super::events::FriendsEvent;
 use super::hello::{self, Delivery, HelloRefusal, HELLO_NAME_WAIT};
@@ -32,7 +33,7 @@ use super::sanitize;
 use super::service::{now_secs, Core, Friends, HandlerAlreadySet, Runtime};
 use crate::coded;
 use crate::error::{AppError, AppResult};
-use crate::models::new_id;
+use crate::models::{new_id, now_ms};
 use crate::services::auth::relogin;
 use crate::services::lock;
 use crate::services::p2p::{find_relay, PeerId};
@@ -49,14 +50,21 @@ const LEAVE_BUDGET: Duration = Duration::from_secs(2);
 /// Ein frisch per Name eingelöster Freund trägt uns erst noch ein; bis dahin ist sein `NOT_FRIEND` kein Entfernen.
 const REDEMPTION_GRACE: Duration = Duration::from_secs(60);
 const NONCE_LEN: usize = 16;
+/// A letter is deleted only after Mojang knew no account for its sender on this many polls in a row: one odd answer
+/// must not destroy a request (review finding 9 on BYNAME-ATTEST).
+const MISSING_SENDER_POLLS: u8 = 2;
 
 /// Was der Dienst über das Verzeichnis im Speicher hält; nichts davon liegt auf der Platte.
 #[derive(Default)]
 pub(super) struct DirectoryClient {
     session: Mutex<Option<CachedSession>>,
+    /// Mojang's player certificate of the account; its private key never reaches the disk.
+    certificate: Mutex<Option<PlayerCertificate>>,
+    /// Letter id → polls in a row on which Mojang knew no account for the sender.
+    missing_senders: Mutex<HashMap<String, u8>>,
     /// Ausgang der letzten Anmeldung oder Abfrage; `None`, solange es keine gab.
     health: Mutex<Option<DirectoryState>>,
-    /// Höchstens eine Anmeldung zugleich: Mojang erlaubt sechs `join` in 30 s je Konto (BYNAME 3.1).
+    /// At most one login at a time, so concurrent calls share one certificate fetch and one token.
     auth_lock: tokio::sync::Mutex<()>,
     polling: tokio::sync::Mutex<()>,
     running_jobs: tokio::sync::Mutex<()>,
@@ -71,10 +79,12 @@ pub(super) struct DirectoryClient {
 struct CachedSession {
     token: String,
     expires_at: u64,
-    /// Von Mojang über das Verzeichnis bestätigt.
+    /// Proven by Mojang's certificate, accepted by the directory.
     uuid: String,
     /// Die Peer-ID, an die das Token gebunden ist.
     peer_id: String,
+    /// What Mojang's account attributes said at this login.
+    privileges: Privileges,
 }
 
 /// Wann das Postfach dran ist: 10 s nach dem Start, dann im Takt; `friends_retry_now` zieht höchstens jede Minute vor.
@@ -142,9 +152,9 @@ impl Failure {
                 error,
                 DirectoryError::Unreachable
                     | DirectoryError::RateLimited { .. }
-                    | DirectoryError::MojangUnavailable
                     | DirectoryError::Unauthorized
-                    | DirectoryError::NotJoined
+                    | DirectoryError::BadCertificate
+                    | DirectoryError::CertificateExpired
             ),
             Self::Mojang(_) | Self::Local(_) => true,
         }
@@ -201,12 +211,21 @@ pub(super) fn directory_status(core: &Core) -> DirectoryStatus {
     DirectoryStatus { state, host: Some(deps.host.clone()) }
 }
 
+/// Forgets the token and the certificate (identity renewed, account changed, friends switched off).
 pub(super) fn forget_session(core: &Core) {
+    forget_token(core);
+    forget_certificate(core);
+}
+
+fn forget_token(core: &Core) {
     *lock(&core.by_name.session) = None;
 }
 
-/// Das gültige Token für die eigene Peer-ID, sonst eine neue Anmeldung; ein abgelehntes `join` oder ein noch nicht
-/// sichtbarer Beitritt bekommen einen zweiten Versuch.
+fn forget_certificate(core: &Core) {
+    *lock(&core.by_name.certificate) = None;
+}
+
+/// Das gültige Token für die eigene Peer-ID, sonst eine neue Anmeldung.
 async fn session(core: &Core, deps: &DirectoryDeps) -> Result<CachedSession, Failure> {
     let identity = core.identity().ok_or_else(|| Failure::Local(identity_lost()))?;
     let _auth = core.by_name.auth_lock.lock().await;
@@ -214,12 +233,7 @@ async fn session(core: &Core, deps: &DirectoryDeps) -> Result<CachedSession, Fai
     if let Some(cached) = cached_session(core, &peer_id) {
         return Ok(cached);
     }
-    let opened = match handshake(deps, &identity).await {
-        Err(Failure::Directory(DirectoryError::NotJoined) | Failure::Mojang(MojangError::InvalidSession)) => {
-            handshake(deps, &identity).await
-        }
-        first => first,
-    };
+    let opened = log_in(core, deps, &identity).await;
     if matches!(opened, Err(Failure::Mojang(MojangError::NotAllowed))) {
         set_health(core, DirectoryState::NotAllowed);
     }
@@ -233,22 +247,97 @@ fn cached_session(core: &Core, peer_id: &str) -> Option<CachedSession> {
     lock(&core.by_name.session).clone().filter(|session| session.peer_id == peer_id && still_valid(session))
 }
 
-/// Herausforderung, Mojang `join` mit dem Token des Kontos (es verlässt Rust nie), Signatur mit dem Freunde-Schlüssel.
-/// Ein Token für ein anderes als das eigene Konto wird nicht benutzt: daran hängt, welche Briefe als „an mich“ gelten.
-async fn handshake(deps: &DirectoryDeps, identity: &Identity) -> Result<CachedSession, Failure> {
+/// One handshake, and one more after a refusal that a fresh Minecraft token or a fresh certificate can cure
+/// (BYNAME-ATTEST 5.4). A token refused again although it was just refreshed means Mojang refuses the account.
+async fn log_in(core: &Core, deps: &DirectoryDeps, identity: &Identity) -> Result<CachedSession, Failure> {
+    match handshake(core, deps, identity).await {
+        Err(Failure::Mojang(MojangError::InvalidSession)) => {
+            deps.tokens.forget_minecraft_session();
+            handshake(core, deps, identity).await.map_err(|failure| match failure {
+                Failure::Mojang(MojangError::InvalidSession) => Failure::Mojang(MojangError::NotAllowed),
+                other => other,
+            })
+        }
+        Err(Failure::Directory(DirectoryError::BadCertificate | DirectoryError::CertificateExpired)) => {
+            forget_certificate(core);
+            handshake(core, deps, identity).await.inspect_err(warn_refused_certificate)
+        }
+        first => first,
+    }
+}
+
+/// Distinct lines, so that a key rotation the Worker missed shows up in the logs users send.
+fn warn_refused_certificate(failure: &Failure) {
+    match failure {
+        Failure::Directory(DirectoryError::BadCertificate) => {
+            tracing::warn!("The directory does not accept Mojang's player certificate; Mojang may have new certificate keys")
+        }
+        Failure::Directory(DirectoryError::CertificateExpired) => {
+            tracing::warn!("The directory considers even a fresh player certificate expired")
+        }
+        _ => {}
+    }
+}
+
+/// The login of BYNAME-ATTEST 5.4: account attributes, certificate, challenge, both signatures. The certificate comes
+/// before the challenge so that its fetch does not eat into the challenge's lifetime. No Mojang `join` happens here.
+/// A token for another account than the own is never used: it decides which letters count as addressed to me.
+async fn handshake(core: &Core, deps: &DirectoryDeps, identity: &Identity) -> Result<CachedSession, Failure> {
     let account = deps.tokens.minecraft_session().await.map_err(Failure::Local)?;
+    let privileges = deps.mojang.privileges(&account).await;
+    if privileges == Privileges::Refused {
+        return Err(Failure::Mojang(MojangError::NotAllowed));
+    }
+    let certificate = current_certificate(core, deps, &account).await?;
     let peer_id = identity.peer_id();
     let challenge = deps.api.challenge(&peer_id).await.map_err(Failure::Directory)?;
-    deps.mojang.join(&account, &challenge.server_id).await.map_err(Failure::Mojang)?;
-    let parts = proof::auth_parts(&challenge.server_id, &peer_id)
+    let parts = proof::login_parts(&deps.host, &challenge.server_id, &peer_id, &certificate.uuid)
         .ok_or(Failure::Directory(DirectoryError::Invalid("serverId")))?;
-    let signature = HEXLOWER.encode(&identity.sign(proof::AUTH_DOMAIN, &parts.as_slices()));
-    let request = SessionRequest { challenge: challenge.challenge, name: account.name, signature };
+    let request = proof::session_request(challenge.challenge, &parts, identity, &certificate)
+        .ok_or_else(|| Failure::Local(local_error("the player certificate could not sign")))?;
     let opened = deps.api.session(&request).await.map_err(Failure::Directory)?;
     if opened.uuid != account.uuid {
         return Err(Failure::Directory(DirectoryError::Invalid("sessionAccount")));
     }
-    Ok(CachedSession { token: opened.token, expires_at: opened.expires_at, uuid: account.uuid, peer_id })
+    Ok(CachedSession { token: opened.token, expires_at: opened.expires_at, uuid: account.uuid, peer_id, privileges })
+}
+
+/// The cached certificate until Mojang wants it refreshed, then a fresh one. While Mojang cannot be reached, a cached
+/// certificate that is still usable serves; never after Mojang refused the account (review finding 1).
+async fn current_certificate(core: &Core, deps: &DirectoryDeps, account: &McIdentity) -> Result<PlayerCertificate, Failure> {
+    let now = clock_ms();
+    let cached = lock(&core.by_name.certificate).clone().filter(|certificate| certificate.uuid == account.uuid);
+    if let Some(fresh) = cached.clone().filter(|certificate| !certificate.needs_refresh(now)) {
+        return Ok(fresh);
+    }
+    match deps.mojang.certificate(account).await {
+        Ok(fetched) => {
+            *lock(&core.by_name.certificate) = Some(fetched.clone());
+            Ok(fetched)
+        }
+        Err(MojangError::NotAllowed) => {
+            forget_certificate(core);
+            Err(Failure::Mojang(MojangError::NotAllowed))
+        }
+        Err(error) => cached.filter(|certificate| certificate.is_usable(now)).ok_or(Failure::Mojang(error)),
+    }
+}
+
+fn clock_ms() -> i64 {
+    i64::try_from(now_ms()).unwrap_or(i64::MAX)
+}
+
+/// The session for being listed: only an account whose attributes Mojang explicitly allows (review finding 1). Unknown
+/// attributes count as refused until owner test O-7 has shown what restricted accounts receive; the next attempt logs
+/// in and asks Mojang again.
+async fn listed_session(core: &Core, deps: &DirectoryDeps) -> Result<CachedSession, Failure> {
+    let me = session(core, deps).await?;
+    if me.privileges == Privileges::Allowed {
+        return Ok(me);
+    }
+    tracing::warn!("Mojang's account attributes are unreadable; the account stays out of the directory");
+    forget_token(core);
+    Err(Failure::Mojang(MojangError::Unreachable))
 }
 
 /// Ein Aufruf mit Token; ein `401` verwirft das Token, meldet sich genau einmal neu an und wiederholt den Aufruf.
@@ -261,10 +350,10 @@ where
     if !matches!(first, Err(DirectoryError::Unauthorized)) {
         return first.map_err(Failure::Directory);
     }
-    forget_session(core);
+    forget_token(core);
     let second = call(deps.api.clone(), session(core, deps).await?.token).await;
     if matches!(second, Err(DirectoryError::Unauthorized)) {
-        forget_session(core);
+        forget_token(core);
     }
     second.map_err(Failure::Directory)
 }
@@ -348,7 +437,7 @@ fn signed_letter(
     to: &str,
 ) -> Result<OutgoingLetter, Failure> {
     let mut nonce = [0; NONCE_LEN];
-    getrandom::fill(&mut nonce).map_err(|err| Failure::Local(std::io::Error::other(err.to_string()).into()))?;
+    getrandom::fill(&mut nonce).map_err(|err| Failure::Local(local_error(&err.to_string())))?;
     let letter = OutgoingLetter {
         to: to.to_owned(),
         nonce: HEXLOWER.encode(&nonce),
@@ -451,7 +540,7 @@ async fn ensure_registered(core: &Core, deps: &DirectoryDeps) -> bool {
 }
 
 async fn register(core: &Core, deps: &DirectoryDeps) -> Result<(), Failure> {
-    let me = session(core, deps).await?;
+    let me = listed_session(core, deps).await?;
     let listed = core.config().directory;
     let is_fresh = listed.registered_uuid.as_deref() == Some(me.uuid.as_str())
         && listed.refreshed_at.is_some_and(|at| now_secs().saturating_sub(at) < REFRESH_SECS);
@@ -473,7 +562,7 @@ pub(super) async fn poll_inbox(core: &Arc<Core>) {
     match fetch_inbox(core, deps).await {
         Ok((letters, own_uuid)) => {
             set_health(core, DirectoryState::Active);
-            let filed = file_letters(core, &letters, &own_uuid);
+            let filed = file_letters(core, deps, &letters, &own_uuid).await;
             if filed | drop_vanished(core, &letters) {
                 core.emit(FriendsEvent::Changed);
             }
@@ -488,20 +577,28 @@ pub(super) async fn poll_inbox(core: &Arc<Core>) {
 }
 
 async fn fetch_inbox(core: &Core, deps: &DirectoryDeps) -> Result<(Vec<InboxLetter>, String), Failure> {
-    let me = session(core, deps).await?;
+    let me = listed_session(core, deps).await?;
     let letters = authorized(core, deps, |api, token| async move { api.inbox(&token).await }).await?;
     Ok((letters, me.uuid))
 }
 
 /// Legt neue, glaubwürdige Briefe als eingehende Anfragen ab; `true`, wenn eine dazukam.
-fn file_letters(core: &Core, letters: &[InboxLetter], own_uuid: &str) -> bool {
+async fn file_letters(core: &Core, deps: &DirectoryDeps, letters: &[InboxLetter], own_uuid: &str) -> bool {
     let Some(identity) = core.identity() else { return false };
     let peer_id = identity.peer_id();
     let me = Recipient { uuid: own_uuid, peer_id: &peer_id, now: now_secs() };
-    letters.iter().fold(false, |filed, letter| file_letter(core, letter, &me) | filed)
+    lock(&core.by_name.missing_senders).retain(|id, _| letters.iter().any(|letter| letter.id == *id));
+    let mut filed = false;
+    for letter in letters.iter().filter(|letter| is_new_request(core, letter, &me)) {
+        filed |= file_with_sender_name(core, deps, letter).await;
+    }
+    filed
 }
 
-fn file_letter(core: &Core, letter: &InboxLetter, me: &Recipient) -> bool {
+/// Whether the letter can become a new request: valid, not from a blocked sender or a friend, not filed yet, and
+/// there is room. Letters that can never become one are deleted on the way. Only these letters cause a lookup at
+/// Mojang (review finding 9).
+fn is_new_request(core: &Core, letter: &InboxLetter, me: &Recipient) -> bool {
     let is_known_relay = |index| find_relay(&core.options.relay_map, index).is_some();
     match proof::validate_letter(&stamped(letter), me, is_known_relay) {
         Ok(()) => {}
@@ -517,10 +614,37 @@ fn file_letter(core: &Core, letter: &InboxLetter, me: &Recipient) -> bool {
         return delete_mail(core, letter);
     }
     let is_filed = core.stores.requests.list().iter().any(|request| request.mail_id.as_deref() == Some(&letter.id));
-    if is_filed || !requests::has_room_for_incoming(core) {
-        return false;
+    !is_filed && requests::has_room_for_incoming(core)
+}
+
+/// The directory stamps no names: the sender's current name comes from Mojang by the proven UUID (BYNAME-ATTEST 4.3).
+/// Without an answer the letter waits for the next poll.
+async fn file_with_sender_name(core: &Core, deps: &DirectoryDeps, letter: &InboxLetter) -> bool {
+    match deps.mojang.profile(&letter.from.uuid).await {
+        Ok(Some(sender)) => {
+            lock(&core.by_name.missing_senders).remove(&letter.id);
+            file_request(core, letter, sender)
+        }
+        Ok(None) if count_missing_sender(core, &letter.id) >= MISSING_SENDER_POLLS => delete_mail(core, letter),
+        Ok(None) => false,
+        Err(error) => {
+            tracing::debug!(?error, "sender of a letter not looked up at Mojang");
+            lock(&core.by_name.missing_senders).remove(&letter.id);
+            false
+        }
     }
-    match core.stores.requests.insert(incoming_letter(letter)) {
+}
+
+/// Counts one more poll in a row on which Mojang knew no account for this letter's sender.
+fn count_missing_sender(core: &Core, mail_id: &str) -> u8 {
+    let mut missing = lock(&core.by_name.missing_senders);
+    let polls = missing.entry(mail_id.to_owned()).or_default();
+    *polls = polls.saturating_add(1);
+    *polls
+}
+
+fn file_request(core: &Core, letter: &InboxLetter, sender: MojangProfile) -> bool {
+    match core.stores.requests.insert(incoming_letter(letter, sender)) {
         Ok(request) => {
             core.emit(FriendsEvent::Request(FriendRequestEvent { request: requests::request_view(request) }));
             true
@@ -550,7 +674,6 @@ fn stamped(letter: &InboxLetter) -> StampedLetter<'_> {
             created_at: letter.created_at,
             display_name: &letter.display_name,
         },
-        from_name: &letter.from.name,
         from_peer_id: &letter.from.peer_id,
         expires_at: letter.expires_at,
         signature: &letter.signature,
@@ -562,19 +685,20 @@ fn is_blocked_sender(core: &Core, peer_id: &str, uuid: &str) -> bool {
         || core.stores.blocked.list().iter().any(|blocked| blocked.mc_uuid.as_deref() == Some(uuid))
 }
 
-fn incoming_letter(letter: &InboxLetter) -> RequestRecord {
-    let sender = &letter.from;
+/// `sender` is Mojang's answer for the stamped UUID.
+fn incoming_letter(letter: &InboxLetter, sender: MojangProfile) -> RequestRecord {
+    let peer_id = &letter.from.peer_id;
     RequestRecord {
         id: new_id(),
         direction: RequestDirection::Incoming,
         state: RequestState::Pending,
-        peer_id: Some(sender.peer_id.clone()),
+        peer_id: Some(peer_id.clone()),
         hello_id: Some(letter.hello_id.clone()),
         relay_index: Some(letter.relay_index),
         secret: Some(letter.secret.clone()),
-        display_name: Some(sanitize::display_name(&letter.display_name, &sender.peer_id)),
-        mc_name: Some(sender.name.clone()),
-        mc_uuid: Some(sender.uuid.clone()),
+        display_name: Some(sanitize::display_name(&letter.display_name, peer_id)),
+        mc_name: Some(sender.name),
+        mc_uuid: Some(sender.uuid),
         code_tail: None,
         created_at: letter.created_at,
         expires_at: letter.expires_at,
@@ -930,6 +1054,10 @@ async fn join_mojang(core: &Core, deps: &DirectoryDeps, server_id: &str) -> Opti
             None
         }
     }
+}
+
+fn local_error(message: &str) -> AppError {
+    std::io::Error::other(message.to_owned()).into()
 }
 
 fn identity_lost() -> AppError {

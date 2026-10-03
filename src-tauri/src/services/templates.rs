@@ -139,7 +139,8 @@ mod tests {
         source.mods = vec![local("own", true), local("off", false), Mod { required_by: vec!["own".into()], ..local("dep", true) }];
         let source = state.instances.insert(source).unwrap();
         let game = state.dirs.game_dir(&source.id);
-        for (path, data) in [("config/sub/a.toml", "x=1"), ("options.txt", "fov:1"), ("saves/w/level.dat", "welt")] {
+        let private_key = ("profilekeys/069a79f444e94726a5befca90e38aaf5.json", "privat");
+        for (path, data) in [("config/sub/a.toml", "x=1"), ("options.txt", "fov:1"), ("saves/w/level.dat", "welt"), private_key] {
             fs::create_dir_all(game.join(path).parent().unwrap()).unwrap();
             fs::write(game.join(path), data).unwrap();
         }
@@ -159,6 +160,7 @@ mod tests {
         assert_eq!(fs::read(new.join("config/sub/a.toml")).unwrap(), b"x=1");
         assert_eq!(fs::read(new.join("options.txt")).unwrap(), b"fov:1");
         assert!(!new.join("mods/off.jar").exists() && !new.join("saves").exists());
+        assert!(!new.join("profilekeys").exists(), "the cached player certificate stays behind");
         assert_eq!((copy.loader, copy.loader_version.as_deref()), (ModLoader::Fabric, Some("0.16.10")));
 
         let shared = root.join("Vorlage.mrpack");

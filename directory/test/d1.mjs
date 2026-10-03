@@ -1,9 +1,9 @@
 // D1-Ersatz auf node:sqlite: genau die Teile der D1-Schnittstelle, die der Worker nutzt
 // (prepare().bind().first/all/run und batch als eine Transaktion), mit dem Schema aus migrations/.
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 
-const MIGRATION = new URL("../migrations/0001_init.sql", import.meta.url);
+const MIGRATIONS = new URL("../migrations/", import.meta.url);
 const READS = /^\s*(select|with)\b/i;
 
 function execute(db, sql, params) {
@@ -12,10 +12,16 @@ function execute(db, sql, params) {
   return { success: true, results: [], meta: { changes: statement.run(...params).changes } };
 }
 
+/** Every file in migrations/ in name order, as `wrangler d1 migrations apply` does. */
+function applyMigrations(db) {
+  const files = readdirSync(MIGRATIONS).filter((name) => name.endsWith(".sql")).sort();
+  for (const file of files) db.exec(readFileSync(new URL(file, MIGRATIONS), "utf8"));
+}
+
 /** `stats` zählt Anweisungen und Rundläufe (ein Aufruf oder ein Batch je Rundlauf), damit Tests Abläufe vergleichen können. */
 export function createD1() {
   const db = new DatabaseSync(":memory:");
-  db.exec(readFileSync(MIGRATION, "utf8"));
+  applyMigrations(db);
   const stats = { statements: 0, roundTrips: 0 };
 
   const singleRoundTrip = (work) => async (...args) => {

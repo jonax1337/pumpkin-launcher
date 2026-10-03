@@ -36,6 +36,7 @@ ist nur die Anleitung. Die Quelle der Regeln ist [`SPEC.md`](SPEC.md) (Abschnitt
 | 5 | Eigenes Relay deployen, `RELAY_MAP` Index 0 (G3) | Du, dann Agent | Release |
 | 6 | Mojang-Compliance (G4) | Du | Release, geschlossene Beta |
 | 7 | Entscheidungen zur geschlossenen Beta, Release | Du | je nach Entscheidung |
+| 8 | Namens-Suche: Verzeichnis, Zertifikat-Login, Tests O-1 bis O-8 | Du (+ 2. Person) | Release 2.0.1 (die Namens-Suche), kein Gate aus SPEC 1.3 |
 
 Das Relay (Schritt 5) hat die längste Vorlaufzeit (Domain, DNS, Zertifikat). Du kannst es parallel zu Schritt 2 und 3
 anstoßen, weil Schritt 2 und 3 mit den öffentlichen n0-Relays laufen.
@@ -337,6 +338,89 @@ Release. Ein Release für alle braucht G1 bis G5.
 - [ ] **7.6 Binärgröße.** Der Agent misst die Größe des Release-Builds mit den echten Endpunkten neu (SPEC 3.1, I1).
 - [ ] **7.7 Release.** Ablauf wie in [`../RELEASING.md`](../RELEASING.md): Version an drei Stellen anheben, annotierten Tag `v…` pushen, Entwurf prüfen, veröffentlichen. Vorher in `VERIFICATION.md` alle Gates G1 bis G5 abhaken.
 - [ ] **7.8 Doc-Sync.** Für SPEC-Abschnitte 3 bis 9, 11 und Anhang A bestätigt jeweils der zuständige Agent „stimmt mit dem Code überein“ (SPEC 13.5, Punkt 5), Abweichungen stehen zuerst in `SPEC.md`.
+
+## 8. Namens-Suche: Verzeichnis und Zertifikat-Login (Release 2.0.1)
+
+**Wer:** Du (O-4 mit 2. Person und zweitem Konto). **Wann:** in der Reihenfolge unten: erst der Worker, dann der Dev-Build-Test O-3, dann Tag und Release, danach O-4 bis O-8. **Blockiert:** nichts aus SPEC 1.3; ohne diese Schritte bleibt die Suche per Namen kaputt („Verzeichnis nicht erreichbar“).
+
+Warum es das gibt: Mojang beantwortet jede Anfrage von Cloudflare Workers mit 403. Der Worker kann Mojang deshalb nie selbst fragen, und die Namens-Suche aus 2.0.0 konnte sich nie anmelden. Seit 2.0.1 holt der Launcher bei Mojang ein signiertes Spielerzertifikat (`api.minecraftservices.com/player/certificates`), und der Worker prüft Mojangs Signatur offline mit fest eingebauten Schlüsseln. Der Entwurf steht in [`BYNAME-ATTEST.md`](BYNAME-ATTEST.md) (mit den bindenden Änderungen aus [`BYNAME-ATTEST-REVIEW.md`](BYNAME-ATTEST-REVIEW.md)), die Ergebnisse trägst du in [`VERIFICATION.md`](VERIFICATION.md), Abschnitt **N**, ein. Alle Befehle laufen in PowerShell im Repository-Wurzelordner; `wrangler` fragt nach der Anmeldung bei Cloudflare (`npx wrangler login`), falls nötig.
+
+### 8.1. Vorher entscheiden und bestätigen
+
+- [ ] **OD-N11: Restrisiko annehmen.** Der Worker setzt Mojangs Mehrspieler-Sperren nicht mehr selbst durch (früher scheiterte `join` für gesperrte Konten schon beim Anmelden). Jetzt prüft nur noch der Launcher `/player/attributes`; ein veränderter Launcher könnte das überspringen und dann auffindbar sein, Anfragen empfangen und senden. Eine Freundschaft kommt trotzdem nicht zustande, weil Mojang das `join` beim Annehmen ablehnt. Entscheide, ob du das annimmst, und notiere es in `VERIFICATION.md` (Abschnitt N). Der Vorschlag ist „annehmen“, aber **das ist nicht entschieden, bis du es notierst**.
+- [ ] **OD-N3: Freigabe für das Zertifikat.** Ob der Launcher `/player/certificates` und `/player/attributes` nutzen darf, ist gegen Mojangs Bedingungen **nicht geprüft**. Frage bei Mojang nach oder lies die Bedingungen, und hake den Punkt in `PRIVACY.md`, Abschnitt 8, ab.
+- [ ] **Datenschutztexte lesen.** `PRIVACY.md`, Abschnitt 9, und `website/datenschutz.html`, Abschnitt 4 („Suche per Minecraft-Namen“): stimmen Verantwortlicher, Cloudflare als Auftragsverarbeiter (Auftragsverarbeitungsvertrag angenommen?) und die Löschfrist von 7 Tagen (Cloudflare-Tarif Free) mit der Wirklichkeit überein?
+
+### 8.2. Die Tests
+
+Die Zeilen heißen wie in `BYNAME-ATTEST.md` 8.3. **Reihenfolge: O-1, O-2, O-3, dann Tag und Release (Schritt 8.3), dann O-4 bis O-8.**
+
+- [ ] **O-1. Worker-Tests und Schlüsselabgleich.**
+  ```powershell
+  cd directory
+  node test.mjs
+  node scripts/mojang-keys.mjs check
+  ```
+  *Erwartet:* alle Zeilen `ok`, dann `ok: 2 keys match`. Bei einem Unterschied (Exit-Code 1) stehen die Schlüssel von Mojang und die eingebauten untereinander: Ablauf siehe 8.4.
+- [ ] **O-2. Datenbank und Worker bereitstellen (Reihenfolge ist Pflicht).**
+  ```powershell
+  cd directory
+  npx wrangler d1 execute pumpkin-friends-directory --remote --command "SELECT (SELECT COUNT(*) FROM users),(SELECT COUNT(*) FROM letters)"
+  ```
+  *Erwartet:* `0, 0` (kein 2.0.0-Login hat je geklappt). Steht dort etwas anderes: **anhalten und nachsehen**, nicht weitermachen. Dann:
+  ```powershell
+  npx wrangler d1 migrations apply pumpkin-friends-directory --remote
+  npx wrangler deploy
+  curl.exe -s -X POST https://pumpkin-friends-directory.jonas-laux.workers.dev/v1/auth/session -H "content-type: application/json" -d "{}"
+  ```
+  *Erwartet:* Migration `0002_letters_without_name` angewendet, **dann erst** das Deployment (der neue Code schreibt `from_name` nicht mehr, die Spalte ist bis `0002` `NOT NULL`), und `curl.exe` druckt `{"error":"gone"}`.
+- [ ] **O-3. Echter Login mit einem Dev-Build, vor dem Tag.**
+  ```powershell
+  $env:PUMPKIN_FRIENDS_DIRECTORY="https://pumpkin-friends-directory.jonas-laux.workers.dev"; npm run tauri:remote
+  ```
+  (oder `pnpm tauri dev` in demselben Fenster). Mit dem echten Microsoft-Konto anmelden, Freunde einschalten, Einstellungen › Freunde › „Per Minecraft-Namen auffindbar“ an. Danach:
+  ```powershell
+  cd directory
+  npx wrangler d1 execute pumpkin-friends-directory --remote --command "SELECT uuid FROM users"
+  ```
+  *Erwartet:* Statuszeile „Auffindbar als <Name>“ innerhalb von 30 s, und die Abfrage zeigt genau deine UUID (ohne Bindestriche). Das beweist die echte Kodierung des privaten Schlüssels, Mojangs Schlüssel Nr. 0 und das Layout der Mojang-Signatur. **Scheitert es:** die Logzeile des Launchers notieren (nur Codes, keine Geheimnisse) und das Release anhalten (Rückfall F1 in `BYNAME-ATTEST.md`, Abschnitt „Fallback“).
+- [ ] **O-4. Zwei PCs, zwei Konten, Build 2.0.1.** A sendet B per Namen, während B's Launcher geschlossen ist; danach startet B.
+  *Erwartet:* Die Anfrage zeigt „Minecraft: <aktueller Name von A>“ innerhalb von 30 s nach dem Öffnen von Freunde; nach dem Annehmen sind beide innerhalb von 30 s Freunde.
+- [ ] **O-5. Laufendes Spiel.** Eine Instanz ab 1.20 starten, einem Online-Server beitreten, eine Chat-Nachricht senden. Den Launcher neu starten, während das Spiel weiterläuft (das erzwingt beim nächsten Login ein neues Zertifikat), warten bis „Auffindbar“, noch eine Nachricht senden und 2 Minuten bleiben.
+  *Erwartet:* Chat funktioniert, kein Rauswurf wegen ungültiger Chat-Signatur („chat validation error“). Notiere das Ergebnis: es entscheidet, ob ein Zertifikatsabruf ein laufendes Spiel stört.
+- [ ] **O-6. Cloudflare-Dashboard.** Workers › pumpkin-friends-directory › Metrics nach O-3 und O-4.
+  *Erwartet:* CPU-Zeit p99 unter 10 ms, Subrequests 0.
+- [ ] **O-7. Kinder- oder Mehrspieler-gesperrtes Konto** (nur, wenn du eines hast).
+  *Erwartet:* „Mojang erlaubt diesem Konto keine Mehrspieler-Funktionen“ (`notAllowed`), Codes funktionieren weiter. Notiere, was Mojang auf `/player/attributes` und `/player/certificates` für dieses Konto antwortet (Statuscode, ob `multiplayerServer.enabled` auf `false` steht); bis dahin gilt eine nicht lesbare Antwort als „nicht erlaubt“ für das Auffindbarsein.
+- [ ] **O-8. Der Workflow „Mojang keys“.** GitHub › Actions › „Mojang keys“ › **Run workflow**, und prüfe, dass der Workflow **aktiviert** ist (kein „This scheduled workflow is disabled“-Hinweis).
+  *Erwartet:* grün. GitHub schaltet geplante Workflows eines öffentlichen Repositorys nach 60 Tagen ohne Aktivität ab; der Job `keepalive` im Workflow schaltet ihn bei jedem Lauf wieder ein. Schau deshalb ab und zu (zum Beispiel beim Release) nach, dass er aktiviert und grün ist.
+
+### 8.3. Tag und Release (nach O-3)
+
+- [ ] Ablauf wie in [`../RELEASING.md`](../RELEASING.md) und `BYNAME-ATTEST.md` Abschnitt 10: Version 2.0.1, annotierter Tag `v2.0.1`, die drei Build-Jobs in der Umgebung `release` freigeben, Entwurf prüfen, veröffentlichen. Der Updater bringt 2.0.1 zu den 2.0.0-Nutzern. Danach O-4 bis O-8.
+
+### 8.4. Wenn „Mojang keys“ fehlschlägt
+
+Ein fehlgeschlagener geplanter Lauf schickt dir eine E-Mail. Dann hat Mojang seine Schlüsselliste geändert, und jede Anmeldung scheitert mit `badCertificate`, bis der Worker die neuen Schlüssel kennt (nur die Namens-Suche ist betroffen). Ohne neues Launcher-Release:
+
+```powershell
+cd directory
+node scripts/mojang-keys.mjs update
+node test.mjs
+```
+
+dann Pull Request, Merge, und `npx wrangler deploy`. Dass Mojang einen neuen Schlüssel vor der ersten Nutzung veröffentlicht, ist **nicht belegt**; ein Ausfall kann also vor der E-Mail beginnen. Anzeichen in Fehlermeldungen von Nutzern: die Logzeile „The directory does not accept Mojang's player certificate“.
+
+### 8.5. Offene Tatsachen, die erst dieser Test klärt
+
+Nichts davon kann ein Agent klären; alles steht bis dahin als „nicht belegt“ in den Dokumenten. Trage die Ergebnisse in `VERIFICATION.md`, Abschnitt N, ein.
+
+- [ ] **Lebensdauer des Zertifikats.** Gerechnet wird mit etwa 48 Stunden (nicht belegt). Der Launcher zeigt sie nicht an; sie steht als `expiresAt` in Mojangs Antwort, und `refreshedAfter` liegt etwa 40 Stunden nach der Ausstellung. Beobachte nach O-3 und O-4, dass die Anmeldung über mehr als zwei Tage Laufzeit hinweg funktioniert.
+- [ ] **Eingeschränkte Konten** (Kinder, Mehrspieler aus, gesperrt): welche Konten bei `/player/certificates` 401 oder 403 und bei `/player/attributes` was bekommen (O-7).
+- [ ] **Wirkung eines Zertifikatsabrufs auf ein laufendes Spiel** (Chat-Schlüssel; O-5).
+- [ ] **Echte Kodierung des privaten Schlüssels** (PKCS#8 oder PKCS#1; beides wird akzeptiert) und Mojangs Schlüssel Nr. 0 (O-3).
+- [ ] **Mojangs Bedingungen** erlauben den Abruf von `/player/certificates` durch einen Drittanbieter-Launcher (OD-N3, 8.1).
+- [ ] **Keine Zeilen aus 2.0.0 in D1** (O-2, die Abfrage mit `0, 0`).
 
 ## Abschluss
 

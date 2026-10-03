@@ -1,6 +1,7 @@
 //! Das Freunde-Verzeichnis (docs/friends/BYNAME.md): Freunde per Minecraft-Namen, Briefkasten und Kontonachweis über Mojang.
 //! Dieses Modul hält die Abhängigkeiten, die der Dienst von außen bekommt (Worker, Mojang, Konto), und die Fehlerart des Verzeichnisses.
 pub mod api;
+pub mod certificate;
 #[cfg(test)]
 pub mod fake;
 #[cfg(test)]
@@ -52,6 +53,8 @@ impl fmt::Debug for McIdentity {
 pub trait AccountTokens: Send + Sync + 'static {
     /// Produktion: `auth::session` des ersten Microsoft-Kontos.
     fn minecraft_session(&self) -> BoxFuture<'_, AppResult<McIdentity>>;
+    /// Drops the cached Minecraft session after Mojang refused its token, so the next one is refreshed.
+    fn forget_minecraft_session(&self);
 }
 
 pub struct DirectoryDeps {
@@ -101,8 +104,10 @@ pub enum DirectoryError {
     SendQuota,
     PairCooldown,
     RateLimited { retry_after: Option<u64> },
-    NotJoined,
-    MojangUnavailable,
+    /// No pinned Mojang key verifies the certificate, or its key is unusable: Mojang may have rotated its keys.
+    BadCertificate,
+    /// The directory's clock says the certificate has expired.
+    CertificateExpired,
     /// Der Worker hat die Anfrage als fehlerhaft abgelehnt: ein Fehler im Launcher oder im Worker.
     Invalid(&'static str),
 }
@@ -119,9 +124,11 @@ impl DirectoryError {
                 tracing::warn!(code, "Das Verzeichnis lehnt eine Anfrage des Launchers als ungültig ab");
                 coded!("errors.friends.directoryUnavailable")
             }
-            Self::Unreachable | Self::Unauthorized | Self::NotRegistered | Self::NotJoined | Self::MojangUnavailable => {
-                coded!("errors.friends.directoryUnavailable")
-            }
+            Self::Unreachable
+            | Self::Unauthorized
+            | Self::NotRegistered
+            | Self::BadCertificate
+            | Self::CertificateExpired => coded!("errors.friends.directoryUnavailable"),
         };
         AppError::invalid(text)
     }
@@ -175,9 +182,9 @@ mod tests {
             (DirectoryError::SendQuota, "errors.friends.rateLimited"),
             (DirectoryError::RateLimited { retry_after: Some(60) }, "errors.friends.rateLimited"),
             (DirectoryError::Unreachable, "errors.friends.directoryUnavailable"),
-            (DirectoryError::MojangUnavailable, "errors.friends.directoryUnavailable"),
+            (DirectoryError::BadCertificate, "errors.friends.directoryUnavailable"),
             (DirectoryError::NotRegistered, "errors.friends.directoryUnavailable"),
-            (DirectoryError::NotJoined, "errors.friends.directoryUnavailable"),
+            (DirectoryError::CertificateExpired, "errors.friends.directoryUnavailable"),
             (DirectoryError::Unauthorized, "errors.friends.directoryUnavailable"),
             (DirectoryError::Invalid("clock"), "errors.friends.directoryUnavailable"),
         ];

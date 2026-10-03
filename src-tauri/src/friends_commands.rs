@@ -48,6 +48,13 @@ impl AccountTokens for AppAccountTokens {
         }
         .boxed()
     }
+
+    fn forget_minecraft_session(&self) {
+        let state = self.handle.state::<AppState>();
+        if let Some(stored) = first_microsoft_account(&state) {
+            auth::forget_session(&state, &stored.id);
+        }
+    }
 }
 
 #[tauri::command]
