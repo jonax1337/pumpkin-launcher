@@ -3,7 +3,7 @@
 //! Spiel, das sich wie der Client mit Handshake und Login Start verbindet. Echte Zeit mit kurzen Werten.
 use std::borrow::Cow;
 use std::future::Future;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -24,6 +24,7 @@ use super::contract::{
 use super::control::OpenFrame;
 use super::events::NoEvents;
 use super::hosting::RequestMessage;
+use super::joining;
 use super::limits::{OPEN_FRAME_LIMIT, REQUEST_FRAME_LIMIT};
 use super::lookup::{LookupError, ModInfo, ModLookup};
 use super::manifest::VersionIndex;
@@ -34,9 +35,10 @@ use super::sessions::{FriendSessions, SessionContext, VersionCatalog};
 use super::test_support::{error_key, TempDir};
 use super::{AccountProfile, Friends, JoinTimers, NetOptions};
 use crate::error::AppResult;
-use crate::models::{Instance, Mod, ModKind, ModSource, NewInstance};
+use crate::models::{new_id, Instance, Mod, ModKind, ModSource, NewInstance};
 use crate::services::gamesignal::{GameSignal, GameSignals};
 use crate::services::modbridge::{ModBridge, ENV_PORT, ENV_TOKEN};
+use crate::services::p2p::tunnel::LocalListener;
 use crate::services::p2p::{frame, BiStream, PeerId, RelayEntry, RelayOperator, RelayTls};
 use crate::services::store::JsonStore;
 use crate::services::{lock, Dirs};
@@ -937,6 +939,39 @@ async fn a_new_join_ends_the_previous_one_with_left() {
     assert_eq!(scene.guest.events.join_ends(), [SessionEnd::Left]);
     assert!(refuses_connections(&first.address).await);
     assert_ne!(first.join_id, second.join_id);
+}
+
+#[tokio::test]
+async fn a_join_started_while_another_runs_ends_that_one_exactly_once() {
+    let scene = Scene::shared().await;
+    let shared = &scene.guest.sessions.shared;
+    let received = shared.invites.open_invite(&scene.invite.id).unwrap();
+    let mut addresses = Vec::new();
+
+    for _ in 0..2 {
+        let listener = LocalListener::bind(IpAddr::V4(Ipv4Addr::LOCALHOST)).await.unwrap();
+        let address = listener.addr.to_string();
+        let ticket = JoinTicket {
+            join_id: new_id(),
+            invite_id: scene.invite.id.clone(),
+            instance_id: GUEST_INSTANCE.into(),
+            address: address.clone(),
+        };
+        joining::start_join(shared, &received, ticket, listener);
+        addresses.push(address);
+    }
+
+    until("the first listener closed", || async { listening_count(&addresses).await == 1 }).await;
+    assert_eq!(scene.guest.events.join_ends(), [SessionEnd::Left]);
+}
+
+/// Wie viele der Adressen noch Verbindungen annehmen.
+async fn listening_count(addresses: &[String]) -> usize {
+    let mut count = 0;
+    for address in addresses {
+        count += usize::from(TcpStream::connect(address).await.is_ok());
+    }
+    count
 }
 
 // ---- Jede Zeile von SPEC 6.5 ----
