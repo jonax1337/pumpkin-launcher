@@ -1,7 +1,7 @@
 name = "pumpkin-friends-directory"
 main = "src/index.js"
 compatibility_date = "2025-09-01"
-# Wie bei proxy/: Der Worker darf von sich aus nur öffentliche Adressen abrufen (hier: sessionserver.mojang.com).
+# As in proxy/: any fetch could only reach public addresses. The Worker makes no subrequests at all; the flag is a safety net.
 compatibility_flags = ["global_fetch_strictly_public"]
 
 # Nur die feste workers.dev-Adresse; keine Vorschau-Adressen je Version für einen Dienst mit Kontodaten.

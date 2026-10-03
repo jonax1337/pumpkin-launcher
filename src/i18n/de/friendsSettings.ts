@@ -104,11 +104,11 @@ export const friendsSettings = {
   "friendsSettings.privacy.relay": "Freunde: verschlüsselte Weiterleitung, keine Inhalte. Nur, wenn du Freunde einschaltest.",
   "friendsSettings.privacy.sessionserverName": "Mojang (Freunde)",
   "friendsSettings.privacy.sessionserver": "Skins deiner Freunde: Der Launcher holt sie mit der Spieler-UUID vom Sessionserver und speichert sie lokal. Die Oberfläche selbst fragt Mojang nie. Nur, wenn du Freunde einschaltest.",
-  "friendsSettings.privacy.sessionserverProof": "Kontonachweis für das Verzeichnis und beim Annehmen.",
+  "friendsSettings.privacy.sessionserverProof": "Kontonachweis beim Annehmen einer Anfrage per Name und die Namen der Absender (Profilabfrage per UUID).",
   "friendsSettings.privacy.directoryName": "Freunde-Verzeichnis",
-  "friendsSettings.privacy.directory": "Nur wenn du per Name auffindbar bist oder jemandem per Name schreibst: Minecraft-UUID, Anfragen bis {days} Tage",
-  "friendsSettings.privacy.nameLookupName": "Minecraft-Namenssuche",
-  "friendsSettings.privacy.nameLookup": "Name → UUID, nur beim Senden per Name",
+  "friendsSettings.privacy.directory": "Nur wenn du per Name auffindbar bist oder jemandem per Name schreibst: Minecraft-UUID, Anfragen bis {days} Tage. Den öffentlichen Schlüssel des Zertifikats und dessen Signaturen verarbeitet es nur zur Prüfung und speichert sie nicht.",
+  "friendsSettings.privacy.nameLookupName": "Minecraft-Namenssuche und Kontonachweis",
+  "friendsSettings.privacy.nameLookup": "Name → UUID beim Senden per Name; ein von Mojang signiertes Spielerzertifikat als Kontonachweis für das Verzeichnis, dazu die Multiplayer-Berechtigung des Kontos (Zertifikat und Attribute). Das Zugriffstoken geht nur an Mojang, nie an das Verzeichnis.",
 
   // Einstellungen › Java & Start
   "friendsSettings.onPlayAside": "Mit aktivierten Freunden wird der Launcher nur minimiert.",

@@ -1,12 +1,15 @@
-// Freunde-Verzeichnis für Pumpkin Launcher: weist Minecraft-Konten über Mojang nach, führt die Liste derer, die per Name
-// auffindbar sein wollen, und verwahrt Freundesanfragen bis zu 14 Tage. Entwurf und Begründung: docs/friends/BYNAME.md.
-// Der Worker sieht nie Minecraft-Zugangsdaten, Anwesenheit, Verbindungen oder den Ausgang einer Anfrage.
+// Friends directory for Pumpkin Launcher: checks Minecraft accounts offline with Mojang-signed player certificates,
+// keeps the list of those who want to be findable by name, and holds friend requests for up to 14 days.
+// Design: docs/friends/BYNAME.md and BYNAME-ATTEST.md. The Worker makes no subrequests and never sees Minecraft
+// credentials, presence, connections or the outcome of a request.
 import { authenticate, issueChallenge, openSession } from "./auth.js";
 import { answerLetter, listInbox, retractLetter, sendLetter } from "./letters.js";
 import { addBlock, purgeStale, readBlockFacts, registerUser, removeBlock, unregisterUser } from "./store.js";
-import { fail, json, noContent, nowSeconds, parseObject } from "./util.js";
+import { concat, fail, json, noContent, nowSeconds, parseObject } from "./util.js";
 
 const MAX_BODY = 2048;
+// A2 carries a player certificate (BYNAME-ATTEST 1.3): 1,974 bytes today, 2,658 with an RSA-4096 certificate key.
+const MAX_SESSION_BODY = 4096;
 const MAX_BLOCKS = 1000;
 // Zeitraum der Begrenzung in Sekunden, muss zu `period` in wrangler.toml passen (der Worker kann ihn aus der Bindung nicht lesen).
 const LIMIT_PERIOD = "60";
@@ -38,21 +41,36 @@ async function unblock({ env, claims, params }) {
   return noContent();
 }
 
-const route = (method, path, handler, authenticated = true) => ({ method, pattern: new RegExp(`^/v1/${path}$`), handler, authenticated });
+const route = (method, path, handler, { authenticated = true, maxBody = MAX_BODY } = {}) => ({
+  method,
+  pattern: new RegExp(`^/${path}$`),
+  handler,
+  authenticated,
+  maxBody,
+});
+const OPEN = { authenticated: false };
 
 // Ids in den Pfaden sind Teil des Musters: Eine falsch geformte Id ist ein unbekannter Pfad.
 const ROUTES = [
-  route("POST", "auth/challenge", issueChallenge, false),
-  route("POST", "auth/session", openSession, false),
-  route("PUT", "me", register),
-  route("DELETE", "me", unregister),
-  route("POST", "outbox", sendLetter),
-  route("DELETE", `outbox/(?<id>${LETTER_ID})`, retractLetter),
-  route("GET", "inbox", listInbox),
-  route("DELETE", `inbox/(?<id>${LETTER_ID})`, answerLetter),
-  route("PUT", `blocks/(?<uuid>${UUID})`, block),
-  route("DELETE", `blocks/(?<uuid>${UUID})`, unblock),
+  route("POST", "v2/auth/challenge", issueChallenge, OPEN),
+  route("POST", "v2/auth/session", openSession, { ...OPEN, maxBody: MAX_SESSION_BODY }),
+  route("PUT", "v1/me", register),
+  route("DELETE", "v1/me", unregister),
+  route("POST", "v1/outbox", sendLetter),
+  route("DELETE", `v1/outbox/(?<id>${LETTER_ID})`, retractLetter),
+  route("GET", "v1/inbox", listInbox),
+  route("DELETE", `v1/inbox/(?<id>${LETTER_ID})`, answerLetter),
+  route("PUT", `v1/blocks/(?<uuid>${UUID})`, block),
+  route("DELETE", `v1/blocks/(?<uuid>${UUID})`, unblock),
 ];
+
+// The 2.0.0 login (a Mojang call from the Worker) can never succeed. Refusing its first step keeps old
+// launchers from making a pointless Mojang `join` before the second.
+const RETIRED = [
+  ["POST", "/v1/auth/challenge"],
+  ["POST", "/v1/auth/session"],
+];
+const isRetired = (method, pathname) => RETIRED.some(([retiredMethod, path]) => retiredMethod === method && path === pathname);
 
 function matchRoute(method, pathname) {
   for (const candidate of ROUTES) {
@@ -69,20 +87,37 @@ async function overLimit(limiter, key) {
 
 const tooManyRequests = () => fail("rateLimited", 429, { "retry-after": LIMIT_PERIOD });
 
-/** Der Text der Anfrage, null wenn er größer als MAX_BODY Bytes ist. */
-async function readBody(request) {
-  const bytes = new Uint8Array(await request.arrayBuffer());
-  return bytes.length > MAX_BODY ? null : new TextDecoder().decode(bytes);
+/** The request body as text, null when it is larger than `maxBody` bytes; a declared oversize is refused unread. */
+async function readBody(request, maxBody) {
+  if (Number(request.headers.get("content-length")) > maxBody) return null;
+  const bytes = request.body ? await readAtMost(request.body, maxBody) : new Uint8Array(0);
+  return bytes && new TextDecoder().decode(bytes);
 }
 
-async function serve(request, env, { handler, authenticated, params }) {
+/** The stream's bytes, or null as soon as more than `maxBytes` arrived (the rest is never read). */
+async function readAtMost(stream, maxBytes) {
+  const reader = stream.getReader();
+  const chunks = [];
+  let size = 0;
+  for (let read = await reader.read(); !read.done; read = await reader.read()) {
+    size += read.value.length;
+    if (size > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(read.value);
+  }
+  return concat(chunks);
+}
+
+async function serve(request, env, { handler, authenticated, maxBody, params, host }) {
   // Schlüssel der Begrenzung ist die IP des Nutzers; Anfragen ohne `cf-connecting-ip` teilen sich einen Eimer.
   if (await overLimit(env.LIMITER_IP, request.headers.get("cf-connecting-ip") ?? "unbekannt")) return tooManyRequests();
-  const text = await readBody(request);
+  const text = await readBody(request, maxBody);
   if (text === null) return fail("tooLarge", 413);
 
   const now = nowSeconds(env);
-  const context = { env, now, text, params };
+  const context = { env, now, text, params, host };
   if (!authenticated) return handler(context);
 
   const claims = await authenticate(request, env, now);
@@ -91,20 +126,24 @@ async function serve(request, env, { handler, authenticated, params }) {
   return handler({ ...context, claims });
 }
 
+async function handleRequest(request, env) {
+  // Der Launcher ist keine Webseite; Browser-Anfragen anderer Seiten sollen das Verzeichnis nicht mitnutzen.
+  if (request.headers.has("origin")) return fail("forbidden", 403);
+  const url = new URL(request.url);
+  if (isRetired(request.method, url.pathname)) return fail("gone", 410);
+  const found = matchRoute(request.method, url.pathname);
+  if (!found) return fail("notFound", 404);
+  // Ohne Datenbank, Begrenzung oder Schlüssel lieber gar nicht antworten als ungeschützt.
+  if (BINDINGS.some((name) => !env[name])) return fail("notConfigured", 503);
+  try {
+    return await serve(request, env, { ...found, host: url.hostname });
+  } catch {
+    return fail("internal", 500);
+  }
+}
+
 export default {
-  async fetch(request, env) {
-    // Der Launcher ist keine Webseite; Browser-Anfragen anderer Seiten sollen das Verzeichnis nicht mitnutzen.
-    if (request.headers.has("origin")) return fail("forbidden", 403);
-    const found = matchRoute(request.method, new URL(request.url).pathname);
-    if (!found) return fail("notFound", 404);
-    // Ohne Datenbank, Begrenzung oder Schlüssel lieber gar nicht antworten als ungeschützt.
-    if (BINDINGS.some((name) => !env[name])) return fail("notConfigured", 503);
-    try {
-      return await serve(request, env, found);
-    } catch {
-      return fail("internal", 500);
-    }
-  },
+  fetch: handleRequest,
 
   async scheduled(_event, env) {
     await purgeStale(env.DB, nowSeconds(env));

@@ -2,22 +2,29 @@
 //! beim Annehmen bei Mojang landen und wann ein Brief aus dem Postfach glaubwürdig ist. Kein Netz, kein Zustand.
 use std::str::FromStr;
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use data_encoding::HEXLOWER;
 use sha2::{Digest, Sha256};
 
+use super::certificate::PlayerCertificate;
+use super::wire::SessionRequest;
 use crate::services::friends::contract::REQUEST_TTL_SECS;
-use crate::services::friends::identity;
-use crate::services::friends::sanitize;
+use crate::services::friends::identity::{self, Identity};
 use crate::services::p2p::PeerId;
 
 pub const LETTER_DOMAIN: &[u8] = b"pumpkin/name-request/1";
-pub const AUTH_DOMAIN: &[u8] = b"pumpkin/directory-auth/1";
+/// Layout L1 (BYNAME-ATTEST 2): the friends key logs this peer id in for this account.
+pub const AUTH_DOMAIN: &[u8] = b"pumpkin/directory-auth/2";
+/// Layout L2: the holder of Mojang's certificate key logs in with this peer id. Never a Minecraft chat format.
+pub const CERT_DOMAIN: &[u8] = b"pumpkin/directory-cert/1";
 const REDEEMER_DOMAIN: &[u8] = b"pumpkin/name-proof/redeemer/1";
 const OWNER_DOMAIN: &[u8] = b"pumpkin/name-proof/owner/1";
 
 /// Wie weit die Uhr eines Absenders und die des Verzeichnisses auseinanderliegen dürfen.
 pub const CLOCK_SKEW_SECS: u64 = 600;
 const SERVER_ID_HEX_LEN: usize = 40;
+const HOST_TAG_LEN: usize = 16;
 
 /// Die Teile einer Signatur in ihrer Reihenfolge, bereit für `Identity::sign` und `identity::verify`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +33,11 @@ pub struct SignedParts(Vec<Vec<u8>>);
 impl SignedParts {
     pub fn as_slices(&self) -> Vec<&[u8]> {
         self.0.iter().map(Vec::as_slice).collect()
+    }
+
+    /// The signed bytes for a key that does not prepend a domain itself (the certificate key): domain ‖ parts.
+    pub fn message(&self, domain: &[u8]) -> Vec<u8> {
+        [domain].into_iter().chain(self.as_slices()).flatten().copied().collect()
     }
 }
 
@@ -46,7 +58,6 @@ pub struct LetterFields<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct StampedLetter<'a> {
     pub fields: LetterFields<'a>,
-    pub from_name: &'a str,
     pub from_peer_id: &'a str,
     pub expires_at: u64,
     pub signature: &'a str,
@@ -113,10 +124,37 @@ pub fn letter_parts(fields: &LetterFields) -> Option<SignedParts> {
     ]))
 }
 
-/// Die `serverId` geht als 40 ASCII-Zeichen in die Signatur, nicht als Bytes. `None` bei falsch geformten Eingaben.
-pub fn auth_parts(server_id: &str, peer_id: &str) -> Option<SignedParts> {
+/// What L1 and L2 sign after their domain (BYNAME-ATTEST 2 with review finding 4):
+/// SHA-256(host)[0..16] ‖ serverId (40 ASCII characters) ‖ peerId (32 bytes) ‖ uuid (16 bytes). `host` is the
+/// directory's hostname, so signatures made for another directory are worthless at this one. `None` for a `serverId`
+/// that is not 40 lowercase hex digits or a malformed peer id or uuid: the launcher signs nothing else.
+pub fn login_parts(host: &str, server_id: &str, peer_id: &str, uuid: &str) -> Option<SignedParts> {
     decode::<20>(server_id)?;
-    Some(SignedParts(vec![server_id.as_bytes().to_vec(), decode::<32>(peer_id)?.to_vec()]))
+    let host_tag = Sha256::digest(host.as_bytes())[..HOST_TAG_LEN].to_vec();
+    Some(SignedParts(vec![
+        host_tag,
+        server_id.as_bytes().to_vec(),
+        decode::<32>(peer_id)?.to_vec(),
+        decode::<16>(uuid)?.to_vec(),
+    ]))
+}
+
+/// The login body (BYNAME-ATTEST 1.2): the certificate's public part, L2 with its key and L1 with the friends key.
+/// `None` if the certificate key cannot sign.
+pub fn session_request(
+    challenge: String,
+    parts: &SignedParts,
+    identity: &Identity,
+    certificate: &PlayerCertificate,
+) -> Option<SessionRequest> {
+    let cert_signature = certificate.sign(&parts.message(CERT_DOMAIN))?;
+    Some(SessionRequest {
+        challenge,
+        uuid: certificate.uuid.clone(),
+        certificate: certificate.proof(),
+        cert_signature: STANDARD.encode(cert_signature),
+        signature: HEXLOWER.encode(&identity.sign(AUTH_DOMAIN, &parts.as_slices())),
+    })
 }
 
 /// Prüft einen Brief aus dem Postfach (BYNAME 7.2). Ob der Absender schon Freund oder gesperrt ist, weiß nur der Dienst.
@@ -127,7 +165,6 @@ pub fn validate_letter(
 ) -> Result<(), Rejection> {
     let fields = &letter.fields;
     let sender_is_plausible = fields.from_uuid != me.uuid
-        && sanitize::mc_name(Some(letter.from_name)).is_some()
         && is_other_peer(letter.from_peer_id, me.peer_id)
         && PeerId::from_str(fields.hello_id).is_ok();
     let is_addressed_to_me = fields.to == me.uuid;
@@ -160,9 +197,16 @@ fn decode<const N: usize>(hex: &str) -> Option<[u8; N]> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::services::friends::identity::Identity;
+    use ring::signature::{UnparsedPublicKey, RSA_PKCS1_2048_8192_SHA1_FOR_LEGACY_USE_ONLY};
+    use sha1::Sha1;
 
+    use super::super::certificate::parse;
+    use super::super::certificate::test_vectors::{vectors, Draft, Inputs};
+    use super::*;
+
+    /// An RSA-2048 SubjectPublicKeyInfo: a 24-byte header, then the PKCS#1 RSAPublicKey ring expects.
+    const RSA_2048_SPKI_LEN: usize = 294;
+    const SPKI_HEADER_LEN: usize = 24;
     const SEED_PEER_ID: &str = "2543b92ff1095511476adc8369db6ddc933665a11978dda1404ee1066ca9559d";
     const UUID_RECIPIENT: &str = "069a79f444e94726a5befca90e38aaf5";
     const UUID_SENDER: &str = "853c80ef3c3749fdaa49938b674adae6";
@@ -210,12 +254,60 @@ mod tests {
         assert_eq!(signature_hex(LETTER_DOMAIN, &parts), expected);
     }
 
+    fn golden_login_parts() -> SignedParts {
+        let inputs = &vectors().inputs;
+        login_parts(&inputs.host, &inputs.server_id, &inputs.peer_id, &inputs.uuid).unwrap()
+    }
+
     #[test]
-    fn a2_auth_signature_matches_the_golden_vector() {
-        let parts = auth_parts("0123456789abcdef0123456789abcdef01234567", SEED_PEER_ID).unwrap();
-        let expected = "8b7c4551617ee1788f53e6a40929fb1a0bf2a7b1abce3e391740951277a5939c\
-                        6de27a93afba50d548ef66eb43dd6922fa1f489c75728f7af9f566ce95681000";
-        assert_eq!(signature_hex(AUTH_DOMAIN, &parts), expected);
+    fn the_seed_and_peer_id_of_the_worker_vectors_are_those_of_the_appendix() {
+        let inputs = &vectors().inputs;
+        assert_eq!(inputs.seed, HEXLOWER.encode(&bytes_from::<32>(0x40)));
+        assert_eq!(inputs.peer_id, SEED_PEER_ID);
+    }
+
+    #[test]
+    fn a2_l1_message_and_signature_match_the_worker_vector() {
+        let golden = &vectors().vectors.a2;
+        let message = golden_login_parts().message(AUTH_DOMAIN);
+        assert_eq!((message.len(), HEXLOWER.encode(&message)), (golden.length, golden.message.clone()));
+        assert_eq!(signature_hex(AUTH_DOMAIN, &golden_login_parts()), golden.signature);
+    }
+
+    #[test]
+    fn a5_l2_message_matches_the_worker_vector() {
+        let golden = &vectors().vectors.a5;
+        let message = golden_login_parts().message(CERT_DOMAIN);
+        assert_eq!((message.len(), HEXLOWER.encode(&message)), (golden.length, golden.message.clone()));
+        assert_eq!(HEXLOWER.encode(&Sha256::digest(&message)), golden.sha256);
+    }
+
+    #[test]
+    fn a6_l3_verifies_with_ring_against_the_fake_mojang_key() {
+        let (inputs, golden) = (&vectors().inputs, &vectors().vectors.a6);
+        let spki = vectors().fake_mojang.spki_der();
+        assert_eq!(spki.len(), RSA_2048_SPKI_LEN);
+        let payload = [
+            HEXLOWER.decode(inputs.uuid.as_bytes()).unwrap(),
+            inputs.expires_at_ms.to_be_bytes().to_vec(),
+            vectors().certificate.spki_der(),
+        ]
+        .concat();
+        assert_eq!((payload.len(), HEXLOWER.encode(&Sha1::digest(&payload))), (golden.length, golden.sha1.clone()));
+        let key = UnparsedPublicKey::new(&RSA_PKCS1_2048_8192_SHA1_FOR_LEGACY_USE_ONLY, &spki[SPKI_HEADER_LEN..]);
+        assert!(key.verify(&payload, &STANDARD.decode(&golden.signature).unwrap()).is_ok());
+    }
+
+    #[test]
+    fn the_session_request_carries_both_signatures_over_the_login_parts() {
+        let inputs = &vectors().inputs;
+        let certificate = parse(&inputs.uuid, &Draft::of(&vectors().certificate, 0).body()).unwrap();
+        let parts = golden_login_parts();
+        let request = session_request("c".into(), &parts, &seed_identity(), &certificate).unwrap();
+        assert_eq!((request.challenge.as_str(), request.uuid.as_str()), ("c", inputs.uuid.as_str()));
+        assert_eq!(request.cert_signature, vectors().vectors.a5.signature);
+        assert_eq!(request.signature, vectors().vectors.a2.signature);
+        assert_eq!(request.certificate, certificate.proof());
     }
 
     #[test]
@@ -254,11 +346,31 @@ mod tests {
     }
 
     #[test]
-    fn auth_parts_refuse_malformed_inputs() {
-        let server_id = "0123456789abcdef0123456789abcdef01234567";
-        assert_eq!(auth_parts("0123456789ABCDEF0123456789ABCDEF01234567", SEED_PEER_ID), None);
-        assert_eq!(auth_parts(&server_id[..38], SEED_PEER_ID), None);
-        assert_eq!(auth_parts(server_id, "abcd"), None);
+    fn login_parts_refuse_a_server_id_that_is_not_40_lowercase_hex_and_malformed_ids() {
+        let inputs = &vectors().inputs;
+        let (server_id, peer_id, uuid) = (inputs.server_id.as_str(), inputs.peer_id.as_str(), inputs.uuid.as_str());
+        let (longer, upper_uuid) = (format!("{server_id}8"), uuid.to_uppercase());
+        let refused = [
+            ("0123456789ABCDEF0123456789ABCDEF01234567", peer_id, uuid),
+            (&server_id[..38], peer_id, uuid),
+            (&longer, peer_id, uuid),
+            ("0123456789abcdef0123456789abcdef0123456g", peer_id, uuid),
+            (server_id, "abcd", uuid),
+            (server_id, peer_id, &upper_uuid),
+        ];
+        for (server_id, peer_id, uuid) in refused {
+            assert_eq!(login_parts(&inputs.host, server_id, peer_id, uuid), None, "{server_id} {peer_id} {uuid}");
+        }
+    }
+
+    #[test]
+    fn login_parts_are_bound_to_the_directory_host() {
+        let Inputs { server_id, peer_id, uuid, .. } = &vectors().inputs;
+        assert_eq!(HEXLOWER.encode(golden_login_parts().as_slices()[0]), vectors().inputs.host_tag);
+        let here = login_parts("directory.example", server_id, peer_id, uuid).unwrap();
+        let elsewhere = login_parts("fork.example", server_id, peer_id, uuid).unwrap();
+        assert_ne!(here.message(AUTH_DOMAIN), elsewhere.message(AUTH_DOMAIN));
+        assert_eq!(here.message(AUTH_DOMAIN).len(), elsewhere.message(AUTH_DOMAIN).len());
     }
 
     /// Ein gültiger Brief des Absenders mit der Seed-Identität an einen Empfänger mit eigener Identität.
@@ -266,7 +378,6 @@ mod tests {
         recipient: Identity,
         fields: LetterFields<'static>,
         hello_id: String,
-        from_name: String,
         from_peer_id: String,
         expires_at: u64,
         signature: String,
@@ -279,7 +390,6 @@ mod tests {
                 recipient: Identity::from_secret_bytes(&bytes_from::<32>(0x60)),
                 fields: golden_fields(),
                 hello_id,
-                from_name: "Alex".into(),
                 from_peer_id: SEED_PEER_ID.into(),
                 expires_at: 1_790_000_000 + REQUEST_TTL_SECS,
                 signature: String::new(),
@@ -304,7 +414,6 @@ mod tests {
         fn check(&self, now: u64, relay_is_known: bool) -> Result<(), Rejection> {
             let letter = StampedLetter {
                 fields: self.fields_with_own_hello_id(),
-                from_name: &self.from_name,
                 from_peer_id: &self.from_peer_id,
                 expires_at: self.expires_at,
                 signature: &self.signature,
@@ -335,11 +444,10 @@ mod tests {
     }
 
     #[test]
-    fn a_stamp_that_is_not_a_name_uuid_or_peer_id_is_malformed() {
-        let bad_name = Fixture { from_name: "Alex!".into(), ..Fixture::valid() };
+    fn a_stamp_that_is_not_a_uuid_or_peer_id_is_malformed() {
         let bad_peer = Fixture { from_peer_id: "abcd".into(), ..Fixture::valid() };
         let bad_uuid = Fixture { fields: LetterFields { from_uuid: "ABC", ..golden_fields() }, ..Fixture::valid() };
-        for fixture in [bad_name, bad_peer, bad_uuid] {
+        for fixture in [bad_peer, bad_uuid] {
             assert_eq!(fixture.check(NOW, true), Err(Rejection::Malformed));
         }
     }
@@ -399,7 +507,7 @@ mod tests {
 
     #[test]
     fn a_forged_letter_with_an_unknown_relay_is_still_malformed() {
-        let fixture = Fixture { from_name: "Alex!".into(), ..Fixture::valid() };
+        let fixture = Fixture { from_peer_id: "abcd".into(), ..Fixture::valid() };
         assert_eq!(fixture.check(NOW, false), Err(Rejection::Malformed));
     }
 }

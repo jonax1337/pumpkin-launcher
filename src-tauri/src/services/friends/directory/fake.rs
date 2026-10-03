@@ -6,20 +6,34 @@ use std::future::ready;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use data_encoding::HEXLOWER;
 use futures::future::BoxFuture;
 use futures::FutureExt;
+use ring::signature::{UnparsedPublicKey, RSA_PKCS1_2048_8192_SHA256};
+use sha2::{Digest, Sha256};
 
 use super::api::DirectoryApi;
-use super::mojang::{MojangError, MojangProfile, MojangSessions};
-use super::proof::{auth_parts, letter_parts, LetterFields, AUTH_DOMAIN, LETTER_DOMAIN};
+use super::certificate::test_vectors::{vectors, Draft, TestKey};
+use super::certificate::{self, PlayerCertificate};
+use super::mojang::{MojangError, MojangProfile, MojangSessions, Privileges};
+use super::proof::{letter_parts, login_parts, session_request, LetterFields, AUTH_DOMAIN, CERT_DOMAIN, LETTER_DOMAIN};
 use super::wire::{Challenge, DirectorySession, InboxLetter, LetterFrom, OutgoingLetter, SentLetter, SessionRequest};
 use super::{DirectoryError, McIdentity};
 use crate::services::friends::contract::REQUEST_TTL_SECS;
 use crate::services::friends::identity::{self, Identity};
-use crate::services::friends::sanitize;
 use crate::services::friends::service::now_secs;
 
+/// The hostname the fake directory binds logins to; services under test use it as `DirectoryDeps.host`.
+pub const DIRECTORY_HOST: &str = "verzeichnis.example";
+const MILLIS: u64 = 1000;
+const HOUR_MS: i64 = 3_600_000;
+/// An RSA-2048 SubjectPublicKeyInfo: a 24-byte header, then the PKCS#1 RSAPublicKey ring expects.
+const RSA_2048_SPKI_LEN: usize = 294;
+const SPKI_HEADER_LEN: usize = 24;
+const MAX_PUBLIC_KEY_BYTES: usize = 800;
+const MAX_SIGNATURE_BYTES: usize = 1024;
 const DAY: u64 = 86_400;
 const CHALLENGE_TTL: u64 = 120;
 const TOKEN_TTL: u64 = 6 * 3600;
@@ -45,11 +59,19 @@ fn is_hex(value: &str, bytes: usize) -> bool {
     value.len() == bytes * 2 && value.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
-/// Mojangs Session-Server und Namenssuche mit den Konten, die ein Test anlegt.
-#[derive(Default)]
+/// Mojang's session server, name lookup, player certificates and account attributes with the accounts a test creates,
+/// and the servers' clock (Mojang's and the directory's agree).
 pub struct FakeMojang {
     state: Mutex<MojangState>,
     unreachable: AtomicBool,
+    /// The servers' clock stands still unless a test moves it, so no outcome depends on how long a step takes.
+    clock: AtomicU64,
+}
+
+impl Default for FakeMojang {
+    fn default() -> Self {
+        Self { state: Mutex::default(), unreachable: AtomicBool::new(false), clock: AtomicU64::new(now_secs()) }
+    }
 }
 
 #[derive(Default)]
@@ -58,6 +80,31 @@ struct MojangState {
     /// (UUID, serverId) in der Reihenfolge der Aufrufe.
     joins: Vec<(String, String)>,
     refusals: HashMap<String, MojangError>,
+    certificate_refusals: HashMap<String, MojangError>,
+    /// Accounts without an entry are allowed.
+    privileges: HashMap<String, Privileges>,
+    next_lifetime: Option<CertificateLifetime>,
+    signs_with_unpinned_key: bool,
+    issued: Vec<IssuedCertificate>,
+    /// UUIDs asked for at the profile route, in the order of the calls.
+    profile_lookups: Vec<String>,
+}
+
+/// When a certificate wants a refresh and when it expires, in epoch milliseconds.
+#[derive(Debug, Clone, Copy)]
+pub struct CertificateLifetime {
+    pub refreshed_after_ms: i64,
+    pub expires_at_ms: i64,
+}
+
+/// What Mojang's signature (layout L3) covers, and whether a key the directory pins made it.
+#[derive(Debug, PartialEq, Eq)]
+struct IssuedCertificate {
+    uuid: String,
+    public_key: Vec<u8>,
+    expires_at_ms: i64,
+    mojang_signature: Vec<u8>,
+    pinned: bool,
 }
 
 impl FakeMojang {
@@ -67,13 +114,39 @@ impl FakeMojang {
         account
     }
 
+    /// The account changes its name; profile lookups and `hasJoined` answer with the new one.
+    pub fn rename(&self, uuid: &str, name: &str) {
+        let mut state = self.state();
+        state.accounts.iter_mut().filter(|account| account.uuid == uuid).for_each(|account| account.name = name.to_owned());
+    }
+
+    /// The account no longer exists.
+    pub fn delete_account(&self, uuid: &str) {
+        self.state().accounts.retain(|account| account.uuid != uuid);
+    }
+
     /// Ab jetzt lehnt `join` dieses Konto mit `error` ab; `None` hebt das auf.
     pub fn refuse_joins(&self, uuid: &str, error: Option<MojangError>) {
-        let mut state = self.state();
-        match error {
-            Some(error) => state.refusals.insert(uuid.to_owned(), error),
-            None => state.refusals.remove(uuid),
-        };
+        set_or_clear(&mut self.state().refusals, uuid, error);
+    }
+
+    /// From now on `/player/certificates` refuses this account with `error`; `None` lifts that.
+    pub fn refuse_certificates(&self, uuid: &str, error: Option<MojangError>) {
+        set_or_clear(&mut self.state().certificate_refusals, uuid, error);
+    }
+
+    pub fn set_privileges(&self, uuid: &str, privileges: Privileges) {
+        self.state().privileges.insert(uuid.to_owned(), privileges);
+    }
+
+    /// The next certificate issued gets this lifetime; later ones the usual 40 h until refresh and 48 h until expiry.
+    pub fn next_certificate_lifetime(&self, lifetime: CertificateLifetime) {
+        self.state().next_lifetime = Some(lifetime);
+    }
+
+    /// Mojang signs new certificates with a key the directory does not pin (a key rotation the Worker missed).
+    pub fn sign_with_unpinned_key(&self, unpinned: bool) {
+        self.state().signs_with_unpinned_key = unpinned;
     }
 
     pub fn set_unreachable(&self, unreachable: bool) {
@@ -85,6 +158,27 @@ impl FakeMojang {
         self.state().joins.clone()
     }
 
+    pub fn certificates_issued_to(&self, uuid: &str) -> usize {
+        self.state().issued.iter().filter(|issued| issued.uuid == uuid).count()
+    }
+
+    pub fn profile_lookups_of(&self, uuid: &str) -> usize {
+        self.state().profile_lookups.iter().filter(|looked_up| *looked_up == uuid).count()
+    }
+
+    /// The servers' clock: the moment this fake was made, moved forward by [`FakeMojang::advance`].
+    pub fn now(&self) -> u64 {
+        self.clock.load(Ordering::SeqCst)
+    }
+
+    pub fn now_ms(&self) -> i64 {
+        i64::try_from(self.now() * MILLIS).expect("epoch milliseconds fit an i64")
+    }
+
+    pub fn advance(&self, secs: u64) {
+        self.clock.fetch_add(secs, Ordering::SeqCst);
+    }
+
     fn state(&self) -> MutexGuard<'_, MojangState> {
         self.state.lock().unwrap()
     }
@@ -93,14 +187,64 @@ impl FakeMojang {
         if self.unreachable.load(Ordering::SeqCst) { Err(MojangError::Unreachable) } else { Ok(()) }
     }
 
+    fn certificate_now(&self, session: &McIdentity) -> Result<PlayerCertificate, MojangError> {
+        self.ensure_reachable()?;
+        let standard = self.standard_lifetime();
+        let mut state = self.state();
+        if let Some(error) = state.certificate_refusals.get(&session.uuid) {
+            return Err(error.clone());
+        }
+        let index = state.accounts.iter().position(|account| is_same_session(account, session)).ok_or(MojangError::InvalidSession)?;
+        let lifetime = state.next_lifetime.take().unwrap_or(standard);
+        let issued = IssuedCertificate::new(&session.uuid, key_of_account(index), lifetime, !state.signs_with_unpinned_key);
+        let certificate = issued.certificate(key_of_account(index), lifetime);
+        state.issued.push(issued);
+        Ok(certificate)
+    }
+
+    fn standard_lifetime(&self) -> CertificateLifetime {
+        let now_ms = self.now_ms();
+        CertificateLifetime { refreshed_after_ms: now_ms + 40 * HOUR_MS, expires_at_ms: now_ms + 48 * HOUR_MS }
+    }
+
+    /// A token Mojang does not know gets a 401, like the real `/player/attributes`.
+    fn privileges_now(&self, session: &McIdentity) -> Privileges {
+        let state = self.state();
+        let is_known = state.accounts.iter().any(|account| is_same_session(account, session));
+        let reachable = !self.unreachable.load(Ordering::SeqCst);
+        match state.privileges.get(&session.uuid) {
+            _ if !(reachable && is_known) => Privileges::Unknown,
+            Some(privileges) => *privileges,
+            None => Privileges::Allowed,
+        }
+    }
+
+    fn profile_now(&self, uuid: &str) -> Result<Option<MojangProfile>, MojangError> {
+        self.state().profile_lookups.push(uuid.to_owned());
+        self.ensure_reachable()?;
+        Ok(self.state().accounts.iter().find(|account| account.uuid == uuid).map(profile_of))
+    }
+
+    /// The stand-in for checking layout L3 with the pinned keys: Mojang issued exactly this certificate with a pinned
+    /// key.
+    fn signed_with_pinned_key(&self, uuid: &str, presented: &Presented) -> bool {
+        let presented = IssuedCertificate {
+            uuid: uuid.to_owned(),
+            public_key: presented.public_key.clone(),
+            expires_at_ms: presented.expires_at_ms,
+            mojang_signature: presented.mojang_signature.clone(),
+            pinned: true,
+        };
+        self.state().issued.contains(&presented)
+    }
+
     fn join_now(&self, session: &McIdentity, server_id: &str) -> Result<(), MojangError> {
         self.ensure_reachable()?;
         let mut state = self.state();
         if let Some(error) = state.refusals.get(&session.uuid) {
             return Err(error.clone());
         }
-        let known = state.accounts.iter().any(|account| account.uuid == session.uuid && account.access_token == session.access_token);
-        if !known {
+        if !state.accounts.iter().any(|account| is_same_session(account, session)) {
             return Err(MojangError::InvalidSession);
         }
         state.joins.push((session.uuid.clone(), server_id.to_owned()));
@@ -128,6 +272,45 @@ fn profile_of(account: &McIdentity) -> MojangProfile {
     MojangProfile { uuid: account.uuid.clone(), name: account.name.clone() }
 }
 
+fn is_same_session(account: &McIdentity, session: &McIdentity) -> bool {
+    account.uuid == session.uuid && account.access_token == session.access_token
+}
+
+fn set_or_clear(refusals: &mut HashMap<String, MojangError>, uuid: &str, error: Option<MojangError>) {
+    match error {
+        Some(error) => refusals.insert(uuid.to_owned(), error),
+        None => refusals.remove(uuid),
+    };
+}
+
+/// The fixed test keys, alternating per account in the order the test created them.
+fn key_of_account(index: usize) -> &'static TestKey {
+    if index.is_multiple_of(2) { &vectors().certificate } else { &vectors().other }
+}
+
+impl IssuedCertificate {
+    /// Mojang's signature is a stand-in (ring cannot sign SHA-1): a digest of what L3 covers and of which key signed.
+    fn new(uuid: &str, key: &TestKey, lifetime: CertificateLifetime, pinned: bool) -> Self {
+        let public_key = key.spki_der();
+        let digest = Sha256::new()
+            .chain_update(HEXLOWER.decode(uuid.as_bytes()).expect("accounts have hex UUIDs"))
+            .chain_update(lifetime.expires_at_ms.to_be_bytes())
+            .chain_update(&public_key)
+            .chain_update([u8::from(pinned)])
+            .finalize();
+        Self { uuid: uuid.to_owned(), public_key, expires_at_ms: lifetime.expires_at_ms, mojang_signature: digest.to_vec(), pinned }
+    }
+
+    /// The certificate as the launcher reads it from Mojang's answer.
+    fn certificate(&self, key: &TestKey, lifetime: CertificateLifetime) -> PlayerCertificate {
+        let draft = Draft {
+            mojang_signature: self.mojang_signature.clone(),
+            ..Draft::with_lifetime(key, lifetime.refreshed_after_ms, lifetime.expires_at_ms)
+        };
+        certificate::parse(&self.uuid, &draft.body()).expect("the synthetic certificate parses")
+    }
+}
+
 impl MojangSessions for FakeMojang {
     fn join<'a>(&'a self, session: &'a McIdentity, server_id: &'a str) -> BoxFuture<'a, Result<(), MojangError>> {
         ready(self.join_now(session, server_id)).boxed()
@@ -140,6 +323,51 @@ impl MojangSessions for FakeMojang {
     fn lookup_name<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<Option<MojangProfile>, MojangError>> {
         ready(self.lookup_now(name)).boxed()
     }
+
+    fn certificate<'a>(&'a self, session: &'a McIdentity) -> BoxFuture<'a, Result<PlayerCertificate, MojangError>> {
+        ready(self.certificate_now(session)).boxed()
+    }
+
+    fn privileges<'a>(&'a self, session: &'a McIdentity) -> BoxFuture<'a, Privileges> {
+        ready(self.privileges_now(session)).boxed()
+    }
+
+    fn profile<'a>(&'a self, uuid: &'a str) -> BoxFuture<'a, Result<Option<MojangProfile>, MojangError>> {
+        ready(self.profile_now(uuid)).boxed()
+    }
+}
+
+/// The public part of a presented certificate and both signatures, decoded; `None` for any malformed field.
+struct Presented {
+    public_key: Vec<u8>,
+    expires_at_ms: i64,
+    mojang_signature: Vec<u8>,
+    cert_signature: Vec<u8>,
+    signature: [u8; 64],
+}
+
+impl Presented {
+    fn decode(request: &SessionRequest) -> Option<Self> {
+        let bounded = |base64: &str, max: usize| STANDARD.decode(base64).ok().filter(|bytes| (1..=max).contains(&bytes.len()));
+        let certificate = &request.certificate;
+        (is_hex(&request.uuid, 16) && certificate.expires_at > 0).then_some(())?;
+        Some(Self {
+            public_key: bounded(&certificate.public_key, MAX_PUBLIC_KEY_BYTES)?,
+            expires_at_ms: certificate.expires_at,
+            mojang_signature: bounded(&certificate.mojang_signature, MAX_SIGNATURE_BYTES)?,
+            cert_signature: bounded(&request.cert_signature, MAX_SIGNATURE_BYTES)?,
+            signature: decode_signature(&request.signature)?,
+        })
+    }
+
+    /// L2 with ring, like the Worker with WebCrypto; the test keys are RSA-2048.
+    fn verify_l2(&self, message: &[u8]) -> Result<(), DirectoryError> {
+        if self.public_key.len() != RSA_2048_SPKI_LEN {
+            return Err(DirectoryError::BadCertificate);
+        }
+        let key = UnparsedPublicKey::new(&RSA_PKCS1_2048_8192_SHA256, &self.public_key[SPKI_HEADER_LEN..]);
+        key.verify(message, &self.cert_signature).map_err(|_| DirectoryError::Invalid("badSignature"))
+    }
 }
 
 struct IssuedChallenge {
@@ -151,7 +379,6 @@ struct IssuedChallenge {
 #[derive(Clone)]
 struct Claims {
     uuid: String,
-    name: String,
     peer_id: String,
     expires_at: u64,
 }
@@ -176,25 +403,25 @@ struct DirectoryState {
     inbox_reads: usize,
 }
 
-/// Der Worker im Speicher. Die Uhr ist die echte, vorgestellt um [`FakeDirectory::advance`].
+/// The Worker in memory, bound to [`DIRECTORY_HOST`]. Its clock is the servers' clock of [`FakeMojang`].
 pub struct FakeDirectory {
     mojang: Arc<FakeMojang>,
     state: Mutex<DirectoryState>,
-    clock_offset: AtomicU64,
     unreachable: AtomicBool,
 }
 
 impl FakeDirectory {
     pub fn new(mojang: Arc<FakeMojang>) -> Self {
-        Self { mojang, state: Mutex::default(), clock_offset: AtomicU64::new(0), unreachable: AtomicBool::new(false) }
+        Self { mojang, state: Mutex::default(), unreachable: AtomicBool::new(false) }
     }
 
     pub fn now(&self) -> u64 {
-        now_secs() + self.clock_offset.load(Ordering::SeqCst)
+        self.mojang.now()
     }
 
+    /// Moves the servers' clock, Mojang's included.
     pub fn advance(&self, secs: u64) {
-        self.clock_offset.fetch_add(secs, Ordering::SeqCst);
+        self.mojang.advance(secs);
     }
 
     /// Solange gesetzt, antwortet jeder Aufruf mit [`DirectoryError::Unreachable`].
@@ -261,39 +488,44 @@ impl FakeDirectory {
         Ok(Challenge { challenge, server_id, expires_at })
     }
 
-    /// Prüft Form, Herausforderung und Signatur; liefert die `serverId` und die Peer-ID, an die die Sitzung gebunden wird.
-    fn verified_challenge(&self, request: &SessionRequest) -> Result<(String, String), DirectoryError> {
-        self.ensure_reachable()?;
-        if sanitize::mc_name(Some(&request.name)).is_none() || !is_hex(&request.signature, 64) {
-            return Err(DirectoryError::Invalid("invalid"));
-        }
+    /// The `serverId` and the peer id of a challenge that is known and not expired.
+    fn live_challenge(&self, challenge: &str) -> Result<(String, String), DirectoryError> {
         let state = self.state();
-        let issued = state.challenges.get(&request.challenge).ok_or(DirectoryError::Invalid("invalid"))?;
+        let issued = state.challenges.get(challenge).ok_or(DirectoryError::Invalid("invalid"))?;
         if issued.expires_at <= self.now() {
             return Err(DirectoryError::Invalid("challengeExpired"));
-        }
-        let parts = auth_parts(&issued.server_id, &issued.peer_id).ok_or(DirectoryError::Invalid("invalid"))?;
-        let signature = decode_signature(&request.signature).ok_or(DirectoryError::Invalid("invalid"))?;
-        if !identity::verify(&issued.peer_id, AUTH_DOMAIN, &parts.as_slices(), &signature) {
-            return Err(DirectoryError::Invalid("badSignature"));
         }
         Ok((issued.server_id.clone(), issued.peer_id.clone()))
     }
 
-    async fn open_session(&self, request: &SessionRequest) -> Result<DirectorySession, DirectoryError> {
-        let (server_id, peer_id) = self.verified_challenge(request)?;
-        let profile = match self.mojang.has_joined(&request.name, &server_id).await {
-            Ok(Some(profile)) => profile,
-            Ok(None) => return Err(DirectoryError::NotJoined),
-            Err(_) => return Err(DirectoryError::MojangUnavailable),
-        };
-        let expires_at = self.now() + TOKEN_TTL;
-        let token = format!("v1.{}", random_hex(48));
-        let claims = Claims { uuid: profile.uuid.clone(), name: profile.name.clone(), peer_id, expires_at };
+    /// A2 in the Worker's order (BYNAME-ATTEST 3.2): shape, challenge, L1, expiry, Mojang's signature, L2.
+    fn open_session(&self, request: &SessionRequest) -> Result<DirectorySession, DirectoryError> {
+        self.ensure_reachable()?;
+        let presented = Presented::decode(request).ok_or(DirectoryError::Invalid("invalid"))?;
+        let (server_id, peer_id) = self.live_challenge(&request.challenge)?;
+        let parts = login_parts(DIRECTORY_HOST, &server_id, &peer_id, &request.uuid).ok_or(DirectoryError::Invalid("invalid"))?;
+        if !identity::verify(&peer_id, AUTH_DOMAIN, &parts.as_slices(), &presented.signature) {
+            return Err(DirectoryError::Invalid("badSignature"));
+        }
+        if presented.expires_at_ms <= self.mojang.now_ms() {
+            return Err(DirectoryError::CertificateExpired);
+        }
+        if !self.mojang.signed_with_pinned_key(&request.uuid, &presented) {
+            return Err(DirectoryError::BadCertificate);
+        }
+        presented.verify_l2(&parts.message(CERT_DOMAIN))?;
+        Ok(self.mint_token(&request.uuid, peer_id, presented.expires_at_ms))
+    }
+
+    /// The token never outlives the certificate that proved its account.
+    fn mint_token(&self, uuid: &str, peer_id: String, certificate_expiry_ms: i64) -> DirectorySession {
+        let certificate_expiry = u64::try_from(certificate_expiry_ms).expect("checked against the clock") / MILLIS;
+        let expires_at = (self.now() + TOKEN_TTL).min(certificate_expiry);
+        let token = format!("v2.{}", random_hex(48));
         let mut state = self.state();
-        state.tokens.insert(token.clone(), claims);
+        state.tokens.insert(token.clone(), Claims { uuid: uuid.to_owned(), peer_id, expires_at });
         state.sessions_opened += 1;
-        Ok(DirectorySession { token, expires_at, uuid: profile.uuid, name: profile.name })
+        DirectorySession { token, expires_at, uuid: uuid.to_owned() }
     }
 
     fn register_now(&self, token: &str) -> Result<(), DirectoryError> {
@@ -443,7 +675,7 @@ fn validate_outgoing(letter: &OutgoingLetter, claims: &Claims, now: u64) -> Resu
 fn stamped(id: &str, letter: &OutgoingLetter, claims: &Claims, expires_at: u64) -> InboxLetter {
     InboxLetter {
         id: id.to_owned(),
-        from: LetterFrom { uuid: claims.uuid.clone(), name: claims.name.clone(), peer_id: claims.peer_id.clone() },
+        from: LetterFrom { uuid: claims.uuid.clone(), peer_id: claims.peer_id.clone() },
         to: letter.to.clone(),
         nonce: letter.nonce.clone(),
         hello_id: letter.hello_id.clone(),
@@ -462,7 +694,7 @@ impl DirectoryApi for FakeDirectory {
     }
 
     fn session<'a>(&'a self, request: &'a SessionRequest) -> BoxFuture<'a, Result<DirectorySession, DirectoryError>> {
-        self.open_session(request).boxed()
+        ready(self.open_session(request)).boxed()
     }
 
     fn register<'a>(&'a self, token: &'a str) -> BoxFuture<'a, Result<(), DirectoryError>> {
@@ -529,8 +761,23 @@ pub fn sign_letter(identity: &Identity, from_uuid: &str, letter: OutgoingLetter)
     OutgoingLetter { signature, ..letter }
 }
 
+/// The login of BYNAME-ATTEST as any client can perform it: Mojang's certificate, a challenge, both signatures.
+pub async fn log_in(directory: &FakeDirectory, identity: &Identity, account: &McIdentity) -> Result<DirectorySession, DirectoryError> {
+    let certificate = directory.mojang.certificate(account).await.expect("Mojang issues the certificate");
+    let challenge = directory.challenge(&identity.peer_id()).await?;
+    directory.session(&signed_session_request(identity, &certificate, &challenge)).await
+}
+
+/// The login body for this challenge, signed like the launcher signs it.
+pub fn signed_session_request(identity: &Identity, certificate: &PlayerCertificate, challenge: &Challenge) -> SessionRequest {
+    let parts = login_parts(DIRECTORY_HOST, &challenge.server_id, &identity.peer_id(), &certificate.uuid).expect("well-formed ids");
+    session_request(challenge.challenge.clone(), &parts, identity, certificate).expect("the test key signs")
+}
+
 #[cfg(test)]
 mod tests {
+    use super::super::proof::SignedParts;
+    use super::super::wire::CertificateProof;
     use super::*;
 
     const UUID_UNKNOWN: &str = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
@@ -562,7 +809,7 @@ mod tests {
         async fn account(&self, name: &str) -> Account {
             let identity = Identity::generate();
             let mc = self.mojang.add_account(name);
-            let session = self.handshake(&identity, &mc, &mc.name).await.unwrap();
+            let session = log_in(&self.directory, &identity, &mc).await.unwrap();
             Account { identity, mc, token: session.token }
         }
 
@@ -572,18 +819,10 @@ mod tests {
             account
         }
 
-        /// Der Ablauf von BYNAME 3.1: Herausforderung, Mojang `join`, Signatur, Sitzung.
-        async fn handshake(&self, identity: &Identity, mc: &McIdentity, name: &str) -> Result<DirectorySession, DirectoryError> {
-            let challenge = self.directory.challenge(&identity.peer_id()).await?;
-            self.mojang.join(mc, &challenge.server_id).await.unwrap();
-            let request = self.session_request(identity, name, &challenge);
-            self.directory.session(&request).await
-        }
-
-        fn session_request(&self, identity: &Identity, name: &str, challenge: &Challenge) -> SessionRequest {
-            let parts = auth_parts(&challenge.server_id, &identity.peer_id()).unwrap();
-            let signature = HEXLOWER.encode(&identity.sign(AUTH_DOMAIN, &parts.as_slices()));
-            SessionRequest { challenge: challenge.challenge.clone(), name: name.to_owned(), signature }
+        /// A fresh certificate and challenge for a login by hand.
+        async fn login_inputs(&self, identity: &Identity, mc: &McIdentity) -> (PlayerCertificate, Challenge) {
+            let certificate = self.mojang.certificate(mc).await.unwrap();
+            (certificate, self.directory.challenge(&identity.peer_id()).await.unwrap())
         }
 
         fn letter(&self, from: &Account, to: &str) -> OutgoingLetter {
@@ -592,7 +831,7 @@ mod tests {
 
         /// Ein frisches Token, denn die Tests stellen die Uhr um Tage vor.
         async fn token_of(&self, account: &Account) -> String {
-            self.handshake(&account.identity, &account.mc, &account.mc.name).await.unwrap().token
+            log_in(&self.directory, &account.identity, &account.mc).await.unwrap().token
         }
 
         async fn send(&self, from: &Account, to: &str) -> Result<SentLetter, DirectoryError> {
@@ -611,13 +850,24 @@ mod tests {
     // Anmeldung (Worker: challenges, sessions, tokens)
 
     #[tokio::test]
-    async fn a_handshake_yields_the_account_mojang_confirms() {
+    async fn a_login_yields_the_account_of_the_certificate_without_a_join() {
         let world = World::new();
         let mc = world.mojang.add_account("Steve");
-        let identity = Identity::generate();
-        let session = world.handshake(&identity, &mc, "steve").await.unwrap();
-        assert_eq!((session.uuid.as_str(), session.name.as_str()), (mc.uuid.as_str(), "Steve"));
+        let session = log_in(&world.directory, &Identity::generate(), &mc).await.unwrap();
+        assert_eq!(session.uuid, mc.uuid);
+        assert!(session.token.starts_with("v2."));
         assert_eq!(session.expires_at, world.directory.now() + TOKEN_TTL);
+        assert!(world.mojang.joins().is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_token_never_outlives_the_certificate() {
+        let world = World::new();
+        let mc = world.mojang.add_account("Steve");
+        let expires_at_ms = world.mojang.now_ms() + HOUR_MS + 999;
+        world.mojang.next_certificate_lifetime(CertificateLifetime { refreshed_after_ms: expires_at_ms, expires_at_ms });
+        let session = log_in(&world.directory, &Identity::generate(), &mc).await.unwrap();
+        assert_eq!(i64::try_from(session.expires_at).unwrap(), expires_at_ms / 1000);
     }
 
     #[tokio::test]
@@ -625,9 +875,8 @@ mod tests {
         let world = World::new();
         let mc = world.mojang.add_account("Alex");
         let identity = Identity::generate();
-        let challenge = world.directory.challenge(&identity.peer_id()).await.unwrap();
-        world.mojang.join(&mc, &challenge.server_id).await.unwrap();
-        let request = world.session_request(&identity, "Alex", &challenge);
+        let (certificate, challenge) = world.login_inputs(&identity, &mc).await;
+        let request = signed_session_request(&identity, &certificate, &challenge);
         world.directory.advance(CHALLENGE_TTL - 1);
         assert!(world.directory.session(&request).await.is_ok());
         world.directory.advance(1);
@@ -643,56 +892,116 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_session_needs_a_known_challenge_a_valid_name_and_a_well_formed_signature() {
+    async fn a_session_needs_a_known_challenge_and_well_formed_fields() {
         let world = World::new();
+        let mc = world.mojang.add_account("Alex");
         let identity = Identity::generate();
-        let challenge = world.directory.challenge(&identity.peer_id()).await.unwrap();
-        let good = world.session_request(&identity, "Alex", &challenge);
-        let unknown = SessionRequest { challenge: "nie-ausgegeben".into(), ..good.clone() };
-        let bad_name = SessionRequest { name: "../etc".into(), ..good.clone() };
-        let short_signature = SessionRequest { signature: "ab".into(), ..good };
-        for request in [unknown, bad_name, short_signature] {
-            assert_eq!(world.directory.session(&request).await.unwrap_err(), DirectoryError::Invalid("invalid"));
+        let (certificate, challenge) = world.login_inputs(&identity, &mc).await;
+        let good = signed_session_request(&identity, &certificate, &challenge);
+        let with_certificate = |change: fn(&mut CertificateProof)| {
+            let mut request = good.clone();
+            change(&mut request.certificate);
+            request
+        };
+        let malformed = [
+            SessionRequest { challenge: "nie-ausgegeben".into(), ..good.clone() },
+            SessionRequest { uuid: mc.uuid.to_uppercase(), ..good.clone() },
+            SessionRequest { signature: "ab".into(), ..good.clone() },
+            SessionRequest { cert_signature: "kein base64!".into(), ..good.clone() },
+            with_certificate(|proof| proof.public_key.push('!')),
+            with_certificate(|proof| proof.mojang_signature = String::new()),
+            with_certificate(|proof| proof.expires_at = -1),
+        ];
+        for request in malformed {
+            assert_eq!(world.directory.session(&request).await.unwrap_err(), DirectoryError::Invalid("invalid"), "{request:?}");
+        }
+        assert!(world.directory.session(&good).await.is_ok());
+    }
+
+    fn signed_by_test_key(key: &TestKey, message: &[u8]) -> String {
+        let pair = ring::signature::RsaKeyPair::from_pkcs8(&STANDARD.decode(&key.pkcs8).unwrap()).unwrap();
+        let mut signature = vec![0; pair.public().modulus_len()];
+        let random = ring::rand::SystemRandom::new();
+        pair.sign(&ring::signature::RSA_PKCS1_SHA256, &random, message, &mut signature).unwrap();
+        STANDARD.encode(signature)
+    }
+
+    #[tokio::test]
+    async fn signatures_by_other_keys_or_over_other_login_parts_are_bad_signatures() {
+        let world = World::new();
+        let mc = world.mojang.add_account("Alex");
+        let identity = Identity::generate();
+        let (certificate, challenge) = world.login_inputs(&identity, &mc).await;
+        let good = signed_session_request(&identity, &certificate, &challenge);
+        let parts_for = |host: &str, server_id: &str, uuid: &str| login_parts(host, server_id, &identity.peer_id(), uuid).unwrap();
+        let l1 = |key: &Identity, parts: SignedParts| SessionRequest { signature: HEXLOWER.encode(&key.sign(AUTH_DOMAIN, &parts.as_slices())), ..good.clone() };
+        let l2 = |cert_signature: String| SessionRequest { cert_signature, ..good.clone() };
+        let (server_id, other_server_id, stranger) = (challenge.server_id.as_str(), random_hex(40), Identity::generate());
+        let forged = [
+            l1(&stranger, parts_for(DIRECTORY_HOST, server_id, &mc.uuid)),
+            l1(&identity, parts_for(DIRECTORY_HOST, &other_server_id, &mc.uuid)),
+            l1(&identity, parts_for("fork.example", server_id, &mc.uuid)),
+            l1(&identity, parts_for(DIRECTORY_HOST, server_id, UUID_UNKNOWN)),
+            SessionRequest { signature: HEXLOWER.encode(&identity.sign(b"pumpkin/directory-auth/1", &parts_for(DIRECTORY_HOST, server_id, &mc.uuid).as_slices())), ..good.clone() },
+            l2(signed_by_test_key(&vectors().other, &parts_for(DIRECTORY_HOST, server_id, &mc.uuid).message(CERT_DOMAIN))),
+            l2(STANDARD.encode(certificate.sign(&parts_for("fork.example", server_id, &mc.uuid).message(CERT_DOMAIN)).unwrap())),
+            l2(STANDARD.encode(certificate.sign(&parts_for(DIRECTORY_HOST, server_id, &mc.uuid).message(AUTH_DOMAIN)).unwrap())),
+        ];
+        for request in forged {
+            assert_eq!(world.directory.session(&request).await.unwrap_err(), DirectoryError::Invalid("badSignature"));
+        }
+        assert!(world.directory.session(&good).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn certificates_mojang_did_not_issue_like_this_are_bad_certificates() {
+        let world = World::new();
+        let (alex, bob) = (world.mojang.add_account("Alex"), world.mojang.add_account("Bob"));
+        let identity = Identity::generate();
+        let (certificate, challenge) = world.login_inputs(&identity, &alex).await;
+        let bobs = world.mojang.certificate(&bob).await.unwrap();
+        let good = signed_session_request(&identity, &certificate, &challenge);
+        let parts = login_parts(DIRECTORY_HOST, &challenge.server_id, &identity.peer_id(), &alex.uuid).unwrap();
+        let another_accounts = SessionRequest {
+            certificate: bobs.proof(),
+            cert_signature: STANDARD.encode(bobs.sign(&parts.message(CERT_DOMAIN)).unwrap()),
+            ..good.clone()
+        };
+        let mut later = good.clone();
+        later.certificate.expires_at += 1;
+        let mut other_key = good.clone();
+        other_key.certificate.public_key = vectors().other.spki.clone();
+        for request in [another_accounts, later, other_key] {
+            assert_eq!(world.directory.session(&request).await.unwrap_err(), DirectoryError::BadCertificate);
+        }
+        world.mojang.sign_with_unpinned_key(true);
+        let (unpinned, challenge) = world.login_inputs(&identity, &alex).await;
+        let request = signed_session_request(&identity, &unpinned, &challenge);
+        assert_eq!(world.directory.session(&request).await.unwrap_err(), DirectoryError::BadCertificate);
+    }
+
+    #[tokio::test]
+    async fn a_certificate_expires_at_the_directorys_clock_without_grace() {
+        let world = World::new();
+        let mc = world.mojang.add_account("Alex");
+        let identity = Identity::generate();
+        for (offset_ms, expected) in [(0, Err(DirectoryError::CertificateExpired)), (1, Ok(()))] {
+            let expires_at_ms = world.mojang.now_ms() + offset_ms;
+            world.mojang.next_certificate_lifetime(CertificateLifetime { refreshed_after_ms: expires_at_ms, expires_at_ms });
+            let (certificate, challenge) = world.login_inputs(&identity, &mc).await;
+            let opened = world.directory.session(&signed_session_request(&identity, &certificate, &challenge)).await;
+            assert_eq!(opened.map(drop), expected, "{offset_ms}");
         }
     }
 
     #[tokio::test]
-    async fn a_signature_of_another_key_or_for_another_server_id_is_a_bad_signature() {
+    async fn a_login_with_a_certificate_in_hand_needs_no_mojang() {
         let world = World::new();
         let mc = world.mojang.add_account("Alex");
         let identity = Identity::generate();
-        let challenge = world.directory.challenge(&identity.peer_id()).await.unwrap();
-        world.mojang.join(&mc, &challenge.server_id).await.unwrap();
-        let stranger = Identity::generate();
-        let other_server_id = Challenge { server_id: random_hex(40), ..challenge.clone() };
-        for forged in [world.session_request(&stranger, "Alex", &challenge), world.session_request(&identity, "Alex", &other_server_id)] {
-            assert_eq!(world.directory.session(&forged).await.unwrap_err(), DirectoryError::Invalid("badSignature"));
-        }
-    }
-
-    #[tokio::test]
-    async fn without_a_join_or_under_another_name_the_account_is_not_joined() {
-        let world = World::new();
-        let never = world.mojang.add_account("Nie");
-        let impostor = world.mojang.add_account("Mallory");
-        world.mojang.add_account("Herobrine");
-        let identity = Identity::generate();
-        let skipped_join = world.directory.challenge(&identity.peer_id()).await.unwrap();
-        let request = world.session_request(&identity, &never.name, &skipped_join);
-        assert_eq!(world.directory.session(&request).await.unwrap_err(), DirectoryError::NotJoined);
-        assert_eq!(world.handshake(&identity, &impostor, "Herobrine").await.unwrap_err(), DirectoryError::NotJoined);
-    }
-
-    #[tokio::test]
-    async fn a_mojang_outage_makes_the_session_unavailable() {
-        let world = World::new();
-        let mc = world.mojang.add_account("Alex");
-        let identity = Identity::generate();
-        let challenge = world.directory.challenge(&identity.peer_id()).await.unwrap();
-        world.mojang.join(&mc, &challenge.server_id).await.unwrap();
+        let (certificate, challenge) = world.login_inputs(&identity, &mc).await;
         world.mojang.set_unreachable(true);
-        let request = world.session_request(&identity, "Alex", &challenge);
-        assert_eq!(world.directory.session(&request).await.unwrap_err(), DirectoryError::MojangUnavailable);
+        assert!(world.directory.session(&signed_session_request(&identity, &certificate, &challenge)).await.is_ok());
     }
 
     #[tokio::test]
@@ -706,7 +1015,7 @@ mod tests {
         let fresh = world.account("Bob").await;
         world.directory.revoke_tokens();
         assert_eq!(world.directory.register(&fresh.token).await, Err(DirectoryError::Unauthorized));
-        assert_eq!(world.directory.register("v1.erfunden").await, Err(DirectoryError::Unauthorized));
+        assert_eq!(world.directory.register("v2.erfunden").await, Err(DirectoryError::Unauthorized));
     }
 
     #[tokio::test]
@@ -763,8 +1072,9 @@ mod tests {
         world.send(&first, carol.uuid()).await.unwrap();
 
         let bobs = world.inbox(&bob).await;
-        assert_eq!(bobs.iter().map(|letter| letter.from.name.as_str()).collect::<Vec<_>>(), ["Drei", "Eins", "Zwei"]);
-        assert_eq!(bobs[1].from, LetterFrom { uuid: first.uuid().into(), name: "Eins".into(), peer_id: first.identity.peer_id() });
+        let senders: Vec<&str> = bobs.iter().map(|letter| letter.from.uuid.as_str()).collect();
+        assert_eq!(senders, [third.uuid(), first.uuid(), second.uuid()]);
+        assert_eq!(bobs[1].from, LetterFrom { uuid: first.uuid().into(), peer_id: first.identity.peer_id() });
         assert!(bobs.iter().all(|letter| letter.to == bob.uuid()));
         assert_eq!(world.inbox(&carol).await.len(), 1);
         assert!(world.inbox(&first).await.is_empty());
@@ -937,7 +1247,7 @@ mod tests {
 
     fn stamped_for_test(from: &Account, to: &str, created_at: u64) -> InboxLetter {
         let letter = sign_letter(&from.identity, from.uuid(), draft_letter(to, created_at));
-        let claims = Claims { uuid: from.uuid().to_owned(), name: from.mc.name.clone(), peer_id: from.identity.peer_id(), expires_at: 0 };
+        let claims = Claims { uuid: from.uuid().to_owned(), peer_id: from.identity.peer_id(), expires_at: 0 };
         stamped("11111111-1111-4111-8111-111111111111", &letter, &claims, created_at + REQUEST_TTL_SECS)
     }
 
@@ -1048,7 +1358,7 @@ mod tests {
         let world = World::new();
         let (victim, bob, attacker) = (world.findable("Victim").await, world.findable("Bob").await, world.account("Mallory").await);
         let mut forged = stamped_for_test(&attacker, bob.uuid(), world.directory.now());
-        forged.from = LetterFrom { uuid: victim.uuid().to_owned(), name: "Victim".into(), peer_id: attacker.identity.peer_id() };
+        forged.from = LetterFrom { uuid: victim.uuid().to_owned(), peer_id: attacker.identity.peer_id() };
         world.directory.inject_letter(forged.clone());
         assert_eq!(world.inbox(&bob).await, [forged]);
         assert_eq!(world.directory.stored_letters_to(bob.uuid())[0].secret, "a0a1a2a3a4a5a6a7a8");
@@ -1084,6 +1394,48 @@ mod tests {
         assert_eq!(mojang.join(&child, "s").await, Err(MojangError::Unreachable));
         assert_eq!(mojang.has_joined("Kind", "s").await, Err(MojangError::Unreachable));
         assert_eq!(mojang.lookup_name("Kind").await, Err(MojangError::Unreachable));
+        assert_eq!(mojang.certificate(&child).await.unwrap_err(), MojangError::Unreachable);
+        assert_eq!(mojang.profile(&child.uuid).await, Err(MojangError::Unreachable));
+        assert_eq!(mojang.privileges(&child).await, Privileges::Unknown);
+    }
+
+    #[tokio::test]
+    async fn mojang_issues_certificates_for_known_tokens_unless_it_refuses_the_account() {
+        let mojang = FakeMojang::default();
+        let (first, second) = (mojang.add_account("Eins"), mojang.add_account("Zwei"));
+        let certificate = mojang.certificate(&first).await.unwrap();
+        assert_eq!((certificate.uuid.as_str(), certificate.public_key.clone()), (first.uuid.as_str(), vectors().certificate.spki_der()));
+        assert_eq!(certificate.expires_at_ms - certificate.refreshed_after_ms, 8 * HOUR_MS);
+        assert_eq!(mojang.certificate(&second).await.unwrap().public_key, vectors().other.spki_der());
+        let stale = McIdentity { access_token: "alt".into(), ..first.clone() };
+        assert_eq!(mojang.certificate(&stale).await.unwrap_err(), MojangError::InvalidSession);
+        mojang.refuse_certificates(&first.uuid, Some(MojangError::NotAllowed));
+        assert_eq!(mojang.certificate(&first).await.unwrap_err(), MojangError::NotAllowed);
+        mojang.refuse_certificates(&first.uuid, None);
+        assert!(mojang.certificate(&first).await.is_ok());
+        assert_eq!((mojang.certificates_issued_to(&first.uuid), mojang.certificates_issued_to(&second.uuid)), (2, 1));
+    }
+
+    #[tokio::test]
+    async fn mojang_answers_privileges_per_account_and_unknown_for_a_stale_token() {
+        let mojang = FakeMojang::default();
+        let (allowed, child) = (mojang.add_account("Steve"), mojang.add_account("Kind"));
+        mojang.set_privileges(&child.uuid, Privileges::Refused);
+        assert_eq!(mojang.privileges(&allowed).await, Privileges::Allowed);
+        assert_eq!(mojang.privileges(&child).await, Privileges::Refused);
+        let stale = McIdentity { access_token: "alt".into(), ..allowed };
+        assert_eq!(mojang.privileges(&stale).await, Privileges::Unknown);
+    }
+
+    #[tokio::test]
+    async fn mojang_profiles_follow_renames_and_deletions() {
+        let mojang = FakeMojang::default();
+        let steve = mojang.add_account("Steve");
+        mojang.rename(&steve.uuid, "Stefan");
+        assert_eq!(mojang.profile(&steve.uuid).await, Ok(Some(MojangProfile { uuid: steve.uuid.clone(), name: "Stefan".into() })));
+        mojang.delete_account(&steve.uuid);
+        assert_eq!(mojang.profile(&steve.uuid).await, Ok(None));
+        assert_eq!(mojang.profile_lookups_of(&steve.uuid), 2);
     }
 
     #[tokio::test]

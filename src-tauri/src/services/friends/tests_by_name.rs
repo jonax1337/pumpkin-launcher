@@ -4,6 +4,7 @@
 use std::borrow::Cow;
 use std::future::{ready, Future};
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -22,15 +23,17 @@ use super::contract::{
 };
 use super::control::WireProfile;
 use super::directory::api::DirectoryApi;
-use super::directory::fake::{draft_letter, sign_letter, FakeDirectory, FakeMojang};
-use super::directory::mojang::{MojangError, MojangSessions};
-use super::directory::proof::{self, NameProof};
-use super::directory::wire::{InboxLetter, LetterFrom, OutgoingLetter, SentLetter, SessionRequest};
+use super::directory::fake::{
+    draft_letter, log_in, sign_letter, CertificateLifetime, FakeDirectory, FakeMojang, DIRECTORY_HOST,
+};
+use super::directory::mojang::{MojangError, Privileges};
+use super::directory::proof::NameProof;
+use super::directory::wire::{InboxLetter, LetterFrom, OutgoingLetter, SentLetter};
 use super::directory::{AccountTokens, DirectoryDeps, DirectoryError, McIdentity};
 use super::events::{EventSink, FriendsEvent};
 use super::hello::{self, Delivery};
 use super::identity::{self, Identity};
-use super::records::FriendRecord;
+use super::records::{BlockedRecord, FriendRecord};
 use super::service::{now_secs, Core};
 use super::test_support::{error_key, TempDir};
 use super::{AccountProfile, Friends, NetOptions};
@@ -47,11 +50,38 @@ const IDLE_TIMEOUT: Duration = Duration::from_secs(40);
 const TEST_POLL: Duration = Duration::from_secs(3600);
 const DAY_SECS: u64 = 24 * 3600;
 
-struct FakeTokens(McIdentity);
+/// The account's Minecraft session. After `serve_stale_token` it hands out a token Mojang no longer accepts, until the
+/// launcher forgets the session (as `auth::session` refreshes it then).
+struct FakeTokens {
+    account: McIdentity,
+    stale: AtomicBool,
+    forgotten: AtomicUsize,
+}
+
+impl FakeTokens {
+    fn new(account: McIdentity) -> Self {
+        Self { account, stale: AtomicBool::new(false), forgotten: AtomicUsize::new(0) }
+    }
+
+    fn serve_stale_token(&self) {
+        self.stale.store(true, Ordering::SeqCst);
+    }
+
+    fn forgotten(&self) -> usize {
+        self.forgotten.load(Ordering::SeqCst)
+    }
+}
 
 impl AccountTokens for FakeTokens {
     fn minecraft_session(&self) -> BoxFuture<'_, AppResult<McIdentity>> {
-        ready(Ok(self.0.clone())).boxed()
+        let stale = self.stale.load(Ordering::SeqCst).then(|| "abgelaufen".to_owned());
+        let access_token = stale.unwrap_or_else(|| self.account.access_token.clone());
+        ready(Ok(McIdentity { access_token, ..self.account.clone() })).boxed()
+    }
+
+    fn forget_minecraft_session(&self) {
+        self.forgotten.fetch_add(1, Ordering::SeqCst);
+        self.stale.store(false, Ordering::SeqCst);
     }
 }
 
@@ -120,15 +150,9 @@ impl World {
         account
     }
 
-    /// Die Anmeldung von BYNAME 3.1 von Hand, wie sie ein fremder Client machen kann.
+    /// The login by hand, as any other client can perform it.
     async fn token_for(&self, identity: &Identity, account: &McIdentity) -> String {
-        let peer_id = identity.peer_id();
-        let challenge = self.directory.challenge(&peer_id).await.unwrap();
-        self.mojang.join(account, &challenge.server_id).await.unwrap();
-        let parts = proof::auth_parts(&challenge.server_id, &peer_id).unwrap();
-        let signature = HEXLOWER.encode(&identity.sign(proof::AUTH_DOMAIN, &parts.as_slices()));
-        let request = SessionRequest { challenge: challenge.challenge, name: account.name.clone(), signature };
-        self.directory.session(&request).await.unwrap().token
+        log_in(&self.directory, identity, account).await.unwrap().token
     }
 
     /// Ein frisch angemeldeter Brief von `node` an `to`, vorbei an dessen Dienst.
@@ -148,14 +172,18 @@ impl World {
         self.mojang.joins().iter().filter(|(uuid, _)| *uuid == account.uuid).count()
     }
 
-    fn deps(&self, account: &McIdentity, poll_interval: Duration) -> DirectoryDeps {
+    fn deps(&self, tokens: Arc<FakeTokens>, poll_interval: Duration) -> DirectoryDeps {
         DirectoryDeps {
             api: self.directory.clone(),
             mojang: self.mojang.clone(),
-            tokens: Arc::new(FakeTokens(account.clone())),
+            tokens,
             poll_interval,
-            host: "verzeichnis.example".into(),
+            host: DIRECTORY_HOST.into(),
         }
+    }
+
+    fn certificates_of(&self, node: &Node) -> usize {
+        self.mojang.certificates_issued_to(&node.account.uuid)
     }
 }
 
@@ -172,6 +200,7 @@ fn enable_input(name: &str, findable: bool) -> FriendsEnableInput {
 struct Node {
     friends: Friends,
     account: McIdentity,
+    tokens: Arc<FakeTokens>,
     secrets: Arc<MemorySecretStore>,
     events: Arc<RecordingEvents>,
     dir: TempDir,
@@ -183,9 +212,10 @@ impl Node {
         let signals = GameSignals::default();
         let bridge = ModBridge::new(signals.clone());
         let friends = Friends::new(&Dirs::new(dir.path()), secrets.clone(), signals, bridge, world.options()).unwrap();
-        friends.attach_directory(world.deps(&account, TEST_POLL)).unwrap();
+        let tokens = Arc::new(FakeTokens::new(account.clone()));
+        friends.attach_directory(world.deps(tokens.clone(), TEST_POLL)).unwrap();
         let events = Arc::new(RecordingEvents::default());
-        let node = Self { friends, account, secrets, events, dir };
+        let node = Self { friends, account, tokens, secrets, events, dir };
         node.friends.start(node.events.clone(), Some(node.profile())).await;
         node
     }
@@ -305,18 +335,12 @@ fn forged_copy(original: &InboxLetter, forger: &Identity, claimed: LetterFrom) -
         hello_id: original.hello_id.clone(),
         relay_index: original.relay_index,
         secret: original.secret.clone(),
-        display_name: claimed.name.clone(),
+        display_name: original.display_name.clone(),
         created_at: original.created_at,
         signature: String::new(),
     };
     let signed = sign_letter(forger, &claimed.uuid, draft);
-    InboxLetter {
-        id: uuid::Uuid::new_v4().to_string(),
-        from: claimed,
-        display_name: signed.display_name,
-        signature: signed.signature,
-        ..original.clone()
-    }
+    InboxLetter { id: uuid::Uuid::new_v4().to_string(), from: claimed, signature: signed.signature, ..original.clone() }
 }
 
 // 1
@@ -458,7 +482,7 @@ async fn a_forged_stamp_with_a_victims_account_never_becomes_a_friend() {
     mallory.friends.add_by_name("Steve").await.unwrap();
     let genuine = world.letters_to(&steve).remove(0);
     let peer_id = mallory.id().to_string();
-    let claimed = LetterFrom { uuid: victim.uuid.clone(), name: victim.name.clone(), peer_id };
+    let claimed = LetterFrom { uuid: victim.uuid.clone(), peer_id };
     world.directory.inject_letter(forged_copy(&genuine, &mallory.identity(), claimed));
     steve.poll().await;
     let forged = steve.letter_from(&victim).await;
@@ -503,7 +527,7 @@ async fn an_answer_from_another_peer_than_the_stamped_one_fails() {
     alex.friends.add_by_name("Steve").await.unwrap();
     let genuine = world.letters_to(&steve).remove(0);
     let peer_id = mallory.id().to_string();
-    let claimed = LetterFrom { uuid: alex.account.uuid.clone(), name: "Alex".into(), peer_id };
+    let claimed = LetterFrom { uuid: alex.account.uuid.clone(), peer_id };
     world.directory.inject_letter(forged_copy(&genuine, &mallory.identity(), claimed));
     steve.poll().await;
     let mallory_id = mallory.id().to_string();
@@ -594,7 +618,7 @@ async fn without_the_directory_by_name_is_unavailable_but_codes_still_work() {
 async fn a_mojang_refusal_shows_not_allowed_and_pauses_polling() {
     let world = World::new().await;
     let kind = world.online("Kind", false).await;
-    world.mojang.refuse_joins(&kind.account.uuid, Some(MojangError::NotAllowed));
+    world.mojang.refuse_certificates(&kind.account.uuid, Some(MojangError::NotAllowed));
     let findable = FriendsSettings { display_name: "Kind".into(), always_relay: false, findable_by_name: true };
 
     kind.friends.update_settings(findable).await.unwrap();
@@ -619,17 +643,20 @@ async fn concurrent_sends_share_one_login_a_cached_token_is_reused_and_a_401_log
     for name in ["Eins", "Zwei", "Drei", "Vier"] {
         world.listed_account(name).await;
     }
+    let logins_before = world.directory.sessions_opened();
+    let logins = || world.directory.sessions_opened() - logins_before;
 
     let (first, second) = tokio::join!(alex.friends.add_by_name("Eins"), alex.friends.add_by_name("Zwei"));
     first.unwrap();
     second.unwrap();
-    assert_eq!(world.joins_of(&alex.account), 1, "the auth lock lets one login through");
+    assert_eq!(logins(), 1, "the auth lock lets one login through");
     alex.friends.add_by_name("Drei").await.unwrap();
-    assert_eq!(world.joins_of(&alex.account), 1, "the cached token is reused");
+    assert_eq!(logins(), 1, "the cached token is reused");
     world.directory.revoke_tokens();
     alex.friends.add_by_name("Vier").await.unwrap();
 
-    assert_eq!(world.joins_of(&alex.account), 2, "exactly one new login after the 401");
+    assert_eq!(logins(), 2, "exactly one new login after the 401");
+    assert_eq!(world.certificates_of(&alex), 1, "both logins share one certificate");
     assert_eq!(alex.requests().await.len(), 4);
 }
 
@@ -692,9 +719,9 @@ async fn directory_loop_alone(directory: &Arc<FakeDirectory>, mojang: &Arc<FakeM
     let deps = DirectoryDeps {
         api: directory.clone(),
         mojang: mojang.clone(),
-        tokens: Arc::new(FakeTokens(account.clone())),
+        tokens: Arc::new(FakeTokens::new(account.clone())),
         poll_interval: PAUSED_POLL,
-        host: "verzeichnis.example".into(),
+        host: DIRECTORY_HOST.into(),
     };
     friends.attach_directory(deps).unwrap();
     friends.start(Arc::new(RecordingEvents::default()), Some(AccountProfile::new(&account.name, &account.uuid))).await;
@@ -726,4 +753,305 @@ async fn the_inbox_is_polled_ten_seconds_after_start_then_per_interval_and_retry
     by_name::poll_soon(&friends.core);
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert_eq!(directory.inbox_reads(), 3, "a minute later retry_now polls at once");
+}
+
+// BYNAME-ATTEST 8.2: the certificate login
+
+const HOUR_MS: i64 = 3_600_000;
+/// Long enough for a login or two, short enough to wait for in a test.
+const SOON_MS: i64 = 3_000;
+
+fn findable_settings(name: &str) -> FriendsSettings {
+    FriendsSettings { display_name: name.to_owned(), always_relay: false, findable_by_name: true }
+}
+
+fn launcher_now_ms() -> i64 {
+    i64::try_from(crate::models::now_ms()).unwrap()
+}
+
+/// A node that has logged in once with a certificate Mojang wants refreshed in a moment, and the moment has come.
+async fn online_with_a_certificate_due_for_refresh(world: &World, name: &str, first_recipient: &str) -> Node {
+    let node = world.online(name, false).await;
+    let refresh_at = launcher_now_ms() + SOON_MS;
+    let lifetime = CertificateLifetime { refreshed_after_ms: refresh_at, expires_at_ms: refresh_at + 48 * HOUR_MS };
+    world.mojang.next_certificate_lifetime(lifetime);
+    node.friends.add_by_name(first_recipient).await.unwrap();
+    until_true("certificate due for refresh", || launcher_now_ms() >= refresh_at).await;
+    world.directory.revoke_tokens();
+    node
+}
+
+// 14
+
+#[tokio::test]
+async fn a_cached_certificate_serves_further_logins_before_its_refresh() {
+    let world = World::new().await;
+    let alex = world.online("Alex", false).await;
+    for name in ["Eins", "Zwei", "Drei"] {
+        world.listed_account(name).await;
+        world.directory.revoke_tokens();
+        alex.friends.add_by_name(name).await.unwrap();
+    }
+    assert_eq!(world.directory.sessions_opened(), 6, "three listed accounts and three logins of Alex");
+    assert_eq!(world.certificates_of(&alex), 1);
+}
+
+#[tokio::test]
+async fn after_refreshed_after_exactly_one_new_certificate_is_fetched() {
+    let world = World::new().await;
+    for name in ["Eins", "Zwei", "Drei"] {
+        world.listed_account(name).await;
+    }
+    let alex = online_with_a_certificate_due_for_refresh(&world, "Alex", "Eins").await;
+    assert_eq!(world.certificates_of(&alex), 1);
+
+    alex.friends.add_by_name("Zwei").await.unwrap();
+    world.directory.revoke_tokens();
+    alex.friends.add_by_name("Drei").await.unwrap();
+
+    assert_eq!(world.certificates_of(&alex), 2, "one more fetch, then the new certificate serves");
+}
+
+// 15
+
+#[tokio::test]
+async fn a_certificate_the_directory_finds_expired_is_fetched_again_once() {
+    let world = World::new().await;
+    let steve = world.online("Steve", false).await;
+    // Still usable for the launcher (over ten minutes left), expired on the directory's clock eleven minutes ahead.
+    let expiry = launcher_now_ms() + 10 * 60 * 1000 + 30_000;
+    world.mojang.next_certificate_lifetime(CertificateLifetime { refreshed_after_ms: expiry, expires_at_ms: expiry });
+    world.directory.advance(11 * 60);
+
+    steve.friends.update_settings(findable_settings("Steve")).await.unwrap();
+    steve.wait_registered(&world).await;
+
+    assert_eq!(world.certificates_of(&steve), 2);
+    until_true("active", || steve.directory_state() == DirectoryState::Active).await;
+}
+
+// 16
+
+#[tokio::test]
+async fn a_certificate_the_directory_never_accepts_leaves_by_name_unreachable_and_keeps_jobs() {
+    let world = World::new().await;
+    let steve = world.online("Steve", false).await;
+    world.listed_account("Alex").await;
+    let blocked_uuid = "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
+    let blocked = BlockedRecord {
+        id: Identity::generate().peer_id(),
+        display_name: "Mallory".into(),
+        blocked_at: now_secs(),
+        mc_uuid: Some(blocked_uuid.into()),
+    };
+    steve.core().stores.blocked.upsert(blocked).unwrap();
+    world.mojang.sign_with_unpinned_key(true);
+
+    steve.friends.update_settings(findable_settings("Steve")).await.unwrap();
+    until_true("unreachable", || steve.directory_state() == DirectoryState::Unreachable).await;
+
+    assert!(steve.jobs().contains(&DirectoryJob::Block { uuid: blocked_uuid.into() }), "the job waits");
+    assert!(world.certificates_of(&steve) >= 2, "a fresh certificate was tried before giving up");
+    assert!(!world.directory.is_registered(&steve.account.uuid));
+    let refused = steve.friends.add_by_name("Alex").await.unwrap_err();
+    assert_eq!(error_key(&refused), "errors.friends.directoryUnavailable");
+}
+
+// 17
+
+#[tokio::test]
+async fn a_refused_minecraft_token_is_refreshed_exactly_once() {
+    let world = World::new().await;
+    let alex = world.online("Alex", false).await;
+    world.listed_account("Steve").await;
+    alex.tokens.serve_stale_token();
+
+    alex.friends.add_by_name("Steve").await.unwrap();
+
+    assert_eq!(alex.tokens.forgotten(), 1);
+    assert_eq!(world.certificates_of(&alex), 1);
+}
+
+#[tokio::test]
+async fn a_token_refused_again_after_its_refresh_means_mojang_refuses_the_account() {
+    let world = World::new().await;
+    let kind = world.online("Kind", false).await;
+    world.listed_account("Steve").await;
+    world.mojang.refuse_certificates(&kind.account.uuid, Some(MojangError::InvalidSession));
+
+    let refused = kind.friends.add_by_name("Steve").await.unwrap_err();
+
+    assert_eq!(error_key(&refused), "errors.friends.directoryNotAllowed");
+    assert_eq!(kind.tokens.forgotten(), 1);
+}
+
+// 18
+
+#[tokio::test]
+async fn attributes_that_refuse_strangers_show_not_allowed_without_fetching_a_certificate() {
+    let world = World::new().await;
+    let kind = world.online("Kind", false).await;
+    world.mojang.set_privileges(&kind.account.uuid, Privileges::Refused);
+
+    kind.friends.update_settings(findable_settings("Kind")).await.unwrap();
+    until_true("not allowed", || kind.directory_state() == DirectoryState::NotAllowed).await;
+
+    assert_eq!(world.certificates_of(&kind), 0);
+    assert!(!world.directory.is_registered(&kind.account.uuid));
+}
+
+#[tokio::test]
+async fn the_attributes_are_asked_again_at_every_login() {
+    let world = World::new().await;
+    let steve = world.online("Steve", true).await;
+    world.listed_account("Alex").await;
+    world.mojang.set_privileges(&steve.account.uuid, Privileges::Refused);
+    world.directory.revoke_tokens();
+
+    let refused = steve.friends.add_by_name("Alex").await.unwrap_err();
+
+    assert_eq!(error_key(&refused), "errors.friends.directoryNotAllowed");
+    assert_eq!(steve.directory_state(), DirectoryState::NotAllowed);
+}
+
+#[tokio::test]
+async fn unknown_attributes_keep_the_account_out_of_the_directory_but_it_can_still_send() {
+    let world = World::new().await;
+    let kind = world.online("Kind", false).await;
+    world.listed_account("Steve").await;
+    world.mojang.set_privileges(&kind.account.uuid, Privileges::Unknown);
+
+    kind.friends.update_settings(findable_settings("Kind")).await.unwrap();
+    until_true("unreachable", || kind.directory_state() == DirectoryState::Unreachable).await;
+
+    assert!(!world.directory.is_registered(&kind.account.uuid));
+    kind.friends.add_by_name("Steve").await.unwrap();
+}
+
+// 19
+
+#[tokio::test]
+async fn an_incoming_request_shows_the_senders_current_name_at_mojang() {
+    let world = World::new().await;
+    let (alex, steve) = (world.online("Alex", false).await, world.online("Steve", true).await);
+    alex.friends.add_by_name("Steve").await.unwrap();
+    world.mojang.rename(&alex.account.uuid, "Alexander");
+
+    steve.poll().await;
+
+    assert_eq!(steve.only_request().await.mc_name.as_deref(), Some("Alexander"));
+}
+
+#[tokio::test]
+async fn a_letter_whose_sender_mojang_cannot_look_up_now_is_filed_on_the_next_poll() {
+    let world = World::new().await;
+    let (alex, steve) = (world.online("Alex", false).await, world.online("Steve", true).await);
+    alex.friends.add_by_name("Steve").await.unwrap();
+    world.mojang.set_unreachable(true);
+
+    steve.poll().await;
+    assert!(steve.requests().await.is_empty());
+    assert_eq!(world.letters_to(&steve).len(), 1, "the letter stays");
+    world.mojang.set_unreachable(false);
+    steve.poll().await;
+
+    assert_eq!(steve.only_request().await.mc_name.as_deref(), Some("Alex"));
+}
+
+#[tokio::test]
+async fn a_letter_from_an_account_mojang_does_not_know_is_deleted_only_on_the_second_poll_in_a_row() {
+    let world = World::new().await;
+    let (alex, steve) = (world.online("Alex", false).await, world.online("Steve", true).await);
+    alex.friends.add_by_name("Steve").await.unwrap();
+    world.mojang.delete_account(&alex.account.uuid);
+
+    steve.poll().await;
+    assert!(steve.requests().await.is_empty());
+    assert!(steve.jobs().is_empty(), "one answer is not enough to delete");
+    steve.poll().await;
+
+    until_true("letter deleted", || world.letters_to(&steve).is_empty()).await;
+    assert!(steve.requests().await.is_empty());
+}
+
+#[tokio::test]
+async fn a_lookup_failure_between_two_misses_starts_the_count_again() {
+    let world = World::new().await;
+    let (alex, steve) = (world.online("Alex", false).await, world.online("Steve", true).await);
+    alex.friends.add_by_name("Steve").await.unwrap();
+    world.mojang.delete_account(&alex.account.uuid);
+
+    steve.poll().await;
+    world.mojang.set_unreachable(true);
+    steve.poll().await;
+    world.mojang.set_unreachable(false);
+    steve.poll().await;
+
+    assert!(steve.jobs().is_empty());
+    assert_eq!(world.letters_to(&steve).len(), 1);
+}
+
+#[tokio::test]
+async fn mojang_hears_nothing_about_letters_from_blocked_senders() {
+    let world = World::new().await;
+    let (alex, steve) = (world.online("Alex", false).await, world.online("Steve", true).await);
+    alex.friends.add_by_name("Steve").await.unwrap();
+    let genuine = world.letters_to(&steve).remove(0);
+    steve.poll().await;
+    steve.friends.block(&alex.id().to_string()).await.unwrap();
+    until_true("letter deleted", || world.letters_to(&steve).is_empty()).await;
+    let lookups = world.mojang.profile_lookups_of(&alex.account.uuid);
+    let from = LetterFrom { uuid: alex.account.uuid.clone(), peer_id: alex.id().to_string() };
+    world.directory.inject_letter(forged_copy(&genuine, &alex.identity(), from));
+
+    steve.poll().await;
+
+    assert_eq!(world.mojang.profile_lookups_of(&alex.account.uuid), lookups);
+    assert!(steve.requests().await.is_empty());
+}
+
+// 20
+
+#[tokio::test]
+async fn logging_in_makes_no_mojang_join_and_accepting_makes_one_on_each_side() {
+    let world = World::new().await;
+    let (alex, steve) = (world.online("Alex", false).await, world.online("Steve", true).await);
+    alex.friends.add_by_name("Steve").await.unwrap();
+    steve.poll().await;
+    assert_eq!((world.joins_of(&alex.account), world.joins_of(&steve.account)), (0, 0));
+
+    steve.friends.answer_request(&steve.only_request().await.id, true).await.unwrap();
+    both_confirmed(&alex, &steve).await;
+
+    assert_eq!((world.joins_of(&alex.account), world.joins_of(&steve.account)), (1, 1));
+}
+
+// 21
+
+#[tokio::test]
+async fn while_mojang_cannot_issue_a_certificate_a_usable_cached_one_serves() {
+    let world = World::new().await;
+    for name in ["Eins", "Zwei"] {
+        world.listed_account(name).await;
+    }
+    let alex = online_with_a_certificate_due_for_refresh(&world, "Alex", "Eins").await;
+    world.mojang.refuse_certificates(&alex.account.uuid, Some(MojangError::RateLimited));
+
+    alex.friends.add_by_name("Zwei").await.unwrap();
+
+    assert_eq!(world.certificates_of(&alex), 1);
+}
+
+#[tokio::test]
+async fn after_mojang_refuses_the_account_the_cached_certificate_is_never_used() {
+    let world = World::new().await;
+    for name in ["Eins", "Zwei"] {
+        world.listed_account(name).await;
+    }
+    let alex = online_with_a_certificate_due_for_refresh(&world, "Alex", "Eins").await;
+    world.mojang.refuse_certificates(&alex.account.uuid, Some(MojangError::NotAllowed));
+
+    let refused = alex.friends.add_by_name("Zwei").await.unwrap_err();
+
+    assert_eq!(error_key(&refused), "errors.friends.directoryNotAllowed");
 }
