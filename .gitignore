@@ -32,3 +32,11 @@ dist-ssr
 
 # Playwright-MCP-Artefakte (Screenshots, Snapshots)
 .playwright-mcp/
+
+# Fabric-Mod (mod/): heruntergeladenes JDK und Gradle-Ausgaben
+mod/.jdk/
+mod/build/
+mod/.gradle/
+
+# Worktrees der Agenten und lokale Claude-Daten
+.claude/worktrees/

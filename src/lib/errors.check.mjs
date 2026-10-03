@@ -38,6 +38,9 @@ assert.equal(toBackendError(missing).message, 'Fabric is not installed');
 assert.equal(toBackendError(offline).message, 'No internet connection. Check your connection and try again. – Details: error sending request');
 assert.equal(toBackendError(nested).message, 'A download failed – Details: The instance is still running');
 assert.equal(toBackendError(running).code, 'invalid', 'die Fehlerart bleibt neben der Übersetzung');
+assert.equal(toBackendError(running).key, 'errors.instance.stillRunning', 'der Fehlercode bleibt, damit die Oberfläche einen Fall erkennt');
+assert.equal(toBackendError('roh').key, null);
+assert.equal(toBackendError({ code: 'invalid', message: 'Neu', key: 'errors.gibtEsNicht' }).key, null, 'ein unbekannter Code zählt nicht');
 assert.equal(cancelledError().message, 'Operation cancelled');
 
 // Rohe Texte noch nicht umgestellter Stellen und unbekannte Codes fallen unverändert durch.

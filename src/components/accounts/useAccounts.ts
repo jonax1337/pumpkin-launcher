@@ -6,8 +6,12 @@ import { api } from "@/lib/api";
 import { queryClient } from "@/lib/queryClient";
 import { MINUTE } from "@/lib/time";
 import type { Account, Instance } from "@/lib/types";
-import { currentUsableAccount, refreshOfflineAllowed, useOfflineAllowed } from "@/store/offline";
+import { useInstance } from "@/hooks/useInstances";
+import { currentUsableAccount, refreshOfflineAllowed, useOfflineAllowed, useUsableAccount } from "@/store/offline";
 import { useSettings, type ActiveAccount } from "@/store/settings";
+import { keyOf, pickLaunchAccount } from "./accountModel";
+
+export { keyOf };
 
 /** Konten ändern sich nur durch Anmelden und Abmelden hier; der Abgleich mit Microsoft eilt nicht. */
 const ACCOUNTS_STALE_MS = 5 * MINUTE;
@@ -53,7 +57,15 @@ export async function launchAccountFor(instance: Pick<Instance, "defaultAccount"
   const { offlineAccounts } = useSettings.getState();
   const microsoft = await queryClient.ensureQueryData(msAccountsQuery).catch(() => undefined);
   const known = listAccounts(microsoft, offlineAccounts, useOfflineAllowed.getState().allowed);
-  return known.find((account) => keyOf(account) === instance.defaultAccount) ?? currentUsableAccount();
+  return pickLaunchAccount(known, instance.defaultAccount, currentUsableAccount());
+}
+
+/** Wie `launchAccountFor`, aber reaktiv für die Anzeige: das Konto, mit dem die Instanz `instanceId` jetzt starten würde. */
+export function useLaunchAccount(instanceId: string | undefined): ActiveAccount | null {
+  const { accounts } = useAllAccounts();
+  const usable = useUsableAccount();
+  const defaultAccount = useInstance(instanceId).data?.defaultAccount ?? null;
+  return pickLaunchAccount(accounts, defaultAccount, usable);
 }
 
 export function useRemoveAccount() {
@@ -70,9 +82,6 @@ export function useRemoveAccount() {
   const remove = (a: ActiveAccount) => (a.kind === "offline" ? removeAccount(a.name) : removeMs.mutate(a.id));
   return { remove, pending: removeMs.isPending };
 }
-
-/** Eindeutiger Schlüssel eines Kontos (Art und Kennung): zwei Konten sind genau dann dasselbe, wenn ihre Schlüssel es sind. */
-export const keyOf = (a: ActiveAccount) => (a.kind === "microsoft" ? `ms:${a.id}` : `off:${a.name}`);
 
 /** Ist `account` das aktive Konto (`null` = keins)? */
 export const isActiveAccount = (active: ActiveAccount | null, account: ActiveAccount) => !!active && keyOf(active) === keyOf(account);

@@ -3,4 +3,5 @@
 [advisories]
 ignore = [
     { id = "RUSTSEC-2024-0370", reason = "proc-macro-error ist unmaintained, kommt aber nur über gtk3-macros (Tauris Linux-Fensterschicht) und läuft allein beim Kompilieren. Wir können es nicht ersetzen; entfällt, sobald Tauri die gtk3-Bindungen ablöst." },
+    { id = "RUSTSEC-2024-0436", reason = "paste ist unmaintained, kommt aber nur über netlink-packet-core (iroh → netwatch → netdev, Linux-Netzwerkabfrage) und läuft allein beim Kompilieren als Makro. Entfällt, sobald netlink-packet-core es ablöst." },
 ]

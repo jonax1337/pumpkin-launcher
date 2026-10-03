@@ -48,9 +48,10 @@ for (const [id, details] of Object.entries(manifest.seasons)) {
   document.getElementById('seasons').append(button);
 }
 
-for (const [i,motion] of manifest.motions.entries()) {
+const orderedMotions=[...manifest.motions].sort((a,b)=>Number(Boolean(b.new))-Number(Boolean(a.new)));
+for (const [i,motion] of orderedMotions.entries()) {
   const card=document.createElement('article'); card.className='card'; card.dataset.motion=motion.id;
-  card.innerHTML=`<div class="card-top"><span class="number">0${i+1}</span><span class="badge">${motion.loop?'Schleife':'Einmal'} · ${(motion.durationMs/1000).toFixed(2)} s</span></div><div class="stage"><object type="image/svg+xml" aria-label="${esc(motion.name)}" data="standard/${motion.id}.svg"><img src="standard/poster.svg" alt="Buddy"></object></div><h2>${esc(motion.name)}</h2><p class="description">${esc(motion.use)}</p><div class="scrub"><input type="range" min="0" max="${motion.durationMs}" step="20" value="0" aria-label="Zeitposition ${esc(motion.name)}"><output>0.00 s</output></div><div class="actions"><button type="button">Neu abspielen</button><a download href="standard/${motion.id}.svg">SVG herunterladen</a></div>`;
+  card.innerHTML=`<div class="card-top"><span class="number">${String(i+1).padStart(2,'0')}</span><span class="badge">${motion.new?'Neu · ':''}${motion.loop?'Schleife':'Einmal'} · ${(motion.durationMs/1000).toFixed(2)} s</span></div><div class="stage"><object type="image/svg+xml" aria-label="${esc(motion.name)}" data="standard/${motion.id}.svg"><img src="standard/poster.svg" alt="Buddy"></object></div><h2>${esc(motion.name)}</h2><p class="description">${esc(motion.use)}</p><div class="scrub"><input type="range" min="0" max="${motion.durationMs}" step="20" value="0" aria-label="Zeitposition ${esc(motion.name)}"><output>0.00 s</output></div><div class="actions"><button type="button">Neu abspielen</button><a download href="standard/${motion.id}.svg">SVG herunterladen</a></div>`;
   const entry={card,motion,object:card.querySelector('object'),download:card.querySelector('a'),slider:card.querySelector('input'),output:card.querySelector('output'),root:null,scrubbing:false,visible:true};
   entry.object.addEventListener('load',()=>{
     entry.root=entry.object.contentDocument?.documentElement;

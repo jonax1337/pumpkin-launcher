@@ -71,12 +71,12 @@ jobs:
       matrix:
         include:
           - platform: windows-latest
-            args: ""
+            args: --features beta-relays
           - platform: ubuntu-22.04
-            args: ""
+            args: --features beta-relays
           # Universal-Build: eine App für Apple Silicon und Intel, im latest.json unter beiden Schlüsseln.
           - platform: macos-latest
-            args: --target universal-apple-darwin
+            args: --target universal-apple-darwin --features beta-relays
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
@@ -108,6 +108,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Öffentliche Adresse des Freunde-Verzeichnisses (siehe directory/README.md); kein Geheimnis. Forks lassen sie leer.
+          PUMPKIN_FRIENDS_DIRECTORY: https://pumpkin-friends-directory.jonas-laux.workers.dev
         with:
           releaseId: ${{ needs.prepare.outputs.release_id }}
           # Der Entwurf hat den Text schon; tauri-action schreibt ihn als `notes` in latest.json, das der Updater anzeigt.
@@ -137,10 +139,46 @@ jobs:
           done
           exit $status
 
+  # Die Website verlinkt feste Dateinamen unter .../releases/latest/download/; die Namen der Tauri-Installer tragen die Version.
+  # Kopien unter festen Namen, noch im Entwurf, damit Prüfsummen und Herkunftsnachweis sie mit abdecken.
+  # Kein Signaturschlüssel und nicht die Umgebung `release`: nur das eingebaute GITHUB_TOKEN.
+  stable-names:
+    name: Stable download names
+    needs: updater-json
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Copy the installers under their stable names
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir stable
+          status=0
+          copy_as() {
+            local pattern="$1" stable_name="$2"
+            rm -rf source && mkdir source
+            gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern "$pattern" --dir source || true
+            if [ "$(ls source | wc -l)" -ne 1 ]; then
+              echo "::error::Expected exactly one release file matching '$pattern' for $stable_name, found $(ls source | wc -l). Re-run that platform's build job (see docs/RELEASING.md)."
+              status=1
+              return
+            fi
+            mv source/* "stable/$stable_name"
+          }
+          copy_as '*_x64-setup.exe' Pumpkin.Launcher_x64-setup.exe
+          copy_as '*_universal.dmg' Pumpkin.Launcher_universal.dmg
+          copy_as '*_amd64.AppImage' Pumpkin.Launcher_amd64.AppImage
+          copy_as '*_amd64.deb' Pumpkin.Launcher_amd64.deb
+          [ "$status" -eq 0 ] || exit 1
+          ls -l stable
+          gh release upload "$GITHUB_REF_NAME" stable/* --repo "$GITHUB_REPOSITORY" --clobber
+
   # Prüfsummen und Herkunftsnachweis erst, wenn alle Dateien im Entwurf liegen.
   checksums:
     name: SHA256SUMS & provenance
-    needs: updater-json
+    needs: stable-names
     runs-on: ubuntu-latest
     permissions:
       contents: write

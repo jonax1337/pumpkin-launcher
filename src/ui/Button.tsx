@@ -144,6 +144,8 @@ type BarLook = {
   activity?: { count: number; p: number | null };
   /** Für die Seitenleiste: 44 px quadratisch, nur Symbol, Kupferstrich am linken Rand statt unten. */
   side?: boolean;
+  /** Zähler-Plakette an der Ecke, nur bei mehr als 0. Sie ist stumm: die Zahl gehört in den zugänglichen Namen (aria-label). */
+  badge?: number;
 };
 
 function barData({ label, tone, activity, side }: Pick<BarLook, "label" | "tone" | "activity" | "side">) {
@@ -157,7 +159,9 @@ function barData({ label, tone, activity, side }: Pick<BarLook, "label" | "tone"
 /** Größte Zahl in der Zähler-Plakette; darüber steht „9+“. */
 const MAX_BADGE_COUNT = 9;
 
-function BarInner({ children, label, iconEnd, activity }: Pick<BarLook, "children" | "label" | "iconEnd" | "activity">) {
+const badgeText = (count: number) => (count > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : count);
+
+function BarInner({ children, label, iconEnd, activity, badge }: Pick<BarLook, "children" | "label" | "iconEnd" | "activity" | "badge">) {
   return (
     <>
       <span className="vx-bc">
@@ -168,10 +172,11 @@ function BarInner({ children, label, iconEnd, activity }: Pick<BarLook, "childre
       <span className="vx-tick" aria-hidden />
       {activity && (
         <>
-          <span className="vx-bar-badge" aria-hidden>{activity.count > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : activity.count}</span>
+          <span className="vx-bar-badge" aria-hidden>{badgeText(activity.count)}</span>
           <Progress thin p={activity.p} decorative className="vx-bar-meter" />
         </>
       )}
+      {badge != null && badge > 0 && <span className="vx-bar-badge" data-always aria-hidden>{badgeText(badge)}</span>}
     </>
   );
 }
@@ -184,14 +189,14 @@ type BarPlainProps = { to?: undefined } & Omit<ComponentProps<"button">, "childr
  * `expanded` = offen (Menü). Mit `to` ein Link. `label`/`tone`/`iconEnd`: Konto-Knopf; `activity`: Aufgaben.
  */
 export function BarButton(props: BarLook & (BarLinkProps | BarPlainProps)) {
-  const { current, expanded, className, children, label, tone, iconEnd, activity, side, ...target } = props;
+  const { current, expanded, className, children, label, tone, iconEnd, activity, side, badge, ...target } = props;
   const common = {
     className: cn("vx-bar fx", className),
     ...barData({ label, tone, activity, side }),
     "aria-current": current ? ("page" as const) : undefined,
     "aria-expanded": expanded,
   };
-  const inner = <BarInner label={label} iconEnd={iconEnd} activity={activity}>{children}</BarInner>;
+  const inner = <BarInner label={label} iconEnd={iconEnd} activity={activity} badge={badge}>{children}</BarInner>;
   return target.to != null ? (
     <Link {...common} {...target}>{inner}</Link>
   ) : (

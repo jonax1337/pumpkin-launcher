@@ -44,12 +44,26 @@ Wird der Schlüssel gestohlen, kann der Angreifer signierte Updates ausliefern; 
    - macOS: `…_<version>_universal.dmg` und für den Updater `….app.tar.gz`
    - zu jeder Updater-Datei die Signatur `.sig`
    - `latest.json` (Version, Versionshinweise, je Plattform Download-Adresse und Signatur für den Updater)
-   - `SHA256SUMS` (Prüfsummen aller Dateien; erst nach den Builds erzeugt) und zu jeder Datei ein [Herkunftsnachweis](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations) (`gh attestation verify <datei> --repo jonax1337/pumpkin-launcher`)
+   - die vier Installer ein zweites Mal unter festen Namen (siehe „Feste Dateinamen für die Website“)
+   - `SHA256SUMS` (Prüfsummen aller Dateien, auch der Kopien unter festen Namen; erst nach den Builds erzeugt) und zu jeder Datei ein [Herkunftsnachweis](https://docs.github.com/actions/security-for-github-actions/using-artifact-attestations) (`gh attestation verify <datei> --repo jonax1337/pumpkin-launcher`)
 
-   Die drei Build-Jobs laufen in der Umgebung `release` und warten auf die Freigabe der Prüfer (Benachrichtigung von GitHub). Danach prüft ein Job, dass `latest.json` Windows, Linux und beide Mac-Architekturen enthält; erst dann entstehen Prüfsummen und Herkunftsnachweis. Die Builds schreiben die Datei nacheinander fort; enden zwei im selben Moment, kann ein Eintrag verloren gehen. Dann den Build der fehlenden Plattform erneut starten.
+   Die drei Build-Jobs laufen in der Umgebung `release` und warten auf die Freigabe der Prüfer (Benachrichtigung von GitHub). Danach prüft ein Job, dass `latest.json` Windows, Linux und beide Mac-Architekturen enthält; danach legt ein weiterer Job die Kopien unter festen Namen an; erst dann entstehen Prüfsummen und Herkunftsnachweis. Die Builds schreiben die Datei nacheinander fort; enden zwei im selben Moment, kann ein Eintrag verloren gehen. Dann den Build der fehlenden Plattform erneut starten.
 4. **Entwurf prüfen und veröffentlichen.** Installer einmal ausprobieren, dann *Publish release*. Den Release-Text kannst du auf GitHub noch ändern; die Versionshinweise im Launcher stammen aber aus `latest.json` und bleiben beim Stand des Tags.
 
 Fehlgeschlagene Builds lassen sich über *Re-run failed jobs* wiederholen; die Dateien landen im selben Entwurf. *Re-run all jobs* legt dagegen einen zweiten Entwurf an (den überzähligen dann löschen). Muss der Code noch geändert werden: Entwurf und Tag löschen, korrigieren, neu taggen.
+
+## Feste Dateinamen für die Website
+
+Die Tauri-Installer tragen die Version im Namen. Die Website verlinkt aber ohne Build-Schritt und ohne Anfrage zur Laufzeit direkt auf `https://github.com/jonax1337/pumpkin-launcher/releases/latest/download/<Name>`; das braucht gleichbleibende Namen. Der Job `stable-names` des Release-Workflows kopiert deshalb nach den Builds, noch im Entwurf, vier Dateien (nur mit dem eingebauten `GITHUB_TOKEN`, ohne Umgebung `release` und ohne Signaturschlüssel) und lädt sie ins Release hoch. Fehlt eine der vier Quelldateien, bricht der Job mit klarer Meldung ab.
+
+| Plattform | Quelle | Fester Name |
+| --- | --- | --- |
+| Windows | `*_x64-setup.exe` | `Pumpkin.Launcher_x64-setup.exe` |
+| macOS | `*_universal.dmg` | `Pumpkin.Launcher_universal.dmg` |
+| Linux | `*_amd64.AppImage` | `Pumpkin.Launcher_amd64.AppImage` |
+| Linux | `*_amd64.deb` | `Pumpkin.Launcher_amd64.deb` |
+
+Zusammen mit `SHA256SUMS` (fester Name) sind das die einzigen Adressen, die `website/` kennt. `latest/download` zeigt immer auf das neueste **veröffentlichte** Release; bis das erste Release mit diesen Namen veröffentlicht ist, liefern die Links 404, und die Website verweist darunter auf die Release-Übersicht. Wer die Namen ändert, passt sie im Workflow, in `website/index.html` und in `website/check.mjs` an. Die Website selbst ändert sich mit einem Release nicht und braucht keinen neuen Deploy.
 
 ## So funktioniert der Updater
 

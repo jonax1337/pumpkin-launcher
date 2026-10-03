@@ -16,8 +16,8 @@ use crate::state::AppState;
 
 const TEXTURE_BASE: &str = "textures.minecraft.net/texture/";
 /// Öffentliche Endpunkte von Mojang (ohne Konto): Name → UUID und UUID → Profil mit Skin.
-const PLAYER_LOOKUP: &str = "https://api.minecraftservices.com/minecraft/profile/lookup/name/";
-const SESSION_PROFILE: &str = "https://sessionserver.mojang.com/session/minecraft/profile/";
+pub(crate) const PLAYER_LOOKUP: &str = "https://api.minecraftservices.com/minecraft/profile/lookup/name/";
+pub(crate) const SESSION_PROFILE: &str = "https://sessionserver.mojang.com/session/minecraft/profile/";
 const MAX_PLAYER_NAME_LEN: usize = 16;
 /// Echte Skins haben wenige KiB; die Grenze fängt nur versehentlich gewählte große Bilder ab.
 const MAX_FILE: u64 = 256 * 1024;
@@ -125,7 +125,7 @@ fn status_text(status: u16) -> Coded {
 }
 
 /// Texturen kommen nur von Mojangs Texturserver. Die API liefert `http://`-Adressen, geladen wird per HTTPS.
-fn texture_url(url: &str) -> AppResult<String> {
+pub(crate) fn texture_url(url: &str) -> AppResult<String> {
     let hash = ["http://", "https://"]
         .iter()
         .find_map(|scheme| url.strip_prefix(scheme))
@@ -217,9 +217,9 @@ pub async fn save_active(state: &AppState, account_id: &str, name: &str) -> AppR
 
 /// Ergebnis der Namenssuche: UUID und Name in der Schreibweise des Spielers.
 #[derive(Deserialize)]
-struct Player {
-    id: String,
-    name: String,
+pub(crate) struct Player {
+    pub(crate) id: String,
+    pub(crate) name: String,
 }
 
 /// Profil vom Session-Server; seine Eigenschaft `textures` ist base64-codiertes JSON mit dem Skin.
@@ -263,7 +263,7 @@ struct SkinMetadata {
 }
 
 /// Buchstaben, Ziffern und Unterstriche, höchstens 16: Minecraft-Spielernamen. Die Prüfung schützt auch den Pfad der Anfrage.
-fn valid_player_name(name: &str) -> bool {
+pub(crate) fn valid_player_name(name: &str) -> bool {
     (1..=MAX_PLAYER_NAME_LEN).contains(&name.len()) && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
 }
 
@@ -280,7 +280,7 @@ fn check_player(status: u16, name: &str) -> AppResult<()> {
     }
 }
 
-fn parse_player(body: &[u8]) -> AppResult<Player> {
+pub(crate) fn parse_player(body: &[u8]) -> AppResult<Player> {
     let player: Player = serde_json::from_slice(body)?;
     // Die UUID wird Teil der nächsten Anfrage.
     let is_uuid = player.id.len() == 32 && player.id.bytes().all(|b| b.is_ascii_hexdigit());
@@ -288,7 +288,7 @@ fn parse_player(body: &[u8]) -> AppResult<Player> {
 }
 
 /// Der Skin aus dem Profil des Session-Servers; `None` bei Spielern mit Standardskin, dann nennt das Profil keinen.
-fn parse_player_skin(body: &[u8]) -> AppResult<Option<OnlineSkin>> {
+pub(crate) fn parse_player_skin(body: &[u8]) -> AppResult<Option<OnlineSkin>> {
     use base64::Engine;
     let profile: SessionProfile = serde_json::from_slice(body)?;
     let Some(textures) = profile.properties.iter().find(|p| p.name == "textures") else {

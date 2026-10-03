@@ -44,6 +44,9 @@ jobs:
       - name: Check website links & assets
         run: pnpm check:website
 
+      - name: Check friends directory worker (routes, limits, cron, golden vectors)
+        run: node directory/test.mjs
+
   backend:
     name: Backend (cargo check & test, ${{ matrix.os }})
     strategy:
@@ -87,3 +90,30 @@ jobs:
         with:
           manifest-path: src-tauri/Cargo.toml
           command: check advisories
+
+  # Gradle lädt beim ersten Lauf Minecraft 26.3 über Loom; ~/.gradle/caches (inkl. fabric-loom) spart das danach.
+  mod:
+    name: Mod (gradle build & test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: mod
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      # Volles Temurin-25-JDK wie scripts/dev-env.sh; Mojangs mitgelieferte Laufzeiten haben kein javac.
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: gradle
+          cache-dependency-path: |
+            mod/**/*.gradle*
+            mod/gradle.properties
+            mod/gradle/wrapper/gradle-wrapper.properties
+
+      - uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      - name: gradlew build test
+        run: ./gradlew build test

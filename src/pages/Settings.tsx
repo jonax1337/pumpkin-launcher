@@ -6,6 +6,7 @@ import { SupportSection } from "@/components/support";
 import { FormSection, PageHeader, TabPanel, Tabs } from "@/ui";
 import { AboutTab } from "./settings/AboutTab";
 import { AppearanceTab } from "./settings/AppearanceTab";
+import { FriendsTab } from "./settings/FriendsTab";
 import { GameTab } from "./settings/GameTab";
 import { StorageTab } from "./settings/StorageTab";
 
@@ -13,6 +14,7 @@ import { StorageTab } from "./settings/StorageTab";
 const SECTIONS = [
   { value: "konten", key: "components.account.accounts" },
   { value: "spiel", key: "settings.tabJava" },
+  { value: "freunde", key: "friendsSettings.tab" },
   { value: "speicher", key: "settings.tabStorage" },
   { value: "darstellung", key: "pages.settings.tabAppearance" },
   { value: "ueber", key: "pages.settings.tabAbout" },
@@ -41,6 +43,8 @@ function SectionBody({ id }: { id: SectionId }) {
       return <div className="set-acc"><AccountsSection /></div>;
     case "spiel":
       return <GameTab />;
+    case "freunde":
+      return <FriendsTab />;
     case "speicher":
       return <StorageTab />;
     case "darstellung":

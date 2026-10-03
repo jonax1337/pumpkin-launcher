@@ -7,7 +7,7 @@ import { isCancelled } from "@/lib/errors";
 import { presetArgs } from "@/lib/jvm";
 import { applyLauncherOnPlay } from "@/lib/launcherWindow";
 import { LONG_TOAST_MS } from "@/lib/toast";
-import type { Instance, InstanceStatus, LaunchOptions, QuickPlay } from "@/lib/types";
+import type { FriendJoin, Instance, InstanceStatus, LaunchOptions, QuickPlay } from "@/lib/types";
 import { askPlayerName, openAddOffline, startMsLogin } from "@/store/accountUi";
 import { useGame } from "@/store/game";
 import { useOfflineAllowed } from "@/store/offline";
@@ -71,7 +71,7 @@ async function requireUsableAccount(instance: Instance): Promise<ActiveAccount> 
   throw new Error(useOfflineAllowed.getState().allowed ? t("hooks.launch.needPlayerName") : t("hooks.launch.needMicrosoft"));
 }
 
-async function launchOptionsFor(account: ActiveAccount, quickPlay: QuickPlay | null, qc: QueryClient): Promise<LaunchOptions> {
+async function launchOptionsFor(account: ActiveAccount, quickPlay: QuickPlay | null, friendJoin: FriendJoin | undefined, qc: QueryClient): Promise<LaunchOptions> {
   const { javaPath, minMemoryMb, jvmPreset, jvmArgs, window, discordPresence } = useSettings.getState();
   const { enabled: backupWorlds, keep: backupKeep } = useWorldBackup.getState();
   return {
@@ -86,6 +86,7 @@ async function launchOptionsFor(account: ActiveAccount, quickPlay: QuickPlay | n
     defaultWindow: window.type === "default" ? null : window,
     discordPresence,
     quickPlay,
+    friendJoin,
   };
 }
 
@@ -93,10 +94,10 @@ function useLaunch() {
   const qc = useQueryClient();
   return useMutation({
     meta: { ownErrorToast: true },
-    mutationFn: async ({ instance, quickPlay }: { instance: Instance; quickPlay: QuickPlay | null }) => {
+    mutationFn: async ({ instance, quickPlay, friendJoin }: { instance: Instance; quickPlay: QuickPlay | null; friendJoin?: FriendJoin }) => {
       const account = await requireUsableAccount(instance);
       useGame.getState().beginRun(instance.id);
-      return api.launchInstance(instance.id, await launchOptionsFor(account, quickPlay, qc));
+      return api.launchInstance(instance.id, await launchOptionsFor(account, quickPlay, friendJoin, qc));
     },
     onSuccess: (_, { instance }) => {
       useGame.getState().setStarted(instance.id, Date.now());
@@ -118,8 +119,13 @@ function useLaunch() {
   });
 }
 
+/** Öffnet den Tunnel zur Welt eines Freundes und liefert, wohin das Spiel verbinden soll. */
+export type OpenFriendJoin = () => Promise<FriendJoin>;
+
 /**
  * „Spielen“: prüft den Spielernamen, installiert bei Bedarf und startet danach, mit `quickPlay` direkt in eine Welt oder auf einen Server.
+ * `openFriendJoin` (Beitritt zu einer Freundeswelt) läuft erst nach der Installation: Der Tunnel wartet sonst auf ein Spiel,
+ * das noch lädt (Spezifikation 6.2). Der Start geht dann ohne `quickPlay` an die Adresse des Tunnels.
  * Ohne Namen öffnet sich der Dialog „Spielername hinzufügen“; nach dem Speichern geht es hier weiter.
  * Fehler melden `useInstall`/`useLaunch` selbst; der Knopf fällt dann in den Ausgangszustand zurück.
  */
@@ -127,17 +133,18 @@ export function usePlay() {
   const qc = useQueryClient();
   const install = useInstall();
   const launch = useLaunch();
-  const play = async (instance: Instance, onLaunched?: () => void, quickPlay: QuickPlay | null = null): Promise<void> => {
+  const play = async (instance: Instance, onLaunched?: () => void, quickPlay: QuickPlay | null = null, openFriendJoin?: OpenFriendJoin): Promise<void> => {
     const game = useGame.getState();
     if (game.launching[instance.id] || game.installs[instance.id]) return;
     game.setLaunching(instance.id, true);
     try {
       if (!(await launchAccountFor(instance))) {
-        return askPlayerName({ label: instance.name, run: () => void play(instance, onLaunched, quickPlay) });
+        return askPlayerName({ label: instance.name, run: () => void play(instance, onLaunched, quickPlay, openFriendJoin) });
       }
       // Fehlt der Status (Abfrage fehlgeschlagen), wird wie bei „nicht installiert“ zuerst installiert.
       if (!qc.getQueryData<InstanceStatus>(instanceKeys.status(instance.id))?.installed) await install.mutateAsync(instance);
-      await launch.mutateAsync({ instance, quickPlay });
+      const friendJoin = await openFriendJoin?.();
+      await launch.mutateAsync({ instance, quickPlay: friendJoin ? null : quickPlay, friendJoin });
       onLaunched?.();
     } catch {
       // Toast kommt aus useInstall/useLaunch.

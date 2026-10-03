@@ -1,0 +1,91 @@
+import { friendsHost as deFriendsHost } from "../de/friendsHost.ts";
+
+/** Gleiche Schlüssel wie das deutsche Wörterbuch; tsc erzwingt die Vollständigkeit. */
+export const friendsHost: typeof deFriendsHost = {
+  // ---------- Section in the Worlds tab ----------
+  "friendsHost.share.title": "Share with friends",
+  "friendsHost.share.versionUnsupported": "Sharing is available from Minecraft {version}.",
+  "friendsHost.share.notRunning": "Start the instance and open the world to LAN (world options), or use the mod.",
+  "friendsHost.share.waiting": "Waiting for a world opened to LAN…",
+  "friendsHost.share.manualPort": "Enter port manually",
+  "friendsHost.share.portLabel": "LAN port",
+  "friendsHost.share.portHelp": "A number from {min} to {max}: the port the game shows when you open to LAN.",
+  "friendsHost.share.portInvalid": "The port must be between {min} and {max}.",
+  "friendsHost.share.portContinue": "Continue",
+  "friendsHost.share.port": "Port {port} · belongs to Minecraft (PID {pid})",
+  "friendsHost.share.start": "Share with friends",
+  "friendsHost.share.sharing.one": "Shared with {n} friend",
+  "friendsHost.share.sharing.other": "Shared with {n} friends",
+  "friendsHost.share.inviteMore": "Invite more",
+  "friendsHost.share.noOneToInvite": "No other friend is online right now.",
+  "friendsHost.share.seatsFull": "All {max} seats are taken.",
+  "friendsHost.share.stop": "Stop sharing",
+  "friendsHost.share.guestsLabel": "Guests",
+
+  // ---------- Guests ----------
+  "friendsHost.guest.invited": "Invited",
+  "friendsHost.guest.connected": "Connected",
+  "friendsHost.guest.declined": "Declined",
+  "friendsHost.guest.kicked": "Removed",
+  "friendsHost.guest.left": "Left",
+  "friendsHost.guest.reinvite": "Invite again",
+  "friendsHost.guest.kick": "Remove",
+  "friendsHost.guest.rtt": "{ms} ms",
+  "friendsHost.path.direct": "Direct",
+  "friendsHost.path.relay": "Relay",
+  "friendsHost.path.directTip": "The launchers are connected to each other directly.",
+
+  // ---------- Mod ----------
+  "friendsHost.mod.title": "Pumpkin Friends mod: share right in the game",
+  "friendsHost.mod.source": "Comes from Modrinth.",
+  "friendsHost.mod.add": "Add mod",
+  "friendsHost.mod.adding": "Adding mod",
+  "friendsHost.mod.task": "Add Pumpkin Friends mod",
+  "friendsHost.mod.taskDone": "Pumpkin Friends mod added",
+  "friendsHost.mod.name": "Pumpkin Friends mod",
+  "friendsHost.mod.installed": "Mod not connected",
+  "friendsHost.mod.connected": "Mod connected",
+
+  // ---------- "Share with friends" dialog ----------
+  "friendsHost.dialog.title": "Share with friends",
+  "friendsHost.dialog.titleMore": "Invite more friends",
+  "friendsHost.dialog.friends": "Friends who are online",
+  "friendsHost.dialog.friendsHelp": "Up to {n} friends.",
+  "friendsHost.dialog.noFriends": "No friend is online right now",
+  "friendsHost.dialog.noFriendsHint": "You can invite confirmed friends who are online.",
+  "friendsHost.dialog.worldName": "Show world name",
+  "friendsHost.dialog.worldNameHelp": "Without it, invited friends see only the name of the instance.",
+  "friendsHost.dialog.infoVisible": "Invited friends see the Minecraft version, the loader and the mod list of this instance.",
+  "friendsHost.dialog.infoHomeNet": "A world opened to LAN is also reachable by devices in your home network, as in vanilla.",
+  "friendsHost.dialog.needFriend": "Pick at least one friend.",
+  "friendsHost.dialog.confirm": "Share",
+  "friendsHost.dialog.confirmMore": "Invite",
+  "friendsHost.dialog.pending": "One moment",
+
+  // ---------- Stop sharing ----------
+  "friendsHost.stop.title": "Stop sharing?",
+  "friendsHost.stop.text": "All friends are disconnected and their invitations expire. You can share the world again afterwards.",
+
+  // ---------- Chip in the title bar ----------
+  "friendsHost.chip.hosting": "Shared · {n} connected",
+  "friendsHost.chip.joinLead": "At {name}",
+  "friendsHost.chip.waiting": "Waiting for the game",
+  "friendsHost.chip.connecting": "Connecting…",
+  "friendsHost.chip.unknownHost": "host",
+
+  // ---------- Panel at the chip ----------
+  "friendsHost.pop.hostTitle": "You are sharing a world",
+  "friendsHost.pop.noGuests": "Nobody is connected yet.",
+  "friendsHost.pop.joinTitle": "You joined a world",
+  "friendsHost.pop.peer": "Host",
+  "friendsHost.pop.status": "Status",
+  "friendsHost.pop.path": "Connection",
+  "friendsHost.pop.rtt": "Response time",
+  "friendsHost.pop.leave": "Leave",
+
+  // ---------- Closing the window ----------
+  "friendsHost.close.title": "Close the launcher?",
+  "friendsHost.close.hosting": "This stops sharing your world.",
+  "friendsHost.close.joining": "This ends the connection to {name}.",
+  "friendsHost.close.both": "This stops sharing your world and ends the connection to {name}.",
+};

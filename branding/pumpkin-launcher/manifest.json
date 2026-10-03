@@ -212,6 +212,14 @@
       "bytes": 1999,
       "sha256": "5974df22acb21bbcd778a80e721980cc92da37c0d072fc8b701bfa6a28988c25"
     },
+    "motion/halloween/curious.svg": {
+      "bytes": 24283,
+      "sha256": "846c8985b59c1c48a9ec85ea1f9911665d097f1f058cb231dc9c6261220fc83f"
+    },
+    "motion/halloween/giggle.svg": {
+      "bytes": 23810,
+      "sha256": "f085526434fdcfc59a8742741a5018a8c65cf7f836d16fe023693e43504cff57"
+    },
     "motion/halloween/hello.svg": {
       "bytes": 25888,
       "sha256": "b1a63d7aae53083f211b256a867e4360cd681371802285c0d8717f22cbb1eb82"
@@ -224,6 +232,14 @@
       "bytes": 21857,
       "sha256": "d151cc5dc057b64719e726c3769f7b977adc9ca7e6458be5326be032b850304f"
     },
+    "motion/halloween/love.svg": {
+      "bytes": 25965,
+      "sha256": "ca78d65b739e910d93681f5748279c2c5387d406b762dd4dd66ccf8df5a2d6ed"
+    },
+    "motion/halloween/nod.svg": {
+      "bytes": 21005,
+      "sha256": "6afffd3893800c35e605b433ab9ac3c34ec91eb6f0b220adf63633fe488befaf"
+    },
     "motion/halloween/oops.svg": {
       "bytes": 24322,
       "sha256": "08ca47947e029c1c9f7f17b45e93b25bc1ba828bca15ac2b7c9fa726dbceb4ec"
@@ -232,6 +248,10 @@
       "bytes": 2784,
       "sha256": "4cce8e79812acbdf184f7e9babbf51cabf03511d286a35b16fb87afb1415db89"
     },
+    "motion/halloween/pout.svg": {
+      "bytes": 17955,
+      "sha256": "abe15c23be2da4735b72343bad6f25cf067a4c76d314f95ac9989f97735c4154"
+    },
     "motion/halloween/sleep.svg": {
       "bytes": 17689,
       "sha256": "c12353eb63fc20d6b2147724af56e29a602d62223c631b9f9c7c3f805582ff52"
@@ -239,6 +259,18 @@
     "motion/halloween/success.svg": {
       "bytes": 29836,
       "sha256": "20bfb6e69038ab62a4e4c944ca6f67cbe12de3c5f5ef1bc3fbe9523fe8a4d069"
+    },
+    "motion/halloween/surprise.svg": {
+      "bytes": 21449,
+      "sha256": "0f64116c65ba5ed0748fd0150d708413a0c8d098b75f0ed1aa9a0caf3066a0e4"
+    },
+    "motion/spring/curious.svg": {
+      "bytes": 26026,
+      "sha256": "e61940772a5013254168efb4d3b066a079ed49715875c012912df3112a05f565"
+    },
+    "motion/spring/giggle.svg": {
+      "bytes": 25528,
+      "sha256": "eb0b153d9cb33fc3a5b12502a5814feed8239bab6d9442641adb4c6c658cd474"
     },
     "motion/spring/hello.svg": {
       "bytes": 27650,
@@ -252,6 +284,14 @@
       "bytes": 23339,
       "sha256": "97b7739633b04da33727284ddc15703443ea725e69d085be3d3d85d13b7aff78"
     },
+    "motion/spring/love.svg": {
+      "bytes": 27683,
+      "sha256": "e1818430fe760654c0ffdb83c467898ef2df3db3554144346df9f4471bb81336"
+    },
+    "motion/spring/nod.svg": {
+      "bytes": 22567,
+      "sha256": "5d1da7b3e804baf8199a6fd31315f37aa5f31ccdefa310cd73105bd9da82e966"
+    },
     "motion/spring/oops.svg": {
       "bytes": 26039,
       "sha256": "aa8984e40c7c6cd091b0395a598e88b833d3b80b4e66c2f4248d51519dab28e9"
@@ -260,6 +300,10 @@
       "bytes": 3004,
       "sha256": "0d3ff71e953a2440200e9ee51e0637cbbef19b376650051ee0a40e70bd204d22"
     },
+    "motion/spring/pout.svg": {
+      "bytes": 19441,
+      "sha256": "8a1d4c1be0066b0ee66d1b7f7fd1116a0c9f412357358d43ae7d0a9f83ceecf3"
+    },
     "motion/spring/sleep.svg": {
       "bytes": 19091,
       "sha256": "d638f8055b3b98a2ced15c0512274a39f3fd9e313bd1dcd1db976c3d0cd7a18d"
@@ -267,6 +311,18 @@
     "motion/spring/success.svg": {
       "bytes": 32007,
       "sha256": "9774cc3d0e0276bf55500f4e228782acadbf095f7b1426fee8c1da4316f348e0"
+    },
+    "motion/spring/surprise.svg": {
+      "bytes": 22986,
+      "sha256": "8e105dcf61b94d4402347e08a373af43dfb3275d543aba1f527f58b52ba065be"
+    },
+    "motion/standard/curious.svg": {
+      "bytes": 23960,
+      "sha256": "236b7d4a7a376eaeb4a2652769d0feb4740bb6143dc4fa64d3f9df9e131a5aa8"
+    },
+    "motion/standard/giggle.svg": {
+      "bytes": 23489,
+      "sha256": "9d0e152f194c47e017b54a56e3e1eb1e680d16e02109793e4d19157f7896b5fd"
     },
     "motion/standard/hello.svg": {
       "bytes": 25732,
@@ -280,6 +336,14 @@
       "bytes": 21587,
       "sha256": "097bf71bdf353b2184512eeed76c45da7fe24eb746cdde6258a5cfd55281be5f"
     },
+    "motion/standard/love.svg": {
+      "bytes": 25644,
+      "sha256": "911fe7de1d3eb19c7746a891fe5b9ac52fd803bccb979c83759320014082c6b3"
+    },
+    "motion/standard/nod.svg": {
+      "bytes": 20812,
+      "sha256": "1c39de61f77a2ea60da7d3a0f570938da1144ca932100d01c7f209a374386c7f"
+    },
     "motion/standard/oops.svg": {
       "bytes": 24000,
       "sha256": "4336e1d9edc5bf9f0400bf11af8e4f0d242c940a8aff2a64dfc19e47a4555949"
@@ -288,6 +352,10 @@
       "bytes": 2772,
       "sha256": "156ee80b76bbc7968978fc5c974d2b1071d2bd93cd1fe9e6f1b2ca85728a2eab"
     },
+    "motion/standard/pout.svg": {
+      "bytes": 17843,
+      "sha256": "f58b665342d01db0d64673752b84742a9fb5f9d22495e9948cabf9d2dd0db9d5"
+    },
     "motion/standard/sleep.svg": {
       "bytes": 17426,
       "sha256": "d8049ac7fa9961a888aac6f90ee81bfcfcb50c212589caa285d363be788e524a"
@@ -295,6 +363,18 @@
     "motion/standard/success.svg": {
       "bytes": 29726,
       "sha256": "b5492969404e713f77dcbea9a5b6e01b7eb6d0b54567f1dae0e890b3f0b1bd04"
+    },
+    "motion/standard/surprise.svg": {
+      "bytes": 21181,
+      "sha256": "343604bd2c4775253e68313bf46258143b833f13ed3749c7208edb152c8b5e82"
+    },
+    "motion/summer/curious.svg": {
+      "bytes": 29272,
+      "sha256": "c4754293a847a8eaa6aa07a0d6f6f83ab0b3b7ff69007a1c17b29bc497ef80bd"
+    },
+    "motion/summer/giggle.svg": {
+      "bytes": 28798,
+      "sha256": "0bc67ab47653da695cd508a26ec994aaad1aee64e1cf9c71b6fae35f8ca3a40b"
     },
     "motion/summer/hello.svg": {
       "bytes": 30819,
@@ -308,6 +388,14 @@
       "bytes": 26237,
       "sha256": "eb042b04ed129bdd8c3502bfaf144e235632e433673955984c7141d567613182"
     },
+    "motion/summer/love.svg": {
+      "bytes": 30952,
+      "sha256": "2304ad65c53c0e18f4b362d7d86f5d662b8267350a99ad8746113e305eaf6cd3"
+    },
+    "motion/summer/nod.svg": {
+      "bytes": 25325,
+      "sha256": "65f899ac0881ddecd29bb1cd1e426e0b1fb7dc1791274ae1fb835b5b8ac76feb"
+    },
     "motion/summer/oops.svg": {
       "bytes": 29318,
       "sha256": "044293cd54715c52795690fa38decfa2b9909184049accebb9029bd1ad51004d"
@@ -316,6 +404,10 @@
       "bytes": 3397,
       "sha256": "c21dd4bbcfe020e697a7aac7e488920b73d16dce5bd63859746396aa7fbd1067"
     },
+    "motion/summer/pout.svg": {
+      "bytes": 21696,
+      "sha256": "1628d6db9a01629d9aef71845e7aea54155f1f98f5e36577a30f35b2814d4bc8"
+    },
     "motion/summer/sleep.svg": {
       "bytes": 21455,
       "sha256": "fea1c429de29a2711de1f13b935706998bd1c0b705fbde35a9a350f39cb24060"
@@ -323,6 +415,18 @@
     "motion/summer/success.svg": {
       "bytes": 35652,
       "sha256": "83cdc2345497b0e1dcc1237f45aa28d6e0b7592f5f67ace767305cd53249de71"
+    },
+    "motion/summer/surprise.svg": {
+      "bytes": 25806,
+      "sha256": "19d5b87703b600a632bb7fba17a077f658fa726be1931473febb647802602222"
+    },
+    "motion/winter/curious.svg": {
+      "bytes": 25566,
+      "sha256": "8d4bc0849cd405a834e8fd33c99158b03cb8fbd9d052924cd46b600304f14c84"
+    },
+    "motion/winter/giggle.svg": {
+      "bytes": 25204,
+      "sha256": "478303cb98a38e25ae3ea1244b444a71c2ef277d5dd187b09e800d3b55e5f0f0"
     },
     "motion/winter/hello.svg": {
       "bytes": 27262,
@@ -336,6 +440,14 @@
       "bytes": 22940,
       "sha256": "18692bdb69033f1bbc666a37d5295c389fb4c0eca37d1c912fda1cddb513c459"
     },
+    "motion/winter/love.svg": {
+      "bytes": 27219,
+      "sha256": "e4f9baafd3bb1813dc5b9d7a4b6cd801915646f31793a92701dc388ea31f1120"
+    },
+    "motion/winter/nod.svg": {
+      "bytes": 22248,
+      "sha256": "85ecd664c1cd6ec83c2c13ccf80c6fe2b218dab52bfa463cc7af79f7adb9048d"
+    },
     "motion/winter/oops.svg": {
       "bytes": 25579,
       "sha256": "ffd3459bc368666e7b905290a3843d933ceaa4772391c6c5888e66a40f4643ee"
@@ -344,6 +456,10 @@
       "bytes": 2975,
       "sha256": "9748fc7165aab063c4b67b74faa6b6fb271c6f9208972ea20fde85dbda3a8c1d"
     },
+    "motion/winter/pout.svg": {
+      "bytes": 19031,
+      "sha256": "0c1d19b0a2a1108ba008df5b9893c2977b5c96f88ef3a9a46410d8b0526cb609"
+    },
     "motion/winter/sleep.svg": {
       "bytes": 18727,
       "sha256": "bdd50ee0f065adf9b861863ddecbc61339440ab4c258d086be33b7fb7a630b1b"
@@ -351,6 +467,10 @@
     "motion/winter/success.svg": {
       "bytes": 31408,
       "sha256": "0d940be535717f0a5ce0f6ebbbadbcdc19085ff0247ca1f86be7abf07b827413"
+    },
+    "motion/winter/surprise.svg": {
+      "bytes": 22587,
+      "sha256": "55633187ad04adbcf5d02db2f7dd0e948c2623e37dbc809030d9117dbd36718e"
     }
   },
   "motion": {

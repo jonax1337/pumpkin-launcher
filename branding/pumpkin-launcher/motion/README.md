@@ -1,6 +1,6 @@
 # Buddy Motion
 
-Sechs vorbereitete Bewegungen für alle fünf freigegebenen Seasons: **30 animierte SVG-Dateien**. Die App verwendet diese Dateien über `src/branding/Brand.tsx`; UI-Zustände und Bewegungseinstellungen steuern die jeweilige Pose.
+Zwölf Bewegungen für alle fünf freigegebenen Seasons: **60 animierte SVG-Dateien**. Die bisherigen sechs werden bereits über `src/branding/Brand.tsx` verwendet. Die sechs neuen Reaktionen sind als Assets vorbereitet und in der Vorschau zuerst zu sehen.
 
 | Datei pro Season | Ablauf | Möglicher Einsatz |
 |---|---|---|
@@ -10,6 +10,12 @@ Sechs vorbereitete Bewegungen für alle fünf freigegebenen Seasons: **30 animie
 | `success.svg` | Kurzer Freudensprung, kleine Hände und Konfetti | Download oder Einrichtung fertig |
 | `oops.svg` | Sanftes Kopfschütteln und überraschter Ausdruck | Ein Fehler ist aufgetreten |
 | `sleep.svg` | Geschlossene Augen und aufsteigendes Z | Inaktivität oder Pause |
+| `curious.svg` | Schiefer Blick, unterschiedliche Augen und kleines Fragezeichen | Tipp oder neue Entdeckung |
+| `nod.svg` | Zwei kurze, freundliche Nicker | Bestätigung |
+| `giggle.svg` | Lachaugen, kleine Wackler und Hand an der Wange | Spielerischer Moment |
+| `surprise.svg` | Große Augen, kurzer Rücksprung und überraschter Mund | Etwas Neues |
+| `pout.svg` | Hängendes Blatt, halbe Lider und Schmollmund | Sanfte Frustration |
+| `love.svg` | Zwinkern, rosige Wangen und ein aufsteigendes Herz | Favorit oder kleines Dankeschön |
 
 Ordner: `standard/`, `spring/`, `summer/`, `halloween/`, `winter/`. Jeder enthält zusätzlich `poster.svg` als statischen Fallback.
 
@@ -18,7 +24,7 @@ Ordner: `standard/`, `spring/`, `summer/`, `halloween/`, `winter/`. Jeder enthä
 - **SVG bleibt das App-Format.** Die Dateien sind transparent und skalierbar, ohne externe Bilder, Skripte oder Laufzeitbibliotheken.
 - Feste 48×48-Zeichenfläche mit 32×32-Buddy bei Ursprung 8/8. Gleiche Maße und Ankerposition für alle Reaktionen; keine springenden Layoutgrößen.
 - Native SVG-SMIL-Animationen schalten klar gezeichnete Posen um. Bewegungen bleiben auf dem Pixelraster; keine weich rotierten oder verzerrten Pixel.
-- `idle`, `loading` und `sleep` laufen in Schleifen. `hello`, `success` und `oops` spielen einmal und enden im originalen ruhigen Buddy.
+- `idle`, `loading`, `sleep` und `curious` laufen in Schleifen. Die übrigen Reaktionen spielen einmal und enden im originalen ruhigen Buddy.
 - `prefers-reduced-motion: reduce` zeigt automatisch die statische Version. Die ursprünglichen freigegebenen SVGs bleiben unverändert.
 - `manifest.json` enthält Dateipfade, Loop-Verhalten und Laufzeiten. Fehler- und Ladeanimationen ersetzen keine Status- oder Fehlertexte.
 
@@ -52,7 +58,7 @@ Beim Verbergen, Verlassen des sichtbaren Bereichs oder einem laufenden Spiel pau
 
 ## Vorschau und Quelle
 
-`index.html` zeigt alle Bewegungen, Seasons, Pause/Replay und Zeitregler. Einmalige Reaktionen werden nur in dieser Vorschau auf Wunsch wiederholt. `buddy-motion-preview.gif` ist eine reine Ansicht für Chat und Review, kein erforderliches App-Asset.
+`index.html` zeigt alle Bewegungen, Seasons, Pause/Replay und Zeitregler. Die neuen Reaktionen stehen zuerst. Einmalige Reaktionen werden nur in dieser Vorschau auf Wunsch wiederholt. `buddy-motion-preview.gif` zeigt die ersten sechs Bewegungen, `buddy-motion-more.gif` die sechs neuen. Beide sind reine Ansichten für Chat und Review, keine erforderlichen App-Assets.
 
 Neu erzeugen: `python branding/pumpkin-launcher/motion/build.py`. Benötigt werden Pillow und der installierte [Pixel Art Studio Skill](https://github.com/Gamezxz/pixel-art-studio), alternativ über `PIXEL_ART_STUDIO_PATH` auffindbar. Die Basisgrafiken werden direkt aus den freigegebenen SVGs gelesen und gegen ihre Pixel-Hashes geprüft.
 

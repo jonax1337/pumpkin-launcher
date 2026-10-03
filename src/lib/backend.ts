@@ -6,11 +6,13 @@ import type {
 } from "./content-types";
 import type { ContentProgress } from "./progress";
 import type {
-  Account, ContentAnalysis, Datapack, ExitPayload, ExportSummary, FileCheck, ForeignInstance, IconChoice, ImportRequest, Instance,
-  InstallProgress, InstanceScene, InstanceStatus, JavaInstall, LaunchOptions, LibrarySkin, LoaderVersion, LocalFile, LogKind, LogPayload,
-  LogSession, MigrationCheck, MigrationOutcome, MigrationTarget, ModLoader, MsLoginStart, NewInstance, PackSelection, PackTarget,
-  PackUpdateOutcome, Screenshot, Server, ServerStatus, SkinProfile, SkinVariant, StorageOverview, Template, VersionEntry, World,
-  WorldBackup,
+  Account, BlockedPeer, ContentAnalysis, Datapack, ExitPayload, ExportSummary, FileCheck, ForeignInstance, Friend, FriendCode,
+  FriendPresenceEvent, FriendRequest, FriendRequestEvent, FriendRequestRefusedEvent, FriendsEnableInput, FriendsSettings, FriendsState, HostSession,
+  HostSessionEndedEvent, HostSessionEvent, IconChoice, ImportRequest, Instance, InstallProgress, InstanceScene, InstanceStatus, Invite,
+  InviteEvent, InviteRevokedEvent, JavaInstall, JoinPlan, JoinSessionEvent, JoinTicket, LanEvent, LanStatus, LaunchOptions, LibrarySkin,
+  LoaderVersion, LocalFile, LogKind, LogPayload, LogSession, MigrationCheck, MigrationOutcome, MigrationTarget, ModConfirmEvent,
+  ModConnectionEvent, ModLoader, ModStatus, MsLoginStart, NetworkStatus, NewInstance, PackSelection, PackTarget, PackUpdateOutcome,
+  Screenshot, Server, ServerStatus, SkinProfile, SkinVariant, StorageOverview, Template, VersionEntry, World, WorldBackup,
 } from "./types";
 
 /** Events des Backends (Tauri-Events bzw. im Browser-Mock der gleiche Name auf einem EventTarget) mit ihrer Nutzlast. */
@@ -23,6 +25,20 @@ export interface BackendEvents {
   "instances-changed": null;
   /** Der Launcher wurde mit einer Pack-Datei geöffnet; `takeOpenedPack` liefert sie. */
   "pack-opened": null;
+  /** Freunde, Anfragen, Codes, Sperren, Einstellungen oder Hinweise haben sich geändert; die Oberfläche lädt neu. */
+  "friends-changed": null;
+  "friends-network": NetworkStatus;
+  "friend-presence": FriendPresenceEvent;
+  "friend-request": FriendRequestEvent;
+  "friend-request-refused": FriendRequestRefusedEvent;
+  "friend-invite": InviteEvent;
+  "friend-invite-revoked": InviteRevokedEvent;
+  "host-session": HostSessionEvent;
+  "host-session-ended": HostSessionEndedEvent;
+  "join-session": JoinSessionEvent;
+  "lan-changed": LanEvent;
+  "friends-mod": ModConnectionEvent;
+  "friends-mod-confirm": ModConfirmEvent;
 }
 
 export type Subscribe = <E extends keyof BackendEvents>(event: E, cb: (payload: BackendEvents[E]) => void) => Promise<UnlistenFn>;
@@ -229,6 +245,19 @@ export interface Backend {
   onExit(cb: (p: ExitPayload) => void): Promise<UnlistenFn>;
   onInstancesChanged(cb: () => void): Promise<UnlistenFn>;
   onPackOpened(cb: () => void): Promise<UnlistenFn>;
+  onFriendsChanged(cb: () => void): Promise<UnlistenFn>;
+  onFriendsNetwork(cb: (p: NetworkStatus) => void): Promise<UnlistenFn>;
+  onFriendPresence(cb: (p: FriendPresenceEvent) => void): Promise<UnlistenFn>;
+  onFriendRequest(cb: (p: FriendRequestEvent) => void): Promise<UnlistenFn>;
+  onFriendRequestRefused(cb: (p: FriendRequestRefusedEvent) => void): Promise<UnlistenFn>;
+  onFriendInvite(cb: (p: InviteEvent) => void): Promise<UnlistenFn>;
+  onFriendInviteRevoked(cb: (p: InviteRevokedEvent) => void): Promise<UnlistenFn>;
+  onHostSession(cb: (p: HostSessionEvent) => void): Promise<UnlistenFn>;
+  onHostSessionEnded(cb: (p: HostSessionEndedEvent) => void): Promise<UnlistenFn>;
+  onJoinSession(cb: (p: JoinSessionEvent) => void): Promise<UnlistenFn>;
+  onLanChanged(cb: (p: LanEvent) => void): Promise<UnlistenFn>;
+  onFriendsMod(cb: (p: ModConnectionEvent) => void): Promise<UnlistenFn>;
+  onFriendsModConfirm(cb: (p: ModConfirmEvent) => void): Promise<UnlistenFn>;
 
   /** `method: "device"` erzwingt den Gerätecode; sonst Browser-Anmeldung (Rückfall auf Gerätecode im Backend). */
   msLoginStart(method?: "device"): Promise<MsLoginStart>;
@@ -323,9 +352,70 @@ export interface Backend {
   checkAppUpdate(): Promise<Update | null>;
   /** Launcher neu starten (nach dem Update auf Systemen, deren Installer das nicht selbst tut). */
   restartApp(): Promise<void>;
+
+  /** Stand der Freunde-Funktion; geht immer, auch wenn sie aus ist oder die Identität fehlt. */
+  friendsState(): Promise<FriendsState>;
+  /** Schaltet Freunde ein (Microsoft-Konto nötig); legt beim ersten Mal die Identität an. */
+  friendsEnable(input: FriendsEnableInput): Promise<FriendsState>;
+  /** Schaltet Freunde aus; die Daten bleiben. */
+  friendsDisable(): Promise<FriendsState>;
+  /** Ändert Anzeigename und „Immer über Relay“; bei geänderter Relay-Wahl enden laufende Sitzungen. */
+  friendsUpdateSettings(settings: FriendsSettings): Promise<FriendsState>;
+  /** Neue Identität; Freunde bekommen sie automatisch, offene Codes und wartende Anfragen verfallen. */
+  friendsRotateIdentity(): Promise<FriendsState>;
+  /** Alle Freunde, Anfragen, Codes und Sperren löschen und eine neue Identität anlegen; geht auch bei verlorener Identität. */
+  friendsReset(): Promise<FriendsState>;
+  friendsList(): Promise<Friend[]>;
+  friendRequests(): Promise<FriendRequest[]>;
+  /** Erzeugt einen Freundescode; nur diese Antwort trägt den Code im Klartext. */
+  friendCodeCreate(): Promise<FriendCode>;
+  /** Die offenen Codes ohne Klartext. */
+  friendCodes(): Promise<FriendCode[]>;
+  friendCodeRevoke(codeId: string): Promise<void>;
+  /** Löst einen Code ein; kehrt sofort zurück, die Zustellung läuft im Hintergrund. */
+  friendAdd(code: string): Promise<FriendRequest>;
+  /** Schickt über das Verzeichnis eine Anfrage an den genauen Minecraft-Namen; die Antwort ist die wartende eigene Anfrage. */
+  friendAddByName(name: string): Promise<FriendRequest>;
+  friendRequestAnswer(requestId: string, accept: boolean): Promise<void>;
+  /** Zieht eine eigene Anfrage zurück. */
+  friendRequestCancel(requestId: string): Promise<void>;
+  /** Eigener Name für den Freund; null = der angegebene Name. */
+  friendRename(friendId: string, alias: string | null): Promise<void>;
+  /** Blendet den Hinweis (neuer Name, neue Identität) eines Freundes aus. */
+  friendAcknowledge(friendId: string): Promise<void>;
+  friendRemove(friendId: string): Promise<void>;
+  /** Entfernt den Freund bzw. verwirft die Anfrage und sperrt die Gegenseite. */
+  friendBlock(peerId: string): Promise<void>;
+  friendUnblock(peerId: string): Promise<void>;
+  friendsBlocked(): Promise<BlockedPeer[]>;
+  /** Stellt offene Anfragen sofort zu und versucht Freunde zu erreichen, die offline wirken; kehrt sofort zurück. */
+  friendsRetryNow(): Promise<void>;
+  /** Skin des Freundes als PNG-data:-URL (das Backend lädt und merkt ihn sich); null = keiner bekannt. */
+  friendSkin(friendId: string): Promise<string | null>;
+
+  /** Der geprüfte LAN-Port der laufenden Instanz; null = keiner offen. */
+  lanStatus(instanceId: string): Promise<LanStatus | null>;
+  hostSessions(): Promise<HostSession[]>;
+  /** Teilt die geöffnete LAN-Welt; `port` nur, wenn der Nutzer ihn selbst nennt. */
+  hostStart(instanceId: string, port: number | null, showWorldName: boolean): Promise<HostSession>;
+  hostInvite(sessionId: string, friendIds: string[]): Promise<HostSession>;
+  hostKick(sessionId: string, friendId: string): Promise<HostSession>;
+  hostStop(sessionId: string): Promise<void>;
+  invitesList(): Promise<Invite[]>;
+  inviteDecline(inviteId: string): Promise<void>;
+  /** Holt die Angaben des Gastgebers und gleicht sie mit den eigenen Instanzen ab. */
+  invitePlan(inviteId: string): Promise<JoinPlan>;
+  /** Öffnet den lokalen Tunnel; das Spiel startet die Oberfläche danach mit `LaunchOptions.friendJoin`. */
+  inviteJoin(inviteId: string, instanceId: string): Promise<JoinTicket>;
+  joinLeave(joinId: string): Promise<void>;
+  friendsModStatus(instanceId: string): Promise<ModStatus>;
+  /** Installiert die Freunde-Mod von Modrinth in die Instanz. */
+  friendsModInstall(instanceId: string, operationId: string): Promise<void>;
+  /** Antwort auf `friends-mod-confirm`: darf die Mod die Welt teilen? */
+  friendsModConfirm(requestId: string, allow: boolean): Promise<void>;
 }
 
-/** Die sieben `on…`-Abonnements, die beide Backends gleich aus ihrem `Subscribe` bauen. */
+/** Die `on…`-Abonnements, die beide Backends gleich aus ihrem `Subscribe` bauen. */
 export const eventSubscriptions = (on: Subscribe) => ({
   onContentBlocked: (cb) => on("content-blocked", cb),
   onContentProgress: (cb) => on("content-progress", cb),
@@ -334,4 +424,17 @@ export const eventSubscriptions = (on: Subscribe) => ({
   onExit: (cb) => on("instance-exit", cb),
   onInstancesChanged: (cb) => on("instances-changed", cb),
   onPackOpened: (cb) => on("pack-opened", cb),
+  onFriendsChanged: (cb) => on("friends-changed", cb),
+  onFriendsNetwork: (cb) => on("friends-network", cb),
+  onFriendPresence: (cb) => on("friend-presence", cb),
+  onFriendRequest: (cb) => on("friend-request", cb),
+  onFriendRequestRefused: (cb) => on("friend-request-refused", cb),
+  onFriendInvite: (cb) => on("friend-invite", cb),
+  onFriendInviteRevoked: (cb) => on("friend-invite-revoked", cb),
+  onHostSession: (cb) => on("host-session", cb),
+  onHostSessionEnded: (cb) => on("host-session-ended", cb),
+  onJoinSession: (cb) => on("join-session", cb),
+  onLanChanged: (cb) => on("lan-changed", cb),
+  onFriendsMod: (cb) => on("friends-mod", cb),
+  onFriendsModConfirm: (cb) => on("friends-mod-confirm", cb),
 } satisfies Partial<Backend>);

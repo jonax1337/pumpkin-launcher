@@ -1,5 +1,6 @@
 import { errors as deErrors } from "../de/errors.ts";
 import { errorsApp } from "./errors.app.ts";
+import { errorsFriends } from "./errors.friends.ts";
 import { errorsGame } from "./errors.game.ts";
 import { errorsModrinth } from "./errors.modrinth.ts";
 import { errorsPacks } from "./errors.packs.ts";
@@ -47,6 +48,7 @@ export const errors: typeof deErrors = {
   "errors.export.chooseTarget": "Please choose where to save the .mrpack file",
   "errors.export.loaderVersionMissing": "The instance has no loader version yet: please start it once first",
   ...errorsApp,
+  ...errorsFriends,
   ...errorsGame,
   ...errorsModrinth,
   ...errorsPacks,

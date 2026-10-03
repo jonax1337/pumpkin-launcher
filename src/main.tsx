@@ -15,6 +15,7 @@ import { InstanceDetailPage } from "@/pages/InstanceDetail";
 import { DiscoverPage } from "@/pages/Discover";
 import { SettingsPage } from "@/pages/Settings";
 import { SkinsPage } from "@/pages/Skins";
+import { FriendsPage } from "@/pages/Friends";
 import { NotFoundPage } from "@/pages/NotFound";
 import "./index.css";
 
@@ -31,6 +32,7 @@ const router = createBrowserRouter([
       { path: "discover", element: <DiscoverPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "skins", element: <SkinsPage /> },
+      { path: "friends", element: <FriendsPage /> },
       // Alte Adressen aus früheren Versionen
       { path: "mods", element: <Navigate to={discoverUrl({ tab: "mod" })} replace /> },
       { path: "modpacks", element: <Navigate to={discoverUrl()} replace /> },

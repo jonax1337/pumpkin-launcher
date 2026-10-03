@@ -47,6 +47,7 @@
 - **German & English UI** — the interface follows your system language or your choice in Settings; backend errors are translated too, only a few remaining messages stay German
 - **Accessibility** — keyboard shortcuts (Ctrl/Cmd+1…4 switch area, Ctrl/Cmd+, settings, Ctrl/Cmd+N new instance, Ctrl/Cmd+Enter play, Ctrl/Cmd+F or `/` search, `?` lists them all), a skip link, text size (normal, large, larger), motion off, and a Windows high-contrast mode
 - **Discord Rich Presence** — optional and off by default: shows friends that you are playing, with version, loader and start time, never the world, server or instance name; the launcher only talks to the local Discord app
+- **Friends** — optional and off by default: add friends with a one-time code, see who is online, and open a world to invited friends in other networks. Launchers connect directly over an encrypted peer-to-peer tunnel (iroh) and fall back to a relay server, and an optional Fabric mod adds a friends screen to the pause menu. Needs a Microsoft account. On a direct connection friends see each other's IP address unless "Always connect through a relay" is on; relays see who connects to whom, never the content. See [Friends](docs/friends/README.md)
 - **Pixelkino UI** — a custom pixel design system with a canvas scene engine, pixel icons and a frameless window. See [the design spec](docs/design/PIXELKINO.md)
 
 <p align="center">
@@ -56,9 +57,11 @@
 
 ## Status
 
-Pumpkin Launcher is in beta (v0.1.x). Install, launch, content, worlds, skins, import, duplicate/export and auto-update are in place and tested on Windows. Linux (AppImage, `.deb`) and macOS (universal `.dmg`) are built by the release workflow and their backend is tested in CI on every change, but they have not been tried on real machines yet, so expect rough edges there. Modpack updates, version switching and a few other recent additions (the `.mrpack` file association, Java detection, the window actions of the "When the game starts" setting) are covered by backend tests or the browser mock but have not yet been verified in a real app build.
+Pumpkin Launcher is in beta (v2.0.x). Install, launch, content, worlds, skins, import, duplicate/export and auto-update are in place and tested on Windows. Linux (AppImage, `.deb`) and macOS (universal `.dmg`) are built by the release workflow and their backend is tested in CI on every change, but they have not been tried on real machines yet, so expect rough edges there. Modpack updates, version switching and a few other recent additions (the `.mrpack` file association, Java detection, the window actions of the "When the game starts" setting) are covered by backend tests or the browser mock but have not yet been verified in a real app build.
 
 > **Microsoft login:** Mojang has approved Pumpkin Launcher's own Azure app, so you can sign in with your Microsoft account. Microsoft must approve each launcher's app before `minecraftservices.com` accepts it; a fork registers its own Azure app and changes `DEFAULT_CLIENT_ID` in `src-tauri/src/services/auth/mod.rs`, and until that app is approved the final Minecraft step returns 403 and the launcher says so. How to register and approve a client ID is documented in [`docs/ACCOUNT-SETUP.md`](docs/ACCOUNT-SETUP.md).
+
+> **Friends:** new and not yet called stable. The tests on two PCs in different real networks are still to be run ([verification record](docs/friends/VERIFICATION.md)), so expect rough edges. Release builds cannot connect friends until our own relay is deployed; debug and closed-beta builds also use n0's public relays, with an explicit opt-in.
 
 ## Getting started
 
@@ -132,7 +135,7 @@ scripts/        build helper scripts
 proxy/          Cloudflare Worker holding the CurseForge API key (forks need their own key and worker)
 ```
 
-Details: [Architecture](docs/ARCHITECTURE.md) · [Releasing](docs/RELEASING.md) · [Pixelkino design spec](docs/design/PIXELKINO.md) · [Branding](branding/pumpkin-launcher/README.md) · [Website](website/README.md) · [Launch video](media/launch-video/README.md) · [CurseForge proxy](proxy/README.md)
+Details: [Architecture](docs/ARCHITECTURE.md) · [Releasing](docs/RELEASING.md) · [Pixelkino design spec](docs/design/PIXELKINO.md) · [Friends](docs/friends/README.md) · [Branding](branding/pumpkin-launcher/README.md) · [Website](website/README.md) · [Launch video](media/launch-video/README.md) · [CurseForge proxy](proxy/README.md)
 
 Instances, templates, accounts and skins are stored as JSON in the app data directory (Windows: `%APPDATA%\dev.laux.launcher\`, Linux: `~/.local/share/dev.laux.launcher/`, macOS: `~/Library/Application Support/dev.laux.launcher/`). The technical identifier stays `dev.laux.launcher` so existing data keeps being found.
 

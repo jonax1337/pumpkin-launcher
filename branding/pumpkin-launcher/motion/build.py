@@ -39,6 +39,18 @@ MOTIONS=[
         p(160),p(120,eyes='worried'),p(100,x=-2,eyes='worried',leaf=1),p(100,x=2,eyes='worried',leaf=-1),p(120,x=-1,eyes='worried'),p(120,x=1,eyes='worried'),p(180,eyes='closed'),p(280)]),
     dict(id='sleep',name='Kleine Pause',loop=True,use='Inaktivität oder eine ruhige, optionale Wartesituation.',frames=[
         p(560,eyes='sleep'),p(480,eyes='sleep',y=1,z=1),p(480,eyes='sleep',y=1,z=2,leaf=-1),p(480,eyes='sleep',z=3),p(560,eyes='sleep',leaf=1),p(560,eyes='sleep')]),
+    dict(id='curious',name='Was ist denn da?',new=True,loop=True,use='Neugieriger Blick für Tipps oder neue Entdeckungen.',previewFrame=3,frames=[
+        p(480),p(240,eyes='left',lean=1,leaf=-1),p(120,eyes='closed',lean=1),p(560,eyes='curious',lean=1,question=1),p(480,eyes='right',lean=-1,question=2,leaf=1),p(240,eyes='curious'),p(160,eyes='closed'),p(640)]),
+    dict(id='nod',name='Alles klar!',new=True,loop=False,use='Ein freundliches Nicken zur Bestätigung.',previewFrame=3,frames=[
+        p(200),p(100,y=-1),p(140,y=1,eyes='closed',leaf=-1),p(180,y=2,eyes='closed'),p(160),p(140,y=2,eyes='closed',leaf=1),p(140,y=1),p(320)]),
+    dict(id='giggle',name='Hihihi',new=True,loop=False,use='Ein kleines Kichern für einen spielerischen Moment.',previewFrame=4,frames=[
+        p(180),p(180,eyes='happy',cover=True),p(140,y=-1,eyes='happy',cover=True),p(140,y=1,x=-1,eyes='happy',cover=True,leaf=-1),p(140,y=-1,x=1,eyes='happy',cover=True),p(180,eyes='happy',cover=True,leaf=1),p(120,eyes='closed'),p(320)]),
+    dict(id='surprise',name='Oh!',new=True,loop=False,use='Überraschte Reaktion auf etwas Neues.',previewFrame=3,frames=[
+        p(200),p(100,y=1,eyes='closed'),p(100,y=-2,x=-1,eyes='wide',alert=1),p(420,y=-1,eyes='wide',alert=2,leaf=1),p(200,eyes='wide'),p(140,eyes='closed'),p(320)]),
+    dict(id='pout',name='Menno …',new=True,loop=False,use='Ein sanftes Schmollen, wenn etwas länger dauert oder nicht klappt.',previewFrame=3,frames=[
+        p(180),p(180,eyes='closed'),p(240,y=1,eyes='pout',leaf_y=1),p(720,y=2,eyes='pout',leaf_y=1),p(240,y=1,eyes='pout',leaf=-1),p(160,eyes='closed'),p(360)]),
+    dict(id='love',name='Für dich',new=True,loop=False,use='Buddy verschenkt ein kleines Herz – etwa für einen Favoriten.',previewFrame=3,frames=[
+        p(180),p(180,eyes='affection',hand=1),p(220,eyes='affection',hand=1,heart=1),p(220,y=-1,eyes='happy',hand=1,heart=2,leaf=1),p(260,y=-1,eyes='happy',heart=3),p(220,eyes='happy',heart=4),p(160,eyes='closed'),p(360)]),
 ]
 
 
@@ -74,14 +86,29 @@ def face(image,expression):
     elif expression=='happy':
         for x in (9,18):
             d.line((x,18,x+1,17),fill=INK); d.line((x+1,17,x+3,17),fill=INK); d.point((x+4,18),fill=INK)
+    elif expression=='wide':
+        for x in (9,18):
+            d.rectangle((x,15,x+3,20),fill=INK); d.rectangle((x,15,x+1,16),fill=PALE)
+    elif expression=='pout':
+        for x in (10,19):
+            d.rectangle((x,18,x+2,19),fill=INK)
+    elif expression=='curious':
+        d.rectangle((10,16,12,19),fill=INK); d.point((10,16),fill=PALE)
+        d.rectangle((19,17,21,19),fill=INK); d.point((19,17),fill=PALE)
+    elif expression=='affection':
+        d.rectangle((10,16,12,19),fill=INK); d.point((10,16),fill=PALE)
+        d.line((19,18,21,18),fill=INK)
+        d.line((8,20,10,20),fill='#DF7183'); d.line((22,20,24,20),fill='#DF7183')
     else:
         shift=-1 if expression=='left' else 1 if expression=='right' else 0
         for x in (10+shift,19+shift):
             d.rectangle((x,16,x+2,19),fill=INK); d.point((x,16),fill=PALE)
-    if expression in ('worried','sleep','happy'):
+    if expression in ('worried','sleep','happy','wide','pout'):
         d.rectangle((13,21,18,23),fill=LIGHT)
         if expression=='worried': d.rectangle((15,21,16,23),fill=INK)
         elif expression=='sleep': d.line((15,22,16,22),fill=INK)
+        elif expression=='wide': d.rectangle((15,21,17,23),fill=INK)
+        elif expression=='pout': d.line((14,22,15,21),fill=INK); d.line((15,21,17,22),fill=INK)
         else:
             d.polygon([(13,21),(18,21),(17,23),(14,23)],fill=INK)
             d.line((14,21,17,21),fill=PALE)
@@ -107,11 +134,30 @@ def frame(image,season,pose):
     for y in range(32):
         for x in range(32):
             color=shaped.getpixel((x,y))
-            if color[3]: s.px(x+dx+(pose.get('leaf',0) if y<=limit else 0),y+dy,color)
+            if color[3]:
+                lean=pose.get('lean',0)*((y-16)//8)
+                s.px(x+dx+lean+(pose.get('leaf',0) if y<=limit else 0),y+dy+(pose.get('leaf_y',0) if y<=limit else 0),color)
     if pose.get('hand'):
         phase=pose['hand']; hand(s,dx+(1 if phase==3 else 0),dy+(3 if phase==1 else 0))
     if pose.get('arms'):
         hand(s,dx,dy-1); hand(s,dx,dy-1,True)
+    if pose.get('cover'):
+        s.line(25+dx,22+dy,22+dx,23+dy,INK); s.line(26+dx,22+dy,22+dx,24+dy,BODY)
+        s.polygon([(19+dx,21+dy),(21+dx,20+dy),(23+dx,20+dy),(24+dx,22+dy),(23+dx,24+dy),(20+dx,24+dy),(19+dx,23+dy)],INK)
+        s.rect(20+dx,21+dy,22+dx,23+dy,BODY); s.line(20+dx,21+dy,22+dx,21+dy,LIGHT)
+    if pose.get('question'):
+        x,y=(38,10) if pose['question']==1 else (39,8)
+        s.line(x,y,x+2,y,'#A9B4C8'); s.px(x+3,y+1,'#A9B4C8'); s.px(x+2,y+2,'#A9B4C8'); s.px(x+1,y+3,'#A9B4C8'); s.rect(x+1,y+5,x+2,y+5,'#A9B4C8')
+    if pose.get('alert'):
+        for x in (8,38) if pose['alert']==1 else (6,40): s.rect(x,13,x+1,15,PALE)
+    if pose.get('heart'):
+        phase=pose['heart']; x,y={1:(37,20),2:(37,14),3:(36,8),4:(38,4)}[phase]
+        if phase==4:
+            s.polygon([(x,y+1),(x+1,y),(x+2,y+1),(x+3,y),(x+4,y+1),(x+2,y+4)],'#DF7183')
+        else:
+            s.polygon([(x+1,y),(x+2,y),(x+3,y+1),(x+4,y),(x+5,y),(x+6,y+1),(x+6,y+2),(x+3,y+5),(x,y+2),(x,y+1)],SHADOW)
+            s.polygon([(x+1,y+1),(x+2,y+1),(x+3,y+2),(x+4,y+1),(x+5,y+1),(x+5,y+2),(x+3,y+4),(x+1,y+2)],'#DF7183')
+            s.line(x+1,y+1,x+2,y+1,PALE)
     if pose.get('dots'):
         for i,x in enumerate((18,23,28)):
             s.rect(x,3,x+1,4,PALE if i<pose['dots'] else '#33415C')
@@ -160,7 +206,7 @@ def svg_animation(season,motion,frames,poster):
 
 
 def contact_sheet(all_frames):
-    canvas=Image.new('RGB',(1440,870),'#070A11'); d=ImageDraw.Draw(canvas)
+    canvas=Image.new('RGB',(1440,len(MOTIONS)*140+30),'#070A11'); d=ImageDraw.Draw(canvas)
     font=lambda size:ImageFont.truetype('C:/Windows/Fonts/bahnschrift.ttf',size)
     for row,motion in enumerate(MOTIONS):
         d.text((20,row*140+14),motion['name'],font=font(18),fill='#E39860')
@@ -172,12 +218,12 @@ def contact_sheet(all_frames):
     canvas.save(ROOT/'qa/contact-sheet.png')
 
 
-def preview_gif(all_frames):
+def preview_gif(all_frames,motions,filename):
     pictures=[]
     font=ImageFont.truetype('C:/Windows/Fonts/bahnschrift.ttf',22)
     for t in range(0,12000,100):
         canvas=Image.new('RGB',(768,576),'#070A11'); d=ImageDraw.Draw(canvas)
-        for i,motion in enumerate(MOTIONS):
+        for i,motion in enumerate(motions):
             duration=sum(p['ms'] for p in motion['frames'])
             phase=t%(duration+(0 if motion['loop'] else 900)); cursor=0; index=len(motion['frames'])-1
             for j,pose in enumerate(motion['frames']):
@@ -188,19 +234,20 @@ def preview_gif(all_frames):
             canvas.paste(frame,(x,y),frame)
             d.text((x+96,y+208),motion['name'],anchor='mt',font=font,fill='#F6E7C8')
         pictures.append(canvas)
-    pictures[0].save(ROOT/'buddy-motion-preview.gif',save_all=True,append_images=pictures[1:],duration=100,loop=0,optimize=False,disposal=2)
+    pictures[0].save(ROOT/filename,save_all=True,append_images=pictures[1:],duration=100,loop=0,optimize=False,disposal=2)
 
 
-def season_sheet(all_frames):
+def season_sheet(all_frames,motions,filename):
     canvas=Image.new('RGB',(1080,1080),'#070A11'); d=ImageDraw.Draw(canvas)
     font=ImageFont.truetype('C:/Windows/Fonts/bahnschrift.ttf',17)
     for col,season in enumerate(SEASONS):
         d.text((180+col*178,20),season['name'],font=font,fill='#E39860')
-        for row,(motion,index) in enumerate(zip(MOTIONS,[2,4,4,4,3,3])):
+        for row,motion in enumerate(motions):
+            index=motion.get('previewFrame',{'idle':2,'hello':4,'loading':4,'success':4,'oops':3,'sleep':3}.get(motion['id'],3))
             im=all_frames[season['id']][motion['id']][index].resize((144,144),Image.Resampling.NEAREST)
             canvas.paste(im,(180+col*178,60+row*166),im)
             if col==0:d.text((15,115+row*166),motion['name'],font=font,fill='#A9B4C8')
-    canvas.save(ROOT/'qa/season-poses.png')
+    canvas.save(ROOT/'qa'/filename)
 
 
 def build():
@@ -230,7 +277,9 @@ def build():
             files[motion['id']]={'svg':f'{key}/{motion["id"]}.svg','bytes':file.stat().st_size}
         manifest['seasons'][key]={'name':season['name'],'poster':f'{key}/poster.svg','sourceSha256':sha256((BRAND/'assets'/key/'mark.svg').read_bytes()).hexdigest(),'files':files}
     (ROOT/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-    contact_sheet(all_frames); season_sheet(all_frames); preview_gif(all_frames)
+    contact_sheet(all_frames)
+    season_sheet(all_frames,MOTIONS[:6],'season-poses.png'); season_sheet(all_frames,MOTIONS[6:],'more-season-poses.png')
+    preview_gif(all_frames,MOTIONS[:6],'buddy-motion-preview.gif'); preview_gif(all_frames,MOTIONS[6:],'buddy-motion-more.gif')
     font=re.search(r'data:font/woff2;base64,([^)]*)',(BRAND/'source/preview.html').read_text(encoding='utf-8')).group(1)
     (ROOT/'index.html').write_text((ROOT/'source/preview.html').read_text(encoding='utf-8').replace('__FONT__',font),encoding='utf-8')
     shutil.copyfile(BRAND/'source/FONT-LICENSE.txt',ROOT/'FONT-LICENSE.txt')
@@ -238,7 +287,7 @@ def build():
         for file in sorted(ROOT.rglob('*')):
             if file.is_file() and file.suffix!='.zip' and 'qa' not in file.parts and '__pycache__' not in file.parts:
                 archive.write(file,file.relative_to(ROOT))
-    print('Built and validated 30 animated SVGs + 5 static posters. Static brand assets unchanged.')
+    print(f'Built and validated {len(MOTIONS)*len(SEASONS)} animated SVGs + {len(SEASONS)} static posters.')
 
 
 if __name__=='__main__': build()
