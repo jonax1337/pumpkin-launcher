@@ -36,6 +36,7 @@ whom, never content, and our relay stores no log. Details: [`PRIVACY.md`](PRIVAC
 | [`PRIVACY.md`](PRIVACY.md) | Privacy, relay legal text and the Mojang compliance checklist |
 | [`OWNER-CHECKLIST.md`](OWNER-CHECKLIST.md) | Everything only the owner can do before a release, in order (German) |
 | [`VERIFICATION.md`](VERIFICATION.md) | The tables for gates G1 to G5 that the owner fills in |
+| [`INGAME.md`](INGAME.md) | Concept for the in-game friends menu: a mod the launcher injects by itself (launcher-only, no install). Supersedes `MOD2.md` |
 | [`../../mod/README.md`](../../mod/README.md) | The Fabric mod: build, test, `FakeLauncher`, GUI checklist |
 | [`../../tools/p2p-spike/README.md`](../../tools/p2p-spike/README.md) | The two-PC spike for gate G1 |
 | [`../../infra/relay/`](../../infra/relay/) | `relay.toml`, `Dockerfile` and compose files for the relay |

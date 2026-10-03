@@ -1,5 +1,7 @@
 # Pumpkin Friends "Mod 2.0": every launcher, many versions, full in-game parity
 
+**Superseded (2026-10-03) by [`INGAME.md`](INGAME.md):** the owner dropped foreign launchers and wants the mod injected automatically by the launcher. This draft stays as research (version matrix, parity table, protocol and UI ideas); `INGAME.md` section 13 lists what was kept and dropped.
+
 Status: design spec, decided (2026-10-03). Base: `docs/friends/SPEC.md` (v2 incl. Wave 0-3 syncs) and `docs/friends/BYNAME.md`. Where this document and SPEC.md disagree, this document wins for everything it names; package D0 folds the changes back into SPEC.md (section 9.9).
 
 Words used here:
