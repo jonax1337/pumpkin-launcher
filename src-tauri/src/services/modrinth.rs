@@ -20,7 +20,7 @@ const API: &str = "https://api.modrinth.com/v2";
 const MAX_IDENTIFIER_LEN: usize = 128;
 const MAX_SEARCH_OFFSET: u32 = 100_000;
 /// Projekte je Sammelabfrage der Inhaltsliste.
-const MAX_PROJECT_IDS: usize = 500;
+pub(crate) const MAX_PROJECT_IDS: usize = 500;
 /// So viele IDs nimmt `GET versions` je Aufruf.
 const VERSION_IDS_PER_CALL: usize = 100;
 /// Mods einer Instanz, die ein Abhängigkeitsabgleich noch berücksichtigt.
@@ -237,6 +237,21 @@ pub async fn versions(
     mc: Option<&str>,
     loader: Option<&str>,
 ) -> AppResult<Vec<Version>> {
+    api(client, &format!("project/{id}/version"), &version_query(id, mc, loader)?).await
+}
+/// Wie [`versions`], aber nur Versionen mit dem Status `listed`: Entwürfe, Archiviertes und nicht Gelistetes fehlen.
+pub async fn listed_versions(
+    client: &reqwest::Client,
+    id: &str,
+    mc: &str,
+    loader: &str,
+) -> AppResult<Vec<Version>> {
+    let query = version_query(id, Some(mc), Some(loader))?;
+    let mut url = parse_url(&format!("{API}/project/{id}/version"))?;
+    url.query_pairs_mut().extend_pairs(&query);
+    parse_listed_versions(&bytes(client.get(url), API_JSON_LIMIT).await?)
+}
+fn version_query(id: &str, mc: Option<&str>, loader: Option<&str>) -> AppResult<Vec<(String, String)>> {
     identifier(id)?;
     let mut q = Vec::new();
     if let Some(mc) = mc {
@@ -247,7 +262,19 @@ pub async fn versions(
         identifier(loader)?;
         q.push(("loaders".into(), serde_json::to_string(&loaders_to_query(loader))?));
     }
-    api(client, &format!("project/{id}/version"), &q).await
+    Ok(q)
+}
+/// Eine Version samt dem Status, den `Version` selbst nicht trägt; ohne Angabe gilt sie als nicht gelistet.
+#[derive(Deserialize)]
+struct StatusVersion {
+    #[serde(flatten)]
+    version: Version,
+    #[serde(default)]
+    status: String,
+}
+pub fn parse_listed_versions(body: &[u8]) -> AppResult<Vec<Version>> {
+    let all: Vec<StatusVersion> = serde_json::from_slice(body)?;
+    Ok(all.into_iter().filter(|v| v.status == "listed").map(|v| v.version).collect())
 }
 /// Mehrere Versionen in einem Aufruf je 100 IDs; jede angefragte muss genau so zurückkommen.
 pub async fn versions_by_ids(client: &reqwest::Client, ids: &[String]) -> AppResult<Vec<Version>> {
@@ -286,22 +313,40 @@ pub async fn versions_by_hash(
     client: &reqwest::Client,
     hashes: &[String],
 ) -> AppResult<HashMap<String, Version>> {
+    versions_by_algorithm(client, hashes, "sha1").await
+}
+/// Wie [`versions_by_hash`] mit SHA-512; Schlüssel ist der kleingeschriebene Hash.
+pub async fn versions_by_sha512(
+    client: &reqwest::Client,
+    hashes: &[String],
+) -> AppResult<HashMap<String, Version>> {
+    versions_by_algorithm(client, hashes, "sha512").await
+}
+async fn versions_by_algorithm(
+    client: &reqwest::Client,
+    hashes: &[String],
+    algorithm: &str,
+) -> AppResult<HashMap<String, Version>> {
     if hashes.is_empty() {
         return Ok(HashMap::new());
     }
     let url = parse_url(&format!("{API}/version_files"))?;
-    let body = serde_json::json!({ "hashes": hashes, "algorithm": "sha1" });
+    let body = serde_json::json!({ "hashes": hashes, "algorithm": algorithm });
     let found: HashMap<String, Version> =
         serde_json::from_slice(&bytes(client.post(url).json(&body), API_JSON_LIMIT).await?)?;
-    Ok(found
+    Ok(carrying_their_hash(found, algorithm))
+}
+/// Behält nur Antworten mit gültigen IDs, von denen eine Datei den angefragten Hash trägt.
+fn carrying_their_hash(found: HashMap<String, Version>, algorithm: &str) -> HashMap<String, Version> {
+    found
         .into_iter()
-        .filter(|(sha1, v)| {
+        .filter(|(hash, v)| {
             identifier(&v.project_id).is_ok()
                 && identifier(&v.id).is_ok()
-                && v.files.iter().any(|f| f.hashes.get("sha1").is_some_and(|h| h.eq_ignore_ascii_case(sha1)))
+                && v.files.iter().any(|f| f.hashes.get(algorithm).is_some_and(|h| h.eq_ignore_ascii_case(hash)))
         })
-        .map(|(sha1, v)| (sha1.to_ascii_lowercase(), v))
-        .collect())
+        .map(|(hash, v)| (hash.to_ascii_lowercase(), v))
+        .collect()
 }
 fn parse_url(s: &str) -> AppResult<reqwest::Url> {
     reqwest::Url::parse(s)
@@ -754,6 +799,51 @@ mod tests {
         assert!(!has_incompatibility(&with(incompatible(Some("b2"), "incompatible"))));
         assert!(!has_incompatibility(&with(incompatible(None, "required"))));
         assert!(!has_incompatibility(&HashMap::new()));
+    }
+    fn version_json(id: &str, status: Option<&str>) -> serde_json::Value {
+        let mut version = serde_json::json!({
+            "id": id, "project_id": "p", "name": "N", "version_number": "1", "game_versions": [], "loaders": [],
+            "files": [], "dependencies": []
+        });
+        if let Some(status) = status {
+            version["status"] = status.into();
+        }
+        version
+    }
+    #[test]
+    fn only_listed_versions_survive_the_status_filter() {
+        let body = serde_json::to_vec(&serde_json::json!([
+            version_json("listed", Some("listed")),
+            version_json("draft", Some("draft")),
+            version_json("archived", Some("archived")),
+            version_json("unlisted", Some("unlisted")),
+            version_json("unknown", None),
+        ]))
+        .unwrap();
+        let ids: Vec<String> = parse_listed_versions(&body).unwrap().into_iter().map(|v| v.id).collect();
+        assert_eq!(ids, ["listed"]);
+    }
+    #[test]
+    fn version_lookup_answers_must_carry_the_requested_hash() {
+        let carrying = |algorithm: &str, hash: &str| {
+            let mut version = v("v1");
+            version.files.push(File {
+                hashes: BTreeMap::from([(algorithm.into(), hash.into())]),
+                url: String::new(),
+                filename: "a.jar".into(),
+                primary: true,
+                size: 1,
+            });
+            version
+        };
+        let found = HashMap::from([
+            ("ABC".to_string(), carrying("sha512", "abc")),
+            ("def".to_string(), carrying("sha1", "def")),
+            ("ghi".to_string(), carrying("sha512", "other")),
+            ("jkl".to_string(), Version { project_id: "../x".into(), ..carrying("sha512", "jkl") }),
+        ]);
+        let kept = carrying_their_hash(found, "sha512");
+        assert_eq!(kept.keys().collect::<Vec<_>>(), ["abc"]);
     }
     #[test]
     fn only_the_modrinth_cdn_is_a_download_origin() {
