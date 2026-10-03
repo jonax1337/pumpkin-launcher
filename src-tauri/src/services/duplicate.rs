@@ -200,7 +200,7 @@ mod tests {
 
         let result = content::cancel_at_step(&state, 0, |progress| duplicate(&state, &source.id, progress)).await;
 
-        assert!(matches!(result, Err(crate::error::AppError::Cancelled)));
+        assert!(matches!(result, Err(crate::error::AppError::Cancelled)), "cancelling ended with: {:?}", result.as_ref().map(|_| "Ok"));
         assert_eq!(state.instances.list(), vec![source]);
         assert_eq!(fs::read_dir(root.join("instances")).unwrap().count(), 1);
         fs::remove_dir_all(root).unwrap();
