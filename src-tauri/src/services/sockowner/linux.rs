@@ -152,6 +152,7 @@ fn ipv6_bytes(hex: &str) -> Option<[u8; 16]> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::SocketTable;
     use super::*;
 
     const HEADER: &str = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode";
@@ -292,6 +293,66 @@ mod tests {
     fn a_process_with_unreadable_descriptors_owns_no_sockets() {
         let proc = FakeProc { descriptors: Err(io::ErrorKind::PermissionDenied), ..FakeProc::healthy() };
         assert!(sockets_in(&proc, 1).unwrap().is_empty());
+    }
+
+    /// Ein `/proc` mit mehreren Prozessen: `reachable` hält den Listener (Inode 1001), `unreadable` verweigert den
+    /// Zugriff auf seine Descriptoren (anderer Nutzer, `hidepid`), `ended` gibt es nicht mehr. Die Tabellen sind heil.
+    struct ManyProcs;
+
+    impl ManyProcs {
+        const REACHABLE: u32 = 10;
+        const UNREADABLE: u32 = 20;
+        const ENDED: u32 = 30;
+    }
+
+    impl ProcFiles for ManyProcs {
+        fn net_table(&self, name: &str) -> io::Result<String> {
+            Ok(if name == IPV4_TABLE { tcp_table() } else { tcp6_table() })
+        }
+
+        fn descriptor_targets(&self, pid: u32) -> io::Result<Vec<String>> {
+            match pid {
+                Self::REACHABLE => Ok(vec!["socket:[1002]".to_owned()]),
+                Self::UNREADABLE => Err(io::ErrorKind::PermissionDenied.into()),
+                _ => Err(io::ErrorKind::NotFound.into()),
+            }
+        }
+    }
+
+    /// Die Sockets von `ManyProcs` als `SocketTable`, so wie `connects_from` sie abfragt.
+    struct ManyProcsTable;
+
+    impl SocketTable for ManyProcsTable {
+        fn sockets_of(&self, pid: u32) -> io::Result<Vec<TcpSocket>> {
+            sockets_in(&ManyProcs, pid)
+        }
+    }
+
+    #[test]
+    #[cfg(target_endian = "little")]
+    fn a_process_with_unreadable_descriptors_is_skipped_while_the_others_keep_their_connections() {
+        let (client, server) = ("127.0.0.1:50000".parse().unwrap(), "127.0.0.1:25565".parse().unwrap());
+
+        let owners = [ManyProcs::REACHABLE, ManyProcs::UNREADABLE, ManyProcs::ENDED]
+            .map(|pid| super::super::connects_from_in(&ManyProcsTable, pid, client, server).unwrap());
+
+        assert_eq!(owners, [true, false, false], "nur der lesbare Prozess besitzt die Verbindung, die anderen sind kein Fehler");
+    }
+
+    #[test]
+    fn an_unreadable_socket_table_is_an_error_even_when_every_process_is_readable() {
+        struct NoTable;
+        impl ProcFiles for NoTable {
+            fn net_table(&self, _name: &str) -> io::Result<String> {
+                Err(io::ErrorKind::PermissionDenied.into())
+            }
+
+            fn descriptor_targets(&self, _pid: u32) -> io::Result<Vec<String>> {
+                Ok(vec!["socket:[1002]".to_owned()])
+            }
+        }
+
+        assert!(sockets_in(&NoTable, ManyProcs::REACHABLE).is_err());
     }
 
     #[test]

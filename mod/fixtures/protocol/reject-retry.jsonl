@@ -1,0 +1,2 @@
+{"direction":"modToLauncher","line":{"type":"hello","protocol":2,"token":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","mod":{"version":"2.1.0","build":"0123456789abcdef"},"game":{"minecraft":"1.21.1","loader":"neoforge","loaderVersion":"21.1.172","java":21}}}
+{"direction":"launcherToMod","line":{"type":"reject","reason":"retry"}}

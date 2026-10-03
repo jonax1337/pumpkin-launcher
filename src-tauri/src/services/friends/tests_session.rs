@@ -2,6 +2,7 @@
 //! Minecraft-Server (gehört diesem Prozess, beantwortet die Statusabfrage, spiegelt nach dem Login) und ein falsches
 //! Spiel, das sich wie der Client mit Handshake und Login Start verbindet. Echte Zeit mit kurzen Werten.
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
@@ -1271,9 +1272,17 @@ async fn row_host_launcher_crashes() {
     assert!(is_closed_within(&mut game, LIMIT).await);
 }
 
-// ---- Mod: Teilen aus dem Spiel (SPEC 7.4) ----
+// ---- Mod: Teilen aus dem Spiel (INGAME 5.4, SPEC 7.4) ----
 
-/// Spielt die Mod: verbindet sich mit dem Token des Starts und liest JSON-Zeilen.
+/// Die Umgebung für das Spiel der Instanz; den Prozess des Spiels nennt der Test selbst (er ist es), damit die Mod nicht
+/// auf das Spielsignal warten muss.
+fn mod_env(node: &Node, instance_id: &str) -> Vec<(String, String)> {
+    let env = node.bridge.launch_env(instance_id, ModLoader::Fabric);
+    node.bridge.bind_pid(instance_id, std::process::id());
+    env
+}
+
+/// Spielt die Mod: verbindet sich mit dem Token des Starts, spricht Protokoll 2 und liest JSON-Zeilen.
 struct FakeMod {
     lines: tokio::io::Lines<BufReader<tokio::net::tcp::OwnedReadHalf>>,
     write: tokio::net::tcp::OwnedWriteHalf,
@@ -1285,13 +1294,25 @@ impl FakeMod {
         let tcp = TcpStream::connect(("127.0.0.1", value(ENV_PORT).parse::<u16>().unwrap())).await.unwrap();
         let (read, write) = tcp.into_split();
         let mut client = Self { lines: BufReader::new(read).lines(), write };
-        let token = value(ENV_TOKEN);
-        client.send(json!({ "type": "hello", "protocols": [1], "token": token, "mod": "0.1.0", "minecraft": "26.3" })).await;
+        let hello = json!({
+            "type": "hello",
+            "protocol": 2,
+            "token": value(ENV_TOKEN),
+            "mod": {"version": "2.1.0", "build": "0123456789abcdef"},
+            "game": {"minecraft": "26.3", "loader": "fabric", "loaderVersion": "0.19.5", "java": 25},
+        });
+        client.send(hello).await;
+        let welcome = client.next_where(|_| true).await;
+        assert_eq!(welcome["type"], "welcome", "{welcome}");
         client
     }
 
     async fn send(&mut self, message: Value) {
         self.write.write_all(format!("{message}\n").as_bytes()).await.unwrap();
+    }
+
+    async fn request(&mut self, id: &str, op: &str, args: Value) {
+        self.send(json!({ "type": "req", "id": id, "op": op, "args": args })).await;
     }
 
     /// Die nächste Zeile, auf die `matches` zutrifft.
@@ -1306,13 +1327,30 @@ impl FakeMod {
         }
     }
 
-    /// Wartet auf einen Stand mit einem Freund, der online ist, und liefert dessen Alias.
+    async fn next_of_type(&mut self, kind: &str) -> Value {
+        self.next_where(|message| message["type"] == kind).await
+    }
+
+    /// Liest Themen, bis `ready` auf die letzten Werte aller bisher gesehenen zutrifft.
+    async fn topics_until(&mut self, ready: impl Fn(&HashMap<String, Value>) -> bool) -> HashMap<String, Value> {
+        let mut seen = HashMap::new();
+        while !ready(&seen) {
+            let state = self.next_of_type("state").await;
+            seen.insert(state["topic"].as_str().unwrap().to_owned(), state["value"].clone());
+        }
+        seen
+    }
+
+    /// Wartet auf das Thema `topic`, bis `matches` auf seinen Wert zutrifft.
+    async fn topic_where(&mut self, topic: &str, matches: impl Fn(&Value) -> bool) -> Value {
+        self.next_where(|message| message["type"] == "state" && message["topic"] == topic && matches(&message["value"])).await
+    }
+
+    /// Wartet auf einen Stand der Freunde mit einem, der online ist, und liefert dessen Alias.
     async fn online_friend_alias(&mut self) -> String {
-        let online = |friends: &Vec<Value>| friends.iter().any(|friend| friend["presence"] == "online");
-        let snapshot = self
-            .next_where(|message| message["type"] == "snapshot" && message["friends"].as_array().is_some_and(online))
-            .await;
-        snapshot["friends"][0]["id"].as_str().unwrap().to_owned()
+        let online = |friends: &Value| friends.as_array().is_some_and(|friends| friends.iter().any(|friend| friend["presence"] == "online"));
+        let state = self.topic_where("friends", online).await;
+        state["value"][0]["id"].as_str().unwrap().to_owned()
     }
 }
 
@@ -1323,23 +1361,26 @@ async fn sharing_from_the_mod_needs_one_confirmation_per_launch() {
     let guest = Node::online(options(&relay), "Bert", RELAXED).await;
     befriend(&host, &guest).await;
     let server = FakeServer::start().await;
-    let env = host.bridge.launch_env(HOST_INSTANCE, ModLoader::Fabric);
+    let env = mod_env(&host, HOST_INSTANCE);
     host.spawn_game(HOST_INSTANCE, None);
     host.open_lan(server.port, PortSource::Mod);
     host.wait_lan(HOST_INSTANCE).await;
     let mut game_mod = FakeMod::connect(&env).await;
     let alias = game_mod.online_friend_alias().await;
 
-    game_mod.send(json!({ "type": "share", "friendIds": [alias] })).await;
+    game_mod.request("s1", "host.invite", json!({ "friends": [alias], "showWorld": false })).await;
     until_true("confirmation asked", || host.events.mod_confirm_requests().len() == 1).await;
-    game_mod.next_where(|message| message["type"] == "notify" && message["event"] == "confirmInLauncher").await;
+    let pending = game_mod.next_of_type("pending").await;
+    assert_eq!(pending, json!({ "type": "pending", "id": "s1", "prompt": "scope", "scope": "share" }));
     let request_id = host.events.mod_confirm_requests()[0].clone();
     host.sessions.mod_confirm(&request_id, true).await.unwrap();
+    assert_eq!(game_mod.next_of_type("res").await, json!({ "type": "res", "id": "s1", "ok": true, "result": {} }));
     let invite = guest.open_invite().await;
-    game_mod.send(json!({ "type": "share", "friendIds": [alias] })).await;
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    game_mod.request("s2", "host.invite", json!({ "friends": [alias], "showWorld": false })).await;
+    let second = game_mod.next_where(|message| message["type"] == "res" || message["type"] == "pending").await;
 
-    assert_eq!(host.events.mod_confirm_requests().len(), 1, "the launch keeps its allow");
+    assert_eq!(second["type"], "res", "the launch keeps its allow and does not ask again");
+    assert_eq!(host.events.mod_confirm_requests().len(), 1);
     assert_eq!(invite.from_name, "Anna");
     assert_eq!(host.session().await.unwrap().guests.len(), 1);
 }
@@ -1351,19 +1392,19 @@ async fn a_denied_share_reaches_the_mod_as_denied() {
     let guest = Node::online(options(&relay), "Bert", RELAXED).await;
     befriend(&host, &guest).await;
     let server = FakeServer::start().await;
-    let env = host.bridge.launch_env(HOST_INSTANCE, ModLoader::Fabric);
+    let env = mod_env(&host, HOST_INSTANCE);
     host.spawn_game(HOST_INSTANCE, None);
     host.open_lan(server.port, PortSource::Mod);
     host.wait_lan(HOST_INSTANCE).await;
     let mut game_mod = FakeMod::connect(&env).await;
     let alias = game_mod.online_friend_alias().await;
 
-    game_mod.send(json!({ "type": "share", "friendIds": [alias] })).await;
+    game_mod.request("s1", "host.invite", json!({ "friends": [alias] })).await;
     until_true("confirmation asked", || host.events.mod_confirm_requests().len() == 1).await;
     host.sessions.mod_confirm(&host.events.mod_confirm_requests()[0], false).await.unwrap();
-    let error = game_mod.next_where(|message| message["type"] == "error").await;
+    let answer = game_mod.next_of_type("res").await;
 
-    assert_eq!(error["code"], "denied");
+    assert_eq!(answer["error"]["code"], "denied");
     assert!(host.session().await.is_none());
     assert!(guest.sessions.invites().await.unwrap().is_empty());
 }
@@ -1374,27 +1415,100 @@ async fn a_share_that_cannot_start_a_session_is_refused_before_asking() {
     let host = Node::online(options(&relay), "Anna", RELAXED).await;
     let guest = Node::online(options(&relay), "Bert", RELAXED).await;
     befriend(&host, &guest).await;
-    let env = host.bridge.launch_env(HOST_INSTANCE, ModLoader::Fabric);
+    let env = mod_env(&host, HOST_INSTANCE);
     host.spawn_game(HOST_INSTANCE, None);
     let mut game_mod = FakeMod::connect(&env).await;
     let alias = game_mod.online_friend_alias().await;
 
-    game_mod.send(json!({ "type": "share", "friendIds": [alias] })).await;
-    let error = game_mod.next_where(|message| message["type"] == "error").await;
+    game_mod.request("s1", "host.invite", json!({ "friends": [alias] })).await;
+    let answer = game_mod.next_of_type("res").await;
 
-    assert_eq!(error["code"], "lanPortUnknown");
+    assert_eq!(answer["error"]["code"], "lanPortUnknown");
     assert!(host.events.mod_confirm_requests().is_empty(), "nobody is asked to confirm a share that cannot start");
+}
+
+#[tokio::test]
+async fn a_share_with_an_offline_friend_is_refused_before_asking() {
+    let (relay, _server) = test_relay().await;
+    let host = Node::online(options(&relay), "Anna", RELAXED).await;
+    let guest = Node::online(options(&relay), "Bert", RELAXED).await;
+    befriend(&host, &guest).await;
+    let server = FakeServer::start().await;
+    let env = mod_env(&host, HOST_INSTANCE);
+    host.spawn_game(HOST_INSTANCE, None);
+    host.open_lan(server.port, PortSource::Mod);
+    host.wait_lan(HOST_INSTANCE).await;
+    let mut game_mod = FakeMod::connect(&env).await;
+    let alias = game_mod.online_friend_alias().await;
+    guest.friends.disable().await.unwrap();
+    until("friend offline", || async { host.presence_of(&guest.id()).await == Presence::Offline }).await;
+
+    game_mod.request("s1", "host.invite", json!({ "friends": [alias] })).await;
+    let answer = game_mod.next_of_type("res").await;
+
+    assert_eq!(answer["error"]["code"], "peerOffline");
+    assert!(host.events.mod_confirm_requests().is_empty());
+}
+
+#[tokio::test]
+async fn the_mod_sees_the_launcher_state_as_topics() {
+    let (relay, _server) = test_relay().await;
+    let host = Node::online(options(&relay), "Anna", RELAXED).await;
+    let guest = Node::online(options(&relay), "Bert", RELAXED).await;
+    befriend(&host, &guest).await;
+    let server = FakeServer::start().await;
+    let env = mod_env(&host, HOST_INSTANCE);
+    host.spawn_game(HOST_INSTANCE, None);
+    host.open_lan(server.port, PortSource::Mod);
+    host.wait_lan(HOST_INSTANCE).await;
+    let mut game_mod = FakeMod::connect(&env).await;
+
+    let topics = game_mod.topics_until(|seen| ["me", "game", "friends"].iter().all(|topic| seen.contains_key(*topic))).await;
+
+    let (me, game, friends) = (&topics["me"], &topics["game"], &topics["friends"]);
+    assert_eq!((me["enabled"].as_bool(), me["availability"].as_str()), (Some(true), Some("available")));
+    assert_eq!(*game, json!({ "hostable": true, "reason": null, "lan": { "port": server.port } }));
+    assert_eq!(friends[0]["id"], "f1", "friends carry aliases, never peer ids");
+    assert!(!friends.to_string().contains(&guest.id().to_string()));
 }
 
 #[tokio::test]
 async fn stop_sharing_from_the_mod_ends_the_session() {
     let scene = Scene::shared().await;
-    let env = scene.host.bridge.launch_env(HOST_INSTANCE, ModLoader::Fabric);
+    let env = mod_env(&scene.host, HOST_INSTANCE);
     let mut game_mod = FakeMod::connect(&env).await;
-    game_mod.next_where(|message| message["type"] == "snapshot" && message["session"].is_object()).await;
+    game_mod.topic_where("session", Value::is_object).await;
 
-    game_mod.send(json!({ "type": "stopSharing" })).await;
+    game_mod.request("h1", "host.stop", json!({})).await;
 
+    assert_eq!(game_mod.next_of_type("res").await["ok"], true);
     scene.host.wait_host_end(SessionEnd::Stopped).await;
     scene.guest.wait_revoked(RevokeReason::Stopped).await;
+}
+
+#[tokio::test]
+async fn kicking_a_guest_from_the_mod_revokes_their_invite() {
+    let scene = Scene::shared().await;
+    let env = mod_env(&scene.host, HOST_INSTANCE);
+    let mut game_mod = FakeMod::connect(&env).await;
+    let session = game_mod.topic_where("session", Value::is_object).await;
+    let alias = session["value"]["guests"][0]["id"].as_str().unwrap().to_owned();
+
+    game_mod.request("k1", "host.kick", json!({ "friend": alias })).await;
+
+    assert_eq!(game_mod.next_of_type("res").await["ok"], true);
+    scene.guest.wait_revoked(RevokeReason::Kicked).await;
+    assert_eq!(scene.host.guest_state(&scene.guest.id()).await, Some((GuestState::Left, true)));
+}
+
+#[tokio::test]
+async fn an_op_the_launcher_does_not_handle_yet_is_answered_as_unsupported() {
+    let scene = Scene::shared().await;
+    let env = mod_env(&scene.host, HOST_INSTANCE);
+    let mut game_mod = FakeMod::connect(&env).await;
+
+    game_mod.request("u1", "friend.addByName", json!({ "name": "Notch" })).await;
+
+    let answer = game_mod.next_of_type("res").await;
+    assert_eq!(answer["error"]["code"], "unsupportedOp");
 }

@@ -1,0 +1,11 @@
+{"direction":"launcherToMod","line":{"type":"event","event":"notify","kind":"requestReceived","name":"Sam"}}
+{"direction":"launcherToMod","line":{"type":"event","event":"notify","kind":"inviteReceived","name":"Sam"}}
+{"direction":"launcherToMod","line":{"type":"event","event":"notify","kind":"friendOnline","name":"Alex"}}
+{"direction":"launcherToMod","line":{"type":"event","event":"notify","kind":"guestJoined","name":"Alex"}}
+{"direction":"launcherToMod","line":{"type":"event","event":"notify","kind":"guestLeft","name":"Alex"}}
+{"direction":"launcherToMod","line":{"type":"event","event":"notify","kind":"sessionEnded"}}
+{"direction":"launcherToMod","line":{"type":"event","event":"notify","kind":"joinEnded"}}
+{"direction":"launcherToMod","line":{"type":"event","event":"notify","kind":"scopeDenied"}}
+{"direction":"launcherToMod","line":{"type":"event","event":"closing","reason":"launchEnded"}}
+{"direction":"launcherToMod","line":{"type":"event","event":"closing","reason":"bridgeStopped"}}
+{"direction":"launcherToMod","line":{"type":"event","event":"closing","reason":"replaced"}}
