@@ -345,6 +345,20 @@ mod tests {
         assert!(!parsed(handshake("127.4.5.6", 41001, 2)).is_addressed_to(listener));
     }
 
+    /// macOS lauscht auf `127.0.0.1` (SPEC 6.2); auch dort zählt nur genau diese Adresse.
+    #[test]
+    fn a_guest_listener_on_127_0_0_1_accepts_only_that_address() {
+        let listener: SocketAddr = "127.0.0.1:41000".parse().unwrap();
+        let addressed = |host: &str| match check_handshake(&handshake(host, 41000, 2), GUEST_WINDOW.max_bytes) {
+            Check::Valid((handshake, _)) => handshake.is_addressed_to(listener),
+            other => panic!("{other:?}"),
+        };
+
+        assert!(addressed("127.0.0.1"));
+        assert!(!addressed("127.0.0.2"));
+        assert!(!addressed("localhost"));
+    }
+
     #[tokio::test]
     async fn reading_returns_the_checked_bytes_or_nothing() {
         let opening = login("Alex");
