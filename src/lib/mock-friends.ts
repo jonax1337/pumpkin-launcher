@@ -127,6 +127,8 @@ interface FriendsDb {
   joins: Map<string, JoinTicket>;
   planScenarios: Map<string, PlanScenario>;
   modInstalled: Set<string>;
+  /** Offene Bitten der Mod: eine beantwortete oder unbekannte `requestId` ist wie im Backend nicht mehr gültig. */
+  pendingModConfirms: Set<string>;
 }
 
 const mockMe = (displayName: string) => {
@@ -176,7 +178,7 @@ function seedFullScenario(db: FriendsDb) {
 function createDb(scenario: Scenario): FriendsDb {
   const db: FriendsDb = {
     state: initialState(scenario), friends: [], requests: [], codes: [], blocked: [], invites: [], sessions: [], lan: new Map(),
-    joins: new Map(), planScenarios: new Map(), modInstalled: new Set(),
+    joins: new Map(), planScenarios: new Map(), modInstalled: new Set(), pendingModConfirms: new Set(),
   };
   if (scenario === "full") seedFullScenario(db);
   return db;
@@ -532,8 +534,10 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
   }
 
   function confirmMod() {
+    const requestId = newId("confirm");
+    db.pendingModConfirms.add(requestId);
     emit("friends-mod-confirm", {
-      requestId: newId("confirm"), instanceId: MOCK_HOST_INSTANCE, instanceName: "Survival 1.21",
+      requestId, instanceId: MOCK_HOST_INSTANCE, instanceName: "Survival 1.21",
       friends: db.friends.filter((f) => f.presence !== "offline").map((f) => ({ friendId: f.id, displayName: f.displayName })),
     });
   }
@@ -639,7 +643,9 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
       await wait(MOD_INSTALL_MS);
       db.modInstalled.add(instanceId);
     },
-    friendsModConfirm: command(() => undefined),
+    friendsModConfirm: command((requestId: string) => {
+      if (!db.pendingModConfirms.delete(requestId)) throw new Error(t("mock.friends.notFound.request", { id: requestId }));
+    }),
   } satisfies Partial<Backend>;
 
   return { api, joinSpawned };

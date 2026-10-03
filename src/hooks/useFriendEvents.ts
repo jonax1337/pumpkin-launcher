@@ -8,7 +8,7 @@ import type {
   Friend, FriendPresenceEvent, FriendsState, HostSession, Invite, InviteRevokedEvent, JoinSessionEvent, LanEvent, NetworkStatus,
 } from "@/lib/types";
 import { requestInviteDialog } from "@/pages/friends/inviteRequest";
-import { applyJoinSession, dropInviteDialog, queueFriendDialog } from "@/store/friendsUi";
+import { applyJoinSession, dropInviteDialog, queueFriendDialog, queueModConfirm } from "@/store/friendsUi";
 import { friendKeys } from "./queryKeys";
 
 const withPresence = ({ friendId, presence, path }: FriendPresenceEvent) => (friends: Friend[] | undefined) =>
@@ -82,7 +82,7 @@ export function useFriendEvents() {
       api.onJoinSession(onJoinSession),
       api.onLanChanged((event) => qc.setQueryData(friendKeys.lan(event.instanceId), withLan(event))),
       api.onFriendsMod(({ instanceId }) => void qc.invalidateQueries({ queryKey: friendKeys.modStatus(instanceId) })),
-      api.onFriendsModConfirm((confirm) => queueFriendDialog({ kind: "modConfirm", confirm })),
+      api.onFriendsModConfirm(queueModConfirm),
     ];
     return () => subs.forEach((p) => p.then((unlisten) => unlisten()));
   }, [qc]);

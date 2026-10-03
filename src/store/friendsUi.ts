@@ -1,7 +1,7 @@
 import { create } from "zustand";
-import type { JoinSessionEvent } from "@/lib/types";
+import type { JoinSessionEvent, ModConfirmEvent } from "@/lib/types";
 import {
-  closeActive, dropInvite, emptyDialogQueue, enqueue, promote, type DialogQueue, type FriendDialog,
+  closeActive, dropInvite, dropModConfirm, emptyDialogQueue, enqueue, MOD_CONFIRM_TTL_MS, promote, type DialogQueue, type FriendDialog,
 } from "./friendDialogQueue";
 
 interface FriendsUiState {
@@ -34,6 +34,12 @@ const updateDialogs = (change: (queue: DialogQueue) => DialogQueue) =>
   useFriendsUi.setState(({ dialogs }) => ({ dialogs: change(dialogs) }));
 
 export const queueFriendDialog = (dialog: FriendDialog) => updateDialogs((queue) => enqueue(queue, dialog));
+
+/** Die Bitte der Mod kommt in die Warteschlange und fällt nach ihrer Frist wieder heraus, auch wenn sie nie beantwortet wird. */
+export function queueModConfirm(confirm: ModConfirmEvent) {
+  queueFriendDialog({ kind: "modConfirm", confirm });
+  setTimeout(() => updateDialogs((queue) => dropModConfirm(queue, confirm.requestId)), MOD_CONFIRM_TTL_MS);
+}
 
 /** Öffnet den nächsten wartenden Dialog, sobald nichts anderes mehr offen ist. */
 export const openNextFriendDialog = () => updateDialogs(promote);

@@ -22,7 +22,8 @@ export function ModConfirmDialog({ confirm, onClose }: { confirm: ModConfirmEven
 
   useEffect(() => void api.setLauncherWindow("restore").catch(toastError), []);
 
-  const reply = (allow: boolean) => answer.mutate({ requestId: confirm.requestId, allow }, { onSuccess: onClose });
+  // Auch ein Fehler schließt: das Backend vergisst die Bitte nach zwei Minuten und beim Spielende (dann NotFound).
+  const reply = (allow: boolean) => answer.mutate({ requestId: confirm.requestId, allow }, { onSettled: onClose });
 
   return (
     <Dialog
