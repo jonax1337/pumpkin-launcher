@@ -1,6 +1,6 @@
 # Pumpkin Friends: Design Spec v2 (friends, world sharing via LAN tunnel, Fabric mod)
 
-**Status: FROZEN, 2026-10-03 (v2); synced with the Wave 0 and Wave 1 implementation on 2026-10-03.** This document replaces v1 (`FRIENDS-SPEC.md`). It applies every finding of the security and feasibility reviews of v1, unless the changelog (Appendix D) says otherwise. It is the only source of truth for the protocol. R0a copies it to `docs/friends/SPEC.md`, and from then on the file in the repo is the spec. There is no separate PROTOCOL.md. The deviations reported by the Wave 0/1 packages are written back into the sections they concern (index in D.3). Deviations where the code still has to change are listed in Appendix E and are **not** reflected as done in the normative text.
+**Status: FROZEN, 2026-10-03 (v2); synced with the implementation of Waves 0 and 1 and of Waves 2 and 3 on 2026-10-03.** This document replaces v1 (`FRIENDS-SPEC.md`). It applies every finding of the security and feasibility reviews of v1, unless the changelog (Appendix D) says otherwise. It is the only source of truth for the protocol. R0a copies it to `docs/friends/SPEC.md`, and from then on the file in the repo is the spec. There is no separate PROTOCOL.md. The deviations reported by the packages are written back into the sections they concern (index in D.3 for Waves 0/1, D.4 for Waves 2/3). Deviations where the code still has to change are listed in Appendix E and are **not** reflected as done in the normative text.
 
 **Owner decisions (final; recorded here, not open):**
 
@@ -138,7 +138,7 @@ pub fn find_relay(map: &[RelayEntry], index: u8) -> Option<&RelayEntry>;   // un
 
 Builder settings for all endpoints (`p2p/endpoint.rs`):
 - `Endpoint::builder(presets::Minimal)`: no address lookup (no DNS/pkarr publisher or resolver). `secret_key` from `NetConfig.secret`, `alpns` from `NetConfig.alpns`, relay mode as in 3.2, `hooks(GateHooks)` (3.5). `relay_only` maps to `clear_ip_transports()`.
-- Transport config: keep-alive 15 s, idle timeout 40 s, `max_concurrent_bidi_streams = 16`, `max_concurrent_uni_streams = 0` (constants in `endpoint.rs`). The keep-alive is connection-wide; inside, iroh keeps every path alive every 5 s and caps a path's idle time at 15 s whatever is configured (IROH-NOTES 10.7). Offline detection is governed by the connection idle timeout (40 s). The idle timeout is currently a constant without a test seam (Appendix E, E1).
+- Transport config: idle timeout from `NetConfig.idle_timeout` (production 40 s, 3.7), keep-alive `min(15 s, idle_timeout / 2)` (so 15 s in production, and a short test idle timeout still gets two keep-alives per period and cannot idle out a live connection), `max_concurrent_bidi_streams = 16`, `max_concurrent_uni_streams = 0` (constants in `endpoint.rs`). The keep-alive is connection-wide; inside, iroh keeps every path alive every 5 s and caps a path's idle time at 15 s whatever is configured (IROH-NOTES 10.7). Offline detection is governed by the connection idle timeout. The effective idle timeout of a connection is the minimum of both peers' values.
 - Every dial is wrapped in `tokio::time::timeout(DIAL_TIMEOUT = 8 s)` (an offline peer otherwise costs up to the idle timeout). Relay reachability is judged after `ONLINE_WAIT = 5 s` (3.4).
 - **Every endpoint runs an accept loop** for its whole life (`PeerNet::bind` spawns it). Without one, dialers of that endpoint would hang until their timeout instead of being refused (IROH-NOTES 10.5). The retired endpoint has no ALPNs, so any inbound handshake fails at once.
 - **Test builds** (`cfg(test)`): an endpoint with IP transports binds only `127.0.0.1:0` (`clear_ip_transports` + `bind_addr`), so no test causes a firewall prompt or leaves the machine. This applies to every test in the crate, including the later R4 and R5 tests.
@@ -176,26 +176,28 @@ pub enum Admission { Accept, Reject(CloseCode), Drop }
 - `Drop` cannot be frameless after the handshake (IROH-NOTES 10.1): it is `Reject` with code 0 (`NORMAL`) and an empty reason. QUIC still sends a CONNECTION_CLOSE, and the remote sees `CloseReason::Peer(NORMAL)`, exactly like a normal end. **No application frame is ever sent**, so to the remote it looks like a closed dead end, not a refusal. The only fully silent option is `Incoming::ignore()` before the handshake, when the peer id is not known yet (used for the handshake cap below).
 - Main endpoint, `pumpkin/peer/1`: `Accept` if the peer is a stored friend (confirmed or not) and not blocked, **or** we have an outgoing request in state `awaitingAnswer` whose `peerId` is this peer. Otherwise `Reject(NOT_FRIEND)`. A blocked friend therefore sees exactly what a removed friend sees.
 - Hello endpoint, `pumpkin/hello/1`: `Drop` if the peer is blocked or over a hello rate limit (12.4), otherwise `Accept`. The secret is checked on the first frame (5.2).
-- Pre-handshake: if 8 handshakes are already in flight on an endpoint, new `Incoming`s are `ignore()`d (nothing is sent back). "In flight" = `Incoming`s being awaited in the accept task (semaphore `MAX_HANDSHAKES = 8`). There is no dedicated test of this cap yet (Appendix E, E2).
+- Pre-handshake: if 8 handshakes are already in flight on an endpoint, new `Incoming`s are `ignore()`d (nothing is sent back). "In flight" = `Incoming`s being awaited in the accept task (semaphore `MAX_HANDSHAKES = 8`). Tested in `p2p/tests.rs` (`ninth_handshake_in_flight_gets_no_answer_until_the_first_eight_are_admitted`).
 - Outgoing connections are not gated (see `GateHooks` above).
 
 ### 3.6 Close codes (QUIC application error codes)
 `0 NORMAL` (also used for silent drops), `1` reserved/unused, `2 NOT_FRIEND`, `3 DUPLICATE`, `4 PROTOCOL` (bad frame, size, or tunnel validation; also the stream reset code), `5 RATE_LIMITED`, `6 SHUTDOWN` (launcher exit, disable, rebind).
 - In code: `pub struct CloseCode(u32)` with the constants `CloseCode::{NORMAL, NOT_FRIEND, DUPLICATE, PROTOCOL, RATE_LIMITED, SHUTDOWN}` (`p2p/conn.rs`). How a connection ended is a `CloseReason { Peer(CloseCode), Local, TimedOut, Lost }` (`TimedOut` = idle timeout, e.g. a crashed peer).
 - `Endpoint::close()` alone would close every open connection with code 0 (IROH-NOTES 10.3). `PeerNet::close(code)` therefore first closes every tracked connection with `code`, then closes the endpoint. R4 calls `close(CloseCode::SHUTDOWN)` before dropping or rebinding an endpoint.
+- `PeerConn::close` on a connection the peer has already closed makes `closed()` report `Local` instead of the peer's code. R4 therefore does not close a connection whose read failed with a lost connection (`io::ErrorKind::NotConnected`).
 - `bridge` (6.3) resets its stream with `NORMAL` when its `stop` token is cancelled.
 
 ### 3.7 Network options (normative test seam)
 The friends service never reads `RELAY_MAP` directly. It gets its network configuration injected (`services/friends/service.rs`, R4):
 ```rust
-pub struct NetOptions { pub relay_map: Vec<RelayEntry>, pub hello_relay_only: bool, pub relay_tls: RelayTls }
-impl NetOptions { pub fn production() -> Self; }   // relay_map = RELAY_MAP.to_vec(), hello_relay_only = true, relay_tls = Verify
+pub struct NetOptions { pub relay_map: Vec<RelayEntry>, pub hello_relay_only: bool, pub relay_tls: RelayTls, pub idle_timeout: Duration }
+impl NetOptions { pub fn production() -> Self; }   // RELAY_MAP.to_vec(), hello_relay_only = true, relay_tls = Verify, idle_timeout = 40 s
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RelayTls { Verify, #[cfg(test)] InsecureForTests }                          // defined in services/p2p/endpoint.rs (R1)
-impl Friends { pub fn new(dirs: &Dirs, secrets: Arc<dyn SecretStore>, signals: GameSignals, bridge: ModBridge, net: NetOptions) -> Self; }
+impl Friends { pub fn new(dirs: &Dirs, secrets: Arc<dyn SecretStore>, signals: GameSignals, bridge: ModBridge, net: NetOptions) -> AppResult<Self>; }
 ```
-- `lib.rs` passes `NetOptions::production()`. No other production call site exists, and there is no setting for any field.
-- R4 maps the options onto `NetConfig` (8.7): every endpoint gets `relay_map` and `relay_tls`; hello endpoints get `relay_only = hello_relay_only` and `RelaySelection::Only(code.relay_index)`. This mapping is a pure function (`hello_net_config`) and unit-tested.
+- `state.rs` (`AppState::load`) passes `NetOptions::production()`, because `AppState` holds `Friends` from its construction on. No other production call site exists, and there is no setting for any field. `Friends::new` fails only when `RecordStores::open` or `FriendsConfig::load` fails (9); it binds nothing and does not touch the keyring before `start` (8.7).
+- R4 maps the options onto `NetConfig` (8.7): every endpoint gets `relay_map`, `relay_tls` and `idle_timeout`; hello endpoints get `relay_only = hello_relay_only` and `RelaySelection::Only(code.relay_index)`. This mapping is a pure function (`hello_net_config`) and unit-tested.
+- `idle_timeout` exists only for the crash tests (4.4, 6.5): they set a short value on both sides, e.g. `NetOptions { idle_timeout: short, ..options(&relay) }`.
 - **Tests** use an in-process relay: `iroh::test_utils::run_relay_server()` (dev-dependency `iroh` with `test-utils`, added by R0a) returns `(RelayMap, RelayUrl, Server)`; the `Server` guard must stay alive. R4 and R5 copy the helper `test_relay()` from `services/p2p/tests.rs`: it returns `(RelayEntry { index: 0, operator: Pumpkin, url, quic_port: the server's random QUIC port }, impl Send guard)`. That entry is the only `relay_map` entry, with `relay_tls = InsecureForTests` (= `ca_tls_config(CaTlsConfig::insecure_skip_verify())`) and `hello_relay_only = true`. This is the configuration for every test that runs the hello flow.
 - **Every** test that connects two endpoints needs that relay entry, because a bare id is not dialable (3.3), even on loopback. Pure logic tests that never touch a hello endpoint may set `hello_relay_only = false`; their endpoints bind `127.0.0.1` only (3.3), and the path usually upgrades from `Relay` to `Direct`.
 - `InsecureForTests` exists only under `cfg(test)`, so a release build cannot skip relay certificate checks. Consequence: it is usable only by tests inside the `src-tauri` crate (unit tests), not by integration tests or examples.
@@ -217,7 +219,7 @@ impl Friends { pub fn new(dirs: &Dirs, secrets: Arc<dyn SecretStore>, signals: G
 
   Computed by `identity::availability(secrets, has_friends_data)`, where R4 passes `config.enabled || stores.any()`. `RecordStores::any()` sees only readable records (D.3).
 - Key operations (`friends/identity.rs`): `identity::create(secrets)` makes and stores a new key without an existence check (R4 checks availability first). `identity::renew(secrets) -> Renewal { retired: Option<Identity>, current: Identity }` is the key move shared by `friends_rotate_identity` and `friends_reset`: the current key (if any) is saved as `friends-identity-retired` first, then a new key becomes `friends-identity`. `load`, `load_retired` and `delete_retired` complete the set.
-- Profile announced to friends (self-asserted, marked as such in the UI): `displayName` (3-32 chars after sanitising), and `mcName`/`mcUuid` of the active Microsoft account at enable time, updated via `profile` when the account changes.
+- Profile announced to friends (self-asserted, marked as such in the UI): `displayName` (3-32 chars after sanitising), and `mcName`/`mcUuid` of the Microsoft account, updated via `profile` when the display name or the account changes. The backend has no "active" account: `friends_commands::account_profile` takes the **first** Microsoft account in `state.accounts` (`AccountProfile { name, uuid }`, UUID lowercased without hyphens). It is read at enable time (also the `msAccountRequired` check) and at app start. A display-name change is sent; an account change while the launcher runs is not observed yet (Appendix E, E7).
 - Signing: `Identity::sign(&self, domain: &[u8], parts: &[&[u8]]) -> [u8; 64]` and the free function `identity::verify(peer_id: &str, domain, parts, sig: &[u8; 64]) -> bool` (Ed25519 over `domain || parts...`; an invalid id counts as a wrong signature). "sign_new"/"sign_permanent" in 4.6 and 5.2 mean `sign` on the respective `Identity`.
 
 ### 4.2 Friend code (`services/friends/code.rs`, `src/lib/friendCode.ts`)
@@ -266,7 +268,8 @@ control hello from A  -> B stores Friend{A, confirmed:true}, deletes Outgoing; B
 - **Decline:** A deletes the incoming request. Nothing is sent. B's request expires after 14 days.
 - **Cancel (B):** deletes the outgoing request. If A had accepted, A's next dial gets `NOT_FRIEND`, and A shows the friend as "removed".
 - **Incoming TTL:** 14 days. At most 20 pending incoming requests (`error{full}`).
-- **Idempotence:** a repeated `friendRequest` with the right secret from the peer that used the code gets `received` again.
+- **Idempotence:** a repeated `friendRequest` with the right secret from the peer that used the code gets `received` again. A `friendRequest` through another code from a peer that already has a pending incoming request marks that code as used and gets `received`, without a second incoming request.
+- **Refusals at the invitee:** `codeUsed`, `alreadyFriends` and `unsupported` delete the outgoing request (`friends-changed`; no event carries the reason). `full` keeps it `delivering`, and it is retried on the backoff.
 - **Limits:** at most 50 friends (`errors.friends.friendLimit`), counting confirmed and unconfirmed friends plus outgoing requests.
 
 ### 4.4 Presence
@@ -275,13 +278,14 @@ control hello from A  -> B stores Friend{A, confirmed:true}, deletes Outgoing; B
 - **Lazy dialing** for all other friends: once, 60 s after startup, then every 60 min. `friends_retry_now` (called when the Friends page opens) also dials every offline friend whose last attempt is more than 2 min old, besides the `delivering` requests (4.3).
 - Backoff per friend after a failed eager dial: 30 s, 2 min, 5 min, 10 min, then every 30 min. An inbound connection from a friend resets the backoff and counts as online.
 - **Control stream:** the dialer opens it. Both sides send `hello` first, then `status`. `status` is re-sent only on change (`online`, or `playing` while any instance runs; no details).
-- **Duplicates:** keep the connection dialed by the peer with the lexicographically lower `PeerId`, and close the other with `DUPLICATE`. In code: `p2p::duplicate_survivor(local, remote) -> Direction` (`Outgoing` when `local < remote`, else `Incoming`; `PeerId` orders bytewise, which equals the hex order) compared with `PeerConn::direction()`.
+- **Duplicates:** keep the connection dialed by the peer with the lexicographically lower `PeerId`, and close the other with `DUPLICATE`. In code: `p2p::duplicate_survivor(local, remote) -> Direction` (`Outgoing` when `local < remote`, else `Incoming`; `PeerId` orders bytewise, which equals the hex order) compared with `PeerConn::direction()`. Two connections in the **same** direction to one peer: the newer replaces the older, which is closed with `DUPLICATE`.
 - **Offline:** `SHUTDOWN` means offline at once. The idle timeout means offline after at most 40 s. Then lazy or eager dialing resumes.
-- `lastSeen` (unix secs) is updated on disconnect. Profile and status persistence is debounced (at most one `friends.json` write per 5 s).
+- `lastSeen` (unix secs) is updated on disconnect. Persistence of profile, `homeRelay`, rename notice and `lastSeen` is debounced: changes are collected per friend and flushed every 5 s, at teardown and before identity changes. `JsonStore` has no batch write, so one flush writes `friends.json` once per changed friend.
 - **Hosting is never broadcast.** Only invited friends learn of a session.
 
 ### 4.5 Removal and block
-- **Remove:** send `unfriend` if connected, delete the record, close with `NORMAL`, stop dialing.
+- **Remove:** send `unfriend` if connected, wait for its `ack` (10 s), delete the record, close with `NORMAL`, stop dialing.
+- **`unfriend` is always acknowledged** with `{"type":"ack"}`: the receiver cannot tell the retired endpoint from a normal connection (both carry the friend's id), so it acks and waits for the sender to close.
 - **Receiving `unfriend`, or `NOT_FRIEND` on dial from a peer we consider a friend:** set `removedByPeer = true` and stop dialing. The UI shows "Hat die Freundschaft beendet" with only "Entfernen". Exception: `NOT_FRIEND` from a friend with a pending `rotated` outbox item is expected and ignored (4.6).
 - **Block** (a friend or a request peer): remove as above but without sending `unfriend`. Add `BlockedPeer`. Blocked peers get `NOT_FRIEND` on peer/1, and are dropped silently on hello/1. Their requests are discarded.
 - **Unblock** only removes the block.
@@ -293,8 +297,9 @@ control hello from A  -> B stores Friend{A, confirmed:true}, deletes Outgoing; B
 | `friends_rotate_identity` | A new key becomes `friends-identity`. The old key moves to `friends-identity-retired`. For every friend, an outbox item `rotated{newPeerId, signature}` is stored, with `signature = sign_new("pumpkin/rotate/1", old_id, new_id)`. **All active codes are revoked and deleted, and their hello endpoints shut down**: a hello key is derived from the identity secret (4.2), so an old code cannot be served without keeping the old secret, which would defeat the rotation. Pending incoming requests and outgoing `awaitingAnswer` requests are deleted too, because they are bound to the old id; outgoing `delivering` requests are kept and are delivered under the new id. `Lifecycle::IdentityChanged` is delivered (8.7), then the main endpoint rebinds (`SHUTDOWN`). Friends are kept. The confirm dialog says that codes and waiting requests are dropped (10.8). |
 | `friends_reset` | For every friend, an outbox item `unfriend` is stored (only if the old key exists). The old key becomes the retired key. All friends, requests, codes (with their hello endpoints) and blocks are deleted. `Lifecycle::IdentityChanged` is delivered (8.7). A new identity is created. The feature stays in its enabled state. In `identityLost` there is nothing to notify, so only the deletion and the new identity happen. |
 
-- **Outbox delivery:** while the feature is enabled, a transient **retired endpoint** (old key, relay-only) dials each pending friend (same backoff as presence), opens the control stream, sends `hello` then the outbox message, waits for `{"type":"ack"}` (10 s), and closes with `NORMAL`. A delivered item is deleted. Items expire after 14 days. When the outbox is empty, the retired key is deleted from the keyring.
-- **Receiving `identityRotated`:** verify that the signature is by `newPeerId` over (old id = the authenticated remote, new id). On success: change the friend record's id to `newPeerId`, set `notice = identityChanged{previousFingerprint}`, send `ack`, and close. On failure: close with `PROTOCOL`.
+- **Order of rotate and reset:** first tear down the old runtime (`Lifecycle::IdentityChanged`, then `SHUTDOWN`), then change the key and the records, then bind the new runtime. Changing the records first would let the still-running outbox task deliver through the retired key while the old connections are open, and the friend would replace its working link.
+- **Outbox delivery:** while the feature is enabled, a transient **retired endpoint** (old key, relay-only) dials each pending friend (same backoff as presence), opens the control stream, sends `hello` then the outbox message, waits for `{"type":"ack"}` (10 s), and closes with `NORMAL`. A delivered item is deleted, and the friend is dialed from the main endpoint right away. Items expire after 14 days. When the outbox is empty, the retired key is deleted from the keyring.
+- **Receiving `identityRotated`:** verify that the signature is by `newPeerId` over (old id = the authenticated remote, new id). On success: change the friend record's id to `newPeerId` with `lastSeen = now`, set `notice = identityChanged{previousFingerprint}`, send `ack`, wait for the sender to close, and dial the new id at once. On failure: close with `PROTOCOL`.
 - **Receiving `unfriend` from the retired key:** handled as in 4.5.
 - Only one retired key exists at a time. Rotating or resetting while an outbox exists drops the older outbox, and the confirm dialog says so.
 - A thief who has the old key cannot undo a rotation: after it, the friend's gate no longer admits the old id.
@@ -337,6 +342,9 @@ control hello from A  -> B stores Friend{A, confirmed:true}, deletes Outgoing; B
 Every bi stream starts with an **open frame** from the opener: `{"type":"control"}` (one per connection, opened by the dialer), `{"type":"request"}`, or `{"type":"tunnel","sessionId":"<uuid>"}`.
 
 R4 owns the accept loop and the control stream. It dispatches `request` and `tunnel` streams and the control messages `invite`, `inviteRevoke` and `inviteDecline` through the `PeerStreamHandler` seam (8.7), which R5 implements. With no handler registered, a request stream gets `error{unsupported}`, a tunnel stream gets `error{sessionNotFound}`, and the three invite messages are ignored (debug log).
+- R4 reads the open frame itself; the handler gets the stream positioned after it. A tunnel `sessionId` must be a canonical lowercase hyphenated UUID, else R4 resets the stream with `PROTOCOL`.
+- R4 enforces the request-stream limit (5 per friend per minute, `error{rateLimited}`) in its dispatcher, before the handler sees the stream. Tunnel stream limits are R5's (6.1).
+- The three invite messages reach the handler sanitised (12.3): ids are canonical UUIDs, `worldName`, the instance name, `minecraftVersion` and `loaderVersion` are cut to 64 chars, and empty values become null. `expiresAt` is not capped there; R5 enforces 5.4. Each message is handled in its own task, so their order is not guaranteed.
 
 **Control stream (both directions):**
 ```jsonc
@@ -351,7 +359,7 @@ R4 owns the accept loop and the control stream. It dispatches `request` and `tun
 {"type":"inviteDecline","inviteId":"<uuid>"}                   // guest -> host
 {"type":"unfriend"}
 {"type":"identityRotated","newPeerId":"<64 hex>","signature":"<128 hex>"}   // retired endpoint only
-{"type":"ack"}                                                 // reply to identityRotated / unfriend from the retired endpoint
+{"type":"ack"}                                                 // reply to identityRotated and to every unfriend (4.5)
 ```
 - A `profile` whose sanitised `displayName` differs from the stored one sets `notice = renamed{previousName}`. Duplicate display names among friends are shown with the fingerprint's first group appended.
 
@@ -366,28 +374,31 @@ R4 owns the accept loop and the control stream. It dispatches `request` and `tun
 **Tunnel streams:** see 6.1. The host answers the open frame with `{"type":"tunnelOk"}` or `{"type":"error","code":"sessionNotFound"|"notInvited"|"guestLimit"|"rateLimited"|"lanUnreachable"}`. Raw bytes follow `tunnelOk`.
 
 ### 5.4 Invites
-- Only the host's launcher sends `invite`, only to confirmed friends that are currently connected, and only those the host selected (UI, or the mod after confirmation, 7.4). At most 7 per session.
+- Only the host's launcher sends `invite`, only to confirmed, not-removed friends that are currently connected (else `errors.friends.notFound.friend` or `peerOffline{name}`), and only those the host selected (UI, or the mod after confirmation, 7.4). At most 7 seats per session: a seat is `invited`, `connected`, or `left` without a kick (`errors.friends.guestLimit{max: 7}` above it).
+- `host_invite` skips a friend that is connected right now. For an `invited`, `left`, `declined` or kicked guest it issues a new invite id.
 - `expiresAt` is at most 2 h after sending. Re-inviting after that is allowed.
-- Receive limits: 10 invites per friend per hour, 1 open invite per session, 20 open in total (the oldest is dropped).
-- `worldName` is sent only if the host ticks "Weltnamen zeigen" (off by default). The instance summary is always sent.
+- **Expiry on the host:** every 5 s, expired invites are closed and get `inviteRevoke{expired}`. A guest that is not connected drops from the guest list, so the host can invite it again; a connected guest stays admitted until its streams end.
+- Receive limits: 10 invites per friend per hour, 1 open invite per session, 20 open in total (the oldest is dropped). An invite whose id another host already uses is dropped, and only the issuing host can revoke an invite. Expired invites leave `invites_list` without an event. On `Lifecycle::Disabled` and `IdentityChanged` the received invites are cleared.
+- `worldName`: nothing in v1 knows the world's name (neither the log parser nor the mod protocol carries it), so `worldName` is always null and `HostSession.worldName` too. "Weltnamen zeigen" stores `showWorldName` but has no visible effect. The instance summary is always sent.
 - Teardown: `inviteRevoke` on session end, kick or expiry. A guest whose connection to the host is lost keeps the invite until `expiresAt`, with `hostOnline = false`.
 - **Closed invites (host side, normative):** a kick and a received `inviteDecline` close the invite on the host. The invite is deleted, and the guest's `SessionGuest` becomes `left` with `kicked: true` (kick) or `declined` (decline). From then on the host refuses that friend's `manifestRequest` and tunnel streams with `notInvited` (6.1), whatever the guest launcher does with the `inviteRevoke`. Only an explicit `host_invite` for that friend opens a new invite (new invite id, state `invited`, `kicked: false`). A guest that leaves on its own (`join_leave`, game exit, lost connection) becomes `left` with `kicked: false` and keeps its open invite until `expiresAt`, so it may rejoin.
 
 ### 5.5 Manifest
 - **Built by the host** (`manifest::build`) at `host_start`, and cached for the session. It is rebuilt only when the instance's mod list changes.
-  - Content: `minecraftVersion`, `loader`, `loaderVersion`, and for every **enabled** `Mod` with `kind == ModKind::Mod`: `sha512` (computed from the file in a blocking task and cached by (file name, size, mtime)) and `fileName`.
+  - Content: `minecraftVersion`, `loader`, `loaderVersion`, and for every **enabled** `Mod` with `kind == ModKind::Mod`: `sha512` (computed from the file in a blocking task and cached in `HashCache`, keyed by the full path with (size, mtime) as validity, one entry per path) and `fileName`. A mod whose file is unreadable or whose name is unsafe is skipped (warning log); entries with the same sha512 are kept once.
+  - The host does not cap the list: a host with more than 500 enabled mods produces a manifest that every guest rejects with `manifestInvalid`.
   - The host excludes nothing. That includes the Pumpkin Friends mod, so no jar can hide from the manifest by declaring a mod id. The guest's matching ignores it only by verified identity: its sha512 resolves to the pinned Modrinth project id (`MOD_PROJECT_ID`, 11.5).
   - Nothing else: no paths, configs, resource packs, JVM args or worlds. The share dialog tells the host that invited friends see version, loader and the mod list.
-- **Validated by the guest** (`manifest::validate`), else `errors.friends.manifestInvalid`:
-  - `loader` is a known `ModLoader`.
-  - `minecraftVersion` exists in Mojang's version manifest, and its `releaseTime >= MIN_MC_RELEASE_TIME` (else `errors.friends.versionUnsupported`).
+- **Validated by the guest** (`manifest::validate`), else `errors.friends.manifestInvalid` (`ManifestError::Invalid`):
+  - `loader` is a known `ModLoader`. `Manifest.loader` is typed `ModLoader`, so an unknown loader already fails deserialisation of the `manifest` frame (a JSON error), which R5 maps to `manifestInvalid`.
+  - `minecraftVersion` exists in Mojang's version manifest, and its `releaseTime >= MIN_MC_RELEASE_TIME` (else `ManifestError::VersionUnsupported` → `errors.friends.versionUnsupported{min: 1.20}`; a text comparison of the same `+00:00` ISO format). The release times come from a `VersionIndex` (`new(entries)` or `from_manifest(&VersionManifest)`).
   - `loaderVersion` matches `^[0-9A-Za-z.+_-]{1,64}$` or is null.
-  - At most 500 mods. `sha512` is 128 lowercase hex, with no duplicates.
-  - `fileName` is sanitised, at most 128 chars, and **display only** (never a path, never written to disk).
+  - At most 500 mods (`MAX_MANIFEST_MODS`). `sha512` is 128 lowercase hex, with no duplicates.
+  - `fileName` is sanitised, at most 128 chars, non-empty after sanitising, and **display only** (never a path, never written to disk).
 
 ### 5.6 Matching (`matching::plan`, guest, no downloads)
 1. **Candidates:** local instances with the same `minecraftVersion` and the same `loader` (the loader version is ignored).
-2. **Required set** of a mod list = the mods that are not known to be client-only. Client-only = the sha512 resolves on Modrinth (`POST /version_files`, `algorithm: "sha512"`) to a version whose project has `server_side == "unsupported"`, or the project is `MOD_PROJECT_ID`. Unresolvable mods count as required.
+2. **Required set** of a mod list = the mods that are not known to be client-only. Client-only = the sha512 resolves on Modrinth (`POST /version_files`, `algorithm: "sha512"`) to a version whose project has `server_side == "unsupported"`, or the project is `MOD_PROJECT_ID`. Unresolvable mods count as required. Consequence while `MOD_PROJECT_ID` is empty: the hand-installed dev jar of our mod counts as required, so between two launchers where only one has it, the plan is `missingContent` (missing or extra = the dev jar).
 3. A candidate **matches** when its required sha512 set equals the host's. Otherwise, `missing` = host required minus local, and `extra` = local required minus host. Each is a `ModRef` with a title from Modrinth, or the sanitised `fileName`.
 4. Verdict:
 
@@ -399,7 +410,10 @@ R4 owns the accept loop and the control stream. It dispatches `request` and `tun
    | `noInstance` | no candidates |
 
    `createVanilla = (host loader == vanilla && verdict == noInstance)`.
-5. Modrinth lookups are batched (one `version_files` call, one `projects` call), cached in memory for 1 h, and respect the existing User-Agent and limits. If Modrinth is unreachable, all mods count as required and the plan has `lookupFailed = true`.
+
+   `versionUnsupported` is not decided by `matching::plan` (it has no release times): `manifest::validate` returns `VersionUnsupported`, and `invite_plan` answers with `matching::version_unsupported(&invite)` (no candidates).
+5. Modrinth lookups are batched (one `version_files` call, one `projects` call), cached in memory for 1 h, and respect the existing User-Agent and limits. If Modrinth is unreachable, all mods count as required and the plan has `lookupFailed = true` (`Classification::LookupFailed`).
+6. **`invite_plan` wiring (R5):** fetch the manifest (a JSON error is `manifestInvalid`); `manifest::validate(raw, &VersionIndex)`; `hashes = matching::hashes_to_classify(&manifest, &instances, &local)`; `Classification::fetch(&*lookup, &hashes)`; `matching::plan(..)`. Steps that hash files (`DiskHashes` with the shared `HashCache`) block and run in `spawn_blocking`. The app keeps one `HashCache` and one `ModrinthLookup` (with its 1 h answer cache).
 
 Matching table (normative, tested in R6). A, B, C = mods that the server needs. S, M = client-only on Modrinth. X = not on Modrinth.
 
@@ -421,13 +435,13 @@ Matching table (normative, tested in R6). A, B, C = mods that the server needs. 
 ## 6. Tunnel
 
 ### 6.1 Host side (`friends/hosting.rs`, `friends/mcproto.rs`, `p2p/tunnel.rs`)
-- **Preconditions for `host_start`:** the instance is running (`errors.friends.gameNotRunning`), was launched with a Microsoft account (`errors.friends.msAccountRequired`), and its version's `releaseTime >= MIN_MC_RELEASE_TIME` (`errors.friends.versionUnsupported`). At most one session at a time (`errors.friends.sessionActive`).
+- **Preconditions for `host_start`:** the instance is running (`errors.friends.gameNotRunning`), was launched with a Microsoft account (`errors.friends.msAccountRequired`), and its version's `releaseTime >= MIN_MC_RELEASE_TIME` (`errors.friends.versionUnsupported`; the check reuses `manifest::validate`, and a version missing from Mojang's manifest cannot be verified and counts as unsupported). Release times come from the `VersionCatalog` seam (`MojangVersions`: Mojang's manifest, kept 1 h). At most one session at a time (`errors.friends.sessionActive`).
 - **Port sources:** a mod `lanOpened` hint, the log parser (6.4), or the manual `port` argument (1024-65535, else `errors.friends.portInvalid`). None known: `errors.friends.lanPortUnknown`.
 - **Port verification** (`lan_detect::verify_port(pid, port) -> PortCheck { Ok, NotOwned, NoAnswer }`), on every new port from any source and before every switch:
   1. `sockowner::listens(game_pid, port)` must be true: a TCP LISTEN socket on that port owned by the game process (run through `spawn_blocking`). Otherwise `PortCheck::NotOwned` → `errors.friends.portNotGame`. A failed lookup (IO error) also counts as `NotOwned` and logs a warning: in doubt nothing is shared.
   2. A server list ping to `127.0.0.1:port` through the existing `services::server_ping::ping`, wrapped in a 2 s timeout (`server_ping`'s own limit is 5 s), must succeed: the answer must be a well-formed status response whose payload parses as JSON. `ServerStatus` does not expose `version.protocol`, so that field is not checked; step 1 is the security check, step 2 only confirms that a Minecraft server answers. Otherwise `PortCheck::NoAnswer` → `errors.friends.lanUnreachable`.
   3. The session stores the verified port, and the UI shows "Port {port} · gehört zu Minecraft (PID {pid})".
-- **Liveness:** every 15 s during a session, `sockowner::listens(game_pid, port)` is re-checked. Two consecutive failures end the session with `lanClosed`.
+- **Liveness:** every 15 s during a session (`SessionContext.liveness`, production `PRODUCTION_LIVENESS`), `sockowner::listens(game_pid, port)` is re-checked. Two consecutive failures end the session with `lanClosed`.
 - **Incoming tunnel stream:**
   1. Admission checks: the session exists (`sessionNotFound`); the peer has an open invite for this session or is a connected guest, and its `SessionGuest` is neither `declined` nor `left` with `kicked: true` (`notInvited`, 5.4); distinct connected guests stay at most 7 (`guestLimit`); at most 4 concurrent streams per guest and at most 20 new streams per guest per minute (`rateLimited`).
   2. Reply `tunnelOk`.
@@ -435,12 +449,13 @@ Matching table (normative, tested in R6). A, B, C = mods that the server needs. 
      - The first packet is a Handshake: VarInt length at most 1024, packet id `0x00`, protocol VarInt, server address String (at most 255 chars), port u16, next state `1` (status) or `2` (login). Next state `3` (transfer) and the legacy ping byte `0xFE` are refused.
      - For next state 2, the next packet is Login Start: id `0x00`, whose first field (name) matches `^[A-Za-z0-9_]{1,16}$`.
      - On failure, reset the stream with `PROTOCOL` and connect nothing.
-  4. `TcpStream::connect(127.0.0.1:port)` (3 s), `set_nodelay(true)`, write the buffered (validated) bytes to the TCP socket, then `bridge(stream, tcp, Bytes::new(), stop)` with an **empty** prefix (6.3: the prefix goes into the stream, which is the guest direction). Connect failure: reset the stream.
+  4. `TcpStream::connect(127.0.0.1:port)` (3 s), `set_nodelay(true)`, write the buffered (validated) bytes to the TCP socket, then `bridge(stream, tcp, Bytes::new(), stop)` with an **empty** prefix (6.3: the prefix goes into the stream, which is the guest direction). Connect failure: reset the stream with `PROTOCOL`.
   5. The guest is `connected` while at least one stream is open. Emit `host-session`.
 - The host never connects anywhere except `127.0.0.1:<verified session port>`. The peer cannot choose the host, port or session.
 - **Kick:** delete the guest's invite, set its `SessionGuest` to `left` with `kicked: true`, send `inviteRevoke{kicked}`, and cancel the guest's streams. Later streams and manifest requests from that friend get `notInvited` until the host re-invites it with `host_invite` (5.4).
 - **Decline:** on `inviteDecline`, delete the invite and set the `SessionGuest` to `declined`. Same admission rule as after a kick.
-- **Session end** (each emits `host-session-ended` with the reason in brackets): `host_stop` (stopped), mod `stopSharing` (stopped), log "Stopping server" or "Unpublishing integrated server" (lanClosed), mod `lanClosed` followed by a failed port check (lanClosed), failed liveness (lanClosed), game exit (gameExited), `Lifecycle::Disabled` (disabled), `Lifecycle::Rebind` or `Lifecycle::IdentityChanged` (stopped), `Lifecycle::Shutdown` (stopped). On end: `inviteRevoke{stopped}` to every guest, then cancel the session's `CancellationToken`. For lifecycle ends this happens before the subscriber releases its `done` token (8.7), so the revoke still leaves through the old endpoint.
+- **Session end** (each emits `host-session-ended` with the reason in brackets): `host_stop` (stopped), mod `stopSharing` (stopped), any `GameSignal::LanClosed` from the log ("Stopping server", "Unpublishing integrated server") or the mod (lanClosed), failed liveness (lanClosed), game exit (gameExited), `Lifecycle::Disabled` (disabled), `Lifecycle::Rebind` or `Lifecycle::IdentityChanged` (stopped), `Lifecycle::Shutdown` (stopped). On end: `inviteRevoke{stopped}` to every guest, then cancel the session's `CancellationToken`. For lifecycle ends this happens before the subscriber releases its `done` token (8.7), so the revoke still leaves through the old endpoint.
+- **`LanClosed` ends at once:** the session ends and the verified port is cleared without a re-check. The signal does not say whether it came from the log or the mod, the log line arrives before the socket closes (a re-check could still pass), and ending only reduces exposure.
 
 ### 6.2 Guest side (`friends/joining.rs`, `p2p/tunnel.rs`)
 - **`invite_join(inviteId, instanceId)`:**
@@ -452,7 +467,8 @@ Matching table (normative, tested in R6). A, B, C = mods that the server needs. 
      - macOS (only `127.0.0.1` is configured on lo0): `127.0.0.1`, port 0.
   5. Return `JoinTicket{joinId, inviteId, instanceId, address:"<ip>:<port>"}`.
   6. The frontend launches the instance with `LaunchOptions.friendJoin = {joinId, address}` (8.6).
-  - One join at a time: a new `invite_join` ends the previous one with `left`.
+  - One join at a time: a new `invite_join` ends the previous one with `left`, but only after the new invite and the instance check (steps 1-3) pass, so a failing attempt does not end a working join.
+  - `dial_friend` without a runtime (feature off, or the bind failed) gives `NetError::Unreachable`, which maps to `peerOffline`.
 - **Timers** (all durations come from an injected `JoinTimers`, 8.7; production values in brackets):
   - The join starts as `waitingForGame`, and the **spawn wait** (`spawn_wait`, 600 s) starts at `invite_join`.
   - Every `GameSignal::LaunchProgress{friend_join: joinId}` restarts the spawn wait. `instance_launch` sends it at its phase boundaries (8.6: after the world backup, the mod sync, the account session, the installed-version check and the Java resolution), at most once per second. Downloading a missing version is **not** part of `instance_launch`: it happens in the separate `instance_install` command, which carries no `friend_join` and sends no `LaunchProgress`. Therefore the frontend completes any needed install **before** it calls `invite_join` (10.4 step 3), so the spawn wait never runs during a download.
@@ -468,8 +484,8 @@ Matching table (normative, tested in R6). A, B, C = mods that the server needs. 
   5. Failure: close the TCP connection. No stream is opened, and the connection does not count as activity.
   6. Success: open a tunnel stream (redial if needed, 8 s), send the open frame, wait for `tunnelOk` (10 s), write the peeked bytes, then `bridge`. After the first valid connection, up to 4 concurrent connections are allowed, each validated the same way.
 - **Mapping onto `LocalListener` (6.3):** steps 1-5 are R5's `admit` closure, which returns `Some((socket, peeked bytes))` on success; `LocalListener` then calls `open` and passes the peeked bytes to `bridge` as `prefix`, so they go into the stream first. R5's `open` closure sends the open frame and waits for `tunnelOk`; an `error` frame gives `TunnelError::Refused(code)`, no answer in 10 s gives `TunnelError::Timeout`. Limits: `ListenerLimits { before_first_valid: 1, after_first_valid: 4 }`. Cancelling the listener's `stop` token closes the address and resets every running tunnel stream with `NORMAL`.
-- **Status:** `join-session{connected{path, rttMs}}` at most every 5 s while streams are open.
-- **End triggers:** `inviteRevoke` (stopped/kicked), game exit of the joining instance (gameExited), `join_leave` (left), host connection lost and not back within 30 s (hostOffline), timers or `LaunchFailed` (error), `Lifecycle::Disabled` (disabled), `Lifecycle::Rebind` or `Lifecycle::IdentityChanged` (left), `Lifecycle::Shutdown` (app exit; no event).
+- **Status:** `join-session{connecting}` on `Spawned`; `join-session{connected{path, rttMs}}` on the first `tunnelOk`, then every 5 s while the join is connected. `LocalListener` does not report when a bridged stream ends, so "while streams are open" is approximated by "while connected". Nothing is emitted while the connection has no selected path, because `JoinState::Connected` needs one.
+- **End triggers:** `inviteRevoke` (stopped/kicked; `inviteRevoke{expired}` removes the invite but does not end a running join), game exit of the joining instance (gameExited), `join_leave` (left), host connection lost and not back within `host_offline_grace` (30 s; hostOffline), timers or `LaunchFailed` (error), `Lifecycle::Disabled` (disabled), `Lifecycle::Rebind` or `Lifecycle::IdentityChanged` (left), `Lifecycle::Shutdown` (app exit; no event).
 
 ### 6.3 Shared tunnel code (`services/p2p/tunnel.rs`, Minecraft-agnostic)
 ```rust
@@ -504,7 +520,7 @@ pub struct ListenerLimits { pub before_first_valid: usize /* 1 */, pub after_fir
 - Chat (`<Name> …`), `/say` (`[Name] …`), disconnect texts and everything else cannot match, because they never form the whole message. Every port still passes 6.1 verification.
 - Table test (R3): real lines for 1.20.1, 1.21.x, 26.1.2, 26.3 in XML and plain form, Fabric's plain form, chat and `/say` spoofs (`<Bob> Published LAN server on port 5432`), a multi-line CDATA, and a forged plain line on another thread.
 
-### 6.5 Close behaviour (normative; the R5 tests assert every row, crash rows with a short idle timeout, which needs the seam of Appendix E, E1)
+### 6.5 Close behaviour (normative; the R5 tests assert every row, crash rows with a short `NetOptions.idle_timeout`, 3.7)
 | Case | Host launcher sees | Guest launcher sees | Guest game |
 |---|---|---|---|
 | Host clicks stop / mod stopSharing | `host-session-ended{stopped}` | `friend-invite-revoked{stopped}`, `join-session{ended{stopped}}` | disconnected |
@@ -553,7 +569,7 @@ pub struct ListenerLimits { pub before_first_valid: usize /* 1 */, pub after_fir
 | type | fields | launcher handling |
 |---|---|---|
 | `lanOpened` | `port` | Hint only. Runs 6.1 verification. A port that fails is ignored and logged. |
-| `lanClosed` | | Triggers a port re-check. A failure ends the session (`lanClosed`). |
+| `lanClosed` | | Ends the session at once (`lanClosed`), without a re-check (6.1). |
 | `share` | `friendIds: string[]` (1..7) | 7.4 |
 | `stopSharing` | | = `host_stop` for this instance's session |
 | `kick` | `friendId` | = `host_kick` |
@@ -577,7 +593,9 @@ type ModSession = { guests: { id: string; name: string; state: "invited" | "conn
 type ModInvite  = { id: string; fromName: string; title: string };   // join happens in the launcher
 ```
 - `id` in `ModFriend`/`ModSession` is an opaque per-connection alias (`f1`, `f2`, ...), not the peer id. Inside the launcher, `LauncherToMod::Snapshot` carries real peer ids; the bridge replaces them with the connection's aliases on the wire and maps aliases in `share`/`kick` back to peer ids.
-- The bridge keeps the latest snapshot per launch for a mod that connects late, sends the first snapshot at once and then at most one per 250 ms (the latest wins). It does **not** sanitise and does **not** enforce the caps: R5 (`mod_link.rs`) sanitises every name (12.3) and limits `friends` to 50 and `invites` to 20 before it calls `push`.
+- The bridge keeps the latest snapshot per launch for a mod that connects late, sends the first snapshot at once and then at most one per 250 ms (the latest wins). It does **not** sanitise and does **not** enforce the caps: R5 (`mod_link.rs`) limits `friends` to 50 and `invites` to 20 before it calls `push`.
+- **Snapshot content (R5):** `friends` are the confirmed, not-removed friends, named `alias ?? displayName` (the same shown name as `SessionGuest.displayName` and `Invite.fromName`). Names are sanitised where they enter (R4 records, wire parsing, 12.3) and not twice. R5 does not observe R4's events, so it rebuilds the snapshot every 1 s for connected mods and pushes it only when it changed; `notify{friendOnline}` comes from that poll.
+- **Error mapping (launcher → mod `error.code`):** `errors.friends.disabled`, `unavailable`, `identityLost` → `notEnabled`; `peerOffline`, `guestLimit`, `lanPortUnknown`, `portNotGame`, `versionUnsupported` → the code of the same name; `lanUnreachable` → `lanPortUnknown`; `sessionActive`, a pending confirmation, and more than 3 shares per minute → `busy`; a denied or unanswered confirmation → `denied`; `msAccountRequired` and anything else → `internal`. `error.ref` is always null.
 - `ModFriend.presence` is a `ModPresence { Offline, Online, Playing }` and a guest's state a `ModGuestState { Invited, Connected }` (`modbridge/protocol.rs`, mirrors of the contract types because R3 does not depend on R2). R5 maps `Presence` 1:1, maps `GuestState::Invited`/`Connected`, and omits `declined` and `left` guests.
 - All names are sanitised (12.3) and contain no `§`. The mod strips `§` again and caps lengths at 32 (names) and 64 (titles). The mod ignores unknown types and fields, maps an unknown presence to `offline` and an unknown guest state to `invited`, drops entries with a null `id`, and shows no toast for unknown `notify` events or `error` codes.
 
@@ -585,7 +603,9 @@ type ModInvite  = { id: string; fromName: string; title: string };   // join hap
 - `share` from the mod: the friend ids must be connected confirmed friends. The bridge has already dropped shares with 0 or more than 7 ids and ids it never showed to that connection (7.3); `GameSignal::ModRequest` carries real peer ids.
   - The **first** `share` of each launch requires confirmation in the launcher: the launcher emits `friends-mod-confirm`, the mod gets `notify{confirmInLauncher}`, and the user answers with `friends_mod_confirm(requestId, allow)`. "Launch" means the token's lifetime (from `Spawned` to `Exited` of that instance), not one mod connection: a mod that reconnects with the same token keeps an earlier allow, and R5 tracks the allow per instance launch.
   - Denied, or no answer within 2 min: `error{denied}`.
-  - After an allow, later `share`s of the same launch are limited to 3 per minute and to the 7-guest cap. Each one shows a launcher toast "{instance}: geteilt mit {names}".
+  - After an allow, later `share`s of the same launch are limited to 3 per minute and to the 7-guest cap. No 8.5 event carries a "{instance}: geteilt mit {names}" toast, so the launcher shows none; the `host-session` event updates the UI (session chip, guest list).
+  - When no session exists, the mod's first allowed `share` starts one through `host_start` with the verified LAN port and `showWorldName = false`.
+  - `friends_mod_confirm` with an unknown or already-answered request id fails with `errors.friends.notFound.request{id}`.
 - `stopSharing` and `kick` only reduce exposure and need no confirmation.
 - `lanOpened` never sets a port without 6.1 verification.
 
@@ -663,7 +683,7 @@ pub struct BlockedPeer { pub peer_id: String, pub display_name: String, pub bloc
 
 pub struct HostSession {
     pub id: String, pub instance_id: String, pub port: u16, pub port_source: PortSource, pub pid: u32,
-    pub world_name: Option<String>, pub show_world_name: bool, pub started_at: u64, pub guests: Vec<SessionGuest>,
+    pub world_name: Option<String> /* always None in v1, 5.4 */, pub show_world_name: bool, pub started_at: u64, pub guests: Vec<SessionGuest>,
 }
 // PortSource: re-exported above, defined in shared_types.rs
 pub struct SessionGuest { pub friend_id: String, pub display_name: String, pub state: GuestState, pub kicked: bool /* true only with state Left after a kick (5.4) */,
@@ -824,6 +844,8 @@ export interface FriendsFixtureTypes {
 ### 8.4 Commands
 Thin wrappers. Friends core: `src-tauri/src/friends_commands.rs` (R4). Sessions, invites, mod, skins: `src-tauri/src/friends_session_commands.rs` (R5). The TS method is the `Backend` method name.
 
+Only `friends_state`, `friends_enable`, `friends_disable` and `friends_reset` work while the feature is off. Every other command, reads included, fails with `errors.friends.disabled` (and with `unavailable` / `identityLost` per 4.1).
+
 | Rust command | Args (TS) | Returns | TS method | Notes |
 |---|---|---|---|---|
 | `friends_state` | | `FriendsState` | `friendsState()` | always works |
@@ -847,11 +869,11 @@ Thin wrappers. Friends core: `src-tauri/src/friends_commands.rs` (R4). Sessions,
 | `friend_unblock` | `peerId` | `void` | `friendUnblock(peerId)` | |
 | `friends_blocked` | | `BlockedPeer[]` | `friendsBlocked()` | |
 | `friends_retry_now` | | `void` | `friendsRetryNow()` | Returns at once. Dials every `delivering` request immediately and every offline friend whose last attempt is more than 2 min old (4.3, 4.4). Called on Friends page open and by "Jetzt zustellen". |
-| `friend_skin` | `friendId` | `string \| null` (PNG data URL) | `friendSkin(friendId)` | Rust fetch + cache (10.2) |
+| `friend_skin` | `friendId` | `string \| null` (PNG data URL) | `friendSkin(friendId)` | Rust fetch + cache (10.2): `avatar::skin` with the friend's stored `mcUuid`. `null` without a (valid) UUID, which is never put into a URL. A failed refresh returns the error, not a stale cache entry. |
 | `lan_status` | `instanceId` | `LanStatus \| null` | `lanStatus(instanceId)` | |
 | `host_sessions` | | `HostSession[]` | `hostSessions()` | 0 or 1 entries |
 | `host_start` | `instanceId, port: number \| null, showWorldName` | `HostSession` | `hostStart(instanceId, port, showWorldName)` | |
-| `host_invite` | `sessionId, friendIds: string[]` | `HostSession` | `hostInvite(sessionId, friendIds)` | |
+| `host_invite` | `sessionId, friendIds: string[]` | `HostSession` | `hostInvite(sessionId, friendIds)` | Seat cap, skip and re-invite rules of 5.4 |
 | `host_kick` | `sessionId, friendId` | `HostSession` | `hostKick(sessionId, friendId)` | |
 | `host_stop` | `sessionId` | `void` | `hostStop(sessionId)` | |
 | `invites_list` | | `Invite[]` | `invitesList()` | |
@@ -859,15 +881,17 @@ Thin wrappers. Friends core: `src-tauri/src/friends_commands.rs` (R4). Sessions,
 | `invite_plan` | `inviteId` | `JoinPlan` | `invitePlan(inviteId)` | fetches the manifest, then 5.6 |
 | `invite_join` | `inviteId, instanceId` | `JoinTicket` | `inviteJoin(inviteId, instanceId)` | |
 | `join_leave` | `joinId` | `void` | `joinLeave(joinId)` | |
-| `friends_mod_status` | `instanceId` | `ModStatus` | `friendsModStatus(instanceId)` | |
-| `friends_mod_install` | `instanceId, operationId` | `void` | `friendsModInstall(instanceId, operationId)` | Pinned project id, under `begin_operation`. |
-| `friends_mod_confirm` | `requestId, allow` | `void` | `friendsModConfirm(requestId, allow)` | 7.4 |
+| `friends_mod_status` | `instanceId` | `ModStatus` | `friendsModStatus(instanceId)` | `connected` whenever the bridge has a connection for the instance (also for a hand-installed dev jar while `modinstall::status` is `unavailable`); otherwise `modinstall::status` (11.5). |
+| `friends_mod_install` | `instanceId, operationId` | `void` | `friendsModInstall(instanceId, operationId)` | Pinned project id, under the instance operation lock (`state.exclusive`, which refuses a running instance); `modinstall::install` inside `run_cancellable` (11.5). |
+| `friends_mod_confirm` | `requestId, allow` | `void` | `friendsModConfirm(requestId, allow)` | 7.4; unknown or answered id: `notFound.request` |
 
 "Create vanilla instance" uses the existing `createInstance` method (`NewInstance` with `loader: "vanilla"` and the host's version). No new command.
 
 `friendsModInstall(instanceId, operationId)` resolves to `void` (F1). `useBackgroundTask` expects a task that resolves to an `Instance`, so F5 wraps the call (for example by refetching the instance afterwards) instead of changing the `Backend` signature.
 
 ### 8.5 Events (via `services::progress::emit`)
+The services emit through sinks, because neither is built with an `AppHandle`: R4 through `EventSink` (`friends/events.rs`: `FriendsEvent`, `TauriEvents`, `NoEvents`) for the first four events, R5 through `SessionEvents` (`friends/session_events.rs`: `SessionEvent`, `TauriSessionEvents`, `NoSessionEvents`) for the rest. Until `start` sets the Tauri sink, events are dropped.
+
 | Event | Payload | When |
 |---|---|---|
 | `friends-changed` | `null` | List, requests, codes, blocked, settings, availability or notices changed. The UI invalidates `friendKeys.all`. **Not** sent for presence or path changes. |
@@ -876,7 +900,7 @@ Thin wrappers. Friends core: `src-tauri/src/friends_commands.rs` (R4). Sessions,
 | `friend-request` | `FriendRequestEvent` | incoming request arrived |
 | `friend-invite` | `InviteEvent` | |
 | `friend-invite-revoked` | `InviteRevokedEvent` | |
-| `host-session` | `HostSessionEvent` | created or changed |
+| `host-session` | `HostSessionEvent` | created or changed; for path or RTT changes of guests at most every 5 s |
 | `host-session-ended` | `HostSessionEndedEvent` | |
 | `join-session` | `JoinSessionEvent` | |
 | `lan-changed` | `LanEvent` | verified port found, or closed |
@@ -884,6 +908,24 @@ Thin wrappers. Friends core: `src-tauri/src/friends_commands.rs` (R4). Sessions,
 | `friends-mod-confirm` | `ModConfirmEvent` | 7.4 |
 
 Query keys (`src/hooks/queryKeys.ts`, F1): `friendKeys.all = ["friends"]` with the children `state`, `list`, `requests`, `codes`, `blocked`, `invites`, `hostSessions`. On purpose **outside** `friendKeys.all`, so that `friends-changed` does not refetch them: `friendKeys.skin(friendId)`, `plan(inviteId)`, `lan(instanceId)`, `modStatus(instanceId)`. `lan-changed` sets `friendKeys.lan(instanceId)`; `friends-mod` invalidates `friendKeys.modStatus(instanceId)`.
+
+**Event handling in the UI** (`src/hooks/useFriendEvents.ts`, F4, mounted once in `Layout`):
+
+| Event | UI effect |
+|---|---|
+| `friends-changed` | invalidate `friendKeys.all` |
+| `friend-request` | invalidate `friendKeys.requests` |
+| `friend-presence` | patch the friend in `friendKeys.list` |
+| `friends-network` | patch `network` in `friendKeys.state` |
+| `friend-invite` | upsert into `friendKeys.invites`, invalidate it, toast, queue the dialog (10.4) |
+| `friend-invite-revoked` | remove the invite from `friendKeys.invites`, drop its dialog, toast |
+| `host-session` / `host-session-ended` | replace / remove the session in `friendKeys.hostSessions` |
+| `join-session` | `useFriendsUi().joinSession` (`applyJoinSession`: an `ended` clears it only for the current `joinId`; toast unless `left`) |
+| `lan-changed` | set `friendKeys.lan(instanceId)` |
+| `friends-mod` | invalidate `friendKeys.modStatus(instanceId)` |
+| `friends-mod-confirm` | queue the ModConfirmDialog |
+
+`useFriendEvents` is the only subscriber. The code still has a second one, `useSharingActivity` (F5, 10.6), for `host-session`, `host-session-ended`, `lan-changed`, `friends-mod` and `join-session`, with its own join state (Appendix E, E6); the double handling of the query keys is idempotent.
 
 `BackendEvents` gets these twelve, with `on…` methods in `eventSubscriptions`: `onFriendsChanged`, `onFriendsNetwork`, `onFriendPresence`, `onFriendRequest`, `onFriendInvite`, `onFriendInviteRevoked`, `onHostSession`, `onHostSessionEnded`, `onJoinSession`, `onLanChanged`, `onFriendsMod`, `onFriendsModConfirm`. `Capabilities` is **not** changed (Appendix D, F15: `Capabilities` is a static, synchronous object and cannot reflect a runtime keyring probe). Runtime availability comes from `FriendsState.availability` (`noSecretStore` hides the area).
 
@@ -912,7 +954,7 @@ pub enum GameSignal {
     LaunchFailed { instance_id: String, friend_join: String },            // only for friend joins, failure before spawn (8.6)
     Spawned { instance_id: String, pid: u32, online_account: bool, friend_join: Option<String> },   // always before that launch's Exited (8.6)
     LanOpened { instance_id: String, port: u16, source: PortSource },      // unverified hint (mod or log); R5 runs verify_port
-    LanClosed { instance_id: String },                                     // log or mod; consumer re-checks
+    LanClosed { instance_id: String },                                     // log or mod; R5 ends the session at once (6.1)
     Exited { instance_id: String },
     ModConnected { instance_id: String }, ModDisconnected { instance_id: String },
     ModRequest { instance_id: String, request: ModRequest },
@@ -930,8 +972,8 @@ pub struct LaunchReporter; impl LaunchReporter {
     pub fn progress(&self);
     pub async fn guard<T>(&self, launch: impl Future<Output = AppResult<T>>) -> AppResult<T>;   // LaunchFailed before an Err returns
 }
-// AppState (state.rs, R3): `pub signals: GameSignals`, `pub bridge: ModBridge` (constructed stopped). R4 subscribes with
-// `state.signals.subscribe()` and passes clones of both to `Friends::new`.
+// AppState (state.rs, R3): `pub signals: GameSignals`, `pub bridge: ModBridge` (constructed stopped). `AppState::load` builds
+// them as locals and passes clones to `Friends::new` (R4) and `FriendSessions::new` (R5); both subscribe to the signals there.
 
 // services/sockowner (R3): Windows GetExtendedTcpTable(TCP_TABLE_OWNER_PID_ALL, v4+v6); Linux /proc/net/tcp{,6} + /proc/<pid>/fd inodes;
 // macOS `/usr/sbin/lsof -nP -a -p <pid> -iTCP… -F` with fixed arguments. Other systems: every query fails with ErrorKind::Unsupported.
@@ -988,7 +1030,8 @@ pub fn spawn(java: &Path, args: &[String], game_dir: &Path, env: &[(String, Stri
 // services/p2p (R1). Public: mod.rs re-exports everything below; `frame` and `tunnel` are public modules.
 #[derive(Debug, Clone)]
 pub struct NetConfig { pub secret: [u8; 32], pub alpns: Vec<&'static [u8]> /* empty = dial-only */, pub relay_map: Vec<RelayEntry>,
-                       pub relays: RelaySelection, pub relay_only: bool, pub relay_tls: RelayTls /* 3.7 */ }
+                       pub relays: RelaySelection, pub relay_only: bool, pub relay_tls: RelayTls /* 3.7 */,
+                       pub idle_timeout: Duration /* 3.3; production 40 s, keep-alive min(15 s, idle_timeout / 2) */ }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NetState { Starting, Online { home_relay: u8 }, RelayUnreachable }   // 3.4
 #[derive(Debug, thiserror::Error)]
@@ -1062,47 +1105,81 @@ pub fn identity::availability(secrets: &dyn SecretStore, has_friends_data: bool)
 //   alias(raw) -> Option<String>, mc_name(Option<&str>), mc_uuid(Option<&str>).
 // contract.rs (8.2): every contract type and constant; contract_tests.rs (8.3).
 
-// services/friends/service.rs (R4): network options (3.7) and the extension seam for R5.
+// services/friends/service.rs (R4): network options (3.7) and the extension seam for R5. Re-exported from services::friends.
 // PeerId, PeerConn, BiStream, NetError and CloseCode below are the services::p2p types (R1); no wrapper types.
 pub trait PeerStreamHandler: Send + Sync + 'static {
     /// Request-Stream nach dem Öffnungsrahmen `{"type":"request"}`; der Handler liest die Anfrage und antwortet selbst.
-    async fn on_request_stream(&self, peer: &PeerId, stream: BiStream);
+    fn on_request_stream<'a>(&'a self, peer: &'a PeerId, stream: BiStream) -> BoxFuture<'a, ()>;
     /// Tunnel-Stream nach `{"type":"tunnel","sessionId":…}`; der Handler antwortet mit `tunnelOk` oder `error`.
-    async fn on_tunnel_stream(&self, peer: &PeerId, session_id: String, stream: BiStream);
+    fn on_tunnel_stream<'a>(&'a self, peer: &'a PeerId, session_id: String, stream: BiStream) -> BoxFuture<'a, ()>;
     /// Steuernachrichten `invite`, `inviteRevoke`, `inviteDecline` (schon größengeprüft und bereinigt).
-    async fn on_control_message(&self, peer: &PeerId, message: SessionControl);
+    fn on_control_message<'a>(&'a self, peer: &'a PeerId, message: SessionControl) -> BoxFuture<'a, ()>;
 }
-// SessionControl and WireInvite (the `invite` object of 5.3) are defined in services/friends/control.rs (R4), which parses them.
+// SessionControl, WireInvite (the `invite` object of 5.3), OpenFrame and PEER_ALPN are in services/friends/control.rs (R4),
+// which parses them. The frame limits of 5.1 are in services/friends/limits.rs (e.g. REQUEST_FRAME_LIMIT 512 KiB, OPEN_FRAME_LIMIT 1 KiB).
 pub enum SessionControl { Invite(WireInvite), InviteRevoke { invite_id: String, reason: RevokeReason }, InviteDecline { invite_id: String } }
 pub enum Lifecycle { Disabled, Rebind, IdentityChanged, Shutdown }
 pub struct LifecycleEvent { pub kind: Lifecycle, pub done: oneshot::Sender<()> }   // send or drop `done` when your teardown is finished
-impl Friends {
+pub struct AccountProfile { pub name: String, pub uuid: String /* 32 lowercase hex */ }   // AccountProfile::new(name, uuid) strips hyphens (4.1)
+impl Friends {   // cheap to clone
+    pub fn new(dirs: &Dirs, secrets: Arc<dyn SecretStore>, signals: GameSignals, bridge: ModBridge, net: NetOptions) -> AppResult<Self>;   // 3.7
+    pub async fn start(&self, events: Arc<dyn EventSink>, account: Option<AccountProfile>);   // app start: sink, availability, prune, activate if enabled
+    pub async fn shutdown(&self);                                                 // RunEvent::Exit: Lifecycle::Shutdown, then bridge.stop()
     pub fn register_stream_handler(&self, handler: Arc<dyn PeerStreamHandler>) -> Result<(), HandlerAlreadySet>;   // exactly once
     pub fn subscribe_lifecycle(&self) -> mpsc::Receiver<LifecycleEvent>;          // every subscriber gets every event
-    pub fn send_control(&self, peer: &PeerId, message: SessionControl) -> Result<(), NotConnected>;   // R5 sends invites through this
+    pub fn send_control(&self, peer: &PeerId, message: SessionControl) -> Result<(), NotConnected>;   // fire-and-forget, queue of 64 per link
     pub fn connection(&self, peer: &PeerId) -> Option<PeerConn>;                  // R5 opens request/tunnel streams on it (redial: `dial_friend`)
-    pub async fn dial_friend(&self, peer: &PeerId) -> Result<PeerConn, NetError>;
+    pub async fn dial_friend(&self, peer: &PeerId) -> Result<PeerConn, NetError>; // existing connection or a new dial; no runtime: Unreachable
 }
-// `async fn` in these traits is shorthand: the real methods return `futures::future::BoxFuture<'_, T>` (T = the shown output)
-// so that the traits stay dyn-compatible without a new crate (`futures` is already a dependency). Same for `ModLookup` below.
+// services/friends/events.rs (R4): pub trait EventSink { fn emit(&self, event: FriendsEvent); }, FriendsEvent { Changed, Network,
+//   Presence, Request }, NoEvents, TauriEvents(AppHandle) (8.5).
+// The traits return `futures::future::BoxFuture` with explicit lifetimes so that they stay dyn-compatible without a new crate
+// (`futures` is already a dependency). Same for `ModLookup` and `VersionCatalog` below.
 ```
+- `register_stream_handler` and `subscribe_lifecycle` can be called before or after `start`. `send_control` fails with `NotConnected` when the link's queue is full or there is no link.
 - **Lifecycle (normative order):** `friends_disable` delivers `Disabled`; `friends_update_settings` with a changed `alwaysRelay` delivers `Rebind`; `friends_rotate_identity` and `friends_reset` deliver `IdentityChanged`; `friends.shutdown()` (from `RunEvent::Exit`) delivers `Shutdown`. R4 sends the event to every subscriber, then waits until every `done` has been sent or dropped, **at most 500 ms in total**, and only then closes or rebinds the endpoints with `PeerNet::close(CloseCode::SHUTDOWN)` (3.6). R4 never calls R5 code directly.
+- **Teardown order:** deliver the `Lifecycle` event, halt the dial scheduler, drain the links, wait 100 ms (`FLUSH_GRACE`, so the last queued control frames such as `inviteRevoke{stopped}` reach the wire), close the endpoints with `SHUTDOWN`, and only then cancel the tasks. Cancelling first would end the control stream (FIN), and the friend would close with `PROTOCOL` before `SHUTDOWN` arrived. A subscriber sends delivery-critical frames before it drops `done`.
 - **R4 and the R1/R3 objects:** R4 keeps one `PeerNet` per endpoint alive for as long as its connections, keeps calling `PeerNet::accept()` (the queue holds 16), dials only through `PeerNet::dial` or its `Dialer` impl (the seam for the paused-time fakes), and holds the Gate's lookups in memory because `Gate::admit` is synchronous (3.5). It starts and stops `state.bridge` with the feature (7.1) and subscribes to `state.signals`.
-- **R5 wiring:** R5 constructs its `FriendSessions` in `lib.rs` `setup` right after `Friends`, calls `register_stream_handler` and `subscribe_lifecycle`, and stores it in `state.rs` (`pub sessions: FriendSessions`). These are the only edits R5 makes to `lib.rs` and `state.rs` besides its `generate_handler!` entries (14). R4 leaves the marker comment `// friends: session wiring (R5)` in `setup` at the place where this goes.
+- **Construction and wiring:** `AppState::load` (`state.rs`) constructs `Friends` and then `FriendSessions` (`pub friends`, `pub sessions`), because `AppState` holds both from its construction on. `lib.rs` `setup` fills R4's marker `// friends: session wiring (R5)` with `start_sessions` (`sessions.start(TauriSessionEvents)` inside `block_on`, so `tokio::spawn` has a runtime), then `start_friends` calls `friends.start(TauriEvents, account_profile)`. `RunEvent::Exit` calls `shut_down_friends` (`friends.shutdown()`, 1 s limit, 10.7).
 
 ```rust
 // services/friends/joining.rs (R5): injectable join timers (6.2)
-pub struct JoinTimers { pub spawn_wait: Duration, pub spawn_wait_cap: Duration, pub first_connection: Duration }
-impl JoinTimers { pub fn production() -> Self; }   // 600 s, 1800 s, 600 s; lib.rs passes this, tests pass small values (13.1 R5)
-// FriendSessions::new(friends: &Friends, signals: GameSignals, bridge: ModBridge, lookup: Arc<dyn ModLookup>, timers: JoinTimers)
+pub struct JoinTimers { pub spawn_wait: Duration, pub spawn_wait_cap: Duration, pub first_connection: Duration, pub host_offline_grace: Duration }
+impl JoinTimers { pub fn production() -> Self; }   // 600 s, 1800 s, 600 s, 30 s; state.rs passes this, tests pass small values (13.1 R5)
+
+// services/friends/sessions.rs (R5); re-exported from services::friends
+pub struct SessionContext {
+    pub friends: Friends, pub signals: GameSignals, pub bridge: ModBridge, pub instances: Arc<JsonStore<Instance>>, pub dirs: Dirs,
+    pub lookup: Arc<dyn ModLookup>, pub versions: Arc<dyn VersionCatalog>, pub timers: JoinTimers,
+    pub liveness: Duration,   // port re-check interval of 6.1; production PRODUCTION_LIVENESS = 15 s
+}
+pub trait VersionCatalog: Send + Sync + 'static { fn index(&self) -> BoxFuture<'_, AppResult<VersionIndex>>; }   // release times (5.5, 6.1)
+pub struct MojangVersions; impl MojangVersions { pub fn new(http: reqwest::Client) -> Self; }   // Mojang's manifest, cached 1 h
+#[derive(Clone)] pub struct FriendSessions;
+impl FriendSessions {
+    pub fn new(context: SessionContext) -> Self;   // subscribes to the game signals at once, so no spawn is missed
+    pub fn start(&self, events: Arc<dyn SessionEvents>) -> Result<(), HandlerAlreadySet>;   // sink, stream handler, lifecycle, signal loops; once
+}
+// services/friends/session_events.rs (R5): pub trait SessionEvents { fn emit(&self, event: SessionEvent); }, SessionEvent (one
+//   variant per R5 event of 8.5), NoSessionEvents, TauriSessionEvents(AppHandle).
 
 // services/friends (R6, pure or behind traits)
-pub fn manifest::build(instance: &Instance, hasher: &dyn Fn(&Path) -> io::Result<String>) -> Manifest;
-pub fn manifest::validate(raw: Manifest, versions: &VersionIndex) -> Result<Manifest, ManifestError>;
-pub trait ModLookup { async fn classify(&self, sha512: &[String]) -> Result<HashMap<String, ModInfo>, LookupError>; } // title, project_id, client_only
-pub fn matching::plan(invite: &Invite, manifest: &Manifest, instances: &[Instance], local_hashes: &dyn LocalHashes, info: &HashMap<String, ModInfo>) -> JoinPlan;
-pub async fn avatar::skin(http, dirs, mc_uuid) -> AppResult<Option<String>>;
-pub async fn modinstall::{status, install}(…);
+pub const manifest::MAX_MANIFEST_MODS: usize = 500;
+pub fn manifest::build(instance: &Instance, mods_dir: &Path, hasher: &dyn Fn(&Path) -> io::Result<String>) -> Manifest;   // Instance does not know its folder
+pub fn manifest::validate(raw: Manifest, versions: &VersionIndex) -> Result<Manifest, ManifestError>;   // ManifestError { Invalid(&'static str), VersionUnsupported }, From<..> for AppError
+pub struct manifest::VersionIndex; impl VersionIndex { pub fn new(entries: impl IntoIterator<Item = (String, String)>) -> Self; pub fn from_manifest(&VersionManifest) -> Self; }
+pub struct manifest::HashCache; impl HashCache { pub fn hash(&self, path: &Path) -> io::Result<String>; }   // blocking (5.5)
+pub trait ModLookup { fn classify<'a>(&'a self, sha512: &'a [String]) -> BoxFuture<'a, Result<HashMap<String, ModInfo>, LookupError>>; } // ModInfo { title, project_id, client_only }
+// lookup.rs: ModrinthLookup::new(api) (MOD_PROJECT_ID, 1 h cache) over ModrinthApi; ModrinthHttp::new() is the real client.
+pub trait matching::LocalHashes { fn mods_of(&self, instance: &Instance) -> Vec<ManifestMod>; }   // DiskHashes { dirs, cache } blocks
+pub enum matching::Classification { Known(HashMap<String, ModInfo>), LookupFailed }   // Classification::fetch(&dyn ModLookup, &hashes).await
+pub fn matching::hashes_to_classify(manifest: &Manifest, instances: &[Instance], local: &dyn LocalHashes) -> Vec<String>;
+pub fn matching::plan(invite: &Invite, manifest: &Manifest, instances: &[Instance], local: &dyn LocalHashes, classification: &Classification) -> JoinPlan;
+pub fn matching::version_unsupported(invite: &Invite) -> JoinPlan;   // 5.6
+pub async fn avatar::skin(http: &reqwest::Client, dirs: &Dirs, mc_uuid: &str) -> AppResult<Option<String>>;   // 8.4, 9
+pub const modinstall::MOD_PROJECT_ID: &str = "";   // this exact declaration form; mod-release.yml greps for it (11.5)
+pub fn modinstall::status(instance: &Instance) -> ModState;   // Unavailable | NotInstalled | Installed (11.5)
+pub async fn modinstall::install(state: &AppState, instance_id: &str, progress: ProgressFn<'_>) -> AppResult<Instance>;
 ```
 
 ---
@@ -1110,7 +1187,7 @@ pub async fn modinstall::{status, install}(…);
 ## 9. Persistence
 
 - **The backend owns everything.** `store/settings.ts` gets no friends fields. The UI reads `friendsState`.
-- Files in `<app data dir>/friends/`, created on first enable:
+- Files in `<app data dir>/friends/`. `Friends::new` creates the empty folder at app start (`RecordStores::open`); the files appear on first enable:
 
 | File | Type | Content |
 |---|---|---|
@@ -1120,10 +1197,10 @@ pub async fn modinstall::{status, install}(…);
 | `codes.json` | `JsonStore<CodeRecord>` | `{id, salt, secretSha256, relayIndex, tail, createdAt, expiresAt, usedBy?}`. Expired records pruned. |
 | `blocked.json` | `JsonStore<BlockedRecord>` | `{id (peer id), displayName, blockedAt}` |
 | `outbox.json` | `JsonStore<OutboxRecord>` | `{id (friend peer id), kind: "unfriend" \| "rotated", newPeerId?, signature?, until}` |
-| `skins/<uuid>.png` | cache | Skin PNG, at most 64 KiB, refreshed after 24 h |
+| `skins/<uuid>.png` | cache | Skin PNG, at most 64 KiB, refreshed after 24 h; a failed refresh is an error, never a stale fallback (8.4) |
 | keyring | secrets | `friends-identity`, `friends-identity-retired` (64 hex each) |
 
-- Sessions, invites, presence, joins and mod confirmations are runtime only.
+- Sessions, invites, presence, joins, mod confirmations and the manifest hash cache are runtime only.
 - The folder is `config::friends_dir(&dirs)` = `<dirs.root>/friends`. `RecordStores::open(dir)` creates it and opens the five `JsonStore`s; `RecordStores::any()` is true when any store holds a readable record (unreadable entries of a newer version are kept on save but not counted).
 - Entities implement `services::store::Entity` in `records.rs` (through a local `record!` macro, because `store.rs`'s `entity!` macro is private), with not-found keys `errors.friends.notFound.{friend,request,code,blocked}`; `OutboxRecord` uses `errors.friends.notFound.friend` (its id is a friend's peer id).
 - `config.json`: `FriendsConfig::load(dir)` returns the defaults when the file is missing. A file that cannot be parsed is moved aside to `config.json.corrupt` (a free name, like `JsonStore` does) and the defaults are used. `save(dir)` writes atomically.
@@ -1146,7 +1223,7 @@ Kit rules (docs/design/PIXELKINO.md): no border radius, a warning always has a s
 - Gates, in this order (`friendsGate` in `src/pages/friends/friendsModel.ts`):
   - `noSecretStore`: the keyring panel (as in 10.8). The navigation entry is hidden anyway (10.1); this gate covers a direct `/friends` URL, so that the page never offers "Freunde aktivieren" on a system without a keyring.
   - `identityLost`: `StatusPanel tone="bad"` "Identität verloren" + "Zurücksetzen" (danger confirm, `friendsReset`).
-  - Not enabled: `Empty size="page"` + "Freunde aktivieren", which opens the opt-in dialog (F3) on the page: `{optingIn && <FriendsOptInDialog onClose={…} />}` (10.9). The current code links to `/settings?tab=freunde` instead (Appendix E, E3).
+  - Not enabled: `Empty size="page"` + "Freunde aktivieren", which opens the opt-in dialog (F3) on the page (`FriendsGate.tsx`): `{optingIn && <FriendsOptInDialog onClose={…} />}` (10.9).
   - No MS account: `StatusPanel` + login button.
   - `network.type === "degraded"`: a `StatusPanel tone="bad"` banner. The page stays usable.
 - Header: `PageHeader title count={online}`. Actions "Freund hinzufügen" (`plus`), "Mein Code" (`link`).
@@ -1166,7 +1243,7 @@ Kit rules (docs/design/PIXELKINO.md): no border radius, a warning always has a s
   - Duplicate display names are shown with the fingerprint's first group.
 - Toolbar: search + `Segmented` Alle/Online. Empty state: "Noch keine Freunde" with both actions.
 - `FriendAvatar`: `friendSkin(friendId)` (TanStack Query, `staleTime` 1 h) rendered with the existing `SkinHead`. Fallback: the pixel face from the name. The UI never contacts Mojang directly. `FriendAvatar`, `SelfAsserted` (`components/friends/FriendAvatar.tsx`) and `Fingerprint` (`components/friends/Fingerprint.tsx`) are shared with F3, F4 and F5, as are the pure helpers of `friendsModel.ts` (`canInvite`, `inviteFrom`, `friendLabels`, …).
-- **Live data in the sidebar:** the badge needs the requests, invites and friends lists on every page. `useFriendsNav` (Sidebar) declares those queries with `enabled` only while friends are enabled and available, using the F1 query keys, and calls the interim hook `src/pages/friends/useFriendsLive.ts`, which handles `friends-changed`, `friend-request`, `friend-presence` and `friends-network`. F4's global `useFriendEvents` replaces it (14, hand-off).
+- **Live data in the sidebar:** the badge needs the requests, invites and friends lists on every page. `useFriendsNav` (Sidebar) declares those queries with `enabled` only while friends are enabled and available, using the F1 query keys. The global `useFriendEvents` (F4, in `Layout`, 8.5) keeps them current; the interim `useFriendsLive.ts` is deleted.
 
 ### 10.3 Add friend dialog (F2, width 520, two `Tabs`)
 - **Mein Code:**
@@ -1177,37 +1254,40 @@ Kit rules (docs/design/PIXELKINO.md): no border radius, a warning always has a s
 - The generated code and the fingerprint dialog reuse the existing pixel `.code` class (no new CSS file).
 
 ### 10.4 Invite and join (F4, global `components/friends/FriendDialogs.tsx` in `Layout`)
-1. `friend-invite`: toast "{name} lädt dich ein: {title}" with the action "Ansehen". The badge increases. If another dialog is open, only the toast is shown, and the invite waits in `store/friendsUi.ts`.
-2. **InviteDialog:** avatar, name + fingerprint, "lädt dich in {title} ein", and chips for MC version, loader and N mods. It calls `invitePlan` on open (`Skel` while loading).
-   - `ready`: "Passende Instanz: {name}" (a `Select` if there are several), primary "Beitreten".
-   - `missingContent`: warning panel "Deine Instanz {name} passt nicht", then the lists "Fehlt" and "Zusätzlich bei dir" (title + file name), and a hint "Füge die fehlenden Mods hinzu oder entferne die zusätzlichen, dann erneut prüfen" with "Erneut prüfen". No primary join.
+1. `friend-invite`: toast "{name} lädt dich ein: {title}" with the action "Ansehen", always. The badge increases. The InviteDialog opens at once unless another dialog is open; then it waits in the dialog queue (`store/friendDialogQueue.ts`, held in `store/friendsUi.ts`, never two dialogs at once). A queued mod confirm goes before waiting invites, because it expires after 2 min. The invite toast is dismissed once its dialog is open (at 900x640 it covered the footer buttons).
+2. **InviteDialog** (title "Einladung"): avatar, name + fingerprint, "lädt dich in {title} ein", and chips for MC version, loader and N mods. It calls `invitePlan` on open (`Skel` while loading); `useInvitePlan` has `staleTime: 0`, so every open and every "Erneut prüfen" refetches. With `hostOnline = false` it shows a hint that the host is not reachable right now. The pure state logic is in `components/friends/inviteModel.ts`.
+   - `ready`: "Passende Instanz: {name}" (a `Select` if there are several; the single-instance line only when that instance matches), primary "Beitreten".
+   - `missingContent`: warning panel "Deine Instanz {name} passt nicht" (no "Passende Instanz" line, which would contradict it), then the lists "Fehlt" and "Zusätzlich bei dir" (title + file name), and a hint "Füge die fehlenden Mods hinzu oder entferne die zusätzlichen, dann erneut prüfen" with "Erneut prüfen". No primary join.
    - `noInstance`: "Du hast keine Instanz mit Minecraft {version} und {loader}". If `createVanilla`: primary "Vanilla-Instanz anlegen", which calls `createInstance({name: title, minecraftVersion, loader:"vanilla"})`, then re-plans.
    - `versionUnsupported`: `StatusPanel tone="bad"` "Erst ab Minecraft 1.20".
    - `lookupFailed`: an extra info line "Modrinth nicht erreichbar; Client-Mods werden mitgezählt".
    - The active account must be Microsoft. Otherwise "Beitreten" is guarded with "Mit Offline-Konto kann man keiner Welt beitreten".
    - Secondary actions: "Ablehnen" (`inviteDecline`), "Später".
-3. **Beitreten:** if the chosen instance is not installed (`instanceKeys.status(id).installed` false or unknown), F4 first runs the install (`useInstall`, `instance_install`) and waits for it. Only then it calls `inviteJoin`, which returns `{joinId, address}`, so the join's spawn wait never runs during a download (6.2). Then the existing `usePlay` start runs with `friendJoin: {joinId, address}` and no `quickPlay` (`LaunchOptions.friendJoin` is optional in TS). `join-session` events drive the session chip. `ended` with a reason other than `left` shows a toast with the translated reason.
+3. **Beitreten:** the dialog closes at once; the rest runs in the always-mounted `FriendDialogs` through `usePlay`, so progress shows in the existing play and install UI and errors as the usual toasts. If the chosen instance is not installed (`instanceKeys.status(id).installed` false or unknown), the install (`instance_install`) runs first. Then `play(instance, onLaunched, quickPlay, openFriendJoin)` calls its fourth parameter, which calls `inviteJoin` and returns `{joinId, address}`, after the install and before the launch, so the join's spawn wait never runs during a download (6.2). The launch runs with `friendJoin: {joinId, address}`, and `quickPlay` is ignored (`LaunchOptions.friendJoin` is optional in TS). `join-session` events go to `useFriendsUi().joinSession` (8.5). `ended` with a reason other than `left` shows a toast with the translated reason.
+   - The dialog does not check whether the target instance runs: a join into a running instance fails at launch with the usual toast, and `LaunchFailed` ends the join.
    - The InviteDialog also opens from the Friends page: F4's `FriendDialogs` reads `useInviteRequest` (10.2) and clears it when it opens the dialog.
-4. `friend-invite-revoked`: close the dialog if it shows that invite, and toast "{name} hat das Teilen beendet".
-5. **ModConfirmDialog** on `friends-mod-confirm`: "Die Mod in {instance} möchte deine Welt mit {names} teilen. Erlauben?" with "Erlauben" / "Ablehnen" (`friendsModConfirm`). The window is restored (`setLauncherWindow("restore")`) when the dialog opens.
+4. `friend-invite-revoked`: close the dialog if it shows that invite, and toast "{name} hat das Teilen beendet" (the same toast for `stopped`, `kicked` and `expired`).
+5. **ModConfirmDialog** on `friends-mod-confirm` (title "Mod möchte teilen"): "Die Mod in {instance} möchte deine Welt mit {names} teilen. Erlauben?" with "Erlauben" / "Ablehnen" (`friendsModConfirm`). The window is restored (`setLauncherWindow("restore")`) when the dialog opens. The dialog has no 2-min timeout of its own: a late answer gets the backend's `notFound.request` error toast (7.4).
 
 ### 10.5 Hosting in the Worlds tab (F5, `pages/detail/WorldsTab.tsx`)
 - A `ShareSection` above the world list, only when friends are enabled and available.
   - Version below 1.20: "Teilen gibt es ab Minecraft 1.20".
   - Not running: "Starte die Instanz und öffne die Welt für LAN (Weltoptionen), oder nutze die Mod."
-  - Running, no verified port: "Warte auf geöffnete LAN-Welt…" + "Port selbst eingeben" (a `TextField` 1024-65535; errors from `hostStart`).
+  - Running, no verified port: "Warte auf geöffnete LAN-Welt…" + "Port selbst eingeben" (a `TextField` 1024-65535; the field shows only the range error inline, errors from `hostStart` come as the central mutation error toast).
 - Verified port (`lan-changed`): "Port {port} · gehört zu Minecraft (PID {pid})" and `Button icon="share"` "Mit Freunden teilen", which opens the **ShareDialog**:
-  - A checkbox list of online confirmed friends (at most 7).
-  - "Weltnamen zeigen" (off).
+  - A checkbox list of online confirmed friends (at most 7). At least one must be selected (footer hint "Wähle mindestens einen Freund.").
+  - "Weltnamen zeigen" (off; no visible effect in v1, 5.4).
   - Info, with a symbol:
     - "Eingeladene sehen Minecraft-Version, Loader und die Modliste dieser Instanz."
     - "Eine für LAN geöffnete Welt ist auch für Geräte in deinem Heimnetz erreichbar, wie bei Vanilla."
   - Confirm: `hostStart`, then `hostInvite`.
-- **Sharing:** `StatusPanel tone="run"` "Geteilt mit N Freunden", a guest list (state, path tag, RTT in `Count`, menu "Entfernen" = kick), "Weitere einladen", and "Teilen beenden" (confirm). A kicked guest shows "Entfernt", a declined one "Abgelehnt"; both offer "Erneut einladen" (`hostInvite`), which is the only way to let them in again (5.4).
-- **Mod row** (Fabric 26.3 instances): `ModStatus` `notInstalled` → "Pumpkin Friends-Mod: Teilen direkt im Spiel" + "Mod hinzufügen" (`friendsModInstall` through `useBackgroundTask`, wrapped because it resolves to `void`, 8.4; text "kommt von Modrinth"). `installed` → chip "Mod nicht verbunden". `connected` → chip "Mod verbunden". `unavailable` → no row.
+  - A session of another instance is not a separate state: this instance shows the normal flow, and `hostStart` fails with the `sessionActive` toast.
+- **Sharing:** `StatusPanel tone="run"` "Geteilt mit N Freunden", a guest list (`ShareGuests.tsx`: state, path tag, RTT in `Count`, menu "Entfernen" = kick), "Weitere einladen", and "Teilen beenden" (confirm, `StopSharingDialog`). A kicked guest shows "Entfernt", a declined one "Abgelehnt"; both offer "Erneut einladen" (`hostInvite`), which is the only way to let them in again (5.4).
+- **Mod row** (`FriendsModRow.tsx`; the backend decides through `ModStatus` (11.5), the UI does not check the MC version): `ModStatus` `notInstalled` → "Pumpkin Friends-Mod: Teilen direkt im Spiel" + "Mod hinzufügen" (`friendsModInstall` through `useBackgroundTask`, wrapped because it resolves to `void`, 8.4; text "kommt von Modrinth"; a `GuardedButton` blocked while the game runs or a job is active). `installed` → chip "Mod nicht verbunden". `connected` → chip "Mod verbunden". `unavailable` → no row.
 
 ### 10.6 Session chip (F5, `app/TitleBar.tsx`)
-- Shown only while a host session or a join is active. "Geteilt · 2 verbunden", or "Bei {name} · Direkt · 38 ms" (fixed width). Click opens a `Popover` with peer, path explanation, RTT, and "Teilen beenden" / "Verlassen".
+- Shown only while a host session or a join is active, in the title bar's `.bar-mid` next to the brand (in `.bar-right` it could collide with the offline chip). "Geteilt · 2 verbunden", or "Bei {name} · Direkt · 38 ms" (fixed width). Click opens a `Popover` with peer, path explanation, RTT, and "Teilen beenden" (with the same confirm as the Worlds tab) / "Verlassen".
+- Source: `useSharingActivity` (`components/friends/useSharingActivity.ts`, mounted once in `TitleBar`; pure helpers in `sharingModel.ts`), which ShareSection and the close confirm read too. It takes the host session from `friendKeys.hostSessions` and the join from `useFriendsUi().joinSession` (8.5), with the host's name looked up in `friendKeys.invites` by `inviteId`. The code still keeps a second join state inside the hook (Appendix E, E6).
 
 ### 10.7 Window close (F3 + F5)
 - `store/friendsUi.ts` (F1) mirrors `friendsEnabled: boolean | null` from the `friendsState` query (null = not loaded yet).
@@ -1217,7 +1297,7 @@ Kit rules (docs/design/PIXELKINO.md): no border radius, a warning always has a s
   - `launcherWindow.ts` adds `async function ensureFriendsEnabled()`: it calls `resolveFriendsEnabled(useFriendsUi.getState().friendsEnabled, () => queryClient.fetchQuery({ queryKey: friendKeys.state, queryFn: () => api.friendsState() }).then((s) => s.enabled), 1500)` and writes a fetched value into `friendsUi`.
   - `applyLauncherOnPlay()` becomes async: `const mode = effectiveOnPlay(useSettings.getState().launcherOnPlay, await ensureFriendsEnabled())`. So "close" stays "close" for every user whose backend answers `enabled: false`, and the fallback "treat as enabled" (null) applies only when `friendsState` fails or takes longer than 1.5 s. `restoreLauncherAfterPlay()` uses the same effective mode.
 - Settings > Spiel shows the hint "Mit aktivierten Freunden wird der Launcher nur minimiert." `GameTab` reads `useFriendsState` for it, and shows its existing `closeWarning` (no playtime tracking) only while `effectiveOnPlay(mode, friendsEnabled)` is still `"close"`.
-- Closing the TitleBar during an active session or join asks first: "Launcher schließen? Das beendet das Teilen bzw. die Verbindung zu {name}." (F5)
+- Closing the TitleBar during an active session or join asks first: "Launcher schließen? Das beendet das Teilen bzw. die Verbindung zu {name}." (F5, `CloseConfirm` in `TitleBar`'s `WindowButtons`). It guards only the title-bar close button, not Alt+F4 or a taskbar close; the owner checks it with the real window in I1.
 - Rust: a cross-platform `RunEvent::Exit` handler calls `friends.shutdown()` (1 s timeout), and keeps the macOS `Opened` branch (R4).
 
 ### 10.8 Settings tab "Freunde" (F3, `pages/settings/FriendsTab.tsx`, `SECTIONS` value `freunde`)
@@ -1227,9 +1307,9 @@ Kit rules (docs/design/PIXELKINO.md): no border radius, a warning always has a s
 - Otherwise:
   - `FormRow` "Freunde" `Switch` (on opens the opt-in, off calls `friendsDisable`). While the feature is off, the tab shows **only** this switch; every row below appears only while it is enabled (rotate and reset need an active identity).
   - "Anzeigename" (3-32, saved on blur).
-  - "Immer über Relay verbinden" (hint: "Freunde sehen deine IP-Adressen nicht. Etwas höhere Latenz. Der Relay-Betreiber sieht, wer mit wem verbunden ist, aber keine Inhalte."; with a confirm while a host session **or a join** is active, because the rebind ends both). The current code checks only host sessions (Appendix E, E4).
-  - "Mein Fingerabdruck" (pixel-font `Count`) with an action that copies the full 64-char peer id: an abuse report to the relay operator needs it, because the relay keeps no logs and the fingerprint is not enough (`docs/friends/RELAY-OPS.md`; Appendix E, E5). "Blockierte" (list + "Entsperren").
-  - Network line "Verbunden über {relayHost}" or "Getrennt: {reason}". Until F4's `useFriendEvents` writes `friends-network` into `friendKeys.state`, the tab subscribes itself (`useLiveNetwork`); F4 removes that.
+  - "Immer über Relay verbinden" (hint: "Freunde sehen deine IP-Adressen nicht. Etwas höhere Latenz. Der Relay-Betreiber sieht, wer mit wem verbunden ist, aber keine Inhalte."; with a confirm while a host session **or a join** is active, because the rebind ends both; the join is read from `useFriendsUi().joinSession`). The confirm text is `relayConfirmText` plus `relayConfirmHosting`, `relayConfirmJoin` or `relayConfirmJoinUnnamed`.
+  - "Mein Fingerabdruck" (pixel-font `Count`) with an action that copies the full 64-char peer id (`copyPeerId`, toast `peerIdCopied`): an abuse report to the relay operator needs it, because the relay keeps no logs and the fingerprint is not enough (`docs/friends/RELAY-OPS.md`). The fingerprint aside says so in one sentence. "Blockierte" (list + "Entsperren").
+  - Network line "Verbunden über {relayHost}" or "Getrennt: {reason}", from `friendKeys.state`, which `useFriendEvents` keeps current (8.5).
   - Danger area (kit `danger` variant; the reset row label is the full wording below, its button says "Zurücksetzen"): "Identität erneuern" (`friendsRotateIdentity`, confirm: "Deine Freunde bekommen die neue Identität automatisch, sobald sie online sind (bis zu 14 Tage). Deine offenen Freundescodes werden widerrufen, und Anfragen, die noch auf Bestätigung warten, werden gelöscht. Läuft gerade eine geteilte Welt oder ein Beitritt, wird er beendet.") and "Identität zurücksetzen und alle Freunde löschen" (`friendsReset`, danger confirm).
 
 ### 10.9 Opt-in dialog (F3, `FriendsOptInDialog`)
@@ -1316,9 +1396,13 @@ No keybinding and no in-game join.
 - All Minecraft calls run on the client thread.
 
 ### 11.5 Distribution and supply chain
-- The owner creates the Modrinth project. Its **project id** is pinned as `MOD_PROJECT_ID` in `services/friends/modinstall.rs`. Until it is set (empty string), `ModState::Unavailable`, and the dev jar (`mod/build/libs/pumpkin_friends-0.1.0.jar`) is added by hand.
-- `friends_mod_install`: list the pinned project's versions for `26.3` + `fabric`. Take the newest `listed` release whose `project_id` equals the constant, pick the file whose sha512 the API reports, and install it through the existing catalog mod-install path (`Fetch::Modrinth` verification). The target file name is a sanitised leaf `[A-Za-z0-9._+-]+\.jar`.
-- Releases: the manual-dispatch workflow `mod-release.yml` with the Minotaur plugin. It runs in a GitHub **environment** `modrinth-release` with the owner as required reviewer, using the `MODRINTH_TOKEN` environment secret. The owner enables 2FA on the Modrinth account. Nothing publishes automatically.
+- The owner creates the Modrinth project. Its **project id** is pinned as `MOD_PROJECT_ID` in `services/friends/modinstall.rs` and, with the identical value, in `.github/workflows/mod-release.yml`. Until it is set (empty string), `modinstall::status` is `Unavailable` on every instance, the lookup treats no project as our own mod (5.6), and the dev jar (`mod/build/libs/pumpkin_friends-0.1.0.jar`) is added by hand.
+- `modinstall::status(instance)`: `Unavailable` for a non-Fabric loader or an empty `MOD_PROJECT_ID`; `Installed` when the instance has an enabled `ModKind::Mod` with `ModSource::Modrinth` and the pinned project id; otherwise `NotInstalled`. `Connected` is added by `friends_mod_status` from the bridge (8.4).
+- `friends_mod_install` (`modinstall::install`): list the pinned project's versions for **the instance's own Minecraft version** + `fabric` (so a second MC version needs no code change). Take the newest `listed` release whose `project_id` equals the constant, pick the file whose sha512 the API reports, and install it through `content::install_mod` (the catalog mod-install path with `Fetch::Modrinth` verification), which also installs Fabric API as a required dependency. An `Unavailable` instance, or no listed release for the version: `errors.friends.modNotAvailable{version}`. The target file name is a sanitised leaf `[A-Za-z0-9._+-]+\.jar`.
+- **Releases** (`mod-release.yml`, manual dispatch from `main` only): a direct Modrinth API upload (`curl` + `jq`), not the Minotaur plugin, so that no Gradle build script runs with the secret in its environment. Two jobs:
+  - `build` has no environment and no secret. It builds and tests without a Gradle cache (no earlier run's cache enters a release), checks that the jar's `fabric.mod.json` id is `pumpkin_friends` and its version matches `mod/gradle.properties`, and checks that `MOD_PROJECT_ID` is an 8-character id equal to the constant in `modinstall.rs` (an exact-text grep for `MOD_PROJECT_ID: &str = "<id>"`). With the empty id it fails on purpose.
+  - `publish` runs in the GitHub **environment** `modrinth-release` (owner as required reviewer, `main` only) with the `MODRINTH_TOKEN` environment secret (Modrinth PAT scopes "Create versions" and "Read projects"), and gets the jar's sha256 from `build`, so the reviewer approves a finished, checked artifact. It checks that the API returns the pinned project, refuses a `version_number` that already exists, and uploads with `game_versions: ["26.3"]`, `loaders: ["fabric"]`, Fabric API (`P7dR8mSH`, the owner confirms the id) as a required dependency, status `listed`, and the chosen channel. The launcher installs only `release` versions.
+  - The owner enables 2FA on the Modrinth account. Nothing publishes automatically.
 
 ---
 
@@ -1335,7 +1419,7 @@ No keybinding and no in-game join.
   - "Always relay" hides your addresses from all peers.
 - **LAN port:** opening a world to LAN binds the game's port on all interfaces, as in vanilla. The tunnel does not change that. Devices in the local network (and anything the router forwards) can reach it, with Mojang authentication as the only protection. Windows Firewall profiles apply. Stated in the ShareDialog and in `docs/friends/PRIVACY.md`.
 - Presence goes only to confirmed friends. Hosting is visible only to invited friends. The manifest goes only to invited friends, and the share dialog says so.
-- Friends' skins are fetched by Rust from Mojang's sessionserver (the UUID is sent to Mojang) and cached locally. Named in the PrivacyNotice.
+- Friends' skins are fetched by Rust from Mojang's sessionserver (`sessionserver.mojang.com`, constant `skins::SESSION_PROFILE`; the UUID is sent to Mojang) and cached locally. Textures come only from `textures.minecraft.net` (`http` is upgraded to `https`). Named in the PrivacyNotice and `PRIVACY.md`.
 - Logs never contain IPs, secrets, codes, tokens or hello ids. Peer ids are logged as their first 8 hex chars.
 
 ### 12.2 Security rules
@@ -1411,12 +1495,12 @@ CI facts (`.github/workflows/ci.yml`): `cargo check` and `cargo test --locked` r
 | R1 | Loopback peers (they dial through the in-process relay with loopback-bound sockets, 3.3/3.7; the path then usually upgrades to `Direct`): echo through `bridge` + `LocalListener`. 1-byte ping-pong x1000 through the tunnel: p99 <= 20 ms on CI (recorded local value on Windows, path Direct: p50 0.97 ms, p99 1.47 ms; target <= 5 ms). `TCP_NODELAY` set on both sockets (asserted with `nodelay()`). Gate reject/accept/drop. Frame over limit closes with `PROTOCOL`, without allocating. Dial timeout 8 s (fake dialer). Duplicate tie-break. `SHUTDOWN` on close. QUIC stream limit 16 enforced. Unknown relay index never dialed. **Relay-only binding:** an endpoint bound with `relay_only: true` and `RelaySelection::Only(0)` (the configuration R4 uses for hello endpoints in production, 3.7) reports no direct (IP) addresses (checked through the iroh call named in IROH-NOTES), and a loopback peer dialing its id without any relay URL fails within 8 s; the same endpoint is reachable through an in-process relay (3.7), and the established path is `Relay`, never `Direct`. A `NetConfig` built from `RELAY_MAP` binds (map entries are accepted as given). |
 | R2 | Code golden vectors (Appendix B), round trip, normalisation, checksum, version, own-code. Hello-key derivation vector. Sign/verify. Contract fixture test (8.3). `SecretStore` keyring + fake; availability matrix (noSecretStore, identityLost, available). Records keep unreadable entries. Sanitisation table (bidi, zero-width, `§`, NFC, caps, empty name). Config defaults all off. Auth refresh-token tests stay green. |
 | R3 | `LanDetector` table (6.4). `sockowner` on the current OS: a test `TcpListener` is reported as owned by `std::process::id()`, and a connection from this process is found by `connects_from`. `verify_port` against a fake status server (ok / not owned / no answer). Modbridge: wrong token, protocol negotiation, duplicate, oversize line, no hello within 2 s, 5th unauthenticated connection refused, rate limit, message → `GameSignal` mapping. `launch_env` empty when stopped or non-Fabric. `spawn` env test with a tiny child printing its env. `friend_join`: no `last_quick_play` write, refusal without `account_id`, bad address refused. `FriendJoin` JSON shape and `LaunchOptions` without the field (8.6). With `friend_join`, a refused or failing launch sends `LaunchFailed` before the error returns; progress sends `LaunchProgress` at most once per second; without `friend_join`, neither is sent. `shared_types` JSON strings (R0a test stays green). `examples/launch.rs` compiles. |
-| R4 | Two `Friends` services with temp dirs, built with `NetOptions` pointing at one in-process relay and `hello_relay_only = true` (3.7): code → hello **through the relay** → request → accept → both friends (inviter online, and inviter offline at redemption: the inviter service starts later, then `friends_retry_now` on the invitee delivers within 5 s); `hello_net_config(NetOptions::production(), ..)` gives `relay_only = true` and `Only(code.relay_index)`; decline is silent; cancel → `removedByPeer`; block looks like removal; unfriend; rotate (friend learns the new id, a thief with the old key is rejected afterwards; **after rotate `friend_codes` is empty, pending incoming and `awaitingAnswer` requests are gone, and redeeming a code created before the rotation gets no frame and stays `delivering`**); reset outbox delivers `unfriend`; `friends_retry_now` (fake dialer, paused time): a `delivering` request in the 10-min backoff step is dialed at once, a second call within 10 s does not dial again; **extension seam:** a fake `PeerStreamHandler` receives request streams, tunnel streams (with `sessionId`) and `invite`/`inviteRevoke`/`inviteDecline`; without a handler the defaults of 5.3 apply; a second `register_stream_handler` fails; a fake lifecycle subscriber gets `Disabled` on `friends_disable`, `Rebind` on an `alwaysRelay` change, `IdentityChanged` on rotate and reset, `Shutdown` on `shutdown()`, each before the endpoint closes (subscriber holds `done` for 200 ms, the remote sees `SHUTDOWN` only afterwards), and a subscriber that never answers delays the close by at most 500 ms; identityLost refuses commands; incoming TTL prune; hello silent drop for a wrong secret (no frame received; the close arrives as `CloseReason::Peer(NORMAL)`, 3.5); hello rate limits; foreign `homeRelay` index ignored; presence online/offline/crash (short idle timeout, through the seam of Appendix E, E1); lazy-dial schedule (fake clock); 50-friend cap; load test with 50 fake friends, startup dial batch finishes within 4 x 8 s rounds. |
-| R5 | Real loopback tunnel to a fake LAN server (a status-answering `TcpListener` owned by the test process): host verification, handshake/login-start validation (legacy ping, transfer state, bad name, oversize rejected), guest nonce + PID check (a foreign handshake address is refused, no stream opened), single-owner limits, 7-guest cap, kick, stop, liveness end, every row of 6.5 (with real `Friends` services from R4 and an in-process relay). **Kick and decline at admission:** after a kick, the kicked guest's launcher ignores `inviteRevoke` and opens a new tunnel stream and a `manifestRequest`: both get `notInvited`, and the guest is `left` with `kicked: true`; after `host_invite` for the same friend, a tunnel stream gets `tunnelOk` again; the same for a guest that sent `inviteDecline` (`declined`). A guest that left on its own can rejoin while its invite is open. **Join timers on real time** with `JoinTimers { spawn_wait: 2 s, spawn_wait_cap: 6 s, first_connection: 3 s }`: no spawn and no progress → the join ends `error` after about 2 s; `LaunchProgress` every 1 s keeps it in `waitingForGame` past 2 s, and it still ends `error` at the 6 s cap; after `Spawned`, a first valid connection at 2 s succeeds, and in a second join no connection by 3 s ends it `error` (a connection at 4 s is refused because the listener is closed); `LaunchFailed` ends the join `error` within 100 ms and the listener address refuses connections. The timer state machine is also tested without sockets on paused time with production values (9 min first connection succeeds, 11 min fails; progress for 25 min keeps the join, 31 min ends it). `Lifecycle` handling: `Disabled`, `Rebind`, `IdentityChanged`, `Shutdown` end host session and join with the reasons of 6.1/6.2, and the `inviteRevoke{stopped}` reaches the guest before `done`. Mod `share` needs confirmation once per launch; denied/timeout. |
+| R4 | Two `Friends` services with temp dirs, built with `NetOptions` pointing at one in-process relay and `hello_relay_only = true` (3.7): code → hello **through the relay** → request → accept → both friends (inviter online, and inviter offline at redemption: the inviter service starts later, then `friends_retry_now` on the invitee delivers within 5 s); `hello_net_config(NetOptions::production(), ..)` gives `relay_only = true` and `Only(code.relay_index)`; decline is silent; cancel → `removedByPeer`; block looks like removal; unfriend; rotate (friend learns the new id, a thief with the old key is rejected afterwards; **after rotate `friend_codes` is empty, pending incoming and `awaitingAnswer` requests are gone, and redeeming a code created before the rotation gets no frame and stays `delivering`**); reset outbox delivers `unfriend`; `friends_retry_now` (fake dialer, paused time): a `delivering` request in the 10-min backoff step is dialed at once, a second call within 10 s does not dial again; **extension seam:** a fake `PeerStreamHandler` receives request streams, tunnel streams (with `sessionId`) and `invite`/`inviteRevoke`/`inviteDecline`; without a handler the defaults of 5.3 apply; a second `register_stream_handler` fails; a fake lifecycle subscriber gets `Disabled` on `friends_disable`, `Rebind` on an `alwaysRelay` change, `IdentityChanged` on rotate and reset, `Shutdown` on `shutdown()`, each before the endpoint closes (subscriber holds `done` for 200 ms, the remote sees `SHUTDOWN` only afterwards), and a subscriber that never answers delays the close by at most 500 ms; identityLost refuses commands; incoming TTL prune; hello silent drop for a wrong secret (no frame received; the close arrives as `CloseReason::Peer(NORMAL)`, 3.5); hello rate limits; foreign `homeRelay` index ignored; presence online/offline/crash (short `NetOptions.idle_timeout`; the friend's runtime workers are frozen instead of dropped, because a dropped runtime can still send a FIN and the peer then sees `PROTOCOL` instead of `TimedOut`); lazy-dial schedule (fake clock); 50-friend cap; load test with 50 fake friends, 16 of them recent (eager): the 16 finish within 4 x 8 s rounds plus one tick, and the 34 others are not dialed before the lazy round at 60 s (with at most 4 concurrent dials, 50 eager dials could not finish in 4 rounds). In `p2p/tests.rs`: keep-alive for the production and a short idle timeout, and the handshake cap of 3.5. |
+| R5 | Real loopback tunnel to a fake LAN server (a status-answering `TcpListener` owned by the test process): host verification, handshake/login-start validation (legacy ping, transfer state, bad name, oversize rejected), guest nonce + PID check (a foreign handshake address is refused, no stream opened), single-owner limits, 7-guest cap, kick, stop, liveness end, every row of 6.5 (with real `Friends` services from R4 and an in-process relay). **Kick and decline at admission:** after a kick, the kicked guest's launcher ignores `inviteRevoke` and opens a new tunnel stream and a `manifestRequest`: both get `notInvited`, and the guest is `left` with `kicked: true`; after `host_invite` for the same friend, a tunnel stream gets `tunnelOk` again; the same for a guest that sent `inviteDecline` (`declined`). A guest that left on its own can rejoin while its invite is open. **Join timers on real time** with `JoinTimers { spawn_wait: 2 s, spawn_wait_cap: 6 s, first_connection: 3 s, host_offline_grace: 1 s }`: no spawn and no progress → the join ends `error` after about 2 s; `LaunchProgress` every 1 s keeps it in `waitingForGame` past 2 s, and it still ends `error` at the 6 s cap; after `Spawned`, a first valid connection at 2 s succeeds, and in a second join no connection by 3 s ends it `error` (a connection at 4 s is refused because the listener is closed); `LaunchFailed` ends the join `error` within 100 ms and the listener address refuses connections. The timer state machine is also tested without sockets on paused time with production values (9 min first connection succeeds, 11 min fails; progress for 25 min keeps the join, 31 min ends it). `Lifecycle` handling: `Disabled`, `Rebind`, `IdentityChanged`, `Shutdown` end host session and join with the reasons of 6.1/6.2, and the `inviteRevoke{stopped}` reaches the guest before `done`. Mod `share` needs confirmation once per launch; denied/timeout. All of it runs on loopback in one process with a fake Minecraft server and client (so the `sockowner` PID check always sees the test process); the real client is owner work (13.4). |
 | R6 | Manifest build (excludes disabled mods and non-`Mod` kinds; a jar declaring mod id `pumpkin_friends` stays in), matching ignores our mod only via `MOD_PROJECT_ID`, validation table, sha512 hashing and cache. The matching table (5.6) with a fake `ModLookup`. Lookup failure → `lookupFailed`. Avatar: host check (only `textures.minecraft.net`), size cap, PNG signature, cache TTL. Mod install: wrong `project_id` refused, non-listed refused. |
 
 ### 13.2 Frontend
-- `pnpm build` (tsc strict = types, i18n completeness, fixtures) and `pnpm check:lib`, including the new `friendCode.check.mjs` (golden vectors, shape, grouping, normalisation), `onPlay.check.mjs` and `src/pages/friends/friendsModel.check.mjs` (F2: gates, badge count, labels, `canInvite`, expired-code hint).
+- `pnpm build` (tsc strict = types, i18n completeness, fixtures) and `pnpm check:lib`, including the new `friendCode.check.mjs` (golden vectors, shape, grouping, normalisation), `onPlay.check.mjs`, `src/pages/friends/friendsModel.check.mjs` (F2: gates, badge count, labels, `canInvite`, expired-code hint), `src/store/friendDialogQueue.check.mjs` and `src/components/friends/inviteModel.check.mjs` (F4: dialog queue, invite dialog states), and `src/components/friends/sharingModel.check.mjs` (F5: share section and chip states).
 - `onPlay.check.mjs` (F3) covers: `effectiveOnPlay` for null/true/false × the three modes (null and true turn "close" into "minimize"; false keeps "close"); `resolveFriendsEnabled` returns the cached value without calling the fetch, returns `false` from a fetch that resolves `false` (so "close" stays "close"), and returns `null` for a fetch that rejects and for one that does not settle within the timeout (fake fetch, timeout 50 ms).
 - Mock pass in `pnpm dev`: every scenario and hook, German and English, a narrow window (900 px), forced colors.
 - **Layout shift:** on `/friends?mock=freunde` and with the session chip visible, `pumpkinMock.cycle()` and then `pumpkinMock.layoutShift()` must return **< 0.001**. Run it in the browser (devtools or Playwright MCP) and paste the result into the PR.
@@ -1466,6 +1550,7 @@ Against `FakeLauncher.java` first, then the real launcher:
 | E11 | Host quits to the title screen | Session ends `lanClosed` within 2 s (log) or 30 s (liveness) |
 | E12 | Windows Firewall prompt on first enable | Behaviour recorded, both choices still connect (relay at worst) |
 | E13 | Child account with multiplayer blocked (if available) | Clear vanilla message recorded |
+| E14 | Guest listener with the real client: a join on Windows and on Linux (random `127.a.b.c`), and on macOS (`127.0.0.1` fallback) | The real game's connection passes the PID and nonce checks (6.2); a second local client is refused |
 
 If a fixture mod has no 26.3 release, substitute another Modrinth mod with the same side classification, and record it.
 
@@ -1481,7 +1566,7 @@ If a fixture mod has no 26.3 release, substitute another Modrinth mod with the s
 ## 14. Work packages
 
 **Ownership rules.**
-- Files listed under a package are exclusive to it while it runs. The only exceptions are the seams that a later package's row names explicitly (R5: the `state.rs` field and the `lib.rs` wiring at R4's marker, 8.7). Files of finished packages (Waves 0 and 1) pass to a later package only where that package's row lists them (R4: `p2p/endpoint.rs` and `p2p/tests.rs` for Appendix E, E1/E2; F4: the F2 and F3 files named in its row).
+- Files listed under a package are exclusive to it while it runs. The only exceptions are the seams that a later package's row names explicitly (R5: the `state.rs` field and the `lib.rs` wiring at R4's marker, 8.7). Files of finished packages pass to a later package only where that package's row lists them (R4: `p2p/endpoint.rs` and `p2p/tests.rs` for the former Appendix E items E1/E2; F4: the F2 and F3 files named in its row; I1: `p2p/relays.rs`).
 - **Stubs:** R0a creates every new Rust module file as a stub (overview doc comment only). Ownership then passes to the package named in R0a's list. `services/shared_types.rs` is not a stub: R0a writes it complete (8.1), and changes to it later go through the change rule.
 - **Cross-package seams are defined in R4** (`PeerStreamHandler`, `Lifecycle`, `NetOptions`, 3.7/8.7). R4 is accepted with fake handlers and subscribers; R5 only registers against them.
 - **Append-only shared files** (any package may append; the orchestrator merges both sides):
@@ -1549,7 +1634,7 @@ If a fixture mod has no 26.3 release, substitute another Modrinth mod with the s
 ### Wave 1
 **R1, rust-net: P2P transport** (depends R0a, R0b)
 - Files: `src-tauri/src/services/p2p/**` (`mod.rs`, `endpoint.rs`, `relays.rs`, `gate.rs`, `frame.rs`, `stream.rs`, `tunnel.rs`, `dialer.rs`, `conn.rs` (`PeerConn`, `CloseCode`, `CloseReason`, `Direction`, `duplicate_survivor`), `peer_id.rs` (`PeerId`, `InvalidPeerId`), `tests.rs`); `src-tauri/Cargo.toml` (append `bytes = "1"`, already in the lock tree, for `bridge`'s `Bytes`).
-- Acceptance: the API of 3 and 6.3/8.7 (including `RelayTls` and `NetConfig.relay_map`, 3.7); R1 tests of 13.1 green on three OSes without network access (the in-process relay runs on loopback); no friends or Minecraft knowledge inside `p2p` (`PathKind` comes from `shared_types`). **Done (Wave 1).** `p2p/relays.rs` passes to I1 (release map); `p2p/endpoint.rs` and `p2p/tests.rs` pass to R4 for Appendix E, E1/E2.
+- Acceptance: the API of 3 and 6.3/8.7 (including `RelayTls` and `NetConfig.relay_map`, 3.7); R1 tests of 13.1 green on three OSes without network access (the in-process relay runs on loopback); no friends or Minecraft knowledge inside `p2p` (`PathKind` comes from `shared_types`). **Done (Wave 1).** `p2p/relays.rs` passes to I1 (release map); `p2p/endpoint.rs` and `p2p/tests.rs` passed to R4 for the former E1/E2 (resolved in Wave 2).
 
 **R2, rust-friends: identity, secrets, codes, records, config, contract, sanitising** (depends R0a, F1)
 - Files: `services/secrets.rs`, `services/auth/keyring.rs`, `services/friends/{mod.rs, contract.rs, contract_tests.rs, identity.rs, code.rs, records.rs, config.rs, sanitize.rs, test_support.rs}` (`test_support.rs` is `cfg(test)`: `TempDir`, `error_key`); `src-tauri/Cargo.toml` (append `getrandom = "0.4"`, already in the lock tree via uuid and iroh, for the code secret and salt).
@@ -1578,8 +1663,8 @@ If a fixture mod has no 26.3 release, substitute another Modrinth mod with the s
 - **Done (Wave 1)**, except the deployment (owner). Unverified container items to expect at the first deploy: the image build, the sysctl `net.ipv4.ip_unprivileged_port_start` for non-root binding of 80/443 (fallback: root user with `cap_add NET_BIND_SERVICE`), volume ownership; the compose service has no `read_only` root filesystem yet. Placeholders: `<relay-domain>`, `<ops-mailbox>`, optionally `<fallback-domain>`; operator, address, hosting provider and AVV are marked "(owner)" in PRIVACY.md. n0's operator details and retention are unverified and must be checked before a beta build with n0 relays ships.
 
 **F2, frontend: Friends page, navigation, add dialog** (depends F1)
-- Files: `src/main.tsx`, `src/app/mainTabs.ts`, `src/app/Sidebar.tsx`, `src/app/usePageTitle.ts`, `src/ui/Button.tsx`, `src/ui/button.css`, `src/ui/a11y.css` (listed, unchanged), `src/ui/List.tsx`, `src/ui/list.css`, `src/pixel/icon-data.ts`, `src/pages/Friends.tsx`, `src/pages/friends/**` (as built: `AddFriendDialog`, `EnterCodeTab`, `MyCodeTab`, `FriendRow`, `FriendsContent`, `FriendsGate`, `FriendsSection`, `RequestsSection`, `NetworkBanner`, `useFriendDialogs`, `useFriendsNav`, `useRetryDeliveries`, `useFriendsLive` (interim), `inviteRequest`, `friendsModel` + `friendsModel.check.mjs`), `src/components/friends/FriendAvatar.tsx` (also `SelfAsserted`), `src/components/friends/Fingerprint.tsx`, `src/i18n/{de,en}/friends.ts`, `src/i18n/{de,en}/ui.ts`, `package.json` (append `friendsModel.check.mjs` to `check:lib`).
-- Acceptance: 10.1-10.3 against all mock scenarios; Ctrl+5 opens Friends and Ctrl+1..4 are unchanged; badge count = requests + invites + notices; icons in both grids; in `?mock=freunde` the page mount calls `friendsRetryNow` once, "Jetzt zustellen" turns the younger delivering request into `awaitingAnswer` and is disabled for 10 s, and only the 8-day-old request shows the expired-code hint; layout shift < 0.001 (13.2); `pnpm build`/`check:lib` green. **Done (Wave 1)**; open: Appendix E, E3 (moved to F4).
+- Files: `src/main.tsx`, `src/app/mainTabs.ts`, `src/app/Sidebar.tsx`, `src/app/usePageTitle.ts`, `src/ui/Button.tsx`, `src/ui/button.css`, `src/ui/a11y.css` (listed, unchanged), `src/ui/List.tsx`, `src/ui/list.css`, `src/pixel/icon-data.ts`, `src/pages/Friends.tsx`, `src/pages/friends/**` (as built: `AddFriendDialog`, `EnterCodeTab`, `MyCodeTab`, `FriendRow`, `FriendsContent`, `FriendsGate`, `FriendsSection`, `RequestsSection`, `NetworkBanner`, `useFriendDialogs`, `useFriendsNav`, `useRetryDeliveries`, `useFriendsLive` (interim, deleted by F4), `inviteRequest`, `friendsModel` + `friendsModel.check.mjs`), `src/components/friends/FriendAvatar.tsx` (also `SelfAsserted`), `src/components/friends/Fingerprint.tsx`, `src/i18n/{de,en}/friends.ts`, `src/i18n/{de,en}/ui.ts`, `package.json` (append `friendsModel.check.mjs` to `check:lib`).
+- Acceptance: 10.1-10.3 against all mock scenarios; Ctrl+5 opens Friends and Ctrl+1..4 are unchanged; badge count = requests + invites + notices; icons in both grids; in `?mock=freunde` the page mount calls `friendsRetryNow` once, "Jetzt zustellen" turns the younger delivering request into `awaitingAnswer` and is disabled for 10 s, and only the 8-day-old request shows the expired-code hint; layout shift < 0.001 (13.2); `pnpm build`/`check:lib` green. **Done (Wave 1)**; the former E3 was resolved by F4.
 
 **F3, frontend: settings tab, opt-in, privacy notice, window close** (depends F1)
 - Files: `src/pages/Settings.tsx`, `src/pages/settings/FriendsTab.tsx`, `src/pages/settings/GameTab.tsx` (hint), `src/components/friends/FriendsOptInDialog.tsx`, `src/components/PrivacyNotice.tsx`, `src/lib/launcherWindow.ts`, `src/lib/onPlay.ts`, `src/lib/onPlay.check.mjs`, `src/i18n/{de,en}/friendsSettings.ts`, `package.json` (append `check:lib`).
@@ -1589,53 +1674,55 @@ If a fixture mod has no 26.3 release, substitute another Modrinth mod with the s
   - The opt-in cannot finish without "Verstanden", and without third-party consent when n0 relays are listed.
   - `onPlay.check.mjs` covers the cases listed in 13.2, including the null path (fetch rejects or times out → minimize) and the "not enabled" path (fetch resolves false → close).
   - Rotate and reset use confirms; the rotate confirm names revoked codes, dropped waiting requests and ended sessions (10.8). PrivacyNotice lists the relays and sessionserver.
-  - **Done (Wave 1)**; open: Appendix E, E4 and E5 (moved to F4). `usePlay.ts` and `useGameEvents.ts` still call the now async `applyLauncherOnPlay()`/`restoreLauncherAfterPlay()` without `await`; both functions catch their own errors (D.3).
+  - **Done (Wave 1)**; the former E4 and E5 were resolved by F4. `usePlay.ts` and `useGameEvents.ts` still call the now async `applyLauncherOnPlay()`/`restoreLauncherAfterPlay()` without `await`; both functions catch their own errors (D.3).
 
 ### Wave 2
 **R4, rust-friends: service, requests, hello endpoints, presence, outbox, block, core commands, lifecycle** (depends R1, R2, R3)
 - Files:
-  - `services/friends/{service.rs, requests.rs, hello.rs, status.rs, control.rs, outbox.rs, limits.rs, events.rs, tests.rs}` (append to `mod.rs`).
-  - `src-tauri/src/friends_commands.rs`.
-  - `src-tauri/src/lib.rs`: register the commands; construct `Friends` with `NetOptions::production()` and start it in `setup` when enabled; leave the marker `// friends: session wiring (R5)`; the cross-platform `RunEvent::Exit` handler.
-  - Append `pub friends: Friends` to `state.rs`.
-  - Appendix E, E1 and E2: `services/p2p/endpoint.rs` (the idle-timeout field only) and `services/p2p/tests.rs` (the new tests), handed over from R1.
+  - `services/friends/{service.rs, requests.rs, hello.rs, status.rs, control.rs, outbox.rs, limits.rs, events.rs, tests.rs}` (appended to `mod.rs`, with the `pub use` of the service API).
+  - `src-tauri/src/friends_commands.rs` (incl. `account_profile`, 4.1).
+  - `src-tauri/src/lib.rs`: `mod friends_commands`, the 21 `generate_handler!` entries, `start_friends` in `setup`, the marker `// friends: session wiring (R5)` right after `app.manage(AppState::load(..))`, and `handle_run_event` as one cross-platform match (`Exit` → `shut_down_friends`; the macOS `Opened` branch moved unchanged to `announce_opened_pack`).
+  - `src-tauri/src/state.rs`: the field `pub friends: Friends`, constructed in `AppState::load` with `NetOptions::production()` (`dirs` and `bridge` built as locals to pass them).
+  - The former E1 and E2: `services/p2p/endpoint.rs` (`NetConfig.idle_timeout`, `transport_config(idle_timeout)`, `keep_alive()` and two unit tests) and `services/p2p/tests.rs` (`idle_timeout` in the `config()` helper, the handshake-cap test), handed over from R1. No other `p2p` file.
 - Acceptance:
   - Sections 3.7, 4 and 5.1-5.3 (control and hello). The 8.4 commands `friends_state` through `friends_retry_now`.
-  - Appendix E, E1 and E2 resolved (and 3.3, 3.7, 8.7 updated through the change rule for E1).
+  - E1 and E2 resolved, and 3.3, 3.7, 8.7 updated.
   - The extension seam of 8.7 (`PeerStreamHandler`, `SessionControl`, `Lifecycle` with its normative order, `send_control`, `connection`, `dial_friend`), accepted with a fake handler and a fake lifecycle subscriber; no reference to R5 code.
   - The events `friends-changed`, `friends-network`, `friend-presence`, `friend-request`.
   - The bridge starts and stops with the feature. R4 tests of 13.1, including the in-process-relay hello flow.
+  - **Done (Wave 2).**
 
 **R6, rust-friends: manifest, matching, Modrinth lookup, skins, mod install (library only)** (depends R2)
-- Files: `services/friends/{manifest.rs, matching.rs, lookup.rs, avatar.rs, modinstall.rs, tests_match.rs}` (append to `mod.rs`), `src-tauri/src/services/modrinth.rs` (add a sha512 `version_files` lookup next to `versions_by_hash`).
-- Acceptance: 5.5, 5.6, 11.5 and the skin rules of 12.2 as pure or trait-backed functions per 8.7; R6 tests of 13.1, including the full matching table; no commands and no `lib.rs` change.
+- Files: `services/friends/{manifest.rs, matching.rs, lookup.rs, avatar.rs, modinstall.rs, tests_match.rs}` (appended to `mod.rs`); `src-tauri/src/services/modrinth.rs` (`versions_by_sha512`, sharing one implementation with `versions_by_hash`; `listed_versions` and `parse_listed_versions`, which read the `status` field through a private wrapper so that `modrinth::Version` is unchanged; `MAX_PROJECT_IDS` now `pub(crate)`); `src-tauri/src/services/skins.rs` (`texture_url`, `parse_player_skin` and `SESSION_PROFILE` made `pub(crate)`, so `avatar.rs` reuses the host check and texture parsing).
+- Acceptance: 5.5, 5.6, 11.5 and the skin rules of 12.2 as pure or trait-backed functions per 8.7; R6 tests of 13.1, including the full matching table; no commands and no `lib.rs` change. **Done (Wave 2).**
 
 **F4, frontend: invites, join, mod confirm, global events** (depends F1, F2)
-- Files: `src/app/Layout.tsx`, `src/hooks/useFriendEvents.ts`, `src/components/friends/{FriendDialogs.tsx, InviteDialog.tsx, ModConfirmDialog.tsx}`, `src/hooks/usePlay.ts` (the `friendJoin` entry only), `src/i18n/{de,en}/friendsInvite.ts`.
-  - Handed over from F2 and F3 (finished): `src/pages/friends/useFriendsLive.ts` (delete once `useFriendEvents` covers its four events) and its call in `useFriendsNav.ts`; `src/pages/friends/FriendsGate.tsx` and `src/pages/Friends.tsx` (Appendix E, E3); `src/pages/settings/FriendsTab.tsx` (remove `useLiveNetwork`; Appendix E, E4 and E5); `src/i18n/{de,en}/friends.ts` and `friendsSettings.ts` (only the keys these changes need).
-- Acceptance: 10.4 in the mock for every verdict (ready, missingContent with both lists, noInstance + createVanilla, versionUnsupported, lookupFailed); offline account guard; install before `inviteJoin` for an uninstalled instance (10.4 step 3); the Friends page's "Beitreten" (`useInviteRequest`) opens the InviteDialog; revoke closes the dialog; never two dialogs at once (queue); every event invalidates or updates the right query keys (listed in the PR); Appendix E, E3-E5 resolved.
+- Files: `src/app/Layout.tsx`, `src/hooks/useFriendEvents.ts`, `src/components/friends/{FriendDialogs.tsx, InviteDialog.tsx, ModConfirmDialog.tsx, inviteModel.ts, inviteModel.check.mjs}`, `src/store/{friendDialogQueue.ts, friendDialogQueue.check.mjs}`, `src/store/friendsUi.ts` (`joinSession`, the dialog queue), `src/hooks/useFriends.ts` (`useInvitePlan` with `staleTime: 0`), `src/hooks/usePlay.ts` (the fourth `play()` parameter `openFriendJoin`, 10.4), `src/i18n/{de,en}/friendsInvite.ts`, `package.json` (two `check:lib` entries).
+  - Handed over from F2 and F3 (finished): `src/pages/friends/useFriendsLive.ts` (deleted) and its call in `useFriendsNav.ts`; `src/pages/friends/FriendsGate.tsx` and `src/pages/Friends.tsx` (the former E3; the `FRIENDS_SETTINGS_URL` constant is gone); `src/pages/settings/FriendsTab.tsx` (`useLiveNetwork` removed; the former E4 and E5); `src/i18n/{de,en}/friends.ts` and `friendsSettings.ts` (only the keys these changes need).
+- Acceptance: 10.4 in the mock for every verdict (ready, missingContent with both lists, noInstance + createVanilla, versionUnsupported, lookupFailed); offline account guard; install before `inviteJoin` for an uninstalled instance (10.4 step 3); the Friends page's "Beitreten" (`useInviteRequest`) opens the InviteDialog; revoke closes the dialog; never two dialogs at once (queue); every event invalidates or updates the right query keys (8.5); E3-E5 resolved. **Done (Wave 2).**
 
 **F5, frontend: hosting UI, session chip, close confirm** (depends F1, F2)
-- Files: `src/pages/detail/WorldsTab.tsx`, `src/pages/detail/ShareSection.tsx`, `src/pages/detail/ShareDialog.tsx`, `src/app/TitleBar.tsx`, `src/components/friends/SessionChip.tsx`, `src/i18n/{de,en}/friendsHost.ts`.
-- Acceptance: 10.5, 10.6 and the close confirm of 10.7 in the mock (version gate, port wait, manual port, verified-port line with PID, invite at most 7, kick, kicked and declined guests with "Erneut einladen", stop, all four mod states); fixed widths; layout shift < 0.001 with the chip.
+- Files: `src/pages/detail/{WorldsTab.tsx, ShareSection.tsx, ShareDialog.tsx, ShareGuests.tsx, FriendsModRow.tsx}`, `src/app/TitleBar.tsx`, `src/components/friends/{SessionChip.tsx, ConnectionText.tsx, StopSharingDialog.tsx, useSharingActivity.ts, sharingModel.ts, sharingModel.check.mjs}`, `src/i18n/{de,en}/friendsHost.ts`, `package.json` (`check:lib`). Edited from F2: `src/pages/friends/friendsModel.ts` (`holdsSeat` exported, `canInvite` takes `Pick<HostSession, "guests"> | undefined`; no behaviour change).
+- Acceptance: 10.5, 10.6 and the close confirm of 10.7 in the mock (version gate, port wait, manual port, verified-port line with PID, invite at most 7, kick, kicked and declined guests with "Erneut einladen", stop, all four mod states); fixed widths; layout shift < 0.001 with the chip. **Done (Wave 2)**; open: Appendix E, E6.
 
 **D2, docs-ci: mod CI and release workflow** (depends M1)
 - Files: `.github/workflows/ci.yml` (append the `mod` job), `.github/workflows/mod-release.yml`.
-- Acceptance: the `mod` job installs Temurin 25 (`setup-java`), caches Gradle (including `~/.gradle/caches/fabric-loom`, because Loom downloads Minecraft 26.3), and runs `./gradlew build test` in `mod/`; the release is manual-dispatch only, in the environment `modrinth-release` with a required reviewer; nothing publishes automatically.
+- Acceptance: the `mod` job installs Temurin 25 (`setup-java`), caches Gradle (including `~/.gradle/caches/fabric-loom`, because Loom downloads Minecraft 26.3), and runs `./gradlew build test` in `mod/`; the release is manual-dispatch only, in the environment `modrinth-release` with a required reviewer; nothing publishes automatically (11.5). **Done (Wave 2)**; the first green run of the `mod` job is checked in I1.
 
 ### Wave 3
 **R5, rust-friends: hosting, joining, mc protocol checks, invites, mod link, session commands** (depends R4, R6)
 - Files:
-  - `services/friends/{hosting.rs, joining.rs, mcproto.rs, invites.rs, mod_link.rs, tests_session.rs}` (append to `mod.rs`).
+  - `services/friends/{hosting.rs, joining.rs, mcproto.rs, invites.rs, mod_link.rs, sessions.rs, session_events.rs, tests_session.rs}` (appended to `mod.rs`, with `pub use joining::JoinTimers` and `pub use sessions::{FriendSessions, MojangVersions, SessionContext, VersionCatalog, PRODUCTION_LIVENESS}`). `sessions.rs` holds `FriendSessions`, `SessionContext`, the `VersionCatalog` seam, the `PeerStreamHandler` impl and the lifecycle and signal loops; `session_events.rs` the `SessionEvents` sink (8.5), because R4's `FriendsEvent` cannot carry session events without editing R4's `events.rs`.
   - `src-tauri/src/friends_session_commands.rs`.
-  - `src-tauri/src/lib.rs` (append `generate_handler!` entries; fill R4's marker `// friends: session wiring (R5)`: construct `FriendSessions` with `JoinTimers::production()`, `register_stream_handler`, `subscribe_lifecycle`).
-  - `src-tauri/src/state.rs` (append `pub sessions: FriendSessions`).
+  - `src-tauri/src/lib.rs`: `mod friends_session_commands`, the 15 `generate_handler!` entries, R4's marker filled with `start_sessions(app.handle().clone())?` (8.7).
+  - `src-tauri/src/state.rs`: the field `pub sessions: FriendSessions`, constructed in `AppState::load` with `SessionContext` and `JoinTimers::production()` (`instances` and `http` built as locals to pass clones).
   - No other R4 file is edited. If R5 needs more from R4, the seam in 8.7 is extended through the change rule first.
 - Acceptance:
   - Sections 5.3-5.4 (invites, closed invites, manifest serving), 6 and 7.3/7.4 (launcher side).
   - The 8.4 commands `friend_skin` and `lan_status` through `friends_mod_confirm`, with their events.
   - Hosting and joining reach the network only through the 8.7 seam; lifecycle events end sessions with the reasons of 6.1/6.2.
   - R5 tests of 13.1, including every row of 6.5, kick/decline admission, and the join timers on real time with `JoinTimers`.
+  - **Done (Wave 3)** (agent part; the two-PC rows are owner work in I1).
 
 ### Wave 4
 **I1, docs-ci: end-to-end verification and release readiness** (depends R0b, R5, F3, F4, F5, M1, D1, D2)
@@ -1645,6 +1732,8 @@ If a fixture mod has no 26.3 release, substitute another Modrinth mod with the s
   - G3 verified (`RELAY-OPS.md` section 8: spike `--relay` on both PCs, the QAD line equals each PC's public IP).
   - The Appendix C checklist (drafted in `PRIVACY.md` section 8) is ticked, and the owner has confirmed the approval scope (G4).
   - The release binary size delta is re-measured with the real endpoints (3.1).
+  - The first CI run of the `mod` job is green (D2).
+  - Appendix E is empty: E6 and E7 are resolved by their follow-up packages before the release.
   - The doc-sync checklist (13.5.5) is complete.
 
 ```
@@ -1682,7 +1771,7 @@ Waves 0 and 1 (R0a, R0b agent part, F1, R1, R2, R3, M1, D1, F2, F3) are merged o
 - `LanOpened` (log or mod) is only a hint: always `lan_detect::verify_port` (6.1). `Spawned.online_account` = non-empty `account_id`; friend joins and hosting need it.
 - Guest side: `LocalListener` with `ListenerLimits { before_first_valid: 1, after_first_valid: 4 }`; `admit` returns the peeked bytes, which `bridge` writes into the stream first; `open` sends the open frame and maps an `error` frame to `TunnelError::Refused(code)` (6.2). Host side: write the validated buffer to the LAN socket, then `bridge` with an empty prefix (6.1). `sockowner::connects_from` and `listens` block on Linux/macOS: `spawn_blocking`.
 - Join timers: `LaunchProgress` comes only from `instance_launch` phase boundaries (8.6); the install runs before `invite_join` (10.4).
-- The crash rows of 6.5 need Appendix E, E1 (R4) first.
+- The crash rows of 6.5 use a short `NetOptions.idle_timeout` (3.7), resolved by R4.
 
 **R6**
 - Mod id `pumpkin_friends`; dev jar `mod/build/libs/pumpkin_friends-0.1.0.jar`; `MOD_PROJECT_ID` stays `""` until the owner creates the Modrinth project (`ModState::Unavailable`). Confirm the sessionserver host (`sessionserver.mojang.com`) used in `PRIVACY.md` and the PrivacyNotice.
@@ -1701,6 +1790,20 @@ Waves 0 and 1 (R0a, R0b agent part, F1, R1, R2, R3, M1, D1, F2, F3) are merged o
 
 **All frontend packages:** `pnpm build` regenerates `src-tauri/icons/icon.icns` (branding sync); never commit it. A fresh worktree needs `pnpm install --frozen-lockfile` once and a placeholder `dist/index.html` before `cargo` can build the Tauri crate without `pnpm build`.
 
+### Hand-off facts after Waves 2 and 3 (for I1 and the Appendix E follow-ups)
+R4, R6, F4, F5, D2 (Wave 2) and R5 (Wave 3) are merged on `feat/friends`; their deviations are written back (D.4).
+
+**I1 (owner work)**
+- 13.4 on two PCs in different networks with two Microsoft accounts: real Minecraft 26.3 Quick Play joins through the tunnel (E3-E7, E9, E11, E14), the offline-account checks E8a/E8b, the mod checks E10. The agent tests ran on loopback in one process with a fake client and server (13.1 R5).
+- The close confirm (10.7) with the real window: the browser mock does not render the window buttons. The F5 UI with a real LAN world.
+- `MOD_PROJECT_ID`: create the Modrinth project, put its 8-character id into `modinstall.rs` and `mod-release.yml` (identical), set up the `modrinth-release` environment (11.5: required reviewer, `main` only, environment secret `MODRINTH_TOKEN`, 2FA), and confirm the Fabric API project id `P7dR8mSH`. Until then `friends_mod_install` is unavailable, and `friends_mod_status` reports `connected` only for a hand-installed dev jar.
+- The first CI run of the `mod` job (D2): possible first-run issues are a Loom download of Minecraft 26.3 timing out (`timeout-minutes: 30`) or the `setup-java` cache path pattern. The job has no paths filter and runs on every PR.
+
+**Follow-ups**
+- E6 (frontend): `useFriendsUi().joinSession` is the single join state; `useSharingActivity` reads it and keeps only the host-session query.
+- E7 (R4 code): see Appendix E.
+- Mock gotchas: every full reload resets the mock DB, so the mock Microsoft login (6 s) has to be repeated; importing modules by URL from the page can create a second mock backend (the `queryClient` URL carries a `?t=` suffix).
+
 ---
 
 ## 15. v1.1 backlog (non-normative)
@@ -1715,6 +1818,9 @@ Waves 0 and 1 (R0a, R0b agent part, F1, R1, R2, R3, M1, D1, F2, F3) are merged o
 - Alias UI beyond rename, per-friend relay mode, deep links, the verified-account badge.
 - A Quilt build, a second MC version for the mod, in-game join from the mod (`joinInvite`/`joinReady`).
 - A random-loopback nonce on macOS (needs lo0 aliases), and named pipes instead of env tokens.
+- A source for the world name (5.4: today always null), for example a `lanOpened` field from the mod; the owner decides whether invites show it.
+- An event for mod shares (e.g. `friends-mod-shared`) for the launcher toast "{instance}: geteilt mit {names}" (7.4).
+- A host-side cap of 500 mods at `host_start` with its own error key, instead of every guest getting `manifestInvalid` (5.5).
 - Dedicated-server hosting (v2, see 1.4).
 
 ---
@@ -1789,7 +1895,7 @@ Parsing must accept the grouped form (with spaces or `-` inside the body) and an
 - [ ] The owner confirmed that the Microsoft/Mojang app approval covers sharing player names and UUIDs between users (G4).
 - [ ] The Modrinth API is used with the launcher User-Agent and within its rate limits.
 
-## Appendix D: Changelog (v1 → v2, and the Wave 0/1 sync)
+## Appendix D: Changelog (v1 → v2, and the Wave 0/1 and Wave 2/3 syncs)
 
 Status values: **applied** (in v2 as described), **partly** (applied with a stated exception), **deferred** (moved to the v1.1 backlog or v2, section 15/1.4), **rejected** (not taken, with the reason). IDs: `S<n>` = security review finding n, `F<n>` = feasibility review finding n (zero-based, in review order).
 
@@ -1892,14 +1998,48 @@ The ten packages of Waves 0 and 1 reported 109 deviations. IDs: `<package> D<n>`
 | M1 D13 | M1's commits carry the session's required co-author trailer instead of the one in the task text. |
 | F3 D7 | `usePlay.ts` and `useGameEvents.ts` call the now async `applyLauncherOnPlay()`/`restoreLauncherAfterPlay()` without `await`; both catch their own errors, and the window action only happens a moment later. |
 
+The Appendix E items of this sync (E1-E5) were all resolved in Wave 2 (Appendix E, resolved table).
+
+### D.4 Wave 2/3 implementation notes (2026-10-03)
+
+The six packages R4, R6, F4, F5, D2 (Wave 2) and R5 (Wave 3) reported 78 deviations, decided as in D.3: **(a)** 70, **(b)** 2 (Appendix E, E6 and E7), **(c)** 6. Their notes for the next waves and R5's items left for the owner are written back too (5.3, 5.6, 8.4, 8.5, 8.7, 10.2, 12.1, 13.4 E14, 14 hand-off, 15).
+
+**D.4.1 Write-back index (a)**
+
+| Package | Deviations | Written back in |
+|---|---|---|
+| R4 | D1-D4, D6-D16, D18, D19 | 3.3 (idle timeout, keep-alive `/ 2`), 3.6 (close after the peer closed), 3.7 (`idle_timeout`, `Friends::new` → `AppResult`, built in `state.rs`), 4.3 (refusals at the invitee, repeated request via another code), 4.4 (same-direction duplicates, per-friend debounce), 4.5/4.6 (`unfriend` always acked, rotate/reset order, rotation moves the record), 5.3 (open frame, request-stream limit in R4), 8.4 (commands need the feature), 8.7 (`start`, `shutdown`, `AccountProfile`, `EventSink`, teardown order, construction), 9 (folder at startup), 13.1 R4 (load test, frozen runtime), 14 R4 |
+| R6 | D1-D9, D11 | 5.5 (typed loader, empty file name, hash cache by path, skipped and deduplicated entries, no host cap), 5.6 (`versionUnsupported` from `validate`, dev jar counts as required, `invite_plan` wiring), 8.4 (`friend_skin`), 8.7 (R6 signatures), 9 (skin cache), 11.5 (`status`, `install` for the instance's version), 14 R6 (`modrinth.rs`, `skins.rs`) |
+| F4 | D1-D8 | 8.5 (event table), 10.4 (toast and queue, plan refetch, dialog strings, join via `usePlay`, revoke toast, mod confirm), 10.8 (relay confirm keys), 13.2, 14 F4 |
+| F5 | D1, D3-D9 | 10.5 (at least one friend, mod row, guarded install, session of another instance, error toasts), 10.6 (chip in `.bar-mid`, popover confirm), 13.2, 14 F5 |
+| D2 | D1-D6 | 11.5 (API upload, two jobs, project id check, Fabric API dependency, existing-version check, no release cache), 14 D2 |
+| R5 | D1-D21 | 5.4 (seats, re-invite, expiry, guest invite store, `worldName` always null), 5.5 (no host cap), 6.1 (host version check, `LanClosed` ends at once, `PROTOCOL` on connect failure), 6.2 (join replacement, status events, `expired` revoke, `host_offline_grace`), 7.3 (`lanClosed`, snapshot content, error mapping), 7.4 (no share toast, mod share starts a session, unknown request id), 8.4 (`friends_mod_status`, `friends_mod_confirm`), 8.5 (sinks, `host-session` rate), 8.7 (`SessionContext`, `FriendSessions`, `JoinTimers`), 13.1 R5, 14 R5, 15 |
+
+**D.4.2 Harmless notes (c)**
+
+| ID | Note |
+|---|---|
+| R4 D17, R5 D23 | The commits carry the session's required co-author trailer instead of the one in the task text (as M1 D13). |
+| R5 D22 | `tests_session.rs` copies R4's test harness (`test_relay`, `options`, `until`, `befriend`, the runtime freezer), because R4's `tests.rs` keeps it private. |
+| R6 D10 | `ModrinthLookup::with(api, own_project_id, ttl)` is `pub(super)` so tests can inject a project id and a short TTL; production uses `ModrinthLookup::new`. |
+| R6 D12 | R6 changes no TS and adds no i18n keys, so `pnpm build`, `check:lib` and `tsc` were not run in its worktree. |
+| D2 D7 | The workflow comments are German, the repo's style for workflows; D2 edited neither SPEC.md nor `mod/`. |
+
 ## Appendix E: Open code fixes
 
-Deviations (and gaps found in the packages' notes) where the code has to change. The normative text above still describes the required behaviour; it does **not** describe these items as done. The owner package resolves each item and removes its row in the same PR.
+Deviations (and gaps found in the packages' notes) where the code has to change. The normative text above still describes the required behaviour; it does **not** describe these items as done. The owner package resolves each item and moves its row to the resolved table in the same PR.
 
 | # | Owner | Source | Fix |
 |---|---|---|---|
-| E1 | R4 (takes over `p2p/endpoint.rs` for this field) | R1 note N3; needed by 13.1 R4 (presence crash) and 6.5 / 13.1 R5 (crash rows) | The idle timeout is the constant `IDLE_TIMEOUT_MS = 40_000` in `p2p/endpoint.rs`, so the "short idle timeout" crash tests have no seam. Add `pub idle_timeout: Duration` to `NetConfig` (used by `transport_config` instead of the constant; the keep-alive interval becomes `min(15 s, idle_timeout / 3)` so that a short test value cannot idle out an alive connection) and `pub idle_timeout: Duration` to `NetOptions` (`production()` = 40 s; no setting). R4 copies it into every `NetConfig`. Update 3.3, 3.7 and 8.7 through the change rule in the same PR. |
-| E2 | R4 (takes over `p2p/tests.rs` for this test) | R1 D16 | The pre-handshake cap of 8 (3.5, 12.4) is implemented but untested. Add a test that keeps 8 handshakes in flight (for example a test `Gate` whose `admit` waits on a `std::sync::Barrier`, on a multi-thread runtime) and asserts that a 9th dialer gets no answer (its dial runs into `DIAL_TIMEOUT` or a shorter test timeout) while the first 8 are admitted after the barrier is released. |
-| E3 | F4 (takes over `src/pages/friends/FriendsGate.tsx`, `src/pages/Friends.tsx`) | F2 D1 | "Freunde aktivieren" on the Friends page is a link to `/settings?tab=freunde`, where the user must flip the switch again. Open the opt-in on the page instead: `{optingIn && <FriendsOptInDialog onClose={() => setOptingIn(false)} />}` (10.2, 10.9). |
-| E4 | F4 (takes over `src/pages/settings/FriendsTab.tsx`) | F3 D3 | The "Immer über Relay" confirm checks only `useHostSessions`, so an active join is ended by the rebind without a warning. Extend the check to an active join (F4's join-session store) and name the join in the confirm text (10.8). |
-| E5 | F4 (same file) | D1 note N4 | Settings shows only the 16-char fingerprint. Add an action next to "Mein Fingerabdruck" that copies the full 64-char peer id (`FriendsState.me.peerId`), with keys in `friendsSettings` (de + en). An abuse report to the relay needs it (10.8, 12.5, `RELAY-OPS.md` section 13). |
+| E6 | Frontend follow-up (takes over `src/components/friends/{useSharingActivity.ts, SessionChip.tsx, sharingModel.ts}`, `src/pages/detail/ShareSection.tsx`, `src/app/TitleBar.tsx`) | F5 D2, F4 N2 | Two join states exist: F4's `useFriendsUi().joinSession` (read by `FriendDialogs` and `FriendsTab`) and F5's `ActiveJoin` inside `useSharingActivity` (read by the chip, ShareSection and the close confirm), and `useSharingActivity` subscribes again to five events that `useFriendEvents` already handles. Make `joinSession` the only join state (host name from `friendKeys.invites` by `inviteId`), drop the five subscriptions from `useSharingActivity`, and keep `sharingModel.check.mjs` green (8.5, 10.6). |
+| E7 | R4 follow-up (takes over `src-tauri/src/friends_commands.rs` and `services/friends/service.rs`) | R4 D5 | An account change while the launcher runs (login, logout or removal of the first Microsoft account) does not reach `Friends`, so friends keep the old `mcName`/`mcUuid` until the next start. After a command changes `state.accounts`, recompute `account_profile`, store it in `Friends`, and send `profile` to connected friends when it changed (4.1). |
+
+**Resolved**
+
+| # | Source | Gap | Resolved by | Where now |
+|---|---|---|---|---|
+| E1 | R1 note N3 | The idle timeout was the constant `IDLE_TIMEOUT_MS`, so the crash tests had no seam. | R4 (Wave 2): `NetConfig.idle_timeout` and `NetOptions.idle_timeout`; keep-alive `min(15 s, idle_timeout / 2)` instead of the planned `/ 3`, which would have given 13.3 s in production. | 3.3, 3.7, 8.7, 13.1 R4 |
+| E2 | R1 D16 | The pre-handshake cap of 8 was untested. | R4 (Wave 2): `ninth_handshake_in_flight_gets_no_answer_until_the_first_eight_are_admitted` in `p2p/tests.rs`. | 3.5, 13.1 R4 |
+| E3 | F2 D1 | "Freunde aktivieren" linked to `/settings?tab=freunde`. | F4 (Wave 2): `FriendsGate.tsx` opens `FriendsOptInDialog` on the page. | 10.2 |
+| E4 | F3 D3 | The "Immer über Relay" confirm ignored an active join. | F4 (Wave 2): `FriendsTab.tsx` also reads `useFriendsUi().joinSession` and names the join. | 10.8 |
+| E5 | D1 note N4 | Settings showed only the 16-char fingerprint. | F4 (Wave 2): "Vollständige ID kopieren" copies `FriendsState.me.peerId`. | 10.8 |
