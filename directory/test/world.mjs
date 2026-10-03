@@ -1,15 +1,61 @@
-// Prüfstand des Verzeichnis-Workers: D1 auf SQLite, ein falsches Mojang, aufzeichnende Begrenzungen, eine vorstellbare Uhr
-// und Konten mit echten Ed25519-Schlüsseln (WebCrypto). Kein Netz, kein Cloudflare-Konto.
+// Prüfstand des Verzeichnis-Workers: D1 auf SQLite, aufzeichnende Begrenzungen, eine vorstellbare Uhr und Konten mit
+// echten Ed25519-Schlüsseln (WebCrypto). Player certificates come from a certificate factory with fake Mojang keys
+// (node:crypto RSA); `fetch` records and throws, because the Worker must make no subrequest. Kein Netz, kein Cloudflare-Konto.
+import { createPrivateKey, generateKeyPairSync, sign } from "node:crypto";
+import { readFileSync } from "node:fs";
 import worker from "../src/index.js";
-import { authParts } from "../src/auth.js";
+import { loginParts, setPinnedKeysForTest } from "../src/auth.js";
 import { letterParts } from "../src/letters.js";
-import { concat, fromHex, randomHex, toHex, utf8 } from "../src/util.js";
+import { bigEndian64, concat, fromHex, randomHex, toHex, utf8 } from "../src/util.js";
 import { createD1 } from "./d1.mjs";
 
 export const START = 1_790_000_000;
-const AUTH_DOMAIN = "pumpkin/directory-auth/1";
+export const HOST = "directory.example";
+export const AUTH_DOMAIN = "pumpkin/directory-auth/2";
+export const CERT_DOMAIN = "pumpkin/directory-cert/1";
 const LETTER_DOMAIN = "pumpkin/name-request/1";
+const CERTIFICATE_LIFETIME_MS = 48 * 60 * 60 * 1000;
 const CONSOLE_METHODS = ["log", "info", "warn", "error", "debug"];
+
+/** Fixed test keys and golden vectors shared with the launcher's tests (BYNAME-ATTEST section 2). */
+export const CERT_VECTORS = JSON.parse(readFileSync(new URL("./cert-vectors.json", import.meta.url), "utf8"));
+
+const fixedKey = ({ pkcs8, spki }) => ({ privateKey: createPrivateKey({ key: Buffer.from(pkcs8, "base64"), format: "der", type: "pkcs8" }), spki });
+
+function freshKey() {
+  const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  return { privateKey, spki: publicKey.export({ type: "spki", format: "der" }).toString("base64") };
+}
+
+/** RSA keys by role: fake Mojang keys A and B (pinned), an unpinned one, and certificate keys of players. */
+export const RSA_KEYS = {
+  mojangA: fixedKey(CERT_VECTORS.fakeMojang),
+  mojangB: freshKey(),
+  unpinned: freshKey(),
+  certificate: fixedKey(CERT_VECTORS.certificate),
+  other: fixedKey(CERT_VECTORS.other),
+};
+export const PINNED_TEST_KEYS = [RSA_KEYS.mojangA.spki, RSA_KEYS.mojangB.spki];
+
+export const toBase64 = (bytes) => Buffer.from(bytes).toString("base64");
+/** RSASSA-PKCS1-v1_5 with `hash` ("sha1" like Mojang, "sha256" like the launcher), base64. */
+export const rsaSignature = (hash, data, key) => toBase64(sign(hash, data, key.privateKey));
+
+/** L3, the bytes Mojang signs: uuid (16) || expiresAt (int64 BE) || SPKI. */
+export const mojangPayload = (uuid, expiresAt, spki) => concat([fromHex(uuid), bigEndian64(expiresAt), Buffer.from(spki, "base64")]);
+
+/** A player certificate for `uuid` as the launcher sends it (`wire`), plus the private key it signs L2 with. */
+export function issueCertificate(uuid, { expiresAt, key = RSA_KEYS.certificate, issuer = RSA_KEYS.mojangA }) {
+  const mojangSignature = rsaSignature("sha1", mojangPayload(uuid, expiresAt, key.spki), issuer);
+  return { key, wire: { publicKey: key.spki, expiresAt, mojangSignature } };
+}
+
+/** Every `fetch` the Worker attempted during the whole run (there must be none). */
+export const subrequests = [];
+globalThis.fetch = async (input) => {
+  subrequests.push(String(input?.url ?? input));
+  throw new Error("the directory Worker must not make subrequests");
+};
 
 /** Alle console-Aufrufe, die der Worker während der Anfragen aller Prüfstände gemacht hat (es soll keine geben). */
 export const consoleCalls = [];
@@ -36,32 +82,32 @@ export async function seededIdentity() {
   return createIdentity(privateKey, publicKey);
 }
 
-/** Mojang-Ersatz: `join` merkt sich (Konto, serverId), `hasJoined` antwortet wie Mojang (200 mit Profil oder 204). */
-function createMojang() {
-  const joins = [];
-  const requests = [];
-  let failure = null;
+let accounts = 0;
 
-  const respond = (url) => {
-    if (failure === "timeout") throw new DOMException("timeout", "TimeoutError");
-    if (failure) return new Response("{}", { status: failure });
-    const query = new URL(url).searchParams;
-    const joined = joins.find((entry) => entry.name.toLowerCase() === query.get("username").toLowerCase() && entry.serverId === query.get("serverId"));
-    if (!joined) return new Response(null, { status: 204 });
-    return new Response(JSON.stringify({ id: joined.uuid, name: joined.name, properties: [] }), { status: 200, headers: { "content-type": "application/json" } });
-  };
+/** A Minecraft account with a friends key; `name` only serves as the display name of its letters. */
+export async function createAccount(name = `Spieler${++accounts}`, uuid = randomHex(16)) {
+  return { uuid, name, identity: await randomIdentity(), token: null, tokenExpiresAt: 0 };
+}
 
+const signedLayout = async (domain, { host, serverId, peerId, uuid }) => concat([utf8(domain), ...(await loginParts(host, serverId, peerId, uuid))]);
+
+/**
+ * The A2 body for `account` over an A1 answer. By default everything is genuine; `certificate` replaces the player
+ * certificate, `l1`/`l2` change what the friends key or the certificate key signs, and `sent` replaces fields of the
+ * body after signing, so a test can break exactly one link.
+ */
+export async function signSession({ challenge, serverId, expiresAt }, account, { certificate, l1 = {}, l2 = {}, sent = {} } = {}) {
+  const proven = certificate ?? issueCertificate(account.uuid, { expiresAt: expiresAt * 1000 + CERTIFICATE_LIFETIME_MS });
+  const covered = { host: HOST, serverId, peerId: account.identity.peerId, uuid: sent.uuid ?? account.uuid };
+  const auth = { domain: AUTH_DOMAIN, identity: account.identity, ...covered, ...l1 };
+  const cert = { domain: CERT_DOMAIN, key: proven.key, ...covered, ...l2 };
   return {
-    requests,
-    join: (account, serverId) => joins.push({ uuid: account.uuid, name: account.name, serverId }),
-    /** `null` für normales Verhalten, sonst ein Statuscode oder "timeout". */
-    failWith: (mode) => {
-      failure = mode;
-    },
-    fetch: async (url, init) => {
-      requests.push({ url: String(url), init });
-      return respond(url);
-    },
+    challenge,
+    uuid: account.uuid,
+    certificate: proven.wire,
+    certSignature: rsaSignature("sha256", await signedLayout(cert.domain, cert), cert.key),
+    signature: await auth.identity.sign(auth.domain, await loginParts(auth.host, auth.serverId, auth.peerId, auth.uuid)),
+    ...sent,
   };
 }
 
@@ -82,9 +128,8 @@ function spyOnConsole() {
 }
 
 export async function createWorld() {
+  setPinnedKeysForTest(PINNED_TEST_KEYS);
   const db = createD1();
-  const mojang = createMojang();
-  globalThis.fetch = mojang.fetch;
   const limits = { ip: [], account: [], ipBlocked: false, accountBlocked: false };
   const env = {
     DB: db,
@@ -93,16 +138,15 @@ export async function createWorld() {
     TOKEN_KEY: "test-token-key",
     NOW: START,
   };
-  let accounts = 0;
 
-  /** Eine Anfrage an den Worker. `body` ist ein Objekt (als JSON) oder ein fertiger Text. */
-  async function call(method, path, { body, token, headers = {}, env: overrides = {} } = {}) {
-    const init = { method, headers: { ...headers }, body: typeof body === "object" ? JSON.stringify(body) : body };
+  /** Eine Anfrage an den Worker. `body` ist ein Objekt (als JSON), ein fertiger Text oder ein Stream. */
+  async function call(method, path, { body, token, headers = {}, env: overrides = {}, host = HOST } = {}) {
+    const init = { method, headers: { ...headers }, body: isJson(body) ? JSON.stringify(body) : body, duplex: "half" };
     if (token) init.headers.authorization = `Bearer ${token}`;
     const spy = spyOnConsole();
     let response;
     try {
-      response = await worker.fetch(new Request(`https://directory.example${path}`, init), { ...env, ...overrides });
+      response = await worker.fetch(new Request(`https://${host}${path}`, init), { ...env, ...overrides });
     } finally {
       spy.restore();
       consoleCalls.push(...spy.calls);
@@ -111,20 +155,15 @@ export async function createWorld() {
     return { status: response.status, text, headers: response.headers, json: text ? JSON.parse(text) : null };
   }
 
-  async function newAccount(name = `Spieler${++accounts}`, uuid = randomHex(16)) {
-    return { uuid, name, identity: await randomIdentity(), token: null, tokenExpiresAt: 0 };
+  const challengeFor = async (account) => (await call("POST", "/v2/auth/challenge", { body: { peerId: account.identity.peerId } })).json;
+
+  /** A1 and the signatures of BYNAME-ATTEST 3.2: the body for /v2/auth/session (see `signSession` for `change`). */
+  async function sessionBody(account, change) {
+    return signSession(await challengeFor(account), account, change);
   }
 
-  /** Der Anfangsteil von BYNAME 3.1 bis zum Abschicken: Herausforderung, Mojang-join, Signatur. Gibt den Körper für /v1/auth/session zurück. */
-  async function sessionBody(account, { name = account.name, join = true } = {}) {
-    const { json: challenge } = await call("POST", "/v1/auth/challenge", { body: { peerId: account.identity.peerId } });
-    if (join) mojang.join(account, challenge.serverId);
-    const signature = await account.identity.sign(AUTH_DOMAIN, authParts(challenge.serverId, account.identity.peerId));
-    return { challenge: challenge.challenge, name, signature };
-  }
-
-  async function handshake(account, options) {
-    return call("POST", "/v1/auth/session", { body: await sessionBody(account, options) });
+  async function handshake(account, change) {
+    return call("POST", "/v2/auth/session", { body: await sessionBody(account, change) });
   }
 
   /** Ein gültiges Token des Kontos; es wird wiederverwendet, bis die Uhr seinen Ablauf erreicht. */
@@ -157,7 +196,7 @@ export async function createWorld() {
 
   /** Ein Konto, das auffindbar ist (hat sich registriert). */
   async function findable(name, uuid) {
-    const account = await newAccount(name, uuid);
+    const account = await createAccount(name, uuid);
     await call("PUT", "/v1/me", { token: await tokenOf(account), body: "{}" });
     return account;
   }
@@ -167,11 +206,11 @@ export async function createWorld() {
   return {
     env,
     db,
-    mojang,
     limits,
     call,
     authed,
-    newAccount,
+    newAccount: createAccount,
+    challengeFor,
     sessionBody,
     handshake,
     tokenOf,
@@ -185,3 +224,5 @@ export async function createWorld() {
     count: (table, where = "1 = 1") => db.raw.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE ${where}`).get().n,
   };
 }
+
+const isJson = (body) => body !== null && typeof body === "object" && !(body instanceof ReadableStream);
