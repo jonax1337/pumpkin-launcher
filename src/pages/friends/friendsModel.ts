@@ -1,5 +1,6 @@
 // Reine Logik der Freunde-Seite (kein React), damit friendsModel.check.mjs sie ohne Bundler prüft.
-import type { Friend, FriendRequest, FriendsState, HostSession, Invite } from "../../lib/friends-types.ts";
+import { FRIENDS_LIMITS } from "../../lib/friends-types.ts";
+import type { DirectoryState, Friend, FriendRequest, FriendsState, HostSession, Invite } from "../../lib/friends-types.ts";
 
 /** Warum die Seite statt der Freundesliste einen Hinweis zeigt; die Reihenfolge ist die der Prüfung. */
 export type FriendsGate = "noSecretStore" | "identityLost" | "disabled" | "noMicrosoftAccount";
@@ -68,10 +69,44 @@ export function canInvite(friend: Friend, session: Pick<HostSession, "guests"> |
   return !guest || !holdsSeat(guest.state, guest.kicked);
 }
 
-/** Eine Anfrage, deren Code älter als seine Gültigkeit ist: er ist eventuell abgelaufen (Spezifikation 4.3). */
+/** Eine Anfrage per Code, die älter als die Gültigkeit ihres Codes ist: er ist eventuell abgelaufen (Spezifikation 4.3). Eine per Name hat keinen Code, der ablaufen könnte. */
 export function codeMayBeExpired(request: FriendRequest, codeTtlSecs: number, nowSecs: number): boolean {
-  return nowSecs - request.createdAt > codeTtlSecs;
+  return request.via === "code" && nowSecs - request.createdAt > codeTtlSecs;
 }
+
+/** Übersetzungsschlüssel des Stands einer eigenen Anfrage; je Herkunft (Code oder Name) ein eigener Text. */
+export type RequestLineKey =
+  | "friends.requests.awaiting"
+  | "friends.requests.awaitingName"
+  | "friends.requests.delivering"
+  | "friends.requests.deliveringName";
+
+/** Der Stand einer eigenen Anfrage als Schlüssel mit dem Namen für seinen Platzhalter (Minecraft-Name, sonst Anzeigename). */
+export function requestLine(request: FriendRequest): { key: RequestLineKey; params: { name: string } } {
+  const params = { name: request.mcName ?? request.displayName ?? "?" };
+  const byName = request.via === "name";
+  if (request.state === "delivering") return { key: byName ? "friends.requests.deliveringName" : "friends.requests.delivering", params };
+  return { key: byName ? "friends.requests.awaitingName" : "friends.requests.awaiting", params };
+}
+
+const SECONDS_PER_DAY = 86_400;
+
+/** So lange hält das Verzeichnis eine Anfrage per Name bereit. */
+export const REQUEST_TTL_DAYS = FRIENDS_LIMITS.requestTtlSecs / SECONDS_PER_DAY;
+
+const MC_NAME_PATTERN =new RegExp("^[A-Za-z0-9_]{1," + FRIENDS_LIMITS.mcNameMax + "}$");
+
+/** Ob der Text die Form eines Minecraft-Namens hat; ob es den Spieler gibt, sagt Mojang beim Senden. */
+export const isMcName = (name: string): boolean => MC_NAME_PATTERN.test(name.trim());
+
+/** Die Wege zum Hinzufügen: per Minecraft-Namen, mit dem Code eines Freundes oder den eigenen Code weitergeben. */
+export type AddFriendTab = "name" | "enter" | "mine";
+
+/** Ohne Verzeichnis gibt es keinen Weg per Namen. */
+export const nameTabAvailable = (directory: DirectoryState): boolean => directory !== "unavailable";
+
+/** Der Reiter, auf dem „Freund hinzufügen“ öffnet. */
+export const defaultAddTab = (directory: DirectoryState): AddFriendTab => (nameTabAvailable(directory) ? "name" : "enter");
 
 /** Mehr aktive Codes sind nicht erlaubt; benutzte zählen nicht mehr. */
 export const activeCodeCount = (codes: { used: boolean }[]): number => codes.filter((code) => !code.used).length;
