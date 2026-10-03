@@ -20,6 +20,7 @@ import { BackupsDialog } from "./BackupsDialog";
 import { DatapacksDialog } from "./DatapacksDialog";
 import { GuardedButton, useBusyReason, type SectionProps } from "./guards";
 import { ServersSection } from "./ServersSection";
+import { ShareSection } from "./ShareSection";
 
 /** Spielart einer Welt als Übersetzungsschlüssel; der Text kommt aus dem Wörterbuch. */
 const GAME_MODE_KEYS: Record<NonNullable<World["gameMode"]>, TKey> = {
@@ -41,13 +42,14 @@ const worldLine = (w: World) =>
     relativeTime(w.lastPlayed),
   ].filter(Boolean).join(" · ");
 
-/** Welten und Server einer Instanz: direkt hineinspielen, Welten sichern und wiederherstellen, Serverliste pflegen. */
+/** Welten und Server einer Instanz: direkt hineinspielen, Welten sichern und wiederherstellen, Serverliste pflegen, Welt für Freunde teilen. */
 export function WorldsTab({ instance, onLaunched }: { instance: Instance; onLaunched: () => void }) {
   const play = usePlay();
   const busy = useBusyReason(instance.id);
   const quickPlay = (target: QuickPlay) => void play(instance, onLaunched, target);
   return (
     <div className="max-w-[var(--page-max)] pt-2">
+      <ShareSection instance={instance} busy={busy} />
       <WorldsSection instance={instance} busy={busy} onPlay={quickPlay} />
       <ServersSection instance={instance} busy={busy} onPlay={quickPlay} />
     </div>

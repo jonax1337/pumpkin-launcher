@@ -18,7 +18,7 @@
     "dev": "node scripts/sync-branding.mjs && vite",
     "build": "node scripts/sync-branding.mjs && tsc && vite build",
     "check:branding": "node src/branding/branding.check.mjs",
-    "check:lib": "node src/lib/modrinth.check.mjs && node src/lib/format.check.mjs && node src/lib/errors.check.mjs && node src/lib/routes.check.mjs && node src/lib/image-hosts.check.mjs && node src/lib/serverAddress.check.mjs && node src/lib/contentList.check.mjs && node src/pages/instances/libraryModel.check.mjs && node src/lib/names.check.mjs && node src/pixel/sceneConfig.check.mjs && node src/lib/friendCode.check.mjs && node src/pages/friends/friendsModel.check.mjs && node src/lib/onPlay.check.mjs",
+    "check:lib": "node src/lib/modrinth.check.mjs && node src/lib/format.check.mjs && node src/lib/errors.check.mjs && node src/lib/routes.check.mjs && node src/lib/image-hosts.check.mjs && node src/lib/serverAddress.check.mjs && node src/lib/contentList.check.mjs && node src/pages/instances/libraryModel.check.mjs && node src/lib/names.check.mjs && node src/pixel/sceneConfig.check.mjs && node src/lib/friendCode.check.mjs && node src/pages/friends/friendsModel.check.mjs && node src/lib/onPlay.check.mjs && node src/components/friends/sharingModel.check.mjs",
     "preview": "vite preview",
     "dev:website": "vite --config website/vite.config.mjs",
     "build:website": "vite build --config website/vite.config.mjs",
