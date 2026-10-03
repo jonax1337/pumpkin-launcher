@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type MutationMeta } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import type { FriendsEnableInput, FriendsSettings, FriendsState } from "@/lib/types";
 import { MINUTE } from "@/lib/time";
@@ -61,9 +61,9 @@ export const useFriendsModStatus = (instanceId: string) =>
   useQuery({ queryKey: friendKeys.modStatus(instanceId), queryFn: () => api.friendsModStatus(instanceId) });
 
 /** Änderung an Freunden, Anfragen, Codes oder Sitzungen; danach lädt alles unter `friendKeys.all` neu. */
-function useFriendsChange<V = void, R = unknown>(change: (v: V) => Promise<R>) {
+function useFriendsChange<V = void, R = unknown>(change: (v: V) => Promise<R>, meta?: MutationMeta) {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: change, onSuccess: () => qc.invalidateQueries({ queryKey: friendKeys.all }) });
+  return useMutation({ mutationFn: change, meta, onSuccess: () => qc.invalidateQueries({ queryKey: friendKeys.all }) });
 }
 
 /** Änderung, die den neuen Gesamtstand zurückgibt; er ersetzt den Stand der Abfrage sofort. */
@@ -95,7 +95,8 @@ export const useRevokeFriendCode = () => useFriendsChange(api.friendCodeRevoke);
 
 export const useAddFriend = () => useFriendsChange(api.friendAdd);
 
-export const useAddFriendByName = () => useFriendsChange(api.friendAddByName);
+/** Den Fehler meldet der Dialog selbst: „nicht auffindbar“ steht dort als Hinweis mit Ausweg, nicht als Toast. */
+export const useAddFriendByName = () => useFriendsChange(api.friendAddByName, { ownErrorToast: true });
 
 export const useAnswerFriendRequest = () =>
   useFriendsChange(({ requestId, accept }: { requestId: string; accept: boolean }) => api.friendRequestAnswer(requestId, accept));

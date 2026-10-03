@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import { FRIENDS_FIXTURES as fixtures } from '../../lib/friends-fixtures.ts';
 import {
-  activeCodeCount, canInvite, codeMayBeExpired, friendLabels, friendsBadgeCount, friendsGate, inviteFrom, onlineCount, visibleFriends,
+  activeCodeCount, canInvite, codeMayBeExpired, defaultAddTab, friendLabels, friendsBadgeCount, friendsGate, inviteFrom, isMcName, nameTabAvailable,
+  onlineCount, REQUEST_TTL_DAYS, requestLine, visibleFriends,
 } from './friendsModel.ts';
 
 const friend = (over) => ({ ...fixtures['friend.online'], ...over });
@@ -69,6 +70,31 @@ const ttl = fixtures.constants.codeTtlSecs;
 const request = { ...fixtures['request.delivering'], createdAt: 1_000_000 };
 assert.ok(!codeMayBeExpired(request, ttl, 1_000_000 + ttl));
 assert.ok(codeMayBeExpired(request, ttl, 1_000_000 + ttl + 1));
+const byName = { ...fixtures['request.nameDelivering'], createdAt: 1_000_000 };
+assert.ok(!codeMayBeExpired(byName, ttl, 1_000_000 + ttl * 10), 'eine Anfrage per Name hat keinen Code, der ablaufen könnte');
+
+// Stand eigener Anfragen: je Herkunft ein eigener Text; der Name ist der Minecraft-Name, sonst der Anzeigename.
+const line = (key, name) => ({ key, params: { name } });
+assert.deepEqual(requestLine(fixtures['request.delivering']), line('friends.requests.delivering', '?'));
+assert.deepEqual(requestLine(fixtures['request.awaitingAnswer']), line('friends.requests.awaiting', fixtures['request.awaitingAnswer'].mcName ?? fixtures['request.awaitingAnswer'].displayName ?? '?'));
+assert.deepEqual(requestLine(fixtures['request.nameOutgoing']), line('friends.requests.awaitingName', fixtures['request.nameOutgoing'].mcName));
+assert.deepEqual(requestLine(fixtures['request.nameDelivering']), line('friends.requests.deliveringName', fixtures['request.nameDelivering'].mcName));
+assert.equal(requestLine({ ...fixtures['request.nameDelivering'], mcName: null, displayName: 'Hanna' }).params.name, 'Hanna');
+
+// Das Verzeichnis hält eine Anfrage 14 Tage bereit.
+assert.equal(REQUEST_TTL_DAYS, 14);
+
+// Minecraft-Name: 1 bis 16 Buchstaben, Ziffern, Unterstriche; Leerzeichen am Rand zählen nicht.
+const mcNameMax = fixtures.constants.mcNameMax;
+assert.ok(isMcName('Steve') && isMcName('_a1') && isMcName(' Steve ') && isMcName('x'.repeat(mcNameMax)));
+assert.ok(!isMcName('') && !isMcName('   ') && !isMcName('x'.repeat(mcNameMax + 1)));
+assert.ok(!isMcName('Ste ve') && !isMcName('Steve!') && !isMcName('Stève') && !isMcName('a-b'));
+
+// Reiter „Freund hinzufügen“: Name zuerst; ohne Verzeichnis entfällt er.
+assert.deepEqual(['unavailable', 'off', 'active', 'unreachable', 'notAllowed'].map(nameTabAvailable), [false, true, true, true, true]);
+assert.equal(defaultAddTab('active'), 'name');
+assert.equal(defaultAddTab('off'), 'name');
+assert.equal(defaultAddTab('unavailable'), 'enter');
 
 // Aktive Codes: benutzte zählen nicht zum Limit.
 assert.equal(activeCodeCount([{ used: false }, { used: true }, { used: false }]), 2);

@@ -3,6 +3,7 @@ import { useFriendsState } from "@/hooks/useFriends";
 import { useI18n, type TKey } from "@/i18n";
 import { TRUSTED_IMAGE_HOSTS } from "@/lib/image-hosts";
 import type { RelayInfo } from "@/lib/types";
+import { REQUEST_TTL_DAYS } from "@/pages/friends/friendsModel";
 
 interface Service {
   name: string;
@@ -42,6 +43,8 @@ const SERVICES: readonly Service[] = [
 /** Hier fragt der Launcher (nicht die Oberfläche) die Skins der Freunde ab. */
 const FRIEND_SKIN_HOST = "sessionserver.mojang.com";
 
+/** Hier löst der Launcher einen Minecraft-Namen beim Senden einer Anfrage per Name in die UUID auf. */
+const NAME_LOOKUP_HOST = "api.minecraftservices.com";
 export const RELAY_OPERATOR_KEYS: Record<RelayInfo["operator"], TKey> = {
   pumpkin: "friendsSettings.operator.pumpkin",
   n0: "friendsSettings.operator.n0",
@@ -63,10 +66,13 @@ function ServiceRow({ label, purpose, hosts }: { label: string; purpose: string;
   );
 }
 
-/** Die Dienste der Freunde: Relay-Server je Betreiber (aus dem Backend) und der Sessionserver für Skins. */
+/** Die Dienste der Freunde: Relay-Server je Betreiber (aus dem Backend), der Sessionserver für Skins und Kontonachweis, bei einem Verzeichnis dieses und die Namenssuche. */
 function FriendsServices() {
   const { t } = useI18n();
-  const relays = useFriendsState().data?.relays ?? [];
+  const state = useFriendsState().data;
+  const relays = state?.relays ?? [];
+  const directoryHost = state?.directory.host;
+  const sessionserverPurpose = t("friendsSettings.privacy.sessionserver") + (directoryHost ? ` ${t("friendsSettings.privacy.sessionserverProof")}` : "");
   return (
     <>
       {hostsByOperator(relays).map(([operator, hosts]) => (
@@ -77,7 +83,15 @@ function FriendsServices() {
           hosts={hosts}
         />
       ))}
-      <ServiceRow label={t("friendsSettings.privacy.sessionserverName")} purpose={t("friendsSettings.privacy.sessionserver")} hosts={[FRIEND_SKIN_HOST]} />
+      {directoryHost && (
+        <ServiceRow
+          label={t("friendsSettings.privacy.directoryName")}
+          purpose={t("friendsSettings.privacy.directory", { days: REQUEST_TTL_DAYS })}
+          hosts={[directoryHost]}
+        />
+      )}
+      <ServiceRow label={t("friendsSettings.privacy.sessionserverName")} purpose={sessionserverPurpose} hosts={[FRIEND_SKIN_HOST]} />
+      {directoryHost && <ServiceRow label={t("friendsSettings.privacy.nameLookupName")} purpose={t("friendsSettings.privacy.nameLookup")} hosts={[NAME_LOOKUP_HOST]} />}
     </>
   );
 }

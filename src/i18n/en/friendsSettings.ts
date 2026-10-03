@@ -35,6 +35,14 @@ export const friendsSettings: typeof deFriendsSettings = {
   "friendsSettings.relayConfirmJoinUnnamed": "Your connection to a shared world will end.",
   "friendsSettings.relayConfirmButton": "Switch",
 
+  // Findable by Minecraft name
+  "friendsSettings.findable.label": "Findable by Minecraft name",
+  "friendsSettings.findable.hint": "Anyone who knows your Minecraft name can send you requests",
+  "friendsSettings.findable.aside": "For that, the Pumpkin directory stores only your Minecraft UUID while this is on; off = deleted at once.",
+  "friendsSettings.findable.active": "Findable as {name}",
+  "friendsSettings.findable.unreachable": "Directory unreachable; trying again",
+  "friendsSettings.findable.notAllowed": "Mojang doesn't allow multiplayer features for this account",
+
   // Fingerprint
   "friendsSettings.fingerprintLabel": "My fingerprint",
   "friendsSettings.fingerprintHint": "Tied permanently to your key",
@@ -73,13 +81,14 @@ export const friendsSettings: typeof deFriendsSettings = {
 
   // Opt-in
   "friendsSettings.optIn.title": "Turn on Friends",
-  "friendsSettings.optIn.codes": "Friends only through codes you exchange yourselves. Whoever has your code can send you a request; that does not show them your IP address.",
+  "friendsSettings.optIn.codes": "Friends through codes you exchange yourselves, or by Minecraft name if the other person allows it. Whoever sends you a request does not see your IP address that way.",
   "friendsSettings.optIn.addresses": "Encrypted connections between launchers. On a direct connection your friends see your public IP address and the addresses of your networks (home network, VPN). So does anyone who redeems your code, or whose code you redeem, as long as “Always relay” is off. “Always relay” prevents that.",
   "friendsSettings.optIn.relays": "Relay servers: {relays}. They forward encrypted data and see who is connected to whom, but never any content.",
   "friendsSettings.optIn.presence": "Friends see whether you are online or playing, and your Minecraft name with your skin (as stated by you).",
-  "friendsSettings.optIn.noTracking": "No chat, no tracking, no public lists. You can turn it off at any time.",
+  "friendsSettings.optIn.noTracking": "No chat, no tracking, no public lists; the search by name only finds exact names of people who turned it on. You can turn it off at any time.",
   "friendsSettings.optIn.nameLabel": "Display name",
   "friendsSettings.optIn.alwaysRelay": "Always connect through a relay",
+  "friendsSettings.optIn.findable": "Be findable by Minecraft name",
   "friendsSettings.optIn.thirdParty": "I agree that {operator} ({hosts}) is used as a relay",
   "friendsSettings.optIn.understood": "Understood",
   "friendsSettings.optIn.firewall": "Windows may ask for a firewall permission (UDP). Allowing it on private networks makes direct connections work better.",
@@ -95,6 +104,11 @@ export const friendsSettings: typeof deFriendsSettings = {
   "friendsSettings.privacy.relay": "Friends: encrypted forwarding, no content. Only if you turn Friends on.",
   "friendsSettings.privacy.sessionserverName": "Mojang (Friends)",
   "friendsSettings.privacy.sessionserver": "Your friends’ skins: the launcher fetches them by player UUID from the session server and stores them locally. The interface itself never contacts Mojang. Only if you turn Friends on.",
+  "friendsSettings.privacy.sessionserverProof": "Account proof for the directory and when accepting.",
+  "friendsSettings.privacy.directoryName": "Friends directory",
+  "friendsSettings.privacy.directory": "Only if you are findable by name or write to someone by name: Minecraft UUID, requests for up to {days} days",
+  "friendsSettings.privacy.nameLookupName": "Minecraft name lookup",
+  "friendsSettings.privacy.nameLookup": "Name → UUID, only when sending by name",
 
   // Settings > Java & Start
   "friendsSettings.onPlayAside": "With Friends turned on, the launcher is only minimized.",

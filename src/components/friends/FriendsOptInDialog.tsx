@@ -49,6 +49,7 @@ function OptInDialog({ state, onClose }: { state: FriendsState; onClose: () => v
   const [displayName, setDisplayName] = useState(state.settings.displayName);
   const [dirty, setDirty] = useState(false);
   const [alwaysRelay, setAlwaysRelay] = useState(false);
+  const [findableByName, setFindableByName] = useState(false);
   const [acceptedThirdParty, setAcceptedThirdParty] = useState(false);
   const [understood, setUnderstood] = useState(false);
 
@@ -61,7 +62,7 @@ function OptInDialog({ state, onClose }: { state: FriendsState; onClose: () => v
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!ready) return;
-    enable.mutate({ displayName: name, alwaysRelay, acceptThirdPartyRelays: acceptedThirdParty, findableByName: false }, { onSuccess: onClose });
+    enable.mutate({ displayName: name, alwaysRelay, acceptThirdPartyRelays: acceptedThirdParty, findableByName }, { onSuccess: onClose });
   }
 
   return (
@@ -94,6 +95,9 @@ function OptInDialog({ state, onClose }: { state: FriendsState; onClose: () => v
           <TextField value={displayName} onChange={(e) => setDisplayName(e.target.value)} onBlur={() => setDirty(true)} />
         </Field>
         <Checkbox checked={alwaysRelay} onChange={setAlwaysRelay}>{t("friendsSettings.optIn.alwaysRelay")}</Checkbox>
+        {state.directory.state !== "unavailable" && (
+          <Checkbox checked={findableByName} onChange={setFindableByName}>{t("friendsSettings.optIn.findable")}</Checkbox>
+        )}
         {thirdPartyRelays.length > 0 && <ThirdPartyConsent relays={thirdPartyRelays} checked={acceptedThirdParty} onChange={setAcceptedThirdParty} />}
         <Checkbox checked={understood} onChange={setUnderstood}>{t("friendsSettings.optIn.understood")}</Checkbox>
         <Hint icon="info">{t("friendsSettings.optIn.firewall")}</Hint>

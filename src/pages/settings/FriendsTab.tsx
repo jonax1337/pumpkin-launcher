@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { type UseMutationResult } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useAllAccounts } from "@/components/accounts/useAccounts";
 import { FriendsOptInDialog } from "@/components/friends/FriendsOptInDialog";
 import { QueryList } from "@/components/QueryList";
 import { useCommitOnUnmount } from "@/hooks/useCommitOnUnmount";
@@ -13,7 +14,7 @@ import { useI18n } from "@/i18n";
 import { copyWithToast } from "@/lib/clipboard";
 import { blurOnEnter } from "@/lib/dom";
 import { formatDate } from "@/lib/format";
-import { FRIENDS_LIMITS, type FriendsSettings, type FriendsState, type Me, type NetworkStatus } from "@/lib/types";
+import { FRIENDS_LIMITS, type DirectoryStatus, type FriendsSettings, type FriendsState, type Me, type NetworkStatus } from "@/lib/types";
 import { useFriendsUi } from "@/store/friendsUi";
 import { Actions, Button, ConfirmDialog, Count, ErrorBox, FormRow, FormSection, Hint, List, ListRow, RowTitle, Skel, StatusPanel, Switch, TextField, type IconName } from "@/ui";
 
@@ -67,6 +68,40 @@ function DisplayNameRow({ settings }: { settings: FriendsSettings }) {
         aria-invalid={invalid || undefined}
       />
       {invalid && <Hint tone="bad" live>{t("errors.friends.displayNameInvalid", limits)}</Hint>}
+    </FormRow>
+  );
+}
+
+/** Wie es um die Eintragung im Verzeichnis steht; bei „aus“ und „nicht eingebunden“ gibt es nichts zu melden. */
+function FindableStatus({ directory, name }: { directory: DirectoryStatus; name: string | undefined }) {
+  const { t } = useI18n();
+  switch (directory.state) {
+    case "active":
+      return name ? <Hint tone="ok">{t("friendsSettings.findable.active", { name })}</Hint> : null;
+    case "unreachable":
+      return <Hint tone="warn" live>{t("friendsSettings.findable.unreachable")}</Hint>;
+    case "notAllowed":
+      return <Hint tone="warn" live>{t("friendsSettings.findable.notAllowed")}</Hint>;
+    default:
+      return null;
+  }
+}
+
+/** „Per Minecraft-Namen auffindbar“: trägt die Minecraft-UUID im Verzeichnis ein oder löscht sie dort. Der Stand folgt asynchron (`friends-changed`). */
+function FindableRow({ settings, directory }: { settings: FriendsSettings; directory: DirectoryStatus }) {
+  const { t } = useI18n();
+  const update = useUpdateFriendsSettings();
+  const minecraftName = useAllAccounts().accounts.find((account) => account.kind === "microsoft")?.username;
+  return (
+    <FormRow label={t("friendsSettings.findable.label")} hint={t("friendsSettings.findable.hint")} aside={t("friendsSettings.findable.aside")}>
+      <Switch
+        label={t("friendsSettings.findable.label")}
+        checked={settings.findableByName}
+        disabled={update.isPending}
+        onChange={(findableByName) => update.mutate({ ...settings, findableByName })}
+        stateText={[t("ui.switch.on"), t("ui.switch.off")]}
+      />
+      {settings.findableByName && <FindableStatus directory={directory} name={minecraftName} />}
     </FormRow>
   );
 }
@@ -254,6 +289,7 @@ function AvailableSettings({ state }: { state: FriendsState }) {
           <>
             <DisplayNameRow settings={state.settings} />
             <AlwaysRelayRow settings={state.settings} />
+            {state.directory.state !== "unavailable" && <FindableRow settings={state.settings} directory={state.directory} />}
             {state.me && <FingerprintRow me={state.me} />}
             <NetworkRow network={state.network} />
           </>

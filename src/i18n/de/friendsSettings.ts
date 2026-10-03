@@ -35,6 +35,14 @@ export const friendsSettings = {
   "friendsSettings.relayConfirmJoinUnnamed": "Dein Beitritt zu einer geteilten Welt wird dabei beendet.",
   "friendsSettings.relayConfirmButton": "Umschalten",
 
+  // Per Minecraft-Namen auffindbar
+  "friendsSettings.findable.label": "Per Minecraft-Namen auffindbar",
+  "friendsSettings.findable.hint": "Wer deinen Minecraft-Namen kennt, kann dir Anfragen schicken",
+  "friendsSettings.findable.aside": "Das Pumpkin-Verzeichnis speichert dafür nur deine Minecraft-UUID, solange das an ist; aus = sofort gelöscht.",
+  "friendsSettings.findable.active": "Auffindbar als {name}",
+  "friendsSettings.findable.unreachable": "Verzeichnis nicht erreichbar; neuer Versuch läuft",
+  "friendsSettings.findable.notAllowed": "Mojang erlaubt diesem Konto keine Mehrspieler-Funktionen",
+
   // Fingerabdruck
   "friendsSettings.fingerprintLabel": "Mein Fingerabdruck",
   "friendsSettings.fingerprintHint": "Gehört fest zu deinem Schlüssel",
@@ -73,13 +81,14 @@ export const friendsSettings = {
 
   // Opt-in
   "friendsSettings.optIn.title": "Freunde aktivieren",
-  "friendsSettings.optIn.codes": "Freunde nur über Codes, die ihr selbst austauscht. Wer deinen Code hat, kann dir eine Anfrage schicken; deine IP-Adresse sieht er dadurch nicht.",
+  "friendsSettings.optIn.codes": "Freunde über Codes, die ihr selbst austauscht, oder per Minecraft-Name, wenn die andere Person das erlaubt. Wer dir eine Anfrage schickt, sieht deine IP-Adresse dadurch nicht.",
   "friendsSettings.optIn.addresses": "Verschlüsselte Verbindungen zwischen den Launchern. Bei einer direkten Verbindung sehen deine Freunde deine öffentliche IP-Adresse und die Adressen deiner Netzwerke (Heimnetz, VPN). Auch wer deinen Code einlöst oder dessen Code du einlöst, kann deine Adressen sehen, solange „Immer über Relay“ aus ist. „Immer über Relay“ verhindert das.",
   "friendsSettings.optIn.relays": "Relay-Server: {relays}. Sie leiten verschlüsselte Daten weiter und sehen, wer mit wem verbunden ist, aber keine Inhalte.",
   "friendsSettings.optIn.presence": "Freunde sehen, ob du online bist oder spielst, und deinen Minecraft-Namen samt Skin (von dir selbst angegeben).",
-  "friendsSettings.optIn.noTracking": "Kein Chat, kein Tracking, keine öffentlichen Listen. Jederzeit abschaltbar.",
+  "friendsSettings.optIn.noTracking": "Kein Chat, kein Tracking, keine öffentlichen Listen; die Suche per Name findet nur genaue Namen von Leuten, die das eingeschaltet haben. Jederzeit abschaltbar.",
   "friendsSettings.optIn.nameLabel": "Anzeigename",
   "friendsSettings.optIn.alwaysRelay": "Immer über Relay verbinden",
+  "friendsSettings.optIn.findable": "Per Minecraft-Namen auffindbar sein",
   "friendsSettings.optIn.thirdParty": "Ich bin einverstanden, dass {operator} ({hosts}) als Relay genutzt wird",
   "friendsSettings.optIn.understood": "Verstanden",
   "friendsSettings.optIn.firewall": "Windows fragt eventuell nach einer Firewall-Freigabe (UDP). Erlaubst du sie in privaten Netzwerken, klappen direkte Verbindungen besser.",
@@ -95,6 +104,11 @@ export const friendsSettings = {
   "friendsSettings.privacy.relay": "Freunde: verschlüsselte Weiterleitung, keine Inhalte. Nur, wenn du Freunde einschaltest.",
   "friendsSettings.privacy.sessionserverName": "Mojang (Freunde)",
   "friendsSettings.privacy.sessionserver": "Skins deiner Freunde: Der Launcher holt sie mit der Spieler-UUID vom Sessionserver und speichert sie lokal. Die Oberfläche selbst fragt Mojang nie. Nur, wenn du Freunde einschaltest.",
+  "friendsSettings.privacy.sessionserverProof": "Kontonachweis für das Verzeichnis und beim Annehmen.",
+  "friendsSettings.privacy.directoryName": "Freunde-Verzeichnis",
+  "friendsSettings.privacy.directory": "Nur wenn du per Name auffindbar bist oder jemandem per Name schreibst: Minecraft-UUID, Anfragen bis {days} Tage",
+  "friendsSettings.privacy.nameLookupName": "Minecraft-Namenssuche",
+  "friendsSettings.privacy.nameLookup": "Name → UUID, nur beim Senden per Name",
 
   // Einstellungen › Java & Start
   "friendsSettings.onPlayAside": "Mit aktivierten Freunden wird der Launcher nur minimiert.",

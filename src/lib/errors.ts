@@ -5,22 +5,27 @@ import { errors } from "../i18n/de/errors.ts";
 /** Stabiler Schlüssel, mit dem das Backend den Abbruch durch den Nutzer meldet (`AppError::code`). */
 const CANCELLED_CODE = "cancelled";
 
+/** Fehlercode des Backends (`coded!`); jeder hat eine deutsche und eine englische Übersetzung. */
+export type ErrorKey = keyof typeof errors;
+
+type BackendErrorOptions = ErrorOptions & { key?: ErrorKey };
+
 /**
  * Fehler eines Backend-Aufrufs: `message` ist der Text für den Nutzer, `code` die Fehlerart des Backends
- * (`AppError::code`). Fehler von Plugins und Browser-Mock haben keinen Code oder ihren eigenen.
+ * (`AppError::code`), `key` der Fehlercode der Meldung (`coded!`), an dem die Oberfläche einen einzelnen Fall erkennt.
+ * Fehler von Plugins und Browser-Mock haben keinen Code oder ihren eigenen.
  */
 export class BackendError extends Error {
   readonly code: string | null;
+  readonly key: ErrorKey | null;
 
-  constructor(message: string, code: string | null = null, options?: ErrorOptions) {
+  constructor(message: string, code: string | null = null, { key, ...options }: BackendErrorOptions = {}) {
     super(message, options);
     this.name = "BackendError";
     this.code = code;
+    this.key = key ?? null;
   }
 }
-
-/** Fehlercode des Backends (`coded!`); jeder hat eine deutsche und eine englische Übersetzung. */
-export type ErrorKey = keyof typeof errors;
 
 /** Meldung als Fehlercode, wie das Backend sie neben `message` schickt (`ErrorText`); Details roh oder selbst codiert. */
 interface CodedText {
@@ -60,7 +65,8 @@ export function errorMessage(err: unknown): string {
 const codeOf = (err: unknown) => (isObject(err) && typeof err.code === "string" ? err.code : null);
 
 /** Macht aus dem, was ein Tauri-Aufruf zurückweist (`{ code, message }` des Backends, string oder Plugin-Objekt), einen `BackendError`; die Ursache bleibt in `cause`. */
-export const toBackendError = (err: unknown) => new BackendError(errorMessage(err), codeOf(err), { cause: err });
+export const toBackendError = (err: unknown) =>
+  new BackendError(errorMessage(err), codeOf(err), { cause: err, key: isCodedText(err) ? err.key : undefined });
 
 /** Die Meldung des Abbruchs durch den Nutzer, wie das Backend sie liefert (für den Browser-Mock). */
 export const cancelledError = () => new BackendError(t("errors.cancelled"), CANCELLED_CODE);

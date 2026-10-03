@@ -1,11 +1,12 @@
 import { useEffect } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { t } from "@/i18n/core";
+import { t, type TKey } from "@/i18n/core";
 import { api } from "@/lib/api";
 import { ACTION_TOAST_MS } from "@/lib/toast";
 import type {
-  Friend, FriendPresenceEvent, FriendsState, HostSession, Invite, InviteRevokedEvent, JoinSessionEvent, LanEvent, NetworkStatus,
+  Friend, FriendPresenceEvent, FriendRequest, FriendRequestRefusedEvent, FriendsState, HostSession, Invite, InviteRevokedEvent,
+  JoinSessionEvent, LanEvent, NetworkStatus, RequestRefusal,
 } from "@/lib/types";
 import { requestInviteDialog } from "@/pages/friends/inviteRequest";
 import { applyJoinSession, dropInviteDialog, queueFriendDialog, queueModConfirm } from "@/store/friendsUi";
@@ -62,6 +63,27 @@ function onJoinSession(event: JoinSessionEvent) {
 
 const withLan = ({ lan }: LanEvent) => () => lan;
 
+const withoutRequest = (requestId: string) => (requests: FriendRequest[] | undefined) =>
+  requests?.filter((request) => request.id !== requestId);
+
+/** Warum der Besitzer des Codes eine eigene Anfrage endgültig abgelehnt hat; die Texte sind die der Fehlermeldungen beim Einlösen. */
+const REFUSAL_REASONS: Record<RequestRefusal, TKey> = {
+  codeUsed: "errors.friends.codeUsed",
+  alreadyFriends: "errors.friends.alreadyFriends",
+  unsupported: "errors.friends.protocolUnsupported",
+};
+
+/** Die Gegenseite der Anfrage: der Minecraft-Name, bei einem Code seine letzten Zeichen. */
+const requestTarget = ({ mcName, codeTail }: FriendRequest) =>
+  mcName ?? (codeTail ? t("friends.requests.codeTitle", { tail: codeTail }) : t("friends.requests.codeTitleNoTail"));
+
+/** Die Anfrage ist im Backend schon gelöscht: sie verschwindet sofort aus der Liste, und ein Toast sagt, woran sie scheiterte. */
+function onRequestRefused(qc: QueryClient, { request, reason }: FriendRequestRefusedEvent) {
+  qc.setQueryData(friendKeys.requests, withoutRequest(request.id));
+  void qc.invalidateQueries({ queryKey: friendKeys.requests });
+  toast.warning(t("friends.requests.refused", { target: requestTarget(request), reason: t(REFUSAL_REASONS[reason]) }));
+}
+
 /**
  * Hält alles aktuell, was Freunde im Backend ändern, auf jeder Seite: `friends-changed` lädt die Freunde-Abfragen neu,
  * Anwesenheit, Netzstatus, Einladungen, geteilte Welt und LAN-Port ändern nur den einen Wert im Zwischenspeicher.
@@ -73,6 +95,7 @@ export function useFriendEvents() {
     const subs = [
       api.onFriendsChanged(() => void qc.invalidateQueries({ queryKey: friendKeys.all })),
       api.onFriendRequest(() => void qc.invalidateQueries({ queryKey: friendKeys.requests })),
+      api.onFriendRequestRefused((event) => onRequestRefused(qc, event)),
       api.onFriendPresence((event) => qc.setQueryData(friendKeys.list, withPresence(event))),
       api.onFriendsNetwork((network) => qc.setQueryData(friendKeys.state, withNetwork(network))),
       api.onFriendInvite(({ invite }) => onInvite(qc, invite)),

@@ -1,6 +1,7 @@
 // Nur im Browser-Dev-Modus dynamisch geladen (siehe api.ts); im Release-Build nicht enthalten.
 import { t } from "@/i18n";
 import type { Backend } from "./backend";
+import { BackendError } from "./errors";
 import { normalizeFriendCode } from "./friendCode";
 import { FRIENDS_LIMITS } from "./friends-types";
 import { clone, newId, wait, type MockContext } from "./mock-util";
@@ -409,7 +410,9 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
       case "unreachable": throw new Error(t("mock.friends.directoryUnavailable"));
       case "notAllowed": throw new Error(t("mock.friends.directoryNotAllowed"));
     }
-    if (sameName(name, MOCK_HIDDEN_NAME)) throw new Error(t("mock.friends.nameNotFindable", { name }));
+    if (sameName(name, MOCK_HIDDEN_NAME)) {
+      throw new BackendError(t("mock.friends.nameNotFindable", { name }), "invalid", { key: "errors.friends.nameNotFindable" });
+    }
     if (sameName(name, MOCK_COOLDOWN_NAME)) throw new Error(t("mock.friends.nameCooldown", { name, days: FRIENDS_LIMITS.nameCooldownDays }));
   }
 
