@@ -125,7 +125,7 @@
 .vx-bar[data-activity] > .vx-bc { top: -3px; }
 .vx-bar-badge { position: absolute; right: 4px; top: 50%; margin-top: -9px; min-width: 18px; height: 18px; padding: 0 3px; display: grid; place-items: center; background: var(--copper); color: var(--ink); font: 400 16px/1 var(--f-px); clip-path: var(--n1); visibility: hidden; }
 .vx-bar-meter.vx-prog { position: absolute; left: 9px; bottom: 4px; width: 22px; height: var(--px); visibility: hidden; }
-.vx-bar[data-activity="busy"] :is(.vx-bar-badge, .vx-bar-meter) { visibility: visible; }
+.vx-bar[data-activity="busy"] :is(.vx-bar-badge, .vx-bar-meter), .vx-bar-badge[data-always] { visibility: visible; }
 /* Seitenleiste (side): 44 px quadratisch, nur Symbol; Kupferstrich senkrecht am linken Rand der Platte.
    Aufgaben darin: Symbol mittig, Zähler als Plakette an der oberen rechten Ecke, Balken unter dem Symbol. */
 .vx-bar[data-side] { width: 44px; height: 44px; min-width: 0; padding: 0; }
