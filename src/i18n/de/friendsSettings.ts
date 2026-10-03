@@ -29,13 +29,18 @@ export const friendsSettings = {
   "friendsSettings.relayHint": "Freunde sehen deine IP-Adressen nicht. Etwas höhere Latenz.",
   "friendsSettings.relayAside": "Der Relay-Betreiber sieht, wer mit wem verbunden ist, aber keine Inhalte.",
   "friendsSettings.relayConfirmTitle": "Verbindung neu aufbauen?",
-  "friendsSettings.relayConfirmText": "Beim Umschalten baut der Launcher die Verbindung neu auf. Die geteilte Welt, die gerade läuft, wird dabei beendet.",
+  "friendsSettings.relayConfirmText": "Beim Umschalten baut der Launcher die Verbindung neu auf.",
+  "friendsSettings.relayConfirmHosting": "Die geteilte Welt, die gerade läuft, wird dabei beendet.",
+  "friendsSettings.relayConfirmJoin": "Dein Beitritt zur Welt von {name} wird dabei beendet.",
+  "friendsSettings.relayConfirmJoinUnnamed": "Dein Beitritt zu einer geteilten Welt wird dabei beendet.",
   "friendsSettings.relayConfirmButton": "Umschalten",
 
   // Fingerabdruck
   "friendsSettings.fingerprintLabel": "Mein Fingerabdruck",
   "friendsSettings.fingerprintHint": "Gehört fest zu deinem Schlüssel",
-  "friendsSettings.fingerprintAside": "Namen gibst du selbst an, den Fingerabdruck nicht. Bei Zweifeln können Freunde ihn mit deinem vergleichen.",
+  "friendsSettings.fingerprintAside": "Namen gibst du selbst an, den Fingerabdruck nicht. Bei Zweifeln können Freunde ihn mit deinem vergleichen. Für eine Meldung an den Relay-Betreiber kopierst du die vollständige ID.",
+  "friendsSettings.copyPeerId": "Vollständige ID kopieren",
+  "friendsSettings.peerIdCopied": "ID kopiert",
 
   // Netzwerk
   "friendsSettings.networkLabel": "Netzwerk",

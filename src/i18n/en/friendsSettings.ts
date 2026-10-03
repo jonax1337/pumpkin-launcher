@@ -29,13 +29,18 @@ export const friendsSettings: typeof deFriendsSettings = {
   "friendsSettings.relayHint": "Friends do not see your IP addresses. Slightly higher latency.",
   "friendsSettings.relayAside": "The relay operator sees who is connected to whom, but never any content.",
   "friendsSettings.relayConfirmTitle": "Reconnect?",
-  "friendsSettings.relayConfirmText": "Switching this makes the launcher reconnect. The world you are sharing right now will end.",
+  "friendsSettings.relayConfirmText": "Switching this makes the launcher reconnect.",
+  "friendsSettings.relayConfirmHosting": "The world you are sharing right now will end.",
+  "friendsSettings.relayConfirmJoin": "Your connection to {name}'s world will end.",
+  "friendsSettings.relayConfirmJoinUnnamed": "Your connection to a shared world will end.",
   "friendsSettings.relayConfirmButton": "Switch",
 
   // Fingerprint
   "friendsSettings.fingerprintLabel": "My fingerprint",
   "friendsSettings.fingerprintHint": "Tied permanently to your key",
-  "friendsSettings.fingerprintAside": "You choose your name yourself, but not your fingerprint. If in doubt, friends can compare it with yours.",
+  "friendsSettings.fingerprintAside": "You choose your name yourself, but not your fingerprint. If in doubt, friends can compare it with yours. For a report to the relay operator, copy the full ID.",
+  "friendsSettings.copyPeerId": "Copy full ID",
+  "friendsSettings.peerIdCopied": "ID copied",
 
   // Network
   "friendsSettings.networkLabel": "Network",

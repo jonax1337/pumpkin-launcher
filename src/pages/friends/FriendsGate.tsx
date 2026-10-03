@@ -1,12 +1,10 @@
 import { useState } from "react";
+import { FriendsOptInDialog } from "@/components/friends/FriendsOptInDialog";
 import { useResetFriends } from "@/hooks/useFriends";
 import { useI18n } from "@/i18n";
 import { startMsLogin } from "@/store/accountUi";
-import { Button, ButtonLink, ConfirmDialog, Empty, StatusPanel } from "@/ui";
+import { Button, ConfirmDialog, Empty, StatusPanel } from "@/ui";
 import type { FriendsGate as Gate } from "./friendsModel";
-
-/** Wohin „Freunde aktivieren“ führt: der Reiter „Freunde“ der Einstellungen, der den Einwilligungsdialog öffnet. */
-export const FRIENDS_SETTINGS_URL = "/settings?tab=freunde";
 
 /** Was die Seite statt der Freundesliste zeigt, solange Freunde nicht nutzbar sind. */
 export function FriendsGate({ gate }: { gate: Gate }) {
@@ -17,15 +15,7 @@ export function FriendsGate({ gate }: { gate: Gate }) {
     case "identityLost":
       return <IdentityLost />;
     case "disabled":
-      return (
-        <Empty
-          size="page"
-          title={t("friends.gate.disabled.title")}
-          actions={<ButtonLink to={FRIENDS_SETTINGS_URL} variant="primary" icon="users">{t("friends.gate.disabled.action")}</ButtonLink>}
-        >
-          {t("friends.gate.disabled.body")}
-        </Empty>
-      );
+      return <Disabled />;
     case "noMicrosoftAccount":
       return (
         <StatusPanel
@@ -38,6 +28,24 @@ export function FriendsGate({ gate }: { gate: Gate }) {
         </StatusPanel>
       );
   }
+}
+
+/** Freunde sind aus: „Freunde aktivieren“ öffnet den Einwilligungsdialog gleich auf der Seite. */
+function Disabled() {
+  const { t } = useI18n();
+  const [optingIn, setOptingIn] = useState(false);
+  return (
+    <>
+      <Empty
+        size="page"
+        title={t("friends.gate.disabled.title")}
+        actions={<Button variant="primary" icon="users" onClick={() => setOptingIn(true)}>{t("friends.gate.disabled.action")}</Button>}
+      >
+        {t("friends.gate.disabled.body")}
+      </Empty>
+      {optingIn && <FriendsOptInDialog onClose={() => setOptingIn(false)} />}
+    </>
+  );
 }
 
 /** Der Schlüssel fehlt, die Daten sind noch da: es hilft nur ein Neuanfang, und der löscht alles. */
