@@ -118,7 +118,8 @@ fn start(dirs: &Dirs, game: &InstalledGame, instance_id: &str, username: &str) -
         // Ohne Empfänger wartet `main` nicht mehr: dann ist nichts zu melden.
         exit_tx.send(code).ok();
     };
-    let running = launch::spawn(&game.java, &args, &dirs.game_dir(instance_id), |stream, line| println!("[{stream:?}] {line}"), on_exit)?;
+    let game_dir = dirs.game_dir(instance_id);
+    let running = launch::spawn(&game.java, &args, &game_dir, &[], |stream, line| println!("[{stream:?}] {line}"), |_| {}, on_exit)?;
     Ok((running, exit_rx))
 }
 
