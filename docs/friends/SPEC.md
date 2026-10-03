@@ -14,6 +14,8 @@
 
 **Change rule.** Sections 3-9 and Appendix A are the contract. A change to them is made in `docs/friends/SPEC.md` first, in the same PR as the code.
 
+**Addendum.** `docs/friends/BYNAME.md` ("N") extends this spec with adding friends by Minecraft name (directory Worker, mailbox, Mojang proof). Its contract parts (N 9.2-9.6) are merged into the sections below; the rest of the addendum stays normative there. Section numbers like "N 7.4" point into that file.
+
 **Conventions.**
 - Rust doc comments and `tracing` texts are German, identifiers English (CONTRIBUTING.md). Clean-code rules apply (load the `clean-code` skill).
 - Contract serde rules: see 8.1. All user-facing backend errors are `AppError::invalid(coded!("errors.friends.*"))` and are only ever returned from commands. They are never inside an event or a state payload.
@@ -52,7 +54,7 @@
 
 ### 1.2 Non-goals (v1)
 - Chat, voice, activity feed, activity sharing, appear offline.
-- Public links, adding by bare id, discovery, deep links.
+- Public links, adding by bare id, discovery beyond the exact Minecraft name of a player who opted in (N), deep links.
 - Building or changing an instance from a friend's manifest (v1.1). Transferring any file between peers.
 - Quilt, Forge or NeoForge mod builds, and a mod for any MC version other than 26.3.
 - In-game join from the mod. The mod points the player to the launcher.
@@ -271,6 +273,7 @@ control hello from A  -> B stores Friend{A, confirmed:true}, deletes Outgoing; B
 - **Idempotence:** a repeated `friendRequest` with the right secret from the peer that used the code gets `received` again. A `friendRequest` through another code from a peer that already has a pending incoming request marks that code as used and gets `received`, without a second incoming request.
 - **Refusals at the invitee:** `codeUsed`, `alreadyFriends` and `unsupported` delete the outgoing request (`friends-changed`; no event carries the reason). `full` keeps it `delivering`, and it is retried on the backoff.
 - **Limits:** at most 50 friends (`errors.friends.friendLimit`), counting confirmed and unconfirmed friends plus outgoing requests.
+- **By name (addendum, N 7):** a request can also start from a letter in the directory mailbox (`RequestRecord.via = name`, N 9.2). The letter carries a single-use code of the sender, and the recipient redeems it through the flow above with the roles swapped. Both launchers additionally prove their Minecraft account to each other through Mojang (N 3.2, N 7.4). Answering, cancelling and blocking a by-name request behave as in N 7.3 and N 7.5, and `NOT_FRIEND` from an unconfirmed friend added less than 60 s ago counts as a failed dial (N 7.4, "Unconfirmed grace").
 
 ### 4.4 Presence
 - Runs while the feature is enabled and available.
@@ -294,8 +297,8 @@ control hello from A  -> B stores Friend{A, confirmed:true}, deletes Outgoing; B
 ### 4.6 Rotate, reset, retired key
 | Action | Effect |
 |---|---|
-| `friends_rotate_identity` | A new key becomes `friends-identity`. The old key moves to `friends-identity-retired`. For every friend, an outbox item `rotated{newPeerId, signature}` is stored, with `signature = sign_new("pumpkin/rotate/1", old_id, new_id)`. **All active codes are revoked and deleted, and their hello endpoints shut down**: a hello key is derived from the identity secret (4.2), so an old code cannot be served without keeping the old secret, which would defeat the rotation. Pending incoming requests and outgoing `awaitingAnswer` requests are deleted too, because they are bound to the old id; outgoing `delivering` requests are kept and are delivered under the new id. `Lifecycle::IdentityChanged` is delivered (8.7), then the main endpoint rebinds (`SHUTDOWN`). Friends are kept. The confirm dialog says that codes and waiting requests are dropped (10.8). |
-| `friends_reset` | For every friend, an outbox item `unfriend` is stored (only if the old key exists). The old key becomes the retired key. All friends, requests, codes (with their hello endpoints) and blocks are deleted. `Lifecycle::IdentityChanged` is delivered (8.7). A new identity is created. The feature stays in its enabled state. In `identityLost` there is nothing to notify, so only the deletion and the new identity happen. |
+| `friends_rotate_identity` | A new key becomes `friends-identity`. The old key moves to `friends-identity-retired`. For every friend, an outbox item `rotated{newPeerId, signature}` is stored, with `signature = sign_new("pumpkin/rotate/1", old_id, new_id)`. **All active codes are revoked and deleted, and their hello endpoints shut down**: a hello key is derived from the identity secret (4.2), so an old code cannot be served without keeping the old secret, which would defeat the rotation. Pending incoming requests with `via: code` and outgoing `awaitingAnswer` requests are deleted too, because they are bound to the old id; outgoing `delivering` requests are kept and are delivered under the new id. By-name outgoing requests (`awaitingAnswer`) are deleted with their codes and a `Retract` job is queued for each letter (N 7.5, 7.6), and by-name incoming pending requests are kept, because they are bound to the sender's id, not ours (`drop_requests_bound_to_old_id` skips `via: name` incoming). The directory session token is dropped, because it carries the old peer id. `Lifecycle::IdentityChanged` is delivered (8.7), then the main endpoint rebinds (`SHUTDOWN`). Friends are kept. The confirm dialog says that codes and waiting requests are dropped (10.8). |
+| `friends_reset` | For every friend, an outbox item `unfriend` is stored (only if the old key exists). The old key becomes the retired key. All friends, requests, codes (with their hello endpoints) and blocks are deleted. `Lifecycle::IdentityChanged` is delivered (8.7). A new identity is created. The feature stays in its enabled state. In `identityLost` there is nothing to notify, so only the deletion and the new identity happen. The directory registration stays (it is keyed by the Minecraft UUID), and pending letters reappear on the next poll (N 7.5). |
 
 - **Order of rotate and reset:** first tear down the old runtime (`Lifecycle::IdentityChanged`, then `SHUTDOWN`), then change the key and the records, then bind the new runtime. Changing the records first would let the still-running outbox task deliver through the retired key while the old connections are open, and the friend would replace its working link.
 - **Outbox delivery:** while the feature is enabled, a transient **retired endpoint** (old key, relay-only) dials each pending friend (same backoff as presence), opens the control stream, sends `hello` then the outbox message, waits for `{"type":"ack"}` (10 s), and closes with `NORMAL`. A delivered item is deleted, and the friend is dialed from the main endpoint right away. Items expire after 14 days. When the outbox is empty, the retired key is deleted from the keyring.
@@ -646,15 +649,18 @@ pub const MAX_FRIENDS: usize = 50;  pub const MAX_ACTIVE_CODES: usize = 3;  pub 
 pub const CODE_TTL_SECS: u64 = 604_800;  pub const REQUEST_TTL_SECS: u64 = 1_209_600;  pub const INVITE_TTL_SECS: u64 = 7_200;
 pub const MIN_MC_RELEASE_TIME: &str = "2023-06-02T08:36:17+00:00";  pub const MIN_MC_LABEL: &str = "1.20";
 pub const PORT_MIN: u16 = 1024;  pub const PORT_MAX: u16 = 65535;
+pub const MAX_NAME_REQUESTS: usize = 5;  pub const MC_NAME_MAX: usize = 16;  pub const NAME_COOLDOWN_DAYS: u64 = 7;   // N 9.3
 
 pub enum Availability { Available, NoSecretStore, IdentityLost }
 pub struct FriendsState {
     pub availability: Availability, pub enabled: bool, pub me: Option<Me>, pub settings: FriendsSettings,
-    pub network: NetworkStatus, pub relays: Vec<RelayInfo>, pub third_party_relays_accepted: bool,
+    pub network: NetworkStatus, pub relays: Vec<RelayInfo>, pub third_party_relays_accepted: bool, pub directory: DirectoryStatus,
 }
 pub struct Me { pub peer_id: String, pub fingerprint: String, pub display_name: String }
-pub struct FriendsSettings { pub display_name: String, pub always_relay: bool }
-pub struct FriendsEnableInput { pub display_name: String, pub always_relay: bool, pub accept_third_party_relays: bool }
+pub struct FriendsSettings { pub display_name: String, pub always_relay: bool, pub findable_by_name: bool }
+pub struct FriendsEnableInput { pub display_name: String, pub always_relay: bool, pub accept_third_party_relays: bool, pub findable_by_name: bool }
+pub struct DirectoryStatus { pub state: DirectoryState, pub host: Option<String> /* for the PrivacyNotice; None if unavailable */ }
+pub enum DirectoryState { Unavailable, Off, Active, Unreachable, NotAllowed }   // unit, camelCase
 pub struct RelayInfo { pub host: String, pub operator: RelayOperatorKind, pub third_party: bool }
 pub enum RelayOperatorKind { Pumpkin, N0 }
 pub enum NetworkStatus { Off, Starting, Online { relay_host: String }, Degraded { reason: DegradedReason } }   // tagged
@@ -672,8 +678,9 @@ pub use crate::services::shared_types::{PathKind, PortSource, ModLoader};   // P
 pub struct FriendRequest {
     pub id: String, pub direction: RequestDirection, pub state: RequestState,
     pub peer_id: Option<String>, pub fingerprint: Option<String>, pub display_name: Option<String>, pub mc_name: Option<String>,
-    pub code_tail: Option<String>, pub created_at: u64, pub expires_at: u64,
+    pub code_tail: Option<String>, pub created_at: u64, pub expires_at: u64, pub via: RequestVia,
 }
+pub enum RequestVia { Code, Name }   // unit, camelCase
 pub enum RequestDirection { Incoming, Outgoing }
 pub enum RequestState { Pending /* incoming */, Delivering /* outgoing, not yet received */, AwaitingAnswer /* outgoing, received */ }
 
@@ -728,17 +735,22 @@ pub struct ModConfirmEvent { pub request_id: String, pub instance_id: String, pu
 pub struct ModConfirmFriend { pub friend_id: String, pub display_name: String }
 ```
 
+`DirectoryState`: `Unavailable` = no directory attached (no URL in this build); `Off` = `findableByName` false; `Active` = registered and the last directory call succeeded; `Unreachable` = the last register or poll failed (network, 5xx, 429); `NotAllowed` = Mojang refused `join` (polling and registration pause until the setting is toggled or the app restarts). `friends_state` computes it whether or not the feature is enabled. `FriendsSettings.findable_by_name` is persisted through `config.settings` (9).
+
 TS mirror (`src/lib/friends-types.ts`), exact (`ModLoader` comes from `import type { ModLoader } from "./types"`, the existing TS twin of the Rust `ModLoader`):
 ```ts
 export const FRIENDS_LIMITS = { codePrefix: "pumpkin-", codeBodyLength: 72, codeLength: 80, displayNameMin: 3, displayNameMax: 32,
   aliasMax: 32, maxFriends: 50, maxActiveCodes: 3, maxGuests: 7, codeTtlSecs: 604800, requestTtlSecs: 1209600, inviteTtlSecs: 7200,
-  minMcReleaseTime: "2023-06-02T08:36:17+00:00", minMcLabel: "1.20", portMin: 1024, portMax: 65535 } as const;
+  minMcReleaseTime: "2023-06-02T08:36:17+00:00", minMcLabel: "1.20", portMin: 1024, portMax: 65535,
+  maxNameRequests: 5, mcNameMax: 16, nameCooldownDays: 7 } as const;
 export type Availability = "available" | "noSecretStore" | "identityLost";
 export interface FriendsState { availability: Availability; enabled: boolean; me: Me | null; settings: FriendsSettings;
-  network: NetworkStatus; relays: RelayInfo[]; thirdPartyRelaysAccepted: boolean }
+  network: NetworkStatus; relays: RelayInfo[]; thirdPartyRelaysAccepted: boolean; directory: DirectoryStatus }
 export interface Me { peerId: string; fingerprint: string; displayName: string }
-export interface FriendsSettings { displayName: string; alwaysRelay: boolean }
-export interface FriendsEnableInput { displayName: string; alwaysRelay: boolean; acceptThirdPartyRelays: boolean }
+export interface FriendsSettings { displayName: string; alwaysRelay: boolean; findableByName: boolean }
+export interface FriendsEnableInput { displayName: string; alwaysRelay: boolean; acceptThirdPartyRelays: boolean; findableByName: boolean }
+export type DirectoryState = "unavailable" | "off" | "active" | "unreachable" | "notAllowed";
+export interface DirectoryStatus { state: DirectoryState; host: string | null }
 export interface RelayInfo { host: string; operator: "pumpkin" | "n0"; thirdParty: boolean }
 export type NetworkStatus = { type: "off" } | { type: "starting" } | { type: "online"; relayHost: string } | { type: "degraded"; reason: DegradedReason };
 export type DegradedReason = "relayUnreachable" | "bindFailed";
@@ -750,7 +762,8 @@ export type Presence = "offline" | "online" | "playing";
 export type PathKind = "direct" | "relay";
 export interface FriendRequest { id: string; direction: "incoming" | "outgoing"; state: "pending" | "delivering" | "awaitingAnswer";
   peerId: string | null; fingerprint: string | null; displayName: string | null; mcName: string | null; codeTail: string | null;
-  createdAt: number; expiresAt: number }
+  createdAt: number; expiresAt: number; via: RequestVia }
+export type RequestVia = "code" | "name";
 export interface FriendCode { id: string; code: string | null; tail: string; createdAt: number; expiresAt: number; used: boolean }
 export interface BlockedPeer { peerId: string; displayName: string; blockedAt: number }
 export type PortSource = "mod" | "log" | "manual";
@@ -790,6 +803,7 @@ export interface FriendsFixtureTypes {
   "networkStatus.off": NetworkStatus; "networkStatus.starting": NetworkStatus; "networkStatus.online": NetworkStatus; "networkStatus.degraded": NetworkStatus;
   "friend.online": Friend; "friend.relayRenamed": Friend; "friend.identityChanged": Friend; "friend.unconfirmed": Friend;
   "request.incoming": FriendRequest; "request.delivering": FriendRequest; "request.awaitingAnswer": FriendRequest;
+  "request.nameIncoming": FriendRequest; "request.nameOutgoing": FriendRequest; "request.nameDelivering": FriendRequest;
   "code.created": FriendCode; "code.listed": FriendCode; blocked: BlockedPeer;
   hostSession: HostSession; invite: Invite;
   "joinPlan.ready": JoinPlan; "joinPlan.missing": JoinPlan; "joinPlan.vanilla": JoinPlan; joinTicket: JoinTicket;
@@ -814,11 +828,14 @@ export interface FriendsFixtureTypes {
 
   | Fixture key(s) | TS type | Rust type (`services::friends::contract`) | Content requirement |
   |---|---|---|---|
-  | `constants` | `typeof FRIENDS_LIMITS` | the `pub const`s of 8.2 | every field, compared value by value |
-  | `friendsState.available`, `.noSecretStore`, `.identityLost` | `FriendsState` | `FriendsState` | one per `Availability`; `available` has a `me` and an `online` network |
+  | `constants` | `typeof FRIENDS_LIMITS` | the `pub const`s of 8.2 | every field, compared value by value, including `maxNameRequests`, `mcNameMax` and `nameCooldownDays` |
+  | `friendsState.available`, `.noSecretStore`, `.identityLost` | `FriendsState` | `FriendsState` | one per `Availability`; `available` has a `me` and an `online` network, `settings.findableByName: true` and `directory: {state: "active", host: "directory.example"}`; `noSecretStore` has `directory: {state: "off", host: …}` and `identityLost` has `directory: {state: "unavailable", host: null}` |
   | `networkStatus.off`, `.starting`, `.online`, `.degraded` | `NetworkStatus` | `NetworkStatus` | one per variant (also the `friends-network` payload) |
   | `friend.online`, `.relayRenamed`, `.identityChanged`, `.unconfirmed` | `Friend` | `Friend` | `relayRenamed`: `path: "relay"` + `notice.renamed`; `identityChanged`: `notice.identityChanged` |
-  | `request.incoming`, `.delivering`, `.awaitingAnswer` | `FriendRequest` | `FriendRequest` | one per `RequestState` |
+  | `request.incoming`, `.delivering`, `.awaitingAnswer` | `FriendRequest` | `FriendRequest` | one per `RequestState`, all with `via: "code"` |
+  | `request.nameIncoming` | `FriendRequest` | `FriendRequest` | `via: "name"`, `pending`, `peerId`/`fingerprint` set, `mcName`, `codeTail: null` |
+  | `request.nameOutgoing` | `FriendRequest` | `FriendRequest` | `via: "name"`, `awaitingAnswer`, `peerId: null`, `mcName` |
+  | `request.nameDelivering` | `FriendRequest` | `FriendRequest` | `via: "name"`, `delivering`, `peerId` set (accepted, waiting for the sender) |
   | `code.created`, `code.listed` | `FriendCode` | `FriendCode` | `created` with `code`, `listed` with `code: null` |
   | `blocked` | `BlockedPeer` | `BlockedPeer` | |
   | `hostSession` | `HostSession` | `HostSession` | one guest per `GuestState`, one of them `left` with `kicked: true` |
@@ -851,7 +868,7 @@ Only `friends_state`, `friends_enable`, `friends_disable` and `friends_reset` wo
 | `friends_state` | | `FriendsState` | `friendsState()` | always works |
 | `friends_enable` | `input: FriendsEnableInput` | `FriendsState` | `friendsEnable(input)` | Needs a Microsoft account, availability `available`, and third-party consent if needed. Creates the identity on first use. |
 | `friends_disable` | | `FriendsState` | `friendsDisable()` | keeps the data |
-| `friends_update_settings` | `settings: FriendsSettings` | `FriendsState` | `friendsUpdateSettings(settings)` | An `alwaysRelay` change rebinds and ends sessions (the UI confirms first). |
+| `friends_update_settings` | `settings: FriendsSettings` | `FriendsState` | `friendsUpdateSettings(settings)` | An `alwaysRelay` change rebinds and ends sessions (the UI confirms first). A `findableByName` change saves and returns at once; the directory loop registers or unregisters asynchronously (N 6). |
 | `friends_rotate_identity` | | `FriendsState` | `friendsRotateIdentity()` | 4.6 |
 | `friends_reset` | | `FriendsState` | `friendsReset()` | 4.6; also works in `identityLost` |
 | `friends_list` | | `Friend[]` | `friendsList()` | |
@@ -860,15 +877,16 @@ Only `friends_state`, `friends_enable`, `friends_disable` and `friends_reset` wo
 | `friend_codes` | | `FriendCode[]` (`code: null`) | `friendCodes()` | |
 | `friend_code_revoke` | `codeId` | `void` | `friendCodeRevoke(codeId)` | |
 | `friend_add` | `code` | `FriendRequest` (`delivering`) | `friendAdd(code)` | Returns at once; delivery runs in the background. |
-| `friend_request_answer` | `requestId, accept` | `void` | `friendRequestAnswer(requestId, accept)` | |
-| `friend_request_cancel` | `requestId` | `void` | `friendRequestCancel(requestId)` | outgoing only |
+| `friend_add_by_name` | `name` | `FriendRequest` (`via: "name"`, `awaitingAnswer`, `peerId: null`) | `friendAddByName(name)` | synchronous, N 7.1; needs the feature (`disabled` else) |
+| `friend_request_answer` | `requestId, accept` | `void` | `friendRequestAnswer(requestId, accept)` | `via`-specific behaviour for by-name requests: N 7.3 |
+| `friend_request_cancel` | `requestId` | `void` | `friendRequestCancel(requestId)` | outgoing only; `via`-specific behaviour for by-name requests: N 7.5 |
 | `friend_rename` | `friendId, alias: string \| null` | `void` | `friendRename(friendId, alias)` | local alias, sanitised, at most 32 chars |
 | `friend_acknowledge` | `friendId` | `void` | `friendAcknowledge(friendId)` | clears `notice` |
 | `friend_remove` | `friendId` | `void` | `friendRemove(friendId)` | |
 | `friend_block` | `peerId` | `void` | `friendBlock(peerId)` | a friend or a request peer |
 | `friend_unblock` | `peerId` | `void` | `friendUnblock(peerId)` | |
 | `friends_blocked` | | `BlockedPeer[]` | `friendsBlocked()` | |
-| `friends_retry_now` | | `void` | `friendsRetryNow()` | Returns at once. Dials every `delivering` request immediately and every offline friend whose last attempt is more than 2 min old (4.3, 4.4). Called on Friends page open and by "Jetzt zustellen". |
+| `friends_retry_now` | | `void` | `friendsRetryNow()` | Returns at once. Dials every `delivering` request immediately and every offline friend whose last attempt is more than 2 min old (4.3, 4.4). Also triggers a directory inbox poll when the last poll is more than 60 s old (N 7.2). Called on Friends page open and by "Jetzt zustellen". |
 | `friend_skin` | `friendId` | `string \| null` (PNG data URL) | `friendSkin(friendId)` | Rust fetch + cache (10.2): `avatar::skin` with the friend's stored `mcUuid`. `null` without a (valid) UUID, which is never put into a URL. A failed refresh returns the error, not a stale cache entry. |
 | `lan_status` | `instanceId` | `LanStatus \| null` | `lanStatus(instanceId)` | |
 | `host_sessions` | | `HostSession[]` | `hostSessions()` | 0 or 1 entries |
@@ -884,6 +902,8 @@ Only `friends_state`, `friends_enable`, `friends_disable` and `friends_reset` wo
 | `friends_mod_status` | `instanceId` | `ModStatus` | `friendsModStatus(instanceId)` | `connected` whenever the bridge has a connection for the instance (also for a hand-installed dev jar while `modinstall::status` is `unavailable`); otherwise `modinstall::status` (11.5). |
 | `friends_mod_install` | `instanceId, operationId` | `void` | `friendsModInstall(instanceId, operationId)` | Pinned project id, under the instance operation lock (`state.exclusive`, which refuses a running instance); `modinstall::install` inside `run_cancellable` (11.5). |
 | `friends_mod_confirm` | `requestId, allow` | `void` | `friendsModConfirm(requestId, allow)` | 7.4; unknown or answered id: `notFound.request` |
+
+No other command is new for by-name requests: findability goes through `friends_update_settings` and `friends_enable`, and answer, cancel and block use the existing commands. There is **no new event**: directory state changes and inbox arrivals use `friends-changed`, and a new incoming by-name request also emits `friend-request` (8.5, payloads unchanged).
 
 "Create vanilla instance" uses the existing `createInstance` method (`NewInstance` with `loader: "vanilla"` and the host's version). No new command.
 
@@ -1191,20 +1211,33 @@ pub async fn modinstall::install(state: &AppState, instance_id: &str, progress: 
 
 | File | Type | Content |
 |---|---|---|
-| `config.json` | struct, `write_atomic` | `{version: 2, enabled, settings: {displayName, alwaysRelay}, thirdPartyRelaysAccepted}`. Missing = disabled with defaults. |
+| `config.json` | struct, `write_atomic` | `{version: 2, enabled, settings: {displayName, alwaysRelay, findableByName}, thirdPartyRelaysAccepted, directory: {registeredUuid?, refreshedAt?, jobs}}`. Missing = disabled with defaults. `settings.findableByName` and `directory` are `#[serde(default)]`, so old files keep loading. |
 | `friends.json` | `JsonStore<FriendRecord>` | `{id, displayName, alias?, mcName?, mcUuid?, homeRelay?: u8, addedAt, lastSeen?, confirmed, removedByPeer, notice?}` |
-| `requests.json` | `JsonStore<RequestRecord>` | `{id, direction, state, peerId?, helloId?, relayIndex?, secret? (outgoing only, to retry delivery), displayName?, mcName?, mcUuid?, codeTail?, createdAt, expiresAt}`. Pruned on load and hourly. |
-| `codes.json` | `JsonStore<CodeRecord>` | `{id, salt, secretSha256, relayIndex, tail, createdAt, expiresAt, usedBy?}`. Expired records pruned. |
-| `blocked.json` | `JsonStore<BlockedRecord>` | `{id (peer id), displayName, blockedAt}` |
+| `requests.json` | `JsonStore<RequestRecord>` | `{id, direction, state, peerId?, helloId?, relayIndex?, secret? (outgoing only, to retry delivery), displayName?, mcName?, mcUuid?, codeTail?, createdAt, expiresAt, via, mailId?}`. Pruned on load and hourly. |
+| `codes.json` | `JsonStore<CodeRecord>` | `{id, salt, secretSha256, relayIndex, tail, createdAt, expiresAt, usedBy?, nameRequestTo?}`. Expired records pruned. |
+| `blocked.json` | `JsonStore<BlockedRecord>` | `{id (peer id), displayName, blockedAt, mcUuid?}` |
 | `outbox.json` | `JsonStore<OutboxRecord>` | `{id (friend peer id), kind: "unfriend" \| "rotated", newPeerId?, signature?, until}` |
 | `skins/<uuid>.png` | cache | Skin PNG, at most 64 KiB, refreshed after 24 h; a failed refresh is an error, never a stale fallback (8.4) |
 | keyring | secrets | `friends-identity`, `friends-identity-retired` (64 hex each) |
 
-- Sessions, invites, presence, joins, mod confirmations and the manifest hash cache are runtime only.
+- **By-name fields (N 9.2; all new fields are `#[serde(default)]`):**
+  ```rust
+  pub struct RequestRecord { …, #[serde(default)] pub via: RequestVia /* Code */, #[serde(default)] pub mail_id: Option<String> }
+  pub struct CodeRecord    { …, #[serde(default)] pub name_request_to: Option<String> /* target uuid; Some = by-name request code */ }
+  pub struct BlockedRecord { …, #[serde(default)] pub mc_uuid: Option<String> }
+  pub struct FriendsConfig { …, #[serde(default)] pub directory: DirectoryConfig }
+  #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)] #[serde(rename_all = "camelCase")]
+  pub struct DirectoryConfig { pub registered_uuid: Option<String>, pub refreshed_at: Option<u64>, pub jobs: Vec<DirectoryJob> }
+  #[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+  pub enum DirectoryJob { DeleteMail { mail_id: String, until: u64 }, Retract { mail_id: String, until: u64 },
+                          Block { uuid: String }, Unblock { uuid: String }, Unregister { uuid: String } }
+  ```
+  `active_codes` (the 3-code cap, `friend_codes`) counts and lists only codes with `name_request_to == None`. `bind_active_codes`, `own_hello_ids` and the prune cover both kinds. The job queue is described in N 7.6.
+- Sessions, invites, presence, joins, mod confirmations and the manifest hash cache are runtime only. The directory session token is runtime only too (N 3.1).
 - The folder is `config::friends_dir(&dirs)` = `<dirs.root>/friends`. `RecordStores::open(dir)` creates it and opens the five `JsonStore`s; `RecordStores::any()` is true when any store holds a readable record (unreadable entries of a newer version are kept on save but not counted).
 - Entities implement `services::store::Entity` in `records.rs` (through a local `record!` macro, because `store.rs`'s `entity!` macro is private), with not-found keys `errors.friends.notFound.{friend,request,code,blocked}`; `OutboxRecord` uses `errors.friends.notFound.friend` (its id is a friend's peer id).
 - `config.json`: `FriendsConfig::load(dir)` returns the defaults when the file is missing. A file that cannot be parsed is moved aside to `config.json.corrupt` (a free name, like `JsonStore` does) and the defaults are used. `save(dir)` writes atomically.
-- Defaults: `enabled = false`, `alwaysRelay = false`, `displayName = ""`, `thirdPartyRelaysAccepted = false`. The display name is filled from the active MS account name when the feature is enabled (the opt-in pre-fills it, `FriendsEnableInput.displayName` carries the result). `showWorldName` is per session, default false.
+- Defaults: `enabled = false`, `alwaysRelay = false`, `displayName = ""`, `thirdPartyRelaysAccepted = false`, `findableByName = false`. The display name is filled from the active MS account name when the feature is enabled (the opt-in pre-fills it, `FriendsEnableInput.displayName` carries the result). `showWorldName` is per session, default false.
 
 ---
 
@@ -1245,7 +1278,13 @@ Kit rules (docs/design/PIXELKINO.md): no border radius, a warning always has a s
 - `FriendAvatar`: `friendSkin(friendId)` (TanStack Query, `staleTime` 1 h) rendered with the existing `SkinHead`. Fallback: the pixel face from the name. The UI never contacts Mojang directly. `FriendAvatar`, `SelfAsserted` (`components/friends/FriendAvatar.tsx`) and `Fingerprint` (`components/friends/Fingerprint.tsx`) are shared with F3, F4 and F5, as are the pure helpers of `friendsModel.ts` (`canInvite`, `inviteFrom`, `friendLabels`, …).
 - **Live data in the sidebar:** the badge needs the requests, invites and friends lists on every page. `useFriendsNav` (Sidebar) declares those queries with `enabled` only while friends are enabled and available, using the F1 query keys. The global `useFriendEvents` (F4, in `Layout`, 8.5) keeps them current; the interim `useFriendsLive.ts` is deleted.
 
-### 10.3 Add friend dialog (F2, width 520, two `Tabs`)
+### 10.3 Add friend dialog (F2, width 520, height 600, three `Tabs`)
+Tabs in this order: **"Per Name"** (new `NameTab.tsx`, the default), "Code eingeben", "Mein Code". `AddFriendTab = "name" | "enter" | "mine"`. `AddFriendButtons`: the primary "Freund hinzufügen" opens `"name"`, or `"enter"` when `directory.state === "unavailable"`, in which case the Name tab is hidden (N 9.7).
+- **Per Name:**
+  - A `TextField` "Minecraft-Name" (placeholder "z. B. Steve", `maxLength 16`, shape check `isMcName` from `friendsModel.ts`, regex `^[A-Za-z0-9_]{1,16}$`). Primary "Anfrage senden" calls `friendAddByName`; on success, toast "Anfrage an {name} gesendet" and close.
+  - Hint (always): "{name} sieht deinen Minecraft-Namen, deinen Anzeigenamen und deinen Fingerabdruck. Erst wenn {name} annimmt, verbinden sich eure Launcher. Das Pumpkin-Verzeichnis hält die Anfrage bis zu 14 Tage bereit."
+  - `nameNotFindable` is shown **inline** (warning with symbol, not a toast) with the action "Meinen Code zeigen", which switches to "Mein Code". `directory.state === "unreachable"`: a `StatusPanel` with "Verzeichnis gerade nicht erreichbar; nutze einen Code". When my own `findableByName` is false, an info line: "Andere finden dich nur per Name, wenn du es in den Einstellungen erlaubst." with a link to `/settings?tab=freunde`.
+  - Rows of the requests section (10.2) with `via: name` (`RequestsSection.tsx`, texts from `friendsModel.ts` `requestLine(request)`, N 9.7): incoming shows name + fingerprint + a "Minecraft: {mcName}" sub-line with the tooltip "Vom Verzeichnis geprüft; beim Annehmen prüfen beide Launcher das Konto noch einmal bei Mojang", and the actions "Annehmen", "Ablehnen", "Blockieren" (menu). Outgoing `awaitingAnswer`: "Anfrage an {mcName} · wartet auf Antwort" + "Zurückziehen", without the expired-code hint. Outgoing `delivering`: "{mcName}: wird verbunden, sobald {mcName} online ist" + "Jetzt zustellen" + "Zurückziehen". `codeMayBeExpired` returns false for `via: name`.
 - **Mein Code:**
   - "Code erzeugen" shows the 80-char code once, in the pixel font, in groups of 4, with "Kopieren".
   - Hint: "Gilt 7 Tage und nur für eine Person. Wer den Code hat, kann dir eine Anfrage schicken: Poste ihn nicht öffentlich."
@@ -1307,6 +1346,7 @@ Kit rules (docs/design/PIXELKINO.md): no border radius, a warning always has a s
 - Otherwise:
   - `FormRow` "Freunde" `Switch` (on opens the opt-in, off calls `friendsDisable`). While the feature is off, the tab shows **only** this switch; every row below appears only while it is enabled (rotate and reset need an active identity).
   - "Anzeigename" (3-32, saved on blur).
+  - `FormRow` "Per Minecraft-Namen auffindbar" `Switch` (hidden when `directory.state === "unavailable"`; sets `findableByName` through `friendsUpdateSettings`), hint "Wer deinen Minecraft-Namen kennt, kann dir Anfragen schicken. Das Pumpkin-Verzeichnis speichert dafür nur deine Minecraft-UUID, solange das an ist; aus = sofort gelöscht." Status line: `active` "Auffindbar als {mcName}", `unreachable` "Verzeichnis nicht erreichbar; neuer Versuch läuft", `notAllowed` (warning with symbol) "Mojang erlaubt diesem Konto keine Mehrspieler-Funktionen" (N 6, N 9.7).
   - "Immer über Relay verbinden" (hint: "Freunde sehen deine IP-Adressen nicht. Etwas höhere Latenz. Der Relay-Betreiber sieht, wer mit wem verbunden ist, aber keine Inhalte."; with a confirm while a host session **or a join** is active, because the rebind ends both; the join is read from `useFriendsUi().joinSession`). The confirm text is `relayConfirmText` plus `relayConfirmHosting`, `relayConfirmJoin` or `relayConfirmJoinUnnamed`.
   - "Mein Fingerabdruck" (pixel-font `Count`) with an action that copies the full 64-char peer id (`copyPeerId`, toast `peerIdCopied`): an abuse report to the relay operator needs it, because the relay keeps no logs and the fingerprint is not enough (`docs/friends/RELAY-OPS.md`). The fingerprint aside says so in one sentence. "Blockierte" (list + "Entsperren").
   - Network line "Verbunden über {relayHost}" or "Getrennt: {reason}", from `friendKeys.state`, which `useFriendEvents` keeps current (8.5).
@@ -1316,21 +1356,22 @@ Kit rules (docs/design/PIXELKINO.md): no border radius, a warning always has a s
 `FriendsOptInDialog({ onClose })` is mounted only while open (like `NameDialog`): callers render `{open && <FriendsOptInDialog onClose={…} />}`. Relay operators are named "Pumpkin Launcher" and "n0" (`RELAY_OPERATOR_KEYS`, exported from `PrivacyNotice.tsx` and reused here).
 
 Text (plain, final wording reviewed by the owner):
-- Freunde nur über Codes, die ihr selbst austauscht. Wer deinen Code hat, kann dir eine Anfrage schicken; deine IP-Adresse sieht er dadurch nicht.
+- Freunde über Codes, die ihr selbst austauscht, oder per Minecraft-Name, wenn die andere Person das erlaubt. Wer dir eine Anfrage schickt, sieht deine IP-Adresse dadurch nicht.
 - Verschlüsselte Verbindungen zwischen den Launchern. Bei einer direkten Verbindung sehen deine Freunde deine öffentliche IP-Adresse und die Adressen deiner Netzwerke (Heimnetz, VPN). Auch wer deinen Code einlöst oder dessen Code du einlöst, kann deine Adressen sehen, solange „Immer über Relay“ aus ist. „Immer über Relay“ verhindert das.
 - Relay-Server: {hosts with operator}. Sie leiten verschlüsselte Daten weiter und sehen, wer mit wem verbunden ist, aber keine Inhalte.
 - Freunde sehen, ob du online bist oder spielst, und deinen Minecraft-Namen samt Skin (von dir selbst angegeben).
-- Kein Chat, kein Tracking, keine öffentlichen Listen. Jederzeit abschaltbar.
+- Kein Chat, kein Tracking, keine öffentlichen Listen; die Suche per Name findet nur genaue Namen von Leuten, die das eingeschaltet haben. Jederzeit abschaltbar.
 
 Inputs:
 - Display name.
 - "Immer über Relay" (off).
+- An optional checkbox "Per Minecraft-Namen auffindbar sein" (unchecked, hidden when `directory.state === "unavailable"`) that feeds `FriendsEnableInput.findableByName`.
 - If `relays` has a third-party relay: a required checkbox "Ich bin einverstanden, dass {operator} ({hosts}) als Relay genutzt wird".
 - "Verstanden" (required).
 
 Primary button: "Freunde aktivieren" (`friendsEnable`). A note says that Windows may ask for firewall permission (UDP), and that allowing it in private networks improves direct connections.
 
-`components/PrivacyNotice.tsx` lists every relay host with its operator and purpose, "Freunde: verschlüsselte Weiterleitung, keine Inhalte", and Mojang's sessionserver for friends' skins (fetched by the launcher, not the page).
+`components/PrivacyNotice.tsx` lists every relay host with its operator and purpose, "Freunde: verschlüsselte Weiterleitung, keine Inhalte", and Mojang's sessionserver for friends' skins (fetched by the launcher, not the page). By-name rows (N 9.7): a `ServiceRow` "Freunde-Verzeichnis" with `directory.host` and the purpose "Nur wenn du per Name auffindbar bist oder jemandem per Name schreibst: Minecraft-UUID, Anfragen bis 14 Tage"; the sessionserver row's purpose gains "Kontonachweis für das Verzeichnis und beim Annehmen"; a new row "Minecraft-Namenssuche" with `api.minecraftservices.com` ("Name → UUID, nur beim Senden per Name").
 
 ### 10.10 Mock (F1, `src/lib/mock-friends.ts`)
 - Scenarios:
@@ -1421,6 +1462,11 @@ No keybinding and no in-game join.
 - Presence goes only to confirmed friends. Hosting is visible only to invited friends. The manifest goes only to invited friends, and the share dialog says so.
 - Friends' skins are fetched by Rust from Mojang's sessionserver (`sessionserver.mojang.com`, constant `skins::SESSION_PROFILE`; the UUID is sent to Mojang) and cached locally. Textures come only from `textures.minecraft.net` (`http` is upgraded to `https`). Named in the PrivacyNotice and `PRIVACY.md`.
 - Logs never contain IPs, secrets, codes, tokens or hello ids. Peer ids are logged as their first 8 hex chars.
+- **Finding by name (N 9.8):**
+  - Finding by name is off until you turn on "Per Minecraft-Namen auffindbar". Then the Pumpkin directory (Cloudflare Worker, database in the EU) stores your Minecraft UUID, and nothing else about you, and keeps requests to you for up to 14 days. Off deletes it at once (restore history up to 7/30 days, N 5.3).
+  - A request by name carries your Minecraft name, UUID, display name and friends id. The directory sees it, and sees who wrote to whom. It never sees whether the request was accepted, and never sees presence or connections.
+  - Whoever writes to you by name learns your friends id and (unless "Immer über Relay") your addresses only after you accept.
+  - To log in to the directory and on every acceptance, Mojang confirms your account, exactly like joining an online-mode server (`sessionserver.mojang.com`). Names are looked up at Mojang (`api.minecraftservices.com`).
 
 ### 12.2 Security rules
 - **Invite-only transport:** the Gate (3.5). Silent drops for strangers on hello endpoints. `NOT_FRIEND` on peer/1.
@@ -1470,6 +1516,19 @@ Mod side (`state/Sanitize`): the same steps; Cc controls (tab and newline includ
 | Tunnel | 7 guests, 4 concurrent + 20 new streams per guest per minute | `guestLimit` / `rateLimited` |
 | Guest listener | 1 unvalidated connection before the first valid one, 4 after | close |
 | Mod bridge | 4 unauthenticated connections, 20 msg/s, 3 `share` per minute after confirmation | close / `error` |
+
+Directory rows (N 0, N 4, N 7.1; the Worker enforces its quotas exactly in D1, only the rate-limit bindings are coarse and per Cloudflare location):
+
+| What | Limit | On excess |
+|---|---|---|
+| By-name letters per sender | 10 per 24 h | `429 sendQuota` → `rateLimited` |
+| By-name letters per sender→recipient pair | 1 per 7 d | `429 pairCooldown` → `nameCooldown` |
+| Pending letters per recipient | 20 | `409 recipientFull` → `requestsFull` |
+| Open by-name outgoing requests per launcher | 5 (`MAX_NAME_REQUESTS`) | `tooManyNameRequests` |
+| Server-side block list per account | 1,000 | `409 blockListFull` |
+| Worker requests per IP | 60 per 60 s (`LIMITER_IP`) | `429 rateLimited` |
+| Worker requests per account | 30 per 60 s (`LIMITER_ACCOUNT`) | `429 rateLimited` |
+| Directory handshakes in flight per launcher | 1 (auth lock) | queued |
 
 ### 12.5 Relay operation (requirements; D1 documents and deploys them)
 - `iroh-relay` at the same iroh version as the launcher (lockstep updates; today 1.3.0). The image is built from the pinned crate (`cargo install iroh-relay --version =1.3.0 --locked --features server` in `rust:1.91-bookworm`, the crate's MSRV) and runs on `debian:bookworm-slim` as a non-root user; no third-party relay image is used, because its origin could not be verified. When iroh is bumped, `IROH_RELAY_VERSION` and the image tag change together (`RELAY-OPS.md` section 9).
@@ -1583,6 +1642,7 @@ If a fixture mod has no 26.3 release, substitute another Modrinth mod with the s
 
 - A later package appends to `state.rs` only where its row says so (strictly sequential via `dependsOn`).
 - Every package keeps the repo green, follows the clean-code skill, and adds the tests listed in 13.1/13.2.
+- **By name:** the work packages of the addendum (N-D0, W1, N-F1, N-R1, N-R2, N-R3, N-F2, N-D1, O1), their waves and the owner-only steps are in `BYNAME.md` section 11. They follow the ownership rules above.
 
 ### Wave 0
 **R0a, rust-net: skeleton, dependencies, error keys, spec in repo**
@@ -1870,6 +1930,17 @@ R4, R6, F4, F5, D2 (Wave 2) and R5 (Wave 3) are merged on `feat/friends`; their 
 | `errors.friends.hostStopped` | | Dein Freund teilt die Welt nicht mehr |
 | `errors.friends.modNotAvailable` | `version` | Die Freunde-Mod gibt es für Minecraft {version} noch nicht |
 | `errors.friends.modConfirmDenied` | | Teilen aus dem Spiel wurde im Launcher abgelehnt |
+| `errors.friends.nameInvalid` | | Das ist kein gültiger Minecraft-Name |
+| `errors.friends.nameUnknown` | `name` | Es gibt keinen Minecraft-Spieler „{name}“ |
+| `errors.friends.nameNotFindable` | `name` | {name} ist nicht per Name auffindbar; tauscht stattdessen einen Freundescode aus |
+| `errors.friends.nameOwn` | | Das ist dein eigener Minecraft-Name |
+| `errors.friends.alreadyRequestedName` | `name` | An {name} geht schon eine Anfrage |
+| `errors.friends.tooManyNameRequests` | `max` | Höchstens {max} offene Anfragen per Name; warte auf Antworten oder ziehe eine zurück |
+| `errors.friends.nameCooldown` | `name`, `days` | Du hast {name} in den letzten {days} Tagen schon eine Anfrage geschickt |
+| `errors.friends.directoryUnavailable` | | Das Freunde-Verzeichnis ist gerade nicht erreichbar; nutze einen Freundescode |
+| `errors.friends.directoryNotAllowed` | | Mojang erlaubt diesem Konto keine Mehrspieler-Funktionen; Freunde per Name geht damit nicht |
+
+Mapping of directory and Mojang failures to keys (N 9.6): `NotFindable` → `nameNotFindable`; `RecipientFull` → existing `requestsFull`; `SendQuota` / `RateLimited` → existing `rateLimited`; `PairCooldown` → `nameCooldown{name, days: 7}`; `Unreachable` / `MojangUnavailable` / `NotRegistered` / `Invalid` → `directoryUnavailable` (`Invalid` also logs a warning: it means a client or Worker bug); `NotJoined` after one retry → `directoryUnavailable`; Mojang `NotAllowed` → `directoryNotAllowed`; `InvalidSession` → refresh once, then `errors.app.auth.relogin`; `Unauthorized` → re-auth once, then `directoryUnavailable`.
 
 Keys are added only together with both languages (append rule, section 14).
 
@@ -1884,6 +1955,8 @@ Parsing must accept the grouped form (with spaces or `-` inside the body) and an
 
 **Hello key.** identity secret = bytes `40 41 … 5f`, salt = bytes `00 01 … 0f`:
 `SHA-256("pumpkin/hello-key/2" || secret || salt) = 0fc118eef8a72afd5f595deba158b70a7a0bf925ed85176b5ec3ef430499d80f`
+
+**By name.** The golden vectors of the addendum (letter signature, directory auth signature, `serverId_redeemer`, `serverId_owner`) are in `BYNAME.md` Appendix A (A.1-A.4), computed with the same Ed25519 seed (`40 41 … 5f`) as above.
 
 ## Appendix C: compliance checklist (ticked by I1 in VERIFICATION.md)
 - [ ] The launcher About page and the mod description carry "NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT."
