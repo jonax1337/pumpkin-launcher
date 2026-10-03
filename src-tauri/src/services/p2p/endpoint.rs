@@ -23,7 +23,9 @@ use super::{
 use crate::services::lock;
 
 const KEEP_ALIVE: Duration = Duration::from_secs(15);
-const IDLE_TIMEOUT_MS: u32 = 40_000;
+/// Mindestens zwei Lebenszeichen je Leerlaufzeit: auch ein kurzer Testwert lässt eine lebende Verbindung nicht ablaufen,
+/// und die 40 s in Produktion behalten ihre 15 s.
+const KEEP_ALIVES_PER_IDLE_TIMEOUT: u32 = 2;
 const MAX_BIDI_STREAMS: u32 = 16;
 /// Mehr gleichzeitige Handshakes werden vor dem Handshake verworfen (SPEC 3.5).
 const MAX_HANDSHAKES: usize = 8;
@@ -44,6 +46,8 @@ pub struct NetConfig {
     /// Ohne IP-Transporte: nur über ein Relay erreichbar, die eigenen Adressen bleiben verborgen.
     pub relay_only: bool,
     pub relay_tls: RelayTls,
+    /// Ohne ein Paket so lange gilt die Verbindung als verloren (abgestürzter Peer); in Produktion 40 s.
+    pub idle_timeout: Duration,
 }
 
 /// Prüfung der Relay-Zertifikate. Abschaltbar nur in Tests, für das In-Process-Relay mit selbst signiertem Zertifikat.
@@ -181,7 +185,7 @@ fn builder(config: &NetConfig, relays: &SelectedRelays, gate: Arc<dyn Gate>) -> 
         .secret_key(SecretKey::from_bytes(&config.secret))
         .alpns(config.alpns.iter().map(|alpn| alpn.to_vec()).collect())
         .relay_mode(relays.relay_mode())
-        .transport_config(transport_config())
+        .transport_config(transport_config(config.idle_timeout)?)
         .hooks(GateHooks::new(gate));
     let builder = config.relay_tls.configure(builder);
     if config.relay_only {
@@ -202,13 +206,19 @@ fn with_ip_transports(builder: Builder) -> Result<Builder, NetError> {
     builder.clear_ip_transports().bind_addr("127.0.0.1:0").map_err(|err| NetError::Bind(err.to_string()))
 }
 
-fn transport_config() -> QuicTransportConfig {
-    QuicTransportConfig::builder()
-        .keep_alive_interval(KEEP_ALIVE)
-        .max_idle_timeout(Some(VarInt::from_u32(IDLE_TIMEOUT_MS).into()))
+fn transport_config(idle_timeout: Duration) -> Result<QuicTransportConfig, NetError> {
+    let max_idle =
+        idle_timeout.try_into().map_err(|_| NetError::Bind(format!("Leerlaufzeit {idle_timeout:?} zu groß")))?;
+    Ok(QuicTransportConfig::builder()
+        .keep_alive_interval(keep_alive(idle_timeout))
+        .max_idle_timeout(Some(max_idle))
         .max_concurrent_bidi_streams(VarInt::from_u32(MAX_BIDI_STREAMS))
         .max_concurrent_uni_streams(VarInt::from_u32(0))
-        .build()
+        .build())
+}
+
+fn keep_alive(idle_timeout: Duration) -> Duration {
+    KEEP_ALIVE.min(idle_timeout / KEEP_ALIVES_PER_IDLE_TIMEOUT)
 }
 
 /// Nur die ID und die Relays der eigenen Karte; ohne Adress-Lookup kennt iroh sonst keinen Weg zum Peer.
@@ -351,5 +361,15 @@ mod tests {
         let urls: Vec<String> = addr.relay_urls().map(|url| url.to_string()).collect();
         assert_eq!(urls, ["https://relay-a.example.org./"]);
         assert_eq!(addr.ip_addrs().count(), 0);
+    }
+
+    #[test]
+    fn keep_alive_is_fifteen_seconds_for_the_production_idle_timeout() {
+        assert_eq!(keep_alive(Duration::from_secs(40)), Duration::from_secs(15));
+    }
+
+    #[test]
+    fn short_idle_timeout_gets_two_keep_alives_per_period() {
+        assert_eq!(keep_alive(Duration::from_millis(1500)), Duration::from_millis(750));
     }
 }
