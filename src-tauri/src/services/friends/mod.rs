@@ -37,6 +37,8 @@ mod sessions;
 #[cfg(test)]
 mod tests_session;
 mod by_name;
+#[cfg(test)]
+mod tests_by_name;
 
 pub use service::{
     AccountProfile, Friends, HandlerAlreadySet, Lifecycle, LifecycleEvent, NetOptions, NotConnected, PeerStreamHandler,
