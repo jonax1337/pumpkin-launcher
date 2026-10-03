@@ -1,20 +1,20 @@
-import { useEffect, useState } from "react";
-import { useQueryClient, type UseMutationResult } from "@tanstack/react-query";
+import { useState } from "react";
+import { type UseMutationResult } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { FriendsOptInDialog } from "@/components/friends/FriendsOptInDialog";
 import { QueryList } from "@/components/QueryList";
-import { friendKeys } from "@/hooks/queryKeys";
 import { useCommitOnUnmount } from "@/hooks/useCommitOnUnmount";
 import { useConfirmTarget } from "@/hooks/useConfirmTarget";
 import {
-  useBlockedPeers, useDisableFriends, useFriendsState, useHostSessions, useResetFriends, useRotateFriendsIdentity, useUnblockPeer,
-  useUpdateFriendsSettings,
+  useBlockedPeers, useDisableFriends, useFriendsState, useHostSessions, useInvites, useResetFriends, useRotateFriendsIdentity,
+  useUnblockPeer, useUpdateFriendsSettings,
 } from "@/hooks/useFriends";
 import { useI18n } from "@/i18n";
-import { api } from "@/lib/api";
+import { copyWithToast } from "@/lib/clipboard";
 import { blurOnEnter } from "@/lib/dom";
 import { formatDate } from "@/lib/format";
-import { FRIENDS_LIMITS, type FriendsSettings, type FriendsState, type NetworkStatus } from "@/lib/types";
+import { FRIENDS_LIMITS, type FriendsSettings, type FriendsState, type Me, type NetworkStatus } from "@/lib/types";
+import { useFriendsUi } from "@/store/friendsUi";
 import { Actions, Button, ConfirmDialog, Count, ErrorBox, FormRow, FormSection, Hint, List, ListRow, RowTitle, Skel, StatusPanel, Switch, TextField, type IconName } from "@/ui";
 
 const SECOND_MS = 1000;
@@ -22,17 +22,6 @@ const ROW_SKELETON_HEIGHT_PX = 60;
 
 const isValidDisplayName = (name: string) =>
   [...name].length >= FRIENDS_LIMITS.displayNameMin && [...name].length <= FRIENDS_LIMITS.displayNameMax;
-
-/** Hält die Netzwerkzeile aktuell, solange nichts anderes das Ereignis `friends-network` in den Stand der Abfrage übernimmt. */
-function useLiveNetwork() {
-  const qc = useQueryClient();
-  useEffect(() => {
-    const subscription = api.onFriendsNetwork((network) =>
-      qc.setQueryData<FriendsState>(friendKeys.state, (state) => state && { ...state, network }),
-    );
-    return () => void subscription.then((unlisten) => unlisten());
-  }, [qc]);
-}
 
 /** Schaltet Freunde ein (öffnet das Opt-in) oder aus; Ausschalten behält die Daten. */
 function EnableRow({ enabled, onEnable }: { enabled: boolean; onEnable: () => void }) {
@@ -82,11 +71,23 @@ function DisplayNameRow({ settings }: { settings: FriendsSettings }) {
   );
 }
 
-/** „Immer über Relay“; während eine Welt geteilt wird, ist das Umschalten erst nach einer Rückfrage möglich, weil es sie beendet. */
+/** Was ein Neuaufbau der Verbindung beendet: die geteilte Welt und der Beitritt, dieser mit dem Namen des Gastgebers. */
+function useRebindConsequences(): string[] {
+  const { t } = useI18n();
+  const sharing = (useHostSessions().data?.length ?? 0) > 0;
+  const joinedInviteId = useFriendsUi((state) => state.joinSession?.inviteId);
+  const host = useInvites().data?.find((invite) => invite.id === joinedInviteId)?.fromName;
+  return [
+    ...(sharing ? [t("friendsSettings.relayConfirmHosting")] : []),
+    ...(joinedInviteId === undefined ? [] : [host ? t("friendsSettings.relayConfirmJoin", { name: host }) : t("friendsSettings.relayConfirmJoinUnnamed")]),
+  ];
+}
+
+/** „Immer über Relay“; während eine Welt geteilt wird oder ein Beitritt läuft, ist das Umschalten erst nach einer Rückfrage möglich, weil es beides beendet. */
 function AlwaysRelayRow({ settings }: { settings: FriendsSettings }) {
   const { t } = useI18n();
   const update = useUpdateFriendsSettings();
-  const sharing = (useHostSessions().data?.length ?? 0) > 0;
+  const consequences = useRebindConsequences();
   const confirm = useConfirmTarget<boolean>();
   const apply = (alwaysRelay: boolean, onDone?: () => void) => update.mutate({ ...settings, alwaysRelay }, { onSuccess: onDone });
   return (
@@ -95,13 +96,13 @@ function AlwaysRelayRow({ settings }: { settings: FriendsSettings }) {
         label={t("friendsSettings.relayLabel")}
         checked={settings.alwaysRelay}
         disabled={update.isPending}
-        onChange={(on) => (sharing ? confirm.ask(on) : apply(on))}
+        onChange={(on) => (consequences.length > 0 ? confirm.ask(on) : apply(on))}
         stateText={[t("ui.switch.on"), t("ui.switch.off")]}
       />
       <ConfirmDialog
         {...confirm.dialogProps({
           title: () => t("friendsSettings.relayConfirmTitle"),
-          text: () => t("friendsSettings.relayConfirmText"),
+          text: () => [t("friendsSettings.relayConfirmText"), ...consequences].join(" "),
           confirmLabel: t("friendsSettings.relayConfirmButton"),
           pending: update.isPending,
           onConfirm: apply,
@@ -111,11 +112,15 @@ function AlwaysRelayRow({ settings }: { settings: FriendsSettings }) {
   );
 }
 
-function FingerprintRow({ fingerprint }: { fingerprint: string }) {
+/** Der Fingerabdruck, und daneben die ganze ID: eine Meldung an den Relay-Betreiber braucht sie, der Fingerabdruck reicht dafür nicht. */
+function FingerprintRow({ me }: { me: Me }) {
   const { t } = useI18n();
   return (
     <FormRow label={t("friendsSettings.fingerprintLabel")} hint={t("friendsSettings.fingerprintHint")} aside={t("friendsSettings.fingerprintAside")}>
-      <div><Count value={fingerprint} size={20} className="select-text" /></div>
+      <Actions gap={12}>
+        <Count value={me.fingerprint} size={20} className="select-text" />
+        <Button size="s" icon="copy" onClick={() => copyWithToast(me.peerId, t("friendsSettings.peerIdCopied"))}>{t("friendsSettings.copyPeerId")}</Button>
+      </Actions>
     </FormRow>
   );
 }
@@ -249,7 +254,7 @@ function AvailableSettings({ state }: { state: FriendsState }) {
           <>
             <DisplayNameRow settings={state.settings} />
             <AlwaysRelayRow settings={state.settings} />
-            {state.me && <FingerprintRow fingerprint={state.me.fingerprint} />}
+            {state.me && <FingerprintRow me={state.me} />}
             <NetworkRow network={state.network} />
           </>
         )}
@@ -279,7 +284,6 @@ function UnavailableSettings({ availability }: { availability: Exclude<FriendsSt
 export function FriendsTab() {
   const { t } = useI18n();
   const query = useFriendsState();
-  useLiveNetwork();
   if (query.error) return <ErrorBox title={t("friendsSettings.loadFailed")} error={query.error} onRetry={() => void query.refetch()} />;
   if (!query.data) return <Skel h={ROW_SKELETON_HEIGHT_PX * 3} />;
   const state = query.data;

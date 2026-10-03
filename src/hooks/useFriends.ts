@@ -39,12 +39,16 @@ export function useFriendSkin(friendId: string) {
   }).data;
 }
 
-/** Abgleich einer Einladung mit den eigenen Instanzen; das Backend fordert dafür beim Gastgeber das Manifest an. */
+/**
+ * Abgleich einer Einladung mit den eigenen Instanzen; das Backend fordert dafür beim Gastgeber das Manifest an.
+ * Er gilt nur für den Augenblick (`staleTime: 0`): wer den Dialog erneut öffnet, hat seine Mods inzwischen vielleicht geändert.
+ */
 export function useInvitePlan(inviteId: string | null) {
   return useQuery({
     queryKey: friendKeys.plan(inviteId ?? ""),
     queryFn: () => api.invitePlan(inviteId!),
     enabled: inviteId != null,
+    staleTime: 0,
     retry: false,
   });
 }
