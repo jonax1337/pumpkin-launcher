@@ -2,6 +2,7 @@ mod account_commands;
 mod commands;
 mod content_commands;
 mod friends_commands;
+mod friends_session_commands;
 mod pack_commands;
 mod pack_open;
 mod screenshot_commands;
@@ -22,6 +23,7 @@ use tauri::{Emitter, Manager};
 use tracing_subscriber::EnvFilter;
 
 use services::friends::events::TauriEvents;
+use services::friends::session_events::TauriSessionEvents;
 
 /// So lange darf das Abmelden bei den Freunden das Beenden der App aufhalten.
 const FRIENDS_SHUTDOWN_LIMIT: Duration = Duration::from_secs(1);
@@ -47,6 +49,7 @@ pub fn run() {
             tracing::info!(?data_dir, "lade Daten");
             app.manage(state::AppState::load(&data_dir)?);
             // friends: session wiring (R5)
+            start_sessions(app.handle().clone())?;
             app.manage(pack_open::OpenedPack::from_process_args());
             spawn_startup_maintenance(app.handle().clone());
             start_friends(app.handle().clone());
@@ -180,6 +183,21 @@ pub fn run() {
             friends_commands::friend_unblock,
             friends_commands::friends_blocked,
             friends_commands::friends_retry_now,
+            friends_session_commands::friend_skin,
+            friends_session_commands::lan_status,
+            friends_session_commands::host_sessions,
+            friends_session_commands::host_start,
+            friends_session_commands::host_invite,
+            friends_session_commands::host_kick,
+            friends_session_commands::host_stop,
+            friends_session_commands::invites_list,
+            friends_session_commands::invite_decline,
+            friends_session_commands::invite_plan,
+            friends_session_commands::invite_join,
+            friends_session_commands::join_leave,
+            friends_session_commands::friends_mod_status,
+            friends_session_commands::friends_mod_install,
+            friends_session_commands::friends_mod_confirm,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -211,6 +229,14 @@ fn start_friends(handle: tauri::AppHandle) {
         let account = friends_commands::account_profile(&state);
         state.friends.start(Arc::new(TauriEvents(handle.clone())), account).await;
     });
+}
+
+/// Hängt die geteilten Welten in den Freunde-Dienst ein, bevor er Streams annimmt; ihre Aufgaben laufen in der
+/// Tokio-Laufzeit der App.
+fn start_sessions(handle: tauri::AppHandle) -> Result<(), services::friends::HandlerAlreadySet> {
+    let state = handle.state::<state::AppState>();
+    let events = Arc::new(TauriSessionEvents(handle.clone()));
+    tauri::async_runtime::block_on(async { state.sessions.start(events) })
 }
 
 /// Freunde und Gäste erfahren das Ende über `SHUTDOWN`; ein hängendes Netz hält das Beenden nicht auf.
