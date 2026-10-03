@@ -15,6 +15,7 @@ pub mod crashreport;
 pub mod debuginfo;
 pub mod download;
 pub mod duplicate;
+pub mod endpoint_url;
 pub mod friends;
 pub mod gamesignal;
 pub mod gamelog;

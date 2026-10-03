@@ -4,7 +4,7 @@ use super::dto::{CfFile, CfMod, One, Page};
 use crate::{
     coded,
     error::{AppError, AppResult},
-    services::{limits::PROVIDER_JSON_LIMIT, transport::read_capped},
+    services::{endpoint_url::https_base, limits::PROVIDER_JSON_LIMIT, transport::read_capped},
 };
 use serde::de::DeserializeOwned;
 use std::{collections::HashMap, time::Duration};
@@ -27,21 +27,8 @@ fn proxy() -> String {
     std::env::var("PUMPKIN_CF_PROXY")
         .ok()
         .or_else(|| option_env!("PUMPKIN_CF_PROXY").map(str::to_string))
-        .and_then(|raw| parse_proxy(&raw))
+        .and_then(|raw| https_base(&raw))
         .unwrap_or_else(|| DEFAULT_PROXY.to_string())
-}
-
-/// Nur eine https-Adresse ohne Zugangsdaten, Pfad, Suchteil und Anker; sonst würde ein falsch gesetzter Wert alles dorthin leiten.
-fn parse_proxy(raw: &str) -> Option<String> {
-    let url = reqwest::Url::parse(raw.trim()).ok()?;
-    let plain = url.scheme() == "https"
-        && url.username().is_empty()
-        && url.password().is_none()
-        && url.host_str().is_some()
-        && matches!(url.path(), "" | "/")
-        && url.query().is_none()
-        && url.fragment().is_none();
-    plain.then(|| url.as_str().trim_end_matches('/').to_string())
 }
 
 /// Sendet die Anfrage, die `build` jedes Mal neu zusammensetzt, und wartet bei 429 auf einen neuen Versuch, statt
@@ -149,14 +136,6 @@ mod tests {
         assert_eq!(rate_limit_wait(Some("Wed, 21 Oct 2026 07:28:00 GMT"), 1), Some(Duration::from_secs(10)));
         assert_eq!(rate_limit_wait(Some("3600"), 0), Some(MAX_WAIT));
         assert_eq!(rate_limit_wait(Some("1"), RATE_LIMIT_RETRIES), None);
-    }
-
-    #[test]
-    fn proxy_address_must_be_plain_https() {
-        assert_eq!(parse_proxy(" https://pumpkin-curseforge.jonas.workers.dev/ ").as_deref(), Some("https://pumpkin-curseforge.jonas.workers.dev"));
-        for bad in ["", "http://x.workers.dev", "https://user:pw@x.workers.dev", "https://x.workers.dev/v1", "https://x.workers.dev/?a=1", "ftp://x", "nicht-url"] {
-            assert_eq!(parse_proxy(bad), None, "{bad}");
-        }
     }
 
     /// Was der Worker durchlässt und was nicht: `cargo test live_curseforge_via_proxy -- --ignored`.

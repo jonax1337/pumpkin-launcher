@@ -6,10 +6,10 @@ use std::time::Duration;
 
 use data_encoding::HEXLOWER;
 
-use super::code;
+use super::{by_name, code};
 use super::contract::{
     FriendRequest, FriendRequestEvent, FriendRequestRefusedEvent, RequestDirection, RequestRefusal, RequestState,
-    MAX_FRIENDS, REQUEST_TTL_SECS,
+    RequestVia, MAX_FRIENDS, REQUEST_TTL_SECS,
 };
 use super::control::WireProfile;
 use super::events::FriendsEvent;
@@ -62,33 +62,36 @@ impl Friends {
             code_tail: Some(parts.tail()),
             created_at: now,
             expires_at: core.request_deadline(),
+            via: RequestVia::Code,
+            mail_id: None,
         })?;
         core.emit(FriendsEvent::Changed);
         dial_now(core, Target::Request(record.id.clone()));
         Ok(request_view(record))
     }
 
-    /// Annehmen macht den Peer zum (unbestätigten) Freund und wählt ihn sofort an; Ablehnen schickt nichts.
+    /// Annehmen macht den Peer zum (unbestätigten) Freund und wählt ihn sofort an; Ablehnen schickt nichts. Eine
+    /// Anfrage per Name wird beim Annehmen zur Einlösung des Codes im Brief (BYNAME 7.3).
     pub async fn answer_request(&self, request_id: &str, accept: bool) -> AppResult<()> {
         let core = &self.core;
         core.ensure_enabled()?;
         let request = incoming_request(core, request_id)?;
         if accept {
             ensure_friend_capacity(core)?;
-            let peer_id = request.peer_id.clone().unwrap_or_default();
-            core.stores.friends.upsert(new_friend(&peer_id, &request, false))?;
-            core.stores.requests.remove(request_id)?;
-            if let Ok(peer) = PeerId::from_str(&peer_id) {
-                dial_now(core, Target::Friend(peer));
+            match request.via {
+                RequestVia::Code => befriend_requester(core, &request)?,
+                RequestVia::Name => redeem_letter(core, &request)?,
             }
         } else {
             core.stores.requests.remove(request_id)?;
         }
+        by_name::delete_letter(core, &request);
         core.emit(FriendsEvent::Changed);
         Ok(())
     }
 
-    /// Zieht eine eigene Anfrage zurück; hatte der Besitzer schon angenommen, sieht er uns als „entfernt“.
+    /// Zieht eine eigene Anfrage zurück; hatte der Besitzer schon angenommen, sieht er uns als „entfernt“. Bei einer
+    /// eigenen Anfrage per Name verschwinden auch ihr Code und der Brief im Verzeichnis (BYNAME 7.5).
     pub async fn cancel_request(&self, request_id: &str) -> AppResult<()> {
         let core = &self.core;
         core.ensure_enabled()?;
@@ -100,11 +103,18 @@ impl Friends {
         if let Some(runtime) = core.runtime() {
             runtime.scheduler.forget(&Target::Request(request_id.to_owned()));
         }
+        if core.stores.codes.remove(request_id).is_ok() {
+            if let Some(runtime) = core.runtime() {
+                hello::close_code(&runtime, request_id).await;
+            }
+            by_name::retract_letter(core, &request);
+        }
         core.emit(FriendsEvent::Changed);
         Ok(())
     }
 
-    /// Stellt wartende Anfragen sofort zu und wählt Offline-Freunde an (SPEC 4.3, 4.4); kehrt sofort zurück.
+    /// Stellt wartende Anfragen sofort zu, wählt Offline-Freunde an (SPEC 4.3, 4.4) und sieht ins Postfach des
+    /// Verzeichnisses (BYNAME 7.2); kehrt sofort zurück.
     pub async fn retry_now(&self) -> AppResult<()> {
         let core = &self.core;
         core.ensure_enabled()?;
@@ -113,8 +123,30 @@ impl Friends {
             let friends = status::offline_friends(core, |_| true);
             runtime.scheduler.retry_now(&status::presence_plan(core, &runtime), requests, friends);
         }
+        by_name::poll_soon(core);
         Ok(())
     }
+}
+
+fn befriend_requester(core: &Arc<Core>, request: &RequestRecord) -> AppResult<()> {
+    let peer_id = request.peer_id.clone().unwrap_or_default();
+    core.stores.friends.upsert(new_friend(&peer_id, request, false))?;
+    core.stores.requests.remove(&request.id)?;
+    if let Ok(peer) = PeerId::from_str(&peer_id) {
+        dial_now(core, Target::Friend(peer));
+    }
+    Ok(())
+}
+
+/// Der Empfänger löst den Code des Absenders ein: die Anfrage wird ausgehend und zugestellt wie eine per Code, mit dem
+/// gestempelten Absender als erwarteter Gegenseite.
+fn redeem_letter(core: &Arc<Core>, request: &RequestRecord) -> AppResult<()> {
+    core.stores.requests.modify(&request.id, |request| {
+        request.direction = RequestDirection::Outgoing;
+        request.state = RequestState::Delivering;
+    })?;
+    dial_now(core, Target::Request(request.id.clone()));
+    Ok(())
 }
 
 /// Das Gate des Haupt-Endpunkts: Freunde (nicht gesperrt) und Peers, auf deren Antwort unsere Anfrage wartet.
@@ -134,20 +166,29 @@ pub(super) fn delivering(core: &Core) -> Vec<String> {
 /// Ein Zustellversuch; `true`, wenn nichts mehr zu tun ist (angekommen, endgültig abgelehnt oder verschwunden).
 pub(super) async fn deliver(core: &Arc<Core>, runtime: &Runtime, request_id: &str) -> bool {
     let Ok(request) = core.stores.requests.get(request_id) else { return true };
-    let (Some(hello_id), Some(secret)) = (hello_peer(&request), request.secret.as_deref()) else { return true };
+    let (Some(hello_id), Some(secret)) = (hello_peer(&request), request.secret.clone()) else { return true };
     if request.state != RequestState::Delivering {
         return true;
     }
-    match hello::send_request(&runtime.main, hello_id, secret, core.own_profile()).await {
-        Delivery::Received { peer, profile } => {
-            mark_received(core, request_id, &peer, profile);
-            true
-        }
+    let delivery = match request.via {
+        RequestVia::Code => deliver_code(core, runtime, request_id, hello_id, &secret).await,
+        RequestVia::Name => by_name::redeem(core, runtime, &request, hello_id, &secret).await,
+    };
+    match delivery {
+        Delivery::Received { .. } => true,
         Delivery::Refused(HelloRefusal::Full) | Delivery::Failed => false,
         Delivery::Refused(HelloRefusal::CodeUsed) => drop_refused(core, request, RequestRefusal::CodeUsed),
         Delivery::Refused(HelloRefusal::AlreadyFriends) => drop_refused(core, request, RequestRefusal::AlreadyFriends),
         Delivery::Refused(HelloRefusal::Unsupported) => drop_refused(core, request, RequestRefusal::Unsupported),
     }
+}
+
+async fn deliver_code(core: &Core, runtime: &Runtime, request_id: &str, hello_id: PeerId, secret: &str) -> Delivery {
+    let delivery = hello::send_request(&runtime.main, hello_id, secret, core.own_profile()).await;
+    if let Delivery::Received { peer, profile } = &delivery {
+        mark_received(core, request_id, peer, profile.clone());
+    }
+    delivery
 }
 
 /// Eine endgültig abgelehnte Anfrage verschwindet; die Oberfläche erfährt den Grund (`friend-request-refused`).
@@ -202,10 +243,15 @@ pub(super) fn accept_answer(
     let peer_id = peer.to_string();
     let Some(request) = awaiting_answer_from(core, &peer_id) else { return Ok(false) };
     let home_relay = home_relay.filter(|index| find_relay(&core.options.relay_map, *index).is_some());
+    // Per Name hat Mojang das Konto beim Einlösen bestätigt; das selbst angegebene Profil ersetzt das nicht.
+    let (mc_name, mc_uuid) = match request.via {
+        RequestVia::Code => (profile.mc_name, profile.mc_uuid),
+        RequestVia::Name => (request.mc_name.clone(), request.mc_uuid.clone()),
+    };
     let friend = FriendRecord {
         display_name: profile.display_name,
-        mc_name: profile.mc_name,
-        mc_uuid: profile.mc_uuid,
+        mc_name,
+        mc_uuid,
         home_relay,
         ..new_friend(&peer_id, &request, true)
     };
@@ -235,9 +281,11 @@ pub(super) fn remove_requests_of(core: &Core, peer_id: &str) -> AppResult<()> {
 }
 
 /// Nach einem neuen Schlüssel: eingehende und angekommene ausgehende Anfragen hängen an der alten ID (SPEC 4.6).
+/// Eingehende per Name bleiben: ihr Brief hängt an der ID des Absenders (BYNAME 7.5).
 pub(super) fn drop_requests_bound_to_old_id(core: &Core) -> AppResult<()> {
     for request in core.stores.requests.list() {
-        if request.state != RequestState::Delivering {
+        let is_letter = request.via == RequestVia::Name && request.direction == RequestDirection::Incoming;
+        if request.state != RequestState::Delivering && !is_letter {
             core.stores.requests.remove(&request.id)?;
         }
     }
@@ -309,6 +357,7 @@ pub(super) fn request_view(record: RequestRecord) -> FriendRequest {
         code_tail: record.code_tail,
         created_at: record.created_at,
         expires_at: record.expires_at,
+        via: record.via,
     }
 }
 
@@ -320,13 +369,13 @@ async fn close_expired_hello_endpoints(core: &Core, runtime: &Runtime) {
     }
 }
 
-fn dial_now(core: &Arc<Core>, target: Target) {
+pub(super) fn dial_now(core: &Arc<Core>, target: Target) {
     if let Some(runtime) = core.runtime() {
         runtime.scheduler.dial_now(&status::presence_plan(core, &runtime), target);
     }
 }
 
-fn mark_received(core: &Core, request_id: &str, peer: &PeerId, profile: WireProfile) {
+pub(super) fn mark_received(core: &Core, request_id: &str, peer: &PeerId, profile: WireProfile) {
     let marked = core.stores.requests.modify(request_id, |request| {
         request.state = RequestState::AwaitingAnswer;
         request.peer_id = Some(peer.to_string());
@@ -369,6 +418,8 @@ fn incoming_record(core: &Core, code: &CodeRecord, peer_id: &str, profile: WireP
         code_tail: Some(code.tail.clone()),
         created_at: now_secs(),
         expires_at: core.request_deadline(),
+        via: RequestVia::Code,
+        mail_id: None,
     }
 }
 
@@ -396,17 +447,32 @@ fn pending_from(core: &Core, peer_id: &str) -> Option<RequestRecord> {
     request_of(core, peer_id).filter(|request| request.state == RequestState::Pending)
 }
 
+/// Ob noch eine eingehende Anfrage Platz hat (SPEC 12.4).
+pub(super) fn has_room_for_incoming(core: &Core) -> bool {
+    pending_count(core) < MAX_PENDING_INCOMING
+}
+
 fn pending_count(core: &Core) -> usize {
     core.stores.requests.list().iter().filter(|request| request.state == RequestState::Pending).count()
 }
 
 /// Freunde (auch unbestätigte) und ausgehende Anfragen zählen zur Grenze von 50.
-fn ensure_friend_capacity(core: &Core) -> AppResult<()> {
-    let outgoing = core.stores.requests.list().iter().filter(|r| r.direction == RequestDirection::Outgoing).count();
-    if core.stores.friends.list().len() + outgoing >= MAX_FRIENDS {
+pub(super) fn ensure_friend_capacity(core: &Core) -> AppResult<()> {
+    if friend_slots_used(core) >= MAX_FRIENDS {
         return Err(AppError::invalid(coded!("errors.friends.friendLimit", max = MAX_FRIENDS)));
     }
     Ok(())
+}
+
+/// Ob der Einlöser eines eigenen Codes per Name Freund werden kann; die Anfrage zu diesem Code macht ihm Platz.
+pub(super) fn has_room_for_redeemer(core: &Core, request_id: &str) -> bool {
+    let freed = usize::from(core.stores.requests.get(request_id).is_ok());
+    friend_slots_used(core) - freed < MAX_FRIENDS
+}
+
+fn friend_slots_used(core: &Core) -> usize {
+    let outgoing = core.stores.requests.list().iter().filter(|r| r.direction == RequestDirection::Outgoing).count();
+    core.stores.friends.list().len() + outgoing
 }
 
 fn not_found(request_id: &str) -> AppError {

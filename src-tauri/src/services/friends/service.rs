@@ -1,6 +1,6 @@
 //! Der Freunde-Dienst (SPEC 3.7, 4.1, 4.6, 8.7): Verfügbarkeit, Aktivieren und Abschalten, Identität erneuern oder
-//! zurücksetzen, die Endpunkte mit ihrem Lebenszyklus und die Naht für Sitzungen (R5). Anfragen, Codes, Präsenz und
-//! Postausgang liegen in eigenen Modulen, die [`Friends`] um ihre Befehle erweitern.
+//! zurücksetzen, die Endpunkte mit ihrem Lebenszyklus und die Naht für Sitzungen (R5). Anfragen, Codes, Präsenz,
+//! Postausgang und das Verzeichnis liegen in eigenen Modulen, die [`Friends`] um ihre Befehle erweitern.
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock, RwLock, Weak};
@@ -10,19 +10,21 @@ use futures::future::BoxFuture;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
+use super::by_name::DirectoryClient;
 use super::config::{friends_dir, FriendsConfig};
 use super::contract::{
     Availability, DegradedReason, FriendsEnableInput, FriendsSettings, FriendsState, Me, NetworkStatus, RelayInfo,
     RelayOperatorKind, REQUEST_TTL_SECS,
 };
 use super::control::{SessionControl, WireProfile, PEER_ALPN};
+use super::directory::DirectoryDeps;
 use super::events::{EventSink, FriendsEvent, NoEvents};
 use super::identity::{self, Identity, Renewal};
 use super::outbox;
 use super::records::RecordStores;
 use super::sanitize;
 use super::status::{self, Links, Patches, Scheduler};
-use super::{hello, requests};
+use super::{by_name, hello, requests};
 use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::now_ms;
@@ -142,6 +144,9 @@ pub(super) struct Core {
     /// Aktivieren, Abschalten, Neu-Binden und Identitätswechsel laufen nacheinander.
     transitions: tokio::sync::Mutex<()>,
     signals: Mutex<Option<broadcast::Receiver<GameSignal>>>,
+    /// Worker, Mojang und Konto für Freunde per Name; fehlt in Builds ohne Verzeichnis (BYNAME 9.1).
+    pub(super) directory: OnceLock<DirectoryDeps>,
+    pub(super) by_name: DirectoryClient,
 }
 
 /// Was nur lebt, solange die Funktion aktiv ist und der Haupt-Endpunkt gebunden.
@@ -184,6 +189,8 @@ impl Friends {
             runtime: Mutex::new(None),
             transitions: tokio::sync::Mutex::new(()),
             signals: Mutex::new(Some(signals.subscribe())),
+            directory: OnceLock::new(),
+            by_name: DirectoryClient::default(),
         };
         Ok(Self { core: Arc::new(core) })
     }
@@ -232,14 +239,16 @@ impl Friends {
             config.enabled = true;
             config.third_party_relays_accepted = input.accept_third_party_relays;
         })?;
-        core.apply_settings(FriendsSettings { display_name, always_relay: input.always_relay }).await?;
+        let settings =
+            FriendsSettings { display_name, always_relay: input.always_relay, findable_by_name: input.findable_by_name };
+        core.apply_settings(settings).await?;
         core.activate().await;
         core.emit(FriendsEvent::Changed);
         Ok(core.state())
     }
 
     /// Die Microsoft-Konten haben sich geändert (Anmelden, Entfernen): verbundene Freunde bekommen das neue Profil,
-    /// wenn sich das angekündigte Konto geändert hat (SPEC 4.1).
+    /// wenn sich das angekündigte Konto geändert hat (SPEC 4.1), und das Verzeichnis erfährt den Wechsel (BYNAME 7.5).
     pub fn update_account(&self, account: Option<AccountProfile>) {
         let core = &self.core;
         let changed = {
@@ -250,6 +259,7 @@ impl Friends {
         };
         if changed {
             core.links.broadcast_profile(core.own_profile());
+            by_name::account_changed(core);
         }
     }
 
@@ -260,13 +270,15 @@ impl Friends {
         core.ensure_available()?;
         core.deactivate(Lifecycle::Disabled).await;
         core.bridge.stop().await;
+        by_name::leave_directory(core).await;
         core.update_config(|config| config.enabled = false)?;
         core.set_network(NetworkStatus::Off);
         core.emit(FriendsEvent::Changed);
         Ok(core.state())
     }
 
-    /// Ein geänderter Anzeigename geht an alle verbundenen Freunde; „Immer über Relay“ bindet neu und beendet Sitzungen.
+    /// Ein geänderter Anzeigename geht an alle verbundenen Freunde; „Immer über Relay“ bindet neu und beendet
+    /// Sitzungen.
     pub async fn update_settings(&self, settings: FriendsSettings) -> AppResult<FriendsState> {
         let core = &self.core;
         let _transition = core.transitions.lock().await;
@@ -357,6 +369,7 @@ impl Core {
             network: lock(&self.network).clone(),
             relays: relay_infos(&self.options.relay_map),
             third_party_relays_accepted: config.third_party_relays_accepted,
+            directory: by_name::directory_status(self),
         }
     }
 
@@ -419,6 +432,11 @@ impl Core {
         }
     }
 
+    /// UUID des ersten Microsoft-Kontos, 32 Hex-Zeichen.
+    pub(super) fn account_uuid(&self) -> Option<String> {
+        lock(&self.account).as_ref().map(|account| account.uuid.clone())
+    }
+
     /// Dauer der Freundschaftsanfragen und der unbestätigten Freunde.
     pub(super) fn request_deadline(&self) -> u64 {
         now_secs() + REQUEST_TTL_SECS
@@ -428,7 +446,7 @@ impl Core {
         *lock(&self.identity) = Some(identity);
     }
 
-    fn update_config(&self, change: impl FnOnce(&mut FriendsConfig)) -> AppResult<()> {
+    pub(super) fn update_config(&self, change: impl FnOnce(&mut FriendsConfig)) -> AppResult<()> {
         let mut config = lock(&self.config);
         change(&mut config);
         config.save(&self.dir)
@@ -452,18 +470,22 @@ impl Core {
         let Renewal { retired, current } = identity::renew(&*self.secrets)?;
         let old = retired.ok_or_else(|| AppError::invalid(coded!("errors.friends.identityLost")))?;
         self.set_identity(current.clone());
+        by_name::forget_session(self);
         outbox::replace_with_rotation(self, &old, &current)?;
+        by_name::retract_own_letters(self);
         hello::delete_all_codes(self)?;
         requests::drop_requests_bound_to_old_id(self)
     }
 
-    /// Mit altem Schlüssel erfahren die Freunde das Ende; ohne (verlorene Identität) gibt es niemanden zu benachrichtigen.
+    /// Mit altem Schlüssel erfahren die Freunde das Ende; ohne (verlorene Identität) gibt es niemanden zu
+    /// benachrichtigen.
     fn reset_records(&self) -> AppResult<()> {
         if self.identity().is_some() {
             outbox::replace_with_unfriend(self)?;
         }
         let Renewal { current, .. } = identity::renew(&*self.secrets)?;
         self.set_identity(current);
+        by_name::forget_session(self);
         requests::delete_all_records(self)?;
         *lock(&self.availability) = Availability::Available;
         Ok(())
@@ -472,6 +494,9 @@ impl Core {
     async fn apply_settings(self: &Arc<Self>, settings: FriendsSettings) -> AppResult<()> {
         let previous = self.config().settings;
         self.update_config(|config| config.settings = settings.clone())?;
+        if previous.findable_by_name != settings.findable_by_name {
+            by_name::findability_changed(self, settings.findable_by_name);
+        }
         if previous.always_relay != settings.always_relay && self.runtime().is_some() {
             self.restart(Lifecycle::Rebind).await;
         } else if previous.display_name != settings.display_name {
@@ -514,6 +539,7 @@ impl Core {
         hello::bind_active_codes(self, &runtime).await;
         requests::spawn_hourly_prune(self, &runtime);
         outbox::spawn_delivery(self, &runtime);
+        by_name::spawn_directory_loop(self, &runtime.stop);
     }
 
     /// Meldet `kind` an alle Abonnenten, wartet auf sie und schließt erst dann die Endpunkte (SPEC 8.7).

@@ -1,20 +1,53 @@
-//! Tauri-Commands der Freunde (SPEC 8.4, von `friends_state` bis `friends_retry_now`). Dünne Schicht über
+//! Tauri-Commands der Freunde (SPEC 8.4, von `friends_state` bis `friends_retry_now`, BYNAME 9.4). Dünne Schicht über
 //! `AppState.friends`; Sitzungen, Einladungen, Mod und Skins liegen in `friends_session_commands.rs` (R5).
-use tauri::State;
+use futures::future::BoxFuture;
+use futures::FutureExt;
+use tauri::{AppHandle, Manager, State};
 
-use crate::error::AppResult;
-use crate::models::AccountKind;
+use crate::coded;
+use crate::error::{AppError, AppResult};
+use crate::models::{AccountKind, MsAccount};
+use crate::services::auth;
 use crate::services::friends::contract::{
     BlockedPeer, Friend, FriendCode, FriendRequest, FriendsEnableInput, FriendsSettings, FriendsState,
 };
+use crate::services::friends::directory::{AccountTokens, McIdentity};
 use crate::services::friends::AccountProfile;
 use crate::state::AppState;
 
 /// Das erste Microsoft-Konto; der Launcher merkt sich kein „aktives“ Konto im Backend.
 pub(crate) fn account_profile(state: &AppState) -> Option<AccountProfile> {
-    let accounts = state.accounts.list().into_iter();
-    let microsoft = accounts.filter(|account| account.kind == AccountKind::Microsoft);
-    microsoft.map(|account| AccountProfile::new(&account.username, &account.id)).next()
+    first_microsoft_account(state).map(|account| AccountProfile::new(&account.username, &account.id))
+}
+
+fn first_microsoft_account(state: &AppState) -> Option<MsAccount> {
+    state.accounts.list().into_iter().find(|account| account.kind == AccountKind::Microsoft)
+}
+
+/// Die Minecraft-Sitzung des ersten Microsoft-Kontos für das Verzeichnis (BYNAME 9.1). Der Weg über den `AppHandle`
+/// bricht den Kreis: `AppState` enthält den Freunde-Dienst, der diese Sitzung braucht.
+pub(crate) struct AppAccountTokens {
+    handle: AppHandle,
+}
+
+impl AppAccountTokens {
+    pub(crate) fn new(handle: AppHandle) -> Self {
+        Self { handle }
+    }
+}
+
+impl AccountTokens for AppAccountTokens {
+    fn minecraft_session(&self) -> BoxFuture<'_, AppResult<McIdentity>> {
+        async move {
+            let state = self.handle.state::<AppState>();
+            let stored = first_microsoft_account(&state)
+                .ok_or_else(|| AppError::invalid(coded!("errors.friends.msAccountRequired")))?;
+            let (account, session) = auth::session(&state, &stored.id).await?;
+            let profile = AccountProfile::new(&account.username, &account.id);
+            Ok(McIdentity { uuid: profile.uuid, name: profile.name, access_token: session.access_token })
+        }
+        .boxed()
+    }
 }
 
 #[tauri::command]
@@ -75,6 +108,12 @@ pub async fn friend_code_revoke(state: State<'_, AppState>, code_id: String) -> 
 #[tauri::command]
 pub async fn friend_add(state: State<'_, AppState>, code: String) -> AppResult<FriendRequest> {
     state.friends.add(&code).await
+}
+
+/// Anfrage an den Spieler mit genau diesem Minecraft-Namen (BYNAME 7.1).
+#[tauri::command]
+pub async fn friend_add_by_name(state: State<'_, AppState>, name: String) -> AppResult<FriendRequest> {
+    state.friends.add_by_name(&name).await
 }
 
 #[tauri::command]

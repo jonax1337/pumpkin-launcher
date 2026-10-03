@@ -7,7 +7,7 @@ import type {
 import type { ContentProgress } from "./progress";
 import type {
   Account, BlockedPeer, ContentAnalysis, Datapack, ExitPayload, ExportSummary, FileCheck, ForeignInstance, Friend, FriendCode,
-  FriendPresenceEvent, FriendRequest, FriendRequestEvent, FriendsEnableInput, FriendsSettings, FriendsState, HostSession,
+  FriendPresenceEvent, FriendRequest, FriendRequestEvent, FriendRequestRefusedEvent, FriendsEnableInput, FriendsSettings, FriendsState, HostSession,
   HostSessionEndedEvent, HostSessionEvent, IconChoice, ImportRequest, Instance, InstallProgress, InstanceScene, InstanceStatus, Invite,
   InviteEvent, InviteRevokedEvent, JavaInstall, JoinPlan, JoinSessionEvent, JoinTicket, LanEvent, LanStatus, LaunchOptions, LibrarySkin,
   LoaderVersion, LocalFile, LogKind, LogPayload, LogSession, MigrationCheck, MigrationOutcome, MigrationTarget, ModConfirmEvent,
@@ -30,6 +30,7 @@ export interface BackendEvents {
   "friends-network": NetworkStatus;
   "friend-presence": FriendPresenceEvent;
   "friend-request": FriendRequestEvent;
+  "friend-request-refused": FriendRequestRefusedEvent;
   "friend-invite": InviteEvent;
   "friend-invite-revoked": InviteRevokedEvent;
   "host-session": HostSessionEvent;
@@ -248,6 +249,7 @@ export interface Backend {
   onFriendsNetwork(cb: (p: NetworkStatus) => void): Promise<UnlistenFn>;
   onFriendPresence(cb: (p: FriendPresenceEvent) => void): Promise<UnlistenFn>;
   onFriendRequest(cb: (p: FriendRequestEvent) => void): Promise<UnlistenFn>;
+  onFriendRequestRefused(cb: (p: FriendRequestRefusedEvent) => void): Promise<UnlistenFn>;
   onFriendInvite(cb: (p: InviteEvent) => void): Promise<UnlistenFn>;
   onFriendInviteRevoked(cb: (p: InviteRevokedEvent) => void): Promise<UnlistenFn>;
   onHostSession(cb: (p: HostSessionEvent) => void): Promise<UnlistenFn>;
@@ -426,6 +428,7 @@ export const eventSubscriptions = (on: Subscribe) => ({
   onFriendsNetwork: (cb) => on("friends-network", cb),
   onFriendPresence: (cb) => on("friend-presence", cb),
   onFriendRequest: (cb) => on("friend-request", cb),
+  onFriendRequestRefused: (cb) => on("friend-request-refused", cb),
   onFriendInvite: (cb) => on("friend-invite", cb),
   onFriendInviteRevoked: (cb) => on("friend-invite-revoked", cb),
   onHostSession: (cb) => on("host-session", cb),

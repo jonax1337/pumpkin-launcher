@@ -10,15 +10,16 @@ use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tokio::time::{timeout, Instant};
 
-use super::code::{self, secret_matches};
+use super::code::{self, secret_matches, IssuedCode};
 use super::contract::{FriendCode, CODE_TTL_SECS, MAX_ACTIVE_CODES};
 use super::control::{signature_bytes, WireProfile, PROTOCOL_VERSION};
 use super::events::FriendsEvent;
 use super::identity::{self, Identity};
 use super::limits::{SlidingWindow, HELLO_FRAME_LIMIT, HELLO_PER_CODE, HELLO_PER_PEER_AND_CODE};
 use super::records::CodeRecord;
-use super::requests;
 use super::service::{hello_net_config, now_secs, Core, Friends, Runtime};
+use super::status::Target;
+use super::{by_name, requests};
 use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::new_id;
@@ -30,6 +31,8 @@ pub const HELLO_ALPN: &[u8] = b"pumpkin/hello/1";
 const BIND_DOMAIN: &[u8] = b"pumpkin/bind/1";
 /// Anfrage und Antwort am Hello-Endpunkt (SPEC 5.1).
 const HELLO_WAIT: Duration = Duration::from_secs(10);
+/// Bei Anfragen per Name liegen beide Mojang-Nachweise in dieser Wartezeit (BYNAME 7.4).
+pub(super) const HELLO_NAME_WAIT: Duration = Duration::from_secs(20);
 
 /// Anfrage des Eingeladenen an den Hello-Endpunkt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -80,23 +83,13 @@ impl Friends {
     pub async fn code_create(&self) -> AppResult<FriendCode> {
         let core = &self.core;
         core.ensure_enabled()?;
-        if active_codes(core).len() >= MAX_ACTIVE_CODES {
+        if own_codes(core).len() >= MAX_ACTIVE_CODES {
             return Err(AppError::invalid(coded!("errors.friends.tooManyCodes", max = MAX_ACTIVE_CODES)));
         }
         let identity = core.identity().ok_or_else(|| AppError::invalid(coded!("errors.friends.identityLost")))?;
         let relay_index = code_relay(core)?;
         let issued = code::issue(&identity, relay_index)?;
-        let now = now_secs();
-        let record = CodeRecord {
-            id: new_id(),
-            salt: HEXLOWER.encode(&issued.salt),
-            secret_sha256: issued.parts.secret_digest(),
-            relay_index,
-            tail: issued.parts.tail(),
-            created_at: now,
-            expires_at: now + CODE_TTL_SECS,
-            used_by: None,
-        };
+        let record = code_record(&issued, CODE_TTL_SECS, None);
         core.stores.codes.insert(record.clone())?;
         if let Some(runtime) = core.runtime() {
             bind_code(core, &runtime, &record).await;
@@ -107,7 +100,7 @@ impl Friends {
 
     pub async fn codes(&self) -> AppResult<Vec<FriendCode>> {
         self.core.ensure_enabled()?;
-        Ok(active_codes(&self.core).iter().map(code_view).collect())
+        Ok(own_codes(&self.core).iter().map(code_view).collect())
     }
 
     /// Widerruft den Code; sein Hello-Endpunkt geht sofort zu.
@@ -123,7 +116,24 @@ impl Friends {
     }
 }
 
-/// Bindet die Hello-Endpunkte aller noch gültigen Codes.
+/// Der gespeicherte Teil eines neuen Codes: das Geheimnis nur als Hash. `name_request_to` nennt das Ziel einer Anfrage
+/// per Name, deren Code das ist.
+pub(super) fn code_record(issued: &IssuedCode, ttl_secs: u64, name_request_to: Option<String>) -> CodeRecord {
+    let now = now_secs();
+    CodeRecord {
+        id: new_id(),
+        salt: HEXLOWER.encode(&issued.salt),
+        secret_sha256: issued.parts.secret_digest(),
+        relay_index: issued.parts.relay_index,
+        tail: issued.parts.tail(),
+        created_at: now,
+        expires_at: now + ttl_secs,
+        used_by: None,
+        name_request_to,
+    }
+}
+
+/// Bindet die Hello-Endpunkte aller noch gültigen Codes, auch der Codes von Anfragen per Name.
 pub(super) async fn bind_active_codes(core: &Arc<Core>, runtime: &Arc<Runtime>) {
     for record in active_codes(core) {
         bind_code(core, runtime, &record).await;
@@ -152,10 +162,15 @@ pub(super) fn delete_all_codes(core: &Core) -> AppResult<()> {
     Ok(())
 }
 
-/// Codes, deren Gültigkeit noch läuft, eingelöst oder nicht.
+/// Codes, deren Gültigkeit noch läuft, eingelöst oder nicht; mit den Codes der Anfragen per Name.
 pub(super) fn active_codes(core: &Core) -> Vec<CodeRecord> {
     let now = now_secs();
     core.stores.codes.list().into_iter().filter(|record| record.expires_at > now).collect()
+}
+
+/// Die gültigen Codes, die der Nutzer selbst erzeugt hat; nur sie zählen zur Grenze und zur Liste (BYNAME 9.2).
+fn own_codes(core: &Core) -> Vec<CodeRecord> {
+    active_codes(core).into_iter().filter(|record| record.name_request_to.is_none()).collect()
 }
 
 /// Hello-IDs der eigenen gültigen Codes, damit niemand seinen eigenen Code einlöst.
@@ -163,20 +178,48 @@ pub(super) fn own_hello_ids(core: &Core, identity: &Identity) -> Vec<[u8; 32]> {
     active_codes(core).iter().filter_map(|record| salt_of(record).map(|salt| identity.hello_id(&salt))).collect()
 }
 
+/// Eine beantwortete Anfrage, deren Verbindung offen bleibt, bis der Aufrufer die Antwort geprüft hat.
+pub(super) struct AnsweredRequest {
+    conn: Option<PeerConn>,
+    pub(super) delivery: Delivery,
+}
+
+impl AnsweredRequest {
+    /// Schließt die Verbindung normal; der Code-Besitzer wartet auf dieses Schließen.
+    pub(super) fn close(self) -> Delivery {
+        if let Some(conn) = self.conn {
+            conn.close(CloseCode::NORMAL);
+        }
+        self.delivery
+    }
+}
+
 /// Stellt die Anfrage an den Hello-Endpunkt `hello_id` und prüft die Unterschrift der Antwort (SPEC 5.2).
 pub(super) async fn send_request(net: &PeerNet, hello_id: PeerId, secret_hex: &str, profile: WireProfile) -> Delivery {
-    let Ok(conn) = net.dial(&hello_id, HELLO_ALPN).await else { return Delivery::Failed };
+    request_answer(net, hello_id, secret_hex, profile, HELLO_WAIT).await.close()
+}
+
+/// Wie [`send_request`], aber erst [`AnsweredRequest::close`] schließt die Verbindung.
+pub(super) async fn request_answer(
+    net: &PeerNet,
+    hello_id: PeerId,
+    secret_hex: &str,
+    profile: WireProfile,
+    wait: Duration,
+) -> AnsweredRequest {
+    let Ok(conn) = net.dial(&hello_id, HELLO_ALPN).await else {
+        return AnsweredRequest { conn: None, delivery: Delivery::Failed };
+    };
     let request = HelloRequest::FriendRequest { protocol: PROTOCOL_VERSION, secret: secret_hex.to_owned(), profile };
-    let answer = timeout(HELLO_WAIT, exchange(&conn, &request)).await;
-    conn.close(CloseCode::NORMAL);
-    match answer {
+    let delivery = match timeout(wait, exchange(&conn, &request)).await {
         Ok(Ok(answer)) => evaluate(answer, &hello_id, &net.id()),
         Ok(Err(err)) => {
             tracing::debug!(%err, "keine Antwort vom Hello-Endpunkt");
             Delivery::Failed
         }
         Err(_) => Delivery::Failed,
-    }
+    };
+    AnsweredRequest { conn: Some(conn), delivery }
 }
 
 async fn exchange(conn: &PeerConn, request: &HelloRequest) -> Result<HelloAnswer, FrameError> {
@@ -201,7 +244,7 @@ fn evaluate(answer: HelloAnswer, hello_id: &PeerId, own_id: &PeerId) -> Delivery
 }
 
 /// Codes liegen am Heim-Relay; vor dem ersten Kontakt am ersten Relay der Karte.
-fn code_relay(core: &Core) -> AppResult<u8> {
+pub(super) fn code_relay(core: &Core) -> AppResult<u8> {
     let home = core.runtime().and_then(|runtime| runtime.main.home_relay());
     home.or_else(|| core.options.relay_map.first().map(|entry| entry.index))
         .ok_or_else(|| AppError::invalid(coded!("errors.friends.networkUnavailable")))
@@ -222,7 +265,7 @@ fn salt_of(record: &CodeRecord) -> Option<[u8; 16]> {
     HEXLOWER.decode(record.salt.as_bytes()).ok()?.try_into().ok()
 }
 
-async fn bind_code(core: &Arc<Core>, runtime: &Arc<Runtime>, record: &CodeRecord) {
+pub(super) async fn bind_code(core: &Arc<Core>, runtime: &Arc<Runtime>, record: &CodeRecord) {
     let Some(salt) = salt_of(record) else {
         tracing::warn!(code = %record.id, "Code ohne gültiges Salz, kein Hello-Endpunkt");
         return;
@@ -259,14 +302,24 @@ async fn answer_request(core: Arc<Core>, runtime: Arc<Runtime>, hello_id: PeerId
         }
         Err(_) => return conn.close(CloseCode::PROTOCOL),
     };
-    let Some(answer) = decide(&core, &runtime.identity, &hello_id, &code_id, &conn.remote(), request) else {
+    let Some(code) = core.stores.codes.get(&code_id).ok().filter(|code| code.expires_at > now_secs()) else {
         return conn.close(CloseCode::NORMAL);
     };
+    let peer = conn.remote();
+    let Some(answer) = decide(&core, &runtime.identity, &hello_id, &code, &peer, request).await else {
+        return conn.close(CloseCode::NORMAL);
+    };
+    let by_name = code.name_request_to.is_some();
+    let wait = if by_name { HELLO_NAME_WAIT } else { HELLO_WAIT };
     if frame::write(&mut stream, &answer, HELLO_FRAME_LIMIT).await.is_ok() {
         let _ = stream.shutdown().await;
-        let _ = timeout(HELLO_WAIT, conn.closed()).await;
+        let _ = timeout(wait, conn.closed()).await;
     }
     conn.close(CloseCode::NORMAL);
+    // Erst jetzt: vor seinem Schließen hat der Einlöser uns als erwartete Antwort eingetragen (BYNAME 7.4, Schritt 6).
+    if by_name && matches!(answer, HelloAnswer::Received { .. }) {
+        requests::dial_now(&core, Target::Friend(peer));
+    }
 }
 
 async fn read_request(conn: &PeerConn) -> Result<(BiStream, HelloRequest), FrameError> {
@@ -275,28 +328,35 @@ async fn read_request(conn: &PeerConn) -> Result<(BiStream, HelloRequest), Frame
     Ok((stream, request))
 }
 
-/// Die Antwort auf eine Anfrage; `None` heißt Schweigen (falsches Geheimnis oder kein gültiger Code mehr).
-fn decide(
-    core: &Core,
+/// Die Antwort auf eine Anfrage an einen gültigen Code; `None` heißt Schweigen: falsches Geheimnis, bei einem Code per
+/// Name auch ein fehlender Mojang-Nachweis.
+async fn decide(
+    core: &Arc<Core>,
     identity: &Identity,
     hello_id: &PeerId,
-    code_id: &str,
+    code: &CodeRecord,
     peer: &PeerId,
     request: HelloRequest,
 ) -> Option<HelloAnswer> {
     let HelloRequest::FriendRequest { protocol: PROTOCOL_VERSION, secret, profile } = request else {
         return Some(HelloAnswer::Error { code: HelloRefusal::Unsupported });
     };
-    let code = core.stores.codes.get(code_id).ok().filter(|code| code.expires_at > now_secs())?;
     if !secret_matches(&code.secret_sha256, &secret) {
         return None;
     }
     let peer_id = peer.to_string();
-    Some(match requests::receive(core, &code, &peer_id, profile.sanitized(&peer_id)) {
-        Ok(()) => HelloAnswer::Received {
+    let outcome = match code.name_request_to {
+        None => requests::receive(core, code, &peer_id, profile.sanitized(&peer_id)).map(|()| core.own_profile()),
+        Some(_) => {
+            let redemption = by_name::Redemption { code, hello_id, redeemer: peer, secret_hex: &secret };
+            by_name::answer_redemption(core, &redemption, profile).await?
+        }
+    };
+    Some(match outcome {
+        Ok(own_profile) => HelloAnswer::Received {
             peer_id: identity.peer_id(),
             binding: HEXLOWER.encode(&identity.sign(BIND_DOMAIN, &[hello_id.as_bytes(), peer.as_bytes()])),
-            profile: core.own_profile(),
+            profile: own_profile,
         },
         Err(refusal) => HelloAnswer::Error { code: refusal },
     })

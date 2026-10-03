@@ -4,6 +4,7 @@ pub mod code;
 pub mod config;
 pub mod contract;
 pub mod control;
+pub mod directory;
 pub mod events;
 mod hello;
 pub mod identity;
@@ -35,6 +36,9 @@ pub mod session_events;
 mod sessions;
 #[cfg(test)]
 mod tests_session;
+mod by_name;
+#[cfg(test)]
+mod tests_by_name;
 
 pub use service::{
     AccountProfile, Friends, HandlerAlreadySet, Lifecycle, LifecycleEvent, NetOptions, NotConnected, PeerStreamHandler,

@@ -223,8 +223,12 @@ impl Node {
         sessions.start(events.clone()).unwrap();
         let account = AccountProfile::new(name, ACCOUNT_UUID);
         friends.start(Arc::new(NoEvents), Some(account.clone())).await;
-        let input =
-            FriendsEnableInput { display_name: name.into(), always_relay: false, accept_third_party_relays: false };
+        let input = FriendsEnableInput {
+            display_name: name.into(),
+            always_relay: false,
+            accept_third_party_relays: false,
+            findable_by_name: false,
+        };
         friends.enable(input, Some(account)).await.unwrap();
         let node = Self { friends, sessions, events, signals, bridge, instances, dirs, _dir: dir };
         node.add_instance(HOST_INSTANCE, "26.3");
@@ -1049,7 +1053,7 @@ async fn row_host_changes_always_relay() {
     let (_ticket, mut game) = scene.playing().await;
     let changed = Instant::now();
 
-    let settings = FriendsSettings { display_name: "Anna".into(), always_relay: true };
+    let settings = FriendsSettings { display_name: "Anna".into(), always_relay: true, findable_by_name: false };
     scene.host.friends.update_settings(settings).await.unwrap();
 
     scene.host.wait_host_end(SessionEnd::Stopped).await;
@@ -1138,7 +1142,7 @@ async fn a_guest_rebind_ends_the_join_with_left() {
     let scene = Scene::shared().await;
     let (_ticket, _game) = scene.playing().await;
 
-    let settings = FriendsSettings { display_name: "Bert".into(), always_relay: true };
+    let settings = FriendsSettings { display_name: "Bert".into(), always_relay: true, findable_by_name: false };
     scene.guest.friends.update_settings(settings).await.unwrap();
 
     scene.guest.wait_join_end(SessionEnd::Left).await;
