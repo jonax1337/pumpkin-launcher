@@ -45,7 +45,7 @@ export const friends: typeof deFriends = {
   "friends.requests.deliveringName": "Connects as soon as {name} is online",
   "friends.requests.toName": "Request to {name}",
   "friends.requests.minecraft": "Minecraft: {name}",
-  "friends.requests.nameChecked": "Checked by the directory; when you accept, both launchers check the account with Mojang once more",
+  "friends.requests.nameChecked": "Account checked by the directory with Mojang's certificate, name looked up at Mojang; on accepting, both launchers check the account at Mojang again",
   "friends.requests.refused": "Request to {target} failed: {reason}",
 
   // ---------- Friend row ----------
