@@ -44,6 +44,16 @@ export const mock: typeof deMock = {
   "mock.friends.lanPortUnknown": "The LAN port is not known yet; open the world to LAN in the game or enter the port",
   "mock.friends.portInvalid": "Port: {min} to {max}",
   "mock.friends.guestLimit": "At most {max} friends at the same time",
+  "mock.friends.alreadyFriends": "You are already friends",
+  "mock.friends.nameInvalid": "That is not a valid Minecraft name",
+  "mock.friends.nameUnknown": "There is no Minecraft player called “{name}”",
+  "mock.friends.nameNotFindable": "{name} can't be found by name; exchange a friend code instead",
+  "mock.friends.nameOwn": "That is your own Minecraft name",
+  "mock.friends.alreadyRequestedName": "A request to {name} is already on its way",
+  "mock.friends.tooManyNameRequests": "At most {max} open requests by name; wait for answers or withdraw one",
+  "mock.friends.nameCooldown": "You already sent {name} a request in the last {days} days",
+  "mock.friends.directoryUnavailable": "The friends directory can't be reached right now; use a friend code",
+  "mock.friends.directoryNotAllowed": "Mojang doesn't allow multiplayer features for this account, so adding friends by name isn't possible",
 
   // Browser-Fassung von lib/api.ts
   "hooks.api.modpacksNeedApp": "Modrinth modpacks require the Tauri app. No modpacks are installed in the browser.",

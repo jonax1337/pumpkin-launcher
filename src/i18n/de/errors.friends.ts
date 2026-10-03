@@ -46,4 +46,14 @@ export const errorsFriends = {
   "errors.friends.hostStopped": "Dein Freund teilt die Welt nicht mehr",
   "errors.friends.modNotAvailable": "Die Freunde-Mod gibt es für Minecraft {version} noch nicht",
   "errors.friends.modConfirmDenied": "Teilen aus dem Spiel wurde im Launcher abgelehnt",
+
+  "errors.friends.nameInvalid": "Das ist kein gültiger Minecraft-Name",
+  "errors.friends.nameUnknown": "Es gibt keinen Minecraft-Spieler „{name}“",
+  "errors.friends.nameNotFindable": "{name} ist nicht per Name auffindbar; tauscht stattdessen einen Freundescode aus",
+  "errors.friends.nameOwn": "Das ist dein eigener Minecraft-Name",
+  "errors.friends.alreadyRequestedName": "An {name} geht schon eine Anfrage",
+  "errors.friends.tooManyNameRequests": "Höchstens {max} offene Anfragen per Name; warte auf Antworten oder ziehe eine zurück",
+  "errors.friends.nameCooldown": "Du hast {name} in den letzten {days} Tagen schon eine Anfrage geschickt",
+  "errors.friends.directoryUnavailable": "Das Freunde-Verzeichnis ist gerade nicht erreichbar; nutze einen Freundescode",
+  "errors.friends.directoryNotAllowed": "Mojang erlaubt diesem Konto keine Mehrspieler-Funktionen; Freunde per Name geht damit nicht",
 } satisfies Dict;

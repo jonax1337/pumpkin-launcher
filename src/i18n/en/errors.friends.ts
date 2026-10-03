@@ -46,4 +46,14 @@ export const errorsFriends: typeof deErrorsFriends = {
   "errors.friends.hostStopped": "Your friend is no longer sharing the world",
   "errors.friends.modNotAvailable": "The Friends mod is not available for Minecraft {version} yet",
   "errors.friends.modConfirmDenied": "Sharing from the game was denied in the launcher",
+
+  "errors.friends.nameInvalid": "That is not a valid Minecraft name",
+  "errors.friends.nameUnknown": "There is no Minecraft player called “{name}”",
+  "errors.friends.nameNotFindable": "{name} can't be found by name; exchange a friend code instead",
+  "errors.friends.nameOwn": "That is your own Minecraft name",
+  "errors.friends.alreadyRequestedName": "A request to {name} is already on its way",
+  "errors.friends.tooManyNameRequests": "At most {max} open requests by name; wait for answers or withdraw one",
+  "errors.friends.nameCooldown": "You already sent {name} a request in the last {days} days",
+  "errors.friends.directoryUnavailable": "The friends directory can't be reached right now; use a friend code",
+  "errors.friends.directoryNotAllowed": "Mojang doesn't allow multiplayer features for this account, so adding friends by name isn't possible",
 };

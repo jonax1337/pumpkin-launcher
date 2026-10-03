@@ -5,13 +5,18 @@ import type { ModLoader } from "./types";
 
 export const FRIENDS_LIMITS = { codePrefix: "pumpkin-", codeBodyLength: 72, codeLength: 80, displayNameMin: 3, displayNameMax: 32,
   aliasMax: 32, maxFriends: 50, maxActiveCodes: 3, maxGuests: 7, codeTtlSecs: 604800, requestTtlSecs: 1209600, inviteTtlSecs: 7200,
-  minMcReleaseTime: "2023-06-02T08:36:17+00:00", minMcLabel: "1.20", portMin: 1024, portMax: 65535 } as const;
+  minMcReleaseTime: "2023-06-02T08:36:17+00:00", minMcLabel: "1.20", portMin: 1024, portMax: 65535,
+  maxNameRequests: 5, mcNameMax: 16, nameCooldownDays: 7 } as const;
 export type Availability = "available" | "noSecretStore" | "identityLost";
 export interface FriendsState { availability: Availability; enabled: boolean; me: Me | null; settings: FriendsSettings;
-  network: NetworkStatus; relays: RelayInfo[]; thirdPartyRelaysAccepted: boolean }
+  network: NetworkStatus; relays: RelayInfo[]; thirdPartyRelaysAccepted: boolean;
+  directory: DirectoryStatus }
 export interface Me { peerId: string; fingerprint: string; displayName: string }
-export interface FriendsSettings { displayName: string; alwaysRelay: boolean }
-export interface FriendsEnableInput { displayName: string; alwaysRelay: boolean; acceptThirdPartyRelays: boolean }
+export interface FriendsSettings { displayName: string; alwaysRelay: boolean; findableByName: boolean }
+/** Verzeichnis für Freunde per Minecraft-Namen (docs/friends/BYNAME.md): `host` zeigt die Datenschutzhinweise, null = keins eingebunden. */
+export type DirectoryState = "unavailable" | "off" | "active" | "unreachable" | "notAllowed";
+export interface DirectoryStatus { state: DirectoryState; host: string | null }
+export interface FriendsEnableInput { displayName: string; alwaysRelay: boolean; acceptThirdPartyRelays: boolean; findableByName: boolean }
 export interface RelayInfo { host: string; operator: "pumpkin" | "n0"; thirdParty: boolean }
 export type NetworkStatus = { type: "off" } | { type: "starting" } | { type: "online"; relayHost: string } | { type: "degraded"; reason: DegradedReason };
 export type DegradedReason = "relayUnreachable" | "bindFailed";
@@ -23,7 +28,8 @@ export type Presence = "offline" | "online" | "playing";
 export type PathKind = "direct" | "relay";
 export interface FriendRequest { id: string; direction: "incoming" | "outgoing"; state: "pending" | "delivering" | "awaitingAnswer";
   peerId: string | null; fingerprint: string | null; displayName: string | null; mcName: string | null; codeTail: string | null;
-  createdAt: number; expiresAt: number }
+  createdAt: number; expiresAt: number; via: RequestVia }
+export type RequestVia = "code" | "name";
 export interface FriendCode { id: string; code: string | null; tail: string; createdAt: number; expiresAt: number; used: boolean }
 export interface BlockedPeer { peerId: string; displayName: string; blockedAt: number }
 export type PortSource = "mod" | "log" | "manual";
@@ -63,6 +69,7 @@ export interface FriendsFixtureTypes {
   "networkStatus.off": NetworkStatus; "networkStatus.starting": NetworkStatus; "networkStatus.online": NetworkStatus; "networkStatus.degraded": NetworkStatus;
   "friend.online": Friend; "friend.relayRenamed": Friend; "friend.identityChanged": Friend; "friend.unconfirmed": Friend;
   "request.incoming": FriendRequest; "request.delivering": FriendRequest; "request.awaitingAnswer": FriendRequest;
+  "request.nameIncoming": FriendRequest; "request.nameOutgoing": FriendRequest; "request.nameDelivering": FriendRequest;
   "code.created": FriendCode; "code.listed": FriendCode; blocked: BlockedPeer;
   hostSession: HostSession; invite: Invite;
   "joinPlan.ready": JoinPlan; "joinPlan.missing": JoinPlan; "joinPlan.vanilla": JoinPlan; joinTicket: JoinTicket;

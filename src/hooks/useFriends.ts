@@ -95,6 +95,8 @@ export const useRevokeFriendCode = () => useFriendsChange(api.friendCodeRevoke);
 
 export const useAddFriend = () => useFriendsChange(api.friendAdd);
 
+export const useAddFriendByName = () => useFriendsChange(api.friendAddByName);
+
 export const useAnswerFriendRequest = () =>
   useFriendsChange(({ requestId, accept }: { requestId: string; accept: boolean }) => api.friendRequestAnswer(requestId, accept));
 
