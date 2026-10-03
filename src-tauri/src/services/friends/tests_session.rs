@@ -1331,8 +1331,11 @@ async fn a_denied_share_reaches_the_mod_as_denied() {
     let host = Node::online(options(&relay), "Anna", RELAXED).await;
     let guest = Node::online(options(&relay), "Bert", RELAXED).await;
     befriend(&host, &guest).await;
+    let server = FakeServer::start().await;
     let env = host.bridge.launch_env(HOST_INSTANCE, ModLoader::Fabric);
     host.spawn_game(HOST_INSTANCE, None);
+    host.open_lan(server.port, PortSource::Mod);
+    host.wait_lan(HOST_INSTANCE).await;
     let mut game_mod = FakeMod::connect(&env).await;
     let alias = game_mod.online_friend_alias().await;
 
@@ -1344,6 +1347,24 @@ async fn a_denied_share_reaches_the_mod_as_denied() {
     assert_eq!(error["code"], "denied");
     assert!(host.session().await.is_none());
     assert!(guest.sessions.invites().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_share_that_cannot_start_a_session_is_refused_before_asking() {
+    let (relay, _server) = test_relay().await;
+    let host = Node::online(options(&relay), "Anna", RELAXED).await;
+    let guest = Node::online(options(&relay), "Bert", RELAXED).await;
+    befriend(&host, &guest).await;
+    let env = host.bridge.launch_env(HOST_INSTANCE, ModLoader::Fabric);
+    host.spawn_game(HOST_INSTANCE, None);
+    let mut game_mod = FakeMod::connect(&env).await;
+    let alias = game_mod.online_friend_alias().await;
+
+    game_mod.send(json!({ "type": "share", "friendIds": [alias] })).await;
+    let error = game_mod.next_where(|message| message["type"] == "error").await;
+
+    assert_eq!(error["code"], "lanPortUnknown");
+    assert!(host.events.mod_confirm_requests().is_empty(), "nobody is asked to confirm a share that cannot start");
 }
 
 #[tokio::test]

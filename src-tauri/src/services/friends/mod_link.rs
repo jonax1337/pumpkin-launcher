@@ -187,6 +187,9 @@ async fn share(sessions: &FriendSessions, instance_id: &str, friend_ids: Vec<Str
     let shared = &sessions.shared;
     shared.ensure_enabled().map_err(mod_error)?;
     let friends = online_friends(shared, &friend_ids).await?;
+    if shared.hosting.session_of(instance_id).is_none() {
+        sessions.ensure_hostable(instance_id).await.map_err(mod_error)?;
+    }
     ensure_consent(shared, instance_id, friends).await?;
     if !shared.mods.take_share(instance_id) {
         return Err(ModErrorCode::Busy);
@@ -260,7 +263,8 @@ fn mod_error(err: AppError) -> ModErrorCode {
         "errors.friends.lanPortUnknown" | "errors.friends.lanUnreachable" => ModErrorCode::LanPortUnknown,
         "errors.friends.portNotGame" => ModErrorCode::PortNotGame,
         "errors.friends.versionUnsupported" => ModErrorCode::VersionUnsupported,
-        "errors.friends.sessionActive" => ModErrorCode::Busy,
+        // Das Spiel läuft (die Mod ist darin), der Launcher hat seinen Start nur noch nicht verarbeitet.
+        "errors.friends.sessionActive" | "errors.friends.gameNotRunning" => ModErrorCode::Busy,
         _ => ModErrorCode::Internal,
     }
 }
@@ -408,6 +412,7 @@ mod tests {
                 ModErrorCode::VersionUnsupported,
             ),
             (AppError::invalid(coded!("errors.friends.sessionActive")), ModErrorCode::Busy),
+            (AppError::invalid(coded!("errors.friends.gameNotRunning")), ModErrorCode::Busy),
             (AppError::Cancelled, ModErrorCode::Internal),
         ];
 
