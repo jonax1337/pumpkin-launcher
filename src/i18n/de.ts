@@ -4,6 +4,10 @@ import { components } from "./de/components.ts";
 import { detail } from "./de/detail.ts";
 import { errors } from "./de/errors.ts";
 import { format } from "./de/format.ts";
+import { friends } from "./de/friends.ts";
+import { friendsHost } from "./de/friendsHost.ts";
+import { friendsInvite } from "./de/friendsInvite.ts";
+import { friendsSettings } from "./de/friendsSettings.ts";
 import { hooks } from "./de/hooks.ts";
 import { pages } from "./de/pages.ts";
 import { settings } from "./de/settings.ts";
@@ -13,4 +17,7 @@ import { ui } from "./de/ui.ts";
  * Deutsches Wörterbuch – Quelle der Wahrheit. Neue Namensräume hier anmelden.
  * Die Texte des Browser-Mocks (de/mock.ts) gehören nicht dazu: `mockWords.ts` lädt sie nur im Dev-Server.
  */
-export const de = { ...common, ...components, ...detail, ...errors, ...format, ...hooks, ...pages, ...settings, ...ui } satisfies Dict;
+export const de = {
+  ...common, ...components, ...detail, ...errors, ...format, ...friends, ...friendsHost, ...friendsInvite, ...friendsSettings,
+  ...hooks, ...pages, ...settings, ...ui,
+} satisfies Dict;

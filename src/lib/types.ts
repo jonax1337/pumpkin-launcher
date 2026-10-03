@@ -1,7 +1,10 @@
 // Backend-Vertrag (serde camelCase). Zeiten = Unix-Millisekunden.
 import { t } from "../i18n/core.ts";
+import type { FriendJoin } from "./friends-types.ts";
 import type { GlyphName, GlyphPalette } from "../pixel/icons.tsx";
 import type { Biome } from "../pixel/sceneConfig.ts";
+
+export * from "./friends-types.ts";
 
 export type ModLoader = "vanilla" | "fabric" | "quilt" | "forge" | "neoforge";
 export type ModSource =
@@ -169,6 +172,8 @@ export interface LaunchOptions {
   discordPresence: boolean;
   /** Direkt in eine Welt oder auf einen Server. */
   quickPlay: QuickPlay | null;
+  /** Beitritt zur geteilten Welt eines Freundes (Adresse des lokalen Tunnels); geht vor `quickPlay`. */
+  friendJoin?: FriendJoin;
 }
 
 /** Spielfenster beim Start; `default` = wie Minecraft es selbst öffnet. */

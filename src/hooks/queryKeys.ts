@@ -68,6 +68,25 @@ export const skinKeys = {
 
 export const accountKeys = { microsoft: ["ms-accounts"] as const };
 
+/**
+ * Freunde. `all` fasst zusammen, was das Ereignis `friends-changed` auffrischt. Skins, Beitrittspläne und die Zustände je Instanz
+ * haben eigene Wurzeln, damit ein Freunde-Ereignis weder Skins neu lädt noch beim Gastgeber das Manifest neu anfordert.
+ */
+export const friendKeys = {
+  all: ["friends"] as const,
+  state: ["friends", "state"] as const,
+  list: ["friends", "list"] as const,
+  requests: ["friends", "requests"] as const,
+  codes: ["friends", "codes"] as const,
+  blocked: ["friends", "blocked"] as const,
+  invites: ["friends", "invites"] as const,
+  hostSessions: ["friends", "host-sessions"] as const,
+  skin: (friendId: string) => ["friend-skin", friendId] as const,
+  plan: (inviteId: string) => ["friend-invite-plan", inviteId] as const,
+  lan: (instanceId: string) => ["friend-lan", instanceId] as const,
+  modStatus: (instanceId: string) => ["friend-mod-status", instanceId] as const,
+};
+
 export const importKeys = { foreign: ["foreign-instances"] as const };
 
 export const appKeys = {
