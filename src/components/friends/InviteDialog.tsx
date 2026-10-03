@@ -2,12 +2,12 @@ import { useState } from "react";
 import { Fingerprint } from "@/components/friends/Fingerprint";
 import { FriendAvatar, SelfAsserted } from "@/components/friends/FriendAvatar";
 import { useDeclineInvite, useInvitePlan } from "@/hooks/useFriends";
+import { useLaunchAccount } from "@/components/accounts/useAccounts";
 import { useCreateInstance } from "@/hooks/useInstances";
 import { useI18n } from "@/i18n";
 import { FRIENDS_LIMITS, LOADER_LABELS, type InstanceCandidate, type InstanceSummary, type Invite, type JoinPlan, type ModRef } from "@/lib/types";
-import { useUsableAccount } from "@/store/offline";
 import { Button, Chip, Dialog, DialogActions, ErrorBox, Field, Heading, Hint, Select, Skel, StatusPanel } from "@/ui";
-import { actionAllowed, chosenCandidate, inviteAction, needsMicrosoftAccount } from "./inviteModel";
+import { actionAllowed, canJoinWith, chosenCandidate, inviteAction, needsMicrosoftAccount } from "./inviteModel";
 
 const DIALOG_WIDTH_PX = 560;
 /** Fest, damit der Dialog zwischen Laden, Urteil und „Erneut prüfen“ nicht wächst und schrumpft; der Körper scrollt. */
@@ -129,10 +129,10 @@ export function InviteDialog({ invite, onJoin, onClose }: { invite: Invite; onJo
   const [pickedId, setPickedId] = useState<string | null>(null);
   const decline = useDeclineInvite();
   const createVanilla = useCreateInstance();
-  const hasMicrosoftAccount = useUsableAccount()?.kind === "microsoft";
 
   const verdict = plan.data && !plan.isFetching ? plan.data : null;
   const candidate = verdict ? chosenCandidate(verdict, pickedId) : undefined;
+  const hasMicrosoftAccount = canJoinWith(useLaunchAccount(candidate?.instanceId));
   const action = verdict ? inviteAction(verdict, candidate) : "none";
   const busy = decline.isPending || createVanilla.isPending;
 

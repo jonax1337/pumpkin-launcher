@@ -1,7 +1,7 @@
 // Run: node src/components/friends/inviteModel.check.mjs (Node with TypeScript stripping).
 import assert from 'node:assert/strict';
 import { FRIENDS_FIXTURES as fixtures } from '../../lib/friends-fixtures.ts';
-import { actionAllowed, chosenCandidate, inviteAction, needsMicrosoftAccount } from './inviteModel.ts';
+import { actionAllowed, canJoinWith, chosenCandidate, inviteAction, needsMicrosoftAccount } from './inviteModel.ts';
 
 const ready = fixtures['joinPlan.ready'];
 const missing = fixtures['joinPlan.missing'];
@@ -33,5 +33,10 @@ assert.equal(needsMicrosoftAccount('join', false), true);
 assert.equal(needsMicrosoftAccount('join', true), false);
 assert.equal(needsMicrosoftAccount('none', false), false);
 assert.equal(needsMicrosoftAccount('createVanilla', false), false);
+
+// Beitreten hängt am Konto, mit dem die Instanz wirklich startet (nicht am aktiven): nur ein Microsoft-Konto reicht, kein Konto auch nicht.
+assert.equal(canJoinWith({ kind: 'microsoft', id: 'm1', username: 'Alex' }), true);
+assert.equal(canJoinWith({ kind: 'offline', name: 'Steve' }), false);
+assert.equal(canJoinWith(null), false);
 
 console.log('inviteModel.check: ok');

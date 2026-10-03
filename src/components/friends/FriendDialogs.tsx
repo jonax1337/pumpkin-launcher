@@ -2,14 +2,18 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { dialogOpen } from "@/app/dialogOpen";
+import { launchAccountFor } from "@/components/accounts/useAccounts";
 import { InviteDialog } from "@/components/friends/InviteDialog";
+import { canJoinWith } from "@/components/friends/inviteModel";
 import { ModConfirmDialog } from "@/components/friends/ModConfirmDialog";
 import { instanceKeys } from "@/hooks/queryKeys";
 import { inviteToastId } from "@/hooks/useFriendEvents";
 import { useInvites, useJoinInvite } from "@/hooks/useFriends";
 import { usePlay } from "@/hooks/usePlay";
+import { t } from "@/i18n/core";
 import { api } from "@/lib/api";
 import { toastError } from "@/lib/toast";
+import type { Instance } from "@/lib/types";
 import { useInviteRequest } from "@/pages/friends/inviteRequest";
 import { closeFriendDialog, openNextFriendDialog, queueFriendDialog, useFriendsUi } from "@/store/friendsUi";
 
@@ -39,6 +43,11 @@ function useOpenWhenFree(hasWaiting: boolean) {
   }, [hasWaiting]);
 }
 
+/** Beitreten startet das Spiel mit `friendJoin`, das ein Microsoft-Konto verlangt: vor dem Tunnel prüfen, nicht erst beim Start. */
+async function requireMicrosoftLaunchAccount(instance: Instance) {
+  if (!canJoinWith(await launchAccountFor(instance))) throw new Error(t("errors.friends.msAccountRequired"));
+}
+
 /**
  * Der Beitritt zu einer Freundeswelt. `usePlay` installiert die Instanz, falls sie fehlt, und erst danach öffnet `inviteJoin`
  * den Tunnel (Spezifikation 6.2, 10.4 Schritt 3): ein Tunnel, der auf ein noch ladendes Spiel wartet, liefe in seine Fristen.
@@ -55,6 +64,7 @@ function useStartJoin() {
     };
     try {
       const instance = await qc.fetchQuery({ queryKey: instanceKeys.detail(instanceId), queryFn: () => api.getInstance(instanceId) });
+      await requireMicrosoftLaunchAccount(instance);
       await play(instance, undefined, null, openFriendJoin);
     } catch (error) {
       toastError(error as Error);
