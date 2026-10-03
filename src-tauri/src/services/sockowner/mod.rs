@@ -27,7 +27,7 @@ pub struct TcpSocket {
     pub state: TcpState,
 }
 
-/// Die TCP-Sockets eines Prozesses.
+/// Die TCP-Sockets eines Prozesses. Einen beendeten Prozess gibt es nicht mehr: er hat keine Sockets (kein Fehler).
 pub trait SocketTable {
     fn sockets_of(&self, pid: u32) -> io::Result<Vec<TcpSocket>>;
 }
@@ -81,6 +81,7 @@ impl SocketTable for PlatformTable {
 mod tests {
     use super::*;
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
+    use std::process::{Command, Stdio};
 
     /// Sockets, wie sie ein Betriebssystem liefern könnte, je Prozess.
     struct FakeTable(Vec<(u32, TcpSocket)>);
@@ -167,13 +168,26 @@ mod tests {
         assert!(connects_from_in(&Broken, 1, addr("127.0.0.1:1"), addr("127.0.0.1:2")).is_err());
     }
 
+    /// Die Kennung eines eigenen, schon beendeten Kindprozesses: ihm gehört sicher kein Socket dieses Tests. (Unter
+    /// Linux kann `pid + 1` ein Thread dieses Prozesses sein und dessen Descriptoren zeigen.)
+    fn ended_process_id() -> u32 {
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .arg("--list")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+        child.wait().unwrap();
+        pid
+    }
+
     #[test]
     fn a_listener_of_this_process_is_owned_by_it() {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let port = listener.local_addr().unwrap().port();
-        let pid = std::process::id();
-        assert!(listens(pid, port).unwrap());
-        assert!(!listens(pid.wrapping_add(1), port).unwrap());
+        assert!(listens(std::process::id(), port).unwrap());
+        assert!(!listens(ended_process_id(), port).unwrap());
     }
 
     #[test]
@@ -181,8 +195,8 @@ mod tests {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
         let (_accepted, _) = listener.accept().unwrap();
-        let (pid, local, server) = (std::process::id(), client.local_addr().unwrap(), listener.local_addr().unwrap());
-        assert!(connects_from(pid, local, server).unwrap());
-        assert!(!connects_from(pid.wrapping_add(1), local, server).unwrap());
+        let (local, server) = (client.local_addr().unwrap(), listener.local_addr().unwrap());
+        assert!(connects_from(std::process::id(), local, server).unwrap());
+        assert!(!connects_from(ended_process_id(), local, server).unwrap());
     }
 }
