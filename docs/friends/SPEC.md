@@ -14,7 +14,7 @@
 
 **Change rule.** Sections 3-9 and Appendix A are the contract. A change to them is made in `docs/friends/SPEC.md` first, in the same PR as the code.
 
-**Addendum.** `docs/friends/BYNAME.md` ("N") extends this spec with adding friends by Minecraft name (directory Worker, mailbox, Mojang proof). Its contract parts (N 9.2-9.6) are merged into the sections below; the rest of the addendum stays normative there. Section numbers like "N 7.4" point into that file.
+**Addendum.** `docs/friends/BYNAME.md` ("N") extends this spec with adding friends by Minecraft name (directory Worker, mailbox, Mojang proof). Its contract parts (N 9.2-9.6) are merged into the sections below; the rest of the addendum stays normative there. Section numbers like "N 7.4" point into that file. Since 2.0.1 the directory login uses Mojang's player certificate instead of a Worker call to Mojang (`docs/friends/BYNAME-ATTEST.md`, with its binding review `BYNAME-ATTEST-REVIEW.md`).
 
 **Conventions.**
 - Rust doc comments and `tracing` texts are German, identifiers English (CONTRIBUTING.md). Clean-code rules apply (load the `clean-code` skill).
@@ -735,7 +735,7 @@ pub struct ModConfirmEvent { pub request_id: String, pub instance_id: String, pu
 pub struct ModConfirmFriend { pub friend_id: String, pub display_name: String }
 ```
 
-`DirectoryState`: `Unavailable` = no directory attached (no URL in this build); `Off` = `findableByName` false; `Active` = registered and the last directory call succeeded; `Unreachable` = the last register or poll failed (network, 5xx, 429); `NotAllowed` = Mojang refused `join` (polling and registration pause until the setting is toggled or the app restarts). `friends_state` computes it whether or not the feature is enabled. `FriendsSettings.findable_by_name` is persisted through `config.settings` (9).
+`DirectoryState`: `Unavailable` = no directory attached (no URL in this build); `Off` = `findableByName` false; `Active` = registered and the last directory call succeeded; `Unreachable` = the last register or poll failed (network, 5xx, 429); `NotAllowed` = Mojang refused the account: multiplayer disabled in `/player/attributes`, a multiplayer ban or switched-off friends or invites there, no player certificate (403, or 401 after a token refresh), or `join` refused at acceptance (polling and registration pause until the setting is toggled or the app restarts). An account whose attributes Mojang does not answer explicitly counts as `Unreachable` for being listed. `friends_state` computes it whether or not the feature is enabled. `FriendsSettings.findable_by_name` is persisted through `config.settings` (9).
 
 TS mirror (`src/lib/friends-types.ts`), exact (`ModLoader` comes from `import type { ModLoader } from "./types"`, the existing TS twin of the Rust `ModLoader`):
 ```ts
@@ -1286,7 +1286,7 @@ Tabs in this order: **"Per Name"** (new `NameTab.tsx`, the default), "Code einge
   - A `TextField` "Minecraft-Name" (placeholder "z. B. Steve", `maxLength 16`, shape check `isMcName` from `friendsModel.ts`, regex `^[A-Za-z0-9_]{1,16}$`). Primary "Anfrage senden" calls `friendAddByName`; on success, toast "Anfrage an {name} gesendet" and close.
   - Hint (always): "{name} sieht deinen Minecraft-Namen, deinen Anzeigenamen und deinen Fingerabdruck. Erst wenn {name} annimmt, verbinden sich eure Launcher. Das Pumpkin-Verzeichnis hält die Anfrage bis zu 14 Tage bereit."
   - `nameNotFindable` is shown **inline** (warning with symbol, not a toast) with the action "Meinen Code zeigen", which switches to "Mein Code". `directory.state === "unreachable"`: a `StatusPanel` with "Verzeichnis gerade nicht erreichbar; nutze einen Code". When my own `findableByName` is false, an info line: "Andere finden dich nur per Name, wenn du es in den Einstellungen erlaubst." with a link to `/settings?tab=freunde`.
-  - Rows of the requests section (10.2) with `via: name` (`RequestsSection.tsx`, texts from `friendsModel.ts` `requestLine(request)`, N 9.7): incoming shows name + fingerprint + a "Minecraft: {mcName}" sub-line with the tooltip "Vom Verzeichnis geprüft; beim Annehmen prüfen beide Launcher das Konto noch einmal bei Mojang", and the actions "Annehmen", "Ablehnen", "Blockieren" (menu). Outgoing `awaitingAnswer`: "Anfrage an {mcName} · wartet auf Antwort" + "Zurückziehen", without the expired-code hint. Outgoing `delivering`: "{mcName}: wird verbunden, sobald {mcName} online ist" + "Jetzt zustellen" + "Zurückziehen". `codeMayBeExpired` returns false for `via: name`.
+  - Rows of the requests section (10.2) with `via: name` (`RequestsSection.tsx`, texts from `friendsModel.ts` `requestLine(request)`, N 9.7): incoming shows name + fingerprint + a "Minecraft: {mcName}" sub-line with the tooltip "Konto per Mojang-Zertifikat vom Verzeichnis geprüft, Name direkt bei Mojang nachgeschlagen; beim Annehmen prüfen beide Launcher das Konto noch einmal bei Mojang", and the actions "Annehmen", "Ablehnen", "Blockieren" (menu). Outgoing `awaitingAnswer`: "Anfrage an {mcName} · wartet auf Antwort" + "Zurückziehen", without the expired-code hint. Outgoing `delivering`: "{mcName}: wird verbunden, sobald {mcName} online ist" + "Jetzt zustellen" + "Zurückziehen". `codeMayBeExpired` returns false for `via: name`.
 - **Mein Code:**
   - "Code erzeugen" shows the 80-char code once, in the pixel font, in groups of 4, with "Kopieren".
   - Hint: "Gilt 7 Tage und nur für eine Person. Wer den Code hat, kann dir eine Anfrage schicken: Poste ihn nicht öffentlich."
@@ -1373,7 +1373,7 @@ Inputs:
 
 Primary button: "Freunde aktivieren" (`friendsEnable`). A note says that Windows may ask for firewall permission (UDP), and that allowing it in private networks improves direct connections.
 
-`components/PrivacyNotice.tsx` lists every relay host with its operator and purpose, "Freunde: verschlüsselte Weiterleitung, keine Inhalte", and Mojang's sessionserver for friends' skins (fetched by the launcher, not the page). By-name rows (N 9.7): a `ServiceRow` "Freunde-Verzeichnis" with `directory.host` and the purpose "Nur wenn du per Name auffindbar bist oder jemandem per Name schreibst: Minecraft-UUID, Anfragen bis 14 Tage"; the sessionserver row's purpose gains "Kontonachweis für das Verzeichnis und beim Annehmen"; a new row "Minecraft-Namenssuche" with `api.minecraftservices.com` ("Name → UUID, nur beim Senden per Name").
+`components/PrivacyNotice.tsx` lists every relay host with its operator and purpose, "Freunde: verschlüsselte Weiterleitung, keine Inhalte", and Mojang's sessionserver for friends' skins (fetched by the launcher, not the page). By-name rows (N 9.7): a `ServiceRow` "Freunde-Verzeichnis" with `directory.host` and the purpose "Nur wenn du per Name auffindbar bist oder jemandem per Name schreibst: Minecraft-UUID, Anfragen bis 14 Tage"; the sessionserver row's purpose becomes "Kontonachweis beim Annehmen einer Anfrage per Name und die Namen der Absender"; the row "Minecraft-Namenssuche und Kontonachweis" with `api.minecraftservices.com` says "Name → UUID beim Senden per Name; ein von Mojang signiertes Spielerzertifikat als Kontonachweis für das Verzeichnis".
 
 ### 10.10 Mock (F1, `src/lib/mock-friends.ts`)
 - Scenarios:
@@ -1462,13 +1462,14 @@ No keybinding and no in-game join.
   - "Always relay" hides your addresses from all peers.
 - **LAN port:** opening a world to LAN binds the game's port on all interfaces, as in vanilla. The tunnel does not change that. Devices in the local network (and anything the router forwards) can reach it, with Mojang authentication as the only protection. Windows Firewall profiles apply. Stated in the ShareDialog and in `docs/friends/PRIVACY.md`.
 - Presence goes only to confirmed friends. Hosting is visible only to invited friends. The manifest goes only to invited friends, and the share dialog says so.
-- Friends' skins are fetched by Rust from Mojang's sessionserver (`sessionserver.mojang.com`, constant `skins::SESSION_PROFILE`; the UUID is sent to Mojang) and cached locally. Textures come only from `textures.minecraft.net` (`http` is upgraded to `https`). Named in the PrivacyNotice and `PRIVACY.md`.
+- Friends' skins are fetched by Rust from Mojang's sessionserver (`sessionserver.mojang.com`, constant `skins::SESSION_PROFILE`; the UUID is sent to Mojang) and cached locally. The same endpoint is used by the recipient's launcher to look up the name of the sender of each new by-name request (N 7.2). Textures come only from `textures.minecraft.net` (`http` is upgraded to `https`). Named in the PrivacyNotice and `PRIVACY.md`.
 - Logs never contain IPs, secrets, codes, tokens or hello ids. Peer ids are logged as their first 8 hex chars.
 - **Finding by name (N 9.8):**
   - Finding by name is off until you turn on "Per Minecraft-Namen auffindbar". Then the Pumpkin directory (Cloudflare Worker, database in the EU) stores your Minecraft UUID, and nothing else about you, and keeps requests to you for up to 14 days. Off deletes it at once (restore history up to 7/30 days, N 5.3).
-  - A request by name carries your Minecraft name, UUID, display name and friends id. The directory sees it, and sees who wrote to whom. It never sees whether the request was accepted, and never sees presence or connections.
+  - A request by name carries your Minecraft UUID, display name and friends id; the directory stores no names. The directory sees it, and sees who wrote to whom. It never sees whether the request was accepted, and never sees presence or connections.
   - Whoever writes to you by name learns your friends id and (unless "Immer über Relay") your addresses only after you accept.
-  - To log in to the directory and on every acceptance, Mojang confirms your account, exactly like joining an online-mode server (`sessionserver.mojang.com`). Names are looked up at Mojang (`api.minecraftservices.com`).
+  - The directory never contacts Mojang. To prove that an account is yours, your launcher fetches a player certificate that Mojang signed (`api.minecraftservices.com/player/certificates`) and signs the login with it; the directory receives the certificate's public key and two signatures, checks them offline, and stores none of them. The access token is only sent to Mojang, never to the directory.
+  - Your launcher calls, from your IP address: `/player/certificates` (about every 40 h while it runs) and `/player/attributes` (at every directory login) and the name lookup at `api.minecraftservices.com`, and `sessionserver.mojang.com/session/minecraft/profile/{uuid}` for the sender of each new request you receive. On every acceptance both launchers confirm each other at Mojang through `join` and `hasJoined`, like an online-mode server (N 3.2).
 
 ### 12.2 Security rules
 - **Invite-only transport:** the Gate (3.5). Silent drops for strangers on hello endpoints. `NOT_FRIEND` on peer/1.
@@ -1530,6 +1531,9 @@ Directory rows (N 0, N 4, N 7.1; the Worker enforces its quotas exactly in D1, o
 | Server-side block list per account | 1,000 | `409 blockListFull` |
 | Worker requests per IP | 60 per 60 s (`LIMITER_IP`) | `429 rateLimited` |
 | Worker requests per account | 30 per 60 s (`LIMITER_ACCOUNT`) | `429 rateLimited` |
+| Worker request body | 2 KiB, 4 KiB for `/v2/auth/session` | `413 tooLarge` |
+| Session token | 6 h, never past the certificate's expiry | `401 unauthorized`, new handshake |
+| Polls in a row without an account for a sender before the letter is deleted | 2 | kept, tried again |
 | Directory handshakes in flight per launcher | 1 (auth lock) | queued |
 
 ### 12.5 Relay operation (requirements; D1 documents and deploys them)
@@ -1942,7 +1946,7 @@ R4, R6, F4, F5, D2 (Wave 2) and R5 (Wave 3) are merged on `feat/friends`; their 
 | `errors.friends.directoryUnavailable` | | Das Freunde-Verzeichnis ist gerade nicht erreichbar; nutze einen Freundescode |
 | `errors.friends.directoryNotAllowed` | | Mojang erlaubt diesem Konto keine Mehrspieler-Funktionen; Freunde per Name geht damit nicht |
 
-Mapping of directory and Mojang failures to keys (N 9.6): `NotFindable` → `nameNotFindable`; `RecipientFull` → existing `requestsFull`; `SendQuota` / `RateLimited` → existing `rateLimited`; `PairCooldown` → `nameCooldown{name, days: 7}`; `Unreachable` / `MojangUnavailable` / `NotRegistered` / `Invalid` → `directoryUnavailable` (`Invalid` also logs a warning: it means a client or Worker bug); `NotJoined` after one retry → `directoryUnavailable`; Mojang `NotAllowed` → `directoryNotAllowed`; `InvalidSession` → refresh once, then `errors.app.auth.relogin`; `Unauthorized` → re-auth once, then `directoryUnavailable`.
+Mapping of directory and Mojang failures to keys (N 9.6): `NotFindable` → `nameNotFindable`; `RecipientFull` → existing `requestsFull`; `SendQuota` / `RateLimited` → existing `rateLimited`; `PairCooldown` → `nameCooldown{name, days: 7}`; `Unreachable` / `NotRegistered` / `Invalid` → `directoryUnavailable` (`Invalid` also logs a warning: it means a client or Worker bug); `BadCertificate` and `CertificateExpired` after one retry with a fresh certificate → `directoryUnavailable` (each with its own warning line); Mojang `NotAllowed` → `directoryNotAllowed`; Mojang `InvalidSession` → forget the Minecraft session and refresh once, then `NotAllowed`; a dead refresh token → `errors.app.auth.relogin`; `Unauthorized` → re-auth once, then `directoryUnavailable`.
 
 Keys are added only together with both languages (append rule, section 14).
 
@@ -1958,7 +1962,7 @@ Parsing must accept the grouped form (with spaces or `-` inside the body) and an
 **Hello key.** identity secret = bytes `40 41 … 5f`, salt = bytes `00 01 … 0f`:
 `SHA-256("pumpkin/hello-key/2" || secret || salt) = 0fc118eef8a72afd5f595deba158b70a7a0bf925ed85176b5ec3ef430499d80f`
 
-**By name.** The golden vectors of the addendum (letter signature, directory auth signature, `serverId_redeemer`, `serverId_owner`) are in `BYNAME.md` Appendix A (A.1-A.4), computed with the same Ed25519 seed (`40 41 … 5f`) as above.
+**By name.** The golden vectors of the addendum (letter signature, the two host-bound login signatures L1 and L2, Mojang's signature layout L3, `serverId_redeemer`, `serverId_owner`) are in `BYNAME.md` Appendix A (A.1-A.6), computed with the same Ed25519 seed (`40 41 … 5f`) as above.
 
 ## Appendix C: compliance checklist (ticked by I1 in VERIFICATION.md)
 - [ ] The launcher About page and the mod description carry "NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT."
