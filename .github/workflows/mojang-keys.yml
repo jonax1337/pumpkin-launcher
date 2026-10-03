@@ -1,0 +1,39 @@
+name: Mojang keys
+
+# Early warning for the friends directory: the Worker pins Mojang's player-certificate keys (directory/src/mojang-keys.js)
+# because it cannot fetch them itself. A failing run means Mojang's list changed: run
+# `node directory/scripts/mojang-keys.mjs update`, then `node directory/test.mjs`, a PR and `npx wrangler deploy`.
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+
+      - name: Compare the pinned keys with Mojang's live list
+        run: node directory/scripts/mojang-keys.mjs check
+
+  # GitHub disables scheduled workflows of a public repository after 60 days without activity, which would silence
+  # this check. Enabling the workflow through the API counts as activity; it runs on its own so a failing check
+  # cannot skip it.
+  keepalive:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Keep the schedule enabled
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PUT "repos/${{ github.repository }}/actions/workflows/mojang-keys.yml/enable"

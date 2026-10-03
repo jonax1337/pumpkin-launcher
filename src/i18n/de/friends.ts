@@ -45,7 +45,7 @@ export const friends = {
   "friends.requests.deliveringName": "Wird verbunden, sobald {name} online ist",
   "friends.requests.toName": "Anfrage an {name}",
   "friends.requests.minecraft": "Minecraft: {name}",
-  "friends.requests.nameChecked": "Vom Verzeichnis geprüft; beim Annehmen prüfen beide Launcher das Konto noch einmal bei Mojang",
+  "friends.requests.nameChecked": "Konto per Mojang-Zertifikat vom Verzeichnis geprüft, Name direkt bei Mojang nachgeschlagen; beim Annehmen prüfen beide Launcher das Konto noch einmal bei Mojang",
   "friends.requests.refused": "Anfrage an {target} gescheitert: {reason}",
 
   // ---------- Freundeszeile ----------

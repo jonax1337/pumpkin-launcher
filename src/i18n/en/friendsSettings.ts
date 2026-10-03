@@ -104,11 +104,11 @@ export const friendsSettings: typeof deFriendsSettings = {
   "friendsSettings.privacy.relay": "Friends: encrypted forwarding, no content. Only if you turn Friends on.",
   "friendsSettings.privacy.sessionserverName": "Mojang (Friends)",
   "friendsSettings.privacy.sessionserver": "Your friends’ skins: the launcher fetches them by player UUID from the session server and stores them locally. The interface itself never contacts Mojang. Only if you turn Friends on.",
-  "friendsSettings.privacy.sessionserverProof": "Account proof for the directory and when accepting.",
+  "friendsSettings.privacy.sessionserverProof": "Account proof when accepting a request by name, and the names of senders (profile lookup by UUID).",
   "friendsSettings.privacy.directoryName": "Friends directory",
-  "friendsSettings.privacy.directory": "Only if you are findable by name or write to someone by name: Minecraft UUID, requests for up to {days} days",
-  "friendsSettings.privacy.nameLookupName": "Minecraft name lookup",
-  "friendsSettings.privacy.nameLookup": "Name → UUID, only when sending by name",
+  "friendsSettings.privacy.directory": "Only if you are findable by name or write to someone by name: Minecraft UUID, requests for up to {days} days. It processes the certificate’s public key and signatures only to check them and does not store them.",
+  "friendsSettings.privacy.nameLookupName": "Minecraft name lookup and account proof",
+  "friendsSettings.privacy.nameLookup": "Name → UUID when sending by name; a Mojang-signed player certificate as account proof for the directory, plus the account’s multiplayer permission (certificate and attributes calls). The access token is only sent to Mojang, never to the directory.",
 
   // Settings > Java & Start
   "friendsSettings.onPlayAside": "With Friends turned on, the launcher is only minimized.",

@@ -26,6 +26,9 @@ use crate::{
 
 const MAX_VERSION_LEN: usize = 64;
 const MAX_SUMMARY_LEN: usize = 500;
+/// Older vanilla releases cache the account's player certificate, private key included, in this folder of the game
+/// directory. It never goes into a pack: whoever holds it can log in to the friends directory as the account.
+const PROFILE_KEYS: &str = "profilekeys";
 /// Projekte je Anfrage bei der Abfrage der Server-Umgebung; deutlich unter dem Limit der API.
 const PROJECT_BATCH: usize = 100;
 
@@ -103,6 +106,7 @@ impl PackSpec {
 /// Inhalte, auch wenn sie noch nicht auf der Platte liegen (die Dateien kommen aus dem Cache).
 pub fn entries(dirs: &Dirs, instance: &Instance) -> AppResult<Vec<String>> {
     let mut names = dirs.game_entries(&instance.id)?;
+    names.retain(|name| !is_profile_keys(name));
     for (m, _) in active_content(instance) {
         let folder = m.kind.folder();
         if !names.iter().any(|n| n == folder) {
@@ -351,7 +355,13 @@ fn overrides(dirs: &Dirs, instance: &Instance, include: &[String], remote: &[Ind
         }
     }
     files.extend(mods::unmanaged_files(dirs, &instance.id, include, &instance.mods)?);
+    files.retain(|(path, _)| !path.split('/').next().is_some_and(is_profile_keys));
     Ok(files)
+}
+
+/// Case-insensitive, because Windows and macOS file systems are.
+fn is_profile_keys(entry: &str) -> bool {
+    entry.eq_ignore_ascii_case(PROFILE_KEYS)
 }
 
 /// Schreibt das Archiv über `<path>.part`; bei einem Fehler oder Abbruch bleibt am Ziel nichts Halbes liegen.
@@ -380,8 +390,28 @@ mod tests {
     use super::*;
     use crate::models::{new_id, InstanceIcon, InstanceScene, ModKind, NewInstance};
 
+    const PROFILE_KEY_FILE: &str = "profilekeys/069a79f444e94726a5befca90e38aaf5.json";
+
     fn meta(name: &str) -> PackMeta {
         PackMeta::new(name, "1.0.0", Some("Mein Pack")).unwrap()
+    }
+
+    #[test]
+    fn the_cached_player_certificate_never_goes_into_a_pack_whatever_is_included() {
+        let root = std::env::temp_dir().join(new_id());
+        let dirs = Dirs::new(&root);
+        let instance = fabric_instance("Quelle");
+        let game = dirs.game_dir(&instance.id);
+        for path in [PROFILE_KEY_FILE, "ProfileKeys/alt.json", "config/a.toml"] {
+            fs::create_dir_all(game.join(path).parent().unwrap()).unwrap();
+            fs::write(game.join(path), "x").unwrap();
+        }
+        let include = ["profilekeys", "ProfileKeys", "config"].map(String::from).to_vec();
+
+        let files: Vec<String> = overrides(&dirs, &instance, &include, &[]).unwrap().into_iter().map(|(path, _)| path).collect();
+
+        assert_eq!(files, ["config/a.toml"]);
+        fs::remove_dir_all(root).unwrap();
     }
 
     fn local_mod(name: &str, enabled: bool) -> Mod {
@@ -437,7 +467,14 @@ mod tests {
         // Geleerter Cache: der Export greift auf die abgelegte Datei zurück.
         fs::remove_dir_all(state.dirs.mod_cache()).unwrap();
         let game = state.dirs.game_dir(&source.id);
-        for (path, data) in [("mods/extra.jar", "eigene"), ("saves/w/level.dat", "welt"), ("options.txt", "fov:1"), ("logs/latest.log", "log")] {
+        let files = [
+            ("mods/extra.jar", "eigene"),
+            ("saves/w/level.dat", "welt"),
+            ("options.txt", "fov:1"),
+            ("logs/latest.log", "log"),
+            (PROFILE_KEY_FILE, "privat"),
+        ];
+        for (path, data) in files {
             fs::create_dir_all(game.join(path).parent().unwrap()).unwrap();
             fs::write(game.join(path), data).unwrap();
         }
@@ -446,6 +483,7 @@ mod tests {
         let include = |names: &[&str]| names.iter().map(|n| n.to_string()).collect::<Vec<_>>();
 
         assert!(export(&state, &source.id, include(&["logs"]), meta("Pack"), &target).await.is_err());
+        assert!(export(&state, &source.id, include(&["profilekeys"]), meta("Pack"), &target).await.is_err());
         assert!(export(&state, &source.id, include(&["mods"]), meta("Pack"), Path::new("Export.mrpack")).await.is_err());
         export(&state, &source.id, include(&["mods", "saves"]), meta("Pack"), &target).await.unwrap();
         assert!(!target.with_extension("mrpack.part").exists());

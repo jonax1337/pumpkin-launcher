@@ -56,13 +56,12 @@ export function storeLetter(db, letter, now) {
   return db.batch([
     statement(
       db,
-      `INSERT INTO letters (id, to_uuid, from_uuid, from_name, from_peer, body, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (to_uuid, from_uuid) DO UPDATE SET id = excluded.id, from_name = excluded.from_name, from_peer = excluded.from_peer,
+      `INSERT INTO letters (id, to_uuid, from_uuid, from_peer, body, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (to_uuid, from_uuid) DO UPDATE SET id = excluded.id, from_peer = excluded.from_peer,
          body = excluded.body, created_at = excluded.created_at, expires_at = excluded.expires_at`,
       letter.id,
       letter.to,
       letter.from.uuid,
-      letter.from.name,
       letter.from.peerId,
       letter.body,
       letter.createdAt,
@@ -92,7 +91,7 @@ export async function readInbox(db, uuid, now) {
     statement(db, "SELECT 1 AS found FROM users WHERE uuid = ?", uuid),
     statement(
       db,
-      `SELECT id, from_uuid, from_name, from_peer, to_uuid, body, created_at, expires_at FROM letters
+      `SELECT id, from_uuid, from_peer, to_uuid, body, created_at, expires_at FROM letters
        WHERE to_uuid = ? AND expires_at > ? ORDER BY created_at, id LIMIT 20`,
       uuid,
       now,

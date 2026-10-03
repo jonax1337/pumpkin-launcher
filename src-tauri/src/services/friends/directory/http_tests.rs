@@ -9,11 +9,11 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 use super::api::{DirectoryApi, WorkerApi};
-use super::wire::{OutgoingLetter, SessionRequest};
+use super::wire::{CertificateProof, OutgoingLetter, SessionRequest};
 use super::DirectoryError;
 use crate::services::transport::base_client_builder;
 
-const TOKEN: &str = "v1.nutzlast.pruefwert";
+const TOKEN: &str = "v2.nutzlast.pruefwert";
 const LETTER_ID: &str = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
 const UUID: &str = "069a79f444e94726a5befca90e38aaf5";
 const PEER_ID: &str = "2543b92ff1095511476adc8369db6ddc933665a11978dda1404ee1066ca9559d";
@@ -172,9 +172,19 @@ fn letter() -> OutgoingLetter {
     }
 }
 
+fn login_body() -> SessionRequest {
+    SessionRequest {
+        challenge: "a.b".into(),
+        uuid: UUID.into(),
+        certificate: CertificateProof { public_key: "MIIB".into(), expires_at: 1_790_172_800_123, mojang_signature: "c2ln".into() },
+        cert_signature: "Y2VydA==".into(),
+        signature: "ab".repeat(64),
+    }
+}
+
 fn inbox_letter_json() -> Value {
     json!({
-        "id": LETTER_ID, "from": { "uuid": UUID, "name": "Alex", "peerId": PEER_ID }, "to": UUID,
+        "id": LETTER_ID, "from": { "uuid": UUID, "peerId": PEER_ID }, "to": UUID,
         "nonce": "000102030405060708090a0b0c0d0e0f", "helloId": "20".repeat(32), "relayIndex": 0, "secret": "a0a1a2a3a4a5a6a7a8",
         "displayName": "Alex", "createdAt": 1_790_000_000u64, "expiresAt": 1_791_209_600u64, "signature": "da".repeat(64),
     })
@@ -193,21 +203,34 @@ async fn challenge_posts_the_peer_id_without_a_token() {
     let challenge = server.api().challenge(PEER_ID).await.unwrap();
     assert_eq!((challenge.challenge.as_str(), challenge.expires_at), ("a.b", 7));
     let request = server.only_request();
-    assert_call(&request, "POST", "/v1/auth/challenge", false);
+    assert_call(&request, "POST", "/v2/auth/challenge", false);
     assert_eq!(request.header("content-type"), Some("application/json"));
     assert_eq!(request.json_body(), json!({ "peerId": PEER_ID }));
 }
 
 #[tokio::test]
-async fn session_posts_challenge_name_and_signature_and_reads_the_token() {
-    let answer = json!({ "token": TOKEN, "expiresAt": 9, "uuid": UUID, "name": "Steve" });
+async fn session_posts_the_certificate_login_body_and_reads_the_token() {
+    let answer = json!({ "token": TOKEN, "expiresAt": 9, "uuid": UUID });
     let server = Loopback::serving(vec![Canned::json(200, answer)]).await;
-    let body = SessionRequest { challenge: "a.b".into(), name: "Steve".into(), signature: "ab".repeat(64) };
-    let session = server.api().session(&body).await.unwrap();
-    assert_eq!((session.token.as_str(), session.uuid.as_str(), session.name.as_str()), (TOKEN, UUID, "Steve"));
+    let session = server.api().session(&login_body()).await.unwrap();
+    assert_eq!((session.token.as_str(), session.uuid.as_str(), session.expires_at), (TOKEN, UUID, 9));
     let request = server.only_request();
-    assert_call(&request, "POST", "/v1/auth/session", false);
-    assert_eq!(request.json_body(), json!({ "challenge": "a.b", "name": "Steve", "signature": "ab".repeat(64) }));
+    assert_call(&request, "POST", "/v2/auth/session", false);
+    let expected = json!({
+        "challenge": "a.b",
+        "uuid": UUID,
+        "certificate": { "publicKey": "MIIB", "expiresAt": 1_790_172_800_123i64, "mojangSignature": "c2ln" },
+        "certSignature": "Y2VydA==",
+        "signature": "ab".repeat(64),
+    });
+    assert_eq!(request.json_body(), expected);
+}
+
+#[tokio::test]
+async fn certificate_refusals_of_the_worker_arrive_as_their_own_errors() {
+    let server = Loopback::serving(vec![Canned::error(401, "badCertificate"), Canned::error(401, "certificateExpired")]).await;
+    assert_eq!(server.api().session(&login_body()).await.unwrap_err(), DirectoryError::BadCertificate);
+    assert_eq!(server.api().session(&login_body()).await.unwrap_err(), DirectoryError::CertificateExpired);
 }
 
 #[tokio::test]
@@ -254,7 +277,7 @@ async fn inbox_reads_the_letters_with_their_stamp() {
     let server = Loopback::serving(vec![Canned::json(200, json!({ "letters": [inbox_letter_json()] }))]).await;
     let letters = server.api().inbox(TOKEN).await.unwrap();
     assert_eq!(letters.len(), 1);
-    assert_eq!((letters[0].id.as_str(), letters[0].from.name.as_str(), letters[0].from.peer_id.as_str()), (LETTER_ID, "Alex", PEER_ID));
+    assert_eq!((letters[0].id.as_str(), letters[0].from.uuid.as_str(), letters[0].from.peer_id.as_str()), (LETTER_ID, UUID, PEER_ID));
     assert_call(&server.only_request(), "GET", "/v1/inbox", true);
 }
 

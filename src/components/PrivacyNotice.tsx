@@ -43,7 +43,7 @@ const SERVICES: readonly Service[] = [
 /** Hier fragt der Launcher (nicht die Oberfläche) die Skins der Freunde ab. */
 const FRIEND_SKIN_HOST = "sessionserver.mojang.com";
 
-/** Hier löst der Launcher einen Minecraft-Namen beim Senden einer Anfrage per Name in die UUID auf. */
+/** Hier löst der Launcher einen Minecraft-Namen beim Senden per Name in die UUID auf und holt Spielerzertifikat und Attribute als Kontonachweis für das Verzeichnis. */
 const NAME_LOOKUP_HOST = "api.minecraftservices.com";
 export const RELAY_OPERATOR_KEYS: Record<RelayInfo["operator"], TKey> = {
   pumpkin: "friendsSettings.operator.pumpkin",
@@ -66,7 +66,7 @@ function ServiceRow({ label, purpose, hosts }: { label: string; purpose: string;
   );
 }
 
-/** Die Dienste der Freunde: Relay-Server je Betreiber (aus dem Backend), der Sessionserver für Skins und Kontonachweis, bei einem Verzeichnis dieses und die Namenssuche. */
+/** Die Dienste der Freunde: Relay-Server je Betreiber (aus dem Backend), der Sessionserver für Skins, Absendernamen und Kontonachweis beim Annehmen, bei einem Verzeichnis dieses sowie Namenssuche und Zertifikat. */
 function FriendsServices() {
   const { t } = useI18n();
   const state = useFriendsState().data;

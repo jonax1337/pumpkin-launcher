@@ -12,8 +12,11 @@ the abuse mailbox). Everything else was derived from the spec and from the `iroh
 
 - Friends is **off by default**. Before the owner of a PC switches it on, nothing binds UDP, listens,
   or contacts a relay or Mojang for friends (SPEC 12.1).
-- Friends connect only through codes that the users exchange themselves. There is no public list and no
-  search, no chat, no tracking, no telemetry.
+- Friends connect through codes that the users exchange themselves, or, if both sides opt in, by exact Minecraft
+  name through the Pumpkin directory (section 9). There is no public list and no partial search, no chat, no
+  tracking, no telemetry.
+- The directory never contacts Mojang and stores no names. Your launcher proves the account with a player certificate
+  that Mojang signed, and the access token is only ever sent to Mojang (section 9).
 - Connections are encrypted end to end between the launchers. The relay forwards ciphertext.
 - Our own relay stores nothing about connections. It sees, while a connection is open, the client's IP
   address and its endpoint id, and who it forwards to.
@@ -30,6 +33,9 @@ the abuse mailbox). Everything else was derived from the spec and from the `iroh
 | Public IP and local network addresses | The other end of a **direct** connection (a friend; with "always relay" off also a code holder, see section 5) | Not stored by us | Connect directly |
 | IP address and endpoint id of a connected launcher | The relay operator, while the connection is open | Memory of the relay process only (section 3.4) | Forward packets, find the peer |
 | Minecraft UUID of a friend | Mojang's sessionserver | Skin image is cached locally | Show the friend's skin |
+| Minecraft UUID of a person who is findable by name, plus first and last refresh time | The Pumpkin directory | The directory's database (EU), until switched off or 30 days without refresh | Be found by exact name (section 9) |
+| By-name request: sender's UUID, friends id, display name, one-time code | The directory, then the recipient | The directory's database, at most 14 days | Deliver a request while the recipient is offline (section 9) |
+| Player certificate (public key, expiry, Mojang's signature) and two signatures | The directory, during the login | **Not stored** | Prove account ownership offline (section 9) |
 | World traffic between the players | The two launchers | Nowhere | The game itself |
 
 ## 3. The relay (GDPR information text, Art. 13)
@@ -132,8 +138,9 @@ anyone up. See RELAY-OPS section 13 for the steps (block list, bandwidth limit).
   vanilla Minecraft. The tunnel does not change that. Devices in the local network (and anything the router
   forwards) can reach the port, and Mojang's authentication is the only protection. Windows Firewall profiles
   apply. The ShareDialog (F5) says this in short, and this file is the long form.
-- **Skins.** The launcher (not the page) fetches a friend's skin from Mojang's sessionserver. That sends the
-  friend's Minecraft UUID, and the launcher's IP address, to Mojang. The texture comes from
+- **Skins and sender names.** The launcher (not the page) fetches a friend's skin from Mojang's sessionserver. That sends the
+  friend's Minecraft UUID, and the launcher's IP address, to Mojang. The same endpoint answers the question "what is the
+  name of the sender of this by-name request", asked once for every new request you receive (section 9.3). The texture comes from
   `textures.minecraft.net` and is cached on the user's PC. The exact sessionserver host is pinned by R6.
 - **Local data.** The identity key is in the OS keychain. Friend records, codes (as hashes), requests and
   the 14-day outbox are in `friends.json` on the user's PC. "Identität zurücksetzen und alle Freunde löschen"
@@ -214,3 +221,92 @@ met, so I1 knows what to check. The Usage Guidelines and the approval scope are 
 | [ ] | The Usage Guidelines were re-read at release time (date recorded). | Owner, date in `VERIFICATION.md` |
 | [ ] | The owner confirmed that the Microsoft/Mojang app approval covers sharing player names and UUIDs between users (G4). | Owner, G4 (see `docs/ACCOUNT-SETUP.md`) |
 | [ ] | The Modrinth API is used with the launcher User-Agent and within its rate limits. | R6 mod install and lookup code, existing Modrinth client |
+| [ ] | The owner confirmed that fetching the player certificate (`/player/certificates`) and the account attributes (`/player/attributes`) from this launcher is covered by the Mojang/Microsoft approval and terms (unverified; BYNAME OD-N3). | Owner, `OWNER-CHECKLIST.md` step 8 |
+
+## 9. The Pumpkin directory (finding friends by Minecraft name)
+
+Applies only if "Per Minecraft-Namen auffindbar" is on, or you send a request by name. Both are off by default. The
+design is `BYNAME.md` with the certificate login of `BYNAME-ATTEST.md`; the website text is
+`website/datenschutz.html` (German). Not legal advice; **(owner)** marks what only the owner can confirm.
+
+### 9.1 Controller and processor
+
+The operator is the controller: **(owner)** name, postal address and e-mail as in the website's privacy page
+(Jonas Laux, `jonas@laux.digital`). Cloudflare, Inc. is the processor (Cloudflare Workers and D1, database in the EU
+jurisdiction; **(owner)** accept Cloudflare's data processing addendum). The Worker runs at Cloudflare's edge
+worldwide, and Cloudflare processes request metadata such as the IP address transiently, among other things for
+rate limiting. The Worker writes no logs (`[observability] enabled = false`).
+
+### 9.2 What the directory processes
+
+| Data | Stored | Kept | Why |
+|---|---|---|---|
+| Minecraft UUID of a findable person, time of first registration and last refresh | Yes, table `users` | Until switched off, until signing out of Friends, or 30 days without a refresh | The opt-in itself |
+| By-name request: sender's UUID and friends id (stamped by the directory), recipient's UUID, single-use code parts, display name, times, signature | Yes, table `letters` | Until answered, retracted, blocked or 14 days | Offline delivery |
+| Blocks: your UUID → blocked UUID | Yes, table `blocks` | Until unblocked or signed out | Refuse a sender |
+| Send log: who wrote to whom, when | Yes, table `sends` | 7 days, also for senders who are not findable | Abuse prevention |
+| **Player certificate: public key, expiry, Mojang's signature, and the two login signatures** | **No (processed, not stored)** | Only while the login request is handled | Prove account ownership offline |
+| Session token | No (stateless, sealed with a secret) | 6 hours at most, in the launcher's memory only | Authorise the calls after login |
+
+The certificate's public key is a pseudonymous identifier for the certificate's lifetime (about 48 hours, unverified).
+Every multiplayer server the player joins receives the same key. The directory does not keep it.
+
+**Never processed by the directory:** player names (it handles none), Minecraft access tokens, certificate private keys,
+friend lists, presence, whether a request was accepted, tunnel traffic. **The directory never contacts Mojang.**
+
+### 9.3 What your launcher sends to Mojang, from your IP address
+
+| Endpoint | Purpose | When | What Mojang learns |
+|---|---|---|---|
+| `POST api.minecraftservices.com/player/certificates` | Fetch the player certificate that proves the account | At a directory login (by-name is on, or you send a request by name), then again about every 40 hours while the launcher runs | The account, from your IP address (sends the access token) |
+| `GET api.minecraftservices.com/player/attributes` | Check that the account may use multiplayer and friends | At every directory login (about every 6 hours) | The account, from your IP address (sends the access token) |
+| `GET api.minecraftservices.com/minecraft/profile/lookup/name/{name}` | Name → UUID | When you send a request by name | The name you looked up |
+| `GET sessionserver.mojang.com/session/minecraft/profile/{uuid}` | UUID → current name of a sender | For each new by-name request you receive, after it was validated | That your launcher asked about that sender's UUID |
+| `POST sessionserver.mojang.com/session/minecraft/join` and `GET .../hasJoined` | Both launchers confirm each other's account | When a by-name request is accepted | Like joining an online-mode server |
+
+**The access token is only sent to Mojang, never to the directory.** Mojang's restrictions apply: an account that Mojang
+does not allow to use multiplayer or friends cannot become findable through this launcher, and cannot complete a
+friendship (`join` is refused).
+
+### 9.4 Retention and deletion
+
+- Switching off "Per Minecraft-Namen auffindbar" or Friends deletes your UUID entry, the requests addressed to you and
+  your blocks at once. If the Minecraft account was removed from the launcher before that could run, the 30-day
+  retention removes the entry.
+- A request is deleted when answered, retracted, blocked or after 14 days. The send log is deleted after 7 days.
+- **Restore window.** The database keeps its history (D1 Time Travel): deleted rows can be restored by the operator for
+  **7 days (Free plan) or 30 days (Paid plan)**. This cannot be switched off. After that they are gone for good.
+- Access: you see your own requests in the launcher. Erasure and other requests: the e-mail address of the
+  controller, with your UUID.
+
+### 9.5 Legal bases
+
+- Findable by name: consent, Art. 6(1)(a) GDPR, opt-in, off by default, withdrawable at any time with one switch that
+  deletes at once.
+- A request you send: Art. 6(1)(b) GDPR (you ask for the contact).
+- Send log: Art. 6(1)(f) GDPR (legitimate interest in abuse prevention), 7 days.
+- Processing of the certificate and signatures for the login: Art. 6(1)(b) GDPR, as part of the service you switched on.
+
+### 9.6 What stays unsafe, stated honestly
+
+- Whoever holds your player certificate's private key (it lives in the launcher's memory, and older vanilla releases
+  also write it to `profilekeys/` in the game folder) can open directory sessions as you for up to its lifetime:
+  read who wrote to you, delete requests, send requests as you, register or unregister you. The launcher never
+  includes `profilekeys/` in instance exports or templates. Such a holder still cannot become your friend or
+  impersonate you at acceptance, because that needs the access token.
+- The directory no longer enforces Mojang's multiplayer restrictions itself. The launcher checks them; a modified
+  launcher could skip the check. Completing a friendship still needs Mojang's `join` at acceptance.
+- Unverified until the owner's tests: the certificate's lifetime, which restricted accounts get which answers, and
+  whether fetching a certificate affects a running game (`OWNER-CHECKLIST.md`, step 8).
+
+### 9.7 PrivacyNotice rows (`components/PrivacyNotice.tsx`)
+
+| Row | Deutsch | English |
+|---|---|---|
+| Name, directory | Freunde-Verzeichnis | Friends directory |
+| Host | `directory.host` | `directory.host` |
+| Purpose | Nur wenn du per Name auffindbar bist oder jemandem per Name schreibst: Minecraft-UUID, Anfragen bis 14 Tage | Only if you are findable by name or write to someone by name: Minecraft UUID, requests for up to 14 days |
+| Name, name lookup (`nameLookupName`) | Minecraft-Namenssuche und Kontonachweis | Minecraft name lookup and account proof |
+| Host | `api.minecraftservices.com` | same |
+| Purpose (`nameLookup`) | Name → UUID beim Senden per Name; ein von Mojang signiertes Spielerzertifikat als Kontonachweis für das Verzeichnis | Name → UUID when sending by name; a Mojang-signed player certificate as account proof for the directory |
+| Mojang sessionserver, purpose (`sessionserverProof`) | Kontonachweis beim Annehmen einer Anfrage per Name und die Namen der Absender | Account proof when accepting a request by name, and the names of senders |

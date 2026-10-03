@@ -7,17 +7,34 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct Challenge {
     pub challenge: String,
-    /// 40 Hex-Zeichen, die der Launcher bei Mojang `join` übergibt.
+    /// 40 hex digits, the per-challenge nonce both login signatures cover.
     pub server_id: String,
     pub expires_at: u64,
 }
 
+/// The login body of BYNAME-ATTEST 1.2: Mojang's certificate and two signatures over the same login parts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionRequest {
     pub challenge: String,
-    pub name: String,
-    /// Ed25519 über `serverId` und Peer-ID, 128 Hex-Zeichen.
+    /// The account, 32 hex digits; the one Mojang signed in the certificate.
+    pub uuid: String,
+    pub certificate: CertificateProof,
+    /// RSASSA-PKCS1-v1_5 / SHA-256 with the certificate key (layout L2), standard base64.
+    pub cert_signature: String,
+    /// Ed25519 with the friends key (layout L1), 128 hex digits.
     pub signature: String,
+}
+
+/// The public part of Mojang's player certificate, standard base64 with padding.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CertificateProof {
+    /// SPKI DER.
+    pub public_key: String,
+    /// Epoch milliseconds, as Mojang signed them.
+    pub expires_at: i64,
+    pub mojang_signature: String,
 }
 
 /// Die Antwort auf die Anmeldung; das Token steht in keiner Debug-Ausgabe.
@@ -26,9 +43,8 @@ pub struct SessionRequest {
 pub struct DirectorySession {
     pub token: String,
     pub expires_at: u64,
-    /// Von Mojang bestätigt, 32 Hex-Zeichen.
+    /// Proven by Mojang's certificate, 32 hex digits.
     pub uuid: String,
-    pub name: String,
 }
 
 impl fmt::Debug for DirectorySession {
@@ -37,7 +53,6 @@ impl fmt::Debug for DirectorySession {
             .field("token", &"<verborgen>")
             .field("expires_at", &self.expires_at)
             .field("uuid", &self.uuid)
-            .field("name", &self.name)
             .finish()
     }
 }
@@ -64,12 +79,12 @@ pub struct SentLetter {
     pub expires_at: u64,
 }
 
-/// Der Stempel des Verzeichnisses: wer den Brief laut Token eingeliefert hat.
+/// The directory's stamp: who posted the letter according to the token. It carries no name; the recipient looks
+/// that up at Mojang (BYNAME-ATTEST 4.3).
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LetterFrom {
     pub uuid: String,
-    pub name: String,
     pub peer_id: String,
 }
 
@@ -122,7 +137,7 @@ mod tests {
     fn inbox_letter_json() -> Value {
         let mut letter = letter_json();
         letter["id"] = json!("7c9e6679-7425-40de-944b-e07fc1f90ae7");
-        letter["from"] = json!({ "uuid": UUID_SENDER, "name": "Alex", "peerId": PEER_ID });
+        letter["from"] = json!({ "uuid": UUID_SENDER, "peerId": PEER_ID });
         letter["expiresAt"] = json!(1_791_209_600u64);
         letter
     }
@@ -146,7 +161,7 @@ mod tests {
     fn an_inbox_letter_reads_the_worker_example_with_its_stamp() {
         let letter: InboxLetter = serde_json::from_value(inbox_letter_json()).unwrap();
         assert_eq!(letter.id, "7c9e6679-7425-40de-944b-e07fc1f90ae7");
-        assert_eq!(letter.from, LetterFrom { uuid: UUID_SENDER.into(), name: "Alex".into(), peer_id: PEER_ID.into() });
+        assert_eq!(letter.from, LetterFrom { uuid: UUID_SENDER.into(), peer_id: PEER_ID.into() });
         assert_eq!((letter.to.as_str(), letter.hello_id.as_str(), letter.relay_index), (UUID_RECIPIENT, HELLO_ID, 0));
         assert_eq!((letter.created_at, letter.expires_at, letter.signature.as_str()), (1_790_000_000, 1_791_209_600, SIGNATURE));
     }
@@ -165,24 +180,38 @@ mod tests {
     }
 
     #[test]
-    fn a_session_request_sends_challenge_name_and_signature() {
-        let request = SessionRequest { challenge: "abc.def".into(), name: "Steve".into(), signature: SIGNATURE.into() };
-        assert_eq!(serde_json::to_value(request).unwrap(), json!({ "challenge": "abc.def", "name": "Steve", "signature": SIGNATURE }));
+    fn a_session_request_has_exactly_the_keys_of_the_login_body() {
+        let certificate = CertificateProof { public_key: "MIIB".into(), expires_at: 1_790_172_800_123, mojang_signature: "c2ln".into() };
+        let request = SessionRequest {
+            challenge: "abc.def".into(),
+            uuid: UUID_RECIPIENT.into(),
+            certificate,
+            cert_signature: "Y2VydA==".into(),
+            signature: SIGNATURE.into(),
+        };
+        let expected = json!({
+            "challenge": "abc.def",
+            "uuid": UUID_RECIPIENT,
+            "certificate": { "publicKey": "MIIB", "expiresAt": 1_790_172_800_123i64, "mojangSignature": "c2ln" },
+            "certSignature": "Y2VydA==",
+            "signature": SIGNATURE,
+        });
+        assert_eq!(serde_json::to_value(request).unwrap(), expected);
     }
 
     #[test]
-    fn a_session_reads_the_token_with_its_expiry_and_account() {
-        let body = json!({ "token": "v1.x.y", "expiresAt": 1_790_021_600u64, "uuid": UUID_RECIPIENT, "name": "Steve" });
+    fn a_session_reads_the_token_with_its_expiry_and_account_and_no_name() {
+        let body = json!({ "token": "v2.x.y", "expiresAt": 1_790_021_600u64, "uuid": UUID_RECIPIENT });
         let session: DirectorySession = serde_json::from_value(body).unwrap();
-        assert_eq!((session.token.as_str(), session.expires_at, session.name.as_str()), ("v1.x.y", 1_790_021_600, "Steve"));
+        assert_eq!((session.token.as_str(), session.expires_at, session.uuid.as_str()), ("v2.x.y", 1_790_021_600, UUID_RECIPIENT));
     }
 
     #[test]
     fn the_token_never_shows_in_debug_output() {
-        let session = DirectorySession { token: "v1.geheim.mac".into(), expires_at: 1, uuid: UUID_RECIPIENT.into(), name: "Steve".into() };
+        let session = DirectorySession { token: "v2.geheim.mac".into(), expires_at: 1, uuid: UUID_RECIPIENT.into() };
         let shown = format!("{session:?}");
         assert!(!shown.contains("geheim"), "{shown}");
-        assert!(shown.contains("Steve"));
+        assert!(shown.contains(UUID_RECIPIENT));
     }
 
     #[test]
