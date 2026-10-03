@@ -4,12 +4,16 @@ compatibility_date = "2025-09-01"
 # Wie bei proxy/: Der Worker darf von sich aus nur öffentliche Adressen abrufen (hier: sessionserver.mojang.com).
 compatibility_flags = ["global_fetch_strictly_public"]
 
+# Nur die feste workers.dev-Adresse; keine Vorschau-Adressen je Version für einen Dienst mit Kontodaten.
+workers_dev = true
+preview_urls = false
+
 # Die Datenbank wird einmalig mit `wrangler d1 create pumpkin-friends-directory --jurisdiction eu` angelegt
 # (die Region lässt sich nur dabei festlegen); die ausgegebene ID kommt anstelle des Platzhalters hierher.
 [[d1_databases]]
 binding = "DB"
 database_name = "pumpkin-friends-directory"
-database_id = "ID-AUS-WRANGLER-D1-CREATE-EINTRAGEN"
+database_id = "7af4829f-d0d1-4b16-bcfa-461ac1df2ca8"
 
 # Grobe Begrenzung je Cloudflare-Standort (Cloudflare erlaubt als Zeitraum nur 10 oder 60 Sekunden).
 # `period` muss zu LIMIT_PERIOD in src/index.js passen, das als Retry-After an den Launcher geht.
