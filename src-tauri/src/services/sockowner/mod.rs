@@ -37,9 +37,9 @@ pub fn listens(pid: u32, port: u16) -> io::Result<bool> {
     listens_in(&PlatformTable, pid, port)
 }
 
-/// Kommt die Verbindung, die an `client` (deren lokale Adresse beim Verbinder) endet, vom Prozess `pid`?
-pub fn connects_from(pid: u32, client: SocketAddr) -> io::Result<bool> {
-    connects_from_in(&PlatformTable, pid, client)
+/// Gehört dem Prozess `pid` die Verbindung von `client` (ihre lokale Adresse beim Verbinder) zu `server`?
+pub fn connects_from(pid: u32, client: SocketAddr, server: SocketAddr) -> io::Result<bool> {
+    connects_from_in(&PlatformTable, pid, client, server)
 }
 
 fn listens_in(table: &impl SocketTable, pid: u32, port: u16) -> io::Result<bool> {
@@ -47,9 +47,16 @@ fn listens_in(table: &impl SocketTable, pid: u32, port: u16) -> io::Result<bool>
     Ok(sockets.iter().any(|socket| socket.state == TcpState::Listen && socket.local.port() == port))
 }
 
-fn connects_from_in(table: &impl SocketTable, pid: u32, client: SocketAddr) -> io::Result<bool> {
+fn connects_from_in(table: &impl SocketTable, pid: u32, client: SocketAddr, server: SocketAddr) -> io::Result<bool> {
     let sockets = table.sockets_of(pid)?;
-    Ok(sockets.iter().any(|socket| socket.state != TcpState::Listen && socket.local == client))
+    Ok(sockets.iter().any(|socket| {
+        socket.state != TcpState::Listen && same_endpoint(socket.local, client) && same_endpoint(socket.remote, server)
+    }))
+}
+
+/// Ein IPv6-Socket (etwa Javas Dual-Stack) nennt IPv4-Gegenstellen in der Form `::ffff:a.b.c.d`.
+fn same_endpoint(listed: SocketAddr, expected: SocketAddr) -> bool {
+    listed.ip().to_canonical() == expected.ip().to_canonical() && listed.port() == expected.port()
 }
 
 #[cfg(windows)]
@@ -119,16 +126,33 @@ mod tests {
 
     #[test]
     fn a_connection_is_found_by_its_local_address_and_owner() {
+        let (table, server) = (fake(), addr("127.0.0.1:25565"));
+        assert!(connects_from_in(&table, 20, addr("127.0.0.1:50000"), server).unwrap());
+        let server_side = connects_from_in(&table, 10, addr("127.0.0.1:50000"), server).unwrap();
+        assert!(!server_side, "der Server-Teil gehört dem anderen");
+        assert!(!connects_from_in(&table, 20, addr("127.0.0.1:50001"), server).unwrap());
+    }
+
+    #[test]
+    fn a_connection_of_the_owner_to_another_server_does_not_count() {
         let table = fake();
-        assert!(connects_from_in(&table, 20, addr("127.0.0.1:50000")).unwrap());
-        assert!(!connects_from_in(&table, 10, addr("127.0.0.1:50000")).unwrap(), "der Server-Teil gehört dem anderen");
-        assert!(!connects_from_in(&table, 20, addr("127.0.0.1:50001")).unwrap());
+
+        assert!(!connects_from_in(&table, 20, addr("127.0.0.1:50000"), addr("127.0.0.1:25566")).unwrap());
+        assert!(!connects_from_in(&table, 20, addr("127.0.0.1:50000"), addr("127.0.0.2:25565")).unwrap());
+    }
+
+    #[test]
+    fn a_dual_stack_socket_names_ipv4_endpoints_in_mapped_form() {
+        let mapped = socket("[::ffff:127.0.0.1]:50000", "[::ffff:127.3.4.5]:25565", TcpState::Established);
+        let table = FakeTable(vec![(20, mapped)]);
+
+        assert!(connects_from_in(&table, 20, addr("127.0.0.1:50000"), addr("127.3.4.5:25565")).unwrap());
     }
 
     #[test]
     fn a_listening_socket_is_no_connection() {
         let table = FakeTable(vec![(10, socket("0.0.0.0:25565", "0.0.0.0:0", TcpState::Listen))]);
-        assert!(!connects_from_in(&table, 10, addr("0.0.0.0:25565")).unwrap());
+        assert!(!connects_from_in(&table, 10, addr("0.0.0.0:25565"), addr("0.0.0.0:0")).unwrap());
     }
 
     #[test]
@@ -140,7 +164,7 @@ mod tests {
             }
         }
         assert!(listens_in(&Broken, 1, 1).is_err());
-        assert!(connects_from_in(&Broken, 1, addr("127.0.0.1:1")).is_err());
+        assert!(connects_from_in(&Broken, 1, addr("127.0.0.1:1"), addr("127.0.0.1:2")).is_err());
     }
 
     #[test]
@@ -157,8 +181,8 @@ mod tests {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
         let (_accepted, _) = listener.accept().unwrap();
-        let pid = std::process::id();
-        assert!(connects_from(pid, client.local_addr().unwrap()).unwrap());
-        assert!(!connects_from(pid.wrapping_add(1), client.local_addr().unwrap()).unwrap());
+        let (pid, local, server) = (std::process::id(), client.local_addr().unwrap(), listener.local_addr().unwrap());
+        assert!(connects_from(pid, local, server).unwrap());
+        assert!(!connects_from(pid.wrapping_add(1), local, server).unwrap());
     }
 }

@@ -13,7 +13,10 @@ use super::{SocketTable, TcpSocket, TcpState};
 const NO_ERROR: u32 = 0;
 const ERROR_INSUFFICIENT_BUFFER: u32 = 122;
 /// Die Tabelle kann zwischen Größenabfrage und Abruf wachsen; so oft wird es erneut versucht.
-const FETCH_ATTEMPTS: usize = 5;
+const FETCH_ATTEMPTS: usize = 8;
+/// Spielraum über die gemeldete Größe hinaus, damit auch viele kurz zwischendurch entstandene Verbindungen noch
+/// hineinpassen: die Hälfte der gemeldeten Größe, mindestens so viele Byte.
+const MIN_SLACK_BYTES: usize = 64 * 1024;
 /// Größe von `dwNumEntries` am Anfang jeder Tabelle, in Wörtern des Puffers.
 const TABLE_HEADER_WORDS: usize = 1;
 
@@ -34,11 +37,13 @@ impl SocketTable for WindowsTable {
 
 /// Holt die Tabelle in einen Puffer aus `u32`, damit die Zeilen ausgerichtet darin liegen.
 fn fetch_table(family: u32) -> io::Result<Vec<u32>> {
-    let mut size = 0u32;
+    let mut required = 0u32;
     for _ in 0..FETCH_ATTEMPTS {
-        let mut buffer = vec![0u32; (size as usize).div_ceil(size_of::<u32>())];
-        // SAFETY: `buffer` fasst mindestens `size` Byte; ohne Platz meldet die Funktion nur die nötige Größe.
+        let mut buffer = vec![0u32; buffer_words(required)];
+        let mut size = u32::try_from(buffer.len() * size_of::<u32>()).map_err(io::Error::other)?;
+        // SAFETY: `buffer` fasst genau `size` Byte; ohne Platz meldet die Funktion nur die nötige Größe.
         let status = unsafe { GetExtendedTcpTable(buffer.as_mut_ptr().cast(), &mut size, 0, family, TCP_TABLE_OWNER_PID_ALL, 0) };
+        required = size;
         match status {
             NO_ERROR => return Ok(buffer),
             ERROR_INSUFFICIENT_BUFFER => continue,
@@ -46,6 +51,15 @@ fn fetch_table(family: u32) -> io::Result<Vec<u32>> {
         }
     }
     Err(io::Error::other("TCP-Tabelle wächst schneller, als sie sich lesen lässt"))
+}
+
+/// Pufferlänge in `u32` für eine Tabelle von `required` Byte samt Spielraum; vor der ersten Abfrage (0) leer.
+fn buffer_words(required: u32) -> usize {
+    let required = required as usize;
+    if required == 0 {
+        return 0;
+    }
+    (required + (required / 2).max(MIN_SLACK_BYTES)).div_ceil(size_of::<u32>())
 }
 
 /// Die Zeilen einer Tabelle: erst die Anzahl, dann die Zeilen.
@@ -122,6 +136,44 @@ mod tests {
         assert_eq!(socket.local, "[::]:8080".parse().unwrap());
         assert_eq!(socket.remote, "[::1]:1".parse().unwrap());
         assert_eq!(socket.state, TcpState::Listen);
+    }
+
+    #[test]
+    fn the_buffer_leaves_room_for_a_table_that_grows_before_the_fetch() {
+        let fits = |required: u32, grown: usize| buffer_words(required) * size_of::<u32>() >= grown;
+
+        assert_eq!(buffer_words(0), 0, "the first call only asks for the size");
+        assert!(fits(100, 100 + MIN_SLACK_BYTES));
+        assert!(fits(1_000_000, 1_500_000));
+    }
+
+    /// Verbindungen, die der Test während des Lesens aufbaut und offen hält.
+    const CHURN_CONNECTIONS: usize = 1500;
+
+    #[test]
+    fn this_process_reads_the_whole_table_while_it_grows() {
+        let listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let address = listener.local_addr().unwrap();
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let churn = {
+            let stop = stop.clone();
+            std::thread::spawn(move || {
+                let mut open = Vec::new();
+                for _ in 0..CHURN_CONNECTIONS {
+                    if stop.load(std::sync::atomic::Ordering::Relaxed) {
+                        return;
+                    }
+                    open.push(std::net::TcpStream::connect(address).unwrap());
+                    open.push(listener.accept().unwrap().0);
+                }
+            })
+        };
+
+        let results: Vec<bool> = (0..50).map(|_| fetch_table(u32::from(AF_INET)).is_ok()).collect();
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        churn.join().unwrap();
+
+        assert!(results.iter().all(|ok| *ok), "{results:?}");
     }
 
     #[test]
