@@ -44,6 +44,30 @@
         "sleep": {
           "svg": "standard/sleep.svg",
           "bytes": 17426
+        },
+        "curious": {
+          "svg": "standard/curious.svg",
+          "bytes": 23960
+        },
+        "nod": {
+          "svg": "standard/nod.svg",
+          "bytes": 20812
+        },
+        "giggle": {
+          "svg": "standard/giggle.svg",
+          "bytes": 23489
+        },
+        "surprise": {
+          "svg": "standard/surprise.svg",
+          "bytes": 21181
+        },
+        "pout": {
+          "svg": "standard/pout.svg",
+          "bytes": 17843
+        },
+        "love": {
+          "svg": "standard/love.svg",
+          "bytes": 25644
         }
       }
     },
@@ -75,6 +99,30 @@
         "sleep": {
           "svg": "spring/sleep.svg",
           "bytes": 19091
+        },
+        "curious": {
+          "svg": "spring/curious.svg",
+          "bytes": 26026
+        },
+        "nod": {
+          "svg": "spring/nod.svg",
+          "bytes": 22567
+        },
+        "giggle": {
+          "svg": "spring/giggle.svg",
+          "bytes": 25528
+        },
+        "surprise": {
+          "svg": "spring/surprise.svg",
+          "bytes": 22986
+        },
+        "pout": {
+          "svg": "spring/pout.svg",
+          "bytes": 19441
+        },
+        "love": {
+          "svg": "spring/love.svg",
+          "bytes": 27683
         }
       }
     },
@@ -106,6 +154,30 @@
         "sleep": {
           "svg": "summer/sleep.svg",
           "bytes": 21455
+        },
+        "curious": {
+          "svg": "summer/curious.svg",
+          "bytes": 29272
+        },
+        "nod": {
+          "svg": "summer/nod.svg",
+          "bytes": 25325
+        },
+        "giggle": {
+          "svg": "summer/giggle.svg",
+          "bytes": 28798
+        },
+        "surprise": {
+          "svg": "summer/surprise.svg",
+          "bytes": 25806
+        },
+        "pout": {
+          "svg": "summer/pout.svg",
+          "bytes": 21696
+        },
+        "love": {
+          "svg": "summer/love.svg",
+          "bytes": 30952
         }
       }
     },
@@ -137,6 +209,30 @@
         "sleep": {
           "svg": "halloween/sleep.svg",
           "bytes": 17689
+        },
+        "curious": {
+          "svg": "halloween/curious.svg",
+          "bytes": 24283
+        },
+        "nod": {
+          "svg": "halloween/nod.svg",
+          "bytes": 21005
+        },
+        "giggle": {
+          "svg": "halloween/giggle.svg",
+          "bytes": 23810
+        },
+        "surprise": {
+          "svg": "halloween/surprise.svg",
+          "bytes": 21449
+        },
+        "pout": {
+          "svg": "halloween/pout.svg",
+          "bytes": 17955
+        },
+        "love": {
+          "svg": "halloween/love.svg",
+          "bytes": 25965
         }
       }
     },
@@ -168,6 +264,30 @@
         "sleep": {
           "svg": "winter/sleep.svg",
           "bytes": 18727
+        },
+        "curious": {
+          "svg": "winter/curious.svg",
+          "bytes": 25566
+        },
+        "nod": {
+          "svg": "winter/nod.svg",
+          "bytes": 22248
+        },
+        "giggle": {
+          "svg": "winter/giggle.svg",
+          "bytes": 25204
+        },
+        "surprise": {
+          "svg": "winter/surprise.svg",
+          "bytes": 22587
+        },
+        "pout": {
+          "svg": "winter/pout.svg",
+          "bytes": 19031
+        },
+        "love": {
+          "svg": "winter/love.svg",
+          "bytes": 27219
         }
       }
     }
@@ -220,6 +340,66 @@
       "use": "Inaktivität oder eine ruhige, optionale Wartesituation.",
       "durationMs": 3120,
       "frames": 6
+    },
+    {
+      "id": "curious",
+      "name": "Was ist denn da?",
+      "new": true,
+      "loop": true,
+      "use": "Neugieriger Blick für Tipps oder neue Entdeckungen.",
+      "previewFrame": 3,
+      "durationMs": 2920,
+      "frames": 8
+    },
+    {
+      "id": "nod",
+      "name": "Alles klar!",
+      "new": true,
+      "loop": false,
+      "use": "Ein freundliches Nicken zur Bestätigung.",
+      "previewFrame": 3,
+      "durationMs": 1380,
+      "frames": 8
+    },
+    {
+      "id": "giggle",
+      "name": "Hihihi",
+      "new": true,
+      "loop": false,
+      "use": "Ein kleines Kichern für einen spielerischen Moment.",
+      "previewFrame": 4,
+      "durationMs": 1400,
+      "frames": 8
+    },
+    {
+      "id": "surprise",
+      "name": "Oh!",
+      "new": true,
+      "loop": false,
+      "use": "Überraschte Reaktion auf etwas Neues.",
+      "previewFrame": 3,
+      "durationMs": 1480,
+      "frames": 7
+    },
+    {
+      "id": "pout",
+      "name": "Menno …",
+      "new": true,
+      "loop": false,
+      "use": "Ein sanftes Schmollen, wenn etwas länger dauert oder nicht klappt.",
+      "previewFrame": 3,
+      "durationMs": 2080,
+      "frames": 7
+    },
+    {
+      "id": "love",
+      "name": "Für dich",
+      "new": true,
+      "loop": false,
+      "use": "Buddy verschenkt ein kleines Herz – etwa für einen Favoriten.",
+      "previewFrame": 3,
+      "durationMs": 1800,
+      "frames": 8
     }
   ]
 }

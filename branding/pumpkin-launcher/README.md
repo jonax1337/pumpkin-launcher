@@ -23,7 +23,7 @@ Alle nativen Bilder werden **direkt aus derselben SVG-Datei** gerendert, ohne ne
 
 ## Übergabe
 
-- `motion/`: 30 animierte SVGs (sechs Bewegungen × fünf Seasons), statische Fallbacks und eine interaktive Vorschau. Details in [motion/README.md](motion/README.md).
+- `motion/`: 60 animierte SVGs (zwölf Bewegungen × fünf Seasons), statische Fallbacks und eine interaktive Vorschau. Sechs neue Reaktionen stehen zuerst; die bisherigen sechs bleiben erhalten. Details in [motion/README.md](motion/README.md).
 - `index.html`: finale Vorschau, inklusive Datumstest; alle gezeigten Logos sind SVGs.
 - `overview.png`: aufbewahrte Übersicht des letzten Konzepts.
 - `CONCEPT.md`: gewählte Motive und vorgeschlagene Saisonzeiten.
