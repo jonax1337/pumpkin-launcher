@@ -1,0 +1,15 @@
+# Temporary troubleshooting override (RELAY-OPS.md, "Debug session"). Never leave it running.
+#   docker compose -f docker-compose.yml -f docker-compose.debug.yml up -d
+# End it within 24 hours and delete the logs by recreating the container:
+#   docker compose up -d --force-recreate
+# The logs of this mode contain client IP addresses (verified in the iroh-relay 1.3.0 source:
+# the connection spans carry the peer address).
+services:
+  relay:
+    environment:
+      RUST_LOG: "iroh_relay=warn"
+    logging:
+      driver: local
+      options:
+        max-size: "1m"
+        max-file: "1"

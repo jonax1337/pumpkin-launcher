@@ -1,0 +1,44 @@
+# Pumpkin Friends relay: iroh-relay at the launcher's iroh version (docs/friends/RELAY-OPS.md).
+# Start:  docker compose up -d --build
+# Check:  docker compose config
+name: pumpkin-relay
+
+services:
+  relay:
+    build:
+      context: .
+      args:
+        # Lockstep with iroh in src-tauri/Cargo.lock. Change both together.
+        IROH_RELAY_VERSION: "1.3.0"
+    image: pumpkin-iroh-relay:1.3.0
+    restart: unless-stopped
+    ports:
+      - "80:80/tcp"        # captive portal probe /generate_204 (ACME does not use it)
+      - "443:443/tcp"      # relay traffic (HTTPS/WSS) and ACME TLS-ALPN-01
+      - "7842:7842/udp"    # QUIC address discovery
+      - "127.0.0.1:9090:9090/tcp"  # metrics, localhost only
+    volumes:
+      - ./relay.toml:/etc/iroh-relay/relay.toml:ro
+      - relay-data:/data
+    environment:
+      # Errors only. Spans of the server carry the client IP, so never raise this on a
+      # standing deployment (RELAY-OPS.md, log policy).
+      RUST_LOG: "error"
+    # No access logs and no stored error logs: nothing from the relay process reaches the disk.
+    logging:
+      driver: none
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: "0"   # non-root user may bind 80 and 443
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9090/metrics", "-o", "/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  relay-data:
