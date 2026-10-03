@@ -224,6 +224,14 @@ pub enum QuickPlay {
     Server { address: String },
 }
 
+/// Beitritt zu einer Freundeswelt: die Adresse (Loopback) des Tunnels, den das Backend dafür geöffnet hat.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FriendJoin {
+    pub join_id: String,
+    pub address: String,
+}
+
 /// Was das Frontend zum Start mitgibt; die Startoptionen der Instanz selbst liest das Backend aus ihr.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -250,6 +258,9 @@ pub struct LaunchOptions {
     pub discord_presence: Option<bool>,
     /// Direkt in eine Welt oder auf einen Server.
     pub quick_play: Option<QuickPlay>,
+    /// Beitritt zu einer Freundeswelt; ersetzt `quick_play` und bleibt unter „zuletzt gespielt“ unerwähnt.
+    #[serde(default)]
+    pub friend_join: Option<FriendJoin>,
 }
 
 /// Namen, die das Frontend zeichnen kann; sie müssen mit ihm übereinstimmen, sonst stürzt die Ansicht ab bzw. ein gültiges
@@ -637,5 +648,18 @@ mod tests {
         assert_eq!((m.kind, m.required_by.len(), m.sha1.is_none()), (ModKind::Mod, 0, true));
         let v = serde_json::to_value(Mod { kind: ModKind::ResourcePack, required_by: vec!["p".into()], ..m }).unwrap();
         assert_eq!((&v["kind"], &v["requiredBy"]), (&serde_json::json!("resourcepack"), &serde_json::json!(["p"])));
+    }
+
+    #[test]
+    fn friend_join_round_trips_and_launch_options_without_it_still_load() {
+        let join: FriendJoin = serde_json::from_str(r#"{"joinId":"j1","address":"127.1.2.3:25565"}"#).unwrap();
+        assert_eq!(join, FriendJoin { join_id: "j1".into(), address: "127.1.2.3:25565".into() });
+        assert_eq!(serde_json::to_value(&join).unwrap(), serde_json::json!({"joinId": "j1", "address": "127.1.2.3:25565"}));
+
+        let without: LaunchOptions = serde_json::from_str(r#"{"username":"Alex"}"#).unwrap();
+        assert_eq!(without.friend_join, None);
+        let with: LaunchOptions =
+            serde_json::from_str(r#"{"username":"Alex","friendJoin":{"joinId":"j1","address":"127.1.2.3:1"}}"#).unwrap();
+        assert_eq!(with.friend_join, Some(FriendJoin { join_id: "j1".into(), address: "127.1.2.3:1".into() }));
     }
 }

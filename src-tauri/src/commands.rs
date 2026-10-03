@@ -1,4 +1,5 @@
 //! Tauri-Commands. Dünne Schicht über `AppState`; Argumentnamen kommen im Frontend als camelCase an.
+use std::net::SocketAddrV4;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -11,6 +12,7 @@ use crate::models::{
     now_ms, require_name, Account, GameWindow, Instance, InstanceIcon, InstanceScene, LaunchOptions, Mod, ModLoader,
     NewInstance, QuickPlay, MAX_NOTES_LEN, NO_NAME_LIMIT,
 };
+use crate::services::gamesignal::{lan_line_forwarder, GameSignal, LaunchReporter};
 use crate::services::install::{self, InstallProgress, InstallStep, OnProgress, INSTALL_PROGRESS_EVENT};
 use crate::services::launch::{self, LaunchSpec, LogStream, Running, Session, EXIT_EVENT, LOG_EVENT};
 use crate::services::loader::{self, LoaderVersion};
@@ -243,19 +245,66 @@ fn provide_mods(state: &AppState, instance: &Instance, on_progress: OnProgress<'
 /// Server. Ausgaben kommen als `instance-log`, das Ende als `instance-exit`.
 #[tauri::command]
 pub async fn instance_launch(app: AppHandle, state: State<'_, AppState>, instance_id: String, options: LaunchOptions) -> AppResult<u32> {
-    let _operation = state.begin_instance_operation(&instance_id)?;
-    let instance = state.instances.get(&instance_id)?;
-    worlds::backup_before_launch(&state, &instance, &options).await;
-    let prepared = prepare_launch(&state, &instance, &options).await?;
-    let pid = state.spawn_running(&instance_id, || {
-        let game = spawn_game(&app, &instance_id, &prepared)?;
+    let join_id = options.friend_join.as_ref().map(|join| join.join_id.as_str());
+    let reporter = LaunchReporter::new(state.signals.clone(), &instance_id, join_id);
+    reporter.guard(launch_instance(&app, &state, &instance_id, &options, &reporter)).await
+}
+
+async fn launch_instance(
+    app: &AppHandle,
+    state: &AppState,
+    instance_id: &str,
+    options: &LaunchOptions,
+    reporter: &LaunchReporter,
+) -> AppResult<u32> {
+    let quick_play = launch_target(options)?;
+    let _operation = state.begin_instance_operation(instance_id)?;
+    let instance = state.instances.get(instance_id)?;
+    worlds::backup_before_launch(state, &instance, options).await;
+    reporter.progress();
+    let prepared = prepare_launch(state, &instance, options, quick_play.as_ref(), reporter).await?;
+    let pid = state.spawn_running(instance_id, || {
+        let game = spawn_game(app, instance_id, &prepared)?;
         // Noch unter der Sperre: `instance-exit` eines sofort beendeten Spiels kommt so erst nach diesem Stand.
-        announce_in_discord(&state, &instance, &options);
-        record_launch(&state, &instance_id, options.quick_play);
+        announce_spawn(state, instance_id, game.pid, options);
+        announce_in_discord(state, &instance, options);
+        record_launch(state, instance_id, remembered_quick_play(options));
         Ok(game)
     })?;
     tracing::info!(instance = %instance_id, pid, user = %prepared.player, "Spiel gestartet");
     Ok(pid)
+}
+
+/// Ob das Frontend ein Konto (Microsoft) für den Start mitgibt; ohne startet das Spiel offline.
+fn has_account(options: &LaunchOptions) -> bool {
+    options.account_id.as_deref().is_some_and(|id| !id.is_empty())
+}
+
+/// Das Quick-Play-Ziel des Starts. Ein Beitritt zu einer Freundeswelt braucht ein Konto und eine Loopback-Adresse; sein
+/// Ziel ersetzt jedes andere der Optionen.
+fn launch_target(options: &LaunchOptions) -> AppResult<Option<QuickPlay>> {
+    let Some(join) = &options.friend_join else { return Ok(options.quick_play.clone()) };
+    if !has_account(options) {
+        return Err(AppError::invalid(coded!("errors.friends.msAccountRequired")));
+    }
+    match join.address.parse::<SocketAddrV4>() {
+        Ok(address) if address.ip().is_loopback() && address.port() != 0 => Ok(Some(QuickPlay::Server { address: join.address.clone() })),
+        _ => Err(AppError::invalid(coded!("errors.friends.joinAddressInvalid"))),
+    }
+}
+
+/// Die Adresse eines Beitritts zu einer Freundeswelt gilt nur einmal; „Weiterspielen“ soll sie nicht wiederholen.
+fn remembered_quick_play(options: &LaunchOptions) -> Option<QuickPlay> {
+    options.friend_join.is_none().then(|| options.quick_play.clone()).flatten()
+}
+
+fn announce_spawn(state: &AppState, instance_id: &str, pid: u32, options: &LaunchOptions) {
+    state.signals.send(GameSignal::Spawned {
+        instance_id: instance_id.to_owned(),
+        pid,
+        online_account: has_account(options),
+        friend_join: options.friend_join.as_ref().map(|join| join.join_id.clone()),
+    });
 }
 
 /// Was für einen Start feststeht, bevor das Spiel läuft.
@@ -265,20 +314,32 @@ struct PreparedLaunch {
     game_dir: PathBuf,
     /// Spielername, nur fürs Protokoll.
     player: String,
+    loader: ModLoader,
 }
 
 /// Prüft die Standards des Launchers, holt den Stand vor einem unterbrochenen Pack-Update zurück, prüft das
-/// Quick-Play-Ziel, bringt die Mods auf Stand, meldet das Konto an und baut die Startargumente.
-async fn prepare_launch(state: &AppState, instance: &Instance, options: &LaunchOptions) -> AppResult<PreparedLaunch> {
+/// Quick-Play-Ziel, bringt die Mods auf Stand, meldet das Konto an und baut die Startargumente. Nach jedem Schritt,
+/// der dauern kann, meldet `reporter` Fortschritt.
+async fn prepare_launch(
+    state: &AppState,
+    instance: &Instance,
+    options: &LaunchOptions,
+    quick_play: Option<&QuickPlay>,
+    reporter: &LaunchReporter,
+) -> AppResult<PreparedLaunch> {
     require_launcher_defaults(options)?;
     pack_update::recover_instance(&state.dirs, instance)?;
-    if let Some(target) = &options.quick_play {
+    if let Some(target) = quick_play {
         worlds::require_target(&state.dirs, &instance.id, target)?;
     }
     mods::sync(&state.dirs, &instance.id, &instance.mods)?;
+    reporter.progress();
     let (account, session) = launch_account(state, options).await?;
+    reporter.progress();
     let version = loader::installed_version(&state.dirs, instance.into()).await?;
+    reporter.progress();
     let java = java::resolve(&state.dirs, version.java_component(), instance.java_path.as_deref(), options.java_path.as_deref())?;
+    reporter.progress();
     let spec = LaunchSpec {
         version: &version,
         dirs: &state.dirs,
@@ -289,11 +350,11 @@ async fn prepare_launch(state: &AppState, instance: &Instance, options: &LaunchO
         extra_jvm_args: launch::effective_jvm_args(&instance.jvm_args, &options.default_jvm_args),
         window: launch::effective_window(instance.window, options.default_window),
         extra_game_args: &instance.game_args,
-        quick_play: options.quick_play.as_ref(),
+        quick_play,
         session: session.as_ref().map(Session::from),
     };
     let args = launch::build_args(&spec, &Env::current())?;
-    Ok(PreparedLaunch { java, args, game_dir: state.dirs.game_dir(&instance.id), player: account.username })
+    Ok(PreparedLaunch { java, args, game_dir: state.dirs.game_dir(&instance.id), player: account.username, loader: instance.loader })
 }
 
 /// Mit Microsoft-Konto: echte Sitzung (bei Bedarf erneuert); sonst Offline mit dem Spielernamen der Optionen.
@@ -310,21 +371,27 @@ async fn launch_account(state: &AppState, options: &LaunchOptions) -> AppResult<
     }
 }
 
-/// Startet das Spiel: Ausgabezeilen gehen als `instance-log` ans Frontend, das Ende an `on_game_exit`.
+/// Startet das Spiel: Ausgabezeilen gehen als `instance-log` ans Frontend und, roh, an die Erkennung des LAN-Ports,
+/// das Ende an `on_game_exit`. Mit laufender Brücke (Fabric) bekommt das Spiel ihre Umgebungsvariablen.
 fn spawn_game(app: &AppHandle, instance_id: &str, prepared: &PreparedLaunch) -> AppResult<Running> {
+    let state = app.state::<AppState>();
     let (log_app, log_id) = (app.clone(), instance_id.to_owned());
     let (exit_app, exit_id) = (app.clone(), instance_id.to_owned());
     let started = SystemTime::now();
+    let env = state.bridge.launch_env(instance_id, prepared.loader);
     launch::spawn(
         &prepared.java,
         &prepared.args,
         &prepared.game_dir,
+        &env,
         move |stream, line| {
             tracing::info!(target: "minecraft", instance = %log_id, ?stream, "{line}");
             emit(&log_app, LOG_EVENT, LogPayload { instance_id: log_id.clone(), stream, line });
         },
+        lan_line_forwarder(state.signals.clone(), instance_id.to_owned()),
         move |code| on_game_exit(&exit_app, exit_id, started, code),
     )
+    .inspect_err(|_| state.bridge.forget(instance_id))
 }
 
 /// Merkt sich Startzeit und Quick-Play-Ziel. Das Spiel läuft schon: ein Schreibfehler (etwa durch ein
@@ -348,12 +415,15 @@ fn announce_in_discord(state: &AppState, instance: &Instance, options: &LaunchOp
     }
 }
 
-/// Aufräumen nach dem Ende des Spiels: Anzeige in Discord weg, Eintrag entfernen, Spielzeit buchen, `instance-exit` senden.
+/// Aufräumen nach dem Ende des Spiels: Anzeige in Discord weg, Eintrag entfernen, Token der Mod verwerfen, Freunde-Funktion
+/// benachrichtigen, Spielzeit buchen, `instance-exit` senden.
 fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, code: Option<i32>) {
     let state = app.state::<AppState>();
     state.presence.stopped(&instance_id);
     // `instance_kill` hat den Eintrag schon entfernt: dann hat der Nutzer gestoppt.
     let stopped = state.take_running(&instance_id).is_none();
+    state.bridge.forget(&instance_id);
+    state.signals.send(GameSignal::Exited { instance_id: instance_id.clone() });
     let crashed = code != Some(0) && !stopped;
     let game_dir = state.dirs.game_dir(&instance_id);
     let text = |p: PathBuf| p.to_string_lossy().into_owned();
@@ -437,6 +507,7 @@ pub fn system_memory_mb() -> AppResult<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::FriendJoin;
     use std::time::Duration;
 
     fn state_with_instance() -> (AppState, String, PathBuf) {
@@ -458,6 +529,67 @@ mod tests {
         record_launch(&state, &id, None);
         assert_eq!(state.instances.get(&id).unwrap().last_quick_play, Some(target), "ohne Ziel bleibt das letzte erhalten");
         record_launch(&state, "weg", None);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    fn join_options(account_id: Option<&str>, address: &str) -> LaunchOptions {
+        LaunchOptions {
+            account_id: account_id.map(str::to_owned),
+            quick_play: Some(QuickPlay::World { id: "Welt".into() }),
+            friend_join: Some(FriendJoin { join_id: "j1".into(), address: address.into() }),
+            ..serde_json::from_str(r#"{"username":"Alex"}"#).unwrap()
+        }
+    }
+
+    #[test]
+    fn a_friend_join_targets_its_loopback_address_and_replaces_any_other_target() {
+        let target = launch_target(&join_options(Some("acc"), "127.1.2.3:25565")).unwrap();
+        assert_eq!(target, Some(QuickPlay::Server { address: "127.1.2.3:25565".into() }));
+    }
+
+    #[test]
+    fn without_a_friend_join_the_target_of_the_options_is_used() {
+        let options = LaunchOptions { friend_join: None, ..join_options(None, "") };
+        assert_eq!(launch_target(&options).unwrap(), Some(QuickPlay::World { id: "Welt".into() }));
+    }
+
+    #[test]
+    fn a_friend_join_without_a_microsoft_account_is_refused() {
+        for account in [None, Some("")] {
+            let err = launch_target(&join_options(account, "127.1.2.3:25565")).unwrap_err();
+            assert_eq!(err.to_string(), "Dafür brauchst du ein Microsoft-Konto");
+        }
+    }
+
+    #[test]
+    fn a_friend_join_needs_a_loopback_address_with_a_port() {
+        for address in ["192.168.1.5:25565", "127.0.0.1", "127.0.0.1:0", "127.0.0.1:99999", "localhost:25565", "[::1]:25565", "127.0.0.1:1:2", " 127.0.0.1:25565", ""] {
+            let err = launch_target(&join_options(Some("acc"), address)).unwrap_err();
+            assert_eq!(err.to_string(), "Ungültige Beitrittsadresse", "{address:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_refused_friend_join_reports_a_failed_launch_before_the_error_returns() {
+        let signals = crate::services::gamesignal::GameSignals::default();
+        let mut receiver = signals.subscribe();
+        let options = join_options(None, "127.1.2.3:25565");
+        let reporter = LaunchReporter::new(signals, "i1", Some("j1"));
+        assert!(reporter.guard(async { launch_target(&options) }).await.is_err());
+        let failed = GameSignal::LaunchFailed { instance_id: "i1".into(), friend_join: "j1".into() };
+        assert_eq!(receiver.try_recv(), Ok(failed));
+    }
+
+    #[test]
+    fn a_friend_join_leaves_the_last_quick_play_target_alone_but_still_counts_as_played() {
+        let (state, id, root) = state_with_instance();
+        let options = join_options(Some("acc"), "127.1.2.3:25565");
+        record_launch(&state, &id, remembered_quick_play(&options));
+        let instance = state.instances.get(&id).unwrap();
+        assert!(instance.last_played_at.is_some());
+        assert_eq!(instance.last_quick_play, None);
+        let plain = LaunchOptions { friend_join: None, ..options };
+        assert_eq!(remembered_quick_play(&plain), Some(QuickPlay::World { id: "Welt".into() }));
         std::fs::remove_dir_all(root).unwrap();
     }
 

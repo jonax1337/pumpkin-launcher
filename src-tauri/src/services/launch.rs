@@ -280,8 +280,10 @@ pub enum LogStream {
 
 /// Rückruf für jede Ausgabezeile des Spiels.
 type LineFn = Arc<dyn Fn(LogStream, String) + Send + Sync>;
+/// Rückruf für jede stdout-Zeile, wie das Spiel sie schrieb (vor dem Auflösen der XML-Ereignisse).
+type RawFn = Arc<dyn Fn(&str) + Send + Sync>;
 
-async fn pump(stream: impl AsyncRead + Unpin, kind: LogStream, on_line: LineFn) {
+async fn pump(stream: impl AsyncRead + Unpin, kind: LogStream, on_line: LineFn, on_raw: Option<RawFn>) {
     let mut reader = BufReader::new(stream);
     let mut xml = XmlLog::default();
     let mut buf = Vec::new();
@@ -298,6 +300,9 @@ async fn pump(stream: impl AsyncRead + Unpin, kind: LogStream, on_line: LineFn) 
         }
         let raw = String::from_utf8_lossy(&buf);
         let raw = raw.trim_end_matches(['\r', '\n']);
+        if let Some(on_raw) = &on_raw {
+            on_raw(raw);
+        }
         let line = if kind == LogStream::Stdout { xml.line(raw) } else { Some(raw.to_owned()) };
         if let Some(line) = line {
             on_line(kind, line);
@@ -320,18 +325,22 @@ impl Running {
     }
 }
 
-/// Startet `java args…` im Spielverzeichnis. `on_line` bekommt jede Ausgabezeile,
+/// Startet `java args…` im Spielverzeichnis, mit den Umgebungsvariablen `env` zusätzlich zu denen des Launchers.
+/// `on_line` bekommt jede aufbereitete Ausgabezeile, `on_stdout_raw` jede stdout-Zeile unverändert,
 /// `on_exit` den Exit-Code (None bei Signal/Kill), nachdem alle Ausgaben gelesen sind.
 pub fn spawn(
     java: &Path,
     args: &[String],
     game_dir: &Path,
+    env: &[(String, String)],
     on_line: impl Fn(LogStream, String) + Send + Sync + 'static,
+    on_stdout_raw: impl Fn(&str) + Send + Sync + 'static,
     on_exit: impl FnOnce(Option<i32>) + Send + 'static,
 ) -> AppResult<Running> {
     std::fs::create_dir_all(game_dir)?;
     let mut child = tokio::process::Command::new(java)
         .args(args)
+        .envs(env.iter().map(|(name, value)| (name, value)))
         .current_dir(game_dir)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -341,8 +350,8 @@ pub fn spawn(
     let pid = child.id().unwrap_or_default();
     let on_line: LineFn = Arc::new(on_line);
     let pumps = [
-        child.stdout.take().map(|s| tokio::spawn(pump(s, LogStream::Stdout, on_line.clone()))),
-        child.stderr.take().map(|s| tokio::spawn(pump(s, LogStream::Stderr, on_line))),
+        child.stdout.take().map(|s| tokio::spawn(pump(s, LogStream::Stdout, on_line.clone(), Some(Arc::new(on_stdout_raw))))),
+        child.stderr.take().map(|s| tokio::spawn(pump(s, LogStream::Stderr, on_line, None))),
     ];
     let (kill, kill_rx) = oneshot::channel::<()>();
     tokio::spawn(supervise(child, kill_rx, pumps.into_iter().flatten().collect(), on_exit));
@@ -418,6 +427,8 @@ pub(crate) mod test_support {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Mutex;
+
     use super::test_support::plain_spec;
     use super::*;
     use crate::models::AccountKind;
@@ -596,6 +607,40 @@ mod tests {
         assert_eq!(split_address("mc.example.net:25570"), ("mc.example.net", "25570"));
         assert_eq!(split_address("[::1]:25566"), ("::1", "25566"));
         assert_eq!(split_address("::1"), ("::1", "25565"));
+    }
+
+    /// Ein Programm, das den Wert von `PUMPKIN_TEST_VAR` ausgibt.
+    fn echo_env_command() -> (&'static str, [String; 2]) {
+        if cfg!(windows) {
+            ("cmd.exe", ["/C".into(), "echo %PUMPKIN_TEST_VAR%".into()])
+        } else {
+            ("sh", ["-c".into(), "echo $PUMPKIN_TEST_VAR".into()])
+        }
+    }
+
+    #[tokio::test]
+    async fn the_child_gets_the_given_environment_and_both_line_callbacks_see_its_output() {
+        let game_dir = std::env::temp_dir().join(crate::models::new_id());
+        let (program, args) = echo_env_command();
+        let (lines, raw_lines) = (Arc::new(Mutex::new(Vec::new())), Arc::new(Mutex::new(Vec::new())));
+        let (on_line, on_raw) = (lines.clone(), raw_lines.clone());
+        let (exit_tx, exit_rx) = oneshot::channel();
+        spawn(
+            Path::new(program),
+            &args,
+            &game_dir,
+            &[("PUMPKIN_TEST_VAR".to_owned(), "wert-42".to_owned())],
+            move |_, line| on_line.lock().unwrap().push(line),
+            move |raw| on_raw.lock().unwrap().push(raw.to_owned()),
+            move |code| {
+                exit_tx.send(code).ok();
+            },
+        )
+        .unwrap();
+        assert_eq!(exit_rx.await.unwrap(), Some(0));
+        assert_eq!(*lines.lock().unwrap(), ["wert-42"]);
+        assert_eq!(*raw_lines.lock().unwrap(), ["wert-42"]);
+        std::fs::remove_dir_all(game_dir).unwrap();
     }
 
     #[test]

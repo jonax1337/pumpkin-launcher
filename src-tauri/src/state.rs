@@ -12,7 +12,9 @@ use crate::error::{AppError, AppResult};
 use crate::models::{Instance, LibrarySkin, MsAccount, Template};
 use crate::services::auth::MsState;
 use crate::services::download::http_client;
+use crate::services::gamesignal::GameSignals;
 use crate::services::launch::Running;
+use crate::services::modbridge::ModBridge;
 use crate::services::presence::Presence;
 use crate::services::progress::{progress, SharedProgress};
 use crate::services::store::JsonStore;
@@ -33,6 +35,10 @@ pub struct AppState {
     pub http: reqwest::Client,
     /// Die Anzeige in Discord; gezeigt wird nur, was `LaunchOptions::discord_presence` beim Start erlaubt.
     pub presence: Presence,
+    /// Was beim Spielstart und -ende geschieht, für die Freunde-Funktion.
+    pub signals: GameSignals,
+    /// Brücke zur Fabric-Mod; gestoppt, bis die Freunde-Funktion sie startet.
+    pub bridge: ModBridge,
     /// Laufende Spiele je Instanz-ID.
     running: Mutex<HashMap<String, Running>>,
     /// Abbrechbare Vorgänge je Instanz- bzw. operationId.
@@ -48,6 +54,7 @@ pub type OperationGuard<'a> = tokio::sync::MutexGuard<'a, ()>;
 impl AppState {
     pub fn load(data_dir: &Path) -> AppResult<Self> {
         fs::create_dir_all(data_dir)?;
+        let signals = GameSignals::default();
         Ok(Self {
             instances: Arc::new(JsonStore::open(data_dir.join("instances.json"))?),
             templates: JsonStore::open(data_dir.join("templates.json"))?,
@@ -57,6 +64,8 @@ impl AppState {
             dirs: Dirs::new(data_dir),
             http: http_client()?,
             presence: Presence::discord(),
+            bridge: ModBridge::new(signals.clone()),
+            signals,
             running: Mutex::new(HashMap::new()),
             operation: tokio::sync::Mutex::new(()),
             cancels: Mutex::new(HashMap::new()),
