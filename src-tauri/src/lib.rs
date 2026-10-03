@@ -15,6 +15,7 @@ mod storage_commands;
 mod support_commands;
 mod world_commands;
 
+use std::future::Future;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -242,10 +243,15 @@ fn start_sessions(handle: tauri::AppHandle) -> Result<(), services::friends::Han
 /// Freunde und Gäste erfahren das Ende über `SHUTDOWN`; ein hängendes Netz hält das Beenden nicht auf.
 fn shut_down_friends(app: &tauri::AppHandle) {
     let state = app.state::<state::AppState>();
-    let shutdown = tokio::time::timeout(FRIENDS_SHUTDOWN_LIMIT, state.friends.shutdown());
-    if tauri::async_runtime::block_on(shutdown).is_err() {
+    if block_on_within(FRIENDS_SHUTDOWN_LIMIT, state.friends.shutdown()).is_none() {
         tracing::warn!("Freunde nicht rechtzeitig abgemeldet");
     }
+}
+
+/// Wartet höchstens `limit` auf `work`, auch vom Haupt-Thread der Ereignisschleife aus. Der hat keine Tokio-Laufzeit
+/// betreten; die Zeitgrenze entsteht deshalb erst in der Laufzeit von `block_on`.
+fn block_on_within<F: Future>(limit: Duration, work: F) -> Option<F::Output> {
+    tauri::async_runtime::block_on(async move { tokio::time::timeout(limit, work).await.ok() })
 }
 
 /// Aufräumen im Hintergrund nach dem Start: Reste unterbrochener Weltvorgänge entfernen, Dateien eines abgestürzten
@@ -285,5 +291,31 @@ fn focus_main_window(app: &tauri::AppHandle) {
         if let Err(err) = result {
             tracing::warn!(%err, "Fenster nicht nach vorn geholt");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SHORT_LIMIT: Duration = Duration::from_millis(50);
+
+    /// Wie `RunEvent::Exit`: ein gewöhnlicher Thread ohne betretene Tokio-Laufzeit.
+    fn outside_any_runtime<T: Send + 'static>(run: impl FnOnce() -> T + Send + 'static) -> T {
+        std::thread::spawn(run).join().expect("no panic outside a Tokio runtime")
+    }
+
+    #[test]
+    fn work_finished_in_time_returns_its_result_outside_a_runtime() {
+        let result = outside_any_runtime(|| block_on_within(SHORT_LIMIT, std::future::ready(7)));
+
+        assert_eq!(result, Some(7));
+    }
+
+    #[test]
+    fn hanging_work_is_given_up_after_the_limit_outside_a_runtime() {
+        let result = outside_any_runtime(|| block_on_within(SHORT_LIMIT, std::future::pending::<()>()));
+
+        assert_eq!(result, None);
     }
 }

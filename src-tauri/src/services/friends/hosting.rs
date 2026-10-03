@@ -411,7 +411,7 @@ impl FriendSessions {
         for (peer, invite) in invites {
             send_session_control(shared, &peer, SessionControl::Invite(invite));
         }
-        Ok(announce_session(shared))
+        announce_session(shared, session_id)
     }
 
     /// Wirft einen Gast hinaus: Einladung zu, Tunnel getrennt, `inviteRevoke{kicked}` (SPEC 6.1).
@@ -424,7 +424,7 @@ impl FriendSessions {
             session_with_id(&mut guard, session_id)?.kick(&peer).ok_or_else(|| friend_not_found(friend_id))?
         };
         send_session_control(shared, &peer, SessionControl::InviteRevoke { invite_id, reason: RevokeReason::Kicked });
-        Ok(announce_session(shared))
+        announce_session(shared, session_id)
     }
 
     pub async fn host_stop(&self, session_id: &str) -> AppResult<()> {
@@ -576,11 +576,13 @@ fn current_view(shared: &Shared) -> Option<HostSession> {
     lock(&shared.hosting.session).as_ref().map(|session| session.view(|peer| link_of(shared, peer)))
 }
 
-/// Meldet den aktuellen Stand der Sitzung an die Oberfläche und gibt ihn zurück.
-fn announce_session(shared: &Shared) -> HostSession {
-    let view = current_view(shared).expect("Sitzung besteht, der Aufrufer hat sie gerade geändert");
+/// Meldet den Stand der geänderten Sitzung an die Oberfläche und gibt ihn zurück. Zwischen Änderung und Meldung kann
+/// ein `end_session` sie beendet haben; gemeldet wird unter der Sperre, damit ihr Ende stets nach diesem Stand kommt.
+fn announce_session(shared: &Shared, session_id: &str) -> AppResult<HostSession> {
+    let mut guard = lock(&shared.hosting.session);
+    let view = session_with_id(&mut guard, session_id)?.view(|peer| link_of(shared, peer));
     shared.emit(SessionEvent::HostSession(HostSessionEvent { session: view.clone() }));
-    view
+    Ok(view)
 }
 
 fn announce_if_active(shared: &Shared) {
@@ -902,8 +904,17 @@ async fn refuse(mut stream: BiStream, reply: &TunnelReply) {
 mod tests {
     use iroh::SecretKey;
 
+    use super::super::lookup::{ModrinthHttp, ModrinthLookup};
+    use super::super::sessions::{MojangVersions, SessionContext, PRODUCTION_LIVENESS};
+    use super::super::test_support::{error_key, TempDir};
+    use super::super::{Friends, JoinTimers, NetOptions};
     use super::*;
     use crate::models::ModLoader;
+    use crate::services::gamesignal::GameSignals;
+    use crate::services::modbridge::ModBridge;
+    use crate::services::secrets::MemorySecretStore;
+    use crate::services::store::JsonStore;
+    use crate::services::Dirs;
 
     const NOW: u64 = 1_000_000;
 
@@ -945,6 +956,25 @@ mod tests {
             session.invite(invitee, format!("inv{seed}"), NOW + INVITE_TTL_SECS);
         }
         session
+    }
+
+    /// Sitzungen eines Dienstes, der nie startet: genug für den Zustand hinter der Sitzungssperre.
+    fn idle_sessions(dir: &TempDir) -> FriendSessions {
+        let (signals, dirs) = (GameSignals::default(), Dirs::new(dir.path()));
+        let bridge = ModBridge::new(signals.clone());
+        let secrets = Arc::new(MemorySecretStore::new());
+        let friends = Friends::new(&dirs, secrets, signals.clone(), bridge.clone(), NetOptions::production()).unwrap();
+        FriendSessions::new(SessionContext {
+            friends,
+            signals,
+            bridge,
+            instances: Arc::new(JsonStore::open(dir.path().join("instances.json")).unwrap()),
+            dirs,
+            lookup: Arc::new(ModrinthLookup::new(ModrinthHttp::new().unwrap())),
+            versions: Arc::new(MojangVersions::new(reqwest::Client::new())),
+            timers: JoinTimers::production(),
+            liveness: PRODUCTION_LIVENESS,
+        })
     }
 
     fn state_of(session: &Session, seed: u8) -> (GuestState, bool) {
@@ -1123,6 +1153,18 @@ mod tests {
         assert_eq!(view.world_name, None);
     }
 
+    #[tokio::test]
+    async fn a_session_ended_before_its_announcement_gives_session_not_found() {
+        let dir = TempDir::new();
+        let sessions = idle_sessions(&dir);
+        *lock(&sessions.shared.hosting.session) = Some(session());
+        end_session(&sessions.shared, |_| true, SessionEnd::Stopped);
+
+        let err = announce_session(&sessions.shared, "s1").unwrap_err();
+
+        assert_eq!(error_key(&err), "errors.friends.sessionNotFound");
+    }
+
     #[test]
     fn versions_before_1_20_and_unknown_versions_cannot_be_shared() {
         let versions = VersionIndex::new([
@@ -1133,7 +1175,7 @@ mod tests {
         assert!(ensure_supported_version("26.3", &versions).is_ok());
         for version in ["1.19.4", "my-custom"] {
             let err = ensure_supported_version(version, &versions).unwrap_err();
-            assert_eq!(super::super::test_support::error_key(&err), "errors.friends.versionUnsupported", "{version}");
+            assert_eq!(error_key(&err), "errors.friends.versionUnsupported", "{version}");
         }
     }
 
