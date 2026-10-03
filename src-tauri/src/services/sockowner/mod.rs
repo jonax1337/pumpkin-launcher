@@ -78,10 +78,24 @@ impl SocketTable for PlatformTable {
 }
 
 #[cfg(test)]
+/// Die Kennung eines eigenen, schon beendeten Kindprozesses: ihm gehört sicher kein Socket dieses Tests. (Unter
+/// Linux kann `pid + 1` ein Thread dieses Prozesses sein und dessen Descriptoren zeigen.)
+pub(crate) fn ended_process_id() -> u32 {
+    let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+        .arg("--list")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let pid = child.id();
+    child.wait().unwrap();
+    pid
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
-    use std::process::{Command, Stdio};
 
     /// Sockets, wie sie ein Betriebssystem liefern könnte, je Prozess.
     struct FakeTable(Vec<(u32, TcpSocket)>);
@@ -166,20 +180,6 @@ mod tests {
         }
         assert!(listens_in(&Broken, 1, 1).is_err());
         assert!(connects_from_in(&Broken, 1, addr("127.0.0.1:1"), addr("127.0.0.1:2")).is_err());
-    }
-
-    /// Die Kennung eines eigenen, schon beendeten Kindprozesses: ihm gehört sicher kein Socket dieses Tests. (Unter
-    /// Linux kann `pid + 1` ein Thread dieses Prozesses sein und dessen Descriptoren zeigen.)
-    fn ended_process_id() -> u32 {
-        let mut child = Command::new(std::env::current_exe().unwrap())
-            .arg("--list")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .unwrap();
-        let pid = child.id();
-        child.wait().unwrap();
-        pid
     }
 
     #[test]

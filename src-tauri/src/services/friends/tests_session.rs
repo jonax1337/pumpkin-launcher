@@ -654,7 +654,7 @@ async fn a_local_connection_from_another_process_opens_no_stream() {
     let addr: SocketAddr = ticket.address.parse().unwrap();
     let before = scene.server.connections();
 
-    scene.guest.spawn_game_as(GUEST_INSTANCE, std::process::id().wrapping_add(1), Some(&ticket.join_id));
+    scene.guest.spawn_game_as(GUEST_INSTANCE, crate::services::sockowner::ended_process_id(), Some(&ticket.join_id));
     tokio::time::sleep(Duration::from_millis(200)).await;
     let mut foreign_process = TcpStream::connect(addr).await.unwrap();
     foreign_process.write_all(&opening_for(addr)).await.unwrap();
