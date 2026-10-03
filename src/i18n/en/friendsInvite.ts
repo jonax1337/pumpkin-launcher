@@ -23,7 +23,7 @@ export const friendsInvite: typeof deFriendsInvite = {
   "friendsInvite.mods.other": "{n} mods",
   "friendsInvite.hostOffline": "The host is offline right now.",
   "friendsInvite.planFailed": "Checking your instances failed",
-  "friendsInvite.offlineAccount": "You can't join a world with an offline account",
+  "friendsInvite.offlineAccount": "Joining needs a Microsoft account, but this instance starts without one. Pick a Microsoft account in the instance settings or at the top.",
   "friendsInvite.lookupFailed": "Modrinth is unreachable; client-only mods are counted",
   "friendsInvite.unsupported.title": "Only from Minecraft {min}",
   "friendsInvite.unsupported.body": "This world runs on Minecraft {version}. Joining works from Minecraft {min} on.",

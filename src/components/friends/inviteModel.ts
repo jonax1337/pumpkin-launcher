@@ -1,4 +1,5 @@
 // Reine Logik des Einladungsdialogs (kein React), damit inviteModel.check.mjs sie ohne Bundler prüft.
+import type { ActiveAccount } from "../../store/settings.ts";
 import type { InstanceCandidate, JoinPlan } from "../../lib/friends-types.ts";
 
 /** Was der Hauptknopf des Dialogs tut; `none`, wenn der Nutzer erst selbst etwas ändern muss (Mods, Version). */
@@ -23,7 +24,10 @@ export function inviteAction(plan: JoinPlan, candidate: InstanceCandidate | unde
   }
 }
 
-/** Beitreten braucht ein Microsoft-Konto (Spielstart mit `friendJoin`, 8.6); eine Vanilla-Instanz anzulegen nicht. */
+/** Beitreten braucht ein Microsoft-Konto (Spielstart mit `friendJoin`, 8.6): das Konto, mit dem die Instanz wirklich startet, entscheidet. */
+export const canJoinWith = (launchAccount: ActiveAccount | null): boolean => launchAccount?.kind === "microsoft";
+
+/** Eine Vanilla-Instanz anzulegen braucht kein Konto; Beitreten nur, wenn das Startkonto ein Microsoft-Konto ist. */
 export const actionAllowed = (action: InviteAction, hasMicrosoftAccount: boolean): boolean =>
   action === "createVanilla" || (action === "join" && hasMicrosoftAccount);
 

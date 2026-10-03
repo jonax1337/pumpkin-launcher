@@ -23,7 +23,7 @@ export const friendsInvite = {
   "friendsInvite.mods.other": "{n} Mods",
   "friendsInvite.hostOffline": "Der Gastgeber ist gerade offline.",
   "friendsInvite.planFailed": "Der Abgleich mit deinen Instanzen ist fehlgeschlagen",
-  "friendsInvite.offlineAccount": "Mit Offline-Konto kann man keiner Welt beitreten",
+  "friendsInvite.offlineAccount": "Beitreten geht nur mit einem Microsoft-Konto, diese Instanz startet aber ohne eines. Wähle in den Instanz-Einstellungen oder oben ein Microsoft-Konto.",
   "friendsInvite.lookupFailed": "Modrinth nicht erreichbar; Client-Mods werden mitgezählt",
   "friendsInvite.unsupported.title": "Erst ab Minecraft {min}",
   "friendsInvite.unsupported.body": "Diese Welt läuft mit Minecraft {version}. Beitreten geht erst ab Minecraft {min}.",
