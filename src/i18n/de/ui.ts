@@ -7,6 +7,8 @@ export const ui = {
   "ui.nav.library": "Bibliothek",
   "ui.nav.discover": "Entdecken",
   "ui.nav.skins": "Skins",
+  "ui.nav.friends": "Freunde",
+  "ui.nav.friendsBadgeAria": "{name}, {count} offen",
   "ui.nav.mainAreas": "Hauptbereiche",
   "ui.pageTitle.notFound": "Seite nicht gefunden",
 
