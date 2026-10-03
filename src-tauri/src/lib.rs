@@ -1,6 +1,7 @@
 mod account_commands;
 mod commands;
 mod content_commands;
+mod friends_commands;
 mod pack_commands;
 mod pack_open;
 mod screenshot_commands;
@@ -14,9 +15,16 @@ mod support_commands;
 mod world_commands;
 
 use std::path::Path;
+use std::sync::Arc;
+use std::time::Duration;
 
 use tauri::{Emitter, Manager};
 use tracing_subscriber::EnvFilter;
+
+use services::friends::events::TauriEvents;
+
+/// So lange darf das Abmelden bei den Freunden das Beenden der App aufhalten.
+const FRIENDS_SHUTDOWN_LIMIT: Duration = Duration::from_secs(1);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -38,8 +46,10 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             tracing::info!(?data_dir, "lade Daten");
             app.manage(state::AppState::load(&data_dir)?);
+            // friends: session wiring (R5)
             app.manage(pack_open::OpenedPack::from_process_args());
             spawn_startup_maintenance(app.handle().clone());
+            start_friends(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -149,26 +159,68 @@ pub fn run() {
             screenshot_commands::screenshot_list,
             screenshot_commands::screenshot_delete,
             screenshot_commands::screenshot_read,
+            friends_commands::friends_state,
+            friends_commands::friends_enable,
+            friends_commands::friends_disable,
+            friends_commands::friends_update_settings,
+            friends_commands::friends_rotate_identity,
+            friends_commands::friends_reset,
+            friends_commands::friends_list,
+            friends_commands::friend_requests,
+            friends_commands::friend_code_create,
+            friends_commands::friend_codes,
+            friends_commands::friend_code_revoke,
+            friends_commands::friend_add,
+            friends_commands::friend_request_answer,
+            friends_commands::friend_request_cancel,
+            friends_commands::friend_rename,
+            friends_commands::friend_acknowledge,
+            friends_commands::friend_remove,
+            friends_commands::friend_block,
+            friends_commands::friend_unblock,
+            friends_commands::friends_blocked,
+            friends_commands::friends_retry_now,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(handle_run_event);
 }
 
+fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
+    match event {
+        tauri::RunEvent::Exit => shut_down_friends(app),
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::Opened { urls } => announce_opened_pack(app, &urls),
+        _ => {}
+    }
+}
+
 /// macOS meldet geöffnete Dateien (Doppelklick, „Öffnen mit“) als Ereignis statt in der Kommandozeile.
 #[cfg(target_os = "macos")]
-fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
-    let tauri::RunEvent::Opened { urls } = event else {
-        return;
-    };
+fn announce_opened_pack(app: &tauri::AppHandle, urls: &[tauri::Url]) {
     let pack = urls.iter().filter_map(|url| url.to_file_path().ok()).find(|path| pack_open::is_pack_file(path));
     if let Some(path) = pack {
         pack_open::announce(app, path);
     }
 }
 
-#[cfg(not(target_os = "macos"))]
-fn handle_run_event(_: &tauri::AppHandle, _: tauri::RunEvent) {}
+/// Startet die Freunde-Funktion, wenn sie aktiviert ist; ohne Aktivierung bindet sie nichts.
+fn start_friends(handle: tauri::AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        let state = handle.state::<state::AppState>();
+        let account = friends_commands::account_profile(&state);
+        state.friends.start(Arc::new(TauriEvents(handle.clone())), account).await;
+    });
+}
+
+/// Freunde und Gäste erfahren das Ende über `SHUTDOWN`; ein hängendes Netz hält das Beenden nicht auf.
+fn shut_down_friends(app: &tauri::AppHandle) {
+    let state = app.state::<state::AppState>();
+    let shutdown = tokio::time::timeout(FRIENDS_SHUTDOWN_LIMIT, state.friends.shutdown());
+    if tauri::async_runtime::block_on(shutdown).is_err() {
+        tracing::warn!("Freunde nicht rechtzeitig abgemeldet");
+    }
+}
 
 /// Aufräumen im Hintergrund nach dem Start: Reste unterbrochener Weltvorgänge entfernen, Dateien eines abgestürzten
 /// Pack-Updates zurückholen, dann bei alten Pack-Instanzen Inhalte im Ordner nachtragen, die nicht in der Instanz stehen.
