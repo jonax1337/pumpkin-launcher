@@ -3254,6 +3254,7 @@ dependencies = [
  "fastnbt",
  "flate2",
  "futures",
+ "getrandom 0.4.3",
  "hickory-resolver",
  "iroh",
  "keyring",
