@@ -8,6 +8,7 @@ pub mod directory;
 pub mod events;
 mod hello;
 pub mod identity;
+pub mod ingame;
 pub mod limits;
 pub mod lookup;
 pub mod manifest;
