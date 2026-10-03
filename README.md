@@ -58,7 +58,7 @@
 
 Pumpkin Launcher is in beta (v0.1.x). Install, launch, content, worlds, skins, import, duplicate/export and auto-update are in place and tested on Windows. Linux (AppImage, `.deb`) and macOS (universal `.dmg`) are built by the release workflow and their backend is tested in CI on every change, but they have not been tried on real machines yet, so expect rough edges there. Modpack updates, version switching and a few other recent additions (the `.mrpack` file association, Java detection, the window actions of the "When the game starts" setting) are covered by backend tests or the browser mock but have not yet been verified in a real app build.
 
-> **Microsoft login:** sign-in, Xbox Live and XSTS work end-to-end, but Microsoft must approve each launcher's Azure app before `minecraftservices.com` accepts it. Pumpkin Launcher's own client ID is registered and approval is requested; until it comes through, the final Minecraft step returns 403 and the launcher says so. Forks register their own Azure app and change `DEFAULT_CLIENT_ID` in `src-tauri/src/services/auth/mod.rs`; how to register and approve a client ID is documented in [`docs/ACCOUNT-SETUP.md`](docs/ACCOUNT-SETUP.md).
+> **Microsoft login:** Mojang has approved Pumpkin Launcher's own Azure app, so you can sign in with your Microsoft account. Microsoft must approve each launcher's app before `minecraftservices.com` accepts it; a fork registers its own Azure app and changes `DEFAULT_CLIENT_ID` in `src-tauri/src/services/auth/mod.rs`, and until that app is approved the final Minecraft step returns 403 and the launcher says so. How to register and approve a client ID is documented in [`docs/ACCOUNT-SETUP.md`](docs/ACCOUNT-SETUP.md).
 
 ## Getting started
 

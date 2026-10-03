@@ -45,7 +45,7 @@ const errorsCore = {
   "errors.instance.alreadyRunning": "Instanz läuft bereits",
   "errors.auth.cancelled": "Anmeldung abgebrochen.",
   "errors.auth.expired": "Die Anmeldung ist abgelaufen. Starte sie bitte neu.",
-  "errors.auth.notApproved": "Microsoft hat diesen Launcher noch nicht für Minecraft freigeschaltet. Das liegt nicht an dir und nicht an deinem Konto: Die Freigabe für Pumpkin Launcher läuft noch, bis dahin kann sich hier niemand anmelden.",
+  "errors.auth.notApproved": "Microsoft hat diesen Launcher noch nicht für Minecraft freigeschaltet. Das liegt nicht an dir und nicht an deinem Konto: Für die Microsoft-App dieses Builds fehlt die Freigabe. Der offizielle Pumpkin Launcher ist freigegeben, hier handelt es sich meist um einen Fork oder eine selbst gebaute Kopie.",
   "errors.auth.tooManyAttempts": "Zu viele Anmeldeversuche in kurzer Zeit. Warte ein paar Minuten und versuch es erneut.",
   "errors.auth.minecraftFailed": "Die Anmeldung bei Minecraft ist fehlgeschlagen (Fehler {status}).",
   "errors.export.chooseTarget": "Bitte einen Speicherort für die .mrpack-Datei wählen",

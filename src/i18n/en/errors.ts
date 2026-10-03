@@ -41,7 +41,7 @@ export const errors: typeof deErrors = {
   "errors.instance.alreadyRunning": "The instance is already running",
   "errors.auth.cancelled": "Sign-in cancelled.",
   "errors.auth.expired": "The sign-in has expired. Please start it again.",
-  "errors.auth.notApproved": "Microsoft has not yet approved this launcher for Minecraft. It's not you or your account: approval for Pumpkin Launcher is still pending, and until then nobody can sign in here.",
+  "errors.auth.notApproved": "Microsoft has not yet approved this launcher for Minecraft. It's not you or your account: this build's Microsoft app has no approval yet. The official Pumpkin Launcher is approved, so this usually means a fork or a self-built copy.",
   "errors.auth.tooManyAttempts": "Too many sign-in attempts in a short time. Wait a few minutes and try again.",
   "errors.auth.minecraftFailed": "Signing in to Minecraft failed (error {status}).",
   "errors.export.chooseTarget": "Please choose where to save the .mrpack file",
