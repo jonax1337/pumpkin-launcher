@@ -13,9 +13,10 @@ import type { Breakpoint } from "./types";
  * Spaltenraster je Liste (list.css, inkl. Media Queries):
  * instances 56 px · content 48 px (noWarnCol: ohne Spalte „Hinweise“) · catalog 84 px (feature 132) · catalog-compact 76 px ·
  * versions ≥ 44 px (Trennlinie unten) · tasks 64 px · tiles: Raster aus 88-px-Kacheln · accounts: 60-px-Platten ·
- * worlds 56 px (Welten: Bild, Name, Aktion, Menü) · servers 56 px (Server: Bild, Name, Status, Aktion, Menü).
+ * worlds 56 px (Welten: Bild, Name, Aktion, Menü) · servers 56 px (Server: Bild, Name, Status, Aktion, Menü) ·
+ * friends 56 px (Freunde: Kopf 40, Name, Status 150, Aktion 120, Menü; `data-note` = Hinweiszeile darunter).
  */
-export type ListVariant = "instances" | "content" | "catalog" | "catalog-compact" | "versions" | "tasks" | "tiles" | "accounts" | "worlds" | "servers";
+export type ListVariant = "instances" | "content" | "catalog" | "catalog-compact" | "versions" | "tasks" | "tiles" | "accounts" | "worlds" | "servers" | "friends";
 
 /** Was die Zeile ihrem Inhalt verrät: ob sie als Ganzes trifft (Tooltip-Wirt) und ob sie die Katalogkarte ist (Titelgröße). */
 const RowCtx = createContext({ hit: false, feature: false });

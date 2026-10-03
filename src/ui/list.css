@@ -78,6 +78,12 @@
 .vx-list[data-variant="worlds"] { --l-cols: 40px minmax(0, 1fr) 120px 36px; --l-gap: 12px; --l-pad: 0 6px 0 8px; }
 .vx-list[data-variant="servers"] { --l-cols: 40px minmax(0, 1fr) 150px 120px 36px; --l-gap: 12px; --l-pad: 0 6px 0 8px; }
 
+/* ---------- Freunde: wie Server (Kopf, Name, Status, Aktion, Menü); eine Hinweiszeile (Umbenennung, neue Identität) steht unter der Zeile ---------- */
+.vx-list[data-variant="friends"] { --l-cols: 40px minmax(0, 1fr) 150px 120px 36px; --l-gap: 12px; --l-pad: 0 6px 0 8px; }
+.vx-list[data-variant="friends"] .vx-row[data-note] { --r-bg: color-mix(in srgb, var(--run) 8%, var(--panel)); --r-hv: var(--r-bg); min-height: 44px; padding-block: 6px; }
+.vx-list[data-variant="friends"] .vx-row[data-note][data-tone="warn"] { --r-bg: color-mix(in srgb, var(--warn) 8%, var(--panel)); }
+.vx-list[data-variant="friends"] .vx-row[data-note] > :nth-child(2) { grid-column: 2 / 4; }
+
 /* ---------- Katalog: 84 px, erster Treffer als Karte 132 px; kompakt (Seitenpanel) 76 px ---------- */
 .vx-list[data-variant="catalog"] { --l-cols: 72px minmax(0, 1fr) 190px; --l-gap: 14px; --l-pad: 0 10px 0 8px; --l-h: 84px; }
 .vx-list[data-variant="catalog-compact"] { --l-cols: 48px minmax(0, 1fr) 128px; --l-gap: 14px; --l-pad: 0 4px 0 8px; --l-h: 76px; }
@@ -135,8 +141,10 @@
 
 /* ---------- Konten: 60-px-Platten, aktives Konto gewählt ---------- */
 .vx-list[data-variant="accounts"] .vx-rows { gap: 8px; }
-.vx-list[data-variant="accounts"] .vx-row { --r-bg: var(--panel); --r-bv: var(--bv-plate); --r-hv: var(--panel); display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 0 8px 0 12px; }
+.vx-list[data-variant="accounts"] .vx-row { --r-bg: var(--panel); --r-bv: var(--bv-plate); --r-hv: var(--panel); display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 6px 8px 6px 12px; }
 .vx-list[data-variant="accounts"] .vx-row > .vx-rt { flex: 1; }
+/* Eine Hinweiszeile unter dem Namen (z. B. Warnung) bricht um, statt abgeschnitten zu werden */
+.vx-list[data-variant="accounts"] .vx-rt-m { overflow: visible; }
 
 /* ---------- Lange Listen ---------- */
 /* Hunderte Inhalte: Zeilen außerhalb des Fensters werden nicht gerendert, ihre Höhe bleibt reserviert (Scrollleiste, Fokus und Auswahl bleiben). */
@@ -168,6 +176,7 @@
   /* Server: ohne Antwortzeit und Versionsangabe neben dem Namen behält der Name seine Breite (nur Status, Spielen und Menü bleiben fest) */
   .vx-list[data-variant="servers"] { --l-cols: 40px minmax(6rem, 1fr) 120px 120px 36px; }
   .vx-list[data-variant="servers"] .vx-rt-a { display: none; }
+  .vx-list[data-variant="friends"] { --l-cols: 40px minmax(6rem, 1fr) 124px 112px 36px; }
   .vx-list [data-hide="720"] { display: none; }
   /* Inhalte zweizeilig: oben der Name über die ganze Breite, darunter Hinweis, Update, Schalter und Menü (Kopf: nur Auswahl und „Name“) */
   .vx-list[data-variant="content"] { --l-h: 84px; }
