@@ -375,12 +375,8 @@ impl FriendSessions {
         let shared = &self.shared;
         shared.ensure_enabled()?;
         ensure_no_session(shared)?;
-        let game = shared.hosting.game(instance_id).ok_or_else(|| invalid(coded!("errors.friends.gameNotRunning")))?;
-        if !game.online_account {
-            return Err(invalid(coded!("errors.friends.msAccountRequired")));
-        }
-        let instance = shared.instances.get(instance_id)?;
-        ensure_supported_version(&instance.minecraft_version, &shared.versions.index().await?)?;
+        let game = hostable_game(shared, instance_id)?;
+        let instance = supported_instance(shared, instance_id).await?;
         let lan = match port {
             Some(port) => manual_lan(shared, instance_id, game.pid, port).await?,
             None => game.lan.ok_or_else(|| invalid(coded!("errors.friends.lanPortUnknown")))?,
@@ -390,6 +386,15 @@ impl FriendSessions {
         let view = store_session(shared, session, game.pid)?;
         shared.emit(SessionEvent::HostSession(HostSessionEvent { session: view.clone() }));
         Ok(view)
+    }
+
+    /// Was `host_start` ohne manuellen Port verlangt, ohne etwas zu starten: die Mod fragt erst danach im Launcher nach
+    /// (SPEC 7.4), damit niemand ein Teilen bestätigt, das danach doch scheitert.
+    pub(super) async fn ensure_hostable(&self, instance_id: &str) -> AppResult<()> {
+        let shared = &self.shared;
+        let game = hostable_game(shared, instance_id)?;
+        supported_instance(shared, instance_id).await?;
+        game.lan.map(drop).ok_or_else(|| invalid(coded!("errors.friends.lanPortUnknown")))
     }
 
     /// Lädt verbundene, bestätigte Freunde ein; höchstens 7 Plätze je Sitzung (SPEC 5.4).
@@ -464,6 +469,23 @@ fn session_with_id<'a>(session: &'a mut Option<Session>, session_id: &str) -> Ap
 }
 
 /// Minecraft ab 1.20 (SPEC 6.1); eine Version, die Mojang nicht kennt, lässt sich nicht prüfen und zählt als zu alt.
+/// Das laufende Spiel der Instanz, gestartet mit Microsoft-Konto.
+fn hostable_game(shared: &Shared, instance_id: &str) -> AppResult<Game> {
+    let game = shared.hosting.game(instance_id).ok_or_else(|| invalid(coded!("errors.friends.gameNotRunning")))?;
+    if game.online_account {
+        Ok(game)
+    } else {
+        Err(invalid(coded!("errors.friends.msAccountRequired")))
+    }
+}
+
+/// Die Instanz, wenn ihre Minecraft-Version das Teilen unterstützt (ab 1.20).
+async fn supported_instance(shared: &Shared, instance_id: &str) -> AppResult<Instance> {
+    let instance = shared.instances.get(instance_id)?;
+    ensure_supported_version(&instance.minecraft_version, &shared.versions.index().await?)?;
+    Ok(instance)
+}
+
 fn ensure_supported_version(minecraft_version: &str, versions: &VersionIndex) -> AppResult<()> {
     let probe = Manifest {
         minecraft_version: minecraft_version.to_owned(),

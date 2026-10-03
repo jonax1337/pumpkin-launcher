@@ -329,6 +329,23 @@ pub struct FriendRequestEvent {
     pub request: FriendRequest,
 }
 
+/// Der Besitzer des Codes hat die ausgehende Anfrage endgültig abgelehnt; sie ist gelöscht.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FriendRequestRefusedEvent {
+    pub request: FriendRequest,
+    pub reason: RequestRefusal,
+}
+
+/// Die endgültigen Ablehnungen aus `pumpkin/hello/1` (SPEC 5.2); `full` wird später erneut versucht.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RequestRefusal {
+    CodeUsed,
+    AlreadyFriends,
+    Unsupported,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InviteEvent {

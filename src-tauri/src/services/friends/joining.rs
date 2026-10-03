@@ -236,7 +236,6 @@ impl FriendSessions {
         let received = shared.invites.open_invite(invite_id)?;
         let instance = shared.instances.get(instance_id)?;
         ensure_matches(&plan_for(shared, &received, vec![instance]).await?)?;
-        end_join(shared, |_| true, Ending::Announced(SessionEnd::Left));
         let listener = LocalListener::bind(join_ip()?).await?;
         let ticket = JoinTicket {
             join_id: new_id(),
@@ -245,7 +244,6 @@ impl FriendSessions {
             address: listener.addr.to_string(),
         };
         start_join(shared, &received, ticket.clone(), listener);
-        emit_state(shared, &ticket, JoinState::WaitingForGame);
         Ok(ticket)
     }
 
@@ -358,15 +356,27 @@ fn refused(code: &str) -> AppError {
     AppError::invalid(coded)
 }
 
-/// Trägt den Beitritt ein und startet Zuhörer, Zeitplan und die Beobachtung des Gastgebers.
-fn start_join(shared: &Arc<Shared>, received: &Received, ticket: JoinTicket, listener: LocalListener) {
+/// Startet Zuhörer, Zeitplan und die Beobachtung des Gastgebers und setzt den Beitritt an die Stelle des laufenden.
+pub(super) fn start_join(shared: &Arc<Shared>, received: &Received, ticket: JoinTicket, listener: LocalListener) {
     let (inputs, receiver) = mpsc::unbounded_channel();
     let join = ActiveJoin { ticket, game: Arc::new(OnceLock::new()), inputs, stop: CancellationToken::new() };
     serve_listener(shared, received, &join, listener);
     let (weak, host, stop) = (Arc::downgrade(shared), received.host, &join.stop);
     tokio::spawn(stop.clone().run_until_cancelled_owned(drive(weak.clone(), join.ticket.clone(), host, receiver)));
     tokio::spawn(stop.clone().run_until_cancelled_owned(watch_host(weak, join.ticket.join_id.clone(), host)));
-    *lock(&shared.joins.current) = Some(join);
+    replace_join(shared, join);
+}
+
+/// Ein Schritt unter der Sperre: der vorige Beitritt endet genau einmal mit `left`, der neue wartet auf das Spiel.
+/// So bleibt auch bei zwei gleichzeitigen `invite_join` kein Zuhörer übrig, und die Ereignisse kommen in Reihenfolge.
+fn replace_join(shared: &Shared, join: ActiveJoin) {
+    let mut current = lock(&shared.joins.current);
+    if let Some(previous) = current.take() {
+        previous.stop.cancel();
+        emit_state(shared, &previous.ticket, JoinState::Ended { reason: SessionEnd::Left });
+    }
+    emit_state(shared, &join.ticket, JoinState::WaitingForGame);
+    *current = Some(join);
 }
 
 fn serve_listener(shared: &Shared, received: &Received, join: &ActiveJoin, listener: LocalListener) {
@@ -374,6 +384,7 @@ fn serve_listener(shared: &Shared, received: &Received, join: &ActiveJoin, liste
         listener: listener.addr,
         game: join.game.clone(),
         inputs: join.inputs.clone(),
+        owner: sockowner::connects_from,
         lookup_failed: AtomicBool::new(false),
     });
     let opener = Arc::new(TunnelOpener {
@@ -393,11 +404,15 @@ fn serve_listener(shared: &Shared, received: &Received, join: &ActiveJoin, liste
     listener.serve(admit, open, LISTENER_LIMITS, join.stop.clone());
 }
 
+/// Fragt das Betriebssystem, ob dem Prozess (`u32`) die Verbindung vom ersten zum zweiten Endpunkt gehört.
+type OwnerLookup = fn(u32, SocketAddr, SocketAddr) -> io::Result<bool>;
+
 /// Prüft lokale Verbindungen, bevor ein Tunnel aufgeht (SPEC 6.2, Schritte 3 bis 5).
 struct LocalGate {
     listener: SocketAddr,
     game: Arc<OnceLock<u32>>,
     inputs: mpsc::UnboundedSender<Input>,
+    owner: OwnerLookup,
     lookup_failed: AtomicBool,
 }
 
@@ -416,15 +431,17 @@ impl LocalGate {
         Some((tcp, Bytes::from(peeked)))
     }
 
-    /// Gehört die Gegenseite der Verbindung dem Spiel? Scheitert die Abfrage selbst, entscheidet allein der Handshake.
+    /// Gehört die Verbindung vom Client zum Zuhörer dem Spiel? Lässt sich das nicht feststellen, gilt sie als fremd:
+    /// eine Abfrage, die ein anderer Prozess scheitern lassen kann, darf die Prüfung nicht aushebeln.
     async fn owned_by_game(&self, pid: u32, client: SocketAddr) -> bool {
-        match tokio::task::spawn_blocking(move || sockowner::connects_from(pid, client)).await {
+        let (owner, server) = (self.owner, self.listener);
+        match tokio::task::spawn_blocking(move || owner(pid, client, server)).await {
             Ok(Ok(owned)) => owned,
             Ok(Err(err)) => {
                 if !self.lookup_failed.swap(true, Ordering::Relaxed) {
-                    tracing::warn!(%err, "Besitzer lokaler Verbindungen nicht ermittelbar, nur der Handshake prüft");
+                    tracing::warn!(%err, "Besitzer lokaler Verbindungen nicht ermittelbar, Verbindung abgelehnt");
                 }
-                true
+                false
             }
             Err(err) => {
                 tracing::warn!(%err, "Abfrage des Verbindungsbesitzers abgebrochen");
@@ -641,6 +658,34 @@ mod tests {
         assert_eq!(key(JoinVerdict::VersionUnsupported), "errors.friends.versionUnsupported");
         assert_eq!(key(JoinVerdict::MissingContent), "errors.friends.instanceMismatch");
         assert_eq!(key(JoinVerdict::NoInstance), "errors.friends.instanceMismatch");
+    }
+
+    fn gate(owner: OwnerLookup) -> LocalGate {
+        LocalGate {
+            listener: "127.1.2.3:40000".parse().unwrap(),
+            game: Arc::new(OnceLock::new()),
+            inputs: mpsc::unbounded_channel().0,
+            owner,
+            lookup_failed: AtomicBool::new(false),
+        }
+    }
+
+    #[tokio::test]
+    async fn an_unverifiable_owner_counts_as_foreign() {
+        let client = "127.0.0.1:50000".parse().unwrap();
+        let broken = gate(|_, _, _| Err(io::Error::other("table grew too fast")));
+
+        assert!(!broken.owned_by_game(7, client).await);
+        assert!(!broken.owned_by_game(7, client).await, "also after the first warning");
+    }
+
+    #[tokio::test]
+    async fn the_owner_is_asked_about_the_connection_to_the_listener() {
+        let client: SocketAddr = "127.0.0.1:50000".parse().unwrap();
+        let owned = gate(|pid, from, to| Ok(pid == 7 && from.port() == 50000 && to == "127.1.2.3:40000".parse().unwrap()));
+
+        assert!(owned.owned_by_game(7, client).await);
+        assert!(!owned.owned_by_game(8, client).await);
     }
 
     #[test]

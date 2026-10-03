@@ -15,7 +15,7 @@ use super::code;
 use super::config::{friends_dir, FriendsConfig};
 use super::contract::{
     Availability, Friend, FriendNotice, FriendRequest, FriendsEnableInput, FriendsSettings, InstanceSummary,
-    NetworkStatus, Presence, RequestDirection, RequestState, RevokeReason, MAX_FRIENDS,
+    NetworkStatus, Presence, RequestDirection, RequestRefusal, RequestState, RevokeReason, MAX_FRIENDS,
 };
 use super::control::{open_control, ControlMessage, OpenFrame, SessionControl, WireInvite, WireProfile, PEER_ALPN};
 use super::events::{EventSink, FriendsEvent};
@@ -921,4 +921,83 @@ async fn fiftieth_friend_or_request_is_the_limit() {
 
     assert_eq!(error_key(&added.unwrap_err()), "errors.friends.friendLimit");
     assert_eq!(error_key(&accepted.unwrap_err()), "errors.friends.friendLimit");
+}
+
+async fn request_reply(conn: &PeerConn) -> Value {
+    reply_to(conn, &OpenFrame::Request).await["code"].clone()
+}
+
+#[tokio::test]
+async fn reconnecting_does_not_reset_the_request_stream_limit() {
+    let (relay, _server) = test_relay().await;
+    let (a, b) = two_friends(&relay).await;
+    let a_id = a.id();
+    let first = b.friends.connection(&a_id).unwrap();
+    for _ in 0..5 {
+        assert_eq!(request_reply(&first).await, "unsupported");
+    }
+
+    b.friends.disable().await.unwrap();
+    b.friends.enable(enable_input("Bert"), Some(account("Bert"))).await.unwrap();
+    let b_ref = &b;
+    let a_ref = &a;
+    until("reconnected", || async move {
+        b_ref.friends.connection(&a_id).is_some() && a_ref.presence_of(&b_ref.id()).await == Presence::Online
+    })
+    .await;
+    let second = b.friends.connection(&a_id).unwrap();
+
+    assert_eq!(request_reply(&second).await, "rateLimited");
+}
+
+#[tokio::test]
+async fn a_peer_replacing_its_connection_too_often_keeps_the_old_one() {
+    let (relay, _server) = test_relay().await;
+    let (dialer, listener) = (raw_endpoint(&relay, [5; 32]).await, raw_endpoint(&relay, [6; 32]).await);
+    let links = status::Links::default();
+    let mut outcomes = Vec::new();
+
+    for _ in 0..7 {
+        let conn = dialer.dial(&listener.id(), PEER_ALPN).await.unwrap();
+        let link = links.new_link(conn, tokio::sync::mpsc::channel(1).0);
+        outcomes.push(match links.register(&dialer.id(), link) {
+            status::Registration::Kept { replaced: None } => "new",
+            status::Registration::Kept { replaced: Some(_) } => "replaced",
+            status::Registration::Duplicate => "duplicate",
+            status::Registration::TooFrequent => "tooFrequent",
+        });
+    }
+
+    assert_eq!(outcomes, ["new", "replaced", "replaced", "replaced", "replaced", "replaced", "tooFrequent"]);
+}
+
+#[tokio::test]
+async fn a_refused_request_tells_the_ui_why_it_disappeared() {
+    let (relay, _server) = test_relay().await;
+    let (a, b) = two_friends(&relay).await;
+    let code = a.friends.code_create().await.unwrap().code.unwrap();
+
+    let request = b.friends.add(&code).await.unwrap();
+
+    let refused = || {
+        b.events.any(|event| {
+            matches!(event, FriendsEvent::RequestRefused(refused)
+                if refused.request.id == request.id && refused.reason == RequestRefusal::AlreadyFriends)
+        })
+    };
+    until_true("friend-request-refused", refused).await;
+    assert!(b.requests().await.is_empty());
+}
+
+#[tokio::test]
+async fn a_changed_microsoft_account_reaches_connected_friends() {
+    let (relay, _server) = test_relay().await;
+    let (a, b) = two_friends(&relay).await;
+    let a_id = a.id();
+
+    a.friends.update_account(Some(account("Neo")));
+    b.wait_friend(&a_id, "new account name", |friend| friend.mc_name.as_deref() == Some("Neo")).await;
+    a.friends.update_account(None);
+
+    b.wait_friend(&a_id, "account removed", |friend| friend.mc_name.is_none() && friend.mc_uuid.is_none()).await;
 }

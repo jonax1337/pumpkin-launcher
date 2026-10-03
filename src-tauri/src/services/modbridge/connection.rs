@@ -11,13 +11,11 @@ use tokio::sync::mpsc;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
-use super::protocol::{Handshake, LauncherToMod, ModToLauncher, PROTOCOL_VERSION};
+use super::protocol::{Handshake, LauncherToMod, ModToLauncher, MAX_LINE_BYTES, PROTOCOL_VERSION};
 use super::{Admitted, Inner};
 use crate::services::gamesignal::{GameSignal, ModRequest};
 use crate::services::shared_types::PortSource;
 
-/// Längste Zeile (samt Zeilenende), die der Launcher von der Mod liest.
-const MAX_LINE_BYTES: usize = 16 * 1024;
 /// So viele Nachrichten darf die Mod in `MESSAGE_WINDOW` schicken; mehr trennt die Verbindung.
 const MAX_MESSAGES_PER_WINDOW: usize = 20;
 const MESSAGE_WINDOW: Duration = Duration::from_secs(1);

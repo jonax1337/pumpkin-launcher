@@ -238,6 +238,21 @@ impl Friends {
         Ok(core.state())
     }
 
+    /// Die Microsoft-Konten haben sich geändert (Anmelden, Entfernen): verbundene Freunde bekommen das neue Profil,
+    /// wenn sich das angekündigte Konto geändert hat (SPEC 4.1).
+    pub fn update_account(&self, account: Option<AccountProfile>) {
+        let core = &self.core;
+        let changed = {
+            let mut current = lock(&core.account);
+            let changed = *current != account;
+            *current = account;
+            changed
+        };
+        if changed {
+            core.links.broadcast_profile(core.own_profile());
+        }
+    }
+
     /// Schaltet ab und behält alle Daten.
     pub async fn disable(&self) -> AppResult<FriendsState> {
         let core = &self.core;

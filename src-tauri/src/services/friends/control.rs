@@ -2,7 +2,7 @@
 //! Eingehende Nachrichten werden geprüft und ihre Fremdtexte bereinigt (SPEC 12.3), bevor der Dienst sie sieht;
 //! Request- und Tunnel-Streams gehen an den [`super::PeerStreamHandler`].
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use data_encoding::HEXLOWER;
@@ -12,13 +12,10 @@ use tokio::sync::mpsc;
 use tokio::time::{timeout, Instant};
 
 use super::contract::{InstanceSummary, Presence, RevokeReason};
-use super::limits::{
-    SlidingWindow, CONTROL_FRAMES, CONTROL_FRAME_LIMIT, OPEN_FRAME_LIMIT, REQUEST_FRAME_LIMIT, REQUEST_STREAMS,
-};
+use super::limits::{SlidingWindow, CONTROL_FRAMES, CONTROL_FRAME_LIMIT, OPEN_FRAME_LIMIT, REQUEST_FRAME_LIMIT};
 use super::service::{Core, Runtime};
 use super::status::{self, Link, Registration, Target};
 use super::{outbox, requests, sanitize};
-use crate::services::lock;
 use crate::services::p2p::{frame, BiStream, CloseCode, FrameError, NetError, PeerConn, PeerId};
 
 /// Wartezeit auf den ersten Rahmen eines neuen Streams und auf den Austausch der `hello`s (SPEC 5.1).
@@ -255,6 +252,8 @@ pub(super) enum SessionError {
     NotFriend,
     #[error("eine andere Verbindung zu diesem Peer bleibt")]
     Duplicate,
+    #[error("Peer ersetzt seine Verbindung zu oft")]
+    TooFrequent,
 }
 
 impl SessionError {
@@ -266,6 +265,7 @@ impl SessionError {
             Self::Frame(_) | Self::Timeout | Self::Protocol => Some(CloseCode::PROTOCOL),
             Self::NotFriend => Some(CloseCode::NOT_FRIEND),
             Self::Duplicate => Some(CloseCode::DUPLICATE),
+            Self::TooFrequent => Some(CloseCode::RATE_LIMITED),
         }
     }
 }
@@ -376,6 +376,7 @@ fn start_link(core: &Arc<Core>, runtime: &Arc<Runtime>, conn: PeerConn, stream: 
     let link = core.links.new_link(conn, sender);
     match core.links.register(&runtime.main.id(), link.clone()) {
         Registration::Duplicate => return Err(SessionError::Duplicate),
+        Registration::TooFrequent => return Err(SessionError::TooFrequent),
         Registration::Kept { replaced: Some(old) } => old.conn.close(CloseCode::DUPLICATE),
         Registration::Kept { replaced: None } => status::emit_presence(core, &peer, link.state()),
     }
@@ -507,21 +508,20 @@ async fn acknowledge_and_close(link: &Link) {
 
 /// Nimmt weitere Streams des Peers an und reicht sie nach ihrem Öffnungsrahmen weiter.
 async fn serve_streams(core: &Arc<Core>, runtime: &Runtime, conn: &PeerConn) {
-    let requests = Arc::new(Mutex::new(SlidingWindow::new(REQUEST_STREAMS)));
     while let Ok(stream) = conn.accept_bi().await {
-        let dispatch = dispatch_stream(core.clone(), conn.remote(), stream, requests.clone());
+        let dispatch = dispatch_stream(core.clone(), conn.remote(), stream);
         tokio::spawn(runtime.stop.clone().run_until_cancelled_owned(dispatch));
     }
 }
 
-async fn dispatch_stream(core: Arc<Core>, peer: PeerId, mut stream: BiStream, requests: Arc<Mutex<SlidingWindow<()>>>) {
+async fn dispatch_stream(core: Arc<Core>, peer: PeerId, mut stream: BiStream) {
     let open = match timeout(FIRST_FRAME_WAIT, stream.read_frame::<OpenFrame>(OPEN_FRAME_LIMIT)).await {
         Ok(Ok(open)) => open,
         Ok(Err(_)) => return,
         Err(_) => return stream.reset(CloseCode::PROTOCOL),
     };
     match open {
-        OpenFrame::Request => serve_request(&core, &peer, stream, &requests).await,
+        OpenFrame::Request => serve_request(&core, &peer, stream).await,
         OpenFrame::Tunnel { session_id } => match checked_id(session_id) {
             Ok(session_id) => serve_tunnel(&core, &peer, session_id, stream).await,
             Err(Malformed) => stream.reset(CloseCode::PROTOCOL),
@@ -530,8 +530,8 @@ async fn dispatch_stream(core: Arc<Core>, peer: PeerId, mut stream: BiStream, re
     }
 }
 
-async fn serve_request(core: &Core, peer: &PeerId, stream: BiStream, requests: &Mutex<SlidingWindow<()>>) {
-    if !lock(requests).try_hit((), Instant::now()) {
+async fn serve_request(core: &Core, peer: &PeerId, stream: BiStream) {
+    if !core.links.admit_request_stream(peer) {
         return refuse(stream, "rateLimited", REQUEST_FRAME_LIMIT).await;
     }
     match core.handler() {

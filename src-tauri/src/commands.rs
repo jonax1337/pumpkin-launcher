@@ -21,6 +21,7 @@ use crate::services::presence::Activity;
 use crate::services::progress::emit;
 use crate::services::rules::Env;
 use crate::services::launch_args::ArgList;
+use crate::services::modbridge::ModBridge;
 use crate::services::{auth, crashreport, download, gamelog, java, launch_args, mods, pack_update, remove_logged, sessionlog, system, worlds};
 use crate::state::AppState;
 
@@ -315,6 +316,8 @@ struct PreparedLaunch {
     /// Spielername, nur fürs Protokoll.
     player: String,
     loader: ModLoader,
+    /// Mit Microsoft-Sitzung gestartet.
+    online_account: bool,
 }
 
 /// Prüft die Standards des Launchers, holt den Stand vor einem unterbrochenen Pack-Update zurück, prüft das
@@ -354,7 +357,9 @@ async fn prepare_launch(
         session: session.as_ref().map(Session::from),
     };
     let args = launch::build_args(&spec, &Env::current())?;
-    Ok(PreparedLaunch { java, args, game_dir: state.dirs.game_dir(&instance.id), player: account.username, loader: instance.loader })
+    let game_dir = state.dirs.game_dir(&instance.id);
+    let online_account = session.is_some();
+    Ok(PreparedLaunch { java, args, game_dir, player: account.username, loader: instance.loader, online_account })
 }
 
 /// Mit Microsoft-Konto: echte Sitzung (bei Bedarf erneuert); sonst Offline mit dem Spielernamen der Optionen.
@@ -378,7 +383,7 @@ fn spawn_game(app: &AppHandle, instance_id: &str, prepared: &PreparedLaunch) -> 
     let (log_app, log_id) = (app.clone(), instance_id.to_owned());
     let (exit_app, exit_id) = (app.clone(), instance_id.to_owned());
     let started = SystemTime::now();
-    let env = state.bridge.launch_env(instance_id, prepared.loader);
+    let env = mod_bridge_env(&state.bridge, instance_id, prepared);
     launch::spawn(
         &prepared.java,
         &prepared.args,
@@ -392,6 +397,16 @@ fn spawn_game(app: &AppHandle, instance_id: &str, prepared: &PreparedLaunch) -> 
         move |code| on_game_exit(&exit_app, exit_id, started, code),
     )
     .inspect_err(|_| state.bridge.forget(instance_id))
+}
+
+/// Nur ein Start mit Microsoft-Konto kann eine Welt teilen (SPEC 6.1); offline bekommt die Mod keinen Zugang zur Brücke
+/// und bietet deshalb nichts an.
+fn mod_bridge_env(bridge: &ModBridge, instance_id: &str, prepared: &PreparedLaunch) -> Vec<(String, String)> {
+    if prepared.online_account {
+        bridge.launch_env(instance_id, prepared.loader)
+    } else {
+        Vec::new()
+    }
 }
 
 /// Merkt sich Startzeit und Quick-Play-Ziel. Das Spiel läuft schon: ein Schreibfehler (etwa durch ein
@@ -529,6 +544,25 @@ mod tests {
         record_launch(&state, &id, None);
         assert_eq!(state.instances.get(&id).unwrap().last_quick_play, Some(target), "ohne Ziel bleibt das letzte erhalten");
         record_launch(&state, "weg", None);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    fn prepared(loader: ModLoader, online_account: bool) -> PreparedLaunch {
+        let (java, game_dir) = (PathBuf::from("java"), PathBuf::from("game"));
+        PreparedLaunch { java, args: Vec::new(), game_dir, player: "Alex".into(), loader, online_account }
+    }
+
+    #[tokio::test]
+    async fn only_a_microsoft_launch_gets_access_to_the_mod_bridge() {
+        let (state, id, root) = state_with_instance();
+        state.bridge.start().await.unwrap();
+
+        let online = mod_bridge_env(&state.bridge, &id, &prepared(ModLoader::Fabric, true));
+        let offline = mod_bridge_env(&state.bridge, &id, &prepared(ModLoader::Fabric, false));
+
+        state.bridge.stop().await;
+        assert_eq!(online.len(), 3, "port, token and protocol");
+        assert!(offline.is_empty());
         std::fs::remove_dir_all(root).unwrap();
     }
 
