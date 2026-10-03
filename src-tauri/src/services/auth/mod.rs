@@ -269,7 +269,7 @@ pub fn accounts(state: &AppState) -> Vec<Account> {
 pub fn remove_account(state: &AppState, id: &str) -> AppResult<()> {
     state.accounts.get(id)?;
     keyring::delete_refresh_token(id)?;
-    lock(&state.ms.sessions).remove(id);
+    forget_session(state, id);
     state.accounts.remove(id)
 }
 
@@ -286,6 +286,11 @@ pub async fn session(state: &AppState, id: &str) -> AppResult<(Account, McSessio
 
 fn cached_session(state: &AppState, id: &str) -> Option<McSession> {
     lock(&state.ms.sessions).get(id).filter(|s| s.valid()).cloned()
+}
+
+/// Drops the cached Minecraft session of the account; the next [`session`] refreshes it with the refresh token.
+pub fn forget_session(state: &AppState, id: &str) {
+    lock(&state.ms.sessions).remove(id);
 }
 
 /// Neue Sitzung per Refresh-Token; liefert das Konto mit dem aktuellen Spielernamen.

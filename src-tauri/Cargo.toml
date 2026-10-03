@@ -56,6 +56,10 @@ unicode-normalization = "0.1"
 bytes = "1"
 # Zufallsbytes für Freundescode-Geheimnis und Salz (schon im Baum über uuid und iroh).
 getrandom = "0.4"
+# Mojang's player certificate for the friends directory: RSA signing and the RFC 3339 times of the certificate
+# (both already in the tree through rustls and the Tauri crates; no new crate).
+ring = "0.17"
+time = { version = "0.3", features = ["parsing"] }
 
 [features]
 # Zusätzlich die öffentlichen Relays von n0 (nur Entwicklung und geschlossene Beta, siehe docs/friends/SPEC.md 3.2).
