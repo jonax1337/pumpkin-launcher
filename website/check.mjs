@@ -10,7 +10,11 @@ const LEGAL_PAGES = ["datenschutz.html", "impressum.html"];
 const RELEASES_URL = `${REPO_URL}/releases`;
 // Fixed asset names, created by the stable-names job of .github/workflows/release.yml (docs/RELEASING.md).
 const DOWNLOAD_BASE = `${RELEASES_URL}/latest/download/`;
-const STABLE_ASSETS = ["Pumpkin-Launcher-Windows-x64.exe", "Pumpkin-Launcher-macOS-universal.dmg", "Pumpkin-Launcher-Linux-x64.AppImage", "Pumpkin-Launcher-Linux-x64.deb", "SHA256SUMS"];
+const STABLE_ASSETS = ["Pumpkin.Launcher_x64-setup.exe", "Pumpkin.Launcher_universal.dmg", "Pumpkin.Launcher_amd64.AppImage", "Pumpkin.Launcher_amd64.deb", "SHA256SUMS"];
+// The links only work if the release workflow really creates these names: compare both sides, so they cannot drift apart.
+const releaseWorkflow = readFileSync(new URL("../.github/workflows/release.yml", import.meta.url), "utf8");
+const copiedNames = [...releaseWorkflow.matchAll(/copy_as '[^']+' ([A-Za-z0-9._-]+)/g)].map((match) => match[1]);
+assert.deepEqual(STABLE_ASSETS.filter((name) => name !== "SHA256SUMS").sort(), copiedNames.sort(), "Website download names must equal the stable-names job in release.yml");
 const isRepoLink = (url) => url === REPO_URL || url.startsWith(`${REPO_URL}/`);
 const isPageLink = (url) => url === "./" || LEGAL_PAGES.some((page) => url === `./${page}`);
 const root = new URL("./", import.meta.url);

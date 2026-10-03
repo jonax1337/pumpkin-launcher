@@ -58,10 +58,10 @@ Die Tauri-Installer tragen die Version im Namen. Die Website verlinkt aber ohne 
 
 | Plattform | Quelle | Fester Name |
 | --- | --- | --- |
-| Windows | `*_x64-setup.exe` | `Pumpkin-Launcher-Windows-x64.exe` |
-| macOS | `*_universal.dmg` | `Pumpkin-Launcher-macOS-universal.dmg` |
-| Linux | `*_amd64.AppImage` | `Pumpkin-Launcher-Linux-x64.AppImage` |
-| Linux | `*_amd64.deb` | `Pumpkin-Launcher-Linux-x64.deb` |
+| Windows | `*_x64-setup.exe` | `Pumpkin.Launcher_x64-setup.exe` |
+| macOS | `*_universal.dmg` | `Pumpkin.Launcher_universal.dmg` |
+| Linux | `*_amd64.AppImage` | `Pumpkin.Launcher_amd64.AppImage` |
+| Linux | `*_amd64.deb` | `Pumpkin.Launcher_amd64.deb` |
 
 Zusammen mit `SHA256SUMS` (fester Name) sind das die einzigen Adressen, die `website/` kennt. `latest/download` zeigt immer auf das neueste **veröffentlichte** Release; bis das erste Release mit diesen Namen veröffentlicht ist, liefern die Links 404, und die Website verweist darunter auf die Release-Übersicht. Wer die Namen ändert, passt sie im Workflow, in `website/index.html` und in `website/check.mjs` an. Die Website selbst ändert sich mit einem Release nicht und braucht keinen neuen Deploy.
 

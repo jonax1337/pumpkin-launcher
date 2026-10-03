@@ -167,10 +167,10 @@ jobs:
             fi
             mv source/* "stable/$stable_name"
           }
-          copy_as '*_x64-setup.exe' Pumpkin-Launcher-Windows-x64.exe
-          copy_as '*_universal.dmg' Pumpkin-Launcher-macOS-universal.dmg
-          copy_as '*_amd64.AppImage' Pumpkin-Launcher-Linux-x64.AppImage
-          copy_as '*_amd64.deb' Pumpkin-Launcher-Linux-x64.deb
+          copy_as '*_x64-setup.exe' Pumpkin.Launcher_x64-setup.exe
+          copy_as '*_universal.dmg' Pumpkin.Launcher_universal.dmg
+          copy_as '*_amd64.AppImage' Pumpkin.Launcher_amd64.AppImage
+          copy_as '*_amd64.deb' Pumpkin.Launcher_amd64.deb
           [ "$status" -eq 0 ] || exit 1
           ls -l stable
           gh release upload "$GITHUB_REF_NAME" stable/* --repo "$GITHUB_REPOSITORY" --clobber
