@@ -274,7 +274,7 @@ mod tests {
 
     impl Fixture {
         fn valid() -> Self {
-            let hello_id = HEXLOWER.encode(&seed_identity().hello_id(&[7; 16]));
+            let hello_id = HEXLOWER.encode(&seed_identity().hello_id(&bytes_from(7)));
             Self {
                 recipient: Identity::from_secret_bytes(&bytes_from::<32>(0x60)),
                 fields: golden_fields(),

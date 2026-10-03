@@ -681,6 +681,7 @@ fn ensure_relay_consent(map: &[RelayEntry], accepted: bool) -> AppResult<()> {
 mod tests {
     use std::borrow::Cow;
 
+    use super::super::code;
     use super::*;
 
     fn entry(index: u8, url: &'static str, operator: RelayOperator) -> RelayEntry {
@@ -690,13 +691,13 @@ mod tests {
     #[test]
     fn production_hello_endpoint_is_relay_only_at_the_code_relay() {
         let identity = Identity::generate();
-        let salt = [5; 16];
+        let issued = code::issue(&identity, 202).unwrap();
 
-        let config = hello_net_config(&NetOptions::production(), &identity, &salt, 202);
+        let config = hello_net_config(&NetOptions::production(), &identity, &issued.salt, issued.parts.relay_index);
 
         assert!(config.relay_only);
         assert_eq!(config.relays, RelaySelection::Only(202));
-        assert_eq!(config.secret, identity.hello_secret(&salt));
+        assert_eq!(config.secret, identity.hello_secret(&issued.salt));
         assert_eq!(config.alpns, [hello::HELLO_ALPN]);
         assert_eq!(config.relay_tls, RelayTls::Verify);
         assert_eq!(config.idle_timeout, Duration::from_secs(40));

@@ -161,13 +161,17 @@ mod tests {
         (from..from + len).collect()
     }
 
+    fn ascending_salt(from: u8) -> [u8; 16] {
+        sequence(from, 16).try_into().unwrap()
+    }
+
     fn golden_identity() -> Identity {
         Identity::from_secret_bytes(&sequence(0x40, 32).try_into().unwrap())
     }
 
     #[test]
     fn hello_secret_matches_the_golden_vector() {
-        let salt: [u8; 16] = sequence(0, 16).try_into().unwrap();
+        let salt = ascending_salt(0);
         assert_eq!(
             HEXLOWER.encode(&golden_identity().hello_secret(&salt)),
             "0fc118eef8a72afd5f595deba158b70a7a0bf925ed85176b5ec3ef430499d80f"
@@ -176,12 +180,12 @@ mod tests {
 
     #[test]
     fn hello_id_is_the_public_key_of_the_hello_secret_and_not_the_peer_id() {
-        let salt = [7; 16];
+        let salt = ascending_salt(7);
         let identity = golden_identity();
         let hello = SecretKey::from_bytes(&identity.hello_secret(&salt)).public();
         assert_eq!(identity.hello_id(&salt), *hello.as_bytes());
         assert_ne!(HEXLOWER.encode(&identity.hello_id(&salt)), identity.peer_id());
-        assert_ne!(identity.hello_id(&salt), identity.hello_id(&[8; 16]));
+        assert_ne!(identity.hello_id(&salt), identity.hello_id(&ascending_salt(8)));
     }
 
     #[test]
