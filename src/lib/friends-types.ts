@@ -53,6 +53,9 @@ export type JoinState = { type: "waitingForGame" } | { type: "connecting" } | { 
   | { type: "ended"; reason: SessionEnd };
 export interface FriendPresenceEvent { friendId: string; presence: Presence; path: PathKind | null }
 export interface FriendRequestEvent { request: FriendRequest }
+/** Endgültige Ablehnung einer eigenen Anfrage durch den Besitzer des Codes; die Anfrage ist danach gelöscht. */
+export type RequestRefusal = "codeUsed" | "alreadyFriends" | "unsupported";
+export interface FriendRequestRefusedEvent { request: FriendRequest; reason: RequestRefusal }
 export interface InviteEvent { invite: Invite }
 export interface InviteRevokedEvent { inviteId: string; reason: "stopped" | "kicked" | "expired" }
 export interface HostSessionEvent { session: HostSession }
@@ -74,7 +77,7 @@ export interface FriendsFixtureTypes {
   hostSession: HostSession; invite: Invite;
   "joinPlan.ready": JoinPlan; "joinPlan.missing": JoinPlan; "joinPlan.vanilla": JoinPlan; joinTicket: JoinTicket;
   lanStatus: LanStatus; modStatus: ModStatus;
-  "event.friendPresence": FriendPresenceEvent; "event.friendRequest": FriendRequestEvent; "event.invite": InviteEvent;
+  "event.friendPresence": FriendPresenceEvent; "event.friendRequest": FriendRequestEvent; "event.requestRefused": FriendRequestRefusedEvent; "event.invite": InviteEvent;
   "event.inviteRevoked": InviteRevokedEvent; "event.hostSession": HostSessionEvent; "event.hostSessionEnded": HostSessionEndedEvent;
   "event.joinSession.waitingForGame": JoinSessionEvent; "event.joinSession.connecting": JoinSessionEvent;
   "event.joinSession.connected": JoinSessionEvent; "event.joinSession.ended": JoinSessionEvent;

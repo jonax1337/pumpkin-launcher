@@ -846,6 +846,7 @@ export interface FriendsFixtureTypes {
   | `modStatus` | `ModStatus` | `ModStatus` | |
   | `event.friendPresence` | `FriendPresenceEvent` | `FriendPresenceEvent` | |
   | `event.friendRequest` | `FriendRequestEvent` | `FriendRequestEvent` | |
+  | `event.requestRefused` | `FriendRequestRefusedEvent` | `FriendRequestRefusedEvent` | `friend-request-refused`; an outgoing `request`, `reason` one of `codeUsed`, `alreadyFriends`, `unsupported` |
   | `event.invite` | `InviteEvent` | `InviteEvent` | |
   | `event.inviteRevoked` | `InviteRevokedEvent` | `InviteRevokedEvent` | |
   | `event.hostSession` | `HostSessionEvent` | `HostSessionEvent` | |
@@ -918,6 +919,7 @@ The services emit through sinks, because neither is built with an `AppHandle`: R
 | `friends-network` | `NetworkStatus` | The UI writes it into the cached `friendKeys.state` (`network`). |
 | `friend-presence` | `FriendPresenceEvent` | Presence or path of one friend changed. The only event for that change; the UI patches the friend in `friendKeys.list`. |
 | `friend-request` | `FriendRequestEvent` | incoming request arrived |
+| `friend-request-refused` | `FriendRequestRefusedEvent` | the code owner finally refused an outgoing request (`codeUsed`, `alreadyFriends`, `unsupported`); the request is already deleted, `friends-changed` precedes it |
 | `friend-invite` | `InviteEvent` | |
 | `friend-invite-revoked` | `InviteRevokedEvent` | |
 | `host-session` | `HostSessionEvent` | created or changed; for path or RTT changes of guests at most every 5 s |

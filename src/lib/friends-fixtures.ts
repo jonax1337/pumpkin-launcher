@@ -444,6 +444,22 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
       "via": "code"
     }
   },
+  "event.requestRefused": {
+    "request": {
+      "id": "req-out-1",
+      "direction": "outgoing",
+      "state": "delivering",
+      "peerId": null,
+      "fingerprint": null,
+      "displayName": null,
+      "mcName": null,
+      "codeTail": "k7qm",
+      "createdAt": 1789999400,
+      "expiresAt": 1791209000,
+      "via": "code"
+    },
+    "reason": "codeUsed"
+  },
   "event.invite": {
     "invite": {
       "id": "5d1c7a3e-6b24-4f08-9a1d-0c8e3b7f2a46",

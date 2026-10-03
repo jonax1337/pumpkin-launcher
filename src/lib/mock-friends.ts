@@ -7,7 +7,7 @@ import { clone, newId, wait, type MockContext } from "./mock-util";
 import { DAY, HOUR, MINUTE } from "./time";
 import type {
   BlockedPeer, DirectoryState, DirectoryStatus, Friend, FriendCode, FriendRequest, FriendsEnableInput, FriendsSettings, FriendsState,
-  HostSession, InstanceSummary, Invite, JoinPlan, JoinTicket, LanStatus, ModRef, ModStatus, PathKind, Presence, RequestVia, SessionGuest,
+  HostSession, InstanceSummary, Invite, JoinPlan, JoinTicket, LanStatus, ModRef, ModStatus, PathKind, Presence, RequestRefusal, RequestVia, SessionGuest,
 } from "./types";
 
 const SECOND_MS = 1000;
@@ -623,6 +623,15 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     changed();
   }
 
+  /** Wie das Backend: die älteste eigene Anfrage verschwindet, `friends-changed` und dann `friend-request-refused`. */
+  function refuseOutgoingRequest(reason: RequestRefusal) {
+    const request = db.requests.find((r) => r.direction === "outgoing");
+    if (!request) throw new Error(t("mock.friends.notFound.request", { id: "outgoing" }));
+    db.requests = db.requests.filter((r) => r !== request);
+    changed();
+    emit("friend-request-refused", { request: clone(request), reason });
+  }
+
   function setDirectoryState(state: Extract<DirectoryState, "active" | "unreachable" | "notAllowed">) {
     db.state.directory.state = state;
     changed();
@@ -688,6 +697,7 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     request: (name: string) => receiveRequest(name, "code"),
     nameRequest: (name: string) => receiveRequest(name, "name"),
     nameAccepted: acceptNameRequest,
+    requestRefused: refuseOutgoingRequest,
     directory: setDirectoryState,
     lanOpened: openLan,
     guestJoined: joinGuest,
