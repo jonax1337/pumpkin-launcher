@@ -23,6 +23,7 @@ use std::time::Duration;
 use tauri::{Emitter, Manager};
 use tracing_subscriber::EnvFilter;
 
+use services::friends::directory::DirectoryDeps;
 use services::friends::events::TauriEvents;
 use services::friends::session_events::TauriSessionEvents;
 
@@ -53,6 +54,7 @@ pub fn run() {
             start_sessions(app.handle().clone())?;
             app.manage(pack_open::OpenedPack::from_process_args());
             spawn_startup_maintenance(app.handle().clone());
+            attach_friends_directory(app.handle());
             start_friends(app.handle().clone());
             shut_down_friends_before_exit(app.handle());
             Ok(())
@@ -200,6 +202,7 @@ pub fn run() {
             friends_session_commands::friends_mod_status,
             friends_session_commands::friends_mod_install,
             friends_session_commands::friends_mod_confirm,
+            friends_commands::friend_add_by_name,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -223,6 +226,16 @@ fn announce_opened_pack(app: &tauri::AppHandle, urls: &[tauri::Url]) {
     let pack = urls.iter().filter_map(|url| url.to_file_path().ok()).find(|path| pack_open::is_pack_file(path));
     if let Some(path) = pack {
         pack_open::announce(app, path);
+    }
+}
+
+/// Hängt das Freunde-Verzeichnis ein, wenn dieser Build eines kennt (BYNAME 9.1); sonst gibt es Freunde nur per Code.
+fn attach_friends_directory(handle: &tauri::AppHandle) {
+    let state = handle.state::<state::AppState>();
+    let tokens = Arc::new(friends_commands::AppAccountTokens::new(handle.clone()));
+    let Some(deps) = DirectoryDeps::production(state.http.clone(), tokens) else { return };
+    if state.friends.attach_directory(deps).is_err() {
+        tracing::warn!("Freunde-Verzeichnis war schon eingehängt");
     }
 }
 
