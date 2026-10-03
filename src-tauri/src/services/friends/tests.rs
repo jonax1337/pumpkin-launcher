@@ -988,3 +988,16 @@ async fn a_refused_request_tells_the_ui_why_it_disappeared() {
     until_true("friend-request-refused", refused).await;
     assert!(b.requests().await.is_empty());
 }
+
+#[tokio::test]
+async fn a_changed_microsoft_account_reaches_connected_friends() {
+    let (relay, _server) = test_relay().await;
+    let (a, b) = two_friends(&relay).await;
+    let a_id = a.id();
+
+    a.friends.update_account(Some(account("Neo")));
+    b.wait_friend(&a_id, "new account name", |friend| friend.mc_name.as_deref() == Some("Neo")).await;
+    a.friends.update_account(None);
+
+    b.wait_friend(&a_id, "account removed", |friend| friend.mc_name.is_none() && friend.mc_uuid.is_none()).await;
+}
