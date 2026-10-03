@@ -96,6 +96,7 @@ impl Friends {
             created_at: now,
             expires_at: now + CODE_TTL_SECS,
             used_by: None,
+            name_request_to: None,
         };
         core.stores.codes.insert(record.clone())?;
         if let Some(runtime) = core.runtime() {

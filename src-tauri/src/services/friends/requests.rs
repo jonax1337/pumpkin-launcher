@@ -9,7 +9,7 @@ use data_encoding::HEXLOWER;
 use super::code;
 use super::contract::{
     FriendRequest, FriendRequestEvent, FriendRequestRefusedEvent, RequestDirection, RequestRefusal, RequestState,
-    MAX_FRIENDS, REQUEST_TTL_SECS,
+    RequestVia, MAX_FRIENDS, REQUEST_TTL_SECS,
 };
 use super::control::WireProfile;
 use super::events::FriendsEvent;
@@ -62,6 +62,8 @@ impl Friends {
             code_tail: Some(parts.tail()),
             created_at: now,
             expires_at: core.request_deadline(),
+            via: RequestVia::Code,
+            mail_id: None,
         })?;
         core.emit(FriendsEvent::Changed);
         dial_now(core, Target::Request(record.id.clone()));
@@ -309,6 +311,7 @@ pub(super) fn request_view(record: RequestRecord) -> FriendRequest {
         code_tail: record.code_tail,
         created_at: record.created_at,
         expires_at: record.expires_at,
+        via: record.via,
     }
 }
 
@@ -369,6 +372,8 @@ fn incoming_record(core: &Core, code: &CodeRecord, peer_id: &str, profile: WireP
         code_tail: Some(code.tail.clone()),
         created_at: now_secs(),
         expires_at: core.request_deadline(),
+        via: RequestVia::Code,
+        mail_id: None,
     }
 }
 

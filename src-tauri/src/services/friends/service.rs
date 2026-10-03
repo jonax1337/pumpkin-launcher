@@ -12,8 +12,8 @@ use tokio_util::sync::CancellationToken;
 
 use super::config::{friends_dir, FriendsConfig};
 use super::contract::{
-    Availability, DegradedReason, FriendsEnableInput, FriendsSettings, FriendsState, Me, NetworkStatus, RelayInfo,
-    RelayOperatorKind, REQUEST_TTL_SECS,
+    Availability, DegradedReason, DirectoryState, DirectoryStatus, FriendsEnableInput, FriendsSettings, FriendsState,
+    Me, NetworkStatus, RelayInfo, RelayOperatorKind, REQUEST_TTL_SECS,
 };
 use super::control::{SessionControl, WireProfile, PEER_ALPN};
 use super::events::{EventSink, FriendsEvent, NoEvents};
@@ -232,7 +232,9 @@ impl Friends {
             config.enabled = true;
             config.third_party_relays_accepted = input.accept_third_party_relays;
         })?;
-        core.apply_settings(FriendsSettings { display_name, always_relay: input.always_relay }).await?;
+        let settings =
+            FriendsSettings { display_name, always_relay: input.always_relay, findable_by_name: input.findable_by_name };
+        core.apply_settings(settings).await?;
         core.activate().await;
         core.emit(FriendsEvent::Changed);
         Ok(core.state())
@@ -357,6 +359,7 @@ impl Core {
             network: lock(&self.network).clone(),
             relays: relay_infos(&self.options.relay_map),
             third_party_relays_accepted: config.third_party_relays_accepted,
+            directory: DirectoryStatus { state: DirectoryState::Unavailable, host: None },
         }
     }
 

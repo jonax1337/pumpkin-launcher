@@ -4,7 +4,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use super::contract::{FriendNotice, RequestDirection, RequestState};
+use super::contract::{FriendNotice, RequestDirection, RequestState, RequestVia};
 use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::services::store::{Entity, JsonStore};
@@ -68,6 +68,11 @@ pub struct RequestRecord {
     pub code_tail: Option<String>,
     pub created_at: u64,
     pub expires_at: u64,
+    #[serde(default)]
+    pub via: RequestVia,
+    /// ID des Briefs im Verzeichnis, nur bei Anfragen per Name.
+    #[serde(default)]
+    pub mail_id: Option<String>,
 }
 
 /// Ein selbst erzeugter Code; das Geheimnis liegt nur als Hash vor, der Klartext nur einmal in der Antwort von `friend_code_create`.
@@ -84,6 +89,9 @@ pub struct CodeRecord {
     pub expires_at: u64,
     /// Peer-ID dessen, der den Code eingelöst hat.
     pub used_by: Option<String>,
+    /// Minecraft-UUID des Empfängers; `Some` heißt: der Code gehört zu einer Anfrage per Name und zählt nicht zu den eigenen Codes.
+    #[serde(default)]
+    pub name_request_to: Option<String>,
 }
 
 /// Ein gesperrter Peer; `id` ist seine Peer-ID.
@@ -93,6 +101,9 @@ pub struct BlockedRecord {
     pub id: String,
     pub display_name: String,
     pub blocked_at: u64,
+    /// Minecraft-UUID, wenn der Peer per Name angefragt hat; damit sperrt auch das Verzeichnis.
+    #[serde(default)]
+    pub mc_uuid: Option<String>,
 }
 
 /// Was einem Freund noch zugestellt werden muss, auch wenn der alte Schlüssel schon ausgemustert ist.
@@ -170,7 +181,7 @@ mod tests {
     }
 
     fn blocked(id: &str) -> BlockedRecord {
-        BlockedRecord { id: id.into(), display_name: "Eli".into(), blocked_at: 1_789_913_600 }
+        BlockedRecord { id: id.into(), display_name: "Eli".into(), blocked_at: 1_789_913_600, mc_uuid: None }
     }
 
     #[test]
@@ -257,10 +268,47 @@ mod tests {
             code_tail: None,
             created_at: 1,
             expires_at: 2,
+            via: RequestVia::Name,
+            mail_id: Some("m".into()),
         };
         let value = serde_json::to_value(&request).unwrap();
         assert_eq!((&value["direction"], &value["state"]), (&json!("outgoing"), &json!("awaitingAnswer")));
+        assert_eq!((&value["via"], &value["mailId"]), (&json!("name"), &json!("m")));
         assert_eq!(serde_json::to_value(OutboxKind::Rotated).unwrap(), json!("rotated"));
         assert_eq!(serde_json::to_value(OutboxKind::Unfriend).unwrap(), json!("unfriend"));
+    }
+
+    #[test]
+    fn records_from_before_the_name_search_still_load() {
+        let request = json!({ "id": "r", "direction": "incoming", "state": "pending", "peerId": null, "helloId": null,
+            "relayIndex": null, "secret": null, "displayName": null, "mcName": null, "mcUuid": null, "codeTail": "abcd",
+            "createdAt": 1, "expiresAt": 2 });
+        let request: RequestRecord = serde_json::from_value(request).unwrap();
+        assert_eq!((request.via, request.mail_id), (RequestVia::Code, None));
+
+        let code = json!({ "id": "c", "salt": "00", "secretSha256": "00", "relayIndex": 0, "tail": "abcd",
+            "createdAt": 1, "expiresAt": 2, "usedBy": null });
+        assert_eq!(serde_json::from_value::<CodeRecord>(code).unwrap().name_request_to, None);
+
+        let blocked = json!({ "id": "b", "displayName": "Eli", "blockedAt": 1 });
+        assert_eq!(serde_json::from_value::<BlockedRecord>(blocked).unwrap().mc_uuid, None);
+    }
+
+    #[test]
+    fn name_request_fields_survive_their_file() {
+        let dir = TempDir::new();
+        let code = CodeRecord {
+            id: "c".into(),
+            salt: "00".into(),
+            secret_sha256: "00".into(),
+            relay_index: 0,
+            tail: "abcd".into(),
+            created_at: 1,
+            expires_at: 2,
+            used_by: None,
+            name_request_to: Some("069a79f444e94726a5befca90e38aaf5".into()),
+        };
+        RecordStores::open(dir.path()).unwrap().codes.insert(code.clone()).unwrap();
+        assert_eq!(RecordStores::open(dir.path()).unwrap().codes.get("c").unwrap(), code);
     }
 }

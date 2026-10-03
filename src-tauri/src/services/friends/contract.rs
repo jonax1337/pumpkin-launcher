@@ -21,6 +21,9 @@ pub const MIN_MC_RELEASE_TIME: &str = "2023-06-02T08:36:17+00:00";
 pub const MIN_MC_LABEL: &str = "1.20";
 pub const PORT_MIN: u16 = 1024;
 pub const PORT_MAX: u16 = 65535;
+pub const MAX_NAME_REQUESTS: usize = 5;
+pub const MC_NAME_MAX: usize = 16;
+pub const NAME_COOLDOWN_DAYS: u64 = 7;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,6 +43,29 @@ pub struct FriendsState {
     pub network: NetworkStatus,
     pub relays: Vec<RelayInfo>,
     pub third_party_relays_accepted: bool,
+    pub directory: DirectoryStatus,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectoryStatus {
+    pub state: DirectoryState,
+    /// Für den Datenschutzhinweis; `None`, solange kein Verzeichnis eingebaut ist.
+    pub host: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DirectoryState {
+    /// Dieser Build kennt kein Verzeichnis.
+    Unavailable,
+    /// „Per Minecraft-Namen auffindbar“ ist aus.
+    Off,
+    Active,
+    /// Die letzte Anmeldung oder Abfrage ist gescheitert.
+    Unreachable,
+    /// Mojang verweigert dem Konto den Mehrspieler-Nachweis.
+    NotAllowed,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -55,6 +81,9 @@ pub struct Me {
 pub struct FriendsSettings {
     pub display_name: String,
     pub always_relay: bool,
+    /// Fehlt in Dateien aus der Zeit vor der Suche per Name.
+    #[serde(default)]
+    pub findable_by_name: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -63,6 +92,7 @@ pub struct FriendsEnableInput {
     pub display_name: String,
     pub always_relay: bool,
     pub accept_third_party_relays: bool,
+    pub findable_by_name: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -142,6 +172,16 @@ pub struct FriendRequest {
     pub code_tail: Option<String>,
     pub created_at: u64,
     pub expires_at: u64,
+    pub via: RequestVia,
+}
+
+/// Auf welchem Weg eine Anfrage entstanden ist.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RequestVia {
+    #[default]
+    Code,
+    Name,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

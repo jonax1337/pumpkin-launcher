@@ -15,7 +15,7 @@ use super::code;
 use super::config::{friends_dir, FriendsConfig};
 use super::contract::{
     Availability, Friend, FriendNotice, FriendRequest, FriendsEnableInput, FriendsSettings, InstanceSummary,
-    NetworkStatus, Presence, RequestDirection, RequestRefusal, RequestState, RevokeReason, MAX_FRIENDS,
+    NetworkStatus, Presence, RequestDirection, RequestRefusal, RequestState, RequestVia, RevokeReason, MAX_FRIENDS,
 };
 use super::control::{open_control, ControlMessage, OpenFrame, SessionControl, WireInvite, WireProfile, PEER_ALPN};
 use super::events::{EventSink, FriendsEvent};
@@ -80,7 +80,12 @@ fn account(name: &str) -> AccountProfile {
 }
 
 fn enable_input(name: &str) -> FriendsEnableInput {
-    FriendsEnableInput { display_name: name.to_owned(), always_relay: false, accept_third_party_relays: false }
+    FriendsEnableInput {
+        display_name: name.to_owned(),
+        always_relay: false,
+        accept_third_party_relays: false,
+        findable_by_name: false,
+    }
 }
 
 #[derive(Default)]
@@ -275,6 +280,8 @@ fn outgoing_request(state: RequestState, peer_id: Option<String>) -> RequestReco
         code_tail: Some("abcd".into()),
         created_at: super::service::now_secs(),
         expires_at: super::service::now_secs() + 14 * DAY_SECS,
+        via: RequestVia::Code,
+        mail_id: None,
     }
 }
 
@@ -589,7 +596,7 @@ async fn trigger(node: &Node, action: Trigger) {
     match action {
         Trigger::Disable => drop(node.friends.disable().await.unwrap()),
         Trigger::AlwaysRelay => {
-            let settings = FriendsSettings { display_name: "Anna".into(), always_relay: true };
+            let settings = FriendsSettings { display_name: "Anna".into(), always_relay: true, findable_by_name: false };
             drop(node.friends.update_settings(settings).await.unwrap());
         }
         Trigger::Rotate => drop(node.friends.rotate_identity().await.unwrap()),

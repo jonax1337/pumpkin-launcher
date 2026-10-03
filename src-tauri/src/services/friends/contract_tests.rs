@@ -47,6 +47,9 @@ fn rows() -> Vec<(&'static str, RoundTrip)> {
         row::<FriendRequest>("request.incoming"),
         row::<FriendRequest>("request.delivering"),
         row::<FriendRequest>("request.awaitingAnswer"),
+        row::<FriendRequest>("request.nameIncoming"),
+        row::<FriendRequest>("request.nameOutgoing"),
+        row::<FriendRequest>("request.nameDelivering"),
         row::<FriendCode>("code.created"),
         row::<FriendCode>("code.listed"),
         row::<BlockedPeer>("blocked"),
@@ -60,6 +63,7 @@ fn rows() -> Vec<(&'static str, RoundTrip)> {
         row::<ModStatus>("modStatus"),
         row::<FriendPresenceEvent>("event.friendPresence"),
         row::<FriendRequestEvent>("event.friendRequest"),
+        row::<FriendRequestRefusedEvent>("event.requestRefused"),
         row::<InviteEvent>("event.invite"),
         row::<InviteRevokedEvent>("event.inviteRevoked"),
         row::<HostSessionEvent>("event.hostSession"),
@@ -111,6 +115,9 @@ fn constants_equal_the_rust_constants() {
         "minMcLabel": MIN_MC_LABEL,
         "portMin": PORT_MIN,
         "portMax": PORT_MAX,
+        "maxNameRequests": MAX_NAME_REQUESTS,
+        "mcNameMax": MC_NAME_MAX,
+        "nameCooldownDays": NAME_COOLDOWN_DAYS,
     });
     assert_eq!(fixtures()["constants"], expected);
 }
@@ -135,12 +142,29 @@ fn fixtures_meet_the_content_requirements_of_the_key_table() {
         ("friendsState.available", "/network/type", json!("online")),
         ("friendsState.noSecretStore", "/availability", json!("noSecretStore")),
         ("friendsState.identityLost", "/availability", json!("identityLost")),
+        ("friendsState.available", "/settings/findableByName", json!(true)),
+        ("friendsState.available", "/directory/state", json!("active")),
+        ("friendsState.noSecretStore", "/directory/state", json!("off")),
+        ("friendsState.identityLost", "/directory/state", json!("unavailable")),
+        ("friendsState.identityLost", "/directory/host", Value::Null),
         ("friend.relayRenamed", "/path", json!("relay")),
         ("friend.relayRenamed", "/notice/type", json!("renamed")),
         ("friend.identityChanged", "/notice/type", json!("identityChanged")),
         ("request.incoming", "/state", json!("pending")),
         ("request.delivering", "/state", json!("delivering")),
         ("request.awaitingAnswer", "/state", json!("awaitingAnswer")),
+        ("request.incoming", "/via", json!("code")),
+        ("request.delivering", "/via", json!("code")),
+        ("request.awaitingAnswer", "/via", json!("code")),
+        ("request.nameIncoming", "/via", json!("name")),
+        ("request.nameIncoming", "/state", json!("pending")),
+        ("request.nameIncoming", "/codeTail", Value::Null),
+        ("request.nameOutgoing", "/via", json!("name")),
+        ("request.nameOutgoing", "/state", json!("awaitingAnswer")),
+        ("request.nameOutgoing", "/peerId", Value::Null),
+        ("request.nameDelivering", "/via", json!("name")),
+        ("request.nameDelivering", "/state", json!("delivering")),
+        ("event.requestRefused", "/reason", json!("codeUsed")),
         ("code.listed", "/code", Value::Null),
         ("joinPlan.vanilla", "/createVanilla", json!(true)),
         ("event.joinSession.waitingForGame", "/state/type", json!("waitingForGame")),
@@ -154,6 +178,18 @@ fn fixtures_meet_the_content_requirements_of_the_key_table() {
     assert!(fixtures["code.created"]["code"].is_string());
     assert!(!fixtures["joinPlan.missing"]["candidates"][0]["missing"].as_array().unwrap().is_empty());
     assert!(!fixtures["joinPlan.missing"]["candidates"][0]["extra"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn directory_states_and_request_ways_use_camel_case_strings() {
+    use DirectoryState::*;
+    let states = [Unavailable, Off, Active, Unreachable, NotAllowed];
+    assert_eq!(
+        serde_json::to_value(states).unwrap(),
+        json!(["unavailable", "off", "active", "unreachable", "notAllowed"])
+    );
+    assert_eq!(serde_json::to_value([RequestVia::Code, RequestVia::Name]).unwrap(), json!(["code", "name"]));
+    assert_eq!(RequestVia::default(), RequestVia::Code);
 }
 
 #[test]

@@ -4,6 +4,7 @@ pub mod code;
 pub mod config;
 pub mod contract;
 pub mod control;
+pub mod directory;
 pub mod events;
 mod hello;
 pub mod identity;

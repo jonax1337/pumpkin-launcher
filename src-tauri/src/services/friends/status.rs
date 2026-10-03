@@ -643,7 +643,12 @@ impl Friends {
             core.patches.forget(peer_id);
         }
         requests::remove_requests_of(core, peer_id)?;
-        core.stores.blocked.upsert(BlockedRecord { id: peer_id.to_owned(), display_name, blocked_at: now_secs() })?;
+        core.stores.blocked.upsert(BlockedRecord {
+            id: peer_id.to_owned(),
+            display_name,
+            blocked_at: now_secs(),
+            mc_uuid: None,
+        })?;
         core.emit(FriendsEvent::Changed);
         if let Ok(peer) = PeerId::from_str(peer_id) {
             forget_target(core, &peer);
