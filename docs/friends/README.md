@@ -1,7 +1,7 @@
 # Pumpkin Friends
 
 An opt-in feature of the launcher: add friends with a one-time code, see who is online, and open a
-singleplayer world (through the Fabric mod or vanilla "Open to LAN") so that invited friends in other
+singleplayer world (through the in-game mod or vanilla "Open to LAN") so that invited friends in other
 networks can join it. It is off by default and needs a Microsoft account. It adds no chat, no voice, no
 public links and no telemetry. Status: built, but not called stable until the owner's real-network
 verification ([`VERIFICATION.md`](VERIFICATION.md)) is filled in.
@@ -15,7 +15,7 @@ verification ([`VERIFICATION.md`](VERIFICATION.md)) is filled in.
 5. Hosting: the launcher finds the game's LAN port (mod hint, log parser or manual), accepts it only if the game process owns it and it answers a server list ping, then tunnels each Minecraft TCP connection through one QUIC stream.
 6. Joining: a single-owner loopback listener on the guest; the game connects with Quick Play. Only into an instance that already matches (Minecraft version, loader, non-client-only mods by sha512).
 7. The relay map is compiled in with stable one-byte indexes; peers exchange indexes, never URLs. Release builds list only our relay; debug and `beta-relays` builds add n0's public relays (opt-in).
-8. The Fabric mod (Minecraft 26.3, client only) shows friends, share and guests in the pause menu. It talks to the launcher over loopback JSON lines, and the launcher treats it as untrusted.
+8. The in-game mod (client only) shows friends, share and guests in the pause menu. Planned ([`INGAME.md`](INGAME.md)): the launcher embeds the mod, injects it into Microsoft-account launches through loader start-up options (Fabric, NeoForge, Forge; only for verified Minecraft versions), and the player installs nothing. Today it is still a hand-installed Fabric mod for Minecraft 26.3. It talks to the launcher over loopback JSON lines only, and the launcher treats it as untrusted.
 9. The webview never touches the network for friend data; Rust fetches and caches skins.
 10. Hosting and joining need online mode: offline accounts are refused before launch, and the host's game refuses them at login.
 
@@ -37,6 +37,6 @@ whom, never content, and our relay stores no log. Details: [`PRIVACY.md`](PRIVAC
 | [`OWNER-CHECKLIST.md`](OWNER-CHECKLIST.md) | Everything only the owner can do before a release, in order (German) |
 | [`VERIFICATION.md`](VERIFICATION.md) | The tables for gates G1 to G5 that the owner fills in |
 | [`INGAME.md`](INGAME.md) | Concept for the in-game friends menu: a mod the launcher injects by itself (launcher-only, no install). Supersedes `MOD2.md` |
-| [`../../mod/README.md`](../../mod/README.md) | The Fabric mod: build, test, `FakeLauncher`, GUI checklist |
+| [`../../mod/README.md`](../../mod/README.md) | The current Fabric mod: build, test, `FakeLauncher`, GUI checklist (replaced by the node build of `INGAME.md`) |
 | [`../../tools/p2p-spike/README.md`](../../tools/p2p-spike/README.md) | The two-PC spike for gate G1 |
 | [`../../infra/relay/`](../../infra/relay/) | `relay.toml`, `Dockerfile` and compose files for the relay |

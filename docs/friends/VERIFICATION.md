@@ -5,7 +5,8 @@ prepare the tables. A gate is met when every required row is filled and passes.
 
 How to get each result, in order and in plain German: [`OWNER-CHECKLIST.md`](OWNER-CHECKLIST.md). The
 sections below follow its steps: G1 is step 2, G2 is steps 1 and 3, G3 is step 5, G4 is step 6, G5 is
-step 7. Section N (finding friends by name, release 2.0.1) is step 8.
+step 7. Section N (finding friends by name, release 2.0.1) is step 8. Section M3 (the in-game mod,
+`INGAME.md`, planned) is step 9.
 
 ## G1: P2P viability (R0b spike, owner run)
 
@@ -139,7 +140,7 @@ Checklist step 7.
 | `pnpm build` and `pnpm check:lib` pass | | |
 | Release binary size delta re-measured with the real endpoints (SPEC 3.1) | | |
 | Doc-sync (SPEC 13.5, item 5): sections 3 to 9, 11 and Appendix A match the code | | |
-| Mod published on Modrinth, `MOD_PROJECT_ID` set in `mod-release.yml` and `modinstall.rs` (no gate; without it the mod install is unavailable) | | |
+| *Obsolete once the injection ships (`INGAME.md` section 8: no Modrinth project, M3 replaces it):* mod published on Modrinth, `MOD_PROJECT_ID` set in `mod-release.yml` and `modinstall.rs` (no gate; without it the mod install is unavailable) | | |
 | Closed-beta decision recorded (checklist step 7): n0 relays, build route | | |
 
 G5 met: [ ] (date, initials)
@@ -182,3 +183,76 @@ Facts that stay **unverified** until the rows above are filled (BYNAME-ATTEST, "
 | OD-N11: the owner accepts that the Worker no longer enforces Mojang's multiplayer restrictions and bans (the launcher checks `/player/attributes`; acceptance still needs a Mojang `join`) | | |
 
 N met: [ ] (date, initials)
+
+## M3: in-game mod (`INGAME.md` sections 2, 10 and Appendix B)
+
+Status: **planned.** The code of `INGAME.md` section 11 is not written yet, so every result cell below is empty on
+purpose. An agent may fill the smoke column only from a green CI run of that node. The owner steps are checklist step 9.
+A cell of the support matrix (`SPEC.md` 11.0) ships only with its smoke entry (`verified.smoke` in `mod-index.json`);
+the owner entry (`verified.owner`) is the Windows pass of the same release. Result is `pass` or `fail`; put the date,
+the launcher version and exact messages into the notes.
+
+### M3.1: node groups
+
+The node groups are the provisional list of `INGAME.md` section 2.2. Spike S0 fixes the real break points; the rows are
+then split or merged to match `mod-index.json`. Do not add a row for a cell that has no node.
+
+Smoke (CI) is the headless start through the launcher's own launch path with real injection: the mod connects, passes
+the owner check and sends `ready` (`INGAME.md` section 10, layer 4). Owner pass (Windows) is the deep run for one node
+per loader and the 3-step run (start, hub opens, one request answered) for every other node (layer 5).
+
+| Node group (Minecraft, loader) | Java | Stage | Smoke (CI) | Owner pass (Windows) |
+|---|---|---|---|---|
+| 26.3, Fabric | 25 | R-A (tracer) | | |
+| 26.3, NeoForge (stable build only) | 25 | R-A when stable | | |
+| 26.2 and 26.1.x, Fabric | 25 | R-A/R-B | | |
+| 26.2 and 26.1.x, NeoForge | 25 | R-A/R-B | | |
+| 1.21.9 to 1.21.11, Fabric (probably split at 1.21.11) | 21 | R-B | | |
+| 1.21.9 to 1.21.11, NeoForge | 21 | R-B | | |
+| 1.21.2 to 1.21.8, Fabric (probably 2 to 3 nodes) | 21 | R-B | | |
+| 1.21.2 to 1.21.8, NeoForge | 21 | R-B | | |
+| 1.21 to 1.21.1, Fabric | 21 | R-A | | |
+| 1.21 to 1.21.1, NeoForge (tracer) | 21 | R-A | | |
+| 1.20.5 to 1.20.6, Fabric | 21 | R-B | | |
+| 1.20.2 to 1.20.4, Fabric | 17 | R-B | | |
+| 1.20 to 1.20.1, Fabric | 17 | R-A | | |
+| 1.20.1, Forge (tracer) | 17 | R-A | | |
+
+Deep run per loader (owner pass, once per release, with two Microsoft accounts): start, open the hub, accept a request,
+share a world and join it from the second account.
+
+| Deep run | Node used | Result | Date | Notes |
+|---|---|---|---|---|
+| Fabric | | | | |
+| NeoForge | | | | |
+| Forge | | | | |
+
+### M3.2: unproven mechanisms (`INGAME.md` Appendix B)
+
+Settled by the spikes S0 to S2 and by the owner on Windows. Until a row has a result, the cell it concerns stays off
+(`verified` empty in the index).
+
+| # | Mechanism | Settled by | Result | Date | Notes |
+|---|---|---|---|---|---|
+| B1 | `-Dfabric.addMods` on Fabric 26.3 and on an obfuscated version (1.20.1): mod loads, Mixin applies, no `.fabric/processedMods` surprises | S1 | | | |
+| B2 | Fabric duplicate mod id (user copy lower, equal, higher) | S1 | | | |
+| B3 | NeoForge 21.1.x via `--fml.mavenRoots` (20.4 and 21.8 optional) | S1 | | | |
+| B4 | NeoForge 26.1.2.114 and 26.2.0.88 via `-Dfml.modFolders`; class-loading guard quiet | S1 | | | |
+| B5 | Forge 1.20.1 (47.4.x) via `--fml.mavenRoots`; client-only display test | S1 | | | |
+| B6 | Windows: non-ASCII data path (for example `C:\Users\Jürgen\...`); `FILE_SHARE_READ` handle held while the loaders read the jar | S1, owner | | | |
+| B7 | Headless start of 26.x clients under software rendering in CI | S1, S2 | | | |
+| B8 | Stonecutter node naming with `-neoforge` and `-forge` suffixes and predicates | S1 | | | |
+| B9 | Screen-init hook per loader (Fabric Mixin target `PauseScreen#init`, NeoForge and Forge screen-init event) on the tracer versions | S1 | | | |
+| B10 | A client-only NeoForge or Forge mod against modded servers (only relevant if instances are also used on servers) | S1, owner | | | |
+
+Further checks the concept names (`INGAME.md` sections 3.8, 5.2, 5.4, 3.3). `friend.addByName` from the game may not
+fetch a new certificate for a running game until owner test O-5 (section N above) shows that a fetch does not disturb the
+game's chat key.
+
+| Check | Result | Date |
+|---|---|---|
+| Circuit breaker: a deliberately broken node jar (wrong Java, bad `mods.toml`) ends in the dialog "Ohne Freunde-Menü starten" and the next launch starts without the mod | | |
+| Wrapper script as Java: the instance row says "Verbindung nicht zuordenbar" and the game still starts | | |
+| Second `pumpkin_friends` jar in `mods/`: injection is skipped and the instance row says why | | |
+
+M3 met: [ ] (date, initials)
