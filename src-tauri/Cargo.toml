@@ -54,6 +54,8 @@ iroh = "1.3"
 data-encoding = "2"
 unicode-normalization = "0.1"
 bytes = "1"
+# Zufallsbytes für Freundescode-Geheimnis und Salz (schon im Baum über uuid und iroh).
+getrandom = "0.4"
 
 [features]
 # Zusätzlich die öffentlichen Relays von n0 (nur Entwicklung und geschlossene Beta, siehe docs/friends/SPEC.md 3.2).
