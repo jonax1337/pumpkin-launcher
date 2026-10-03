@@ -1,0 +1,12 @@
+{"direction":"launcherToMod","line":{"type":"state","topic":"me","rev":1,"value":{"enabled":true,"availability":"available","network":"online","fingerprint":"ab12 cd34"}}}
+{"direction":"launcherToMod","line":{"type":"state","topic":"friends","rev":1,"value":[{"id":"f1","name":"Alex","mcUuid":null,"presence":"playing"},{"id":"f2","name":"Bea","mcUuid":"069a79f444e94726a5befca90e38aaf5","presence":"offline"}]}}
+{"direction":"launcherToMod","line":{"type":"state","topic":"requests","rev":1,"value":{"incoming":[{"id":"r1","name":"Sam","mcName":"Sam_MC","fingerprint":"ab12 cd34"}],"outgoing":[{"id":"r2","name":null,"state":"delivering"}]}}}
+{"direction":"launcherToMod","line":{"type":"state","topic":"invites","rev":1,"value":[{"id":"i1","fromName":"Sam","title":"Insel"}]}}
+{"direction":"launcherToMod","line":{"type":"state","topic":"session","rev":1,"value":{"guests":[{"id":"f1","name":"Alex","state":"connected"}]}}}
+{"direction":"launcherToMod","line":{"type":"state","topic":"session","rev":2,"value":null}}
+{"direction":"launcherToMod","line":{"type":"state","topic":"join","rev":1,"value":{"inviteId":"i1","hostName":"Sam","state":"connected","path":"direct","rttMs":23}}}
+{"direction":"launcherToMod","line":{"type":"state","topic":"join","rev":2,"value":null}}
+{"direction":"launcherToMod","line":{"type":"state","topic":"game","rev":1,"value":{"hostable":false,"reason":{"type":"versionUnsupported","min":"1.20"},"lan":{"port":50123}}}}
+{"direction":"launcherToMod","line":{"type":"state","topic":"game","rev":2,"value":{"hostable":true,"reason":null,"lan":null}}}
+{"direction":"launcherToMod","line":{"type":"state","topic":"codes","rev":1,"value":[{"id":"c1","tail":"x7q2","expiresAt":1790000000,"used":false}]}}
+{"direction":"launcherToMod","line":{"type":"state","topic":"blocked","rev":1,"value":[{"id":"f3","name":"Troll"}]}}
