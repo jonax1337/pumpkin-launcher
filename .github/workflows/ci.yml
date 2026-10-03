@@ -44,6 +44,9 @@ jobs:
       - name: Check website links & assets
         run: pnpm check:website
 
+      - name: Check friends directory worker (routes, limits, cron, golden vectors)
+        run: node directory/test.mjs
+
   backend:
     name: Backend (cargo check & test, ${{ matrix.os }})
     strategy:
