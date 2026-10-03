@@ -13,6 +13,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::contract::{
     BlockedPeer, DegradedReason, Friend, FriendNotice, FriendPresenceEvent, NetworkStatus, PathKind, Presence,
+    RequestVia,
 };
 use super::control::{self, ControlMessage, WireProfile, PEER_ALPN};
 use super::events::FriendsEvent;
@@ -20,7 +21,7 @@ use super::identity::fingerprint;
 use super::limits::{Attempts, SlidingWindow, LINK_REPLACEMENTS, REQUEST_STREAMS};
 use super::records::{BlockedRecord, FriendRecord, OutboxKind, RecordStores};
 use super::service::{now_secs, relay_host, Core, Friends, NotConnected, Runtime};
-use super::{requests, sanitize};
+use super::{by_name, requests, sanitize};
 use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::services::gamesignal::GameSignal;
@@ -633,12 +634,14 @@ impl Friends {
         Ok(())
     }
 
-    /// Sperrt einen Freund oder den Peer einer Anfrage: wie Entfernen, aber ohne `unfriend` (SPEC 4.5).
+    /// Sperrt einen Freund oder den Peer einer Anfrage: wie Entfernen, aber ohne `unfriend` (SPEC 4.5). Kam die Anfrage
+    /// per Name, sperrt auch das Verzeichnis den Absender (BYNAME 7.3).
     pub async fn block(&self, peer_id: &str) -> AppResult<()> {
         let core = &self.core;
         core.ensure_enabled()?;
         let display_name = known_name(core, peer_id)
             .ok_or_else(|| AppError::NotFound(coded!("errors.friends.notFound.friend", id = peer_id).into()))?;
+        let letter = requests::request_of(core, peer_id).filter(|request| request.via == RequestVia::Name);
         if core.stores.friends.remove(peer_id).is_ok() {
             core.patches.forget(peer_id);
         }
@@ -647,8 +650,11 @@ impl Friends {
             id: peer_id.to_owned(),
             display_name,
             blocked_at: now_secs(),
-            mc_uuid: None,
+            mc_uuid: letter.as_ref().and_then(|request| request.mc_uuid.clone()),
         })?;
+        if let Some(letter) = &letter {
+            by_name::block_sender(core, letter);
+        }
         core.emit(FriendsEvent::Changed);
         if let Ok(peer) = PeerId::from_str(peer_id) {
             forget_target(core, &peer);
@@ -663,7 +669,11 @@ impl Friends {
     pub async fn unblock(&self, peer_id: &str) -> AppResult<()> {
         let core = &self.core;
         core.ensure_enabled()?;
+        let blocked = core.stores.blocked.get(peer_id)?;
         core.stores.blocked.remove(peer_id)?;
+        if let Some(uuid) = blocked.mc_uuid {
+            by_name::unblock_sender(core, uuid);
+        }
         core.emit(FriendsEvent::Changed);
         Ok(())
     }
@@ -722,14 +732,16 @@ fn went_offline(core: &Core, peer: &PeerId) {
     emit_presence(core, peer, (Presence::Offline, None));
 }
 
-/// `NOT_FRIEND` von einem Freund heißt „entfernt“, außer er kennt unsere neue ID noch nicht (SPEC 4.6).
+/// `NOT_FRIEND` von einem Freund heißt „entfernt“, außer er kennt unsere neue ID noch nicht (SPEC 4.6) oder hat uns
+/// gerade erst per Name eingelöst und trägt uns erst noch ein (BYNAME 7.4); dann war es nur ein gescheiterter Versuch.
 fn notice_close(core: &Core, peer: &PeerId, reason: CloseReason) {
     if reason != CloseReason::Peer(CloseCode::NOT_FRIEND) {
         return;
     }
     let id = peer.to_string();
     let rotation_pending = core.stores.outbox.get(&id).is_ok_and(|item| item.kind == OutboxKind::Rotated);
-    if !rotation_pending && friend(core, &id).is_some() {
+    let Some(record) = friend(core, &id) else { return };
+    if !rotation_pending && !by_name::in_redemption_grace(core, &record) {
         mark_removed_by_peer(core, peer);
     }
 }
