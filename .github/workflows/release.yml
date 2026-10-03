@@ -71,12 +71,12 @@ jobs:
       matrix:
         include:
           - platform: windows-latest
-            args: ""
+            args: --features beta-relays
           - platform: ubuntu-22.04
-            args: ""
+            args: --features beta-relays
           # Universal-Build: eine App für Apple Silicon und Intel, im latest.json unter beiden Schlüsseln.
           - platform: macos-latest
-            args: --target universal-apple-darwin
+            args: --target universal-apple-darwin --features beta-relays
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0

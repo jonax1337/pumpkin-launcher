@@ -34,7 +34,7 @@ body:
     attributes:
       label: Launcher version
       description: Einstellungen › Über Pumpkin Launcher. Not needed if you paste the debug info below, which starts with the version.
-      placeholder: "0.1.0"
+      placeholder: "2.0.0"
   - type: textarea
     id: debug-info
     attributes:
