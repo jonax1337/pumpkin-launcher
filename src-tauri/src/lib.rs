@@ -54,6 +54,7 @@ pub fn run() {
             app.manage(pack_open::OpenedPack::from_process_args());
             spawn_startup_maintenance(app.handle().clone());
             start_friends(app.handle().clone());
+            shut_down_friends_before_exit(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -205,14 +206,16 @@ pub fn run() {
         .run(handle_run_event);
 }
 
+#[cfg(target_os = "macos")]
 fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
-    match event {
-        tauri::RunEvent::Exit => shut_down_friends(app),
-        #[cfg(target_os = "macos")]
-        tauri::RunEvent::Opened { urls } => announce_opened_pack(app, &urls),
-        _ => {}
+    if let tauri::RunEvent::Opened { urls } = event {
+        announce_opened_pack(app, &urls);
     }
 }
+
+/// Das Beenden räumt `shut_down_friends_before_exit` auf; sonst gibt es hier nur auf macOS etwas zu tun.
+#[cfg(not(target_os = "macos"))]
+fn handle_run_event(_app: &tauri::AppHandle, _event: tauri::RunEvent) {}
 
 /// macOS meldet geöffnete Dateien (Doppelklick, „Öffnen mit“) als Ereignis statt in der Kommandozeile.
 #[cfg(target_os = "macos")]
@@ -240,18 +243,44 @@ fn start_sessions(handle: tauri::AppHandle) -> Result<(), services::friends::Han
     tauri::async_runtime::block_on(async { state.sessions.start(events) })
 }
 
+/// Läuft, sobald Tauri vor dem Beenden die Ressourcen der App freigibt (`AppHandle::cleanup_before_exit`). Das tut
+/// es auf jedem Weg hinaus: nach `RunEvent::Exit`, beim Neustart und im `on_before_exit` des Updaters, der unter Windows
+/// danach mit `std::process::exit` endet und `RunEvent::Exit` nie erreicht.
+struct BeforeExit(Box<dyn Fn() + Send + Sync>);
+
+impl tauri::Resource for BeforeExit {}
+
+impl Drop for BeforeExit {
+    fn drop(&mut self) {
+        (self.0)();
+    }
+}
+
+fn shut_down_friends_before_exit(app: &tauri::AppHandle) {
+    let handle = app.clone();
+    app.resources_table().add(BeforeExit(Box::new(move || shut_down_friends(&handle))));
+}
+
 /// Freunde und Gäste erfahren das Ende über `SHUTDOWN`; ein hängendes Netz hält das Beenden nicht auf.
 fn shut_down_friends(app: &tauri::AppHandle) {
-    let state = app.state::<state::AppState>();
-    if block_on_within(FRIENDS_SHUTDOWN_LIMIT, state.friends.shutdown()).is_none() {
+    let friends = app.state::<state::AppState>().friends.clone();
+    if block_on_within(FRIENDS_SHUTDOWN_LIMIT, async move { friends.shutdown().await }).is_none() {
         tracing::warn!("Freunde nicht rechtzeitig abgemeldet");
     }
 }
 
-/// Wartet höchstens `limit` auf `work`, auch vom Haupt-Thread der Ereignisschleife aus. Der hat keine Tokio-Laufzeit
-/// betreten; die Zeitgrenze entsteht deshalb erst in der Laufzeit von `block_on`.
-fn block_on_within<F: Future>(limit: Duration, work: F) -> Option<F::Output> {
-    tauri::async_runtime::block_on(async move { tokio::time::timeout(limit, work).await.ok() })
+/// Wartet höchstens `limit` auf `work`, von jedem Thread aus: vom Haupt-Thread der Ereignisschleife (ohne Tokio-Laufzeit)
+/// ebenso wie aus einer Aufgabe der Laufzeit (der Updater installiert aus einem Befehl heraus), in der `block_on`
+/// selbst nicht erlaubt ist. Deshalb wartet ein eigener Thread; die Zeitgrenze entsteht in der Laufzeit von `block_on`.
+fn block_on_within<F>(limit: Duration, work: F) -> Option<F::Output>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    let waiter = std::thread::spawn(move || {
+        tauri::async_runtime::block_on(async move { tokio::time::timeout(limit, work).await.ok() })
+    });
+    waiter.join().ok().flatten()
 }
 
 /// Aufräumen im Hintergrund nach dem Start: Reste unterbrochener Weltvorgänge entfernen, Dateien eines abgestürzten
@@ -317,5 +346,27 @@ mod tests {
         let result = outside_any_runtime(|| block_on_within(SHORT_LIMIT, std::future::pending::<()>()));
 
         assert_eq!(result, None);
+    }
+
+    /// Wie der Updater, der aus einem asynchronen Befehl heraus installiert und dabei `on_before_exit` aufruft.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn work_finishes_from_inside_a_runtime_task() {
+        let result = block_on_within(SHORT_LIMIT, std::future::ready(7));
+
+        assert_eq!(result, Some(7));
+    }
+
+    #[test]
+    fn the_exit_hook_runs_when_tauri_frees_the_app_resources() {
+        let ran = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = ran.clone();
+        let mut resources = tauri::ResourceTable::default();
+        resources.add(BeforeExit(Box::new(move || {
+            counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        })));
+
+        drop(resources);
+
+        assert_eq!(ran.load(std::sync::atomic::Ordering::SeqCst), 1);
     }
 }
