@@ -1,4 +1,91 @@
 import type { Dict } from "../types.ts";
 
 // Welt teilen und Sitzungs-Chip (F5). Deutsch ist Quelle der Wahrheit.
-export const friendsHost = {} satisfies Dict;
+export const friendsHost = {
+  // ---------- Abschnitt im Tab Welten ----------
+  "friendsHost.share.title": "Mit Freunden teilen",
+  "friendsHost.share.versionUnsupported": "Teilen gibt es ab Minecraft {version}.",
+  "friendsHost.share.notRunning": "Starte die Instanz und öffne die Welt für LAN (Weltoptionen), oder nutze die Mod.",
+  "friendsHost.share.waiting": "Warte auf geöffnete LAN-Welt…",
+  "friendsHost.share.manualPort": "Port selbst eingeben",
+  "friendsHost.share.portLabel": "LAN-Port",
+  "friendsHost.share.portHelp": "Eine Zahl von {min} bis {max}: der Port, den das Spiel beim Öffnen für LAN nennt.",
+  "friendsHost.share.portInvalid": "Der Port muss zwischen {min} und {max} liegen.",
+  "friendsHost.share.portContinue": "Weiter",
+  "friendsHost.share.port": "Port {port} · gehört zu Minecraft (PID {pid})",
+  "friendsHost.share.start": "Mit Freunden teilen",
+  "friendsHost.share.sharing.one": "Geteilt mit {n} Freund",
+  "friendsHost.share.sharing.other": "Geteilt mit {n} Freunden",
+  "friendsHost.share.inviteMore": "Weitere einladen",
+  "friendsHost.share.noOneToInvite": "Gerade ist kein weiterer Freund online.",
+  "friendsHost.share.seatsFull": "Alle {max} Plätze sind vergeben.",
+  "friendsHost.share.stop": "Teilen beenden",
+  "friendsHost.share.guestsLabel": "Gäste",
+
+  // ---------- Gäste ----------
+  "friendsHost.guest.invited": "Eingeladen",
+  "friendsHost.guest.connected": "Verbunden",
+  "friendsHost.guest.declined": "Abgelehnt",
+  "friendsHost.guest.kicked": "Entfernt",
+  "friendsHost.guest.left": "Verlassen",
+  "friendsHost.guest.reinvite": "Erneut einladen",
+  "friendsHost.guest.kick": "Entfernen",
+  "friendsHost.guest.rtt": "{ms} ms",
+  "friendsHost.path.direct": "Direkt",
+  "friendsHost.path.relay": "Relay",
+  "friendsHost.path.directTip": "Die Launcher sind direkt miteinander verbunden.",
+
+  // ---------- Mod ----------
+  "friendsHost.mod.title": "Pumpkin Friends-Mod: Teilen direkt im Spiel",
+  "friendsHost.mod.source": "Kommt von Modrinth.",
+  "friendsHost.mod.add": "Mod hinzufügen",
+  "friendsHost.mod.adding": "Mod wird hinzugefügt",
+  "friendsHost.mod.task": "Pumpkin Friends-Mod hinzufügen",
+  "friendsHost.mod.taskDone": "Pumpkin Friends-Mod hinzugefügt",
+  "friendsHost.mod.name": "Pumpkin Friends-Mod",
+  "friendsHost.mod.installed": "Mod nicht verbunden",
+  "friendsHost.mod.connected": "Mod verbunden",
+
+  // ---------- Dialog „Mit Freunden teilen“ ----------
+  "friendsHost.dialog.title": "Mit Freunden teilen",
+  "friendsHost.dialog.titleMore": "Weitere Freunde einladen",
+  "friendsHost.dialog.friends": "Freunde, die online sind",
+  "friendsHost.dialog.friendsHelp": "Höchstens {n} Freunde.",
+  "friendsHost.dialog.noFriends": "Gerade ist kein Freund online",
+  "friendsHost.dialog.noFriendsHint": "Eingeladen werden können bestätigte Freunde, die online sind.",
+  "friendsHost.dialog.worldName": "Weltnamen zeigen",
+  "friendsHost.dialog.worldNameHelp": "Ohne Haken sehen Eingeladene nur den Namen der Instanz.",
+  "friendsHost.dialog.infoVisible": "Eingeladene sehen Minecraft-Version, Loader und die Modliste dieser Instanz.",
+  "friendsHost.dialog.infoHomeNet": "Eine für LAN geöffnete Welt ist auch für Geräte in deinem Heimnetz erreichbar, wie bei Vanilla.",
+  "friendsHost.dialog.needFriend": "Wähle mindestens einen Freund.",
+  "friendsHost.dialog.confirm": "Teilen",
+  "friendsHost.dialog.confirmMore": "Einladen",
+  "friendsHost.dialog.pending": "Einen Moment",
+
+  // ---------- Teilen beenden ----------
+  "friendsHost.stop.title": "Teilen beenden?",
+  "friendsHost.stop.text": "Alle Freunde werden getrennt, und ihre Einladungen verfallen. Du kannst die Welt danach erneut teilen.",
+
+  // ---------- Chip in der Fensterleiste ----------
+  "friendsHost.chip.hosting": "Geteilt · {n} verbunden",
+  "friendsHost.chip.joinLead": "Bei {name}",
+  "friendsHost.chip.waiting": "Wartet auf das Spiel",
+  "friendsHost.chip.connecting": "Verbindet…",
+  "friendsHost.chip.unknownHost": "Gastgeber",
+
+  // ---------- Platte am Chip ----------
+  "friendsHost.pop.hostTitle": "Du teilst eine Welt",
+  "friendsHost.pop.noGuests": "Noch ist niemand verbunden.",
+  "friendsHost.pop.joinTitle": "Du bist beigetreten",
+  "friendsHost.pop.peer": "Gastgeber",
+  "friendsHost.pop.status": "Stand",
+  "friendsHost.pop.path": "Verbindung",
+  "friendsHost.pop.rtt": "Antwortzeit",
+  "friendsHost.pop.leave": "Verlassen",
+
+  // ---------- Fenster schließen ----------
+  "friendsHost.close.title": "Launcher schließen?",
+  "friendsHost.close.hosting": "Das beendet das Teilen deiner Welt.",
+  "friendsHost.close.joining": "Das beendet die Verbindung zu {name}.",
+  "friendsHost.close.both": "Das beendet das Teilen deiner Welt und die Verbindung zu {name}.",
+} satisfies Dict;

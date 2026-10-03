@@ -59,10 +59,10 @@ export function visibleFriends(friends: Friend[], labels: Map<string, string>, {
 export const inviteFrom = (invites: Invite[], friend: Friend): Invite | undefined => invites.find((invite) => invite.from === friend.id);
 
 /** Gäste, die ihren Platz behalten: nicht abgelehnt und nicht entfernt (Spezifikation 5.4). */
-const holdsSeat = (state: string, kicked: boolean) => state !== "declined" && !(state === "left" && kicked);
+export const holdsSeat = (state: string, kicked: boolean) => state !== "declined" && !(state === "left" && kicked);
 
 /** Ob „Einladen“ passt: ich teile, der Freund ist bestätigt und online und hat noch keinen Platz. */
-export function canInvite(friend: Friend, session: HostSession | undefined): boolean {
+export function canInvite(friend: Friend, session: Pick<HostSession, "guests"> | undefined): boolean {
   if (!session || !friend.confirmed || friend.removedByPeer || friend.presence === "offline") return false;
   const guest = session.guests.find((candidate) => candidate.friendId === friend.id);
   return !guest || !holdsSeat(guest.state, guest.kicked);
