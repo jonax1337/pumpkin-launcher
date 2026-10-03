@@ -196,6 +196,7 @@ export function createTauriBackend(): Backend {
     friendCodes: () => call("friend_codes"),
     friendCodeRevoke: (codeId) => call("friend_code_revoke", { codeId }),
     friendAdd: (code) => call("friend_add", { code }),
+    friendAddByName: (name) => call("friend_add_by_name", { name }),
     friendRequestAnswer: (requestId, accept) => call("friend_request_answer", { requestId, accept }),
     friendRequestCancel: (requestId) => call("friend_request_cancel", { requestId }),
     friendRename: (friendId, alias) => call("friend_rename", { friendId, alias }),

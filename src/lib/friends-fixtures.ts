@@ -20,7 +20,10 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
     "minMcReleaseTime": "2023-06-02T08:36:17+00:00",
     "minMcLabel": "1.20",
     "portMin": 1024,
-    "portMax": 65535
+    "portMax": 65535,
+    "maxNameRequests": 5,
+    "mcNameMax": 16,
+    "nameCooldownDays": 7
   },
   "friendsState.available": {
     "availability": "available",
@@ -32,7 +35,8 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
     },
     "settings": {
       "displayName": "Jonas",
-      "alwaysRelay": false
+      "alwaysRelay": false,
+      "findableByName": true
     },
     "network": {
       "type": "online",
@@ -45,7 +49,11 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
         "thirdParty": false
       }
     ],
-    "thirdPartyRelaysAccepted": false
+    "thirdPartyRelaysAccepted": false,
+    "directory": {
+      "state": "active",
+      "host": "directory.example"
+    }
   },
   "friendsState.noSecretStore": {
     "availability": "noSecretStore",
@@ -53,13 +61,18 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
     "me": null,
     "settings": {
       "displayName": "Jonas",
-      "alwaysRelay": false
+      "alwaysRelay": false,
+      "findableByName": false
     },
     "network": {
       "type": "off"
     },
     "relays": [],
-    "thirdPartyRelaysAccepted": false
+    "thirdPartyRelaysAccepted": false,
+    "directory": {
+      "state": "off",
+      "host": "directory.example"
+    }
   },
   "friendsState.identityLost": {
     "availability": "identityLost",
@@ -67,7 +80,8 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
     "me": null,
     "settings": {
       "displayName": "Jonas",
-      "alwaysRelay": false
+      "alwaysRelay": false,
+      "findableByName": false
     },
     "network": {
       "type": "off"
@@ -79,7 +93,11 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
         "thirdParty": false
       }
     ],
-    "thirdPartyRelaysAccepted": false
+    "thirdPartyRelaysAccepted": false,
+    "directory": {
+      "state": "unavailable",
+      "host": null
+    }
   },
   "networkStatus.off": {
     "type": "off"
@@ -171,7 +189,8 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
     "mcName": "Bea_Builds",
     "codeTail": null,
     "createdAt": 1789999400,
-    "expiresAt": 1791209000
+    "expiresAt": 1791209000,
+    "via": "code"
   },
   "request.delivering": {
     "id": "req-out-1",
@@ -183,7 +202,8 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
     "mcName": null,
     "codeTail": "rvw3",
     "createdAt": 1789999400,
-    "expiresAt": 1791209000
+    "expiresAt": 1791209000,
+    "via": "code"
   },
   "request.awaitingAnswer": {
     "id": "req-out-2",
@@ -195,7 +215,47 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
     "mcName": "EliPlays",
     "codeTail": "q7mx",
     "createdAt": 1789999400,
-    "expiresAt": 1791209000
+    "expiresAt": 1791209000,
+    "via": "code"
+  },
+  "request.nameIncoming": {
+    "id": "req-name-in-1",
+    "direction": "incoming",
+    "state": "pending",
+    "peerId": "a1b2c3d4e5f60718293a4b5c6d7e8f900112233445566778899aabbccddeeff0",
+    "fingerprint": "a1b2 c3d4 e5f6 0718",
+    "displayName": "Bea",
+    "mcName": "Bea_Builds",
+    "codeTail": null,
+    "createdAt": 1789999400,
+    "expiresAt": 1791209000,
+    "via": "name"
+  },
+  "request.nameOutgoing": {
+    "id": "req-name-out-1",
+    "direction": "outgoing",
+    "state": "awaitingAnswer",
+    "peerId": null,
+    "fingerprint": null,
+    "displayName": null,
+    "mcName": "Steve",
+    "codeTail": null,
+    "createdAt": 1789999400,
+    "expiresAt": 1791209000,
+    "via": "name"
+  },
+  "request.nameDelivering": {
+    "id": "req-name-out-2",
+    "direction": "outgoing",
+    "state": "delivering",
+    "peerId": "a1b2c3d4e5f60718293a4b5c6d7e8f900112233445566778899aabbccddeeff0",
+    "fingerprint": "a1b2 c3d4 e5f6 0718",
+    "displayName": "Bea",
+    "mcName": "Bea_Builds",
+    "codeTail": null,
+    "createdAt": 1789999400,
+    "expiresAt": 1791209000,
+    "via": "name"
   },
   "code.created": {
     "id": "code-1",
@@ -380,7 +440,8 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
       "mcName": "Bea_Builds",
       "codeTail": null,
       "createdAt": 1789999400,
-      "expiresAt": 1791209000
+      "expiresAt": 1791209000,
+      "via": "code"
     }
   },
   "event.invite": {

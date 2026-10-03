@@ -6,8 +6,8 @@ import { FRIENDS_LIMITS } from "./friends-types";
 import { clone, newId, wait, type MockContext } from "./mock-util";
 import { DAY, HOUR, MINUTE } from "./time";
 import type {
-  BlockedPeer, Friend, FriendCode, FriendRequest, FriendsEnableInput, FriendsSettings, FriendsState, HostSession, InstanceSummary, Invite,
-  JoinPlan, JoinTicket, LanStatus, ModRef, ModStatus, PathKind, Presence, SessionGuest,
+  BlockedPeer, DirectoryState, DirectoryStatus, Friend, FriendCode, FriendRequest, FriendsEnableInput, FriendsSettings, FriendsState,
+  HostSession, InstanceSummary, Invite, JoinPlan, JoinTicket, LanStatus, ModRef, ModStatus, PathKind, Presence, RequestVia, SessionGuest,
 } from "./types";
 
 const SECOND_MS = 1000;
@@ -17,6 +17,7 @@ const MINUTE_SECS = MINUTE / SECOND_MS;
 const nowSecs = () => Math.floor(Date.now() / SECOND_MS);
 
 const MOCK_RELAY_HOST = "relay-eu1.pumpkin.example";
+const MOCK_DIRECTORY_HOST = "verzeichnis.pumpkin.example";
 const MOCK_PLAYER_NAME = "Jonax1337";
 const MOCK_HOST_INSTANCE = "inst-survival";
 const MOCK_GAME_PID = 4242;
@@ -24,6 +25,12 @@ const MOCK_PORT = 52114;
 const MOCK_LOCAL_RTT_MS = 38;
 const MOCK_RELAY_RTT_MS = 64;
 const BASE32 = "abcdefghijklmnopqrstuvwxyz234567";
+const MC_NAME_PATTERN = new RegExp(`^[A-Za-z0-9_]{1,${FRIENDS_LIMITS.mcNameMax}}$`);
+
+/** Minecraft-Namen, die `friendAddByName` wie das Verzeichnis beantwortet; jeder andere gültige Name wird zugestellt. */
+const MOCK_UNKNOWN_NAME = "herobrine";
+const MOCK_HIDDEN_NAME = "versteckt";
+const MOCK_COOLDOWN_NAME = "spammer";
 
 /** Pausen der vorgetäuschten Abläufe: Anmeldung beim Relay, Zustellung einer Anfrage, Mod-Installation, Verbindung zum Gastgeber. */
 const ONLINE_AFTER_MS = 800;
@@ -54,13 +61,14 @@ const SUMMARIES: Record<PlanScenario, InstanceSummary> = {
   lookupFailed: { ...FABRIC_26_3, modCount: 12 },
 };
 
-type Scenario = "disabled" | "full" | "empty" | "identityLost" | "noSecretStore";
+type Scenario = "disabled" | "full" | "empty" | "identityLost" | "noSecretStore" | "noDirectory";
 
-/** `?mock=freunde`, `freunde-leer`, `freunde-verloren`, `freunde-keyring`; ohne eine davon sind Freunde aus. */
+/** `?mock=freunde`, `freunde-leer`, `freunde-ohne-verzeichnis`, `freunde-verloren`, `freunde-keyring`; ohne eine davon sind Freunde aus. */
 function scenarioFromUrl(): Scenario {
   switch (new URLSearchParams(location.search).get("mock")) {
     case "freunde": return "full";
     case "freunde-leer": return "empty";
+    case "freunde-ohne-verzeichnis": return "noDirectory";
     case "freunde-verloren": return "identityLost";
     case "freunde-keyring": return "noSecretStore";
     default: return "disabled";
@@ -85,12 +93,21 @@ function friendOf(name: string, over: Partial<Friend> = {}): Friend {
   };
 }
 
-function incomingRequestOf(name: string): FriendRequest {
+function incomingRequestOf(name: string, via: RequestVia = "code"): FriendRequest {
   const peerId = newPeerId();
   const createdAt = nowSecs();
   return {
     id: newId("req"), direction: "incoming", state: "pending", peerId, fingerprint: fingerprintOf(peerId), displayName: name, mcName: name,
-    codeTail: null, createdAt, expiresAt: createdAt + FRIENDS_LIMITS.requestTtlSecs,
+    codeTail: null, createdAt, expiresAt: createdAt + FRIENDS_LIMITS.requestTtlSecs, via,
+  };
+}
+
+/** Eine eigene Anfrage per Name: im Verzeichnis hinterlegt, `name` hat noch nicht geantwortet. */
+function nameOutgoingRequestOf(name: string): FriendRequest {
+  const createdAt = nowSecs();
+  return {
+    id: newId("req"), direction: "outgoing", state: "awaitingAnswer", peerId: null, fingerprint: null, displayName: null, mcName: name,
+    codeTail: null, createdAt, expiresAt: createdAt + FRIENDS_LIMITS.requestTtlSecs, via: "name",
   };
 }
 
@@ -99,7 +116,7 @@ function deliveringRequestOf(codeTail: string, ageSecs: number): FriendRequest {
   const createdAt = nowSecs() - ageSecs;
   return {
     id: newId("req"), direction: "outgoing", state: "delivering", peerId: null, fingerprint: null, displayName: null, mcName: null,
-    codeTail, createdAt, expiresAt: createdAt + FRIENDS_LIMITS.requestTtlSecs,
+    codeTail, createdAt, expiresAt: createdAt + FRIENDS_LIMITS.requestTtlSecs, via: "code",
   };
 }
 
@@ -136,6 +153,11 @@ const mockMe = (displayName: string) => {
   return { peerId, fingerprint: fingerprintOf(peerId), displayName };
 };
 
+function initialDirectory(scenario: Scenario): DirectoryStatus {
+  if (scenario === "identityLost" || scenario === "noDirectory") return { state: "unavailable", host: null };
+  return { state: scenario === "full" ? "active" : "off", host: MOCK_DIRECTORY_HOST };
+}
+
 function initialState(scenario: Scenario): FriendsState {
   const enabled = scenario !== "disabled" && scenario !== "noSecretStore";
   const identityKnown = enabled && scenario !== "identityLost";
@@ -143,14 +165,15 @@ function initialState(scenario: Scenario): FriendsState {
     availability: scenario === "identityLost" ? "identityLost" : scenario === "noSecretStore" ? "noSecretStore" : "available",
     enabled,
     me: identityKnown ? mockMe(MOCK_PLAYER_NAME) : null,
-    settings: { displayName: MOCK_PLAYER_NAME, alwaysRelay: false },
+    settings: { displayName: MOCK_PLAYER_NAME, alwaysRelay: false, findableByName: scenario === "full" },
     network: identityKnown ? { type: "online", relayHost: MOCK_RELAY_HOST } : { type: "off" },
     relays: [{ host: MOCK_RELAY_HOST, operator: "pumpkin", thirdParty: false }],
     thirdPartyRelaysAccepted: false,
+    directory: initialDirectory(scenario),
   };
 }
 
-/** `?mock=freunde`: fünf Freunde, drei Anfragen, eine Einladung, ein Hinweis und eine laufende geteilte Welt. */
+/** `?mock=freunde`: fünf Freunde, fünf Anfragen (zwei davon per Name), eine Einladung, ein Hinweis und eine laufende geteilte Welt. */
 function seedFullScenario(db: FriendsDb) {
   const alex = friendOf("Alex", { presence: "online", path: "direct" });
   const bea = friendOf("Bea", { presence: "playing", path: "relay" });
@@ -158,7 +181,10 @@ function seedFullScenario(db: FriendsDb) {
   const dana = friendOf("Dana", { confirmed: false, lastSeen: null, mcName: null, mcUuid: null });
   const eli = friendOf("Eli", { presence: "online", path: "direct" });
   db.friends = [alex, bea, chris, dana, eli];
-  db.requests = [incomingRequestOf("Fynn"), deliveringRequestOf("k7qm", 2 * HOUR_SECS), deliveringRequestOf("x2ab", 8 * DAY_SECS)];
+  db.requests = [
+    incomingRequestOf("Fynn"), deliveringRequestOf("k7qm", 2 * HOUR_SECS), deliveringRequestOf("x2ab", 8 * DAY_SECS),
+    incomingRequestOf("Hanna", "name"), nameOutgoingRequestOf("Ida"),
+  ];
   const invite = inviteOf(alex, "ready");
   db.invites = [invite];
   db.planScenarios.set(invite.id, "ready");
@@ -262,16 +288,17 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
   // --- Identität und Einstellungen ---
 
   /** Nach dem Einschalten steht die Verbindung zum Relay erst nach einem Moment. */
-  function enable({ displayName, alwaysRelay, acceptThirdPartyRelays }: FriendsEnableInput) {
+  function enable({ displayName, alwaysRelay, acceptThirdPartyRelays, findableByName }: FriendsEnableInput) {
     const name = displayName.trim();
     if (name.length < FRIENDS_LIMITS.displayNameMin || name.length > FRIENDS_LIMITS.displayNameMax) {
       throw new Error(t("mock.friends.displayNameInvalid", { min: FRIENDS_LIMITS.displayNameMin, max: FRIENDS_LIMITS.displayNameMax }));
     }
     if (!appDb.accounts.some((a) => a.kind === "microsoft")) throw new Error(t("mock.friends.msAccountRequired"));
-    Object.assign(db.state, { enabled: true, settings: { displayName: name, alwaysRelay }, thirdPartyRelaysAccepted: acceptThirdPartyRelays });
+    Object.assign(db.state, { enabled: true, settings: { displayName: name, alwaysRelay, findableByName }, thirdPartyRelaysAccepted: acceptThirdPartyRelays });
     db.state.me ??= mockMe(name);
     setNetwork({ type: "starting" });
     setTimeout(() => setNetwork({ type: "online", relayHost: MOCK_RELAY_HOST }), ONLINE_AFTER_MS);
+    applyFindability(findableByName);
     return db.state;
   }
 
@@ -282,8 +309,24 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     return db.state;
   }
 
+  /** Das Verzeichnis trägt die Person erst nach einem Moment ein; wieder aus ist es sofort. Ohne Verzeichnis ändert sich nichts. */
+  function applyFindability(findable: boolean) {
+    const { directory } = db.state;
+    if (directory.state === "unavailable") return;
+    if (!findable) {
+      directory.state = "off";
+      return;
+    }
+    setTimeout(() => {
+      if (!db.state.settings.findableByName) return;
+      directory.state = "active";
+      changed();
+    }, ONLINE_AFTER_MS);
+  }
+
   function updateSettings(settings: FriendsSettings) {
     if (settings.alwaysRelay !== db.state.settings.alwaysRelay) endSessions("stopped");
+    if (settings.findableByName !== db.state.settings.findableByName) applyFindability(settings.findableByName);
     db.state.settings = settings;
     if (db.state.me) db.state.me.displayName = settings.displayName;
     changed();
@@ -298,10 +341,14 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     return db.state;
   }
 
-  /** Wie das Backend: offene Codes und Anfragen, die an die alte ID gebunden sind, verfallen; wartende eigene bleiben. */
+  /** An die alte ID gebunden sind alle Anfragen außer den wartenden eigenen und den eingegangenen per Name (die gehören zur ID des Absenders). */
+  const survivesRotation = (r: FriendRequest) =>
+    (r.direction === "outgoing" && r.state === "delivering") || (r.direction === "incoming" && r.via === "name");
+
+  /** Wie das Backend: offene Codes und Anfragen, die an die alte ID gebunden sind, verfallen. */
   function rotateIdentity() {
     db.codes = [];
-    db.requests = db.requests.filter((r) => r.direction === "outgoing" && r.state === "delivering");
+    db.requests = db.requests.filter(survivesRotation);
     return startNewIdentity();
   }
 
@@ -324,13 +371,53 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     return { ...record, code };
   }
 
-  function addFriend(input: string) {
-    const code = normalizeFriendCode(input);
-    if (!code) throw new Error(t("mock.friends.codeInvalid"));
+  function checkFriendCapacity() {
     if (db.friends.length + db.requests.filter((r) => r.direction === "outgoing").length >= FRIENDS_LIMITS.maxFriends) {
       throw new Error(t("mock.friends.friendLimit", { max: FRIENDS_LIMITS.maxFriends }));
     }
+  }
+
+  function addFriend(input: string) {
+    const code = normalizeFriendCode(input);
+    if (!code) throw new Error(t("mock.friends.codeInvalid"));
+    checkFriendCapacity();
     const request = deliveringRequestOf(code.slice(-4), 0);
+    db.requests.push(request);
+    changed();
+    return request;
+  }
+
+  const sameName = (a: string | null, b: string) => a?.toLowerCase() === b.toLowerCase();
+  const openNameRequests = () => db.requests.filter((r) => r.direction === "outgoing" && r.via === "name");
+
+  /** Wie das Backend: erst die Prüfungen auf dieser Seite, dann die Anmeldung am Verzeichnis, zuletzt dessen Antwort. */
+  function checkNameRequestAllowed(name: string) {
+    if (!MC_NAME_PATTERN.test(name)) throw new Error(t("mock.friends.nameInvalid"));
+    if (db.state.directory.state === "unavailable") throw new Error(t("mock.friends.directoryUnavailable"));
+    if (sameName(name, MOCK_UNKNOWN_NAME)) throw new Error(t("mock.friends.nameUnknown", { name }));
+    if (sameName(name, MOCK_PLAYER_NAME)) throw new Error(t("mock.friends.nameOwn"));
+    if (db.friends.some((f) => sameName(f.mcName, name))) throw new Error(t("mock.friends.alreadyFriends"));
+    if (openNameRequests().some((r) => sameName(r.mcName, name))) throw new Error(t("mock.friends.alreadyRequestedName", { name }));
+    if (openNameRequests().length >= FRIENDS_LIMITS.maxNameRequests) {
+      throw new Error(t("mock.friends.tooManyNameRequests", { max: FRIENDS_LIMITS.maxNameRequests }));
+    }
+    checkFriendCapacity();
+  }
+
+  function checkDirectoryAnswer(name: string) {
+    switch (db.state.directory.state) {
+      case "unreachable": throw new Error(t("mock.friends.directoryUnavailable"));
+      case "notAllowed": throw new Error(t("mock.friends.directoryNotAllowed"));
+    }
+    if (sameName(name, MOCK_HIDDEN_NAME)) throw new Error(t("mock.friends.nameNotFindable", { name }));
+    if (sameName(name, MOCK_COOLDOWN_NAME)) throw new Error(t("mock.friends.nameCooldown", { name, days: FRIENDS_LIMITS.nameCooldownDays }));
+  }
+
+  function addFriendByName(input: string) {
+    const name = input.trim();
+    checkNameRequestAllowed(name);
+    checkDirectoryAnswer(name);
+    const request = nameOutgoingRequestOf(name);
     db.requests.push(request);
     changed();
     return request;
@@ -338,9 +425,11 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
 
   function answerRequest(requestId: string, accept: boolean) {
     const request = find(db.requests, requestId, "request");
-    db.requests = without(db.requests, requestId, "request");
-    if (accept) {
-      db.friends.push(friendOf(request.displayName ?? "?", { id: request.peerId ?? newPeerId(), confirmed: false, lastSeen: null }));
+    if (accept && request.via === "name") {
+      Object.assign(request, { direction: "outgoing", state: "delivering" });
+    } else {
+      db.requests = without(db.requests, requestId, "request");
+      if (accept) db.friends.push(friendOf(request.displayName ?? "?", { id: request.peerId ?? newPeerId(), confirmed: false, lastSeen: null }));
     }
     changed();
   }
@@ -359,12 +448,29 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     Object.assign(request, { state: "awaitingAnswer", peerId, fingerprint: fingerprintOf(peerId), displayName: "Gwen", mcName: "Gwen" });
   }
 
-  /** Stellt jede Anfrage zu, deren Code noch gilt; zu einem abgelaufenen Code kommt nie eine Antwort. */
-  function retryDeliveries() {
-    const fresh = db.requests.filter((r) => r.state === "delivering" && nowSecs() - r.createdAt <= FRIENDS_LIMITS.codeTtlSecs);
-    if (fresh.length === 0) return;
+  /** Die Gegenseite hat angenommen: erst unbestätigt, nach einem Moment bestätigt und online. */
+  function becomeFriend(request: FriendRequest) {
+    db.requests = db.requests.filter((r) => r !== request);
+    const friend = friendOf(request.displayName ?? request.mcName ?? "?", {
+      id: request.peerId ?? newPeerId(), mcName: request.mcName, confirmed: false, lastSeen: null,
+    });
+    db.friends.push(friend);
     setTimeout(() => {
-      fresh.forEach(deliver);
+      if (!db.friends.includes(friend)) return;
+      Object.assign(friend, { confirmed: true, lastSeen: nowSecs() });
+      setPresence(friend, "online", "direct");
+      changed();
+    }, DELIVERY_MS);
+  }
+
+  /** Stellt jede Anfrage zu, deren Code noch gilt; zu einem abgelaufenen Code kommt nie eine Antwort. Per Name hat die Gegenseite schon angenommen. */
+  function retryDeliveries() {
+    const deliverable = db.requests.filter(
+      (r) => r.state === "delivering" && (r.via === "name" || nowSecs() - r.createdAt <= FRIENDS_LIMITS.codeTtlSecs),
+    );
+    if (deliverable.length === 0) return;
+    setTimeout(() => {
+      deliverable.forEach((r) => (r.via === "name" ? becomeFriend(r) : deliver(r)));
       changed();
     }, DELIVERY_MS);
   }
@@ -504,10 +610,22 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     emit("friend-invite", { invite: clone(invite) });
   }
 
-  function receiveRequest(name: string) {
-    const request = incomingRequestOf(name);
+  function receiveRequest(name: string, via: RequestVia) {
+    const request = incomingRequestOf(name, via);
     db.requests.push(request);
     emit("friend-request", { request: clone(request) });
+  }
+
+  function acceptNameRequest(name: string) {
+    const request = openNameRequests().find((r) => sameName(r.mcName, name));
+    if (!request) throw new Error(t("mock.friends.notFound.request", { id: name }));
+    becomeFriend(request);
+    changed();
+  }
+
+  function setDirectoryState(state: Extract<DirectoryState, "active" | "unreachable" | "notAllowed">) {
+    db.state.directory.state = state;
+    changed();
   }
 
   function openLan(port: number) {
@@ -567,7 +685,10 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     invite: (name: string) => receiveInvite(friendNamed(name)),
     friendOnline: (name: string) => setPresence(friendNamed(name), "online", "direct"),
     friendOffline: (name: string) => setPresence(friendNamed(name), "offline", null),
-    request: receiveRequest,
+    request: (name: string) => receiveRequest(name, "code"),
+    nameRequest: (name: string) => receiveRequest(name, "name"),
+    nameAccepted: acceptNameRequest,
+    directory: setDirectoryState,
     lanOpened: openLan,
     guestJoined: joinGuest,
     hostGone: closeHostedWorld,
@@ -598,6 +719,7 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
       changed();
     }),
     friendAdd: command(addFriend, { needsEnabled: true }),
+    friendAddByName: command(addFriendByName, { needsEnabled: true }),
     friendRequestAnswer: command(answerRequest),
     friendRequestCancel: command((requestId: string) => {
       db.requests = without(db.requests, requestId, "request");

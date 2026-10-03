@@ -372,6 +372,8 @@ export interface Backend {
   friendCodeRevoke(codeId: string): Promise<void>;
   /** Löst einen Code ein; kehrt sofort zurück, die Zustellung läuft im Hintergrund. */
   friendAdd(code: string): Promise<FriendRequest>;
+  /** Schickt über das Verzeichnis eine Anfrage an den genauen Minecraft-Namen; die Antwort ist die wartende eigene Anfrage. */
+  friendAddByName(name: string): Promise<FriendRequest>;
   friendRequestAnswer(requestId: string, accept: boolean): Promise<void>;
   /** Zieht eine eigene Anfrage zurück. */
   friendRequestCancel(requestId: string): Promise<void>;

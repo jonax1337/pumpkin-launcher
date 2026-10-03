@@ -61,7 +61,7 @@ function OptInDialog({ state, onClose }: { state: FriendsState; onClose: () => v
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!ready) return;
-    enable.mutate({ displayName: name, alwaysRelay, acceptThirdPartyRelays: acceptedThirdParty }, { onSuccess: onClose });
+    enable.mutate({ displayName: name, alwaysRelay, acceptThirdPartyRelays: acceptedThirdParty, findableByName: false }, { onSuccess: onClose });
   }
 
   return (

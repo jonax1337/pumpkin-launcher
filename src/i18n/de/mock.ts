@@ -44,6 +44,16 @@ export const mock = {
   "mock.friends.lanPortUnknown": "Der LAN-Port ist noch unbekannt; öffne die Welt im Spiel für LAN oder gib den Port ein",
   "mock.friends.portInvalid": "Port: {min} bis {max}",
   "mock.friends.guestLimit": "Höchstens {max} Freunde gleichzeitig",
+  "mock.friends.alreadyFriends": "Ihr seid schon befreundet",
+  "mock.friends.nameInvalid": "Das ist kein gültiger Minecraft-Name",
+  "mock.friends.nameUnknown": "Es gibt keinen Minecraft-Spieler „{name}“",
+  "mock.friends.nameNotFindable": "{name} ist nicht per Name auffindbar; tauscht stattdessen einen Freundescode aus",
+  "mock.friends.nameOwn": "Das ist dein eigener Minecraft-Name",
+  "mock.friends.alreadyRequestedName": "An {name} geht schon eine Anfrage",
+  "mock.friends.tooManyNameRequests": "Höchstens {max} offene Anfragen per Name; warte auf Antworten oder ziehe eine zurück",
+  "mock.friends.nameCooldown": "Du hast {name} in den letzten {days} Tagen schon eine Anfrage geschickt",
+  "mock.friends.directoryUnavailable": "Das Freunde-Verzeichnis ist gerade nicht erreichbar; nutze einen Freundescode",
+  "mock.friends.directoryNotAllowed": "Mojang erlaubt diesem Konto keine Mehrspieler-Funktionen; Freunde per Name geht damit nicht",
 
   // Browser-Fassung von lib/api.ts
   "hooks.api.modpacksNeedApp": "Modrinth-Modpacks benötigen die Tauri-App. Im Browser werden keine Modpacks installiert.",
