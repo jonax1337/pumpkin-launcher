@@ -17,7 +17,7 @@ use super::contract::{
 use super::control::{self, ControlMessage, WireProfile, PEER_ALPN};
 use super::events::FriendsEvent;
 use super::identity::fingerprint;
-use super::limits::Attempts;
+use super::limits::{Attempts, SlidingWindow, LINK_REPLACEMENTS, REQUEST_STREAMS};
 use super::records::{BlockedRecord, FriendRecord, OutboxKind, RecordStores};
 use super::service::{now_secs, relay_host, Core, Friends, NotConnected, Runtime};
 use super::{requests, sanitize};
@@ -42,11 +42,25 @@ const RETRY_FRIEND_GAP: Duration = Duration::from_secs(120);
 const PATCH_FLUSH_INTERVAL: Duration = Duration::from_secs(5);
 
 /// Die Verbindungen zu Freunden, je Peer höchstens eine, und der eigene Status.
-#[derive(Default)]
 pub(super) struct Links {
     links: Mutex<HashMap<PeerId, Link>>,
     next_id: AtomicU64,
     own: Mutex<OwnPresence>,
+    /// Je Freund über alle seine Verbindungen hinweg: ein neues Verbinden setzt die Grenzen nicht zurück.
+    request_streams: Mutex<SlidingWindow<PeerId>>,
+    replacements: Mutex<SlidingWindow<PeerId>>,
+}
+
+impl Default for Links {
+    fn default() -> Self {
+        Self {
+            links: Mutex::default(),
+            next_id: AtomicU64::default(),
+            own: Mutex::default(),
+            request_streams: Mutex::new(SlidingWindow::new(REQUEST_STREAMS)),
+            replacements: Mutex::new(SlidingWindow::new(LINK_REPLACEMENTS)),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -72,6 +86,8 @@ pub(super) enum Registration {
     Kept { replaced: Option<Link> },
     /// Eine bestehende Verbindung bleibt nach der Regel für doppelte Verbindungen (SPEC 4.4).
     Duplicate,
+    /// Der Peer ersetzt seine Verbindung zu oft; die eingetragene bleibt.
+    TooFrequent,
 }
 
 impl Link {
@@ -93,18 +109,29 @@ impl Links {
     }
 
     /// Bei zwei Verbindungen zu demselben Peer bleibt die, die der Peer mit der kleineren ID angewählt hat; zwei in
-    /// derselben Richtung ersetzt die neuere, denn die ältere ist dann meist schon tot.
+    /// derselben Richtung ersetzt die neuere, denn die ältere ist dann meist schon tot. Ersetzen ist begrenzt
+    /// (`LINK_REPLACEMENTS`), damit ständiges Neuverbinden nicht zur Last wird.
     pub(super) fn register(&self, local: &PeerId, link: Link) -> Registration {
         let peer = link.conn.remote();
         let mut links = lock(&self.links);
-        let loses = links.get(&peer).is_some_and(|existing| {
-            existing.conn.direction() != link.conn.direction()
-                && link.conn.direction() != crate::services::p2p::duplicate_survivor(local, &peer)
-        });
-        if loses {
+        let Some(existing) = links.get(&peer) else {
+            links.insert(peer, link);
+            return Registration::Kept { replaced: None };
+        };
+        if existing.conn.direction() != link.conn.direction()
+            && link.conn.direction() != crate::services::p2p::duplicate_survivor(local, &peer)
+        {
             return Registration::Duplicate;
         }
+        if !lock(&self.replacements).try_hit(peer, Instant::now()) {
+            return Registration::TooFrequent;
+        }
         Registration::Kept { replaced: links.insert(peer, link) }
+    }
+
+    /// Zählt einen Request-Stream des Freundes; `false` über der Grenze von SPEC 12.4.
+    pub(super) fn admit_request_stream(&self, peer: &PeerId) -> bool {
+        lock(&self.request_streams).try_hit(*peer, Instant::now())
     }
 
     /// Entfernt die Verbindung nur, wenn sie noch die eingetragene ist.

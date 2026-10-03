@@ -23,6 +23,8 @@ pub const HELLO_PER_PEER_AND_CODE: RateLimit = RateLimit { max: 3, window: Durat
 pub const HELLO_PER_CODE: RateLimit = RateLimit { max: 10, window: Duration::from_secs(3600) };
 pub const CONTROL_FRAMES: RateLimit = RateLimit { max: 50, window: Duration::from_secs(10) };
 pub const REQUEST_STREAMS: RateLimit = RateLimit { max: 5, window: Duration::from_secs(60) };
+/// Wie oft eine neue Verbindung eines Freundes seine eingetragene ersetzen darf; mehr ist kein Wiederverbinden mehr.
+pub const LINK_REPLACEMENTS: RateLimit = RateLimit { max: 5, window: Duration::from_secs(60) };
 
 /// Wartezeiten nach dem ersten, zweiten, … gescheiterten Versuch; danach bleibt es bei der letzten.
 const BACKOFF: [Duration; 5] = [
