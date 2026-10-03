@@ -17,7 +17,7 @@ use crate::state::AppState;
 const TEXTURE_BASE: &str = "textures.minecraft.net/texture/";
 /// Öffentliche Endpunkte von Mojang (ohne Konto): Name → UUID und UUID → Profil mit Skin.
 const PLAYER_LOOKUP: &str = "https://api.minecraftservices.com/minecraft/profile/lookup/name/";
-const SESSION_PROFILE: &str = "https://sessionserver.mojang.com/session/minecraft/profile/";
+pub(crate) const SESSION_PROFILE: &str = "https://sessionserver.mojang.com/session/minecraft/profile/";
 const MAX_PLAYER_NAME_LEN: usize = 16;
 /// Echte Skins haben wenige KiB; die Grenze fängt nur versehentlich gewählte große Bilder ab.
 const MAX_FILE: u64 = 256 * 1024;
@@ -125,7 +125,7 @@ fn status_text(status: u16) -> Coded {
 }
 
 /// Texturen kommen nur von Mojangs Texturserver. Die API liefert `http://`-Adressen, geladen wird per HTTPS.
-fn texture_url(url: &str) -> AppResult<String> {
+pub(crate) fn texture_url(url: &str) -> AppResult<String> {
     let hash = ["http://", "https://"]
         .iter()
         .find_map(|scheme| url.strip_prefix(scheme))
@@ -288,7 +288,7 @@ fn parse_player(body: &[u8]) -> AppResult<Player> {
 }
 
 /// Der Skin aus dem Profil des Session-Servers; `None` bei Spielern mit Standardskin, dann nennt das Profil keinen.
-fn parse_player_skin(body: &[u8]) -> AppResult<Option<OnlineSkin>> {
+pub(crate) fn parse_player_skin(body: &[u8]) -> AppResult<Option<OnlineSkin>> {
     use base64::Engine;
     let profile: SessionProfile = serde_json::from_slice(body)?;
     let Some(textures) = profile.properties.iter().find(|p| p.name == "textures") else {
