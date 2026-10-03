@@ -32,6 +32,9 @@ const ALPN: &[u8] = b"pumpkin/test/1";
 const LIMIT: Duration = Duration::from_secs(10);
 const LOOPBACK: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
 const GUEST_LIMITS: ListenerLimits = ListenerLimits { before_first_valid: 1, after_first_valid: 4 };
+const IDLE_TIMEOUT: Duration = Duration::from_secs(40);
+/// So viele Handshakes laufen höchstens zugleich (SPEC 3.5); jeder weitere wird vor dem Handshake verworfen.
+const HANDSHAKE_CAP: usize = 8;
 
 /// Startet ein Relay im Test-Prozess; es läuft, solange der zweite Wert lebt.
 async fn test_relay() -> (RelayEntry, impl Send) {
@@ -49,6 +52,7 @@ fn config(seed: u8, relay_map: Vec<RelayEntry>) -> NetConfig {
         relays: RelaySelection::All,
         relay_only: false,
         relay_tls: RelayTls::InsecureForTests,
+        idle_timeout: IDLE_TIMEOUT,
     }
 }
 
@@ -424,6 +428,58 @@ async fn unreachable_relay_reports_relay_unreachable_after_the_wait() {
 
     assert_eq!(*reported.unwrap().unwrap(), NetState::RelayUnreachable);
     assert_eq!(net.home_relay(), None);
+}
+
+/// Hält die ersten acht Zulassungen an, bis sie und der Test die Schranke erreichen. Spätere warten nicht: ein
+/// verspäteter Wiederholungsversuch des neunten Anwählenden darf keinen Worker-Thread für immer blockieren.
+struct HeldGate {
+    barrier: Arc<std::sync::Barrier>,
+    entered: AtomicUsize,
+}
+
+impl Gate for HeldGate {
+    fn admit(&self, _peer: &PeerId, _alpn: &[u8]) -> Admission {
+        if self.entered.fetch_add(1, Ordering::SeqCst) < HANDSHAKE_CAP {
+            self.barrier.wait();
+        }
+        Admission::Accept
+    }
+}
+
+/// `admit` blockiert seinen Worker-Thread; die übrigen Threads treiben Relay, Endpunkte und Annahme-Schleife weiter.
+#[tokio::test(flavor = "multi_thread", worker_threads = 16)]
+async fn ninth_handshake_in_flight_gets_no_answer_until_the_first_eight_are_admitted() {
+    let (relay, _server) = test_relay().await;
+    let gate = Arc::new(HeldGate {
+        barrier: Arc::new(std::sync::Barrier::new(HANDSHAKE_CAP + 1)),
+        entered: AtomicUsize::new(0),
+    });
+    let listener = Arc::new(bind(config(1, vec![relay.clone()]), gate.clone()).await);
+    online(&listener).await;
+    let mut held = Vec::new();
+    for seed in 2..2 + HANDSHAKE_CAP as u8 {
+        let dialer = bind(config(seed, vec![relay.clone()]), Arc::new(AcceptAll)).await;
+        let target = listener.id();
+        held.push(tokio::spawn(async move {
+            let conn = dialer.dial(&target, ALPN).await;
+            (dialer, conn)
+        }));
+    }
+    eventually(|| gate.entered.load(Ordering::SeqCst) == HANDSHAKE_CAP).await;
+
+    let ninth = bind(config(20, vec![relay.clone()]), Arc::new(AcceptAll)).await;
+    let unanswered = tokio::time::timeout(Duration::from_secs(2), ninth.dial(&listener.id(), ALPN)).await;
+
+    assert!(unanswered.is_err(), "the ninth dialer must not get any answer");
+    assert_eq!(gate.entered.load(Ordering::SeqCst), HANDSHAKE_CAP, "the gate never saw the ninth");
+    let barrier = gate.barrier.clone();
+    tokio::task::spawn_blocking(move || barrier.wait()).await.unwrap();
+    for _ in 0..HANDSHAKE_CAP {
+        tokio::time::timeout(LIMIT, listener.accept()).await.expect("admitted after the release").unwrap();
+    }
+    for dial in held {
+        assert!(dial.await.unwrap().1.is_ok());
+    }
 }
 
 #[tokio::test]
