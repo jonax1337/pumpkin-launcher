@@ -12,7 +12,7 @@ use crate::models::ModLoader;
 
 /// Anwendungs-ID aus dem Discord Developer Portal (Application ID); der Name der Anwendung steht als „Spielt …“ in
 /// Discord, das Bild `pumpkin` gehört unter „Rich Presence › Art Assets“ hochgeladen. Leer: keine Verbindung zu Discord.
-const APPLICATION_ID: &str = "";
+const APPLICATION_ID: &str = "1555906597451071579";
 const LARGE_IMAGE: &str = "pumpkin";
 const LARGE_IMAGE_TEXT: &str = "Pumpkin Launcher";
 
