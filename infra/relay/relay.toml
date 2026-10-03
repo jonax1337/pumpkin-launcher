@@ -1,0 +1,42 @@
+# iroh-relay 1.3.0 configuration for Pumpkin Friends (docs/friends/RELAY-OPS.md).
+# Every option below was checked against src/main.rs of the iroh-relay 1.3.0 crate.
+# Replace the <placeholders> before deploying.
+
+enable_relay = true
+
+# 0.0.0.0 inside the container: Docker publishes the ports (docker-compose.yml).
+# With TLS configured this port only serves /generate_204 (captive portal probe). ACME runs on 443.
+http_bind_addr = "0.0.0.0:80"
+
+# QUIC address discovery (QAD): tells launchers their public address (UDP 7842).
+# Needs [tls]; the server refuses to start without it.
+enable_quic_addr_discovery = true
+
+# Reachable inside the container only; docker-compose.yml publishes it on 127.0.0.1.
+enable_metrics = true
+metrics_bind_addr = "0.0.0.0:9090"
+
+# Open relay: launchers cannot authenticate (SPEC 12.5). To block an abusive endpoint
+# (RELAY-OPS.md, abuse handling) replace this line with: access.denylist = ["<64 hex PeerId>"]
+# Top-level keys must stand before the first [table]. "everyone" is the default.
+access = "everyone"
+
+[tls]
+https_bind_addr = "0.0.0.0:443"
+quic_bind_addr = "0.0.0.0:7842"
+cert_mode = "LetsEncrypt"
+# Several names (the fallback domain) go in a list:
+# ["relay-eu1.<relay-domain>", "relay-eu1.<fallback-domain>"]
+hostname = "relay-eu1.<relay-domain>"
+# Only used for Let's Encrypt expiry notices. This is not the abuse address.
+contact = "<ops-mailbox>"
+# ACME account and certificates. A Docker volume, so that a recreate does not burn
+# Let's Encrypt rate limits.
+cert_dir = "/data/certs"
+prod_tls = true
+
+# Cap on the data stream one client sends to the relay. Token bucket: it slows the sender
+# down by back pressure and drops nothing. Starting values, re-measure with the G3 throughput run.
+[limits.client.rx]
+bytes_per_second = 4194304
+max_burst_bytes = 8388608
