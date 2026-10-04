@@ -202,6 +202,7 @@ pub fn run() {
             friends_session_commands::invite_join,
             friends_session_commands::join_leave,
             friends_session_commands::friends_mod_confirm,
+            friends_session_commands::friends_mod_activity,
             ingame_commands::friends_ingame_status,
             ingame_commands::friends_ingame_set_enabled,
             ingame_commands::friends_ingame_retry,
@@ -256,6 +257,7 @@ fn start_friends(handle: tauri::AppHandle) {
 fn start_sessions(handle: tauri::AppHandle) -> Result<(), services::friends::HandlerAlreadySet> {
     let state = handle.state::<state::AppState>();
     let events = Arc::new(TauriSessionEvents(handle.clone()));
+    state.sessions.forward_mod_events_to(handle.clone());
     tauri::async_runtime::block_on(async { state.sessions.start(events) })
 }
 

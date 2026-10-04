@@ -92,7 +92,6 @@ pub async fn friends_mod_confirm(state: State<'_, AppState>, request_id: String,
 /// Die Vorgänge der Bereiche `share` und `social`, die aus dem Spiel kamen (INGAME 5.7): die letzten 100, neueste zuerst.
 /// Nur im Speicher; neue Einträge kommen als Ereignis `friends-mod-activity`.
 #[tauri::command]
-#[expect(dead_code, reason = "lib.rs trägt den Befehl in generate_handler! ein; erst dann wird er benutzt (dann diese Zeile löschen)")]
 pub fn friends_mod_activity(state: State<'_, AppState>) -> Vec<ModActivityEntry> {
     state.sessions.mod_activity()
 }
