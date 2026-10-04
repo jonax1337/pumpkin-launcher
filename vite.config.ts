@@ -34,8 +34,8 @@ export default defineConfig(() => ({
         }
       : undefined,
     watch: {
-      // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      // 3. tell Vite to ignore watching `src-tauri` and the agent worktrees (their build temp files crash the watcher with EBUSY)
+      ignored: ["**/src-tauri/**", "**/.claude/worktrees/**"],
     },
   },
 }));
