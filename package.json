@@ -1,7 +1,7 @@
 {
   "name": "pumpkin-launcher",
   "private": true,
-  "version": "2.0.1",
+  "version": "0.2.0",
   "description": "A Minecraft: Java Edition launcher with instances, Modrinth mods & modpacks, and presets — every world, one click.",
   "type": "module",
   "license": "Apache-2.0",
