@@ -69,6 +69,7 @@ net.minecraft.client.gui.narration.NarratedElementType#TITLE
 @group Pause menu, title screen, other screens
 PauseScreen#<init>
 PauseScreen#init @used
+PauseScreen#showsPauseMenu @used
 PauseScreen#createPauseMenu
 PauseScreen#disconnectFromWorld
 PauseScreen#render
@@ -127,6 +128,7 @@ Checkbox#selected @used
 Checkbox.Builder#pos @used
 Checkbox.Builder#onValueChange @used
 Checkbox.Builder#selected @used
+Checkbox.Builder#maxWidth
 Checkbox.Builder#build @used
 StringWidget#<init>
 StringWidget#setMaxWidth
@@ -261,6 +263,8 @@ SystemToast.SystemToastId#WORLD_BACKUP
 SystemToast.SystemToastId#UNSECURE_SERVER_WARNING
 SystemToast.SystemToastId#FRIEND_SYSTEM_NOTIFICATION
 net.minecraft.client.gui.components.toasts.FriendToast#<init>
+net.minecraft.client.gui.components.toasts.FriendToast#add
+net.minecraft.world.item.component.ResolvableProfile#createUnresolved
 
 @group Publish to LAN
 IntegratedServer#publishServer @used
