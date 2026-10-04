@@ -1,18 +1,26 @@
 # Single source of truth for the mod build nodes (docs/friends/INGAME.md 2.2, 4.3).
 #
 # Read by: settings.gradle (project tree), the node build scripts, scripts/dev-env.sh and scripts/dev-env.ps1
-# (JDK per node), and .github/workflows/mod.yml (job matrix). Add a node here first, nowhere else.
+# (JDK per node), scripts/compile-matrix.mjs and .github/workflows/mod.yml (job matrices). Add a node here first,
+# nowhere else.
 #
 # Columns, separated by blanks:
-#   id           Node id and Gradle project name: <minecraft>-<loader>. Never used as a version (see README).
+#   id           Node id and Gradle project name: <highest minecraft release>-<loader>. Never used as a version (see README).
 #   loader       fabric | neoforge | forge
-#   minecraft    Explicit Mojang release ids the jar may serve, comma separated, no ranges, no snapshots.
-#                The LAST id is the version the node is compiled against.
+#   minecraft    Explicit Mojang release ids the jar CLAIMS to serve (this goes into mod-index.json), comma separated,
+#                no ranges, no snapshots. The LAST id is the version the node is compiled against by default.
 #   loaderMin    Lowest loader version the jar accepts (Fabric Loader, NeoForge, Forge).
-#   java         JDK major that builds, tests and runs the node. It is also the jar's javaMin.
+#   java         JDK major that compiles (--release), tests and runs the node. It is also the jar's javaMin.
 #   strategy     How the launcher injects the jar: fabricAddMods | fmlMavenRoot | fmlModFolders.
+#   gradleJdk    JDK major Gradle itself runs on for this node: at least java and at least mod.gradleJdkMin.
+#                Stonecutter needs 21, Fabric Loom 1.18 needs 25 (also for obfuscated Minecraft versions).
+#   matrix       Every Minecraft release the node is meant to serve (docs/friends/INGAME-API.md section 5), comma
+#                separated, ascending. `minecraft` must be a subset: a node claims only what it was built against.
+#                scripts/compile-matrix.mjs compiles both ends and one middle release of this list.
 #
-# id               loader    minecraft  loaderMin  java  strategy
-26.3-fabric        fabric    26.3       0.19.5     25    fabricAddMods
-1.21.1-neoforge    neoforge  1.21.1     21.1.0     21    fmlMavenRoot
-1.20.1-forge       forge     1.20.1     47.4.0     17    fmlMavenRoot
+# id               loader    minecraft  loaderMin  java  strategy       gradleJdk  matrix
+26.3-fabric        fabric    26.3       0.19.5     25    fabricAddMods  25         26.3
+1.21.1-fabric      fabric    1.21.1     0.15.11    21    fabricAddMods  25         1.20.5,1.20.6,1.21,1.21.1
+1.21.1-neoforge    neoforge  1.21.1     21.1.0     21    fmlMavenRoot   21         1.21,1.21.1
+26.2-neoforge      neoforge  26.2       26.2.0.57  25    fmlModFolders  25         26.2
+1.20.1-forge       forge     1.20.1     47.4.0     17    fmlMavenRoot   21         1.20.1

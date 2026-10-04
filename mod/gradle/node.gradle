@@ -16,6 +16,20 @@ if (runningJava < node.javaMin) {
 }
 
 ext.node = node
+
+// Version einer Abhängigkeit für die Minecraft-Version, gegen die gerade übersetzt wird: die Standardversion des Knotens
+// nimmt den Schlüssel selbst, jede andere Version der matrix (-Pcompile.minecraft) den Schlüssel "<Schlüssel>@<Version>"
+// aus versions/<Knoten>/gradle.properties. Fehlt er, bricht Gradle ab, statt eine falsche Version zu nehmen.
+ext.pinned = { String key ->
+	sc.current.version == node.minecraft.last() ? project.property(key) : project.property("${key}@${sc.current.version}")
+}
+
+// Swap "minecraft_version" (Zeile //$ minecraft_version im Quelltext): die Konstante MINECRAFT mit der Minecraft-Version
+// des Knotens, für die Logzeile der Tracer. Alle Knoten müssen jeden Swap kennen, den eine Quelldatei benutzt.
+stonecutter {
+	swaps['minecraft_version'] = "private static final String MINECRAFT = \"${sc.current.version}\";".toString()
+}
+
 group = rootProject.group
 version = "${rootProject.version}+${node.id}"
 base.archivesName = 'pumpkin_friends'
@@ -56,10 +70,17 @@ def descriptorValues = [
 	minecraftList: node.minecraft.collect { "\"${it}\"" }.join(', '),
 	// Maven-Bereiche: "[a]" für genau eine Version ("[a,a]" lehnt FML ab), sonst "[a,b]" von der ersten bis zur letzten.
 	minecraftRange: node.minecraft.size() == 1 ? "[${node.minecraft.first()}]" : "[${node.minecraft.first()},${node.minecraft.last()}]",
+	// Nur Fabric: Einstiegsklasse und Mixin-Konfigurationen des Knotens (versions/<Knoten>/gradle.properties).
+	fabricEntrypoint: project.findProperty('fabric_entrypoint') ?: '',
+	mixinConfigs : (project.findProperty('fabric_mixin_configs') ?: '').split(',').findAll { !it.isEmpty() }.collect { "\"${it}\"" }.join(', '),
 ]
 tasks.named('processResources') {
 	inputs.properties(descriptorValues)
 	from(rootProject.file("descriptors/${node.loader}"))
+	// Tracer-Knoten bringen zusätzlich ihre eigenen Dateien mit (z. B. die Mixin-Konfiguration des Fabric-Tracers).
+	if (project.findProperty('tracer') == 'true') {
+		from(rootProject.file("descriptors/${node.loader}-tracer"))
+	}
 	filesMatching(['fabric.mod.json', 'META-INF/*.toml']) {
 		expand(descriptorValues)
 	}

@@ -1,0 +1,13 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "dev.laux.pumpkin.friends.platform.fabric.mixin",
+	"refmap": "pumpkin_friends-refmap.json",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"TracerMinecraftMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

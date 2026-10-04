@@ -2,7 +2,7 @@
 # (ohne Adminrechte) und setzt JAVA_HOME (das JDK für Gradle) sowie PUMPKIN_JDK_<Version> (die JDKs, die Gradle als
 # Toolchain findet), alles für diese PowerShell-Sitzung. Aufruf aus mod/: .\scripts\dev-env.ps1 [-Node <Knoten-Id>]
 # Standard ist der erste Knoten in nodes.txt. Welches JDK ein Knoten braucht, steht in nodes.txt (Spalte java);
-# Gradle selbst braucht mindestens mod.gradleJdkMin aus gradle.properties (Stonecutter verlangt Java 21).
+# das JDK, auf dem Gradle selbst läuft, in Spalte gradleJdk (Stonecutter verlangt Java 21, Fabric Loom Java 25).
 # Bereits gesetzte PUMPKIN_JDK_<Version> werden nicht neu geladen. Mojangs Laufzeiten sind nur JREs ohne javac;
 # deshalb immer eigene JDKs (SPEC 11.1).
 param([string]$Node)
@@ -16,17 +16,15 @@ function Get-Architecture {
     if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'aarch64' } else { 'x64' }
 }
 
-# nodes.txt: Spalte 1 Id, Spalte 5 java. Kommentare und Leerzeilen entfallen.
+# nodes.txt: Spalte 1 Id, Spalte 5 java, Spalte 7 gradleJdk. Kommentare und Leerzeilen entfallen.
 function Get-Nodes {
     Get-Content (Join-Path $ModDir 'nodes.txt') |
         ForEach-Object { ($_ -replace '#.*', '').Trim() } |
         Where-Object { $_ } |
-        ForEach-Object { $columns = $_ -split '\s+'; [pscustomobject]@{ Id = $columns[0]; Java = [int]$columns[4] } }
-}
-
-function Get-GradleJdkMin {
-    $line = Select-String -Path (Join-Path $ModDir 'gradle.properties') -Pattern '^mod\.gradleJdkMin=(\d+)$'
-    [int]$line.Matches[0].Groups[1].Value
+        ForEach-Object {
+            $columns = $_ -split '\s+'
+            [pscustomobject]@{ Id = $columns[0]; Java = [int]$columns[4]; GradleJdk = [int]$columns[6] }
+        }
 }
 
 function Get-TemurinPackage($FeatureVersion) {
@@ -81,7 +79,7 @@ $selected = $nodes | Where-Object { $_.Id -eq $Node }
 if (-not $selected) { throw "Unbekannter Knoten: $Node (siehe nodes.txt)" }
 
 $gameJava = $selected.Java
-$gradleJava = [Math]::Max($gameJava, (Get-GradleJdkMin))
+$gradleJava = $selected.GradleJdk
 foreach ($featureVersion in ($gameJava, $gradleJava | Select-Object -Unique)) {
     [Environment]::SetEnvironmentVariable("PUMPKIN_JDK_$featureVersion", (Get-JdkHome $featureVersion))
 }
