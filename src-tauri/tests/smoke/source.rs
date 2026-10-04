@@ -2,7 +2,7 @@
 //! eingebetteten. Jeder Knoten gilt hier als geprüft, denn der Rauchtest ist es, der die Prüfung erst liefert.
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use launcher_lib::services::friends::ingame::{sha256_hex, ModIndex, ModSource, Verified};
 
@@ -39,12 +39,14 @@ impl DistSource {
     }
 
     /// Legt eine Kopie des Jars des Knotens in `mods_dir` (Anhang B, Punkt 2): eine zweite `pumpkin_friends` als
-    /// Instanzinhalt, neben der die Einspeisung nicht stattfinden darf.
-    pub fn place_copy_of(&self, node_id: &str, mods_dir: &Path) -> Result<(), String> {
+    /// Instanzinhalt, neben der die Einspeisung nicht stattfinden darf. Liefert den Pfad, den der Lauf danach wieder
+    /// entfernt — die Instanz bleibt für weitere Läufe der Zelle unverändert.
+    pub fn place_copy_of(&self, node_id: &str, mods_dir: &Path) -> Result<PathBuf, String> {
         let node = self.index.node(node_id).ok_or_else(|| format!("Knoten {node_id} fehlt im Index"))?;
         let copy = mods_dir.join(format!("copy-of-{}", node.file));
         fs::create_dir_all(mods_dir).map_err(|error| error.to_string())?;
-        fs::write(&copy, &self.jars[&node.file]).map_err(|error| format!("{}: {error}", copy.display()))
+        fs::write(&copy, &self.jars[&node.file]).map_err(|error| format!("{}: {error}", copy.display()))?;
+        Ok(copy)
     }
 }
 

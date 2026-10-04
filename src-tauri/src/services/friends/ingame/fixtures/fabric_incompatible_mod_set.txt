@@ -1,14 +1,19 @@
-[12:00:00] [main/INFO] (FabricLoader) Loading Minecraft 1.21.1 with Fabric Loader 0.15.11
-[12:00:01] [main/INFO] (FabricLoader) Loading 3 mods:
-	- fabric-api 0.102.0+1.21.1
-	- fabricloader 0.15.11
-	- pumpkin_friends 2.1.0
-[12:00:02] [main/ERROR] (FabricLoader) Incompatible mod set found! net.fabricmc.loader.impl.FormattedException: Some of your mods are incompatible with the game or each other!
+[main/INFO] Loading Minecraft 1.21.1 with Fabric Loader 0.19.5
+[main/WARN] Mod resolution failed
+[main/INFO] Immediate reason: [HARD_DEP_INCOMPATIBLE_PRESELECTED pumpkin_friends 2.1.0+26.3-fabric {depends minecraft @ [26.3]}, ROOT_FORCELOAD_SINGLE pumpkin_friends 2.1.0+26.3-fabric]
+[main/INFO] Reason: [HARD_DEP pumpkin_friends 2.1.0+26.3-fabric {depends minecraft @ [26.3]}, HARD_DEP pumpkin_friends 2.1.0+26.3-fabric {depends java @ [>=25]}]
+[main/INFO] Fix: add [], remove [], replace [[pumpkin_friends 2.1.0+26.3-fabric] -> add:pumpkin_friends 1 ([(-∞,∞)])]
+[main/ERROR] Incompatible mods found!
+[main/ERROR] net.fabricmc.loader.impl.FormattedException: Some of your mods are incompatible with the game or each other!
 A potential solution has been determined, this may resolve your problem:
-	 - Replace mod 'Fabric Loader' (fabricloader) 0.15.11 with any version that is at least 0.16.0.
-Unmet dependency listing:
-	 - Mod 'Pumpkin Friends' (pumpkin_friends) 2.1.0 requires version 0.16.0 or later of fabricloader, but only the wrong version is present: 0.15.11!
-More details: Mod 'Pumpkin Friends' (pumpkin_friends) 2.1.0 requires fabricloader >=0.16.0
-	at net.fabricmc.loader.impl.FabricLoaderImpl.load(FabricLoaderImpl.java:229)
-	at net.fabricmc.loader.impl.launch.knot.Knot.init(Knot.java:155)
+	 - Replace mod 'Pumpkin Friends' (pumpkin_friends) 2.1.0+26.3-fabric with any version that is compatible with:
+		 - minecraft 1.21.1
+		 - java 21
+More details:
+	 - Mod 'Pumpkin Friends' (pumpkin_friends) 2.1.0+26.3-fabric requires version 26.3 of 'Minecraft' (minecraft), but only the wrong version is present: 1.21.1!
+	 - Mod 'Pumpkin Friends' (pumpkin_friends) 2.1.0+26.3-fabric requires version 25 or later of 'OpenJDK 64-Bit Server VM' (java), but only the wrong version is present: 21!
+	at net.fabricmc.loader.impl.FormattedException.ofLocalized(FormattedException.java:51)
+	at net.fabricmc.loader.impl.FabricLoaderImpl.load(FabricLoaderImpl.java:202)
+	at net.fabricmc.loader.impl.launch.knot.Knot.init(Knot.java:142)
+	at net.fabricmc.loader.impl.launch.knot.Knot.launch(Knot.java:66)
 	at net.fabricmc.loader.impl.launch.knot.KnotClient.main(KnotClient.java:23)

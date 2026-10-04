@@ -57,9 +57,7 @@ async fn run_cell(config: &Config) -> Result<(Outcome, Vec<String>), String> {
     let client = http_client().map_err(|error| error.to_string())?;
     let instance = provision::install(&client, &dirs, provision::instance_for(&node, config.loader_version.clone())).await?;
     let companions = companion::provide(&client, instance.loader, &instance.minecraft_version, &dirs.mods_dir(&instance.id)).await?;
-    if config.scenario == Scenario::DuplicateId {
-        source.place_copy_of(&config.cell, &dirs.mods_dir(&instance.id))?;
-    }
+    let copy = (config.scenario == Scenario::DuplicateId).then(|| source.place_copy_of(&config.cell, &dirs.mods_dir(&instance.id))).transpose()?;
 
     let bridge = ModBridge::new(GameSignals::default());
     bridge.start().await.map_err(|error| error.to_string())?;
@@ -71,6 +69,9 @@ async fn run_cell(config: &Config) -> Result<(Outcome, Vec<String>), String> {
         Injection::Skipped(reason) => Ok(skipped_outcome(&facts, &config.scenario, reason)),
         Injection::Failed(error) => Ok(facts.not_started(Verdict::Failed, format!("the injection failed: {error}"))),
     };
+    if let Some(copy) = copy {
+        std::fs::remove_file(&copy).map_err(|error| format!("{}: {error}", copy.display()))?;
+    }
     bridge.forget(&instance.id);
     bridge.stop().await;
     result
