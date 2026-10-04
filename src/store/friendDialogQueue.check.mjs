@@ -5,7 +5,8 @@ import { closeActive, dropInvite, dropModConfirm, emptyDialogQueue, enqueue, MOD
 
 const invite = (inviteId) => ({ kind: 'invite', inviteId });
 const modConfirm = (requestId) => ({ kind: 'modConfirm', confirm: { ...fixtures['event.modConfirm'], requestId } });
-const ids = (dialogs) => dialogs.map((d) => (d.kind === 'invite' ? d.inviteId : d.confirm.requestId));
+const breaker = (instanceId, reason = 'mixinApplyFailed') => ({ kind: 'breaker', instanceId, reason });
+const ids = (dialogs) => dialogs.map((d) => (d.kind === 'invite' ? d.inviteId : d.kind === 'breaker' ? d.instanceId : d.confirm.requestId));
 
 // Nie zwei Dialoge zugleich: ein zweiter wartet, bis der erste geschlossen ist.
 let queue = promote(enqueue(enqueue(emptyDialogQueue, invite('a')), invite('b')));
@@ -49,5 +50,25 @@ assert.deepEqual(ids(dropModConfirm(queue, 'r2').waiting), ['a'], 'eine wartende
 assert.equal(dropModConfirm(queue, 'r2').active.confirm.requestId, 'r1', 'die offene Bitte bleibt, wenn eine andere verfällt');
 assert.equal(dropModConfirm(queue, 'zzz').waiting.length, 2);
 assert.equal(dropModConfirm(promote(enqueue(emptyDialogQueue, invite('r1'))), 'r1').active.inviteId, 'r1', 'eine Einladung verfällt nicht mit der Bitte');
+
+// Der Startfehler einer Instanz zeigt sich einmal, offen oder wartend; eine andere Instanz bekommt ihren eigenen Dialog.
+queue = promote(enqueue(emptyDialogQueue, breaker('inst-a')));
+assert.equal(queue.active.kind, 'breaker');
+assert.equal(enqueue(queue, breaker('inst-a', 'unknown')), queue, 'derselbe Startfehler kommt nicht noch einmal, auch mit anderem Grund');
+queue = enqueue(queue, breaker('inst-b'));
+assert.deepEqual(ids(queue.waiting), ['inst-b']);
+assert.equal(enqueue(queue, breaker('inst-b')), queue);
+assert.equal(promote(closeActive(queue)).active.instanceId, 'inst-b', 'nach dem Schließen kommt der nächste');
+assert.equal(enqueue(closeActive(promote(enqueue(emptyDialogQueue, breaker('inst-a')))), breaker('inst-a')).waiting.length, 1, 'nach dem Schließen darf ein neuer Startfehler wieder fragen');
+
+// Weder Widerruf einer Einladung noch Verfall einer Bitte der Mod schließt die Frage nach dem Startfehler.
+queue = promote(enqueue(emptyDialogQueue, breaker('r1')));
+assert.equal(dropInvite(queue, 'r1').active.kind, 'breaker');
+assert.equal(dropModConfirm(queue, 'r1').active.kind, 'breaker');
+
+// Der Startfehler wartet hinter einem offenen Dialog und reiht sich vor keinem anderen ein.
+queue = promote(enqueue(enqueue(emptyDialogQueue, invite('a')), breaker('inst-a')));
+assert.equal(queue.active.kind, 'invite');
+assert.deepEqual(ids(queue.waiting), ['inst-a']);
 
 console.log('friendDialogQueue.check: ok');

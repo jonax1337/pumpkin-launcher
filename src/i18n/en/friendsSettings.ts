@@ -43,6 +43,14 @@ export const friendsSettings: typeof deFriendsSettings = {
   "friendsSettings.findable.unreachable": "Directory unreachable; trying again",
   "friendsSettings.findable.notAllowed": "Mojang doesn't allow multiplayer features for this account",
 
+  // Friends menu in the game
+  "friendsSettings.ingameMenu.label": "Friends menu in the game",
+  "friendsSettings.ingameMenu.hint": "The launcher adds a friends menu to your games at start when instance and account fit.",
+  "friendsSettings.ingameActions.label": "Actions in the game",
+  "friendsSettings.ingameActions.hint": "With “Always ask” you confirm once per game start in the launcher, with “Allow” the game (and every mod in it) may add friends, answer requests and share worlds without asking.",
+  "friendsSettings.ingameActions.ask": "Always ask",
+  "friendsSettings.ingameActions.allow": "Allow",
+
   // Fingerprint
   "friendsSettings.fingerprintLabel": "My fingerprint",
   "friendsSettings.fingerprintHint": "Tied permanently to your key",

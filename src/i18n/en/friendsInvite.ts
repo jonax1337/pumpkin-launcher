@@ -52,8 +52,12 @@ export const friendsInvite: typeof deFriendsInvite = {
   "friendsInvite.later": "Later",
 
   // ---------- Mod request ----------
-  "friendsInvite.mod.title": "Mod wants to share",
-  "friendsInvite.mod.text": "The mod in {instance} wants to share your world with {names}. Allow?",
-  "friendsInvite.mod.allow": "Allow",
+  "friendsInvite.mod.title": "Request from the game",
+  "friendsInvite.mod.scope.share": "This game wants to share your world with selected friends.",
+  "friendsInvite.mod.scope.social": "This game wants to add friends, answer requests and accept invites.",
+  "friendsInvite.mod.game": "Game",
+  "friendsInvite.mod.operation": "Action",
+  "friendsInvite.mod.allow": "Allow (until the game ends)",
   "friendsInvite.mod.deny": "Decline",
+  "friendsInvite.mod.wait": "Allow unlocks in a moment so that no click agrees by accident.",
 };

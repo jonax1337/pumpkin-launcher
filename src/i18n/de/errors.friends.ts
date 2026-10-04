@@ -44,7 +44,6 @@ export const errorsFriends = {
   "errors.friends.joinAddressInvalid": "Ungültige Beitrittsadresse",
   "errors.friends.tunnelFailed": "Die Verbindung zu deinem Freund ist abgebrochen",
   "errors.friends.hostStopped": "Dein Freund teilt die Welt nicht mehr",
-  "errors.friends.modNotAvailable": "Die Freunde-Mod gibt es für Minecraft {version} noch nicht",
   "errors.friends.modConfirmDenied": "Teilen aus dem Spiel wurde im Launcher abgelehnt",
 
   "errors.friends.nameInvalid": "Das ist kein gültiger Minecraft-Name",

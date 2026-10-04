@@ -85,6 +85,8 @@ export const friendKeys = {
   plan: (inviteId: string) => ["friend-invite-plan", inviteId] as const,
   lan: (instanceId: string) => ["friend-lan", instanceId] as const,
   modStatus: (instanceId: string) => ["friend-mod-status", instanceId] as const,
+  /** Die Vorgänge aus dem Spiel; eine eigene Wurzel, damit `friends-changed` sie nicht neu lädt. */
+  modActivity: ["friend-mod-activity"] as const,
 };
 
 export const importKeys = { foreign: ["foreign-instances"] as const };
