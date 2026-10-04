@@ -231,8 +231,8 @@ the 3-step run (start, hub opens, one request answered) for every other node (la
 |---|---|---|---|---|
 | 26.3, Fabric | 25 | R-A | pass (2026-10-04, local smoke: bridge handshake, `ready` screens ["hub"], `INGAME-SMOKE.md` row 1) | |
 | 1.21.1, Fabric | 21 | R-A | pass (2026-10-04, local smoke: obfuscated node, remapped jar + Mixin, `INGAME-SMOKE.md` row 1) | |
-| 1.21.8, Fabric | 21 | R-A | pending (package V1a) | |
-| 1.21.11, Fabric | 21 | R-A | pending (package V1a) | |
+| 1.21.8, Fabric | 21 | R-A | pass (2026-10-04, local smoke: tracer line, `INGAME-SMOKE.md`) | |
+| 1.21.11, Fabric | 21 | R-A | pass (2026-10-04, local smoke: tracer line, `INGAME-SMOKE.md`) | |
 | 1.21.1, NeoForge | 21 | R-A | pass (2026-10-04, local smoke: `--fml.mavenRoots`, NeoForge 21.1.253, `INGAME-SMOKE.md` row 3) | |
 | 26.2, NeoForge | 25 | R-A | pass (2026-10-04, local smoke: `-Dfml.modFolders`, NeoForge 26.2.0.88, `INGAME-SMOKE.md` row 4) | |
 | 1.20.1, Forge | 17 | R-A | pass (2026-10-04, local smoke: `--fml.mavenRoots`, Forge 47.4.26, `INGAME-SMOKE.md` row 5) | |
