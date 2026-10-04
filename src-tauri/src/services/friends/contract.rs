@@ -472,7 +472,15 @@ pub struct ModConfirmEvent {
     pub request_id: String,
     pub instance_id: String,
     pub instance_name: String,
+    /// Nur beim Bereich `share`: die Freunde, mit denen die Welt geteilt werden soll. Sonst leer.
     pub friends: Vec<ModConfirmFriend>,
+    /// Wofür gefragt wird. Fehlt nur im gemeinsamen Muster `event.modConfirm` aus der Zeit vor Protokoll 2; der Launcher
+    /// setzt es immer. Wird zur Pflicht, sobald das Muster und `friends-types.ts` nachgezogen sind.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<ModScope>,
+    /// Was die Mod tun will; fehlt aus demselben Grund nur im alten Muster.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<ModConfirmSummary>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -480,4 +488,42 @@ pub struct ModConfirmEvent {
 pub struct ModConfirmFriend {
     pub friend_id: String,
     pub display_name: String,
+}
+
+// ---- Vorgänge aus dem Spiel: Rückfrage und Aktivitätsliste (INGAME 5.5, 5.7) ----
+
+pub use crate::services::modbridge::ops::{OpenTarget as ModOpenTarget, Scope as ModScope};
+
+/// Was die Mod tun will, wenn sie die Rückfrage auslöst: der Vorgang und die Person, um die es geht. Beides ist
+/// bereinigt; die Oberfläche setzt daraus ihren Satz.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModConfirmSummary {
+    /// Der Name des Vorgangs aus INGAME 5.4, etwa `friend.addByName`.
+    pub op: String,
+    pub target_name: Option<String>,
+}
+
+/// Ein Vorgang der Bereiche `share` und `social`, der aus dem Spiel kam (Aktivitätsliste, INGAME 5.7). Nur im Speicher,
+/// die letzten 100, neueste zuerst.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModActivityEntry {
+    /// ISO-8601 in UTC, etwa `2026-10-04T12:30:05Z`.
+    pub at: String,
+    pub instance_id: String,
+    pub scope: ModScope,
+    pub op: String,
+    /// Die Person, um die es ging, so benannt, wie der Launcher sie vor dem Vorgang zeigte (bei `friend.rename` also
+    /// der bisherige Name).
+    pub target_name: Option<String>,
+    pub ok: bool,
+}
+
+/// `launcher.open`: die Mod bittet, das Fenster des Launchers nach vorn zu holen und `target` zu zeigen.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModOpenEvent {
+    pub instance_id: String,
+    pub target: ModOpenTarget,
 }

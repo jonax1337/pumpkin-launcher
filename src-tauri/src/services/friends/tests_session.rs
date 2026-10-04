@@ -21,7 +21,7 @@ use tokio_util::sync::CancellationToken;
 
 use super::contract::{
     FriendsEnableInput, FriendsSettings, GuestState, HostSession, Invite, JoinState, JoinTicket, JoinVerdict, LanStatus,
-    ModLoader, PortSource, Presence, RevokeReason, SessionEnd,
+    ModConfirmEvent, ModLoader, PortSource, Presence, RevokeReason, SessionEnd,
 };
 use super::control::OpenFrame;
 use super::events::NoEvents;
@@ -104,7 +104,7 @@ async fn until_true(what: &str, condition: impl Fn() -> bool) {
 }
 
 /// Mojangs Versionsliste, auf zwei Einträge verkürzt.
-struct FixedVersions;
+pub(super) struct FixedVersions;
 
 impl VersionCatalog for FixedVersions {
     fn index(&self) -> BoxFuture<'_, AppResult<VersionIndex>> {
@@ -118,7 +118,7 @@ impl VersionCatalog for FixedVersions {
 }
 
 /// Modrinth kennt keine Datei: jede Mod zählt als erforderlich.
-struct UnknownMods;
+pub(super) struct UnknownMods;
 
 impl ModLookup for UnknownMods {
     fn classify<'a>(
@@ -172,8 +172,12 @@ impl RecordingEvents {
     }
 
     fn mod_confirm_requests(&self) -> Vec<String> {
+        self.mod_confirms().into_iter().map(|confirm| confirm.request_id).collect()
+    }
+
+    fn mod_confirms(&self) -> Vec<ModConfirmEvent> {
         self.collect(|event| match event {
-            SessionEvent::ModConfirm(confirm) => Some(confirm.request_id.clone()),
+            SessionEvent::ModConfirm(confirm) => Some(confirm.clone()),
             _ => None,
         })
     }
@@ -204,9 +208,20 @@ impl Node {
     }
 
     async fn online_with(options: NetOptions, name: &str, timers: JoinTimers, liveness: Duration) -> Self {
+        Self::online_with_bridge(options, name, timers, liveness, ModBridge::new).await
+    }
+
+    /// Wie `online_with`, mit der Brücke, die `make_bridge` aus den Spielsignalen des Dienstes baut.
+    async fn online_with_bridge(
+        options: NetOptions,
+        name: &str,
+        timers: JoinTimers,
+        liveness: Duration,
+        make_bridge: impl FnOnce(GameSignals) -> ModBridge,
+    ) -> Self {
         let dir = TempDir::new();
         let (signals, dirs) = (GameSignals::default(), Dirs::new(dir.path()));
-        let bridge = ModBridge::new(signals.clone());
+        let bridge = make_bridge(signals.clone());
         let secrets = Arc::new(crate::services::secrets::MemorySecretStore::new());
         let friends = Friends::new(&dirs, secrets, signals.clone(), bridge.clone(), options).unwrap();
         let instances = Arc::new(JsonStore::open(dir.path().join("instances.json")).unwrap());
@@ -410,9 +425,18 @@ impl Scene {
     }
 
     async fn shared_with(timers: JoinTimers, liveness: Duration) -> Self {
+        Self::shared_with_guest_bridge(timers, liveness, ModBridge::new).await
+    }
+
+    /// Wie `shared_with`, mit der Brücke des Gastes, die `make_bridge` aus den Spielsignalen des Gastes baut.
+    async fn shared_with_guest_bridge(
+        timers: JoinTimers,
+        liveness: Duration,
+        make_bridge: impl FnOnce(GameSignals) -> ModBridge,
+    ) -> Self {
         let (relay, server_guard) = test_relay().await;
         let host = Node::online_with(options(&relay), "Anna", RELAXED, liveness).await;
-        let guest = Node::online(options(&relay), "Bert", timers).await;
+        let guest = Node::online_with_bridge(options(&relay), "Bert", timers, Duration::from_secs(15), make_bridge).await;
         befriend(&host, &guest).await;
         let server = FakeServer::start().await;
         let session = share_with(&host, &guest, &server).await;
@@ -1283,17 +1307,20 @@ fn mod_env(node: &Node, instance_id: &str) -> Vec<(String, String)> {
 }
 
 /// Spielt die Mod: verbindet sich mit dem Token des Starts, spricht Protokoll 2 und liest JSON-Zeilen.
-struct FakeMod {
+pub(super) struct FakeMod {
     lines: tokio::io::Lines<BufReader<tokio::net::tcp::OwnedReadHalf>>,
     write: tokio::net::tcp::OwnedWriteHalf,
+    /// Jede Zeile, die der Launcher bisher geschickt hat, damit ein Test auch auf etwas prüfen kann, das vor einer
+    /// anderen Zeile ankam.
+    seen: Vec<Value>,
 }
 
 impl FakeMod {
-    async fn connect(env: &[(String, String)]) -> Self {
+    pub(super) async fn connect(env: &[(String, String)]) -> Self {
         let value = |name: &str| env.iter().find(|(key, _)| key == name).unwrap().1.clone();
         let tcp = TcpStream::connect(("127.0.0.1", value(ENV_PORT).parse::<u16>().unwrap())).await.unwrap();
         let (read, write) = tcp.into_split();
-        let mut client = Self { lines: BufReader::new(read).lines(), write };
+        let mut client = Self { lines: BufReader::new(read).lines(), write, seen: Vec::new() };
         let hello = json!({
             "type": "hello",
             "protocol": 2,
@@ -1315,16 +1342,40 @@ impl FakeMod {
         self.send(json!({ "type": "req", "id": id, "op": op, "args": args })).await;
     }
 
+    /// Schickt den Vorgang und wartet auf die Antwort mit derselben Kennung; Themen, Hinweise und `pending` davor werden
+    /// übergangen. Danach eine kurze Pause, damit viele Aufrufe hintereinander nicht an den 20 Nachrichten je Sekunde
+    /// der Brücke scheitern.
+    pub(super) async fn call(&mut self, id: &str, op: &str, args: Value) -> Value {
+        self.request(id, op, args).await;
+        let answer = self.next_where(|message| message["type"] == "res" && message["id"] == id).await;
+        tokio::time::sleep(Duration::from_millis(60)).await;
+        answer
+    }
+
+    /// Der erste Hinweis (Toast) der Art `kind`, auch wenn er schon vor dem Aufruf angekommen ist.
+    async fn next_notify(&mut self, kind: &str) -> Value {
+        self.eventually(|message| message["type"] == "event" && message["event"] == "notify" && message["kind"] == kind).await
+    }
+
     /// Die nächste Zeile, auf die `matches` zutrifft.
     async fn next_where(&mut self, matches: impl Fn(&Value) -> bool) -> Value {
         let deadline = tokio::time::Instant::now() + LIMIT;
         loop {
             let line = tokio::time::timeout_at(deadline, self.lines.next_line()).await.unwrap().unwrap();
             let message: Value = serde_json::from_str(&line.unwrap()).unwrap();
+            self.seen.push(message.clone());
             if matches(&message) {
                 return message;
             }
         }
+    }
+
+    /// Die erste Zeile, auf die `matches` zutrifft: schon gesehene zählen mit, sonst wird weiter gelesen.
+    async fn eventually(&mut self, matches: impl Fn(&Value) -> bool) -> Value {
+        if let Some(found) = self.seen.iter().find(|message| matches(message)) {
+            return found.clone();
+        }
+        self.next_where(matches).await
     }
 
     async fn next_of_type(&mut self, kind: &str) -> Value {
@@ -1501,14 +1552,11 @@ async fn kicking_a_guest_from_the_mod_revokes_their_invite() {
     assert_eq!(scene.host.guest_state(&scene.guest.id()).await, Some((GuestState::Left, true)));
 }
 
-#[tokio::test]
-async fn an_op_the_launcher_does_not_handle_yet_is_answered_as_unsupported() {
-    let scene = Scene::shared().await;
-    let env = mod_env(&scene.host, HOST_INSTANCE);
-    let mut game_mod = FakeMod::connect(&env).await;
+// ---- Die übrigen Vorgänge der Mod (INGAME 5.4) und ihre Zustimmung: eigene Dateien, die diese Bausteine benutzen ----
 
-    game_mod.request("u1", "friend.addByName", json!({ "name": "Notch" })).await;
-
-    let answer = game_mod.next_of_type("res").await;
-    assert_eq!(answer["error"]["code"], "unsupportedOp");
-}
+#[path = "tests_mod_link.rs"]
+mod mod_ops;
+#[path = "tests_mod_link_join.rs"]
+mod mod_join;
+#[path = "tests_mod_link_social.rs"]
+mod mod_social;
