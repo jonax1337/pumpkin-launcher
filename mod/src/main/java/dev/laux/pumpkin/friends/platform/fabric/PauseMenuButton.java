@@ -43,9 +43,17 @@ public final class PauseMenuButton {
 	 * {@code PauseScreenMixin} (daher öffentlich: sein Mixin-Paket liegt tiefer).
 	 */
 	public static Button buttonFor(PauseScreen pause) {
+		//? if >=1.20.2 {
 		if (client == null || UiSession.off() || !pause.showsPauseMenu()) {
 			return null;
 		}
+		//?} else {
+		/*// Same table: showsPauseMenu first exists in 1.20.2; 1.20 to 1.20.1 has no accessor for the save state,
+		// so beyond inactivity only the free-slot rule decides.
+		if (client == null || UiSession.off()) {
+			return null;
+		}
+		*///?}
 		Rect slot = slotBelow(buttonsOf(pause), pause.height);
 		if (slot == null) {
 			return null;

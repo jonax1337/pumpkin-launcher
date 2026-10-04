@@ -51,13 +51,25 @@ jobs:
       matrix:
         include:
           - { cell: 26.3-fabric, java: 25, gradle-java: 25 }   # headless 26.x: unbewiesen, siehe Kopfkommentar
+          - { cell: 26.2-fabric, java: 25, gradle-java: 25 }   # headless 26.x: unbewiesen, siehe Kopfkommentar
+          - { cell: 26.1.2-fabric, java: 25, gradle-java: 25 } # headless 26.x: unbewiesen, siehe Kopfkommentar
           - { cell: 1.21.1-fabric, java: 21, gradle-java: 25 }
+          - { cell: 1.21.5-fabric, java: 21, gradle-java: 25 }
+          - { cell: 1.21.8-fabric, java: 21, gradle-java: 25 }
+          - { cell: 1.21.10-fabric, java: 21, gradle-java: 25 }
+          - { cell: 1.21.11-fabric, java: 21, gradle-java: 25 }
+          - { cell: 1.20.1-fabric, java: 17, gradle-java: 25 }
+          - { cell: 1.20.2-fabric, java: 17, gradle-java: 25 }
+          - { cell: 1.20.4-fabric, java: 17, gradle-java: 25 }
           - { cell: 1.21.1-neoforge, java: 21, gradle-java: 21 }
+          - { cell: 1.21.5-neoforge, java: 21, gradle-java: 21 }
+          - { cell: 1.21.8-neoforge, java: 21, gradle-java: 21 }
+          - { cell: 1.21.10-neoforge, java: 21, gradle-java: 21 }
+          - { cell: 1.21.11-neoforge, java: 21, gradle-java: 21 }
           - { cell: 26.2-neoforge, java: 25, gradle-java: 25 } # headless 26.x: unbewiesen, siehe Kopfkommentar
           - { cell: 1.20.1-forge, java: 17, gradle-java: 21 }
     env:
       PUMPKIN_SMOKE_CELL: ${{ matrix.cell }}
-      PUMPKIN_SMOKE_DATA: ${{ runner.temp }}/smoke-data
       PUMPKIN_SMOKE_DIST: mod/build/mod-index
       # Software-GL für den headlessen Client; erbt an das Spiel weiter.
       LIBGL_ALWAYS_SOFTWARE: '1'
@@ -107,6 +119,9 @@ jobs:
           workspaces: src-tauri
 
       - name: Run the smoke cell
+        env:
+          # runner-Kontext ist nur in Schritt-Env erlaubt (actionlint), daher hier und nicht im Job.
+          PUMPKIN_SMOKE_DATA: ${{ runner.temp }}/smoke-data
         run: |
           xvfb-run --auto-servernum --server-args='-screen 0 1280x720x24' \
             cargo test --manifest-path src-tauri/Cargo.toml --locked --features smoke --test smoke smoke_cell -- --exact --nocapture

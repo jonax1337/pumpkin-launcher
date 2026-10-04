@@ -41,19 +41,45 @@ public final class Widgets {
 	}
 
 	/**
-	 * {@code Checkbox#builder(Component, Font)} exists from 1.20.3 (1.20.2 and older: constructor only, a later node);
-	 * {@code Checkbox.Builder#pos}, {@code #selected(boolean)}, {@code #onValueChange} are table rows of the same era.
-	 * The builder has no width here: {@code Checkbox.Builder#maxWidth} first exists in 1.21 (probed with mc-api-probe),
-	 * which is above the 1.20.5 end of the 1.21.1-fabric node - the kit sizes widgets itself through
+	 * {@code Checkbox#builder(Component, Font)} exists from 1.20.3 (1.20.2 and older: constructor only, no change
+	 * callback); {@code Checkbox.Builder#pos}, {@code #selected(boolean)}, {@code #onValueChange} are table rows of the
+	 * same era. The builder has no width here: {@code Checkbox.Builder#maxWidth} first exists in 1.21 (probed with
+	 * mc-api-probe), which is above the 1.20.5 end of the 1.21.1-fabric node - the kit sizes widgets itself through
 	 * {@code AbstractWidget#setWidth} (every era) when it places a row.
 	 */
 	public static AbstractWidget toggle(String label, boolean selected, Consumer<Boolean> onChange) {
+		//? if >=1.20.3 {
 		return Checkbox.builder(Text.literal(label), font())
 			.pos(0, 0)
 			.selected(selected)
 			.onValueChange((checkbox, value) -> UiSession.run(() -> onChange.accept(value)))
 			.build();
+		//?} else {
+		/*return new EarlyToggle(label, selected, onChange);
+		*///?}
 	}
+
+	//? if <1.20.3 {
+	/**
+	 * The checkbox of the eras without a builder, INGAME-API.md 3, "Widgets: Button, Checkbox, text": up to 1.20.2 only
+	 * the constructors {@code Checkbox(int, int, int, int, Component, boolean)} exist, and they have no change callback,
+	 * so the wrapper reports {@code Checkbox#selected()} (a row of every era) after every press.
+	 */
+	private static final class EarlyToggle extends Checkbox {
+		private final Consumer<Boolean> onChange;
+
+		EarlyToggle(String label, boolean selected, Consumer<Boolean> onChange) {
+			super(0, 0, 1, GuiMetrics.BUTTON_HEIGHT, Text.literal(label), selected);
+			this.onChange = onChange;
+		}
+
+		@Override
+		public void onPress() {
+			super.onPress();
+			UiSession.run(() -> onChange.accept(selected()));
+		}
+	}
+	//?}
 
 	private static Font font() {
 		return Minecraft.getInstance().font;

@@ -53,7 +53,34 @@ die Prüfung liefert.
 | 6a. Nicht-ASCII-Datenpfad (Windows) | alle fünf Zellen, `hold`, Datenordner `D:\pumpkin-build\smoke\Jürgen Müller\` (ü und Leerzeichen) | alle | **bestanden** (alle fünf) | je Zelle derselbe Beweis wie oben (Brücke bzw. Tracerzeile); kein List-File nötig, die JVM nimmt den Pfad unverändert |
 | 6b. `FILE_SHARE_READ`-Handle | alle fünf Zellen, einmal `hold` (Handle bis zum Ende offen — strenger als der Launcher) und einmal `release` (Handle fällt nach dem Start, wie im Launcher) | alle | **bestanden**: jeder Loader liest das JAR in beiden Szenarien | je Zelle `passed` in `hold` und `release` (26.3-fabric `release`: 29,8 s, Laufbericht: `[smoke] link up for smoke-26.3-fabric: hello accepted, owner check passed, welcome sent` und `[smoke] mod ready for smoke-26.3-fabric: screens ["hub"]`; 1.21.1-fabric: 84,2 s, Tracer+Mixin; 1.21.1-neoforge: 13,7 s; 26.2-neoforge: 13,1 s; 1.20.1-forge: 15,0 s); die Tracerzeile bzw. `bridge-ready` steht im Log, während das Launcher-Handle offen blieb |
 
+## 2a. Ergebnisse der vollen Matrix (Paket V2, A26, 2026-10-04)
+
+Elf weitere Zellen, gleicher Laufweg wie oben (Szenario `hold`, Windows 11 des Owners, Fabric Loader 0.19.5 bzw.
+die neueste stabile NeoForge-Serie; `loaderMin`-Böden siehe Abschnitt 5). Die sieben neuen Fabric-Zellen tragen die
+volle Mod (Brücken-Beweis), die vier NeoForge-Zellen den Tracer. Die Jars heißen jetzt
+`pumpkin_friends-0.2.0+<Knoten>.jar` (A25: Mod-Version = Launcher-Version 0.2.0); der Launcher im Bericht meldet
+noch `2.0.1`, weil das Feld `version` des Test-Launchers dem Branch-Stand folgt.
+
+| Zelle | Strategie | Ergebnis | Beweis (Auszug aus dem Laufbericht) |
+|---|---|---|---|
+| `26.2-fabric` (Minecraft 26.2, nicht obfusziert) | `fabricAddMods` | **bestanden** (11,8 s) | `-Dfabric.addMods=…\friends-mod\0.2.0\pumpkin_friends-0.2.0+26.2-fabric.jar`, Log: `- pumpkin_friends 0.2.0+26.2-fabric`, `Pumpkin Friends: connected to the Pumpkin Launcher 2.0.1`; Bericht: `proof: bridge-ready ["hub"]` |
+| `26.1.2-fabric` (26.1 – 26.1.2, nicht obfusziert) | `fabricAddMods` | **bestanden** (8,7 s) | Bericht: `proof: bridge-ready ["hub"]` |
+| `1.21.5-fabric` (1.21.2 – 1.21.5, obfusziert, remapptes Jar) | `fabricAddMods` | **bestanden** (28,2 s) | Bericht: `proof: bridge-ready ["hub"]` |
+| `1.21.10-fabric` (1.21.9 – 1.21.10, obfusziert, remapptes Jar) | `fabricAddMods` | **bestanden** (22,3 s) | Bericht: `proof: bridge-ready ["hub"]` |
+| `1.20.1-fabric` (1.20 – 1.20.1, obfusziert, remapptes Jar) | `fabricAddMods` | **bestanden** (18,1 s) | Log: `- pumpkin_friends 0.2.0+1.20.1-fabric`, Brücke verbunden; Bericht: `proof: bridge-ready ["hub"]` |
+| `1.20.2-fabric` (1.20.2, obfusziert, remapptes Jar) | `fabricAddMods` | **bestanden** (19,2 s) | Bericht: `proof: bridge-ready ["hub"]` |
+| `1.20.4-fabric` (1.20.3 – 1.20.4, obfusziert, remapptes Jar) | `fabricAddMods` | **bestanden** (19,0 s) | Bericht: `proof: bridge-ready ["hub"]` |
+| `1.21.5-neoforge` (NeoForge 21.5.98, FML 7.0.13) | `fmlMavenRoot` | **bestanden** (17,6 s) | Spiel-Log (ModLauncher-Argumente): `--fml.mavenRoots D:\…\maven-1.21.5-neoforge --fml.mods dev.laux.pumpkin:pumpkin_friends:0.2.0`; `pumpkin_friends tracer 1.21.5 neoforge` |
+| `1.21.8-neoforge` (NeoForge 21.8.54 im Lauf, FML 9.0.18) | `fmlMavenRoot` | **bestanden** (16,8 s) | Bericht: `proof: tracer-log` |
+| `1.21.10-neoforge` (NeoForge 21.10.64, FML 10) | `fmlModFolders` | **bestanden** (13,2 s) | Eingepflanzt: `-Dfml.modFolders=pumpkin%%…\pumpkin_friends-0.2.0+1.21.10-neoforge.jar`; Bericht: `proof: tracer-log`. Erste Beweisführung von `fmlModFolders` auf einer 21.x-Serie |
+| `1.21.11-neoforge` (NeoForge 21.11.45, FML 10) | `fmlModFolders` | **bestanden** (31,0 s) | Bericht: `proof: tracer-log` |
+
+Damit sind alle 18 Zellen von `mod/nodes.txt` geraucht und in `mod/verified.json` eingetragen (A26). Nicht Teil
+dieser Welle: `26.1.2-neoforge` aus der Empfehlung von INGAME-API.md Abschnitt 5 (A26 nennt ihn nicht; die Serie
+26.1.2 hat stabile Builds und bleibt einer späteren Welle überlassen).
+
 ## 3. Was die Fehlstart-Läufe lehrten (Breaker, INGAME 3.8)
+
 
 Der Rauchtest erzeugt absichtliche Fehlstarts (Szenarien `wrong-jar:<Knoten>` und
 `spawn-java:<Pfad>`) und ersetzt damit die nachgebauten Fixture-Logs durch echte Mitschnitte
@@ -99,8 +126,8 @@ Software-GL, nächtlich und bei Änderungen unter `mod/**` und den Einspeisungsq
   kam nicht bis zur Protokollierung. Ursache nicht untersucht (kein Bestandteil dieses Pakets);
   der geforderte Fall „ü und Leerzeichen“ ist bestanden.
 - **`loaderMin`-Böden**: geraucht wurde mit dem jeweils neuesten stabilen Loader (Fabric 0.19.5,
-  NeoForge 21.1.255/26.2.0.88, Forge 47.4.26), nicht mit den Böden der Knoten
-  (`loaderMin`-Spalte von `mod/nodes.txt`).
+  NeoForge 21.1.255/21.5.98/21.8.54/21.10.64/21.11.45/26.2.0.88, Forge 47.4.26), nicht mit den Böden der Knoten
+  (`loaderMin`-Spalte von `mod/nodes.txt`; gilt für die Läufe beider Wellen, Abschnitt 2 und 2a).
 - **Begleiter Fabric API**: die Mod erklärt `fabric-api` als Abhängigkeit
   (`mod/descriptors/fabric/fabric.mod.json`); der Rauchtest legt sie in den Mods-Ordner der
   Rauchinstanz. Bis ein Paket die Abhängigkeit entfernt, beweist der Lauf die Einspeisung
