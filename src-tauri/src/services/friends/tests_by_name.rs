@@ -569,7 +569,7 @@ async fn rotation_retracts_own_letters_but_keeps_letters_from_others() {
 async fn findability_registers_disable_unregisters_and_queued_jobs_survive_a_restart() {
     let world = World::new().await;
     let steve = world.online("Steve", false).await;
-    let findable = FriendsSettings { display_name: "Steve".into(), always_relay: false, findable_by_name: true };
+    let findable = FriendsSettings { display_name: "Steve".into(), always_relay: false, findable_by_name: true, ..FriendsSettings::default() };
 
     steve.friends.update_settings(findable.clone()).await.unwrap();
     steve.wait_registered(&world).await;
@@ -619,7 +619,7 @@ async fn a_mojang_refusal_shows_not_allowed_and_pauses_polling() {
     let world = World::new().await;
     let kind = world.online("Kind", false).await;
     world.mojang.refuse_certificates(&kind.account.uuid, Some(MojangError::NotAllowed));
-    let findable = FriendsSettings { display_name: "Kind".into(), always_relay: false, findable_by_name: true };
+    let findable = FriendsSettings { display_name: "Kind".into(), always_relay: false, findable_by_name: true, ..FriendsSettings::default() };
 
     kind.friends.update_settings(findable).await.unwrap();
     until_true("not allowed", || kind.directory_state() == DirectoryState::NotAllowed).await;
@@ -704,7 +704,7 @@ async fn directory_loop_alone(directory: &Arc<FakeDirectory>, mojang: &Arc<FakeM
     let dir = TempDir::new();
     let secrets = Arc::new(MemorySecretStore::new());
     identity::create(&*secrets).unwrap();
-    let settings = FriendsSettings { display_name: "Steve".into(), always_relay: false, findable_by_name: true };
+    let settings = FriendsSettings { display_name: "Steve".into(), always_relay: false, findable_by_name: true, ..FriendsSettings::default() };
     FriendsConfig { settings, ..FriendsConfig::default() }.save(&friends_dir(&Dirs::new(dir.path()))).unwrap();
     let signals = GameSignals::default();
     let bridge = ModBridge::new(signals.clone());
@@ -762,7 +762,7 @@ const HOUR_MS: i64 = 3_600_000;
 const SOON_MS: i64 = 3_000;
 
 fn findable_settings(name: &str) -> FriendsSettings {
-    FriendsSettings { display_name: name.to_owned(), always_relay: false, findable_by_name: true }
+    FriendsSettings { display_name: name.to_owned(), always_relay: false, findable_by_name: true, ..FriendsSettings::default() }
 }
 
 fn launcher_now_ms() -> i64 {

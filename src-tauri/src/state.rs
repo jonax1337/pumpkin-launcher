@@ -12,6 +12,8 @@ use crate::error::{AppError, AppResult};
 use crate::models::{Instance, LibrarySkin, MsAccount, Template};
 use crate::services::auth::MsState;
 use crate::services::download::http_client;
+use crate::services::friends::config::friends_dir;
+use crate::services::friends::ingame::Ingame;
 use crate::services::friends::lookup::{ModrinthHttp, ModrinthLookup};
 use crate::services::friends::{
     FriendSessions, Friends, JoinTimers, MojangVersions, NetOptions, SessionContext, PRODUCTION_LIVENESS,
@@ -42,8 +44,10 @@ pub struct AppState {
     pub presence: Presence,
     /// Was beim Spielstart und -ende geschieht, für die Freunde-Funktion.
     pub signals: GameSignals,
-    /// Brücke zur Fabric-Mod; gestoppt, bis die Freunde-Funktion sie startet.
+    /// Brücke zur Mod im Spiel; gestoppt, bis die Freunde-Funktion sie startet.
     pub bridge: ModBridge,
+    /// Die Einspeisung der Mod in die Spielstarts: JARs des Builds, Zustand je Instanz, Java-Versionen.
+    pub ingame: Ingame,
     /// Die Freunde-Funktion; aus, bis `lib.rs` sie beim Start (oder der Nutzer beim Aktivieren) startet.
     pub friends: Friends,
     /// Geteilte Welten, Einladungen, Beitritte und die Mod; hängt sich erst mit `start` in `friends` ein.
@@ -68,6 +72,7 @@ impl AppState {
         let bridge = ModBridge::new(signals.clone());
         let friends =
             Friends::new(&dirs, Arc::new(KeyringSecrets), signals.clone(), bridge.clone(), NetOptions::production())?;
+        let ingame = Ingame::open(&friends_dir(&dirs), env!("CARGO_PKG_VERSION"))?;
         let instances = Arc::new(JsonStore::open(data_dir.join("instances.json"))?);
         let http = http_client()?;
         let sessions = FriendSessions::new(SessionContext {
@@ -91,6 +96,7 @@ impl AppState {
             http,
             presence: Presence::discord(),
             bridge,
+            ingame,
             friends,
             sessions,
             signals,

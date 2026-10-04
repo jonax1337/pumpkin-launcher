@@ -3,6 +3,8 @@ mod commands;
 mod content_commands;
 mod friends_commands;
 mod friends_session_commands;
+mod ingame_commands;
+mod ingame_launch;
 mod pack_commands;
 mod pack_open;
 mod screenshot_commands;
@@ -199,9 +201,10 @@ pub fn run() {
             friends_session_commands::invite_plan,
             friends_session_commands::invite_join,
             friends_session_commands::join_leave,
-            friends_session_commands::friends_mod_status,
-            friends_session_commands::friends_mod_install,
             friends_session_commands::friends_mod_confirm,
+            ingame_commands::friends_ingame_status,
+            ingame_commands::friends_ingame_set_enabled,
+            ingame_commands::friends_ingame_retry,
             friends_commands::friend_add_by_name,
         ])
         .build(tauri::generate_context!())

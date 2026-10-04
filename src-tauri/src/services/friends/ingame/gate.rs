@@ -107,7 +107,7 @@ fn launcher_state_blocker(facts: &LaunchFacts) -> Option<SkipReason> {
     }
 }
 
-fn target_of<'a>(facts: &LaunchFacts<'a>) -> Target<'a> {
+pub(super) fn target_of<'a>(facts: &LaunchFacts<'a>) -> Target<'a> {
     Target { minecraft: facts.minecraft, loader: facts.loader, loader_version: facts.loader_version, java_major: facts.java_major }
 }
 

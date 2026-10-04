@@ -170,6 +170,7 @@ mod tests {
                 display_name: "Anna".into(),
                 always_relay: false,
                 findable_by_name: false,
+                ..Default::default()
             },
             network: NetworkStatus::Starting,
             relays: Vec::new(),

@@ -36,7 +36,9 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
     "settings": {
       "displayName": "Jonas",
       "alwaysRelay": false,
-      "findableByName": true
+      "findableByName": true,
+      "ingameMenu": true,
+      "ingameActions": "ask"
     },
     "network": {
       "type": "online",
@@ -62,7 +64,9 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
     "settings": {
       "displayName": "Jonas",
       "alwaysRelay": false,
-      "findableByName": false
+      "findableByName": false,
+      "ingameMenu": false,
+      "ingameActions": "allow"
     },
     "network": {
       "type": "off"
@@ -81,7 +85,9 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
     "settings": {
       "displayName": "Jonas",
       "alwaysRelay": false,
-      "findableByName": false
+      "findableByName": false,
+      "ingameMenu": true,
+      "ingameActions": "ask"
     },
     "network": {
       "type": "off"
@@ -421,8 +427,78 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
     "source": "mod",
     "pid": 18244
   },
-  "modStatus": {
-    "state": "connected"
+  "ingameStatus.active": {
+    "state": "active",
+    "reason": null,
+    "node": {
+      "id": "1.21.1-fabric",
+      "minecraft": "1.21.1",
+      "loader": "fabric"
+    }
+  },
+  "ingameStatus.connected": {
+    "state": "connected",
+    "reason": null,
+    "node": {
+      "id": "26.3-fabric",
+      "minecraft": "26.3",
+      "loader": "fabric"
+    }
+  },
+  "ingameStatus.off": {
+    "state": "off",
+    "reason": {
+      "type": "instanceOff"
+    },
+    "node": {
+      "id": "1.21.1-neoforge",
+      "minecraft": "1.21.1",
+      "loader": "neoforge"
+    }
+  },
+  "ingameStatus.autoOff": {
+    "state": "autoOff",
+    "reason": {
+      "type": "breaker",
+      "reason": "mixinApplyFailed"
+    },
+    "node": {
+      "id": "1.20.1-forge",
+      "minecraft": "1.20.1",
+      "loader": "forge"
+    }
+  },
+  "ingameStatus.unavailable": {
+    "state": "unavailable",
+    "reason": {
+      "type": "javaTooOld",
+      "need": 21
+    },
+    "node": null
+  },
+  "ingameStatus.loaderTooOld": {
+    "state": "unavailable",
+    "reason": {
+      "type": "loaderTooOld",
+      "need": "0.16.0"
+    },
+    "node": null
+  },
+  "event.ingame": {
+    "instanceId": "inst-fabric",
+    "status": {
+      "state": "active",
+      "reason": null,
+      "node": {
+        "id": "1.21.1-fabric",
+        "minecraft": "1.21.1",
+        "loader": "fabric"
+      }
+    }
+  },
+  "event.ingameFailed": {
+    "instanceId": "inst-fabric",
+    "reason": "fabricIncompatibleModSet"
   },
   "event.friendPresence": {
     "friendId": "3f9ac02177de01b49d5e8c7a21f06b3344aa90bc12de56f7081926a3b4c5d6e7",

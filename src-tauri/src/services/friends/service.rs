@@ -239,8 +239,13 @@ impl Friends {
             config.enabled = true;
             config.third_party_relays_accepted = input.accept_third_party_relays;
         })?;
-        let settings =
-            FriendsSettings { display_name, always_relay: input.always_relay, findable_by_name: input.findable_by_name };
+        let kept = core.config().settings;
+        let settings = FriendsSettings {
+            display_name,
+            always_relay: input.always_relay,
+            findable_by_name: input.findable_by_name,
+            ..kept
+        };
         core.apply_settings(settings).await?;
         core.activate().await;
         core.emit(FriendsEvent::Changed);

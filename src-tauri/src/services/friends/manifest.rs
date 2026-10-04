@@ -77,7 +77,7 @@ impl VersionIndex {
     }
 }
 
-/// Das Manifest der Instanz: jede aktive Mod-Datei mit ihrem SHA-512, auch die Freunde-Mod selbst. Eine Datei, die
+/// Das Manifest der Instanz: jede aktive Mod-Datei mit ihrem SHA-512 (die Freunde-Mod liegt nie in der Instanz). Eine Datei, die
 /// sich nicht lesen lässt, fehlt; dieselbe Datei unter zwei Namen steht nur einmal drin.
 pub fn build(instance: &Instance, mods_dir: &Path, hasher: &dyn Fn(&Path) -> io::Result<String>) -> Manifest {
     let mut seen = HashSet::new();
