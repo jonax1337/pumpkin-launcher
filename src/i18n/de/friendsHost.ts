@@ -35,17 +35,6 @@ export const friendsHost = {
   "friendsHost.path.relay": "Relay",
   "friendsHost.path.directTip": "Die Launcher sind direkt miteinander verbunden.",
 
-  // ---------- Mod ----------
-  "friendsHost.mod.title": "Pumpkin Friends-Mod: Teilen direkt im Spiel",
-  "friendsHost.mod.source": "Kommt von Modrinth.",
-  "friendsHost.mod.add": "Mod hinzufügen",
-  "friendsHost.mod.adding": "Mod wird hinzugefügt",
-  "friendsHost.mod.task": "Pumpkin Friends-Mod hinzufügen",
-  "friendsHost.mod.taskDone": "Pumpkin Friends-Mod hinzugefügt",
-  "friendsHost.mod.name": "Pumpkin Friends-Mod",
-  "friendsHost.mod.installed": "Mod nicht verbunden",
-  "friendsHost.mod.connected": "Mod verbunden",
-
   // ---------- Dialog „Mit Freunden teilen“ ----------
   "friendsHost.dialog.title": "Mit Freunden teilen",
   "friendsHost.dialog.titleMore": "Weitere Freunde einladen",
@@ -96,6 +85,9 @@ export const friendsHost = {
   "friendsHost.ingame.off": "aus",
   "friendsHost.ingame.autoOff": "Nach einem Startfehler ausgeschaltet",
   "friendsHost.ingame.retry": "Erneut versuchen",
+  "friendsHost.ingame.switch": "Freunde-Menü im Spiel für diese Instanz",
+  "friendsHost.ingame.addLoader": "{loader} hinzufügen?",
+  "friendsHost.ingame.addLoaderDone": "{loader} ist eingetragen und wird beim nächsten Start installiert",
   "friendsHost.ingame.reason.notInBuild": "In diesem Build nicht verfügbar",
   "friendsHost.ingame.reason.vanilla": "Braucht einen Loader",
   "friendsHost.ingame.reason.quilt": "Mit Quilt noch nicht verfügbar",
@@ -109,7 +101,6 @@ export const friendsHost = {
   "friendsHost.ingame.reason.offlineAccount": "Nur mit Microsoft-Konto",
   "friendsHost.ingame.reason.friendsOff": "Freunde ist ausgeschaltet",
   "friendsHost.ingame.reason.bridgeNotRunning": "Die Verbindung zum Launcher läuft nicht",
-  "friendsHost.ingame.reason.instanceOff": "Für diese Instanz ausgeschaltet",
   "friendsHost.ingame.reason.globallyOff": "In den Einstellungen ausgeschaltet",
   "friendsHost.ingame.reason.breaker": "Nach einem Startfehler ausgeschaltet ({failure})",
   "friendsHost.ingame.failure.fabricIncompatibleModSet": "Fabric meldet unverträgliche Mods",
@@ -117,4 +108,11 @@ export const friendsHost = {
   "friendsHost.ingame.failure.modLoadingError": "Ladefehler des Loaders",
   "friendsHost.ingame.failure.unsupportedClassVersion": "Das Java ist zu alt für die Mod",
   "friendsHost.ingame.failure.unknown": "unbekannter Grund",
+
+  // ---------- Startfehler durch das Freunde-Menü (Sicherungsschalter, INGAME 3.8) ----------
+  "friendsHost.breaker.title": "Startfehler",
+  "friendsHost.breaker.text": "Das Spiel ist beim Start abgestürzt. Das Freunde-Menü könnte die Ursache sein. Ohne starten?",
+  "friendsHost.breaker.detail": "{instance}: {failure}",
+  "friendsHost.breaker.startWithout": "Ohne Freunde-Menü starten",
+  "friendsHost.breaker.retry": "Trotzdem erneut versuchen",
 } satisfies Dict;

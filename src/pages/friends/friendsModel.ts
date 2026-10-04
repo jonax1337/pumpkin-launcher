@@ -1,6 +1,6 @@
 // Reine Logik der Freunde-Seite (kein React), damit friendsModel.check.mjs sie ohne Bundler prüft.
 import { FRIENDS_LIMITS } from "../../lib/friends-types.ts";
-import type { DirectoryState, Friend, FriendRequest, FriendsState, HostSession, Invite } from "../../lib/friends-types.ts";
+import type { DirectoryState, Friend, FriendRequest, FriendsState, HostSession, Invite, ModOpenTarget } from "../../lib/friends-types.ts";
 
 /** Warum die Seite statt der Freundesliste einen Hinweis zeigt; die Reihenfolge ist die der Prüfung. */
 export type FriendsGate = "noSecretStore" | "identityLost" | "disabled" | "noMicrosoftAccount";
@@ -107,6 +107,30 @@ export const nameTabAvailable = (directory: DirectoryState): boolean => director
 
 /** Der Reiter, auf dem „Freund hinzufügen“ öffnet. */
 export const defaultAddTab = (directory: DirectoryState): AddFriendTab => (nameTabAvailable(directory) ? "name" : "enter");
+
+/** Der Anker des Abschnitts „Anfragen“ auf der Freunde-Seite. */
+export const REQUESTS_ANCHOR = "friends-requests";
+
+/**
+ * Wohin `launcher.open` der Mod führt (INGAME 5.4): auf die Freunde-Seite, dort zu den Anfragen oder zum Dialog der ältesten
+ * Einladung, oder zu den Einstellungen der Freunde.
+ */
+export type ModOpenDestination =
+  | { page: "friends"; anchor: typeof REQUESTS_ANCHOR | null; showInvite: boolean }
+  | { page: "settings" };
+
+export function modOpenDestination(target: ModOpenTarget): ModOpenDestination {
+  switch (target) {
+    case "friends":
+      return { page: "friends", anchor: null, showInvite: false };
+    case "requests":
+      return { page: "friends", anchor: REQUESTS_ANCHOR, showInvite: false };
+    case "invites":
+      return { page: "friends", anchor: null, showInvite: true };
+    case "settings":
+      return { page: "settings" };
+  }
+}
 
 /** Mehr aktive Codes sind nicht erlaubt; benutzte zählen nicht mehr. */
 export const activeCodeCount = (codes: { used: boolean }[]): number => codes.filter((code) => !code.used).length;

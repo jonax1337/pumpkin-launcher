@@ -52,8 +52,12 @@ export const friendsInvite = {
   "friendsInvite.later": "Später",
 
   // ---------- Bitte der Mod ----------
-  "friendsInvite.mod.title": "Mod möchte teilen",
-  "friendsInvite.mod.text": "Die Mod in {instance} möchte deine Welt mit {names} teilen. Erlauben?",
-  "friendsInvite.mod.allow": "Erlauben",
+  "friendsInvite.mod.title": "Anfrage aus dem Spiel",
+  "friendsInvite.mod.scope.share": "Dieses Spiel möchte deine Welt mit ausgewählten Freunden teilen.",
+  "friendsInvite.mod.scope.social": "Dieses Spiel möchte Freunde hinzufügen, Anfragen beantworten und Einladungen annehmen.",
+  "friendsInvite.mod.game": "Spiel",
+  "friendsInvite.mod.operation": "Vorgang",
+  "friendsInvite.mod.allow": "Erlauben (bis Spielende)",
   "friendsInvite.mod.deny": "Ablehnen",
+  "friendsInvite.mod.wait": "Erlauben wird gleich frei, damit kein Klick versehentlich zustimmt.",
 } satisfies Dict;

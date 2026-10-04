@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { dialogOpen } from "@/app/dialogOpen";
 import { launchAccountFor } from "@/components/accounts/useAccounts";
+import { IngameBreakerDialog } from "@/components/friends/IngameBreakerDialog";
 import { InviteDialog } from "@/components/friends/InviteDialog";
 import { canJoinWith } from "@/components/friends/inviteModel";
 import { ModConfirmDialog } from "@/components/friends/ModConfirmDialog";
@@ -85,12 +86,14 @@ function InviteHost({ inviteId, onJoin }: { inviteId: string; onJoin: (instanceI
 }
 
 /**
- * Die globalen Dialoge der Freunde, einmal im Layout: Einladungen und die Bitte der Mod, von jeder Seite aus erreichbar.
+ * Die globalen Dialoge der Freunde, einmal im Layout: Einladungen, die Bitte der Mod und die Frage nach einem Startfehler,
+ * von jeder Seite aus erreichbar.
  * Es ist immer nur einer offen; was dazukommt, wartet (`useFriendsUi().dialogs`).
  */
 export function FriendDialogs() {
   const { active, waiting } = useFriendsUi((state) => state.dialogs);
   const startJoin = useStartJoin();
+  const play = usePlay();
   useInviteRequests();
   useOpenWhenFree(active === null && waiting.length > 0);
 
@@ -101,6 +104,10 @@ export function FriendDialogs() {
       void startJoin(inviteId, instanceId);
     };
     return <InviteHost key={inviteId} inviteId={inviteId} onJoin={join} />;
+  }
+  if (active?.kind === "breaker") {
+    const { instanceId, reason } = active;
+    return <IngameBreakerDialog key={instanceId} instanceId={instanceId} reason={reason} onStart={(instance) => play(instance)} onClose={closeFriendDialog} />;
   }
   if (active?.kind === "modConfirm") return <ModConfirmDialog key={active.confirm.requestId} confirm={active.confirm} onClose={closeFriendDialog} />;
   return null;

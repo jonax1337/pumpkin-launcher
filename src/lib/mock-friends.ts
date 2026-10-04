@@ -8,7 +8,7 @@ import { clone, newId, wait, type MockContext } from "./mock-util";
 import { DAY, HOUR, MINUTE } from "./time";
 import type {
   BlockedPeer, DirectoryState, DirectoryStatus, Friend, FriendCode, FriendRequest, FriendsEnableInput, FriendsSettings, FriendsState,
-  HostSession, InstanceSummary, Invite, JoinPlan, JoinTicket, IngameFailureKind, IngameNode, IngameReason, IngameStatus, LanStatus, ModActivityEntry, ModConfirmEvent, ModRef, PathKind, Presence, RequestRefusal, RequestVia, SessionGuest,
+  HostSession, InstanceSummary, Invite, JoinPlan, JoinTicket, IngameFailureKind, IngameNode, IngameReason, IngameStatus, LanStatus, ModActivityEntry, ModConfirmEvent, ModOpenTarget, ModRef, ModScope, PathKind, Presence, RequestRefusal, RequestVia, SessionGuest,
 } from "./types";
 
 const SECOND_MS = 1000;
@@ -61,6 +61,9 @@ const JOIN_CONNECT_MS = 1200;
 
 /** So viele Vorgänge aus dem Spiel behält der Launcher (INGAME 5.7). */
 const MOD_ACTIVITY_LIMIT = 100;
+
+/** So viele Zeichen behält der Launcher von `summary.targetName` (`sanitize::world_or_instance_name`); die Rückfrage darf sich nicht darauf stützen. */
+const MOD_SUMMARY_NAME_CAP = 64;
 
 /** `pumpkinMock.cycle()`: so viele Runden im Abstand von `CYCLE_STEP_MS`, die RTT wächst je Runde um `CYCLE_RTT_STEP_MS`. */
 const CYCLE_ROUNDS = 5;
@@ -219,6 +222,11 @@ function seedFullScenario(db: FriendsDb) {
   db.planScenarios.set(invite.id, "ready");
   const lan: LanStatus = { port: MOCK_PORT, source: "mod", pid: MOCK_GAME_PID };
   db.lan.set(MOCK_HOST_INSTANCE, lan);
+  db.modActivity = [
+    modActivityOf({ op: "friend.addByName", targetName: "Hanna" }, 3 * MINUTE_SECS),
+    modActivityOf({ op: "request.answer", targetName: "Fynn", ok: false }, 12 * MINUTE_SECS),
+    modActivityOf({ op: "host.invite", scope: "share", targetName: "Bea, Eli" }, 25 * MINUTE_SECS),
+  ];
   db.sessions = [{
     id: crypto.randomUUID(), instanceId: MOCK_HOST_INSTANCE, port: lan.port, portSource: lan.source, pid: lan.pid, worldName: "Inselwelt",
     showWorldName: true, startedAt: nowSecs() - 25 * MINUTE_SECS,
@@ -228,6 +236,14 @@ function seedFullScenario(db: FriendsDb) {
       guestOf(eli, { state: "declined" }),
     ],
   }];
+}
+
+/** Ein Vorgang aus dem Spiel, der `agoSecs` Sekunden zurückliegt; ohne Angaben ein erledigter im Bereich `social`. */
+function modActivityOf(over: Partial<ModActivityEntry>, agoSecs = 0): ModActivityEntry {
+  return {
+    at: new Date(Date.now() - agoSecs * SECOND_MS).toISOString(), instanceId: MOCK_HOST_INSTANCE, scope: "social", op: "friend.addByName",
+    targetName: null, ok: true, ...over,
+  };
 }
 
 function createDb(scenario: Scenario): FriendsDb {
@@ -749,27 +765,36 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     emit("host-session", { session: clone(session) });
   }
 
-  function confirmMod() {
-    const online = db.friends.filter((f) => f.presence !== "offline");
+  /** Die Bitte der Mod: im Bereich `share` die Welt mit den Freunden, die online sind, im Bereich `social` eine Anfrage an `targetName`. */
+  function confirmMod(scope: ModScope = "share", targetName = "Anna") {
+    const online = scope === "share" ? db.friends.filter((f) => f.presence !== "offline") : [];
     const confirm: ModConfirmEvent = {
       requestId: newId("confirm"), instanceId: MOCK_HOST_INSTANCE, instanceName: "Survival 1.21",
       friends: online.map((f) => ({ friendId: f.id, displayName: f.displayName })),
-      scope: "share", summary: { op: "host.invite", targetName: online.map((f) => f.displayName).join(", ") || null },
+      scope,
+      summary: scope === "share"
+        ? { op: "host.invite", targetName: online.map((f) => f.displayName).join(", ").slice(0, MOD_SUMMARY_NAME_CAP) || null }
+        : { op: "friend.addByName", targetName },
     };
     db.pendingModConfirms.set(confirm.requestId, confirm);
     emit("friends-mod-confirm", confirm);
   }
 
+  /** Ein Vorgang aus dem Spiel, den der Launcher ausgeführt (oder abgelehnt) hat: in die Liste und als `friends-mod-activity`. */
+  function recordModActivity(op: string, targetName: string | null = null, ok = true) {
+    const entry = modActivityOf({ op, targetName, ok, scope: op === "host.invite" ? "share" : "social" });
+    db.modActivity = [entry, ...db.modActivity].slice(0, MOD_ACTIVITY_LIMIT);
+    emit("friends-mod-activity", entry);
+  }
+
+  /** `launcher.open` der Mod: die Oberfläche geht an die Stelle, die `target` nennt. */
+  const openFromMod = (target: ModOpenTarget) => emit("friends-mod-open", { instanceId: MOCK_HOST_INSTANCE, target });
+
   function answerModConfirm(requestId: string, allow: boolean) {
     const confirm = db.pendingModConfirms.get(requestId);
     if (!confirm) throw new Error(t("mock.friends.notFound.request", { id: requestId }));
     db.pendingModConfirms.delete(requestId);
-    const entry: ModActivityEntry = {
-      at: new Date().toISOString(), instanceId: confirm.instanceId, scope: confirm.scope, op: confirm.summary.op,
-      targetName: confirm.summary.targetName, ok: allow,
-    };
-    db.modActivity = [entry, ...db.modActivity].slice(0, MOD_ACTIVITY_LIMIT);
-    emit("friends-mod-activity", entry);
+    recordModActivity(confirm.summary.op, confirm.summary.targetName, allow);
   }
 
   function setNotice(name: string, kind: "renamed" | "identityChanged") {
@@ -808,6 +833,8 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     network: (status: "online" | "degraded") =>
       setNetwork(status === "online" ? { type: "online", relayHost: MOCK_RELAY_HOST } : { type: "degraded", reason: "relayUnreachable" }),
     modConfirm: confirmMod,
+    modActivity: recordModActivity,
+    modOpen: openFromMod,
     ingameFailed: failIngame,
     ingame: forceIngame,
     notice: setNotice,

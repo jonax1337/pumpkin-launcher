@@ -1,8 +1,14 @@
 // Reine Warteschlange der globalen Freunde-Dialoge (kein React), damit friendDialogQueue.check.mjs sie ohne Bundler prüft.
-import type { ModConfirmEvent } from "../lib/friends-types.ts";
+import type { IngameFailureKind, ModConfirmEvent } from "../lib/friends-types.ts";
 
-/** Was ein globaler Freunde-Dialog zeigt: eine Einladung (per ID, der Inhalt kommt aus der Abfrage) oder die Bitte der Mod. */
-export type FriendDialog = { kind: "invite"; inviteId: string } | { kind: "modConfirm"; confirm: ModConfirmEvent };
+/**
+ * Was ein globaler Freunde-Dialog zeigt: eine Einladung (per ID, der Inhalt kommt aus der Abfrage), die Bitte der Mod oder die
+ * Frage nach einem Startfehler, den das Freunde-Menü der Instanz verursacht haben könnte.
+ */
+export type FriendDialog =
+  | { kind: "invite"; inviteId: string }
+  | { kind: "modConfirm"; confirm: ModConfirmEvent }
+  | { kind: "breaker"; instanceId: string; reason: IngameFailureKind };
 
 /** `active` ist der eine offene Dialog; alle weiteren warten, bis er zu ist. */
 export interface DialogQueue {
@@ -15,13 +21,21 @@ export const MOD_CONFIRM_TTL_MS = 120_000;
 
 export const emptyDialogQueue: DialogQueue = { active: null, waiting: [] };
 
-const same = (a: FriendDialog, b: FriendDialog) =>
-  a.kind === "invite" ? b.kind === "invite" && a.inviteId === b.inviteId : b.kind === "modConfirm" && a.confirm.requestId === b.confirm.requestId;
+function same(a: FriendDialog, b: FriendDialog): boolean {
+  switch (a.kind) {
+    case "invite":
+      return b.kind === "invite" && a.inviteId === b.inviteId;
+    case "modConfirm":
+      return b.kind === "modConfirm" && a.confirm.requestId === b.confirm.requestId;
+    case "breaker":
+      return b.kind === "breaker" && a.instanceId === b.instanceId;
+  }
+}
 
 const isShownOrWaiting = (queue: DialogQueue, dialog: FriendDialog) =>
   [queue.active, ...queue.waiting].some((other) => other !== null && same(other, dialog));
 
-/** Reiht einen Dialog hinten ein; was schon offen ist oder wartet, kommt nicht noch einmal. */
+/** Reiht einen Dialog hinten ein; was schon offen ist oder wartet, kommt nicht noch einmal (der Startfehler einer Instanz zeigt sich nur einmal). */
 export const enqueue = (queue: DialogQueue, dialog: FriendDialog): DialogQueue =>
   isShownOrWaiting(queue, dialog) ? queue : { ...queue, waiting: [...queue.waiting, dialog] };
 
