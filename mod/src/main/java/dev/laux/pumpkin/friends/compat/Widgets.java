@@ -38,15 +38,15 @@ public final class Widgets {
 	}
 
 	/**
-	 * {@code Checkbox#builder(Component, Font)} exists from 1.20.3 (1.20.2 and older: constructor only, a later node).
-	 * {@code Checkbox.Builder#pos}, {@code #selected(boolean)}, {@code #onValueChange} are table rows of the same era;
-	 * {@code Checkbox.Builder#maxWidth(int)} stands in no table of INGAME-API.md and was probed with mc-api-probe as
-	 * public on 1.21.1, 1.21.8, 1.21.11 and 26.3 (the four compile versions of the kit, amendment A11).
+	 * {@code Checkbox#builder(Component, Font)} exists from 1.20.3 (1.20.2 and older: constructor only, a later node);
+	 * {@code Checkbox.Builder#pos}, {@code #selected(boolean)}, {@code #onValueChange} are table rows of the same era.
+	 * The builder has no width here: {@code Checkbox.Builder#maxWidth} first exists in 1.21 (probed with mc-api-probe),
+	 * which is above the 1.20.5 end of the 1.21.1-fabric node - the kit sizes widgets itself through
+	 * {@code AbstractWidget#setWidth} (every era) when it places a row.
 	 */
-	public static AbstractWidget toggle(String label, boolean selected, int width, Consumer<Boolean> onChange) {
+	public static AbstractWidget toggle(String label, boolean selected, Consumer<Boolean> onChange) {
 		return Checkbox.builder(Text.literal(label), font())
 			.pos(0, 0)
-			.maxWidth(width)
 			.selected(selected)
 			.onValueChange((checkbox, value) -> onChange.accept(value))
 			.build();

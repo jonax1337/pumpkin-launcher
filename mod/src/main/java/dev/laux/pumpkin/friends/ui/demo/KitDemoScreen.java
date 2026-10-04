@@ -66,7 +66,7 @@ final class KitDemoScreen extends PumpkinScreen {
 		return List.of(
 			Row.heading(Text.translate("pumpkin_friends.kitdemo.form")),
 			Row.fullWidth("form.name", name),
-			Row.fullWidth("form.toggle", Widgets.toggle(Text.translate("pumpkin_friends.kitdemo.toggle"), false, 100, selected -> { })),
+			Row.fullWidth("form.toggle", Widgets.toggle(Text.translate("pumpkin_friends.kitdemo.toggle"), false, selected -> { })),
 			Row.text(Text.translate("pumpkin_friends.kitdemo.clipboard"))
 				.withAction("form.copy", Widgets.button(Text.translate("pumpkin_friends.kitdemo.copy"), ACTION_WIDTH,
 					() -> Clipboard.copy(name.getValue())))

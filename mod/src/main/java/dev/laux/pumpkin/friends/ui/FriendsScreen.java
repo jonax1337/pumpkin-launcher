@@ -123,7 +123,7 @@ public final class FriendsScreen extends PumpkinScreen {
 		rows.add(Row.heading(Text.translate("pumpkin_friends.section.invite")));
 		shown.friends().stream().filter(friend -> invitable.contains(friend.id()))
 			.forEach(friend -> rows.add(Row.fullWidth("invite.choice." + friend.id(),
-				Widgets.toggle(friend.name(), selectedFriendIds.contains(friend.id()), FULL_ROW_WIDTH,
+				Widgets.toggle(friend.name(), selectedFriendIds.contains(friend.id()),
 					selected -> toggle(friend.id(), selected)))));
 		inviteButton = Widgets.button(Text.translate("pumpkin_friends.invite"), FULL_ROW_WIDTH, this::invite);
 		inviteButton.active = canInvite();
