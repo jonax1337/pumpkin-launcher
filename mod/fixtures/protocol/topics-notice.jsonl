@@ -1,0 +1,1 @@
+{"direction":"launcherToMod","line":{"type":"state","topic":"friends","rev":2,"value":[{"id":"f1","name":"Alex","mcUuid":null,"presence":"online","notice":{"type":"renamed","previousName":"Alt"}},{"id":"f2","name":"Bea","mcUuid":null,"presence":"offline","notice":{"type":"identityChanged"}},{"id":"f3","name":"Cleo","mcUuid":null,"presence":"playing"}]}}

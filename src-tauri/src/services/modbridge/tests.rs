@@ -195,7 +195,7 @@ pub(super) async fn wait_until(what: &str, condition: impl Fn() -> bool) {
 }
 
 fn friend(id: &str, name: &str) -> ModFriend {
-    ModFriend { id: id.into(), name: name.into(), mc_uuid: None, presence: ModPresence::Online }
+    ModFriend { id: id.into(), name: name.into(), mc_uuid: None, presence: ModPresence::Online, notice: None }
 }
 
 fn friends(names: &[(&str, &str)]) -> TopicValue {
@@ -786,7 +786,13 @@ async fn an_op_that_does_not_finish_is_answered_with_timeout_at_the_deadline() {
         fixture.bridge.inner.clone(),
         "i1".into(),
         "a1".into(),
-        super::launch::Link { id: 1, queue: Arc::new(super::queue::LinkQueue::new(Duration::ZERO)), abort: Default::default() },
+        super::launch::Link {
+            id: 1,
+            queue: Arc::new(super::queue::LinkQueue::new(Duration::ZERO)),
+            abort: Default::default(),
+            peer: "127.0.0.1:50000".parse().unwrap(),
+            local: "127.0.0.1:50001".parse().unwrap(),
+        },
     );
     let started = tokio::time::Instant::now();
 

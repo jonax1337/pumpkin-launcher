@@ -200,6 +200,18 @@ pub struct ModFriend {
     pub name: String,
     pub mc_uuid: Option<String>,
     pub presence: ModPresence,
+    /// Fehlt auf dem Draht, wenn es keinen Hinweis gibt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notice: Option<ModFriendNotice>,
+}
+
+/// Ein Hinweis zu einem Freund. Die Mod darf nur `renamed` quittieren (`friend.acknowledge`); `identityChanged` prüft der
+/// Nutzer im Launcher.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum ModFriendNotice {
+    Renamed { previous_name: String },
+    IdentityChanged,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

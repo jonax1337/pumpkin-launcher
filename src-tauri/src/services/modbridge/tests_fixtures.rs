@@ -70,8 +70,9 @@ fn read_back<T: serde::Serialize + serde::de::DeserializeOwned>(entry: &Entry) -
 #[test]
 fn the_fixture_files_are_the_documented_ones() {
     let expected = [
-        "errors", "events", "handshake-ok", "hints", "limits", "ops", "pending", "reject-build", "reject-duplicate", "reject-owner",
-        "reject-protocol", "reject-retry", "reject-token", "request-response", "topics",
+        "errors-reasons", "errors", "events", "handshake-ok", "hints", "limits", "ops-join-failed", "ops", "pending", "reject-build",
+        "reject-duplicate", "reject-owner", "reject-protocol", "reject-retry", "reject-token", "request-response", "topics-notice",
+        "topics",
     ];
     let files: Vec<String> = fixture_files().iter().map(|name| name.trim_end_matches(".jsonl").to_owned()).collect();
     assert_eq!(files, expected);
@@ -100,7 +101,7 @@ fn requests_name_valid_ids_and_ops_in_their_canonical_form() {
 
 #[test]
 fn every_result_reads_into_the_result_type_of_its_op() {
-    for file in ["ops.jsonl", "request-response.jsonl", "pending.jsonl"] {
+    for file in ["ops.jsonl", "ops-join-failed.jsonl", "request-response.jsonl", "pending.jsonl"] {
         let mut open: Option<(String, Op)> = None;
         for entry in entries_of(file) {
             match (entry.direction, read_back::<Value>(&entry)) {
@@ -129,7 +130,20 @@ fn every_op_of_the_table_has_a_request_fixture() {
         .collect();
     let table: BTreeSet<String> = OP_NAMES.iter().map(|name| (*name).to_owned()).collect();
     assert_eq!(named, table);
-    assert_eq!(OP_NAMES.len(), 21);
+    assert_eq!(OP_NAMES.len(), 22);
+}
+
+#[test]
+fn the_fixture_of_join_failed_is_the_only_op_outside_ops_jsonl() {
+    let in_ops: BTreeSet<String> = entries_of("ops.jsonl")
+        .iter()
+        .filter(|entry| entry.direction == Direction::ModToLauncher)
+        .map(|entry| entry.line["op"].as_str().unwrap().to_owned())
+        .collect();
+    let table: BTreeSet<String> = OP_NAMES.iter().map(|name| (*name).to_owned()).collect();
+
+    assert_eq!(table.difference(&in_ops).collect::<Vec<_>>(), ["join.failed"]);
+    assert_eq!(entries_of("ops-join-failed.jsonl")[0].line["op"], "join.failed");
 }
 
 #[test]
@@ -147,7 +161,7 @@ fn every_reject_reason_has_its_own_fixture_file() {
 #[test]
 fn every_topic_has_a_state_fixture_that_reads_into_its_value_type() {
     let mut seen = BTreeSet::new();
-    for entry in entries_of("topics.jsonl") {
+    for entry in entries_of("topics.jsonl").into_iter().chain(entries_of("topics-notice.jsonl")) {
         let LauncherFrame::State { topic, value, .. } = read_back::<LauncherFrame>(&entry) else { panic!("{}", entry.line) };
         let typed = TopicValue::parse(topic, value.clone()).unwrap_or_else(|err| panic!("{topic:?}: {err}"));
         assert_eq!(typed.to_json(), value, "{topic:?}");

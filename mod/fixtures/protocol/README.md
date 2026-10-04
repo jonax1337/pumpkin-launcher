@@ -30,9 +30,12 @@ Inside one file, a `res` or `pending` belongs to the `req` with the same `id` th
 | `reject-token.jsonl`, `reject-protocol.jsonl`, `reject-owner.jsonl`, `reject-build.jsonl`, `reject-duplicate.jsonl`, `reject-retry.jsonl` | one `hello` and the `reject` with that reason |
 | `request-response.jsonl` | a request answered with a result and with errors (with and without params) |
 | `pending.jsonl` | a request that waits for the launcher dialog: `req`, `pending`, `res` |
-| `ops.jsonl` | every operation of 5.4: its `req` and the `res` it gets when it succeeds |
+| `ops.jsonl` | every operation of 5.4 but `join.failed`: its `req` and the `res` it gets when it succeeds |
 | `errors.jsonl` | one `res` for every error code |
 | `topics.jsonl` | a `state` push for every topic, with the aliases `f1`, `f2`, ... |
+| `topics-notice.jsonl` | the `friends` topic with a `notice` on an entry (`renamed` with `previousName`, `identityChanged`); an entry without a notice has no `notice` key |
+| `ops-join-failed.jsonl` | `join.failed`: the mod reports that connecting to the world of `invite.joinHere` failed; the launcher answers `{}` |
+| `errors-reasons.jsonl` | errors whose code is coarse and carries its cause in `params.reason` (`badRequest`, `denied`, `busy`, `directoryUnavailable`, `rateLimited`, `notFound`, `nameUnknown`) and the numbers `max`, `days`, `missing`, `extra` |
 | `events.jsonl` | every `notify` kind and every `closing` reason |
 | `hints.jsonl` | `lanOpened`, `lanClosed`, `ready`, `ping`, `pong` |
 | `limits.jsonl` | the numbers of 5.3 and 5.6 |

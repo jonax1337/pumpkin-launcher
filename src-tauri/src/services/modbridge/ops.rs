@@ -48,6 +48,9 @@ pub enum Op {
     InviteJoinHere { id: String },
     #[serde(rename = "join.leave")]
     JoinLeave {},
+    /// Die Mod meldet: das Verbinden des Spiels mit der Welt aus `invite.joinHere` ist gescheitert.
+    #[serde(rename = "join.failed")]
+    JoinFailed {},
     #[serde(rename = "host.invite")]
     HostInvite {
         friends: Vec<String>,
@@ -80,7 +83,7 @@ pub enum Op {
 }
 
 /// Die Namen aller Vorgänge von 5.4, in der Reihenfolge von [`Op`]; `Op::name` ist dazu die Gegenprobe.
-pub const OP_NAMES: [&str; 21] = [
+pub const OP_NAMES: [&str; 22] = [
     "state.sync",
     "launcher.open",
     "request.answer",
@@ -90,6 +93,7 @@ pub const OP_NAMES: [&str; 21] = [
     "invite.plan",
     "invite.joinHere",
     "join.leave",
+    "join.failed",
     "host.invite",
     "host.kick",
     "host.stop",
@@ -126,6 +130,7 @@ impl Op {
             Self::InvitePlan { .. } => "invite.plan",
             Self::InviteJoinHere { .. } => "invite.joinHere",
             Self::JoinLeave {} => "join.leave",
+            Self::JoinFailed {} => "join.failed",
             Self::HostInvite { .. } => "host.invite",
             Self::HostKick { .. } => "host.kick",
             Self::HostStop {} => "host.stop",
@@ -384,6 +389,7 @@ mod tests {
             parse("invite.plan", json!({"id": "i1"})),
             parse("invite.joinHere", json!({"id": "i1"})),
             parse("join.leave", json!({})),
+            parse("join.failed", json!({})),
             parse("host.invite", json!({"friends": ["f1"], "showWorld": true})),
             parse("host.kick", json!({"friend": "f1"})),
             parse("host.stop", json!({})),

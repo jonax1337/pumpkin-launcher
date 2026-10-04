@@ -25,6 +25,8 @@ mod tests;
 mod tests_fixtures;
 #[cfg(test)]
 mod tests_limits;
+#[cfg(test)]
+mod tests_ops;
 
 use std::sync::Arc;
 
@@ -62,6 +64,25 @@ impl ModBridge {
 
     fn with_parts(signals: GameSignals, timing: Timing, owner: Arc<dyn OwnerCheck>) -> Self {
         Self { inner: Arc::new(Inner::new(signals, timing, owner)) }
+    }
+
+    /// Eine Brücke, deren Besitzer-Urteil der Test vorgibt statt des Betriebssystems.
+    #[cfg(test)]
+    pub fn with_owner_for_test(
+        signals: GameSignals,
+        owns: Arc<dyn Fn(u32, std::net::SocketAddr, std::net::SocketAddr) -> std::io::Result<bool> + Send + Sync>,
+    ) -> Self {
+        Self::with_parts(signals, Timing::PRODUCTION, Arc::new(owner::OwnerFn(owns)))
+    }
+
+    /// Der Datensatz des Starts sagt „kein Microsoft-Konto“: ein Zustand, den `register_launch` gar nicht erst entstehen
+    /// lässt, den INGAME 7 aber trotzdem prüft.
+    #[cfg(test)]
+    pub fn mark_offline_for_test(&self, instance_id: &str) {
+        let mut state = lock(&self.inner.state);
+        if let Some(launch) = state.launches.get_mut(instance_id) {
+            launch.expectations.online_account = false;
+        }
     }
 
     /// Beginnt auf `127.0.0.1` an einem freien Port zu lauschen; läuft die Brücke schon, passiert nichts.
@@ -150,6 +171,11 @@ impl ModBridge {
         lock(&self.inner.state).launches.get(instance_id).is_some_and(|launch| launch.link.is_some())
     }
 
+    /// Ob irgendein Spiel gerade mit einer Mod verbunden ist.
+    pub fn has_active_link(&self) -> bool {
+        lock(&self.inner.state).launches.values().any(|launch| launch.link.is_some())
+    }
+
     /// Die Bildschirme, die die Mod mit `ready` gemeldet hat; `None`, solange sie es nicht getan hat.
     pub fn ready_screens(&self, instance_id: &str) -> Option<Vec<String>> {
         lock(&self.inner.state).launches.get(instance_id).and_then(|launch| launch.ready.clone())
@@ -166,6 +192,13 @@ impl ModBridge {
         let state = lock(&self.inner.state);
         let Some(link) = state.launches.get(instance_id).and_then(|launch| launch.link.as_ref()) else { return };
         link.queue.push_event(protocol::Event::Notify { kind, name });
+    }
+
+    /// Erlaubt `scope` für den Start, als hätte der Nutzer vorab zugestimmt: die Stelle, an der Tests den Zustand von
+    /// „Aktionen im Spiel: erlauben“ herstellen, solange die Erwartungen kein eigenes Feld dafür tragen.
+    #[cfg(test)]
+    pub fn allow_scope_for_test(&self, instance_id: &str, scope: ops::Scope) {
+        self.inner.allow_scope(instance_id, scope);
     }
 
     /// Setzt den Bearbeiter der Vorgänge ein; bis dahin antwortet die Brücke jedem mit `unsupportedOp`.

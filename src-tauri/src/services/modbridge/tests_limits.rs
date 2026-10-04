@@ -193,7 +193,9 @@ fn ms(milliseconds: u64) -> Duration {
 fn wide_friends(round: usize) -> TopicValue {
     let name = |index: usize| format!("{}{round:04}{index:02}", "\u{1F383}".repeat(24));
     TopicValue::Friends(
-        (0..50).map(|index| ModFriend { id: format!("{index:064x}"), name: name(index), mc_uuid: None, presence: protocol::ModPresence::Online }).collect(),
+        (0..50)
+            .map(|index| ModFriend { id: format!("{index:064x}"), name: name(index), mc_uuid: None, presence: protocol::ModPresence::Online, notice: None })
+            .collect(),
     )
 }
 

@@ -8,7 +8,7 @@ use tokio::time::Instant;
 
 use super::launch::{Link, PromptRefusal};
 use super::ops::{ErrorCode, Op, OpError, OpOutcome, RateClass, Scope};
-use super::protocol::{LauncherFrame, Prompt};
+use super::protocol::{Event, LauncherFrame, ModNotify, Prompt};
 use super::Inner;
 
 pub trait OpHandler: Send + Sync {
@@ -46,7 +46,8 @@ impl OpContext {
 
     /// Stellt sicher, dass dieser Spielstart `scope` darf. Ist er noch nicht erlaubt, wird `ask` (der Dialog im
     /// Launcher; `true` heißt erlaubt) abgewartet, und die Mod bekommt solange `pending`. Es läuft höchstens eine
-    /// Rückfrage je Spielstart (sonst `busy`), nach drei in zehn Minuten wird ohne Frage abgelehnt (`denied`).
+    /// Rückfrage je Spielstart (sonst `busy`), nach drei in zehn Minuten wird ohne Frage abgelehnt (`denied`). Jede
+    /// Ablehnung, ob vom Nutzer oder wegen der Obergrenze, meldet der Mod zusätzlich den Toast `scopeDenied`.
     pub async fn require_scope(&self, scope: Scope, ask: impl Future<Output = bool>) -> Result<(), OpError> {
         if self.inner.scope_allowed(&self.instance_id, scope) {
             return Ok(());
@@ -57,8 +58,40 @@ impl OpContext {
             open.close(Some(scope));
             Ok(())
         } else {
-            Err(OpError::new(ErrorCode::Denied))
+            drop(open);
+            Err(self.denied())
         }
+    }
+
+    /// Ob dieser Start ein Microsoft-Konto hat (INGAME 7, Schritt 1).
+    pub fn online_account(&self) -> bool {
+        self.inner.launch_facts(&self.instance_id).is_some_and(|facts| facts.online_account)
+    }
+
+    /// Der Prozess des Spiels, sobald der Launcher ihn kennt.
+    pub fn game_pid(&self) -> Option<u32> {
+        self.inner.launch_facts(&self.instance_id)?.pid
+    }
+
+    /// Prüft noch einmal, dass die Verbindung dem Spielprozess gehört, mit derselben Prüfung wie bei der Anmeldung. Wer
+    /// das nicht belegen kann, bekommt `denied` (INGAME 5.2, 7).
+    pub async fn verify_owner(&self) -> Result<(), OpError> {
+        let owned = match self.game_pid() {
+            Some(pid) => self.inner.verify_owner(pid, self.link.peer, self.link.local).await.is_ok(),
+            None => false,
+        };
+        if owned {
+            Ok(())
+        } else {
+            tracing::warn!(instance = %self.instance_id, "Verbindung der Mod gehört nicht (mehr) zum Spielprozess, Vorgang abgelehnt");
+            Err(OpError::new(ErrorCode::Denied).with_param("reason", "owner"))
+        }
+    }
+
+    /// Abgelehnt: die Mod bekommt `denied`, und ein Toast sagt dem Spieler, dass der Launcher den Vorgang nicht erlaubt hat.
+    fn denied(&self) -> OpError {
+        self.link.queue.push_event(Event::Notify { kind: ModNotify::ScopeDenied, name: None });
+        OpError::new(ErrorCode::Denied)
     }
 
     /// Zählt einen Vorgang der Klasse für diesen Spielstart; für Klassen, die die Brücke nicht schon vorher zählt.
@@ -74,7 +107,7 @@ impl OpContext {
         match self.inner.begin_prompt(&self.instance_id, Instant::now()) {
             Ok(()) => Ok(OpenPrompt { inner: self.inner.clone(), instance_id: self.instance_id.clone(), closed: false }),
             Err(PromptRefusal::Open) => Err(OpError::new(ErrorCode::Busy)),
-            Err(PromptRefusal::Exhausted) => Err(OpError::new(ErrorCode::Denied)),
+            Err(PromptRefusal::Exhausted) => Err(self.denied()),
         }
     }
 }

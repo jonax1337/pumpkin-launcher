@@ -204,6 +204,9 @@ struct Node {
     secrets: Arc<MemorySecretStore>,
     events: Arc<RecordingEvents>,
     dir: TempDir,
+    /// Die Spielsignale und die Brücke, mit denen der Dienst gebaut ist; Spiele mit der Mod hängen sich daran.
+    signals: GameSignals,
+    bridge: ModBridge,
 }
 
 impl Node {
@@ -211,11 +214,11 @@ impl Node {
     async fn start(world: &World, account: McIdentity, dir: TempDir, secrets: Arc<MemorySecretStore>) -> Self {
         let signals = GameSignals::default();
         let bridge = ModBridge::new(signals.clone());
-        let friends = Friends::new(&Dirs::new(dir.path()), secrets.clone(), signals, bridge, world.options()).unwrap();
+        let friends = Friends::new(&Dirs::new(dir.path()), secrets.clone(), signals.clone(), bridge.clone(), world.options()).unwrap();
         let tokens = Arc::new(FakeTokens::new(account.clone()));
         friends.attach_directory(world.deps(tokens.clone(), TEST_POLL)).unwrap();
         let events = Arc::new(RecordingEvents::default());
-        let node = Self { friends, account, tokens, secrets, events, dir };
+        let node = Self { friends, account, tokens, secrets, events, dir, signals, bridge };
         node.friends.start(node.events.clone(), Some(node.profile())).await;
         node
     }
@@ -1055,3 +1058,8 @@ async fn after_mojang_refuses_the_account_the_cached_certificate_is_never_used()
 
     assert_eq!(error_key(&refused), "errors.friends.directoryNotAllowed");
 }
+
+// ---- Freunde per Name aus dem Spiel (INGAME 5.4): solange eine Mod verbunden ist, kein neues Zertifikat ----
+
+#[path = "tests_mod_link_by_name.rs"]
+mod from_the_game;

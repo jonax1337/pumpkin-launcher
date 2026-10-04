@@ -3,6 +3,7 @@
 //! von `register_launch` bis `forget`; eine Verbindung kommt und geht in dieser Zeit, ohne dass Zähler oder
 //! Zustimmungen zurückgesetzt werden.
 use std::collections::{HashMap, HashSet};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -44,6 +45,9 @@ pub(super) struct Link {
     pub queue: Arc<LinkQueue>,
     /// Beendet die Verbindung sofort, ohne die Warteschlange zu leeren.
     pub abort: CancellationToken,
+    /// Die Endpunkte des TCP-Sockets, damit der Besitzer später noch einmal geprüft werden kann (INGAME 7, Schritt 4).
+    pub peer: SocketAddr,
+    pub local: SocketAddr,
 }
 
 impl Link {
@@ -77,6 +81,7 @@ pub(super) struct Launch {
 
 impl Launch {
     pub fn new(token: String, expectations: Expectations) -> Self {
+        let grants = Grants::with_allowed(pre_granted(&expectations));
         Self {
             token,
             expectations,
@@ -84,7 +89,7 @@ impl Launch {
             link: None,
             topics: TopicStore::default(),
             limits: OpLimits::default(),
-            grants: Grants::new(),
+            grants,
             ready: None,
         }
     }
@@ -94,6 +99,13 @@ impl Launch {
             link.close(reason);
         }
     }
+}
+
+/// Die Bereiche, die der Nutzer für diesen Start vorab erlaubt hat (Einstellung „Aktionen im Spiel“ = erlauben,
+/// Amendment A13). Das Feld dafür bringt Paket W1 in die Erwartungen; bis dahin erlaubt der Start nichts vorab. Dies ist
+/// die einzige Stelle, die W1 anfassen muss.
+fn pre_granted(_expectations: &Expectations) -> impl IntoIterator<Item = Scope> {
+    std::iter::empty()
 }
 
 /// Die Zählfenster der Vorgänge je Klasse (INGAME 5.6).
@@ -136,8 +148,15 @@ pub(super) struct Grants {
 }
 
 impl Grants {
+    /// Ein Start, dessen `allowed` der Nutzer schon vor dem Spielstart erlaubt hat: dafür fragt der Launcher nie.
+    fn with_allowed(allowed: impl IntoIterator<Item = Scope>) -> Self {
+        let prompts = SlidingWindow::new(PROMPTS_PER_SPAN, PROMPT_SPAN);
+        Self { allowed: allowed.into_iter().collect(), prompt_open: false, prompts }
+    }
+
+    #[cfg(test)]
     fn new() -> Self {
-        Self { allowed: HashSet::new(), prompt_open: false, prompts: SlidingWindow::new(PROMPTS_PER_SPAN, PROMPT_SPAN) }
+        Self::with_allowed([])
     }
 
     pub fn is_allowed(&self, scope: Scope) -> bool {
@@ -233,6 +252,22 @@ mod tests {
         grants.end_prompt(None);
         assert_eq!(grants.begin_prompt(at(start, 3)), Err(PromptRefusal::Exhausted));
         assert_eq!(grants.begin_prompt(at(start, 600)), Ok(()), "die erste Rückfrage ist zehn Minuten her");
+    }
+
+    #[test]
+    fn a_scope_the_user_allowed_before_the_start_needs_no_prompt_and_shows_as_allow() {
+        let mut grants = Grants::with_allowed([Scope::Social]);
+
+        assert!(grants.is_allowed(Scope::Social) && !grants.is_allowed(Scope::Share));
+        assert_eq!(grants.scopes(), Scopes { share: ScopeState::Ask, social: ScopeState::Allow });
+        assert_eq!(grants.begin_prompt(Instant::now()), Ok(()), "andere Bereiche fragen weiter, mit vollem Kontingent");
+    }
+
+    #[test]
+    fn without_a_pre_grant_in_the_expectations_nothing_is_allowed_up_front() {
+        let launch = Launch::new("t".into(), Expectations::unconstrained());
+
+        assert!(!launch.grants.is_allowed(Scope::Share) && !launch.grants.is_allowed(Scope::Social));
     }
 
     #[test]
