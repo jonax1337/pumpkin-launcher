@@ -12,15 +12,22 @@ The biggest update since the first release: Pumpkin Friends. Keep in touch with 
 
 The in-game menu is available for these Minecraft versions and loaders (each cell smoke-tested through the real launch path; more versions arrive as their cells pass the same test):
 
-| Minecraft | Loader | Loader from | Java | In-game menu |
-|---|---|---|---|---|
-| 26.3 | Fabric | 0.19.5 | 25 | yes |
-| 26.2 | NeoForge | 26.2.0.57 | 25 | yes |
-| 1.21.11 | Fabric | 0.17.3 | 21 | yes |
-| 1.21.8 | Fabric | 0.16.13 | 21 | yes |
-| 1.21.1 | Fabric | 0.15.11 | 21 | yes |
-| 1.21.1 | NeoForge | 21.1.0 | 21 | yes |
-| 1.20.1 | Forge | 47.4.0 | 17 | yes |
+| Minecraft | Loader | Loader from | Java |
+|---|---|---|---|
+| 26.3 | Fabric | 0.19.5 | 25 |
+| 26.1 – 26.2 | Fabric | 0.18.4 | 25 |
+| 26.2 | NeoForge | 26.2.0.57 | 25 |
+| 1.21.9 – 1.21.11 | Fabric | 0.17.0 | 21 |
+| 1.21.10 – 1.21.11 | NeoForge | 21.10.63 | 21 |
+| 1.21.6 – 1.21.8 | Fabric | 0.16.13 | 21 |
+| 1.21.8 | NeoForge | 21.8.9 | 21 |
+| 1.21.2 – 1.21.5 | Fabric | 0.16.10 | 21 |
+| 1.21.3 – 1.21.5 | NeoForge | 21.3.56 | 21 |
+| 1.20.5 – 1.21.1 | Fabric | 0.15.11 | 21 |
+| 1.21 – 1.21.1 | NeoForge | 21.1.0 | 21 |
+| 1.20.2 – 1.20.4 | Fabric | 0.14.22 | 17 |
+| 1.20 – 1.20.1 | Fabric | 0.14.21 | 17 |
+| 1.20.1 | Forge | 47.4.0 | 17 |
 
 Vanilla instances (no loader), Quilt, offline accounts and other Minecraft versions launch exactly as before; the instance page says what a launch would need.
 

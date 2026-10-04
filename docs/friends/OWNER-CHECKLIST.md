@@ -25,7 +25,7 @@ Release-Zweig gemergt ist und CI grün läuft. **Blockiert:** das Release selbst
   `src-tauri/Cargo.toml` (und `Cargo.lock`), `mod/gradle.properties` (Mod-Version = Launcher-Version, INGAME 3.2).
   Der Release-Workflow prüft das beim Tag noch einmal selbst und bricht sonst ab.
 - [ ] **0.2. Mod-Dist bauen.** Aus `mod/` (JDKs wie in `mod/README.md`): `.\gradlew.bat build modIndex`. Erwartet:
-  `build/mod-index/mod-index.json` mit `modVersion: "0.2.0"` und sieben Jars `pumpkin_friends-0.2.0+<Knoten>.jar`,
+  `build/mod-index/mod-index.json` mit `modVersion: "0.2.0"` und 18 Jars `pumpkin_friends-0.2.0+<Knoten>.jar`,
   Budget-Meldung von `checkJarBudget`, und `node scripts/validate-mod-index.mjs build/mod-index/mod-index.json build/mod-index`
   meldet keinen Fehler.
 - [ ] **0.3. Rauchtest lokal für den Release-Commit** (öffnet kurz ein Spielfenster, etwa 3 Minuten je Zelle;
@@ -50,9 +50,9 @@ Release-Zweig gemergt ist und CI grün läuft. **Blockiert:** das Release selbst
 - [ ] **0.5. Erster Lauf des erweiterten Release-Workflows** (baut jetzt zuerst die Mod, alle Knoten aus
   `mod/nodes.txt`, und bettet sie über `PUMPKIN_MOD_DIST` in die Launcher-Binärdateien ein). Prüfe im Lauf unter
   *Actions → Release*:
-  - [ ] Die Jobs *Mod node list*, *Mod node …* (sieben Stück) und *Mod package* sind grün.
+  - [ ] Die Jobs *Mod node list*, *Mod node …* (alle Knoten aus `mod/nodes.txt`, derzeit 18) und *Mod package* sind grün.
   - [ ] Im Job *Build (…)* besteht der Schritt *Check the mod dist (index and version)* und loggt
-        `Embedding pumpkin_friends 0.2.0 (7 jars).`
+        `Embedding pumpkin_friends 0.2.0 (18 jars).`
   - [ ] Nirgendwo im Workflow ist das Cargo-Feature `smoke` gesetzt (der Rauchtest bleibt lokal/nächtlich).
   - [ ] Der Windows-Installer aus dem Entwurf enthält die Mod: Installieren, eine Instanz aus der Tabelle starten
         (Freunde an) — die Instanzseite zeigt „Freunde-Menü im Spiel: aktiv“, im `mods`-Ordner der Instanz liegt
