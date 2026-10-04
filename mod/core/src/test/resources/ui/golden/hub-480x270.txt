@@ -1,0 +1,37 @@
+screen 480x270, 5 tabs
+title 85,6 310x10
+status 85,18 310x10
+tab0 85,32 61x20
+tab1 148,32 61x20
+tab2 211,32 60x20
+tab3 273,32 60x20
+tab4 335,32 60x20
+body 85,56 310x182
+footer 85,242 310x28
+footerButton 1/1 140,246 200x20
+footerButton 1/2 85,246 153x20
+footerButton 2/2 242,246 153x20
+page 1: first row 0, 6 rows shown
+  row0 85,56 304x24 | line1 89,56 232x24 | action 325,58 60x20
+  row1 85,80 304x24 | line1 89,80 232x24 | action 325,82 60x20
+  row2 85,104 304x36 | line1 89,108 232x12 | line2 89,124 232x12 | action 325,112 60x20
+  row3 85,140 304x24 | line1 89,140 232x24 | action 325,142 60x20
+  row4 85,164 304x24 | line1 89,164 232x24 | action 325,166 60x20
+  row5 85,188 304x36 | line1 89,192 232x12 | line2 89,208 232x12 | action 325,196 60x20
+  scrollbar thumb 393,56 2x29
+page 2: first row 6, 6 rows shown
+  row6 85,56 304x24 | line1 89,56 232x24 | action 325,58 60x20
+  row7 85,80 304x24 | line1 89,80 232x24 | action 325,82 60x20
+  row8 85,104 304x36 | line1 89,108 232x12 | line2 89,124 232x12 | action 325,112 60x20
+  row9 85,140 304x24 | line1 89,140 232x24 | action 325,142 60x20
+  row10 85,164 304x24 | line1 89,164 232x24 | action 325,166 60x20
+  row11 85,188 304x36 | line1 89,192 232x12 | line2 89,208 232x12 | action 325,196 60x20
+  scrollbar thumb 393,83 2x29
+last page: first row 34, 6 rows shown
+  row34 85,56 304x24 | line1 89,56 232x24 | action 325,58 60x20
+  row35 85,80 304x36 | line1 89,84 232x12 | line2 89,100 232x12 | action 325,88 60x20
+  row36 85,116 304x24 | line1 89,116 232x24 | action 325,118 60x20
+  row37 85,140 304x24 | line1 89,140 232x24 | action 325,142 60x20
+  row38 85,164 304x36 | line1 89,168 232x12 | line2 89,184 232x12 | action 325,172 60x20
+  row39 85,200 304x24 | line1 89,200 232x24 | action 325,202 60x20
+  scrollbar thumb 393,209 2x29
