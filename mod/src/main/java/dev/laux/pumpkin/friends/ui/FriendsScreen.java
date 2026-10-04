@@ -11,6 +11,7 @@ import dev.laux.pumpkin.friends.state.Join;
 import dev.laux.pumpkin.friends.state.Session;
 import dev.laux.pumpkin.friends.ui.hub.InvitesTab;
 import dev.laux.pumpkin.friends.ui.hub.OptionsTab;
+import dev.laux.pumpkin.friends.ui.hub.ShareLink;
 import dev.laux.pumpkin.friends.ui.hub.ShareTab;
 import dev.laux.pumpkin.friends.ui.kit.PumpkinScreen;
 import dev.laux.pumpkin.friends.ui.kit.Row;
@@ -43,7 +44,7 @@ public final class FriendsScreen extends PumpkinScreen {
 		super(Text.translate("pumpkin_friends.title"), parent);
 		this.client = client;
 		this.invites = new InvitesTab(client, this);
-		this.share = new ShareTab(client);
+		this.share = new ShareTab(ShareLink.to(client));
 		this.options = new OptionsTab(client);
 	}
 

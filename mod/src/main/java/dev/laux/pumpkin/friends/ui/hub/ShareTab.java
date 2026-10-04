@@ -1,6 +1,5 @@
 package dev.laux.pumpkin.friends.ui.hub;
 
-import dev.laux.pumpkin.friends.bridge.BridgeClient;
 import dev.laux.pumpkin.friends.compat.Lan;
 import dev.laux.pumpkin.friends.compat.Text;
 import dev.laux.pumpkin.friends.compat.Toasts;
@@ -39,14 +38,14 @@ public final class ShareTab {
 	private static final int ACTION_WIDTH = 62;
 	private static final int FULL_ROW_WIDTH = 110;
 
-	private final BridgeClient client;
+	private final ShareLink link;
 	private final ShareControls controls = new ShareControls();
 	// Nur gesetzt, während die Zeilen dieses Baus laufen; die Schalter der gleichen Bauwirkung schalten ihn frei.
 	private AbstractWidget inviteButton;
 	private final Set<ShareModel.State> renderedOnce = EnumSet.noneOf(ShareModel.State.class);
 
-	public ShareTab(BridgeClient client) {
-		this.client = client;
+	public ShareTab(ShareLink link) {
+		this.link = link;
 	}
 
 	/** The rows of the tab's current state; called once per widget build, so every widget is fresh. */
@@ -76,12 +75,12 @@ public final class ShareTab {
 
 	private ShareModel.Input input() {
 		// "Gerade teilt {Instanz}": die Themen tragen heute nicht, wer anders teilt (Abweichung im Bericht).
-		return new ShareModel.Input(client.topics().game(), Lan.onMultiplayerServer(), client.topics().join(),
-			client.topics().session().isPresent(), Lan.publishedPort().isPresent(), Optional.empty());
+		return new ShareModel.Input(link.topics().game(), Lan.onMultiplayerServer(), link.topics().join(),
+			link.topics().session().isPresent(), Lan.publishedPort().isPresent(), Optional.empty());
 	}
 
 	private List<Row> joinRows() {
-		Join join = client.topics().join().orElseThrow();
+		Join join = link.topics().join().orElseThrow();
 		Row row = Row.text(Text.translate("pumpkin_friends.join.row", join.hostName(), pathName(join), rttName(join)));
 		return List.of(row.withAction("join.leave", Widgets.button(Text.translate("pumpkin_friends.join.leave"),
 			ACTION_WIDTH, () -> run(Ops.joinLeave()))));
@@ -98,7 +97,7 @@ public final class ShareTab {
 	}
 
 	private List<Row> notHostableRows() {
-		Game.Unhostable reason = client.topics().game().reason().orElseThrow();
+		Game.Unhostable reason = link.topics().game().reason().orElseThrow();
 		String text = switch (reason.kind()) {
 			case VERSION_UNSUPPORTED -> reason.minVersion()
 				.map(min -> Text.translate("pumpkin_friends.share.reason.versionUnsupported", min))
@@ -129,14 +128,14 @@ public final class ShareTab {
 
 	private List<Row> publishedRows() {
 		List<Row> rows = new ArrayList<>();
-		rows.add(Row.text(Text.translate("pumpkin_friends.share.published", client.topics().game().lanPort().getAsInt())));
+		rows.add(Row.text(Text.translate("pumpkin_friends.share.published", link.topics().game().lanPort().getAsInt())));
 		addInviteSection(rows, "pumpkin_friends.section.invite");
 		return rows;
 	}
 
 	private List<Row> sessionRows() {
 		List<Row> rows = new ArrayList<>();
-		client.topics().session().ifPresent(session -> addGuests(rows, session));
+		link.topics().session().ifPresent(session -> addGuests(rows, session));
 		rows.add(Row.fullWidth("share.stop", Widgets.button(Text.translate("pumpkin_friends.stop_sharing"),
 			FULL_ROW_WIDTH, this::stopSharing)));
 		if (!Lan.canUnpublish()) {
@@ -160,7 +159,7 @@ public final class ShareTab {
 
 	/** The toggles of the invitable friends (max 7), the "Weltname zeigen" toggle and the [Einladen] button. */
 	private void addInviteSection(List<Row> rows, String headingKey) {
-		List<Friend> invitable = Invitees.of(client.topics().friends(), client.topics().session());
+		List<Friend> invitable = Invitees.of(link.topics().friends(), link.topics().session());
 		controls.retainAll(invitable.stream().map(Friend::id).collect(Collectors.toSet()));
 		if (invitable.isEmpty()) {
 			return;
@@ -190,7 +189,7 @@ public final class ShareTab {
 
 	/** Erst die Sitzung im Launcher beenden, dann - wo die Zeit es hergibt - die Welt aus dem LAN nehmen (A2). */
 	private void stopSharing() {
-		client.request(Ops.hostStop()).reply().thenAccept(ShareTab::endSharing);
+		link.ask(Ops.hostStop()).thenAccept(ShareTab::endSharing);
 	}
 
 	private static void endSharing(Reply<?> reply) {
@@ -199,7 +198,7 @@ public final class ShareTab {
 
 	/** Sends the operation; if the launcher refuses or does not answer, the player sees why as a toast. */
 	private void run(Op<?> operation) {
-		client.request(operation).reply().thenAccept(reply -> reply.error().ifPresent(Toasts::showError));
+		link.ask(operation).thenAccept(reply -> reply.error().ifPresent(Toasts::showError));
 	}
 
 	private static String lowercase(Enum<?> value) {

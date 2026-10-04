@@ -97,6 +97,7 @@
 	"pumpkin_friends.share.invite_more": "Weitere einladen:",
 	"pumpkin_friends.share.reinvite": "Erneut einladen",
 	"pumpkin_friends.share.show_world": "Weltname zeigen",
+	"pumpkin_friends.share.demo.title": "Teilen (Entwicklung)",
 	"pumpkin_friends.join.row": "Bei %s · %s · %s",
 	"pumpkin_friends.join.path.direct": "direkt",
 	"pumpkin_friends.join.path.relay": "Relay",
