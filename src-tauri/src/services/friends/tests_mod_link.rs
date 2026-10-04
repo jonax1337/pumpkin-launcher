@@ -14,6 +14,7 @@ use crate::services::modbridge::ops::{Scope, OP_NAMES};
 pub(super) struct RecordingApp {
     activity: Mutex<Vec<ModActivityEntry>>,
     opens: Mutex<Vec<ModOpenEvent>>,
+    link_changes: Mutex<Vec<String>>,
 }
 
 impl ModAppEvents for RecordingApp {
@@ -24,9 +25,18 @@ impl ModAppEvents for RecordingApp {
     fn open_launcher(&self, event: ModOpenEvent) {
         lock(&self.opens).push(event);
     }
+
+    fn link_changed(&self, instance_id: &str) {
+        lock(&self.link_changes).push(instance_id.to_owned());
+    }
 }
 
 impl RecordingApp {
+    /// Die Instanzen, für die die App erfuhr, dass sich die Verbindung der Mod geändert hat, in der Reihenfolge.
+    pub(super) fn link_changes(&self) -> Vec<String> {
+        lock(&self.link_changes).clone()
+    }
+
     pub(super) fn entries(&self) -> Vec<ModActivityEntry> {
         lock(&self.activity).clone()
     }
@@ -230,6 +240,21 @@ async fn a_manifest_the_guests_would_reject_makes_the_game_unhostable() {
     assert_eq!(game["value"]["reason"], json!({ "type": "manifestInvalid" }));
     assert_eq!((error_code(&share), share["error"]["params"]["reason"].as_str()), (Some("badRequest"), Some("manifestInvalid")));
     assert!(scene.host.events.mod_confirm_requests().is_empty(), "niemand bestätigt ein Teilen, das scheitern würde");
+}
+
+// ---- Verbindung ----
+
+#[tokio::test]
+async fn the_app_hears_when_the_link_of_an_instance_comes_up_and_when_it_goes_down() {
+    let mut scene = ModScene::new().await;
+    until_true("link up announced", || scene.app.link_changes().len() == 1).await;
+    assert!(scene.host.bridge.is_connected(HOST_INSTANCE));
+
+    scene.game_mod.write.shutdown().await.unwrap();
+    until_true("link down announced", || scene.app.link_changes().len() == 2).await;
+
+    assert!(!scene.host.bridge.is_connected(HOST_INSTANCE), "the second announcement is the end of the link");
+    assert_eq!(scene.app.link_changes(), [HOST_INSTANCE, HOST_INSTANCE]);
 }
 
 // ---- Jeder Vorgang hat eine Antwort ----

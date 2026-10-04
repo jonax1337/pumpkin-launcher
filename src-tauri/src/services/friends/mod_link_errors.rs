@@ -71,6 +71,7 @@ fn translation(name: &str) -> Option<Translation> {
         "msAccountRequired" => Translation::plain(ErrorCode::MsAccountRequired),
         "notFound.friend" => Translation::plain(ErrorCode::UnknownFriend),
         "notFound.request" | "notFound.invite" | "inviteExpired" | "sessionNotFound" => Translation::plain(ErrorCode::NotFound),
+        "instanceMismatch" => Translation::plain(ErrorCode::InstanceMismatch),
         "nameUnknown" => Translation::plain(ErrorCode::NameUnknown),
         "nameNotFindable" => Translation::reasoned(ErrorCode::NameUnknown),
         "directoryUnavailable" => Translation::plain(ErrorCode::DirectoryUnavailable),
@@ -81,7 +82,7 @@ fn translation(name: &str) -> Option<Translation> {
         "sessionActive" | "gameNotRunning" => Translation::plain(ErrorCode::Busy),
         "tooManyNameRequests" | "tooManyCodes" | "requestsFull" | "friendLimit" => Translation::reasoned(ErrorCode::Busy),
         "nameInvalid" | "nameOwn" | "alreadyFriends" | "alreadyRequested" | "alreadyRequestedName" | "codeInvalid" | "codeOwn"
-        | "instanceMismatch" | "manifestInvalid" | "portInvalid" => Translation::reasoned(ErrorCode::BadRequest),
+        | "manifestInvalid" | "portInvalid" => Translation::reasoned(ErrorCode::BadRequest),
         _ => None,
     }
 }
@@ -127,6 +128,7 @@ mod tests {
             (invalid(coded!("errors.friends.nameInvalid")), ErrorCode::BadRequest),
             (invalid(coded!("errors.friends.alreadyFriends")), ErrorCode::BadRequest),
             (invalid(coded!("errors.friends.codeInvalid")), ErrorCode::BadRequest),
+            (invalid(coded!("errors.friends.instanceMismatch")), ErrorCode::InstanceMismatch),
             (AppError::NotFound("Anfrage „x“ wurde nicht gefunden".into()), ErrorCode::NotFound),
             (AppError::Cancelled, ErrorCode::Internal),
         ];

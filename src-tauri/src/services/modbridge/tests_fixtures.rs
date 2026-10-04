@@ -11,7 +11,7 @@ use super::limits::*;
 use super::ops::{windows_of, ErrorCode, Op, RateClass, OP_NAMES};
 use super::protocol::{is_valid_request_id, LauncherFrame, ModFrame, RejectReason};
 use super::tests::Fixture;
-use super::topics::{Topic, TopicValue, MAX_BLOCKED, MAX_CODES, MAX_FRIENDS, MAX_INVITES, MAX_REQUESTS};
+use super::topics::{DirectoryLine, Topic, TopicValue, MAX_BLOCKED, MAX_CODES, MAX_FRIENDS, MAX_INVITES, MAX_REQUESTS};
 
 const FIXTURE_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../mod/fixtures/protocol");
 
@@ -71,8 +71,8 @@ fn read_back<T: serde::Serialize + serde::de::DeserializeOwned>(entry: &Entry) -
 fn the_fixture_files_are_the_documented_ones() {
     let expected = [
         "errors-reasons", "errors", "events", "handshake-ok", "hints", "limits", "ops-join-failed", "ops", "pending", "reject-build",
-        "reject-duplicate", "reject-owner", "reject-protocol", "reject-retry", "reject-token", "request-response", "topics-notice",
-        "topics",
+        "reject-duplicate", "reject-owner", "reject-protocol", "reject-retry", "reject-token", "request-response",
+        "topics-me-directory", "topics-notice", "topics",
     ];
     let files: Vec<String> = fixture_files().iter().map(|name| name.trim_end_matches(".jsonl").to_owned()).collect();
     assert_eq!(files, expected);
@@ -161,7 +161,8 @@ fn every_reject_reason_has_its_own_fixture_file() {
 #[test]
 fn every_topic_has_a_state_fixture_that_reads_into_its_value_type() {
     let mut seen = BTreeSet::new();
-    for entry in entries_of("topics.jsonl").into_iter().chain(entries_of("topics-notice.jsonl")) {
+    let files = ["topics.jsonl", "topics-me-directory.jsonl", "topics-notice.jsonl"];
+    for entry in files.into_iter().flat_map(entries_of) {
         let LauncherFrame::State { topic, value, .. } = read_back::<LauncherFrame>(&entry) else { panic!("{}", entry.line) };
         let typed = TopicValue::parse(topic, value.clone()).unwrap_or_else(|err| panic!("{topic:?}: {err}"));
         assert_eq!(typed.to_json(), value, "{topic:?}");
@@ -169,6 +170,22 @@ fn every_topic_has_a_state_fixture_that_reads_into_its_value_type() {
     }
     let all = [Topic::Me, Topic::Friends, Topic::Requests, Topic::Invites, Topic::Session, Topic::Join, Topic::Game, Topic::Codes, Topic::Blocked];
     assert_eq!(seen, all.into_iter().collect::<BTreeSet<_>>());
+}
+
+#[test]
+fn the_me_topic_names_the_directory_state_and_the_fixture_shows_every_state() {
+    let directory_of = |entry: Entry| {
+        let LauncherFrame::State { value, .. } = read_back::<LauncherFrame>(&entry) else { panic!("{}", entry.line) };
+        let TopicValue::Me(me) = TopicValue::parse(Topic::Me, value).unwrap() else { panic!("{}", entry.line) };
+        me.directory
+    };
+
+    let shown: Vec<DirectoryLine> = entries_of("topics-me-directory.jsonl").into_iter().map(directory_of).collect();
+
+    let every_state = [DirectoryLine::Active, DirectoryLine::Off, DirectoryLine::Unreachable, DirectoryLine::NotAllowed, DirectoryLine::Unavailable];
+    assert_eq!(shown, every_state);
+    let main_push = entries_of("topics.jsonl").into_iter().find(|entry| entry.line["topic"] == "me").unwrap();
+    assert_eq!(directory_of(main_push), DirectoryLine::Active);
 }
 
 #[test]
@@ -196,6 +213,8 @@ fn every_error_code_has_a_response_fixture() {
         ErrorCode::DirectoryUnavailable,
         ErrorCode::Timeout,
         ErrorCode::Internal,
+        ErrorCode::InstanceMismatch,
+        ErrorCode::Forbidden,
     ];
     let model: BTreeSet<String> = all.iter().map(|code| serde_json::to_value(code).unwrap().as_str().unwrap().to_owned()).collect();
     assert_eq!(in_files, model);

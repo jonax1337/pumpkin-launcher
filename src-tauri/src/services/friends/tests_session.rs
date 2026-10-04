@@ -39,7 +39,7 @@ use super::{AccountProfile, Friends, JoinTimers, NetOptions};
 use crate::error::AppResult;
 use crate::models::{new_id, Instance, Mod, ModKind, ModSource, NewInstance};
 use crate::services::gamesignal::{GameSignal, GameSignals};
-use crate::services::modbridge::{ModBridge, ENV_PORT, ENV_TOKEN};
+use crate::services::modbridge::{Expectations, ModBridge, ENV_PORT, ENV_TOKEN};
 use crate::services::p2p::tunnel::LocalListener;
 use crate::services::p2p::{frame, BiStream, PeerId, RelayEntry, RelayOperator, RelayTls};
 use crate::services::store::JsonStore;
@@ -1301,7 +1301,7 @@ async fn row_host_launcher_crashes() {
 /// Die Umgebung für das Spiel der Instanz; den Prozess des Spiels nennt der Test selbst (er ist es), damit die Mod nicht
 /// auf das Spielsignal warten muss.
 fn mod_env(node: &Node, instance_id: &str) -> Vec<(String, String)> {
-    let env = node.bridge.launch_env(instance_id, ModLoader::Fabric);
+    let env = node.bridge.register_launch(instance_id, Expectations::unconstrained());
     node.bridge.bind_pid(instance_id, std::process::id());
     env
 }

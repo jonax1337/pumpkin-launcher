@@ -235,32 +235,31 @@ fn recording_ops() -> (Arc<dyn OpHandler>, Arc<Mutex<Vec<Op>>>) {
 
 // --- Spielstarts und Umgebung ---------------------------------------------------------------------------------------
 
-#[tokio::test]
-async fn launch_env_is_empty_when_stopped_or_without_a_loader_that_can_carry_the_mod() {
-    let bridge = ModBridge::new(GameSignals::default());
-    assert!(bridge.launch_env("i1", ModLoader::Fabric).is_empty(), "gestoppt");
-    bridge.start().await.unwrap();
-    for loader in [ModLoader::Vanilla, ModLoader::Quilt] {
-        assert!(bridge.launch_env("i1", loader).is_empty(), "{loader:?}");
-    }
-    for loader in [ModLoader::Fabric, ModLoader::NeoForge, ModLoader::Forge] {
-        assert_eq!(bridge.launch_env("i1", loader).len(), 3, "{loader:?}");
-    }
-    bridge.stop().await;
-    assert!(bridge.launch_env("i1", ModLoader::Fabric).is_empty(), "wieder gestoppt");
+fn register_unconstrained(bridge: &ModBridge, instance_id: &str) -> Vec<(String, String)> {
+    bridge.register_launch(instance_id, Expectations::unconstrained())
 }
 
 #[tokio::test]
-async fn launch_env_names_port_token_and_protocol_two_and_every_launch_gets_a_new_token() {
+async fn a_launch_is_registered_only_while_the_bridge_listens() {
+    let bridge = ModBridge::new(GameSignals::default());
+    assert!(register_unconstrained(&bridge, "i1").is_empty(), "gestoppt");
+    bridge.start().await.unwrap();
+    assert_eq!(register_unconstrained(&bridge, "i1").len(), 3);
+    bridge.stop().await;
+    assert!(register_unconstrained(&bridge, "i1").is_empty(), "wieder gestoppt");
+}
+
+#[tokio::test]
+async fn a_registered_launch_names_port_token_and_protocol_two_and_every_launch_gets_a_new_token() {
     let bridge = ModBridge::new(GameSignals::default());
     bridge.start().await.unwrap();
-    let env = bridge.launch_env("i1", ModLoader::Fabric);
+    let env = register_unconstrained(&bridge, "i1");
     let names: Vec<&str> = env.iter().map(|(name, _)| name.as_str()).collect();
     assert_eq!(names, [ENV_PORT, ENV_TOKEN, ENV_PROTOCOL]);
     assert!(env[0].1.parse::<u16>().is_ok());
     assert!(env[1].1.len() == 64 && env[1].1.bytes().all(|b| b.is_ascii_hexdigit()), "{}", env[1].1);
     assert_eq!(env[2].1, "2");
-    assert_ne!(bridge.launch_env("i1", ModLoader::Fabric)[1].1, env[1].1);
+    assert_ne!(register_unconstrained(&bridge, "i1")[1].1, env[1].1);
 }
 
 #[tokio::test]
@@ -278,9 +277,9 @@ async fn starting_twice_keeps_one_listener() {
     let bridge = ModBridge::new(GameSignals::default());
     bridge.start().await.unwrap();
     let port = |env: Vec<(String, String)>| env[0].1.clone();
-    let first = port(bridge.launch_env("i1", ModLoader::Fabric));
+    let first = port(register_unconstrained(&bridge, "i1"));
     bridge.start().await.unwrap();
-    assert_eq!(port(bridge.launch_env("i1", ModLoader::Fabric)), first);
+    assert_eq!(port(register_unconstrained(&bridge, "i1")), first);
 }
 
 // --- Anmeldung -------------------------------------------------------------------------------------------------------
@@ -441,7 +440,7 @@ async fn forgetting_a_launch_says_why_disconnects_the_mod_and_voids_the_token() 
 async fn a_new_launch_of_the_same_instance_voids_the_old_token() {
     let fixture = Fixture::start().await;
     let (mut old, _) = fixture.login().await;
-    fixture.bridge.launch_env("i1", ModLoader::Fabric);
+    register_unconstrained(&fixture.bridge, "i1");
     let rest = old.expect_closed().await;
     assert_eq!(rest, [json!({"type": "event", "event": "closing", "reason": "replaced"})]);
     let mut late = fixture.connect().await;
@@ -457,7 +456,7 @@ async fn stopping_the_bridge_disconnects_everyone_and_frees_the_port() {
     let rest = client.expect_closed().await;
     assert_eq!(rest, [json!({"type": "event", "event": "closing", "reason": "bridgeStopped"})]);
     assert!(TcpStream::connect(("127.0.0.1", fixture.port)).await.is_err());
-    assert!(fixture.bridge.launch_env("i1", ModLoader::Fabric).is_empty());
+    assert!(register_unconstrained(&fixture.bridge, "i1").is_empty());
 }
 
 // --- Nachrichten der Mod, die keine Vorgänge sind ----------------------------------------------------------------------
@@ -720,7 +719,7 @@ async fn a_new_launch_of_the_instance_starts_without_the_consent_and_counters_of
     old.request("a1", "host.invite", json!({"friends": []})).await;
     old.read_type("res").await;
 
-    let env = fixture.bridge.launch_env("i1", ModLoader::Fabric);
+    let env = register_unconstrained(&fixture.bridge, "i1");
     fixture.bridge.bind_pid("i1", std::process::id());
     let token = env.iter().find(|(name, _)| name == ENV_TOKEN).unwrap().1.clone();
     let mut fresh = fixture.connect().await;

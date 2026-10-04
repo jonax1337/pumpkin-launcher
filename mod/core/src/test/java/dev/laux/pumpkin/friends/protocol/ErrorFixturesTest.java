@@ -49,6 +49,14 @@ class ErrorFixturesTest {
 	}
 
 	@Test
+	void theTwoCodesOfAmendment15AreKnownByTheirWireNames() {
+		assertEquals(ErrorCode.INSTANCE_MISMATCH, ErrorCode.fromWire("instanceMismatch"));
+		assertEquals(ErrorCode.FORBIDDEN, ErrorCode.fromWire("forbidden"));
+		assertEquals("instanceMismatch", ErrorCode.INSTANCE_MISMATCH.wireName());
+		assertEquals("forbidden", ErrorCode.FORBIDDEN.wireName());
+	}
+
+	@Test
 	void aCodeFromAnewerLauncherIsRecognisedAsUnknownNotAsOneOfOurs() {
 		String line = "{\"type\":\"res\",\"id\":\"x1\",\"ok\":false,\"error\":{\"code\":\"somethingNew\",\"params\":{}}}";
 

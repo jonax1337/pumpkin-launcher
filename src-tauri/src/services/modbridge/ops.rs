@@ -339,6 +339,11 @@ pub enum ErrorCode {
     DirectoryUnavailable,
     Timeout,
     Internal,
+    /// `invite.joinHere`: das laufende Spiel passt nicht zur Einladung (andere Instanz, Version oder Inhalte).
+    InstanceMismatch,
+    /// Der Vorgang ist für die Mod nicht erlaubt, auch nicht mit Zustimmung: `friend.acknowledge` für einen Hinweis, den nur
+    /// der Nutzer im Launcher prüft (`identityChanged`, `addedInGame`).
+    Forbidden,
 }
 
 /// Ein Fehler als Antwort: der Code und seine Parameter (etwa `min` bei `versionUnsupported`).

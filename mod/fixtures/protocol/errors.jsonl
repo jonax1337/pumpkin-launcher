@@ -16,3 +16,5 @@
 {"direction":"launcherToMod","line":{"type":"res","id":"e16","ok":false,"error":{"code":"directoryUnavailable","params":{}}}}
 {"direction":"launcherToMod","line":{"type":"res","id":"e17","ok":false,"error":{"code":"timeout","params":{}}}}
 {"direction":"launcherToMod","line":{"type":"res","id":"e18","ok":false,"error":{"code":"internal","params":{}}}}
+{"direction":"launcherToMod","line":{"type":"res","id":"e19","ok":false,"error":{"code":"instanceMismatch","params":{}}}}
+{"direction":"launcherToMod","line":{"type":"res","id":"e20","ok":false,"error":{"code":"forbidden","params":{}}}}

@@ -7,15 +7,15 @@ use std::sync::Arc;
 use super::errors::mod_error;
 use super::{FriendSessions, Shared};
 use crate::services::friends::contract::{
-    Availability, BlockedPeer, Friend, FriendCode, FriendNotice, FriendRequest, FriendsState, NetworkStatus, Presence,
-    RequestDirection, RequestState, MAX_GUESTS, MIN_MC_LABEL,
+    Availability, BlockedPeer, DirectoryState, Friend, FriendCode, FriendNotice, FriendRequest, FriendsState, NetworkStatus,
+    Presence, RequestDirection, RequestState, MAX_GUESTS, MIN_MC_LABEL,
 };
 use crate::services::friends::sessions::shown_name;
 use crate::services::modbridge::ops::{ErrorCode, OpError};
 use crate::services::modbridge::protocol::{ModFriend, ModFriendNotice, ModPresence, ModSession};
 use crate::services::modbridge::topics::{
-    BlockedView, CodeView, GameLan, GameView, HostableReason, IncomingRequest, MeAvailability, MeView, NetworkLine, OutgoingRequest,
-    OutgoingState, RequestsView, TopicValue, MAX_BLOCKED, MAX_CODES, MAX_FRIENDS, MAX_INVITES, MAX_REQUESTS,
+    BlockedView, CodeView, DirectoryLine, GameLan, GameView, HostableReason, IncomingRequest, MeAvailability, MeView, NetworkLine,
+    OutgoingRequest, OutgoingState, RequestsView, TopicValue, MAX_BLOCKED, MAX_CODES, MAX_FRIENDS, MAX_INVITES, MAX_REQUESTS,
 };
 
 /// Baut die Themen der Instanz neu und gibt sie an die Brücke; die schickt nur, was sich geändert hat.
@@ -33,19 +33,41 @@ pub(super) async fn publish(shared: &Arc<Shared>, instance_id: &str, friends: &[
 }
 
 fn me(state: &FriendsState) -> TopicValue {
-    let availability = match state.availability {
+    let fingerprint = state.me.as_ref().map(|me| me.fingerprint.clone());
+    TopicValue::Me(MeView {
+        enabled: state.enabled,
+        availability: availability_line(state.availability),
+        network: network_line(&state.network),
+        fingerprint,
+        directory: directory_line(state.directory.state),
+    })
+}
+
+fn availability_line(availability: Availability) -> MeAvailability {
+    match availability {
         Availability::Available => MeAvailability::Available,
         Availability::NoSecretStore => MeAvailability::NoSecretStore,
         Availability::IdentityLost => MeAvailability::IdentityLost,
-    };
-    let network = match state.network {
+    }
+}
+
+fn network_line(network: &NetworkStatus) -> NetworkLine {
+    match network {
         NetworkStatus::Off => NetworkLine::Off,
         NetworkStatus::Starting => NetworkLine::Starting,
         NetworkStatus::Online { .. } => NetworkLine::Online,
         NetworkStatus::Degraded { .. } => NetworkLine::Degraded,
-    };
-    let fingerprint = state.me.as_ref().map(|me| me.fingerprint.clone());
-    TopicValue::Me(MeView { enabled: state.enabled, availability, network, fingerprint })
+    }
+}
+
+fn directory_line(directory: DirectoryState) -> DirectoryLine {
+    match directory {
+        DirectoryState::Active => DirectoryLine::Active,
+        DirectoryState::Off => DirectoryLine::Off,
+        DirectoryState::Unreachable => DirectoryLine::Unreachable,
+        DirectoryState::NotAllowed => DirectoryLine::NotAllowed,
+        DirectoryState::Unavailable => DirectoryLine::Unavailable,
+    }
 }
 
 /// Die bestätigten, nicht vom Freund entfernten Freunde, benannt mit `alias ?? displayName`.
@@ -337,8 +359,23 @@ mod tests {
         let TopicValue::Me(view) = me(&state) else { panic!("kein Thema me") };
 
         assert_eq!(
-            (view.enabled, view.availability, view.network, view.fingerprint.as_deref()),
-            (false, MeAvailability::IdentityLost, NetworkLine::Starting, Some("ab cd"))
+            (view.enabled, view.availability, view.network, view.fingerprint.as_deref(), view.directory),
+            (false, MeAvailability::IdentityLost, NetworkLine::Starting, Some("ab cd"), DirectoryLine::Off)
         );
+    }
+
+    #[test]
+    fn me_mirrors_every_state_of_the_directory() {
+        let states = [
+            (DirectoryState::Active, DirectoryLine::Active),
+            (DirectoryState::Off, DirectoryLine::Off),
+            (DirectoryState::Unreachable, DirectoryLine::Unreachable),
+            (DirectoryState::NotAllowed, DirectoryLine::NotAllowed),
+            (DirectoryState::Unavailable, DirectoryLine::Unavailable),
+        ];
+
+        for (state, line) in states {
+            assert_eq!(directory_line(state), line, "{state:?}");
+        }
     }
 }

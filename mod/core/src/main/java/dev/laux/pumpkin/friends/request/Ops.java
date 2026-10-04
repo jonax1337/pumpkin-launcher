@@ -69,6 +69,11 @@ public final class Ops {
 		return quick("join.leave", new JsonObject());
 	}
 
+	/** The game could not connect to the world that {@code invite.joinHere} named. */
+	public static Op<Done> joinFailed() {
+		return quick("join.failed", new JsonObject());
+	}
+
 	public static Op<Done> hostInvite(List<String> friends, boolean showWorld) {
 		JsonArray aliases = new JsonArray();
 		friends.forEach(aliases::add);

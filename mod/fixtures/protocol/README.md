@@ -31,11 +31,12 @@ Inside one file, a `res` or `pending` belongs to the `req` with the same `id` th
 | `request-response.jsonl` | a request answered with a result and with errors (with and without params) |
 | `pending.jsonl` | a request that waits for the launcher dialog: `req`, `pending`, `res` |
 | `ops.jsonl` | every operation of 5.4 but `join.failed`: its `req` and the `res` it gets when it succeeds |
-| `errors.jsonl` | one `res` for every error code |
-| `topics.jsonl` | a `state` push for every topic, with the aliases `f1`, `f2`, ... |
+| `errors.jsonl` | one `res` for every error code (`instanceMismatch`: `invite.joinHere` while the running game does not match the invite; `forbidden`: `friend.acknowledge` for a notice only the user may review, `identityChanged` or `addedInGame`) |
+| `topics.jsonl` | a `state` push for every topic, with the aliases `f1`, `f2`, ... The `me` value carries `directory` (`active`, `off`, `unreachable`, `notAllowed`, `unavailable`): the state of the name directory, as `DirectoryState` in the launcher |
+| `topics-me-directory.jsonl` | the `me` topic once for every value of `directory` |
 | `topics-notice.jsonl` | the `friends` topic with a `notice` on an entry (`renamed` with `previousName`, `identityChanged`); an entry without a notice has no `notice` key |
 | `ops-join-failed.jsonl` | `join.failed`: the mod reports that connecting to the world of `invite.joinHere` failed; the launcher answers `{}` |
-| `errors-reasons.jsonl` | errors whose code is coarse and carries its cause in `params.reason` (`badRequest`, `denied`, `busy`, `directoryUnavailable`, `rateLimited`, `notFound`, `nameUnknown`) and the numbers `max`, `days`, `missing`, `extra` |
+| `errors-reasons.jsonl` | errors whose code is coarse and carries its cause in `params.reason` (`badRequest`, `denied`, `busy`, `directoryUnavailable`, `rateLimited`, `notFound` for a friend without a notice, `nameUnknown`), the numbers `max` and `days`, and `instanceMismatch` with the plan `verdict` and the counts `missing`, `extra` |
 | `events.jsonl` | every `notify` kind and every `closing` reason |
 | `hints.jsonl` | `lanOpened`, `lanClosed`, `ready`, `ping`, `pong` |
 | `limits.jsonl` | the numbers of 5.3 and 5.6 |

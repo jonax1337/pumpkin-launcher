@@ -35,7 +35,6 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::error::AppResult;
-use crate::models::ModLoader;
 use crate::services::gamesignal::{GameSignal, GameSignals};
 use crate::services::lock;
 pub use handler::{OpContext, OpHandler};
@@ -113,16 +112,6 @@ impl ModBridge {
                 }
             }
             tracing::info!("Brücke zur Mod gestoppt");
-        }
-    }
-
-    /// Umgebungsvariablen für den Start einer Instanz mit Fabric, NeoForge oder Forge und laufender Brücke: Port, neuer
-    /// Token und Protokollversion, sonst nichts. Ein früherer Token derselben Instanz verfällt. Für den Start mit
-    /// Knoten und Mod-Build ruft der Aufrufer `register_launch`.
-    pub fn launch_env(&self, instance_id: &str, loader: ModLoader) -> Vec<(String, String)> {
-        match loader {
-            ModLoader::Fabric | ModLoader::NeoForge | ModLoader::Forge => self.register_launch(instance_id, Expectations::unconstrained()),
-            ModLoader::Vanilla | ModLoader::Quilt => Vec::new(),
         }
     }
 

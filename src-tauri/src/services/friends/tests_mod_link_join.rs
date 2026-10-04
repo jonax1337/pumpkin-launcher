@@ -272,7 +272,7 @@ async fn a_running_game_that_does_not_match_is_refused_with_the_verdict_of_the_p
 
     let answer = scene.join_here("j1").await;
 
-    assert_eq!((error_code(&answer), param(&answer, "reason"), param(&answer, "verdict")), (Some("badRequest"), Some("instanceMismatch"), Some("missingContent")));
+    assert_eq!((error_code(&answer), param(&answer, "verdict")), (Some("instanceMismatch"), Some("missingContent")));
     assert_eq!(answer["error"]["params"]["extra"], 1);
     assert!(scene.no_join_was_started(), "kein Zuhörer, kein Beitritt");
 }
@@ -284,7 +284,7 @@ async fn a_running_game_of_another_version_is_refused_as_no_instance() {
 
     let answer = scene.join_here("j1").await;
 
-    assert_eq!((error_code(&answer), param(&answer, "verdict")), (Some("badRequest"), Some("noInstance")));
+    assert_eq!((error_code(&answer), param(&answer, "verdict")), (Some("instanceMismatch"), Some("noInstance")));
     assert!(scene.no_join_was_started());
 }
 
