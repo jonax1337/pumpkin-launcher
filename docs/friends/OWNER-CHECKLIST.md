@@ -456,7 +456,7 @@ Nur Zellen, deren Rauchtest in der CI grün war, gehören ins Release; unverifiz
 von Hand freigeschaltet.
 
 - [ ] **9.0. Visueller Durchlauf im Spiel (dein nächster Schritt, sobald Paket U2 gemergt ist).** Entwicklungs-Build des
-  Launchers bauen (`pnpm mod:build` nicht vergessen, sonst ist der Index leer), dann eine `26.3-fabric`-Instanz mit
+  Launchers bauen (vorher `cd mod` und `.\gradlew.bat modIndex`, sonst ist der Index leer), dann eine `26.3-fabric`-Instanz mit
   Microsoft-Konto starten (Freunde an). *Erwartet:* Der Hub öffnet sich über den Knopf „Pumpkin Friends“ im
   Pausenmenü; im Instanzordner liegt keine neue Datei in `mods/`; die Instanzseite zeigt „Freunde-Menü im Spiel:
   aktiv“. Danach die Demo-Bildschirme von U2 über ihre Start-Properties (`hubdemo`, `sharedemo`) öffnen und prüfen:

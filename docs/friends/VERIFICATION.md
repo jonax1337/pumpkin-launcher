@@ -244,9 +244,10 @@ Settled by the spikes S0 to S2 and by the owner on Windows. Until a row has a re
 | B9 | Screen-init hook per loader (Fabric Mixin target `PauseScreen#init`, NeoForge and Forge screen-init event) on the tracer versions | smoke (S2) | partly | 2026-10-04 | Fabric Mixin proven by the 1.21.1-fabric tracer + mixin line; the button in a real pause menu is first seen by the owner pass |
 | B10 | A client-only NeoForge or Forge mod against modded servers (only relevant if instances are also used on servers) | owner | open | | no server in the smoke |
 
-Further checks the concept names (`INGAME.md` sections 3.8, 5.2, 5.4, 3.3). `friend.addByName` from the game may not
-fetch a new certificate for a running game until owner test O-5 (section N above) shows that a fetch does not disturb the
-game's chat key.
+Further checks the concept names (`INGAME.md` sections 3.8, 5.2, 5.4, 3.3). While any game link is active the launcher
+never fetches a new player certificate (A16, `INGAME.md` 5.4): the directory loop, `friend.addByName` and `friends.retry`
+all work cached-only and answer `directoryUnavailable` when the cache is empty or stale. The rule is unconditional and is
+not lifted by owner test O-5 (section N above); O-5 only records whether a fetch would disturb a running game's chat key.
 
 | Check | Result | Date |
 |---|---|---|

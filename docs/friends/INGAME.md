@@ -143,7 +143,7 @@ The jar is **launcher data, not instance content**. It is materialised under `<d
 - Validation is strict and runs in two places with the same rules, `mod/scripts/validate-mod-index.mjs` (build) and `src-tauri/src/services/friends/ingame/{index,validate}.rs` (launcher, `mod/index.schema.json` as schema): node ids and file names are unique, `(loader, minecraft id)` is unique across nodes, the strategy must suit the loader (`fabricAddMods` for Fabric, `fmlMavenRoot` and `fmlModFolders` for NeoForge and Forge), ids, file names and `modVersion` start with a letter or digit and use only letters, digits and `._+-` (at most 128 characters), `minecraft` is a non-empty list of release ids without duplicates, `javaMin` is 8 to 64, `sha256` is 64 lowercase hex characters, `file` ends in `.jar`. A node whose entry is invalid makes the whole index unusable. `verified` null or absent = the cell is OFF.
 - `src-tauri/build.rs` (or a generated `mod_jars.rs`) embeds the index and the jars with `include_bytes!`. Bytes inside the signed launcher binary are harder to tamper with than resource files next to it.
 - Budget: each jar at most 300 KB, all jars together at most 8 MB; CI fails above that. The jars are compressed already; no extra compression.
-- Dev builds without jars (`tauri dev`) get an empty index: injection reports "not available in this build". `pnpm mod:build` produces the jars for local work.
+- Dev builds without jars (`tauri dev`) get an empty index: injection reports "not available in this build". `cd mod && ./gradlew modIndex` produces the jars for local work.
 - Release CI order: `mod` matrix (build + smoke) -> artifact -> per-OS launcher build consumes the artifact. The mod version equals the launcher version.
 
 ### 3.3 When the launcher injects
