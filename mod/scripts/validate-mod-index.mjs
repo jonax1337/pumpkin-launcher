@@ -3,6 +3,7 @@
 // Ohne Jar-Ordner liegen die Jars neben der Indexdatei. Exit-Code 1 bei jeder verletzten Regel.
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { isDeepStrictEqual } from 'node:util';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,6 +36,33 @@ function verifiedProblems(verified) {
 		problems.push('verified.owner must be null or a YYYY-MM-DD date');
 	}
 	return problems;
+}
+
+// mod/verified.json (INGAME A17): {"<node id>": {"smoke": "YYYY-MM-DD", "owner": null | "YYYY-MM-DD"}}. Only a passed smoke
+// test adds an entry, so every key must be a node of nodes.txt and every entry must be a complete verified object.
+export function verifiedFileProblems(verifiedFile, knownNodeIds) {
+	if (!isPlainObject(verifiedFile)) {
+		return ['verified.json must be a JSON object'];
+	}
+	return Object.entries(verifiedFile).flatMap(([nodeId, verified]) => {
+		const label = `verified.json ${nodeId}`;
+		if (!knownNodeIds.includes(nodeId)) {
+			return [`${label}: not a node of nodes.txt`];
+		}
+		if (!isPlainObject(verified)) {
+			return [`${label}: must be an object`];
+		}
+		const unknownKeys = Object.keys(verified).filter(key => key !== 'smoke' && key !== 'owner');
+		const unknown = unknownKeys.length > 0 ? [`unknown field(s) ${unknownKeys.join(', ')}`] : [];
+		return [...unknown, ...verifiedProblems(verified)].map(problem => `${label}: ${problem}`);
+	});
+}
+
+// The index must carry exactly what verified.json says: an entry for a proven cell, null for every other node.
+export function verifiedAgreementProblems(index, verifiedFile) {
+	return index.nodes
+		.filter(node => !isDeepStrictEqual(node.verified ?? null, verifiedFile[node.id] ?? null))
+		.map(node => `node ${node.id}: verified in the index differs from verified.json`);
 }
 
 export function nodeProblems(node, modVersion) {
@@ -146,6 +174,22 @@ async function jarProblems(index, jarDirectory, budget) {
 	return problems;
 }
 
+async function readNodeIds(nodesPath) {
+	const text = await readFile(nodesPath, 'utf8');
+	return text.split(/\r?\n/).map(line => line.replace(/#.*/, '').trim()).filter(Boolean).map(line => line.split(/\s+/)[0]);
+}
+
+async function readVerifiedFile(path) {
+	try {
+		return JSON.parse(await readFile(path, 'utf8'));
+	} catch (failure) {
+		if (failure.code === 'ENOENT') {
+			return {};
+		}
+		throw failure;
+	}
+}
+
 async function main() {
 	const [indexPath, jarDirectory = dirname(indexPath ?? '.')] = process.argv.slice(2);
 	if (!indexPath) {
@@ -154,7 +198,11 @@ async function main() {
 	}
 	const modDirectory = join(dirname(fileURLToPath(import.meta.url)), '..');
 	const index = JSON.parse(await readFile(indexPath, 'utf8'));
-	const problems = indexProblems(index);
+	const verifiedFile = await readVerifiedFile(join(modDirectory, 'verified.json'));
+	const problems = [...indexProblems(index), ...verifiedFileProblems(verifiedFile, await readNodeIds(join(modDirectory, 'nodes.txt')))];
+	if (problems.length === 0) {
+		problems.push(...verifiedAgreementProblems(index, verifiedFile));
+	}
 	if (problems.length === 0) {
 		problems.push(...(await jarProblems(index, jarDirectory, await readBudget(join(modDirectory, 'gradle.properties')))));
 	}

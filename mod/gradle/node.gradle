@@ -1,6 +1,7 @@
 // Gemeinsamer Teil aller Knoten-Buildskripte (build-fabric, build-neoforge, build-forge). Jedes Skript wendet ihn an,
 // nachdem es sein Loader-Plugin geladen hat, und ruft am Ende registerModIndexEntry(<Jar-Provider>) auf.
 import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 import java.security.MessageDigest
 
 apply plugin: 'java-library'
@@ -104,6 +105,14 @@ abstract class ModIndexEntry extends DefaultTask {
 	}
 }
 
+// Die Zellen, deren Rauchtest bestanden ist (INGAME A17): mod/verified.json {"<Knoten-Id>": {"smoke": "JJJJ-MM-TT",
+// "owner": null | "JJJJ-MM-TT"}}. Nur ein bestandener Rauchtest trägt einen Eintrag ein; ein Knoten ohne Eintrag ist aus.
+// providers.fileContents macht die Datei zur Eingabe des Konfigurations-Caches: eine Änderung baut den Index neu.
+def verifiedCells() {
+	def text = providers.fileContents(rootProject.layout.projectDirectory.file('verified.json')).asText.orElse('{}').get()
+	new JsonSlurper().parseText(text)
+}
+
 // Schreibt build/mod-index-entry/{<jar>, entry.json}; stonecutter.gradle fasst die Einträge aller Knoten zusammen.
 ext.registerModIndexEntry = { jarFile ->
 	def entry = [
@@ -113,7 +122,7 @@ ext.registerModIndexEntry = { jarFile ->
 		minecraft: node.minecraft,
 		javaMin : node.javaMin,
 		strategy: node.strategy,
-		verified: null,
+		verified: verifiedCells()[node.id],
 	]
 	tasks.register('modIndexEntry', ModIndexEntry) {
 		group = 'build'

@@ -1,0 +1,7 @@
+{
+	"26.3-fabric": { "smoke": "2026-10-04", "owner": null },
+	"1.21.1-fabric": { "smoke": "2026-10-04", "owner": null },
+	"1.21.1-neoforge": { "smoke": "2026-10-04", "owner": null },
+	"26.2-neoforge": { "smoke": "2026-10-04", "owner": null },
+	"1.20.1-forge": { "smoke": "2026-10-04", "owner": null }
+}

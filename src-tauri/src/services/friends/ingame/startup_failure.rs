@@ -22,12 +22,22 @@ struct Pattern {
 }
 
 const PATTERNS: [Pattern; 4] = [
-    Pattern { kind: FailureKind::FabricIncompatibleModSet, markers: &["Incompatible mod set"] },
+    Pattern {
+        kind: FailureKind::FabricIncompatibleModSet,
+        // „Incompatible mods found!“ ist der Wortlaut des Fabric Loader 0.19 (Rauchtest S2, wrong-jar-Lauf), ältere
+        // Loader schreiben „Incompatible mod set!“.
+        markers: &["Incompatible mods found", "Incompatible mod set"],
+    },
     Pattern {
         kind: FailureKind::MixinApplyFailed,
         markers: &["Mixin apply", "Mixin transformation", "MixinApplyError", "InvalidInjectionException", "InjectionError", "Critical injection failure"],
     },
-    Pattern { kind: FailureKind::ModLoadingError, markers: &["ModLoadingException", "ModLoadingIssue", "mod loading error", "Error during mod loading"] },
+    Pattern {
+        kind: FailureKind::ModLoadingError,
+        // Die ersten beiden sind der Wortlaut von FML 4 (NeoForge 21.1, Rauchtest S2); die übrigen stehen in älteren
+        // und neueren FML-Versionen und im nachgebauten Forge-Log.
+        markers: &["Missing or unsupported mandatory dependencies", "Error during pre-loading phase", "ModLoadingException", "ModLoadingIssue", "mod loading error", "Error during mod loading"],
+    },
     Pattern { kind: FailureKind::UnsupportedClassVersion, markers: &["UnsupportedClassVersionError"] },
 ];
 
@@ -65,8 +75,9 @@ fn names_the_mod(line: &str) -> bool {
 mod tests {
     use super::*;
 
-    // Die Logs unter fixtures/ sind nach den Meldungsformaten der Loader nachgebaut (Fabric Loader, Mixin, FML,
-    // JVM), nicht mitgeschnitten. Der Rauchtest (Paket S2) ersetzt sie durch echte Mitschnitte der Zellen.
+    // Die Logs unter fixtures/: echte Mitschnitte der Zellen, wo der Rauchtest (Paket S2) sie erzeugt hat
+    // (wrong-jar-Läufe, siehe INGAME-SMOKE.md); die übrigen sind nach den Meldungsformaten der Loader nachgebaut
+    // (Mixin, JVM, unverwandter Absturz), bis ein Lauf sie liefert.
     const FABRIC_INCOMPATIBLE: &str = include_str!("fixtures/fabric_incompatible_mod_set.txt");
     const MIXIN_FAILED: &str = include_str!("fixtures/mixin_apply_failed.txt");
     const NEOFORGE_LOADING: &str = include_str!("fixtures/neoforge_mod_loading_error.txt");

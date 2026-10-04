@@ -70,6 +70,14 @@ time = { version = "0.3", features = ["parsing"] }
 [features]
 # Zusätzlich die öffentlichen Relays von n0 (nur Entwicklung und geschlossene Beta, siehe docs/friends/SPEC.md 3.2).
 beta-relays = []
+# Rauchtest der Mod im Spiel (docs/friends/INGAME-SMOKE.md): schaltet den Test `tests/smoke` frei und erlaubt ihm, das Tor
+# „Microsoft-Konto“ der Einspeisung zu überstimmen. Nie in den Standard-Features, nie im Release-Workflow.
+smoke = []
+
+[[test]]
+name = "smoke"
+path = "tests/smoke/main.rs"
+required-features = ["smoke"]
 
 [dev-dependencies]
 tokio = { version = "1.53.1", features = ["test-util"] }
