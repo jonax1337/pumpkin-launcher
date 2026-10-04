@@ -439,9 +439,13 @@ auf **Windows**; die Ergebnisse kommen in [`VERIFICATION.md`](VERIFICATION.md), 
 Release (Gate M3). Das ist die Ebene 5 aus `INGAME.md` Abschnitt 10; die Ebenen 1 bis 4 (Java, Rust, Zusammenspiel,
 Rauchtest pro Knoten) läuft die CI.
 
-**Stand: geplant.** Der Code folgt in späteren Wellen (`INGAME.md`, Abschnitt 11); bis dahin gibt es nichts zu testen.
-Die Mod installierst du nie und veröffentlichst du nirgends: Es gibt kein Modrinth-Projekt (Schritt 4 entfällt),
-keinen Token und keine Freigabe-Umgebung. Du brauchst nur:
+**Stand: Launcher-Seite gebaut und eingespeist (Stand `feat/ingame-mod`, 2026-10-04).** Fünf Zellen haben einen
+grünen Rauchtest (`INGAME-SMOKE.md`, Einträge in `mod/verified.json`): `26.3-fabric`, `1.21.1-fabric`,
+`1.21.1-neoforge`, `26.2-neoforge`, `1.20.1-forge`; `1.21.8-fabric` und `1.21.11-fabric` warten auf Paket V1a.
+Was noch fehlt, sind die Bildschirme (Paket U2) und der visuelle Nachweis im echten Spiel — daher ist dein
+**nächster Schritt der visuelle Durchlauf (9.0)**; die vollständige Release-Prüfung (9.1 bis 9.8) folgt, sobald ein
+Release-Kandidat mit Mod existiert. Die Mod installierst du nie und veröffentlichst du nirgends: Es gibt kein
+Modrinth-Projekt (Schritt 4 entfällt), keinen Token und keine Freigabe-Umgebung. Du brauchst nur:
 
 - einen Windows-PC mit dem Release-Kandidaten des Launchers (ein Build, der die Mod enthält),
 - **zwei Microsoft-Konten** mit Minecraft Java (eines pro Instanz, wie in G2) für „Teilen“ und „Beitreten“,
@@ -451,6 +455,15 @@ keinen Token und keine Freigabe-Umgebung. Du brauchst nur:
 Nur Zellen, deren Rauchtest in der CI grün war, gehören ins Release; unverifizierte Zellen sind aus und werden nicht
 von Hand freigeschaltet.
 
+- [ ] **9.0. Visueller Durchlauf im Spiel (dein nächster Schritt, sobald Paket U2 gemergt ist).** Entwicklungs-Build des
+  Launchers bauen (`pnpm mod:build` nicht vergessen, sonst ist der Index leer), dann eine `26.3-fabric`-Instanz mit
+  Microsoft-Konto starten (Freunde an). *Erwartet:* Der Hub öffnet sich über den Knopf „Pumpkin Friends“ im
+  Pausenmenü; im Instanzordner liegt keine neue Datei in `mods/`; die Instanzseite zeigt „Freunde-Menü im Spiel:
+  aktiv“. Danach die Demo-Bildschirme von U2 über ihre Start-Properties (`hubdemo`, `sharedemo`) öffnen und prüfen:
+  Tabs, Listen, Bildlauf, Fokus, deutsche und englische Texte, Fenstergröße ändern ohne Duplikat-Knopf. Zum Schluss
+  eine echte Freundesanfrage mit einem zweiten Konto aus dem Hub heraus beantworten (inkl. Rückfrage im Launcher).
+  Was auffällt, notiere in `VERIFICATION.md`, M3 („Owner pass“), Zeile 26.3-fabric; dieser Durchlauf ersetzt den
+  Kurzlauf 9.2 für diese Zelle noch nicht.
 - [ ] **9.1. Tiefenlauf pro Lader** (einmal pro Release, je ein Knoten von Fabric, NeoForge, Forge): Instanz mit Konto A
   starten (Freunde an). *Erwartet:* Im Pausenmenü steht „Pumpkin Friends“, im Instanzordner liegt **keine** neue Datei
   in `mods/`, die Instanzseite zeigt „Freunde-Menü im Spiel: aktiv“. Im Hub: eine Anfrage annehmen, danach eine Welt
