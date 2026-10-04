@@ -2,8 +2,9 @@ package dev.laux.pumpkin.friends.platform.fabric;
 
 import dev.laux.pumpkin.friends.bridge.BridgeClient;
 import dev.laux.pumpkin.friends.compat.GameScreens;
-import dev.laux.pumpkin.friends.ui.FriendsScreen;
 import dev.laux.pumpkin.friends.ui.UiSession;
+import dev.laux.pumpkin.friends.ui.demo.HubDemo;
+import dev.laux.pumpkin.friends.ui.hub.HubScreen;
 import dev.laux.pumpkin.friends.ui.model.GuiMetrics;
 import dev.laux.pumpkin.friends.ui.model.Rect;
 import java.util.List;
@@ -14,10 +15,10 @@ import net.minecraft.network.chat.Component;
 
 /**
  * Knopf „Pumpkin Friends“ im Pausemenü (INGAME 6.1): unter der Vanilla-Knopfspalte, in deren Breite, überschneidungsfrei.
- * Er steht wann immer die Mod nicht inaktiv ist, auch ohne Verbindung zum Launcher (der Bildschirm erklärt es dann).
- * Eingehängt wird er vom {@code PauseScreenMixin} am Ende von {@code PauseScreen#init()}; {@link #attach(BridgeClient)}
- * schaltet ihn frei, sobald die Mod vom Launcher gestartet wurde. Nach einem Fehler der Mod schaltet {@link UiSession}
- * die UI der Sitzung ab (INGAME 4.2), und der Knopf bleibt dann aus.
+ * Er steht wann immer die Mod nicht inaktiv ist, auch ohne Verbindung zum Launcher (der Hub erklärt es dann). Eingehängt
+ * wird er vom {@code PauseScreenMixin} am Ende von {@code PauseScreen#init()}; {@link #attach(BridgeClient)} schaltet ihn
+ * frei, sobald die Mod vom Launcher gestartet wurde. Nach einem Fehler der Mod schaltet {@link UiSession} die UI der
+ * Sitzung ab (INGAME 4.2), und der Knopf bleibt dann aus.
  */
 public final class PauseMenuButton {
 	private static final Component LABEL = Component.translatable("pumpkin_friends.button");
@@ -31,6 +32,8 @@ public final class PauseMenuButton {
 	/** Meldet den laufenden Client an; erst ab hier setzt der Mixin den Knopf ins Pausemenü. */
 	public static void attach(BridgeClient attached) {
 		client = attached;
+		// Der visuelle Prüfpfad des Owners: -Dpumpkin.dev.hubdemo (siehe HubDemo).
+		HubDemo.attach(attached);
 	}
 
 	/**
@@ -47,7 +50,7 @@ public final class PauseMenuButton {
 		if (slot == null) {
 			return null;
 		}
-		return Button.builder(LABEL, pressed -> UiSession.run(() -> GameScreens.show(new FriendsScreen(pause, client))))
+		return Button.builder(LABEL, pressed -> UiSession.run(() -> GameScreens.show(new HubScreen(pause, client))))
 			.bounds(slot.x(), slot.y(), slot.width(), slot.height()).build();
 	}
 
