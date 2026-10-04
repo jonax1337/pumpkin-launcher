@@ -223,5 +223,6 @@ export function createTauriBackend(): Backend {
     friendsIngameSetEnabled: (instanceId, enabled) => call("friends_ingame_set_enabled", { instanceId, enabled }),
     friendsIngameRetry: (instanceId) => call("friends_ingame_retry", { instanceId }),
     friendsModConfirm: (requestId, allow) => call("friends_mod_confirm", { requestId, allow }),
+    friendsModActivity: () => call("friends_mod_activity"),
   };
 }

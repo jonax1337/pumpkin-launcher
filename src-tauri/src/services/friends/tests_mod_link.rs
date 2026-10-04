@@ -50,11 +50,10 @@ pub(super) async fn answer_prompt_of(node: &Node, index: usize, allow: bool) -> 
     until_true("confirmation asked", || node.events.mod_confirms().len() > index).await;
     let event = node.events.mod_confirms().remove(index);
     node.sessions.mod_confirm(&event.request_id, allow).await.unwrap();
-    let summary = event.summary.expect("der Launcher nennt immer, was die Mod tun will");
     Prompt {
-        scope: event.scope.expect("der Launcher nennt immer den Bereich"),
-        op: summary.op,
-        target: summary.target_name,
+        scope: event.scope,
+        op: event.summary.op,
+        target: event.summary.target_name,
         friend_names: event.friends.into_iter().map(|friend| friend.display_name).collect(),
         instance_id: event.instance_id,
     }

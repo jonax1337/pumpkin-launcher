@@ -10,8 +10,8 @@ import type {
   FriendPresenceEvent, FriendRequest, FriendRequestEvent, FriendRequestRefusedEvent, FriendsEnableInput, FriendsSettings, FriendsState, HostSession,
   HostSessionEndedEvent, HostSessionEvent, IconChoice, ImportRequest, Instance, InstallProgress, InstanceScene, InstanceStatus, Invite,
   InviteEvent, InviteRevokedEvent, JavaInstall, JoinPlan, JoinSessionEvent, JoinTicket, LanEvent, LanStatus, LaunchOptions, LibrarySkin,
-  LoaderVersion, LocalFile, LogKind, LogPayload, LogSession, MigrationCheck, MigrationOutcome, MigrationTarget, ModConfirmEvent,
-  ModConnectionEvent, ModLoader, MsLoginStart, NetworkStatus, NewInstance, PackSelection, PackTarget, PackUpdateOutcome,
+  LoaderVersion, LocalFile, LogKind, LogPayload, LogSession, MigrationCheck, MigrationOutcome, MigrationTarget, ModActivityEntry, ModConfirmEvent,
+  ModConnectionEvent, ModLoader, ModOpenEvent, MsLoginStart, NetworkStatus, NewInstance, PackSelection, PackTarget, PackUpdateOutcome,
   Screenshot, Server, ServerStatus, SkinProfile, SkinVariant, StorageOverview, Template, VersionEntry, World, WorldBackup,
 } from "./types";
 
@@ -39,6 +39,10 @@ export interface BackendEvents {
   "lan-changed": LanEvent;
   "friends-mod": ModConnectionEvent;
   "friends-mod-confirm": ModConfirmEvent;
+  /** Ein Vorgang aus dem Spiel (Bereich `share` oder `social`) ist erledigt; der Eintrag kommt neu in die Aktivitätsliste. */
+  "friends-mod-activity": ModActivityEntry;
+  /** Die Mod bittet, das Fenster des Launchers nach vorn zu holen und eine Seite zu zeigen. */
+  "friends-mod-open": ModOpenEvent;
   /** Der Status der Mod im Spiel einer Instanz hat sich geändert (Schalter, Startfehler, Spielstart oder -ende). */
   "friends-ingame": IngameEvent;
   /** Der Start ist wahrscheinlich an der Mod gescheitert; ihre Einspeisung in die Instanz ist ausgeschaltet. */
@@ -262,6 +266,8 @@ export interface Backend {
   onLanChanged(cb: (p: LanEvent) => void): Promise<UnlistenFn>;
   onFriendsMod(cb: (p: ModConnectionEvent) => void): Promise<UnlistenFn>;
   onFriendsModConfirm(cb: (p: ModConfirmEvent) => void): Promise<UnlistenFn>;
+  onFriendsModActivity(cb: (p: ModActivityEntry) => void): Promise<UnlistenFn>;
+  onFriendsModOpen(cb: (p: ModOpenEvent) => void): Promise<UnlistenFn>;
   onFriendsIngame(cb: (p: IngameEvent) => void): Promise<UnlistenFn>;
   onFriendsIngameFailed(cb: (p: IngameFailedEvent) => void): Promise<UnlistenFn>;
 
@@ -422,6 +428,8 @@ export interface Backend {
   friendsIngameRetry(instanceId: string): Promise<IngameStatus>;
   /** Antwort auf `friends-mod-confirm`: darf die Mod die Welt teilen? */
   friendsModConfirm(requestId: string, allow: boolean): Promise<void>;
+  /** Die Vorgänge aus dem Spiel, die letzten 100, neueste zuerst; nur im Speicher des Launchers (INGAME 5.7). */
+  friendsModActivity(): Promise<ModActivityEntry[]>;
 }
 
 /** Die `on…`-Abonnements, die beide Backends gleich aus ihrem `Subscribe` bauen. */
@@ -446,6 +454,8 @@ export const eventSubscriptions = (on: Subscribe) => ({
   onLanChanged: (cb) => on("lan-changed", cb),
   onFriendsMod: (cb) => on("friends-mod", cb),
   onFriendsModConfirm: (cb) => on("friends-mod-confirm", cb),
+  onFriendsModActivity: (cb) => on("friends-mod-activity", cb),
+  onFriendsModOpen: (cb) => on("friends-mod-open", cb),
   onFriendsIngame: (cb) => on("friends-ingame", cb),
   onFriendsIngameFailed: (cb) => on("friends-ingame-failed", cb),
 } satisfies Partial<Backend>);

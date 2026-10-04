@@ -71,8 +71,8 @@ async fn ask_user(shared: &Shared, instance_id: &str, consent: &Consent) -> bool
         instance_id: instance_id.to_owned(),
         instance_name,
         friends: consent.friends.clone(),
-        scope: Some(consent.scope),
-        summary: Some(ModConfirmSummary { op: consent.op.to_owned(), target_name: consent.target_name.clone() }),
+        scope: consent.scope,
+        summary: ModConfirmSummary { op: consent.op.to_owned(), target_name: consent.target_name.clone() },
     }));
     let allowed = answer_within(answered, CONFIRM_WAIT).await;
     lock(&shared.mods.pending).remove(&request_id);

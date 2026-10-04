@@ -670,6 +670,23 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
         "friendId": "a1b2c3d4e5f60718293a4b5c6d7e8f900112233445566778899aabbccddeeff0",
         "displayName": "Bea"
       }
-    ]
+    ],
+    "scope": "share",
+    "summary": {
+      "op": "host.invite",
+      "targetName": "Alex, Bea"
+    }
+  },
+  "modActivityEntry": {
+    "at": "2026-10-04T12:30:05Z",
+    "instanceId": "inst-fabric",
+    "scope": "social",
+    "op": "friend.addByName",
+    "targetName": "Alex",
+    "ok": true
+  },
+  "event.modOpen": {
+    "instanceId": "inst-fabric",
+    "target": "requests"
   }
 }/*JSON-END*/ satisfies FriendsFixtureTypes;

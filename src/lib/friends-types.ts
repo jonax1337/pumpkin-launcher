@@ -67,7 +67,18 @@ export interface HostSessionEndedEvent { sessionId: string; reason: SessionEnd }
 export interface JoinSessionEvent { joinId: string; inviteId: string; instanceId: string; state: JoinState }
 export interface LanEvent { instanceId: string; lan: LanStatus | null }
 export interface ModConnectionEvent { instanceId: string; connected: boolean }
-export interface ModConfirmEvent { requestId: string; instanceId: string; instanceName: string; friends: { friendId: string; displayName: string }[] }
+/** Wofür die Mod im Launcher fragt (INGAME 5.5): eine Welt teilen oder die Freundesliste ändern. */
+export type ModScope = "share" | "social";
+/** Was die Mod tun will: der Vorgang (`friend.addByName`, INGAME 5.4) und die Person, um die es geht. */
+export interface ModConfirmSummary { op: string; targetName: string | null }
+export interface ModConfirmEvent { requestId: string; instanceId: string; instanceName: string; friends: { friendId: string; displayName: string }[];
+  scope: ModScope; summary: ModConfirmSummary }
+/** Ein Vorgang der Bereiche `share` und `social`, der aus dem Spiel kam (Aktivitätsliste, INGAME 5.7); `at` ist ISO-8601 in UTC. */
+export interface ModActivityEntry { at: string; instanceId: string; scope: ModScope; op: string; targetName: string | null; ok: boolean }
+/** Die Seite des Launchers, die `launcher.open` zeigt. */
+export type ModOpenTarget = "friends" | "requests" | "invites" | "settings";
+/** `friends-mod-open`: die Mod bittet, das Fenster des Launchers nach vorn zu holen und `target` zu zeigen. */
+export interface ModOpenEvent { instanceId: string; target: ModOpenTarget }
 export interface FriendJoin { joinId: string; address: string }
 
 // --- Freunde-Menü im Spiel (docs/friends/INGAME.md, 3.9); Rust-Gegenstück: Abschnitt am Ende von contract.rs ---
@@ -108,5 +119,6 @@ export interface FriendsFixtureTypes {
   "event.joinSession.waitingForGame": JoinSessionEvent; "event.joinSession.connecting": JoinSessionEvent;
   "event.joinSession.connected": JoinSessionEvent; "event.joinSession.ended": JoinSessionEvent;
   "event.lan": LanEvent; "event.modConnection": ModConnectionEvent; "event.modConfirm": ModConfirmEvent;
+  modActivityEntry: ModActivityEntry; "event.modOpen": ModOpenEvent;
   "event.ingame": IngameEvent; "event.ingameFailed": IngameFailedEvent;
 }

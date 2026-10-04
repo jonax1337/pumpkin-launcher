@@ -490,13 +490,10 @@ pub struct ModConfirmEvent {
     pub instance_name: String,
     /// Nur beim Bereich `share`: die Freunde, mit denen die Welt geteilt werden soll. Sonst leer.
     pub friends: Vec<ModConfirmFriend>,
-    /// Wofür gefragt wird. Fehlt nur im gemeinsamen Muster `event.modConfirm` aus der Zeit vor Protokoll 2; der Launcher
-    /// setzt es immer. Wird zur Pflicht, sobald das Muster und `friends-types.ts` nachgezogen sind.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub scope: Option<ModScope>,
-    /// Was die Mod tun will; fehlt aus demselben Grund nur im alten Muster.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub summary: Option<ModConfirmSummary>,
+    /// Wofür gefragt wird.
+    pub scope: ModScope,
+    /// Was die Mod tun will.
+    pub summary: ModConfirmSummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

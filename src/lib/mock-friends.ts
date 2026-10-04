@@ -8,7 +8,7 @@ import { clone, newId, wait, type MockContext } from "./mock-util";
 import { DAY, HOUR, MINUTE } from "./time";
 import type {
   BlockedPeer, DirectoryState, DirectoryStatus, Friend, FriendCode, FriendRequest, FriendsEnableInput, FriendsSettings, FriendsState,
-  HostSession, InstanceSummary, Invite, JoinPlan, JoinTicket, IngameFailureKind, IngameNode, IngameReason, IngameStatus, LanStatus, ModRef, PathKind, Presence, RequestRefusal, RequestVia, SessionGuest,
+  HostSession, InstanceSummary, Invite, JoinPlan, JoinTicket, IngameFailureKind, IngameNode, IngameReason, IngameStatus, LanStatus, ModActivityEntry, ModConfirmEvent, ModRef, PathKind, Presence, RequestRefusal, RequestVia, SessionGuest,
 } from "./types";
 
 const SECOND_MS = 1000;
@@ -58,6 +58,9 @@ function isOlder(version: string, minimum: string): boolean {
 const ONLINE_AFTER_MS = 800;
 const DELIVERY_MS = 1000;
 const JOIN_CONNECT_MS = 1200;
+
+/** So viele Vorgänge aus dem Spiel behält der Launcher (INGAME 5.7). */
+const MOD_ACTIVITY_LIMIT = 100;
 
 /** `pumpkinMock.cycle()`: so viele Runden im Abstand von `CYCLE_STEP_MS`, die RTT wächst je Runde um `CYCLE_RTT_STEP_MS`. */
 const CYCLE_ROUNDS = 5;
@@ -169,7 +172,9 @@ interface FriendsDb {
   /** Vorgeführte Zustände (`pumpkinMock.ingame`), die den berechneten ersetzen. */
   ingameForced: Map<string, IngameStatus>;
   /** Offene Bitten der Mod: eine beantwortete oder unbekannte `requestId` ist wie im Backend nicht mehr gültig. */
-  pendingModConfirms: Set<string>;
+  pendingModConfirms: Map<string, ModConfirmEvent>;
+  /** Die Vorgänge aus dem Spiel, neueste zuerst. */
+  modActivity: ModActivityEntry[];
 }
 
 const mockMe = (displayName: string) => {
@@ -228,7 +233,7 @@ function seedFullScenario(db: FriendsDb) {
 function createDb(scenario: Scenario): FriendsDb {
   const db: FriendsDb = {
     state: initialState(scenario), friends: [], requests: [], codes: [], blocked: [], invites: [], sessions: [], lan: new Map(),
-    joins: new Map(), planScenarios: new Map(), ingameOff: new Map(), ingameForced: new Map(), pendingModConfirms: new Set(),
+    joins: new Map(), planScenarios: new Map(), ingameOff: new Map(), ingameForced: new Map(), pendingModConfirms: new Map(), modActivity: [],
   };
   if (scenario === "full") seedFullScenario(db);
   return db;
@@ -745,12 +750,26 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
   }
 
   function confirmMod() {
-    const requestId = newId("confirm");
-    db.pendingModConfirms.add(requestId);
-    emit("friends-mod-confirm", {
-      requestId, instanceId: MOCK_HOST_INSTANCE, instanceName: "Survival 1.21",
-      friends: db.friends.filter((f) => f.presence !== "offline").map((f) => ({ friendId: f.id, displayName: f.displayName })),
-    });
+    const online = db.friends.filter((f) => f.presence !== "offline");
+    const confirm: ModConfirmEvent = {
+      requestId: newId("confirm"), instanceId: MOCK_HOST_INSTANCE, instanceName: "Survival 1.21",
+      friends: online.map((f) => ({ friendId: f.id, displayName: f.displayName })),
+      scope: "share", summary: { op: "host.invite", targetName: online.map((f) => f.displayName).join(", ") || null },
+    };
+    db.pendingModConfirms.set(confirm.requestId, confirm);
+    emit("friends-mod-confirm", confirm);
+  }
+
+  function answerModConfirm(requestId: string, allow: boolean) {
+    const confirm = db.pendingModConfirms.get(requestId);
+    if (!confirm) throw new Error(t("mock.friends.notFound.request", { id: requestId }));
+    db.pendingModConfirms.delete(requestId);
+    const entry: ModActivityEntry = {
+      at: new Date().toISOString(), instanceId: confirm.instanceId, scope: confirm.scope, op: confirm.summary.op,
+      targetName: confirm.summary.targetName, ok: allow,
+    };
+    db.modActivity = [entry, ...db.modActivity].slice(0, MOD_ACTIVITY_LIMIT);
+    emit("friends-mod-activity", entry);
   }
 
   function setNotice(name: string, kind: "renamed" | "identityChanged") {
@@ -868,9 +887,8 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
       await wait();
       return clone(retryIngame(instanceId));
     },
-    friendsModConfirm: command((requestId: string) => {
-      if (!db.pendingModConfirms.delete(requestId)) throw new Error(t("mock.friends.notFound.request", { id: requestId }));
-    }),
+    friendsModConfirm: command(answerModConfirm),
+    friendsModActivity: command(() => db.modActivity),
   } satisfies Partial<Backend>;
 
   return { api, joinSpawned };

@@ -82,6 +82,8 @@ fn rows() -> Vec<(&'static str, RoundTrip)> {
         row::<LanEvent>("event.lan"),
         row::<ModConnectionEvent>("event.modConnection"),
         row::<ModConfirmEvent>("event.modConfirm"),
+        row::<ModActivityEntry>("modActivityEntry"),
+        row::<ModOpenEvent>("event.modOpen"),
     ]
 }
 
