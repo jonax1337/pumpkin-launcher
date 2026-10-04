@@ -1,10 +1,10 @@
 package dev.laux.pumpkin.friends.platform.fabric;
 
 import dev.laux.pumpkin.friends.bridge.HostPlatform;
+import dev.laux.pumpkin.friends.compat.MinecraftMainThread;
 import dev.laux.pumpkin.friends.protocol.GameInfo;
 import dev.laux.pumpkin.friends.runtime.MainThread;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.client.Minecraft;
 
 /** What the core needs to know about this node: Fabric's mod versions, the Java version, and Minecraft's main thread. */
 final class FabricPlatform implements HostPlatform {
@@ -22,7 +22,7 @@ final class FabricPlatform implements HostPlatform {
 
 	@Override
 	public MainThread mainThread() {
-		return task -> Minecraft.getInstance().execute(task);
+		return new MinecraftMainThread();
 	}
 
 	private static String versionOf(String modId) {

@@ -1,67 +1,78 @@
 package dev.laux.pumpkin.friends.platform.fabric;
 
 import dev.laux.pumpkin.friends.bridge.BridgeClient;
+import dev.laux.pumpkin.friends.compat.GameScreens;
 import dev.laux.pumpkin.friends.ui.FriendsScreen;
+import dev.laux.pumpkin.friends.ui.UiSession;
+import dev.laux.pumpkin.friends.ui.model.GuiMetrics;
+import dev.laux.pumpkin.friends.ui.model.Rect;
 import java.util.List;
-import net.fabricmc.fabric.api.client.screen.v1.Screens;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.PauseScreen;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /**
- * Knopf „Pumpkin Friends“ im Pausemenü (SPEC 11.3): unter den vorhandenen Knöpfen, sichtbar nur bei Verbindung zum
- * Launcher. {@code AFTER_INIT} läuft bei jedem Neuaufbau und jeder Größenänderung, daher das idempotente Hinzufügen.
+ * Knopf „Pumpkin Friends“ im Pausemenü (INGAME 6.1): unter der Vanilla-Knopfspalte, in deren Breite, überschneidungsfrei.
+ * Er steht wann immer die Mod nicht inaktiv ist, auch ohne Verbindung zum Launcher (der Bildschirm erklärt es dann).
+ * Eingehängt wird er vom {@code PauseScreenMixin} am Ende von {@code PauseScreen#init()}; {@link #attach(BridgeClient)}
+ * schaltet ihn frei, sobald die Mod vom Launcher gestartet wurde. Nach einem Fehler der Mod schaltet {@link UiSession}
+ * die UI der Sitzung ab (INGAME 4.2), und der Knopf bleibt dann aus.
  */
 public final class PauseMenuButton {
 	private static final Component LABEL = Component.translatable("pumpkin_friends.button");
 	private static final int GAP = 4;
 
-	private final BridgeClient client;
+	private static volatile BridgeClient client;
 
-	public PauseMenuButton(BridgeClient client) {
-		this.client = client;
+	private PauseMenuButton() {
 	}
 
-	public void afterInit(Minecraft minecraft, Screen screen) {
-		if (!(screen instanceof PauseScreen pause) || !pause.showsPauseMenu()) {
-			return;
+	/** Meldet den laufenden Client an; erst ab hier setzt der Mixin den Knopf ins Pausemenü. */
+	public static void attach(BridgeClient attached) {
+		client = attached;
+	}
+
+	/**
+	 * Der Knopf für dieses Pausemenü, oder null: wenn die Mod inaktiv ist, ihre UI nach einem Fehler für diese Sitzung
+	 * abgeschaltet ist (INGAME 4.2), der Bildschirm keine Pausemenü-Spalte hat ({@code showsPauseMenu}, mit mc-api-probe
+	 * auf 1.21.1, 1.21.8, 1.21.11 und 26.3 als public verifiziert) oder kein Platz bleibt. Aufrufer ist allein der
+	 * {@code PauseScreenMixin} (daher öffentlich: sein Mixin-Paket liegt tiefer).
+	 */
+	public static Button buttonFor(PauseScreen pause) {
+		if (client == null || UiSession.off() || !pause.showsPauseMenu()) {
+			return null;
 		}
-		List<AbstractWidget> widgets = Screens.getWidgets(pause);
-		if (widgets.isEmpty() || widgets.stream().anyMatch(PauseMenuButton::isOurs)) {
-			return;
+		Rect slot = slotBelow(buttonsOf(pause), pause.height);
+		if (slot == null) {
+			return null;
 		}
-		Button button = Button.builder(LABEL, pressed -> open(minecraft, pause)).build();
-		placeBelow(button, widgets, pause.height);
-		button.visible = client.isConnected();
-		widgets.add(button);
+		return Button.builder(LABEL, pressed -> UiSession.run(() -> GameScreens.show(new FriendsScreen(pause, client))))
+			.bounds(slot.x(), slot.y(), slot.width(), slot.height()).build();
 	}
 
-	public void tick(Minecraft minecraft) {
-		if (minecraft.gui.screen() instanceof PauseScreen pause) {
-			Screens.getWidgets(pause).stream().filter(PauseMenuButton::isOurs)
-				.forEach(button -> button.visible = client.isConnected());
+	/**
+	 * INGAME-API.md 3, „Screen: widgets and narration“ ({@code Screen#children()}) und „Widgets: Button, Checkbox, text“
+	 * ({@code AbstractWidget#getX/getY/getWidth/getHeight}, jede Ära): der Slot aus den Maßen der vorhandenen Knöpfe.
+	 */
+	private static List<AbstractWidget> buttonsOf(PauseScreen pause) {
+		return pause.children().stream().filter(AbstractWidget.class::isInstance).map(AbstractWidget.class::cast).toList();
+	}
+
+	/** Unter alle vorhandenen Knöpfe; reicht der Platz weder darunter noch darüber, bleibt der Knopf aus. */
+	private static Rect slotBelow(List<AbstractWidget> widgets, int screenHeight) {
+		if (widgets.isEmpty()) {
+			return null;
 		}
-	}
-
-	private void open(Minecraft minecraft, PauseScreen pause) {
-		minecraft.gui.setScreen(new FriendsScreen(pause, client));
-	}
-
-	/** Unter alle vorhandenen Knöpfe, in deren Breite; reicht der Platz nicht, darüber. */
-	private static void placeBelow(Button button, List<AbstractWidget> widgets, int screenHeight) {
 		int left = widgets.stream().mapToInt(AbstractWidget::getX).min().orElseThrow();
 		int right = widgets.stream().mapToInt(widget -> widget.getX() + widget.getWidth()).max().orElseThrow();
 		int top = widgets.stream().mapToInt(AbstractWidget::getY).min().orElseThrow();
-		int bottom = widgets.stream().mapToInt(AbstractWidget::getBottom).max().orElseThrow();
+		int bottom = widgets.stream().mapToInt(widget -> widget.getY() + widget.getHeight()).max().orElseThrow();
 		int below = bottom + GAP;
-		boolean fitsBelow = below + Button.DEFAULT_HEIGHT <= screenHeight;
-		button.setRectangle(right - left, Button.DEFAULT_HEIGHT, left, fitsBelow ? below : top - GAP - Button.DEFAULT_HEIGHT);
-	}
-
-	private static boolean isOurs(AbstractWidget widget) {
-		return LABEL.equals(widget.getMessage());
+		if (below + GuiMetrics.BUTTON_HEIGHT <= screenHeight) {
+			return new Rect(left, below, right - left, GuiMetrics.BUTTON_HEIGHT);
+		}
+		int above = top - GAP - GuiMetrics.BUTTON_HEIGHT;
+		return above >= 0 ? new Rect(left, above, right - left, GuiMetrics.BUTTON_HEIGHT) : null;
 	}
 }

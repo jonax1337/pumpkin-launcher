@@ -31,6 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
+      fabricMatrix: ${{ steps.matrix.outputs.fabricMatrix }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
@@ -49,6 +50,8 @@ jobs:
                 family: (if .[1] == "fabric" then "fabric" elif .[1] == "neoforge" then "neoforge" else "legacyforge" end)
               })' mod/nodes.txt)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          # Der Kit-Demo-Lauf (kit-demo) gibt es nur für Fabric-Knoten.
+          echo "fabricMatrix=$(echo "$matrix" | jq -c 'map(select(.loader == "fabric"))')" >> "$GITHUB_OUTPUT"
 
   # Schichtenregeln und Skript-Spezifikationen: kein Gradle, kein Minecraft.
   checks:
@@ -72,6 +75,9 @@ jobs:
 
       - name: compile-matrix (specification)
         run: node mod/scripts/compile-matrix.check.mjs
+
+      - name: kit-demo (specification)
+        run: node mod/scripts/kit-demo.check.mjs
 
   build:
     name: Node ${{ matrix.id }}
@@ -187,6 +193,68 @@ jobs:
 
       - name: Compile against both ends and a middle version
         run: node mod/scripts/compile-matrix.mjs --node ${{ matrix.id }}
+
+  # Kit-Demo-Lauf (Paket U1): ein Entwicklungs-Client je Fabric-Knoten unter Xvfb mit Software-GL. Der Demo-Bildschirm des Widget-Kits
+  # schreibt "pumpkin_friends kit demo rendered <n> frames at <w>x<h>"; scripts/kit-demo.mjs wartet darauf und beendet den Client.
+  # Best Effort und NICHT bestätigt: Auf dem Windows-Rechner der Entwicklung lief der Lauf für alle vier Knoten, auf einem
+  # GitHub-Runner wurde er noch nie gestartet (offen ist vor allem, ob 26.x unter Software-Rendering startet, INGAME 12 Risiko 2).
+  # Darum continue-on-error: Ein roter Lauf hier sperrt weder den Build noch das Paket.
+  kit-demo:
+    name: Kit demo ${{ matrix.id }}
+    needs: [nodes, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.nodes.outputs.fabricMatrix) }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+
+      - uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      - name: Game JDK ${{ matrix.java }}
+        id: game-jdk
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - name: Expose the game JDK to Gradle
+        run: echo "PUMPKIN_JDK_${{ matrix.java }}=${{ steps.game-jdk.outputs.path }}" >> "$GITHUB_ENV"
+
+      - name: Gradle JDK ${{ matrix.gradleJava }}
+        if: matrix.gradleJava != matrix.java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.gradleJava }}
+
+      # Wie bei matrix-compile: Das zuletzt eingerichtete JDK ist das JDK für Gradle.
+      - name: Expose the Gradle JDK
+        run: echo "PUMPKIN_JDK_${{ matrix.gradleJava }}=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Gradle cache (fabric)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            mod/.gradle/loom-cache
+          key: gradle-fabric-${{ hashFiles('mod/gradle.properties', 'mod/gradle/wrapper/gradle-wrapper.properties', 'mod/build-fabric.gradle') }}
+          restore-keys: |
+            gradle-fabric-
+
+      - name: Display and software GL
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libxrandr2 libxxf86vm1 libxcursor1 libxi6
+
+      - name: Run the kit demo
+        run: LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" node mod/scripts/kit-demo.mjs --node ${{ matrix.id }}
 
   # Ein Artefakt mit mod-index.json und allen Jars; hier greift auch das Gesamtbudget.
   package:
