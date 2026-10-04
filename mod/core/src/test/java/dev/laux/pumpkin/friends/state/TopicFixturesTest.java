@@ -2,6 +2,7 @@ package dev.laux.pumpkin.friends.state;
 
 import static dev.laux.pumpkin.friends.Fixtures.Direction.LAUNCHER_TO_MOD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.laux.pumpkin.friends.Fixtures;
@@ -19,6 +20,10 @@ class TopicFixturesTest {
 	private static final List<State> PUSHES = Fixtures.read("topics.jsonl", LAUNCHER_TO_MOD).stream()
 		.map(Line::wire).map(wire -> (State) FrameCodec.decode(wire).orElseThrow()).toList();
 
+	// Spelled as numbers so that the source file holds no invisible characters.
+	private static final String SECTION_SIGN = String.valueOf((char) 0x00A7);
+	private static final String RIGHT_TO_LEFT_OVERRIDE = String.valueOf((char) 0x202E);
+
 	private final TopicStore store = new TopicStore();
 
 	@Test
@@ -35,7 +40,30 @@ class TopicFixturesTest {
 	void meKeepsTheIdentityLine() {
 		replay(Topic.ME);
 
-		assertEquals(Optional.of(new Me(true, Me.Availability.AVAILABLE, Me.Network.ONLINE, Optional.of("ab12 cd34"))), store.me());
+		assertEquals(Optional.of(new Me(true, Me.Availability.AVAILABLE, Me.Network.ONLINE, Optional.of("ab12 cd34"),
+			Me.Directory.ACTIVE)), store.me());
+	}
+
+	@Test
+	void meMirrorsEveryStateOfTheNameDirectory() {
+		List<State> pushes = Fixtures.read("topics-me-directory.jsonl", LAUNCHER_TO_MOD).stream()
+			.map(Line::wire).map(wire -> (State) FrameCodec.decode(wire).orElseThrow()).toList();
+
+		List<Me.Directory> shown = pushes.stream().map(push -> {
+			assertTrue(store.apply(push), "rev " + push.rev());
+			return store.me().orElseThrow().directory();
+		}).toList();
+
+		assertEquals(List.of(Me.Directory.values()), shown);
+	}
+
+	@Test
+	void aDirectoryStateTheModDoesNotKnowMakesTheMeValueMalformed() {
+		State unknown = (State) FrameCodec.decode("{\"type\":\"state\",\"topic\":\"me\",\"rev\":1,\"value\":{\"enabled\":true,"
+			+ "\"availability\":\"available\",\"network\":\"online\",\"fingerprint\":null,\"directory\":\"sleeping\"}}").orElseThrow();
+
+		assertFalse(store.apply(unknown));
+		assertEquals(Optional.empty(), store.me());
 	}
 
 	@Test
@@ -43,8 +71,41 @@ class TopicFixturesTest {
 		replay(Topic.FRIENDS);
 
 		assertEquals(List.of(
-			new Friend("f1", "Alex", Optional.empty(), Friend.Presence.PLAYING),
-			new Friend("f2", "Bea", Optional.of("069a79f444e94726a5befca90e38aaf5"), Friend.Presence.OFFLINE)), store.friends());
+			new Friend("f1", "Alex", Optional.empty(), Friend.Presence.PLAYING, Optional.empty()),
+			new Friend("f2", "Bea", Optional.of("069a79f444e94726a5befca90e38aaf5"), Friend.Presence.OFFLINE, Optional.empty())),
+			store.friends());
+	}
+
+	@Test
+	void aFriendKeepsARenamedOrAnIdentityChangedNoticeAndOtherFriendsHaveNone() {
+		Fixtures.read("topics-notice.jsonl", LAUNCHER_TO_MOD).stream().map(Line::wire)
+			.map(wire -> (State) FrameCodec.decode(wire).orElseThrow()).forEach(store::apply);
+
+		List<Optional<FriendNotice>> notices = store.friends().stream().map(Friend::notice).toList();
+
+		assertEquals(List.of(Optional.of(new FriendNotice.Renamed("Alt")), Optional.of(new FriendNotice.IdentityChanged()),
+			Optional.empty()), notices);
+	}
+
+	@Test
+	void theNameBeforeARenameIsSanitisedLikeEveryOtherName() {
+		store.apply(friendsPush("[{\"id\":\"f1\",\"name\":\"Alex\",\"mcUuid\":null,\"presence\":\"online\","
+			+ "\"notice\":{\"type\":\"renamed\",\"previousName\":\"" + SECTION_SIGN + "cAl" + RIGHT_TO_LEFT_OVERRIDE + "ex\"}}]"));
+
+		assertEquals(Optional.of(new FriendNotice.Renamed("cAlex")), store.friends().get(0).notice());
+	}
+
+	@Test
+	void aNoticeOfAnewerLauncherIsLeftOutAndTheFriendStays() {
+		store.apply(friendsPush("[{\"id\":\"f1\",\"name\":\"Alex\",\"mcUuid\":null,\"presence\":\"online\","
+			+ "\"notice\":{\"type\":\"addedInGame\"}}]"));
+
+		assertEquals(List.of("f1"), store.friends().stream().map(Friend::id).toList());
+		assertEquals(Optional.empty(), store.friends().get(0).notice());
+	}
+
+	private static State friendsPush(String friendsJson) {
+		return (State) FrameCodec.decode("{\"type\":\"state\",\"topic\":\"friends\",\"rev\":1,\"value\":" + friendsJson + "}").orElseThrow();
 	}
 
 	@Test

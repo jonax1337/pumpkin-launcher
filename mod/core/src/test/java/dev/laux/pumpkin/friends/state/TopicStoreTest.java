@@ -88,7 +88,7 @@ class TopicStoreTest {
 		push(Topic.FRIENDS, 1, "[{\"id\":\"f1\",\"name\":\"\u00a7cAl\u202eex\",\"mcUuid\":\"NOT-A-UUID\",\"presence\":\"online\"}]");
 		push(Topic.INVITES, 1, "[{\"id\":\"i1\",\"fromName\":\"" + "B".repeat(40) + "\",\"title\":\"" + "T".repeat(80) + "\"}]");
 
-		assertEquals(new Friend("f1", "cAlex", Optional.empty(), Friend.Presence.ONLINE), store.friends().get(0));
+		assertEquals(new Friend("f1", "cAlex", Optional.empty(), Friend.Presence.ONLINE, Optional.empty()), store.friends().get(0));
 		assertEquals(new Invite("i1", "B".repeat(Sanitize.NAME_MAX_CHARS), "T".repeat(Sanitize.TITLE_MAX_CHARS)), store.invites().get(0));
 	}
 

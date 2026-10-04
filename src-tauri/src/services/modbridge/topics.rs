@@ -122,6 +122,8 @@ pub struct MeView {
     pub availability: MeAvailability,
     pub network: NetworkLine,
     pub fingerprint: Option<String>,
+    /// Ob der Nutzer per Minecraft-Namen auffindbar ist und das Verzeichnis antwortet (BYNAME 9.3).
+    pub directory: DirectoryLine,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -139,6 +141,18 @@ pub enum NetworkLine {
     Starting,
     Online,
     Degraded,
+}
+
+/// Der Zustand des Verzeichnisses für Namen, wie `DirectoryState` im Launcher; die Mod zeigt im Reiter „Per Name“ dessen
+/// Texte.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DirectoryLine {
+    Active,
+    Off,
+    Unreachable,
+    NotAllowed,
+    Unavailable,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -314,6 +328,7 @@ mod tests {
                 availability: MeAvailability::IdentityLost,
                 network: NetworkLine::Degraded,
                 fingerprint: Some(text(64)),
+                directory: DirectoryLine::Unreachable,
             }),
             Topic::Friends => TopicValue::Friends(
                 (0..MAX_FRIENDS)

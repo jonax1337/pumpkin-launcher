@@ -308,7 +308,7 @@ async fn an_identity_change_is_never_acknowledged_from_the_game() {
 
     let answer = scene.game_mod.call("a1", "friend.acknowledge", json!({ "id": alias })).await;
 
-    assert_eq!((error_code(&answer), reason(&answer)), (Some("notFound"), Some("notRenamed")));
+    assert_eq!(error_code(&answer), Some("forbidden"));
     assert_eq!(notice_of_guest(&scene).await, Some(changed), "der Hinweis bleibt für den Nutzer im Launcher");
     assert!(scene.activity().is_empty(), "nichts wurde ausgeführt");
 }

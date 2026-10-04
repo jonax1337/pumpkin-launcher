@@ -1,0 +1,5 @@
+{"direction":"launcherToMod","line":{"type":"state","topic":"me","rev":1,"value":{"enabled":true,"availability":"available","network":"online","fingerprint":"ab12 cd34","directory":"active"}}}
+{"direction":"launcherToMod","line":{"type":"state","topic":"me","rev":2,"value":{"enabled":true,"availability":"available","network":"online","fingerprint":"ab12 cd34","directory":"off"}}}
+{"direction":"launcherToMod","line":{"type":"state","topic":"me","rev":3,"value":{"enabled":true,"availability":"available","network":"online","fingerprint":"ab12 cd34","directory":"unreachable"}}}
+{"direction":"launcherToMod","line":{"type":"state","topic":"me","rev":4,"value":{"enabled":true,"availability":"available","network":"online","fingerprint":"ab12 cd34","directory":"notAllowed"}}}
+{"direction":"launcherToMod","line":{"type":"state","topic":"me","rev":5,"value":{"enabled":true,"availability":"available","network":"online","fingerprint":"ab12 cd34","directory":"unavailable"}}}

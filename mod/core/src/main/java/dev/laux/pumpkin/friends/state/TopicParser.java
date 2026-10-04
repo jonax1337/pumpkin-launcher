@@ -22,12 +22,14 @@ final class TopicParser {
 	static Me me(JsonElement value) {
 		JsonFields fields = JsonFields.of(value);
 		return new Me(fields.bool("enabled"), fields.enumValue("availability", Me.Availability.class),
-			fields.enumValue("network", Me.Network.class), fields.optionalString("fingerprint").map(Sanitize::title));
+			fields.enumValue("network", Me.Network.class), fields.optionalString("fingerprint").map(Sanitize::title),
+			fields.enumValue("directory", Me.Directory.class));
 	}
 
 	static List<Friend> friends(JsonElement value) {
 		return list(value, fields -> new Friend(id(fields, "id"), Sanitize.name(fields.string("name")),
-			fields.optionalString("mcUuid").flatMap(Sanitize::mcUuid), fields.enumValue("presence", Friend.Presence.class)));
+			fields.optionalString("mcUuid").flatMap(Sanitize::mcUuid), fields.enumValue("presence", Friend.Presence.class),
+			fields.optionalObject("notice").flatMap(TopicParser::notice)));
 	}
 
 	static Requests requests(JsonElement value) {
@@ -66,6 +68,18 @@ final class TopicParser {
 
 	static List<Blocked> blocked(JsonElement value) {
 		return list(value, fields -> new Blocked(id(fields, "id"), Sanitize.name(fields.string("name"))));
+	}
+
+	/**
+	 * A notice type this mod does not know (a newer launcher) is left out instead of making the whole friends list malformed:
+	 * the launcher alone decides what the player has to review, so a missing hint never lets the mod do more.
+	 */
+	private static Optional<FriendNotice> notice(JsonFields fields) {
+		return switch (fields.string("type")) {
+			case "renamed" -> Optional.of(new FriendNotice.Renamed(Sanitize.name(fields.string("previousName"))));
+			case "identityChanged" -> Optional.of(new FriendNotice.IdentityChanged());
+			default -> Optional.empty();
+		};
 	}
 
 	private static Requests.Incoming incomingRequest(JsonFields fields) {

@@ -58,8 +58,7 @@ fn ensure_running_game_fits(plan: &InvitePlan) -> Result<(), OpError> {
     match plan.verdict {
         PlanVerdict::Ready => Ok(()),
         PlanVerdict::VersionUnsupported => Err(OpError::new(ErrorCode::VersionUnsupported).with_param("min", MIN_MC_LABEL)),
-        PlanVerdict::MissingContent | PlanVerdict::NoInstance => Err(OpError::new(ErrorCode::BadRequest)
-            .with_param("reason", "instanceMismatch")
+        PlanVerdict::MissingContent | PlanVerdict::NoInstance => Err(OpError::new(ErrorCode::InstanceMismatch)
             .with_param("verdict", serde_json::to_value(plan.verdict).unwrap_or_default())
             .with_param("missing", plan.missing)
             .with_param("extra", plan.extra)),
@@ -197,10 +196,10 @@ mod tests {
         let version = ensure_running_game_fits(&view(PlanVerdict::VersionUnsupported, 0, 0)).unwrap_err();
         assert_eq!((version.code, version.params["min"].as_str()), (ErrorCode::VersionUnsupported, Some("1.20")));
         let missing = ensure_running_game_fits(&view(PlanVerdict::MissingContent, 3, 1)).unwrap_err();
-        assert_eq!(missing.code, ErrorCode::BadRequest);
+        assert_eq!(missing.code, ErrorCode::InstanceMismatch);
         assert_eq!(missing.params["verdict"], "missingContent");
         assert_eq!((&missing.params["missing"], &missing.params["extra"]), (&3.into(), &1.into()));
         let none = ensure_running_game_fits(&view(PlanVerdict::NoInstance, 0, 0)).unwrap_err();
-        assert_eq!((none.params["reason"].as_str(), none.params["verdict"].as_str()), (Some("instanceMismatch"), Some("noInstance")));
+        assert_eq!((none.code, none.params["verdict"].as_str()), (ErrorCode::InstanceMismatch, Some("noInstance")));
     }
 }

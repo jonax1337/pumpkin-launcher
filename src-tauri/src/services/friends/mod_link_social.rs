@@ -45,12 +45,14 @@ fn name_of_request(request: &FriendRequest) -> Option<String> {
     request.display_name.clone().or_else(|| request.mc_name.clone())
 }
 
-/// Nur ein Hinweis „umbenannt“ darf die Mod quittieren; `identityChanged` prüft der Nutzer im Launcher.
+/// Nur ein Hinweis „umbenannt“ darf die Mod quittieren; `identityChanged` prüft der Nutzer im Launcher (`forbidden`).
+/// Ohne Hinweis gibt es nichts zu quittieren (`notFound`).
 async fn ensure_renamed_notice(sessions: &FriendSessions, friend_id: &str) -> Result<Friend, OpError> {
     let friend = friend_named(sessions, friend_id).await?;
     match friend.notice {
         Some(FriendNotice::Renamed { .. }) => Ok(friend),
-        _ => Err(OpError::new(ErrorCode::NotFound).with_param("reason", "notRenamed")),
+        Some(FriendNotice::IdentityChanged { .. }) => Err(OpError::new(ErrorCode::Forbidden)),
+        None => Err(OpError::new(ErrorCode::NotFound).with_param("reason", "notRenamed")),
     }
 }
 
