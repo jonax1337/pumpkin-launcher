@@ -21,6 +21,8 @@
 # id               loader    minecraft  loaderMin  java  strategy       gradleJdk  matrix
 26.3-fabric        fabric    26.3       0.19.5     25    fabricAddMods  25         26.3
 1.21.1-fabric      fabric    1.21.1     0.15.11    21    fabricAddMods  25         1.20.5,1.20.6,1.21,1.21.1
+1.21.8-fabric      fabric    1.21.8     0.16.13    21    fabricAddMods  25         1.21.6,1.21.7,1.21.8
+1.21.11-fabric     fabric    1.21.11    0.17.3     21    fabricAddMods  25         1.21.11
 1.21.1-neoforge    neoforge  1.21.1     21.1.0     21    fmlMavenRoot   21         1.21,1.21.1
 26.2-neoforge      neoforge  26.2       26.2.0.57  25    fmlModFolders  25         26.2
 1.20.1-forge       forge     1.20.1     47.4.0     17    fmlMavenRoot   21         1.20.1
