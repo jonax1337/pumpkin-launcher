@@ -1,6 +1,6 @@
 # Pumpkin Friends: Design Spec v2 (friends, world sharing via LAN tunnel, in-game mod)
 
-> **In-game mod, planned (2026-10-03).** The in-game part is redesigned in [`INGAME.md`](INGAME.md): the launcher embeds the mod jars and injects the mod into Microsoft-account launches through loader start-up options (no install step, no Modrinth project, nothing in the instance folder). SPEC.md stays the source of truth for contracts and says where they change; `INGAME.md` is the design behind them and is not copied here. The code lands in later waves, so the sections 5.5, 5.6, 7, 8.4, 10.5 and 11 below describe **both**: what the code does today (marked "Current code") and what is planned (marked "Planned, INGAME.md section N"). When a package replaces the code, it deletes the matching "Current code" text in the same PR. The changelog entry is D.5.
+> **In-game mod (2026-10-03, code merged 2026-10-04).** The in-game part is redesigned in [`INGAME.md`](INGAME.md): the launcher embeds the mod jars and injects the mod into Microsoft-account launches through loader start-up options (no install step, no Modrinth project, nothing in the instance folder). SPEC.md stays the source of truth for contracts and says where they change; `INGAME.md` is the design behind them and is not copied here. The launcher side of waves 0 to 2 is merged on `feat/ingame-mod` (see `INGAME.md` Status), so the "Current code" texts that described the removed model (hand install, Modrinth distribution, protocol 1, fabric-only) were struck by package D2; whatever is still marked "Planned" waits for the open packages of `INGAME.md` 11.2. The changelog entries are D.5 and D.6.
 
 **Status: FROZEN, 2026-10-03 (v2); synced with the implementation of Waves 0 and 1 and of Waves 2 and 3 on 2026-10-03.** This document replaces v1 (`FRIENDS-SPEC.md`). It applies every finding of the security and feasibility reviews of v1, unless the changelog (Appendix D) says otherwise. It is the only source of truth for the protocol. R0a copies it to `docs/friends/SPEC.md`, and from then on the file in the repo is the spec. There is no separate PROTOCOL.md. The deviations reported by the packages are written back into the sections they concern (index in D.3 for Waves 0/1, D.4 for Waves 2/3). Deviations where the code still has to change are listed in Appendix E and are **not** reflected as done in the normative text.
 
@@ -10,7 +10,7 @@
 |---|---|
 | OD-1 | v1 keeps all three goals: the friends system, hosting a world for friends in other networks through the LAN tunnel, and the in-game mod. **Amended 2026-10-03 (INGAME.md sections 0, 1 and 7):** the in-game mod is no longer a hand-installed Fabric mod. The launcher injects it by itself, and "in-game join from the mod" (`invite.joinHere`) moves from the backlog into the planned in-game release R-A; the rest of this row is unchanged. Moved to the v1.1 backlog (section 15, non-normative): automatic build of modded instances from a friend's manifest, `shareActivity`, `appearOffline`, alias UI beyond a minimal rename, Quilt, in-game join from the mod, and dedicated-server hosting (v2). Kept: the mod's pause-screen "share with friends", toasts, the friends list view and IPC (hardened as an untrusted channel), a minimal block, and the fingerprint on request and invite dialogs. v1 joins only when the friend already has a matching instance (MC version + loader family + non-client-only mod set). Otherwise it shows exactly what is missing, and offers to create a vanilla instance when the host runs vanilla. |
 | OD-2 | Transport: iroh with a compiled-in relay map. The production plan is our own relay (D1 documents it). n0's public relays are allowed only in debug and closed-beta builds, and only when they are named in the PrivacyNotice with an explicit opt-in. Relay URLs are never peer-supplied. |
-| OD-3 | **Superseded 2026-10-03 (INGAME.md sections 2 and 4.3).** Planned: the mod is built per **node** (`<Minecraft release ids>-<loader>`, one jar each) and a cell is supported only when the embedded index lists the exact release id, the Java major fits and the node's CI smoke test passed (11.0). Fabric, NeoForge and Forge are in scope; Minecraft 26.3 is one node among several, not the only target. *Current code (until the build packages land):* only 26.3 with Fabric, built with a full JDK (Temurin 25) downloaded into `mod/.jdk`. |
+| OD-3 | **Superseded 2026-10-03 (INGAME.md sections 2 and 4.3).** The mod is built per **node** (`<Minecraft release ids>-<loader>`, one jar each) and a cell is supported only when the embedded index lists the exact release id, the Java major fits and the node's smoke test passed (11.0). Fabric, NeoForge and Forge are in scope; Minecraft 26.3 is one node among several, not the only target. *Code (merged):* seven nodes exist in `mod/nodes.txt`, built by the Stonecutter project through `PUMPKIN_JDK_<major>` toolchains; five are smoke-proven (`mod/verified.json`, `INGAME-SMOKE.md`). |
 | OD-4 | Proceed even though Mojang's native P2P hosting may come back and overlap this feature. |
 | OD-5 | Wave 0 viability gate. R0a (skeleton + deps) and R0b (throwaway spike CLI that builds and passes loopback tests) are agent work. The **owner personally** runs R0b on two machines in different networks. Waves 1+ may be built in parallel, but **the release is blocked** until the R0b numbers (direct vs relay path, echo latency) are recorded in `docs/friends/VERIFICATION.md` and the owner has run the two-PC end-to-end tests (13.4). |
 
@@ -39,7 +39,7 @@
 | Tunnel | One QUIC bi-stream per Minecraft TCP connection, `TCP_NODELAY` on every local socket. Host: only to the LAN port, and only after it is verified to be **owned by the game PID and answering a server list ping**. Guest: a single-owner listener on a random loopback address, with a handshake nonce check and a PID check. |
 | LAN port | Mod hint, strict log parser, or manual entry. Every source is verified the same way (PID + ping). Ends on `Stopping server`, unpublish, game exit, or a failed liveness probe. |
 | Join | Only into an existing matching instance (MC version + loader + non-client-only mod set, compared by **sha512**). Vanilla host: an offer to create a vanilla instance. No downloads from or on behalf of the host. Minimum MC version for hosting and joining: **1.20**. |
-| Mod | Client only. Planned (INGAME.md sections 0, 3, 6): embedded in the launcher and injected into Microsoft-account launches while Friends is on; a hub in the pause menu. Node table instead of one version (11.0). JSON lines over loopback (protocol 2), the connection is tied to the spawned game process (7.1), and the launcher treats the mod as untrusted: the `share` and `social` scopes are each confirmed once per launch (7.4). *Current code:* Fabric, MC 26.3, hand-installed; pause-screen friends screen (list, share, guests, stop) and toasts; protocol 1; the first `share` per launch needs confirmation in the launcher. |
+| Mod | Client only. Embedded in the launcher and injected into Microsoft-account launches while Friends is on (INGAME.md sections 0, 3); a hub in the pause menu (INGAME.md section 6, package U2). Node table instead of one version (11.0). JSON lines over loopback (protocol 2), the connection is tied to the spawned game process (7.1), and the launcher treats the mod as untrusted: the `share` and `social` scopes are each confirmed once per launch (7.4). |
 | Contract | One serde convention (`tag = "type"`, camelCase fields), no `AppError` in payloads, shared JSON fixtures checked by both Rust and `tsc`. |
 | Default | Everything is off. Enabling needs an explicit opt-in and a Microsoft account. |
 
@@ -51,7 +51,7 @@
 1. **Friends.** Codes, mutual consent, presence, removal, a minimal block, rotate and reset of the identity.
 2. **Host a world.** The host opens a singleplayer world to LAN (through the mod or vanilla). The launcher tunnels the verified LAN port to invited, online friends.
 3. **Join.** The guest accepts an invite and joins with an existing matching instance through Quick Play. If nothing matches, the UI lists what is missing or extra. A vanilla host gets a "create vanilla instance" offer.
-4. **Mod.** A client mod with a friends screen in the pause menu (presence list, share, guest list with kick, stop) and toasts; planned to grow into the hub of INGAME.md section 6. Without the launcher it does nothing. Planned (INGAME.md section 3): the launcher injects it, the player installs nothing. *Current code:* Fabric 26.3 only, installed by the player.
+4. **Mod.** A client mod with a friends screen in the pause menu (presence list, share, guest list with kick, stop) and toasts; planned to grow into the hub of INGAME.md section 6. Without the launcher it does nothing. The launcher injects it, the player installs nothing (INGAME.md section 3; merged, five cells smoke-proven).
 5. **Privacy.** Opt-in, off by default, invite-only, no telemetry, no chat, honest IP wording, "always relay".
 
 ### 1.2 Non-goals (v1)
@@ -59,7 +59,7 @@
 - Public links, adding by bare id, discovery beyond the exact Minecraft name of a player who opted in (N), deep links.
 - Building or changing an instance from a friend's manifest (v1.1). Transferring any file between peers.
 - Any launcher other than the Pumpkin Launcher, installing the mod by hand, and publishing it on Modrinth or CurseForge (INGAME.md section 1.2). Quilt, Vanilla instances without a loader and offline accounts get no mod in v1. Minecraft releases without a verified node (11.0) get none either.
-- *Current code:* In-game join from the mod. The mod points the player to the launcher. Planned: `invite.joinHere` (INGAME.md section 7).
+- *Open package:* the in-game join flow `invite.joinHere` is protocol and launcher side complete (7.2, ops table); the mod-side flow is package J1 of INGAME.md section 11.2.
 - Hosting or joining for MC versions older than 1.20, or with an offline account.
 - Integrating with Mojang's Friends List (O key). Tray icon or a background process after the window closes.
 
@@ -392,7 +392,7 @@ R4 owns the accept loop and the control stream. It dispatches `request` and `tun
 - **Built by the host** (`manifest::build`) at `host_start`, and cached for the session. It is rebuilt only when the instance's mod list changes.
   - Content: `minecraftVersion`, `loader`, `loaderVersion`, and for every **enabled** `Mod` with `kind == ModKind::Mod`: `sha512` (computed from the file in a blocking task and cached in `HashCache`, keyed by the full path with (size, mtime) as validity, one entry per path) and `fileName`. A mod whose file is unreadable or whose name is unsafe is skipped (warning log); entries with the same sha512 are kept once.
   - The host does not cap the list: a host with more than 500 enabled mods produces a manifest that every guest rejects with `manifestInvalid`.
-  - The host excludes nothing, so no jar can hide from the manifest by declaring a mod id. Planned (INGAME.md section 3.1): our mod is launcher data outside the instance folder, so it never enters a manifest and needs no exception anywhere; a `pumpkin_friends` jar that does sit in `mods/` is an ordinary entry (and blocks the injection, INGAME.md section 3.3). *Current code:* the guest's matching ignores our mod by verified identity: its sha512 resolves to the pinned Modrinth project id (`MOD_PROJECT_ID`, 11.5).
+  - The host excludes nothing, so no jar can hide from the manifest by declaring a mod id. Our mod is launcher data outside the instance folder, so it never enters a manifest and needs no exception anywhere; a `pumpkin_friends` jar that does sit in `mods/` is an ordinary entry (and blocks the injection, INGAME.md section 3.3).
   - Nothing else: no paths, configs, resource packs, JVM args or worlds. The share dialog tells the host that invited friends see version, loader and the mod list.
 - **Validated by the guest** (`manifest::validate`), else `errors.friends.manifestInvalid` (`ManifestError::Invalid`):
   - `loader` is a known `ModLoader`. `Manifest.loader` is typed `ModLoader`, so an unknown loader already fails deserialisation of the `manifest` frame (a JSON error), which R5 maps to `manifestInvalid`.
@@ -403,7 +403,7 @@ R4 owns the accept loop and the control stream. It dispatches `request` and `tun
 
 ### 5.6 Matching (`matching::plan`, guest, no downloads)
 1. **Candidates:** local instances with the same `minecraftVersion` and the same `loader` (the loader version is ignored).
-2. **Required set** of a mod list = the mods that are not known to be client-only. Client-only = the sha512 resolves on Modrinth (`POST /version_files`, `algorithm: "sha512"`) to a version whose project has `server_side == "unsupported"`, or (current code only) the project is `MOD_PROJECT_ID`. Unresolvable mods count as required. Current code, while `MOD_PROJECT_ID` is empty: the hand-installed dev jar of our mod counts as required, so between two launchers where only one has it, the plan is `missingContent` (missing or extra = the dev jar). Planned (INGAME.md section 8): the `MOD_PROJECT_ID` rule and this consequence are removed together with `lookup.rs`'s special case, because our mod is not content any more.
+2. **Required set** of a mod list = the mods that are not known to be client-only. Client-only = the sha512 resolves on Modrinth (`POST /version_files`, `algorithm: "sha512"`) to a version whose project has `server_side == "unsupported"`. Unresolvable mods count as required. There is no "our mod" special case any more: the injected mod is not content of any instance (INGAME.md section 3.1), and a `pumpkin_friends` jar in `mods/` is an ordinary entry.
 3. A candidate **matches** when its required sha512 set equals the host's. Otherwise, `missing` = host required minus local, and `extra` = local required minus host. Each is a `ModRef` with a title from Modrinth, or the sanitised `fileName`.
 4. Verdict:
 
@@ -547,91 +547,33 @@ pub struct ListenerLimits { pub before_first_valid: usize /* 1 */, pub after_fir
 
 ## 7. Launcher to mod IPC (untrusted channel)
 
-> **Planned: bridge protocol 2 (INGAME.md section 5).** The mod and the launcher ship as one build and nothing of protocol 1 was ever published, so protocol 2 replaces protocol 1 without a compatibility layer. The changes against 7.1 to 7.5 are: (1) the launcher proves that the connection belongs to the game process it spawned (the owner check, 7.1); (2) typed requests and whole-state topics replace `share`/`kick`/`snapshot` (INGAME.md sections 5.3 and 5.4); (3) two consent scopes, `share` and `social`, each asked once per launch (7.4); (4) limits, rate limits and visibility as in INGAME.md sections 5.3, 5.6 and 5.7. Everything below that is not marked "Planned" is the **current code** (protocol 1) and stays the contract until the packages L2, O1 and M1 replace it.
+> **Bridge protocol 2 (INGAME.md section 5) is the contract; the code is merged.** The mod and the launcher ship as one build and nothing of protocol 1 was ever published, so protocol 2 replaced it without a compatibility layer. The wire shapes are **defined by the Rust types** (`services/modbridge/protocol.rs`, `ops.rs`, `topics.rs`) **and by the golden lines in `mod/fixtures/protocol/`**, which the Rust and the Java core tests both read; a change there is a protocol change. The design (handshake, framing, limits, ops, topics, events, consent, rate limits, visibility) is `INGAME.md` sections 5.1 to 5.7 and is not copied here; this section records only the contract-level rules.
 
 ### 7.1 Transport and auth
 
-- **Planned, INGAME.md section 5.2 (owner check).** The launcher creates a launch record `{token, instanceId, node, expectedPid, online_account, startedAt}` when the child is created and passes `PUMPKIN_IPC_PROTOCOL=2` next to port and token. The bridge binds `127.0.0.1` with exclusive address use on Windows. On `hello` the launcher looks the token up and proves with `sockowner::connects_from(expectedPid, peer, local)` that the TCP connection belongs to the spawned game process; a mismatch gets `reject{owner}`, a pid that is not known yet gets `reject{retry}`, and an IO error in the lookup fails closed. Counters and grants belong to the launch record, not to the connection. A leaked token is therefore useless from another process; code inside the game JVM still can use it (INGAME.md section 5.1, `PRIVACY.md` 10).
-
-Current code (protocol 1), until the packages replace it:
-
-- `services/modbridge` listens on `127.0.0.1:0` while the feature is enabled. `AppState.bridge` is constructed **stopped**; R4 calls `start()` when the feature is enabled and available and `stop()` when it is disabled (R3 never starts it).
-- For each launch of a **Fabric** instance while the bridge runs, `launch_env(instance_id, loader)` returns `PUMPKIN_IPC_PORT`, `PUMPKIN_IPC_TOKEN` and `PUMPKIN_IPC_PROTOCOL=1` (constants `ENV_PORT`, `ENV_TOKEN`, `ENV_PROTOCOL`). The token is 64 lowercase hex made of two UUID v4 (`simple` form), i.e. 244 random bits from the OS random generator. They go into the child **environment only**, never into arguments. For other loaders or a stopped bridge, the list is empty and the launch is byte-identical to today. A new `launch_env` for the same instance invalidates its previous token.
-- The token binds one launch. It stays valid across mod reconnects during that launch (still one connection at a time) and is dropped by `forget` on game exit (or by `stop`), so a token leaked through `hs_err_pid*.log` or a child process is useless afterwards. Same-user malware is out of scope. **Mods running in the same JVM can read the token**, so every mod request is treated as untrusted (7.4).
-- Limits:
-  - Non-loopback peers cannot connect: the listener binds `127.0.0.1` only (there is no separate peer-address check).
-  - At most 4 unauthenticated connections (the 5th is closed at once). `hello` must arrive within 2 s; a missing or malformed `hello` closes the connection without an answer.
-  - One connection per token (a second gets `reject{duplicate}`).
-  - JSON lines of at most 16 KiB; a longer line closes the connection.
-  - At most 20 messages/s from the mod. Excess closes the connection.
-  - The outgoing queue holds at most 64 messages; when `push` finds it full, the connection is dropped. A write to the mod that takes longer than 5 s also ends the connection.
-  - After `hello`, an unknown, malformed or second `hello` line is ignored (debug log); it still counts toward the 20 messages/s.
+- **Owner check (INGAME.md section 5.2).** The launcher creates a launch record `{token, instanceId, node, expectedPid, online_account, startedAt}` when the child is created and passes `PUMPKIN_IPC_PROTOCOL=2` next to port and token (in the child environment only, never in arguments; the token is 64 lowercase hex). The bridge binds `127.0.0.1` with exclusive address use on Windows. On `hello` the launcher looks the token up and proves with `sockowner::connects_from(expectedPid, peer, local)` that the TCP connection belongs to the spawned game process; a mismatch gets `reject{owner}`, a pid that is not known yet gets `reject{retry}`, and an IO error in the lookup fails closed. Counters and grants belong to the launch record, not to the connection. A leaked token is therefore useless from another process; code inside the game JVM still can use it (INGAME.md section 5.1, `PRIVACY.md` 10).
+- **Framing and limits (INGAME.md section 5.3, `modbridge/framing.rs`):** until `welcome` lines up to 1 KiB, `hello` within 2 s, at most 4 unauthenticated connections, one live link per launch (a second with the same token gets `reject{duplicate}`); after it 16 KiB mod-to-launcher, 64 KiB launcher-to-mod, 20 messages/s, 8 requests in flight, an outgoing queue of 64 and a 5 s write deadline; either side may `ping` (answered `pong`), 30 s without a line from the mod closes the link.
 
 ### 7.2 Handshake
 
-Planned, protocol 2 (INGAME.md section 5.3): `hello{protocol:2, token, mod:{version, build}, game:{minecraft, loader, loaderVersion, java}}`, answered by `welcome{protocol:2, launcher, scopes:{share, social}}` or `reject{reason: token|protocol|owner|build|duplicate|retry}`. The `game` block is diagnostics only (the launcher knows the truth); a `build` that differs from the index entry's `sha256` prefix is refused, which catches another copy of the mod answering. Current code (protocol 1):
-
-```jsonc
-{"type":"hello","protocols":[1],"token":"<64 hex>","mod":"0.1.0","minecraft":"26.3"}   // mod -> launcher
-{"type":"welcome","protocol":1,"launcher":"0.2.0"}                                    // launcher -> mod, then a snapshot
-{"type":"reject","reason":"token"|"protocol"|"duplicate"}                              // then close
-```
-- `welcome.launcher` is the launcher's crate version (`CARGO_PKG_VERSION`). The first `snapshot` after `welcome` is the latest one `push`ed for this launch, or an empty one.
-- The mod closes the connection on a `welcome` with `protocol != 1`. After any `reject`, or a lost connection, the mod retries on its normal backoff (7.5); only a `welcome` resets the backoff.
+Protocol 2 (INGAME.md section 5.3): `hello{protocol:2, token, mod:{version, build}, game:{minecraft, loader, loaderVersion, java}}`, answered by `welcome{protocol:2, launcher, scopes:{share, social}}` or `reject{reason: token|protocol|owner|build|duplicate|retry}` (then the launcher closes the connection). The `game` block is diagnostics only (the launcher knows the truth); `hello.mod.build` is the SHA-256 prefix of the mod's own jar, and a value that is not a prefix of the index entry's `sha256` is refused with `reject{build}`, which catches another copy of the mod answering. A protocol-1 shaped `hello` gets `reject{protocol}`. `welcome.launcher` is the launcher's crate version. After any `reject`, or a lost connection, the mod retries on its normal backoff (7.5); only a `welcome` resets it.
 
 ### 7.3 Messages
-**Mod to launcher**
-| type | fields | launcher handling |
-|---|---|---|
-| `lanOpened` | `port` | Hint only. Runs 6.1 verification. A port that fails is ignored and logged. |
-| `lanClosed` | | Ends the session at once (`lanClosed`), without a re-check (6.1). |
-| `share` | `friendIds: string[]` (1..7) | 7.4 |
-| `stopSharing` | | = `host_stop` for this instance's session |
-| `kick` | `friendId` | = `host_kick` |
-| `ping` | | `pong` (always answered by the bridge) |
 
-- Exact JSON the mod sends: `{"type":"share","friendIds":[..]}`, `{"type":"stopSharing"}`, `{"type":"kick","friendId":".."}`, `{"type":"lanOpened","port":N}`, `{"type":"lanClosed"}`, `{"type":"ping"}`. After a (re)connect the mod re-sends `lanOpened` if its world is already published.
-- **Ping timing** (mod side): the mod pings every 10 s and drops the connection when nothing arrives from the launcher for 30 s (socket read timeout), then reconnects on its backoff. The launcher therefore answers every `ping` with `pong`.
-- **Bridge filtering before any signal** (R3): `share` with fewer than 1 or more than 7 ids, and `share`/`kick` naming an alias that was never shown to this connection in a snapshot, are ignored with a debug log; there is no error reply. Everything else becomes a `GameSignal` (`LanOpened { source: Mod }`, `LanClosed`, `ModRequest`).
+Requests, responses, `pending`, state topics and events are those of `INGAME.md` sections 5.3 and 5.4 (ops table; error codes; `me`, `friends`, `requests`, `invites`, `session`, `join`, `game` topics; `notify` and `closing` events), with one golden JSON line per shape in `mod/fixtures/protocol/`. Contract-level rules that stay normative here:
 
-**Launcher to mod**
-| type | fields |
-|---|---|
-| `snapshot` | `friends: ModFriend[]` (at most 50), `session: ModSession \| null`, `invites: ModInvite[]` (at most 20). Sent after `welcome` and on change, debounced to 250 ms. |
-| `notify` | `event: "inviteReceived" \| "guestJoined" \| "guestLeft" \| "sessionEnded" \| "friendOnline" \| "confirmInLauncher"`, `name: string \| null`, `mcUuid: string \| null` |
-| `error` | `code: "notEnabled" \| "peerOffline" \| "guestLimit" \| "lanPortUnknown" \| "portNotGame" \| "denied" \| "versionUnsupported" \| "busy" \| "internal"`, `ref: string \| null` |
-| `pong` | |
-
-```ts
-type ModFriend  = { id: string; name: string; mcUuid: string | null; presence: "offline" | "online" | "playing" };
-type ModSession = { guests: { id: string; name: string; state: "invited" | "connected" }[] };
-type ModInvite  = { id: string; fromName: string; title: string };   // join happens in the launcher
-```
-- `id` in `ModFriend`/`ModSession` is an opaque per-connection alias (`f1`, `f2`, ...), not the peer id. Inside the launcher, `LauncherToMod::Snapshot` carries real peer ids; the bridge replaces them with the connection's aliases on the wire and maps aliases in `share`/`kick` back to peer ids.
-- The bridge keeps the latest snapshot per launch for a mod that connects late, sends the first snapshot at once and then at most one per 250 ms (the latest wins). It does **not** sanitise and does **not** enforce the caps: R5 (`mod_link.rs`) limits `friends` to 50 and `invites` to 20 before it calls `push`.
-- **Snapshot content (R5):** `friends` are the confirmed, not-removed friends, named `alias ?? displayName` (the same shown name as `SessionGuest.displayName` and `Invite.fromName`). Names are sanitised where they enter (R4 records, wire parsing, 12.3) and not twice. R5 does not observe R4's events, so it rebuilds the snapshot every 1 s for connected mods and pushes it only when it changed; `notify{friendOnline}` comes from that poll.
-- **Error mapping (launcher → mod `error.code`):** `errors.friends.disabled`, `unavailable`, `identityLost` → `notEnabled`; `peerOffline`, `guestLimit`, `lanPortUnknown`, `portNotGame`, `versionUnsupported` → the code of the same name; `lanUnreachable` → `lanPortUnknown`; `sessionActive`, a pending confirmation, and more than 3 shares per minute → `busy`; a denied or unanswered confirmation → `denied`; `msAccountRequired` and anything else → `internal`. `error.ref` is always null.
-- `ModFriend.presence` is a `ModPresence { Offline, Online, Playing }` and a guest's state a `ModGuestState { Invited, Connected }` (`modbridge/protocol.rs`, mirrors of the contract types because R3 does not depend on R2). R5 maps `Presence` 1:1, maps `GuestState::Invited`/`Connected`, and omits `declined` and `left` guests.
-- All names are sanitised (12.3) and contain no `§`. The mod strips `§` again and caps lengths at 32 (names) and 64 (titles). The mod ignores unknown types and fields, maps an unknown presence to `offline` and an unknown guest state to `invited`, drops entries with a null `id`, and shows no toast for unknown `notify` events or `error` codes.
+- Friends are addressed by **per-link aliases** (`f1`, `f2`, ...), never by peer ids; the launcher maps aliases both ways at the link boundary.
+- `lanOpened{port}` is a hint only and never sets a port without the 6.1 verification (PID + ping); `lanClosed` ends the session without a re-check.
+- All names are sanitised (12.3) and contain no `§`; the mod sanitises peer-supplied strings again before rendering (INGAME.md section 6.2).
+- The mod ignores unknown types and fields, never throws on the render or client thread, and treats the connection as absent whenever an env value is invalid (`BridgeEnv`: port, token, `PUMPKIN_IPC_PROTOCOL=2`).
 
 ### 7.4 Untrusted-request rules
 
-**Planned, two consent scopes (INGAME.md section 5.5, operation table in 5.4).** `share` covers `host.invite`; `social` covers graph changes, answering requests (`request.answer`), `friend.addByName` and joining (`invite.joinHere`). Each scope is asked once per game launch in the launcher with "Ablehnen" as the initial focus, a 1 s guard on every non-deny button and at most 1 open prompt and 3 prompts per 10 minutes per launch. The setting "Aktionen im Spiel" can pre-grant per instance. Operations that only reduce exposure (`host.stop`, `host.kick`, `request.cancel`, `invite.decline`, `join.leave`) need no scope. Identity and privacy operations (enable, disable, rotate, reset, settings, relay consent, copying the full peer id) have no operation at all and stay launcher-only. Every executed `share` or `social` operation raises a launcher toast and an activity entry (INGAME.md section 5.7). Grants and counters are keyed on the launch record (7.1), so a reconnect cannot reset them.
-
-Current code (one confirmation, protocol 1):
-
-- `share` from the mod: the friend ids must be connected confirmed friends. The bridge has already dropped shares with 0 or more than 7 ids and ids it never showed to that connection (7.3); `GameSignal::ModRequest` carries real peer ids.
-  - The **first** `share` of each launch requires confirmation in the launcher: the launcher emits `friends-mod-confirm`, the mod gets `notify{confirmInLauncher}`, and the user answers with `friends_mod_confirm(requestId, allow)`. "Launch" means the token's lifetime (from `Spawned` to `Exited` of that instance), not one mod connection: a mod that reconnects with the same token keeps an earlier allow, and R5 tracks the allow per instance launch.
-  - Denied, or no answer within 2 min: `error{denied}`.
-  - After an allow, later `share`s of the same launch are limited to 3 per minute and to the 7-guest cap. No 8.5 event carries a "{instance}: geteilt mit {names}" toast, so the launcher shows none; the `host-session` event updates the UI (session chip, guest list).
-  - When no session exists, the mod's first allowed `share` starts one through `host_start` with the verified LAN port and `showWorldName = false`.
-  - `friends_mod_confirm` with an unknown or already-answered request id fails with `errors.friends.notFound.request{id}`.
-- `stopSharing` and `kick` only reduce exposure and need no confirmation.
-- `lanOpened` never sets a port without 6.1 verification.
+**Two consent scopes (INGAME.md section 5.5, operation table in 5.4).** `share` covers `host.invite`; `social` covers graph changes, answering requests (`request.answer`), `friend.addByName` and joining (`invite.joinHere`). Each scope is asked once per game launch in the launcher with "Ablehnen" as the initial focus, a 1 s guard on every non-deny button and at most 1 open prompt and 3 prompts per 10 minutes per launch. The setting "Aktionen im Spiel" (`ask` default, or `allow`) pre-grants globally and is carried per launch as `Expectations.pre_granted`. Operations that only reduce exposure (`host.stop`, `host.kick`, `request.cancel`, `invite.decline`, `join.leave`) need no scope. Identity and privacy operations (enable, disable, rotate, reset, settings, relay consent, copying the full peer id) have no operation at all and stay launcher-only. Every executed `share` or `social` operation raises a launcher toast and an activity entry (INGAME.md section 5.7). Grants and counters are keyed on the launch record (7.1), so a reconnect cannot reset them. Rate limits per launch: `INGAME.md` section 5.6.
 
 ### 7.5 Failure behaviour
-- The launcher never blocks on the bridge. Bridge errors are logged, and the only UI effect is `friends-mod{connected:false}`.
-- The mod with no env vars: no threads, no UI, one info log line. The mod also treats the env as absent when `PUMPKIN_IPC_PROTOCOL` is not `1`, the port is outside 1..65535, or the token is not 64 lowercase hex (`BridgeEnv`). On connect failure (connect timeout 2 s), after a `reject` and after a lost connection: backoff 1, 2, 5, 10, then 30 s; only a `welcome` resets it. While disconnected, the button is hidden. It never throws on the render or client thread.
+- The launcher never blocks on the bridge. Bridge errors are logged; the instance status row (10.5) is the only UI effect.
+- The mod with no env vars: no threads, no UI, one info log line. It also treats the env as absent when `PUMPKIN_IPC_PROTOCOL` is not `2`, the port is outside 1..65535, or the token is not 64 lowercase hex (`BridgeEnv`). On connect failure, after a `reject` and after a lost connection it retries on its backoff; only a `welcome` resets it. It never throws on the render or client thread.
 
 ---
 
@@ -917,15 +859,16 @@ Only `friends_state`, `friends_enable`, `friends_disable` and `friends_reset` wo
 | `invite_plan` | `inviteId` | `JoinPlan` | `invitePlan(inviteId)` | fetches the manifest, then 5.6 |
 | `invite_join` | `inviteId, instanceId` | `JoinTicket` | `inviteJoin(inviteId, instanceId)` | |
 | `join_leave` | `joinId` | `void` | `joinLeave(joinId)` | |
-| `friends_mod_status` | `instanceId` | `ModStatus` | `friendsModStatus(instanceId)` | `connected` whenever the bridge has a connection for the instance (also for a hand-installed dev jar while `modinstall::status` is `unavailable`); otherwise `modinstall::status` (11.5). |
-| `friends_mod_install` | `instanceId, operationId` | `void` | `friendsModInstall(instanceId, operationId)` | **Planned removal (INGAME.md section 8, 11.5): the mod is injected, nothing is installed.** Current code: pinned project id, under the instance operation lock (`state.exclusive`, which refuses a running instance); `modinstall::install` inside `run_cancellable` (11.5). |
+| `friends_ingame_status` | `instanceId` | `IngameStatus` | `friendsIngameStatus(instanceId)` | The status row of 10.5: the gate verdict of INGAME.md section 3.9 (active, off, reason codes, `connected` while a link is up). |
+| `friends_ingame_set_enabled` | `instanceId, enabled` | `IngameStatus` | `friendsIngameSetEnabled(instanceId, enabled)` | Per-instance switch of the injection (INGAME.md section 3.9). |
+| `friends_ingame_retry` | `instanceId` | `IngameStatus` | `friendsIngameRetry(instanceId)` | Lifts a tripped circuit breaker for the next launch (INGAME.md section 3.8). |
 | `friends_mod_confirm` | `requestId, allow` | `void` | `friendsModConfirm(requestId, allow)` | 7.4; unknown or answered id: `notFound.request` |
 
 No other command is new for by-name requests: findability goes through `friends_update_settings` and `friends_enable`, and answer, cancel and block use the existing commands. There is **no new event**: directory state changes and inbox arrivals use `friends-changed`, and a new incoming by-name request also emits `friend-request` (8.5, payloads unchanged).
 
 "Create vanilla instance" uses the existing `createInstance` method (`NewInstance` with `loader: "vanilla"` and the host's version). No new command.
 
-`friendsModInstall(instanceId, operationId)` resolves to `void` (F1). `useBackgroundTask` expects a task that resolves to an `Instance`, so F5 wraps the call (for example by refetching the instance afterwards) instead of changing the `Backend` signature.
+The old `friends_mod_install` wrapper note (`useBackgroundTask` around a `void` result) died with the command; nothing is installed any more (11.5).
 
 ### 8.5 Events (via `services::progress::emit`)
 The services emit through sinks, because neither is built with an `AppHandle`: R4 through `EventSink` (`friends/events.rs`: `FriendsEvent`, `TauriEvents`, `NoEvents`) for the first four events, R5 through `SessionEvents` (`friends/session_events.rs`: `SessionEvent`, `TauriSessionEvents`, `NoSessionEvents`) for the rest. Until `start` sets the Tauri sink, events are dropped.
@@ -945,6 +888,10 @@ The services emit through sinks, because neither is built with an `AppHandle`: R
 | `lan-changed` | `LanEvent` | verified port found, or closed |
 | `friends-mod` | `ModConnectionEvent` | |
 | `friends-mod-confirm` | `ModConfirmEvent` | 7.4 |
+| `friends-mod-activity` | `ModActivityEvent` | an in-game `share`/`social` operation was executed (5.7 visibility); feeds the activity list |
+| `friends-mod-open` | `ModOpenEvent` | the mod asked for `launcher.open`; the launcher focuses the friends page |
+| `friends-ingame` | `IngameEvent` | injection state of an instance changed (gate verdict, link up/down); drives the status row (10.5) |
+| `friends-ingame-failed` | `IngameFailedEvent` | the circuit breaker tripped for an instance (INGAME.md section 3.8); opens the breaker dialog |
 
 Query keys (`src/hooks/queryKeys.ts`, F1): `friendKeys.all = ["friends"]` with the children `state`, `list`, `requests`, `codes`, `blocked`, `invites`, `hostSessions`. On purpose **outside** `friendKeys.all`, so that `friends-changed` does not refetch them: `friendKeys.skin(friendId)`, `plan(inviteId)`, `lan(instanceId)`, `modStatus(instanceId)`. `lan-changed` sets `friendKeys.lan(instanceId)`; `friends-mod` invalidates `friendKeys.modStatus(instanceId)`.
 
@@ -1216,10 +1163,8 @@ pub fn matching::hashes_to_classify(manifest: &Manifest, instances: &[Instance],
 pub fn matching::plan(invite: &Invite, manifest: &Manifest, instances: &[Instance], local: &dyn LocalHashes, classification: &Classification) -> JoinPlan;
 pub fn matching::version_unsupported(invite: &Invite) -> JoinPlan;   // 5.6
 pub async fn avatar::skin(http: &reqwest::Client, dirs: &Dirs, mc_uuid: &str) -> AppResult<Option<String>>;   // 8.4, 9
-// The next three lines are current code; INGAME.md section 8 removes `modinstall` and `MOD_PROJECT_ID` (11.5).
-pub const modinstall::MOD_PROJECT_ID: &str = "";   // this exact declaration form; mod-release.yml greps for it (11.5)
-pub fn modinstall::status(instance: &Instance) -> ModState;   // Unavailable | NotInstalled | Installed (11.5)
-pub async fn modinstall::install(state: &AppState, instance_id: &str, progress: ProgressFn<'_>) -> AppResult<Instance>;
+// Removed by W1 (INGAME.md section 8, A12): modinstall::MOD_PROJECT_ID, modinstall::status and modinstall::install
+// are gone; nothing replaces them, the mod is injected (11.0), never installed.
 ```
 
 ---
@@ -1326,7 +1271,7 @@ Tabs in this order: **"Per Name"** (new `NameTab.tsx`, the default), "Code einge
    - The dialog does not check whether the target instance runs: a join into a running instance fails at launch with the usual toast, and `LaunchFailed` ends the join.
    - The InviteDialog also opens from the Friends page: F4's `FriendDialogs` reads `useInviteRequest` (10.2) and clears it when it opens the dialog.
 4. `friend-invite-revoked`: close the dialog if it shows that invite, and toast "{name} hat das Teilen beendet" (the same toast for `stopped`, `kicked` and `expired`).
-5. **ModConfirmDialog** on `friends-mod-confirm` (title "Mod möchte teilen"): "Die Mod in {instance} möchte deine Welt mit {names} teilen. Erlauben?" with "Erlauben" / "Ablehnen" (`friendsModConfirm`). The window is restored (`setLauncherWindow("restore")`) when the dialog opens. The dialog has no 2-min timeout of its own: a late answer gets the backend's `notFound.request` error toast (7.4).
+5. **ModConfirmDialog** on `friends-mod-confirm` (title "Anfrage aus dem Spiel"): the scope sentence of the request (`share` or `social`, the wording of 7.4 / INGAME.md section 5.5) plus a one-line summary of the asked operation (`confirmOperationLine`), with "Erlauben" / "Ablehnen" (`friendsModConfirm`) and the 1 s guard of 7.4. The window is restored (`setLauncherWindow("restore")`) when the dialog opens. The dialog has no 2-min timeout of its own: a late answer gets the backend's `notFound.request` error toast (7.4).
 
 ### 10.5 Hosting in the Worlds tab (F5, `pages/detail/WorldsTab.tsx`)
 - A `ShareSection` above the world list, only when friends are enabled and available.
@@ -1342,7 +1287,7 @@ Tabs in this order: **"Per Name"** (new `NameTab.tsx`, the default), "Code einge
   - Confirm: `hostStart`, then `hostInvite`.
   - A session of another instance is not a separate state: this instance shows the normal flow, and `hostStart` fails with the `sessionActive` toast.
 - **Sharing:** `StatusPanel tone="run"` "Geteilt mit N Freunden", a guest list (`ShareGuests.tsx`: state, path tag, RTT in `Count`, menu "Entfernen" = kick), "Weitere einladen", and "Teilen beenden" (confirm, `StopSharingDialog`). A kicked guest shows "Entfernt", a declined one "Abgelehnt"; both offer "Erneut einladen" (`hostInvite`), which is the only way to let them in again (5.4).
-- **Mod row, planned (INGAME.md section 3.9):** a status row without any install button ("Freunde-Menü im Spiel: aktiv / aus / nicht verfügbar / ..."), driven by the node selection (11.0). *Current code:* **Mod row** (`FriendsModRow.tsx`; the backend decides through `ModStatus` (11.5), the UI does not check the MC version): `ModStatus` `notInstalled` → "Pumpkin Friends-Mod: Teilen direkt im Spiel" + "Mod hinzufügen" (`friendsModInstall` through `useBackgroundTask`, wrapped because it resolves to `void`, 8.4; text "kommt von Modrinth"; a `GuardedButton` blocked while the game runs or a job is active). `installed` → chip "Mod nicht verbunden". `connected` → chip "Mod verbunden". `unavailable` → no row.
+- **In-game status row (INGAME.md section 3.9, merged with F1):** a status row without any install button ("Freunde-Menü im Spiel: aktiv (Fabric 1.21.1)" / "aus" / reason texts / "Nach einem Startfehler ausgeschaltet" + "Erneut versuchen"), driven by `friends_ingame_status` (8.4) and the node selection (11.0), with the per-instance switch, "Fabric hinzufügen?" for vanilla instances, and "Im Launcher öffnen" navigation (`FriendsModRow.tsx`, model `ingameModel.ts`). The v1 "Mod hinzufügen"/`ModStatus` row is gone with `modinstall`.
 
 ### 10.6 Session chip (F5, `app/TitleBar.tsx`)
 - Shown only while a host session or a join is active, in the title bar's `.bar-mid` next to the brand (in `.bar-right` it could collide with the offline chip). "Geteilt · 2 verbunden", or "Bei {name} · Direkt · 38 ms" (fixed width). Click opens a `Popover` with peer, path explanation, RTT, and "Teilen beenden" (with the same confirm as the Worlds tab) / "Verlassen".
@@ -1409,80 +1354,32 @@ Primary button: "Freunde aktivieren" (`friendsEnable`). A note says that Windows
 
 ## 11. The mod (`mod/`)
 
-### 11.0 Planned model: embedded, injected, node table (INGAME.md sections 2, 3 and 4)
-This subsection is the contract for the in-game mod after the packages of INGAME.md section 11 land. 11.1 to 11.5 below describe the code as it is today (single Fabric build for 26.3, installed by the player) and are replaced package by package.
+### 11.0 Model: embedded, injected, node table (INGAME.md sections 2, 3 and 4; merged)
+This subsection is the contract for the in-game mod. Build and topology detail live in `mod/README.md` and `INGAME.md` section 4 and are not copied here.
 
-- **The mod is part of the launcher.** The launcher's CI builds one jar per node and embeds the jars and `mod-index.json` in the launcher binary; mod version = launcher version. There is no Modrinth project, no download and no install step (11.5).
-- **Injection, not installation.** At launch the launcher writes the jar to its own data folder (`<data>/runtime/friends-mod/<modVersion>/<node>.jar`) and hands it to the loader through start-up options (strategies `fabricAddMods`, `fmlMavenRoot`, `fmlModFolders`, INGAME.md section 3.5). Nothing is written into the instance, so export, duplicate, content scan and manifests never see the mod.
+- **The mod is part of the launcher.** The launcher's CI builds one jar per node and embeds the jars and `mod-index.json` in the launcher binary; mod version = launcher version (the next release is 0.2.0, INGAME A23). There is no Modrinth project, no download and no install step (11.5).
+- **Injection, not installation.** At launch the launcher writes the jar to its own data folder (`<data>/runtime/friends-mod/<modVersion>/`, layout per strategy) and hands it to the loader through start-up options (strategies `fabricAddMods`, `fmlMavenRoot`, `fmlModFolders`, INGAME.md section 3.5; all three are smoke-proven, `INGAME-SMOKE.md`). Nothing is written into the instance, so export, duplicate, content scan and manifests never see the mod.
 - **When it is injected.** Only while Friends is switched on (before the opt-in nothing is injected and nothing listens, 12.1), only for launches with a Microsoft account (`online_account`), only if a node fits and the Java check passes, the player did not switch it off, the circuit breaker is not tripped for the instance, and the instance holds no other `pumpkin_friends` jar (INGAME.md section 3.3). Otherwise the launch is byte-identical to a launch without Friends.
-- **Node and support-matrix rule.** A node is one build target `<minecraft range>-<loader>` with exactly one jar. A cell `(Minecraft release id, loader)` is supported if and only if (1) the embedded index has a node whose `minecraft` list contains that **exact release id** (explicit Mojang release ids, never a range, never snapshots) with matching loader and minimum loader version, (2) the Java that will run the game has a major version of at least `javaMin`, and (3) the node has a `verified` entry because a headless CI smoke test of that node passed on the commit that built it (INGAME.md section 2.1). A Minecraft release newer than the index gets no injection until a launcher release adds a node. Unverified cells are off, not guessed.
-- **`mod-index.json`** (written by the Gradle build in `mod/`, read by the launcher; camelCase, UTF-8): `modVersion` and `nodes[]`, each with `id`, `loader` (`fabric`|`neoforge`|`forge`), `loaderMin`, `minecraft[]`, `javaMin`, `strategy`, `file` (a plain leaf name matching `[A-Za-z0-9._+-]+\.jar`), `sha256` (64 lowercase hex) and `verified` (`{smoke, owner}` or null; null or absent turns the cell off). The launcher checks the SHA-256 before every launch and rewrites the file when it is missing or different (INGAME.md section 3.7).
+- **Node and support-matrix rule.** A node is one build target `<minecraft range>-<loader>` with exactly one jar. A cell `(Minecraft release id, loader)` is supported if and only if (1) the embedded index has a node whose `minecraft` list contains that **exact release id** (explicit Mojang release ids, never a range, never snapshots) with matching loader and minimum loader version, (2) the Java that will run the game has a major version of at least `javaMin`, and (3) the node has a `verified` entry because a smoke test of that node passed (INGAME.md section 2.1; the smoke runs on the owner's Windows machine, A18, its CI job exists but has not run). A Minecraft release newer than the index gets no injection until a launcher release adds a node. Unverified cells are off, not guessed.
+- **`mod-index.json`** (written by the Gradle build in `mod/`, read by the launcher; camelCase, UTF-8): `modVersion` and `nodes[]`, each with `id`, `loader` (`fabric`|`neoforge`|`forge`), `loaderMin`, `minecraft[]`, `javaMin`, `strategy`, `file` (a plain leaf name matching `[A-Za-z0-9._+-]+\.jar`), `sha256` (64 lowercase hex) and `verified` (`{smoke, owner}` or null; null or absent turns the cell off; filled from `mod/verified.json`, and only a passed smoke adds an entry, INGAME A17). The launcher checks the SHA-256 before every launch and rewrites the file when it is missing or different (INGAME.md section 3.7).
 - **Fallbacks.** Quilt, Vanilla instances (no loader) and offline accounts get no injection in v1. A start failure caused by the mod switches injection off for that instance (circuit breaker, INGAME.md section 3.8).
-- **Hooks and dependencies.** No Fabric API requirement; one soft Mixin on Fabric, loader events on NeoForge and Forge (INGAME.md section 4.2). The Fabric API dependency in 11.1 is current code only.
+- **Hooks and dependencies.** No Fabric API dependency at all (INGAME A22); one soft Mixin on Fabric, loader events on NeoForge and Forge (INGAME.md section 4.2).
 
-### 11.1 Target and toolchain (current code)
-| Item | Value |
-|---|---|
-| Minecraft | 26.3 only (`"minecraft": "~26.3"`) |
-| Loader | Fabric Loader 0.19.5, Fabric API 0.161.0+26.3 (required dependency) |
-| Build | Loom `net.fabricmc.fabric-loom` 1.18.2 (no remap), Gradle wrapper 9.7.1 (files from FabricMC/fabric-example-mod, CC0), `options.release = 25`, `"java": ">=25"` |
-| JDK | Always a full Temurin 25 JDK, downloaded by `mod/scripts/dev-env.ps1` / `dev-env.sh` from the Adoptium API into `mod/.jdk/` (gitignored). The SHA-256 is verified against the API's checksum. No admin rights. Mojang's runtimes are never used. |
-| Environment | client only |
-
-`./gradlew build` and `./gradlew genSources` are run as separate invocations.
+### 11.1 Target and toolchain
+The single-build-for-26.3 text of v1 (Fabric API dependency, Temurin JDK downloaded into `mod/.jdk`) is gone with the code it described. The build is the Stonecutter multi-node project of `mod/`: `mod/nodes.txt` is the single source of truth for the node list (id, loader, claimed Minecraft ids, `loaderMin`, `java`, strategy, Gradle JDK), seven nodes exist, and the JDKs come from the `PUMPKIN_JDK_<major>` environment variables (never a download into the repo). Details: `mod/README.md` and `INGAME.md` section 4.3.
 
 ### 11.2 Layout
-```
-mod/ build.gradle settings.gradle gradle.properties gradlew gradlew.bat gradle/wrapper/*
-     scripts/dev-env.ps1 scripts/dev-env.sh scripts/FakeLauncher.java  README.md (build + owner GUI checklist of 13.3.2)
-     src/client/java/dev/laux/pumpkin/friends/
-       FriendsClient.java                      ClientModInitializer: env present -> bridge, else nothing
-       bridge/ BridgeEnv BridgeClient Protocol (Gson, 16 KiB cap) Messages Backoff      <- Minecraft-free
-       state/  Snapshot StateStore Sanitize (strip §, controls, caps)                 <- Minecraft-free
-       mc/     PauseMenuButton FriendsScreen LanWatcher LanControl Toasts
-     src/client/resources/fabric.mod.json, assets/pumpkin_friends/{icon.png, lang/{en_us,de_de}.json}
-     src/test/java/dev/laux/pumpkin/friends/{ProtocolTest,BackoffTest,StateStoreTest,SanitizeTest,BridgeHarnessTest,ScriptedLauncher}.java
-     .gitattributes (*.bat crlf, *.jar binary; the repo forces eol=lf)   .gitignore (run/ from runClient)
-```
-- Mod id `pumpkin_friends`, name "Pumpkin Friends", version `0.1.0`; the build output is `mod/build/libs/pumpkin_friends-0.1.0.jar`. The description contains "NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT." The icon `icon.png` is a copy of `src-tauri/icons/128x128.png`.
-- Start-up seam: `BridgeClient.startIfLaunched(env, versions, listener, timing)` returns `Optional<BridgeClient>` and starts the thread only for a valid env (7.5); `FriendsClient` uses it. All timings are injectable through `BridgeClient.Timing`.
-- Lang keys beyond the features below: `publish_failed`, `no_friends`, `someone`, `section.*`, and the `row` / `invite_row` formats.
+The source tree is the four layers of `INGAME.md` section 4.1 (`core/` Minecraft-free, `compat/` per era, `platform/` per loader, `ui/`), one project per node, plus `mod/fixtures/protocol/` (the golden lines shared with the Rust tests) and `mod/verified.json`. Mod id `pumpkin_friends`; the description carries "NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED OR ASSOCIATED WITH MOJANG OR MICROSOFT.". The layer rules are enforced by a check script (INGAME.md section 4.1).
 
 ### 11.3 Features
-1. **Pause-menu button** "Pumpkin Friends" (`ScreenEvents.AFTER_INIT`, `PauseScreen`, added idempotently, placed relative to existing widgets). Only while the bridge is connected. Opens `FriendsScreen`.
-2. **FriendsScreen:**
-   - (a) A friends list with presence, from the snapshot.
-   - (b) In singleplayer and not published: "Für Freunde öffnen", which calls `publishServer(MultiplayerScope.LAN, false, HttpUtil.getAvailablePort())` on the client thread (the 26.3 three-argument overload; `false` = no commands for guests).
-   - (c) Published: checkboxes for the online friends who are not already guests, and "Einladen" (`share`), enabled for 1 to 7 selected friends. The launcher stays authoritative on the guest limit.
-   - (d) Sharing: the guest list with "Entfernen" (`kick`), and "Teilen beenden" (`stopSharing`, then `unpublishServer()`).
-   - (e) Received invites, read-only, with the text line "Im Launcher beitreten" under the list (a text, not a button: there is no in-game join).
-   - (f) "Bestätige im Launcher" after `notify{confirmInLauncher}` (which also shows a toast). The hint stays until the next `error` message or a snapshot whose session differs from the current one.
-3. **LAN watcher:** polls `isPublished()`/`getPort()` at `END_CLIENT_TICK` and sends `lanOpened`/`lanClosed` on change. This also covers vanilla World Options.
-4. **Toasts:** `FriendToast` with `ResolvableProfile.createUnresolved(uuid)` when `mcUuid` is set, otherwise `SystemToast`. Text from the lang keys per `notify.event` and `error.code`. Names are inserted as literal text after `Sanitize`.
-5. **Degradation:** no env means only an inert initializer. Disconnected means the button is hidden and the screen shows "Launcher nicht verbunden".
-
-No keybinding and no in-game join.
+The R-A in-game feature set is `INGAME.md` section 6 (screens, hub states, Teilen tab) as built by package U2 from the A24 list: hub with Freunde, Anfragen, Einladungen, Teilen, Optionen (read-only), add friend by name, accept/decline, invites view/decline/joinHere, share/kick/stop, toasts. The old single-screen feature list of v1 (share checkboxes, `notify{confirmInLauncher}`) died with protocol 1; the equivalent rules are 7.3 to 7.5 and `INGAME.md` sections 5.4 and 5.5.
 
 ### 11.4 Threading
-- A daemon reader (blocking socket, connect timeout 2 s, read timeout 30 s) and a writer on a `LinkedBlockingQueue(64)`. The writer sends a `ping` itself when the queue has been empty for one ping interval (10 s), so pings never sit in the queue. When the queue is full, the new message is dropped and a warning is logged. Messages queued before the launcher's `welcome` are dropped, and the queue is cleared at the start of each connection, so nothing stale goes out before `hello`.
-- Inbound messages go to a `ConcurrentLinkedQueue`, which is drained at `END_CLIENT_TICK` into an immutable `Snapshot` (volatile). `pong` is handled inside `BridgeClient` as a liveness signal and does not enter that queue.
-- All Minecraft calls run on the client thread.
+The bridge thread, backoff and liveness are `INGAME.md` sections 4.2 and 5.3 (work reaches the main thread through `Minecraft.execute`, not a tick hook); the Java implementation is `mod/core` (`bridge`, `request`, `runtime`), tested without Minecraft.
 
 ### 11.5 Distribution and supply chain
 
-**Planned (INGAME.md sections 3.2 and 8): the mod is distributed inside the launcher.** The jars are built in the launcher's release CI (a `mod` matrix with the smoke test, whose artifact the per-OS launcher build consumes), embedded with `include_bytes!` and hash-checked before every launch (11.0). The supply chain is the launcher's own signed release. The following go away: `services/friends/modinstall.rs`, the command `friends_mod_install` and its `ModState::NotInstalled` path, `MOD_PROJECT_ID` and the Modrinth lookup of our mod, `.github/workflows/mod-release.yml`, the GitHub environment `modrinth-release` with its `MODRINTH_TOKEN`, the Modrinth project and the owner's 2FA duty for it, and the add button of `FriendsModRow`. Budget: each jar at most 300 KB, all jars together at most 8 MB; CI fails above that.
-
-**Current code, kept until those packages land (historical afterwards):** the mod is published on Modrinth and installed by the player.
-
-- The owner creates the Modrinth project. Its **project id** is pinned as `MOD_PROJECT_ID` in `services/friends/modinstall.rs` and, with the identical value, in `.github/workflows/mod-release.yml`. Until it is set (empty string), `modinstall::status` is `Unavailable` on every instance, the lookup treats no project as our own mod (5.6), and the dev jar (`mod/build/libs/pumpkin_friends-0.1.0.jar`) is added by hand.
-- `modinstall::status(instance)`: `Unavailable` for a non-Fabric loader or an empty `MOD_PROJECT_ID`; `Installed` when the instance has an enabled `ModKind::Mod` with `ModSource::Modrinth` and the pinned project id; otherwise `NotInstalled`. `Connected` is added by `friends_mod_status` from the bridge (8.4).
-- `friends_mod_install` (`modinstall::install`): list the pinned project's versions for **the instance's own Minecraft version** + `fabric` (so a second MC version needs no code change). Take the newest `listed` release whose `project_id` equals the constant, pick the file whose sha512 the API reports, and install it through `content::install_mod` (the catalog mod-install path with `Fetch::Modrinth` verification), which also installs Fabric API as a required dependency. An `Unavailable` instance, or no listed release for the version: `errors.friends.modNotAvailable{version}`. The target file name is a sanitised leaf `[A-Za-z0-9._+-]+\.jar`.
-- **Releases** (`mod-release.yml`, manual dispatch from `main` only): a direct Modrinth API upload (`curl` + `jq`), not the Minotaur plugin, so that no Gradle build script runs with the secret in its environment. Two jobs:
-  - `build` has no environment and no secret. It builds and tests without a Gradle cache (no earlier run's cache enters a release), checks that the jar's `fabric.mod.json` id is `pumpkin_friends` and its version matches `mod/gradle.properties`, and checks that `MOD_PROJECT_ID` is an 8-character id equal to the constant in `modinstall.rs` (an exact-text grep for `MOD_PROJECT_ID: &str = "<id>"`). With the empty id it fails on purpose.
-  - `publish` runs in the GitHub **environment** `modrinth-release` (owner as required reviewer, `main` only) with the `MODRINTH_TOKEN` environment secret (Modrinth PAT scopes "Create versions" and "Read projects"), and gets the jar's sha256 from `build`, so the reviewer approves a finished, checked artifact. It checks that the API returns the pinned project, refuses a `version_number` that already exists, and uploads with `game_versions: ["26.3"]`, `loaders: ["fabric"]`, Fabric API (`P7dR8mSH`, the owner confirms the id) as a required dependency, status `listed`, and the chosen channel. The launcher installs only `release` versions.
-  - The owner enables 2FA on the Modrinth account. Nothing publishes automatically.
-
----
+**The mod is distributed inside the launcher (INGAME.md sections 3.2 and 8).** The jars are built in the launcher's release CI (a `mod` matrix with the smoke test, whose artifact the per-OS launcher build consumes), embedded with `include_bytes!` and hash-checked before every launch (11.0). The supply chain is the launcher's own signed release. Gone for good (A12; W1 and F1 removed them): `services/friends/modinstall.rs`, the command `friends_mod_install` and its `ModState::NotInstalled` path, `MOD_PROJECT_ID` and the Modrinth lookup of our mod, `.github/workflows/mod-release.yml`, the GitHub environment `modrinth-release` with its `MODRINTH_TOKEN`, the Modrinth project and the owner's 2FA duty for it, and the add button of `FriendsModRow`. Budget: each jar at most 300 KB, all jars together at most 8 MB; CI fails above that.
 
 ## 12. Privacy and security
 
@@ -1515,7 +1412,7 @@ No keybinding and no in-game join.
   - Joining needs a Microsoft account (`instance_launch` refuses `friendJoin` without `account_id`). Unit-tested.
   - The game itself rejects offline guests at login: the host's integrated server authenticates every login, and the tunnel forwards bytes unchanged to that port. Verified by the owner in E8b (13.4).
 - **Minimum version 1.20** for hosting and joining.
-- **No file transfer between peers.** No downloads on behalf of a manifest in v1. `servers.dat` and `options.txt` are never touched. The only downloads in the friends feature are (current code only) our own mod from the pinned Modrinth project, which goes away with 11.5, and friends' skin PNGs (sessionserver → `textures.minecraft.net` only, at most 64 KiB, PNG signature checked).
+- **No file transfer between peers.** No downloads on behalf of a manifest in v1. `servers.dat` and `options.txt` are never touched. The only downloads in the friends feature are friends' skin PNGs (sessionserver → `textures.minecraft.net` only, at most 64 KiB, PNG signature checked); the in-game mod needs no download at all (11.0).
 - **Untrusted input:** every frame and IPC line is size-limited before parsing. Ids and hashes are format-checked. Peer strings are sanitised (12.3). Unknown fields are ignored. A malformed peer frame resets the stream with `PROTOCOL`, and on the hello and control streams the connection is closed with `PROTOCOL` (5.1). A malformed mod IPC line after `hello` is ignored (debug log) but counts toward the 20 messages/s limit, whose excess closes the connection (7.1).
 - **Dependency hygiene:** `cargo deny check advisories` is green on the final tree (R0a). `deny.toml` ignores two compile-time-only advisories with a reason each: RUSTSEC-2024-0370 (proc-macro-error via gtk3-macros, existing) and RUSTSEC-2024-0436 (paste, unmaintained, via iroh → netwatch → netdev → netlink-packet-core, Linux only). The new crypto crates (ed25519-dalek 3, curve25519-dalek 5, noq) are listed with their audit status in `DEPENDENCIES.md`.
 
@@ -1608,18 +1505,10 @@ CI facts (`.github/workflows/ci.yml`): `cargo check` and `cargo test --locked` r
 
 ### 13.3 Mod
 
-#### 13.3.1 Agent-verifiable (M1 acceptance; also run by the D2 CI job)
-- `./gradlew build` compiles every class, including `mc/`, against the 26.3 mappings and the pinned Fabric API; this is the signature check for `publishServer`, `unpublishServer`, `isPublished`, `getPort`, `FriendToast`, `ResolvableProfile.createUnresolved`, `ScreenEvents.AFTER_INIT` and `END_CLIENT_TICK`.
-- `./gradlew test`: JUnit for `Protocol`, `Backoff`, `StateStore` and `Sanitize`.
-- **Scripted protocol harness** `BridgeHarnessTest` (JUnit, no Minecraft classes): `ScriptedLauncher` listens on a loopback port and plays the launcher side of section 7 from a script, while the real `BridgeEnv`, `BridgeClient` and `StateStore` connect to it with env values passed in. Asserted cases:
-  1. No env: `BridgeEnv` reports absent, and no thread is started.
-  2. Handshake: `hello` with the token and `protocols: [1]`, then `welcome` and a `snapshot`, which `StateStore` exposes (names stripped of `§`, lengths capped).
-  3. `reject{token}`, `reject{protocol}` and `reject{duplicate}`: the client closes and keeps retrying on the normal backoff (1, 2, 5, 10, 30 s), never faster; it does not stop for good. Only a `welcome` resets the backoff.
-  4. A line over 16 KiB from the launcher closes the connection; a malformed line is ignored without an exception.
-  5. `notify` and `error` messages reach the state queue; the mod's `ping` is answered by the launcher's `pong` (ping goes mod → launcher only, 7.3), which `BridgeClient` consumes as a liveness signal.
-  6. Outgoing `share`, `stopSharing`, `kick`, `lanOpened`, `lanClosed` have the exact JSON of 7.3.
-  7. The launcher closes mid-session: the client goes to "disconnected" and reconnects after the backoff 1, 2, 5 s (shortened by an injected clock).
-- No GUI check is part of M1. A `./gradlew runClient` smoke run is optional and not required of the agent.
+#### 13.3.1 Agent-verifiable (JUnit in `mod/core`, no Minecraft classes)
+- The Minecraft-free core is tested with JUnit without any Minecraft class: protocol 2 encode and decode against the golden lines of `mod/fixtures/protocol/` (shared with the Rust tests), the request layer and backoff, the state store, the sanitiser, and the view-model/layout tests of INGAME.md section 6.5. A scripted launcher (`ScriptedLauncher`) plays the launcher side of section 7 over a loopback socket: handshake and `welcome`, every `reject` reason, line limits, reconnect backoff.
+- The compile-against-Minecraft checks are the node compile matrix of `mod/` (both ends and one middle release per node, INGAME.md section 4.3); the real-game proof is the smoke (INGAME.md section 10, layer 4) and the owner pass (layer 5).
+- No GUI check is agent-verifiable.
 
 #### 13.3.2 Owner-verified GUI checklist (in `mod/README.md`; run by the owner in I1 as part of E10, results in VERIFICATION.md)
 Against `FakeLauncher.java` first, then the real launcher:
@@ -1666,7 +1555,7 @@ If a fixture mod has no 26.3 release, substitute another Modrinth mod with the s
 
 ## 14. Work packages
 
-> The packages below are the record of the v1 waves. The work packages of the in-game mod (injection, bridge 2, mod core, compat, screens, nodes, release gate) are defined in `INGAME.md` section 11 and are not repeated here. Where a package below mentions installing the mod, publishing it on Modrinth or `MOD_PROJECT_ID`, read it as the **current code** that `INGAME.md` section 8 replaces (11.5).
+> The packages below are the record of the v1 waves. The work packages of the in-game mod (injection, bridge 2, mod core, compat, screens, nodes, release gate) are defined in `INGAME.md` section 11 and are not repeated here. Where a package below mentions installing the mod, publishing it on Modrinth or `MOD_PROJECT_ID`, read it as historical: that code is removed (INGAME.md section 8, A12; changelog D.6).
 
 **Ownership rules.**
 - Files listed under a package are exclusive to it while it runs. The only exceptions are the seams that a later package's row names explicitly (R5: the `state.rs` field and the `lib.rs` wiring at R4's marker, 8.7). Files of finished packages pass to a later package only where that package's row lists them (R4: `p2p/endpoint.rs` and `p2p/tests.rs` for the former Appendix E items E1/E2; F4: the F2 and F3 files named in its row; I1: `p2p/relays.rs`).
@@ -2158,6 +2047,18 @@ Documentation only; no code changed. The owner brief of 2026-10-03 (Pumpkin Laun
 | 15 | Second Minecraft version and in-game join leave the backlog | 2, 7 |
 
 Not changed: the transport, identity, codes, manifests, matching and tunnel rules (sections 3 to 6) and Appendix A. The error keys for the new operations (for example `nameUnknown`, `directoryUnavailable`, `rateLimited`) are defined by the code packages and added to Appendix A with them.
+
+### D.6 Wave 0-2 state folded in (2026-10-04, package D2)
+
+Documentation only; no code changed. Waves 0 and 1 of `INGAME.md` section 11.2 and F1 are merged on `feat/ingame-mod` (tip e36d48c): injection wired into `prepare_launch`, protocol 2 with all 22 ops, seven build nodes of which five are smoke-proven (`mod/verified.json`, `INGAME-SMOKE.md`). This pass struck the "Current code" texts that described removed code and pointed the sections at `INGAME.md`:
+
+| Where | Change |
+|---|---|
+| Header, OD-3, 0, 1.1, 1.2 | "Current code" of the fabric-only hand install struck; OD-3 records the seven-node build; the in-game join non-goal became "open package J1" |
+| 5.5, 5.6 | The `MOD_PROJECT_ID` matching exception is gone (A12); no "our mod" special case exists |
+| 7 (intro, 7.1 to 7.5) | Protocol 2 is the contract; the protocol-1 message tables and confirmation block were struck and replaced by pointers at `INGAME.md` 5 and the golden fixtures `mod/fixtures/protocol/`; framing/limits summarised |
+| 8.4, 8.5, 10.5 | `friends_mod_install` replaced by `friends_ingame_status` / `set_enabled` / `retry`; new events `friends-mod-activity`, `friends-mod-open`, `friends-ingame`, `friends-ingame-failed`; the status row replaces the mod row; the consent dialog carries scope and operation summary |
+| 11.0 to 11.5 | Retitled from "planned model" to the merged model; the single-node toolchain, layout, feature list, threading notes and the whole Modrinth distribution block (project, token, `mod-release.yml`, 2FA duty) are struck and replaced by pointers at `mod/README.md` and `INGAME.md` 4 |
 
 ## Appendix E: Open code fixes
 
