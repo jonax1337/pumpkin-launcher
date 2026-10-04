@@ -84,7 +84,7 @@ src/main/java/.../
   compat/                  everything that differs between Minecraft versions (screens, painter, widgets, LAN, toasts, connect, leave world)
   platform/<loader>/       one thin entry class per loader (Fabric: entry point + pause-menu hook; tracers)
   ui/kit/                  PumpkinScreen, ScrollPane, TabBar, Row: the widget kit; no version conditionals
-  ui/demo/                 the kit demo screen (dev only, see "Widget kit"); ui/FriendsScreen runs on the kit
+  ui/demo/                 the kit demo and share demo screens (dev only, see "Widget kit"); ui/InviteScreen and the hub screens of ui/hub/ run on the kit
 src/main/resources/        language files and icon, shared by all nodes
 scripts/                   dev-env.sh/.ps1, check-conditionals.mjs, validate-mod-index.mjs, compile-matrix.mjs, kit-demo.mjs, FakeLauncher.java
 ```
@@ -215,8 +215,8 @@ The screens of the hub (INGAME 6.2) stand on two layers:
   and switches the mod's UI off for the session; the pause button then stays away, while the input overrides keep the
   vanilla half of their expression (above all the escape key) alive.
 
-`ui/FriendsScreen` (the screen of the merged 26.3 state) runs on the kit already; the hub screens of package U2
-replace it.
+`ui/hub/HubScreen` (the hub of package U2, with the tab classes of U2b beside it) runs on the kit; the interim
+`ui/FriendsScreen` of the merged 26.3 state is gone.
 
 ### Kit demo (the render proof)
 
@@ -230,6 +230,10 @@ closes itself. No `NoSuchMethodError`, no layout exception - that is the proof.
 ```sh
 node scripts/kit-demo.mjs --node 1.21.1-fabric          # starts runClient -Pkitdemo, waits for the line, kills the client
 ```
+
+`ui/demo/ShareDemoScreen` (package U2b) proves the Teilen tab the same way, pure-UI: with the environment variable
+`PUMPKIN_SHARE_DEMO` set it opens on the title screen with fake topics and no world, and the tab logs
+`pumpkin_friends share tab rendered <state> at <w>x<h>` once per state it has shown.
 
 The script uses a hard 180 s timeout and kills only its own process tree. Dev-run evidence (the render proof of U1,
 2026-10-04, dev machine, Gradle on JDK 25, game on the node's JDK):

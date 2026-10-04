@@ -17,6 +17,7 @@ import dev.laux.pumpkin.friends.state.Session;
 import dev.laux.pumpkin.friends.state.TopicStore;
 import dev.laux.pumpkin.friends.ui.kit.PumpkinScreen;
 import dev.laux.pumpkin.friends.ui.kit.Row;
+import dev.laux.pumpkin.friends.ui.model.Painter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -25,9 +26,10 @@ import net.minecraft.client.gui.screens.Screen;
 
 /**
  * The hub behind the pause-menu button (INGAME 6.1 to 6.3): title and status line for every link state, the five tabs,
- * the scrolling body and the footer. Tabs whose screens belong to a later package show a placeholder so the navigation
- * is complete. The hub opens on the tab with pending items (Anfragen, else Einladungen, else Freunde) and rebuilds
- * itself whenever the launcher's state changes; a rebuild keeps text, focus, scroll position and tab (INGAME 6.5).
+ * the scrolling body and the footer. Freunde and Anfragen render their rows here; Einladungen, Teilen and Optionen come
+ * from their own tab classes (package U2b). The hub opens on the tab with pending items (Anfragen, else Einladungen,
+ * else Freunde) and rebuilds itself whenever the launcher's state changes; a rebuild keeps text, focus, scroll position
+ * and tab (INGAME 6.5).
  */
 public class HubScreen extends PumpkinScreen {
 	/** INGAME 5.4, host.invite: at most seven guests share one world. */
@@ -37,6 +39,9 @@ public class HubScreen extends PumpkinScreen {
 
 	private final BridgeClient client;
 	private final RetryCooldown deliverCooldown = new RetryCooldown();
+	private final InvitesTab invites;
+	private final ShareTab share;
+	private final OptionsTab options;
 	private Snapshot shown;
 	private HubCondition condition;
 	private boolean opened;
@@ -44,6 +49,9 @@ public class HubScreen extends PumpkinScreen {
 	public HubScreen(Screen parent, BridgeClient client) {
 		super(Text.translate("pumpkin_friends.title"), parent);
 		this.client = client;
+		this.invites = new InvitesTab(client, this);
+		this.share = new ShareTab(ShareLink.to(client));
+		this.options = new OptionsTab(client);
 	}
 
 	@Override
@@ -70,7 +78,9 @@ public class HubScreen extends PumpkinScreen {
 		return switch (HubTab.values()[tab]) {
 			case FRIENDS -> friendRows();
 			case REQUESTS -> requestRows();
-			case INVITES, SHARE, OPTIONS -> placeholderRows();
+			case INVITES -> invites.rows();
+			case SHARE -> share.rows();
+			case OPTIONS -> options.rows();
 		};
 	}
 
@@ -99,6 +109,15 @@ public class HubScreen extends PumpkinScreen {
 		refreshDeliverButton();
 	}
 
+	/** The render proof of the Teilen tab: it logs every state it has shown once (the dev proof of package U2b). */
+	@Override
+	protected void paint(Painter painter) {
+		super.paint(painter);
+		if (condition != null && condition.showsContent() && currentTab() == HubTab.SHARE) {
+			share.onRendered(width, height);
+		}
+	}
+
 	private HubTab currentTab() {
 		return HubTab.values()[Math.max(0, Math.min(selectedTab(), HubTab.values().length - 1))];
 	}
@@ -122,10 +141,6 @@ public class HubScreen extends PumpkinScreen {
 				OPEN_WIDTH, () -> client.request(Ops.launcherOpen(condition.openTarget())))));
 		}
 		return rows;
-	}
-
-	private static List<Row> placeholderRows() {
-		return List.of(Row.text(Text.translate("pumpkin_friends.hub.tab.placeholder")));
 	}
 
 	// ---- Freunde (INGAME 6.2) ----

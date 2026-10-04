@@ -5,8 +5,8 @@ import dev.laux.pumpkin.friends.state.Requests;
 import java.util.List;
 
 /**
- * The five tabs of the hub (INGAME 6.2); the enum order is the tab order on screen. Tabs this package does not fill yet
- * keep their place so the navigation is complete; their body is a placeholder.
+ * The five tabs of the hub (INGAME 6.2); the enum order is the tab order on screen. Freunde and Anfragen belong to
+ * package U2a, Einladungen, Teilen and Optionen to U2b.
  */
 public enum HubTab {
 	FRIENDS("pumpkin_friends.hub.tab.friends"),
