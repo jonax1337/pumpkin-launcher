@@ -7,33 +7,63 @@ import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.HttpUtil;
 
-/** Öffnet und schließt die Einzelspielerwelt für das LAN; nur auf dem Client-Thread aufrufen. */
-public final class LanControl {
-	private LanControl() {
+/**
+ * Opens the singleplayer world to the LAN and reports its port; only call it on the client thread. INGAME-API.md 3,
+ * "Publish to LAN" (rows {@code IntegratedServer#isPublished}, {@code #getPort}, {@code #publishServer}) and 3.2.
+ */
+public final class Lan {
+	private Lan() {
 	}
 
-	public static boolean canPublish(Minecraft minecraft) {
-		return server(minecraft).filter(server -> !server.isPublished()).isPresent();
+	/** {@code Minecraft#getSingleplayerServer()} exists in every era ("Minecraft: screens, main thread, leaving a world"). */
+	private static Optional<IntegratedServer> server() {
+		return Optional.ofNullable(Minecraft.getInstance().getSingleplayerServer());
 	}
 
-	public static OptionalInt publishedPort(Minecraft minecraft) {
-		return server(minecraft).filter(IntegratedServer::isPublished)
+	public static boolean canPublish() {
+		return server().filter(server -> !server.isPublished()).isPresent();
+	}
+
+	public static OptionalInt publishedPort() {
+		return server().filter(IntegratedServer::isPublished)
 			.map(server -> OptionalInt.of(server.getPort()))
 			.orElse(OptionalInt.empty());
 	}
 
-	/** Gäste bekommen keine Befehle; der Port ist wie in Vanillas „Im LAN öffnen“ ein freier zufälliger. */
-	public static boolean publish(Minecraft minecraft) {
-		return server(minecraft)
-			.map(server -> server.publishServer(MinecraftServer.MultiplayerScope.LAN, false, HttpUtil.getAvailablePort()))
-			.orElse(false);
+	/** Gäste bekommen keine Befehle; der Port ist wie in Vanillas „Im LAN öffnen“ ein freier zufälliger ({@code HttpUtil#getAvailablePort}). */
+	public static boolean publish() {
+		return server().map(server -> publishOn(server, HttpUtil.getAvailablePort())).orElse(false);
 	}
 
-	public static void unpublish(Minecraft minecraft) {
-		server(minecraft).ifPresent(IntegratedServer::unpublishServer);
+	private static boolean publishOn(IntegratedServer server, int port) {
+		//? if >=26.3 {
+		// "Publish to LAN" table, column 26.3: publishServer(MultiplayerScope, boolean, int).
+		return server.publishServer(MinecraftServer.MultiplayerScope.LAN, false, port);
+		//?} else if >=26.2 {
+		/*// Column 26.2: publishServer(MultiplayerScope, GameType, boolean, int); MultiplayerScope.LAN exists from 26.2.
+		return server.publishServer(MinecraftServer.MultiplayerScope.LAN, server.getDefaultGameType(), false, port);
+		*///?} else {
+		/*// Column 1.20 to 26.1.2: publishServer(GameType, boolean, int), the call of vanilla's ShareToLanScreen (3.2).
+		return server.publishServer(server.getDefaultGameType(), false, port);
+		*///?}
 	}
 
-	private static Optional<IntegratedServer> server(Minecraft minecraft) {
-		return Optional.ofNullable(minecraft.getSingleplayerServer());
+	/**
+	 * A2: {@code IntegratedServer#unpublishServer()} exists only from 26.2. Before that a published world stays open to the
+	 * LAN until the player leaves it, and ending the session happens in the launcher alone ({@code host.stop}).
+	 */
+	public static boolean canUnpublish() {
+		//? if >=26.2 {
+		return true;
+		//?} else {
+		/*return false;
+		*///?}
+	}
+
+	/** Does nothing where {@link #canUnpublish()} is false. */
+	public static void unpublish() {
+		//? if >=26.2 {
+		server().ifPresent(IntegratedServer::unpublishServer);
+		//?}
 	}
 }

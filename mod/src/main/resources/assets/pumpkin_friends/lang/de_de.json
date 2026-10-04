@@ -49,5 +49,20 @@
 	"pumpkin_friends.error.nameUnknown": "Diesen Namen gibt es nicht",
 	"pumpkin_friends.error.directoryUnavailable": "Das Verzeichnis ist gerade nicht erreichbar",
 	"pumpkin_friends.error.timeout": "Der Launcher hat nicht rechtzeitig geantwortet",
-	"pumpkin_friends.error.disconnected": "Der Launcher ist nicht verbunden"
+	"pumpkin_friends.error.disconnected": "Der Launcher ist nicht verbunden",
+	"pumpkin_friends.done": "Fertig",
+	"pumpkin_friends.lan_stays_open": "Die Welt bleibt im LAN offen, bis du sie verlässt",
+	"pumpkin_friends.kitdemo.title": "Widget-Kit (Entwicklung)",
+	"pumpkin_friends.kitdemo.tab_list": "Liste",
+	"pumpkin_friends.kitdemo.tab_form": "Formular",
+	"pumpkin_friends.kitdemo.status": "%s Zeilen, scrollbar mit Mausrad, Bild auf/ab",
+	"pumpkin_friends.kitdemo.row": "Zeile %s",
+	"pumpkin_friends.kitdemo.row_second": "Zweite Zeile einer hohen Zeile",
+	"pumpkin_friends.kitdemo.open": "Öffnen",
+	"pumpkin_friends.kitdemo.form": "Eingabefelder",
+	"pumpkin_friends.kitdemo.name_hint": "Name eingeben",
+	"pumpkin_friends.kitdemo.toggle": "Ein Schalter",
+	"pumpkin_friends.kitdemo.clipboard": "Zwischenablage",
+	"pumpkin_friends.kitdemo.copy": "Kopieren",
+	"pumpkin_friends.kitdemo.paste": "Einfügen"
 }

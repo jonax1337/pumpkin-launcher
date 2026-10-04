@@ -2,7 +2,6 @@ package dev.laux.pumpkin.friends.compat;
 
 import dev.laux.pumpkin.friends.bridge.BridgeClient;
 import java.util.OptionalInt;
-import net.minecraft.client.Minecraft;
 
 /**
  * Meldet dem Launcher jede Änderung des LAN-Ports, egal ob über die Mod oder Vanillas Weltoptionen geöffnet
@@ -17,14 +16,14 @@ public final class LanWatcher {
 		this.client = client;
 	}
 
-	public void tick(Minecraft minecraft) {
+	public void tick() {
 		boolean connected = client.isConnected();
 		if (connected && !wasConnected) {
 			// Eine neue Verbindung kennt noch keinen Port: eine schon offene Welt wird erneut gemeldet.
 			reportedPort = OptionalInt.empty();
 		}
 		wasConnected = connected;
-		OptionalInt port = LanControl.publishedPort(minecraft);
+		OptionalInt port = Lan.publishedPort();
 		if (connected && !port.equals(reportedPort)) {
 			report(port);
 			reportedPort = port;
