@@ -3,7 +3,7 @@
 //! Das Verzeichnis stellt nur zu; ob jemand das Konto hat, das er angibt, bestätigt Mojang beiden Launchern direkt.
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use data_encoding::HEXLOWER;
@@ -72,6 +72,31 @@ pub(super) struct DirectoryClient {
     wake: Notify,
     /// Peer-IDs frisch per Name eingelöster Freunde und wann sie eingelöst haben.
     redeemed: Mutex<HashMap<String, Instant>>,
+    /// Fragt, ob irgendein Spiel mit der Mod verbunden ist; fehlt, bis die Sitzungen es einsetzen.
+    game_links: OnceLock<GameLinkProbe>,
+}
+
+/// Ob irgendein laufendes Spiel über die Brücke mit dem Launcher verbunden ist.
+pub(super) type GameLinkProbe = Arc<dyn Fn() -> bool + Send + Sync>;
+
+/// Woher das Zertifikat einer Anmeldung kommen darf. Ein Abruf bei Mojang kann den Chat-Schlüssel eines laufenden Spiels
+/// ersetzen; ob er das tut, klärt der Eigentümertest O-5 (BYNAME-ATTEST). Bis dahin holt der Launcher während eines Spiels
+/// mit verbundener Mod kein neues Zertifikat (INGAME 5.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CertificateSource {
+    /// Das gemerkte, solange Mojang keine Erneuerung will, sonst ein frisches.
+    CachedOrFetched,
+    /// Nur das gemerkte, solange es benutzbar ist; ohne ein solches scheitert die Anmeldung.
+    CachedOnly,
+}
+
+impl DirectoryClient {
+    fn certificate_source(&self) -> CertificateSource {
+        match self.game_links.get() {
+            Some(game_link_active) if game_link_active() => CertificateSource::CachedOnly,
+            _ => CertificateSource::CachedOrFetched,
+        }
+    }
 }
 
 /// Ein Token des Verzeichnisses; steht in keiner Debug-Ausgabe und in keinem Protokoll.
@@ -171,7 +196,14 @@ impl Friends {
         Ok(())
     }
 
-    /// Schickt eine Freundschaftsanfrage an den Spieler mit genau diesem Minecraft-Namen (BYNAME 7.1).
+    /// Sagt dem Dienst, woher er erfährt, ob ein Spiel mit der Mod verbunden ist; genau einmal.
+    pub(super) fn watch_game_links(&self, probe: GameLinkProbe) -> Result<(), HandlerAlreadySet> {
+        self.core.by_name.game_links.set(probe).map_err(|_| HandlerAlreadySet)
+    }
+
+    /// Schickt eine Freundschaftsanfrage an den Spieler mit genau diesem Minecraft-Namen (BYNAME 7.1). Solange ein Spiel mit
+    /// der Mod verbunden ist, meldet sich der Dienst nur mit dem gemerkten Zertifikat an; gibt es keines, das noch
+    /// taugt, bleibt es bei `directoryUnavailable`.
     pub async fn add_by_name(&self, name: &str) -> AppResult<FriendRequest> {
         let core = &self.core;
         core.ensure_enabled()?;
@@ -182,7 +214,8 @@ impl Friends {
         let target = look_up(deps, &name).await?;
         ensure_may_request(core, &target)?;
         let (parts, record) = issue_code(core, &identity, &target)?;
-        let sent = match send_letter(core, deps, &identity, &parts, &target.uuid).await {
+        let source = core.by_name.certificate_source();
+        let sent = match send_letter(core, deps, &identity, &parts, &target.uuid, source).await {
             Ok(sent) => sent,
             Err(failure) => {
                 let _ = core.stores.codes.remove(&record.id);
@@ -227,13 +260,18 @@ fn forget_certificate(core: &Core) {
 
 /// Das gültige Token für die eigene Peer-ID, sonst eine neue Anmeldung.
 async fn session(core: &Core, deps: &DirectoryDeps) -> Result<CachedSession, Failure> {
+    session_with(core, deps, CertificateSource::CachedOrFetched).await
+}
+
+/// Wie [`session`], mit der Vorgabe, woher das Zertifikat einer neuen Anmeldung kommen darf.
+async fn session_with(core: &Core, deps: &DirectoryDeps, source: CertificateSource) -> Result<CachedSession, Failure> {
     let identity = core.identity().ok_or_else(|| Failure::Local(identity_lost()))?;
     let _auth = core.by_name.auth_lock.lock().await;
     let peer_id = identity.peer_id();
     if let Some(cached) = cached_session(core, &peer_id) {
         return Ok(cached);
     }
-    let opened = log_in(core, deps, &identity).await;
+    let opened = log_in(core, deps, &identity, source).await;
     if matches!(opened, Err(Failure::Mojang(MojangError::NotAllowed))) {
         set_health(core, DirectoryState::NotAllowed);
     }
@@ -249,18 +287,26 @@ fn cached_session(core: &Core, peer_id: &str) -> Option<CachedSession> {
 
 /// One handshake, and one more after a refusal that a fresh Minecraft token or a fresh certificate can cure
 /// (BYNAME-ATTEST 5.4). A token refused again although it was just refreshed means Mojang refuses the account.
-async fn log_in(core: &Core, deps: &DirectoryDeps, identity: &Identity) -> Result<CachedSession, Failure> {
-    match handshake(core, deps, identity).await {
+async fn log_in(
+    core: &Core,
+    deps: &DirectoryDeps,
+    identity: &Identity,
+    source: CertificateSource,
+) -> Result<CachedSession, Failure> {
+    match handshake(core, deps, identity, source).await {
         Err(Failure::Mojang(MojangError::InvalidSession)) => {
             deps.tokens.forget_minecraft_session();
-            handshake(core, deps, identity).await.map_err(|failure| match failure {
+            handshake(core, deps, identity, source).await.map_err(|failure| match failure {
                 Failure::Mojang(MojangError::InvalidSession) => Failure::Mojang(MojangError::NotAllowed),
                 other => other,
             })
         }
-        Err(Failure::Directory(DirectoryError::BadCertificate | DirectoryError::CertificateExpired)) => {
+        // Ein frisches Zertifikat gibt es nur, wo der Abruf erlaubt ist; sonst bleibt es bei der Ablehnung.
+        Err(Failure::Directory(DirectoryError::BadCertificate | DirectoryError::CertificateExpired))
+            if source == CertificateSource::CachedOrFetched =>
+        {
             forget_certificate(core);
-            handshake(core, deps, identity).await.inspect_err(warn_refused_certificate)
+            handshake(core, deps, identity, source).await.inspect_err(warn_refused_certificate)
         }
         first => first,
     }
@@ -282,13 +328,18 @@ fn warn_refused_certificate(failure: &Failure) {
 /// The login of BYNAME-ATTEST 5.4: account attributes, certificate, challenge, both signatures. The certificate comes
 /// before the challenge so that its fetch does not eat into the challenge's lifetime. No Mojang `join` happens here.
 /// A token for another account than the own is never used: it decides which letters count as addressed to me.
-async fn handshake(core: &Core, deps: &DirectoryDeps, identity: &Identity) -> Result<CachedSession, Failure> {
+async fn handshake(
+    core: &Core,
+    deps: &DirectoryDeps,
+    identity: &Identity,
+    source: CertificateSource,
+) -> Result<CachedSession, Failure> {
     let account = deps.tokens.minecraft_session().await.map_err(Failure::Local)?;
     let privileges = deps.mojang.privileges(&account).await;
     if privileges == Privileges::Refused {
         return Err(Failure::Mojang(MojangError::NotAllowed));
     }
-    let certificate = current_certificate(core, deps, &account).await?;
+    let certificate = current_certificate(core, deps, &account, source).await?;
     let peer_id = identity.peer_id();
     let challenge = deps.api.challenge(&peer_id).await.map_err(Failure::Directory)?;
     let parts = proof::login_parts(&deps.host, &challenge.server_id, &peer_id, &certificate.uuid)
@@ -304,9 +355,20 @@ async fn handshake(core: &Core, deps: &DirectoryDeps, identity: &Identity) -> Re
 
 /// The cached certificate until Mojang wants it refreshed, then a fresh one. While Mojang cannot be reached, a cached
 /// certificate that is still usable serves; never after Mojang refused the account (review finding 1).
-async fn current_certificate(core: &Core, deps: &DirectoryDeps, account: &McIdentity) -> Result<PlayerCertificate, Failure> {
+///
+/// With [`CertificateSource::CachedOnly`] Mojang is not asked at all: a certificate that is usable serves even when
+/// Mojang wants it refreshed, and without one the login fails as if Mojang could not be reached.
+async fn current_certificate(
+    core: &Core,
+    deps: &DirectoryDeps,
+    account: &McIdentity,
+    source: CertificateSource,
+) -> Result<PlayerCertificate, Failure> {
     let now = clock_ms();
     let cached = lock(&core.by_name.certificate).clone().filter(|certificate| certificate.uuid == account.uuid);
+    if source == CertificateSource::CachedOnly {
+        return cached.filter(|certificate| certificate.is_usable(now)).ok_or(Failure::Mojang(MojangError::Unreachable));
+    }
     if let Some(fresh) = cached.clone().filter(|certificate| !certificate.needs_refresh(now)) {
         return Ok(fresh);
     }
@@ -346,12 +408,21 @@ where
     F: Fn(Arc<dyn DirectoryApi>, String) -> Fut,
     Fut: Future<Output = Result<T, DirectoryError>>,
 {
-    let first = call(deps.api.clone(), session(core, deps).await?.token).await;
+    authorized_with(core, deps, CertificateSource::CachedOrFetched, call).await
+}
+
+/// Wie [`authorized`], mit der Vorgabe, woher das Zertifikat einer nötigen Anmeldung kommen darf.
+async fn authorized_with<T, F, Fut>(core: &Core, deps: &DirectoryDeps, source: CertificateSource, call: F) -> Result<T, Failure>
+where
+    F: Fn(Arc<dyn DirectoryApi>, String) -> Fut,
+    Fut: Future<Output = Result<T, DirectoryError>>,
+{
+    let first = call(deps.api.clone(), session_with(core, deps, source).await?.token).await;
     if !matches!(first, Err(DirectoryError::Unauthorized)) {
         return first.map_err(Failure::Directory);
     }
     forget_token(core);
-    let second = call(deps.api.clone(), session(core, deps).await?.token).await;
+    let second = call(deps.api.clone(), session_with(core, deps, source).await?.token).await;
     if matches!(second, Err(DirectoryError::Unauthorized)) {
         forget_token(core);
     }
@@ -423,10 +494,11 @@ async fn send_letter(
     identity: &Identity,
     parts: &CodeParts,
     to: &str,
+    source: CertificateSource,
 ) -> Result<SentLetter, Failure> {
-    let me = session(core, deps).await?;
+    let me = session_with(core, deps, source).await?;
     let letter = &signed_letter(core, identity, &me.uuid, parts, to)?;
-    authorized(core, deps, |api, token| async move { api.send(&token, letter).await }).await
+    authorized_with(core, deps, source, |api, token| async move { api.send(&token, letter).await }).await
 }
 
 fn signed_letter(
