@@ -15,9 +15,10 @@
 	"environment": "client",
 	"entrypoints": {
 		"client": [
-			"dev.laux.pumpkin.friends.platform.fabric.FriendsClient"
+			"${fabricEntrypoint}"
 		]
 	},
+	"mixins": [${mixinConfigs}],
 	"depends": {
 		"fabricloader": ">=${loaderMin}",
 		"minecraft": [${minecraftList}],

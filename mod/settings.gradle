@@ -11,10 +11,15 @@ pluginManagement {
 		mavenCentral()
 		gradlePluginPortal()
 	}
+	plugins {
+		// Wählt je Knoten das Loom mit oder ohne Remapping (Fabric ab Minecraft 26.1 ist nicht mehr verschleiert, INGAME A4).
+		id('dev.kikugie.loom-back-compat').version '0.4.3'
+	}
 }
 
 plugins {
 	id('dev.kikugie.stonecutter').version '0.9.8'
+	id 'dev.kikugie.loom-back-compat'
 }
 
 rootProject.name = 'pumpkin_friends'
@@ -27,9 +32,9 @@ def nodeTable = new File(settingsDir, 'nodes.txt').readLines('UTF-8')
 	.collect { it.replaceFirst(/#.*/, '').trim() }
 	.findAll { !it.isEmpty() }
 	.collect { line ->
-		def (id, loader, minecraft, loaderMin, java, strategy) = line.split(/\s+/) as List
+		def (id, loader, minecraft, loaderMin, java, strategy, gradleJdk, matrix) = line.split(/\s+/) as List
 		[id: id, loader: loader, minecraft: minecraft.split(',') as List, loaderMin: loaderMin,
-		 javaMin: java as int, strategy: strategy]
+		 javaMin: java as int, strategy: strategy, gradleJdk: gradleJdk as int, matrix: matrix.split(',') as List]
 	}
 
 def requestedNodeIds = (startParameter.projectProperties['node'] ?: '').split(',').findAll { !it.isEmpty() }
@@ -38,6 +43,45 @@ if (!unknownIds.isEmpty()) {
 	throw new GradleException("Unbekannte Knoten in -Pnode: ${unknownIds}. Bekannt: ${nodeTable*.id}")
 }
 def selectedNodes = requestedNodeIds.isEmpty() ? nodeTable : nodeTable.findAll { it.id in requestedNodeIds }
+
+// Ein Knoten darf nur beanspruchen, wogegen er gebaut wird, und Gradle muss auf einem JDK laufen, das der Knoten und
+// Stonecutter vertragen (INGAME A5).
+def modProperties = new Properties()
+new File(settingsDir, 'gradle.properties').withReader('UTF-8') { modProperties.load(it) }
+def gradleJdkMin = modProperties.getProperty('mod.gradleJdkMin') as int
+nodeTable.each { node ->
+	if (!node.matrix.containsAll(node.minecraft)) {
+		throw new GradleException("nodes.txt, Knoten ${node.id}: minecraft ${node.minecraft} liegt nicht in matrix ${node.matrix}")
+	}
+	if (node.gradleJdk < Math.max(node.javaMin, gradleJdkMin)) {
+		throw new GradleException("nodes.txt, Knoten ${node.id}: gradleJdk ${node.gradleJdk} ist kleiner als java ${node.javaMin} oder mod.gradleJdkMin ${gradleJdkMin}")
+	}
+}
+
+// -Pcompile.minecraft=<Version> übersetzt einen einzelnen Knoten gegen eine andere Minecraft-Version seiner matrix
+// (scripts/compile-matrix.mjs). Der Jar-Inhalt bleibt der des Knotens; nur Quellen und Abhängigkeiten ändern sich.
+def compileMinecraft = startParameter.projectProperties['compile.minecraft']
+if (compileMinecraft != null) {
+	if (selectedNodes.size() != 1) {
+		throw new GradleException("-Pcompile.minecraft braucht genau einen Knoten in -Pnode, gewählt sind ${selectedNodes*.id}")
+	}
+	def node = selectedNodes.first()
+	if (!(compileMinecraft in node.matrix)) {
+		throw new GradleException("Minecraft ${compileMinecraft} liegt nicht in der matrix von ${node.id}: ${node.matrix}")
+	}
+	node.compileMinecraft = compileMinecraft
+}
+
+// loom-back-compat legt Loom auf den Klassenpfad des Wurzelprojekts, wenn dieses eine Extra-Property
+// "loomx.loom_version" hat (eine Zeile in gradle.properties zählt dafür nicht). Das tut es nur, wenn ein gewählter
+// Knoten Fabric ist, denn Loom verlangt ein JDK 25 und die anderen Knoten laufen auf dem JDK 21.
+if (selectedNodes.any { it.loader == 'fabric' }) {
+	gradle.beforeProject { project ->
+		if (project == project.rootProject) {
+			project.ext['loomx.loom_version'] = modProperties.getProperty('loom_version')
+		}
+	}
+}
 
 gradle.ext.nodeTable = nodeTable
 gradle.ext.selectedNodes = selectedNodes
@@ -49,7 +93,7 @@ stonecutter {
 		// Knoten-Id und Minecraft-Version sind getrennt: "1.21.1-neoforge" würde als SemVer-Prerelease von 1.21.1
 		// gelesen und läge unter 1.21.1 (README, Abschnitt Knoten-Ids).
 		selectedNodes.each { node ->
-			versions([(node.id): node.minecraft.last()])
+			versions([(node.id): node.compileMinecraft ?: node.minecraft.last()])
 		}
 		mapBuilds { branch, node -> 'build-' + node.project.substring(node.project.lastIndexOf('-') + 1) + '.gradle' }
 	}

@@ -1,18 +1,34 @@
 plugins {
-	// Ohne Remapping: ab Minecraft 26.1 ist das Spiel nicht mehr verschleiert. Für ältere Fabric-Knoten kommt
-	// dev.kikugie.loom-back-compat dazu (README, Abschnitt Versionen).
-	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+	// Wählt je Knoten Loom ohne Remapping (Minecraft ab 26.1, loomx.unobfuscated=true) oder mit Remapping (verschleierte
+	// Versionen, false); beides aus versions/<Knoten>/gradle.properties. Die Loom-Version steht in gradle.properties.
+	id 'dev.kikugie.loom-back-compat'
 }
 
 apply from: rootProject.file('gradle/node.gradle')
 
+def isTracer = project.findProperty('tracer') == 'true'
+// Innerhalb von dependencies { } heißt "loomx" eine andere Erweiterung, daher hier festhalten.
+def isUnobfuscated = loomx.unobfuscated
+def fabricPackage = 'dev/laux/pumpkin/friends/platform/fabric'
+
 // Andere Loader haben eigene Einstiegsklassen und sehen die Fabric-API nicht.
 sourceSets.main.java.exclude('dev/laux/pumpkin/friends/platform/neoforge/**', 'dev/laux/pumpkin/friends/platform/forge/**')
+if (isTracer) {
+	// Tracer-Knoten: nur Einstieg und Mixin des Tracers. compat/ und ui/ kommen mit den Paketen, die sie für diesen Knoten bauen.
+	sourceSets.main.java.exclude('dev/laux/pumpkin/friends/compat/**', 'dev/laux/pumpkin/friends/ui/**',
+		"${fabricPackage}/FriendsClient.java", "${fabricPackage}/PauseMenuButton.java")
+} else {
+	sourceSets.main.java.exclude("${fabricPackage}/TracerClient.java", "${fabricPackage}/mixin/**")
+}
 
 dependencies {
 	minecraft "com.mojang:minecraft:${sc.current.version}"
-	implementation "net.fabricmc:fabric-loader:${project.fabric_loader_version}"
-	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	if (!isUnobfuscated) {
+		mappings loom.officialMojangMappings()
+	}
+	// modImplementation gibt es dank loom-back-compat auch ohne Remapping.
+	modImplementation "net.fabricmc:fabric-loader:${project.fabric_loader_version}"
+	modImplementation "net.fabricmc.fabric-api:fabric-api:${pinned('fabric_api_version')}"
 }
 
 loom {
@@ -23,4 +39,16 @@ loom {
 	}
 }
 
-registerModIndexEntry(tasks.named('jar').flatMap { it.archiveFile })
+if (!isUnobfuscated) {
+	// Das Jar im Launcher-Lauf wird nicht remappt (-Dfabric.addMods, INGAME A4): Es muss die Intermediary-Namen und die
+	// Refmap schon enthalten. Der Name der Refmap steht in der Mixin-Konfiguration des Knotens.
+	loom {
+		mixin {
+			useLegacyMixinAp = true
+			defaultRefmapName = 'pumpkin_friends-refmap.json'
+		}
+	}
+}
+
+// loomx.modJar ist remapJar bei verschleierten Versionen und jar sonst: erst das ist das Jar des Knotens.
+registerModIndexEntry(loomx.modJar.flatMap { it.archiveFile })

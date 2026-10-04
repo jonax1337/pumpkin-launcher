@@ -3,8 +3,8 @@
 # Toolchain findet). Aus mod/ mit Punkt aufrufen, damit die Variablen in der Shell bleiben:
 #   . scripts/dev-env.sh [Knoten-Id]        (Standard: der erste Knoten in nodes.txt)
 # Wo ein Punkt-Aufruf keine Argumente erlaubt: PUMPKIN_NODE=<Knoten-Id> . scripts/dev-env.sh
-# Welches JDK ein Knoten braucht, steht in nodes.txt (Spalte java); Gradle selbst braucht mindestens
-# mod.gradleJdkMin aus gradle.properties (Stonecutter verlangt Java 21). Bereits gesetzte PUMPKIN_JDK_<Version>
+# Welches JDK ein Knoten braucht, steht in nodes.txt (Spalte java); das JDK, auf dem Gradle selbst läuft, in Spalte
+# gradleJdk (Stonecutter verlangt Java 21, Fabric Loom Java 25). Bereits gesetzte PUMPKIN_JDK_<Version>
 # werden nicht neu geladen. Mojangs Laufzeiten sind nur JREs ohne javac; deshalb immer eigene JDKs (SPEC 11.1).
 # Kein "set -e": beim Einlesen mit "." würde es die aufrufende Shell beenden. "local" gibt es in bash, dash und zsh.
 
@@ -83,8 +83,8 @@ pumpkin_node_java() {
 	pumpkin_nodes | awk -v id="$1" '$1 == id { print $5; found = 1 } END { exit !found }'
 }
 
-pumpkin_gradle_jdk_min() {
-	sed -n 's/^mod\.gradleJdkMin=//p' gradle.properties
+pumpkin_node_gradle_jdk() {
+	pumpkin_nodes | awk -v id="$1" '$1 == id { print $7; found = 1 } END { exit !found }'
 }
 
 # Gibt JAVA_HOME des JDKs der Version $1 aus: ein gesetztes PUMPKIN_JDK_<Version> oder das geladene mod/.jdk/<Version>.
@@ -107,8 +107,7 @@ pumpkin_dev_env() {
 	[ -f gradlew ] || { echo "Bitte aus dem Ordner mod/ aufrufen." >&2; return 1; }
 	local node=${1:-${PUMPKIN_NODE:-$(pumpkin_nodes | awk 'NR == 1 { print $1 }')}} node_java gradle_java home feature_version
 	node_java=$(pumpkin_node_java "$node") || { echo "Unbekannter Knoten: $node (siehe nodes.txt)" >&2; return 1; }
-	gradle_java=$(pumpkin_gradle_jdk_min)
-	[ "$node_java" -gt "$gradle_java" ] && gradle_java=$node_java
+	gradle_java=$(pumpkin_node_gradle_jdk "$node")
 	for feature_version in $node_java $gradle_java; do
 		home=$(pumpkin_jdk_home "$feature_version") || return 1
 		export "PUMPKIN_JDK_$feature_version=$home"

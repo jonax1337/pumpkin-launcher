@@ -68,6 +68,28 @@ export function nodeProblems(node, modVersion) {
 	return [...problems, ...verifiedProblems(node.verified)];
 }
 
+// Der Launcher wählt den Knoten über (Loader, Minecraft-Version) und den Dateinamen; beides darf nicht doppelt vorkommen.
+function crossNodeProblems(nodes) {
+	const problems = [];
+	const fileOwners = new Map();
+	const releaseOwners = new Map();
+	for (const node of nodes.filter(isPlainObject)) {
+		const previousFileOwner = fileOwners.get(node.file);
+		if (previousFileOwner !== undefined) {
+			problems.push(`node ${node.id}: file name is used by ${previousFileOwner} as well`);
+		}
+		fileOwners.set(node.file, node.id);
+		for (const release of Array.isArray(node.minecraft) ? node.minecraft : []) {
+			const key = `${node.loader}/${release}`;
+			if (releaseOwners.has(key)) {
+				problems.push(`node ${node.id}: Minecraft ${release} on ${node.loader} is also served by ${releaseOwners.get(key)}`);
+			}
+			releaseOwners.set(key, node.id);
+		}
+	}
+	return problems;
+}
+
 export function indexProblems(index) {
 	if (!isPlainObject(index)) {
 		return ['index must be a JSON object'];
@@ -92,7 +114,7 @@ export function indexProblems(index) {
 		seenIds.add(node.id);
 		problems.push(...nodeProblems(node, index.modVersion).map(problem => `${label}: ${problem}`));
 	}
-	return problems;
+	return [...problems, ...crossNodeProblems(index.nodes)];
 }
 
 async function readBudget(gradlePropertiesPath) {

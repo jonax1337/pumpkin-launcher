@@ -9,7 +9,7 @@ sourceSets.main.java.exclude('dev/laux/pumpkin/friends/compat/**', 'dev/laux/pum
 	'dev/laux/pumpkin/friends/platform/fabric/**', 'dev/laux/pumpkin/friends/platform/forge/**')
 
 neoForge {
-	version = project.neoforge_version
+	version = pinned('neoforge_version')
 
 	runs {
 		client {

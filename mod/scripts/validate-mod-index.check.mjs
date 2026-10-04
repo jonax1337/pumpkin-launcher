@@ -43,12 +43,27 @@ const cases = [
 	}],
 	['rejects a strategy that does not belong to the loader', () =>
 		assert.equal(indexProblems(index(node({ strategy: 'fabricAddMods' }))).length, 1)],
-	['rejects a duplicate id', () => assert.equal(indexProblems(index(node(), node())).length, 1)],
+	['rejects a duplicate id', () =>
+		assert.ok(indexProblems(index(node(), node())).some(problem => problem.includes('duplicate id')))],
 	['rejects an id that does not end in the loader', () =>
 		assert.ok(indexProblems(index(node({ id: '1.21.1-forge' }))).some(problem => problem.includes('id must be')))],
 	['rejects an empty node list', () => assert.equal(indexProblems(index()).length, 1)],
 	['rejects a malformed verified entry', () =>
 		assert.equal(indexProblems(index(node({ verified: { smoke: 'yesterday', owner: null } }))).length, 1)],
+	['accepts the same Minecraft id on different loaders', () =>
+		assert.deepEqual(indexProblems(index(node(), node({
+			id: '1.21.1-fabric', loader: 'fabric', strategy: 'fabricAddMods', file: 'pumpkin_friends-2.1.0+1.21.1-fabric.jar',
+		}))), [])],
+	['rejects a Minecraft id that two nodes of one loader both serve', () => {
+		const second = node({ id: '1.21-neoforge', minecraft: ['1.21'], file: 'pumpkin_friends-2.1.0+1.21-neoforge.jar' });
+		const problems = indexProblems(index(node(), second));
+		assert.equal(problems.length, 1);
+		assert.match(problems[0], /Minecraft 1\.21 on neoforge is also served by 1\.21\.1-neoforge/);
+	}],
+	['rejects two nodes with the same file name', () => {
+		const problems = indexProblems(index(node(), node({ id: '1.21.5-neoforge', minecraft: ['1.21.5'] })));
+		assert.ok(problems.some(problem => problem.includes('file name is used by')));
+	}],
 ];
 
 for (const [name, run] of cases) {
