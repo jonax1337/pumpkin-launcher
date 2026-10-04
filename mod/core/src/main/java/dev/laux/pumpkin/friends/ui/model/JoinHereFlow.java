@@ -79,6 +79,13 @@ public final class JoinHereFlow {
 		return Step.CANCEL_JOIN;
 	}
 
+	/** The operation itself failed, so no answer will come; the flow ends without owing the launcher a report. */
+	public void abandoned() {
+		if (phase == Phase.WAITING_FOR_THE_ANSWER) {
+			phase = Phase.ENDED;
+		}
+	}
+
 	/**
 	 * The join topic: {@code connected} completes the flow; a topic that vanishes after it was seen means the connection
 	 * is gone. An absent topic before the first one is nothing - the push of the topic can trail the answer of the

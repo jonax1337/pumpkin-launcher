@@ -91,6 +91,16 @@ class JoinHereFlowTest {
 	}
 
 	@Test
+	void anAbandonedAnswerEndsTheFlowWithoutOwingAReport() {
+		JoinHereFlow flow = new JoinHereFlow();
+		flow.abandoned();
+
+		assertEquals(JoinHereFlow.Phase.ENDED, flow.phase());
+		assertNull(flow.failure());
+		assertEquals(JoinHereFlow.Step.NONE, flow.answered("127.0.0.1", 49_151));
+	}
+
+	@Test
 	void anEndedFlowIgnoresFurtherEvents() {
 		JoinHereFlow flow = new JoinHereFlow();
 		flow.answered("127.0.0.1", 49_151);

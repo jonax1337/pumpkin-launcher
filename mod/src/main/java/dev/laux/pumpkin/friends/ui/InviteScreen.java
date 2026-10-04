@@ -29,6 +29,8 @@ import net.minecraft.client.gui.screens.Screen;
  */
 public final class InviteScreen extends PumpkinScreen {
 	private static final int FULL_ROW_WIDTH = 130;
+	/** INGAME 6.2: inline errors carry the warning sign. */
+	private static final String WARNING = "⚠";
 
 	private final BridgeClient client;
 	private final Invite invite;
@@ -75,7 +77,7 @@ public final class InviteScreen extends PumpkinScreen {
 	}
 
 	private List<Row> failedRows() {
-		return List.of(Row.text(Text.translate("pumpkin_friends.error.internal")), openLauncherRow());
+		return List.of(Row.text(WARNING + " " + Text.translate("pumpkin_friends.error.internal")), openLauncherRow());
 	}
 
 	private static void addCountsAndAlternatives(List<Row> rows, InvitePlan answer) {

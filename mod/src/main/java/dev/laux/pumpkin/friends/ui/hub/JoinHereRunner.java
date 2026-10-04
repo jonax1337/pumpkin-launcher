@@ -54,7 +54,11 @@ public final class JoinHereRunner {
 	}
 
 	private void onAnswer(Reply<JoinHere> reply) {
-		reply.error().ifPresent(Toasts::showError);
+		if (reply.error().isPresent()) {
+			flow.abandoned();
+			Toasts.showError(reply.error().orElseThrow());
+			return;
+		}
 		if (reply instanceof Success<JoinHere> success) {
 			UiSession.run(() -> run(flow.answered(success.value().host(), success.value().port())));
 		}
