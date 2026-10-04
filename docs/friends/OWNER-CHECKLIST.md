@@ -15,6 +15,55 @@ ist nur die Anleitung. Die Quelle der Regeln ist [`SPEC.md`](SPEC.md) (Abschnitt
   beiden Build-Arten aus SPEC 1.3. `kein Gate` heißt: nicht in SPEC 1.3 genannt, aber der Schritt steht
   trotzdem im Weg (Begründung steht dabei).
 
+## 0. Release 0.2.0 (der Release-Kandidat mit der Mod im Spiel)
+
+**Wer:** Du (Bauen, Taggen, Veröffentlichen), Du + 2. Person (In-Game-Pass). **Wann:** wenn alles auf dem
+Release-Zweig gemergt ist und CI grün läuft. **Blockiert:** das Release selbst. Die Ergebnisse trägst du in
+[`VERIFICATION.md`](VERIFICATION.md), Abschnitt **0.2.0**, ein.
+
+- [ ] **0.1. Versionen prüfen.** Alle vier Stellen tragen `0.2.0`: `package.json`, `src-tauri/tauri.conf.json`,
+  `src-tauri/Cargo.toml` (und `Cargo.lock`), `mod/gradle.properties` (Mod-Version = Launcher-Version, INGAME 3.2).
+  Der Release-Workflow prüft das beim Tag noch einmal selbst und bricht sonst ab.
+- [ ] **0.2. Mod-Dist bauen.** Aus `mod/` (JDKs wie in `mod/README.md`): `.\gradlew.bat build modIndex`. Erwartet:
+  `build/mod-index/mod-index.json` mit `modVersion: "0.2.0"` und sieben Jars `pumpkin_friends-0.2.0+<Knoten>.jar`,
+  Budget-Meldung von `checkJarBudget`, und `node scripts/validate-mod-index.mjs build/mod-index/mod-index.json build/mod-index`
+  meldet keinen Fehler.
+- [ ] **0.3. Rauchtest lokal für den Release-Commit** (öffnet kurz ein Spielfenster, etwa 3 Minuten je Zelle;
+  `CARGO_TARGET_DIR` auf ein eigenes Zielverzeichnis setzen):
+  ```powershell
+  .\tools\mod-smoke\run.ps1 -Cell 26.3-fabric     -Data D:\pumpkin-build\smoke\data
+  .\tools\mod-smoke\run.ps1 -Cell 1.21.1-fabric   -Data D:\pumpkin-build\smoke\data
+  .\tools\mod-smoke\run.ps1 -Cell 1.21.8-fabric   -Data D:\pumpkin-build\smoke\data
+  .\tools\mod-smoke\run.ps1 -Cell 1.21.11-fabric  -Data D:\pumpkin-build\smoke\data
+  .\tools\mod-smoke\run.ps1 -Cell 1.21.1-neoforge -Data D:\pumpkin-build\smoke\data
+  .\tools\mod-smoke\run.ps1 -Cell 26.2-neoforge   -Data D:\pumpkin-build\smoke\data
+  .\tools\mod-smoke\run.ps1 -Cell 1.20.1-forge    -Data D:\pumpkin-build\smoke\data
+  ```
+  *Erwartet:* je Zelle `passed` im Bericht (`<Data>\smoke-reports\`) und die Meldung des gestarteten Spiels mit der
+  Version `0.2.0` (zum Beispiel `pumpkin_friends 0.2.0+26.3-fabric`).
+- [ ] **0.4. Taggen und pushen.** Der Versionshinweis ist der Text des Tags (die Datei ist bewusst komplett Englisch):
+  ```powershell
+  git tag -a v0.2.0 --cleanup=verbatim -F docs/friends/RELEASE-0.2.0.md
+  git push origin v0.2.0
+  ```
+  `--cleanup=verbatim` übergibt den Text unverändert; ohne es räumt Git führende Leerzeichen weg.
+- [ ] **0.5. Erster Lauf des erweiterten Release-Workflows** (baut jetzt zuerst die Mod, alle Knoten aus
+  `mod/nodes.txt`, und bettet sie über `PUMPKIN_MOD_DIST` in die Launcher-Binärdateien ein). Prüfe im Lauf unter
+  *Actions → Release*:
+  - [ ] Die Jobs *Mod node list*, *Mod node …* (sieben Stück) und *Mod package* sind grün.
+  - [ ] Im Job *Build (…)* besteht der Schritt *Check the mod dist (index and version)* und loggt
+        `Embedding pumpkin_friends 0.2.0 (7 jars).`
+  - [ ] Nirgendwo im Workflow ist das Cargo-Feature `smoke` gesetzt (der Rauchtest bleibt lokal/nächtlich).
+  - [ ] Der Windows-Installer aus dem Entwurf enthält die Mod: Installieren, eine Instanz aus der Tabelle starten
+        (Freunde an) — die Instanzseite zeigt „Freunde-Menü im Spiel: aktiv“, im `mods`-Ordner der Instanz liegt
+        keine Datei.
+- [ ] **0.6. Entwurf prüfen und veröffentlichen** (Ablauf wie [`../RELEASING.md`](../RELEASING.md): Installer einmal
+  ausprobieren, dann *Publish release*). Datum in `VERIFICATION.md` eintragen.
+- [ ] **0.7. In-Game-Owner-Pass mit dem zweiten Konto** (Schritt 9 unten, Ergebnisse nach `VERIFICATION.md` M3):
+  erst **9.0** (visueller Durchlauf, Hub im Pausenmenü), dann **9.1** Tiefenlauf je Lader (Fabric, NeoForge, Forge:
+  Anfrage annehmen, Welt teilen, Beitritt mit Konto B), dann **9.2** Kurzlauf für jeden anderen Knoten, dann 9.3
+  bis 9.8. Erst danach gilt M3 als erfüllt und 0.2.0 als abschließend geprüft.
+
 ## Was du insgesamt brauchst
 
 - Zwei Windows-PCs in **verschiedenen Netzwerken** (zum Beispiel Zuhause und Büro, oder ein PC im
@@ -29,6 +78,7 @@ ist nur die Anleitung. Die Quelle der Regeln ist [`SPEC.md`](SPEC.md) (Abschnitt
 
 | Schritt | Thema | Wer | Blockiert |
 |---|---|---|---|
+| 0 | **Release 0.2.0**: bauen, taggen, veröffentlichen, In-Game-Pass | Du (+ 2. Person) | das Release selbst |
 | 1 | Echter Microsoft-Login-Test | Du | G2 (muss zuerst) |
 | 2 | Spike auf zwei PCs (G1) | Du + 2. Person | Release, geschlossene Beta |
 | 3 | Test-Build, End-to-End-Tabelle E1 bis E13, Mod-Oberfläche (G2) | Du + 2. Person | Release, geschlossene Beta |
