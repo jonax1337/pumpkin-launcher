@@ -1,0 +1,120 @@
+name: Mod smoke
+
+# Rauchtest der Einspeisung im echten Spiel (docs/friends/INGAME.md 10, Schicht 4; Anleitung docs/friends/INGAME-SMOKE.md):
+# baut den Knoten, startet Minecraft unter Xvfb mit Software-GL über den Startweg des Launchers (Cargo-Feature "smoke",
+# nie in Release-Builds) und prüft, dass die Mod im Spiel ankommt. Nur die Zellen, die auf dem Rechner des Owners
+# bewiesen sind (siehe INGAME-SMOKE.md), stehen in der Matrix unten.
+#
+# UNVERIFIZIERT (nie gelaufen; Paket S2 konnte diesen Workflow nicht ausführen):
+# - ob Minecraft 26.x headless unter Software-Rendering startet (INGAME 12, Risiko 2; 26.3-fabric und 26.2-neoforge
+#   können hier rot sein, bis ein Lauf das Gegenteil zeigt),
+# - ob der Linux-Startweg (Pfade, xvfb) dem Windows-Beweis entspricht.
+# Ein roter Job hier heißt: die Zelle ist nicht bewiesen und bleibt in mod/verified.json ohne Eintrag.
+
+on:
+  schedule:
+    # Nächtlich, 03:22 UTC, abseits der vollen Minuten.
+    - cron: '22 3 * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'mod/**'
+      - 'src-tauri/src/services/friends/ingame/**'
+      - 'src-tauri/tests/smoke/**'
+      - 'tools/mod-smoke/**'
+      - '.github/workflows/mod-smoke.yml'
+  pull_request:
+    paths:
+      - 'mod/**'
+      - 'src-tauri/src/services/friends/ingame/**'
+      - 'src-tauri/tests/smoke/**'
+      - 'tools/mod-smoke/**'
+      - '.github/workflows/mod-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Smoke ${{ matrix.cell }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      # Nur bewiesene Zellen (mod/nodes.txt kennt den JDK- und Strategie-Satz; eine neue Zelle kommt hierher erst,
+      # nachdem ein Lauf sie bewiesen hat).
+      matrix:
+        include:
+          - { cell: 26.3-fabric, java: 25, gradle-java: 25 }   # headless 26.x: unbewiesen, siehe Kopfkommentar
+          - { cell: 1.21.1-fabric, java: 21, gradle-java: 25 }
+          - { cell: 1.21.1-neoforge, java: 21, gradle-java: 21 }
+          - { cell: 26.2-neoforge, java: 25, gradle-java: 25 } # headless 26.x: unbewiesen, siehe Kopfkommentar
+          - { cell: 1.20.1-forge, java: 17, gradle-java: 21 }
+    env:
+      PUMPKIN_SMOKE_CELL: ${{ matrix.cell }}
+      PUMPKIN_SMOKE_DATA: ${{ runner.temp }}/smoke-data
+      PUMPKIN_SMOKE_DIST: mod/build/mod-index
+      # Software-GL für den headlessen Client; erbt an das Spiel weiter.
+      LIBGL_ALWAYS_SOFTWARE: '1'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: ./.github/actions/linux-deps
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - name: Expose the game JDK to Gradle
+        run: echo "PUMPKIN_JDK_${{ matrix.java }}=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        if: matrix.gradle-java != matrix.java
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.gradle-java }}
+
+      - name: Expose the Gradle JDK
+        run: echo "PUMPKIN_JDK_${{ matrix.gradle-java }}=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Gradle cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-smoke-${{ matrix.cell }}-${{ hashFiles('mod/gradle.properties', 'mod/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-smoke-${{ matrix.cell }}-
+
+      # Baut nur den Knoten der Zelle (-Pnode) samt Index und Jars.
+      - name: Build the node and its index
+        working-directory: mod
+        run: ./gradlew -Pnode=${{ matrix.cell }} -Pcore.testJdk=${{ matrix.java }} build modIndex
+
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri
+
+      - name: Run the smoke cell
+        run: |
+          xvfb-run --auto-servernum --server-args='-screen 0 1280x720x24' \
+            cargo test --manifest-path src-tauri/Cargo.toml --locked --features smoke --test smoke smoke_cell -- --exact --nocapture
+
+      - name: Upload the smoke report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: smoke-report-${{ matrix.cell }}
+          path: ${{ runner.temp }}/smoke-data/smoke-reports/
+          if-no-files-found: ignore
