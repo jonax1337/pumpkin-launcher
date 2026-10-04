@@ -9,7 +9,7 @@ use super::super::sessions::{FriendSessions, SessionContext};
 use super::super::tests_session::{FakeMod, FixedVersions, UnknownMods};
 use super::super::JoinTimers;
 use super::*;
-use crate::models::ModLoader;
+use crate::services::modbridge::Expectations;
 use crate::services::modbridge::ops::Scope;
 use crate::services::store::JsonStore;
 
@@ -37,7 +37,7 @@ async fn start_game(node: Node) -> GameNode {
         liveness: Duration::from_secs(15),
     });
     sessions.start(Arc::new(NoSessionEvents)).unwrap();
-    let env = node.bridge.launch_env(GAME, ModLoader::Fabric);
+    let env = node.bridge.register_launch(GAME, Expectations::unconstrained());
     node.bridge.bind_pid(GAME, std::process::id());
     node.bridge.allow_scope_for_test(GAME, Scope::Social);
     let mut game_mod = FakeMod::connect(&env).await;
@@ -123,6 +123,52 @@ async fn once_the_game_is_gone_the_launcher_fetches_a_fresh_certificate_again() 
     node.friends.add_by_name("Zwei").await.unwrap();
 
     assert_eq!(world.certificates_of(&node), 1);
+}
+
+#[tokio::test]
+async fn the_directory_loop_fetches_no_certificate_while_a_game_is_linked_and_registers_once_the_last_one_is_gone() {
+    let world = World::new().await;
+    let alex = world.online("Alex", false).await;
+    let game = start_game(alex).await;
+    let GameNode { node, _sessions, game_mod } = game;
+
+    node.friends.update_settings(findable_settings("Alex")).await.unwrap();
+    until_true("the loop waits", || node.friends.directory_awaits_games()).await;
+
+    assert_eq!(world.certificates_of(&node), 0, "nothing was fetched while the game is linked");
+    assert!(!world.directory.is_registered(&node.account.uuid));
+    assert_ne!(node.directory_state(), DirectoryState::Unreachable, "waiting is no failure");
+    node.bridge.forget(GAME);
+    drop(game_mod);
+    until_true("link gone", || !node.bridge.has_active_link()).await;
+    node.wait_registered(&world).await;
+
+    assert_eq!(world.certificates_of(&node), 1, "the certificate is fetched once the last link has ended");
+    until_true("active", || node.directory_state() == DirectoryState::Active).await;
+}
+
+/// Nach dem Entwenden des Tokens meldet sich der Dienst mit dem gemerkten Zertifikat neu an, solange das Spiel verbunden
+/// ist: `friends.retry` antwortet, und die Anmeldung, die eine Auslieferung sicher auslöst, holt kein zweites Zertifikat.
+/// Wie oft `friends.retry` das Abholen vorziehen darf, drosselt die Schleife selbst (BYNAME 7.2); der Test verlässt sich
+/// darum nicht auf ihren Takt.
+#[tokio::test]
+async fn the_directory_loop_and_friends_retry_serve_from_the_cached_certificate_while_a_game_is_linked() {
+    let world = World::new().await;
+    world.listed_account("Zwei").await;
+    world.listed_account("Drei").await;
+    let alex = online_with_a_certificate_due_for_refresh(&world, "Alex", "Zwei").await;
+    let mut game = start_game(alex).await;
+
+    game.node.friends.update_settings(findable_settings("Alex")).await.unwrap();
+    game.node.wait_registered(&world).await;
+    world.directory.revoke_tokens();
+    let answer = game.game_mod.call("rt", "friends.retry", json!({})).await;
+    assert_eq!(answer["ok"], true, "{answer}");
+    let delivery = add_by_name_from_the_game(&mut game, "Drei").await;
+    assert_eq!(delivery["ok"], true, "{delivery}");
+
+    assert_eq!(world.certificates_of(&game.node), 1, "the certificate Mojang wants refreshed served, no new one was fetched");
+    assert_eq!(game.node.directory_state(), DirectoryState::Active);
 }
 
 #[tokio::test]

@@ -3,6 +3,7 @@
 //! Das Verzeichnis stellt nur zu; ob jemand das Konto hat, das er angibt, bestätigt Mojang beiden Launchern direkt.
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
@@ -74,6 +75,9 @@ pub(super) struct DirectoryClient {
     redeemed: Mutex<HashMap<String, Instant>>,
     /// Fragt, ob irgendein Spiel mit der Mod verbunden ist; fehlt, bis die Sitzungen es einsetzen.
     game_links: OnceLock<GameLinkProbe>,
+    /// Der Dienst hat ein Zertifikat gebraucht, durfte keins holen und gibt keine Fehlermeldung ab, bis das letzte Spiel
+    /// mit der Mod zu Ende ist.
+    awaiting_games: AtomicBool,
 }
 
 /// Ob irgendein laufendes Spiel über die Brücke mit dem Launcher verbunden ist.
@@ -91,11 +95,27 @@ enum CertificateSource {
 }
 
 impl DirectoryClient {
+    fn game_link_active(&self) -> bool {
+        self.game_links.get().is_some_and(|probe| probe())
+    }
+
     fn certificate_source(&self) -> CertificateSource {
-        match self.game_links.get() {
-            Some(game_link_active) if game_link_active() => CertificateSource::CachedOnly,
-            _ => CertificateSource::CachedOrFetched,
+        if self.game_link_active() {
+            CertificateSource::CachedOnly
+        } else {
+            CertificateSource::CachedOrFetched
         }
+    }
+
+    /// Ob die Schleife auf das Ende der Spiele wartet: ihr fehlt ein Zertifikat, und solange ein Spiel mit der Mod läuft,
+    /// holt sie keins.
+    fn is_awaiting_games(&self) -> bool {
+        self.awaiting_games.load(Ordering::SeqCst) && self.game_link_active()
+    }
+
+    /// Setzt den Zustand „wartet auf die Spiele“; `true`, wenn er sich geändert hat.
+    fn set_awaiting_games(&self, awaiting: bool) -> bool {
+        self.awaiting_games.swap(awaiting, Ordering::SeqCst) != awaiting
     }
 }
 
@@ -139,6 +159,11 @@ impl PollClock {
         due
     }
 
+    /// Das Abholen ist ab jetzt fällig, ohne die Mindestzeit von `hurry`.
+    fn make_due(&mut self, now: Instant) {
+        self.next = now;
+    }
+
     /// `true`, wenn das Abholen auf jetzt vorgezogen wurde.
     fn hurry(&mut self, now: Instant) -> bool {
         if self.last.is_some_and(|last| now.duration_since(last) < RETRY_POLL_GAP) {
@@ -156,6 +181,9 @@ enum Failure {
     Mojang(MojangError),
     /// Im Launcher selbst: kein Konto, keine Identität, kein Zufall.
     Local(AppError),
+    /// Eine Anmeldung brauchte ein neues Zertifikat, während ein Spiel mit der Mod verbunden ist ([`CertificateSource`]).
+    /// Das ist kein Fehler des Verzeichnisses: die Schleife wartet, bis das letzte Spiel zu Ende ist.
+    CertificateWithheld,
 }
 
 impl Failure {
@@ -165,7 +193,7 @@ impl Failure {
             Self::Directory(error) => error.into_app_error(name),
             Self::Mojang(MojangError::NotAllowed) => AppError::invalid(coded!("errors.friends.directoryNotAllowed")),
             Self::Mojang(MojangError::InvalidSession) => AppError::invalid(relogin()),
-            Self::Mojang(MojangError::Unreachable | MojangError::RateLimited) => directory_unavailable(),
+            Self::Mojang(MojangError::Unreachable | MojangError::RateLimited) | Self::CertificateWithheld => directory_unavailable(),
             Self::Local(error) => error,
         }
     }
@@ -181,7 +209,7 @@ impl Failure {
                     | DirectoryError::BadCertificate
                     | DirectoryError::CertificateExpired
             ),
-            Self::Mojang(_) | Self::Local(_) => true,
+            Self::Mojang(_) | Self::Local(_) | Self::CertificateWithheld => true,
         }
     }
 }
@@ -194,6 +222,18 @@ impl Friends {
             spawn_directory_loop(&self.core, &runtime.stop);
         }
         Ok(())
+    }
+
+    /// Ob die Schleife des Verzeichnisses gerade auf das Ende der Spiele mit der Mod wartet.
+    #[cfg(test)]
+    pub(super) fn directory_awaits_games(&self) -> bool {
+        self.core.by_name.is_awaiting_games()
+    }
+
+    /// Ein Spiel mit der Mod ist nicht mehr verbunden: wartet die Schleife des Verzeichnisses auf das Ende der Spiele, holt
+    /// sie ihre Arbeit nach.
+    pub(super) fn game_link_ended(&self) {
+        self.core.by_name.wake.notify_one();
     }
 
     /// Sagt dem Dienst, woher er erfährt, ob ein Spiel mit der Mod verbunden ist; genau einmal.
@@ -214,8 +254,7 @@ impl Friends {
         let target = look_up(deps, &name).await?;
         ensure_may_request(core, &target)?;
         let (parts, record) = issue_code(core, &identity, &target)?;
-        let source = core.by_name.certificate_source();
-        let sent = match send_letter(core, deps, &identity, &parts, &target.uuid, source).await {
+        let sent = match send_letter(core, deps, &identity, &parts, &target.uuid).await {
             Ok(sent) => sent,
             Err(failure) => {
                 let _ = core.stores.codes.remove(&record.id);
@@ -258,16 +297,15 @@ fn forget_certificate(core: &Core) {
     *lock(&core.by_name.certificate) = None;
 }
 
-/// Das gültige Token für die eigene Peer-ID, sonst eine neue Anmeldung.
+/// Das gültige Token für die eigene Peer-ID, sonst eine neue Anmeldung. Woher deren Zertifikat kommen darf, hängt davon ab,
+/// ob ein Spiel mit der Mod verbunden ist ([`CertificateSource`]); das gilt für jeden Weg zum Verzeichnis: Namen, Anmeldung
+/// der Schleife, Aufträge und `friends_retry_now`.
 async fn session(core: &Core, deps: &DirectoryDeps) -> Result<CachedSession, Failure> {
-    session_with(core, deps, CertificateSource::CachedOrFetched).await
-}
-
-/// Wie [`session`], mit der Vorgabe, woher das Zertifikat einer neuen Anmeldung kommen darf.
-async fn session_with(core: &Core, deps: &DirectoryDeps, source: CertificateSource) -> Result<CachedSession, Failure> {
     let identity = core.identity().ok_or_else(|| Failure::Local(identity_lost()))?;
     let _auth = core.by_name.auth_lock.lock().await;
     let peer_id = identity.peer_id();
+    let source = core.by_name.certificate_source();
+    resume_after_games(core, source);
     if let Some(cached) = cached_session(core, &peer_id) {
         return Ok(cached);
     }
@@ -357,7 +395,7 @@ async fn handshake(
 /// certificate that is still usable serves; never after Mojang refused the account (review finding 1).
 ///
 /// With [`CertificateSource::CachedOnly`] Mojang is not asked at all: a certificate that is usable serves even when
-/// Mojang wants it refreshed, and without one the login fails as if Mojang could not be reached.
+/// Mojang wants it refreshed, and without one the login is withheld ([`Failure::CertificateWithheld`]).
 async fn current_certificate(
     core: &Core,
     deps: &DirectoryDeps,
@@ -367,7 +405,7 @@ async fn current_certificate(
     let now = clock_ms();
     let cached = lock(&core.by_name.certificate).clone().filter(|certificate| certificate.uuid == account.uuid);
     if source == CertificateSource::CachedOnly {
-        return cached.filter(|certificate| certificate.is_usable(now)).ok_or(Failure::Mojang(MojangError::Unreachable));
+        return cached.filter(|certificate| certificate.is_usable(now)).ok_or(Failure::CertificateWithheld);
     }
     if let Some(fresh) = cached.clone().filter(|certificate| !certificate.needs_refresh(now)) {
         return Ok(fresh);
@@ -408,21 +446,12 @@ where
     F: Fn(Arc<dyn DirectoryApi>, String) -> Fut,
     Fut: Future<Output = Result<T, DirectoryError>>,
 {
-    authorized_with(core, deps, CertificateSource::CachedOrFetched, call).await
-}
-
-/// Wie [`authorized`], mit der Vorgabe, woher das Zertifikat einer nötigen Anmeldung kommen darf.
-async fn authorized_with<T, F, Fut>(core: &Core, deps: &DirectoryDeps, source: CertificateSource, call: F) -> Result<T, Failure>
-where
-    F: Fn(Arc<dyn DirectoryApi>, String) -> Fut,
-    Fut: Future<Output = Result<T, DirectoryError>>,
-{
-    let first = call(deps.api.clone(), session_with(core, deps, source).await?.token).await;
+    let first = call(deps.api.clone(), session(core, deps).await?.token).await;
     if !matches!(first, Err(DirectoryError::Unauthorized)) {
         return first.map_err(Failure::Directory);
     }
     forget_token(core);
-    let second = call(deps.api.clone(), session_with(core, deps, source).await?.token).await;
+    let second = call(deps.api.clone(), session(core, deps).await?.token).await;
     if matches!(second, Err(DirectoryError::Unauthorized)) {
         forget_token(core);
     }
@@ -439,9 +468,29 @@ fn set_health(core: &Core, state: DirectoryState) {
 /// Eine Mojang-Sperre bleibt sichtbar, bis der Nutzer die Einstellung umschaltet; alles andere heißt „nicht
 /// erreichbar“.
 fn note_failure(core: &Core, failure: &Failure) {
+    if matches!(failure, Failure::CertificateWithheld) {
+        await_end_of_games(core);
+        return;
+    }
     tracing::debug!(?failure, "Verzeichnis nicht erreicht");
     if !matches!(failure, Failure::Mojang(MojangError::NotAllowed)) {
         set_health(core, DirectoryState::Unreachable);
+    }
+}
+
+/// Ohne Zertifikat und ohne Erlaubnis, eins zu holen, ist das Verzeichnis weder erreichbar noch unerreichbar: der Zustand bleibt,
+/// der Postfach-Termin bleibt fällig, und die Schleife wartet, bis das letzte Spiel mit der Mod zu Ende ist.
+fn await_end_of_games(core: &Core) {
+    lock(&core.by_name.clock).make_due(Instant::now());
+    if core.by_name.set_awaiting_games(true) {
+        tracing::info!("Verzeichnis wartet auf das Ende der Spiele mit der Mod: kein brauchbares gemerktes Zertifikat, und währenddessen holt der Launcher keins");
+    }
+}
+
+/// Die Anmeldung darf wieder ein Zertifikat holen: war der Dienst am Warten, geht es jetzt weiter.
+fn resume_after_games(core: &Core, source: CertificateSource) {
+    if source == CertificateSource::CachedOrFetched && core.by_name.set_awaiting_games(false) {
+        tracing::info!("Verzeichnis arbeitet weiter: kein Spiel mit der Mod ist mehr verbunden");
     }
 }
 
@@ -494,11 +543,10 @@ async fn send_letter(
     identity: &Identity,
     parts: &CodeParts,
     to: &str,
-    source: CertificateSource,
 ) -> Result<SentLetter, Failure> {
-    let me = session_with(core, deps, source).await?;
+    let me = session(core, deps).await?;
     let letter = &signed_letter(core, identity, &me.uuid, parts, to)?;
-    authorized_with(core, deps, source, |api, token| async move { api.send(&token, letter).await }).await
+    authorized(core, deps, |api, token| async move { api.send(&token, letter).await }).await
 }
 
 fn signed_letter(
@@ -575,11 +623,20 @@ pub(super) fn poll_soon(core: &Core) {
 async fn directory_loop(core: Arc<Core>) {
     loop {
         tick(&core).await;
-        let next_poll = lock(&core.by_name.clock).next;
-        tokio::select! {
-            () = sleep_until(next_poll) => {}
-            () = core.by_name.wake.notified() => {}
-        }
+        wait_for_next_tick(&core).await;
+    }
+}
+
+/// Bis zum nächsten Termin des Postfachs oder bis jemand weckt; wer auf das Ende der Spiele wartet, wartet nur aufs Wecken.
+async fn wait_for_next_tick(core: &Core) {
+    if core.by_name.is_awaiting_games() {
+        core.by_name.wake.notified().await;
+        return;
+    }
+    let next_poll = lock(&core.by_name.clock).next;
+    tokio::select! {
+        () = sleep_until(next_poll) => {}
+        () = core.by_name.wake.notified() => {}
     }
 }
 

@@ -155,8 +155,10 @@ pub(super) fn connected(shared: &Shared, instance_id: &str) {
     announce_connection(shared, instance_id, true);
 }
 
+/// Eine beendete Verbindung weckt das Verzeichnis: wartet es auf das Ende der Spiele, macht es jetzt weiter.
 pub(super) fn disconnected(shared: &Shared, instance_id: &str) {
     announce_connection(shared, instance_id, false);
+    shared.friends.game_link_ended();
 }
 
 fn announce_connection(shared: &Shared, instance_id: &str, connected: bool) {
