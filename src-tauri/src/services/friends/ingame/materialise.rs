@@ -87,7 +87,7 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 
 /// Legt das JAR des Knotens bereit: Bytes aus der Quelle gegen den Index prüfen, ablegen, wenn die Datei fehlt oder
 /// nicht passt (ein verkürztes oder verändertes JAR wird neu geschrieben), erneut prüfen, schreibschützen.
-pub fn materialise(source: &impl ModSource, data_dir: &Path, node: &Node) -> Result<MaterialisedJar, MaterialiseError> {
+pub fn materialise(source: &(impl ModSource + ?Sized), data_dir: &Path, node: &Node) -> Result<MaterialisedJar, MaterialiseError> {
     let bytes = source.jar_bytes(&node.file).ok_or_else(|| MaterialiseError::JarMissing { file: node.file.clone() })?;
     if sha256_hex(bytes) != node.sha256 {
         return Err(MaterialiseError::EmbeddedJarCorrupt { file: node.file.clone() });

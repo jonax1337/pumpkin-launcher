@@ -12,7 +12,7 @@ const MOD_IDENTITY: [&str; 3] = ["pumpkin_friends", "dev.laux.pumpkin", "dev/lau
 
 /// So viele Zeilen nach der Fehlerzeile darf die Mod noch genannt werden. Loader schreiben die Ursache oft in die
 /// Zeilen unter der Überschrift („Incompatible mod set!“); die Liste aller Mods im Absturzbericht steht weiter hinten.
-const NAMING_LOOKAHEAD_LINES: usize = 25;
+pub(super) const NAMING_LOOKAHEAD_LINES: usize = 25;
 
 /// Ein Fehlerbild: Zeilen, die einen der `markers` enthalten, sind Startfehler dieser Art, sobald die Mod in
 /// derselben oder einer der folgenden Zeilen genannt wird.

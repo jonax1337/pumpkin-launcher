@@ -29,12 +29,15 @@ pub struct Expectations {
     pub online_account: bool,
     /// Der volle SHA-256 der eingebauten Mod-Datei; die Mod meldet in `hello` dessen Anfang.
     pub build_id: Option<String>,
+    /// Der Nutzer hat „Aktionen im Spiel“ auf „Erlauben“ gestellt: beide Geltungsbereiche sind von Anfang an
+    /// erlaubt, der Launcher fragt in diesem Spielstart nicht (INGAME 5.5).
+    pub pre_granted: bool,
 }
 
 impl Expectations {
     /// Der Start ohne Wissen über die Mod: jede Mod mit dem richtigen Token und Prozess wird angenommen.
     pub fn unconstrained() -> Self {
-        Self { node_id: None, online_account: true, build_id: None }
+        Self { node_id: None, online_account: true, build_id: None, pre_granted: false }
     }
 }
 

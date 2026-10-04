@@ -369,10 +369,8 @@ fn leaked(api: FakeApi) -> &'static FakeApi {
     Box::leak(Box::new(api))
 }
 
-const OWN_PROJECT: &str = "friends-mod";
-
 fn lookup_over(api: &'static FakeApi, ttl: Duration) -> ModrinthLookup<&'static FakeApi> {
-    ModrinthLookup::with(api, OWN_PROJECT, ttl)
+    ModrinthLookup::with(api, ttl)
 }
 
 const HOUR: Duration = Duration::from_secs(3600);
@@ -400,26 +398,6 @@ async fn only_server_side_unsupported_projects_are_client_only() {
 
     let client_only: Vec<bool> = ['a', 'b', 'c'].iter().map(|l| found[&hash(*l)].client_only).collect();
     assert_eq!(client_only, [false, false, true]);
-}
-
-#[tokio::test]
-async fn our_mod_is_ignored_only_by_its_verified_project_id() {
-    let api = leaked(FakeApi::knowing(&[('o', OWN_PROJECT, "required"), ('i', "impostor", "required")]));
-    let lookup = lookup_over(api, HOUR);
-
-    let found = lookup.classify(&[hash('o'), hash('i'), hash('f')]).await.unwrap();
-
-    assert!(found[&hash('o')].client_only);
-    assert!(!found[&hash('i')].client_only, "ein Name oder eine Mod-ID reicht nicht");
-    assert!(!found.contains_key(&hash('f')), "eine Datei namens pumpkin_friends.jar ohne Treffer bleibt erforderlich");
-}
-
-#[tokio::test]
-async fn an_unset_own_project_id_matches_nothing() {
-    let api = leaked(FakeApi::knowing(&[('a', "", "required")]));
-    let lookup = ModrinthLookup::with(api, "", HOUR);
-
-    assert!(!lookup.classify(&[hash('a')]).await.unwrap()[&hash('a')].client_only, "leer ist keine Projekt-ID");
 }
 
 #[tokio::test]
@@ -516,19 +494,19 @@ fn mod_dir_hasher(known: &'static [(&'static str, char)]) -> impl Fn(&std::path:
 }
 
 #[test]
-fn the_manifest_lists_active_mods_only_including_our_own_jar() {
+fn the_manifest_lists_active_mods_only() {
     let mut host = instance("host", FABRIC, "26.3");
     host.loader_version = Some("0.19.5".into());
     host.mods = vec![
         mod_entry("sodium.jar", ModKind::Mod, true),
-        mod_entry("pumpkin_friends-0.1.0.jar", ModKind::Mod, true),
+        mod_entry("lithium.jar", ModKind::Mod, true),
         mod_entry("off.jar", ModKind::Mod, false),
         mod_entry("pack.zip", ModKind::ResourcePack, true),
         mod_entry("shader.zip", ModKind::Shader, true),
     ];
     let hasher = mod_dir_hasher(&[
         ("sodium.jar", 'a'),
-        ("pumpkin_friends-0.1.0.jar", 'f'),
+        ("lithium.jar", 'f'),
         ("off.jar", 'o'),
         ("pack.zip", 'p'),
         ("shader.zip", 'h'),
@@ -542,7 +520,7 @@ fn the_manifest_lists_active_mods_only_including_our_own_jar() {
             minecraft_version: "26.3".into(),
             loader: FABRIC,
             loader_version: Some("0.19.5".into()),
-            mods: vec![file('a', "sodium.jar"), file('f', "pumpkin_friends-0.1.0.jar")],
+            mods: vec![file('a', "sodium.jar"), file('f', "lithium.jar")],
         }
     );
 }

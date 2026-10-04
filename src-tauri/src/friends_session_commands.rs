@@ -1,11 +1,10 @@
 //! Tauri-Commands der geteilten Welten (SPEC 8.4, von `friend_skin` bis `friends_mod_confirm`). Dünne Schicht über
-//! `AppState.sessions`; nur Skin und Mod-Installation brauchen mehr vom App-Zustand.
-use tauri::{AppHandle, State};
+//! `AppState.sessions`; nur der Skin braucht mehr vom App-Zustand.
+use tauri::State;
 
 use crate::error::{AppError, AppResult};
-use crate::services::friends::contract::{HostSession, Invite, JoinPlan, JoinTicket, LanStatus, ModActivityEntry, ModStatus};
-use crate::services::friends::{avatar, modinstall};
-use crate::services::progress::SharedProgress;
+use crate::services::friends::avatar;
+use crate::services::friends::contract::{HostSession, Invite, JoinPlan, JoinTicket, LanStatus, ModActivityEntry};
 use crate::state::AppState;
 
 /// Der Skin eines Freundes als PNG-Data-URL; Rust lädt und merkt ihn, die Oberfläche fragt Mojang nie selbst.
@@ -83,25 +82,6 @@ pub async fn invite_join(state: State<'_, AppState>, invite_id: String, instance
 #[tauri::command]
 pub async fn join_leave(state: State<'_, AppState>, join_id: String) -> AppResult<()> {
     state.sessions.join_leave(&join_id).await
-}
-
-#[tauri::command]
-pub async fn friends_mod_status(state: State<'_, AppState>, instance_id: String) -> AppResult<ModStatus> {
-    state.sessions.mod_status(&instance_id).await
-}
-
-/// Installiert die Freunde-Mod (SPEC 11.5) unter der Vorgangssperre; die Instanz darf dabei nicht laufen.
-#[tauri::command]
-pub async fn friends_mod_install(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    instance_id: String,
-    operation_id: String,
-) -> AppResult<()> {
-    let (state, instance_id): (&AppState, &str) = (&state, &instance_id);
-    let _operation = state.exclusive(instance_id)?;
-    let install = |progress: SharedProgress| async move { modinstall::install(state, instance_id, &*progress).await };
-    state.run_cancellable(&app, &operation_id, install).await.map(drop)
 }
 
 #[tauri::command]

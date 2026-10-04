@@ -84,6 +84,37 @@ pub struct FriendsSettings {
     /// Fehlt in Dateien aus der Zeit vor der Suche per Name.
     #[serde(default)]
     pub findable_by_name: bool,
+    /// „Freunde-Menü im Spiel“ (INGAME 3.9): der globale Schalter der Einspeisung. Fehlt in älteren Dateien: an.
+    #[serde(default = "ingame_menu_default")]
+    pub ingame_menu: bool,
+    /// „Aktionen im Spiel“ (INGAME 5.5). Fehlt in älteren Dateien: fragen.
+    #[serde(default)]
+    pub ingame_actions: IngameActions,
+}
+
+fn ingame_menu_default() -> bool {
+    true
+}
+
+impl Default for FriendsSettings {
+    fn default() -> Self {
+        Self {
+            display_name: String::new(),
+            always_relay: false,
+            findable_by_name: false,
+            ingame_menu: ingame_menu_default(),
+            ingame_actions: IngameActions::default(),
+        }
+    }
+}
+
+/// Ob der Launcher Aktionen der Mod im Spiel (Teilen, Freunde ändern) einmal je Spielstart erfragt oder sie gleich erlaubt.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum IngameActions {
+    #[default]
+    Ask,
+    Allow,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -340,21 +371,6 @@ pub struct LanStatus {
     pub pid: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ModState {
-    Unavailable,
-    NotInstalled,
-    Installed,
-    Connected,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModStatus {
-    pub state: ModState,
-}
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FriendPresenceEvent {
@@ -526,4 +542,87 @@ pub struct ModActivityEntry {
 pub struct ModOpenEvent {
     pub instance_id: String,
     pub target: ModOpenTarget,
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Freunde-Menü im Spiel (docs/friends/INGAME.md, 3.9): Status der Einspeisung je Instanz, berechnet ohne Start.
+// ---------------------------------------------------------------------------------------------------------------------
+
+use super::ingame::{FailureKind, Loader as IngameLoader};
+
+/// Wie es um das Freunde-Menü im Spiel einer Instanz steht.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum IngameState {
+    /// Der nächste Start speist die Mod ein.
+    Active,
+    /// Die Mod des laufenden Spiels ist mit dem Launcher verbunden.
+    Connected,
+    /// Der Spieler hat die Einspeisung ausgeschaltet (global oder für die Instanz).
+    Off,
+    /// Ein Startfehler hat sie ausgeschaltet („Erneut versuchen“).
+    AutoOff,
+    /// Für diese Instanz gibt es keine Einspeisung; `reason` sagt warum.
+    Unavailable,
+}
+
+/// Der Grund zu einem Status, den die Oberfläche in die Zeile der Instanzseite übersetzt.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum IngameReason {
+    /// Dieser Build trägt keine Mod (Entwicklungsbuild ohne JARs).
+    NotInBuild,
+    Vanilla,
+    Quilt,
+    /// Kein Knoten für diese Minecraft-Version mit diesem Loader.
+    NoNode,
+    /// Es gibt einen Knoten, sein Rauchtest ist aber nicht bestanden.
+    Unverified,
+    LoaderTooOld { need: String },
+    LoaderVersionUnknown,
+    JavaTooOld { need: u32 },
+    JavaUnknown,
+    IdCollision,
+    OfflineAccount,
+    FriendsOff,
+    BridgeNotRunning,
+    /// Der Schalter dieser Instanz ist aus.
+    InstanceOff,
+    /// Der globale Schalter „Freunde-Menü im Spiel“ ist aus.
+    GloballyOff,
+    Breaker { reason: FailureKind },
+}
+
+/// Der Knoten, der für die Instanz gewählt wäre.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IngameNode {
+    pub id: String,
+    /// Die Minecraft-Version der Instanz.
+    pub minecraft: String,
+    pub loader: IngameLoader,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IngameStatus {
+    pub state: IngameState,
+    pub reason: Option<IngameReason>,
+    pub node: Option<IngameNode>,
+}
+
+/// `friends-ingame`: der Status einer Instanz hat sich geändert.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IngameEvent {
+    pub instance_id: String,
+    pub status: IngameStatus,
+}
+
+/// `friends-ingame-failed`: der Start ist wahrscheinlich an der Mod gescheitert, die Einspeisung ist ausgeschaltet.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IngameFailedEvent {
+    pub instance_id: String,
+    pub reason: FailureKind,
 }

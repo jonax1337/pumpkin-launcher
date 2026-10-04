@@ -11,10 +11,8 @@ use std::time::Duration;
 use tokio::sync::oneshot;
 
 use super::contract::{
-    Friend, FriendRequest, ModActivityEntry, ModConnectionEvent, ModOpenEvent, ModState, ModStatus, Presence, RequestDirection,
-    RequestState,
+    Friend, FriendRequest, ModActivityEntry, ModConnectionEvent, ModOpenEvent, Presence, RequestDirection, RequestState,
 };
-use super::modinstall;
 use super::session_events::SessionEvent;
 use super::sessions::{shown_name, FriendSessions, Shared};
 use crate::coded;
@@ -126,17 +124,6 @@ impl ModLink {
 }
 
 impl FriendSessions {
-    /// Zustand der Mod in der Instanz; eine verbundene Mod ist immer `connected`.
-    pub async fn mod_status(&self, instance_id: &str) -> AppResult<ModStatus> {
-        let shared = &self.shared;
-        shared.ensure_enabled()?;
-        let instance = shared.instances.get(instance_id)?;
-        if shared.bridge.is_connected(instance_id) {
-            return Ok(ModStatus { state: ModState::Connected });
-        }
-        Ok(ModStatus { state: modinstall::status(&instance) })
-    }
-
     /// Die Antwort des Nutzers auf `friends-mod-confirm` (SPEC 7.4).
     pub async fn mod_confirm(&self, request_id: &str, allow: bool) -> AppResult<()> {
         let pending = lock(&self.shared.mods.pending).remove(request_id);

@@ -12,7 +12,12 @@ export interface FriendsState { availability: Availability; enabled: boolean; me
   network: NetworkStatus; relays: RelayInfo[]; thirdPartyRelaysAccepted: boolean;
   directory: DirectoryStatus }
 export interface Me { peerId: string; fingerprint: string; displayName: string }
-export interface FriendsSettings { displayName: string; alwaysRelay: boolean; findableByName: boolean }
+export interface FriendsSettings { displayName: string; alwaysRelay: boolean; findableByName: boolean;
+  /** „Freunde-Menü im Spiel“: der globale Schalter der Einspeisung (INGAME 3.9). */
+  ingameMenu: boolean;
+  /** „Aktionen im Spiel“ (INGAME 5.5): einmal je Spielstart fragen oder gleich erlauben. */
+  ingameActions: IngameActions }
+export type IngameActions = "ask" | "allow";
 /** Verzeichnis für Freunde per Minecraft-Namen (docs/friends/BYNAME.md): `host` zeigt die Datenschutzhinweise, null = keins eingebunden. */
 export type DirectoryState = "unavailable" | "off" | "active" | "unreachable" | "notAllowed";
 export interface DirectoryStatus { state: DirectoryState; host: string | null }
@@ -47,7 +52,6 @@ export interface JoinPlan { inviteId: string; summary: InstanceSummary; verdict:
   createVanilla: boolean; lookupFailed: boolean }
 export interface JoinTicket { joinId: string; inviteId: string; instanceId: string; address: string }
 export interface LanStatus { port: number; source: PortSource; pid: number }
-export interface ModStatus { state: "unavailable" | "notInstalled" | "installed" | "connected" }
 export type SessionEnd = "stopped" | "kicked" | "lanClosed" | "hostOffline" | "gameExited" | "left" | "disabled" | "error";
 export type JoinState = { type: "waitingForGame" } | { type: "connecting" } | { type: "connected"; path: PathKind; rttMs: number | null }
   | { type: "ended"; reason: SessionEnd };
@@ -65,6 +69,26 @@ export interface LanEvent { instanceId: string; lan: LanStatus | null }
 export interface ModConnectionEvent { instanceId: string; connected: boolean }
 export interface ModConfirmEvent { requestId: string; instanceId: string; instanceName: string; friends: { friendId: string; displayName: string }[] }
 export interface FriendJoin { joinId: string; address: string }
+
+// --- Freunde-Menü im Spiel (docs/friends/INGAME.md, 3.9); Rust-Gegenstück: Abschnitt am Ende von contract.rs ---
+/** `active`: der nächste Start speist die Mod ein; `connected`: die Mod des laufenden Spiels ist verbunden; `off`: vom Spieler
+ *  ausgeschaltet; `autoOff`: nach einem Startfehler ausgeschaltet; `unavailable`: gibt es für die Instanz nicht (`reason` sagt warum). */
+export type IngameState = "active" | "connected" | "off" | "autoOff" | "unavailable";
+/** Die Art Startfehler, die der Launcher der Mod zuschreibt (Sicherungsschalter, INGAME 3.8). */
+export type IngameFailureKind = "fabricIncompatibleModSet" | "mixinApplyFailed" | "modLoadingError" | "unsupportedClassVersion" | "unknown";
+export type IngameReason =
+  | { type: "notInBuild" } | { type: "vanilla" } | { type: "quilt" } | { type: "noNode" } | { type: "unverified" }
+  | { type: "loaderTooOld"; need: string } | { type: "loaderVersionUnknown" }
+  | { type: "javaTooOld"; need: number } | { type: "javaUnknown" }
+  | { type: "idCollision" } | { type: "offlineAccount" } | { type: "friendsOff" } | { type: "bridgeNotRunning" }
+  | { type: "instanceOff" } | { type: "globallyOff" }
+  | { type: "breaker"; reason: IngameFailureKind };
+export interface IngameNode { id: string; minecraft: string; loader: "fabric" | "neoforge" | "forge" }
+export interface IngameStatus { state: IngameState; reason: IngameReason | null; node: IngameNode | null }
+/** `friends-ingame`: der Status einer Instanz hat sich geändert. */
+export interface IngameEvent { instanceId: string; status: IngameStatus }
+/** `friends-ingame-failed`: der Start ist wahrscheinlich an der Mod gescheitert, die Einspeisung der Instanz ist aus. */
+export interface IngameFailedEvent { instanceId: string; reason: IngameFailureKind }
 /** Fixture key -> TS type (8.3). The fixture object uses these flat, dotted keys; `satisfies` rejects missing and extra keys. */
 export interface FriendsFixtureTypes {
   constants: typeof FRIENDS_LIMITS;
@@ -76,10 +100,13 @@ export interface FriendsFixtureTypes {
   "code.created": FriendCode; "code.listed": FriendCode; blocked: BlockedPeer;
   hostSession: HostSession; invite: Invite;
   "joinPlan.ready": JoinPlan; "joinPlan.missing": JoinPlan; "joinPlan.vanilla": JoinPlan; joinTicket: JoinTicket;
-  lanStatus: LanStatus; modStatus: ModStatus;
+  lanStatus: LanStatus;
+  "ingameStatus.active": IngameStatus; "ingameStatus.connected": IngameStatus; "ingameStatus.off": IngameStatus;
+  "ingameStatus.autoOff": IngameStatus; "ingameStatus.unavailable": IngameStatus; "ingameStatus.loaderTooOld": IngameStatus;
   "event.friendPresence": FriendPresenceEvent; "event.friendRequest": FriendRequestEvent; "event.requestRefused": FriendRequestRefusedEvent; "event.invite": InviteEvent;
   "event.inviteRevoked": InviteRevokedEvent; "event.hostSession": HostSessionEvent; "event.hostSessionEnded": HostSessionEndedEvent;
   "event.joinSession.waitingForGame": JoinSessionEvent; "event.joinSession.connecting": JoinSessionEvent;
   "event.joinSession.connected": JoinSessionEvent; "event.joinSession.ended": JoinSessionEvent;
   "event.lan": LanEvent; "event.modConnection": ModConnectionEvent; "event.modConfirm": ModConfirmEvent;
+  "event.ingame": IngameEvent; "event.ingameFailed": IngameFailedEvent;
 }

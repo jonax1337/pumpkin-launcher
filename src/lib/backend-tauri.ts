@@ -219,8 +219,9 @@ export function createTauriBackend(): Backend {
     invitePlan: (inviteId) => call("invite_plan", { inviteId }),
     inviteJoin: (inviteId, instanceId) => call("invite_join", { inviteId, instanceId }),
     joinLeave: (joinId) => call("join_leave", { joinId }),
-    friendsModStatus: (instanceId) => call("friends_mod_status", { instanceId }),
-    friendsModInstall: (instanceId, operationId) => call("friends_mod_install", { instanceId, operationId }),
+    friendsIngameStatus: (instanceId) => call("friends_ingame_status", { instanceId }),
+    friendsIngameSetEnabled: (instanceId, enabled) => call("friends_ingame_set_enabled", { instanceId, enabled }),
+    friendsIngameRetry: (instanceId) => call("friends_ingame_retry", { instanceId }),
     friendsModConfirm: (requestId, allow) => call("friends_mod_confirm", { requestId, allow }),
   };
 }

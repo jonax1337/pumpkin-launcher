@@ -27,7 +27,7 @@ impl Default for FriendsConfig {
         Self {
             version: CONFIG_VERSION,
             enabled: false,
-            settings: FriendsSettings { display_name: String::new(), always_relay: false, findable_by_name: false },
+            settings: FriendsSettings::default(),
             third_party_relays_accepted: false,
             directory: DirectoryConfig::default(),
         }
@@ -80,7 +80,7 @@ impl FriendsConfig {
     }
 }
 
-fn set_aside(path: &Path, err: &serde_json::Error) -> AppResult<()> {
+pub(super) fn set_aside(path: &Path, err: &serde_json::Error) -> AppResult<()> {
     let name = path.file_name().unwrap_or_default().to_string_lossy();
     let backup = path.with_file_name(free_name(&name, ".corrupt", |n| path.with_file_name(n).exists()));
     tracing::warn!(?path, ?backup, %err, "defekte Freunde-Konfiguration gesichert, starte mit Standardwerten");
@@ -91,6 +91,7 @@ fn set_aside(path: &Path, err: &serde_json::Error) -> AppResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::friends::contract::IngameActions;
     use crate::services::friends::test_support::TempDir;
 
     #[test]
@@ -110,7 +111,13 @@ mod tests {
         let folder = dir.path().join("friends");
         let config = FriendsConfig {
             enabled: true,
-            settings: FriendsSettings { display_name: "Jonas".into(), always_relay: true, findable_by_name: true },
+            settings: FriendsSettings {
+                display_name: "Jonas".into(),
+                always_relay: true,
+                findable_by_name: true,
+                ingame_menu: false,
+                ingame_actions: IngameActions::Allow,
+            },
             third_party_relays_accepted: true,
             directory: DirectoryConfig {
                 registered_uuid: Some("853c80ef3c3749fdaa49938b674adae6".into()),
@@ -131,7 +138,7 @@ mod tests {
         let expected = serde_json::json!({
             "version": 2,
             "enabled": false,
-            "settings": { "displayName": "", "alwaysRelay": false, "findableByName": false },
+            "settings": { "displayName": "", "alwaysRelay": false, "findableByName": false, "ingameMenu": true, "ingameActions": "ask" },
             "thirdPartyRelaysAccepted": false,
             "directory": { "registeredUuid": null, "refreshedAt": null, "jobs": [] }
         });
@@ -149,6 +156,25 @@ mod tests {
         assert!(!config.settings.findable_by_name);
         assert_eq!(config.directory, DirectoryConfig::default());
         assert!(!dir.path().join("config.json.corrupt").exists());
+    }
+
+    #[test]
+    fn config_from_before_the_ingame_menu_has_it_on_and_asks_for_actions() {
+        let dir = TempDir::new();
+        let old = r#"{ "version": 2, "enabled": true, "settings": { "displayName": "Jonas", "alwaysRelay": false, "findableByName": true } }"#;
+        fs::write(dir.path().join(CONFIG_FILE), old).unwrap();
+        let settings = FriendsConfig::load(dir.path()).unwrap().settings;
+        assert!(settings.ingame_menu);
+        assert_eq!(settings.ingame_actions, IngameActions::Ask);
+    }
+
+    #[test]
+    fn an_unknown_value_of_the_ingame_actions_is_unreadable_and_sets_the_file_aside() {
+        let dir = TempDir::new();
+        let broken = r#"{ "enabled": true, "settings": { "displayName": "J", "alwaysRelay": false, "ingameActions": "always" } }"#;
+        fs::write(dir.path().join(CONFIG_FILE), broken).unwrap();
+        assert_eq!(FriendsConfig::load(dir.path()).unwrap(), FriendsConfig::default());
+        assert!(dir.path().join("config.json.corrupt").exists());
     }
 
     #[test]

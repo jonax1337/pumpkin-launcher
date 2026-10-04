@@ -16,6 +16,12 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# Für die Einbettung der Mod (build.rs): dieselbe Indexprüfung und derselbe SHA-256 wie zur Laufzeit; alle schon im Baum.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+sha2 = "0.11"
+data-encoding = "2"
 
 [dependencies]
 tauri = { version = "2", features = ["image-png", "protocol-asset"] }

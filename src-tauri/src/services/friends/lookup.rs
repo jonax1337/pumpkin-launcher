@@ -6,7 +6,6 @@ use std::time::{Duration, Instant};
 
 use futures::future::BoxFuture;
 
-use super::modinstall::MOD_PROJECT_ID;
 use crate::error::AppResult;
 use crate::services::lock;
 use crate::services::modrinth::{self, Project, Version, MAX_PROJECT_IDS};
@@ -19,7 +18,7 @@ const SERVER_SIDE_UNSUPPORTED: &str = "unsupported";
 pub struct ModInfo {
     pub title: String,
     pub project_id: String,
-    /// Der Server braucht die Mod nicht: ein reines Client-Projekt oder die Freunde-Mod selbst.
+    /// Der Server braucht die Mod nicht: ein reines Client-Projekt.
     pub client_only: bool,
 }
 
@@ -65,7 +64,6 @@ impl ModrinthApi for ModrinthHttp {
 
 pub struct ModrinthLookup<A> {
     api: A,
-    own_project_id: String,
     ttl: Duration,
     /// Auch Treffer ohne Ergebnis stehen drin, damit unbekannte Dateien nicht bei jeder Frage neu angefragt werden.
     cache: Mutex<HashMap<String, CachedAnswer>>,
@@ -78,12 +76,12 @@ struct CachedAnswer {
 
 impl<A: ModrinthApi> ModrinthLookup<A> {
     pub fn new(api: A) -> Self {
-        Self::with(api, MOD_PROJECT_ID, CACHE_TTL)
+        Self::with(api, CACHE_TTL)
     }
 
-    /// Mit eigener Projekt-ID und eigener Gültigkeitsdauer; Tests brauchen beides anders als [`Self::new`].
-    pub(super) fn with(api: A, own_project_id: &str, ttl: Duration) -> Self {
-        Self { api, own_project_id: own_project_id.to_owned(), ttl, cache: Mutex::default() }
+    /// Mit eigener Gültigkeitsdauer; Tests brauchen sie anders als [`Self::new`].
+    pub(super) fn with(api: A, ttl: Duration) -> Self {
+        Self { api, ttl, cache: Mutex::default() }
     }
 
     /// Die Hashes ohne Doppelte: was noch gültig im Speicher liegt, und was erst angefragt werden muss.
@@ -118,18 +116,17 @@ impl<A: ModrinthApi> ModrinthLookup<A> {
         Ok(hashes
             .iter()
             .map(|hash| {
-                let info = versions.get(hash).and_then(|v| projects.get(&v.project_id)).map(|p| self.describe(p));
+                let info = versions.get(hash).and_then(|v| projects.get(&v.project_id)).map(Self::describe);
                 (hash.clone(), info)
             })
             .collect())
     }
 
-    fn describe(&self, project: &Project) -> ModInfo {
-        let ours = !self.own_project_id.is_empty() && project.id == self.own_project_id;
+    fn describe(project: &Project) -> ModInfo {
         ModInfo {
             title: project.title.clone(),
             project_id: project.id.clone(),
-            client_only: ours || project.server_side == SERVER_SIDE_UNSUPPORTED,
+            client_only: project.server_side == SERVER_SIDE_UNSUPPORTED,
         }
     }
 }

@@ -60,6 +60,11 @@ impl FakeSource {
         Self { index: index_of(Vec::new()), jars: HashMap::new() }
     }
 
+    /// Der Index nennt den Knoten, die Quelle hat sein JAR aber nicht.
+    pub fn indexed_without_jar(node: &Node) -> Self {
+        Self { index: index_of(vec![node.clone()]), jars: HashMap::new() }
+    }
+
     pub fn with_jar(node: &Node, bytes: &[u8]) -> Self {
         Self { index: index_of(vec![node.clone()]), jars: HashMap::from([(node.file.clone(), bytes.to_vec())]) }
     }

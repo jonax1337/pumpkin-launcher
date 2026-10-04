@@ -1093,7 +1093,7 @@ async fn row_host_changes_always_relay() {
     let (_ticket, mut game) = scene.playing().await;
     let changed = Instant::now();
 
-    let settings = FriendsSettings { display_name: "Anna".into(), always_relay: true, findable_by_name: false };
+    let settings = FriendsSettings { display_name: "Anna".into(), always_relay: true, findable_by_name: false, ..FriendsSettings::default() };
     scene.host.friends.update_settings(settings).await.unwrap();
 
     scene.host.wait_host_end(SessionEnd::Stopped).await;
@@ -1182,7 +1182,7 @@ async fn a_guest_rebind_ends_the_join_with_left() {
     let scene = Scene::shared().await;
     let (_ticket, _game) = scene.playing().await;
 
-    let settings = FriendsSettings { display_name: "Bert".into(), always_relay: true, findable_by_name: false };
+    let settings = FriendsSettings { display_name: "Bert".into(), always_relay: true, findable_by_name: false, ..FriendsSettings::default() };
     scene.guest.friends.update_settings(settings).await.unwrap();
 
     scene.guest.wait_join_end(SessionEnd::Left).await;

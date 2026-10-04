@@ -6,12 +6,12 @@ import type {
 } from "./content-types";
 import type { ContentProgress } from "./progress";
 import type {
-  Account, BlockedPeer, ContentAnalysis, Datapack, ExitPayload, ExportSummary, FileCheck, ForeignInstance, Friend, FriendCode,
+  Account, BlockedPeer, ContentAnalysis, Datapack, IngameEvent, IngameFailedEvent, IngameStatus, ExitPayload, ExportSummary, FileCheck, ForeignInstance, Friend, FriendCode,
   FriendPresenceEvent, FriendRequest, FriendRequestEvent, FriendRequestRefusedEvent, FriendsEnableInput, FriendsSettings, FriendsState, HostSession,
   HostSessionEndedEvent, HostSessionEvent, IconChoice, ImportRequest, Instance, InstallProgress, InstanceScene, InstanceStatus, Invite,
   InviteEvent, InviteRevokedEvent, JavaInstall, JoinPlan, JoinSessionEvent, JoinTicket, LanEvent, LanStatus, LaunchOptions, LibrarySkin,
   LoaderVersion, LocalFile, LogKind, LogPayload, LogSession, MigrationCheck, MigrationOutcome, MigrationTarget, ModConfirmEvent,
-  ModConnectionEvent, ModLoader, ModStatus, MsLoginStart, NetworkStatus, NewInstance, PackSelection, PackTarget, PackUpdateOutcome,
+  ModConnectionEvent, ModLoader, MsLoginStart, NetworkStatus, NewInstance, PackSelection, PackTarget, PackUpdateOutcome,
   Screenshot, Server, ServerStatus, SkinProfile, SkinVariant, StorageOverview, Template, VersionEntry, World, WorldBackup,
 } from "./types";
 
@@ -39,6 +39,10 @@ export interface BackendEvents {
   "lan-changed": LanEvent;
   "friends-mod": ModConnectionEvent;
   "friends-mod-confirm": ModConfirmEvent;
+  /** Der Status der Mod im Spiel einer Instanz hat sich geändert (Schalter, Startfehler, Spielstart oder -ende). */
+  "friends-ingame": IngameEvent;
+  /** Der Start ist wahrscheinlich an der Mod gescheitert; ihre Einspeisung in die Instanz ist ausgeschaltet. */
+  "friends-ingame-failed": IngameFailedEvent;
 }
 
 export type Subscribe = <E extends keyof BackendEvents>(event: E, cb: (payload: BackendEvents[E]) => void) => Promise<UnlistenFn>;
@@ -258,6 +262,8 @@ export interface Backend {
   onLanChanged(cb: (p: LanEvent) => void): Promise<UnlistenFn>;
   onFriendsMod(cb: (p: ModConnectionEvent) => void): Promise<UnlistenFn>;
   onFriendsModConfirm(cb: (p: ModConfirmEvent) => void): Promise<UnlistenFn>;
+  onFriendsIngame(cb: (p: IngameEvent) => void): Promise<UnlistenFn>;
+  onFriendsIngameFailed(cb: (p: IngameFailedEvent) => void): Promise<UnlistenFn>;
 
   /** `method: "device"` erzwingt den Gerätecode; sonst Browser-Anmeldung (Rückfall auf Gerätecode im Backend). */
   msLoginStart(method?: "device"): Promise<MsLoginStart>;
@@ -408,9 +414,12 @@ export interface Backend {
   /** Öffnet den lokalen Tunnel; das Spiel startet die Oberfläche danach mit `LaunchOptions.friendJoin`. */
   inviteJoin(inviteId: string, instanceId: string): Promise<JoinTicket>;
   joinLeave(joinId: string): Promise<void>;
-  friendsModStatus(instanceId: string): Promise<ModStatus>;
-  /** Installiert die Freunde-Mod von Modrinth in die Instanz. */
-  friendsModInstall(instanceId: string, operationId: string): Promise<void>;
+  /** Was der nächste Start der Instanz mit der Mod im Spiel tut und warum, berechnet ohne Start (INGAME 3.9). */
+  friendsIngameStatus(instanceId: string): Promise<IngameStatus>;
+  /** Der Schalter „Freunde-Menü im Spiel“ der Instanz; hebt auch ein automatisches Ausschalten auf. */
+  friendsIngameSetEnabled(instanceId: string, enabled: boolean): Promise<IngameStatus>;
+  /** „Erneut versuchen“ nach einem Startfehler; ein vom Nutzer ausgeschalteter Schalter bleibt aus. */
+  friendsIngameRetry(instanceId: string): Promise<IngameStatus>;
   /** Antwort auf `friends-mod-confirm`: darf die Mod die Welt teilen? */
   friendsModConfirm(requestId: string, allow: boolean): Promise<void>;
 }
@@ -437,4 +446,6 @@ export const eventSubscriptions = (on: Subscribe) => ({
   onLanChanged: (cb) => on("lan-changed", cb),
   onFriendsMod: (cb) => on("friends-mod", cb),
   onFriendsModConfirm: (cb) => on("friends-mod-confirm", cb),
+  onFriendsIngame: (cb) => on("friends-ingame", cb),
+  onFriendsIngameFailed: (cb) => on("friends-ingame-failed", cb),
 } satisfies Partial<Backend>);

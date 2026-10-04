@@ -13,7 +13,6 @@ pub mod limits;
 pub mod lookup;
 pub mod manifest;
 pub mod matching;
-pub mod modinstall;
 mod outbox;
 pub mod records;
 mod requests;

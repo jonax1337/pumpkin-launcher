@@ -53,6 +53,11 @@ impl InjectionState {
         }
     }
 
+    /// Ob ein Startfehler die Einspeisung ausgeschaltet hat (gleich unter welcher Launcher-Version).
+    pub fn is_tripped(&self) -> bool {
+        matches!(self, Self::AutoOff { .. })
+    }
+
     /// Der Grund, aus dem der Schalter unter dieser Launcher-Version ausgelöst ist; `None`, wenn er es nicht ist.
     /// Ein `AutoOff` einer anderen Launcher-Version zählt nicht mehr: dort kann ein behobener Knoten liegen.
     pub fn tripped_reason(&self, launcher_version: &str) -> Option<FailureKind> {
@@ -103,6 +108,13 @@ mod tests {
     fn the_players_switch_wins_over_every_state() {
         assert_eq!(InjectionState::from_switch(true), InjectionState::Active);
         assert_eq!(InjectionState::from_switch(false), InjectionState::UserOff);
+    }
+
+    #[test]
+    fn only_an_automatic_switch_off_counts_as_tripped() {
+        assert!(auto_off(FailureKind::MixinApplyFailed, NOW).is_tripped());
+        assert!(!InjectionState::Active.is_tripped());
+        assert!(!InjectionState::UserOff.is_tripped());
     }
 
     #[test]

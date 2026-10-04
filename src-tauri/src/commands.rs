@@ -8,6 +8,7 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::coded;
 use crate::error::{AppError, AppResult};
+use crate::ingame_launch::{self, LaunchWatch};
 use crate::models::{
     now_ms, require_name, Account, GameWindow, Instance, InstanceIcon, InstanceScene, LaunchOptions, Mod, ModLoader,
     NewInstance, QuickPlay, MAX_NOTES_LEN, NO_NAME_LIMIT,
@@ -20,8 +21,8 @@ use crate::services::mojang::{VersionEntry, VersionManifest, MANIFEST_URL};
 use crate::services::presence::Activity;
 use crate::services::progress::emit;
 use crate::services::rules::Env;
+use crate::services::friends::ingame::Injection;
 use crate::services::launch_args::ArgList;
-use crate::services::modbridge::ModBridge;
 use crate::services::{auth, crashreport, download, gamelog, java, launch_args, mods, pack_update, remove_logged, sessionlog, system, worlds};
 use crate::state::AppState;
 
@@ -147,6 +148,9 @@ pub fn delete_instance(state: State<'_, AppState>, id: String) -> AppResult<()> 
     // Erst den Store-Eintrag: nur eine existierende Id wird zum Pfad, und bleibt das
     // Verzeichnis liegen (Datei gesperrt), ist die Instanz trotzdem weg.
     state.instances.remove(&id)?;
+    if let Err(err) = state.ingame.store.forget(&id) {
+        tracing::warn!(%id, %err, "Zustand des Freunde-Menüs nicht entfernt");
+    }
     remove_logged(&state.dirs.instance(&id));
     tracing::info!(%id, "Instanz gelöscht");
     Ok(())
@@ -315,14 +319,13 @@ struct PreparedLaunch {
     game_dir: PathBuf,
     /// Spielername, nur fürs Protokoll.
     player: String,
-    loader: ModLoader,
-    /// Mit Microsoft-Sitzung gestartet.
-    online_account: bool,
+    /// Die Mod im Spiel: eingespeist samt Umgebung für das Spiel, oder nicht eingespeist und der Start wie ohne sie.
+    injection: Injection,
 }
 
 /// Prüft die Standards des Launchers, holt den Stand vor einem unterbrochenen Pack-Update zurück, prüft das
-/// Quick-Play-Ziel, bringt die Mods auf Stand, meldet das Konto an und baut die Startargumente. Nach jedem Schritt,
-/// der dauern kann, meldet `reporter` Fortschritt.
+/// Quick-Play-Ziel, bringt die Mods auf Stand, meldet das Konto an, speist die Mod im Spiel ein, wenn alles passt
+/// (INGAME 3.3), und baut die Startargumente. Nach jedem Schritt, der dauern kann, meldet `reporter` Fortschritt.
 async fn prepare_launch(
     state: &AppState,
     instance: &Instance,
@@ -343,23 +346,28 @@ async fn prepare_launch(
     reporter.progress();
     let java = java::resolve(&state.dirs, version.java_component(), instance.java_path.as_deref(), options.java_path.as_deref())?;
     reporter.progress();
-    let spec = LaunchSpec {
+    let user_jvm_args = launch::effective_jvm_args(&instance.jvm_args, &options.default_jvm_args);
+    let injection = ingame_launch::inject_into_launch(state, instance, &java, session.is_some(), user_jvm_args);
+    let start_args = injection.start_args(user_jvm_args, &instance.game_args);
+    let spec = start_args.apply(LaunchSpec {
         version: &version,
         dirs: &state.dirs,
         instance_id: &instance.id,
         account: &account,
         memory_mb: instance.memory_mb.or(options.default_memory_mb).unwrap_or(launch::DEFAULT_MEMORY_MB),
         min_memory_mb: instance.min_memory_mb.or(options.default_min_memory_mb),
-        extra_jvm_args: launch::effective_jvm_args(&instance.jvm_args, &options.default_jvm_args),
+        injected_jvm_args: &[],
+        extra_jvm_args: user_jvm_args,
         window: launch::effective_window(instance.window, options.default_window),
+        injected_game_args: &[],
         extra_game_args: &instance.game_args,
         quick_play,
         session: session.as_ref().map(Session::from),
-    };
-    let args = launch::build_args(&spec, &Env::current())?;
+    });
+    // Der Start ist in der Brücke schon angemeldet: scheitert hier etwas, darf kein Datensatz ohne Spiel zurückbleiben.
+    let args = launch::build_args(&spec, &Env::current()).inspect_err(|_| state.bridge.forget(&instance.id))?;
     let game_dir = state.dirs.game_dir(&instance.id);
-    let online_account = session.is_some();
-    Ok(PreparedLaunch { java, args, game_dir, player: account.username, loader: instance.loader, online_account })
+    Ok(PreparedLaunch { java, args, game_dir, player: account.username, injection })
 }
 
 /// Mit Microsoft-Konto: echte Sitzung (bei Bedarf erneuert); sonst Offline mit dem Spielernamen der Optionen.
@@ -377,36 +385,33 @@ async fn launch_account(state: &AppState, options: &LaunchOptions) -> AppResult<
 }
 
 /// Startet das Spiel: Ausgabezeilen gehen als `instance-log` ans Frontend und, roh, an die Erkennung des LAN-Ports,
-/// das Ende an `on_game_exit`. Mit laufender Brücke (Fabric) bekommt das Spiel ihre Umgebungsvariablen.
+/// das Ende an `on_game_exit`. Nur ein Start mit eingespeister Mod bekommt die Umgebungsvariablen der Brücke und eine
+/// Wache über die ersten 90 Sekunden (INGAME 3.8); der Prozess wird gleich nach dem Start an seinen Datensatz gebunden.
 fn spawn_game(app: &AppHandle, instance_id: &str, prepared: &PreparedLaunch) -> AppResult<Running> {
     let state = app.state::<AppState>();
     let (log_app, log_id) = (app.clone(), instance_id.to_owned());
     let (exit_app, exit_id) = (app.clone(), instance_id.to_owned());
     let started = SystemTime::now();
-    let env = mod_bridge_env(&state.bridge, instance_id, prepared);
-    launch::spawn(
+    let watch = prepared.injection.node_id().map(|_| LaunchWatch::new(app, instance_id));
+    let (line_watch, exit_watch) = (watch.clone(), watch);
+    let game = launch::spawn(
         &prepared.java,
         &prepared.args,
         &prepared.game_dir,
-        &env,
+        prepared.injection.env(),
         move |stream, line| {
             tracing::info!(target: "minecraft", instance = %log_id, ?stream, "{line}");
+            if let Some(watch) = &line_watch {
+                watch.on_line(&line);
+            }
             emit(&log_app, LOG_EVENT, LogPayload { instance_id: log_id.clone(), stream, line });
         },
         lan_line_forwarder(state.signals.clone(), instance_id.to_owned()),
-        move |code| on_game_exit(&exit_app, exit_id, started, code),
+        move |code| on_game_exit(&exit_app, exit_id, started, code, exit_watch),
     )
-    .inspect_err(|_| state.bridge.forget(instance_id))
-}
-
-/// Nur ein Start mit Microsoft-Konto kann eine Welt teilen (SPEC 6.1); offline bekommt die Mod keinen Zugang zur Brücke
-/// und bietet deshalb nichts an.
-fn mod_bridge_env(bridge: &ModBridge, instance_id: &str, prepared: &PreparedLaunch) -> Vec<(String, String)> {
-    if prepared.online_account {
-        bridge.launch_env(instance_id, prepared.loader)
-    } else {
-        Vec::new()
-    }
+    .inspect_err(|_| state.bridge.forget(instance_id))?;
+    prepared.injection.bind_pid(&state.bridge, instance_id, game.pid);
+    Ok(game)
 }
 
 /// Merkt sich Startzeit und Quick-Play-Ziel. Das Spiel läuft schon: ein Schreibfehler (etwa durch ein
@@ -431,14 +436,18 @@ fn announce_in_discord(state: &AppState, instance: &Instance, options: &LaunchOp
 }
 
 /// Aufräumen nach dem Ende des Spiels: Anzeige in Discord weg, Eintrag entfernen, Token der Mod verwerfen, Freunde-Funktion
-/// benachrichtigen, Spielzeit buchen, `instance-exit` senden.
-fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, code: Option<i32>) {
+/// benachrichtigen, Startfehler der Mod festhalten, Spielzeit buchen, `instance-exit` senden.
+fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, code: Option<i32>, watch: Option<LaunchWatch>) {
     let state = app.state::<AppState>();
     state.presence.stopped(&instance_id);
     // `instance_kill` hat den Eintrag schon entfernt: dann hat der Nutzer gestoppt.
     let stopped = state.take_running(&instance_id).is_none();
     state.bridge.forget(&instance_id);
     state.signals.send(GameSignal::Exited { instance_id: instance_id.clone() });
+    if let Some(watch) = watch {
+        watch.on_exit(code);
+        ingame_launch::announce_current(app, &instance_id);
+    }
     let crashed = code != Some(0) && !stopped;
     let game_dir = state.dirs.game_dir(&instance_id);
     let text = |p: PathBuf| p.to_string_lossy().into_owned();
@@ -544,25 +553,6 @@ mod tests {
         record_launch(&state, &id, None);
         assert_eq!(state.instances.get(&id).unwrap().last_quick_play, Some(target), "ohne Ziel bleibt das letzte erhalten");
         record_launch(&state, "weg", None);
-        std::fs::remove_dir_all(root).unwrap();
-    }
-
-    fn prepared(loader: ModLoader, online_account: bool) -> PreparedLaunch {
-        let (java, game_dir) = (PathBuf::from("java"), PathBuf::from("game"));
-        PreparedLaunch { java, args: Vec::new(), game_dir, player: "Alex".into(), loader, online_account }
-    }
-
-    #[tokio::test]
-    async fn only_a_microsoft_launch_gets_access_to_the_mod_bridge() {
-        let (state, id, root) = state_with_instance();
-        state.bridge.start().await.unwrap();
-
-        let online = mod_bridge_env(&state.bridge, &id, &prepared(ModLoader::Fabric, true));
-        let offline = mod_bridge_env(&state.bridge, &id, &prepared(ModLoader::Fabric, false));
-
-        state.bridge.stop().await;
-        assert_eq!(online.len(), 3, "port, token and protocol");
-        assert!(offline.is_empty());
         std::fs::remove_dir_all(root).unwrap();
     }
 

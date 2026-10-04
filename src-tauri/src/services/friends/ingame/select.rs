@@ -23,6 +23,16 @@ pub enum Selection<'a> {
     Unfit(Unfit),
 }
 
+impl<'a> Selection<'a> {
+    /// Der gewählte Knoten, falls einer passt.
+    pub fn fit(self) -> Option<&'a Node> {
+        match self {
+            Self::Fit(node) => Some(node),
+            Self::Unfit(_) => None,
+        }
+    }
+}
+
 /// Warum für eine Instanz kein Knoten gewählt wird; die Instanzseite zeigt daraus ihre Zeile (INGAME 3.9).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Unfit {
