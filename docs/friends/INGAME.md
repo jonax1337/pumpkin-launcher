@@ -1,22 +1,30 @@
 # Pumpkin Friends in-game: an auto-injected, launcher-only mod
 
-Concept of 2026-10-03, amended 2026-10-04 with the findings of wave 0 (`INGAME-API.md`, `mod/README.md`, the Rust code on `feat/ingame-mod`). Where this document and an older text disagree, this document wins. Replaces the draft `MOD2.md` and its review `MOD2-REVIEW.md` (both stay in the repo as superseded research; section 13 lists what was carried over and what fell away). Base documents: `SPEC.md` (friends feature, bridge), `BYNAME.md` and `BYNAME-ATTEST.md` (add by name; since 2.0.1 the directory login uses Mojang's player certificate), `PRIVACY.md`, `INGAME-API.md` (Minecraft API evidence, real node list). Written against `main` at 2.0.1.
+Concept of 2026-10-03, amended 2026-10-04 with the findings of waves 0 and 1 (`INGAME-API.md`, `INGAME-SMOKE.md`, `mod/README.md`, the Rust code on `feat/ingame-mod`). Where this document and an older text disagree, this document wins. Replaces the draft `MOD2.md` and its review `MOD2-REVIEW.md` (both stay in the repo as superseded research; section 13 lists what was carried over and what fell away). Base documents: `SPEC.md` (friends feature, bridge), `BYNAME.md` and `BYNAME-ATTEST.md` (add by name; the directory login uses Mojang's player certificate), `PRIVACY.md`, `INGAME-API.md` (Minecraft API evidence, real node list), `INGAME-SMOKE.md` (what the smoke runs proved). Written against `feat/ingame-mod` at e36d48c; the next launcher release is **0.2.0** (A23; the 2.x version numbers and tags were deleted on 2026-10-04, so the `2.0.1` seen in older logs and fixtures is history).
 
 ## Status (2026-10-04)
 
-Branch `feat/ingame-mod`. "Merged" means the package is on that branch; nothing of it is wired into a game start yet unless the row says so.
+Branch `feat/ingame-mod`. **Waves 0 and 1 are merged** (D0, S0, S1, L1, L2a, M1a, D1, M1b, L2b, W1, S2), **wave 2 is in flight** (U1 with the compat layer and the widget kit is merged, render proof of the kit demo on the four Fabric nodes; F1 is merged, A20; D2 is this change; U2, J1, V1a and G1 are open). The launcher side is complete: embedding build step, injection in `prepare_launch`, `InjectionState` persistence, `friends_ingame_status` / `set_enabled` / `retry`, the events `friends-ingame` / `friends-ingame-failed`, the settings `ingame_menu` and `ingame_actions` (A14).
+
+**Five cells are smoke-proven** (real runs on the owner's Windows machine, evidence and log excerpts in `INGAME-SMOKE.md`, entries in `mod/verified.json`): `26.3-fabric` (full mod, bridge handshake), `1.21.1-fabric` (obfuscated, remapped jar + Mixin), `1.21.1-neoforge` and `1.20.1-forge` (`--fml.mavenRoots`), `26.2-neoforge` (`-Dfml.modFolders`); the non-ASCII path (ü + space) and the `FILE_SHARE_READ` handle (hold and release) passed for all five (A21). **`1.21.8-fabric` and `1.21.11-fabric` are the only unverified nodes** and stay off until package V1a smokes them. Nothing is released to players yet: the injection exists only on `feat/ingame-mod`.
 
 | Package | State | What exists |
 |---|---|---|
 | D0 docs | merged | `SPEC.md`, `PRIVACY.md`, `VERIFICATION.md`, owner checklist carry the in-game concept |
 | S0 API spike | merged | `tools/mc-api-probe/`, `INGAME-API.md` (11 API runs, 19 nodes, loader hooks) |
-| S1 topology | merged | `mod/` Stonecutter project, `nodes.txt`, `mod-index.json` writer, `validate-mod-index.mjs`, layer check, `mod.yml` node matrix; three tracer nodes (`26.3-fabric` full mod, `1.21.1-neoforge` and `1.20.1-forge` log-only), all with `verified: null` |
-| L1 injection core | merged | `services/friends/ingame/`: index + validation, node selection, Java check, materialise, argument merge, breaker state, startup-failure patterns. Pure building blocks, not called from `prepare_launch` yet |
+| S1 topology | merged | `mod/` Stonecutter project, `nodes.txt`, `mod-index.json` writer, `validate-mod-index.mjs`, layer check, `mod.yml` node matrix; seven nodes exist (four full fabric nodes, one NeoForge per FML era, the Forge tracer) |
+| L1 injection core | merged | `services/friends/ingame/`: index + validation, node selection, Java check, materialise, argument merge, gate, breaker state, startup-failure patterns |
 | L2a bridge 2 | merged | `services/modbridge/`: protocol 2, owner check, exclusive bind, launch records, scopes, op/topic types, golden fixtures `mod/fixtures/protocol/` |
-| M1a mod core | merged | `mod/core/`: bridge client, backoff, protocol, state store, sanitiser, JUnit tests (a scripted launcher in the tests; the Java side does not read `mod/fixtures/protocol/` yet) |
-| D1 (this document), M1b, L2b, W1, S2, F1, D2, U1, U2, J1, V\*, G1 | open | see 11.2 |
-
-Nothing is released: no node has a `verified` entry, so the launcher injects nothing.
+| M1a mod core | merged | `mod/core/`: bridge client, backoff, protocol, state store, sanitiser, JUnit tests |
+| D1 concept amendments | merged | A1 to A13 in this document |
+| M1b mod core, second half | merged | view-models and layout, self-hash for `hello.mod.build`, `ready`, all topics |
+| L2b bridge ops | merged | dispatch of every op of 5.4, topic pushes, consent backend (two scopes, caps), `launcher.open`, activity list, `Expectations.pre_granted` |
+| W1 wiring | merged | injection called from `prepare_launch` / `spawn_game` / `launch_env`, launch registration with `node_id`, `build_id`, `pre_granted`, live breaker scan and post-mortem, A12 items removed |
+| S2 smoke harness | merged | `src-tauri/tests/smoke` (Cargo feature `smoke`, never default, never in the release workflow, A18), `tools/mod-smoke/`, `.github/workflows/mod-smoke.yml`; five cells green (A21) |
+| F1 frontend | merged | instance status row, settings, consent dialog (scope + summary, 1 s guard), breaker dialog, activity list, mod-open navigation (A20) |
+| D2 (this change) | merged | A14 to A24 folded in, docs re-aligned |
+| U1 compat + kit | merged | compat layer for the four eras, widget kit with layout models, kit demo screen with render proof on the four Fabric nodes (`mod/scripts/kit-demo.mjs`), pause-menu hook, toasts |
+| U2, J1, V\*, G1 | open | see 11.2 |
 
 Owner brief that shaped this concept (2026-10-03):
 1. **No foreign launchers.** Only games started by the Pumpkin Launcher matter.
@@ -113,7 +121,7 @@ The real list is `INGAME-API.md` section 5: **19 nodes, 11 Fabric, 7 NeoForge, 1
 | 1.20.2 | 17 | `1.20.2-fabric` | later | later |
 | 1.20 - 1.20.1 | 17 | `1.20.1-fabric` | (NeoForge 20.x: later) | `1.20.1-forge` |
 
-Stage: the tracer nodes (`26.3-fabric`, `1.21.1-neoforge`, `1.20.1-forge`) exist in `mod/nodes.txt` (S1); they list only their compile version in `minecraft` and the Fabric tracer uses loader 0.19.5 as `loaderMin` until package V\* widens them to the entries of `INGAME-API.md` section 5. R-A takes the Fabric nodes and the two tracers that pass smoke, R-B the rest (11.1). Every node is a compile target, a CI smoke run and an owner-checked cell, so the count is a budget: merging nodes (for example 1.21.9-1.21.10 with 1.21.11) needs reflection or `MethodHandle` for the differing calls and is not planned before R-B.
+Stage: **seven nodes exist** in `mod/nodes.txt` (S1, widened by the later waves): the four Fabric nodes `26.3-fabric`, `1.21.1-fabric`, `1.21.8-fabric`, `1.21.11-fabric`, plus `1.21.1-neoforge` (FML 9, `fmlMavenRoot`), `26.2-neoforge` (FML 11, `fmlModFolders`) and `1.20.1-forge`. **Five of them are smoke-proven** (`mod/verified.json`, A17, evidence in `INGAME-SMOKE.md`); `1.21.8-fabric` and `1.21.11-fabric` are the only unverified nodes and stay off until V1a smokes them (A21). The remaining twelve nodes of `INGAME-API.md` section 5 arrive with R-B (11.1). Every node is a compile target, a smoke run and an owner-checked cell, so the count is a budget: merging nodes (for example 1.21.9-1.21.10 with 1.21.11) needs reflection or `MethodHandle` for the differing calls and is not planned before R-B.
 
 ### 2.3 "Later" and "never"
 - **Later, on demand**: Forge above 1.20.1 (third toolchain, EventBus changes), NeoForge 20.2-20.6 (needs NeoGradle), Minecraft 1.18.2-1.19.4 (needs the launcher's sharing floor lowered, a security decision, see MOD2-REVIEW), Quilt (Quilted Fabric API has no 26.x release; a Quilt cell needs its own smoke proof), Vanilla instances (opt-in "add Fabric", section 3.9).
@@ -131,7 +139,7 @@ The jar is **launcher data, not instance content**. It is materialised under `<d
 - Nothing needs cleaning up when the launcher is removed except its data folder.
 
 ### 3.2 Embedding
-- The Gradle build (`modIndex` task in `mod/`) writes `mod-index.json` next to the jars. `modVersion` exists **once**, at the top level. Per node: `id`, `loader` (`fabric|neoforge|forge`), `loaderMin`, `minecraft[]` (explicit release ids), `javaMin`, `strategy` (`fabricAddMods|fmlMavenRoot|fmlModFolders`), `file`, `sha256`, `verified` (null or absent, or `{smoke: "YYYY-MM-DD", owner: null|"YYYY-MM-DD"}`). Field names are camelCase; unknown fields are rejected.
+- The Gradle build (`modIndex` task in `mod/`) writes `mod-index.json` next to the jars. `modVersion` exists **once**, at the top level. Per node: `id`, `loader` (`fabric|neoforge|forge`), `loaderMin`, `minecraft[]` (explicit release ids), `javaMin`, `strategy` (`fabricAddMods|fmlMavenRoot|fmlModFolders`), `file`, `sha256`, `verified` (null or absent, or `{smoke: "YYYY-MM-DD", owner: null|"YYYY-MM-DD"}`). Field names are camelCase; unknown fields are rejected. `verified` is filled from `mod/verified.json` (A17): **only a passed smoke run adds an entry**, never a human.
 - Validation is strict and runs in two places with the same rules, `mod/scripts/validate-mod-index.mjs` (build) and `src-tauri/src/services/friends/ingame/{index,validate}.rs` (launcher, `mod/index.schema.json` as schema): node ids and file names are unique, `(loader, minecraft id)` is unique across nodes, the strategy must suit the loader (`fabricAddMods` for Fabric, `fmlMavenRoot` and `fmlModFolders` for NeoForge and Forge), ids, file names and `modVersion` start with a letter or digit and use only letters, digits and `._+-` (at most 128 characters), `minecraft` is a non-empty list of release ids without duplicates, `javaMin` is 8 to 64, `sha256` is 64 lowercase hex characters, `file` ends in `.jar`. A node whose entry is invalid makes the whole index unusable. `verified` null or absent = the cell is OFF.
 - `src-tauri/build.rs` (or a generated `mod_jars.rs`) embeds the index and the jars with `include_bytes!`. Bytes inside the signed launcher binary are harder to tamper with than resource files next to it.
 - Budget: each jar at most 300 KB, all jars together at most 8 MB; CI fails above that. The jars are compressed already; no extra compression.
@@ -156,9 +164,9 @@ A Fabric mod with `depends: java >= N` that meets an older Java produces the loa
 
 | Loader / era | Strategy id | What the launcher adds | Evidence |
 |---|---|---|---|
-| Fabric (loader >= 0.12) | `fabricAddMods` | `-Dfabric.addMods=<jar>` (or `@listfile`). **Obfuscated nodes (1.20 to 1.21.11) must ship the Loom-remapped jar** (intermediary names plus refmap): a jar passed through `fabric.addMods` is not remapped at runtime outside a development environment (A4). 26.x nodes stay in Mojang names | Fabric Loader source (`ArgumentModCandidateFinder`, `FabricLoaderImpl`, `INGAME-API.md` 6.1); NoRiskClient ships exactly this in production (`docs/research-noriskclient.md:92-96`). Not yet exercised by us in a game. |
-| NeoForge 21.x up to FML 9 and Forge 1.17.1-1.20.2 | `fmlMavenRoot` | `--fml.mavenRoots <dir> --fml.mods dev.laux.pumpkin:pumpkin_friends:<ver>`. The jar lies in its own folder per node, `<runtime>/maven-<nodeId>/dev/laux/pumpkin/pumpkin_friends/<version>/pumpkin_friends-<version>.jar`, and `<dir>` is `<runtime>/maven-<nodeId>` (A9) | FML `MavenDirectoryLocator` read in source for Forge 1.20.1-47.4.0 and NeoForge FML 4.0.44; the flag names are inferred from the service option names. Layout: `ingame/materialise.rs`. |
-| NeoForge 21.9+ and 26.x (FML 10+) | `fmlModFolders` | `-Dfml.modFolders=pumpkin%%<jar>` | FML `InDevFolderLocator` source: always registered, no production guard. It is a development feature and may change. |
+| Fabric (loader >= 0.12) | `fabricAddMods` | `-Dfabric.addMods=<jar>` (or `@listfile`). **Obfuscated nodes (1.20 to 1.21.11) must ship the Loom-remapped jar** (intermediary names plus refmap): a jar passed through `fabric.addMods` is not remapped at runtime outside a development environment (A4). 26.x nodes stay in Mojang names | Fabric Loader source (`ArgumentModCandidateFinder`, `FabricLoaderImpl`, `INGAME-API.md` 6.1); NoRiskClient ships exactly this in production (`docs/research-noriskclient.md:92-96`). **Proven by the smoke** on `26.3-fabric` (Mojang names, bridge handshake) and `1.21.1-fabric` (remapped jar, Mixin applies), `INGAME-SMOKE.md` rows 1. |
+| NeoForge 21.x up to FML 9 and Forge 1.17.1-1.20.2 | `fmlMavenRoot` | `--fml.mavenRoots <dir> --fml.mods dev.laux.pumpkin:pumpkin_friends:<ver>`. The jar lies in its own folder per node, `<runtime>/maven-<nodeId>/dev/laux/pumpkin/pumpkin_friends/<version>/pumpkin_friends-<version>.jar`, and `<dir>` is `<runtime>/maven-<nodeId>` (A9) | FML `MavenDirectoryLocator` read in source for Forge 1.20.1-47.4.0 and NeoForge FML 4.0.44; **proven by the smoke** on `1.21.1-neoforge` (21.1.253) and `1.20.1-forge` (47.4.26), `INGAME-SMOKE.md` rows 3 and 5. |
+| NeoForge 21.9+ and 26.x (FML 10+) | `fmlModFolders` | `-Dfml.modFolders=pumpkin%%<jar>` | FML `InDevFolderLocator` source: always registered, no production guard. It is a development feature and may change. **Proven by the smoke** on `26.2-neoforge` (26.2.0.88), `INGAME-SMOKE.md` row 4; the unsmoked FML 10/12 series stay off with their nodes. |
 | Quilt, Vanilla | none | nothing | out of scope in v1 |
 
 Rules for the table:
@@ -176,7 +184,7 @@ Duplicates (A9, `ingame/args.rs`, `property.rs`):
 
 ### 3.7 Integrity
 - Compile-time SHA-256 per jar. Before every launch the launcher checks the materialised file; if missing or different it rewrites it atomically (temp file + rename) and marks it read-only.
-- On Windows the launcher keeps the file open with `FILE_SHARE_READ` until the game has spawned, so the check-to-load window is closed. (`MaterialisedJar` holds the handle; the effect on loader reads is to be proven by S2.)
+- On Windows the launcher keeps the file open with `FILE_SHARE_READ` until the game has spawned, so the check-to-load window is closed. (`MaterialisedJar` holds the handle; every loader read the jar in both smoke scenarios, handle held and released, on all five cells — `INGAME-SMOKE.md` row 6b.)
 - The index entry's `sha256` is also part of the launch record (`Expectations.build_id`, 5.3); the mod reports a prefix of the SHA-256 of its own jar in `hello` and the launcher refuses a mismatch with `reject{build}`. This catches "another copy of the mod answered". A jar cannot embed its own hash, so the mod computes it at runtime (5.3, A6).
 - This protects against corruption and accidental overwrites. It does not protect against an attacker who can already change the launcher binary or run code as the same user (5.1).
 
@@ -221,7 +229,7 @@ mod/
 Rules enforced by a CI script: version conditionals only in `compat/` and `platform/`; `ui/` calls only a short allow-list of vanilla types; `core/` never imports Minecraft.
 
 ### 4.2 Hooks and dependencies
-- **No Fabric API requirement.** The only hook needed is "a screen was initialised, add a button to the pause screen". On Fabric that is one `@Inject(method="init", at=@At("TAIL"), require=0)` into `PauseScreen`, so a changed signature degrades to "no button" and a log line instead of a crash. On NeoForge/Forge it is the screen-init event. Nested Fabric API modules were considered and rejected: a nested module that is newer than the user's own copy can replace it and trip other mods' dependency checks.
+- **No Fabric API requirement.** The only hook needed is "a screen was initialised, add a button to the pause screen". On Fabric that is one `@Inject(method="init", at=@At("TAIL"), require=0)` into `PauseScreen`, so a changed signature degrades to "no button" and a log line instead of a crash. On NeoForge/Forge it is the screen-init event. Nested Fabric API modules were considered and rejected: a nested module that is newer than the user's own copy can replace it and trip other mods' dependency checks. **A22: the mod has no Fabric API dependency and the smoke installs no companion** (the `depends` block of `mod/descriptors/fabric/fabric.mod.json` lists only `fabricloader`, `minecraft` and `java`); do not reintroduce one.
 - **Work comes to the main thread through `Minecraft.execute`**, not a tick hook: the bridge thread posts runnables; a 1-second poster covers the LAN watcher. This avoids a second hook family.
 - **No key binding in R-A.** Registration has to happen before options load and differs per loader. R-B adds an unbound binding.
 - **Soft failure everywhere.** Every entry point runs inside a guard that logs and disables the mod's UI for the session on any exception. The mod must never throw into the game.
@@ -267,7 +275,7 @@ Code running in the game JVM is code running as the player's OS user. Any other 
 4. One live link per launch. A second connection with the same token gets `reject{duplicate}`; counters and grants belong to the launch, not to the connection, so reconnects cannot reset them.
 
 ### 5.3 Protocol 2
-The mod and launcher always ship as one build, nothing from protocol 1 was ever published, so protocol 2 replaces it with no compatibility layer. JSON lines, UTF-8. **The shapes are defined by the Rust types (`modbridge/protocol.rs`, `ops.rs`, `topics.rs`) and by the golden lines in `mod/fixtures/protocol/`** (its `README.md` is the reference); the Rust tests read these files today and the Java tests are meant to (the Java side does not yet; layer 3 of section 10). A change there is a protocol change.
+The mod and launcher always ship as one build, nothing from protocol 1 was ever published, so protocol 2 replaces it with no compatibility layer. JSON lines, UTF-8. **The shapes are defined by the Rust types (`modbridge/protocol.rs`, `ops.rs`, `topics.rs`) and by the golden lines in `mod/fixtures/protocol/`** (its `README.md` is the reference); the Rust tests and the Java core tests read the same files (`mod/core` test `Fixtures`). A change there is a protocol change.
 
 **Framing and limits.** Until `welcome`: lines up to 1 KiB, `hello` within 2 s, at most 4 unauthenticated connections. After: mod to launcher up to 16 KiB, launcher to mod up to 64 KiB. The mod may send 20 messages per second and keep 8 requests in flight. Outgoing queue 64 per link; a stalled writer (5 s) closes the link. **Either side may send `ping`** (answered by `pong`); the launcher sends one every 10 s, any line from the mod counts as a sign of life, and 30 s without a line from the mod closes the link (`framing.rs` `Liveness`).
 
@@ -293,10 +301,10 @@ The `game` block is diagnostics; the launcher knows the truth and logs a mismatc
 ```
 Ids match `^[a-z0-9]{1,12}$`. Mod-side timeouts: 15 s, 30 s for slow operations, 130 s after `pending`. `pending` is `{type, id, prompt: "scope", scope: "share"|"social"}`; the launcher's own deadline for any answer is 125 s (`REQUEST_DEADLINE`).
 
-**Error codes** (`error.code`, `params` always an object; the mod maps them to texts): `notEnabled`, `peerOffline`, `guestLimit{max}`, `lanPortUnknown`, `portNotGame`, `denied`, `versionUnsupported{min}`, `msAccountRequired`, `busy`, `rateLimited`, `unsupportedOp` (the op exists but this launcher release does not handle it yet), `badRequest` (unknown op, wrong arguments, duplicate or invalid id), `unknownFriend` (alias not known on this link), `notFound`, `nameUnknown`, `directoryUnavailable`, `timeout`, `internal`. One golden line per code: `errors.jsonl`.
+**Error codes** (`error.code`, `params` always an object; the mod maps them to texts): `notEnabled`, `peerOffline`, `guestLimit{max}`, `lanPortUnknown`, `portNotGame`, `denied`, `versionUnsupported{min}`, `msAccountRequired`, `busy`, `rateLimited`, `unsupportedOp` (the op exists but this launcher release does not handle it yet), `badRequest` (unknown op, wrong arguments, duplicate or invalid id), `unknownFriend` (alias not known on this link), `notFound`, `nameUnknown`, `directoryUnavailable`, `instanceMismatch` (`invite.joinHere`: the running game does not fit the invite — other instance, version or content), `forbidden` (never allowed for the mod, even with consent: `friend.acknowledge` of a notice only the user can review in the launcher), `timeout`, `internal`. One golden line per code: `errors.jsonl`.
 
 **State topics (launcher to mod).** Whole-value pushes with a per-topic revision, coalesced to one per topic per 250 ms. The mod replaces its copy; it never patches.
-`me`, `friends`, `requests`, `invites`, `session`, `join`, `game` (R-A); `codes`, `blocked` (R-B). Friends are addressed by **per-link aliases** (`f1`, `f2`, ...), never by peer id. Each topic has a hard element cap and a Rust test that its worst case fits in 60 KiB.
+`me`, `friends`, `requests`, `invites`, `session`, `join`, `game` (R-A); `codes`, `blocked` (R-B). The `me` topic carries the **directory line** (`active|off|unreachable|notAllowed|unavailable`, A15) that the "Per Name" tab of 6.2 mirrors. Friends are addressed by **per-link aliases** (`f1`, `f2`, ...), never by peer id. Each topic has a hard element cap and a Rust test that its worst case fits in 60 KiB.
 
 **Events (launcher to mod).** Wire shape `{"type":"event","event":"notify","kind":"...","name":"..."}` (`name` optional) and `{"type":"event","event":"closing","reason":"..."}`. `notify` kinds for toasts: `requestReceived`, `inviteReceived`, `friendOnline`, `guestJoined`, `guestLeft`, `sessionEnded`, `joinEnded`, `scopeDenied`. `closing` reasons: `launchEnded`, `bridgeStopped`, `replaced` (a new start of the instance replaced the token); the launcher closes right after. Queue of 32, drop-oldest; responses never drop.
 
@@ -312,19 +320,22 @@ Scope column: `-` needs none, `S` share, `C` social. Stage column: release that 
 | `launcher.open{target}` | bring the launcher window to the friends page (friends, requests, invites, settings); 1 per 10 s; never while a dialog is open | - | A |
 | `request.answer{id,accept}` | accept or decline an incoming request | C | A |
 | `request.cancel{id}` | withdraw an outgoing request | - | A |
-| `friend.addByName{name}` | send a request by Minecraft name (BYNAME); launcher-side rate limited. While a game runs the launcher uses only its cached player certificate and never fetches a new one on the mod's behalf (answer `directoryUnavailable` instead) until owner test O-5 shows that a certificate fetch does not disturb a running game's chat key | C | A |
+| `friend.addByName{name}` | send a request by Minecraft name (BYNAME); launcher-side rate limited. While any game link is active the launcher answers from the cached player certificate only and never fetches a new one (`directoryUnavailable` instead, A16 and the note below) | C | A |
 | `invite.decline{id}` | decline an invite | - | A |
 | `invite.plan{id}` | match verdict for the running instance and alternatives (SPEC 5.6) | - | A |
 | `invite.joinHere{id}` | join the invite from the running game (section 7) | C | A |
 | `join.leave` | leave the joined session | - | A |
 | `host.invite{friends[],showWorld}` | start sharing the published LAN world and invite | S | A |
 | `host.kick{friend}`, `host.stop` | remove a guest, end sharing | - | A |
+| `join.failed{}` | the mod reports that its connect to the join failed (7); op #22 | - | A |
 | `friend.addByCode{code}`, `code.create`, `code.revoke{id}` | codes | C | B |
 | `friend.rename`, `friend.remove`, `friend.block`, `blocked.unblock` | graph changes | C | B |
 | `friend.acknowledge{id}` | clear a "renamed" notice only (never `identityChanged`, never `addedInGame`) | C | B |
 | `friends.retry` | redeliver pending requests now | - | B |
 
-The table is complete for protocol 2: `OP_NAMES` in `modbridge/ops.rs` holds exactly these 21 ops and `mod/fixtures/protocol/ops.jsonl` has a golden request for each. **There is no `join.failed` op** (earlier text of 7 assumed one). The launcher sees a join itself through the `join` topic (`waitingForGame`, `connecting`, `connected`) and `notify{joinEnded}`; the mod shows a failure locally (7). Should J1 find a mod-side report necessary, it adds the op to `ops.rs`, the fixtures and this table in one change. Today `friends/mod_link_ops.rs` handles only `host.invite`, `host.kick` and `host.stop`; every other op answers `unsupportedOp` until package L2b.
+The table is complete for protocol 2: `OP_NAMES` in `modbridge/ops.rs` holds exactly these **22 ops** and `mod/fixtures/protocol/ops.jsonl` has a golden request for each, `join.failed` included (A15; the earlier text assumed no such op). `friends/mod_link_ops.rs` dispatches every op of the table (L2b is merged); the launcher additionally sees a join itself through the `join` topic (`waitingForGame`, `connecting`, `connected`) and `notify{joinEnded}`.
+
+**While any game link is active the launcher never fetches a new player certificate** (A16): the directory loop, `friend.addByName` and `friends.retry` all work cached-only and answer `directoryUnavailable` when the cache is empty or stale, so a running game's chat key is never disturbed by a certificate fetch. The guard lives in the by-name service (`game_link_active` / `CertificateSource`); it is unconditional, not tied to owner test O-5.
 
 Never in-game, no op exists: enable, disable, rotate identity, reset, settings changes (display name, findable, relay), relay consent, copying the full peer id, reviewing `identityChanged`/`addedInGame` notices. The Options tab shows them read-only with "Im Launcher öffnen".
 
@@ -333,7 +344,7 @@ Two scopes, asked **once per game launch** in the launcher:
 - `share` (host.invite): "Dieses Spiel möchte deine Welt mit ausgewählten Freunden teilen."
 - `social` (graph changes, answering requests, joining): "Dieses Spiel möchte Freunde hinzufügen, Anfragen beantworten und Einladungen annehmen."
 
-Prompt buttons: "Ablehnen" (initial focus) and "Erlauben (bis Spielende)". The setting "Aktionen im Spiel" (`ask` default, or `allow`) can pre-grant, so players who trust their mod set never see the prompt. The launcher passes it as **`Expectations.pre_granted`** when it registers the launch (A13), so the grant belongs to the launch record like every other counter; `welcome.scopes` then reports `allow`. (3.9 and the first text of this section said "per instance"; the setting is one global control, 3.9. `pre_granted` is not yet a field of `Expectations` on `feat/ingame-mod`: package L2b adds it.) In-game, a pending request shows a `LauncherWaitScreen` ("Bestätige im Pumpkin Launcher", Abbrechen only stops waiting).
+Prompt buttons: "Ablehnen" (initial focus) and "Erlauben (bis Spielende)". The setting "Aktionen im Spiel" (`ask` default, or `allow`) can pre-grant, so players who trust their mod set never see the prompt. The launcher passes it as **`Expectations.pre_granted`** when it registers the launch (A13), so the grant belongs to the launch record like every other counter; `welcome.scopes` then reports `allow`. (3.9 and the first text of this section said "per instance"; the setting is one global control, 3.9. `pre_granted` is a field of `Expectations` since L2b.) In-game, a pending request shows a `LauncherWaitScreen` ("Bestätige im Pumpkin Launcher", Abbrechen only stops waiting).
 
 Hardening carried from the MOD2 review:
 - The dialog keeps every non-deny button disabled for at least 1 s after it is visible and focused, restarting on each focus change, and ignores a pointer-up whose pointer-down happened before the dialog appeared.
@@ -373,7 +384,7 @@ ConfirmFlow          in-game yes/no for destructive in-game steps (remove, block
 ```
 The "Per Name" tab mirrors the launcher: `directory` states `unreachable`, `notAllowed` and `off` show the launcher's texts. R-A has no code entry in-game, so on `unreachable` the tab offers "Im Launcher öffnen" (friend codes) instead of "nutze einen Code".
 
-Esc goes to the parent screen. Tab order follows visual order; Enter in an `EditBox` submits. Every row is a focusable widget with a full narration line. All text goes through `pumpkin_friends.*` language keys (`en_us`, `de_de`); player-controlled strings are sanitised and only ever rendered as literals. Errors are shown inline with a "⚠" prefix plus a toast for asynchronous results.
+Esc goes to the parent screen. Tab order follows visual order; Enter in an `EditBox` submits. Every row is a focusable widget with a full narration line. All text goes through `pumpkin_friends.*` language keys (`en_us`, `de_de`); the lang files are **append-only** (A19: a key is never renamed or removed, because old jars keep running against them); player-controlled strings are sanitised and only ever rendered as literals. Errors are shown inline with a "⚠" prefix plus a toast for asynchronous results.
 
 ### 6.3 Hub states
 | State | Body |
@@ -417,7 +428,7 @@ Pure vanilla widgets, no textures, no Mojang or Minecraft branding in the UI (co
 3. The running instance must **match** the host's manifest (`matching::plan` with the running instance first). Otherwise the answer is `invite.plan`'s verdict (`missingContent`, `versionUnsupported`) and the hub offers "Im Launcher öffnen" or, if a matching instance exists, "Passende Instanz starten".
 4. Re-verify the owner (5.2) at this point; bind a single-owner loopback listener (`127.a.b.c:port`); create the join with `game_pid = link pid`; reply `{host, port}`. One join at a time; all SPEC 6.2 limits apply (first connection within 120 s, nonce check in the handshake, `connects_from(game_pid, ...)`).
 
-**Mod.** Validate that `host` is in `127.0.0.0/8`; ask "Welt verlassen und beitreten?" through `ConfirmFlow`; leave the world; connect through `compat.Connect` to the literal address; show the failure locally after a disconnect or when the `join` topic has not reached `connected` after 30 s (there is no `join.failed` op, 5.4). The mod never resolves names and never connects anywhere else.
+**Mod.** Validate that `host` is in `127.0.0.0/8`; ask "Welt verlassen und beitreten?" through `ConfirmFlow`; leave the world; connect through `compat.Connect` to the literal address; after a disconnect, or when the `join` topic has not reached `connected` after 30 s, show the failure locally and report it with `join.failed{}` (op #22, 5.4; A15). The mod never resolves names and never connects anywhere else.
 
 **Pre-grant.** With "Aktionen im Spiel: Erlauben" (`Expectations.pre_granted`, 5.5) scope `social` is already granted, so `invite.joinHere` skips the launcher prompt; the confirmation in the game (`ConfirmFlow`) and every other check of this section stay.
 
@@ -435,7 +446,7 @@ Pure vanilla widgets, no textures, no Mojang or Minecraft branding in the UI (co
 | `modbridge/` | protocol 2; `hello` owner check via `sockowner::connects_from`; exclusive bind on Windows; launch-record keyed counters. |
 | `friends/mod_link.rs` | split into `dispatch` (ops), `topics`, `consent`; scopes `share`/`social`; new ops of 5.4; `launcher.open`. |
 | `friends/joining.rs`, `hosting.rs` | `joinHere` entry; `online_account` check on the join path. |
-| **removed for good** (A12): `friends/modinstall.rs`, the command `friends_mod_install`, `MOD_PROJECT_ID`, the Modrinth lookup, `FriendsModRow`'s add button, the `ModState` values `notInstalled` and `installed` (Rust `contract.rs`, TypeScript `friends-types.ts`), the "our mod" special cases in `lookup.rs` / `manifest.rs` / matching, the Modrinth publish workflow | the mod is no longer content. These exist in the tree today and are deleted by the package that wires the injection (W1) and by F1 for the frontend; no new code may depend on them. |
+| **removed for good** (A12): `friends/modinstall.rs`, the command `friends_mod_install`, `MOD_PROJECT_ID`, the Modrinth lookup, `FriendsModRow`'s add button, the `ModState` values `notInstalled` and `installed` (Rust `contract.rs`, TypeScript `friends-types.ts`), the "our mod" special cases in `lookup.rs` / `manifest.rs` / matching, the Modrinth publish workflow | the mod is no longer content. **All of them are deleted** (W1 for the Rust side, F1 for the frontend; both merged): `MOD_PROJECT_ID` and `modinstall` no longer appear anywhere in `src-tauri`, and `FriendsModRow.tsx` is the status row of 3.9. |
 | `friends/mod_link.rs` / `Expectations` | register the launch with `node_id`, `build_id` (the index `sha256`), `online_account` and `pre_granted` (A13) |
 | frontend: instance status row, two settings, `ModConfirmDialog` (two scopes, 1 s guard), activity list, breaker dialog | |
 | `contract.rs` / `friends-types.ts` / fixtures | status enum (3.9) replacing `ModState`, consent scopes, activity entry; golden fixtures shared with the Java tests. |
@@ -443,10 +454,10 @@ Pure vanilla widgets, no textures, no Mojang or Minecraft branding in the UI (co
 
 ---
 
-## 9. Documentation changes (package D0 done; D1 amended this document; D2 closes the rest)
+## 9. Documentation changes (package D0 done; D1 amended this document; D2, this change, closed the rest)
 
-- `SPEC.md`: 7.1/7.4 (bridge: protocol 2, owner check, scopes), 11 (mod: embedded and injected, node table replaces "26.3 only"), 11.5 (modinstall removed), 5.5/5.6 (our mod no longer in manifests), 12.1/12.2 (see below), OD-1/OD-3, non-goals.
-- `PRIVACY.md` (extend the 2.0.1 sections on the certificate login and what the launcher sends to Mojang; add the in-game mod and the `profilekeys` exposure) and the opt-in text (10.9): "Wenn Freunde an ist, lädt der Launcher beim Spielstart eine kleine Mod in deine Spiele. Sie liegt außerhalb deines Instanzordners, hat keine Netzwerkverbindung außer zum Launcher auf diesem PC und kann nichts ändern, was du nicht im Spiel anstößt. Andere Mods im selben Spiel können dieselbe Verbindung nutzen; deshalb fragt der Launcher vor Freundes- und Teilen-Aktionen aus dem Spiel."
+- `SPEC.md`: 7.1/7.4 (bridge: protocol 2, owner check, scopes), 11 (mod: embedded and injected, node table replaces "26.3 only"), 11.5 (modinstall removed), 5.5/5.6 (our mod no longer in manifests), 12.1/12.2 (see below), OD-1/OD-3, non-goals. D2 struck the "Current code" blocks that described removed code (modinstall, Modrinth distribution, protocol 1, the fabric-only hand install) and pointed the sections at this document.
+- `PRIVACY.md` (the certificate-login sections on what the launcher sends to Mojang; the in-game mod and the `profilekeys` exposure) and the opt-in text (10.9): "Wenn Freunde an ist, lädt der Launcher beim Spielstart eine kleine Mod in deine Spiele. Sie liegt außerhalb deines Instanzordners, hat keine Netzwerkverbindung außer zum Launcher auf diesem PC und kann nichts ändern, was du nicht im Spiel anstößt. Andere Mods im selben Spiel können dieselbe Verbindung nutzen; deshalb fragt der Launcher vor Freundes- und Teilen-Aktionen aus dem Spiel."
 - 12.1 stays true: before the opt-in, nothing listens and nothing is injected.
 - New section for the keyring exposure of same-user code (from the MOD2 review).
 
@@ -459,10 +470,10 @@ Pure vanilla widgets, no textures, no Mojang or Minecraft branding in the UI (co
 | 1. Java core | protocol, state store, sanitiser, backoff, view-model layout at 5 resolutions, rebuild state | JUnit 6 on JDK 17, no Minecraft |
 | 2. Rust | node selection tables, argument merging, Java check, materialise/hash, breaker patterns on fixture logs, bridge: token + owner (fake socket table incl. unreadable PIDs), counters survive reconnect, op rate limits, consent paths, `joinHere` rules | `cargo test`, three OSes |
 | 3. Interop | real `ModBridge` driven by the real Java core client; golden JSON fixtures are shared files read by both sides | CI job after layers 1-2 |
-| 4. **Smoke (per node)** | a real Minecraft client, headless (Linux, Xvfb + software GL), started through the launcher's own launch path with real injection; the mod connects, passes the owner check and sends `ready`; harness exits the game. Fails on any loader/Mixin error in the log | CI matrix, nightly and on `mod/**` and injection changes |
+| 4. **Smoke (per node)** | a real Minecraft client, started through the launcher's own launch path with real injection; the mod connects, passes the owner check and sends `ready`; harness exits the game. Fails on any loader/Mixin error in the log | **Real and green for five cells on this Windows machine** (`INGAME-SMOKE.md`, A18/A21); the CI job `.github/workflows/mod-smoke.yml` (Linux, Xvfb + software GL, nightly and on `mod/**` and injection changes) has never been executed |
 | 5. Owner pass | per release on Windows: for each loader one deep run (start, hub, accept a request, share and join with a second account), for each other node a 3-step run (start, hub opens, one request answered) | `OWNER-CHECKLIST.md` |
 
-The smoke harness needs the launch pipeline to run without a Tauri window (services are plain Rust, to be confirmed in S2) and a compile-time `smoke` feature that lets the harness override the online-account gate; that feature is never in release builds. Two things are not proven yet: that Minecraft 26.x starts under software rendering in CI (a Vulkan renderer would change this), and that NeoForge 21.9+/26 honours `fml.modFolders` in a production launch. Both are S1 outcomes, not assumptions.
+The smoke harness (`src-tauri/tests/smoke`, Cargo feature `smoke`, never default, never in the release workflow, A18) runs the launch pipeline without a Tauri window (the services are plain Rust) and overrides only the online-account gate for its offline test account. Still not proven: that Minecraft 26.x starts under software rendering **in CI** (the local runs used the owner's GPU; a Vulkan renderer would change this) and the smoke of the two pending fabric nodes (V1a).
 
 ---
 
@@ -471,11 +482,11 @@ The smoke harness needs the launch pipeline to run without a Tauri window (servi
 Each release must be shippable alone. A cell is in a release only if its smoke test is green.
 
 ### 11.1 Releases
-- **R-A (first public in-game release).** Fabric on every node that passes smoke, plus the NeoForge 1.21.1 and Forge 1.20.1 tracers if their injection is proven by smoke. Features: hub with Freunde, Anfragen, Einladungen, Teilen, add by name, toasts, `joinHere`, instance status row, settings, consent with two scopes, circuit breaker.
+- **R-A (first public in-game release, launcher 0.2.0 or later per A23).** The five smoke-proven cells (`26.3-fabric`, `1.21.1-fabric`, `1.21.1-neoforge`, `26.2-neoforge`, `1.20.1-forge`) plus `1.21.8-fabric` and `1.21.11-fabric` once V1a smokes them; every other cell stays off. Features (A24): hub with Freunde, Anfragen, Einladungen, Teilen, Optionen (read-only), add friend by name, accept/decline requests, invites view/decline/joinHere, share/kick/stop, toasts, instance status row, settings, consent with two scopes, circuit breaker.
 - **R-B.** More nodes (the rest of `INGAME-API.md` section 5), friend management (codes, rename, remove, block, blocked list, retry), title-screen button and key binding.
 - **R-C.** Persistent activity log, undo, `addedInGame` review, polish.
 
-If smoke shows that NeoForge/Forge injection does not work in production, R-A is Fabric-only and the other loaders wait for the managed-copy decision (3.5). The concept stays valid; the matrix shrinks.
+If smoke shows that NeoForge/Forge injection does not work in production, R-A is Fabric-only and the other loaders wait for the managed-copy decision (3.5). The concept stays valid; the matrix shrinks. (The smoke has since proven all three loaders, `INGAME-SMOKE.md`; the sentence stays as the rule for future nodes.)
 
 ### 11.2 Packages and order
 
@@ -489,18 +500,18 @@ The split below replaces the first plan of 2026-10-03: L2 became L2a + L2b, M1 b
 | 0 | **L1** injection core | index, selection, Java check, materialise, argument merge, breaker (Rust, building blocks only) | S1 | merged |
 | 0 | **L2a** bridge 2 | protocol 2, owner check, exclusive bind, launch records, scopes, op and topic types, golden fixtures | - | merged |
 | 0 | **M1a** mod core | Java core: bridge client, protocol, state store, sanitiser | S0 | merged |
-| 1 | **D1** concept amendments | this document (A1 to A13) | wave 0 | this change |
-| 1 | **M1b** mod core, second half | view-models and layout (6.5), the self-hash for `hello.mod.build` (5.3), `ready`, remaining topics | M1a | open |
-| 1 | **L2b** bridge ops | dispatch of every op of 5.4, topic pushes, consent dialog backend (two scopes, caps), `launcher.open`, activity list, `Expectations.pre_granted` | L2a | open |
-| 1 | **W1** wiring | call the injection step from `prepare_launch` / `spawn_game` / `launch_env`, register the launch with `node_id`, `build_id`, `pre_granted`, live breaker scan (`analyze_log`) and post-mortem (`analyze_exit`), remove the A12 items on the Rust side | L1, L2a | open |
-| 1 | **S2** smoke harness | headless launch through the launcher pipeline, `ready` handshake, CI job; proves the injection flags per node | S1, W1 | open |
-| 2 | **F1** frontend | instance status row (3.9), settings, consent and breaker dialogs, contract types, removal of `FriendsModRow`'s add button and the `ModState` values `notInstalled` / `installed` | W1, L2b | open |
-| 2 | **D2** docs, second pass | SPEC, PRIVACY, VERIFICATION, owner checklist re-aligned with the amended concept and the state after wave 1 | D1, wave 1 | open |
-| 2 | **U1** compat + kit | compat for **four eras**, compiled and checked against 1.21.1, 1.21.8, 1.21.11 and 26.3 (A11); widget kit, throwaway screen proving button, `EditBox`, scroll pane, narration, resize; toasts (A10), `canUnpublish` (A2) | M1a, S0 | open |
-| 3 | **U2** screens (R-A set) | hub, friends, requests, invites, add by name, share, options | U1, M1b, L2b | open |
-| 3 | **J1** join here | launcher + mod | U2, L2b | open |
-| 3 | **V\*** nodes | one package per node group of `INGAME-API.md` section 5, including the Loom-remapped jars of the obfuscated Fabric nodes (A4) | U1 | open |
-| 4 | **G1** release gate | CI matrix green, owner Windows pass, size budget, release workflow | all of R-A | open |
+| 1 | **D1** concept amendments | this document (A1 to A13) | wave 0 | merged |
+| 1 | **M1b** mod core, second half | view-models and layout (6.5), the self-hash for `hello.mod.build` (5.3), `ready`, remaining topics | M1a | merged |
+| 1 | **L2b** bridge ops | dispatch of every op of 5.4, topic pushes, consent dialog backend (two scopes, caps), `launcher.open`, activity list, `Expectations.pre_granted` | L2a | merged |
+| 1 | **W1** wiring | call the injection step from `prepare_launch` / `spawn_game` / `launch_env`, register the launch with `node_id`, `build_id`, `pre_granted`, live breaker scan (`analyze_log`) and post-mortem (`analyze_exit`), remove the A12 items on the Rust side | L1, L2a | merged |
+| 1 | **S2** smoke harness | launch through the launcher pipeline, `ready` handshake, CI job; proves the injection flags per node | S1, W1 | merged (five cells green, `INGAME-SMOKE.md`; the CI job itself never ran) |
+| 2 | **F1** frontend | instance status row (3.9), settings, consent and breaker dialogs, contract types, removal of `FriendsModRow`'s add button and the `ModState` values `notInstalled` / `installed` | W1, L2b | merged (A20) |
+| 2 | **D2** docs, second pass | SPEC, PRIVACY, VERIFICATION, owner checklist, README re-aligned with the amended concept and the state after wave 1; A14 to A24 folded into this document | D1, wave 1 | this change |
+| 2 | **U1** compat + kit | compat for **four eras**, compiled and checked against 1.21.1, 1.21.8, 1.21.11 and 26.3 (A11); widget kit, throwaway screen proving button, `EditBox`, scroll pane, narration, resize; toasts (A10), `canUnpublish` (A2) | M1a, S0 | merged (kit demo render proof on the four Fabric nodes; `Checkbox.Builder#maxWidth` is deliberately not used, the kit sizes its toggles itself) |
+| 3 | **U2** screens (R-A set) | the R-A feature set of A24: hub with Freunde, Anfragen, Einladungen, Teilen, Optionen (read-only); add friend **by name**; accept/decline requests; invites view/decline/joinHere; share/kick/stop; toasts. No codes, no rename/remove/block, no […] row menu, no keybinding, no title-screen button (all R-B) | U1, M1b, L2b | open |
+| 3 | **J1** join here | launcher + mod | U2, L2b | open (the launcher side of `invite.joinHere` and `join.failed` exists since L2b; J1 builds the mod flow of 7) |
+| 3 | **V\*** nodes | one package per node group of `INGAME-API.md` section 5, including the Loom-remapped jars of the obfuscated Fabric nodes (A4); V1a smokes `1.21.8-fabric` and `1.21.11-fabric`, the only unverified nodes | U1 | open |
+| 4 | **G1** release gate | CI matrix green, owner Windows pass, size budget, release workflow. **A23: the next launcher release is 0.2.0** (the 2.x numbers and tags were deleted on 2026-10-04); G1 must align `modVersion` with the launcher version, nothing else about versioning changes | all of R-A | open |
 
 Ownership rule: `contract.rs`, `friends-types.ts` and the shared fixtures may be amended by the package that needs the change, with the Rust, TypeScript and fixture edits in the same change; a package adds its types in a separate block and does not reorder existing code. `compat/` additions needed by a screen package are made by that package for every existing node.
 
@@ -508,9 +519,9 @@ Ownership rule: `contract.rs`, `friends-types.ts` and the shared fixtures may be
 
 ## 12. Risks
 
-1. **Production injection on NeoForge 21.9+/26 uses a development feature** (`fml.modFolders`) and may change or vanish. Mitigation: smoke test per release; cell off if red. The flag names and FML 11/12 behaviour stay unproven until S2 (`INGAME-API.md` 8).
-2. **Headless CI for 26.x** may not start (renderer). Mitigation: S2 answers it early; fallback is an owner-run smoke script.
-3. **Non-ASCII user folders on Windows** can break JVM option paths (`C:\Users\Jürgen\...`). Mitigation: list-file form, S2 test with such a path, ASCII-only fallback location.
+1. **Production injection on NeoForge 21.9+/26 uses a development feature** (`fml.modFolders`) and may change or vanish. Mitigation: smoke test per release; cell off if red. The flag works on FML 11 in a production launch (26.2-neoforge smoke run, `INGAME-SMOKE.md` row 4); FML 10 and 12 series stay unsmoked with their nodes (`INGAME-API.md` 8).
+2. **Headless CI for 26.x** may not start (renderer). The local smoke runs used the owner's GPU; the CI workflow has never been executed and says so in its header (`INGAME-SMOKE.md` section 5). Fallback is an owner-run smoke script, which is what the five green cells are.
+3. **Non-ASCII user folders on Windows** can break JVM option paths. The required case (ü + space, `D:\pumpkin-build\smoke\Jürgen Müller\`) passed on all five cells without a list file; a CJK path stayed silent for 240 s and is not investigated (`INGAME-SMOKE.md` section 5).
 4. **A crash that happens after the 90-second window** is not caught by the circuit breaker. Accepted; the per-instance switch is the manual exit.
 5. **Same-JVM code can use the bridge** (5.1). Mitigation: narrow API, prompts, visibility; honest privacy text.
 6. **Every mod fix is a launcher release.** Accepted for what it buys (no distribution channel, one signed artifact); the updater makes it quick, the breaker makes a bad node survivable.
@@ -554,7 +565,7 @@ Owner tasks that remain: the Windows owner pass per release, a second Microsoft 
 
 ## Appendix A: injection mechanisms (research, 2026-10-03)
 
-"Source" = read in loader source or artifacts; "unproven" = must be shown by experiment (S1/S2). Nothing here was run against a real client.
+"Source" = read in loader source or artifacts; "unproven" = must be shown by experiment (S1/S2). This appendix is the research record of 2026-10-03; the smoke runs of 2026-10-04 have since proven the `fabricAddMods`, `fmlMavenRoot` and `fmlModFolders` rows in real clients (Appendix B, `INGAME-SMOKE.md`).
 
 | Loader | Mechanism | Detail | Status |
 |---|---|---|---|
@@ -575,13 +586,15 @@ Sources: Fabric Loader (`ArgumentModCandidateFinder`, `SystemProperties`, 0.12 a
 
 ## Appendix B: things only an experiment can settle (spike checklist)
 
-1. `-Dfabric.addMods` on Fabric 26.3 and on an obfuscated version (1.20.1): the Loom-remapped jar (intermediary names, refmap) loads, the Mixin applies, no `.fabric/processedMods` surprises.
-2. Fabric duplicate id (user copy lower, equal, higher).
-3. NeoForge 21.1.x via `--fml.mavenRoots`; 20.4 and 21.8 optional.
-4. NeoForge 26.1.2.114 and 26.2.0.88 via `-Dfml.modFolders`; class-loading guard quiet.
-5. Forge 1.20.1 (47.4.x) via `--fml.mavenRoots`; client-only declaration `clientSideOnly = true`.
-6. Windows: non-ASCII data path; `FILE_SHARE_READ` handle held while loaders read the jar.
-7. Headless start of 26.x clients under software rendering.
+**Items 1 to 6 are settled by the smoke runs of S2** (real runs, evidence and log excerpts in `INGAME-SMOKE.md`, 2026-10-04); item 7 is settled only for the owner's GPU, not for headless CI, and items 9 and 10 remain source-read, not observed.
+
+1. `-Dfabric.addMods` on Fabric 26.3 and on an obfuscated version (the lowest obfuscated node): the Loom-remapped jar (intermediary names, refmap) loads, the Mixin applies, no `.fabric/processedMods` surprises. **Passed** on `26.3-fabric` and `1.21.1-fabric` (today the lowest obfuscated node; a `1.20.1-fabric` node does not exist yet).
+2. Fabric duplicate id (user copy lower, equal, higher). **Settled for the equal case** by the `duplicate-id` scenario (the gate refuses beside a copy in `mods/`); lower/higher copies remain untried.
+3. NeoForge 21.1.x via `--fml.mavenRoots`; 20.4 and 21.8 optional. **Passed** on `1.21.1-neoforge` (21.1.253).
+4. NeoForge 26.1.2.114 and 26.2.0.88 via `-Dfml.modFolders`; class-loading guard quiet. **Passed** on `26.2-neoforge` (26.2.0.88); 26.1.2.114 has no node yet.
+5. Forge 1.20.1 (47.4.x) via `--fml.mavenRoots`; client-only declaration `clientSideOnly = true`. **Passed** on `1.20.1-forge` (47.4.26).
+6. Windows: non-ASCII data path; `FILE_SHARE_READ` handle held while loaders read the jar. **Passed** for all five cells (path `D:\pumpkin-build\smoke\Jürgen Müller\`, hold and release).
+7. Headless start of 26.x clients under software rendering. **Open**: the CI workflow never ran; the local smoke used the owner's GPU.
 8. ~~Stonecutter node naming with `-neoforge`/`-forge` suffixes and predicates.~~ Settled by S1: node id and Minecraft version are separate fields (`mod/README.md`).
-9. Screen-init hook per loader (Fabric Mixin target `PauseScreen#init`, NeoForge/Forge `ScreenEvent.Init.Post`) on the tracer versions. Read from sources for all versions in `INGAME-API.md` 6; not yet observed in a running game.
-10. Behaviour of a client-only NeoForge/Forge mod against modded servers (not relevant for the loopback tunnel, relevant if players also use their instances on servers).
+9. Screen-init hook per loader (Fabric Mixin target `PauseScreen#init`, NeoForge/Forge `ScreenEvent.Init.Post`) on the tracer versions. Read from sources for all versions in `INGAME-API.md` 6; the smoke proves the Fabric Mixin on `1.21.1-fabric` (tracer + mixin line) and the mod load on the other cells; the button in a real pause menu is first seen by the owner pass.
+10. Behaviour of a client-only NeoForge/Forge mod against modded servers (not relevant for the loopback tunnel, relevant if players also use their instances on servers). **Open**; the smoke used no server.
