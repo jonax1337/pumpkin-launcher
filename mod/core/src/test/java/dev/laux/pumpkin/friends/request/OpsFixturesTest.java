@@ -33,9 +33,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
-/** ops.jsonl, request-response.jsonl and the requests of pending.jsonl: every request line is what {@link Ops} builds. */
+/**
+ * ops.jsonl, ops-join-failed.jsonl, request-response.jsonl and the requests of pending.jsonl: every request line is what
+ * {@link Ops} builds, and every operation of INGAME 5.4 has a builder.
+ */
 class OpsFixturesTest {
-	private static final List<String> FILES = List.of("ops.jsonl", "request-response.jsonl", "pending.jsonl");
+	private static final List<String> FILES = List.of("ops.jsonl", "ops-join-failed.jsonl", "request-response.jsonl", "pending.jsonl");
 
 	/** The operation each fixture request stands for, by request id. */
 	private static final Map<String, Op<?>> OPS_BY_REQUEST_ID = Map.ofEntries(
@@ -60,6 +63,7 @@ class OpsFixturesTest {
 		Map.entry("o19", Ops.blockedUnblock("f3")),
 		Map.entry("o20", Ops.friendAcknowledge("f1")),
 		Map.entry("o21", Ops.friendsRetry()),
+		Map.entry("o22", Ops.joinFailed()),
 		Map.entry("a1", Ops.hostStop()),
 		Map.entry("a2", Ops.friendAddByName("Notch")),
 		Map.entry("a3", Ops.hostInvite(List.of("f1"), false)),
@@ -84,8 +88,18 @@ class OpsFixturesTest {
 	void everyOperationOfTheTableIsInTheFixtures() {
 		Set<String> fixtureOps = requestLines().map(line -> line.message().get("op").getAsString()).collect(Collectors.toSet());
 
-		assertEquals(21, fixtureOps.size());
+		assertEquals(22, fixtureOps.size());
 		assertEquals(fixtureOps, publicOpFactories(), "Ops has a factory the fixtures do not show, or the other way round");
+	}
+
+	@Test
+	void theBuildersAreExactlyTheOperationsOfTable54() {
+		List<String> table54 = List.of("state.sync", "launcher.open", "request.answer", "request.cancel", "friend.addByName",
+			"invite.decline", "invite.plan", "invite.joinHere", "join.leave", "join.failed", "host.invite", "host.kick", "host.stop",
+			"friend.addByCode", "code.create", "code.revoke", "friend.rename", "friend.remove", "friend.block", "blocked.unblock",
+			"friend.acknowledge", "friends.retry");
+
+		assertEquals(Set.copyOf(table54), publicOpFactories());
 	}
 
 	@Test

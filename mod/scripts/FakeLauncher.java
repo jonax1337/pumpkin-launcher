@@ -37,6 +37,8 @@ public final class FakeLauncher {
 	private static final int SILENCE_SECONDS = 30;
 	private static final int HELLO_SECONDS = 2;
 	private static final int MAX_GUESTS = 7;
+	private static final String COMMANDS = "allow, deny, invite, request, online, offline, directory <state>, "
+		+ "notice renamed|identityChanged|none, error <code>, closing [reason], quit";
 
 	private static final Pattern STRING_MEMBER = Pattern.compile("\"(%s)\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
 	private static final Pattern PORT = Pattern.compile("\"port\"\\s*:\\s*(\\d+)");
@@ -56,14 +58,15 @@ public final class FakeLauncher {
 	private int inFlight;
 	private int lanPort;
 	private String nextError;
+	private String directory = "active";
 	private volatile Link link;
 
 	private FakeLauncher() {
 		String sectionSign = Character.toString(0xA7);
 		String rightToLeftOverride = Character.toString(0x202E);
-		friends.put("f1", new Friend("jeb_", "853c80ef3c3749fdaa49938b674adae6", "online"));
-		friends.put("f2", new Friend(sectionSign + "cRot" + rightToLeftOverride + "evil", null, "online"));
-		friends.put("f3", new Friend("Notch", "069a79f444e94726a5befca90e38aaf5", "offline"));
+		friends.put("f1", new Friend("jeb_", "853c80ef3c3749fdaa49938b674adae6", "online", null));
+		friends.put("f2", new Friend(sectionSign + "cRot" + rightToLeftOverride + "evil", null, "online", null));
+		friends.put("f3", new Friend("Notch", "069a79f444e94726a5befca90e38aaf5", "offline", null));
 	}
 
 	public static void main(String[] args) throws IOException {
@@ -94,7 +97,7 @@ public final class FakeLauncher {
 			port, token, PROTOCOL);
 		System.out.println("sh:");
 		System.out.printf("  export PUMPKIN_IPC_PORT=%d PUMPKIN_IPC_TOKEN=%s PUMPKIN_IPC_PROTOCOL=%d%n", port, token, PROTOCOL);
-		System.out.println("Commands: allow, deny, invite, request, online, offline, error <code>, closing [reason], quit");
+		System.out.println("Commands: " + COMMANDS);
 	}
 
 	private static void startThread(Runnable task, String name) {
@@ -231,7 +234,10 @@ public final class FakeLauncher {
 			case "host.kick" -> hostKick(id, stringMember("friend", line));
 			case "host.stop" -> hostStop(id);
 			case "request.answer" -> answerRequest(id, first(ACCEPT, line));
-			case "request.cancel", "invite.decline", "join.leave" -> succeed(id);
+			case "request.cancel", "invite.decline", "join.leave", "join.failed" -> succeed(id);
+			// The fake has no host to join: the running game never matches the world of an invite.
+			case "invite.joinHere" -> fail(id, "instanceMismatch");
+			case "friend.acknowledge" -> acknowledge(id, stringMember("id", line));
 			case "friend.addByName" -> addByName(id, stringMember("name", line));
 			default -> fail(id, "unsupportedOp");
 		}
@@ -287,11 +293,27 @@ public final class FakeLauncher {
 		}
 		String name = incomingRequests.remove(0);
 		if (accept.equals("true")) {
-			friends.put("f" + (friends.size() + 1), new Friend(name, null, "offline"));
+			friends.put("f" + (friends.size() + 1), new Friend(name, null, "offline", null));
 		}
 		succeed(id);
 		push("requests");
 		push("friends");
+	}
+
+	/** Like the launcher: the game may acknowledge a {@code renamed} notice and nothing else. */
+	private void acknowledge(String id, String alias) throws IOException {
+		Friend friend = friends.get(alias);
+		if (friend == null) {
+			fail(id, "unknownFriend");
+		} else if ("identityChanged".equals(friend.notice())) {
+			fail(id, "forbidden");
+		} else if (friend.notice() == null) {
+			fail(id, "notFound");
+		} else {
+			friends.put(alias, new Friend(friend.name(), friend.mcUuid(), friend.presence(), null));
+			succeed(id);
+			push("friends");
+		}
 	}
 
 	private void addByName(String id, String name) throws IOException {
@@ -351,6 +373,8 @@ public final class FakeLauncher {
 				push("requests");
 			}
 			case "online", "offline" -> setPresence("f3", words[0]);
+			case "directory" -> setDirectory(words.length > 1 ? words[1] : "active");
+			case "notice" -> setNotice(words.length > 1 ? words[1] : "none");
 			case "error" -> {
 				nextError = words.length > 1 ? words[1] : "internal";
 				System.out.println("   The next request is answered with " + nextError);
@@ -358,7 +382,7 @@ public final class FakeLauncher {
 			case "closing" -> send("{\"type\":\"event\",\"event\":\"closing\",\"reason\":\""
 				+ (words.length > 1 ? words[1] : "bridgeStopped") + "\"}");
 			case "quit" -> System.exit(0);
-			default -> System.out.println("   Commands: allow, deny, invite, request, online, offline, error <code>, closing [reason], quit");
+			default -> System.out.println("   Commands: " + COMMANDS);
 		}
 	}
 
@@ -386,11 +410,24 @@ public final class FakeLauncher {
 
 	private void setPresence(String alias, String presence) throws IOException {
 		Friend friend = friends.get(alias);
-		friends.put(alias, new Friend(friend.name(), friend.mcUuid(), presence));
+		friends.put(alias, new Friend(friend.name(), friend.mcUuid(), presence, friend.notice()));
 		push("friends");
 		if (presence.equals("online")) {
 			notifyMod("friendOnline", friend.name());
 		}
+	}
+
+	/** {@code active}, {@code off}, {@code unreachable}, {@code notAllowed} or {@code unavailable}: what the name tab shows. */
+	private void setDirectory(String state) throws IOException {
+		directory = state;
+		push("me");
+	}
+
+	/** Puts the notice on Notch, the friend of the console commands, or takes it away with {@code none}. */
+	private void setNotice(String notice) throws IOException {
+		Friend friend = friends.get("f3");
+		friends.put("f3", new Friend(friend.name(), friend.mcUuid(), friend.presence(), notice.equals("none") ? null : notice));
+		push("friends");
 	}
 
 	private void pingRegularly() {
@@ -423,7 +460,8 @@ public final class FakeLauncher {
 
 	private String valueOf(String topic) {
 		return switch (topic) {
-			case "me" -> "{\"enabled\":true,\"availability\":\"available\",\"network\":\"online\",\"fingerprint\":\"ab12 cd34\"}";
+			case "me" -> "{\"enabled\":true,\"availability\":\"available\",\"network\":\"online\",\"fingerprint\":\"ab12 cd34\","
+				+ "\"directory\":\"" + directory + "\"}";
 			case "friends" -> friendsJson();
 			case "requests" -> requestsJson();
 			case "invites" -> invitesJson();
@@ -436,8 +474,17 @@ public final class FakeLauncher {
 	private String friendsJson() {
 		List<String> entries = new ArrayList<>();
 		friends.forEach((alias, friend) -> entries.add("{\"id\":\"" + alias + "\",\"name\":" + json(friend.name())
-			+ ",\"mcUuid\":" + json(friend.mcUuid()) + ",\"presence\":\"" + friend.presence() + "\"}"));
+			+ ",\"mcUuid\":" + json(friend.mcUuid()) + ",\"presence\":\"" + friend.presence() + "\"" + noticeJson(friend) + "}"));
 		return "[" + String.join(",", entries) + "]";
+	}
+
+	/** The {@code notice} member of a friend, with its leading comma; nothing when the friend has none. */
+	private static String noticeJson(Friend friend) {
+		return switch (String.valueOf(friend.notice())) {
+			case "renamed" -> ",\"notice\":{\"type\":\"renamed\",\"previousName\":\"Old name\"}";
+			case "identityChanged" -> ",\"notice\":{\"type\":\"identityChanged\"}";
+			default -> "";
+		};
 	}
 
 	private String guestsJson() {
@@ -535,7 +582,8 @@ public final class FakeLauncher {
 		return QUOTED.matcher(list).results().map(match -> match.group(1)).toList();
 	}
 
-	private record Friend(String name, String mcUuid, String presence) {
+	/** {@code notice} is {@code null}, {@code renamed} or {@code identityChanged}. */
+	private record Friend(String name, String mcUuid, String presence, String notice) {
 	}
 
 	private record Link(Socket socket, OutputStream out) {

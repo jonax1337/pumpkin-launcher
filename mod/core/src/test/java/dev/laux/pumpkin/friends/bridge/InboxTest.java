@@ -1,10 +1,13 @@
 package dev.laux.pumpkin.friends.bridge;
 
+import static dev.laux.pumpkin.friends.Fixtures.Direction.LAUNCHER_TO_MOD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.gson.JsonParser;
 import dev.laux.pumpkin.friends.FakeClock;
+import dev.laux.pumpkin.friends.Fixtures;
+import dev.laux.pumpkin.friends.Fixtures.Line;
 import dev.laux.pumpkin.friends.ManualMainThread;
 import dev.laux.pumpkin.friends.protocol.ClosingReason;
 import dev.laux.pumpkin.friends.protocol.FrameCodec;
@@ -71,6 +74,20 @@ class InboxTest {
 		mainThread.runPending();
 
 		assertEquals(List.of("notice GUEST_JOINED cAlex", "notice SESSION_ENDED -", "notice FRIEND_ONLINE -"), heard);
+	}
+
+	@Test
+	void everyNoticeOfTheEventFixtureReachesTheListenersSoNoToastKindIsLost() {
+		inbox.addListener(recorder());
+		Fixtures.read("events.jsonl", LAUNCHER_TO_MOD).stream().map(Line::wire).map(wire -> FrameCodec.decode(wire).orElseThrow())
+			.filter(Notify.class::isInstance).forEach(inbox::deliver);
+
+		mainThread.runPending();
+
+		assertEquals(NotifyKind.values().length, heard.size());
+		assertTrue(heard.contains("notice SCOPE_DENIED -"));
+		assertTrue(heard.contains("notice REQUEST_RECEIVED Sam"));
+		assertTrue(heard.contains("notice JOIN_ENDED -"));
 	}
 
 	@Test

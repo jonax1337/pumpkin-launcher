@@ -7,43 +7,51 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.laux.pumpkin.friends.Fixtures;
 import dev.laux.pumpkin.friends.Fixtures.Line;
 import dev.laux.pumpkin.friends.protocol.LauncherFrame.Response;
-import dev.laux.pumpkin.friends.protocol.LauncherFrame.State;
-import dev.laux.pumpkin.friends.state.Friend;
-import dev.laux.pumpkin.friends.state.TopicStore;
-import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 /**
- * The fixtures the launcher side added after the mod reader was written: errors-reasons.jsonl, topics-notice.jsonl and the
- * answer of ops-join-failed.jsonl. The mod reads what it already understands of them (the code, the parameters as text, the
- * friends of the push and the empty result); it does not act on the {@code reason}, the friend {@code notice} or the
- * {@code join.failed} operation yet.
+ * errors-reasons.jsonl and the answer of ops-join-failed.jsonl: the errors whose code is coarse or carries numbers, read
+ * through the error object the UI uses. The friend notices of topics-notice.jsonl are read by {@code TopicFixturesTest}.
  */
 class LauncherSideFixturesTest {
-	@Test
-	void everyCoarseErrorKeepsItsCodeAndItsReasonAsText() {
-		Map<String, OpError> byId = Fixtures.read("errors-reasons.jsonl", LAUNCHER_TO_MOD).stream()
-			.collect(Collectors.toMap(Line::id, LauncherSideFixturesTest::error));
+	private final Map<String, OpError> byId = Fixtures.read("errors-reasons.jsonl", LAUNCHER_TO_MOD).stream()
+		.collect(Collectors.toMap(Line::id, LauncherSideFixturesTest::error));
 
+	@Test
+	void aCoarseErrorNamesItsCauseAsTheReason() {
 		assertEquals(ErrorCode.BAD_REQUEST, byId.get("r01").code());
-		assertEquals("nameInvalid", byId.get("r01").param("reason").orElseThrow());
-		assertEquals("1", byId.get("r02").param("extra").orElseThrow());
-		assertEquals("3", byId.get("r04").param("max").orElseThrow());
-		assertEquals("7", byId.get("r06").param("days").orElseThrow());
+		assertEquals("nameInvalid", byId.get("r01").reason().orElseThrow());
+		assertEquals(ErrorCode.NOT_FOUND, byId.get("r07").code());
+		assertEquals("notRenamed", byId.get("r07").reason().orElseThrow());
 		assertEquals(ErrorCode.NAME_UNKNOWN, byId.get("r08").code());
-		assertTrue(byId.values().stream().noneMatch(error -> error.code() == ErrorCode.UNRECOGNIZED));
+		assertEquals("nameNotFindable", byId.get("r08").reason().orElseThrow());
 	}
 
 	@Test
-	void aFriendWithANoticeIsStillAFriendOfTheTopic() {
-		TopicStore store = new TopicStore();
-		State push = (State) FrameCodec.decode(Fixtures.only("topics-notice.jsonl", LAUNCHER_TO_MOD).wire()).orElseThrow();
+	void numbersArriveAsNumbersOnDemand() {
+		assertEquals(OptionalInt.of(3), byId.get("r04").intParam("max"));
+		assertEquals(OptionalInt.of(7), byId.get("r06").intParam("days"));
+		assertEquals(OptionalInt.empty(), byId.get("r04").intParam("days"), "absent");
+		assertEquals(OptionalInt.empty(), byId.get("r01").intParam("reason"), "not a number");
+	}
 
-		assertTrue(store.apply(push));
+	@Test
+	void aRunningGameThatDoesNotFitGetsInstanceMismatchWithThePlanVerdictAndTheCounts() {
+		OpError mismatch = byId.get("r02");
 
-		assertEquals(List.of("Alex", "Bea", "Cleo"), store.friends().stream().map(Friend::name).toList());
+		assertEquals(ErrorCode.INSTANCE_MISMATCH, mismatch.code());
+		assertEquals("missingContent", mismatch.param("verdict").orElseThrow());
+		assertEquals(OptionalInt.of(0), mismatch.intParam("missing"));
+		assertEquals(OptionalInt.of(1), mismatch.intParam("extra"));
+		assertTrue(mismatch.reason().isEmpty(), "the code is no longer coarse");
+	}
+
+	@Test
+	void everyReasonFixtureIsAKnownCode() {
+		assertTrue(byId.values().stream().noneMatch(error -> error.code() == ErrorCode.UNRECOGNIZED));
 	}
 
 	@Test
