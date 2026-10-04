@@ -1,14 +1,17 @@
 import { useEffect } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { activityText, withActivity } from "@/components/friends/modRequestModel";
+import { opText } from "@/components/friends/modRequestText";
 import { t, type TKey } from "@/i18n/core";
 import { api } from "@/lib/api";
 import { ACTION_TOAST_MS } from "@/lib/toast";
 import type {
-  Friend, FriendPresenceEvent, FriendRequest, FriendRequestRefusedEvent, FriendsState, HostSession, Invite, InviteRevokedEvent,
-  JoinSessionEvent, LanEvent, NetworkStatus, RequestRefusal,
+  Friend, FriendPresenceEvent, FriendRequest, FriendRequestRefusedEvent, FriendsState, HostSession, IngameFailedEvent, Invite, InviteRevokedEvent,
+  JoinSessionEvent, LanEvent, ModActivityEntry, NetworkStatus, RequestRefusal,
 } from "@/lib/types";
 import { requestInviteDialog } from "@/pages/friends/inviteRequest";
+import { useModOpenNavigation } from "@/pages/friends/useFriendsNav";
 import { applyJoinSession, dropInviteDialog, queueFriendDialog, queueModConfirm } from "@/store/friendsUi";
 import { friendKeys } from "./queryKeys";
 
@@ -85,12 +88,27 @@ function onRequestRefused(qc: QueryClient, { request, reason }: FriendRequestRef
 }
 
 /**
+ * Ein Vorgang aus dem Spiel: vorn in die Liste und als Toast; ein Vorgang, der nicht lief, als Warnung. Ist die Liste noch nicht
+ * geladen, holt das Backend sie samt diesem Vorgang: ein Eintrag allein gälte sonst als ganze, frische Liste.
+ */
+function onModActivity(qc: QueryClient, entry: ModActivityEntry) {
+  if (qc.getQueryData(friendKeys.modActivity)) qc.setQueryData(friendKeys.modActivity, (list: ModActivityEntry[] = []) => withActivity(list, entry));
+  else void qc.invalidateQueries({ queryKey: friendKeys.modActivity });
+  const show = entry.ok ? toast : toast.warning;
+  show(t(entry.ok ? "friends.activity.toast" : "friends.activity.toastFailed", { text: opText(activityText(entry)) }));
+}
+
+/** Das Freunde-Menü hat den Start vermutlich zum Absturz gebracht: der Launcher hat es ausgeschaltet und fragt, wie es weitergeht. */
+const onIngameFailed = ({ instanceId, reason }: IngameFailedEvent) => queueFriendDialog({ kind: "breaker", instanceId, reason });
+
+/**
  * Hält alles aktuell, was Freunde im Backend ändern, auf jeder Seite: `friends-changed` lädt die Freunde-Abfragen neu,
  * Anwesenheit, Netzstatus, Einladungen, geteilte Welt und LAN-Port ändern nur den einen Wert im Zwischenspeicher.
  * Einmal im Layout einhängen.
  */
 export function useFriendEvents() {
   const qc = useQueryClient();
+  useModOpenNavigation();
   useEffect(() => {
     const subs = [
       api.onFriendsChanged(() => void qc.invalidateQueries({ queryKey: friendKeys.all })),
@@ -106,6 +124,8 @@ export function useFriendEvents() {
       api.onLanChanged((event) => qc.setQueryData(friendKeys.lan(event.instanceId), withLan(event))),
       api.onFriendsMod(({ instanceId }) => void qc.invalidateQueries({ queryKey: friendKeys.modStatus(instanceId) })),
       api.onFriendsModConfirm(queueModConfirm),
+      api.onFriendsModActivity((entry) => onModActivity(qc, entry)),
+      api.onFriendsIngameFailed(onIngameFailed),
     ];
     return () => subs.forEach((p) => p.then((unlisten) => unlisten()));
   }, [qc]);

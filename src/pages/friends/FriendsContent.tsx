@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocation } from "react-router";
 import { useFriendRequests, useFriendsList, useHostSessions, useInvites } from "@/hooks/useFriends";
 import { useI18n } from "@/i18n";
 import type { FriendsState } from "@/lib/types";
 import { ErrorBox, PageHeader, Skel } from "@/ui";
+import { ActivitySection } from "./ActivitySection";
 import { AddFriendButtons, AddFriendDialog, type AddFriendTab } from "./AddFriendDialog";
 import { FriendsSection } from "./FriendsSection";
 import { onlineCount } from "./friendsModel";
@@ -11,7 +13,15 @@ import { RequestsSection } from "./RequestsSection";
 import { useFriendDialogs } from "./useFriendDialogs";
 import { useRetryDeliveries } from "./useRetryDeliveries";
 
-/** Die benutzbare Seite: Kopf mit Zahl der Freunde online, Anfragen und Freundesliste. */
+/** Springt zu dem Abschnitt, den der Anker der Adresse nennt (`launcher.open` der Mod), sobald die Seite ihn zeigt. */
+function useScrollToAnchor(ready: boolean) {
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (ready && hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: "start" });
+  }, [ready, hash]);
+}
+
+/** Die benutzbare Seite: Kopf mit Zahl der Freunde online, Anfragen, Freundesliste und die Aktivität im Spiel. */
 export function FriendsContent({ state }: { state: FriendsState }) {
   const { t } = useI18n();
   const friends = useFriendsList();
@@ -23,6 +33,7 @@ export function FriendsContent({ state }: { state: FriendsState }) {
   const [adding, setAdding] = useState<AddFriendTab | null>(null);
 
   const error = friends.error ?? requests.error;
+  useScrollToAnchor(!!friends.data && !!requests.data);
   return (
     <>
       <PageHeader title={t("ui.nav.friends")} count={friends.data && onlineCount(friends.data)}>
@@ -39,6 +50,7 @@ export function FriendsContent({ state }: { state: FriendsState }) {
           <FriendsSection friends={friends.data} invites={invites.data ?? []} session={sessions.data?.[0]} actions={actions} onAdd={setAdding} />
         </>
       )}
+      <ActivitySection />
       {adding && <AddFriendDialog initialTab={adding} onClose={() => setAdding(null)} />}
       {dialogs}
     </>

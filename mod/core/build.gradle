@@ -1,0 +1,42 @@
+plugins {
+	id 'java-library'
+}
+
+// core/ kennt weder Minecraft noch einen Loader: Der Klassenpfad enthält nur Gson und SLF4J, die das Spiel liefert.
+// Ein Minecraft-Import bricht deshalb schon das Kompilieren, und --release 17 hält die Klassen auf jedem Knoten lauffähig.
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	compileOnly "com.google.code.gson:gson:${gson_version}"
+	compileOnly "org.slf4j:slf4j-api:${slf4j_version}"
+
+	testImplementation "com.google.code.gson:gson:${gson_version}"
+	testImplementation "org.slf4j:slf4j-api:${slf4j_version}"
+	testImplementation platform("org.junit:junit-bom:${junit_version}")
+	testImplementation 'org.junit.jupiter:junit-jupiter'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testRuntimeOnly "org.slf4j:slf4j-nop:${slf4j_version}"
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 17
+	it.options.encoding = 'UTF-8'
+	// classfile: Gson verweist auf Errorprone-Annotationen, die nicht auf dem Klassenpfad liegen.
+	it.options.compilerArgs << '-Xlint:all,-classfile,-serial'
+}
+
+test {
+	useJUnitPlatform()
+	// The golden lines of the launcher channel are shared with the Rust tests; the tests read them in place, never a copy.
+	def protocolFixtures = rootProject.file('fixtures/protocol')
+	inputs.dir(protocolFixtures)
+	systemProperty 'pumpkin.fixtures.protocol', protocolFixtures.absolutePath
+	// -Pcore.testJdk=<Version> führt die Tests auf genau diesem JDK aus (die JDKs des Knotens: nodes.txt).
+	if (project.hasProperty('core.testJdk')) {
+		javaLauncher = javaToolchains.launcherFor {
+			languageVersion = JavaLanguageVersion.of(project.property('core.testJdk') as int)
+		}
+	}
+}

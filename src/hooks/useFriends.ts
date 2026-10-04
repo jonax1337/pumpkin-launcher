@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type MutationMeta } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { api } from "@/lib/api";
-import type { FriendsEnableInput, FriendsSettings, FriendsState } from "@/lib/types";
+import type { FriendsEnableInput, FriendsSettings, FriendsState, IngameStatus } from "@/lib/types";
 import { MINUTE } from "@/lib/time";
 import { setFriendsEnabled } from "@/store/friendsUi";
 import { friendKeys } from "./queryKeys";
@@ -57,8 +58,38 @@ export function useInvitePlan(inviteId: string | null) {
 export const useLanStatus = (instanceId: string) =>
   useQuery({ queryKey: friendKeys.lan(instanceId), queryFn: () => api.lanStatus(instanceId) });
 
-export const useFriendsModStatus = (instanceId: string) =>
-  useQuery({ queryKey: friendKeys.modStatus(instanceId), queryFn: () => api.friendsModStatus(instanceId) });
+/**
+ * Was der nächste Start der Instanz mit der Mod im Spiel tut und warum. `friends-ingame` ersetzt den Stand sofort;
+ * `friends-mod` (Verbindung steht oder bricht ab) und `friends-changed` laden ihn über `friendKeys.modStatus` neu.
+ * Er hängt an Version, Loader, Konten und Einstellungen, ändert sich also auch ohne Ereignis (Version wechseln, Konto anmelden):
+ * Die Zeile fragt deshalb bei jedem Einblenden neu; das Backend rechnet ihn ohne Start.
+ */
+export function useIngameStatus(instanceId: string) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const sub = api.onFriendsIngame((event) => {
+      if (event.instanceId === instanceId) qc.setQueryData(friendKeys.modStatus(instanceId), event.status);
+    });
+    return () => void sub.then((unlisten) => unlisten());
+  }, [qc, instanceId]);
+  return useQuery({ queryKey: friendKeys.modStatus(instanceId), queryFn: () => api.friendsIngameStatus(instanceId), staleTime: 0 });
+}
+
+/** Die Vorgänge aus dem Spiel, neueste zuerst; `friends-mod-activity` ergänzt sie live (hooks/useFriendEvents.ts). */
+export const useModActivity = () => useQuery({ queryKey: friendKeys.modActivity, queryFn: api.friendsModActivity });
+
+/** Änderung am Stand der Einspeisung einer Instanz; der neue Status ersetzt den der Abfrage sofort. */
+function useIngameChange<V = void>(instanceId: string, change: (v: V) => Promise<IngameStatus>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: change, onSuccess: (status) => qc.setQueryData(friendKeys.modStatus(instanceId), status) });
+}
+
+/** Der Schalter „Freunde-Menü im Spiel“ der Instanz; Einschalten hebt auch ein automatisches Ausschalten nach einem Startfehler auf. */
+export const useSetIngameEnabled = (instanceId: string) =>
+  useIngameChange(instanceId, (enabled: boolean) => api.friendsIngameSetEnabled(instanceId, enabled));
+
+/** „Erneut versuchen“ nach einem Startfehler: hebt das automatische Ausschalten auf, einen Schalter des Spielers nicht. */
+export const useRetryIngame = (instanceId: string) => useIngameChange(instanceId, () => api.friendsIngameRetry(instanceId));
 
 /** Änderung an Freunden, Anfragen, Codes oder Sitzungen; danach lädt alles unter `friendKeys.all` neu. */
 function useFriendsChange<V = void, R = unknown>(change: (v: V) => Promise<R>, meta?: MutationMeta) {

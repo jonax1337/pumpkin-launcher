@@ -5,7 +5,31 @@ prepare the tables. A gate is met when every required row is filled and passes.
 
 How to get each result, in order and in plain German: [`OWNER-CHECKLIST.md`](OWNER-CHECKLIST.md). The
 sections below follow its steps: G1 is step 2, G2 is steps 1 and 3, G3 is step 5, G4 is step 6, G5 is
-step 7. Section N (finding friends by name, release 2.0.1) is step 8.
+step 7. Section N (finding friends by name) is step 8. Section M3 (the in-game mod, `INGAME.md`) is
+step 9.
+
+## 0.2.0: release gate (checklist step 0)
+
+The gate for the 0.2.0 release candidate (first release with the in-game mod). The owner fills this in;
+"expected" is what counts as a pass. The smoke rows below re-run the local smoke on the release commit
+(the 2026-10-04 entries in M3.1 prove the cells, these prove the release commit).
+
+| # | Gate | Expected | Result | Date | Notes |
+|---|---|---|---|---|---|
+| V1 | Every version field is 0.2.0: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` + `Cargo.lock`, `mod/gradle.properties` | All four show 0.2.0; no file names 2.1.0/2.0.1 as a current version | | | |
+| V2 | Mod dist of the release commit (`gradlew build modIndex` in `mod/`) | `mod-index.json` has `modVersion: "0.2.0"`, seven jars `pumpkin_friends-0.2.0+<node>.jar`; `validate-mod-index.mjs` and `checkJarBudget` pass | | | |
+| V3 | Local smoke on the release commit, all seven cells (`tools/mod-smoke/run.ps1`) | Every cell `passed`; the game log names `pumpkin_friends 0.2.0+<node>` (rows below) | | | |
+| V3a | 26.3-fabric | `passed` | | | |
+| V3b | 1.21.1-fabric | `passed` | | | |
+| V3c | 1.21.8-fabric | `passed` | | | |
+| V3d | 1.21.11-fabric | `passed` | | | |
+| V3e | 1.21.1-neoforge | `passed` | | | |
+| V3f | 26.2-neoforge | `passed` | | | |
+| V3g | 1.20.1-forge | `passed` | | | |
+| V4 | Release workflow first run (tag `v0.2.0`): mod jobs green, dist check passed, embedding log line present, smoke feature absent | *Mod node list*, the seven *Mod node* jobs and *Mod package* green; *Build* logs `Embedding pumpkin_friends 0.2.0 (7 jars).`; no `-D features=smoke`/`--features smoke` anywhere in the run | | | |
+| V5 | Shipped binaries embed the mod | Installed 0.2.0 launcher: instance row shows "Freunde-Menü im Spiel: aktiv" for a supported cell; nothing appears in the instance's `mods/` folder | | | |
+| V6 | Draft reviewed and published (`docs/friends/RELEASE-0.2.0.md` as the tag text) | Installers tested, release published; updater offers 0.2.0 | | | |
+| V7 | In-game owner pass with a second account (checklist 0.7 = step 9) | Every M3 row filled (9.0 visual pass, 9.1 deep run per loader, 9.2 short run per node, 9.3-9.8); "M3 met" checked | | | |
 
 ## G1: P2P viability (R0b spike, owner run)
 
@@ -139,7 +163,7 @@ Checklist step 7.
 | `pnpm build` and `pnpm check:lib` pass | | |
 | Release binary size delta re-measured with the real endpoints (SPEC 3.1) | | |
 | Doc-sync (SPEC 13.5, item 5): sections 3 to 9, 11 and Appendix A match the code | | |
-| Mod published on Modrinth, `MOD_PROJECT_ID` set in `mod-release.yml` and `modinstall.rs` (no gate; without it the mod install is unavailable) | | |
+| *Obsolete once the injection ships (`INGAME.md` section 8: no Modrinth project, M3 replaces it):* mod published on Modrinth, `MOD_PROJECT_ID` set in `mod-release.yml` and `modinstall.rs` (no gate; without it the mod install is unavailable) | | |
 | Closed-beta decision recorded (checklist step 7): n0 relays, build route | | |
 
 G5 met: [ ] (date, initials)
@@ -182,3 +206,76 @@ Facts that stay **unverified** until the rows above are filled (BYNAME-ATTEST, "
 | OD-N11: the owner accepts that the Worker no longer enforces Mojang's multiplayer restrictions and bans (the launcher checks `/player/attributes`; acceptance still needs a Mojang `join`) | | |
 
 N met: [ ] (date, initials)
+
+## M3: in-game mod (`INGAME.md` sections 2, 10 and Appendix B)
+
+Status: **launcher side merged, smoke real and green for five of seven nodes** (2026-10-04, `INGAME-SMOKE.md`); the
+owner pass and the release are pending. The smoke runs so far were local runs on the owner's Windows machine through
+the launcher's own launch path (Cargo feature `smoke`, A18), not CI runs: the CI job `.github/workflows/mod-smoke.yml`
+has never been executed. The owner steps are checklist step 9. A cell of the support matrix (`SPEC.md` 11.0) ships only
+with its smoke entry (`verified.smoke` in `mod-index.json`, filled from `mod/verified.json`, A17); the owner entry
+(`verified.owner`) is the Windows pass of the same release. Result is `pass` or `fail`; put the date, the launcher
+version and exact messages into the notes.
+
+### M3.1: node groups
+
+The rows are the seven nodes that exist in `mod/nodes.txt` (matching `mod-index.json`). The other twelve nodes of
+`INGAME-API.md` section 5 arrive with R-B and get their rows when they exist. Do not add a row for a cell that has no
+node.
+
+Smoke is the start through the launcher's own launch path with real injection: the mod connects, passes the owner check
+and sends `ready` (`INGAME.md` section 10, layer 4). Owner pass (Windows) is the deep run for one node per loader and
+the 3-step run (start, hub opens, one request answered) for every other node (layer 5).
+
+| Node (Minecraft, loader) | Java | Stage | Smoke | Owner pass (Windows) |
+|---|---|---|---|---|
+| 26.3, Fabric | 25 | R-A | pass (2026-10-04, local smoke: bridge handshake, `ready` screens ["hub"], `INGAME-SMOKE.md` row 1) | |
+| 1.21.1, Fabric | 21 | R-A | pass (2026-10-04, local smoke: obfuscated node, remapped jar + Mixin, `INGAME-SMOKE.md` row 1) | |
+| 1.21.8, Fabric | 21 | R-A | pass (2026-10-04, local smoke: tracer line, `INGAME-SMOKE.md`) | |
+| 1.21.11, Fabric | 21 | R-A | pass (2026-10-04, local smoke: tracer line, `INGAME-SMOKE.md`) | |
+| 1.21.1, NeoForge | 21 | R-A | pass (2026-10-04, local smoke: `--fml.mavenRoots`, NeoForge 21.1.253, `INGAME-SMOKE.md` row 3) | |
+| 26.2, NeoForge | 25 | R-A | pass (2026-10-04, local smoke: `-Dfml.modFolders`, NeoForge 26.2.0.88, `INGAME-SMOKE.md` row 4) | |
+| 1.20.1, Forge | 17 | R-A | pass (2026-10-04, local smoke: `--fml.mavenRoots`, Forge 47.4.26, `INGAME-SMOKE.md` row 5) | |
+
+Cross-cutting smoke results of the same runs (all five cells): non-ASCII data path `D:\pumpkin-build\smoke\Jürgen Müller\`
+(ü + space) and the `FILE_SHARE_READ` handle in both scenarios (hold, release) passed (`INGAME-SMOKE.md` rows 6a and 6b).
+
+Deep run per loader (owner pass, once per release, with two Microsoft accounts): start, open the hub, accept a request,
+share a world and join it from the second account.
+
+| Deep run | Node used | Result | Date | Notes |
+|---|---|---|---|---|
+| Fabric | | | | |
+| NeoForge | | | | |
+| Forge | | | | |
+
+### M3.2: unproven mechanisms (`INGAME.md` Appendix B)
+
+Settled by the spikes S0 to S2 and by the owner on Windows. Until a row has a result, the cell it concerns stays off
+(`verified` empty in the index).
+
+| # | Mechanism | Settled by | Result | Date | Notes |
+|---|---|---|---|---|---|
+| B1 | `-Dfabric.addMods` on Fabric 26.3 and on an obfuscated version: mod loads, Mixin applies, no `.fabric/processedMods` surprises | smoke (S2) | pass (local) | 2026-10-04 | 26.3-fabric (full mod) and 1.21.1-fabric (lowest obfuscated node today; a 1.20.1-fabric node does not exist yet), `INGAME-SMOKE.md` row 1 |
+| B2 | Fabric duplicate mod id (user copy lower, equal, higher) | smoke (S2) | pass (local, equal case) | 2026-10-04 | `duplicate-id` scenario: the gate refuses beside a copy in `mods/` (`INGAME-SMOKE.md` row 2); lower/higher copies untried |
+| B3 | NeoForge 21.1.x via `--fml.mavenRoots` (20.4 and 21.8 optional) | smoke (S2) | pass (local) | 2026-10-04 | 1.21.1-neoforge, NeoForge 21.1.253, `INGAME-SMOKE.md` row 3 |
+| B4 | NeoForge 26.1.2.114 and 26.2.0.88 via `-Dfml.modFolders`; class-loading guard quiet | smoke (S2) | pass (local, 26.2 only) | 2026-10-04 | 26.2-neoforge, NeoForge 26.2.0.88, `INGAME-SMOKE.md` row 4; 26.1.2.114 has no node yet |
+| B5 | Forge 1.20.1 (47.4.x) via `--fml.mavenRoots`; client-only display test | smoke (S2) | pass (local) | 2026-10-04 | 1.20.1-forge, Forge 47.4.26, `INGAME-SMOKE.md` row 5; the display test against a modded server stays open (B10) |
+| B6 | Windows: non-ASCII data path (for example `C:\Users\Jürgen\...`); `FILE_SHARE_READ` handle held while the loaders read the jar | smoke (S2) | pass (local) | 2026-10-04 | `D:\pumpkin-build\smoke\Jürgen Müller\` (ü + space) and hold + release on all five cells, `INGAME-SMOKE.md` rows 6a/6b; a CJK path stayed silent and is not investigated |
+| B7 | Headless start of 26.x clients under software rendering in CI | S2 (CI) | open | | the CI workflow never ran; the local smoke used the owner's GPU (`INGAME-SMOKE.md` section 5) |
+| B8 | Stonecutter node naming with `-neoforge` and `-forge` suffixes and predicates | S1 | settled | 2026-10-04 | node id and Minecraft version are separate fields (`mod/README.md`) |
+| B9 | Screen-init hook per loader (Fabric Mixin target `PauseScreen#init`, NeoForge and Forge screen-init event) on the tracer versions | smoke (S2) | partly | 2026-10-04 | Fabric Mixin proven by the 1.21.1-fabric tracer + mixin line; the button in a real pause menu is first seen by the owner pass |
+| B10 | A client-only NeoForge or Forge mod against modded servers (only relevant if instances are also used on servers) | owner | open | | no server in the smoke |
+
+Further checks the concept names (`INGAME.md` sections 3.8, 5.2, 5.4, 3.3). While any game link is active the launcher
+never fetches a new player certificate (A16, `INGAME.md` 5.4): the directory loop, `friend.addByName` and `friends.retry`
+all work cached-only and answer `directoryUnavailable` when the cache is empty or stale. The rule is unconditional and is
+not lifted by owner test O-5 (section N above); O-5 only records whether a fetch would disturb a running game's chat key.
+
+| Check | Result | Date |
+|---|---|---|
+| Circuit breaker: a deliberately broken node jar (wrong Java, bad `mods.toml`) ends in the dialog "Ohne Freunde-Menü starten" and the next launch starts without the mod | | |
+| Wrapper script as Java: the instance row says "Verbindung nicht zuordenbar" and the game still starts | | |
+| Second `pumpkin_friends` jar in `mods/`: injection is skipped and the instance row says why | | |
+
+M3 met: [ ] (date, initials)

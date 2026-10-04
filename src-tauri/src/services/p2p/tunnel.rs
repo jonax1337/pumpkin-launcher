@@ -156,9 +156,18 @@ where
         } else {
             self.limits.before_first_valid
         };
-        self.active
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |active| (active < limit).then_some(active + 1))
-            .ok()?;
+        // Statt des auf neueren rustc missbilligten fetch_update: den Zähler nur unter dem Limit anheben und bei einem
+        // Rennen mit einem anderen Zuwachs erneut lesen. Der Slot wird einzig am Limit verweigert.
+        loop {
+            let active = self.active.load(Ordering::SeqCst);
+            if active >= limit {
+                return None;
+            }
+            match self.active.compare_exchange(active, active + 1, Ordering::SeqCst, Ordering::SeqCst) {
+                Ok(_) => break,
+                Err(_) => continue,
+            }
+        }
         Some(Slot(self.active.clone()))
     }
 

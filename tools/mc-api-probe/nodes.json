@@ -1,0 +1,24 @@
+{
+  "modVersion": "0.2.0",
+  "nodes": [
+    { "id": "1.20.1-fabric", "loader": "fabric", "loaderMin": "0.14.21", "minecraft": ["1.20", "1.20.1"], "javaMin": 17, "strategy": "fabricAddMods" },
+    { "id": "1.20.2-fabric", "loader": "fabric", "loaderMin": "0.14.22", "minecraft": ["1.20.2"], "javaMin": 17, "strategy": "fabricAddMods" },
+    { "id": "1.20.4-fabric", "loader": "fabric", "loaderMin": "0.14.23", "minecraft": ["1.20.3", "1.20.4"], "javaMin": 17, "strategy": "fabricAddMods" },
+    { "id": "1.21.1-fabric", "loader": "fabric", "loaderMin": "0.15.11", "minecraft": ["1.20.5", "1.20.6", "1.21", "1.21.1"], "javaMin": 21, "strategy": "fabricAddMods" },
+    { "id": "1.21.5-fabric", "loader": "fabric", "loaderMin": "0.16.10", "minecraft": ["1.21.2", "1.21.3", "1.21.4", "1.21.5"], "javaMin": 21, "strategy": "fabricAddMods" },
+    { "id": "1.21.8-fabric", "loader": "fabric", "loaderMin": "0.16.13", "minecraft": ["1.21.6", "1.21.7", "1.21.8"], "javaMin": 21, "strategy": "fabricAddMods" },
+    { "id": "1.21.10-fabric", "loader": "fabric", "loaderMin": "0.17.0", "minecraft": ["1.21.9", "1.21.10"], "javaMin": 21, "strategy": "fabricAddMods" },
+    { "id": "1.21.11-fabric", "loader": "fabric", "loaderMin": "0.17.3", "minecraft": ["1.21.11"], "javaMin": 21, "strategy": "fabricAddMods" },
+    { "id": "26.1.2-fabric", "loader": "fabric", "loaderMin": "0.18.4", "minecraft": ["26.1", "26.1.1", "26.1.2"], "javaMin": 25, "strategy": "fabricAddMods" },
+    { "id": "26.2-fabric", "loader": "fabric", "loaderMin": "0.18.4", "minecraft": ["26.2"], "javaMin": 25, "strategy": "fabricAddMods" },
+    { "id": "26.3-fabric", "loader": "fabric", "loaderMin": "0.18.4", "minecraft": ["26.3"], "javaMin": 25, "strategy": "fabricAddMods" },
+    { "id": "1.21.1-neoforge", "loader": "neoforge", "loaderMin": "21.0.143", "minecraft": ["1.21", "1.21.1"], "javaMin": 21, "strategy": "fmlMavenRoot" },
+    { "id": "1.21.5-neoforge", "loader": "neoforge", "loaderMin": "21.3.56", "minecraft": ["1.21.3", "1.21.4", "1.21.5"], "javaMin": 21, "strategy": "fmlMavenRoot" },
+    { "id": "1.21.8-neoforge", "loader": "neoforge", "loaderMin": "21.8.9", "minecraft": ["1.21.8"], "javaMin": 21, "strategy": "fmlMavenRoot" },
+    { "id": "1.21.10-neoforge", "loader": "neoforge", "loaderMin": "21.10.63", "minecraft": ["1.21.10"], "javaMin": 21, "strategy": "fmlModFolders" },
+    { "id": "1.21.11-neoforge", "loader": "neoforge", "loaderMin": "21.11.42", "minecraft": ["1.21.11"], "javaMin": 21, "strategy": "fmlModFolders" },
+    { "id": "26.1.2-neoforge", "loader": "neoforge", "loaderMin": "26.1.2.71", "minecraft": ["26.1.2"], "javaMin": 25, "strategy": "fmlModFolders" },
+    { "id": "26.2-neoforge", "loader": "neoforge", "loaderMin": "26.2.0.57", "minecraft": ["26.2"], "javaMin": 25, "strategy": "fmlModFolders" },
+    { "id": "1.20.1-forge", "loader": "forge", "loaderMin": "47.4.0", "minecraft": ["1.20.1"], "javaMin": 17, "strategy": "fmlMavenRoot" }
+  ]
+}

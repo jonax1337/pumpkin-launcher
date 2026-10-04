@@ -1,0 +1,20 @@
+[main/ERROR] Missing or unsupported mandatory dependencies:
+	Mod ID: 'neoforge', Requested by: 'pumpkin_friends', Expected range: '[26.2.0.57,)', Actual version: '21.1.255'
+	Mod ID: 'minecraft', Requested by: 'pumpkin_friends', Expected range: '[26.2,26.2]', Actual version: '1.21.1'
+[main/INFO] Launching target 'forgeclient' with arguments [--version, 1.21.1, --gameDir, D:\pumpkin-build\smoke\data\instances\smoke-1.21.1-neoforge\minecraft, --assetsDir, D:\pumpkin-build\smoke\data\assets, --uuid, a58633e45eac3741828deeb25cac0322, --username, PumpkinSmoke, --assetIndex, 17, --accessToken, ❄❄❄❄❄❄❄❄, --clientId, 0, --xuid, 0, --userType, msa, --versionType, release, --width, 854, --height, 480]
+WARN StatusConsoleListener Error parsing URI D:\pumpkin-build\smoke\data\assets\log_configs\client-1.12.xml
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+[11:20:16] [Datafixer Bootstrap/INFO] [mojang/DataFixerBuilder]: 229 Datafixer optimizations took 532 milliseconds
+[11:20:16] [pool-6-thread-1/INFO] [MixinExtras|Service/]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.5).
+[11:20:21] [Render thread/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/D:/pumpkin-build/smoke/data/libraries/net/minecraft/client/1.21.1-20240808.144430/client-1.21.1-20240808.144430-srg.jar%23188!/assets/.mcassetsroot' uses unexpected schema
+[11:20:21] [Render thread/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/D:/pumpkin-build/smoke/data/libraries/net/minecraft/client/1.21.1-20240808.144430/client-1.21.1-20240808.144430-srg.jar%23188!/data/.mcassetsroot' uses unexpected schema
+[11:20:21] [Render thread/INFO] [mojang/YggdrasilAuthenticationService]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[11:20:21] [Render thread/INFO] [minecraft/Minecraft]: Setting user: PumpkinSmoke
+[11:20:21] [Render thread/INFO] [minecraft/Minecraft]: Backend library: LWJGL version 3.3.3+5
+[11:20:21] [Render thread/FATAL] [ne.ne.fm.ModLoader/CORE]: Error during pre-loading phase: Mod pumpkin_friends requires neoforge 26.2.0.57 or above
+Currently, neoforge is 21.1.255
+
+[11:20:21] [Render thread/FATAL] [ne.ne.fm.ModLoader/CORE]: Error during pre-loading phase: Mod pumpkin_friends requires minecraft 26.2
+Currently, minecraft is 1.21.1
+
+[11:20:21] [Render thread/ERROR] [ne.ne.fm.ModLoader/]: Cowardly refusing to send event net.neoforged.neoforge.client.event.sound.SoundEngineLoadEvent to a broken mod state

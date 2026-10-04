@@ -1,4 +1,4 @@
-//! Signale vom Spielstart und -ende an die Freunde-Funktion (gestartet, beendet, Fortschritt, LAN-Port, Mod-Anfragen).
+//! Signale vom Spielstart und -ende an die Freunde-Funktion (gestartet, beendet, Fortschritt, LAN-Port, Mod-Verbindung).
 use std::future::Future;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -32,7 +32,9 @@ pub enum GameSignal {
     ModRequest { instance_id: String, request: ModRequest },
 }
 
-/// Was die Mod verlangt. Die Freunde-IDs sind echte Peer-IDs: die Brücke hat die Aliasse der Mod schon aufgelöst.
+/// Was die Mod im Protokoll 1 verlangte. Die Brücke erzeugt dieses Signal nicht mehr: im Protokoll 2 laufen die Vorgänge
+/// über den `OpHandler` der Brücke (docs/friends/INGAME.md, 5.4), mit Zustimmung je Spielstart. Das Signal bleibt, bis
+/// die Sitzungen es nicht mehr auswerten.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModRequest {
     Share { friend_ids: Vec<String> },

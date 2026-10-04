@@ -133,6 +133,12 @@ impl Hosting {
         let session = lock(&self.session);
         session.as_ref().filter(|session| session.instance_id == instance_id).map(|session| session.id.clone())
     }
+
+    /// Ob die (einzige) geteilte Welt zu einem anderen Spiel dieses Launchers gehört; die eigene Sitzung bleibt außen
+    /// vor und steht im Thema `session` (INGAME 6.4 „Gerade teilt …“).
+    pub(super) fn shares_another(&self, instance_id: &str) -> bool {
+        lock(&self.session).as_ref().is_some_and(|session| session.instance_id != instance_id)
+    }
 }
 
 /// Eine geteilte Welt mit ihren Gästen; nur im Speicher.
@@ -389,11 +395,13 @@ impl FriendSessions {
     }
 
     /// Was `host_start` ohne manuellen Port verlangt, ohne etwas zu starten: die Mod fragt erst danach im Launcher nach
-    /// (SPEC 7.4), damit niemand ein Teilen bestätigt, das danach doch scheitert.
+    /// (SPEC 7.4), damit niemand ein Teilen bestätigt, das danach doch scheitert. Dazu gehört, dass die Gäste das Manifest
+    /// der Instanz annehmen würden.
     pub(super) async fn ensure_hostable(&self, instance_id: &str) -> AppResult<()> {
         let shared = &self.shared;
         let game = hostable_game(shared, instance_id)?;
-        supported_instance(shared, instance_id).await?;
+        let instance = supported_instance(shared, instance_id).await?;
+        ensure_manifest_valid(shared, &instance).await?;
         game.lan.map(drop).ok_or_else(|| invalid(coded!("errors.friends.lanPortUnknown")))
     }
 
@@ -515,6 +523,13 @@ async fn manual_lan(shared: &Shared, instance_id: &str, pid: u32, port: u16) -> 
         PortCheck::NotOwned => Err(invalid(coded!("errors.friends.portNotGame", port = port))),
         PortCheck::NoAnswer => Err(invalid(coded!("errors.friends.lanUnreachable"))),
     }
+}
+
+/// Ein Manifest, das die Gäste verwerfen würden (etwa mit über 500 Mods), macht die Instanz nicht teilbar.
+async fn ensure_manifest_valid(shared: &Shared, instance: &Instance) -> AppResult<()> {
+    let (_, manifest) = build_manifest(shared, instance).await?;
+    manifest::validate(manifest, &shared.versions.index().await?)?;
+    Ok(())
 }
 
 async fn build_manifest(shared: &Shared, instance: &Instance) -> AppResult<(Vec<Mod>, Manifest)> {

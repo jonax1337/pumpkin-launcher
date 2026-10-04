@@ -1,0 +1,297 @@
+name: Mod
+
+# Baut die In-Game-Mod (mod/, docs/friends/INGAME.md 4.3 und 11.2) für jeden Knoten aus mod/nodes.txt: ein Job pro Knoten
+# mit dem JDK, das nodes.txt für ihn nennt. Das Ergebnis ist ein Artefakt "mod-index" mit mod-index.json und allen Jars.
+# Die Compile-Matrix (matrix-compile) übersetzt jeden Knoten außerdem gegen beide Enden und eine Mitte seiner Minecraft-Liste.
+# "verified" setzt der Rauchtest (mod/verified.json, Paket S2): nächtlich und bei Änderungen unter mod/** läuft
+# .github/workflows/mod-smoke.yml; lokale Läufe beschreibt tools/mod-smoke/README.md.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mod/**'
+      - '.github/workflows/mod.yml'
+  pull_request:
+    paths:
+      - 'mod/**'
+      - '.github/workflows/mod.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Die Knotenliste kommt aus mod/nodes.txt; nur dort wird ein Knoten angelegt.
+  nodes:
+    name: Node list
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      fabricMatrix: ${{ steps.matrix.outputs.fabricMatrix }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      # java = JDK des Spiels, gradleJava = JDK, auf dem Gradle läuft (Spalte gradleJdk), family = Cache-Familie.
+      - name: Read nodes.txt
+        id: matrix
+        run: |
+          matrix=$(jq -R -s -c '
+            split("\n")
+            | map(sub("#.*"; "") | gsub("^\\s+|\\s+$"; "") | select(length > 0) | gsub("\\s+"; " ") | split(" "))
+            | map({
+                id: .[0],
+                loader: .[1],
+                java: (.[4] | tonumber),
+                gradleJava: (.[6] | tonumber),
+                family: (if .[1] == "fabric" then "fabric" elif .[1] == "neoforge" then "neoforge" else "legacyforge" end)
+              })' mod/nodes.txt)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          # Der Kit-Demo-Lauf (kit-demo) gibt es nur für Fabric-Knoten.
+          echo "fabricMatrix=$(echo "$matrix" | jq -c 'map(select(.loader == "fabric"))')" >> "$GITHUB_OUTPUT"
+
+  # Schichtenregeln und Skript-Spezifikationen: kein Gradle, kein Minecraft.
+  checks:
+    name: Layer rules and scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: check-conditionals (specification)
+        run: node mod/scripts/check-conditionals.check.mjs
+
+      - name: check-conditionals (tree)
+        run: node mod/scripts/check-conditionals.mjs
+
+      - name: validate-mod-index (specification)
+        run: node mod/scripts/validate-mod-index.check.mjs
+
+      - name: compile-matrix (specification)
+        run: node mod/scripts/compile-matrix.check.mjs
+
+      - name: kit-demo (specification)
+        run: node mod/scripts/kit-demo.check.mjs
+
+  build:
+    name: Node ${{ matrix.id }}
+    needs: [nodes, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.nodes.outputs.matrix) }}
+    defaults:
+      run:
+        working-directory: mod
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      # Volle Temurin-JDKs wie scripts/dev-env.sh; Mojangs mitgelieferte Laufzeiten haben kein javac.
+      - name: Game JDK ${{ matrix.java }}
+        id: game-jdk
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      # Gradle findet die JDKs der Toolchain über PUMPKIN_JDK_<Version> (gradle.properties).
+      - name: Expose the game JDK to Gradle
+        run: echo "PUMPKIN_JDK_${{ matrix.java }}=${{ steps.game-jdk.outputs.path }}" >> "$GITHUB_ENV"
+
+      - name: Gradle JDK ${{ matrix.gradleJava }}
+        if: matrix.gradleJava != matrix.java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.gradleJava }}
+
+      # Ein Cache je Toolchain-Familie, nicht je Knoten: Die aufbereiteten Minecraft-Quellen sind für alle Knoten
+      # einer Familie dieselben. Der Schlüssel hängt nur an dem Build-Skript der Familie.
+      - name: Gradle cache (${{ matrix.family }})
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            mod/.gradle/loom-cache
+          key: gradle-${{ matrix.family }}-${{ hashFiles('mod/gradle.properties', 'mod/gradle/wrapper/gradle-wrapper.properties', format('mod/build-{0}.gradle', matrix.loader)) }}
+          restore-keys: |
+            gradle-${{ matrix.family }}-
+
+      # core/ läuft auf dem JDK des Knotens: so ist belegt, dass es auf jedem Knoten läuft (-Pcore.testJdk).
+      - name: Build and test
+        run: ./gradlew -Pnode=${{ matrix.id }} -Pcore.testJdk=${{ matrix.java }} build modIndex
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mod-node-${{ matrix.id }}
+          path: mod/build/mod-index/
+          if-no-files-found: error
+
+  # Compile-Matrix (INGAME 4.3): jeder Knoten gegen beide Enden und eine Mitte seiner Minecraft-Liste (nodes.txt, Spalte matrix).
+  # Ein Knoten, dessen Quellen gegen eine beanspruchte Version nicht mehr übersetzen, bricht hier statt erst im Spiel.
+  matrix-compile:
+    name: Compile matrix ${{ matrix.id }}
+    needs: [nodes, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.nodes.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      - name: Game JDK ${{ matrix.java }}
+        id: game-jdk
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - name: Expose the game JDK to Gradle
+        run: echo "PUMPKIN_JDK_${{ matrix.java }}=${{ steps.game-jdk.outputs.path }}" >> "$GITHUB_ENV"
+
+      - name: Gradle JDK ${{ matrix.gradleJava }}
+        if: matrix.gradleJava != matrix.java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.gradleJava }}
+
+      # compile-matrix.mjs startet Gradle mit JAVA_HOME = PUMPKIN_JDK_<gradleJdk>. setup-java hat JAVA_HOME auf das zuletzt
+      # eingerichtete JDK gesetzt, und das ist in beiden Fällen das JDK für Gradle.
+      - name: Expose the Gradle JDK
+        run: echo "PUMPKIN_JDK_${{ matrix.gradleJava }}=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Gradle cache (${{ matrix.family }})
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            mod/.gradle/loom-cache
+          key: gradle-${{ matrix.family }}-${{ hashFiles('mod/gradle.properties', 'mod/gradle/wrapper/gradle-wrapper.properties', format('mod/build-{0}.gradle', matrix.loader)) }}
+          restore-keys: |
+            gradle-${{ matrix.family }}-
+
+      - name: Compile against both ends and a middle version
+        run: node mod/scripts/compile-matrix.mjs --node ${{ matrix.id }}
+
+  # Kit-Demo-Lauf (Paket U1): ein Entwicklungs-Client je Fabric-Knoten unter Xvfb mit Software-GL. Der Demo-Bildschirm des Widget-Kits
+  # schreibt "pumpkin_friends kit demo rendered <n> frames at <w>x<h>"; scripts/kit-demo.mjs wartet darauf und beendet den Client.
+  # Best Effort und NICHT bestätigt: Auf dem Windows-Rechner der Entwicklung lief der Lauf für alle vier Knoten, auf einem
+  # GitHub-Runner wurde er noch nie gestartet (offen ist vor allem, ob 26.x unter Software-Rendering startet, INGAME 12 Risiko 2).
+  # Darum continue-on-error: Ein roter Lauf hier sperrt weder den Build noch das Paket.
+  kit-demo:
+    name: Kit demo ${{ matrix.id }}
+    needs: [nodes, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.nodes.outputs.fabricMatrix) }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      - name: Game JDK ${{ matrix.java }}
+        id: game-jdk
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - name: Expose the game JDK to Gradle
+        run: echo "PUMPKIN_JDK_${{ matrix.java }}=${{ steps.game-jdk.outputs.path }}" >> "$GITHUB_ENV"
+
+      - name: Gradle JDK ${{ matrix.gradleJava }}
+        if: matrix.gradleJava != matrix.java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.gradleJava }}
+
+      # Wie bei matrix-compile: Das zuletzt eingerichtete JDK ist das JDK für Gradle.
+      - name: Expose the Gradle JDK
+        run: echo "PUMPKIN_JDK_${{ matrix.gradleJava }}=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Gradle cache (fabric)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            mod/.gradle/loom-cache
+          key: gradle-fabric-${{ hashFiles('mod/gradle.properties', 'mod/gradle/wrapper/gradle-wrapper.properties', 'mod/build-fabric.gradle') }}
+          restore-keys: |
+            gradle-fabric-
+
+      - name: Display and software GL
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libxrandr2 libxxf86vm1 libxcursor1 libxi6
+
+      - name: Run the kit demo
+        run: LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" node mod/scripts/kit-demo.mjs --node ${{ matrix.id }}
+
+  # Ein Artefakt mit mod-index.json und allen Jars; hier greift auch das Gesamtbudget.
+  package:
+    name: Package mod-index
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: mod-node-*
+          path: parts
+
+      - name: Merge the node indexes
+        run: |
+          mkdir out
+          cp parts/*/*.jar out/
+          jq -s '{
+            modVersion: (map(.modVersion) | unique | if length == 1 then .[0] else error("modVersion differs between nodes") end),
+            nodes: (map(.nodes) | add | sort_by(.id))
+          }' parts/*/mod-index.json > out/mod-index.json
+
+      - name: Validate mod-index.json, hashes and size budget
+        run: node mod/scripts/validate-mod-index.mjs out/mod-index.json out
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mod-index
+          path: out/
+          if-no-files-found: error

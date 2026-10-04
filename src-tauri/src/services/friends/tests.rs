@@ -14,7 +14,7 @@ use tokio::sync::{oneshot, Notify};
 use super::code;
 use super::config::{friends_dir, FriendsConfig};
 use super::contract::{
-    Availability, Friend, FriendNotice, FriendRequest, FriendsEnableInput, FriendsSettings, InstanceSummary,
+    Availability, Friend, FriendNotice, FriendRequest, FriendsEnableInput, FriendsSettings, IngameActions, InstanceSummary,
     NetworkStatus, Presence, RequestDirection, RequestRefusal, RequestState, RequestVia, RevokeReason, MAX_FRIENDS,
 };
 use super::control::{open_control, ControlMessage, OpenFrame, SessionControl, WireInvite, WireProfile, PEER_ALPN};
@@ -28,7 +28,7 @@ use super::test_support::{error_key, TempDir};
 use super::{AccountProfile, Friends, Lifecycle, NetOptions, PeerStreamHandler};
 use crate::models::new_id;
 use crate::services::gamesignal::{GameSignal, GameSignals};
-use crate::services::modbridge::ModBridge;
+use crate::services::modbridge::{Expectations, ModBridge};
 use crate::services::p2p::{
     frame, Admission, BiStream, CloseCode, CloseReason, Gate, NetConfig, PeerConn, PeerId, PeerNet, RelayEntry,
     RelayOperator, RelaySelection, RelayTls, DIAL_TIMEOUT,
@@ -596,7 +596,7 @@ async fn trigger(node: &Node, action: Trigger) {
     match action {
         Trigger::Disable => drop(node.friends.disable().await.unwrap()),
         Trigger::AlwaysRelay => {
-            let settings = FriendsSettings { display_name: "Anna".into(), always_relay: true, findable_by_name: false };
+            let settings = FriendsSettings { display_name: "Anna".into(), always_relay: true, findable_by_name: false, ..FriendsSettings::default() };
             drop(node.friends.update_settings(settings).await.unwrap());
         }
         Trigger::Rotate => drop(node.friends.rotate_identity().await.unwrap()),
@@ -704,13 +704,44 @@ async fn enabling_needs_a_microsoft_account_and_starts_the_mod_bridge_until_disa
     let node = Node::started(offline_options(), Arc::new(MemorySecretStore::new()), TempDir::new()).await;
     let refused = node.friends.enable(enable_input("Anna"), None).await;
     assert_eq!(error_key(&refused.unwrap_err()), "errors.friends.msAccountRequired");
-    assert!(node.bridge.launch_env("i1", ModLoader::Fabric).is_empty());
+    assert!(node.bridge.register_launch("i1", Expectations::unconstrained()).is_empty());
 
     node.friends.enable(enable_input("Anna"), Some(account("Anna"))).await.unwrap();
-    assert!(!node.bridge.launch_env("i1", ModLoader::Fabric).is_empty(), "bridge runs with the feature");
+    assert!(!node.bridge.register_launch("i1", Expectations::unconstrained()).is_empty(), "bridge runs with the feature");
 
     node.friends.disable().await.unwrap();
-    assert!(node.bridge.launch_env("i1", ModLoader::Fabric).is_empty(), "bridge stops with the feature");
+    assert!(node.bridge.register_launch("i1", Expectations::unconstrained()).is_empty(), "bridge stops with the feature");
+}
+
+#[tokio::test]
+async fn the_ingame_settings_start_on_and_asking_and_survive_a_restart() {
+    let node = Node::started(offline_options(), Arc::new(MemorySecretStore::new()), TempDir::new()).await;
+    node.friends.enable(enable_input("Anna"), Some(account("Anna"))).await.unwrap();
+    let defaults = node.friends.state().settings;
+    assert!(defaults.ingame_menu);
+    assert_eq!(defaults.ingame_actions, IngameActions::Ask);
+
+    let changed = FriendsSettings { ingame_menu: false, ingame_actions: IngameActions::Allow, ..defaults };
+    node.friends.update_settings(changed.clone()).await.unwrap();
+    let Node { secrets, _dir: dir, .. } = node;
+    let restarted = Node::started(offline_options(), secrets, dir).await;
+
+    assert_eq!(restarted.friends.state().settings, changed);
+}
+
+#[tokio::test]
+async fn turning_friends_off_and_on_again_keeps_the_ingame_settings() {
+    let node = Node::started(offline_options(), Arc::new(MemorySecretStore::new()), TempDir::new()).await;
+    node.friends.enable(enable_input("Anna"), Some(account("Anna"))).await.unwrap();
+    let state = node.friends.state();
+    let changed = FriendsSettings { ingame_menu: false, ingame_actions: IngameActions::Allow, ..state.settings };
+    node.friends.update_settings(changed).await.unwrap();
+
+    node.friends.disable().await.unwrap();
+    let state = node.friends.enable(enable_input("Anna"), Some(account("Anna"))).await.unwrap();
+
+    assert!(!state.settings.ingame_menu);
+    assert_eq!(state.settings.ingame_actions, IngameActions::Allow);
 }
 
 #[tokio::test]

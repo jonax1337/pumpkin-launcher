@@ -1,0 +1,348 @@
+# Members the compat layer of the Pumpkin Friends mod needs (docs/friends/INGAME.md 4.1, 4.4, 5, 6, 7).
+#
+# Format, one entry per line:
+#   Class#member [@used]
+#     Class   fully qualified, or just the end of the name (Screen, Button.Builder, SystemToast.SystemToastId)
+#     member  a method, a field, or <init> for constructors; inherited members are resolved through the hierarchy
+#     @used   the compat layer / ui calls or overrides it, so a change in its descriptor is a real node break point
+#   @group Name starts a table group, a leading # is a comment.
+# Names that exist only in some eras (render vs extractRenderState) are separate lines; each version has one of them.
+
+@group Screen: lifecycle and rendering
+net.minecraft.client.gui.screens.Screen#<init> @used
+Screen#init @used
+Screen#rebuildWidgets @used
+Screen#repositionElements @used
+Screen#resize
+Screen#tick @used
+Screen#added
+Screen#removed
+Screen#onClose @used
+Screen#shouldCloseOnEsc @used
+Screen#isPauseScreen
+Screen#render @used
+Screen#extractRenderState @used
+Screen#renderBackground @used
+Screen#extractBackground @used
+Screen#renderTransparentBackground
+Screen#renderBlurredBackground
+Screen#renderMenuBackground
+Screen#getTitle
+Screen#getFont
+Screen#minecraft @used
+Screen#font @used
+Screen#width @used
+Screen#height @used
+Screen#title
+
+@group Screen: input
+Screen#keyPressed @used
+Screen#keyReleased
+Screen#charTyped
+Screen#mouseClicked
+Screen#mouseReleased
+Screen#mouseDragged
+Screen#mouseScrolled @used
+Screen#mouseMoved
+Screen#isMouseOver
+Screen#setFocused
+Screen#getFocused
+Screen#setInitialFocus @used
+
+@group Screen: widgets and narration
+Screen#addRenderableWidget @used
+Screen#addRenderableOnly @used
+Screen#addWidget
+Screen#removeWidget @used
+Screen#clearWidgets @used
+Screen#children
+Screen#updateNarratedWidget
+Screen#updateNarrationState
+Screen#triggerImmediateNarration
+Screen#scheduleNarration
+net.minecraft.client.gui.components.Renderable#render
+net.minecraft.client.gui.components.Renderable#extractRenderState
+net.minecraft.client.gui.narration.NarrationElementOutput#add
+net.minecraft.client.gui.narration.NarrationElementOutput#nest
+net.minecraft.client.gui.narration.NarratedElementType#TITLE
+
+@group Pause menu, title screen, other screens
+PauseScreen#<init>
+PauseScreen#init @used
+PauseScreen#showsPauseMenu @used
+PauseScreen#createPauseMenu
+PauseScreen#disconnectFromWorld
+PauseScreen#render
+PauseScreen#extractRenderState
+TitleScreen#<init> @used
+TitleScreen#init
+TitleScreen#render
+TitleScreen#extractRenderState
+net.minecraft.client.gui.screens.GenericDirtMessageScreen#<init>
+net.minecraft.client.gui.screens.GenericMessageScreen#<init>
+net.minecraft.client.gui.screens.ProgressScreen#<init>
+net.minecraft.client.gui.screens.ConfirmScreen#<init> @used
+net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen#<init>
+net.minecraft.client.gui.screens.ShareToLanScreen#<init>
+net.minecraft.client.gui.screens.WorldOptionsScreen#<init>
+
+@group Widgets: Button, Checkbox, text
+Button#builder @used
+Button#<init>
+Button.Builder#pos
+Button.Builder#size
+Button.Builder#width @used
+Button.Builder#bounds @used
+Button.Builder#tooltip
+Button.Builder#build @used
+Button#onPress
+Button#setMessage @used
+Button#getMessage
+AbstractWidget#<init>
+AbstractWidget#render
+AbstractWidget#renderWidget
+AbstractWidget#extractRenderState
+AbstractWidget#extractWidgetRenderState
+AbstractWidget#setX @used
+AbstractWidget#setY @used
+AbstractWidget#setPosition
+AbstractWidget#getX @used
+AbstractWidget#getY @used
+AbstractWidget#setWidth @used
+AbstractWidget#setHeight
+AbstractWidget#getWidth @used
+AbstractWidget#getHeight @used
+AbstractWidget#setTooltip
+AbstractWidget#setFocused @used
+AbstractWidget#isFocused
+AbstractWidget#active @used
+AbstractWidget#visible @used
+AbstractWidget#isMouseOver
+AbstractWidget#updateWidgetNarration
+AbstractWidget#createNarrationMessage
+AbstractWidget#mouseClicked
+AbstractWidget#onClick
+Checkbox#builder @used
+Checkbox#<init>
+Checkbox#selected @used
+Checkbox.Builder#pos @used
+Checkbox.Builder#onValueChange @used
+Checkbox.Builder#selected @used
+Checkbox.Builder#maxWidth
+Checkbox.Builder#build @used
+StringWidget#<init>
+StringWidget#setMaxWidth
+StringWidget#alignLeft
+StringWidget#setColor
+AbstractStringWidget#setColor
+net.minecraft.client.gui.components.MultiLineTextWidget#<init>
+net.minecraft.client.gui.components.Tooltip#create
+
+@group Widgets: EditBox
+EditBox#<init> @used
+EditBox#setValue @used
+EditBox#getValue @used
+EditBox#setMaxLength @used
+EditBox#setHint @used
+EditBox#setFilter
+EditBox#setResponder @used
+EditBox#setEditable @used
+EditBox#setCanLoseFocus
+EditBox#setSuggestion
+EditBox#insertText
+EditBox#keyPressed
+EditBox#charTyped
+EditBox#setFocused @used
+EditBox#getCursorPosition
+EditBox#setCursorPosition
+
+@group Scrolling list (vanilla), for reference only
+net.minecraft.client.gui.components.AbstractSelectionList#<init>
+net.minecraft.client.gui.components.AbstractSelectionList#render
+net.minecraft.client.gui.components.AbstractSelectionList#renderWidget
+net.minecraft.client.gui.components.AbstractSelectionList#extractWidgetRenderState
+net.minecraft.client.gui.components.AbstractSelectionList#mouseScrolled
+net.minecraft.client.gui.components.AbstractSelectionList#setScrollAmount
+net.minecraft.client.gui.components.AbstractSelectionList#scrollAmount
+net.minecraft.client.gui.components.AbstractSelectionList#getScrollAmount
+net.minecraft.client.gui.components.AbstractSelectionList#setRectangle
+net.minecraft.client.gui.components.AbstractSelectionList#updateSizeAndPosition
+net.minecraft.client.gui.components.AbstractSelectionList#addEntry
+net.minecraft.client.gui.components.AbstractSelectionList#clearEntries
+net.minecraft.client.gui.components.AbstractSelectionList#getRowWidth
+net.minecraft.client.gui.components.AbstractSelectionList#getMaxScroll
+net.minecraft.client.gui.components.ContainerObjectSelectionList#<init>
+net.minecraft.client.gui.components.AbstractSelectionList.Entry#render
+net.minecraft.client.gui.components.AbstractSelectionList.Entry#renderContent
+net.minecraft.client.gui.components.AbstractSelectionList.Entry#extractContent
+net.minecraft.client.gui.components.ContainerObjectSelectionList.Entry#children
+net.minecraft.client.gui.components.ContainerObjectSelectionList.Entry#narratables
+
+@group Font, drawing, text components
+Font#width @used
+Font#split @used
+Font#lineHeight @used
+Font#wordWrapHeight
+Font#plainSubstrByWidth @used
+Font#substrByWidth
+GuiGraphics#drawString @used
+GuiGraphics#drawCenteredString @used
+GuiGraphics#drawWordWrap
+GuiGraphics#fill @used
+GuiGraphics#enableScissor @used
+GuiGraphics#disableScissor @used
+GuiGraphics#renderTooltip
+GuiGraphicsExtractor#text @used
+GuiGraphicsExtractor#centeredText @used
+GuiGraphicsExtractor#textWithWordWrap
+GuiGraphicsExtractor#fill @used
+GuiGraphicsExtractor#enableScissor @used
+GuiGraphicsExtractor#disableScissor @used
+GuiGraphicsExtractor#setTooltipForNextFrame
+net.minecraft.network.chat.Component#literal @used
+net.minecraft.network.chat.Component#translatable @used
+net.minecraft.network.chat.Component#empty @used
+net.minecraft.network.chat.Component#nullToEmpty
+net.minecraft.network.chat.Component#getString @used
+net.minecraft.network.chat.MutableComponent#withStyle @used
+net.minecraft.network.chat.MutableComponent#append @used
+net.minecraft.ChatFormatting#GRAY @used
+
+@group Minecraft: screens, main thread, leaving a world
+net.minecraft.client.Minecraft#getInstance @used
+Minecraft#setScreen @used
+Minecraft#setScreenAndShow
+Minecraft#gui
+Gui#setScreen @used
+Gui#screen @used
+Minecraft#screen @used
+Minecraft#execute @used
+Minecraft#isSameThread
+Minecraft#getSingleplayerServer @used
+Minecraft#hasSingleplayerServer
+Minecraft#isLocalServer @used
+Minecraft#isSingleplayer
+Minecraft#getCurrentServer @used
+Minecraft#getConnection
+Minecraft#level @used
+Minecraft#player
+Minecraft#font @used
+Minecraft#getWindow
+Minecraft#clearLevel @used
+Minecraft#clearClientLevel
+Minecraft#disconnect @used
+Minecraft#disconnectFromWorld @used
+Minecraft#disconnectWithSavingScreen @used
+Minecraft#disconnectWithProgressScreen
+Minecraft#stop
+net.minecraft.client.multiplayer.ClientLevel#disconnect @used
+net.minecraft.client.multiplayer.ClientLevel#DEFAULT_QUIT_MESSAGE
+
+@group Toasts
+Minecraft#getToasts @used
+Minecraft#getToastManager @used
+Gui#toastManager @used
+net.minecraft.client.gui.components.toasts.ToastComponent#addToast @used
+net.minecraft.client.gui.components.toasts.ToastManager#addToast @used
+Toast#render
+Toast#extractRenderState
+Toast#getWantedVisibility
+Toast#update
+Toast#getToken
+Toast#width
+Toast#height
+SystemToast#<init>
+SystemToast#add @used
+SystemToast#addOrUpdate
+SystemToast#reset
+SystemToast.SystemToastId#<init> @used
+SystemToast.SystemToastIds#PERIODIC_NOTIFICATION @used
+SystemToast.SystemToastId#NARRATOR_TOGGLE
+SystemToast.SystemToastId#PERIODIC_NOTIFICATION @used
+SystemToast.SystemToastId#WORLD_BACKUP
+SystemToast.SystemToastId#UNSECURE_SERVER_WARNING
+SystemToast.SystemToastId#FRIEND_SYSTEM_NOTIFICATION
+net.minecraft.client.gui.components.toasts.FriendToast#<init>
+net.minecraft.client.gui.components.toasts.FriendToast#add
+net.minecraft.world.item.component.ResolvableProfile#createUnresolved
+
+@group Publish to LAN
+IntegratedServer#publishServer @used
+IntegratedServer#isPublished @used
+IntegratedServer#getPort @used
+IntegratedServer#unpublishServer @used
+IntegratedServer#stopServer
+IntegratedServer#getMultiplayerScope
+net.minecraft.server.MinecraftServer#publishServer
+net.minecraft.server.MinecraftServer.MultiplayerScope#LAN @used
+net.minecraft.server.MinecraftServer#isPublished
+net.minecraft.server.MinecraftServer#unpublishServer
+net.minecraft.server.MinecraftServer#getPort
+net.minecraft.server.MinecraftServer#isRunning
+net.minecraft.server.MinecraftServer#isSingleplayer
+net.minecraft.server.MinecraftServer#isDedicatedServer
+net.minecraft.server.MinecraftServer#getPlayerList
+net.minecraft.server.MinecraftServer#execute
+net.minecraft.server.MinecraftServer#getWorldData
+net.minecraft.server.MinecraftServer#getMotd
+net.minecraft.server.MinecraftServer#getDefaultGameType @used
+net.minecraft.util.HttpUtil#getAvailablePort @used
+
+@group Connecting
+ConnectScreen#startConnecting @used
+ServerAddress#<init> @used
+ServerAddress#parseString
+ServerAddress#getHost
+ServerAddress#getPort
+ServerData#<init> @used
+ServerData.Type#LAN @used
+ServerData.Type#OTHER @used
+ServerData#name
+ServerData#ip
+net.minecraft.client.multiplayer.TransferState#<init>
+
+@group Clipboard
+Minecraft#keyboardHandler @used
+KeyboardHandler#setClipboard @used
+KeyboardHandler#getClipboard
+com.mojang.blaze3d.platform.ClipboardManager#setClipboard
+com.mojang.blaze3d.platform.ClipboardManager#getClipboard
+
+@group Key mappings (R-B)
+KeyMapping#<init> @used
+KeyMapping.Category#<init>
+KeyMapping.Category#register @used
+KeyMapping#consumeClick @used
+KeyMapping#isDown
+KeyMapping#getName
+KeyMapping#setKey
+com.mojang.blaze3d.platform.InputConstants#UNKNOWN @used
+com.mojang.blaze3d.platform.InputConstants.Type#KEYSYM
+com.mojang.blaze3d.platform.InputConstants.Type#KEYBOARD
+Options#keyMappings
+Options#load
+Minecraft#options
+
+@group Input event types (1.21.9+)
+net.minecraft.client.input.KeyEvent#key
+net.minecraft.client.input.KeyEvent#<init>
+net.minecraft.client.input.MouseButtonEvent#<init>
+net.minecraft.client.input.MouseButtonEvent#x
+net.minecraft.client.input.MouseButtonEvent#button
+net.minecraft.client.input.CharacterEvent#codepoint
+net.minecraft.client.gui.components.events.GuiEventListener#mouseClicked
+net.minecraft.client.gui.components.events.GuiEventListener#keyPressed
+net.minecraft.client.gui.components.events.GuiEventListener#charTyped
+net.minecraft.client.gui.components.events.GuiEventListener#mouseScrolled
+
+@group Identifiers and version info
+net.minecraft.resources.ResourceLocation#fromNamespaceAndPath
+net.minecraft.resources.ResourceLocation#parse
+net.minecraft.resources.ResourceLocation#withDefaultNamespace
+net.minecraft.resources.Identifier#fromNamespaceAndPath
+net.minecraft.resources.Identifier#parse
+net.minecraft.resources.Identifier#withDefaultNamespace
+net.minecraft.SharedConstants#getCurrentVersion
+net.minecraft.WorldVersion#getName
+net.minecraft.WorldVersion#name
+net.minecraft.WorldVersion#id

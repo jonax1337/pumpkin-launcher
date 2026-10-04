@@ -23,12 +23,15 @@ use super::limits::{OPEN_FRAME_LIMIT, REQUEST_FRAME_LIMIT};
 use super::manifest::{self, Manifest, ManifestError};
 use super::matching::{self, Classification, DiskHashes};
 use super::mcproto::{self, GUEST_WINDOW};
+use super::mod_link;
 use super::session_events::SessionEvent;
 use super::sessions::{FriendSessions, Shared};
 use super::{Friends, Lifecycle};
 use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::{new_id, Instance};
+use crate::services::modbridge::protocol::ModNotify;
+use crate::services::modbridge::topics::{JoinPhase, JoinView};
 use crate::services::p2p::tunnel::{ListenerLimits, LocalListener, TunnelError};
 use crate::services::p2p::{frame, BiStream, FrameError, PeerConn, PeerId};
 use crate::services::{blocking, lock, sockowner};
@@ -42,6 +45,8 @@ const REQUEST_WAIT: Duration = Duration::from_secs(30);
 const STATUS_INTERVAL: Duration = Duration::from_secs(5);
 /// So oft wird während der Schonfrist nachgesehen, ob die Verbindung zum Gastgeber wieder steht.
 const HOST_POLL: Duration = Duration::from_millis(250);
+/// Bei einem Beitritt aus dem laufenden Spiel muss die erste gültige Verbindung binnen dieser Zeit kommen (INGAME 7).
+const HERE_FIRST_CONNECTION: Duration = Duration::from_secs(120);
 
 /// Zeitgrenzen eines Beitritts; die App nimmt [`JoinTimers::production`], Tests kurze Werte.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,6 +128,10 @@ pub(super) struct Joins {
 
 struct ActiveJoin {
     ticket: JoinTicket,
+    /// Der Name des Gastgebers, wie ihn die Mod zeigt.
+    host_name: String,
+    /// Wie weit der Beitritt ist, für das Thema `join` der Mod.
+    state: JoinState,
     /// Prozess-ID des Spiels, sobald es läuft; vorher gehört keine lokale Verbindung zu ihm.
     game: Arc<OnceLock<u32>>,
     inputs: mpsc::UnboundedSender<Input>,
@@ -159,6 +168,38 @@ impl Joins {
             let _ = join.inputs.send(Input::Spawned);
         }
     }
+
+    /// Ob ein Beitritt läuft, gleich von welcher Instanz.
+    pub(super) fn is_active(&self) -> bool {
+        lock(&self.current).is_some()
+    }
+
+    /// Die Kennung des Beitritts, den die Spiel-Instanz gerade macht.
+    fn join_of_instance(&self, instance_id: &str) -> Option<(String, JoinState)> {
+        let current = lock(&self.current);
+        let join = current.as_ref().filter(|join| join.ticket.instance_id == instance_id)?;
+        Some((join.ticket.join_id.clone(), join.state.clone()))
+    }
+
+    /// Der Beitritt dieser Instanz, wie die Mod ihn sieht (Thema `join`); `None`, wenn sie keinem beigetreten ist.
+    pub(super) fn view_for_mod(&self, instance_id: &str) -> Option<JoinView> {
+        let current = lock(&self.current);
+        let join = current.as_ref().filter(|join| join.ticket.instance_id == instance_id)?;
+        let (state, path, rtt_ms) = match &join.state {
+            JoinState::WaitingForGame => (JoinPhase::WaitingForGame, None, None),
+            JoinState::Connecting => (JoinPhase::Connecting, None, None),
+            JoinState::Connected { path, rtt_ms } => (JoinPhase::Connected, Some(*path), *rtt_ms),
+            JoinState::Ended { .. } => return None,
+        };
+        Some(JoinView { invite_id: join.ticket.invite_id.clone(), host_name: join.host_name.clone(), state, path, rtt_ms })
+    }
+
+    fn remember(&self, join_id: &str, state: &JoinState) {
+        let mut current = lock(&self.current);
+        if let Some(join) = current.as_mut().filter(|join| join.ticket.join_id == join_id) {
+            join.state = state.clone();
+        }
+    }
 }
 
 /// Wie ein Beitritt endet: mit Ereignis an die Oberfläche oder still (die App beendet sich).
@@ -178,6 +219,14 @@ fn end_join(shared: &Shared, applies: impl FnOnce(&ActiveJoin) -> bool, ending: 
     join.stop.cancel();
     if let Ending::Announced(reason) = ending {
         emit_state(shared, &join.ticket, JoinState::Ended { reason });
+        tell_mod_about_the_end(shared, &join.ticket.instance_id, reason);
+    }
+}
+
+/// Wer selbst geht (`left`), braucht keinen Toast; jedes andere Ende erfährt die Mod des Beitritts.
+fn tell_mod_about_the_end(shared: &Shared, instance_id: &str, reason: SessionEnd) {
+    if reason != SessionEnd::Left {
+        mod_link::notify(shared, instance_id, ModNotify::JoinEnded, None);
     }
 }
 
@@ -252,6 +301,67 @@ impl FriendSessions {
         end_by_id(&self.shared, join_id, SessionEnd::Left);
         Ok(())
     }
+
+    /// Der Abgleich der Einladung mit allen Instanzen, die laufende vorn (INGAME 7, Schritt 3): die Mod fragt für das Spiel,
+    /// in dem sie läuft. Nichts wird geladen.
+    pub(super) async fn plan_with_running_first(
+        &self,
+        invite_id: &str,
+        running_instance_id: &str,
+    ) -> AppResult<(Received, JoinPlan)> {
+        let shared = &self.shared;
+        shared.ensure_enabled()?;
+        let received = shared.invites.open_invite(invite_id)?;
+        shared.instances.get(running_instance_id)?;
+        let mut instances = shared.instances.list();
+        instances.sort_by_key(|instance| instance.id != running_instance_id);
+        let plan = plan_for(shared, &received, instances).await?;
+        Ok((received, plan))
+    }
+
+    /// Der Beitritt aus dem laufenden Spiel (INGAME 7, Schritt 4): ein Zuhörer an einer Loopback-Adresse, dem nur der Prozess
+    /// `game_pid` gehört. Das Spiel läuft schon, also gibt es keine Wartezeit auf den Start, und die erste Verbindung muss
+    /// binnen [`HERE_FIRST_CONNECTION`] kommen. Vorher hat der Aufrufer geprüft, dass nichts anderes beitritt.
+    pub(super) async fn start_join_here(
+        &self,
+        received: &Received,
+        instance_id: &str,
+        game_pid: u32,
+    ) -> AppResult<(JoinTicket, SocketAddr)> {
+        let shared = &self.shared;
+        let listener = LocalListener::bind(join_ip()?).await?;
+        let address = listener.addr;
+        let ticket = JoinTicket {
+            join_id: new_id(),
+            invite_id: received.invite.id.clone(),
+            instance_id: instance_id.to_owned(),
+            address: address.to_string(),
+        };
+        start_join_with(shared, received, ticket.clone(), listener, here_timers(shared.timers));
+        shared.joins.spawned(&ticket.join_id, game_pid);
+        Ok((ticket, address))
+    }
+
+    /// Das Spiel der Instanz verlässt die Welt, der es beigetreten ist; ohne Beitritt gibt es nichts zu tun.
+    pub(super) fn leave_join_of_instance(&self, instance_id: &str) {
+        if let Some((join_id, _)) = self.shared.joins.join_of_instance(instance_id) {
+            end_by_id(&self.shared, &join_id, SessionEnd::Left);
+        }
+    }
+
+    /// Die Mod meldet, dass das Spiel nicht in die Welt kam. Hat der Tunnel schon eine gültige Verbindung, irrt sie sich.
+    pub(super) fn fail_join_of_instance(&self, instance_id: &str) {
+        let Some((join_id, state)) = self.shared.joins.join_of_instance(instance_id) else { return };
+        if !matches!(state, JoinState::Connected { .. }) {
+            end_by_id(&self.shared, &join_id, SessionEnd::Error);
+        }
+    }
+}
+
+/// Die Zeiten eines Beitritts aus dem laufenden Spiel: die erste Verbindung kommt binnen zwei Minuten oder gar nicht,
+/// kürzere Vorgaben (Tests) bleiben.
+fn here_timers(timers: JoinTimers) -> JoinTimers {
+    JoinTimers { first_connection: timers.first_connection.min(HERE_FIRST_CONNECTION), ..timers }
 }
 
 fn peer_offline(received: &Received) -> AppError {
@@ -358,11 +468,22 @@ fn refused(code: &str) -> AppError {
 
 /// Startet Zuhörer, Zeitplan und die Beobachtung des Gastgebers und setzt den Beitritt an die Stelle des laufenden.
 pub(super) fn start_join(shared: &Arc<Shared>, received: &Received, ticket: JoinTicket, listener: LocalListener) {
+    start_join_with(shared, received, ticket, listener, shared.timers);
+}
+
+fn start_join_with(shared: &Arc<Shared>, received: &Received, ticket: JoinTicket, listener: LocalListener, timers: JoinTimers) {
     let (inputs, receiver) = mpsc::unbounded_channel();
-    let join = ActiveJoin { ticket, game: Arc::new(OnceLock::new()), inputs, stop: CancellationToken::new() };
+    let join = ActiveJoin {
+        ticket,
+        host_name: received.invite.from_name.clone(),
+        state: JoinState::WaitingForGame,
+        game: Arc::new(OnceLock::new()),
+        inputs,
+        stop: CancellationToken::new(),
+    };
     serve_listener(shared, received, &join, listener);
     let (weak, host, stop) = (Arc::downgrade(shared), received.host, &join.stop);
-    tokio::spawn(stop.clone().run_until_cancelled_owned(drive(weak.clone(), join.ticket.clone(), host, receiver)));
+    tokio::spawn(stop.clone().run_until_cancelled_owned(drive(weak.clone(), join.ticket.clone(), host, receiver, timers)));
     tokio::spawn(stop.clone().run_until_cancelled_owned(watch_host(weak, join.ticket.join_id.clone(), host)));
     replace_join(shared, join);
 }
@@ -485,8 +606,13 @@ enum Wake {
 }
 
 /// Führt den Zeitplan (SPEC 6.2) und meldet die Zustände; endet der Plan, endet der Beitritt mit `error`.
-async fn drive(shared: Weak<Shared>, ticket: JoinTicket, host: PeerId, mut inputs: mpsc::UnboundedReceiver<Input>) {
-    let Some(timers) = shared.upgrade().map(|shared| shared.timers) else { return };
+async fn drive(
+    shared: Weak<Shared>,
+    ticket: JoinTicket,
+    host: PeerId,
+    mut inputs: mpsc::UnboundedReceiver<Input>,
+    timers: JoinTimers,
+) {
     let mut clock = JoinClock::start(timers, Instant::now());
     let mut tunnel_open = false;
     loop {
@@ -503,7 +629,7 @@ async fn drive(shared: Weak<Shared>, ticket: JoinTicket, host: PeerId, mut input
             Wake::Input(Input::Progress) => clock.progressed(Instant::now()),
             Wake::Input(Input::Spawned) => {
                 clock.spawned(Instant::now());
-                emit_state(&shared, &ticket, JoinState::Connecting);
+                announce(&shared, &ticket, JoinState::Connecting);
             }
             Wake::Input(Input::FirstConnection) => clock.connected(),
             Wake::Input(Input::TunnelOpened) => {
@@ -526,7 +652,13 @@ fn report_connected(shared: &Shared, ticket: &JoinTicket, host: &PeerId) {
     let Some(conn) = shared.friends.connection(host) else { return };
     let Some(path) = conn.path() else { return };
     let rtt_ms = conn.rtt().map(|rtt| u32::try_from(rtt.as_millis()).unwrap_or(u32::MAX));
-    emit_state(shared, ticket, JoinState::Connected { path, rtt_ms });
+    announce(shared, ticket, JoinState::Connected { path, rtt_ms });
+}
+
+/// Merkt sich den Stand für die Mod und meldet ihn der Oberfläche.
+fn announce(shared: &Shared, ticket: &JoinTicket, state: JoinState) {
+    shared.joins.remember(&ticket.join_id, &state);
+    emit_state(shared, ticket, state);
 }
 
 /// Endet mit `hostOffline`, wenn die Verbindung zum Gastgeber länger als die Schonfrist fehlt (SPEC 6.2).
@@ -622,6 +754,16 @@ mod tests {
             (timers.spawn_wait, timers.spawn_wait_cap, timers.first_connection, timers.host_offline_grace),
             (10 * MINUTE, 30 * MINUTE, 10 * MINUTE, Duration::from_secs(30))
         );
+    }
+
+    #[test]
+    fn a_join_from_the_running_game_waits_two_minutes_for_the_first_connection_at_most() {
+        let production = here_timers(JoinTimers::production());
+        let quick = JoinTimers { first_connection: Duration::from_secs(3), ..JoinTimers::production() };
+
+        assert_eq!(production.first_connection, Duration::from_secs(120));
+        assert_eq!((production.spawn_wait, production.host_offline_grace), (10 * MINUTE, Duration::from_secs(30)));
+        assert_eq!(here_timers(quick).first_connection, Duration::from_secs(3));
     }
 
     #[test]

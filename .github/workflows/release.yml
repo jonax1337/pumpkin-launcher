@@ -1,6 +1,8 @@
 name: Release
 
-# Tag v* pushen → Installer für Windows, Linux und macOS plus ein gemeinsames latest.json als Entwurf. Ablauf: docs/RELEASING.md
+# Tag v* pushen → zuerst die In-Game-Mod (alle Knoten aus mod/nodes.txt, wie mod.yml), dann die Installer für
+# Windows, Linux und macOS, die die Mod-Jars über PUMPKIN_MOD_DIST einbetten, plus ein gemeinsames latest.json
+# als Entwurf. Ablauf: docs/RELEASING.md
 on:
   push:
     tags: ["v*"]
@@ -27,13 +29,15 @@ jobs:
           status=0
           check() {
             if [ "$2" != "$tag" ]; then
-              echo "::error file=$1::$1 has version $2, but the tag is $GITHUB_REF_NAME. Bump all three files (see docs/RELEASING.md)."
+              echo "::error file=$1::$1 has version $2, but the tag is $GITHUB_REF_NAME. Bump all four files (see docs/RELEASING.md)."
               status=1
             fi
           }
           check package.json "$(node -p "require('./package.json').version")"
           check src-tauri/tauri.conf.json "$(node -p "require('./src-tauri/tauri.conf.json').version")"
           check src-tauri/Cargo.toml "$(grep -m1 '^version = ' src-tauri/Cargo.toml | cut -d '"' -f2)"
+          # Die Mod-Version ist immer die Launcher-Version (INGAME 3.2); modVersion und jeder Jar-Name tragen sie.
+          check mod/gradle.properties "$(grep -m1 '^version=' mod/gradle.properties | cut -d= -f2)"
           exit $status
 
       # checkout legt den Tag ohne Nachricht an; die Nachricht des annotierten Tags sind die Versionshinweise.
@@ -59,9 +63,125 @@ jobs:
             -f name="Pumpkin Launcher $GITHUB_REF_NAME" -f body="$NOTES" -F draft=true --jq .id)
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
+  # Die Mod-Jars für die Einbettung: derselbe Weg wie mod.yml (Knotenliste aus mod/nodes.txt, ein Job je Knoten,
+  # Zusammenführen und Prüfen), hier ohne die CI-Gates (Schichtregeln, Compile-Matrix, Kit-Demo) — der Release-Tag
+  # braucht nur die Jars, und der `build`-Task jedes Knotens kompiliert und testet sowieso.
+  mod-nodes:
+    name: Mod node list
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      # java = JDK des Spiels, gradleJava = JDK, auf dem Gradle läuft (Spalte gradleJdk), family = Cache-Familie.
+      - name: Read nodes.txt
+        id: matrix
+        run: |
+          matrix=$(jq -R -s -c '
+            split("\n")
+            | map(sub("#.*"; "") | gsub("^\\s+|\\s+$"; "") | select(length > 0) | gsub("\\s+"; " ") | split(" "))
+            | map({
+                id: .[0],
+                loader: .[1],
+                java: (.[4] | tonumber),
+                gradleJava: (.[6] | tonumber),
+                family: (if .[1] == "fabric" then "fabric" elif .[1] == "neoforge" then "neoforge" else "legacyforge" end)
+              })' mod/nodes.txt)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  mod-build:
+    name: Mod node ${{ matrix.id }}
+    needs: mod-nodes
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.mod-nodes.outputs.matrix) }}
+    defaults:
+      run:
+        working-directory: mod
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      - name: Game JDK ${{ matrix.java }}
+        id: game-jdk
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - name: Expose the game JDK to Gradle
+        run: echo "PUMPKIN_JDK_${{ matrix.java }}=${{ steps.game-jdk.outputs.path }}" >> "$GITHUB_ENV"
+
+      - name: Gradle JDK ${{ matrix.gradleJava }}
+        if: matrix.gradleJava != matrix.java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.gradleJava }}
+
+      # Ein Cache je Toolchain-Familie wie in mod.yml; auf einem Tag-Push bringt vor allem restore-keys etwas.
+      - name: Gradle cache (${{ matrix.family }})
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            mod/.gradle/loom-cache
+          key: gradle-${{ matrix.family }}-${{ hashFiles('mod/gradle.properties', 'mod/gradle/wrapper/gradle-wrapper.properties', format('mod/build-{0}.gradle', matrix.loader)) }}
+          restore-keys: |
+            gradle-${{ matrix.family }}-
+
+      - name: Build and test
+        run: ./gradlew -Pnode=${{ matrix.id }} -Pcore.testJdk=${{ matrix.java }} build modIndex
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mod-node-${{ matrix.id }}
+          path: mod/build/mod-index/
+          if-no-files-found: error
+
+  mod-package:
+    name: Mod package
+    needs: mod-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: mod-node-*
+          path: parts
+
+      - name: Merge the node indexes
+        run: |
+          mkdir out
+          cp parts/*/*.jar out/
+          jq -s '{
+            modVersion: (map(.modVersion) | unique | if length == 1 then .[0] else error("modVersion differs between nodes") end),
+            nodes: (map(.nodes) | add | sort_by(.id))
+          }' parts/*/mod-index.json > out/mod-index.json
+
+      - name: Validate mod-index.json, hashes and size budget
+        run: node mod/scripts/validate-mod-index.mjs out/mod-index.json out
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mod-index
+          path: out/
+          if-no-files-found: error
+
   build:
     name: Build (${{ matrix.platform }})
-    needs: prepare
+    needs: [prepare, mod-package]
     # Der Signaturschlüssel liegt als Secret dieser Umgebung; ihre Pflichtprüfer geben jeden Build frei (docs/RELEASING.md).
     environment: release
     permissions:
@@ -100,6 +220,25 @@ jobs:
         with:
           workspaces: src-tauri
 
+      - name: Download the mod dist
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: mod-index
+          path: mod-dist
+
+      # Einbettung ist Pflicht: Der Index muss gültig sein und die Version des Tags tragen (die Mod-Version ist
+      # immer die Launcher-Version, INGAME 3.2), sonst steht später "in diesem Build nicht verfügbar" im Spiel.
+      - name: Check the mod dist (index and version)
+        shell: bash
+        run: |
+          node mod/scripts/validate-mod-index.mjs mod-dist/mod-index.json mod-dist
+          index_version=$(jq -r .modVersion mod-dist/mod-index.json)
+          if [ "$index_version" != "${GITHUB_REF_NAME#v}" ]; then
+            echo "::error::mod-index.json has modVersion $index_version, but the tag is $GITHUB_REF_NAME."
+            exit 1
+          fi
+          echo "Embedding pumpkin_friends $index_version ($(ls mod-dist/*.jar | wc -l) jars)."
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -110,6 +249,9 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # Öffentliche Adresse des Freunde-Verzeichnisses (siehe directory/README.md); kein Geheimnis. Forks lassen sie leer.
           PUMPKIN_FRIENDS_DIRECTORY: https://pumpkin-friends-directory.jonas-laux.workers.dev
+          # Der Mod-Ordner (mod-index.json + Jars), den build.rs einbettet (INGAME 3.2); ohne ihn trägt der
+          # Launcher keine Mod und die Einspeisung meldet "in diesem Build nicht verfügbar".
+          PUMPKIN_MOD_DIST: ${{ github.workspace }}/mod-dist
         with:
           releaseId: ${{ needs.prepare.outputs.release_id }}
           # Der Entwurf hat den Text schon; tauri-action schreibt ihn als `notes` in latest.json, das der Updater anzeigt.

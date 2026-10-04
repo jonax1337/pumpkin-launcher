@@ -60,7 +60,14 @@ fn rows() -> Vec<(&'static str, RoundTrip)> {
         row::<JoinPlan>("joinPlan.vanilla"),
         row::<JoinTicket>("joinTicket"),
         row::<LanStatus>("lanStatus"),
-        row::<ModStatus>("modStatus"),
+        row::<IngameStatus>("ingameStatus.active"),
+        row::<IngameStatus>("ingameStatus.connected"),
+        row::<IngameStatus>("ingameStatus.off"),
+        row::<IngameStatus>("ingameStatus.autoOff"),
+        row::<IngameStatus>("ingameStatus.unavailable"),
+        row::<IngameStatus>("ingameStatus.loaderTooOld"),
+        row::<IngameEvent>("event.ingame"),
+        row::<IngameFailedEvent>("event.ingameFailed"),
         row::<FriendPresenceEvent>("event.friendPresence"),
         row::<FriendRequestEvent>("event.friendRequest"),
         row::<FriendRequestRefusedEvent>("event.requestRefused"),
@@ -75,6 +82,8 @@ fn rows() -> Vec<(&'static str, RoundTrip)> {
         row::<LanEvent>("event.lan"),
         row::<ModConnectionEvent>("event.modConnection"),
         row::<ModConfirmEvent>("event.modConfirm"),
+        row::<ModActivityEntry>("modActivityEntry"),
+        row::<ModOpenEvent>("event.modOpen"),
     ]
 }
 
@@ -143,6 +152,18 @@ fn fixtures_meet_the_content_requirements_of_the_key_table() {
         ("friendsState.noSecretStore", "/availability", json!("noSecretStore")),
         ("friendsState.identityLost", "/availability", json!("identityLost")),
         ("friendsState.available", "/settings/findableByName", json!(true)),
+        ("friendsState.available", "/settings/ingameActions", json!("ask")),
+        ("friendsState.noSecretStore", "/settings/ingameActions", json!("allow")),
+        ("friendsState.noSecretStore", "/settings/ingameMenu", json!(false)),
+        ("ingameStatus.active", "/state", json!("active")),
+        ("ingameStatus.connected", "/state", json!("connected")),
+        ("ingameStatus.off", "/state", json!("off")),
+        ("ingameStatus.autoOff", "/state", json!("autoOff")),
+        ("ingameStatus.autoOff", "/reason/type", json!("breaker")),
+        ("ingameStatus.unavailable", "/state", json!("unavailable")),
+        ("ingameStatus.unavailable", "/reason/need", json!(21)),
+        ("ingameStatus.unavailable", "/node", Value::Null),
+        ("event.ingameFailed", "/reason", json!("fabricIncompatibleModSet")),
         ("friendsState.available", "/directory/state", json!("active")),
         ("friendsState.noSecretStore", "/directory/state", json!("off")),
         ("friendsState.identityLost", "/directory/state", json!("unavailable")),
@@ -190,6 +211,21 @@ fn directory_states_and_request_ways_use_camel_case_strings() {
     );
     assert_eq!(serde_json::to_value([RequestVia::Code, RequestVia::Name]).unwrap(), json!(["code", "name"]));
     assert_eq!(RequestVia::default(), RequestVia::Code);
+}
+
+#[test]
+fn ingame_reasons_are_tagged_and_the_settings_use_camel_case_strings() {
+    use IngameReason::*;
+    let reasons = [NotInBuild, Vanilla, Quilt, NoNode, Unverified, LoaderVersionUnknown, JavaUnknown, IdCollision, OfflineAccount, FriendsOff, BridgeNotRunning, InstanceOff, GloballyOff];
+    let types: Vec<Value> = reasons.iter().map(|reason| serde_json::to_value(reason).unwrap()["type"].clone()).collect();
+    assert_eq!(
+        Value::Array(types),
+        json!(["notInBuild", "vanilla", "quilt", "noNode", "unverified", "loaderVersionUnknown", "javaUnknown", "idCollision", "offlineAccount", "friendsOff", "bridgeNotRunning", "instanceOff", "globallyOff"])
+    );
+    assert_eq!(serde_json::to_value(JavaTooOld { need: 21 }).unwrap(), json!({ "type": "javaTooOld", "need": 21 }));
+    assert_eq!(serde_json::to_value([IngameActions::Ask, IngameActions::Allow]).unwrap(), json!(["ask", "allow"]));
+    assert_eq!(FriendsSettings::default().ingame_actions, IngameActions::Ask);
+    assert!(FriendsSettings::default().ingame_menu);
 }
 
 #[test]

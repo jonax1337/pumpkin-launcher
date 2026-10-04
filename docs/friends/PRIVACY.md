@@ -17,6 +17,9 @@ the abuse mailbox). Everything else was derived from the spec and from the `iroh
   tracking, no telemetry.
 - The directory never contacts Mojang and stores no names. Your launcher proves the account with a player certificate
   that Mojang signed, and the access token is only ever sent to Mojang (section 9).
+- Planned (`INGAME.md` section 9; section 10 below): while Friends is on, the launcher loads a small in-game mod into
+  Microsoft-account launches. It lives outside the instance folder and talks only to the launcher on this PC. Other
+  mods in the same game can use the same connection.
 - Connections are encrypted end to end between the launchers. The relay forwards ciphertext.
 - Our own relay stores nothing about connections. It sees, while a connection is open, the client's IP
   address and its endpoint id, and who it forwards to.
@@ -37,6 +40,7 @@ the abuse mailbox). Everything else was derived from the spec and from the `iroh
 | By-name request: sender's UUID, friends id, display name, one-time code | The directory, then the recipient | The directory's database, at most 14 days | Deliver a request while the recipient is offline (section 9) |
 | Player certificate (public key, expiry, Mojang's signature) and two signatures | The directory, during the login | **Not stored** | Prove account ownership offline (section 9) |
 | World traffic between the players | The two launchers | Nowhere | The game itself |
+| Friends data shown in the game (names, presence, requests, invites; planned) | The in-game mod and every other mod in the same game (section 10) | Memory of the game process only | Show the friends menu in the game |
 
 ## 3. The relay (GDPR information text, Art. 13)
 
@@ -213,9 +217,9 @@ met, so I1 knows what to check. The Usage Guidelines and the approval scope are 
 
 | Done | Item | Where it is met or checked |
 |---|---|---|
-| [ ] | The launcher About page and the mod description carry "NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT." | About page (`AboutTab.tsx`): no such line exists in `src` or the README today (searched); needed before release. Mod: Modrinth description and `mod/README.md` (M1) |
+| [ ] | The launcher About page and the mod description carry "NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT." | About page (`AboutTab.tsx`): no such line exists in `src` or the README today (searched); needed before release. Mod: the description in the jar metadata (`fabric.mod.json`, `neoforge.mods.toml`, `mods.toml`) and `mod/README.md` (M1); a Modrinth description only while a Modrinth project exists (`INGAME.md` drops it) |
 | [ ] | No Minecraft logo or Mojang branding in the friends UI or the mod. The name "Pumpkin Friends" does not suggest officialness. | Review of F2 to F5 and M1 assets |
-| [ ] | Free, with no paid perks or gating. No game files are distributed between peers. Each client downloads from Mojang and Modrinth only. | SPEC 1.2 (no downloads from friends), R6 |
+| [ ] | Free, with no paid perks or gating. No game files are distributed between peers. Each client downloads from Mojang and Modrinth only (the in-game mod needs no download: it is part of the launcher, `INGAME.md` section 3.2). | SPEC 1.2 (no downloads from friends), R6 |
 | [ ] | Online-mode only. Offline accounts are refused before launch (E8a, plus the R3 unit test), and the host's game refuses them at login (E8b, with the recorded vanilla message). | E8a and E8b in `VERIFICATION.md` |
 | [ ] | Child-account behaviour recorded (E13). The feature does not bypass Xbox or Mojang multiplayer restrictions (it uses the vanilla join path). | E13 |
 | [ ] | The Usage Guidelines were re-read at release time (date recorded). | Owner, date in `VERIFICATION.md` |
@@ -310,3 +314,65 @@ friendship (`join` is refused).
 | Host | `api.minecraftservices.com` | same |
 | Purpose (`nameLookup`) | Name → UUID beim Senden per Name; ein von Mojang signiertes Spielerzertifikat als Kontonachweis für das Verzeichnis | Name → UUID when sending by name; a Mojang-signed player certificate as account proof for the directory |
 | Mojang sessionserver, purpose (`sessionserverProof`) | Kontonachweis beim Annehmen einer Anfrage per Name und die Namen der Absender | Account proof when accepting a request by name, and the names of senders |
+
+## 10. The in-game mod (`INGAME.md`)
+
+Status: the launcher-injected mod is built and merged on `feat/ingame-mod` (waves 0 to 2 of `INGAME.md` section 11.2;
+five cells smoke-proven, `INGAME-SMOKE.md`) and is **not yet in a released build**. The hand-installed Fabric mod of
+the 2.0.x releases is gone from that branch (SPEC 11.5, changelog D.6). This section is the wording basis for the
+release that ships the injection. It does not change sections 1 to 9, in particular not the certificate login of
+section 9.
+
+### 10.1 What is added to the game, and when
+
+- Only while Friends is on, and only for launches with a Microsoft account, the launcher adds a small mod to the game
+  (`INGAME.md` section 3.3). Before the opt-in nothing is injected and nothing listens (SPEC 12.1). With an offline
+  account, a Vanilla instance (no loader), Quilt or an unsupported Minecraft version, nothing is added.
+- The mod file lives in the launcher's own data folder, **outside your instance folder**. It is not in `mods/`, not in
+  exports or templates, and no pack update can overwrite it. It is part of the launcher and is not downloaded.
+- The mod has **no network access except the loopback connection to the launcher on this PC** (`127.0.0.1`). It
+  contacts no server, no relay and not Mojang. All friend logic, all network traffic and all identity operations stay
+  in the launcher.
+- The mod can only trigger what you start in the game menu. Enabling or disabling Friends, rotating or resetting the
+  identity, relay consent and copying your full id are never possible from the game.
+
+### 10.2 Other mods in the same game (same-JVM exposure)
+
+Every mod in a game runs as your operating-system user, inside the same process. Another mod in the same game can
+therefore read the connection data the launcher hands to the game (port and a one-time token), connect to the launcher
+and use the same operations as our mod, for example answer a friend request or invite friends to your world.
+
+- The launcher limits what such a connection can do: no identity operations, no raw peer ids (friends are addressed by
+  per-launch aliases), rate limits, and a toast plus an activity entry for every action taken from the game.
+- Before friend and share actions from the game, the launcher asks once per game launch ("Dieses Spiel möchte deine Welt
+  mit ausgewählten Freunden teilen." and "Dieses Spiel möchte Freunde hinzufügen, Anfragen beantworten und Einladungen
+  annehmen."). The setting "Aktionen im Spiel" can allow them in advance.
+- The launcher checks that the connection comes from the game process it started, so a leaked token does not help another
+  program. This is **not a defence against malicious mods**: code in the game process is code on your PC.
+- Do not run mods you do not trust, with or without Pumpkin Friends.
+
+### 10.3 What same-user code can read, stated honestly
+
+- **Friends identity key.** On Windows and Linux, any program running as your user can read the key from the OS keyring.
+  Consent prompts and scopes do not change that.
+- **`profilekeys/`.** Older vanilla releases cache the account's player certificate, **including its private key**, in
+  `<gameDir>/profilekeys/`. Whoever can read it (any mod in the game, any program of your user) can open directory
+  sessions for your account for the certificate's lifetime (about 48 hours, unverified) and do what section 9.6 lists:
+  read who wrote to you, delete requests, send requests as you, register or unregister you. They still cannot become
+  your friend or impersonate you at acceptance, because that needs the access token. The launcher keeps `profilekeys/`
+  out of instance exports and templates. Injecting the mod does not make this worse and does not read the folder.
+
+### 10.4 Opt-in sentence
+
+Added to the opt-in dialog (SPEC 10.9) when the injection ships, and to the PrivacyNotice:
+
+| Deutsch | English |
+|---|---|
+| Wenn Freunde an ist, lädt der Launcher beim Spielstart eine kleine Mod in deine Spiele. Sie liegt außerhalb deines Instanzordners, hat keine Netzwerkverbindung außer zum Launcher auf diesem PC und kann nichts ändern, was du nicht im Spiel anstößt. Andere Mods im selben Spiel können dieselbe Verbindung nutzen; deshalb fragt der Launcher vor Freundes- und Teilen-Aktionen aus dem Spiel. | While Friends is on, the launcher loads a small mod into your games at launch. It is stored outside your instance folder, has no network connection except to the launcher on this PC, and cannot change anything you do not start in the game. Other mods in the same game can use the same connection; that is why the launcher asks before friend and share actions from the game. |
+
+### 10.5 Data that flows to the mod
+
+Names, presence, requests and invites of your confirmed friends are sent to the mod over the loopback connection, as
+whole-state pushes, so that the menu can show them. They stay in the game process's memory and are not stored by the
+mod. Every other mod in the same game can see the same data (section 10.2). Peer-supplied strings are sanitised before
+they reach the mod (SPEC 12.3).

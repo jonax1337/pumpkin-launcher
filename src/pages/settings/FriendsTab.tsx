@@ -14,9 +14,9 @@ import { useI18n } from "@/i18n";
 import { copyWithToast } from "@/lib/clipboard";
 import { blurOnEnter } from "@/lib/dom";
 import { formatDate } from "@/lib/format";
-import { FRIENDS_LIMITS, type DirectoryStatus, type FriendsSettings, type FriendsState, type Me, type NetworkStatus } from "@/lib/types";
+import { FRIENDS_LIMITS, type DirectoryStatus, type FriendsSettings, type FriendsState, type IngameActions, type Me, type NetworkStatus } from "@/lib/types";
 import { useFriendsUi } from "@/store/friendsUi";
-import { Actions, Button, ConfirmDialog, Count, ErrorBox, FormRow, FormSection, Hint, List, ListRow, RowTitle, Skel, StatusPanel, Switch, TextField, type IconName } from "@/ui";
+import { Actions, Button, ConfirmDialog, Count, ErrorBox, FormRow, FormSection, Hint, List, ListRow, RowTitle, Segmented, Skel, StatusPanel, Switch, TextField, type IconName } from "@/ui";
 
 const SECOND_MS = 1000;
 const ROW_SKELETON_HEIGHT_PX = 60;
@@ -102,6 +102,42 @@ function FindableRow({ settings, directory }: { settings: FriendsSettings; direc
         stateText={[t("ui.switch.on"), t("ui.switch.off")]}
       />
       {settings.findableByName && <FindableStatus directory={directory} name={minecraftName} />}
+    </FormRow>
+  );
+}
+
+/** „Freunde-Menü im Spiel“: der globale Schalter der Einspeisung; die Instanzseite zeigt, was daraus für jede Instanz folgt (INGAME 3.9). */
+function IngameMenuRow({ settings }: { settings: FriendsSettings }) {
+  const { t } = useI18n();
+  const update = useUpdateFriendsSettings();
+  return (
+    <FormRow label={t("friendsSettings.ingameMenu.label")} hint={t("friendsSettings.ingameMenu.hint")}>
+      <Switch
+        label={t("friendsSettings.ingameMenu.label")}
+        checked={settings.ingameMenu}
+        disabled={update.isPending}
+        onChange={(ingameMenu) => update.mutate({ ...settings, ingameMenu })}
+        stateText={[t("ui.switch.on"), t("ui.switch.off")]}
+      />
+    </FormRow>
+  );
+}
+
+/** „Aktionen im Spiel“: ob der Launcher bei jedem Spielstart einmal fragt oder die Aktionen aus dem Spiel gleich erlaubt (INGAME 5.5). */
+function IngameActionsRow({ settings }: { settings: FriendsSettings }) {
+  const { t } = useI18n();
+  const update = useUpdateFriendsSettings();
+  return (
+    <FormRow label={t("friendsSettings.ingameActions.label")} hint={t("friendsSettings.ingameActions.hint")} group="radiogroup">
+      <Segmented<IngameActions>
+        label={t("friendsSettings.ingameActions.label")}
+        value={settings.ingameActions}
+        onChange={(ingameActions) => update.mutate({ ...settings, ingameActions })}
+        items={[
+          { value: "ask", label: t("friendsSettings.ingameActions.ask") },
+          { value: "allow", label: t("friendsSettings.ingameActions.allow") },
+        ]}
+      />
     </FormRow>
   );
 }
@@ -290,6 +326,8 @@ function AvailableSettings({ state }: { state: FriendsState }) {
             <DisplayNameRow settings={state.settings} />
             <AlwaysRelayRow settings={state.settings} />
             {state.directory.state !== "unavailable" && <FindableRow settings={state.settings} directory={state.directory} />}
+            <IngameMenuRow settings={state.settings} />
+            <IngameActionsRow settings={state.settings} />
             {state.me && <FingerprintRow me={state.me} />}
             <NetworkRow network={state.network} />
           </>

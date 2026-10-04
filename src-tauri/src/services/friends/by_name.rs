@@ -3,7 +3,8 @@
 //! Das Verzeichnis stellt nur zu; ob jemand das Konto hat, das er angibt, bestätigt Mojang beiden Launchern direkt.
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use data_encoding::HEXLOWER;
@@ -72,6 +73,50 @@ pub(super) struct DirectoryClient {
     wake: Notify,
     /// Peer-IDs frisch per Name eingelöster Freunde und wann sie eingelöst haben.
     redeemed: Mutex<HashMap<String, Instant>>,
+    /// Fragt, ob irgendein Spiel mit der Mod verbunden ist; fehlt, bis die Sitzungen es einsetzen.
+    game_links: OnceLock<GameLinkProbe>,
+    /// Der Dienst hat ein Zertifikat gebraucht, durfte keins holen und gibt keine Fehlermeldung ab, bis das letzte Spiel
+    /// mit der Mod zu Ende ist.
+    awaiting_games: AtomicBool,
+}
+
+/// Ob irgendein laufendes Spiel über die Brücke mit dem Launcher verbunden ist.
+pub(super) type GameLinkProbe = Arc<dyn Fn() -> bool + Send + Sync>;
+
+/// Woher das Zertifikat einer Anmeldung kommen darf. Ein Abruf bei Mojang kann den Chat-Schlüssel eines laufenden Spiels
+/// ersetzen; ob er das tut, klärt der Eigentümertest O-5 (BYNAME-ATTEST). Bis dahin holt der Launcher während eines Spiels
+/// mit verbundener Mod kein neues Zertifikat (INGAME 5.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CertificateSource {
+    /// Das gemerkte, solange Mojang keine Erneuerung will, sonst ein frisches.
+    CachedOrFetched,
+    /// Nur das gemerkte, solange es benutzbar ist; ohne ein solches scheitert die Anmeldung.
+    CachedOnly,
+}
+
+impl DirectoryClient {
+    fn game_link_active(&self) -> bool {
+        self.game_links.get().is_some_and(|probe| probe())
+    }
+
+    fn certificate_source(&self) -> CertificateSource {
+        if self.game_link_active() {
+            CertificateSource::CachedOnly
+        } else {
+            CertificateSource::CachedOrFetched
+        }
+    }
+
+    /// Ob die Schleife auf das Ende der Spiele wartet: ihr fehlt ein Zertifikat, und solange ein Spiel mit der Mod läuft,
+    /// holt sie keins.
+    fn is_awaiting_games(&self) -> bool {
+        self.awaiting_games.load(Ordering::SeqCst) && self.game_link_active()
+    }
+
+    /// Setzt den Zustand „wartet auf die Spiele“; `true`, wenn er sich geändert hat.
+    fn set_awaiting_games(&self, awaiting: bool) -> bool {
+        self.awaiting_games.swap(awaiting, Ordering::SeqCst) != awaiting
+    }
 }
 
 /// Ein Token des Verzeichnisses; steht in keiner Debug-Ausgabe und in keinem Protokoll.
@@ -114,6 +159,18 @@ impl PollClock {
         due
     }
 
+    /// Das Abholen ist ab jetzt fällig, ohne die Mindestzeit von `hurry`.
+    fn make_due(&mut self, now: Instant) {
+        self.next = now;
+    }
+
+    /// Die Restzeit, bis `hurry` wieder wirkt (Rest der Minute nach dem letzten Abholen); 0, wenn jetzt.
+    fn cooldown_ms(&self, now: Instant) -> u64 {
+        self.last
+            .filter(|last| now.duration_since(*last) < RETRY_POLL_GAP)
+            .map_or(0, |last| (RETRY_POLL_GAP - now.duration_since(last)).as_millis() as u64)
+    }
+
     /// `true`, wenn das Abholen auf jetzt vorgezogen wurde.
     fn hurry(&mut self, now: Instant) -> bool {
         if self.last.is_some_and(|last| now.duration_since(last) < RETRY_POLL_GAP) {
@@ -131,6 +188,9 @@ enum Failure {
     Mojang(MojangError),
     /// Im Launcher selbst: kein Konto, keine Identität, kein Zufall.
     Local(AppError),
+    /// Eine Anmeldung brauchte ein neues Zertifikat, während ein Spiel mit der Mod verbunden ist ([`CertificateSource`]).
+    /// Das ist kein Fehler des Verzeichnisses: die Schleife wartet, bis das letzte Spiel zu Ende ist.
+    CertificateWithheld,
 }
 
 impl Failure {
@@ -140,7 +200,7 @@ impl Failure {
             Self::Directory(error) => error.into_app_error(name),
             Self::Mojang(MojangError::NotAllowed) => AppError::invalid(coded!("errors.friends.directoryNotAllowed")),
             Self::Mojang(MojangError::InvalidSession) => AppError::invalid(relogin()),
-            Self::Mojang(MojangError::Unreachable | MojangError::RateLimited) => directory_unavailable(),
+            Self::Mojang(MojangError::Unreachable | MojangError::RateLimited) | Self::CertificateWithheld => directory_unavailable(),
             Self::Local(error) => error,
         }
     }
@@ -156,7 +216,7 @@ impl Failure {
                     | DirectoryError::BadCertificate
                     | DirectoryError::CertificateExpired
             ),
-            Self::Mojang(_) | Self::Local(_) => true,
+            Self::Mojang(_) | Self::Local(_) | Self::CertificateWithheld => true,
         }
     }
 }
@@ -171,7 +231,33 @@ impl Friends {
         Ok(())
     }
 
-    /// Schickt eine Freundschaftsanfrage an den Spieler mit genau diesem Minecraft-Namen (BYNAME 7.1).
+    /// Ob die Schleife des Verzeichnisses gerade auf das Ende der Spiele mit der Mod wartet.
+    #[cfg(test)]
+    pub(super) fn directory_awaits_games(&self) -> bool {
+        self.core.by_name.is_awaiting_games()
+    }
+
+    /// Die Restzeit der Sperre von „Jetzt zustellen“ in Millisekunden (Rest der Minute nach dem letzten Abholen des
+    /// Postfachs, BYNAME 7.2); 0, wenn ein Druck sofort wirkt. Das Thema `requests` trägt sie in die Mod.
+    pub(super) fn retry_cooldown_ms(&self) -> u64 {
+        let now = Instant::now();
+        lock(&self.core.by_name.clock).cooldown_ms(now)
+    }
+
+    /// Ein Spiel mit der Mod ist nicht mehr verbunden: wartet die Schleife des Verzeichnisses auf das Ende der Spiele, holt
+    /// sie ihre Arbeit nach.
+    pub(super) fn game_link_ended(&self) {
+        self.core.by_name.wake.notify_one();
+    }
+
+    /// Sagt dem Dienst, woher er erfährt, ob ein Spiel mit der Mod verbunden ist; genau einmal.
+    pub(super) fn watch_game_links(&self, probe: GameLinkProbe) -> Result<(), HandlerAlreadySet> {
+        self.core.by_name.game_links.set(probe).map_err(|_| HandlerAlreadySet)
+    }
+
+    /// Schickt eine Freundschaftsanfrage an den Spieler mit genau diesem Minecraft-Namen (BYNAME 7.1). Solange ein Spiel mit
+    /// der Mod verbunden ist, meldet sich der Dienst nur mit dem gemerkten Zertifikat an; gibt es keines, das noch
+    /// taugt, bleibt es bei `directoryUnavailable`.
     pub async fn add_by_name(&self, name: &str) -> AppResult<FriendRequest> {
         let core = &self.core;
         core.ensure_enabled()?;
@@ -225,15 +311,19 @@ fn forget_certificate(core: &Core) {
     *lock(&core.by_name.certificate) = None;
 }
 
-/// Das gültige Token für die eigene Peer-ID, sonst eine neue Anmeldung.
+/// Das gültige Token für die eigene Peer-ID, sonst eine neue Anmeldung. Woher deren Zertifikat kommen darf, hängt davon ab,
+/// ob ein Spiel mit der Mod verbunden ist ([`CertificateSource`]); das gilt für jeden Weg zum Verzeichnis: Namen, Anmeldung
+/// der Schleife, Aufträge und `friends_retry_now`.
 async fn session(core: &Core, deps: &DirectoryDeps) -> Result<CachedSession, Failure> {
     let identity = core.identity().ok_or_else(|| Failure::Local(identity_lost()))?;
     let _auth = core.by_name.auth_lock.lock().await;
     let peer_id = identity.peer_id();
+    let source = core.by_name.certificate_source();
+    resume_after_games(core, source);
     if let Some(cached) = cached_session(core, &peer_id) {
         return Ok(cached);
     }
-    let opened = log_in(core, deps, &identity).await;
+    let opened = log_in(core, deps, &identity, source).await;
     if matches!(opened, Err(Failure::Mojang(MojangError::NotAllowed))) {
         set_health(core, DirectoryState::NotAllowed);
     }
@@ -249,18 +339,26 @@ fn cached_session(core: &Core, peer_id: &str) -> Option<CachedSession> {
 
 /// One handshake, and one more after a refusal that a fresh Minecraft token or a fresh certificate can cure
 /// (BYNAME-ATTEST 5.4). A token refused again although it was just refreshed means Mojang refuses the account.
-async fn log_in(core: &Core, deps: &DirectoryDeps, identity: &Identity) -> Result<CachedSession, Failure> {
-    match handshake(core, deps, identity).await {
+async fn log_in(
+    core: &Core,
+    deps: &DirectoryDeps,
+    identity: &Identity,
+    source: CertificateSource,
+) -> Result<CachedSession, Failure> {
+    match handshake(core, deps, identity, source).await {
         Err(Failure::Mojang(MojangError::InvalidSession)) => {
             deps.tokens.forget_minecraft_session();
-            handshake(core, deps, identity).await.map_err(|failure| match failure {
+            handshake(core, deps, identity, source).await.map_err(|failure| match failure {
                 Failure::Mojang(MojangError::InvalidSession) => Failure::Mojang(MojangError::NotAllowed),
                 other => other,
             })
         }
-        Err(Failure::Directory(DirectoryError::BadCertificate | DirectoryError::CertificateExpired)) => {
+        // Ein frisches Zertifikat gibt es nur, wo der Abruf erlaubt ist; sonst bleibt es bei der Ablehnung.
+        Err(Failure::Directory(DirectoryError::BadCertificate | DirectoryError::CertificateExpired))
+            if source == CertificateSource::CachedOrFetched =>
+        {
             forget_certificate(core);
-            handshake(core, deps, identity).await.inspect_err(warn_refused_certificate)
+            handshake(core, deps, identity, source).await.inspect_err(warn_refused_certificate)
         }
         first => first,
     }
@@ -282,13 +380,18 @@ fn warn_refused_certificate(failure: &Failure) {
 /// The login of BYNAME-ATTEST 5.4: account attributes, certificate, challenge, both signatures. The certificate comes
 /// before the challenge so that its fetch does not eat into the challenge's lifetime. No Mojang `join` happens here.
 /// A token for another account than the own is never used: it decides which letters count as addressed to me.
-async fn handshake(core: &Core, deps: &DirectoryDeps, identity: &Identity) -> Result<CachedSession, Failure> {
+async fn handshake(
+    core: &Core,
+    deps: &DirectoryDeps,
+    identity: &Identity,
+    source: CertificateSource,
+) -> Result<CachedSession, Failure> {
     let account = deps.tokens.minecraft_session().await.map_err(Failure::Local)?;
     let privileges = deps.mojang.privileges(&account).await;
     if privileges == Privileges::Refused {
         return Err(Failure::Mojang(MojangError::NotAllowed));
     }
-    let certificate = current_certificate(core, deps, &account).await?;
+    let certificate = current_certificate(core, deps, &account, source).await?;
     let peer_id = identity.peer_id();
     let challenge = deps.api.challenge(&peer_id).await.map_err(Failure::Directory)?;
     let parts = proof::login_parts(&deps.host, &challenge.server_id, &peer_id, &certificate.uuid)
@@ -304,9 +407,20 @@ async fn handshake(core: &Core, deps: &DirectoryDeps, identity: &Identity) -> Re
 
 /// The cached certificate until Mojang wants it refreshed, then a fresh one. While Mojang cannot be reached, a cached
 /// certificate that is still usable serves; never after Mojang refused the account (review finding 1).
-async fn current_certificate(core: &Core, deps: &DirectoryDeps, account: &McIdentity) -> Result<PlayerCertificate, Failure> {
+///
+/// With [`CertificateSource::CachedOnly`] Mojang is not asked at all: a certificate that is usable serves even when
+/// Mojang wants it refreshed, and without one the login is withheld ([`Failure::CertificateWithheld`]).
+async fn current_certificate(
+    core: &Core,
+    deps: &DirectoryDeps,
+    account: &McIdentity,
+    source: CertificateSource,
+) -> Result<PlayerCertificate, Failure> {
     let now = clock_ms();
     let cached = lock(&core.by_name.certificate).clone().filter(|certificate| certificate.uuid == account.uuid);
+    if source == CertificateSource::CachedOnly {
+        return cached.filter(|certificate| certificate.is_usable(now)).ok_or(Failure::CertificateWithheld);
+    }
     if let Some(fresh) = cached.clone().filter(|certificate| !certificate.needs_refresh(now)) {
         return Ok(fresh);
     }
@@ -368,9 +482,29 @@ fn set_health(core: &Core, state: DirectoryState) {
 /// Eine Mojang-Sperre bleibt sichtbar, bis der Nutzer die Einstellung umschaltet; alles andere heißt „nicht
 /// erreichbar“.
 fn note_failure(core: &Core, failure: &Failure) {
+    if matches!(failure, Failure::CertificateWithheld) {
+        await_end_of_games(core);
+        return;
+    }
     tracing::debug!(?failure, "Verzeichnis nicht erreicht");
     if !matches!(failure, Failure::Mojang(MojangError::NotAllowed)) {
         set_health(core, DirectoryState::Unreachable);
+    }
+}
+
+/// Ohne Zertifikat und ohne Erlaubnis, eins zu holen, ist das Verzeichnis weder erreichbar noch unerreichbar: der Zustand bleibt,
+/// der Postfach-Termin bleibt fällig, und die Schleife wartet, bis das letzte Spiel mit der Mod zu Ende ist.
+fn await_end_of_games(core: &Core) {
+    lock(&core.by_name.clock).make_due(Instant::now());
+    if core.by_name.set_awaiting_games(true) {
+        tracing::info!("Verzeichnis wartet auf das Ende der Spiele mit der Mod: kein brauchbares gemerktes Zertifikat, und währenddessen holt der Launcher keins");
+    }
+}
+
+/// Die Anmeldung darf wieder ein Zertifikat holen: war der Dienst am Warten, geht es jetzt weiter.
+fn resume_after_games(core: &Core, source: CertificateSource) {
+    if source == CertificateSource::CachedOrFetched && core.by_name.set_awaiting_games(false) {
+        tracing::info!("Verzeichnis arbeitet weiter: kein Spiel mit der Mod ist mehr verbunden");
     }
 }
 
@@ -503,11 +637,20 @@ pub(super) fn poll_soon(core: &Core) {
 async fn directory_loop(core: Arc<Core>) {
     loop {
         tick(&core).await;
-        let next_poll = lock(&core.by_name.clock).next;
-        tokio::select! {
-            () = sleep_until(next_poll) => {}
-            () = core.by_name.wake.notified() => {}
-        }
+        wait_for_next_tick(&core).await;
+    }
+}
+
+/// Bis zum nächsten Termin des Postfachs oder bis jemand weckt; wer auf das Ende der Spiele wartet, wartet nur aufs Wecken.
+async fn wait_for_next_tick(core: &Core) {
+    if core.by_name.is_awaiting_games() {
+        core.by_name.wake.notified().await;
+        return;
+    }
+    let next_poll = lock(&core.by_name.clock).next;
+    tokio::select! {
+        () = sleep_until(next_poll) => {}
+        () = core.by_name.wake.notified() => {}
     }
 }
 

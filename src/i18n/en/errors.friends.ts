@@ -44,7 +44,6 @@ export const errorsFriends: typeof deErrorsFriends = {
   "errors.friends.joinAddressInvalid": "Invalid join address",
   "errors.friends.tunnelFailed": "The connection to your friend was lost",
   "errors.friends.hostStopped": "Your friend is no longer sharing the world",
-  "errors.friends.modNotAvailable": "The Friends mod is not available for Minecraft {version} yet",
   "errors.friends.modConfirmDenied": "Sharing from the game was denied in the launcher",
 
   "errors.friends.nameInvalid": "That is not a valid Minecraft name",

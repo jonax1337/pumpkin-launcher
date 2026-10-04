@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { FRIENDS_FIXTURES as fixtures } from '../../lib/friends-fixtures.ts';
 import {
   activeCodeCount, canInvite, codeMayBeExpired, defaultAddTab, friendLabels, friendsBadgeCount, friendsGate, inviteFrom, isMcName, nameTabAvailable,
-  onlineCount, REQUEST_TTL_DAYS, requestLine, visibleFriends,
+  modOpenDestination, onlineCount, REQUESTS_ANCHOR, REQUEST_TTL_DAYS, requestLine, visibleFriends,
 } from './friendsModel.ts';
 
 const friend = (over) => ({ ...fixtures['friend.online'], ...over });
@@ -98,5 +98,11 @@ assert.equal(defaultAddTab('unavailable'), 'enter');
 
 // Aktive Codes: benutzte zählen nicht zum Limit.
 assert.equal(activeCodeCount([{ used: false }, { used: true }, { used: false }]), 2);
+
+// launcher.open der Mod: jedes Ziel führt an eine Stelle; die Anfragen scrollen zu ihrem Abschnitt, die Einladungen öffnen ihren Dialog.
+assert.deepEqual(modOpenDestination('friends'), { page: 'friends', anchor: null, showInvite: false });
+assert.deepEqual(modOpenDestination('requests'), { page: 'friends', anchor: REQUESTS_ANCHOR, showInvite: false });
+assert.deepEqual(modOpenDestination('invites'), { page: 'friends', anchor: null, showInvite: true });
+assert.deepEqual(modOpenDestination('settings'), { page: 'settings' });
 
 console.log('friendsModel.check: ok');

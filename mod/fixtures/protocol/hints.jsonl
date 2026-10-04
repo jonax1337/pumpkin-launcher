@@ -1,0 +1,7 @@
+{"direction":"modToLauncher","line":{"type":"lanOpened","port":50123}}
+{"direction":"modToLauncher","line":{"type":"lanClosed"}}
+{"direction":"modToLauncher","line":{"type":"ready","screens":["hub","share"]}}
+{"direction":"modToLauncher","line":{"type":"ping"}}
+{"direction":"launcherToMod","line":{"type":"pong"}}
+{"direction":"launcherToMod","line":{"type":"ping"}}
+{"direction":"modToLauncher","line":{"type":"pong"}}

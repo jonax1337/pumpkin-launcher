@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jonax1337/pumpkin-launcher/mod/index.schema.json",
+  "title": "Pumpkin Friends mod index",
+  "description": "mod-index.json: written by the Gradle build in mod/, read by the launcher (src-tauri/src/services/friends/ingame/). The launcher enforces the same rules and, beyond what a schema can say: node ids, file names and (loader, minecraft) cells are unique, and a strategy must suit its loader (fabricAddMods for fabric; fmlMavenRoot and fmlModFolders for neoforge and forge). A node without a verified entry is switched off.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["modVersion", "nodes"],
+  "properties": {
+    "modVersion": {
+      "$ref": "#/$defs/plainName",
+      "description": "The launcher version the jars were built for. Used as a folder name."
+    },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/node" }
+    }
+  },
+  "$defs": {
+    "plainName": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$",
+      "description": "One path segment: starts with a letter or digit, then letters, digits and . _ + -, at most 128 characters."
+    },
+    "releaseId": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,3})\\.(0|[1-9][0-9]{0,3})(\\.(0|[1-9][0-9]{0,3}))?$",
+      "description": "An explicit Mojang release id such as 1.21.1 or 26.3. Never a range, a snapshot, a pre-release or a release candidate."
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$"
+    },
+    "verified": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["smoke"],
+      "properties": {
+        "smoke": {
+          "$ref": "#/$defs/date",
+          "description": "Day the headless smoke test of this node passed."
+        },
+        "owner": {
+          "anyOf": [{ "$ref": "#/$defs/date" }, { "type": "null" }],
+          "description": "Day the owner checked this cell by hand, or null."
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "loader", "loaderMin", "minecraft", "javaMin", "strategy", "file", "sha256"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/plainName",
+          "description": "Unique. <minecraft range>-<loader>, for example 1.21.1-neoforge."
+        },
+        "loader": { "enum": ["fabric", "neoforge", "forge"] },
+        "loaderMin": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)*([-+].*)?$",
+          "description": "Smallest loader version that runs the jar (Fabric loader, NeoForge, Forge). Compared numerically; a suffix after the digits is ignored."
+        },
+        "minecraft": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/releaseId" }
+        },
+        "javaMin": { "type": "integer", "minimum": 8, "maximum": 64 },
+        "strategy": { "enum": ["fabricAddMods", "fmlMavenRoot", "fmlModFolders"] },
+        "file": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}\\.jar$",
+          "description": "Plain leaf file name of the jar. Unique per node."
+        },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "verified": {
+          "anyOf": [{ "$ref": "#/$defs/verified" }, { "type": "null" }],
+          "description": "Absent or null: the cell is off."
+        }
+      }
+    }
+  }
+}

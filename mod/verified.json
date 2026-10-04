@@ -1,0 +1,20 @@
+{
+	"26.3-fabric": { "smoke": "2026-10-04", "owner": null },
+	"26.2-fabric": { "smoke": "2026-10-04", "owner": null },
+	"26.1.2-fabric": { "smoke": "2026-10-04", "owner": null },
+	"1.21.1-fabric": { "smoke": "2026-10-04", "owner": null },
+	"1.21.5-fabric": { "smoke": "2026-10-04", "owner": null },
+	"1.21.8-fabric": { "smoke": "2026-10-04", "owner": null },
+	"1.21.10-fabric": { "smoke": "2026-10-04", "owner": null },
+	"1.21.11-fabric": { "smoke": "2026-10-04", "owner": null },
+	"1.20.1-fabric": { "smoke": "2026-10-04", "owner": null },
+	"1.20.2-fabric": { "smoke": "2026-10-04", "owner": null },
+	"1.20.4-fabric": { "smoke": "2026-10-04", "owner": null },
+	"1.21.1-neoforge": { "smoke": "2026-10-04", "owner": null },
+	"1.21.5-neoforge": { "smoke": "2026-10-04", "owner": null },
+	"1.21.8-neoforge": { "smoke": "2026-10-04", "owner": null },
+	"1.21.10-neoforge": { "smoke": "2026-10-04", "owner": null },
+	"1.21.11-neoforge": { "smoke": "2026-10-04", "owner": null },
+	"26.2-neoforge": { "smoke": "2026-10-04", "owner": null },
+	"1.20.1-forge": { "smoke": "2026-10-04", "owner": null }
+}

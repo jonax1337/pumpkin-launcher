@@ -1,0 +1,27 @@
+{
+	"schemaVersion": 1,
+	"id": "pumpkin_friends",
+	"version": "${version}",
+	"name": "Pumpkin Friends",
+	"description": "Share your singleplayer world with friends through the Pumpkin Launcher. Does nothing without the launcher. NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.",
+	"authors": [
+		"jonax1337"
+	],
+	"contact": {
+		"sources": "https://github.com/jonax1337/pumpkin-launcher"
+	},
+	"license": "Apache-2.0",
+	"icon": "assets/pumpkin_friends/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": [
+			"${fabricEntrypoint}"
+		]
+	},
+	"mixins": [${mixinConfigs}],
+	"depends": {
+		"fabricloader": ">=${loaderMin}",
+		"minecraft": [${minecraftList}],
+		"java": ">=${javaMin}"
+	}
+}

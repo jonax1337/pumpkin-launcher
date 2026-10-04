@@ -15,6 +15,55 @@ ist nur die Anleitung. Die Quelle der Regeln ist [`SPEC.md`](SPEC.md) (Abschnitt
   beiden Build-Arten aus SPEC 1.3. `kein Gate` heißt: nicht in SPEC 1.3 genannt, aber der Schritt steht
   trotzdem im Weg (Begründung steht dabei).
 
+## 0. Release 0.2.0 (der Release-Kandidat mit der Mod im Spiel)
+
+**Wer:** Du (Bauen, Taggen, Veröffentlichen), Du + 2. Person (In-Game-Pass). **Wann:** wenn alles auf dem
+Release-Zweig gemergt ist und CI grün läuft. **Blockiert:** das Release selbst. Die Ergebnisse trägst du in
+[`VERIFICATION.md`](VERIFICATION.md), Abschnitt **0.2.0**, ein.
+
+- [ ] **0.1. Versionen prüfen.** Alle vier Stellen tragen `0.2.0`: `package.json`, `src-tauri/tauri.conf.json`,
+  `src-tauri/Cargo.toml` (und `Cargo.lock`), `mod/gradle.properties` (Mod-Version = Launcher-Version, INGAME 3.2).
+  Der Release-Workflow prüft das beim Tag noch einmal selbst und bricht sonst ab.
+- [ ] **0.2. Mod-Dist bauen.** Aus `mod/` (JDKs wie in `mod/README.md`): `.\gradlew.bat build modIndex`. Erwartet:
+  `build/mod-index/mod-index.json` mit `modVersion: "0.2.0"` und 18 Jars `pumpkin_friends-0.2.0+<Knoten>.jar`,
+  Budget-Meldung von `checkJarBudget`, und `node scripts/validate-mod-index.mjs build/mod-index/mod-index.json build/mod-index`
+  meldet keinen Fehler.
+- [ ] **0.3. Rauchtest lokal für den Release-Commit** (öffnet kurz ein Spielfenster, etwa 3 Minuten je Zelle;
+  `CARGO_TARGET_DIR` auf ein eigenes Zielverzeichnis setzen):
+  ```powershell
+  .\tools\mod-smoke\run.ps1 -Cell 26.3-fabric     -Data D:\pumpkin-build\smoke\data
+  .\tools\mod-smoke\run.ps1 -Cell 1.21.1-fabric   -Data D:\pumpkin-build\smoke\data
+  .\tools\mod-smoke\run.ps1 -Cell 1.21.8-fabric   -Data D:\pumpkin-build\smoke\data
+  .\tools\mod-smoke\run.ps1 -Cell 1.21.11-fabric  -Data D:\pumpkin-build\smoke\data
+  .\tools\mod-smoke\run.ps1 -Cell 1.21.1-neoforge -Data D:\pumpkin-build\smoke\data
+  .\tools\mod-smoke\run.ps1 -Cell 26.2-neoforge   -Data D:\pumpkin-build\smoke\data
+  .\tools\mod-smoke\run.ps1 -Cell 1.20.1-forge    -Data D:\pumpkin-build\smoke\data
+  ```
+  *Erwartet:* je Zelle `passed` im Bericht (`<Data>\smoke-reports\`) und die Meldung des gestarteten Spiels mit der
+  Version `0.2.0` (zum Beispiel `pumpkin_friends 0.2.0+26.3-fabric`).
+- [ ] **0.4. Taggen und pushen.** Der Versionshinweis ist der Text des Tags (die Datei ist bewusst komplett Englisch):
+  ```powershell
+  git tag -a v0.2.0 --cleanup=verbatim -F docs/friends/RELEASE-0.2.0.md
+  git push origin v0.2.0
+  ```
+  `--cleanup=verbatim` übergibt den Text unverändert; ohne es räumt Git führende Leerzeichen weg.
+- [ ] **0.5. Erster Lauf des erweiterten Release-Workflows** (baut jetzt zuerst die Mod, alle Knoten aus
+  `mod/nodes.txt`, und bettet sie über `PUMPKIN_MOD_DIST` in die Launcher-Binärdateien ein). Prüfe im Lauf unter
+  *Actions → Release*:
+  - [ ] Die Jobs *Mod node list*, *Mod node …* (alle Knoten aus `mod/nodes.txt`, derzeit 18) und *Mod package* sind grün.
+  - [ ] Im Job *Build (…)* besteht der Schritt *Check the mod dist (index and version)* und loggt
+        `Embedding pumpkin_friends 0.2.0 (18 jars).`
+  - [ ] Nirgendwo im Workflow ist das Cargo-Feature `smoke` gesetzt (der Rauchtest bleibt lokal/nächtlich).
+  - [ ] Der Windows-Installer aus dem Entwurf enthält die Mod: Installieren, eine Instanz aus der Tabelle starten
+        (Freunde an) — die Instanzseite zeigt „Freunde-Menü im Spiel: aktiv“, im `mods`-Ordner der Instanz liegt
+        keine Datei.
+- [ ] **0.6. Entwurf prüfen und veröffentlichen** (Ablauf wie [`../RELEASING.md`](../RELEASING.md): Installer einmal
+  ausprobieren, dann *Publish release*). Datum in `VERIFICATION.md` eintragen.
+- [ ] **0.7. In-Game-Owner-Pass mit dem zweiten Konto** (Schritt 9 unten, Ergebnisse nach `VERIFICATION.md` M3):
+  erst **9.0** (visueller Durchlauf, Hub im Pausenmenü), dann **9.1** Tiefenlauf je Lader (Fabric, NeoForge, Forge:
+  Anfrage annehmen, Welt teilen, Beitritt mit Konto B), dann **9.2** Kurzlauf für jeden anderen Knoten, dann 9.3
+  bis 9.8. Erst danach gilt M3 als erfüllt und 0.2.0 als abschließend geprüft.
+
 ## Was du insgesamt brauchst
 
 - Zwei Windows-PCs in **verschiedenen Netzwerken** (zum Beispiel Zuhause und Büro, oder ein PC im
@@ -23,20 +72,22 @@ ist nur die Anleitung. Die Quelle der Regeln ist [`SPEC.md`](SPEC.md) (Abschnitt
   PCs wird vom Spiel gekickt.
 - Zugang zum zweiten PC (jemand sitzt davor, oder Fernzugriff).
 - Für den Relay-Teil: ein Linux-Server in der EU, eine Domain und ein zweiter, davon unabhängiger Domainname.
-- Für die Mod: ein Modrinth-Konto und Admin-Rechte im GitHub-Repository.
+- Für die Mod im Spiel (Schritt 9): dasselbe zweite Microsoft-Konto wie oben und ein Windows-PC mit Java-Instanzen der Lader Fabric, NeoForge und Forge. **Kein Modrinth-Konto und kein Modrinth-Projekt mehr nötig**; die Mod steckt im Launcher (`INGAME.md`). Admin-Rechte im GitHub-Repository brauchst du weiterhin für Releases.
 
 ## Reihenfolge auf einen Blick
 
 | Schritt | Thema | Wer | Blockiert |
 |---|---|---|---|
+| 0 | **Release 0.2.0**: bauen, taggen, veröffentlichen, In-Game-Pass | Du (+ 2. Person) | das Release selbst |
 | 1 | Echter Microsoft-Login-Test | Du | G2 (muss zuerst) |
 | 2 | Spike auf zwei PCs (G1) | Du + 2. Person | Release, geschlossene Beta |
 | 3 | Test-Build, End-to-End-Tabelle E1 bis E13, Mod-Oberfläche (G2) | Du + 2. Person | Release, geschlossene Beta |
-| 4 | Modrinth-Projekt, `MOD_PROJECT_ID`, GitHub-Umgebung, erste Mod-Version | Du, dann Agent | kein Gate (Mod-Installation) |
+| 4 | ~~Modrinth-Projekt, `MOD_PROJECT_ID`, GitHub-Umgebung, erste Mod-Version~~ **überholt** (nur nötig, solange die von Hand installierte Mod ausgeliefert wird; entfällt mit der Mod im Launcher) | - | kein Gate |
 | 5 | Eigenes Relay deployen, `RELAY_MAP` Index 0 (G3) | Du, dann Agent | Release |
 | 6 | Mojang-Compliance (G4) | Du | Release, geschlossene Beta |
 | 7 | Entscheidungen zur geschlossenen Beta, Release | Du | je nach Entscheidung |
 | 8 | Namens-Suche: Verzeichnis, Zertifikat-Login, Tests O-1 bis O-8 | Du (+ 2. Person) | Release 2.0.1 (die Namens-Suche), kein Gate aus SPEC 1.3 |
+| 9 | Mod im Spiel (vom Launcher eingebaut): Test pro Release auf Windows | Du + 2. Person | Release, das die Mod im Spiel enthält (Gate M3, kein Gate aus SPEC 1.3) |
 
 Das Relay (Schritt 5) hat die längste Vorlaufzeit (Domain, DNS, Zertifikat). Du kannst es parallel zu Schritt 2 und 3
 anstoßen, weil Schritt 2 und 3 mit den öffentlichen n0-Relays laufen.
@@ -219,6 +270,9 @@ Seiten-Einordnung und notiere das.
 
 ### 3.3. Mod-Oberfläche (E10, SPEC 13.3.2)
 
+> **Gilt für die heutige, von Hand installierte Mod (nur Fabric 26.3).** Sobald der Launcher die Mod selbst einbaut,
+> ersetzt Schritt 9 diese Liste (`INGAME.md`, Abschnitt 10, Ebene 5); die Punkte hier sind dann erledigt oder entfallen.
+
 Kein Agent hat die Mod im Spiel gesehen; gebaut und mit JUnit geprüft ist sie. Die Liste steht auch in
 [`mod/README.md`](../../mod/README.md), Abschnitt „Owner GUI checklist“. Erst gegen den Fake-Launcher, dann gegen
 den echten Launcher.
@@ -253,7 +307,13 @@ Danach in `VERIFICATION.md`: „G2 met“ abhaken.
 
 ---
 
-## 4. Modrinth-Projekt und Mod-Veröffentlichung
+## 4. Modrinth-Projekt und Mod-Veröffentlichung (überholt)
+
+> **Überholt durch `INGAME.md` (Abschnitte 3.2, 8 und 14, Entscheidung 4).** Die Mod wird im Launcher mitgebaut und
+> vom Launcher selbst ins Spiel gelegt. Es gibt kein Modrinth-Projekt, keinen Token, keine Umgebung `modrinth-release`
+> und keinen Workflow `mod-release.yml` mehr; dieser Schritt entfällt, sobald der Einbau ausgeliefert wird. Nichts davon
+> musst du jetzt anlegen. Die Schritte unten gelten nur, falls die von Hand installierte Mod vorher noch veröffentlicht
+> werden soll (heutiger Stand der Dokumente und des Codes); sonst überspringen.
 
 **Wer:** Du (Schritte 4.1 bis 4.4 und 4.6), Agent (4.5). **Wann:** nach dem Merge von `feat/friends` nach `main`
 (der Workflow läuft nur von `main`). **Blockiert:** kein Gate. Ohne Projekt-ID meldet der Launcher die Mod als
@@ -318,7 +378,7 @@ Punkt erfüllt wird. Hake sie in `VERIFICATION.md` ab.
 - [ ] Verhalten von Kinderkonten notiert (E13), die Funktion umgeht keine Mehrspieler-Sperren von Xbox oder Mojang.
 - [ ] Die Usage Guidelines von Mojang zum Release-Zeitpunkt noch einmal gelesen, Datum in `VERIFICATION.md` notiert.
 - [ ] **Du hast bestätigt, dass die Freigabe von Microsoft/Mojang für die Azure-App auch das Weitergeben von Spielernamen und UUIDs zwischen Nutzern abdeckt** (siehe [`../ACCOUNT-SETUP.md`](../ACCOUNT-SETUP.md)). Das kann nur jemand mit Zugang zur Freigabe entscheiden; im Zweifel bei Mojang nachfragen.
-- [ ] Die Modrinth-API wird mit dem Launcher-User-Agent und innerhalb der Limits benutzt.
+- [ ] Die Modrinth-API wird mit dem Launcher-User-Agent und innerhalb der Limits benutzt (nur noch für die Einordnung „nur Client“ und Titel beim Abgleich; ein Mod-Download von dort entfällt mit Schritt 9).
 
 ---
 
@@ -422,7 +482,68 @@ Nichts davon kann ein Agent klären; alles steht bis dahin als „nicht belegt�
 - [ ] **Mojangs Bedingungen** erlauben den Abruf von `/player/certificates` durch einen Drittanbieter-Launcher (OD-N3, 8.1).
 - [ ] **Keine Zeilen aus 2.0.0 in D1** (O-2, die Abfrage mit `0, 0`).
 
+## 9. Mod im Spiel (vom Launcher eingebaut)
+
+**Wer:** Du (Tiefenlauf mit 2. Person und zweitem Konto). **Wann:** vor jedem Release, das die Mod im Spiel enthält,
+auf **Windows**; die Ergebnisse kommen in [`VERIFICATION.md`](VERIFICATION.md), Abschnitt **M3**. **Blockiert:** dieses
+Release (Gate M3). Das ist die Ebene 5 aus `INGAME.md` Abschnitt 10; die Ebenen 1 bis 4 (Java, Rust, Zusammenspiel,
+Rauchtest pro Knoten) läuft die CI.
+
+**Stand: Launcher-Seite gebaut und eingespeist (Stand `feat/ingame-mod`, 2026-10-04).** Fünf Zellen haben einen
+grünen Rauchtest (`INGAME-SMOKE.md`, Einträge in `mod/verified.json`): `26.3-fabric`, `1.21.1-fabric`,
+`1.21.1-neoforge`, `26.2-neoforge`, `1.20.1-forge`; `1.21.8-fabric` und `1.21.11-fabric` warten auf Paket V1a.
+Was noch fehlt, sind die Bildschirme (Paket U2) und der visuelle Nachweis im echten Spiel — daher ist dein
+**nächster Schritt der visuelle Durchlauf (9.0)**; die vollständige Release-Prüfung (9.1 bis 9.8) folgt, sobald ein
+Release-Kandidat mit Mod existiert. Die Mod installierst du nie und veröffentlichst du nirgends: Es gibt kein
+Modrinth-Projekt (Schritt 4 entfällt), keinen Token und keine Freigabe-Umgebung. Du brauchst nur:
+
+- einen Windows-PC mit dem Release-Kandidaten des Launchers (ein Build, der die Mod enthält),
+- **zwei Microsoft-Konten** mit Minecraft Java (eines pro Instanz, wie in G2) für „Teilen“ und „Beitreten“,
+- je eine Instanz pro Lader (Fabric, NeoForge, Forge) in einer Minecraft-Version, die in der Knotentabelle steht
+  (`VERIFICATION.md`, M3.1). Mindestens eine mit **Pfad mit Umlaut im Benutzernamen**, falls du so ein Konto hast (B6).
+
+Nur Zellen, deren Rauchtest in der CI grün war, gehören ins Release; unverifizierte Zellen sind aus und werden nicht
+von Hand freigeschaltet.
+
+- [ ] **9.0. Visueller Durchlauf im Spiel (dein nächster Schritt, sobald Paket U2 gemergt ist).** Entwicklungs-Build des
+  Launchers bauen (vorher `cd mod` und `.\gradlew.bat modIndex`, sonst ist der Index leer), dann eine `26.3-fabric`-Instanz mit
+  Microsoft-Konto starten (Freunde an). *Erwartet:* Der Hub öffnet sich über den Knopf „Pumpkin Friends“ im
+  Pausenmenü; im Instanzordner liegt keine neue Datei in `mods/`; die Instanzseite zeigt „Freunde-Menü im Spiel:
+  aktiv“. Danach die Demo-Bildschirme von U2 über ihre Start-Properties (`hubdemo`, `sharedemo`) öffnen und prüfen:
+  Tabs, Listen, Bildlauf, Fokus, deutsche und englische Texte, Fenstergröße ändern ohne Duplikat-Knopf. Zum Schluss
+  eine echte Freundesanfrage mit einem zweiten Konto aus dem Hub heraus beantworten (inkl. Rückfrage im Launcher).
+  Was auffällt, notiere in `VERIFICATION.md`, M3 („Owner pass“), Zeile 26.3-fabric; dieser Durchlauf ersetzt den
+  Kurzlauf 9.2 für diese Zelle noch nicht.
+- [ ] **9.1. Tiefenlauf pro Lader** (einmal pro Release, je ein Knoten von Fabric, NeoForge, Forge): Instanz mit Konto A
+  starten (Freunde an). *Erwartet:* Im Pausenmenü steht „Pumpkin Friends“, im Instanzordner liegt **keine** neue Datei
+  in `mods/`, die Instanzseite zeigt „Freunde-Menü im Spiel: aktiv“. Im Hub: eine Anfrage annehmen, danach eine Welt
+  für Freunde öffnen, Konto B einladen und aus Konto B beitreten (Konto B nutzt die Spiel-Funktion „Beitreten“ im
+  Hub oder den Launcher). Beim ersten „Teilen“ und beim ersten Annehmen fragt der Launcher je einmal nach
+  („Ablehnen“ ist vorausgewählt). Tabelle „Deep run“ in M3.1 ausfüllen.
+- [ ] **9.2. Kurzlauf für jeden anderen Knoten** (3 Schritte, pro Release): Spiel startet, der Hub öffnet sich, eine
+  Anfrage wird beantwortet. Zeile in M3.1 ausfüllen.
+- [ ] **9.3. Nichts vor dem Einschalten.** Friends **aus**: Instanz starten. *Erwartet:* kein Button im Pausenmenü, keine
+  Mod im Spiel, kein offener Port des Launchers für Friends. Dann ein Spiel mit **Offline-Konto** und eine
+  Vanilla-Instanz starten: ebenfalls keine Mod, die Instanzseite sagt warum („Nur mit Microsoft-Konto“, „Braucht einen
+  Loader“).
+- [ ] **9.4. Fremde Mods.** Eine zweite Datei `pumpkin_friends` in `mods/` legen: *Erwartet:* Das Spiel startet, es wird
+  nichts eingebaut, die Instanzseite sagt „Im Ordner mods liegt schon eine pumpkin_friends-Datei“.
+- [ ] **9.5. Absicherungen.** Aktionen aus dem Spiel erst nach der Frage im Launcher (Zeitsperre von 1 s sichtbar);
+  „Aktionen im Spiel: Erlauben“ fragt nicht mehr; ein Java-Wrapper-Skript führt zu „Verbindung nicht zuordenbar“, das
+  Spiel startet trotzdem; eine absichtlich kaputte Mod-Jar führt zum Dialog „Ohne Freunde-Menü starten“ und der nächste
+  Start läuft ohne Mod (Zeilen unter „Further checks“ in M3.2).
+- [ ] **9.6. Mechanismen, die nur ein Versuch klärt** (`INGAME.md`, Anhang B): trage die Ergebnisse von B1 bis B10 in
+  M3.2 ein, soweit sie auf Windows entschieden werden (besonders B6: Pfad mit Umlaut, Datei während des Starts gesperrt).
+  Die Spikes S1 und S2 liefern den Rest; ein Agent darf nur eintragen, was er belegen kann.
+- [ ] **9.7. Entscheidungen.** Prüfe die Liste in `INGAME.md`, Abschnitt 14 (neun Entscheidungen, alle überstimmbar), und
+  sage Bescheid, wenn du eine umdrehen willst. Insbesondere Nummer 8 („Immer fragen“ als Standard für Aktionen im Spiel).
+- [ ] **9.8. Datenschutztext.** Der Satz zur Mod im Opt-in-Dialog ([`PRIVACY.md`](PRIVACY.md), Abschnitt 10.4) und die
+  Abschnitte 10.2 und 10.3 (andere Mods im selben Spiel, `profilekeys/`) sind von dir gelesen und freigegeben, bevor der
+  Einbau ausgeliefert wird.
+
+Danach in `VERIFICATION.md`: „M3 met“ abhaken.
+
 ## Abschluss
 
-Wenn G1 bis G5 in [`VERIFICATION.md`](VERIFICATION.md) abgehakt sind, ist Friends freigabereif. Bis dahin nennt das
+Wenn G1 bis G5 in [`VERIFICATION.md`](VERIFICATION.md) abgehakt sind, ist Friends freigabereif (ein Release, das die Mod im Spiel enthält, braucht zusätzlich M3). Bis dahin nennt das
 README von Friends den Stand ehrlich: nicht als stabil erklärt, solange die Tests im echten Netz fehlen.

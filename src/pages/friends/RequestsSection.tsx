@@ -5,7 +5,7 @@ import { useI18n } from "@/i18n";
 import { FRIENDS_LIMITS } from "@/lib/friends-types";
 import type { FriendRequest } from "@/lib/types";
 import { Avatar, Button, Hint, Icon, IconButton, List, ListRow, Menu, RowTitle, SectionHeader, Tip } from "@/ui";
-import { codeMayBeExpired, requestLine } from "./friendsModel";
+import { codeMayBeExpired, REQUESTS_ANCHOR, requestLine } from "./friendsModel";
 import type { Person } from "./useFriendDialogs";
 
 const SECOND_MS = 1000;
@@ -20,7 +20,7 @@ type RequestActions = {
 export function RequestsSection({ requests, ...actions }: { requests: FriendRequest[] } & RequestActions) {
   const { t } = useI18n();
   return (
-    <section className="mt-6">
+    <section id={REQUESTS_ANCHOR} className="mt-6">
       <SectionHeader title={t("friends.requests.title")} size="sub" as="h2" />
       <List variant="accounts" aria-label={t("friends.requests.title")}>
         {requests.map((request) => (

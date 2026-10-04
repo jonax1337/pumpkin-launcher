@@ -1,0 +1,108 @@
+plugins {
+	// Wählt je Knoten Loom ohne Remapping (Minecraft ab 26.1, loomx.unobfuscated=true) oder mit Remapping (verschleierte
+	// Versionen, false); beides aus versions/<Knoten>/gradle.properties. Die Loom-Version steht in gradle.properties.
+	id 'dev.kikugie.loom-back-compat'
+}
+
+apply from: rootProject.file('gradle/node.gradle')
+
+def isTracer = project.findProperty('tracer') == 'true'
+// Innerhalb von dependencies { } heißt "loomx" eine andere Erweiterung, daher hier festhalten.
+def isUnobfuscated = loomx.unobfuscated
+def fabricPackage = 'dev/laux/pumpkin/friends/platform/fabric'
+
+// Andere Loader haben eigene Einstiegsklassen.
+sourceSets.main.java.exclude('dev/laux/pumpkin/friends/platform/neoforge/**', 'dev/laux/pumpkin/friends/platform/forge/**')
+if (isTracer) {
+	// Tracer-Knoten: nur Einstieg und Mixin des Tracers. compat/ und ui/ kommen mit den Paketen, die sie für diesen Knoten bauen.
+	sourceSets.main.java.exclude('dev/laux/pumpkin/friends/compat/**', 'dev/laux/pumpkin/friends/ui/**',
+		"${fabricPackage}/FriendsClient.java", "${fabricPackage}/PauseMenuButton.java", "${fabricPackage}/mixin/PauseScreenMixin.java")
+} else {
+	sourceSets.main.java.exclude("${fabricPackage}/TracerClient.java", "${fabricPackage}/mixin/TracerMinecraftMixin.java")
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${sc.current.version}"
+	if (!isUnobfuscated) {
+		mappings loom.officialMojangMappings()
+	}
+	// Keine Fabric-API (INGAME 4.2, Entscheidung 3): die Mod braucht nur den Loader; modImplementation gibt es dank
+	// loom-back-compat auch ohne Remapping.
+	modImplementation "net.fabricmc:fabric-loader:${project.fabric_loader_version}"
+}
+
+// Mixin-Konfiguration des Knotens (Pausemenü-Hook, INGAME 4.2): eine Vorlage, pro Knoten mit Refmap und Klassenversion
+// gefüllt. Die Refmap gehört zu den verschleierten Knoten (INGAME A4); 26.x läuft in Mojang-Namen und braucht keine.
+// compatibilityLevel folgt dem --release des Knotens (node.javaMin), denn die Mixin-Klassen teilen seine Klassenversion.
+if (!isTracer) {
+	// In der Aktion einer Aufgabe sind die ext-Eigenschaften des Projekts nicht sichtbar, daher hier festhalten.
+	def nodeJavaMin = node.javaMin
+	def mixinConfig = layout.buildDirectory.file('generated/pumpkin_friends.mixins.json')
+	def writeMixinConfig = tasks.register('writeMixinConfig') {
+		outputs.file(mixinConfig)
+		doLast {
+			def refmap = isUnobfuscated ? 'null' : '"pumpkin_friends-refmap.json"'
+			mixinConfig.get().asFile.text = """{
+\t"required": true,
+\t"minVersion": "0.8",
+\t"package": "${fabricPackage}.mixin",
+\t"refmap": ${refmap},
+\t"compatibilityLevel": "JAVA_${nodeJavaMin}",
+\t"client": [
+\t\t"PauseScreenMixin"
+\t],
+\t"injectors": {
+\t\t"defaultRequire": 0
+\t}
+}
+"""
+		}
+	}
+	tasks.named('processResources') {
+		from(mixinConfig)
+		dependsOn writeMixinConfig
+	}
+}
+
+loom {
+	mods {
+		"pumpkin_friends" {
+			sourceSet sourceSets.main
+		}
+	}
+}
+
+// -Pkitdemo startet den Entwicklungs-Client mit dem Widget-Kit-Demo-Bildschirm (README, Abschnitt Kit demo): Er öffnet sich
+// mit dem ersten Titelbildschirm, schreibt eine Logzeile und schließt sich wieder.
+// Ein frischer Lauf zeigt zuerst den Barrierefreiheits-Willkommensbildschirm statt des Titelbildschirms; options.txt schaltet ihn ab.
+if (project.hasProperty('kitdemo')) {
+	loom {
+		runs {
+			client {
+				vmArg '-Dpumpkin.dev.kitdemo=true'
+			}
+		}
+	}
+	def optionsFile = file('run/options.txt')
+	tasks.matching { it.name == 'runClient' }.configureEach {
+		doFirst {
+			def kept = optionsFile.exists() ? optionsFile.readLines('UTF-8').findAll { !it.startsWith('onboardAccessibility:') } : []
+			optionsFile.parentFile.mkdirs()
+			optionsFile.setText((kept + 'onboardAccessibility:false').join('\n') + '\n', 'UTF-8')
+		}
+	}
+}
+
+if (!isUnobfuscated) {
+	// Das Jar im Launcher-Lauf wird nicht remappt (-Dfabric.addMods, INGAME A4): Es muss die Intermediary-Namen und die
+	// Refmap schon enthalten. Der Name der Refmap steht in der Mixin-Konfiguration des Knotens.
+	loom {
+		mixin {
+			useLegacyMixinAp = true
+			defaultRefmapName = 'pumpkin_friends-refmap.json'
+		}
+	}
+}
+
+// loomx.modJar ist remapJar bei verschleierten Versionen und jar sonst: erst das ist das Jar des Knotens.
+registerModIndexEntry(loomx.modJar.flatMap { it.archiveFile })

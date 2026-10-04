@@ -27,10 +27,12 @@ Wird der Schlüssel gestohlen, kann der Angreifer signierte Updates ausliefern; 
 
 ## Ablauf
 
-1. **Version anheben** – an drei Stellen dieselbe Version, z. B. `0.2.0`:
+1. **Version anheben** – an vier Stellen dieselbe Version, z. B. `0.2.0`:
    - `package.json` → `version`
    - `src-tauri/tauri.conf.json` → `version`
    - `src-tauri/Cargo.toml` → `[package] version`
+   - `mod/gradle.properties` → `version` (die Mod-Version ist immer die Launcher-Version, `friends/INGAME.md` 3.2;
+     `modVersion` und jeder Jar-Name tragen sie)
 
    Danach `cargo check --manifest-path src-tauri/Cargo.toml`, damit `Cargo.lock` mitzieht, und alles committen.
 2. **Annotierten Tag mit Versionshinweisen** anlegen und pushen. Die Tag-Nachricht (Markdown) wird Release-Text und erscheint im Launcher unter *Einstellungen › Über*:
@@ -38,7 +40,13 @@ Wird der Schlüssel gestohlen, kann der Angreifer signierte Updates ausliefern; 
    git tag -a v0.2.0 -F notes.md     # oder: -m "Kurzer Titel" -m "- Änderung 1"
    git push origin v0.2.0
    ```
-3. **Workflow abwarten.** Er bricht mit klarer Meldung ab, wenn der Tag nicht zur Version in allen drei Dateien passt. Danach liegt ein Entwurf vor mit:
+3. **Workflow abwarten.** Er bricht mit klarer Meldung ab, wenn der Tag nicht zur Version in allen vier Dateien passt.
+   Zuerst baut er die In-Game-Mod (alle Knoten aus `mod/nodes.txt`, Jobs *Mod node list* / *Mod node …* / *Mod package*,
+   wie `mod.yml`); jeder Launcher-Build lädt das Artefakt `mod-index`, prüft Index und Version (Schritt *Check the mod
+   dist*) und übergibt den Ordner über `PUMPKIN_MOD_DIST` an den Rust-Build, der die Jars einbettet
+   (`friends/INGAME.md` 3.2). Steht der Schritt auf Rot, trägt der Launcher keine Mod („in diesem Build nicht
+   verfügbar“) — nicht veröffentlichen. Das Cargo-Feature `smoke` darf im Release-Workflow nirgendwo gesetzt sein.
+   Danach liegt ein Entwurf vor mit:
    - Windows: NSIS-Installer `…_<version>_x64-setup.exe`
    - Linux: `…_<version>_amd64.AppImage` und `…_<version>_amd64.deb`
    - macOS: `…_<version>_universal.dmg` und für den Updater `….app.tar.gz`

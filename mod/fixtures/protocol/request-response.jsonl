@@ -1,0 +1,6 @@
+{"direction":"modToLauncher","line":{"type":"req","id":"a1","op":"host.stop","args":{}}}
+{"direction":"launcherToMod","line":{"type":"res","id":"a1","ok":true,"result":{}}}
+{"direction":"modToLauncher","line":{"type":"req","id":"a2","op":"friend.addByName","args":{"name":"Notch"}}}
+{"direction":"launcherToMod","line":{"type":"res","id":"a2","ok":false,"error":{"code":"nameUnknown","params":{}}}}
+{"direction":"modToLauncher","line":{"type":"req","id":"a3","op":"host.invite","args":{"friends":["f1"],"showWorld":false}}}
+{"direction":"launcherToMod","line":{"type":"res","id":"a3","ok":false,"error":{"code":"versionUnsupported","params":{"min":"1.20"}}}}

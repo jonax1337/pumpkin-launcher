@@ -1,0 +1,30 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "Apache-2.0"
+issueTrackerURL = "https://github.com/jonax1337/pumpkin-launcher/issues"
+
+[[mods]]
+modId = "pumpkin_friends"
+version = "${version}"
+displayName = "Pumpkin Friends"
+authors = "jonax1337"
+description = '''
+Connects the game to the Pumpkin Launcher's Friends feature. Does nothing without the launcher.
+NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.
+'''
+logoFile = "assets/pumpkin_friends/icon.png"
+
+# Reine Client-Mod: Server verlangen sie nicht.
+[[dependencies.pumpkin_friends]]
+modId = "neoforge"
+type = "required"
+versionRange = "[${loaderMin},)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.pumpkin_friends]]
+modId = "minecraft"
+type = "required"
+versionRange = "${minecraftRange}"
+ordering = "NONE"
+side = "CLIENT"

@@ -51,8 +51,12 @@ pub struct LaunchSpec<'a> {
     pub memory_mb: u32,
     /// Startgröße des Heaps (`-Xms`); ohne entscheidet die JVM.
     pub min_memory_mb: Option<u32>,
+    /// Startoptionen der eingespeisten Mod (INGAME 3.6): nach den JVM-Argumenten der Version, vor `extra_jvm_args`.
+    pub injected_jvm_args: &'a [String],
     pub extra_jvm_args: &'a [String],
     pub window: GameWindow,
+    /// Spielargumente der eingespeisten Mod: nach denen der Version, vor `extra_game_args`.
+    pub injected_game_args: &'a [String],
     pub extra_game_args: &'a [String],
     /// Direkt in eine Welt oder auf einen Server.
     pub quick_play: Option<&'a QuickPlay>,
@@ -137,6 +141,7 @@ pub fn build_args(spec: &LaunchSpec, env: &Env) -> AppResult<Vec<String>> {
         let file = path_text(log_config_path(spec.dirs, log));
         args.push(substitute(&log.argument, &HashMap::from([("path", file)])));
     }
+    args.extend(spec.injected_jvm_args.iter().cloned());
     // Eigene JVM-Args der Instanz zuletzt, damit sie Vorgaben der Version überschreiben.
     args.extend(spec.extra_jvm_args.iter().cloned());
     args.push(version.main_class.clone());
@@ -145,6 +150,7 @@ pub fn build_args(spec: &LaunchSpec, env: &Env) -> AppResult<Vec<String>> {
     if let Some(QuickPlayArgs::Legacy(legacy)) = quick_play {
         args.extend(legacy);
     }
+    args.extend(spec.injected_game_args.iter().cloned());
     // Eigene Spielargumente zuletzt. Sie überschreiben nichts: doppelte Optionen lehnt Minecraft ab
     // (je nach Version Standardwert oder Startabbruch).
     args.extend(spec.extra_game_args.iter().cloned());
@@ -416,8 +422,10 @@ pub(crate) mod test_support {
             account,
             memory_mb: 2048,
             min_memory_mb: None,
+            injected_jvm_args: &[],
             extra_jvm_args: &[],
             window: GameWindow::Default,
+            injected_game_args: &[],
             extra_game_args: &[],
             quick_play: None,
             session: None,
@@ -505,6 +513,30 @@ mod tests {
         let args = build_args(&online, &LINUX).unwrap();
         let token = args.iter().position(|a| a == "--accessToken").unwrap();
         assert_eq!(args[token + 1], "eyJ.token");
+    }
+
+    #[test]
+    fn injected_options_sit_after_the_version_options_and_before_the_users() {
+        let (version, dirs, account) = (test_version(), Dirs::new("/data"), notch());
+        let (injected_jvm, injected_game) = (["-Dfabric.addMods=m.jar".to_owned()], ["--fml.mods".to_owned(), "g:a:1".to_owned()]);
+        let (user_jvm, user_game) = (["-Dfoo=1".to_owned()], ["--demo".to_owned()]);
+        let spec = LaunchSpec {
+            injected_jvm_args: &injected_jvm,
+            injected_game_args: &injected_game,
+            extra_jvm_args: &user_jvm,
+            extra_game_args: &user_game,
+            ..plain_spec(&version, &dirs, &account)
+        };
+
+        let args = build_args(&spec, &LINUX).unwrap();
+
+        let at = |wanted: &str| args.iter().position(|arg| arg == wanted).unwrap_or_else(|| panic!("{wanted} fehlt in {args:?}"));
+        let log_config = args.iter().position(|arg| arg.starts_with("-Dlog4j.configurationFile=")).unwrap();
+        assert_eq!(at("-Dfabric.addMods=m.jar"), log_config + 1, "direkt nach den JVM-Argumenten der Version");
+        assert_eq!(at("-Dfoo=1"), log_config + 2, "danach die des Nutzers");
+        assert!(at("-Dfoo=1") < at("net.minecraft.client.main.Main"));
+        assert_eq!(at("--fml.mods"), args.len() - 3, "die Spielargumente der Einspeisung stehen vor denen des Nutzers");
+        assert_eq!(args[args.len() - 2..], ["g:a:1", "--demo"]);
     }
 
     #[test]

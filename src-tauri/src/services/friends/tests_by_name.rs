@@ -204,6 +204,9 @@ struct Node {
     secrets: Arc<MemorySecretStore>,
     events: Arc<RecordingEvents>,
     dir: TempDir,
+    /// Die Spielsignale und die Brücke, mit denen der Dienst gebaut ist; Spiele mit der Mod hängen sich daran.
+    signals: GameSignals,
+    bridge: ModBridge,
 }
 
 impl Node {
@@ -211,11 +214,11 @@ impl Node {
     async fn start(world: &World, account: McIdentity, dir: TempDir, secrets: Arc<MemorySecretStore>) -> Self {
         let signals = GameSignals::default();
         let bridge = ModBridge::new(signals.clone());
-        let friends = Friends::new(&Dirs::new(dir.path()), secrets.clone(), signals, bridge, world.options()).unwrap();
+        let friends = Friends::new(&Dirs::new(dir.path()), secrets.clone(), signals.clone(), bridge.clone(), world.options()).unwrap();
         let tokens = Arc::new(FakeTokens::new(account.clone()));
         friends.attach_directory(world.deps(tokens.clone(), TEST_POLL)).unwrap();
         let events = Arc::new(RecordingEvents::default());
-        let node = Self { friends, account, tokens, secrets, events, dir };
+        let node = Self { friends, account, tokens, secrets, events, dir, signals, bridge };
         node.friends.start(node.events.clone(), Some(node.profile())).await;
         node
     }
@@ -569,7 +572,7 @@ async fn rotation_retracts_own_letters_but_keeps_letters_from_others() {
 async fn findability_registers_disable_unregisters_and_queued_jobs_survive_a_restart() {
     let world = World::new().await;
     let steve = world.online("Steve", false).await;
-    let findable = FriendsSettings { display_name: "Steve".into(), always_relay: false, findable_by_name: true };
+    let findable = FriendsSettings { display_name: "Steve".into(), always_relay: false, findable_by_name: true, ..FriendsSettings::default() };
 
     steve.friends.update_settings(findable.clone()).await.unwrap();
     steve.wait_registered(&world).await;
@@ -619,7 +622,7 @@ async fn a_mojang_refusal_shows_not_allowed_and_pauses_polling() {
     let world = World::new().await;
     let kind = world.online("Kind", false).await;
     world.mojang.refuse_certificates(&kind.account.uuid, Some(MojangError::NotAllowed));
-    let findable = FriendsSettings { display_name: "Kind".into(), always_relay: false, findable_by_name: true };
+    let findable = FriendsSettings { display_name: "Kind".into(), always_relay: false, findable_by_name: true, ..FriendsSettings::default() };
 
     kind.friends.update_settings(findable).await.unwrap();
     until_true("not allowed", || kind.directory_state() == DirectoryState::NotAllowed).await;
@@ -704,7 +707,7 @@ async fn directory_loop_alone(directory: &Arc<FakeDirectory>, mojang: &Arc<FakeM
     let dir = TempDir::new();
     let secrets = Arc::new(MemorySecretStore::new());
     identity::create(&*secrets).unwrap();
-    let settings = FriendsSettings { display_name: "Steve".into(), always_relay: false, findable_by_name: true };
+    let settings = FriendsSettings { display_name: "Steve".into(), always_relay: false, findable_by_name: true, ..FriendsSettings::default() };
     FriendsConfig { settings, ..FriendsConfig::default() }.save(&friends_dir(&Dirs::new(dir.path()))).unwrap();
     let signals = GameSignals::default();
     let bridge = ModBridge::new(signals.clone());
@@ -755,6 +758,26 @@ async fn the_inbox_is_polled_ten_seconds_after_start_then_per_interval_and_retry
     assert_eq!(directory.inbox_reads(), 3, "a minute later retry_now polls at once");
 }
 
+/// Das Thema `requests` trägt die Restzeit der Sperre von „Jetzt zustellen“ (INGAME A27): nichts vor dem ersten
+/// Abholen, fast die ganze Minute danach, wieder nichts eine Minute später.
+#[tokio::test(start_paused = true)]
+async fn the_retry_cooldown_covers_the_minute_after_a_poll_and_is_zero_when_a_press_may_act() {
+    let mojang = Arc::new(FakeMojang::default());
+    let directory = Arc::new(FakeDirectory::new(mojang.clone()));
+    let (friends, _dir) = directory_loop_alone(&directory, &mojang).await;
+    by_name::spawn_directory_loop(&friends.core, &CancellationToken::new());
+
+    assert_eq!(friends.retry_cooldown_ms(), 0, "vor dem ersten Abholen sperrt nichts");
+
+    tokio::time::sleep(Duration::from_secs(11)).await;
+    assert_eq!(directory.inbox_reads(), 1, "der erste Abgleich ist gelaufen");
+    let remaining = friends.retry_cooldown_ms();
+    assert!(remaining > 58_000 && remaining <= 60_000, "Rest der Minute, nicht {remaining}");
+
+    tokio::time::sleep(Duration::from_secs(61)).await;
+    assert_eq!(friends.retry_cooldown_ms(), 0, "eine Minute nach dem Abholen darf wieder gedrückt werden");
+}
+
 // BYNAME-ATTEST 8.2: the certificate login
 
 const HOUR_MS: i64 = 3_600_000;
@@ -762,7 +785,7 @@ const HOUR_MS: i64 = 3_600_000;
 const SOON_MS: i64 = 3_000;
 
 fn findable_settings(name: &str) -> FriendsSettings {
-    FriendsSettings { display_name: name.to_owned(), always_relay: false, findable_by_name: true }
+    FriendsSettings { display_name: name.to_owned(), always_relay: false, findable_by_name: true, ..FriendsSettings::default() }
 }
 
 fn launcher_now_ms() -> i64 {
@@ -1055,3 +1078,8 @@ async fn after_mojang_refuses_the_account_the_cached_certificate_is_never_used()
 
     assert_eq!(error_key(&refused), "errors.friends.directoryNotAllowed");
 }
+
+// ---- Freunde per Name aus dem Spiel (INGAME 5.4): solange eine Mod verbunden ist, kein neues Zertifikat ----
+
+#[path = "tests_mod_link_by_name.rs"]
+mod from_the_game;

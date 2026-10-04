@@ -1,0 +1,134 @@
+// Gemeinsamer Teil aller Knoten-Buildskripte (build-fabric, build-neoforge, build-forge). Jedes Skript wendet ihn an,
+// nachdem es sein Loader-Plugin geladen hat, und ruft am Ende registerModIndexEntry(<Jar-Provider>) auf.
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+
+apply plugin: 'java-library'
+
+// Die Loader-Skripte lesen die Source-Sets von core/ beim Konfigurieren.
+evaluationDependsOn(':core')
+
+def node = gradle.ext.nodeTable.find { it.id == sc.current.project }
+def runningJava = JavaVersion.current().majorVersion.toInteger()
+if (runningJava < node.javaMin) {
+	throw new GradleException("Knoten ${node.id} braucht JDK ${node.javaMin} oder neuer, Gradle läuft auf JDK ${runningJava}. " +
+		"Aufruf: . scripts/dev-env.sh ${node.id} (bzw. .\\scripts\\dev-env.ps1 ${node.id})")
+}
+
+ext.node = node
+
+// Version einer Abhängigkeit für die Minecraft-Version, gegen die gerade übersetzt wird: die Standardversion des Knotens
+// nimmt den Schlüssel selbst, jede andere Version der matrix (-Pcompile.minecraft) den Schlüssel "<Schlüssel>@<Version>"
+// aus versions/<Knoten>/gradle.properties. Fehlt er, bricht Gradle ab, statt eine falsche Version zu nehmen.
+ext.pinned = { String key ->
+	sc.current.version == node.minecraft.last() ? project.property(key) : project.property("${key}@${sc.current.version}")
+}
+
+// Swap "minecraft_version" (Zeile //$ minecraft_version im Quelltext): die Konstante MINECRAFT mit der Minecraft-Version
+// des Knotens, für die Logzeile der Tracer. Alle Knoten müssen jeden Swap kennen, den eine Quelldatei benutzt.
+stonecutter {
+	swaps['minecraft_version'] = "private static final String MINECRAFT = \"${sc.current.version}\";".toString()
+}
+
+group = rootProject.group
+version = "${rootProject.version}+${node.id}"
+base.archivesName = 'pumpkin_friends'
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation project(':core')
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = node.javaMin
+	it.options.encoding = 'UTF-8'
+	// classfile: Gson verweist auf Errorprone-Annotationen, die nicht auf dem Klassenpfad liegen.
+	it.options.compilerArgs << '-Xlint:all,-classfile,-serial'
+}
+
+// Das Spiel läuft mit dem JDK des Knotens, auch wenn Gradle auf einem neueren JDK läuft (Stonecutter verlangt 21).
+tasks.withType(JavaExec).configureEach {
+	javaLauncher = javaToolchains.launcherFor {
+		languageVersion = JavaLanguageVersion.of(node.javaMin)
+	}
+}
+
+// Die Klassen aus core/ liegen im Jar der Mod; der Knoten bringt sonst nichts mit.
+tasks.named('jar') {
+	dependsOn ':core:classes'
+	from project(':core').sourceSets.main.output
+}
+
+// Deskriptor des Loaders aus descriptors/<loader>/; die Platzhalter kommen aus nodes.txt.
+def descriptorValues = [
+	version      : project.version.toString(),
+	loaderMin    : node.loaderMin,
+	javaMin      : node.javaMin.toString(),
+	minecraftList: node.minecraft.collect { "\"${it}\"" }.join(', '),
+	// Maven-Bereiche: "[a]" für genau eine Version ("[a,a]" lehnt FML ab), sonst "[a,b]" von der ersten bis zur letzten.
+	minecraftRange: node.minecraft.size() == 1 ? "[${node.minecraft.first()}]" : "[${node.minecraft.first()},${node.minecraft.last()}]",
+	// Nur Fabric: Einstiegsklasse und Mixin-Konfigurationen des Knotens (versions/<Knoten>/gradle.properties).
+	fabricEntrypoint: project.findProperty('fabric_entrypoint') ?: '',
+	mixinConfigs : (project.findProperty('fabric_mixin_configs') ?: '').split(',').findAll { !it.isEmpty() }.collect { "\"${it}\"" }.join(', '),
+]
+tasks.named('processResources') {
+	inputs.properties(descriptorValues)
+	from(rootProject.file("descriptors/${node.loader}"))
+	// Tracer-Knoten bringen zusätzlich ihre eigenen Dateien mit (z. B. die Mixin-Konfiguration des Fabric-Tracers).
+	if (project.findProperty('tracer') == 'true') {
+		from(rootProject.file("descriptors/${node.loader}-tracer"))
+	}
+	filesMatching(['fabric.mod.json', 'META-INF/*.toml']) {
+		expand(descriptorValues)
+	}
+}
+
+abstract class ModIndexEntry extends DefaultTask {
+	@InputFile abstract RegularFileProperty getJar()
+	@Input abstract Property<String> getEntryJson()
+	@OutputDirectory abstract DirectoryProperty getEntryDir()
+
+	@TaskAction
+	void write() {
+		def jarFile = jar.get().asFile
+		def sha256 = MessageDigest.getInstance('SHA-256').digest(jarFile.bytes).encodeHex().toString()
+		def entry = new groovy.json.JsonSlurper().parseText(entryJson.get()) + [file: jarFile.name, sha256: sha256]
+		def dir = entryDir.get().asFile
+		dir.deleteDir()
+		dir.mkdirs()
+		java.nio.file.Files.copy(jarFile.toPath(), new File(dir, jarFile.name).toPath())
+		new File(dir, 'entry.json').setText(JsonOutput.toJson(entry), 'UTF-8')
+	}
+}
+
+// Die Zellen, deren Rauchtest bestanden ist (INGAME A17): mod/verified.json {"<Knoten-Id>": {"smoke": "JJJJ-MM-TT",
+// "owner": null | "JJJJ-MM-TT"}}. Nur ein bestandener Rauchtest trägt einen Eintrag ein; ein Knoten ohne Eintrag ist aus.
+// providers.fileContents macht die Datei zur Eingabe des Konfigurations-Caches: eine Änderung baut den Index neu.
+def verifiedCells() {
+	def text = providers.fileContents(rootProject.layout.projectDirectory.file('verified.json')).asText.orElse('{}').get()
+	new JsonSlurper().parseText(text)
+}
+
+// Schreibt build/mod-index-entry/{<jar>, entry.json}; stonecutter.gradle fasst die Einträge aller Knoten zusammen.
+ext.registerModIndexEntry = { jarFile ->
+	def entry = [
+		id      : node.id,
+		loader  : node.loader,
+		loaderMin: node.loaderMin,
+		minecraft: node.minecraft,
+		javaMin : node.javaMin,
+		strategy: node.strategy,
+		verified: verifiedCells()[node.id],
+	]
+	tasks.register('modIndexEntry', ModIndexEntry) {
+		group = 'build'
+		description = 'Schreibt den Index-Eintrag dieses Knotens samt SHA-256 des Jars.'
+		jar = jarFile
+		entryJson = JsonOutput.toJson(entry)
+		entryDir = layout.buildDirectory.dir('mod-index-entry')
+	}
+}

@@ -1,0 +1,69 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+plugins {
+	id 'dev.kikugie.stonecutter'
+}
+
+// Ohne aktive Version baut jeder Knoten aus seinen erzeugten Quellen; so hängt das Ergebnis nicht davon ab,
+// welcher Knoten zuletzt im Editor aktiv war, und -Pnode darf jeden Knoten wählen.
+stonecutter.active null
+
+def selectedNodes = gradle.ext.selectedNodes
+def modIndexDir = layout.buildDirectory.dir('mod-index')
+
+// build/mod-index/{mod-index.json, <jar>...}: der Vertrag zwischen dem Gradle-Build und dem Launcher (INGAME 3.2).
+// Kein Knoten gilt als geprüft: "verified" bleibt null, bis ein Rauchtest die Zelle freigibt.
+def modIndex = tasks.register('modIndex') {
+	group = 'build'
+	description = 'Sammelt die Jars der gewählten Knoten und schreibt build/mod-index/mod-index.json.'
+	def nodeIds = selectedNodes*.id
+	def entryDirs = nodeIds.collect { file("versions/${it}/build/mod-index-entry") }
+	def modVersion = project.version.toString()
+	def outputDir = modIndexDir
+	dependsOn nodeIds.collect { ":${it}:modIndexEntry" }
+	inputs.files(entryDirs)
+	inputs.property('modVersion', modVersion)
+	outputs.dir(outputDir)
+
+	doLast {
+		def out = outputDir.get().asFile
+		out.deleteDir()
+		out.mkdirs()
+		def nodes = entryDirs.collect { dir ->
+			def entry = new JsonSlurper().parse(new File(dir, 'entry.json'), 'UTF-8')
+			java.nio.file.Files.copy(new File(dir, entry.file).toPath(), new File(out, entry.file).toPath())
+			entry
+		}
+		new File(out, 'mod-index.json').setText(
+			JsonOutput.prettyPrint(JsonOutput.toJson([modVersion: modVersion, nodes: nodes])) + '\n', 'UTF-8')
+	}
+}
+
+// Ein Jar höchstens mod.jarMaxBytes, alle Jars zusammen höchstens mod.totalMaxBytes (gradle.properties).
+def checkJarBudget = tasks.register('checkJarBudget') {
+	group = 'verification'
+	description = 'Bricht ab, wenn ein Mod-Jar oder alle zusammen das Größenbudget überschreiten.'
+	def jarMaxBytes = project.property('mod.jarMaxBytes') as long
+	def totalMaxBytes = project.property('mod.totalMaxBytes') as long
+	def jarDir = modIndexDir
+	mustRunAfter modIndex
+	inputs.dir(jarDir).optional()
+
+	doLast {
+		def jars = jarDir.get().asFile.listFiles({ File f -> f.name.endsWith('.jar') } as FileFilter) ?: []
+		def oversized = jars.findAll { it.length() > jarMaxBytes }
+		if (!oversized.isEmpty()) {
+			throw new GradleException("Jar über ${jarMaxBytes} Bytes: " + oversized.collect { "${it.name} (${it.length()})" }.join(', '))
+		}
+		def total = jars*.length().sum() ?: 0L
+		if (total > totalMaxBytes) {
+			throw new GradleException("Alle Jars zusammen ${total} Bytes, erlaubt sind ${totalMaxBytes}")
+		}
+		logger.lifecycle("Jar-Budget eingehalten: ${jars.size()} Jars, ${total} Bytes (je höchstens ${jarMaxBytes}, zusammen ${totalMaxBytes})")
+	}
+}
+
+modIndex.configure {
+	finalizedBy checkJarBudget
+}

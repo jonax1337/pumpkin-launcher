@@ -59,6 +59,11 @@ pub fn version_of(exe: &Path) -> Option<String> {
     read_release(exe.parent()?.parent()?).map(|release| release.version)
 }
 
+/// Hauptversion der Java-Programmdatei `exe` aus der Datei `release` ihres Java-Homes; ohne diese unbekannt.
+pub fn major_of_exe(exe: &Path) -> Option<u32> {
+    version_of(exe).and_then(|version| major_of(&version))
+}
+
 /// Die Installation im Java-Home `home`, sofern dort Programmdatei und `release` liegen.
 fn install_at(home: &Path) -> Option<JavaInstall> {
     let exe = JAVA_FILE_NAMES.iter().map(|name| home.join("bin").join(name)).find(|exe| exe.is_file())?;
@@ -154,6 +159,8 @@ mod tests {
         assert_eq!(found[1].vendor.as_deref(), Some("Microsoft"));
         assert_eq!(Path::new(&found[1].path), jdk21.join("bin").join(JAVA_FILE_NAMES[0]));
         assert_eq!(version_of(Path::new(&found[1].path)).as_deref(), Some("21.0.2"));
+        assert_eq!(major_of_exe(Path::new(&found[1].path)), Some(21));
+        assert_eq!(major_of_exe(&root.join("ohne-release").join("bin").join(JAVA_FILE_NAMES[0])), None);
         assert!(scan(&root.join("gibt-es-nicht")).is_empty());
         fs::remove_dir_all(root).unwrap();
     }
