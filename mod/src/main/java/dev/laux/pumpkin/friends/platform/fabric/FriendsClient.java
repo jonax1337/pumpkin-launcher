@@ -6,6 +6,7 @@ import dev.laux.pumpkin.friends.compat.LanWatcher;
 import dev.laux.pumpkin.friends.compat.MinecraftMainThread;
 import dev.laux.pumpkin.friends.compat.NoticeToasts;
 import dev.laux.pumpkin.friends.runtime.MainThread;
+import dev.laux.pumpkin.friends.ui.UiSession;
 import dev.laux.pumpkin.friends.ui.demo.KitDemo;
 import java.util.List;
 import java.util.Optional;
@@ -64,12 +65,16 @@ public final class FriendsClient implements ClientModInitializer {
 		}
 	}
 
-	// Ein Fehler der Mod darf weder den Client-Thread noch das Spiel abbrechen (SPEC 7.5).
+	// Ein Fehler der Mod darf weder den Client-Thread noch das Spiel abbrechen (SPEC 7.5). Ein RuntimeException wird
+	// übergangen (der nächste Sekundentick versucht es erneut); ein LinkageError (Zeitsprung) schaltet außerdem die UI
+	// der Sitzung ab (INGAME 4.2), denn die Klasse bleibt gebrochen.
 	private static void guarded(Runnable action) {
 		try {
 			action.run();
 		} catch (RuntimeException failure) {
 			LOG.warn("Pumpkin Friends: Fehler übergangen", failure);
+		} catch (LinkageError failure) {
+			UiSession.disable(failure);
 		}
 	}
 }

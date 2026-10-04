@@ -1,6 +1,7 @@
 package dev.laux.pumpkin.friends.platform.fabric.mixin;
 
 import dev.laux.pumpkin.friends.platform.fabric.PauseMenuButton;
+import dev.laux.pumpkin.friends.ui.UiSession;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
@@ -19,6 +20,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * in jeder Ära, das Ziel lautet zur Laufzeit der verschleierten Knoten {@code class_433#method_25426()} (Abschnitt 6.1,
  * auf allen Versionen von 1.20 bis 1.21.11 gleich). {@code require = 0}: ändert Mojang die Methode, bleibt der Knopf
  * aus, statt das Spiel zu brechen.
+ *
+ * <p>Weiches Scheitern (INGAME 4.2): der Hook-Leib fängt {@code RuntimeException} und {@code LinkageError} (in
+ * Zeitsprüngen zeigen sich fehlende Signaturen als Errors) und übergibt sie {@link UiSession#disable}, die einmal loggt
+ * und die UI der Sitzung abschaltet; ins Spiel geworfen wird nichts. Ohne Lambda im Leib: der Handler darf nach dem
+ * Merge keine synthetischen Methoden dieser Mixin-Klasse brauchen.
  */
 @Mixin(PauseScreen.class)
 public abstract class PauseScreenMixin extends Screen {
@@ -29,11 +35,15 @@ public abstract class PauseScreenMixin extends Screen {
 
 	@Inject(method = "init()V", at = @At("TAIL"), require = 0)
 	private void pumpkinFriends$addButton(CallbackInfo callback) {
-		Button button = PauseMenuButton.buttonFor((PauseScreen) (Object) this);
-		if (button != null) {
-			// INGAME-API.md 3, „Screen: widgets and narration“: addRenderableWidget ist protected (GuiEventListener) → GuiEventListener
-			// in jeder Ära; es zeichnet, fokussiert und erzählt den Knopf.
-			this.addRenderableWidget(button);
+		try {
+			Button button = PauseMenuButton.buttonFor((PauseScreen) (Object) this);
+			if (button != null) {
+				// INGAME-API.md 3, „Screen: widgets and narration“: addRenderableWidget ist protected (GuiEventListener) → GuiEventListener
+				// in jeder Ära; es zeichnet, fokussiert und erzählt den Knopf.
+				this.addRenderableWidget(button);
+			}
+		} catch (RuntimeException | LinkageError failure) {
+			UiSession.disable(failure);
 		}
 	}
 }

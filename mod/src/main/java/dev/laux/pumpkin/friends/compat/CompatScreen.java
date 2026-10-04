@@ -1,5 +1,6 @@
 package dev.laux.pumpkin.friends.compat;
 
+import dev.laux.pumpkin.friends.ui.UiSession;
 import dev.laux.pumpkin.friends.ui.model.Painter;
 import dev.laux.pumpkin.friends.ui.model.StateKeeper;
 import dev.laux.pumpkin.friends.ui.model.TrackedField;
@@ -26,6 +27,10 @@ import net.minecraft.client.input.KeyEvent;
  *
  * <p>Vanilla runs {@code init()} again on every window resize and builds all widgets anew. {@link #build()} therefore
  * must create every widget; text, focus, scroll position and tab survive through the {@link StateKeeper}.
+ *
+ * <p>Every override is the soft-failure boundary of INGAME 4.2: it runs inside {@link UiSession}, so a failure of the
+ * mod's UI is logged and switches the UI off for the session instead of reaching the game. Drawing stops then, while
+ * the input overrides keep the vanilla half of their expression alive, above all the escape key.
  */
 public abstract class CompatScreen extends Screen {
 	// GLFW key codes; the LWJGL classes are not on the compile class path of a node.
@@ -112,74 +117,98 @@ public abstract class CompatScreen extends Screen {
 	/** INGAME-API.md 3, "Screen: lifecycle and rendering": {@code init()} is {@code protected () → void} in every era. */
 	@Override
 	protected final void init() {
-		tracked.clear();
-		lastFocused = null;
-		build();
-		state.restore(tracked);
+		UiSession.run(() -> {
+			tracked.clear();
+			lastFocused = null;
+			build();
+			state.restore(tracked);
+		});
 	}
 
 	/** Same table: {@code rebuildWidgets()} is {@code protected () → void} in every era; it clears the widgets and calls {@code init()}. */
 	@Override
 	protected void rebuildWidgets() {
-		state.capture(tracked);
-		rememberState(state);
-		super.rebuildWidgets();
+		UiSession.run(() -> {
+			state.capture(tracked);
+			rememberState(state);
+			super.rebuildWidgets();
+		});
 	}
 
 	@Override
 	public void tick() {
-		super.tick();
-		onTick();
+		UiSession.run(() -> {
+			super.tick();
+			onTick();
+		});
 	}
 
 	//? if >=26.1 {
 	// Same table: extractRenderState replaces render from 26.1; the Screen draws background and widgets in it.
 	@Override
 	public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-		super.extractRenderState(graphics, mouseX, mouseY, partialTick);
-		paint(new CompatPainter(graphics, font));
+		UiSession.run(() -> {
+			super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+			paint(new CompatPainter(graphics, font));
+		});
 	}
 
 	@Override
 	public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-		super.extractBackground(graphics, mouseX, mouseY, partialTick);
-		paintBackdrop(new CompatPainter(graphics, font));
+		UiSession.run(() -> {
+			super.extractBackground(graphics, mouseX, mouseY, partialTick);
+			paintBackdrop(new CompatPainter(graphics, font));
+		});
 	}
 	//?} else {
 	/*// Same table: render(GuiGraphics, int, int, float) up to 1.21.11; renderBackground(GuiGraphics, int, int, float)
 	// since 1.20.2 (earlier eras arrive with their nodes).
 	@Override
 	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-		super.render(graphics, mouseX, mouseY, partialTick);
-		paint(new CompatPainter(graphics, font));
+		UiSession.run(() -> {
+			super.render(graphics, mouseX, mouseY, partialTick);
+			paint(new CompatPainter(graphics, font));
+		});
 	}
 
 	@Override
 	public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-		super.renderBackground(graphics, mouseX, mouseY, partialTick);
-		paintBackdrop(new CompatPainter(graphics, font));
+		UiSession.run(() -> {
+			super.renderBackground(graphics, mouseX, mouseY, partialTick);
+			paintBackdrop(new CompatPainter(graphics, font));
+		});
 	}
 	*///?}
 
 	/** Same table, "Screen: input": {@code mouseScrolled(double, double, double, double)} since 1.20.2 (three doubles before). */
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-		return onWheel(scrollY) || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+		return UiSession.attempt(() -> wheel(scrollY) || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY));
 	}
 
 	//? if >=1.21.9 {
 	// Same table: keyPressed(KeyEvent) from 1.21.9.
 	@Override
 	public boolean keyPressed(KeyEvent event) {
-		return handlePageKey(event.key()) || super.keyPressed(event);
+		return UiSession.attempt(() -> pageKey(event.key()) || super.keyPressed(event));
 	}
 	//?} else {
 	/*// Same table: keyPressed(int, int, int) up to 1.21.8.
 	@Override
 	public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-		return handlePageKey(keyCode) || super.keyPressed(keyCode, scanCode, modifiers);
+		return UiSession.attempt(() -> pageKey(keyCode) || super.keyPressed(keyCode, scanCode, modifiers));
 	}
 	*///?}
+
+	/** The mod's page keys only while the UI is on; the vanilla half of the calling expression always runs. */
+	private boolean pageKey(int glfwKey) {
+		return !UiSession.off() && handlePageKey(glfwKey);
+	}
+
+	/** The mod's wheel only while the UI is on; the vanilla half of the calling expression always runs. */
+	private boolean wheel(double verticalDelta) {
+		return !UiSession.off() && onWheel(verticalDelta);
+	}
 
 	private boolean handlePageKey(int glfwKey) {
 		if (glfwKey == KEY_PAGE_UP) {
@@ -191,11 +220,13 @@ public abstract class CompatScreen extends Screen {
 	/** Same table, "Screen: widgets and narration": {@code updateNarrationState(NarrationElementOutput)} is the same in every era. */
 	@Override
 	protected void updateNarrationState(NarrationElementOutput output) {
-		super.updateNarrationState(output);
-		for (String line : narration()) {
-			if (!line.isBlank()) {
-				output.nest().add(NarratedElementType.TITLE, Text.literal(line));
+		UiSession.run(() -> {
+			super.updateNarrationState(output);
+			for (String line : narration()) {
+				if (!line.isBlank()) {
+					output.nest().add(NarratedElementType.TITLE, Text.literal(line));
+				}
 			}
-		}
+		});
 	}
 }

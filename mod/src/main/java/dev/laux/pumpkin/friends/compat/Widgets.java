@@ -1,5 +1,6 @@
 package dev.laux.pumpkin.friends.compat;
 
+import dev.laux.pumpkin.friends.ui.UiSession;
 import dev.laux.pumpkin.friends.ui.model.GuiMetrics;
 import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
@@ -12,7 +13,9 @@ import net.minecraft.client.gui.components.StringWidget;
 
 /**
  * The widgets of the kit, all vanilla and none overriding an input method (INGAME 4.4). They are created at
- * {@code (0, 0)}; the screen layout moves them. INGAME-API.md 3, tables "Widgets: Button, Checkbox, text" and "Widgets: EditBox".
+ * {@code (0, 0)}; the screen layout moves them. Their handlers run in the session's soft-failure guard (INGAME 4.2):
+ * vanilla calls them from its own input dispatch, so a press that fails must not throw into the game.
+ * INGAME-API.md 3, tables "Widgets: Button, Checkbox, text" and "Widgets: EditBox".
  */
 public final class Widgets {
 	private Widgets() {
@@ -20,7 +23,7 @@ public final class Widgets {
 
 	/** {@code Button#builder(Component, OnPress)} and {@code Button.Builder#bounds} exist in every era. */
 	public static AbstractWidget button(String label, int width, Runnable onPress) {
-		return Button.builder(Text.literal(label), pressed -> onPress.run())
+		return Button.builder(Text.literal(label), pressed -> UiSession.run(onPress))
 			.bounds(0, 0, width, GuiMetrics.BUTTON_HEIGHT).build();
 	}
 
@@ -48,7 +51,7 @@ public final class Widgets {
 		return Checkbox.builder(Text.literal(label), font())
 			.pos(0, 0)
 			.selected(selected)
-			.onValueChange((checkbox, value) -> onChange.accept(value))
+			.onValueChange((checkbox, value) -> UiSession.run(() -> onChange.accept(value)))
 			.build();
 	}
 

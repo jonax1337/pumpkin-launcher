@@ -209,6 +209,11 @@ The screens of the hub (INGAME 6.2) stand on two layers:
   `visible = false`; the 2 px scrollbar comes from `ScrollModel`), `TabBar`, `Row`. Everything era-specific sits in
   `compat/` (`CompatScreen`, `CompatPainter`, `Widgets`, `Text`, `GameScreens`, ...), keyed on the Minecraft version
   through Stonecutter conditionals, so the NeoForge and Forge nodes reuse it unchanged.
+- `core/src/main/java/.../ui/UiSession` is the soft-failure guard behind all of it (INGAME 4.2): every entry point that
+  calls game code — the pause-menu hook, the kit's button and toggle handlers, `CompatScreen`'s lifecycle overrides —
+  runs inside it. The first `RuntimeException` or `LinkageError` (era mismatches surface as the latter) logs one line
+  and switches the mod's UI off for the session; the pause button then stays away, while the input overrides keep the
+  vanilla half of their expression (above all the escape key) alive.
 
 `ui/FriendsScreen` (the screen of the merged 26.3 state) runs on the kit already; the hub screens of package U2
 replace it.
