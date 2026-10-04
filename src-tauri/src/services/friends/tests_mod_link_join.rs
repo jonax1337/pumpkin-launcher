@@ -213,6 +213,11 @@ async fn joining_here_hands_the_mod_a_loopback_address_that_leads_into_the_world
     assert_eq!(answer["ok"], true, "{answer}");
     let address = JoinScene::address_of(&answer);
     let socket: SocketAddr = address.parse().unwrap();
+    // macOS kennt auf lo0 nur 127.0.0.1 (joining::join_ip); überall sonst muss die Adresse gerade nicht 127.0.0.1
+    // sein, damit sie niemand errät.
+    #[cfg(target_os = "macos")]
+    assert!(socket.ip().is_loopback(), "{address}");
+    #[cfg(not(target_os = "macos"))]
     assert!(socket.ip().is_loopback() && socket.ip() != IpAddr::V4(Ipv4Addr::LOCALHOST), "{address}");
     let _game = enter_world(&address).await;
     scene.scene.host.wait_guest(&scene.scene.guest.id(), (GuestState::Connected, false)).await;

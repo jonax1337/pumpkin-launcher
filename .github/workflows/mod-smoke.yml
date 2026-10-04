@@ -70,7 +70,6 @@ jobs:
           - { cell: 1.20.1-forge, java: 17, gradle-java: 21 }
     env:
       PUMPKIN_SMOKE_CELL: ${{ matrix.cell }}
-      PUMPKIN_SMOKE_DIST: mod/build/mod-index
       # Software-GL für den headlessen Client; erbt an das Spiel weiter.
       LIBGL_ALWAYS_SOFTWARE: '1'
     steps:
@@ -120,8 +119,10 @@ jobs:
 
       - name: Run the smoke cell
         env:
-          # runner-Kontext ist nur in Schritt-Env erlaubt (actionlint), daher hier und nicht im Job.
+          # runner-Kontext ist nur in Schritt-Env erlaubt (actionlint), daher hier und nicht im Job. Der Dist-Pfad ist
+          # absolut, weil cargo die Test-Binare mit cwd im Paketverzeichnis (src-tauri) startet.
           PUMPKIN_SMOKE_DATA: ${{ runner.temp }}/smoke-data
+          PUMPKIN_SMOKE_DIST: ${{ github.workspace }}/mod/build/mod-index
         run: |
           xvfb-run --auto-servernum --server-args='-screen 0 1280x720x24' \
             cargo test --manifest-path src-tauri/Cargo.toml --locked --features smoke --test smoke smoke_cell -- --exact --nocapture
