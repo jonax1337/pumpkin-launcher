@@ -28,7 +28,7 @@ use super::test_support::{error_key, TempDir};
 use super::{AccountProfile, Friends, Lifecycle, NetOptions, PeerStreamHandler};
 use crate::models::new_id;
 use crate::services::gamesignal::{GameSignal, GameSignals};
-use crate::services::modbridge::ModBridge;
+use crate::services::modbridge::{Expectations, ModBridge};
 use crate::services::p2p::{
     frame, Admission, BiStream, CloseCode, CloseReason, Gate, NetConfig, PeerConn, PeerId, PeerNet, RelayEntry,
     RelayOperator, RelaySelection, RelayTls, DIAL_TIMEOUT,
@@ -704,13 +704,13 @@ async fn enabling_needs_a_microsoft_account_and_starts_the_mod_bridge_until_disa
     let node = Node::started(offline_options(), Arc::new(MemorySecretStore::new()), TempDir::new()).await;
     let refused = node.friends.enable(enable_input("Anna"), None).await;
     assert_eq!(error_key(&refused.unwrap_err()), "errors.friends.msAccountRequired");
-    assert!(node.bridge.launch_env("i1", ModLoader::Fabric).is_empty());
+    assert!(node.bridge.register_launch("i1", Expectations::unconstrained()).is_empty());
 
     node.friends.enable(enable_input("Anna"), Some(account("Anna"))).await.unwrap();
-    assert!(!node.bridge.launch_env("i1", ModLoader::Fabric).is_empty(), "bridge runs with the feature");
+    assert!(!node.bridge.register_launch("i1", Expectations::unconstrained()).is_empty(), "bridge runs with the feature");
 
     node.friends.disable().await.unwrap();
-    assert!(node.bridge.launch_env("i1", ModLoader::Fabric).is_empty(), "bridge stops with the feature");
+    assert!(node.bridge.register_launch("i1", Expectations::unconstrained()).is_empty(), "bridge stops with the feature");
 }
 
 #[tokio::test]
