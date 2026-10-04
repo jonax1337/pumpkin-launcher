@@ -162,7 +162,7 @@ public abstract class CompatScreen extends Screen {
 	}
 	//?} else {
 	/*// Same table: render(GuiGraphics, int, int, float) up to 1.21.11; renderBackground(GuiGraphics, int, int, float)
-	// since 1.20.2 (earlier eras arrive with their nodes).
+	// since 1.20.2, one parameter before.
 	@Override
 	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		UiSession.run(() -> {
@@ -171,6 +171,7 @@ public abstract class CompatScreen extends Screen {
 		});
 	}
 
+	//? if >=1.20.2 {
 	@Override
 	public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		UiSession.run(() -> {
@@ -178,13 +179,29 @@ public abstract class CompatScreen extends Screen {
 			paintBackdrop(new CompatPainter(graphics, font));
 		});
 	}
+	//?} else {
+	@Override
+	public void renderBackground(GuiGraphics graphics) {
+		UiSession.run(() -> {
+			super.renderBackground(graphics);
+			paintBackdrop(new CompatPainter(graphics, font));
+		});
+	}
+	//?}
 	*///?}
 
-	/** Same table, "Screen: input": {@code mouseScrolled(double, double, double, double)} since 1.20.2 (three doubles before). */
+	/** Same table, "Screen: input": {@code mouseScrolled} has four doubles since 1.20.2, three before (no horizontal delta). */
+	//? if >=1.20.2 {
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
 		return UiSession.attempt(() -> wheel(scrollY) || super.mouseScrolled(mouseX, mouseY, scrollX, scrollY));
 	}
+	//?} else {
+	/*@Override
+	public boolean mouseScrolled(double mouseX, double mouseY, double scrollY) {
+		return UiSession.attempt(() -> wheel(scrollY) || super.mouseScrolled(mouseX, mouseY, scrollY));
+	}
+	*///?}
 
 	//? if >=1.21.9 {
 	// Same table: keyPressed(KeyEvent) from 1.21.9.
