@@ -104,11 +104,11 @@ impl Launch {
     }
 }
 
-/// Die Bereiche, die der Nutzer für diesen Start vorab erlaubt hat (Einstellung „Aktionen im Spiel“ = erlauben,
-/// Amendment A13). Das Feld dafür bringt Paket W1 in die Erwartungen; bis dahin erlaubt der Start nichts vorab. Dies ist
-/// die einzige Stelle, die W1 anfassen muss.
-fn pre_granted(_expectations: &Expectations) -> impl IntoIterator<Item = Scope> {
-    std::iter::empty()
+/// Die Bereiche, die der Nutzer für diesen Start vorab erlaubt hat: mit der Einstellung „Aktionen im Spiel“ = erlauben
+/// (`Expectations::pre_granted`, Amendment A13) beide, sonst keinen.
+fn pre_granted(expectations: &Expectations) -> impl IntoIterator<Item = Scope> {
+    let scopes: &[Scope] = if expectations.pre_granted { &[Scope::Share, Scope::Social] } else { &[] };
+    scopes.iter().copied()
 }
 
 /// Die Zählfenster der Vorgänge je Klasse (INGAME 5.6).
@@ -155,11 +155,6 @@ impl Grants {
     fn with_allowed(allowed: impl IntoIterator<Item = Scope>) -> Self {
         let prompts = SlidingWindow::new(PROMPTS_PER_SPAN, PROMPT_SPAN);
         Self { allowed: allowed.into_iter().collect(), prompt_open: false, prompts }
-    }
-
-    #[cfg(test)]
-    fn new() -> Self {
-        Self::with_allowed([])
     }
 
     pub fn is_allowed(&self, scope: Scope) -> bool {
@@ -245,7 +240,7 @@ mod tests {
 
     #[test]
     fn one_prompt_at_a_time_and_three_in_ten_minutes() {
-        let (start, mut grants) = (Instant::now(), Grants::new());
+        let (start, mut grants) = (Instant::now(), Grants::with_allowed([]));
         assert_eq!(grants.begin_prompt(start), Ok(()));
         assert_eq!(grants.begin_prompt(start), Err(PromptRefusal::Open));
         grants.end_prompt(None);
@@ -267,15 +262,17 @@ mod tests {
     }
 
     #[test]
-    fn without_a_pre_grant_in_the_expectations_nothing_is_allowed_up_front() {
-        let launch = Launch::new("t".into(), Expectations::unconstrained());
+    fn the_expectations_decide_whether_a_launch_starts_pre_granted() {
+        let asking = Launch::new("t".into(), Expectations::unconstrained());
+        assert_eq!(asking.grants.scopes(), Scopes { share: ScopeState::Ask, social: ScopeState::Ask });
 
-        assert!(!launch.grants.is_allowed(Scope::Share) && !launch.grants.is_allowed(Scope::Social));
+        let pre_granted = Launch::new("t".into(), Expectations { pre_granted: true, ..Expectations::unconstrained() });
+        assert_eq!(pre_granted.grants.scopes(), Scopes { share: ScopeState::Allow, social: ScopeState::Allow });
     }
 
     #[test]
     fn an_allow_lasts_and_shows_in_the_scopes() {
-        let (start, mut grants) = (Instant::now(), Grants::new());
+        let (start, mut grants) = (Instant::now(), Grants::with_allowed([]));
         assert_eq!(grants.scopes(), Scopes { share: ScopeState::Ask, social: ScopeState::Ask });
         grants.begin_prompt(start).unwrap();
         grants.end_prompt(Some(Scope::Share));
