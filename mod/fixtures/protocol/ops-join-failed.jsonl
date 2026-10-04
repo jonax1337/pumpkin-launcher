@@ -1,0 +1,2 @@
+{"direction":"modToLauncher","line":{"type":"req","id":"o22","op":"join.failed","args":{}}}
+{"direction":"launcherToMod","line":{"type":"res","id":"o22","ok":true,"result":{}}}

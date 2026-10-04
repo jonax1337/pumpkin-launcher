@@ -1,0 +1,8 @@
+{"direction":"launcherToMod","line":{"type":"res","id":"r01","ok":false,"error":{"code":"badRequest","params":{"reason":"nameInvalid"}}}}
+{"direction":"launcherToMod","line":{"type":"res","id":"r02","ok":false,"error":{"code":"badRequest","params":{"reason":"instanceMismatch","verdict":"missingContent","missing":0,"extra":1}}}}
+{"direction":"launcherToMod","line":{"type":"res","id":"r03","ok":false,"error":{"code":"denied","params":{"reason":"owner"}}}}
+{"direction":"launcherToMod","line":{"type":"res","id":"r04","ok":false,"error":{"code":"busy","params":{"reason":"tooManyCodes","max":3}}}}
+{"direction":"launcherToMod","line":{"type":"res","id":"r05","ok":false,"error":{"code":"directoryUnavailable","params":{"reason":"directoryNotAllowed"}}}}
+{"direction":"launcherToMod","line":{"type":"res","id":"r06","ok":false,"error":{"code":"rateLimited","params":{"reason":"nameCooldown","days":7}}}}
+{"direction":"launcherToMod","line":{"type":"res","id":"r07","ok":false,"error":{"code":"notFound","params":{"reason":"notRenamed"}}}}
+{"direction":"launcherToMod","line":{"type":"res","id":"r08","ok":false,"error":{"code":"nameUnknown","params":{"reason":"nameNotFindable"}}}}

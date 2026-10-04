@@ -10,6 +10,17 @@ pub trait OwnerCheck: Send + Sync {
     fn owns(&self, pid: u32, peer: SocketAddr, local: SocketAddr) -> io::Result<bool>;
 }
 
+/// Ein vorgegebenes Urteil, das ein Test jederzeit ändern kann.
+#[cfg(test)]
+pub(super) struct OwnerFn(pub std::sync::Arc<dyn Fn(u32, SocketAddr, SocketAddr) -> io::Result<bool> + Send + Sync>);
+
+#[cfg(test)]
+impl OwnerCheck for OwnerFn {
+    fn owns(&self, pid: u32, peer: SocketAddr, local: SocketAddr) -> io::Result<bool> {
+        (self.0)(pid, peer, local)
+    }
+}
+
 /// Fragt das Betriebssystem (`sockowner`).
 pub(super) struct SocketOwner;
 

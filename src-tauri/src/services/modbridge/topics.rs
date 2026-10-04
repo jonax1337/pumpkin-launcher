@@ -293,7 +293,7 @@ impl TopicStore {
 #[cfg(test)]
 mod tests {
     use super::super::limits::{LAUNCHER_LINE_BYTES, TOPIC_BUDGET_BYTES};
-    use super::super::protocol::{LauncherFrame, ModGuest, ModGuestState, ModPresence};
+    use super::super::protocol::{LauncherFrame, ModFriendNotice, ModGuest, ModGuestState, ModPresence};
     use super::*;
 
     const WIDEST_CHAR: &str = "\u{1F383}";
@@ -317,7 +317,13 @@ mod tests {
             }),
             Topic::Friends => TopicValue::Friends(
                 (0..MAX_FRIENDS)
-                    .map(|index| ModFriend { id: peer_id(index), name: text(NAME_CHARS), mc_uuid: Some("0".repeat(32)), presence: ModPresence::Playing })
+                    .map(|index| ModFriend {
+                        id: peer_id(index),
+                        name: text(NAME_CHARS),
+                        mc_uuid: Some("0".repeat(32)),
+                        presence: ModPresence::Playing,
+                        notice: Some(ModFriendNotice::Renamed { previous_name: text(NAME_CHARS) }),
+                    })
                     .collect(),
             ),
             Topic::Requests => TopicValue::Requests(RequestsView {
@@ -402,7 +408,7 @@ mod tests {
     #[test]
     fn peer_ids_are_replaced_by_stable_aliases_and_map_back() {
         let mut aliases = Aliases::default();
-        let friend = |id: &str| ModFriend { id: id.into(), name: "x".into(), mc_uuid: None, presence: ModPresence::Online };
+        let friend = |id: &str| ModFriend { id: id.into(), name: "x".into(), mc_uuid: None, presence: ModPresence::Online, notice: None };
         let guest = |id: &str| ModGuest { id: id.into(), name: "x".into(), state: ModGuestState::Invited };
         let friends = TopicValue::Friends(vec![friend("peer-a"), friend("peer-b")]).masked(&mut aliases);
         let session = TopicValue::Session(Some(ModSession { guests: vec![guest("peer-b"), guest("peer-c")] })).masked(&mut aliases);

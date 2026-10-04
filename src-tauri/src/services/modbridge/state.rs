@@ -42,6 +42,12 @@ pub(super) struct State {
     pub launches: HashMap<String, Launch>,
 }
 
+/// Was ein Vorgang über den Start wissen muss, ohne den Datensatz selbst zu sehen.
+pub(super) struct LaunchFacts {
+    pub online_account: bool,
+    pub pid: Option<u32>,
+}
+
 pub(super) struct Listening {
     pub port: u16,
     pub stop: CancellationToken,
@@ -82,6 +88,11 @@ impl Inner {
         self.with_launch(instance_id, |launch| launch.grants.end_prompt(granted));
     }
 
+    #[cfg(test)]
+    pub fn allow_scope(&self, instance_id: &str, scope: Scope) {
+        self.end_prompt(instance_id, Some(scope));
+    }
+
     /// Zählt einen Vorgang; ein Start, den es nicht mehr gibt, darf nichts mehr.
     pub fn take_rate(&self, instance_id: &str, class: RateClass, now: Instant) -> bool {
         self.with_launch(instance_id, |launch| launch.limits.take(class, now)).unwrap_or(false)
@@ -120,7 +131,12 @@ impl Inner {
     pub async fn admit(self: &Arc<Self>, hello: &Hello, peer: SocketAddr, local: SocketAddr) -> Result<Admitted, RejectReason> {
         let pid = self.check_credentials(hello)?;
         self.verify_owner(pid, peer, local).await?;
-        self.install_link(&hello.token)
+        self.install_link(&hello.token, peer, local)
+    }
+
+    /// Ob dieser Start ein Microsoft-Konto hat und welcher Prozess sein Spiel ist, sofern der Launcher ihn kennt.
+    pub fn launch_facts(&self, instance_id: &str) -> Option<LaunchFacts> {
+        self.with_launch(instance_id, |launch| LaunchFacts { online_account: launch.expectations.online_account, pid: launch.pid })
     }
 
     /// Token, Protokoll und Mod; liefert den Spielprozess, wenn der Launcher ihn schon kennt.
@@ -143,7 +159,8 @@ impl Inner {
         launch.pid.ok_or(RejectReason::Retry)
     }
 
-    async fn verify_owner(&self, pid: u32, peer: SocketAddr, local: SocketAddr) -> Result<(), RejectReason> {
+    /// Dieselbe Prüfung wie bei der Anmeldung; jeder Fehler gilt als „gehört nicht“ (INGAME 5.2).
+    pub async fn verify_owner(&self, pid: u32, peer: SocketAddr, local: SocketAddr) -> Result<(), RejectReason> {
         let owner = self.owner.clone();
         match tokio::task::spawn_blocking(move || owner.owns(pid, peer, local)).await {
             Ok(Ok(true)) => Ok(()),
@@ -160,7 +177,7 @@ impl Inner {
     }
 
     /// Trägt die Verbindung ein, wenn der Start sie noch will: Token noch gültig, noch keine andere Verbindung.
-    fn install_link(&self, token: &str) -> Result<Admitted, RejectReason> {
+    fn install_link(&self, token: &str, peer: SocketAddr, local: SocketAddr) -> Result<Admitted, RejectReason> {
         let mut state = lock(&self.state);
         let (instance_id, launch) = state.launches.iter_mut().find(|(_, launch)| launch.token == token).ok_or(RejectReason::Token)?;
         if launch.link.is_some() {
@@ -170,6 +187,8 @@ impl Inner {
             id: self.next_link_id.fetch_add(1, Ordering::Relaxed),
             queue: Arc::new(LinkQueue::new(self.timing.topic_coalesce)),
             abort: CancellationToken::new(),
+            peer,
+            local,
         };
         link.queue.mark_topics(launch.topics.valued());
         launch.link = Some(link.clone());
