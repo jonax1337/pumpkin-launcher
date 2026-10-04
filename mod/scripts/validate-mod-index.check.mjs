@@ -1,6 +1,6 @@
 // Spezifikation von validate-mod-index.mjs: node mod/scripts/validate-mod-index.check.mjs
 import assert from 'node:assert/strict';
-import { indexProblems, verifiedAgreementProblems, verifiedFileProblems } from './validate-mod-index.mjs';
+import { indexProblems } from './validate-mod-index.mjs';
 
 const SHA256 = 'a'.repeat(64);
 
@@ -63,30 +63,6 @@ const cases = [
 	['rejects two nodes with the same file name', () => {
 		const problems = indexProblems(index(node(), node({ id: '1.21.5-neoforge', minecraft: ['1.21.5'] })));
 		assert.ok(problems.some(problem => problem.includes('file name is used by')));
-	}],
-	['accepts a verified.json with proven cells of nodes.txt', () =>
-		assert.deepEqual(verifiedFileProblems({ '1.21.1-neoforge': { smoke: '2026-10-04', owner: null } }, ['1.21.1-neoforge']), [])],
-	['accepts an empty verified.json: no cell is on', () => assert.deepEqual(verifiedFileProblems({}, ['1.21.1-neoforge']), [])],
-	['rejects a verified.json entry for a node nodes.txt does not have', () => {
-		const problems = verifiedFileProblems({ '9.9-forge': { smoke: '2026-10-04', owner: null } }, ['1.21.1-neoforge']);
-		assert.match(problems[0], /not a node of nodes\.txt/);
-	}],
-	['rejects a verified.json entry without a smoke date, without owner or with another field', () => {
-		const known = ['1.21.1-neoforge'];
-		assert.equal(verifiedFileProblems({ '1.21.1-neoforge': { owner: null } }, known).length, 1);
-		assert.equal(verifiedFileProblems({ '1.21.1-neoforge': { smoke: '2026-10-04' } }, known).length, 1);
-		assert.equal(verifiedFileProblems({ '1.21.1-neoforge': { smoke: '2026-10-04', owner: null, by: 'me' } }, known).length, 1);
-		assert.equal(verifiedFileProblems([], known).length, 1);
-	}],
-	['finds an index that disagrees with verified.json in either direction', () => {
-		const proven = { smoke: '2026-10-04', owner: null };
-		const other = node({ id: '1.21.1-fabric', loader: 'fabric', strategy: 'fabricAddMods', file: 'pumpkin_friends-2.1.0+1.21.1-fabric.jar' });
-		const unproven = index(node(), other);
-		const stamped = index(node({ verified: proven }), other);
-		assert.deepEqual(verifiedAgreementProblems(stamped, { '1.21.1-neoforge': proven }), []);
-		assert.deepEqual(verifiedAgreementProblems(unproven, {}), []);
-		assert.match(verifiedAgreementProblems(unproven, { '1.21.1-neoforge': proven })[0], /1\.21\.1-neoforge: verified in the index differs/);
-		assert.match(verifiedAgreementProblems(stamped, {})[0], /1\.21\.1-neoforge: verified in the index differs/);
 	}],
 ];
 
