@@ -30,6 +30,15 @@ pub struct LaunchFacts<'a> {
     pub mod_ids_in_instance: &'a [String],
 }
 
+#[cfg(feature = "smoke")]
+impl LaunchFacts<'_> {
+    /// Rauchtest (A18, `tests/smoke`): der Start läuft mit einem Offline-Konto, das Tor soll aber so entscheiden, als hätte
+    /// er ein Microsoft-Konto. Nur dieses eine Tor wird überstimmt; alle anderen Bedingungen bleiben echt.
+    pub fn with_online_account_forced(self) -> Self {
+        Self { online_account: true, ..self }
+    }
+}
+
 /// Das Ergebnis: den Knoten einspeisen oder auslassen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Decision<'a> {
@@ -201,6 +210,18 @@ mod tests {
         for (name, facts, expected) in cases {
             assert_eq!(skip_reason(&index, &facts), expected, "{name}");
         }
+    }
+
+    #[cfg(feature = "smoke")]
+    #[test]
+    fn the_smoke_feature_overrules_only_the_online_account_gate() {
+        let index = index();
+        let offline = LaunchFacts { online_account: false, ..fitting_facts() };
+        assert_eq!(skip_reason(&index, &offline), SkipReason::OfflineAccount);
+
+        assert_eq!(decide(&index, &offline.with_online_account_forced()), Decision::Inject(index.node("1.21.1-fabric").unwrap()));
+        let java_too_old = LaunchFacts { java_major: Some(17), ..offline };
+        assert_eq!(skip_reason(&index, &java_too_old.with_online_account_forced()), SkipReason::Unfit(Unfit::JavaTooOld { need: 21 }));
     }
 
     #[test]
