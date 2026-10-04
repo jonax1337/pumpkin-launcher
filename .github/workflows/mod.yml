@@ -2,6 +2,7 @@ name: Mod
 
 # Baut die In-Game-Mod (mod/, docs/friends/INGAME.md 4.3 und 11.2) für jeden Knoten aus mod/nodes.txt: ein Job pro Knoten
 # mit dem JDK, das nodes.txt für ihn nennt. Das Ergebnis ist ein Artefakt "mod-index" mit mod-index.json und allen Jars.
+# Die Compile-Matrix (matrix-compile) übersetzt jeden Knoten außerdem gegen beide Enden und eine Mitte seiner Minecraft-Liste.
 # Noch kein Rauchtest (Paket S2): kein Knoten wird hier als "verified" markiert.
 
 on:
@@ -33,20 +34,19 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      # java = JDK des Spiels, gradleJava = JDK für Gradle (mindestens mod.gradleJdkMin), family = Cache-Familie.
+      # java = JDK des Spiels, gradleJava = JDK, auf dem Gradle läuft (Spalte gradleJdk), family = Cache-Familie.
       - name: Read nodes.txt
         id: matrix
         run: |
-          gradle_jdk_min=$(sed -n 's/^mod\.gradleJdkMin=//p' mod/gradle.properties)
-          matrix=$(jq -R -s -c --argjson min "$gradle_jdk_min" '
+          matrix=$(jq -R -s -c '
             split("\n")
             | map(sub("#.*"; "") | gsub("^\\s+|\\s+$"; "") | select(length > 0) | gsub("\\s+"; " ") | split(" "))
-            | map((.[4] | tonumber) as $java | {
+            | map({
                 id: .[0],
                 loader: .[1],
-                java: $java,
-                gradleJava: (if $java > $min then $java else $min end),
-                family: (if .[1] == "fabric" then "fabric-remap" elif .[1] == "neoforge" then "neoforge" else "legacyforge" end)
+                java: (.[4] | tonumber),
+                gradleJava: (.[6] | tonumber),
+                family: (if .[1] == "fabric" then "fabric" elif .[1] == "neoforge" then "neoforge" else "legacyforge" end)
               })' mod/nodes.txt)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
@@ -69,6 +69,9 @@ jobs:
 
       - name: validate-mod-index (specification)
         run: node mod/scripts/validate-mod-index.check.mjs
+
+      - name: compile-matrix (specification)
+        run: node mod/scripts/compile-matrix.check.mjs
 
   build:
     name: Node ${{ matrix.id }}
@@ -128,6 +131,62 @@ jobs:
           name: mod-node-${{ matrix.id }}
           path: mod/build/mod-index/
           if-no-files-found: error
+
+  # Compile-Matrix (INGAME 4.3): jeder Knoten gegen beide Enden und eine Mitte seiner Minecraft-Liste (nodes.txt, Spalte matrix).
+  # Ein Knoten, dessen Quellen gegen eine beanspruchte Version nicht mehr übersetzen, bricht hier statt erst im Spiel.
+  matrix-compile:
+    name: Compile matrix ${{ matrix.id }}
+    needs: [nodes, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.nodes.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+
+      - uses: gradle/actions/wrapper-validation@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      - name: Game JDK ${{ matrix.java }}
+        id: game-jdk
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+
+      - name: Expose the game JDK to Gradle
+        run: echo "PUMPKIN_JDK_${{ matrix.java }}=${{ steps.game-jdk.outputs.path }}" >> "$GITHUB_ENV"
+
+      - name: Gradle JDK ${{ matrix.gradleJava }}
+        if: matrix.gradleJava != matrix.java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.gradleJava }}
+
+      # compile-matrix.mjs startet Gradle mit JAVA_HOME = PUMPKIN_JDK_<gradleJdk>. setup-java hat JAVA_HOME auf das zuletzt
+      # eingerichtete JDK gesetzt, und das ist in beiden Fällen das JDK für Gradle.
+      - name: Expose the Gradle JDK
+        run: echo "PUMPKIN_JDK_${{ matrix.gradleJava }}=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Gradle cache (${{ matrix.family }})
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            mod/.gradle/loom-cache
+          key: gradle-${{ matrix.family }}-${{ hashFiles('mod/gradle.properties', 'mod/gradle/wrapper/gradle-wrapper.properties', format('mod/build-{0}.gradle', matrix.loader)) }}
+          restore-keys: |
+            gradle-${{ matrix.family }}-
+
+      - name: Compile against both ends and a middle version
+        run: node mod/scripts/compile-matrix.mjs --node ${{ matrix.id }}
 
   # Ein Artefakt mit mod-index.json und allen Jars; hier greift auch das Gesamtbudget.
   package:
