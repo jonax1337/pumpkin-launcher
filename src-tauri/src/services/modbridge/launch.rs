@@ -28,12 +28,15 @@ pub struct Expectations {
     pub online_account: bool,
     /// Der volle SHA-256 der eingebauten Mod-Datei; die Mod meldet in `hello` dessen Anfang.
     pub build_id: Option<String>,
+    /// Der Nutzer hat „Aktionen im Spiel“ auf „Erlauben“ gestellt: beide Geltungsbereiche sind von Anfang an
+    /// erlaubt, der Launcher fragt in diesem Spielstart nicht (INGAME 5.5).
+    pub pre_granted: bool,
 }
 
 impl Expectations {
     /// Der Start ohne Wissen über die Mod: jede Mod mit dem richtigen Token und Prozess wird angenommen.
     pub fn unconstrained() -> Self {
-        Self { node_id: None, online_account: true, build_id: None }
+        Self { node_id: None, online_account: true, build_id: None, pre_granted: false }
     }
 }
 
@@ -77,6 +80,7 @@ pub(super) struct Launch {
 
 impl Launch {
     pub fn new(token: String, expectations: Expectations) -> Self {
+        let grants = Grants::new(expectations.pre_granted);
         Self {
             token,
             expectations,
@@ -84,7 +88,7 @@ impl Launch {
             link: None,
             topics: TopicStore::default(),
             limits: OpLimits::default(),
-            grants: Grants::new(),
+            grants,
             ready: None,
         }
     }
@@ -136,8 +140,10 @@ pub(super) struct Grants {
 }
 
 impl Grants {
-    fn new() -> Self {
-        Self { allowed: HashSet::new(), prompt_open: false, prompts: SlidingWindow::new(PROMPTS_PER_SPAN, PROMPT_SPAN) }
+    /// Mit `pre_granted` sind alle Geltungsbereiche von Anfang an erlaubt.
+    fn new(pre_granted: bool) -> Self {
+        let allowed = if pre_granted { HashSet::from([Scope::Share, Scope::Social]) } else { HashSet::new() };
+        Self { allowed, prompt_open: false, prompts: SlidingWindow::new(PROMPTS_PER_SPAN, PROMPT_SPAN) }
     }
 
     pub fn is_allowed(&self, scope: Scope) -> bool {
@@ -223,7 +229,7 @@ mod tests {
 
     #[test]
     fn one_prompt_at_a_time_and_three_in_ten_minutes() {
-        let (start, mut grants) = (Instant::now(), Grants::new());
+        let (start, mut grants) = (Instant::now(), Grants::new(false));
         assert_eq!(grants.begin_prompt(start), Ok(()));
         assert_eq!(grants.begin_prompt(start), Err(PromptRefusal::Open));
         grants.end_prompt(None);
@@ -236,8 +242,23 @@ mod tests {
     }
 
     #[test]
+    fn a_pre_granted_launch_starts_with_every_scope_allowed() {
+        let grants = Grants::new(true);
+        assert!(grants.is_allowed(Scope::Share) && grants.is_allowed(Scope::Social));
+        assert_eq!(grants.scopes(), Scopes { share: ScopeState::Allow, social: ScopeState::Allow });
+    }
+
+    #[test]
+    fn the_expectations_decide_whether_a_launch_starts_pre_granted() {
+        let asking = Launch::new("t".into(), Expectations::unconstrained());
+        assert_eq!(asking.grants.scopes(), Scopes { share: ScopeState::Ask, social: ScopeState::Ask });
+        let pre_granted = Launch::new("t".into(), Expectations { pre_granted: true, ..Expectations::unconstrained() });
+        assert_eq!(pre_granted.grants.scopes(), Scopes { share: ScopeState::Allow, social: ScopeState::Allow });
+    }
+
+    #[test]
     fn an_allow_lasts_and_shows_in_the_scopes() {
-        let (start, mut grants) = (Instant::now(), Grants::new());
+        let (start, mut grants) = (Instant::now(), Grants::new(false));
         assert_eq!(grants.scopes(), Scopes { share: ScopeState::Ask, social: ScopeState::Ask });
         grants.begin_prompt(start).unwrap();
         grants.end_prompt(Some(Scope::Share));
