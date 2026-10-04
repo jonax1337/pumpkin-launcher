@@ -21,21 +21,35 @@ One **node** is one build target `<minecraft>-<loader>` that produces exactly on
 | Node | Loader | Game JDK | Gradle JDK | Strategy | Claims (`mod-index.json`) | Compile matrix | State |
 |---|---|---|---|---|---|---|---|
 | `26.3-fabric` | Fabric Loader >= 0.19.5 (not obfuscated) | 25 | 25 | `fabricAddMods` | 26.3 | 26.3 | the full mod on the widget kit (package U1) |
+| `26.2-fabric` | Fabric Loader >= 0.18.4 (not obfuscated) | 25 | 25 | `fabricAddMods` | 26.2 | 26.2 | the full mod on the widget kit (package V2) |
+| `26.1.2-fabric` | Fabric Loader >= 0.18.4 (not obfuscated) | 25 | 25 | `fabricAddMods` | 26.1.2 | 26.1, 26.1.1, 26.1.2 | the full mod on the widget kit (package V2) |
 | `1.21.1-fabric` | Fabric Loader >= 0.15.11 (**obfuscated**, remapped jar) | 21 | 25 | `fabricAddMods` | 1.21.1 | 1.20.5, 1.20.6, 1.21, 1.21.1 | the full mod on the widget kit (was the Fabric tracer until U1) |
+| `1.21.5-fabric` | Fabric Loader >= 0.16.10 (**obfuscated**, remapped jar) | 21 | 25 | `fabricAddMods` | 1.21.5 | 1.21.2, 1.21.4, 1.21.5 | the full mod on the widget kit (package V2) |
 | `1.21.8-fabric` | Fabric Loader >= 0.16.13 (**obfuscated**, remapped jar) | 21 | 25 | `fabricAddMods` | 1.21.8 | 1.21.6, 1.21.7, 1.21.8 | the full mod on the widget kit (package U1) |
-| `1.21.11-fabric` | Fabric Loader >= 0.17.3 (**obfuscated**, remapped jar) | 21 | 25 | `fabricAddMods` | 1.21.11 | 1.21.11 | the full mod on the widget kit (package U1) |
+| `1.21.10-fabric` | Fabric Loader >= 0.17.0 (**obfuscated**, remapped jar) | 21 | 25 | `fabricAddMods` | 1.21.10 | 1.21.9, 1.21.10 | the full mod on the widget kit (package V2) |
+| `1.21.11-fabric` | Fabric Loader >= 0.17.3 (**obfuscated**, remapped jar) | 21 | 25 | `fabricAddMods` | 1.21.11 | 1.21.11 | the full mod on the widget kit (package U1/V1a) |
+| `1.20.1-fabric` | Fabric Loader >= 0.14.21 (**obfuscated**, remapped jar) | 17 | 25 | `fabricAddMods` | 1.20.1 | 1.20, 1.20.1 | the full mod on the widget kit (package V2) |
+| `1.20.2-fabric` | Fabric Loader >= 0.14.22 (**obfuscated**, remapped jar) | 17 | 25 | `fabricAddMods` | 1.20.2 | 1.20.2 | the full mod on the widget kit (package V2) |
+| `1.20.4-fabric` | Fabric Loader >= 0.14.23 (**obfuscated**, remapped jar) | 17 | 25 | `fabricAddMods` | 1.20.4 | 1.20.3, 1.20.4 | the full mod on the widget kit (package V2) |
 | `1.21.1-neoforge` | NeoForge >= 21.1.0 | 21 | 21 | `fmlMavenRoot` | 1.21.1 | 1.21, 1.21.1 | **tracer**: logs `pumpkin_friends tracer 1.21.1 neoforge`, nothing else |
+| `1.21.5-neoforge` | NeoForge >= 21.3.56 | 21 | 21 | `fmlMavenRoot` | 1.21.5 | 1.21.3, 1.21.4, 1.21.5 | **tracer**: logs `pumpkin_friends tracer 1.21.5 neoforge`, nothing else |
+| `1.21.8-neoforge` | NeoForge >= 21.8.9 | 21 | 21 | `fmlMavenRoot` | 1.21.8 | 1.21.8 | **tracer**: logs `pumpkin_friends tracer 1.21.8 neoforge`, nothing else |
+| `1.21.10-neoforge` | NeoForge >= 21.10.63 | 21 | 21 | `fmlModFolders` | 1.21.10 | 1.21.10 | **tracer**: logs `pumpkin_friends tracer 1.21.10 neoforge`, nothing else |
+| `1.21.11-neoforge` | NeoForge >= 21.11.42 | 21 | 21 | `fmlModFolders` | 1.21.11 | 1.21.11 | **tracer**: logs `pumpkin_friends tracer 1.21.11 neoforge`, nothing else |
 | `26.2-neoforge` | NeoForge >= 26.2.0.57 | 25 | 25 | `fmlModFolders` | 26.2 | 26.2 | **tracer**: logs `pumpkin_friends tracer 26.2 neoforge`, nothing else |
 | `1.20.1-forge` | Forge >= 47.4.0 | 17 | 21 | `fmlMavenRoot` | 1.20.1 | 1.20.1 | **tracer**: logs `pumpkin_friends tracer 1.20.1 forge`, nothing else |
 
-The tracers only prove the build topology and the injection mechanisms (INGAME 11.2, spike S1):
-`26.2-neoforge` is the only node on which `-Dfml.modFolders` (FML 10 and newer) can be proven. Until package U1
-`1.21.1-fabric` was the Fabric tracer and the only node that proved the Loom-remapped jar of amendment A4 with a
-Mixin; the four Fabric nodes now carry the full mod, and the Mixin that proves A4 comes with the pause-menu hook
-(the tracer's Mixin sources and `descriptors/fabric-tracer/` are no longer used by any node). All four remap from
-Mojang names to intermediary names the same way (`loomx.unobfuscated=false`, `remapJar`), except `26.3-fabric`.
-`verified` is `null` for every node in `mod-index.json`: no smoke test has released a cell yet, so the launcher
-injects nothing.
+That is the full recommended list of `docs/friends/INGAME-API.md` section 5 except `26.1.2-neoforge` (A26 leaves it
+to a later wave); `1.21.10-neoforge` is in because the NeoForge maven has stable 21.10.x builds from 21.10.63 on and
+the API list names it. The five NeoForge and one Forge nodes remain **tracers**: they prove the build topology and
+the injection mechanisms (INGAME 11.2, spike S1), nothing else. `-Dfml.modFolders` (FML 10 and newer) is proven by
+`26.2-neoforge`, `1.21.10-neoforge` and `1.21.11-neoforge`, `--fml.mavenRoots` by `1.21.1-neoforge`,
+`1.21.5-neoforge`, `1.21.8-neoforge` and `1.20.1-forge`. All eleven Fabric nodes carry the full mod, and the Mixin
+that proves A4 comes with the pause-menu hook (the tracer's Mixin sources and `descriptors/fabric-tracer/` are no
+longer used by any node). The ten obfuscated Fabric nodes (1.20.1 to 1.21.11) remap from Mojang names to
+intermediary names the same way (`loomx.unobfuscated=false`, `remapJar`); the three 26.x nodes ship Mojang names.
+Every cell of the table has a passed local smoke run (2026-10-04, evidence in `docs/friends/INGAME-SMOKE.md`), so
+`verified.json` carries all eighteen nodes and the launcher injects on all of them.
 
 **Claims versus the compile matrix.** A node id carries the highest release it serves
 (`1.21.1-fabric` serves 1.20.5 to 1.21.1 according to `docs/friends/INGAME-API.md` section 5), but
@@ -56,7 +70,7 @@ Pins checked against the Maven metadata on 2026-10-03 (spike S1). Every row reso
 | Fabric Loom | 1.18.2, plugin ids `net.fabricmc.fabric-loom` (no remap, Minecraft >= 26.1) and `net.fabricmc.fabric-loom-remap` (older) | `maven.fabricmc.net` |
 | loom-back-compat | 0.4.3 (the Stonecutter wiki shows 0.4.2), plugin id `dev.kikugie.loom-back-compat` | `maven.kikugie.dev/releases`; **in use** since `1.21.1-fabric`: it applies the remapping or the non-remapping Loom per node (`loomx.unobfuscated` in `versions/<node>/gradle.properties`) and gives both the same `modImplementation` and `loomx.modJar` (= `remapJar` or `jar`). `settings.gradle` applies it, and a `beforeProject` hook there hands the Loom version (`loom_version` in `gradle.properties`) to the root project, but only when a Fabric node is selected: the plugin reads it from a project extra property, not from `gradle.properties`, and Loom on the class path would demand JDK 25 for NeoForge and Forge builds too |
 | ModDevGradle | 2.0.148, plugin ids `net.neoforged.moddev` and `net.neoforged.moddev.legacyforge` | Gradle plugin portal. `net.neoforged.moddev.legacy` does not exist |
-| NeoForge (dev) | 21.1.172 (21.1.253 is the newest 21.1.x), 21.0.167 (matrix end 1.21), 26.2.0.88 (`26.2-neoforge`) | NeoForged Maven, `userdev` artifact; 26.2.0.88 resolved and built |
+| NeoForge (dev) | 21.1.172 (21.1.253 is the newest 21.1.x), 21.0.167 (matrix end 1.21), 21.3.97/21.4.158/21.5.98 (`1.21.5-neoforge` and its matrix ends), 21.8.9 (`1.21.8-neoforge`; the newest 21.8.54 fails while setting up the Minecraft artifacts), 21.10.64 (`1.21.10-neoforge`), 21.11.45 (`1.21.11-neoforge`), 26.2.0.88 (`26.2-neoforge`) | NeoForged Maven, `userdev` artifact, stable (non-beta) builds only; every pin resolved and built |
 | Forge (dev) | 1.20.1-47.4.10 (recommended; 47.4.26 is latest) | Forge Maven and `promotions_slim.json` |
 | Fabric Loader (dev) | 0.19.5 (every Fabric node) | `maven.fabricmc.net`. **No Fabric API** (INGAME 4.2, decision 3): the mod depends on the loader only, so it also loads on instances without Fabric API; the entry point `ClientModInitializer` belongs to the loader |
 | JUnit | 6.1.3 | Maven Central |
@@ -283,14 +297,14 @@ fromNamespaceAndPath(String,String)`, `--only 1.21` compiled. The probe was not 
 ## `mod-index.json`
 
 ```json
-{ "modVersion": "2.1.0",
+{ "modVersion": "0.2.0",
   "nodes": [ { "id": "1.21.1-neoforge", "loader": "neoforge", "loaderMin": "21.1.0", "minecraft": ["1.21.1"],
-               "javaMin": 21, "strategy": "fmlMavenRoot", "verified": null,
-               "file": "pumpkin_friends-2.1.0+1.21.1-neoforge.jar", "sha256": "<64 lowercase hex>" } ] }
+               "javaMin": 21, "strategy": "fmlMavenRoot", "verified": { "smoke": "2026-10-04", "owner": null },
+               "file": "pumpkin_friends-0.2.0+1.21.1-neoforge.jar", "sha256": "<64 lowercase hex>" } ] }
 ```
 
 `minecraft` lists explicit release ids; a node only claims what it was built against. `strategy` is
-`fabricAddMods` for Fabric, `fmlMavenRoot` for NeoForge 21.1 and Forge 1.20.1, `fmlModFolders` for NeoForge on FML 10 and newer (`26.2-neoforge`; INGAME 3.5).
+`fabricAddMods` for Fabric, `fmlMavenRoot` for NeoForge up to FML 9 and Forge 1.20.1, `fmlModFolders` for NeoForge on FML 10 and newer (`1.21.10-neoforge`, `1.21.11-neoforge`, `26.2-neoforge`; INGAME 3.5).
 The mod version is `version` in `gradle.properties` (= the launcher version); the jar name is
 `pumpkin_friends-<modVersion>+<node id>.jar`.
 
