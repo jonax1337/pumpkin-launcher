@@ -40,10 +40,10 @@ public final class ShareModel {
 	/**
 	 * @param sessionHere       whether the session topic names guests of this game
 	 * @param worldOpenToLan    what the compat layer sees: the integrated server has published a port
-	 * @param sharingInstance   the instance that shares instead of this game, when the topics carry it
+	 * @param sharedElsewhere   the game topic's word that another game of this launcher holds the shared world
 	 */
 	public record Input(Game game, boolean onMultiplayerServer, Optional<Join> join, boolean sessionHere,
-			boolean worldOpenToLan, Optional<String> sharingInstance) {
+			boolean worldOpenToLan, boolean sharedElsewhere) {
 	}
 
 	public static State state(Input input) {
@@ -56,7 +56,7 @@ public final class ShareModel {
 		if (!input.game().hostable()) {
 			return explainsWhy(input.game()) ? State.NOT_HOSTABLE : State.UNKNOWN;
 		}
-		if (input.sharingInstance().isPresent()) {
+		if (input.sharedElsewhere()) {
 			return State.SHARED_ELSEWHERE;
 		}
 		if (input.sessionHere()) {

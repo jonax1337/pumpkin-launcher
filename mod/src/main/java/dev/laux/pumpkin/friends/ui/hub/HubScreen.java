@@ -11,6 +11,7 @@ import dev.laux.pumpkin.friends.state.Friend;
 import dev.laux.pumpkin.friends.state.FriendNotice;
 import dev.laux.pumpkin.friends.state.Game;
 import dev.laux.pumpkin.friends.state.Invite;
+import dev.laux.pumpkin.friends.state.Join;
 import dev.laux.pumpkin.friends.state.Me;
 import dev.laux.pumpkin.friends.state.Requests;
 import dev.laux.pumpkin.friends.state.Session;
@@ -38,7 +39,6 @@ public class HubScreen extends PumpkinScreen {
 	private static final int OPEN_WIDTH = 130;
 
 	private final BridgeClient client;
-	private final RetryCooldown deliverCooldown = new RetryCooldown();
 	private final InvitesTab invites;
 	private final ShareTab share;
 	private final OptionsTab options;
@@ -65,7 +65,7 @@ public class HubScreen extends PumpkinScreen {
 	private void chooseOpeningTabOnce() {
 		if (!opened) {
 			opened = true;
-			state().rememberSelectedTab(HubTab.openingTab(shown.requests().incoming().size(), shown.invites().size()).ordinal());
+			state().rememberSelectedTab(HubTab.openingTab(shown.incoming().size(), shown.invites().size()).ordinal());
 		}
 	}
 
@@ -124,11 +124,12 @@ public class HubScreen extends PumpkinScreen {
 
 	private void refreshView() {
 		shown = snapshot();
-		condition = HubCondition.of(shown.link(), shown.awaitingDialog(), shown.me());
+		condition = HubCondition.of(shown.link(), shown.awaitingDialog(), shown.me(), client.topics()::received);
 	}
 
 	private String tabTitle(HubTab tab) {
-		int badge = tab.badge(shown.requests(), shown.invites());
+		// The badge counts entries only; the pushed cooldown would rename the tab every second.
+		int badge = tab.badge(new Requests(shown.incoming(), shown.outgoing(), 0), shown.invites());
 		String label = Text.translate(tab.labelKey());
 		return badge == 0 ? label : label + " (" + badge + ")";
 	}
@@ -197,17 +198,16 @@ public class HubScreen extends PumpkinScreen {
 
 	private List<Row> requestRows() {
 		List<Row> rows = new ArrayList<>();
-		Requests requests = shown.requests();
-		if (requests.incoming().isEmpty() && requests.outgoing().isEmpty()) {
+		if (shown.incoming().isEmpty() && shown.outgoing().isEmpty()) {
 			return List.of(Row.text(Text.translate("pumpkin_friends.requests.empty")));
 		}
-		if (!requests.incoming().isEmpty()) {
+		if (!shown.incoming().isEmpty()) {
 			rows.add(Row.heading(Text.translate("pumpkin_friends.requests.incoming")));
-			requests.incoming().forEach(incoming -> rows.add(incomingRow(incoming)));
+			shown.incoming().forEach(incoming -> rows.add(incomingRow(incoming)));
 		}
-		if (!requests.outgoing().isEmpty()) {
+		if (!shown.outgoing().isEmpty()) {
 			rows.add(Row.heading(Text.translate("pumpkin_friends.requests.outgoing")));
-			requests.outgoing().forEach(outgoing -> rows.add(outgoingRow(outgoing)));
+			shown.outgoing().forEach(outgoing -> rows.add(outgoingRow(outgoing)));
 		}
 		return rows;
 	}
@@ -235,33 +235,41 @@ public class HubScreen extends PumpkinScreen {
 
 	/** The footer offers the redelivery only while something waits for delivery. */
 	private boolean delivering() {
-		return shown.requests().outgoing().stream().anyMatch(outgoing -> outgoing.state() == Requests.State.DELIVERING);
+		return shown.outgoing().stream().anyMatch(outgoing -> outgoing.state() == Requests.State.DELIVERING);
 	}
 
 	private void deliverNow() {
-		long now = System.currentTimeMillis();
-		if (!deliverCooldown.canSend(now)) {
+		if (deliverCooldownMillis() > 0) {
 			return;
 		}
-		deliverCooldown.markSent(now);
 		HubOps.run(this, client, Ops.friendsRetry());
+	}
+
+	/** The launcher's own cooldown (INGAME A27), pushed with the requests topic; it re-pushes about once a second. */
+	private long deliverCooldownMillis() {
+		return client.topics().retryCooldownMillis(System.currentTimeMillis());
 	}
 
 	/** The deliver button greys out for the cooldown; the other tabs' footer actions are not its business. */
 	private void refreshDeliverButton() {
 		if (currentTab() == HubTab.REQUESTS) {
-			extraFooterWidget().ifPresent(button -> button.active = deliverCooldown.canSend(System.currentTimeMillis()));
+			extraFooterWidget().ifPresent(button -> button.active = deliverCooldownMillis() == 0);
 		}
 	}
 
 	private Snapshot snapshot() {
 		TopicStore topics = client.topics();
-		return new Snapshot(client.state(), client.isAwaitingLauncherDialog(), topics.me(), topics.friends(), topics.requests(),
-			topics.invites(), topics.session(), topics.game());
+		return new Snapshot(client.state(), client.isAwaitingLauncherDialog(), topics.me(), topics.friends(),
+			topics.requests().incoming(), topics.requests().outgoing(), topics.invites(), topics.session(), topics.join(),
+			topics.game());
 	}
 
-	/** Everything the hub shows; a change of any of it rebuilds the screen. */
-	private record Snapshot(LinkState link, boolean awaitingDialog, Optional<Me> me, List<Friend> friends, Requests requests,
-			List<Invite> invites, Optional<Session> session, Game game) {
+	/**
+	 * Everything the hub shows; a change of any of it rebuilds the screen. The requests go in as lists, not as one
+	 * value: the pushed cooldown ticks every second and must grey the footer button, not rebuild the screen.
+	 */
+	private record Snapshot(LinkState link, boolean awaitingDialog, Optional<Me> me, List<Friend> friends,
+			List<Requests.Incoming> incoming, List<Requests.Outgoing> outgoing, List<Invite> invites, Optional<Session> session,
+			Optional<Join> join, Game game) {
 	}
 }

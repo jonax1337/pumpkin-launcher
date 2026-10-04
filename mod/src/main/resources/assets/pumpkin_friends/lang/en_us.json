@@ -170,5 +170,12 @@
 	"pumpkin_friends.options.network.via": "Connected via %s",
 	"pumpkin_friends.options.network.unknown": "Network: –",
 	"pumpkin_friends.options.actions.ask": "In-game actions: ask",
-	"pumpkin_friends.options.actions.allow": "In-game actions: allowed"
+	"pumpkin_friends.options.actions.allow": "In-game actions: allowed",
+	"_l3": "L3 (ingame/L3): me/game/requests topics, input and the hub's wait",
+	"pumpkin_friends.options.name": "Display name: %s",
+	"pumpkin_friends.options.name.unknown": "Display name: –",
+	"pumpkin_friends.options.findable.yes": "Findable by Minecraft name: yes",
+	"pumpkin_friends.options.findable.no": "Findable by Minecraft name: no",
+	"pumpkin_friends.options.findable.unknown": "Findable by Minecraft name: –",
+	"pumpkin_friends.share.elsewhere.unnamed": "Another of your games is sharing a world right now."
 }

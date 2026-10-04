@@ -15,8 +15,20 @@ import org.junit.jupiter.api.Test;
 class TopicStoreTest {
 	private static final String ONE_FRIEND = "[{\"id\":\"f1\",\"name\":\"Alex\",\"mcUuid\":null,\"presence\":\"online\"}]";
 	private static final String OTHER_FRIEND = "[{\"id\":\"f9\",\"name\":\"Zoe\",\"mcUuid\":null,\"presence\":\"offline\"}]";
+	private static final String ME_ONLINE = "{\"enabled\":true,\"availability\":\"available\",\"network\":\"online\","
+		+ "\"fingerprint\":null,\"directory\":\"active\",\"displayName\":\"Anna\",\"findableByName\":false,\"relayHost\":null}";
 
-	private final TopicStore store = new TopicStore();
+	/** Eine Uhr, die nur der Test bewegt: die Frist des Liefer-Buttons zählt an ihr. */
+	private static final class SetClock {
+		private long millis;
+
+		long millis() {
+			return millis;
+		}
+	}
+
+	private final SetClock clock = new SetClock();
+	private final TopicStore store = new TopicStore(clock::millis);
 	private final List<Topic> changed = new ArrayList<>();
 
 	TopicStoreTest() {
@@ -109,7 +121,7 @@ class TopicStoreTest {
 	@Test
 	void clearingForgetsValuesAndRevisionsSoAReconnectStartsFresh() {
 		push(Topic.FRIENDS, 9, ONE_FRIEND);
-		push(Topic.GAME, 4, "{\"hostable\":true,\"reason\":null,\"lan\":null}");
+		push(Topic.GAME, 4, "{\"hostable\":true,\"reason\":null,\"lan\":null,\"sharedElsewhere\":false}");
 		changed.clear();
 
 		store.clear();
@@ -118,6 +130,45 @@ class TopicStoreTest {
 		assertEquals(Game.UNKNOWN, store.game());
 		assertTrue(changed.containsAll(List.of(Topic.FRIENDS, Topic.GAME)) && changed.size() == 2);
 		assertTrue(push(Topic.FRIENDS, 1, ONE_FRIEND), "revision 1 is new again after a clear");
+	}
+
+	@Test
+	void receivedNamesTheTopicsWhoseFirstPushArrivedAndClearResetsThem() {
+		assertFalse(store.received(Topic.ME));
+		assertFalse(store.received(Topic.GAME), "das Spiel-Thema hat einen Platzhalter, aber noch keinen Schub");
+
+		push(Topic.ME, 1, ME_ONLINE);
+		push(Topic.GAME, 1, "{\"hostable\":true,\"reason\":null,\"lan\":null,\"sharedElsewhere\":false}");
+
+		assertTrue(store.received(Topic.ME));
+		assertTrue(store.received(Topic.GAME));
+		assertFalse(store.received(Topic.FRIENDS), "ein Thema ohne Schub bleibt unerwartet");
+
+		store.clear();
+
+		assertFalse(store.received(Topic.ME), "nach dem Verlust der Verbindung zählt der erste Schub neu");
+	}
+
+	@Test
+	void theRetryCooldownCountsDownFromThePushAndZeroMeansReady() {
+		push(Topic.REQUESTS, 1, "{\"incoming\":[],\"outgoing\":[],\"retryCooldownMs\":42000}");
+
+		assertEquals(42_000, store.retryCooldownMillis(clock.millis()));
+		assertEquals(41_000, store.retryCooldownMillis(clock.millis() + 1_000));
+		assertEquals(0, store.retryCooldownMillis(clock.millis() + 42_000), "abgelaufen bleibt null");
+		assertEquals(0, store.retryCooldownMillis(clock.millis() + 60_000));
+
+		push(Topic.REQUESTS, 2, "{\"incoming\":[],\"outgoing\":[],\"retryCooldownMs\":0}");
+		assertEquals(0, store.retryCooldownMillis(clock.millis()), "ein neuer Schub ersetzt die Frist");
+	}
+
+	@Test
+	void clearingDropsTheRetryCooldownUntilTheNextPush() {
+		push(Topic.REQUESTS, 1, "{\"incoming\":[],\"outgoing\":[],\"retryCooldownMs\":42000}");
+
+		store.clear();
+
+		assertEquals(0, store.retryCooldownMillis(clock.millis()));
 	}
 
 	private boolean push(Topic topic, long revision, String json) {

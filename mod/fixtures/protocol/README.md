@@ -32,7 +32,7 @@ Inside one file, a `res` or `pending` belongs to the `req` with the same `id` th
 | `pending.jsonl` | a request that waits for the launcher dialog: `req`, `pending`, `res` |
 | `ops.jsonl` | every operation of 5.4 but `join.failed`: its `req` and the `res` it gets when it succeeds |
 | `errors.jsonl` | one `res` for every error code (`instanceMismatch`: `invite.joinHere` while the running game does not match the invite; `forbidden`: `friend.acknowledge` for a notice only the user may review, `identityChanged` or `addedInGame`) |
-| `topics.jsonl` | a `state` push for every topic, with the aliases `f1`, `f2`, ... The `me` value carries `directory` (`active`, `off`, `unreachable`, `notAllowed`, `unavailable`): the state of the name directory, as `DirectoryState` in the launcher |
+| `topics.jsonl` | a `state` push for every topic, with the aliases `f1`, `f2`, ... The `me` value carries `directory` (`active`, `off`, `unreachable`, `notAllowed`, `unavailable`): the state of the name directory, as `DirectoryState` in the launcher; it also carries `displayName`, `findableByName` and `relayHost` (null when not connected through a relay). `requests` carries `retryCooldownMs`, `game` carries `sharedElsewhere` (its second push shows another game of the same launcher sharing) |
 | `topics-me-directory.jsonl` | the `me` topic once for every value of `directory` |
 | `topics-notice.jsonl` | the `friends` topic with a `notice` on an entry (`renamed` with `previousName`, `identityChanged`); an entry without a notice has no `notice` key |
 | `ops-join-failed.jsonl` | `join.failed`: the mod reports that connecting to the world of `invite.joinHere` failed; the launcher answers `{}` |

@@ -133,6 +133,12 @@ impl Hosting {
         let session = lock(&self.session);
         session.as_ref().filter(|session| session.instance_id == instance_id).map(|session| session.id.clone())
     }
+
+    /// Ob die (einzige) geteilte Welt zu einem anderen Spiel dieses Launchers gehört; die eigene Sitzung bleibt außen
+    /// vor und steht im Thema `session` (INGAME 6.4 „Gerade teilt …“).
+    pub(super) fn shares_another(&self, instance_id: &str) -> bool {
+        lock(&self.session).as_ref().is_some_and(|session| session.instance_id != instance_id)
+    }
 }
 
 /// Eine geteilte Welt mit ihren Gästen; nur im Speicher.

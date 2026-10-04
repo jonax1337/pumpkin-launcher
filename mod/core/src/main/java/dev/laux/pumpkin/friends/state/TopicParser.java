@@ -23,7 +23,8 @@ final class TopicParser {
 		JsonFields fields = JsonFields.of(value);
 		return new Me(fields.bool("enabled"), fields.enumValue("availability", Me.Availability.class),
 			fields.enumValue("network", Me.Network.class), fields.optionalString("fingerprint").map(Sanitize::title),
-			fields.enumValue("directory", Me.Directory.class));
+			fields.enumValue("directory", Me.Directory.class), Sanitize.name(fields.string("displayName")),
+			fields.bool("findableByName"), fields.optionalString("relayHost").map(Sanitize::host));
 	}
 
 	static List<Friend> friends(JsonElement value) {
@@ -36,7 +37,8 @@ final class TopicParser {
 		JsonFields fields = JsonFields.of(value);
 		return new Requests(
 			list(fields.objects("incoming"), TopicParser::incomingRequest),
-			list(fields.objects("outgoing"), TopicParser::outgoingRequest));
+			list(fields.objects("outgoing"), TopicParser::outgoingRequest),
+			fields.number("retryCooldownMs"));
 	}
 
 	static List<Invite> invites(JsonElement value) {
@@ -58,7 +60,8 @@ final class TopicParser {
 	static Game game(JsonElement value) {
 		JsonFields fields = JsonFields.of(value);
 		OptionalInt lanPort = fields.optionalObject("lan").map(lan -> OptionalInt.of(lan.integer("port"))).orElse(OptionalInt.empty());
-		return new Game(fields.bool("hostable"), fields.optionalObject("reason").map(TopicParser::unhostable), lanPort);
+		return new Game(fields.bool("hostable"), fields.optionalObject("reason").map(TopicParser::unhostable), lanPort,
+			fields.bool("sharedElsewhere"));
 	}
 
 	static List<Code> codes(JsonElement value) {

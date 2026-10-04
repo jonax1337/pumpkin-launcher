@@ -23,7 +23,7 @@ pub(super) async fn publish(shared: &Arc<Shared>, instance_id: &str, friends: &[
     let bridge = &shared.bridge;
     bridge.set_topic(instance_id, me(&shared.friends.state()));
     bridge.set_topic(instance_id, friends_of(friends));
-    bridge.set_topic(instance_id, requests_of(requests));
+    bridge.set_topic(instance_id, requests_of(requests, shared.friends.retry_cooldown_ms()));
     bridge.set_topic(instance_id, session(shared, instance_id));
     bridge.set_topic(instance_id, invites(shared));
     bridge.set_topic(instance_id, TopicValue::Join(shared.joins.view_for_mod(instance_id)));
@@ -40,7 +40,19 @@ fn me(state: &FriendsState) -> TopicValue {
         network: network_line(&state.network),
         fingerprint,
         directory: directory_line(state.directory.state),
+        display_name: state.settings.display_name.clone(),
+        findable_by_name: state.settings.findable_by_name,
+        relay_host: relay_host_of(&state.network),
     })
+}
+
+/// Der Host des Relays, über den das Freunde-Netzwerk verbunden ist; nur `Online` kennt ihn (der Optionen-Reiter zeigt
+/// „Verbunden über {host}“).
+fn relay_host_of(network: &NetworkStatus) -> Option<String> {
+    match network {
+        NetworkStatus::Online { relay_host } => Some(relay_host.clone()),
+        _ => None,
+    }
 }
 
 fn availability_line(availability: Availability) -> MeAvailability {
@@ -89,15 +101,20 @@ fn mod_friend(friend: &Friend) -> ModFriend {
     ModFriend { id: friend.id.clone(), name: shown_name(friend), mc_uuid: friend.mc_uuid.clone(), presence, notice }
 }
 
-/// Eingehende Anfragen, die auf den Nutzer warten, und die eigenen, die unterwegs oder unbeantwortet sind.
-fn requests_of(requests: &[FriendRequest]) -> TopicValue {
+/// Eingehende Anfragen, die auf den Nutzer warten, und die eigenen, die unterwegs oder unbeantwortet sind. Die Restzeit
+/// der Sperre von „Jetzt zustellen“ kommt aus dem Verzeichnis-Dienst, das sie durchsetzt.
+fn requests_of(requests: &[FriendRequest], retry_cooldown_ms: u64) -> TopicValue {
     let incoming = requests
         .iter()
         .filter(|request| request.direction == RequestDirection::Incoming && request.state == RequestState::Pending)
         .take(MAX_REQUESTS)
         .map(incoming_request);
     let outgoing = requests.iter().filter(|request| request.direction == RequestDirection::Outgoing).filter_map(outgoing_request);
-    TopicValue::Requests(RequestsView { incoming: incoming.collect(), outgoing: outgoing.take(MAX_REQUESTS).collect() })
+    TopicValue::Requests(RequestsView {
+        incoming: incoming.collect(),
+        outgoing: outgoing.take(MAX_REQUESTS).collect(),
+        retry_cooldown_ms,
+    })
 }
 
 fn incoming_request(request: &FriendRequest) -> IncomingRequest {
@@ -146,7 +163,7 @@ async fn game(shared: &Arc<Shared>, instance_id: &str) -> TopicValue {
     let sessions = FriendSessions { shared: shared.clone() };
     let (hostable, reason) = hostability(sessions.ensure_hostable(instance_id).await);
     let lan = sessions.lan_status(instance_id).await.ok().flatten().map(|lan| GameLan { port: lan.port });
-    TopicValue::Game(GameView { hostable, reason, lan })
+    TopicValue::Game(GameView { hostable, reason, lan, shared_elsewhere: shared.hosting.shares_another(instance_id) })
 }
 
 /// Ob das Spiel eine Welt teilen kann. Ein noch nicht geöffneter LAN-Port steht dem nicht im Weg: die Mod öffnet ihn
@@ -264,7 +281,7 @@ mod tests {
             request("out3", RequestDirection::Outgoing, RequestState::Pending),
         ];
 
-        let TopicValue::Requests(view) = requests_of(&all) else { panic!("kein Thema requests") };
+        let TopicValue::Requests(view) = requests_of(&all, 0) else { panic!("kein Thema requests") };
 
         let incoming: Vec<(&str, &str, Option<&str>)> =
             view.incoming.iter().map(|request| (request.id.as_str(), request.name.as_str(), request.mc_name.as_deref())).collect();
@@ -289,9 +306,17 @@ mod tests {
             .chain(many(RequestDirection::Outgoing, RequestState::Delivering))
             .collect();
 
-        let TopicValue::Requests(view) = requests_of(&all) else { panic!("kein Thema requests") };
+        let TopicValue::Requests(view) = requests_of(&all, 0) else { panic!("kein Thema requests") };
 
         assert_eq!((view.incoming.len(), view.outgoing.len()), (MAX_REQUESTS, MAX_REQUESTS));
+    }
+
+    #[test]
+    fn the_requests_topic_carries_the_remaining_cooldown_of_deliver_now() {
+        let TopicValue::Requests(view) = requests_of(&[], 42_000) else { panic!("kein Thema requests") };
+
+        assert_eq!(view.retry_cooldown_ms, 42_000);
+        assert_eq!(requests_of(&[], 0).to_json()["retryCooldownMs"], serde_json::json!(0));
     }
 
     #[test]
@@ -362,6 +387,39 @@ mod tests {
             (view.enabled, view.availability, view.network, view.fingerprint.as_deref(), view.directory),
             (false, MeAvailability::IdentityLost, NetworkLine::Starting, Some("ab cd"), DirectoryLine::Off)
         );
+        assert_eq!((view.display_name.as_str(), view.findable_by_name), ("Anna", false));
+        assert_eq!(view.relay_host, None, "„startet“ kennt noch keinen Relay-Host");
+    }
+
+    #[test]
+    fn me_names_the_relay_host_only_while_the_network_is_online() {
+        let state = |network| FriendsState { network, ..empty_state() };
+
+        let online = NetworkStatus::Online { relay_host: "relay-eu1.example.org".into() };
+        assert_eq!(me(&state(online.clone())).to_json()["relayHost"], serde_json::json!("relay-eu1.example.org"));
+        assert_eq!(
+            me(&state(NetworkStatus::Degraded { reason: crate::services::friends::contract::DegradedReason::RelayUnreachable }))
+                .to_json()["relayHost"],
+            serde_json::json!(null)
+        );
+        assert_eq!(me(&state(NetworkStatus::Off)).to_json()["relayHost"], serde_json::json!(null));
+    }
+
+    /// [`FriendsState`] mit den Werten, die kein Test hier interessiert.
+    fn empty_state() -> FriendsState {
+        FriendsState {
+            availability: Availability::Available,
+            enabled: true,
+            me: None,
+            settings: crate::services::friends::contract::FriendsSettings::default(),
+            network: NetworkStatus::Off,
+            relays: Vec::new(),
+            third_party_relays_accepted: false,
+            directory: crate::services::friends::contract::DirectoryStatus {
+                state: crate::services::friends::contract::DirectoryState::Unavailable,
+                host: None,
+            },
+        }
     }
 
     #[test]

@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.LongSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,6 +22,9 @@ public final class TopicStore {
 
 	private final Map<Topic, Long> revisions = new EnumMap<>(Topic.class);
 	private final List<Listener> listeners = new CopyOnWriteArrayList<>();
+	/** Wall clock the "Jetzt zustellen" cooldown counts on; tests replace it. */
+	private final LongSupplier wallClock;
+	private long deliverReadyAtMillis = Long.MIN_VALUE;
 	private Optional<Me> me = Optional.empty();
 	private List<Friend> friends = List.of();
 	private Requests requests = Requests.NONE;
@@ -39,6 +43,28 @@ public final class TopicStore {
 
 	public void addListener(Listener listener) {
 		listeners.add(listener);
+	}
+
+	public TopicStore() {
+		this(System::currentTimeMillis);
+	}
+
+	TopicStore(LongSupplier wallClock) {
+		this.wallClock = wallClock;
+	}
+
+	/** Whether the launcher has pushed this topic since the link came up; false again after {@link #clear()}. */
+	public boolean received(Topic topic) {
+		return revisions.containsKey(topic);
+	}
+
+	/**
+	 * The remaining milliseconds of the launcher's "Jetzt zustellen" cooldown at the given time, from the last taken
+	 * requests push; zero when pressing again may act now (the launcher re-pushes the value about once a second while
+	 * it counts down).
+	 */
+	public long retryCooldownMillis(long nowMillis) {
+		return Math.max(0, deliverReadyAtMillis - nowMillis);
 	}
 
 	public Optional<Me> me() {
@@ -93,6 +119,9 @@ public final class TopicStore {
 			LOG.debug("Pumpkin Friends: ignoring malformed {} value: {}", topic, malformed.getMessage());
 			return false;
 		}
+		if (topic == Topic.REQUESTS) {
+			deliverReadyAtMillis = wallClock.getAsLong() + requests.retryCooldownMillis();
+		}
 		revisions.put(topic, push.rev());
 		listeners.forEach(listener -> listener.changed(topic));
 		return true;
@@ -102,6 +131,7 @@ public final class TopicStore {
 	public void clear() {
 		List<Topic> held = List.copyOf(revisions.keySet());
 		revisions.clear();
+		deliverReadyAtMillis = Long.MIN_VALUE;
 		me = Optional.empty();
 		friends = List.of();
 		requests = Requests.NONE;

@@ -34,6 +34,7 @@ import net.minecraft.client.input.KeyEvent;
  */
 public abstract class CompatScreen extends Screen {
 	// GLFW key codes; the LWJGL classes are not on the compile class path of a node.
+	private static final int KEY_ENTER = 257;
 	private static final int KEY_PAGE_UP = 266;
 	private static final int KEY_PAGE_DOWN = 267;
 
@@ -65,6 +66,14 @@ public abstract class CompatScreen extends Screen {
 
 	/** One notch of the wheel; a positive delta is wheel up. Return true if the screen used it. */
 	protected boolean onWheel(double verticalDelta) {
+		return false;
+	}
+
+	/**
+	 * The main Enter key, before the focused widget sees it (INGAME 6.2 "Enter in an EditBox submits"): a screen that
+	 * submits on Enter answers true. The numpad Enter (335) stays with vanilla.
+	 */
+	protected boolean onEnter() {
 		return false;
 	}
 
@@ -207,15 +216,20 @@ public abstract class CompatScreen extends Screen {
 	// Same table: keyPressed(KeyEvent) from 1.21.9.
 	@Override
 	public boolean keyPressed(KeyEvent event) {
-		return UiSession.attempt(() -> pageKey(event.key()) || super.keyPressed(event));
+		return UiSession.attempt(() -> enterKey(event.key()) || pageKey(event.key()) || super.keyPressed(event));
 	}
 	//?} else {
 	/*// Same table: keyPressed(int, int, int) up to 1.21.8.
 	@Override
 	public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-		return UiSession.attempt(() -> pageKey(keyCode) || super.keyPressed(keyCode, scanCode, modifiers));
+		return UiSession.attempt(() -> enterKey(keyCode) || pageKey(keyCode) || super.keyPressed(keyCode, scanCode, modifiers));
 	}
 	*///?}
+
+	/** The mod's Enter only while the UI is on; the vanilla half of the calling expression always runs. */
+	private boolean enterKey(int glfwKey) {
+		return !UiSession.off() && glfwKey == KEY_ENTER && onEnter();
+	}
 
 	/** The mod's page keys only while the UI is on; the vanilla half of the calling expression always runs. */
 	private boolean pageKey(int glfwKey) {

@@ -41,7 +41,7 @@ class TopicFixturesTest {
 		replay(Topic.ME);
 
 		assertEquals(Optional.of(new Me(true, Me.Availability.AVAILABLE, Me.Network.ONLINE, Optional.of("ab12 cd34"),
-			Me.Directory.ACTIVE)), store.me());
+			Me.Directory.ACTIVE, "Anna", true, Optional.of("relay-eu1.example.org"))), store.me());
 	}
 
 	@Test
@@ -114,7 +114,7 @@ class TopicFixturesTest {
 
 		assertEquals(new Requests(
 			List.of(new Requests.Incoming("r1", "Sam", Optional.of("Sam_MC"), "ab12 cd34")),
-			List.of(new Requests.Outgoing("r2", Optional.empty(), Requests.State.DELIVERING))), store.requests());
+			List.of(new Requests.Outgoing("r2", Optional.empty(), Requests.State.DELIVERING)), 42_000), store.requests());
 	}
 
 	@Test
@@ -147,10 +147,11 @@ class TopicFixturesTest {
 	void gameReportsWhyTheWorldCannotBeSharedAndTheVerifiedLanPort() {
 		replayFirstOf(Topic.GAME);
 		assertEquals(new Game(false, Optional.of(new Game.Unhostable(Game.Unhostable.Kind.VERSION_UNSUPPORTED, Optional.of("1.20"))),
-			OptionalInt.of(50123)), store.game());
+			OptionalInt.of(50123), false), store.game());
 
 		replay(Topic.GAME);
-		assertEquals(new Game(true, Optional.empty(), OptionalInt.empty()), store.game());
+		assertEquals(new Game(true, Optional.empty(), OptionalInt.empty(), true), store.game(),
+				"der zweite Druck zeigt die Welt eines anderen Spiels des gleichen Launchers");
 	}
 
 	@Test
