@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 /** Tab order, badges and the opening tab of the hub (INGAME 6.1, 6.2). */
 class HubTabTest {
 	private final Requests onlyOutgoing = new Requests(List.of(),
-		List.of(new Requests.Outgoing("r3", Optional.empty(), Requests.State.DELIVERING)));
+		List.of(new Requests.Outgoing("r3", Optional.empty(), Requests.State.DELIVERING)), 0);
 
 	@Test
 	void theTabsAppearInTheOrderOfTheDesign() {
@@ -25,7 +25,7 @@ class HubTabTest {
 		Requests requests = new Requests(
 			List.of(new Requests.Incoming("r1", "Sam", Optional.empty(), "ab12"),
 				new Requests.Incoming("r2", "Alex", Optional.empty(), "cd34")),
-			List.of(new Requests.Outgoing("r3", Optional.of("Kim"), Requests.State.DELIVERING)));
+			List.of(new Requests.Outgoing("r3", Optional.of("Kim"), Requests.State.DELIVERING)), 0);
 		List<Invite> invites = List.of(new Invite("i1", "Sam", "Insel"));
 
 		assertEquals(3, HubTab.REQUESTS.badge(requests, invites));
@@ -54,7 +54,7 @@ class HubTabTest {
 
 	@Test
 	void aTabWithoutOpenItemsCountsNothing() {
-		Requests none = new Requests(List.of(), List.of());
+		Requests none = Requests.NONE;
 
 		assertEquals(0, HubTab.REQUESTS.badge(none, List.of()));
 		assertEquals(0, HubTab.INVITES.badge(none, List.of()));

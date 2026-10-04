@@ -5,7 +5,7 @@
 use std::sync::atomic::AtomicUsize;
 
 use super::*;
-use crate::services::friends::contract::{ModActivityEntry, ModOpenEvent, ModScope};
+use crate::services::friends::contract::{ModActivityEntry, ModOpenEvent, ModScope, NetworkStatus};
 use crate::services::friends::mod_link::ModAppEvents;
 use crate::services::modbridge::ops::{Scope, OP_NAMES};
 
@@ -201,11 +201,25 @@ async fn the_mod_receives_all_nine_topics_and_empty_ones_are_empty() {
         .topics_until(|seen| ["me", "friends", "requests", "invites", "session", "join", "game", "codes", "blocked"].iter().all(|t| seen.contains_key(*t)))
         .await;
 
-    assert_eq!(topics["requests"], json!({ "incoming": [], "outgoing": [] }));
+    assert_eq!(topics["requests"], json!({ "incoming": [], "outgoing": [], "retryCooldownMs": 0 }));
     assert_eq!(topics["codes"].as_array().unwrap().len(), 1, "nur der Code, mit dem Anna und Bert sich befreundet haben");
     assert_eq!(topics["codes"][0]["used"], true);
     assert_eq!((&topics["blocked"], &topics["invites"]), (&json!([]), &json!([])));
     assert_eq!((&topics["session"], &topics["join"]), (&Value::Null, &Value::Null));
+}
+
+#[tokio::test]
+async fn the_me_topic_carries_the_display_name_the_findability_and_the_relay_host() {
+    let mut scene = ModScene::new().await;
+    let NetworkStatus::Online { relay_host } = scene.host.friends.state().network else {
+        panic!("die Szene ist über das Test-Relay verbunden")
+    };
+    scene.game_mod.call("s1", "state.sync", json!({})).await;
+
+    let me = scene.game_mod.topic_where("me", |_| true).await;
+
+    assert_eq!((&me["value"]["displayName"], &me["value"]["findableByName"]), (&json!("Anna"), &json!(false)));
+    assert_eq!(me["value"]["relayHost"], json!(relay_host), "der Host des Test-Relays, wie die Netzwerkzeile ihn kennt");
 }
 
 #[tokio::test]
@@ -216,7 +230,34 @@ async fn a_game_without_an_open_port_can_still_start_sharing_and_one_with_a_port
 
     let game = scene.game_mod.topic_where("game", |_| true).await;
 
-    assert_eq!(game["value"], json!({ "hostable": true, "reason": null, "lan": { "port": port } }));
+    assert_eq!(game["value"], json!({ "hostable": true, "reason": null, "lan": { "port": port }, "sharedElsewhere": false }));
+}
+
+#[tokio::test]
+async fn a_session_of_another_game_of_the_same_launcher_shows_in_the_game_topic_not_the_session_topic() {
+    let mut scene = ModScene::ready_to_share(&[]).await;
+    scene.game_mod.call("s1", "state.sync", json!({})).await;
+    // Annas anderes Spiel (GUEST_INSTANCE) teilt seine eigene Welt; die Mod hängt am Spiel von HOST_INSTANCE.
+    let other_world = FakeServer::start().await;
+    scene.host.spawn_game(GUEST_INSTANCE, None);
+    scene.host.signals.send(GameSignal::LanOpened {
+        instance_id: GUEST_INSTANCE.into(),
+        port: other_world.port,
+        source: PortSource::Mod,
+    });
+    scene.host.wait_lan(GUEST_INSTANCE).await;
+    scene.host.sessions.host_start(GUEST_INSTANCE, None, false).await.unwrap();
+
+    let game = scene.game_mod.topic_where("game", |value| value["sharedElsewhere"] == true).await;
+    scene.game_mod.call("s2", "state.sync", json!({})).await;
+    let session = scene.game_mod.topic_where("session", |_| true).await;
+
+    assert_eq!(
+        (game["value"]["hostable"].as_bool(), &game["value"]["lan"]),
+        (Some(true), &json!({ "port": scene.server.port })),
+        "der eigene geprüfte Port bleibt; nur die Sitzung gehört dem anderen Spiel"
+    );
+    assert_eq!(session["value"], Value::Null, "die Sitzung des anderen Spiels bleibt außen vor");
 }
 
 #[tokio::test]

@@ -164,6 +164,13 @@ impl PollClock {
         self.next = now;
     }
 
+    /// Die Restzeit, bis `hurry` wieder wirkt (Rest der Minute nach dem letzten Abholen); 0, wenn jetzt.
+    fn cooldown_ms(&self, now: Instant) -> u64 {
+        self.last
+            .filter(|last| now.duration_since(*last) < RETRY_POLL_GAP)
+            .map_or(0, |last| (RETRY_POLL_GAP - now.duration_since(last)).as_millis() as u64)
+    }
+
     /// `true`, wenn das Abholen auf jetzt vorgezogen wurde.
     fn hurry(&mut self, now: Instant) -> bool {
         if self.last.is_some_and(|last| now.duration_since(last) < RETRY_POLL_GAP) {
@@ -228,6 +235,13 @@ impl Friends {
     #[cfg(test)]
     pub(super) fn directory_awaits_games(&self) -> bool {
         self.core.by_name.is_awaiting_games()
+    }
+
+    /// Die Restzeit der Sperre von „Jetzt zustellen“ in Millisekunden (Rest der Minute nach dem letzten Abholen des
+    /// Postfachs, BYNAME 7.2); 0, wenn ein Druck sofort wirkt. Das Thema `requests` trägt sie in die Mod.
+    pub(super) fn retry_cooldown_ms(&self) -> u64 {
+        let now = Instant::now();
+        lock(&self.core.by_name.clock).cooldown_ms(now)
     }
 
     /// Ein Spiel mit der Mod ist nicht mehr verbunden: wartet die Schleife des Verzeichnisses auf das Ende der Spiele, holt

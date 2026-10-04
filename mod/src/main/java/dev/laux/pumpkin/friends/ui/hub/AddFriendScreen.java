@@ -24,7 +24,7 @@ import net.minecraft.client.gui.screens.Screen;
  * launcher's hint sentence under it, the directory line the launcher would show, and the answer inline — a hint for a
  * name that is not findable, an error with "⚠" for everything else. The send runs {@code friend.addByName}; while the
  * launcher asks for consent the {@link LauncherWaitScreen} covers this screen. Text, focus and scroll survive a rebuild
- * (INGAME 6.5). Enter submits once the send button has the focus.
+ * (INGAME 6.5). Enter submits from the name field; a focused send button keeps its own vanilla Enter.
  */
 public final class AddFriendScreen extends PumpkinScreen {
 	private static final int FIELD_WIDTH = 120;
@@ -71,6 +71,17 @@ public final class AddFriendScreen extends PumpkinScreen {
 			shownDirectory = directory;
 			rebuildWidgets();
 		}
+	}
+
+	/** INGAME 6.2: Enter in the name field sends the request; anything else focused leaves the key to vanilla. */
+	@Override
+	protected boolean onEnter() {
+		boolean inNameField = focusedWidget().filter(EditBox.class::isInstance).isPresent();
+		if (!inNameField) {
+			return false;
+		}
+		send();
+		return true;
 	}
 
 	private void addDirectoryNotice(List<Row> rows) {

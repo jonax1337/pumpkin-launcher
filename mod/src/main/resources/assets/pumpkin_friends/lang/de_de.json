@@ -170,5 +170,12 @@
 	"pumpkin_friends.options.network.via": "Verbunden über %s",
 	"pumpkin_friends.options.network.unknown": "Netzwerk: –",
 	"pumpkin_friends.options.actions.ask": "Aktionen im Spiel: fragen",
-	"pumpkin_friends.options.actions.allow": "Aktionen im Spiel: erlaubt"
+	"pumpkin_friends.options.actions.allow": "Aktionen im Spiel: erlaubt",
+	"_l3": "L3 (ingame/L3): me/game/requests-Themen, Eingabe und Warten des Hubs",
+	"pumpkin_friends.options.name": "Anzeigename: %s",
+	"pumpkin_friends.options.name.unknown": "Anzeigename: –",
+	"pumpkin_friends.options.findable.yes": "Per Minecraft-Namen auffindbar: ja",
+	"pumpkin_friends.options.findable.no": "Per Minecraft-Namen auffindbar: nein",
+	"pumpkin_friends.options.findable.unknown": "Per Minecraft-Namen auffindbar: –",
+	"pumpkin_friends.share.elsewhere.unnamed": "Ein anderes deiner Spiele teilt gerade eine Welt."
 }

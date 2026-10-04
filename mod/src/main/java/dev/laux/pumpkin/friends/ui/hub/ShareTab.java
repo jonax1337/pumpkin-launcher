@@ -74,9 +74,8 @@ public final class ShareTab {
 	}
 
 	private ShareModel.Input input() {
-		// "Gerade teilt {Instanz}": die Themen tragen heute nicht, wer anders teilt (Abweichung im Bericht).
 		return new ShareModel.Input(link.topics().game(), Lan.onMultiplayerServer(), link.topics().join(),
-			link.topics().session().isPresent(), Lan.publishedPort().isPresent(), Optional.empty());
+			link.topics().session().isPresent(), Lan.publishedPort().isPresent(), link.topics().game().sharedElsewhere());
 	}
 
 	private List<Row> joinRows() {
@@ -110,8 +109,7 @@ public final class ShareTab {
 	}
 
 	private List<Row> sharedElsewhereRows() {
-		String instance = input().sharingInstance().orElse("");
-		return List.of(Row.text(Text.translate("pumpkin_friends.share.elsewhere", instance)));
+		return List.of(Row.text(Text.translate("pumpkin_friends.share.elsewhere.unnamed")));
 	}
 
 	private List<Row> openRows() {

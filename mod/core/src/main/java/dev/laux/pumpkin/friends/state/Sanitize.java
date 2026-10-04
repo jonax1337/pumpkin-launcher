@@ -36,6 +36,11 @@ public final class Sanitize {
 		return Optional.ofNullable(raw).filter(uuid -> MC_UUID.matcher(uuid).matches());
 	}
 
+	/** A relay host of the launcher's network line: launcher-chosen, still cleaned and capped like a title. */
+	public static String host(String raw) {
+		return cap(clean(raw), TITLE_MAX_CHARS);
+	}
+
 	private static String clean(String raw) {
 		if (raw == null) {
 			return "";

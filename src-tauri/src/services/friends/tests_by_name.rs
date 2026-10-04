@@ -758,6 +758,26 @@ async fn the_inbox_is_polled_ten_seconds_after_start_then_per_interval_and_retry
     assert_eq!(directory.inbox_reads(), 3, "a minute later retry_now polls at once");
 }
 
+/// Das Thema `requests` trägt die Restzeit der Sperre von „Jetzt zustellen“ (INGAME A27): nichts vor dem ersten
+/// Abholen, fast die ganze Minute danach, wieder nichts eine Minute später.
+#[tokio::test(start_paused = true)]
+async fn the_retry_cooldown_covers_the_minute_after_a_poll_and_is_zero_when_a_press_may_act() {
+    let mojang = Arc::new(FakeMojang::default());
+    let directory = Arc::new(FakeDirectory::new(mojang.clone()));
+    let (friends, _dir) = directory_loop_alone(&directory, &mojang).await;
+    by_name::spawn_directory_loop(&friends.core, &CancellationToken::new());
+
+    assert_eq!(friends.retry_cooldown_ms(), 0, "vor dem ersten Abholen sperrt nichts");
+
+    tokio::time::sleep(Duration::from_secs(11)).await;
+    assert_eq!(directory.inbox_reads(), 1, "der erste Abgleich ist gelaufen");
+    let remaining = friends.retry_cooldown_ms();
+    assert!(remaining > 58_000 && remaining <= 60_000, "Rest der Minute, nicht {remaining}");
+
+    tokio::time::sleep(Duration::from_secs(61)).await;
+    assert_eq!(friends.retry_cooldown_ms(), 0, "eine Minute nach dem Abholen darf wieder gedrückt werden");
+}
+
 // BYNAME-ATTEST 8.2: the certificate login
 
 const HOUR_MS: i64 = 3_600_000;

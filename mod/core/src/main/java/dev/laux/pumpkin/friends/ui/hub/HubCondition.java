@@ -3,16 +3,22 @@ package dev.laux.pumpkin.friends.ui.hub;
 import dev.laux.pumpkin.friends.bridge.LinkState;
 import dev.laux.pumpkin.friends.json.WireNames;
 import dev.laux.pumpkin.friends.protocol.RejectReason;
+import dev.laux.pumpkin.friends.protocol.Topic;
 import dev.laux.pumpkin.friends.request.Ops.OpenTarget;
 import dev.laux.pumpkin.friends.state.Me;
+import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 
 /**
- * What the hub explains in its status line (INGAME 6.3), as a pure function of the link, the pending dialog and the
- * {@code me} topic. While the condition is not {@link Ready} every tab's body shows the explanation instead of content.
- * Texts are language keys; the screen translates them.
+ * What the hub explains in its status line (INGAME 6.3), as a pure function of the link, the pending dialog, the
+ * {@code me} topic and whether every awaited topic has arrived. While the condition is not {@link Ready} every tab's
+ * body shows the explanation instead of content. Texts are language keys; the screen translates them.
  */
 public sealed interface HubCondition {
+	/** The topics whose first push the hub waits for before it shows content (INGAME 6.3 "loading"); codes and blocked are R-B. */
+	List<Topic> AWAITED = List.of(Topic.ME, Topic.FRIENDS, Topic.REQUESTS, Topic.INVITES, Topic.SESSION, Topic.JOIN, Topic.GAME);
+
 	/** The language key of the status line; empty when there is nothing to explain. */
 	String statusKey();
 
@@ -32,7 +38,7 @@ public sealed interface HubCondition {
 	 * that waits, the terminal refusals, Friends switched off, the identities the launcher cannot serve, the missing
 	 * state, and the ready case.
 	 */
-	static HubCondition of(LinkState link, boolean awaitingLauncherDialog, Optional<Me> me) {
+	static HubCondition of(LinkState link, boolean awaitingLauncherDialog, Optional<Me> me, Predicate<Topic> received) {
 		if (link instanceof LinkState.Rejected refused) {
 			return refused.reason().isTerminal() ? new Refused(refused.reason()) : new Connecting();
 		}
@@ -51,6 +57,9 @@ public sealed interface HubCondition {
 		}
 		if (identity.availability() != Me.Availability.AVAILABLE) {
 			return new WithoutIdentity(identity.availability());
+		}
+		if (AWAITED.stream().anyMatch(topic -> !received.test(topic))) {
+			return new Loading();
 		}
 		return new Ready();
 	}
@@ -161,7 +170,7 @@ public sealed interface HubCondition {
 		}
 	}
 
-	/** Connected, but the state has not arrived yet. */
+	/** Connected, but the first push of every awaited topic has not arrived yet (or the me topic is still missing). */
 	record Loading() implements HubCondition {
 		private static final String KEY = "pumpkin_friends.hub.state.loading";
 

@@ -1518,7 +1518,7 @@ async fn the_mod_sees_the_launcher_state_as_topics() {
 
     let (me, game, friends) = (&topics["me"], &topics["game"], &topics["friends"]);
     assert_eq!((me["enabled"].as_bool(), me["availability"].as_str()), (Some(true), Some("available")));
-    assert_eq!(*game, json!({ "hostable": true, "reason": null, "lan": { "port": server.port } }));
+    assert_eq!(*game, json!({ "hostable": true, "reason": null, "lan": { "port": server.port }, "sharedElsewhere": false }));
     assert_eq!(friends[0]["id"], "f1", "friends carry aliases, never peer ids");
     assert!(!friends.to_string().contains(&guest.id().to_string()));
 }

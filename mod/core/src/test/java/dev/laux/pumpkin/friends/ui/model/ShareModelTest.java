@@ -10,8 +10,8 @@ import org.junit.jupiter.api.Test;
 
 /** Every row of INGAME 6.4 as one case, in the order the table lists them. */
 class ShareModelTest {
-	private static final Game HOSTABLE = new Game(true, Optional.empty(), OptionalInt.empty());
-	private static final Game HOSTABLE_WITH_PORT = new Game(true, Optional.empty(), OptionalInt.of(50123));
+	private static final Game HOSTABLE = new Game(true, Optional.empty(), OptionalInt.empty(), false);
+	private static final Game HOSTABLE_WITH_PORT = new Game(true, Optional.empty(), OptionalInt.of(50123), false);
 	private static final Game BELOW_THE_FLOOR = hostableNo(Game.Unhostable.Kind.VERSION_UNSUPPORTED);
 	private static final Game NO_MS_ACCOUNT = hostableNo(Game.Unhostable.Kind.MS_ACCOUNT_REQUIRED);
 	private static final Game MANIFEST_UNKNOWN_TO_THE_LAUNCHER = hostableNo(Game.Unhostable.Kind.MANIFEST_INVALID);
@@ -20,7 +20,7 @@ class ShareModelTest {
 	void aGameThatJoinedAFriendIsJoinedEvenThoughItIsOnAServer() {
 		Join joined = new Join("i1", "Sam", Join.Phase.CONNECTED, Optional.of(Join.Path.DIRECT), OptionalInt.of(23));
 		assertEquals(ShareModel.State.JOINED, ShareModel.state(new ShareModel.Input(HOSTABLE, true,
-			Optional.of(joined), false, false, Optional.empty())));
+			Optional.of(joined), false, false, false)));
 	}
 
 	@Test
@@ -44,13 +44,13 @@ class ShareModelTest {
 	@Test
 	void aNotHostableWithoutAReasonIsUndecidedToo() {
 		assertEquals(ShareModel.State.UNKNOWN, ShareModel.state(
-			input(new Game(false, Optional.empty(), OptionalInt.empty()), false)));
+			input(new Game(false, Optional.empty(), OptionalInt.empty(), false), false)));
 	}
 
 	@Test
 	void anotherGameOfThePlayerSharingWinsOverThisGamesOwnRows() {
 		assertEquals(ShareModel.State.SHARED_ELSEWHERE, ShareModel.state(new ShareModel.Input(HOSTABLE, false,
-			Optional.empty(), false, false, Optional.of("Welt von Anna"))));
+			Optional.empty(), false, false, true)));
 	}
 
 	@Test
@@ -84,10 +84,10 @@ class ShareModelTest {
 	}
 
 	private static ShareModel.Input input(Game game, boolean onServer, boolean sessionHere, boolean worldOpen) {
-		return new ShareModel.Input(game, onServer, Optional.empty(), sessionHere, worldOpen, Optional.empty());
+		return new ShareModel.Input(game, onServer, Optional.empty(), sessionHere, worldOpen, false);
 	}
 
 	private static Game hostableNo(Game.Unhostable.Kind kind) {
-		return new Game(false, Optional.of(new Game.Unhostable(kind, Optional.empty())), OptionalInt.empty());
+		return new Game(false, Optional.of(new Game.Unhostable(kind, Optional.empty())), OptionalInt.empty(), false);
 	}
 }

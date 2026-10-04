@@ -18,6 +18,8 @@ pub const MAX_BLOCKED: usize = 100;
 /// Zeichen eines Namens, eines Titels, eines Minecraft-Namens und eines Fingerabdrucks, wie die Quellen sie begrenzen.
 pub const NAME_CHARS: usize = 32;
 pub const TITLE_CHARS: usize = 64;
+/// Zeichen eines Relay-Hosts für den Größten-Fall: Hosts dürfen länger sein als Namen, aber keine unbeschränkte Zeile.
+pub const HOST_CHARS: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -124,6 +126,12 @@ pub struct MeView {
     pub fingerprint: Option<String>,
     /// Ob der Nutzer per Minecraft-Namen auffindbar ist und das Verzeichnis antwortet (BYNAME 9.3).
     pub directory: DirectoryLine,
+    /// Der Anzeigename, wie ihn die Einstellungen tragen; leer, solange es keine Identität gibt.
+    pub display_name: String,
+    /// „Per Minecraft-Namen auffindbar“ aus den Einstellungen; ändern bleibt eine Launcher-Aufgabe.
+    pub findable_by_name: bool,
+    /// Der Relay-Host, über den das Netzwerk verbunden ist; nur `online` trägt ihn.
+    pub relay_host: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -160,6 +168,9 @@ pub enum DirectoryLine {
 pub struct RequestsView {
     pub incoming: Vec<IncomingRequest>,
     pub outgoing: Vec<OutgoingRequest>,
+    /// Restzeit der Sperre von „Jetzt zustellen“ (`friends_retry_now`, BYNAME 7.2) in Millisekunden; 0, wenn ein Druck
+    /// jetzt etwas bewirkt.
+    pub retry_cooldown_ms: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -213,6 +224,9 @@ pub struct GameView {
     pub reason: Option<HostableReason>,
     /// Nur ein geprüfter Port; der Eintrag ist da, sobald der Launcher den Port dem Spielprozess zugeordnet hat.
     pub lan: Option<GameLan>,
+    /// `true`, solange eine andere Instanz dieses Launchers die (einzige) geteilte Welt hält; die eigene Sitzung steht
+    /// im Thema `session`.
+    pub shared_elsewhere: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -329,6 +343,9 @@ mod tests {
                 network: NetworkLine::Degraded,
                 fingerprint: Some(text(64)),
                 directory: DirectoryLine::Unreachable,
+                display_name: text(NAME_CHARS),
+                findable_by_name: true,
+                relay_host: Some(text(HOST_CHARS)),
             }),
             Topic::Friends => TopicValue::Friends(
                 (0..MAX_FRIENDS)
@@ -348,6 +365,7 @@ mod tests {
                 outgoing: (0..MAX_REQUESTS)
                     .map(|index| OutgoingRequest { id: format!("{index:036}"), name: Some(text(NAME_CHARS)), state: OutgoingState::AwaitingAnswer })
                     .collect(),
+                retry_cooldown_ms: u64::MAX,
             }),
             Topic::Invites => TopicValue::Invites(
                 (0..MAX_INVITES).map(|index| ModInvite { id: format!("{index:036}"), from_name: text(NAME_CHARS), title: text(TITLE_CHARS) }).collect(),
@@ -366,6 +384,7 @@ mod tests {
                 hostable: false,
                 reason: Some(HostableReason::VersionUnsupported { min: text(16) }),
                 lan: Some(GameLan { port: u16::MAX }),
+                shared_elsewhere: true,
             }),
             Topic::Codes => TopicValue::Codes(
                 (0..MAX_CODES).map(|index| CodeView { id: format!("{index:036}"), tail: text(8), expires_at: u64::MAX, used: true }).collect(),
@@ -447,7 +466,7 @@ mod tests {
     }
 
     fn game(hostable: bool) -> TopicValue {
-        TopicValue::Game(GameView { hostable, reason: None, lan: None })
+        TopicValue::Game(GameView { hostable, reason: None, lan: None, shared_elsewhere: false })
     }
 
     #[test]

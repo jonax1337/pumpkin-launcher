@@ -40,13 +40,12 @@ public final class OptionsTab {
 	}
 
 	private OptionsLines lines() {
-		// Den Relay-Host trägt das me-Thema noch nicht; die Zeile erscheint, sobald er es tut (Abweichung im Bericht).
 		Optional<String> launcherVersion = Optional.empty();
 		Optional<Scopes> scopes = Optional.empty();
 		if (client.state() instanceof LinkState.Connected connected) {
 			launcherVersion = Optional.of(connected.launcherVersion());
 			scopes = Optional.of(connected.scopes());
 		}
-		return OptionsLines.of(client.topics().me(), launcherVersion, scopes, Optional.empty());
+		return OptionsLines.of(client.topics().me(), launcherVersion, scopes);
 	}
 }
