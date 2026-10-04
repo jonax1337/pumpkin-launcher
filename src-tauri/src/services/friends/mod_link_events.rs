@@ -5,6 +5,7 @@ use std::sync::{Arc, RwLock};
 
 use tauri::{AppHandle, Manager};
 
+use crate::ingame_launch::announce_current;
 use crate::services::friends::contract::{ModActivityEntry, ModOpenEvent};
 use crate::services::progress::emit;
 
@@ -13,6 +14,9 @@ pub trait ModAppEvents: Send + Sync + 'static {
     fn activity(&self, entry: ModActivityEntry);
     /// Die Mod bittet um das Fenster des Launchers (Ereignis `friends-mod-open`); die Oberfläche zeigt `event.target`.
     fn open_launcher(&self, event: ModOpenEvent);
+    /// Die Mod der Instanz hat sich verbunden oder die Verbindung ist zu Ende; die Instanzzeile rechnet ihren Status neu
+    /// (Ereignis `friends-ingame`).
+    fn link_changed(&self, instance_id: &str);
 }
 
 /// Verwirft alles, solange die App noch keinen Empfänger gesetzt hat.
@@ -22,6 +26,8 @@ impl ModAppEvents for NoModAppEvents {
     fn activity(&self, _entry: ModActivityEntry) {}
 
     fn open_launcher(&self, _event: ModOpenEvent) {}
+
+    fn link_changed(&self, _instance_id: &str) {}
 }
 
 pub struct TauriModAppEvents(pub AppHandle);
@@ -34,6 +40,10 @@ impl ModAppEvents for TauriModAppEvents {
     fn open_launcher(&self, event: ModOpenEvent) {
         focus_main_window(&self.0);
         emit(&self.0, "friends-mod-open", event);
+    }
+
+    fn link_changed(&self, instance_id: &str) {
+        announce_current(&self.0, instance_id);
     }
 }
 

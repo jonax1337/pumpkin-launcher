@@ -164,6 +164,7 @@ pub(super) fn disconnected(shared: &Shared, instance_id: &str) {
 fn announce_connection(shared: &Shared, instance_id: &str, connected: bool) {
     let event = ModConnectionEvent { instance_id: instance_id.to_owned(), connected };
     shared.emit(SessionEvent::ModConnection(event));
+    shared.mods.app_events.get().link_changed(instance_id);
 }
 
 /// Ein Hinweis an die Mod der Instanz; `who` sind Name und Minecraft-UUID der Person, um die es geht (die Mod zeigt
