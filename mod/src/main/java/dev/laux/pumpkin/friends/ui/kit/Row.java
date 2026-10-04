@@ -29,6 +29,11 @@ public final class Row {
 		return new Row(RowStyle.NORMAL, line, Optional.empty(), false);
 	}
 
+	/** A line that steps back: hints and explanations under a field or question. */
+	public static Row muted(String line) {
+		return new Row(RowStyle.MUTED, line, Optional.empty(), false);
+	}
+
 	public static Row heading(String line) {
 		return new Row(RowStyle.HEADING, line, Optional.empty(), false);
 	}

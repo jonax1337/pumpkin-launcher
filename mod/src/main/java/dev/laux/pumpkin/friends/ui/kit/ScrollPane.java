@@ -95,6 +95,20 @@ public final class ScrollPane {
 		scroll.thumb(scrollbarTrack).ifPresent(thumb -> painter.scrollbar(scrollbarTrack, thumb));
 	}
 
+	/** The narration of the shown rows in view order: both lines of a two-line row, one line per row (INGAME 6.2). */
+	public List<String> narrationLines() {
+		List<String> lines = new ArrayList<>();
+		for (PlacedRow shown : placed) {
+			if (shown.row().firstLine().isEmpty()) {
+				continue;
+			}
+			lines.add(shown.row().secondLine()
+				.map(second -> shown.row().firstLine() + ", " + second)
+				.orElse(shown.row().firstLine()));
+		}
+		return lines;
+	}
+
 	private void hideAll() {
 		actions().forEach(action -> action.widget().visible = false);
 	}
