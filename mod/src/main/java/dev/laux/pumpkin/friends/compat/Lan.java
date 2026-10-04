@@ -20,6 +20,15 @@ public final class Lan {
 		return Optional.ofNullable(Minecraft.getInstance().getSingleplayerServer());
 	}
 
+	/**
+	 * Whether the player is on a multiplayer server, the gate of the Teilen tab (INGAME 6.4, "Auf Servern nicht möglich").
+	 * INGAME-API.md 3, "Minecraft: screens, main thread, leaving a world": {@code Minecraft#getCurrentServer()} in every
+	 * era. A game that joined a friend counts as joined, not as "on a server" - the share model checks the join first.
+	 */
+	public static boolean onMultiplayerServer() {
+		return Minecraft.getInstance().getCurrentServer() != null;
+	}
+
 	public static boolean canPublish() {
 		return server().filter(server -> !server.isPublished()).isPresent();
 	}
