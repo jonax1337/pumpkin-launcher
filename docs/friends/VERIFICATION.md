@@ -8,6 +8,29 @@ sections below follow its steps: G1 is step 2, G2 is steps 1 and 3, G3 is step 5
 step 7. Section N (finding friends by name) is step 8. Section M3 (the in-game mod, `INGAME.md`) is
 step 9.
 
+## 0.2.0: release gate (checklist step 0)
+
+The gate for the 0.2.0 release candidate (first release with the in-game mod). The owner fills this in;
+"expected" is what counts as a pass. The smoke rows below re-run the local smoke on the release commit
+(the 2026-10-04 entries in M3.1 prove the cells, these prove the release commit).
+
+| # | Gate | Expected | Result | Date | Notes |
+|---|---|---|---|---|---|
+| V1 | Every version field is 0.2.0: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` + `Cargo.lock`, `mod/gradle.properties` | All four show 0.2.0; no file names 2.1.0/2.0.1 as a current version | | | |
+| V2 | Mod dist of the release commit (`gradlew build modIndex` in `mod/`) | `mod-index.json` has `modVersion: "0.2.0"`, seven jars `pumpkin_friends-0.2.0+<node>.jar`; `validate-mod-index.mjs` and `checkJarBudget` pass | | | |
+| V3 | Local smoke on the release commit, all seven cells (`tools/mod-smoke/run.ps1`) | Every cell `passed`; the game log names `pumpkin_friends 0.2.0+<node>` (rows below) | | | |
+| V3a | 26.3-fabric | `passed` | | | |
+| V3b | 1.21.1-fabric | `passed` | | | |
+| V3c | 1.21.8-fabric | `passed` | | | |
+| V3d | 1.21.11-fabric | `passed` | | | |
+| V3e | 1.21.1-neoforge | `passed` | | | |
+| V3f | 26.2-neoforge | `passed` | | | |
+| V3g | 1.20.1-forge | `passed` | | | |
+| V4 | Release workflow first run (tag `v0.2.0`): mod jobs green, dist check passed, embedding log line present, smoke feature absent | *Mod node list*, the seven *Mod node* jobs and *Mod package* green; *Build* logs `Embedding pumpkin_friends 0.2.0 (7 jars).`; no `-D features=smoke`/`--features smoke` anywhere in the run | | | |
+| V5 | Shipped binaries embed the mod | Installed 0.2.0 launcher: instance row shows "Freunde-Menü im Spiel: aktiv" for a supported cell; nothing appears in the instance's `mods/` folder | | | |
+| V6 | Draft reviewed and published (`docs/friends/RELEASE-0.2.0.md` as the tag text) | Installers tested, release published; updater offers 0.2.0 | | | |
+| V7 | In-game owner pass with a second account (checklist 0.7 = step 9) | Every M3 row filled (9.0 visual pass, 9.1 deep run per loader, 9.2 short run per node, 9.3-9.8); "M3 met" checked | | | |
+
 ## G1: P2P viability (R0b spike, owner run)
 
 How to run and what each number means: [`tools/p2p-spike/README.md`](../../tools/p2p-spike/README.md).
