@@ -1,6 +1,10 @@
 package dev.laux.pumpkin.friends.compat;
 
-import dev.laux.pumpkin.friends.state.StateStore.Alert;
+import dev.laux.pumpkin.friends.json.WireNames;
+import dev.laux.pumpkin.friends.protocol.ErrorCode;
+import dev.laux.pumpkin.friends.protocol.NotifyKind;
+import dev.laux.pumpkin.friends.protocol.OpError;
+import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.toasts.FriendToast;
@@ -17,15 +21,20 @@ public final class Toasts {
 	private Toasts() {
 	}
 
-	public static void show(Minecraft minecraft, Alert alert) {
+	public static void showNotice(Minecraft minecraft, NotifyKind kind, Optional<String> name, Optional<String> mcUuid) {
 		// Namen nur als Literal einsetzen: so wirkt kein Formatierungs- oder Übersetzungscode darin.
-		Component name = alert.name().<Component>map(Component::literal)
-			.orElseGet(() -> Component.translatable("pumpkin_friends.someone"));
-		Component message = Component.translatable(alert.translationKey(), name);
-		alert.mcUuid().map(Toasts::uuid).ifPresentOrElse(
+		Component who = name.<Component>map(Component::literal).orElseGet(() -> Component.translatable("pumpkin_friends.someone"));
+		Component message = Component.translatable("pumpkin_friends.notify." + WireNames.of(kind), who);
+		mcUuid.map(Toasts::uuid).ifPresentOrElse(
 			uuid -> FriendToast.add(minecraft.gui.toastManager(), minecraft.font, ResolvableProfile.createUnresolved(uuid),
 				message),
 			() -> showSystem(minecraft, message));
+	}
+
+	/** Ein Fehlercode ohne eigenen Text (ein neuerer Launcher) erscheint als allgemeiner Fehler. */
+	public static void showError(Minecraft minecraft, OpError error) {
+		ErrorCode code = error.code() == ErrorCode.UNRECOGNIZED ? ErrorCode.INTERNAL : error.code();
+		showSystem(minecraft, Component.translatable("pumpkin_friends.error." + WireNames.of(code)));
 	}
 
 	public static void showSystem(Minecraft minecraft, Component message) {

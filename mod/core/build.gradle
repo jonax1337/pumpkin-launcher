@@ -29,6 +29,10 @@ tasks.withType(JavaCompile).configureEach {
 
 test {
 	useJUnitPlatform()
+	// The golden lines of the launcher channel are shared with the Rust tests; the tests read them in place, never a copy.
+	def protocolFixtures = rootProject.file('fixtures/protocol')
+	inputs.dir(protocolFixtures)
+	systemProperty 'pumpkin.fixtures.protocol', protocolFixtures.absolutePath
 	// -Pcore.testJdk=<Version> führt die Tests auf genau diesem JDK aus (die JDKs des Knotens: nodes.txt).
 	if (project.hasProperty('core.testJdk')) {
 		javaLauncher = javaToolchains.launcherFor {

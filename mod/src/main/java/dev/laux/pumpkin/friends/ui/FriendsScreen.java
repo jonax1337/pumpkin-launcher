@@ -1,16 +1,18 @@
 package dev.laux.pumpkin.friends.ui;
 
 import dev.laux.pumpkin.friends.bridge.BridgeClient;
-import dev.laux.pumpkin.friends.bridge.Messages.Kick;
-import dev.laux.pumpkin.friends.bridge.Messages.Share;
-import dev.laux.pumpkin.friends.bridge.Messages.StopSharing;
 import dev.laux.pumpkin.friends.compat.LanControl;
 import dev.laux.pumpkin.friends.compat.Toasts;
-import dev.laux.pumpkin.friends.state.Snapshot;
-import dev.laux.pumpkin.friends.state.StateStore;
+import dev.laux.pumpkin.friends.request.Op;
+import dev.laux.pumpkin.friends.request.Ops;
+import dev.laux.pumpkin.friends.request.Reply;
+import dev.laux.pumpkin.friends.state.Friend;
+import dev.laux.pumpkin.friends.state.Invite;
+import dev.laux.pumpkin.friends.state.Session;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -34,7 +36,6 @@ public final class FriendsScreen extends Screen {
 	private static final int MAX_GUESTS = 7;
 
 	private final Screen parent;
-	private final StateStore store;
 	private final BridgeClient client;
 	private final Set<String> selectedFriendIds = new LinkedHashSet<>();
 	private HeaderAndFooterLayout layout;
@@ -43,17 +44,16 @@ public final class FriendsScreen extends Screen {
 	private Button inviteButton;
 	private View shown;
 
-	public FriendsScreen(Screen parent, StateStore store, BridgeClient client) {
+	public FriendsScreen(Screen parent, BridgeClient client) {
 		super(Component.translatable("pumpkin_friends.title"));
 		this.parent = parent;
-		this.store = store;
 		this.client = client;
 	}
 
 	@Override
 	protected void init() {
 		shown = currentView();
-		selectedFriendIds.retainAll(invitableFriendIds(shown.snapshot()));
+		selectedFriendIds.retainAll(invitableFriendIds(shown));
 		layout = new HeaderAndFooterLayout(this);
 		layout.addTitleHeader(title, font);
 		LinearLayout content = LinearLayout.vertical().spacing(SPACING);
@@ -86,8 +86,8 @@ public final class FriendsScreen extends Screen {
 	}
 
 	private View currentView() {
-		return new View(store.isConnected(), store.snapshot(), LanControl.canPublish(minecraft),
-			LanControl.publishedPort(minecraft));
+		return new View(client.isConnected(), client.topics().friends(), client.topics().session(), client.topics().invites(),
+			client.isAwaitingLauncherDialog(), LanControl.canPublish(minecraft), LanControl.publishedPort(minecraft));
 	}
 
 	private void addSections(LinearLayout content) {
@@ -95,16 +95,15 @@ public final class FriendsScreen extends Screen {
 			content.addChild(text(Component.translatable("pumpkin_friends.disconnected")));
 			return;
 		}
-		Snapshot snapshot = shown.snapshot();
-		if (snapshot.awaitingConfirmation()) {
+		if (shown.awaitingConfirmation()) {
 			content.addChild(text(Component.translatable("pumpkin_friends.confirm_in_launcher")));
 		}
-		addHosting(content, snapshot);
-		addFriendList(content, snapshot);
-		addInvites(content, snapshot);
+		addHosting(content);
+		addFriendList(content);
+		addInvites(content);
 	}
 
-	private void addHosting(LinearLayout content, Snapshot snapshot) {
+	private void addHosting(LinearLayout content) {
 		if (shown.canPublish()) {
 			content.addChild(button(Component.translatable("pumpkin_friends.open_to_friends"), this::publish));
 			return;
@@ -112,8 +111,8 @@ public final class FriendsScreen extends Screen {
 		if (shown.publishedPort().isEmpty()) {
 			return;
 		}
-		snapshot.session().ifPresent(session -> addGuests(content, session));
-		addInviteChoices(content, snapshot);
+		shown.session().ifPresent(session -> addGuests(content, session));
+		addInviteChoices(content);
 	}
 
 	private void publish() {
@@ -122,31 +121,31 @@ public final class FriendsScreen extends Screen {
 		}
 	}
 
-	private void addGuests(LinearLayout content, Snapshot.Session session) {
+	private void addGuests(LinearLayout content, Session session) {
 		content.addChild(heading("pumpkin_friends.section.guests"));
-		for (Snapshot.Guest guest : session.guests()) {
+		for (Session.Guest guest : session.guests()) {
 			LinearLayout row = LinearLayout.horizontal().spacing(SPACING);
 			row.addChild(text(Component.translatable("pumpkin_friends.row", Component.literal(guest.name()),
 				Component.translatable("pumpkin_friends.guest." + lowercase(guest.state())))).setMaxWidth(ROW_WIDTH / 2));
 			row.addChild(Button.builder(Component.translatable("pumpkin_friends.kick"),
-				button -> client.send(new Kick(guest.id()))).width(Button.SMALL_WIDTH).build());
+				button -> run(Ops.hostKick(guest.id()))).width(Button.SMALL_WIDTH).build());
 			content.addChild(row);
 		}
 		content.addChild(button(Component.translatable("pumpkin_friends.stop_sharing"), this::stopSharing));
 	}
 
 	private void stopSharing() {
-		client.send(new StopSharing());
+		run(Ops.hostStop());
 		LanControl.unpublish(minecraft);
 	}
 
-	private void addInviteChoices(LinearLayout content, Snapshot snapshot) {
-		Set<String> invitable = invitableFriendIds(snapshot);
+	private void addInviteChoices(LinearLayout content) {
+		Set<String> invitable = invitableFriendIds(shown);
 		if (invitable.isEmpty()) {
 			return;
 		}
 		content.addChild(heading("pumpkin_friends.section.invite"));
-		snapshot.onlineFriends().stream().filter(friend -> invitable.contains(friend.id()))
+		shown.friends().stream().filter(friend -> invitable.contains(friend.id()))
 			.forEach(friend -> content.addChild(Checkbox.builder(Component.literal(friend.name()), font)
 				.selected(selectedFriendIds.contains(friend.id()))
 				.onValueChange((checkbox, selected) -> toggle(friend.id(), selected))
@@ -171,36 +170,45 @@ public final class FriendsScreen extends Screen {
 	}
 
 	private void invite() {
-		client.send(new Share(List.copyOf(selectedFriendIds)));
+		run(Ops.hostInvite(List.copyOf(selectedFriendIds), false));
 		selectedFriendIds.clear();
 		rebuildWidgets();
 	}
 
+	/** Sends the operation; if the launcher refuses or does not answer, the player sees why as a toast. */
+	private void run(Op<?> operation) {
+		client.request(operation).reply().thenAccept(this::showFailure);
+	}
+
+	private void showFailure(Reply<?> reply) {
+		reply.error().ifPresent(error -> Toasts.showError(minecraft, error));
+	}
+
 	/** Online-Freunde, die noch nicht Gast der Sitzung sind. */
-	private static Set<String> invitableFriendIds(Snapshot snapshot) {
-		Set<String> guestIds = snapshot.session().stream().flatMap(session -> session.guests().stream())
-			.map(Snapshot.Guest::id).collect(Collectors.toSet());
-		return snapshot.onlineFriends().stream().map(Snapshot.Friend::id).filter(id -> !guestIds.contains(id))
+	private static Set<String> invitableFriendIds(View view) {
+		Set<String> guestIds = view.session().stream().flatMap(session -> session.guests().stream())
+			.map(Session.Guest::id).collect(Collectors.toSet());
+		return view.friends().stream().filter(Friend::isOnline).map(Friend::id).filter(id -> !guestIds.contains(id))
 			.collect(Collectors.toCollection(LinkedHashSet::new));
 	}
 
-	private void addFriendList(LinearLayout content, Snapshot snapshot) {
+	private void addFriendList(LinearLayout content) {
 		content.addChild(heading("pumpkin_friends.section.friends"));
-		if (snapshot.friends().isEmpty()) {
+		if (shown.friends().isEmpty()) {
 			content.addChild(text(Component.translatable("pumpkin_friends.no_friends")));
 		}
-		for (Snapshot.Friend friend : snapshot.friends()) {
+		for (Friend friend : shown.friends()) {
 			content.addChild(text(Component.translatable("pumpkin_friends.row", Component.literal(friend.name()),
 				Component.translatable("pumpkin_friends.presence." + lowercase(friend.presence())))));
 		}
 	}
 
-	private void addInvites(LinearLayout content, Snapshot snapshot) {
-		if (snapshot.invites().isEmpty()) {
+	private void addInvites(LinearLayout content) {
+		if (shown.invites().isEmpty()) {
 			return;
 		}
 		content.addChild(heading("pumpkin_friends.section.invites"));
-		for (Snapshot.Invite invite : snapshot.invites()) {
+		for (Invite invite : shown.invites()) {
 			content.addChild(text(Component.translatable("pumpkin_friends.invite_row",
 				Component.literal(invite.fromName()), Component.literal(invite.title()))));
 		}
@@ -224,6 +232,7 @@ public final class FriendsScreen extends Screen {
 	}
 
 	/** Alles, was der Bildschirm zeigt; ändert sich etwas davon, wird er neu aufgebaut. */
-	private record View(boolean connected, Snapshot snapshot, boolean canPublish, OptionalInt publishedPort) {
+	private record View(boolean connected, List<Friend> friends, Optional<Session> session, List<Invite> invites,
+			boolean awaitingConfirmation, boolean canPublish, OptionalInt publishedPort) {
 	}
 }

@@ -1,9 +1,6 @@
 package dev.laux.pumpkin.friends.compat;
 
 import dev.laux.pumpkin.friends.bridge.BridgeClient;
-import dev.laux.pumpkin.friends.bridge.Messages.LanClosed;
-import dev.laux.pumpkin.friends.bridge.Messages.LanOpened;
-import dev.laux.pumpkin.friends.state.StateStore;
 import java.util.OptionalInt;
 import net.minecraft.client.Minecraft;
 
@@ -13,17 +10,15 @@ import net.minecraft.client.Minecraft;
  */
 public final class LanWatcher {
 	private final BridgeClient client;
-	private final StateStore store;
 	private OptionalInt reportedPort = OptionalInt.empty();
 	private boolean wasConnected;
 
-	public LanWatcher(BridgeClient client, StateStore store) {
+	public LanWatcher(BridgeClient client) {
 		this.client = client;
-		this.store = store;
 	}
 
 	public void tick(Minecraft minecraft) {
-		boolean connected = store.isConnected();
+		boolean connected = client.isConnected();
 		if (connected && !wasConnected) {
 			// Eine neue Verbindung kennt noch keinen Port: eine schon offene Welt wird erneut gemeldet.
 			reportedPort = OptionalInt.empty();
@@ -31,8 +26,16 @@ public final class LanWatcher {
 		wasConnected = connected;
 		OptionalInt port = LanControl.publishedPort(minecraft);
 		if (connected && !port.equals(reportedPort)) {
-			client.send(port.isPresent() ? new LanOpened(port.getAsInt()) : new LanClosed());
+			report(port);
 			reportedPort = port;
+		}
+	}
+
+	private void report(OptionalInt port) {
+		if (port.isPresent()) {
+			client.lanOpened(port.getAsInt());
+		} else {
+			client.lanClosed();
 		}
 	}
 }

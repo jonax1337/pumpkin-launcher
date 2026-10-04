@@ -36,5 +36,18 @@
 	"pumpkin_friends.error.denied": "Im Launcher abgelehnt",
 	"pumpkin_friends.error.versionUnsupported": "Diese Minecraft-Version wird nicht unterstützt",
 	"pumpkin_friends.error.busy": "Der Launcher ist beschäftigt, versuch es gleich noch einmal",
-	"pumpkin_friends.error.internal": "Fehler im Launcher"
+	"pumpkin_friends.error.internal": "Fehler im Launcher",
+	"pumpkin_friends.notify.requestReceived": "%s möchte dein Freund sein",
+	"pumpkin_friends.notify.joinEnded": "Die beigetretene Welt ist beendet",
+	"pumpkin_friends.notify.scopeDenied": "Die Aktion im Spiel wurde im Launcher abgelehnt",
+	"pumpkin_friends.error.msAccountRequired": "Dafür ist ein Microsoft-Konto nötig",
+	"pumpkin_friends.error.rateLimited": "Zu viele Aktionen, warte einen Moment",
+	"pumpkin_friends.error.unsupportedOp": "Diese Launcher-Version kann das noch nicht",
+	"pumpkin_friends.error.badRequest": "Der Launcher hat die Anfrage nicht verstanden",
+	"pumpkin_friends.error.unknownFriend": "Dieser Freund ist nicht mehr bekannt",
+	"pumpkin_friends.error.notFound": "Nicht gefunden",
+	"pumpkin_friends.error.nameUnknown": "Diesen Namen gibt es nicht",
+	"pumpkin_friends.error.directoryUnavailable": "Das Verzeichnis ist gerade nicht erreichbar",
+	"pumpkin_friends.error.timeout": "Der Launcher hat nicht rechtzeitig geantwortet",
+	"pumpkin_friends.error.disconnected": "Der Launcher ist nicht verbunden"
 }
