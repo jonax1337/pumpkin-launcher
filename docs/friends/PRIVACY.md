@@ -315,11 +315,13 @@ friendship (`join` is refused).
 | Purpose (`nameLookup`) | Name → UUID beim Senden per Name; ein von Mojang signiertes Spielerzertifikat als Kontonachweis für das Verzeichnis | Name → UUID when sending by name; a Mojang-signed player certificate as account proof for the directory |
 | Mojang sessionserver, purpose (`sessionserverProof`) | Kontonachweis beim Annehmen einer Anfrage per Name und die Namen der Absender | Account proof when accepting a request by name, and the names of senders |
 
-## 10. The in-game mod (planned, `INGAME.md`)
+## 10. The in-game mod (`INGAME.md`)
 
-Status: **planned.** Today the player installs a Fabric mod by hand (SPEC 11.5); the launcher-injected mod arrives
-with the packages of `INGAME.md` section 11. This section is the wording basis for that release and is not yet true of
-the shipped code. It does not change sections 1 to 9, in particular not the certificate login of section 9.
+Status: the launcher-injected mod is built and merged on `feat/ingame-mod` (waves 0 to 2 of `INGAME.md` section 11.2;
+five cells smoke-proven, `INGAME-SMOKE.md`) and is **not yet in a released build**. The hand-installed Fabric mod of
+the 2.0.x releases is gone from that branch (SPEC 11.5, changelog D.6). This section is the wording basis for the
+release that ships the injection. It does not change sections 1 to 9, in particular not the certificate login of
+section 9.
 
 ### 10.1 What is added to the game, and when
 
