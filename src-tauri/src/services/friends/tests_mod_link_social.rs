@@ -2,8 +2,8 @@
 //! Fehlercodes und was die Zustimmung bewirkt. Anna spielt mit der Mod, Bert ist ihr Freund, Cleo ein Fremder.
 use super::mod_ops::ModScene;
 use super::*;
-use crate::services::friends::contract::{Friend, FriendNotice, ModScope, RequestDirection};
-use crate::services::modbridge::ops::Scope;
+use crate::services::friends::contract::{Friend, FriendNotice, ModScope, Presence, RequestDirection};
+use crate::services::modbridge::ops::{Op, Scope, OP_NAMES};
 
 fn error_code(answer: &Value) -> Option<&str> {
     answer["error"]["code"].as_str()
@@ -372,4 +372,122 @@ async fn acknowledging_a_notice_asks_first_too() {
     assert_eq!(confirm.op, "friend.acknowledge");
     assert_eq!(error_code(&scene.game_mod.answer_of("k1").await), Some("denied"));
     assert!(notice_of_guest(&scene).await.is_some());
+}
+
+// ---- Jeder Vorgang mit Bereich fragt nach genau diesem Bereich und ändert bei Ablehnung nichts ----
+
+/// Was ein Vorgang in der Welt vorfinden muss, damit er bis zur Rückfrage kommt, und was die Rückfrage dann nennt.
+struct ScopedOp {
+    args: Value,
+    target: Option<&'static str>,
+    /// Hält Gegenstellen am Leben, solange der Vorgang läuft.
+    _peers: Vec<Box<dyn Send>>,
+}
+
+impl ScopedOp {
+    fn new(args: Value, target: Option<&'static str>) -> Self {
+        Self { args, target, _peers: Vec::new() }
+    }
+
+    fn with_peer(mut self, peer: impl Send + 'static) -> Self {
+        self._peers.push(Box::new(peer));
+        self
+    }
+}
+
+/// Ein Vorgang ohne Vorbereitung in dieser Tabelle fällt hier auf: wer einen Vorgang mit Bereich anlegt, ergänzt ihn.
+async fn prepare_scoped_op(scene: &mut ModScene, name: &str) -> ScopedOp {
+    let alias = scene.guest_alias.clone();
+    match name {
+        "request.answer" => {
+            let (cleo, request_id) = request_from_cleo(scene).await;
+            ScopedOp::new(json!({ "id": request_id, "accept": true }), Some("Cleo")).with_peer(cleo)
+        }
+        "friend.addByName" => ScopedOp::new(json!({ "name": "Notch" }), Some("Notch")),
+        "friend.addByCode" => {
+            let cleo = scene.stranger("Cleo").await;
+            let code = cleo.friends.code_create().await.unwrap().code.unwrap();
+            ScopedOp::new(json!({ "code": code }), None).with_peer(cleo)
+        }
+        "invite.joinHere" => {
+            let (invite_id, world) = scene.invite_from_guest().await;
+            ScopedOp::new(json!({ "id": invite_id }), Some("Bert")).with_peer(world)
+        }
+        "host.invite" => ScopedOp::new(json!({ "friends": [alias], "showWorld": false }), Some("Bert")),
+        "code.create" => ScopedOp::new(json!({}), None),
+        "code.revoke" => {
+            let created = scene.host.friends.code_create().await.unwrap();
+            ScopedOp::new(json!({ "id": created.id }), None)
+        }
+        "friend.rename" => ScopedOp::new(json!({ "friend": alias, "alias": "Kumpel" }), Some("Bert")),
+        "friend.remove" | "friend.block" => ScopedOp::new(json!({ "friend": alias }), Some("Bert")),
+        "blocked.unblock" => {
+            scene.host.friends.block(&scene.guest.id().to_string()).await.unwrap();
+            let blocked = scene.game_mod.topic_where("blocked", |value| !value.as_array().unwrap().is_empty()).await;
+            ScopedOp::new(json!({ "id": blocked["value"][0]["id"] }), Some("Bert"))
+        }
+        "friend.acknowledge" => {
+            set_notice(scene, Some(FriendNotice::Renamed { previous_name: "Alt".into() }));
+            ScopedOp::new(json!({ "id": alias }), Some("Bert"))
+        }
+        _ => panic!("{name} hat einen Bereich, aber keine Vorbereitung in prepare_scoped_op"),
+    }
+}
+
+fn scope_of(name: &str) -> Option<Scope> {
+    let args = json!({ "target": "friends", "id": "x", "accept": true, "name": "x", "friends": ["x"], "friend": "x", "code": "x", "alias": null });
+    Op::from_request(name, args).unwrap().scope()
+}
+
+/// Was eine Ablehnung nicht anrühren darf: Freunde samt Alias und Hinweis, Anfragen, Codes, Sperren, die geteilte Welt
+/// und Beitritte.
+#[derive(Debug, PartialEq)]
+struct World {
+    friends: Vec<Friend>,
+    requests: usize,
+    codes: Vec<String>,
+    blocked: usize,
+    shares_world: bool,
+    joins: usize,
+}
+
+/// Anwesenheit, Pfad und letzte Sichtung ändern sich von selbst und gehören nicht zu dem, was eine Ablehnung bewahrt.
+fn without_connection_state(friend: Friend) -> Friend {
+    Friend { presence: Presence::Offline, path: None, last_seen: None, ..friend }
+}
+
+async fn world_of(scene: &ModScene) -> World {
+    let host = &scene.host;
+    let friends = host.friends.list().await.unwrap();
+    World {
+        friends: friends.into_iter().map(without_connection_state).collect(),
+        requests: host.friends.requests().await.unwrap().len(),
+        codes: host.friends.codes().await.unwrap().into_iter().map(|code| code.id).collect(),
+        blocked: host.friends.blocked().await.unwrap().len(),
+        shares_world: host.session().await.is_some(),
+        joins: host.events.join_states().len(),
+    }
+}
+
+#[tokio::test]
+async fn every_op_with_a_scope_asks_for_exactly_that_scope_and_a_refusal_changes_nothing() {
+    let scoped: Vec<&str> = OP_NAMES.into_iter().filter(|name| scope_of(name).is_some()).collect();
+    assert!(scoped.len() >= 12, "die Tabelle der Vorgänge mit Bereich ist nicht leer geworden: {scoped:?}");
+
+    for name in scoped {
+        let mut scene = ModScene::ready_to_share(&[]).await;
+        let prepared = prepare_scoped_op(&mut scene, name).await;
+        let before = world_of(&scene).await;
+
+        scene.game_mod.request("s1", name, prepared.args.clone()).await;
+        let confirm = scene.answer_prompt(false).await;
+        let answer = scene.game_mod.answer_of("s1").await;
+
+        let asked = (Some(confirm.scope), confirm.op.as_str(), confirm.target.as_deref());
+        assert_eq!(asked, (scope_of(name), name, prepared.target), "{name}");
+        assert_eq!(error_code(&answer), Some("denied"), "{name}: {answer}");
+        assert_eq!(world_of(&scene).await, before, "{name} hat trotz Ablehnung etwas geändert");
+        let entries = scene.activity();
+        assert_eq!((entries[0].op.as_str(), entries[0].ok), (name, false), "{name}: auch der abgelehnte Versuch steht in der Liste");
+    }
 }

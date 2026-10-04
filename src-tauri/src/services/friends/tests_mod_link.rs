@@ -144,6 +144,14 @@ impl ModScene {
     pub(super) fn activity(&self) -> Vec<ModActivityEntry> {
         self.host.sessions.mod_activity()
     }
+
+    /// Bert teilt seine Welt und lädt Anna ein. Liefert die Kennung der Einladung und die Welt, die leben muss, solange
+    /// die Einladung gilt.
+    pub(super) async fn invite_from_guest(&self) -> (String, FakeServer) {
+        let world = FakeServer::start().await;
+        share_with(&self.guest, &self.host, &world).await;
+        (self.host.open_invite().await.id, world)
+    }
 }
 
 impl FakeMod {
@@ -326,6 +334,49 @@ async fn a_share_prompt_lists_the_friends_and_the_op_lands_in_the_activity_list(
     assert_eq!(answer["ok"], true);
     let entries = scene.activity();
     assert_eq!((entries[0].scope, entries[0].op.as_str(), entries[0].target_name.as_deref(), entries[0].ok), (ModScope::Share, "host.invite", Some("Bert"), true));
+}
+
+#[tokio::test]
+async fn a_share_scope_the_user_allowed_before_the_start_shares_without_a_prompt() {
+    let mut scene = ModScene::ready_to_share(&[Scope::Share]).await;
+    let alias = scene.guest_alias.clone();
+
+    let answer = scene.game_mod.call("s1", "host.invite", json!({ "friends": [alias], "showWorld": false })).await;
+
+    let welcome = scene.game_mod.seen[0].clone();
+    assert_eq!(welcome["scopes"], json!({ "share": "allow", "social": "ask" }));
+    assert_eq!(answer["ok"], true, "{answer}");
+    assert!(scene.host.events.mod_confirm_requests().is_empty());
+    assert!(!scene.game_mod.seen.iter().any(|message| message["type"] == "pending"));
+    let session = scene.host.session().await.expect("die Welt wird geteilt");
+    assert_eq!(session.guests.len(), 1);
+    let entries = scene.activity();
+    assert_eq!((entries[0].op.as_str(), entries[0].ok), ("host.invite", true));
+}
+
+#[tokio::test]
+async fn host_invite_is_limited_to_three_successes_a_minute_and_failed_attempts_cost_nothing() {
+    let mut scene = ModScene::ready_to_share(&[]).await;
+    let alias = scene.guest_alias.clone();
+    let invite = json!({ "friends": [alias], "showWorld": false });
+
+    scene.game_mod.request("r0", "host.invite", invite.clone()).await;
+    scene.answer_prompt(false).await;
+    let refused = scene.game_mod.answer_of("r0").await;
+    let nobody = scene.game_mod.call("r1", "host.invite", json!({ "friends": [] })).await;
+    let stranger = scene.game_mod.call("r2", "host.invite", json!({ "friends": ["kein-alias"] })).await;
+    scene.game_mod.request("r3", "host.invite", invite.clone()).await;
+    scene.answer_prompt(true).await;
+    let mut successes = vec![scene.game_mod.answer_of("r3").await];
+    for number in 4..6 {
+        successes.push(scene.game_mod.call(&format!("r{number}"), "host.invite", invite.clone()).await);
+    }
+    let fourth = scene.game_mod.call("r6", "host.invite", invite).await;
+
+    assert_eq!([&refused, &nobody, &stranger].map(|answer| error_code(answer)), [Some("denied"), Some("badRequest"), Some("unknownFriend")]);
+    assert!(successes.iter().all(|answer| answer["ok"] == true), "{successes:?}");
+    assert_eq!(error_code(&fourth), Some("rateLimited"));
+    assert_eq!(scene.host.events.mod_confirm_requests().len(), 2, "die vierte Anfrage wird abgelehnt, ohne zu fragen");
 }
 
 #[tokio::test]
