@@ -1,7 +1,6 @@
 package dev.laux.pumpkin.friends.platform.fabric;
 
 import dev.laux.pumpkin.friends.bridge.BridgeClient;
-import dev.laux.pumpkin.friends.state.StateStore;
 import dev.laux.pumpkin.friends.ui.FriendsScreen;
 import java.util.List;
 import net.fabricmc.fabric.api.client.screen.v1.Screens;
@@ -20,11 +19,9 @@ public final class PauseMenuButton {
 	private static final Component LABEL = Component.translatable("pumpkin_friends.button");
 	private static final int GAP = 4;
 
-	private final StateStore store;
 	private final BridgeClient client;
 
-	public PauseMenuButton(StateStore store, BridgeClient client) {
-		this.store = store;
+	public PauseMenuButton(BridgeClient client) {
 		this.client = client;
 	}
 
@@ -38,19 +35,19 @@ public final class PauseMenuButton {
 		}
 		Button button = Button.builder(LABEL, pressed -> open(minecraft, pause)).build();
 		placeBelow(button, widgets, pause.height);
-		button.visible = store.isConnected();
+		button.visible = client.isConnected();
 		widgets.add(button);
 	}
 
 	public void tick(Minecraft minecraft) {
 		if (minecraft.gui.screen() instanceof PauseScreen pause) {
 			Screens.getWidgets(pause).stream().filter(PauseMenuButton::isOurs)
-				.forEach(button -> button.visible = store.isConnected());
+				.forEach(button -> button.visible = client.isConnected());
 		}
 	}
 
 	private void open(Minecraft minecraft, PauseScreen pause) {
-		minecraft.gui.setScreen(new FriendsScreen(pause, store, client));
+		minecraft.gui.setScreen(new FriendsScreen(pause, client));
 	}
 
 	/** Unter alle vorhandenen Knöpfe, in deren Breite; reicht der Platz nicht, darüber. */

@@ -1,5 +1,6 @@
 package dev.laux.pumpkin.friends.bridge;
 
+import dev.laux.pumpkin.friends.protocol.Protocol;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;

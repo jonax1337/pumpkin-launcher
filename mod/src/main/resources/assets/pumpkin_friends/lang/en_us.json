@@ -36,5 +36,18 @@
 	"pumpkin_friends.error.denied": "Denied in the launcher",
 	"pumpkin_friends.error.versionUnsupported": "This Minecraft version is not supported",
 	"pumpkin_friends.error.busy": "The launcher is busy, try again in a moment",
-	"pumpkin_friends.error.internal": "Error in the launcher"
+	"pumpkin_friends.error.internal": "Error in the launcher",
+	"pumpkin_friends.notify.requestReceived": "%s wants to be your friend",
+	"pumpkin_friends.notify.joinEnded": "The joined world has ended",
+	"pumpkin_friends.notify.scopeDenied": "The action in the game was denied in the launcher",
+	"pumpkin_friends.error.msAccountRequired": "A Microsoft account is required for this",
+	"pumpkin_friends.error.rateLimited": "Too many actions, wait a moment",
+	"pumpkin_friends.error.unsupportedOp": "This launcher version cannot do that yet",
+	"pumpkin_friends.error.badRequest": "The launcher did not understand the request",
+	"pumpkin_friends.error.unknownFriend": "That friend is not known any more",
+	"pumpkin_friends.error.notFound": "Not found",
+	"pumpkin_friends.error.nameUnknown": "There is no such name",
+	"pumpkin_friends.error.directoryUnavailable": "The directory cannot be reached right now",
+	"pumpkin_friends.error.timeout": "The launcher did not answer in time",
+	"pumpkin_friends.error.disconnected": "The launcher is not connected"
 }

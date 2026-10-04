@@ -1,64 +1,71 @@
 package dev.laux.pumpkin.friends.bridge;
 
-import dev.laux.pumpkin.friends.bridge.Messages.Hello;
-import dev.laux.pumpkin.friends.bridge.Messages.Inbound;
-import dev.laux.pumpkin.friends.bridge.Messages.Outbound;
-import dev.laux.pumpkin.friends.bridge.Messages.Ping;
-import dev.laux.pumpkin.friends.bridge.Messages.Pong;
-import dev.laux.pumpkin.friends.bridge.Messages.Reject;
-import dev.laux.pumpkin.friends.bridge.Messages.Welcome;
-import java.io.BufferedInputStream;
+import dev.laux.pumpkin.friends.protocol.ClosingReason;
+import dev.laux.pumpkin.friends.protocol.ErrorCode;
+import dev.laux.pumpkin.friends.protocol.LauncherFrame.Welcome;
+import dev.laux.pumpkin.friends.protocol.ModFrame;
+import dev.laux.pumpkin.friends.protocol.RejectReason;
+import dev.laux.pumpkin.friends.request.Op;
+import dev.laux.pumpkin.friends.request.Request;
+import dev.laux.pumpkin.friends.request.RequestManager;
+import dev.laux.pumpkin.friends.request.RequestManager.Delivery;
+import dev.laux.pumpkin.friends.runtime.MonotonicClock;
+import dev.laux.pumpkin.friends.state.TopicStore;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Hält die Verbindung zum Launcher (SPEC 7, 11.4): ein Daemon-Thread verbindet, liest und wartet nach jedem Abbruch
- * die {@link Backoff}-Zeit; pro Verbindung schreibt ein zweiter Thread aus einer Warteschlange mit 64 Plätzen.
+ * The mod's side of the launcher channel (INGAME 5, protocol 2). A daemon thread connects, speaks the protocol and, after
+ * every end of the connection, waits the {@link Backoff} time (a fixed minute after a terminal {@code reject}) before it
+ * tries again. Everything the rest of the mod uses is on the main thread: {@link #topics()}, {@link #request(Op)}, the
+ * {@link BridgeListener}s. Without the launcher's environment variables nothing starts.
  */
 public final class BridgeClient {
 	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_friends");
-	private static final int QUEUE_CAPACITY = 64;
 	private static final String THREAD_NAME = "Pumpkin Friends bridge";
 
 	private final BridgeEnv env;
-	private final Versions versions;
-	private final Listener listener;
+	private final HostPlatform platform;
 	private final Timing timing;
+	private final MonotonicClock clock = MonotonicClock.SYSTEM;
 	private final Backoff backoff = new Backoff();
-	private final BlockingQueue<Outbound> outgoing = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
-	private volatile boolean running;
-	private volatile boolean welcomed;
+	private final TopicStore topics = new TopicStore();
+	private final RequestManager requests;
+	private final Inbox inbox;
+	private final Thread bridgeThread;
+	private volatile boolean running = true;
+	private volatile Connection current;
 	private volatile Socket socket;
-	private Thread reader;
+	private volatile List<String> readyScreens = List.of();
+	// Only the bridge thread touches the rest.
+	private Connection serving;
+	private Optional<RejectReason> rejection = Optional.empty();
+	private Optional<RejectReason> lastReportedRejection = Optional.empty();
+	private LinkState published = LinkState.OFFLINE;
 
-	private BridgeClient(BridgeEnv env, Versions versions, Listener listener, Timing timing) {
+	private BridgeClient(BridgeEnv env, HostPlatform platform, Timing timing) {
 		this.env = env;
-		this.versions = versions;
-		this.listener = listener;
+		this.platform = platform;
 		this.timing = timing;
+		this.requests = new RequestManager(platform.mainThread(), clock, this::deliver);
+		this.inbox = new Inbox(requests, topics, platform.mainThread(), this::onClosing);
+		this.bridgeThread = new Thread(this::connectRepeatedly, THREAD_NAME);
+		bridgeThread.setDaemon(true);
 	}
 
-	/** Verbindet nur, wenn der Launcher die Umgebung gesetzt hat (SPEC 7.5); sonst entsteht kein Thread. */
-	public static Optional<BridgeClient> startIfLaunched(Map<String, String> environment, Versions versions,
-			Listener listener, Timing timing) {
+	/** Connects only when the launcher set the environment (SPEC 7.5); otherwise no thread exists. */
+	public static Optional<BridgeClient> startIfLaunched(Map<String, String> environment, HostPlatform platform, Timing timing) {
 		return BridgeEnv.from(environment).map(env -> {
-			BridgeClient client = new BridgeClient(env, versions, listener, timing);
-			client.running = true;
-			client.reader = daemon(client::connectRepeatedly, THREAD_NAME);
+			BridgeClient client = new BridgeClient(env, platform, timing);
+			client.bridgeThread.start();
 			return client;
 		});
 	}
@@ -66,28 +73,94 @@ public final class BridgeClient {
 	public void stop() {
 		running = false;
 		closeSocket();
-		reader.interrupt();
+		bridgeThread.interrupt();
 	}
 
-	/** Verwirft die Nachricht, solange der Launcher die Verbindung nicht bestätigt hat oder die Warteschlange voll ist. */
-	public void send(Outbound message) {
-		if (welcomed && !outgoing.offer(message)) {
-			LOG.warn("Nachricht an den Launcher verworfen, Warteschlange voll: {}", message.type());
+	public void addListener(BridgeListener listener) {
+		inbox.addListener(listener);
+	}
+
+	/** Main thread. */
+	public LinkState state() {
+		return inbox.linkState();
+	}
+
+	/** Main thread. */
+	public boolean isConnected() {
+		return state().isConnected();
+	}
+
+	/** Main thread. The topics are empty while the link is down. */
+	public TopicStore topics() {
+		return topics;
+	}
+
+	/** Main thread. The reply completes on the main thread, also when the link is down ({@code disconnected}). */
+	public <T> Request<T> request(Op<T> op) {
+		return requests.start(op);
+	}
+
+	/** Whether the launcher currently waits for the player to answer a dialog on behalf of a request. */
+	public boolean isAwaitingLauncherDialog() {
+		return requests.isAwaitingLauncherDialog();
+	}
+
+	/** A hint for the launcher, which verifies the port itself. Dropped while the link is down: the caller reports again after a reconnect. */
+	public void lanOpened(int port) {
+		hint(new ModFrame.LanOpened(port));
+	}
+
+	public void lanClosed() {
+		hint(new ModFrame.LanClosed());
+	}
+
+	/** Names the screens this mod offers; sent now and again after every reconnect. */
+	public void announceReady(List<String> screens) {
+		readyScreens = List.copyOf(screens);
+		sendReady();
+	}
+
+	private void hint(ModFrame frame) {
+		if (deliver(frame) == Delivery.QUEUE_FULL) {
+			LOG.warn("Pumpkin Friends: dropped {} for the launcher, the queue is full", frame.type());
+		}
+	}
+
+	private void sendReady() {
+		if (!readyScreens.isEmpty()) {
+			hint(new ModFrame.Ready(readyScreens));
+		}
+	}
+
+	private Delivery deliver(ModFrame frame) {
+		Connection connection = current;
+		if (connection == null) {
+			return Delivery.NOT_CONNECTED;
+		}
+		return connection.offer(frame) ? Delivery.QUEUED : Delivery.QUEUE_FULL;
+	}
+
+	private void onClosing(ClosingReason reason) {
+		if (reason.isFinal()) {
+			LOG.info("Pumpkin Friends: the launcher ended this link for good ({})", reason);
+			running = false;
 		}
 	}
 
 	private void connectRepeatedly() {
 		while (running) {
+			rejection = Optional.empty();
 			connectOnce();
 			if (running) {
-				waitBeforeReconnect();
+				pauseBeforeReconnect();
 			}
 		}
 	}
 
-	private void waitBeforeReconnect() {
+	private void pauseBeforeReconnect() {
+		Duration pause = rejection.isPresent() ? timing.rejectedRetry() : backoff.next();
 		try {
-			timing.sleeper().sleep(backoff.next());
+			timing.sleeper().sleep(pause);
 		} catch (InterruptedException stopped) {
 			Thread.currentThread().interrupt();
 			running = false;
@@ -97,141 +170,75 @@ public final class BridgeClient {
 	private void connectOnce() {
 		try (Socket connection = new Socket()) {
 			socket = connection;
-			connection.connect(launcherAddress(), (int) timing.connectTimeout().toMillis());
-			connection.setSoTimeout((int) timing.silenceTimeout().toMillis());
-			converse(connection);
+			connection.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), env.port()),
+				(int) timing.connectTimeout().toMillis());
+			serving = new Connection(connection, hello(), timing, clock, inbox, new HandshakeEvents());
+			serving.serve();
 		} catch (IOException ended) {
-			LOG.debug("Verbindung zum Launcher beendet: {}", ended.getMessage());
+			LOG.debug("Pumpkin Friends: connection to the launcher ended: {}", ended.getMessage());
 		} finally {
 			socket = null;
-			endSession();
+			endLink();
 		}
 	}
 
-	private InetSocketAddress launcherAddress() {
-		return new InetSocketAddress(InetAddress.getLoopbackAddress(), env.port());
+	private ModFrame.Hello hello() {
+		return new ModFrame.Hello(env.token(), platform.modVersion(), platform.buildId(), platform.game());
 	}
 
-	private void converse(Socket connection) throws IOException {
-		OutputStream out = connection.getOutputStream();
-		// Reste der vorigen Verbindung dürfen nicht vor oder statt der neuen Begrüßung hinausgehen.
-		outgoing.clear();
-		writeLine(out, new Hello(List.of(Protocol.VERSION), env.token(), versions.mod(), versions.minecraft()));
-		Thread writer = daemon(() -> writeQueued(out), THREAD_NAME + " writer");
-		try {
-			readUntilClosed(new BufferedInputStream(connection.getInputStream()));
-		} finally {
-			writer.interrupt();
-		}
+	private void endLink() {
+		current = null;
+		requests.failAll(ErrorCode.DISCONNECTED);
+		publish(rejection.<LinkState>map(LinkState.Rejected::new).orElse(LinkState.OFFLINE));
 	}
 
-	private void readUntilClosed(InputStream in) throws IOException {
-		while (running) {
-			if (!handle(Protocol.readLine(in))) {
-				return;
+	private void publish(LinkState next) {
+		if (!next.equals(published)) {
+			if (published.isConnected()) {
+				LOG.info("Pumpkin Friends: disconnected from the Pumpkin Launcher");
 			}
+			published = next;
+			inbox.linkChanged(next);
 		}
-	}
-
-	/** Liefert {@code false}, wenn die Verbindung enden soll. Unlesbare Zeilen werden übergangen. */
-	private boolean handle(String line) {
-		return Protocol.decode(line).map(this::dispatch).orElse(true);
-	}
-
-	private boolean dispatch(Inbound message) {
-		if (message instanceof Welcome welcome) {
-			return acceptWelcome(welcome);
-		}
-		if (message instanceof Reject reject) {
-			LOG.warn("Launcher lehnt die Verbindung ab: {}", reject.reason());
-			return false;
-		}
-		if (!(message instanceof Pong) && welcomed) {
-			listener.received(message);
-		}
-		return true;
-	}
-
-	private boolean acceptWelcome(Welcome welcome) {
-		if (welcome.protocol() != Protocol.VERSION) {
-			LOG.warn("Launcher spricht Protokoll {}, die Mod nur {}", welcome.protocol(), Protocol.VERSION);
-			return false;
-		}
-		backoff.reset();
-		welcomed = true;
-		LOG.info("Mit dem Pumpkin Launcher verbunden");
-		listener.connected();
-		return true;
-	}
-
-	private void endSession() {
-		if (welcomed) {
-			welcomed = false;
-			LOG.info("Verbindung zum Pumpkin Launcher getrennt");
-			listener.disconnected();
-		}
-	}
-
-	/** Schreibt die Warteschlange; ist sie eine Ping-Periode lang leer, geht ein {@code ping} hinaus (Lebenszeichen). */
-	private void writeQueued(OutputStream out) {
-		try {
-			while (true) {
-				Outbound message = outgoing.poll(timing.pingInterval().toMillis(), TimeUnit.MILLISECONDS);
-				writeLine(out, message == null ? new Ping() : message);
-			}
-		} catch (InterruptedException sessionEnded) {
-			Thread.currentThread().interrupt();
-		} catch (IOException writeFailed) {
-			closeSocket();
-		}
-	}
-
-	private static void writeLine(OutputStream out, Outbound message) throws IOException {
-		out.write((Protocol.encode(message) + "\n").getBytes(StandardCharsets.UTF_8));
-		out.flush();
 	}
 
 	private void closeSocket() {
-		Socket current = socket;
-		if (current == null) {
+		Socket open = socket;
+		if (open == null) {
 			return;
 		}
 		try {
-			current.close();
+			open.close();
 		} catch (IOException ignored) {
-			// Ein Fehler beim Schließen ändert nichts: die Verbindung ist danach so oder so weg.
+			// Closing a socket that is already failing changes nothing: the connection is gone either way.
 		}
 	}
 
-	private static Thread daemon(Runnable task, String name) {
-		Thread thread = new Thread(task, name);
-		thread.setDaemon(true);
-		thread.start();
-		return thread;
-	}
-
-	/** Empfänger der Brückenereignisse; wird vom Lese-Thread aufgerufen. */
-	public interface Listener {
-		void connected();
-
-		void received(Inbound message);
-
-		void disconnected();
-	}
-
-	public record Versions(String mod, String minecraft) {
-	}
-
-	/** Zeiten der Verbindung; Tests verkürzen die Wartezeiten über einen eigenen {@link Sleeper}. */
-	public record Timing(Duration connectTimeout, Duration pingInterval, Duration silenceTimeout, Sleeper sleeper) {
-		public static Timing production() {
-			return new Timing(Duration.ofSeconds(2), Duration.ofSeconds(10), Duration.ofSeconds(30),
-				pause -> Thread.sleep(pause.toMillis()));
+	private final class HandshakeEvents implements Connection.Events {
+		@Override
+		public void welcomed(Welcome welcome) {
+			backoff.reset();
+			lastReportedRejection = Optional.empty();
+			current = serving;
+			LOG.info("Pumpkin Friends: connected to the Pumpkin Launcher {}", welcome.launcher());
+			publish(new LinkState.Connected(welcome.launcher(), welcome.scopes()));
+			sendReady();
 		}
-	}
 
-	@FunctionalInterface
-	public interface Sleeper {
-		void sleep(Duration duration) throws InterruptedException;
+		@Override
+		public void rejected(RejectReason reason) {
+			rejection = Optional.of(reason).filter(RejectReason::isTerminal);
+			reportOnce(reason);
+		}
+
+		// A game that is refused keeps asking once a minute; the log hears of it once per reason.
+		private void reportOnce(RejectReason reason) {
+			if (reason.isTerminal() && !Optional.of(reason).equals(lastReportedRejection)) {
+				LOG.warn("Pumpkin Friends: the launcher refused this game ({}); trying again every minute", reason);
+				lastReportedRejection = Optional.of(reason);
+			} else {
+				LOG.debug("Pumpkin Friends: the launcher refused this game ({})", reason);
+			}
+		}
 	}
 }
