@@ -30,6 +30,7 @@ export const mock = {
   "mock.friends.notFound.code": "Code „{id}“ wurde nicht gefunden",
   "mock.friends.notFound.invite": "Einladung „{id}“ gibt es nicht mehr",
   "mock.friends.notFound.session": "Geteilte Welt „{id}“ gibt es nicht mehr",
+  "mock.friends.notFound.instance": "Instanz „{id}“ gibt es nicht",
   "mock.friends.unavailable": "Auf diesem System gibt es keinen Schlüsselbund; Freunde sind hier nicht verfügbar",
   "mock.friends.identityLost": "Deine Freunde-Identität fehlt im Schlüsselbund; setze sie in den Einstellungen zurück",
   "mock.friends.disabled": "Freunde sind nicht aktiviert",

@@ -8,7 +8,7 @@ import { clone, newId, wait, type MockContext } from "./mock-util";
 import { DAY, HOUR, MINUTE } from "./time";
 import type {
   BlockedPeer, DirectoryState, DirectoryStatus, Friend, FriendCode, FriendRequest, FriendsEnableInput, FriendsSettings, FriendsState,
-  HostSession, InstanceSummary, Invite, JoinPlan, JoinTicket, LanStatus, ModRef, ModStatus, PathKind, Presence, RequestRefusal, RequestVia, SessionGuest,
+  HostSession, InstanceSummary, Invite, JoinPlan, JoinTicket, IngameFailureKind, IngameNode, IngameReason, IngameStatus, LanStatus, ModRef, PathKind, Presence, RequestRefusal, RequestVia, SessionGuest,
 } from "./types";
 
 const SECOND_MS = 1000;
@@ -33,10 +33,30 @@ const MOCK_UNKNOWN_NAME = "herobrine";
 const MOCK_HIDDEN_NAME = "versteckt";
 const MOCK_COOLDOWN_NAME = "spammer";
 
-/** Pausen der vorgetäuschten Abläufe: Anmeldung beim Relay, Zustellung einer Anfrage, Mod-Installation, Verbindung zum Gastgeber. */
+/** Die Zellen der Mod im Spiel, die der Mock kennt (wie `mod-index.json`); `verified: false` ist eine Zelle ohne bestandenen Rauchtest. */
+interface MockNode { id: string; loader: IngameNode["loader"]; minecraft: string[]; loaderMin: string; verified: boolean }
+const MOCK_NODES: MockNode[] = [
+  { id: "26.3-fabric", loader: "fabric", minecraft: ["26.3"], loaderMin: "0.19.5", verified: true },
+  { id: "1.21.1-fabric", loader: "fabric", minecraft: ["1.21", "1.21.1"], loaderMin: "0.16.0", verified: true },
+  { id: "1.20.4-fabric", loader: "fabric", minecraft: ["1.20.4"], loaderMin: "0.15.0", verified: false },
+  { id: "1.21.1-neoforge", loader: "neoforge", minecraft: ["1.21", "1.21.1"], loaderMin: "21.1.0", verified: true },
+  { id: "1.20.1-forge", loader: "forge", minecraft: ["1.20.1"], loaderMin: "47.4.0", verified: true },
+];
+
+/** Ob die Loader-Version `version` unter `minimum` liegt, Teil für Teil als Zahl verglichen. */
+function isOlder(version: string, minimum: string): boolean {
+  const parts = (text: string) => text.split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const [have, need] = [parts(version), parts(minimum)];
+  for (let i = 0; i < Math.max(have.length, need.length); i++) {
+    const [a, b] = [have[i] ?? 0, need[i] ?? 0];
+    if (a !== b) return a < b;
+  }
+  return false;
+}
+
+/** Pausen der vorgetäuschten Abläufe: Anmeldung beim Relay, Zustellung einer Anfrage, Verbindung zum Gastgeber. */
 const ONLINE_AFTER_MS = 800;
 const DELIVERY_MS = 1000;
-const MOD_INSTALL_MS = 1500;
 const JOIN_CONNECT_MS = 1200;
 
 /** `pumpkinMock.cycle()`: so viele Runden im Abstand von `CYCLE_STEP_MS`, die RTT wächst je Runde um `CYCLE_RTT_STEP_MS`. */
@@ -144,7 +164,10 @@ interface FriendsDb {
   lan: Map<string, LanStatus>;
   joins: Map<string, JoinTicket>;
   planScenarios: Map<string, PlanScenario>;
-  modInstalled: Set<string>;
+  /** Was der Nutzer oder ein Startfehler an der Einspeisung der Instanz ausgeschaltet hat; ohne Eintrag ist sie an. */
+  ingameOff: Map<string, "user" | IngameFailureKind>;
+  /** Vorgeführte Zustände (`pumpkinMock.ingame`), die den berechneten ersetzen. */
+  ingameForced: Map<string, IngameStatus>;
   /** Offene Bitten der Mod: eine beantwortete oder unbekannte `requestId` ist wie im Backend nicht mehr gültig. */
   pendingModConfirms: Set<string>;
 }
@@ -166,7 +189,7 @@ function initialState(scenario: Scenario): FriendsState {
     availability: scenario === "identityLost" ? "identityLost" : scenario === "noSecretStore" ? "noSecretStore" : "available",
     enabled,
     me: identityKnown ? mockMe(MOCK_PLAYER_NAME) : null,
-    settings: { displayName: MOCK_PLAYER_NAME, alwaysRelay: false, findableByName: scenario === "full" },
+    settings: { displayName: MOCK_PLAYER_NAME, alwaysRelay: false, findableByName: scenario === "full", ingameMenu: true, ingameActions: "ask" },
     network: identityKnown ? { type: "online", relayHost: MOCK_RELAY_HOST } : { type: "off" },
     relays: [{ host: MOCK_RELAY_HOST, operator: "pumpkin", thirdParty: false }],
     thirdPartyRelaysAccepted: false,
@@ -205,7 +228,7 @@ function seedFullScenario(db: FriendsDb) {
 function createDb(scenario: Scenario): FriendsDb {
   const db: FriendsDb = {
     state: initialState(scenario), friends: [], requests: [], codes: [], blocked: [], invites: [], sessions: [], lan: new Map(),
-    joins: new Map(), planScenarios: new Map(), modInstalled: new Set(), pendingModConfirms: new Set(),
+    joins: new Map(), planScenarios: new Map(), ingameOff: new Map(), ingameForced: new Map(), pendingModConfirms: new Set(),
   };
   if (scenario === "full") seedFullScenario(db);
   return db;
@@ -295,7 +318,8 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
       throw new Error(t("mock.friends.displayNameInvalid", { min: FRIENDS_LIMITS.displayNameMin, max: FRIENDS_LIMITS.displayNameMax }));
     }
     if (!appDb.accounts.some((a) => a.kind === "microsoft")) throw new Error(t("mock.friends.msAccountRequired"));
-    Object.assign(db.state, { enabled: true, settings: { displayName: name, alwaysRelay, findableByName }, thirdPartyRelaysAccepted: acceptThirdPartyRelays });
+    const settings = { ...db.state.settings, displayName: name, alwaysRelay, findableByName };
+    Object.assign(db.state, { enabled: true, settings, thirdPartyRelaysAccepted: acceptThirdPartyRelays });
     db.state.me ??= mockMe(name);
     setNetwork({ type: "starting" });
     setTimeout(() => setNetwork({ type: "online", relayHost: MOCK_RELAY_HOST }), ONLINE_AFTER_MS);
@@ -595,11 +619,68 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     emit("join-session", { ...joinEventBase(ticket), state: { type: "ended", reason: "left" } });
   }
 
-  function modState(instanceId: string): ModStatus {
+  // --- Freunde-Menü im Spiel (INGAME 3.9) ---
+
+  const unavailable = (reason: IngameReason, node: IngameNode | null = null): IngameStatus => ({ state: "unavailable", reason, node });
+
+  /** Wie das Backend ohne Start: erst die Zelle (Loader, Version, Loader-Version), dann die Konten, dann die Schalter. */
+  function ingameStatus(instanceId: string): IngameStatus {
+    const forced = db.ingameForced.get(instanceId);
+    if (forced) return forced;
     const instance = appDb.instances.find((i) => i.id === instanceId);
-    if (instance?.loader !== "fabric") return { state: "unavailable" };
-    if (!db.modInstalled.has(instanceId)) return { state: "notInstalled" };
-    return { state: appDb.running.has(instanceId) ? "connected" : "installed" };
+    if (!instance) throw new Error(t("mock.friends.notFound.instance", { id: instanceId }));
+    if (!db.state.enabled) return unavailable({ type: "friendsOff" });
+    if (!appDb.accounts.some((a) => a.kind === "microsoft")) return unavailable({ type: "offlineAccount" });
+    if (instance.loader === "vanilla") return unavailable({ type: "vanilla" });
+    if (instance.loader === "quilt") return unavailable({ type: "quilt" });
+    const cell = MOCK_NODES.find((n) => n.loader === instance.loader && n.minecraft.includes(instance.minecraftVersion));
+    if (!cell) return unavailable({ type: "noNode" });
+    const node: IngameNode = { id: cell.id, minecraft: instance.minecraftVersion, loader: cell.loader };
+    if (!cell.verified) return unavailable({ type: "unverified" });
+    if (!instance.loaderVersion) return unavailable({ type: "loaderVersionUnknown" });
+    if (isOlder(instance.loaderVersion, cell.loaderMin)) return unavailable({ type: "loaderTooOld", need: cell.loaderMin });
+    return ingameStatusOfFit(instanceId, node);
+  }
+
+  function ingameStatusOfFit(instanceId: string, node: IngameNode): IngameStatus {
+    const off = db.ingameOff.get(instanceId);
+    if (appDb.running.has(instanceId)) return { state: "connected", reason: null, node };
+    if (!db.state.settings.ingameMenu) return { state: "off", reason: { type: "globallyOff" }, node };
+    if (off === "user") return { state: "off", reason: { type: "instanceOff" }, node };
+    if (off) return { state: "autoOff", reason: { type: "breaker", reason: off }, node };
+    return { state: "active", reason: null, node };
+  }
+
+  /** Ändert den Zustand der Einspeisung und meldet den neuen Status wie das Backend als `friends-ingame`. */
+  function changeIngame(instanceId: string, change: () => void) {
+    change();
+    const status = ingameStatus(instanceId);
+    emit("friends-ingame", { instanceId, status: clone(status) });
+    return status;
+  }
+
+  function setIngameEnabled(instanceId: string, enabled: boolean) {
+    return changeIngame(instanceId, () => (enabled ? db.ingameOff.delete(instanceId) : db.ingameOff.set(instanceId, "user")));
+  }
+
+  function retryIngame(instanceId: string) {
+    return changeIngame(instanceId, () => {
+      if (db.ingameOff.get(instanceId) !== "user") db.ingameOff.delete(instanceId);
+    });
+  }
+
+  /** Ein Startfehler wie im Backend: `friends-ingame-failed` für den Dialog, danach der neue Status. */
+  function failIngame(instanceId: string, reason: IngameFailureKind = "mixinApplyFailed") {
+    ingameStatus(instanceId);
+    if (db.ingameOff.get(instanceId) === "user") return;
+    db.ingameOff.set(instanceId, reason);
+    emit("friends-ingame-failed", { instanceId, reason });
+    changeIngame(instanceId, () => {});
+  }
+
+  /** Zeigt einen Zustand, den der Mock nicht berechnet (`pumpkinMock.ingame(id, status)`); `null` stellt die Berechnung wieder her. */
+  function forceIngame(instanceId: string, status: IngameStatus | null) {
+    changeIngame(instanceId, () => (status ? db.ingameForced.set(instanceId, status) : db.ingameForced.delete(instanceId)));
   }
 
   // --- Vorführ-Hooks (`pumpkinMock`) ---
@@ -708,6 +789,8 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     network: (status: "online" | "degraded") =>
       setNetwork(status === "online" ? { type: "online", relayHost: MOCK_RELAY_HOST } : { type: "degraded", reason: "relayUnreachable" }),
     modConfirm: confirmMod,
+    ingameFailed: failIngame,
+    ingame: forceIngame,
     notice: setNotice,
     cycle,
     layoutShift: takeLayoutShift,
@@ -773,10 +856,17 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     invitePlan: command((inviteId: string) => planFor(find(db.invites, inviteId, "invite"))),
     inviteJoin: command(openJoin, { needsEnabled: true }),
     joinLeave: command(leaveJoin),
-    friendsModStatus: command(modState),
-    friendsModInstall: async (instanceId: string) => {
-      await wait(MOD_INSTALL_MS);
-      db.modInstalled.add(instanceId);
+    friendsIngameStatus: async (instanceId: string) => {
+      await wait();
+      return clone(ingameStatus(instanceId));
+    },
+    friendsIngameSetEnabled: async (instanceId: string, enabled: boolean) => {
+      await wait();
+      return clone(setIngameEnabled(instanceId, enabled));
+    },
+    friendsIngameRetry: async (instanceId: string) => {
+      await wait();
+      return clone(retryIngame(instanceId));
     },
     friendsModConfirm: command((requestId: string) => {
       if (!db.pendingModConfirms.delete(requestId)) throw new Error(t("mock.friends.notFound.request", { id: requestId }));

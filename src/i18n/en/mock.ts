@@ -30,6 +30,7 @@ export const mock: typeof deMock = {
   "mock.friends.notFound.code": "Code “{id}” was not found",
   "mock.friends.notFound.invite": "Invite “{id}” no longer exists",
   "mock.friends.notFound.session": "Shared world “{id}” no longer exists",
+  "mock.friends.notFound.instance": "Instance “{id}” does not exist",
   "mock.friends.unavailable": "This system has no keyring; friends are not available here",
   "mock.friends.identityLost": "Your friends identity is missing from the keyring; reset it in Settings",
   "mock.friends.disabled": "Friends are not enabled",

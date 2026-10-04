@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type MutationMeta } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { api } from "@/lib/api";
 import type { FriendsEnableInput, FriendsSettings, FriendsState } from "@/lib/types";
 import { MINUTE } from "@/lib/time";
@@ -57,8 +58,20 @@ export function useInvitePlan(inviteId: string | null) {
 export const useLanStatus = (instanceId: string) =>
   useQuery({ queryKey: friendKeys.lan(instanceId), queryFn: () => api.lanStatus(instanceId) });
 
-export const useFriendsModStatus = (instanceId: string) =>
-  useQuery({ queryKey: friendKeys.modStatus(instanceId), queryFn: () => api.friendsModStatus(instanceId) });
+/**
+ * Was der nächste Start der Instanz mit der Mod im Spiel tut und warum. `friends-ingame` ersetzt den Stand sofort;
+ * `friends-mod` (Verbindung steht oder bricht ab) und `friends-changed` laden ihn über `friendKeys.modStatus` neu.
+ */
+export function useIngameStatus(instanceId: string) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const sub = api.onFriendsIngame((event) => {
+      if (event.instanceId === instanceId) qc.setQueryData(friendKeys.modStatus(instanceId), event.status);
+    });
+    return () => void sub.then((unlisten) => unlisten());
+  }, [qc, instanceId]);
+  return useQuery({ queryKey: friendKeys.modStatus(instanceId), queryFn: () => api.friendsIngameStatus(instanceId) });
+}
 
 /** Änderung an Freunden, Anfragen, Codes oder Sitzungen; danach lädt alles unter `friendKeys.all` neu. */
 function useFriendsChange<V = void, R = unknown>(change: (v: V) => Promise<R>, meta?: MutationMeta) {
