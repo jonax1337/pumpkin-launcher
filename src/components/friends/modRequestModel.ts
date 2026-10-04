@@ -1,5 +1,5 @@
 // Reine Logik der Aktivität im Spiel (INGAME 5.5 und 5.7, kein React), damit activityModel.check.mjs sie ohne Bundler prüft.
-import type { ModActivityEntry, ModScope } from "../../lib/friends-types.ts";
+import type { ModActivityEntry, ModConfirmEvent, ModScope } from "../../lib/friends-types.ts";
 
 /** So viele Vorgänge zeigt die Liste und hält der Launcher (`MOD_ACTIVITY_LIMIT`). */
 export const ACTIVITY_LIMIT = 100;
@@ -43,6 +43,15 @@ export const activityLine = ({ op, targetName }: Pick<ModActivityEntry, "op" | "
 /** Die Benennung des Vorgangs vor der Ausführung oder wenn er nicht lief. */
 export const operationLine = ({ op, targetName }: { op: string; targetName: string | null }): OpLine<OperationKey> =>
   ({ key: isKnown(op) ? SCOPED_OPS[op].operation : "friends.op.unknown", name: targetName, op });
+
+/**
+ * Der Vorgang in der Rückfrage. Beim Teilen stehen alle Freunde darin, die die Mod einlädt: `summary.targetName` kürzt der
+ * Launcher auf 64 Zeichen, und mit bis zu sieben Gästen fehlten dann Namen, ohne dass die Person es sähe, die erlaubt.
+ */
+export const confirmOperationLine = ({ scope, friends, summary }: Pick<ModConfirmEvent, "scope" | "friends" | "summary">): OpLine<OperationKey> =>
+  scope === "share"
+    ? operationLine({ op: summary.op, targetName: friends.map((friend) => friend.displayName).join(", ") || null })
+    : operationLine(summary);
 
 /** Ein Vorgang, der lief, heißt „erledigt“; sonst wurde er abgelehnt oder scheiterte, und die Liste nennt den Versuch, nicht die Tat. */
 export const activityText = (entry: ModActivityEntry): OpLine<ActivityKey | OperationKey> =>

@@ -62,6 +62,9 @@ const JOIN_CONNECT_MS = 1200;
 /** So viele Vorgänge aus dem Spiel behält der Launcher (INGAME 5.7). */
 const MOD_ACTIVITY_LIMIT = 100;
 
+/** So viele Zeichen behält der Launcher von `summary.targetName` (`sanitize::world_or_instance_name`); die Rückfrage darf sich nicht darauf stützen. */
+const MOD_SUMMARY_NAME_CAP = 64;
+
 /** `pumpkinMock.cycle()`: so viele Runden im Abstand von `CYCLE_STEP_MS`, die RTT wächst je Runde um `CYCLE_RTT_STEP_MS`. */
 const CYCLE_ROUNDS = 5;
 const CYCLE_STEP_MS = 400;
@@ -770,7 +773,7 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
       friends: online.map((f) => ({ friendId: f.id, displayName: f.displayName })),
       scope,
       summary: scope === "share"
-        ? { op: "host.invite", targetName: online.map((f) => f.displayName).join(", ") || null }
+        ? { op: "host.invite", targetName: online.map((f) => f.displayName).join(", ").slice(0, MOD_SUMMARY_NAME_CAP) || null }
         : { op: "friend.addByName", targetName },
     };
     db.pendingModConfirms.set(confirm.requestId, confirm);

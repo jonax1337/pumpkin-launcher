@@ -6,7 +6,7 @@ import { toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import type { ModConfirmEvent } from "@/lib/types";
 import { Button, Dialog, DialogActions, Hint } from "@/ui";
-import { operationLine, scopeSentenceKey } from "./modRequestModel";
+import { confirmOperationLine, scopeSentenceKey } from "./modRequestModel";
 import { opText } from "./modRequestText";
 import { useConsentGuard } from "./useConsentGuard";
 
@@ -60,7 +60,7 @@ export function ModConfirmDialog({ confirm, onClose }: { confirm: ModConfirmEven
         <dt>{t("friendsInvite.mod.game")}</dt>
         <dd>{confirm.instanceName}</dd>
         <dt>{t("friendsInvite.mod.operation")}</dt>
-        <dd>{opText(operationLine(confirm.summary))}</dd>
+        <dd className="min-w-0 break-words">{opText(confirmOperationLine(confirm))}</dd>
       </dl>
       {/* Der Platz bleibt reserviert: der Hinweis verschwindet, ohne dass der Dialog springt. */}
       <Hint className={cn("mt-3", guard.armed && "invisible")}>{t("friendsInvite.mod.wait")}</Hint>

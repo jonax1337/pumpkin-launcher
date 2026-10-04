@@ -6,7 +6,7 @@ import { friends as enFriends } from '../../i18n/en/friends.ts';
 import { friendsInvite as enInvite } from '../../i18n/en/friendsInvite.ts';
 import { FRIENDS_FIXTURES as fixtures } from '../../lib/friends-fixtures.ts';
 import {
-  ACTIVITY_LIMIT, activityLine, activityText, operationLine, SCOPED_OPS, scopeSentenceKey, withActivity,
+  ACTIVITY_LIMIT, activityLine, activityText, confirmOperationLine, operationLine, SCOPED_OPS, scopeSentenceKey, withActivity,
 } from './modRequestModel.ts';
 
 const DICTS = [['de', { ...deFriends, ...deInvite }], ['en', { ...enFriends, ...enInvite }]];
@@ -38,6 +38,21 @@ for (const [language, words] of DICTS) {
 assert.deepEqual(activityLine(entry({})), { key: 'friends.activity.friendAddByName', name: 'Alex', op: 'friend.addByName' });
 assert.deepEqual(activityLine(entry({ op: 'code.create', targetName: null })), { key: 'friends.activity.codeCreate', name: null, op: 'code.create' });
 assert.deepEqual(operationLine({ op: 'host.invite', targetName: 'Alex, Bea' }), { key: 'friends.op.hostInvite', name: 'Alex, Bea', op: 'host.invite' });
+
+// Die Rückfrage zum Teilen nennt jeden Freund, den die Mod einlädt, auch wenn der Launcher `targetName` auf 64 Zeichen kürzt.
+const SUMMARY_NAME_CAP = 64;
+const guests = Array.from({ length: fixtures.constants.maxGuests }, (_, n) => ({ friendId: `f${n}`, displayName: `Gast${n}_`.padEnd(32, 'x') }));
+const cappedTarget = guests.map((g) => g.displayName).join(', ').slice(0, SUMMARY_NAME_CAP);
+const shareLine = confirmOperationLine({ scope: 'share', friends: guests, summary: { op: 'host.invite', targetName: cappedTarget } });
+assert.equal(shareLine.key, 'friends.op.hostInvite');
+for (const guest of guests) assert.ok(shareLine.name.includes(guest.displayName), `${guest.displayName} fehlt in der Rückfrage`);
+assert.ok(shareLine.name.length > SUMMARY_NAME_CAP, 'der Text ist nicht auf die Kürzung des Launchers beschränkt');
+assert.equal(confirmOperationLine({ scope: 'share', friends: [], summary: { op: 'host.invite', targetName: null } }).name, null);
+assert.deepEqual(
+  confirmOperationLine({ scope: 'social', friends: [], summary: { op: 'friend.addByName', targetName: 'Alex' } }),
+  { key: 'friends.op.friendAddByName', name: 'Alex', op: 'friend.addByName' },
+  'im Bereich social nennt allein summary die Person',
+);
 
 // Ein unbekannter Vorgang (neuere Mod, ältere Oberfläche) erscheint unter seinem Namen und wirft nichts.
 assert.equal(activityLine(entry({ op: 'friend.teleport' })).key, 'friends.activity.unknown');
