@@ -11,14 +11,15 @@ import org.junit.jupiter.api.Test;
  * handshake-ok and reject-* by {@link HandshakeFixturesTest}; ops, request-response and pending by
  * {@code OpsFixturesTest} and {@code RequestManagerTest}; errors by {@link ErrorFixturesTest}; events by
  * {@link EventFixturesTest}; hints by {@link HintsFixturesTest}; limits by {@link LimitsFixtureTest}; topics by
- * {@code TopicFixturesTest}.
+ * {@code TopicFixturesTest}; errors-reasons, ops-join-failed and topics-notice by {@link LauncherSideFixturesTest}.
  */
 class FixtureFilesTest {
 	@Test
 	void theFixtureDirectoryHoldsExactlyTheFilesTheTestsKnow() {
-		List<String> known = List.of("errors.jsonl", "events.jsonl", "handshake-ok.jsonl", "hints.jsonl", "limits.jsonl",
-			"ops.jsonl", "pending.jsonl", "reject-build.jsonl", "reject-duplicate.jsonl", "reject-owner.jsonl",
-			"reject-protocol.jsonl", "reject-retry.jsonl", "reject-token.jsonl", "request-response.jsonl", "topics.jsonl");
+		List<String> known = List.of("errors-reasons.jsonl", "errors.jsonl", "events.jsonl", "handshake-ok.jsonl", "hints.jsonl",
+			"limits.jsonl", "ops-join-failed.jsonl", "ops.jsonl", "pending.jsonl", "reject-build.jsonl", "reject-duplicate.jsonl",
+			"reject-owner.jsonl", "reject-protocol.jsonl", "reject-retry.jsonl", "reject-token.jsonl", "request-response.jsonl",
+			"topics-notice.jsonl", "topics.jsonl");
 
 		assertEquals(known, Fixtures.fileNames());
 	}
