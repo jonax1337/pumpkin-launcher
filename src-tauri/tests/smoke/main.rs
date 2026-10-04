@@ -2,7 +2,6 @@
 //! `docs/friends/INGAME-SMOKE.md`): startet eine echte Zelle (Minecraft, Loader, eingespeiste Mod) über den Startweg des
 //! Launchers, ohne Tauri-Fenster, und prüft, dass die Mod im Spiel angekommen ist. Läuft nur mit dem Cargo-Feature
 //! `smoke` und wenn `PUMPKIN_SMOKE_CELL` eine Zelle nennt, sonst gibt es nichts zu starten.
-mod companion;
 mod config;
 mod launch;
 mod observe;
@@ -56,14 +55,12 @@ async fn run_cell(config: &Config) -> Result<(Outcome, Vec<String>), String> {
     let dirs = Dirs::new(&config.data);
     let client = http_client().map_err(|error| error.to_string())?;
     let instance = provision::install(&client, &dirs, provision::instance_for(&node, config.loader_version.clone())).await?;
-    let companions = companion::provide(&client, instance.loader, &instance.minecraft_version, &dirs.mods_dir(&instance.id)).await?;
     let copy = (config.scenario == Scenario::DuplicateId).then(|| source.place_copy_of(&config.cell, &dirs.mods_dir(&instance.id))).transpose()?;
 
     let bridge = ModBridge::new(GameSignals::default());
     bridge.start().await.map_err(|error| error.to_string())?;
     let prepared = launch::prepare(&Inputs { dirs: &dirs, bridge: &bridge, source: &source, instance: &instance }).await?;
-    let mut facts = Facts::of(&node, &instance, &prepared, &config.scenario);
-    facts.companions = companions.iter().filter_map(|file| file.file_name()).map(|name| name.to_string_lossy().into_owned()).collect();
+    let facts = Facts::of(&node, &instance, &prepared, &config.scenario);
     let result = match &prepared.injection {
         Injection::Injected(_) => run_game(config, &node, &instance.id, prepared, &bridge, &facts).await,
         Injection::Skipped(reason) => Ok(skipped_outcome(&facts, &config.scenario, reason)),
@@ -100,7 +97,6 @@ struct Facts {
     java_major: Option<u32>,
     injected_jvm_args: Vec<String>,
     injected_game_args: Vec<String>,
-    companions: Vec<String>,
 }
 
 impl Facts {
@@ -115,7 +111,6 @@ impl Facts {
             java_major: prepared.gate_java_major,
             injected_jvm_args: start_args.injected_jvm,
             injected_game_args: start_args.injected_game,
-            companions: Vec::new(),
         }
     }
 
@@ -133,7 +128,6 @@ impl Facts {
             breaker: ended.breaker.map(|kind| format!("{kind:?}")),
             injected_jvm_args: self.injected_jvm_args.clone(),
             injected_game_args: self.injected_game_args.clone(),
-            companions: self.companions.clone(),
             seconds: seconds(ended.duration),
             exit_code: ended.exit_code,
             evidence: evidence_of(&ended.log),

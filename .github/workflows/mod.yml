@@ -3,7 +3,8 @@ name: Mod
 # Baut die In-Game-Mod (mod/, docs/friends/INGAME.md 4.3 und 11.2) für jeden Knoten aus mod/nodes.txt: ein Job pro Knoten
 # mit dem JDK, das nodes.txt für ihn nennt. Das Ergebnis ist ein Artefakt "mod-index" mit mod-index.json und allen Jars.
 # Die Compile-Matrix (matrix-compile) übersetzt jeden Knoten außerdem gegen beide Enden und eine Mitte seiner Minecraft-Liste.
-# Noch kein Rauchtest (Paket S2): kein Knoten wird hier als "verified" markiert.
+# "verified" setzt der Rauchtest (mod/verified.json, Paket S2): nächtlich und bei Änderungen unter mod/** läuft
+# .github/workflows/mod-smoke.yml; lokale Läufe beschreibt tools/mod-smoke/README.md.
 
 on:
   push:

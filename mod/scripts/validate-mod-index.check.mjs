@@ -1,6 +1,6 @@
 // Spezifikation von validate-mod-index.mjs: node mod/scripts/validate-mod-index.check.mjs
 import assert from 'node:assert/strict';
-import { indexProblems } from './validate-mod-index.mjs';
+import { indexProblems, verifiedFileProblems, verifiedAgreementProblems } from './validate-mod-index.mjs';
 
 const SHA256 = 'a'.repeat(64);
 
@@ -63,6 +63,28 @@ const cases = [
 	['rejects two nodes with the same file name', () => {
 		const problems = indexProblems(index(node(), node({ id: '1.21.5-neoforge', minecraft: ['1.21.5'] })));
 		assert.ok(problems.some(problem => problem.includes('file name is used by')));
+	}],
+	['accepts a verified.json entry for a known node', () =>
+		assert.deepEqual(verifiedFileProblems({ '1.21.1-neoforge': { smoke: '2026-10-04', owner: null } }, ['1.21.1-neoforge']), [])],
+	['rejects a verified.json key that is not a node of nodes.txt', () =>
+		assert.deepEqual(verifiedFileProblems({ '9.9.9-fabric': { smoke: '2026-10-04', owner: null } }, ['1.21.1-neoforge']),
+			['verified.json 9.9.9-fabric: not a node of nodes.txt'])],
+	['rejects a verified.json that is not an object', () =>
+		assert.deepEqual(verifiedFileProblems([], ['1.21.1-neoforge']), ['verified.json must be a JSON object'])],
+	['rejects unknown fields in a verified.json entry', () =>
+		assert.ok(verifiedFileProblems({ '1.21.1-neoforge': { smoke: '2026-10-04', owner: null, extra: 1 } }, ['1.21.1-neoforge'])
+			.some(problem => problem.includes('unknown field')))],
+	['rejects a malformed smoke date in verified.json', () =>
+		assert.ok(verifiedFileProblems({ '1.21.1-neoforge': { smoke: 'yesterday', owner: null } }, ['1.21.1-neoforge'])
+			.some(problem => problem.includes('smoke must be')))],
+	['agreement: flags a node whose index verified differs from verified.json', () => {
+		const problems = verifiedAgreementProblems(index(node({ verified: { smoke: '2026-10-04', owner: null } })), {});
+		assert.deepEqual(problems, ['node 1.21.1-neoforge: verified in the index differs from verified.json']);
+	}],
+	['agreement: accepts an index that matches verified.json', () => {
+		const verifiedFile = { '1.21.1-neoforge': { smoke: '2026-10-04', owner: null } };
+		assert.deepEqual(verifiedAgreementProblems(index(node({ verified: verifiedFile['1.21.1-neoforge'] })), verifiedFile), []);
+		assert.deepEqual(verifiedAgreementProblems(index(node()), {}), []);
 	}],
 ];
 

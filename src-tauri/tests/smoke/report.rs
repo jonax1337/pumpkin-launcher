@@ -46,7 +46,6 @@ pub struct Outcome {
     pub breaker: Option<String>,
     pub injected_jvm_args: Vec<String>,
     pub injected_game_args: Vec<String>,
-    pub companions: Vec<String>,
     pub seconds: f64,
     pub exit_code: Option<i32>,
     pub evidence: Vec<String>,
