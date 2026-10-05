@@ -32,7 +32,7 @@ final class KitDemoScreen extends PumpkinScreen {
 	private boolean closing;
 
 	KitDemoScreen(Screen parent) {
-		super(Text.translate("pumpkin_friends.kitdemo.title"), parent);
+		super("pumpkin_friends.kitdemo.title", parent);
 	}
 
 	@Override

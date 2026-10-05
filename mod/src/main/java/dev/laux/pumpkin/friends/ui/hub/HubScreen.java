@@ -19,6 +19,7 @@ import dev.laux.pumpkin.friends.state.TopicStore;
 import dev.laux.pumpkin.friends.ui.kit.PumpkinScreen;
 import dev.laux.pumpkin.friends.ui.kit.Row;
 import dev.laux.pumpkin.friends.ui.model.Painter;
+import dev.laux.pumpkin.friends.ui.model.PumpkinTheme;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -45,9 +46,10 @@ public class HubScreen extends PumpkinScreen {
 	private Snapshot shown;
 	private HubCondition condition;
 	private boolean opened;
+	private String headerStatus = "";
 
 	public HubScreen(Screen parent, BridgeClient client) {
-		super(Text.translate("pumpkin_friends.title"), parent);
+		super("pumpkin_friends.title", parent);
 		this.client = client;
 		this.invites = new InvitesTab(client, this);
 		this.share = new ShareTab(ShareLink.to(client));
@@ -86,7 +88,7 @@ public class HubScreen extends PumpkinScreen {
 
 	@Override
 	protected String statusLine() {
-		return condition == null || condition.statusKey().isEmpty() ? "" : Text.translate(condition.statusKey());
+		return headerStatus;
 	}
 
 	@Override
@@ -125,6 +127,12 @@ public class HubScreen extends PumpkinScreen {
 	private void refreshView() {
 		shown = snapshot();
 		condition = HubCondition.of(shown.link(), shown.awaitingDialog(), shown.me(), client.topics()::received);
+		if (condition.showsContent()) {
+			long online = shown.friends().stream().filter(Friend::isOnline).count();
+			headerStatus = Text.translate("pumpkin_friends.hub.summary", shown.friends().size(), online);
+		} else {
+			headerStatus = condition.statusKey().isEmpty() ? "" : Text.translate(condition.statusKey());
+		}
 	}
 
 	private String tabTitle(HubTab tab) {
@@ -147,18 +155,33 @@ public class HubScreen extends PumpkinScreen {
 	// ---- Freunde (INGAME 6.2) ----
 
 	private List<Row> friendRows() {
-		List<Row> rows = new ArrayList<>();
 		if (shown.friends().isEmpty()) {
 			return List.of(Row.text(Text.translate("pumpkin_friends.no_friends")));
 		}
-		for (Friend friend : shown.friends()) {
-			rows.add(friendRow(friend));
-		}
+		List<Row> rows = new ArrayList<>();
+		List<Friend> online = shown.friends().stream().filter(Friend::isOnline).toList();
+		List<Friend> offline = shown.friends().stream().filter(friend -> !friend.isOnline()).toList();
+		addFriendGroup(rows, online, "pumpkin_friends.friends.group.online");
+		addFriendGroup(rows, offline, "pumpkin_friends.friends.group.offline");
 		return rows;
 	}
 
+	private void addFriendGroup(List<Row> rows, List<Friend> friends, String titleKey) {
+		if (friends.isEmpty()) {
+			return;
+		}
+		rows.add(Row.heading(Text.translate(titleKey, friends.size())));
+		for (Friend friend : friends) {
+			rows.add(friendRow(friend));
+		}
+	}
+
 	private Row friendRow(Friend friend) {
-		Row row = Row.twoLines(friend.name(), subLineOf(friend));
+		String presence = WireNames.of(friend.presence());
+		String detail = friend.notice().map(HubScreen::noticeText)
+			.orElseGet(() -> Text.translate("pumpkin_friends.friends.detail." + presence));
+		Row row = Row.friend(friend.name(), friend.mcUuid(), detail,
+			Text.translate("pumpkin_friends.presence." + presence), presenceColor(friend.presence()));
 		if (invitable(friend)) {
 			row.withAction("friend.invite." + friend.id(), Widgets.button(Text.translate("pumpkin_friends.invite"),
 				ACTION_WIDTH, () -> HubOps.run(this, client, Ops.hostInvite(List.of(friend.id()), false))));
@@ -166,9 +189,12 @@ public class HubScreen extends PumpkinScreen {
 		return row;
 	}
 
-	private static String subLineOf(Friend friend) {
-		String presence = Text.translate("pumpkin_friends.presence." + WireNames.of(friend.presence()));
-		return friend.notice().map(notice -> presence + " · " + noticeText(notice)).orElse(presence);
+	private static int presenceColor(Friend.Presence presence) {
+		return switch (presence) {
+			case ONLINE -> PumpkinTheme.ONLINE;
+			case PLAYING -> PumpkinTheme.PLAYING;
+			case OFFLINE -> PumpkinTheme.OFFLINE;
+		};
 	}
 
 	private static String noticeText(FriendNotice notice) {

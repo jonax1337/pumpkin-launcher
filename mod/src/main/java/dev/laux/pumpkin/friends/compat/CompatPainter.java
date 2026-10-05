@@ -2,6 +2,7 @@ package dev.laux.pumpkin.friends.compat;
 
 import dev.laux.pumpkin.friends.ui.model.Painter;
 import dev.laux.pumpkin.friends.ui.model.Rect;
+import java.util.Optional;
 import net.minecraft.client.gui.Font;
 //? if >=26.1 {
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -55,6 +56,11 @@ final class CompatPainter implements Painter {
 	}
 
 	@Override
+	public void head(String name, Optional<String> uuid, Rect bounds) {
+		PlayerHeads.draw(graphics, name, uuid, bounds);
+	}
+
+	@Override
 	public int textWidth(String text) {
 		return font.width(text);
 	}
@@ -65,8 +71,20 @@ final class CompatPainter implements Painter {
 		graphics.text(font, text, x, y, argb, false);
 		//?} else {
 		/*graphics.drawString(font, text, x, y, argb, false);
-		*///?}
+	*///?}
 	}
+
+	//? if >=26.1 {
+	@Override
+	public void text(String text, int x, int y, int argb, boolean shadow) {
+		graphics.text(font, text, x, y, argb, shadow);
+	}
+	//?} else {
+	/*@Override
+	public void text(String text, int x, int y, int argb, boolean shadow) {
+		graphics.drawString(font, text, x, y, argb, shadow);
+	}
+	*///?}
 
 	/** {@code enableScissor(int, int, int, int)} and {@code disableScissor()} exist in every era. */
 	@Override

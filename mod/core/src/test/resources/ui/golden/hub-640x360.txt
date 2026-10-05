@@ -21,7 +21,7 @@ page 1: first row 0, 9 rows shown
   row6 165,224 304x24 | line1 169,224 232x24 | action 405,226 60x20
   row7 165,248 304x24 | line1 169,248 232x24 | action 405,250 60x20
   row8 165,272 304x36 | line1 169,276 232x12 | line2 169,292 232x12 | action 405,280 60x20
-  scrollbar thumb 473,56 2x66
+  scrollbar thumb 471,56 4x66
 page 2: first row 9, 9 rows shown
   row9 165,56 304x24 | line1 169,56 232x24 | action 405,58 60x20
   row10 165,80 304x24 | line1 169,80 232x24 | action 405,82 60x20
@@ -32,7 +32,7 @@ page 2: first row 9, 9 rows shown
   row15 165,224 304x24 | line1 169,224 232x24 | action 405,226 60x20
   row16 165,248 304x24 | line1 169,248 232x24 | action 405,250 60x20
   row17 165,272 304x36 | line1 169,276 232x12 | line2 169,292 232x12 | action 405,280 60x20
-  scrollbar thumb 473,116 2x66
+  scrollbar thumb 471,116 4x66
 last page: first row 31, 9 rows shown
   row31 165,56 304x24 | line1 169,56 232x24 | action 405,58 60x20
   row32 165,80 304x36 | line1 169,84 232x12 | line2 169,100 232x12 | action 405,88 60x20
@@ -43,4 +43,4 @@ last page: first row 31, 9 rows shown
   row37 165,224 304x24 | line1 169,224 232x24 | action 405,226 60x20
   row38 165,248 304x36 | line1 169,252 232x12 | line2 169,268 232x12 | action 405,256 60x20
   row39 165,284 304x24 | line1 169,284 232x24 | action 405,286 60x20
-  scrollbar thumb 473,262 2x66
+  scrollbar thumb 471,262 4x66

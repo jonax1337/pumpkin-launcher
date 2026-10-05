@@ -59,7 +59,7 @@ Words used here:
 |---|---|
 | 1 | Injection happens only while Friends is switched on, only for Microsoft-account launches, and only if a verified node fits. |
 | 2 | The jar lives in the launcher data folder, never in the instance. No managed copy in `mods/` in v1. |
-| 3 | The mod depends on nothing the user must have: no Fabric API requirement. One soft Mixin on Fabric, loader events on NeoForge/Forge. |
+| 3 | The mod depends on nothing the user must have: no Fabric API requirement. Soft Fabric hooks add the pause button and expose the mod's own client-resource namespace; NeoForge/Forge use loader events. |
 | 4 | Jars are embedded in the launcher (`include_bytes!`), hash-checked before every launch. |
 | 5 | A support-matrix cell is shipped only after a headless CI smoke test of that exact cell passed with the real injection path. Unverified cells are off, not guessed. |
 | 6 | Vanilla instances, Quilt, offline accounts: no injection in v1. |
@@ -81,10 +81,10 @@ Words used here:
 ### 1.2 Non-goals
 - Any launcher other than the Pumpkin Launcher; games started from outside it.
 - Installing the mod by hand; publishing it on Modrinth/CurseForge.
-- A background service, a listening socket in the mod, HTTP/P2P/Mojang calls in the mod.
+- A background service, a listening socket in the mod, or custom HTTP/P2P networking in the mod. Native Minecraft profile/skin lookups for friend heads are the documented exception.
 - Turning Friends on from inside the game (the bridge does not exist before the opt-in; SPEC 12.1 stays true).
 - Quilt, Vanilla (no loader), offline accounts, Minecraft below the launcher's sharing floor (1.20, `MIN_MC_RELEASE_TIME`), servers, Forge above 1.20.1, NeoForge 20.x, Minecraft 1.16 to 1.19 (all "later, on demand", section 2.3).
-- Friend faces in-game, a client chat command, automated in-game UI tests beyond the smoke test.
+- A client chat command, automated in-game UI tests beyond the smoke test.
 
 ---
 
@@ -229,7 +229,8 @@ mod/
 Rules enforced by a CI script: version conditionals only in `compat/` and `platform/`; `ui/` calls only a short allow-list of vanilla types; `core/` never imports Minecraft.
 
 ### 4.2 Hooks and dependencies
-- **No Fabric API requirement.** The only hook needed is "a screen was initialised, add a button to the pause screen". On Fabric that is one `@Inject(method="init", at=@At("TAIL"), require=0)` into `PauseScreen`, so a changed signature degrades to "no button" and a log line instead of a crash. On NeoForge/Forge it is the screen-init event. Nested Fabric API modules were considered and rejected: a nested module that is newer than the user's own copy can replace it and trip other mods' dependency checks. **A22: the mod has no Fabric API dependency and the smoke installs no companion** (the `depends` block of `mod/descriptors/fabric/fabric.mod.json` lists only `fabricloader`, `minecraft` and `java`); do not reintroduce one.
+- **No Fabric API requirement.** The pause-menu hook adds a button after screen initialization. On Fabric that is `@Inject(method="init", at=@At("TAIL"), require=0)` into `PauseScreen`, so a changed signature degrades to "no button" and a log line instead of a crash. On NeoForge/Forge it is the screen-init event. Nested Fabric API modules were considered and rejected: a nested module that is newer than the user's own copy can replace it and trip other mods' dependency checks. **A22: the mod has no Fabric API dependency and the smoke installs no companion** (the `depends` block of `mod/descriptors/fabric/fabric.mod.json` lists only `fabricloader`, `minecraft` and `java`); do not reintroduce one.
+- **Client assets without a companion API.** Fabric Loader alone does not expose packaged language files to Minecraft. `PumpkinResourcesMixin` adds only `pumpkin_friends` to the built-in client resource layer and routes lookups/listing to the mod container. Higher-priority user resource packs remain authoritative. The hooks use `UiSession`, `require=0`, native path validation and version-specific `VanillaPackResources`/`FixedPathPackResources` targets; no other namespace or server data is changed.
 - **Work comes to the main thread through `Minecraft.execute`**, not a tick hook: the bridge thread posts runnables; a 1-second poster covers the LAN watcher. This avoids a second hook family.
 - **No key binding in R-A.** Registration has to happen before options load and differs per loader. R-B adds an unbound binding.
 - **Soft failure everywhere.** Every entry point runs inside a guard that logs and disables the mod's UI for the session on any exception. The mod must never throw into the game.
@@ -243,7 +244,7 @@ Rules enforced by a CI script: version conditionals only in `compat/` and `platf
 
   Read from loader sources; that a modded server accepts the client is reasoned, not tried (`INGAME-API.md` 8).
 - **Toasts (A10).** `compat.Toast` uses `SystemToast.SystemToastIds.PERIODIC_NOTIFICATION` before Minecraft 1.20.3 (the toast id becomes a class `SystemToastId` there) and a toast id of its own after. It never reuses `FRIEND_SYSTEM_NOTIFICATION`: Mojang's own friends UI exists from 26.2 (`INGAME-API.md` 0.9, 7.6). From 1.21.2 the manager is `getToastManager()`, from 26.2 it hangs off `Gui` (`INGAME-API.md` 4).
-- **No network code.** The only socket is `127.0.0.1:<port>` from the environment, and the connect target is never taken from anywhere else.
+- **No custom network transport.** The mod's own socket is only `127.0.0.1:<port>` from the environment. Native Minecraft profile/skin services may contact Mojang when displaying a known-UUID friend's head; unknown UUIDs use local defaults. No custom skin endpoint or display-name lookup is added.
 
 ### 4.3 Build tooling
 - Stonecutter (release 0.9.8; 0.10 is alpha) with one project per node, Fabric Loom 1.18.2 (no remap on 26.x, remap plugin below via `loom-back-compat`), NeoForge ModDevGradle 2.0.x, ModDevGradle `legacyforge` for Forge 1.20.1. Source in Mojang mappings everywhere (Yarn is gone from 26.1). **The shipped Fabric jar is not in Mojang names below 26.x:** obfuscated nodes (1.20 to 1.21.11) ship the Loom-remapped jar with refmap (3.5, A4); 26.x nodes ship Mojang names.
@@ -414,7 +415,15 @@ Esc goes to the parent screen. Tab order follows visual order; Enter in an `Edit
 Every screen is split into (a) a **view-model and layout in `core`** (rectangles, row heights, scroll offsets, tab wrapping, text clipping through an injected width function) and (b) thin widget glue in `compat/ui`. Layout is unit-tested at the five resolutions with golden rectangle lists; `rebuild()` preserves `EditBox` text, focus and scroll position (vanilla re-runs `init()` on every resize) and has its own test. Only pixels are left to the smoke test and the owner pass.
 
 ### 6.6 Look and licensing
-Pure vanilla widgets, no textures, no Mojang or Minecraft branding in the UI (consistent with the `PRIVACY.md` checklist). Friend faces are deferred.
+The hub uses a warm pumpkin masthead, separate status/navigation/footer bands, and grouped online/offline friend cards.
+Each card shows a native Minecraft skin head on the left, the name beside it, and a colored status badge on the right:
+leaf green for online, turquoise for playing, muted brown for offline. Optional actions occupy a separate strip below
+the identity. Names and descriptions clip before adjacent controls; the narrator includes the name, detail and status.
+Known UUIDs resolve asynchronously through Minecraft's native profile/skin services, with face and hat layers. Missing
+UUIDs use vanilla default heads without disclosing display names through an external lookup. The bounded skin cache
+expires after 30 minutes from creation, so rendering does not indefinitely pin a failed lookup.
+Chrome is drawn from plain fills; no custom UI textures or Minecraft/Mojang branding are shipped. Light text has
+vanilla drop shadows; dark selected-tab text has no shadow. Button labels follow vanilla's eight-pixel glyph alignment.
 
 ---
 
@@ -457,7 +466,7 @@ Pure vanilla widgets, no textures, no Mojang or Minecraft branding in the UI (co
 ## 9. Documentation changes (package D0 done; D1 amended this document; D2, this change, closed the rest)
 
 - `SPEC.md`: 7.1/7.4 (bridge: protocol 2, owner check, scopes), 11 (mod: embedded and injected, node table replaces "26.3 only"), 11.5 (modinstall removed), 5.5/5.6 (our mod no longer in manifests), 12.1/12.2 (see below), OD-1/OD-3, non-goals. D2 struck the "Current code" blocks that described removed code (modinstall, Modrinth distribution, protocol 1, the fabric-only hand install) and pointed the sections at this document.
-- `PRIVACY.md` (the certificate-login sections on what the launcher sends to Mojang; the in-game mod and the `profilekeys` exposure) and the opt-in text (10.9): "Wenn Freunde an ist, lädt der Launcher beim Spielstart eine kleine Mod in deine Spiele. Sie liegt außerhalb deines Instanzordners, hat keine Netzwerkverbindung außer zum Launcher auf diesem PC und kann nichts ändern, was du nicht im Spiel anstößt. Andere Mods im selben Spiel können dieselbe Verbindung nutzen; deshalb fragt der Launcher vor Freundes- und Teilen-Aktionen aus dem Spiel."
+- `PRIVACY.md` covers the launcher's certificate-login calls, the in-game mod and the `profilekeys` exposure. The mod lives outside the instance folder; friend operations go through the launcher on this PC and its consent checks. Displaying heads can additionally use Minecraft's native Mojang profile/skin services with the known friend's UUID. Other mods in the same game can use the same launcher connection.
 - 12.1 stays true: before the opt-in, nothing listens and nothing is injected.
 - New section for the keyring exposure of same-user code (from the MOD2 review).
 

@@ -213,18 +213,31 @@ Linux and macOS (note the leading dot, so `JAVA_HOME` stays set; `PUMPKIN_NODE=<
 The screens of the hub (INGAME 6.2) stand on two layers:
 
 - `core/src/main/java/.../ui/model/` computes every rectangle and colour Minecraft-free: `HubLayout` (title, status
-  line, tab bar, body, footer at 320x240 and up), `HubChrome`/`PumpkinTheme` (warm Pumpkin panel, orange accent,
-  notched plates), `TabBarModel` (wraps below 300 px), `ScrollModel` (whole-row scrolling, wheel, PageUp/PageDown,
+  line, tab bar, body, footer at 320x240 and up), `HubChrome`/`PumpkinTheme` (warm Pumpkin panel in the bevel language
+  of the vanilla chrome, orange accent, shadows for light text, the header pumpkin), `TabBarModel` (wraps
+  below 300 px), `ScrollModel` (whole-row scrolling, wheel, PageUp/PageDown,
   reveal), `RowLayout`/`RowPainter` (one- and two-line rows, 24 and 36 px), `Fit` (clipping with an ellipsis through
   an injected width function), `StateKeeper` (text, focus, scroll position and tab across `Screen.init` re-runs).
   Golden rectangle lists at 320x240, 427x240, 480x270, 640x360 and 960x540 are the source of truth (`core` JUnit
   tests).
+  `FriendCardLayout` reserves separate portrait/name/status areas and puts actions below the identity, keeping names,
+  translated status badges and invite buttons from overlapping.
 - `src/main/java/.../ui/kit/` is the thin widget glue with no version conditionals: `PumpkinScreen` (frame with title,
   status line, optional tabs, body and footer "Fertig"), `ScrollPane` (row backdrops and text are clipped to the body;
-  widgets outside it get `visible = false`; the 2 px scrollbar comes from `ScrollModel`), `TabBar`, `Row`. Everything
-  era-specific sits in `compat/` (`CompatScreen`, `CompatPainter`, `Widgets` with the Pumpkin-painted button and its
-  era's render override, `Text`, `GameScreens`, ...), keyed on the Minecraft version through Stonecutter conditionals,
+  widgets outside it get `visible = false`; the 4 px scrollbar comes from `ScrollModel`), `TabBar`, `Row`. Everything
+  era-specific sits in `compat/` (`CompatScreen`, `CompatPainter`, `Widgets` with the Pumpkin-painted button and
+  toggle — each with its era's render override — and the vanilla `EditBox`, `Text`, `GameScreens`, ...), keyed on the
+  Minecraft version through Stonecutter conditionals,
   so the NeoForge and Forge nodes reuse it unchanged.
+- Friend cards group online/offline players, show names left and colored status badges right, and render native
+  Minecraft heads through `compat/PlayerHeads`. Known UUIDs resolve asynchronously with a vanilla default while loading;
+  missing UUIDs never trigger a name lookup. The bounded cache expires after write rather than after access.
+- `platform/fabric/mixin/PumpkinResourcesMixin` exposes only the mod's packaged client assets through the built-in
+  resource layer. This loads `en_us`/`de_de` without requiring Fabric API and preserves user resource-pack overrides.
+  It uses Minecraft's native resource-path validator and the existing UI soft-failure guard.
+- Screen constructors pass translation keys and arguments, not translated string snapshots. `CompatScreen` retains
+  the native translatable title component and caches its plain text only until Minecraft replaces the language instance.
+  This keeps early-opened screens and their native narration correct after language assets load or reload.
 - `core/src/main/java/.../ui/UiSession` is the soft-failure guard behind all of it (INGAME 4.2): every entry point that
   calls game code — the pause-menu hook, the kit's button and toggle handlers, `CompatScreen`'s lifecycle overrides —
   runs inside it. The first `RuntimeException` or `LinkageError` (era mismatches surface as the latter) logs one line

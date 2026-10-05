@@ -15,6 +15,6 @@ public final class RowPainter {
 	private static void line(Painter painter, Rect area, String text, int argb) {
 		String fitted = Fit.clip(text, area.width(), painter::codePointWidth);
 		int y = area.y() + (area.height() - painter.lineHeight()) / 2;
-		painter.text(fitted, area.x(), y, argb);
+		painter.text(fitted, area.x(), y, argb, true);
 	}
 }

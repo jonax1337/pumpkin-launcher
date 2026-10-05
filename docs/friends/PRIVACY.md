@@ -18,8 +18,9 @@ the abuse mailbox). Everything else was derived from the spec and from the `iroh
 - The directory never contacts Mojang and stores no names. Your launcher proves the account with a player certificate
   that Mojang signed, and the access token is only ever sent to Mojang (section 9).
 - Planned (`INGAME.md` section 9; section 10 below): while Friends is on, the launcher loads a small in-game mod into
-  Microsoft-account launches. It lives outside the instance folder and talks only to the launcher on this PC. Other
-  mods in the same game can use the same connection.
+  Microsoft-account launches. It lives outside the instance folder and routes friend operations through the launcher on
+  this PC. Heads use Minecraft's native Mojang profile/skin services for known UUIDs (section 6); other mods in the same
+  game can use the same launcher connection.
 - Connections are encrypted end to end between the launchers. The relay forwards ciphertext.
 - Our own relay stores nothing about connections. It sees, while a connection is open, the client's IP
   address and its endpoint id, and who it forwards to.
@@ -146,6 +147,9 @@ anyone up. See RELAY-OPS section 13 for the steps (block list, bandwidth limit).
   friend's Minecraft UUID, and the launcher's IP address, to Mojang. The same endpoint answers the question "what is the
   name of the sender of this by-name request", asked once for every new request you receive (section 9.3). The texture comes from
   `textures.minecraft.net` and is cached on the user's PC. The exact sessionserver host is pinned by R6.
+  The in-game Friends menu also asks Minecraft's native profile/skin services for known-UUID friend heads. Mojang sees
+  that UUID and the game client's IP address; Minecraft manages the texture cache. No separate skin provider is used,
+  and friends without a UUID use a vanilla default head without a display-name lookup.
 - **Local data.** The identity key is in the OS keychain. Friend records, codes (as hashes), requests and
   the 14-day outbox are in `friends.json` on the user's PC. "Identität zurücksetzen und alle Freunde löschen"
   removes them. Logs never contain IPs, secrets, codes, tokens or hello ids (SPEC 12.1).

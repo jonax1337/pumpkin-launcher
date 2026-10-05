@@ -7,6 +7,7 @@ import dev.laux.pumpkin.friends.ui.model.GuiMetrics;
 import dev.laux.pumpkin.friends.ui.model.HubChrome;
 import dev.laux.pumpkin.friends.ui.model.HubLayout;
 import dev.laux.pumpkin.friends.ui.model.Painter;
+import dev.laux.pumpkin.friends.ui.model.PumpkinTheme;
 import dev.laux.pumpkin.friends.ui.model.Rect;
 import dev.laux.pumpkin.friends.ui.model.StateKeeper;
 import java.util.ArrayList;
@@ -28,7 +29,6 @@ public abstract class PumpkinScreen extends CompatScreen {
 	public record FooterButton(String label, Runnable onPress) {
 	}
 
-	private final String titleText;
 	private final Screen parent;
 	private final HubChrome chrome = new HubChrome();
 	private HubLayout layout;
@@ -36,9 +36,8 @@ public abstract class PumpkinScreen extends CompatScreen {
 	private Optional<AbstractWidget> extraFooter = Optional.empty();
 	private int selectedTab;
 
-	protected PumpkinScreen(String title, Screen parent) {
-		super(title);
-		this.titleText = title;
+	protected PumpkinScreen(String titleKey, Screen parent, Object... titleArguments) {
+		super(titleKey, titleArguments);
 		this.parent = parent;
 	}
 
@@ -143,11 +142,30 @@ public abstract class PumpkinScreen extends CompatScreen {
 	protected void paintBackdrop(Painter painter) {
 		HubChrome.paintBackdrop(painter, layout);
 		body.paintBackdrop(painter);
+		paintTabConnector(painter);
+	}
+
+	/** Opens the body behind the selected tab, so the tab bar reads as tabs of one panel, not as buttons above it. */
+	private void paintTabConnector(Painter painter) {
+		if (selectedTab >= layout.tabs().size()) {
+			return;
+		}
+		Rect tab = layout.tabs().get(selectedTab);
+		Rect body = layout.body();
+		int gapHeight = body.y() - tab.bottom();
+		// A wrapped tab bar opens the body only under its last row; a tab above would draw through the row below.
+		int lowestBottom = layout.tabs().stream().mapToInt(Rect::bottom).max().orElse(Integer.MIN_VALUE);
+		if (gapHeight <= 0 || tab.bottom() != lowestBottom) {
+			return;
+		}
+		painter.fill(tab.x() + 1, tab.bottom() - 1, tab.width() - 2, gapHeight + 2, PumpkinTheme.SUNK);
+		painter.fill(tab.x(), tab.bottom(), 1, gapHeight, PumpkinTheme.EDGE);
+		painter.fill(tab.right() - 1, tab.bottom(), 1, gapHeight, PumpkinTheme.EDGE);
 	}
 
 	@Override
 	protected void paint(Painter painter) {
-		chrome.paintHeader(painter, layout, titleText, statusLine());
+		chrome.paintHeader(painter, layout, titleText(), statusLine());
 		body.paint(painter);
 	}
 

@@ -37,7 +37,7 @@ public final class AddFriendScreen extends PumpkinScreen {
 	private Me.Directory shownDirectory;
 
 	public AddFriendScreen(Screen parent, BridgeClient client) {
-		super(Text.translate("pumpkin_friends.add.title"), parent);
+		super("pumpkin_friends.add.title", parent);
 		this.client = client;
 		shownDirectory = client.topics().me().map(Me::directory).orElse(null);
 	}

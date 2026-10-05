@@ -177,5 +177,15 @@
 	"pumpkin_friends.options.findable.yes": "Findable by Minecraft name: yes",
 	"pumpkin_friends.options.findable.no": "Findable by Minecraft name: no",
 	"pumpkin_friends.options.findable.unknown": "Findable by Minecraft name: –",
-	"pumpkin_friends.share.elsewhere.unnamed": "Another of your games is sharing a world right now."
+	"pumpkin_friends.share.elsewhere.unnamed": "Another of your games is sharing a world right now.",
+	"pumpkin_friends.friends.group.online": "Play together · %s online",
+	"pumpkin_friends.friends.group.offline": "Until the next adventure · %s offline",
+	"pumpkin_friends.friends.detail.online": "Connected to Pumpkin Friends",
+	"pumpkin_friends.friends.detail.playing": "Exploring Minecraft right now",
+	"pumpkin_friends.friends.detail.offline": "Not connected right now",
+	"pumpkin_friends.toggle.on": "on",
+	"pumpkin_friends.toggle.off": "off",
+	"pumpkin_friends.toggle.narration": "%s, %s",
+	"pumpkin_friends.toggle.usage": "Press Space or Enter to toggle.",
+	"pumpkin_friends.hub.summary": "%s friends · %s online"
 }

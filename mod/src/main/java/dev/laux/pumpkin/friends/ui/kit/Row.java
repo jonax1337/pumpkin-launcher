@@ -1,5 +1,6 @@
 package dev.laux.pumpkin.friends.ui.kit;
 
+import dev.laux.pumpkin.friends.ui.model.FriendCardLayout;
 import dev.laux.pumpkin.friends.ui.model.GuiMetrics;
 import dev.laux.pumpkin.friends.ui.model.RowStyle;
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ public final class Row {
 	private final Optional<String> secondLine;
 	private final boolean widgetFillsRow;
 	private final List<Action> actions = new ArrayList<>();
+	private Optional<FriendIdentity> friendIdentity = Optional.empty();
 
 	private Row(RowStyle style, String firstLine, Optional<String> secondLine, boolean widgetFillsRow) {
 		this.style = style;
@@ -43,6 +45,13 @@ public final class Row {
 		return new Row(RowStyle.NORMAL, first, Optional.of(second), false);
 	}
 
+	/** A friend's portrait, identity and status, with actions in their own strip below. */
+	public static Row friend(String name, Optional<String> uuid, String detail, String status, int statusColor) {
+		Row row = twoLines(name, detail);
+		row.friendIdentity = Optional.of(new FriendIdentity(uuid, status, statusColor));
+		return row;
+	}
+
 	/** A row that holds only {@code widget}, stretched to the row width. */
 	public static Row fullWidth(String id, AbstractWidget widget) {
 		return new Row(RowStyle.NORMAL, "", Optional.empty(), true).withAction(id, widget);
@@ -55,6 +64,9 @@ public final class Row {
 	}
 
 	int height() {
+		if (friendIdentity.isPresent()) {
+			return actions.isEmpty() ? FriendCardLayout.HEIGHT : FriendCardLayout.ACTION_HEIGHT;
+		}
 		return secondLine.isPresent() ? GuiMetrics.TWO_LINE_ROW_HEIGHT : GuiMetrics.ROW_HEIGHT;
 	}
 
@@ -72,6 +84,13 @@ public final class Row {
 
 	boolean widgetFillsRow() {
 		return widgetFillsRow;
+	}
+
+	Optional<FriendIdentity> friendIdentity() {
+		return friendIdentity;
+	}
+
+	record FriendIdentity(Optional<String> uuid, String status, int statusColor) {
 	}
 
 	List<Action> actions() {

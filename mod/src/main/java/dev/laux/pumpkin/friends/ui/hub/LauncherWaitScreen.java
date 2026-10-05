@@ -18,7 +18,7 @@ final class LauncherWaitScreen extends PumpkinScreen {
 	private final LauncherWait wait;
 
 	LauncherWaitScreen(Screen parent, LauncherWait wait) {
-		super(Text.translate("pumpkin_friends.wait.title"), parent);
+		super("pumpkin_friends.wait.title", parent);
 		this.wait = wait;
 	}
 

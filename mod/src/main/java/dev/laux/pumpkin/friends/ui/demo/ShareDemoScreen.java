@@ -40,7 +40,7 @@ final class ShareDemoScreen extends PumpkinScreen {
 	private int ticks;
 
 	ShareDemoScreen(Screen parent) {
-		super(Text.translate("pumpkin_friends.share.demo.title"), parent);
+		super("pumpkin_friends.share.demo.title", parent);
 		feed(GAME_UNPUBLISHED);
 		feed(FRIENDS);
 	}

@@ -12,20 +12,12 @@ class HubChromeTest {
 	private final HubLayout layout = HubLayout.of(320, 240, 0);
 
 	@Test
-	void headerCentresTitleAndStatusInTheirLines() {
-		new HubChrome().paintHeader(painter, layout, "Friends", "Connected");
-
-		// 7 glyphs of 6 px centre at x = 10 + (300 - 42) / 2; a 9 px font in a 10 px line starts at the line top.
-		assertTrue(painter.calls().get(0).startsWith("text 'Friends' at 139,6 "));
-		assertTrue(painter.calls().get(1).startsWith("text 'Connected' at 133,18 "));
-	}
-
-	@Test
 	void headerClipsATitleThatIsTooWide() {
 		new HubChrome().paintHeader(painter, layout, "x".repeat(60), "");
 
-		String clipped = "x".repeat(49) + "…";
-		assertTrue(painter.calls().get(0).startsWith("text '" + clipped + "' at 10,6 "));
+		// The title line may use 290 px beside the pumpkin; the ellipsis leaves room for 47 glyphs of 6 px.
+		String clipped = "x".repeat(47) + "…";
+		assertTrue(firstText().startsWith("text '" + clipped + "' at 21,6 "));
 	}
 
 	@Test
@@ -38,5 +30,10 @@ class HubChromeTest {
 		// The text area is 4..52 = 48 px = 8 glyphs, so six characters (the trailing space is dropped) and the ellipsis remain.
 		assertTrue(painter.calls().get(0).startsWith("text 'A long…' at 4,5 "));
 		assertTrue(painter.calls().get(1).startsWith("text 'Playing' at 4,21 "));
+	}
+
+	private String firstText() {
+		Optional<String> text = painter.calls().stream().filter(call -> call.startsWith("text ")).findFirst();
+		return text.orElseThrow();
 	}
 }

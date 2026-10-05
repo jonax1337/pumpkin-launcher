@@ -177,5 +177,15 @@
 	"pumpkin_friends.options.findable.yes": "Per Minecraft-Namen auffindbar: ja",
 	"pumpkin_friends.options.findable.no": "Per Minecraft-Namen auffindbar: nein",
 	"pumpkin_friends.options.findable.unknown": "Per Minecraft-Namen auffindbar: –",
-	"pumpkin_friends.share.elsewhere.unnamed": "Ein anderes deiner Spiele teilt gerade eine Welt."
+	"pumpkin_friends.share.elsewhere.unnamed": "Ein anderes deiner Spiele teilt gerade eine Welt.",
+	"pumpkin_friends.friends.group.online": "Gemeinsam spielen · %s online",
+	"pumpkin_friends.friends.group.offline": "Bis zum nächsten Abenteuer · %s offline",
+	"pumpkin_friends.friends.detail.online": "Verbunden mit Pumpkin Friends",
+	"pumpkin_friends.friends.detail.playing": "Gerade in Minecraft unterwegs",
+	"pumpkin_friends.friends.detail.offline": "Zurzeit nicht verbunden",
+	"pumpkin_friends.toggle.on": "eingeschaltet",
+	"pumpkin_friends.toggle.off": "ausgeschaltet",
+	"pumpkin_friends.toggle.narration": "%s, %s",
+	"pumpkin_friends.toggle.usage": "Mit Leertaste oder Eingabetaste umschalten.",
+	"pumpkin_friends.hub.summary": "%s Freunde · %s online"
 }

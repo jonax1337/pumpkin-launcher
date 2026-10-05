@@ -16,7 +16,8 @@ sourceSets.main.java.exclude('dev/laux/pumpkin/friends/platform/neoforge/**', 'd
 if (isTracer) {
 	// Tracer-Knoten: nur Einstieg und Mixin des Tracers. compat/ und ui/ kommen mit den Paketen, die sie für diesen Knoten bauen.
 	sourceSets.main.java.exclude('dev/laux/pumpkin/friends/compat/**', 'dev/laux/pumpkin/friends/ui/**',
-		"${fabricPackage}/FriendsClient.java", "${fabricPackage}/PauseMenuButton.java", "${fabricPackage}/mixin/PauseScreenMixin.java")
+		"${fabricPackage}/FriendsClient.java", "${fabricPackage}/PauseMenuButton.java",
+		"${fabricPackage}/mixin/PauseScreenMixin.java", "${fabricPackage}/mixin/PumpkinResourcesMixin.java")
 } else {
 	sourceSets.main.java.exclude("${fabricPackage}/TracerClient.java", "${fabricPackage}/mixin/TracerMinecraftMixin.java")
 }
@@ -49,7 +50,8 @@ if (!isTracer) {
 \t"refmap": ${refmap},
 \t"compatibilityLevel": "JAVA_${nodeJavaMin}",
 \t"client": [
-\t\t"PauseScreenMixin"
+\t\t"PauseScreenMixin",
+\t\t"PumpkinResourcesMixin"
 \t],
 \t"injectors": {
 \t\t"defaultRequire": 0

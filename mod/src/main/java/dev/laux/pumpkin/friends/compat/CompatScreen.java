@@ -11,6 +11,8 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.locale.Language;
+import net.minecraft.network.chat.Component;
 //? if >=26.1 {
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 //?} else {
@@ -41,9 +43,21 @@ public abstract class CompatScreen extends Screen {
 	private final StateKeeper state = new StateKeeper();
 	private final List<TrackedField> tracked = new ArrayList<>();
 	private AbstractWidget lastFocused;
+	private Language titleLanguage;
+	private String translatedTitle = "";
 
-	protected CompatScreen(String title) {
-		super(Text.literal(title));
+	protected CompatScreen(String titleKey, Object... titleArguments) {
+		super(Component.translatable(titleKey, titleArguments));
+	}
+
+	/** Cache only within one language instance; resource reloads must not freeze early untranslated keys. */
+	protected final String titleText() {
+		Language language = Language.getInstance();
+		if (language != titleLanguage) {
+			titleLanguage = language;
+			translatedTitle = title.getString();
+		}
+		return translatedTitle;
 	}
 
 	/** Creates and adds every widget of the screen; runs on the first open and after every resize or rebuild. */

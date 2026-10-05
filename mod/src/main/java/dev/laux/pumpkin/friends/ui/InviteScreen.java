@@ -39,7 +39,7 @@ public final class InviteScreen extends PumpkinScreen {
 	private boolean askedForPlan;
 
 	public InviteScreen(Screen parent, BridgeClient client, Invite invite) {
-		super(Text.translate("pumpkin_friends.invite.title", invite.fromName()), parent);
+		super("pumpkin_friends.invite.title", parent, invite.fromName());
 		this.client = client;
 		this.invite = invite;
 	}

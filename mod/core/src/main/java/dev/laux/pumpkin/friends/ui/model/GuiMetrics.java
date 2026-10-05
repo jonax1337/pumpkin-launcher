@@ -26,7 +26,7 @@ public final class GuiMetrics {
 	public static final int ROW_ACTION_GAP = 4;
 	public static final int ROW_TEXT_LINE_HEIGHT = 12;
 
-	public static final int SCROLLBAR_WIDTH = 2;
+	public static final int SCROLLBAR_WIDTH = 4;
 	/** Space reserved right of the rows so the scrollbar never overlaps a button. */
 	public static final int SCROLLBAR_GUTTER = 6;
 	public static final int SCROLLBAR_MIN_THUMB = 8;

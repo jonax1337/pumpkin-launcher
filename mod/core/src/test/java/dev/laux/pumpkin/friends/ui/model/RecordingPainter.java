@@ -25,6 +25,11 @@ final class RecordingPainter implements Painter {
 	}
 
 	@Override
+	public void text(String text, int x, int y, int argb, boolean shadow) {
+		calls.add("text '" + text + "' at " + x + "," + y + " " + hex(argb) + (shadow ? " shadow" : ""));
+	}
+
+	@Override
 	public int codePointWidth(int codePoint) {
 		return GLYPH_WIDTH;
 	}

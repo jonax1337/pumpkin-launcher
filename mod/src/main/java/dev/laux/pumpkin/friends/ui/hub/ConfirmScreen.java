@@ -20,7 +20,7 @@ public final class ConfirmScreen extends PumpkinScreen {
 	private final Runnable action;
 
 	public ConfirmScreen(Screen parent, String question, String confirmLabel, Runnable action) {
-		super(Text.translate("pumpkin_friends.title"), parent);
+		super("pumpkin_friends.title", parent);
 		this.question = question;
 		this.confirmLabel = confirmLabel;
 		this.action = action;

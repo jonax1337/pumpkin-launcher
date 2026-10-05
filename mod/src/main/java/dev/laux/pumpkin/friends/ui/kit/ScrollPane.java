@@ -1,5 +1,8 @@
 package dev.laux.pumpkin.friends.ui.kit;
 
+import dev.laux.pumpkin.friends.compat.Text;
+import dev.laux.pumpkin.friends.ui.model.Fit;
+import dev.laux.pumpkin.friends.ui.model.FriendCardLayout;
 import dev.laux.pumpkin.friends.ui.model.GuiMetrics;
 import dev.laux.pumpkin.friends.ui.model.Painter;
 import dev.laux.pumpkin.friends.ui.model.Rect;
@@ -10,6 +13,7 @@ import dev.laux.pumpkin.friends.ui.model.RowStyle;
 import dev.laux.pumpkin.friends.ui.model.ScrollModel;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import net.minecraft.client.gui.components.AbstractWidget;
 
 /**
@@ -51,9 +55,16 @@ public final class ScrollPane {
 		List<Rect> shown = scroll.visibleRows(rowArea);
 		for (int index = 0; index < shown.size(); index++) {
 			Row row = rows.get(scroll.firstRow() + index);
-			RowLayout inside = RowLayout.of(shown.get(index), row.secondLine().isPresent(), actionWidths(row, shown.get(index)));
+			Rect bounds = shown.get(index);
+			Optional<FriendCardLayout> card = row.friendIdentity().map(identity ->
+				FriendCardLayout.of(bounds, Text.width(identity.status()) + 18, actionWidths(row, bounds)));
+			RowLayout inside = card.map(FriendCardLayout::rowLayout).orElseGet(() ->
+				RowLayout.of(bounds, row.secondLine().isPresent(), actionWidths(row, bounds)));
 			placeActions(row, inside);
-			placed.add(new PlacedRow(row, inside, shown.get(index)));
+			String statusLabel = row.friendIdentity().map(identity -> Fit.clip(identity.status(),
+				Math.max(0, card.orElseThrow().status().width() - 13),
+				codePoint -> Text.width(new String(Character.toChars(codePoint))))).orElse("");
+			placed.add(new PlacedRow(row, inside, bounds, card, statusLabel, Text.width(statusLabel)));
 		}
 	}
 
@@ -100,6 +111,10 @@ public final class ScrollPane {
 		for (int index = 0; index < placed.size(); index++) {
 			PlacedRow shown = placed.get(index);
 			Rect area = shown.bounds();
+			if (shown.row().friendIdentity().isPresent()) {
+				paintCardBackdrop(painter, shown);
+				continue;
+			}
 			if (shown.row().style() == RowStyle.HEADING) {
 				painter.fill(area, PumpkinTheme.PANEL);
 				painter.fill(area.x(), area.y() + 3, 2, Math.max(0, area.height() - 6), PumpkinTheme.ACCENT);
@@ -111,19 +126,50 @@ public final class ScrollPane {
 		}
 	}
 
+	private void paintCardBackdrop(Painter painter, PlacedRow shown) {
+		Rect area = shown.bounds();
+		int color = shown.row().friendIdentity().orElseThrow().statusColor();
+		painter.fill(area.x() + 2, area.y() + 2, Math.max(0, area.width() - 4), area.height() - 6, PumpkinTheme.EDGE);
+		painter.fill(area.x() + 3, area.y() + 3, Math.max(0, area.width() - 6), area.height() - 8, PumpkinTheme.SURFACE);
+		painter.fill(area.x() + 3, area.y() + 3, 2, area.height() - 8, color);
+		Rect head = shown.card().orElseThrow().portrait();
+		painter.fill(head.x() - 1, head.y() - 1, head.width() + 2, head.height() + 2, PumpkinTheme.BORDER);
+		if (!shown.row().actions().isEmpty()) {
+			painter.fill(area.x() + 8, area.y() + FriendCardLayout.HEIGHT - 12,
+				Math.max(0, area.width() - 16), 1, PumpkinTheme.HOVER);
+		}
+	}
+
 	public void paint(Painter painter) {
 		painter.beginClip(viewport);
 		paintRows(painter);
 		painter.endClip();
-		scroll.thumb(scrollbarTrack).ifPresent(thumb -> painter.scrollbar(scrollbarTrack, thumb));
+		scroll.thumb(scrollbarTrack).ifPresent(thumb -> PumpkinTheme.scrollbar(painter, scrollbarTrack, thumb));
 	}
 
 	private void paintRows(Painter painter) {
 		for (PlacedRow shown : placed) {
+			if (shown.card().isPresent()) {
+				paintFriend(painter, shown);
+				continue;
+			}
 			if (!shown.row().firstLine().isEmpty()) {
 				RowPainter.paint(painter, shown.layout(), shown.row().style(), shown.row().firstLine(), shown.row().secondLine());
 			}
 		}
+	}
+
+	private void paintFriend(Painter painter, PlacedRow shown) {
+		Row row = shown.row();
+		Row.FriendIdentity identity = row.friendIdentity().orElseThrow();
+		FriendCardLayout card = shown.card().orElseThrow();
+		painter.head(row.firstLine(), identity.uuid(), card.portrait());
+		RowPainter.paint(painter, shown.layout(), row.style(), row.firstLine(), row.secondLine());
+		Rect status = card.status();
+		painter.fill(status, PumpkinTheme.SUNK);
+		painter.fill(status.x() + 4, status.y() + 4, 3, 3, identity.statusColor());
+		painter.text(shown.statusLabel(), status.right() - 4 - shown.statusWidth(),
+			status.y() + (status.height() - painter.lineHeight()) / 2, identity.statusColor(), true);
 	}
 
 
@@ -134,9 +180,10 @@ public final class ScrollPane {
 			if (shown.row().firstLine().isEmpty()) {
 				continue;
 			}
-			lines.add(shown.row().secondLine()
+			String line = shown.row().secondLine()
 				.map(second -> shown.row().firstLine() + ", " + second)
-				.orElse(shown.row().firstLine()));
+				.orElse(shown.row().firstLine());
+			lines.add(line + shown.row().friendIdentity().map(identity -> ", " + identity.status()).orElse(""));
 		}
 		return lines;
 	}
@@ -162,6 +209,7 @@ public final class ScrollPane {
 		}
 	}
 
-	private record PlacedRow(Row row, RowLayout layout, Rect bounds) {
+	private record PlacedRow(Row row, RowLayout layout, Rect bounds, Optional<FriendCardLayout> card,
+		String statusLabel, int statusWidth) {
 	}
 }
