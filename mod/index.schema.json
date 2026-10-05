@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/jonax1337/pumpkin-launcher/mod/index.schema.json",
-  "title": "Pumpkin Friends mod index",
-  "description": "mod-index.json: written by the Gradle build in mod/, read by the launcher (src-tauri/src/services/friends/ingame/). The launcher enforces the same rules and, beyond what a schema can say: node ids, file names and (loader, minecraft) cells are unique, and a strategy must suit its loader (fabricAddMods for fabric; fmlMavenRoot and fmlModFolders for neoforge and forge). A node without a verified entry is switched off.",
+  "title": "Pumpkin Bridge mod index",
+  "description": "mod-index.json: written by the Gradle build in mod/ and read by the launcher. The launcher enforces the same rules and, beyond what a schema can say: node ids, file names and (loader, minecraft) cells are unique, and a strategy must suit its loader (fabricAddMods for fabric; fmlMavenRoot and fmlModFolders for neoforge and forge). A node without a verified entry is switched off.",
   "type": "object",
   "additionalProperties": false,
   "required": ["modVersion", "nodes"],

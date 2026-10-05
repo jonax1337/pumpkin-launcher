@@ -265,6 +265,7 @@ impl Node {
         let events = Arc::new(RecordingEvents::default());
         sessions.start(events.clone()).unwrap();
         let account = AccountProfile::new(name, ACCOUNT_UUID);
+        bridge.start().await.unwrap();
         friends
             .start(Arc::new(NoEvents), Some(account.clone()))
             .await;

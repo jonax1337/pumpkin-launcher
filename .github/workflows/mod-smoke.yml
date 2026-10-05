@@ -19,14 +19,14 @@ on:
     branches: [main]
     paths:
       - 'mod/**'
-      - 'src-tauri/src/services/friends/ingame/**'
+      - 'src-tauri/src/services/modbridge/ingame/**'
       - 'src-tauri/tests/smoke/**'
       - 'tools/mod-smoke/**'
       - '.github/workflows/mod-smoke.yml'
   pull_request:
     paths:
       - 'mod/**'
-      - 'src-tauri/src/services/friends/ingame/**'
+      - 'src-tauri/src/services/modbridge/ingame/**'
       - 'src-tauri/tests/smoke/**'
       - 'tools/mod-smoke/**'
       - '.github/workflows/mod-smoke.yml'

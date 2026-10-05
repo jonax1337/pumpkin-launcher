@@ -81,7 +81,7 @@ pub struct FriendsSettings {
     /// Fehlt in Dateien aus der Zeit vor der Suche per Name.
     #[serde(default)]
     pub findable_by_name: bool,
-    /// „Freunde-Menü im Spiel“ (INGAME 3.9): der globale Schalter der Einspeisung. Fehlt in älteren Dateien: an.
+    /// „Pumpkin Bridge im Spiel“ (INGAME 3.9): der globale Schalter der Einspeisung. Fehlt in älteren Dateien: an.
     #[serde(default = "ingame_menu_default")]
     pub ingame_menu: bool,
     /// „Aktionen im Spiel“ (INGAME 5.5). Fehlt in älteren Dateien: fragen.
@@ -549,12 +549,12 @@ pub struct ModOpenEvent {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Freunde-Menü im Spiel (docs/friends/INGAME.md, 3.9): Status der Einspeisung je Instanz, berechnet ohne Start.
+// Pumpkin Bridge im Spiel (docs/friends/INGAME.md, 3.9): Status der Einspeisung je Instanz, berechnet ohne Start.
 // ---------------------------------------------------------------------------------------------------------------------
 
-use super::ingame::{FailureKind, Loader as IngameLoader};
+use crate::services::modbridge::ingame::{FailureKind, Loader as IngameLoader};
 
-/// Wie es um das Freunde-Menü im Spiel einer Instanz steht.
+/// Wie es um das Pumpkin Bridge im Spiel einer Instanz steht.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum IngameState {
@@ -596,11 +596,10 @@ pub enum IngameReason {
     JavaUnknown,
     IdCollision,
     OfflineAccount,
-    FriendsOff,
     BridgeNotRunning,
     /// Der Schalter dieser Instanz ist aus.
     InstanceOff,
-    /// Der globale Schalter „Freunde-Menü im Spiel“ ist aus.
+    /// Der globale Schalter „Pumpkin Bridge im Spiel“ ist aus.
     GloballyOff,
     Breaker {
         reason: FailureKind,

@@ -367,15 +367,19 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
       return;
     }
     setTimeout(() => {
-      if (!db.state.settings.findableByName) return;
+      if (!db.state.enabled || !db.state.settings.findableByName) return;
       directory.state = "active";
       changed();
     }, ONLINE_AFTER_MS);
   }
 
   function updateSettings(settings: FriendsSettings) {
+    const previous = db.state.settings;
+    if (settings.alwaysRelay !== previous.alwaysRelay || settings.findableByName !== previous.findableByName) {
+      checkUsable(false);
+    }
     if (settings.alwaysRelay !== db.state.settings.alwaysRelay) endSessions("stopped");
-    if (settings.findableByName !== db.state.settings.findableByName) applyFindability(settings.findableByName);
+    if (db.state.enabled && settings.findableByName !== db.state.settings.findableByName) applyFindability(settings.findableByName);
     db.state.settings = settings;
     changed();
     return db.state;
@@ -644,7 +648,7 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     emit("join-session", { ...joinEventBase(ticket), state: { type: "ended", reason: "left" } });
   }
 
-  // --- Freunde-Menü im Spiel (INGAME 3.9) ---
+  // --- Pumpkin Bridge im Spiel (INGAME 3.9) ---
 
   const unavailable = (reason: IngameReason, node: IngameNode | null = null): IngameStatus => ({ state: "unavailable", reason, node });
 
@@ -654,7 +658,6 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     if (forced) return forced;
     const instance = appDb.instances.find((i) => i.id === instanceId);
     if (!instance) throw new Error(t("mock.friends.notFound.instance", { id: instanceId }));
-    if (!db.state.enabled) return unavailable({ type: "friendsOff" });
     if (!appDb.accounts.some((a) => a.kind === "microsoft")) return unavailable({ type: "offlineAccount" });
     if (instance.loader === "vanilla") return unavailable({ type: "vanilla" });
     if (instance.loader === "quilt") return unavailable({ type: "quilt" });
@@ -853,7 +856,10 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     },
     friendsEnable: command(enable),
     friendsDisable: command(disable),
-    friendsUpdateSettings: command(updateSettings),
+    friendsUpdateSettings: async (settings: FriendsSettings) => {
+      await wait();
+      return clone(updateSettings(settings));
+    },
     friendsRotateIdentity: command(rotateIdentity),
     friendsReset: command(reset, { allowLostIdentity: true }),
     friendsList: command(() => db.friends),

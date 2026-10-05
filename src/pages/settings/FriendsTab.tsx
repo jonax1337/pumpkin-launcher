@@ -82,7 +82,7 @@ function FindableRow({ settings, directory }: { settings: FriendsSettings; direc
   );
 }
 
-/** „Freunde-Menü im Spiel“: der globale Schalter der Einspeisung; die Instanzseite zeigt, was daraus für jede Instanz folgt (INGAME 3.9). */
+/** Pumpkin Bridge bleibt unabhängig von der Friends-Freigabe einschaltbar. */
 function IngameMenuRow({ settings }: { settings: FriendsSettings }) {
   const { t } = useI18n();
   const update = useUpdateFriendsSettings();
@@ -302,7 +302,6 @@ function AvailableSettings({ state }: { state: FriendsState }) {
             <MinecraftNameRow />
             <AlwaysRelayRow settings={state.settings} />
             {state.directory.state !== "unavailable" && <FindableRow settings={state.settings} directory={state.directory} />}
-            <IngameMenuRow settings={state.settings} />
             <IngameActionsRow settings={state.settings} />
             {state.me && <FingerprintRow me={state.me} />}
             <NetworkRow network={state.network} />
@@ -337,5 +336,12 @@ export function FriendsTab() {
   if (query.error) return <ErrorBox title={t("friendsSettings.loadFailed")} error={query.error} onRetry={() => void query.refetch()} />;
   if (!query.data) return <Skel h={ROW_SKELETON_HEIGHT_PX * 3} />;
   const state = query.data;
-  return state.availability === "available" ? <AvailableSettings state={state} /> : <UnavailableSettings availability={state.availability} />;
+  return (
+    <>
+      <FormSection title={t("friendsSettings.ingameMenu.label")} level={3}>
+        <IngameMenuRow settings={state.settings} />
+      </FormSection>
+      {state.availability === "available" ? <AvailableSettings state={state} /> : <UnavailableSettings availability={state.availability} />}
+    </>
+  );
 }

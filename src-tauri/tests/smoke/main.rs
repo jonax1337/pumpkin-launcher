@@ -14,7 +14,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use launcher_lib::services::download::http_client;
-use launcher_lib::services::friends::ingame::{FailureKind, Injection, ModSource, Node, SkipReason};
+use launcher_lib::services::modbridge::ingame::{FailureKind, Injection, ModSource, Node, SkipReason};
 use launcher_lib::services::gamesignal::GameSignals;
 use launcher_lib::services::modbridge::ModBridge;
 use launcher_lib::services::Dirs;

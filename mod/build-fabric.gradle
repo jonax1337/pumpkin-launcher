@@ -9,15 +9,17 @@ apply from: rootProject.file('gradle/node.gradle')
 def isTracer = project.findProperty('tracer') == 'true'
 // Innerhalb von dependencies { } heißt "loomx" eine andere Erweiterung, daher hier festhalten.
 def isUnobfuscated = loomx.unobfuscated
-def fabricPackage = 'dev/laux/pumpkin/friends/platform/fabric'
+def fabricPackage = 'dev/laux/pumpkin/bridge/platform/fabric'
 
 // Andere Loader haben eigene Einstiegsklassen.
-sourceSets.main.java.exclude('dev/laux/pumpkin/friends/platform/neoforge/**', 'dev/laux/pumpkin/friends/platform/forge/**')
+sourceSets.main.java.exclude('dev/laux/pumpkin/bridge/platform/neoforge/**', 'dev/laux/pumpkin/bridge/platform/forge/**')
 if (isTracer) {
 	// Tracer-Knoten: nur Einstieg und Mixin des Tracers. compat/ und ui/ kommen mit den Paketen, die sie für diesen Knoten bauen.
-	sourceSets.main.java.exclude('dev/laux/pumpkin/friends/compat/**', 'dev/laux/pumpkin/friends/ui/**',
-		"${fabricPackage}/FriendsClient.java", "${fabricPackage}/PauseMenuButton.java",
-		"${fabricPackage}/mixin/PauseScreenMixin.java", "${fabricPackage}/mixin/PumpkinResourcesMixin.java")
+	sourceSets.main.java.exclude('dev/laux/pumpkin/bridge/compat/**', 'dev/laux/pumpkin/bridge/ui/**',
+		'dev/laux/pumpkin/bridge/modules/**',
+		"${fabricPackage}/BridgeClientInitializer.java", "${fabricPackage}/PumpkinMenuButton.java",
+		"${fabricPackage}/mixin/PauseScreenMixin.java", "${fabricPackage}/mixin/TitleScreenMixin.java",
+		"${fabricPackage}/mixin/PumpkinResourcesMixin.java")
 } else {
 	sourceSets.main.java.exclude("${fabricPackage}/TracerClient.java", "${fabricPackage}/mixin/TracerMinecraftMixin.java")
 }
@@ -38,19 +40,20 @@ dependencies {
 if (!isTracer) {
 	// In der Aktion einer Aufgabe sind die ext-Eigenschaften des Projekts nicht sichtbar, daher hier festhalten.
 	def nodeJavaMin = node.javaMin
-	def mixinConfig = layout.buildDirectory.file('generated/pumpkin_friends.mixins.json')
+	def mixinConfig = layout.buildDirectory.file('generated/pumpkin_bridge.mixins.json')
 	def writeMixinConfig = tasks.register('writeMixinConfig') {
 		outputs.file(mixinConfig)
 		doLast {
-			def refmap = isUnobfuscated ? 'null' : '"pumpkin_friends-refmap.json"'
+			def refmap = isUnobfuscated ? 'null' : '"pumpkin_bridge-refmap.json"'
 			mixinConfig.get().asFile.text = """{
 \t"required": true,
 \t"minVersion": "0.8",
-\t"package": "${fabricPackage}.mixin",
+\t"package": "${fabricPackage.replace('/', '.')}.mixin",
 \t"refmap": ${refmap},
 \t"compatibilityLevel": "JAVA_${nodeJavaMin}",
 \t"client": [
 \t\t"PauseScreenMixin",
+\t\t"TitleScreenMixin",
 \t\t"PumpkinResourcesMixin"
 \t],
 \t"injectors": {
@@ -68,7 +71,7 @@ if (!isTracer) {
 
 loom {
 	mods {
-		"pumpkin_friends" {
+		"pumpkin_bridge" {
 			sourceSet sourceSets.main
 		}
 	}
@@ -104,7 +107,7 @@ if (!isUnobfuscated) {
 	loom {
 		mixin {
 			useLegacyMixinAp = true
-			defaultRefmapName = 'pumpkin_friends-refmap.json'
+			defaultRefmapName = 'pumpkin_bridge-refmap.json'
 		}
 	}
 }

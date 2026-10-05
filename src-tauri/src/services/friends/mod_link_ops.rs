@@ -32,7 +32,18 @@ impl OpHandler for ModOps {
                 .0
                 .upgrade()
                 .ok_or_else(|| OpError::new(ErrorCode::Internal))?;
-            execute(&shared, &ctx, op).await
+            if matches!(op, Op::StateSync {} | Op::LauncherOpen { .. }) {
+                return execute(&shared, &ctx, op).await;
+            }
+            shared.ensure_enabled().map_err(mod_error)?;
+            if !ctx.friends_enabled() {
+                return Err(OpError::new(ErrorCode::NotEnabled));
+            }
+            tokio::select! {
+                biased;
+                () = ctx.friends_disabled() => Err(OpError::new(ErrorCode::NotEnabled)),
+                outcome = execute(&shared, &ctx, op) => outcome,
+            }
         })
     }
 }

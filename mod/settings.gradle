@@ -22,7 +22,7 @@ plugins {
 	id 'dev.kikugie.loom-back-compat'
 }
 
-rootProject.name = 'pumpkin_friends'
+rootProject.name = 'pumpkin_bridge'
 
 include 'core'
 

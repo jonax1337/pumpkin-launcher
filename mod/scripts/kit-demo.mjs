@@ -13,7 +13,7 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { parseNodes } from './compile-matrix.mjs';
 
-const PROOF_LINE = /pumpkin_friends kit demo rendered (\d+) frames at (\d+)x(\d+)/;
+const PROOF_LINE = /pumpkin_bridge kit demo rendered (\d+) frames at (\d+)x(\d+)/;
 const DEFAULT_TIMEOUT_SECONDS = 180;
 
 /** The numbers of the proof line, or null for any other line. */

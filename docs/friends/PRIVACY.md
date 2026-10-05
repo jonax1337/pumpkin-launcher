@@ -10,17 +10,18 @@ the abuse mailbox). Everything else was derived from the spec and from the `iroh
 
 ## 1. Summary
 
-- Friends is **off by default**. Before the owner of a PC switches it on, nothing binds UDP, listens,
-  or contacts a relay or Mojang for friends (SPEC 12.1).
+- Friends is **off by default**. Before opt-in it creates no Friends UDP endpoint, relay connection
+  or Friends-related Mojang request. The independent Pumpkin Bridge listener may already bind a
+  loopback-only TCP port on this PC; that is not Friends networking or consent (SPEC 12.1).
 - Friends connect through codes that the users exchange themselves, or, if both sides opt in, by exact Minecraft
   name through the Pumpkin directory (section 9). There is no public list and no partial search, no chat, no
   tracking, no telemetry.
 - The directory never contacts Mojang and stores no names. Your launcher proves the account with a player certificate
   that Mojang signed, and the access token is only ever sent to Mojang (section 9).
-- Planned (`INGAME.md` section 9; section 10 below): while Friends is on, the launcher loads a small in-game mod into
-  Microsoft-account launches. It lives outside the instance folder and routes friend operations through the launcher on
-  this PC. Heads use Minecraft's native Mojang profile/skin services for known UUIDs (section 6); other mods in the same
-  game can use the same launcher connection.
+- Pumpkin Bridge may be injected into supported Microsoft-account launches even while Friends is off,
+  subject to its global/per-instance switches. Its logo opens the shared module home; Friends data
+  and actions remain disabled until opt-in. Known-UUID heads use Minecraft's native Mojang services
+  only when shown; other mods in the same game can access the same loopback channel.
 - Connections are encrypted end to end between the launchers. The relay forwards ciphertext.
 - Our own relay stores nothing about connections. It sees, while a connection is open, the client's IP
   address and its endpoint id, and who it forwards to.
@@ -329,16 +330,20 @@ section 9.
 
 ### 10.1 What is added to the game, and when
 
-- Only while Friends is on, and only for launches with a Microsoft account, the launcher adds a small mod to the game
-  (`INGAME.md` section 3.3). Before the opt-in nothing is injected and nothing listens (SPEC 12.1). With an offline
-  account, a Vanilla instance (no loader), Quilt or an unsupported Minecraft version, nothing is added.
+- Pumpkin Bridge is injected into supported Microsoft-account launches when the existing global/
+  per-instance injection switches permit it, independently of Friends opt-in (`INGAME.md` 3.3).
+  Before Friends opt-in the local Bridge may listen, but exposes no private Friends data or actions.
+  Offline accounts, Vanilla, Quilt and unsupported targets still get no injection.
 - The mod file lives in the launcher's own data folder, **outside your instance folder**. It is not in `mods/`, not in
   exports or templates, and no pack update can overwrite it. It is part of the launcher and is not downloaded.
-- The mod has **no network access except the loopback connection to the launcher on this PC** (`127.0.0.1`). It
-  contacts no server, no relay and not Mojang. All friend logic, all network traffic and all identity operations stay
-  in the launcher.
+- The mod's custom transport is only the loopback connection to the launcher on this PC (`127.0.0.1`).
+  Friends logic, identity operations, peer and relay traffic stay in the launcher. Minecraft's native
+  profile/skin services may contact Mojang when rendering a known-UUID head.
 - The mod can only trigger what you start in the game menu. Enabling or disabling Friends, rotating or resetting the
   identity, relay consent and copying your full id are never possible from the game.
+- Disabling Friends or changing its identity revokes game-side grants and pending/private frames,
+  not the common Bridge listener. A private write interrupted by revocation may close that one socket
+  and reconnect; information already sent to the game cannot be recalled.
 
 ### 10.2 Other mods in the same game (same-JVM exposure)
 
@@ -372,11 +377,12 @@ Added to the opt-in dialog (SPEC 10.9) when the injection ships, and to the Priv
 
 | Deutsch | English |
 |---|---|
-| Wenn Freunde an ist, lädt der Launcher beim Spielstart eine kleine Mod in deine Spiele. Sie liegt außerhalb deines Instanzordners, hat keine Netzwerkverbindung außer zum Launcher auf diesem PC und kann nichts ändern, was du nicht im Spiel anstößt. Andere Mods im selben Spiel können dieselbe Verbindung nutzen; deshalb fragt der Launcher vor Freundes- und Teilen-Aktionen aus dem Spiel. | While Friends is on, the launcher loads a small mod into your games at launch. It is stored outside your instance folder, has no network connection except to the launcher on this PC, and cannot change anything you do not start in the game. Other mods in the same game can use the same connection; that is why the launcher asks before friend and share actions from the game. |
+| Pumpkin Bridge kann auch bei ausgeschalteten Freunden in unterstützten Spielen geladen sein. Die Mod liegt außerhalb des Instanzordners; ihr eigener Transport verbindet nur zum Launcher auf diesem PC. Minecraft kann für bekannte Spielerköpfe seine Mojang-Dienste nutzen. Freunde-Daten und -Aktionen benötigen deine Freigabe. Andere Mods im selben Spiel können dieselbe lokale Verbindung nutzen; Aktionen bleiben durch die Zustimmung im Launcher begrenzt. | Pumpkin Bridge may be loaded into supported games even while Friends is off. It is outside the instance folder; its custom transport connects only to the launcher on this PC. Minecraft may use its Mojang services for known player heads. Friends data/actions require your opt-in. Other mods in the same game can use the same local channel; launcher consent still limits actions. |
 
 ### 10.5 Data that flows to the mod
 
-Names, presence, requests and invites of your confirmed friends are sent to the mod over the loopback connection, as
-whole-state pushes, so that the menu can show them. They stay in the game process's memory and are not stored by the
-mod. Every other mod in the same game can see the same data (section 10.2). Peer-supplied strings are sanitised before
+Only while Friends is enabled, confirmed friends' names, presence, requests and invites are sent to the
+mod as whole-state pushes. Disabling Friends redacts new pushes and revokes queued private work;
+previously sent information cannot be recalled from the game process's memory.
+Every other mod in the same game can see previously delivered data (section 10.2). Peer-supplied strings are sanitised before
 they reach the mod (SPEC 12.3).

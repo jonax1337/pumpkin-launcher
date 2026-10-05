@@ -1,6 +1,0 @@
-[12:00:01] [main/INFO] (FabricLoader) Loading 3 mods: fabric-api, fabricloader, pumpkin_friends
-[12:00:09] [Render thread/INFO] (Minecraft) Setting user: Player
-[12:00:11] [Render thread/ERROR] (mixin) Mixin apply for mod pumpkin_friends failed pumpkin_friends.mixins.json:PauseScreenMixin from mod pumpkin_friends -> net.minecraft.client.gui.screens.PauseScreen: org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException @Inject annotation on init could not find any targets matching 'init' in net.minecraft.client.gui.screens.PauseScreen.
-	at org.spongepowered.asm.mixin.injection.struct.InjectionInfo.validateTargets(InjectionInfo.java:660)
-	at org.spongepowered.asm.mixin.transformer.MixinTargetContext.applyInjections(MixinTargetContext.java:1356)
-[12:00:11] [Render thread/FATAL] (mixin) Mixin transformation of net.minecraft.client.gui.screens.PauseScreen failed

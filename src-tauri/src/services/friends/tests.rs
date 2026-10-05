@@ -161,6 +161,7 @@ impl Node {
         )
         .unwrap();
         let events = Arc::new(RecordingEvents::default());
+        bridge.start().await.unwrap();
         friends.start(events.clone(), Some(account("Alex"))).await;
         Self {
             friends,
@@ -924,7 +925,22 @@ async fn without_a_keyring_even_reset_is_unavailable() {
 }
 
 #[tokio::test]
-async fn enabling_needs_a_microsoft_account_and_starts_the_mod_bridge_until_disabled() {
+async fn bridge_switch_remains_writable_without_a_secret_store_or_friends_identity() {
+    for secrets in [MemorySecretStore::unreachable(), MemorySecretStore::new()] {
+        let node = Node::started(offline_options(), Arc::new(secrets), TempDir::new()).await;
+        let mut settings = node.friends.state().settings;
+        settings.ingame_menu = false;
+        let state = node.friends.update_settings(settings).await.unwrap();
+        assert!(!state.settings.ingame_menu);
+        assert!(!state.enabled);
+        assert_eq!(state.network, NetworkStatus::Off);
+        assert!(state.me.is_none());
+        node.bridge.stop().await;
+    }
+}
+
+#[tokio::test]
+async fn friends_consent_requires_microsoft_but_bridge_runs_before_and_after_consent() {
     let node = Node::started(
         offline_options(),
         Arc::new(MemorySecretStore::new()),
@@ -936,10 +952,9 @@ async fn enabling_needs_a_microsoft_account_and_starts_the_mod_bridge_until_disa
         error_key(&refused.unwrap_err()),
         "errors.friends.msAccountRequired"
     );
-    assert!(node
-        .bridge
-        .register_launch("i1", Expectations::unconstrained())
-        .is_empty());
+    assert!(!node.bridge.register_launch("i1", Expectations::unconstrained()).is_empty());
+    assert!(!node.friends.state().enabled);
+    assert_eq!(node.friends.state().network, NetworkStatus::Off);
 
     node.friends
         .enable(enable_input(), Some(account("Anna")))
@@ -950,16 +965,18 @@ async fn enabling_needs_a_microsoft_account_and_starts_the_mod_bridge_until_disa
             .bridge
             .register_launch("i1", Expectations::unconstrained())
             .is_empty(),
-        "bridge runs with the feature"
+        "bridge remains available with Friends enabled"
     );
 
     node.friends.disable().await.unwrap();
     assert!(
-        node.bridge
+        !node.bridge
             .register_launch("i1", Expectations::unconstrained())
             .is_empty(),
-        "bridge stops with the feature"
+        "disabling Friends does not stop the shared bridge"
     );
+    assert_eq!(node.friends.state().network, NetworkStatus::Off);
+    node.bridge.stop().await;
 }
 
 #[tokio::test]

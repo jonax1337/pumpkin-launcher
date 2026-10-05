@@ -12,7 +12,7 @@ function node(overrides = {}) {
 		minecraft: ['1.21', '1.21.1'],
 		javaMin: 21,
 		strategy: 'fmlMavenRoot',
-		file: 'pumpkin_friends-2.1.0+1.21.1-neoforge.jar',
+		file: 'pumpkin_bridge-2.1.0+1.21.1-neoforge.jar',
 		sha256: SHA256,
 		verified: null,
 		...overrides,
@@ -34,7 +34,7 @@ const cases = [
 	['rejects a snapshot id', () =>
 		assert.equal(indexProblems(index(node({ minecraft: ['24w14a'] }))).length, 1)],
 	['rejects a file name with a path', () =>
-		assert.ok(indexProblems(index(node({ file: '../pumpkin_friends-2.1.0+1.21.1-neoforge.jar' }))).length >= 1)],
+		assert.ok(indexProblems(index(node({ file: '../pumpkin_bridge-2.1.0+1.21.1-neoforge.jar' }))).length >= 1)],
 	['rejects a file name that does not carry mod version and node id', () =>
 		assert.equal(indexProblems(index(node({ file: 'other.jar' }))).length, 1)],
 	['rejects an upper-case or short sha256', () => {
@@ -52,10 +52,10 @@ const cases = [
 		assert.equal(indexProblems(index(node({ verified: { smoke: 'yesterday', owner: null } }))).length, 1)],
 	['accepts the same Minecraft id on different loaders', () =>
 		assert.deepEqual(indexProblems(index(node(), node({
-			id: '1.21.1-fabric', loader: 'fabric', strategy: 'fabricAddMods', file: 'pumpkin_friends-2.1.0+1.21.1-fabric.jar',
+			id: '1.21.1-fabric', loader: 'fabric', strategy: 'fabricAddMods', file: 'pumpkin_bridge-2.1.0+1.21.1-fabric.jar',
 		}))), [])],
 	['rejects a Minecraft id that two nodes of one loader both serve', () => {
-		const second = node({ id: '1.21-neoforge', minecraft: ['1.21'], file: 'pumpkin_friends-2.1.0+1.21-neoforge.jar' });
+		const second = node({ id: '1.21-neoforge', minecraft: ['1.21'], file: 'pumpkin_bridge-2.1.0+1.21-neoforge.jar' });
 		const problems = indexProblems(index(node(), second));
 		assert.equal(problems.length, 1);
 		assert.match(problems[0], /Minecraft 1\.21 on neoforge is also served by 1\.21\.1-neoforge/);

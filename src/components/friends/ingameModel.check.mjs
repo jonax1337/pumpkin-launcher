@@ -7,7 +7,7 @@ import { ADDED_LOADER, ingameRow, withAddedLoader } from './ingameModel.ts';
 const FAILURES = ['fabricIncompatibleModSet', 'mixinApplyFailed', 'modLoadingError', 'unsupportedClassVersion', 'unknown'];
 const SIMPLE_REASONS = [
   'notInBuild', 'vanilla', 'quilt', 'noNode', 'unverified', 'loaderVersionUnknown', 'javaUnknown', 'idCollision', 'offlineAccount',
-  'friendsOff', 'bridgeNotRunning', 'instanceOff', 'globallyOff',
+  'bridgeNotRunning', 'instanceOff', 'globallyOff',
 ];
 const REASONS = [
   ...SIMPLE_REASONS.map((type) => ({ type })),

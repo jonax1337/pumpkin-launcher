@@ -54,6 +54,7 @@ pub fn run() {
             app.manage(state::AppState::load(&data_dir)?);
             // friends: session wiring (R5)
             start_sessions(app.handle().clone())?;
+            start_bridge(app.handle());
             app.manage(pack_open::OpenedPack::from_process_args());
             spawn_startup_maintenance(app.handle().clone());
             attach_friends_directory(app.handle());
@@ -243,6 +244,14 @@ fn attach_friends_directory(handle: &tauri::AppHandle) {
     }
 }
 
+fn start_bridge(handle: &tauri::AppHandle) {
+    let state = handle.state::<state::AppState>();
+    state.bridge.set_friends_enabled(state.friends.state().enabled);
+    if let Err(err) = tauri::async_runtime::block_on(state.bridge.start()) {
+        tracing::warn!(%err, "Pumpkin Bridge nicht gestartet");
+    }
+}
+
 /// Startet die Freunde-Funktion, wenn sie aktiviert ist; ohne Aktivierung bindet sie nichts.
 fn start_friends(handle: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
@@ -281,8 +290,13 @@ fn shut_down_friends_before_exit(app: &tauri::AppHandle) {
 
 /// Freunde und Gäste erfahren das Ende über `SHUTDOWN`; ein hängendes Netz hält das Beenden nicht auf.
 fn shut_down_friends(app: &tauri::AppHandle) {
-    let friends = app.state::<state::AppState>().friends.clone();
-    if block_on_within(FRIENDS_SHUTDOWN_LIMIT, async move { friends.shutdown().await }).is_none() {
+    let state = app.state::<state::AppState>();
+    let friends = state.friends.clone();
+    let bridge = state.bridge.clone();
+    if block_on_within(FRIENDS_SHUTDOWN_LIMIT, async move {
+        friends.shutdown().await;
+        bridge.stop().await;
+    }).is_none() {
         tracing::warn!("Freunde nicht rechtzeitig abgemeldet");
     }
 }

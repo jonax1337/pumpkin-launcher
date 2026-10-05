@@ -43,9 +43,9 @@ export const friendsSettings = {
   "friendsSettings.findable.unreachable": "Verzeichnis nicht erreichbar; neuer Versuch läuft",
   "friendsSettings.findable.notAllowed": "Mojang erlaubt diesem Konto keine Mehrspieler-Funktionen",
 
-  // Freunde-Menü im Spiel
-  "friendsSettings.ingameMenu.label": "Freunde-Menü im Spiel",
-  "friendsSettings.ingameMenu.hint": "Der Launcher fügt deinen Spielen beim Start ein Freunde-Menü hinzu, wenn Instanz und Konto dazu passen.",
+  // Pumpkin Bridge im Spiel
+  "friendsSettings.ingameMenu.label": "Pumpkin Bridge",
+  "friendsSettings.ingameMenu.hint": "Der Launcher fügt Pumpkin Bridge unterstützten Spielen hinzu, auch wenn Freunde ausgeschaltet ist. Freunde-Netzwerk und -Aktionen benötigen weiterhin deine Zustimmung.",
   "friendsSettings.ingameActions.label": "Aktionen im Spiel",
   "friendsSettings.ingameActions.hint": "Bei „Immer fragen“ bestätigst du einmal je Spielstart im Launcher, bei „Erlauben“ darf das Spiel (und jede Mod darin) Freunde hinzufügen, Anfragen beantworten und Welten teilen, ohne zu fragen.",
   "friendsSettings.ingameActions.ask": "Immer fragen",

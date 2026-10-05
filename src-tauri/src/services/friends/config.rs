@@ -86,7 +86,7 @@ impl FriendsConfig {
     }
 }
 
-pub(super) fn set_aside(path: &Path, err: &serde_json::Error) -> AppResult<()> {
+pub(crate) fn set_aside(path: &Path, err: &serde_json::Error) -> AppResult<()> {
     let name = path.file_name().unwrap_or_default().to_string_lossy();
     let backup = path.with_file_name(free_name(&name, ".corrupt", |n| {
         path.with_file_name(n).exists()

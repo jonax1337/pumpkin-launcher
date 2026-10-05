@@ -237,7 +237,7 @@ jobs:
             echo "::error::mod-index.json has modVersion $index_version, but the tag is $GITHUB_REF_NAME."
             exit 1
           fi
-          echo "Embedding pumpkin_friends $index_version ($(ls mod-dist/*.jar | wc -l) jars)."
+          echo "Embedding pumpkin_bridge $index_version ($(ls mod-dist/*.jar | wc -l) jars)."
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

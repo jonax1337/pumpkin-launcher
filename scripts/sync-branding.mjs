@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,6 +28,8 @@ try {
   await writeFile(markFile, cropped);
   // Alle nativen Icons (Windows, Mobil, PNGs) kommen aus dem zugeschnittenen SVG; keine alten Zeichen im Paket.
   await run(['icon', markFile, '--output', fileURLToPath(target)]);
+  // The in-game entry uses the launcher's unmodified, pixel-sharp 32px mark.
+  await copyFile(new URL('32x32.png', source), new URL('mod/src/main/resources/assets/pumpkin_bridge/logo.png', root));
 } finally {
   await rm(work, { recursive: true, force: true });
 }

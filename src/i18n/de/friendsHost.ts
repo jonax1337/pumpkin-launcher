@@ -78,14 +78,14 @@ export const friendsHost = {
   "friendsHost.close.joining": "Das beendet die Verbindung zu {name}.",
   "friendsHost.close.both": "Das beendet das Teilen deiner Welt und die Verbindung zu {name}.",
 
-  // ---------- Freunde-Menü im Spiel (Statuszeile der Instanzseite, INGAME 3.9) ----------
-  "friendsHost.ingame.name": "Freunde-Menü im Spiel",
+  // ---------- Pumpkin Bridge im Spiel (Statuszeile der Instanzseite, INGAME 3.9) ----------
+  "friendsHost.ingame.name": "Pumpkin Bridge im Spiel",
   "friendsHost.ingame.active": "aktiv ({loader} {minecraft})",
   "friendsHost.ingame.connected": "verbunden",
   "friendsHost.ingame.off": "aus",
   "friendsHost.ingame.autoOff": "Nach einem Startfehler ausgeschaltet",
   "friendsHost.ingame.retry": "Erneut versuchen",
-  "friendsHost.ingame.switch": "Freunde-Menü im Spiel für diese Instanz",
+  "friendsHost.ingame.switch": "Pumpkin Bridge im Spiel für diese Instanz",
   "friendsHost.ingame.addLoader": "{loader} hinzufügen?",
   "friendsHost.ingame.addLoaderDone": "{loader} ist eingetragen und wird beim nächsten Start installiert",
   "friendsHost.ingame.reason.notInBuild": "In diesem Build nicht verfügbar",
@@ -97,9 +97,8 @@ export const friendsHost = {
   "friendsHost.ingame.reason.loaderVersionUnknown": "Die Loader-Version ist unbekannt",
   "friendsHost.ingame.reason.javaTooOld": "Java {need} oder neuer nötig",
   "friendsHost.ingame.reason.javaUnknown": "Die Java-Version ist unbekannt",
-  "friendsHost.ingame.reason.idCollision": "Im Ordner mods liegt schon eine pumpkin_friends-Datei",
+  "friendsHost.ingame.reason.idCollision": "Im Ordner mods liegt schon eine pumpkin_bridge-Datei",
   "friendsHost.ingame.reason.offlineAccount": "Nur mit Microsoft-Konto",
-  "friendsHost.ingame.reason.friendsOff": "Freunde ist ausgeschaltet",
   "friendsHost.ingame.reason.bridgeNotRunning": "Die Verbindung zum Launcher läuft nicht",
   "friendsHost.ingame.reason.globallyOff": "In den Einstellungen ausgeschaltet",
   "friendsHost.ingame.reason.breaker": "Nach einem Startfehler ausgeschaltet ({failure})",
@@ -109,10 +108,10 @@ export const friendsHost = {
   "friendsHost.ingame.failure.unsupportedClassVersion": "Das Java ist zu alt für die Mod",
   "friendsHost.ingame.failure.unknown": "unbekannter Grund",
 
-  // ---------- Startfehler durch das Freunde-Menü (Sicherungsschalter, INGAME 3.8) ----------
+  // ---------- Startfehler durch Pumpkin Bridge (Sicherungsschalter, INGAME 3.8) ----------
   "friendsHost.breaker.title": "Startfehler",
-  "friendsHost.breaker.text": "Das Spiel ist beim Start abgestürzt. Das Freunde-Menü könnte die Ursache sein. Ohne starten?",
+  "friendsHost.breaker.text": "Das Spiel ist beim Start abgestürzt. Pumpkin Bridge könnte die Ursache sein. Ohne starten?",
   "friendsHost.breaker.detail": "{instance}: {failure}",
-  "friendsHost.breaker.startWithout": "Ohne Freunde-Menü starten",
+  "friendsHost.breaker.startWithout": "Ohne Pumpkin Bridge starten",
   "friendsHost.breaker.retry": "Trotzdem erneut versuchen",
 } satisfies Dict;

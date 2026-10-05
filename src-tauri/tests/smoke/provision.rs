@@ -1,7 +1,7 @@
 //! Minecraft und Loader über dieselben Dienste installieren, die der Befehl `instance_install` benutzt
 //! (`commands.rs`, `install_instance`): Version laden, Loader auflösen, installieren, als installiert vermerken.
 use launcher_lib::models::{Instance, ModLoader, NewInstance};
-use launcher_lib::services::friends::ingame::{Loader, Node};
+use launcher_lib::services::modbridge::ingame::{Loader, Node};
 use launcher_lib::services::install::{self, InstallStep};
 use launcher_lib::services::loader;
 use launcher_lib::services::Dirs;

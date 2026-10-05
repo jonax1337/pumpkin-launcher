@@ -1,15 +1,32 @@
-# Pumpkin Friends (in-game mod)
+# Pumpkin Bridge (in-game mod)
 
-Client-only mod that connects the game to the Pumpkin Launcher's Friends feature
-(`docs/friends/SPEC.md`, sections 7 and 11; the multi-node design is `docs/friends/INGAME.md`).
-From the pause menu it shows your friends, opens the singleplayer world to LAN, invites online
-friends, lists guests (with "Entfernen"), stops sharing, and shows received invites.
-Notifications appear as toasts.
+Client-only bridge between Minecraft and Pumpkin Launcher. The shared connection, menu entry and
+UI kit are independent of individual features; **Friends is the first module**, not the mod's identity.
+Mod id, resource namespace and jar basename: `pumpkin_bridge`; Java base: `dev.laux.pumpkin.bridge`.
+Protocol 2 and the launcher-issued `PUMPKIN_IPC_*` environment variables are unchanged.
 
-Without the launcher the mod does nothing: if the game was not started by the launcher with
-Friends enabled, it writes one log line and starts no thread and no UI. The launcher treats
-everything the mod sends as untrusted, and the first share of every game start must be confirmed
-in the launcher.
+The full Fabric nodes add a detached, icon-only Pumpkin button to the title and pause menus.
+The button uses the launcher's 32px logo, has a "Pumpkin" tooltip and native button narration,
+and never moves vanilla widgets. It prefers the lower-right corner, avoids the native footer,
+and uses a free slot on the other edge if another widget occupies that corner.
+
+The button opens the Pumpkin home with a large **Friends** tile using the launcher's `users` pixel
+icon (`src/pixel/icon-data.ts`). Selecting it opens `Pumpkin › Friends`: friends, requests,
+invites, world sharing and Friends options. Back/Escape returns one level at a time.
+The cached module screen preserves its tab, scroll position, text and keyboard focus on return
+and resize. The home shows launcher connection state and the module's online/pending summary.
+
+Without valid launcher environment variables the mod starts neither a thread nor UI.
+Bridge injection/listener availability no longer depends on Friends opt-in; existing Microsoft-account,
+loader/version, global/per-instance injection switches and startup-breaker checks still apply.
+Disabling Friends leaves the Bridge available but hides Friends data/actions and explains how to enable
+the module in the launcher. Friends networking and operations still require consent; reset/rotation
+revokes grants, pending work and old publication generations without stopping the shared listener.
+Revocation during a backpressured private write closes only that interrupted link, allowing reconnect.
+
+Friends retains LAN publishing, invitations, guest removal, stop sharing, joining and notification toasts
+(`docs/friends/SPEC.md`; channel/build design in `docs/friends/INGAME.md`).
+The launcher treats every mod request as untrusted and preserves its per-launch action-consent checks.
 
 NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.
 
@@ -31,22 +48,22 @@ One **node** is one build target `<minecraft>-<loader>` that produces exactly on
 | `1.20.1-fabric` | Fabric Loader >= 0.14.21 (**obfuscated**, remapped jar) | 17 | 25 | `fabricAddMods` | 1.20.1 | 1.20, 1.20.1 | the full mod on the widget kit (package V2) |
 | `1.20.2-fabric` | Fabric Loader >= 0.14.22 (**obfuscated**, remapped jar) | 17 | 25 | `fabricAddMods` | 1.20.2 | 1.20.2 | the full mod on the widget kit (package V2) |
 | `1.20.4-fabric` | Fabric Loader >= 0.14.23 (**obfuscated**, remapped jar) | 17 | 25 | `fabricAddMods` | 1.20.4 | 1.20.3, 1.20.4 | the full mod on the widget kit (package V2) |
-| `1.21.1-neoforge` | NeoForge >= 21.1.0 | 21 | 21 | `fmlMavenRoot` | 1.21.1 | 1.21, 1.21.1 | **tracer**: logs `pumpkin_friends tracer 1.21.1 neoforge`, nothing else |
-| `1.21.5-neoforge` | NeoForge >= 21.3.56 | 21 | 21 | `fmlMavenRoot` | 1.21.5 | 1.21.3, 1.21.4, 1.21.5 | **tracer**: logs `pumpkin_friends tracer 1.21.5 neoforge`, nothing else |
-| `1.21.8-neoforge` | NeoForge >= 21.8.9 | 21 | 21 | `fmlMavenRoot` | 1.21.8 | 1.21.8 | **tracer**: logs `pumpkin_friends tracer 1.21.8 neoforge`, nothing else |
-| `1.21.10-neoforge` | NeoForge >= 21.10.63 | 21 | 21 | `fmlModFolders` | 1.21.10 | 1.21.10 | **tracer**: logs `pumpkin_friends tracer 1.21.10 neoforge`, nothing else |
-| `1.21.11-neoforge` | NeoForge >= 21.11.42 | 21 | 21 | `fmlModFolders` | 1.21.11 | 1.21.11 | **tracer**: logs `pumpkin_friends tracer 1.21.11 neoforge`, nothing else |
-| `26.2-neoforge` | NeoForge >= 26.2.0.57 | 25 | 25 | `fmlModFolders` | 26.2 | 26.2 | **tracer**: logs `pumpkin_friends tracer 26.2 neoforge`, nothing else |
-| `1.20.1-forge` | Forge >= 47.4.0 | 17 | 21 | `fmlMavenRoot` | 1.20.1 | 1.20.1 | **tracer**: logs `pumpkin_friends tracer 1.20.1 forge`, nothing else |
+| `1.21.1-neoforge` | NeoForge >= 21.1.0 | 21 | 21 | `fmlMavenRoot` | 1.21.1 | 1.21, 1.21.1 | **tracer**: logs `pumpkin_bridge tracer 1.21.1 neoforge`, nothing else |
+| `1.21.5-neoforge` | NeoForge >= 21.3.56 | 21 | 21 | `fmlMavenRoot` | 1.21.5 | 1.21.3, 1.21.4, 1.21.5 | **tracer**: logs `pumpkin_bridge tracer 1.21.5 neoforge`, nothing else |
+| `1.21.8-neoforge` | NeoForge >= 21.8.9 | 21 | 21 | `fmlMavenRoot` | 1.21.8 | 1.21.8 | **tracer**: logs `pumpkin_bridge tracer 1.21.8 neoforge`, nothing else |
+| `1.21.10-neoforge` | NeoForge >= 21.10.63 | 21 | 21 | `fmlModFolders` | 1.21.10 | 1.21.10 | **tracer**: logs `pumpkin_bridge tracer 1.21.10 neoforge`, nothing else |
+| `1.21.11-neoforge` | NeoForge >= 21.11.42 | 21 | 21 | `fmlModFolders` | 1.21.11 | 1.21.11 | **tracer**: logs `pumpkin_bridge tracer 1.21.11 neoforge`, nothing else |
+| `26.2-neoforge` | NeoForge >= 26.2.0.57 | 25 | 25 | `fmlModFolders` | 26.2 | 26.2 | **tracer**: logs `pumpkin_bridge tracer 26.2 neoforge`, nothing else |
+| `1.20.1-forge` | Forge >= 47.4.0 | 17 | 21 | `fmlMavenRoot` | 1.20.1 | 1.20.1 | **tracer**: logs `pumpkin_bridge tracer 1.20.1 forge`, nothing else |
 
 That is the full recommended list of `docs/friends/INGAME-API.md` section 5 except `26.1.2-neoforge` (A26 leaves it
 to a later wave); `1.21.10-neoforge` is in because the NeoForge maven has stable 21.10.x builds from 21.10.63 on and
-the API list names it. The five NeoForge and one Forge nodes remain **tracers**: they prove the build topology and
+the API list names it. The six NeoForge and one Forge nodes remain **tracers**: they prove the build topology and
 the injection mechanisms (INGAME 11.2, spike S1), nothing else. `-Dfml.modFolders` (FML 10 and newer) is proven by
 `26.2-neoforge`, `1.21.10-neoforge` and `1.21.11-neoforge`, `--fml.mavenRoots` by `1.21.1-neoforge`,
 `1.21.5-neoforge`, `1.21.8-neoforge` and `1.20.1-forge`. All eleven Fabric nodes carry the full mod, and the Mixin
 that proves A4 comes with the pause-menu hook (the tracer's Mixin sources and `descriptors/fabric-tracer/` are no
-longer used by any node). The ten obfuscated Fabric nodes (1.20.1 to 1.21.11) remap from Mojang names to
+longer used by any node). The eight obfuscated Fabric nodes (1.20.1 to 1.21.11) remap from Mojang names to
 intermediary names the same way (`loomx.unobfuscated=false`, `remapJar`); the three 26.x nodes ship Mojang names.
 Every cell of the table has a passed local smoke run (2026-10-04, evidence in `docs/friends/INGAME-SMOKE.md`), so
 `verified.json` carries all eighteen nodes and the launcher injects on all of them.
@@ -92,14 +109,21 @@ gradle/node.gradle         the part every node shares (release, jar contents, de
 versions/<node>/           per-node gradle.properties (dependency versions, Loom variant, tracer flag); build and run output is ignored
 descriptors/<loader>/      fabric.mod.json, META-INF/neoforge.mods.toml, META-INF/mods.toml + pack.mcmeta
 descriptors/<loader>-tracer/  extra files of the tracer nodes of that loader (the Fabric tracer's Mixin configuration)
-core/                      Minecraft-free Java (--release 17): bridge client, state store, sanitiser + all JUnit tests
-core/src/main/java/.../ui/model/   Minecraft-free layout (package U1): Rect, HubLayout, TabBarModel, ScrollModel, Fit, RowLayout, StateKeeper, Painter
-src/main/java/.../
-  compat/                  everything that differs between Minecraft versions (screens, painter, widgets, LAN, toasts, connect, leave world)
-  platform/<loader>/       one thin entry class per loader (Fabric: entry point + pause-menu hook; tracers)
-  ui/kit/                  PumpkinScreen, ScrollPane, TabBar, Row: the widget kit; no version conditionals
-  ui/demo/                 the kit demo and share demo screens (dev only, see "Widget kit"); ui/InviteScreen and the hub screens of ui/hub/ run on the kit
-src/main/resources/        language files and icon, shared by all nodes
+core/                      Minecraft-free Java (--release 17): transport, protocol, runtime, UI models and Friends module
+core/src/main/java/dev/laux/pumpkin/bridge/
+  transport/               connection, inbox, backoff and generic request machinery; no Friends state dependency
+  protocol/                shared wire envelopes and JSON parsing
+  runtime/                 main-thread and clock contracts
+  ui/model/                shared layout, theme, pixel icons and retained screen state
+  modules/friends/          FriendsClient, state, operations and feature-specific view models
+src/main/java/dev/laux/pumpkin/bridge/
+  compat/                  era-specific screens, painter, widgets, connect and leave-world adapters
+  platform/<loader>/       thin loader entrypoints; Fabric title/pause hooks, other loaders' tracers
+  ui/kit/                  shared widgets, screen frame, icons and BridgeModule tile/screen contract
+  ui/home/                 feature-independent Pumpkin home
+  ui/demo/                 development-only visual proof screens; excluded from shipped jars
+  modules/friends/          Friends screens and version-specific LAN/notification adapters in compat/
+src/main/resources/        assets/pumpkin_bridge/: languages, descriptor icon and launcher logo
 scripts/                   dev-env.sh/.ps1, check-conditionals.mjs, validate-mod-index.mjs, compile-matrix.mjs, kit-demo.mjs, FakeLauncher.java
 ```
 
@@ -109,10 +133,20 @@ Layer rules (checked by `scripts/check-conditionals.mjs`, run in the workflow):
 
 Every node jar holds the node's own classes plus the compiled classes of `core/`. A node excludes the
 source folders it cannot compile (`build-<loader>.gradle`): Fabric drops the other loaders'
-`platform/` folders, the tracers also drop `compat/` and `ui/`.
+`platform/` folders, the tracers also drop `compat/`, `ui/` and Minecraft-facing `modules/`.
 
 Client-only declaration (amendment A3): Fabric `"environment": "client"`, NeoForge `@Mod(dist = Dist.CLIENT)`, Forge 1.20.1
 `clientSideOnly = true` at the top level of `mods.toml` (not `displayTest = IGNORE_SERVER_VERSION`, which is the constant for server-only mods).
+
+New features implement `BridgeModule` and are registered explicitly in `BridgeClientInitializer`.
+The home renders only registered modules; there is no plugin loader or placeholder tile.
+`BridgeClient` delivers raw frames and connection changes; `modules/friends/FriendsClient` owns
+Friends topic parsing, sanitization and LAN hints on the shared connection.
+
+Production jars omit development demos and redundant ZIP directory records, and use deflate level 9.
+Compaction runs on `jar` and Fabric's `remapJar` before index generation hashes the final bytes.
+The existing 300 KiB per-jar / 8 MiB total budgets remain unchanged. Gradle `runClient` still has the demos.
+
 
 ### What had to change in `core/` (the move was `git mv`, behaviour is unchanged)
 
@@ -223,7 +257,7 @@ The screens of the hub (INGAME 6.2) stand on two layers:
   `FriendCardLayout` reserves separate portrait/name/status areas and puts actions below the identity, keeping names,
   translated status badges and invite buttons from overlapping.
 - `src/main/java/.../ui/kit/` is the thin widget glue with no version conditionals: `PumpkinScreen` (frame with title,
-  status line, optional tabs, body and footer "Fertig"), `ScrollPane` (row backdrops and text are clipped to the body;
+  status line, optional tabs, body and footer "Zurück"), `ScrollPane` (row backdrops and text are clipped to the body;
   widgets outside it get `visible = false`; the 4 px scrollbar comes from `ScrollModel`), `TabBar`, `Row`. Everything
   era-specific sits in `compat/` (`CompatScreen`, `CompatPainter`, `Widgets` with the Pumpkin-painted button and
   toggle — each with its era's render override — and the vanilla `EditBox`, `Text`, `GameScreens`, ...), keyed on the
@@ -244,8 +278,9 @@ The screens of the hub (INGAME 6.2) stand on two layers:
   and switches the mod's UI off for the session; the pause button then stays away, while the input overrides keep the
   vanilla half of their expression (above all the escape key) alive.
 
-`ui/hub/HubScreen` (the hub of package U2, with the tab classes of U2b beside it) runs on the kit; the interim
-`ui/FriendsScreen` of the merged 26.3 state is gone.
+`ui/home/BridgeHomeScreen` is the module tile entry; `modules/friends/ui/FriendsScreen` owns the
+Friends tabs. `CompatScreen` captures state before vanilla rebuild/removal, restores focus after
+vanilla chooses initial focus, and aggregates supplementary narration without replacing the focused button's name.
 
 ### Kit demo (the render proof)
 
@@ -253,7 +288,7 @@ The screens of the hub (INGAME 6.2) stand on two layers:
 two-line), an `EditBox`, a toggle and buttons, wired to the clipboard. It is reachable **only** with
 `-Dpumpkin.dev.kitdemo=true` (never in normal play): with the property set it opens by itself when the title screen
 first shows (a dev thread polls through `Minecraft.execute`, no extra Mixin), logs
-`pumpkin_friends kit demo rendered <n> frames at <w>x<h>` exactly once after its first three rendered frames, then
+`pumpkin_bridge kit demo rendered <n> frames at <w>x<h>` exactly once after its first three rendered frames, then
 closes itself. No `NoSuchMethodError`, no layout exception - that is the proof. `PUMPKIN_DEV_DEMO_HOLD=true` (or the
 Gradle property `-PdemoHold`) keeps the screen open instead: the owner's visual check path for tabs, focus, scrolling
 and both layout extremes.
@@ -264,7 +299,7 @@ node scripts/kit-demo.mjs --node 1.21.1-fabric          # starts runClient -Pkit
 
 `ui/demo/ShareDemoScreen` (package U2b) proves the Teilen tab the same way, pure-UI: with the environment variable
 `PUMPKIN_SHARE_DEMO` set it opens on the title screen with fake topics and no world, and the tab logs
-`pumpkin_friends share tab rendered <state> at <w>x<h>` once per state it has shown.
+`pumpkin_bridge share tab rendered <state> at <w>x<h>` once per state it has shown.
 
 The script uses a hard 180 s timeout and kills only its own process tree. Dev-run evidence (the render proof of U1,
 2026-10-04, dev machine, Gradle on JDK 25, game on the node's JDK):
@@ -317,15 +352,17 @@ fromNamespaceAndPath(String,String)`, `--only 1.21` compiled. The probe was not 
 { "modVersion": "0.2.0",
   "nodes": [ { "id": "1.21.1-neoforge", "loader": "neoforge", "loaderMin": "21.1.0", "minecraft": ["1.21.1"],
                "javaMin": 21, "strategy": "fmlMavenRoot", "verified": { "smoke": "2026-10-04", "owner": null },
-               "file": "pumpkin_friends-0.2.0+1.21.1-neoforge.jar", "sha256": "<64 lowercase hex>" } ] }
+               "file": "pumpkin_bridge-0.2.0+1.21.1-neoforge.jar", "sha256": "<64 lowercase hex>" } ] }
 ```
 
 `minecraft` lists explicit release ids; a node only claims what it was built against. `strategy` is
 `fabricAddMods` for Fabric, `fmlMavenRoot` for NeoForge up to FML 9 and Forge 1.20.1, `fmlModFolders` for NeoForge on FML 10 and newer (`1.21.10-neoforge`, `1.21.11-neoforge`, `26.2-neoforge`; INGAME 3.5).
 The mod version is `version` in `gradle.properties` (= the launcher version); the jar name is
-`pumpkin_friends-<modVersion>+<node id>.jar`.
+`pumpkin_bridge-<modVersion>+<node id>.jar`.
 
 ## Tracer proof
+
+The log excerpts below are historical pre-Bridge evidence; their old mod identity is preserved verbatim.
 
 Each tracer node was started with `runClient` in the dev environment (hard limit 150 s, process killed afterwards) and the log was searched.
 
@@ -342,7 +379,7 @@ Each tracer node was started with `runClient` in the dev environment (hard limit
 
 Fabric before 26.x runs in intermediary names, and a jar handed to `-Dfabric.addMods` is not remapped at runtime.
 Every obfuscated Fabric node therefore ships the Loom-remapped jar (`loomx.modJar` = `remapJar`; the plain `jar` task
-output is not what `modIndex` collects). The Mixin configuration `pumpkin_friends.mixins.json` is generated per node by
+output is not what `modIndex` collects). The Mixin configuration `pumpkin_bridge.mixins.json` is generated per node by
 `build-fabric.gradle`: with `refmap` and the Loom refmap pipeline on the obfuscated nodes, without a refmap on 26.x
 (Mojang names), and with the `compatibilityLevel` of the node's `--release` (JAVA_21 below 26.x, JAVA_25 on 26.3).
 Historical evidence from the tracer jar `pumpkin_friends-2.1.0+1.21.1-fabric.jar` of spike S1 (target `Minecraft#run`,
@@ -374,9 +411,9 @@ injects the jar itself, nothing is published to a mod platform.
 
 ## Mod behaviour (node `26.3-fabric`)
 
-The tests cover the Minecraft-free parts: `ProtocolTest`, `BackoffTest`, `StateStoreTest`,
-`SanitizeTest`, and `BridgeHarnessTest`, which plays the launcher side of the protocol from a
-script (`ScriptedLauncher`) against the real bridge client. Protocol 1 is unchanged.
+The Minecraft-free tests cover protocol parsing, connection/request lifecycle, Friends state/sanitization,
+layout bounds and retained screen state. `FriendsClientTest` uses a real loopback connection to
+`ScriptedLauncher`. The launcher-mod channel remains protocol 2; no protocol-1 compatibility path exists.
 
 ## FakeLauncher
 
@@ -410,21 +447,23 @@ game without the real launcher. It has no dependencies and runs straight from so
    | `online` / `offline` | switches `Notch` online (with a toast) or offline |
    | `error <code>` | sends `error{code}`, for example `error busy` |
    | `quit` | ends the fake launcher, as if the launcher was killed |
+   | `friends off` / `friends on` | switches the Friends module without ending the Bridge; disabled state is redacted |
 
 ## Owner GUI checklist
 
-The agent that built this mod verified only the build and the JUnit tests; nothing below has
-been checked in the game yet (the 26.3 dev run only confirmed that the mod loads and stays inactive without the launcher).
-The owner runs this list as part of E10 (SPEC 13.4) and records the results in `docs/friends/VERIFICATION.md`.
+The Bridge cutover was exercised in Minecraft 26.3: title/pause logo, tooltip, tile navigation,
+Back/Escape, retained tab/scroll and keyboard focus on resize, pending-request summary, Friends
+disable/re-enable and launcher disconnect. Packaged production startup was also exercised.
+These checks do not replace the two-account, cross-network owner pass in `docs/friends/VERIFICATION.md`.
 
 Against `FakeLauncher.java` first, then the real launcher:
   1. Without env: no button, no crash, one log line.
-  2. The button appears only while connected.
-  3. Publish from the mod: the launcher shows the verified port (source `mod`).
-  4. Publish from vanilla World Options: same.
-  5. First invite from the mod: "Bestätige im Launcher", and after allowing it the friend gets a toast with a head.
-  6. Kick and stop: the friend is disconnected and gets a toast.
-  7. Kill the launcher mid-session: the UI hides, the game runs on without exceptions.
-  8. Resize with the pause menu open: no duplicate button.
-  9. German and English.
+  2. Detached logo in title and pause menus; tooltip/narration says Pumpkin, native widgets stay put.
+  3. Pumpkin tile home → Friends; Back/Escape returns Friends → home → original Minecraft menu.
+  4. Tab, scroll, text and keyboard focus survive module return, state pushes and resize.
+  5. Publish through Friends or vanilla World Options: launcher verifies the port (source `mod`).
+  6. First scoped action follows the launcher's configured confirmation policy; kick/stop still work.
+  7. `friends off`: Bridge stays connected, Friends explains disabled state and shows no feature actions.
+  8. Kill launcher mid-session: home explains disconnected state; native menu and game remain usable.
+  9. German and English; GUI scaling, edge collision avoidance and no duplicate logo after resize.
   10. A name containing `§c` and bidi characters is shown without formatting.

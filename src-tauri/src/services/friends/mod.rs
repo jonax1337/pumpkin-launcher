@@ -12,7 +12,6 @@ pub mod events;
 mod hello;
 mod hosting;
 pub mod identity;
-pub mod ingame;
 mod invites;
 mod joining;
 pub mod limits;
@@ -30,7 +29,7 @@ pub mod session_events;
 mod sessions;
 mod status;
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

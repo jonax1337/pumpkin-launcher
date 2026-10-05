@@ -198,7 +198,7 @@ jobs:
         run: node mod/scripts/compile-matrix.mjs --node ${{ matrix.id }}
 
   # Kit-Demo-Lauf (Paket U1): ein Entwicklungs-Client je Fabric-Knoten unter Xvfb mit Software-GL. Der Demo-Bildschirm des Widget-Kits
-  # schreibt "pumpkin_friends kit demo rendered <n> frames at <w>x<h>"; scripts/kit-demo.mjs wartet darauf und beendet den Client.
+  # schreibt "pumpkin_bridge kit demo rendered <n> frames at <w>x<h>"; scripts/kit-demo.mjs wartet darauf und beendet den Client.
   # Best Effort und NICHT bestätigt: Auf dem Windows-Rechner der Entwicklung lief der Lauf für alle vier Knoten, auf einem
   # GitHub-Runner wurde er noch nie gestartet (offen ist vor allem, ob 26.x unter Software-Rendering startet, INGAME 12 Risiko 2).
   # Darum continue-on-error: Ein roter Lauf hier sperrt weder den Build noch das Paket.

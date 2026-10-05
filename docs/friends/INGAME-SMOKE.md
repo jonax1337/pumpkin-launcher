@@ -5,6 +5,40 @@ Beweisbericht des Rauchtests von `INGAME.md` (Abschnitte 3.5, 10 Schicht 4, Anh�
 setzt die Zellen, die Einspeisungsflags und die Wortlaute der Loader-Meldungen nicht mehr als
 Vermutungen, sondern als gelaufene Läufe.
 
+## Pumpkin-Bridge-Cutover (2026-10-05)
+
+Aktuelle Mod-ID und JAR-Basis: `pumpkin_bridge`; Maven-Koordinate
+`dev.laux.pumpkin.bridge:pumpkin_bridge:0.2.0`. Die historischen Mitschnitte weiter unten behalten
+ihre damaligen Namen; sie sind keine Behauptung über den neuen Menüfluss.
+
+| Aktueller Lauf | Ergebnis | Beweis |
+|---|---|---|
+| `26.3-fabric`, `hold` | bestanden, 17,0 s Spiel-Laufzeit | `bridge-ready ["home", "friends"]`, echter Launcher-Startweg und neues JAR |
+| `1.20.1-fabric`, `hold` mit temporärer GUI-Haltehilfe | bestanden, 300,1 s | remapptes Produktions-JAR, Java 17, `bridge-ready ["home", "friends"]` |
+| `1.21.1-neoforge`, `hold` | bestanden, 15,5 s | `tracer-log`, neue Maven-Koordinate und neues Mod-ID |
+| `26.2-neoforge`, `hold` | bestanden, 11,8 s | `tracer-log`, `fmlModFolders` mit neuem JAR |
+| `1.20.1-forge`, `hold` | bestanden, 15,5 s | `tracer-log`, neue Maven-Koordinate und neues Mod-ID |
+
+Berichte des lokalen Laufs: `D:/pumpkin-build/smoke/bridge-cutover-reports/`.
+Die temporäre GUI-Haltehilfe und ihre Startskripte wurden danach entfernt; die normalen Smokes
+laufen wieder auf dem unveränderten Beobachtungs-/Abbruchpfad. Der Rauchtest beendet sein eigenes
+Spiel nach dem Beweis, deshalb ist dessen Kill-Exit-Code kein Crash-Urteil.
+
+**Tatsächliche Oberfläche auf 26.3:** Entwicklungsclient gegen `FakeLauncher`: Logo in Haupt-
+und Welt-Pausemenü, Tooltip „Pumpkin“, Kachel-Hub/Friends-Breadcrumb, Zurück/ESC über beide Ebenen,
+Tab-/Scroll-Erhalt, Tastaturfokus nach Resize, Online-/Anfragen-Zähler, Friends aus/an bei laufender
+Bridge und Launcher-Verlust ohne Verlust des nativen Menüs. Zusätzlich wurde das verpackte
+Produktions-JAR auf 26.3 geöffnet: Logo, Hub und Friends-Untermenü, ohne ausgelieferte Demo-Klassen.
+Der verpackte Smoke allein ist kein Nachweis jeder UI-Interaktion auf allen 18 Knoten.
+
+**Weitere Prüfungen:** 18 JARs gebaut, Größenbudget unverändert (4.772.996 Bytes zusammen,
+je höchstens 300 KiB); alle 32 Compile-Matrix-Zellen bestanden; 435 Core-JUnit-Tests auf JDK 17;
+Rust: 1.444 bestanden, 8 bestehende Netzwerk-/Schlüsselbundtests ignoriert; Clippy mit `-D warnings`,
+Frontend-Build und JS-/Layer-Prüfungen bestanden. Im Launcher-Browser wurden Bridge-Schalter bei
+Friends aus, fehlendem Schlüsselbund und verlorener Identität einschließlich Tastaturbedienung geprüft.
+Der Zwei-Konto-/Zwei-Netzwerke-Owner-Pass bleibt davon getrennt.
+
+
 ## 1. Was der Rauchtest treibt
 
 Der Test `src-tauri/tests/smoke` (Cargo-Feature `smoke`, nie Standard, nie im Release-Workflow)
@@ -31,7 +65,7 @@ Zelle: 240 s. Ein Spielfenster öffnet sich kurz auf dem Desktop.
 — die Verbindung besteht erst, nachdem `hello` angenommen, der Besitzer geprüft und `welcome`
 gesendet wurde (`admit` in `modbridge/state.rs`), und `ready` meldet die Bildschirme; der Test
 schreibt jede dieser Stufen in seinen Laufbericht. Bei den Tracerknoten die Logzeile
-`pumpkin_friends tracer <Minecraft> <Loader>` (beim Fabric-Tracer zusätzlich die Zeile seines
+`pumpkin_bridge tracer <Minecraft> <Loader>` (beim Fabric-Tracer zusätzlich die Zeile seines
 Mixin, weil erst sie beweist, dass das remappte JAR arbeitet).
 
 **JARs:** der Test liest Index und Jars aus `mod/build/mod-index/` (`gradlew modIndex`) statt aus
@@ -84,7 +118,7 @@ dieser Welle: `26.1.2-neoforge` aus der Empfehlung von INGAME-API.md Abschnitt 5
 
 Der Rauchtest erzeugt absichtliche Fehlstarts (Szenarien `wrong-jar:<Knoten>` und
 `spawn-java:<Pfad>`) und ersetzt damit die nachgebauten Fixture-Logs durch echte Mitschnitte
-(`src-tauri/src/services/friends/ingame/fixtures/`).
+(`src-tauri/src/services/modbridge/ingame/fixtures/`).
 
 | Lauf | Ergebnis | Folge |
 |---|---|---|

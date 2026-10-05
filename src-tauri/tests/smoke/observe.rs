@@ -1,12 +1,12 @@
 //! Woran der Rauchtest erkennt, dass die Mod im Spiel angekommen ist (Anhang B von INGAME.md): bei der echten Mod am
 //! Zustand der Brücke (`hello` angenommen, Besitzer geprüft, `welcome` gesendet, `ready` gemeldet), bei den Tracern an
-//! ihrer Logzeile `pumpkin_friends tracer <Minecraft> <Loader>` (der Fabric-Tracer dazu an der Zeile aus seinem Mixin).
+//! ihrer Logzeile `pumpkin_bridge tracer <Minecraft> <Loader>` (der Fabric-Tracer dazu an der Zeile aus seinem Mixin).
 use std::time::Duration;
 
-use launcher_lib::services::friends::ingame::Loader;
+use launcher_lib::services::modbridge::ingame::Loader;
 use launcher_lib::services::modbridge::ModBridge;
 
-const TRACER_PREFIX: &str = "pumpkin_friends tracer";
+const TRACER_PREFIX: &str = "pumpkin_bridge tracer";
 const MIXIN_SUFFIX: &str = "mixin";
 pub const POLL: Duration = Duration::from_millis(250);
 
@@ -96,7 +96,7 @@ mod tests {
     #[test]
     fn a_neoforge_tracer_is_proven_by_its_one_line() {
         let bridge = ModBridge::new(GameSignals::default());
-        let lines = log(&["[modloading-worker-0/INFO] [pumpkin_friends/]: pumpkin_friends tracer 1.21.1 neoforge"]);
+        let lines = log(&["[modloading-worker-0/INFO] [pumpkin_bridge/]: pumpkin_bridge tracer 1.21.1 neoforge"]);
 
         assert_eq!(probe(&bridge, Loader::Neoforge, "1.21.1").proof(&lines), Some(Proof::TracerLog { mixin_seen: false }));
         assert_eq!(probe(&bridge, Loader::Neoforge, "26.2").proof(&lines), None, "another Minecraft version is another cell");
@@ -106,8 +106,8 @@ mod tests {
     #[test]
     fn the_fabric_tracer_needs_the_line_of_its_mixin_too() {
         let bridge = ModBridge::new(GameSignals::default());
-        let entry = "(pumpkin_friends) pumpkin_friends tracer 1.21.1 fabric";
-        let mixin = "(pumpkin_friends) pumpkin_friends tracer 1.21.1 fabric mixin";
+        let entry = "(pumpkin_bridge) pumpkin_bridge tracer 1.21.1 fabric";
+        let mixin = "(pumpkin_bridge) pumpkin_bridge tracer 1.21.1 fabric mixin";
 
         assert_eq!(probe(&bridge, Loader::Fabric, "1.21.1").proof(&log(&[entry])), None);
         assert_eq!(probe(&bridge, Loader::Fabric, "1.21.1").proof(&log(&[mixin])), None);

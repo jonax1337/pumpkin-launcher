@@ -13,7 +13,7 @@ use crate::models::{Instance, LibrarySkin, MsAccount, Template};
 use crate::services::auth::MsState;
 use crate::services::download::http_client;
 use crate::services::friends::config::friends_dir;
-use crate::services::friends::ingame::Ingame;
+use crate::services::modbridge::ingame::Ingame;
 use crate::services::friends::lookup::{ModrinthHttp, ModrinthLookup};
 use crate::services::friends::{
     FriendSessions, Friends, JoinTimers, MojangVersions, NetOptions, SessionContext, PRODUCTION_LIVENESS,
@@ -44,7 +44,7 @@ pub struct AppState {
     pub presence: Presence,
     /// Was beim Spielstart und -ende geschieht, für die Freunde-Funktion.
     pub signals: GameSignals,
-    /// Brücke zur Mod im Spiel; gestoppt, bis die Freunde-Funktion sie startet.
+    /// Shared Bridge listener, available at startup independently of Friends consent.
     pub bridge: ModBridge,
     /// Die Einspeisung der Mod in die Spielstarts: JARs des Builds, Zustand je Instanz, Java-Versionen.
     pub ingame: Ingame,

@@ -303,7 +303,6 @@ fn ingame_reasons_are_tagged_and_the_settings_use_camel_case_strings() {
         JavaUnknown,
         IdCollision,
         OfflineAccount,
-        FriendsOff,
         BridgeNotRunning,
         InstanceOff,
         GloballyOff,
@@ -324,7 +323,6 @@ fn ingame_reasons_are_tagged_and_the_settings_use_camel_case_strings() {
             "javaUnknown",
             "idCollision",
             "offlineAccount",
-            "friendsOff",
             "bridgeNotRunning",
             "instanceOff",
             "globallyOff"

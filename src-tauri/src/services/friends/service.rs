@@ -224,6 +224,7 @@ impl Friends {
         let _transition = core.transitions.lock().await;
         requests::prune_expired(core);
         core.refresh_availability();
+        core.bridge.set_friends_enabled(core.config().enabled);
         if core.config().enabled {
             core.activate().await;
         }
@@ -233,7 +234,6 @@ impl Friends {
     pub async fn shutdown(&self) {
         let _transition = self.core.transitions.lock().await;
         self.core.deactivate(Lifecycle::Shutdown).await;
-        self.core.bridge.stop().await;
     }
 
     pub fn state(&self) -> FriendsState {
@@ -260,6 +260,7 @@ impl Friends {
             config.enabled = true;
             config.third_party_relays_accepted = input.accept_third_party_relays;
         })?;
+        core.bridge.set_friends_enabled(true);
         let kept = core.config().settings;
         let settings = FriendsSettings {
             always_relay: input.always_relay,
@@ -301,10 +302,10 @@ impl Friends {
         let core = &self.core;
         let _transition = core.transitions.lock().await;
         core.ensure_available()?;
-        core.deactivate(Lifecycle::Disabled).await;
-        core.bridge.stop().await;
-        by_name::leave_directory(core).await;
         core.update_config(|config| config.enabled = false)?;
+        core.bridge.set_friends_enabled(false);
+        core.deactivate(Lifecycle::Disabled).await;
+        by_name::leave_directory(core).await;
         core.set_network(NetworkStatus::Off);
         core.emit(FriendsEvent::Changed);
         Ok(core.state())
@@ -314,7 +315,10 @@ impl Friends {
     pub async fn update_settings(&self, settings: FriendsSettings) -> AppResult<FriendsState> {
         let core = &self.core;
         let _transition = core.transitions.lock().await;
-        core.ensure_enabled()?;
+        let previous = core.config().settings;
+        if previous.always_relay != settings.always_relay || previous.findable_by_name != settings.findable_by_name {
+            core.ensure_available()?;
+        }
         core.apply_settings(settings).await?;
         core.emit(FriendsEvent::Changed);
         Ok(core.state())
@@ -326,8 +330,10 @@ impl Friends {
         let core = &self.core;
         let _transition = core.transitions.lock().await;
         core.ensure_enabled()?;
+        core.bridge.set_friends_enabled(false);
         core.deactivate(Lifecycle::IdentityChanged).await;
         let rotated = core.rotate_records();
+        core.bridge.set_friends_enabled(core.config().enabled);
         core.activate().await;
         rotated?;
         core.emit(FriendsEvent::Changed);
@@ -342,8 +348,10 @@ impl Friends {
         if *lock(&core.availability) == Availability::NoSecretStore {
             return Err(AppError::invalid(coded!("errors.friends.unavailable")));
         }
+        core.bridge.set_friends_enabled(false);
         core.deactivate(Lifecycle::IdentityChanged).await;
         let reset = core.reset_records();
+        core.bridge.set_friends_enabled(core.config().enabled);
         core.activate().await;
         reset?;
         core.emit(FriendsEvent::Changed);
@@ -560,9 +568,6 @@ impl Core {
         let Some(identity) = self.identity() else {
             return;
         };
-        if let Err(err) = self.bridge.start().await {
-            tracing::warn!(%err, "Mod-Brücke nicht gestartet");
-        }
         let config = main_net_config(
             &self.options,
             &identity,

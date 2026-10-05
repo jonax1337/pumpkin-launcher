@@ -3,6 +3,11 @@
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import java.security.MessageDigest
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipOutputStream
 
 apply plugin: 'java-library'
 
@@ -33,7 +38,7 @@ stonecutter {
 
 group = rootProject.group
 version = "${rootProject.version}+${node.id}"
-base.archivesName = 'pumpkin_friends'
+base.archivesName = 'pumpkin_bridge'
 
 repositories {
 	mavenCentral()
@@ -63,6 +68,34 @@ tasks.withType(JavaExec).configureEach {
 tasks.named('jar') {
 	dependsOn ':core:classes'
 	from project(':core').sourceSets.main.output
+	includeEmptyDirs = false
+	// Demos remain available to runClient, but never ship in launcher-injected jars.
+	exclude 'dev/laux/pumpkin/bridge/ui/demo/**'
+}
+
+// Package paths are long; directory records are redundant in ZIP and cost several KiB per node.
+// Apply after remapping too, before modIndexEntry hashes the final bytes.
+tasks.matching { it.name == 'jar' || it.name == 'remapJar' }.configureEach {
+	def archive = archiveFile
+	doLast {
+		def jarFile = archive.get().asFile
+		def compact = new File(temporaryDir, 'compact.jar')
+		new ZipFile(jarFile).withCloseable { input ->
+			new ZipOutputStream(new FileOutputStream(compact)).withCloseable { output ->
+				output.setLevel(9)
+				input.entries().each { entry ->
+					if (!entry.directory) {
+						def packed = new ZipEntry(entry.name)
+						packed.time = entry.time
+						output.putNextEntry(packed)
+						input.getInputStream(entry).withCloseable { content -> content.transferTo(output) }
+						output.closeEntry()
+					}
+				}
+			}
+		}
+		Files.move(compact.toPath(), jarFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+	}
 }
 
 // Deskriptor des Loaders aus descriptors/<loader>/; die Platzhalter kommen aus nodes.txt.

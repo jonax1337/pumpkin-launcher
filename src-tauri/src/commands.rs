@@ -21,7 +21,7 @@ use crate::services::mojang::{VersionEntry, VersionManifest, MANIFEST_URL};
 use crate::services::presence::Activity;
 use crate::services::progress::emit;
 use crate::services::rules::Env;
-use crate::services::friends::ingame::Injection;
+use crate::services::modbridge::ingame::Injection;
 use crate::services::launch_args::ArgList;
 use crate::services::{auth, crashreport, download, gamelog, java, launch_args, mods, pack_update, remove_logged, sessionlog, system, worlds};
 use crate::state::AppState;

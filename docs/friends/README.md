@@ -15,7 +15,7 @@ verification ([`VERIFICATION.md`](VERIFICATION.md)) is filled in.
 5. Hosting: the launcher finds the game's LAN port (mod hint, log parser or manual), accepts it only if the game process owns it and it answers a server list ping, then tunnels each Minecraft TCP connection through one QUIC stream.
 6. Joining: a single-owner loopback listener on the guest; the game connects with Quick Play. Only into an instance that already matches (Minecraft version, loader, non-client-only mods by sha512).
 7. The relay map is compiled in with stable one-byte indexes; peers exchange indexes, never URLs. Release builds list only our relay; debug and `beta-relays` builds add n0's public relays (opt-in).
-8. The in-game mod (client only, [`INGAME.md`](INGAME.md)): the launcher embeds the mod jars and injects them into Microsoft-account launches through loader start-up options — the player installs nothing, nothing lands in the instance folder. Seven build nodes exist (Fabric, NeoForge, Forge; Minecraft 1.20.1 to 26.3), five of them are smoke-proven ([`INGAME-SMOKE.md`](INGAME-SMOKE.md)); unverified cells stay off. It talks to the launcher over loopback JSON lines only, and the launcher treats it as untrusted.
+8. [Pumpkin Bridge](../../mod/README.md) is the launcher-injected client mod. It has a detached logo entry, module tile home and nested Friends screen. The shared Bridge is independent of Friends opt-in; feature data/networking/actions remain gated. The 18-node build covers full Fabric UI and existing Forge/NeoForge tracers; [current smoke evidence](INGAME-SMOKE.md) is distinct from the two-account owner pass.
 9. The webview never touches the network for friend data; Rust fetches and caches skins.
 10. Hosting and joining need online mode: offline accounts are refused before launch, and the host's game refuses them at login.
 
@@ -36,7 +36,7 @@ whom, never content, and our relay stores no log. Details: [`PRIVACY.md`](PRIVAC
 | [`PRIVACY.md`](PRIVACY.md) | Privacy, relay legal text and the Mojang compliance checklist |
 | [`OWNER-CHECKLIST.md`](OWNER-CHECKLIST.md) | Everything only the owner can do before a release, in order (German) |
 | [`VERIFICATION.md`](VERIFICATION.md) | The tables for gates G1 to G5 that the owner fills in |
-| [`INGAME.md`](INGAME.md) | Concept for the in-game friends menu: a mod the launcher injects by itself (launcher-only, no install). Supersedes `MOD2.md` |
-| [`../../mod/README.md`](../../mod/README.md) | The current Fabric mod: build, test, `FakeLauncher`, GUI checklist (replaced by the node build of `INGAME.md`) |
+| [`INGAME.md`](INGAME.md) | Pumpkin Bridge injection/channel design and feature-module navigation; supersedes `MOD2.md` |
+| [`../../mod/README.md`](../../mod/README.md) | Current node build, modular code layout, menu flow, tests and GUI checklist |
 | [`../../tools/p2p-spike/README.md`](../../tools/p2p-spike/README.md) | The two-PC spike for gate G1 |
 | [`../../infra/relay/`](../../infra/relay/) | `relay.toml`, `Dockerfile` and compose files for the relay |

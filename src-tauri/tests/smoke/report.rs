@@ -83,7 +83,7 @@ mod tests {
 
     #[test]
     fn the_evidence_keeps_only_the_lines_about_the_mod_and_the_loader_in_order() {
-        let log: Vec<String> = ["Setting user", "Loading Minecraft 1.21.1 with Fabric Loader 0.19.5", "Reloading ResourceManager", "pumpkin_friends tracer 1.21.1 fabric"]
+        let log: Vec<String> = ["Setting user", "Loading Minecraft 1.21.1 with Fabric Loader 0.19.5", "Reloading ResourceManager", "pumpkin_bridge tracer 1.21.1 fabric"]
             .iter()
             .map(|line| (*line).to_owned())
             .collect();

@@ -87,8 +87,8 @@ export function nodeProblems(node, modVersion) {
 	}
 	if (!JAR_LEAF_NAME.test(node.file ?? '')) {
 		problems.push('file must be a plain jar leaf name');
-	} else if (node.file !== `pumpkin_friends-${modVersion}+${node.id}.jar`) {
-		problems.push(`file must be pumpkin_friends-${modVersion}+${node.id}.jar`);
+	} else if (node.file !== `pumpkin_bridge-${modVersion}+${node.id}.jar`) {
+		problems.push(`file must be pumpkin_bridge-${modVersion}+${node.id}.jar`);
 	}
 	if (!SHA256.test(node.sha256 ?? '')) {
 		problems.push('sha256 must be 64 lowercase hex characters');

@@ -82,6 +82,12 @@ impl ModLink {
         lock(&self.pending).retain(|_, pending| pending.instance_id != instance_id);
     }
 
+
+    pub(super) fn revoke_friends(&self) {
+        lock(&self.pending).clear();
+        *lock(&self.presence) = None;
+        *lock(&self.incoming_seen) = None;
+    }
     /// Ob irgendein Spiel auf eine Antwort des Nutzers wartet; dann bringt `launcher.open` das Fenster nicht nach vorn.
     fn has_open_question(&self) -> bool {
         !lock(&self.pending).is_empty()
@@ -153,6 +159,7 @@ impl ModLink {
 impl FriendSessions {
     /// Die Antwort des Nutzers auf `friends-mod-confirm` (SPEC 7.4).
     pub async fn mod_confirm(&self, request_id: &str, allow: bool) -> AppResult<()> {
+        self.shared.ensure_enabled()?;
         let pending = lock(&self.shared.mods.pending).remove(request_id);
         let pending = pending.ok_or_else(|| {
             AppError::NotFound(coded!("errors.friends.notFound.request", id = request_id).into())
@@ -180,6 +187,9 @@ impl FriendSessions {
 /// Eine neue Verbindung bekommt von der Brücke sofort den letzten Stand jedes Themas.
 pub(super) fn connected(shared: &Shared, instance_id: &str) {
     announce_connection(shared, instance_id, true);
+    if !shared.friends.state().enabled {
+        topics::publish_unavailable(shared, instance_id);
+    }
 }
 
 /// Eine beendete Verbindung weckt das Verzeichnis: wartet es auf das Ende der Spiele, macht es jetzt weiter.
@@ -249,16 +259,27 @@ fn watch_game_links(shared: &Shared) {
     }
 }
 
+pub(super) fn disabled(shared: &Shared) {
+    shared.mods.revoke_friends();
+    for instance_id in shared.hosting.running_instances() {
+        topics::publish_unavailable(shared, &instance_id);
+    }
+}
+
 async fn refresh(shared: &Arc<Shared>) {
+    let publication = shared.bridge.friends_publication();
     let friends = shared.friends.list().await.unwrap_or_default();
     let requests = shared.friends.requests().await.unwrap_or_default();
+    if !publication.is_current() {
+        return;
+    }
     let running = shared.hosting.running_instances().into_iter();
     let instances: Vec<String> = running
         .filter(|instance| shared.bridge.is_connected(instance))
         .collect();
     for friend in shared.mods.came_online(&friends) {
         let who = Some((shown_name(friend), friend.mc_uuid.clone()));
-        notify_all(shared, &instances, ModNotify::FriendOnline, &who);
+        notify_all(&publication, &instances, ModNotify::FriendOnline, &who);
     }
     for request in shared.mods.newly_received(&requests) {
         let name = request
@@ -267,25 +288,25 @@ async fn refresh(shared: &Arc<Shared>) {
             .or_else(|| request.display_name.clone())
             .unwrap_or_default();
         notify_all(
-            shared,
+            &publication,
             &instances,
             ModNotify::RequestReceived,
             &Some((name, None)),
         );
     }
     for instance_id in &instances {
-        topics::publish(shared, instance_id, &friends, &requests).await;
+        topics::publish(shared, &publication, instance_id, &friends, &requests).await;
     }
 }
 
 fn notify_all(
-    shared: &Shared,
+    publication: &crate::services::modbridge::FriendsPublication<'_>,
     instances: &[String],
     event: ModNotify,
     who: &Option<(String, Option<String>)>,
 ) {
     for instance_id in instances {
-        notify(shared, instance_id, event, who.clone());
+        publication.notify(instance_id, event, who.as_ref().map(|(name, _)| name.clone()));
     }
 }
 

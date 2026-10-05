@@ -66,7 +66,10 @@ pub(super) async fn consented(
         .require_scope(consent.scope, ask_user(shared, ctx.instance_id(), &consent))
         .await;
     let outcome = match allowed {
-        Ok(()) => act.await,
+        Ok(()) => {
+            shared.ensure_enabled().map_err(super::errors::mod_error)?;
+            act.await
+        }
         Err(refusal) => Err(refusal),
     };
     record(shared, ctx.instance_id(), &consent, outcome.is_ok());

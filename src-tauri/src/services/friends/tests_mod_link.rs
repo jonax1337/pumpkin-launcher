@@ -862,3 +862,61 @@ async fn launcher_open_never_opens_the_window_while_a_dialog_waits_for_the_user(
     assert!(scene.app.opened().is_empty());
     scene.answer_prompt(false).await;
 }
+
+#[tokio::test]
+async fn disabling_friends_keeps_the_bridge_connected_and_reconnects_with_private_state_cleared() {
+    let mut scene = ModScene::allowing(&[Scope::Share, Scope::Social]).await;
+    scene.host.friends.disable().await.unwrap();
+    assert_eq!(scene.host.friends.state().network, NetworkStatus::Off);
+    assert!(scene.host.bridge.is_connected(HOST_INSTANCE));
+
+    let denied = scene.game_mod.call("disabled", "code.create", json!({})).await;
+    assert_eq!(error_code(&denied), Some("notEnabled"));
+    scene.reconnect().await;
+    assert_eq!(scene.game_mod.seen[0]["scopes"], json!({"share": "ask", "social": "ask"}));
+    let state = scene.game_mod.topics_until(|seen| {
+        seen.get("me").is_some_and(|me| me["enabled"] == false)
+            && seen.get("friends") == Some(&json!([]))
+            && seen.get("codes") == Some(&json!([]))
+            && seen.get("blocked") == Some(&json!([]))
+    }).await;
+    assert_eq!(state["me"]["fingerprint"], Value::Null);
+    assert_eq!(state["me"]["displayName"], "");
+    assert_eq!(state["me"]["network"], "off");
+    assert!(scene.host.bridge.is_connected(HOST_INSTANCE));
+
+    let opened = scene.game_mod.call("open", "launcher.open", json!({"target": "settings"})).await;
+    assert_eq!(error_code(&opened), None);
+    assert_eq!(scene.app.opened().len(), 1);
+}
+
+#[tokio::test]
+async fn disabling_friends_revokes_a_pending_prompt_without_disconnecting_bridge() {
+    let mut scene = ModScene::new().await;
+    scene.game_mod.request("waiting", "code.create", json!({})).await;
+    scene.game_mod.next_of_type("pending").await;
+    until_true("question open", || !scene.host.events.mod_confirm_requests().is_empty()).await;
+    let question = scene.host.events.mod_confirm_requests()[0].clone();
+
+    scene.host.friends.disable().await.unwrap();
+    let answer = scene.game_mod.answer_of("waiting").await;
+    assert_eq!(error_code(&answer), Some("notEnabled"));
+    assert!(scene.host.sessions.mod_confirm(&question, true).await.is_err());
+    assert!(scene.host.bridge.is_connected(HOST_INSTANCE));
+}
+
+#[tokio::test]
+async fn resetting_identity_revokes_friends_grants_but_keeps_the_shared_bridge_connected() {
+    let mut scene = ModScene::allowing(&[Scope::Share, Scope::Social]).await;
+    scene.host.friends.reset().await.unwrap();
+    assert!(scene.host.bridge.is_connected(HOST_INSTANCE));
+    scene.reconnect().await;
+    assert_eq!(scene.game_mod.seen[0]["scopes"], json!({"share": "ask", "social": "ask"}));
+
+    scene.game_mod.request("afterreset", "code.create", json!({})).await;
+    scene.game_mod.next_of_type("pending").await;
+    scene.answer_prompt(false).await;
+    let denied = scene.game_mod.answer_of("afterreset").await;
+    assert_eq!(error_code(&denied), Some("denied"));
+    assert!(scene.host.bridge.is_connected(HOST_INSTANCE));
+}

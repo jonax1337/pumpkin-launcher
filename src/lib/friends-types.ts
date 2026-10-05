@@ -91,7 +91,7 @@ export type IngameReason =
   | { type: "notInBuild" } | { type: "vanilla" } | { type: "quilt" } | { type: "noNode" } | { type: "unverified" }
   | { type: "loaderTooOld"; need: string } | { type: "loaderVersionUnknown" }
   | { type: "javaTooOld"; need: number } | { type: "javaUnknown" }
-  | { type: "idCollision" } | { type: "offlineAccount" } | { type: "friendsOff" } | { type: "bridgeNotRunning" }
+  | { type: "idCollision" } | { type: "offlineAccount" } | { type: "bridgeNotRunning" }
   | { type: "instanceOff" } | { type: "globallyOff" }
   | { type: "breaker"; reason: IngameFailureKind };
 export interface IngameNode { id: string; minecraft: string; loader: "fabric" | "neoforge" | "forge" }

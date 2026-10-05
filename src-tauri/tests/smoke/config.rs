@@ -20,7 +20,7 @@ pub enum Scenario {
     /// Das Tor sieht das Java der Zelle, das Spiel läuft aber mit diesem (echter Fehlstart durch zu altes Java).
     SpawnWithJava { java: PathBuf },
     /// Eine Kopie des Jars der Zelle liegt im Mods-Ordner der Instanz (Anhang B, Punkt 2): das Tor muss die Einspeisung
-    /// verweigern, statt zwei pumpkin_friends zu starten; das Spiel startet unberührt.
+    /// verweigern, statt zwei pumpkin_bridge zu starten; das Spiel startet unberührt.
     DuplicateId,
 }
 

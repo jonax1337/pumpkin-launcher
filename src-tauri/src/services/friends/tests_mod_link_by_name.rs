@@ -24,6 +24,7 @@ struct GameNode {
 
 /// Hängt Sitzungen und ein Spiel mit verbundener Mod an einen laufenden Knoten.
 async fn start_game(node: Node) -> GameNode {
+    node.bridge.start().await.unwrap();
     let instances = Arc::new(JsonStore::open(node.dir.path().join("instances.json")).unwrap());
     let sessions = FriendSessions::new(SessionContext {
         friends: node.friends.clone(),

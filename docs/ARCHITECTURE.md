@@ -20,6 +20,30 @@ Desktop-App auf Basis von **Tauri 2**: ein Rust-Backend (`src-tauri/`) und ein R
 └────────────────────────────────────────────────────┘
 ```
 
+## Pumpkin Bridge und Feature-Module
+
+`mod/` ist die clientseitige **Pumpkin Bridge** (`pumpkin_bridge`), nicht eine Friends-Mod mit umbenanntem Button.
+`dev.laux.pumpkin.bridge.transport` hält Verbindung, Zustellung und Requests; `modules.friends.FriendsClient`
+besitzt Friends-Zustand, Bereinigung und Feature-Operationen. Gemeinsame Layouts/Widgets liegen unter `ui/model`
+und `ui/kit`; `ui/home/BridgeHomeScreen` rendert registrierte `BridgeModule`-Kacheln ohne Friends-Fachlogik.
+`FriendsScreen` und seine Dialoge liegen unter `modules/friends/ui`.
+
+Fabric hängt denselben freistehenden Logo-Button in Haupt- und Pausemenü ein, ohne Vanilla-Widgets zu verschieben.
+Zurück/ESC folgt dem Screen-Elternpfad; der Home-Einstieg hält seinen Friends-Screen für Tab-/Scroll-/Fokus-Erhalt.
+Versionsunterschiede bleiben in `compat/` bzw. `platform/`, der Core bleibt Minecraft-frei.
+
+Im Launcher gehört Einspeisung, Index, Materialisierung und Startfehler-Sicherung zu `services/modbridge/ingame/`.
+`lib.rs` startet den gemeinsamen Loopback-Listener unabhängig vom Friends-Opt-in. Die vorhandenen globalen/
+Instanz-Schalter und Konto-/Loader-Prüfungen bleiben erhalten; Friends-Daten, Netzwerk und Aktionen benötigen
+weiterhin die Friends-Freigabe. Ausschalten, Identitätswechsel und Zurücksetzen widerrufen private Topics,
+Scopes und alte Arbeits-/Publikationsgenerationen, nicht den Listener. Eine bei Widerruf blockierte private
+JSON-Schreiboperation darf ihren einzelnen Socket schließen; der Start-Token bleibt für Reconnect gültig.
+
+Die bestehenden Tauri-Commands/Ereignisse `friends_ingame_*` / `friends-ingame*` bleiben die API der
+Instanz-Einstellungen. Sie sind keine Java-Mod-Identität und kein zweiter Einspeisungspfad.
+Build-/Versionsmatrix und Bedienung: [mod/README.md](../mod/README.md).
+
+
 ## Backend (`src-tauri/src`)
 
 | Modul | Aufgabe |

@@ -244,6 +244,9 @@ async fn follow_lifecycle(shared: Weak<Shared>, mut events: mpsc::Receiver<Lifec
         if matches!(kind, Lifecycle::Disabled | Lifecycle::IdentityChanged) {
             shared.invites.clear();
         }
+        if matches!(kind, Lifecycle::Disabled | Lifecycle::IdentityChanged) {
+            mod_link::disabled(&shared);
+        }
         drop(done);
     }
 }

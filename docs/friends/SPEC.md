@@ -6,6 +6,12 @@
 
 **Minecraft-name cutover (2026-10-05).** Friends has no configurable self-display-name. The first signed-in Microsoft Minecraft account supplies the name automatically; local friend aliases remain private labels. Existing `displayName` output and signed wire fields keep their shape but carry the derived player name. Legacy settings ignore the removed field without resetting keys or friends.
 
+**Pumpkin Bridge cutover (2026-10-05).** The client mod is `pumpkin_bridge`, with Friends as its first
+module. Shared listener/injection availability is separate from Friends opt-in; only loopback Bridge
+traffic exists before opt-in, with no Friends peer/relay networking or private data/actions.
+Disable/reset/rotation revoke feature grants, pending work and publication generations without stopping
+the shared listener. `INGAME.md` and `mod/README.md` describe the module layout and nested menu entry.
+
 **Owner decisions (final; recorded here, not open):**
 
 | # | Decision |
@@ -41,9 +47,9 @@
 | Tunnel | One QUIC bi-stream per Minecraft TCP connection, `TCP_NODELAY` on every local socket. Host: only to the LAN port, and only after it is verified to be **owned by the game PID and answering a server list ping**. Guest: a single-owner listener on a random loopback address, with a handshake nonce check and a PID check. |
 | LAN port | Mod hint, strict log parser, or manual entry. Every source is verified the same way (PID + ping). Ends on `Stopping server`, unpublish, game exit, or a failed liveness probe. |
 | Join | Only into an existing matching instance (MC version + loader + non-client-only mod set, compared by **sha512**). Vanilla host: an offer to create a vanilla instance. No downloads from or on behalf of the host. Minimum MC version for hosting and joining: **1.20**. |
-| Mod | Client only. Embedded in the launcher and injected into Microsoft-account launches while Friends is on (INGAME.md sections 0, 3); a hub in the pause menu (INGAME.md section 6, package U2). Node table instead of one version (11.0). JSON lines over loopback (protocol 2), the connection is tied to the spawned game process (7.1), and the launcher treats the mod as untrusted: the `share` and `social` scopes are each confirmed once per launch (7.4). |
+| Mod | Client-only Pumpkin Bridge, embedded and injected into supported Microsoft-account launches independently of Friends opt-in. Detached title/pause logo → module tile home → Friends submenu. Protocol 2 over process-owned loopback; Friends `share`/`social` actions remain consent-gated. |
 | Contract | One serde convention (`tag = "type"`, camelCase fields), no `AppError` in payloads, shared JSON fixtures checked by both Rust and `tsc`. |
-| Default | Everything is off. Enabling needs an explicit opt-in and a Microsoft account. |
+| Default | Friends networking and actions are off and need opt-in plus a Microsoft account. The shared local Bridge listener and its existing default-on injection switch are separate. |
 
 ---
 
@@ -88,7 +94,7 @@ Dedicated-server hosting from an instance is planned for v2. It will reuse the t
 ```
 HOST PC                                                   GUEST PC
 Minecraft (integrated server, LAN port L, all interfaces)  Minecraft (Quick Play -> 127.a.b.c:F)
-  pumpkin_friends mod --JSON lines--+                        (mod optional, no join from the mod)
+  pumpkin_bridge mod --JSON lines--+                        (mod optional, no join from the mod)
         ^ TCP 127.0.0.1:L           |                                 | TCP 127.a.b.c:F
 Launcher (Rust)                     v                        Launcher (Rust)
   gamesignal <- lan_detect (stdout), modbridge, spawn/exit     gamesignal <- spawn/exit
@@ -219,8 +225,8 @@ impl Friends { pub fn new(dirs: &Dirs, secrets: Arc<dyn SecretStore>, signals: G
 - **Availability** (computed at startup and on every enable):
   | State | Condition | Effect |
   |---|---|---|
-  | `noSecretStore` | the keyring probe fails with a platform error (not "no entry"), e.g. Linux without a secret service | Every friends command except `friends_state` fails with `errors.friends.unavailable`. The Friends navigation entry is hidden. Settings explains why. Keys are never stored in files. |
-  | `identityLost` | no `friends-identity` entry, but `config.enabled` or any record exists | Only `friends_state` and `friends_reset` work. Others fail with `errors.friends.identityLost`. The UI shows "Identität verloren" and the reset action. A new key is never created silently. |
+  | `noSecretStore` | keyring unavailable | Friends operations fail with `unavailable`; Bridge-only status/injection settings remain accessible without an identity. |
+  | `identityLost` | no identity but existing Friends data | State/reset and Bridge-only settings remain accessible; no identity is recreated silently. |
   | `available` | otherwise | normal |
 
   Computed by `identity::availability(secrets, has_friends_data)`, where R4 passes `config.enabled || stores.any()`. `RecordStores::any()` sees only readable records (D.3).
@@ -394,7 +400,7 @@ R4 owns the accept loop and the control stream. It dispatches `request` and `tun
 - **Built by the host** (`manifest::build`) at `host_start`, and cached for the session. It is rebuilt only when the instance's mod list changes.
   - Content: `minecraftVersion`, `loader`, `loaderVersion`, and for every **enabled** `Mod` with `kind == ModKind::Mod`: `sha512` (computed from the file in a blocking task and cached in `HashCache`, keyed by the full path with (size, mtime) as validity, one entry per path) and `fileName`. A mod whose file is unreadable or whose name is unsafe is skipped (warning log); entries with the same sha512 are kept once.
   - The host does not cap the list: a host with more than 500 enabled mods produces a manifest that every guest rejects with `manifestInvalid`.
-  - The host excludes nothing, so no jar can hide from the manifest by declaring a mod id. Our mod is launcher data outside the instance folder, so it never enters a manifest and needs no exception anywhere; a `pumpkin_friends` jar that does sit in `mods/` is an ordinary entry (and blocks the injection, INGAME.md section 3.3).
+  - The manifest excludes no enabled jar by mod id. Injected Pumpkin Bridge is launcher data outside the instance, so it needs no manifest exception. A manually added `pumpkin_bridge` jar is ordinary content and triggers the duplicate injection gate; legacy jars remain ordinary content without a matching bypass.
   - Nothing else: no paths, configs, resource packs, JVM args or worlds. The share dialog tells the host that invited friends see version, loader and the mod list.
 - **Validated by the guest** (`manifest::validate`), else `errors.friends.manifestInvalid` (`ManifestError::Invalid`):
   - `loader` is a known `ModLoader`. `Manifest.loader` is typed `ModLoader`, so an unknown loader already fails deserialisation of the `manifest` frame (a JSON error), which R5 maps to `manifestInvalid`.
@@ -823,7 +829,7 @@ export interface FriendsFixtureTypes {
 ### 8.4 Commands
 Thin wrappers. Friends core: `src-tauri/src/friends_commands.rs` (R4). Sessions, invites, mod, skins: `src-tauri/src/friends_session_commands.rs` (R5). The TS method is the `Backend` method name.
 
-Only `friends_state`, `friends_enable`, `friends_disable` and `friends_reset` work while the feature is off. Every other command, reads included, fails with `errors.friends.disabled` (and with `unavailable` / `identityLost` per 4.1).
+While Friends is off/unavailable, Bridge-only injection status/switch commands and updates limited to `ingameMenu`/`ingameActions` remain available. They do not enable Friends or create an identity. Friends feature commands retain their existing disabled/availability guards; `friends_state`, `friends_enable`, `friends_disable` and the permitted reset path remain the feature lifecycle API.
 
 | Rust command | Args (TS) | Returns | TS method | Notes |
 |---|---|---|---|---|
@@ -978,37 +984,10 @@ pub fn connects_from(pid: u32, client: SocketAddr) -> io::Result<bool>; // a non
 #[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum PortCheck { Ok, NotOwned, NoAnswer }
 pub async fn verify_port(pid: u32, port: u16) -> PortCheck;   // 6.1; a failed owner lookup counts as NotOwned
 
-// services/modbridge (R3)
-pub const ENV_PORT: &str = "PUMPKIN_IPC_PORT"; pub const ENV_TOKEN: &str = "PUMPKIN_IPC_TOKEN"; pub const ENV_PROTOCOL: &str = "PUMPKIN_IPC_PROTOCOL";
-#[derive(Clone)]
-pub struct ModBridge;
-impl ModBridge {
-    pub fn new(signals: GameSignals) -> Self;            // stopped
-    pub async fn start(&self) -> AppResult<()>;          // binds 127.0.0.1:0; no await inside; idempotent
-    pub async fn stop(&self);                            // closes every link, drops every token, awaits the accept task: the port is free on return
-    pub fn launch_env(&self, instance_id: &str, loader: ModLoader) -> Vec<(String, String)>;   // empty unless Fabric and running
-    pub fn forget(&self, instance_id: &str); pub fn is_connected(&self, instance_id: &str) -> bool;
-    pub fn push(&self, instance_id: &str, message: LauncherToMod);   // keeps the latest Snapshot; full queue (64) -> disconnect
-}
-// services/modbridge/protocol.rs (R3): the wire types of 7.2/7.3. Defined here (8.1). Per-connection loop: modbridge/connection.rs.
-pub const PROTOCOL_VERSION: u32 = 1;
-pub enum ModToLauncher { Hello { protocols: Vec<u32>, token: String, mod_version: String /* "mod" */, minecraft: String },
-                         LanOpened { port: u16 }, LanClosed, Share { friend_ids: Vec<String> }, StopSharing, Kick { friend_id: String }, Ping }
-pub enum Handshake { Welcome { protocol: u32, launcher: String }, Reject { reason: RejectReason } }
-pub enum RejectReason { Token, Protocol, Duplicate }
-pub enum LauncherToMod { Snapshot { friends: Vec<ModFriend>, session: Option<ModSession>, invites: Vec<ModInvite> },
-                         Notify { event: ModNotify, name: Option<String>, mc_uuid: Option<String> },
-                         Error { code: ModErrorCode, r#ref: Option<String> }, Pong }
-pub struct ModFriend { pub id: String, pub name: String, pub mc_uuid: Option<String>, pub presence: ModPresence }
-pub enum ModPresence { Offline, Online, Playing }
-pub struct ModSession { pub guests: Vec<ModGuest> }
-pub struct ModGuest { pub id: String, pub name: String, pub state: ModGuestState }
-pub enum ModGuestState { Invited, Connected }
-pub struct ModInvite { pub id: String, pub from_name: String, pub title: String }
-pub enum ModNotify { InviteReceived, GuestJoined, GuestLeft, SessionEnded, FriendOnline, ConfirmInLauncher }
-pub enum ModErrorCode { NotEnabled, PeerOffline, GuestLimit, LanPortUnknown, PortNotGame, Denied, VersionUnsupported, Busy, Internal }
-// ModFriend/ModGuest carry real peer ids inside the launcher; the bridge replaces them with per-connection aliases on the wire (7.3).
-// Serde: enums with data `tag = "type"`, camelCase (8.1); ModToLauncher is Deserialize only.
+// Shared Bridge's current API: services/modbridge/mod.rs (ModBridge, Expectations, register_launch, bind_pid,
+// set_friends_enabled, ready_screens, set_topic). Ownership: lib.rs starts/stops it, independently of Friends.
+// Protocol 2's authoritative types: services/modbridge/{protocol,ops,topics}.rs and mod/fixtures/protocol/.
+// No Fabric-only launch_env, protocol negotiation, Snapshot/Share/Kick aliases or protocol-1 seam remains.
 
 // launch.rs (R3): seven parameters; `on_stdout_raw` gets every stdout line unprocessed (for LanDetector), stdout only.
 pub fn spawn(java: &Path, args: &[String], game_dir: &Path, env: &[(String, String)],
@@ -1112,7 +1091,7 @@ pub struct AccountProfile { pub name: String, pub uuid: String /* 32 lowercase h
 impl Friends {   // cheap to clone
     pub fn new(dirs: &Dirs, secrets: Arc<dyn SecretStore>, signals: GameSignals, bridge: ModBridge, net: NetOptions) -> AppResult<Self>;   // 3.7
     pub async fn start(&self, events: Arc<dyn EventSink>, account: Option<AccountProfile>);   // app start: sink, availability, prune, activate if enabled
-    pub async fn shutdown(&self);                                                 // RunEvent::Exit: Lifecycle::Shutdown, then bridge.stop()
+    pub async fn shutdown(&self);                                                 // Friends Lifecycle::Shutdown; lib.rs separately stops shared Bridge
     pub fn register_stream_handler(&self, handler: Arc<dyn PeerStreamHandler>) -> Result<(), HandlerAlreadySet>;   // exactly once
     pub fn subscribe_lifecycle(&self) -> mpsc::Receiver<LifecycleEvent>;          // every subscriber gets every event
     pub fn send_control(&self, peer: &PeerId, message: SessionControl) -> Result<(), NotConnected>;   // fire-and-forget, queue of 64 per link
@@ -1127,8 +1106,8 @@ impl Friends {   // cheap to clone
 - `register_stream_handler` and `subscribe_lifecycle` can be called before or after `start`. `send_control` fails with `NotConnected` when the link's queue is full or there is no link.
 - **Lifecycle (normative order):** `friends_disable` delivers `Disabled`; `friends_update_settings` with a changed `alwaysRelay` delivers `Rebind`; `friends_rotate_identity` and `friends_reset` deliver `IdentityChanged`; `friends.shutdown()` (from `RunEvent::Exit`) delivers `Shutdown`. R4 sends the event to every subscriber, then waits until every `done` has been sent or dropped, **at most 500 ms in total**, and only then closes or rebinds the endpoints with `PeerNet::close(CloseCode::SHUTDOWN)` (3.6). R4 never calls R5 code directly.
 - **Teardown order:** deliver the `Lifecycle` event, halt the dial scheduler, drain the links, wait 100 ms (`FLUSH_GRACE`, so the last queued control frames such as `inviteRevoke{stopped}` reach the wire), close the endpoints with `SHUTDOWN`, and only then cancel the tasks. Cancelling first would end the control stream (FIN), and the friend would close with `PROTOCOL` before `SHUTDOWN` arrived. A subscriber sends delivery-critical frames before it drops `done`.
-- **R4 and the R1/R3 objects:** R4 keeps one `PeerNet` per endpoint alive for as long as its connections, keeps calling `PeerNet::accept()` (the queue holds 16), dials only through `PeerNet::dial` or its `Dialer` impl (the seam for the paused-time fakes), and holds the Gate's lookups in memory because `Gate::admit` is synchronous (3.5). It starts and stops `state.bridge` with the feature (7.1) and subscribes to `state.signals`.
-- **Construction and wiring:** `AppState::load` (`state.rs`) constructs `Friends` and then `FriendSessions` (`pub friends`, `pub sessions`), because `AppState` holds both from its construction on. `lib.rs` `setup` fills R4's marker `// friends: session wiring (R5)` with `start_sessions` (`sessions.start(TauriSessionEvents)` inside `block_on`, so `tokio::spawn` has a runtime), then `start_friends` calls `friends.start(TauriEvents, account_profile)`. `RunEvent::Exit` calls `shut_down_friends` (`friends.shutdown()`, 1 s limit, 10.7).
+- **Friends and shared objects:** Friends owns its peer endpoints, dial scheduler and game-signal subscription. It updates/revokes Friends permission on the common Bridge; it does not start or stop the Bridge listener.
+- **Construction:** `AppState::load` constructs Friends and FriendSessions with the shared GameSignals/ModBridge. `lib.rs` starts the Bridge independently, then starts Friends/session subscriptions. On app exit it shuts down Friends and separately stops Bridge.
 
 ```rust
 // services/friends/joining.rs (R5): injectable join timers (6.2)
@@ -1311,7 +1290,7 @@ Tabs in this order: **"Per Name"** (new `NameTab.tsx`, the default), "Code einge
 - `noSecretStore`: only a `StatusPanel` "Auf diesem System gibt es keinen Schlüsselbund (Secret Service); Freunde sind hier nicht verfügbar."
 - `identityLost`: only the panel and "Zurücksetzen" (as in 10.2).
 - Otherwise:
-  - `FormRow` "Freunde" `Switch` (on opens the opt-in, off calls `friendsDisable`). While the feature is off, the tab shows **only** this switch; every row below appears only while it is enabled (rotate and reset need an active identity).
+  - `FormRow` "Freunde" `Switch` controls opt-in; feature rows below require enabled Friends. The separate "Pumpkin Bridge" section remains visible even while Friends is disabled or unavailable, without resetting identity.
   - Read-only "Minecraft-Spielername", taken from the first Microsoft Minecraft account; loading and query errors are shown explicitly, with retry on error. No display-name input or save action.
   - `FormRow` "Per Minecraft-Namen auffindbar" `Switch` (hidden when `directory.state === "unavailable"`; sets `findableByName` through `friendsUpdateSettings`), hint "Wer deinen Minecraft-Namen kennt, kann dir Anfragen schicken. Das Pumpkin-Verzeichnis speichert dafür nur deine Minecraft-UUID, solange das an ist; aus = sofort gelöscht." Status line: `active` "Auffindbar als {mcName}", `unreachable` "Verzeichnis nicht erreichbar; neuer Versuch läuft", `notAllowed` (warning with symbol) "Mojang erlaubt diesem Konto keine Mehrspieler-Funktionen" (N 6, N 9.7).
   - "Immer über Relay verbinden" (hint: "Freunde sehen deine IP-Adressen nicht. Etwas höhere Latenz. Der Relay-Betreiber sieht, wer mit wem verbunden ist, aber keine Inhalte."; with a confirm while a host session **or a join** is active, because the rebind ends both; the join is read from `useFriendsUi().joinSession`). The confirm text is `relayConfirmText` plus `relayConfirmHosting`, `relayConfirmJoin` or `relayConfirmJoinUnnamed`.
@@ -1328,7 +1307,7 @@ Text (plain, final wording reviewed by the owner):
 - Relay-Server: {hosts with operator}. Sie leiten verschlüsselte Daten weiter und sehen, wer mit wem verbunden ist, aber keine Inhalte.
 - Freunde sehen, ob du online bist oder spielst, und deinen Minecraft-Namen samt Skin (von dir selbst angegeben).
 - Kein Chat, kein Tracking, keine öffentlichen Listen; die Suche per Name findet nur genaue Namen von Leuten, die das eingeschaltet haben. Jederzeit abschaltbar.
-- Planned with the in-game mod (INGAME.md section 9; the sentence is added to this dialog and to `PRIVACY.md` 10 when the injection ships, not before): „Wenn Freunde an ist, lädt der Launcher beim Spielstart eine kleine Mod in deine Spiele. Sie liegt außerhalb deines Instanzordners, hat keine Netzwerkverbindung außer zum Launcher auf diesem PC und kann nichts ändern, was du nicht im Spiel anstößt. Andere Mods im selben Spiel können dieselbe Verbindung nutzen; deshalb fragt der Launcher vor Freundes- und Teilen-Aktionen aus dem Spiel."
+- In-game wording: Pumpkin Bridge may already be present in supported games while Friends is off. Its custom transport is only to the local launcher; Minecraft's native known-UUID head lookup may contact Mojang. Friends data/actions require opt-in, and other mods in the same game can use the same local connection, so game actions retain consent checks.
 
 Inputs:
 - Read-only Minecraft player name from the first Microsoft account (not an input). Enabling requires a successfully loaded Microsoft account as well as consent.
@@ -1360,18 +1339,22 @@ Primary button: "Freunde aktivieren" (`friendsEnable`). A note says that Windows
 This subsection is the contract for the in-game mod. Build and topology detail live in `mod/README.md` and `INGAME.md` section 4 and are not copied here.
 
 - **The mod is part of the launcher.** The launcher's CI builds one jar per node and embeds the jars and `mod-index.json` in the launcher binary; mod version = launcher version (the next release is 0.2.0, INGAME A23). There is no Modrinth project, no download and no install step (11.5).
-- **Injection, not installation.** At launch the launcher writes the jar to its own data folder (`<data>/runtime/friends-mod/<modVersion>/`, layout per strategy) and hands it to the loader through start-up options (strategies `fabricAddMods`, `fmlMavenRoot`, `fmlModFolders`, INGAME.md section 3.5; all three are smoke-proven, `INGAME-SMOKE.md`). Nothing is written into the instance, so export, duplicate, content scan and manifests never see the mod.
-- **When it is injected.** Only while Friends is switched on (before the opt-in nothing is injected and nothing listens, 12.1), only for launches with a Microsoft account (`online_account`), only if a node fits and the Java check passes, the player did not switch it off, the circuit breaker is not tripped for the instance, and the instance holds no other `pumpkin_friends` jar (INGAME.md section 3.3). Otherwise the launch is byte-identical to a launch without Friends.
+- **Injection, not installation.** The launcher materializes `pumpkin_bridge` in `<data>/runtime/bridge-mod/<modVersion>/` and hands it to the loader through its startup options. The instance/content/export/manifest paths remain untouched.
+- **When injected.** The shared listener must be running, the launch must use a Microsoft account, a verified node/Java must fit, the global/per-instance switches must permit it, no breaker may be tripped and no duplicate `pumpkin_bridge` may exist. Friends opt-in is not an injection gate (`INGAME.md` 3.3).
 - **Node and support-matrix rule.** A node is one build target `<minecraft range>-<loader>` with exactly one jar. A cell `(Minecraft release id, loader)` is supported if and only if (1) the embedded index has a node whose `minecraft` list contains that **exact release id** (explicit Mojang release ids, never a range, never snapshots) with matching loader and minimum loader version, (2) the Java that will run the game has a major version of at least `javaMin`, and (3) the node has a `verified` entry because a smoke test of that node passed (INGAME.md section 2.1; the smoke runs on the owner's Windows machine, A18, its CI job exists but has not run). A Minecraft release newer than the index gets no injection until a launcher release adds a node. Unverified cells are off, not guessed.
 - **`mod-index.json`** (written by the Gradle build in `mod/`, read by the launcher; camelCase, UTF-8): `modVersion` and `nodes[]`, each with `id`, `loader` (`fabric`|`neoforge`|`forge`), `loaderMin`, `minecraft[]`, `javaMin`, `strategy`, `file` (a plain leaf name matching `[A-Za-z0-9._+-]+\.jar`), `sha256` (64 lowercase hex) and `verified` (`{smoke, owner}` or null; null or absent turns the cell off; filled from `mod/verified.json`, and only a passed smoke adds an entry, INGAME A17). The launcher checks the SHA-256 before every launch and rewrites the file when it is missing or different (INGAME.md section 3.7).
 - **Fallbacks.** Quilt, Vanilla instances (no loader) and offline accounts get no injection in v1. A start failure caused by the mod switches injection off for that instance (circuit breaker, INGAME.md section 3.8).
-- **Hooks and dependencies.** No Fabric API dependency at all (INGAME A22); one soft Mixin on Fabric, loader events on NeoForge and Forge (INGAME.md section 4.2).
+- **Hooks and dependencies.** No Fabric API dependency. Full Fabric nodes use soft title/pause/resource hooks; existing Forge/NeoForge nodes remain tracers.
 
 ### 11.1 Target and toolchain
-The single-build-for-26.3 text of v1 (Fabric API dependency, Temurin JDK downloaded into `mod/.jdk`) is gone with the code it described. The build is the Stonecutter multi-node project of `mod/`: `mod/nodes.txt` is the single source of truth for the node list (id, loader, claimed Minecraft ids, `loaderMin`, `java`, strategy, Gradle JDK), seven nodes exist, and the JDKs come from the `PUMPKIN_JDK_<major>` environment variables (never a download into the repo). Details: `mod/README.md` and `INGAME.md` section 4.3.
+The Stonecutter project builds one jar per node. `mod/nodes.txt` is the node/toolchain source
+of truth: 18 nodes, full Fabric UI and Forge/NeoForge tracers. Current checks are reported in
+`mod/README.md` and `INGAME-SMOKE.md`.
 
 ### 11.2 Layout
-The source tree is the four layers of `INGAME.md` section 4.1 (`core/` Minecraft-free, `compat/` per era, `platform/` per loader, `ui/`), one project per node, plus `mod/fixtures/protocol/` (the golden lines shared with the Rust tests) and `mod/verified.json`. Mod id `pumpkin_friends`; the description carries "NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED OR ASSOCIATED WITH MOJANG OR MICROSOFT.". The layer rules are enforced by a check script (INGAME.md section 4.1).
+Shared transport/runtime/UI and `modules/friends` are separated under `dev.laux.pumpkin.bridge`;
+mod id `pumpkin_bridge`. Client-only declarations, the official-product disclaimer, Minecraft-free
+Core and compat/platform-only version conditionals remain enforced.
 
 ### 11.3 Features
 The R-A in-game feature set is `INGAME.md` section 6 (screens, hub states, Teilen tab) as built by package U2 from the A24 list: hub with Freunde, Anfragen, Einladungen, Teilen, Optionen (read-only), add friend by name, accept/decline, invites view/decline/joinHere, share/kick/stop, toasts. The old single-screen feature list of v1 (share checkboxes, `notify{confirmInLauncher}`) died with protocol 1; the equivalent rules are 7.3 to 7.5 and `INGAME.md` sections 5.4 and 5.5.
@@ -1386,7 +1369,7 @@ The bridge thread, backoff and liveness are `INGAME.md` sections 4.2 and 5.3 (wo
 ## 12. Privacy and security
 
 ### 12.1 Privacy (normative wording basis for UI and docs)
-- Off by default. Before `friends_enable`, nothing binds UDP, listens, or contacts a relay or Mojang for friends. Planned (INGAME.md section 9): this includes the mod. Before the opt-in the bridge does not exist and no launch gets a mod, an environment variable or a start-up option; injection happens only while Friends is on and only for Microsoft-account launches (11.0).
+- Friends is off by default. Before `friends_enable`, no Friends UDP endpoint, peer/relay connection or Friends-related Mojang request is created. Pumpkin Bridge may already listen on a local loopback TCP port and be injected into supported Microsoft-account launches. It exposes only shared Bridge functions before opt-in; Friends data/actions remain disabled.
 - **In-game mod (planned, INGAME.md sections 5.1 and 9; wording in `PRIVACY.md` 10):** the jar lives outside the instance folder and has no network code except the loopback socket to the launcher. Code running in the same game JVM runs as the player's OS user: another mod can read the bridge token and port from the environment and speak the protocol, and on Windows and Linux it can read the friends identity key from the OS keyring. The launcher limits the mod's API (no identity operations, no raw peer ids) and asks before `share` and `social` actions (7.4); that limits abuse by greedy mods and is not a defence against malware. Older vanilla releases also cache the account's player certificate, private key included, in `<gameDir>/profilekeys/`; whoever can read it can open directory sessions for the account for about 48 hours (`BYNAME-ATTEST.md`; the launcher keeps that folder out of packs and templates).
 - No address publishing. Relays see the ids and IPs of connected endpoints and who talks to whom, never content.
 - **IP exposure, stated honestly:**
@@ -1497,7 +1480,7 @@ CI facts (`.github/workflows/ci.yml`): `cargo check` and `cargo test --locked` r
 | R3 | `LanDetector` table (6.4). `sockowner` on the current OS: a test `TcpListener` is reported as owned by `std::process::id()`, and a connection from this process is found by `connects_from`. `verify_port` against a fake status server (ok / not owned / no answer). Modbridge: wrong token, protocol negotiation, duplicate, oversize line, no hello within 2 s, 5th unauthenticated connection refused, rate limit, message → `GameSignal` mapping. `launch_env` empty when stopped or non-Fabric. `spawn` env test with a tiny child printing its env. `friend_join`: no `last_quick_play` write, refusal without `account_id`, bad address refused. `FriendJoin` JSON shape and `LaunchOptions` without the field (8.6). With `friend_join`, a refused or failing launch sends `LaunchFailed` before the error returns; progress sends `LaunchProgress` at most once per second; without `friend_join`, neither is sent. `shared_types` JSON strings (R0a test stays green). `examples/launch.rs` compiles. |
 | R4 | Two `Friends` services with temp dirs, built with `NetOptions` pointing at one in-process relay and `hello_relay_only = true` (3.7): code → hello **through the relay** → request → accept → both friends (inviter online, and inviter offline at redemption: the inviter service starts later, then `friends_retry_now` on the invitee delivers within 5 s); `hello_net_config(NetOptions::production(), ..)` gives `relay_only = true` and `Only(code.relay_index)`; decline is silent; cancel → `removedByPeer`; block looks like removal; unfriend; rotate (friend learns the new id, a thief with the old key is rejected afterwards; **after rotate `friend_codes` is empty, pending incoming and `awaitingAnswer` requests are gone, and redeeming a code created before the rotation gets no frame and stays `delivering`**); reset outbox delivers `unfriend`; `friends_retry_now` (fake dialer, paused time): a `delivering` request in the 10-min backoff step is dialed at once, a second call within 10 s does not dial again; **extension seam:** a fake `PeerStreamHandler` receives request streams, tunnel streams (with `sessionId`) and `invite`/`inviteRevoke`/`inviteDecline`; without a handler the defaults of 5.3 apply; a second `register_stream_handler` fails; a fake lifecycle subscriber gets `Disabled` on `friends_disable`, `Rebind` on an `alwaysRelay` change, `IdentityChanged` on rotate and reset, `Shutdown` on `shutdown()`, each before the endpoint closes (subscriber holds `done` for 200 ms, the remote sees `SHUTDOWN` only afterwards), and a subscriber that never answers delays the close by at most 500 ms; identityLost refuses commands; incoming TTL prune; hello silent drop for a wrong secret (no frame received; the close arrives as `CloseReason::Peer(NORMAL)`, 3.5); hello rate limits; foreign `homeRelay` index ignored; presence online/offline/crash (short `NetOptions.idle_timeout`; the friend's runtime workers are frozen instead of dropped, because a dropped runtime can still send a FIN and the peer then sees `PROTOCOL` instead of `TimedOut`); lazy-dial schedule (fake clock); 50-friend cap; load test with 50 fake friends, 16 of them recent (eager): the 16 finish within 4 x 8 s rounds plus one tick, and the 34 others are not dialed before the lazy round at 60 s (with at most 4 concurrent dials, 50 eager dials could not finish in 4 rounds). In `p2p/tests.rs`: keep-alive for the production and a short idle timeout, and the handshake cap of 3.5. |
 | R5 | Real loopback tunnel to a fake LAN server (a status-answering `TcpListener` owned by the test process): host verification, handshake/login-start validation (legacy ping, transfer state, bad name, oversize rejected), guest nonce + PID check (a foreign handshake address is refused, no stream opened), single-owner limits, 7-guest cap, kick, stop, liveness end, every row of 6.5 (with real `Friends` services from R4 and an in-process relay). **Kick and decline at admission:** after a kick, the kicked guest's launcher ignores `inviteRevoke` and opens a new tunnel stream and a `manifestRequest`: both get `notInvited`, and the guest is `left` with `kicked: true`; after `host_invite` for the same friend, a tunnel stream gets `tunnelOk` again; the same for a guest that sent `inviteDecline` (`declined`). A guest that left on its own can rejoin while its invite is open. **Join timers on real time** with `JoinTimers { spawn_wait: 2 s, spawn_wait_cap: 6 s, first_connection: 3 s, host_offline_grace: 1 s }`: no spawn and no progress → the join ends `error` after about 2 s; `LaunchProgress` every 1 s keeps it in `waitingForGame` past 2 s, and it still ends `error` at the 6 s cap; after `Spawned`, a first valid connection at 2 s succeeds, and in a second join no connection by 3 s ends it `error` (a connection at 4 s is refused because the listener is closed); `LaunchFailed` ends the join `error` within 100 ms and the listener address refuses connections. The timer state machine is also tested without sockets on paused time with production values (9 min first connection succeeds, 11 min fails; progress for 25 min keeps the join, 31 min ends it). `Lifecycle` handling: `Disabled`, `Rebind`, `IdentityChanged`, `Shutdown` end host session and join with the reasons of 6.1/6.2, and the `inviteRevoke{stopped}` reaches the guest before `done`. Mod `share` needs confirmation once per launch; denied/timeout. All of it runs on loopback in one process with a fake Minecraft server and client (so the `sockowner` PID check always sees the test process); the real client is owner work (13.4). |
-| R6 | Manifest build (excludes disabled mods and non-`Mod` kinds; a jar declaring mod id `pumpkin_friends` stays in), matching ignores our mod only via `MOD_PROJECT_ID`, validation table, sha512 hashing and cache. The matching table (5.6) with a fake `ModLookup`. Lookup failure → `lookupFailed`. Avatar: host check (only `textures.minecraft.net`), size cap, PNG signature, cache TTL. Mod install: wrong `project_id` refused, non-listed refused. |
+| R6 | Manifest/matching treats every enabled instance jar normally, with no launcher-mod id bypass. Verify sha512/cache/matching and lookup failures; avatar host/size/PNG/TTL guards; shared Bridge node/index/hash/injection and duplicate-id checks. No mod-install command or Modrinth-project exception remains. |
 
 ### 13.2 Frontend
 - `pnpm build` (tsc strict = types, i18n completeness, fixtures) and `pnpm check:lib`, including the new `friendCode.check.mjs` (golden vectors, shape, grouping, normalisation), `onPlay.check.mjs`, `src/pages/friends/friendsModel.check.mjs` (F2: gates, badge count, labels, `canInvite`, expired-code hint), `src/store/friendDialogQueue.check.mjs` and `src/components/friends/inviteModel.check.mjs` (F4: dialog queue, invite dialog states), and `src/components/friends/sharingModel.check.mjs` (F5: share section and chip states).
@@ -1510,20 +1493,20 @@ CI facts (`.github/workflows/ci.yml`): `cargo check` and `cargo test --locked` r
 #### 13.3.1 Agent-verifiable (JUnit in `mod/core`, no Minecraft classes)
 - The Minecraft-free core is tested with JUnit without any Minecraft class: protocol 2 encode and decode against the golden lines of `mod/fixtures/protocol/` (shared with the Rust tests), the request layer and backoff, the state store, the sanitiser, and the view-model/layout tests of INGAME.md section 6.5. A scripted launcher (`ScriptedLauncher`) plays the launcher side of section 7 over a loopback socket: handshake and `welcome`, every `reject` reason, line limits, reconnect backoff.
 - The compile-against-Minecraft checks are the node compile matrix of `mod/` (both ends and one middle release per node, INGAME.md section 4.3); the real-game proof is the smoke (INGAME.md section 10, layer 4) and the owner pass (layer 5).
-- No GUI check is agent-verifiable.
+- Menu/navigation/resize smoke can be exercised in an actual game window; it does not replace the two-account, cross-network owner pass.
 
 #### 13.3.2 Owner-verified GUI checklist (in `mod/README.md`; run by the owner in I1 as part of E10, results in VERIFICATION.md)
 Against `FakeLauncher.java` first, then the real launcher:
-  1. Without env: no button, no crash, one log line.
-  2. The button appears only while connected.
-  3. Publish from the mod: the launcher shows the verified port (source `mod`).
-  4. Publish from vanilla World Options: same.
-  5. First invite from the mod: "Bestätige im Launcher", and after allowing it the friend gets a toast with a head.
-  6. Kick and stop: the friend is disconnected and gets a toast.
-  7. Kill the launcher mid-session: the UI hides, the game runs on without exceptions.
-  8. Resize with the pause menu open: no duplicate button.
-  9. German and English.
-  10. A name containing `§c` and bidi characters is shown without formatting.
+  1. Without env: no entry/thread, no crash, one info line.
+  2. Detached Pumpkin logo in title and pause menus; tooltip/narration Pumpkin; native widgets unchanged.
+  3. Logo → module home → Friends, with Back/Escape returning one level.
+  4. Module tab, scroll, text and focus survive return, pushes and resize.
+  5. LAN sharing/port verification works through the module and vanilla options.
+  6. Scoped game actions follow configured ask/allow consent; guest kick/stop still work.
+  7. Friends off keeps Bridge connected, with disabled explanation and no feature actions.
+  8. Launcher loss keeps menu usable and shows disconnected state, without throwing into Minecraft.
+  9. German/English and GUI scaling; no duplicate entry after resize.
+  10. Names with formatting/bidi characters remain sanitized literals.
 
 ### 13.4 Owner end-to-end table (two PCs, different networks, two Microsoft accounts; results in VERIFICATION.md)
 | # | Case | Pass criterion |

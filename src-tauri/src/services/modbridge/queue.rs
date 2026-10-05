@@ -9,9 +9,12 @@ use std::time::Duration;
 
 use tokio::sync::Notify;
 use tokio::time::Instant;
+use tokio_util::sync::CancellationToken;
 
 use super::limits::{EVENT_QUEUE, OUTGOING_QUEUE};
 use super::protocol::{Event, LauncherFrame};
+use super::ops::ErrorCode;
+use super::protocol::Response;
 use super::topics::Topic;
 use crate::services::lock;
 
@@ -20,6 +23,7 @@ use crate::services::lock;
 pub(super) enum Outgoing {
     /// Eine fertige Nachricht: Antwort, `pending` oder Hinweis.
     Frame(LauncherFrame),
+    FriendsFrame { frame: LauncherFrame, generation: u64 },
     /// Der aktuelle Wert des Themas.
     Topic(Topic),
 }
@@ -46,11 +50,14 @@ pub(super) struct LinkQueue {
 
 #[derive(Default)]
 struct State {
-    replies: VecDeque<LauncherFrame>,
+    replies: VecDeque<Outgoing>,
     events: VecDeque<Event>,
     dirty: BTreeSet<Topic>,
     last_sent: HashMap<Topic, Instant>,
     finishing: bool,
+    friends_generation: u64,
+    friends_disabled: bool,
+    friends_stop: CancellationToken,
 }
 
 impl State {
@@ -70,14 +77,68 @@ impl LinkQueue {
         if state.len() >= OUTGOING_QUEUE {
             return Err(Overflow);
         }
-        state.replies.push_back(reply);
+        state.replies.push_back(Outgoing::Frame(reply));
         drop(state);
         self.wake.notify_one();
         Ok(())
     }
 
+    pub fn friends_generation(&self) -> u64 {
+        lock(&self.state).friends_generation
+    }
+
+    pub fn friends_allowed(&self, generation: u64) -> bool {
+        let state = lock(&self.state);
+        !state.friends_disabled && state.friends_generation == generation
+    }
+
+    pub fn friends_permission(&self, generation: u64) -> Option<CancellationToken> {
+        let state = lock(&self.state);
+        (!state.friends_disabled && state.friends_generation == generation).then(|| state.friends_stop.clone())
+    }
+
+    pub fn push_friends_reply(&self, frame: LauncherFrame, generation: u64) -> Result<(), Overflow> {
+        let mut state = lock(&self.state);
+        if state.len() >= OUTGOING_QUEUE {
+            return Err(Overflow);
+        }
+        let outgoing = if state.friends_disabled || generation != state.friends_generation {
+            Outgoing::Frame(revoked_reply(frame))
+        } else {
+            Outgoing::FriendsFrame { frame, generation }
+        };
+        state.replies.push_back(outgoing);
+        drop(state);
+        self.wake.notify_one();
+        Ok(())
+    }
+
+    pub fn set_friends_enabled(&self, enabled: bool) {
+        let mut state = lock(&self.state);
+        if enabled && state.friends_disabled {
+            state.friends_stop = CancellationToken::new();
+        }
+        state.friends_disabled = !enabled;
+        if !enabled {
+            state.friends_stop.cancel();
+            state.friends_generation += 1;
+            for outgoing in &mut state.replies {
+                if let Outgoing::FriendsFrame { frame, .. } = outgoing {
+                    let frame = std::mem::replace(frame, LauncherFrame::Pong);
+                    *outgoing = Outgoing::Frame(revoked_reply(frame));
+                }
+            }
+            state.events.retain(|event| !matches!(event, Event::Notify { .. }));
+        }
+        drop(state);
+        self.wake.notify_one();
+    }
+
     pub fn push_event(&self, event: Event) {
         let mut state = lock(&self.state);
+        if state.friends_disabled && matches!(event, Event::Notify { .. }) {
+            return;
+        }
         if state.events.len() >= EVENT_QUEUE {
             state.events.pop_front();
         }
@@ -107,10 +168,14 @@ impl LinkQueue {
     pub fn next(&self, now: Instant) -> Next {
         let mut state = lock(&self.state);
         if let Some(reply) = state.replies.pop_front() {
-            return Next::Send(Outgoing::Frame(reply));
+            return Next::Send(reply);
         }
         if let Some(event) = state.events.pop_front() {
-            return Next::Send(Outgoing::Frame(LauncherFrame::Event(event)));
+            let frame = LauncherFrame::Event(event);
+            return Next::Send(match frame {
+                LauncherFrame::Event(Event::Notify { .. }) => Outgoing::FriendsFrame { frame, generation: state.friends_generation },
+                _ => Outgoing::Frame(frame),
+            });
         }
         let due_at = |state: &State, topic: &Topic| state.last_sent.get(topic).map_or(now, |sent| *sent + self.coalesce);
         let due = state.dirty.iter().copied().find(|topic| due_at(&state, topic) <= now);
@@ -124,6 +189,21 @@ impl LinkQueue {
             None if state.finishing => Next::Finished,
             None => Next::Idle,
         }
+    }
+}
+
+pub(super) fn revoked_reply(frame: LauncherFrame) -> LauncherFrame {
+    match frame {
+        LauncherFrame::Res(mut response) => {
+            response.ok = false;
+            response.result = None;
+            response.error = Some(ErrorCode::NotEnabled.into());
+            LauncherFrame::Res(response)
+        }
+        LauncherFrame::Pending { id, .. } => LauncherFrame::Res(Response {
+            id, ok: false, result: None, error: Some(ErrorCode::NotEnabled.into()),
+        }),
+        other => other,
     }
 }
 
@@ -162,7 +242,7 @@ mod tests {
         let now = Instant::now();
         assert_eq!(sent(queue.next(now)), Outgoing::Frame(reply("r1")));
         assert_eq!(sent(queue.next(now)), Outgoing::Frame(reply("r2")));
-        assert_eq!(sent(queue.next(now)), Outgoing::Frame(LauncherFrame::Event(notify("a"))));
+        assert_eq!(sent(queue.next(now)), Outgoing::FriendsFrame { frame: LauncherFrame::Event(notify("a")), generation: 0 });
         assert_eq!(queue.next(now), Next::Idle);
     }
 
@@ -174,7 +254,7 @@ mod tests {
         let now = Instant::now();
         assert_eq!(sent(queue.next(now)), Outgoing::Frame(reply("r1")), "Antworten gehen nie verloren");
         let names: Vec<String> = std::iter::from_fn(|| match queue.next(now) {
-            Next::Send(Outgoing::Frame(LauncherFrame::Event(Event::Notify { name, .. }))) => name,
+            Next::Send(Outgoing::FriendsFrame { frame: LauncherFrame::Event(Event::Notify { name, .. }), .. }) => name,
             _ => None,
         })
         .collect();

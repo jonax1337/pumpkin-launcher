@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use launcher_lib::models::{Account, GameWindow, Instance};
 use launcher_lib::services::content::ModIdScanner;
-use launcher_lib::services::friends::ingame::{inject, FailureKind, Injection, InjectionRequest, InjectionState, JavaMajors, LaunchFacts, ModSource, StartupWatch, UserArgs};
+use launcher_lib::services::modbridge::ingame::{inject, FailureKind, Injection, InjectionRequest, InjectionState, JavaMajors, LaunchFacts, ModSource, StartupWatch, UserArgs};
 use launcher_lib::services::launch::{self, LaunchSpec, Running};
 use launcher_lib::services::modbridge::ModBridge;
 use launcher_lib::services::rules::Env;

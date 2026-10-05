@@ -23,12 +23,17 @@ use crate::services::modbridge::topics::{
 /// Baut die Themen der Instanz neu und gibt sie an die Brücke; die schickt nur, was sich geändert hat.
 pub(super) async fn publish(
     shared: &Arc<Shared>,
+    bridge: &crate::services::modbridge::FriendsPublication<'_>,
     instance_id: &str,
     friends: &[Friend],
     requests: &[FriendRequest],
 ) {
-    let bridge = &shared.bridge;
-    bridge.set_topic(instance_id, me(&shared.friends.state()));
+    let state = shared.friends.state();
+    bridge.set_topic(instance_id, me(&state));
+    if !state.enabled || state.availability != Availability::Available {
+        publish_unavailable(shared, instance_id);
+        return;
+    }
     bridge.set_topic(instance_id, friends_of(friends));
     bridge.set_topic(
         instance_id,
@@ -49,6 +54,23 @@ pub(super) async fn publish(
         instance_id,
         blocked_of(&shared.friends.blocked().await.unwrap_or_default()),
     );
+}
+
+pub(super) fn publish_unavailable(shared: &Shared, instance_id: &str) {
+    let bridge = &shared.bridge;
+    bridge.set_topic(instance_id, me(&shared.friends.state()));
+    bridge.set_topic(instance_id, TopicValue::Friends(Vec::new()));
+    bridge.set_topic(instance_id, TopicValue::Requests(RequestsView {
+        incoming: Vec::new(), outgoing: Vec::new(), retry_cooldown_ms: 0,
+    }));
+    bridge.set_topic(instance_id, TopicValue::Invites(Vec::new()));
+    bridge.set_topic(instance_id, TopicValue::Session(None));
+    bridge.set_topic(instance_id, TopicValue::Join(None));
+    bridge.set_topic(instance_id, TopicValue::Game(GameView {
+        hostable: false, reason: None, lan: None, shared_elsewhere: false,
+    }));
+    bridge.set_topic(instance_id, TopicValue::Codes(Vec::new()));
+    bridge.set_topic(instance_id, TopicValue::Blocked(Vec::new()));
 }
 
 fn me(state: &FriendsState) -> TopicValue {

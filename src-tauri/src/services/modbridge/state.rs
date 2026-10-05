@@ -38,6 +38,8 @@ pub(super) struct Inner {
 #[derive(Default)]
 pub(super) struct State {
     pub listening: Option<Listening>,
+    pub friends_enabled: Option<bool>,
+    pub friends_generation: u64,
     /// Die gestarteten Spiele je Instanz-ID.
     pub launches: HashMap<String, Launch>,
 }
@@ -75,22 +77,71 @@ impl Inner {
         lock(&self.state).launches.get_mut(instance_id).map(f)
     }
 
+    pub fn set_friends_enabled(&self, enabled: bool) {
+        let mut state = lock(&self.state);
+        state.friends_enabled = Some(enabled);
+        if !enabled {
+            state.friends_generation += 1;
+        }
+        for launch in state.launches.values_mut() {
+            if launch.expectations.friends_enabled == enabled {
+                continue;
+            }
+            launch.expectations.friends_enabled = enabled;
+            if enabled {
+                launch.friends_stop = CancellationToken::new();
+                if let Some(link) = &launch.link {
+                    link.queue.set_friends_enabled(true);
+                }
+            } else {
+                launch.friends_stop.cancel();
+                launch.grants.revoke();
+                launch.topics.revoke_friends();
+                if let Some(link) = &launch.link {
+                    link.queue.set_friends_enabled(false);
+                    link.queue.mark_topics(launch.topics.valued());
+                }
+            }
+        }
+    }
+
+    pub fn friends_enabled(&self, instance_id: &str) -> bool {
+        self.with_launch(instance_id, |launch| launch.expectations.friends_enabled).unwrap_or(false)
+    }
+
+    pub fn friends_stop(&self, instance_id: &str) -> CancellationToken {
+        self.with_launch(instance_id, |launch| launch.friends_stop.clone()).unwrap_or_else(|| {
+            let stop = CancellationToken::new();
+            stop.cancel();
+            stop
+        })
+    }
     pub fn scope_allowed(&self, instance_id: &str, scope: Scope) -> bool {
-        self.with_launch(instance_id, |launch| launch.grants.is_allowed(scope)).unwrap_or(false)
+        self.with_launch(instance_id, |launch| launch.expectations.friends_enabled && launch.grants.is_allowed(scope)).unwrap_or(false)
     }
 
     /// Öffnet die Rückfrage des Spielstarts; ein Start, den es nicht mehr gibt, bekommt keine.
-    pub fn begin_prompt(&self, instance_id: &str, now: Instant) -> Result<(), PromptRefusal> {
-        self.with_launch(instance_id, |launch| launch.grants.begin_prompt(now)).unwrap_or(Err(PromptRefusal::Exhausted))
+    pub fn begin_prompt(&self, instance_id: &str, now: Instant, permission: &CancellationToken) -> Result<(), PromptRefusal> {
+        self.with_launch(instance_id, |launch| {
+            if permission.is_cancelled() || !launch.expectations.friends_enabled {
+                return Err(PromptRefusal::Exhausted);
+            }
+            launch.grants.begin_prompt(now)
+        }).unwrap_or(Err(PromptRefusal::Exhausted))
     }
 
-    pub fn end_prompt(&self, instance_id: &str, granted: Option<Scope>) {
-        self.with_launch(instance_id, |launch| launch.grants.end_prompt(granted));
+    pub fn end_prompt(&self, instance_id: &str, granted: Option<Scope>, permission: &CancellationToken) {
+        self.with_launch(instance_id, |launch| {
+            if permission.is_cancelled() {
+                return;
+            }
+            launch.grants.end_prompt(granted.filter(|_| launch.expectations.friends_enabled));
+        });
     }
 
     #[cfg(test)]
     pub fn allow_scope(&self, instance_id: &str, scope: Scope) {
-        self.end_prompt(instance_id, Some(scope));
+        self.end_prompt(instance_id, Some(scope), &self.friends_stop(instance_id));
     }
 
     /// Zählt einen Vorgang; ein Start, den es nicht mehr gibt, darf nichts mehr.
@@ -98,17 +149,31 @@ impl Inner {
         self.with_launch(instance_id, |launch| launch.limits.take(class, now)).unwrap_or(false)
     }
 
+    #[cfg(test)]
     pub fn topic_current(&self, instance_id: &str, topic: Topic) -> Option<(u64, TopicValue)> {
         self.with_launch(instance_id, |launch| launch.topics.current(topic)).flatten()
     }
 
-    /// Setzt das Thema; ändert sich der Wert, geht er an die Verbindung, falls eine besteht.
-    pub fn set_topic(&self, instance_id: &str, value: TopicValue) {
+    pub fn topic_for_link(&self, instance_id: &str, link_id: u64, topic: Topic) -> Option<(u64, TopicValue)> {
         self.with_launch(instance_id, |launch| {
-            if let (Some(topic), Some(link)) = (launch.topics.set(value), &launch.link) {
-                link.queue.mark_topics([topic]);
-            }
-        });
+            launch.link.as_ref().filter(|link| link.id == link_id)?;
+            launch.topics.current(topic)
+        }).flatten()
+    }
+
+    /// Setzt das Thema; ändert sich der Wert, geht er an die Verbindung, falls eine besteht.
+    pub fn set_topic(&self, instance_id: &str, mut value: TopicValue, generation: Option<u64>) {
+        let mut state = lock(&self.state);
+        if generation.is_some_and(|generation| generation != state.friends_generation) {
+            return;
+        }
+        let Some(launch) = state.launches.get_mut(instance_id) else { return };
+        if !launch.expectations.friends_enabled {
+            value.revoke_friends();
+        }
+        if let (Some(topic), Some(link)) = (launch.topics.set(value), &launch.link) {
+            link.queue.mark_topics([topic]);
+        }
     }
 
     /// Schickt der Verbindung alle Themen noch einmal (`state.sync`).
@@ -190,6 +255,7 @@ impl Inner {
             peer,
             local,
         };
+        link.queue.set_friends_enabled(launch.expectations.friends_enabled);
         link.queue.mark_topics(launch.topics.valued());
         launch.link = Some(link.clone());
         Ok(Admitted { instance_id: instance_id.clone(), link, scopes: launch.grants.scopes() })
