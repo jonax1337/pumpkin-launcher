@@ -98,6 +98,7 @@ export const friends: typeof deFriends = {
   "friends.name.sent": "Request to {name} sent",
   "friends.name.showMyCode": "Show my code",
   "friends.name.unreachable": "The directory can't be reached right now; use a code.",
+  "friends.name.buildUnavailable": "This build has no friends directory, so search by Minecraft name is off. Friend codes still work.",
   "friends.name.notFindable": "Others can only find you by name if you allow it in the settings.",
   "friends.name.openSettings": "Open settings",
   "friends.myCode.button": "My code",

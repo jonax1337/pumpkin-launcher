@@ -8,6 +8,7 @@ Thanks for your interest! Issues, discussions and pull requests are all welcome.
 # Prerequisites: Node 24, pnpm 11, Rust stable; system packages per OS: see README (Prerequisites)
 pnpm install
 pnpm tauri dev     # desktop app with hot reload
+pnpm dev:friends   # same, with the friends directory attached
 pnpm dev           # frontend only, mock data (http://localhost:1420)
 ```
 

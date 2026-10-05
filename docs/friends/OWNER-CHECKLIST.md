@@ -436,9 +436,9 @@ Die Zeilen heißen wie in `BYNAME-ATTEST.md` 8.3. **Reihenfolge: O-1, O-2, O-3, 
   *Erwartet:* Migration `0002_letters_without_name` angewendet, **dann erst** das Deployment (der neue Code schreibt `from_name` nicht mehr, die Spalte ist bis `0002` `NOT NULL`), und `curl.exe` druckt `{"error":"gone"}`.
 - [ ] **O-3. Echter Login mit einem Dev-Build, vor dem Tag.**
   ```powershell
-  $env:PUMPKIN_FRIENDS_DIRECTORY="https://pumpkin-friends-directory.jonas-laux.workers.dev"; npm run tauri:remote
+  pnpm dev:friends
   ```
-  (oder `pnpm tauri dev` in demselben Fenster). Mit dem echten Microsoft-Konto anmelden, Freunde einschalten, Einstellungen › Freunde › „Per Minecraft-Namen auffindbar“ an. Danach:
+  Mit dem echten Microsoft-Konto anmelden, Freunde einschalten, Einstellungen › Freunde › „Per Minecraft-Namen auffindbar“ an. Danach:
   ```powershell
   cd directory
   npx wrangler d1 execute pumpkin-friends-directory --remote --command "SELECT uuid FROM users"

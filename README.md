@@ -89,6 +89,7 @@ Pumpkin Launcher is in beta (v2.0.x). Install, launch, content, worlds, skins, i
 ```bash
 pnpm install
 pnpm tauri dev     # desktop app with hot reload
+pnpm dev:friends   # same, with the friends directory attached (add by Minecraft name)
 pnpm tauri:remote  # same, but without scene animation (for remote-desktop sessions)
 pnpm dev           # frontend only in the browser (http://localhost:1420, mock data)
 ```

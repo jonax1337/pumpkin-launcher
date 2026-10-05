@@ -98,6 +98,7 @@ export const friends = {
   "friends.name.sent": "Anfrage an {name} gesendet",
   "friends.name.showMyCode": "Meinen Code zeigen",
   "friends.name.unreachable": "Das Verzeichnis ist gerade nicht erreichbar; nutze einen Code.",
+  "friends.name.buildUnavailable": "Dieser Build kennt kein Freunde-Verzeichnis; die Suche per Minecraft-Name ist deshalb aus. Freundescodes funktionieren.",
   "friends.name.notFindable": "Andere finden dich nur per Name, wenn du es in den Einstellungen erlaubst.",
   "friends.name.openSettings": "Einstellungen öffnen",
   "friends.myCode.button": "Mein Code",
