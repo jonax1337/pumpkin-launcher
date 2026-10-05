@@ -28,7 +28,7 @@ the abuse mailbox). Everything else was derived from the spec and from the `iroh
 
 | Data | Who sees it | Where it is stored | Why |
 |---|---|---|---|
-| Display name (3 to 32 characters), Minecraft name and UUID (self-asserted) | Confirmed friends | Locally at each friend, locally at the user | Show who a friend is |
+| Minecraft player name and UUID (automatically sourced from the signed-in account; normal peer announcements remain self-asserted) | Confirmed friends | Locally at each friend, locally at the user | Show who a friend is; no separate configurable display name |
 | Online and playing status | Confirmed friends only | Not stored by us (kept in memory by the friend's launcher; `lastSeen` is stored locally) | Presence |
 | Hosting a world, version, loader, mod list (manifest) | Invited friends only | Not stored by us | Join a shared world |
 | Permanent identity key | Nobody. Only the derived id (64 hex) is shared with friends | The OS keychain, never in a file | Authenticate friends |
@@ -37,7 +37,7 @@ the abuse mailbox). Everything else was derived from the spec and from the `iroh
 | IP address and endpoint id of a connected launcher | The relay operator, while the connection is open | Memory of the relay process only (section 3.4) | Forward packets, find the peer |
 | Minecraft UUID of a friend | Mojang's sessionserver | Skin image is cached locally | Show the friend's skin |
 | Minecraft UUID of a person who is findable by name, plus first and last refresh time | The Pumpkin directory | The directory's database (EU), until switched off or 30 days without refresh | Be found by exact name (section 9) |
-| By-name request: sender's UUID, friends id, display name, one-time code | The directory, then the recipient | The directory's database, at most 14 days | Deliver a request while the recipient is offline (section 9) |
+| By-name request: sender's UUID, friends id, Minecraft player name, one-time code | The directory, then the recipient | The directory's database, at most 14 days | Deliver a request while the recipient is offline (section 9) |
 | Player certificate (public key, expiry, Mojang's signature) and two signatures | The directory, during the login | **Not stored** | Prove account ownership offline (section 9) |
 | World traffic between the players | The two launchers | Nowhere | The game itself |
 | Friends data shown in the game (names, presence, requests, invites; planned) | The in-game mod and every other mod in the same game (section 10) | Memory of the game process only | Show the friends menu in the game |
@@ -246,7 +246,7 @@ rate limiting. The Worker writes no logs (`[observability] enabled = false`).
 | Data | Stored | Kept | Why |
 |---|---|---|---|
 | Minecraft UUID of a findable person, time of first registration and last refresh | Yes, table `users` | Until switched off, until signing out of Friends, or 30 days without a refresh | The opt-in itself |
-| By-name request: sender's UUID and friends id (stamped by the directory), recipient's UUID, single-use code parts, display name, times, signature | Yes, table `letters` | Until answered, retracted, blocked or 14 days | Offline delivery |
+| By-name request: sender's UUID and friends id (stamped by the directory), recipient's UUID, single-use code parts, Minecraft player name (signed `displayName` wire field), times, signature | Yes, table `letters` | Until answered, retracted, blocked or 14 days | Offline delivery |
 | Blocks: your UUID → blocked UUID | Yes, table `blocks` | Until unblocked or signed out | Refuse a sender |
 | Send log: who wrote to whom, when | Yes, table `sends` | 7 days, also for senders who are not findable | Abuse prevention |
 | **Player certificate: public key, expiry, Mojang's signature, and the two login signatures** | **No (processed, not stored)** | Only while the login request is handled | Prove account ownership offline |

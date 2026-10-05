@@ -38,10 +38,10 @@ assert.equal(seatsLeft(sessionWith(guest('left'), guest('declined'), guest('left
 
 // Wen man einladen kann: online, bestätigt, ohne Platz; alphabetisch, auch bei gleichen Namen mit Fingerabdruck.
 const alex = friend({ id: 'a', displayName: 'Alex' });
-const bea = friend({ id: 'b', displayName: 'Bea', presence: 'playing' });
-const cleo = friend({ id: 'c', displayName: 'Cleo', presence: 'offline' });
-const dino = friend({ id: 'd', displayName: 'Dino', confirmed: false });
-const eli = friend({ id: 'e', displayName: 'Eli', removedByPeer: true });
+const bea = friend({ id: 'b', displayName: 'Old nickname', mcName: 'Bea', presence: 'playing' });
+const cleo = friend({ id: 'c', displayName: 'Cleo', mcName: 'Cleo', presence: 'offline' });
+const dino = friend({ id: 'd', displayName: 'Dino', mcName: 'Dino', confirmed: false });
+const eli = friend({ id: 'e', displayName: 'Eli', mcName: 'Eli', removedByPeer: true });
 const everyone = [bea, eli, dino, cleo, alex];
 const labels = friendLabels(everyone);
 assert.deepEqual(ids(invitableFriends(everyone, labels, undefined)), ['a', 'b']);

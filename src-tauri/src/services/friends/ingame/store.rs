@@ -24,7 +24,10 @@ struct StateFile {
 
 impl Default for StateFile {
     fn default() -> Self {
-        Self { version: STATE_VERSION, instances: BTreeMap::new() }
+        Self {
+            version: STATE_VERSION,
+            instances: BTreeMap::new(),
+        }
     }
 }
 
@@ -42,10 +45,17 @@ impl InjectionStore {
     pub fn open(dir: &Path, launcher_version: &str) -> AppResult<Self> {
         let path = dir.join(STATE_FILE);
         let stored = read(&path)?;
-        let lifted: BTreeMap<_, _> =
-            stored.instances.iter().map(|(id, state)| (id.clone(), state.clone().lifted_for(launcher_version))).collect();
+        let lifted: BTreeMap<_, _> = stored
+            .instances
+            .iter()
+            .map(|(id, state)| (id.clone(), state.clone().lifted_for(launcher_version)))
+            .collect();
         let was_lifted = lifted != stored.instances;
-        let store = Self { path, launcher_version: launcher_version.to_owned(), states: Mutex::new(lifted) };
+        let store = Self {
+            path,
+            launcher_version: launcher_version.to_owned(),
+            states: Mutex::new(lifted),
+        };
         if was_lifted {
             store.save(&lock(&store.states))?;
         }
@@ -54,7 +64,10 @@ impl InjectionStore {
 
     /// Der Zustand der Instanz; eine unbekannte Instanz ist `Active`.
     pub fn get(&self, instance_id: &str) -> InjectionState {
-        lock(&self.states).get(instance_id).cloned().unwrap_or_default()
+        lock(&self.states)
+            .get(instance_id)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Der Spieler legt den Schalter der Instanz um; das hebt auch ein automatisches Ausschalten auf.
@@ -85,7 +98,11 @@ impl InjectionStore {
         Ok(())
     }
 
-    fn change(&self, instance_id: &str, transition: impl FnOnce(InjectionState) -> InjectionState) -> AppResult<InjectionState> {
+    fn change(
+        &self,
+        instance_id: &str,
+        transition: impl FnOnce(InjectionState) -> InjectionState,
+    ) -> AppResult<InjectionState> {
         let mut states = lock(&self.states);
         let next = transition(states.get(instance_id).cloned().unwrap_or_default());
         let mut changed = states.clone();
@@ -103,13 +120,18 @@ impl InjectionStore {
         if let Some(dir) = self.path.parent() {
             fs::create_dir_all(dir)?;
         }
-        let file = StateFile { version: STATE_VERSION, instances: states.clone() };
+        let file = StateFile {
+            version: STATE_VERSION,
+            instances: states.clone(),
+        };
         write_atomic(&self.path, &serde_json::to_vec_pretty(&file)?)
     }
 }
 
 fn read(path: &Path) -> AppResult<StateFile> {
-    let Some(raw) = none_if_missing(fs::read_to_string(path))? else { return Ok(StateFile::default()) };
+    let Some(raw) = none_if_missing(fs::read_to_string(path))? else {
+        return Ok(StateFile::default());
+    };
     match serde_json::from_str(&raw) {
         Ok(file) => Ok(file),
         Err(error) => {
@@ -131,7 +153,10 @@ mod tests {
     }
 
     fn auto_off(reason: FailureKind, version: &str) -> InjectionState {
-        InjectionState::AutoOff { reason, launcher_version: version.to_owned() }
+        InjectionState::AutoOff {
+            reason,
+            launcher_version: version.to_owned(),
+        }
     }
 
     #[test]
@@ -154,7 +179,9 @@ mod tests {
     #[test]
     fn a_trip_survives_a_restart_under_the_same_launcher_version() {
         let dir = TempDir::new();
-        let tripped = open(&dir, LAUNCHER).trip("i1", FailureKind::MixinApplyFailed).unwrap();
+        let tripped = open(&dir, LAUNCHER)
+            .trip("i1", FailureKind::MixinApplyFailed)
+            .unwrap();
 
         assert_eq!(tripped, auto_off(FailureKind::MixinApplyFailed, LAUNCHER));
         assert_eq!(open(&dir, LAUNCHER).get("i1"), tripped);
@@ -163,13 +190,19 @@ mod tests {
     #[test]
     fn a_new_launcher_version_lifts_a_trip_and_stores_the_lifting() {
         let dir = TempDir::new();
-        open(&dir, "2.1.0").trip("i1", FailureKind::ModLoadingError).unwrap();
+        open(&dir, "2.1.0")
+            .trip("i1", FailureKind::ModLoadingError)
+            .unwrap();
 
         assert_eq!(open(&dir, "2.1.1").get("i1"), InjectionState::Active);
 
         let written = fs::read_to_string(dir.path().join(STATE_FILE)).unwrap();
         assert!(!written.contains("autoOff"), "{written}");
-        assert_eq!(open(&dir, "2.1.0").get("i1"), InjectionState::Active, "aufgehoben bleibt aufgehoben");
+        assert_eq!(
+            open(&dir, "2.1.0").get("i1"),
+            InjectionState::Active,
+            "aufgehoben bleibt aufgehoben"
+        );
     }
 
     #[test]
@@ -186,14 +219,21 @@ mod tests {
         let store = open(&dir, LAUNCHER);
         store.set_switch("i1", false).unwrap();
 
-        assert_eq!(store.trip("i1", FailureKind::UnsupportedClassVersion).unwrap(), InjectionState::UserOff);
+        assert_eq!(
+            store
+                .trip("i1", FailureKind::UnsupportedClassVersion)
+                .unwrap(),
+            InjectionState::UserOff
+        );
     }
 
     #[test]
     fn retry_lifts_a_trip_but_not_the_players_off_switch() {
         let dir = TempDir::new();
         let store = open(&dir, LAUNCHER);
-        store.trip("i1", FailureKind::FabricIncompatibleModSet).unwrap();
+        store
+            .trip("i1", FailureKind::FabricIncompatibleModSet)
+            .unwrap();
         store.set_switch("i2", false).unwrap();
 
         assert_eq!(store.retry("i1").unwrap(), InjectionState::Active);
@@ -207,7 +247,10 @@ mod tests {
         let store = open(&dir, LAUNCHER);
         store.trip("i1", FailureKind::MixinApplyFailed).unwrap();
 
-        assert_eq!(store.set_switch("i1", true).unwrap(), InjectionState::Active);
+        assert_eq!(
+            store.set_switch("i1", true).unwrap(),
+            InjectionState::Active
+        );
     }
 
     #[test]
@@ -217,7 +260,9 @@ mod tests {
         store.set_switch("i1", false).unwrap();
         store.set_switch("i1", true).unwrap();
 
-        let written: StateFile = serde_json::from_str(&fs::read_to_string(dir.path().join(STATE_FILE)).unwrap()).unwrap();
+        let written: StateFile =
+            serde_json::from_str(&fs::read_to_string(dir.path().join(STATE_FILE)).unwrap())
+                .unwrap();
 
         assert!(written.instances.is_empty());
     }
@@ -229,7 +274,9 @@ mod tests {
         store.trip("i1", FailureKind::ModLoadingError).unwrap();
         store.set_switch("i2", false).unwrap();
 
-        let written: serde_json::Value = serde_json::from_str(&fs::read_to_string(dir.path().join(STATE_FILE)).unwrap()).unwrap();
+        let written: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(dir.path().join(STATE_FILE)).unwrap())
+                .unwrap();
 
         let expected = serde_json::json!({
             "version": 1,
@@ -258,6 +305,9 @@ mod tests {
         fs::write(dir.path().join(STATE_FILE), "{kaputt").unwrap();
 
         assert_eq!(open(&dir, LAUNCHER).get("i1"), InjectionState::Active);
-        assert_eq!(fs::read_to_string(dir.path().join("ingame.json.corrupt")).unwrap(), "{kaputt");
+        assert_eq!(
+            fs::read_to_string(dir.path().join("ingame.json.corrupt")).unwrap(),
+            "{kaputt"
+        );
     }
 }

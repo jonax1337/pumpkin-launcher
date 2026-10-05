@@ -73,13 +73,16 @@ loom {
 }
 
 // -Pkitdemo startet den Entwicklungs-Client mit dem Widget-Kit-Demo-Bildschirm (README, Abschnitt Kit demo): Er öffnet sich
-// mit dem ersten Titelbildschirm, schreibt eine Logzeile und schließt sich wieder.
+// mit dem ersten Titelbildschirm, schreibt eine Logzeile und schließt sich wieder; -PdemoHold zusätzlich hält ihn offen.
 // Ein frischer Lauf zeigt zuerst den Barrierefreiheits-Willkommensbildschirm statt des Titelbildschirms; options.txt schaltet ihn ab.
 if (project.hasProperty('kitdemo')) {
 	loom {
 		runs {
 			client {
 				vmArg '-Dpumpkin.dev.kitdemo=true'
+				if (project.hasProperty('demoHold')) {
+					vmArg '-Dpumpkin.dev.demoHold=true'
+				}
 			}
 		}
 	}

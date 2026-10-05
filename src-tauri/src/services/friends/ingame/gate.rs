@@ -1,9 +1,9 @@
 //! Das Tor der Einspeisung (INGAME 3.3): alle Bedingungen an einer Stelle, als reine Funktion über die Tatsachen des
 //! Starts. Besteht eine nicht, startet das Spiel byte-identisch zu heute; der Grund füllt die Statuszeile der
 //! Instanzseite (3.9).
+use super::breaker::{FailureKind, InjectionState};
 use super::index::{ModIndex, Node};
 use super::select::{select, Selection, Target, Unfit};
-use super::breaker::{FailureKind, InjectionState};
 use crate::models::ModLoader;
 
 /// Die Mod-Id, die in einer Instanz nicht schon vorhanden sein darf (INGAME 3.3, Punkt 6).
@@ -35,7 +35,10 @@ impl LaunchFacts<'_> {
     /// Rauchtest (A18, `tests/smoke`): der Start läuft mit einem Offline-Konto, das Tor soll aber so entscheiden, als hätte
     /// er ein Microsoft-Konto. Nur dieses eine Tor wird überstimmt; alle anderen Bedingungen bleiben echt.
     pub fn with_online_account_forced(self) -> Self {
-        Self { online_account: true, ..self }
+        Self {
+            online_account: true,
+            ..self
+        }
     }
 }
 
@@ -117,7 +120,12 @@ fn launcher_state_blocker(facts: &LaunchFacts) -> Option<SkipReason> {
 }
 
 pub(super) fn target_of<'a>(facts: &LaunchFacts<'a>) -> Target<'a> {
-    Target { minecraft: facts.minecraft, loader: facts.loader, loader_version: facts.loader_version, java_major: facts.java_major }
+    Target {
+        minecraft: facts.minecraft,
+        loader: facts.loader,
+        loader_version: facts.loader_version,
+        java_major: facts.java_major,
+    }
 }
 
 fn switch_blocker(facts: &LaunchFacts) -> Option<SkipReason> {
@@ -126,12 +134,18 @@ fn switch_blocker(facts: &LaunchFacts) -> Option<SkipReason> {
     }
     match facts.instance_state {
         InjectionState::UserOff => Some(SkipReason::InstanceOff),
-        state => state.tripped_reason(facts.launcher_version).map(SkipReason::Tripped),
+        state => state
+            .tripped_reason(facts.launcher_version)
+            .map(SkipReason::Tripped),
     }
 }
 
 fn collision_blocker(facts: &LaunchFacts) -> Option<SkipReason> {
-    facts.mod_ids_in_instance.iter().any(|id| id == MOD_ID).then_some(SkipReason::IdCollision)
+    facts
+        .mod_ids_in_instance
+        .iter()
+        .any(|id| id == MOD_ID)
+        .then_some(SkipReason::IdCollision)
 }
 
 #[cfg(test)]
@@ -146,9 +160,27 @@ mod tests {
 
     fn index() -> ModIndex {
         index_of(vec![
-            node("1.21.1-fabric", Loader::Fabric, &["1.21", "1.21.1"], "0.16.0", 21),
-            node("1.21.1-neoforge", Loader::Neoforge, &["1.21.1"], "21.1.0", 21),
-            unverified(node("1.20.4-fabric", Loader::Fabric, &["1.20.4"], "0.15.0", 17)),
+            node(
+                "1.21.1-fabric",
+                Loader::Fabric,
+                &["1.21", "1.21.1"],
+                "0.16.0",
+                21,
+            ),
+            node(
+                "1.21.1-neoforge",
+                Loader::Neoforge,
+                &["1.21.1"],
+                "21.1.0",
+                21,
+            ),
+            unverified(node(
+                "1.20.4-fabric",
+                Loader::Fabric,
+                &["1.20.4"],
+                "0.15.0",
+                17,
+            )),
         ])
     }
 
@@ -178,9 +210,19 @@ mod tests {
     #[test]
     fn a_launch_that_meets_every_condition_injects_the_node() {
         let index = index();
-        assert_eq!(decide(&index, &fitting_facts()), Decision::Inject(index.node("1.21.1-fabric").unwrap()));
-        let neoforge = LaunchFacts { loader: ModLoader::NeoForge, loader_version: "21.1.172", ..fitting_facts() };
-        assert_eq!(decide(&index, &neoforge), Decision::Inject(index.node("1.21.1-neoforge").unwrap()));
+        assert_eq!(
+            decide(&index, &fitting_facts()),
+            Decision::Inject(index.node("1.21.1-fabric").unwrap())
+        );
+        let neoforge = LaunchFacts {
+            loader: ModLoader::NeoForge,
+            loader_version: "21.1.172",
+            ..fitting_facts()
+        };
+        assert_eq!(
+            decide(&index, &neoforge),
+            Decision::Inject(index.node("1.21.1-neoforge").unwrap())
+        );
     }
 
     #[test]
@@ -190,22 +232,137 @@ mod tests {
         let tripped = InjectionState::Active.tripped(FailureKind::MixinApplyFailed, LAUNCHER);
         let own_mod = vec!["fabric-api".to_owned(), MOD_ID.to_owned()];
         let cases: Vec<(&str, LaunchFacts, SkipReason)> = vec![
-            ("friends off", LaunchFacts { friends_enabled: false, ..fitting_facts() }, SkipReason::FriendsOff),
-            ("bridge not running", LaunchFacts { bridge_running: false, ..fitting_facts() }, SkipReason::BridgeNotRunning),
-            ("offline account", LaunchFacts { online_account: false, ..fitting_facts() }, SkipReason::OfflineAccount),
-            ("vanilla", LaunchFacts { loader: ModLoader::Vanilla, ..fitting_facts() }, SkipReason::Unfit(Unfit::VanillaNeedsLoader)),
-            ("quilt", LaunchFacts { loader: ModLoader::Quilt, ..fitting_facts() }, SkipReason::Unfit(Unfit::QuiltUnsupported)),
-            ("newer minecraft", LaunchFacts { minecraft: "26.9", ..fitting_facts() }, SkipReason::Unfit(Unfit::NoNode)),
-            ("snapshot", LaunchFacts { minecraft: "24w14a", ..fitting_facts() }, SkipReason::Unfit(Unfit::NoNode)),
-            ("unverified cell", LaunchFacts { minecraft: "1.20.4", java_major: Some(17), ..fitting_facts() }, SkipReason::Unfit(Unfit::Unverified)),
-            ("loader too old", LaunchFacts { loader_version: "0.15.0", ..fitting_facts() }, SkipReason::Unfit(Unfit::LoaderTooOld { need: "0.16.0".to_owned() })),
-            ("loader version unreadable", LaunchFacts { loader_version: "", ..fitting_facts() }, SkipReason::Unfit(Unfit::LoaderVersionUnknown)),
-            ("java too old", LaunchFacts { java_major: Some(17), ..fitting_facts() }, SkipReason::Unfit(Unfit::JavaTooOld { need: 21 })),
-            ("java unknown", LaunchFacts { java_major: None, ..fitting_facts() }, SkipReason::Unfit(Unfit::JavaUnknown)),
-            ("global switch off", LaunchFacts { global_switch: false, ..fitting_facts() }, SkipReason::GloballyOff),
-            ("instance switch off", LaunchFacts { instance_state: &off, ..fitting_facts() }, SkipReason::InstanceOff),
-            ("breaker tripped", LaunchFacts { instance_state: &tripped, ..fitting_facts() }, SkipReason::Tripped(FailureKind::MixinApplyFailed)),
-            ("own mod already in mods", LaunchFacts { mod_ids_in_instance: &own_mod, ..fitting_facts() }, SkipReason::IdCollision),
+            (
+                "friends off",
+                LaunchFacts {
+                    friends_enabled: false,
+                    ..fitting_facts()
+                },
+                SkipReason::FriendsOff,
+            ),
+            (
+                "bridge not running",
+                LaunchFacts {
+                    bridge_running: false,
+                    ..fitting_facts()
+                },
+                SkipReason::BridgeNotRunning,
+            ),
+            (
+                "offline account",
+                LaunchFacts {
+                    online_account: false,
+                    ..fitting_facts()
+                },
+                SkipReason::OfflineAccount,
+            ),
+            (
+                "vanilla",
+                LaunchFacts {
+                    loader: ModLoader::Vanilla,
+                    ..fitting_facts()
+                },
+                SkipReason::Unfit(Unfit::VanillaNeedsLoader),
+            ),
+            (
+                "quilt",
+                LaunchFacts {
+                    loader: ModLoader::Quilt,
+                    ..fitting_facts()
+                },
+                SkipReason::Unfit(Unfit::QuiltUnsupported),
+            ),
+            (
+                "newer minecraft",
+                LaunchFacts {
+                    minecraft: "26.9",
+                    ..fitting_facts()
+                },
+                SkipReason::Unfit(Unfit::NoNode),
+            ),
+            (
+                "snapshot",
+                LaunchFacts {
+                    minecraft: "24w14a",
+                    ..fitting_facts()
+                },
+                SkipReason::Unfit(Unfit::NoNode),
+            ),
+            (
+                "unverified cell",
+                LaunchFacts {
+                    minecraft: "1.20.4",
+                    java_major: Some(17),
+                    ..fitting_facts()
+                },
+                SkipReason::Unfit(Unfit::Unverified),
+            ),
+            (
+                "loader too old",
+                LaunchFacts {
+                    loader_version: "0.15.0",
+                    ..fitting_facts()
+                },
+                SkipReason::Unfit(Unfit::LoaderTooOld {
+                    need: "0.16.0".to_owned(),
+                }),
+            ),
+            (
+                "loader version unreadable",
+                LaunchFacts {
+                    loader_version: "",
+                    ..fitting_facts()
+                },
+                SkipReason::Unfit(Unfit::LoaderVersionUnknown),
+            ),
+            (
+                "java too old",
+                LaunchFacts {
+                    java_major: Some(17),
+                    ..fitting_facts()
+                },
+                SkipReason::Unfit(Unfit::JavaTooOld { need: 21 }),
+            ),
+            (
+                "java unknown",
+                LaunchFacts {
+                    java_major: None,
+                    ..fitting_facts()
+                },
+                SkipReason::Unfit(Unfit::JavaUnknown),
+            ),
+            (
+                "global switch off",
+                LaunchFacts {
+                    global_switch: false,
+                    ..fitting_facts()
+                },
+                SkipReason::GloballyOff,
+            ),
+            (
+                "instance switch off",
+                LaunchFacts {
+                    instance_state: &off,
+                    ..fitting_facts()
+                },
+                SkipReason::InstanceOff,
+            ),
+            (
+                "breaker tripped",
+                LaunchFacts {
+                    instance_state: &tripped,
+                    ..fitting_facts()
+                },
+                SkipReason::Tripped(FailureKind::MixinApplyFailed),
+            ),
+            (
+                "own mod already in mods",
+                LaunchFacts {
+                    mod_ids_in_instance: &own_mod,
+                    ..fitting_facts()
+                },
+                SkipReason::IdCollision,
+            ),
         ];
         for (name, facts, expected) in cases {
             assert_eq!(skip_reason(&index, &facts), expected, "{name}");
@@ -216,33 +373,58 @@ mod tests {
     #[test]
     fn the_smoke_feature_overrules_only_the_online_account_gate() {
         let index = index();
-        let offline = LaunchFacts { online_account: false, ..fitting_facts() };
+        let offline = LaunchFacts {
+            online_account: false,
+            ..fitting_facts()
+        };
         assert_eq!(skip_reason(&index, &offline), SkipReason::OfflineAccount);
 
-        assert_eq!(decide(&index, &offline.with_online_account_forced()), Decision::Inject(index.node("1.21.1-fabric").unwrap()));
-        let java_too_old = LaunchFacts { java_major: Some(17), ..offline };
-        assert_eq!(skip_reason(&index, &java_too_old.with_online_account_forced()), SkipReason::Unfit(Unfit::JavaTooOld { need: 21 }));
+        assert_eq!(
+            decide(&index, &offline.with_online_account_forced()),
+            Decision::Inject(index.node("1.21.1-fabric").unwrap())
+        );
+        let java_too_old = LaunchFacts {
+            java_major: Some(17),
+            ..offline
+        };
+        assert_eq!(
+            skip_reason(&index, &java_too_old.with_online_account_forced()),
+            SkipReason::Unfit(Unfit::JavaTooOld { need: 21 })
+        );
     }
 
     #[test]
     fn a_trip_from_an_older_launcher_version_no_longer_blocks() {
         let index = index();
         let tripped_before = InjectionState::Active.tripped(FailureKind::ModLoadingError, "2.0.1");
-        let facts = LaunchFacts { instance_state: &tripped_before, ..fitting_facts() };
+        let facts = LaunchFacts {
+            instance_state: &tripped_before,
+            ..fitting_facts()
+        };
         assert!(matches!(decide(&index, &facts), Decision::Inject(_)));
     }
 
     #[test]
     fn other_mods_in_the_folder_do_not_collide() {
         let index = index();
-        let others = vec!["fabric-api".to_owned(), "pumpkin_friends_extra".to_owned(), "Pumpkin_Friends".to_owned()];
-        let facts = LaunchFacts { mod_ids_in_instance: &others, ..fitting_facts() };
+        let others = vec![
+            "fabric-api".to_owned(),
+            "pumpkin_friends_extra".to_owned(),
+            "Pumpkin_Friends".to_owned(),
+        ];
+        let facts = LaunchFacts {
+            mod_ids_in_instance: &others,
+            ..fitting_facts()
+        };
         assert!(matches!(decide(&index, &facts), Decision::Inject(_)));
     }
 
     #[test]
     fn an_empty_index_never_injects() {
-        assert_eq!(skip_reason(&ModIndex::default(), &fitting_facts()), SkipReason::Unfit(Unfit::NoNode));
+        assert_eq!(
+            skip_reason(&ModIndex::default(), &fitting_facts()),
+            SkipReason::Unfit(Unfit::NoNode)
+        );
     }
 
     #[test]
@@ -257,16 +439,40 @@ mod tests {
             mod_ids_in_instance: &[MOD_ID.to_owned()],
             ..fitting_facts()
         };
-        assert_eq!(skip_reason(&index, &everything_wrong), SkipReason::FriendsOff);
-        let bridge_on = LaunchFacts { friends_enabled: true, ..everything_wrong };
-        assert_eq!(skip_reason(&index, &bridge_on), SkipReason::BridgeNotRunning);
-        let bridge_up = LaunchFacts { bridge_running: true, ..bridge_on };
+        assert_eq!(
+            skip_reason(&index, &everything_wrong),
+            SkipReason::FriendsOff
+        );
+        let bridge_on = LaunchFacts {
+            friends_enabled: true,
+            ..everything_wrong
+        };
+        assert_eq!(
+            skip_reason(&index, &bridge_on),
+            SkipReason::BridgeNotRunning
+        );
+        let bridge_up = LaunchFacts {
+            bridge_running: true,
+            ..bridge_on
+        };
         assert_eq!(skip_reason(&index, &bridge_up), SkipReason::OfflineAccount);
-        let online = LaunchFacts { online_account: true, ..bridge_up };
-        assert_eq!(skip_reason(&index, &online), SkipReason::Unfit(Unfit::JavaUnknown));
-        let java_known = LaunchFacts { java_major: Some(21), ..online };
+        let online = LaunchFacts {
+            online_account: true,
+            ..bridge_up
+        };
+        assert_eq!(
+            skip_reason(&index, &online),
+            SkipReason::Unfit(Unfit::JavaUnknown)
+        );
+        let java_known = LaunchFacts {
+            java_major: Some(21),
+            ..online
+        };
         assert_eq!(skip_reason(&index, &java_known), SkipReason::GloballyOff);
-        let switch_on = LaunchFacts { global_switch: true, ..java_known };
+        let switch_on = LaunchFacts {
+            global_switch: true,
+            ..java_known
+        };
         assert_eq!(skip_reason(&index, &switch_on), SkipReason::IdCollision);
     }
 
@@ -278,7 +484,9 @@ mod tests {
             SkipReason::OfflineAccount,
             SkipReason::Unfit(Unfit::NoNode),
             SkipReason::Unfit(Unfit::Unverified),
-            SkipReason::Unfit(Unfit::LoaderTooOld { need: "1".to_owned() }),
+            SkipReason::Unfit(Unfit::LoaderTooOld {
+                need: "1".to_owned(),
+            }),
             SkipReason::Unfit(Unfit::LoaderVersionUnknown),
             SkipReason::Unfit(Unfit::JavaTooOld { need: 21 }),
             SkipReason::Unfit(Unfit::JavaUnknown),
@@ -293,8 +501,21 @@ mod tests {
         assert_eq!(
             codes,
             [
-                "friendsOff", "bridgeNotRunning", "offlineAccount", "noNode", "unverified", "loaderTooOld", "loaderVersionUnknown", "javaTooOld",
-                "javaUnknown", "vanillaNeedsLoader", "quiltUnsupported", "globallyOff", "instanceOff", "tripped", "idCollision"
+                "friendsOff",
+                "bridgeNotRunning",
+                "offlineAccount",
+                "noNode",
+                "unverified",
+                "loaderTooOld",
+                "loaderVersionUnknown",
+                "javaTooOld",
+                "javaUnknown",
+                "vanillaNeedsLoader",
+                "quiltUnsupported",
+                "globallyOff",
+                "instanceOff",
+                "tripped",
+                "idCollision"
             ]
         );
     }

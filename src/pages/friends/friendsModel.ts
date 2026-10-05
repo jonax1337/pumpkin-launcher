@@ -24,8 +24,8 @@ export function friendsBadgeCount(requests: FriendRequest[], invites: Invite[], 
 /** Freunde, die gerade online sind oder spielen. */
 export const onlineCount = (friends: Friend[]): number => friends.filter((friend) => friend.presence !== "offline").length;
 
-/** Der Name, den man selbst vergeben hat, sonst der selbst angegebene des Freundes. */
-export const friendName = (friend: Friend): string => friend.alias ?? friend.displayName;
+/** Ein lokaler Alias hat Vorrang vor dem Minecraft-Namen; alte Profile behalten ihren bisherigen Namen als Rückfall. */
+export const friendName = (friend: Friend): string => friend.alias ?? friend.mcName ?? friend.displayName;
 
 /** Erste Vierergruppe des Fingerabdrucks: unterscheidet gleich benannte Freunde. */
 export const fingerprintHead = (fingerprint: string): string => fingerprint.split(" ")[0];
@@ -81,9 +81,11 @@ export type RequestLineKey =
   | "friends.requests.delivering"
   | "friends.requests.deliveringName";
 
+export const requestName = (request: FriendRequest): string => request.mcName ?? request.displayName ?? "?";
+
 /** Der Stand einer eigenen Anfrage als Schlüssel mit dem Namen für seinen Platzhalter (Minecraft-Name, sonst Anzeigename). */
 export function requestLine(request: FriendRequest): { key: RequestLineKey; params: { name: string } } {
-  const params = { name: request.mcName ?? request.displayName ?? "?" };
+  const params = { name: requestName(request) };
   const byName = request.via === "name";
   if (request.state === "delivering") return { key: byName ? "friends.requests.deliveringName" : "friends.requests.delivering", params };
   return { key: byName ? "friends.requests.awaitingName" : "friends.requests.awaiting", params };

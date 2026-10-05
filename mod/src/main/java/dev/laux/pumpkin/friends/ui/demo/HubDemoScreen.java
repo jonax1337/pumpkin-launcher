@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * The hub as the dev run proves it (see {@link HubDemo}): after its first three rendered frames it logs one line and
- * closes itself, like the kit demo before it. Only the counter and the closing are demo; the screen is the real hub.
+ * closes itself unless the development-only demoHold switch is set. The screen is the real hub.
  */
 final class HubDemoScreen extends HubScreen {
 	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_friends");
@@ -37,7 +37,8 @@ final class HubDemoScreen extends HubScreen {
 	@Override
 	protected void onTick() {
 		super.onTick();
-		if (proofLogged && !closing) {
+		if (proofLogged && !closing && !Boolean.getBoolean("pumpkin.dev.demoHold")
+			&& !"true".equalsIgnoreCase(System.getenv("PUMPKIN_DEV_DEMO_HOLD"))) {
 			closing = true;
 			onClose();
 		}

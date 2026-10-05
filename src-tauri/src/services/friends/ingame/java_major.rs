@@ -3,7 +3,9 @@
 
 /// Hauptversion aus der Datei `release` einer Runtime (`JAVA_VERSION="21.0.2"`, bei Java 8 `"1.8.0_392"`).
 pub fn from_release_file(text: &str) -> Option<u32> {
-    let version = text.lines().find_map(|line| line.trim().strip_prefix("JAVA_VERSION="))?;
+    let version = text
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("JAVA_VERSION="))?;
     from_version_string(version.trim().trim_matches('"'))
 }
 
@@ -11,7 +13,9 @@ pub fn from_release_file(text: &str) -> Option<u32> {
 /// `openjdk version "21.0.2" 2024-01-16`, `java version "1.8.0_392"` oder `openjdk version "25-ea"`.
 /// Zeilen davor, wie `Picked up JAVA_TOOL_OPTIONS: ...`, werden übersprungen.
 pub fn from_version_output(text: &str) -> Option<u32> {
-    text.lines().find_map(quoted_version_of_line).and_then(from_version_string)
+    text.lines()
+        .find_map(quoted_version_of_line)
+        .and_then(from_version_string)
 }
 
 fn quoted_version_of_line(line: &str) -> Option<&str> {
@@ -21,7 +25,9 @@ fn quoted_version_of_line(line: &str) -> Option<&str> {
 
 /// `1.8.0_392` ist Java 8, `21.0.2`, `17` und `25-ea` sind Java 21, 17 und 25.
 fn from_version_string(version: &str) -> Option<u32> {
-    let mut numbers = version.split(['.', '_', '-', '+']).map_while(|part| part.parse::<u32>().ok());
+    let mut numbers = version
+        .split(['.', '_', '-', '+'])
+        .map_while(|part| part.parse::<u32>().ok());
     match numbers.next()? {
         1 => numbers.next(),
         major => Some(major),
@@ -35,8 +41,14 @@ mod tests {
     #[test]
     fn release_files_give_the_major_version() {
         let cases = [
-            ("JAVA_VERSION=\"21.0.2\"\nIMPLEMENTOR=\"Eclipse Adoptium\"\n", Some(21)),
-            ("IMPLEMENTOR=\"Oracle\"\nJAVA_VERSION=\"17.0.20\"\r\nOS_NAME=\"Windows\"\r\n", Some(17)),
+            (
+                "JAVA_VERSION=\"21.0.2\"\nIMPLEMENTOR=\"Eclipse Adoptium\"\n",
+                Some(21),
+            ),
+            (
+                "IMPLEMENTOR=\"Oracle\"\nJAVA_VERSION=\"17.0.20\"\r\nOS_NAME=\"Windows\"\r\n",
+                Some(17),
+            ),
             ("JAVA_VERSION=\"1.8.0_392\"\n", Some(8)),
             ("JAVA_VERSION=\"25\"\n", Some(25)),
             ("JAVA_VERSION=\"25-ea\"\n", Some(25)),
@@ -50,7 +62,14 @@ mod tests {
 
     #[test]
     fn release_files_without_a_usable_version_give_nothing() {
-        for text in ["", "IMPLEMENTOR=\"x\"\n", "JAVA_VERSION=\"\"\n", "JAVA_VERSION=\"abc\"\n", "JAVA_VERSION=\"1\"\n", "JAVA_RUNTIME_VERSION=\"21.0.2+13\"\n"] {
+        for text in [
+            "",
+            "IMPLEMENTOR=\"x\"\n",
+            "JAVA_VERSION=\"\"\n",
+            "JAVA_VERSION=\"abc\"\n",
+            "JAVA_VERSION=\"1\"\n",
+            "JAVA_RUNTIME_VERSION=\"21.0.2+13\"\n",
+        ] {
             assert_eq!(from_release_file(text), None, "{text:?}");
         }
     }
@@ -72,7 +91,14 @@ mod tests {
 
     #[test]
     fn version_output_that_is_not_java_gives_nothing() {
-        for text in ["", "command not found: java\n", "version \"21\"\n", "openjdk version 21\n", "openjdk version \"\" 2024\n", "openjdk version \"21"] {
+        for text in [
+            "",
+            "command not found: java\n",
+            "version \"21\"\n",
+            "openjdk version 21\n",
+            "openjdk version \"\" 2024\n",
+            "openjdk version \"21",
+        ] {
             assert_eq!(from_version_output(text), None, "{text:?}");
         }
     }

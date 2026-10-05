@@ -244,7 +244,7 @@ Runs only while the feature is enabled and available, the directory is attached,
 - Already a friend with `from.peerId` → queue `DeleteMail`.
 - Already stored (`mail_id` equals the letter id) → skip. Pending incoming requests ≥ 20 → leave it on the server (it comes back on a later poll).
 - **Sender name (the directory stamps none).** Only a letter that passed everything above (validation, local block, already-friend, not stored, room) causes a lookup at Mojang (review finding 9): `GET https://sessionserver.mojang.com/session/minecraft/profile/{from.uuid}` (`MojangSessions::profile`, from the recipient's IP). `Ok(Some(profile))` with `profile.uuid == from.uuid` → file it with `mc_name = profile.name`. `Err(_)` → leave the letter on the server and try again on the next poll. `Ok(None)` (204/404) → the letter stays, and is deleted only after `None` on **two polls in a row** (an in-memory miss counter per letter), because `DeleteMail` is irreversible and one anomalous answer must not destroy a legitimate letter. At most 20 letters are filed per poll, so at most 20 profile calls per 15 minutes.
-- Otherwise insert `RequestRecord { direction: Incoming, state: Pending, via: Name, peer_id: Some(from.peerId), hello_id, relay_index, secret, display_name: sanitize::display_name(displayName, peerId), mc_name: profile.name, mc_uuid: from.uuid, mail_id, created_at, expires_at }` and emit `friends-changed` + `friend-request`.
+- Otherwise insert `RequestRecord { direction: Incoming, state: Pending, via: Name, peer_id: Some(from.peerId), hello_id, relay_index, secret, display_name: profile.name, mc_name: profile.name, mc_uuid: from.uuid, mail_id, created_at, expires_at }` and emit `friends-changed` + `friend-request`. Verify the letter signature using the original signed `displayName` bytes before deriving this canonical name.
 - **Vanished letters:** a pending by-name incoming request whose `mail_id` is no longer in the inbox (retracted by the sender, answered on another PC of the same account, blocked, expired) is deleted locally (`friends-changed`).
 
 ### 7.3 Recipient answers
@@ -265,7 +265,7 @@ Runs only while the feature is enabled and available, the directory is attached,
 2. `used_by == Some(other)` → `error{codeUsed}`. `used_by == Some(this peer)` → go to step 4 (idempotent retry).
 3. Mojang `hasJoined(profile.mcName, serverId_redeemer(this hello id, conn.remote(), secret))` returns a UUID equal to `uuid_R`, else **close `NORMAL` with no frame** (as for a wrong secret). Friend capacity (else `error{full}`).
 4. `tokens.minecraft_session()` + Mojang `join(serverId_owner(...))`. On failure: close silently (R retries).
-5. Store `Friend{R, confirmed: false, display_name: sanitised profile.displayName, mc_name/mc_uuid from Mojang}`, set `used_by = R`, delete the outgoing `RequestRecord` with the code's id, and emit `friends-changed`.
+5. Store `Friend{R, confirmed: false, display_name: canonical Mojang name, mc_name/mc_uuid from Mojang}`, set `used_by = R`, delete the outgoing `RequestRecord` with the code's id, and emit `friends-changed`.
 6. Answer `received{peerId, binding, profile{…, mcName: session.name}}` and wait for R's close (≤ 20 s). **Only then** `dial_now(Target::Friend(R))`. From there on, SPEC 4.3 is unchanged: R's Gate admits S (`awaitingAnswer`), the control `hello` arrives, and both become confirmed.
 
 **Unconfirmed grace (`status.rs`, applies to all friends):** `NOT_FRIEND` from an **unconfirmed** friend added less than 60 s ago counts as a failed dial (backoff), not as `removedByPeer`. This closes the last ordering race between step 6 and R's step 4.
@@ -278,7 +278,7 @@ Runs only while the feature is enabled and available, the directory is attached,
 - **Rotate (SPEC 4.6):** by-name outgoing requests are `AwaitingAnswer` and bound to the old key, so they are deleted, their codes deleted, and `Retract` jobs queued. **By-name incoming pending requests are kept** (`drop_requests_bound_to_old_id` skips `via: Name` incoming): they are bound to the sender's id, not ours. The session token is dropped (it carries the old peer id).
 - **Reset:** as SPEC 4.6 (all records gone). Registration stays (it is keyed by UUID), and pending letters reappear on the next poll.
 - **Disable:** `Lifecycle::Disabled` → drop the session, queue `Unregister`, run the job queue once (≤ 2 s budget), and keep `findableByName` so that re-enabling registers again. While disabled, nothing is polled or sent.
-- **Account change** (first Microsoft account changes, the E7 seam): drop the session; if `registered_uuid` ≠ new uuid and the setting is on, queue `Unregister{old}` (only executable while the old account is still present, else dropped and covered by the 30-day retention) and register the new one.
+- **Account change** (first Microsoft account changes): a rename of the same UUID only updates the announced name and keeps token and certificate. A changed UUID drops the session; if `registered_uuid` ≠ new uuid and the setting is on, queue `Unregister{old}` (only executable while the old account is still present, else dropped and covered by the 30-day retention) and register the new one.
 
 ### 7.6 Directory jobs (persistent, `config.json` → `directory.jobs`)
 `DeleteMail{mailId, until}`, `Retract{mailId, until}`, `Block{uuid}`, `Unblock{uuid}`, `Unregister{uuid}`. They run in order at the start of every loop tick, and at once after the command that queued them. A `2xx`/`404` result removes a job. A network error, `5xx` or `429` keeps it. `until` (= the letter's expiry) drops stale ones. When findable turns on, `Block` jobs are re-queued for every local `BlockedRecord` with an `mc_uuid` (blocks exist server-side only while registered, N 4 B1).
@@ -404,8 +404,8 @@ pub const MAX_NAME_REQUESTS: usize = 5;  pub const MC_NAME_MAX: usize = 16;  pub
 pub enum RequestVia { Code, Name }                                                  // unit, camelCase
 pub enum DirectoryState { Unavailable, Off, Active, Unreachable, NotAllowed }       // unit, camelCase
 pub struct DirectoryStatus { pub state: DirectoryState, pub host: Option<String> /* for the PrivacyNotice; None if unavailable */ }
-pub struct FriendsSettings { pub display_name: String, pub always_relay: bool, pub findable_by_name: bool }
-pub struct FriendsEnableInput { pub display_name: String, pub always_relay: bool, pub accept_third_party_relays: bool, pub findable_by_name: bool }
+pub struct FriendsSettings { pub always_relay: bool, pub findable_by_name: bool }
+pub struct FriendsEnableInput { pub always_relay: bool, pub accept_third_party_relays: bool, pub findable_by_name: bool }
 pub struct FriendsState { …, pub directory: DirectoryStatus }
 pub struct FriendRequest { …, pub via: RequestVia }
 ```
@@ -417,8 +417,8 @@ export const FRIENDS_LIMITS = { …, maxNameRequests: 5, mcNameMax: 16, nameCool
 export type RequestVia = "code" | "name";
 export type DirectoryState = "unavailable" | "off" | "active" | "unreachable" | "notAllowed";
 export interface DirectoryStatus { state: DirectoryState; host: string | null }
-export interface FriendsSettings { displayName: string; alwaysRelay: boolean; findableByName: boolean }
-export interface FriendsEnableInput { displayName: string; alwaysRelay: boolean; acceptThirdPartyRelays: boolean; findableByName: boolean }
+export interface FriendsSettings { alwaysRelay: boolean; findableByName: boolean }
+export interface FriendsEnableInput { alwaysRelay: boolean; acceptThirdPartyRelays: boolean; findableByName: boolean }
 // FriendsState += directory: DirectoryStatus;   FriendRequest += via: RequestVia
 ```
 
@@ -460,7 +460,7 @@ Mapping: `NotFindable` → `nameNotFindable`; `RecipientFull` → existing `requ
 ### 9.7 Frontend
 - **AddFriendDialog** (`src/pages/friends/AddFriendDialog.tsx`, width 520, height 600): three `Tabs` in this order: **"Per Name"** (new `NameTab.tsx`, the default), "Code eingeben", "Mein Code". `AddFriendTab = "name" | "enter" | "mine"`. `AddFriendButtons`: the primary "Freund hinzufügen" opens `"name"` (or `"enter"` when `directory.state === "unavailable"`, in which case the Name tab is hidden).
   - Name tab: a `TextField` "Minecraft-Name" (placeholder "z. B. Steve", `maxLength 16`, shape check `isMcName` from `friendsModel.ts`, regex `^[A-Za-z0-9_]{1,16}$`). Primary "Anfrage senden" calls `friendAddByName`; on success, toast "Anfrage an {name} gesendet" and close.
-  - Hint (always): "{name} sieht deinen Minecraft-Namen, deinen Anzeigenamen und deinen Fingerabdruck. Erst wenn {name} annimmt, verbinden sich eure Launcher. Das Pumpkin-Verzeichnis hält die Anfrage bis zu 14 Tage bereit."
+  - Hint (always): "{name} sieht deinen Minecraft-Namen und deinen Fingerabdruck. Erst wenn {name} annimmt, verbinden sich eure Launcher. Das Pumpkin-Verzeichnis hält die Anfrage bis zu 14 Tage bereit."
   - `nameNotFindable` is shown **inline** (warning with symbol, not a toast) with the action "Meinen Code zeigen", which switches to "Mein Code". `directory.state === "unreachable"`: a `StatusPanel` with "Verzeichnis gerade nicht erreichbar; nutze einen Code". When my own `findableByName` is false, an info line: "Andere finden dich nur per Name, wenn du es in den Einstellungen erlaubst." with a link to `/settings?tab=freunde`.
 - **RequestsSection** (`RequestsSection.tsx`, texts from `friendsModel.ts` `requestLine(request)`):
   - Incoming `via: name`: name + fingerprint + a "Minecraft: {mcName}" sub-line, with a tooltip "Konto per Mojang-Zertifikat vom Verzeichnis geprüft, Name direkt bei Mojang nachgeschlagen; beim Annehmen prüfen beide Launcher das Konto noch einmal bei Mojang" (`requests.nameChecked`). Actions "Annehmen", "Ablehnen", and "Blockieren" in the menu.
@@ -476,7 +476,7 @@ Mapping: `NotFindable` → `nameNotFindable`; `RecipientFull` → existing `requ
 ### 9.8 Privacy text (SPEC 12.1 and 10.9, normative wording basis)
 SPEC 12.1 gains:
 - Finding by name is off until you turn on "Per Minecraft-Namen auffindbar". Then the Pumpkin directory (Cloudflare Worker, database in the EU) stores your Minecraft UUID, and nothing else about you, and keeps requests to you for up to 14 days. Off deletes it at once (restore history up to 7/30 days, N 5.3).
-- A request by name carries your Minecraft UUID, your display name and your friends id; the directory stores **no names**. The directory sees it, and sees who wrote to whom. It never sees whether the request was accepted, and never sees presence or connections.
+- A request by name carries your Minecraft UUID, your account-derived Minecraft player name (the unchanged signed `displayName` field) and your friends id. The directory has no name index, but stores the name in the pending letter and sees who wrote to whom. It never sees whether the request was accepted, presence or connections.
 - Whoever writes to you by name learns your friends id and (unless "Immer über Relay") your addresses only after you accept.
 - **The directory never contacts Mojang.** To prove that an account is yours, your launcher fetches a player certificate that Mojang signed (`api.minecraftservices.com/player/certificates`) and signs the login with it. The directory receives the certificate's public key and two signatures, checks them offline, and stores none of them. **The access token is only sent to Mojang, never to the directory.**
 - Your launcher calls these Mojang endpoints, from your IP address: `api.minecraftservices.com/player/certificates` (the certificate, about every 40 hours while the launcher runs), `api.minecraftservices.com/player/attributes` (whether the account may use multiplayer and friends, at every directory login), `api.minecraftservices.com/minecraft/profile/lookup/name/{name}` (name → UUID when you send by name), and `sessionserver.mojang.com/session/minecraft/profile/{uuid}` (UUID → name of the sender of each new request you receive, so Mojang learns that your launcher asked about that sender's UUID). On every acceptance both launchers confirm each other at Mojang through `join` and `hasJoined`, like an online-mode server.
@@ -602,7 +602,7 @@ Waves: **0** N-D0 → **1** W1 ∥ N-F1 → **2** N-R1 → **3** N-R2 → **4** 
 - **R3 Single operator.** One Worker means one point of failure and one point of trust. A compromise leaks metadata (who wrote to whom, findable UUIDs, pending secrets) and allows spam, but not impersonation (N 3.2). Codes keep working.
 - **R4 Free-tier capacity.** About 4 polls per hour per running findable launcher, plus about 2 requests (A1 and A2) per 6 h. 2.0.0 launchers that are still installed cost one `410` on A1 per 15-minute tick until they update. 100 k requests/day covers roughly 2,000-3,000 daily active findable users (8 h sessions). D1's 100 k written rows/day covers roughly 15 k letters/day. Beyond that, the Worker answers errors (by-name unavailable) until 00:00 UTC.
 - **R5 GDPR duties.** The owner becomes controller of a hosted service: privacy policy, data subject requests, and a processor agreement with Cloudflare. D1 Time Travel keeps deleted rows up to 7/30 days.
-- **R6 Self-asserted remainder.** Display names stay self-asserted. Only the Minecraft account is verified, and only at request and acceptance time (later `profile` changes are self-asserted as before).
+- **R6 Self-asserted remainder.** There is no configurable Friends display name. By-name requests and acceptance use canonical Mojang names; ordinary later `profile` announcements remain self-asserted and sanitised, so their names alone do not prove account ownership.
 - **R7 Latency.** Inbox polling makes delivery up to 15 min late unless the recipient opens the Friends page (`friends_retry_now`). Push is a non-goal for now.
 - **R8 Multiple PCs per account.** They share one inbox; the first acceptance wins. Acceptable, but surprising.
 

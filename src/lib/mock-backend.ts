@@ -70,7 +70,7 @@ export function createMockBackend(): Backend {
     ...eventSubscriptions(on),
     ...createInstanceMock(context),
     ...game,
-    ...createAccountMock(context),
+    ...createAccountMock(context, friends.accountChanged),
     ...createContentMock(context),
     ...createContentFilesMock(context),
     ...createPackMock(context),

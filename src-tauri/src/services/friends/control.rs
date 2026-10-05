@@ -12,7 +12,9 @@ use tokio::sync::mpsc;
 use tokio::time::{timeout, Instant};
 
 use super::contract::{InstanceSummary, Presence, RevokeReason};
-use super::limits::{SlidingWindow, CONTROL_FRAMES, CONTROL_FRAME_LIMIT, OPEN_FRAME_LIMIT, REQUEST_FRAME_LIMIT};
+use super::limits::{
+    SlidingWindow, CONTROL_FRAMES, CONTROL_FRAME_LIMIT, OPEN_FRAME_LIMIT, REQUEST_FRAME_LIMIT,
+};
 use super::service::{Core, Runtime};
 use super::status::{self, Link, Registration, Target};
 use super::{outbox, requests, sanitize};
@@ -32,7 +34,11 @@ pub const PROTOCOL_VERSION: u32 = 1;
 
 /// Erster Rahmen jedes Bi-Streams, vom Öffnenden gesendet.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum OpenFrame {
     /// Einer je Verbindung, vom Anwählenden geöffnet.
     Control,
@@ -56,9 +62,12 @@ pub struct WireProfile {
 impl WireProfile {
     /// Bereinigt; ein leerer Name wird zum Ersatznamen aus der Peer-ID.
     pub fn sanitized(&self, peer_id: &str) -> Self {
+        let mc_name = sanitize::mc_name(self.mc_name.as_deref());
         Self {
-            display_name: sanitize::display_name(&self.display_name, peer_id),
-            mc_name: sanitize::mc_name(self.mc_name.as_deref()),
+            display_name: mc_name
+                .clone()
+                .unwrap_or_else(|| sanitize::display_name(&self.display_name, peer_id)),
+            mc_name,
             mc_uuid: sanitize::mc_uuid(self.mc_uuid.as_deref()),
         }
     }
@@ -79,13 +88,22 @@ pub struct WireInvite {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SessionControl {
     Invite(WireInvite),
-    InviteRevoke { invite_id: String, reason: RevokeReason },
-    InviteDecline { invite_id: String },
+    InviteRevoke {
+        invite_id: String,
+        reason: RevokeReason,
+    },
+    InviteDecline {
+        invite_id: String,
+    },
 }
 
 /// Alle Nachrichten des Steuer-Streams, so wie sie auf der Leitung stehen.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub(super) enum ControlMessage {
     Hello {
         protocol: u32,
@@ -138,7 +156,9 @@ impl From<SessionControl> for ControlMessage {
     fn from(message: SessionControl) -> Self {
         match message {
             SessionControl::Invite(invite) => Self::Invite { invite },
-            SessionControl::InviteRevoke { invite_id, reason } => Self::InviteRevoke { invite_id, reason },
+            SessionControl::InviteRevoke { invite_id, reason } => {
+                Self::InviteRevoke { invite_id, reason }
+            }
             SessionControl::InviteDecline { invite_id } => Self::InviteDecline { invite_id },
         }
     }
@@ -172,20 +192,35 @@ pub(super) struct Malformed;
 pub(super) fn parse(message: ControlMessage, peer: &PeerId) -> Result<Incoming, Malformed> {
     let peer_id = peer.to_string();
     Ok(match message {
-        ControlMessage::Hello { profile, home_relay, .. } => {
-            Incoming::Hello { profile: profile.sanitized(&peer_id), home_relay }
-        }
+        ControlMessage::Hello {
+            profile,
+            home_relay,
+            ..
+        } => Incoming::Hello {
+            profile: profile.sanitized(&peer_id),
+            home_relay,
+        },
         ControlMessage::Status { presence } => Incoming::Status(presence),
         ControlMessage::Profile { profile } => Incoming::Profile(profile.sanitized(&peer_id)),
-        ControlMessage::Invite { invite } => Incoming::Session(SessionControl::Invite(sanitized_invite(invite)?)),
+        ControlMessage::Invite { invite } => {
+            Incoming::Session(SessionControl::Invite(sanitized_invite(invite)?))
+        }
         ControlMessage::InviteRevoke { invite_id, reason } => {
-            Incoming::Session(SessionControl::InviteRevoke { invite_id: checked_id(invite_id)?, reason })
+            Incoming::Session(SessionControl::InviteRevoke {
+                invite_id: checked_id(invite_id)?,
+                reason,
+            })
         }
         ControlMessage::InviteDecline { invite_id } => {
-            Incoming::Session(SessionControl::InviteDecline { invite_id: checked_id(invite_id)? })
+            Incoming::Session(SessionControl::InviteDecline {
+                invite_id: checked_id(invite_id)?,
+            })
         }
         ControlMessage::Unfriend => Incoming::Unfriend,
-        ControlMessage::IdentityRotated { new_peer_id, signature } => Incoming::IdentityRotated {
+        ControlMessage::IdentityRotated {
+            new_peer_id,
+            signature,
+        } => Incoming::IdentityRotated {
             new_peer_id: PeerId::from_str(&new_peer_id).map_err(|_| Malformed)?,
             signature: signature_bytes(&signature).ok_or(Malformed)?,
         },
@@ -204,7 +239,11 @@ fn sanitized_invite(invite: WireInvite) -> Result<WireInvite, Malformed> {
     Ok(WireInvite {
         id: checked_id(invite.id)?,
         session_id: checked_id(invite.session_id)?,
-        world_name: invite.world_name.as_deref().map(sanitize::world_or_instance_name).filter(|name| !name.is_empty()),
+        world_name: invite
+            .world_name
+            .as_deref()
+            .map(sanitize::world_or_instance_name)
+            .filter(|name| !name.is_empty()),
         instance: InstanceSummary {
             name: sanitize::world_or_instance_name(&instance.name),
             minecraft_version: sanitize::world_or_instance_name(&instance.minecraft_version),
@@ -271,14 +310,21 @@ impl SessionError {
 }
 
 /// Wir haben angewählt: Steuer-Stream öffnen, `hello`s tauschen, Status senden, Verbindung eintragen.
-pub(super) async fn run_outgoing(core: &Arc<Core>, runtime: &Arc<Runtime>, conn: PeerConn) -> Result<(), SessionError> {
+pub(super) async fn run_outgoing(
+    core: &Arc<Core>,
+    runtime: &Arc<Runtime>,
+    conn: PeerConn,
+) -> Result<(), SessionError> {
     let established = async {
-        let (mut stream, profile, home_relay) = open_control(&conn, &own_hello(core, runtime)).await?;
+        let (mut stream, profile, home_relay) =
+            open_control(&conn, &own_hello(core, runtime)).await?;
         accept_hello(core, &conn.remote(), profile, home_relay)?;
         frame::write(&mut stream, &own_status(core), CONTROL_FRAME_LIMIT).await?;
         Ok(stream)
     };
-    let stream = timeout(FIRST_FRAME_WAIT, established).await.unwrap_or(Err(SessionError::Timeout));
+    let stream = timeout(FIRST_FRAME_WAIT, established)
+        .await
+        .unwrap_or(Err(SessionError::Timeout));
     let started = stream.and_then(|stream| start_link(core, runtime, conn.clone(), stream));
     if let Err(err) = &started {
         close_after(&conn, err);
@@ -319,7 +365,11 @@ pub(super) async fn say_goodbye(link: Link, message: ControlMessage) {
     link.conn.close(CloseCode::NORMAL);
 }
 
-async fn accept_control(core: &Arc<Core>, runtime: &Runtime, conn: &PeerConn) -> Result<BiStream, SessionError> {
+async fn accept_control(
+    core: &Arc<Core>,
+    runtime: &Runtime,
+    conn: &PeerConn,
+) -> Result<BiStream, SessionError> {
     let mut stream = conn.accept_bi().await?;
     if stream.read_frame::<OpenFrame>(OPEN_FRAME_LIMIT).await? != OpenFrame::Control {
         return Err(SessionError::Protocol);
@@ -331,17 +381,30 @@ async fn accept_control(core: &Arc<Core>, runtime: &Runtime, conn: &PeerConn) ->
     Ok(stream)
 }
 
-async fn read_hello(stream: &mut BiStream, peer: &PeerId) -> Result<(WireProfile, Option<u8>), SessionError> {
-    let message = stream.read_frame::<ControlMessage>(CONTROL_FRAME_LIMIT).await?;
+async fn read_hello(
+    stream: &mut BiStream,
+    peer: &PeerId,
+) -> Result<(WireProfile, Option<u8>), SessionError> {
+    let message = stream
+        .read_frame::<ControlMessage>(CONTROL_FRAME_LIMIT)
+        .await?;
     match parse(message, peer) {
-        Ok(Incoming::Hello { profile, home_relay }) => Ok((profile, home_relay)),
+        Ok(Incoming::Hello {
+            profile,
+            home_relay,
+        }) => Ok((profile, home_relay)),
         _ => Err(SessionError::Protocol),
     }
 }
 
 /// Ein Freund wird aktualisiert und (falls nötig) bestätigt; ein Peer, auf dessen Antwort unsere Anfrage wartet,
 /// wird Freund (SPEC 4.3). Alle anderen sind keine Freunde.
-fn accept_hello(core: &Core, peer: &PeerId, profile: WireProfile, home_relay: Option<u8>) -> Result<(), SessionError> {
+fn accept_hello(
+    core: &Core,
+    peer: &PeerId,
+    profile: WireProfile,
+    home_relay: Option<u8>,
+) -> Result<(), SessionError> {
     let id = peer.to_string();
     if let Some(friend) = status::friend(core, &id) {
         if !friend.confirmed {
@@ -366,25 +429,42 @@ fn own_hello(core: &Core, runtime: &Runtime) -> ControlMessage {
 }
 
 fn own_status(core: &Core) -> ControlMessage {
-    ControlMessage::Status { presence: core.links.own_presence() }
+    ControlMessage::Status {
+        presence: core.links.own_presence(),
+    }
 }
 
 /// Trägt die Verbindung ein und startet Schreiber, Leser, Stream-Annahme und Wegbeobachtung.
-fn start_link(core: &Arc<Core>, runtime: &Arc<Runtime>, conn: PeerConn, stream: BiStream) -> Result<(), SessionError> {
+fn start_link(
+    core: &Arc<Core>,
+    runtime: &Arc<Runtime>,
+    conn: PeerConn,
+    stream: BiStream,
+) -> Result<(), SessionError> {
     let peer = conn.remote();
     let (sender, outgoing) = mpsc::channel(CONTROL_QUEUE);
     let link = core.links.new_link(conn, sender);
     match core.links.register(&runtime.main.id(), link.clone()) {
         Registration::Duplicate => return Err(SessionError::Duplicate),
         Registration::TooFrequent => return Err(SessionError::TooFrequent),
-        Registration::Kept { replaced: Some(old) } => old.conn.close(CloseCode::DUPLICATE),
+        Registration::Kept {
+            replaced: Some(old),
+        } => old.conn.close(CloseCode::DUPLICATE),
         Registration::Kept { replaced: None } => status::emit_presence(core, &peer, link.state()),
     }
     runtime.scheduler.connected(&Target::Friend(peer));
     let (read, write) = tokio::io::split(stream);
     let stop = &runtime.stop;
-    tokio::spawn(stop.clone().run_until_cancelled_owned(write_control(write, outgoing)));
-    tokio::spawn(stop.clone().run_until_cancelled_owned(serve_link(core.clone(), runtime.clone(), link, read)));
+    tokio::spawn(
+        stop.clone()
+            .run_until_cancelled_owned(write_control(write, outgoing)),
+    );
+    tokio::spawn(stop.clone().run_until_cancelled_owned(serve_link(
+        core.clone(),
+        runtime.clone(),
+        link,
+        read,
+    )));
     Ok(())
 }
 
@@ -394,7 +474,10 @@ fn close_after(conn: &PeerConn, err: &SessionError) {
     }
 }
 
-async fn write_control(mut write: WriteHalf<BiStream>, mut outgoing: mpsc::Receiver<ControlMessage>) {
+async fn write_control(
+    mut write: WriteHalf<BiStream>,
+    mut outgoing: mpsc::Receiver<ControlMessage>,
+) {
     while let Some(message) = outgoing.recv().await {
         if let Err(err) = frame::write(&mut write, &message, CONTROL_FRAME_LIMIT).await {
             tracing::debug!(%err, "Steuernachricht nicht geschrieben");
@@ -417,7 +500,12 @@ async fn serve_link(core: Arc<Core>, runtime: Arc<Runtime>, link: Link, read: Re
 }
 
 /// Liest Steuernachrichten, bis die Verbindung endet; jedes Ende des Lesens schließt sie.
-async fn read_control(core: &Arc<Core>, runtime: &Arc<Runtime>, link: &Link, mut read: ReadHalf<BiStream>) {
+async fn read_control(
+    core: &Arc<Core>,
+    runtime: &Arc<Runtime>,
+    link: &Link,
+    mut read: ReadHalf<BiStream>,
+) {
     let peer = link.conn.remote();
     let mut frames = SlidingWindow::new(CONTROL_FRAMES);
     loop {
@@ -462,7 +550,10 @@ async fn handle(core: &Arc<Core>, runtime: &Arc<Runtime>, link: &Link, incoming:
     let peer = link.conn.remote();
     match incoming {
         Incoming::Status(presence) => {
-            if let Some(changed) = core.links.update(&peer, link.id, |current, _| *current = presence) {
+            if let Some(changed) = core
+                .links
+                .update(&peer, link.id, |current, _| *current = presence)
+            {
                 status::emit_presence(core, &peer, changed);
             }
         }
@@ -473,10 +564,16 @@ async fn handle(core: &Arc<Core>, runtime: &Arc<Runtime>, link: &Link, incoming:
             acknowledge_and_close(link).await;
             return Flow::Ended;
         }
-        Incoming::IdentityRotated { new_peer_id, signature } => {
+        Incoming::IdentityRotated {
+            new_peer_id,
+            signature,
+        } => {
             if outbox::accept_rotation(core, &peer, &new_peer_id, &signature) {
                 acknowledge_and_close(link).await;
-                runtime.scheduler.dial_now(&status::presence_plan(core, runtime), Target::Friend(new_peer_id));
+                runtime.scheduler.dial_now(
+                    &status::presence_plan(core, runtime),
+                    Target::Friend(new_peer_id),
+                );
             } else {
                 link.conn.close(CloseCode::PROTOCOL);
             }
@@ -500,7 +597,8 @@ fn hand_to_sessions(core: &Core, peer: PeerId, message: SessionControl) {
 
 /// Bestätigt und wartet, bis der Peer schließt; nur wenn er das nicht tut, schließen wir selbst.
 async fn acknowledge_and_close(link: &Link) {
-    let closed_by_peer = link.send(ControlMessage::Ack).is_ok() && timeout(ACK_WAIT, link.conn.closed()).await.is_ok();
+    let closed_by_peer = link.send(ControlMessage::Ack).is_ok()
+        && timeout(ACK_WAIT, link.conn.closed()).await.is_ok();
     if !closed_by_peer {
         link.conn.close(CloseCode::NORMAL);
     }
@@ -515,7 +613,12 @@ async fn serve_streams(core: &Arc<Core>, runtime: &Runtime, conn: &PeerConn) {
 }
 
 async fn dispatch_stream(core: Arc<Core>, peer: PeerId, mut stream: BiStream) {
-    let open = match timeout(FIRST_FRAME_WAIT, stream.read_frame::<OpenFrame>(OPEN_FRAME_LIMIT)).await {
+    let open = match timeout(
+        FIRST_FRAME_WAIT,
+        stream.read_frame::<OpenFrame>(OPEN_FRAME_LIMIT),
+    )
+    .await
+    {
         Ok(Ok(open)) => open,
         Ok(Err(_)) => return,
         Err(_) => return stream.reset(CloseCode::PROTOCOL),
@@ -548,7 +651,10 @@ async fn serve_tunnel(core: &Core, peer: &PeerId, session_id: String, stream: Bi
 }
 
 async fn refuse(mut stream: BiStream, code: &'static str, limit: usize) {
-    if frame::write(&mut stream, &StreamReply::Error { code }, limit).await.is_ok() {
+    if frame::write(&mut stream, &StreamReply::Error { code }, limit)
+        .await
+        .is_ok()
+    {
         let _ = stream.shutdown().await;
     }
 }
@@ -559,7 +665,10 @@ async fn watch_path(core: &Core, link: &Link) {
     loop {
         tokio::time::sleep(PATH_POLL).await;
         let path = link.conn.path();
-        if let Some(changed) = core.links.update(&peer, link.id, |_, current| *current = path) {
+        if let Some(changed) = core
+            .links
+            .update(&peer, link.id, |_, current| *current = path)
+        {
             status::emit_presence(core, &peer, changed);
         }
     }
@@ -586,23 +695,41 @@ mod tests {
 
     #[test]
     fn open_frames_have_the_wire_shape() {
-        let tunnel = OpenFrame::Tunnel { session_id: SESSION_ID.into() };
+        let tunnel = OpenFrame::Tunnel {
+            session_id: SESSION_ID.into(),
+        };
 
-        assert_eq!(serde_json::to_value(OpenFrame::Control).unwrap(), json!({ "type": "control" }));
-        assert_eq!(serde_json::to_value(tunnel).unwrap(), json!({ "type": "tunnel", "sessionId": SESSION_ID }));
-        assert_eq!(serde_json::from_value::<OpenFrame>(json!({ "type": "video" })).unwrap(), OpenFrame::Unknown);
+        assert_eq!(
+            serde_json::to_value(OpenFrame::Control).unwrap(),
+            json!({ "type": "control" })
+        );
+        assert_eq!(
+            serde_json::to_value(tunnel).unwrap(),
+            json!({ "type": "tunnel", "sessionId": SESSION_ID })
+        );
+        assert_eq!(
+            serde_json::from_value::<OpenFrame>(json!({ "type": "video" })).unwrap(),
+            OpenFrame::Unknown
+        );
     }
 
     #[test]
     fn hello_has_the_wire_shape() {
-        let profile = WireProfile { display_name: "Alex".into(), mc_name: Some("Alex".into()), mc_uuid: None };
+        let profile = WireProfile {
+            display_name: "Alex".into(),
+            mc_name: Some("Alex".into()),
+            mc_uuid: None,
+        };
 
         let wire = serde_json::to_value(ControlMessage::hello(profile, Some(0))).unwrap();
 
         assert_eq!(wire["type"], "hello");
         assert_eq!(wire["protocol"], 1);
         assert_eq!(wire["features"], json!([]));
-        assert_eq!(wire["profile"], json!({ "displayName": "Alex", "mcName": "Alex", "mcUuid": null }));
+        assert_eq!(
+            wire["profile"],
+            json!({ "displayName": "Alex", "mcName": "Alex", "mcUuid": null })
+        );
         assert_eq!(wire["homeRelay"], 0);
     }
 
@@ -613,13 +740,42 @@ mod tests {
             "profile": { "displayName": "\u{202e}Bob§c", "mcName": "no spaces", "mcUuid": "ABC" }
         }));
 
-        let profile = WireProfile { display_name: "Bobc".into(), mc_name: None, mc_uuid: None };
-        assert_eq!(parsed, Ok(Incoming::Hello { profile, home_relay: None }));
+        let profile = WireProfile {
+            display_name: "Bobc".into(),
+            mc_name: None,
+            mc_uuid: None,
+        };
+        assert_eq!(
+            parsed,
+            Ok(Incoming::Hello {
+                profile,
+                home_relay: None
+            })
+        );
+    }
+
+    #[test]
+    fn minecraft_names_override_legacy_labels_in_hello_and_profile_updates() {
+        for kind in ["hello", "profile"] {
+            let parsed = incoming(json!({
+                "type": kind, "protocol": 1, "launcher": "0.2.0",
+                "profile": { "displayName": "Arbitrary nickname", "mcName": "Alex_01", "mcUuid": null }
+            })).unwrap();
+            let profile = match parsed {
+                Incoming::Hello { profile, .. } | Incoming::Profile(profile) => profile,
+                _ => panic!("expected a profile"),
+            };
+            assert_eq!(profile.display_name, "Alex_01");
+            assert_eq!(profile.mc_name.as_deref(), Some("Alex_01"));
+        }
     }
 
     #[test]
     fn unknown_message_type_is_ignored() {
-        assert_eq!(incoming(json!({ "type": "chat", "text": "hi" })), Ok(Incoming::Unknown));
+        assert_eq!(
+            incoming(json!({ "type": "chat", "text": "hi" })),
+            Ok(Incoming::Unknown)
+        );
     }
 
     #[test]
@@ -631,7 +787,9 @@ mod tests {
             "expiresAt": 1_790_000_000u64
         }}));
 
-        let Ok(Incoming::Session(SessionControl::Invite(invite))) = parsed else { panic!("{parsed:?}") };
+        let Ok(Incoming::Session(SessionControl::Invite(invite))) = parsed else {
+            panic!("{parsed:?}")
+        };
         assert_eq!(invite.world_name.as_deref(), Some("Inselwelt"));
         assert_eq!(invite.instance.name, "Fabrica 26.3");
         assert_eq!(invite.instance.loader, ModLoader::Fabric);
@@ -643,15 +801,23 @@ mod tests {
         let upper = INVITE_ID.to_uppercase();
 
         for id in ["x", upper.as_str(), "0f8d2c1e6a4b4f7e9c3d2b1a0e9f8d7c"] {
-            assert_eq!(incoming(json!({ "type": "inviteDecline", "inviteId": id })), Err(Malformed), "{id}");
+            assert_eq!(
+                incoming(json!({ "type": "inviteDecline", "inviteId": id })),
+                Err(Malformed),
+                "{id}"
+            );
         }
     }
 
     #[test]
     fn revoke_reason_and_id_pass_through() {
-        let parsed = incoming(json!({ "type": "inviteRevoke", "inviteId": INVITE_ID, "reason": "kicked" }));
+        let parsed =
+            incoming(json!({ "type": "inviteRevoke", "inviteId": INVITE_ID, "reason": "kicked" }));
 
-        let revoke = SessionControl::InviteRevoke { invite_id: INVITE_ID.into(), reason: RevokeReason::Kicked };
+        let revoke = SessionControl::InviteRevoke {
+            invite_id: INVITE_ID.into(),
+            reason: RevokeReason::Kicked,
+        };
         assert_eq!(parsed, Ok(Incoming::Session(revoke)));
     }
 
@@ -660,10 +826,20 @@ mod tests {
         let new_peer_id = peer().to_string();
         let signature = "ab".repeat(64);
 
-        let parsed = incoming(json!({ "type": "identityRotated", "newPeerId": new_peer_id, "signature": signature }));
-        let short = incoming(json!({ "type": "identityRotated", "newPeerId": new_peer_id, "signature": "ab" }));
+        let parsed = incoming(
+            json!({ "type": "identityRotated", "newPeerId": new_peer_id, "signature": signature }),
+        );
+        let short = incoming(
+            json!({ "type": "identityRotated", "newPeerId": new_peer_id, "signature": "ab" }),
+        );
 
-        assert_eq!(parsed, Ok(Incoming::IdentityRotated { new_peer_id: peer(), signature: [0xab; 64] }));
+        assert_eq!(
+            parsed,
+            Ok(Incoming::IdentityRotated {
+                new_peer_id: peer(),
+                signature: [0xab; 64]
+            })
+        );
         assert_eq!(short, Err(Malformed));
     }
 }

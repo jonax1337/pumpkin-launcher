@@ -39,13 +39,18 @@ pub use embedded::{build_source, EmbeddedParts, EmbeddedSource};
 pub use gate::{decide, Decision, LaunchFacts, SkipReason, MOD_ID};
 pub use index::{EmptySource, IndexError, Loader, ModIndex, ModSource, Node, Strategy, Verified};
 pub use java_cache::JavaMajors;
-pub use runtime::Ingame;
-pub use plan::{inject, Injected, Injection, InjectionError, InjectionRequest, LaunchRegistry, StartArgs};
-pub use status::status_of;
-pub use store::InjectionStore;
-pub use watch::StartupWatch;
-pub use java_major::{from_release_file as java_major_from_release_file, from_version_output as java_major_from_version_output};
+pub use java_major::{
+    from_release_file as java_major_from_release_file,
+    from_version_output as java_major_from_version_output,
+};
 pub use materialise::{materialise, runtime_dir, sha256_hex, MaterialiseError, MaterialisedJar};
+pub use plan::{
+    inject, Injected, Injection, InjectionError, InjectionRequest, LaunchRegistry, StartArgs,
+};
+pub use runtime::Ingame;
 pub use select::{select, Selection, Target, Unfit};
 pub use startup_failure::{analyze_exit, analyze_log, STARTUP_WINDOW};
+pub use status::status_of;
+pub use store::InjectionStore;
 pub use version::{is_release_id, LoaderVersion};
+pub use watch::StartupWatch;

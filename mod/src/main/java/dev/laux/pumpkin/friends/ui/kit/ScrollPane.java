@@ -5,6 +5,8 @@ import dev.laux.pumpkin.friends.ui.model.Painter;
 import dev.laux.pumpkin.friends.ui.model.Rect;
 import dev.laux.pumpkin.friends.ui.model.RowLayout;
 import dev.laux.pumpkin.friends.ui.model.RowPainter;
+import dev.laux.pumpkin.friends.ui.model.PumpkinTheme;
+import dev.laux.pumpkin.friends.ui.model.RowStyle;
 import dev.laux.pumpkin.friends.ui.model.ScrollModel;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,6 +22,7 @@ public final class ScrollPane {
 	private final Rect scrollbarTrack;
 	private final List<Row> rows;
 	private final ScrollModel scroll;
+	private final Rect viewport;
 	private final List<PlacedRow> placed = new ArrayList<>();
 
 	/** {@code firstRow} is a remembered scroll position; it is clamped to what the new window can show. */
@@ -27,6 +30,7 @@ public final class ScrollPane {
 		this.rows = List.copyOf(rows);
 		rowArea = new Rect(body.x(), body.y(), body.width() - GuiMetrics.SCROLLBAR_GUTTER, body.height());
 		scrollbarTrack = new Rect(body.right() - GuiMetrics.SCROLLBAR_WIDTH, body.y(), GuiMetrics.SCROLLBAR_WIDTH, body.height());
+		viewport = body;
 		scroll = new ScrollModel(this.rows.stream().map(Row::height).toList(), body.height());
 		scroll.scrollTo(firstRow);
 	}
@@ -49,7 +53,7 @@ public final class ScrollPane {
 			Row row = rows.get(scroll.firstRow() + index);
 			RowLayout inside = RowLayout.of(shown.get(index), row.secondLine().isPresent(), actionWidths(row, shown.get(index)));
 			placeActions(row, inside);
-			placed.add(new PlacedRow(row, inside));
+			placed.add(new PlacedRow(row, inside, shown.get(index)));
 		}
 	}
 
@@ -86,14 +90,42 @@ public final class ScrollPane {
 		}
 	}
 
+	public void paintBackdrop(Painter painter) {
+		painter.beginClip(viewport);
+		paintRowBackdrops(painter);
+		painter.endClip();
+	}
+
+	private void paintRowBackdrops(Painter painter) {
+		for (int index = 0; index < placed.size(); index++) {
+			PlacedRow shown = placed.get(index);
+			Rect area = shown.bounds();
+			if (shown.row().style() == RowStyle.HEADING) {
+				painter.fill(area, PumpkinTheme.PANEL);
+				painter.fill(area.x(), area.y() + 3, 2, Math.max(0, area.height() - 6), PumpkinTheme.ACCENT);
+			} else if (index % 2 == 0) {
+				painter.fill(area, PumpkinTheme.PANEL);
+			}
+			painter.fill(area.x() + GuiMetrics.ROW_PADDING, area.bottom() - 1,
+				Math.max(0, area.width() - 2 * GuiMetrics.ROW_PADDING), 1, PumpkinTheme.SURFACE);
+		}
+	}
+
 	public void paint(Painter painter) {
+		painter.beginClip(viewport);
+		paintRows(painter);
+		painter.endClip();
+		scroll.thumb(scrollbarTrack).ifPresent(thumb -> painter.scrollbar(scrollbarTrack, thumb));
+	}
+
+	private void paintRows(Painter painter) {
 		for (PlacedRow shown : placed) {
 			if (!shown.row().firstLine().isEmpty()) {
 				RowPainter.paint(painter, shown.layout(), shown.row().style(), shown.row().firstLine(), shown.row().secondLine());
 			}
 		}
-		scroll.thumb(scrollbarTrack).ifPresent(thumb -> painter.scrollbar(scrollbarTrack, thumb));
 	}
+
 
 	/** The narration of the shown rows in view order: both lines of a two-line row, one line per row (INGAME 6.2). */
 	public List<String> narrationLines() {
@@ -119,17 +151,17 @@ public final class ScrollPane {
 			.toList();
 	}
 
-	private static void placeActions(Row row, RowLayout inside) {
+	private void placeActions(Row row, RowLayout inside) {
 		for (int index = 0; index < row.actions().size(); index++) {
 			Rect target = inside.actions().get(index);
 			AbstractWidget widget = row.actions().get(index).widget();
 			widget.setWidth(target.width());
 			widget.setX(target.x());
 			widget.setY(target.y());
-			widget.visible = true;
+			widget.visible = target.y() >= viewport.y() && target.bottom() <= viewport.bottom();
 		}
 	}
 
-	private record PlacedRow(Row row, RowLayout layout) {
+	private record PlacedRow(Row row, RowLayout layout, Rect bounds) {
 	}
 }

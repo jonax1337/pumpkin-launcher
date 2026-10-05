@@ -2,7 +2,7 @@ package dev.laux.pumpkin.friends.platform.fabric.mixin;
 
 import dev.laux.pumpkin.friends.platform.fabric.PauseMenuButton;
 import dev.laux.pumpkin.friends.ui.UiSession;
-import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -36,7 +36,7 @@ public abstract class PauseScreenMixin extends Screen {
 	@Inject(method = "init()V", at = @At("TAIL"), require = 0)
 	private void pumpkinFriends$addButton(CallbackInfo callback) {
 		try {
-			Button button = PauseMenuButton.buttonFor((PauseScreen) (Object) this);
+			AbstractWidget button = PauseMenuButton.buttonFor((PauseScreen) (Object) this);
 			if (button != null) {
 				// INGAME-API.md 3, „Screen: widgets and narration“: addRenderableWidget ist protected (GuiEventListener) → GuiEventListener
 				// in jeder Ära; es zeichnet, fokussiert und erzählt den Knopf.

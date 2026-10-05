@@ -6,7 +6,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use super::index::{Node, Strategy};
-use super::materialise::{sha256_hex, write_atomically, MaterialisedJar, MAVEN_ARTIFACT, MAVEN_GROUP};
+use super::materialise::{
+    sha256_hex, write_atomically, MaterialisedJar, MAVEN_ARTIFACT, MAVEN_GROUP,
+};
 use super::property;
 
 /// Trennzeichen von Pfadlisten (`File.pathSeparator`) der Java, die das Spiel startet; der Launcher und das Spiel
@@ -55,7 +57,9 @@ pub enum ArgsError {
     PathNotText(PathBuf),
     #[error("Der Pfad {0} enthält das Trennzeichen der Pfadliste")]
     PathHasListSeparator(PathBuf),
-    #[error("Das JAR {0} liegt in keinem Maven-Verzeichnis, die Strategie fmlMavenRoot braucht eines")]
+    #[error(
+        "Das JAR {0} liegt in keinem Maven-Verzeichnis, die Strategie fmlMavenRoot braucht eines"
+    )]
     NotInMavenLayout(PathBuf),
     #[error("Die Listendatei {path} aus den Startargumenten ist nicht lesbar: {source}")]
     ListFileUnreadable { path: PathBuf, source: io::Error },
@@ -64,11 +68,20 @@ pub enum ArgsError {
 }
 
 /// Baut die Optionen für den Knoten, dessen JAR bereitliegt.
-pub fn build(node: &Node, jar: &MaterialisedJar, user: &UserArgs) -> Result<InjectedArgs, ArgsError> {
+pub fn build(
+    node: &Node,
+    jar: &MaterialisedJar,
+    user: &UserArgs,
+) -> Result<InjectedArgs, ArgsError> {
     build_with_separator(node.strategy, jar, user, PATH_LIST_SEPARATOR)
 }
 
-fn build_with_separator(strategy: Strategy, jar: &MaterialisedJar, user: &UserArgs, separator: char) -> Result<InjectedArgs, ArgsError> {
+fn build_with_separator(
+    strategy: Strategy,
+    jar: &MaterialisedJar,
+    user: &UserArgs,
+    separator: char,
+) -> Result<InjectedArgs, ArgsError> {
     match strategy {
         Strategy::FabricAddMods => fabric_add_mods(jar, user, separator),
         Strategy::FmlMavenRoot => fml_maven_root(jar, user),
@@ -79,11 +92,20 @@ fn build_with_separator(strategy: Strategy, jar: &MaterialisedJar, user: &UserAr
 /// Fabric: `-Dfabric.addMods=<Pfadliste>`. Hat der Nutzer die Eigenschaft gesetzt, bleiben seine Einträge, unserer
 /// kommt genau einmal ans Ende. Enthält sein Wert eine Listendatei (`@datei`), entsteht eine gemeinsame Listendatei
 /// im Datenordner, denn Fabric kennt nur die eine Eigenschaft.
-fn fabric_add_mods(jar: &MaterialisedJar, user: &UserArgs, separator: char) -> Result<InjectedArgs, ArgsError> {
+fn fabric_add_mods(
+    jar: &MaterialisedJar,
+    user: &UserArgs,
+    separator: char,
+) -> Result<InjectedArgs, ArgsError> {
     let ours = path_text(jar.jar())?;
     let existing = property::find(user.jvm, FABRIC_PROPERTY, separator);
-    let uses_list_file = existing.entries.iter().any(|entry| entry.starts_with('@')) || ours.contains(separator);
-    let mut entries = if uses_list_file { expand_list_files(&existing.entries, user.game_dir)? } else { existing.entries };
+    let uses_list_file =
+        existing.entries.iter().any(|entry| entry.starts_with('@')) || ours.contains(separator);
+    let mut entries = if uses_list_file {
+        expand_list_files(&existing.entries, user.game_dir)?
+    } else {
+        existing.entries
+    };
     append_once(&mut entries, ours);
     let value = if uses_list_file {
         format!("@{}", write_shared_list_file(jar.runtime_dir(), &entries)?)
@@ -102,12 +124,20 @@ fn fabric_add_mods(jar: &MaterialisedJar, user: &UserArgs, separator: char) -> R
 /// NeoForge und Forge mit Maven-Verzeichnis: `--fml.mavenRoots <Wurzel> --fml.mods <Gruppe:Artefakt:Version>`.
 /// Beide Optionen dürfen mehrfach vorkommen, deshalb bleiben die des Nutzers; nur ein früheres Paar von uns entfällt.
 fn fml_maven_root(jar: &MaterialisedJar, user: &UserArgs) -> Result<InjectedArgs, ArgsError> {
-    let root = path_text(jar.maven_root().ok_or_else(|| ArgsError::NotInMavenLayout(jar.jar().to_owned()))?)?;
+    let root = path_text(
+        jar.maven_root()
+            .ok_or_else(|| ArgsError::NotInMavenLayout(jar.jar().to_owned()))?,
+    )?;
     let coordinate = format!("{MAVEN_GROUP}:{MAVEN_ARTIFACT}:{}", jar.mod_version());
     let (rest, roots_replaced) = without_option(user.game, MAVEN_ROOTS_OPTION, &root);
     let (rest, mods_replaced) = without_option(&rest, MODS_OPTION, &coordinate);
     Ok(InjectedArgs {
-        game: vec![MAVEN_ROOTS_OPTION.to_owned(), root, MODS_OPTION.to_owned(), coordinate],
+        game: vec![
+            MAVEN_ROOTS_OPTION.to_owned(),
+            root,
+            MODS_OPTION.to_owned(),
+            coordinate,
+        ],
         user_jvm: user.jvm.to_vec(),
         user_game: rest,
         replaced: [roots_replaced, mods_replaced].concat(),
@@ -116,7 +146,11 @@ fn fml_maven_root(jar: &MaterialisedJar, user: &UserArgs) -> Result<InjectedArgs
 }
 
 /// NeoForge ab FML 10: `-Dfml.modFolders=pumpkin%%<JAR>`, zusammengeführt mit einem Wert des Nutzers.
-fn fml_mod_folders(jar: &MaterialisedJar, user: &UserArgs, separator: char) -> Result<InjectedArgs, ArgsError> {
+fn fml_mod_folders(
+    jar: &MaterialisedJar,
+    user: &UserArgs,
+    separator: char,
+) -> Result<InjectedArgs, ArgsError> {
     let path = path_text(jar.jar())?;
     if path.contains(separator) {
         return Err(ArgsError::PathHasListSeparator(jar.jar().to_owned()));
@@ -125,7 +159,10 @@ fn fml_mod_folders(jar: &MaterialisedJar, user: &UserArgs, separator: char) -> R
     let mut entries = existing.entries;
     append_once(&mut entries, format!("{FOLDERS_LABEL}%%{path}"));
     Ok(InjectedArgs {
-        jvm: vec![format!("-D{FOLDERS_PROPERTY}={}", entries.join(&separator.to_string()))],
+        jvm: vec![format!(
+            "-D{FOLDERS_PROPERTY}={}",
+            entries.join(&separator.to_string())
+        )],
         user_jvm: existing.remaining,
         user_game: user.game.to_vec(),
         replaced: existing.replaced,
@@ -153,18 +190,36 @@ fn expand_list_files(entries: &[String], game_dir: &Path) -> Result<Vec<String>,
 }
 
 fn read_list_file(path: &Path) -> Result<Vec<String>, ArgsError> {
-    let text = fs::read_to_string(path).map_err(|source| ArgsError::ListFileUnreadable { path: path.to_owned(), source })?;
-    Ok(text.lines().map(str::trim).filter(|line| !line.is_empty()).map(str::to_owned).collect())
+    let text = fs::read_to_string(path).map_err(|source| ArgsError::ListFileUnreadable {
+        path: path.to_owned(),
+        source,
+    })?;
+    Ok(text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_owned)
+        .collect())
 }
 
 /// Schreibt die Einträge als Listendatei, deren Name aus dem Inhalt folgt: gleiche Einträge ergeben dieselbe Datei
 /// (ein zweiter Lauf ändert nichts), verschiedene Instanzen stören sich nicht.
 fn write_shared_list_file(directory: &Path, entries: &[String]) -> Result<String, ArgsError> {
-    let content = entries.iter().map(|entry| format!("{entry}\n")).collect::<String>();
-    let path = directory.join(format!("{LIST_FILE_PREFIX}{}.list", &sha256_hex(content.as_bytes())[..16]));
-    let write = || fs::create_dir_all(directory).and_then(|()| write_atomically(&path, content.as_bytes()));
+    let content = entries
+        .iter()
+        .map(|entry| format!("{entry}\n"))
+        .collect::<String>();
+    let path = directory.join(format!(
+        "{LIST_FILE_PREFIX}{}.list",
+        &sha256_hex(content.as_bytes())[..16]
+    ));
+    let write =
+        || fs::create_dir_all(directory).and_then(|()| write_atomically(&path, content.as_bytes()));
     if fs::read_to_string(&path).ok().as_deref() != Some(content.as_str()) {
-        write().map_err(|source| ArgsError::ListFileNotWritable { path: path.clone(), source })?;
+        write().map_err(|source| ArgsError::ListFileNotWritable {
+            path: path.clone(),
+            source,
+        })?;
     }
     path_text(&path)
 }
@@ -176,7 +231,8 @@ fn without_option(args: &[String], name: &str, value: &str) -> (Vec<String>, Vec
     let (mut kept, mut removed) = (Vec::new(), Vec::new());
     let mut position = 0;
     while position < args.len() {
-        let is_pair = args[position] == name && args.get(position + 1).is_some_and(|next| next == value);
+        let is_pair =
+            args[position] == name && args.get(position + 1).is_some_and(|next| next == value);
         if is_pair {
             removed.push(format!("{name} {value}"));
             position += 2;
@@ -192,7 +248,9 @@ fn without_option(args: &[String], name: &str, value: &str) -> (Vec<String>, Vec
 }
 
 fn path_text(path: &Path) -> Result<String, ArgsError> {
-    path.to_str().map(str::to_owned).ok_or_else(|| ArgsError::PathNotText(path.to_owned()))
+    path.to_str()
+        .map(str::to_owned)
+        .ok_or_else(|| ArgsError::PathNotText(path.to_owned()))
 }
 
 #[cfg(test)]
@@ -216,15 +274,38 @@ mod tests {
 
     impl Case {
         fn new(loader: Loader, strategy: Strategy) -> Self {
-            let node = Node { strategy, ..jar_node("1.21.1-test", loader, JAR_BYTES) };
+            let node = Node {
+                strategy,
+                ..jar_node("1.21.1-test", loader, JAR_BYTES)
+            };
             let data = TempDir::new();
-            let jar = materialise(&FakeSource::with_jar(&node, JAR_BYTES), data.path(), &node).unwrap();
-            Self { strategy, data, game_dir: TempDir::new(), jar }
+            let jar =
+                materialise(&FakeSource::with_jar(&node, JAR_BYTES), data.path(), &node).unwrap();
+            Self {
+                strategy,
+                data,
+                game_dir: TempDir::new(),
+                jar,
+            }
         }
 
-        fn run(&self, jvm: &[&str], game: &[&str], separator: char) -> Result<InjectedArgs, ArgsError> {
+        fn run(
+            &self,
+            jvm: &[&str],
+            game: &[&str],
+            separator: char,
+        ) -> Result<InjectedArgs, ArgsError> {
             let (jvm, game) = (strings(jvm), strings(game));
-            build_with_separator(self.strategy, &self.jar, &UserArgs { jvm: &jvm, game: &game, game_dir: self.game_dir.path() }, separator)
+            build_with_separator(
+                self.strategy,
+                &self.jar,
+                &UserArgs {
+                    jvm: &jvm,
+                    game: &game,
+                    game_dir: self.game_dir.path(),
+                },
+                separator,
+            )
         }
 
         fn ours(&self) -> String {
@@ -242,7 +323,10 @@ mod tests {
 
     fn single_jvm_value(args: &InjectedArgs, property: &str) -> String {
         assert_eq!(args.jvm.len(), 1, "{args:?}");
-        args.jvm[0].strip_prefix(&format!("-D{property}=")).unwrap_or_else(|| panic!("{:?}", args.jvm)).to_owned()
+        args.jvm[0]
+            .strip_prefix(&format!("-D{property}="))
+            .unwrap_or_else(|| panic!("{:?}", args.jvm))
+            .to_owned()
     }
 
     // --- fabricAddMods ---------------------------------------------------------------------------------------
@@ -253,23 +337,46 @@ mod tests {
         let args = case.run(&["-Xmx2G"], &["--demo"], ';').unwrap();
         assert_eq!(args.jvm, vec![format!("-Dfabric.addMods={}", case.ours())]);
         assert!(args.game.is_empty());
-        assert_eq!((args.user_jvm, args.user_game, args.replaced), (strings(&["-Xmx2G"]), strings(&["--demo"]), vec![]));
+        assert_eq!(
+            (args.user_jvm, args.user_game, args.replaced),
+            (strings(&["-Xmx2G"]), strings(&["--demo"]), vec![])
+        );
     }
 
     #[test]
     fn fabric_appends_the_jar_to_the_users_list_exactly_once() {
         let case = fabric_case();
-        let args = case.run(&["-Xmx2G", r"-Dfabric.addMods=C:\a.jar;C:\b.jar"], &[], ';').unwrap();
-        assert_eq!(single_jvm_value(&args, "fabric.addMods"), format!(r"C:\a.jar;C:\b.jar;{}", case.ours()));
-        assert_eq!(args.user_jvm, strings(&["-Xmx2G"]), "die Eigenschaft des Nutzers ist ersetzt, nicht doppelt");
-        assert_eq!(args.replaced, strings(&[r"-Dfabric.addMods=C:\a.jar;C:\b.jar"]));
+        let args = case
+            .run(&["-Xmx2G", r"-Dfabric.addMods=C:\a.jar;C:\b.jar"], &[], ';')
+            .unwrap();
+        assert_eq!(
+            single_jvm_value(&args, "fabric.addMods"),
+            format!(r"C:\a.jar;C:\b.jar;{}", case.ours())
+        );
+        assert_eq!(
+            args.user_jvm,
+            strings(&["-Xmx2G"]),
+            "die Eigenschaft des Nutzers ist ersetzt, nicht doppelt"
+        );
+        assert_eq!(
+            args.replaced,
+            strings(&[r"-Dfabric.addMods=C:\a.jar;C:\b.jar"])
+        );
     }
 
     #[test]
     fn fabric_merge_is_idempotent() {
         let case = fabric_case();
-        let first = case.run(&[r"-Dfabric.addMods=C:\a.jar;C:\b.jar"], &[], ';').unwrap();
-        let second = case.run(&first.jvm.iter().map(String::as_str).collect::<Vec<_>>(), &[], ';').unwrap();
+        let first = case
+            .run(&[r"-Dfabric.addMods=C:\a.jar;C:\b.jar"], &[], ';')
+            .unwrap();
+        let second = case
+            .run(
+                &first.jvm.iter().map(String::as_str).collect::<Vec<_>>(),
+                &[],
+                ';',
+            )
+            .unwrap();
         assert_eq!(second.jvm, first.jvm);
         let value = single_jvm_value(&second, "fabric.addMods");
         assert_eq!(value.matches(&case.ours()).count(), 1);
@@ -280,21 +387,43 @@ mod tests {
         let case = fabric_case();
         let existing = format!("-Dfabric.addMods={};C:\\b.jar", case.ours());
         let args = case.run(&[&existing], &[], ';').unwrap();
-        assert_eq!(single_jvm_value(&args, "fabric.addMods"), format!("C:\\b.jar;{}", case.ours()));
+        assert_eq!(
+            single_jvm_value(&args, "fabric.addMods"),
+            format!("C:\\b.jar;{}", case.ours())
+        );
     }
 
     #[test]
     fn fabric_splits_and_joins_with_the_separator_it_is_given() {
         let case = fabric_case();
-        let args = case.run(&["-Dfabric.addMods=/a.jar|/b.jar"], &[], '|').unwrap();
-        assert_eq!(single_jvm_value(&args, "fabric.addMods"), format!("/a.jar|/b.jar|{}", case.ours()));
+        let args = case
+            .run(&["-Dfabric.addMods=/a.jar|/b.jar"], &[], '|')
+            .unwrap();
+        assert_eq!(
+            single_jvm_value(&args, "fabric.addMods"),
+            format!("/a.jar|/b.jar|{}", case.ours())
+        );
     }
 
     #[test]
     fn fabric_collapses_duplicate_properties_to_the_one_the_jvm_would_use() {
         let case = fabric_case();
-        let args = case.run(&["-Dfabric.addMods=a.jar", "-Xss1M", "-Dfabric.addMods=b.jar", "-Dfabric.addMods=c.jar"], &[], ';').unwrap();
-        assert_eq!(single_jvm_value(&args, "fabric.addMods"), format!("c.jar;{}", case.ours()));
+        let args = case
+            .run(
+                &[
+                    "-Dfabric.addMods=a.jar",
+                    "-Xss1M",
+                    "-Dfabric.addMods=b.jar",
+                    "-Dfabric.addMods=c.jar",
+                ],
+                &[],
+                ';',
+            )
+            .unwrap();
+        assert_eq!(
+            single_jvm_value(&args, "fabric.addMods"),
+            format!("c.jar;{}", case.ours())
+        );
         assert_eq!(args.user_jvm, strings(&["-Xss1M"]));
         assert_eq!(args.replaced.len(), 3);
     }
@@ -302,8 +431,17 @@ mod tests {
     #[test]
     fn fabric_understands_quoted_user_values() {
         let case = fabric_case();
-        let args = case.run(&[r#"-Dfabric.addMods="C:\my mods\a.jar";"C:\b.jar""#], &[], ';').unwrap();
-        assert_eq!(single_jvm_value(&args, "fabric.addMods"), format!(r"C:\my mods\a.jar;C:\b.jar;{}", case.ours()));
+        let args = case
+            .run(
+                &[r#"-Dfabric.addMods="C:\my mods\a.jar";"C:\b.jar""#],
+                &[],
+                ';',
+            )
+            .unwrap();
+        assert_eq!(
+            single_jvm_value(&args, "fabric.addMods"),
+            format!(r"C:\my mods\a.jar;C:\b.jar;{}", case.ours())
+        );
     }
 
     #[test]
@@ -317,12 +455,19 @@ mod tests {
     #[test]
     fn fabric_merges_a_user_list_file_into_one_shared_list_file() {
         let case = fabric_case();
-        fs::write(case.game_dir.path().join("mine.txt"), "C:\\x.jar\r\n\r\n  C:\\y.jar  \n").unwrap();
+        fs::write(
+            case.game_dir.path().join("mine.txt"),
+            "C:\\x.jar\r\n\r\n  C:\\y.jar  \n",
+        )
+        .unwrap();
         let args = case.run(&["-Dfabric.addMods=@mine.txt"], &[], ';').unwrap();
         let value = single_jvm_value(&args, "fabric.addMods");
         let list_file = value.strip_prefix('@').expect("Listendatei-Form");
         assert!(Path::new(list_file).starts_with(case.jar.runtime_dir()));
-        assert_eq!(fs::read_to_string(list_file).unwrap(), format!("C:\\x.jar\nC:\\y.jar\n{}\n", case.ours()));
+        assert_eq!(
+            fs::read_to_string(list_file).unwrap(),
+            format!("C:\\x.jar\nC:\\y.jar\n{}\n", case.ours())
+        );
         assert_eq!(args.replaced, strings(&["-Dfabric.addMods=@mine.txt"]));
     }
 
@@ -330,19 +475,39 @@ mod tests {
     fn fabric_list_file_merge_mixes_plain_entries_and_list_files_and_is_idempotent() {
         let case = fabric_case();
         fs::write(case.game_dir.path().join("mine.txt"), "listed.jar\n").unwrap();
-        let first = case.run(&["-Dfabric.addMods=plain.jar;@mine.txt"], &[], ';').unwrap();
-        let content = fs::read_to_string(single_jvm_value(&first, "fabric.addMods").strip_prefix('@').unwrap()).unwrap();
+        let first = case
+            .run(&["-Dfabric.addMods=plain.jar;@mine.txt"], &[], ';')
+            .unwrap();
+        let content = fs::read_to_string(
+            single_jvm_value(&first, "fabric.addMods")
+                .strip_prefix('@')
+                .unwrap(),
+        )
+        .unwrap();
         assert_eq!(content, format!("plain.jar\nlisted.jar\n{}\n", case.ours()));
         let second = case.run(&[first.jvm[0].as_str()], &[], ';').unwrap();
         assert_eq!(second.jvm, first.jvm);
-        assert_eq!(fs::read_to_string(single_jvm_value(&second, "fabric.addMods").strip_prefix('@').unwrap()).unwrap(), content);
+        assert_eq!(
+            fs::read_to_string(
+                single_jvm_value(&second, "fabric.addMods")
+                    .strip_prefix('@')
+                    .unwrap()
+            )
+            .unwrap(),
+            content
+        );
     }
 
     #[test]
     fn fabric_reports_an_unreadable_user_list_file() {
         let case = fabric_case();
-        let error = case.run(&["-Dfabric.addMods=@missing.txt"], &[], ';').unwrap_err();
-        assert!(matches!(error, ArgsError::ListFileUnreadable { .. }), "{error}");
+        let error = case
+            .run(&["-Dfabric.addMods=@missing.txt"], &[], ';')
+            .unwrap_err();
+        assert!(
+            matches!(error, ArgsError::ListFileUnreadable { .. }),
+            "{error}"
+        );
     }
 
     #[test]
@@ -361,7 +526,12 @@ mod tests {
 
     fn maven_game_args(case: &Case) -> Vec<String> {
         let root = case.jar.maven_root().unwrap().to_str().unwrap().to_owned();
-        vec!["--fml.mavenRoots".to_owned(), root, "--fml.mods".to_owned(), "dev.laux.pumpkin:pumpkin_friends:2.1.0".to_owned()]
+        vec![
+            "--fml.mavenRoots".to_owned(),
+            root,
+            "--fml.mods".to_owned(),
+            "dev.laux.pumpkin:pumpkin_friends:2.1.0".to_owned(),
+        ]
     }
 
     #[test]
@@ -370,13 +540,21 @@ mod tests {
         let args = case.run(&["-Xmx2G"], &["--demo"], ';').unwrap();
         assert_eq!(args.game, maven_game_args(&case));
         assert!(args.jvm.is_empty());
-        assert_eq!((args.user_jvm, args.user_game, args.replaced), (strings(&["-Xmx2G"]), strings(&["--demo"]), vec![]));
+        assert_eq!(
+            (args.user_jvm, args.user_game, args.replaced),
+            (strings(&["-Xmx2G"]), strings(&["--demo"]), vec![])
+        );
     }
 
     #[test]
     fn maven_root_keeps_user_options_of_the_same_name_with_other_values() {
         let case = maven_case();
-        let user = ["--fml.mavenRoots", "/their/repo", "--fml.mods", "their:mod:1.0"];
+        let user = [
+            "--fml.mavenRoots",
+            "/their/repo",
+            "--fml.mods",
+            "their:mod:1.0",
+        ];
         let args = case.run(&[], &user, ';').unwrap();
         assert_eq!(args.user_game, strings(&user));
         assert!(args.replaced.is_empty());
@@ -398,7 +576,11 @@ mod tests {
     fn maven_root_also_drops_the_equals_form_of_our_options() {
         let case = maven_case();
         let ours = maven_game_args(&case);
-        let user = [format!("--fml.mavenRoots={}", ours[1]), format!("--fml.mods={}", ours[3]), "--x".to_owned()];
+        let user = [
+            format!("--fml.mavenRoots={}", ours[1]),
+            format!("--fml.mods={}", ours[3]),
+            "--x".to_owned(),
+        ];
         let user: Vec<&str> = user.iter().map(String::as_str).collect();
         let args = case.run(&[], &user, ';').unwrap();
         assert_eq!(args.user_game, strings(&["--x"]));
@@ -415,7 +597,10 @@ mod tests {
     fn mod_folders_without_user_property_labels_the_jar() {
         let case = folders_case();
         let args = case.run(&["-Xmx2G"], &[], ';').unwrap();
-        assert_eq!(args.jvm, vec![format!("-Dfml.modFolders=pumpkin%%{}", case.ours())]);
+        assert_eq!(
+            args.jvm,
+            vec![format!("-Dfml.modFolders=pumpkin%%{}", case.ours())]
+        );
         assert!(args.game.is_empty());
         assert_eq!(args.user_jvm, strings(&["-Xmx2G"]));
     }
@@ -423,8 +608,20 @@ mod tests {
     #[test]
     fn mod_folders_appends_to_the_users_value_exactly_once_and_is_idempotent() {
         let case = folders_case();
-        let first = case.run(&["-Dfml.modFolders=dev%%C:\\dev\\classes;dev%%C:\\dev\\res"], &[], ';').unwrap();
-        assert_eq!(single_jvm_value(&first, "fml.modFolders"), format!("dev%%C:\\dev\\classes;dev%%C:\\dev\\res;pumpkin%%{}", case.ours()));
+        let first = case
+            .run(
+                &["-Dfml.modFolders=dev%%C:\\dev\\classes;dev%%C:\\dev\\res"],
+                &[],
+                ';',
+            )
+            .unwrap();
+        assert_eq!(
+            single_jvm_value(&first, "fml.modFolders"),
+            format!(
+                "dev%%C:\\dev\\classes;dev%%C:\\dev\\res;pumpkin%%{}",
+                case.ours()
+            )
+        );
         assert_eq!(first.replaced.len(), 1);
         let second = case.run(&[first.jvm[0].as_str()], &[], ';').unwrap();
         assert_eq!(second.jvm, first.jvm);
@@ -433,16 +630,30 @@ mod tests {
     #[test]
     fn mod_folders_collapses_duplicate_properties_like_the_jvm() {
         let case = folders_case();
-        let args = case.run(&["-Dfml.modFolders=a%%1", "-Dfml.modFolders=b%%2"], &[], ';').unwrap();
-        assert_eq!(single_jvm_value(&args, "fml.modFolders"), format!("b%%2;pumpkin%%{}", case.ours()));
+        let args = case
+            .run(
+                &["-Dfml.modFolders=a%%1", "-Dfml.modFolders=b%%2"],
+                &[],
+                ';',
+            )
+            .unwrap();
+        assert_eq!(
+            single_jvm_value(&args, "fml.modFolders"),
+            format!("b%%2;pumpkin%%{}", case.ours())
+        );
         assert!(args.user_jvm.is_empty());
     }
 
     #[test]
     fn mod_folders_refuses_a_path_that_would_break_the_list() {
         let case = folders_case();
-        let error = case.run(&[], &[], SEPARATOR_IN_EVERY_TEST_PATH).unwrap_err();
-        assert!(matches!(error, ArgsError::PathHasListSeparator(_)), "{error}");
+        let error = case
+            .run(&[], &[], SEPARATOR_IN_EVERY_TEST_PATH)
+            .unwrap_err();
+        assert!(
+            matches!(error, ArgsError::PathHasListSeparator(_)),
+            "{error}"
+        );
     }
 
     // --- Hilfen ----------------------------------------------------------------------------------------------

@@ -8,7 +8,6 @@ export const errorsFriends: typeof deErrorsFriends = {
   "errors.friends.msAccountRequired": "You need a Microsoft account for this",
   "errors.friends.relayConsentRequired": "Please agree to the use of the relay servers named",
   "errors.friends.networkUnavailable": "No connection to the relay server; friends can't be reached right now",
-  "errors.friends.displayNameInvalid": "Display name: {min} to {max} characters",
 
   "errors.friends.codeInvalid": "This friend code is not valid",
   "errors.friends.codeUsed": "Someone else has already used this friend code",

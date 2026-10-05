@@ -212,17 +212,19 @@ Linux and macOS (note the leading dot, so `JAVA_HOME` stays set; `PUMPKIN_NODE=<
 
 The screens of the hub (INGAME 6.2) stand on two layers:
 
-- `core/src/main/java/.../ui/model/` computes every rectangle Minecraft-free: `HubLayout` (title, status line, tab bar,
-  body, footer at 320x240 and up), `TabBarModel` (wraps below 300 px), `ScrollModel` (whole-row scrolling, wheel,
-  PageUp/PageDown, reveal), `RowLayout`/`RowPainter` (one- and two-line rows, 24 and 36 px), `Fit` (clipping with an
-  ellipsis through an injected width function), `StateKeeper` (text, focus, scroll position and tab across
-  `Screen.init` re-runs). Golden rectangle lists at 320x240, 427x240, 480x270, 640x360 and 960x540 are the source of
-  truth (`core` JUnit tests).
+- `core/src/main/java/.../ui/model/` computes every rectangle and colour Minecraft-free: `HubLayout` (title, status
+  line, tab bar, body, footer at 320x240 and up), `HubChrome`/`PumpkinTheme` (warm Pumpkin panel, orange accent,
+  notched plates), `TabBarModel` (wraps below 300 px), `ScrollModel` (whole-row scrolling, wheel, PageUp/PageDown,
+  reveal), `RowLayout`/`RowPainter` (one- and two-line rows, 24 and 36 px), `Fit` (clipping with an ellipsis through
+  an injected width function), `StateKeeper` (text, focus, scroll position and tab across `Screen.init` re-runs).
+  Golden rectangle lists at 320x240, 427x240, 480x270, 640x360 and 960x540 are the source of truth (`core` JUnit
+  tests).
 - `src/main/java/.../ui/kit/` is the thin widget glue with no version conditionals: `PumpkinScreen` (frame with title,
-  status line, optional tabs, body and footer "Fertig"), `ScrollPane` (rows outside the body rectangle get
-  `visible = false`; the 2 px scrollbar comes from `ScrollModel`), `TabBar`, `Row`. Everything era-specific sits in
-  `compat/` (`CompatScreen`, `CompatPainter`, `Widgets`, `Text`, `GameScreens`, ...), keyed on the Minecraft version
-  through Stonecutter conditionals, so the NeoForge and Forge nodes reuse it unchanged.
+  status line, optional tabs, body and footer "Fertig"), `ScrollPane` (row backdrops and text are clipped to the body;
+  widgets outside it get `visible = false`; the 2 px scrollbar comes from `ScrollModel`), `TabBar`, `Row`. Everything
+  era-specific sits in `compat/` (`CompatScreen`, `CompatPainter`, `Widgets` with the Pumpkin-painted button and its
+  era's render override, `Text`, `GameScreens`, ...), keyed on the Minecraft version through Stonecutter conditionals,
+  so the NeoForge and Forge nodes reuse it unchanged.
 - `core/src/main/java/.../ui/UiSession` is the soft-failure guard behind all of it (INGAME 4.2): every entry point that
   calls game code — the pause-menu hook, the kit's button and toggle handlers, `CompatScreen`'s lifecycle overrides —
   runs inside it. The first `RuntimeException` or `LinkageError` (era mismatches surface as the latter) logs one line
@@ -239,7 +241,9 @@ two-line), an `EditBox`, a toggle and buttons, wired to the clipboard. It is rea
 `-Dpumpkin.dev.kitdemo=true` (never in normal play): with the property set it opens by itself when the title screen
 first shows (a dev thread polls through `Minecraft.execute`, no extra Mixin), logs
 `pumpkin_friends kit demo rendered <n> frames at <w>x<h>` exactly once after its first three rendered frames, then
-closes itself. No `NoSuchMethodError`, no layout exception - that is the proof.
+closes itself. No `NoSuchMethodError`, no layout exception - that is the proof. `PUMPKIN_DEV_DEMO_HOLD=true` (or the
+Gradle property `-PdemoHold`) keeps the screen open instead: the owner's visual check path for tabs, focus, scrolling
+and both layout extremes.
 
 ```sh
 node scripts/kit-demo.mjs --node 1.21.1-fabric          # starts runClient -Pkitdemo, waits for the line, kills the client

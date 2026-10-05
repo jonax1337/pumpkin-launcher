@@ -5,10 +5,11 @@ package dev.laux.pumpkin.friends.ui.model;
  * Minecraft version, tests implement it as a recorder. Colours are ARGB.
  */
 public interface Painter {
-	int SCROLLBAR_TRACK = 0x40FFFFFF;
-	int SCROLLBAR_THUMB = 0xC0FFFFFF;
-
 	void fill(Rect area, int argb);
+
+	default void fill(int x, int y, int width, int height, int argb) {
+		fill(new Rect(x, y, width, height), argb);
+	}
 
 	/** Draws one line of plain text with its top-left corner at {@code (x, y)}, without shadow. */
 	void text(String text, int x, int y, int argb);
@@ -19,11 +20,24 @@ public interface Painter {
 	int lineHeight();
 
 	default int textWidth(String text) {
-		return text.codePoints().map(this::codePointWidth).sum();
+		int width = 0;
+		for (int index = 0; index < text.length();) {
+			int codePoint = text.codePointAt(index);
+			width += codePointWidth(codePoint);
+			index += Character.charCount(codePoint);
+		}
+		return width;
 	}
 
 	default void scrollbar(Rect track, Rect thumb) {
-		fill(track, SCROLLBAR_TRACK);
-		fill(thumb, SCROLLBAR_THUMB);
+		fill(track, PumpkinTheme.SUNK);
+		fill(thumb, PumpkinTheme.ACCENT);
+	}
+
+	/** Everything until {@link #endClip()} stays inside {@code area}; a painter without clipping ignores it. */
+	default void beginClip(Rect area) {
+	}
+
+	default void endClip() {
 	}
 }

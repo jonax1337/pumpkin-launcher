@@ -14,13 +14,21 @@ use crate::services::modbridge::{Expectations, ModBridge};
 /// Tests setzen eine Attrappe ein.
 pub trait LaunchRegistry {
     /// Legt den Datensatz des Starts an und liefert die Umgebungsvariablen für das Spiel; leer, wenn die Brücke nicht läuft.
-    fn register_launch(&self, instance_id: &str, expectations: Expectations) -> Vec<(String, String)>;
+    fn register_launch(
+        &self,
+        instance_id: &str,
+        expectations: Expectations,
+    ) -> Vec<(String, String)>;
 
     fn bind_pid(&self, instance_id: &str, pid: u32);
 }
 
 impl LaunchRegistry for ModBridge {
-    fn register_launch(&self, instance_id: &str, expectations: Expectations) -> Vec<(String, String)> {
+    fn register_launch(
+        &self,
+        instance_id: &str,
+        expectations: Expectations,
+    ) -> Vec<(String, String)> {
         ModBridge::register_launch(self, instance_id, expectations)
     }
 
@@ -77,7 +85,12 @@ pub struct StartArgs {
 
 /// Entscheidet über die Einspeisung und bereitet sie vor. Die Anmeldung in der Brücke kommt zuletzt: bis dahin hat ein
 /// Fehlschlag nichts hinterlassen, das aufzuräumen wäre.
-pub fn inject(source: &(impl ModSource + ?Sized), data_dir: &Path, registry: &dyn LaunchRegistry, request: &InjectionRequest) -> Injection {
+pub fn inject(
+    source: &(impl ModSource + ?Sized),
+    data_dir: &Path,
+    registry: &dyn LaunchRegistry,
+    request: &InjectionRequest,
+) -> Injection {
     let node = match decide(source.index(), &request.facts) {
         Decision::Inject(node) => node,
         Decision::Skip(reason) => return Injection::Skipped(reason),
@@ -107,7 +120,12 @@ fn prepare(
     if env.is_empty() {
         return Err(InjectionError::BridgeNotRunning);
     }
-    Ok(Injected { node_id: node.id.clone(), args, env, _jar: jar })
+    Ok(Injected {
+        node_id: node.id.clone(),
+        args,
+        env,
+        _jar: jar,
+    })
 }
 
 impl StartArgs {
@@ -129,9 +147,11 @@ impl Injection {
     pub fn start_args(&self, user_jvm: &[String], user_game: &[String]) -> StartArgs {
         match self {
             Self::Injected(injected) => injected.start_args(),
-            Self::Skipped(_) | Self::Failed(_) => {
-                StartArgs { user_jvm: user_jvm.to_vec(), user_game: user_game.to_vec(), ..StartArgs::default() }
-            }
+            Self::Skipped(_) | Self::Failed(_) => StartArgs {
+                user_jvm: user_jvm.to_vec(),
+                user_game: user_game.to_vec(),
+                ..StartArgs::default()
+            },
         }
     }
 
@@ -175,14 +195,16 @@ mod tests {
 
     use super::*;
     use crate::models::{Account, AccountKind, ModLoader};
+    use crate::services::friends::ingame::breaker::{FailureKind, InjectionState};
+    use crate::services::friends::ingame::index::Loader;
+    use crate::services::friends::ingame::materialise::sha256_hex;
+    use crate::services::friends::ingame::test_support::{
+        jar_node, unverified, FakeSource, TempDir,
+    };
     use crate::services::launch::{build_args, test_support::plain_spec};
     use crate::services::mojang::VersionJson;
     use crate::services::rules::Env;
     use crate::services::Dirs;
-    use crate::services::friends::ingame::breaker::{FailureKind, InjectionState};
-    use crate::services::friends::ingame::index::Loader;
-    use crate::services::friends::ingame::materialise::sha256_hex;
-    use crate::services::friends::ingame::test_support::{jar_node, unverified, FakeSource, TempDir};
 
     const JAR: &[u8] = b"PK\x03\x04 fabric jar";
     const NO_MODS: &[String] = &[];
@@ -198,16 +220,25 @@ mod tests {
 
     impl FakeBridge {
         fn running() -> Self {
-            Self { running: true, ..Self::default() }
+            Self {
+                running: true,
+                ..Self::default()
+            }
         }
     }
 
     impl LaunchRegistry for FakeBridge {
-        fn register_launch(&self, instance_id: &str, expectations: Expectations) -> Vec<(String, String)> {
+        fn register_launch(
+            &self,
+            instance_id: &str,
+            expectations: Expectations,
+        ) -> Vec<(String, String)> {
             if !self.running {
                 return Vec::new();
             }
-            self.registered.borrow_mut().push((instance_id.to_owned(), expectations));
+            self.registered
+                .borrow_mut()
+                .push((instance_id.to_owned(), expectations));
             vec![("PUMPKIN_IPC_PORT".to_owned(), "4711".to_owned())]
         }
 
@@ -241,12 +272,37 @@ mod tests {
 
     fn setup() -> Setup {
         let node = jar_node("1.21.1-fabric", Loader::Fabric, JAR);
-        Setup { data: TempDir::new(), game_dir: TempDir::new(), source: FakeSource::with_jar(&node, JAR), node }
+        Setup {
+            data: TempDir::new(),
+            game_dir: TempDir::new(),
+            source: FakeSource::with_jar(&node, JAR),
+            node,
+        }
     }
 
-    fn inject_with(setup: &Setup, bridge: &FakeBridge, facts: LaunchFacts, pre_granted: bool, user_jvm: &[String]) -> Injection {
-        let user = UserArgs { jvm: user_jvm, game: &[], game_dir: setup.game_dir.path() };
-        inject(&setup.source, setup.data.path(), bridge, &InjectionRequest { facts, instance_id: "i1", user, pre_granted })
+    fn inject_with(
+        setup: &Setup,
+        bridge: &FakeBridge,
+        facts: LaunchFacts,
+        pre_granted: bool,
+        user_jvm: &[String],
+    ) -> Injection {
+        let user = UserArgs {
+            jvm: user_jvm,
+            game: &[],
+            game_dir: setup.game_dir.path(),
+        };
+        inject(
+            &setup.source,
+            setup.data.path(),
+            bridge,
+            &InjectionRequest {
+                facts,
+                instance_id: "i1",
+                user,
+                pre_granted,
+            },
+        )
     }
 
     #[test]
@@ -258,7 +314,9 @@ mod tests {
 
         assert!(matches!(injection, Injection::Injected(_)));
         let registered = bridge.registered.borrow();
-        let [(instance, expectations)] = registered.as_slice() else { panic!("{} Anmeldungen", registered.len()) };
+        let [(instance, expectations)] = registered.as_slice() else {
+            panic!("{} Anmeldungen", registered.len())
+        };
         assert_eq!(instance, "i1");
         assert_eq!(
             *expectations,
@@ -269,7 +327,11 @@ mod tests {
                 pre_granted: true,
             }
         );
-        assert_eq!(expectations.build_id.as_deref().map(str::len), Some(64), "der volle SHA-256, nicht nur ein Anfang");
+        assert_eq!(
+            expectations.build_id.as_deref().map(str::len),
+            Some(64),
+            "der volle SHA-256, nicht nur ein Anfang"
+        );
     }
 
     #[test]
@@ -285,16 +347,40 @@ mod tests {
     #[test]
     fn a_fitting_launch_gets_the_loader_option_and_the_env_of_the_bridge() {
         let setup = setup();
-        let injection = inject_with(&setup, &FakeBridge::running(), facts(), false, &["-Dfabric.addMods=other.jar".to_owned()]);
+        let injection = inject_with(
+            &setup,
+            &FakeBridge::running(),
+            facts(),
+            false,
+            &["-Dfabric.addMods=other.jar".to_owned()],
+        );
 
         let start = injection.start_args(&[], &[]);
 
-        let jar = setup.data.path().join("runtime").join("friends-mod").join("2.1.0").join(&setup.node.file);
+        let jar = setup
+            .data
+            .path()
+            .join("runtime")
+            .join("friends-mod")
+            .join("2.1.0")
+            .join(&setup.node.file);
         let separator = crate::services::friends::ingame::PATH_LIST_SEPARATOR;
-        assert_eq!(start.injected_jvm, [format!("-Dfabric.addMods=other.jar{separator}{}", jar.display())]);
+        assert_eq!(
+            start.injected_jvm,
+            [format!(
+                "-Dfabric.addMods=other.jar{separator}{}",
+                jar.display()
+            )]
+        );
         assert!(start.injected_game.is_empty());
-        assert!(start.user_jvm.is_empty(), "die ersetzte Eigenschaft des Nutzers ist in der Einspeisung aufgegangen");
-        assert_eq!(injection.env(), [("PUMPKIN_IPC_PORT".to_owned(), "4711".to_owned())]);
+        assert!(
+            start.user_jvm.is_empty(),
+            "die ersetzte Eigenschaft des Nutzers ist in der Einspeisung aufgegangen"
+        );
+        assert_eq!(
+            injection.env(),
+            [("PUMPKIN_IPC_PORT".to_owned(), "4711".to_owned())]
+        );
         assert_eq!(injection.node_id(), Some("1.21.1-fabric"));
     }
 
@@ -303,7 +389,16 @@ mod tests {
         let setup = setup();
         let bridge = FakeBridge::running();
         let injected = inject_with(&setup, &bridge, facts(), false, &[]);
-        let skipped = inject_with(&setup, &bridge, LaunchFacts { online_account: false, ..facts() }, false, &[]);
+        let skipped = inject_with(
+            &setup,
+            &bridge,
+            LaunchFacts {
+                online_account: false,
+                ..facts()
+            },
+            false,
+            &[],
+        );
 
         injected.bind_pid(&bridge, "i1", 4242);
         skipped.bind_pid(&bridge, "i2", 1);
@@ -319,16 +414,77 @@ mod tests {
         let off = InjectionState::UserOff;
         let own_mod = vec!["pumpkin_friends".to_owned()];
         let cases: Vec<(&str, LaunchFacts)> = vec![
-            ("friends off", LaunchFacts { friends_enabled: false, ..facts() }),
-            ("vanilla", LaunchFacts { loader: ModLoader::Vanilla, loader_version: "", ..facts() }),
-            ("offline account", LaunchFacts { online_account: false, ..facts() }),
-            ("java too old", LaunchFacts { java_major: Some(17), ..facts() }),
-            ("java unknown", LaunchFacts { java_major: None, ..facts() }),
-            ("id collision", LaunchFacts { mod_ids_in_instance: &own_mod, ..facts() }),
-            ("global switch off", LaunchFacts { global_switch: false, ..facts() }),
-            ("instance switch off", LaunchFacts { instance_state: &off, ..facts() }),
-            ("breaker tripped", LaunchFacts { instance_state: &tripped, ..facts() }),
-            ("newer minecraft", LaunchFacts { minecraft: "26.9", ..facts() }),
+            (
+                "friends off",
+                LaunchFacts {
+                    friends_enabled: false,
+                    ..facts()
+                },
+            ),
+            (
+                "vanilla",
+                LaunchFacts {
+                    loader: ModLoader::Vanilla,
+                    loader_version: "",
+                    ..facts()
+                },
+            ),
+            (
+                "offline account",
+                LaunchFacts {
+                    online_account: false,
+                    ..facts()
+                },
+            ),
+            (
+                "java too old",
+                LaunchFacts {
+                    java_major: Some(17),
+                    ..facts()
+                },
+            ),
+            (
+                "java unknown",
+                LaunchFacts {
+                    java_major: None,
+                    ..facts()
+                },
+            ),
+            (
+                "id collision",
+                LaunchFacts {
+                    mod_ids_in_instance: &own_mod,
+                    ..facts()
+                },
+            ),
+            (
+                "global switch off",
+                LaunchFacts {
+                    global_switch: false,
+                    ..facts()
+                },
+            ),
+            (
+                "instance switch off",
+                LaunchFacts {
+                    instance_state: &off,
+                    ..facts()
+                },
+            ),
+            (
+                "breaker tripped",
+                LaunchFacts {
+                    instance_state: &tripped,
+                    ..facts()
+                },
+            ),
+            (
+                "newer minecraft",
+                LaunchFacts {
+                    minecraft: "26.9",
+                    ..facts()
+                },
+            ),
         ];
         let user_jvm = vec!["-Xss2M".to_owned(), "-Dfabric.addMods=mine.jar".to_owned()];
         for (name, facts) in cases {
@@ -337,7 +493,10 @@ mod tests {
             let injection = inject_with(&setup, &bridge, facts, true, &user_jvm);
 
             assert!(matches!(injection, Injection::Skipped(_)), "{name}");
-            let expected = StartArgs { user_jvm: user_jvm.clone(), ..StartArgs::default() };
+            let expected = StartArgs {
+                user_jvm: user_jvm.clone(),
+                ..StartArgs::default()
+            };
             assert_eq!(injection.start_args(&user_jvm, &[]), expected, "{name}");
             assert!(injection.env().is_empty(), "{name}");
             assert!(bridge.registered.borrow().is_empty(), "{name}");
@@ -360,17 +519,39 @@ mod tests {
     /// Die Argumentliste eines Starts, so zusammengesetzt wie in `prepare_launch`: `start` in der Startbeschreibung.
     fn argument_list(start: &StartArgs) -> Vec<String> {
         let (version, dirs) = (version(), Dirs::new("/data"));
-        let account = Account { id: "b50ad385-829d-3141-a216-7e7d7539ba7f".into(), username: "Notch".into(), kind: AccountKind::Offline, active: true };
-        let env = Env { os: "linux", arch: "x86_64", features: Vec::new() };
+        let account = Account {
+            id: "b50ad385-829d-3141-a216-7e7d7539ba7f".into(),
+            username: "Notch".into(),
+            kind: AccountKind::Offline,
+            active: true,
+        };
+        let env = Env {
+            os: "linux",
+            arch: "x86_64",
+            features: Vec::new(),
+        };
         build_args(&start.apply(plain_spec(&version, &dirs, &account)), &env).unwrap()
     }
 
     /// Die Argumentliste, wie sie vor der Einspeisung entstand: die Argumente des Nutzers unverändert in der Beschreibung.
     fn argument_list_without_friends(user_jvm: &[String], user_game: &[String]) -> Vec<String> {
         let (version, dirs) = (version(), Dirs::new("/data"));
-        let account = Account { id: "b50ad385-829d-3141-a216-7e7d7539ba7f".into(), username: "Notch".into(), kind: AccountKind::Offline, active: true };
-        let env = Env { os: "linux", arch: "x86_64", features: Vec::new() };
-        let spec = LaunchSpec { extra_jvm_args: user_jvm, extra_game_args: user_game, ..plain_spec(&version, &dirs, &account) };
+        let account = Account {
+            id: "b50ad385-829d-3141-a216-7e7d7539ba7f".into(),
+            username: "Notch".into(),
+            kind: AccountKind::Offline,
+            active: true,
+        };
+        let env = Env {
+            os: "linux",
+            arch: "x86_64",
+            features: Vec::new(),
+        };
+        let spec = LaunchSpec {
+            extra_jvm_args: user_jvm,
+            extra_game_args: user_game,
+            ..plain_spec(&version, &dirs, &account)
+        };
         build_args(&spec, &env).unwrap()
     }
 
@@ -381,22 +562,85 @@ mod tests {
         let off = InjectionState::UserOff;
         let own_mod = vec!["pumpkin_friends".to_owned()];
         let cases: Vec<(&str, LaunchFacts)> = vec![
-            ("vanilla", LaunchFacts { loader: ModLoader::Vanilla, ..facts() }),
-            ("offline account", LaunchFacts { online_account: false, ..facts() }),
-            ("java too old", LaunchFacts { java_major: Some(17), ..facts() }),
-            ("id collision", LaunchFacts { mod_ids_in_instance: &own_mod, ..facts() }),
-            ("global switch off", LaunchFacts { global_switch: false, ..facts() }),
-            ("instance switch off", LaunchFacts { instance_state: &off, ..facts() }),
-            ("breaker tripped", LaunchFacts { instance_state: &tripped, ..facts() }),
+            (
+                "vanilla",
+                LaunchFacts {
+                    loader: ModLoader::Vanilla,
+                    ..facts()
+                },
+            ),
+            (
+                "offline account",
+                LaunchFacts {
+                    online_account: false,
+                    ..facts()
+                },
+            ),
+            (
+                "java too old",
+                LaunchFacts {
+                    java_major: Some(17),
+                    ..facts()
+                },
+            ),
+            (
+                "id collision",
+                LaunchFacts {
+                    mod_ids_in_instance: &own_mod,
+                    ..facts()
+                },
+            ),
+            (
+                "global switch off",
+                LaunchFacts {
+                    global_switch: false,
+                    ..facts()
+                },
+            ),
+            (
+                "instance switch off",
+                LaunchFacts {
+                    instance_state: &off,
+                    ..facts()
+                },
+            ),
+            (
+                "breaker tripped",
+                LaunchFacts {
+                    instance_state: &tripped,
+                    ..facts()
+                },
+            ),
         ];
-        let (user_jvm, user_game) = (vec!["-Xss2M".to_owned(), "-Dfabric.addMods=mine.jar".to_owned()], vec!["--demo".to_owned()]);
+        let (user_jvm, user_game) = (
+            vec!["-Xss2M".to_owned(), "-Dfabric.addMods=mine.jar".to_owned()],
+            vec!["--demo".to_owned()],
+        );
         let baseline = argument_list_without_friends(&user_jvm, &user_game);
         for (name, facts) in cases {
-            let user = UserArgs { jvm: &user_jvm, game: &user_game, game_dir: setup.game_dir.path() };
-            let request = InjectionRequest { facts, instance_id: "i1", user, pre_granted: false };
-            let injection = inject(&setup.source, setup.data.path(), &FakeBridge::running(), &request);
+            let user = UserArgs {
+                jvm: &user_jvm,
+                game: &user_game,
+                game_dir: setup.game_dir.path(),
+            };
+            let request = InjectionRequest {
+                facts,
+                instance_id: "i1",
+                user,
+                pre_granted: false,
+            };
+            let injection = inject(
+                &setup.source,
+                setup.data.path(),
+                &FakeBridge::running(),
+                &request,
+            );
 
-            assert_eq!(argument_list(&injection.start_args(&user_jvm, &user_game)), baseline, "{name}");
+            assert_eq!(
+                argument_list(&injection.start_args(&user_jvm, &user_game)),
+                baseline,
+                "{name}"
+            );
             assert!(injection.env().is_empty(), "{name}");
         }
     }
@@ -405,13 +649,33 @@ mod tests {
     fn a_fitting_launch_has_the_injected_option_after_the_version_options_and_before_the_users() {
         let setup = setup();
         let (user_jvm, user_game) = (vec!["-Xss2M".to_owned()], vec!["--demo".to_owned()]);
-        let user = UserArgs { jvm: &user_jvm, game: &user_game, game_dir: setup.game_dir.path() };
-        let request = InjectionRequest { facts: facts(), instance_id: "i1", user, pre_granted: false };
-        let injection = inject(&setup.source, setup.data.path(), &FakeBridge::running(), &request);
+        let user = UserArgs {
+            jvm: &user_jvm,
+            game: &user_game,
+            game_dir: setup.game_dir.path(),
+        };
+        let request = InjectionRequest {
+            facts: facts(),
+            instance_id: "i1",
+            user,
+            pre_granted: false,
+        };
+        let injection = inject(
+            &setup.source,
+            setup.data.path(),
+            &FakeBridge::running(),
+            &request,
+        );
 
         let args = argument_list(&injection.start_args(&user_jvm, &user_game));
 
-        let jar = setup.data.path().join("runtime").join("friends-mod").join("2.1.0").join(&setup.node.file);
+        let jar = setup
+            .data
+            .path()
+            .join("runtime")
+            .join("friends-mod")
+            .join("2.1.0")
+            .join(&setup.node.file);
         let expected_option = format!("-Dfabric.addMods={}", jar.display());
         let baseline = argument_list_without_friends(&user_jvm, &user_game);
         let at_user_option = baseline.iter().position(|arg| arg == "-Xss2M").unwrap();
@@ -431,7 +695,10 @@ mod tests {
 
         let args = argument_list(&start);
 
-        assert_eq!(args[args.len() - 3..], ["--fml.mavenRoots", "root", "--demo"]);
+        assert_eq!(
+            args[args.len() - 3..],
+            ["--fml.mavenRoots", "root", "--demo"]
+        );
         assert!(args.iter().position(|arg| arg == "Notch").unwrap() < args.len() - 3);
     }
 
@@ -444,20 +711,33 @@ mod tests {
 
         let injection = inject_with(&setup, &bridge, facts(), false, &[]);
 
-        assert!(matches!(injection, Injection::Skipped(SkipReason::Unfit(_))));
+        assert!(matches!(
+            injection,
+            Injection::Skipped(SkipReason::Unfit(_))
+        ));
         assert!(bridge.registered.borrow().is_empty());
     }
 
     #[test]
     fn a_jar_that_cannot_be_provided_leaves_the_launch_untouched() {
         let node = jar_node("1.21.1-fabric", Loader::Fabric, JAR);
-        let setup = Setup { source: FakeSource::indexed_without_jar(&node), node, ..setup() };
+        let setup = Setup {
+            source: FakeSource::indexed_without_jar(&node),
+            node,
+            ..setup()
+        };
         let bridge = FakeBridge::running();
 
         let injection = inject_with(&setup, &bridge, facts(), false, &["-Xss2M".to_owned()]);
 
-        assert!(matches!(injection, Injection::Failed(InjectionError::Materialise(_))));
-        assert_eq!(injection.start_args(&["-Xss2M".to_owned()], &[]).user_jvm, ["-Xss2M"]);
+        assert!(matches!(
+            injection,
+            Injection::Failed(InjectionError::Materialise(_))
+        ));
+        assert_eq!(
+            injection.start_args(&["-Xss2M".to_owned()], &[]).user_jvm,
+            ["-Xss2M"]
+        );
         assert!(injection.env().is_empty());
         assert!(bridge.registered.borrow().is_empty());
     }
@@ -469,8 +749,14 @@ mod tests {
 
         let injection = inject_with(&setup, &bridge, facts(), false, &["-Xss2M".to_owned()]);
 
-        assert!(matches!(injection, Injection::Failed(InjectionError::BridgeNotRunning)));
-        assert_eq!(injection.start_args(&["-Xss2M".to_owned()], &[]).user_jvm, ["-Xss2M"]);
+        assert!(matches!(
+            injection,
+            Injection::Failed(InjectionError::BridgeNotRunning)
+        ));
+        assert_eq!(
+            injection.start_args(&["-Xss2M".to_owned()], &[]).user_jvm,
+            ["-Xss2M"]
+        );
         assert!(injection.env().is_empty());
     }
 }

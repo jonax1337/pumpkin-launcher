@@ -22,7 +22,7 @@ final class TabBar {
 	}
 
 	private static Row.Action tab(int index, String label, Rect rectangle, boolean selected, IntConsumer onSelect) {
-		AbstractWidget button = Widgets.button(label, rectangle.width(), () -> onSelect.accept(index));
+		AbstractWidget button = Widgets.tab(label, rectangle.width(), selected, () -> onSelect.accept(index));
 		button.setX(rectangle.x());
 		button.setY(rectangle.y());
 		button.active = !selected;

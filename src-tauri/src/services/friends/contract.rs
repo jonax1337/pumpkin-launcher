@@ -8,8 +8,6 @@ pub use crate::services::shared_types::{ModLoader, PathKind, PortSource};
 pub const FRIEND_CODE_PREFIX: &str = "pumpkin-";
 pub const FRIEND_CODE_BODY_LENGTH: usize = 72;
 pub const FRIEND_CODE_LENGTH: usize = 80;
-pub const DISPLAY_NAME_MIN: usize = 3;
-pub const DISPLAY_NAME_MAX: usize = 32;
 pub const ALIAS_MAX: usize = 32;
 pub const MAX_FRIENDS: usize = 50;
 pub const MAX_ACTIVE_CODES: usize = 3;
@@ -79,7 +77,6 @@ pub struct Me {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FriendsSettings {
-    pub display_name: String,
     pub always_relay: bool,
     /// Fehlt in Dateien aus der Zeit vor der Suche per Name.
     #[serde(default)]
@@ -99,7 +96,6 @@ fn ingame_menu_default() -> bool {
 impl Default for FriendsSettings {
     fn default() -> Self {
         Self {
-            display_name: String::new(),
             always_relay: false,
             findable_by_name: false,
             ingame_menu: ingame_menu_default(),
@@ -120,7 +116,6 @@ pub enum IngameActions {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FriendsEnableInput {
-    pub display_name: String,
     pub always_relay: bool,
     pub accept_third_party_relays: bool,
     pub findable_by_name: bool,
@@ -142,7 +137,11 @@ pub enum RelayOperatorKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum NetworkStatus {
     Off,
     Starting,
@@ -176,7 +175,11 @@ pub struct Friend {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum FriendNotice {
     Renamed { previous_name: String },
     IdentityChanged { previous_fingerprint: String },
@@ -446,7 +449,11 @@ pub struct JoinSessionEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum JoinState {
     WaitingForGame,
     Connecting,
@@ -565,7 +572,11 @@ pub enum IngameState {
 
 /// Der Grund zu einem Status, den die Oberfläche in die Zeile der Instanzseite übersetzt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum IngameReason {
     /// Dieser Build trägt keine Mod (Entwicklungsbuild ohne JARs).
     NotInBuild,
@@ -575,9 +586,13 @@ pub enum IngameReason {
     NoNode,
     /// Es gibt einen Knoten, sein Rauchtest ist aber nicht bestanden.
     Unverified,
-    LoaderTooOld { need: String },
+    LoaderTooOld {
+        need: String,
+    },
     LoaderVersionUnknown,
-    JavaTooOld { need: u32 },
+    JavaTooOld {
+        need: u32,
+    },
     JavaUnknown,
     IdCollision,
     OfflineAccount,
@@ -587,7 +602,9 @@ pub enum IngameReason {
     InstanceOff,
     /// Der globale Schalter „Freunde-Menü im Spiel“ ist aus.
     GloballyOff,
-    Breaker { reason: FailureKind },
+    Breaker {
+        reason: FailureKind,
+    },
 }
 
 /// Der Knoten, der für die Instanz gewählt wäre.

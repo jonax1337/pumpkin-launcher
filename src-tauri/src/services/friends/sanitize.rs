@@ -2,29 +2,23 @@
 //! durch, bevor er gespeichert, angezeigt oder weitergereicht wird. Die Mod bereinigt nach denselben Regeln.
 use unicode_normalization::UnicodeNormalization;
 
-use super::contract::{ALIAS_MAX, DISPLAY_NAME_MAX, DISPLAY_NAME_MIN};
+use super::contract::ALIAS_MAX;
 use super::identity::short_id;
-use crate::coded;
-use crate::error::{AppError, AppResult};
 
 const WORLD_NAME_MAX: usize = 64;
 const FILE_NAME_MAX: usize = 128;
 const MC_NAME_MAX: usize = 16;
 const MC_UUID_LEN: usize = 32;
+const PEER_NAME_MAX: usize = 32;
 
 /// Anzeigename eines Peers, höchstens 32 Zeichen; ein leerer Name wird zu `#` und den ersten 8 Zeichen der Peer-ID.
 pub fn display_name(raw: &str, peer_id: &str) -> String {
-    let name = capped(raw, DISPLAY_NAME_MAX);
-    if name.is_empty() { format!("#{}", short_id(peer_id)) } else { name }
-}
-
-/// Eigener Anzeigename: kein Kürzen, sondern ein Fehler, wenn er bereinigt nicht 3 bis 32 Zeichen lang ist.
-pub fn own_display_name(raw: &str) -> AppResult<String> {
-    let name = clean(raw);
-    if (DISPLAY_NAME_MIN..=DISPLAY_NAME_MAX).contains(&name.chars().count()) {
-        return Ok(name);
+    let name = capped(raw, PEER_NAME_MAX);
+    if name.is_empty() {
+        format!("#{}", short_id(peer_id))
+    } else {
+        name
     }
-    Err(AppError::invalid(coded!("errors.friends.displayNameInvalid", min = DISPLAY_NAME_MIN, max = DISPLAY_NAME_MAX)))
 }
 
 /// Welt- und Instanzname, höchstens 64 Zeichen.
@@ -44,14 +38,19 @@ pub fn alias(raw: &str) -> Option<String> {
 
 /// Ein Minecraft-Name hat 1 bis 16 Zeichen aus `A-Za-z0-9_`, sonst gilt er als nicht angegeben.
 pub fn mc_name(raw: Option<&str>) -> Option<String> {
-    raw.filter(|name| (1..=MC_NAME_MAX).contains(&name.len()) && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'))
-        .map(str::to_owned)
+    raw.filter(|name| {
+        (1..=MC_NAME_MAX).contains(&name.len())
+            && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+    })
+    .map(str::to_owned)
 }
 
 /// Eine Minecraft-UUID besteht aus 32 Hex-Zeichen in Kleinbuchstaben, sonst gilt sie als nicht angegeben.
 pub fn mc_uuid(raw: Option<&str>) -> Option<String> {
-    raw.filter(|uuid| uuid.len() == MC_UUID_LEN && uuid.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
-        .map(str::to_owned)
+    raw.filter(|uuid| {
+        uuid.len() == MC_UUID_LEN && uuid.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+    })
+    .map(str::to_owned)
 }
 
 /// NFC, unsichtbare und steuernde Zeichen weg, Leerraum zusammengezogen und gekürzt.
@@ -88,7 +87,6 @@ fn is_invisible(c: char) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::friends::test_support::error_key;
 
     const PEER: &str = "3f9ac02177de01b49d5e8c7a21f06b3344aa90bc12de56f7081926a3b4c5d6e7";
 
@@ -110,15 +108,42 @@ mod tests {
 
     #[test]
     fn bidi_and_zero_width_characters_are_removed() {
-        let tricks = ["\u{202E}", "\u{202A}", "\u{2066}", "\u{2069}", "\u{200B}", "\u{200F}", "\u{FEFF}", "\u{00AD}", "\u{061C}", "\u{180E}", "\u{2060}", "\u{2028}", "\u{E0041}", "\u{FFF9}"];
+        let tricks = [
+            "\u{202E}",
+            "\u{202A}",
+            "\u{2066}",
+            "\u{2069}",
+            "\u{200B}",
+            "\u{200F}",
+            "\u{FEFF}",
+            "\u{00AD}",
+            "\u{061C}",
+            "\u{180E}",
+            "\u{2060}",
+            "\u{2028}",
+            "\u{E0041}",
+            "\u{FFF9}",
+        ];
         for trick in tricks {
-            assert_eq!(name(&format!("Al{trick}ex")), "Alex", "U+{:04X}", trick.chars().next().unwrap() as u32);
+            assert_eq!(
+                name(&format!("Al{trick}ex")),
+                "Alex",
+                "U+{:04X}",
+                trick.chars().next().unwrap() as u32
+            );
         }
     }
 
     #[test]
     fn every_listed_range_is_removed_at_both_ends() {
-        let ranges = [('\u{200B}', '\u{200F}'), ('\u{2028}', '\u{202E}'), ('\u{2060}', '\u{2064}'), ('\u{2066}', '\u{206F}'), ('\u{FFF9}', '\u{FFFB}'), ('\u{E0020}', '\u{E007F}')];
+        let ranges = [
+            ('\u{200B}', '\u{200F}'),
+            ('\u{2028}', '\u{202E}'),
+            ('\u{2060}', '\u{2064}'),
+            ('\u{2066}', '\u{206F}'),
+            ('\u{FFF9}', '\u{FFFB}'),
+            ('\u{E0020}', '\u{E007F}'),
+        ];
         for (first, last) in ranges {
             assert_eq!(name(&format!("a{first}{last}b")), "ab");
         }
@@ -160,21 +185,20 @@ mod tests {
     }
 
     #[test]
-    fn own_display_name_must_have_3_to_32_chars_after_cleaning() {
-        assert_eq!(own_display_name(" §Jonas ").unwrap(), "Jonas");
-        assert_eq!(own_display_name("abc").unwrap(), "abc");
-        assert!(own_display_name(&"a".repeat(32)).is_ok());
-        let too_long = "a".repeat(33);
-        for raw in ["ab", "", "a\u{200B}b", too_long.as_str()] {
-            assert_eq!(error_key(&own_display_name(raw).unwrap_err()), "errors.friends.displayNameInvalid", "{raw:?}");
-        }
-    }
-
-    #[test]
     fn mc_name_needs_the_mojang_format() {
         assert_eq!(mc_name(Some("Alex_01")).as_deref(), Some("Alex_01"));
-        assert_eq!(mc_name(Some(&"a".repeat(16))).as_deref(), Some("aaaaaaaaaaaaaaaa"));
-        for raw in [None, Some(""), Some("a b"), Some("Älex"), Some("§cAlex"), Some(&*"a".repeat(17))] {
+        assert_eq!(
+            mc_name(Some(&"a".repeat(16))).as_deref(),
+            Some("aaaaaaaaaaaaaaaa")
+        );
+        for raw in [
+            None,
+            Some(""),
+            Some("a b"),
+            Some("Älex"),
+            Some("§cAlex"),
+            Some(&*"a".repeat(17)),
+        ] {
             assert_eq!(mc_name(raw), None, "{raw:?}");
         }
     }
@@ -184,7 +208,14 @@ mod tests {
         let uuid = "069a79f444e94726a5befca90e38aaf5";
         assert_eq!(mc_uuid(Some(uuid)).as_deref(), Some(uuid));
         let dashed = "069a79f4-44e9-4726-a5be-fca90e38aaf5";
-        for raw in [None, Some(""), Some(dashed), Some(&*uuid.to_uppercase()), Some(&uuid[1..]), Some("g69a79f444e94726a5befca90e38aaf5")] {
+        for raw in [
+            None,
+            Some(""),
+            Some(dashed),
+            Some(&*uuid.to_uppercase()),
+            Some(&uuid[1..]),
+            Some("g69a79f444e94726a5befca90e38aaf5"),
+        ] {
             assert_eq!(mc_uuid(raw), None, "{raw:?}");
         }
     }

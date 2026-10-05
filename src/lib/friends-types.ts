@@ -3,7 +3,7 @@
 // Änderungen gehören zuerst in die Spezifikation, dann hierher und in die Fixtures (friends-fixtures.ts).
 import type { ModLoader } from "./types";
 
-export const FRIENDS_LIMITS = { codePrefix: "pumpkin-", codeBodyLength: 72, codeLength: 80, displayNameMin: 3, displayNameMax: 32,
+export const FRIENDS_LIMITS = { codePrefix: "pumpkin-", codeBodyLength: 72, codeLength: 80,
   aliasMax: 32, maxFriends: 50, maxActiveCodes: 3, maxGuests: 7, codeTtlSecs: 604800, requestTtlSecs: 1209600, inviteTtlSecs: 7200,
   minMcReleaseTime: "2023-06-02T08:36:17+00:00", minMcLabel: "1.20", portMin: 1024, portMax: 65535,
   maxNameRequests: 5, mcNameMax: 16, nameCooldownDays: 7 } as const;
@@ -12,7 +12,7 @@ export interface FriendsState { availability: Availability; enabled: boolean; me
   network: NetworkStatus; relays: RelayInfo[]; thirdPartyRelaysAccepted: boolean;
   directory: DirectoryStatus }
 export interface Me { peerId: string; fingerprint: string; displayName: string }
-export interface FriendsSettings { displayName: string; alwaysRelay: boolean; findableByName: boolean;
+export interface FriendsSettings { alwaysRelay: boolean; findableByName: boolean;
   /** „Freunde-Menü im Spiel“: der globale Schalter der Einspeisung (INGAME 3.9). */
   ingameMenu: boolean;
   /** „Aktionen im Spiel“ (INGAME 5.5): einmal je Spielstart fragen oder gleich erlauben. */
@@ -21,7 +21,7 @@ export type IngameActions = "ask" | "allow";
 /** Verzeichnis für Freunde per Minecraft-Namen (docs/friends/BYNAME.md): `host` zeigt die Datenschutzhinweise, null = keins eingebunden. */
 export type DirectoryState = "unavailable" | "off" | "active" | "unreachable" | "notAllowed";
 export interface DirectoryStatus { state: DirectoryState; host: string | null }
-export interface FriendsEnableInput { displayName: string; alwaysRelay: boolean; acceptThirdPartyRelays: boolean; findableByName: boolean }
+export interface FriendsEnableInput { alwaysRelay: boolean; acceptThirdPartyRelays: boolean; findableByName: boolean }
 export interface RelayInfo { host: string; operator: "pumpkin" | "n0"; thirdParty: boolean }
 export type NetworkStatus = { type: "off" } | { type: "starting" } | { type: "online"; relayHost: string } | { type: "degraded"; reason: DegradedReason };
 export type DegradedReason = "relayUnreachable" | "bindFailed";

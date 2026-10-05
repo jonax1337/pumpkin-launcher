@@ -7,7 +7,9 @@ use std::time::Duration;
 use tokio::sync::oneshot;
 
 use super::{Shared, CONFIRM_WAIT};
-use crate::services::friends::contract::{ModActivityEntry, ModConfirmEvent, ModConfirmFriend, ModConfirmSummary};
+use crate::services::friends::contract::{
+    ModActivityEntry, ModConfirmEvent, ModConfirmFriend, ModConfirmSummary,
+};
 use crate::services::friends::sanitize;
 use crate::services::friends::service::now_secs;
 use crate::services::friends::session_events::SessionEvent;
@@ -28,20 +30,41 @@ pub(super) struct Consent {
 
 impl Consent {
     pub(super) fn social(op: &'static str, target_name: Option<String>) -> Self {
-        Self { scope: Scope::Social, op, target_name, friends: Vec::new() }
+        Self {
+            scope: Scope::Social,
+            op,
+            target_name,
+            friends: Vec::new(),
+        }
     }
 
     pub(super) fn share(op: &'static str, friends: Vec<ModConfirmFriend>) -> Self {
-        let names: Vec<&str> = friends.iter().map(|friend| friend.display_name.as_str()).collect();
-        let target_name = Some(sanitize::world_or_instance_name(&names.join(", "))).filter(|names| !names.is_empty());
-        Self { scope: Scope::Share, op, target_name, friends }
+        let names: Vec<&str> = friends
+            .iter()
+            .map(|friend| friend.display_name.as_str())
+            .collect();
+        let target_name = Some(sanitize::world_or_instance_name(&names.join(", ")))
+            .filter(|names| !names.is_empty());
+        Self {
+            scope: Scope::Share,
+            op,
+            target_name,
+            friends,
+        }
     }
 }
 
 /// Lässt `act` erst laufen, wenn der Bereich erlaubt ist (erst gefragt, wenn nötig), und trägt den Ausgang ein.
 /// `act` ist eine Zukunft, die noch nichts getan hat: bei Ablehnung wird sie nie angefasst.
-pub(super) async fn consented(shared: &Shared, ctx: &OpContext, consent: Consent, act: impl Future<Output = OpOutcome>) -> OpOutcome {
-    let allowed = ctx.require_scope(consent.scope, ask_user(shared, ctx.instance_id(), &consent)).await;
+pub(super) async fn consented(
+    shared: &Shared,
+    ctx: &OpContext,
+    consent: Consent,
+    act: impl Future<Output = OpOutcome>,
+) -> OpOutcome {
+    let allowed = ctx
+        .require_scope(consent.scope, ask_user(shared, ctx.instance_id(), &consent))
+        .await;
     let outcome = match allowed {
         Ok(()) => act.await,
         Err(refusal) => Err(refusal),
@@ -65,14 +88,21 @@ fn record(shared: &Shared, instance_id: &str, consent: &Consent, ok: bool) {
 /// für den Rest des Spielstarts und hat der Mod `pending` gemeldet.
 async fn ask_user(shared: &Shared, instance_id: &str, consent: &Consent) -> bool {
     let (request_id, answered) = shared.mods.ask(instance_id);
-    let instance_name = shared.instances.get(instance_id).map(|instance| instance.name).unwrap_or_default();
+    let instance_name = shared
+        .instances
+        .get(instance_id)
+        .map(|instance| instance.name)
+        .unwrap_or_default();
     shared.emit(SessionEvent::ModConfirm(ModConfirmEvent {
         request_id: request_id.clone(),
         instance_id: instance_id.to_owned(),
         instance_name,
         friends: consent.friends.clone(),
         scope: consent.scope,
-        summary: ModConfirmSummary { op: consent.op.to_owned(), target_name: consent.target_name.clone() },
+        summary: ModConfirmSummary {
+            op: consent.op.to_owned(),
+            target_name: consent.target_name.clone(),
+        },
     }));
     let allowed = answer_within(answered, CONFIRM_WAIT).await;
     lock(&shared.mods.pending).remove(&request_id);
@@ -114,18 +144,36 @@ mod tests {
 
     #[test]
     fn a_share_names_its_friends_and_a_social_op_its_person() {
-        let friends = ["Anna", "Bert"].map(|name| ModConfirmFriend { friend_id: format!("id-{name}"), display_name: name.into() });
+        let friends = ["Anna", "Bert"].map(|name| ModConfirmFriend {
+            friend_id: format!("id-{name}"),
+            display_name: name.into(),
+        });
 
         let share = Consent::share("host.invite", friends.to_vec());
         let social = Consent::social("friend.remove", Some("Cleo".into()));
 
-        assert_eq!((share.scope, share.target_name.as_deref()), (Scope::Share, Some("Anna, Bert")));
-        assert_eq!((social.scope, social.target_name.as_deref(), social.friends.len()), (Scope::Social, Some("Cleo"), 0));
+        assert_eq!(
+            (share.scope, share.target_name.as_deref()),
+            (Scope::Share, Some("Anna, Bert"))
+        );
+        assert_eq!(
+            (
+                social.scope,
+                social.target_name.as_deref(),
+                social.friends.len()
+            ),
+            (Scope::Social, Some("Cleo"), 0)
+        );
     }
 
     #[test]
     fn a_share_of_many_long_names_stays_within_the_name_cap() {
-        let friends = (0..7).map(|n| ModConfirmFriend { friend_id: n.to_string(), display_name: "x".repeat(32) }).collect();
+        let friends = (0..7)
+            .map(|n| ModConfirmFriend {
+                friend_id: n.to_string(),
+                display_name: "x".repeat(32),
+            })
+            .collect();
 
         let share = Consent::share("host.invite", friends);
 

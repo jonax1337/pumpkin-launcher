@@ -19,10 +19,10 @@ export const friendsSettings: typeof deFriendsSettings = {
   "friendsSettings.enableHint": "Friend codes, online status and playing together",
   "friendsSettings.enableAside": "Off by default. Switching it on shows a dialog about what friends and relay servers can see. Switching it off keeps your friends.",
 
-  // Display name
-  "friendsSettings.nameLabel": "Display name",
-  "friendsSettings.nameHint": "How your friends see you: {min} to {max} characters",
-  "friendsSettings.nameAside": "You choose this name yourself. Friends see it together with your fingerprint.",
+  // Minecraft player name
+  "friendsSettings.nameLabel": "Minecraft player name",
+  "friendsSettings.nameHint": "Taken automatically from your Microsoft Minecraft account. Your friends see this name.",
+  "friendsSettings.nameUnavailable": "No Microsoft Minecraft account signed in",
 
   // Always relay
   "friendsSettings.relayLabel": "Always connect through a relay",
@@ -54,7 +54,7 @@ export const friendsSettings: typeof deFriendsSettings = {
   // Fingerprint
   "friendsSettings.fingerprintLabel": "My fingerprint",
   "friendsSettings.fingerprintHint": "Tied permanently to your key",
-  "friendsSettings.fingerprintAside": "You choose your name yourself, but not your fingerprint. If in doubt, friends can compare it with yours. For a report to the relay operator, copy the full ID.",
+  "friendsSettings.fingerprintAside": "Your Minecraft name can change, but your fingerprint is tied to your key. If in doubt, friends can compare it with yours. For a report to the relay operator, copy the full ID.",
   "friendsSettings.copyPeerId": "Copy full ID",
   "friendsSettings.peerIdCopied": "ID copied",
 
@@ -92,9 +92,8 @@ export const friendsSettings: typeof deFriendsSettings = {
   "friendsSettings.optIn.codes": "Friends through codes you exchange yourselves, or by Minecraft name if the other person allows it. Whoever sends you a request does not see your IP address that way.",
   "friendsSettings.optIn.addresses": "Encrypted connections between launchers. On a direct connection your friends see your public IP address and the addresses of your networks (home network, VPN). So does anyone who redeems your code, or whose code you redeem, as long as “Always relay” is off. “Always relay” prevents that.",
   "friendsSettings.optIn.relays": "Relay servers: {relays}. They forward encrypted data and see who is connected to whom, but never any content.",
-  "friendsSettings.optIn.presence": "Friends see whether you are online or playing, and your Minecraft name with your skin (as stated by you).",
+  "friendsSettings.optIn.presence": "Friends see whether you are online or playing, and your Minecraft name with your skin. Your name is taken automatically from your Microsoft Minecraft account.",
   "friendsSettings.optIn.noTracking": "No chat, no tracking, no public lists; the search by name only finds exact names of people who turned it on. You can turn it off at any time.",
-  "friendsSettings.optIn.nameLabel": "Display name",
   "friendsSettings.optIn.alwaysRelay": "Always connect through a relay",
   "friendsSettings.optIn.findable": "Be findable by Minecraft name",
   "friendsSettings.optIn.thirdParty": "I agree that {operator} ({hosts}) is used as a relay",

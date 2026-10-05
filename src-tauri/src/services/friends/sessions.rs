@@ -48,16 +48,28 @@ pub struct MojangVersions {
 
 impl MojangVersions {
     pub fn new(http: reqwest::Client) -> Self {
-        Self { http, cached: tokio::sync::Mutex::new(None) }
+        Self {
+            http,
+            cached: tokio::sync::Mutex::new(None),
+        }
     }
 
     async fn release_times(&self) -> AppResult<ReleaseTimes> {
         let mut cached = self.cached.lock().await;
-        if let Some((_, entries)) = cached.as_ref().filter(|(fetched, _)| fetched.elapsed() < VERSIONS_TTL) {
+        if let Some((_, entries)) = cached
+            .as_ref()
+            .filter(|(fetched, _)| fetched.elapsed() < VERSIONS_TTL)
+        {
             return Ok(entries.clone());
         }
         let manifest: VersionManifest = download::get_json(&self.http, MANIFEST_URL).await?;
-        let entries = Arc::new(manifest.versions.into_iter().map(|entry| (entry.id, entry.release_time)).collect());
+        let entries = Arc::new(
+            manifest
+                .versions
+                .into_iter()
+                .map(|entry| (entry.id, entry.release_time))
+                .collect(),
+        );
         *cached = Some((Instant::now(), Arc::clone(&entries)));
         Ok(entries)
     }
@@ -65,7 +77,11 @@ impl MojangVersions {
 
 impl VersionCatalog for MojangVersions {
     fn index(&self) -> BoxFuture<'_, AppResult<VersionIndex>> {
-        Box::pin(async move { Ok(VersionIndex::new(self.release_times().await?.iter().cloned())) })
+        Box::pin(async move {
+            Ok(VersionIndex::new(
+                self.release_times().await?.iter().cloned(),
+            ))
+        })
     }
 }
 
@@ -128,15 +144,25 @@ impl FriendSessions {
             mods: ModLink::default(),
             events: RwLock::new(Arc::new(NoSessionEvents)),
         };
-        Self { shared: Arc::new(shared) }
+        Self {
+            shared: Arc::new(shared),
+        }
     }
 
     /// Setzt den Empfänger der Ereignisse und hängt sich in den Freunde-Dienst ein; genau einmal.
     pub fn start(&self, events: Arc<dyn SessionEvents>) -> Result<(), HandlerAlreadySet> {
         let shared = &self.shared;
-        *shared.events.write().unwrap_or_else(|poisoned| poisoned.into_inner()) = events;
-        shared.friends.register_stream_handler(Arc::new(SessionHandler(Arc::downgrade(shared))))?;
-        tokio::spawn(follow_lifecycle(Arc::downgrade(shared), shared.friends.subscribe_lifecycle()));
+        *shared
+            .events
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = events;
+        shared
+            .friends
+            .register_stream_handler(Arc::new(SessionHandler(Arc::downgrade(shared))))?;
+        tokio::spawn(follow_lifecycle(
+            Arc::downgrade(shared),
+            shared.friends.subscribe_lifecycle(),
+        ));
         if let Some(signals) = lock(&shared.signals).take() {
             tokio::spawn(follow_signals(Arc::downgrade(shared), signals));
         }
@@ -147,7 +173,10 @@ impl FriendSessions {
 
 impl Shared {
     pub(super) fn emit(&self, event: SessionEvent) {
-        self.events.read().unwrap_or_else(|poisoned| poisoned.into_inner()).emit(event);
+        self.events
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .emit(event);
     }
 
     /// Sitzungsbefehle gibt es nur bei aktivierter, verfügbarer Funktion (wie die übrigen Freunde-Befehle).
@@ -168,7 +197,12 @@ impl PeerStreamHandler for SessionHandler {
         })
     }
 
-    fn on_tunnel_stream<'a>(&'a self, peer: &'a PeerId, session_id: String, stream: BiStream) -> BoxFuture<'a, ()> {
+    fn on_tunnel_stream<'a>(
+        &'a self,
+        peer: &'a PeerId,
+        session_id: String,
+        stream: BiStream,
+    ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
             if let Some(shared) = self.0.upgrade() {
                 hosting::serve_tunnel(&shared, peer, &session_id, stream).await;
@@ -176,15 +210,23 @@ impl PeerStreamHandler for SessionHandler {
         })
     }
 
-    fn on_control_message<'a>(&'a self, peer: &'a PeerId, message: SessionControl) -> BoxFuture<'a, ()> {
+    fn on_control_message<'a>(
+        &'a self,
+        peer: &'a PeerId,
+        message: SessionControl,
+    ) -> BoxFuture<'a, ()> {
         Box::pin(async move {
-            let Some(shared) = self.0.upgrade() else { return };
+            let Some(shared) = self.0.upgrade() else {
+                return;
+            };
             match message {
                 SessionControl::Invite(invite) => invites::receive(&shared, peer, invite).await,
                 SessionControl::InviteRevoke { invite_id, reason } => {
                     invites::revoked(&shared, peer, &invite_id, reason);
                 }
-                SessionControl::InviteDecline { invite_id } => hosting::declined(&shared, peer, &invite_id),
+                SessionControl::InviteDecline { invite_id } => {
+                    hosting::declined(&shared, peer, &invite_id)
+                }
             }
         })
     }
@@ -194,7 +236,9 @@ impl PeerStreamHandler for SessionHandler {
 /// schon eingereiht, wenn `done` fällt.
 async fn follow_lifecycle(shared: Weak<Shared>, mut events: mpsc::Receiver<LifecycleEvent>) {
     while let Some(LifecycleEvent { kind, done }) = events.recv().await {
-        let Some(shared) = shared.upgrade() else { return };
+        let Some(shared) = shared.upgrade() else {
+            return;
+        };
         hosting::end_for_lifecycle(&shared, kind);
         joining::end_for_lifecycle(&shared, kind);
         if matches!(kind, Lifecycle::Disabled | Lifecycle::IdentityChanged) {
@@ -209,19 +253,29 @@ async fn follow_signals(shared: Weak<Shared>, mut signals: broadcast::Receiver<G
         let signal = match signals.recv().await {
             Ok(signal) => signal,
             Err(broadcast::error::RecvError::Lagged(missed)) => {
-                tracing::warn!(missed, "Spielsignale verpasst, Sitzungsstand kann veraltet sein");
+                tracing::warn!(
+                    missed,
+                    "Spielsignale verpasst, Sitzungsstand kann veraltet sein"
+                );
                 continue;
             }
             Err(broadcast::error::RecvError::Closed) => return,
         };
-        let Some(shared) = shared.upgrade() else { return };
+        let Some(shared) = shared.upgrade() else {
+            return;
+        };
         on_signal(&shared, signal);
     }
 }
 
 fn on_signal(shared: &Arc<Shared>, signal: GameSignal) {
     match signal {
-        GameSignal::Spawned { instance_id, pid, online_account, friend_join } => {
+        GameSignal::Spawned {
+            instance_id,
+            pid,
+            online_account,
+            friend_join,
+        } => {
             hosting::game_spawned(shared, &instance_id, pid, online_account);
             shared.mods.new_launch(&instance_id);
             if let Some(join_id) = friend_join {
@@ -229,8 +283,14 @@ fn on_signal(shared: &Arc<Shared>, signal: GameSignal) {
             }
         }
         GameSignal::LaunchProgress { friend_join, .. } => shared.joins.progressed(&friend_join),
-        GameSignal::LaunchFailed { friend_join, .. } => joining::launch_failed(shared, &friend_join),
-        GameSignal::LanOpened { instance_id, port, source } => hosting::lan_opened(shared, &instance_id, port, source),
+        GameSignal::LaunchFailed { friend_join, .. } => {
+            joining::launch_failed(shared, &friend_join)
+        }
+        GameSignal::LanOpened {
+            instance_id,
+            port,
+            source,
+        } => hosting::lan_opened(shared, &instance_id, port, source),
         GameSignal::LanClosed { instance_id } => hosting::lan_closed(shared, &instance_id),
         GameSignal::Exited { instance_id } => {
             hosting::game_exited(shared, &instance_id);
@@ -239,19 +299,31 @@ fn on_signal(shared: &Arc<Shared>, signal: GameSignal) {
         }
         GameSignal::ModConnected { instance_id } => mod_link::connected(shared, &instance_id),
         GameSignal::ModDisconnected { instance_id } => mod_link::disconnected(shared, &instance_id),
-        GameSignal::ModRequest { instance_id, request } => {
+        GameSignal::ModRequest {
+            instance_id,
+            request,
+        } => {
             tokio::spawn(mod_link::handle(shared.clone(), instance_id, request));
         }
     }
 }
 
-/// Anzeigename eines Freundes, wie der Launcher ihn zeigt: eigener Spitzname vor seinem Anzeigenamen.
+/// Name eines Freundes: eigener Spitzname vor Minecraft-Namen und dem bereinigten Ersatznamen.
 pub(super) fn shown_name(friend: &super::contract::Friend) -> String {
-    friend.alias.clone().unwrap_or_else(|| friend.display_name.clone())
+    friend
+        .alias
+        .clone()
+        .or_else(|| super::sanitize::mc_name(friend.mc_name.as_deref()))
+        .unwrap_or_else(|| friend.display_name.clone())
 }
 
 /// Freunde nach Peer-ID; nur bei aktivierter Funktion.
-pub(super) async fn friends_by_id(shared: &Shared) -> AppResult<HashMap<String, super::contract::Friend>> {
+pub(super) async fn friends_by_id(
+    shared: &Shared,
+) -> AppResult<HashMap<String, super::contract::Friend>> {
     let friends = shared.friends.list().await?;
-    Ok(friends.into_iter().map(|friend| (friend.id.clone(), friend)).collect())
+    Ok(friends
+        .into_iter()
+        .map(|friend| (friend.id.clone(), friend))
+        .collect())
 }

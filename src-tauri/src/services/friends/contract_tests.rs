@@ -90,8 +90,11 @@ fn rows() -> Vec<(&'static str, RoundTrip)> {
 #[test]
 fn fixture_keys_are_exactly_the_rows_of_the_key_table() {
     let in_file: BTreeSet<String> = fixtures().keys().cloned().collect();
-    let in_table: BTreeSet<String> =
-        rows().iter().map(|(key, _)| key.to_string()).chain(["constants".to_owned()]).collect();
+    let in_table: BTreeSet<String> = rows()
+        .iter()
+        .map(|(key, _)| key.to_string())
+        .chain(["constants".to_owned()])
+        .collect();
     assert_eq!(in_file, in_table);
 }
 
@@ -111,8 +114,6 @@ fn constants_equal_the_rust_constants() {
         "codePrefix": FRIEND_CODE_PREFIX,
         "codeBodyLength": FRIEND_CODE_BODY_LENGTH,
         "codeLength": FRIEND_CODE_LENGTH,
-        "displayNameMin": DISPLAY_NAME_MIN,
-        "displayNameMax": DISPLAY_NAME_MAX,
         "aliasMax": ALIAS_MAX,
         "maxFriends": MAX_FRIENDS,
         "maxActiveCodes": MAX_ACTIVE_CODES,
@@ -140,21 +141,52 @@ fn created_code_is_the_appendix_b_golden_code_and_parses() {
     let parts = code::parse(text).unwrap();
     assert_eq!(parts.encode(), text);
     assert_eq!(created["tail"], parts.tail());
-    assert_eq!(created["expiresAt"].as_u64().unwrap() - created["createdAt"].as_u64().unwrap(), CODE_TTL_SECS);
+    assert_eq!(
+        created["expiresAt"].as_u64().unwrap() - created["createdAt"].as_u64().unwrap(),
+        CODE_TTL_SECS
+    );
 }
 
 #[test]
 fn fixtures_meet_the_content_requirements_of_the_key_table() {
     let fixtures = fixtures();
     let requirements = [
-        ("friendsState.available", "/availability", json!("available")),
+        (
+            "friendsState.available",
+            "/availability",
+            json!("available"),
+        ),
         ("friendsState.available", "/network/type", json!("online")),
-        ("friendsState.noSecretStore", "/availability", json!("noSecretStore")),
-        ("friendsState.identityLost", "/availability", json!("identityLost")),
-        ("friendsState.available", "/settings/findableByName", json!(true)),
-        ("friendsState.available", "/settings/ingameActions", json!("ask")),
-        ("friendsState.noSecretStore", "/settings/ingameActions", json!("allow")),
-        ("friendsState.noSecretStore", "/settings/ingameMenu", json!(false)),
+        (
+            "friendsState.noSecretStore",
+            "/availability",
+            json!("noSecretStore"),
+        ),
+        (
+            "friendsState.identityLost",
+            "/availability",
+            json!("identityLost"),
+        ),
+        (
+            "friendsState.available",
+            "/settings/findableByName",
+            json!(true),
+        ),
+        (
+            "friendsState.available",
+            "/settings/ingameActions",
+            json!("ask"),
+        ),
+        (
+            "friendsState.noSecretStore",
+            "/settings/ingameActions",
+            json!("allow"),
+        ),
+        (
+            "friendsState.noSecretStore",
+            "/settings/ingameMenu",
+            json!(false),
+        ),
         ("ingameStatus.active", "/state", json!("active")),
         ("ingameStatus.connected", "/state", json!("connected")),
         ("ingameStatus.off", "/state", json!("off")),
@@ -163,14 +195,34 @@ fn fixtures_meet_the_content_requirements_of_the_key_table() {
         ("ingameStatus.unavailable", "/state", json!("unavailable")),
         ("ingameStatus.unavailable", "/reason/need", json!(21)),
         ("ingameStatus.unavailable", "/node", Value::Null),
-        ("event.ingameFailed", "/reason", json!("fabricIncompatibleModSet")),
-        ("friendsState.available", "/directory/state", json!("active")),
-        ("friendsState.noSecretStore", "/directory/state", json!("off")),
-        ("friendsState.identityLost", "/directory/state", json!("unavailable")),
+        (
+            "event.ingameFailed",
+            "/reason",
+            json!("fabricIncompatibleModSet"),
+        ),
+        (
+            "friendsState.available",
+            "/directory/state",
+            json!("active"),
+        ),
+        (
+            "friendsState.noSecretStore",
+            "/directory/state",
+            json!("off"),
+        ),
+        (
+            "friendsState.identityLost",
+            "/directory/state",
+            json!("unavailable"),
+        ),
         ("friendsState.identityLost", "/directory/host", Value::Null),
         ("friend.relayRenamed", "/path", json!("relay")),
         ("friend.relayRenamed", "/notice/type", json!("renamed")),
-        ("friend.identityChanged", "/notice/type", json!("identityChanged")),
+        (
+            "friend.identityChanged",
+            "/notice/type",
+            json!("identityChanged"),
+        ),
         ("request.incoming", "/state", json!("pending")),
         ("request.delivering", "/state", json!("delivering")),
         ("request.awaitingAnswer", "/state", json!("awaitingAnswer")),
@@ -188,17 +240,39 @@ fn fixtures_meet_the_content_requirements_of_the_key_table() {
         ("event.requestRefused", "/reason", json!("codeUsed")),
         ("code.listed", "/code", Value::Null),
         ("joinPlan.vanilla", "/createVanilla", json!(true)),
-        ("event.joinSession.waitingForGame", "/state/type", json!("waitingForGame")),
-        ("event.joinSession.connecting", "/state/type", json!("connecting")),
-        ("event.joinSession.connected", "/state/type", json!("connected")),
+        (
+            "event.joinSession.waitingForGame",
+            "/state/type",
+            json!("waitingForGame"),
+        ),
+        (
+            "event.joinSession.connecting",
+            "/state/type",
+            json!("connecting"),
+        ),
+        (
+            "event.joinSession.connected",
+            "/state/type",
+            json!("connected"),
+        ),
         ("event.joinSession.ended", "/state/type", json!("ended")),
     ];
     for (key, pointer, expected) in requirements {
-        assert_eq!(fixtures[key].pointer(pointer), Some(&expected), "{key} {pointer}");
+        assert_eq!(
+            fixtures[key].pointer(pointer),
+            Some(&expected),
+            "{key} {pointer}"
+        );
     }
     assert!(fixtures["code.created"]["code"].is_string());
-    assert!(!fixtures["joinPlan.missing"]["candidates"][0]["missing"].as_array().unwrap().is_empty());
-    assert!(!fixtures["joinPlan.missing"]["candidates"][0]["extra"].as_array().unwrap().is_empty());
+    assert!(!fixtures["joinPlan.missing"]["candidates"][0]["missing"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert!(!fixtures["joinPlan.missing"]["candidates"][0]["extra"]
+        .as_array()
+        .unwrap()
+        .is_empty());
 }
 
 #[test]
@@ -209,29 +283,79 @@ fn directory_states_and_request_ways_use_camel_case_strings() {
         serde_json::to_value(states).unwrap(),
         json!(["unavailable", "off", "active", "unreachable", "notAllowed"])
     );
-    assert_eq!(serde_json::to_value([RequestVia::Code, RequestVia::Name]).unwrap(), json!(["code", "name"]));
+    assert_eq!(
+        serde_json::to_value([RequestVia::Code, RequestVia::Name]).unwrap(),
+        json!(["code", "name"])
+    );
     assert_eq!(RequestVia::default(), RequestVia::Code);
 }
 
 #[test]
 fn ingame_reasons_are_tagged_and_the_settings_use_camel_case_strings() {
     use IngameReason::*;
-    let reasons = [NotInBuild, Vanilla, Quilt, NoNode, Unverified, LoaderVersionUnknown, JavaUnknown, IdCollision, OfflineAccount, FriendsOff, BridgeNotRunning, InstanceOff, GloballyOff];
-    let types: Vec<Value> = reasons.iter().map(|reason| serde_json::to_value(reason).unwrap()["type"].clone()).collect();
+    let reasons = [
+        NotInBuild,
+        Vanilla,
+        Quilt,
+        NoNode,
+        Unverified,
+        LoaderVersionUnknown,
+        JavaUnknown,
+        IdCollision,
+        OfflineAccount,
+        FriendsOff,
+        BridgeNotRunning,
+        InstanceOff,
+        GloballyOff,
+    ];
+    let types: Vec<Value> = reasons
+        .iter()
+        .map(|reason| serde_json::to_value(reason).unwrap()["type"].clone())
+        .collect();
     assert_eq!(
         Value::Array(types),
-        json!(["notInBuild", "vanilla", "quilt", "noNode", "unverified", "loaderVersionUnknown", "javaUnknown", "idCollision", "offlineAccount", "friendsOff", "bridgeNotRunning", "instanceOff", "globallyOff"])
+        json!([
+            "notInBuild",
+            "vanilla",
+            "quilt",
+            "noNode",
+            "unverified",
+            "loaderVersionUnknown",
+            "javaUnknown",
+            "idCollision",
+            "offlineAccount",
+            "friendsOff",
+            "bridgeNotRunning",
+            "instanceOff",
+            "globallyOff"
+        ])
     );
-    assert_eq!(serde_json::to_value(JavaTooOld { need: 21 }).unwrap(), json!({ "type": "javaTooOld", "need": 21 }));
-    assert_eq!(serde_json::to_value([IngameActions::Ask, IngameActions::Allow]).unwrap(), json!(["ask", "allow"]));
-    assert_eq!(FriendsSettings::default().ingame_actions, IngameActions::Ask);
+    assert_eq!(
+        serde_json::to_value(JavaTooOld { need: 21 }).unwrap(),
+        json!({ "type": "javaTooOld", "need": 21 })
+    );
+    assert_eq!(
+        serde_json::to_value([IngameActions::Ask, IngameActions::Allow]).unwrap(),
+        json!(["ask", "allow"])
+    );
+    assert_eq!(
+        FriendsSettings::default().ingame_actions,
+        IngameActions::Ask
+    );
     assert!(FriendsSettings::default().ingame_menu);
 }
 
 #[test]
 fn host_session_fixture_has_one_guest_per_state_and_a_kicked_one() {
     let session: HostSession = serde_json::from_value(fixtures()["hostSession"].clone()).unwrap();
-    let states: BTreeSet<String> = session.guests.iter().map(|g| format!("{:?}", g.state)).collect();
+    let states: BTreeSet<String> = session
+        .guests
+        .iter()
+        .map(|g| format!("{:?}", g.state))
+        .collect();
     assert_eq!(states.len(), 4);
-    assert!(session.guests.iter().any(|g| g.state == GuestState::Left && g.kicked));
+    assert!(session
+        .guests
+        .iter()
+        .any(|g| g.state == GuestState::Left && g.kicked));
 }

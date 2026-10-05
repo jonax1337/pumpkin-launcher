@@ -15,7 +15,9 @@ use tokio::sync::mpsc;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
-use super::contract::{JoinPlan, JoinSessionEvent, JoinState, JoinTicket, JoinVerdict, SessionEnd, MIN_MC_LABEL};
+use super::contract::{
+    JoinPlan, JoinSessionEvent, JoinState, JoinTicket, JoinVerdict, SessionEnd, MIN_MC_LABEL,
+};
 use super::control::OpenFrame;
 use super::hosting::{RequestMessage, RequestReply, TunnelReply};
 use super::invites::Received;
@@ -37,7 +39,10 @@ use crate::services::p2p::{frame, BiStream, FrameError, PeerConn, PeerId};
 use crate::services::{blocking, lock, sockowner};
 
 /// Vor der ersten gültigen Verbindung eine ungeprüfte zugleich, danach vier (SPEC 6.2).
-const LISTENER_LIMITS: ListenerLimits = ListenerLimits { before_first_valid: 1, after_first_valid: 4 };
+const LISTENER_LIMITS: ListenerLimits = ListenerLimits {
+    before_first_valid: 1,
+    after_first_valid: 4,
+};
 /// Wartezeit auf `tunnelOk` und auf die Antwort einer Manifest-Anfrage (SPEC 5.1, 6.2).
 const TUNNEL_OK_WAIT: Duration = Duration::from_secs(10);
 const REQUEST_WAIT: Duration = Duration::from_secs(30);
@@ -89,8 +94,14 @@ enum Phase {
 
 impl JoinClock {
     pub(super) fn start(timers: JoinTimers, now: Instant) -> Self {
-        let phase = Phase::AwaitingSpawn { until: now + timers.spawn_wait };
-        Self { timers, cap: now + timers.spawn_wait_cap, phase }
+        let phase = Phase::AwaitingSpawn {
+            until: now + timers.spawn_wait,
+        };
+        Self {
+            timers,
+            cap: now + timers.spawn_wait_cap,
+            phase,
+        }
     }
 
     /// `None`, sobald die erste gültige Verbindung da ist.
@@ -105,13 +116,17 @@ impl JoinClock {
     /// Der Start meldet Fortschritt: die Wartezeit auf das Spiel beginnt neu, die Obergrenze bleibt.
     pub(super) fn progressed(&mut self, now: Instant) {
         if let Phase::AwaitingSpawn { .. } = self.phase {
-            self.phase = Phase::AwaitingSpawn { until: now + self.timers.spawn_wait };
+            self.phase = Phase::AwaitingSpawn {
+                until: now + self.timers.spawn_wait,
+            };
         }
     }
 
     pub(super) fn spawned(&mut self, now: Instant) {
         if let Phase::AwaitingSpawn { .. } = self.phase {
-            self.phase = Phase::AwaitingConnection { until: now + self.timers.first_connection };
+            self.phase = Phase::AwaitingConnection {
+                until: now + self.timers.first_connection,
+            };
         }
     }
 
@@ -151,7 +166,10 @@ enum Input {
 impl Joins {
     fn send(&self, join_id: &str, input: Input) {
         let current = lock(&self.current);
-        if let Some(join) = current.as_ref().filter(|join| join.ticket.join_id == join_id) {
+        if let Some(join) = current
+            .as_ref()
+            .filter(|join| join.ticket.join_id == join_id)
+        {
             let _ = join.inputs.send(input);
         }
     }
@@ -163,7 +181,10 @@ impl Joins {
     /// Das Spiel des Beitritts läuft: ab jetzt gehören ihm die lokalen Verbindungen mit seiner Prozess-ID.
     pub(super) fn spawned(&self, join_id: &str, pid: u32) {
         let current = lock(&self.current);
-        if let Some(join) = current.as_ref().filter(|join| join.ticket.join_id == join_id) {
+        if let Some(join) = current
+            .as_ref()
+            .filter(|join| join.ticket.join_id == join_id)
+        {
             let _ = join.game.set(pid);
             let _ = join.inputs.send(Input::Spawned);
         }
@@ -177,26 +198,39 @@ impl Joins {
     /// Die Kennung des Beitritts, den die Spiel-Instanz gerade macht.
     fn join_of_instance(&self, instance_id: &str) -> Option<(String, JoinState)> {
         let current = lock(&self.current);
-        let join = current.as_ref().filter(|join| join.ticket.instance_id == instance_id)?;
+        let join = current
+            .as_ref()
+            .filter(|join| join.ticket.instance_id == instance_id)?;
         Some((join.ticket.join_id.clone(), join.state.clone()))
     }
 
     /// Der Beitritt dieser Instanz, wie die Mod ihn sieht (Thema `join`); `None`, wenn sie keinem beigetreten ist.
     pub(super) fn view_for_mod(&self, instance_id: &str) -> Option<JoinView> {
         let current = lock(&self.current);
-        let join = current.as_ref().filter(|join| join.ticket.instance_id == instance_id)?;
+        let join = current
+            .as_ref()
+            .filter(|join| join.ticket.instance_id == instance_id)?;
         let (state, path, rtt_ms) = match &join.state {
             JoinState::WaitingForGame => (JoinPhase::WaitingForGame, None, None),
             JoinState::Connecting => (JoinPhase::Connecting, None, None),
             JoinState::Connected { path, rtt_ms } => (JoinPhase::Connected, Some(*path), *rtt_ms),
             JoinState::Ended { .. } => return None,
         };
-        Some(JoinView { invite_id: join.ticket.invite_id.clone(), host_name: join.host_name.clone(), state, path, rtt_ms })
+        Some(JoinView {
+            invite_id: join.ticket.invite_id.clone(),
+            host_name: join.host_name.clone(),
+            state,
+            path,
+            rtt_ms,
+        })
     }
 
     fn remember(&self, join_id: &str, state: &JoinState) {
         let mut current = lock(&self.current);
-        if let Some(join) = current.as_mut().filter(|join| join.ticket.join_id == join_id) {
+        if let Some(join) = current
+            .as_mut()
+            .filter(|join| join.ticket.join_id == join_id)
+        {
             join.state = state.clone();
         }
     }
@@ -213,7 +247,11 @@ enum Ending {
 fn end_join(shared: &Shared, applies: impl FnOnce(&ActiveJoin) -> bool, ending: Ending) {
     let ended = {
         let mut current = lock(&shared.joins.current);
-        if current.as_ref().is_some_and(applies) { current.take() } else { None }
+        if current.as_ref().is_some_and(applies) {
+            current.take()
+        } else {
+            None
+        }
     };
     let Some(join) = ended else { return };
     join.stop.cancel();
@@ -231,11 +269,19 @@ fn tell_mod_about_the_end(shared: &Shared, instance_id: &str, reason: SessionEnd
 }
 
 fn end_by_id(shared: &Shared, join_id: &str, reason: SessionEnd) {
-    end_join(shared, |join| join.ticket.join_id == join_id, Ending::Announced(reason));
+    end_join(
+        shared,
+        |join| join.ticket.join_id == join_id,
+        Ending::Announced(reason),
+    );
 }
 
 pub(super) fn end_for_invite(shared: &Shared, invite_id: &str, reason: SessionEnd) {
-    end_join(shared, |join| join.ticket.invite_id == invite_id, Ending::Announced(reason));
+    end_join(
+        shared,
+        |join| join.ticket.invite_id == invite_id,
+        Ending::Announced(reason),
+    );
 }
 
 /// Der Start ist vor dem Spielprozess gescheitert: sofort `error` (SPEC 6.2).
@@ -245,7 +291,8 @@ pub(super) fn launch_failed(shared: &Shared, join_id: &str) {
 
 /// Nur das Spiel des Beitritts zählt, und erst nachdem es gestartet ist.
 pub(super) fn game_exited(shared: &Shared, instance_id: &str) {
-    let ours = |join: &ActiveJoin| join.ticket.instance_id == instance_id && join.game.get().is_some();
+    let ours =
+        |join: &ActiveJoin| join.ticket.instance_id == instance_id && join.game.get().is_some();
     end_join(shared, ours, Ending::Announced(SessionEnd::GameExited));
 }
 
@@ -337,7 +384,13 @@ impl FriendSessions {
             instance_id: instance_id.to_owned(),
             address: address.to_string(),
         };
-        start_join_with(shared, received, ticket.clone(), listener, here_timers(shared.timers));
+        start_join_with(
+            shared,
+            received,
+            ticket.clone(),
+            listener,
+            here_timers(shared.timers),
+        );
         shared.joins.spawned(&ticket.join_id, game_pid);
         Ok((ticket, address))
     }
@@ -351,7 +404,9 @@ impl FriendSessions {
 
     /// Die Mod meldet, dass das Spiel nicht in die Welt kam. Hat der Tunnel schon eine gültige Verbindung, irrt sie sich.
     pub(super) fn fail_join_of_instance(&self, instance_id: &str) {
-        let Some((join_id, state)) = self.shared.joins.join_of_instance(instance_id) else { return };
+        let Some((join_id, state)) = self.shared.joins.join_of_instance(instance_id) else {
+            return;
+        };
         if !matches!(state, JoinState::Connected { .. }) {
             end_by_id(&self.shared, &join_id, SessionEnd::Error);
         }
@@ -361,19 +416,26 @@ impl FriendSessions {
 /// Die Zeiten eines Beitritts aus dem laufenden Spiel: die erste Verbindung kommt binnen zwei Minuten oder gar nicht,
 /// kürzere Vorgaben (Tests) bleiben.
 fn here_timers(timers: JoinTimers) -> JoinTimers {
-    JoinTimers { first_connection: timers.first_connection.min(HERE_FIRST_CONNECTION), ..timers }
+    JoinTimers {
+        first_connection: timers.first_connection.min(HERE_FIRST_CONNECTION),
+        ..timers
+    }
 }
 
 fn peer_offline(received: &Received) -> AppError {
-    AppError::invalid(coded!("errors.friends.peerOffline", name = received.invite.from_name))
+    AppError::invalid(coded!(
+        "errors.friends.peerOffline",
+        name = received.invite.from_name
+    ))
 }
 
 fn ensure_matches(plan: &JoinPlan) -> AppResult<()> {
     match plan.verdict {
         JoinVerdict::Ready => Ok(()),
-        JoinVerdict::VersionUnsupported => {
-            Err(AppError::invalid(coded!("errors.friends.versionUnsupported", min = MIN_MC_LABEL)))
-        }
+        JoinVerdict::VersionUnsupported => Err(AppError::invalid(coded!(
+            "errors.friends.versionUnsupported",
+            min = MIN_MC_LABEL
+        ))),
         JoinVerdict::MissingContent | JoinVerdict::NoInstance => {
             Err(AppError::invalid(coded!("errors.friends.instanceMismatch")))
         }
@@ -393,16 +455,26 @@ fn join_ip() -> io::Result<IpAddr> {
 }
 
 /// Manifest holen, prüfen und mit `instances` abgleichen; nichts wird geladen.
-async fn plan_for(shared: &Shared, received: &Received, instances: Vec<Instance>) -> AppResult<JoinPlan> {
+async fn plan_for(
+    shared: &Shared,
+    received: &Received,
+    instances: Vec<Instance>,
+) -> AppResult<JoinPlan> {
     let Some(manifest) = validated_manifest(shared, received).await? else {
         return Ok(matching::version_unsupported(&received.invite));
     };
     let (manifest, instances) = (Arc::new(manifest), Arc::new(instances));
     let (host, local) = (manifest.clone(), instances.clone());
-    let to_classify = with_local_hashes(shared, move |disk| matching::hashes_to_classify(&host, &local, disk)).await?;
+    let to_classify = with_local_hashes(shared, move |disk| {
+        matching::hashes_to_classify(&host, &local, disk)
+    })
+    .await?;
     let classification = Classification::fetch(&*shared.lookup, &to_classify).await;
     let invite = received.invite.clone();
-    with_local_hashes(shared, move |disk| matching::plan(&invite, &manifest, &instances, disk, &classification)).await
+    with_local_hashes(shared, move |disk| {
+        matching::plan(&invite, &manifest, &instances, disk, &classification)
+    })
+    .await
 }
 
 /// Das geprüfte Manifest des Gastgebers; `None`, wenn seine Minecraft-Version älter als 1.20 ist.
@@ -421,7 +493,13 @@ async fn with_local_hashes<T: Send + 'static>(
     work: impl FnOnce(&DiskHashes) -> T + Send + 'static,
 ) -> AppResult<T> {
     let (dirs, cache) = (shared.dirs.clone(), shared.hashes.clone());
-    blocking(move |_| Ok(work(&DiskHashes { dirs: &dirs, cache: &cache }))).await
+    blocking(move |_| {
+        Ok(work(&DiskHashes {
+            dirs: &dirs,
+            cache: &cache,
+        }))
+    })
+    .await
 }
 
 /// Warum eine Manifest-Anfrage keine Antwort brachte.
@@ -431,12 +509,18 @@ enum FetchFailure {
 }
 
 async fn fetch_manifest(shared: &Shared, received: &Received) -> AppResult<Manifest> {
-    let conn = shared.friends.dial_friend(&received.host).await.map_err(|_| peer_offline(received))?;
+    let conn = shared
+        .friends
+        .dial_friend(&received.host)
+        .await
+        .map_err(|_| peer_offline(received))?;
     match ask_manifest(&conn, &received.invite.session_id).await {
         Ok(RequestReply::Manifest { manifest }) => Ok(manifest),
         Ok(RequestReply::Error { code }) => Err(refused(&code)),
         Err(FetchFailure::Offline) => Err(peer_offline(received)),
-        Err(FetchFailure::Malformed) => Err(AppError::invalid(coded!("errors.friends.manifestInvalid"))),
+        Err(FetchFailure::Malformed) => {
+            Err(AppError::invalid(coded!("errors.friends.manifestInvalid")))
+        }
     }
 }
 
@@ -444,7 +528,9 @@ async fn ask_manifest(conn: &PeerConn, session_id: &str) -> Result<RequestReply,
     let mut stream = conn.open_bi().await.map_err(|_| FetchFailure::Offline)?;
     let exchange = async {
         frame::write(&mut stream, &OpenFrame::Request, OPEN_FRAME_LIMIT).await?;
-        let request = RequestMessage::ManifestRequest { session_id: session_id.to_owned() };
+        let request = RequestMessage::ManifestRequest {
+            session_id: session_id.to_owned(),
+        };
         frame::write(&mut stream, &request, REQUEST_FRAME_LIMIT).await?;
         stream.read_frame::<RequestReply>(REQUEST_FRAME_LIMIT).await
     };
@@ -467,11 +553,22 @@ fn refused(code: &str) -> AppError {
 }
 
 /// Startet Zuhörer, Zeitplan und die Beobachtung des Gastgebers und setzt den Beitritt an die Stelle des laufenden.
-pub(super) fn start_join(shared: &Arc<Shared>, received: &Received, ticket: JoinTicket, listener: LocalListener) {
+pub(super) fn start_join(
+    shared: &Arc<Shared>,
+    received: &Received,
+    ticket: JoinTicket,
+    listener: LocalListener,
+) {
     start_join_with(shared, received, ticket, listener, shared.timers);
 }
 
-fn start_join_with(shared: &Arc<Shared>, received: &Received, ticket: JoinTicket, listener: LocalListener, timers: JoinTimers) {
+fn start_join_with(
+    shared: &Arc<Shared>,
+    received: &Received,
+    ticket: JoinTicket,
+    listener: LocalListener,
+    timers: JoinTimers,
+) {
     let (inputs, receiver) = mpsc::unbounded_channel();
     let join = ActiveJoin {
         ticket,
@@ -483,8 +580,18 @@ fn start_join_with(shared: &Arc<Shared>, received: &Received, ticket: JoinTicket
     };
     serve_listener(shared, received, &join, listener);
     let (weak, host, stop) = (Arc::downgrade(shared), received.host, &join.stop);
-    tokio::spawn(stop.clone().run_until_cancelled_owned(drive(weak.clone(), join.ticket.clone(), host, receiver, timers)));
-    tokio::spawn(stop.clone().run_until_cancelled_owned(watch_host(weak, join.ticket.join_id.clone(), host)));
+    tokio::spawn(stop.clone().run_until_cancelled_owned(drive(
+        weak.clone(),
+        join.ticket.clone(),
+        host,
+        receiver,
+        timers,
+    )));
+    tokio::spawn(stop.clone().run_until_cancelled_owned(watch_host(
+        weak,
+        join.ticket.join_id.clone(),
+        host,
+    )));
     replace_join(shared, join);
 }
 
@@ -494,13 +601,24 @@ fn replace_join(shared: &Shared, join: ActiveJoin) {
     let mut current = lock(&shared.joins.current);
     if let Some(previous) = current.take() {
         previous.stop.cancel();
-        emit_state(shared, &previous.ticket, JoinState::Ended { reason: SessionEnd::Left });
+        emit_state(
+            shared,
+            &previous.ticket,
+            JoinState::Ended {
+                reason: SessionEnd::Left,
+            },
+        );
     }
     emit_state(shared, &join.ticket, JoinState::WaitingForGame);
     *current = Some(join);
 }
 
-fn serve_listener(shared: &Shared, received: &Received, join: &ActiveJoin, listener: LocalListener) {
+fn serve_listener(
+    shared: &Shared,
+    received: &Received,
+    join: &ActiveJoin,
+    listener: LocalListener,
+) {
     let gate = Arc::new(LocalGate {
         listener: listener.addr,
         game: join.game.clone(),
@@ -584,9 +702,15 @@ impl TunnelOpener {
     async fn open(&self) -> Result<BiStream, TunnelError> {
         let conn = self.friends.dial_friend(&self.host).await?;
         let mut stream = conn.open_bi().await?;
-        let open = OpenFrame::Tunnel { session_id: self.session_id.clone() };
+        let open = OpenFrame::Tunnel {
+            session_id: self.session_id.clone(),
+        };
         frame::write(&mut stream, &open, OPEN_FRAME_LIMIT).await?;
-        let reply = tokio::time::timeout(TUNNEL_OK_WAIT, stream.read_frame::<TunnelReply>(OPEN_FRAME_LIMIT)).await;
+        let reply = tokio::time::timeout(
+            TUNNEL_OK_WAIT,
+            stream.read_frame::<TunnelReply>(OPEN_FRAME_LIMIT),
+        )
+        .await;
         match reply.map_err(|_| TunnelError::Timeout)?? {
             TunnelReply::TunnelOk => {
                 let _ = self.inputs.send(Input::TunnelOpened);
@@ -621,7 +745,9 @@ async fn drive(
             input = inputs.recv() => input.map_or(Wake::Closed, Wake::Input),
             () = tokio::time::sleep(STATUS_INTERVAL), if tunnel_open => Wake::Status,
         };
-        let Some(shared) = shared.upgrade() else { return };
+        let Some(shared) = shared.upgrade() else {
+            return;
+        };
         match wake {
             Wake::Closed => return,
             Wake::Deadline => return end_by_id(&shared, &ticket.join_id, SessionEnd::Error),
@@ -649,9 +775,13 @@ async fn sleep_until(deadline: Option<Instant>) {
 
 /// `connected` mit Weg und Umlaufzeit; ohne gewählten Weg gibt es nichts zu melden.
 fn report_connected(shared: &Shared, ticket: &JoinTicket, host: &PeerId) {
-    let Some(conn) = shared.friends.connection(host) else { return };
+    let Some(conn) = shared.friends.connection(host) else {
+        return;
+    };
     let Some(path) = conn.path() else { return };
-    let rtt_ms = conn.rtt().map(|rtt| u32::try_from(rtt.as_millis()).unwrap_or(u32::MAX));
+    let rtt_ms = conn
+        .rtt()
+        .map(|rtt| u32::try_from(rtt.as_millis()).unwrap_or(u32::MAX));
     announce(shared, ticket, JoinState::Connected { path, rtt_ms });
 }
 
@@ -664,7 +794,9 @@ fn announce(shared: &Shared, ticket: &JoinTicket, state: JoinState) {
 /// Endet mit `hostOffline`, wenn die Verbindung zum Gastgeber länger als die Schonfrist fehlt (SPEC 6.2).
 async fn watch_host(shared: Weak<Shared>, join_id: String, host: PeerId) {
     loop {
-        let Some(shared) = shared.upgrade() else { return };
+        let Some(shared) = shared.upgrade() else {
+            return;
+        };
         if let Some(conn) = live_connection(&shared.friends, &host) {
             drop(shared);
             conn.closed().await;
@@ -689,7 +821,9 @@ async fn reconnects_within(friends: &Friends, host: &PeerId, grace: Duration) ->
 
 /// Die Verbindung zum Gastgeber, wenn sie noch offen ist; eine eben geschlossene steht kurz noch in der Liste.
 fn live_connection(friends: &Friends, host: &PeerId) -> Option<PeerConn> {
-    friends.connection(host).filter(|conn| conn.closed().now_or_never().is_none())
+    friends
+        .connection(host)
+        .filter(|conn| conn.closed().now_or_never().is_none())
 }
 
 #[cfg(test)]
@@ -718,7 +852,11 @@ mod tests {
         }
         clock.progressed(start + 29 * MINUTE);
 
-        assert_eq!(clock.deadline(), Some(start + 30 * MINUTE), "31 minutes are past the cap");
+        assert_eq!(
+            clock.deadline(),
+            Some(start + 30 * MINUTE),
+            "31 minutes are past the cap"
+        );
     }
 
     #[tokio::test(start_paused = true)]
@@ -738,9 +876,17 @@ mod tests {
         let mut clock = JoinClock::start(JoinTimers::production(), start);
 
         clock.spawned(start + 29 * MINUTE);
-        assert_eq!(clock.deadline(), Some(start + 39 * MINUTE), "the cap only applies before the spawn");
+        assert_eq!(
+            clock.deadline(),
+            Some(start + 39 * MINUTE),
+            "the cap only applies before the spawn"
+        );
         clock.progressed(start + 30 * MINUTE);
-        assert_eq!(clock.deadline(), Some(start + 39 * MINUTE), "progress after the spawn changes nothing");
+        assert_eq!(
+            clock.deadline(),
+            Some(start + 39 * MINUTE),
+            "progress after the spawn changes nothing"
+        );
         clock.connected();
 
         assert_eq!(clock.deadline(), None);
@@ -751,18 +897,34 @@ mod tests {
         let timers = JoinTimers::production();
 
         assert_eq!(
-            (timers.spawn_wait, timers.spawn_wait_cap, timers.first_connection, timers.host_offline_grace),
-            (10 * MINUTE, 30 * MINUTE, 10 * MINUTE, Duration::from_secs(30))
+            (
+                timers.spawn_wait,
+                timers.spawn_wait_cap,
+                timers.first_connection,
+                timers.host_offline_grace
+            ),
+            (
+                10 * MINUTE,
+                30 * MINUTE,
+                10 * MINUTE,
+                Duration::from_secs(30)
+            )
         );
     }
 
     #[test]
     fn a_join_from_the_running_game_waits_two_minutes_for_the_first_connection_at_most() {
         let production = here_timers(JoinTimers::production());
-        let quick = JoinTimers { first_connection: Duration::from_secs(3), ..JoinTimers::production() };
+        let quick = JoinTimers {
+            first_connection: Duration::from_secs(3),
+            ..JoinTimers::production()
+        };
 
         assert_eq!(production.first_connection, Duration::from_secs(120));
-        assert_eq!((production.spawn_wait, production.host_offline_grace), (10 * MINUTE, Duration::from_secs(30)));
+        assert_eq!(
+            (production.spawn_wait, production.host_offline_grace),
+            (10 * MINUTE, Duration::from_secs(30))
+        );
         assert_eq!(here_timers(quick).first_connection, Duration::from_secs(3));
     }
 
@@ -774,7 +936,9 @@ mod tests {
         if !cfg!(target_os = "macos") {
             assert_ne!(ip, IpAddr::V4(Ipv4Addr::LOCALHOST));
             let IpAddr::V4(v4) = ip else { panic!("{ip}") };
-            assert!(v4.octets()[1..].iter().all(|octet| (1..=254).contains(octet)));
+            assert!(v4.octets()[1..]
+                .iter()
+                .all(|octet| (1..=254).contains(octet)));
         }
     }
 
@@ -794,12 +958,23 @@ mod tests {
             create_vanilla: false,
             lookup_failed: false,
         };
-        let key = |verdict| super::super::test_support::error_key(&ensure_matches(&plan(verdict)).unwrap_err());
+        let key = |verdict| {
+            super::super::test_support::error_key(&ensure_matches(&plan(verdict)).unwrap_err())
+        };
 
         assert!(ensure_matches(&plan(JoinVerdict::Ready)).is_ok());
-        assert_eq!(key(JoinVerdict::VersionUnsupported), "errors.friends.versionUnsupported");
-        assert_eq!(key(JoinVerdict::MissingContent), "errors.friends.instanceMismatch");
-        assert_eq!(key(JoinVerdict::NoInstance), "errors.friends.instanceMismatch");
+        assert_eq!(
+            key(JoinVerdict::VersionUnsupported),
+            "errors.friends.versionUnsupported"
+        );
+        assert_eq!(
+            key(JoinVerdict::MissingContent),
+            "errors.friends.instanceMismatch"
+        );
+        assert_eq!(
+            key(JoinVerdict::NoInstance),
+            "errors.friends.instanceMismatch"
+        );
     }
 
     fn gate(owner: OwnerLookup) -> LocalGate {
@@ -818,13 +993,18 @@ mod tests {
         let broken = gate(|_, _, _| Err(io::Error::other("table grew too fast")));
 
         assert!(!broken.owned_by_game(7, client).await);
-        assert!(!broken.owned_by_game(7, client).await, "also after the first warning");
+        assert!(
+            !broken.owned_by_game(7, client).await,
+            "also after the first warning"
+        );
     }
 
     #[tokio::test]
     async fn the_owner_is_asked_about_the_connection_to_the_listener() {
         let client: SocketAddr = "127.0.0.1:50000".parse().unwrap();
-        let owned = gate(|pid, from, to| Ok(pid == 7 && from.port() == 50000 && to == "127.1.2.3:40000".parse().unwrap()));
+        let owned = gate(|pid, from, to| {
+            Ok(pid == 7 && from.port() == 50000 && to == "127.1.2.3:40000".parse().unwrap())
+        });
 
         assert!(owned.owned_by_game(7, client).await);
         assert!(!owned.owned_by_game(8, client).await);

@@ -18,7 +18,9 @@ use super::service::{now_secs, retired_net_config, Core, Runtime};
 use super::status::{self, Target};
 use crate::coded;
 use crate::error::{AppError, AppResult};
-use crate::services::p2p::{frame, Admission, BiStream, CloseCode, FrameError, Gate, PeerId, PeerNet};
+use crate::services::p2p::{
+    frame, Admission, BiStream, CloseCode, FrameError, Gate, PeerId, PeerNet,
+};
 
 /// Die neue Identität unterschreibt (alte ID, neue ID); so kann niemand eine fremde ID als neue ausgeben.
 const ROTATE_DOMAIN: &[u8] = b"pumpkin/rotate/1";
@@ -27,7 +29,8 @@ const TICK: Duration = Duration::from_secs(1);
 /// Nach „Identität erneuern“: jeder Freund bekommt die neue ID, ältere Einträge fallen weg.
 pub(super) fn replace_with_rotation(core: &Core, old: &Identity, new: &Identity) -> AppResult<()> {
     let (old_id, new_id) = (own_peer_id(old)?, own_peer_id(new)?);
-    let signature = HEXLOWER.encode(&new.sign(ROTATE_DOMAIN, &[old_id.as_bytes(), new_id.as_bytes()]));
+    let signature =
+        HEXLOWER.encode(&new.sign(ROTATE_DOMAIN, &[old_id.as_bytes(), new_id.as_bytes()]));
     replace(core, |friend| OutboxRecord {
         id: friend.id.clone(),
         kind: OutboxKind::Rotated,
@@ -49,20 +52,38 @@ pub(super) fn replace_with_unfriend(core: &Core) -> AppResult<()> {
 }
 
 /// `identityRotated` von `old`: gilt nur mit der Unterschrift der neuen ID; dann zieht der Freund auf sie um.
-pub(super) fn accept_rotation(core: &Core, old: &PeerId, new: &PeerId, signature: &[u8; 64]) -> bool {
+pub(super) fn accept_rotation(
+    core: &Core,
+    old: &PeerId,
+    new: &PeerId,
+    signature: &[u8; 64],
+) -> bool {
     let (old_id, new_id) = (old.to_string(), new.to_string());
-    if !identity::verify(&new_id, ROTATE_DOMAIN, &[old.as_bytes(), new.as_bytes()], signature) {
+    if !identity::verify(
+        &new_id,
+        ROTATE_DOMAIN,
+        &[old.as_bytes(), new.as_bytes()],
+        signature,
+    ) {
         return false;
     }
-    let Some(record) = status::friend(core, &old_id) else { return false };
+    let Some(record) = status::friend(core, &old_id) else {
+        return false;
+    };
     core.patches.forget(&old_id);
     let moved = FriendRecord {
         id: new_id,
-        notice: Some(FriendNotice::IdentityChanged { previous_fingerprint: fingerprint(&old_id) }),
+        notice: Some(FriendNotice::IdentityChanged {
+            previous_fingerprint: fingerprint(&old_id),
+        }),
         last_seen: Some(now_secs()),
         ..record
     };
-    let stored = core.stores.friends.remove(&old_id).and_then(|()| core.stores.friends.upsert(moved));
+    let stored = core
+        .stores
+        .friends
+        .remove(&old_id)
+        .and_then(|()| core.stores.friends.upsert(moved));
     if let Err(err) = stored {
         tracing::warn!(%err, "neue Identität eines Freundes nicht gespeichert");
         return false;
@@ -81,14 +102,18 @@ fn replace(core: &Core, item: impl Fn(&FriendRecord) -> OutboxRecord) -> AppResu
     for old in core.stores.outbox.list() {
         core.stores.outbox.remove(&old.id)?;
     }
-    for friend in status::friends(core).iter().filter(|friend| !friend.removed_by_peer) {
+    for friend in status::friends(core)
+        .iter()
+        .filter(|friend| !friend.removed_by_peer)
+    {
         core.stores.outbox.insert(item(friend))?;
     }
     Ok(())
 }
 
 fn own_peer_id(identity: &Identity) -> AppResult<PeerId> {
-    PeerId::from_str(&identity.peer_id()).map_err(|_| AppError::invalid(coded!("errors.friends.identityLost")))
+    PeerId::from_str(&identity.peer_id())
+        .map_err(|_| AppError::invalid(coded!("errors.friends.identityLost")))
 }
 
 async fn deliver_regularly(core: Arc<Core>, runtime: Arc<Runtime>) {
@@ -114,7 +139,8 @@ async fn deliver_regularly(core: Arc<Core>, runtime: Arc<Runtime>) {
             Ok(Some(retired)) => retired,
             _ => {
                 tracing::warn!("ausgemusterter Schlüssel fehlt, Postausgang wartet");
-                due.into_iter().for_each(|id| attempts.failed(id, Instant::now()));
+                due.into_iter()
+                    .for_each(|id| attempts.failed(id, Instant::now()));
                 continue;
             }
         };
@@ -142,15 +168,26 @@ fn after_delivery(core: &Arc<Core>, runtime: &Arc<Runtime>, friend_id: &str) {
         tracing::debug!(%err, "zugestellter Postausgang-Eintrag schon weg");
     }
     if let Ok(peer) = PeerId::from_str(friend_id) {
-        runtime.scheduler.dial_now(&status::presence_plan(core, runtime), Target::Friend(peer));
+        runtime
+            .scheduler
+            .dial_now(&status::presence_plan(core, runtime), Target::Friend(peer));
     }
 }
 
 /// Ein Zustellversuch; `true`, wenn der Eintrag erledigt ist (zugestellt oder unbrauchbar).
 async fn deliver_item(core: &Core, retired: &Identity, friend_id: &str) -> bool {
-    let Ok(item) = core.stores.outbox.get(friend_id) else { return true };
-    let (Ok(friend), Some(message)) = (PeerId::from_str(friend_id), message(&item)) else { return true };
-    let net = match PeerNet::bind(retired_net_config(&core.options, retired), Arc::new(DialOnly)).await {
+    let Ok(item) = core.stores.outbox.get(friend_id) else {
+        return true;
+    };
+    let (Ok(friend), Some(message)) = (PeerId::from_str(friend_id), message(&item)) else {
+        return true;
+    };
+    let net = match PeerNet::bind(
+        retired_net_config(&core.options, retired),
+        Arc::new(DialOnly),
+    )
+    .await
+    {
         Ok(net) => net,
         Err(err) => {
             tracing::warn!(%err, "Endpunkt des alten Schlüssels nicht gebunden");
@@ -165,12 +202,19 @@ async fn deliver_item(core: &Core, retired: &Identity, friend_id: &str) -> bool 
     delivered.is_ok()
 }
 
-async fn deliver_on(net: &PeerNet, core: &Core, friend: &PeerId, message: &ControlMessage) -> Result<(), SessionError> {
+async fn deliver_on(
+    net: &PeerNet,
+    core: &Core,
+    friend: &PeerId,
+    message: &ControlMessage,
+) -> Result<(), SessionError> {
     let conn = net.dial(friend, PEER_ALPN).await?;
     let hello = ControlMessage::hello(core.own_profile(), None);
     let (mut stream, _, _) = control::open_control(&conn, &hello).await?;
     frame::write(&mut stream, message, CONTROL_FRAME_LIMIT).await?;
-    timeout(ACK_WAIT, until_ack(&mut stream)).await.map_err(|_| SessionError::Timeout)??;
+    timeout(ACK_WAIT, until_ack(&mut stream))
+        .await
+        .map_err(|_| SessionError::Timeout)??;
     conn.close(CloseCode::NORMAL);
     Ok(())
 }
@@ -178,7 +222,11 @@ async fn deliver_on(net: &PeerNet, core: &Core, friend: &PeerId, message: &Contr
 /// Liest bis zum `ack`; `hello` und `status` des Freundes kommen davor und zählen nicht.
 async fn until_ack(stream: &mut BiStream) -> Result<(), FrameError> {
     loop {
-        if stream.read_frame::<ControlMessage>(CONTROL_FRAME_LIMIT).await? == ControlMessage::Ack {
+        if stream
+            .read_frame::<ControlMessage>(CONTROL_FRAME_LIMIT)
+            .await?
+            == ControlMessage::Ack
+        {
             return Ok(());
         }
     }
@@ -215,8 +263,18 @@ mod tests {
         let signature = new.sign(ROTATE_DOMAIN, &[old_id.as_bytes(), new_id.as_bytes()]);
 
         let parts: [&[u8]; 2] = [old_id.as_bytes(), new_id.as_bytes()];
-        assert!(identity::verify(&new_id.to_string(), ROTATE_DOMAIN, &parts, &signature));
-        assert!(!identity::verify(&old_id.to_string(), ROTATE_DOMAIN, &parts, &signature));
+        assert!(identity::verify(
+            &new_id.to_string(),
+            ROTATE_DOMAIN,
+            &parts,
+            &signature
+        ));
+        assert!(!identity::verify(
+            &old_id.to_string(),
+            ROTATE_DOMAIN,
+            &parts,
+            &signature
+        ));
     }
 
     #[test]
@@ -228,9 +286,15 @@ mod tests {
             signature: Some("s".into()),
             until: 0,
         };
-        let broken = OutboxRecord { signature: None, ..item.clone() };
+        let broken = OutboxRecord {
+            signature: None,
+            ..item.clone()
+        };
 
-        let rotated = ControlMessage::IdentityRotated { new_peer_id: "n".into(), signature: "s".into() };
+        let rotated = ControlMessage::IdentityRotated {
+            new_peer_id: "n".into(),
+            signature: "s".into(),
+        };
         assert_eq!(message(&item), Some(rotated));
         assert_eq!(message(&broken), None);
     }

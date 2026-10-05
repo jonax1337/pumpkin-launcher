@@ -48,7 +48,9 @@ impl ModAppEvents for TauriModAppEvents {
 }
 
 fn focus_main_window(app: &AppHandle) {
-    let Some(window) = app.get_webview_window("main") else { return };
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
     for result in [window.unminimize(), window.show(), window.set_focus()] {
         if let Err(err) = result {
             tracing::warn!(%err, "Fenster nicht nach vorn geholt");
@@ -67,10 +69,16 @@ impl Default for AppEventSink {
 
 impl AppEventSink {
     pub(super) fn set(&self, events: Arc<dyn ModAppEvents>) {
-        *self.0.write().unwrap_or_else(|poisoned| poisoned.into_inner()) = events;
+        *self
+            .0
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = events;
     }
 
     pub(super) fn get(&self) -> Arc<dyn ModAppEvents> {
-        self.0.read().unwrap_or_else(|poisoned| poisoned.into_inner()).clone()
+        self.0
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
     }
 }

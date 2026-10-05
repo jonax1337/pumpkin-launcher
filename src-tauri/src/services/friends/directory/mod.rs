@@ -83,13 +83,19 @@ impl DirectoryDeps {
 
 /// Adresse des Verzeichnisses ohne Schrägstrich am Ende; `None` ohne Adresse oder bei einer ungültigen (nicht https).
 pub fn directory_url() -> Option<String> {
-    resolve_directory_url(std::env::var(DIRECTORY_ENV).ok(), option_env!("PUMPKIN_FRIENDS_DIRECTORY"))
+    resolve_directory_url(
+        std::env::var(DIRECTORY_ENV).ok(),
+        option_env!("PUMPKIN_FRIENDS_DIRECTORY"),
+    )
 }
 
 /// Die Laufzeit-Einstellung geht vor der beim Bauen, die vor dem Standard; ein ungültiger Wert fällt auf keine Adresse
 /// zurück statt auf einen anderen Wert.
 fn resolve_directory_url(runtime: Option<String>, build_time: Option<&str>) -> Option<String> {
-    let chosen = runtime.as_deref().or(build_time).unwrap_or(DEFAULT_DIRECTORY);
+    let chosen = runtime
+        .as_deref()
+        .or(build_time)
+        .unwrap_or(DEFAULT_DIRECTORY);
     https_base(chosen)
 }
 
@@ -103,7 +109,9 @@ pub enum DirectoryError {
     RecipientFull,
     SendQuota,
     PairCooldown,
-    RateLimited { retry_after: Option<u64> },
+    RateLimited {
+        retry_after: Option<u64>,
+    },
     /// No pinned Mojang key verifies the certificate, or its key is unusable: Mojang may have rotated its keys.
     BadCertificate,
     /// The directory's clock says the certificate has expired.
@@ -117,11 +125,18 @@ impl DirectoryError {
     pub fn into_app_error(self, name: &str) -> AppError {
         let text = match self {
             Self::NotFindable => coded!("errors.friends.nameNotFindable", name = name),
-            Self::PairCooldown => coded!("errors.friends.nameCooldown", name = name, days = NAME_COOLDOWN_DAYS),
+            Self::PairCooldown => coded!(
+                "errors.friends.nameCooldown",
+                name = name,
+                days = NAME_COOLDOWN_DAYS
+            ),
             Self::RecipientFull => coded!("errors.friends.requestsFull"),
             Self::SendQuota | Self::RateLimited { .. } => coded!("errors.friends.rateLimited"),
             Self::Invalid(code) => {
-                tracing::warn!(code, "Das Verzeichnis lehnt eine Anfrage des Launchers als ungültig ab");
+                tracing::warn!(
+                    code,
+                    "Das Verzeichnis lehnt eine Anfrage des Launchers als ungültig ab"
+                );
                 coded!("errors.friends.directoryUnavailable")
             }
             Self::Unreachable
@@ -141,13 +156,19 @@ mod tests {
 
     #[test]
     fn the_runtime_address_beats_the_build_time_address() {
-        let resolved = resolve_directory_url(Some("https://runtime.example".into()), Some("https://build.example"));
+        let resolved = resolve_directory_url(
+            Some("https://runtime.example".into()),
+            Some("https://build.example"),
+        );
         assert_eq!(resolved.as_deref(), Some("https://runtime.example"));
     }
 
     #[test]
     fn the_build_time_address_is_used_without_a_runtime_address() {
-        assert_eq!(resolve_directory_url(None, Some("https://build.example/")).as_deref(), Some("https://build.example"));
+        assert_eq!(
+            resolve_directory_url(None, Some("https://build.example/")).as_deref(),
+            Some("https://build.example")
+        );
     }
 
     #[test]
@@ -157,13 +178,26 @@ mod tests {
 
     #[test]
     fn an_address_that_is_not_https_means_no_directory() {
-        assert_eq!(resolve_directory_url(Some("http://directory.example".into()), Some("https://build.example")), None);
-        assert_eq!(resolve_directory_url(None, Some("https://user:pw@build.example")), None);
+        assert_eq!(
+            resolve_directory_url(
+                Some("http://directory.example".into()),
+                Some("https://build.example")
+            ),
+            None
+        );
+        assert_eq!(
+            resolve_directory_url(None, Some("https://user:pw@build.example")),
+            None
+        );
     }
 
     #[test]
     fn the_token_never_shows_in_the_debug_output_of_a_session() {
-        let identity = McIdentity { uuid: "a".repeat(32), name: "Steve".into(), access_token: "eyJgeheim".into() };
+        let identity = McIdentity {
+            uuid: "a".repeat(32),
+            name: "Steve".into(),
+            access_token: "eyJgeheim".into(),
+        };
         let shown = format!("{identity:?}");
         assert!(!shown.contains("eyJgeheim"), "{shown}");
         assert!(shown.contains("Steve"));
@@ -176,17 +210,43 @@ mod tests {
     #[test]
     fn errors_map_to_the_keys_of_the_table() {
         let table = [
-            (DirectoryError::NotFindable, "errors.friends.nameNotFindable"),
+            (
+                DirectoryError::NotFindable,
+                "errors.friends.nameNotFindable",
+            ),
             (DirectoryError::PairCooldown, "errors.friends.nameCooldown"),
             (DirectoryError::RecipientFull, "errors.friends.requestsFull"),
             (DirectoryError::SendQuota, "errors.friends.rateLimited"),
-            (DirectoryError::RateLimited { retry_after: Some(60) }, "errors.friends.rateLimited"),
-            (DirectoryError::Unreachable, "errors.friends.directoryUnavailable"),
-            (DirectoryError::BadCertificate, "errors.friends.directoryUnavailable"),
-            (DirectoryError::NotRegistered, "errors.friends.directoryUnavailable"),
-            (DirectoryError::CertificateExpired, "errors.friends.directoryUnavailable"),
-            (DirectoryError::Unauthorized, "errors.friends.directoryUnavailable"),
-            (DirectoryError::Invalid("clock"), "errors.friends.directoryUnavailable"),
+            (
+                DirectoryError::RateLimited {
+                    retry_after: Some(60),
+                },
+                "errors.friends.rateLimited",
+            ),
+            (
+                DirectoryError::Unreachable,
+                "errors.friends.directoryUnavailable",
+            ),
+            (
+                DirectoryError::BadCertificate,
+                "errors.friends.directoryUnavailable",
+            ),
+            (
+                DirectoryError::NotRegistered,
+                "errors.friends.directoryUnavailable",
+            ),
+            (
+                DirectoryError::CertificateExpired,
+                "errors.friends.directoryUnavailable",
+            ),
+            (
+                DirectoryError::Unauthorized,
+                "errors.friends.directoryUnavailable",
+            ),
+            (
+                DirectoryError::Invalid("clock"),
+                "errors.friends.directoryUnavailable",
+            ),
         ];
         for (error, key) in table {
             assert_eq!(keys(error.clone()), key, "{error:?}");
@@ -195,10 +255,12 @@ mod tests {
 
     #[test]
     fn the_name_and_the_cooldown_days_reach_the_message() {
-        let cooldown = serde_json::to_value(DirectoryError::PairCooldown.into_app_error("Steve")).unwrap();
+        let cooldown =
+            serde_json::to_value(DirectoryError::PairCooldown.into_app_error("Steve")).unwrap();
         assert_eq!(cooldown["params"]["name"], "Steve");
         assert_eq!(cooldown["params"]["days"], "7");
-        let unknown = serde_json::to_value(DirectoryError::NotFindable.into_app_error("Steve")).unwrap();
+        let unknown =
+            serde_json::to_value(DirectoryError::NotFindable.into_app_error("Steve")).unwrap();
         assert_eq!(unknown["params"]["name"], "Steve");
     }
 }

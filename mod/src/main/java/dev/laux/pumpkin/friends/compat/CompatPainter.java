@@ -17,9 +17,9 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
  */
 final class CompatPainter implements Painter {
 	//? if >=26.1 {
-	private final GuiGraphicsExtractor graphics;
+	private GuiGraphicsExtractor graphics;
 	//?} else {
-	/*private final GuiGraphics graphics;
+	/*private GuiGraphics graphics;
 	*///?}
 	private final Font font;
 
@@ -32,9 +32,31 @@ final class CompatPainter implements Painter {
 		this.font = font;
 	}
 
+	CompatPainter(Font font) {
+		this.font = font;
+	}
+
+	//? if >=26.1 {
+	void bind(GuiGraphicsExtractor graphics) {
+	//?} else {
+	/*void bind(GuiGraphics graphics) {
+	*///?}
+		this.graphics = graphics;
+	}
+
 	@Override
 	public void fill(Rect area, int argb) {
 		graphics.fill(area.x(), area.y(), area.right(), area.bottom(), argb);
+	}
+
+	@Override
+	public void fill(int x, int y, int width, int height, int argb) {
+		graphics.fill(x, y, x + width, y + height, argb);
+	}
+
+	@Override
+	public int textWidth(String text) {
+		return font.width(text);
 	}
 
 	@Override
@@ -44,6 +66,17 @@ final class CompatPainter implements Painter {
 		//?} else {
 		/*graphics.drawString(font, text, x, y, argb, false);
 		*///?}
+	}
+
+	/** {@code enableScissor(int, int, int, int)} and {@code disableScissor()} exist in every era. */
+	@Override
+	public void beginClip(Rect area) {
+		graphics.enableScissor(area.x(), area.y(), area.right(), area.bottom());
+	}
+
+	@Override
+	public void endClip() {
+		graphics.disableScissor();
 	}
 
 	/** {@code Font#width(String)} exists in every era (same table). */

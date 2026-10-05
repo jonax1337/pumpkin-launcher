@@ -28,12 +28,18 @@ pub struct LookupError(pub String);
 
 /// Nur Dateien, die Modrinth kennt, stehen im Ergebnis; für alle anderen gilt die Mod als erforderlich.
 pub trait ModLookup: Send + Sync + 'static {
-    fn classify<'a>(&'a self, sha512: &'a [String]) -> BoxFuture<'a, Result<HashMap<String, ModInfo>, LookupError>>;
+    fn classify<'a>(
+        &'a self,
+        sha512: &'a [String],
+    ) -> BoxFuture<'a, Result<HashMap<String, ModInfo>, LookupError>>;
 }
 
 /// Die zwei Modrinth-Aufrufe, auf die [`ModrinthLookup`] aufsetzt; Tests setzen einen Fake ein.
 pub trait ModrinthApi: Send + Sync + 'static {
-    fn versions_by_sha512<'a>(&'a self, hashes: &'a [String]) -> BoxFuture<'a, AppResult<HashMap<String, Version>>>;
+    fn versions_by_sha512<'a>(
+        &'a self,
+        hashes: &'a [String],
+    ) -> BoxFuture<'a, AppResult<HashMap<String, Version>>>;
     fn projects<'a>(&'a self, ids: &'a [String]) -> BoxFuture<'a, AppResult<Vec<Project>>>;
 }
 
@@ -47,7 +53,10 @@ impl ModrinthHttp {
 }
 
 impl ModrinthApi for ModrinthHttp {
-    fn versions_by_sha512<'a>(&'a self, hashes: &'a [String]) -> BoxFuture<'a, AppResult<HashMap<String, Version>>> {
+    fn versions_by_sha512<'a>(
+        &'a self,
+        hashes: &'a [String],
+    ) -> BoxFuture<'a, AppResult<HashMap<String, Version>>> {
         Box::pin(modrinth::versions_by_sha512(&self.0, hashes))
     }
 
@@ -81,7 +90,11 @@ impl<A: ModrinthApi> ModrinthLookup<A> {
 
     /// Mit eigener Gültigkeitsdauer; Tests brauchen sie anders als [`Self::new`].
     pub(super) fn with(api: A, ttl: Duration) -> Self {
-        Self { api, ttl, cache: Mutex::default() }
+        Self {
+            api,
+            ttl,
+            cache: Mutex::default(),
+        }
     }
 
     /// Die Hashes ohne Doppelte: was noch gültig im Speicher liegt, und was erst angefragt werden muss.
@@ -90,7 +103,10 @@ impl<A: ModrinthApi> ModrinthLookup<A> {
         let (mut known, mut unknown) = (HashMap::new(), Vec::new());
         let mut seen = HashSet::new();
         for hash in hashes.iter().filter(|hash| seen.insert(hash.as_str())) {
-            match cache.get(hash).filter(|answer| answer.stored.elapsed() < self.ttl) {
+            match cache
+                .get(hash)
+                .filter(|answer| answer.stored.elapsed() < self.ttl)
+            {
                 Some(answer) => drop(known.insert(hash.clone(), answer.info.clone())),
                 None => unknown.push(hash.clone()),
             }
@@ -102,7 +118,15 @@ impl<A: ModrinthApi> ModrinthLookup<A> {
         let now = Instant::now();
         let mut cache = lock(&self.cache);
         cache.retain(|_, answer| now.duration_since(answer.stored) < self.ttl);
-        cache.extend(answers.iter().map(|(hash, info)| (hash.clone(), CachedAnswer { stored: now, info: info.clone() })));
+        cache.extend(answers.iter().map(|(hash, info)| {
+            (
+                hash.clone(),
+                CachedAnswer {
+                    stored: now,
+                    info: info.clone(),
+                },
+            )
+        }));
     }
 
     async fn ask_modrinth(&self, hashes: &[String]) -> AppResult<HashMap<String, Option<ModInfo>>> {
@@ -111,12 +135,20 @@ impl<A: ModrinthApi> ModrinthLookup<A> {
         let projects: HashMap<String, Project> = if project_ids.is_empty() {
             HashMap::new()
         } else {
-            self.api.projects(&project_ids).await?.into_iter().map(|p| (p.id.clone(), p)).collect()
+            self.api
+                .projects(&project_ids)
+                .await?
+                .into_iter()
+                .map(|p| (p.id.clone(), p))
+                .collect()
         };
         Ok(hashes
             .iter()
             .map(|hash| {
-                let info = versions.get(hash).and_then(|v| projects.get(&v.project_id)).map(Self::describe);
+                let info = versions
+                    .get(hash)
+                    .and_then(|v| projects.get(&v.project_id))
+                    .map(Self::describe);
                 (hash.clone(), info)
             })
             .collect())
@@ -132,15 +164,24 @@ impl<A: ModrinthApi> ModrinthLookup<A> {
 }
 
 impl<A: ModrinthApi> ModLookup for ModrinthLookup<A> {
-    fn classify<'a>(&'a self, sha512: &'a [String]) -> BoxFuture<'a, Result<HashMap<String, ModInfo>, LookupError>> {
+    fn classify<'a>(
+        &'a self,
+        sha512: &'a [String],
+    ) -> BoxFuture<'a, Result<HashMap<String, ModInfo>, LookupError>> {
         Box::pin(async move {
             let (mut known, unknown) = self.split_cached(sha512);
             if !unknown.is_empty() {
-                let answers = self.ask_modrinth(&unknown).await.map_err(|err| LookupError(err.to_string()))?;
+                let answers = self
+                    .ask_modrinth(&unknown)
+                    .await
+                    .map_err(|err| LookupError(err.to_string()))?;
                 self.remember(&answers);
                 known.extend(answers);
             }
-            Ok(known.into_iter().filter_map(|(hash, info)| Some((hash, info?))).collect())
+            Ok(known
+                .into_iter()
+                .filter_map(|(hash, info)| Some((hash, info?)))
+                .collect())
         })
     }
 }

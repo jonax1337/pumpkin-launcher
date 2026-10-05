@@ -28,7 +28,10 @@ pub struct EmbeddedSource {
 
 impl EmbeddedSource {
     pub fn open(parts: EmbeddedParts) -> Result<Self, IndexError> {
-        Ok(Self { index: ModIndex::parse(parts.index_json)?, jars: parts.jars })
+        Ok(Self {
+            index: ModIndex::parse(parts.index_json)?,
+            jars: parts.jars,
+        })
     }
 }
 
@@ -38,14 +41,19 @@ impl ModSource for EmbeddedSource {
     }
 
     fn jar_bytes(&self, file: &str) -> Option<&[u8]> {
-        self.jars.iter().find(|(name, _)| *name == file).map(|(_, bytes)| *bytes)
+        self.jars
+            .iter()
+            .find(|(name, _)| *name == file)
+            .map(|(_, bytes)| *bytes)
     }
 }
 
 /// Die Quelle dieses Builds.
 pub fn build_source() -> &'static (dyn ModSource + Send + Sync) {
     static SOURCE: OnceLock<Box<dyn ModSource + Send + Sync>> = OnceLock::new();
-    SOURCE.get_or_init(|| source_of(generated::parts())).as_ref()
+    SOURCE
+        .get_or_init(|| source_of(generated::parts()))
+        .as_ref()
 }
 
 /// Ein Index, der nicht gilt, wird wie ein fehlender behandelt: lieber keine Einspeisung als eine mit geratenen Werten.
@@ -83,7 +91,10 @@ mod tests {
 
     fn parts_with(index_json: String) -> EmbeddedParts {
         let jars: &'static [EmbeddedJar] = Box::leak(Box::new([(JAR_FILE, JAR_BYTES)]));
-        EmbeddedParts { index_json: Box::leak(index_json.into_boxed_str()), jars }
+        EmbeddedParts {
+            index_json: Box::leak(index_json.into_boxed_str()),
+            jars,
+        }
     }
 
     #[test]
@@ -105,7 +116,9 @@ mod tests {
 
     #[test]
     fn an_embedded_index_the_launcher_refuses_leaves_the_build_without_a_mod() {
-        let source = source_of(Some(parts_with(r#"{ "modVersion": "2.1.0", "nodes": "kaputt" }"#.to_owned())));
+        let source = source_of(Some(parts_with(
+            r#"{ "modVersion": "2.1.0", "nodes": "kaputt" }"#.to_owned(),
+        )));
 
         assert!(source.index().nodes.is_empty());
     }
@@ -114,25 +127,45 @@ mod tests {
     fn this_build_reports_what_the_generator_embedded() {
         let source = build_source();
 
-        assert!(source.index().nodes.iter().all(|node| source.jar_bytes(&node.file).is_some()));
+        assert!(source
+            .index()
+            .nodes
+            .iter()
+            .all(|node| source.jar_bytes(&node.file).is_some()));
     }
 
     #[test]
     fn the_generator_accepts_what_the_launcher_accepts_and_nothing_else() {
-        let dist = std::env::temp_dir().join(format!("pumpkin-embedded-{}", uuid::Uuid::new_v4().simple()));
+        let dist = std::env::temp_dir().join(format!(
+            "pumpkin-embedded-{}",
+            uuid::Uuid::new_v4().simple()
+        ));
         std::fs::create_dir_all(&dist).unwrap();
         std::fs::write(dist.join(JAR_FILE), JAR_BYTES).unwrap();
         std::fs::write(dist.join(generator::INDEX_FILE), index_json()).unwrap();
         let parse = |text: &str| {
             let index = ModIndex::parse(text).map_err(|error| error.to_string())?;
-            Ok(index.nodes.into_iter().map(|node| generator::JarEntry { file: node.file, sha256: node.sha256 }).collect())
+            Ok(index
+                .nodes
+                .into_iter()
+                .map(|node| generator::JarEntry {
+                    file: node.file,
+                    sha256: node.sha256,
+                })
+                .collect())
         };
 
         let embedding = generator::inspect(&dist, parse);
 
-        assert!(matches!(embedding, generator::Embedding::Embedded { .. }), "{embedding:?}");
+        assert!(
+            matches!(embedding, generator::Embedding::Embedded { .. }),
+            "{embedding:?}"
+        );
         std::fs::write(dist.join(JAR_FILE), b"tampered").unwrap();
-        assert!(matches!(generator::inspect(&dist, parse), generator::Embedding::Rejected(_)));
+        assert!(matches!(
+            generator::inspect(&dist, parse),
+            generator::Embedding::Rejected(_)
+        ));
         let _ = std::fs::remove_dir_all(dist);
     }
 }

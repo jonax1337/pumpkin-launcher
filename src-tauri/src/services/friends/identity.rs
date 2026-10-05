@@ -23,11 +23,15 @@ pub struct Identity {
 
 impl Identity {
     pub fn generate() -> Self {
-        Self { key: SecretKey::generate() }
+        Self {
+            key: SecretKey::generate(),
+        }
     }
 
     pub fn from_secret_bytes(bytes: &[u8; 32]) -> Self {
-        Self { key: SecretKey::from_bytes(bytes) }
+        Self {
+            key: SecretKey::from_bytes(bytes),
+        }
     }
 
     pub fn secret_bytes(&self) -> [u8; 32] {
@@ -47,11 +51,18 @@ impl Identity {
     /// Geheimer Schlüssel des Hello-Endpunkts eines Codes; aus der Identität abgeleitet, damit kein weiterer
     /// Schlüsselbund-Eintrag nötig ist und die Peer-ID nie im Code steht.
     pub fn hello_secret(&self, salt: &[u8; 16]) -> [u8; 32] {
-        Sha256::new().chain_update(HELLO_KEY_DOMAIN).chain_update(self.secret_bytes()).chain_update(salt).finalize().into()
+        Sha256::new()
+            .chain_update(HELLO_KEY_DOMAIN)
+            .chain_update(self.secret_bytes())
+            .chain_update(salt)
+            .finalize()
+            .into()
     }
 
     pub fn hello_id(&self, salt: &[u8; 16]) -> [u8; 32] {
-        *SecretKey::from_bytes(&self.hello_secret(salt)).public().as_bytes()
+        *SecretKey::from_bytes(&self.hello_secret(salt))
+            .public()
+            .as_bytes()
     }
 
     fn from_hex(hex: &str) -> Option<Self> {
@@ -66,12 +77,23 @@ impl Identity {
 
 /// Prüft eine Signatur über `domain || parts…` gegen die Peer-ID; eine ungültige ID gilt als falsche Signatur.
 pub fn verify(peer_id: &str, domain: &[u8], parts: &[&[u8]], signature: &[u8; 64]) -> bool {
-    let Some(key) = parse_peer_id(peer_id) else { return false };
-    key.verify(&signed_message(domain, parts), &Signature::from_bytes(signature)).is_ok()
+    let Some(key) = parse_peer_id(peer_id) else {
+        return false;
+    };
+    key.verify(
+        &signed_message(domain, parts),
+        &Signature::from_bytes(signature),
+    )
+    .is_ok()
 }
 
 fn signed_message(domain: &[u8], parts: &[&[u8]]) -> Vec<u8> {
-    [domain].into_iter().chain(parts.iter().copied()).flatten().copied().collect()
+    [domain]
+        .into_iter()
+        .chain(parts.iter().copied())
+        .flatten()
+        .copied()
+        .collect()
 }
 
 /// Streng: genau 64 Hex-Zeichen in Kleinbuchstaben, die einen gültigen öffentlichen Schlüssel ergeben.
@@ -127,7 +149,10 @@ pub fn renew(secrets: &dyn SecretStore) -> AppResult<Renewal> {
     if let Some(old) = &retired {
         secrets.save(RETIRED_ENTRY, &old.to_hex())?;
     }
-    Ok(Renewal { retired, current: create(secrets)? })
+    Ok(Renewal {
+        retired,
+        current: create(secrets)?,
+    })
 }
 
 /// Berechnet die Verfügbarkeit (SPEC 4.1). `has_friends_data`: die Funktion ist aktiviert oder es gibt Datensätze.
@@ -144,10 +169,15 @@ pub fn availability(secrets: &dyn SecretStore, has_friends_data: bool) -> Availa
 
 /// Ein Eintrag, der keine 64 Hex-Zeichen enthält, ist kein Schlüssel und zählt als fehlend.
 fn load_entry(secrets: &dyn SecretStore, name: &str) -> AppResult<Option<Identity>> {
-    let Some(hex) = secrets.load(name)? else { return Ok(None) };
+    let Some(hex) = secrets.load(name)? else {
+        return Ok(None);
+    };
     let identity = Identity::from_hex(&hex);
     if identity.is_none() {
-        tracing::warn!(entry = name, "Schlüsselbund-Eintrag ist kein Schlüssel, wird als fehlend behandelt");
+        tracing::warn!(
+            entry = name,
+            "Schlüsselbund-Eintrag ist kein Schlüssel, wird als fehlend behandelt"
+        );
     }
     Ok(identity)
 }
@@ -184,15 +214,23 @@ mod tests {
         let identity = golden_identity();
         let hello = SecretKey::from_bytes(&identity.hello_secret(&salt)).public();
         assert_eq!(identity.hello_id(&salt), *hello.as_bytes());
-        assert_ne!(HEXLOWER.encode(&identity.hello_id(&salt)), identity.peer_id());
-        assert_ne!(identity.hello_id(&salt), identity.hello_id(&ascending_salt(8)));
+        assert_ne!(
+            HEXLOWER.encode(&identity.hello_id(&salt)),
+            identity.peer_id()
+        );
+        assert_ne!(
+            identity.hello_id(&salt),
+            identity.hello_id(&ascending_salt(8))
+        );
     }
 
     #[test]
     fn peer_id_is_64_lowercase_hex() {
         let id = golden_identity().peer_id();
         assert_eq!(id.len(), 64);
-        assert!(id.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
+        assert!(id
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
         assert!(parse_peer_id(&id).is_some());
     }
 
@@ -216,11 +254,36 @@ mod tests {
     fn signature_verifies_for_the_signer_over_the_same_parts_only() {
         let (alice, bob) = (golden_identity(), Identity::generate());
         let signature = alice.sign(b"pumpkin/test/1", &[b"eins", b"zwei"]);
-        assert!(verify(&alice.peer_id(), b"pumpkin/test/1", &[b"eins", b"zwei"], &signature));
-        assert!(!verify(&bob.peer_id(), b"pumpkin/test/1", &[b"eins", b"zwei"], &signature));
-        assert!(!verify(&alice.peer_id(), b"pumpkin/other/1", &[b"eins", b"zwei"], &signature));
-        assert!(!verify(&alice.peer_id(), b"pumpkin/test/1", &[b"eins", b"drei"], &signature));
-        assert!(!verify("kein-peer", b"pumpkin/test/1", &[b"eins", b"zwei"], &signature));
+        assert!(verify(
+            &alice.peer_id(),
+            b"pumpkin/test/1",
+            &[b"eins", b"zwei"],
+            &signature
+        ));
+        assert!(!verify(
+            &bob.peer_id(),
+            b"pumpkin/test/1",
+            &[b"eins", b"zwei"],
+            &signature
+        ));
+        assert!(!verify(
+            &alice.peer_id(),
+            b"pumpkin/other/1",
+            &[b"eins", b"zwei"],
+            &signature
+        ));
+        assert!(!verify(
+            &alice.peer_id(),
+            b"pumpkin/test/1",
+            &[b"eins", b"drei"],
+            &signature
+        ));
+        assert!(!verify(
+            "kein-peer",
+            b"pumpkin/test/1",
+            &[b"eins", b"zwei"],
+            &signature
+        ));
     }
 
     #[test]
@@ -237,7 +300,10 @@ mod tests {
         let created = create(&secrets).unwrap();
         let stored = secrets.load(IDENTITY_ENTRY).unwrap().unwrap();
         assert_eq!(stored.len(), 64);
-        assert_eq!(load(&secrets).unwrap().unwrap().peer_id(), created.peer_id());
+        assert_eq!(
+            load(&secrets).unwrap().unwrap().peer_id(),
+            created.peer_id()
+        );
     }
 
     #[test]
@@ -254,8 +320,14 @@ mod tests {
         let renewal = renew(&secrets).unwrap();
         assert_eq!(renewal.retired.unwrap().peer_id(), old.peer_id());
         assert_ne!(renewal.current.peer_id(), old.peer_id());
-        assert_eq!(load(&secrets).unwrap().unwrap().peer_id(), renewal.current.peer_id());
-        assert_eq!(load_retired(&secrets).unwrap().unwrap().peer_id(), old.peer_id());
+        assert_eq!(
+            load(&secrets).unwrap().unwrap().peer_id(),
+            renewal.current.peer_id()
+        );
+        assert_eq!(
+            load_retired(&secrets).unwrap().unwrap().peer_id(),
+            old.peer_id()
+        );
         delete_retired(&secrets).unwrap();
         assert!(load_retired(&secrets).unwrap().is_none());
     }
@@ -276,7 +348,13 @@ mod tests {
         assert_eq!(availability(&secrets, true), Availability::IdentityLost);
         create(&secrets).unwrap();
         assert_eq!(availability(&secrets, true), Availability::Available);
-        assert_eq!(availability(&MemorySecretStore::unreachable(), true), Availability::NoSecretStore);
-        assert_eq!(availability(&MemorySecretStore::unreachable(), false), Availability::NoSecretStore);
+        assert_eq!(
+            availability(&MemorySecretStore::unreachable(), true),
+            Availability::NoSecretStore
+        );
+        assert_eq!(
+            availability(&MemorySecretStore::unreachable(), false),
+            Availability::NoSecretStore
+        );
     }
 }

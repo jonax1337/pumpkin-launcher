@@ -371,7 +371,7 @@ export interface Backend {
   friendsEnable(input: FriendsEnableInput): Promise<FriendsState>;
   /** Schaltet Freunde aus; die Daten bleiben. */
   friendsDisable(): Promise<FriendsState>;
-  /** Ändert Anzeigename und „Immer über Relay“; bei geänderter Relay-Wahl enden laufende Sitzungen. */
+  /** Ändert die Freunde-Einstellungen; bei geänderter Relay-Wahl enden laufende Sitzungen. */
   friendsUpdateSettings(settings: FriendsSettings): Promise<FriendsState>;
   /** Neue Identität; Freunde bekommen sie automatisch, offene Codes und wartende Anfragen verfallen. */
   friendsRotateIdentity(): Promise<FriendsState>;

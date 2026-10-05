@@ -37,12 +37,17 @@ fn probe(exe: &Path) -> Option<u32> {
 /// Startet `java -version` (die Ausgabe kommt auf stderr). Unter Windows hat `javaw.exe` keine Konsole und schreibt
 /// nichts, also fragt der Aufruf deren Nachbarn `java.exe`.
 fn major_from_version_output(exe: &Path) -> Option<u32> {
-    let output = silent(Command::new(console_program(exe)).arg("-version")).stdin(Stdio::null()).output().ok()?;
+    let output = silent(Command::new(console_program(exe)).arg("-version"))
+        .stdin(Stdio::null())
+        .output()
+        .ok()?;
     from_version_output(&String::from_utf8_lossy(&output.stderr))
 }
 
 fn console_program(exe: &Path) -> PathBuf {
-    let is_windowless = exe.file_name().is_some_and(|name| name.eq_ignore_ascii_case("javaw.exe"));
+    let is_windowless = exe
+        .file_name()
+        .is_some_and(|name| name.eq_ignore_ascii_case("javaw.exe"));
     if is_windowless {
         exe.with_file_name("java.exe")
     } else {
@@ -89,18 +94,33 @@ mod tests {
         let majors = JavaMajors::default();
 
         assert_eq!(majors.of_probing(Path::new("a/java"), |_| None), None);
-        assert_eq!(majors.of_probing(Path::new("a/java"), |_| Some(17)), Some(17));
+        assert_eq!(
+            majors.of_probing(Path::new("a/java"), |_| Some(17)),
+            Some(17)
+        );
     }
 
     #[test]
     fn the_windowless_program_asks_its_console_neighbour() {
-        assert_eq!(console_program(Path::new("jre/bin/javaw.exe")), Path::new("jre/bin/java.exe"));
-        assert_eq!(console_program(Path::new("jre/bin/JAVAW.EXE")), Path::new("jre/bin/java.exe"));
-        assert_eq!(console_program(Path::new("jre/bin/java")), Path::new("jre/bin/java"));
+        assert_eq!(
+            console_program(Path::new("jre/bin/javaw.exe")),
+            Path::new("jre/bin/java.exe")
+        );
+        assert_eq!(
+            console_program(Path::new("jre/bin/JAVAW.EXE")),
+            Path::new("jre/bin/java.exe")
+        );
+        assert_eq!(
+            console_program(Path::new("jre/bin/java")),
+            Path::new("jre/bin/java")
+        );
     }
 
     #[test]
     fn a_program_that_is_not_there_has_no_major() {
-        assert_eq!(JavaMajors::default().of(Path::new("gibt-es-nicht/bin/java")), None);
+        assert_eq!(
+            JavaMajors::default().of(Path::new("gibt-es-nicht/bin/java")),
+            None
+        );
     }
 }

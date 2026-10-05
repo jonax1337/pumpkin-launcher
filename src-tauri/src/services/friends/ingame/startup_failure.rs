@@ -30,15 +30,32 @@ const PATTERNS: [Pattern; 4] = [
     },
     Pattern {
         kind: FailureKind::MixinApplyFailed,
-        markers: &["Mixin apply", "Mixin transformation", "MixinApplyError", "InvalidInjectionException", "InjectionError", "Critical injection failure"],
+        markers: &[
+            "Mixin apply",
+            "Mixin transformation",
+            "MixinApplyError",
+            "InvalidInjectionException",
+            "InjectionError",
+            "Critical injection failure",
+        ],
     },
     Pattern {
         kind: FailureKind::ModLoadingError,
         // Die ersten beiden sind der Wortlaut von FML 4 (NeoForge 21.1, Rauchtest S2); die übrigen stehen in älteren
         // und neueren FML-Versionen und im nachgebauten Forge-Log.
-        markers: &["Missing or unsupported mandatory dependencies", "Error during pre-loading phase", "ModLoadingException", "ModLoadingIssue", "mod loading error", "Error during mod loading"],
+        markers: &[
+            "Missing or unsupported mandatory dependencies",
+            "Error during pre-loading phase",
+            "ModLoadingException",
+            "ModLoadingIssue",
+            "mod loading error",
+            "Error during mod loading",
+        ],
     },
-    Pattern { kind: FailureKind::UnsupportedClassVersion, markers: &["UnsupportedClassVersionError"] },
+    Pattern {
+        kind: FailureKind::UnsupportedClassVersion,
+        markers: &["UnsupportedClassVersionError"],
+    },
 ];
 
 /// Der Startfehler, den das Log zeigt, sofern er die Mod nennt. Der Aufrufer darf es schon während der ersten
@@ -53,7 +70,11 @@ pub fn analyze_log<S: AsRef<str>>(lines: &[S]) -> Option<FailureKind> {
 /// sein, und das Log muss die Mod nennen. Ein früher Absturz ohne solchen Hinweis (Speichermangel, kaputtes Pack, eine
 /// fremde Mod) schaltet die Einspeisung nicht aus: INGAME 3.8 nennt den Fehlercode allein als Grund, aber ein
 /// Absturz, den die Mod nicht verursacht hat, soll sie nicht kosten.
-pub fn analyze_exit<S: AsRef<str>>(exit_code: Option<i32>, uptime: Duration, lines: &[S]) -> Option<FailureKind> {
+pub fn analyze_exit<S: AsRef<str>>(
+    exit_code: Option<i32>,
+    uptime: Duration,
+    lines: &[S],
+) -> Option<FailureKind> {
     if exit_code == Some(0) || uptime > STARTUP_WINDOW {
         return None;
     }
@@ -62,9 +83,14 @@ pub fn analyze_exit<S: AsRef<str>>(exit_code: Option<i32>, uptime: Duration, lin
 
 fn failure_at<S: AsRef<str>>(lines: &[S], at: usize) -> Option<FailureKind> {
     let line = lines[at].as_ref();
-    let pattern = PATTERNS.iter().find(|pattern| pattern.markers.iter().any(|marker| line.contains(marker)))?;
+    let pattern = PATTERNS
+        .iter()
+        .find(|pattern| pattern.markers.iter().any(|marker| line.contains(marker)))?;
     let reach = lines.len().min(at + 1 + NAMING_LOOKAHEAD_LINES);
-    lines[at..reach].iter().any(|candidate| names_the_mod(candidate.as_ref())).then_some(pattern.kind)
+    lines[at..reach]
+        .iter()
+        .any(|candidate| names_the_mod(candidate.as_ref()))
+        .then_some(pattern.kind)
 }
 
 fn names_the_mod(line: &str) -> bool {
@@ -107,7 +133,11 @@ mod tests {
     #[test]
     fn a_quick_crash_with_such_a_log_trips_the_breaker() {
         for (log, kind) in FAILURES {
-            assert_eq!(analyze_exit(Some(1), QUICK, &lines(log)), Some(kind), "{kind:?}");
+            assert_eq!(
+                analyze_exit(Some(1), QUICK, &lines(log)),
+                Some(kind),
+                "{kind:?}"
+            );
         }
     }
 
@@ -120,7 +150,10 @@ mod tests {
 
     #[test]
     fn a_quick_crash_without_any_log_evidence_does_not_trip_the_breaker() {
-        let silent: [&str; 2] = ["[12:00:01] [main/INFO] Loading", "[12:00:02] [main/ERROR] java.lang.OutOfMemoryError: Java heap space"];
+        let silent: [&str; 2] = [
+            "[12:00:01] [main/INFO] Loading",
+            "[12:00:02] [main/ERROR] java.lang.OutOfMemoryError: Java heap space",
+        ];
         assert_eq!(analyze_exit(Some(1), QUICK, &silent), None);
         assert_eq!(analyze_exit::<&str>(Some(1), QUICK, &[]), None);
     }
@@ -139,7 +172,11 @@ mod tests {
             (Some(0), Duration::from_secs(600), false),
         ];
         for (code, uptime, trips) in cases {
-            assert_eq!(analyze_exit(code, uptime, &log).is_some(), trips, "{code:?} nach {uptime:?}");
+            assert_eq!(
+                analyze_exit(code, uptime, &log).is_some(),
+                trips,
+                "{code:?} nach {uptime:?}"
+            );
         }
     }
 
@@ -148,7 +185,11 @@ mod tests {
         let marker = "Mixin apply for mod othermod failed";
         let mention = "(pumpkin_friends) wurde geladen";
         let last_reached_gap = NAMING_LOOKAHEAD_LINES - 1;
-        for (gap, trips) in [(0, true), (last_reached_gap, true), (last_reached_gap + 1, false)] {
+        for (gap, trips) in [
+            (0, true),
+            (last_reached_gap, true),
+            (last_reached_gap + 1, false),
+        ] {
             let mut log = vec![marker];
             log.extend(std::iter::repeat_n("\tat some.Frame(Frame.java:1)", gap));
             log.push(mention);
@@ -158,16 +199,29 @@ mod tests {
 
     #[test]
     fn mentioning_the_mod_before_the_error_line_is_not_enough() {
-        let log = ["(pumpkin_friends) wurde geladen", "Mixin apply for mod othermod failed"];
+        let log = [
+            "(pumpkin_friends) wurde geladen",
+            "Mixin apply for mod othermod failed",
+        ];
         assert_eq!(analyze_log(&log), None);
     }
 
     #[test]
     fn the_package_of_the_mod_counts_as_naming_it() {
-        for line in ["java.lang.UnsupportedClassVersionError: dev/laux/pumpkin/friends/X", "UnsupportedClassVersionError at dev.laux.pumpkin.friends.X"] {
-            assert_eq!(analyze_log(&[line]), Some(FailureKind::UnsupportedClassVersion), "{line}");
+        for line in [
+            "java.lang.UnsupportedClassVersionError: dev/laux/pumpkin/friends/X",
+            "UnsupportedClassVersionError at dev.laux.pumpkin.friends.X",
+        ] {
+            assert_eq!(
+                analyze_log(&[line]),
+                Some(FailureKind::UnsupportedClassVersion),
+                "{line}"
+            );
         }
-        assert_eq!(analyze_log(&["java.lang.UnsupportedClassVersionError: com/other/mod/X"]), None);
+        assert_eq!(
+            analyze_log(&["java.lang.UnsupportedClassVersionError: com/other/mod/X"]),
+            None
+        );
     }
 
     #[test]

@@ -2,6 +2,7 @@ package dev.laux.pumpkin.friends.platform.fabric;
 
 import dev.laux.pumpkin.friends.bridge.BridgeClient;
 import dev.laux.pumpkin.friends.compat.GameScreens;
+import dev.laux.pumpkin.friends.compat.Widgets;
 import dev.laux.pumpkin.friends.ui.UiSession;
 import dev.laux.pumpkin.friends.ui.demo.HubDemo;
 import dev.laux.pumpkin.friends.ui.hub.HubScreen;
@@ -12,12 +13,11 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.minecraft.client.gui.components.AbstractWidget;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.network.chat.Component;
 
 /**
- * Knopf „Pumpkin Friends“ im Pausemenü (INGAME 6.1): direkt über „Speichern und beenden“, in dessen Platz und Breite
+ * Knopf „Friends“ im Pausemenü (INGAME 6.1): direkt über „Speichern und beenden“, in dessen Platz und Breite
  * (der Vanilla-Knopf wandert dafür einen Slot tiefer); nur wenn das nicht passt, unter der Vanilla-Knopfspalte.
  * Er steht wann immer die Mod nicht inaktiv ist, auch ohne Verbindung zum Launcher (der Hub erklärt es dann). Eingehängt
  * wird er vom {@code PauseScreenMixin} am Ende von {@code PauseScreen#init()}; {@link #attach(BridgeClient)} schaltet ihn
@@ -46,7 +46,7 @@ public final class PauseMenuButton {
 	 * auf 1.21.1, 1.21.8, 1.21.11 und 26.3 als public verifiziert) oder kein Platz bleibt. Aufrufer ist allein der
 	 * {@code PauseScreenMixin} (daher öffentlich: sein Mixin-Paket liegt tiefer).
 	 */
-	public static Button buttonFor(PauseScreen pause) {
+	public static AbstractWidget buttonFor(PauseScreen pause) {
 		//? if >=1.20.2 {
 		if (client == null || UiSession.off() || !pause.showsPauseMenu()) {
 			return null;
@@ -65,8 +65,11 @@ public final class PauseMenuButton {
 		if (slot == null) {
 			return null;
 		}
-		return Button.builder(LABEL, pressed -> UiSession.run(() -> GameScreens.show(new HubScreen(pause, client))))
-			.bounds(slot.x(), slot.y(), slot.width(), slot.height()).build();
+		AbstractWidget button = Widgets.button(LABEL.getString(), slot.width(),
+			() -> GameScreens.show(new HubScreen(pause, client)));
+		button.setX(slot.x());
+		button.setY(slot.y());
+		return button;
 	}
 
 	/**

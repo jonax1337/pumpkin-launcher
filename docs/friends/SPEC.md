@@ -4,6 +4,8 @@
 
 **Status: FROZEN, 2026-10-03 (v2); synced with the implementation of Waves 0 and 1 and of Waves 2 and 3 on 2026-10-03.** This document replaces v1 (`FRIENDS-SPEC.md`). It applies every finding of the security and feasibility reviews of v1, unless the changelog (Appendix D) says otherwise. It is the only source of truth for the protocol. R0a copies it to `docs/friends/SPEC.md`, and from then on the file in the repo is the spec. There is no separate PROTOCOL.md. The deviations reported by the packages are written back into the sections they concern (index in D.3 for Waves 0/1, D.4 for Waves 2/3). Deviations where the code still has to change are listed in Appendix E and are **not** reflected as done in the normative text.
 
+**Minecraft-name cutover (2026-10-05).** Friends has no configurable self-display-name. The first signed-in Microsoft Minecraft account supplies the name automatically; local friend aliases remain private labels. Existing `displayName` output and signed wire fields keep their shape but carry the derived player name. Legacy settings ignore the removed field without resetting keys or friends.
+
 **Owner decisions (final; recorded here, not open):**
 
 | # | Decision |
@@ -223,7 +225,7 @@ impl Friends { pub fn new(dirs: &Dirs, secrets: Arc<dyn SecretStore>, signals: G
 
   Computed by `identity::availability(secrets, has_friends_data)`, where R4 passes `config.enabled || stores.any()`. `RecordStores::any()` sees only readable records (D.3).
 - Key operations (`friends/identity.rs`): `identity::create(secrets)` makes and stores a new key without an existence check (R4 checks availability first). `identity::renew(secrets) -> Renewal { retired: Option<Identity>, current: Identity }` is the key move shared by `friends_rotate_identity` and `friends_reset`: the current key (if any) is saved as `friends-identity-retired` first, then a new key becomes `friends-identity`. `load`, `load_retired` and `delete_retired` complete the set.
-- Profile announced to friends (self-asserted, marked as such in the UI): `displayName` (3-32 chars after sanitising), and `mcName`/`mcUuid` of the Microsoft account, updated via `profile` when the display name or the account changes. The backend has no "active" account: `friends_commands::account_profile` takes the **first** Microsoft account in `state.accounts` (`AccountProfile { name, uuid }`, UUID lowercased without hyphens). It is read at enable time (also the `msAccountRequired` check) and at app start. A display-name change is sent; an account change while the launcher runs is not observed yet (Appendix E, E7).
+- Profile announced to friends (self-asserted, marked as such in the UI): `displayName` is derived from the Microsoft Minecraft account, not an editable Friends setting; `mcName`/`mcUuid` carry the same account's profile. `friends_commands::account_profile` takes the **first** Microsoft account in `state.accounts`, independently of the selected launch account. Account changes broadcast `profile` and emit `friends-changed`. A valid sanitised `mcName` takes precedence over a legacy wire display name; profiles without it retain the sanitised legacy fallback. Names never replace the friends key or UUID-based account proofs.
 - Signing: `Identity::sign(&self, domain: &[u8], parts: &[&[u8]]) -> [u8; 64]` and the free function `identity::verify(peer_id: &str, domain, parts, sig: &[u8; 64]) -> bool` (Ed25519 over `domain || parts...`; an invalid id counts as a wrong signature). "sign_new"/"sign_permanent" in 4.6 and 5.2 mean `sign` on the respective `Identity`.
 
 ### 4.2 Friend code (`services/friends/code.rs`, `src/lib/friendCode.ts`)
@@ -366,7 +368,7 @@ R4 owns the accept loop and the control stream. It dispatches `request` and `tun
 {"type":"identityRotated","newPeerId":"<64 hex>","signature":"<128 hex>"}   // retired endpoint only
 {"type":"ack"}                                                 // reply to identityRotated and to every unfriend (4.5)
 ```
-- A `profile` whose sanitised `displayName` differs from the stored one sets `notice = renamed{previousName}`. Duplicate display names among friends are shown with the fingerprint's first group appended.
+- A `profile` whose derived name differs from the stored one sets `notice = renamed{previousName}`. Duplicate displayed names among friends are shown with the fingerprint's first group appended.
 
 **Request streams** (at most 5 per friend per minute; excess gets `error{rateLimited}`):
 ```jsonc
@@ -603,7 +605,7 @@ Requests, responses, `pending`, state topics and events are those of `INGAME.md`
 ### 8.2 Types (Rust | TS)
 ```rust
 pub const FRIEND_CODE_PREFIX: &str = "pumpkin-";   pub const FRIEND_CODE_BODY_LENGTH: usize = 72;   pub const FRIEND_CODE_LENGTH: usize = 80;
-pub const DISPLAY_NAME_MIN: usize = 3;  pub const DISPLAY_NAME_MAX: usize = 32;  pub const ALIAS_MAX: usize = 32;
+pub const ALIAS_MAX: usize = 32;
 pub const MAX_FRIENDS: usize = 50;  pub const MAX_ACTIVE_CODES: usize = 3;  pub const MAX_GUESTS: usize = 7;
 pub const CODE_TTL_SECS: u64 = 604_800;  pub const REQUEST_TTL_SECS: u64 = 1_209_600;  pub const INVITE_TTL_SECS: u64 = 7_200;
 pub const MIN_MC_RELEASE_TIME: &str = "2023-06-02T08:36:17+00:00";  pub const MIN_MC_LABEL: &str = "1.20";
@@ -616,8 +618,8 @@ pub struct FriendsState {
     pub network: NetworkStatus, pub relays: Vec<RelayInfo>, pub third_party_relays_accepted: bool, pub directory: DirectoryStatus,
 }
 pub struct Me { pub peer_id: String, pub fingerprint: String, pub display_name: String }
-pub struct FriendsSettings { pub display_name: String, pub always_relay: bool, pub findable_by_name: bool }
-pub struct FriendsEnableInput { pub display_name: String, pub always_relay: bool, pub accept_third_party_relays: bool, pub findable_by_name: bool }
+pub struct FriendsSettings { pub always_relay: bool, pub findable_by_name: bool, pub ingame_menu: bool, pub ingame_actions: IngameActions }
+pub struct FriendsEnableInput { pub always_relay: bool, pub accept_third_party_relays: bool, pub findable_by_name: bool }
 pub struct DirectoryStatus { pub state: DirectoryState, pub host: Option<String> /* for the PrivacyNotice; None if unavailable */ }
 pub enum DirectoryState { Unavailable, Off, Active, Unreachable, NotAllowed }   // unit, camelCase
 pub struct RelayInfo { pub host: String, pub operator: RelayOperatorKind, pub third_party: bool }
@@ -698,7 +700,7 @@ pub struct ModConfirmFriend { pub friend_id: String, pub display_name: String }
 
 TS mirror (`src/lib/friends-types.ts`), exact (`ModLoader` comes from `import type { ModLoader } from "./types"`, the existing TS twin of the Rust `ModLoader`):
 ```ts
-export const FRIENDS_LIMITS = { codePrefix: "pumpkin-", codeBodyLength: 72, codeLength: 80, displayNameMin: 3, displayNameMax: 32,
+export const FRIENDS_LIMITS = { codePrefix: "pumpkin-", codeBodyLength: 72, codeLength: 80,
   aliasMax: 32, maxFriends: 50, maxActiveCodes: 3, maxGuests: 7, codeTtlSecs: 604800, requestTtlSecs: 1209600, inviteTtlSecs: 7200,
   minMcReleaseTime: "2023-06-02T08:36:17+00:00", minMcLabel: "1.20", portMin: 1024, portMax: 65535,
   maxNameRequests: 5, mcNameMax: 16, nameCooldownDays: 7 } as const;
@@ -706,8 +708,8 @@ export type Availability = "available" | "noSecretStore" | "identityLost";
 export interface FriendsState { availability: Availability; enabled: boolean; me: Me | null; settings: FriendsSettings;
   network: NetworkStatus; relays: RelayInfo[]; thirdPartyRelaysAccepted: boolean; directory: DirectoryStatus }
 export interface Me { peerId: string; fingerprint: string; displayName: string }
-export interface FriendsSettings { displayName: string; alwaysRelay: boolean; findableByName: boolean }
-export interface FriendsEnableInput { displayName: string; alwaysRelay: boolean; acceptThirdPartyRelays: boolean; findableByName: boolean }
+export interface FriendsSettings { alwaysRelay: boolean; findableByName: boolean; ingameMenu: boolean; ingameActions: IngameActions }
+export interface FriendsEnableInput { alwaysRelay: boolean; acceptThirdPartyRelays: boolean; findableByName: boolean }
 export type DirectoryState = "unavailable" | "off" | "active" | "unreachable" | "notAllowed";
 export interface DirectoryStatus { state: DirectoryState; host: string | null }
 export interface RelayInfo { host: string; operator: "pumpkin" | "n0"; thirdParty: boolean }
@@ -1087,7 +1089,7 @@ pub fn identity::availability(secrets: &dyn SecretStore, has_friends_data: bool)
 // records.rs (9): FriendRecord, RequestRecord, CodeRecord, BlockedRecord, OutboxRecord, OutboxKind { Unfriend, Rotated },
 //   RecordStores { friends, requests, codes, blocked, outbox: JsonStore<_> } with open(dir) and any().
 // config.rs (9): FriendsConfig { version, enabled, settings: FriendsSettings, third_party_relays_accepted } with load(dir), save(dir); friends_dir(&Dirs).
-// sanitize.rs (12.3): display_name(raw, peer_id), own_display_name(raw) -> AppResult<String>, world_or_instance_name, file_name,
+// sanitize.rs (12.3): display_name(raw, peer_id), world_or_instance_name, file_name,
 //   alias(raw) -> Option<String>, mc_name(Option<&str>), mc_uuid(Option<&str>).
 // contract.rs (8.2): every contract type and constant; contract_tests.rs (8.3).
 
@@ -1202,7 +1204,7 @@ pub async fn avatar::skin(http: &reqwest::Client, dirs: &Dirs, mc_uuid: &str) ->
 - The folder is `config::friends_dir(&dirs)` = `<dirs.root>/friends`. `RecordStores::open(dir)` creates it and opens the five `JsonStore`s; `RecordStores::any()` is true when any store holds a readable record (unreadable entries of a newer version are kept on save but not counted).
 - Entities implement `services::store::Entity` in `records.rs` (through a local `record!` macro, because `store.rs`'s `entity!` macro is private), with not-found keys `errors.friends.notFound.{friend,request,code,blocked}`; `OutboxRecord` uses `errors.friends.notFound.friend` (its id is a friend's peer id).
 - `config.json`: `FriendsConfig::load(dir)` returns the defaults when the file is missing. A file that cannot be parsed is moved aside to `config.json.corrupt` (a free name, like `JsonStore` does) and the defaults are used. `save(dir)` writes atomically.
-- Defaults: `enabled = false`, `alwaysRelay = false`, `displayName = ""`, `thirdPartyRelaysAccepted = false`, `findableByName = false`. The display name is filled from the active MS account name when the feature is enabled (the opt-in pre-fills it, `FriendsEnableInput.displayName` carries the result). `showWorldName` is per session, default false.
+- Defaults: `enabled = false`, `alwaysRelay = false`, `thirdPartyRelaysAccepted = false`, `findableByName = false`. The first signed-in Microsoft Minecraft account supplies the Friends name automatically; there is no name in settings or enable input. Old `settings.displayName` values are ignored on load and omitted on save; all other settings, friend records and identity keys survive. `showWorldName` is per session, default false.
 
 ---
 
@@ -1233,7 +1235,7 @@ Kit rules (docs/design/PIXELKINO.md): no border radius, a warning always has a s
 - **Friends** (`List variant="friends"`: 40px avatar | name+sub | 150px status | 120px action | 36px menu):
   - Sub-line: "spielt", "online", "zuletzt online vor 2 h", or for unconfirmed friends "wartet, bis {name} online kommt".
   - Status chip with dot and text (never color alone), and a "Relay" tag when `path === "relay"`.
-  - Order: alphabetical by the displayed name (alias, else display name, with the fingerprint suffix for duplicates), never by presence, so rows do not move when someone comes online.
+  - Order: alphabetical by the displayed name (local alias, else Minecraft name, else sanitised legacy wire label, with the fingerprint suffix for duplicates), never by presence, so rows do not move when someone comes online.
   - Action: "Beitreten" when an open invite from this friend exists. It calls `requestInviteDialog(inviteId)` (`src/pages/friends/inviteRequest.ts`, a zustand store `useInviteRequest` holding the requested invite id); F4's `FriendDialogs` reads that store, opens the InviteDialog and clears it. Otherwise "Einladen" when I host a session, the friend is confirmed, online and not removed by the peer, and holds no seat in the session (a seat = `invited`, `connected`, or `left` without a kick; a `declined` or kicked guest gets "Einladen" again, 5.4) (`canInvite`).
   - Menu: "Umbenennen" (one `TextField` dialog, `friendRename`), "Fingerabdruck anzeigen", "Entfernen" (danger confirm), "Blockieren" (danger confirm).
   - `notice` rows show "{alt} heißt jetzt {neu}" or "{name} hat eine neue Identität (Fingerabdruck geändert)", with "OK" (`friendAcknowledge`). They are separate list rows under the friend's row, so the fixed grid columns stay untouched.
@@ -1247,14 +1249,14 @@ Kit rules (docs/design/PIXELKINO.md): no border radius, a warning always has a s
 Tabs in this order: **"Per Name"** (new `NameTab.tsx`, the default), "Code eingeben", "Mein Code". `AddFriendTab = "name" | "enter" | "mine"`. `AddFriendButtons`: the primary "Freund hinzufügen" opens `"name"`, or `"enter"` when `directory.state === "unavailable"`, in which case the Name tab is hidden (N 9.7).
 - **Per Name:**
   - A `TextField` "Minecraft-Name" (placeholder "z. B. Steve", `maxLength 16`, shape check `isMcName` from `friendsModel.ts`, regex `^[A-Za-z0-9_]{1,16}$`). Primary "Anfrage senden" calls `friendAddByName`; on success, toast "Anfrage an {name} gesendet" and close.
-  - Hint (always): "{name} sieht deinen Minecraft-Namen, deinen Anzeigenamen und deinen Fingerabdruck. Erst wenn {name} annimmt, verbinden sich eure Launcher. Das Pumpkin-Verzeichnis hält die Anfrage bis zu 14 Tage bereit."
+  - Hint (always): "{name} sieht deinen Minecraft-Namen und deinen Fingerabdruck. Erst wenn {name} annimmt, verbinden sich eure Launcher. Das Pumpkin-Verzeichnis hält die Anfrage bis zu 14 Tage bereit."
   - `nameNotFindable` is shown **inline** (warning with symbol, not a toast) with the action "Meinen Code zeigen", which switches to "Mein Code". `directory.state === "unreachable"`: a `StatusPanel` with "Verzeichnis gerade nicht erreichbar; nutze einen Code". When my own `findableByName` is false, an info line: "Andere finden dich nur per Name, wenn du es in den Einstellungen erlaubst." with a link to `/settings?tab=freunde`.
   - Rows of the requests section (10.2) with `via: name` (`RequestsSection.tsx`, texts from `friendsModel.ts` `requestLine(request)`, N 9.7): incoming shows name + fingerprint + a "Minecraft: {mcName}" sub-line with the tooltip "Konto per Mojang-Zertifikat vom Verzeichnis geprüft, Name direkt bei Mojang nachgeschlagen; beim Annehmen prüfen beide Launcher das Konto noch einmal bei Mojang", and the actions "Annehmen", "Ablehnen", "Blockieren" (menu). Outgoing `awaitingAnswer`: "Anfrage an {mcName} · wartet auf Antwort" + "Zurückziehen", without the expired-code hint. Outgoing `delivering`: "{mcName}: wird verbunden, sobald {mcName} online ist" + "Jetzt zustellen" + "Zurückziehen". `codeMayBeExpired` returns false for `via: name`.
 - **Mein Code:**
   - "Code erzeugen" shows the 80-char code once, in the pixel font, in groups of 4, with "Kopieren".
   - Hint: "Gilt 7 Tage und nur für eine Person. Wer den Code hat, kann dir eine Anfrage schicken: Poste ihn nicht öffentlich."
   - The active codes (tail, expiry, used) with "Widerrufen". "Code erzeugen" is disabled at 3 active codes.
-- **Code eingeben:** a `TextField` with shape validation (`friendCode.ts`). "Anfrage senden" calls `friendAdd`. Toast: "Anfrage wird zugestellt". A hint states that the display name and the Minecraft name go to the code owner, who must accept (4.3).
+- **Code eingeben:** a `TextField` with shape validation (`friendCode.ts`). Primary "Anfrage senden" calls `friendAdd`. Toast: "Anfrage wird zugestellt". A hint states that the Minecraft name goes to the code owner, who must accept (4.3).
 - The generated code and the fingerprint dialog reuse the existing pixel `.code` class (no new CSS file).
 
 ### 10.4 Invite and join (F4, global `components/friends/FriendDialogs.tsx` in `Layout`)
@@ -1310,7 +1312,7 @@ Tabs in this order: **"Per Name"** (new `NameTab.tsx`, the default), "Code einge
 - `identityLost`: only the panel and "Zurücksetzen" (as in 10.2).
 - Otherwise:
   - `FormRow` "Freunde" `Switch` (on opens the opt-in, off calls `friendsDisable`). While the feature is off, the tab shows **only** this switch; every row below appears only while it is enabled (rotate and reset need an active identity).
-  - "Anzeigename" (3-32, saved on blur).
+  - Read-only "Minecraft-Spielername", taken from the first Microsoft Minecraft account; loading and query errors are shown explicitly, with retry on error. No display-name input or save action.
   - `FormRow` "Per Minecraft-Namen auffindbar" `Switch` (hidden when `directory.state === "unavailable"`; sets `findableByName` through `friendsUpdateSettings`), hint "Wer deinen Minecraft-Namen kennt, kann dir Anfragen schicken. Das Pumpkin-Verzeichnis speichert dafür nur deine Minecraft-UUID, solange das an ist; aus = sofort gelöscht." Status line: `active` "Auffindbar als {mcName}", `unreachable` "Verzeichnis nicht erreichbar; neuer Versuch läuft", `notAllowed` (warning with symbol) "Mojang erlaubt diesem Konto keine Mehrspieler-Funktionen" (N 6, N 9.7).
   - "Immer über Relay verbinden" (hint: "Freunde sehen deine IP-Adressen nicht. Etwas höhere Latenz. Der Relay-Betreiber sieht, wer mit wem verbunden ist, aber keine Inhalte."; with a confirm while a host session **or a join** is active, because the rebind ends both; the join is read from `useFriendsUi().joinSession`). The confirm text is `relayConfirmText` plus `relayConfirmHosting`, `relayConfirmJoin` or `relayConfirmJoinUnnamed`.
   - "Mein Fingerabdruck" (pixel-font `Count`) with an action that copies the full 64-char peer id (`copyPeerId`, toast `peerIdCopied`): an abuse report to the relay operator needs it, because the relay keeps no logs and the fingerprint is not enough (`docs/friends/RELAY-OPS.md`). The fingerprint aside says so in one sentence. "Blockierte" (list + "Entsperren").
@@ -1329,7 +1331,7 @@ Text (plain, final wording reviewed by the owner):
 - Planned with the in-game mod (INGAME.md section 9; the sentence is added to this dialog and to `PRIVACY.md` 10 when the injection ships, not before): „Wenn Freunde an ist, lädt der Launcher beim Spielstart eine kleine Mod in deine Spiele. Sie liegt außerhalb deines Instanzordners, hat keine Netzwerkverbindung außer zum Launcher auf diesem PC und kann nichts ändern, was du nicht im Spiel anstößt. Andere Mods im selben Spiel können dieselbe Verbindung nutzen; deshalb fragt der Launcher vor Freundes- und Teilen-Aktionen aus dem Spiel."
 
 Inputs:
-- Display name.
+- Read-only Minecraft player name from the first Microsoft account (not an input). Enabling requires a successfully loaded Microsoft account as well as consent.
 - "Immer über Relay" (off).
 - An optional checkbox "Per Minecraft-Namen auffindbar sein" (unchecked, hidden when `directory.state === "unavailable"`) that feeds `FriendsEnableInput.findableByName`.
 - If `relays` has a third-party relay: a required checkbox "Ich bin einverstanden, dass {operator} ({hosts}) als Relay genutzt wird".
@@ -1399,7 +1401,7 @@ The bridge thread, backoff and liveness are `INGAME.md` sections 4.2 and 5.3 (wo
 - Logs never contain IPs, secrets, codes, tokens or hello ids. Peer ids are logged as their first 8 hex chars.
 - **Finding by name (N 9.8):**
   - Finding by name is off until you turn on "Per Minecraft-Namen auffindbar". Then the Pumpkin directory (Cloudflare Worker, database in the EU) stores your Minecraft UUID, and nothing else about you, and keeps requests to you for up to 14 days. Off deletes it at once (restore history up to 7/30 days, N 5.3).
-  - A request by name carries your Minecraft UUID, display name and friends id; the directory stores no names. The directory sees it, and sees who wrote to whom. It never sees whether the request was accepted, and never sees presence or connections.
+  - A request by name carries your Minecraft UUID, Minecraft player name (in the signed `displayName` field) and friends id. The directory has no name index; the letter itself contains the name. The directory sees who wrote to whom, but never whether the request was accepted, presence or connections.
   - Whoever writes to you by name learns your friends id and (unless "Immer über Relay") your addresses only after you accept.
   - The directory never contacts Mojang. To prove that an account is yours, your launcher fetches a player certificate that Mojang signed (`api.minecraftservices.com/player/certificates`) and signs the login with it; the directory receives the certificate's public key and two signatures, checks them offline, and stores none of them. The access token is only sent to Mojang, never to the directory.
   - Your launcher calls, from your IP address: `/player/certificates` (about every 40 h while it runs) and `/player/attributes` (at every directory login) and the name lookup at `api.minecraftservices.com`, and `sessionserver.mojang.com/session/minecraft/profile/{uuid}` for the sender of each new request you receive. On every acceptance both launchers confirm each other at Mojang through `join` and `hasJoined`, like an online-mode server (N 3.2).
@@ -1431,7 +1433,7 @@ The bridge thread, backoff and liveness are `INGAME.md` sections 4.2 and 5.3 (wo
 
 5. `mcName` must match `^[A-Za-z0-9_]{1,16}$`, else null. `mcUuid` must be 32 lowercase hex, else null.
 
-Launcher side (`friends/sanitize.rs`): `display_name(raw, peer_id)` (with the `#` fallback), `own_display_name(raw)` (no cut; outside 3-32 chars → `errors.friends.displayNameInvalid`), `world_or_instance_name`, `file_name`, `alias(raw) -> Option<String>`, `mc_name`, `mc_uuid`. A cut never leaves trailing whitespace.
+Launcher side (`friends/sanitize.rs`): `display_name(raw, peer_id)` sanitises legacy wire labels (with the `#` fallback); valid `mc_name` takes precedence. `world_or_instance_name`, `file_name`, `alias(raw) -> Option<String>`, `mc_name`, `mc_uuid` retain their caps. A cut never leaves trailing whitespace. Own names come from the Minecraft account, not a free-form input.
 
 Mod side (`state/Sanitize`): the same steps; Cc controls (tab and newline included) go in step 2, before whitespace is collapsed. The cap is not followed by a second trim, and an empty name stays empty (the mod never sees peer ids, so it cannot build the `#` fallback). Both are harmless because the launcher has already sanitised and capped every name it sends.
 
@@ -1752,7 +1754,7 @@ Waves 0 and 1 (R0a, R0b agent part, F1, R1, R2, R3, M1, D1, F2, F3) are merged o
 - `Gate::admit` is synchronous (3.5); a `Drop` arrives at the dialer as `CloseReason::Peer(NORMAL)`. Keep calling `PeerNet::accept()`; a `PeerNet` must outlive its `PeerConn`s; call `close(CloseCode::SHUTDOWN)` before dropping or rebinding.
 - Frames: use `BiStream::read_frame(limit)` and `frame::write`; define the per-context limits of 5.1 in the friends service; close the connection with `PROTOCOL` on a hello/control frame error.
 - Identity and codes (R2): `identity::availability(secrets, config.enabled || stores.any())`; `code::issue` (store `salt` hex, `secret_digest()` as `secretSha256`, `tail()`); on `friend_add`: `code::parse`, then `ensure_relay_known(|i| find_relay(map, i).is_some())` and `ensure_not_own(&own hello ids)`; on the hello endpoint: `code::secret_matches(record.secret_sha256, request.secret)`; `identity::renew` for rotate and reset; `identity::create` only after checking availability. `friendRequest.secret` = `parts.secret_hex()`; `RequestRecord.helloId` = hex of `parts.hello_id`.
-- Every peer string through `sanitize` (12.3); the own name through `sanitize::own_display_name`. Fill `FriendsConfig.settings.display_name` (default `""`) from `FriendsEnableInput.displayName`.
+- Every peer string goes through `sanitize` (12.3). Own profile and signed-letter names derive from the Microsoft Minecraft account. No `FriendsConfig.settings.display_name` or `FriendsEnableInput.displayName` exists.
 - Convert R2's `String` ids with `PeerId::from_str`; reuse `p2p::PeerId` everywhere, never a second id type.
 - Start/stop `state.bridge` with the feature; subscribe to `state.signals` (a broadcast of 256; handle `RecvError::Lagged`).
 - Tests: copy `test_relay()` from `services/p2p/tests.rs` (3.7); every endpoint in tests binds `127.0.0.1` only; `MemorySecretStore` and `friends/test_support.rs` (`TempDir`, `error_key`) are available to in-crate tests. A fresh worktree's first `cargo test` takes about 5 min; check free disk space first (`CARGO_INCREMENTAL=0` and `CARGO_PROFILE_DEV_DEBUG=0` keep debug builds small).
@@ -1828,7 +1830,6 @@ R4, R6, F4, F5, D2 (Wave 2) and R5 (Wave 3) are merged on `feat/friends`; their 
 | `errors.friends.msAccountRequired` | | Dafür brauchst du ein Microsoft-Konto |
 | `errors.friends.relayConsentRequired` | | Bitte stimme der Nutzung der genannten Relay-Server zu |
 | `errors.friends.networkUnavailable` | | Keine Verbindung zum Relay-Server; Freunde sind gerade nicht erreichbar |
-| `errors.friends.displayNameInvalid` | `min`, `max` | Anzeigename: {min} bis {max} Zeichen |
 | `errors.friends.codeInvalid` | | Dieser Freundescode ist ungültig |
 | `errors.friends.codeUsed` | | Dieser Freundescode wurde schon von jemand anderem benutzt |
 | `errors.friends.codeOwn` | | Das ist dein eigener Code |
@@ -2067,7 +2068,6 @@ Deviations (and gaps found in the packages' notes) where the code has to change.
 | # | Owner | Source | Fix |
 |---|---|---|---|
 | E6 | Frontend follow-up (takes over `src/components/friends/{useSharingActivity.ts, SessionChip.tsx, sharingModel.ts}`, `src/pages/detail/ShareSection.tsx`, `src/app/TitleBar.tsx`) | F5 D2, F4 N2 | Two join states exist: F4's `useFriendsUi().joinSession` (read by `FriendDialogs` and `FriendsTab`) and F5's `ActiveJoin` inside `useSharingActivity` (read by the chip, ShareSection and the close confirm), and `useSharingActivity` subscribes again to five events that `useFriendEvents` already handles. Make `joinSession` the only join state (host name from `friendKeys.invites` by `inviteId`), drop the five subscriptions from `useSharingActivity`, and keep `sharingModel.check.mjs` green (8.5, 10.6). |
-| E7 | R4 follow-up (takes over `src-tauri/src/friends_commands.rs` and `services/friends/service.rs`) | R4 D5 | An account change while the launcher runs (login, logout or removal of the first Microsoft account) does not reach `Friends`, so friends keep the old `mcName`/`mcUuid` until the next start. After a command changes `state.accounts`, recompute `account_profile`, store it in `Friends`, and send `profile` to connected friends when it changed (4.1). |
 
 **Resolved**
 
@@ -2078,3 +2078,4 @@ Deviations (and gaps found in the packages' notes) where the code has to change.
 | E3 | F2 D1 | "Freunde aktivieren" linked to `/settings?tab=freunde`. | F4 (Wave 2): `FriendsGate.tsx` opens `FriendsOptInDialog` on the page. | 10.2 |
 | E4 | F3 D3 | The "Immer über Relay" confirm ignored an active join. | F4 (Wave 2): `FriendsTab.tsx` also reads `useFriendsUi().joinSession` and names the join. | 10.8 |
 | E5 | D1 note N4 | Settings showed only the 16-char fingerprint. | F4 (Wave 2): "Vollständige ID kopieren" copies `FriendsState.me.peerId`. | 10.8 |
+| E7 | R4 D5 | An account change while the launcher runs did not reach Friends, so friends kept the old `mcName`/`mcUuid` until the next start. | Minecraft-name cutover (2026-10-05): every account change (command or automatic session refresh) recomputes the first Microsoft account, stores it in Friends, sends `profile` and emits `friends-changed`; a same-UUID rename keeps the directory login. | 4.1 |

@@ -70,14 +70,19 @@ impl MaterialisedJar {
         let file = fs::File::open(&self.jar).map_err(|source| io_error(&self.jar, source))?;
         match hash_of(file).map_err(|source| io_error(&self.jar, source))? {
             Some(hash) if hash == self.sha256 => Ok(()),
-            _ => Err(MaterialiseError::JarChanged { path: self.jar.clone() }),
+            _ => Err(MaterialiseError::JarChanged {
+                path: self.jar.clone(),
+            }),
         }
     }
 }
 
 /// Der Ordner dieser Mod-Version im Datenordner des Launchers.
 pub fn runtime_dir(data_dir: &Path, mod_version: &str) -> PathBuf {
-    data_dir.join("runtime").join("friends-mod").join(mod_version)
+    data_dir
+        .join("runtime")
+        .join("friends-mod")
+        .join(mod_version)
 }
 
 /// SHA-256 als 64 Hexzeichen in Kleinbuchstaben.
@@ -87,16 +92,33 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 
 /// Legt das JAR des Knotens bereit: Bytes aus der Quelle gegen den Index prüfen, ablegen, wenn die Datei fehlt oder
 /// nicht passt (ein verkürztes oder verändertes JAR wird neu geschrieben), erneut prüfen, schreibschützen.
-pub fn materialise(source: &(impl ModSource + ?Sized), data_dir: &Path, node: &Node) -> Result<MaterialisedJar, MaterialiseError> {
-    let bytes = source.jar_bytes(&node.file).ok_or_else(|| MaterialiseError::JarMissing { file: node.file.clone() })?;
+pub fn materialise(
+    source: &(impl ModSource + ?Sized),
+    data_dir: &Path,
+    node: &Node,
+) -> Result<MaterialisedJar, MaterialiseError> {
+    let bytes = source
+        .jar_bytes(&node.file)
+        .ok_or_else(|| MaterialiseError::JarMissing {
+            file: node.file.clone(),
+        })?;
     if sha256_hex(bytes) != node.sha256 {
-        return Err(MaterialiseError::EmbeddedJarCorrupt { file: node.file.clone() });
+        return Err(MaterialiseError::EmbeddedJarCorrupt {
+            file: node.file.clone(),
+        });
     }
     let mod_version = source.index().mod_version.clone();
     let runtime_dir = runtime_dir(data_dir, &mod_version);
     let (maven_root, jar) = locations(node, &runtime_dir, &mod_version);
     let hold = place(&jar, bytes, &node.sha256)?;
-    Ok(MaterialisedJar { jar, maven_root, runtime_dir, mod_version, sha256: node.sha256.clone(), _hold: hold })
+    Ok(MaterialisedJar {
+        jar,
+        maven_root,
+        runtime_dir,
+        mod_version,
+        sha256: node.sha256.clone(),
+        _hold: hold,
+    })
 }
 
 /// Wo das JAR liegt: bei `fmlMavenRoot` in einem Maven-Verzeichnis je Knoten, sonst flach unter seinem Dateinamen.
@@ -116,13 +138,17 @@ fn locations(node: &Node, runtime_dir: &Path, mod_version: &str) -> (Option<Path
 
 /// Sorgt dafür, dass unter `path` genau `bytes` liegen, und gibt die Haltevorrichtung zurück.
 fn place(path: &Path, bytes: &[u8], sha256: &str) -> Result<Option<fs::File>, MaterialiseError> {
-    let parent = path.parent().ok_or_else(|| io_error(path, io::ErrorKind::InvalidInput.into()))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| io_error(path, io::ErrorKind::InvalidInput.into()))?;
     fs::create_dir_all(parent).map_err(|source| io_error(parent, source))?;
     let hold = match open_if_matching(path, sha256)? {
         Some(hold) => hold,
         None => {
             write_atomically(path, bytes).map_err(|source| io_error(path, source))?;
-            open_if_matching(path, sha256)?.ok_or_else(|| MaterialiseError::WrittenJarCorrupt { path: path.to_owned() })?
+            open_if_matching(path, sha256)?.ok_or_else(|| MaterialiseError::WrittenJarCorrupt {
+                path: path.to_owned(),
+            })?
         }
     };
     mark_read_only(path).map_err(|source| io_error(path, source))?;
@@ -148,7 +174,9 @@ fn open_if_matching(path: &Path, sha256: &str) -> Result<Option<VerifiedFile>, M
         Err(source) => return Err(io_error(path, source)),
     };
     let mut handle = &file;
-    let matches = hash_of(&mut handle).map_err(|source| io_error(path, source))?.is_some_and(|hash| hash == sha256);
+    let matches = hash_of(&mut handle)
+        .map_err(|source| io_error(path, source))?
+        .is_some_and(|hash| hash == sha256);
     Ok(matches.then_some(VerifiedFile(file)))
 }
 
@@ -163,7 +191,10 @@ fn hash_of(reader: impl Read) -> io::Result<Option<String>> {
 fn open_shared_for_reading(path: &Path) -> io::Result<fs::File> {
     use std::os::windows::fs::OpenOptionsExt;
     use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ;
-    fs::OpenOptions::new().read(true).share_mode(FILE_SHARE_READ).open(path)
+    fs::OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ)
+        .open(path)
 }
 
 #[cfg(not(windows))]
@@ -186,7 +217,10 @@ pub(super) fn write_atomically(path: &Path, bytes: &[u8]) -> io::Result<()> {
 }
 
 fn temp_name_beside(path: &Path) -> PathBuf {
-    let name = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
     path.with_file_name(format!("{name}.{}.tmp", uuid::Uuid::new_v4().simple()))
 }
 
@@ -223,7 +257,10 @@ fn mark_read_only(path: &Path) -> io::Result<()> {
 }
 
 fn io_error(path: &Path, source: io::Error) -> MaterialiseError {
-    MaterialiseError::Io { path: path.to_owned(), source }
+    MaterialiseError::Io {
+        path: path.to_owned(),
+        source,
+    }
 }
 
 #[cfg(test)]
@@ -249,7 +286,10 @@ mod tests {
         let materialised = materialise(&source, data.path(), &node).unwrap();
         assert_eq!(materialised.jar(), jar_path(&data, &node));
         assert_eq!(fs::read(materialised.jar()).unwrap(), JAR);
-        assert!(fs::metadata(materialised.jar()).unwrap().permissions().readonly());
+        assert!(fs::metadata(materialised.jar())
+            .unwrap()
+            .permissions()
+            .readonly());
         assert_eq!(materialised.maven_root(), None);
         assert_eq!(materialised.mod_version(), "2.1.0");
         assert!(materialised.verify().is_ok());
@@ -303,7 +343,10 @@ mod tests {
         let first = materialise(&source, data.path(), &node).unwrap();
         let before = fs::metadata(first.jar()).unwrap().modified().unwrap();
         let second = materialise(&source, data.path(), &node).unwrap();
-        assert_eq!(fs::metadata(second.jar()).unwrap().modified().unwrap(), before);
+        assert_eq!(
+            fs::metadata(second.jar()).unwrap().modified().unwrap(),
+            before
+        );
         let leftovers = fs::read_dir(second.runtime_dir()).unwrap().count();
         assert_eq!(leftovers, 1, "keine Temp-Dateien übrig");
     }
@@ -313,7 +356,10 @@ mod tests {
         let (data, _, node) = setup(Loader::Fabric);
         let source = FakeSource::with_jar(&node, b"other bytes");
         let error = materialise(&source, data.path(), &node).unwrap_err();
-        assert!(matches!(error, MaterialiseError::EmbeddedJarCorrupt { .. }), "{error}");
+        assert!(
+            matches!(error, MaterialiseError::EmbeddedJarCorrupt { .. }),
+            "{error}"
+        );
         assert!(!runtime_dir(data.path(), "2.1.0").exists());
     }
 
@@ -321,17 +367,29 @@ mod tests {
     fn a_jar_the_source_does_not_have_is_reported() {
         let (data, _, node) = setup(Loader::Fabric);
         let source = FakeSource::empty();
-        assert!(matches!(materialise(&source, data.path(), &node), Err(MaterialiseError::JarMissing { .. })));
+        assert!(matches!(
+            materialise(&source, data.path(), &node),
+            Err(MaterialiseError::JarMissing { .. })
+        ));
     }
 
     #[test]
     fn maven_nodes_get_a_repository_layout_per_node() {
         let (data, source, node) = setup(Loader::Neoforge);
-        let node = Node { strategy: Strategy::FmlMavenRoot, ..node };
+        let node = Node {
+            strategy: Strategy::FmlMavenRoot,
+            ..node
+        };
         let materialised = materialise(&source, data.path(), &node).unwrap();
         let root = runtime_dir(data.path(), "2.1.0").join("maven-1.21.1-neoforge");
         assert_eq!(materialised.maven_root(), Some(root.as_path()));
-        let expected = root.join("dev").join("laux").join("pumpkin").join("pumpkin_friends").join("2.1.0").join("pumpkin_friends-2.1.0.jar");
+        let expected = root
+            .join("dev")
+            .join("laux")
+            .join("pumpkin")
+            .join("pumpkin_friends")
+            .join("2.1.0")
+            .join("pumpkin_friends-2.1.0.jar");
         assert_eq!(materialised.jar(), expected);
         assert_eq!(fs::read(&expected).unwrap(), JAR);
     }
@@ -343,7 +401,10 @@ mod tests {
         let materialised = materialise(&source, data.path(), &node).unwrap();
         crate::services::friends::ingame::test_support::make_writable(materialised.jar());
         fs::write(materialised.jar(), b"tampered").unwrap();
-        assert!(matches!(materialised.verify(), Err(MaterialiseError::JarChanged { .. })));
+        assert!(matches!(
+            materialised.verify(),
+            Err(MaterialiseError::JarChanged { .. })
+        ));
     }
 
     #[cfg(windows)]
@@ -356,8 +417,14 @@ mod tests {
         let path = materialised.jar().to_owned();
         make_replaceable(&path).unwrap();
         let open_for_writing = || fs::OpenOptions::new().write(true).share_mode(0).open(&path);
-        assert_eq!(open_for_writing().unwrap_err().raw_os_error(), Some(SHARING_VIOLATION));
-        assert_eq!(fs::remove_file(&path).unwrap_err().raw_os_error(), Some(SHARING_VIOLATION));
+        assert_eq!(
+            open_for_writing().unwrap_err().raw_os_error(),
+            Some(SHARING_VIOLATION)
+        );
+        assert_eq!(
+            fs::remove_file(&path).unwrap_err().raw_os_error(),
+            Some(SHARING_VIOLATION)
+        );
         drop(materialised);
         assert!(open_for_writing().is_ok());
     }

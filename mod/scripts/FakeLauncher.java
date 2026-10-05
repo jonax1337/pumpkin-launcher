@@ -461,12 +461,13 @@ public final class FakeLauncher {
 	private String valueOf(String topic) {
 		return switch (topic) {
 			case "me" -> "{\"enabled\":true,\"availability\":\"available\",\"network\":\"online\",\"fingerprint\":\"ab12 cd34\","
-				+ "\"directory\":\"" + directory + "\"}";
+				+ "\"directory\":\"" + directory + "\",\"displayName\":\"Alex\",\"findableByName\":false,\"relayHost\":null}";
 			case "friends" -> friendsJson();
 			case "requests" -> requestsJson();
 			case "invites" -> invitesJson();
 			case "session" -> guests.isEmpty() ? "null" : "{\"guests\":[" + guestsJson() + "]}";
-			case "game" -> "{\"hostable\":true,\"reason\":null,\"lan\":" + (lanPort == 0 ? "null" : "{\"port\":" + lanPort + "}") + "}";
+			case "game" -> "{\"hostable\":true,\"reason\":null,\"sharedElsewhere\":false,\"lan\":"
+				+ (lanPort == 0 ? "null" : "{\"port\":" + lanPort + "}") + "}";
 			default -> topic.equals("join") ? "null" : "[]";
 		};
 	}
@@ -508,7 +509,7 @@ public final class FakeLauncher {
 			entries.add("{\"id\":\"r" + index + "\",\"name\":" + json(incomingRequests.get(index)) + ",\"mcName\":"
 				+ json(incomingRequests.get(index)) + ",\"fingerprint\":\"ab12 cd34\"}");
 		}
-		return "{\"incoming\":[" + String.join(",", entries) + "],\"outgoing\":[]}";
+		return "{\"incoming\":[" + String.join(",", entries) + "],\"outgoing\":[],\"retryCooldownMs\":0}";
 	}
 
 	private void notifyMod(String kind, String name) throws IOException {

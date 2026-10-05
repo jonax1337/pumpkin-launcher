@@ -42,7 +42,7 @@ Words used here:
 
 ## 0. The concept in one page
 
-**What the player experiences.** They switch Friends on once, in the launcher (as today). From then on, every Microsoft-account launch of an instance that the launcher can serve starts with a "Pumpkin Friends" button in the pause menu. It opens a hub: friends with presence, requests (accept/decline), invites (join), "share my world", add a friend by name. Nothing was installed, nothing appears in the `mods/` folder, nothing shows up in exports or mod lists. Instances the launcher cannot serve simply work as before, and the instance page says why.
+**What the player experiences.** They switch Friends on once, in the launcher (as today). From then on, every Microsoft-account launch of an instance that the launcher can serve starts with a "Friends" button in the pause menu. It opens a hub: friends with presence, requests (accept/decline), invites (join), "share my world", add a friend by name. Nothing was installed, nothing appears in the `mods/` folder, nothing shows up in exports or mod lists. Instances the launcher cannot serve simply work as before.
 
 **How it works, in five lines.**
 1. The mod jars are **built in the launcher's own CI and embedded in the launcher binary** (one jar per node, plus an index with SHA-256). No Modrinth project, no download, no update flow: mod and launcher are one artifact.
@@ -337,7 +337,7 @@ The table is complete for protocol 2: `OP_NAMES` in `modbridge/ops.rs` holds exa
 
 **While any game link is active the launcher never fetches a new player certificate** (A16): the directory loop, `friend.addByName` and `friends.retry` all work cached-only and answer `directoryUnavailable` when the cache is empty or stale, so a running game's chat key is never disturbed by a certificate fetch. The guard lives in the by-name service (`game_link_active` / `CertificateSource`); it is unconditional, not tied to owner test O-5.
 
-Never in-game, no op exists: enable, disable, rotate identity, reset, settings changes (display name, findable, relay), relay consent, copying the full peer id, reviewing `identityChanged`/`addedInGame` notices. The Options tab shows them read-only with "Im Launcher öffnen".
+Never in-game, no op exists: enable, disable, rotate identity, reset, settings changes (findable, relay), relay consent, copying the full peer id, reviewing `identityChanged`/`addedInGame` notices. The Options tab shows the account-derived Minecraft name and settings read-only with "Im Launcher öffnen". There is no separate editable Friends display name.
 
 ### 5.5 Consent
 Two scopes, asked **once per game launch** in the launcher:
@@ -363,7 +363,7 @@ Every `social` and `share` operation executed from the game raises a launcher to
 ## 6. In-game UI
 
 ### 6.1 Entry points
-- **Pause menu button** "Pumpkin Friends" placed below the last vanilla button column; skipped when it would overlap a widget. Shown whenever the mod is not inert, also while disconnected (the hub then explains).
+- **Pause menu button** "Friends" placed below the last vanilla button column; skipped when it would overlap a widget. Shown whenever the mod is not inert, also while disconnected (the hub then explains).
 - **R-B:** a text button `PF` left of "Mehrspieler" on the title screen (skipped when overlapping, e.g. Mojang's own friends button on 26.2+) and an **unbound** key binding "Pumpkin Friends öffnen". Key `O` is never bound.
 - Every entry opens the hub on the tab with pending items first: Anfragen, else Einladungen, else Freunde.
 

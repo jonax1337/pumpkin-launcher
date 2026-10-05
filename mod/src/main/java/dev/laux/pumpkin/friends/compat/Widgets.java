@@ -2,6 +2,8 @@ package dev.laux.pumpkin.friends.compat;
 
 import dev.laux.pumpkin.friends.ui.UiSession;
 import dev.laux.pumpkin.friends.ui.model.GuiMetrics;
+import dev.laux.pumpkin.friends.ui.model.Fit;
+import dev.laux.pumpkin.friends.ui.model.PumpkinTheme;
 import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -10,9 +12,14 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.Checkbox;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.StringWidget;
+//? if >=26.1 {
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+//?} else {
+/*import net.minecraft.client.gui.GuiGraphics;
+*///?}
 
 /**
- * The widgets of the kit, all vanilla and none overriding an input method (INGAME 4.4). They are created at
+ * The widgets of the kit preserve vanilla input and narration while buttons draw the Pumpkin palette. They are created at
  * {@code (0, 0)}; the screen layout moves them. Their handlers run in the session's soft-failure guard (INGAME 4.2):
  * vanilla calls them from its own input dispatch, so a press that fails must not throw into the game.
  * INGAME-API.md 3, tables "Widgets: Button, Checkbox, text" and "Widgets: EditBox".
@@ -21,10 +28,73 @@ public final class Widgets {
 	private Widgets() {
 	}
 
-	/** {@code Button#builder(Component, OnPress)} and {@code Button.Builder#bounds} exist in every era. */
+	/** Button's protected constructor and default narration exist in every supported era. */
 	public static AbstractWidget button(String label, int width, Runnable onPress) {
-		return Button.builder(Text.literal(label), pressed -> UiSession.run(onPress))
-			.bounds(0, 0, width, GuiMetrics.BUTTON_HEIGHT).build();
+		return new PumpkinButton(label, width, false, onPress);
+	}
+
+	public static AbstractWidget tab(String label, int width, boolean selected, Runnable onPress) {
+		return new PumpkinButton(label, width, selected, onPress);
+	}
+
+	private static final class PumpkinButton extends Button {
+		private final CompatPainter painter = new CompatPainter(font());
+		private final String label;
+		private final boolean selected;
+		private int fittedWidth = -1;
+		private String fittedLabel = "";
+
+		PumpkinButton(String label, int width, boolean selected, Runnable onPress) {
+			super(0, 0, width, GuiMetrics.BUTTON_HEIGHT, Text.literal(label),
+				pressed -> UiSession.run(onPress), DEFAULT_NARRATION);
+			this.label = label;
+			this.selected = selected;
+		}
+
+		// Input, click sound, tooltips and narration stay inherited from Button.
+		//? if >=26.1 {
+		@Override
+		protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+		//?} else if >=1.21.11 {
+		/*@Override
+		protected void renderContents(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+		*///?} else {
+		/*@Override
+		public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+		*///?}
+			painter.bind(graphics);
+			paintButton(mouseX, mouseY);
+		}
+
+		private void paintButton(int mouseX, int mouseY) {
+			int x = getX();
+			int y = getY();
+			int width = getWidth();
+			int height = getHeight();
+			boolean hover = active && isMouseOver(mouseX, mouseY);
+			int surface = selected ? PumpkinTheme.ACCENT
+				: !active ? PumpkinTheme.PANEL : hover ? PumpkinTheme.HOVER : PumpkinTheme.SURFACE;
+			int border = isFocused() ? PumpkinTheme.FOCUS
+				: selected || hover ? PumpkinTheme.ACCENT : active ? PumpkinTheme.BORDER : PumpkinTheme.SURFACE;
+			PumpkinTheme.plate(painter, x, y, width, height, border, surface);
+			if (selected) {
+				painter.fill(x + 3, y + height - 3, Math.max(0, width - 6), 2, PumpkinTheme.INK);
+			} else if (active) {
+				painter.fill(x + 2, y + 2, Math.max(0, width - 4), 1, hover ? PumpkinTheme.BORDER : PumpkinTheme.HOVER);
+				painter.fill(x + 2, y + height - 2, Math.max(0, width - 4), 1, PumpkinTheme.EDGE);
+			}
+			if (isFocused()) {
+				painter.fill(x + 2, y + 2, 2, Math.max(0, height - 4), PumpkinTheme.FOCUS);
+				painter.fill(x + width - 4, y + 2, 2, Math.max(0, height - 4), PumpkinTheme.FOCUS);
+			}
+			if (fittedWidth != width) {
+				fittedWidth = width;
+				fittedLabel = Fit.clip(label, Math.max(0, width - 12), painter::codePointWidth);
+			}
+			int textColor = selected ? PumpkinTheme.INK : active ? PumpkinTheme.TEXT : PumpkinTheme.DISABLED;
+			painter.text(fittedLabel, x + (width - painter.textWidth(fittedLabel)) / 2,
+				y + (height - painter.lineHeight()) / 2, textColor);
+		}
 	}
 
 	/** The six-argument {@code EditBox} constructor exists in every era; {@code setHint} and {@code setMaxLength} too. */

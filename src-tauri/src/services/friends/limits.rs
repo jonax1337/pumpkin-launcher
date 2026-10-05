@@ -19,12 +19,27 @@ pub struct RateLimit {
     pub window: Duration,
 }
 
-pub const HELLO_PER_PEER_AND_CODE: RateLimit = RateLimit { max: 3, window: Duration::from_secs(600) };
-pub const HELLO_PER_CODE: RateLimit = RateLimit { max: 10, window: Duration::from_secs(3600) };
-pub const CONTROL_FRAMES: RateLimit = RateLimit { max: 50, window: Duration::from_secs(10) };
-pub const REQUEST_STREAMS: RateLimit = RateLimit { max: 5, window: Duration::from_secs(60) };
+pub const HELLO_PER_PEER_AND_CODE: RateLimit = RateLimit {
+    max: 3,
+    window: Duration::from_secs(600),
+};
+pub const HELLO_PER_CODE: RateLimit = RateLimit {
+    max: 10,
+    window: Duration::from_secs(3600),
+};
+pub const CONTROL_FRAMES: RateLimit = RateLimit {
+    max: 50,
+    window: Duration::from_secs(10),
+};
+pub const REQUEST_STREAMS: RateLimit = RateLimit {
+    max: 5,
+    window: Duration::from_secs(60),
+};
 /// Wie oft eine neue Verbindung eines Freundes seine eingetragene ersetzen darf; mehr ist kein Wiederverbinden mehr.
-pub const LINK_REPLACEMENTS: RateLimit = RateLimit { max: 5, window: Duration::from_secs(60) };
+pub const LINK_REPLACEMENTS: RateLimit = RateLimit {
+    max: 5,
+    window: Duration::from_secs(60),
+};
 
 /// Wartezeiten nach dem ersten, zweiten, … gescheiterten Versuch; danach bleibt es bei der letzten.
 const BACKOFF: [Duration; 5] = [
@@ -44,13 +59,19 @@ pub struct SlidingWindow<K> {
 
 impl<K: Eq + Hash> SlidingWindow<K> {
     pub fn new(limit: RateLimit) -> Self {
-        Self { limit, hits: HashMap::new() }
+        Self {
+            limit,
+            hits: HashMap::new(),
+        }
     }
 
     /// Zählt ein Ereignis für `key`; über der Grenze wird es nicht gezählt und ergibt `false`.
     pub fn try_hit(&mut self, key: K, now: Instant) -> bool {
         let hits = self.hits.entry(key).or_default();
-        while hits.front().is_some_and(|hit| now.duration_since(*hit) >= self.limit.window) {
+        while hits
+            .front()
+            .is_some_and(|hit| now.duration_since(*hit) >= self.limit.window)
+        {
             hits.pop_front();
         }
         if hits.len() >= self.limit.max {
@@ -84,19 +105,36 @@ impl Attempt {
 
 impl<K: Eq + Hash + Clone> Default for Attempts<K> {
     fn default() -> Self {
-        Self { entries: HashMap::new() }
+        Self {
+            entries: HashMap::new(),
+        }
     }
 }
 
 impl<K: Eq + Hash + Clone> Attempts<K> {
     /// Die Ziele aus `candidates`, die jetzt dran sind und nicht schon laufen.
     pub fn due(&self, candidates: impl IntoIterator<Item = K>, now: Instant) -> Vec<K> {
-        candidates.into_iter().filter(|key| self.entries.get(key).is_none_or(|attempt| attempt.is_due(now))).collect()
+        candidates
+            .into_iter()
+            .filter(|key| {
+                self.entries
+                    .get(key)
+                    .is_none_or(|attempt| attempt.is_due(now))
+            })
+            .collect()
     }
 
     /// Die Ziele aus `candidates`, die nicht laufen und deren letzter Versuch mindestens `gap` zurückliegt.
-    pub fn idle_for(&self, candidates: impl IntoIterator<Item = K>, gap: Duration, now: Instant) -> Vec<K> {
-        candidates.into_iter().filter(|key| self.is_idle_for(key, gap, now)).collect()
+    pub fn idle_for(
+        &self,
+        candidates: impl IntoIterator<Item = K>,
+        gap: Duration,
+        now: Instant,
+    ) -> Vec<K> {
+        candidates
+            .into_iter()
+            .filter(|key| self.is_idle_for(key, gap, now))
+            .collect()
     }
 
     /// Macht `key` sofort fällig, ohne den Backoff zurückzusetzen.
@@ -136,7 +174,10 @@ impl<K: Eq + Hash + Clone> Attempts<K> {
 
     fn is_idle_for(&self, key: &K, gap: Duration, now: Instant) -> bool {
         self.entries.get(key).is_none_or(|attempt| {
-            !attempt.in_flight && attempt.started.is_none_or(|started| now.duration_since(started) >= gap)
+            !attempt.in_flight
+                && attempt
+                    .started
+                    .is_none_or(|started| now.duration_since(started) >= gap)
         })
     }
 }
@@ -145,7 +186,10 @@ impl<K: Eq + Hash + Clone> Attempts<K> {
 mod tests {
     use super::*;
 
-    const LIMIT: RateLimit = RateLimit { max: 2, window: Duration::from_secs(10) };
+    const LIMIT: RateLimit = RateLimit {
+        max: 2,
+        window: Duration::from_secs(10),
+    };
 
     #[tokio::test(start_paused = true)]
     async fn window_refuses_over_the_limit_and_frees_up_after_the_window() {
@@ -169,7 +213,9 @@ mod tests {
             attempts.begin("r", now);
             attempts.failed("r", now);
             let wait = Duration::from_secs(secs);
-            assert!(attempts.due(["r"], now + wait - Duration::from_secs(1)).is_empty());
+            assert!(attempts
+                .due(["r"], now + wait - Duration::from_secs(1))
+                .is_empty());
             assert_eq!(attempts.due(["r"], now + wait), ["r"]);
         }
     }
@@ -181,7 +227,9 @@ mod tests {
 
         attempts.begin("r", now);
 
-        assert!(attempts.due(["r"], now + Duration::from_secs(3600)).is_empty());
+        assert!(attempts
+            .due(["r"], now + Duration::from_secs(3600))
+            .is_empty());
         assert!(attempts.idle_for(["r"], Duration::ZERO, now).is_empty());
     }
 
@@ -208,8 +256,13 @@ mod tests {
         attempts.begin("r", now);
         attempts.failed("r", now);
 
-        assert!(attempts.idle_for(["r"], Duration::from_secs(10), now + Duration::from_secs(9)).is_empty());
+        assert!(attempts
+            .idle_for(["r"], Duration::from_secs(10), now + Duration::from_secs(9))
+            .is_empty());
         let later = now + Duration::from_secs(10);
-        assert_eq!(attempts.idle_for(["r", "new"], Duration::from_secs(10), later), ["r", "new"]);
+        assert_eq!(
+            attempts.idle_for(["r", "new"], Duration::from_secs(10), later),
+            ["r", "new"]
+        );
     }
 }

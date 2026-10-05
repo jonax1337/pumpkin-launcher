@@ -34,7 +34,6 @@ export const mock: typeof deMock = {
   "mock.friends.unavailable": "This system has no keyring; friends are not available here",
   "mock.friends.identityLost": "Your friends identity is missing from the keyring; reset it in Settings",
   "mock.friends.disabled": "Friends are not enabled",
-  "mock.friends.displayNameInvalid": "Display name: {min} to {max} characters",
   "mock.friends.msAccountRequired": "You need a Microsoft account for this",
   "mock.friends.tooManyCodes": "At most {max} open codes; revoke one first",
   "mock.friends.codeInvalid": "This friend code is not valid",

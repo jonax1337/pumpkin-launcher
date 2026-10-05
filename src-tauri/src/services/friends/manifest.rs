@@ -15,8 +15,8 @@ use crate::coded;
 use crate::error::AppError;
 use crate::models::{Instance, Mod, ModKind, ModLoader};
 use crate::services::mojang::VersionManifest;
-use crate::services::{lock, require_plain_name};
 use crate::services::transport::Digests;
+use crate::services::{lock, require_plain_name};
 
 /// Mehr Mods nimmt der Gast nicht an; ein größeres Manifest ist ungültig.
 pub const MAX_MANIFEST_MODS: usize = 500;
@@ -52,10 +52,13 @@ pub enum ManifestError {
 impl From<ManifestError> for AppError {
     fn from(err: ManifestError) -> Self {
         match err {
-            ManifestError::Invalid(_) => AppError::invalid(coded!("errors.friends.manifestInvalid")),
-            ManifestError::VersionUnsupported => {
-                AppError::invalid(coded!("errors.friends.versionUnsupported", min = MIN_MC_LABEL))
+            ManifestError::Invalid(_) => {
+                AppError::invalid(coded!("errors.friends.manifestInvalid"))
             }
+            ManifestError::VersionUnsupported => AppError::invalid(coded!(
+                "errors.friends.versionUnsupported",
+                min = MIN_MC_LABEL
+            )),
         }
     }
 }
@@ -69,7 +72,12 @@ impl VersionIndex {
     }
 
     pub fn from_manifest(manifest: &VersionManifest) -> Self {
-        Self::new(manifest.versions.iter().map(|entry| (entry.id.clone(), entry.release_time.clone())))
+        Self::new(
+            manifest
+                .versions
+                .iter()
+                .map(|entry| (entry.id.clone(), entry.release_time.clone())),
+        )
     }
 
     fn release_time(&self, version: &str) -> Option<&str> {
@@ -79,9 +87,16 @@ impl VersionIndex {
 
 /// Das Manifest der Instanz: jede aktive Mod-Datei mit ihrem SHA-512 (die Freunde-Mod liegt nie in der Instanz). Eine Datei, die
 /// sich nicht lesen lässt, fehlt; dieselbe Datei unter zwei Namen steht nur einmal drin.
-pub fn build(instance: &Instance, mods_dir: &Path, hasher: &dyn Fn(&Path) -> io::Result<String>) -> Manifest {
+pub fn build(
+    instance: &Instance,
+    mods_dir: &Path,
+    hasher: &dyn Fn(&Path) -> io::Result<String>,
+) -> Manifest {
     let mut seen = HashSet::new();
-    let mods = hashed_mods(instance, mods_dir, hasher).into_iter().filter(|file| seen.insert(file.sha512.clone())).collect();
+    let mods = hashed_mods(instance, mods_dir, hasher)
+        .into_iter()
+        .filter(|file| seen.insert(file.sha512.clone()))
+        .collect();
     Manifest {
         minecraft_version: instance.minecraft_version.clone(),
         loader: instance.loader,
@@ -91,15 +106,29 @@ pub fn build(instance: &Instance, mods_dir: &Path, hasher: &dyn Fn(&Path) -> io:
 }
 
 /// Aktive Mods der Instanz (keine Ressourcenpakete oder Shader) mit dem SHA-512 ihrer Datei in `mods_dir`.
-pub fn hashed_mods(instance: &Instance, mods_dir: &Path, hasher: &dyn Fn(&Path) -> io::Result<String>) -> Vec<ManifestMod> {
-    let active = instance.mods.iter().filter(|m| m.enabled && m.kind == ModKind::Mod);
+pub fn hashed_mods(
+    instance: &Instance,
+    mods_dir: &Path,
+    hasher: &dyn Fn(&Path) -> io::Result<String>,
+) -> Vec<ManifestMod> {
+    let active = instance
+        .mods
+        .iter()
+        .filter(|m| m.enabled && m.kind == ModKind::Mod);
     active.filter_map(|m| hashed(m, mods_dir, hasher)).collect()
 }
 
-fn hashed(m: &Mod, mods_dir: &Path, hasher: &dyn Fn(&Path) -> io::Result<String>) -> Option<ManifestMod> {
+fn hashed(
+    m: &Mod,
+    mods_dir: &Path,
+    hasher: &dyn Fn(&Path) -> io::Result<String>,
+) -> Option<ManifestMod> {
     let path = mods_dir.join(require_plain_name(&m.file_name).ok()?);
     match hasher(&path) {
-        Ok(sha512) => Some(ManifestMod { sha512, file_name: m.file_name.clone() }),
+        Ok(sha512) => Some(ManifestMod {
+            sha512,
+            file_name: m.file_name.clone(),
+        }),
         Err(err) => {
             tracing::warn!(file = %m.file_name, %err, "Mod-Datei ohne Hash, sie fehlt im Manifest");
             None
@@ -124,14 +153,19 @@ pub fn validate(raw: Manifest, versions: &VersionIndex) -> Result<Manifest, Mani
         if file_name.is_empty() {
             return Err(ManifestError::Invalid("Dateiname leer"));
         }
-        mods.push(ManifestMod { sha512: m.sha512, file_name });
+        mods.push(ManifestMod {
+            sha512: m.sha512,
+            file_name,
+        });
     }
     Ok(Manifest { mods, ..raw })
 }
 
 /// ISO-8601 mit demselben Format (`+00:00`) wie [`MIN_MC_RELEASE_TIME`], daher als Text vergleichbar.
 fn ensure_supported_version(version: &str, versions: &VersionIndex) -> Result<(), ManifestError> {
-    let released = versions.release_time(version).ok_or(ManifestError::Invalid("unbekannte Minecraft-Version"))?;
+    let released = versions
+        .release_time(version)
+        .ok_or(ManifestError::Invalid("unbekannte Minecraft-Version"))?;
     if released < MIN_MC_RELEASE_TIME {
         return Err(ManifestError::VersionUnsupported);
     }
@@ -141,7 +175,8 @@ fn ensure_supported_version(version: &str, versions: &VersionIndex) -> Result<()
 fn ensure_loader_version(version: Option<&str>) -> Result<(), ManifestError> {
     let well_formed = |v: &str| {
         (1..=LOADER_VERSION_MAX).contains(&v.len())
-            && v.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'+' | b'_' | b'-'))
+            && v.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'+' | b'_' | b'-'))
     };
     if version.is_some_and(|v| !well_formed(v)) {
         return Err(ManifestError::Invalid("Loader-Version ungültig"));
@@ -180,13 +215,20 @@ impl HashCache {
             return Ok(sha512);
         }
         let sha512 = sha512_file(path)?;
-        let entry = CachedHash { size, modified, sha512: sha512.clone() };
+        let entry = CachedHash {
+            size,
+            modified,
+            sha512: sha512.clone(),
+        };
         lock(&self.entries).insert(path.to_owned(), entry);
         Ok(sha512)
     }
 
     fn cached(&self, path: &Path, size: u64, modified: SystemTime) -> Option<String> {
         let entries = lock(&self.entries);
-        entries.get(path).filter(|e| e.size == size && e.modified == modified).map(|e| e.sha512.clone())
+        entries
+            .get(path)
+            .filter(|e| e.size == size && e.modified == modified)
+            .map(|e| e.sha512.clone())
     }
 }

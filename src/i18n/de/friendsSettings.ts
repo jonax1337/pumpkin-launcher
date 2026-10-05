@@ -19,10 +19,10 @@ export const friendsSettings = {
   "friendsSettings.enableHint": "Freundescodes, Online-Status und gemeinsam spielen",
   "friendsSettings.enableAside": "Standardmäßig aus. Beim Einschalten zeigt ein Dialog, was Freunde und Relay-Server sehen. Ausschalten behält deine Freunde.",
 
-  // Anzeigename
-  "friendsSettings.nameLabel": "Anzeigename",
-  "friendsSettings.nameHint": "So sehen dich deine Freunde: {min} bis {max} Zeichen",
-  "friendsSettings.nameAside": "Du gibst den Namen selbst an. Freunde sehen ihn zusammen mit deinem Fingerabdruck.",
+  // Minecraft-Spielername
+  "friendsSettings.nameLabel": "Minecraft-Spielername",
+  "friendsSettings.nameHint": "Wird automatisch aus deinem Microsoft-Minecraft-Konto übernommen. Deine Freunde sehen diesen Namen.",
+  "friendsSettings.nameUnavailable": "Kein Microsoft-Minecraft-Konto angemeldet",
 
   // Immer über Relay
   "friendsSettings.relayLabel": "Immer über Relay verbinden",
@@ -54,7 +54,7 @@ export const friendsSettings = {
   // Fingerabdruck
   "friendsSettings.fingerprintLabel": "Mein Fingerabdruck",
   "friendsSettings.fingerprintHint": "Gehört fest zu deinem Schlüssel",
-  "friendsSettings.fingerprintAside": "Namen gibst du selbst an, den Fingerabdruck nicht. Bei Zweifeln können Freunde ihn mit deinem vergleichen. Für eine Meldung an den Relay-Betreiber kopierst du die vollständige ID.",
+  "friendsSettings.fingerprintAside": "Dein Minecraft-Name kann sich ändern, dein Fingerabdruck gehört fest zu deinem Schlüssel. Bei Zweifeln können Freunde ihn mit deinem vergleichen. Für eine Meldung an den Relay-Betreiber kopierst du die vollständige ID.",
   "friendsSettings.copyPeerId": "Vollständige ID kopieren",
   "friendsSettings.peerIdCopied": "ID kopiert",
 
@@ -92,9 +92,8 @@ export const friendsSettings = {
   "friendsSettings.optIn.codes": "Freunde über Codes, die ihr selbst austauscht, oder per Minecraft-Name, wenn die andere Person das erlaubt. Wer dir eine Anfrage schickt, sieht deine IP-Adresse dadurch nicht.",
   "friendsSettings.optIn.addresses": "Verschlüsselte Verbindungen zwischen den Launchern. Bei einer direkten Verbindung sehen deine Freunde deine öffentliche IP-Adresse und die Adressen deiner Netzwerke (Heimnetz, VPN). Auch wer deinen Code einlöst oder dessen Code du einlöst, kann deine Adressen sehen, solange „Immer über Relay“ aus ist. „Immer über Relay“ verhindert das.",
   "friendsSettings.optIn.relays": "Relay-Server: {relays}. Sie leiten verschlüsselte Daten weiter und sehen, wer mit wem verbunden ist, aber keine Inhalte.",
-  "friendsSettings.optIn.presence": "Freunde sehen, ob du online bist oder spielst, und deinen Minecraft-Namen samt Skin (von dir selbst angegeben).",
+  "friendsSettings.optIn.presence": "Freunde sehen, ob du online bist oder spielst, und deinen Minecraft-Namen samt Skin. Dein Name wird automatisch aus deinem Microsoft-Minecraft-Konto übernommen.",
   "friendsSettings.optIn.noTracking": "Kein Chat, kein Tracking, keine öffentlichen Listen; die Suche per Name findet nur genaue Namen von Leuten, die das eingeschaltet haben. Jederzeit abschaltbar.",
-  "friendsSettings.optIn.nameLabel": "Anzeigename",
   "friendsSettings.optIn.alwaysRelay": "Immer über Relay verbinden",
   "friendsSettings.optIn.findable": "Per Minecraft-Namen auffindbar sein",
   "friendsSettings.optIn.thirdParty": "Ich bin einverstanden, dass {operator} ({hosts}) als Relay genutzt wird",

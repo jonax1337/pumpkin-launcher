@@ -45,6 +45,8 @@ dependencies {
 
 tasks.withType(JavaCompile).configureEach {
 	it.options.release = node.javaMin
+	// Stacktraces behalten Quellnamen und Zeilen; die Tabelle lokaler Variablen braucht das Spiel nicht und kostet Jar-Größe.
+	it.options.debugOptions.debugLevel = 'source,lines'
 	it.options.encoding = 'UTF-8'
 	// classfile: Gson verweist auf Errorprone-Annotationen, die nicht auf dem Klassenpfad liegen.
 	it.options.compilerArgs << '-Xlint:all,-classfile,-serial'

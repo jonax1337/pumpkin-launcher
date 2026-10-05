@@ -31,7 +31,10 @@ pub enum InjectionState {
     UserOff,
     /// Ein Startfehler hat sie ausgeschaltet, unter dieser Launcher-Version.
     #[serde(rename_all = "camelCase")]
-    AutoOff { reason: FailureKind, launcher_version: String },
+    AutoOff {
+        reason: FailureKind,
+        launcher_version: String,
+    },
 }
 
 impl InjectionState {
@@ -40,7 +43,10 @@ impl InjectionState {
     pub fn tripped(self, reason: FailureKind, launcher_version: &str) -> Self {
         match self {
             Self::UserOff => Self::UserOff,
-            Self::Active | Self::AutoOff { .. } => Self::AutoOff { reason, launcher_version: launcher_version.to_owned() },
+            Self::Active | Self::AutoOff { .. } => Self::AutoOff {
+                reason,
+                launcher_version: launcher_version.to_owned(),
+            },
         }
     }
 
@@ -62,7 +68,10 @@ impl InjectionState {
     /// Ein `AutoOff` einer anderen Launcher-Version zählt nicht mehr: dort kann ein behobener Knoten liegen.
     pub fn tripped_reason(&self, launcher_version: &str) -> Option<FailureKind> {
         match self {
-            Self::AutoOff { reason, launcher_version: tripped_under } if tripped_under == launcher_version => Some(*reason),
+            Self::AutoOff {
+                reason,
+                launcher_version: tripped_under,
+            } if tripped_under == launcher_version => Some(*reason),
             _ => None,
         }
     }
@@ -71,7 +80,10 @@ impl InjectionState {
     /// einer anderen Version fällt auf `Active` zurück, alles andere bleibt.
     pub fn lifted_for(self, launcher_version: &str) -> Self {
         match self {
-            Self::AutoOff { launcher_version: tripped_under, .. } if tripped_under != launcher_version => Self::Active,
+            Self::AutoOff {
+                launcher_version: tripped_under,
+                ..
+            } if tripped_under != launcher_version => Self::Active,
             other => other,
         }
     }
@@ -84,7 +96,10 @@ mod tests {
     const NOW: &str = "2.1.0";
 
     fn auto_off(reason: FailureKind, version: &str) -> InjectionState {
-        InjectionState::AutoOff { reason, launcher_version: version.to_owned() }
+        InjectionState::AutoOff {
+            reason,
+            launcher_version: version.to_owned(),
+        }
     }
 
     #[test]
@@ -95,12 +110,16 @@ mod tests {
 
     #[test]
     fn a_start_failure_never_overrides_the_players_off_switch() {
-        assert_eq!(InjectionState::UserOff.tripped(FailureKind::ModLoadingError, NOW), InjectionState::UserOff);
+        assert_eq!(
+            InjectionState::UserOff.tripped(FailureKind::ModLoadingError, NOW),
+            InjectionState::UserOff
+        );
     }
 
     #[test]
     fn a_second_failure_keeps_the_switch_off_with_the_newer_reason() {
-        let state = auto_off(FailureKind::MixinApplyFailed, "2.0.9").tripped(FailureKind::UnsupportedClassVersion, NOW);
+        let state = auto_off(FailureKind::MixinApplyFailed, "2.0.9")
+            .tripped(FailureKind::UnsupportedClassVersion, NOW);
         assert_eq!(state, auto_off(FailureKind::UnsupportedClassVersion, NOW));
     }
 
@@ -120,7 +139,10 @@ mod tests {
     #[test]
     fn a_trip_counts_only_under_the_launcher_version_that_caused_it() {
         let state = auto_off(FailureKind::FabricIncompatibleModSet, "2.1.0");
-        assert_eq!(state.tripped_reason("2.1.0"), Some(FailureKind::FabricIncompatibleModSet));
+        assert_eq!(
+            state.tripped_reason("2.1.0"),
+            Some(FailureKind::FabricIncompatibleModSet)
+        );
         assert_eq!(state.tripped_reason("2.1.1"), None);
         assert_eq!(InjectionState::Active.tripped_reason(NOW), None);
         assert_eq!(InjectionState::UserOff.tripped_reason(NOW), None);
@@ -131,8 +153,14 @@ mod tests {
         let tripped = auto_off(FailureKind::ModLoadingError, "2.1.0");
         assert_eq!(tripped.clone().lifted_for("2.1.0"), tripped);
         assert_eq!(tripped.lifted_for("2.2.0"), InjectionState::Active);
-        assert_eq!(InjectionState::UserOff.lifted_for("2.2.0"), InjectionState::UserOff);
-        assert_eq!(InjectionState::Active.lifted_for("2.2.0"), InjectionState::Active);
+        assert_eq!(
+            InjectionState::UserOff.lifted_for("2.2.0"),
+            InjectionState::UserOff
+        );
+        assert_eq!(
+            InjectionState::Active.lifted_for("2.2.0"),
+            InjectionState::Active
+        );
     }
 
     #[test]
@@ -154,6 +182,9 @@ mod tests {
     #[test]
     fn a_reason_from_a_newer_launcher_reads_as_unknown() {
         let json = r#"{"state":"autoOff","reason":"somethingNew","launcherVersion":"9.0.0"}"#;
-        assert_eq!(serde_json::from_str::<InjectionState>(json).unwrap(), auto_off(FailureKind::Unknown, "9.0.0"));
+        assert_eq!(
+            serde_json::from_str::<InjectionState>(json).unwrap(),
+            auto_off(FailureKind::Unknown, "9.0.0")
+        );
     }
 }

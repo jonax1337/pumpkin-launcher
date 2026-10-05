@@ -11,13 +11,25 @@ use crate::services::friends::contract::{IngameNode, IngameReason, IngameState, 
 pub fn status_of(index: &ModIndex, facts: &LaunchFacts, connected: bool) -> IngameStatus {
     let node = chosen_node(index, facts);
     if connected {
-        return IngameStatus { state: IngameState::Connected, reason: None, node };
+        return IngameStatus {
+            state: IngameState::Connected,
+            reason: None,
+            node,
+        };
     }
     match decide(index, facts) {
-        Decision::Inject(_) => IngameStatus { state: IngameState::Active, reason: None, node },
+        Decision::Inject(_) => IngameStatus {
+            state: IngameState::Active,
+            reason: None,
+            node,
+        },
         Decision::Skip(skip) => {
             let (state, reason) = describe(skip, index);
-            IngameStatus { state, reason: Some(reason), node }
+            IngameStatus {
+                state,
+                reason: Some(reason),
+                node,
+            }
         }
     }
 }
@@ -25,7 +37,11 @@ pub fn status_of(index: &ModIndex, facts: &LaunchFacts, connected: bool) -> Inga
 /// Der Knoten, der für die Instanz gilt, auch wenn ein Schalter die Einspeisung gerade verhindert.
 fn chosen_node(index: &ModIndex, facts: &LaunchFacts) -> Option<IngameNode> {
     match select(index, &target_of(facts)) {
-        Selection::Fit(node) => Some(IngameNode { id: node.id.clone(), minecraft: facts.minecraft.to_owned(), loader: node.loader }),
+        Selection::Fit(node) => Some(IngameNode {
+            id: node.id.clone(),
+            minecraft: facts.minecraft.to_owned(),
+            loader: node.loader,
+        }),
         Selection::Unfit(_) => None,
     }
 }
@@ -75,8 +91,20 @@ mod tests {
 
     fn index() -> ModIndex {
         index_of(vec![
-            node("1.21.1-fabric", Loader::Fabric, &["1.21", "1.21.1"], "0.16.0", 21),
-            unverified(node("1.20.4-fabric", Loader::Fabric, &["1.20.4"], "0.15.0", 17)),
+            node(
+                "1.21.1-fabric",
+                Loader::Fabric,
+                &["1.21", "1.21.1"],
+                "0.16.0",
+                21,
+            ),
+            unverified(node(
+                "1.20.4-fabric",
+                Loader::Fabric,
+                &["1.20.4"],
+                "0.15.0",
+                17,
+            )),
         ])
     }
 
@@ -97,7 +125,11 @@ mod tests {
     }
 
     fn fabric_node() -> Option<IngameNode> {
-        Some(IngameNode { id: "1.21.1-fabric".into(), minecraft: "1.21.1".into(), loader: Loader::Fabric })
+        Some(IngameNode {
+            id: "1.21.1-fabric".into(),
+            minecraft: "1.21.1".into(),
+            loader: Loader::Fabric,
+        })
     }
 
     fn status(facts: &LaunchFacts) -> IngameStatus {
@@ -106,40 +138,85 @@ mod tests {
 
     #[test]
     fn a_fitting_instance_is_active_with_its_node() {
-        assert_eq!(status(&facts()), IngameStatus { state: IngameState::Active, reason: None, node: fabric_node() });
+        assert_eq!(
+            status(&facts()),
+            IngameStatus {
+                state: IngameState::Active,
+                reason: None,
+                node: fabric_node()
+            }
+        );
     }
 
     #[test]
     fn a_connected_mod_is_connected_whatever_the_switches_say() {
         let off = InjectionState::UserOff;
-        let facts = LaunchFacts { instance_state: &off, ..facts() };
+        let facts = LaunchFacts {
+            instance_state: &off,
+            ..facts()
+        };
 
         let status = status_of(&index(), &facts, true);
 
-        assert_eq!(status, IngameStatus { state: IngameState::Connected, reason: None, node: fabric_node() });
+        assert_eq!(
+            status,
+            IngameStatus {
+                state: IngameState::Connected,
+                reason: None,
+                node: fabric_node()
+            }
+        );
     }
 
     #[test]
     fn the_switches_give_off_with_the_node_kept() {
         let off = InjectionState::UserOff;
-        let instance_off = LaunchFacts { instance_state: &off, ..facts() };
-        let globally_off = LaunchFacts { global_switch: false, ..facts() };
+        let instance_off = LaunchFacts {
+            instance_state: &off,
+            ..facts()
+        };
+        let globally_off = LaunchFacts {
+            global_switch: false,
+            ..facts()
+        };
 
-        assert_eq!(status(&instance_off), IngameStatus { state: IngameState::Off, reason: Some(IngameReason::InstanceOff), node: fabric_node() });
-        assert_eq!(status(&globally_off), IngameStatus { state: IngameState::Off, reason: Some(IngameReason::GloballyOff), node: fabric_node() });
+        assert_eq!(
+            status(&instance_off),
+            IngameStatus {
+                state: IngameState::Off,
+                reason: Some(IngameReason::InstanceOff),
+                node: fabric_node()
+            }
+        );
+        assert_eq!(
+            status(&globally_off),
+            IngameStatus {
+                state: IngameState::Off,
+                reason: Some(IngameReason::GloballyOff),
+                node: fabric_node()
+            }
+        );
     }
 
     #[test]
     fn a_start_failure_gives_auto_off_with_the_failure_kind_until_the_launcher_changes() {
         let tripped = InjectionState::Active.tripped(FailureKind::MixinApplyFailed, LAUNCHER);
-        let breaker = LaunchFacts { instance_state: &tripped, ..facts() };
-        let newer = LaunchFacts { launcher_version: "2.1.1", ..breaker };
+        let breaker = LaunchFacts {
+            instance_state: &tripped,
+            ..facts()
+        };
+        let newer = LaunchFacts {
+            launcher_version: "2.1.1",
+            ..breaker
+        };
 
         assert_eq!(
             status(&breaker),
             IngameStatus {
                 state: IngameState::AutoOff,
-                reason: Some(IngameReason::Breaker { reason: FailureKind::MixinApplyFailed }),
+                reason: Some(IngameReason::Breaker {
+                    reason: FailureKind::MixinApplyFailed
+                }),
                 node: fabric_node()
             }
         );
@@ -150,36 +227,157 @@ mod tests {
     fn every_other_reason_is_unavailable_with_its_own_reason() {
         let own_mod = vec!["pumpkin_friends".to_owned()];
         let cases: Vec<(&str, LaunchFacts, IngameReason)> = vec![
-            ("friends off", LaunchFacts { friends_enabled: false, ..facts() }, IngameReason::FriendsOff),
-            ("bridge", LaunchFacts { bridge_running: false, ..facts() }, IngameReason::BridgeNotRunning),
-            ("offline", LaunchFacts { online_account: false, ..facts() }, IngameReason::OfflineAccount),
-            ("vanilla", LaunchFacts { loader: ModLoader::Vanilla, ..facts() }, IngameReason::Vanilla),
-            ("quilt", LaunchFacts { loader: ModLoader::Quilt, ..facts() }, IngameReason::Quilt),
-            ("no node", LaunchFacts { minecraft: "26.9", ..facts() }, IngameReason::NoNode),
-            ("unverified", LaunchFacts { minecraft: "1.20.4", java_major: Some(17), ..facts() }, IngameReason::Unverified),
-            ("loader", LaunchFacts { loader_version: "0.15.0", ..facts() }, IngameReason::LoaderTooOld { need: "0.16.0".into() }),
-            ("loader unreadable", LaunchFacts { loader_version: "", ..facts() }, IngameReason::LoaderVersionUnknown),
-            ("java", LaunchFacts { java_major: Some(17), ..facts() }, IngameReason::JavaTooOld { need: 21 }),
-            ("java unknown", LaunchFacts { java_major: None, ..facts() }, IngameReason::JavaUnknown),
-            ("collision", LaunchFacts { mod_ids_in_instance: &own_mod, ..facts() }, IngameReason::IdCollision),
+            (
+                "friends off",
+                LaunchFacts {
+                    friends_enabled: false,
+                    ..facts()
+                },
+                IngameReason::FriendsOff,
+            ),
+            (
+                "bridge",
+                LaunchFacts {
+                    bridge_running: false,
+                    ..facts()
+                },
+                IngameReason::BridgeNotRunning,
+            ),
+            (
+                "offline",
+                LaunchFacts {
+                    online_account: false,
+                    ..facts()
+                },
+                IngameReason::OfflineAccount,
+            ),
+            (
+                "vanilla",
+                LaunchFacts {
+                    loader: ModLoader::Vanilla,
+                    ..facts()
+                },
+                IngameReason::Vanilla,
+            ),
+            (
+                "quilt",
+                LaunchFacts {
+                    loader: ModLoader::Quilt,
+                    ..facts()
+                },
+                IngameReason::Quilt,
+            ),
+            (
+                "no node",
+                LaunchFacts {
+                    minecraft: "26.9",
+                    ..facts()
+                },
+                IngameReason::NoNode,
+            ),
+            (
+                "unverified",
+                LaunchFacts {
+                    minecraft: "1.20.4",
+                    java_major: Some(17),
+                    ..facts()
+                },
+                IngameReason::Unverified,
+            ),
+            (
+                "loader",
+                LaunchFacts {
+                    loader_version: "0.15.0",
+                    ..facts()
+                },
+                IngameReason::LoaderTooOld {
+                    need: "0.16.0".into(),
+                },
+            ),
+            (
+                "loader unreadable",
+                LaunchFacts {
+                    loader_version: "",
+                    ..facts()
+                },
+                IngameReason::LoaderVersionUnknown,
+            ),
+            (
+                "java",
+                LaunchFacts {
+                    java_major: Some(17),
+                    ..facts()
+                },
+                IngameReason::JavaTooOld { need: 21 },
+            ),
+            (
+                "java unknown",
+                LaunchFacts {
+                    java_major: None,
+                    ..facts()
+                },
+                IngameReason::JavaUnknown,
+            ),
+            (
+                "collision",
+                LaunchFacts {
+                    mod_ids_in_instance: &own_mod,
+                    ..facts()
+                },
+                IngameReason::IdCollision,
+            ),
         ];
         for (name, facts, reason) in cases {
             let status = status(&facts);
-            assert_eq!((status.state, status.reason), (IngameState::Unavailable, Some(reason)), "{name}");
+            assert_eq!(
+                (status.state, status.reason),
+                (IngameState::Unavailable, Some(reason)),
+                "{name}"
+            );
         }
     }
 
     #[test]
     fn only_a_fitting_cell_has_a_node() {
-        assert_eq!(status(&LaunchFacts { loader: ModLoader::Vanilla, ..facts() }).node, None);
-        assert_eq!(status(&LaunchFacts { minecraft: "1.20.4", java_major: Some(17), ..facts() }).node, None);
-        assert_eq!(status(&LaunchFacts { online_account: false, ..facts() }).node, fabric_node(), "das Konto ändert den Knoten nicht");
+        assert_eq!(
+            status(&LaunchFacts {
+                loader: ModLoader::Vanilla,
+                ..facts()
+            })
+            .node,
+            None
+        );
+        assert_eq!(
+            status(&LaunchFacts {
+                minecraft: "1.20.4",
+                java_major: Some(17),
+                ..facts()
+            })
+            .node,
+            None
+        );
+        assert_eq!(
+            status(&LaunchFacts {
+                online_account: false,
+                ..facts()
+            })
+            .node,
+            fabric_node(),
+            "das Konto ändert den Knoten nicht"
+        );
     }
 
     #[test]
     fn a_build_without_any_node_says_it_has_no_mod() {
         let status = status_of(&ModIndex::default(), &facts(), false);
 
-        assert_eq!(status, IngameStatus { state: IngameState::Unavailable, reason: Some(IngameReason::NotInBuild), node: None });
+        assert_eq!(
+            status,
+            IngameStatus {
+                state: IngameState::Unavailable,
+                reason: Some(IngameReason::NotInBuild),
+                node: None
+            }
+        );
     }
 }

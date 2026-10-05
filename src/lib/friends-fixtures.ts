@@ -8,8 +8,6 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
     "codePrefix": "pumpkin-",
     "codeBodyLength": 72,
     "codeLength": 80,
-    "displayNameMin": 3,
-    "displayNameMax": 32,
     "aliasMax": 32,
     "maxFriends": 50,
     "maxActiveCodes": 3,
@@ -34,7 +32,6 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
       "displayName": "Jonas"
     },
     "settings": {
-      "displayName": "Jonas",
       "alwaysRelay": false,
       "findableByName": true,
       "ingameMenu": true,
@@ -62,7 +59,6 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
     "enabled": false,
     "me": null,
     "settings": {
-      "displayName": "Jonas",
       "alwaysRelay": false,
       "findableByName": false,
       "ingameMenu": false,
@@ -83,7 +79,6 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
     "enabled": true,
     "me": null,
     "settings": {
-      "displayName": "Jonas",
       "alwaysRelay": false,
       "findableByName": false,
       "ingameMenu": true,

@@ -22,7 +22,9 @@ pub struct DiskHashes<'a> {
 
 impl LocalHashes for DiskHashes<'_> {
     fn mods_of(&self, instance: &Instance) -> Vec<ManifestMod> {
-        manifest::hashed_mods(instance, &self.dirs.mods_dir(&instance.id), &|path| self.cache.hash(path))
+        manifest::hashed_mods(instance, &self.dirs.mods_dir(&instance.id), &|path| {
+            self.cache.hash(path)
+        })
     }
 }
 
@@ -65,9 +67,19 @@ impl Classification {
 }
 
 /// Alle Hashes, die der Abgleich nachschlagen muss: die des Gastgebers und die der infrage kommenden Instanzen.
-pub fn hashes_to_classify(manifest: &Manifest, instances: &[Instance], local: &dyn LocalHashes) -> Vec<String> {
+pub fn hashes_to_classify(
+    manifest: &Manifest,
+    instances: &[Instance],
+    local: &dyn LocalHashes,
+) -> Vec<String> {
     let own = candidates(manifest, instances).flat_map(|instance| local.mods_of(instance));
-    let mut hashes: Vec<String> = manifest.mods.iter().cloned().chain(own).map(|file| file.sha512).collect();
+    let mut hashes: Vec<String> = manifest
+        .mods
+        .iter()
+        .cloned()
+        .chain(own)
+        .map(|file| file.sha512)
+        .collect();
     hashes.sort();
     hashes.dedup();
     hashes
@@ -83,9 +95,20 @@ pub fn plan(
 ) -> JoinPlan {
     let host = required(&manifest.mods, classification);
     let mut found: Vec<InstanceCandidate> = candidates(manifest, instances)
-        .map(|instance| compare(instance, &host, &required(&local.mods_of(instance), classification)))
+        .map(|instance| {
+            compare(
+                instance,
+                &host,
+                &required(&local.mods_of(instance), classification),
+            )
+        })
         .collect();
-    found.sort_by_key(|candidate| (!candidate.matches, candidate.missing.len() + candidate.extra.len()));
+    found.sort_by_key(|candidate| {
+        (
+            !candidate.matches,
+            candidate.missing.len() + candidate.extra.len(),
+        )
+    });
     let verdict = verdict_of(&found);
     JoinPlan {
         invite_id: invite.id.clone(),
@@ -110,8 +133,13 @@ pub fn version_unsupported(invite: &Invite) -> JoinPlan {
 }
 
 /// Instanzen mit derselben Minecraft-Version und demselben Loader; die Loader-Version zählt nicht.
-fn candidates<'a>(manifest: &'a Manifest, instances: &'a [Instance]) -> impl Iterator<Item = &'a Instance> {
-    instances.iter().filter(|i| i.minecraft_version == manifest.minecraft_version && i.loader == manifest.loader)
+fn candidates<'a>(
+    manifest: &'a Manifest,
+    instances: &'a [Instance],
+) -> impl Iterator<Item = &'a Instance> {
+    instances.iter().filter(|i| {
+        i.minecraft_version == manifest.minecraft_version && i.loader == manifest.loader
+    })
 }
 
 /// Eine Datei, die der Server braucht, mit der Angabe für die Anzeige.
@@ -124,15 +152,23 @@ struct Required {
 fn required(mods: &[ManifestMod], classification: &Classification) -> Vec<Required> {
     let mut seen = HashSet::new();
     mods.iter()
-        .filter(|file| classification.is_required(&file.sha512) && seen.insert(file.sha512.as_str()))
-        .map(|file| Required { sha512: file.sha512.clone(), shown: classification.mod_ref(file) })
+        .filter(|file| {
+            classification.is_required(&file.sha512) && seen.insert(file.sha512.as_str())
+        })
+        .map(|file| Required {
+            sha512: file.sha512.clone(),
+            shown: classification.mod_ref(file),
+        })
         .collect()
 }
 
 /// Was in `from` steht, aber nicht in `other`.
 fn absent_from(from: &[Required], other: &[Required]) -> Vec<ModRef> {
     let present: HashSet<&str> = other.iter().map(|file| file.sha512.as_str()).collect();
-    from.iter().filter(|file| !present.contains(file.sha512.as_str())).map(|file| file.shown.clone()).collect()
+    from.iter()
+        .filter(|file| !present.contains(file.sha512.as_str()))
+        .map(|file| file.shown.clone())
+        .collect()
 }
 
 fn compare(instance: &Instance, host: &[Required], local: &[Required]) -> InstanceCandidate {

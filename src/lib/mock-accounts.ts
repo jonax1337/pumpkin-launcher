@@ -18,7 +18,7 @@ const DEVICE_LOGIN_CODE = "B7KQ-X4TZ";
 const CONFIRM_AFTER_MS = 6000;
 
 /** Microsoft-Anmeldung im Browser: Code sofort, Bestätigung nach ein paar Sekunden. */
-export function createAccountMock({ db }: MockContext) {
+export function createAccountMock({ db }: MockContext, onAccountsChanged: () => void) {
   let cancelPending: (() => void) | null = null;
 
   return {
@@ -49,6 +49,7 @@ export function createAccountMock({ db }: MockContext) {
           cancelPending = null;
           const account: Account = { id: newId("ms"), username: MOCK_USERNAME, kind: "microsoft", active: true };
           db.accounts = [...db.accounts.filter((a) => a.username !== account.username), account];
+          onAccountsChanged();
           resolve(clone(account));
         }, CONFIRM_AFTER_MS);
         cancelPending = () => {
@@ -61,7 +62,11 @@ export function createAccountMock({ db }: MockContext) {
       cancelPending = null;
     },
     msAccounts: () => Promise.resolve(clone(db.accounts)),
-    msAccountRemove: (id) => Promise.resolve(void (db.accounts = db.accounts.filter((a) => a.id !== id))),
+    msAccountRemove: (id) => {
+      db.accounts = db.accounts.filter((a) => a.id !== id);
+      onAccountsChanged();
+      return Promise.resolve();
+    },
     /** Im Browser-Mock immer erlaubt. */
     offlineAllowed: () => Promise.resolve(true),
   } satisfies Partial<Backend>;

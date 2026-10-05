@@ -28,5 +28,8 @@ impl Drop for TempDir {
 
 /// Schlüssel des Fehlercodes, so wie ihn das Frontend bekommt.
 pub(super) fn error_key(err: &AppError) -> String {
-    serde_json::to_value(err).unwrap()["key"].as_str().unwrap_or_default().to_owned()
+    serde_json::to_value(err).unwrap()["key"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned()
 }

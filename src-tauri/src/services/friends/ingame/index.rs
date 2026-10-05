@@ -69,7 +69,14 @@ impl Strategy {
 
     /// Ob der Loader diese Strategie versteht.
     pub fn suits(self, loader: Loader) -> bool {
-        matches!((self, loader), (Self::FabricAddMods, Loader::Fabric) | (Self::FmlMavenRoot | Self::FmlModFolders, Loader::Neoforge | Loader::Forge))
+        matches!(
+            (self, loader),
+            (Self::FabricAddMods, Loader::Fabric)
+                | (
+                    Self::FmlMavenRoot | Self::FmlModFolders,
+                    Loader::Neoforge | Loader::Forge
+                )
+        )
     }
 }
 
@@ -101,16 +108,36 @@ pub enum IndexError {
     MinecraftIdInvalid { node: String, value: String },
     #[error("Knoten {node}: minecraft darf nicht leer sein und keine Id doppelt nennen")]
     MinecraftListInvalid { node: String },
-    #[error("Knoten {node}: die Release-Id {minecraft} wird für {loader:?} schon von {other} bedient")]
-    MinecraftIdClaimedTwice { node: String, minecraft: String, loader: Loader, other: String },
+    #[error(
+        "Knoten {node}: die Release-Id {minecraft} wird für {loader:?} schon von {other} bedient"
+    )]
+    MinecraftIdClaimedTwice {
+        node: String,
+        minecraft: String,
+        loader: Loader,
+        other: String,
+    },
     #[error("Knoten {node}: javaMin {value} liegt außerhalb von {min} bis {max}")]
-    JavaMinInvalid { node: String, value: u32, min: u32, max: u32 },
+    JavaMinInvalid {
+        node: String,
+        value: u32,
+        min: u32,
+        max: u32,
+    },
     #[error("Knoten {node}: die Strategie {strategy:?} passt nicht zum Loader {loader:?}")]
-    StrategyMismatch { node: String, strategy: Strategy, loader: Loader },
+    StrategyMismatch {
+        node: String,
+        strategy: Strategy,
+        loader: Loader,
+    },
     #[error("Knoten {node}: \"{value}\" ist kein reiner JAR-Dateiname")]
     FileNameInvalid { node: String, value: String },
     #[error("Knoten {node}: die Datei {file} gehört schon zu {other}")]
-    FileNameDuplicate { node: String, file: String, other: String },
+    FileNameDuplicate {
+        node: String,
+        file: String,
+        other: String,
+    },
     #[error("Knoten {node}: sha256 muss 64 Hexzeichen in Kleinbuchstaben sein")]
     Sha256Invalid { node: String },
     #[error("Knoten {node}: verified.smoke \"{value}\" ist kein Datum JJJJ-MM-TT")]
@@ -121,7 +148,8 @@ impl ModIndex {
     /// Liest und prüft einen Index. Unbekannte Felder, unbekannte Loader oder Strategien und jede Regelverletzung
     /// lehnen den ganzen Index ab: lieber keine Einspeisung als eine mit geratenen Werten.
     pub fn parse(json: &str) -> Result<Self, IndexError> {
-        let index: Self = serde_json::from_str(json).map_err(|error| IndexError::Malformed(error.to_string()))?;
+        let index: Self =
+            serde_json::from_str(json).map_err(|error| IndexError::Malformed(error.to_string()))?;
         validate::index(&index)?;
         Ok(index)
     }
@@ -134,7 +162,9 @@ impl ModIndex {
     /// Der Knoten, der diese Minecraft-Release-Id für diesen Loader bedient. Höchstens einer: die Prüfung
     /// verbietet Überschneidungen.
     pub fn node_serving(&self, loader: Loader, release_id: &str) -> Option<&Node> {
-        self.nodes.iter().find(|node| node.loader == loader && node.serves_minecraft(release_id))
+        self.nodes
+            .iter()
+            .find(|node| node.loader == loader && node.serves_minecraft(release_id))
     }
 }
 
@@ -171,12 +201,19 @@ mod tests {
     fn the_empty_source_offers_nothing() {
         let source = EmptySource::default();
         assert!(source.index().nodes.is_empty());
-        assert_eq!(source.jar_bytes("pumpkin_friends-2.1.0+1.21.1-neoforge.jar"), None);
+        assert_eq!(
+            source.jar_bytes("pumpkin_friends-2.1.0+1.21.1-neoforge.jar"),
+            None
+        );
     }
 
     #[test]
     fn strategy_ids_match_the_serde_names() {
-        for (strategy, id) in [(Strategy::FabricAddMods, Strategy::IDS[0]), (Strategy::FmlMavenRoot, Strategy::IDS[1]), (Strategy::FmlModFolders, Strategy::IDS[2])] {
+        for (strategy, id) in [
+            (Strategy::FabricAddMods, Strategy::IDS[0]),
+            (Strategy::FmlMavenRoot, Strategy::IDS[1]),
+            (Strategy::FmlModFolders, Strategy::IDS[2]),
+        ] {
             assert_eq!(serde_json::to_value(strategy).unwrap(), id);
         }
     }

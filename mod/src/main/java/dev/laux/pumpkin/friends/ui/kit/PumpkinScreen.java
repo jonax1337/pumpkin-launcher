@@ -30,6 +30,7 @@ public abstract class PumpkinScreen extends CompatScreen {
 
 	private final String titleText;
 	private final Screen parent;
+	private final HubChrome chrome = new HubChrome();
 	private HubLayout layout;
 	private ScrollPane body;
 	private Optional<AbstractWidget> extraFooter = Optional.empty();
@@ -141,11 +142,12 @@ public abstract class PumpkinScreen extends CompatScreen {
 	@Override
 	protected void paintBackdrop(Painter painter) {
 		HubChrome.paintBackdrop(painter, layout);
+		body.paintBackdrop(painter);
 	}
 
 	@Override
 	protected void paint(Painter painter) {
-		HubChrome.paintHeader(painter, layout, titleText, statusLine());
+		chrome.paintHeader(painter, layout, titleText, statusLine());
 		body.paint(painter);
 	}
 

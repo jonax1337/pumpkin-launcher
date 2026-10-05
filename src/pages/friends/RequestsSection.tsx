@@ -5,7 +5,7 @@ import { useI18n } from "@/i18n";
 import { FRIENDS_LIMITS } from "@/lib/friends-types";
 import type { FriendRequest } from "@/lib/types";
 import { Avatar, Button, Hint, Icon, IconButton, List, ListRow, Menu, RowTitle, SectionHeader, Tip } from "@/ui";
-import { codeMayBeExpired, REQUESTS_ANCHOR, requestLine } from "./friendsModel";
+import { codeMayBeExpired, REQUESTS_ANCHOR, requestLine, requestName } from "./friendsModel";
 import type { Person } from "./useFriendDialogs";
 
 const SECOND_MS = 1000;
@@ -67,7 +67,7 @@ function RequesterSub({ request }: { request: FriendRequest }) {
 
 /** Name samt Fingerabdruck: der Name ist selbst angegeben, der Fingerabdruck gehört zum Schlüssel dahinter. */
 function Requester({ request, aside }: { request: FriendRequest; aside?: string }) {
-  const name = request.displayName ?? "?";
+  const name = requestName(request);
   return (
     <>
       <span className="grid place-items-center">
@@ -81,7 +81,7 @@ function Requester({ request, aside }: { request: FriendRequest; aside?: string 
 function IncomingRow({ request, askBlock }: { request: FriendRequest; askBlock: (person: Person) => void }) {
   const { t } = useI18n();
   const answer = useAnswerFriendRequest();
-  const name = request.displayName ?? "?";
+  const name = requestName(request);
   return (
     <ListRow>
       <Requester request={request} />

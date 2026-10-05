@@ -14,10 +14,13 @@ use tokio::sync::{oneshot, Notify};
 use super::code;
 use super::config::{friends_dir, FriendsConfig};
 use super::contract::{
-    Availability, Friend, FriendNotice, FriendRequest, FriendsEnableInput, FriendsSettings, IngameActions, InstanceSummary,
-    NetworkStatus, Presence, RequestDirection, RequestRefusal, RequestState, RequestVia, RevokeReason, MAX_FRIENDS,
+    Availability, Friend, FriendNotice, FriendRequest, FriendsEnableInput, FriendsSettings,
+    IngameActions, InstanceSummary, NetworkStatus, Presence, RequestDirection, RequestRefusal,
+    RequestState, RequestVia, RevokeReason, MAX_FRIENDS,
 };
-use super::control::{open_control, ControlMessage, OpenFrame, SessionControl, WireInvite, WireProfile, PEER_ALPN};
+use super::control::{
+    open_control, ControlMessage, OpenFrame, SessionControl, WireInvite, WireProfile, PEER_ALPN,
+};
 use super::events::{EventSink, FriendsEvent};
 use super::hello::HELLO_ALPN;
 use super::identity::{self, fingerprint, Identity};
@@ -30,8 +33,8 @@ use crate::models::new_id;
 use crate::services::gamesignal::{GameSignal, GameSignals};
 use crate::services::modbridge::{Expectations, ModBridge};
 use crate::services::p2p::{
-    frame, Admission, BiStream, CloseCode, CloseReason, Gate, NetConfig, PeerConn, PeerId, PeerNet, RelayEntry,
-    RelayOperator, RelaySelection, RelayTls, DIAL_TIMEOUT,
+    frame, Admission, BiStream, CloseCode, CloseReason, Gate, NetConfig, PeerConn, PeerId, PeerNet,
+    RelayEntry, RelayOperator, RelaySelection, RelayTls, DIAL_TIMEOUT,
 };
 use crate::services::secrets::MemorySecretStore;
 use crate::services::shared_types::ModLoader;
@@ -52,7 +55,12 @@ const DAY_SECS: u64 = 24 * 3600;
 async fn test_relay() -> (RelayEntry, impl Send) {
     let (map, url, server) = run_relay_server().await.unwrap();
     let quic_port = map.get(&url).unwrap().quic.as_ref().map(|quic| quic.port);
-    let entry = RelayEntry { index: 0, url: Cow::Owned(url.to_string()), operator: RelayOperator::Pumpkin, quic_port };
+    let entry = RelayEntry {
+        index: 0,
+        url: Cow::Owned(url.to_string()),
+        operator: RelayOperator::Pumpkin,
+        quic_port,
+    };
     (entry, server)
 }
 
@@ -79,9 +87,8 @@ fn account(name: &str) -> AccountProfile {
     AccountProfile::new(name, ACCOUNT_UUID)
 }
 
-fn enable_input(name: &str) -> FriendsEnableInput {
+fn enable_input() -> FriendsEnableInput {
     FriendsEnableInput {
-        display_name: name.to_owned(),
         always_relay: false,
         accept_third_party_relays: false,
         findable_by_name: false,
@@ -109,7 +116,9 @@ impl RecordingEvents {
         lock(&self.events)
             .iter()
             .filter_map(|event| match event {
-                FriendsEvent::Presence(presence) if presence.friend_id == id => Some(presence.presence),
+                FriendsEvent::Presence(presence) if presence.friend_id == id => {
+                    Some(presence.presence)
+                }
                 _ => None,
             })
             .collect()
@@ -130,7 +139,10 @@ impl Node {
     /// Aktiviert und online am Test-Relay.
     async fn online(options: NetOptions, name: &str) -> Self {
         let node = Self::started(options, Arc::new(MemorySecretStore::new()), TempDir::new()).await;
-        node.friends.enable(enable_input(name), Some(account(name))).await.unwrap();
+        node.friends
+            .enable(enable_input(), Some(account(name)))
+            .await
+            .unwrap();
         node.wait_online().await;
         node
     }
@@ -140,10 +152,24 @@ impl Node {
         let signals = GameSignals::default();
         let bridge = ModBridge::new(signals.clone());
         let dirs = Dirs::new(dir.path());
-        let friends = Friends::new(&dirs, secrets.clone(), signals.clone(), bridge.clone(), options).unwrap();
+        let friends = Friends::new(
+            &dirs,
+            secrets.clone(),
+            signals.clone(),
+            bridge.clone(),
+            options,
+        )
+        .unwrap();
         let events = Arc::new(RecordingEvents::default());
         friends.start(events.clone(), Some(account("Alex"))).await;
-        Self { friends, secrets, events, signals, bridge, _dir: dir }
+        Self {
+            friends,
+            secrets,
+            events,
+            signals,
+            bridge,
+            _dir: dir,
+        }
     }
 
     fn id(&self) -> PeerId {
@@ -155,30 +181,52 @@ impl Node {
     }
 
     async fn wait_online(&self) {
-        until("network online", || async move { matches!(self.friends.state().network, NetworkStatus::Online { .. }) })
-            .await;
+        until("network online", || async move {
+            matches!(self.friends.state().network, NetworkStatus::Online { .. })
+        })
+        .await;
     }
 
     async fn friend(&self, peer: &PeerId) -> Option<Friend> {
         let id = peer.to_string();
-        self.friends.list().await.unwrap().into_iter().find(|friend| friend.id == id)
+        self.friends
+            .list()
+            .await
+            .unwrap()
+            .into_iter()
+            .find(|friend| friend.id == id)
     }
 
     async fn presence_of(&self, peer: &PeerId) -> Presence {
-        self.friend(peer).await.map_or(Presence::Offline, |friend| friend.presence)
+        self.friend(peer)
+            .await
+            .map_or(Presence::Offline, |friend| friend.presence)
     }
 
     async fn wait_friend(&self, peer: &PeerId, what: &str, matches: impl Fn(&Friend) -> bool) {
         let matches = &matches;
-        until(what, || async move { self.friend(peer).await.is_some_and(|friend| matches(&friend)) }).await;
+        until(what, || async move {
+            self.friend(peer)
+                .await
+                .is_some_and(|friend| matches(&friend))
+        })
+        .await;
     }
 
     async fn wait_presence(&self, peer: &PeerId, presence: Presence) {
-        until(&format!("{presence:?}"), || async move { self.presence_of(peer).await == presence }).await;
+        until(&format!("{presence:?}"), || async move {
+            self.presence_of(peer).await == presence
+        })
+        .await;
     }
 
     async fn wait_request_state(&self, state: RequestState) {
-        let reached = || async move { self.requests().await.first().is_some_and(|request| request.state == state) };
+        let reached = || async move {
+            self.requests()
+                .await
+                .first()
+                .is_some_and(|request| request.state == state)
+        };
         until("request state", reached).await;
     }
 
@@ -198,7 +246,10 @@ where
 {
     let deadline = Instant::now() + LIMIT;
     while !condition().await {
-        assert!(Instant::now() < deadline, "{what}: not reached within {LIMIT:?}");
+        assert!(
+            Instant::now() < deadline,
+            "{what}: not reached within {LIMIT:?}"
+        );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
 }
@@ -208,7 +259,10 @@ async fn until_true(what: &str, condition: impl Fn() -> bool) {
 }
 
 async fn incoming_request(node: &Node) -> FriendRequest {
-    until("incoming request", || async move { !node.requests().await.is_empty() }).await;
+    until("incoming request", || async move {
+        !node.requests().await.is_empty()
+    })
+    .await;
     node.requests().await.remove(0)
 }
 
@@ -224,13 +278,17 @@ async fn befriend(a: &Node, b: &Node) {
     })
     .await;
     until("both online", || async move {
-        a.presence_of(&b_id).await == Presence::Online && b.presence_of(&a_id).await == Presence::Online
+        a.presence_of(&b_id).await == Presence::Online
+            && b.presence_of(&a_id).await == Presence::Online
     })
     .await;
 }
 
 async fn two_friends(relay: &RelayEntry) -> (Node, Node) {
-    let (a, b) = (Node::online(options(relay), "Anna").await, Node::online(options(relay), "Bert").await);
+    let (a, b) = (
+        Node::online(options(relay), "Anna").await,
+        Node::online(options(relay), "Bert").await,
+    );
     befriend(&a, &b).await;
     (a, b)
 }
@@ -323,11 +381,23 @@ async fn code_through_the_relay_and_acceptance_make_both_confirmed_friends() {
     let (a, b) = two_friends(&relay).await;
 
     let anna = b.friend(&a.id()).await.unwrap();
-    assert_eq!((anna.display_name.as_str(), anna.mc_name.as_deref()), ("Anna", Some("Anna")));
+    assert_eq!(
+        (anna.display_name.as_str(), anna.mc_name.as_deref()),
+        ("Anna", Some("Anna"))
+    );
     assert!(a.requests().await.is_empty() && b.requests().await.is_empty());
-    assert!(a.events.any(|event| matches!(event, FriendsEvent::Request(_))), "friend-request on the inviter");
-    assert!(a.events.any(|event| matches!(event, FriendsEvent::Network(NetworkStatus::Online { .. }))));
-    assert!(b.events.presences_of(&a.id()).contains(&Presence::Online), "friend-presence");
+    assert!(
+        a.events
+            .any(|event| matches!(event, FriendsEvent::Request(_))),
+        "friend-request on the inviter"
+    );
+    assert!(a
+        .events
+        .any(|event| matches!(event, FriendsEvent::Network(NetworkStatus::Online { .. }))));
+    assert!(
+        b.events.presences_of(&a.id()).contains(&Presence::Online),
+        "friend-presence"
+    );
 }
 
 #[tokio::test]
@@ -340,22 +410,39 @@ async fn request_to_an_offline_inviter_is_delivered_by_retry_now_once_it_is_onli
     b.friends.add(&code).await.unwrap();
     // Erst wenn der erste Versuch über 10 s her ist, wählt `friends_retry_now` sofort neu an.
     tokio::time::sleep(DIAL_TIMEOUT + Duration::from_secs(3)).await;
-    assert_eq!(b.requests().await[0].state, RequestState::Delivering, "first attempt failed, now in backoff");
+    assert_eq!(
+        b.requests().await[0].state,
+        RequestState::Delivering,
+        "first attempt failed, now in backoff"
+    );
 
-    a.friends.enable(enable_input("Anna"), Some(account("Anna"))).await.unwrap();
+    a.friends
+        .enable(enable_input(), Some(account("Anna")))
+        .await
+        .unwrap();
     a.wait_online().await;
     let pressed = Instant::now();
     b.friends.retry_now().await.unwrap();
     incoming_request(&a).await;
 
-    assert!(pressed.elapsed() <= Duration::from_secs(5), "delivered after {:?}", pressed.elapsed());
+    assert!(
+        pressed.elapsed() <= Duration::from_secs(5),
+        "delivered after {:?}",
+        pressed.elapsed()
+    );
 }
 
 #[tokio::test]
 async fn declining_sends_nothing() {
     let (relay, _server) = test_relay().await;
-    let (a, b) = (Node::online(options(&relay), "Anna").await, Node::online(options(&relay), "Bert").await);
-    b.friends.add(&a.friends.code_create().await.unwrap().code.unwrap()).await.unwrap();
+    let (a, b) = (
+        Node::online(options(&relay), "Anna").await,
+        Node::online(options(&relay), "Bert").await,
+    );
+    b.friends
+        .add(&a.friends.code_create().await.unwrap().code.unwrap())
+        .await
+        .unwrap();
     let request = incoming_request(&a).await;
     b.wait_request_state(RequestState::AwaitingAnswer).await;
 
@@ -370,16 +457,26 @@ async fn declining_sends_nothing() {
 #[tokio::test]
 async fn cancelled_request_shows_the_inviter_a_removed_friend_after_accepting() {
     let (relay, _server) = test_relay().await;
-    let (a, b) = (Node::online(options(&relay), "Anna").await, Node::online(options(&relay), "Bert").await);
-    b.friends.add(&a.friends.code_create().await.unwrap().code.unwrap()).await.unwrap();
+    let (a, b) = (
+        Node::online(options(&relay), "Anna").await,
+        Node::online(options(&relay), "Bert").await,
+    );
+    b.friends
+        .add(&a.friends.code_create().await.unwrap().code.unwrap())
+        .await
+        .unwrap();
     let request = incoming_request(&a).await;
     b.wait_request_state(RequestState::AwaitingAnswer).await;
 
-    b.friends.cancel_request(&b.requests().await[0].id).await.unwrap();
+    b.friends
+        .cancel_request(&b.requests().await[0].id)
+        .await
+        .unwrap();
     a.friends.answer_request(&request.id, true).await.unwrap();
 
     let b_id = b.id();
-    a.wait_friend(&b_id, "removed by peer", |friend| friend.removed_by_peer).await;
+    a.wait_friend(&b_id, "removed by peer", |friend| friend.removed_by_peer)
+        .await;
 }
 
 #[tokio::test]
@@ -390,7 +487,8 @@ async fn removing_a_friend_tells_them_with_unfriend() {
     a.friends.remove(&b.id().to_string()).await.unwrap();
 
     let a_id = a.id();
-    b.wait_friend(&a_id, "removed by peer", |friend| friend.removed_by_peer).await;
+    b.wait_friend(&a_id, "removed by peer", |friend| friend.removed_by_peer)
+        .await;
     assert!(a.friend(&b.id()).await.is_none());
 }
 
@@ -404,10 +502,14 @@ async fn blocking_looks_like_removal_to_the_blocked_friend() {
     b.wait_presence(&a_id, Presence::Offline).await;
     b.friends.retry_now().await.unwrap();
 
-    b.wait_friend(&a_id, "removed by peer", |friend| friend.removed_by_peer).await;
+    b.wait_friend(&a_id, "removed by peer", |friend| friend.removed_by_peer)
+        .await;
     assert!(a.friend(&b_id).await.is_none());
     let blocked = a.friends.blocked().await.unwrap();
-    assert_eq!((blocked.len(), blocked[0].peer_id.as_str()), (1, b_id.to_string().as_str()));
+    assert_eq!(
+        (blocked.len(), blocked[0].peer_id.as_str()),
+        (1, b_id.to_string().as_str())
+    );
 }
 
 #[tokio::test]
@@ -418,34 +520,63 @@ async fn rotation_moves_the_friend_to_the_new_id_and_drops_codes_and_bound_reque
     let old_secret = identity::load(&*a.secrets).unwrap().unwrap().secret_bytes();
     let old_id = a.id();
     let requests = &a.core().stores.requests;
-    requests.insert(incoming_record(&random_peer_id(), super::service::now_secs() + DAY_SECS)).unwrap();
-    requests.insert(outgoing_request(RequestState::AwaitingAnswer, Some(random_peer_id()))).unwrap();
-    let delivering = requests.insert(outgoing_request(RequestState::Delivering, None)).unwrap();
+    requests
+        .insert(incoming_record(
+            &random_peer_id(),
+            super::service::now_secs() + DAY_SECS,
+        ))
+        .unwrap();
+    requests
+        .insert(outgoing_request(
+            RequestState::AwaitingAnswer,
+            Some(random_peer_id()),
+        ))
+        .unwrap();
+    let delivering = requests
+        .insert(outgoing_request(RequestState::Delivering, None))
+        .unwrap();
 
     a.friends.rotate_identity().await.unwrap();
 
     let new_id = a.id();
     assert_ne!(new_id, old_id);
-    assert!(a.friends.codes().await.unwrap().is_empty(), "codes are revoked");
-    let left: Vec<String> = a.requests().await.into_iter().map(|request| request.id).collect();
+    assert!(
+        a.friends.codes().await.unwrap().is_empty(),
+        "codes are revoked"
+    );
+    let left: Vec<String> = a
+        .requests()
+        .await
+        .into_iter()
+        .map(|request| request.id)
+        .collect();
     assert_eq!(left, [delivering.id], "only the delivering request stays");
     b.wait_friend(&new_id, "new id learned", |_| true).await;
     let moved = b.friend(&new_id).await.unwrap();
     assert_eq!(
         moved.notice,
-        Some(FriendNotice::IdentityChanged { previous_fingerprint: fingerprint(&old_id.to_string()) })
+        Some(FriendNotice::IdentityChanged {
+            previous_fingerprint: fingerprint(&old_id.to_string())
+        })
     );
     assert!(b.friend(&old_id).await.is_none());
     b.wait_presence(&new_id, Presence::Online).await;
 
     let thief = raw_endpoint(&relay, old_secret).await;
     let stolen = thief.dial(&b.id(), PEER_ALPN).await.unwrap();
-    assert_eq!(tokio::time::timeout(LIMIT, stolen.closed()).await.unwrap(), CloseReason::Peer(CloseCode::NOT_FRIEND));
+    assert_eq!(
+        tokio::time::timeout(LIMIT, stolen.closed()).await.unwrap(),
+        CloseReason::Peer(CloseCode::NOT_FRIEND)
+    );
 
     let c = Node::online(options(&relay), "Carl").await;
     c.friends.add(&old_code).await.unwrap();
     tokio::time::sleep(DIAL_TIMEOUT + Duration::from_secs(1)).await;
-    assert_eq!(c.requests().await[0].state, RequestState::Delivering, "the old code got no answer");
+    assert_eq!(
+        c.requests().await[0].state,
+        RequestState::Delivering,
+        "the old code got no answer"
+    );
 }
 
 #[tokio::test]
@@ -458,8 +589,14 @@ async fn reset_delivers_unfriend_through_the_outbox_and_drops_the_retired_key() 
 
     assert!(state.enabled && a.friends.list().await.unwrap().is_empty());
     assert_ne!(a.id(), old_id);
-    b.wait_friend(&old_id, "unfriend delivered", |friend| friend.removed_by_peer).await;
-    until_true("retired key gone", || identity::load_retired(&*a.secrets).unwrap().is_none()).await;
+    b.wait_friend(&old_id, "unfriend delivered", |friend| {
+        friend.removed_by_peer
+    })
+    .await;
+    until_true("retired key gone", || {
+        identity::load_retired(&*a.secrets).unwrap().is_none()
+    })
+    .await;
 }
 
 /// Merkt sich, was der Dienst an die Sitzungen weiterreicht.
@@ -480,11 +617,20 @@ impl PeerStreamHandler for FakeHandler {
         Box::pin(async move { lock(&self.seen).push(Seen::Request(*peer)) })
     }
 
-    fn on_tunnel_stream<'a>(&'a self, peer: &'a PeerId, session_id: String, _stream: BiStream) -> BoxFuture<'a, ()> {
+    fn on_tunnel_stream<'a>(
+        &'a self,
+        peer: &'a PeerId,
+        session_id: String,
+        _stream: BiStream,
+    ) -> BoxFuture<'a, ()> {
         Box::pin(async move { lock(&self.seen).push(Seen::Tunnel(*peer, session_id)) })
     }
 
-    fn on_control_message<'a>(&'a self, peer: &'a PeerId, message: SessionControl) -> BoxFuture<'a, ()> {
+    fn on_control_message<'a>(
+        &'a self,
+        peer: &'a PeerId,
+        message: SessionControl,
+    ) -> BoxFuture<'a, ()> {
         Box::pin(async move { lock(&self.seen).push(Seen::Control(*peer, message)) })
     }
 }
@@ -513,7 +659,10 @@ async fn open_stream(conn: &PeerConn, open: &OpenFrame) -> BiStream {
 
 async fn reply_to(conn: &PeerConn, open: &OpenFrame) -> Value {
     let mut stream = open_stream(conn, open).await;
-    tokio::time::timeout(LIMIT, stream.read_frame::<Value>(1024)).await.unwrap().unwrap()
+    tokio::time::timeout(LIMIT, stream.read_frame::<Value>(1024))
+        .await
+        .unwrap()
+        .unwrap()
 }
 
 #[tokio::test]
@@ -526,9 +675,20 @@ async fn registered_handler_gets_request_and_tunnel_streams_and_session_messages
     let b_id = b.id();
 
     let _request = open_stream(&to_a, &OpenFrame::Request).await;
-    let _tunnel = open_stream(&to_a, &OpenFrame::Tunnel { session_id: SESSION_ID.into() }).await;
-    let revoke = SessionControl::InviteRevoke { invite_id: INVITE_ID.into(), reason: RevokeReason::Stopped };
-    let decline = SessionControl::InviteDecline { invite_id: INVITE_ID.into() };
+    let _tunnel = open_stream(
+        &to_a,
+        &OpenFrame::Tunnel {
+            session_id: SESSION_ID.into(),
+        },
+    )
+    .await;
+    let revoke = SessionControl::InviteRevoke {
+        invite_id: INVITE_ID.into(),
+        reason: RevokeReason::Stopped,
+    };
+    let decline = SessionControl::InviteDecline {
+        invite_id: INVITE_ID.into(),
+    };
     for message in [invite(), revoke.clone(), decline.clone()] {
         b.friends.send_control(&a.id(), message).unwrap();
     }
@@ -544,7 +704,12 @@ async fn registered_handler_gets_request_and_tunnel_streams_and_session_messages
     ] {
         assert!(seen.contains(&expected), "{expected:?} missing in {seen:?}");
     }
-    assert!(a.friends.register_stream_handler(Arc::new(FakeHandler::default())).is_err(), "only once");
+    assert!(
+        a.friends
+            .register_stream_handler(Arc::new(FakeHandler::default()))
+            .is_err(),
+        "only once"
+    );
 }
 
 #[tokio::test]
@@ -554,13 +719,25 @@ async fn without_a_handler_streams_get_the_default_errors_and_invites_are_ignore
     let to_b = a.friends.connection(&b.id()).unwrap();
 
     let request = reply_to(&to_b, &OpenFrame::Request).await;
-    let tunnel = reply_to(&to_b, &OpenFrame::Tunnel { session_id: SESSION_ID.into() }).await;
+    let tunnel = reply_to(
+        &to_b,
+        &OpenFrame::Tunnel {
+            session_id: SESSION_ID.into(),
+        },
+    )
+    .await;
     a.friends.send_control(&b.id(), invite()).unwrap();
     tokio::time::sleep(Duration::from_millis(300)).await;
 
     assert_eq!(request, json!({ "type": "error", "code": "unsupported" }));
-    assert_eq!(tunnel, json!({ "type": "error", "code": "sessionNotFound" }));
-    assert!(b.friends.connection(&a.id()).is_some(), "an ignored invite keeps the connection");
+    assert_eq!(
+        tunnel,
+        json!({ "type": "error", "code": "sessionNotFound" })
+    );
+    assert!(
+        b.friends.connection(&a.id()).is_some(),
+        "an ignored invite keeps the connection"
+    );
 }
 
 /// Ein Abonnent, der jedes Ereignis mit Zeitpunkt notiert und `done` so lange hält (`None`: für immer).
@@ -596,7 +773,11 @@ async fn trigger(node: &Node, action: Trigger) {
     match action {
         Trigger::Disable => drop(node.friends.disable().await.unwrap()),
         Trigger::AlwaysRelay => {
-            let settings = FriendsSettings { display_name: "Anna".into(), always_relay: true, findable_by_name: false, ..FriendsSettings::default() };
+            let settings = FriendsSettings {
+                always_relay: true,
+                findable_by_name: false,
+                ..FriendsSettings::default()
+            };
             drop(node.friends.update_settings(settings).await.unwrap());
         }
         Trigger::Rotate => drop(node.friends.rotate_identity().await.unwrap()),
@@ -618,7 +799,10 @@ async fn subscriber_runs_before_the_remote_sees_shutdown(action: Trigger, expect
     let (kind, received_at) = lock(&seen)[0];
     assert_eq!(kind, expected);
     assert_eq!(reason, CloseReason::Peer(CloseCode::SHUTDOWN));
-    assert!(closed_at >= received_at + HOLD, "the remote saw the close before the subscriber was done");
+    assert!(
+        closed_at >= received_at + HOLD,
+        "the remote saw the close before the subscriber was done"
+    );
 }
 
 #[tokio::test]
@@ -633,12 +817,14 @@ async fn changing_always_relay_delivers_rebind_before_the_endpoint_closes() {
 
 #[tokio::test]
 async fn rotating_delivers_identity_changed_before_the_endpoint_closes() {
-    subscriber_runs_before_the_remote_sees_shutdown(Trigger::Rotate, Lifecycle::IdentityChanged).await;
+    subscriber_runs_before_the_remote_sees_shutdown(Trigger::Rotate, Lifecycle::IdentityChanged)
+        .await;
 }
 
 #[tokio::test]
 async fn resetting_delivers_identity_changed_before_the_endpoint_closes() {
-    subscriber_runs_before_the_remote_sees_shutdown(Trigger::Reset, Lifecycle::IdentityChanged).await;
+    subscriber_runs_before_the_remote_sees_shutdown(Trigger::Reset, Lifecycle::IdentityChanged)
+        .await;
 }
 
 #[tokio::test]
@@ -658,17 +844,29 @@ async fn subscriber_that_never_answers_delays_the_close_by_at_most_half_a_second
 
     let (_, closed_at) = tokio::time::timeout(LIMIT, closed).await.unwrap().unwrap();
     let delay = closed_at - started;
-    assert!(delay >= Duration::from_millis(500), "closed after {delay:?}, before the wait ended");
-    assert!(delay <= Duration::from_millis(1500), "closed after {delay:?}");
+    assert!(
+        delay >= Duration::from_millis(500),
+        "closed after {delay:?}, before the wait ended"
+    );
+    assert!(
+        delay <= Duration::from_millis(1500),
+        "closed after {delay:?}"
+    );
 }
 
 #[tokio::test]
 async fn lost_identity_refuses_everything_but_state_and_reset() {
     let dir = TempDir::new();
-    let config = FriendsConfig { enabled: true, ..FriendsConfig::default() };
+    let config = FriendsConfig {
+        enabled: true,
+        ..FriendsConfig::default()
+    };
     config.save(&friends_dir(&Dirs::new(dir.path()))).unwrap();
     let node = Node::started(offline_options(), Arc::new(MemorySecretStore::new()), dir).await;
-    assert_eq!(node.friends.state().availability, Availability::IdentityLost);
+    assert_eq!(
+        node.friends.state().availability,
+        Availability::IdentityLost
+    );
 
     let refusals = [
         node.friends.list().await.err(),
@@ -677,11 +875,17 @@ async fn lost_identity_refuses_everything_but_state_and_reset() {
         node.friends.retry_now().await.err(),
         node.friends.rotate_identity().await.err(),
         node.friends.disable().await.err(),
-        node.friends.enable(enable_input("Anna"), Some(account("Anna"))).await.err(),
+        node.friends
+            .enable(enable_input(), Some(account("Anna")))
+            .await
+            .err(),
     ];
 
     for refusal in refusals {
-        assert_eq!(error_key(&refusal.expect("refused")), "errors.friends.identityLost");
+        assert_eq!(
+            error_key(&refusal.expect("refused")),
+            "errors.friends.identityLost"
+        );
     }
     let state = node.friends.reset().await.unwrap();
     assert_eq!(state.availability, Availability::Available);
@@ -690,40 +894,99 @@ async fn lost_identity_refuses_everything_but_state_and_reset() {
 
 #[tokio::test]
 async fn without_a_keyring_even_reset_is_unavailable() {
-    let node = Node::started(offline_options(), Arc::new(MemorySecretStore::unreachable()), TempDir::new()).await;
+    let node = Node::started(
+        offline_options(),
+        Arc::new(MemorySecretStore::unreachable()),
+        TempDir::new(),
+    )
+    .await;
 
-    assert_eq!(node.friends.state().availability, Availability::NoSecretStore);
-    let enable = node.friends.enable(enable_input("Anna"), Some(account("Anna"))).await;
-    assert_eq!(error_key(&enable.unwrap_err()), "errors.friends.unavailable");
-    assert_eq!(error_key(&node.friends.reset().await.unwrap_err()), "errors.friends.unavailable");
-    assert_eq!(error_key(&node.friends.list().await.unwrap_err()), "errors.friends.unavailable");
+    assert_eq!(
+        node.friends.state().availability,
+        Availability::NoSecretStore
+    );
+    let enable = node
+        .friends
+        .enable(enable_input(), Some(account("Anna")))
+        .await;
+    assert_eq!(
+        error_key(&enable.unwrap_err()),
+        "errors.friends.unavailable"
+    );
+    assert_eq!(
+        error_key(&node.friends.reset().await.unwrap_err()),
+        "errors.friends.unavailable"
+    );
+    assert_eq!(
+        error_key(&node.friends.list().await.unwrap_err()),
+        "errors.friends.unavailable"
+    );
 }
 
 #[tokio::test]
 async fn enabling_needs_a_microsoft_account_and_starts_the_mod_bridge_until_disabled() {
-    let node = Node::started(offline_options(), Arc::new(MemorySecretStore::new()), TempDir::new()).await;
-    let refused = node.friends.enable(enable_input("Anna"), None).await;
-    assert_eq!(error_key(&refused.unwrap_err()), "errors.friends.msAccountRequired");
-    assert!(node.bridge.register_launch("i1", Expectations::unconstrained()).is_empty());
+    let node = Node::started(
+        offline_options(),
+        Arc::new(MemorySecretStore::new()),
+        TempDir::new(),
+    )
+    .await;
+    let refused = node.friends.enable(enable_input(), None).await;
+    assert_eq!(
+        error_key(&refused.unwrap_err()),
+        "errors.friends.msAccountRequired"
+    );
+    assert!(node
+        .bridge
+        .register_launch("i1", Expectations::unconstrained())
+        .is_empty());
 
-    node.friends.enable(enable_input("Anna"), Some(account("Anna"))).await.unwrap();
-    assert!(!node.bridge.register_launch("i1", Expectations::unconstrained()).is_empty(), "bridge runs with the feature");
+    node.friends
+        .enable(enable_input(), Some(account("Anna")))
+        .await
+        .unwrap();
+    assert!(
+        !node
+            .bridge
+            .register_launch("i1", Expectations::unconstrained())
+            .is_empty(),
+        "bridge runs with the feature"
+    );
 
     node.friends.disable().await.unwrap();
-    assert!(node.bridge.register_launch("i1", Expectations::unconstrained()).is_empty(), "bridge stops with the feature");
+    assert!(
+        node.bridge
+            .register_launch("i1", Expectations::unconstrained())
+            .is_empty(),
+        "bridge stops with the feature"
+    );
 }
 
 #[tokio::test]
 async fn the_ingame_settings_start_on_and_asking_and_survive_a_restart() {
-    let node = Node::started(offline_options(), Arc::new(MemorySecretStore::new()), TempDir::new()).await;
-    node.friends.enable(enable_input("Anna"), Some(account("Anna"))).await.unwrap();
+    let node = Node::started(
+        offline_options(),
+        Arc::new(MemorySecretStore::new()),
+        TempDir::new(),
+    )
+    .await;
+    node.friends
+        .enable(enable_input(), Some(account("Anna")))
+        .await
+        .unwrap();
     let defaults = node.friends.state().settings;
     assert!(defaults.ingame_menu);
     assert_eq!(defaults.ingame_actions, IngameActions::Ask);
 
-    let changed = FriendsSettings { ingame_menu: false, ingame_actions: IngameActions::Allow, ..defaults };
+    let changed = FriendsSettings {
+        ingame_menu: false,
+        ingame_actions: IngameActions::Allow,
+        ..defaults
+    };
     node.friends.update_settings(changed.clone()).await.unwrap();
-    let Node { secrets, _dir: dir, .. } = node;
+    let Node {
+        secrets, _dir: dir, ..
+    } = node;
     let restarted = Node::started(offline_options(), secrets, dir).await;
 
     assert_eq!(restarted.friends.state().settings, changed);
@@ -731,14 +994,30 @@ async fn the_ingame_settings_start_on_and_asking_and_survive_a_restart() {
 
 #[tokio::test]
 async fn turning_friends_off_and_on_again_keeps_the_ingame_settings() {
-    let node = Node::started(offline_options(), Arc::new(MemorySecretStore::new()), TempDir::new()).await;
-    node.friends.enable(enable_input("Anna"), Some(account("Anna"))).await.unwrap();
+    let node = Node::started(
+        offline_options(),
+        Arc::new(MemorySecretStore::new()),
+        TempDir::new(),
+    )
+    .await;
+    node.friends
+        .enable(enable_input(), Some(account("Anna")))
+        .await
+        .unwrap();
     let state = node.friends.state();
-    let changed = FriendsSettings { ingame_menu: false, ingame_actions: IngameActions::Allow, ..state.settings };
+    let changed = FriendsSettings {
+        ingame_menu: false,
+        ingame_actions: IngameActions::Allow,
+        ..state.settings
+    };
     node.friends.update_settings(changed).await.unwrap();
 
     node.friends.disable().await.unwrap();
-    let state = node.friends.enable(enable_input("Anna"), Some(account("Anna"))).await.unwrap();
+    let state = node
+        .friends
+        .enable(enable_input(), Some(account("Anna")))
+        .await
+        .unwrap();
 
     assert!(!state.settings.ingame_menu);
     assert_eq!(state.settings.ingame_actions, IngameActions::Allow);
@@ -751,10 +1030,19 @@ async fn expired_incoming_requests_and_stale_unconfirmed_friends_are_pruned_at_s
     let fresh = incoming_record(&random_peer_id(), now + DAY_SECS);
     {
         let stores = RecordStores::open(&friends_dir(&Dirs::new(dir.path()))).unwrap();
-        stores.requests.insert(incoming_record(&random_peer_id(), now - 1)).unwrap();
+        stores
+            .requests
+            .insert(incoming_record(&random_peer_id(), now - 1))
+            .unwrap();
         stores.requests.insert(fresh.clone()).unwrap();
-        stores.friends.insert(friend_record(&random_peer_id(), false, now - 15 * DAY_SECS)).unwrap();
-        stores.friends.insert(friend_record(&random_peer_id(), true, now - 15 * DAY_SECS)).unwrap();
+        stores
+            .friends
+            .insert(friend_record(&random_peer_id(), false, now - 15 * DAY_SECS))
+            .unwrap();
+        stores
+            .friends
+            .insert(friend_record(&random_peer_id(), true, now - 15 * DAY_SECS))
+            .unwrap();
     }
 
     let node = Node::started(offline_options(), Arc::new(MemorySecretStore::new()), dir).await;
@@ -765,7 +1053,11 @@ async fn expired_incoming_requests_and_stale_unconfirmed_friends_are_pruned_at_s
 }
 
 /// Fragt den Hello-Endpunkt eines Codes direkt; `None`, wenn kein Rahmen kam, dazu der Schließgrund.
-async fn ask_hello(main: &PeerNet, code: &str, secret: &str) -> (Option<Value>, Option<CloseReason>) {
+async fn ask_hello(
+    main: &PeerNet,
+    code: &str,
+    secret: &str,
+) -> (Option<Value>, Option<CloseReason>) {
     let hello = PeerId::from_bytes(&code::parse(code).unwrap().hello_id).unwrap();
     let conn = main.dial(&hello, HELLO_ALPN).await.unwrap();
     let request = json!({ "type": "friendRequest", "protocol": 1, "secret": secret,
@@ -780,36 +1072,55 @@ async fn ask_hello(main: &PeerNet, code: &str, secret: &str) -> (Option<Value>, 
         conn.close(CloseCode::NORMAL);
         return (answer, None);
     }
-    (None, Some(tokio::time::timeout(LIMIT, conn.closed()).await.unwrap()))
+    (
+        None,
+        Some(tokio::time::timeout(LIMIT, conn.closed()).await.unwrap()),
+    )
 }
 
 #[tokio::test]
 async fn wrong_secret_gets_no_frame_and_a_close_like_a_normal_end() {
     let (relay, _server) = test_relay().await;
-    let (a, b) = (Node::online(options(&relay), "Anna").await, Node::online(options(&relay), "Bert").await);
+    let (a, b) = (
+        Node::online(options(&relay), "Anna").await,
+        Node::online(options(&relay), "Bert").await,
+    );
     let code = a.friends.code_create().await.unwrap().code.unwrap();
 
     let (answer, closed) = ask_hello(&b.main_endpoint(), &code, &"00".repeat(9)).await;
 
-    assert_eq!((answer, closed), (None, Some(CloseReason::Peer(CloseCode::NORMAL))));
+    assert_eq!(
+        (answer, closed),
+        (None, Some(CloseReason::Peer(CloseCode::NORMAL)))
+    );
     assert!(a.requests().await.is_empty());
 }
 
 #[tokio::test]
 async fn fourth_hello_from_the_same_peer_within_ten_minutes_is_dropped_silently() {
     let (relay, _server) = test_relay().await;
-    let (a, b) = (Node::online(options(&relay), "Anna").await, Node::online(options(&relay), "Bert").await);
+    let (a, b) = (
+        Node::online(options(&relay), "Anna").await,
+        Node::online(options(&relay), "Bert").await,
+    );
     let code = a.friends.code_create().await.unwrap().code.unwrap();
     let secret = code::parse(&code).unwrap().secret_hex();
     let main = b.main_endpoint();
 
     for attempt in 0..3 {
         let (answer, _) = ask_hello(&main, &code, &secret).await;
-        assert_eq!(answer.expect("answered")["type"], "received", "attempt {attempt} is repeated idempotently");
+        assert_eq!(
+            answer.expect("answered")["type"],
+            "received",
+            "attempt {attempt} is repeated idempotently"
+        );
     }
     let (answer, closed) = ask_hello(&main, &code, &secret).await;
 
-    assert_eq!((answer, closed), (None, Some(CloseReason::Peer(CloseCode::NORMAL))));
+    assert_eq!(
+        (answer, closed),
+        (None, Some(CloseReason::Peer(CloseCode::NORMAL)))
+    );
     assert_eq!(a.requests().await.len(), 1);
 }
 
@@ -818,20 +1129,39 @@ async fn home_relay_index_outside_the_map_is_never_stored() {
     let (relay, _server) = test_relay().await;
     let a = Node::online(options(&relay), "Anna").await;
     let stranger = Identity::generate();
-    a.core().stores.friends.insert(friend_record(&stranger.peer_id(), true, 0)).unwrap();
+    a.core()
+        .stores
+        .friends
+        .insert(friend_record(&stranger.peer_id(), true, 0))
+        .unwrap();
     let raw = raw_endpoint(&relay, stranger.secret_bytes()).await;
-    let profile = WireProfile { display_name: "Fremd".into(), mc_name: None, mc_uuid: None };
+    let profile = WireProfile {
+        display_name: "Fremd".into(),
+        mc_name: None,
+        mc_uuid: None,
+    };
 
     let foreign = raw.dial(&a.id(), PEER_ALPN).await.unwrap();
-    open_control(&foreign, &ControlMessage::hello(profile.clone(), Some(77))).await.unwrap();
+    open_control(&foreign, &ControlMessage::hello(profile.clone(), Some(77)))
+        .await
+        .unwrap();
     tokio::time::sleep(Duration::from_millis(300)).await;
-    let ignored = status::friend(a.core(), &stranger.peer_id()).unwrap().home_relay;
+    let ignored = status::friend(a.core(), &stranger.peer_id())
+        .unwrap()
+        .home_relay;
     let known = raw.dial(&a.id(), PEER_ALPN).await.unwrap();
-    open_control(&known, &ControlMessage::hello(profile, Some(0))).await.unwrap();
+    open_control(&known, &ControlMessage::hello(profile, Some(0)))
+        .await
+        .unwrap();
     tokio::time::sleep(Duration::from_millis(300)).await;
 
     assert_eq!(ignored, None);
-    assert_eq!(status::friend(a.core(), &stranger.peer_id()).unwrap().home_relay, Some(0));
+    assert_eq!(
+        status::friend(a.core(), &stranger.peer_id())
+            .unwrap()
+            .home_relay,
+        Some(0)
+    );
 }
 
 #[tokio::test]
@@ -839,20 +1169,33 @@ async fn presence_follows_playing_and_shutdown_ends_it_at_once() {
     let (relay, _server) = test_relay().await;
     let (a, b) = two_friends(&relay).await;
     let a_id = a.id();
-    let spawned = GameSignal::Spawned { instance_id: "i1".into(), pid: 1, online_account: true, friend_join: None };
+    let spawned = GameSignal::Spawned {
+        instance_id: "i1".into(),
+        pid: 1,
+        online_account: true,
+        friend_join: None,
+    };
 
     a.signals.send(spawned);
     b.wait_presence(&a_id, Presence::Playing).await;
-    a.signals.send(GameSignal::Exited { instance_id: "i1".into() });
+    a.signals.send(GameSignal::Exited {
+        instance_id: "i1".into(),
+    });
     b.wait_presence(&a_id, Presence::Online).await;
     let disabled = Instant::now();
     a.friends.disable().await.unwrap();
     b.wait_presence(&a_id, Presence::Offline).await;
 
-    assert!(disabled.elapsed() <= Duration::from_secs(3), "offline after {:?}", disabled.elapsed());
+    assert!(
+        disabled.elapsed() <= Duration::from_secs(3),
+        "offline after {:?}",
+        disabled.elapsed()
+    );
     assert!(b.friend(&a_id).await.unwrap().last_seen.is_some());
     let presences = b.events.presences_of(&a_id);
-    assert!([Presence::Playing, Presence::Online, Presence::Offline].iter().all(|p| presences.contains(p)));
+    assert!([Presence::Playing, Presence::Online, Presence::Offline]
+        .iter()
+        .all(|p| presences.contains(p)));
 }
 
 /// Worker-Threads der Laufzeit des Absturz-Freundes; alle werden eingefroren.
@@ -878,7 +1221,10 @@ impl Freezable {
             self.thaw.send(()).unwrap();
         }
         self.finish.notify_one();
-        tokio::task::spawn_blocking(move || self.thread.join()).await.unwrap().unwrap();
+        tokio::task::spawn_blocking(move || self.thread.join())
+            .await
+            .unwrap()
+            .unwrap();
     }
 }
 
@@ -889,16 +1235,25 @@ async fn freezable_friend_of(b: &Node, relay: &RelayEntry) -> Freezable {
     let (freeze, finish) = (Arc::new(Notify::new()), Arc::new(Notify::new()));
     let (frozen, finished) = (freeze.clone(), finish.clone());
     let (thaw, thawed) = std::sync::mpsc::channel::<()>();
-    let options = NetOptions { idle_timeout: CRASH_IDLE_TIMEOUT, ..options(relay) };
+    let options = NetOptions {
+        idle_timeout: CRASH_IDLE_TIMEOUT,
+        ..options(relay)
+    };
     let thread = std::thread::spawn(move || {
-        let builder = tokio::runtime::Builder::new_multi_thread().worker_threads(FROZEN_WORKERS).enable_all().build();
+        let builder = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(FROZEN_WORKERS)
+            .enable_all()
+            .build();
         builder.unwrap().block_on(async move {
             let a = Node::online(options, "Anna").await;
-            code_tx.send((a.id(), a.friends.code_create().await.unwrap().code.unwrap())).unwrap();
+            code_tx
+                .send((a.id(), a.friends.code_create().await.unwrap().code.unwrap()))
+                .unwrap();
             let request = incoming_request(&a).await;
             a.friends.answer_request(&request.id, true).await.unwrap();
             let b_id = befriended_rx.await.unwrap();
-            a.wait_friend(&b_id, "confirmed", |friend| friend.confirmed).await;
+            a.wait_friend(&b_id, "confirmed", |friend| friend.confirmed)
+                .await;
             frozen.notified().await;
             freeze_workers(thawed);
             finished.notified().await;
@@ -908,7 +1263,13 @@ async fn freezable_friend_of(b: &Node, relay: &RelayEntry) -> Freezable {
     b.friends.add(&code).await.unwrap();
     befriended_tx.send(b.id()).unwrap();
     b.wait_presence(&id, Presence::Online).await;
-    Freezable { id, freeze, thaw, finish, thread }
+    Freezable {
+        id,
+        freeze,
+        thaw,
+        finish,
+        thread,
+    }
 }
 
 /// Blockiert jeden Worker-Thread der aktuellen Laufzeit, bis je ein Auftauen kommt: kein Timer, kein Socket läuft mehr.
@@ -925,7 +1286,14 @@ fn freeze_workers(thawed: std::sync::mpsc::Receiver<()>) {
 #[tokio::test]
 async fn crashed_friend_goes_offline_after_the_idle_timeout() {
     let (relay, _server) = test_relay().await;
-    let b = Node::online(NetOptions { idle_timeout: CRASH_IDLE_TIMEOUT, ..options(&relay) }, "Bert").await;
+    let b = Node::online(
+        NetOptions {
+            idle_timeout: CRASH_IDLE_TIMEOUT,
+            ..options(&relay)
+        },
+        "Bert",
+    )
+    .await;
     let friend = freezable_friend_of(&b, &relay).await;
     let id = friend.id;
     let closed = watch_close(b.friends.connection(&id).unwrap());
@@ -937,28 +1305,55 @@ async fn crashed_friend_goes_offline_after_the_idle_timeout() {
     b.wait_presence(&id, Presence::Offline).await;
     friend.finish().await;
     assert_eq!(reason, CloseReason::TimedOut);
-    assert!(closed_at - crashed <= CRASH_IDLE_TIMEOUT + Duration::from_secs(3), "after {:?}", closed_at - crashed);
+    assert!(
+        closed_at - crashed <= CRASH_IDLE_TIMEOUT + Duration::from_secs(3),
+        "after {:?}",
+        closed_at - crashed
+    );
 }
 
 #[tokio::test]
 async fn fiftieth_friend_or_request_is_the_limit() {
     let (relay, _server) = test_relay().await;
-    let (a, b) = (Node::online(options(&relay), "Anna").await, Node::online(options(&relay), "Bert").await);
+    let (a, b) = (
+        Node::online(options(&relay), "Anna").await,
+        Node::online(options(&relay), "Bert").await,
+    );
     for _ in 0..MAX_FRIENDS - 1 {
-        b.core().stores.friends.insert(friend_record(&random_peer_id(), true, 0)).unwrap();
+        b.core()
+            .stores
+            .friends
+            .insert(friend_record(&random_peer_id(), true, 0))
+            .unwrap();
     }
-    b.core().stores.requests.insert(outgoing_request(RequestState::Delivering, None)).unwrap();
+    b.core()
+        .stores
+        .requests
+        .insert(outgoing_request(RequestState::Delivering, None))
+        .unwrap();
     for _ in 0..MAX_FRIENDS {
-        a.core().stores.friends.insert(friend_record(&random_peer_id(), true, 0)).unwrap();
+        a.core()
+            .stores
+            .friends
+            .insert(friend_record(&random_peer_id(), true, 0))
+            .unwrap();
     }
-    let incoming = a.core().stores.requests.insert(incoming_record(&random_peer_id(), u64::MAX)).unwrap();
+    let incoming = a
+        .core()
+        .stores
+        .requests
+        .insert(incoming_record(&random_peer_id(), u64::MAX))
+        .unwrap();
 
     let code = a.friends.code_create().await.unwrap().code.unwrap();
     let added = b.friends.add(&code).await;
     let accepted = a.friends.answer_request(&incoming.id, true).await;
 
     assert_eq!(error_key(&added.unwrap_err()), "errors.friends.friendLimit");
-    assert_eq!(error_key(&accepted.unwrap_err()), "errors.friends.friendLimit");
+    assert_eq!(
+        error_key(&accepted.unwrap_err()),
+        "errors.friends.friendLimit"
+    );
 }
 
 async fn request_reply(conn: &PeerConn) -> Value {
@@ -976,11 +1371,15 @@ async fn reconnecting_does_not_reset_the_request_stream_limit() {
     }
 
     b.friends.disable().await.unwrap();
-    b.friends.enable(enable_input("Bert"), Some(account("Bert"))).await.unwrap();
+    b.friends
+        .enable(enable_input(), Some(account("Bert")))
+        .await
+        .unwrap();
     let b_ref = &b;
     let a_ref = &a;
     until("reconnected", || async move {
-        b_ref.friends.connection(&a_id).is_some() && a_ref.presence_of(&b_ref.id()).await == Presence::Online
+        b_ref.friends.connection(&a_id).is_some()
+            && a_ref.presence_of(&b_ref.id()).await == Presence::Online
     })
     .await;
     let second = b.friends.connection(&a_id).unwrap();
@@ -991,7 +1390,10 @@ async fn reconnecting_does_not_reset_the_request_stream_limit() {
 #[tokio::test]
 async fn a_peer_replacing_its_connection_too_often_keeps_the_old_one() {
     let (relay, _server) = test_relay().await;
-    let (dialer, listener) = (raw_endpoint(&relay, [5; 32]).await, raw_endpoint(&relay, [6; 32]).await);
+    let (dialer, listener) = (
+        raw_endpoint(&relay, [5; 32]).await,
+        raw_endpoint(&relay, [6; 32]).await,
+    );
     let links = status::Links::default();
     let mut outcomes = Vec::new();
 
@@ -1006,7 +1408,18 @@ async fn a_peer_replacing_its_connection_too_often_keeps_the_old_one() {
         });
     }
 
-    assert_eq!(outcomes, ["new", "replaced", "replaced", "replaced", "replaced", "replaced", "tooFrequent"]);
+    assert_eq!(
+        outcomes,
+        [
+            "new",
+            "replaced",
+            "replaced",
+            "replaced",
+            "replaced",
+            "replaced",
+            "tooFrequent"
+        ]
+    );
 }
 
 #[tokio::test]
@@ -1028,14 +1441,81 @@ async fn a_refused_request_tells_the_ui_why_it_disappeared() {
 }
 
 #[tokio::test]
-async fn a_changed_microsoft_account_reaches_connected_friends() {
+async fn an_account_rename_updates_own_state_and_connected_friends_without_changing_identity() {
     let (relay, _server) = test_relay().await;
     let (a, b) = two_friends(&relay).await;
     let a_id = a.id();
+    lock(&a.events.events).clear();
 
     a.friends.update_account(Some(account("Neo")));
-    b.wait_friend(&a_id, "new account name", |friend| friend.mc_name.as_deref() == Some("Neo")).await;
+    assert_eq!(a.friends.state().me.unwrap().display_name, "Neo");
+    assert_eq!(a.id(), a_id);
+    assert!(a.events.any(|event| matches!(event, FriendsEvent::Changed)));
+    b.wait_friend(&a_id, "new account name", |friend| {
+        friend.mc_name.as_deref() == Some("Neo")
+            && friend.display_name == "Neo"
+            && friend.notice
+                == Some(FriendNotice::Renamed {
+                    previous_name: "Anna".into(),
+                })
+    })
+    .await;
     a.friends.update_account(None);
+    assert_eq!(a.friends.state().me.unwrap().display_name, "");
 
-    b.wait_friend(&a_id, "account removed", |friend| friend.mc_name.is_none() && friend.mc_uuid.is_none()).await;
+    b.wait_friend(&a_id, "account removed", |friend| {
+        friend.mc_name.is_none() && friend.mc_uuid.is_none()
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn loading_legacy_name_settings_preserves_identity_friends_and_personal_labels() {
+    let dir = TempDir::new();
+    let secrets = Arc::new(MemorySecretStore::new());
+    let identity = identity::create(&*secrets).unwrap();
+    let peer = random_peer_id();
+    let folder = friends_dir(&Dirs::new(dir.path()));
+    let record = FriendRecord {
+        display_name: "Old nickname".into(),
+        mc_name: Some("MinecraftName".into()),
+        alias: Some("Buddy".into()),
+        ..friend_record(&peer, true, super::service::now_secs())
+    };
+    RecordStores::open(&folder)
+        .unwrap()
+        .friends
+        .insert(record.clone())
+        .unwrap();
+    let config = FriendsConfig {
+        settings: FriendsSettings {
+            always_relay: true,
+            ingame_menu: false,
+            ingame_actions: IngameActions::Allow,
+            ..Default::default()
+        },
+        third_party_relays_accepted: true,
+        ..Default::default()
+    };
+    let mut legacy = serde_json::to_value(&config).unwrap();
+    legacy["settings"]["displayName"] = json!("Configured nickname");
+    std::fs::write(
+        folder.join("config.json"),
+        serde_json::to_vec(&legacy).unwrap(),
+    )
+    .unwrap();
+
+    let node = Node::started(offline_options(), secrets, dir).await;
+
+    assert_eq!(node.friends.state().settings, config.settings);
+    assert!(node.friends.state().third_party_relays_accepted);
+    assert_eq!(node.id().to_string(), identity.peer_id());
+    assert_eq!(node.core().stores.friends.get(&peer).unwrap(), record);
+    node.friends
+        .enable(enable_input(), Some(account("Alex")))
+        .await
+        .unwrap();
+    let friend = node.friends.list().await.unwrap().remove(0);
+    assert_eq!(friend.display_name, "MinecraftName");
+    assert_eq!(super::sessions::shown_name(&friend), "Buddy");
 }

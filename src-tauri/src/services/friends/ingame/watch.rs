@@ -76,7 +76,9 @@ mod tests {
 
     /// Gibt die Zeilen nacheinander in die Wache und liefert, was sie beim Mitlesen gemeldet hat.
     fn feed(watch: &mut StartupWatch, log: &str, uptime: Duration) -> Vec<FailureKind> {
-        log.lines().filter_map(|line| watch.on_line(uptime, line)).collect()
+        log.lines()
+            .filter_map(|line| watch.on_line(uptime, line))
+            .collect()
     }
 
     const BLAMING_LOGS: [(&str, FailureKind); 4] = [
@@ -104,13 +106,20 @@ mod tests {
 
     /// Eine Wache, die das Log schon gelesen hat, ohne dass sie beim Mitlesen etwas gemeldet hätte.
     fn watch_that_read(log: &str) -> StartupWatch {
-        StartupWatch { lines: log.lines().map(str::to_owned).collect(), ..StartupWatch::default() }
+        StartupWatch {
+            lines: log.lines().map(str::to_owned).collect(),
+            ..StartupWatch::default()
+        }
     }
 
     #[test]
     fn the_exit_alone_blames_the_mod_when_the_log_names_it() {
         for (log, kind) in BLAMING_LOGS {
-            assert_eq!(watch_that_read(log).on_exit(Some(1), EARLY), Some(kind), "{kind:?}");
+            assert_eq!(
+                watch_that_read(log).on_exit(Some(1), EARLY),
+                Some(kind),
+                "{kind:?}"
+            );
         }
     }
 
@@ -127,8 +136,14 @@ mod tests {
         let mut watch = watch_that_read(FABRIC_INCOMPATIBLE);
 
         assert_eq!(watch.on_exit(Some(0), EARLY), None);
-        assert_eq!(watch.on_exit(Some(1), STARTUP_WINDOW + Duration::from_secs(1)), None);
-        assert_eq!(watch.on_exit(Some(1), EARLY), Some(FailureKind::FabricIncompatibleModSet));
+        assert_eq!(
+            watch.on_exit(Some(1), STARTUP_WINDOW + Duration::from_secs(1)),
+            None
+        );
+        assert_eq!(
+            watch.on_exit(Some(1), EARLY),
+            Some(FailureKind::FabricIncompatibleModSet)
+        );
     }
 
     #[test]
@@ -149,7 +164,10 @@ mod tests {
             assert_eq!(watch.on_line(EARLY, "\tat some.Frame(Frame.java:1)"), None);
         }
 
-        assert_eq!(watch.on_line(EARLY, "(pumpkin_friends) wurde geladen"), Some(FailureKind::MixinApplyFailed));
+        assert_eq!(
+            watch.on_line(EARLY, "(pumpkin_friends) wurde geladen"),
+            Some(FailureKind::MixinApplyFailed)
+        );
     }
 
     #[test]

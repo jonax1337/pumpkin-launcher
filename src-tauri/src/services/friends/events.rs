@@ -2,7 +2,9 @@
 //! [`TauriEvents`] sie als Tauri-Events, Tests zeichnen sie auf.
 use tauri::AppHandle;
 
-use super::contract::{FriendPresenceEvent, FriendRequestEvent, FriendRequestRefusedEvent, NetworkStatus};
+use super::contract::{
+    FriendPresenceEvent, FriendRequestEvent, FriendRequestRefusedEvent, NetworkStatus,
+};
 use crate::services::progress::emit;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -35,7 +37,9 @@ impl EventSink for TauriEvents {
             FriendsEvent::Network(status) => emit(&self.0, "friends-network", status),
             FriendsEvent::Presence(presence) => emit(&self.0, "friend-presence", presence),
             FriendsEvent::Request(request) => emit(&self.0, "friend-request", request),
-            FriendsEvent::RequestRefused(refused) => emit(&self.0, "friend-request-refused", refused),
+            FriendsEvent::RequestRefused(refused) => {
+                emit(&self.0, "friend-request-refused", refused)
+            }
         }
     }
 }

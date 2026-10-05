@@ -28,11 +28,17 @@ struct Translation {
 
 impl Translation {
     fn plain(code: ErrorCode) -> Option<Self> {
-        Some(Self { code, with_reason: false })
+        Some(Self {
+            code,
+            with_reason: false,
+        })
     }
 
     fn reasoned(code: ErrorCode) -> Option<Self> {
-        Some(Self { code, with_reason: true })
+        Some(Self {
+            code,
+            with_reason: true,
+        })
     }
 
     fn into_error(self, wire: &Value) -> OpError {
@@ -57,7 +63,8 @@ fn reason_of(wire: &Value) -> &str {
 /// Die Parameter laufen als Text durch den Fehler; Zahlen sollen als Zahl ankommen.
 fn number_or_text(value: &Value) -> Value {
     let text = value.as_str();
-    text.and_then(|text| text.parse::<u64>().ok()).map_or_else(|| json!(value), |number| json!(number))
+    text.and_then(|text| text.parse::<u64>().ok())
+        .map_or_else(|| json!(value), |number| json!(number))
 }
 
 fn translation(name: &str) -> Option<Translation> {
@@ -70,7 +77,9 @@ fn translation(name: &str) -> Option<Translation> {
         "versionUnsupported" => Translation::plain(ErrorCode::VersionUnsupported),
         "msAccountRequired" => Translation::plain(ErrorCode::MsAccountRequired),
         "notFound.friend" => Translation::plain(ErrorCode::UnknownFriend),
-        "notFound.request" | "notFound.invite" | "inviteExpired" | "sessionNotFound" => Translation::plain(ErrorCode::NotFound),
+        "notFound.request" | "notFound.invite" | "inviteExpired" | "sessionNotFound" => {
+            Translation::plain(ErrorCode::NotFound)
+        }
         "instanceMismatch" => Translation::plain(ErrorCode::InstanceMismatch),
         "nameUnknown" => Translation::plain(ErrorCode::NameUnknown),
         "nameNotFindable" => Translation::reasoned(ErrorCode::NameUnknown),
@@ -80,9 +89,18 @@ fn translation(name: &str) -> Option<Translation> {
         "nameCooldown" => Translation::reasoned(ErrorCode::RateLimited),
         // Das Spiel läuft (die Mod ist darin), der Launcher hat seinen Start nur noch nicht verarbeitet.
         "sessionActive" | "gameNotRunning" => Translation::plain(ErrorCode::Busy),
-        "tooManyNameRequests" | "tooManyCodes" | "requestsFull" | "friendLimit" => Translation::reasoned(ErrorCode::Busy),
-        "nameInvalid" | "nameOwn" | "alreadyFriends" | "alreadyRequested" | "alreadyRequestedName" | "codeInvalid" | "codeOwn"
-        | "manifestInvalid" | "portInvalid" => Translation::reasoned(ErrorCode::BadRequest),
+        "tooManyNameRequests" | "tooManyCodes" | "requestsFull" | "friendLimit" => {
+            Translation::reasoned(ErrorCode::Busy)
+        }
+        "nameInvalid"
+        | "nameOwn"
+        | "alreadyFriends"
+        | "alreadyRequested"
+        | "alreadyRequestedName"
+        | "codeInvalid"
+        | "codeOwn"
+        | "manifestInvalid"
+        | "portInvalid" => Translation::reasoned(ErrorCode::BadRequest),
         _ => None,
     }
 }
@@ -100,36 +118,126 @@ mod tests {
     #[test]
     fn launcher_errors_become_mod_error_codes() {
         let cases = [
-            (invalid(coded!("errors.friends.disabled")), ErrorCode::NotEnabled),
-            (invalid(coded!("errors.friends.unavailable")), ErrorCode::NotEnabled),
-            (invalid(coded!("errors.friends.identityLost")), ErrorCode::NotEnabled),
-            (invalid(coded!("errors.friends.peerOffline", name = "Bert")), ErrorCode::PeerOffline),
-            (invalid(coded!("errors.friends.guestLimit", max = 7)), ErrorCode::GuestLimit),
-            (invalid(coded!("errors.friends.lanPortUnknown")), ErrorCode::LanPortUnknown),
-            (invalid(coded!("errors.friends.lanUnreachable")), ErrorCode::LanPortUnknown),
-            (invalid(coded!("errors.friends.portNotGame", port = 1)), ErrorCode::PortNotGame),
-            (invalid(coded!("errors.friends.versionUnsupported", min = "1.20")), ErrorCode::VersionUnsupported),
-            (invalid(coded!("errors.friends.msAccountRequired")), ErrorCode::MsAccountRequired),
-            (invalid(coded!("errors.friends.sessionActive")), ErrorCode::Busy),
-            (invalid(coded!("errors.friends.gameNotRunning")), ErrorCode::Busy),
-            (AppError::NotFound(coded!("errors.friends.notFound.friend", id = "x").into()), ErrorCode::UnknownFriend),
-            (AppError::NotFound(coded!("errors.friends.notFound.request", id = "x").into()), ErrorCode::NotFound),
-            (AppError::NotFound(coded!("errors.friends.notFound.invite", id = "x").into()), ErrorCode::NotFound),
-            (invalid(coded!("errors.friends.inviteExpired")), ErrorCode::NotFound),
-            (invalid(coded!("errors.friends.nameUnknown", name = "x")), ErrorCode::NameUnknown),
-            (invalid(coded!("errors.friends.nameNotFindable", name = "x")), ErrorCode::NameUnknown),
-            (invalid(coded!("errors.friends.directoryUnavailable")), ErrorCode::DirectoryUnavailable),
-            (invalid(coded!("errors.friends.directoryNotAllowed")), ErrorCode::DirectoryUnavailable),
-            (invalid(coded!("errors.friends.rateLimited")), ErrorCode::RateLimited),
-            (invalid(coded!("errors.friends.nameCooldown", name = "x", days = 7)), ErrorCode::RateLimited),
-            (invalid(coded!("errors.friends.tooManyNameRequests", max = 5)), ErrorCode::Busy),
-            (invalid(coded!("errors.friends.tooManyCodes", max = 3)), ErrorCode::Busy),
-            (invalid(coded!("errors.friends.requestsFull")), ErrorCode::Busy),
-            (invalid(coded!("errors.friends.nameInvalid")), ErrorCode::BadRequest),
-            (invalid(coded!("errors.friends.alreadyFriends")), ErrorCode::BadRequest),
-            (invalid(coded!("errors.friends.codeInvalid")), ErrorCode::BadRequest),
-            (invalid(coded!("errors.friends.instanceMismatch")), ErrorCode::InstanceMismatch),
-            (AppError::NotFound("Anfrage „x“ wurde nicht gefunden".into()), ErrorCode::NotFound),
+            (
+                invalid(coded!("errors.friends.disabled")),
+                ErrorCode::NotEnabled,
+            ),
+            (
+                invalid(coded!("errors.friends.unavailable")),
+                ErrorCode::NotEnabled,
+            ),
+            (
+                invalid(coded!("errors.friends.identityLost")),
+                ErrorCode::NotEnabled,
+            ),
+            (
+                invalid(coded!("errors.friends.peerOffline", name = "Bert")),
+                ErrorCode::PeerOffline,
+            ),
+            (
+                invalid(coded!("errors.friends.guestLimit", max = 7)),
+                ErrorCode::GuestLimit,
+            ),
+            (
+                invalid(coded!("errors.friends.lanPortUnknown")),
+                ErrorCode::LanPortUnknown,
+            ),
+            (
+                invalid(coded!("errors.friends.lanUnreachable")),
+                ErrorCode::LanPortUnknown,
+            ),
+            (
+                invalid(coded!("errors.friends.portNotGame", port = 1)),
+                ErrorCode::PortNotGame,
+            ),
+            (
+                invalid(coded!("errors.friends.versionUnsupported", min = "1.20")),
+                ErrorCode::VersionUnsupported,
+            ),
+            (
+                invalid(coded!("errors.friends.msAccountRequired")),
+                ErrorCode::MsAccountRequired,
+            ),
+            (
+                invalid(coded!("errors.friends.sessionActive")),
+                ErrorCode::Busy,
+            ),
+            (
+                invalid(coded!("errors.friends.gameNotRunning")),
+                ErrorCode::Busy,
+            ),
+            (
+                AppError::NotFound(coded!("errors.friends.notFound.friend", id = "x").into()),
+                ErrorCode::UnknownFriend,
+            ),
+            (
+                AppError::NotFound(coded!("errors.friends.notFound.request", id = "x").into()),
+                ErrorCode::NotFound,
+            ),
+            (
+                AppError::NotFound(coded!("errors.friends.notFound.invite", id = "x").into()),
+                ErrorCode::NotFound,
+            ),
+            (
+                invalid(coded!("errors.friends.inviteExpired")),
+                ErrorCode::NotFound,
+            ),
+            (
+                invalid(coded!("errors.friends.nameUnknown", name = "x")),
+                ErrorCode::NameUnknown,
+            ),
+            (
+                invalid(coded!("errors.friends.nameNotFindable", name = "x")),
+                ErrorCode::NameUnknown,
+            ),
+            (
+                invalid(coded!("errors.friends.directoryUnavailable")),
+                ErrorCode::DirectoryUnavailable,
+            ),
+            (
+                invalid(coded!("errors.friends.directoryNotAllowed")),
+                ErrorCode::DirectoryUnavailable,
+            ),
+            (
+                invalid(coded!("errors.friends.rateLimited")),
+                ErrorCode::RateLimited,
+            ),
+            (
+                invalid(coded!("errors.friends.nameCooldown", name = "x", days = 7)),
+                ErrorCode::RateLimited,
+            ),
+            (
+                invalid(coded!("errors.friends.tooManyNameRequests", max = 5)),
+                ErrorCode::Busy,
+            ),
+            (
+                invalid(coded!("errors.friends.tooManyCodes", max = 3)),
+                ErrorCode::Busy,
+            ),
+            (
+                invalid(coded!("errors.friends.requestsFull")),
+                ErrorCode::Busy,
+            ),
+            (
+                invalid(coded!("errors.friends.nameInvalid")),
+                ErrorCode::BadRequest,
+            ),
+            (
+                invalid(coded!("errors.friends.alreadyFriends")),
+                ErrorCode::BadRequest,
+            ),
+            (
+                invalid(coded!("errors.friends.codeInvalid")),
+                ErrorCode::BadRequest,
+            ),
+            (
+                invalid(coded!("errors.friends.instanceMismatch")),
+                ErrorCode::InstanceMismatch,
+            ),
+            (
+                AppError::NotFound("Anfrage „x“ wurde nicht gefunden".into()),
+                ErrorCode::NotFound,
+            ),
             (AppError::Cancelled, ErrorCode::Internal),
         ];
 
@@ -142,9 +250,19 @@ mod tests {
     #[test]
     fn errors_with_a_number_or_a_version_carry_it_as_a_param() {
         let limit = mod_error(invalid(coded!("errors.friends.guestLimit", max = 7)));
-        let version = mod_error(invalid(coded!("errors.friends.versionUnsupported", min = "1.20")));
-        let requests = mod_error(invalid(coded!("errors.friends.tooManyNameRequests", max = 5)));
-        let cooldown = mod_error(invalid(coded!("errors.friends.nameCooldown", name = "Notch", days = 7)));
+        let version = mod_error(invalid(coded!(
+            "errors.friends.versionUnsupported",
+            min = "1.20"
+        )));
+        let requests = mod_error(invalid(coded!(
+            "errors.friends.tooManyNameRequests",
+            max = 5
+        )));
+        let cooldown = mod_error(invalid(coded!(
+            "errors.friends.nameCooldown",
+            name = "Notch",
+            days = 7
+        )));
 
         assert_eq!(limit.params["max"], 7);
         assert_eq!(version.params["min"], "1.20");
@@ -155,19 +273,45 @@ mod tests {
     /// Die Fehler aus `errors-reasons.jsonl`, die diese Übersetzung erzeugt, sind genau die der gemeinsamen Muster.
     #[test]
     fn the_golden_reason_fixtures_are_what_the_launcher_produces() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../mod/fixtures/protocol/errors-reasons.jsonl");
-        let lines: Vec<Value> = std::fs::read_to_string(path).unwrap().lines().map(|line| serde_json::from_str(line).unwrap()).collect();
-        let error_of = |id: &str| lines.iter().find(|line| line["line"]["id"] == id).unwrap()["line"]["error"].clone();
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../mod/fixtures/protocol/errors-reasons.jsonl"
+        );
+        let lines: Vec<Value> = std::fs::read_to_string(path)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        let error_of = |id: &str| {
+            lines.iter().find(|line| line["line"]["id"] == id).unwrap()["line"]["error"].clone()
+        };
         let produced = [
             ("r01", invalid(coded!("errors.friends.nameInvalid"))),
-            ("r04", invalid(coded!("errors.friends.tooManyCodes", max = 3))),
+            (
+                "r04",
+                invalid(coded!("errors.friends.tooManyCodes", max = 3)),
+            ),
             ("r05", invalid(coded!("errors.friends.directoryNotAllowed"))),
-            ("r06", invalid(coded!("errors.friends.nameCooldown", name = "Notch", days = 7))),
-            ("r08", invalid(coded!("errors.friends.nameNotFindable", name = "Notch"))),
+            (
+                "r06",
+                invalid(coded!(
+                    "errors.friends.nameCooldown",
+                    name = "Notch",
+                    days = 7
+                )),
+            ),
+            (
+                "r08",
+                invalid(coded!("errors.friends.nameNotFindable", name = "Notch")),
+            ),
         ];
 
         for (id, err) in produced {
-            assert_eq!(serde_json::to_value(mod_error(err)).unwrap(), error_of(id), "{id}");
+            assert_eq!(
+                serde_json::to_value(mod_error(err)).unwrap(),
+                error_of(id),
+                "{id}"
+            );
         }
     }
 
@@ -175,7 +319,11 @@ mod tests {
     fn coarse_codes_name_their_cause_in_reason_and_never_leak_a_name() {
         let own = mod_error(invalid(coded!("errors.friends.nameOwn")));
         let not_allowed = mod_error(invalid(coded!("errors.friends.directoryNotAllowed")));
-        let cooldown = mod_error(invalid(coded!("errors.friends.nameCooldown", name = "Notch", days = 7)));
+        let cooldown = mod_error(invalid(coded!(
+            "errors.friends.nameCooldown",
+            name = "Notch",
+            days = 7
+        )));
         let offline = mod_error(invalid(coded!("errors.friends.peerOffline", name = "Bert")));
 
         assert_eq!(own.params["reason"], "nameOwn");

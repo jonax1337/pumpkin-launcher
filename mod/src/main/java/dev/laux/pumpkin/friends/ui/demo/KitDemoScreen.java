@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Throw-away screen that proves the widget kit renders on a Minecraft version: tabs, a scroll list of 40 rows, an edit
  * box, a toggle and buttons. Reachable only with {@code -Dpumpkin.dev.kitdemo=true} ({@link KitDemo}). After its first
- * three rendered frames it logs one line and closes itself.
+ * three rendered frames it logs one line and closes itself unless the development-only demoHold switch is set.
  */
 final class KitDemoScreen extends PumpkinScreen {
 	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_friends");
@@ -88,7 +88,8 @@ final class KitDemoScreen extends PumpkinScreen {
 	@Override
 	protected void onTick() {
 		super.onTick();
-		if (proofLogged && !closing) {
+		if (proofLogged && !closing && !Boolean.getBoolean("pumpkin.dev.demoHold")
+			&& !"true".equalsIgnoreCase(System.getenv("PUMPKIN_DEV_DEMO_HOLD"))) {
 			closing = true;
 			onClose();
 		}

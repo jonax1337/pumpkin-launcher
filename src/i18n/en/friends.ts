@@ -94,7 +94,7 @@ export const friends: typeof deFriends = {
   "friends.name.placeholder": "e.g. Steve",
   "friends.name.wrongShape": "That is not a Minecraft name: 1 to {max} letters, digits and underscores are allowed.",
   "friends.name.someone": "The person",
-  "friends.name.hint": "{name} sees your Minecraft name, your display name and your fingerprint. Your launchers only connect once the request is accepted. The Pumpkin directory holds the request for up to {days} days.",
+  "friends.name.hint": "{name} sees your Minecraft name and your fingerprint. Your launchers only connect once the request is accepted. The Pumpkin directory holds the request for up to {days} days.",
   "friends.name.sent": "Request to {name} sent",
   "friends.name.showMyCode": "Show my code",
   "friends.name.unreachable": "The directory can't be reached right now; use a code.",
@@ -117,7 +117,7 @@ export const friends: typeof deFriends = {
   "friends.enter.help": "Your friend gave you this code. Spaces and hyphens in it don't matter.",
   "friends.enter.placeholder": "pumpkin-…",
   "friends.enter.wrongShape": "That is not a friend code: it starts with \"pumpkin-\", followed by 72 letters and digits.",
-  "friends.enter.consent": "Your display name and your Minecraft name go to the owner of the code. They have to accept the request.",
+  "friends.enter.consent": "Your Minecraft name goes to the owner of the code. They have to accept the request.",
 
   // ---------- Activity in the game (INGAME 5.7) ----------
   "friends.activity.title": "Activity in the game",

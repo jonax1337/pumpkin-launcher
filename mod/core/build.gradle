@@ -22,6 +22,8 @@ dependencies {
 
 tasks.withType(JavaCompile).configureEach {
 	it.options.release = 17
+	// Stacktraces behalten Quellnamen und Zeilen; lokale Variablentabellen brauchen die Knoten-Jars nicht.
+	it.options.debugOptions.debugLevel = 'source,lines'
 	it.options.encoding = 'UTF-8'
 	// classfile: Gson verweist auf Errorprone-Annotationen, die nicht auf dem Klassenpfad liegen.
 	it.options.compilerArgs << '-Xlint:all,-classfile,-serial'

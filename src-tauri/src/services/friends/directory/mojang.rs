@@ -30,7 +30,10 @@ const MULTIPLAYER_ENABLED: &str = "/privileges/multiplayerServer/enabled";
 /// A ban from multiplayer (authlib `BanDetails.MULTIPLAYER_SCOPE`).
 const MULTIPLAYER_BAN: &str = "/banStatus/bannedScopes/MULTIPLAYER";
 /// The account's own friends settings (authlib `UserFlag.FRIENDS_ENABLED` and `ACCEPT_FRIEND_INVITES`).
-const FRIENDS_PREFERENCES: [&str; 2] = ["/friendsPreferences/friends", "/friendsPreferences/acceptInvites"];
+const FRIENDS_PREFERENCES: [&str; 2] = [
+    "/friendsPreferences/friends",
+    "/friendsPreferences/acceptInvites",
+];
 
 /// Konto und Name, wie Mojang sie bestätigt: `uuid` mit 32 Hex-Zeichen in Kleinbuchstaben, `name` in Mojangs Schreibweise.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,16 +64,33 @@ pub enum Privileges {
 
 pub trait MojangSessions: Send + Sync + 'static {
     /// Meldet das Konto mit dieser `serverId` an, wie der Spielclient beim Beitritt zu einem Online-Server.
-    fn join<'a>(&'a self, session: &'a McIdentity, server_id: &'a str) -> BoxFuture<'a, Result<(), MojangError>>;
+    fn join<'a>(
+        &'a self,
+        session: &'a McIdentity,
+        server_id: &'a str,
+    ) -> BoxFuture<'a, Result<(), MojangError>>;
     /// Das Profil, das mit dieser `serverId` beigetreten ist; `None`, wenn `name` das nicht war.
-    fn has_joined<'a>(&'a self, name: &'a str, server_id: &'a str) -> BoxFuture<'a, Result<Option<MojangProfile>, MojangError>>;
+    fn has_joined<'a>(
+        &'a self,
+        name: &'a str,
+        server_id: &'a str,
+    ) -> BoxFuture<'a, Result<Option<MojangProfile>, MojangError>>;
     /// Name → Konto; `None`, wenn es den Namen nicht gibt.
-    fn lookup_name<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<Option<MojangProfile>, MojangError>>;
+    fn lookup_name<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> BoxFuture<'a, Result<Option<MojangProfile>, MojangError>>;
     /// Mojang's player certificate of the account (BYNAME-ATTEST 5.3).
-    fn certificate<'a>(&'a self, session: &'a McIdentity) -> BoxFuture<'a, Result<PlayerCertificate, MojangError>>;
+    fn certificate<'a>(
+        &'a self,
+        session: &'a McIdentity,
+    ) -> BoxFuture<'a, Result<PlayerCertificate, MojangError>>;
     fn privileges<'a>(&'a self, session: &'a McIdentity) -> BoxFuture<'a, Privileges>;
     /// UUID → account with its current name; `None` if the account no longer exists.
-    fn profile<'a>(&'a self, uuid: &'a str) -> BoxFuture<'a, Result<Option<MojangProfile>, MojangError>>;
+    fn profile<'a>(
+        &'a self,
+        uuid: &'a str,
+    ) -> BoxFuture<'a, Result<Option<MojangProfile>, MojangError>>;
 }
 
 pub struct MojangHttp {
@@ -82,25 +102,46 @@ impl MojangHttp {
         Self { client }
     }
 
-    async fn fetch(&self, request: reqwest::RequestBuilder, body_limit: u64) -> Result<(u16, Vec<u8>), MojangError> {
-        let mut response = request.timeout(REQUEST_TIMEOUT).send().await.map_err(|_| MojangError::Unreachable)?;
+    async fn fetch(
+        &self,
+        request: reqwest::RequestBuilder,
+        body_limit: u64,
+    ) -> Result<(u16, Vec<u8>), MojangError> {
+        let mut response = request
+            .timeout(REQUEST_TIMEOUT)
+            .send()
+            .await
+            .map_err(|_| MojangError::Unreachable)?;
         let status = response.status().as_u16();
-        let body = read_capped(&mut response, body_limit, "Antwort zu groß").await.map_err(|_| MojangError::Unreachable)?;
+        let body = read_capped(&mut response, body_limit, "Antwort zu groß")
+            .await
+            .map_err(|_| MojangError::Unreachable)?;
         Ok((status, body))
     }
 }
 
 impl MojangSessions for MojangHttp {
-    fn join<'a>(&'a self, session: &'a McIdentity, server_id: &'a str) -> BoxFuture<'a, Result<(), MojangError>> {
+    fn join<'a>(
+        &'a self,
+        session: &'a McIdentity,
+        server_id: &'a str,
+    ) -> BoxFuture<'a, Result<(), MojangError>> {
         async move {
-            let request = self.client.post(JOIN_URL).json(&join_body(session, server_id));
+            let request = self
+                .client
+                .post(JOIN_URL)
+                .json(&join_body(session, server_id));
             let (status, body) = self.fetch(request, JOIN_BODY_LIMIT).await?;
             parse_join(status, &body)
         }
         .boxed()
     }
 
-    fn has_joined<'a>(&'a self, name: &'a str, server_id: &'a str) -> BoxFuture<'a, Result<Option<MojangProfile>, MojangError>> {
+    fn has_joined<'a>(
+        &'a self,
+        name: &'a str,
+        server_id: &'a str,
+    ) -> BoxFuture<'a, Result<Option<MojangProfile>, MojangError>> {
         async move {
             // Der Name stammt aus dem Hello-Rahmen der Gegenseite; was kein Minecraft-Name ist, kann nicht beigetreten sein.
             if sanitize::mc_name(Some(name)).is_none() {
@@ -113,7 +154,10 @@ impl MojangSessions for MojangHttp {
         .boxed()
     }
 
-    fn lookup_name<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Result<Option<MojangProfile>, MojangError>> {
+    fn lookup_name<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> BoxFuture<'a, Result<Option<MojangProfile>, MojangError>> {
         async move {
             // Der Name wird Teil des Pfads: nur Minecraft-Namen gehen hinaus.
             if !skins::valid_player_name(name) {
@@ -126,10 +170,17 @@ impl MojangSessions for MojangHttp {
         .boxed()
     }
 
-    fn certificate<'a>(&'a self, session: &'a McIdentity) -> BoxFuture<'a, Result<PlayerCertificate, MojangError>> {
+    fn certificate<'a>(
+        &'a self,
+        session: &'a McIdentity,
+    ) -> BoxFuture<'a, Result<PlayerCertificate, MojangError>> {
         async move {
             // An empty body, so that `Content-Length: 0` goes out like vanilla's request.
-            let request = self.client.post(CERTIFICATES_URL).bearer_auth(&session.access_token).body(Vec::new());
+            let request = self
+                .client
+                .post(CERTIFICATES_URL)
+                .bearer_auth(&session.access_token)
+                .body(Vec::new());
             let (status, body) = self.fetch(request, CERTIFICATE_BODY_LIMIT).await?;
             parse_certificate(status, &body, &session.uuid)
         }
@@ -138,7 +189,10 @@ impl MojangSessions for MojangHttp {
 
     fn privileges<'a>(&'a self, session: &'a McIdentity) -> BoxFuture<'a, Privileges> {
         async move {
-            let request = self.client.get(ATTRIBUTES_URL).bearer_auth(&session.access_token);
+            let request = self
+                .client
+                .get(ATTRIBUTES_URL)
+                .bearer_auth(&session.access_token);
             match self.fetch(request, ATTRIBUTES_BODY_LIMIT).await {
                 Ok((status, body)) => parse_attributes(status, &body),
                 Err(_) => Privileges::Unknown,
@@ -147,13 +201,21 @@ impl MojangSessions for MojangHttp {
         .boxed()
     }
 
-    fn profile<'a>(&'a self, uuid: &'a str) -> BoxFuture<'a, Result<Option<MojangProfile>, MojangError>> {
+    fn profile<'a>(
+        &'a self,
+        uuid: &'a str,
+    ) -> BoxFuture<'a, Result<Option<MojangProfile>, MojangError>> {
         async move {
             // The UUID becomes part of the path: only the canonical form goes out.
             if sanitize::mc_uuid(Some(uuid)).is_none() {
                 return Ok(None);
             }
-            let (status, body) = self.fetch(self.client.get(format!("{SESSION_PROFILE}{uuid}")), PROFILE_BODY_LIMIT).await?;
+            let (status, body) = self
+                .fetch(
+                    self.client.get(format!("{SESSION_PROFILE}{uuid}")),
+                    PROFILE_BODY_LIMIT,
+                )
+                .await?;
             parse_profile(status, &body, uuid)
         }
         .boxed()
@@ -166,7 +228,9 @@ fn join_body(session: &McIdentity, server_id: &str) -> serde_json::Value {
 
 fn has_joined_url(name: &str, server_id: &str) -> reqwest::Url {
     let mut url = reqwest::Url::parse(HAS_JOINED_URL).expect("feste Adresse");
-    url.query_pairs_mut().append_pair("username", name).append_pair("serverId", server_id);
+    url.query_pairs_mut()
+        .append_pair("username", name)
+        .append_pair("serverId", server_id);
     url
 }
 
@@ -187,7 +251,10 @@ fn parse_join(status: u16, body: &[u8]) -> Result<(), MojangError> {
 }
 
 fn refusal(body: &[u8]) -> MojangError {
-    match serde_json::from_slice::<MojangFault>(body).as_ref().map(|fault| fault.error.as_str()) {
+    match serde_json::from_slice::<MojangFault>(body)
+        .as_ref()
+        .map(|fault| fault.error.as_str())
+    {
         Ok("InsufficientPrivilegesException" | "UserBannedException") => MojangError::NotAllowed,
         Ok("InvalidCredentialsException") => MojangError::InvalidSession,
         _ => MojangError::Unreachable,
@@ -211,7 +278,11 @@ fn parse_lookup(status: u16, body: &[u8]) -> Result<Option<MojangProfile>, Mojan
     }
 }
 
-fn parse_certificate(status: u16, body: &[u8], uuid: &str) -> Result<PlayerCertificate, MojangError> {
+fn parse_certificate(
+    status: u16,
+    body: &[u8],
+    uuid: &str,
+) -> Result<PlayerCertificate, MojangError> {
     match status {
         200 => certificate::parse(uuid, body).ok_or(MojangError::Unreachable),
         401 => Err(MojangError::InvalidSession),
@@ -225,12 +296,23 @@ fn parse_certificate(status: u16, body: &[u8], uuid: &str) -> Result<PlayerCerti
 /// restricted accounts really receive is unverified (owner test O-7), so the friends preferences count as disabled
 /// in every plausible form: `false`, `"DISABLED"` or `{"enabled": false}`.
 fn parse_attributes(status: u16, body: &[u8]) -> Privileges {
-    let Some(attributes) = (status == 200).then(|| serde_json::from_slice::<Value>(body).ok()).flatten() else {
+    let Some(attributes) = (status == 200)
+        .then(|| serde_json::from_slice::<Value>(body).ok())
+        .flatten()
+    else {
         return Privileges::Unknown;
     };
-    let multiplayer = attributes.pointer(MULTIPLAYER_ENABLED).and_then(Value::as_bool);
-    let friends_disabled = FRIENDS_PREFERENCES.iter().filter_map(|at| attributes.pointer(at)).any(is_disabled);
-    if multiplayer == Some(false) || attributes.pointer(MULTIPLAYER_BAN).is_some() || friends_disabled {
+    let multiplayer = attributes
+        .pointer(MULTIPLAYER_ENABLED)
+        .and_then(Value::as_bool);
+    let friends_disabled = FRIENDS_PREFERENCES
+        .iter()
+        .filter_map(|at| attributes.pointer(at))
+        .any(is_disabled);
+    if multiplayer == Some(false)
+        || attributes.pointer(MULTIPLAYER_BAN).is_some()
+        || friends_disabled
+    {
         Privileges::Refused
     } else if multiplayer == Some(true) {
         Privileges::Allowed
@@ -249,9 +331,17 @@ fn is_disabled(preference: &Value) -> bool {
 }
 
 /// 204 and 404 mean the account no longer exists; an answer about another account is no answer.
-fn parse_profile(status: u16, body: &[u8], uuid: &str) -> Result<Option<MojangProfile>, MojangError> {
+fn parse_profile(
+    status: u16,
+    body: &[u8],
+    uuid: &str,
+) -> Result<Option<MojangProfile>, MojangError> {
     match status {
-        200 => profile_of(body).ok().filter(|profile| profile.uuid == uuid).map(Some).ok_or(MojangError::Unreachable),
+        200 => profile_of(body)
+            .ok()
+            .filter(|profile| profile.uuid == uuid)
+            .map(Some)
+            .ok_or(MojangError::Unreachable),
         204 | 404 => Ok(None),
         429 => Err(MojangError::RateLimited),
         _ => Err(MojangError::Unreachable),
@@ -263,7 +353,9 @@ fn profile_of(body: &[u8]) -> Result<MojangProfile, MojangError> {
     let player = skins::parse_player(body).map_err(|_| MojangError::Unreachable)?;
     let uuid = sanitize::mc_uuid(Some(&player.id.to_ascii_lowercase()));
     let name = sanitize::mc_name(Some(&player.name));
-    uuid.zip(name).map(|(uuid, name)| MojangProfile { uuid, name }).ok_or(MojangError::Unreachable)
+    uuid.zip(name)
+        .map(|(uuid, name)| MojangProfile { uuid, name })
+        .ok_or(MojangError::Unreachable)
 }
 
 #[cfg(test)]
@@ -274,15 +366,22 @@ mod tests {
     const UUID: &str = "069a79f444e94726a5befca90e38aaf5";
 
     fn profile_json(id: &str, name: &str) -> Vec<u8> {
-        json!({ "id": id, "name": name, "properties": [{ "name": "textures", "value": "AAAA" }] }).to_string().into_bytes()
+        json!({ "id": id, "name": name, "properties": [{ "name": "textures", "value": "AAAA" }] })
+            .to_string()
+            .into_bytes()
     }
 
     fn fault(error: &str) -> Vec<u8> {
-        json!({ "error": error, "errorMessage": "egal" }).to_string().into_bytes()
+        json!({ "error": error, "errorMessage": "egal" })
+            .to_string()
+            .into_bytes()
     }
 
     fn steve() -> MojangProfile {
-        MojangProfile { uuid: UUID.into(), name: "Steve".into() }
+        MojangProfile {
+            uuid: UUID.into(),
+            name: "Steve".into(),
+        }
     }
 
     #[test]
@@ -318,25 +417,42 @@ mod tests {
     #[test]
     fn join_with_any_other_status_is_unreachable() {
         for status in [200, 400, 404, 500, 503] {
-            assert_eq!(parse_join(status, b""), Err(MojangError::Unreachable), "{status}");
+            assert_eq!(
+                parse_join(status, b""),
+                Err(MojangError::Unreachable),
+                "{status}"
+            );
         }
     }
 
     #[test]
     fn join_sends_the_token_the_uuid_without_hyphens_and_the_server_id() {
-        let session = McIdentity { uuid: UUID.into(), name: "Steve".into(), access_token: "token-1".into() };
+        let session = McIdentity {
+            uuid: UUID.into(),
+            name: "Steve".into(),
+            access_token: "token-1".into(),
+        };
         let server_id = "0123456789abcdef0123456789abcdef01234567";
-        assert_eq!(join_body(&session, server_id), json!({ "accessToken": "token-1", "selectedProfile": UUID, "serverId": server_id }));
+        assert_eq!(
+            join_body(&session, server_id),
+            json!({ "accessToken": "token-1", "selectedProfile": UUID, "serverId": server_id })
+        );
     }
 
     #[test]
     fn has_joined_200_reads_the_profile() {
-        assert_eq!(parse_has_joined(200, &profile_json(UUID, "Steve")), Ok(Some(steve())));
+        assert_eq!(
+            parse_has_joined(200, &profile_json(UUID, "Steve")),
+            Ok(Some(steve()))
+        );
     }
 
     #[test]
     fn has_joined_normalizes_an_uppercase_uuid() {
-        assert_eq!(parse_has_joined(200, &profile_json(&UUID.to_uppercase(), "Steve")), Ok(Some(steve())));
+        assert_eq!(
+            parse_has_joined(200, &profile_json(&UUID.to_uppercase(), "Steve")),
+            Ok(Some(steve()))
+        );
     }
 
     #[test]
@@ -347,7 +463,11 @@ mod tests {
     #[test]
     fn has_joined_with_any_other_status_is_unreachable() {
         for status in [400, 403, 404, 429, 500] {
-            assert_eq!(parse_has_joined(status, b""), Err(MojangError::Unreachable), "{status}");
+            assert_eq!(
+                parse_has_joined(status, b""),
+                Err(MojangError::Unreachable),
+                "{status}"
+            );
         }
     }
 
@@ -363,13 +483,21 @@ mod tests {
             b"kein json".to_vec(),
         ];
         for body in bad {
-            assert_eq!(parse_has_joined(200, &body), Err(MojangError::Unreachable), "{}", String::from_utf8_lossy(&body));
+            assert_eq!(
+                parse_has_joined(200, &body),
+                Err(MojangError::Unreachable),
+                "{}",
+                String::from_utf8_lossy(&body)
+            );
         }
     }
 
     #[test]
     fn lookup_200_reads_the_canonical_spelling() {
-        assert_eq!(parse_lookup(200, &profile_json(UUID, "Steve")), Ok(Some(steve())));
+        assert_eq!(
+            parse_lookup(200, &profile_json(UUID, "Steve")),
+            Ok(Some(steve()))
+        );
     }
 
     #[test]
@@ -381,18 +509,34 @@ mod tests {
     fn lookup_429_is_rate_limited_and_anything_else_unreachable() {
         assert_eq!(parse_lookup(429, b""), Err(MojangError::RateLimited));
         for status in [204, 400, 403, 500] {
-            assert_eq!(parse_lookup(status, b""), Err(MojangError::Unreachable), "{status}");
+            assert_eq!(
+                parse_lookup(status, b""),
+                Err(MojangError::Unreachable),
+                "{status}"
+            );
         }
     }
 
     #[test]
     fn the_has_joined_url_carries_username_and_server_id_but_no_ip() {
         let url = has_joined_url("Steve", "0123456789abcdef0123456789abcdef01234567");
-        assert_eq!(url.origin().ascii_serialization() + url.path(), "https://sessionserver.mojang.com/session/minecraft/hasJoined");
-        let query: Vec<(String, String)> = url.query_pairs().map(|(k, v)| (k.into_owned(), v.into_owned())).collect();
+        assert_eq!(
+            url.origin().ascii_serialization() + url.path(),
+            "https://sessionserver.mojang.com/session/minecraft/hasJoined"
+        );
+        let query: Vec<(String, String)> = url
+            .query_pairs()
+            .map(|(k, v)| (k.into_owned(), v.into_owned()))
+            .collect();
         assert_eq!(
             query,
-            [("username".to_owned(), "Steve".to_owned()), ("serverId".to_owned(), "0123456789abcdef0123456789abcdef01234567".to_owned())]
+            [
+                ("username".to_owned(), "Steve".to_owned()),
+                (
+                    "serverId".to_owned(),
+                    "0123456789abcdef0123456789abcdef01234567".to_owned()
+                )
+            ]
         );
     }
 
@@ -420,7 +564,11 @@ mod tests {
             (204, certificate_body(), MojangError::Unreachable),
         ];
         for (status, body, expected) in table {
-            assert_eq!(parse_certificate(status, &body, UUID).unwrap_err(), expected, "{status}");
+            assert_eq!(
+                parse_certificate(status, &body, UUID).unwrap_err(),
+                expected,
+                "{status}"
+            );
         }
     }
 
@@ -436,7 +584,8 @@ mod tests {
     fn attributes_allow_only_explicitly_enabled_multiplayer() {
         assert_eq!(attributes(enabled_multiplayer()), Privileges::Allowed);
         let mut friends_on = enabled_multiplayer();
-        friends_on["friendsPreferences"] = json!({ "friends": "ENABLED", "acceptInvites": { "enabled": true } });
+        friends_on["friendsPreferences"] =
+            json!({ "friends": "ENABLED", "acceptInvites": { "enabled": true } });
         assert_eq!(attributes(friends_on), Privileges::Allowed);
     }
 
@@ -445,7 +594,8 @@ mod tests {
         let mut disabled = enabled_multiplayer();
         disabled["privileges"]["multiplayerServer"]["enabled"] = json!(false);
         let mut banned = enabled_multiplayer();
-        banned["banStatus"]["bannedScopes"]["MULTIPLAYER"] = json!({ "banId": "x", "expires": null, "reason": "y" });
+        banned["banStatus"]["bannedScopes"]["MULTIPLAYER"] =
+            json!({ "banId": "x", "expires": null, "reason": "y" });
         let mut refused = vec![disabled, banned];
         for key in ["friends", "acceptInvites"] {
             for off in [json!(false), json!("DISABLED"), json!({ "enabled": false })] {
@@ -462,21 +612,37 @@ mod tests {
     #[test]
     fn attributes_without_an_explicit_answer_are_unknown() {
         let mut missing = enabled_multiplayer();
-        missing["privileges"].as_object_mut().unwrap().remove("multiplayerServer");
+        missing["privileges"]
+            .as_object_mut()
+            .unwrap()
+            .remove("multiplayerServer");
         assert_eq!(attributes(missing), Privileges::Unknown);
         assert_eq!(attributes(json!({})), Privileges::Unknown);
         assert_eq!(parse_attributes(200, b"kein json"), Privileges::Unknown);
         for status in [204, 401, 403, 429, 500] {
-            assert_eq!(parse_attributes(status, enabled_multiplayer().to_string().as_bytes()), Privileges::Unknown, "{status}");
+            assert_eq!(
+                parse_attributes(status, enabled_multiplayer().to_string().as_bytes()),
+                Privileges::Unknown,
+                "{status}"
+            );
         }
     }
 
     #[test]
     fn a_profile_answer_maps_like_the_table() {
-        assert_eq!(parse_profile(200, &profile_json(UUID, "Steve"), UUID), Ok(Some(steve())));
+        assert_eq!(
+            parse_profile(200, &profile_json(UUID, "Steve"), UUID),
+            Ok(Some(steve()))
+        );
         let other = "853c80ef3c3749fdaa49938b674adae6";
-        assert_eq!(parse_profile(200, &profile_json(other, "Alex"), UUID), Err(MojangError::Unreachable));
-        assert_eq!(parse_profile(200, b"kein json", UUID), Err(MojangError::Unreachable));
+        assert_eq!(
+            parse_profile(200, &profile_json(other, "Alex"), UUID),
+            Err(MojangError::Unreachable)
+        );
+        assert_eq!(
+            parse_profile(200, b"kein json", UUID),
+            Err(MojangError::Unreachable)
+        );
         assert_eq!(parse_profile(204, b"", UUID), Ok(None));
         assert_eq!(parse_profile(404, b"", UUID), Ok(None));
         assert_eq!(parse_profile(429, b"", UUID), Err(MojangError::RateLimited));
@@ -486,7 +652,13 @@ mod tests {
     #[tokio::test]
     async fn names_that_are_no_minecraft_names_never_reach_the_network() {
         let http = MojangHttp::new(reqwest::Client::new());
-        for name in ["", "Ste ve", "../x", "Steve&ip=1", "ZwölfZeichenLangerNameXX"] {
+        for name in [
+            "",
+            "Ste ve",
+            "../x",
+            "Steve&ip=1",
+            "ZwölfZeichenLangerNameXX",
+        ] {
             assert_eq!(http.has_joined(name, "x").await, Ok(None), "{name}");
             assert_eq!(http.lookup_name(name).await, Ok(None), "{name}");
         }

@@ -22,8 +22,17 @@ impl Ingame {
         Self::with_source(build_source(), friends_dir, launcher_version)
     }
 
-    pub fn with_source(source: &'static (dyn ModSource + Send + Sync), friends_dir: &Path, launcher_version: &str) -> AppResult<Self> {
-        Ok(Self { source, store: InjectionStore::open(friends_dir, launcher_version)?, java: JavaMajors::default(), mod_ids: ModIdScanner::default() })
+    pub fn with_source(
+        source: &'static (dyn ModSource + Send + Sync),
+        friends_dir: &Path,
+        launcher_version: &str,
+    ) -> AppResult<Self> {
+        Ok(Self {
+            source,
+            store: InjectionStore::open(friends_dir, launcher_version)?,
+            java: JavaMajors::default(),
+            mod_ids: ModIdScanner::default(),
+        })
     }
 
     pub fn source(&self) -> &'static (dyn ModSource + Send + Sync) {
@@ -42,7 +51,10 @@ mod tests {
     fn the_jars_of_a_mod_version_lie_below_the_friends_mod_folder_of_the_data_dir() {
         let dirs = Dirs::new("/daten");
 
-        assert_eq!(dirs.friends_mod().join("2.1.0"), runtime_dir(&dirs.root, "2.1.0"));
+        assert_eq!(
+            dirs.friends_mod().join("2.1.0"),
+            runtime_dir(&dirs.root, "2.1.0")
+        );
     }
 
     #[test]
@@ -52,6 +64,9 @@ mod tests {
         let ingame = Ingame::open(dir.path(), "2.1.0").unwrap();
 
         assert_eq!(ingame.store.get("i1"), super::super::InjectionState::Active);
-        assert_eq!(ingame.source().index().nodes.is_empty(), build_source().index().nodes.is_empty());
+        assert_eq!(
+            ingame.source().index().nodes.is_empty(),
+            build_source().index().nodes.is_empty()
+        );
     }
 }

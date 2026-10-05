@@ -175,6 +175,10 @@ public abstract class CompatScreen extends Screen {
 	@Override
 	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
 		UiSession.run(() -> {
+			//? if <1.20.2 {
+			// Vanilla never calls renderBackground from Screen.render here, so the Pumpkin panel needs its own call.
+			renderBackground(graphics);
+			//?}
 			super.render(graphics, mouseX, mouseY, partialTick);
 			paint(new CompatPainter(graphics, font));
 		});

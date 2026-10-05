@@ -43,7 +43,8 @@ const RELEASE_ID_MAX_PART_DIGITS: usize = 4;
 /// Snapshots (`24w14a`, `26.1-snapshot-1`), Vorabversionen, Release Candidates, Bereiche und Platzhalter sind keine.
 pub fn is_release_id(id: &str) -> bool {
     let parts: Vec<&str> = id.split('.').collect();
-    (RELEASE_ID_MIN_PARTS..=RELEASE_ID_MAX_PARTS).contains(&parts.len()) && parts.iter().all(|part| is_plain_number(part))
+    (RELEASE_ID_MIN_PARTS..=RELEASE_ID_MAX_PARTS).contains(&parts.len())
+        && parts.iter().all(|part| is_plain_number(part))
 }
 
 fn is_plain_number(text: &str) -> bool {
@@ -59,7 +60,9 @@ mod tests {
     use std::cmp::Ordering;
 
     fn compare(left: &str, right: &str) -> Ordering {
-        LoaderVersion::parse(left).unwrap().cmp(&LoaderVersion::parse(right).unwrap())
+        LoaderVersion::parse(left)
+            .unwrap()
+            .cmp(&LoaderVersion::parse(right).unwrap())
     }
 
     #[test]
@@ -99,7 +102,15 @@ mod tests {
 
     #[test]
     fn text_without_a_leading_number_is_not_a_version() {
-        for text in ["", " ", "beta", "-1", ".5", "v1.2", "99999999999999999999999.1"] {
+        for text in [
+            "",
+            " ",
+            "beta",
+            "-1",
+            ".5",
+            "v1.2",
+            "99999999999999999999999.1",
+        ] {
             assert_eq!(LoaderVersion::parse(text), None, "{text:?}");
         }
     }
@@ -114,9 +125,30 @@ mod tests {
     #[test]
     fn snapshots_pre_releases_ranges_and_junk_are_no_release_ids() {
         let cases = [
-            "", "1", "1.21.1.1", "24w14a", "1.21-pre1", "1.21.1-rc1", "26.1-snapshot-1", "26.1-pre-1", "1.21-1.21.1", "~1.21",
-            ">=1.21", "1.21.x", "1.*", "1.RV-Pre1", "3D Shareware v1.34", "1..21", ".1.21", "1.21.", "1.021", "1.21.01", "1.21.12345",
-            " 1.21", "1.21 ", "١.٢١",
+            "",
+            "1",
+            "1.21.1.1",
+            "24w14a",
+            "1.21-pre1",
+            "1.21.1-rc1",
+            "26.1-snapshot-1",
+            "26.1-pre-1",
+            "1.21-1.21.1",
+            "~1.21",
+            ">=1.21",
+            "1.21.x",
+            "1.*",
+            "1.RV-Pre1",
+            "3D Shareware v1.34",
+            "1..21",
+            ".1.21",
+            "1.21.",
+            "1.021",
+            "1.21.01",
+            "1.21.12345",
+            " 1.21",
+            "1.21 ",
+            "١.٢١",
         ];
         for id in cases {
             assert!(!is_release_id(id), "{id:?}");

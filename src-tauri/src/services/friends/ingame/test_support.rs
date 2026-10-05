@@ -26,27 +26,42 @@ pub fn node(id: &str, loader: Loader, minecraft: &[&str], loader_min: &str, java
         id: id.to_owned(),
         loader,
         loader_min: loader_min.to_owned(),
-        minecraft: minecraft.iter().map(|&release| release.to_owned()).collect(),
+        minecraft: minecraft
+            .iter()
+            .map(|&release| release.to_owned())
+            .collect(),
         java_min,
         strategy: default_strategy(loader),
         file: file_of(id),
         sha256: "ab".repeat(32),
-        verified: Some(Verified { smoke: "2026-10-03".to_owned(), owner: None }),
+        verified: Some(Verified {
+            smoke: "2026-10-03".to_owned(),
+            owner: None,
+        }),
     }
 }
 
 /// Derselbe Knoten ohne bestandenen Rauchtest.
 pub fn unverified(node: Node) -> Node {
-    Node { verified: None, ..node }
+    Node {
+        verified: None,
+        ..node
+    }
 }
 
 /// Ein geprüfter Knoten, dessen Prüfsumme zu `jar` passt.
 pub fn jar_node(id: &str, loader: Loader, jar: &[u8]) -> Node {
-    Node { sha256: sha256_hex(jar), ..node(id, loader, &["1.21.1"], "0.16.0", 21) }
+    Node {
+        sha256: sha256_hex(jar),
+        ..node(id, loader, &["1.21.1"], "0.16.0", 21)
+    }
 }
 
 pub fn index_of(nodes: Vec<Node>) -> ModIndex {
-    ModIndex { mod_version: MOD_VERSION.to_owned(), nodes }
+    ModIndex {
+        mod_version: MOD_VERSION.to_owned(),
+        nodes,
+    }
 }
 
 /// Eine Quelle, die genau die angegebenen JARs kennt.
@@ -57,16 +72,25 @@ pub struct FakeSource {
 
 impl FakeSource {
     pub fn empty() -> Self {
-        Self { index: index_of(Vec::new()), jars: HashMap::new() }
+        Self {
+            index: index_of(Vec::new()),
+            jars: HashMap::new(),
+        }
     }
 
     /// Der Index nennt den Knoten, die Quelle hat sein JAR aber nicht.
     pub fn indexed_without_jar(node: &Node) -> Self {
-        Self { index: index_of(vec![node.clone()]), jars: HashMap::new() }
+        Self {
+            index: index_of(vec![node.clone()]),
+            jars: HashMap::new(),
+        }
     }
 
     pub fn with_jar(node: &Node, bytes: &[u8]) -> Self {
-        Self { index: index_of(vec![node.clone()]), jars: HashMap::from([(node.file.clone(), bytes.to_vec())]) }
+        Self {
+            index: index_of(vec![node.clone()]),
+            jars: HashMap::from([(node.file.clone(), bytes.to_vec())]),
+        }
     }
 }
 
@@ -85,7 +109,8 @@ pub struct TempDir(PathBuf);
 
 impl TempDir {
     pub fn new() -> Self {
-        let path = std::env::temp_dir().join(format!("pumpkin-ingame-{}", uuid::Uuid::new_v4().simple()));
+        let path =
+            std::env::temp_dir().join(format!("pumpkin-ingame-{}", uuid::Uuid::new_v4().simple()));
         fs::create_dir_all(&path).unwrap();
         Self(path)
     }
@@ -115,6 +140,8 @@ pub fn make_writable(path: &Path) {
 fn make_all_writable(path: &Path) {
     make_writable(path);
     if let Ok(entries) = fs::read_dir(path) {
-        entries.flatten().for_each(|entry| make_all_writable(&entry.path()));
+        entries
+            .flatten()
+            .for_each(|entry| make_all_writable(&entry.path()));
     }
 }

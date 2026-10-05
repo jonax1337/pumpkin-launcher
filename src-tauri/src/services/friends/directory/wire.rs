@@ -161,14 +161,35 @@ mod tests {
     fn an_inbox_letter_reads_the_worker_example_with_its_stamp() {
         let letter: InboxLetter = serde_json::from_value(inbox_letter_json()).unwrap();
         assert_eq!(letter.id, "7c9e6679-7425-40de-944b-e07fc1f90ae7");
-        assert_eq!(letter.from, LetterFrom { uuid: UUID_SENDER.into(), peer_id: PEER_ID.into() });
-        assert_eq!((letter.to.as_str(), letter.hello_id.as_str(), letter.relay_index), (UUID_RECIPIENT, HELLO_ID, 0));
-        assert_eq!((letter.created_at, letter.expires_at, letter.signature.as_str()), (1_790_000_000, 1_791_209_600, SIGNATURE));
+        assert_eq!(
+            letter.from,
+            LetterFrom {
+                uuid: UUID_SENDER.into(),
+                peer_id: PEER_ID.into()
+            }
+        );
+        assert_eq!(
+            (
+                letter.to.as_str(),
+                letter.hello_id.as_str(),
+                letter.relay_index
+            ),
+            (UUID_RECIPIENT, HELLO_ID, 0)
+        );
+        assert_eq!(
+            (
+                letter.created_at,
+                letter.expires_at,
+                letter.signature.as_str()
+            ),
+            (1_790_000_000, 1_791_209_600, SIGNATURE)
+        );
     }
 
     #[test]
     fn an_inbox_is_a_list_of_letters() {
-        let inbox: Inbox = serde_json::from_value(json!({ "letters": [inbox_letter_json()] })).unwrap();
+        let inbox: Inbox =
+            serde_json::from_value(json!({ "letters": [inbox_letter_json()] })).unwrap();
         assert_eq!(inbox.letters.len(), 1);
     }
 
@@ -176,12 +197,23 @@ mod tests {
     fn a_challenge_reads_the_worker_answer() {
         let body = json!({ "challenge": "abc.def", "serverId": "0123456789abcdef0123456789abcdef01234567", "expiresAt": 1_790_000_120u64 });
         let challenge: Challenge = serde_json::from_value(body).unwrap();
-        assert_eq!(challenge, Challenge { challenge: "abc.def".into(), server_id: "0123456789abcdef0123456789abcdef01234567".into(), expires_at: 1_790_000_120 });
+        assert_eq!(
+            challenge,
+            Challenge {
+                challenge: "abc.def".into(),
+                server_id: "0123456789abcdef0123456789abcdef01234567".into(),
+                expires_at: 1_790_000_120
+            }
+        );
     }
 
     #[test]
     fn a_session_request_has_exactly_the_keys_of_the_login_body() {
-        let certificate = CertificateProof { public_key: "MIIB".into(), expires_at: 1_790_172_800_123, mojang_signature: "c2ln".into() };
+        let certificate = CertificateProof {
+            public_key: "MIIB".into(),
+            expires_at: 1_790_172_800_123,
+            mojang_signature: "c2ln".into(),
+        };
         let request = SessionRequest {
             challenge: "abc.def".into(),
             uuid: UUID_RECIPIENT.into(),
@@ -201,14 +233,26 @@ mod tests {
 
     #[test]
     fn a_session_reads_the_token_with_its_expiry_and_account_and_no_name() {
-        let body = json!({ "token": "v2.x.y", "expiresAt": 1_790_021_600u64, "uuid": UUID_RECIPIENT });
+        let body =
+            json!({ "token": "v2.x.y", "expiresAt": 1_790_021_600u64, "uuid": UUID_RECIPIENT });
         let session: DirectorySession = serde_json::from_value(body).unwrap();
-        assert_eq!((session.token.as_str(), session.expires_at, session.uuid.as_str()), ("v2.x.y", 1_790_021_600, UUID_RECIPIENT));
+        assert_eq!(
+            (
+                session.token.as_str(),
+                session.expires_at,
+                session.uuid.as_str()
+            ),
+            ("v2.x.y", 1_790_021_600, UUID_RECIPIENT)
+        );
     }
 
     #[test]
     fn the_token_never_shows_in_debug_output() {
-        let session = DirectorySession { token: "v2.geheim.mac".into(), expires_at: 1, uuid: UUID_RECIPIENT.into() };
+        let session = DirectorySession {
+            token: "v2.geheim.mac".into(),
+            expires_at: 1,
+            uuid: UUID_RECIPIENT.into(),
+        };
         let shown = format!("{session:?}");
         assert!(!shown.contains("geheim"), "{shown}");
         assert!(shown.contains(UUID_RECIPIENT));
@@ -216,8 +260,17 @@ mod tests {
 
     #[test]
     fn a_sent_letter_reads_id_and_expiry() {
-        let sent: SentLetter = serde_json::from_value(json!({ "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7", "expiresAt": 5 })).unwrap();
-        assert_eq!(sent, SentLetter { id: "7c9e6679-7425-40de-944b-e07fc1f90ae7".into(), expires_at: 5 });
+        let sent: SentLetter = serde_json::from_value(
+            json!({ "id": "7c9e6679-7425-40de-944b-e07fc1f90ae7", "expiresAt": 5 }),
+        )
+        .unwrap();
+        assert_eq!(
+            sent,
+            SentLetter {
+                id: "7c9e6679-7425-40de-944b-e07fc1f90ae7".into(),
+                expires_at: 5
+            }
+        );
     }
 
     #[test]
