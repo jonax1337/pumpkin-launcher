@@ -1254,11 +1254,13 @@ mod tests {
             with_certificate(|proof| proof.mojang_signature = String::new()),
             with_certificate(|proof| proof.expires_at = -1),
         ];
-        for request in malformed {
-            assert_eq!(
-                world.directory.session(&request).await.unwrap_err(),
-                DirectoryError::Invalid("invalid"),
-                "{request:?}"
+        for (case, request) in malformed.into_iter().enumerate() {
+            assert!(
+                matches!(
+                    world.directory.session(&request).await,
+                    Err(DirectoryError::Invalid("invalid"))
+                ),
+                "malformed session case {case} must be invalid"
             );
         }
         assert!(world.directory.session(&good).await.is_ok());

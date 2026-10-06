@@ -7,10 +7,11 @@ use std::time::Duration;
 use futures::future::BoxFuture;
 
 use super::config::friends_dir;
+use super::directory::mojang::session_profile_url;
 use super::sanitize;
 use crate::coded;
 use crate::error::{AppError, AppResult};
-use crate::services::skins::{parse_player_skin, SESSION_PROFILE};
+use crate::services::skins::parse_player_skin;
 use crate::services::{data_url, modrinth, write_atomic, Dirs};
 
 const SKIN_MAX_BYTES: u64 = 64 * 1024;
@@ -31,7 +32,7 @@ struct MojangHttp<'a>(&'a reqwest::Client);
 impl MojangSource for MojangHttp<'_> {
     fn session_profile<'a>(&'a self, mc_uuid: &'a str) -> BoxFuture<'a, AppResult<Vec<u8>>> {
         Box::pin(modrinth::bytes(
-            self.0.get(format!("{SESSION_PROFILE}{mc_uuid}")),
+            self.0.get(session_profile_url(mc_uuid)),
             PROFILE_MAX_BYTES,
         ))
     }

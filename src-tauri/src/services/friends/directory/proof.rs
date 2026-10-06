@@ -440,11 +440,10 @@ mod tests {
             (server_id, "abcd", uuid),
             (server_id, peer_id, &upper_uuid),
         ];
-        for (server_id, peer_id, uuid) in refused {
-            assert_eq!(
-                login_parts(&inputs.host, server_id, peer_id, uuid),
-                None,
-                "{server_id} {peer_id} {uuid}"
+        for (case, (server_id, peer_id, uuid)) in refused.into_iter().enumerate() {
+            assert!(
+                login_parts(&inputs.host, server_id, peer_id, uuid).is_none(),
+                "malformed login case {case} must be refused"
             );
         }
     }

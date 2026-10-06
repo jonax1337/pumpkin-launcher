@@ -10,6 +10,14 @@ ext.mixin_refmap = isUnobfuscated ? 'null' : '"pumpkin_bridge-refmap.json"'
 
 apply from: rootProject.file('gradle/node.gradle')
 
+if (node.javaMin < 9) {
+	// Loom 1.18's internal xvfb-run drops the bare classpath; Java 8 cannot use its @argfile path.
+	// Use JavaExec's normal classpath handling and the kit demo's existing outer Xvfb display.
+	tasks.withType(net.fabricmc.loom.task.AbstractRunTask).configureEach {
+		useXvfb = false
+	}
+}
+
 sourceSets.main.java.exclude('dev/laux/pumpkin/bridge/platform/neoforge/**',
 	'dev/laux/pumpkin/bridge/platform/neoforgelegacy/**', 'dev/laux/pumpkin/bridge/platform/forge/**')
 

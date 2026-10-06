@@ -212,7 +212,7 @@ impl MojangSessions for MojangHttp {
             }
             let (status, body) = self
                 .fetch(
-                    self.client.get(format!("{SESSION_PROFILE}{uuid}")),
+                    self.client.get(session_profile_url(uuid)),
                     PROFILE_BODY_LIMIT,
                 )
                 .await?;
@@ -224,6 +224,16 @@ impl MojangSessions for MojangHttp {
 
 fn join_body(session: &McIdentity, server_id: &str) -> serde_json::Value {
     json!({ "accessToken": session.access_token, "selectedProfile": session.uuid, "serverId": server_id })
+}
+
+/// The fixed HTTPS session endpoint with an already validated UUID as its final path segment.
+pub(crate) fn session_profile_url(uuid: &str) -> reqwest::Url {
+    let mut url = reqwest::Url::parse(SESSION_PROFILE).expect("feste Adresse");
+    url.path_segments_mut()
+        .expect("feste hierarchische Adresse")
+        .pop_if_empty()
+        .push(uuid);
+    url
 }
 
 fn has_joined_url(name: &str, server_id: &str) -> reqwest::Url {

@@ -35,6 +35,10 @@ For installation and a first game, start with the [launcher guide](README.md#dow
 - Aligned release tests with the Java 17 minimum for JUnit on Java 8 game targets.
 - Fixed the bare-Node Mojang key check and mod-packaging jobs so they do not
   require an uninstalled pnpm cache integration.
+- Preserved the development launch classpath for Java 8 Fabric targets.
+- Added a real software Vulkan driver for headless Minecraft 26.3 CI rendering.
+- Kept Minecraft profile requests explicitly HTTPS and removed sensitive values
+  from failed-test diagnostics.
 
 ### Current limits
 

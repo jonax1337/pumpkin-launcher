@@ -210,10 +210,9 @@ jobs:
       - name: Compile against both ends and a middle version
         run: node mod/scripts/compile-matrix.mjs --node ${{ matrix.id }}
 
-  # Kit-Demo-Lauf: ein Entwicklungs-Client je Fabric-Knoten unter Xvfb mit Software-GL. Der Demo-Bildschirm des Widget-Kits
+  # Kit-Demo-Lauf: ein Entwicklungs-Client je Fabric-Knoten unter Xvfb mit Software-GL/Vulkan. Der Demo-Bildschirm des Widget-Kits
   # schreibt "pumpkin_bridge kit demo rendered <n> frames at <w>x<h>"; scripts/kit-demo.mjs wartet darauf und beendet den Client.
-  # Best Effort und NICHT bestätigt: Auf dem Windows-Rechner der Entwicklung lief der Lauf für alle vier Knoten, auf einem
-  # GitHub-Runner wurde er noch nie gestartet (offen ist vor allem, ob 26.x unter Software-Rendering startet, docs/bridge/README.md).
+  # Best Effort: Dieser Entwicklungs-Lauf setzt kein "verified"; dafür läuft der separate Produktions-Rauchtest.
   # Darum continue-on-error: Ein roter Lauf hier sperrt weder den Build noch das Paket.
   kit-demo:
     name: Kit demo ${{ matrix.id }}
@@ -225,6 +224,10 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.nodes.outputs.fabricMatrix) }}
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      # 26.3 tries Vulkan when Xvfb cannot supply its requested sRGB GLX visual; use Mesa's real CPU driver.
+      VK_DRIVER_FILES: /usr/share/vulkan/icd.d/lvp_icd.json
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
@@ -267,11 +270,11 @@ jobs:
           restore-keys: |
             gradle-fabric-
 
-      - name: Display and software GL
-        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libxrandr2 libxxf86vm1 libxcursor1 libxi6
+      - name: Display and software rendering
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 mesa-vulkan-drivers libxrandr2 libxxf86vm1 libxcursor1 libxi6
 
       - name: Run the kit demo
-        run: LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" node mod/scripts/kit-demo.mjs --node ${{ matrix.id }}
+        run: xvfb-run -a -s "-screen 0 1280x720x24" node mod/scripts/kit-demo.mjs --node ${{ matrix.id }}
 
   # Ein Artefakt mit mod-index.json und allen Jars; hier greift auch das Gesamtbudget.
   package:

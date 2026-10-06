@@ -788,7 +788,7 @@ mod tests {
         }}));
 
         let Ok(Incoming::Session(SessionControl::Invite(invite))) = parsed else {
-            panic!("{parsed:?}")
+            panic!("expected a successfully parsed session invite")
         };
         assert_eq!(invite.world_name.as_deref(), Some("Inselwelt"));
         assert_eq!(invite.instance.name, "Fabrica 26.3");

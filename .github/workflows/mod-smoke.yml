@@ -1,7 +1,7 @@
 name: Mod smoke
 
 # Rauchtest der Einspeisung im echten Spiel (tools/mod-smoke/README.md):
-# baut den Knoten und startet Minecraft unter Xvfb mit Software-GL über den Startweg des Launchers.
+# baut den Knoten und startet Minecraft unter Xvfb mit Software-GL/Vulkan über den Startweg des Launchers.
 # `nodes.txt` is the sole support matrix. This job attempts every target; a successful
 # bridge handshake is not a claim that the interactive UI or Friends flows were checked.
 
@@ -67,10 +67,15 @@ jobs:
       PUMPKIN_SMOKE_CELL: ${{ matrix.cell }}
       # Software-GL für den headlessen Client; erbt an das Spiel weiter.
       LIBGL_ALWAYS_SOFTWARE: '1'
+      # LIBGL_ALWAYS_SOFTWARE does not select a Vulkan driver. Lavapipe supplies real X11 surfaces for 26.3.
+      VK_DRIVER_FILES: /usr/share/vulkan/icd.d/lvp_icd.json
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - uses: ./.github/actions/linux-deps
+
+      - name: Display and software rendering
+        run: sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 mesa-vulkan-drivers
 
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:

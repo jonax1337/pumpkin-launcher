@@ -430,10 +430,13 @@ mod tests {
         let shown = format!("{certificate:?}");
         assert!(
             shown.contains(UUID) && shown.contains("<verborgen>"),
-            "{shown}"
+            "certificate debug output must identify the account and redact keys"
         );
         let key_start = format!("{:?}", &certificate.public_key[..8]).replace(['[', ']'], "");
-        assert!(!shown.contains(&key_start), "{shown}");
+        assert!(
+            !shown.contains(&key_start),
+            "certificate debug output must not contain key bytes"
+        );
     }
 
     #[test]
