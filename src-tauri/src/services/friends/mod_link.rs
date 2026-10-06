@@ -1,4 +1,4 @@
-//! Verbindung zur Mod im Spiel (INGAME 5, SPEC 7), Launcher-Seite: Themen (Freunde, Anfragen, Sitzung, Einladungen,
+//! Verbindung zur Mod im Spiel (docs/bridge/README.md, "Protocol 2", SPEC 7), Launcher-Seite: Themen (Freunde, Anfragen, Sitzung, Einladungen,
 //! Beitritt, Spiel, Codes, Gesperrte, ich) und Hinweise an die Mod, ihre Vorgänge als nicht vertrauenswürdig behandelt.
 //! Die Brücke (`modbridge`) prüft Rahmen, Ratenfenster und Zustimmungen je Spielstart; was ein Vorgang bewirkt, steht in
 //! `mod_link_ops` (Einteilung), `mod_link_social` (Freunde und Anfragen), `mod_link_join` (Beitreten) und im Teilen
@@ -11,7 +11,8 @@ use std::time::Duration;
 use tokio::sync::oneshot;
 
 use super::contract::{
-    Friend, FriendRequest, ModActivityEntry, ModConnectionEvent, ModOpenEvent, Presence, RequestDirection, RequestState,
+    Friend, FriendRequest, ModActivityEntry, ModConnectionEvent, ModOpenEvent, Presence,
+    RequestDirection, RequestState,
 };
 use super::session_events::SessionEvent;
 use super::sessions::{shown_name, FriendSessions, Shared};
@@ -81,6 +82,12 @@ impl ModLink {
         lock(&self.pending).retain(|_, pending| pending.instance_id != instance_id);
     }
 
+
+    pub(super) fn revoke_friends(&self) {
+        lock(&self.pending).clear();
+        *lock(&self.presence) = None;
+        *lock(&self.incoming_seen) = None;
+    }
     /// Ob irgendein Spiel auf eine Antwort des Nutzers wartet; dann bringt `launcher.open` das Fenster nicht nach vorn.
     fn has_open_question(&self) -> bool {
         !lock(&self.pending).is_empty()
@@ -89,25 +96,51 @@ impl ModLink {
     /// Freunde, die seit dem letzten Abgleich von offline auf online oder spielend gewechselt sind; der erste Abgleich
     /// merkt sich nur den Stand.
     fn came_online<'a>(&self, friends: &'a [Friend]) -> Vec<&'a Friend> {
-        let now = friends.iter().map(|friend| (friend.id.clone(), friend.presence)).collect();
-        let Some(before) = lock(&self.presence).replace(now) else { return Vec::new() };
-        let was_offline = |friend: &Friend| before.get(&friend.id).is_none_or(|before| *before == Presence::Offline);
-        friends.iter().filter(|friend| friend.presence != Presence::Offline && was_offline(friend)).collect()
+        let now = friends
+            .iter()
+            .map(|friend| (friend.id.clone(), friend.presence))
+            .collect();
+        let Some(before) = lock(&self.presence).replace(now) else {
+            return Vec::new();
+        };
+        let was_offline = |friend: &Friend| {
+            before
+                .get(&friend.id)
+                .is_none_or(|before| *before == Presence::Offline)
+        };
+        friends
+            .iter()
+            .filter(|friend| friend.presence != Presence::Offline && was_offline(friend))
+            .collect()
     }
 
     /// Eingehende Anfragen, die seit dem letzten Abgleich neu sind; der erste Abgleich merkt sich nur den Stand.
     fn newly_received<'a>(&self, requests: &'a [FriendRequest]) -> Vec<&'a FriendRequest> {
-        let waiting = |request: &&FriendRequest| request.direction == RequestDirection::Incoming && request.state == RequestState::Pending;
+        let waiting = |request: &&FriendRequest| {
+            request.direction == RequestDirection::Incoming
+                && request.state == RequestState::Pending
+        };
         let current: Vec<&FriendRequest> = requests.iter().filter(waiting).collect();
         let now = current.iter().map(|request| request.id.clone()).collect();
-        let Some(before) = lock(&self.incoming_seen).replace(now) else { return Vec::new() };
-        current.into_iter().filter(|request| !before.contains(&request.id)).collect()
+        let Some(before) = lock(&self.incoming_seen).replace(now) else {
+            return Vec::new();
+        };
+        current
+            .into_iter()
+            .filter(|request| !before.contains(&request.id))
+            .collect()
     }
 
     fn ask(&self, instance_id: &str) -> (String, oneshot::Receiver<bool>) {
         let (answer, answered) = oneshot::channel();
         let request_id = new_id();
-        lock(&self.pending).insert(request_id.clone(), Pending { instance_id: instance_id.to_owned(), answer });
+        lock(&self.pending).insert(
+            request_id.clone(),
+            Pending {
+                instance_id: instance_id.to_owned(),
+                answer,
+            },
+        );
         (request_id, answered)
     }
 
@@ -126,6 +159,7 @@ impl ModLink {
 impl FriendSessions {
     /// Die Antwort des Nutzers auf `friends-mod-confirm` (SPEC 7.4).
     pub async fn mod_confirm(&self, request_id: &str, allow: bool) -> AppResult<()> {
+        self.shared.ensure_enabled()?;
         let pending = lock(&self.shared.mods.pending).remove(request_id);
         let pending = pending.ok_or_else(|| {
             AppError::NotFound(coded!("errors.friends.notFound.request", id = request_id).into())
@@ -134,7 +168,7 @@ impl FriendSessions {
         Ok(())
     }
 
-    /// Die Vorgänge der Bereiche `share` und `social`, die aus dem Spiel kamen (INGAME 5.7), neueste zuerst; höchstens 100.
+    /// Die Vorgänge der Bereiche `share` und `social`, die aus dem Spiel kamen (docs/bridge/README.md, "Protocol 2"), neueste zuerst; höchstens 100.
     pub fn mod_activity(&self) -> Vec<ModActivityEntry> {
         self.shared.mods.activity.list()
     }
@@ -153,6 +187,9 @@ impl FriendSessions {
 /// Eine neue Verbindung bekommt von der Brücke sofort den letzten Stand jedes Themas.
 pub(super) fn connected(shared: &Shared, instance_id: &str) {
     announce_connection(shared, instance_id, true);
+    if !shared.friends.state().enabled {
+        topics::publish_unavailable(shared, instance_id);
+    }
 }
 
 /// Eine beendete Verbindung weckt das Verzeichnis: wartet es auf das Ende der Spiele, macht es jetzt weiter.
@@ -162,15 +199,25 @@ pub(super) fn disconnected(shared: &Shared, instance_id: &str) {
 }
 
 fn announce_connection(shared: &Shared, instance_id: &str, connected: bool) {
-    let event = ModConnectionEvent { instance_id: instance_id.to_owned(), connected };
+    let event = ModConnectionEvent {
+        instance_id: instance_id.to_owned(),
+        connected,
+    };
     shared.emit(SessionEvent::ModConnection(event));
     shared.mods.app_events.get().link_changed(instance_id);
 }
 
 /// Ein Hinweis an die Mod der Instanz; `who` sind Name und Minecraft-UUID der Person, um die es geht (die Mod zeigt
 /// nur den Namen).
-pub(super) fn notify(shared: &Shared, instance_id: &str, event: ModNotify, who: Option<(String, Option<String>)>) {
-    shared.bridge.notify(instance_id, event, who.map(|(name, _mc_uuid)| name));
+pub(super) fn notify(
+    shared: &Shared,
+    instance_id: &str,
+    event: ModNotify,
+    who: Option<(String, Option<String>)>,
+) {
+    shared
+        .bridge
+        .notify(instance_id, event, who.map(|(name, _mc_uuid)| name));
 }
 
 /// Vorgänge der Mod laufen über den `OpHandler` der Brücke und ihre Zustimmungen je Spielstart; das Spielsignal
@@ -182,14 +229,20 @@ pub(super) async fn handle(_shared: Arc<Shared>, instance_id: String, request: M
 /// Setzt den Bearbeiter der Vorgänge in die Brücke ein und hält die Themen jeder verbundenen Mod aktuell; meldet
 /// auch Freunde, die online kommen, und neue Anfragen.
 pub(super) async fn refresh_regularly(shared: Weak<Shared>) {
-    let Some(strong) = shared.upgrade() else { return };
-    strong.bridge.set_handler(Arc::new(ops::ModOps::new(shared.clone())));
+    let Some(strong) = shared.upgrade() else {
+        return;
+    };
+    strong
+        .bridge
+        .set_handler(Arc::new(ops::ModOps::new(shared.clone())));
     watch_game_links(&strong);
     drop(strong);
     let mut ticks = tokio::time::interval(REFRESH_INTERVAL);
     loop {
         ticks.tick().await;
-        let Some(shared) = shared.upgrade() else { return };
+        let Some(shared) = shared.upgrade() else {
+            return;
+        };
         refresh(&shared).await;
     }
 }
@@ -197,32 +250,63 @@ pub(super) async fn refresh_regularly(shared: Weak<Shared>) {
 /// Sagt dem Freunde-Dienst, ob ein Spiel mit der Mod verbunden ist: dann holt er kein neues Zertifikat bei Mojang.
 fn watch_game_links(shared: &Shared) {
     let bridge = shared.bridge.clone();
-    if shared.friends.watch_game_links(Arc::new(move || bridge.has_active_link())).is_err() {
+    if shared
+        .friends
+        .watch_game_links(Arc::new(move || bridge.has_active_link()))
+        .is_err()
+    {
         tracing::warn!("Die Spielverbindungen wurden dem Freunde-Dienst schon gemeldet");
     }
 }
 
-async fn refresh(shared: &Arc<Shared>) {
-    let friends = shared.friends.list().await.unwrap_or_default();
-    let requests = shared.friends.requests().await.unwrap_or_default();
-    let running = shared.hosting.running_instances().into_iter();
-    let instances: Vec<String> = running.filter(|instance| shared.bridge.is_connected(instance)).collect();
-    for friend in shared.mods.came_online(&friends) {
-        let who = Some((shown_name(friend), friend.mc_uuid.clone()));
-        notify_all(shared, &instances, ModNotify::FriendOnline, &who);
-    }
-    for request in shared.mods.newly_received(&requests) {
-        let name = request.display_name.clone().or_else(|| request.mc_name.clone()).unwrap_or_default();
-        notify_all(shared, &instances, ModNotify::RequestReceived, &Some((name, None)));
-    }
-    for instance_id in &instances {
-        topics::publish(shared, instance_id, &friends, &requests).await;
+pub(super) fn disabled(shared: &Shared) {
+    shared.mods.revoke_friends();
+    for instance_id in shared.hosting.running_instances() {
+        topics::publish_unavailable(shared, &instance_id);
     }
 }
 
-fn notify_all(shared: &Shared, instances: &[String], event: ModNotify, who: &Option<(String, Option<String>)>) {
+async fn refresh(shared: &Arc<Shared>) {
+    let publication = shared.bridge.friends_publication();
+    let friends = shared.friends.list().await.unwrap_or_default();
+    let requests = shared.friends.requests().await.unwrap_or_default();
+    if !publication.is_current() {
+        return;
+    }
+    let running = shared.hosting.running_instances().into_iter();
+    let instances: Vec<String> = running
+        .filter(|instance| shared.bridge.is_connected(instance))
+        .collect();
+    for friend in shared.mods.came_online(&friends) {
+        let who = Some((shown_name(friend), friend.mc_uuid.clone()));
+        notify_all(&publication, &instances, ModNotify::FriendOnline, &who);
+    }
+    for request in shared.mods.newly_received(&requests) {
+        let name = request
+            .mc_name
+            .clone()
+            .or_else(|| request.display_name.clone())
+            .unwrap_or_default();
+        notify_all(
+            &publication,
+            &instances,
+            ModNotify::RequestReceived,
+            &Some((name, None)),
+        );
+    }
+    for instance_id in &instances {
+        topics::publish(shared, &publication, instance_id, &friends, &requests).await;
+    }
+}
+
+fn notify_all(
+    publication: &crate::services::modbridge::FriendsPublication<'_>,
+    instances: &[String],
+    event: ModNotify,
+    who: &Option<(String, Option<String>)>,
+) {
     for instance_id in instances {
-        notify(shared, instance_id, event, who.clone());
+        publication.notify(instance_id, event, who.as_ref().map(|(name, _)| name.clone()));
     }
 }
 
@@ -282,9 +366,22 @@ mod tests {
     fn only_friends_coming_online_after_the_first_look_are_announced() {
         let link = ModLink::default();
 
-        assert!(link.came_online(&[friend("a", Presence::Online), friend("b", Presence::Offline)]).is_empty());
-        let next = [friend("a", Presence::Playing), friend("b", Presence::Online), friend("c", Presence::Online)];
-        let announced: Vec<&str> = link.came_online(&next).into_iter().map(|friend| friend.id.as_str()).collect();
+        assert!(link
+            .came_online(&[
+                friend("a", Presence::Online),
+                friend("b", Presence::Offline)
+            ])
+            .is_empty());
+        let next = [
+            friend("a", Presence::Playing),
+            friend("b", Presence::Online),
+            friend("c", Presence::Online),
+        ];
+        let announced: Vec<&str> = link
+            .came_online(&next)
+            .into_iter()
+            .map(|friend| friend.id.as_str())
+            .collect();
 
         assert_eq!(announced, ["b", "c"]);
     }
@@ -294,17 +391,31 @@ mod tests {
         let link = ModLink::default();
         let incoming = |id| request(id, RequestDirection::Incoming, RequestState::Pending);
 
-        assert!(link.newly_received(&[incoming("r1")]).is_empty(), "der erste Abgleich merkt sich nur den Stand");
+        assert!(
+            link.newly_received(&[incoming("r1")]).is_empty(),
+            "der erste Abgleich merkt sich nur den Stand"
+        );
         let next = [
             incoming("r1"),
             incoming("r2"),
             request("r3", RequestDirection::Outgoing, RequestState::Delivering),
             request("r4", RequestDirection::Incoming, RequestState::Delivering),
         ];
-        let announced: Vec<&str> = link.newly_received(&next).into_iter().map(|request| request.id.as_str()).collect();
+        let announced: Vec<&str> = link
+            .newly_received(&next)
+            .into_iter()
+            .map(|request| request.id.as_str())
+            .collect();
 
-        assert_eq!(announced, ["r2"], "nur eingehende, die auf die Antwort des Nutzers warten");
-        assert!(link.newly_received(&next).is_empty(), "dieselbe Anfrage wird nicht noch einmal gemeldet");
+        assert_eq!(
+            announced,
+            ["r2"],
+            "nur eingehende, die auf die Antwort des Nutzers warten"
+        );
+        assert!(
+            link.newly_received(&next).is_empty(),
+            "dieselbe Anfrage wird nicht noch einmal gemeldet"
+        );
     }
 
     #[test]

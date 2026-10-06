@@ -1,4 +1,4 @@
-//! Die Frage, ob eine Verbindung vom Spielprozess kommt, den der Launcher gestartet hat (docs/friends/INGAME.md, 5.2).
+//! Die Frage, ob eine Verbindung vom Spielprozess kommt, den der Launcher gestartet hat (docs/bridge/README.md, "Connection and ownership").
 use std::io;
 use std::net::SocketAddr;
 

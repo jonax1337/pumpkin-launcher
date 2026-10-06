@@ -1,42 +1,77 @@
 # Pumpkin Friends
 
-An opt-in feature of the launcher: add friends with a one-time code, see who is online, and open a
-singleplayer world (through the in-game mod or vanilla "Open to LAN") so that invited friends in other
-networks can join it. It is off by default and needs a Microsoft account. It adds no chat, no voice, no
-public links and no telemetry. Status: built, but not called stable until the owner's real-network
-verification ([`VERIFICATION.md`](VERIFICATION.md)) is filled in.
+Last updated: 2026-10-06.
 
-## Architecture in ten lines
+Friends is optional and off by default. With a Microsoft account, you can exchange one-time friend codes, see who is online and invite friends in other networks into a singleplayer world. Exact Minecraft-name requests are available when a directory is configured; the recipient must opt into being findable.
 
-1. Transport is [iroh](https://github.com/n0-computer/iroh) 1.3: QUIC with Ed25519 ids, hole punching, and a relay as fallback. Friends are dialed by id; there is no address lookup service.
-2. Identity is one permanent key in the OS keyring. A friend code (`pumpkin-` + 72 base32 characters) is single use, valid 7 days, and carries a per-code relay-only hello endpoint, not your permanent id.
-3. A friendship needs mutual consent: the invitee redeems the code, the inviter accepts in the UI.
-4. Presence runs over one connection per online friend (keep-alive 15 s, idle timeout 40 s).
-5. Hosting: the launcher finds the game's LAN port (mod hint, log parser or manual), accepts it only if the game process owns it and it answers a server list ping, then tunnels each Minecraft TCP connection through one QUIC stream.
-6. Joining: a single-owner loopback listener on the guest; the game connects with Quick Play. Only into an instance that already matches (Minecraft version, loader, non-client-only mods by sha512).
-7. The relay map is compiled in with stable one-byte indexes; peers exchange indexes, never URLs. Release builds list only our relay; debug and `beta-relays` builds add n0's public relays (opt-in).
-8. The in-game mod (client only, [`INGAME.md`](INGAME.md)): the launcher embeds the mod jars and injects them into Microsoft-account launches through loader start-up options — the player installs nothing, nothing lands in the instance folder. Seven build nodes exist (Fabric, NeoForge, Forge; Minecraft 1.20.1 to 26.3), five of them are smoke-proven ([`INGAME-SMOKE.md`](INGAME-SMOKE.md)); unverified cells stay off. It talks to the launcher over loopback JSON lines only, and the launcher treats it as untrusted.
-9. The webview never touches the network for friend data; Rust fetches and caches skins.
-10. Hosting and joining need online mode: offline accounts are refused before launch, and the host's game refuses them at login.
+## Using Friends
 
-## Privacy in one paragraph
+### Turn it on
 
-On a direct connection friends see each other's public IP and local interface addresses; "Immer über
-Relay verbinden" (always relay) hides them at the cost of latency. Relays see ids, IPs and who talks to
-whom, never content, and our relay stores no log. Details: [`PRIVACY.md`](PRIVACY.md).
+Both players need Pumpkin Launcher, a signed-in Microsoft account that owns Minecraft: Java Edition, and a working system keyring. Keep both launchers open during play.
 
-## Documents
+In **0.3.0**, hosting and joining require Minecraft **1.16.5 or newer**. The in-game menu has its own exact version/loader requirements.
 
-| Document | What it is |
-|---|---|
-| [`SPEC.md`](SPEC.md) | The frozen design and protocol spec, the source of truth (release gates in 1.3, tests in 13) |
-| [`IROH-NOTES.md`](IROH-NOTES.md) | How the iroh 1.3 API behaves, as checked by the spike's tests |
-| [`DEPENDENCIES.md`](DEPENDENCIES.md) | New Rust dependencies and why |
-| [`RELAY-OPS.md`](RELAY-OPS.md) | Runbook for our own relay (ports, deployment, limits, logs, abuse) |
-| [`PRIVACY.md`](PRIVACY.md) | Privacy, relay legal text and the Mojang compliance checklist |
-| [`OWNER-CHECKLIST.md`](OWNER-CHECKLIST.md) | Everything only the owner can do before a release, in order (German) |
-| [`VERIFICATION.md`](VERIFICATION.md) | The tables for gates G1 to G5 that the owner fills in |
-| [`INGAME.md`](INGAME.md) | Concept for the in-game friends menu: a mod the launcher injects by itself (launcher-only, no install). Supersedes `MOD2.md` |
-| [`../../mod/README.md`](../../mod/README.md) | The current Fabric mod: build, test, `FakeLauncher`, GUI checklist (replaced by the node build of `INGAME.md`) |
-| [`../../tools/p2p-spike/README.md`](../../tools/p2p-spike/README.md) | The two-PC spike for gate G1 |
-| [`../../infra/relay/`](../../infra/relay/) | `relay.toml`, `Dockerfile` and compose files for the relay |
+The **keyring** is your computer's secure password storage. Windows Credential Manager and macOS Keychain are built in; Linux needs a working Secret Service store, such as GNOME Keyring or KWallet. If Pumpkin reports a credential-storage error, make sure that store is available and unlocked. For persistent errors, open **Settings > Support** and include the error plus **Copy debug info**, not passwords or tokens.
+
+Open **Settings > Friends**, turn on **Friends**, and read the privacy notice. If the build uses third-party relays, it asks for separate consent. This is optional; normal singleplayer play does not need Friends.
+
+### Add a friend with a code
+
+1. Open the launcher's **Friends** page and choose **Add friend > My code > Create code**.
+2. Give the code privately to your friend. Do not post it publicly.
+3. Your friend opens **Add friend > Enter code**, pastes it, and chooses **Send request**.
+4. You open **Requests** on the Friends page and choose **Accept**. Both players must agree before they become friends.
+
+Codes are single-use and expire after seven days. Pending requests can be delivered for up to fourteen days; keep the launchers online for delivery. Local aliases change only your own labels.
+
+As an alternative, use **Add friend > By name** with the exact Minecraft name. The recipient must enable **Settings > Friends > Findable by Minecraft name**, and the build needs a configured directory. If the directory cannot be reached, use a code instead.
+
+### Share a world and join
+
+1. **Host:** start your instance, open a singleplayer world, press **Esc** for Minecraft's pause menu, and choose **Open to LAN**. An instance is a separate game setup with its own worlds and mods.
+2. In Pumpkin, open that instance's **Worlds** tab and choose **Share with friends**. Select the confirmed friends who are online, then choose **Share**. If LAN detection needs help, **Enter port manually** accepts the port Minecraft displays.
+3. **Guest:** open the invitation with **View**, choose a matching **Instance** if prompted, and press **Join**.
+
+The guest needs the same Minecraft release, loader and required mods as the host. A loader, such as Fabric or Forge, lets mods run. If the invitation reports a mismatch:
+
+- **Plain Minecraft:** if you have no matching setup, choose **Create vanilla instance** to create one before joining.
+- **Modded world:** obtain the host's matching modpack and pack version, or agree on the missing/extra mods listed in the invitation and adjust your instance. To import a pack, open **Library > New instance > File**; use **Another launcher** if the matching setup is in another launcher. Then choose **Check again**.
+
+Friends does not copy the host's world, mods or configuration files, or automatically transfer or install a matching modpack.
+
+The host can choose **Stop sharing** in the Worlds tab to disconnect guests and expire invitations. A guest can choose **Leave** in the active connection panel. Closing the launcher ends sharing/joining. Before Minecraft 26.2, stopping sharing does not close the world's LAN port: leave the world as well to stop local-network access.
+
+### In-game menu
+
+In **0.3.0**, Friends is a feature in the **Pumpkin Bridge** menu for supported modded Microsoft-account launches. The build registry covers selected Fabric, Quilt, Forge and NeoForge targets; the launcher embeds the validated package, but automatic injection requires recorded startup evidence. Supported launches receive the bundled client mod automatically; no manual JAR installation is needed. See [Check your installed build](../bridge/README.md#check-your-installed-build) and [startup recovery](../bridge/README.md#startup-recovery) for the controls and their limits. Private Friends data and actions remain unavailable until opt-in; identity and privacy settings remain in the launcher.
+
+**Historical 0.2.0 compatibility:** that release's pause-menu **Pumpkin Friends** button supported selected Fabric releases from Minecraft 1.20 through 26.3, selected NeoForge releases, and Forge 1.20.1. The [0.2.0 supported-games table](https://github.com/jonax1337/pumpkin-launcher/releases/tag/v0.2.0#supported-games) gives its exact Minecraft and minimum loader versions. Vanilla, Quilt and older or unlisted combinations did not get that release's in-game menu. Launcher sharing and joining in **0.2.0** required Minecraft **1.20 or newer**, even without the menu.
+
+For historical **0.2.0** startup failures with Chinese, Japanese or Korean characters in the launcher's data-folder path, follow the [release-specific menu workaround](../../CHANGELOG.md#known-limits). The original [0.2.0 Known limits](https://github.com/jonax1337/pumpkin-launcher/releases/tag/v0.2.0#known-limits) describe that release; they do not establish a fix in 0.3.0.
+
+## Connection and privacy
+
+A **relay** is a server that forwards encrypted traffic between your launchers when they cannot connect directly. It cannot read the world tunnel's content. On a direct path, peers can see each other's public IP and local interface addresses. **Settings > Friends > Always connect through a relay** hides those addresses from peers, with additional latency; the relay operator still sees connection metadata, such as IP addresses, connected endpoints and timing. Changing this setting ends an active share/join.
+
+Opening a world to LAN also exposes Minecraft's LAN port to the local network, as in Vanilla. Other mods in the same game process can access the local Bridge channel. Only run mods you trust. Start with [your privacy choices](PRIVACY.md#your-choices-at-a-glance); the same reference explains data retention.
+
+## Availability and limits
+
+Official tagged release builds enable the `beta-relays` feature (n0 relays, with separate consent) and configure the Friends directory. Release users do not need to run their own relay or directory. An ordinary source build without that feature or directory configuration has an empty production relay map and no default directory address; it needs operator configuration for Friends connectivity and name requests.
+
+Friends remains experimental. A working in-game menu is not evidence that authenticated sharing and joining with two accounts across different networks is reliable. That cross-network behavior and equivalent non-Windows runtime evidence are not yet established. Check **Settings > Friends > Network** for the connection status; if it reports an unreachable relay, check your internet connection. For persistent errors, use the launcher's **Settings > Support** and include the message plus **Copy debug info**.
+
+There is no chat, voice, public discovery list or telemetry. If the in-game button is missing, first use the release-specific compatibility guidance [above](#in-game-menu); Friends setup does not make an unsupported game/loader combination supported.
+
+## Technical documentation
+
+| Document | Purpose |
+| --- | --- |
+| [SPEC.md](SPEC.md) | Friends transport, identity, sessions and directory API contracts |
+| [Pumpkin Bridge](../bridge/README.md) | General Launcher–Minecraft integration, injection, local protocol and consent boundaries |
+| [PRIVACY.md](PRIVACY.md) | Data recipients, retention and security limitations |
+| [RELAY-OPS.md](RELAY-OPS.md) | Relay deployment, configuration and incident handling |
+| [mod README](../../mod/README.md) | Build setup and current support registry |
+| [directory README](../../directory/README.md) | Worker deployment and pinned-key maintenance |
+| [relay configuration](../../infra/relay/) | Deployable server files |

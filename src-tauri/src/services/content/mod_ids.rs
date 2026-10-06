@@ -1,5 +1,5 @@
 //! Welche Mod-IDs die JARs im Ordner `mods` einer Instanz tragen. Der Launcher fragt das vor jedem Start (und für die
-//! Statuszeile der Instanzseite), ob schon eine `pumpkin_friends` darin liegt (INGAME 3.3, Punkt 6); darum merkt sich der
+//! Statuszeile der Instanzseite), ob schon eine `pumpkin_bridge` darin liegt (docs/bridge/README.md, "Support selection"); darum merkt sich der
 //! [`ModIdScanner`] das Ergebnis je Datei, solange Größe und Änderungszeit gleich bleiben.
 use std::collections::HashMap;
 use std::fs;
@@ -93,7 +93,7 @@ mod tests {
         fs::write(dir.join("sodium.jar"), fabric_jar("sodium", &["sodium-extra"])).unwrap();
         fs::write(dir.join("LITHIUM.JAR"), fabric_jar("lithium", &[])).unwrap();
         fs::write(dir.join("notes.txt"), "kein JAR").unwrap();
-        fs::write(dir.join("pumpkin_friends.jar.disabled"), fabric_jar("pumpkin_friends", &[])).unwrap();
+        fs::write(dir.join("pumpkin_bridge.jar.disabled"), fabric_jar("pumpkin_bridge", &[])).unwrap();
 
         let ids = ModIdScanner::default().ids_in(&dir);
 
@@ -104,9 +104,9 @@ mod tests {
     #[test]
     fn a_jar_with_the_id_of_the_friends_mod_is_found_under_any_file_name() {
         let dir = mods_dir();
-        fs::write(dir.join("umbenannt.jar"), fabric_jar("pumpkin_friends", &[])).unwrap();
+        fs::write(dir.join("umbenannt.jar"), fabric_jar("pumpkin_bridge", &[])).unwrap();
 
-        assert_eq!(ModIdScanner::default().ids_in(&dir), ["pumpkin_friends"]);
+        assert_eq!(ModIdScanner::default().ids_in(&dir), ["pumpkin_bridge"]);
         fs::remove_dir_all(dir).unwrap();
     }
 

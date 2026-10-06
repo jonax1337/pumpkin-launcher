@@ -1,0 +1,103 @@
+package dev.laux.pumpkin.bridge.protocol;
+
+import com.google.gson.JsonObject;
+import dev.laux.pumpkin.bridge.protocol.json.JsonFields;
+import dev.laux.pumpkin.bridge.protocol.json.MalformedJson;
+import dev.laux.pumpkin.bridge.protocol.LauncherFrame.Closing;
+import dev.laux.pumpkin.bridge.protocol.LauncherFrame.Notify;
+import dev.laux.pumpkin.bridge.protocol.LauncherFrame.Pending;
+import dev.laux.pumpkin.bridge.protocol.LauncherFrame.Ping;
+import dev.laux.pumpkin.bridge.protocol.LauncherFrame.Pong;
+import dev.laux.pumpkin.bridge.protocol.LauncherFrame.Reject;
+import dev.laux.pumpkin.bridge.protocol.LauncherFrame.Response;
+import dev.laux.pumpkin.bridge.protocol.LauncherFrame.State;
+import dev.laux.pumpkin.bridge.protocol.LauncherFrame.Welcome;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
+
+/** Turns frames into JSON lines and back. Whatever does not match the protocol exactly is dropped: the launcher channel is untrusted. */
+public final class FrameCodec {
+	private static final Map<String, Function<JsonFields, LauncherFrame>> READERS = createReaders();
+
+	private static Map<String, Function<JsonFields, LauncherFrame>> createReaders() {
+		Map<String, Function<JsonFields, LauncherFrame>> readers = new java.util.HashMap<>();
+		readers.put("welcome", FrameCodec::welcome);
+		readers.put("reject", fields -> new Reject(fields.enumValue("reason", RejectReason.class)));
+		readers.put("res", FrameCodec::response);
+		readers.put("pending", FrameCodec::pending);
+		readers.put("state", FrameCodec::state);
+		readers.put("event", FrameCodec::event);
+		readers.put("ping", fields -> new Ping());
+		readers.put("pong", fields -> new Pong());
+		return java.util.Collections.unmodifiableMap(readers);
+	}
+
+	private FrameCodec() {
+	}
+
+	/** The line without its line ending. */
+	public static String encode(ModFrame frame) {
+		JsonObject line = new JsonObject();
+		line.addProperty("type", frame.type());
+		frame.writeMembers(line);
+		return line.toString();
+	}
+
+	public static Optional<LauncherFrame> decode(String line) {
+		try {
+			JsonFields fields = JsonFields.parseLine(line);
+			Function<JsonFields, LauncherFrame> reader = READERS.get(fields.string("type"));
+			return Optional.ofNullable(reader).map(read -> read.apply(fields));
+		} catch (MalformedJson malformed) {
+			return Optional.empty();
+		}
+	}
+
+	private static LauncherFrame welcome(JsonFields fields) {
+		JsonFields scopes = fields.object("scopes");
+		return new Welcome(fields.integer("protocol"), fields.string("launcher"),
+			new Scopes(scopes.enumValue("share", ScopeState.class), scopes.enumValue("social", ScopeState.class)));
+	}
+
+	private static LauncherFrame response(JsonFields fields) {
+		String id = requestId(fields);
+		if (fields.bool("ok")) {
+			return new Response(id, Optional.of(fields.optionalObject("result").orElseGet(() -> JsonFields.of(new JsonObject()))),
+				Optional.empty());
+		}
+		JsonFields error = fields.object("error");
+		Map<String, String> params = error.optionalObject("params").map(JsonFields::textMembers).orElse(java.util.Collections.emptyMap());
+		return new Response(id, Optional.empty(), Optional.of(new OpError(ErrorCode.fromWire(error.string("code")), params)));
+	}
+
+	private static LauncherFrame pending(JsonFields fields) {
+		if (!"scope".equals(fields.string("prompt"))) {
+			throw new MalformedJson("unknown prompt");
+		}
+		return new Pending(requestId(fields), fields.enumValue("scope", Scope.class));
+	}
+
+	private static LauncherFrame state(JsonFields fields) {
+		return new State(fields.enumValue("topic", Topic.class), fields.number("rev"), fields.element("value"));
+	}
+
+	private static LauncherFrame event(JsonFields fields) {
+		switch (fields.string("event")) {
+			case "notify":
+				return new Notify(fields.enumValue("kind", NotifyKind.class), fields.optionalString("name"));
+			case "closing":
+				return new Closing(fields.enumValue("reason", ClosingReason.class));
+			default:
+				throw new MalformedJson("unknown event");
+		}
+	}
+
+	private static String requestId(JsonFields fields) {
+		String id = fields.string("id");
+		if (!Protocol.isValidRequestId(id)) {
+			throw new MalformedJson("invalid request id");
+		}
+		return id;
+	}
+}

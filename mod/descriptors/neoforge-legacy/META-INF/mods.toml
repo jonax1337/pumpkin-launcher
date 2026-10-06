@@ -1,0 +1,29 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "Apache-2.0"
+issueTrackerURL = "https://github.com/jonax1337/pumpkin-launcher/issues"
+
+[[mods]]
+modId = "pumpkin_bridge"
+version = "${version}"
+displayName = "Pumpkin Bridge"
+authors = "jonax1337"
+description = '''
+Connects Minecraft to the Pumpkin Launcher through Pumpkin Bridge, with Friends for sharing worlds and invitations. Does nothing without the launcher.
+NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.
+'''
+logoFile = "assets/pumpkin_bridge/icon.png"
+
+[[dependencies.pumpkin_bridge]]
+modId = "neoforge"
+mandatory = true
+versionRange = "[${loaderMin},)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.pumpkin_bridge]]
+modId = "minecraft"
+mandatory = true
+versionRange = "${minecraftRange}"
+ordering = "NONE"
+side = "CLIENT"

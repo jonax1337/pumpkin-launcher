@@ -15,13 +15,13 @@ use crate::models::{
 };
 use crate::services::gamesignal::{lan_line_forwarder, GameSignal, LaunchReporter};
 use crate::services::install::{self, InstallProgress, InstallStep, OnProgress, INSTALL_PROGRESS_EVENT};
-use crate::services::launch::{self, LaunchSpec, LogStream, Running, Session, EXIT_EVENT, LOG_EVENT};
+use crate::services::launch::{self, ExitCause, LaunchSpec, LogStream, ProcessExit, Running, Session, EXIT_EVENT, LOG_EVENT};
 use crate::services::loader::{self, LoaderVersion};
 use crate::services::mojang::{VersionEntry, VersionManifest, MANIFEST_URL};
 use crate::services::presence::Activity;
 use crate::services::progress::emit;
 use crate::services::rules::Env;
-use crate::services::friends::ingame::Injection;
+use crate::services::modbridge::ingame::Injection;
 use crate::services::launch_args::ArgList;
 use crate::services::{auth, crashreport, download, gamelog, java, launch_args, mods, pack_update, remove_logged, sessionlog, system, worlds};
 use crate::state::AppState;
@@ -325,7 +325,7 @@ struct PreparedLaunch {
 
 /// Prüft die Standards des Launchers, holt den Stand vor einem unterbrochenen Pack-Update zurück, prüft das
 /// Quick-Play-Ziel, bringt die Mods auf Stand, meldet das Konto an, speist die Mod im Spiel ein, wenn alles passt
-/// (INGAME 3.3), und baut die Startargumente. Nach jedem Schritt, der dauern kann, meldet `reporter` Fortschritt.
+/// (docs/bridge/README.md, "Support selection"), und baut die Startargumente. Nach jedem Schritt, der dauern kann, meldet `reporter` Fortschritt.
 async fn prepare_launch(
     state: &AppState,
     instance: &Instance,
@@ -343,6 +343,7 @@ async fn prepare_launch(
     let (account, session) = launch_account(state, options).await?;
     reporter.progress();
     let version = loader::installed_version(&state.dirs, instance.into()).await?;
+    install::ensure_logging_libraries(&state.http, &state.dirs, &version).await?;
     reporter.progress();
     let java = java::resolve(&state.dirs, version.java_component(), instance.java_path.as_deref(), options.java_path.as_deref())?;
     reporter.progress();
@@ -357,6 +358,7 @@ async fn prepare_launch(
         memory_mb: instance.memory_mb.or(options.default_memory_mb).unwrap_or(launch::DEFAULT_MEMORY_MB),
         min_memory_mb: instance.min_memory_mb.or(options.default_min_memory_mb),
         injected_jvm_args: &[],
+        injected_classpath: &[],
         extra_jvm_args: user_jvm_args,
         window: launch::effective_window(instance.window, options.default_window),
         injected_game_args: &[],
@@ -386,7 +388,7 @@ async fn launch_account(state: &AppState, options: &LaunchOptions) -> AppResult<
 
 /// Startet das Spiel: Ausgabezeilen gehen als `instance-log` ans Frontend und, roh, an die Erkennung des LAN-Ports,
 /// das Ende an `on_game_exit`. Nur ein Start mit eingespeister Mod bekommt die Umgebungsvariablen der Brücke und eine
-/// Wache über die ersten 90 Sekunden (INGAME 3.8); der Prozess wird gleich nach dem Start an seinen Datensatz gebunden.
+/// Wache über die ersten 90 Sekunden (docs/bridge/README.md, "Startup recovery"); der Prozess wird gleich nach dem Start an seinen Datensatz gebunden.
 fn spawn_game(app: &AppHandle, instance_id: &str, prepared: &PreparedLaunch) -> AppResult<Running> {
     let state = app.state::<AppState>();
     let (log_app, log_id) = (app.clone(), instance_id.to_owned());
@@ -407,7 +409,7 @@ fn spawn_game(app: &AppHandle, instance_id: &str, prepared: &PreparedLaunch) -> 
             emit(&log_app, LOG_EVENT, LogPayload { instance_id: log_id.clone(), stream, line });
         },
         lan_line_forwarder(state.signals.clone(), instance_id.to_owned()),
-        move |code| on_game_exit(&exit_app, exit_id, started, code, exit_watch),
+        move |result| on_game_exit(&exit_app, exit_id, started, result, exit_watch),
     )
     .inspect_err(|_| state.bridge.forget(instance_id))?;
     prepared.injection.bind_pid(&state.bridge, instance_id, game.pid);
@@ -437,18 +439,20 @@ fn announce_in_discord(state: &AppState, instance: &Instance, options: &LaunchOp
 
 /// Aufräumen nach dem Ende des Spiels: Anzeige in Discord weg, Eintrag entfernen, Token der Mod verwerfen, Freunde-Funktion
 /// benachrichtigen, Startfehler der Mod festhalten, Spielzeit buchen, `instance-exit` senden.
-fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, code: Option<i32>, watch: Option<LaunchWatch>) {
+fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, result: ProcessExit, watch: Option<LaunchWatch>) {
+    let code = result.code;
     let state = app.state::<AppState>();
     state.presence.stopped(&instance_id);
-    // `instance_kill` hat den Eintrag schon entfernt: dann hat der Nutzer gestoppt.
-    let stopped = state.take_running(&instance_id).is_none();
+    drop(state.take_running(&instance_id));
     state.bridge.forget(&instance_id);
     state.signals.send(GameSignal::Exited { instance_id: instance_id.clone() });
     if let Some(watch) = watch {
-        watch.on_exit(code);
+        if result.cause == ExitCause::Natural {
+            watch.on_exit(code);
+        }
         ingame_launch::announce_current(app, &instance_id);
     }
-    let crashed = code != Some(0) && !stopped;
+    let crashed = code != Some(0) && result.cause == ExitCause::Natural;
     let game_dir = state.dirs.game_dir(&instance_id);
     let text = |p: PathBuf| p.to_string_lossy().into_owned();
     let report = gamelog::crash_report(&game_dir, started);

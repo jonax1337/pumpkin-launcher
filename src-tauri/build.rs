@@ -1,4 +1,4 @@
-//! Build-Skript: Tauri und die Einbettung der Mod (docs/friends/INGAME.md, 3.2).
+//! Build-Skript: Tauri und die Einbettung der Mod (docs/bridge/README.md, "Embedded index and files").
 //!
 //! Liegt im Mod-Ordner (Umgebungsvariable `PUMPKIN_MOD_DIST`, sonst `<Repo>/mod/build/mod-index`) ein gültiger
 //! `mod-index.json` samt JARs, bettet `ingame/embedded.rs` sie ein; sonst trägt der Build keine Mod und die
@@ -12,13 +12,13 @@ use embed::{Embedding, JarEntry};
 mod embed;
 // Die Regeldatei des Index, von Laufzeit und Build gemeinsam benutzt.
 #[allow(dead_code)]
-#[path = "src/services/friends/ingame/index.rs"]
+#[path = "src/services/modbridge/ingame/index.rs"]
 mod index;
 #[allow(dead_code)]
-#[path = "src/services/friends/ingame/validate.rs"]
+#[path = "src/services/modbridge/ingame/validate.rs"]
 mod validate;
 #[allow(dead_code)]
-#[path = "src/services/friends/ingame/version.rs"]
+#[path = "src/services/modbridge/ingame/version.rs"]
 mod version;
 
 const DIST_ENV: &str = "PUMPKIN_MOD_DIST";
@@ -27,12 +27,12 @@ const GENERATED_FILE: &str = "embedded_mod.rs";
 
 fn main() {
     tauri_build::build();
-    if let Err(reason) = embed_friends_mod() {
-        println!("cargo:warning=Freunde-Mod nicht eingebettet: {reason}");
+    if let Err(reason) = embed_bridge_mod() {
+        println!("cargo:warning=Pumpkin Bridge nicht eingebettet: {reason}");
     }
 }
 
-fn embed_friends_mod() -> Result<(), String> {
+fn embed_bridge_mod() -> Result<(), String> {
     println!("cargo:rerun-if-env-changed={DIST_ENV}");
     println!("cargo:rerun-if-changed=build_support/embed.rs");
     let dist = dist_folder();

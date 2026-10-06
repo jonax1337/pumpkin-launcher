@@ -1,4 +1,4 @@
-//! Die Vorgänge von INGAME 5.4 gegen die laufende Brücke mit einem Bearbeiter, der alles mit `{}` beantwortet: jeder Vorgang
+//! Die Vorgänge von docs/bridge/README.md, "Operations and consent" gegen die laufende Brücke mit einem Bearbeiter, der alles mit `{}` beantwortet: jeder Vorgang
 //! wird in dem Fenster seiner Klasse gezählt (5.6), `join.failed` ist ein Vorgang, die Rückfrage meldet Ablehnungen mit
 //! einem Toast (5.5), und die Brücke prüft den Besitzer der Verbindung auf Verlangen noch einmal (7).
 use std::io;

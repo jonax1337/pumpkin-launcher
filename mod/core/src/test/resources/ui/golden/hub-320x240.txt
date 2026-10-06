@@ -17,18 +17,18 @@ page 1: first row 0, 5 rows shown
   row2 10,104 294x36 | line1 14,108 222x12 | line2 14,124 222x12 | action 240,112 60x20
   row3 10,140 294x24 | line1 14,140 222x24 | action 240,142 60x20
   row4 10,164 294x24 | line1 14,164 222x24 | action 240,166 60x20
-  scrollbar thumb 308,56 2x20
+  scrollbar thumb 306,56 4x20
 page 2: first row 5, 5 rows shown
   row5 10,56 294x36 | line1 14,60 222x12 | line2 14,76 222x12 | action 240,64 60x20
   row6 10,92 294x24 | line1 14,92 222x24 | action 240,94 60x20
   row7 10,116 294x24 | line1 14,116 222x24 | action 240,118 60x20
   row8 10,140 294x36 | line1 14,144 222x12 | line2 14,160 222x12 | action 240,148 60x20
   row9 10,176 294x24 | line1 14,176 222x24 | action 240,178 60x20
-  scrollbar thumb 308,73 2x20
+  scrollbar thumb 306,73 4x20
 last page: first row 35, 5 rows shown
   row35 10,56 294x36 | line1 14,60 222x12 | line2 14,76 222x12 | action 240,64 60x20
   row36 10,92 294x24 | line1 14,92 222x24 | action 240,94 60x20
   row37 10,116 294x24 | line1 14,116 222x24 | action 240,118 60x20
   row38 10,140 294x36 | line1 14,144 222x12 | line2 14,160 222x12 | action 240,148 60x20
   row39 10,176 294x24 | line1 14,176 222x24 | action 240,178 60x20
-  scrollbar thumb 308,188 2x20
+  scrollbar thumb 306,188 4x20

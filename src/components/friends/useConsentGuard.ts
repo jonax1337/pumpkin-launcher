@@ -5,7 +5,7 @@ import { acceptsActivation, changeAttention, isArmed, lockedForMs, openGuard, ty
 const windowAttended = () => document.hasFocus() && document.visibilityState === "visible";
 
 /**
- * Schutz vor Fehlklicks für die Rückfrage der Mod (INGAME 5.5): `armed` wird erst eine Sekunde nach dem Erscheinen des Dialogs bei
+ * Schutz vor Fehlklicks für die Rückfrage der Mod (docs/bridge/README.md, "Operations and consent"): `armed` wird erst eine Sekunde nach dem Erscheinen des Dialogs bei
  * Fokus und sichtbarem Fenster wahr und fällt bei jedem Wechsel von Fokus oder Sichtbarkeit wieder zurück. `activate` führt die Aktion
  * nur aus, wenn das Auslösen zählt (`acceptsActivation`); `onPointerDown` gehört an die Schaltfläche, die geschützt wird.
  */

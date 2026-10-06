@@ -20,8 +20,9 @@ use tokio::time::error::Elapsed;
 use tokio_util::sync::CancellationToken;
 
 use super::contract::{
-    FriendsEnableInput, FriendsSettings, GuestState, HostSession, Invite, JoinState, JoinTicket, JoinVerdict, LanStatus,
-    ModConfirmEvent, ModLoader, PortSource, Presence, RevokeReason, SessionEnd,
+    FriendsEnableInput, FriendsSettings, GuestState, HostSession, Invite, JoinState, JoinTicket,
+    JoinVerdict, LanStatus, ModConfirmEvent, ModLoader, PortSource, Presence, RevokeReason,
+    SessionEnd,
 };
 use super::control::OpenFrame;
 use super::events::NoEvents;
@@ -74,7 +75,12 @@ const SHORT: JoinTimers = JoinTimers {
 async fn test_relay() -> (RelayEntry, impl Send) {
     let (map, url, server) = run_relay_server().await.unwrap();
     let quic_port = map.get(&url).unwrap().quic.as_ref().map(|quic| quic.port);
-    let entry = RelayEntry { index: 0, url: Cow::Owned(url.to_string()), operator: RelayOperator::Pumpkin, quic_port };
+    let entry = RelayEntry {
+        index: 0,
+        url: Cow::Owned(url.to_string()),
+        operator: RelayOperator::Pumpkin,
+        quic_port,
+    };
     (entry, server)
 }
 
@@ -94,7 +100,10 @@ where
 {
     let deadline = Instant::now() + LIMIT;
     while !condition().await {
-        assert!(Instant::now() < deadline, "{what}: not reached within {LIMIT:?}");
+        assert!(
+            Instant::now() < deadline,
+            "{what}: not reached within {LIMIT:?}"
+        );
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
 }
@@ -103,7 +112,7 @@ async fn until_true(what: &str, condition: impl Fn() -> bool) {
     until(what, || std::future::ready(condition())).await;
 }
 
-/// Mojangs Versionsliste, auf zwei Einträge verkürzt.
+/// Mojangs Versionsliste, auf die für diese Sitzungen nötigen Releases verkürzt.
 pub(super) struct FixedVersions;
 
 impl VersionCatalog for FixedVersions {
@@ -112,6 +121,8 @@ impl VersionCatalog for FixedVersions {
             Ok(VersionIndex::new([
                 ("26.3".to_owned(), "2026-09-01T10:00:00+00:00".to_owned()),
                 ("1.19.4".to_owned(), "2023-03-14T12:56:18+00:00".to_owned()),
+                ("1.16.5".to_owned(), super::contract::MIN_MC_RELEASE_TIME.to_owned()),
+                ("1.16.4".to_owned(), "2020-10-29T15:49:37+00:00".to_owned()),
             ]))
         })
     }
@@ -154,7 +165,15 @@ impl RecordingEvents {
 
     fn join_ends(&self) -> Vec<SessionEnd> {
         let states = self.join_states().into_iter();
-        states.filter_map(|state| if let JoinState::Ended { reason } = state { Some(reason) } else { None }).collect()
+        states
+            .filter_map(|state| {
+                if let JoinState::Ended { reason } = state {
+                    Some(reason)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     fn revocations(&self) -> Vec<RevokeReason> {
@@ -172,7 +191,10 @@ impl RecordingEvents {
     }
 
     fn mod_confirm_requests(&self) -> Vec<String> {
-        self.mod_confirms().into_iter().map(|confirm| confirm.request_id).collect()
+        self.mod_confirms()
+            .into_iter()
+            .map(|confirm| confirm.request_id)
+            .collect()
     }
 
     fn mod_confirms(&self) -> Vec<ModConfirmEvent> {
@@ -207,7 +229,12 @@ impl Node {
         Self::online_with(options, name, timers, Duration::from_secs(15)).await
     }
 
-    async fn online_with(options: NetOptions, name: &str, timers: JoinTimers, liveness: Duration) -> Self {
+    async fn online_with(
+        options: NetOptions,
+        name: &str,
+        timers: JoinTimers,
+        liveness: Duration,
+    ) -> Self {
         Self::online_with_bridge(options, name, timers, liveness, ModBridge::new).await
     }
 
@@ -223,7 +250,8 @@ impl Node {
         let (signals, dirs) = (GameSignals::default(), Dirs::new(dir.path()));
         let bridge = make_bridge(signals.clone());
         let secrets = Arc::new(crate::services::secrets::MemorySecretStore::new());
-        let friends = Friends::new(&dirs, secrets, signals.clone(), bridge.clone(), options).unwrap();
+        let friends =
+            Friends::new(&dirs, secrets, signals.clone(), bridge.clone(), options).unwrap();
         let instances = Arc::new(JsonStore::open(dir.path().join("instances.json")).unwrap());
         let sessions = FriendSessions::new(SessionContext {
             friends: friends.clone(),
@@ -239,15 +267,26 @@ impl Node {
         let events = Arc::new(RecordingEvents::default());
         sessions.start(events.clone()).unwrap();
         let account = AccountProfile::new(name, ACCOUNT_UUID);
-        friends.start(Arc::new(NoEvents), Some(account.clone())).await;
+        bridge.start().await.unwrap();
+        friends
+            .start(Arc::new(NoEvents), Some(account.clone()))
+            .await;
         let input = FriendsEnableInput {
-            display_name: name.into(),
             always_relay: false,
             accept_third_party_relays: false,
             findable_by_name: false,
         };
         friends.enable(input, Some(account)).await.unwrap();
-        let node = Self { friends, sessions, events, signals, bridge, instances, dirs, _dir: dir };
+        let node = Self {
+            friends,
+            sessions,
+            events,
+            signals,
+            bridge,
+            instances,
+            dirs,
+            _dir: dir,
+        };
         node.add_instance(HOST_INSTANCE, "26.3");
         node.add_instance(GUEST_INSTANCE, "26.3");
         node
@@ -276,12 +315,19 @@ impl Node {
     /// Der Start scheitert, bevor das Spiel läuft.
     fn fail_launch(&self, ticket: &JoinTicket) {
         let (instance_id, friend_join) = (ticket.instance_id.clone(), ticket.join_id.clone());
-        self.signals.send(GameSignal::LaunchFailed { instance_id, friend_join });
+        self.signals.send(GameSignal::LaunchFailed {
+            instance_id,
+            friend_join,
+        });
     }
 
     /// Das Spiel meldet einen LAN-Port (nur ein Hinweis, SPEC 6.4).
     fn open_lan(&self, port: u16, source: PortSource) {
-        self.signals.send(GameSignal::LanOpened { instance_id: HOST_INSTANCE.into(), port, source });
+        self.signals.send(GameSignal::LanOpened {
+            instance_id: HOST_INSTANCE.into(),
+            port,
+            source,
+        });
     }
 
     fn spawn_game_as(&self, instance_id: &str, pid: u32, friend_join: Option<&str>) {
@@ -295,49 +341,89 @@ impl Node {
 
     async fn presence_of(&self, peer: &PeerId) -> Presence {
         let friends = self.friends.list().await.unwrap();
-        friends.into_iter().find(|friend| friend.id == peer.to_string()).map_or(Presence::Offline, |f| f.presence)
+        friends
+            .into_iter()
+            .find(|friend| friend.id == peer.to_string())
+            .map_or(Presence::Offline, |f| f.presence)
     }
 
     async fn session(&self) -> Option<HostSession> {
-        self.sessions.host_sessions().await.unwrap().into_iter().next()
+        self.sessions
+            .host_sessions()
+            .await
+            .unwrap()
+            .into_iter()
+            .next()
     }
 
     async fn guest_state(&self, guest: &PeerId) -> Option<(GuestState, bool)> {
         let session = self.session().await?;
         let id = guest.to_string();
-        session.guests.into_iter().find(|g| g.friend_id == id).map(|guest| (guest.state, guest.kicked))
+        session
+            .guests
+            .into_iter()
+            .find(|g| g.friend_id == id)
+            .map(|guest| (guest.state, guest.kicked))
     }
 
     async fn wait_guest(&self, guest: &PeerId, expected: (GuestState, bool)) {
-        until(&format!("guest {expected:?}"), || async move { self.guest_state(guest).await == Some(expected) }).await;
+        until(&format!("guest {expected:?}"), || async move {
+            self.guest_state(guest).await == Some(expected)
+        })
+        .await;
     }
 
     async fn open_invite(&self) -> Invite {
-        until("invite received", || async move { !self.sessions.invites().await.unwrap().is_empty() }).await;
+        until("invite received", || async move {
+            !self.sessions.invites().await.unwrap().is_empty()
+        })
+        .await;
         self.sessions.invites().await.unwrap().remove(0)
     }
 
     async fn wait_join_end(&self, reason: SessionEnd) {
-        until_true(&format!("join ended {reason:?}"), || self.events.join_ends().contains(&reason)).await;
+        until_true(&format!("join ended {reason:?}"), || {
+            self.events.join_ends().contains(&reason)
+        })
+        .await;
     }
 
     async fn wait_revoked(&self, reason: RevokeReason) {
-        until_true(&format!("invite revoked {reason:?}"), || self.events.revocations().contains(&reason)).await;
+        until_true(&format!("invite revoked {reason:?}"), || {
+            self.events.revocations().contains(&reason)
+        })
+        .await;
     }
 
     async fn wait_host_end(&self, reason: SessionEnd) {
-        until_true(&format!("host session ended {reason:?}"), || self.events.host_ends().contains(&reason)).await;
+        until_true(&format!("host session ended {reason:?}"), || {
+            self.events.host_ends().contains(&reason)
+        })
+        .await;
     }
 
     async fn wait_lan(&self, instance_id: &str) -> LanStatus {
-        until("verified LAN port", || async move { self.sessions.lan_status(instance_id).await.unwrap().is_some() })
-            .await;
-        self.sessions.lan_status(instance_id).await.unwrap().unwrap()
+        until("verified LAN port", || async move {
+            self.sessions
+                .lan_status(instance_id)
+                .await
+                .unwrap()
+                .is_some()
+        })
+        .await;
+        self.sessions
+            .lan_status(instance_id)
+            .await
+            .unwrap()
+            .unwrap()
     }
 }
 
 async fn incoming_request_id(node: &Node) -> String {
-    until("incoming request", || async move { !node.friends.requests().await.unwrap().is_empty() }).await;
+    until("incoming request", || async move {
+        !node.friends.requests().await.unwrap().is_empty()
+    })
+    .await;
     node.friends.requests().await.unwrap().remove(0).id
 }
 
@@ -348,7 +434,8 @@ async fn befriend(a: &Node, b: &Node) {
     a.friends.answer_request(&request, true).await.unwrap();
     let (a_id, b_id) = (a.id(), b.id());
     until("both online", || async move {
-        a.presence_of(&b_id).await == Presence::Online && b.presence_of(&a_id).await == Presence::Online
+        a.presence_of(&b_id).await == Presence::Online
+            && b.presence_of(&a_id).await == Presence::Online
     })
     .await;
 }
@@ -378,7 +465,11 @@ impl FakeServer {
                 tokio::spawn(serve_game(stream));
             }
         });
-        Self { port, connections, close }
+        Self {
+            port,
+            connections,
+            close,
+        }
     }
 
     fn connections(&self) -> usize {
@@ -388,10 +479,20 @@ impl FakeServer {
 
 async fn serve_game(mut stream: TcpStream) {
     let check = |bytes: &[u8]| mcproto::check_handshake(bytes, HOST_WINDOW.max_bytes);
-    let Some(((opening, _), _)) = mcproto::read_checked(&mut stream, HOST_WINDOW, check).await else { return };
+    let Some(((opening, _), _)) = mcproto::read_checked(&mut stream, HOST_WINDOW, check).await
+    else {
+        return;
+    };
     if opening.next == mcproto::NextState::Status {
         let json = r#"{"version":{"name":"26.3","protocol":774},"players":{"max":8,"online":1},"description":"x"}"#;
-        let status = packet(&[varint(0), varint(json.len() as i32), json.as_bytes().to_vec()].concat());
+        let status = packet(
+            &[
+                varint(0),
+                varint(json.len() as i32),
+                json.as_bytes().to_vec(),
+            ]
+            .concat(),
+        );
         let _ = stream.write_all(&status).await;
         return;
     }
@@ -405,8 +506,15 @@ async fn share_with(host: &Node, guest: &Node, server: &FakeServer) -> HostSessi
     host.spawn_game(HOST_INSTANCE, None);
     host.open_lan(server.port, PortSource::Log);
     host.wait_lan(HOST_INSTANCE).await;
-    let session = host.sessions.host_start(HOST_INSTANCE, None, false).await.unwrap();
-    host.sessions.host_invite(&session.id, vec![guest.id().to_string()]).await.unwrap()
+    let session = host
+        .sessions
+        .host_start(HOST_INSTANCE, None, false)
+        .await
+        .unwrap();
+    host.sessions
+        .host_invite(&session.id, vec![guest.id().to_string()])
+        .await
+        .unwrap()
 }
 
 /// Zwei befreundete Dienste; der Gastgeber teilt und hat den Gast eingeladen.
@@ -436,16 +544,34 @@ impl Scene {
     ) -> Self {
         let (relay, server_guard) = test_relay().await;
         let host = Node::online_with(options(&relay), "Anna", RELAXED, liveness).await;
-        let guest = Node::online_with_bridge(options(&relay), "Bert", timers, Duration::from_secs(15), make_bridge).await;
+        let guest = Node::online_with_bridge(
+            options(&relay),
+            "Bert",
+            timers,
+            Duration::from_secs(15),
+            make_bridge,
+        )
+        .await;
         befriend(&host, &guest).await;
         let server = FakeServer::start().await;
         let session = share_with(&host, &guest, &server).await;
         let invite = guest.open_invite().await;
-        Self { host, guest, server, session, invite, _relay: Box::new(server_guard) }
+        Self {
+            host,
+            guest,
+            server,
+            session,
+            invite,
+            _relay: Box::new(server_guard),
+        }
     }
 
     async fn join(&self) -> JoinTicket {
-        self.guest.sessions.invite_join(&self.invite.id, GUEST_INSTANCE).await.unwrap()
+        self.guest
+            .sessions
+            .invite_join(&self.invite.id, GUEST_INSTANCE)
+            .await
+            .unwrap()
     }
 
     /// Beitritt mit gestartetem Spiel, das über den Tunnel beim Server angemeldet ist.
@@ -453,27 +579,47 @@ impl Scene {
         let ticket = self.join().await;
         self.guest.spawn_game(GUEST_INSTANCE, Some(&ticket.join_id));
         let game = enter_world(&ticket.address).await;
-        self.host.wait_guest(&self.guest.id(), (GuestState::Connected, false)).await;
+        self.host
+            .wait_guest(&self.guest.id(), (GuestState::Connected, false))
+            .await;
         (ticket, game)
     }
 
     /// Ein Stream, wie ihn ein Gast-Launcher öffnet, der Widerrufe nicht beachtet.
     async fn raw_tunnel(&self) -> Value {
-        let mut stream = self.raw_stream(&OpenFrame::Tunnel { session_id: self.session.id.clone() }).await;
+        let mut stream = self
+            .raw_stream(&OpenFrame::Tunnel {
+                session_id: self.session.id.clone(),
+            })
+            .await;
         stream.read_frame::<Value>(OPEN_FRAME_LIMIT).await.unwrap()
     }
 
     async fn raw_manifest_request(&self) -> Value {
         let mut stream = self.raw_stream(&OpenFrame::Request).await;
-        let request = RequestMessage::ManifestRequest { session_id: self.session.id.clone() };
-        frame::write(&mut stream, &request, REQUEST_FRAME_LIMIT).await.unwrap();
-        stream.read_frame::<Value>(REQUEST_FRAME_LIMIT).await.unwrap()
+        let request = RequestMessage::ManifestRequest {
+            session_id: self.session.id.clone(),
+        };
+        frame::write(&mut stream, &request, REQUEST_FRAME_LIMIT)
+            .await
+            .unwrap();
+        stream
+            .read_frame::<Value>(REQUEST_FRAME_LIMIT)
+            .await
+            .unwrap()
     }
 
     async fn raw_stream(&self, open: &OpenFrame) -> BiStream {
-        let conn = self.guest.friends.dial_friend(&self.host.id()).await.unwrap();
+        let conn = self
+            .guest
+            .friends
+            .dial_friend(&self.host.id())
+            .await
+            .unwrap();
         let mut stream = conn.open_bi().await.unwrap();
-        frame::write(&mut stream, open, OPEN_FRAME_LIMIT).await.unwrap();
+        frame::write(&mut stream, open, OPEN_FRAME_LIMIT)
+            .await
+            .unwrap();
         stream
     }
 }
@@ -493,14 +639,21 @@ async fn enter_world(address: &str) -> TcpStream {
     let mut game = TcpStream::connect(addr).await.unwrap();
     game.write_all(&opening_for(addr)).await.unwrap();
     let mut reply = [0u8; WELCOME.len()];
-    tokio::time::timeout(LIMIT, game.read_exact(&mut reply)).await.unwrap().unwrap();
+    tokio::time::timeout(LIMIT, game.read_exact(&mut reply))
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(reply, WELCOME);
     game
 }
 
 /// Handshake und Login Start, wie das Spiel sie an die Adresse des Beitritts schickt.
 fn opening_for(addr: SocketAddr) -> Vec<u8> {
-    [handshake(&addr.ip().to_string(), addr.port(), 2), login_start("Bert")].concat()
+    [
+        handshake(&addr.ip().to_string(), addr.port(), 2),
+        login_start("Bert"),
+    ]
+    .concat()
 }
 
 /// Die Verbindung wurde geschlossen (Ende, Fehler oder Zurücksetzen), bevor `wait` um ist.
@@ -509,7 +662,10 @@ async fn is_closed_within(game: &mut TcpStream, wait: Duration) -> bool {
 }
 
 /// Was ein Lesen von höchstens einem Byte binnen `wait` ergibt: gelesene Bytes, Fehler oder Zeitablauf.
-async fn read_within(game: &mut TcpStream, wait: Duration) -> Result<std::io::Result<usize>, Elapsed> {
+async fn read_within(
+    game: &mut TcpStream,
+    wait: Duration,
+) -> Result<std::io::Result<usize>, Elapsed> {
     let mut byte = [0u8; 1];
     tokio::time::timeout(wait, game.read(&mut byte)).await
 }
@@ -529,23 +685,60 @@ async fn refuses_connections(address: &str) -> bool {
 // ---- Gastgeber: Prüfungen vor dem Teilen (SPEC 6.1) ----
 
 #[tokio::test]
-async fn hosting_needs_a_running_microsoft_game_of_1_20_or_later() {
+async fn hosting_needs_a_running_microsoft_game_of_1_16_5_or_later() {
     let (relay, _server) = test_relay().await;
     let host = Node::online(options(&relay), "Anna", RELAXED).await;
-    host.add_instance("old", "1.19.4");
+    host.add_instance("old", "1.16.4");
     let start = |instance: &'static str| host.sessions.host_start(instance, None, false);
 
     let not_running = start(HOST_INSTANCE).await.unwrap_err();
     host.add_instance("offline", "26.3");
     host.spawn_game("old", None);
-    let offline = GameSignal::Spawned { instance_id: "offline".into(), pid: 1, online_account: false, friend_join: None };
+    let offline = GameSignal::Spawned {
+        instance_id: "offline".into(),
+        pid: 1,
+        online_account: false,
+        friend_join: None,
+    };
     host.signals.send(offline);
-    let known = || async { start("offline").await.is_err_and(|e| error_key(&e) != "errors.friends.gameNotRunning") };
+    let known = || async {
+        start("offline")
+            .await
+            .is_err_and(|e| error_key(&e) != "errors.friends.gameNotRunning")
+    };
     until("games known", known).await;
 
     assert_eq!(error_key(&not_running), "errors.friends.gameNotRunning");
-    assert_eq!(error_key(&start("offline").await.unwrap_err()), "errors.friends.msAccountRequired");
-    assert_eq!(error_key(&start("old").await.unwrap_err()), "errors.friends.versionUnsupported");
+    assert_eq!(
+        error_key(&start("offline").await.unwrap_err()),
+        "errors.friends.msAccountRequired"
+    );
+    assert_eq!(
+        error_key(&start("old").await.unwrap_err()),
+        "errors.friends.versionUnsupported"
+    );
+}
+
+#[tokio::test]
+async fn the_oldest_supported_game_still_requires_online_authentication_and_a_checked_lan_port() {
+    let (relay, _server) = test_relay().await;
+    let host = Node::online(options(&relay), "Anna", RELAXED).await;
+    host.add_instance("oldest", "1.16.5");
+    host.spawn_game("oldest", None);
+    let start = || host.sessions.host_start("oldest", None, false);
+    until("oldest game known", || async {
+        start().await.is_err_and(|error| error_key(&error) == "errors.friends.lanPortUnknown")
+    }).await;
+    assert_eq!(error_key(&start().await.unwrap_err()), "errors.friends.lanPortUnknown");
+    host.signals.send(GameSignal::Spawned {
+        instance_id: "oldest".into(),
+        pid: 1,
+        online_account: false,
+        friend_join: None,
+    });
+    until("oldest offline game refused", || async {
+        start().await.is_err_and(|error| error_key(&error) == "errors.friends.msAccountRequired")
+    }).await;
 }
 
 #[tokio::test]
@@ -560,20 +753,48 @@ async fn a_port_must_be_given_in_range_owned_by_the_game_and_answering() {
             let _ = stream.write_all(b"HTTP/1.1 400 Bad Request\r\n\r\n").await;
         }
     });
-    let unused = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap().port();
+    let unused = TcpListener::bind("127.0.0.1:0")
+        .await
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
     host.spawn_game(HOST_INSTANCE, None);
     let start = |port: Option<u16>| host.sessions.host_start(HOST_INSTANCE, port, false);
-    let known = || async { start(Some(80)).await.is_err_and(|e| error_key(&e) == "errors.friends.portInvalid") };
+    let known = || async {
+        start(Some(80))
+            .await
+            .is_err_and(|e| error_key(&e) == "errors.friends.portInvalid")
+    };
     until("game known", known).await;
 
-    assert_eq!(error_key(&start(None).await.unwrap_err()), "errors.friends.lanPortUnknown");
-    assert_eq!(error_key(&start(Some(unused)).await.unwrap_err()), "errors.friends.portNotGame");
-    assert_eq!(error_key(&start(Some(http_port)).await.unwrap_err()), "errors.friends.lanUnreachable");
+    assert_eq!(
+        error_key(&start(None).await.unwrap_err()),
+        "errors.friends.lanPortUnknown"
+    );
+    assert_eq!(
+        error_key(&start(Some(unused)).await.unwrap_err()),
+        "errors.friends.portNotGame"
+    );
+    assert_eq!(
+        error_key(&start(Some(http_port)).await.unwrap_err()),
+        "errors.friends.lanUnreachable"
+    );
     let session = start(Some(server.port)).await.unwrap();
-    let manual = LanStatus { port: server.port, source: PortSource::Manual, pid: std::process::id() };
-    assert_eq!((session.port, session.port_source, session.pid), (manual.port, manual.source, manual.pid));
+    let manual = LanStatus {
+        port: server.port,
+        source: PortSource::Manual,
+        pid: std::process::id(),
+    };
+    assert_eq!(
+        (session.port, session.port_source, session.pid),
+        (manual.port, manual.source, manual.pid)
+    );
     assert_eq!(host.events.lan_events().last(), Some(&Some(manual)));
-    assert_eq!(error_key(&start(Some(server.port)).await.unwrap_err()), "errors.friends.sessionActive");
+    assert_eq!(
+        error_key(&start(Some(server.port)).await.unwrap_err()),
+        "errors.friends.sessionActive"
+    );
 }
 
 #[tokio::test]
@@ -581,7 +802,12 @@ async fn a_lan_hint_counts_only_after_verification() {
     let (relay, _server) = test_relay().await;
     let host = Node::online(options(&relay), "Anna", RELAXED).await;
     let server = FakeServer::start().await;
-    let unused = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap().port();
+    let unused = TcpListener::bind("127.0.0.1:0")
+        .await
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
     host.spawn_game(HOST_INSTANCE, None);
 
     host.open_lan(unused, PortSource::Mod);
@@ -589,11 +815,27 @@ async fn a_lan_hint_counts_only_after_verification() {
     let ignored = host.sessions.lan_status(HOST_INSTANCE).await.unwrap();
     host.open_lan(server.port, PortSource::Mod);
     let verified = host.wait_lan(HOST_INSTANCE).await;
-    host.signals.send(GameSignal::LanClosed { instance_id: HOST_INSTANCE.into() });
-    until("lan closed", || async { host.sessions.lan_status(HOST_INSTANCE).await.unwrap().is_none() }).await;
+    host.signals.send(GameSignal::LanClosed {
+        instance_id: HOST_INSTANCE.into(),
+    });
+    until("lan closed", || async {
+        host.sessions
+            .lan_status(HOST_INSTANCE)
+            .await
+            .unwrap()
+            .is_none()
+    })
+    .await;
 
     assert_eq!(ignored, None);
-    assert_eq!(verified, LanStatus { port: server.port, source: PortSource::Mod, pid: std::process::id() });
+    assert_eq!(
+        verified,
+        LanStatus {
+            port: server.port,
+            source: PortSource::Mod,
+            pid: std::process::id()
+        }
+    );
     assert_eq!(host.events.lan_events().last(), Some(&None));
 }
 
@@ -601,17 +843,28 @@ async fn a_lan_hint_counts_only_after_verification() {
 async fn a_new_port_replaces_the_session_port_only_after_verification() {
     let scene = Scene::shared().await;
     let moved = FakeServer::start().await;
-    let unused = TcpListener::bind("127.0.0.1:0").await.unwrap().local_addr().unwrap().port();
+    let unused = TcpListener::bind("127.0.0.1:0")
+        .await
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
 
     scene.host.open_lan(unused, PortSource::Mod);
     tokio::time::sleep(Duration::from_millis(500)).await;
     let kept = scene.host.session().await.unwrap().port;
     scene.host.open_lan(moved.port, PortSource::Mod);
-    until("port switched", || async { scene.host.session().await.unwrap().port == moved.port }).await;
+    until("port switched", || async {
+        scene.host.session().await.unwrap().port == moved.port
+    })
+    .await;
     let (_ticket, _game) = scene.playing().await;
 
     assert_eq!(kept, scene.server.port);
-    assert_eq!(scene.host.session().await.unwrap().port_source, PortSource::Mod);
+    assert_eq!(
+        scene.host.session().await.unwrap().port_source,
+        PortSource::Mod
+    );
     assert_eq!(moved.connections(), 2, "the verification ping and the game");
 }
 
@@ -620,13 +873,28 @@ async fn only_connected_confirmed_friends_can_be_invited() {
     let scene = Scene::shared().await;
     let stranger = super::identity::Identity::generate().peer_id();
 
-    let unknown = scene.host.sessions.host_invite(&scene.session.id, vec![stranger]).await.unwrap_err();
+    let unknown = scene
+        .host
+        .sessions
+        .host_invite(&scene.session.id, vec![stranger])
+        .await
+        .unwrap_err();
     scene.guest.friends.disable().await.unwrap();
-    until("guest offline", || async { scene.host.presence_of(&scene.guest.id()).await == Presence::Offline }).await;
-    let offline = scene.host.sessions.host_invite(&scene.session.id, vec![scene.guest.id().to_string()]).await;
+    until("guest offline", || async {
+        scene.host.presence_of(&scene.guest.id()).await == Presence::Offline
+    })
+    .await;
+    let offline = scene
+        .host
+        .sessions
+        .host_invite(&scene.session.id, vec![scene.guest.id().to_string()])
+        .await;
 
     assert_eq!(error_key(&unknown), "errors.friends.notFound.friend");
-    assert_eq!(error_key(&offline.unwrap_err()), "errors.friends.peerOffline");
+    assert_eq!(
+        error_key(&offline.unwrap_err()),
+        "errors.friends.peerOffline"
+    );
 }
 
 // ---- Tunnel (SPEC 6.1, 6.2) ----
@@ -638,13 +906,24 @@ async fn the_game_of_the_guest_reaches_the_host_world_through_the_tunnel() {
     let (_ticket, mut game) = scene.playing().await;
     game.write_all(b"ping").await.unwrap();
     let mut echoed = [0u8; 4];
-    tokio::time::timeout(LIMIT, game.read_exact(&mut echoed)).await.unwrap().unwrap();
+    tokio::time::timeout(LIMIT, game.read_exact(&mut echoed))
+        .await
+        .unwrap()
+        .unwrap();
 
     assert_eq!(&echoed, b"ping");
     let states = scene.guest.events.join_states();
-    assert_eq!(states[..2], [JoinState::WaitingForGame, JoinState::Connecting]);
+    assert_eq!(
+        states[..2],
+        [JoinState::WaitingForGame, JoinState::Connecting]
+    );
     until_true("connected reported", || {
-        scene.guest.events.join_states().iter().any(|state| matches!(state, JoinState::Connected { .. }))
+        scene
+            .guest
+            .events
+            .join_states()
+            .iter()
+            .any(|state| matches!(state, JoinState::Connected { .. }))
     })
     .await;
 }
@@ -656,16 +935,29 @@ async fn a_tunnel_without_a_valid_handshake_never_reaches_the_lan_port() {
     let openings = [
         vec![0xFE, 0x01, 0xFA],
         handshake("localhost", scene.server.port, 3),
-        [handshake("localhost", scene.server.port, 2), login_start("bad name")].concat(),
+        [
+            handshake("localhost", scene.server.port, 2),
+            login_start("bad name"),
+        ]
+        .concat(),
         varint(2000),
     ];
 
     for opening in openings {
-        let mut stream = scene.raw_stream(&OpenFrame::Tunnel { session_id: scene.session.id.clone() }).await;
-        assert_eq!(stream.read_frame::<Value>(OPEN_FRAME_LIMIT).await.unwrap(), tunnel_ok());
+        let mut stream = scene
+            .raw_stream(&OpenFrame::Tunnel {
+                session_id: scene.session.id.clone(),
+            })
+            .await;
+        assert_eq!(
+            stream.read_frame::<Value>(OPEN_FRAME_LIMIT).await.unwrap(),
+            tunnel_ok()
+        );
         stream.write_all(&opening).await.unwrap();
         let mut rest = Vec::new();
-        let read = tokio::time::timeout(LIMIT, stream.read_to_end(&mut rest)).await.unwrap();
+        let read = tokio::time::timeout(LIMIT, stream.read_to_end(&mut rest))
+            .await
+            .unwrap();
         assert!(read.is_err(), "the stream is reset");
     }
 
@@ -679,14 +971,21 @@ async fn a_local_connection_from_another_process_opens_no_stream() {
     let addr: SocketAddr = ticket.address.parse().unwrap();
     let before = scene.server.connections();
 
-    scene.guest.spawn_game_as(GUEST_INSTANCE, crate::services::sockowner::ended_process_id(), Some(&ticket.join_id));
+    scene.guest.spawn_game_as(
+        GUEST_INSTANCE,
+        crate::services::sockowner::ended_process_id(),
+        Some(&ticket.join_id),
+    );
     tokio::time::sleep(Duration::from_millis(200)).await;
     let mut foreign_process = TcpStream::connect(addr).await.unwrap();
     foreign_process.write_all(&opening_for(addr)).await.unwrap();
 
     assert!(is_closed_within(&mut foreign_process, LIMIT).await);
     assert_eq!(scene.server.connections(), before);
-    assert_eq!(scene.host.guest_state(&scene.guest.id()).await, Some((GuestState::Invited, false)));
+    assert_eq!(
+        scene.host.guest_state(&scene.guest.id()).await,
+        Some((GuestState::Invited, false))
+    );
 }
 
 #[tokio::test]
@@ -694,28 +993,44 @@ async fn a_handshake_naming_another_address_is_refused() {
     let scene = Scene::shared().await;
     let ticket = scene.join().await;
     let addr: SocketAddr = ticket.address.parse().unwrap();
-    scene.guest.spawn_game(GUEST_INSTANCE, Some(&ticket.join_id));
+    scene
+        .guest
+        .spawn_game(GUEST_INSTANCE, Some(&ticket.join_id));
     tokio::time::sleep(Duration::from_millis(200)).await;
     let before = scene.server.connections();
 
     // Nie die Adresse des Beitritts: Windows und Linux lauschen auf 127.a.b.c mit a ≥ 1, macOS auf 127.0.0.1 (SPEC 6.2).
     let named = "127.0.0.2";
-    assert_ne!(named, addr.ip().to_string(), "the test needs an address other than the listener's");
+    assert_ne!(
+        named,
+        addr.ip().to_string(),
+        "the test needs an address other than the listener's"
+    );
 
     let mut game = TcpStream::connect(addr).await.unwrap();
-    game.write_all(&[handshake(named, addr.port(), 2), login_start("Bert")].concat()).await.unwrap();
+    game.write_all(&[handshake(named, addr.port(), 2), login_start("Bert")].concat())
+        .await
+        .unwrap();
 
     let read = read_within(&mut game, LIMIT).await;
-    assert!(is_closed(&read), "handshake naming {named} at listener {addr}: the game connection gave {read:?}");
+    assert!(
+        is_closed(&read),
+        "handshake naming {named} at listener {addr}: the game connection gave {read:?}"
+    );
     assert_eq!(scene.server.connections(), before);
-    assert_eq!(scene.host.guest_state(&scene.guest.id()).await, Some((GuestState::Invited, false)));
+    assert_eq!(
+        scene.host.guest_state(&scene.guest.id()).await,
+        Some((GuestState::Invited, false))
+    );
 }
 
 #[tokio::test]
 async fn before_the_first_valid_connection_only_one_is_handled_at_a_time() {
     let scene = Scene::shared().await;
     let ticket = scene.join().await;
-    scene.guest.spawn_game(GUEST_INSTANCE, Some(&ticket.join_id));
+    scene
+        .guest
+        .spawn_game(GUEST_INSTANCE, Some(&ticket.join_id));
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     let _waiting = TcpStream::connect(&ticket.address).await.unwrap();
@@ -758,17 +1073,36 @@ async fn a_kicked_guest_gets_not_invited_until_the_host_invites_again() {
     let (_ticket, mut game) = scene.playing().await;
     let guest = scene.guest.id();
 
-    scene.host.sessions.host_kick(&scene.session.id, &guest.to_string()).await.unwrap();
+    scene
+        .host
+        .sessions
+        .host_kick(&scene.session.id, &guest.to_string())
+        .await
+        .unwrap();
 
     scene.guest.wait_revoked(RevokeReason::Kicked).await;
     scene.guest.wait_join_end(SessionEnd::Kicked).await;
     assert!(is_closed_within(&mut game, LIMIT).await);
-    assert_eq!(scene.host.guest_state(&guest).await, Some((GuestState::Left, true)));
+    assert_eq!(
+        scene.host.guest_state(&guest).await,
+        Some((GuestState::Left, true))
+    );
     assert_eq!(scene.raw_tunnel().await, refused("notInvited"));
     assert_eq!(scene.raw_manifest_request().await, refused("notInvited"));
-    assert_eq!(scene.host.guest_state(&guest).await, Some((GuestState::Left, true)));
-    scene.host.sessions.host_invite(&scene.session.id, vec![guest.to_string()]).await.unwrap();
-    assert_eq!(scene.host.guest_state(&guest).await, Some((GuestState::Invited, false)));
+    assert_eq!(
+        scene.host.guest_state(&guest).await,
+        Some((GuestState::Left, true))
+    );
+    scene
+        .host
+        .sessions
+        .host_invite(&scene.session.id, vec![guest.to_string()])
+        .await
+        .unwrap();
+    assert_eq!(
+        scene.host.guest_state(&guest).await,
+        Some((GuestState::Invited, false))
+    );
     assert_eq!(scene.raw_tunnel().await, tunnel_ok());
 }
 
@@ -777,13 +1111,26 @@ async fn a_declined_invite_is_closed_until_the_host_invites_again() {
     let scene = Scene::shared().await;
     let guest = scene.guest.id();
 
-    scene.guest.sessions.invite_decline(&scene.invite.id).await.unwrap();
+    scene
+        .guest
+        .sessions
+        .invite_decline(&scene.invite.id)
+        .await
+        .unwrap();
 
-    scene.host.wait_guest(&guest, (GuestState::Declined, false)).await;
+    scene
+        .host
+        .wait_guest(&guest, (GuestState::Declined, false))
+        .await;
     assert!(scene.guest.sessions.invites().await.unwrap().is_empty());
     assert_eq!(scene.raw_tunnel().await, refused("notInvited"));
     assert_eq!(scene.raw_manifest_request().await, refused("notInvited"));
-    scene.host.sessions.host_invite(&scene.session.id, vec![guest.to_string()]).await.unwrap();
+    scene
+        .host
+        .sessions
+        .host_invite(&scene.session.id, vec![guest.to_string()])
+        .await
+        .unwrap();
     assert_eq!(scene.raw_tunnel().await, tunnel_ok());
 }
 
@@ -792,20 +1139,38 @@ async fn a_guest_who_left_may_rejoin_while_the_invite_is_open() {
     let scene = Scene::shared().await;
     let (ticket, _game) = scene.playing().await;
 
-    scene.guest.sessions.join_leave(&ticket.join_id).await.unwrap();
-    scene.host.wait_guest(&scene.guest.id(), (GuestState::Left, false)).await;
+    scene
+        .guest
+        .sessions
+        .join_leave(&ticket.join_id)
+        .await
+        .unwrap();
+    scene
+        .host
+        .wait_guest(&scene.guest.id(), (GuestState::Left, false))
+        .await;
     let (_again, _game) = scene.playing().await;
 
-    assert_eq!(scene.host.guest_state(&scene.guest.id()).await, Some((GuestState::Connected, false)));
+    assert_eq!(
+        scene.host.guest_state(&scene.guest.id()).await,
+        Some((GuestState::Connected, false))
+    );
 }
 
 #[tokio::test]
 async fn strangers_to_the_session_get_session_not_found() {
     let scene = Scene::shared().await;
 
-    let mut stream = scene.raw_stream(&OpenFrame::Tunnel { session_id: crate::models::new_id() }).await;
+    let mut stream = scene
+        .raw_stream(&OpenFrame::Tunnel {
+            session_id: crate::models::new_id(),
+        })
+        .await;
 
-    assert_eq!(stream.read_frame::<Value>(OPEN_FRAME_LIMIT).await.unwrap(), refused("sessionNotFound"));
+    assert_eq!(
+        stream.read_frame::<Value>(OPEN_FRAME_LIMIT).await.unwrap(),
+        refused("sessionNotFound")
+    );
 }
 
 // ---- Abgleich vor dem Beitritt (SPEC 5.5, 5.6, 6.2) ----
@@ -825,13 +1190,21 @@ async fn the_plan_finds_the_matching_instance_and_a_mismatch_cannot_join() {
     let invite = guest.open_invite().await;
 
     let plan = guest.sessions.invite_plan(&invite.id).await.unwrap();
-    let mismatch = guest.sessions.invite_join(&invite.id, "bare").await.unwrap_err();
+    let mismatch = guest
+        .sessions
+        .invite_join(&invite.id, "bare")
+        .await
+        .unwrap_err();
 
     assert_eq!(plan.verdict, JoinVerdict::Ready);
     assert_eq!(plan.candidates[0].instance_id, GUEST_INSTANCE);
     assert_eq!(plan.candidates[1].missing[0].file_name, "lithium.jar");
     assert_eq!(error_key(&mismatch), "errors.friends.instanceMismatch");
-    assert!(guest.sessions.invite_join(&invite.id, GUEST_INSTANCE).await.is_ok());
+    assert!(guest
+        .sessions
+        .invite_join(&invite.id, GUEST_INSTANCE)
+        .await
+        .is_ok());
 }
 
 #[tokio::test]
@@ -856,7 +1229,9 @@ async fn the_manifest_follows_a_changed_mod_list_of_the_host() {
 }
 
 fn make_fabric(node: &Node, instance_id: &str) {
-    node.instances.modify(instance_id, |instance| instance.loader = ModLoader::Fabric).unwrap();
+    node.instances
+        .modify(instance_id, |instance| instance.loader = ModLoader::Fabric)
+        .unwrap();
 }
 
 /// Legt eine aktive Mod-Datei in eine Fabric-Instanz.
@@ -888,7 +1263,12 @@ fn with_mod(node: &Node, instance_id: &str, file_name: &str, content: &[u8]) {
 async fn an_unknown_invite_cannot_be_joined() {
     let scene = Scene::shared().await;
 
-    let unknown = scene.guest.sessions.invite_join("nope", GUEST_INSTANCE).await.unwrap_err();
+    let unknown = scene
+        .guest
+        .sessions
+        .invite_join("nope", GUEST_INSTANCE)
+        .await
+        .unwrap_err();
 
     assert_eq!(error_key(&unknown), "errors.friends.notFound.invite");
 }
@@ -904,7 +1284,10 @@ async fn without_spawn_and_progress_the_join_ends_after_the_spawn_wait() {
 
     scene.guest.wait_join_end(SessionEnd::Error).await;
     let waited = joined.elapsed();
-    assert!(waited >= Duration::from_millis(1800) && waited < Duration::from_millis(3500), "{waited:?}");
+    assert!(
+        waited >= Duration::from_millis(1800) && waited < Duration::from_millis(3500),
+        "{waited:?}"
+    );
     assert!(refuses_connections(&ticket.address).await);
 }
 
@@ -913,7 +1296,10 @@ async fn progress_keeps_waiting_for_the_game_until_the_cap() {
     let scene = Scene::shared_with(SHORT, Duration::from_secs(15)).await;
     let joined = Instant::now();
     let ticket = scene.join().await;
-    let progress = GameSignal::LaunchProgress { instance_id: GUEST_INSTANCE.into(), friend_join: ticket.join_id };
+    let progress = GameSignal::LaunchProgress {
+        instance_id: GUEST_INSTANCE.into(),
+        friend_join: ticket.join_id,
+    };
 
     while joined.elapsed() < Duration::from_secs(3) {
         scene.guest.signals.send(progress.clone());
@@ -928,14 +1314,19 @@ async fn progress_keeps_waiting_for_the_game_until_the_cap() {
     assert!(alive_past_spawn_wait);
     assert_eq!(scene.guest.events.join_ends(), [SessionEnd::Error]);
     let waited = joined.elapsed();
-    assert!(waited >= Duration::from_millis(5500) && waited < Duration::from_millis(7500), "{waited:?}");
+    assert!(
+        waited >= Duration::from_millis(5500) && waited < Duration::from_millis(7500),
+        "{waited:?}"
+    );
 }
 
 #[tokio::test]
 async fn after_the_spawn_a_connection_at_two_seconds_is_in_time() {
     let scene = Scene::shared_with(SHORT, Duration::from_secs(15)).await;
     let ticket = scene.join().await;
-    scene.guest.spawn_game(GUEST_INSTANCE, Some(&ticket.join_id));
+    scene
+        .guest
+        .spawn_game(GUEST_INSTANCE, Some(&ticket.join_id));
 
     tokio::time::sleep(Duration::from_secs(2)).await;
     let _game = enter_world(&ticket.address).await;
@@ -949,13 +1340,18 @@ async fn after_the_spawn_no_connection_within_three_seconds_ends_the_join() {
     let scene = Scene::shared_with(SHORT, Duration::from_secs(15)).await;
     let ticket = scene.join().await;
     let spawned = Instant::now();
-    scene.guest.spawn_game(GUEST_INSTANCE, Some(&ticket.join_id));
+    scene
+        .guest
+        .spawn_game(GUEST_INSTANCE, Some(&ticket.join_id));
 
     scene.guest.wait_join_end(SessionEnd::Error).await;
     let waited = spawned.elapsed();
     tokio::time::sleep(Duration::from_secs(4).saturating_sub(spawned.elapsed())).await;
 
-    assert!(waited >= Duration::from_millis(2800) && waited < Duration::from_millis(4000), "{waited:?}");
+    assert!(
+        waited >= Duration::from_millis(2800) && waited < Duration::from_millis(4000),
+        "{waited:?}"
+    );
     assert!(refuses_connections(&ticket.address).await);
 }
 
@@ -968,9 +1364,16 @@ async fn a_failed_launch_ends_the_join_at_once_and_closes_the_address() {
     scene.guest.fail_launch(&ticket);
 
     scene.guest.wait_join_end(SessionEnd::Error).await;
-    assert!(failed.elapsed() < Duration::from_millis(100), "{:?}", failed.elapsed());
+    assert!(
+        failed.elapsed() < Duration::from_millis(100),
+        "{:?}",
+        failed.elapsed()
+    );
     assert!(refuses_connections(&ticket.address).await);
-    assert_eq!(scene.host.guest_state(&scene.guest.id()).await, Some((GuestState::Invited, false)));
+    assert_eq!(
+        scene.host.guest_state(&scene.guest.id()).await,
+        Some((GuestState::Invited, false))
+    );
 }
 
 #[tokio::test]
@@ -993,7 +1396,9 @@ async fn a_join_started_while_another_runs_ends_that_one_exactly_once() {
     let mut addresses = Vec::new();
 
     for _ in 0..2 {
-        let listener = LocalListener::bind(IpAddr::V4(Ipv4Addr::LOCALHOST)).await.unwrap();
+        let listener = LocalListener::bind(IpAddr::V4(Ipv4Addr::LOCALHOST))
+            .await
+            .unwrap();
         let address = listener.addr.to_string();
         let ticket = JoinTicket {
             join_id: new_id(),
@@ -1005,7 +1410,10 @@ async fn a_join_started_while_another_runs_ends_that_one_exactly_once() {
         addresses.push(address);
     }
 
-    until("the first listener closed", || async { listening_count(&addresses).await == 1 }).await;
+    until("the first listener closed", || async {
+        listening_count(&addresses).await == 1
+    })
+    .await;
     assert_eq!(scene.guest.events.join_ends(), [SessionEnd::Left]);
 }
 
@@ -1025,7 +1433,12 @@ async fn row_host_stops() {
     let scene = Scene::shared().await;
     let (_ticket, mut game) = scene.playing().await;
 
-    scene.host.sessions.host_stop(&scene.session.id).await.unwrap();
+    scene
+        .host
+        .sessions
+        .host_stop(&scene.session.id)
+        .await
+        .unwrap();
 
     scene.host.wait_host_end(SessionEnd::Stopped).await;
     scene.guest.wait_revoked(RevokeReason::Stopped).await;
@@ -1038,7 +1451,9 @@ async fn row_host_quits_to_title() {
     let scene = Scene::shared().await;
     let (_ticket, mut game) = scene.playing().await;
 
-    scene.host.signals.send(GameSignal::LanClosed { instance_id: HOST_INSTANCE.into() });
+    scene.host.signals.send(GameSignal::LanClosed {
+        instance_id: HOST_INSTANCE.into(),
+    });
 
     scene.host.wait_host_end(SessionEnd::LanClosed).await;
     scene.guest.wait_revoked(RevokeReason::Stopped).await;
@@ -1051,7 +1466,9 @@ async fn row_host_game_exits() {
     let scene = Scene::shared().await;
     let (_ticket, mut game) = scene.playing().await;
 
-    scene.host.signals.send(GameSignal::Exited { instance_id: HOST_INSTANCE.into() });
+    scene.host.signals.send(GameSignal::Exited {
+        instance_id: HOST_INSTANCE.into(),
+    });
 
     scene.host.wait_host_end(SessionEnd::GameExited).await;
     scene.guest.wait_join_end(SessionEnd::Stopped).await;
@@ -1093,7 +1510,11 @@ async fn row_host_changes_always_relay() {
     let (_ticket, mut game) = scene.playing().await;
     let changed = Instant::now();
 
-    let settings = FriendsSettings { display_name: "Anna".into(), always_relay: true, findable_by_name: false, ..FriendsSettings::default() };
+    let settings = FriendsSettings {
+        always_relay: true,
+        findable_by_name: false,
+        ..FriendsSettings::default()
+    };
     scene.host.friends.update_settings(settings).await.unwrap();
 
     scene.host.wait_host_end(SessionEnd::Stopped).await;
@@ -1122,10 +1543,18 @@ async fn row_guest_leaves() {
     let scene = Scene::shared().await;
     let (ticket, mut game) = scene.playing().await;
 
-    scene.guest.sessions.join_leave(&ticket.join_id).await.unwrap();
+    scene
+        .guest
+        .sessions
+        .join_leave(&ticket.join_id)
+        .await
+        .unwrap();
 
     scene.guest.wait_join_end(SessionEnd::Left).await;
-    scene.host.wait_guest(&scene.guest.id(), (GuestState::Left, false)).await;
+    scene
+        .host
+        .wait_guest(&scene.guest.id(), (GuestState::Left, false))
+        .await;
     assert!(is_closed_within(&mut game, LIMIT).await);
 }
 
@@ -1134,10 +1563,15 @@ async fn row_guest_game_exits() {
     let scene = Scene::shared().await;
     let (_ticket, _game) = scene.playing().await;
 
-    scene.guest.signals.send(GameSignal::Exited { instance_id: GUEST_INSTANCE.into() });
+    scene.guest.signals.send(GameSignal::Exited {
+        instance_id: GUEST_INSTANCE.into(),
+    });
 
     scene.guest.wait_join_end(SessionEnd::GameExited).await;
-    scene.host.wait_guest(&scene.guest.id(), (GuestState::Left, false)).await;
+    scene
+        .host
+        .wait_guest(&scene.guest.id(), (GuestState::Left, false))
+        .await;
 }
 
 #[tokio::test]
@@ -1147,8 +1581,14 @@ async fn row_guest_launcher_exits() {
 
     scene.guest.friends.shutdown().await;
 
-    scene.host.wait_guest(&scene.guest.id(), (GuestState::Left, false)).await;
-    assert!(scene.guest.events.join_ends().is_empty(), "the app is gone, nobody is told");
+    scene
+        .host
+        .wait_guest(&scene.guest.id(), (GuestState::Left, false))
+        .await;
+    assert!(
+        scene.guest.events.join_ends().is_empty(),
+        "the app is gone, nobody is told"
+    );
     assert!(is_closed_within(&mut game, LIMIT).await);
 }
 
@@ -1160,7 +1600,10 @@ async fn row_guest_launch_fails_before_spawn() {
     scene.guest.fail_launch(&ticket);
 
     scene.guest.wait_join_end(SessionEnd::Error).await;
-    assert_eq!(scene.host.guest_state(&scene.guest.id()).await, Some((GuestState::Invited, false)));
+    assert_eq!(
+        scene.host.guest_state(&scene.guest.id()).await,
+        Some((GuestState::Invited, false))
+    );
 }
 
 #[tokio::test]
@@ -1172,7 +1615,10 @@ async fn row_guest_disables_friends() {
     scene.guest.friends.disable().await.unwrap();
 
     scene.guest.wait_join_end(SessionEnd::Disabled).await;
-    scene.host.wait_guest(&scene.guest.id(), (GuestState::Left, false)).await;
+    scene
+        .host
+        .wait_guest(&scene.guest.id(), (GuestState::Left, false))
+        .await;
     assert!(disabled.elapsed() <= PROMPT, "{:?}", disabled.elapsed());
     assert!(is_closed_within(&mut game, LIMIT).await);
 }
@@ -1182,7 +1628,11 @@ async fn a_guest_rebind_ends_the_join_with_left() {
     let scene = Scene::shared().await;
     let (_ticket, _game) = scene.playing().await;
 
-    let settings = FriendsSettings { display_name: "Bert".into(), always_relay: true, findable_by_name: false, ..FriendsSettings::default() };
+    let settings = FriendsSettings {
+        always_relay: true,
+        findable_by_name: false,
+        ..FriendsSettings::default()
+    };
     scene.guest.friends.update_settings(settings).await.unwrap();
 
     scene.guest.wait_join_end(SessionEnd::Left).await;
@@ -1204,10 +1654,18 @@ async fn row_host_kicks_the_guest() {
     let scene = Scene::shared().await;
     let (_ticket, _game) = scene.playing().await;
 
-    scene.host.sessions.host_kick(&scene.session.id, &scene.guest.id().to_string()).await.unwrap();
+    scene
+        .host
+        .sessions
+        .host_kick(&scene.session.id, &scene.guest.id().to_string())
+        .await
+        .unwrap();
 
     scene.guest.wait_join_end(SessionEnd::Kicked).await;
-    scene.host.wait_guest(&scene.guest.id(), (GuestState::Left, true)).await;
+    scene
+        .host
+        .wait_guest(&scene.guest.id(), (GuestState::Left, true))
+        .await;
 }
 
 /// Ein Gastgeber in eigener Laufzeit, die der Test einfrieren kann: kein Paket mehr, wie nach einem Absturz.
@@ -1229,30 +1687,55 @@ impl CrashingHost {
         let (freeze, finish) = (Arc::new(Notify::new()), Arc::new(Notify::new()));
         let (frozen, finished) = (freeze.clone(), finish.clone());
         let (thaw, thawed) = std::sync::mpsc::channel::<()>();
-        let options = NetOptions { idle_timeout: CRASH_IDLE_TIMEOUT, ..options(relay) };
+        let options = NetOptions {
+            idle_timeout: CRASH_IDLE_TIMEOUT,
+            ..options(relay)
+        };
         let thread = std::thread::spawn(move || {
             let mut runtime = tokio::runtime::Builder::new_multi_thread();
-            runtime.worker_threads(FROZEN_WORKERS).enable_all().build().unwrap().block_on(async move {
-                let host = Node::online(options, "Anna", RELAXED).await;
-                code_tx.send(host.friends.code_create().await.unwrap().code.unwrap()).unwrap();
-                let request = incoming_request_id(&host).await;
-                host.friends.answer_request(&request, true).await.unwrap();
-                let guest_id = guest_rx.await.unwrap();
-                until("guest online", || async { host.presence_of(&guest_id).await == Presence::Online }).await;
-                let server = FakeServer::start().await;
-                host.spawn_game(HOST_INSTANCE, None);
-                host.open_lan(server.port, PortSource::Log);
-                host.wait_lan(HOST_INSTANCE).await;
-                let session = host.sessions.host_start(HOST_INSTANCE, None, false).await.unwrap();
-                host.sessions.host_invite(&session.id, vec![guest_id.to_string()]).await.unwrap();
-                frozen.notified().await;
-                freeze_workers(thawed);
-                finished.notified().await;
-            });
+            runtime
+                .worker_threads(FROZEN_WORKERS)
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async move {
+                    let host = Node::online(options, "Anna", RELAXED).await;
+                    code_tx
+                        .send(host.friends.code_create().await.unwrap().code.unwrap())
+                        .unwrap();
+                    let request = incoming_request_id(&host).await;
+                    host.friends.answer_request(&request, true).await.unwrap();
+                    let guest_id = guest_rx.await.unwrap();
+                    until("guest online", || async {
+                        host.presence_of(&guest_id).await == Presence::Online
+                    })
+                    .await;
+                    let server = FakeServer::start().await;
+                    host.spawn_game(HOST_INSTANCE, None);
+                    host.open_lan(server.port, PortSource::Log);
+                    host.wait_lan(HOST_INSTANCE).await;
+                    let session = host
+                        .sessions
+                        .host_start(HOST_INSTANCE, None, false)
+                        .await
+                        .unwrap();
+                    host.sessions
+                        .host_invite(&session.id, vec![guest_id.to_string()])
+                        .await
+                        .unwrap();
+                    frozen.notified().await;
+                    freeze_workers(thawed);
+                    finished.notified().await;
+                });
         });
         guest.friends.add(&code_rx.await.unwrap()).await.unwrap();
         guest_tx.send(guest.id()).unwrap();
-        Self { freeze, thaw, finish, thread }
+        Self {
+            freeze,
+            thaw,
+            finish,
+            thread,
+        }
     }
 
     async fn finish(self) {
@@ -1260,7 +1743,10 @@ impl CrashingHost {
             self.thaw.send(()).unwrap();
         }
         self.finish.notify_one();
-        tokio::task::spawn_blocking(move || self.thread.join()).await.unwrap().unwrap();
+        tokio::task::spawn_blocking(move || self.thread.join())
+            .await
+            .unwrap()
+            .unwrap();
     }
 }
 
@@ -1278,11 +1764,18 @@ fn freeze_workers(thawed: std::sync::mpsc::Receiver<()>) {
 #[tokio::test]
 async fn row_host_launcher_crashes() {
     let (relay, _server) = test_relay().await;
-    let crash_options = NetOptions { idle_timeout: CRASH_IDLE_TIMEOUT, ..options(&relay) };
+    let crash_options = NetOptions {
+        idle_timeout: CRASH_IDLE_TIMEOUT,
+        ..options(&relay)
+    };
     let guest = Node::online(crash_options, "Bert", RELAXED).await;
     let host = CrashingHost::share_with(&guest, &relay).await;
     let invite = guest.open_invite().await;
-    let ticket = guest.sessions.invite_join(&invite.id, GUEST_INSTANCE).await.unwrap();
+    let ticket = guest
+        .sessions
+        .invite_join(&invite.id, GUEST_INSTANCE)
+        .await
+        .unwrap();
     guest.spawn_game(GUEST_INSTANCE, Some(&ticket.join_id));
     let mut game = enter_world(&ticket.address).await;
     let crashed = Instant::now();
@@ -1292,16 +1785,21 @@ async fn row_host_launcher_crashes() {
     guest.wait_join_end(SessionEnd::HostOffline).await;
     let waited = crashed.elapsed();
     host.finish().await;
-    assert!(waited <= CRASH_IDLE_TIMEOUT + RELAXED.host_offline_grace + Duration::from_secs(3), "{waited:?}");
+    assert!(
+        waited <= CRASH_IDLE_TIMEOUT + RELAXED.host_offline_grace + Duration::from_secs(3),
+        "{waited:?}"
+    );
     assert!(is_closed_within(&mut game, LIMIT).await);
 }
 
-// ---- Mod: Teilen aus dem Spiel (INGAME 5.4, SPEC 7.4) ----
+// ---- Mod: Teilen aus dem Spiel (docs/bridge/README.md, "Operations and consent", SPEC 7.4) ----
 
 /// Die Umgebung für das Spiel der Instanz; den Prozess des Spiels nennt der Test selbst (er ist es), damit die Mod nicht
 /// auf das Spielsignal warten muss.
 fn mod_env(node: &Node, instance_id: &str) -> Vec<(String, String)> {
-    let env = node.bridge.register_launch(instance_id, Expectations::unconstrained());
+    let env = node
+        .bridge
+        .register_launch(instance_id, Expectations::unconstrained());
     node.bridge.bind_pid(instance_id, std::process::id());
     env
 }
@@ -1318,9 +1816,15 @@ pub(super) struct FakeMod {
 impl FakeMod {
     pub(super) async fn connect(env: &[(String, String)]) -> Self {
         let value = |name: &str| env.iter().find(|(key, _)| key == name).unwrap().1.clone();
-        let tcp = TcpStream::connect(("127.0.0.1", value(ENV_PORT).parse::<u16>().unwrap())).await.unwrap();
+        let tcp = TcpStream::connect(("127.0.0.1", value(ENV_PORT).parse::<u16>().unwrap()))
+            .await
+            .unwrap();
         let (read, write) = tcp.into_split();
-        let mut client = Self { lines: BufReader::new(read).lines(), write, seen: Vec::new() };
+        let mut client = Self {
+            lines: BufReader::new(read).lines(),
+            write,
+            seen: Vec::new(),
+        };
         let hello = json!({
             "type": "hello",
             "protocol": 2,
@@ -1335,11 +1839,15 @@ impl FakeMod {
     }
 
     async fn send(&mut self, message: Value) {
-        self.write.write_all(format!("{message}\n").as_bytes()).await.unwrap();
+        self.write
+            .write_all(format!("{message}\n").as_bytes())
+            .await
+            .unwrap();
     }
 
     async fn request(&mut self, id: &str, op: &str, args: Value) {
-        self.send(json!({ "type": "req", "id": id, "op": op, "args": args })).await;
+        self.send(json!({ "type": "req", "id": id, "op": op, "args": args }))
+            .await;
     }
 
     /// Schickt den Vorgang und wartet auf die Antwort mit derselben Kennung; Themen, Hinweise und `pending` davor werden
@@ -1347,21 +1855,29 @@ impl FakeMod {
     /// der Brücke scheitern.
     pub(super) async fn call(&mut self, id: &str, op: &str, args: Value) -> Value {
         self.request(id, op, args).await;
-        let answer = self.next_where(|message| message["type"] == "res" && message["id"] == id).await;
+        let answer = self
+            .next_where(|message| message["type"] == "res" && message["id"] == id)
+            .await;
         tokio::time::sleep(Duration::from_millis(60)).await;
         answer
     }
 
     /// Der erste Hinweis (Toast) der Art `kind`, auch wenn er schon vor dem Aufruf angekommen ist.
     async fn next_notify(&mut self, kind: &str) -> Value {
-        self.eventually(|message| message["type"] == "event" && message["event"] == "notify" && message["kind"] == kind).await
+        self.eventually(|message| {
+            message["type"] == "event" && message["event"] == "notify" && message["kind"] == kind
+        })
+        .await
     }
 
     /// Die nächste Zeile, auf die `matches` zutrifft.
     async fn next_where(&mut self, matches: impl Fn(&Value) -> bool) -> Value {
         let deadline = tokio::time::Instant::now() + LIMIT;
         loop {
-            let line = tokio::time::timeout_at(deadline, self.lines.next_line()).await.unwrap().unwrap();
+            let line = tokio::time::timeout_at(deadline, self.lines.next_line())
+                .await
+                .unwrap()
+                .unwrap();
             let message: Value = serde_json::from_str(&line.unwrap()).unwrap();
             self.seen.push(message.clone());
             if matches(&message) {
@@ -1383,23 +1899,36 @@ impl FakeMod {
     }
 
     /// Liest Themen, bis `ready` auf die letzten Werte aller bisher gesehenen zutrifft.
-    async fn topics_until(&mut self, ready: impl Fn(&HashMap<String, Value>) -> bool) -> HashMap<String, Value> {
+    async fn topics_until(
+        &mut self,
+        ready: impl Fn(&HashMap<String, Value>) -> bool,
+    ) -> HashMap<String, Value> {
         let mut seen = HashMap::new();
         while !ready(&seen) {
             let state = self.next_of_type("state").await;
-            seen.insert(state["topic"].as_str().unwrap().to_owned(), state["value"].clone());
+            seen.insert(
+                state["topic"].as_str().unwrap().to_owned(),
+                state["value"].clone(),
+            );
         }
         seen
     }
 
     /// Wartet auf das Thema `topic`, bis `matches` auf seinen Wert zutrifft.
     async fn topic_where(&mut self, topic: &str, matches: impl Fn(&Value) -> bool) -> Value {
-        self.next_where(|message| message["type"] == "state" && message["topic"] == topic && matches(&message["value"])).await
+        self.next_where(|message| {
+            message["type"] == "state" && message["topic"] == topic && matches(&message["value"])
+        })
+        .await
     }
 
     /// Wartet auf einen Stand der Freunde mit einem, der online ist, und liefert dessen Alias.
     async fn online_friend_alias(&mut self) -> String {
-        let online = |friends: &Value| friends.as_array().is_some_and(|friends| friends.iter().any(|friend| friend["presence"] == "online"));
+        let online = |friends: &Value| {
+            friends
+                .as_array()
+                .is_some_and(|friends| friends.iter().any(|friend| friend["presence"] == "online"))
+        };
         let state = self.topic_where("friends", online).await;
         state["value"][0]["id"].as_str().unwrap().to_owned()
     }
@@ -1419,18 +1948,44 @@ async fn sharing_from_the_mod_needs_one_confirmation_per_launch() {
     let mut game_mod = FakeMod::connect(&env).await;
     let alias = game_mod.online_friend_alias().await;
 
-    game_mod.request("s1", "host.invite", json!({ "friends": [alias], "showWorld": false })).await;
-    until_true("confirmation asked", || host.events.mod_confirm_requests().len() == 1).await;
+    game_mod
+        .request(
+            "s1",
+            "host.invite",
+            json!({ "friends": [alias], "showWorld": false }),
+        )
+        .await;
+    until_true("confirmation asked", || {
+        host.events.mod_confirm_requests().len() == 1
+    })
+    .await;
     let pending = game_mod.next_of_type("pending").await;
-    assert_eq!(pending, json!({ "type": "pending", "id": "s1", "prompt": "scope", "scope": "share" }));
+    assert_eq!(
+        pending,
+        json!({ "type": "pending", "id": "s1", "prompt": "scope", "scope": "share" })
+    );
     let request_id = host.events.mod_confirm_requests()[0].clone();
     host.sessions.mod_confirm(&request_id, true).await.unwrap();
-    assert_eq!(game_mod.next_of_type("res").await, json!({ "type": "res", "id": "s1", "ok": true, "result": {} }));
+    assert_eq!(
+        game_mod.next_of_type("res").await,
+        json!({ "type": "res", "id": "s1", "ok": true, "result": {} })
+    );
     let invite = guest.open_invite().await;
-    game_mod.request("s2", "host.invite", json!({ "friends": [alias], "showWorld": false })).await;
-    let second = game_mod.next_where(|message| message["type"] == "res" || message["type"] == "pending").await;
+    game_mod
+        .request(
+            "s2",
+            "host.invite",
+            json!({ "friends": [alias], "showWorld": false }),
+        )
+        .await;
+    let second = game_mod
+        .next_where(|message| message["type"] == "res" || message["type"] == "pending")
+        .await;
 
-    assert_eq!(second["type"], "res", "the launch keeps its allow and does not ask again");
+    assert_eq!(
+        second["type"], "res",
+        "the launch keeps its allow and does not ask again"
+    );
     assert_eq!(host.events.mod_confirm_requests().len(), 1);
     assert_eq!(invite.from_name, "Anna");
     assert_eq!(host.session().await.unwrap().guests.len(), 1);
@@ -1450,9 +2005,17 @@ async fn a_denied_share_reaches_the_mod_as_denied() {
     let mut game_mod = FakeMod::connect(&env).await;
     let alias = game_mod.online_friend_alias().await;
 
-    game_mod.request("s1", "host.invite", json!({ "friends": [alias] })).await;
-    until_true("confirmation asked", || host.events.mod_confirm_requests().len() == 1).await;
-    host.sessions.mod_confirm(&host.events.mod_confirm_requests()[0], false).await.unwrap();
+    game_mod
+        .request("s1", "host.invite", json!({ "friends": [alias] }))
+        .await;
+    until_true("confirmation asked", || {
+        host.events.mod_confirm_requests().len() == 1
+    })
+    .await;
+    host.sessions
+        .mod_confirm(&host.events.mod_confirm_requests()[0], false)
+        .await
+        .unwrap();
     let answer = game_mod.next_of_type("res").await;
 
     assert_eq!(answer["error"]["code"], "denied");
@@ -1471,11 +2034,16 @@ async fn a_share_that_cannot_start_a_session_is_refused_before_asking() {
     let mut game_mod = FakeMod::connect(&env).await;
     let alias = game_mod.online_friend_alias().await;
 
-    game_mod.request("s1", "host.invite", json!({ "friends": [alias] })).await;
+    game_mod
+        .request("s1", "host.invite", json!({ "friends": [alias] }))
+        .await;
     let answer = game_mod.next_of_type("res").await;
 
     assert_eq!(answer["error"]["code"], "lanPortUnknown");
-    assert!(host.events.mod_confirm_requests().is_empty(), "nobody is asked to confirm a share that cannot start");
+    assert!(
+        host.events.mod_confirm_requests().is_empty(),
+        "nobody is asked to confirm a share that cannot start"
+    );
 }
 
 #[tokio::test]
@@ -1492,9 +2060,14 @@ async fn a_share_with_an_offline_friend_is_refused_before_asking() {
     let mut game_mod = FakeMod::connect(&env).await;
     let alias = game_mod.online_friend_alias().await;
     guest.friends.disable().await.unwrap();
-    until("friend offline", || async { host.presence_of(&guest.id()).await == Presence::Offline }).await;
+    until("friend offline", || async {
+        host.presence_of(&guest.id()).await == Presence::Offline
+    })
+    .await;
 
-    game_mod.request("s1", "host.invite", json!({ "friends": [alias] })).await;
+    game_mod
+        .request("s1", "host.invite", json!({ "friends": [alias] }))
+        .await;
     let answer = game_mod.next_of_type("res").await;
 
     assert_eq!(answer["error"]["code"], "peerOffline");
@@ -1514,12 +2087,27 @@ async fn the_mod_sees_the_launcher_state_as_topics() {
     host.wait_lan(HOST_INSTANCE).await;
     let mut game_mod = FakeMod::connect(&env).await;
 
-    let topics = game_mod.topics_until(|seen| ["me", "game", "friends"].iter().all(|topic| seen.contains_key(*topic))).await;
+    let topics = game_mod
+        .topics_until(|seen| {
+            ["me", "game", "friends"]
+                .iter()
+                .all(|topic| seen.contains_key(*topic))
+        })
+        .await;
 
     let (me, game, friends) = (&topics["me"], &topics["game"], &topics["friends"]);
-    assert_eq!((me["enabled"].as_bool(), me["availability"].as_str()), (Some(true), Some("available")));
-    assert_eq!(*game, json!({ "hostable": true, "reason": null, "lan": { "port": server.port }, "sharedElsewhere": false }));
-    assert_eq!(friends[0]["id"], "f1", "friends carry aliases, never peer ids");
+    assert_eq!(
+        (me["enabled"].as_bool(), me["availability"].as_str()),
+        (Some(true), Some("available"))
+    );
+    assert_eq!(
+        *game,
+        json!({ "hostable": true, "reason": null, "lan": { "port": server.port }, "sharedElsewhere": false })
+    );
+    assert_eq!(
+        friends[0]["id"], "f1",
+        "friends carry aliases, never peer ids"
+    );
     assert!(!friends.to_string().contains(&guest.id().to_string()));
 }
 
@@ -1543,20 +2131,28 @@ async fn kicking_a_guest_from_the_mod_revokes_their_invite() {
     let env = mod_env(&scene.host, HOST_INSTANCE);
     let mut game_mod = FakeMod::connect(&env).await;
     let session = game_mod.topic_where("session", Value::is_object).await;
-    let alias = session["value"]["guests"][0]["id"].as_str().unwrap().to_owned();
+    let alias = session["value"]["guests"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
 
-    game_mod.request("k1", "host.kick", json!({ "friend": alias })).await;
+    game_mod
+        .request("k1", "host.kick", json!({ "friend": alias }))
+        .await;
 
     assert_eq!(game_mod.next_of_type("res").await["ok"], true);
     scene.guest.wait_revoked(RevokeReason::Kicked).await;
-    assert_eq!(scene.host.guest_state(&scene.guest.id()).await, Some((GuestState::Left, true)));
+    assert_eq!(
+        scene.host.guest_state(&scene.guest.id()).await,
+        Some((GuestState::Left, true))
+    );
 }
 
-// ---- Die übrigen Vorgänge der Mod (INGAME 5.4) und ihre Zustimmung: eigene Dateien, die diese Bausteine benutzen ----
+// ---- Die übrigen Vorgänge der Mod (docs/bridge/README.md, "Operations and consent") und ihre Zustimmung: eigene Dateien, die diese Bausteine benutzen ----
 
-#[path = "tests_mod_link.rs"]
-mod mod_ops;
 #[path = "tests_mod_link_join.rs"]
 mod mod_join;
+#[path = "tests_mod_link.rs"]
+mod mod_ops;
 #[path = "tests_mod_link_social.rs"]
 mod mod_social;

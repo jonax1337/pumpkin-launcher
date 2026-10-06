@@ -1,11 +1,11 @@
-// Reine Logik der Aktivität im Spiel (INGAME 5.5 und 5.7, kein React), damit activityModel.check.mjs sie ohne Bundler prüft.
+// Reine Logik der Aktivität im Spiel (docs/bridge/README.md, "Operations and consent", kein React), damit activityModel.check.mjs sie ohne Bundler prüft.
 import type { ModActivityEntry, ModConfirmEvent, ModScope } from "../../lib/friends-types.ts";
 
 /** So viele Vorgänge zeigt die Liste und hält der Launcher (`MOD_ACTIVITY_LIMIT`). */
 export const ACTIVITY_LIMIT = 100;
 
 /**
- * Die Vorgänge der Bereiche `share` und `social` (INGAME 5.4) mit ihren Wörterbuchschlüsseln: `activity` ist der Satz für einen
+ * Die Vorgänge der Bereiche `share` und `social` (docs/bridge/README.md, "Operations and consent") mit ihren Wörterbuchschlüsseln: `activity` ist der Satz für einen
  * ausgeführten Vorgang („Anna als Freund hinzugefügt“), `operation` benennt den Vorgang, bevor er läuft oder wenn er nicht lief.
  */
 export const SCOPED_OPS = {
@@ -57,7 +57,7 @@ export const confirmOperationLine = ({ scope, friends, summary }: Pick<ModConfir
 export const activityText = (entry: ModActivityEntry): OpLine<ActivityKey | OperationKey> =>
   entry.ok ? activityLine(entry) : operationLine(entry);
 
-/** Der Schlüssel des Satzes über die Rückfrage: ein Satz je Bereich (INGAME 5.5). */
+/** Der Schlüssel des Satzes über die Rückfrage: ein Satz je Bereich (docs/bridge/README.md, "Operations and consent"). */
 export const scopeSentenceKey = (scope: ModScope) => (scope === "share" ? "friendsInvite.mod.scope.share" : "friendsInvite.mod.scope.social");
 
 const sameEntry = (a: ModActivityEntry, b: ModActivityEntry) =>

@@ -2,7 +2,7 @@ name: Release
 
 # Tag v* pushen → zuerst die In-Game-Mod (alle Knoten aus mod/nodes.txt, wie mod.yml), dann die Installer für
 # Windows, Linux und macOS, die die Mod-Jars über PUMPKIN_MOD_DIST einbetten, plus ein gemeinsames latest.json
-# als Entwurf. Ablauf: docs/RELEASING.md
+# als Entwurf. Ablauf: CONTRIBUTING.md#release-packaging
 on:
   push:
     tags: ["v*"]
@@ -29,14 +29,14 @@ jobs:
           status=0
           check() {
             if [ "$2" != "$tag" ]; then
-              echo "::error file=$1::$1 has version $2, but the tag is $GITHUB_REF_NAME. Bump all four files (see docs/RELEASING.md)."
+              echo "::error file=$1::$1 has version $2, but the tag is $GITHUB_REF_NAME. Bump all four files (see CONTRIBUTING.md#release-packaging)."
               status=1
             fi
           }
           check package.json "$(node -p "require('./package.json').version")"
           check src-tauri/tauri.conf.json "$(node -p "require('./src-tauri/tauri.conf.json').version")"
           check src-tauri/Cargo.toml "$(grep -m1 '^version = ' src-tauri/Cargo.toml | cut -d '"' -f2)"
-          # Die Mod-Version ist immer die Launcher-Version (INGAME 3.2); modVersion und jeder Jar-Name tragen sie.
+          # Die Mod-Version ist immer die Launcher-Version (docs/bridge/README.md, "Embedded index and files"); modVersion und jeder Jar-Name tragen sie.
           check mod/gradle.properties "$(grep -m1 '^version=' mod/gradle.properties | cut -d= -f2)"
           exit $status
 
@@ -85,8 +85,9 @@ jobs:
                 id: .[0],
                 loader: .[1],
                 java: (.[4] | tonumber),
+                testJava: (if (.[4] | tonumber) < 17 then 17 else (.[4] | tonumber) end),
                 gradleJava: (.[6] | tonumber),
-                family: (if .[1] == "fabric" then "fabric" elif .[1] == "neoforge" then "neoforge" else "legacyforge" end)
+                family: (if .[1] == "fabric" or .[1] == "quilt" then "fabric" elif .[1] == "neoforge" then "neoforge" else "forge" end)
               })' mod/nodes.txt)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
@@ -117,6 +118,18 @@ jobs:
       - name: Expose the game JDK to Gradle
         run: echo "PUMPKIN_JDK_${{ matrix.java }}=${{ steps.game-jdk.outputs.path }}" >> "$GITHUB_ENV"
 
+      - name: Test JDK for Java 8 production nodes
+        if: matrix.java < 17
+        id: test-jdk
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Expose the test JDK
+        if: matrix.java < 17
+        run: echo "PUMPKIN_JDK_17=${{ steps.test-jdk.outputs.path }}" >> "$GITHUB_ENV"
+
       - name: Gradle JDK ${{ matrix.gradleJava }}
         if: matrix.gradleJava != matrix.java
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -132,12 +145,13 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
             mod/.gradle/loom-cache
-          key: gradle-${{ matrix.family }}-${{ hashFiles('mod/gradle.properties', 'mod/gradle/wrapper/gradle-wrapper.properties', format('mod/build-{0}.gradle', matrix.loader)) }}
+          key: gradle-${{ matrix.family }}-${{ hashFiles('mod/gradle.properties', 'mod/gradle/wrapper/gradle-wrapper.properties', 'mod/build-*.gradle') }}
           restore-keys: |
             gradle-${{ matrix.family }}-
 
+      # Java 8 production bytecode is exercised by the real game; JUnit 6 requires Java 17 or newer.
       - name: Build and test
-        run: ./gradlew -Pnode=${{ matrix.id }} -Pcore.testJdk=${{ matrix.java }} build modIndex
+        run: ./gradlew -Pnode=${{ matrix.id }} -Pcore.testJdk=${{ matrix.testJava }} build modIndex
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -184,7 +198,7 @@ jobs:
   build:
     name: Build (${{ matrix.platform }})
     needs: [prepare, mod-package]
-    # Der Signaturschlüssel liegt als Secret dieser Umgebung; ihre Pflichtprüfer geben jeden Build frei (docs/RELEASING.md).
+    # Signing uses repository or release-environment secrets; reviewer protection is not currently configured.
     environment: release
     permissions:
       contents: write
@@ -229,7 +243,7 @@ jobs:
           path: mod-dist
 
       # Einbettung ist Pflicht: Der Index muss gültig sein und die Version des Tags tragen (die Mod-Version ist
-      # immer die Launcher-Version, INGAME 3.2), sonst steht später "in diesem Build nicht verfügbar" im Spiel.
+      # immer die Launcher-Version, docs/bridge/README.md, "Embedded index and files"), sonst steht später "in diesem Build nicht verfügbar" im Spiel.
       - name: Check the mod dist (index and version)
         shell: bash
         run: |
@@ -239,7 +253,7 @@ jobs:
             echo "::error::mod-index.json has modVersion $index_version, but the tag is $GITHUB_REF_NAME."
             exit 1
           fi
-          echo "Embedding pumpkin_friends $index_version ($(ls mod-dist/*.jar | wc -l) jars)."
+          echo "Embedding pumpkin_bridge $index_version ($(ls mod-dist/*.jar | wc -l) jars)."
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -251,7 +265,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # Öffentliche Adresse des Freunde-Verzeichnisses (siehe directory/README.md); kein Geheimnis. Forks lassen sie leer.
           PUMPKIN_FRIENDS_DIRECTORY: https://pumpkin-friends-directory.jonas-laux.workers.dev
-          # Der Mod-Ordner (mod-index.json + Jars), den build.rs einbettet (INGAME 3.2); ohne ihn trägt der
+          # Der Mod-Ordner (mod-index.json + Jars), den build.rs einbettet (docs/bridge/README.md, "Embedded index and files"); ohne ihn trägt der
           # Launcher keine Mod und die Einspeisung meldet "in diesem Build nicht verfügbar".
           PUMPKIN_MOD_DIST: ${{ github.workspace }}/mod-dist
         with:
@@ -277,7 +291,7 @@ jobs:
           status=0
           for platform in windows-x86_64 linux-x86_64 darwin-x86_64 darwin-aarch64; do
             if ! jq -e --arg p "$platform" '.platforms[$p]' latest.json > /dev/null; then
-              echo "::error::latest.json has no entry for $platform. Re-run that platform's build job (see docs/RELEASING.md)."
+              echo "::error::latest.json has no entry for $platform. Re-run that platform's build job (see CONTRIBUTING.md#release-packaging)."
               status=1
             fi
           done
@@ -305,7 +319,7 @@ jobs:
             rm -rf source && mkdir source
             gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --pattern "$pattern" --dir source || true
             if [ "$(ls source | wc -l)" -ne 1 ]; then
-              echo "::error::Expected exactly one release file matching '$pattern' for $stable_name, found $(ls source | wc -l). Re-run that platform's build job (see docs/RELEASING.md)."
+              echo "::error::Expected exactly one release file matching '$pattern' for $stable_name, found $(ls source | wc -l). Re-run that platform's build job (see CONTRIBUTING.md#release-packaging)."
               status=1
               return
             fi

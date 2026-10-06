@@ -10,7 +10,7 @@ import { Actions, Button, StatusPanel, Switch } from "@/ui";
 import { GuardedButton } from "./guards";
 
 /**
- * Die Zeile zum Freunde-Menü im Spiel (INGAME 3.9): der Stand, bei Bedarf der Grund, der Schalter der Instanz und, wo es hilft,
+ * Die Zeile zum Freunde-Menü im Spiel (docs/bridge/README.md, "Support selection"): der Stand, bei Bedarf der Grund, der Schalter der Instanz und, wo es hilft,
  * „Erneut versuchen“ oder „Fabric hinzufügen?“. Nichts davon installiert etwas; der Wechsel des Loaders geschieht nur auf Klick.
  */
 export function FriendsModRow({ instance, busy = null }: { instance: Instance; busy?: string | null }) {

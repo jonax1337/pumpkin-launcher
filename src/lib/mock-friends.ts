@@ -19,7 +19,6 @@ const nowSecs = () => Math.floor(Date.now() / SECOND_MS);
 
 const MOCK_RELAY_HOST = "relay-eu1.pumpkin.example";
 const MOCK_DIRECTORY_HOST = "verzeichnis.pumpkin.example";
-const MOCK_PLAYER_NAME = "Jonax1337";
 const MOCK_HOST_INSTANCE = "inst-survival";
 const MOCK_GAME_PID = 4242;
 const MOCK_PORT = 52114;
@@ -41,6 +40,7 @@ const MOCK_NODES: MockNode[] = [
   { id: "1.20.4-fabric", loader: "fabric", minecraft: ["1.20.4"], loaderMin: "0.15.0", verified: false },
   { id: "1.21.1-neoforge", loader: "neoforge", minecraft: ["1.21", "1.21.1"], loaderMin: "21.1.0", verified: true },
   { id: "1.20.1-forge", loader: "forge", minecraft: ["1.20.1"], loaderMin: "47.4.0", verified: true },
+  { id: "1.16.5-quilt", loader: "quilt", minecraft: ["1.16.5"], loaderMin: "0.29.2", verified: true },
 ];
 
 /** Ob die Loader-Version `version` unter `minimum` liegt, Teil für Teil als Zahl verglichen. */
@@ -59,7 +59,7 @@ const ONLINE_AFTER_MS = 800;
 const DELIVERY_MS = 1000;
 const JOIN_CONNECT_MS = 1200;
 
-/** So viele Vorgänge aus dem Spiel behält der Launcher (INGAME 5.7). */
+/** So viele Vorgänge aus dem Spiel behält der Launcher (docs/bridge/README.md, "Protocol 2"). */
 const MOD_ACTIVITY_LIMIT = 100;
 
 /** So viele Zeichen behält der Launcher von `summary.targetName` (`sanitize::world_or_instance_name`); die Rückfrage darf sich nicht darauf stützen. */
@@ -84,7 +84,7 @@ const SUMMARIES: Record<PlanScenario, InstanceSummary> = {
   ready: FABRIC_26_3,
   missing: FABRIC_26_3,
   vanilla: { name: "Vanilla 26.3", minecraftVersion: "26.3", loader: "vanilla", loaderVersion: null, modCount: 0 },
-  unsupported: { name: "Vanilla 1.19.4", minecraftVersion: "1.19.4", loader: "vanilla", loaderVersion: null, modCount: 0 },
+  unsupported: { name: "Vanilla 1.16.4", minecraftVersion: "1.16.4", loader: "vanilla", loaderVersion: null, modCount: 0 },
   lookupFailed: { ...FABRIC_26_3, modCount: 12 },
 };
 
@@ -150,13 +150,13 @@ function deliveringRequestOf(codeTail: string, ageSecs: number): FriendRequest {
 function inviteOf(from: Friend, scenario: PlanScenario): Invite {
   const receivedAt = nowSecs();
   return {
-    id: crypto.randomUUID(), sessionId: crypto.randomUUID(), from: from.id, fromName: from.displayName, fromFingerprint: from.fingerprint,
+    id: crypto.randomUUID(), sessionId: crypto.randomUUID(), from: from.id, fromName: from.mcName ?? from.displayName, fromFingerprint: from.fingerprint,
     title: "Inselwelt", instance: SUMMARIES[scenario], receivedAt, expiresAt: receivedAt + FRIENDS_LIMITS.inviteTtlSecs, hostOnline: true,
   };
 }
 
 const guestOf = (friend: Friend, over: Partial<SessionGuest> = {}): SessionGuest => ({
-  friendId: friend.id, displayName: friend.displayName, state: "invited", kicked: false, path: null, rttMs: null, ...over,
+  friendId: friend.id, displayName: friend.mcName ?? friend.displayName, state: "invited", kicked: false, path: null, rttMs: null, ...over,
 });
 
 interface FriendsDb {
@@ -196,8 +196,8 @@ function initialState(scenario: Scenario): FriendsState {
   return {
     availability: scenario === "identityLost" ? "identityLost" : scenario === "noSecretStore" ? "noSecretStore" : "available",
     enabled,
-    me: identityKnown ? mockMe(MOCK_PLAYER_NAME) : null,
-    settings: { displayName: MOCK_PLAYER_NAME, alwaysRelay: false, findableByName: scenario === "full", ingameMenu: true, ingameActions: "ask" },
+    me: identityKnown ? mockMe("") : null,
+    settings: { alwaysRelay: false, findableByName: scenario === "full", ingameMenu: true, ingameActions: "ask" },
     network: identityKnown ? { type: "online", relayHost: MOCK_RELAY_HOST } : { type: "off" },
     relays: [{ host: MOCK_RELAY_HOST, operator: "pumpkin", thirdParty: false }],
     thirdPartyRelaysAccepted: false,
@@ -284,6 +284,12 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
   const db = createDb(scenarioFromUrl());
   const takeLayoutShift = createLayoutShiftMeter();
   const changed = () => emit("friends-changed", null);
+  const accountName = () => appDb.accounts.find((account) => account.kind === "microsoft")?.username ?? "";
+  function accountChanged() {
+    if (db.state.me) db.state.me.displayName = accountName();
+    changed();
+  }
+  if (db.state.me) db.state.me.displayName = accountName();
 
   const find = <T extends { id: string }>(items: T[], id: string, kind: NotFound): T => {
     const found = items.find((item) => item.id === id);
@@ -333,15 +339,13 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
   // --- Identität und Einstellungen ---
 
   /** Nach dem Einschalten steht die Verbindung zum Relay erst nach einem Moment. */
-  function enable({ displayName, alwaysRelay, acceptThirdPartyRelays, findableByName }: FriendsEnableInput) {
-    const name = displayName.trim();
-    if (name.length < FRIENDS_LIMITS.displayNameMin || name.length > FRIENDS_LIMITS.displayNameMax) {
-      throw new Error(t("mock.friends.displayNameInvalid", { min: FRIENDS_LIMITS.displayNameMin, max: FRIENDS_LIMITS.displayNameMax }));
-    }
-    if (!appDb.accounts.some((a) => a.kind === "microsoft")) throw new Error(t("mock.friends.msAccountRequired"));
-    const settings = { ...db.state.settings, displayName: name, alwaysRelay, findableByName };
+  function enable({ alwaysRelay, acceptThirdPartyRelays, findableByName }: FriendsEnableInput) {
+    const name = accountName();
+    if (!name) throw new Error(t("mock.friends.msAccountRequired"));
+    const settings = { ...db.state.settings, alwaysRelay, findableByName };
     Object.assign(db.state, { enabled: true, settings, thirdPartyRelaysAccepted: acceptThirdPartyRelays });
     db.state.me ??= mockMe(name);
+    db.state.me.displayName = name;
     setNetwork({ type: "starting" });
     setTimeout(() => setNetwork({ type: "online", relayHost: MOCK_RELAY_HOST }), ONLINE_AFTER_MS);
     applyFindability(findableByName);
@@ -364,17 +368,20 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
       return;
     }
     setTimeout(() => {
-      if (!db.state.settings.findableByName) return;
+      if (!db.state.enabled || !db.state.settings.findableByName) return;
       directory.state = "active";
       changed();
     }, ONLINE_AFTER_MS);
   }
 
   function updateSettings(settings: FriendsSettings) {
+    const previous = db.state.settings;
+    if (settings.alwaysRelay !== previous.alwaysRelay || settings.findableByName !== previous.findableByName) {
+      checkUsable(false);
+    }
     if (settings.alwaysRelay !== db.state.settings.alwaysRelay) endSessions("stopped");
-    if (settings.findableByName !== db.state.settings.findableByName) applyFindability(settings.findableByName);
+    if (db.state.enabled && settings.findableByName !== db.state.settings.findableByName) applyFindability(settings.findableByName);
     db.state.settings = settings;
-    if (db.state.me) db.state.me.displayName = settings.displayName;
     changed();
     return db.state;
   }
@@ -382,7 +389,7 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
   function startNewIdentity() {
     endSessions("stopped");
     db.state.availability = "available";
-    db.state.me = mockMe(db.state.settings.displayName);
+    db.state.me = mockMe(accountName());
     changed();
     return db.state;
   }
@@ -441,7 +448,7 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     if (!MC_NAME_PATTERN.test(name)) throw new Error(t("mock.friends.nameInvalid"));
     if (db.state.directory.state === "unavailable") throw new Error(t("mock.friends.directoryUnavailable"));
     if (sameName(name, MOCK_UNKNOWN_NAME)) throw new Error(t("mock.friends.nameUnknown", { name }));
-    if (sameName(name, MOCK_PLAYER_NAME)) throw new Error(t("mock.friends.nameOwn"));
+    if (sameName(name, accountName())) throw new Error(t("mock.friends.nameOwn"));
     if (db.friends.some((f) => sameName(f.mcName, name))) throw new Error(t("mock.friends.alreadyFriends"));
     if (openNameRequests().some((r) => sameName(r.mcName, name))) throw new Error(t("mock.friends.alreadyRequestedName", { name }));
     if (openNameRequests().length >= FRIENDS_LIMITS.maxNameRequests) {
@@ -477,7 +484,9 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
       Object.assign(request, { direction: "outgoing", state: "delivering" });
     } else {
       db.requests = without(db.requests, requestId, "request");
-      if (accept) db.friends.push(friendOf(request.displayName ?? "?", { id: request.peerId ?? newPeerId(), confirmed: false, lastSeen: null }));
+      if (accept) db.friends.push(friendOf(request.mcName ?? request.displayName ?? "?", {
+        id: request.peerId ?? newPeerId(), mcName: request.mcName, confirmed: false, lastSeen: null,
+      }));
     }
     changed();
   }
@@ -487,7 +496,7 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     const request = db.requests.find((r) => r.peerId === peerId);
     db.friends = db.friends.filter((f) => f !== friend);
     db.requests = db.requests.filter((r) => r !== request);
-    db.blocked.push({ peerId, displayName: friend?.displayName ?? request?.displayName ?? peerId.slice(0, 8), blockedAt: nowSecs() });
+    db.blocked.push({ peerId, displayName: friend?.mcName ?? friend?.displayName ?? request?.mcName ?? request?.displayName ?? peerId.slice(0, 8), blockedAt: nowSecs() });
     changed();
   }
 
@@ -499,7 +508,7 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
   /** Die Gegenseite hat angenommen: erst unbestätigt, nach einem Moment bestätigt und online. */
   function becomeFriend(request: FriendRequest) {
     db.requests = db.requests.filter((r) => r !== request);
-    const friend = friendOf(request.displayName ?? request.mcName ?? "?", {
+    const friend = friendOf(request.mcName ?? request.displayName ?? "?", {
       id: request.peerId ?? newPeerId(), mcName: request.mcName, confirmed: false, lastSeen: null,
     });
     db.friends.push(friend);
@@ -640,7 +649,7 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     emit("join-session", { ...joinEventBase(ticket), state: { type: "ended", reason: "left" } });
   }
 
-  // --- Freunde-Menü im Spiel (INGAME 3.9) ---
+  // --- Pumpkin Bridge im Spiel (docs/bridge/README.md, "Support selection") ---
 
   const unavailable = (reason: IngameReason, node: IngameNode | null = null): IngameStatus => ({ state: "unavailable", reason, node });
 
@@ -650,10 +659,8 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     if (forced) return forced;
     const instance = appDb.instances.find((i) => i.id === instanceId);
     if (!instance) throw new Error(t("mock.friends.notFound.instance", { id: instanceId }));
-    if (!db.state.enabled) return unavailable({ type: "friendsOff" });
     if (!appDb.accounts.some((a) => a.kind === "microsoft")) return unavailable({ type: "offlineAccount" });
     if (instance.loader === "vanilla") return unavailable({ type: "vanilla" });
-    if (instance.loader === "quilt") return unavailable({ type: "quilt" });
     const cell = MOCK_NODES.find((n) => n.loader === instance.loader && n.minecraft.includes(instance.minecraftVersion));
     if (!cell) return unavailable({ type: "noNode" });
     const node: IngameNode = { id: cell.id, minecraft: instance.minecraftVersion, loader: cell.loader };
@@ -770,10 +777,10 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     const online = scope === "share" ? db.friends.filter((f) => f.presence !== "offline") : [];
     const confirm: ModConfirmEvent = {
       requestId: newId("confirm"), instanceId: MOCK_HOST_INSTANCE, instanceName: "Survival 1.21",
-      friends: online.map((f) => ({ friendId: f.id, displayName: f.displayName })),
+      friends: online.map((f) => ({ friendId: f.id, displayName: f.mcName ?? f.displayName })),
       scope,
       summary: scope === "share"
-        ? { op: "host.invite", targetName: online.map((f) => f.displayName).join(", ").slice(0, MOD_SUMMARY_NAME_CAP) || null }
+        ? { op: "host.invite", targetName: online.map((f) => f.mcName ?? f.displayName).join(", ").slice(0, MOD_SUMMARY_NAME_CAP) || null }
         : { op: "friend.addByName", targetName },
     };
     db.pendingModConfirms.set(confirm.requestId, confirm);
@@ -849,7 +856,10 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     },
     friendsEnable: command(enable),
     friendsDisable: command(disable),
-    friendsUpdateSettings: command(updateSettings),
+    friendsUpdateSettings: async (settings: FriendsSettings) => {
+      await wait();
+      return clone(updateSettings(settings));
+    },
     friendsRotateIdentity: command(rotateIdentity),
     friendsReset: command(reset, { allowLostIdentity: true }),
     friendsList: command(() => db.friends),
@@ -918,5 +928,5 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     friendsModActivity: command(() => db.modActivity),
   } satisfies Partial<Backend>;
 
-  return { api, joinSpawned };
+  return { api, joinSpawned, accountChanged };
 }

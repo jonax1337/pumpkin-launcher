@@ -1,0 +1,4 @@
+[12:00:01] [main/INFO] (FabricLoader) Loading 3 mods: fabric-api, fabricloader, pumpkin_bridge
+[12:00:02] [main/ERROR] (FabricLoader) Uncaught exception in thread "main"
+java.lang.UnsupportedClassVersionError: dev/laux/pumpkin/bridge/transport/BridgeClient has been compiled by a more recent version of the Java Runtime (class file version 69.0), this version of the Java Runtime only recognizes class file versions up to 65.0
+	at java.base/java.lang.ClassLoader.defineClass1(Native Method)

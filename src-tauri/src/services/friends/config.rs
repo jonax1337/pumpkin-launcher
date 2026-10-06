@@ -1,5 +1,5 @@
 //! Einstellungen der Freunde (SPEC 9): `friends/config.json` im App-Datenverzeichnis. Fehlt die Datei, sind die
-//! Freunde aus und alles steht auf den Standardwerten; der Anzeigename wird erst beim Aktivieren aus dem Konto vorbelegt.
+//! Freunde aus und alles steht auf den Standardwerten; der eigene Name stammt ausschließlich aus dem Minecraft-Konto.
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -46,7 +46,11 @@ pub struct DirectoryConfig {
 
 /// Ein Auftrag ans Verzeichnis, der einen Neustart und Netzfehler überlebt.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum DirectoryJob {
     DeleteMail { mail_id: String, until: u64 },
     Retract { mail_id: String, until: u64 },
@@ -64,7 +68,9 @@ impl FriendsConfig {
     /// Eine unlesbare Datei wird nach `config.json.corrupt` gesichert statt beim nächsten Speichern überschrieben.
     pub fn load(dir: &Path) -> AppResult<Self> {
         let path = dir.join(CONFIG_FILE);
-        let Some(raw) = none_if_missing(fs::read_to_string(&path))? else { return Ok(Self::default()) };
+        let Some(raw) = none_if_missing(fs::read_to_string(&path))? else {
+            return Ok(Self::default());
+        };
         match serde_json::from_str(&raw) {
             Ok(config) => Ok(config),
             Err(err) => {
@@ -80,9 +86,11 @@ impl FriendsConfig {
     }
 }
 
-pub(super) fn set_aside(path: &Path, err: &serde_json::Error) -> AppResult<()> {
+pub(crate) fn set_aside(path: &Path, err: &serde_json::Error) -> AppResult<()> {
     let name = path.file_name().unwrap_or_default().to_string_lossy();
-    let backup = path.with_file_name(free_name(&name, ".corrupt", |n| path.with_file_name(n).exists()));
+    let backup = path.with_file_name(free_name(&name, ".corrupt", |n| {
+        path.with_file_name(n).exists()
+    }));
     tracing::warn!(?path, ?backup, %err, "defekte Freunde-Konfiguration gesichert, starte mit Standardwerten");
     fs::rename(path, backup)?;
     Ok(())
@@ -101,18 +109,16 @@ mod tests {
         assert!(!config.enabled);
         assert!(!config.settings.always_relay);
         assert!(!config.third_party_relays_accepted);
-        assert_eq!(config.settings.display_name, "");
         assert_eq!(config.version, 2);
     }
 
     #[test]
-    fn saved_config_loads_back_and_creates_the_folder() {
+    fn legacy_nickname_is_discarded_without_changing_other_settings_or_directory_jobs() {
         let dir = TempDir::new();
         let folder = dir.path().join("friends");
         let config = FriendsConfig {
             enabled: true,
             settings: FriendsSettings {
-                display_name: "Jonas".into(),
                 always_relay: true,
                 findable_by_name: true,
                 ingame_menu: false,
@@ -122,27 +128,28 @@ mod tests {
             directory: DirectoryConfig {
                 registered_uuid: Some("853c80ef3c3749fdaa49938b674adae6".into()),
                 refreshed_at: Some(1_790_000_000),
-                jobs: vec![DirectoryJob::Unregister { uuid: "069a79f444e94726a5befca90e38aaf5".into() }],
+                jobs: vec![DirectoryJob::Unregister {
+                    uuid: "069a79f444e94726a5befca90e38aaf5".into(),
+                }],
             },
             ..FriendsConfig::default()
         };
-        config.save(&folder).unwrap();
-        assert_eq!(FriendsConfig::load(&folder).unwrap(), config);
-    }
+        let mut legacy = serde_json::to_value(&config).unwrap();
+        legacy["settings"]["displayName"] = serde_json::json!("Old nickname");
+        fs::create_dir_all(&folder).unwrap();
+        fs::write(
+            folder.join(CONFIG_FILE),
+            serde_json::to_vec(&legacy).unwrap(),
+        )
+        .unwrap();
 
-    #[test]
-    fn file_has_the_documented_shape() {
-        let dir = TempDir::new();
-        FriendsConfig::default().save(dir.path()).unwrap();
-        let written: serde_json::Value = serde_json::from_slice(&fs::read(dir.path().join(CONFIG_FILE)).unwrap()).unwrap();
-        let expected = serde_json::json!({
-            "version": 2,
-            "enabled": false,
-            "settings": { "displayName": "", "alwaysRelay": false, "findableByName": false, "ingameMenu": true, "ingameActions": "ask" },
-            "thirdPartyRelaysAccepted": false,
-            "directory": { "registeredUuid": null, "refreshedAt": null, "jobs": [] }
-        });
-        assert_eq!(written, expected);
+        let migrated = FriendsConfig::load(&folder).unwrap();
+        assert_eq!(migrated, config);
+        assert!(!folder.join("config.json.corrupt").exists());
+        migrated.save(&folder).unwrap();
+        let saved: serde_json::Value =
+            serde_json::from_slice(&fs::read(folder.join(CONFIG_FILE)).unwrap()).unwrap();
+        assert!(saved["settings"].get("displayName").is_none());
     }
 
     #[test]
@@ -173,15 +180,24 @@ mod tests {
         let dir = TempDir::new();
         let broken = r#"{ "enabled": true, "settings": { "displayName": "J", "alwaysRelay": false, "ingameActions": "always" } }"#;
         fs::write(dir.path().join(CONFIG_FILE), broken).unwrap();
-        assert_eq!(FriendsConfig::load(dir.path()).unwrap(), FriendsConfig::default());
+        assert_eq!(
+            FriendsConfig::load(dir.path()).unwrap(),
+            FriendsConfig::default()
+        );
         assert!(dir.path().join("config.json.corrupt").exists());
     }
 
     #[test]
     fn directory_jobs_use_a_camel_case_type_tag() {
         let jobs = [
-            DirectoryJob::DeleteMail { mail_id: "m".into(), until: 5 },
-            DirectoryJob::Retract { mail_id: "m".into(), until: 6 },
+            DirectoryJob::DeleteMail {
+                mail_id: "m".into(),
+                until: 5,
+            },
+            DirectoryJob::Retract {
+                mail_id: "m".into(),
+                until: 6,
+            },
             DirectoryJob::Block { uuid: "u".into() },
             DirectoryJob::Unblock { uuid: "u".into() },
             DirectoryJob::Unregister { uuid: "u".into() },
@@ -209,13 +225,22 @@ mod tests {
     fn unreadable_file_is_set_aside_and_never_overwritten() {
         let dir = TempDir::new();
         fs::write(dir.path().join(CONFIG_FILE), "{kaputt").unwrap();
-        assert_eq!(FriendsConfig::load(dir.path()).unwrap(), FriendsConfig::default());
-        assert_eq!(fs::read_to_string(dir.path().join("config.json.corrupt")).unwrap(), "{kaputt");
+        assert_eq!(
+            FriendsConfig::load(dir.path()).unwrap(),
+            FriendsConfig::default()
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("config.json.corrupt")).unwrap(),
+            "{kaputt"
+        );
         assert!(!dir.path().join(CONFIG_FILE).exists());
     }
 
     #[test]
     fn friends_dir_is_below_the_app_data_dir() {
-        assert_eq!(friends_dir(&Dirs::new("/daten")), Path::new("/daten").join("friends"));
+        assert_eq!(
+            friends_dir(&Dirs::new("/daten")),
+            Path::new("/daten").join("friends")
+        );
     }
 }

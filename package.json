@@ -1,7 +1,7 @@
 {
   "name": "pumpkin-launcher",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A Minecraft: Java Edition launcher with instances, Modrinth mods & modpacks, and presets — every world, one click.",
   "type": "module",
   "license": "Apache-2.0",
@@ -16,6 +16,7 @@
   "packageManager": "pnpm@11.1.3",
   "scripts": {
     "dev": "node scripts/sync-branding.mjs && vite",
+    "dev:friends": "node scripts/tauri-friends.mjs",
     "build": "node scripts/sync-branding.mjs && tsc && vite build",
     "check:branding": "node src/branding/branding.check.mjs",
     "check:lib": "node src/lib/modrinth.check.mjs && node src/lib/format.check.mjs && node src/lib/errors.check.mjs && node src/lib/routes.check.mjs && node src/lib/image-hosts.check.mjs && node src/lib/serverAddress.check.mjs && node src/lib/contentList.check.mjs && node src/pages/instances/libraryModel.check.mjs && node src/lib/names.check.mjs && node src/pixel/sceneConfig.check.mjs && node src/lib/friendCode.check.mjs && node src/pages/friends/friendsModel.check.mjs && node src/lib/onPlay.check.mjs && node src/store/friendDialogQueue.check.mjs && node src/components/accounts/accountModel.check.mjs && node src/components/friends/inviteModel.check.mjs && node src/components/friends/sharingModel.check.mjs && node src/components/friends/ingameModel.check.mjs && node src/components/friends/consentGuardModel.check.mjs && node src/components/friends/modRequestModel.check.mjs && node src/components/friends/breakerModel.check.mjs",

@@ -105,7 +105,7 @@ function FriendChoices({ friends, labels, picked, full, onToggle }: {
           onChange={(on) => onToggle(friend.id, on)}
         >
           <span className="flex min-w-0 items-center gap-3">
-            <FriendAvatar friendId={friend.id} name={friend.displayName} box={AVATAR_BOX} />
+            <FriendAvatar friendId={friend.id} name={friend.mcName ?? friend.displayName} box={AVATAR_BOX} />
             <span className="ell">{labels.get(friend.id)}</span>
           </span>
         </Checkbox>

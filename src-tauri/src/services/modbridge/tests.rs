@@ -16,8 +16,8 @@ use tokio::sync::broadcast::Receiver;
 use tokio::sync::Notify;
 
 use super::ops::{ErrorCode, Op, OpError, OpOutcome, OpResult, RateClass, Scope};
-use super::protocol::{ModFriend, ModGuest, ModGuestState, ModInvite, ModPresence, ModSession};
-use super::topics::TopicValue;
+use super::protocol::{LauncherFrame, Response, ModFriend, ModGuest, ModGuestState, ModInvite, ModPresence, ModSession};
+use super::topics::{Topic, TopicValue};
 use super::*;
 use crate::services::gamesignal::GameSignal;
 use crate::services::shared_types::PortSource;
@@ -481,9 +481,9 @@ async fn lan_hints_and_ready_reach_the_launcher() {
     client.send(json!({"type": "lanClosed"})).await;
     fixture.expect_signal(&GameSignal::LanClosed { instance_id: "i1".into() }).await;
     assert_eq!(fixture.bridge.ready_screens("i1"), None);
-    client.send(json!({"type": "ready", "screens": ["hub", "share"]})).await;
+    client.send(json!({"type": "ready", "screens": ["home", "friends"]})).await;
     wait_until("ready gemerkt", || fixture.bridge.ready_screens("i1").is_some()).await;
-    assert_eq!(fixture.bridge.ready_screens("i1"), Some(vec!["hub".to_owned(), "share".to_owned()]));
+    assert_eq!(fixture.bridge.ready_screens("i1"), Some(vec!["home".to_owned(), "friends".to_owned()]));
 }
 
 // --- Vorgänge ---------------------------------------------------------------------------------------------------------
@@ -879,4 +879,114 @@ async fn a_notification_reaches_the_connected_mod_and_is_dropped_without_one() {
     fixture.bridge.notify("i1", ModNotify::SessionEnded, None);
     assert_eq!(client.read_type("event").await, json!({"type": "event", "event": "notify", "kind": "guestJoined", "name": "Alex"}));
     assert_eq!(client.read_type("event").await, json!({"type": "event", "event": "notify", "kind": "sessionEnded"}));
+}
+
+#[tokio::test]
+async fn disabled_friends_accepts_a_bridge_connection_but_denies_friends_operations() {
+    let expected = Expectations { friends_enabled: false, pre_granted: true, ..Expectations::unconstrained() };
+    let fixture = Fixture::start_with(Timing::PRODUCTION, fixed_owner(|| Ok(true)), expected).await;
+    let (handler, handled) = recording_ops();
+    fixture.bridge.set_handler(handler);
+    let (mut client, welcome) = fixture.login().await;
+    assert_eq!(welcome["scopes"], json!({"share": "ask", "social": "ask"}));
+
+    client.send(json!({"type": "req", "id": "disabled", "op": "code.create", "args": {}})).await;
+    let answer = client.read_type("res").await;
+    assert_eq!(answer["error"]["code"], "notEnabled");
+    assert!(lock(&handled).is_empty());
+    client.ping_pong().await;
+    assert!(fixture.bridge.is_connected("i1"));
+    fixture.bridge.stop().await;
+}
+
+#[tokio::test]
+async fn revoking_friends_clears_grants_and_topics_without_revoking_the_bridge_token() {
+    let fixture = Fixture::start_with(
+        Timing::PRODUCTION,
+        fixed_owner(|| Ok(true)),
+        Expectations { pre_granted: true, ..Expectations::unconstrained() },
+    ).await;
+    let (mut client, _) = fixture.login().await;
+    fixture.bridge.set_topic("i1", friends(&[("peer", "Private name")]));
+    fixture.bridge.set_friends_enabled(false);
+    assert!(fixture.bridge.is_connected("i1"));
+    assert!(!fixture.bridge.inner.scope_allowed("i1", Scope::Social));
+    assert_eq!(fixture.bridge.inner.topic_current("i1", Topic::Friends).unwrap().1, friends(&[]));
+    fixture.bridge.set_topic("i1", friends(&[("peer", "Late stale publication")]));
+    assert_eq!(fixture.bridge.inner.topic_current("i1", Topic::Friends).unwrap().1, friends(&[]));
+    client.ping_pong().await;
+
+    fixture.bridge.set_friends_enabled(true);
+    assert!(!fixture.bridge.inner.scope_allowed("i1", Scope::Social));
+    assert!(fixture.bridge.is_connected("i1"));
+    fixture.bridge.stop().await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn unsent_friends_secrets_and_notifications_are_revoked_but_generic_responses_survive() {
+    let fixture = Fixture::start_with(Timing::PRODUCTION, fixed_owner(|| Ok(true)), Expectations::unconstrained()).await;
+    let (mut client, _) = fixture.login().await;
+    let link = lock(&fixture.bridge.inner.state).launches["i1"].link.clone().unwrap();
+    let generation = link.queue.friends_generation();
+    let private_reply = |id: &str| LauncherFrame::Res(Response {
+        id: id.into(), ok: true, result: Some(json!({"code": "private-bearer-code"})), error: None,
+    });
+    link.reply_friends(private_reply("before"), generation);
+    fixture.bridge.notify("i1", ModNotify::FriendOnline, Some("Private friend".into()));
+    link.reply(LauncherFrame::Res(Response::success("generic", OpResult::empty())));
+    fixture.bridge.set_friends_enabled(false);
+    fixture.bridge.notify("i1", ModNotify::FriendOnline, Some("Late private friend".into()));
+    fixture.bridge.set_friends_enabled(true);
+    link.reply_friends(private_reply("stale"), generation);
+
+    let before = client.read().await.unwrap();
+    assert_eq!(before["id"], "before");
+    assert_eq!(before["error"]["code"], "notEnabled");
+    assert!(before.get("result").is_none());
+    let generic = client.read().await.unwrap();
+    assert_eq!(generic["id"], "generic");
+    assert_eq!(generic["ok"], true);
+    let stale = client.read().await.unwrap();
+    assert_eq!(stale["id"], "stale");
+    assert_eq!(stale["error"]["code"], "notEnabled");
+    assert!(stale.get("result").is_none());
+    client.send(json!({"type": "ping"})).await;
+    assert_eq!(client.read().await.unwrap()["type"], "pong");
+    client.expect_silence(Duration::from_millis(50)).await;
+    assert!(fixture.bridge.is_connected("i1"));
+    fixture.bridge.stop().await;
+}
+
+#[tokio::test]
+async fn a_pre_reset_publication_cannot_restore_old_friends_data_or_notifications_after_reenable() {
+    let fixture = Fixture::start_with(Timing::PRODUCTION, fixed_owner(|| Ok(true)), Expectations::unconstrained()).await;
+    let (mut client, _) = fixture.login().await;
+    let old = fixture.bridge.friends_publication();
+    fixture.bridge.set_topic("i1", friends(&[]));
+    fixture.bridge.set_friends_enabled(false);
+    fixture.bridge.set_friends_enabled(true);
+    old.set_topic("i1", friends(&[("old", "Previous identity friend")]));
+    old.notify("i1", ModNotify::FriendOnline, Some("Previous identity friend".into()));
+
+    assert!(!old.is_current());
+    client.send(json!({"type": "req", "id": "sync", "op": "state.sync", "args": {}})).await;
+    client.read_type("res").await;
+    let state = client.read_type("state").await;
+    assert_eq!(state["topic"], "friends");
+    assert_eq!(state["value"], json!([]));
+    client.expect_silence(Duration::from_millis(50)).await;
+    fixture.bridge.stop().await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_replaced_link_cannot_receive_topic_data_from_the_new_launch_of_the_same_instance() {
+    let fixture = Fixture::start_with(Timing::PRODUCTION, fixed_owner(|| Ok(true)), Expectations::unconstrained()).await;
+    let (mut old_client, _) = fixture.login().await;
+    fixture.bridge.set_topic("i1", friends(&[("old", "Previous launch friend")]));
+    assert!(!fixture.bridge.register_launch("i1", Expectations::unconstrained()).is_empty());
+    fixture.bridge.set_topic("i1", friends(&[("new", "New launch private friend")]));
+
+    let remaining = old_client.expect_closed().await;
+    assert!(remaining.iter().all(|frame| frame["type"] != "state"));
+    fixture.bridge.stop().await;
 }

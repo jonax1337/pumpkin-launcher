@@ -1,6 +1,6 @@
 //! Konten: Offline (UUID aus dem Namen) und Microsoft per Browser oder Gerätecode → Xbox Live → XSTS →
 //! Minecraft-Token. Refresh-Tokens liegen im OS-Schlüsselbund (`keyring`), nie in JSON;
-//! Minecraft-Tokens nur im Speicher und mit Ablaufzeit. Anleitung: `docs/ACCOUNT-SETUP.md`.
+//! Minecraft-Tokens nur im Speicher und mit Ablaufzeit. Anleitung: `CONTRIBUTING.md#microsoft-sign-in-for-forks`.
 mod callback_server;
 mod keyring;
 mod oauth;
@@ -31,7 +31,7 @@ pub(crate) fn relogin() -> Coded {
 }
 
 /// Client-ID der Azure-App „Pumpkin Launcher“ (öffentlicher Client, kein Geheimnis). Forks müssen eine eigene
-/// Azure-App registrieren und von Microsoft freischalten lassen (`docs/ACCOUNT-SETUP.md`) und diese Konstante ändern.
+/// Azure-App registrieren und von Microsoft freischalten lassen (`CONTRIBUTING.md#microsoft-sign-in-for-forks`) und diese Konstante ändern.
 const DEFAULT_CLIENT_ID: &str = "5e27ee41-3be2-4c3a-a156-a3c61dbef8dc";
 /// So lange wartet die Browser-Anmeldung auf den Rücksprung.
 const BROWSER_TIMEOUT: Duration = Duration::from_secs(600);
@@ -50,9 +50,17 @@ pub struct MsState {
 /// Wie die Anmeldung läuft: Browser mit Rücksprung auf localhost (Standard) oder Gerätecode (Rückfall).
 #[derive(Clone)]
 enum Flow {
-    Device { device_code: String, interval: u64 },
+    Device {
+        device_code: String,
+        interval: u64,
+    },
     /// Lokaler Listener für den Rücksprung, PKCE-Verifier und `state` gegen fremde Aufrufe.
-    Browser { listener: Arc<TcpListener>, verifier: String, state: String, redirect_uri: String },
+    Browser {
+        listener: Arc<TcpListener>,
+        verifier: String,
+        state: String,
+        redirect_uri: String,
+    },
 }
 
 #[derive(Clone)]
@@ -89,7 +97,11 @@ pub struct McSession {
 
 impl McSession {
     fn new(login: McLogin, xuid: String) -> Self {
-        Self { access_token: login.access_token, xuid, expires_at: Instant::now() + Duration::from_secs(login.expires_in) }
+        Self {
+            access_token: login.access_token,
+            xuid,
+            expires_at: Instant::now() + Duration::from_secs(login.expires_in),
+        }
     }
 
     fn valid(&self) -> bool {
@@ -98,7 +110,10 @@ impl McSession {
 }
 
 pub(crate) async fn send(request: reqwest::RequestBuilder) -> AppResult<(u16, Vec<u8>)> {
-    let response = request.header(reqwest::header::ACCEPT, "application/json").send().await?;
+    let response = request
+        .header(reqwest::header::ACCEPT, "application/json")
+        .send()
+        .await?;
     let status = response.status().as_u16();
     Ok((status, response.bytes().await?.to_vec()))
 }
@@ -144,7 +159,9 @@ pub async fn start_login(state: &AppState, mode: LoginMode) -> AppResult<LoginSt
     if mode == LoginMode::Browser {
         match start_browser(state, DEFAULT_CLIENT_ID).await {
             Ok(start) => return Ok(start),
-            Err(err) => tracing::warn!(%err, "Browser-Anmeldung nicht möglich, weiche auf Gerätecode aus"),
+            Err(err) => {
+                tracing::warn!(%err, "Browser-Anmeldung nicht möglich, weiche auf Gerätecode aus")
+            }
         }
     }
     start_device(state, DEFAULT_CLIENT_ID).await
@@ -160,10 +177,24 @@ async fn start_browser(state: &AppState, client_id: &str) -> AppResult<LoginStar
     // Nur Loopback: von außen ist der Listener nicht erreichbar. Microsoft ignoriert den Port von `http://localhost`.
     let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
     let redirect_uri = format!("http://localhost:{}", listener.local_addr()?.port());
-    let verifier = format!("{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple());
+    let verifier = format!(
+        "{}{}",
+        uuid::Uuid::new_v4().simple(),
+        uuid::Uuid::new_v4().simple()
+    );
     let login_state = uuid::Uuid::new_v4().simple().to_string();
-    let url = oauth::authorize_url(client_id, &redirect_uri, &oauth::pkce_challenge(&verifier), &login_state);
-    let flow = Flow::Browser { listener: Arc::new(listener), verifier, state: login_state, redirect_uri };
+    let url = oauth::authorize_url(
+        client_id,
+        &redirect_uri,
+        &oauth::pkce_challenge(&verifier),
+        &login_state,
+    );
+    let flow = Flow::Browser {
+        listener: Arc::new(listener),
+        verifier,
+        state: login_state,
+        redirect_uri,
+    };
     set_pending(state, Pending::new(client_id.into(), flow, BROWSER_TIMEOUT));
     Ok(LoginStart {
         mode: LoginMode::Browser,
@@ -177,8 +208,18 @@ async fn start_browser(state: &AppState, client_id: &str) -> AppResult<LoginStar
 
 async fn start_device(state: &AppState, client_id: &str) -> AppResult<LoginStart> {
     let device = oauth::request_device_code(&state.http, client_id).await?;
-    let flow = Flow::Device { device_code: device.device_code, interval: device.interval };
-    set_pending(state, Pending::new(client_id.into(), flow, Duration::from_secs(device.expires_in)));
+    let flow = Flow::Device {
+        device_code: device.device_code,
+        interval: device.interval,
+    };
+    set_pending(
+        state,
+        Pending::new(
+            client_id.into(),
+            flow,
+            Duration::from_secs(device.expires_in),
+        ),
+    );
     Ok(LoginStart {
         mode: LoginMode::Device,
         user_code: device.user_code,
@@ -193,7 +234,8 @@ async fn start_device(state: &AppState, client_id: &str) -> AppResult<LoginStart
 pub async fn finish_login(state: &AppState) -> AppResult<Account> {
     // Nicht `take`: `cancel_login`/`start_login` müssen die laufende Anmeldung noch abbrechen können.
     // `claimed` sorgt dafür, dass ein zweiter paralleler Aufruf sofort „keine Anmeldung“ bekommt.
-    let pending = claim(&mut lock(&state.ms.pending)).ok_or_else(|| AppError::invalid(coded!("errors.app.auth.noneRunning")))?;
+    let pending = claim(&mut lock(&state.ms.pending))
+        .ok_or_else(|| AppError::invalid(coded!("errors.app.auth.noneRunning")))?;
     let result = poll(state, &pending).await;
     // Nur die eigene Anmeldung aufräumen, nicht eine inzwischen neu gestartete.
     let mut slot = lock(&state.ms.pending);
@@ -211,10 +253,23 @@ fn claim(slot: &mut Option<Pending>) -> Option<Pending> {
 
 async fn poll(state: &AppState, p: &Pending) -> AppResult<Account> {
     match &p.flow {
-        Flow::Device { device_code, interval } => poll_device(state, p, device_code, *interval).await,
-        Flow::Browser { listener, verifier, state: login_state, redirect_uri } => {
+        Flow::Device {
+            device_code,
+            interval,
+        } => poll_device(state, p, device_code, *interval).await,
+        Flow::Browser {
+            listener,
+            verifier,
+            state: login_state,
+            redirect_uri,
+        } => {
             let code = callback_server::wait_for_code(p, listener, login_state).await?;
-            let auth = AuthorizationCode { client_id: &p.client_id, code: &code, redirect_uri, verifier };
+            let auth = AuthorizationCode {
+                client_id: &p.client_id,
+                code: &code,
+                redirect_uri,
+                verifier,
+            };
             match oauth::redeem_code(&state.http, &auth).await? {
                 Poll::Done(tokens) => complete(state, &p.client_id, tokens).await,
                 _ => Err(AppError::invalid(coded!("errors.app.auth.notFinished"))),
@@ -223,10 +278,19 @@ async fn poll(state: &AppState, p: &Pending) -> AppResult<Account> {
     }
 }
 
-async fn poll_device(state: &AppState, p: &Pending, device_code: &str, first_interval: u64) -> AppResult<Account> {
+async fn poll_device(
+    state: &AppState,
+    p: &Pending,
+    device_code: &str,
+    first_interval: u64,
+) -> AppResult<Account> {
     let mut interval = first_interval.max(1);
     loop {
-        if p.cancel.run_until_cancelled(tokio::time::sleep(Duration::from_secs(interval))).await.is_none() {
+        if p.cancel
+            .run_until_cancelled(tokio::time::sleep(Duration::from_secs(interval)))
+            .await
+            .is_none()
+        {
             return Err(AppError::invalid(coded!("errors.auth.cancelled")));
         }
         if Instant::now() >= p.expires_at {
@@ -241,8 +305,11 @@ async fn poll_device(state: &AppState, p: &Pending, device_code: &str, first_int
 }
 
 async fn complete(state: &AppState, client_id: &str, tokens: Tokens) -> AppResult<Account> {
-    let refresh = tokens.refresh_token.ok_or_else(|| AppError::invalid(coded!("errors.app.auth.noRefreshToken")))?;
-    let MinecraftLogin { profile, session } = xbox::login_to_minecraft(&state.http, &tokens.access_token).await?;
+    let refresh = tokens
+        .refresh_token
+        .ok_or_else(|| AppError::invalid(coded!("errors.app.auth.noRefreshToken")))?;
+    let MinecraftLogin { profile, session } =
+        xbox::login_to_minecraft(&state.http, &tokens.access_token).await?;
     keyring::save_refresh_token(&profile.id, &refresh)?;
     let account = state.accounts.upsert(MsAccount {
         id: profile.id,
@@ -262,7 +329,12 @@ pub fn cancel_login(state: &AppState) {
 }
 
 pub fn accounts(state: &AppState) -> Vec<Account> {
-    state.accounts.list().iter().map(MsAccount::account).collect()
+    state
+        .accounts
+        .list()
+        .iter()
+        .map(MsAccount::account)
+        .collect()
 }
 
 /// Entfernt Konto, Schlüsselbund-Eintrag und Sitzung.
@@ -285,7 +357,10 @@ pub async fn session(state: &AppState, id: &str) -> AppResult<(Account, McSessio
 }
 
 fn cached_session(state: &AppState, id: &str) -> Option<McSession> {
-    lock(&state.ms.sessions).get(id).filter(|s| s.valid()).cloned()
+    lock(&state.ms.sessions)
+        .get(id)
+        .filter(|s| s.valid())
+        .cloned()
 }
 
 /// Drops the cached Minecraft session of the account; the next [`session`] refreshes it with the refresh token.
@@ -296,10 +371,13 @@ pub fn forget_session(state: &AppState, id: &str) {
 /// Neue Sitzung per Refresh-Token; liefert das Konto mit dem aktuellen Spielernamen.
 async fn refresh_session(state: &AppState, stored: MsAccount) -> AppResult<(MsAccount, McSession)> {
     let refresh = keyring::load_refresh_token(&stored.id)?;
-    let Poll::Done(tokens) = oauth::redeem_refresh_token(&state.http, &stored.client_id, &refresh).await? else {
+    let Poll::Done(tokens) =
+        oauth::redeem_refresh_token(&state.http, &stored.client_id, &refresh).await?
+    else {
         return Err(AppError::invalid(relogin()));
     };
-    let MinecraftLogin { profile, session } = xbox::login_to_minecraft(&state.http, &tokens.access_token).await?;
+    let MinecraftLogin { profile, session } =
+        xbox::login_to_minecraft(&state.http, &tokens.access_token).await?;
     ensure_same_profile(&stored, &profile)?;
     persist_rotated_token(&stored.id, &tokens)?;
     let account = rename_if_changed(state, stored, profile.name)?;
@@ -322,18 +400,31 @@ fn persist_rotated_token(account_id: &str, tokens: &Tokens) -> AppResult<()> {
 }
 
 /// Der Spielername kann sich auf minecraft.net geändert haben.
-fn rename_if_changed(state: &AppState, stored: MsAccount, username: String) -> AppResult<MsAccount> {
+fn rename_if_changed(
+    state: &AppState,
+    stored: MsAccount,
+    username: String,
+) -> AppResult<MsAccount> {
     if username == stored.username {
         return Ok(stored);
     }
-    state.accounts.update(MsAccount { username, ..stored })
+    let renamed = state.accounts.update(MsAccount { username, ..stored })?;
+    state
+        .friends
+        .update_account(crate::friends_commands::account_profile(state));
+    Ok(renamed)
 }
 
 /// Spielernamen ohne Konto gibt es nur in Debug-Builds (`pnpm tauri dev`) oder wenn ein Microsoft-Konto
 /// angemeldet ist, dessen Besitz beim Login geprüft wurde. Ein offizieller Build startet so nicht für
 /// Leute, die das Spiel nicht besitzen. Der Quelltext ist offen: das ist Richtlinie, kein Kopierschutz.
 pub fn offline_allowed(state: &AppState) -> bool {
-    cfg!(debug_assertions) || state.accounts.list().iter().any(|a| keyring::has_refresh_token(&a.id))
+    cfg!(debug_assertions)
+        || state
+            .accounts
+            .list()
+            .iter()
+            .any(|a| keyring::has_refresh_token(&a.id))
 }
 
 /// Wie `offline_allowed`, aber als Fehler mit Anleitung für den Start.
@@ -341,7 +432,9 @@ pub fn require_offline(state: &AppState) -> AppResult<()> {
     if offline_allowed(state) {
         return Ok(());
     }
-    Err(AppError::invalid(coded!("errors.app.auth.offlineNotAllowed")))
+    Err(AppError::invalid(coded!(
+        "errors.app.auth.offlineNotAllowed"
+    )))
 }
 
 /// UUID eines Offline-Spielers wie im Spiel selbst: MD5 von `OfflinePlayer:<name>`
@@ -354,9 +447,15 @@ pub fn offline_uuid(username: &str) -> uuid::Uuid {
 /// Offline-Account; die ID ist die deterministische Spieler-UUID. Namen wie im Spiel:
 /// 3–16 Zeichen aus `A-Z a-z 0-9 _`.
 pub fn offline_account(username: &str) -> AppResult<Account> {
-    let valid = (3..=16).contains(&username.len()) && username.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');
+    let valid = (3..=16).contains(&username.len())
+        && username
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_');
     if !valid {
-        return Err(AppError::invalid(coded!("errors.app.auth.invalidUsername", username = username)));
+        return Err(AppError::invalid(coded!(
+            "errors.app.auth.invalidUsername",
+            username = username
+        )));
     }
     Ok(Account {
         id: offline_uuid(username).to_string(),
@@ -373,27 +472,44 @@ mod tests {
     #[test]
     fn offline_uuid_matches_java() {
         // Referenz: Javas UUID.nameUUIDFromBytes("OfflinePlayer:Notch".getBytes(UTF_8)).
-        assert_eq!(offline_account("Notch").unwrap().id, "b50ad385-829d-3141-a216-7e7d7539ba7f");
+        assert_eq!(
+            offline_account("Notch").unwrap().id,
+            "b50ad385-829d-3141-a216-7e7d7539ba7f"
+        );
         assert!(offline_account("ab").is_err());
         assert!(offline_account("bad name").is_err());
     }
 
     #[test]
     fn default_client_id_is_a_uuid() {
-        assert!(uuid::Uuid::parse_str(DEFAULT_CLIENT_ID).is_ok(), "ein Fork hat die Client-ID falsch eingetragen");
+        assert!(
+            uuid::Uuid::parse_str(DEFAULT_CLIENT_ID).is_ok(),
+            "ein Fork hat die Client-ID falsch eingetragen"
+        );
     }
 
     #[test]
     fn login_mode_defaults_to_browser() {
         assert_eq!(LoginMode::from_method(Some("device")), LoginMode::Device);
         assert_eq!(LoginMode::from_method(Some("browser")), LoginMode::Browser);
-        assert_eq!(LoginMode::from_method(Some("Device")), LoginMode::Browser, "nur der exakte Wert erzwingt den Gerätecode");
+        assert_eq!(
+            LoginMode::from_method(Some("Device")),
+            LoginMode::Browser,
+            "nur der exakte Wert erzwingt den Gerätecode"
+        );
         assert_eq!(LoginMode::from_method(None), LoginMode::Browser);
     }
 
     #[test]
     fn second_finish_login_gets_nothing() {
-        let p = Pending::new("c".into(), Flow::Device { device_code: "d".into(), interval: 5 }, Duration::ZERO);
+        let p = Pending::new(
+            "c".into(),
+            Flow::Device {
+                device_code: "d".into(),
+                interval: 5,
+            },
+            Duration::ZERO,
+        );
         let mut slot = Some(p);
         assert!(claim(&mut slot).is_some());
         assert!(claim(&mut slot).is_none());

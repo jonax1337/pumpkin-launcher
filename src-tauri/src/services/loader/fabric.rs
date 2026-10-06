@@ -104,14 +104,18 @@ impl LoaderProfile for Profile {
 pub(super) async fn loader_versions(client: &reqwest::Client, loader: ModLoader, mc: &str) -> AppResult<Vec<LoaderVersion>> {
     let url = format!("{}/versions/loader/{}", meta(loader).url, segment(mc)?);
     let entries: Vec<LoaderEntry> = download::get_json(client, &url).await?;
+    Ok(ordered_versions(loader, entries))
+}
+
+fn ordered_versions(loader: ModLoader, entries: Vec<LoaderEntry>) -> Vec<LoaderVersion> {
     let versions = entries.into_iter().map(|e| e.loader);
     if loader != ModLoader::Quilt {
-        return Ok(versions.collect());
+        return versions.collect();
     }
     // Quilt-Meta liefert ungeordnet und ohne `stable`.
     let mut versions: Vec<LoaderVersion> = versions.map(|v| LoaderVersion::from_tag(v.version)).collect();
     versions.sort_by(|a, b| compare_versions(&b.version, &a.version));
-    Ok(versions)
+    versions
 }
 
 /// Lädt das Profil, ergänzt fehlende SHA-1 aus den `.sha1`-Dateien des Maven-Repos und cacht es
@@ -148,6 +152,22 @@ mod tests {
         assert_eq!(Profile::id_for(quilt), "quilt-loader-0.29.2-1.21.1");
         let fabric = LoaderTarget::new(ModLoader::Fabric, "1.21.11", "0.19.5").unwrap();
         assert_eq!(Profile::id_for(fabric), "fabric-loader-0.19.5-1.21.11");
+    }
+
+    #[test]
+    fn unsorted_quilt_api_selects_the_latest_stable_release() {
+        let entries = serde_json::from_value(serde_json::json!([
+            {"loader": {"version": "0.20.0-beta.1"}},
+            {"loader": {"version": "0.30.0"}},
+            {"loader": {"version": "0.30.2-beta.1"}},
+            {"loader": {"version": "0.30.1"}}
+        ])).unwrap();
+        let versions = ordered_versions(ModLoader::Quilt, entries);
+        assert_eq!(versions.iter().map(|v| v.version.as_str()).collect::<Vec<_>>(),
+            ["0.30.2-beta.1", "0.30.1", "0.30.0", "0.20.0-beta.1"]);
+        assert_eq!(super::super::default_version(ModLoader::Quilt, &versions).unwrap().version, "0.30.1");
+        let unsorted = [LoaderVersion::from_tag("0.30.0".into()), LoaderVersion::from_tag("0.30.1".into())];
+        assert_eq!(super::super::default_version(ModLoader::Quilt, &unsorted).unwrap().version, "0.30.1");
     }
 
     #[test]

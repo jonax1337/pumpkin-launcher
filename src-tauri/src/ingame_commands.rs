@@ -1,4 +1,4 @@
-//! Tauri-Commands des Freunde-Menüs im Spiel (docs/friends/INGAME.md, 3.9): Status der Instanz, Schalter und „Erneut
+//! Tauri-Commands des Freunde-Menüs im Spiel (docs/bridge/README.md, "Support selection"): Status der Instanz, Schalter und „Erneut
 //! versuchen“. Dünne Schicht über `ingame_launch` und den Zustand je Instanz in `AppState.ingame`.
 use tauri::{AppHandle, State};
 

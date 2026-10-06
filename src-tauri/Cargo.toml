@@ -1,6 +1,6 @@
 [package]
 name = "launcher"
-version = "0.2.0"
+version = "0.3.0"
 description = "Pumpkin Launcher – Jede Welt. Ein Klick."
 authors = ["LAUX DIGITAL"]
 edition = "2021"
@@ -70,8 +70,8 @@ time = { version = "0.3", features = ["parsing"] }
 [features]
 # Zusätzlich die öffentlichen Relays von n0 (nur Entwicklung und geschlossene Beta, siehe docs/friends/SPEC.md 3.2).
 beta-relays = []
-# Rauchtest der Mod im Spiel (docs/friends/INGAME-SMOKE.md): schaltet den Test `tests/smoke` frei und erlaubt ihm, das Tor
-# „Microsoft-Konto“ der Einspeisung zu überstimmen. Nie in den Standard-Features, nie im Release-Workflow.
+# Rauchtest der Mod im Spiel (tools/mod-smoke/README.md): schaltet `tests/smoke` frei und erlaubt dem Test,
+# das Microsoft-Konto-Tor zu überstimmen. Nie in den Standard-Features oder im Release-Workflow.
 smoke = []
 
 [[test]]

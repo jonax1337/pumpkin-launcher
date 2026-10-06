@@ -1,20 +1,410 @@
 {
-	"26.3-fabric": { "smoke": "2026-10-04", "owner": null },
-	"26.2-fabric": { "smoke": "2026-10-04", "owner": null },
-	"26.1.2-fabric": { "smoke": "2026-10-04", "owner": null },
-	"1.21.1-fabric": { "smoke": "2026-10-04", "owner": null },
-	"1.21.5-fabric": { "smoke": "2026-10-04", "owner": null },
-	"1.21.8-fabric": { "smoke": "2026-10-04", "owner": null },
-	"1.21.10-fabric": { "smoke": "2026-10-04", "owner": null },
-	"1.21.11-fabric": { "smoke": "2026-10-04", "owner": null },
-	"1.20.1-fabric": { "smoke": "2026-10-04", "owner": null },
-	"1.20.2-fabric": { "smoke": "2026-10-04", "owner": null },
-	"1.20.4-fabric": { "smoke": "2026-10-04", "owner": null },
-	"1.21.1-neoforge": { "smoke": "2026-10-04", "owner": null },
-	"1.21.5-neoforge": { "smoke": "2026-10-04", "owner": null },
-	"1.21.8-neoforge": { "smoke": "2026-10-04", "owner": null },
-	"1.21.10-neoforge": { "smoke": "2026-10-04", "owner": null },
-	"1.21.11-neoforge": { "smoke": "2026-10-04", "owner": null },
-	"26.2-neoforge": { "smoke": "2026-10-04", "owner": null },
-	"1.20.1-forge": { "smoke": "2026-10-04", "owner": null }
+	"1.16.5-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.16.5-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.16.5-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.18.2-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.18.2-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.18.2-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.19.2-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.19.2-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.19.2-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.1-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.1-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.1-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.1-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.2-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.2-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.2-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.2-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.3-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.3-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.3-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.3-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.4-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.4-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.4-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.4-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.5-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.5-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.5-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.6-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.6-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.6-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.20.6-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.1-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.1-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.1-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.1-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.10-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.10-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.10-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.10-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.11-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.11-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.11-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.11-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.2-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.2-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.2-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.3-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.3-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.3-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.3-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.4-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.4-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.4-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.4-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.5-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.5-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.5-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.5-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.6-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.6-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.6-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.6-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.7-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.7-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.7-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.7-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.8-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.8-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.8-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.8-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.9-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.9-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.9-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"1.21.9-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.1-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.1-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.1-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.1-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.1.1-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.1.1-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.1.1-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.1.1-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.1.2-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.1.2-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.1.2-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.1.2-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.2-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.2-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.2-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.2-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.3-fabric": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.3-forge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.3-neoforge": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	},
+	"26.3-quilt": {
+		"owner": null,
+		"smoke": "2026-10-06"
+	}
 }

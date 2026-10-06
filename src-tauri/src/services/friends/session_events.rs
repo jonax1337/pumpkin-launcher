@@ -4,8 +4,8 @@
 use tauri::AppHandle;
 
 use super::contract::{
-    HostSessionEndedEvent, HostSessionEvent, InviteEvent, InviteRevokedEvent, JoinSessionEvent, LanEvent,
-    ModConfirmEvent, ModConnectionEvent,
+    HostSessionEndedEvent, HostSessionEvent, InviteEvent, InviteRevokedEvent, JoinSessionEvent,
+    LanEvent, ModConfirmEvent, ModConnectionEvent,
 };
 use crate::services::progress::emit;
 

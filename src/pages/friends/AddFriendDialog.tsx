@@ -4,12 +4,11 @@ import { useAddFriend, useAddFriendByName, useCreateFriendCode, useFriendsState 
 import { useI18n } from "@/i18n";
 import { BackendError } from "@/lib/errors";
 import { isFriendCodeShape, normalizeFriendCode } from "@/lib/friendCode";
-import { Actions, Button, Dialog, DialogActions, TabPanel, Tabs, type TabItem } from "@/ui";
+import { Actions, Button, Dialog, DialogActions, Hint, TabPanel, Tabs, type TabItem } from "@/ui";
 import { EnterCodeTab } from "./EnterCodeTab";
 import { defaultAddTab, isMcName, nameTabAvailable, type AddFriendTab } from "./friendsModel";
 import { MyCodeTab } from "./MyCodeTab";
 import { NameTab } from "./NameTab";
-
 export type { AddFriendTab };
 
 const DIALOG_WIDTH = 520;
@@ -73,9 +72,10 @@ export function AddFriendDialog({ initialTab, onClose }: { initialTab: AddFriend
     addByName.reset();
   }
 
+  const nameSearchUnavailable = !nameTabAvailable(state?.directory.state ?? "unavailable");
   const nameTab: TabItem<AddFriendTab> = { value: "name", label: t("friends.name.tab"), icon: "user" };
   const tabs: TabItem<AddFriendTab>[] = [
-    ...(nameTabAvailable(state?.directory.state ?? "unavailable") ? [nameTab] : []),
+    ...(nameSearchUnavailable ? [] : [nameTab]),
     { value: "enter", label: t("friends.enter.tab"), icon: "plus" },
     { value: "mine", label: t("friends.myCode.tab"), icon: "link" },
   ];
@@ -102,7 +102,12 @@ export function AddFriendDialog({ initialTab, onClose }: { initialTab: AddFriend
       <Tabs idBase="add-friend" label={t("friends.add.tabsLabel")} value={tab} onChange={setTab} items={tabs} />
       <TabPanel idBase="add-friend" value={tab} className="mt-4">
         {tab === "mine" && <MyCodeTab create={createCode} />}
-        {tab === "enter" && <EnterCodeTab formId={formId} input={code} onInput={setCode} onSubmit={sendCode} />}
+        {tab === "enter" && nameSearchUnavailable && (
+          <Hint className="mt-3">{t("friends.name.buildUnavailable")}</Hint>
+        )}
+        {tab === "enter" && (
+          <EnterCodeTab formId={formId} input={code} onInput={setCode} onSubmit={sendCode} />
+        )}
         {tab === "name" && state && (
           <NameTab
             formId={formId}

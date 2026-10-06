@@ -1,4 +1,4 @@
-# Single source of truth for the mod build nodes (docs/friends/INGAME.md 2.2, 4.3).
+# Single source of truth for the mod build nodes (docs/bridge/README.md, "Support selection").
 #
 # Read by: settings.gradle (project tree), the node build scripts, scripts/dev-env.sh and scripts/dev-env.ps1
 # (JDK per node), scripts/compile-matrix.mjs and .github/workflows/mod.yml (job matrices). Add a node here first,
@@ -6,15 +6,15 @@
 #
 # Columns, separated by blanks:
 #   id           Node id and Gradle project name: <highest minecraft release>-<loader>. Never used as a version (see README).
-#   loader       fabric | neoforge | forge
+#   loader       fabric | quilt | neoforge | forge
 #   minecraft    Explicit Mojang release ids the jar CLAIMS to serve (this goes into mod-index.json), comma separated,
 #                no ranges, no snapshots. The LAST id is the version the node is compiled against by default.
 #   loaderMin    Lowest loader version the jar accepts (Fabric Loader, NeoForge, Forge).
 #   java         JDK major that compiles (--release), tests and runs the node. It is also the jar's javaMin.
-#   strategy     How the launcher injects the jar: fabricAddMods | fmlMavenRoot | fmlModFolders.
+#   strategy     fabricAddMods | quiltAddMods | fmlMavenRoot | fmlModFolders | forgeClasspath
 #   gradleJdk    JDK major Gradle itself runs on for this node: at least java and at least mod.gradleJdkMin.
 #                Stonecutter needs 21, Fabric Loom 1.18 needs 25 (also for obfuscated Minecraft versions).
-#   matrix       Every Minecraft release the node is meant to serve (docs/friends/INGAME-API.md section 5), comma
+#   matrix       Every Minecraft release the node is meant to serve (docs/bridge/MINECRAFT-API.md), comma
 #                separated, ascending. `minecraft` must be a subset: a node claims only what it was built against.
 #                scripts/compile-matrix.mjs compiles both ends and one middle release of this list.
 #
@@ -37,3 +37,95 @@
 1.21.11-neoforge   neoforge  1.21.11    21.11.42   21    fmlModFolders  21         1.21.11
 26.2-neoforge      neoforge  26.2       26.2.0.57  25    fmlModFolders  25         26.2
 1.20.1-forge       forge     1.20.1     47.4.0     17    fmlMavenRoot   21         1.20.1
+
+# Exact release artifacts for the retained compatibility ranges.
+26.1-fabric fabric 26.1 0.18.4 25 fabricAddMods 25 26.1
+26.1.1-fabric fabric 26.1.1 0.18.4 25 fabricAddMods 25 26.1.1
+1.20.5-fabric fabric 1.20.5 0.15.11 21 fabricAddMods 25 1.20.5
+1.20.6-fabric fabric 1.20.6 0.15.11 21 fabricAddMods 25 1.20.6
+1.21-fabric fabric 1.21 0.15.11 21 fabricAddMods 25 1.21
+1.21.2-fabric fabric 1.21.2 0.16.10 21 fabricAddMods 25 1.21.2
+1.21.3-fabric fabric 1.21.3 0.16.10 21 fabricAddMods 25 1.21.3
+1.21.4-fabric fabric 1.21.4 0.16.10 21 fabricAddMods 25 1.21.4
+1.21.6-fabric fabric 1.21.6 0.16.13 21 fabricAddMods 25 1.21.6
+1.21.7-fabric fabric 1.21.7 0.16.13 21 fabricAddMods 25 1.21.7
+1.21.9-fabric fabric 1.21.9 0.17.0 21 fabricAddMods 25 1.21.9
+1.20-fabric fabric 1.20 0.14.21 17 fabricAddMods 25 1.20
+1.20.3-fabric fabric 1.20.3 0.14.23 17 fabricAddMods 25 1.20.3
+
+# Selected modpack anchors. No release below 1.16 is supported.
+1.16.5-fabric fabric 1.16.5 0.14.21 8 fabricAddMods 25 1.16.5
+1.16.5-forge forge 1.16.5 36.2.42 8 fmlMavenRoot 21 1.16.5
+1.18.2-fabric fabric 1.18.2 0.14.21 17 fabricAddMods 25 1.18.2
+1.18.2-forge forge 1.18.2 40.2.21 17 fmlMavenRoot 21 1.18.2
+1.19.2-fabric fabric 1.19.2 0.14.21 17 fabricAddMods 25 1.19.2
+1.19.2-forge forge 1.19.2 43.3.8 17 fmlMavenRoot 21 1.19.2
+
+# Quilt uses the Fabric-compatible entrypoint, but has its own injection and smoke proof.
+26.3-quilt quilt 26.3 0.30.1 25 quiltAddMods 25 26.3
+26.2-quilt quilt 26.2 0.30.1 25 quiltAddMods 25 26.2
+26.1.2-quilt quilt 26.1.2 0.30.1 25 quiltAddMods 25 26.1.2
+1.21.1-quilt quilt 1.21.1 0.30.1 21 quiltAddMods 25 1.21.1
+1.21.5-quilt quilt 1.21.5 0.30.1 21 quiltAddMods 25 1.21.5
+1.21.8-quilt quilt 1.21.8 0.30.1 21 quiltAddMods 25 1.21.8
+1.21.10-quilt quilt 1.21.10 0.30.1 21 quiltAddMods 25 1.21.10
+1.21.11-quilt quilt 1.21.11 0.30.1 21 quiltAddMods 25 1.21.11
+1.20.1-quilt quilt 1.20.1 0.30.1 17 quiltAddMods 25 1.20.1
+1.20.2-quilt quilt 1.20.2 0.30.1 17 quiltAddMods 25 1.20.2
+1.20.4-quilt quilt 1.20.4 0.30.1 17 quiltAddMods 25 1.20.4
+26.1-quilt quilt 26.1 0.30.1 25 quiltAddMods 25 26.1
+26.1.1-quilt quilt 26.1.1 0.30.1 25 quiltAddMods 25 26.1.1
+1.20.5-quilt quilt 1.20.5 0.30.1 21 quiltAddMods 25 1.20.5
+1.20.6-quilt quilt 1.20.6 0.30.1 21 quiltAddMods 25 1.20.6
+1.21-quilt quilt 1.21 0.30.1 21 quiltAddMods 25 1.21
+1.21.2-quilt quilt 1.21.2 0.30.1 21 quiltAddMods 25 1.21.2
+1.21.3-quilt quilt 1.21.3 0.30.1 21 quiltAddMods 25 1.21.3
+1.21.4-quilt quilt 1.21.4 0.30.1 21 quiltAddMods 25 1.21.4
+1.21.6-quilt quilt 1.21.6 0.30.1 21 quiltAddMods 25 1.21.6
+1.21.7-quilt quilt 1.21.7 0.30.1 21 quiltAddMods 25 1.21.7
+1.21.9-quilt quilt 1.21.9 0.30.1 21 quiltAddMods 25 1.21.9
+1.20-quilt quilt 1.20 0.30.1 17 quiltAddMods 25 1.20
+1.20.3-quilt quilt 1.20.3 0.30.1 17 quiltAddMods 25 1.20.3
+1.16.5-quilt quilt 1.16.5 0.30.1 8 quiltAddMods 25 1.16.5
+1.18.2-quilt quilt 1.18.2 0.30.1 17 quiltAddMods 25 1.18.2
+1.19.2-quilt quilt 1.19.2 0.30.1 17 quiltAddMods 25 1.19.2
+
+# Available modern Forge and NeoForge releases, including beta-only loaders on release Minecraft.
+1.20-forge forge 1.20 46.0.14 17 fmlMavenRoot 25 1.20
+1.20.2-forge forge 1.20.2 48.1.0 17 fmlMavenRoot 25 1.20.2
+1.20.3-forge forge 1.20.3 49.0.2 17 forgeClasspath 25 1.20.3
+1.20.4-forge forge 1.20.4 49.2.8 17 forgeClasspath 25 1.20.4
+1.20.6-forge forge 1.20.6 50.2.10 21 forgeClasspath 25 1.20.6
+1.21-forge forge 1.21 51.0.33 21 forgeClasspath 25 1.21
+1.21.1-forge forge 1.21.1 52.1.16 21 forgeClasspath 25 1.21.1
+1.21.3-forge forge 1.21.3 53.1.12 21 forgeClasspath 25 1.21.3
+1.21.4-forge forge 1.21.4 54.1.18 21 forgeClasspath 25 1.21.4
+1.21.5-forge forge 1.21.5 55.1.14 21 forgeClasspath 25 1.21.5
+1.21.6-forge forge 1.21.6 56.0.9 21 forgeClasspath 25 1.21.6
+1.21.7-forge forge 1.21.7 57.0.3 21 forgeClasspath 25 1.21.7
+1.21.8-forge forge 1.21.8 58.1.22 21 forgeClasspath 25 1.21.8
+1.21.9-forge forge 1.21.9 59.0.5 21 forgeClasspath 25 1.21.9
+1.21.10-forge forge 1.21.10 60.1.15 21 forgeClasspath 25 1.21.10
+1.21.11-forge forge 1.21.11 61.2.1 21 forgeClasspath 25 1.21.11
+26.1-forge forge 26.1 62.0.9 25 forgeClasspath 25 26.1
+26.1.1-forge forge 26.1.1 63.0.2 25 forgeClasspath 25 26.1.1
+26.1.2-forge forge 26.1.2 64.1.3 25 forgeClasspath 25 26.1.2
+26.2-forge forge 26.2 65.1.3 25 forgeClasspath 25 26.2
+26.3-forge forge 26.3 66.0.9 25 forgeClasspath 25 26.3
+1.20.1-neoforge neoforge 1.20.1 47.1.106 17 fmlMavenRoot 25 1.20.1
+1.20.2-neoforge neoforge 1.20.2 20.2.93 17 fmlMavenRoot 21 1.20.2
+1.20.3-neoforge neoforge 1.20.3 20.3.8-beta 17 fmlMavenRoot 21 1.20.3
+1.20.4-neoforge neoforge 1.20.4 20.4.251 17 fmlMavenRoot 21 1.20.4
+1.20.5-neoforge neoforge 1.20.5 20.5.21-beta 21 fmlMavenRoot 21 1.20.5
+1.20.6-neoforge neoforge 1.20.6 20.6.141 21 fmlMavenRoot 21 1.20.6
+1.21-neoforge neoforge 1.21 21.0.167 21 fmlMavenRoot 21 1.21
+1.21.2-neoforge neoforge 1.21.2 21.2.1-beta 21 fmlMavenRoot 21 1.21.2
+1.21.3-neoforge neoforge 1.21.3 21.3.97 21 fmlMavenRoot 21 1.21.3
+1.21.4-neoforge neoforge 1.21.4 21.4.158 21 fmlMavenRoot 21 1.21.4
+1.21.6-neoforge neoforge 1.21.6 21.6.20-beta 21 fmlMavenRoot 21 1.21.6
+1.21.7-neoforge neoforge 1.21.7 21.7.25-beta 21 fmlMavenRoot 21 1.21.7
+1.21.9-neoforge neoforge 1.21.9 21.9.16-beta 21 fmlModFolders 21 1.21.9
+26.1-neoforge neoforge 26.1 26.1.0.19-beta 25 fmlModFolders 25 26.1
+26.1.1-neoforge neoforge 26.1.1 26.1.1.15-beta 25 fmlModFolders 25 26.1.1
+26.1.2-neoforge neoforge 26.1.2 26.1.2.114 25 fmlModFolders 25 26.1.2
+26.3-neoforge neoforge 26.3 26.3.0.51-beta 25 fmlModFolders 25 26.3

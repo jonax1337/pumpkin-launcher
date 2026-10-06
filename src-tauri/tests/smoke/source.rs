@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use launcher_lib::services::friends::ingame::{sha256_hex, ModIndex, ModSource, Verified};
+use launcher_lib::services::modbridge::ingame::{sha256_hex, ModIndex, ModSource, Verified};
 
 const INDEX_FILE: &str = "mod-index.json";
 const SMOKE_DAY: &str = "2000-01-01";
@@ -38,7 +38,7 @@ impl DistSource {
         Ok(())
     }
 
-    /// Legt eine Kopie des Jars des Knotens in `mods_dir` (Anhang B, Punkt 2): eine zweite `pumpkin_friends` als
+    /// Legt eine Kopie des Jars des Knotens in `mods_dir` (Anhang B, Punkt 2): eine zweite `pumpkin_bridge` als
     /// Instanzinhalt, neben der die Einspeisung nicht stattfinden darf. Liefert den Pfad, den der Lauf danach wieder
     /// entfernt — die Instanz bleibt für weitere Läufe der Zelle unverändert.
     pub fn place_copy_of(&self, node_id: &str, mods_dir: &Path) -> Result<PathBuf, String> {

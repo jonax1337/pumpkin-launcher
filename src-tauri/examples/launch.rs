@@ -107,6 +107,7 @@ fn start(dirs: &Dirs, game: &InstalledGame, instance_id: &str, username: &str) -
         memory_mb: launch::DEFAULT_MEMORY_MB,
         min_memory_mb: None,
         injected_jvm_args: &[],
+        injected_classpath: &[],
         extra_jvm_args: &[],
         window: GameWindow::Default,
         injected_game_args: &[],
@@ -116,9 +117,9 @@ fn start(dirs: &Dirs, game: &InstalledGame, instance_id: &str, username: &str) -
     };
     let args = launch::build_args(&spec, &Env::current())?;
     let (exit_tx, exit_rx) = oneshot::channel();
-    let on_exit = move |code| {
+    let on_exit = move |result: launch::ProcessExit| {
         // Ohne Empfänger wartet `main` nicht mehr: dann ist nichts zu melden.
-        exit_tx.send(code).ok();
+        exit_tx.send(result.code).ok();
     };
     let game_dir = dirs.game_dir(instance_id);
     let running = launch::spawn(&game.java, &args, &game_dir, &[], |stream, line| println!("[{stream:?}] {line}"), |_| {}, on_exit)?;

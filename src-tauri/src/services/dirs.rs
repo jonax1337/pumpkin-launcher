@@ -32,9 +32,9 @@ impl Dirs {
         self.root.join("runtime").join(component)
     }
 
-    /// Hier legt der Launcher die Mod-JARs für die Einspeisung ab, je Mod-Version ein Unterordner (INGAME 3.1).
-    pub fn friends_mod(&self) -> PathBuf {
-        self.root.join("runtime").join("friends-mod")
+    /// Hier legt der Launcher die Mod-JARs für die Einspeisung ab, je Mod-Version ein Unterordner (docs/bridge/README.md, "Support selection").
+    pub fn bridge_mod(&self) -> PathBuf {
+        self.root.join("runtime").join("bridge-mod")
     }
 
     /// `versions/<id>/<id>.<ext>` (Versions-JSON und Client-JAR).

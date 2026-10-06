@@ -8,7 +8,7 @@ import type { ModActivityEntry } from "@/lib/types";
 import { Chip, Hint, Icon, List, ListRow, RowTitle, SectionHeader } from "@/ui";
 
 /**
- * „Aktivität im Spiel“ (INGAME 5.7): was Spiele über das Freunde-Menü ausgelöst haben, neueste zuerst, mit Zeit, Instanz und Ergebnis.
+ * „Aktivität im Spiel“ (docs/bridge/README.md, "Protocol 2"): was Spiele über das Freunde-Menü ausgelöst haben, neueste zuerst, mit Zeit, Instanz und Ergebnis.
  * Ohne Vorgänge fehlt der Abschnitt ganz; die Liste lebt nur im Speicher des Launchers.
  */
 export function ActivitySection() {

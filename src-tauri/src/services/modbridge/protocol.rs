@@ -1,5 +1,5 @@
-//! Nachrichten zwischen Launcher und Mod, Protokoll 2: JSON-Zeilen, Format und Grenzen siehe docs/friends/INGAME.md,
-//! Abschnitt 5.3. Die Beispielzeilen stehen in `mod/fixtures/protocol/*.jsonl`; sie sind das gemeinsame Muster der
+//! Nachrichten zwischen Launcher und Mod, Protokoll 2: JSON-Zeilen, Format und Grenzen siehe docs/bridge/README.md,
+//! Abschnitt „Protocol 2“. Die Beispielzeilen stehen in `mod/fixtures/protocol/*.jsonl`; sie sind das gemeinsame Muster der
 //! Rust- und der Java-Tests.
 //!
 //! Die Mod ist ein nicht vertrauenswürdiger Kanal: jede Zeile wird gegen diese Typen geprüft, Unbekanntes verworfen.
@@ -284,7 +284,7 @@ mod tests {
         assert_eq!(parse(hello).unwrap(), ModFrame::Hello(expected));
         assert_eq!(parse(r#"{"type":"lanOpened","port":50123}"#).unwrap(), ModFrame::LanOpened { port: 50123 });
         assert_eq!(parse(r#"{"type":"lanClosed"}"#).unwrap(), ModFrame::LanClosed);
-        assert_eq!(parse(r#"{"type":"ready","screens":["hub"]}"#).unwrap(), ModFrame::Ready { screens: vec!["hub".into()] });
+        assert_eq!(parse(r#"{"type":"ready","screens":["home","friends"]}"#).unwrap(), ModFrame::Ready { screens: vec!["home".into(), "friends".into()] });
         assert_eq!(parse(r#"{"type":"ping","extra":true}"#).unwrap(), ModFrame::Ping, "unbekannte Felder werden ignoriert");
         assert_eq!(parse(r#"{"type":"pong"}"#).unwrap(), ModFrame::Pong);
         let request = parse(r#"{"type":"req","id":"a1","op":"host.stop"}"#).unwrap();

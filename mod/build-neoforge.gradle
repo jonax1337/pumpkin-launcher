@@ -2,11 +2,12 @@ plugins {
 	id 'net.neoforged.moddev' version "${moddev_version}"
 }
 
+// NeoForge runs Mojang names in production; no intermediary refmap is necessary.
+ext.mixin_refmap = 'null'
 apply from: rootProject.file('gradle/node.gradle')
 
-// Tracer-Knoten: nur die Einstiegsklasse. compat/ und ui/ kommen mit den Paketen, die sie für diesen Knoten bauen.
-sourceSets.main.java.exclude('dev/laux/pumpkin/friends/compat/**', 'dev/laux/pumpkin/friends/ui/**',
-	'dev/laux/pumpkin/friends/platform/fabric/**', 'dev/laux/pumpkin/friends/platform/forge/**')
+sourceSets.main.java.exclude('dev/laux/pumpkin/bridge/platform/fabric/**',
+	'dev/laux/pumpkin/bridge/platform/forge/**', 'dev/laux/pumpkin/bridge/platform/neoforgelegacy/**')
 
 neoForge {
 	version = pinned('neoforge_version')
@@ -14,11 +15,17 @@ neoForge {
 	runs {
 		client {
 			client()
+			if (project.hasProperty('kitdemo')) {
+				systemProperty 'pumpkin.dev.kitdemo', 'true'
+			}
+			if (project.hasProperty('demoHold')) {
+				systemProperty 'pumpkin.dev.demoHold', 'true'
+			}
 		}
 	}
 
 	mods {
-		"pumpkin_friends" {
+		"pumpkin_bridge" {
 			sourceSet sourceSets.main
 			sourceSet project(':core').sourceSets.main
 		}

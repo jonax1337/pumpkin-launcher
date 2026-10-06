@@ -3,25 +3,25 @@
 // Änderungen gehören zuerst in die Spezifikation, dann hierher und in die Fixtures (friends-fixtures.ts).
 import type { ModLoader } from "./types";
 
-export const FRIENDS_LIMITS = { codePrefix: "pumpkin-", codeBodyLength: 72, codeLength: 80, displayNameMin: 3, displayNameMax: 32,
+export const FRIENDS_LIMITS = { codePrefix: "pumpkin-", codeBodyLength: 72, codeLength: 80,
   aliasMax: 32, maxFriends: 50, maxActiveCodes: 3, maxGuests: 7, codeTtlSecs: 604800, requestTtlSecs: 1209600, inviteTtlSecs: 7200,
-  minMcReleaseTime: "2023-06-02T08:36:17+00:00", minMcLabel: "1.20", portMin: 1024, portMax: 65535,
+  minMcReleaseTime: "2021-01-14T16:05:32+00:00", minMcLabel: "1.16.5", portMin: 1024, portMax: 65535,
   maxNameRequests: 5, mcNameMax: 16, nameCooldownDays: 7 } as const;
 export type Availability = "available" | "noSecretStore" | "identityLost";
 export interface FriendsState { availability: Availability; enabled: boolean; me: Me | null; settings: FriendsSettings;
   network: NetworkStatus; relays: RelayInfo[]; thirdPartyRelaysAccepted: boolean;
   directory: DirectoryStatus }
 export interface Me { peerId: string; fingerprint: string; displayName: string }
-export interface FriendsSettings { displayName: string; alwaysRelay: boolean; findableByName: boolean;
-  /** „Freunde-Menü im Spiel“: der globale Schalter der Einspeisung (INGAME 3.9). */
+export interface FriendsSettings { alwaysRelay: boolean; findableByName: boolean;
+  /** „Freunde-Menü im Spiel“: der globale Schalter der Einspeisung (docs/bridge/README.md, "Support selection"). */
   ingameMenu: boolean;
-  /** „Aktionen im Spiel“ (INGAME 5.5): einmal je Spielstart fragen oder gleich erlauben. */
+  /** „Aktionen im Spiel“ (docs/bridge/README.md, "Operations and consent"): einmal je Spielstart fragen oder gleich erlauben. */
   ingameActions: IngameActions }
 export type IngameActions = "ask" | "allow";
-/** Verzeichnis für Freunde per Minecraft-Namen (docs/friends/BYNAME.md): `host` zeigt die Datenschutzhinweise, null = keins eingebunden. */
+/** Verzeichnis für Freunde per Minecraft-Namen (docs/friends/SPEC.md#directory-api): `host` zeigt die Datenschutzhinweise, null = keins eingebunden. */
 export type DirectoryState = "unavailable" | "off" | "active" | "unreachable" | "notAllowed";
 export interface DirectoryStatus { state: DirectoryState; host: string | null }
-export interface FriendsEnableInput { displayName: string; alwaysRelay: boolean; acceptThirdPartyRelays: boolean; findableByName: boolean }
+export interface FriendsEnableInput { alwaysRelay: boolean; acceptThirdPartyRelays: boolean; findableByName: boolean }
 export interface RelayInfo { host: string; operator: "pumpkin" | "n0"; thirdParty: boolean }
 export type NetworkStatus = { type: "off" } | { type: "starting" } | { type: "online"; relayHost: string } | { type: "degraded"; reason: DegradedReason };
 export type DegradedReason = "relayUnreachable" | "bindFailed";
@@ -67,13 +67,13 @@ export interface HostSessionEndedEvent { sessionId: string; reason: SessionEnd }
 export interface JoinSessionEvent { joinId: string; inviteId: string; instanceId: string; state: JoinState }
 export interface LanEvent { instanceId: string; lan: LanStatus | null }
 export interface ModConnectionEvent { instanceId: string; connected: boolean }
-/** Wofür die Mod im Launcher fragt (INGAME 5.5): eine Welt teilen oder die Freundesliste ändern. */
+/** Wofür die Mod im Launcher fragt (docs/bridge/README.md, "Operations and consent"): eine Welt teilen oder die Freundesliste ändern. */
 export type ModScope = "share" | "social";
-/** Was die Mod tun will: der Vorgang (`friend.addByName`, INGAME 5.4) und die Person, um die es geht. */
+/** Was die Mod tun will: der Vorgang (`friend.addByName`, docs/bridge/README.md, "Operations and consent") und die Person, um die es geht. */
 export interface ModConfirmSummary { op: string; targetName: string | null }
 export interface ModConfirmEvent { requestId: string; instanceId: string; instanceName: string; friends: { friendId: string; displayName: string }[];
   scope: ModScope; summary: ModConfirmSummary }
-/** Ein Vorgang der Bereiche `share` und `social`, der aus dem Spiel kam (Aktivitätsliste, INGAME 5.7); `at` ist ISO-8601 in UTC. */
+/** Ein Vorgang der Bereiche `share` und `social`, der aus dem Spiel kam (Aktivitätsliste, docs/bridge/README.md, "Protocol 2"); `at` ist ISO-8601 in UTC. */
 export interface ModActivityEntry { at: string; instanceId: string; scope: ModScope; op: string; targetName: string | null; ok: boolean }
 /** Die Seite des Launchers, die `launcher.open` zeigt. */
 export type ModOpenTarget = "friends" | "requests" | "invites" | "settings";
@@ -81,20 +81,20 @@ export type ModOpenTarget = "friends" | "requests" | "invites" | "settings";
 export interface ModOpenEvent { instanceId: string; target: ModOpenTarget }
 export interface FriendJoin { joinId: string; address: string }
 
-// --- Freunde-Menü im Spiel (docs/friends/INGAME.md, 3.9); Rust-Gegenstück: Abschnitt am Ende von contract.rs ---
+// --- Freunde-Menü im Spiel (docs/bridge/README.md, "Support selection"); Rust-Gegenstück: Abschnitt am Ende von contract.rs ---
 /** `active`: der nächste Start speist die Mod ein; `connected`: die Mod des laufenden Spiels ist verbunden; `off`: vom Spieler
  *  ausgeschaltet; `autoOff`: nach einem Startfehler ausgeschaltet; `unavailable`: gibt es für die Instanz nicht (`reason` sagt warum). */
 export type IngameState = "active" | "connected" | "off" | "autoOff" | "unavailable";
-/** Die Art Startfehler, die der Launcher der Mod zuschreibt (Sicherungsschalter, INGAME 3.8). */
+/** Die Art Startfehler, die der Launcher der Mod zuschreibt (Sicherungsschalter, docs/bridge/README.md, "Startup recovery"). */
 export type IngameFailureKind = "fabricIncompatibleModSet" | "mixinApplyFailed" | "modLoadingError" | "unsupportedClassVersion" | "unknown";
 export type IngameReason =
-  | { type: "notInBuild" } | { type: "vanilla" } | { type: "quilt" } | { type: "noNode" } | { type: "unverified" }
+  | { type: "notInBuild" } | { type: "vanilla" } | { type: "noNode" } | { type: "unverified" }
   | { type: "loaderTooOld"; need: string } | { type: "loaderVersionUnknown" }
   | { type: "javaTooOld"; need: number } | { type: "javaUnknown" }
-  | { type: "idCollision" } | { type: "offlineAccount" } | { type: "friendsOff" } | { type: "bridgeNotRunning" }
+  | { type: "idCollision" } | { type: "offlineAccount" } | { type: "bridgeNotRunning" }
   | { type: "instanceOff" } | { type: "globallyOff" }
   | { type: "breaker"; reason: IngameFailureKind };
-export interface IngameNode { id: string; minecraft: string; loader: "fabric" | "neoforge" | "forge" }
+export interface IngameNode { id: string; minecraft: string; loader: "fabric" | "neoforge" | "forge" | "quilt" }
 export interface IngameStatus { state: IngameState; reason: IngameReason | null; node: IngameNode | null }
 /** `friends-ingame`: der Status einer Instanz hat sich geändert. */
 export interface IngameEvent { instanceId: string; status: IngameStatus }

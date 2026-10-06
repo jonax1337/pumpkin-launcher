@@ -33,7 +33,7 @@ pub enum GameSignal {
 }
 
 /// Was die Mod im Protokoll 1 verlangte. Die Brücke erzeugt dieses Signal nicht mehr: im Protokoll 2 laufen die Vorgänge
-/// über den `OpHandler` der Brücke (docs/friends/INGAME.md, 5.4), mit Zustimmung je Spielstart. Das Signal bleibt, bis
+/// über den `OpHandler` der Brücke (docs/bridge/README.md, "Operations and consent"), mit Zustimmung je Spielstart. Das Signal bleibt, bis
 /// die Sitzungen es nicht mehr auswerten.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModRequest {

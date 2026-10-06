@@ -1,4 +1,4 @@
-//! Der Lauscher der Brücke (docs/friends/INGAME.md, 5.2): nur Loopback, ein freier Port, und unter Windows
+//! Der Lauscher der Brücke (docs/bridge/README.md, "Connection and ownership"): nur Loopback, ein freier Port, und unter Windows
 //! ausschließlich für diesen Prozess.
 use std::io;
 use std::net::{Ipv4Addr, SocketAddr};

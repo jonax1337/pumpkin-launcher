@@ -1,6 +1,6 @@
 import { useFriendsState } from "@/hooks/useFriends";
 import { useI18n } from "@/i18n";
-import { useUsableAccount } from "@/store/offline";
+import { useAllAccounts } from "@/components/accounts/useAccounts";
 import { ErrorBox, PageHeader, Skel } from "@/ui";
 import { FriendsContent } from "./friends/FriendsContent";
 import { FriendsGate } from "./friends/FriendsGate";
@@ -18,14 +18,22 @@ export function FriendsPage() {
 function FriendsBody() {
   const { t } = useI18n();
   const state = useFriendsState();
-  const account = useUsableAccount();
-  const gate = state.data ? friendsGate(state.data, account?.kind === "microsoft") : null;
+  const { accounts, query } = useAllAccounts();
+  const hasMicrosoftAccount = accounts.some((account) => account.kind === "microsoft");
+  const gate = state.data ? friendsGate(state.data, hasMicrosoftAccount) : null;
+  const needsAccount = state.data?.enabled && state.data.availability === "available";
+  const accountPending = needsAccount && query.isPending;
+  const accountError = needsAccount && query.error;
 
-  if (state.data && !gate) return <FriendsContent state={state.data} />;
+  if (state.data && !gate && !accountError && !accountPending) return <FriendsContent state={state.data} />;
   return (
     <>
       <PageHeader title={t("ui.nav.friends")} />
-      {gate ? (
+      {accountError ? (
+        <ErrorBox className="mt-4" title={t("components.account.msLoadFailed")} error={accountError} onRetry={() => void query.refetch()} />
+      ) : accountPending ? (
+        <Skel className="mt-4" h={120} />
+      ) : gate ? (
         <FriendsGate gate={gate} />
       ) : state.error ? (
         <ErrorBox className="mt-4" title={t("friends.loadFailed")} error={state.error} onRetry={() => void state.refetch()} />

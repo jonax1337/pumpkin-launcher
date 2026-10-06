@@ -13,7 +13,7 @@ use crate::models::{Instance, LibrarySkin, MsAccount, Template};
 use crate::services::auth::MsState;
 use crate::services::download::http_client;
 use crate::services::friends::config::friends_dir;
-use crate::services::friends::ingame::Ingame;
+use crate::services::modbridge::ingame::Ingame;
 use crate::services::friends::lookup::{ModrinthHttp, ModrinthLookup};
 use crate::services::friends::{
     FriendSessions, Friends, JoinTimers, MojangVersions, NetOptions, SessionContext, PRODUCTION_LIVENESS,
@@ -44,7 +44,7 @@ pub struct AppState {
     pub presence: Presence,
     /// Was beim Spielstart und -ende geschieht, für die Freunde-Funktion.
     pub signals: GameSignals,
-    /// Brücke zur Mod im Spiel; gestoppt, bis die Freunde-Funktion sie startet.
+    /// Shared Bridge listener, available at startup independently of Friends consent.
     pub bridge: ModBridge,
     /// Die Einspeisung der Mod in die Spielstarts: JARs des Builds, Zustand je Instanz, Java-Versionen.
     pub ingame: Ingame,
@@ -138,7 +138,15 @@ impl AppState {
     pub async fn cancellable<T>(&self, key: &str, work: impl Future<Output = AppResult<T>>) -> AppResult<T> {
         let token = CancellationToken::new();
         self.cancels().insert(key.to_owned(), token.clone());
-        let result = until_phases_end(token.run_until_cancelled(work)).await;
+        let result = until_phases_end(async {
+            // Abbruch hat Vorrang vor gleichzeitig fertiger Arbeit, bevor diese ihre Instanz einträgt.
+            tokio::select! {
+                biased;
+                _ = token.cancelled() => None,
+                result = work => Some(result),
+            }
+        })
+        .await;
         self.cancels().remove(key);
         result.unwrap_or(Err(AppError::Cancelled))
     }
@@ -214,9 +222,37 @@ mod tests {
             tokio::task::yield_now().await;
             state.cancel("op");
         });
-        assert_eq!(result.unwrap_err().to_string(), "Vorgang abgebrochen");
+        assert!(matches!(result, Err(AppError::Cancelled)));
         assert!(state.cancels().is_empty());
         assert_eq!(state.cancellable("op", async { Ok(1) }).await.unwrap(), 1);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancellation_wins_before_ready_work_commits_an_instance() {
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        let state = AppState::load(&root).unwrap();
+        let instance = Instance::from_new(crate::models::NewInstance {
+            name: "Cancelled copy".into(),
+            minecraft_version: "1.21.1".into(),
+            loader: crate::models::ModLoader::Vanilla,
+            loader_version: None,
+        });
+        let instance_id = instance.id.clone();
+        let (entered, started) = tokio::sync::oneshot::channel();
+        let (resume, held) = tokio::sync::oneshot::channel();
+        let work = state.cancellable("op", async {
+            entered.send(()).unwrap();
+            held.await.unwrap();
+            state.instances.insert(instance)
+        });
+        let (result, ()) = tokio::join!(biased; work, async {
+            started.await.unwrap();
+            state.cancel("op");
+            resume.send(()).unwrap();
+        });
+        assert!(matches!(result, Err(AppError::Cancelled)));
+        assert!(state.instances.get(&instance_id).is_err());
         std::fs::remove_dir_all(root).unwrap();
     }
 

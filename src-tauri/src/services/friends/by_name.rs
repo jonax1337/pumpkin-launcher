@@ -15,8 +15,8 @@ use tokio_util::sync::CancellationToken;
 use super::code::{self, CodeParts};
 use super::config::DirectoryJob;
 use super::contract::{
-    DirectoryState, DirectoryStatus, FriendRequest, FriendRequestEvent, RequestDirection, RequestState, RequestVia,
-    MAX_NAME_REQUESTS, REQUEST_TTL_SECS,
+    DirectoryState, DirectoryStatus, FriendRequest, FriendRequestEvent, RequestDirection,
+    RequestState, RequestVia, MAX_NAME_REQUESTS, REQUEST_TTL_SECS,
 };
 use super::control::WireProfile;
 use super::directory::api::DirectoryApi;
@@ -85,7 +85,7 @@ pub(super) type GameLinkProbe = Arc<dyn Fn() -> bool + Send + Sync>;
 
 /// Woher das Zertifikat einer Anmeldung kommen darf. Ein Abruf bei Mojang kann den Chat-Schlüssel eines laufenden Spiels
 /// ersetzen; ob er das tut, klärt der Eigentümertest O-5 (BYNAME-ATTEST). Bis dahin holt der Launcher während eines Spiels
-/// mit verbundener Mod kein neues Zertifikat (INGAME 5.4).
+/// mit verbundener Mod kein neues Zertifikat (docs/bridge/README.md, "Operations and consent").
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CertificateSource {
     /// Das gemerkte, solange Mojang keine Erneuerung will, sonst ein frisches.
@@ -140,13 +140,19 @@ struct PollClock {
 
 impl Default for PollClock {
     fn default() -> Self {
-        Self { next: Instant::now() + FIRST_POLL_DELAY, last: None }
+        Self {
+            next: Instant::now() + FIRST_POLL_DELAY,
+            last: None,
+        }
     }
 }
 
 impl PollClock {
     fn restart(&mut self, now: Instant) {
-        *self = Self { next: now + FIRST_POLL_DELAY, last: None };
+        *self = Self {
+            next: now + FIRST_POLL_DELAY,
+            last: None,
+        };
     }
 
     /// `true`, wenn jetzt abgeholt wird; der nächste Termin steht dann schon fest.
@@ -168,12 +174,17 @@ impl PollClock {
     fn cooldown_ms(&self, now: Instant) -> u64 {
         self.last
             .filter(|last| now.duration_since(*last) < RETRY_POLL_GAP)
-            .map_or(0, |last| (RETRY_POLL_GAP - now.duration_since(last)).as_millis() as u64)
+            .map_or(0, |last| {
+                (RETRY_POLL_GAP - now.duration_since(last)).as_millis() as u64
+            })
     }
 
     /// `true`, wenn das Abholen auf jetzt vorgezogen wurde.
     fn hurry(&mut self, now: Instant) -> bool {
-        if self.last.is_some_and(|last| now.duration_since(last) < RETRY_POLL_GAP) {
+        if self
+            .last
+            .is_some_and(|last| now.duration_since(last) < RETRY_POLL_GAP)
+        {
             return false;
         }
         self.next = now;
@@ -198,9 +209,12 @@ impl Failure {
     fn into_app_error(self, name: &str) -> AppError {
         match self {
             Self::Directory(error) => error.into_app_error(name),
-            Self::Mojang(MojangError::NotAllowed) => AppError::invalid(coded!("errors.friends.directoryNotAllowed")),
+            Self::Mojang(MojangError::NotAllowed) => {
+                AppError::invalid(coded!("errors.friends.directoryNotAllowed"))
+            }
             Self::Mojang(MojangError::InvalidSession) => AppError::invalid(relogin()),
-            Self::Mojang(MojangError::Unreachable | MojangError::RateLimited) | Self::CertificateWithheld => directory_unavailable(),
+            Self::Mojang(MojangError::Unreachable | MojangError::RateLimited)
+            | Self::CertificateWithheld => directory_unavailable(),
             Self::Local(error) => error,
         }
     }
@@ -224,7 +238,10 @@ impl Failure {
 impl Friends {
     /// Hängt das Verzeichnis ein (BYNAME 9.1); genau einmal, vor oder nach dem Start.
     pub fn attach_directory(&self, deps: DirectoryDeps) -> Result<(), HandlerAlreadySet> {
-        self.core.directory.set(deps).map_err(|_| HandlerAlreadySet)?;
+        self.core
+            .directory
+            .set(deps)
+            .map_err(|_| HandlerAlreadySet)?;
         if let Some(runtime) = self.core.runtime() {
             spawn_directory_loop(&self.core, &runtime.stop);
         }
@@ -252,7 +269,11 @@ impl Friends {
 
     /// Sagt dem Dienst, woher er erfährt, ob ein Spiel mit der Mod verbunden ist; genau einmal.
     pub(super) fn watch_game_links(&self, probe: GameLinkProbe) -> Result<(), HandlerAlreadySet> {
-        self.core.by_name.game_links.set(probe).map_err(|_| HandlerAlreadySet)
+        self.core
+            .by_name
+            .game_links
+            .set(probe)
+            .map_err(|_| HandlerAlreadySet)
     }
 
     /// Schickt eine Freundschaftsanfrage an den Spieler mit genau diesem Minecraft-Namen (BYNAME 7.1). Solange ein Spiel mit
@@ -278,7 +299,10 @@ impl Friends {
         if let Some(runtime) = core.runtime() {
             hello::bind_code(core, &runtime, &record).await;
         }
-        let request = core.stores.requests.insert(awaiting_answer(&record, target, sent))?;
+        let request = core
+            .stores
+            .requests
+            .insert(awaiting_answer(&record, target, sent))?;
         core.emit(FriendsEvent::Changed);
         Ok(requests::request_view(request))
     }
@@ -287,14 +311,20 @@ impl Friends {
 /// Der Zustand für die Oberfläche (BYNAME 9.3); auch bei abgeschalteter Funktion.
 pub(super) fn directory_status(core: &Core) -> DirectoryStatus {
     let Some(deps) = core.directory.get() else {
-        return DirectoryStatus { state: DirectoryState::Unavailable, host: None };
+        return DirectoryStatus {
+            state: DirectoryState::Unavailable,
+            host: None,
+        };
     };
     let state = if core.config().settings.findable_by_name {
         lock(&core.by_name.health).unwrap_or(DirectoryState::Off)
     } else {
         DirectoryState::Off
     };
-    DirectoryStatus { state, host: Some(deps.host.clone()) }
+    DirectoryStatus {
+        state,
+        host: Some(deps.host.clone()),
+    }
 }
 
 /// Forgets the token and the certificate (identity renewed, account changed, friends switched off).
@@ -315,7 +345,9 @@ fn forget_certificate(core: &Core) {
 /// ob ein Spiel mit der Mod verbunden ist ([`CertificateSource`]); das gilt für jeden Weg zum Verzeichnis: Namen, Anmeldung
 /// der Schleife, Aufträge und `friends_retry_now`.
 async fn session(core: &Core, deps: &DirectoryDeps) -> Result<CachedSession, Failure> {
-    let identity = core.identity().ok_or_else(|| Failure::Local(identity_lost()))?;
+    let identity = core
+        .identity()
+        .ok_or_else(|| Failure::Local(identity_lost()))?;
     let _auth = core.by_name.auth_lock.lock().await;
     let peer_id = identity.peer_id();
     let source = core.by_name.certificate_source();
@@ -333,8 +365,11 @@ async fn session(core: &Core, deps: &DirectoryDeps) -> Result<CachedSession, Fai
 }
 
 fn cached_session(core: &Core, peer_id: &str) -> Option<CachedSession> {
-    let still_valid = |session: &CachedSession| session.expires_at > now_secs() + SESSION_MARGIN_SECS;
-    lock(&core.by_name.session).clone().filter(|session| session.peer_id == peer_id && still_valid(session))
+    let still_valid =
+        |session: &CachedSession| session.expires_at > now_secs() + SESSION_MARGIN_SECS;
+    lock(&core.by_name.session)
+        .clone()
+        .filter(|session| session.peer_id == peer_id && still_valid(session))
 }
 
 /// One handshake, and one more after a refusal that a fresh Minecraft token or a fresh certificate can cure
@@ -348,17 +383,23 @@ async fn log_in(
     match handshake(core, deps, identity, source).await {
         Err(Failure::Mojang(MojangError::InvalidSession)) => {
             deps.tokens.forget_minecraft_session();
-            handshake(core, deps, identity, source).await.map_err(|failure| match failure {
-                Failure::Mojang(MojangError::InvalidSession) => Failure::Mojang(MojangError::NotAllowed),
-                other => other,
-            })
+            handshake(core, deps, identity, source)
+                .await
+                .map_err(|failure| match failure {
+                    Failure::Mojang(MojangError::InvalidSession) => {
+                        Failure::Mojang(MojangError::NotAllowed)
+                    }
+                    other => other,
+                })
         }
         // Ein frisches Zertifikat gibt es nur, wo der Abruf erlaubt ist; sonst bleibt es bei der Ablehnung.
-        Err(Failure::Directory(DirectoryError::BadCertificate | DirectoryError::CertificateExpired))
-            if source == CertificateSource::CachedOrFetched =>
-        {
+        Err(Failure::Directory(
+            DirectoryError::BadCertificate | DirectoryError::CertificateExpired,
+        )) if source == CertificateSource::CachedOrFetched => {
             forget_certificate(core);
-            handshake(core, deps, identity, source).await.inspect_err(warn_refused_certificate)
+            handshake(core, deps, identity, source)
+                .await
+                .inspect_err(warn_refused_certificate)
         }
         first => first,
     }
@@ -386,23 +427,48 @@ async fn handshake(
     identity: &Identity,
     source: CertificateSource,
 ) -> Result<CachedSession, Failure> {
-    let account = deps.tokens.minecraft_session().await.map_err(Failure::Local)?;
+    let account = deps
+        .tokens
+        .minecraft_session()
+        .await
+        .map_err(Failure::Local)?;
     let privileges = deps.mojang.privileges(&account).await;
     if privileges == Privileges::Refused {
         return Err(Failure::Mojang(MojangError::NotAllowed));
     }
     let certificate = current_certificate(core, deps, &account, source).await?;
     let peer_id = identity.peer_id();
-    let challenge = deps.api.challenge(&peer_id).await.map_err(Failure::Directory)?;
-    let parts = proof::login_parts(&deps.host, &challenge.server_id, &peer_id, &certificate.uuid)
-        .ok_or(Failure::Directory(DirectoryError::Invalid("serverId")))?;
+    let challenge = deps
+        .api
+        .challenge(&peer_id)
+        .await
+        .map_err(Failure::Directory)?;
+    let parts = proof::login_parts(
+        &deps.host,
+        &challenge.server_id,
+        &peer_id,
+        &certificate.uuid,
+    )
+    .ok_or(Failure::Directory(DirectoryError::Invalid("serverId")))?;
     let request = proof::session_request(challenge.challenge, &parts, identity, &certificate)
         .ok_or_else(|| Failure::Local(local_error("the player certificate could not sign")))?;
-    let opened = deps.api.session(&request).await.map_err(Failure::Directory)?;
+    let opened = deps
+        .api
+        .session(&request)
+        .await
+        .map_err(Failure::Directory)?;
     if opened.uuid != account.uuid {
-        return Err(Failure::Directory(DirectoryError::Invalid("sessionAccount")));
+        return Err(Failure::Directory(DirectoryError::Invalid(
+            "sessionAccount",
+        )));
     }
-    Ok(CachedSession { token: opened.token, expires_at: opened.expires_at, uuid: account.uuid, peer_id, privileges })
+    Ok(CachedSession {
+        token: opened.token,
+        expires_at: opened.expires_at,
+        uuid: account.uuid,
+        peer_id,
+        privileges,
+    })
 }
 
 /// The cached certificate until Mojang wants it refreshed, then a fresh one. While Mojang cannot be reached, a cached
@@ -417,11 +483,18 @@ async fn current_certificate(
     source: CertificateSource,
 ) -> Result<PlayerCertificate, Failure> {
     let now = clock_ms();
-    let cached = lock(&core.by_name.certificate).clone().filter(|certificate| certificate.uuid == account.uuid);
+    let cached = lock(&core.by_name.certificate)
+        .clone()
+        .filter(|certificate| certificate.uuid == account.uuid);
     if source == CertificateSource::CachedOnly {
-        return cached.filter(|certificate| certificate.is_usable(now)).ok_or(Failure::CertificateWithheld);
+        return cached
+            .filter(|certificate| certificate.is_usable(now))
+            .ok_or(Failure::CertificateWithheld);
     }
-    if let Some(fresh) = cached.clone().filter(|certificate| !certificate.needs_refresh(now)) {
+    if let Some(fresh) = cached
+        .clone()
+        .filter(|certificate| !certificate.needs_refresh(now))
+    {
         return Ok(fresh);
     }
     match deps.mojang.certificate(account).await {
@@ -433,7 +506,9 @@ async fn current_certificate(
             forget_certificate(core);
             Err(Failure::Mojang(MojangError::NotAllowed))
         }
-        Err(error) => cached.filter(|certificate| certificate.is_usable(now)).ok_or(Failure::Mojang(error)),
+        Err(error) => cached
+            .filter(|certificate| certificate.is_usable(now))
+            .ok_or(Failure::Mojang(error)),
     }
 }
 
@@ -449,7 +524,9 @@ async fn listed_session(core: &Core, deps: &DirectoryDeps) -> Result<CachedSessi
     if me.privileges == Privileges::Allowed {
         return Ok(me);
     }
-    tracing::warn!("Mojang's account attributes are unreadable; the account stays out of the directory");
+    tracing::warn!(
+        "Mojang's account attributes are unreadable; the account stays out of the directory"
+    );
     forget_token(core);
     Err(Failure::Mojang(MojangError::Unreachable))
 }
@@ -511,7 +588,10 @@ fn resume_after_games(core: &Core, source: CertificateSource) {
 async fn look_up(deps: &DirectoryDeps, name: &str) -> AppResult<MojangProfile> {
     match deps.mojang.lookup_name(name).await {
         Ok(Some(profile)) => Ok(profile),
-        Ok(None) => Err(AppError::invalid(coded!("errors.friends.nameUnknown", name = name))),
+        Ok(None) => Err(AppError::invalid(coded!(
+            "errors.friends.nameUnknown",
+            name = name
+        ))),
         Err(_) => Err(directory_unavailable()),
     }
 }
@@ -522,15 +602,27 @@ fn ensure_may_request(core: &Core, target: &MojangProfile) -> AppResult<()> {
         return Err(AppError::invalid(coded!("errors.friends.nameOwn")));
     }
     let is_target = |mc_uuid: &Option<String>| mc_uuid.as_deref() == Some(target.uuid.as_str());
-    if core.stores.friends.list().iter().any(|friend| is_target(&friend.mc_uuid)) {
+    if core
+        .stores
+        .friends
+        .list()
+        .iter()
+        .any(|friend| is_target(&friend.mc_uuid))
+    {
         return Err(AppError::invalid(coded!("errors.friends.alreadyFriends")));
     }
     let open = open_name_requests(core);
     if open.iter().any(|request| is_target(&request.mc_uuid)) {
-        return Err(AppError::invalid(coded!("errors.friends.alreadyRequestedName", name = target.name)));
+        return Err(AppError::invalid(coded!(
+            "errors.friends.alreadyRequestedName",
+            name = target.name
+        )));
     }
     if open.len() >= MAX_NAME_REQUESTS {
-        return Err(AppError::invalid(coded!("errors.friends.tooManyNameRequests", max = MAX_NAME_REQUESTS)));
+        return Err(AppError::invalid(coded!(
+            "errors.friends.tooManyNameRequests",
+            max = MAX_NAME_REQUESTS
+        )));
     }
     requests::ensure_friend_capacity(core)
 }
@@ -539,11 +631,20 @@ fn open_name_requests(core: &Core) -> Vec<RequestRecord> {
     let is_open = |request: &RequestRecord| {
         request.via == RequestVia::Name && request.direction == RequestDirection::Outgoing
     };
-    core.stores.requests.list().into_iter().filter(is_open).collect()
+    core.stores
+        .requests
+        .list()
+        .into_iter()
+        .filter(is_open)
+        .collect()
 }
 
 /// Ein Code nur für diese Anfrage, so lange gültig wie der Brief; er zählt nicht zu den eigenen Codes.
-fn issue_code(core: &Core, identity: &Identity, target: &MojangProfile) -> AppResult<(CodeParts, CodeRecord)> {
+fn issue_code(
+    core: &Core,
+    identity: &Identity,
+    target: &MojangProfile,
+) -> AppResult<(CodeParts, CodeRecord)> {
     let relay_index = hello::code_relay(core)?;
     let issued = code::issue(identity, relay_index)?;
     let record = hello::code_record(&issued, REQUEST_TTL_SECS, Some(target.uuid.clone()));
@@ -560,7 +661,10 @@ async fn send_letter(
 ) -> Result<SentLetter, Failure> {
     let me = session(core, deps).await?;
     let letter = &signed_letter(core, identity, &me.uuid, parts, to)?;
-    authorized(core, deps, |api, token| async move { api.send(&token, letter).await }).await
+    authorized(core, deps, |api, token| async move {
+        api.send(&token, letter).await
+    })
+    .await
 }
 
 fn signed_letter(
@@ -578,7 +682,7 @@ fn signed_letter(
         hello_id: HEXLOWER.encode(&parts.hello_id),
         relay_index: parts.relay_index,
         secret: parts.secret_hex(),
-        display_name: core.config().settings.display_name,
+        display_name: core.own_profile().display_name,
         created_at: now_secs(),
         signature: String::new(),
     };
@@ -592,9 +696,13 @@ fn signed_letter(
         created_at: letter.created_at,
         display_name: &letter.display_name,
     };
-    let signed = proof::letter_parts(&fields).ok_or(Failure::Directory(DirectoryError::Invalid("letter")))?;
+    let signed = proof::letter_parts(&fields)
+        .ok_or(Failure::Directory(DirectoryError::Invalid("letter")))?;
     let signature = HEXLOWER.encode(&identity.sign(proof::LETTER_DOMAIN, &signed.as_slices()));
-    Ok(OutgoingLetter { signature, ..letter })
+    Ok(OutgoingLetter {
+        signature,
+        ..letter
+    })
 }
 
 /// Die eigene Anfrage trägt die ID ihres Codes; sie lebt höchstens so lange wie der Code.
@@ -624,7 +732,10 @@ pub(super) fn spawn_directory_loop(core: &Arc<Core>, stop: &CancellationToken) {
         return;
     }
     lock(&core.by_name.clock).restart(Instant::now());
-    tokio::spawn(stop.clone().run_until_cancelled_owned(directory_loop(core.clone())));
+    tokio::spawn(
+        stop.clone()
+            .run_until_cancelled_owned(directory_loop(core.clone())),
+    );
 }
 
 /// `friends_retry_now`: das Postfach jetzt abholen, wenn das letzte Abholen über 60 s her ist.
@@ -655,7 +766,9 @@ async fn wait_for_next_tick(core: &Core) {
 }
 
 async fn tick(core: &Arc<Core>) {
-    let Some(deps) = core.directory.get() else { return };
+    let Some(deps) = core.directory.get() else {
+        return;
+    };
     run_jobs(core).await;
     let poll_due = lock(&core.by_name.clock).take_due(Instant::now(), deps.poll_interval);
     if is_listed(core) && ensure_registered(core, deps).await && poll_due {
@@ -665,7 +778,8 @@ async fn tick(core: &Arc<Core>) {
 
 /// Auffindbar und nicht von Mojang gesperrt; eine Sperre pausiert bis zum Umschalten oder Neustart.
 fn is_listed(core: &Core) -> bool {
-    core.config().settings.findable_by_name && *lock(&core.by_name.health) != Some(DirectoryState::NotAllowed)
+    core.config().settings.findable_by_name
+        && *lock(&core.by_name.health) != Some(DirectoryState::NotAllowed)
 }
 
 /// Trägt das Konto ein oder frischt den Eintrag auf, wenn er älter als einen Tag ist; `true`, wenn er steht.
@@ -686,11 +800,16 @@ async fn register(core: &Core, deps: &DirectoryDeps) -> Result<(), Failure> {
     let me = listed_session(core, deps).await?;
     let listed = core.config().directory;
     let is_fresh = listed.registered_uuid.as_deref() == Some(me.uuid.as_str())
-        && listed.refreshed_at.is_some_and(|at| now_secs().saturating_sub(at) < REFRESH_SECS);
+        && listed
+            .refreshed_at
+            .is_some_and(|at| now_secs().saturating_sub(at) < REFRESH_SECS);
     if is_fresh {
         return Ok(());
     }
-    authorized(core, deps, |api, token| async move { api.register(&token).await }).await?;
+    authorized(core, deps, |api, token| async move {
+        api.register(&token).await
+    })
+    .await?;
     core.update_config(|config| {
         config.directory.registered_uuid = Some(me.uuid);
         config.directory.refreshed_at = Some(now_secs());
@@ -700,7 +819,9 @@ async fn register(core: &Core, deps: &DirectoryDeps) -> Result<(), Failure> {
 
 /// Holt das Postfach ab und gleicht die wartenden Anfragen per Name damit ab.
 pub(super) async fn poll_inbox(core: &Arc<Core>) {
-    let Some(deps) = core.directory.get() else { return };
+    let Some(deps) = core.directory.get() else {
+        return;
+    };
     let _polling = core.by_name.polling.lock().await;
     match fetch_inbox(core, deps).await {
         Ok((letters, own_uuid)) => {
@@ -719,20 +840,43 @@ pub(super) async fn poll_inbox(core: &Arc<Core>) {
     }
 }
 
-async fn fetch_inbox(core: &Core, deps: &DirectoryDeps) -> Result<(Vec<InboxLetter>, String), Failure> {
+async fn fetch_inbox(
+    core: &Core,
+    deps: &DirectoryDeps,
+) -> Result<(Vec<InboxLetter>, String), Failure> {
     let me = listed_session(core, deps).await?;
-    let letters = authorized(core, deps, |api, token| async move { api.inbox(&token).await }).await?;
+    let letters = authorized(
+        core,
+        deps,
+        |api, token| async move { api.inbox(&token).await },
+    )
+    .await?;
     Ok((letters, me.uuid))
 }
 
 /// Legt neue, glaubwürdige Briefe als eingehende Anfragen ab; `true`, wenn eine dazukam.
-async fn file_letters(core: &Core, deps: &DirectoryDeps, letters: &[InboxLetter], own_uuid: &str) -> bool {
-    let Some(identity) = core.identity() else { return false };
+async fn file_letters(
+    core: &Core,
+    deps: &DirectoryDeps,
+    letters: &[InboxLetter],
+    own_uuid: &str,
+) -> bool {
+    let Some(identity) = core.identity() else {
+        return false;
+    };
     let peer_id = identity.peer_id();
-    let me = Recipient { uuid: own_uuid, peer_id: &peer_id, now: now_secs() };
-    lock(&core.by_name.missing_senders).retain(|id, _| letters.iter().any(|letter| letter.id == *id));
+    let me = Recipient {
+        uuid: own_uuid,
+        peer_id: &peer_id,
+        now: now_secs(),
+    };
+    lock(&core.by_name.missing_senders)
+        .retain(|id, _| letters.iter().any(|letter| letter.id == *id));
     let mut filed = false;
-    for letter in letters.iter().filter(|letter| is_new_request(core, letter, &me)) {
+    for letter in letters
+        .iter()
+        .filter(|letter| is_new_request(core, letter, &me))
+    {
         filed |= file_with_sender_name(core, deps, letter).await;
     }
     filed
@@ -750,13 +894,23 @@ fn is_new_request(core: &Core, letter: &InboxLetter, me: &Recipient) -> bool {
     }
     let sender = &letter.from;
     if is_blocked_sender(core, &sender.peer_id, &sender.uuid) {
-        queue_job(core, DirectoryJob::Block { uuid: sender.uuid.clone() });
+        queue_job(
+            core,
+            DirectoryJob::Block {
+                uuid: sender.uuid.clone(),
+            },
+        );
         return delete_mail(core, letter);
     }
     if core.stores.friends.get(&sender.peer_id).is_ok() {
         return delete_mail(core, letter);
     }
-    let is_filed = core.stores.requests.list().iter().any(|request| request.mail_id.as_deref() == Some(&letter.id));
+    let is_filed = core
+        .stores
+        .requests
+        .list()
+        .iter()
+        .any(|request| request.mail_id.as_deref() == Some(&letter.id));
     !is_filed && requests::has_room_for_incoming(core)
 }
 
@@ -768,7 +922,9 @@ async fn file_with_sender_name(core: &Core, deps: &DirectoryDeps, letter: &Inbox
             lock(&core.by_name.missing_senders).remove(&letter.id);
             file_request(core, letter, sender)
         }
-        Ok(None) if count_missing_sender(core, &letter.id) >= MISSING_SENDER_POLLS => delete_mail(core, letter),
+        Ok(None) if count_missing_sender(core, &letter.id) >= MISSING_SENDER_POLLS => {
+            delete_mail(core, letter)
+        }
         Ok(None) => false,
         Err(error) => {
             tracing::debug!(?error, "sender of a letter not looked up at Mojang");
@@ -789,7 +945,9 @@ fn count_missing_sender(core: &Core, mail_id: &str) -> u8 {
 fn file_request(core: &Core, letter: &InboxLetter, sender: MojangProfile) -> bool {
     match core.stores.requests.insert(incoming_letter(letter, sender)) {
         Ok(request) => {
-            core.emit(FriendsEvent::Request(FriendRequestEvent { request: requests::request_view(request) }));
+            core.emit(FriendsEvent::Request(FriendRequestEvent {
+                request: requests::request_view(request),
+            }));
             true
         }
         Err(err) => {
@@ -801,7 +959,13 @@ fn file_request(core: &Core, letter: &InboxLetter, sender: MojangProfile) -> boo
 
 /// Immer `false`: ein gelöschter Brief wird keine Anfrage.
 fn delete_mail(core: &Core, letter: &InboxLetter) -> bool {
-    queue_job(core, DirectoryJob::DeleteMail { mail_id: letter.id.clone(), until: letter.expires_at });
+    queue_job(
+        core,
+        DirectoryJob::DeleteMail {
+            mail_id: letter.id.clone(),
+            until: letter.expires_at,
+        },
+    );
     false
 }
 
@@ -825,7 +989,12 @@ fn stamped(letter: &InboxLetter) -> StampedLetter<'_> {
 
 fn is_blocked_sender(core: &Core, peer_id: &str, uuid: &str) -> bool {
     core.stores.blocked.get(peer_id).is_ok()
-        || core.stores.blocked.list().iter().any(|blocked| blocked.mc_uuid.as_deref() == Some(uuid))
+        || core
+            .stores
+            .blocked
+            .list()
+            .iter()
+            .any(|blocked| blocked.mc_uuid.as_deref() == Some(uuid))
 }
 
 /// `sender` is Mojang's answer for the stamped UUID.
@@ -839,7 +1008,7 @@ fn incoming_letter(letter: &InboxLetter, sender: MojangProfile) -> RequestRecord
         hello_id: Some(letter.hello_id.clone()),
         relay_index: Some(letter.relay_index),
         secret: Some(letter.secret.clone()),
-        display_name: Some(sanitize::display_name(&letter.display_name, peer_id)),
+        display_name: Some(sender.name.clone()),
         mc_name: Some(sender.name),
         mc_uuid: Some(sender.uuid),
         code_tail: None,
@@ -855,10 +1024,17 @@ fn incoming_letter(letter: &InboxLetter, sender: MojangProfile) -> RequestRecord
 fn drop_vanished(core: &Core, letters: &[InboxLetter]) -> bool {
     let present: HashSet<&str> = letters.iter().map(|letter| letter.id.as_str()).collect();
     let vanished = core.stores.requests.list().into_iter().filter(|request| {
-        let is_waiting_letter = request.via == RequestVia::Name && request.state == RequestState::Pending;
-        is_waiting_letter && request.mail_id.as_deref().is_some_and(|id| !present.contains(id))
+        let is_waiting_letter =
+            request.via == RequestVia::Name && request.state == RequestState::Pending;
+        is_waiting_letter
+            && request
+                .mail_id
+                .as_deref()
+                .is_some_and(|id| !present.contains(id))
     });
-    vanished.fold(false, |dropped, request| core.stores.requests.remove(&request.id).is_ok() | dropped)
+    vanished.fold(false, |dropped, request| {
+        core.stores.requests.remove(&request.id).is_ok() | dropped
+    })
 }
 
 fn forget_registration(core: &Core) {
@@ -889,11 +1065,14 @@ fn queue_job(core: &Core, job: DirectoryJob) {
 
 /// Arbeitet die Aufträge der Reihe nach ab; was erledigt oder überholt ist, verschwindet.
 pub(super) async fn run_jobs(core: &Core) {
-    let Some(deps) = core.directory.get() else { return };
+    let Some(deps) = core.directory.get() else {
+        return;
+    };
     let _running = core.by_name.running_jobs.lock().await;
     for job in core.config().directory.jobs {
         if is_settled(core, deps, &job).await {
-            let removed = core.update_config(|config| config.directory.jobs.retain(|queued| *queued != job));
+            let removed =
+                core.update_config(|config| config.directory.jobs.retain(|queued| *queued != job));
             if let Err(err) = removed {
                 tracing::warn!(%err, "erledigter Auftrag ans Verzeichnis nicht entfernt");
             }
@@ -903,20 +1082,34 @@ pub(super) async fn run_jobs(core: &Core) {
 
 async fn is_settled(core: &Core, deps: &DirectoryDeps, job: &DirectoryJob) -> bool {
     let outcome = match job {
-        DirectoryJob::DeleteMail { until, .. } | DirectoryJob::Retract { until, .. } if *until <= now_secs() => {
+        DirectoryJob::DeleteMail { until, .. } | DirectoryJob::Retract { until, .. }
+            if *until <= now_secs() =>
+        {
             return true;
         }
         DirectoryJob::DeleteMail { mail_id, .. } => {
-            authorized(core, deps, |api, token| async move { api.delete(&token, mail_id).await }).await
+            authorized(core, deps, |api, token| async move {
+                api.delete(&token, mail_id).await
+            })
+            .await
         }
         DirectoryJob::Retract { mail_id, .. } => {
-            authorized(core, deps, |api, token| async move { api.retract(&token, mail_id).await }).await
+            authorized(core, deps, |api, token| async move {
+                api.retract(&token, mail_id).await
+            })
+            .await
         }
         DirectoryJob::Block { uuid } => {
-            authorized(core, deps, |api, token| async move { api.block(&token, uuid).await }).await
+            authorized(core, deps, |api, token| async move {
+                api.block(&token, uuid).await
+            })
+            .await
         }
         DirectoryJob::Unblock { uuid } => {
-            authorized(core, deps, |api, token| async move { api.unblock(&token, uuid).await }).await
+            authorized(core, deps, |api, token| async move {
+                api.unblock(&token, uuid).await
+            })
+            .await
         }
         DirectoryJob::Unregister { uuid } => return unregister(core, deps, uuid).await,
     };
@@ -930,7 +1123,10 @@ async fn unregister(core: &Core, deps: &DirectoryDeps, uuid: &str) -> bool {
     if !is_own_account {
         return true;
     }
-    let outcome = authorized(core, deps, |api, token| async move { api.unregister(&token).await }).await;
+    let outcome = authorized(core, deps, |api, token| async move {
+        api.unregister(&token).await
+    })
+    .await;
     if outcome.is_ok() && core.config().directory.registered_uuid.as_deref() == Some(uuid) {
         forget_registration(core);
     }
@@ -938,26 +1134,43 @@ async fn unregister(core: &Core, deps: &DirectoryDeps, uuid: &str) -> bool {
 }
 
 fn settles(outcome: Result<(), Failure>) -> bool {
-    outcome.as_ref().err().is_none_or(|failure| !failure.keeps_job())
+    outcome
+        .as_ref()
+        .err()
+        .is_none_or(|failure| !failure.keeps_job())
 }
 
 /// Eine angenommene oder abgelehnte Anfrage per Name: ihr Brief wird im Verzeichnis gelöscht.
 pub(super) fn delete_letter(core: &Core, request: &RequestRecord) {
     if let (RequestVia::Name, Some(mail_id)) = (request.via, &request.mail_id) {
-        queue_job(core, DirectoryJob::DeleteMail { mail_id: mail_id.clone(), until: request.expires_at });
+        queue_job(
+            core,
+            DirectoryJob::DeleteMail {
+                mail_id: mail_id.clone(),
+                until: request.expires_at,
+            },
+        );
     }
 }
 
 /// Eine eigene Anfrage per Name ist zurückgezogen: ihr Brief verschwindet aus dem Postfach des Empfängers.
 pub(super) fn retract_letter(core: &Core, request: &RequestRecord) {
     if let (RequestVia::Name, Some(mail_id)) = (request.via, &request.mail_id) {
-        queue_job(core, DirectoryJob::Retract { mail_id: mail_id.clone(), until: request.expires_at });
+        queue_job(
+            core,
+            DirectoryJob::Retract {
+                mail_id: mail_id.clone(),
+                until: request.expires_at,
+            },
+        );
     }
 }
 
 /// Vor einem neuen Schlüssel: Briefe mit Codes des alten Schlüssels taugen nichts mehr (BYNAME 7.5).
 pub(super) fn retract_own_letters(core: &Core) {
-    let own = open_name_requests(core).into_iter().filter(|request| core.stores.codes.get(&request.id).is_ok());
+    let own = open_name_requests(core)
+        .into_iter()
+        .filter(|request| core.stores.codes.get(&request.id).is_ok());
     for request in own {
         retract_letter(core, &request);
     }
@@ -998,7 +1211,8 @@ pub(super) fn account_changed(core: &Core) {
     let account_uuid = core.account_uuid();
     let config = core.config();
     let registered = config.directory.registered_uuid;
-    let other_registration = registered.filter(|registered| Some(registered) != account_uuid.as_ref());
+    let other_registration =
+        registered.filter(|registered| Some(registered) != account_uuid.as_ref());
     if let Some(old) = other_registration.filter(|_| config.settings.findable_by_name) {
         queue_job(core, DirectoryJob::Unregister { uuid: old });
         forget_registration(core);
@@ -1026,12 +1240,24 @@ struct ProofInputs {
 
 impl ProofInputs {
     fn new(hello_id: &PeerId, redeemer: &PeerId, secret_hex: &str) -> Option<Self> {
-        let secret = HEXLOWER.decode(secret_hex.as_bytes()).ok()?.try_into().ok()?;
-        Some(Self { hello_id: *hello_id.as_bytes(), redeemer: *redeemer.as_bytes(), secret })
+        let secret = HEXLOWER
+            .decode(secret_hex.as_bytes())
+            .ok()?
+            .try_into()
+            .ok()?;
+        Some(Self {
+            hello_id: *hello_id.as_bytes(),
+            redeemer: *redeemer.as_bytes(),
+            secret,
+        })
     }
 
     fn proof(&self) -> NameProof<'_> {
-        NameProof { hello_id: &self.hello_id, redeemer_peer_id: &self.redeemer, secret: &self.secret }
+        NameProof {
+            hello_id: &self.hello_id,
+            redeemer_peer_id: &self.redeemer,
+            secret: &self.secret,
+        }
     }
 }
 
@@ -1052,7 +1278,11 @@ pub(super) async fn answer_redemption(
     profile: WireProfile,
 ) -> Option<Result<WireProfile, HelloRefusal>> {
     let deps = core.directory.get()?;
-    let inputs = ProofInputs::new(redemption.hello_id, redemption.redeemer, redemption.secret_hex)?;
+    let inputs = ProofInputs::new(
+        redemption.hello_id,
+        redemption.redeemer,
+        redemption.secret_hex,
+    )?;
     let redeemer_id = redemption.redeemer.to_string();
     let newly_confirmed = match redemption.code.used_by.as_deref() {
         Some(user) if user != redeemer_id => return Some(Err(HelloRefusal::CodeUsed)),
@@ -1065,9 +1295,13 @@ pub(super) async fn answer_redemption(
     };
     let own = join_mojang(core, deps, &inputs.proof().server_id_owner()).await?;
     if let Some(account) = newly_confirmed {
-        befriend_redeemer(core, redemption.code, &redeemer_id, &profile, account).ok()?;
+        befriend_redeemer(core, redemption.code, &redeemer_id, account).ok()?;
     }
-    Some(Ok(WireProfile { mc_name: Some(own.name), mc_uuid: Some(own.uuid), ..core.own_profile() }))
+    Some(Ok(WireProfile {
+        display_name: own.name.clone(),
+        mc_name: Some(own.name),
+        mc_uuid: Some(own.uuid),
+    }))
 }
 
 /// Mojang muss bestätigen, dass der Einlöser genau das Konto ist, an das der Brief ging; sonst Schweigen.
@@ -1078,11 +1312,20 @@ async fn confirm_redeemer(
     inputs: &ProofInputs,
     profile: &WireProfile,
 ) -> Option<Result<MojangProfile, HelloRefusal>> {
-    if core.stores.friends.get(&redemption.redeemer.to_string()).is_ok() {
+    if core
+        .stores
+        .friends
+        .get(&redemption.redeemer.to_string())
+        .is_ok()
+    {
         return Some(Err(HelloRefusal::AlreadyFriends));
     }
     let name = sanitize::mc_name(profile.mc_name.as_deref())?;
-    let account = deps.mojang.has_joined(&name, &inputs.proof().server_id_redeemer()).await.ok()??;
+    let account = deps
+        .mojang
+        .has_joined(&name, &inputs.proof().server_id_redeemer())
+        .await
+        .ok()??;
     if redemption.code.name_request_to.as_deref() != Some(account.uuid.as_str()) {
         return None;
     }
@@ -1097,13 +1340,11 @@ fn befriend_redeemer(
     core: &Core,
     code: &CodeRecord,
     redeemer_id: &str,
-    profile: &WireProfile,
     account: MojangProfile,
 ) -> AppResult<()> {
-    let profile = profile.clone().sanitized(redeemer_id);
     core.stores.friends.upsert(FriendRecord {
         id: redeemer_id.to_owned(),
-        display_name: profile.display_name,
+        display_name: account.name.clone(),
         alias: None,
         mc_name: Some(account.name),
         mc_uuid: Some(account.uuid),
@@ -1114,7 +1355,9 @@ fn befriend_redeemer(
         removed_by_peer: false,
         notice: None,
     })?;
-    core.stores.codes.modify(&code.id, |code| code.used_by = Some(redeemer_id.to_owned()))?;
+    core.stores
+        .codes
+        .modify(&code.id, |code| code.used_by = Some(redeemer_id.to_owned()))?;
     let _ = core.stores.requests.remove(&code.id);
     remember_redemption(core, redeemer_id);
     core.emit(FriendsEvent::Changed);
@@ -1142,19 +1385,40 @@ pub(super) async fn redeem(
     hello_id: PeerId,
     secret_hex: &str,
 ) -> Delivery {
-    let Some(deps) = core.directory.get() else { return Delivery::Failed };
-    let Some(inputs) = ProofInputs::new(&hello_id, &runtime.main.id(), secret_hex) else { return Delivery::Failed };
+    let Some(deps) = core.directory.get() else {
+        return Delivery::Failed;
+    };
+    let Some(inputs) = ProofInputs::new(&hello_id, &runtime.main.id(), secret_hex) else {
+        return Delivery::Failed;
+    };
     let Some(account) = join_mojang(core, deps, &inputs.proof().server_id_redeemer()).await else {
         return Delivery::Failed;
     };
-    let profile = WireProfile { mc_name: Some(account.name), mc_uuid: Some(account.uuid), ..core.own_profile() };
-    let answered = hello::request_answer(&runtime.main, hello_id, secret_hex, profile, HELLO_NAME_WAIT).await;
+    let profile = WireProfile {
+        display_name: account.name.clone(),
+        mc_name: Some(account.name),
+        mc_uuid: Some(account.uuid),
+    };
+    let answered = hello::request_answer(
+        &runtime.main,
+        hello_id,
+        secret_hex,
+        profile,
+        HELLO_NAME_WAIT,
+    )
+    .await;
     let confirmed = match &answered.delivery {
-        Delivery::Received { peer, profile } => confirm_sender(core, deps, request, peer, profile, &inputs).await,
+        Delivery::Received { peer, profile } => {
+            confirm_sender(core, deps, request, peer, profile, &inputs).await
+        }
         Delivery::Refused(_) | Delivery::Failed => true,
     };
     let delivery = answered.close();
-    if confirmed { delivery } else { Delivery::Failed }
+    if confirmed {
+        delivery
+    } else {
+        Delivery::Failed
+    }
 }
 
 /// Die Antwort muss vom gestempelten Absender kommen, und Mojang muss sein Konto bestätigen; dann wird sie eingetragen.
@@ -1170,15 +1434,25 @@ async fn confirm_sender(
     if !is_stamped_sender {
         return false;
     }
-    let Some(name) = profile.mc_name.as_deref() else { return false };
-    let joined = deps.mojang.has_joined(name, &inputs.proof().server_id_owner()).await;
-    let Ok(Some(sender)) = joined.inspect_err(|err| tracing::debug!(?err, "Mojang nicht erreicht")) else {
+    let Some(name) = profile.mc_name.as_deref() else {
+        return false;
+    };
+    let joined = deps
+        .mojang
+        .has_joined(name, &inputs.proof().server_id_owner())
+        .await;
+    let Ok(Some(sender)) = joined.inspect_err(|err| tracing::debug!(?err, "Mojang nicht erreicht"))
+    else {
         return false;
     };
     if request.mc_uuid.as_deref() != Some(sender.uuid.as_str()) {
         return false;
     }
-    let verified = WireProfile { mc_name: Some(sender.name), mc_uuid: Some(sender.uuid), ..profile.clone() };
+    let verified = WireProfile {
+        display_name: sender.name.clone(),
+        mc_name: Some(sender.name),
+        mc_uuid: Some(sender.uuid),
+    };
     requests::mark_received(core, &request.id, peer, verified);
     true
 }

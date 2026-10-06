@@ -37,7 +37,12 @@ impl SignedParts {
 
     /// The signed bytes for a key that does not prepend a domain itself (the certificate key): domain ‖ parts.
     pub fn message(&self, domain: &[u8]) -> Vec<u8> {
-        [domain].into_iter().chain(self.as_slices()).flatten().copied().collect()
+        [domain]
+            .into_iter()
+            .chain(self.as_slices())
+            .flatten()
+            .copied()
+            .collect()
     }
 }
 
@@ -168,10 +173,18 @@ pub fn validate_letter(
         && is_other_peer(letter.from_peer_id, me.peer_id)
         && PeerId::from_str(fields.hello_id).is_ok();
     let is_addressed_to_me = fields.to == me.uuid;
-    if !(is_addressed_to_me && sender_is_plausible && is_within_lifetime(letter, me.now) && signature_holds(letter)) {
+    if !(is_addressed_to_me
+        && sender_is_plausible
+        && is_within_lifetime(letter, me.now)
+        && signature_holds(letter))
+    {
         return Err(Rejection::Malformed);
     }
-    if relay_is_known(fields.relay_index) { Ok(()) } else { Err(Rejection::UnknownRelay) }
+    if relay_is_known(fields.relay_index) {
+        Ok(())
+    } else {
+        Err(Rejection::UnknownRelay)
+    }
 }
 
 fn is_other_peer(candidate: &str, own: &str) -> bool {
@@ -181,14 +194,23 @@ fn is_other_peer(candidate: &str, own: &str) -> bool {
 fn is_within_lifetime(letter: &StampedLetter, now: u64) -> bool {
     let created_at = letter.fields.created_at;
     let latest_expiry = created_at.saturating_add(REQUEST_TTL_SECS + CLOCK_SKEW_SECS);
-    created_at <= now.saturating_add(CLOCK_SKEW_SECS) && now < letter.expires_at && letter.expires_at <= latest_expiry
+    created_at <= now.saturating_add(CLOCK_SKEW_SECS)
+        && now < letter.expires_at
+        && letter.expires_at <= latest_expiry
 }
 
 fn signature_holds(letter: &StampedLetter) -> bool {
-    let (Some(signature), Some(parts)) = (decode::<64>(letter.signature), letter_parts(&letter.fields)) else {
+    let (Some(signature), Some(parts)) =
+        (decode::<64>(letter.signature), letter_parts(&letter.fields))
+    else {
         return false;
     };
-    identity::verify(letter.from_peer_id, LETTER_DOMAIN, &parts.as_slices(), &signature)
+    identity::verify(
+        letter.from_peer_id,
+        LETTER_DOMAIN,
+        &parts.as_slices(),
+        &signature,
+    )
 }
 
 fn decode<const N: usize>(hex: &str) -> Option<[u8; N]> {
@@ -237,8 +259,16 @@ mod tests {
         }
     }
 
-    fn golden_proof<'a>(hello_id: &'a [u8; 32], redeemer: &'a [u8; 32], secret: &'a [u8; 9]) -> NameProof<'a> {
-        NameProof { hello_id, redeemer_peer_id: redeemer, secret }
+    fn golden_proof<'a>(
+        hello_id: &'a [u8; 32],
+        redeemer: &'a [u8; 32],
+        secret: &'a [u8; 9],
+    ) -> NameProof<'a> {
+        NameProof {
+            hello_id,
+            redeemer_peer_id: redeemer,
+            secret,
+        }
     }
 
     #[test]
@@ -256,7 +286,13 @@ mod tests {
 
     fn golden_login_parts() -> SignedParts {
         let inputs = &vectors().inputs;
-        login_parts(&inputs.host, &inputs.server_id, &inputs.peer_id, &inputs.uuid).unwrap()
+        login_parts(
+            &inputs.host,
+            &inputs.server_id,
+            &inputs.peer_id,
+            &inputs.uuid,
+        )
+        .unwrap()
     }
 
     #[test]
@@ -270,15 +306,24 @@ mod tests {
     fn a2_l1_message_and_signature_match_the_worker_vector() {
         let golden = &vectors().vectors.a2;
         let message = golden_login_parts().message(AUTH_DOMAIN);
-        assert_eq!((message.len(), HEXLOWER.encode(&message)), (golden.length, golden.message.clone()));
-        assert_eq!(signature_hex(AUTH_DOMAIN, &golden_login_parts()), golden.signature);
+        assert_eq!(
+            (message.len(), HEXLOWER.encode(&message)),
+            (golden.length, golden.message.clone())
+        );
+        assert_eq!(
+            signature_hex(AUTH_DOMAIN, &golden_login_parts()),
+            golden.signature
+        );
     }
 
     #[test]
     fn a5_l2_message_matches_the_worker_vector() {
         let golden = &vectors().vectors.a5;
         let message = golden_login_parts().message(CERT_DOMAIN);
-        assert_eq!((message.len(), HEXLOWER.encode(&message)), (golden.length, golden.message.clone()));
+        assert_eq!(
+            (message.len(), HEXLOWER.encode(&message)),
+            (golden.length, golden.message.clone())
+        );
         assert_eq!(HEXLOWER.encode(&Sha256::digest(&message)), golden.sha256);
     }
 
@@ -293,18 +338,30 @@ mod tests {
             vectors().certificate.spki_der(),
         ]
         .concat();
-        assert_eq!((payload.len(), HEXLOWER.encode(&Sha1::digest(&payload))), (golden.length, golden.sha1.clone()));
-        let key = UnparsedPublicKey::new(&RSA_PKCS1_2048_8192_SHA1_FOR_LEGACY_USE_ONLY, &spki[SPKI_HEADER_LEN..]);
-        assert!(key.verify(&payload, &STANDARD.decode(&golden.signature).unwrap()).is_ok());
+        assert_eq!(
+            (payload.len(), HEXLOWER.encode(&Sha1::digest(&payload))),
+            (golden.length, golden.sha1.clone())
+        );
+        let key = UnparsedPublicKey::new(
+            &RSA_PKCS1_2048_8192_SHA1_FOR_LEGACY_USE_ONLY,
+            &spki[SPKI_HEADER_LEN..],
+        );
+        assert!(key
+            .verify(&payload, &STANDARD.decode(&golden.signature).unwrap())
+            .is_ok());
     }
 
     #[test]
     fn the_session_request_carries_both_signatures_over_the_login_parts() {
         let inputs = &vectors().inputs;
-        let certificate = parse(&inputs.uuid, &Draft::of(&vectors().certificate, 0).body()).unwrap();
+        let certificate =
+            parse(&inputs.uuid, &Draft::of(&vectors().certificate, 0).body()).unwrap();
         let parts = golden_login_parts();
         let request = session_request("c".into(), &parts, &seed_identity(), &certificate).unwrap();
-        assert_eq!((request.challenge.as_str(), request.uuid.as_str()), ("c", inputs.uuid.as_str()));
+        assert_eq!(
+            (request.challenge.as_str(), request.uuid.as_str()),
+            ("c", inputs.uuid.as_str())
+        );
         assert_eq!(request.cert_signature, vectors().vectors.a5.signature);
         assert_eq!(request.signature, vectors().vectors.a2.signature);
         assert_eq!(request.certificate, certificate.proof());
@@ -314,8 +371,14 @@ mod tests {
     fn a3_a4_server_ids_match_the_golden_vectors() {
         let (hello_id, redeemer, secret) = (bytes_from(0x20), bytes_from(0x60), bytes_from(0xa0));
         let proof = golden_proof(&hello_id, &redeemer, &secret);
-        assert_eq!(proof.server_id_redeemer(), "1173a19b66402ae0b58b86da1777f8ee4a797703");
-        assert_eq!(proof.server_id_owner(), "da7b9698d86d1aeb398af253249ef76dc60eecd5");
+        assert_eq!(
+            proof.server_id_redeemer(),
+            "1173a19b66402ae0b58b86da1777f8ee4a797703"
+        );
+        assert_eq!(
+            proof.server_id_owner(),
+            "da7b9698d86d1aeb398af253249ef76dc60eecd5"
+        );
     }
 
     #[test]
@@ -334,11 +397,26 @@ mod tests {
     fn letter_parts_refuse_malformed_fields() {
         let golden = golden_fields();
         let malformed = [
-            LetterFields { to: "069A79F444E94726A5BEFCA90E38AAF5", ..golden },
-            LetterFields { from_uuid: "853c80ef", ..golden },
-            LetterFields { nonce: "00", ..golden },
-            LetterFields { hello_id: "zz", ..golden },
-            LetterFields { secret: "a0a1a2a3a4a5a6a7a8a9", ..golden },
+            LetterFields {
+                to: "069A79F444E94726A5BEFCA90E38AAF5",
+                ..golden
+            },
+            LetterFields {
+                from_uuid: "853c80ef",
+                ..golden
+            },
+            LetterFields {
+                nonce: "00",
+                ..golden
+            },
+            LetterFields {
+                hello_id: "zz",
+                ..golden
+            },
+            LetterFields {
+                secret: "a0a1a2a3a4a5a6a7a8a9",
+                ..golden
+            },
         ];
         for fields in malformed {
             assert_eq!(letter_parts(&fields), None, "{fields:?}");
@@ -348,7 +426,11 @@ mod tests {
     #[test]
     fn login_parts_refuse_a_server_id_that_is_not_40_lowercase_hex_and_malformed_ids() {
         let inputs = &vectors().inputs;
-        let (server_id, peer_id, uuid) = (inputs.server_id.as_str(), inputs.peer_id.as_str(), inputs.uuid.as_str());
+        let (server_id, peer_id, uuid) = (
+            inputs.server_id.as_str(),
+            inputs.peer_id.as_str(),
+            inputs.uuid.as_str(),
+        );
         let (longer, upper_uuid) = (format!("{server_id}8"), uuid.to_uppercase());
         let refused = [
             ("0123456789ABCDEF0123456789ABCDEF01234567", peer_id, uuid),
@@ -358,19 +440,33 @@ mod tests {
             (server_id, "abcd", uuid),
             (server_id, peer_id, &upper_uuid),
         ];
-        for (server_id, peer_id, uuid) in refused {
-            assert_eq!(login_parts(&inputs.host, server_id, peer_id, uuid), None, "{server_id} {peer_id} {uuid}");
+        for (case, (server_id, peer_id, uuid)) in refused.into_iter().enumerate() {
+            assert!(
+                login_parts(&inputs.host, server_id, peer_id, uuid).is_none(),
+                "malformed login case {case} must be refused"
+            );
         }
     }
 
     #[test]
     fn login_parts_are_bound_to_the_directory_host() {
-        let Inputs { server_id, peer_id, uuid, .. } = &vectors().inputs;
-        assert_eq!(HEXLOWER.encode(golden_login_parts().as_slices()[0]), vectors().inputs.host_tag);
+        let Inputs {
+            server_id,
+            peer_id,
+            uuid,
+            ..
+        } = &vectors().inputs;
+        assert_eq!(
+            HEXLOWER.encode(golden_login_parts().as_slices()[0]),
+            vectors().inputs.host_tag
+        );
         let here = login_parts("directory.example", server_id, peer_id, uuid).unwrap();
         let elsewhere = login_parts("fork.example", server_id, peer_id, uuid).unwrap();
         assert_ne!(here.message(AUTH_DOMAIN), elsewhere.message(AUTH_DOMAIN));
-        assert_eq!(here.message(AUTH_DOMAIN).len(), elsewhere.message(AUTH_DOMAIN).len());
+        assert_eq!(
+            here.message(AUTH_DOMAIN).len(),
+            elsewhere.message(AUTH_DOMAIN).len()
+        );
     }
 
     /// Ein gültiger Brief des Absenders mit der Seed-Identität an einen Empfänger mit eigener Identität.
@@ -408,7 +504,10 @@ mod tests {
         }
 
         fn fields_with_own_hello_id(&self) -> LetterFields<'_> {
-            LetterFields { hello_id: &self.hello_id, ..self.fields }
+            LetterFields {
+                hello_id: &self.hello_id,
+                ..self.fields
+            }
         }
 
         fn check(&self, now: u64, relay_is_known: bool) -> Result<(), Rejection> {
@@ -419,7 +518,15 @@ mod tests {
                 signature: &self.signature,
             };
             let peer_id = self.recipient.peer_id();
-            validate_letter(&letter, &Recipient { uuid: UUID_RECIPIENT, peer_id: &peer_id, now }, |_| relay_is_known)
+            validate_letter(
+                &letter,
+                &Recipient {
+                    uuid: UUID_RECIPIENT,
+                    peer_id: &peer_id,
+                    now,
+                },
+                |_| relay_is_known,
+            )
         }
     }
 
@@ -430,14 +537,23 @@ mod tests {
 
     #[test]
     fn a_letter_for_someone_else_is_malformed() {
-        let fixture = Fixture::valid().with_fields(LetterFields { to: UUID_SENDER, ..golden_fields() });
+        let fixture = Fixture::valid().with_fields(LetterFields {
+            to: UUID_SENDER,
+            ..golden_fields()
+        });
         assert_eq!(fixture.check(NOW, true), Err(Rejection::Malformed));
     }
 
     #[test]
     fn a_letter_from_myself_is_malformed() {
-        let own_uuid = Fixture::valid().with_fields(LetterFields { from_uuid: UUID_RECIPIENT, ..golden_fields() });
-        let own_peer_id = Fixture { from_peer_id: Fixture::valid().recipient.peer_id(), ..Fixture::valid() };
+        let own_uuid = Fixture::valid().with_fields(LetterFields {
+            from_uuid: UUID_RECIPIENT,
+            ..golden_fields()
+        });
+        let own_peer_id = Fixture {
+            from_peer_id: Fixture::valid().recipient.peer_id(),
+            ..Fixture::valid()
+        };
         for fixture in [own_uuid, own_peer_id] {
             assert_eq!(fixture.check(NOW, true), Err(Rejection::Malformed));
         }
@@ -445,8 +561,17 @@ mod tests {
 
     #[test]
     fn a_stamp_that_is_not_a_uuid_or_peer_id_is_malformed() {
-        let bad_peer = Fixture { from_peer_id: "abcd".into(), ..Fixture::valid() };
-        let bad_uuid = Fixture { fields: LetterFields { from_uuid: "ABC", ..golden_fields() }, ..Fixture::valid() };
+        let bad_peer = Fixture {
+            from_peer_id: "abcd".into(),
+            ..Fixture::valid()
+        };
+        let bad_uuid = Fixture {
+            fields: LetterFields {
+                from_uuid: "ABC",
+                ..golden_fields()
+            },
+            ..Fixture::valid()
+        };
         for fixture in [bad_peer, bad_uuid] {
             assert_eq!(fixture.check(NOW, true), Err(Rejection::Malformed));
         }
@@ -455,7 +580,11 @@ mod tests {
     #[test]
     fn a_hello_id_that_is_no_key_is_malformed() {
         let not_a_curve_point = format!("02{}", "00".repeat(31));
-        let fixture = Fixture { hello_id: not_a_curve_point, ..Fixture::valid() }.sign();
+        let fixture = Fixture {
+            hello_id: not_a_curve_point,
+            ..Fixture::valid()
+        }
+        .sign();
         assert_eq!(fixture.check(NOW, true), Err(Rejection::Malformed));
     }
 
@@ -464,30 +593,59 @@ mod tests {
         let fixture = Fixture::valid();
         let created_at = fixture.fields.created_at;
         assert_eq!(fixture.check(created_at - CLOCK_SKEW_SECS, true), Ok(()));
-        assert_eq!(fixture.check(created_at - CLOCK_SKEW_SECS - 1, true), Err(Rejection::Malformed));
+        assert_eq!(
+            fixture.check(created_at - CLOCK_SKEW_SECS - 1, true),
+            Err(Rejection::Malformed)
+        );
     }
 
     #[test]
     fn an_expired_letter_is_malformed() {
         let fixture = Fixture::valid();
         assert_eq!(fixture.check(fixture.expires_at - 1, true), Ok(()));
-        assert_eq!(fixture.check(fixture.expires_at, true), Err(Rejection::Malformed));
+        assert_eq!(
+            fixture.check(fixture.expires_at, true),
+            Err(Rejection::Malformed)
+        );
     }
 
     #[test]
     fn a_lifetime_beyond_the_ttl_plus_skew_is_malformed() {
         let created_at = golden_fields().created_at;
         let latest = created_at + REQUEST_TTL_SECS + CLOCK_SKEW_SECS;
-        assert_eq!(Fixture { expires_at: latest, ..Fixture::valid() }.check(NOW, true), Ok(()));
-        assert_eq!(Fixture { expires_at: latest + 1, ..Fixture::valid() }.check(NOW, true), Err(Rejection::Malformed));
+        assert_eq!(
+            Fixture {
+                expires_at: latest,
+                ..Fixture::valid()
+            }
+            .check(NOW, true),
+            Ok(())
+        );
+        assert_eq!(
+            Fixture {
+                expires_at: latest + 1,
+                ..Fixture::valid()
+            }
+            .check(NOW, true),
+            Err(Rejection::Malformed)
+        );
     }
 
     #[test]
     fn a_tampered_or_truncated_signature_is_malformed() {
         // Absichtlich ohne `with_fields`: die Signatur des Originals bleibt stehen.
-        let tampered_fields = LetterFields { display_name: "Mallory", ..golden_fields() };
-        let tampered = Fixture { fields: tampered_fields, ..Fixture::valid() };
-        let truncated = Fixture { signature: "ab".into(), ..Fixture::valid() };
+        let tampered_fields = LetterFields {
+            display_name: "Mallory",
+            ..golden_fields()
+        };
+        let tampered = Fixture {
+            fields: tampered_fields,
+            ..Fixture::valid()
+        };
+        let truncated = Fixture {
+            signature: "ab".into(),
+            ..Fixture::valid()
+        };
         for fixture in [tampered, truncated] {
             assert_eq!(fixture.check(NOW, true), Err(Rejection::Malformed));
         }
@@ -496,18 +654,27 @@ mod tests {
     #[test]
     fn a_forged_stamp_with_a_valid_signature_of_another_key_is_malformed() {
         let attacker = Identity::from_secret_bytes(&bytes_from::<32>(0x80));
-        let fixture = Fixture { from_peer_id: attacker.peer_id(), ..Fixture::valid() };
+        let fixture = Fixture {
+            from_peer_id: attacker.peer_id(),
+            ..Fixture::valid()
+        };
         assert_eq!(fixture.check(NOW, true), Err(Rejection::Malformed));
     }
 
     #[test]
     fn an_unknown_relay_is_ignored_not_malformed() {
-        assert_eq!(Fixture::valid().check(NOW, false), Err(Rejection::UnknownRelay));
+        assert_eq!(
+            Fixture::valid().check(NOW, false),
+            Err(Rejection::UnknownRelay)
+        );
     }
 
     #[test]
     fn a_forged_letter_with_an_unknown_relay_is_still_malformed() {
-        let fixture = Fixture { from_peer_id: "abcd".into(), ..Fixture::valid() };
+        let fixture = Fixture {
+            from_peer_id: "abcd".into(),
+            ..Fixture::valid()
+        };
         assert_eq!(fixture.check(NOW, false), Err(Rejection::Malformed));
     }
 }

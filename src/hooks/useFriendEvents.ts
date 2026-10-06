@@ -13,7 +13,7 @@ import type {
 import { requestInviteDialog } from "@/pages/friends/inviteRequest";
 import { useModOpenNavigation } from "@/pages/friends/useFriendsNav";
 import { applyJoinSession, dropInviteDialog, queueFriendDialog, queueModConfirm } from "@/store/friendsUi";
-import { friendKeys } from "./queryKeys";
+import { accountKeys, friendKeys } from "./queryKeys";
 
 const withPresence = ({ friendId, presence, path }: FriendPresenceEvent) => (friends: Friend[] | undefined) =>
   friends?.map((friend) => (friend.id === friendId ? { ...friend, presence, path } : friend));
@@ -111,7 +111,11 @@ export function useFriendEvents() {
   useModOpenNavigation();
   useEffect(() => {
     const subs = [
-      api.onFriendsChanged(() => void qc.invalidateQueries({ queryKey: friendKeys.all })),
+      api.onFriendsChanged(() => {
+        void qc.invalidateQueries({ queryKey: friendKeys.all });
+        // Der Name folgt dem ersten Microsoft-Konto; eine automatische Umbenennung ändert nur den Freunde-Zustand.
+        void qc.invalidateQueries({ queryKey: accountKeys.microsoft });
+      }),
       api.onFriendRequest(() => void qc.invalidateQueries({ queryKey: friendKeys.requests })),
       api.onFriendRequestRefused((event) => onRequestRefused(qc, event)),
       api.onFriendPresence((event) => qc.setQueryData(friendKeys.list, withPresence(event))),

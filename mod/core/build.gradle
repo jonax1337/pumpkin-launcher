@@ -2,26 +2,27 @@ plugins {
 	id 'java-library'
 }
 
-// core/ kennt weder Minecraft noch einen Loader: Der Klassenpfad enthält nur Gson und SLF4J, die das Spiel liefert.
-// Ein Minecraft-Import bricht deshalb schon das Kompilieren, und --release 17 hält die Klassen auf jedem Knoten lauffähig.
+// core/ kennt weder Minecraft noch einen Loader: Der Klassenpfad enthält nur Gson und die Log4j-API des Spiels.
+// --release 8 hält die Produktionsklassen auch auf dem Java-8-Knoten für Minecraft 1.16.5 lauffähig.
 repositories {
 	mavenCentral()
 }
 
 dependencies {
 	compileOnly "com.google.code.gson:gson:${gson_version}"
-	compileOnly "org.slf4j:slf4j-api:${slf4j_version}"
+	compileOnly "org.apache.logging.log4j:log4j-api:${log4j_version}"
 
 	testImplementation "com.google.code.gson:gson:${gson_version}"
-	testImplementation "org.slf4j:slf4j-api:${slf4j_version}"
+	testImplementation "org.apache.logging.log4j:log4j-api:${log4j_version}"
 	testImplementation platform("org.junit:junit-bom:${junit_version}")
 	testImplementation 'org.junit.jupiter:junit-jupiter'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-	testRuntimeOnly "org.slf4j:slf4j-nop:${slf4j_version}"
 }
 
 tasks.withType(JavaCompile).configureEach {
-	it.options.release = 17
+	it.options.release = it.name == 'compileJava' ? 8 : 17
+	// Stacktraces behalten Quellnamen und Zeilen; lokale Variablentabellen brauchen die Knoten-Jars nicht.
+	it.options.debugOptions.debugLevel = 'source,lines'
 	it.options.encoding = 'UTF-8'
 	// classfile: Gson verweist auf Errorprone-Annotationen, die nicht auf dem Klassenpfad liegen.
 	it.options.compilerArgs << '-Xlint:all,-classfile,-serial'
@@ -33,7 +34,7 @@ test {
 	def protocolFixtures = rootProject.file('fixtures/protocol')
 	inputs.dir(protocolFixtures)
 	systemProperty 'pumpkin.fixtures.protocol', protocolFixtures.absolutePath
-	// -Pcore.testJdk=<Version> führt die Tests auf genau diesem JDK aus (die JDKs des Knotens: nodes.txt).
+	// -Pcore.testJdk=<Version> wählt das Test-JDK; JUnit 6 braucht mindestens Java 17, nicht das Java-8-Spiel-JDK.
 	if (project.hasProperty('core.testJdk')) {
 		javaLauncher = javaToolchains.launcherFor {
 			languageVersion = JavaLanguageVersion.of(project.property('core.testJdk') as int)

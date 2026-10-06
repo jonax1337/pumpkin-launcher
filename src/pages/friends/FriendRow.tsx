@@ -4,7 +4,7 @@ import { useI18n, type TKey } from "@/i18n";
 import { relativeTime } from "@/lib/format";
 import type { Friend, HostSession, Invite } from "@/lib/types";
 import { Button, Cell, Chip, Icon, IconButton, ListRow, Menu, RowTitle, Tip, type MenuEntry } from "@/ui";
-import { canInvite } from "./friendsModel";
+import { canInvite, friendName } from "./friendsModel";
 import { requestInviteDialog } from "./inviteRequest";
 import type { FriendActions } from "./useFriendDialogs";
 
@@ -21,7 +21,7 @@ function useSubline() {
   const { t } = useI18n();
   return (friend: Friend): string => {
     if (friend.removedByPeer) return t("friends.sub.removedByPeer");
-    if (!friend.confirmed) return t("friends.sub.unconfirmed", { name: friend.displayName });
+    if (!friend.confirmed) return t("friends.sub.unconfirmed", { name: friendName(friend) });
     if (friend.presence === "playing") return t("friends.sub.playing");
     if (friend.presence === "online") return t("friends.sub.online");
     return friend.lastSeen ? t("friends.sub.lastSeen", { time: relativeTime(friend.lastSeen * SECOND_MS) }) : t("friends.sub.offline");
@@ -96,7 +96,7 @@ export function FriendRow({ friend, label, invite, session, actions }: {
   return (
     <>
       <ListRow off={gone}>
-        <span className="grid place-items-center"><FriendAvatar friendId={friend.id} name={friend.displayName} /></span>
+        <span className="grid place-items-center"><FriendAvatar friendId={friend.id} name={friendName(friend)} /></span>
         <SelfAsserted><RowTitle title={label} sub={subline(friend)} /></SelfAsserted>
         {gone ? <span /> : <PresenceCell friend={friend} />}
         {gone ? (

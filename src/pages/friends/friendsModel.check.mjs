@@ -2,8 +2,8 @@
 import assert from 'node:assert/strict';
 import { FRIENDS_FIXTURES as fixtures } from '../../lib/friends-fixtures.ts';
 import {
-  activeCodeCount, canInvite, codeMayBeExpired, defaultAddTab, friendLabels, friendsBadgeCount, friendsGate, inviteFrom, isMcName, nameTabAvailable,
-  modOpenDestination, onlineCount, REQUESTS_ANCHOR, REQUEST_TTL_DAYS, requestLine, visibleFriends,
+  activeCodeCount, canInvite, codeMayBeExpired, defaultAddTab, friendLabels, friendName, friendsBadgeCount, friendsGate, inviteFrom, isMcName, nameTabAvailable,
+  modOpenDestination, onlineCount, REQUESTS_ANCHOR, REQUEST_TTL_DAYS, requestLine, requestName, visibleFriends,
 } from './friendsModel.ts';
 
 const friend = (over) => ({ ...fixtures['friend.online'], ...over });
@@ -16,6 +16,9 @@ assert.equal(friendsGate(state({ availability: 'identityLost' }), true), 'identi
 assert.equal(friendsGate(state({ enabled: false }), true), 'disabled');
 assert.equal(friendsGate(state({}), false), 'noMicrosoftAccount');
 assert.equal(friendsGate(state({}), true), null);
+assert.ok(!('displayName' in fixtures['friendsState.available'].settings));
+assert.ok(!('displayNameMin' in fixtures.constants));
+assert.ok(!('displayNameMax' in fixtures.constants));
 
 // Zahl an der Seitenleiste: eingehende Anfragen + Einladungen + Hinweise; eigene Anfragen zählen nicht.
 const incoming = fixtures['request.incoming'];
@@ -25,7 +28,7 @@ assert.equal(friendsBadgeCount([], [], []), 0);
 assert.equal(friendsBadgeCount([incoming, ...outgoing], [], [fixtures['friend.online']]), 1);
 assert.equal(friendsBadgeCount([incoming, ...outgoing], [fixtures.invite], withNotice), 4);
 
-// Namen: Alias schlägt Anzeigename; gleiche Namen bekommen die erste Gruppe des Fingerabdrucks.
+// Namen: Alias schlägt Minecraft-Namen; gleiche Namen bekommen die erste Gruppe des Fingerabdrucks.
 const alex = friend({ id: 'a', displayName: 'Alex', fingerprint: '1111 2222 3333 4444' });
 const alexTwin = friend({ id: 'b', displayName: 'Alex', fingerprint: '9999 2222 3333 4444' });
 const bea = friend({ id: 'c', displayName: 'Bea', alias: 'Bienchen', presence: 'offline', mcName: 'BeaMC' });
@@ -35,6 +38,9 @@ assert.equal(labels.get('b'), 'Alex · 9999');
 assert.equal(labels.get('c'), 'Bienchen');
 assert.equal(friendLabels([alex, bea]).get('a'), 'Alex');
 assert.equal(friendLabels([alex, friend({ id: 'd', displayName: 'Alex', alias: 'Lex' })]).get('a'), 'Alex', 'ein Alias macht den Namen eindeutig');
+assert.equal(friendName(friend({ displayName: 'Old nickname', mcName: 'MinecraftName' })), 'MinecraftName');
+assert.equal(friendName(friend({ displayName: 'Legacy name', mcName: null })), 'Legacy name');
+assert.equal(friendName(friend({ displayName: 'Old nickname', mcName: 'MinecraftName', alias: 'Local alias' })), 'Local alias');
 
 // Liste: alphabetisch, nach Anwesenheit nur gefiltert, nie sortiert; Suche in Namen, Alias und Minecraft-Namen.
 const all = [bea, alexTwin, alex];
@@ -80,6 +86,8 @@ assert.deepEqual(requestLine(fixtures['request.awaitingAnswer']), line('friends.
 assert.deepEqual(requestLine(fixtures['request.nameOutgoing']), line('friends.requests.awaitingName', fixtures['request.nameOutgoing'].mcName));
 assert.deepEqual(requestLine(fixtures['request.nameDelivering']), line('friends.requests.deliveringName', fixtures['request.nameDelivering'].mcName));
 assert.equal(requestLine({ ...fixtures['request.nameDelivering'], mcName: null, displayName: 'Hanna' }).params.name, 'Hanna');
+assert.equal(requestName({ ...incoming, displayName: 'Old nickname', mcName: 'MinecraftName' }), 'MinecraftName');
+assert.equal(requestLine({ ...incoming, displayName: 'Old nickname', mcName: 'MinecraftName' }).params.name, 'MinecraftName');
 
 // Das Verzeichnis hält eine Anfrage 14 Tage bereit.
 assert.equal(REQUEST_TTL_DAYS, 14);

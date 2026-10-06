@@ -1,0 +1,39 @@
+plugins {
+	id 'xyz.wagyourtail.unimined' version "${unimined_version}"
+}
+
+apply from: rootProject.file('gradle/node.gradle')
+
+sourceSets.main.java.exclude('dev/laux/pumpkin/bridge/platform/fabric/**',
+	'dev/laux/pumpkin/bridge/platform/neoforge/**', 'dev/laux/pumpkin/bridge/platform/neoforgelegacy/**')
+
+repositories {
+	maven { url = 'https://maven.minecraftforge.net/' }
+	maven { url = 'https://repo.spongepowered.org/maven/' }
+}
+
+java {
+	toolchain.languageVersion = JavaLanguageVersion.of(21)
+	sourceCompatibility = JavaVersion.VERSION_1_8
+	targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+unimined.minecraft {
+	version sc.current.version
+	mappings {
+		searge()
+		mojmap()
+	}
+	minecraftForge {
+		loader project.pinned('forge_version').substring(sc.current.version.length() + 1)
+		mixinConfig 'pumpkin_bridge.mixins.json'
+	}
+	defaultRemapJar = true
+}
+
+// Unimined remaps Mixin targets together with the production jar, without a second annotation-processing path.
+tasks.named('jar') {
+	manifest.attributes('MixinConfigs': 'pumpkin_bridge.mixins.json')
+}
+
+registerModIndexEntry(tasks.named('remapJar').flatMap { it.archiveFile })

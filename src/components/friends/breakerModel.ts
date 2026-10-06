@@ -1,7 +1,7 @@
-// Reine Abfolge des Dialogs nach einem Startfehler durch das Freunde-Menü (INGAME 3.8, kein React), damit breakerModel.check.mjs sie
+// Reine Abfolge des Dialogs nach einem Startfehler durch das Pumpkin Bridge (docs/bridge/README.md, "Startup recovery", kein React), damit breakerModel.check.mjs sie
 // ohne Bundler prüft.
 
-/** Die zwei Wege aus dem Dialog: ohne Freunde-Menü starten (Schalter der Instanz aus) oder es noch einmal versuchen (Sperre aufheben). */
+/** Die zwei Wege aus dem Dialog: ohne Pumpkin Bridge starten (Schalter der Instanz aus) oder es noch einmal versuchen (Sperre aufheben). */
 export type BreakerChoice = "startWithout" | "retryAnyway";
 
 /** Was der Dialog tun kann; jeder Schritt meldet seinen Fehler, indem er ablehnt. */

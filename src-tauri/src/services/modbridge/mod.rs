@@ -1,4 +1,4 @@
-//! Lokale Brücke zur Mod im Spiel: JSON-Zeilen über Loopback, Protokoll 2 (docs/friends/INGAME.md, 5.1 bis 5.3).
+//! Lokale Brücke zur Mod im Spiel: JSON-Zeilen über Loopback, Protokoll 2 (docs/bridge/README.md, "Protocol 2").
 //!
 //! Die Brücke lauscht ausschließlich auf `127.0.0.1`. Jeder Start eines Spiels bekommt einen Datensatz mit eigenem Token
 //! (`register_launch`); den Prozess des Spiels nennt `bind_pid`, sobald es ihn gibt. Eine Verbindung wird nur
@@ -8,6 +8,7 @@
 mod connection;
 mod framing;
 mod handler;
+pub mod ingame;
 mod launch;
 pub mod limits;
 mod listener;
@@ -75,7 +76,7 @@ impl ModBridge {
     }
 
     /// Der Datensatz des Starts sagt „kein Microsoft-Konto“: ein Zustand, den `register_launch` gar nicht erst entstehen
-    /// lässt, den INGAME 7 aber trotzdem prüft.
+    /// lässt, den docs/bridge/README.md, "In-game navigation and world behavior" aber trotzdem prüft.
     #[cfg(test)]
     pub fn mark_offline_for_test(&self, instance_id: &str) {
         let mut state = lock(&self.inner.state);
@@ -115,15 +116,26 @@ impl ModBridge {
         }
     }
 
+    pub fn is_running(&self) -> bool {
+        lock(&self.inner.state).listening.is_some()
+    }
+
+    /// Consent changes revoke Friends grants and pending work without closing the shared Bridge.
+    pub fn set_friends_enabled(&self, enabled: bool) {
+        self.inner.set_friends_enabled(enabled);
+    }
+
     /// Legt den Datensatz des Starts an und liefert die Umgebungsvariablen für das Spiel (`ENV_PORT`, `ENV_TOKEN`,
     /// `ENV_PROTOCOL`). Ohne laufende Brücke oder ohne Microsoft-Konto liefert es nichts und legt nichts an. Ein
     /// früherer Datensatz derselben Instanz verfällt.
-    pub fn register_launch(&self, instance_id: &str, expectations: Expectations) -> Vec<(String, String)> {
+    pub fn register_launch(&self, instance_id: &str, mut expectations: Expectations) -> Vec<(String, String)> {
         if !expectations.online_account {
             return Vec::new();
         }
         let mut state = lock(&self.inner.state);
         let Some(port) = state.listening.as_ref().map(|listening| listening.port) else { return Vec::new() };
+        expectations.friends_enabled &= state.friends_enabled.unwrap_or(true);
+        expectations.pre_granted &= expectations.friends_enabled;
         let token = new_token();
         let previous = state.launches.insert(instance_id.to_owned(), Launch::new(token.clone(), expectations));
         if let Some(previous) = previous {
@@ -173,13 +185,25 @@ impl ModBridge {
     /// Setzt den Wert eines Themas für das Spiel der Instanz. Ändert er sich, geht er (höchstens alle 250 ms je Thema)
     /// an die Mod; eine Mod, die sich später verbindet, bekommt den letzten Wert zuerst.
     pub fn set_topic(&self, instance_id: &str, value: TopicValue) {
-        self.inner.set_topic(instance_id, value);
+        self.inner.set_topic(instance_id, value, None);
+    }
+
+    pub(crate) fn friends_publication(&self) -> FriendsPublication<'_> {
+        FriendsPublication { bridge: self, generation: lock(&self.inner.state).friends_generation }
     }
 
     /// Ein Hinweis (Toast) an die Mod der Instanz; ohne Verbindung geht er verloren.
     pub fn notify(&self, instance_id: &str, kind: ModNotify, name: Option<String>) {
+        self.notify_current(instance_id, kind, name, None);
+    }
+
+    fn notify_current(&self, instance_id: &str, kind: ModNotify, name: Option<String>, generation: Option<u64>) {
         let state = lock(&self.inner.state);
-        let Some(link) = state.launches.get(instance_id).and_then(|launch| launch.link.as_ref()) else { return };
+        if generation.is_some_and(|generation| generation != state.friends_generation) {
+            return;
+        }
+        let Some(launch) = state.launches.get(instance_id).filter(|launch| launch.expectations.friends_enabled) else { return };
+        let Some(link) = &launch.link else { return };
         link.queue.push_event(protocol::Event::Notify { kind, name });
     }
 
@@ -193,6 +217,25 @@ impl ModBridge {
     /// Setzt den Bearbeiter der Vorgänge ein; bis dahin antwortet die Brücke jedem mit `unsupportedOp`.
     pub fn set_handler(&self, handler: Arc<dyn OpHandler>) {
         *lock(&self.inner.handler) = handler;
+    }
+}
+
+pub(crate) struct FriendsPublication<'a> {
+    bridge: &'a ModBridge,
+    generation: u64,
+}
+
+impl FriendsPublication<'_> {
+    pub fn is_current(&self) -> bool {
+        lock(&self.bridge.inner.state).friends_generation == self.generation
+    }
+
+    pub fn set_topic(&self, instance_id: &str, value: TopicValue) {
+        self.bridge.inner.set_topic(instance_id, value, Some(self.generation));
+    }
+
+    pub fn notify(&self, instance_id: &str, kind: ModNotify, name: Option<String>) {
+        self.bridge.notify_current(instance_id, kind, name, Some(self.generation));
     }
 }
 

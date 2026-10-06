@@ -38,7 +38,7 @@ export function useFriendDialogs(): { actions: FriendActions; dialogs: ReactNode
           key={renaming.id}
           title={t("friends.rename.title")}
           label={t("friends.rename.label")}
-          help={t("friends.rename.help", { name: renaming.displayName })}
+          help={t("friends.rename.help", { name: renaming.mcName ?? renaming.displayName })}
           initial={renaming.alias ?? ""}
           maxLength={FRIENDS_LIMITS.aliasMax}
           allowBlank
@@ -90,7 +90,7 @@ function FingerprintDialog({ friend, label, onClose }: { friend: Friend; label: 
       footer={<DialogActions confirm={{ label: t("common.done"), width: 124, autoFocus: true, onClick: onClose }} />}
     >
       <div className="flex items-center gap-3">
-        <FriendAvatar friendId={friend.id} name={friend.displayName} />
+        <FriendAvatar friendId={friend.id} name={friend.mcName ?? friend.displayName} />
         <div className="min-w-0">
           <b className="vx-trunc block">{label}</b>
           {friend.mcName && <span className="vx-trunc block text-fg-3">{t("friends.fingerprint.mcName", { name: friend.mcName })}</span>}

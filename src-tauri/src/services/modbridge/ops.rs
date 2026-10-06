@@ -1,4 +1,4 @@
-//! Die Vorgänge der Mod (docs/friends/INGAME.md, 5.4): Name, Argumente, Ergebnis, Fehlercode, nötiger Geltungsbereich
+//! Die Vorgänge der Mod (docs/bridge/README.md, "Operations and consent"): Name, Argumente, Ergebnis, Fehlercode, nötiger Geltungsbereich
 //! und Zählklasse der Ratenbegrenzung (5.6). Die Freunde-IDs in den Argumenten sind auf dem Draht Aliasse der
 //! Verbindung; erst [`Op::resolve_friends`] macht echte Peer-IDs daraus.
 use std::time::Duration;
@@ -6,7 +6,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-/// Wofür der Nutzer im Launcher einmal je Spielstart gefragt wird (INGAME 5.5).
+/// Wofür der Nutzer im Launcher einmal je Spielstart gefragt wird (docs/bridge/README.md, "Operations and consent").
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Scope {
@@ -205,7 +205,7 @@ impl Op {
     }
 }
 
-/// Wie ein Vorgang gezählt wird (INGAME 5.6). Jede Klasse hat ihre Fenster je Spielstart.
+/// Wie ein Vorgang gezählt wird (docs/bridge/README.md, "Protocol 2"). Jede Klasse hat ihre Fenster je Spielstart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RateClass {
     /// 5 je Minute und 20 je Stunde.
@@ -297,7 +297,7 @@ pub struct PlanAlternative {
     pub matches: bool,
 }
 
-/// Wohin das laufende Spiel für `invite.joinHere` verbindet: eine Loopback-Adresse (INGAME 7).
+/// Wohin das laufende Spiel für `invite.joinHere` verbindet: eine Loopback-Adresse (docs/bridge/README.md, "In-game navigation and world behavior").
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JoinHere {
@@ -313,7 +313,7 @@ pub struct CodeCreated {
     pub code: String,
 }
 
-/// Fehlercodes der Antworten (INGAME 5.3, 5.4); die Mod übersetzt sie in Texte.
+/// Fehlercodes der Antworten (docs/bridge/README.md, "Protocol 2"); die Mod übersetzt sie in Texte.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ErrorCode {

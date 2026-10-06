@@ -8,7 +8,6 @@ export const errorsFriends = {
   "errors.friends.msAccountRequired": "Dafür brauchst du ein Microsoft-Konto",
   "errors.friends.relayConsentRequired": "Bitte stimme der Nutzung der genannten Relay-Server zu",
   "errors.friends.networkUnavailable": "Keine Verbindung zum Relay-Server; Freunde sind gerade nicht erreichbar",
-  "errors.friends.displayNameInvalid": "Anzeigename: {min} bis {max} Zeichen",
 
   "errors.friends.codeInvalid": "Dieser Freundescode ist ungültig",
   "errors.friends.codeUsed": "Dieser Freundescode wurde schon von jemand anderem benutzt",

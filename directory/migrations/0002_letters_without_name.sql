@@ -1,3 +1,3 @@
--- The directory stores no player names (docs/friends/BYNAME-ATTEST.md, section 4.2): the recipient's launcher looks
--- the sender's name up at Mojang by the stamped UUID. Apply before deploying the Worker that no longer writes it.
+-- Drop the legacy sender-name column, not displayName inside signed letter bodies (docs/friends/SPEC.md#directory-api).
+-- Apply before deploying the Worker that no longer writes from_name.
 ALTER TABLE letters DROP COLUMN from_name;

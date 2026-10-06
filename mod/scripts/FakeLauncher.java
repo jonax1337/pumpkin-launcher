@@ -21,7 +21,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Plays the launcher side of the mod channel, protocol 2 (docs/friends/INGAME.md, 5.3), so the mod can be tried without the
+ * Plays the launcher side of the mod channel, protocol 2 (docs/bridge/README.md, "Protocol 2"), so the mod can be tried without the
  * launcher: {@code java scripts/FakeLauncher.java}, then set the printed environment variables and start the game.
  * It keeps the limits of the real bridge (hello within 2 s and 1 KiB, 16 KiB lines, 20 messages per second, 8 requests in
  * flight, ping every 10 s, 30 s of silence closes), pushes the topics, and answers the operations a player can try from the
@@ -37,7 +37,7 @@ public final class FakeLauncher {
 	private static final int SILENCE_SECONDS = 30;
 	private static final int HELLO_SECONDS = 2;
 	private static final int MAX_GUESTS = 7;
-	private static final String COMMANDS = "allow, deny, invite, request, online, offline, directory <state>, "
+	private static final String COMMANDS = "allow, deny, invite, request, online, offline, friends on|off, directory <state>, "
 		+ "notice renamed|identityChanged|none, error <code>, closing [reason], quit";
 
 	private static final Pattern STRING_MEMBER = Pattern.compile("\"(%s)\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
@@ -59,6 +59,7 @@ public final class FakeLauncher {
 	private int lanPort;
 	private String nextError;
 	private String directory = "active";
+	private boolean friendsEnabled = true;
 	private volatile Link link;
 
 	private FakeLauncher() {
@@ -211,6 +212,10 @@ public final class FakeLauncher {
 	}
 
 	private void request(String id, String op, String line) throws IOException {
+		if (!friendsEnabled && !op.equals("state.sync") && !op.equals("launcher.open")) {
+			fail(id, "notEnabled");
+			return;
+		}
 		if (inFlight >= MAX_IN_FLIGHT) {
 			fail(id, "busy");
 			return;
@@ -373,6 +378,7 @@ public final class FakeLauncher {
 				push("requests");
 			}
 			case "online", "offline" -> setPresence("f3", words[0]);
+			case "friends" -> setFriendsEnabled(words.length < 2 || !words[1].equals("off"));
 			case "directory" -> setDirectory(words.length > 1 ? words[1] : "active");
 			case "notice" -> setNotice(words.length > 1 ? words[1] : "none");
 			case "error" -> {
@@ -384,6 +390,16 @@ public final class FakeLauncher {
 			case "quit" -> System.exit(0);
 			default -> System.out.println("   Commands: " + COMMANDS);
 		}
+	}
+
+	private void setFriendsEnabled(boolean enabled) throws IOException {
+		friendsEnabled = enabled;
+		if (!enabled) {
+			pendingByScope.clear();
+			grantedScopes.clear();
+			inFlight = 0;
+		}
+		pushAllTopics();
 	}
 
 	private void answerPending(boolean allow) throws IOException {
@@ -459,14 +475,25 @@ public final class FakeLauncher {
 	}
 
 	private String valueOf(String topic) {
+		if (!friendsEnabled) {
+			return switch (topic) {
+				case "me" -> "{\"enabled\":false,\"availability\":\"available\",\"network\":\"off\",\"fingerprint\":null,"
+					+ "\"directory\":\"off\",\"displayName\":\"\",\"findableByName\":false,\"relayHost\":null}";
+				case "requests" -> "{\"incoming\":[],\"outgoing\":[],\"retryCooldownMs\":0}";
+				case "game" -> "{\"hostable\":false,\"reason\":\"notEnabled\",\"sharedElsewhere\":false,\"lan\":null}";
+				case "session", "join" -> "null";
+				default -> "[]";
+			};
+		}
 		return switch (topic) {
 			case "me" -> "{\"enabled\":true,\"availability\":\"available\",\"network\":\"online\",\"fingerprint\":\"ab12 cd34\","
-				+ "\"directory\":\"" + directory + "\"}";
+				+ "\"directory\":\"" + directory + "\",\"displayName\":\"Alex\",\"findableByName\":false,\"relayHost\":null}";
 			case "friends" -> friendsJson();
 			case "requests" -> requestsJson();
 			case "invites" -> invitesJson();
 			case "session" -> guests.isEmpty() ? "null" : "{\"guests\":[" + guestsJson() + "]}";
-			case "game" -> "{\"hostable\":true,\"reason\":null,\"lan\":" + (lanPort == 0 ? "null" : "{\"port\":" + lanPort + "}") + "}";
+			case "game" -> "{\"hostable\":true,\"reason\":null,\"sharedElsewhere\":false,\"lan\":"
+				+ (lanPort == 0 ? "null" : "{\"port\":" + lanPort + "}") + "}";
 			default -> topic.equals("join") ? "null" : "[]";
 		};
 	}
@@ -508,7 +535,7 @@ public final class FakeLauncher {
 			entries.add("{\"id\":\"r" + index + "\",\"name\":" + json(incomingRequests.get(index)) + ",\"mcName\":"
 				+ json(incomingRequests.get(index)) + ",\"fingerprint\":\"ab12 cd34\"}");
 		}
-		return "{\"incoming\":[" + String.join(",", entries) + "],\"outgoing\":[]}";
+		return "{\"incoming\":[" + String.join(",", entries) + "],\"outgoing\":[],\"retryCooldownMs\":0}";
 	}
 
 	private void notifyMod(String kind, String name) throws IOException {

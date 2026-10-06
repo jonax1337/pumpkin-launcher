@@ -1,0 +1,101 @@
+plugins {
+	id 'net.minecraftforge.gradle' version '7.0.40'
+	id 'net.minecraftforge.renamer' version '1.0.14'
+}
+
+// Forge through 1.20.4 ships SRG names; 1.20.6+ ships Mojang names.
+def needsSrg = sc.current.version in ['1.20.2', '1.20.3', '1.20.4']
+def mixinJava = sc.current.version.startsWith('1.20.') ? 17 : 21
+ext.mixin_compatibility = "JAVA_${mixinJava}"
+ext.mixin_refmap = needsSrg ? '"pumpkin_bridge-refmap.json"' : 'null'
+apply from: rootProject.file('gradle/node.gradle')
+
+sourceSets.main.java.exclude('dev/laux/pumpkin/bridge/platform/fabric/**',
+	'dev/laux/pumpkin/bridge/platform/neoforge/**', 'dev/laux/pumpkin/bridge/platform/neoforgelegacy/**')
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(node.javaMin)
+
+// Upstream Mixin's bytecode ceiling can be lower than the game's required JDK.
+if (mixinJava < node.javaMin) {
+	def mixinSources = 'dev/laux/pumpkin/bridge/platform/shared/mixin/**'
+	sourceSets.main.java.exclude(mixinSources)
+	def mainCompile = tasks.named('compileJava', JavaCompile)
+	def compileMixins = tasks.register('compileMixins', JavaCompile) {
+		// mainCompile also owns the Stonecutter-generated sources and compiles the hook helpers.
+		dependsOn mainCompile
+		source {
+			sourceSets.main.java.srcDirs.collect { directory ->
+				fileTree(directory) { include mixinSources }
+			}
+		}
+		classpath = sourceSets.main.compileClasspath + files(mainCompile.flatMap { it.destinationDirectory })
+		javaCompiler = mainCompile.flatMap { it.javaCompiler }
+		options.release = mixinJava
+		options.annotationProcessorPath = sourceSets.main.annotationProcessorPath
+		destinationDirectory = layout.buildDirectory.dir('classes/java/mixins')
+	}
+	sourceSets.main.output.dir([builtBy: compileMixins], compileMixins.flatMap { it.destinationDirectory })
+}
+
+minecraft {
+	if (!sc.current.version.startsWith('26.')) {
+		mappings channel: 'official', version: sc.current.version
+	}
+	runs {
+		configureEach {
+			workingDir = layout.projectDirectory.dir('run')
+			if (!needsSrg) {
+				args '--mixin.config=pumpkin_bridge.mixins.json'
+			}
+			if (project.hasProperty('kitdemo')) {
+				systemProperty 'pumpkin.dev.kitdemo', 'true'
+			}
+			if (project.hasProperty('demoHold')) {
+				systemProperty 'pumpkin.dev.demoHold', 'true'
+			}
+		}
+		register('client')
+	}
+}
+
+repositories {
+	minecraft.mavenizer(it)
+	maven fg.forgeMaven
+	maven fg.minecraftLibsMaven
+	maven { url = 'https://maven.neoforged.net/releases' }
+}
+
+dependencies {
+	implementation minecraft.dependency("net.minecraftforge:forge:${pinned('forge_version')}")
+	if (needsSrg) {
+		annotationProcessor 'org.spongepowered:mixin:0.8.7:processor'
+	}
+}
+
+tasks.named('jar') {
+	manifest.attributes('MixinConfigs': 'pumpkin_bridge.mixins.json')
+}
+
+if (needsSrg) {
+	tasks.named('jar') {
+		archiveClassifier = 'dev'
+	}
+	renamer.mappings(minecraft.dependency.toSrg)
+	renamer.enableMixinRefmaps {
+		config 'pumpkin_bridge.mixins.json'
+		source(sourceSets.main) {
+			refMap = 'pumpkin_bridge-refmap.json'
+		}
+		jar(tasks.named('jar'))
+	}
+	minecraft.runs.configureEach {
+		renamer.mixin.run(it)
+	}
+	def productionJar = renamer.classes(tasks.named('jar')) {
+		output.set(layout.buildDirectory.file("libs/pumpkin_bridge-${project.version}.jar"))
+		mappings renamer.mixin.generatedMappings
+	}
+	registerModIndexEntry(productionJar.flatMap { it.output })
+} else {
+	registerModIndexEntry(tasks.named('jar').flatMap { it.archiveFile })
+}

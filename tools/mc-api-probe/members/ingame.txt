@@ -1,4 +1,4 @@
-# Members the compat layer of the Pumpkin Friends mod needs (docs/friends/INGAME.md 4.1, 4.4, 5, 6, 7).
+# Members the compat layer of the Pumpkin Friends mod needs (docs/bridge/README.md).
 #
 # Format, one entry per line:
 #   Class#member [@used]

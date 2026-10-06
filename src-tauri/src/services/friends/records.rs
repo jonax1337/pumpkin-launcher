@@ -176,12 +176,19 @@ mod tests {
             last_seen: None,
             confirmed: false,
             removed_by_peer: false,
-            notice: Some(FriendNotice::Renamed { previous_name: "Alexander".into() }),
+            notice: Some(FriendNotice::Renamed {
+                previous_name: "Alexander".into(),
+            }),
         }
     }
 
     fn blocked(id: &str) -> BlockedRecord {
-        BlockedRecord { id: id.into(), display_name: "Eli".into(), blocked_at: 1_789_913_600, mc_uuid: None }
+        BlockedRecord {
+            id: id.into(),
+            display_name: "Eli".into(),
+            blocked_at: 1_789_913_600,
+            mc_uuid: None,
+        }
     }
 
     #[test]
@@ -198,18 +205,30 @@ mod tests {
     #[test]
     fn friend_file_uses_camel_case_keys() {
         let dir = TempDir::new();
-        RecordStores::open(dir.path()).unwrap().friends.insert(friend("a")).unwrap();
-        let written: Vec<Value> = serde_json::from_slice(&std::fs::read(dir.path().join("friends.json")).unwrap()).unwrap();
+        RecordStores::open(dir.path())
+            .unwrap()
+            .friends
+            .insert(friend("a"))
+            .unwrap();
+        let written: Vec<Value> =
+            serde_json::from_slice(&std::fs::read(dir.path().join("friends.json")).unwrap())
+                .unwrap();
         assert_eq!(written[0]["displayName"], "Alex");
         assert_eq!(written[0]["homeRelay"], 0);
-        assert_eq!(written[0]["notice"], json!({ "type": "renamed", "previousName": "Alexander" }));
+        assert_eq!(
+            written[0]["notice"],
+            json!({ "type": "renamed", "previousName": "Alexander" })
+        );
     }
 
     #[test]
     fn optional_fields_may_be_missing_in_the_file() {
         let minimal = json!({ "id": "a", "displayName": "Alex", "addedAt": 1, "confirmed": true, "removedByPeer": false });
         let record: FriendRecord = serde_json::from_value(minimal).unwrap();
-        assert_eq!((record.alias, record.home_relay, record.notice), (None, None, None));
+        assert_eq!(
+            (record.alias, record.home_relay, record.notice),
+            (None, None, None)
+        );
     }
 
     #[test]
@@ -222,7 +241,8 @@ mod tests {
             error_key(&stores.codes.get("x").unwrap_err()),
             error_key(&stores.blocked.get("x").unwrap_err()),
         ];
-        let expected = ["friend", "request", "code", "blocked"].map(|kind| format!("errors.friends.notFound.{kind}"));
+        let expected = ["friend", "request", "code", "blocked"]
+            .map(|kind| format!("errors.friends.notFound.{kind}"));
         assert_eq!(keys, expected);
         assert!(matches!(stores.outbox.get("x"), Err(AppError::NotFound(_))));
     }
@@ -232,13 +252,19 @@ mod tests {
         let dir = TempDir::new();
         let future = json!({ "id": "z", "zukunft": true });
         let known = serde_json::to_value(friend("a")).unwrap();
-        std::fs::write(dir.path().join("friends.json"), serde_json::to_vec(&[known, future.clone()]).unwrap()).unwrap();
+        std::fs::write(
+            dir.path().join("friends.json"),
+            serde_json::to_vec(&[known, future.clone()]).unwrap(),
+        )
+        .unwrap();
 
         let stores = RecordStores::open(dir.path()).unwrap();
         assert_eq!(stores.friends.list().len(), 1);
         stores.friends.modify("a", |f| f.confirmed = true).unwrap();
 
-        let saved: Vec<Value> = serde_json::from_slice(&std::fs::read(dir.path().join("friends.json")).unwrap()).unwrap();
+        let saved: Vec<Value> =
+            serde_json::from_slice(&std::fs::read(dir.path().join("friends.json")).unwrap())
+                .unwrap();
         assert_eq!(saved[1], future);
         assert_eq!(saved[0]["confirmed"], true);
     }
@@ -272,10 +298,22 @@ mod tests {
             mail_id: Some("m".into()),
         };
         let value = serde_json::to_value(&request).unwrap();
-        assert_eq!((&value["direction"], &value["state"]), (&json!("outgoing"), &json!("awaitingAnswer")));
-        assert_eq!((&value["via"], &value["mailId"]), (&json!("name"), &json!("m")));
-        assert_eq!(serde_json::to_value(OutboxKind::Rotated).unwrap(), json!("rotated"));
-        assert_eq!(serde_json::to_value(OutboxKind::Unfriend).unwrap(), json!("unfriend"));
+        assert_eq!(
+            (&value["direction"], &value["state"]),
+            (&json!("outgoing"), &json!("awaitingAnswer"))
+        );
+        assert_eq!(
+            (&value["via"], &value["mailId"]),
+            (&json!("name"), &json!("m"))
+        );
+        assert_eq!(
+            serde_json::to_value(OutboxKind::Rotated).unwrap(),
+            json!("rotated")
+        );
+        assert_eq!(
+            serde_json::to_value(OutboxKind::Unfriend).unwrap(),
+            json!("unfriend")
+        );
     }
 
     #[test]
@@ -288,10 +326,20 @@ mod tests {
 
         let code = json!({ "id": "c", "salt": "00", "secretSha256": "00", "relayIndex": 0, "tail": "abcd",
             "createdAt": 1, "expiresAt": 2, "usedBy": null });
-        assert_eq!(serde_json::from_value::<CodeRecord>(code).unwrap().name_request_to, None);
+        assert_eq!(
+            serde_json::from_value::<CodeRecord>(code)
+                .unwrap()
+                .name_request_to,
+            None
+        );
 
         let blocked = json!({ "id": "b", "displayName": "Eli", "blockedAt": 1 });
-        assert_eq!(serde_json::from_value::<BlockedRecord>(blocked).unwrap().mc_uuid, None);
+        assert_eq!(
+            serde_json::from_value::<BlockedRecord>(blocked)
+                .unwrap()
+                .mc_uuid,
+            None
+        );
     }
 
     #[test]
@@ -308,7 +356,18 @@ mod tests {
             used_by: None,
             name_request_to: Some("069a79f444e94726a5befca90e38aaf5".into()),
         };
-        RecordStores::open(dir.path()).unwrap().codes.insert(code.clone()).unwrap();
-        assert_eq!(RecordStores::open(dir.path()).unwrap().codes.get("c").unwrap(), code);
+        RecordStores::open(dir.path())
+            .unwrap()
+            .codes
+            .insert(code.clone())
+            .unwrap();
+        assert_eq!(
+            RecordStores::open(dir.path())
+                .unwrap()
+                .codes
+                .get("c")
+                .unwrap(),
+            code
+        );
     }
 }

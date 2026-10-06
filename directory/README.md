@@ -1,92 +1,61 @@
-# Friends directory (Cloudflare Worker)
+# Friends directory
 
-Makes "add a friend by name" possible. The Worker checks which Minecraft account a launcher holds, keeps the list of
-those who want to be findable by name (only their Minecraft UUID), and holds friend requests for up to 14 days, even
-while the other person is offline. A letter carries the sender's single-use friend code; the friendship itself is then
-made in the launcher through the normal P2P flow, in which both sides prove their Minecraft account to each other at
-Mojang. The Worker can therefore lose or deliver letters, but never pose as someone else. Design and reasoning:
-[`docs/friends/BYNAME.md`](../docs/friends/BYNAME.md) and, for the login,
-[`docs/friends/BYNAME-ATTEST.md`](../docs/friends/BYNAME-ATTEST.md).
+Cloudflare Worker for optional friend lookup by Minecraft name. It verifies Mojang-signed player certificates offline, stores findable UUIDs and holds signed friend-code letters for up to 14 days. Friendship itself is established by the launcher's authenticated peer-to-peer flow; the directory cannot impersonate a peer.
 
-**The Worker makes no subrequests.** Mojang answers every request from Cloudflare Workers with 403, so the Worker
-checks accounts offline: the launcher fetches its Mojang-signed player certificate itself, and the Worker verifies
-Mojang's signature with keys pinned in its source (`src/mojang-keys.js`).
+The Worker makes no subrequests. The launcher fetches its player certificate from Mojang and sends only its public part. Pinned keys in `src/mojang-keys.js` verify Mojang's signature. This service is separate from the [CurseForge proxy](../proxy/README.md); friend codes, presence, invitations and tunnels do not require the directory.
 
-The Worker is separate from [`proxy/`](../proxy) (own name, own secrets, never mixed with the CurseForge key). Without
-it, friend codes, presence, invites and tunnels keep working unchanged.
+The full wire contract is in [SPEC.md](../docs/friends/SPEC.md#directory-api).
 
-## What is stored
+## Stored data and limits
 
-| Data | Table | Kept |
+| Table | Contents | Retention |
 |---|---|---|
-| UUID of a findable person, first login, last refresh | `users` | until switched off, until signing out of Friends, or 30 days without refresh |
-| Letters: sender (UUID, peer id), recipient, code parts, display name, signature | `letters` | until answered, retracted, blocked or 14 days |
-| Blocks: owner → blocked UUID | `blocks` | until unblocked or signed out |
-| Send log: from, to, time | `sends` | 7 days |
+| `users` | Findable UUID, first login and last refresh | Until removal or 30 days without refresh |
+| `letters` | Sender UUID/peer id, recipient, code parts, signed `displayName` and signature | Until removal or 14 days |
+| `blocks` | Owner-to-blocked UUID relationship | Until unblocked or owner registration removed (including findability/Friends opt-out) |
+| `sends` | Sender, recipient and send time | 7 days |
 
-**Not stored:** player names (the directory handles none: senders' names are looked up by the recipient's launcher at
-Mojang, name → UUID by the sender's launcher), player certificates and their signatures (checked, then dropped), IP
-addresses, presence, friend lists, the outcome of a request (accepting and declining look the same to the Worker),
-tokens and challenges (both are stateless). Cloudflare logging is off (`[observability] enabled = false`), and the
-Worker writes nothing to logs.
+The Worker retains the signed sender `displayName` inside pending letter bodies; it is not a verified Minecraft name. It does not retain certificates, IP addresses, presence, friend lists, tokens, challenges or acceptance outcomes. Logging is disabled. D1 Time Travel can retain deleted rows for 7 days on Free or 30 days on Paid; account for this in the service privacy policy.
 
-Deleted rows stay recoverable through D1 Time Travel for 7 days (Free) or 30 days (Paid); this cannot be switched off
-and belongs in the privacy policy.
+Findability/Friends opt-out **queues** removal of the registration, inbox and owned blocks;
+visible remote deletion requires successful processing by the service. Ordinary account
+sign-out is not an immediate-erasure guarantee. If an account is removed before queued
+cleanup succeeds, data can remain until inactive retention expires. See
+[Retention and deletion](../docs/friends/PRIVACY.md#retention-and-deletion) for outgoing-letter,
+send-history and backup limits.
+
+Quotas are 10 letters per sender per day, one letter per pair in seven days and 20 pending letters per inbox. Coarse Cloudflare limits are 60 requests/minute per IP and 30 per account. Blocks suppress delivery while preserving the normal 202 response. Daily cleanup runs at 03:17 UTC.
 
 ## Routes
 
-JSON only, bodies at most 2 KiB (4 KiB for `/v2/auth/session`, which carries a certificate). Every request with an
-`Origin` header (that is, from a web page) gets 403, unknown methods or paths get 404. Errors are always
-`{"error":"<code>"}`. Protected routes need `Authorization: Bearer <token>` (otherwise 401).
+JSON bodies are limited to 2 KiB, or 4 KiB for certificate login. An `Origin` header returns 403; unknown routes/methods return 404. Protected routes require a bearer token. Errors use `{"error":"<code>"}`.
 
-| Route | Login | Answer | Errors |
-|---|---|---|---|
-| `POST /v2/auth/challenge` `{peerId}` | no | 200 `{challenge, serverId, expiresAt}` | 400 `invalid` |
-| `POST /v2/auth/session` `{challenge, uuid, certificate: {publicKey, expiresAt, mojangSignature}, certSignature, signature}` | no | 200 `{token, expiresAt, uuid}` | 400 `invalid` / `challengeExpired`, 401 `badSignature` / `badCertificate` / `certificateExpired`, 413 `tooLarge` |
-| `POST /v1/auth/challenge`, `POST /v1/auth/session` | – | 410 `gone`: the 2.0.0 login, retired | |
-| `PUT /v1/me` `{}` | yes | 200 `{findable, refreshedAt}`: become findable or refresh | |
-| `DELETE /v1/me` | yes | 204: deletes the entry, the inbox and the blocks | |
-| `POST /v1/outbox` (letter) | yes | 202 `{id, expiresAt}` | 400 `invalid` / `self` / `badSignature` / `clock`, 404 `notFindable`, 409 `recipientFull`, 429 `sendQuota` / `pairCooldown` / `rateLimited` |
-| `DELETE /v1/outbox/{id}` | yes | 204 always: retracts an own letter | |
-| `GET /v1/inbox` | yes | 200 `{letters}`: at most 20, oldest first; `from` is `{uuid, peerId}` | 404 `notRegistered` |
-| `DELETE /v1/inbox/{id}` | yes | 204 always: deletes a letter to me | |
-| `PUT /v1/blocks/{uuid}` | yes | 204: blocks and deletes waiting letters from that UUID | 404 `notRegistered`, 409 `blockListFull` (1,000) |
-| `DELETE /v1/blocks/{uuid}` | yes | 204 always | |
+| Route | Purpose |
+|---|---|
+| `POST /v2/auth/challenge` | Issue a stateless account-proof challenge |
+| `POST /v2/auth/session` | Verify peer/certificate signatures and issue a token |
+| `POST /v1/auth/challenge`, `POST /v1/auth/session` | Retired login; 410 `gone` |
+| `PUT /v1/me` | Register or refresh findability |
+| `DELETE /v1/me` | Remove registration, inbox and blocks |
+| `POST /v1/outbox` | Submit a signed friend-code letter |
+| `DELETE /v1/outbox/{id}` | Retract an own letter |
+| `GET /v1/inbox` | List up to 20 pending letters, oldest first |
+| `DELETE /v1/inbox/{id}` | Remove a received letter |
+| `PUT /v1/blocks/{uuid}` | Block an account and delete its waiting letters |
+| `DELETE /v1/blocks/{uuid}` | Unblock an account |
 
-All routes except the retired ones: 429 `rateLimited` with `Retry-After: 60`, and 503 `notConfigured` when `DB`,
-`LIMITER_IP`, `LIMITER_ACCOUNT` or `TOKEN_KEY` is missing (the Worker would rather not answer than work unprotected).
-A body above the limit is refused as soon as its `Content-Length` or the bytes read so far exceed it.
+All active routes need `DB`, `LIMITER_IP`, `LIMITER_ACCOUNT` and `TOKEN_KEY`; missing configuration returns 503 `notConfigured`. Throttling returns 429 with `Retry-After: 60`. Tokens last at most six hours and never outlive the player certificate. Login signatures are bound to the directory hostname, so changing the client-facing hostname changes the signature audience.
 
-**Login in short** (BYNAME-ATTEST sections 1-3): the Worker hands out a stateless challenge and a `serverId`. The
-launcher fetches its player certificate from Mojang (`api.minecraftservices.com/player/certificates`, from the
-player's own IP) and sends its public part with two signatures over the same 128 bytes,
-`domain ‖ SHA-256(host)[0..16] ‖ serverId ‖ peerId ‖ uuid`: one with its friends key (Ed25519, domain
-`pumpkin/directory-auth/2`) and one with the certificate's private key (RSA PKCS#1 v1.5 / SHA-256, domain
-`pumpkin/directory-cert/1`). `host` is the directory's hostname as the launcher addresses it, so signatures made for
-another directory are useless here. The Worker checks, cheapest first: the body's shape (including an RSA
-SubjectPublicKeyInfo of 2048-4096 bits and a safe-integer expiry), the challenge, the Ed25519 signature, the
-certificate's expiry, Mojang's SHA1withRSA signature over `uuid ‖ expiresAt ‖ SPKI` with a pinned key, and the
-certificate-key signature. The token (6 hours at most, never past the certificate's expiry, only in the launcher's
-memory) carries UUID and peer id and is sealed with `TOKEN_KEY` by HMAC.
+## Deployment
 
-Limits: at most 10 letters per sender in 24 hours, 1 letter per sender and recipient in 7 days, 20 waiting letters
-per inbox. The database counts these exactly; the `[[ratelimits]]` (60 requests per minute and IP, 30 per account)
-are only a coarse brake per Cloudflare location. A letter to someone who blocked the sender is answered like a
-delivery (202), but nothing is stored.
-
-A cron run cleans up daily at 03:17 UTC: expired letters, send log entries older than 7 days, and entries without a
-refresh for 30 days together with their inbox and blocks.
-
-## Setup (once; needs a Cloudflare account and Wrangler 4.36 or later)
+Requires a Cloudflare account and Wrangler 4.36 or later. For a new installation, from this directory:
 
 ```sh
-cd directory
 npx wrangler login
 npx wrangler d1 create pumpkin-friends-directory --jurisdiction eu
 ```
 
-The printed `database_id` replaces the placeholder in `wrangler.toml`. The region (`eu`) can only be set at creation.
-Then:
+Set the returned database id in `wrangler.toml`; jurisdiction is selected at creation. Apply migrations before deploying code that relies on them:
 
 ```sh
 npx wrangler d1 migrations apply pumpkin-friends-directory --remote
@@ -94,66 +63,37 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))" | np
 npx wrangler deploy
 ```
 
-The secret is never shown or stored. `wrangler deploy` prints the Worker's address (first
-`pumpkin-friends-directory.<account>.workers.dev`, optionally a custom domain later). That address goes into the
-launcher as `DEFAULT_DIRECTORY` (a one-line pull request); for that and the checks afterwards see
-[`OWNER-CHECKLIST.md`](../docs/friends/OWNER-CHECKLIST.md). The launcher binds its login signatures to this hostname:
-a custom domain works as long as the launcher addresses the Worker by it.
+Migration `0002_letters_without_name.sql` removes the legacy required name column. It must be applied before certificate-login code that omits that column.
 
-Open decisions that must be settled before a release (Mojang approval, privacy policy, contact address for access
-requests):
-[`BYNAME.md`](../docs/friends/BYNAME.md), section 12.
+The source `DEFAULT_DIRECTORY` in `src-tauri/src/services/friends/directory/mod.rs` is
+**empty**. Official tagged builds supply `PUMPKIN_FRIENDS_DIRECTORY` through the
+[release workflow](../.github/workflows/release.yml); [local Friends development](../CONTRIBUTING.md#development-setup)
+uses a wrapper default. Neither setting proves service availability.
 
-**Forks** do not use this directory automatically: the launcher only ships the address in official builds; whoever
-builds it themselves sets up their own Worker and sets `PUMPKIN_FRIENDS_DIRECTORY=<address>` (at run time or build
-time).
+Forks deploy their own service and set `PUMPKIN_FRIENDS_DIRECTORY` to its HTTPS base URL
+before building or launching the desktop app. Runtime wins over the compiled build-time
+value, which wins over the empty source default. An empty or invalid selected value disables
+directory access; it does **not** fall back to the compiled/official address or cause a Worker
+error response. The launcher then has no configured by-name directory; friend codes remain independent.
 
-Rotating the key (for example after a leak): `npx wrangler secret put TOKEN_KEY` with a new value. All tokens and
-challenges become invalid at once; launchers simply log in again. After a break-in, also redeploy and empty the
-database.
+For example, from the repository root in PowerShell, substitute your deployed hostname:
 
-## Updating the deployed Worker to the certificate login (migration 0002)
+```powershell
+$env:PUMPKIN_FRIENDS_DIRECTORY = 'https://your-directory.example'
+pnpm tauri dev
+```
 
-The certificate login no longer writes `letters.from_name`, which is `NOT NULL` until migration
-`0002_letters_without_name.sql` drops it. The order is therefore fixed, in `directory/`:
+The same environment assignment before `pnpm tauri build` embeds the address; setting it
+in the installed launcher's process environment overrides that embedded value. A custom
+domain works when the launcher uses that same hostname. Service deployment does not resolve
+Mojang approval or privacy obligations; see [PRIVACY.md](../docs/friends/PRIVACY.md).
 
-1. **Check that D1 holds no rows from 2.0.0** (mandatory; no 2.0.0 login ever succeeded, so `0, 0` is expected):
-   `npx wrangler d1 execute pumpkin-friends-directory --remote --command "SELECT (SELECT COUNT(*) FROM users),(SELECT COUNT(*) FROM letters)"`.
-   Stop and investigate if it is not `0, 0`.
-2. `npx wrangler d1 migrations apply pumpkin-friends-directory --remote` (applies 0002).
-3. `npx wrangler deploy`, **only after** step 2.
-4. `curl -s -X POST https://pumpkin-friends-directory.jonas-laux.workers.dev/v1/auth/session -H "content-type: application/json" -d "{}"`
-   prints `{"error":"gone"}`.
+Updating `TOKEN_KEY` invalidates all tokens and challenges immediately; clients authenticate again. After compromise, database remediation and redeployment are separate operational decisions.
 
-## Mojang's keys
+## Mojang keys and developer tools
 
-`src/mojang-keys.js` holds Mojang's `playerCertificateKeys` from `GET https://api.minecraftservices.com/publickeys`,
-in Mojang's order; `test/mojang-publickeys.json` is the saved answer they came from. There is no environment override:
-the tests inject their own keys through a test-only module seam.
+- `node scripts/mojang-keys.mjs check`: compare pinned keys with Mojang's current list; exit 0 for a match, 1 for a difference and 2 for unavailable upstream.
+- `node scripts/mojang-keys.mjs update`: refresh `src/mojang-keys.js` and `test/mojang-publickeys.json`. Updated keys take effect after Worker deployment, without a launcher release.
+- `node test.mjs`: offline Node 24 route, quota, cleanup and certificate fixtures using `node:sqlite`; no Cloudflare account or network is needed. `MOJANG_PUBLICKEYS=<file>` supplies another saved key-list answer.
 
-- `node scripts/mojang-keys.mjs check` compares the pinned keys with Mojang's live list: exit 0 with
-  "ok: N keys match", 1 with a diff, 2 when Mojang cannot be reached.
-- `node scripts/mojang-keys.mjs update` rewrites `src/mojang-keys.js` (with the date) and
-  `test/mojang-publickeys.json` from the live answer.
-
-**Key update procedure** (when the check fails): `node scripts/mojang-keys.mjs update`, then `node test.mjs`, a pull
-request, and after the merge `npx wrangler deploy`. No launcher release is needed. Until the deploy, a certificate
-signed with a new key gets `401 badCertificate`, and by-name login fails for everyone; friend codes keep working.
-
-**Early warning:** the workflow `.github/workflows/mojang-keys.yml` runs the check daily at 05:23 UTC (and on
-demand), and a failing run e-mails the owner. GitHub disables scheduled workflows of a public repository after 60
-days without activity; the workflow's `keepalive` job re-enables itself through the API on every run to prevent
-that. **Owner:** confirm now and then under GitHub › Actions › "Mojang keys" that the workflow is enabled and green.
-That Mojang publishes a new key in `/publickeys` before signing with it is an assumption (vanilla refetches the list
-every 24 hours), not a documented promise, so a rotation can still cause an outage until the update is deployed.
-
-## Testing
-
-`node test.mjs` checks all routes, limits, the cron run, the certificate login and the golden vectors of
-[`BYNAME.md`](../docs/friends/BYNAME.md), Appendix A, and [`BYNAME-ATTEST.md`](../docs/friends/BYNAME-ATTEST.md),
-section 2 (Node 24; no Cloudflare account, no network). D1 is emulated with `node:sqlite` (`test/d1.mjs`, all
-migrations in order), player certificates come from fake Mojang keys, and `fetch` records and throws: the run fails
-if the Worker attempts any subrequest. `test/cert-vectors.json` holds the fixed test-only RSA keys and the vectors
-the launcher's tests reproduce byte for byte (host `directory.example`). With
-`MOJANG_PUBLICKEYS=<file> node test.mjs` the pinned keys are compared with another saved `/publickeys` answer. The
-Worker reads the time from `env.NOW` when it is set; only the tests do that.
+`.github/workflows/mojang-keys.yml` monitors upstream keys. A new signing key can cause `401 badCertificate` until the pinned-key update is deployed; friend codes remain independent of directory login. Advance publication of keys is not guaranteed.

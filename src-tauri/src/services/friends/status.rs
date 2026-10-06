@@ -12,8 +12,8 @@ use tokio::time::{Instant, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
 
 use super::contract::{
-    BlockedPeer, DegradedReason, Friend, FriendNotice, FriendPresenceEvent, NetworkStatus, PathKind, Presence,
-    RequestVia,
+    BlockedPeer, DegradedReason, Friend, FriendNotice, FriendPresenceEvent, NetworkStatus,
+    PathKind, Presence, RequestVia,
 };
 use super::control::{self, ControlMessage, WireProfile, PEER_ALPN};
 use super::events::FriendsEvent;
@@ -26,7 +26,9 @@ use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::services::gamesignal::GameSignal;
 use crate::services::lock;
-use crate::services::p2p::{find_relay, CloseCode, CloseReason, NetError, NetState, PeerConn, PeerId, RelayEntry};
+use crate::services::p2p::{
+    find_relay, CloseCode, CloseReason, NetError, NetState, PeerConn, PeerId, RelayEntry,
+};
 
 /// Höchstens so viele Anwahlversuche laufen zugleich; weitere warten.
 const MAX_CONCURRENT_DIALS: usize = 4;
@@ -106,7 +108,14 @@ impl Links {
     pub(super) fn new_link(&self, conn: PeerConn, sender: mpsc::Sender<ControlMessage>) -> Link {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let path = conn.path();
-        Link { id, conn, sender, acked: Arc::new(Notify::new()), presence: Presence::Online, path }
+        Link {
+            id,
+            conn,
+            sender,
+            acked: Arc::new(Notify::new()),
+            presence: Presence::Online,
+            path,
+        }
     }
 
     /// Bei zwei Verbindungen zu demselben Peer bleibt die, die der Peer mit der kleineren ID angewählt hat; zwei in
@@ -127,7 +136,9 @@ impl Links {
         if !lock(&self.replacements).try_hit(peer, Instant::now()) {
             return Registration::TooFrequent;
         }
-        Registration::Kept { replaced: links.insert(peer, link) }
+        Registration::Kept {
+            replaced: links.insert(peer, link),
+        }
     }
 
     /// Zählt einen Request-Stream des Freundes; `false` über der Grenze von SPEC 12.4.
@@ -177,7 +188,9 @@ impl Links {
     fn set_playing(&self, playing: bool) {
         let changed = std::mem::replace(&mut lock(&self.own).playing, playing) != playing;
         if changed {
-            self.broadcast(&ControlMessage::Status { presence: self.own_presence() });
+            self.broadcast(&ControlMessage::Status {
+                presence: self.own_presence(),
+            });
         }
     }
 
@@ -197,7 +210,9 @@ impl Links {
     }
 
     pub(super) fn view(&self, peer: &PeerId) -> (Presence, Option<PathKind>) {
-        lock(&self.links).get(peer).map_or((Presence::Offline, None), |link| (link.presence, link.path))
+        lock(&self.links)
+            .get(peer)
+            .map_or((Presence::Offline, None), |link| (link.presence, link.path))
     }
 
     fn broadcast(&self, message: &ControlMessage) {
@@ -259,7 +274,10 @@ impl FriendPatch {
 
 impl Patches {
     pub(super) fn add(&self, id: &str, patch: FriendPatch) {
-        lock(&self.pending).entry(id.to_owned()).or_default().merge(patch);
+        lock(&self.pending)
+            .entry(id.to_owned())
+            .or_default()
+            .merge(patch);
     }
 
     /// Der Datensatz so, wie er nach dem nächsten Schreiben aussieht.
@@ -310,11 +328,19 @@ pub(super) struct Scheduler {
 
 impl Scheduler {
     pub(super) fn new(stop: CancellationToken) -> Self {
-        Self { attempts: Mutex::default(), slots: Arc::new(Semaphore::new(MAX_CONCURRENT_DIALS)), stop }
+        Self {
+            attempts: Mutex::default(),
+            slots: Arc::new(Semaphore::new(MAX_CONCURRENT_DIALS)),
+            stop,
+        }
     }
 
     /// Läuft bis zum Abbruch. Nur online wird angewählt; jedes Online-Werden macht alle eifrigen Ziele sofort fällig.
-    pub(super) async fn run(self: Arc<Self>, plan: Arc<dyn DialPlan>, mut online: watch::Receiver<bool>) {
+    pub(super) async fn run(
+        self: Arc<Self>,
+        plan: Arc<dyn DialPlan>,
+        mut online: watch::Receiver<bool>,
+    ) {
         let mut next_lazy_round = Instant::now() + FIRST_LAZY_ROUND;
         let mut was_online = false;
         let mut ticks = tokio::time::interval(TICK);
@@ -342,7 +368,12 @@ impl Scheduler {
     }
 
     /// Anfragen sofort und mit frischem Backoff, Freunde, deren letzter Versuch über 2 min her ist (SPEC 4.3, 4.4).
-    pub(super) fn retry_now(self: &Arc<Self>, plan: &Arc<dyn DialPlan>, requests: Vec<Target>, friends: Vec<Target>) {
+    pub(super) fn retry_now(
+        self: &Arc<Self>,
+        plan: &Arc<dyn DialPlan>,
+        requests: Vec<Target>,
+        friends: Vec<Target>,
+    ) {
         let now = Instant::now();
         let chosen = {
             let mut attempts = lock(&self.attempts);
@@ -419,14 +450,21 @@ struct PresencePlan {
 }
 
 pub(super) fn presence_plan(core: &Arc<Core>, runtime: &Arc<Runtime>) -> Arc<dyn DialPlan> {
-    Arc::new(PresencePlan { core: core.clone(), runtime: runtime.clone() })
+    Arc::new(PresencePlan {
+        core: core.clone(),
+        runtime: runtime.clone(),
+    })
 }
 
 impl DialPlan for PresencePlan {
     fn eager(&self) -> Vec<Target> {
         let now = now_secs();
         let mut targets = offline_friends(&self.core, |friend| is_eager(friend, now));
-        targets.extend(requests::delivering(&self.core).into_iter().map(Target::Request));
+        targets.extend(
+            requests::delivering(&self.core)
+                .into_iter()
+                .map(Target::Request),
+        );
         targets
     }
 
@@ -448,7 +486,10 @@ impl DialPlan for PresencePlan {
 
 /// Unbestätigte und kürzlich gesehene Freunde werden mit Backoff angewählt, alle anderen nur träge.
 fn is_eager(friend: &FriendRecord, now: u64) -> bool {
-    !friend.confirmed || friend.last_seen.is_some_and(|seen| now.saturating_sub(seen) <= RECENTLY_SEEN_SECS)
+    !friend.confirmed
+        || friend
+            .last_seen
+            .is_some_and(|seen| now.saturating_sub(seen) <= RECENTLY_SEEN_SECS)
 }
 
 /// Offline-Freunde, die noch angewählt werden (nicht die, die uns entfernt haben).
@@ -486,14 +527,32 @@ pub(super) fn spawn_presence(core: &Arc<Core>, runtime: &Arc<Runtime>) {
     let (online_tx, online) = watch::channel(false);
     let stop = &runtime.stop;
     let scheduler = runtime.scheduler.clone();
-    tokio::spawn(stop.clone().run_until_cancelled_owned(watch_network(core.clone(), runtime.clone(), online_tx)));
-    tokio::spawn(stop.clone().run_until_cancelled_owned(accept_peers(core.clone(), runtime.clone())));
-    tokio::spawn(scheduler.stop.clone().run_until_cancelled_owned(scheduler.run(presence_plan(core, runtime), online)));
-    tokio::spawn(stop.clone().run_until_cancelled_owned(flush_patches_regularly(core.clone())));
+    tokio::spawn(stop.clone().run_until_cancelled_owned(watch_network(
+        core.clone(),
+        runtime.clone(),
+        online_tx,
+    )));
+    tokio::spawn(
+        stop.clone()
+            .run_until_cancelled_owned(accept_peers(core.clone(), runtime.clone())),
+    );
+    tokio::spawn(
+        scheduler
+            .stop
+            .clone()
+            .run_until_cancelled_owned(scheduler.run(presence_plan(core, runtime), online)),
+    );
+    tokio::spawn(
+        stop.clone()
+            .run_until_cancelled_owned(flush_patches_regularly(core.clone())),
+    );
 }
 
 /// Hält den eigenen Status („spielt“) aktuell, solange der Dienst lebt.
-pub(super) fn spawn_signal_consumer(core: &Arc<Core>, mut signals: broadcast::Receiver<GameSignal>) {
+pub(super) fn spawn_signal_consumer(
+    core: &Arc<Core>,
+    mut signals: broadcast::Receiver<GameSignal>,
+) {
     let core = Arc::downgrade(core);
     tokio::spawn(async move {
         let mut running = HashSet::new();
@@ -503,7 +562,10 @@ pub(super) fn spawn_signal_consumer(core: &Arc<Core>, mut signals: broadcast::Re
                 Ok(GameSignal::Exited { instance_id }) => running.remove(&instance_id),
                 Ok(_) => continue,
                 Err(broadcast::error::RecvError::Lagged(missed)) => {
-                    tracing::warn!(missed, "Spielsignale verpasst, Spielstatus kann veraltet sein");
+                    tracing::warn!(
+                        missed,
+                        "Spielsignale verpasst, Spielstatus kann veraltet sein"
+                    );
                     continue;
                 }
                 Err(broadcast::error::RecvError::Closed) => return,
@@ -524,7 +586,13 @@ pub(super) fn take_all_links(core: &Core) -> Vec<Link> {
 }
 
 /// Eine Verbindung ist zu Ende: der Freund ist offline, und wie sie endete, entscheidet über das weitere Anwählen.
-pub(super) fn link_ended(core: &Core, runtime: &Runtime, peer: &PeerId, id: u64, reason: CloseReason) {
+pub(super) fn link_ended(
+    core: &Core,
+    runtime: &Runtime,
+    peer: &PeerId,
+    id: u64,
+    reason: CloseReason,
+) {
     if core.links.remove(peer, id) {
         went_offline(core, peer);
         runtime.scheduler.disconnected(Target::Friend(*peer));
@@ -532,47 +600,92 @@ pub(super) fn link_ended(core: &Core, runtime: &Runtime, peer: &PeerId, id: u64,
     notice_close(core, peer, reason);
 }
 
-pub(super) fn emit_presence(core: &Core, peer: &PeerId, (presence, path): (Presence, Option<PathKind>)) {
-    core.emit(FriendsEvent::Presence(FriendPresenceEvent { friend_id: peer.to_string(), presence, path }));
+pub(super) fn emit_presence(
+    core: &Core,
+    peer: &PeerId,
+    (presence, path): (Presence, Option<PathKind>),
+) {
+    core.emit(FriendsEvent::Presence(FriendPresenceEvent {
+        friend_id: peer.to_string(),
+        presence,
+        path,
+    }));
 }
 
 /// Der Freund mit dieser ID, mit noch nicht geschriebenen Änderungen.
 pub(super) fn friend(core: &Core, id: &str) -> Option<FriendRecord> {
-    core.stores.friends.get(id).ok().map(|record| core.patches.effective(record))
+    core.stores
+        .friends
+        .get(id)
+        .ok()
+        .map(|record| core.patches.effective(record))
 }
 
 pub(super) fn friends(core: &Core) -> Vec<FriendRecord> {
-    core.stores.friends.list().into_iter().map(|record| core.patches.effective(record)).collect()
+    core.stores
+        .friends
+        .list()
+        .into_iter()
+        .map(|record| core.patches.effective(record))
+        .collect()
 }
 
-/// Übernimmt ein bereinigtes Profil; ein neuer Anzeigename hinterlässt einen Hinweis für die Oberfläche (SPEC 5.3).
-pub(super) fn apply_profile(core: &Core, peer: &PeerId, profile: WireProfile) {
+/// Übernimmt ein bereinigtes Profil; ein neuer Name hinterlässt einen Hinweis für die Oberfläche (SPEC 5.3).
+pub(super) fn apply_profile(core: &Core, peer: &PeerId, mut profile: WireProfile) {
     let id = peer.to_string();
-    let Some(record) = friend(core, &id) else { return };
+    if let Some(name) = &profile.mc_name {
+        profile.display_name.clone_from(name);
+    }
+    let Some(record) = friend(core, &id) else {
+        return;
+    };
     let unchanged = record.display_name == profile.display_name
         && record.mc_name == profile.mc_name
         && record.mc_uuid == profile.mc_uuid;
     if unchanged {
         return;
     }
-    let renamed = record.display_name != profile.display_name;
-    let notice = renamed.then(|| FriendNotice::Renamed { previous_name: record.display_name.clone() });
-    core.patches.add(&id, FriendPatch { profile: Some(profile), notice, ..FriendPatch::default() });
-    if renamed {
-        core.emit(FriendsEvent::Changed);
-    }
+    let previous_name = sanitize::mc_name(record.mc_name.as_deref())
+        .unwrap_or_else(|| sanitize::display_name(&record.display_name, &id));
+    let renamed = previous_name != profile.display_name;
+    let notice = renamed.then_some(FriendNotice::Renamed { previous_name });
+    core.patches.add(
+        &id,
+        FriendPatch {
+            profile: Some(profile),
+            notice,
+            ..FriendPatch::default()
+        },
+    );
+    core.emit(FriendsEvent::Changed);
 }
 
 /// Ein `homeRelay` außerhalb der eigenen Karte wird nie gespeichert (SPEC 3.2).
-pub(super) fn apply_home_relay(core: &Core, peer: &PeerId, home_relay: Option<u8>, relay_map: &[RelayEntry]) {
-    let Some(index) = home_relay.filter(|index| find_relay(relay_map, *index).is_some()) else { return };
-    core.patches.add(&peer.to_string(), FriendPatch { home_relay: Some(index), ..FriendPatch::default() });
+pub(super) fn apply_home_relay(
+    core: &Core,
+    peer: &PeerId,
+    home_relay: Option<u8>,
+    relay_map: &[RelayEntry],
+) {
+    let Some(index) = home_relay.filter(|index| find_relay(relay_map, *index).is_some()) else {
+        return;
+    };
+    core.patches.add(
+        &peer.to_string(),
+        FriendPatch {
+            home_relay: Some(index),
+            ..FriendPatch::default()
+        },
+    );
 }
 
 /// `unfriend` oder `NOT_FRIEND`: der Freund hat die Freundschaft beendet und wird nicht mehr angewählt (SPEC 4.5).
 pub(super) fn mark_removed_by_peer(core: &Core, peer: &PeerId) {
     let id = peer.to_string();
-    let marked = core.stores.friends.modify(&id, |record| record.removed_by_peer = true);
+    let marked = core
+        .stores
+        .friends
+        .modify(&id, |record| record.removed_by_peer = true);
     if marked.is_ok() {
         core.emit(FriendsEvent::Changed);
     }
@@ -583,10 +696,16 @@ pub(super) fn network_status(state: NetState, relay_map: &[RelayEntry]) -> Netwo
     match state {
         NetState::Starting => NetworkStatus::Starting,
         NetState::Online { home_relay } => match find_relay(relay_map, home_relay) {
-            Some(entry) => NetworkStatus::Online { relay_host: relay_host(entry) },
-            None => NetworkStatus::Degraded { reason: DegradedReason::RelayUnreachable },
+            Some(entry) => NetworkStatus::Online {
+                relay_host: relay_host(entry),
+            },
+            None => NetworkStatus::Degraded {
+                reason: DegradedReason::RelayUnreachable,
+            },
         },
-        NetState::RelayUnreachable => NetworkStatus::Degraded { reason: DegradedReason::RelayUnreachable },
+        NetState::RelayUnreachable => NetworkStatus::Degraded {
+            reason: DegradedReason::RelayUnreachable,
+        },
     }
 }
 
@@ -594,7 +713,10 @@ impl Friends {
     pub async fn list(&self) -> AppResult<Vec<Friend>> {
         let core = &self.core;
         core.ensure_enabled()?;
-        Ok(friends(core).into_iter().map(|record| friend_view(core, record)).collect())
+        Ok(friends(core)
+            .into_iter()
+            .map(|record| friend_view(core, record))
+            .collect())
     }
 
     /// Eigener Spitzname, bereinigt; leer entfernt ihn.
@@ -602,7 +724,9 @@ impl Friends {
         let core = &self.core;
         core.ensure_enabled()?;
         let alias = alias.as_deref().and_then(sanitize::alias);
-        core.stores.friends.modify(friend_id, |record| record.alias = alias)?;
+        core.stores
+            .friends
+            .modify(friend_id, |record| record.alias = alias)?;
         core.emit(FriendsEvent::Changed);
         Ok(())
     }
@@ -612,7 +736,9 @@ impl Friends {
         let core = &self.core;
         core.ensure_enabled()?;
         core.patches.flush(&core.stores);
-        core.stores.friends.modify(friend_id, |record| record.notice = None)?;
+        core.stores
+            .friends
+            .modify(friend_id, |record| record.notice = None)?;
         core.emit(FriendsEvent::Changed);
         Ok(())
     }
@@ -639,9 +765,11 @@ impl Friends {
     pub async fn block(&self, peer_id: &str) -> AppResult<()> {
         let core = &self.core;
         core.ensure_enabled()?;
-        let display_name = known_name(core, peer_id)
-            .ok_or_else(|| AppError::NotFound(coded!("errors.friends.notFound.friend", id = peer_id).into()))?;
-        let letter = requests::request_of(core, peer_id).filter(|request| request.via == RequestVia::Name);
+        let display_name = known_name(core, peer_id).ok_or_else(|| {
+            AppError::NotFound(coded!("errors.friends.notFound.friend", id = peer_id).into())
+        })?;
+        let letter =
+            requests::request_of(core, peer_id).filter(|request| request.via == RequestVia::Name);
         if core.stores.friends.remove(peer_id).is_ok() {
             core.patches.forget(peer_id);
         }
@@ -693,12 +821,14 @@ impl Friends {
 }
 
 fn friend_view(core: &Core, record: FriendRecord) -> Friend {
-    let (presence, path) =
-        PeerId::from_str(&record.id).map_or((Presence::Offline, None), |peer| core.links.view(&peer));
+    let (presence, path) = PeerId::from_str(&record.id)
+        .map_or((Presence::Offline, None), |peer| core.links.view(&peer));
+    let display_name = sanitize::mc_name(record.mc_name.as_deref())
+        .unwrap_or_else(|| sanitize::display_name(&record.display_name, &record.id));
     Friend {
         fingerprint: fingerprint(&record.id),
         id: record.id,
-        display_name: record.display_name,
+        display_name,
         alias: record.alias,
         mc_name: record.mc_name,
         mc_uuid: record.mc_uuid,
@@ -715,10 +845,17 @@ fn friend_view(core: &Core, record: FriendRecord) -> Friend {
 /// Name eines Freundes oder des Peers einer Anfrage, für die Sperrliste.
 fn known_name(core: &Core, peer_id: &str) -> Option<String> {
     if let Some(friend) = friend(core, peer_id) {
-        return Some(friend.display_name);
+        return Some(
+            sanitize::mc_name(friend.mc_name.as_deref())
+                .unwrap_or_else(|| sanitize::display_name(&friend.display_name, peer_id)),
+        );
     }
     let request = requests::request_of(core, peer_id)?;
-    Some(request.display_name.unwrap_or_else(|| sanitize::display_name("", peer_id)))
+    Some(
+        sanitize::mc_name(request.mc_name.as_deref()).unwrap_or_else(|| {
+            sanitize::display_name(request.display_name.as_deref().unwrap_or_default(), peer_id)
+        }),
+    )
 }
 
 fn forget_target(core: &Core, peer: &PeerId) {
@@ -728,7 +865,13 @@ fn forget_target(core: &Core, peer: &PeerId) {
 }
 
 fn went_offline(core: &Core, peer: &PeerId) {
-    core.patches.add(&peer.to_string(), FriendPatch { last_seen: Some(now_secs()), ..FriendPatch::default() });
+    core.patches.add(
+        &peer.to_string(),
+        FriendPatch {
+            last_seen: Some(now_secs()),
+            ..FriendPatch::default()
+        },
+    );
     emit_presence(core, peer, (Presence::Offline, None));
 }
 
@@ -739,8 +882,14 @@ fn notice_close(core: &Core, peer: &PeerId, reason: CloseReason) {
         return;
     }
     let id = peer.to_string();
-    let rotation_pending = core.stores.outbox.get(&id).is_ok_and(|item| item.kind == OutboxKind::Rotated);
-    let Some(record) = friend(core, &id) else { return };
+    let rotation_pending = core
+        .stores
+        .outbox
+        .get(&id)
+        .is_ok_and(|item| item.kind == OutboxKind::Rotated);
+    let Some(record) = friend(core, &id) else {
+        return;
+    };
     if !rotation_pending && !by_name::in_redemption_grace(core, &record) {
         mark_removed_by_peer(core, peer);
     }
@@ -761,7 +910,11 @@ async fn watch_network(core: Arc<Core>, runtime: Arc<Runtime>, online: watch::Se
 async fn accept_peers(core: Arc<Core>, runtime: Arc<Runtime>) {
     while let Some((_, conn)) = runtime.main.accept().await {
         let stop = runtime.stop.clone();
-        tokio::spawn(stop.run_until_cancelled_owned(control::run_incoming(core.clone(), runtime.clone(), conn)));
+        tokio::spawn(stop.run_until_cancelled_owned(control::run_incoming(
+            core.clone(),
+            runtime.clone(),
+            conn,
+        )));
     }
 }
 
@@ -793,16 +946,28 @@ mod tests {
 
     impl FakeDialer {
         fn new(delay: Duration) -> Arc<Self> {
-            Arc::new(Self { delay, dials: Mutex::default(), done: Mutex::default() })
+            Arc::new(Self {
+                delay,
+                dials: Mutex::default(),
+                done: Mutex::default(),
+            })
         }
 
         fn dials_of(&self, target: &PeerId) -> Vec<Instant> {
-            lock(&self.dials).iter().filter(|(peer, _)| peer == target).map(|(_, at)| *at).collect()
+            lock(&self.dials)
+                .iter()
+                .filter(|(peer, _)| peer == target)
+                .map(|(_, at)| *at)
+                .collect()
         }
     }
 
     impl Dialer for FakeDialer {
-        fn dial<'a>(&'a self, peer: &'a PeerId, _alpn: &'static [u8]) -> BoxFuture<'a, Result<PeerConn, NetError>> {
+        fn dial<'a>(
+            &'a self,
+            peer: &'a PeerId,
+            _alpn: &'static [u8],
+        ) -> BoxFuture<'a, Result<PeerConn, NetError>> {
             Box::pin(async move {
                 lock(&self.dials).push((*peer, Instant::now()));
                 tokio::time::sleep(self.delay).await;
@@ -852,7 +1017,8 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
-    async fn retry_now_dials_a_request_in_the_ten_minute_step_at_once_but_not_twice_within_ten_seconds() {
+    async fn retry_now_dials_a_request_in_the_ten_minute_step_at_once_but_not_twice_within_ten_seconds(
+    ) {
         let dialer = FakeDialer::new(Duration::ZERO);
         let request = Target::Request("r1".into());
         let plan = Arc::new(FakePlan {
@@ -874,7 +1040,11 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(1)).await;
 
         let dials = dialer.dials_of(&peer(1));
-        assert_eq!(dials.len(), 5, "one immediate dial, none for the second call");
+        assert_eq!(
+            dials.len(),
+            5,
+            "one immediate dial, none for the second call"
+        );
         assert_eq!(dials[4], start_at + Duration::from_secs(8 * 60));
     }
 
@@ -914,17 +1084,29 @@ mod tests {
 
         sleep_until(start_at + Duration::from_secs(2 * 3600 + 61)).await;
 
-        let offsets: Vec<u64> = dialer.dials_of(&old_friend).iter().map(|at| (*at - start_at).as_secs()).collect();
+        let offsets: Vec<u64> = dialer
+            .dials_of(&old_friend)
+            .iter()
+            .map(|at| (*at - start_at).as_secs())
+            .collect();
         assert_eq!(offsets, [60, 3660, 7260]);
     }
 
     #[tokio::test(start_paused = true)]
     async fn startup_batch_of_fifty_friends_dials_only_the_recent_ones_within_four_rounds() {
         let dialer = FakeDialer::new(DIAL_TIMEOUT);
-        let recent: Vec<Target> = (0..16).map(|seed| Target::Friend(peer(seed + 10))).collect();
-        let old: Vec<Target> = (0..34).map(|seed| Target::Friend(peer(seed + 100))).collect();
-        let plan =
-            Arc::new(FakePlan { dialer: dialer.clone(), eager: recent.clone(), lazy: old, request_peer: peer(1) });
+        let recent: Vec<Target> = (0..16)
+            .map(|seed| Target::Friend(peer(seed + 10)))
+            .collect();
+        let old: Vec<Target> = (0..34)
+            .map(|seed| Target::Friend(peer(seed + 100)))
+            .collect();
+        let plan = Arc::new(FakePlan {
+            dialer: dialer.clone(),
+            eager: recent.clone(),
+            lazy: old,
+            request_peer: peer(1),
+        });
         let start_at = Instant::now();
         let _running = start(plan);
 
@@ -933,21 +1115,43 @@ mod tests {
         let first_done: Vec<Instant> = recent
             .iter()
             .map(|target| {
-                let Target::Friend(friend) = target else { unreachable!() };
-                lock(&dialer.done).iter().find(|(peer, _)| peer == friend).map(|(_, at)| *at).expect("dialed")
+                let Target::Friend(friend) = target else {
+                    unreachable!()
+                };
+                lock(&dialer.done)
+                    .iter()
+                    .find(|(peer, _)| peer == friend)
+                    .map(|(_, at)| *at)
+                    .expect("dialed")
             })
             .collect();
         let last = first_done.into_iter().max().unwrap();
-        assert!(last - start_at <= 4 * DIAL_TIMEOUT + TICK, "batch took {:?}", last - start_at);
-        let peers_dialed: HashSet<PeerId> = lock(&dialer.dials).iter().map(|(peer, _)| *peer).collect();
-        assert_eq!(peers_dialed.len(), 16, "old friends wait for the lazy round");
+        assert!(
+            last - start_at <= 4 * DIAL_TIMEOUT + TICK,
+            "batch took {:?}",
+            last - start_at
+        );
+        let peers_dialed: HashSet<PeerId> =
+            lock(&dialer.dials).iter().map(|(peer, _)| *peer).collect();
+        assert_eq!(
+            peers_dialed.len(),
+            16,
+            "old friends wait for the lazy round"
+        );
     }
 
     #[tokio::test(start_paused = true)]
     async fn never_more_than_four_dials_run_at_once() {
         let dialer = FakeDialer::new(DIAL_TIMEOUT);
-        let eager: Vec<Target> = (0..10).map(|seed| Target::Friend(peer(seed + 10))).collect();
-        let plan = Arc::new(FakePlan { dialer: dialer.clone(), eager, lazy: vec![], request_peer: peer(1) });
+        let eager: Vec<Target> = (0..10)
+            .map(|seed| Target::Friend(peer(seed + 10)))
+            .collect();
+        let plan = Arc::new(FakePlan {
+            dialer: dialer.clone(),
+            eager,
+            lazy: vec![],
+            request_peer: peer(1),
+        });
         let _running = start(plan);
 
         tokio::time::sleep(Duration::from_secs(1)).await;
@@ -964,14 +1168,21 @@ mod tests {
             quic_port: None,
         }];
 
-        assert_eq!(network_status(NetState::Starting, &map), NetworkStatus::Starting);
+        assert_eq!(
+            network_status(NetState::Starting, &map),
+            NetworkStatus::Starting
+        );
         assert_eq!(
             network_status(NetState::Online { home_relay: 0 }, &map),
-            NetworkStatus::Online { relay_host: "relay-eu1.example.org".into() }
+            NetworkStatus::Online {
+                relay_host: "relay-eu1.example.org".into()
+            }
         );
         assert_eq!(
             network_status(NetState::RelayUnreachable, &map),
-            NetworkStatus::Degraded { reason: DegradedReason::RelayUnreachable }
+            NetworkStatus::Degraded {
+                reason: DegradedReason::RelayUnreachable
+            }
         );
     }
 
@@ -994,7 +1205,10 @@ mod tests {
 
         assert!(is_eager(&friend(false, None), now));
         assert!(is_eager(&friend(true, Some(now - RECENTLY_SEEN_SECS)), now));
-        assert!(!is_eager(&friend(true, Some(now - RECENTLY_SEEN_SECS - 1)), now));
+        assert!(!is_eager(
+            &friend(true, Some(now - RECENTLY_SEEN_SECS - 1)),
+            now
+        ));
         assert!(!is_eager(&friend(true, None), now));
     }
 }

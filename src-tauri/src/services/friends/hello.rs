@@ -24,7 +24,9 @@ use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::new_id;
 use crate::services::lock;
-use crate::services::p2p::{frame, Admission, BiStream, CloseCode, FrameError, Gate, PeerConn, PeerId, PeerNet};
+use crate::services::p2p::{
+    frame, Admission, BiStream, CloseCode, FrameError, Gate, PeerConn, PeerId, PeerNet,
+};
 
 pub const HELLO_ALPN: &[u8] = b"pumpkin/hello/1";
 /// Die Unterschrift des Code-Besitzers bindet seine dauerhafte ID an den Hello-Schlüssel des Codes.
@@ -36,7 +38,11 @@ pub(super) const HELLO_NAME_WAIT: Duration = Duration::from_secs(20);
 
 /// Anfrage des Eingeladenen an den Hello-Endpunkt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 enum HelloRequest {
     FriendRequest {
         protocol: u32,
@@ -49,10 +55,20 @@ enum HelloRequest {
 
 /// Antwort des Code-Besitzers; bei falschem Geheimnis gibt es keine.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 enum HelloAnswer {
-    Received { peer_id: String, binding: String, profile: WireProfile },
-    Error { code: HelloRefusal },
+    Received {
+        peer_id: String,
+        binding: String,
+        profile: WireProfile,
+    },
+    Error {
+        code: HelloRefusal,
+    },
 }
 
 /// Warum der Code-Besitzer eine Anfrage mit richtigem Geheimnis ablehnt.
@@ -84,9 +100,14 @@ impl Friends {
         let core = &self.core;
         core.ensure_enabled()?;
         if own_codes(core).len() >= MAX_ACTIVE_CODES {
-            return Err(AppError::invalid(coded!("errors.friends.tooManyCodes", max = MAX_ACTIVE_CODES)));
+            return Err(AppError::invalid(coded!(
+                "errors.friends.tooManyCodes",
+                max = MAX_ACTIVE_CODES
+            )));
         }
-        let identity = core.identity().ok_or_else(|| AppError::invalid(coded!("errors.friends.identityLost")))?;
+        let identity = core
+            .identity()
+            .ok_or_else(|| AppError::invalid(coded!("errors.friends.identityLost")))?;
         let relay_index = code_relay(core)?;
         let issued = code::issue(&identity, relay_index)?;
         let record = code_record(&issued, CODE_TTL_SECS, None);
@@ -95,7 +116,10 @@ impl Friends {
             bind_code(core, &runtime, &record).await;
         }
         core.emit(FriendsEvent::Changed);
-        Ok(FriendCode { code: Some(issued.parts.encode()), ..code_view(&record) })
+        Ok(FriendCode {
+            code: Some(issued.parts.encode()),
+            ..code_view(&record)
+        })
     }
 
     pub async fn codes(&self) -> AppResult<Vec<FriendCode>> {
@@ -118,7 +142,11 @@ impl Friends {
 
 /// Der gespeicherte Teil eines neuen Codes: das Geheimnis nur als Hash. `name_request_to` nennt das Ziel einer Anfrage
 /// per Name, deren Code das ist.
-pub(super) fn code_record(issued: &IssuedCode, ttl_secs: u64, name_request_to: Option<String>) -> CodeRecord {
+pub(super) fn code_record(
+    issued: &IssuedCode,
+    ttl_secs: u64,
+    name_request_to: Option<String>,
+) -> CodeRecord {
     let now = now_secs();
     CodeRecord {
         id: new_id(),
@@ -148,7 +176,10 @@ pub(super) async fn close_code(runtime: &Runtime, code_id: &str) {
 }
 
 pub(super) async fn close_all(runtime: &Runtime) {
-    let endpoints: Vec<_> = lock(&runtime.hellos).drain().map(|(_, endpoint)| endpoint).collect();
+    let endpoints: Vec<_> = lock(&runtime.hellos)
+        .drain()
+        .map(|(_, endpoint)| endpoint)
+        .collect();
     for endpoint in endpoints {
         endpoint.close(CloseCode::SHUTDOWN).await;
     }
@@ -165,17 +196,28 @@ pub(super) fn delete_all_codes(core: &Core) -> AppResult<()> {
 /// Codes, deren Gültigkeit noch läuft, eingelöst oder nicht; mit den Codes der Anfragen per Name.
 pub(super) fn active_codes(core: &Core) -> Vec<CodeRecord> {
     let now = now_secs();
-    core.stores.codes.list().into_iter().filter(|record| record.expires_at > now).collect()
+    core.stores
+        .codes
+        .list()
+        .into_iter()
+        .filter(|record| record.expires_at > now)
+        .collect()
 }
 
 /// Die gültigen Codes, die der Nutzer selbst erzeugt hat; nur sie zählen zur Grenze und zur Liste (BYNAME 9.2).
 fn own_codes(core: &Core) -> Vec<CodeRecord> {
-    active_codes(core).into_iter().filter(|record| record.name_request_to.is_none()).collect()
+    active_codes(core)
+        .into_iter()
+        .filter(|record| record.name_request_to.is_none())
+        .collect()
 }
 
 /// Hello-IDs der eigenen gültigen Codes, damit niemand seinen eigenen Code einlöst.
 pub(super) fn own_hello_ids(core: &Core, identity: &Identity) -> Vec<[u8; 32]> {
-    active_codes(core).iter().filter_map(|record| salt_of(record).map(|salt| identity.hello_id(&salt))).collect()
+    active_codes(core)
+        .iter()
+        .filter_map(|record| salt_of(record).map(|salt| identity.hello_id(&salt)))
+        .collect()
 }
 
 /// Eine beantwortete Anfrage, deren Verbindung offen bleibt, bis der Aufrufer die Antwort geprüft hat.
@@ -195,8 +237,15 @@ impl AnsweredRequest {
 }
 
 /// Stellt die Anfrage an den Hello-Endpunkt `hello_id` und prüft die Unterschrift der Antwort (SPEC 5.2).
-pub(super) async fn send_request(net: &PeerNet, hello_id: PeerId, secret_hex: &str, profile: WireProfile) -> Delivery {
-    request_answer(net, hello_id, secret_hex, profile, HELLO_WAIT).await.close()
+pub(super) async fn send_request(
+    net: &PeerNet,
+    hello_id: PeerId,
+    secret_hex: &str,
+    profile: WireProfile,
+) -> Delivery {
+    request_answer(net, hello_id, secret_hex, profile, HELLO_WAIT)
+        .await
+        .close()
 }
 
 /// Wie [`send_request`], aber erst [`AnsweredRequest::close`] schließt die Verbindung.
@@ -208,9 +257,16 @@ pub(super) async fn request_answer(
     wait: Duration,
 ) -> AnsweredRequest {
     let Ok(conn) = net.dial(&hello_id, HELLO_ALPN).await else {
-        return AnsweredRequest { conn: None, delivery: Delivery::Failed };
+        return AnsweredRequest {
+            conn: None,
+            delivery: Delivery::Failed,
+        };
     };
-    let request = HelloRequest::FriendRequest { protocol: PROTOCOL_VERSION, secret: secret_hex.to_owned(), profile };
+    let request = HelloRequest::FriendRequest {
+        protocol: PROTOCOL_VERSION,
+        secret: secret_hex.to_owned(),
+        profile,
+    };
     let delivery = match timeout(wait, exchange(&conn, &request)).await {
         Ok(Ok(answer)) => evaluate(answer, &hello_id, &net.id()),
         Ok(Err(err)) => {
@@ -219,23 +275,41 @@ pub(super) async fn request_answer(
         }
         Err(_) => Delivery::Failed,
     };
-    AnsweredRequest { conn: Some(conn), delivery }
+    AnsweredRequest {
+        conn: Some(conn),
+        delivery,
+    }
 }
 
 async fn exchange(conn: &PeerConn, request: &HelloRequest) -> Result<HelloAnswer, FrameError> {
-    let mut stream = conn.open_bi().await.map_err(|err| FrameError::Io(std::io::Error::other(err)))?;
+    let mut stream = conn
+        .open_bi()
+        .await
+        .map_err(|err| FrameError::Io(std::io::Error::other(err)))?;
     frame::write(&mut stream, request, HELLO_FRAME_LIMIT).await?;
     stream.read_frame(HELLO_FRAME_LIMIT).await
 }
 
 fn evaluate(answer: HelloAnswer, hello_id: &PeerId, own_id: &PeerId) -> Delivery {
     match answer {
-        HelloAnswer::Received { peer_id, binding, profile } => {
+        HelloAnswer::Received {
+            peer_id,
+            binding,
+            profile,
+        } => {
             let bound = signature_bytes(&binding).is_some_and(|signature| {
-                identity::verify(&peer_id, BIND_DOMAIN, &[hello_id.as_bytes(), own_id.as_bytes()], &signature)
+                identity::verify(
+                    &peer_id,
+                    BIND_DOMAIN,
+                    &[hello_id.as_bytes(), own_id.as_bytes()],
+                    &signature,
+                )
             });
             match PeerId::from_str(&peer_id) {
-                Ok(peer) if bound => Delivery::Received { peer, profile: profile.sanitized(&peer_id) },
+                Ok(peer) if bound => Delivery::Received {
+                    peer,
+                    profile: profile.sanitized(&peer_id),
+                },
                 _ => Delivery::Failed,
             }
         }
@@ -262,7 +336,11 @@ fn code_view(record: &CodeRecord) -> FriendCode {
 }
 
 fn salt_of(record: &CodeRecord) -> Option<[u8; 16]> {
-    HEXLOWER.decode(record.salt.as_bytes()).ok()?.try_into().ok()
+    HEXLOWER
+        .decode(record.salt.as_bytes())
+        .ok()?
+        .try_into()
+        .ok()
 }
 
 pub(super) async fn bind_code(core: &Arc<Core>, runtime: &Arc<Runtime>, record: &CodeRecord) {
@@ -284,15 +362,32 @@ pub(super) async fn bind_code(core: &Arc<Core>, runtime: &Arc<Runtime>, record: 
     tokio::spawn(runtime.stop.clone().run_until_cancelled_owned(serve));
 }
 
-async fn serve_endpoint(core: Arc<Core>, runtime: Arc<Runtime>, endpoint: Arc<PeerNet>, code_id: String) {
+async fn serve_endpoint(
+    core: Arc<Core>,
+    runtime: Arc<Runtime>,
+    endpoint: Arc<PeerNet>,
+    code_id: String,
+) {
     while let Some((_, conn)) = endpoint.accept().await {
-        let answer = answer_request(core.clone(), runtime.clone(), endpoint.id(), code_id.clone(), conn);
+        let answer = answer_request(
+            core.clone(),
+            runtime.clone(),
+            endpoint.id(),
+            code_id.clone(),
+            conn,
+        );
         tokio::spawn(runtime.stop.clone().run_until_cancelled_owned(answer));
     }
 }
 
 /// Beantwortet eine Anfrage am Hello-Endpunkt. Falsches Geheimnis, abgelaufener Code: kein Rahmen, nur Schließen.
-async fn answer_request(core: Arc<Core>, runtime: Arc<Runtime>, hello_id: PeerId, code_id: String, conn: PeerConn) {
+async fn answer_request(
+    core: Arc<Core>,
+    runtime: Arc<Runtime>,
+    hello_id: PeerId,
+    code_id: String,
+    conn: PeerConn,
+) {
     let read = timeout(HELLO_WAIT, read_request(&conn)).await;
     let (mut stream, request) = match read {
         Ok(Ok(read)) => read,
@@ -302,16 +397,26 @@ async fn answer_request(core: Arc<Core>, runtime: Arc<Runtime>, hello_id: PeerId
         }
         Err(_) => return conn.close(CloseCode::PROTOCOL),
     };
-    let Some(code) = core.stores.codes.get(&code_id).ok().filter(|code| code.expires_at > now_secs()) else {
+    let Some(code) = core
+        .stores
+        .codes
+        .get(&code_id)
+        .ok()
+        .filter(|code| code.expires_at > now_secs())
+    else {
         return conn.close(CloseCode::NORMAL);
     };
     let peer = conn.remote();
-    let Some(answer) = decide(&core, &runtime.identity, &hello_id, &code, &peer, request).await else {
+    let Some(answer) = decide(&core, &runtime.identity, &hello_id, &code, &peer, request).await
+    else {
         return conn.close(CloseCode::NORMAL);
     };
     let by_name = code.name_request_to.is_some();
     let wait = if by_name { HELLO_NAME_WAIT } else { HELLO_WAIT };
-    if frame::write(&mut stream, &answer, HELLO_FRAME_LIMIT).await.is_ok() {
+    if frame::write(&mut stream, &answer, HELLO_FRAME_LIMIT)
+        .await
+        .is_ok()
+    {
         let _ = stream.shutdown().await;
         let _ = timeout(wait, conn.closed()).await;
     }
@@ -323,7 +428,10 @@ async fn answer_request(core: Arc<Core>, runtime: Arc<Runtime>, hello_id: PeerId
 }
 
 async fn read_request(conn: &PeerConn) -> Result<(BiStream, HelloRequest), FrameError> {
-    let mut stream = conn.accept_bi().await.map_err(|err| FrameError::Io(std::io::Error::other(err)))?;
+    let mut stream = conn
+        .accept_bi()
+        .await
+        .map_err(|err| FrameError::Io(std::io::Error::other(err)))?;
     let request = stream.read_frame(HELLO_FRAME_LIMIT).await?;
     Ok((stream, request))
 }
@@ -338,24 +446,38 @@ async fn decide(
     peer: &PeerId,
     request: HelloRequest,
 ) -> Option<HelloAnswer> {
-    let HelloRequest::FriendRequest { protocol: PROTOCOL_VERSION, secret, profile } = request else {
-        return Some(HelloAnswer::Error { code: HelloRefusal::Unsupported });
+    let HelloRequest::FriendRequest {
+        protocol: PROTOCOL_VERSION,
+        secret,
+        profile,
+    } = request
+    else {
+        return Some(HelloAnswer::Error {
+            code: HelloRefusal::Unsupported,
+        });
     };
     if !secret_matches(&code.secret_sha256, &secret) {
         return None;
     }
     let peer_id = peer.to_string();
     let outcome = match code.name_request_to {
-        None => requests::receive(core, code, &peer_id, profile.sanitized(&peer_id)).map(|()| core.own_profile()),
+        None => requests::receive(core, code, &peer_id, profile.sanitized(&peer_id))
+            .map(|()| core.own_profile()),
         Some(_) => {
-            let redemption = by_name::Redemption { code, hello_id, redeemer: peer, secret_hex: &secret };
+            let redemption = by_name::Redemption {
+                code,
+                hello_id,
+                redeemer: peer,
+                secret_hex: &secret,
+            };
             by_name::answer_redemption(core, &redemption, profile).await?
         }
     };
     Some(match outcome {
         Ok(own_profile) => HelloAnswer::Received {
             peer_id: identity.peer_id(),
-            binding: HEXLOWER.encode(&identity.sign(BIND_DOMAIN, &[hello_id.as_bytes(), peer.as_bytes()])),
+            binding: HEXLOWER
+                .encode(&identity.sign(BIND_DOMAIN, &[hello_id.as_bytes(), peer.as_bytes()])),
             profile: own_profile,
         },
         Err(refusal) => HelloAnswer::Error { code: refusal },
@@ -380,7 +502,10 @@ impl HelloGate {
             per_code: SlidingWindow::new(HELLO_PER_CODE),
             per_peer: SlidingWindow::new(HELLO_PER_PEER_AND_CODE),
         };
-        Self { core, limits: Mutex::new(limits) }
+        Self {
+            core,
+            limits: Mutex::new(limits),
+        }
     }
 
     fn within_limits(&self, peer: &PeerId) -> bool {
@@ -392,7 +517,10 @@ impl HelloGate {
 
 impl Gate for HelloGate {
     fn admit(&self, peer: &PeerId, _alpn: &[u8]) -> Admission {
-        let blocked = self.core.upgrade().is_none_or(|core| core.stores.blocked.get(&peer.to_string()).is_ok());
+        let blocked = self
+            .core
+            .upgrade()
+            .is_none_or(|core| core.stores.blocked.get(&peer.to_string()).is_ok());
         if blocked || !self.within_limits(peer) {
             Admission::Drop
         } else {
@@ -413,12 +541,20 @@ mod tests {
     }
 
     fn profile() -> WireProfile {
-        WireProfile { display_name: "Alex".into(), mc_name: None, mc_uuid: None }
+        WireProfile {
+            display_name: "Alex".into(),
+            mc_name: None,
+            mc_uuid: None,
+        }
     }
 
     #[test]
     fn friend_request_has_the_wire_shape() {
-        let request = HelloRequest::FriendRequest { protocol: 1, secret: "a0".repeat(9), profile: profile() };
+        let request = HelloRequest::FriendRequest {
+            protocol: 1,
+            secret: "a0".repeat(9),
+            profile: profile(),
+        };
 
         let wire = serde_json::to_value(request).unwrap();
 
@@ -429,7 +565,10 @@ mod tests {
 
     #[test]
     fn refusal_has_the_wire_shape() {
-        let wire = serde_json::to_value(HelloAnswer::Error { code: HelloRefusal::AlreadyFriends }).unwrap();
+        let wire = serde_json::to_value(HelloAnswer::Error {
+            code: HelloRefusal::AlreadyFriends,
+        })
+        .unwrap();
 
         assert_eq!(wire, json!({ "type": "error", "code": "alreadyFriends" }));
     }
@@ -450,8 +589,17 @@ mod tests {
         let for_someone_else = evaluate(answer(&binding), &hello_id, &peer(3));
 
         let owner_id = PeerId::from_str(&owner.peer_id()).unwrap();
-        assert_eq!(delivered, Delivery::Received { peer: owner_id, profile: profile() });
-        assert_eq!((forged, for_someone_else), (Delivery::Failed, Delivery::Failed));
+        assert_eq!(
+            delivered,
+            Delivery::Received {
+                peer: owner_id,
+                profile: profile()
+            }
+        );
+        assert_eq!(
+            (forged, for_someone_else),
+            (Delivery::Failed, Delivery::Failed)
+        );
     }
 
     #[tokio::test(start_paused = true)]
@@ -460,8 +608,14 @@ mod tests {
         let in_limits: Vec<bool> = (0..4).map(|_| gate.within_limits(&peer(1))).collect();
         assert_eq!(in_limits, [true, true, true, false]);
 
-        let others: Vec<bool> = (2..10).map(|seed| gate.within_limits(&peer(seed))).collect();
+        let others: Vec<bool> = (2..10)
+            .map(|seed| gate.within_limits(&peer(seed)))
+            .collect();
 
-        assert_eq!(others.iter().filter(|admitted| **admitted).count(), 6, "ten per code, four already used");
+        assert_eq!(
+            others.iter().filter(|admitted| **admitted).count(),
+            6,
+            "ten per code, four already used"
+        );
     }
 }

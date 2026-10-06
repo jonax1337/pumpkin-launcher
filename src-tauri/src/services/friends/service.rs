@@ -13,8 +13,8 @@ use tokio_util::sync::CancellationToken;
 use super::by_name::DirectoryClient;
 use super::config::{friends_dir, FriendsConfig};
 use super::contract::{
-    Availability, DegradedReason, FriendsEnableInput, FriendsSettings, FriendsState, Me, NetworkStatus, RelayInfo,
-    RelayOperatorKind, REQUEST_TTL_SECS,
+    Availability, DegradedReason, FriendsEnableInput, FriendsSettings, FriendsState, Me,
+    NetworkStatus, RelayInfo, RelayOperatorKind, REQUEST_TTL_SECS,
 };
 use super::control::{SessionControl, WireProfile, PEER_ALPN};
 use super::directory::DirectoryDeps;
@@ -31,8 +31,8 @@ use crate::models::now_ms;
 use crate::services::gamesignal::{GameSignal, GameSignals};
 use crate::services::modbridge::ModBridge;
 use crate::services::p2p::{
-    Admission, BiStream, CloseCode, Gate, NetConfig, NetError, PeerConn, PeerId, PeerNet, RelayEntry, RelayOperator,
-    RelaySelection, RelayTls, RELAY_MAP,
+    Admission, BiStream, CloseCode, Gate, NetConfig, NetError, PeerConn, PeerId, PeerNet,
+    RelayEntry, RelayOperator, RelaySelection, RelayTls, RELAY_MAP,
 };
 use crate::services::secrets::SecretStore;
 use crate::services::{lock, Dirs};
@@ -79,7 +79,10 @@ pub struct AccountProfile {
 impl AccountProfile {
     /// `uuid` darf die Bindestrich-Schreibweise des Kontenspeichers haben.
     pub fn new(name: &str, uuid: &str) -> Self {
-        Self { name: name.to_owned(), uuid: uuid.replace('-', "").to_lowercase() }
+        Self {
+            name: name.to_owned(),
+            uuid: uuid.replace('-', "").to_lowercase(),
+        }
     }
 }
 
@@ -88,9 +91,18 @@ pub trait PeerStreamHandler: Send + Sync + 'static {
     /// Request-Stream nach dem Öffnungsrahmen `{"type":"request"}`; der Handler liest die Anfrage und antwortet selbst.
     fn on_request_stream<'a>(&'a self, peer: &'a PeerId, stream: BiStream) -> BoxFuture<'a, ()>;
     /// Tunnel-Stream nach `{"type":"tunnel","sessionId":…}`; der Handler antwortet mit `tunnelOk` oder `error`.
-    fn on_tunnel_stream<'a>(&'a self, peer: &'a PeerId, session_id: String, stream: BiStream) -> BoxFuture<'a, ()>;
+    fn on_tunnel_stream<'a>(
+        &'a self,
+        peer: &'a PeerId,
+        session_id: String,
+        stream: BiStream,
+    ) -> BoxFuture<'a, ()>;
     /// Steuernachrichten `invite`, `inviteRevoke`, `inviteDecline` (schon größengeprüft und bereinigt).
-    fn on_control_message<'a>(&'a self, peer: &'a PeerId, message: SessionControl) -> BoxFuture<'a, ()>;
+    fn on_control_message<'a>(
+        &'a self,
+        peer: &'a PeerId,
+        message: SessionControl,
+    ) -> BoxFuture<'a, ()>;
 }
 
 /// Was mit den Endpunkten gleich geschieht; Abonnenten räumen davor ihre Sitzungen ab.
@@ -192,14 +204,19 @@ impl Friends {
             directory: OnceLock::new(),
             by_name: DirectoryClient::default(),
         };
-        Ok(Self { core: Arc::new(core) })
+        Ok(Self {
+            core: Arc::new(core),
+        })
     }
 
     /// Beim App-Start: Empfänger der Ereignisse setzen, Verfügbarkeit prüfen, Abgelaufenes aufräumen und die Funktion
     /// starten, wenn sie aktiviert ist.
     pub async fn start(&self, events: Arc<dyn EventSink>, account: Option<AccountProfile>) {
         let core = &self.core;
-        *core.events.write().unwrap_or_else(|poisoned| poisoned.into_inner()) = events;
+        *core
+            .events
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = events;
         *lock(&core.account) = account;
         if let Some(signals) = lock(&core.signals).take() {
             status::spawn_signal_consumer(core, signals);
@@ -207,6 +224,7 @@ impl Friends {
         let _transition = core.transitions.lock().await;
         requests::prune_expired(core);
         core.refresh_availability();
+        core.bridge.set_friends_enabled(core.config().enabled);
         if core.config().enabled {
             core.activate().await;
         }
@@ -216,20 +234,23 @@ impl Friends {
     pub async fn shutdown(&self) {
         let _transition = self.core.transitions.lock().await;
         self.core.deactivate(Lifecycle::Shutdown).await;
-        self.core.bridge.stop().await;
     }
 
     pub fn state(&self) -> FriendsState {
         self.core.state()
     }
 
-    pub async fn enable(&self, input: FriendsEnableInput, account: Option<AccountProfile>) -> AppResult<FriendsState> {
+    pub async fn enable(
+        &self,
+        input: FriendsEnableInput,
+        account: Option<AccountProfile>,
+    ) -> AppResult<FriendsState> {
         let core = &self.core;
         let _transition = core.transitions.lock().await;
         core.refresh_availability();
         core.ensure_available()?;
-        let account = account.ok_or_else(|| AppError::invalid(coded!("errors.friends.msAccountRequired")))?;
-        let display_name = sanitize::own_display_name(&input.display_name)?;
+        let account =
+            account.ok_or_else(|| AppError::invalid(coded!("errors.friends.msAccountRequired")))?;
         ensure_relay_consent(&core.options.relay_map, input.accept_third_party_relays)?;
         if core.identity().is_none() {
             core.set_identity(identity::create(&*core.secrets)?);
@@ -239,9 +260,9 @@ impl Friends {
             config.enabled = true;
             config.third_party_relays_accepted = input.accept_third_party_relays;
         })?;
+        core.bridge.set_friends_enabled(true);
         let kept = core.config().settings;
         let settings = FriendsSettings {
-            display_name,
             always_relay: input.always_relay,
             findable_by_name: input.findable_by_name,
             ..kept
@@ -256,16 +277,24 @@ impl Friends {
     /// wenn sich das angekündigte Konto geändert hat (SPEC 4.1), und das Verzeichnis erfährt den Wechsel (BYNAME 7.5).
     pub fn update_account(&self, account: Option<AccountProfile>) {
         let core = &self.core;
-        let changed = {
+        let (changed, same_uuid) = {
             let mut current = lock(&core.account);
-            let changed = *current != account;
+            let previous = current.clone();
+            let changed = previous != account;
+            let same_uuid = previous.as_ref().map(|account| account.uuid.as_str())
+                == account.as_ref().map(|account| account.uuid.as_str());
             *current = account;
-            changed
+            (changed, same_uuid)
         };
-        if changed {
-            core.links.broadcast_profile(core.own_profile());
+        if !changed {
+            return;
+        }
+        core.links.broadcast_profile(core.own_profile());
+        // Eine Umbenennung behält die Verzeichnungs-Anmeldung derselben UUID; nur ein gewechseltes Konto verliert sie (BYNAME 7.5).
+        if !same_uuid {
             by_name::account_changed(core);
         }
+        core.emit(FriendsEvent::Changed);
     }
 
     /// Schaltet ab und behält alle Daten.
@@ -273,23 +302,24 @@ impl Friends {
         let core = &self.core;
         let _transition = core.transitions.lock().await;
         core.ensure_available()?;
-        core.deactivate(Lifecycle::Disabled).await;
-        core.bridge.stop().await;
-        by_name::leave_directory(core).await;
         core.update_config(|config| config.enabled = false)?;
+        core.bridge.set_friends_enabled(false);
+        core.deactivate(Lifecycle::Disabled).await;
+        by_name::leave_directory(core).await;
         core.set_network(NetworkStatus::Off);
         core.emit(FriendsEvent::Changed);
         Ok(core.state())
     }
 
-    /// Ein geänderter Anzeigename geht an alle verbundenen Freunde; „Immer über Relay“ bindet neu und beendet
-    /// Sitzungen.
+    /// „Immer über Relay“ bindet neu und beendet Sitzungen.
     pub async fn update_settings(&self, settings: FriendsSettings) -> AppResult<FriendsState> {
         let core = &self.core;
         let _transition = core.transitions.lock().await;
-        core.ensure_enabled()?;
-        let display_name = sanitize::own_display_name(&settings.display_name)?;
-        core.apply_settings(FriendsSettings { display_name, ..settings }).await?;
+        let previous = core.config().settings;
+        if previous.always_relay != settings.always_relay || previous.findable_by_name != settings.findable_by_name {
+            core.ensure_available()?;
+        }
+        core.apply_settings(settings).await?;
         core.emit(FriendsEvent::Changed);
         Ok(core.state())
     }
@@ -300,8 +330,10 @@ impl Friends {
         let core = &self.core;
         let _transition = core.transitions.lock().await;
         core.ensure_enabled()?;
+        core.bridge.set_friends_enabled(false);
         core.deactivate(Lifecycle::IdentityChanged).await;
         let rotated = core.rotate_records();
+        core.bridge.set_friends_enabled(core.config().enabled);
         core.activate().await;
         rotated?;
         core.emit(FriendsEvent::Changed);
@@ -316,8 +348,10 @@ impl Friends {
         if *lock(&core.availability) == Availability::NoSecretStore {
             return Err(AppError::invalid(coded!("errors.friends.unavailable")));
         }
+        core.bridge.set_friends_enabled(false);
         core.deactivate(Lifecycle::IdentityChanged).await;
         let reset = core.reset_records();
+        core.bridge.set_friends_enabled(core.config().enabled);
         core.activate().await;
         reset?;
         core.emit(FriendsEvent::Changed);
@@ -325,8 +359,14 @@ impl Friends {
     }
 
     /// Genau einmal möglich.
-    pub fn register_stream_handler(&self, handler: Arc<dyn PeerStreamHandler>) -> Result<(), HandlerAlreadySet> {
-        self.core.handler.set(handler).map_err(|_| HandlerAlreadySet)
+    pub fn register_stream_handler(
+        &self,
+        handler: Arc<dyn PeerStreamHandler>,
+    ) -> Result<(), HandlerAlreadySet> {
+        self.core
+            .handler
+            .set(handler)
+            .map_err(|_| HandlerAlreadySet)
     }
 
     /// Jeder Abonnent bekommt jedes Ereignis.
@@ -363,7 +403,7 @@ impl Core {
             Me {
                 fingerprint: identity::fingerprint(&peer_id),
                 peer_id,
-                display_name: config.settings.display_name.clone(),
+                display_name: self.own_profile().display_name,
             }
         });
         FriendsState {
@@ -381,8 +421,12 @@ impl Core {
     pub(super) fn ensure_available(&self) -> AppResult<()> {
         match *lock(&self.availability) {
             Availability::Available => Ok(()),
-            Availability::NoSecretStore => Err(AppError::invalid(coded!("errors.friends.unavailable"))),
-            Availability::IdentityLost => Err(AppError::invalid(coded!("errors.friends.identityLost"))),
+            Availability::NoSecretStore => {
+                Err(AppError::invalid(coded!("errors.friends.unavailable")))
+            }
+            Availability::IdentityLost => {
+                Err(AppError::invalid(coded!("errors.friends.identityLost")))
+            }
         }
     }
 
@@ -412,7 +456,10 @@ impl Core {
     }
 
     pub(super) fn emit(&self, event: FriendsEvent) {
-        self.events.read().unwrap_or_else(|poisoned| poisoned.into_inner()).emit(event);
+        self.events
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .emit(event);
     }
 
     pub(super) fn set_network(&self, status: NetworkStatus) {
@@ -429,17 +476,20 @@ impl Core {
 
     /// Das Profil, das Freunde in `hello` und `profile` bekommen.
     pub(super) fn own_profile(&self) -> WireProfile {
-        let account = lock(&self.account).clone();
+        let account = lock(&self.account);
+        let mc_name = sanitize::mc_name(account.as_ref().map(|account| account.name.as_str()));
         WireProfile {
-            display_name: self.config().settings.display_name,
-            mc_name: sanitize::mc_name(account.as_ref().map(|account| account.name.as_str())),
+            display_name: mc_name.clone().unwrap_or_default(),
+            mc_name,
             mc_uuid: sanitize::mc_uuid(account.as_ref().map(|account| account.uuid.as_str())),
         }
     }
 
     /// UUID des ersten Microsoft-Kontos, 32 Hex-Zeichen.
     pub(super) fn account_uuid(&self) -> Option<String> {
-        lock(&self.account).as_ref().map(|account| account.uuid.clone())
+        lock(&self.account)
+            .as_ref()
+            .map(|account| account.uuid.clone())
     }
 
     /// Dauer der Freundschaftsanfragen und der unbestätigten Freunde.
@@ -473,7 +523,8 @@ impl Core {
     /// schon zu, während die alten Verbindungen noch offen sind.
     fn rotate_records(&self) -> AppResult<()> {
         let Renewal { retired, current } = identity::renew(&*self.secrets)?;
-        let old = retired.ok_or_else(|| AppError::invalid(coded!("errors.friends.identityLost")))?;
+        let old =
+            retired.ok_or_else(|| AppError::invalid(coded!("errors.friends.identityLost")))?;
         self.set_identity(current.clone());
         by_name::forget_session(self);
         outbox::replace_with_rotation(self, &old, &current)?;
@@ -504,8 +555,6 @@ impl Core {
         }
         if previous.always_relay != settings.always_relay && self.runtime().is_some() {
             self.restart(Lifecycle::Rebind).await;
-        } else if previous.display_name != settings.display_name {
-            self.links.broadcast_profile(self.own_profile());
         }
         Ok(())
     }
@@ -516,17 +565,24 @@ impl Core {
         if self.runtime().is_some() || !self.config().enabled {
             return;
         }
-        let Some(identity) = self.identity() else { return };
-        if let Err(err) = self.bridge.start().await {
-            tracing::warn!(%err, "Mod-Brücke nicht gestartet");
-        }
-        let config = main_net_config(&self.options, &identity, self.config().settings.always_relay);
-        let gate = Arc::new(MainGate { core: Arc::downgrade(self) });
+        let Some(identity) = self.identity() else {
+            return;
+        };
+        let config = main_net_config(
+            &self.options,
+            &identity,
+            self.config().settings.always_relay,
+        );
+        let gate = Arc::new(MainGate {
+            core: Arc::downgrade(self),
+        });
         let main = match PeerNet::bind(config, gate).await {
             Ok(main) => Arc::new(main),
             Err(err) => {
                 tracing::warn!(%err, "Freunde-Endpunkt nicht gebunden");
-                self.set_network(NetworkStatus::Degraded { reason: DegradedReason::BindFailed });
+                self.set_network(NetworkStatus::Degraded {
+                    reason: DegradedReason::BindFailed,
+                });
                 return;
             }
         };
@@ -550,7 +606,9 @@ impl Core {
     /// Meldet `kind` an alle Abonnenten, wartet auf sie und schließt erst dann die Endpunkte (SPEC 8.7).
     async fn deactivate(&self, kind: Lifecycle) {
         self.deliver_lifecycle(kind).await;
-        let Some(runtime) = lock(&self.runtime).take() else { return };
+        let Some(runtime) = lock(&self.runtime).take() else {
+            return;
+        };
         // Sonst wählte der Zeitplan die gleich als offline geltenden Freunde noch einmal an.
         runtime.scheduler.halt();
         self.patches.flush(&self.stores);
@@ -584,7 +642,10 @@ impl Core {
             futures::future::join_all(finished).await;
         };
         if tokio::time::timeout(LIFECYCLE_WAIT, deliver).await.is_err() {
-            tracing::warn!(?kind, "Lebenszyklus-Abonnent hat nicht rechtzeitig aufgeräumt");
+            tracing::warn!(
+                ?kind,
+                "Lebenszyklus-Abonnent hat nicht rechtzeitig aufgeräumt"
+            );
         }
         lock(&self.lifecycle).retain(|subscriber| !subscriber.is_closed());
     }
@@ -598,7 +659,9 @@ struct MainGate {
 
 impl Gate for MainGate {
     fn admit(&self, peer: &PeerId, alpn: &[u8]) -> Admission {
-        let Some(core) = self.core.upgrade() else { return Admission::Reject(CloseCode::SHUTDOWN) };
+        let Some(core) = self.core.upgrade() else {
+            return Admission::Reject(CloseCode::SHUTDOWN);
+        };
         if alpn == PEER_ALPN && requests::may_connect(&core, &peer.to_string()) {
             Admission::Accept
         } else {
@@ -607,7 +670,11 @@ impl Gate for MainGate {
     }
 }
 
-pub(super) fn main_net_config(options: &NetOptions, identity: &Identity, always_relay: bool) -> NetConfig {
+pub(super) fn main_net_config(
+    options: &NetOptions,
+    identity: &Identity,
+    always_relay: bool,
+) -> NetConfig {
     NetConfig {
         secret: identity.secret_bytes(),
         alpns: vec![PEER_ALPN],
@@ -656,8 +723,12 @@ pub(super) fn now_secs() -> u64 {
 
 /// Host eines Relays für die Anzeige, ohne den abschließenden Punkt der voll qualifizierten Namen.
 pub(super) fn relay_host(entry: &RelayEntry) -> String {
-    let host = reqwest::Url::parse(&entry.url).ok().and_then(|url| url.host_str().map(str::to_owned));
-    host.unwrap_or_else(|| entry.url.to_string()).trim_end_matches('.').to_owned()
+    let host = reqwest::Url::parse(&entry.url)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_owned));
+    host.unwrap_or_else(|| entry.url.to_string())
+        .trim_end_matches('.')
+        .to_owned()
 }
 
 fn relay_infos(map: &[RelayEntry]) -> Vec<RelayInfo> {
@@ -678,7 +749,9 @@ fn ensure_relay_consent(map: &[RelayEntry], accepted: bool) -> AppResult<()> {
     if accepted || map.iter().all(|entry| entry.operator != RelayOperator::N0) {
         Ok(())
     } else {
-        Err(AppError::invalid(coded!("errors.friends.relayConsentRequired")))
+        Err(AppError::invalid(coded!(
+            "errors.friends.relayConsentRequired"
+        )))
     }
 }
 
@@ -690,7 +763,12 @@ mod tests {
     use super::*;
 
     fn entry(index: u8, url: &'static str, operator: RelayOperator) -> RelayEntry {
-        RelayEntry { index, url: Cow::Borrowed(url), operator, quic_port: Some(7842) }
+        RelayEntry {
+            index,
+            url: Cow::Borrowed(url),
+            operator,
+            quic_port: Some(7842),
+        }
     }
 
     #[test]
@@ -698,7 +776,12 @@ mod tests {
         let identity = Identity::generate();
         let issued = code::issue(&identity, 202).unwrap();
 
-        let config = hello_net_config(&NetOptions::production(), &identity, &issued.salt, issued.parts.relay_index);
+        let config = hello_net_config(
+            &NetOptions::production(),
+            &identity,
+            &issued.salt,
+            issued.parts.relay_index,
+        );
 
         assert!(config.relay_only);
         assert_eq!(config.relays, RelaySelection::Only(202));
@@ -715,7 +798,10 @@ mod tests {
         let direct = main_net_config(&NetOptions::production(), &identity, false);
         let relayed = main_net_config(&NetOptions::production(), &identity, true);
 
-        assert_eq!((direct.relays, direct.relay_only, relayed.relay_only), (RelaySelection::All, false, true));
+        assert_eq!(
+            (direct.relays, direct.relay_only, relayed.relay_only),
+            (RelaySelection::All, false, true)
+        );
         assert_eq!(direct.secret, identity.secret_bytes());
         assert_eq!(direct.relay_map.len(), RELAY_MAP.len());
     }
@@ -730,8 +816,19 @@ mod tests {
 
     #[test]
     fn third_party_relays_need_consent() {
-        let ours = [entry(0, "https://relay-eu1.example.org/", RelayOperator::Pumpkin)];
-        let with_n0 = [ours[0].clone(), entry(200, "https://use1-1.relay.n0.iroh.link./", RelayOperator::N0)];
+        let ours = [entry(
+            0,
+            "https://relay-eu1.example.org/",
+            RelayOperator::Pumpkin,
+        )];
+        let with_n0 = [
+            ours[0].clone(),
+            entry(
+                200,
+                "https://use1-1.relay.n0.iroh.link./",
+                RelayOperator::N0,
+            ),
+        ];
 
         assert!(ensure_relay_consent(&ours, false).is_ok());
         assert!(ensure_relay_consent(&with_n0, true).is_ok());
@@ -740,7 +837,11 @@ mod tests {
 
     #[test]
     fn relay_host_drops_the_trailing_dot() {
-        let n0 = entry(200, "https://use1-1.relay.n0.iroh.link./", RelayOperator::N0);
+        let n0 = entry(
+            200,
+            "https://use1-1.relay.n0.iroh.link./",
+            RelayOperator::N0,
+        );
 
         assert_eq!(relay_host(&n0), "use1-1.relay.n0.iroh.link");
     }

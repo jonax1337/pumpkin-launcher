@@ -8,11 +8,23 @@ pluginManagement {
 			name = 'KikuGie Releases'
 			url = 'https://maven.kikugie.dev/releases/'
 		}
+		maven {
+			name = 'WagYourTail Releases'
+			url = 'https://maven.wagyourtail.xyz/releases/'
+		}
+		maven {
+			name = 'MinecraftForge'
+			url = 'https://maven.minecraftforge.net/'
+		}
+		maven {
+			name = 'NeoForged'
+			url = 'https://maven.neoforged.net/releases/'
+		}
 		mavenCentral()
 		gradlePluginPortal()
 	}
 	plugins {
-		// Wählt je Knoten das Loom mit oder ohne Remapping (Fabric ab Minecraft 26.1 ist nicht mehr verschleiert, INGAME A4).
+		// Wählt je Knoten das Loom mit oder ohne Remapping (Fabric ab Minecraft 26.1 ist nicht mehr verschleiert, docs/bridge/README.md).
 		id('dev.kikugie.loom-back-compat').version '0.4.3'
 	}
 }
@@ -22,7 +34,7 @@ plugins {
 	id 'dev.kikugie.loom-back-compat'
 }
 
-rootProject.name = 'pumpkin_friends'
+rootProject.name = 'pumpkin_bridge'
 
 include 'core'
 
@@ -45,7 +57,7 @@ if (!unknownIds.isEmpty()) {
 def selectedNodes = requestedNodeIds.isEmpty() ? nodeTable : nodeTable.findAll { it.id in requestedNodeIds }
 
 // Ein Knoten darf nur beanspruchen, wogegen er gebaut wird, und Gradle muss auf einem JDK laufen, das der Knoten und
-// Stonecutter vertragen (INGAME A5).
+// Stonecutter vertragen (docs/bridge/README.md).
 def modProperties = new Properties()
 new File(settingsDir, 'gradle.properties').withReader('UTF-8') { modProperties.load(it) }
 def gradleJdkMin = modProperties.getProperty('mod.gradleJdkMin') as int
@@ -75,7 +87,7 @@ if (compileMinecraft != null) {
 // loom-back-compat legt Loom auf den Klassenpfad des Wurzelprojekts, wenn dieses eine Extra-Property
 // "loomx.loom_version" hat (eine Zeile in gradle.properties zählt dafür nicht). Das tut es nur, wenn ein gewählter
 // Knoten Fabric ist, denn Loom verlangt ein JDK 25 und die anderen Knoten laufen auf dem JDK 21.
-if (selectedNodes.any { it.loader == 'fabric' }) {
+if (selectedNodes.any { it.loader in ['fabric', 'quilt'] }) {
 	gradle.beforeProject { project ->
 		if (project == project.rootProject) {
 			project.ext['loomx.loom_version'] = modProperties.getProperty('loom_version')
@@ -95,6 +107,27 @@ stonecutter {
 		selectedNodes.each { node ->
 			versions([(node.id): node.compileMinecraft ?: node.minecraft.last()])
 		}
-		mapBuilds { branch, node -> 'build-' + node.project.substring(node.project.lastIndexOf('-') + 1) + '.gradle' }
+		mapBuilds { branch, projectNode ->
+			def node = selectedNodes.find { it.id == projectNode.project }
+			def minecraft = (node.compileMinecraft ?: node.minecraft.last()).tokenize('.').collect { it as int }
+			if (node.loader in ['fabric', 'quilt']) {
+				return 'build-fabric.gradle'
+			}
+			if (node.loader == 'forge') {
+				if (minecraft[0] == 1 && minecraft[1] == 16) {
+					return 'build-forge-legacy.gradle'
+				}
+				def modern = minecraft[0] > 1 || minecraft[1] > 20 ||
+					(minecraft[1] == 20 && minecraft.size() > 2 && minecraft[2] > 1)
+				return modern ? 'build-forge-modern.gradle' : 'build-forge.gradle'
+			}
+			if (node.loader == 'neoforge' && (node.compileMinecraft ?: node.minecraft.last()) == '1.20.1') {
+				return 'build-neoforge-forge.gradle'
+			}
+			if (node.loader == 'neoforge' && minecraft[0] == 1 && minecraft[1] == 20) {
+				return 'build-neoforge-legacy.gradle'
+			}
+			return 'build-neoforge.gradle'
+		}
 	}
 }

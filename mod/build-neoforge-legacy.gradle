@@ -1,0 +1,51 @@
+plugins {
+	id 'net.neoforged.gradle.userdev' version '7.1.39'
+}
+
+// NeoForge 20.x already uses Mojang names at runtime, unlike the NeoForge 47.x fork.
+ext.mixin_refmap = 'null'
+apply from: rootProject.file('gradle/node.gradle')
+
+sourceSets.main.java.exclude('dev/laux/pumpkin/bridge/platform/fabric/**',
+	'dev/laux/pumpkin/bridge/platform/forge/**', 'dev/laux/pumpkin/bridge/platform/neoforgelegacy/**')
+
+// JST is Java 21 tooling; --release and the client runtime still follow the node's Java minimum.
+java.toolchain.languageVersion = JavaLanguageVersion.of(Math.max(21, node.javaMin))
+
+repositories {
+	maven { url = 'https://maven.neoforged.net/releases' }
+}
+
+dependencies {
+	implementation "net.neoforged:neoforge:${pinned('neoforge_version')}"
+}
+
+runs {
+	configureEach {
+		workingDirectory = layout.projectDirectory.dir('run')
+		modSource sourceSets.main
+		modSource project(':core').sourceSets.main
+		argument '--mixin.config=pumpkin_bridge.mixins.json'
+		if (project.hasProperty('kitdemo')) {
+			systemProperty 'pumpkin.dev.kitdemo', 'true'
+		}
+		if (project.hasProperty('demoHold')) {
+			systemProperty 'pumpkin.dev.demoHold', 'true'
+		}
+	}
+	client {}
+}
+
+// FML 1/2 in 1.20.2-1.20.4 still reads mods.toml with mandatory dependencies.
+if (sc.current.version in ['1.20.2', '1.20.3', '1.20.4']) {
+	tasks.named('processResources') {
+		exclude 'META-INF/neoforge.mods.toml'
+		from(rootProject.file('descriptors/neoforge-legacy'))
+	}
+}
+
+tasks.named('jar') {
+	manifest.attributes('MixinConfigs': 'pumpkin_bridge.mixins.json')
+}
+
+registerModIndexEntry(tasks.named('jar').flatMap { it.archiveFile })

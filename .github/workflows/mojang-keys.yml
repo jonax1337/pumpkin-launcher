@@ -21,6 +21,7 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 24
+          package-manager-cache: false
 
       - name: Compare the pinned keys with Mojang's live list
         run: node directory/scripts/mojang-keys.mjs check

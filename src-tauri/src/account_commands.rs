@@ -10,7 +10,10 @@ use crate::state::AppState;
 /// Startet die Anmeldung. Standard: Browser mit Rücksprung auf localhost, das Frontend öffnet `verificationUri`.
 /// `method = "device"` erzwingt den Gerätecode (dann zeigt das Frontend `userCode` und `verificationUri`).
 #[tauri::command]
-pub async fn ms_login_start(state: State<'_, AppState>, method: Option<String>) -> AppResult<LoginStart> {
+pub async fn ms_login_start(
+    state: State<'_, AppState>,
+    method: Option<String>,
+) -> AppResult<LoginStart> {
     auth::start_login(&state, LoginMode::from_method(method.as_deref())).await
 }
 

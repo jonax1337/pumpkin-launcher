@@ -3,7 +3,7 @@ use std::env;
 use std::path::PathBuf;
 use std::time::Duration;
 
-/// Hartes Zeitlimit eines Spielstarts, wenn nichts anderes verlangt wird (INGAME 10, Schicht 4).
+/// Hartes Zeitlimit eines Spielstarts, wenn nichts anderes verlangt wird (docs/bridge/README.md).
 const DEFAULT_TIMEOUT_SECS: u64 = 240;
 const SCENARIO_SEPARATOR: char = ':';
 
@@ -20,7 +20,7 @@ pub enum Scenario {
     /// Das Tor sieht das Java der Zelle, das Spiel läuft aber mit diesem (echter Fehlstart durch zu altes Java).
     SpawnWithJava { java: PathBuf },
     /// Eine Kopie des Jars der Zelle liegt im Mods-Ordner der Instanz (Anhang B, Punkt 2): das Tor muss die Einspeisung
-    /// verweigern, statt zwei pumpkin_friends zu starten; das Spiel startet unberührt.
+    /// verweigern, statt zwei pumpkin_bridge zu starten; das Spiel startet unberührt.
     DuplicateId,
 }
 
@@ -66,6 +66,8 @@ pub struct Config {
     pub scenario: Scenario,
     /// Feste Loader-Version statt der neuesten stabilen.
     pub loader_version: Option<String>,
+    /// Keeps a proven production client alive for desktop UI interaction; zero preserves the normal smoke run.
+    pub ui_hold: Duration,
 }
 
 impl Config {
@@ -77,7 +79,16 @@ impl Config {
         let out = var("PUMPKIN_SMOKE_OUT").map(PathBuf::from).unwrap_or_else(|| data.join("smoke-reports"));
         let timeout = var("PUMPKIN_SMOKE_TIMEOUT_SECS").map_or(Ok(DEFAULT_TIMEOUT_SECS), |text| text.parse().map_err(|_| format!("PUMPKIN_SMOKE_TIMEOUT_SECS '{text}' ist keine Zahl")))?;
         let scenario = Scenario::parse(&var("PUMPKIN_SMOKE_SCENARIO").unwrap_or_default())?;
-        Ok(Some(Self { cell, dist, data, out, timeout: Duration::from_secs(timeout), scenario, loader_version: var("PUMPKIN_SMOKE_LOADER_VERSION") }))
+        let ui_hold = var("PUMPKIN_SMOKE_UI_HOLD_SECS").map_or(Ok(0), |text| {
+            text.parse::<u64>().map_err(|_| format!("PUMPKIN_SMOKE_UI_HOLD_SECS '{text}' ist keine Zahl"))
+        })?;
+        if ui_hold > 600 {
+            return Err("PUMPKIN_SMOKE_UI_HOLD_SECS darf höchstens 600 sein".to_owned());
+        }
+        Ok(Some(Self {
+            cell, dist, data, out, timeout: Duration::from_secs(timeout), scenario,
+            loader_version: var("PUMPKIN_SMOKE_LOADER_VERSION"), ui_hold: Duration::from_secs(ui_hold),
+        }))
     }
 }
 

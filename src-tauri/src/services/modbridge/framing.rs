@@ -1,4 +1,4 @@
-//! JSON-Zeilen auf dem Draht (INGAME 5.3): Lesen mit Längengrenze, Schreiben mit Zeitgrenze, dazu die Uhr für Ping und
+//! JSON-Zeilen auf dem Draht (docs/bridge/README.md, "Protocol 2"): Lesen mit Längengrenze, Schreiben mit Zeitgrenze, dazu die Uhr für Ping und
 //! Stille.
 use std::io;
 use std::time::Duration;
@@ -63,6 +63,20 @@ pub(super) fn encode_line(message: &impl Serialize) -> Vec<u8> {
 pub(super) async fn write_line<W: AsyncWrite + Unpin>(writer: &mut W, line: &[u8], stall: Duration) -> io::Result<()> {
     let timed_out = |_| io::Error::new(io::ErrorKind::TimedOut, "Mod liest nicht");
     tokio::time::timeout(stall, writer.write_all(line)).await.map_err(timed_out)?
+}
+
+/// A revoked private write must end its connection: a partial JSON line cannot be resumed safely.
+pub(super) async fn write_private_line<W: AsyncWrite + Unpin>(
+    writer: &mut W,
+    line: &[u8],
+    stall: Duration,
+    permission: &tokio_util::sync::CancellationToken,
+) -> io::Result<()> {
+    tokio::select! {
+        biased;
+        () = permission.cancelled() => Err(io::Error::new(io::ErrorKind::ConnectionAborted, "Friends permission revoked during write")),
+        result = write_line(writer, line, stall) => result,
+    }
 }
 
 /// Was die Uhr der Verbindung als Nächstes verlangt.
@@ -231,5 +245,32 @@ mod tests {
         liveness.heard(secs(start, 25));
         assert_ne!(liveness.beat(secs(start, 40)), Beat::Silent);
         assert_eq!(liveness.beat(secs(start, 55)), Beat::Silent);
+    }
+
+    #[tokio::test]
+    async fn revocation_interrupts_a_backpressured_private_line_and_the_partial_stream_ends() {
+        use tokio::io::AsyncReadExt;
+
+        let (mut writer, mut reader) = tokio::io::duplex(8);
+        let permission = tokio_util::sync::CancellationToken::new();
+        let line = b"{\"secret\":\"private-bearer-code\"}\n";
+        let write = async {
+            let result = write_private_line(&mut writer, line, Duration::from_secs(5), &permission).await;
+            drop(writer);
+            result
+        };
+        let revoke_and_read = async {
+            let mut prefix = [0; 8];
+            reader.read_exact(&mut prefix).await.unwrap();
+            permission.cancel();
+            let mut remaining = Vec::new();
+            reader.read_to_end(&mut remaining).await.unwrap();
+            (prefix, remaining)
+        };
+
+        let (result, (prefix, remaining)) = tokio::join!(write, revoke_and_read);
+        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::ConnectionAborted);
+        assert_eq!(&prefix, &line[..8]);
+        assert!(remaining.is_empty(), "revoked payload remainder must not reach the consumer");
     }
 }

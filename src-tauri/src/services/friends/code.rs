@@ -34,19 +34,28 @@ pub struct IssuedCode {
 /// Erzeugt einen neuen Code für das Relay mit dem Index `relay_index`.
 pub fn issue(identity: &Identity, relay_index: u8) -> AppResult<IssuedCode> {
     let salt = random_bytes()?;
-    let parts = CodeParts { relay_index, hello_id: identity.hello_id(&salt), secret: random_bytes()? };
+    let parts = CodeParts {
+        relay_index,
+        hello_id: identity.hello_id(&salt),
+        secret: random_bytes()?,
+    };
     Ok(IssuedCode { salt, parts })
 }
 
 /// Liest einen eingegebenen Code: Groß-/Kleinschreibung, Leerzeichen und `-` im Hauptteil sind egal.
 pub fn parse(input: &str) -> AppResult<CodeParts> {
-    let payload = normalized_body(input).and_then(|body| BASE32_NOPAD.decode(body.to_uppercase().as_bytes()).ok());
-    payload.and_then(|payload| CodeParts::from_payload(&payload)).ok_or_else(invalid)
+    let payload = normalized_body(input)
+        .and_then(|body| BASE32_NOPAD.decode(body.to_uppercase().as_bytes()).ok());
+    payload
+        .and_then(|payload| CodeParts::from_payload(&payload))
+        .ok_or_else(invalid)
 }
 
 /// Ob der Klartext-Hash `secret_digest` zum Geheimnis `secret_hex` (18 Hex-Zeichen aus der Anfrage) gehört.
 pub fn secret_matches(secret_digest: &str, secret_hex: &str) -> bool {
-    let Ok(secret) = HEXLOWER.decode(secret_hex.as_bytes()) else { return false };
+    let Ok(secret) = HEXLOWER.decode(secret_hex.as_bytes()) else {
+        return false;
+    };
     secret.len() == SECRET_LEN && digest_of(&secret) == secret_digest
 }
 
@@ -54,7 +63,10 @@ impl CodeParts {
     pub fn encode(&self) -> String {
         let body = self.body();
         let payload = [&body[..], &checksum(&body)[..]].concat();
-        format!("{FRIEND_CODE_PREFIX}{}", BASE32_NOPAD.encode(&payload).to_lowercase())
+        format!(
+            "{FRIEND_CODE_PREFIX}{}",
+            BASE32_NOPAD.encode(&payload).to_lowercase()
+        )
     }
 
     /// Die letzten vier Zeichen des Codes: so erkennt der Nutzer seine Codes wieder.
@@ -78,7 +90,9 @@ impl CodeParts {
         if is_known(self.relay_index) {
             return Ok(());
         }
-        Err(AppError::invalid(coded!("errors.friends.protocolUnsupported")))
+        Err(AppError::invalid(coded!(
+            "errors.friends.protocolUnsupported"
+        )))
     }
 
     pub fn ensure_not_own(&self, own_hello_ids: &[[u8; 32]]) -> AppResult<()> {
@@ -89,7 +103,12 @@ impl CodeParts {
     }
 
     fn body(&self) -> Vec<u8> {
-        [&[VERSION, self.relay_index][..], &self.hello_id[..], &self.secret[..]].concat()
+        [
+            &[VERSION, self.relay_index][..],
+            &self.hello_id[..],
+            &self.secret[..],
+        ]
+        .concat()
     }
 
     fn from_payload(payload: &[u8]) -> Option<Self> {
@@ -97,7 +116,11 @@ impl CodeParts {
         if check != checksum(body) || body[0] != VERSION {
             return None;
         }
-        Some(Self { relay_index: body[1], hello_id: body[2..34].try_into().ok()?, secret: body[34..].try_into().ok()? })
+        Some(Self {
+            relay_index: body[1],
+            hello_id: body[2..34].try_into().ok()?,
+            secret: body[34..].try_into().ok()?,
+        })
     }
 }
 
@@ -108,7 +131,11 @@ fn invalid() -> AppError {
 /// Hauptteil des Codes in Kleinbuchstaben ohne Leerzeichen und `-`, oder `None`, wenn Präfix, Länge oder Alphabet nicht passen.
 fn normalized_body(input: &str) -> Option<String> {
     let lowered = input.trim().to_lowercase();
-    let body: String = lowered.strip_prefix(FRIEND_CODE_PREFIX)?.chars().filter(|c| !matches!(c, ' ' | '-')).collect();
+    let body: String = lowered
+        .strip_prefix(FRIEND_CODE_PREFIX)?
+        .chars()
+        .filter(|c| !matches!(c, ' ' | '-'))
+        .collect();
     let in_alphabet = body.bytes().all(|b| matches!(b, b'a'..=b'z' | b'2'..=b'7'));
     (body.len() == FRIEND_CODE_BODY_LENGTH && in_alphabet).then_some(body)
 }
@@ -133,8 +160,10 @@ mod tests {
     use super::*;
     use crate::services::friends::test_support::error_key;
 
-    const GOLDEN: &str = "pumpkin-aiaaaaicamcakbqhbaequcymbuha6earcijrifiwc4mbsgq3dqor4h5augrkhjffu2t2rvw3";
-    const GOLDEN_GROUPED_BODY: &str = "aiaa aaic amca kbqh baeq ucym buha 6ear cijr ifiw c4mb sgq3 dqor 4h5a ugrk hjff u2t2 rvw3";
+    const GOLDEN: &str =
+        "pumpkin-aiaaaaicamcakbqhbaequcymbuha6earcijrifiwc4mbsgq3dqor4h5augrkhjffu2t2rvw3";
+    const GOLDEN_GROUPED_BODY: &str =
+        "aiaa aaic amca kbqh baeq ucym buha 6ear cijr ifiw c4mb sgq3 dqor 4h5a ugrk hjff u2t2 rvw3";
 
     fn golden_parts() -> CodeParts {
         CodeParts {
@@ -186,7 +215,13 @@ mod tests {
     fn parsing_accepts_grouped_upper_case_and_padded_input() {
         let grouped = format!("pumpkin-{GOLDEN_GROUPED_BODY}");
         let hyphenated = format!("pumpkin-{}", GOLDEN_GROUPED_BODY.replace(' ', "-"));
-        for input in [grouped.clone(), hyphenated, grouped.to_uppercase(), format!("  {GOLDEN}\n"), GOLDEN.to_uppercase()] {
+        for input in [
+            grouped.clone(),
+            hyphenated,
+            grouped.to_uppercase(),
+            format!("  {GOLDEN}\n"),
+            GOLDEN.to_uppercase(),
+        ] {
             assert_eq!(parse(&input).unwrap(), golden_parts(), "{input}");
         }
     }
@@ -197,7 +232,11 @@ mod tests {
             let mut bytes = GOLDEN.as_bytes().to_vec();
             bytes[at] = if bytes[at] == b'a' { b'b' } else { b'a' };
             let err = parse(std::str::from_utf8(&bytes).unwrap()).unwrap_err();
-            assert_eq!(error_key(&err), "errors.friends.codeInvalid", "Position {at}");
+            assert_eq!(
+                error_key(&err),
+                "errors.friends.codeInvalid",
+                "Position {at}"
+            );
         }
     }
 
@@ -216,7 +255,11 @@ mod tests {
             format!("pumpkin-{}8", &body[1..]),
         ];
         for input in inputs {
-            assert_eq!(error_key(&parse(&input).unwrap_err()), "errors.friends.codeInvalid", "{input}");
+            assert_eq!(
+                error_key(&parse(&input).unwrap_err()),
+                "errors.friends.codeInvalid",
+                "{input}"
+            );
         }
     }
 
@@ -225,8 +268,14 @@ mod tests {
         let mut body = golden_parts().body();
         body[0] = 0x03;
         let payload = [&body[..], &checksum(&body)[..]].concat();
-        let code = format!("{FRIEND_CODE_PREFIX}{}", BASE32_NOPAD.encode(&payload).to_lowercase());
-        assert_eq!(error_key(&parse(&code).unwrap_err()), "errors.friends.codeInvalid");
+        let code = format!(
+            "{FRIEND_CODE_PREFIX}{}",
+            BASE32_NOPAD.encode(&payload).to_lowercase()
+        );
+        assert_eq!(
+            error_key(&parse(&code).unwrap_err()),
+            "errors.friends.codeInvalid"
+        );
     }
 
     #[test]
@@ -246,7 +295,9 @@ mod tests {
     fn own_hello_id_is_code_own() {
         let parts = golden_parts();
         parts.ensure_not_own(&[[9; 32]]).unwrap();
-        let err = parts.ensure_not_own(&[[9; 32], parts.hello_id]).unwrap_err();
+        let err = parts
+            .ensure_not_own(&[[9; 32], parts.hello_id])
+            .unwrap_err();
         assert_eq!(error_key(&err), "errors.friends.codeOwn");
     }
 
@@ -255,9 +306,15 @@ mod tests {
         let parts = golden_parts();
         assert_eq!(parts.secret_hex(), "a0a1a2a3a4a5a6a7a8");
         assert!(secret_matches(&parts.secret_digest(), &parts.secret_hex()));
-        assert!(!secret_matches(&parts.secret_digest(), "a0a1a2a3a4a5a6a7a9"));
+        assert!(!secret_matches(
+            &parts.secret_digest(),
+            "a0a1a2a3a4a5a6a7a9"
+        ));
         assert!(!secret_matches(&parts.secret_digest(), "a0a1a2a3a4a5a6a7"));
         assert!(!secret_matches(&parts.secret_digest(), "kein hex"));
-        assert!(!secret_matches(&parts.secret_digest(), &parts.secret_hex().to_uppercase()));
+        assert!(!secret_matches(
+            &parts.secret_digest(),
+            &parts.secret_hex().to_uppercase()
+        ));
     }
 }

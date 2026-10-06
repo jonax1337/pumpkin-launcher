@@ -1,4 +1,4 @@
-//! Mojang's player certificate (docs/friends/BYNAME-ATTEST.md 5.2): an RSA key pair Mojang generates, whose public half
+//! Mojang's player certificate (docs/friends/SPEC.md#directory-api): an RSA key pair Mojang generates, whose public half
 //! Mojang signs together with the account UUID and the expiry. The launcher proves its account to the directory with it.
 //! Pure functions; the certificate lives in memory only and its private key never leaves the launcher.
 use std::fmt;
@@ -85,18 +85,26 @@ pub fn parse(uuid: &str, body: &[u8]) -> Option<PlayerCertificate> {
 /// The DER bytes of a PEM text. The labels are ignored: Mojang labels PKCS#8 as `RSA PRIVATE KEY` and SPKI as
 /// `RSA PUBLIC KEY`.
 fn pem_body(text: &str) -> Option<Vec<u8>> {
-    let base64: String = text.lines().map(str::trim).filter(|line| !line.starts_with(PEM_BOUNDARY)).collect();
+    let base64: String = text
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.starts_with(PEM_BOUNDARY))
+        .collect();
     STANDARD.decode(base64).ok()
 }
 
 /// Mojang's encoding of the private key is unverified, so both PKCS#8 and PKCS#1 are accepted.
 fn key_pair(der: &[u8]) -> Option<RsaKeyPair> {
-    RsaKeyPair::from_pkcs8(der).or_else(|_| RsaKeyPair::from_der(der)).ok()
+    RsaKeyPair::from_pkcs8(der)
+        .or_else(|_| RsaKeyPair::from_der(der))
+        .ok()
 }
 
 /// RFC 3339 with up to nine fraction digits as epoch milliseconds, truncated like Java's `Instant.toEpochMilli`.
 fn epoch_ms(text: &str) -> Option<i64> {
-    let nanos = OffsetDateTime::parse(text, &Rfc3339).ok()?.unix_timestamp_nanos();
+    let nanos = OffsetDateTime::parse(text, &Rfc3339)
+        .ok()?
+        .unix_timestamp_nanos();
     i64::try_from(nanos / NANOS_PER_MILLI).ok()
 }
 
@@ -112,7 +120,14 @@ impl PlayerCertificate {
     /// RSASSA-PKCS1-v1_5 with SHA-256 over `message`; `None` if ring refuses.
     pub fn sign(&self, message: &[u8]) -> Option<Vec<u8>> {
         let mut signature = vec![0; self.key_pair.public().modulus_len()];
-        self.key_pair.sign(&RSA_PKCS1_SHA256, &SystemRandom::new(), message, &mut signature).ok()?;
+        self.key_pair
+            .sign(
+                &RSA_PKCS1_SHA256,
+                &SystemRandom::new(),
+                message,
+                &mut signature,
+            )
+            .ok()?;
         Some(signature)
     }
 
@@ -249,13 +264,21 @@ pub mod test_vectors {
     }
 
     fn pem(label: &str, base64: &str) -> String {
-        let lines: Vec<&str> = base64.as_bytes().chunks(PEM_LINE).map(|line| std::str::from_utf8(line).unwrap()).collect();
-        format!("-----BEGIN {label}-----\n{}\n-----END {label}-----\n", lines.join("\n"))
+        let lines: Vec<&str> = base64
+            .as_bytes()
+            .chunks(PEM_LINE)
+            .map(|line| std::str::from_utf8(line).unwrap())
+            .collect();
+        format!(
+            "-----BEGIN {label}-----\n{}\n-----END {label}-----\n",
+            lines.join("\n")
+        )
     }
 
     /// Epoch milliseconds in Mojang's notation, with nine fraction digits.
     pub fn rfc3339(epoch_ms: i64) -> String {
-        let at = OffsetDateTime::from_unix_timestamp_nanos(i128::from(epoch_ms) * 1_000_000).unwrap();
+        let at =
+            OffsetDateTime::from_unix_timestamp_nanos(i128::from(epoch_ms) * 1_000_000).unwrap();
         format!(
             "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:09}Z",
             at.year(),
@@ -295,7 +318,10 @@ mod tests {
 
     #[test]
     fn a_pkcs1_private_key_parses_too() {
-        let pkcs1 = Draft { private_key: vectors().certificate.pkcs1.clone(), ..draft() };
+        let pkcs1 = Draft {
+            private_key: vectors().certificate.pkcs1.clone(),
+            ..draft()
+        };
         assert!(parsed(&pkcs1).is_some());
     }
 
@@ -308,7 +334,10 @@ mod tests {
 
     #[test]
     fn a_private_key_that_does_not_match_the_public_key_is_refused() {
-        let mismatched = Draft { private_key: vectors().other.pkcs8.clone(), ..draft() };
+        let mismatched = Draft {
+            private_key: vectors().other.pkcs8.clone(),
+            ..draft()
+        };
         assert!(parsed(&mismatched).is_none());
     }
 
@@ -318,39 +347,79 @@ mod tests {
         body.as_object_mut().unwrap().remove("publicKeySignatureV2");
         assert!(parse(UUID, body.to_string().as_bytes()).is_none());
         let mut body: serde_json::Value = serde_json::from_slice(&draft().body()).unwrap();
-        body["keyPair"].as_object_mut().unwrap().remove("privateKey");
+        body["keyPair"]
+            .as_object_mut()
+            .unwrap()
+            .remove("privateKey");
         assert!(parse(UUID, body.to_string().as_bytes()).is_none());
     }
 
     #[test]
     fn signatures_and_keys_beyond_their_bounds_are_refused() {
         for mojang_signature in [Vec::new(), vec![1; MAX_SIGNATURE_BYTES + 1]] {
-            assert!(parsed(&Draft { mojang_signature, ..draft() }).is_none());
+            assert!(parsed(&Draft {
+                mojang_signature,
+                ..draft()
+            })
+            .is_none());
         }
-        assert!(parsed(&Draft { mojang_signature: vec![1; MAX_SIGNATURE_BYTES], ..draft() }).is_some());
-        let oversized_key = STANDARD.encode([vec![0; MAX_PUBLIC_KEY_BYTES], vectors().certificate.spki_der()].concat());
-        assert!(parsed(&Draft { public_key: oversized_key, ..draft() }).is_none());
+        assert!(parsed(&Draft {
+            mojang_signature: vec![1; MAX_SIGNATURE_BYTES],
+            ..draft()
+        })
+        .is_some());
+        let oversized_key = STANDARD.encode(
+            [
+                vec![0; MAX_PUBLIC_KEY_BYTES],
+                vectors().certificate.spki_der(),
+            ]
+            .concat(),
+        );
+        assert!(parsed(&Draft {
+            public_key: oversized_key,
+            ..draft()
+        })
+        .is_none());
     }
 
     #[test]
     fn garbage_is_refused() {
         assert!(parse(UUID, b"kein json").is_none());
-        assert!(parsed(&Draft { private_key: "!!!".into(), ..draft() }).is_none());
-        assert!(parsed(&Draft { expires_at: "morgen".into(), ..draft() }).is_none());
+        assert!(parsed(&Draft {
+            private_key: "!!!".into(),
+            ..draft()
+        })
+        .is_none());
+        assert!(parsed(&Draft {
+            expires_at: "morgen".into(),
+            ..draft()
+        })
+        .is_none());
     }
 
     #[test]
     fn times_are_epoch_milliseconds_truncated_like_java() {
-        assert_eq!(epoch_ms("2022-04-30T00:11:32.174783069Z"), Some(1_651_277_492_174));
+        assert_eq!(
+            epoch_ms("2022-04-30T00:11:32.174783069Z"),
+            Some(1_651_277_492_174)
+        );
         assert_eq!(epoch_ms("2022-04-30T00:11:32Z"), Some(1_651_277_492_000));
-        assert_eq!(epoch_ms("2022-04-30T00:11:32.174+00:00"), Some(1_651_277_492_174));
-        assert_eq!(epoch_ms(&rfc3339(1_790_172_800_123)), Some(1_790_172_800_123));
+        assert_eq!(
+            epoch_ms("2022-04-30T00:11:32.174+00:00"),
+            Some(1_651_277_492_174)
+        );
+        assert_eq!(
+            epoch_ms(&rfc3339(1_790_172_800_123)),
+            Some(1_790_172_800_123)
+        );
     }
 
     #[test]
     fn the_certificate_key_reproduces_golden_vector_a5_byte_for_byte() {
         let golden = &vectors().vectors.a5;
-        let message = data_encoding::HEXLOWER.decode(golden.message.as_bytes()).unwrap();
+        let message = data_encoding::HEXLOWER
+            .decode(golden.message.as_bytes())
+            .unwrap();
         let signature = parsed(&draft()).unwrap().sign(&message).unwrap();
         assert_eq!(STANDARD.encode(signature), golden.signature);
     }
@@ -359,9 +428,15 @@ mod tests {
     fn the_debug_output_shows_no_key_bytes() {
         let certificate = parsed(&draft()).unwrap();
         let shown = format!("{certificate:?}");
-        assert!(shown.contains(UUID) && shown.contains("<verborgen>"), "{shown}");
+        assert!(
+            shown.contains(UUID) && shown.contains("<verborgen>"),
+            "certificate debug output must identify the account and redact keys"
+        );
         let key_start = format!("{:?}", &certificate.public_key[..8]).replace(['[', ']'], "");
-        assert!(!shown.contains(&key_start), "{shown}");
+        assert!(
+            !shown.contains(&key_start),
+            "certificate debug output must not contain key bytes"
+        );
     }
 
     #[test]
@@ -379,6 +454,9 @@ mod tests {
         let proof = parsed(&draft()).unwrap().proof();
         assert_eq!(proof.public_key, vectors().certificate.spki);
         assert_eq!(proof.expires_at, NOW_MS + 48 * 3600 * 1000);
-        assert_eq!(proof.mojang_signature, STANDARD.encode(draft().mojang_signature));
+        assert_eq!(
+            proof.mojang_signature,
+            STANDARD.encode(draft().mojang_signature)
+        );
     }
 }

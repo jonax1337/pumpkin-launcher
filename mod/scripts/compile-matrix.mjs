@@ -1,5 +1,5 @@
-// Compile-Matrix (docs/friends/INGAME.md 4.3): übersetzt jeden Knoten gegen beide Enden und eine mittlere Version seiner
-// matrix aus nodes.txt (Spalte matrix = docs/friends/INGAME-API.md Abschnitt 5). So bricht der Build, sobald ein Knoten
+// Compile-Matrix (docs/bridge/README.md): übersetzt jeden Knoten gegen beide Enden und eine mittlere Version seiner
+// matrix aus nodes.txt (Spalte matrix = docs/bridge/MINECRAFT-API.md). So bricht der Build, sobald ein Knoten
 // eine Minecraft-Version beansprucht, gegen die seine Quellen nicht mehr übersetzen.
 //
 // Aufruf aus mod/ oder von überall:

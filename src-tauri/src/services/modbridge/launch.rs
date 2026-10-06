@@ -1,4 +1,4 @@
-//! Der Datensatz eines Spielstarts (docs/friends/INGAME.md, 5.2): Token, erwartete Mod, Spielprozess, die (höchstens
+//! Der Datensatz eines Spielstarts (docs/bridge/README.md, "Connection and ownership"): Token, erwartete Mod, Spielprozess, die (höchstens
 //! eine) Verbindung, die Themen und alles, was zählt: Ratenfenster, Zustimmungen und Rückfragen. Der Datensatz lebt
 //! von `register_launch` bis `forget`; eine Verbindung kommt und geht in dieser Zeit, ohne dass Zähler oder
 //! Zustimmungen zurückgesetzt werden.
@@ -27,17 +27,19 @@ pub struct Expectations {
     pub node_id: Option<String>,
     /// Nur ein Start mit Microsoft-Konto bekommt Zugang zur Brücke (SPEC 6.1).
     pub online_account: bool,
+    /// Friends consent is independent of the shared Bridge connection.
+    pub friends_enabled: bool,
     /// Der volle SHA-256 der eingebauten Mod-Datei; die Mod meldet in `hello` dessen Anfang.
     pub build_id: Option<String>,
     /// Der Nutzer hat „Aktionen im Spiel“ auf „Erlauben“ gestellt: beide Geltungsbereiche sind von Anfang an
-    /// erlaubt, der Launcher fragt in diesem Spielstart nicht (INGAME 5.5).
+    /// erlaubt, der Launcher fragt in diesem Spielstart nicht (docs/bridge/README.md, "Operations and consent").
     pub pre_granted: bool,
 }
 
 impl Expectations {
     /// Der Start ohne Wissen über die Mod: jede Mod mit dem richtigen Token und Prozess wird angenommen.
     pub fn unconstrained() -> Self {
-        Self { node_id: None, online_account: true, build_id: None, pre_granted: false }
+        Self { node_id: None, online_account: true, friends_enabled: true, build_id: None, pre_granted: false }
     }
 }
 
@@ -48,7 +50,7 @@ pub(super) struct Link {
     pub queue: Arc<LinkQueue>,
     /// Beendet die Verbindung sofort, ohne die Warteschlange zu leeren.
     pub abort: CancellationToken,
-    /// Die Endpunkte des TCP-Sockets, damit der Besitzer später noch einmal geprüft werden kann (INGAME 7, Schritt 4).
+    /// Die Endpunkte des TCP-Sockets, damit der Besitzer später noch einmal geprüft werden kann (docs/bridge/README.md, "In-game navigation and world behavior").
     pub peer: SocketAddr,
     pub local: SocketAddr,
 }
@@ -57,6 +59,13 @@ impl Link {
     /// Reiht eine Antwort ein; ist die Warteschlange voll, liest die Mod nicht mehr, und die Verbindung endet.
     pub fn reply(&self, frame: LauncherFrame) {
         if self.queue.push_reply(frame).is_err() {
+            tracing::warn!("Warteschlange der Mod voll: Verbindung getrennt");
+            self.abort.cancel();
+        }
+    }
+
+    pub fn reply_friends(&self, frame: LauncherFrame, generation: u64) {
+        if self.queue.push_friends_reply(frame, generation).is_err() {
             tracing::warn!("Warteschlange der Mod voll: Verbindung getrennt");
             self.abort.cancel();
         }
@@ -78,6 +87,7 @@ pub(super) struct Launch {
     pub topics: TopicStore,
     pub limits: OpLimits,
     pub grants: Grants,
+    pub friends_stop: CancellationToken,
     /// Die Bildschirme, die die Mod mit `ready` gemeldet hat.
     pub ready: Option<Vec<String>>,
 }
@@ -85,6 +95,10 @@ pub(super) struct Launch {
 impl Launch {
     pub fn new(token: String, expectations: Expectations) -> Self {
         let grants = Grants::with_allowed(pre_granted(&expectations));
+        let friends_stop = CancellationToken::new();
+        if !expectations.friends_enabled {
+            friends_stop.cancel();
+        }
         Self {
             token,
             expectations,
@@ -93,12 +107,15 @@ impl Launch {
             topics: TopicStore::default(),
             limits: OpLimits::default(),
             grants,
+            friends_stop,
             ready: None,
         }
     }
 
     pub fn close_link(&self, reason: ClosingReason) {
+        self.friends_stop.cancel();
         if let Some(link) = &self.link {
+            link.queue.set_friends_enabled(false);
             link.close(reason);
         }
     }
@@ -107,11 +124,11 @@ impl Launch {
 /// Die Bereiche, die der Nutzer für diesen Start vorab erlaubt hat: mit der Einstellung „Aktionen im Spiel“ = erlauben
 /// (`Expectations::pre_granted`, Amendment A13) beide, sonst keinen.
 fn pre_granted(expectations: &Expectations) -> impl IntoIterator<Item = Scope> {
-    let scopes: &[Scope] = if expectations.pre_granted { &[Scope::Share, Scope::Social] } else { &[] };
+    let scopes: &[Scope] = if expectations.friends_enabled && expectations.pre_granted { &[Scope::Share, Scope::Social] } else { &[] };
     scopes.iter().copied()
 }
 
-/// Die Zählfenster der Vorgänge je Klasse (INGAME 5.6).
+/// Die Zählfenster der Vorgänge je Klasse (docs/bridge/README.md, "Protocol 2").
 #[derive(Default)]
 pub(super) struct OpLimits {
     windows: HashMap<RateClass, Vec<SlidingWindow>>,
@@ -143,7 +160,7 @@ pub(super) enum PromptRefusal {
     Exhausted,
 }
 
-/// Zustimmungen und Rückfragen eines Spielstarts (INGAME 5.5).
+/// Zustimmungen und Rückfragen eines Spielstarts (docs/bridge/README.md, "Operations and consent").
 pub(super) struct Grants {
     allowed: HashSet<Scope>,
     prompt_open: bool,
@@ -164,6 +181,11 @@ impl Grants {
     pub fn scopes(&self) -> Scopes {
         let state = |scope| if self.is_allowed(scope) { ScopeState::Allow } else { ScopeState::Ask };
         Scopes { share: state(Scope::Share), social: state(Scope::Social) }
+    }
+
+    pub fn revoke(&mut self) {
+        self.allowed.clear();
+        self.prompt_open = false;
     }
 
     /// Öffnet die einzige Rückfrage, die ein Spielstart gleichzeitig haben darf.

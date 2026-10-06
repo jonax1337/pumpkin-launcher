@@ -78,28 +78,26 @@ export const friendsHost: typeof deFriendsHost = {
   "friendsHost.close.joining": "This ends the connection to {name}.",
   "friendsHost.close.both": "This stops sharing your world and ends the connection to {name}.",
 
-  // ---------- Friends menu in the game (status row of the instance page, INGAME 3.9) ----------
-  "friendsHost.ingame.name": "Friends menu in the game",
+  // ---------- Pumpkin Bridge (status row of the instance page, docs/bridge/README.md, "Support selection") ----------
+  "friendsHost.ingame.name": "Pumpkin Bridge",
   "friendsHost.ingame.active": "active ({loader} {minecraft})",
   "friendsHost.ingame.connected": "connected",
   "friendsHost.ingame.off": "off",
   "friendsHost.ingame.autoOff": "Switched off after a start failure",
   "friendsHost.ingame.retry": "Try again",
-  "friendsHost.ingame.switch": "Friends menu in the game for this instance",
+  "friendsHost.ingame.switch": "Pumpkin Bridge for this instance",
   "friendsHost.ingame.addLoader": "Add {loader}?",
   "friendsHost.ingame.addLoaderDone": "{loader} is set and will be installed at the next start",
   "friendsHost.ingame.reason.notInBuild": "Not available in this build",
   "friendsHost.ingame.reason.vanilla": "Needs a loader",
-  "friendsHost.ingame.reason.quilt": "Not available with Quilt yet",
   "friendsHost.ingame.reason.noNode": "Not available for {loader} {minecraft} yet",
   "friendsHost.ingame.reason.unverified": "Not released for {loader} {minecraft} yet",
   "friendsHost.ingame.reason.loaderTooOld": "Needs {loader} {need} or newer",
   "friendsHost.ingame.reason.loaderVersionUnknown": "The loader version is unknown",
   "friendsHost.ingame.reason.javaTooOld": "Needs Java {need} or newer",
   "friendsHost.ingame.reason.javaUnknown": "The Java version is unknown",
-  "friendsHost.ingame.reason.idCollision": "The mods folder already holds a pumpkin_friends file",
+  "friendsHost.ingame.reason.idCollision": "The mods folder already holds a pumpkin_bridge file",
   "friendsHost.ingame.reason.offlineAccount": "Only with a Microsoft account",
-  "friendsHost.ingame.reason.friendsOff": "Friends is turned off",
   "friendsHost.ingame.reason.bridgeNotRunning": "The connection to the launcher is not running",
   "friendsHost.ingame.reason.globallyOff": "Switched off in the settings",
   "friendsHost.ingame.reason.breaker": "Switched off after a start failure ({failure})",
@@ -109,10 +107,10 @@ export const friendsHost: typeof deFriendsHost = {
   "friendsHost.ingame.failure.unsupportedClassVersion": "The Java is too old for the mod",
   "friendsHost.ingame.failure.unknown": "unknown reason",
 
-  // ---------- Start failure caused by the friends menu (circuit breaker, INGAME 3.8) ----------
+  // ---------- Start failure caused by Pumpkin Bridge (circuit breaker, docs/bridge/README.md, "Startup recovery") ----------
   "friendsHost.breaker.title": "Start failure",
-  "friendsHost.breaker.text": "The game crashed while starting. The friends menu may be the cause. Start without it?",
+  "friendsHost.breaker.text": "The game crashed while starting. Pumpkin Bridge may be the cause. Start without it?",
   "friendsHost.breaker.detail": "{instance}: {failure}",
-  "friendsHost.breaker.startWithout": "Start without friends menu",
+  "friendsHost.breaker.startWithout": "Start without Pumpkin Bridge",
   "friendsHost.breaker.retry": "Try again anyway",
 };

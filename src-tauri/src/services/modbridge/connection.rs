@@ -111,22 +111,44 @@ impl Connection {
     async fn write(&mut self, item: Outgoing) -> io::Result<()> {
         match item {
             Outgoing::Frame(frame) => self.send(frame).await,
-            Outgoing::Topic(topic) => match self.topic_frame(topic) {
-                Some(frame) => self.send(frame).await,
-                None => Ok(()),
+            Outgoing::FriendsFrame { frame, generation } => {
+                if let Some(permission) = self.link.queue.friends_permission(generation) {
+                    self.send_with_permission(frame, Some(permission)).await
+                } else if matches!(frame, LauncherFrame::Res(_) | LauncherFrame::Pending { .. }) {
+                    self.send(super::queue::revoked_reply(frame)).await
+                } else {
+                    Ok(())
+                }
+            }
+            Outgoing::Topic(topic) => loop {
+                let generation = self.link.queue.friends_generation();
+                let permission = self.link.queue.friends_permission(generation);
+                let frame = self.topic_frame(topic);
+                if generation != self.link.queue.friends_generation()
+                    || (permission.is_none() && self.link.queue.friends_allowed(generation)) {
+                    continue;
+                }
+                break match frame {
+                    Some(frame) => self.send_with_permission(frame, permission).await,
+                    None => Ok(()),
+                };
             },
         }
     }
 
     /// Der aktuelle Wert des Themas, mit den Aliassen dieser Verbindung statt der Peer-IDs.
     fn topic_frame(&mut self, topic: Topic) -> Option<LauncherFrame> {
-        let (revision, value) = self.inner.topic_current(&self.instance_id, topic)?;
+        let (revision, value) = self.inner.topic_for_link(&self.instance_id, self.link.id, topic)?;
         Some(LauncherFrame::state(topic, revision, &value.masked(&mut self.aliases)))
     }
 
     /// Schreibt die Nachricht. Passt sie nicht in eine Zeile des Launchers, bekommt die Mod statt einer Antwort einen
     /// `internal`-Fehler und sonst nichts: ein Thema ist durch seine Obergrenzen klein genug (siehe `topics`).
     async fn send(&mut self, frame: LauncherFrame) -> io::Result<()> {
+        self.send_with_permission(frame, None).await
+    }
+
+    async fn send_with_permission(&mut self, frame: LauncherFrame, permission: Option<CancellationToken>) -> io::Result<()> {
         let mut line = encode_line(&frame);
         if line.len() > LAUNCHER_LINE_BYTES {
             let LauncherFrame::Res(response) = &frame else {
@@ -136,7 +158,10 @@ impl Connection {
             tracing::warn!(instance = %self.instance_id, bytes = line.len(), "Antwort an die Mod zu lang");
             line = encode_line(&LauncherFrame::Res(Response::failure(&response.id, ErrorCode::Internal)));
         }
-        write_line(&mut self.writer, &line, self.inner.timing.write_stall).await
+        match permission {
+            Some(permission) => super::framing::write_private_line(&mut self.writer, &line, self.inner.timing.write_stall, &permission).await,
+            None => write_line(&mut self.writer, &line, self.inner.timing.write_stall).await,
+        }
     }
 
     /// Wertet eine Zeile der Mod aus; `false`, wenn die Verbindung wegen zu vieler Nachrichten endet.
@@ -200,6 +225,9 @@ impl Connection {
             tracing::debug!(instance = %self.instance_id, %err, "Anfrage der Mod verworfen");
             ErrorCode::BadRequest
         })?;
+        if !matches!(op, Op::StateSync {} | Op::LauncherOpen { .. }) && !self.inner.friends_enabled(&self.instance_id) {
+            return Err(ErrorCode::NotEnabled);
+        }
         let op = op.resolve_friends(|alias| self.aliases.real(alias)).map_err(|UnknownFriend| ErrorCode::UnknownFriend)?;
         let class = op.rate_class();
         if class.counted_before_handling() && !self.inner.take_rate(&self.instance_id, class, Instant::now()) {
@@ -214,6 +242,8 @@ impl Connection {
 
     fn spawn_handler(&self, id: String, op: Op, guard: InFlightGuard) {
         let ctx = OpContext::new(self.inner.clone(), self.instance_id.clone(), id.clone(), self.link.clone());
+        let friends_operation = !matches!(op, Op::StateSync {} | Op::LauncherOpen { .. });
+        let generation = ctx.friends_generation();
         let handler = self.inner.handler();
         let (link, session) = (self.link.clone(), self.session.clone());
         drop(tokio::spawn(async move {
@@ -221,7 +251,12 @@ impl Connection {
                 () = session.cancelled() => return,
                 outcome = answer(handler.as_ref(), ctx, op, REQUEST_DEADLINE) => outcome,
             };
-            link.reply(LauncherFrame::Res(Response::from_outcome(&id, outcome)));
+            let frame = LauncherFrame::Res(Response::from_outcome(&id, outcome));
+            if friends_operation {
+                link.reply_friends(frame, generation);
+            } else {
+                link.reply(frame);
+            }
             drop(guard);
         }));
     }

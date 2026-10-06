@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { useAllAccounts } from "@/components/accounts/useAccounts";
 import { FriendsOptInDialog } from "@/components/friends/FriendsOptInDialog";
 import { QueryList } from "@/components/QueryList";
-import { useCommitOnUnmount } from "@/hooks/useCommitOnUnmount";
 import { useConfirmTarget } from "@/hooks/useConfirmTarget";
 import {
   useBlockedPeers, useDisableFriends, useFriendsState, useHostSessions, useInvites, useResetFriends, useRotateFriendsIdentity,
@@ -12,17 +11,13 @@ import {
 } from "@/hooks/useFriends";
 import { useI18n } from "@/i18n";
 import { copyWithToast } from "@/lib/clipboard";
-import { blurOnEnter } from "@/lib/dom";
 import { formatDate } from "@/lib/format";
-import { FRIENDS_LIMITS, type DirectoryStatus, type FriendsSettings, type FriendsState, type IngameActions, type Me, type NetworkStatus } from "@/lib/types";
+import { type DirectoryStatus, type FriendsSettings, type FriendsState, type IngameActions, type Me, type NetworkStatus } from "@/lib/types";
 import { useFriendsUi } from "@/store/friendsUi";
-import { Actions, Button, ConfirmDialog, Count, ErrorBox, FormRow, FormSection, Hint, List, ListRow, RowTitle, Segmented, Skel, StatusPanel, Switch, TextField, type IconName } from "@/ui";
+import { Actions, Button, ConfirmDialog, Count, ErrorBox, FormRow, FormSection, Hint, List, ListRow, RowTitle, Segmented, Skel, StatusPanel, Switch, type IconName } from "@/ui";
 
 const SECOND_MS = 1000;
 const ROW_SKELETON_HEIGHT_PX = 60;
-
-const isValidDisplayName = (name: string) =>
-  [...name].length >= FRIENDS_LIMITS.displayNameMin && [...name].length <= FRIENDS_LIMITS.displayNameMax;
 
 /** Schaltet Freunde ein (öffnet das Opt-in) oder aus; Ausschalten behält die Daten. */
 function EnableRow({ enabled, onEnable }: { enabled: boolean; onEnable: () => void }) {
@@ -41,33 +36,14 @@ function EnableRow({ enabled, onEnable }: { enabled: boolean; onEnable: () => vo
   );
 }
 
-/** Anzeigename: wird beim Verlassen des Felds gespeichert, sofern er gültig ist. */
-function DisplayNameRow({ settings }: { settings: FriendsSettings }) {
+function MinecraftNameRow() {
   const { t } = useI18n();
-  const update = useUpdateFriendsSettings();
-  const [draft, setDraft] = useState<string | null>(null);
-  const name = draft?.trim() ?? settings.displayName;
-  const invalid = draft !== null && !isValidDisplayName(name);
-  const limits = { min: FRIENDS_LIMITS.displayNameMin, max: FRIENDS_LIMITS.displayNameMax };
-
-  function save() {
-    if (draft === null || invalid) return;
-    if (name === settings.displayName) return setDraft(null);
-    update.mutate({ ...settings, displayName: name }, { onSuccess: () => setDraft(null) });
-  }
-  useCommitOnUnmount(save);
-
+  const { query } = useAllAccounts();
   return (
-    <FormRow label={t("friendsSettings.nameLabel")} htmlFor="friends-name" hint={t("friendsSettings.nameHint", limits)} aside={t("friendsSettings.nameAside")}>
-      <TextField
-        id="friends-name"
-        value={draft ?? settings.displayName}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={save}
-        onKeyDown={blurOnEnter}
-        aria-invalid={invalid || undefined}
-      />
-      {invalid && <Hint tone="bad" live>{t("errors.friends.displayNameInvalid", limits)}</Hint>}
+    <FormRow label={t("friendsSettings.nameLabel")} hint={t("friendsSettings.nameHint")}>
+      <QueryList query={query} error={t("components.account.msLoadFailed")} empty={<p>{t("friendsSettings.nameUnavailable")}</p>}>
+        {(accounts) => <p aria-live="polite">{accounts[0].username}</p>}
+      </QueryList>
     </FormRow>
   );
 }
@@ -106,7 +82,7 @@ function FindableRow({ settings, directory }: { settings: FriendsSettings; direc
   );
 }
 
-/** „Freunde-Menü im Spiel“: der globale Schalter der Einspeisung; die Instanzseite zeigt, was daraus für jede Instanz folgt (INGAME 3.9). */
+/** Pumpkin Bridge bleibt unabhängig von der Friends-Freigabe einschaltbar. */
 function IngameMenuRow({ settings }: { settings: FriendsSettings }) {
   const { t } = useI18n();
   const update = useUpdateFriendsSettings();
@@ -123,7 +99,7 @@ function IngameMenuRow({ settings }: { settings: FriendsSettings }) {
   );
 }
 
-/** „Aktionen im Spiel“: ob der Launcher bei jedem Spielstart einmal fragt oder die Aktionen aus dem Spiel gleich erlaubt (INGAME 5.5). */
+/** „Aktionen im Spiel“: ob der Launcher bei jedem Spielstart einmal fragt oder die Aktionen aus dem Spiel gleich erlaubt (docs/bridge/README.md, "Operations and consent"). */
 function IngameActionsRow({ settings }: { settings: FriendsSettings }) {
   const { t } = useI18n();
   const update = useUpdateFriendsSettings();
@@ -323,10 +299,9 @@ function AvailableSettings({ state }: { state: FriendsState }) {
         <EnableRow enabled={state.enabled} onEnable={() => setOptingIn(true)} />
         {state.enabled && (
           <>
-            <DisplayNameRow settings={state.settings} />
+            <MinecraftNameRow />
             <AlwaysRelayRow settings={state.settings} />
             {state.directory.state !== "unavailable" && <FindableRow settings={state.settings} directory={state.directory} />}
-            <IngameMenuRow settings={state.settings} />
             <IngameActionsRow settings={state.settings} />
             {state.me && <FingerprintRow me={state.me} />}
             <NetworkRow network={state.network} />
@@ -361,5 +336,12 @@ export function FriendsTab() {
   if (query.error) return <ErrorBox title={t("friendsSettings.loadFailed")} error={query.error} onRetry={() => void query.refetch()} />;
   if (!query.data) return <Skel h={ROW_SKELETON_HEIGHT_PX * 3} />;
   const state = query.data;
-  return state.availability === "available" ? <AvailableSettings state={state} /> : <UnavailableSettings availability={state.availability} />;
+  return (
+    <>
+      <FormSection title={t("friendsSettings.ingameMenu.label")} level={3}>
+        <IngameMenuRow settings={state.settings} />
+      </FormSection>
+      {state.availability === "available" ? <AvailableSettings state={state} /> : <UnavailableSettings availability={state.availability} />}
+    </>
+  );
 }

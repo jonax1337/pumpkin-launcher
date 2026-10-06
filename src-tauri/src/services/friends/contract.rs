@@ -8,8 +8,6 @@ pub use crate::services::shared_types::{ModLoader, PathKind, PortSource};
 pub const FRIEND_CODE_PREFIX: &str = "pumpkin-";
 pub const FRIEND_CODE_BODY_LENGTH: usize = 72;
 pub const FRIEND_CODE_LENGTH: usize = 80;
-pub const DISPLAY_NAME_MIN: usize = 3;
-pub const DISPLAY_NAME_MAX: usize = 32;
 pub const ALIAS_MAX: usize = 32;
 pub const MAX_FRIENDS: usize = 50;
 pub const MAX_ACTIVE_CODES: usize = 3;
@@ -17,8 +15,8 @@ pub const MAX_GUESTS: usize = 7;
 pub const CODE_TTL_SECS: u64 = 604_800;
 pub const REQUEST_TTL_SECS: u64 = 1_209_600;
 pub const INVITE_TTL_SECS: u64 = 7_200;
-pub const MIN_MC_RELEASE_TIME: &str = "2023-06-02T08:36:17+00:00";
-pub const MIN_MC_LABEL: &str = "1.20";
+pub const MIN_MC_RELEASE_TIME: &str = "2021-01-14T16:05:32+00:00";
+pub const MIN_MC_LABEL: &str = "1.16.5";
 pub const PORT_MIN: u16 = 1024;
 pub const PORT_MAX: u16 = 65535;
 pub const MAX_NAME_REQUESTS: usize = 5;
@@ -79,15 +77,14 @@ pub struct Me {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FriendsSettings {
-    pub display_name: String,
     pub always_relay: bool,
     /// Fehlt in Dateien aus der Zeit vor der Suche per Name.
     #[serde(default)]
     pub findable_by_name: bool,
-    /// „Freunde-Menü im Spiel“ (INGAME 3.9): der globale Schalter der Einspeisung. Fehlt in älteren Dateien: an.
+    /// „Pumpkin Bridge im Spiel“ (docs/bridge/README.md, "Support selection"): der globale Schalter der Einspeisung. Fehlt in älteren Dateien: an.
     #[serde(default = "ingame_menu_default")]
     pub ingame_menu: bool,
-    /// „Aktionen im Spiel“ (INGAME 5.5). Fehlt in älteren Dateien: fragen.
+    /// „Aktionen im Spiel“ (docs/bridge/README.md, "Operations and consent"). Fehlt in älteren Dateien: fragen.
     #[serde(default)]
     pub ingame_actions: IngameActions,
 }
@@ -99,7 +96,6 @@ fn ingame_menu_default() -> bool {
 impl Default for FriendsSettings {
     fn default() -> Self {
         Self {
-            display_name: String::new(),
             always_relay: false,
             findable_by_name: false,
             ingame_menu: ingame_menu_default(),
@@ -120,7 +116,6 @@ pub enum IngameActions {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FriendsEnableInput {
-    pub display_name: String,
     pub always_relay: bool,
     pub accept_third_party_relays: bool,
     pub findable_by_name: bool,
@@ -142,7 +137,11 @@ pub enum RelayOperatorKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum NetworkStatus {
     Off,
     Starting,
@@ -176,7 +175,11 @@ pub struct Friend {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum FriendNotice {
     Renamed { previous_name: String },
     IdentityChanged { previous_fingerprint: String },
@@ -446,7 +449,11 @@ pub struct JoinSessionEvent {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum JoinState {
     WaitingForGame,
     Connecting,
@@ -503,7 +510,7 @@ pub struct ModConfirmFriend {
     pub display_name: String,
 }
 
-// ---- Vorgänge aus dem Spiel: Rückfrage und Aktivitätsliste (INGAME 5.5, 5.7) ----
+// ---- Vorgänge aus dem Spiel: Rückfrage und Aktivitätsliste (docs/bridge/README.md, "Operations and consent") ----
 
 pub use crate::services::modbridge::ops::{OpenTarget as ModOpenTarget, Scope as ModScope};
 
@@ -512,12 +519,12 @@ pub use crate::services::modbridge::ops::{OpenTarget as ModOpenTarget, Scope as 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModConfirmSummary {
-    /// Der Name des Vorgangs aus INGAME 5.4, etwa `friend.addByName`.
+    /// Der Name des Vorgangs aus docs/bridge/README.md, "Operations and consent", etwa `friend.addByName`.
     pub op: String,
     pub target_name: Option<String>,
 }
 
-/// Ein Vorgang der Bereiche `share` und `social`, der aus dem Spiel kam (Aktivitätsliste, INGAME 5.7). Nur im Speicher,
+/// Ein Vorgang der Bereiche `share` und `social`, der aus dem Spiel kam (Aktivitätsliste, docs/bridge/README.md, "Protocol 2"). Nur im Speicher,
 /// die letzten 100, neueste zuerst.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -542,12 +549,12 @@ pub struct ModOpenEvent {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Freunde-Menü im Spiel (docs/friends/INGAME.md, 3.9): Status der Einspeisung je Instanz, berechnet ohne Start.
+// Pumpkin Bridge im Spiel (docs/bridge/README.md, "Support selection"): Status der Einspeisung je Instanz, berechnet ohne Start.
 // ---------------------------------------------------------------------------------------------------------------------
 
-use super::ingame::{FailureKind, Loader as IngameLoader};
+use crate::services::modbridge::ingame::{FailureKind, Loader as IngameLoader};
 
-/// Wie es um das Freunde-Menü im Spiel einer Instanz steht.
+/// Wie es um das Pumpkin Bridge im Spiel einer Instanz steht.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum IngameState {
@@ -565,29 +572,37 @@ pub enum IngameState {
 
 /// Der Grund zu einem Status, den die Oberfläche in die Zeile der Instanzseite übersetzt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum IngameReason {
     /// Dieser Build trägt keine Mod (Entwicklungsbuild ohne JARs).
     NotInBuild,
     Vanilla,
-    Quilt,
     /// Kein Knoten für diese Minecraft-Version mit diesem Loader.
     NoNode,
     /// Es gibt einen Knoten, sein Rauchtest ist aber nicht bestanden.
     Unverified,
-    LoaderTooOld { need: String },
+    LoaderTooOld {
+        need: String,
+    },
     LoaderVersionUnknown,
-    JavaTooOld { need: u32 },
+    JavaTooOld {
+        need: u32,
+    },
     JavaUnknown,
     IdCollision,
     OfflineAccount,
-    FriendsOff,
     BridgeNotRunning,
     /// Der Schalter dieser Instanz ist aus.
     InstanceOff,
-    /// Der globale Schalter „Freunde-Menü im Spiel“ ist aus.
+    /// Der globale Schalter „Pumpkin Bridge im Spiel“ ist aus.
     GloballyOff,
-    Breaker { reason: FailureKind },
+    Breaker {
+        reason: FailureKind,
+    },
 }
 
 /// Der Knoten, der für die Instanz gewählt wäre.

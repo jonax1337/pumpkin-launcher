@@ -1,4 +1,4 @@
-// Kit-Demo-Lauf (docs/friends/INGAME.md 11.2, Paket U1): startet den Entwicklungs-Client eines Fabric-Knotens mit -Pkitdemo,
+// Kit-Demo-Lauf (docs/bridge/README.md): startet den Entwicklungs-Client eines Fabric-Knotens mit -Pkitdemo,
 // wartet auf die Beweiszeile des Widget-Kit-Demo-Bildschirms und beendet den Client wieder.
 //
 // Aufruf aus beliebigem Ordner:
@@ -13,7 +13,7 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { parseNodes } from './compile-matrix.mjs';
 
-const PROOF_LINE = /pumpkin_friends kit demo rendered (\d+) frames at (\d+)x(\d+)/;
+const PROOF_LINE = /pumpkin_bridge kit demo rendered (\d+) frames at (\d+)x(\d+)/;
 const DEFAULT_TIMEOUT_SECONDS = 180;
 
 /** The numbers of the proof line, or null for any other line. */

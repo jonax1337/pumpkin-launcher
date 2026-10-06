@@ -25,7 +25,10 @@ fn hash(letter: char) -> String {
 }
 
 fn file(letter: char, file_name: &str) -> ManifestMod {
-    ManifestMod { sha512: hash(letter), file_name: file_name.into() }
+    ManifestMod {
+        sha512: hash(letter),
+        file_name: file_name.into(),
+    }
 }
 
 fn instance(id: &str, loader: ModLoader, mc: &str) -> Instance {
@@ -56,7 +59,12 @@ fn mod_entry(file_name: &str, kind: ModKind, enabled: bool) -> Mod {
 }
 
 fn manifest_of(loader: ModLoader, mc: &str, mods: Vec<ManifestMod>) -> Manifest {
-    Manifest { minecraft_version: mc.into(), loader, loader_version: None, mods }
+    Manifest {
+        minecraft_version: mc.into(),
+        loader,
+        loader_version: None,
+        mods,
+    }
 }
 
 fn invite() -> Invite {
@@ -89,7 +97,11 @@ impl LocalHashes for FakeLocal {
 }
 
 fn info(title: &str, client_only: bool) -> ModInfo {
-    ModInfo { title: title.into(), project_id: format!("project-{title}"), client_only }
+    ModInfo {
+        title: title.into(),
+        project_id: format!("project-{title}"),
+        client_only,
+    }
 }
 
 /// A, B, C braucht der Server, S und M sind reine Client-Mods auf Modrinth, X kennt Modrinth nicht (SPEC 5.6).
@@ -127,7 +139,13 @@ fn plan_of(row: &Row, classification: &Classification) -> JoinPlan {
         local.insert(guest.id.clone(), table_mods(mods));
         instances.push(guest);
     }
-    matching::plan(&invite(), &host, &instances, &FakeLocal(local), classification)
+    matching::plan(
+        &invite(),
+        &host,
+        &instances,
+        &FakeLocal(local),
+        classification,
+    )
 }
 
 fn titles(refs: &[super::contract::ModRef]) -> Vec<&str> {
@@ -139,7 +157,13 @@ const VANILLA: ModLoader = ModLoader::Vanilla;
 
 #[test]
 fn vanilla_host_and_vanilla_guest_are_ready() {
-    let plan = plan_of(&Row { host: (VANILLA, "26.3", ""), guests: vec![(VANILLA, "26.3", "")] }, &table_classification());
+    let plan = plan_of(
+        &Row {
+            host: (VANILLA, "26.3", ""),
+            guests: vec![(VANILLA, "26.3", "")],
+        },
+        &table_classification(),
+    );
 
     assert_eq!(plan.verdict, JoinVerdict::Ready);
     assert!(plan.candidates[0].matches);
@@ -148,21 +172,39 @@ fn vanilla_host_and_vanilla_guest_are_ready() {
 
 #[test]
 fn vanilla_host_without_instance_offers_a_vanilla_instance() {
-    let plan = plan_of(&Row { host: (VANILLA, "26.3", ""), guests: vec![] }, &table_classification());
+    let plan = plan_of(
+        &Row {
+            host: (VANILLA, "26.3", ""),
+            guests: vec![],
+        },
+        &table_classification(),
+    );
 
-    assert_eq!((plan.verdict, plan.create_vanilla), (JoinVerdict::NoInstance, true));
+    assert_eq!(
+        (plan.verdict, plan.create_vanilla),
+        (JoinVerdict::NoInstance, true)
+    );
 }
 
 #[test]
 fn client_only_mods_of_the_host_are_not_required() {
-    let row = Row { host: (FABRIC, "26.3", "abs"), guests: vec![(FABRIC, "26.3", "ab")] };
+    let row = Row {
+        host: (FABRIC, "26.3", "abs"),
+        guests: vec![(FABRIC, "26.3", "ab")],
+    };
 
-    assert_eq!(plan_of(&row, &table_classification()).verdict, JoinVerdict::Ready);
+    assert_eq!(
+        plan_of(&row, &table_classification()).verdict,
+        JoinVerdict::Ready
+    );
 }
 
 #[test]
 fn a_mod_the_guest_lacks_is_missing() {
-    let row = Row { host: (FABRIC, "26.3", "ab"), guests: vec![(FABRIC, "26.3", "a")] };
+    let row = Row {
+        host: (FABRIC, "26.3", "ab"),
+        guests: vec![(FABRIC, "26.3", "a")],
+    };
 
     let plan = plan_of(&row, &table_classification());
 
@@ -174,7 +216,10 @@ fn a_mod_the_guest_lacks_is_missing() {
 
 #[test]
 fn a_server_mod_only_the_guest_has_is_extra() {
-    let row = Row { host: (FABRIC, "26.3", "a"), guests: vec![(FABRIC, "26.3", "ac")] };
+    let row = Row {
+        host: (FABRIC, "26.3", "a"),
+        guests: vec![(FABRIC, "26.3", "ac")],
+    };
 
     let plan = plan_of(&row, &table_classification());
 
@@ -185,53 +230,80 @@ fn a_server_mod_only_the_guest_has_is_extra() {
 
 #[test]
 fn a_client_only_mod_only_the_guest_has_is_fine() {
-    let row = Row { host: (FABRIC, "26.3", "a"), guests: vec![(FABRIC, "26.3", "am")] };
+    let row = Row {
+        host: (FABRIC, "26.3", "a"),
+        guests: vec![(FABRIC, "26.3", "am")],
+    };
 
-    assert_eq!(plan_of(&row, &table_classification()).verdict, JoinVerdict::Ready);
+    assert_eq!(
+        plan_of(&row, &table_classification()).verdict,
+        JoinVerdict::Ready
+    );
 }
 
 #[test]
 fn an_unknown_mod_with_the_same_hash_on_both_sides_is_ready() {
-    let row = Row { host: (FABRIC, "26.3", "ax"), guests: vec![(FABRIC, "26.3", "ax")] };
+    let row = Row {
+        host: (FABRIC, "26.3", "ax"),
+        guests: vec![(FABRIC, "26.3", "ax")],
+    };
 
-    assert_eq!(plan_of(&row, &table_classification()).verdict, JoinVerdict::Ready);
+    assert_eq!(
+        plan_of(&row, &table_classification()).verdict,
+        JoinVerdict::Ready
+    );
 }
 
 #[test]
 fn an_unknown_mod_the_guest_lacks_is_missing_under_its_file_name() {
-    let row = Row { host: (FABRIC, "26.3", "ax"), guests: vec![(FABRIC, "26.3", "a")] };
+    let row = Row {
+        host: (FABRIC, "26.3", "ax"),
+        guests: vec![(FABRIC, "26.3", "a")],
+    };
 
     let plan = plan_of(&row, &table_classification());
 
     let missing = &plan.candidates[0].missing;
-    assert_eq!((plan.verdict, titles(missing)), (JoinVerdict::MissingContent, vec!["X.jar"]));
+    assert_eq!(
+        (plan.verdict, titles(missing)),
+        (JoinVerdict::MissingContent, vec!["X.jar"])
+    );
     assert_eq!(missing[0].project_id, None);
 }
 
 #[test]
 fn another_version_or_loader_is_no_candidate_and_never_offers_vanilla_to_a_modded_host() {
-    let row = Row { host: (FABRIC, "26.3", ""), guests: vec![(FABRIC, "26.2", ""), (ModLoader::Quilt, "26.3", "")] };
+    let row = Row {
+        host: (FABRIC, "26.3", ""),
+        guests: vec![(FABRIC, "26.2", ""), (ModLoader::Quilt, "26.3", "")],
+    };
 
     let plan = plan_of(&row, &table_classification());
 
-    assert_eq!((plan.verdict, plan.create_vanilla), (JoinVerdict::NoInstance, false));
+    assert_eq!(
+        (plan.verdict, plan.create_vanilla),
+        (JoinVerdict::NoInstance, false)
+    );
     assert!(plan.candidates.is_empty());
 }
 
 #[test]
-fn a_host_older_than_1_20_is_unsupported_after_validation() {
+fn a_host_older_than_1_16_5_is_unsupported_after_validation() {
     let versions = VersionIndex::new([
-        ("1.19.4".to_owned(), "2023-03-14T12:56:18+00:00".to_owned()),
+        ("1.16.4".to_owned(), "2020-10-29T15:49:37+00:00".to_owned()),
         ("26.3".to_owned(), "2026-09-01T10:00:00+00:00".to_owned()),
     ]);
-    let old = manifest_of(FABRIC, "1.19.4", vec![]);
+    let old = manifest_of(FABRIC, "1.16.4", vec![]);
 
     let verdict = match manifest::validate(old, &versions) {
         Err(ManifestError::VersionUnsupported) => matching::version_unsupported(&invite()),
         other => panic!("{other:?}"),
     };
 
-    assert_eq!((verdict.verdict, verdict.create_vanilla), (JoinVerdict::VersionUnsupported, false));
+    assert_eq!(
+        (verdict.verdict, verdict.create_vanilla),
+        (JoinVerdict::VersionUnsupported, false)
+    );
     assert!(verdict.candidates.is_empty());
 }
 
@@ -239,19 +311,30 @@ fn a_host_older_than_1_20_is_unsupported_after_validation() {
 fn candidates_list_matches_first_then_the_fewest_differences() {
     let row = Row {
         host: (FABRIC, "26.3", "ab"),
-        guests: vec![(FABRIC, "26.3", "cx"), (FABRIC, "26.3", "a"), (FABRIC, "26.3", "ab")],
+        guests: vec![
+            (FABRIC, "26.3", "cx"),
+            (FABRIC, "26.3", "a"),
+            (FABRIC, "26.3", "ab"),
+        ],
     };
 
     let plan = plan_of(&row, &table_classification());
 
-    let order: Vec<&str> = plan.candidates.iter().map(|c| c.instance_id.as_str()).collect();
+    let order: Vec<&str> = plan
+        .candidates
+        .iter()
+        .map(|c| c.instance_id.as_str())
+        .collect();
     assert_eq!(order, ["guest-2", "guest-1", "guest-0"]);
     assert_eq!(plan.verdict, JoinVerdict::Ready);
 }
 
 #[test]
 fn a_failed_lookup_makes_every_mod_required_and_says_so() {
-    let row = Row { host: (FABRIC, "26.3", "abs"), guests: vec![(FABRIC, "26.3", "ab")] };
+    let row = Row {
+        host: (FABRIC, "26.3", "abs"),
+        guests: vec![(FABRIC, "26.3", "ab")],
+    };
 
     let plan = plan_of(&row, &Classification::LookupFailed);
 
@@ -262,7 +345,11 @@ fn a_failed_lookup_makes_every_mod_required_and_says_so() {
 
 #[test]
 fn duplicate_files_count_once() {
-    let host = manifest_of(FABRIC, "26.3", vec![table_file('a'), file('a', "A-copy.jar")]);
+    let host = manifest_of(
+        FABRIC,
+        "26.3",
+        vec![table_file('a'), file('a', "A-copy.jar")],
+    );
     let guest = instance("guest", FABRIC, "26.3");
     let local = FakeLocal(HashMap::from([("guest".to_owned(), table_mods("a"))]));
 
@@ -274,7 +361,10 @@ fn duplicate_files_count_once() {
 #[test]
 fn only_hashes_of_hosts_and_candidates_are_looked_up_once() {
     let host = manifest_of(FABRIC, "26.3", table_mods("abs"));
-    let instances = [instance("fits", FABRIC, "26.3"), instance("other", ModLoader::Quilt, "26.3")];
+    let instances = [
+        instance("fits", FABRIC, "26.3"),
+        instance("other", ModLoader::Quilt, "26.3"),
+    ];
     let local = FakeLocal(HashMap::from([
         ("fits".to_owned(), table_mods("acx")),
         ("other".to_owned(), table_mods("m")),
@@ -282,7 +372,10 @@ fn only_hashes_of_hosts_and_candidates_are_looked_up_once() {
 
     let hashes = matching::hashes_to_classify(&host, &instances, &local);
 
-    assert_eq!(hashes, ["a", "b", "c", "s", "x"].map(|l| hash(l.chars().next().unwrap())));
+    assert_eq!(
+        hashes,
+        ["a", "b", "c", "s", "x"].map(|l| hash(l.chars().next().unwrap()))
+    );
 }
 
 struct FakeLookup {
@@ -290,18 +383,30 @@ struct FakeLookup {
 }
 
 impl ModLookup for FakeLookup {
-    fn classify<'a>(&'a self, _: &'a [String]) -> BoxFuture<'a, Result<HashMap<String, ModInfo>, LookupError>> {
+    fn classify<'a>(
+        &'a self,
+        _: &'a [String],
+    ) -> BoxFuture<'a, Result<HashMap<String, ModInfo>, LookupError>> {
         Box::pin(async { self.answer.clone() })
     }
 }
 
 #[tokio::test]
 async fn classification_keeps_the_answer_or_records_the_failure() {
-    let known = FakeLookup { answer: Ok(HashMap::from([(hash('a'), info("A", false))])) };
-    let failing = FakeLookup { answer: Err(LookupError("offline".into())) };
+    let known = FakeLookup {
+        answer: Ok(HashMap::from([(hash('a'), info("A", false))])),
+    };
+    let failing = FakeLookup {
+        answer: Err(LookupError("offline".into())),
+    };
 
-    assert!(matches!(Classification::fetch(&known, &[hash('a')]).await, Classification::Known(map) if map.len() == 1));
-    assert!(matches!(Classification::fetch(&failing, &[hash('a')]).await, Classification::LookupFailed));
+    assert!(
+        matches!(Classification::fetch(&known, &[hash('a')]).await, Classification::Known(map) if map.len() == 1)
+    );
+    assert!(matches!(
+        Classification::fetch(&failing, &[hash('a')]).await,
+        Classification::LookupFailed
+    ));
 }
 
 fn modrinth_version(project_id: &str, sha512: &str) -> Version {
@@ -315,7 +420,12 @@ fn modrinth_version(project_id: &str, sha512: &str) -> Version {
 }
 
 fn modrinth_project(id: &str, server_side: &str) -> Project {
-    Project { id: id.into(), title: format!("Titel {id}"), server_side: server_side.into(), ..Project::default() }
+    Project {
+        id: id.into(),
+        title: format!("Titel {id}"),
+        server_side: server_side.into(),
+        ..Project::default()
+    }
 }
 
 #[derive(Default)]
@@ -331,27 +441,41 @@ impl FakeApi {
     fn knowing(hashes_and_projects: &[(char, &str, &str)]) -> Self {
         let mut api = Self::default();
         for (letter, project_id, server_side) in hashes_and_projects {
-            api.versions.insert(hash(*letter), modrinth_version(project_id, &hash(*letter)));
+            api.versions
+                .insert(hash(*letter), modrinth_version(project_id, &hash(*letter)));
             api.projects.push(modrinth_project(project_id, server_side));
         }
         api
     }
 
     fn calls(&self) -> (usize, usize) {
-        (self.version_calls.lock().unwrap().len(), self.project_calls.lock().unwrap().len())
+        (
+            self.version_calls.lock().unwrap().len(),
+            self.project_calls.lock().unwrap().len(),
+        )
     }
 
     fn fail_when_offline(&self) -> AppResult<()> {
-        if self.offline.load(Ordering::SeqCst) { Err(AppError::invalid("offline")) } else { Ok(()) }
+        if self.offline.load(Ordering::SeqCst) {
+            Err(AppError::invalid("offline"))
+        } else {
+            Ok(())
+        }
     }
 }
 
 impl ModrinthApi for &'static FakeApi {
-    fn versions_by_sha512<'a>(&'a self, hashes: &'a [String]) -> BoxFuture<'a, AppResult<HashMap<String, Version>>> {
+    fn versions_by_sha512<'a>(
+        &'a self,
+        hashes: &'a [String],
+    ) -> BoxFuture<'a, AppResult<HashMap<String, Version>>> {
         Box::pin(async move {
             self.version_calls.lock().unwrap().push(hashes.to_vec());
             self.fail_when_offline()?;
-            Ok(hashes.iter().filter_map(|h| Some((h.clone(), self.versions.get(h)?.clone()))).collect())
+            Ok(hashes
+                .iter()
+                .filter_map(|h| Some((h.clone(), self.versions.get(h)?.clone())))
+                .collect())
         })
     }
 
@@ -359,7 +483,12 @@ impl ModrinthApi for &'static FakeApi {
         Box::pin(async move {
             self.project_calls.lock().unwrap().push(ids.to_vec());
             self.fail_when_offline()?;
-            Ok(self.projects.iter().filter(|p| ids.contains(&p.id)).cloned().collect())
+            Ok(self
+                .projects
+                .iter()
+                .filter(|p| ids.contains(&p.id))
+                .cloned()
+                .collect())
         })
     }
 }
@@ -377,26 +506,54 @@ const HOUR: Duration = Duration::from_secs(3600);
 
 #[tokio::test]
 async fn lookup_asks_modrinth_once_for_versions_and_once_for_projects() {
-    let api = leaked(FakeApi::knowing(&[('a', "pa", "required"), ('s', "ps", "unsupported"), ('b', "pa", "required")]));
+    let api = leaked(FakeApi::knowing(&[
+        ('a', "pa", "required"),
+        ('s', "ps", "unsupported"),
+        ('b', "pa", "required"),
+    ]));
     let lookup = lookup_over(api, HOUR);
 
-    let found = lookup.classify(&[hash('a'), hash('s'), hash('b'), hash('x'), hash('a')]).await.unwrap();
+    let found = lookup
+        .classify(&[hash('a'), hash('s'), hash('b'), hash('x'), hash('a')])
+        .await
+        .unwrap();
 
     assert_eq!(api.calls(), (1, 1));
-    assert_eq!(api.version_calls.lock().unwrap()[0].len(), 4, "doppelte Hashes werden nur einmal gefragt");
+    assert_eq!(
+        api.version_calls.lock().unwrap()[0].len(),
+        4,
+        "doppelte Hashes werden nur einmal gefragt"
+    );
     assert_eq!(api.project_calls.lock().unwrap()[0], ["pa", "ps"]);
     assert_eq!(found.len(), 3, "X kennt Modrinth nicht");
-    assert_eq!(found[&hash('a')], ModInfo { title: "Titel pa".into(), project_id: "pa".into(), client_only: false });
+    assert_eq!(
+        found[&hash('a')],
+        ModInfo {
+            title: "Titel pa".into(),
+            project_id: "pa".into(),
+            client_only: false
+        }
+    );
     assert!(found[&hash('s')].client_only);
 }
 
 #[tokio::test]
 async fn only_server_side_unsupported_projects_are_client_only() {
-    let api = leaked(FakeApi::knowing(&[('a', "p1", "required"), ('b', "p2", "optional"), ('c', "p3", "unsupported")]));
+    let api = leaked(FakeApi::knowing(&[
+        ('a', "p1", "required"),
+        ('b', "p2", "optional"),
+        ('c', "p3", "unsupported"),
+    ]));
 
-    let found = lookup_over(api, HOUR).classify(&[hash('a'), hash('b'), hash('c')]).await.unwrap();
+    let found = lookup_over(api, HOUR)
+        .classify(&[hash('a'), hash('b'), hash('c')])
+        .await
+        .unwrap();
 
-    let client_only: Vec<bool> = ['a', 'b', 'c'].iter().map(|l| found[&hash(*l)].client_only).collect();
+    let client_only: Vec<bool> = ['a', 'b', 'c']
+        .iter()
+        .map(|l| found[&hash(*l)].client_only)
+        .collect();
     assert_eq!(client_only, [false, false, true]);
 }
 
@@ -408,13 +565,20 @@ async fn answers_including_misses_are_remembered_for_the_ttl() {
     lookup.classify(&[hash('a'), hash('x')]).await.unwrap();
     let again = lookup.classify(&[hash('x'), hash('a')]).await.unwrap();
 
-    assert_eq!(api.calls(), (1, 1), "auch X (kein Treffer) wird nicht erneut gefragt");
+    assert_eq!(
+        api.calls(),
+        (1, 1),
+        "auch X (kein Treffer) wird nicht erneut gefragt"
+    );
     assert_eq!(again.len(), 1);
 }
 
 #[tokio::test]
 async fn only_new_hashes_are_asked_for() {
-    let api = leaked(FakeApi::knowing(&[('a', "pa", "required"), ('b', "pb", "required")]));
+    let api = leaked(FakeApi::knowing(&[
+        ('a', "pa", "required"),
+        ('b', "pb", "required"),
+    ]));
     let lookup = lookup_over(api, HOUR);
 
     lookup.classify(&[hash('a')]).await.unwrap();
@@ -454,7 +618,11 @@ async fn nothing_is_asked_for_an_empty_list_or_unknown_files_only_cost_one_call(
     assert!(lookup.classify(&[]).await.unwrap().is_empty());
     assert_eq!(api.calls(), (0, 0));
     assert!(lookup.classify(&[hash('x')]).await.unwrap().is_empty());
-    assert_eq!(api.calls(), (1, 0), "ohne Treffer gibt es kein Projekt nachzuschlagen");
+    assert_eq!(
+        api.calls(),
+        (1, 0),
+        "ohne Treffer gibt es kein Projekt nachzuschlagen"
+    );
 }
 
 #[tokio::test]
@@ -462,14 +630,25 @@ async fn a_version_without_its_project_stays_unresolved() {
     let mut api = FakeApi::knowing(&[('a', "pa", "required")]);
     api.projects.clear();
 
-    assert!(lookup_over(leaked(api), HOUR).classify(&[hash('a')]).await.unwrap().is_empty());
+    assert!(lookup_over(leaked(api), HOUR)
+        .classify(&[hash('a')])
+        .await
+        .unwrap()
+        .is_empty());
 }
 
 #[tokio::test]
 async fn the_plan_follows_what_modrinth_says_through_the_real_lookup() {
-    let api = leaked(FakeApi::knowing(&[('a', "pa", "required"), ('s', "ps", "unsupported")]));
+    let api = leaked(FakeApi::knowing(&[
+        ('a', "pa", "required"),
+        ('s', "ps", "unsupported"),
+    ]));
     let lookup = lookup_over(api, HOUR);
-    let host = manifest_of(FABRIC, "26.3", vec![table_file('a'), table_file('s'), table_file('x')]);
+    let host = manifest_of(
+        FABRIC,
+        "26.3",
+        vec![table_file('a'), table_file('s'), table_file('x')],
+    );
     let guest = instance("guest", FABRIC, "26.3");
     let local = FakeLocal(HashMap::from([("guest".to_owned(), table_mods("a"))]));
 
@@ -478,13 +657,22 @@ async fn the_plan_follows_what_modrinth_says_through_the_real_lookup() {
     let plan = matching::plan(&invite(), &host, &[guest], &local, &classification);
 
     assert_eq!(plan.verdict, JoinVerdict::MissingContent);
-    assert_eq!(titles(&plan.candidates[0].missing), ["X.jar"], "S ist Client-Mod, X unbekannt");
+    assert_eq!(
+        titles(&plan.candidates[0].missing),
+        ["X.jar"],
+        "S ist Client-Mod, X unbekannt"
+    );
     assert!(!plan.lookup_failed);
 }
 
-fn mod_dir_hasher(known: &'static [(&'static str, char)]) -> impl Fn(&std::path::Path) -> io::Result<String> {
+fn mod_dir_hasher(
+    known: &'static [(&'static str, char)],
+) -> impl Fn(&std::path::Path) -> io::Result<String> {
     move |path| {
-        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
         known
             .iter()
             .find(|(file_name, _)| *file_name == name)
@@ -543,7 +731,11 @@ fn the_manifest_skips_unreadable_files_unsafe_names_and_repeated_hashes() {
 
 #[test]
 fn a_vanilla_manifest_is_empty_and_serialises_with_the_wire_names() {
-    let built = manifest::build(&instance("host", VANILLA, "26.3"), std::path::Path::new("mods"), &|_| unreachable!());
+    let built = manifest::build(
+        &instance("host", VANILLA, "26.3"),
+        std::path::Path::new("mods"),
+        &|_| unreachable!(),
+    );
 
     assert_eq!(
         serde_json::to_value(&built).unwrap(),
@@ -554,8 +746,14 @@ fn a_vanilla_manifest_is_empty_and_serialises_with_the_wire_names() {
 fn versions() -> VersionIndex {
     VersionIndex::new([
         ("26.3".to_owned(), "2026-09-01T10:00:00+00:00".to_owned()),
-        ("1.20".to_owned(), MIN_MC_RELEASE_TIME.to_owned()),
-        ("1.19.4".to_owned(), "2023-03-14T12:56:18+00:00".to_owned()),
+        ("1.16.5".to_owned(), MIN_MC_RELEASE_TIME.to_owned()),
+        ("1.16.4".to_owned(), "2020-10-29T15:49:37+00:00".to_owned()),
+        ("1.16".to_owned(), "2020-06-23T16:20:52+00:00".to_owned()),
+        ("1.15.2".to_owned(), "2020-01-17T10:03:52+00:00".to_owned()),
+        ("1.18.2".to_owned(), "2022-02-28T10:42:45+00:00".to_owned()),
+        ("1.19.2".to_owned(), "2022-08-05T11:57:05+00:00".to_owned()),
+        ("1.16.5-rc1".to_owned(), "2021-01-13T16:22:59+00:00".to_owned()),
+        ("26.3-snapshot-1".to_owned(), "2026-06-23T11:57:02+00:00".to_owned()),
     ])
 }
 
@@ -564,14 +762,20 @@ fn valid_manifest() -> Manifest {
 }
 
 fn invalid(raw: Manifest) {
-    assert!(matches!(manifest::validate(raw, &versions()), Err(ManifestError::Invalid(_))));
+    assert!(matches!(
+        manifest::validate(raw, &versions()),
+        Err(ManifestError::Invalid(_))
+    ));
 }
 
 #[test]
 fn a_valid_manifest_passes_with_sanitised_file_names() {
     let mut raw = valid_manifest();
     raw.loader_version = Some("0.19.5+build.1".into());
-    raw.mods = vec![file('a', "§4sodium\u{202e}.jar\n"), file('b', &"x".repeat(300))];
+    raw.mods = vec![
+        file('a', "§4sodium\u{202e}.jar\n"),
+        file('b', &"x".repeat(300)),
+    ];
 
     let valid = manifest::validate(raw, &versions()).unwrap();
 
@@ -580,12 +784,25 @@ fn a_valid_manifest_passes_with_sanitised_file_names() {
 }
 
 #[test]
-fn the_release_time_boundary_is_inclusive() {
-    assert!(manifest::validate(manifest_of(FABRIC, "1.20", vec![]), &versions()).is_ok());
-    assert_eq!(
-        manifest::validate(manifest_of(FABRIC, "1.19.4", vec![]), &versions()),
-        Err(ManifestError::VersionUnsupported)
-    );
+fn the_selected_release_floor_is_inclusive_and_rejects_earlier_releases() {
+    for version in ["1.16.5", "1.18.2", "1.19.2", "26.3"] {
+        for loader in [FABRIC, ModLoader::Forge, ModLoader::Quilt, ModLoader::Vanilla] {
+            assert!(manifest::validate(manifest_of(loader, version, vec![]), &versions()).is_ok(), "{version} {loader:?}");
+        }
+    }
+    for version in ["1.16", "1.16.4", "1.15.2"] {
+        assert_eq!(
+            manifest::validate(manifest_of(FABRIC, version, vec![]), &versions()),
+            Err(ManifestError::VersionUnsupported),
+        );
+    }
+}
+
+#[test]
+fn snapshots_do_not_pass_the_release_floor_even_after_its_release_date() {
+    for version in ["1.16.5-rc1", "26.3-snapshot-1"] {
+        invalid(manifest_of(FABRIC, version, vec![]));
+    }
 }
 
 #[test]
@@ -608,21 +825,43 @@ fn loader_versions_are_restricted_to_a_safe_alphabet_and_length() {
 #[test]
 fn at_most_500_mods_are_accepted() {
     let many = |count: usize| -> Vec<ManifestMod> {
-        (0..count).map(|n| ManifestMod { sha512: format!("{n:0>128x}"), file_name: format!("m{n}.jar") }).collect()
+        (0..count)
+            .map(|n| ManifestMod {
+                sha512: format!("{n:0>128x}"),
+                file_name: format!("m{n}.jar"),
+            })
+            .collect()
     };
 
-    assert!(manifest::validate(manifest_of(FABRIC, "26.3", many(MAX_MANIFEST_MODS)), &versions()).is_ok());
+    assert!(manifest::validate(
+        manifest_of(FABRIC, "26.3", many(MAX_MANIFEST_MODS)),
+        &versions()
+    )
+    .is_ok());
     invalid(manifest_of(FABRIC, "26.3", many(MAX_MANIFEST_MODS + 1)));
 }
 
 #[test]
 fn hashes_must_be_128_lowercase_hex_characters_and_unique() {
-    let with = |sha512: String| manifest_of(FABRIC, "26.3", vec![ManifestMod { sha512, file_name: "a.jar".into() }]);
+    let with = |sha512: String| {
+        manifest_of(
+            FABRIC,
+            "26.3",
+            vec![ManifestMod {
+                sha512,
+                file_name: "a.jar".into(),
+            }],
+        )
+    };
     invalid(with("a".repeat(127)));
     invalid(with("a".repeat(129)));
     invalid(with("A".repeat(128)));
     invalid(with("g".repeat(128)));
-    invalid(manifest_of(FABRIC, "26.3", vec![file('a', "one.jar"), file('a', "two.jar")]));
+    invalid(manifest_of(
+        FABRIC,
+        "26.3",
+        vec![file('a', "one.jar"), file('a', "two.jar")],
+    ));
 }
 
 #[test]
@@ -641,7 +880,12 @@ fn an_unknown_loader_does_not_even_deserialise() {
 fn a_manifest_without_loader_version_deserialises() {
     let raw = json!({ "minecraftVersion": "26.3", "loader": "fabric", "mods": [] });
 
-    assert_eq!(serde_json::from_value::<Manifest>(raw).unwrap().loader_version, None);
+    assert_eq!(
+        serde_json::from_value::<Manifest>(raw)
+            .unwrap()
+            .loader_version,
+        None
+    );
 }
 
 #[test]
@@ -651,7 +895,7 @@ fn manifest_errors_map_to_their_friends_keys() {
 
     assert_eq!(invalid_key, "errors.friends.manifestInvalid");
     assert_eq!(error_key(&old), "errors.friends.versionUnsupported");
-    assert_eq!(serde_json::to_value(&old).unwrap()["params"]["min"], "1.20");
+    assert_eq!(serde_json::to_value(&old).unwrap()["params"]["min"], "1.16.5");
 }
 
 #[test]
@@ -670,7 +914,10 @@ fn the_version_index_reads_the_mojang_manifest() {
 }
 
 fn invalid_with(index: &VersionIndex, raw: Manifest) {
-    assert!(matches!(manifest::validate(raw, index), Err(ManifestError::Invalid(_))));
+    assert!(matches!(
+        manifest::validate(raw, index),
+        Err(ManifestError::Invalid(_))
+    ));
 }
 
 #[test]
@@ -695,23 +942,47 @@ fn the_hash_cache_reuses_a_hash_until_size_or_time_change() {
     let first = cache.hash(&path).unwrap();
 
     std::fs::write(&path, b"bbbb").unwrap();
-    std::fs::File::options().write(true).open(&path).unwrap().set_modified(before).unwrap();
-    assert_eq!(cache.hash(&path).unwrap(), first, "gleiche Größe und Zeit: aus dem Merker");
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(before)
+        .unwrap();
+    assert_eq!(
+        cache.hash(&path).unwrap(),
+        first,
+        "gleiche Größe und Zeit: aus dem Merker"
+    );
 
-    std::fs::File::options().write(true).open(&path).unwrap().set_modified(before + Duration::from_secs(5)).unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(before + Duration::from_secs(5))
+        .unwrap();
     let changed = cache.hash(&path).unwrap();
     assert_ne!(changed, first);
     assert_eq!(changed, manifest::sha512_file(&path).unwrap());
 
     std::fs::write(&path, b"longer content").unwrap();
-    assert_eq!(cache.hash(&path).unwrap(), manifest::sha512_file(&path).unwrap(), "andere Größe: neu gelesen");
+    assert_eq!(
+        cache.hash(&path).unwrap(),
+        manifest::sha512_file(&path).unwrap(),
+        "andere Größe: neu gelesen"
+    );
 }
 
 #[test]
 fn the_hash_cache_reports_a_missing_file() {
     let dir = TempDir::new();
 
-    assert_eq!(HashCache::default().hash(&dir.path().join("none.jar")).unwrap_err().kind(), io::ErrorKind::NotFound);
+    assert_eq!(
+        HashCache::default()
+            .hash(&dir.path().join("none.jar"))
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::NotFound
+    );
 }
 
 #[test]
@@ -719,13 +990,20 @@ fn disk_hashes_read_the_mods_folder_of_the_instance() {
     let dir = TempDir::new();
     let dirs = crate::services::Dirs::new(dir.path());
     let mut guest = instance("guest", FABRIC, "26.3");
-    guest.mods = vec![mod_entry("a.jar", ModKind::Mod, true), mod_entry("off.jar", ModKind::Mod, false)];
+    guest.mods = vec![
+        mod_entry("a.jar", ModKind::Mod, true),
+        mod_entry("off.jar", ModKind::Mod, false),
+    ];
     std::fs::create_dir_all(dirs.mods_dir("guest")).unwrap();
     std::fs::write(dirs.mods_dir("guest").join("a.jar"), b"abc").unwrap();
     std::fs::write(dirs.mods_dir("guest").join("off.jar"), b"abc").unwrap();
     let cache = HashCache::default();
 
-    let mods = matching::DiskHashes { dirs: &dirs, cache: &cache }.mods_of(&guest);
+    let mods = matching::DiskHashes {
+        dirs: &dirs,
+        cache: &cache,
+    }
+    .mods_of(&guest);
 
     assert_eq!(mods.len(), 1);
     assert_eq!(mods[0].file_name, "a.jar");

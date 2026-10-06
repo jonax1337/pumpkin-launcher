@@ -1,4 +1,4 @@
--- Schema des Freunde-Verzeichnisses (docs/friends/BYNAME.md, Abschnitt 5.1).
+-- Schema des Freunde-Verzeichnisses (docs/friends/SPEC.md#directory-api).
 CREATE TABLE users (
   uuid TEXT PRIMARY KEY,
   created_at INTEGER NOT NULL,

@@ -5,7 +5,9 @@ use std::time::Duration;
 
 use tokio::time::Instant;
 
-use super::contract::{Invite, InviteEvent, InviteRevokedEvent, RevokeReason, SessionEnd, INVITE_TTL_SECS};
+use super::contract::{
+    Invite, InviteEvent, InviteRevokedEvent, RevokeReason, SessionEnd, INVITE_TTL_SECS,
+};
 use super::control::{SessionControl, WireInvite};
 use super::identity::fingerprint;
 use super::limits::{RateLimit, SlidingWindow};
@@ -19,7 +21,10 @@ use crate::services::lock;
 use crate::services::modbridge::protocol::{ModInvite, ModNotify};
 use crate::services::p2p::PeerId;
 
-const INVITES_PER_FRIEND: RateLimit = RateLimit { max: 10, window: Duration::from_secs(3600) };
+const INVITES_PER_FRIEND: RateLimit = RateLimit {
+    max: 10,
+    window: Duration::from_secs(3600),
+};
 const MAX_OPEN_INVITES: usize = 20;
 
 /// Die offenen Einladungen und das Zählfenster je Gastgeber.
@@ -30,7 +35,10 @@ pub(super) struct Invites {
 
 impl Default for Invites {
     fn default() -> Self {
-        Self { open: Mutex::default(), arrivals: Mutex::new(SlidingWindow::new(INVITES_PER_FRIEND)) }
+        Self {
+            open: Mutex::default(),
+            arrivals: Mutex::new(SlidingWindow::new(INVITES_PER_FRIEND)),
+        }
     }
 }
 
@@ -51,7 +59,10 @@ impl Invites {
 
     /// Die Einladung `invite_id`, wenn sie noch offen ist (SPEC 6.2).
     pub(super) fn open_invite(&self, invite_id: &str) -> AppResult<Received> {
-        let found = lock(&self.open).iter().find(|received| received.invite.id == invite_id).cloned();
+        let found = lock(&self.open)
+            .iter()
+            .find(|received| received.invite.id == invite_id)
+            .cloned();
         let received = found.ok_or_else(|| {
             AppError::NotFound(coded!("errors.friends.notFound.invite", id = invite_id).into())
         })?;
@@ -80,13 +91,17 @@ impl Invites {
 
     fn take(&self, invite_id: &str) -> Option<Received> {
         let mut open = lock(&self.open);
-        let index = open.iter().position(|received| received.invite.id == invite_id)?;
+        let index = open
+            .iter()
+            .position(|received| received.invite.id == invite_id)?;
         Some(open.remove(index))
     }
 
     fn take_from(&self, host: &PeerId, invite_id: &str) -> Option<Received> {
         let mut open = lock(&self.open);
-        let index = open.iter().position(|received| received.host == *host && received.invite.id == invite_id)?;
+        let index = open
+            .iter()
+            .position(|received| received.host == *host && received.invite.id == invite_id)?;
         Some(open.remove(index))
     }
 
@@ -95,7 +110,10 @@ impl Invites {
     fn admit(&self, received: Received) -> bool {
         let mut open = lock(&self.open);
         let id = &received.invite.id;
-        if open.iter().any(|other| other.invite.id == *id && other.host != received.host) {
+        if open
+            .iter()
+            .any(|other| other.invite.id == *id && other.host != received.host)
+        {
             return false;
         }
         let replaced = |other: &Received| {
@@ -115,7 +133,9 @@ impl FriendSessions {
     pub async fn invites(&self) -> AppResult<Vec<Invite>> {
         self.shared.ensure_enabled()?;
         let open = self.shared.invites.current(now_secs()).into_iter();
-        Ok(open.map(|received| with_host_online(&self.shared, received)).collect())
+        Ok(open
+            .map(|received| with_host_online(&self.shared, received))
+            .collect())
     }
 
     /// Lehnt ab: die Einladung verschwindet, der Gastgeber erfährt es mit `inviteDecline` (SPEC 5.4).
@@ -124,8 +144,14 @@ impl FriendSessions {
         shared.ensure_enabled()?;
         let received = shared.invites.open_invite(invite_id)?;
         shared.invites.take(invite_id);
-        let decline = SessionControl::InviteDecline { invite_id: invite_id.to_owned() };
-        if shared.friends.send_control(&received.host, decline).is_err() {
+        let decline = SessionControl::InviteDecline {
+            invite_id: invite_id.to_owned(),
+        };
+        if shared
+            .friends
+            .send_control(&received.host, decline)
+            .is_err()
+        {
             tracing::debug!(peer = %received.host.short(), "Absage nicht zugestellt, der Gastgeber ist offline");
         }
         super::joining::end_for_invite(shared, invite_id, SessionEnd::Left);
@@ -135,18 +161,25 @@ impl FriendSessions {
 
 fn with_host_online(shared: &Shared, received: Received) -> Invite {
     let host_online = shared.friends.connection(&received.host).is_some();
-    Invite { host_online, ..received.invite }
+    Invite {
+        host_online,
+        ..received.invite
+    }
 }
 
 /// Eine Einladung eines Freundes (SPEC 5.4); was nicht passt, wird still verworfen.
 pub(super) async fn receive(shared: &Arc<Shared>, host: &PeerId, wire: WireInvite) {
-    let Some((received, mc_uuid)) = accepted_invite(shared, host, wire).await else { return };
+    let Some((received, mc_uuid)) = accepted_invite(shared, host, wire).await else {
+        return;
+    };
     let invite = received.invite.clone();
     if !shared.invites.admit(received) {
         tracing::debug!(peer = %host.short(), "Einladung mit fremder ID verworfen");
         return;
     }
-    shared.emit(SessionEvent::Invite(InviteEvent { invite: invite.clone() }));
+    shared.emit(SessionEvent::Invite(InviteEvent {
+        invite: invite.clone(),
+    }));
     for instance_id in shared.hosting.running_instances() {
         let who = Some((invite.from_name.clone(), mc_uuid.clone()));
         mod_link::notify(shared, &instance_id, ModNotify::InviteReceived, who);
@@ -154,9 +187,15 @@ pub(super) async fn receive(shared: &Arc<Shared>, host: &PeerId, wire: WireInvit
 }
 
 /// Die Einladung, wie sie gespeichert wird, mit der Minecraft-UUID des Gastgebers; `None`, wenn sie verworfen wird.
-async fn accepted_invite(shared: &Shared, host: &PeerId, wire: WireInvite) -> Option<(Received, Option<String>)> {
+async fn accepted_invite(
+    shared: &Shared,
+    host: &PeerId,
+    wire: WireInvite,
+) -> Option<(Received, Option<String>)> {
     let friends = friends_by_id(shared).await.ok()?;
-    let friend = friends.get(&host.to_string()).filter(|friend| friend.confirmed && !friend.removed_by_peer)?;
+    let friend = friends
+        .get(&host.to_string())
+        .filter(|friend| friend.confirmed && !friend.removed_by_peer)?;
     if !lock(&shared.invites.arrivals).try_hit(*host, Instant::now()) {
         tracing::debug!(peer = %host.short(), "zu viele Einladungen, verworfen");
         return None;
@@ -164,7 +203,10 @@ async fn accepted_invite(shared: &Shared, host: &PeerId, wire: WireInvite) -> Op
     let now = now_secs();
     let expires_at = capped_expiry(wire.expires_at, now)?;
     let invite = Invite {
-        title: wire.world_name.clone().unwrap_or_else(|| wire.instance.name.clone()),
+        title: wire
+            .world_name
+            .clone()
+            .unwrap_or_else(|| wire.instance.name.clone()),
         id: wire.id,
         session_id: wire.session_id,
         from: host.to_string(),
@@ -175,7 +217,13 @@ async fn accepted_invite(shared: &Shared, host: &PeerId, wire: WireInvite) -> Op
         expires_at,
         host_online: true,
     };
-    Some((Received { host: *host, invite }, friend.mc_uuid.clone()))
+    Some((
+        Received {
+            host: *host,
+            invite,
+        },
+        friend.mc_uuid.clone(),
+    ))
 }
 
 /// Eine Einladung gilt höchstens 2 h ab Empfang (SPEC 5.4); eine schon abgelaufene gibt es nicht.
@@ -189,7 +237,10 @@ pub(super) fn revoked(shared: &Shared, host: &PeerId, invite_id: &str, reason: R
     if shared.invites.take_from(host, invite_id).is_none() {
         return;
     }
-    shared.emit(SessionEvent::InviteRevoked(InviteRevokedEvent { invite_id: invite_id.to_owned(), reason }));
+    shared.emit(SessionEvent::InviteRevoked(InviteRevokedEvent {
+        invite_id: invite_id.to_owned(),
+        reason,
+    }));
     let ended = match reason {
         RevokeReason::Stopped => SessionEnd::Stopped,
         RevokeReason::Kicked => SessionEnd::Kicked,
@@ -228,11 +279,18 @@ mod tests {
             expires_at: u64::MAX,
             host_online: true,
         };
-        Received { host: peer(host), invite }
+        Received {
+            host: peer(host),
+            invite,
+        }
     }
 
     fn ids(invites: &Invites) -> Vec<String> {
-        invites.current(0).into_iter().map(|received| received.invite.id).collect()
+        invites
+            .current(0)
+            .into_iter()
+            .map(|received| received.invite.id)
+            .collect()
     }
 
     #[test]
@@ -265,7 +323,11 @@ mod tests {
         invites.admit(received(1, "a", "s1"));
 
         assert!(!invites.admit(received(2, "a", "s2")));
-        assert_eq!(invites.take_from(&peer(2), "a").map(|r| r.invite.id), None, "only its host may revoke it");
+        assert_eq!(
+            invites.take_from(&peer(2), "a").map(|r| r.invite.id),
+            None,
+            "only its host may revoke it"
+        );
     }
 
     #[test]

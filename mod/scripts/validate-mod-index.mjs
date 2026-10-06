@@ -1,4 +1,4 @@
-// Prüft mod-index.json gegen den Vertrag zwischen Gradle-Build und Launcher (docs/friends/INGAME.md 3.2) und gegen die
+// Prüft mod-index.json gegen den Vertrag zwischen Gradle-Build und Launcher (docs/bridge/README.md, "Embedded index and files") und gegen die
 // Jars daneben: Aufruf node mod/scripts/validate-mod-index.mjs <mod-index.json> [Ordner mit den Jars]
 // Ohne Jar-Ordner liegen die Jars neben der Indexdatei. Exit-Code 1 bei jeder verletzten Regel.
 import { createHash } from 'node:crypto';
@@ -10,16 +10,30 @@ import { fileURLToPath } from 'node:url';
 const LOADER_STRATEGIES = {
 	fabric: ['fabricAddMods'],
 	neoforge: ['fmlMavenRoot', 'fmlModFolders'],
-	forge: ['fmlMavenRoot'],
+	forge: ['fmlMavenRoot', 'forgeClasspath'],
+	quilt: ['quiltAddMods'],
 };
-const MOD_VERSION = /^\d+\.\d+\.\d+$/;
-const RELEASE_ID = /^\d+\.\d+(\.\d+)?$/;
-const LOADER_VERSION = /^\d+(\.\d+)*$/;
-const JAR_LEAF_NAME = /^[A-Za-z0-9._+-]+\.jar$/;
+const PLAIN_NAME = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$/;
+const RELEASE_ID = /^(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})(\.(0|[1-9][0-9]{0,3}))?$/;
+const LOADER_VERSION = /^[0-9]+(\.[0-9]+)*([-+].*)?$/;
+const JAR_LEAF_NAME = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}\.jar$/;
 const SHA256 = /^[0-9a-f]{64}$/;
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DATE = /^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/;
+const NODE_FIELDS = ['id', 'loader', 'loaderMin', 'minecraft', 'javaMin', 'strategy', 'file', 'sha256', 'verified'];
 
 const isPlainObject = value => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const matches = (pattern, value) => typeof value === 'string' && pattern.exec(value)?.[0] === value;
+
+function unknownFieldProblems(value, allowed) {
+	const unknown = Object.keys(value).filter(key => !allowed.includes(key));
+	return unknown.length > 0 ? [`unknown field(s) ${unknown.join(', ')}`] : [];
+}
+
+function isLoaderVersion(value) {
+	return matches(LOADER_VERSION, value)
+		&& value.split(/[-+]/, 1)[0].split('.').every(part => BigInt(part) <= 18446744073709551615n);
+}
 
 function verifiedProblems(verified) {
 	if (verified === null || verified === undefined) {
@@ -28,17 +42,17 @@ function verifiedProblems(verified) {
 	if (!isPlainObject(verified)) {
 		return ['verified must be null or an object'];
 	}
-	const problems = [];
-	if (!ISO_DATE.test(verified.smoke ?? '')) {
+	const problems = unknownFieldProblems(verified, ['smoke', 'owner']);
+	if (!matches(ISO_DATE, verified.smoke)) {
 		problems.push('verified.smoke must be a YYYY-MM-DD date');
 	}
-	if (verified.owner !== null && !ISO_DATE.test(verified.owner ?? '')) {
+	if (verified.owner !== undefined && verified.owner !== null && !matches(ISO_DATE, verified.owner)) {
 		problems.push('verified.owner must be null or a YYYY-MM-DD date');
 	}
 	return problems;
 }
 
-// mod/verified.json (INGAME A17): {"<node id>": {"smoke": "YYYY-MM-DD", "owner": null | "YYYY-MM-DD"}}. Only a passed smoke
+// mod/verified.json (docs/bridge/README.md): {"<node id>": {"smoke": "YYYY-MM-DD", "owner": null | "YYYY-MM-DD"}}. Only a passed smoke
 // test adds an entry, so every key must be a node of nodes.txt and every entry must be a complete verified object.
 export function verifiedFileProblems(verifiedFile, knownNodeIds) {
 	if (!isPlainObject(verifiedFile)) {
@@ -52,9 +66,7 @@ export function verifiedFileProblems(verifiedFile, knownNodeIds) {
 		if (!isPlainObject(verified)) {
 			return [`${label}: must be an object`];
 		}
-		const unknownKeys = Object.keys(verified).filter(key => key !== 'smoke' && key !== 'owner');
-		const unknown = unknownKeys.length > 0 ? [`unknown field(s) ${unknownKeys.join(', ')}`] : [];
-		return [...unknown, ...verifiedProblems(verified)].map(problem => `${label}: ${problem}`);
+		return verifiedProblems(verified).map(problem => `${label}: ${problem}`);
 	});
 }
 
@@ -65,32 +77,32 @@ export function verifiedAgreementProblems(index, verifiedFile) {
 		.map(node => `node ${node.id}: verified in the index differs from verified.json`);
 }
 
-export function nodeProblems(node, modVersion) {
-	const problems = [];
-	const strategies = LOADER_STRATEGIES[node.loader];
+export function nodeProblems(node) {
+	const problems = unknownFieldProblems(node, NODE_FIELDS);
+	const strategies = typeof node.loader === 'string' && Object.hasOwn(LOADER_STRATEGIES, node.loader)
+		? LOADER_STRATEGIES[node.loader] : undefined;
 	if (!strategies) {
 		problems.push(`loader must be one of ${Object.keys(LOADER_STRATEGIES).join(', ')}`);
 	} else if (!strategies.includes(node.strategy)) {
 		problems.push(`strategy for ${node.loader} must be one of ${strategies.join(', ')}`);
 	}
-	if (typeof node.id !== 'string' || !node.id.endsWith(`-${node.loader}`)) {
-		problems.push('id must be <minecraft>-<loader>');
+	if (!matches(PLAIN_NAME, node.id)) {
+		problems.push('id must be a plain name of at most 128 characters');
 	}
-	if (!LOADER_VERSION.test(node.loaderMin ?? '')) {
-		problems.push('loaderMin must be a dotted version');
+	if (!isLoaderVersion(node.loaderMin)) {
+		problems.push('loaderMin must be a numeric loader version');
 	}
-	if (!Array.isArray(node.minecraft) || node.minecraft.length === 0 || !node.minecraft.every(id => RELEASE_ID.test(id))) {
+	if (!Array.isArray(node.minecraft) || node.minecraft.length === 0
+		|| !node.minecraft.every(id => matches(RELEASE_ID, id))) {
 		problems.push('minecraft must be a non-empty list of explicit release ids');
 	}
-	if (!Number.isInteger(node.javaMin) || node.javaMin < 8) {
-		problems.push('javaMin must be an integer of at least 8');
+	if (!Number.isInteger(node.javaMin) || node.javaMin < 8 || node.javaMin > 64) {
+		problems.push('javaMin must be an integer between 8 and 64');
 	}
-	if (!JAR_LEAF_NAME.test(node.file ?? '')) {
+	if (!matches(JAR_LEAF_NAME, node.file)) {
 		problems.push('file must be a plain jar leaf name');
-	} else if (node.file !== `pumpkin_friends-${modVersion}+${node.id}.jar`) {
-		problems.push(`file must be pumpkin_friends-${modVersion}+${node.id}.jar`);
 	}
-	if (!SHA256.test(node.sha256 ?? '')) {
+	if (!matches(SHA256, node.sha256)) {
 		problems.push('sha256 must be 64 lowercase hex characters');
 	}
 	return [...problems, ...verifiedProblems(node.verified)];
@@ -122,12 +134,12 @@ export function indexProblems(index) {
 	if (!isPlainObject(index)) {
 		return ['index must be a JSON object'];
 	}
-	const problems = [];
-	if (!MOD_VERSION.test(index.modVersion ?? '')) {
-		problems.push('modVersion must be MAJOR.MINOR.PATCH');
+	const problems = unknownFieldProblems(index, ['modVersion', 'nodes']);
+	if (!matches(PLAIN_NAME, index.modVersion)) {
+		problems.push('modVersion must be a plain name of at most 128 characters');
 	}
-	if (!Array.isArray(index.nodes) || index.nodes.length === 0) {
-		return [...problems, 'nodes must be a non-empty list'];
+	if (!Array.isArray(index.nodes)) {
+		return [...problems, 'nodes must be a list'];
 	}
 	const seenIds = new Set();
 	for (const node of index.nodes) {
@@ -140,15 +152,24 @@ export function indexProblems(index) {
 			problems.push(`${label}: duplicate id`);
 		}
 		seenIds.add(node.id);
-		problems.push(...nodeProblems(node, index.modVersion).map(problem => `${label}: ${problem}`));
+		problems.push(...nodeProblems(node).map(problem => `${label}: ${problem}`));
 	}
 	return [...problems, ...crossNodeProblems(index.nodes)];
 }
 
-async function readBudget(gradlePropertiesPath) {
-	const text = await readFile(gradlePropertiesPath, 'utf8');
-	const read = key => Number(text.match(new RegExp(`^${key.replaceAll('.', '\\.')}=(\\d+)$`, 'm'))?.[1]);
+export function parseBudget(text) {
+	const read = key => {
+		const value = Number(text.match(new RegExp(`^${key.replaceAll('.', '\\.')}=(\\d+)\\r?$`, 'm'))?.[1]);
+		if (!Number.isSafeInteger(value) || value <= 0) {
+			throw new Error(`${key} must be a positive safe integer byte limit`);
+		}
+		return value;
+	};
 	return { jarMaxBytes: read('mod.jarMaxBytes'), totalMaxBytes: read('mod.totalMaxBytes') };
+}
+
+async function readBudget(gradlePropertiesPath) {
+	return parseBudget(await readFile(gradlePropertiesPath, 'utf8'));
 }
 
 async function jarProblems(index, jarDirectory, budget) {

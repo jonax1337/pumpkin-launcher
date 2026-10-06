@@ -94,10 +94,11 @@ export const friends = {
   "friends.name.placeholder": "z. B. Steve",
   "friends.name.wrongShape": "Das ist kein Minecraft-Name: erlaubt sind 1 bis {max} Buchstaben, Ziffern und Unterstriche.",
   "friends.name.someone": "Die Person",
-  "friends.name.hint": "{name} sieht deinen Minecraft-Namen, deinen Anzeigenamen und deinen Fingerabdruck. Erst nach der Annahme verbinden sich eure Launcher. Das Pumpkin-Verzeichnis hält die Anfrage bis zu {days} Tage bereit.",
+  "friends.name.hint": "{name} sieht deinen Minecraft-Namen und deinen Fingerabdruck. Erst nach der Annahme verbinden sich eure Launcher. Das Pumpkin-Verzeichnis hält die Anfrage bis zu {days} Tage bereit.",
   "friends.name.sent": "Anfrage an {name} gesendet",
   "friends.name.showMyCode": "Meinen Code zeigen",
   "friends.name.unreachable": "Das Verzeichnis ist gerade nicht erreichbar; nutze einen Code.",
+  "friends.name.buildUnavailable": "Dieser Build kennt kein Freunde-Verzeichnis; die Suche per Minecraft-Name ist deshalb aus. Freundescodes funktionieren.",
   "friends.name.notFindable": "Andere finden dich nur per Name, wenn du es in den Einstellungen erlaubst.",
   "friends.name.openSettings": "Einstellungen öffnen",
   "friends.myCode.button": "Mein Code",
@@ -117,9 +118,9 @@ export const friends = {
   "friends.enter.help": "Den Code hat dir dein Freund gegeben. Leerzeichen und Bindestriche darin stören nicht.",
   "friends.enter.placeholder": "pumpkin-…",
   "friends.enter.wrongShape": "Das ist kein Freundescode: Er beginnt mit „pumpkin-“, danach folgen 72 Buchstaben und Ziffern.",
-  "friends.enter.consent": "Dein Anzeigename und dein Minecraft-Name gehen an den Besitzer des Codes. Er muss die Anfrage annehmen.",
+  "friends.enter.consent": "Dein Minecraft-Name geht an den Besitzer des Codes. Er muss die Anfrage annehmen.",
 
-  // ---------- Aktivität im Spiel (INGAME 5.7) ----------
+  // ---------- Aktivität im Spiel (docs/bridge/README.md, "Protocol 2") ----------
   "friends.activity.title": "Aktivität im Spiel",
   "friends.activity.note": "Was Spiele über das Freunde-Menü ausgelöst haben, die letzten 100. Die Liste bleibt nur im Speicher des Launchers.",
   "friends.activity.sub": "{time} · {instance}",

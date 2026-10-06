@@ -7,10 +7,11 @@ use std::time::Duration;
 use futures::future::BoxFuture;
 
 use super::config::friends_dir;
+use super::directory::mojang::session_profile_url;
 use super::sanitize;
 use crate::coded;
 use crate::error::{AppError, AppResult};
-use crate::services::skins::{parse_player_skin, SESSION_PROFILE};
+use crate::services::skins::parse_player_skin;
 use crate::services::{data_url, modrinth, write_atomic, Dirs};
 
 const SKIN_MAX_BYTES: u64 = 64 * 1024;
@@ -30,7 +31,10 @@ struct MojangHttp<'a>(&'a reqwest::Client);
 
 impl MojangSource for MojangHttp<'_> {
     fn session_profile<'a>(&'a self, mc_uuid: &'a str) -> BoxFuture<'a, AppResult<Vec<u8>>> {
-        Box::pin(modrinth::bytes(self.0.get(format!("{SESSION_PROFILE}{mc_uuid}")), PROFILE_MAX_BYTES))
+        Box::pin(modrinth::bytes(
+            self.0.get(session_profile_url(mc_uuid)),
+            PROFILE_MAX_BYTES,
+        ))
     }
 
     fn texture<'a>(&'a self, url: &'a str) -> BoxFuture<'a, AppResult<Vec<u8>>> {
@@ -43,13 +47,21 @@ pub async fn skin(http: &reqwest::Client, dirs: &Dirs, mc_uuid: &str) -> AppResu
     skin_from(&MojangHttp(http), dirs, mc_uuid).await
 }
 
-async fn skin_from(source: &dyn MojangSource, dirs: &Dirs, mc_uuid: &str) -> AppResult<Option<String>> {
-    let Some(uuid) = sanitize::mc_uuid(Some(mc_uuid)) else { return Ok(None) };
+async fn skin_from(
+    source: &dyn MojangSource,
+    dirs: &Dirs,
+    mc_uuid: &str,
+) -> AppResult<Option<String>> {
+    let Some(uuid) = sanitize::mc_uuid(Some(mc_uuid)) else {
+        return Ok(None);
+    };
     let path = cache_path(dirs, &uuid);
     if let Some(png) = fresh_cached(&path) {
         return Ok(Some(data_url("image/png", &png)));
     }
-    let Some(png) = download(source, &uuid).await? else { return Ok(None) };
+    let Some(png) = download(source, &uuid).await? else {
+        return Ok(None);
+    };
     fs::create_dir_all(path.parent().unwrap_or(&path))?;
     write_atomic(&path, &png)?;
     Ok(Some(data_url("image/png", &png)))
@@ -70,7 +82,9 @@ fn fresh_cached(path: &Path) -> Option<Vec<u8>> {
 
 async fn download(source: &dyn MojangSource, uuid: &str) -> AppResult<Option<Vec<u8>>> {
     let profile = source.session_profile(uuid).await?;
-    let Some(skin) = parse_player_skin(&profile)? else { return Ok(None) };
+    let Some(skin) = parse_player_skin(&profile)? else {
+        return Ok(None);
+    };
     let png = source.texture(&skin.url).await?;
     ensure_png(&png)?;
     Ok(Some(png))
@@ -97,15 +111,18 @@ mod tests {
     use super::*;
 
     const UUID: &str = "986dec87b7ec47ff89ff033fdb95c4b5";
-    const TEXTURE_URL: &str = "http://textures.minecraft.net/texture/1a4af718455d4aab528e7a61f86fa25e6a369d1768dc";
-    const TEXTURE_URL_HTTPS: &str = "https://textures.minecraft.net/texture/1a4af718455d4aab528e7a61f86fa25e6a369d1768dc";
+    const TEXTURE_URL: &str =
+        "http://textures.minecraft.net/texture/1a4af718455d4aab528e7a61f86fa25e6a369d1768dc";
+    const TEXTURE_URL_HTTPS: &str =
+        "https://textures.minecraft.net/texture/1a4af718455d4aab528e7a61f86fa25e6a369d1768dc";
 
     fn png(extra: usize) -> Vec<u8> {
         [PNG_SIGNATURE, &vec![0u8; extra]].concat()
     }
 
     fn session_profile(texture_url: &str) -> Vec<u8> {
-        let textures = serde_json::json!({ "textures": { "SKIN": { "url": texture_url } } }).to_string();
+        let textures =
+            serde_json::json!({ "textures": { "SKIN": { "url": texture_url } } }).to_string();
         let value = base64::engine::general_purpose::STANDARD.encode(textures);
         serde_json::to_vec(&serde_json::json!({ "id": UUID, "properties": [{ "name": "textures", "value": value }] })).unwrap()
     }
@@ -119,7 +136,12 @@ mod tests {
 
     impl FakeMojang {
         fn serving(profile: Vec<u8>, texture: Vec<u8>) -> Self {
-            Self { profile, texture, profile_calls: AtomicUsize::new(0), textures_asked: Mutex::default() }
+            Self {
+                profile,
+                texture,
+                profile_calls: AtomicUsize::new(0),
+                textures_asked: Mutex::default(),
+            }
         }
 
         fn with_skin() -> Self {
@@ -159,7 +181,11 @@ mod tests {
         assert!(first.starts_with("data:image/png;base64,"));
         assert_eq!(first, second);
         assert_eq!(fs::read(cached_file(&dirs)).unwrap(), png(100));
-        assert_eq!(mojang.profile_calls(), 1, "der zweite Aufruf kommt aus dem Ordner");
+        assert_eq!(
+            mojang.profile_calls(),
+            1,
+            "der zweite Aufruf kommt aus dem Ordner"
+        );
         assert_eq!(*mojang.textures_asked.lock().unwrap(), [TEXTURE_URL_HTTPS]);
     }
 
@@ -170,7 +196,12 @@ mod tests {
         let mojang = FakeMojang::with_skin();
         skin_from(&mojang, &dirs, UUID).await.unwrap();
         let old = std::time::SystemTime::now() - CACHE_MAX_AGE - Duration::from_secs(60);
-        fs::File::options().write(true).open(cached_file(&dirs)).unwrap().set_modified(old).unwrap();
+        fs::File::options()
+            .write(true)
+            .open(cached_file(&dirs))
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
 
         skin_from(&mojang, &dirs, UUID).await.unwrap();
 
@@ -182,8 +213,19 @@ mod tests {
         let dir = TempDir::new();
         let mojang = FakeMojang::with_skin();
 
-        for bad in ["", "../etc/passwd", &UUID.to_uppercase(), "986dec87-b7ec-47ff-89ff-033fdb95c4b5"] {
-            assert_eq!(skin_from(&mojang, &Dirs::new(dir.path()), bad).await.unwrap(), None, "{bad}");
+        for bad in [
+            "",
+            "../etc/passwd",
+            &UUID.to_uppercase(),
+            "986dec87-b7ec-47ff-89ff-033fdb95c4b5",
+        ] {
+            assert_eq!(
+                skin_from(&mojang, &Dirs::new(dir.path()), bad)
+                    .await
+                    .unwrap(),
+                None,
+                "{bad}"
+            );
         }
 
         assert_eq!(mojang.profile_calls(), 0);
@@ -193,7 +235,8 @@ mod tests {
     async fn a_player_with_the_default_skin_has_none_and_nothing_is_cached() {
         let dir = TempDir::new();
         let dirs = Dirs::new(dir.path());
-        let profile = serde_json::to_vec(&serde_json::json!({ "id": UUID, "properties": [] })).unwrap();
+        let profile =
+            serde_json::to_vec(&serde_json::json!({ "id": UUID, "properties": [] })).unwrap();
         let mojang = FakeMojang::serving(profile, png(0));
 
         assert_eq!(skin_from(&mojang, &dirs, UUID).await.unwrap(), None);
@@ -224,8 +267,10 @@ mod tests {
     async fn images_over_64_kib_or_without_png_signature_are_refused_and_not_cached() {
         let dir = TempDir::new();
         let dirs = Dirs::new(dir.path());
-        let too_big = FakeMojang::serving(session_profile(TEXTURE_URL), png(SKIN_MAX_BYTES as usize));
-        let not_png = FakeMojang::serving(session_profile(TEXTURE_URL), b"GIF89a-not-a-png".to_vec());
+        let too_big =
+            FakeMojang::serving(session_profile(TEXTURE_URL), png(SKIN_MAX_BYTES as usize));
+        let not_png =
+            FakeMojang::serving(session_profile(TEXTURE_URL), b"GIF89a-not-a-png".to_vec());
 
         let big_error = skin_from(&too_big, &dirs, UUID).await.unwrap_err();
         let png_error = skin_from(&not_png, &dirs, UUID).await.unwrap_err();
@@ -241,6 +286,9 @@ mod tests {
         let exact = png(SKIN_MAX_BYTES as usize - PNG_SIGNATURE.len());
         let mojang = FakeMojang::serving(session_profile(TEXTURE_URL), exact);
 
-        assert!(skin_from(&mojang, &Dirs::new(dir.path()), UUID).await.unwrap().is_some());
+        assert!(skin_from(&mojang, &Dirs::new(dir.path()), UUID)
+            .await
+            .unwrap()
+            .is_some());
     }
 }

@@ -1,9 +1,9 @@
 name: Mod
 
-# Baut die In-Game-Mod (mod/, docs/friends/INGAME.md 4.3 und 11.2) für jeden Knoten aus mod/nodes.txt: ein Job pro Knoten
+# Baut die In-Game-Mod (mod/, docs/bridge/README.md) für jeden Knoten aus mod/nodes.txt: ein Job pro Knoten
 # mit dem JDK, das nodes.txt für ihn nennt. Das Ergebnis ist ein Artefakt "mod-index" mit mod-index.json und allen Jars.
 # Die Compile-Matrix (matrix-compile) übersetzt jeden Knoten außerdem gegen beide Enden und eine Mitte seiner Minecraft-Liste.
-# "verified" setzt der Rauchtest (mod/verified.json, Paket S2): nächtlich und bei Änderungen unter mod/** läuft
+# "verified" setzt der Rauchtest (mod/verified.json): nächtlich und bei Änderungen unter mod/** läuft
 # .github/workflows/mod-smoke.yml; lokale Läufe beschreibt tools/mod-smoke/README.md.
 
 on:
@@ -47,8 +47,9 @@ jobs:
                 id: .[0],
                 loader: .[1],
                 java: (.[4] | tonumber),
+                testJava: (if (.[4] | tonumber) < 17 then 17 else (.[4] | tonumber) end),
                 gradleJava: (.[6] | tonumber),
-                family: (if .[1] == "fabric" then "fabric" elif .[1] == "neoforge" then "neoforge" else "legacyforge" end)
+                family: (if .[1] == "fabric" or .[1] == "quilt" then "fabric" elif .[1] == "neoforge" then "neoforge" else "forge" end)
               })' mod/nodes.txt)
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           # Der Kit-Demo-Lauf (kit-demo) gibt es nur für Fabric-Knoten.
@@ -110,6 +111,18 @@ jobs:
       - name: Expose the game JDK to Gradle
         run: echo "PUMPKIN_JDK_${{ matrix.java }}=${{ steps.game-jdk.outputs.path }}" >> "$GITHUB_ENV"
 
+      - name: Test JDK for Java 8 production nodes
+        if: matrix.java < 17
+        id: test-jdk
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Expose the test JDK
+        if: matrix.java < 17
+        run: echo "PUMPKIN_JDK_17=${{ steps.test-jdk.outputs.path }}" >> "$GITHUB_ENV"
+
       - name: Gradle JDK ${{ matrix.gradleJava }}
         if: matrix.gradleJava != matrix.java
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -126,13 +139,13 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
             mod/.gradle/loom-cache
-          key: gradle-${{ matrix.family }}-${{ hashFiles('mod/gradle.properties', 'mod/gradle/wrapper/gradle-wrapper.properties', format('mod/build-{0}.gradle', matrix.loader)) }}
+          key: gradle-${{ matrix.family }}-${{ hashFiles('mod/gradle.properties', 'mod/gradle/wrapper/gradle-wrapper.properties', 'mod/build-*.gradle') }}
           restore-keys: |
             gradle-${{ matrix.family }}-
 
-      # core/ läuft auf dem JDK des Knotens: so ist belegt, dass es auf jedem Knoten läuft (-Pcore.testJdk).
+      # Java 8 production bytecode is exercised by the real game; JUnit 6 requires Java 17 or newer.
       - name: Build and test
-        run: ./gradlew -Pnode=${{ matrix.id }} -Pcore.testJdk=${{ matrix.java }} build modIndex
+        run: ./gradlew -Pnode=${{ matrix.id }} -Pcore.testJdk=${{ matrix.testJava }} build modIndex
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -140,7 +153,7 @@ jobs:
           path: mod/build/mod-index/
           if-no-files-found: error
 
-  # Compile-Matrix (INGAME 4.3): jeder Knoten gegen beide Enden und eine Mitte seiner Minecraft-Liste (nodes.txt, Spalte matrix).
+  # Compile-Matrix (docs/bridge/README.md): jeder Knoten gegen beide Enden und eine Mitte seiner Minecraft-Liste (nodes.txt, Spalte matrix).
   # Ein Knoten, dessen Quellen gegen eine beanspruchte Version nicht mehr übersetzen, bricht hier statt erst im Spiel.
   matrix-compile:
     name: Compile matrix ${{ matrix.id }}
@@ -190,17 +203,16 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
             mod/.gradle/loom-cache
-          key: gradle-${{ matrix.family }}-${{ hashFiles('mod/gradle.properties', 'mod/gradle/wrapper/gradle-wrapper.properties', format('mod/build-{0}.gradle', matrix.loader)) }}
+          key: gradle-${{ matrix.family }}-${{ hashFiles('mod/gradle.properties', 'mod/gradle/wrapper/gradle-wrapper.properties', 'mod/build-*.gradle') }}
           restore-keys: |
             gradle-${{ matrix.family }}-
 
       - name: Compile against both ends and a middle version
         run: node mod/scripts/compile-matrix.mjs --node ${{ matrix.id }}
 
-  # Kit-Demo-Lauf (Paket U1): ein Entwicklungs-Client je Fabric-Knoten unter Xvfb mit Software-GL. Der Demo-Bildschirm des Widget-Kits
-  # schreibt "pumpkin_friends kit demo rendered <n> frames at <w>x<h>"; scripts/kit-demo.mjs wartet darauf und beendet den Client.
-  # Best Effort und NICHT bestätigt: Auf dem Windows-Rechner der Entwicklung lief der Lauf für alle vier Knoten, auf einem
-  # GitHub-Runner wurde er noch nie gestartet (offen ist vor allem, ob 26.x unter Software-Rendering startet, INGAME 12 Risiko 2).
+  # Kit-Demo-Lauf: ein Entwicklungs-Client je Fabric-Knoten unter Xvfb mit Software-GL/Vulkan. Der Demo-Bildschirm des Widget-Kits
+  # schreibt "pumpkin_bridge kit demo rendered <n> frames at <w>x<h>"; scripts/kit-demo.mjs wartet darauf und beendet den Client.
+  # Best Effort: Dieser Entwicklungs-Lauf setzt kein "verified"; dafür läuft der separate Produktions-Rauchtest.
   # Darum continue-on-error: Ein roter Lauf hier sperrt weder den Build noch das Paket.
   kit-demo:
     name: Kit demo ${{ matrix.id }}
@@ -212,6 +224,10 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.nodes.outputs.fabricMatrix) }}
+    env:
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      # 26.3 tries Vulkan when Xvfb cannot supply its requested sRGB GLX visual; use Mesa's real CPU driver.
+      VK_DRIVER_FILES: /usr/share/vulkan/icd.d/lvp_icd.json
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
@@ -254,11 +270,11 @@ jobs:
           restore-keys: |
             gradle-fabric-
 
-      - name: Display and software GL
-        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 libxrandr2 libxxf86vm1 libxcursor1 libxi6
+      - name: Display and software rendering
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0 mesa-vulkan-drivers libxrandr2 libxxf86vm1 libxcursor1 libxi6
 
       - name: Run the kit demo
-        run: LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x720x24" node mod/scripts/kit-demo.mjs --node ${{ matrix.id }}
+        run: xvfb-run -a -s "-screen 0 1280x720x24" node mod/scripts/kit-demo.mjs --node ${{ matrix.id }}
 
   # Ein Artefakt mit mod-index.json und allen Jars; hier greift auch das Gesamtbudget.
   package:

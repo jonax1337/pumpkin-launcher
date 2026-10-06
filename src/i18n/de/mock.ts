@@ -34,7 +34,6 @@ export const mock = {
   "mock.friends.unavailable": "Auf diesem System gibt es keinen Schlüsselbund; Freunde sind hier nicht verfügbar",
   "mock.friends.identityLost": "Deine Freunde-Identität fehlt im Schlüsselbund; setze sie in den Einstellungen zurück",
   "mock.friends.disabled": "Freunde sind nicht aktiviert",
-  "mock.friends.displayNameInvalid": "Anzeigename: {min} bis {max} Zeichen",
   "mock.friends.msAccountRequired": "Dafür brauchst du ein Microsoft-Konto",
   "mock.friends.tooManyCodes": "Höchstens {max} offene Codes; widerrufe zuerst einen",
   "mock.friends.codeInvalid": "Dieser Freundescode ist ungültig",

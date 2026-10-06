@@ -1,65 +1,59 @@
-# Buddy Motion
+# Buddy motion
 
-Zwölf Bewegungen für alle fünf freigegebenen Seasons: **60 animierte SVG-Dateien**. Die bisherigen sechs werden bereits über `src/branding/Brand.tsx` verwendet. Die sechs neuen Reaktionen sind als Assets vorbereitet und in der Vorschau zuerst zu sehen.
+Twelve animations for each of the five Buddy variants: 60 SVG files, plus one static `poster.svg` per season. Assets use a fixed 48×48 canvas with the 32×32 mascot anchored at 8/8. Native SVG-SMIL switches pixel-grid poses without an external runtime library.
 
-| Datei pro Season | Ablauf | Möglicher Einsatz |
+## Assets
+
+Season directories are `standard/`, `spring/`, `summer/`, `halloween/` and `winter/`.
+
+| File | Motion | Playback |
 |---|---|---|
-| `idle.svg` | Ruhiges Schweben, Blinzeln, leicht nachlaufendes Blatt/Accessoire | Startseite oder Leerseite |
-| `hello.svg` | Kleiner Hüpfer und Winken, dann zurück zur Ruhe | Begrüßung oder Onboarding |
-| `loading.svg` | Blickwechsel und drei nacheinander aufleuchtende Pixel | Unbestimmtes Laden |
-| `success.svg` | Kurzer Freudensprung, kleine Hände und Konfetti | Download oder Einrichtung fertig |
-| `oops.svg` | Sanftes Kopfschütteln und überraschter Ausdruck | Ein Fehler ist aufgetreten |
-| `sleep.svg` | Geschlossene Augen und aufsteigendes Z | Inaktivität oder Pause |
-| `curious.svg` | Schiefer Blick, unterschiedliche Augen und kleines Fragezeichen | Tipp oder neue Entdeckung |
-| `nod.svg` | Zwei kurze, freundliche Nicker | Bestätigung |
-| `giggle.svg` | Lachaugen, kleine Wackler und Hand an der Wange | Spielerischer Moment |
-| `surprise.svg` | Große Augen, kurzer Rücksprung und überraschter Mund | Etwas Neues |
-| `pout.svg` | Hängendes Blatt, halbe Lider und Schmollmund | Sanfte Frustration |
-| `love.svg` | Zwinkern, rosige Wangen und ein aufsteigendes Herz | Favorit oder kleines Dankeschön |
+| `idle.svg` | Floating and blinking | Loop |
+| `hello.svg` | Hop and wave | Once |
+| `loading.svg` | Glance and three progress pixels | Loop |
+| `success.svg` | Jump and confetti | Once |
+| `oops.svg` | Head shake | Once |
+| `sleep.svg` | Closed eyes and rising Z | Loop |
+| `curious.svg` | Tilt and question mark | Loop |
+| `nod.svg` | Two nods | Once |
+| `giggle.svg` | Laugh and small wobble | Once |
+| `surprise.svg` | Wide eyes and short recoil | Once |
+| `pout.svg` | Drooping leaf and half-closed eyes | Once |
+| `love.svg` | Wink and rising heart | Once |
 
-Ordner: `standard/`, `spring/`, `summer/`, `halloween/`, `winter/`. Jeder enthält zusätzlich `poster.svg` als statischen Fallback.
+One-shot reactions end in the original resting pose. `manifest.json` contains paths, durations and loop behavior. Animations do not replace textual status or error messages.
 
-## Eigenschaften
+## Usage
 
-- **SVG bleibt das App-Format.** Die Dateien sind transparent und skalierbar, ohne externe Bilder, Skripte oder Laufzeitbibliotheken.
-- Feste 48×48-Zeichenfläche mit 32×32-Buddy bei Ursprung 8/8. Gleiche Maße und Ankerposition für alle Reaktionen; keine springenden Layoutgrößen.
-- Native SVG-SMIL-Animationen schalten klar gezeichnete Posen um. Bewegungen bleiben auf dem Pixelraster; keine weich rotierten oder verzerrten Pixel.
-- `idle`, `loading`, `sleep` und `curious` laufen in Schleifen. Die übrigen Reaktionen spielen einmal und enden im originalen ruhigen Buddy.
-- `prefers-reduced-motion: reduce` zeigt automatisch die statische Version. Die ursprünglichen freigegebenen SVGs bleiben unverändert.
-- `manifest.json` enthält Dateipfade, Loop-Verhalten und Laufzeiten. Fehler- und Ladeanimationen ersetzen keine Status- oder Fehlertexte.
-
-## Verwendung
-
-Für eine einfache laufende Animation genügt ein normales Bild:
+Use an image for autonomous playback:
 
 ```html
 <img src="motion/standard/idle.svg" width="96" height="96" alt="Buddy">
 ```
 
-Für kontrolliertes Abspielen, Pause oder erneutes Auslösen kann das SVG als `<object>` geladen werden:
+For playback control, load the same-origin SVG as an `<object>` and access its root after `load`. The root provides `setCurrentTime(0)`, `pauseAnimations()` and `unpauseAnimations()`. Class `is-static` forces the poster state. `prefers-reduced-motion: reduce` always shows the static version.
 
-```html
-<object id="buddy" type="image/svg+xml" data="motion/standard/success.svg"
-        width="96" height="96" aria-label="Buddy freut sich"></object>
+App integration should pause playback while hidden, offscreen or during a running game. The preview already pauses hidden cards/tabs; once-only reactions repeat only when explicitly enabled there.
+
+## Preview and regeneration
+
+`index.html` exposes season selection, pause/replay and a time scrubber. The GIF previews and `qa/` pose sheets are visual aids, not runtime assets.
+
+Run from the repository root after installing Pillow (`python -m pip install Pillow`).
+The external Pixel Art Studio toolkit is **not included in this repository**, and no
+acquisition URL or pinned toolkit version is recorded here. Set `PIXEL_ART_STUDIO_PATH`
+to its root containing `scripts/pixelstudio` (a Python module/package exporting `Sprite`);
+the generator adds `<root>/scripts` to Python's import path. Without an override it uses
+`~/.codex/skills/pixel-art-studio`. The environment variable must not point directly to
+`scripts/` or to the `pixelstudio` module.
+
+Without that toolkit, motion regeneration cannot be reproduced from this repository alone.
+Use the shipped seasonal SVGs/posters for app and website consumption; no toolkit or Python
+is required for playback. After regeneration, run the final static build in the
+[branding sequence](../README.md#regeneration) to refresh the combined asset ZIP.
+
+```sh
+python branding/pumpkin-launcher/motion/build.py
 ```
 
-Nach dem `load`-Ereignis stehen am SVG-Wurzelelement die nativen Methoden `setCurrentTime(0)`, `pauseAnimations()` und `unpauseAnimations()` zur Verfügung. Beispiel:
-
-```js
-const object = document.querySelector('#buddy');
-object.addEventListener('load', () => {
-  const svg = object.contentDocument.documentElement;
-  svg.setCurrentTime(0);
-  svg.unpauseAnimations();
-});
-```
-
-Beim Verbergen, Verlassen des sichtbaren Bereichs oder einem laufenden Spiel pausieren. Die mitgelieferte Vorschau setzt das für unsichtbare Karten und verborgene Tabs bereits um. Eine CSS-Klasse `is-static` am SVG-Wurzelelement erzwingt außerdem den ruhigen Posterzustand. Die Systemeinstellung für reduzierte Bewegung hat immer Vorrang.
-
-## Vorschau und Quelle
-
-`index.html` zeigt alle Bewegungen, Seasons, Pause/Replay und Zeitregler. Die neuen Reaktionen stehen zuerst. Einmalige Reaktionen werden nur in dieser Vorschau auf Wunsch wiederholt. `buddy-motion-preview.gif` zeigt die ersten sechs Bewegungen, `buddy-motion-more.gif` die sechs neuen. Beide sind reine Ansichten für Chat und Review, keine erforderlichen App-Assets.
-
-Neu erzeugen: `python branding/pumpkin-launcher/motion/build.py`. Benötigt werden Pillow und der installierte [Pixel Art Studio Skill](https://github.com/Gamezxz/pixel-art-studio), alternativ über `PIXEL_ART_STUDIO_PATH` auffindbar. Die Basisgrafiken werden direkt aus den freigegebenen SVGs gelesen und gegen ihre Pixel-Hashes geprüft.
-
-Der Generator prüft feste Abmessungen, transparente Sicherheitsränder, Binäralpha, mindestens drei unterschiedliche Posen, nahtlose Loop-Enden und die Rückkehr einmaliger Reaktionen zur Originalpose. `qa/contact-sheet.png` ist das Arbeitsblatt der Posen. Das Runtime-Paket benötigt den Skill nicht; zum Neubau gehören die Quellen im vollständigen Branding-Paket dazu.
+The generator reads the approved [branding SVGs](../README.md), checks their pixel hashes, validates pose dimensions, safety margins, binary alpha and loop/resting endpoints, then packages assets and sources in `pumpkin-mascot-motion.zip`.

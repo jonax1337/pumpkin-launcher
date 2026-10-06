@@ -1,4 +1,4 @@
-//! Die Aktivitätsliste (INGAME 5.7): jeder `social`- und `share`-Vorgang, der aus dem Spiel kam, mit Zeit, Person und
+//! Die Aktivitätsliste (docs/bridge/README.md, "Protocol 2"): jeder `social`- und `share`-Vorgang, der aus dem Spiel kam, mit Zeit, Person und
 //! Ausgang. Nur im Speicher, die letzten 100, neueste zuerst; ein Neustart des Launchers leert sie (die Ablage kommt in R-C).
 use std::collections::VecDeque;
 use std::sync::Mutex;
@@ -67,7 +67,10 @@ mod tests {
 
         let listed = log.list();
         assert_eq!(listed.len(), MAX_ENTRIES);
-        assert_eq!((listed[0].op.as_str(), listed[99].op.as_str()), ("op129", "op30"));
+        assert_eq!(
+            (listed[0].op.as_str(), listed[99].op.as_str()),
+            ("op129", "op30")
+        );
     }
 
     #[test]
@@ -79,6 +82,10 @@ mod tests {
     fn times_are_iso_8601_in_utc() {
         assert_eq!(iso_utc(0), "1970-01-01T00:00:00Z");
         assert_eq!(iso_utc(1_790_000_000), "2026-09-21T14:13:20Z");
-        assert_eq!(iso_utc(u64::MAX), "1970-01-01T00:00:00Z", "unbrauchbare Zeiten werden nicht zur Panne");
+        assert_eq!(
+            iso_utc(u64::MAX),
+            "1970-01-01T00:00:00Z",
+            "unbrauchbare Zeiten werden nicht zur Panne"
+        );
     }
 }

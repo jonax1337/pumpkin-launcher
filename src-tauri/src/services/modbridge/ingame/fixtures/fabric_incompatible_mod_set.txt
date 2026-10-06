@@ -1,0 +1,19 @@
+[main/INFO] Loading Minecraft 1.21.1 with Fabric Loader 0.19.5
+[main/WARN] Mod resolution failed
+[main/INFO] Immediate reason: [HARD_DEP_INCOMPATIBLE_PRESELECTED pumpkin_bridge 2.1.0+26.3-fabric {depends minecraft @ [26.3]}, ROOT_FORCELOAD_SINGLE pumpkin_bridge 2.1.0+26.3-fabric]
+[main/INFO] Reason: [HARD_DEP pumpkin_bridge 2.1.0+26.3-fabric {depends minecraft @ [26.3]}, HARD_DEP pumpkin_bridge 2.1.0+26.3-fabric {depends java @ [>=25]}]
+[main/INFO] Fix: add [], remove [], replace [[pumpkin_bridge 2.1.0+26.3-fabric] -> add:pumpkin_bridge 1 ([(-∞,∞)])]
+[main/ERROR] Incompatible mods found!
+[main/ERROR] net.fabricmc.loader.impl.FormattedException: Some of your mods are incompatible with the game or each other!
+A potential solution has been determined, this may resolve your problem:
+	 - Replace mod 'Pumpkin Bridge' (pumpkin_bridge) 2.1.0+26.3-fabric with any version that is compatible with:
+		 - minecraft 1.21.1
+		 - java 21
+More details:
+	 - Mod 'Pumpkin Bridge' (pumpkin_bridge) 2.1.0+26.3-fabric requires version 26.3 of 'Minecraft' (minecraft), but only the wrong version is present: 1.21.1!
+	 - Mod 'Pumpkin Bridge' (pumpkin_bridge) 2.1.0+26.3-fabric requires version 25 or later of 'OpenJDK 64-Bit Server VM' (java), but only the wrong version is present: 21!
+	at net.fabricmc.loader.impl.FormattedException.ofLocalized(FormattedException.java:51)
+	at net.fabricmc.loader.impl.FabricLoaderImpl.load(FabricLoaderImpl.java:202)
+	at net.fabricmc.loader.impl.launch.knot.Knot.init(Knot.java:142)
+	at net.fabricmc.loader.impl.launch.knot.Knot.launch(Knot.java:66)
+	at net.fabricmc.loader.impl.launch.knot.KnotClient.main(KnotClient.java:23)

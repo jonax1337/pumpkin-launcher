@@ -9,7 +9,8 @@ use crate::error::{AppError, AppResult};
 use crate::models::{AccountKind, MsAccount};
 use crate::services::auth;
 use crate::services::friends::contract::{
-    BlockedPeer, Friend, FriendCode, FriendRequest, FriendsEnableInput, FriendsSettings, FriendsState,
+    BlockedPeer, Friend, FriendCode, FriendRequest, FriendsEnableInput, FriendsSettings,
+    FriendsState,
 };
 use crate::services::friends::directory::{AccountTokens, McIdentity};
 use crate::services::friends::AccountProfile;
@@ -17,11 +18,16 @@ use crate::state::AppState;
 
 /// Das erste Microsoft-Konto; der Launcher merkt sich kein „aktives“ Konto im Backend.
 pub(crate) fn account_profile(state: &AppState) -> Option<AccountProfile> {
-    first_microsoft_account(state).map(|account| AccountProfile::new(&account.username, &account.id))
+    first_microsoft_account(state)
+        .map(|account| AccountProfile::new(&account.username, &account.id))
 }
 
 fn first_microsoft_account(state: &AppState) -> Option<MsAccount> {
-    state.accounts.list().into_iter().find(|account| account.kind == AccountKind::Microsoft)
+    state
+        .accounts
+        .list()
+        .into_iter()
+        .find(|account| account.kind == AccountKind::Microsoft)
 }
 
 /// Die Minecraft-Sitzung des ersten Microsoft-Kontos für das Verzeichnis (BYNAME 9.1). Der Weg über den `AppHandle`
@@ -44,7 +50,11 @@ impl AccountTokens for AppAccountTokens {
                 .ok_or_else(|| AppError::invalid(coded!("errors.friends.msAccountRequired")))?;
             let (account, session) = auth::session(&state, &stored.id).await?;
             let profile = AccountProfile::new(&account.username, &account.id);
-            Ok(McIdentity { uuid: profile.uuid, name: profile.name, access_token: session.access_token })
+            Ok(McIdentity {
+                uuid: profile.uuid,
+                name: profile.name,
+                access_token: session.access_token,
+            })
         }
         .boxed()
     }
@@ -63,7 +73,10 @@ pub fn friends_state(state: State<'_, AppState>) -> FriendsState {
 }
 
 #[tauri::command]
-pub async fn friends_enable(state: State<'_, AppState>, input: FriendsEnableInput) -> AppResult<FriendsState> {
+pub async fn friends_enable(
+    state: State<'_, AppState>,
+    input: FriendsEnableInput,
+) -> AppResult<FriendsState> {
     state.friends.enable(input, account_profile(&state)).await
 }
 
@@ -73,7 +86,10 @@ pub async fn friends_disable(state: State<'_, AppState>) -> AppResult<FriendsSta
 }
 
 #[tauri::command]
-pub async fn friends_update_settings(state: State<'_, AppState>, settings: FriendsSettings) -> AppResult<FriendsState> {
+pub async fn friends_update_settings(
+    state: State<'_, AppState>,
+    settings: FriendsSettings,
+) -> AppResult<FriendsState> {
     state.friends.update_settings(settings).await
 }
 
@@ -119,22 +135,36 @@ pub async fn friend_add(state: State<'_, AppState>, code: String) -> AppResult<F
 
 /// Anfrage an den Spieler mit genau diesem Minecraft-Namen (BYNAME 7.1).
 #[tauri::command]
-pub async fn friend_add_by_name(state: State<'_, AppState>, name: String) -> AppResult<FriendRequest> {
+pub async fn friend_add_by_name(
+    state: State<'_, AppState>,
+    name: String,
+) -> AppResult<FriendRequest> {
     state.friends.add_by_name(&name).await
 }
 
 #[tauri::command]
-pub async fn friend_request_answer(state: State<'_, AppState>, request_id: String, accept: bool) -> AppResult<()> {
+pub async fn friend_request_answer(
+    state: State<'_, AppState>,
+    request_id: String,
+    accept: bool,
+) -> AppResult<()> {
     state.friends.answer_request(&request_id, accept).await
 }
 
 #[tauri::command]
-pub async fn friend_request_cancel(state: State<'_, AppState>, request_id: String) -> AppResult<()> {
+pub async fn friend_request_cancel(
+    state: State<'_, AppState>,
+    request_id: String,
+) -> AppResult<()> {
     state.friends.cancel_request(&request_id).await
 }
 
 #[tauri::command]
-pub async fn friend_rename(state: State<'_, AppState>, friend_id: String, alias: Option<String>) -> AppResult<()> {
+pub async fn friend_rename(
+    state: State<'_, AppState>,
+    friend_id: String,
+    alias: Option<String>,
+) -> AppResult<()> {
     state.friends.rename(&friend_id, alias).await
 }
 

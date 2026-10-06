@@ -1,4 +1,4 @@
-//! Zustandsthemen (docs/friends/INGAME.md, 5.3): der Launcher schickt den ganzen Wert eines Themas mit einer
+//! Zustandsthemen (docs/bridge/README.md, "Protocol 2"): der Launcher schickt den ganzen Wert eines Themas mit einer
 //! Revision, die Mod ersetzt ihre Kopie und patcht nie. Jedes Thema hat eine harte Obergrenze für seine Einträge; der
 //! Test am Ende rechnet nach, dass der schlimmste Fall in `TOPIC_BUDGET_BYTES` passt.
 use std::collections::HashMap;
@@ -53,6 +53,37 @@ pub enum TopicValue {
 }
 
 impl TopicValue {
+    pub fn revoke_friends(&mut self) {
+        match self {
+            Self::Me(me) => {
+                me.enabled = false;
+                me.network = NetworkLine::Off;
+                me.fingerprint = None;
+                me.directory = DirectoryLine::Off;
+                me.display_name.clear();
+                me.findable_by_name = false;
+                me.relay_host = None;
+            }
+            Self::Friends(friends) => friends.clear(),
+            Self::Requests(requests) => {
+                requests.incoming.clear();
+                requests.outgoing.clear();
+                requests.retry_cooldown_ms = 0;
+            }
+            Self::Invites(invites) => invites.clear(),
+            Self::Session(session) => *session = None,
+            Self::Join(join) => *join = None,
+            Self::Game(game) => {
+                game.hostable = false;
+                game.reason = None;
+                game.lan = None;
+                game.shared_elsewhere = false;
+            }
+            Self::Codes(codes) => codes.clear(),
+            Self::Blocked(blocked) => blocked.clear(),
+        }
+    }
+
     pub fn topic(&self) -> Topic {
         match self {
             Self::Me(_) => Topic::Me,
@@ -197,7 +228,7 @@ pub enum OutgoingState {
     AwaitingAnswer,
 }
 
-/// Die Welt, der dieses Spiel beigetreten ist (INGAME 7).
+/// Die Welt, der dieses Spiel beigetreten ist (docs/bridge/README.md, "In-game navigation and world behavior").
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JoinView {
@@ -312,9 +343,16 @@ impl TopicStore {
         self.entries.get(&topic).cloned()
     }
 
+    pub fn revoke_friends(&mut self) {
+        for (revision, value) in self.entries.values_mut() {
+            value.revoke_friends();
+            *revision += 1;
+        }
+    }
+
     /// Die Themen, die schon einen Wert haben.
-    pub fn valued(&self) -> Vec<Topic> {
-        self.entries.keys().copied().collect()
+    pub fn valued(&self) -> impl Iterator<Item = Topic> + '_ {
+        self.entries.keys().copied()
     }
 }
 
@@ -487,7 +525,7 @@ mod tests {
         let mut store = TopicStore::default();
         store.set(game(true));
         store.set(TopicValue::Join(None));
-        let mut valued = store.valued();
+        let mut valued: Vec<_> = store.valued().collect();
         valued.sort();
         assert_eq!(valued, [Topic::Join, Topic::Game]);
     }

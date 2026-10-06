@@ -1,16 +1,15 @@
 import { useId, useState, type FormEvent } from "react";
+import { useAllAccounts } from "@/components/accounts/useAccounts";
 import { RELAY_OPERATOR_KEYS } from "@/components/PrivacyNotice";
+import { QueryList } from "@/components/QueryList";
 import { useEnableFriends, useFriendsState } from "@/hooks/useFriends";
 import { useI18n } from "@/i18n";
-import { FRIENDS_LIMITS, type FriendsState, type RelayInfo } from "@/lib/types";
-import { Checkbox, Dialog, DialogActions, Field, Hint, TextField } from "@/ui";
+import { type FriendsState, type RelayInfo } from "@/lib/types";
+import { Checkbox, Dialog, DialogActions, Field, Hint } from "@/ui";
 
 const DIALOG_WIDTH_PX = 600;
 const DIALOG_HEIGHT_PX = 780;
 const CONFIRM_WIDTH_PX = 180;
-
-const isValidDisplayName = (name: string) =>
-  [...name].length >= FRIENDS_LIMITS.displayNameMin && [...name].length <= FRIENDS_LIMITS.displayNameMax;
 
 /** Alle Relay-Server als „Host (Betreiber)“, wie der Dialog sie aufzählt. */
 function RelaysText({ relays }: { relays: RelayInfo[] }) {
@@ -46,23 +45,21 @@ function OptInDialog({ state, onClose }: { state: FriendsState; onClose: () => v
   const { t } = useI18n();
   const formId = useId();
   const enable = useEnableFriends();
-  const [displayName, setDisplayName] = useState(state.settings.displayName);
-  const [dirty, setDirty] = useState(false);
+  const { accounts, query } = useAllAccounts();
+  const minecraftName = accounts.find((account) => account.kind === "microsoft")?.username;
   const [alwaysRelay, setAlwaysRelay] = useState(false);
   const [findableByName, setFindableByName] = useState(false);
   const [acceptedThirdParty, setAcceptedThirdParty] = useState(false);
   const [understood, setUnderstood] = useState(false);
 
   const thirdPartyRelays = state.relays.filter((relay) => relay.thirdParty);
-  const name = displayName.trim();
-  const nameValid = isValidDisplayName(name);
   const consentGiven = thirdPartyRelays.length === 0 || acceptedThirdParty;
-  const ready = nameValid && understood && consentGiven && !enable.isPending;
+  const ready = query.isSuccess && !!minecraftName && understood && consentGiven && !enable.isPending;
 
   function submit(e: FormEvent) {
     e.preventDefault();
     if (!ready) return;
-    enable.mutate({ displayName: name, alwaysRelay, acceptThirdPartyRelays: acceptedThirdParty, findableByName }, { onSuccess: onClose });
+    enable.mutate({ alwaysRelay, acceptThirdPartyRelays: acceptedThirdParty, findableByName }, { onSuccess: onClose });
   }
 
   return (
@@ -87,12 +84,10 @@ function OptInDialog({ state, onClose }: { state: FriendsState; onClose: () => v
     >
       <PrivacyPoints relays={state.relays} />
       <form id={formId} onSubmit={submit} className="flex flex-col gap-3">
-        <Field
-          label={t("friendsSettings.optIn.nameLabel")}
-          help={t("friendsSettings.nameHint", { min: FRIENDS_LIMITS.displayNameMin, max: FRIENDS_LIMITS.displayNameMax })}
-          error={dirty && !nameValid ? t("errors.friends.displayNameInvalid", { min: FRIENDS_LIMITS.displayNameMin, max: FRIENDS_LIMITS.displayNameMax }) : undefined}
-        >
-          <TextField value={displayName} onChange={(e) => setDisplayName(e.target.value)} onBlur={() => setDirty(true)} />
+        <Field label={t("friendsSettings.nameLabel")} help={t("friendsSettings.nameHint")}>
+          <QueryList query={query} error={t("components.account.msLoadFailed")} empty={<p>{t("friendsSettings.nameUnavailable")}</p>}>
+            {(accounts) => <p aria-live="polite">{accounts[0].username}</p>}
+          </QueryList>
         </Field>
         <Checkbox checked={alwaysRelay} onChange={setAlwaysRelay}>{t("friendsSettings.optIn.alwaysRelay")}</Checkbox>
         {state.directory.state !== "unavailable" && (

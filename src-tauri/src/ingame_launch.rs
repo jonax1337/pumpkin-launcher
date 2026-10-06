@@ -1,6 +1,6 @@
-//! Die Mod im Spiel in den Start und in die Statuszeile verdrahtet (docs/friends/INGAME.md, 3.3 bis 3.9): was der Start
+//! Die Mod im Spiel in den Start und in die Statuszeile verdrahtet (docs/bridge/README.md, "Support selection"): was der Start
 //! über die Instanz wissen muss, damit das Tor entscheidet, wie die Argumente der Einspeisung in `LaunchSpec` kommen, der
-//! Status ohne Start und die Wache der ersten 90 Sekunden. Die Entscheidungen selbst liegen in `services::friends::ingame`.
+//! Status ohne Start und die Wache der ersten 90 Sekunden. Die Entscheidungen selbst liegen in `services::modbridge::ingame`.
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -9,7 +9,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::models::Instance;
 use crate::services::friends::contract::{IngameActions, IngameEvent, IngameFailedEvent, IngameStatus};
-use crate::services::friends::ingame::{
+use crate::services::modbridge::ingame::{
     inject, select, status_of, FailureKind, Injection, InjectionRequest, InjectionState, LaunchFacts, StartupWatch, Target, UserArgs,
 };
 use crate::services::progress::emit;
@@ -22,6 +22,7 @@ pub const INGAME_FAILED_EVENT: &str = "friends-ingame-failed";
 /// Was zur Entscheidung gehört und nicht aus der Instanz selbst kommt: Einstellungen, gespeicherter Zustand, Ordnerinhalt.
 struct GateInputs {
     friends_enabled: bool,
+    bridge_running: bool,
     global_switch: bool,
     pre_granted: bool,
     instance_state: InjectionState,
@@ -32,20 +33,20 @@ fn gate_inputs(state: &AppState, instance: &Instance) -> GateInputs {
     let friends = state.friends.state();
     GateInputs {
         friends_enabled: friends.enabled,
+        bridge_running: state.bridge.is_running(),
         global_switch: friends.settings.ingame_menu,
-        pre_granted: friends.settings.ingame_actions == IngameActions::Allow,
+        pre_granted: friends.enabled && friends.settings.ingame_actions == IngameActions::Allow,
         instance_state: state.ingame.store.get(&instance.id),
         mod_ids: state.ingame.mod_ids.ids_in(&state.dirs.mods_dir(&instance.id)),
     }
 }
 
 impl GateInputs {
-    /// Die Brücke läuft, solange Freunde an ist (sie startet und stoppt mit der Funktion); ob sie wirklich lauscht,
-    /// zeigt sich erst beim Anmelden des Starts.
+    /// Listener availability belongs to Bridge, independently of Friends consent.
     fn facts<'a>(&'a self, instance: &'a Instance, online_account: bool, java_major: Option<u32>) -> LaunchFacts<'a> {
         LaunchFacts {
             friends_enabled: self.friends_enabled,
-            bridge_running: self.friends_enabled,
+            bridge_running: self.bridge_running,
             online_account,
             minecraft: &instance.minecraft_version,
             loader: instance.loader,
@@ -59,7 +60,7 @@ impl GateInputs {
     }
 }
 
-/// Die Einspeisung für den Start von `instance` mit dem Java `java`. Scheitert sie, startet das Spiel ohne (INGAME 3.3).
+/// Die Einspeisung für den Start von `instance` mit dem Java `java`. Scheitert sie, startet das Spiel ohne (docs/bridge/README.md, "Support selection").
 pub fn inject_into_launch(state: &AppState, instance: &Instance, java: &Path, online_account: bool, user_jvm: &[String]) -> Injection {
     let gate = gate_inputs(state, instance);
     let java_major = state.ingame.java.of(java);
@@ -77,9 +78,9 @@ pub fn inject_into_launch(state: &AppState, instance: &Instance, java: &Path, on
 
 fn log_outcome(instance_id: &str, injection: &Injection) {
     match injection {
-        Injection::Injected(_) => tracing::info!(instance = %instance_id, node = ?injection.node_id(), "Freunde-Menü wird eingespeist"),
-        Injection::Skipped(reason) => tracing::debug!(instance = %instance_id, reason = reason.code(), "Freunde-Menü nicht eingespeist"),
-        Injection::Failed(error) => tracing::warn!(instance = %instance_id, %error, "Freunde-Menü nicht eingespeist"),
+        Injection::Injected(_) => tracing::info!(instance = %instance_id, node = ?injection.node_id(), "Pumpkin Bridge wird eingespeist"),
+        Injection::Skipped(reason) => tracing::debug!(instance = %instance_id, reason = reason.code(), "Pumpkin Bridge nicht eingespeist"),
+        Injection::Failed(error) => tracing::warn!(instance = %instance_id, %error, "Pumpkin Bridge nicht eingespeist"),
     }
 }
 
@@ -131,7 +132,7 @@ pub fn announce_current(app: &AppHandle, instance_id: &str) {
         let state = app.state::<AppState>();
         match state.instances.get(&instance_id) {
             Ok(instance) => announce(&app, &instance_id, status(&state, &instance).await),
-            Err(error) => tracing::debug!(instance = %instance_id, %error, "Status des Freunde-Menüs nicht berechnet"),
+            Err(error) => tracing::debug!(instance = %instance_id, %error, "Status des Pumpkin Bridges nicht berechnet"),
         }
     });
 }
@@ -182,11 +183,11 @@ mod tests {
     use super::*;
     use crate::models::{ModLoader, NewInstance};
     use crate::services::friends::config::friends_dir;
-    use crate::services::friends::contract::{IngameNode, IngameReason, IngameState};
-    use crate::services::friends::ingame::{Ingame, Loader, ModIndex, ModSource};
+    use crate::services::friends::contract::{IngameNode, IngameState};
+    use crate::services::modbridge::ingame::{Ingame, Loader, ModIndex, ModSource};
 
     const INDEX: &str = r#"{ "modVersion": "2.1.0", "nodes": [ { "id": "1.21.1-fabric", "loader": "fabric", "loaderMin": "0.16.0",
-        "minecraft": ["1.21.1"], "javaMin": 21, "strategy": "fabricAddMods", "file": "pumpkin_friends-2.1.0+1.21.1-fabric.jar",
+        "minecraft": ["1.21.1"], "javaMin": 21, "strategy": "fabricAddMods", "file": "pumpkin_bridge-2.1.0+1.21.1-fabric.jar",
         "sha256": "abababababababababababababababababababababababababababababababab", "verified": { "smoke": "2026-10-03" } } ] }"#;
 
     struct IndexOnly(ModIndex);
@@ -213,13 +214,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn with_friends_off_the_status_names_the_reason_and_the_node_the_instance_would_get() {
+    async fn disabled_friends_does_not_hide_the_bridge_node_when_the_listener_is_running() {
         let (state, instance, root) = state_with_instance(ModLoader::Fabric);
+        state.bridge.start().await.unwrap();
+        state.accounts.insert(crate::models::MsAccount {
+            id: "online".into(), username: "Player".into(), kind: crate::models::AccountKind::Microsoft, client_id: "client".into(),
+        }).unwrap();
 
         let status = status(&state, &instance).await;
 
         let node = IngameNode { id: "1.21.1-fabric".into(), minecraft: "1.21.1".into(), loader: Loader::Fabric };
-        assert_eq!((status.state, status.reason, status.node), (IngameState::Unavailable, Some(IngameReason::FriendsOff), Some(node)));
+        assert_eq!((status.state, status.reason, status.node), (IngameState::Active, None, Some(node)));
+        state.bridge.stop().await;
         std::fs::remove_dir_all(root).unwrap();
     }
 

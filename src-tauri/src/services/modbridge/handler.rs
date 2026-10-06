@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use futures::future::BoxFuture;
 use tokio::time::Instant;
+use tokio_util::sync::CancellationToken;
 
 use super::launch::{Link, PromptRefusal};
 use super::ops::{ErrorCode, Op, OpError, OpOutcome, RateClass, Scope};
@@ -33,15 +34,33 @@ pub struct OpContext {
     instance_id: String,
     request_id: String,
     link: Link,
+    friends_stop: CancellationToken,
+    friends_generation: u64,
 }
 
 impl OpContext {
     pub(super) fn new(inner: Arc<Inner>, instance_id: String, request_id: String, link: Link) -> Self {
-        Self { inner, instance_id, request_id, link }
+        let friends_stop = inner.friends_stop(&instance_id);
+        let friends_generation = link.queue.friends_generation();
+        Self { inner, instance_id, request_id, link, friends_stop, friends_generation }
     }
 
     pub fn instance_id(&self) -> &str {
         &self.instance_id
+    }
+
+    pub fn friends_enabled(&self) -> bool {
+        !self.friends_stop.is_cancelled()
+            && self.link.queue.friends_allowed(self.friends_generation)
+            && self.inner.friends_enabled(&self.instance_id)
+    }
+
+    pub async fn friends_disabled(&self) {
+        self.friends_stop.cancelled().await;
+    }
+
+    pub(super) fn friends_generation(&self) -> u64 {
+        self.friends_generation
     }
 
     /// Stellt sicher, dass dieser Spielstart `scope` darf. Ist er noch nicht erlaubt, wird `ask` (der Dialog im
@@ -49,12 +68,15 @@ impl OpContext {
     /// Rückfrage je Spielstart (sonst `busy`), nach drei in zehn Minuten wird ohne Frage abgelehnt (`denied`). Jede
     /// Ablehnung, ob vom Nutzer oder wegen der Obergrenze, meldet der Mod zusätzlich den Toast `scopeDenied`.
     pub async fn require_scope(&self, scope: Scope, ask: impl Future<Output = bool>) -> Result<(), OpError> {
+        if !self.friends_enabled() {
+            return Err(OpError::new(ErrorCode::NotEnabled));
+        }
         if self.inner.scope_allowed(&self.instance_id, scope) {
             return Ok(());
         }
         let open = self.open_prompt()?;
-        self.link.reply(LauncherFrame::Pending { id: self.request_id.clone(), prompt: Prompt::Scope, scope });
-        if ask.await {
+        self.link.reply_friends(LauncherFrame::Pending { id: self.request_id.clone(), prompt: Prompt::Scope, scope }, self.friends_generation);
+        if ask.await && self.friends_enabled() {
             open.close(Some(scope));
             Ok(())
         } else {
@@ -63,7 +85,7 @@ impl OpContext {
         }
     }
 
-    /// Ob dieser Start ein Microsoft-Konto hat (INGAME 7, Schritt 1).
+    /// Ob dieser Start ein Microsoft-Konto hat (docs/bridge/README.md, "In-game navigation and world behavior").
     pub fn online_account(&self) -> bool {
         self.inner.launch_facts(&self.instance_id).is_some_and(|facts| facts.online_account)
     }
@@ -74,7 +96,7 @@ impl OpContext {
     }
 
     /// Prüft noch einmal, dass die Verbindung dem Spielprozess gehört, mit derselben Prüfung wie bei der Anmeldung. Wer
-    /// das nicht belegen kann, bekommt `denied` (INGAME 5.2, 7).
+    /// das nicht belegen kann, bekommt `denied` (docs/bridge/README.md, "Connection and ownership").
     pub async fn verify_owner(&self) -> Result<(), OpError> {
         let owned = match self.game_pid() {
             Some(pid) => self.inner.verify_owner(pid, self.link.peer, self.link.local).await.is_ok(),
@@ -104,8 +126,8 @@ impl OpContext {
     }
 
     fn open_prompt(&self) -> Result<OpenPrompt, OpError> {
-        match self.inner.begin_prompt(&self.instance_id, Instant::now()) {
-            Ok(()) => Ok(OpenPrompt { inner: self.inner.clone(), instance_id: self.instance_id.clone(), closed: false }),
+        match self.inner.begin_prompt(&self.instance_id, Instant::now(), &self.friends_stop) {
+            Ok(()) => Ok(OpenPrompt { inner: self.inner.clone(), instance_id: self.instance_id.clone(), permission: self.friends_stop.clone(), closed: false }),
             Err(PromptRefusal::Open) => Err(OpError::new(ErrorCode::Busy)),
             Err(PromptRefusal::Exhausted) => Err(self.denied()),
         }
@@ -118,19 +140,20 @@ struct OpenPrompt {
     inner: Arc<Inner>,
     instance_id: String,
     closed: bool,
+    permission: CancellationToken,
 }
 
 impl OpenPrompt {
     fn close(mut self, granted: Option<Scope>) {
         self.closed = true;
-        self.inner.end_prompt(&self.instance_id, granted);
+        self.inner.end_prompt(&self.instance_id, granted, &self.permission);
     }
 }
 
 impl Drop for OpenPrompt {
     fn drop(&mut self) {
         if !self.closed {
-            self.inner.end_prompt(&self.instance_id, None);
+            self.inner.end_prompt(&self.instance_id, None, &self.permission);
         }
     }
 }

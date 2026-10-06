@@ -1,9 +1,9 @@
 {
 	"schemaVersion": 1,
-	"id": "pumpkin_friends",
+	"id": "pumpkin_bridge",
 	"version": "${version}",
-	"name": "Pumpkin Friends",
-	"description": "Share your singleplayer world with friends through the Pumpkin Launcher. Does nothing without the launcher. NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.",
+	"name": "Pumpkin Bridge",
+	"description": "Connect Minecraft to the Pumpkin Launcher through Pumpkin Bridge, with Friends for sharing worlds and invitations. Does nothing without the launcher. NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.",
 	"authors": [
 		"jonax1337"
 	],
@@ -11,7 +11,7 @@
 		"sources": "https://github.com/jonax1337/pumpkin-launcher"
 	},
 	"license": "Apache-2.0",
-	"icon": "assets/pumpkin_friends/icon.png",
+	"icon": "assets/pumpkin_bridge/icon.png",
 	"environment": "client",
 	"entrypoints": {
 		"client": [

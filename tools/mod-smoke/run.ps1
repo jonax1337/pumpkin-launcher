@@ -1,4 +1,4 @@
-# Startet eine Zelle des Rauchtests der Mod im Spiel (docs/friends/INGAME-SMOKE.md).
+# Startet eine Zelle des Rauchtests der Mod im Spiel (tools/mod-smoke/README.md).
 # Aufruf aus dem Repo-Stamm:
 #   .\tools\mod-smoke\run.ps1 -Cell 26.3-fabric -Data D:\pumpkin-build\smoke\data
 # Voraussetzung: der Gradle-Lauf `gradlew modIndex` in mod/ hat build/mod-index/ geschrieben (oder -Dist zeigt darauf).
