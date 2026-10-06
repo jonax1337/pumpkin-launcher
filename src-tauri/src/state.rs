@@ -214,9 +214,37 @@ mod tests {
             tokio::task::yield_now().await;
             state.cancel("op");
         });
-        assert_eq!(result.unwrap_err().to_string(), "Vorgang abgebrochen");
+        assert!(matches!(result, Err(AppError::Cancelled)));
         assert!(state.cancels().is_empty());
         assert_eq!(state.cancellable("op", async { Ok(1) }).await.unwrap(), 1);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancellation_wins_before_ready_work_commits_an_instance() {
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        let state = AppState::load(&root).unwrap();
+        let instance = Instance::from_new(crate::models::NewInstance {
+            name: "Cancelled copy".into(),
+            minecraft_version: "1.21.1".into(),
+            loader: crate::models::ModLoader::Vanilla,
+            loader_version: None,
+        });
+        let instance_id = instance.id.clone();
+        let (entered, started) = tokio::sync::oneshot::channel();
+        let (resume, held) = tokio::sync::oneshot::channel();
+        let work = state.cancellable("op", async {
+            entered.send(()).unwrap();
+            held.await.unwrap();
+            state.instances.insert(instance)
+        });
+        let (result, ()) = tokio::join!(biased; work, async {
+            started.await.unwrap();
+            state.cancel("op");
+            resume.send(()).unwrap();
+        });
+        assert!(matches!(result, Err(AppError::Cancelled)));
+        assert!(state.instances.get(&instance_id).is_err());
         std::fs::remove_dir_all(root).unwrap();
     }
 
