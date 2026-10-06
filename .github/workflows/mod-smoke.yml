@@ -9,21 +9,6 @@ on:
   schedule:
     # Nächtlich, 03:22 UTC, abseits der vollen Minuten.
     - cron: '22 3 * * *'
-  push:
-    branches: [main]
-    paths:
-      - 'mod/**'
-      - 'src-tauri/src/services/modbridge/ingame/**'
-      - 'src-tauri/tests/smoke/**'
-      - 'tools/mod-smoke/**'
-      - '.github/workflows/mod-smoke.yml'
-  pull_request:
-    paths:
-      - 'mod/**'
-      - 'src-tauri/src/services/modbridge/ingame/**'
-      - 'src-tauri/tests/smoke/**'
-      - 'tools/mod-smoke/**'
-      - '.github/workflows/mod-smoke.yml'
   workflow_dispatch:
 
 permissions:

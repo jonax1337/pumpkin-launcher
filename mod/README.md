@@ -63,6 +63,23 @@ provide another full JDK via `PUMPKIN_JDK_<major>`.
 
 `modIndex` writes `build/mod-index/mod-index.json` and production JARs. It enforces the limits in `gradle.properties`: 320 KiB per JAR and 32 MiB aggregate. The mod version follows the launcher version; filenames are `pumpkin_bridge-<modVersion>+<node id>.jar`. [`index.schema.json`](index.schema.json) defines the index fields, including exact `minecraft` ids, `loaderMin`, `javaMin`, `strategy`, verification and SHA-256.
 
+### GitHub Actions
+
+Pushes to `main` and pull requests touching the mod run the layer/script checks and
+representative `build modIndex` jobs. The matrix is derived from `nodes.txt`: first
+and last rows for every loader, game JDK, Gradle JDK and injection strategy
+combination (currently 34 nodes). This is a toolchain/strategy sample, not proof
+that every Minecraft-era adapter compiles.
+
+The full `Mod` workflow runs nightly at 01:17 UTC and on manual dispatch: all
+102 builds, compile-range checks, Fabric kit demos and the validated aggregate
+`mod-index` artifact. Fast runs upload only individual `mod-node-*` artifacts;
+they never publish an incomplete aggregate as `mod-index`.
+Production `Mod smoke` runs separately at 03:22 UTC or manually.
+Dispatch both full workflows before merging broad compatibility changes.
+Release builds retain the complete registry regardless of this CI sampling.
+
+
 ## Source layout
 
 | Path | Purpose |

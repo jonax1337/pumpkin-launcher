@@ -1,10 +1,8 @@
 name: Mod
 
-# Baut die In-Game-Mod (mod/, docs/bridge/README.md) für jeden Knoten aus mod/nodes.txt: ein Job pro Knoten
-# mit dem JDK, das nodes.txt für ihn nennt. Das Ergebnis ist ein Artefakt "mod-index" mit mod-index.json und allen Jars.
-# Die Compile-Matrix (matrix-compile) übersetzt jeden Knoten außerdem gegen beide Enden und eine Mitte seiner Minecraft-Liste.
-# "verified" setzt der Rauchtest (mod/verified.json): nächtlich und bei Änderungen unter mod/** läuft
-# .github/workflows/mod-smoke.yml; lokale Läufe beschreibt tools/mod-smoke/README.md.
+# Push/PR: repräsentative Builds pro Loader, Spiel-/Gradle-JDK und Einspeisungsstrategie.
+# Nächtlich/manuell: alle Knoten, Compile-Matrix, Kit-Demos und das vollständige mod-index-Paket.
+# Produktions-Spielstarts laufen separat in mod-smoke.yml; Release baut weiterhin alle Knoten.
 
 on:
   push:
@@ -17,6 +15,8 @@ on:
       - 'mod/**'
       - '.github/workflows/mod.yml'
   workflow_dispatch:
+  schedule:
+    - cron: '17 1 * * *'
 
 permissions:
   contents: read
@@ -36,9 +36,11 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      # java = JDK des Spiels, gradleJava = JDK, auf dem Gradle läuft (Spalte gradleJdk), family = Cache-Familie.
+      # java = Spiel-JDK, gradleJava = Gradle-JDK, family = Cache-Familie.
       - name: Read nodes.txt
         id: matrix
+        env:
+          FULL_MATRIX: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
         run: |
           matrix=$(jq -R -s -c '
             split("\n")
@@ -49,8 +51,15 @@ jobs:
                 java: (.[4] | tonumber),
                 testJava: (if (.[4] | tonumber) < 17 then 17 else (.[4] | tonumber) end),
                 gradleJava: (.[6] | tonumber),
+                strategy: .[5],
                 family: (if .[1] == "fabric" or .[1] == "quilt" then "fabric" elif .[1] == "neoforge" then "neoforge" else "forge" end)
               })' mod/nodes.txt)
+          if [ "$FULL_MATRIX" != "true" ]; then
+            # Beide Randknoten jeder Toolchain/Strategie; Reihenfolge aus nodes.txt, keine zweite Target-Liste.
+            matrix=$(echo "$matrix" | jq -c '
+              group_by([.loader, .java, .gradleJava, .strategy])
+              | map([first, last]) | flatten | unique_by(.id)')
+          fi
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           # Der Kit-Demo-Lauf (kit-demo) gibt es nur für Fabric-Knoten.
           echo "fabricMatrix=$(echo "$matrix" | jq -c 'map(select(.loader == "fabric"))')" >> "$GITHUB_OUTPUT"
@@ -157,6 +166,7 @@ jobs:
   # Ein Knoten, dessen Quellen gegen eine beanspruchte Version nicht mehr übersetzen, bricht hier statt erst im Spiel.
   matrix-compile:
     name: Compile matrix ${{ matrix.id }}
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: [nodes, checks]
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -216,6 +226,7 @@ jobs:
   # Darum continue-on-error: Ein roter Lauf hier sperrt weder den Build noch das Paket.
   kit-demo:
     name: Kit demo ${{ matrix.id }}
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: [nodes, checks]
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -279,6 +290,7 @@ jobs:
   # Ein Artefakt mit mod-index.json und allen Jars; hier greift auch das Gesamtbudget.
   package:
     name: Package mod-index
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
     steps:

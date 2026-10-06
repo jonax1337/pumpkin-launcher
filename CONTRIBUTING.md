@@ -55,6 +55,17 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets
 `pnpm build` synchronizes branding icons, type-checks the frontend and builds it with Vite.
 CI runs the frontend checks, the Friends directory tests and Rust checks on Windows, Linux and macOS;
 Clippy runs on Linux with warnings non-blocking. The dependency job checks Rust advisories with `cargo deny`.
+
+For Bridge changes, `Mod` runs layer/script checks and representative node builds on
+pushes and pull requests. It selects the first and last registry row for each
+loader/game-JDK/Gradle-JDK/injection-strategy combination (currently 34 of 102 nodes).
+The complete build and compile matrices, Fabric kit demos and aggregate `mod-index`
+package run nightly at 01:17 UTC or via **Actions → Mod → Run workflow**.
+`Mod smoke` exercises all production targets nightly at 03:22 UTC or via manual dispatch,
+not on each push/PR. Version-specific failures outside the representative set can
+therefore surface only in a full run; dispatch both workflows before merging broad
+compatibility changes. Release tags still build and package every registered node.
+
 Component-specific setup and commands:
 
 - [Bridge mod](mod/README.md) and [protocol fixtures](mod/fixtures/protocol/README.md)
