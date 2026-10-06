@@ -1,4 +1,4 @@
-//! Jede Grenze aus INGAME 5.3 gegen die laufende Brücke: Zeilenlängen, Zeitlimits, Zahl der Verbindungen, Nachrichten und
+//! Jede Grenze aus docs/bridge/README.md, "Protocol 2" gegen die laufende Brücke: Zeilenlängen, Zeitlimits, Zahl der Verbindungen, Nachrichten und
 //! offenen Anfragen, Stillstand und Stille. (Die Warteschlange von 64 und die 32 Hinweise prüft `queue`, die
 //! Uhr für Ping und Stille `framing`.)
 use std::sync::Arc;

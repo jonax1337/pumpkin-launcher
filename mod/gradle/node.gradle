@@ -30,11 +30,6 @@ ext.pinned = { String key ->
 	sc.current.version == node.minecraft.last() ? project.property(key) : project.property("${key}@${sc.current.version}")
 }
 
-// Swap "minecraft_version" (Zeile //$ minecraft_version im Quelltext): die Konstante MINECRAFT mit der Minecraft-Version
-// des Knotens, für die Logzeile der Tracer. Alle Knoten müssen jeden Swap kennen, den eine Quelldatei benutzt.
-stonecutter {
-	swaps['minecraft_version'] = "private static final String MINECRAFT = \"${sc.current.version}\";".toString()
-}
 
 group = rootProject.group
 version = "${rootProject.version}+${node.id}"
@@ -58,7 +53,7 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 // Das Spiel läuft mit dem JDK des Knotens, auch wenn Gradle auf einem neueren JDK läuft (Stonecutter verlangt 21).
-tasks.withType(JavaExec).configureEach {
+tasks.withType(JavaExec).matching { it.name.startsWith('run') }.configureEach {
 	javaLauncher = javaToolchains.launcherFor {
 		languageVersion = JavaLanguageVersion.of(node.javaMin)
 	}
@@ -75,8 +70,8 @@ tasks.named('jar') {
 
 // Package paths are long; directory records are redundant in ZIP and cost several KiB per node.
 // Apply after remapping too, before modIndexEntry hashes the final bytes.
-tasks.matching { it.name == 'jar' || it.name == 'remapJar' }.configureEach {
-	def archive = archiveFile
+tasks.matching { it.hasProperty('archiveFile') || it.name == 'renameJar' }.configureEach { archiveTask ->
+	def archive = archiveTask.hasProperty('archiveFile') ? archiveTask.archiveFile : archiveTask.output
 	doLast {
 		def jarFile = archive.get().asFile
 		def compact = new File(temporaryDir, 'compact.jar')
@@ -101,23 +96,21 @@ tasks.matching { it.name == 'jar' || it.name == 'remapJar' }.configureEach {
 // Deskriptor des Loaders aus descriptors/<loader>/; die Platzhalter kommen aus nodes.txt.
 def descriptorValues = [
 	version      : project.version.toString(),
-	loaderMin    : node.loaderMin,
+	loaderMin    : project.findProperty('fabric_loader_min') ?: node.loaderMin,
 	javaMin      : node.javaMin.toString(),
 	minecraftList: node.minecraft.collect { "\"${it}\"" }.join(', '),
 	// Maven-Bereiche: "[a]" für genau eine Version ("[a,a]" lehnt FML ab), sonst "[a,b]" von der ersten bis zur letzten.
 	minecraftRange: node.minecraft.size() == 1 ? "[${node.minecraft.first()}]" : "[${node.minecraft.first()},${node.minecraft.last()}]",
-	// Nur Fabric: Einstiegsklasse und Mixin-Konfigurationen des Knotens (versions/<Knoten>/gradle.properties).
 	fabricEntrypoint: project.findProperty('fabric_entrypoint') ?: '',
 	mixinConfigs : (project.findProperty('fabric_mixin_configs') ?: '').split(',').findAll { !it.isEmpty() }.collect { "\"${it}\"" }.join(', '),
+	mixinRefmap: project.findProperty('mixin_refmap') ?: '"pumpkin_bridge-refmap.json"',
+	mixinCompatibility: project.findProperty('mixin_compatibility') ?: "JAVA_${node.javaMin}",
 ]
 tasks.named('processResources') {
 	inputs.properties(descriptorValues)
-	from(rootProject.file("descriptors/${node.loader}"))
-	// Tracer-Knoten bringen zusätzlich ihre eigenen Dateien mit (z. B. die Mixin-Konfiguration des Fabric-Tracers).
-	if (project.findProperty('tracer') == 'true') {
-		from(rootProject.file("descriptors/${node.loader}-tracer"))
-	}
-	filesMatching(['fabric.mod.json', 'META-INF/*.toml']) {
+	from(rootProject.file("descriptors/${node.loader == 'quilt' ? 'fabric' : node.loader}"))
+	from(rootProject.file('descriptors/pumpkin_bridge.mixins.json'))
+	filesMatching(['fabric.mod.json', 'META-INF/*.toml', '*.mixins.json']) {
 		expand(descriptorValues)
 	}
 }
@@ -140,7 +133,7 @@ abstract class ModIndexEntry extends DefaultTask {
 	}
 }
 
-// Die Zellen, deren Rauchtest bestanden ist (INGAME A17): mod/verified.json {"<Knoten-Id>": {"smoke": "JJJJ-MM-TT",
+// Die Zellen, deren Rauchtest bestanden ist (docs/bridge/README.md): mod/verified.json {"<Knoten-Id>": {"smoke": "JJJJ-MM-TT",
 // "owner": null | "JJJJ-MM-TT"}}. Nur ein bestandener Rauchtest trägt einen Eintrag ein; ein Knoten ohne Eintrag ist aus.
 // providers.fileContents macht die Datei zur Eingabe des Konfigurations-Caches: eine Änderung baut den Index neu.
 def verifiedCells() {

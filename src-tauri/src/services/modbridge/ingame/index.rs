@@ -1,5 +1,5 @@
 //! Der Mod-Index (`mod-index.json`): welche Mod-JARs der Launcher mitbringt und für welche Instanzen sie taugen.
-//! Das Gradle-Projekt unter `mod/` schreibt ihn, der Launcher liest ihn nur (INGAME 3.2). Das Schema liegt in
+//! Das Gradle-Projekt unter `mod/` schreibt ihn, der Launcher liest ihn nur (docs/bridge/README.md, "Embedded index and files"). Das Schema liegt in
 //! `mod/index.schema.json`; die Regeln, die ein Schema nicht ausdrückt, prüft [`validate`](super::validate).
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +19,7 @@ pub struct ModIndex {
 pub struct Node {
     pub id: String,
     pub loader: Loader,
-    /// Kleinste Loader-Version (Fabric Loader, NeoForge, Forge), mit der das JAR läuft.
+    /// Kleinste Loader-Version (Fabric, Quilt, NeoForge, Forge), mit der das JAR läuft.
     pub loader_min: String,
     /// Ausdrückliche Mojang-Release-Ids, nie ein Bereich und nie ein Snapshot.
     pub minecraft: Vec<String>,
@@ -34,7 +34,7 @@ pub struct Node {
 }
 
 impl Node {
-    /// Ob der Rauchtest dieses Knotens bestanden ist; ein Knoten ohne Eintrag ist aus (INGAME 2.1, Punkt 3).
+    /// Ob der Rauchtest dieses Knotens bestanden ist; ein Knoten ohne Eintrag ist aus (docs/bridge/README.md, "Support selection").
     pub fn is_verified(&self) -> bool {
         self.verified.is_some()
     }
@@ -52,30 +52,35 @@ pub enum Loader {
     Fabric,
     Neoforge,
     Forge,
+    Quilt,
 }
 
-/// Wie das JAR dem Loader übergeben wird (INGAME 3.5); die Zuordnung steht im Index, nicht im Code.
+/// Wie das JAR dem Loader übergeben wird (docs/bridge/README.md, "Support selection"); die Zuordnung steht im Index, nicht im Code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Strategy {
     FabricAddMods,
     FmlMavenRoot,
     FmlModFolders,
+    QuiltAddMods,
+    ForgeClasspath,
 }
 
 impl Strategy {
     /// Alle Strategien mit ihrer Id im Index, in der Reihenfolge des Schemas.
-    pub const IDS: [&'static str; 3] = ["fabricAddMods", "fmlMavenRoot", "fmlModFolders"];
+    pub const IDS: [&'static str; 5] = [
+        "fabricAddMods", "fmlMavenRoot", "fmlModFolders", "quiltAddMods", "forgeClasspath",
+    ];
 
     /// Ob der Loader diese Strategie versteht.
     pub fn suits(self, loader: Loader) -> bool {
         matches!(
             (self, loader),
             (Self::FabricAddMods, Loader::Fabric)
-                | (
-                    Self::FmlMavenRoot | Self::FmlModFolders,
-                    Loader::Neoforge | Loader::Forge
-                )
+                | (Self::QuiltAddMods, Loader::Quilt)
+                | (Self::FmlMavenRoot, Loader::Neoforge | Loader::Forge)
+                | (Self::FmlModFolders, Loader::Neoforge)
+                | (Self::ForgeClasspath, Loader::Forge)
         )
     }
 }
@@ -212,6 +217,8 @@ mod tests {
         for (strategy, id) in [
             (Strategy::FabricAddMods, Strategy::IDS[0]),
             (Strategy::FmlMavenRoot, Strategy::IDS[1]),
+            (Strategy::QuiltAddMods, Strategy::IDS[3]),
+            (Strategy::ForgeClasspath, Strategy::IDS[4]),
             (Strategy::FmlModFolders, Strategy::IDS[2]),
         ] {
             assert_eq!(serde_json::to_value(strategy).unwrap(), id);
@@ -224,11 +231,17 @@ mod tests {
             (Strategy::FabricAddMods, Loader::Fabric, true),
             (Strategy::FabricAddMods, Loader::Neoforge, false),
             (Strategy::FabricAddMods, Loader::Forge, false),
+            (Strategy::QuiltAddMods, Loader::Quilt, true),
+            (Strategy::QuiltAddMods, Loader::Fabric, false),
+            (Strategy::FabricAddMods, Loader::Quilt, false),
+            (Strategy::ForgeClasspath, Loader::Forge, true),
+            (Strategy::ForgeClasspath, Loader::Quilt, false),
+            (Strategy::ForgeClasspath, Loader::Neoforge, false),
             (Strategy::FmlMavenRoot, Loader::Neoforge, true),
             (Strategy::FmlMavenRoot, Loader::Forge, true),
             (Strategy::FmlMavenRoot, Loader::Fabric, false),
             (Strategy::FmlModFolders, Loader::Neoforge, true),
-            (Strategy::FmlModFolders, Loader::Forge, true),
+            (Strategy::FmlModFolders, Loader::Forge, false),
             (Strategy::FmlModFolders, Loader::Fabric, false),
         ];
         for (strategy, loader, expected) in cases {

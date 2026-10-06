@@ -1,5 +1,7 @@
 package dev.laux.pumpkin.bridge.modules.friends.ui;
 
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import dev.laux.pumpkin.bridge.modules.friends.compat.Lan;
 import dev.laux.pumpkin.bridge.compat.Text;
 import dev.laux.pumpkin.bridge.compat.Toasts;
@@ -7,6 +9,7 @@ import dev.laux.pumpkin.bridge.compat.Widgets;
 import dev.laux.pumpkin.bridge.transport.request.Op;
 import dev.laux.pumpkin.bridge.modules.friends.protocol.Ops;
 import dev.laux.pumpkin.bridge.transport.request.Reply;
+import dev.laux.pumpkin.bridge.protocol.OpError;
 import dev.laux.pumpkin.bridge.modules.friends.state.Friend;
 import dev.laux.pumpkin.bridge.modules.friends.state.Game;
 import dev.laux.pumpkin.bridge.modules.friends.state.Join;
@@ -23,18 +26,18 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import net.minecraft.client.gui.components.AbstractWidget;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /**
- * The Teilen tab of the hub (INGAME 6.4): the state machine says which body the current game shows, this tab renders it
+ * The Teilen tab of the hub (docs/bridge/README.md, "In-game navigation and world behavior"): the state machine says which body the current game shows, this tab renders it
  * with the widget kit and sends the operations ({@code host.invite}, {@code host.kick}, {@code host.stop},
  * {@code join.leave}). The invite choices live in {@link ShareControls}, so they survive a resize. "Teilen beenden" ends
  * the session first and unpublishes the LAN world only where the era has {@code unpublishServer} (A2); older eras keep
  * the world open and say so.
  */
 public final class ShareTab {
-	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_bridge");
+	private static final Logger LOG = LogManager.getLogger("pumpkin_bridge");
 	private static final int ACTION_WIDTH = 62;
 	private static final int FULL_ROW_WIDTH = 110;
 
@@ -52,17 +55,28 @@ public final class ShareTab {
 	public List<Row> rows() {
 		inviteButton = null;
 		ShareModel.State state = ShareModel.state(input());
-		return switch (state) {
-			case JOINED -> joinRows();
-			case ON_SERVER -> List.of(Row.text(Text.translate("pumpkin_bridge.share.on_server")));
-			case NOT_HOSTABLE -> notHostableRows();
-			case UNKNOWN -> List.of(Row.text(Text.translate("pumpkin_bridge.share.unknown")));
-			case SHARED_ELSEWHERE -> sharedElsewhereRows();
-			case SESSION -> sessionRows();
-			case PUBLISHED -> publishedRows();
-			case WAITING_FOR_VERIFICATION -> List.of(Row.text(Text.translate("pumpkin_bridge.share.waiting")));
-			case NOT_PUBLISHED -> openRows();
-		};
+		switch (state) {
+			case JOINED:
+				return joinRows();
+			case ON_SERVER:
+				return Immutable.list(Row.text(Text.translate("pumpkin_bridge.share.on_server")));
+			case NOT_HOSTABLE:
+				return notHostableRows();
+			case UNKNOWN:
+				return Immutable.list(Row.text(Text.translate("pumpkin_bridge.share.unknown")));
+			case SHARED_ELSEWHERE:
+				return sharedElsewhereRows();
+			case SESSION:
+				return sessionRows();
+			case PUBLISHED:
+				return publishedRows();
+			case WAITING_FOR_VERIFICATION:
+				return Immutable.list(Row.text(Text.translate("pumpkin_bridge.share.waiting")));
+			case NOT_PUBLISHED:
+				return openRows();
+			default:
+				throw new IncompatibleClassChangeError();
+		}
 	}
 
 	/** Logs one line per state the tab has rendered, the render proof of the dev run. */
@@ -79,9 +93,9 @@ public final class ShareTab {
 	}
 
 	private List<Row> joinRows() {
-		Join join = link.topics().join().orElseThrow();
+		Join join = link.topics().join().get();
 		Row row = Row.text(Text.translate("pumpkin_bridge.join.row", join.hostName(), pathName(join), rttName(join)));
-		return List.of(row.withAction("join.leave", Widgets.button(Text.translate("pumpkin_bridge.join.leave"),
+		return Immutable.list(row.withAction("join.leave", Widgets.button(Text.translate("pumpkin_bridge.join.leave"),
 			ACTION_WIDTH, () -> run(Ops.joinLeave()))));
 	}
 
@@ -96,28 +110,39 @@ public final class ShareTab {
 	}
 
 	private List<Row> notHostableRows() {
-		Game.Unhostable reason = link.topics().game().reason().orElseThrow();
-		String text = switch (reason.kind()) {
-			case VERSION_UNSUPPORTED -> reason.minVersion()
+		Game.Unhostable reason = link.topics().game().reason().get();
+		String text;
+		switch (reason.kind()) {
+			case VERSION_UNSUPPORTED:
+				text = reason.minVersion()
 				.map(min -> Text.translate("pumpkin_bridge.share.reason.versionUnsupported", min))
 				.orElseGet(() -> Text.translate("pumpkin_bridge.share.reason.versionUnsupported.unknown"));
-			case MS_ACCOUNT_REQUIRED -> Text.translate("pumpkin_bridge.share.reason.msAccountRequired");
-			case MANIFEST_INVALID -> Text.translate("pumpkin_bridge.share.reason.manifestInvalid");
-			case NOT_READY -> Text.translate("pumpkin_bridge.share.unknown");
-		};
-		return List.of(Row.text(text));
+				break;
+			case MS_ACCOUNT_REQUIRED:
+				text = Text.translate("pumpkin_bridge.share.reason.msAccountRequired");
+				break;
+			case MANIFEST_INVALID:
+				text = Text.translate("pumpkin_bridge.share.reason.manifestInvalid");
+				break;
+			case NOT_READY:
+				text = Text.translate("pumpkin_bridge.share.unknown");
+				break;
+			default:
+				throw new IncompatibleClassChangeError();
+		}
+		return Immutable.list(Row.text(text));
 	}
 
 	private List<Row> sharedElsewhereRows() {
-		return List.of(Row.text(Text.translate("pumpkin_bridge.share.elsewhere.unnamed")));
+		return Immutable.list(Row.text(Text.translate("pumpkin_bridge.share.elsewhere.unnamed")));
 	}
 
 	private List<Row> openRows() {
-		return List.of(Row.fullWidth("share.open", Widgets.button(Text.translate("pumpkin_bridge.open_to_friends"),
+		return Immutable.list(Row.fullWidth("share.open", Widgets.button(Text.translate("pumpkin_bridge.open_to_friends"),
 			FULL_ROW_WIDTH, this::openWorld)));
 	}
 
-	/** Öffnet die Welt für Freunde und wartet dann auf die Bestätigung des Ports durch den Launcher (INGAME 6.4). */
+	/** Öffnet die Welt für Freunde und wartet dann auf die Bestätigung des Ports durch den Launcher (docs/bridge/README.md, "In-game navigation and world behavior"). */
 	private void openWorld() {
 		if (!Lan.publish()) {
 			Toasts.showSystem(Text.translate("pumpkin_bridge.publish_failed"));
@@ -149,7 +174,7 @@ public final class ShareTab {
 			rows.add(Row.text(Text.translate("pumpkin_bridge.row", guest.name(),
 					Text.translate("pumpkin_bridge.guest." + lowercase(guest.state()))))
 				.withAction("guest.reinvite." + guest.id(), Widgets.button(Text.translate("pumpkin_bridge.share.reinvite"),
-					ACTION_WIDTH, () -> run(Ops.hostInvite(List.of(guest.id()), controls.showsWorldName()))))
+					ACTION_WIDTH, () -> run(Ops.hostInvite(Immutable.list(guest.id()), controls.showsWorldName()))))
 				.withAction("guest.kick." + guest.id(), Widgets.button(Text.translate("pumpkin_bridge.kick"),
 					ACTION_WIDTH, () -> run(Ops.hostKick(guest.id())))));
 		}
@@ -191,7 +216,12 @@ public final class ShareTab {
 	}
 
 	private static void endSharing(Reply<?> reply) {
-		reply.error().ifPresentOrElse(Toasts::showError, Lan::unpublish);
+		Optional<OpError> error = reply.error();
+		if (error.isPresent()) {
+			Toasts.showError(error.get());
+		} else {
+			Lan.unpublish();
+		}
 	}
 
 	/** Sends the operation; if the launcher refuses or does not answer, the player sees why as a toast. */

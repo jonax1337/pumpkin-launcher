@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/jonax1337/pumpkin-launcher/mod/index.schema.json",
   "title": "Pumpkin Bridge mod index",
-  "description": "mod-index.json: written by the Gradle build in mod/ and read by the launcher. The launcher enforces the same rules and, beyond what a schema can say: node ids, file names and (loader, minecraft) cells are unique, and a strategy must suit its loader (fabricAddMods for fabric; fmlMavenRoot and fmlModFolders for neoforge and forge). A node without a verified entry is switched off.",
+  "description": "mod-index.json: written by the Gradle build in mod/ and read by the launcher. Node ids, file names and (loader, minecraft) cells must be unique. Strategy mappings are fabricAddMods for Fabric, quiltAddMods for explicit Quilt artifacts (no Fabric fallback), fmlMavenRoot for older Forge/NeoForge, fmlModFolders for NeoForge only, and forgeClasspath for modern Forge only. A node without a verified entry is switched off.",
   "type": "object",
   "additionalProperties": false,
   "required": ["modVersion", "nodes"],
@@ -29,7 +29,8 @@
     },
     "date": {
       "type": "string",
-      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$"
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$",
+      "description": "YYYY-MM-DD with month 01 through 12 and day 01 through 31, matching the launcher; calendar existence is not checked."
     },
     "verified": {
       "type": "object",
@@ -53,13 +54,13 @@
       "properties": {
         "id": {
           "$ref": "#/$defs/plainName",
-          "description": "Unique. <minecraft range>-<loader>, for example 1.21.1-neoforge."
+          "description": "Unique plain node id, independent of generator naming. Conventionally <minecraft range>-<loader>, for example 1.21.1-neoforge."
         },
-        "loader": { "enum": ["fabric", "neoforge", "forge"] },
+        "loader": { "enum": ["fabric", "neoforge", "forge", "quilt"] },
         "loaderMin": {
           "type": "string",
           "pattern": "^[0-9]+(\\.[0-9]+)*([-+].*)?$",
-          "description": "Smallest loader version that runs the jar (Fabric loader, NeoForge, Forge). Compared numerically; a suffix after the digits is ignored."
+          "description": "Smallest loader version that runs the jar (Fabric loader, Quilt loader, NeoForge, Forge). Compared numerically as unsigned 64-bit components; a suffix after the digits is ignored."
         },
         "minecraft": {
           "type": "array",
@@ -68,7 +69,10 @@
           "items": { "$ref": "#/$defs/releaseId" }
         },
         "javaMin": { "type": "integer", "minimum": 8, "maximum": 64 },
-        "strategy": { "enum": ["fabricAddMods", "fmlMavenRoot", "fmlModFolders"] },
+        "strategy": {
+          "enum": ["fabricAddMods", "fmlMavenRoot", "fmlModFolders", "quiltAddMods", "forgeClasspath"],
+          "description": "Loader-specific injection strategy. Quilt requires its own explicit artifact and loader.addMods; forgeClasspath is for modern Forge, never NeoForge."
+        },
         "file": {
           "type": "string",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}\\.jar$",
@@ -79,7 +83,25 @@
           "anyOf": [{ "$ref": "#/$defs/verified" }, { "type": "null" }],
           "description": "Absent or null: the cell is off."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "loader": { "const": "fabric" } }, "required": ["loader"] },
+          "then": { "properties": { "strategy": { "const": "fabricAddMods" } } }
+        },
+        {
+          "if": { "properties": { "loader": { "const": "neoforge" } }, "required": ["loader"] },
+          "then": { "properties": { "strategy": { "enum": ["fmlMavenRoot", "fmlModFolders"] } } }
+        },
+        {
+          "if": { "properties": { "loader": { "const": "forge" } }, "required": ["loader"] },
+          "then": { "properties": { "strategy": { "enum": ["fmlMavenRoot", "forgeClasspath"] } } }
+        },
+        {
+          "if": { "properties": { "loader": { "const": "quilt" } }, "required": ["loader"] },
+          "then": { "properties": { "strategy": { "const": "quiltAddMods" } } }
+        }
+      ]
     }
   }
 }

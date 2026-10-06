@@ -1,5 +1,7 @@
 package dev.laux.pumpkin.bridge.ui.kit;
 
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import dev.laux.pumpkin.bridge.compat.Widgets;
 import dev.laux.pumpkin.bridge.ui.model.Rect;
 import java.util.List;
@@ -13,8 +15,7 @@ final class TabBar {
 
 	TabBar(List<String> labels, List<Rect> rectangles, int selected, IntConsumer onSelect) {
 		tabs = IntStream.range(0, labels.size())
-			.mapToObj(index -> tab(index, labels.get(index), rectangles.get(index), index == selected, onSelect))
-			.toList();
+			.mapToObj(index -> tab(index, labels.get(index), rectangles.get(index), index == selected, onSelect)).collect(Immutable.toList());
 	}
 
 	List<Row.Action> tabs() {
@@ -23,8 +24,7 @@ final class TabBar {
 
 	private static Row.Action tab(int index, String label, Rect rectangle, boolean selected, IntConsumer onSelect) {
 		AbstractWidget button = Widgets.tab(label, rectangle.width(), selected, () -> onSelect.accept(index));
-		button.setX(rectangle.x());
-		button.setY(rectangle.y());
+		Widgets.setPosition(button, rectangle.x(), rectangle.y());
 		button.active = !selected;
 		return new Row.Action("tab" + index, button);
 	}

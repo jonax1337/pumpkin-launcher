@@ -40,6 +40,7 @@ const MOCK_NODES: MockNode[] = [
   { id: "1.20.4-fabric", loader: "fabric", minecraft: ["1.20.4"], loaderMin: "0.15.0", verified: false },
   { id: "1.21.1-neoforge", loader: "neoforge", minecraft: ["1.21", "1.21.1"], loaderMin: "21.1.0", verified: true },
   { id: "1.20.1-forge", loader: "forge", minecraft: ["1.20.1"], loaderMin: "47.4.0", verified: true },
+  { id: "1.16.5-quilt", loader: "quilt", minecraft: ["1.16.5"], loaderMin: "0.29.2", verified: true },
 ];
 
 /** Ob die Loader-Version `version` unter `minimum` liegt, Teil für Teil als Zahl verglichen. */
@@ -58,7 +59,7 @@ const ONLINE_AFTER_MS = 800;
 const DELIVERY_MS = 1000;
 const JOIN_CONNECT_MS = 1200;
 
-/** So viele Vorgänge aus dem Spiel behält der Launcher (INGAME 5.7). */
+/** So viele Vorgänge aus dem Spiel behält der Launcher (docs/bridge/README.md, "Protocol 2"). */
 const MOD_ACTIVITY_LIMIT = 100;
 
 /** So viele Zeichen behält der Launcher von `summary.targetName` (`sanitize::world_or_instance_name`); die Rückfrage darf sich nicht darauf stützen. */
@@ -83,7 +84,7 @@ const SUMMARIES: Record<PlanScenario, InstanceSummary> = {
   ready: FABRIC_26_3,
   missing: FABRIC_26_3,
   vanilla: { name: "Vanilla 26.3", minecraftVersion: "26.3", loader: "vanilla", loaderVersion: null, modCount: 0 },
-  unsupported: { name: "Vanilla 1.19.4", minecraftVersion: "1.19.4", loader: "vanilla", loaderVersion: null, modCount: 0 },
+  unsupported: { name: "Vanilla 1.16.4", minecraftVersion: "1.16.4", loader: "vanilla", loaderVersion: null, modCount: 0 },
   lookupFailed: { ...FABRIC_26_3, modCount: 12 },
 };
 
@@ -648,7 +649,7 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     emit("join-session", { ...joinEventBase(ticket), state: { type: "ended", reason: "left" } });
   }
 
-  // --- Pumpkin Bridge im Spiel (INGAME 3.9) ---
+  // --- Pumpkin Bridge im Spiel (docs/bridge/README.md, "Support selection") ---
 
   const unavailable = (reason: IngameReason, node: IngameNode | null = null): IngameStatus => ({ state: "unavailable", reason, node });
 
@@ -660,7 +661,6 @@ export function createFriendsMock({ db: appDb, emit }: MockContext, skins: SkinS
     if (!instance) throw new Error(t("mock.friends.notFound.instance", { id: instanceId }));
     if (!appDb.accounts.some((a) => a.kind === "microsoft")) return unavailable({ type: "offlineAccount" });
     if (instance.loader === "vanilla") return unavailable({ type: "vanilla" });
-    if (instance.loader === "quilt") return unavailable({ type: "quilt" });
     const cell = MOCK_NODES.find((n) => n.loader === instance.loader && n.minecraft.includes(instance.minecraftVersion));
     if (!cell) return unavailable({ type: "noNode" });
     const node: IngameNode = { id: cell.id, minecraft: instance.minecraftVersion, loader: cell.loader };

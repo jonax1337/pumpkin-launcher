@@ -1,5 +1,8 @@
 package dev.laux.pumpkin.bridge.ui.model;
 
+import java.util.Objects;
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -8,10 +11,57 @@ import java.util.Optional;
  * Inside one row: text on the left, action widgets right-aligned and vertically centred. The text lines get the width
  * that is left of the leftmost action, so a long name is clipped before it reaches a button.
  */
-public record RowLayout(Rect firstLine, Optional<Rect> secondLine, List<Rect> actions) {
-	public RowLayout {
-		actions = List.copyOf(actions);
+public final class RowLayout {
+	private final Rect firstLine;
+	private final Optional<Rect> secondLine;
+	private final List<Rect> actions;
+
+	public RowLayout(Rect firstLine, Optional<Rect> secondLine, List<Rect> actions) {
+		actions = Immutable.copyList(actions);
+		this.firstLine = firstLine;
+		this.secondLine = secondLine;
+		this.actions = actions;
 	}
+
+	public Rect firstLine() {
+		return firstLine;
+	}
+
+	public Optional<Rect> secondLine() {
+		return secondLine;
+	}
+
+	public List<Rect> actions() {
+		return actions;
+	}
+
+	@Override
+	public boolean equals(Object other) {
+		if (this == other) {
+			return true;
+		}
+		if (!(other instanceof RowLayout)) {
+			return false;
+		}
+		RowLayout that = (RowLayout) other;
+		return Objects.equals(firstLine, that.firstLine)
+			&& Objects.equals(secondLine, that.secondLine)
+			&& Objects.equals(actions, that.actions);
+	}
+
+	@Override
+	public int hashCode() {
+		int hash = Objects.hashCode(firstLine);
+		hash = 31 * hash + Objects.hashCode(secondLine);
+		hash = 31 * hash + Objects.hashCode(actions);
+		return hash;
+	}
+
+	@Override
+	public String toString() {
+		return "RowLayout[firstLine=" + firstLine + ", secondLine=" + secondLine + ", actions=" + actions + "]";
+	}
+
 
 	/** {@code actionWidths} are in the order the actions appear on screen, left to right. */
 	public static RowLayout of(Rect row, boolean twoLine, List<Integer> actionWidths) {

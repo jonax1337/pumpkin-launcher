@@ -1,15 +1,9 @@
 name: Mod smoke
 
-# Rauchtest der Einspeisung im echten Spiel (docs/friends/INGAME.md 10, Schicht 4; Anleitung docs/friends/INGAME-SMOKE.md):
-# baut den Knoten, startet Minecraft unter Xvfb mit Software-GL über den Startweg des Launchers (Cargo-Feature "smoke",
-# nie in Release-Builds) und prüft, dass die Mod im Spiel ankommt. Nur die Zellen, die auf dem Rechner des Owners
-# bewiesen sind (siehe INGAME-SMOKE.md), stehen in der Matrix unten.
-#
-# UNVERIFIZIERT (nie gelaufen; Paket S2 konnte diesen Workflow nicht ausführen):
-# - ob Minecraft 26.x headless unter Software-Rendering startet (INGAME 12, Risiko 2; 26.3-fabric und 26.2-neoforge
-#   können hier rot sein, bis ein Lauf das Gegenteil zeigt),
-# - ob der Linux-Startweg (Pfade, xvfb) dem Windows-Beweis entspricht.
-# Ein roter Job hier heißt: die Zelle ist nicht bewiesen und bleibt in mod/verified.json ohne Eintrag.
+# Rauchtest der Einspeisung im echten Spiel (tools/mod-smoke/README.md):
+# baut den Knoten und startet Minecraft unter Xvfb mit Software-GL über den Startweg des Launchers.
+# `nodes.txt` is the sole support matrix. This job attempts every target; a successful
+# bridge handshake is not a claim that the interactive UI or Friends flows were checked.
 
 on:
   schedule:
@@ -40,34 +34,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  nodes:
+    name: Smoke target list
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Read nodes.txt
+        id: matrix
+        run: |
+          matrix=$(jq -R -s -c '
+            split("\n")
+            | map(sub("#.*"; "") | gsub("^\\s+|\\s+$"; "") | select(length > 0) | gsub("\\s+"; " ") | split(" "))
+            | map({
+                cell: .[0],
+                java: (.[4] | tonumber),
+                testJava: (if (.[4] | tonumber) < 17 then 17 else (.[4] | tonumber) end),
+                "gradle-java": (.[6] | tonumber)
+              })' mod/nodes.txt)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
   smoke:
     name: Smoke ${{ matrix.cell }}
+    needs: nodes
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      # Nur bewiesene Zellen (mod/nodes.txt kennt den JDK- und Strategie-Satz; eine neue Zelle kommt hierher erst,
-      # nachdem ein Lauf sie bewiesen hat).
       matrix:
-        include:
-          - { cell: 26.3-fabric, java: 25, gradle-java: 25 }   # headless 26.x: unbewiesen, siehe Kopfkommentar
-          - { cell: 26.2-fabric, java: 25, gradle-java: 25 }   # headless 26.x: unbewiesen, siehe Kopfkommentar
-          - { cell: 26.1.2-fabric, java: 25, gradle-java: 25 } # headless 26.x: unbewiesen, siehe Kopfkommentar
-          - { cell: 1.21.1-fabric, java: 21, gradle-java: 25 }
-          - { cell: 1.21.5-fabric, java: 21, gradle-java: 25 }
-          - { cell: 1.21.8-fabric, java: 21, gradle-java: 25 }
-          - { cell: 1.21.10-fabric, java: 21, gradle-java: 25 }
-          - { cell: 1.21.11-fabric, java: 21, gradle-java: 25 }
-          - { cell: 1.20.1-fabric, java: 17, gradle-java: 25 }
-          - { cell: 1.20.2-fabric, java: 17, gradle-java: 25 }
-          - { cell: 1.20.4-fabric, java: 17, gradle-java: 25 }
-          - { cell: 1.21.1-neoforge, java: 21, gradle-java: 21 }
-          - { cell: 1.21.5-neoforge, java: 21, gradle-java: 21 }
-          - { cell: 1.21.8-neoforge, java: 21, gradle-java: 21 }
-          - { cell: 1.21.10-neoforge, java: 21, gradle-java: 21 }
-          - { cell: 1.21.11-neoforge, java: 21, gradle-java: 21 }
-          - { cell: 26.2-neoforge, java: 25, gradle-java: 25 } # headless 26.x: unbewiesen, siehe Kopfkommentar
-          - { cell: 1.20.1-forge, java: 17, gradle-java: 21 }
+        include: ${{ fromJSON(needs.nodes.outputs.matrix) }}
     env:
       PUMPKIN_SMOKE_CELL: ${{ matrix.cell }}
       # Software-GL für den headlessen Client; erbt an das Spiel weiter.
@@ -84,6 +79,18 @@ jobs:
 
       - name: Expose the game JDK to Gradle
         run: echo "PUMPKIN_JDK_${{ matrix.java }}=$JAVA_HOME" >> "$GITHUB_ENV"
+
+      - name: Test JDK for Java 8 production nodes
+        if: matrix.java < 17
+        id: test-jdk
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Expose the test JDK
+        if: matrix.java < 17
+        run: echo "PUMPKIN_JDK_17=${{ steps.test-jdk.outputs.path }}" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         if: matrix.gradle-java != matrix.java
@@ -107,7 +114,7 @@ jobs:
       # Baut nur den Knoten der Zelle (-Pnode) samt Index und Jars.
       - name: Build the node and its index
         working-directory: mod
-        run: ./gradlew -Pnode=${{ matrix.cell }} -Pcore.testJdk=${{ matrix.java }} build modIndex
+        run: ./gradlew -Pnode=${{ matrix.cell }} -Pcore.testJdk=${{ matrix.testJava }} build modIndex
 
       - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
         with:

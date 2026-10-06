@@ -1,5 +1,9 @@
 package dev.laux.pumpkin.bridge.modules.friends.ui.model;
 
+import java.util.Objects;
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+import dev.laux.pumpkin.bridge.runtime.Whitespace;
+
 import dev.laux.pumpkin.bridge.protocol.ScopeState;
 import dev.laux.pumpkin.bridge.protocol.Scopes;
 import dev.laux.pumpkin.bridge.modules.friends.state.Me;
@@ -9,16 +13,90 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * The lines of the read-only Optionen tab (INGAME 6.2): everything the me topic and the welcome carry about the
+ * The lines of the read-only Optionen tab (docs/bridge/README.md, "In-game navigation and world behavior"): everything the me topic and the welcome carry about the
  * player's friends identity, nothing editable - the settings live in the launcher, and [Im Launcher öffnen] is the tab's
  * only action. A missing value (topic not pushed yet, no welcome, no identity yet) has its own dash variant instead of
  * hiding the line, so the tab's shape never changes.
  */
-public record OptionsLines(List<Line> lines) {
+public final class OptionsLines {
+	private final List<Line> lines;
+
+	public OptionsLines(List<Line> lines) {
+		this.lines = lines;
+	}
+
+	public List<Line> lines() {
+		return lines;
+	}
+
+	@Override
+	public boolean equals(Object other) {
+		if (this == other) {
+			return true;
+		}
+		if (!(other instanceof OptionsLines)) {
+			return false;
+		}
+		OptionsLines that = (OptionsLines) other;
+		return Objects.equals(lines, that.lines);
+	}
+
+	@Override
+	public int hashCode() {
+		int hash = Objects.hashCode(lines);
+		return hash;
+	}
+
+	@Override
+	public String toString() {
+		return "OptionsLines[lines=" + lines + "]";
+	}
+
 	private static final String KEY = "pumpkin_bridge.options.";
 
 	/** One text row: a language key and, when its format has one, the player's value. */
-	public record Line(String key, Optional<String> argument) {
+	public static final class Line {
+		private final String key;
+		private final Optional<String> argument;
+
+		public Line(String key, Optional<String> argument) {
+			this.key = key;
+			this.argument = argument;
+		}
+
+		public String key() {
+			return key;
+		}
+
+		public Optional<String> argument() {
+			return argument;
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (this == other) {
+				return true;
+			}
+			if (!(other instanceof Line)) {
+				return false;
+			}
+			Line that = (Line) other;
+			return Objects.equals(key, that.key)
+				&& Objects.equals(argument, that.argument);
+		}
+
+		@Override
+		public int hashCode() {
+			int hash = Objects.hashCode(key);
+			hash = 31 * hash + Objects.hashCode(argument);
+			return hash;
+		}
+
+		@Override
+		public String toString() {
+			return "Line[key=" + key + ", argument=" + argument + "]";
+		}
+
 		static Line plain(String key) {
 			return new Line(key, Optional.empty());
 		}
@@ -39,7 +117,7 @@ public record OptionsLines(List<Line> lines) {
 		lines.add(me.map(who -> Line.plain(KEY + "findable." + (who.findableByName() ? "yes" : "no")))
 			.orElseGet(() -> Line.plain(KEY + "findable.unknown")));
 		lines.add(Line.plain(KEY + "actions." + actionsState(scopes).name().toLowerCase(Locale.ROOT)));
-		return new OptionsLines(List.copyOf(lines));
+		return new OptionsLines(Immutable.copyList(lines));
 	}
 
 	/** "Verbunden über {host}" when the topic names the host, otherwise the network state. */
@@ -53,7 +131,7 @@ public record OptionsLines(List<Line> lines) {
 	}
 
 	private static Line namedLine(String present, String absent, String displayName) {
-		return displayName.isBlank() ? Line.plain(absent) : Line.valued(present, displayName);
+		return Whitespace.isBlank(displayName) ? Line.plain(absent) : Line.valued(present, displayName);
 	}
 
 	private static Line valued(String present, String absent, Optional<String> value) {

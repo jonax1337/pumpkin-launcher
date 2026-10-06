@@ -1,4 +1,4 @@
-//! Der Sicherungsschalter je Instanz (INGAME 3.8): wann die Einspeisung läuft, wann der Spieler sie ausgeschaltet
+//! Der Sicherungsschalter je Instanz (docs/bridge/README.md, "Startup recovery"): wann die Einspeisung läuft, wann der Spieler sie ausgeschaltet
 //! hat und wann der Launcher sie nach einem Startfehler selbst abgeschaltet hat. Der Zustand gehört der Instanz und
 //! wird vom Aufrufer gespeichert; hier stehen nur die Übergänge.
 use serde::{Deserialize, Serialize};

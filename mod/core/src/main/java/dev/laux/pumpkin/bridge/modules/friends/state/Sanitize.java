@@ -1,5 +1,7 @@
 package dev.laux.pumpkin.bridge.modules.friends.state;
 
+import dev.laux.pumpkin.bridge.runtime.Whitespace;
+
 import java.text.Normalizer;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -49,7 +51,7 @@ public final class Sanitize {
 			.filter(codePoint -> !isRemoved(codePoint))
 			.collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
 			.toString();
-		return WHITESPACE_RUN.matcher(visible).replaceAll(" ").strip();
+		return Whitespace.strip(WHITESPACE_RUN.matcher(visible).replaceAll(" "));
 	}
 
 	private static boolean isRemoved(int codePoint) {

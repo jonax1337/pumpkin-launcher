@@ -1,4 +1,4 @@
-//! Die Themen für die Mod (INGAME 5.3): `me`, `friends`, `requests`, `invites`, `session`, `join`, `game`, `codes` und
+//! Die Themen für die Mod (docs/bridge/README.md, "Protocol 2"): `me`, `friends`, `requests`, `invites`, `session`, `join`, `game`, `codes` und
 //! `blocked`, mit echten Peer-IDs (die Verbindung ersetzt sie durch Aliasse). Alle Namen sind bei ihrer Herkunft schon
 //! bereinigt (SPEC 12.3); hier gelten nur die Obergrenzen der Einträge, mit denen jedes Thema in eine Zeile des Launchers
 //! passt (siehe `modbridge::topics`).
@@ -587,12 +587,12 @@ mod tests {
             (true, None),
             "der Port wird erst beim Teilen geöffnet"
         );
-        let old = AppError::invalid(coded!("errors.friends.versionUnsupported", min = "1.20"));
+        let old = AppError::invalid(coded!("errors.friends.versionUnsupported", min = "1.16.5"));
         assert_eq!(
             hostability(Err(old)),
             (
                 false,
-                Some(HostableReason::VersionUnsupported { min: "1.20".into() })
+                Some(HostableReason::VersionUnsupported { min: "1.16.5".into() })
             )
         );
         let offline = AppError::invalid(coded!("errors.friends.msAccountRequired"));

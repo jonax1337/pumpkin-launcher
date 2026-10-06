@@ -1,4 +1,4 @@
-//! Grenzen des Mod-Kanals (docs/friends/INGAME.md, 5.3 und 5.6). `mod/fixtures/protocol/limits.jsonl` hält dieselben
+//! Grenzen des Mod-Kanals (docs/bridge/README.md, "Protocol 2"). `mod/fixtures/protocol/limits.jsonl` hält dieselben
 //! Zahlen für die Java-Seite fest; `tests_fixtures` prüft beide gegeneinander.
 use std::time::Duration;
 

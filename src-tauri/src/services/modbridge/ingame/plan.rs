@@ -1,7 +1,7 @@
-//! Die Einspeisung eines Starts, zusammengesetzt aus den Bausteinen des Moduls (INGAME 3.3 bis 3.7): Tor, JAR bereitlegen,
+//! Die Einspeisung eines Starts, zusammengesetzt aus den Bausteinen des Moduls (docs/bridge/README.md, "Support selection"): Tor, JAR bereitlegen,
 //! Startoptionen bauen, den Start in der Brücke anmelden. Scheitert ein Schritt, startet das Spiel ohne Einspeisung,
 //! byte-identisch zu einem Start ohne Pumpkin Bridge; ein Fehler kostet nie den Spielstart.
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::args::{self, InjectedArgs, UserArgs};
 use super::gate::{decide, Decision, LaunchFacts, SkipReason};
@@ -42,7 +42,7 @@ pub struct InjectionRequest<'a> {
     pub facts: LaunchFacts<'a>,
     pub instance_id: &'a str,
     pub user: UserArgs<'a>,
-    /// „Aktionen im Spiel“ steht auf „Erlauben“ (INGAME 5.5).
+    /// „Aktionen im Spiel“ steht auf „Erlauben“ (docs/bridge/README.md, "Operations and consent").
     pub pre_granted: bool,
 }
 
@@ -74,7 +74,8 @@ pub struct Injected {
 
 /// Die Argumente des Starts: Optionen der Einspeisung (leer ohne sie) und die Argumente des Nutzers, soweit sie bleiben.
 #[derive(Debug, Default, PartialEq, Eq)]
-pub struct StartArgs {
+pub struct StartArgs<'a> {
+    pub injected_classpath: &'a [PathBuf],
     /// Kommen nach den JVM-Argumenten der Version und vor `user_jvm`.
     pub injected_jvm: Vec<String>,
     /// Kommen nach den Spielargumenten der Version und vor `user_game`.
@@ -129,11 +130,12 @@ fn prepare(
     })
 }
 
-impl StartArgs {
+impl StartArgs<'_> {
     /// Setzt die Argumente in die Startbeschreibung: die der Einspeisung (leer ohne sie) an ihren Platz zwischen denen der
-    /// Version und denen des Nutzers (INGAME 3.6), dazu die verbleibenden des Nutzers.
+    /// Version und denen des Nutzers (docs/bridge/README.md, "Support selection"), dazu die verbleibenden des Nutzers.
     pub fn apply<'a>(&'a self, spec: LaunchSpec<'a>) -> LaunchSpec<'a> {
         LaunchSpec {
+            injected_classpath: &self.injected_classpath,
             injected_jvm_args: &self.injected_jvm,
             extra_jvm_args: &self.user_jvm,
             injected_game_args: &self.injected_game,
@@ -145,7 +147,7 @@ impl StartArgs {
 
 impl Injection {
     /// Die Argumente des Starts. Ohne Einspeisung sind es unverändert die des Nutzers.
-    pub fn start_args(&self, user_jvm: &[String], user_game: &[String]) -> StartArgs {
+    pub fn start_args(&self, user_jvm: &[String], user_game: &[String]) -> StartArgs<'_> {
         match self {
             Self::Injected(injected) => injected.start_args(),
             Self::Skipped(_) | Self::Failed(_) => StartArgs {
@@ -156,7 +158,7 @@ impl Injection {
         }
     }
 
-    /// Die Umgebungsvariablen für das Spiel; nur eine Einspeisung setzt welche (INGAME 5.2).
+    /// Die Umgebungsvariablen für das Spiel; nur eine Einspeisung setzt welche (docs/bridge/README.md, "Connection and ownership").
     pub fn env(&self) -> &[(String, String)] {
         match self {
             Self::Injected(injected) => &injected.env,
@@ -180,8 +182,9 @@ impl Injection {
 }
 
 impl Injected {
-    fn start_args(&self) -> StartArgs {
+    fn start_args(&self) -> StartArgs<'_> {
         StartArgs {
+            injected_classpath: &self.args.classpath,
             injected_jvm: self.args.jvm.clone(),
             injected_game: self.args.game.clone(),
             user_jvm: self.args.user_jvm.clone(),
@@ -707,6 +710,23 @@ mod tests {
             ["--fml.mavenRoots", "root", "--demo"]
         );
         assert!(args.iter().position(|arg| arg == "Notch").unwrap() < args.len() - 3);
+    }
+
+    #[test]
+    fn a_classpath_injection_extends_the_launch_classpath_without_replacing_user_arguments() {
+        let injected = PathBuf::from("/bridge/pumpkin.jar");
+        let classpath = [injected.clone()];
+        let start = StartArgs {
+            injected_classpath: &classpath,
+            user_jvm: vec!["-Xss2M".into()],
+            user_game: vec!["--demo".into()],
+            ..StartArgs::default()
+        };
+        let baseline = argument_list_without_friends(&start.user_jvm, &start.user_game);
+        let mut expected = baseline.clone();
+        let classpath = expected.iter().position(|argument| argument == "-cp").unwrap() + 1;
+        expected[classpath].push_str(&format!(":{}", injected.display()));
+        assert_eq!(argument_list(&start), expected);
     }
 
     #[test]

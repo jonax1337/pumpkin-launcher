@@ -11,7 +11,7 @@ import java.time.Duration;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
-/** limits.jsonl: the numbers of INGAME 5.3 that concern the mod are the numbers in {@link Limits}. */
+/** limits.jsonl: the numbers of docs/bridge/README.md, "Protocol 2" that concern the mod are the numbers in {@link Limits}. */
 class LimitsFixtureTest {
 	private static final JsonObject LIMITS = Fixtures.only("limits.jsonl", NONE).message();
 

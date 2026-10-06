@@ -4,14 +4,14 @@ import dev.laux.pumpkin.bridge.modules.friends.state.Join;
 import java.util.Optional;
 
 /**
- * The join flow of INGAME 7 as a pure machine: the answer of {@code invite.joinHere} is validated as a literal loopback
+ * The join flow of docs/bridge/README.md, "In-game navigation and world behavior" as a pure machine: the answer of {@code invite.joinHere} is validated as a literal loopback
  * address before anything happens, the player confirms leaving the world, then the game connects and waits for the join
  * topic to reach {@code connected} within thirty seconds. Every event returns the step the caller owes the flow next;
  * {@link #tick} drives the deadline, {@link #joinTopic} the connection's progress. The failure cases end the flow and
  * owe the launcher the {@code join.failed} report.
  */
 public final class JoinHereFlow {
-	/** INGAME 7: after thirty seconds without {@code connected} the join counts as failed. */
+	/** docs/bridge/README.md, "In-game navigation and world behavior": after thirty seconds without {@code connected} the join counts as failed. */
 	public static final long DEADLINE_MILLIS = 30_000;
 
 	public enum Phase {

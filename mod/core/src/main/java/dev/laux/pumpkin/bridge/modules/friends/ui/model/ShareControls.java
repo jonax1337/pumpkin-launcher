@@ -1,5 +1,7 @@
 package dev.laux.pumpkin.bridge.modules.friends.ui.model;
 
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -7,7 +9,7 @@ import java.util.Set;
 
 /**
  * What the player chose in the Teilen tab's invite section: the toggled friends (never more than the guest limit allows)
- * and whether the world's name is shown to the guests (INGAME 6.4, "Weltname zeigen"). Lives longer than one widget
+ * and whether the world's name is shown to the guests (docs/bridge/README.md, "In-game navigation and world behavior", "Weltname zeigen"). Lives longer than one widget
  * build, so a resize keeps the choices.
  */
 public final class ShareControls {
@@ -44,7 +46,7 @@ public final class ShareControls {
 	}
 
 	public List<String> selection() {
-		return List.copyOf(selected);
+		return Immutable.copyList(selected);
 	}
 
 	/** Drops friends that are no longer invitable, for example after they went offline or became guests. */

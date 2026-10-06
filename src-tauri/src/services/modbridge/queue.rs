@@ -1,4 +1,4 @@
-//! Die Warteschlange einer Verbindung zum Schreiben (docs/friends/INGAME.md, 5.3).
+//! Die Warteschlange einer Verbindung zum Schreiben (docs/bridge/README.md, "Protocol 2").
 //!
 //! Antworten gehen nie verloren und kommen in der Reihenfolge der Anfragen. Hinweise (Toasts) sind höchstens 32:
 //! ein weiterer verdrängt den ältesten. Themen stehen nur als „hat sich geändert“ darin; den Wert holt der Schreiber,

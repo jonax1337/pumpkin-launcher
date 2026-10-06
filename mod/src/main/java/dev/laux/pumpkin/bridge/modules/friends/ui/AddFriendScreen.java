@@ -1,5 +1,7 @@
 package dev.laux.pumpkin.bridge.modules.friends.ui;
 
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import dev.laux.pumpkin.bridge.modules.friends.ui.model.LauncherWait;
 import dev.laux.pumpkin.bridge.modules.friends.ui.model.DirectoryNotice;
 import dev.laux.pumpkin.bridge.modules.friends.ui.model.AddFriendFailure;
@@ -25,11 +27,11 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 
 /**
- * "Freund hinzufügen" with the single R-A tab "Per Name" (INGAME 6.2, BYNAME 9.7): one field for a Minecraft name, the
+ * "Freund hinzufügen" with the single R-A tab "Per Name" (docs/bridge/README.md, "In-game navigation and world behavior", BYNAME 9.7): one field for a Minecraft name, the
  * launcher's hint sentence under it, the directory line the launcher would show, and the answer inline — a hint for a
  * name that is not findable, an error with "⚠" for everything else. The send runs {@code friend.addByName}; while the
  * launcher asks for consent the {@link LauncherWaitScreen} covers this screen. Text, focus and scroll survive a rebuild
- * (INGAME 6.5). Enter submits from the name field; a focused send button keeps its own vanilla Enter.
+ * (docs/bridge/README.md, "In-game navigation and world behavior"). Enter submits from the name field; a focused send button keeps its own vanilla Enter.
  */
 public final class AddFriendScreen extends PumpkinScreen {
 	private static final int FIELD_WIDTH = 120;
@@ -49,7 +51,7 @@ public final class AddFriendScreen extends PumpkinScreen {
 
 	@Override
 	protected List<String> tabLabels() {
-		return List.of(Text.translate("pumpkin_bridge.add.tab.name"));
+		return Immutable.list(Text.translate("pumpkin_bridge.add.tab.name"));
 	}
 
 	@Override
@@ -78,7 +80,7 @@ public final class AddFriendScreen extends PumpkinScreen {
 		}
 	}
 
-	/** INGAME 6.2: Enter in the name field sends the request; anything else focused leaves the key to vanilla. */
+	/** docs/bridge/README.md, "In-game navigation and world behavior": Enter in the name field sends the request; anything else focused leaves the key to vanilla. */
 	@Override
 	protected boolean onEnter() {
 		boolean inNameField = focusedWidget().filter(EditBox.class::isInstance).isPresent();
@@ -108,8 +110,8 @@ public final class AddFriendScreen extends PumpkinScreen {
 
 	private void send() {
 		Optional<String> name = form.nameToSend();
-		if (name.isEmpty() || !AddFriendForm.isMcName(name.get())) {
-			failure = Optional.of(new AddFriendFailure("pumpkin_bridge.add.error.nameInvalid", List.of(), false));
+		if (!name.isPresent() || !AddFriendForm.isMcName(name.get())) {
+			failure = Optional.of(new AddFriendFailure("pumpkin_bridge.add.error.nameInvalid", Immutable.list(), false));
 			rebuildWidgets();
 			return;
 		}
@@ -121,7 +123,7 @@ public final class AddFriendScreen extends PumpkinScreen {
 
 	private void answered(String name, Reply<?> reply) {
 		if (reply.error().isPresent()) {
-			failure = Optional.of(AddFriendFailure.of(reply.error().orElseThrow(), name));
+			failure = Optional.of(AddFriendFailure.of(reply.error().get(), name));
 			rebuildWidgets();
 			return;
 		}

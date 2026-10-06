@@ -1,5 +1,7 @@
 package dev.laux.pumpkin.bridge.ui.demo;
 
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import dev.laux.pumpkin.bridge.compat.Clipboard;
 import dev.laux.pumpkin.bridge.compat.Text;
 import dev.laux.pumpkin.bridge.compat.Widgets;
@@ -10,8 +12,8 @@ import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /**
  * Throw-away screen that proves the widget kit renders on a Minecraft version: tabs, a scroll list of 40 rows, an edit
@@ -19,7 +21,7 @@ import org.slf4j.LoggerFactory;
  * three rendered frames it logs one line and closes itself unless the development-only demoHold switch is set.
  */
 final class KitDemoScreen extends PumpkinScreen {
-	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_bridge");
+	private static final Logger LOG = LogManager.getLogger("pumpkin_bridge");
 	private static final int LIST_ROW_COUNT = 40;
 	private static final int TWO_LINE_EVERY = 5;
 	private static final int ACTION_WIDTH = 50;
@@ -37,7 +39,7 @@ final class KitDemoScreen extends PumpkinScreen {
 
 	@Override
 	protected List<String> tabLabels() {
-		return List.of(Text.translate("pumpkin_bridge.kitdemo.tab_list"), Text.translate("pumpkin_bridge.kitdemo.tab_form"));
+		return Immutable.list(Text.translate("pumpkin_bridge.kitdemo.tab_list"), Text.translate("pumpkin_bridge.kitdemo.tab_form"));
 	}
 
 	@Override
@@ -63,7 +65,7 @@ final class KitDemoScreen extends PumpkinScreen {
 
 	private static List<Row> formRows() {
 		EditBox name = Widgets.editBox(Text.translate("pumpkin_bridge.kitdemo.name_hint"), 100, FIELD_MAX_LENGTH);
-		return List.of(
+		return Immutable.list(
 			Row.heading(Text.translate("pumpkin_bridge.kitdemo.form")),
 			Row.fullWidth("form.name", name),
 			Row.fullWidth("form.toggle", Widgets.toggle(Text.translate("pumpkin_bridge.kitdemo.toggle"), false, selected -> { })),

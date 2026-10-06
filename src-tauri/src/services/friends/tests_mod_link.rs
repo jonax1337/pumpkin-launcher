@@ -1,4 +1,4 @@
-//! Die Vorgänge der Mod gegen die Freunde-Funktion mit echten Sockets (INGAME 5.4 bis 5.7): jeder Vorgang hat eine Antwort,
+//! Die Vorgänge der Mod gegen die Freunde-Funktion mit echten Sockets (docs/bridge/README.md, "Operations and consent"): jeder Vorgang hat eine Antwort,
 //! die Zustimmung läuft über die Rückfrage im Launcher, der Spielstart hält Zähler und Zustimmungen, und jeder Vorgang eines
 //! Bereichs landet in der Aktivitätsliste. Die Szene hier und die Bausteine aus `tests_session` tragen auch
 //! `tests_mod_link_social` und `tests_mod_link_join`.
@@ -327,13 +327,13 @@ async fn a_session_of_another_game_of_the_same_launcher_shows_in_the_game_topic_
 }
 
 #[tokio::test]
-async fn a_version_below_1_20_makes_the_game_unhostable_with_the_minimum() {
+async fn a_version_below_1_16_5_makes_the_game_unhostable_with_the_minimum() {
     let mut scene = ModScene::new().await;
     scene
         .host
         .instances
         .modify(HOST_INSTANCE, |instance| {
-            instance.minecraft_version = "1.19.4".into()
+            instance.minecraft_version = "1.16.4".into()
         })
         .unwrap();
 
@@ -344,7 +344,7 @@ async fn a_version_below_1_20_makes_the_game_unhostable_with_the_minimum() {
 
     assert_eq!(
         game["value"]["reason"],
-        json!({ "type": "versionUnsupported", "min": "1.20" })
+        json!({ "type": "versionUnsupported", "min": "1.16.5" })
     );
 }
 

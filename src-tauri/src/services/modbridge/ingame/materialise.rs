@@ -1,4 +1,4 @@
-//! Legt das eingebettete JAR im Datenordner des Launchers ab und sichert es bis zum Spielstart (INGAME 3.1, 3.7).
+//! Legt das eingebettete JAR im Datenordner des Launchers ab und sichert es bis zum Spielstart (docs/bridge/README.md, "Support selection").
 //! Der Ort ist `<Daten>/runtime/bridge-mod/<Mod-Version>/`; für Loader, die ein Maven-Verzeichnis erwarten, liegt
 //! das JAR darin nach dessen Schema. Das JAR gehört dem Launcher, nie der Instanz.
 use std::fs;
@@ -14,8 +14,8 @@ use super::index::{ModSource, Node, Strategy};
 pub const MAVEN_GROUP: &str = "dev.laux.pumpkin.bridge";
 pub const MAVEN_ARTIFACT: &str = "pumpkin_bridge";
 
-/// Mehr als das hat nie ein JAR dieser Mod (INGAME 3.2: höchstens 300 KB je JAR); alles Größere ist fremd.
-const MAX_JAR_BYTES: u64 = 8 * 1024 * 1024;
+/// Größenlimit des Bridge-Artefakts: höchstens 320 KiB je JAR, wie im Mod-Build.
+const MAX_JAR_BYTES: u64 = 320 * 1024;
 
 /// Warum das JAR nicht bereitliegt. Der Aufrufer startet dann ohne Einspeisung.
 #[derive(Debug, thiserror::Error)]

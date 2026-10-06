@@ -1,4 +1,4 @@
-//! Der gespeicherte Zustand der Einspeisung je Instanz (INGAME 3.8, 3.9): `friends/ingame.json` im Datenordner des
+//! Der gespeicherte Zustand der Einspeisung je Instanz (docs/bridge/README.md, "Startup recovery"): `friends/ingame.json` im Datenordner des
 //! Launchers. Hier steht nur, was vom Standard (`Active`) abweicht; die Übergänge selbst liegen in [`InjectionState`].
 use std::collections::BTreeMap;
 use std::fs;

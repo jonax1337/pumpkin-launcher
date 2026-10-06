@@ -33,6 +33,39 @@
       "file": "pumpkin_bridge-2.1.0+1.20.1-forge.jar",
       "sha256": "206800dc022016162f5d1be5479fd874aeb2fadb3930eb42f3fde801db7a32cc",
       "verified": null
+    },
+    {
+      "id": "1.16.5-quilt",
+      "loader": "quilt",
+      "loaderMin": "0.26.4",
+      "minecraft": ["1.16.5"],
+      "javaMin": 8,
+      "strategy": "quiltAddMods",
+      "file": "pumpkin_bridge-2.1.0+1.16.5-quilt.jar",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "verified": null
+    },
+    {
+      "id": "1.16.5-forge",
+      "loader": "forge",
+      "loaderMin": "36.2.39",
+      "minecraft": ["1.16.5"],
+      "javaMin": 8,
+      "strategy": "fmlMavenRoot",
+      "file": "pumpkin_bridge-2.1.0+1.16.5-forge.jar",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "verified": null
+    },
+    {
+      "id": "1.21.11-forge",
+      "loader": "forge",
+      "loaderMin": "61.0.0",
+      "minecraft": ["1.21.11"],
+      "javaMin": 21,
+      "strategy": "forgeClasspath",
+      "file": "pumpkin_bridge-2.1.0+1.21.11-forge.jar",
+      "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "verified": null
     }
   ]
 }

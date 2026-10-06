@@ -1,4 +1,4 @@
-//! Die Aktivitätsliste (INGAME 5.7): jeder `social`- und `share`-Vorgang, der aus dem Spiel kam, mit Zeit, Person und
+//! Die Aktivitätsliste (docs/bridge/README.md, "Protocol 2"): jeder `social`- und `share`-Vorgang, der aus dem Spiel kam, mit Zeit, Person und
 //! Ausgang. Nur im Speicher, die letzten 100, neueste zuerst; ein Neustart des Launchers leert sie (die Ablage kommt in R-C).
 use std::collections::VecDeque;
 use std::sync::Mutex;

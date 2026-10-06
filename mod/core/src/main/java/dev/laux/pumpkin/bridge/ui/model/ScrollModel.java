@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Scrolling by whole rows (INGAME 4.4): the viewport shows rows from {@link #firstRow()} on, and a row that does not
+ * Scrolling by whole rows (docs/bridge/README.md): the viewport shows rows from {@link #firstRow()} on, and a row that does not
  * fit completely is not shown at all. Wheel, PageUp and PageDown move the first row; the focused row can be revealed.
  * At least one row is always shown, even if it is taller than the viewport.
  */

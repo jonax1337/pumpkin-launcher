@@ -296,7 +296,6 @@ fn ingame_reasons_are_tagged_and_the_settings_use_camel_case_strings() {
     let reasons = [
         NotInBuild,
         Vanilla,
-        Quilt,
         NoNode,
         Unverified,
         LoaderVersionUnknown,
@@ -316,7 +315,6 @@ fn ingame_reasons_are_tagged_and_the_settings_use_camel_case_strings() {
         json!([
             "notInBuild",
             "vanilla",
-            "quilt",
             "noNode",
             "unverified",
             "loaderVersionUnknown",

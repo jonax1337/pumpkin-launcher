@@ -85,7 +85,7 @@ impl OpContext {
         }
     }
 
-    /// Ob dieser Start ein Microsoft-Konto hat (INGAME 7, Schritt 1).
+    /// Ob dieser Start ein Microsoft-Konto hat (docs/bridge/README.md, "In-game navigation and world behavior").
     pub fn online_account(&self) -> bool {
         self.inner.launch_facts(&self.instance_id).is_some_and(|facts| facts.online_account)
     }
@@ -96,7 +96,7 @@ impl OpContext {
     }
 
     /// Prüft noch einmal, dass die Verbindung dem Spielprozess gehört, mit derselben Prüfung wie bei der Anmeldung. Wer
-    /// das nicht belegen kann, bekommt `denied` (INGAME 5.2, 7).
+    /// das nicht belegen kann, bekommt `denied` (docs/bridge/README.md, "Connection and ownership").
     pub async fn verify_owner(&self) -> Result<(), OpError> {
         let owned = match self.game_pid() {
             Some(pid) => self.inner.verify_owner(pid, self.link.peer, self.link.local).await.is_ok(),

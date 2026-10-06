@@ -7,7 +7,7 @@ import dev.laux.pumpkin.bridge.transport.request.Request;
 import java.util.Optional;
 
 /**
- * The state of waiting for a launcher dialog (INGAME 5.5, 6.2): while a request is pending the game shows the
+ * The state of waiting for a launcher dialog (docs/bridge/README.md, "Operations and consent"): while a request is pending the game shows the
  * LauncherWaitScreen, and its "Abbrechen" only stops waiting — the operation itself keeps running to its answer. The
  * first terminal event decides; later ones change nothing.
  */

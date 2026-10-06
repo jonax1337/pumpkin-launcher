@@ -1,4 +1,4 @@
-//! Zustimmung und Spur eines Vorgangs aus dem Spiel (INGAME 5.5, 5.7): ein Vorgang eines Bereichs läuft erst, wenn der
+//! Zustimmung und Spur eines Vorgangs aus dem Spiel (docs/bridge/README.md, "Operations and consent"): ein Vorgang eines Bereichs läuft erst, wenn der
 //! Nutzer ihn für diesen Spielstart erlaubt hat, und jeder Ausgang kommt in die Aktivitätsliste. Die Brücke hält die
 //! Zustimmungen und Zähler des Starts (`OpContext::require_scope`); hier steht, was der Nutzer gefragt wird.
 use std::future::Future;
@@ -20,7 +20,7 @@ use crate::services::modbridge::OpContext;
 /// Was der Vorgang aus dem Spiel ist, für die Rückfrage und für die Aktivitätsliste.
 pub(super) struct Consent {
     pub scope: Scope,
-    /// Der Name des Vorgangs aus INGAME 5.4.
+    /// Der Name des Vorgangs aus docs/bridge/README.md, "Operations and consent".
     pub op: &'static str,
     /// Die Person, um die es geht, bereinigt und so benannt, wie der Launcher sie vor dem Vorgang zeigt.
     pub target_name: Option<String>,

@@ -1,469 +1,100 @@
-# Pumpkin Bridge (in-game mod)
+# Pumpkin Bridge build reference
 
-Client-only bridge between Minecraft and Pumpkin Launcher. The shared connection, menu entry and
-UI kit are independent of individual features; **Friends is the first module**, not the mod's identity.
-Mod id, resource namespace and jar basename: `pumpkin_bridge`; Java base: `dev.laux.pumpkin.bridge`.
-Protocol 2 and the launcher-issued `PUMPKIN_IPC_*` environment variables are unchanged.
+Build reference for the client-only Minecraft mod bundled with Pumpkin Launcher. The launcher injects the matching JAR at startup; users do not install it in an instance's `mods` folder. The general integration, module home, injection and local protocol contract live in [Pumpkin Bridge](../docs/bridge/README.md). Friends is the only currently implemented feature module.
 
-The full Fabric nodes add a detached, icon-only Pumpkin button to the title and pause menus.
-The button uses the launcher's 32px logo, has a "Pumpkin" tooltip and native button narration,
-and never moves vanilla widgets. It prefers the lower-right corner, avoids the native footer,
-and uses a free slot on the other edge if another widget occupies that corner.
-
-The button opens the Pumpkin home with a large **Friends** tile using the launcher's `users` pixel
-icon (`src/pixel/icon-data.ts`). Selecting it opens `Pumpkin › Friends`: friends, requests,
-invites, world sharing and Friends options. Back/Escape returns one level at a time.
-The cached module screen preserves its tab, scroll position, text and keyboard focus on return
-and resize. The home shows launcher connection state and the module's online/pending summary.
-
-Without valid launcher environment variables the mod starts neither a thread nor UI.
-Bridge injection/listener availability no longer depends on Friends opt-in; existing Microsoft-account,
-loader/version, global/per-instance injection switches and startup-breaker checks still apply.
-Disabling Friends leaves the Bridge available but hides Friends data/actions and explains how to enable
-the module in the launcher. Friends networking and operations still require consent; reset/rotation
-revokes grants, pending work and old publication generations without stopping the shared listener.
-Revocation during a backpressured private write closes only that interrupted link, allowing reconnect.
-
-Friends retains LAN publishing, invitations, guest removal, stop sharing, joining and notification toasts
-(`docs/friends/SPEC.md`; channel/build design in `docs/friends/INGAME.md`).
-The launcher treats every mod request as untrusted and preserves its per-launch action-consent checks.
+Players should first [check the installed launcher's support and status](../docs/bridge/README.md#check-your-installed-build),
+not infer packaged support from this source registry. For an automatically disabled
+instance, see [the existing retry/off controls](../docs/bridge/README.md#startup-recovery).
 
 NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.
 
-## Nodes
+## Targets and injection
 
-One **node** is one build target `<minecraft>-<loader>` that produces exactly one jar. The list is
-`nodes.txt`, the only place that names nodes, their JDK and their injection strategy.
+[`nodes.txt`](nodes.txt) defines exact release/loader targets, loader minima, game JDK, Gradle JDK, injection strategy and retained compile ranges. A node produces one JAR. Its id is a Gradle project name, not a Minecraft version predicate; Stonecutter uses the separate Minecraft version. A `matrix` range is a compile target, not a wider runtime-support claim.
 
-| Node | Loader | Game JDK | Gradle JDK | Strategy | Claims (`mod-index.json`) | Compile matrix | State |
-|---|---|---|---|---|---|---|---|
-| `26.3-fabric` | Fabric Loader >= 0.19.5 (not obfuscated) | 25 | 25 | `fabricAddMods` | 26.3 | 26.3 | the full mod on the widget kit (package U1) |
-| `26.2-fabric` | Fabric Loader >= 0.18.4 (not obfuscated) | 25 | 25 | `fabricAddMods` | 26.2 | 26.2 | the full mod on the widget kit (package V2) |
-| `26.1.2-fabric` | Fabric Loader >= 0.18.4 (not obfuscated) | 25 | 25 | `fabricAddMods` | 26.1.2 | 26.1, 26.1.1, 26.1.2 | the full mod on the widget kit (package V2) |
-| `1.21.1-fabric` | Fabric Loader >= 0.15.11 (**obfuscated**, remapped jar) | 21 | 25 | `fabricAddMods` | 1.21.1 | 1.20.5, 1.20.6, 1.21, 1.21.1 | the full mod on the widget kit (was the Fabric tracer until U1) |
-| `1.21.5-fabric` | Fabric Loader >= 0.16.10 (**obfuscated**, remapped jar) | 21 | 25 | `fabricAddMods` | 1.21.5 | 1.21.2, 1.21.4, 1.21.5 | the full mod on the widget kit (package V2) |
-| `1.21.8-fabric` | Fabric Loader >= 0.16.13 (**obfuscated**, remapped jar) | 21 | 25 | `fabricAddMods` | 1.21.8 | 1.21.6, 1.21.7, 1.21.8 | the full mod on the widget kit (package U1) |
-| `1.21.10-fabric` | Fabric Loader >= 0.17.0 (**obfuscated**, remapped jar) | 21 | 25 | `fabricAddMods` | 1.21.10 | 1.21.9, 1.21.10 | the full mod on the widget kit (package V2) |
-| `1.21.11-fabric` | Fabric Loader >= 0.17.3 (**obfuscated**, remapped jar) | 21 | 25 | `fabricAddMods` | 1.21.11 | 1.21.11 | the full mod on the widget kit (package U1/V1a) |
-| `1.20.1-fabric` | Fabric Loader >= 0.14.21 (**obfuscated**, remapped jar) | 17 | 25 | `fabricAddMods` | 1.20.1 | 1.20, 1.20.1 | the full mod on the widget kit (package V2) |
-| `1.20.2-fabric` | Fabric Loader >= 0.14.22 (**obfuscated**, remapped jar) | 17 | 25 | `fabricAddMods` | 1.20.2 | 1.20.2 | the full mod on the widget kit (package V2) |
-| `1.20.4-fabric` | Fabric Loader >= 0.14.23 (**obfuscated**, remapped jar) | 17 | 25 | `fabricAddMods` | 1.20.4 | 1.20.3, 1.20.4 | the full mod on the widget kit (package V2) |
-| `1.21.1-neoforge` | NeoForge >= 21.1.0 | 21 | 21 | `fmlMavenRoot` | 1.21.1 | 1.21, 1.21.1 | **tracer**: logs `pumpkin_bridge tracer 1.21.1 neoforge`, nothing else |
-| `1.21.5-neoforge` | NeoForge >= 21.3.56 | 21 | 21 | `fmlMavenRoot` | 1.21.5 | 1.21.3, 1.21.4, 1.21.5 | **tracer**: logs `pumpkin_bridge tracer 1.21.5 neoforge`, nothing else |
-| `1.21.8-neoforge` | NeoForge >= 21.8.9 | 21 | 21 | `fmlMavenRoot` | 1.21.8 | 1.21.8 | **tracer**: logs `pumpkin_bridge tracer 1.21.8 neoforge`, nothing else |
-| `1.21.10-neoforge` | NeoForge >= 21.10.63 | 21 | 21 | `fmlModFolders` | 1.21.10 | 1.21.10 | **tracer**: logs `pumpkin_bridge tracer 1.21.10 neoforge`, nothing else |
-| `1.21.11-neoforge` | NeoForge >= 21.11.42 | 21 | 21 | `fmlModFolders` | 1.21.11 | 1.21.11 | **tracer**: logs `pumpkin_bridge tracer 1.21.11 neoforge`, nothing else |
-| `26.2-neoforge` | NeoForge >= 26.2.0.57 | 25 | 25 | `fmlModFolders` | 26.2 | 26.2 | **tracer**: logs `pumpkin_bridge tracer 26.2 neoforge`, nothing else |
-| `1.20.1-forge` | Forge >= 47.4.0 | 17 | 21 | `fmlMavenRoot` | 1.20.1 | 1.20.1 | **tracer**: logs `pumpkin_bridge tracer 1.20.1 forge`, nothing else |
+| Loader / era | Strategy |
+|---|---|
+| Fabric | `fabricAddMods` (`-Dfabric.addMods`) |
+| Quilt | `quiltAddMods` (`-Dloader.addMods`) |
+| Forge through the 1.20.2 targets | `fmlMavenRoot` |
+| Forge 1.20.3+ targets | `forgeClasspath` |
+| NeoForge through FML 9 | `fmlMavenRoot` |
+| NeoForge FML 10+ | `fmlModFolders` |
 
-That is the full recommended list of `docs/friends/INGAME-API.md` section 5 except `26.1.2-neoforge` (A26 leaves it
-to a later wave); `1.21.10-neoforge` is in because the NeoForge maven has stable 21.10.x builds from 21.10.63 on and
-the API list names it. The six NeoForge and one Forge nodes remain **tracers**: they prove the build topology and
-the injection mechanisms (INGAME 11.2, spike S1), nothing else. `-Dfml.modFolders` (FML 10 and newer) is proven by
-`26.2-neoforge`, `1.21.10-neoforge` and `1.21.11-neoforge`, `--fml.mavenRoots` by `1.21.1-neoforge`,
-`1.21.5-neoforge`, `1.21.8-neoforge` and `1.20.1-forge`. All eleven Fabric nodes carry the full mod, and the Mixin
-that proves A4 comes with the pause-menu hook (the tracer's Mixin sources and `descriptors/fabric-tracer/` are no
-longer used by any node). The eight obfuscated Fabric nodes (1.20.1 to 1.21.11) remap from Mojang names to
-intermediary names the same way (`loomx.unobfuscated=false`, `remapJar`); the three 26.x nodes ship Mojang names.
-Every cell of the table has a passed local smoke run (2026-10-04, evidence in `docs/friends/INGAME-SMOKE.md`), so
-`verified.json` carries all eighteen nodes and the launcher injects on all of them.
+Fabric and Quilt need no companion API. Pre-26.x Fabric-compatible JARs use Loom remapping and a refmap; 26.x uses Mojang names. Quilt development runs use Fabric, not the production Quilt loader.
 
-**Claims versus the compile matrix.** A node id carries the highest release it serves
-(`1.21.1-fabric` serves 1.20.5 to 1.21.1 according to `docs/friends/INGAME-API.md` section 5), but
-`mod-index.json` claims only what the node was built against (`minecraft` column of `nodes.txt`). The
-`matrix` column lists everything the node is meant to serve; widening the claim is a later step, after the
-matrix and a smoke test have proven the rest. The Fabric tracer's Mixin line is the one exception to "one
-line, nothing else": a Mixin that applies from a non-development jar is what amendment A4 is about.
+[`verified.json`](verified.json) records production evidence consumed by packaging; registration or compilation alone does not establish runtime support. Authenticated sharing and joining are distinct from startup/menu evidence.
 
-## Versions
+## Build and development
 
-Pins checked against the Maven metadata on 2026-10-03 (spike S1). Every row resolved and built.
-
-| Item | Version | Where it was checked |
-|---|---|---|
-| Gradle wrapper | 9.7.1 (SHA-256 pinned) | works with every plugin below |
-| JDK that runs Gradle | **21 or newer** (amendment A5); **25 for Fabric nodes** | Stonecutter 0.9.8 refuses a Java 17 JVM: `Dependency requires at least JVM runtime version 21`. Fabric Loom 1.18.2 refuses a Java 21 JVM for both plugin ids (`Dependency requires at least JVM runtime version 25`), so even the obfuscated `1.21.1-fabric` is configured on Gradle with JDK 25 (`gradleJdk` column) |
-| Stonecutter | 0.9.8 (release; 0.10 is alpha) | `maven.kikugie.dev/releases`, plugin id `dev.kikugie.stonecutter` |
-| Fabric Loom | 1.18.2, plugin ids `net.fabricmc.fabric-loom` (no remap, Minecraft >= 26.1) and `net.fabricmc.fabric-loom-remap` (older) | `maven.fabricmc.net` |
-| loom-back-compat | 0.4.3 (the Stonecutter wiki shows 0.4.2), plugin id `dev.kikugie.loom-back-compat` | `maven.kikugie.dev/releases`; **in use** since `1.21.1-fabric`: it applies the remapping or the non-remapping Loom per node (`loomx.unobfuscated` in `versions/<node>/gradle.properties`) and gives both the same `modImplementation` and `loomx.modJar` (= `remapJar` or `jar`). `settings.gradle` applies it, and a `beforeProject` hook there hands the Loom version (`loom_version` in `gradle.properties`) to the root project, but only when a Fabric node is selected: the plugin reads it from a project extra property, not from `gradle.properties`, and Loom on the class path would demand JDK 25 for NeoForge and Forge builds too |
-| ModDevGradle | 2.0.148, plugin ids `net.neoforged.moddev` and `net.neoforged.moddev.legacyforge` | Gradle plugin portal. `net.neoforged.moddev.legacy` does not exist |
-| NeoForge (dev) | 21.1.172 (21.1.253 is the newest 21.1.x), 21.0.167 (matrix end 1.21), 21.3.97/21.4.158/21.5.98 (`1.21.5-neoforge` and its matrix ends), 21.8.9 (`1.21.8-neoforge`; the newest 21.8.54 fails while setting up the Minecraft artifacts), 21.10.64 (`1.21.10-neoforge`), 21.11.45 (`1.21.11-neoforge`), 26.2.0.88 (`26.2-neoforge`) | NeoForged Maven, `userdev` artifact, stable (non-beta) builds only; every pin resolved and built |
-| Forge (dev) | 1.20.1-47.4.10 (recommended; 47.4.26 is latest) | Forge Maven and `promotions_slim.json` |
-| Fabric Loader (dev) | 0.19.5 (every Fabric node) | `maven.fabricmc.net`. **No Fabric API** (INGAME 4.2, decision 3): the mod depends on the loader only, so it also loads on instances without Fabric API; the entry point `ClientModInitializer` belongs to the loader |
-| JUnit | 6.1.3 | Maven Central |
-| Gson / SLF4J (compile only) | 2.10.1 / 2.0.17 | the game supplies both; the versions are those of Minecraft 1.20.1 |
-
-The plugin versions live in `gradle.properties` (`loom_version`, `moddev_version`), the dependency
-versions of a node in `versions/<node>/gradle.properties`.
-
-## Layout
-
-```
-nodes.txt                  the node list (id, loader, claimed minecraft ids, loader minimum, JDK, strategy, Gradle JDK, matrix)
-settings.gradle            reads nodes.txt, builds the Stonecutter tree, honours -Pnode=<id>[,<id>] and -Pcompile.minecraft=<release>
-stonecutter.gradle         controller: modIndex and checkJarBudget tasks
-build-fabric.gradle        build script per loader (Loom / ModDevGradle / ModDevGradle legacyforge)
-build-neoforge.gradle
-build-forge.gradle
-gradle/node.gradle         the part every node shares (release, jar contents, descriptor, index entry, pinned(), swaps)
-versions/<node>/           per-node gradle.properties (dependency versions, Loom variant, tracer flag); build and run output is ignored
-descriptors/<loader>/      fabric.mod.json, META-INF/neoforge.mods.toml, META-INF/mods.toml + pack.mcmeta
-descriptors/<loader>-tracer/  extra files of the tracer nodes of that loader (the Fabric tracer's Mixin configuration)
-core/                      Minecraft-free Java (--release 17): transport, protocol, runtime, UI models and Friends module
-core/src/main/java/dev/laux/pumpkin/bridge/
-  transport/               connection, inbox, backoff and generic request machinery; no Friends state dependency
-  protocol/                shared wire envelopes and JSON parsing
-  runtime/                 main-thread and clock contracts
-  ui/model/                shared layout, theme, pixel icons and retained screen state
-  modules/friends/          FriendsClient, state, operations and feature-specific view models
-src/main/java/dev/laux/pumpkin/bridge/
-  compat/                  era-specific screens, painter, widgets, connect and leave-world adapters
-  platform/<loader>/       thin loader entrypoints; Fabric title/pause hooks, other loaders' tracers
-  ui/kit/                  shared widgets, screen frame, icons and BridgeModule tile/screen contract
-  ui/home/                 feature-independent Pumpkin home
-  ui/demo/                 development-only visual proof screens; excluded from shipped jars
-  modules/friends/          Friends screens and version-specific LAN/notification adapters in compat/
-src/main/resources/        assets/pumpkin_bridge/: languages, descriptor icon and launcher logo
-scripts/                   dev-env.sh/.ps1, check-conditionals.mjs, validate-mod-index.mjs, compile-matrix.mjs, kit-demo.mjs, FakeLauncher.java
-```
-
-Layer rules (checked by `scripts/check-conditionals.mjs`, run in the workflow):
-1. Stonecutter conditionals (`//? if ...`, `/*? ... */`) and swaps (`//$ name`) appear only below a `compat/` or `platform/` folder.
-2. `core/` imports no Minecraft, Mojang or loader class. The compiler enforces the same, because `core/` is its own Gradle project without a game on its class path.
-
-Every node jar holds the node's own classes plus the compiled classes of `core/`. A node excludes the
-source folders it cannot compile (`build-<loader>.gradle`): Fabric drops the other loaders'
-`platform/` folders, the tracers also drop `compat/`, `ui/` and Minecraft-facing `modules/`.
-
-Client-only declaration (amendment A3): Fabric `"environment": "client"`, NeoForge `@Mod(dist = Dist.CLIENT)`, Forge 1.20.1
-`clientSideOnly = true` at the top level of `mods.toml` (not `displayTest = IGNORE_SERVER_VERSION`, which is the constant for server-only mods).
-
-New features implement `BridgeModule` and are registered explicitly in `BridgeClientInitializer`.
-The home renders only registered modules; there is no plugin loader or placeholder tile.
-`BridgeClient` delivers raw frames and connection changes; `modules/friends/FriendsClient` owns
-Friends topic parsing, sanitization and LAN hints on the shared connection.
-
-Production jars omit development demos and redundant ZIP directory records, and use deflate level 9.
-Compaction runs on `jar` and Fabric's `remapJar` before index generation hashes the final bytes.
-The existing 300 KiB per-jar / 8 MiB total budgets remain unchanged. Gradle `runClient` still has the demos.
-
-
-### What had to change in `core/` (the move was `git mv`, behaviour is unchanged)
-
-`core/` compiles with `--release 17`, the old code was built for Java 25. Three spots used newer APIs:
-- `BridgeClient.dispatch` and `StateStore.apply`: pattern-matching `switch` (Java 21) became `instanceof` chains with the same order and the same results.
-- `BridgeClient.Timing.production()`: `Thread::sleep` taking a `Duration` (Java 19) became `pause -> Thread.sleep(pause.toMillis())`.
-- Tests: `List.getFirst()`/`getLast()` and `Thread.sleep(Duration)` (Java 21/19) became `get(0)`, `get(size - 1)` and `toMillis()`.
-
-One test had a latent race that the move exposed: `BridgeHarnessTest.launcherClosingMidSessionDisconnectsAndReconnectsAfterTheBackoff`
-compared the complete list of backoff delays right after closing the last connection, while the bridge thread
-records one more delay when it sees the close. The old test class path most likely had a logging backend that delayed the bridge
-thread just long enough (inferred, not measured); with the silent SLF4J binding of `core/` the bridge thread won every time. The assertion now compares the first four delays.
-
-## Node ids and Stonecutter (decision, spike S1)
-
-**Decision: the node id and the Minecraft version are separate fields.** The Gradle project (and
-`mod-index.json` `id`) is `1.21.1-neoforge`; the version Stonecutter evaluates is `1.21.1`.
-`settings.gradle` registers `versions([(id): minecraft.last()])`, i.e. `"1.21.1-neoforge" to "1.21.1"`.
-The layout stays flat (one source tree, one build script per loader); one branch per loader was not needed.
-
-Why. A throw-away Stonecutter 0.9.8 project (`stonecutter.active null`, one shared `build.gradle`) printed
-`sc.current.parsed.matches(...)` for each node, once per registration style:
-
-```groovy
-def p = sc.current.parsed
-println "${sc.current.project} version=${sc.current.version} >=1.21.1:${p.matches('>=1.21.1')} <1.21.1:${p.matches('<1.21.1')} >=1.20.1:${p.matches('>=1.20.1')}"
-```
-
-Registering the id as the version makes Stonecutter read `neoforge` as a semver pre-release tag, which sorts
-*below* the release:
-
-| Registration | Node | version | `>=1.21.1` | `<1.21.1` | `>=1.20.1` |
-|---|---|---|---|---|---|
-| `versions("1.20.1-forge", "1.21.1-neoforge", "26.3-fabric")` | `1.20.1-forge` | `1.20.1-forge` | false | true | **false** |
-| | `1.21.1-neoforge` | `1.21.1-neoforge` | **false** | **true** | true |
-| | `26.3-fabric` | `26.3-fabric` | true | false | true |
-| `versions(["1.20.1-forge": "1.20.1", "1.21.1-neoforge": "1.21.1", "26.3-fabric": "26.3"])` | `1.20.1-forge` | `1.20.1` | false | true | true |
-| | `1.21.1-neoforge` | `1.21.1` | true | false | true |
-| | `26.3-fabric` | `26.3` | true | false | true |
-
-So with the naive registration `//? if >=1.21.1` is false on the node `1.21.1-neoforge`. The Stonecutter wiki
-(project model, "Version") documents the same trap and the same fix. `26.3-fabric` was always fine only by luck of its name.
-Rules that follow: the node id is never used in a predicate, `nodes.txt` takes explicit release ids only
-(`26.3`, `1.21.1`; the last one is the compile version), and the build script finds the loader through
-`sc.current.project`, not through the version.
-
-## JDKs
-
-`nodes.txt` (columns `java` and `gradleJdk`) is the single source of truth for the JDK majors of a node. It is read by
-- `settings.gradle` and `gradle/node.gradle`: `--release <java>` for the node's classes, and the `javaLauncher` of every run task (`runClient`) is the toolchain JDK of that major, so the game of `1.20.1-forge` runs on Java 17 even though Gradle runs on 21;
-- `scripts/dev-env.sh` and `scripts/dev-env.ps1`: they download the node's JDK and the Gradle JDK (Temurin, SHA-256 checked) into `.jdk/<major>` and set `PUMPKIN_JDK_<major>`;
-- `.github/workflows/mod.yml`: the `nodes` job turns `nodes.txt` into the job matrices.
-- `scripts/compile-matrix.mjs`: starts Gradle on `PUMPKIN_JDK_<gradleJdk>`.
-
-Deviation from INGAME 4.3 ("one JDK per build", amendment A5): **Gradle itself needs JDK 21 or newer** (Stonecutter),
-and **JDK 25 on Fabric nodes** (Loom 1.18.2, also for the obfuscated Minecraft versions). The JDK Gradle runs on is the
-`gradleJdk` column of `nodes.txt` (never below the node's `java` and never below `mod.gradleJdkMin` in `gradle.properties`;
-`settings.gradle` checks both), and only the game JVM and the compile release follow the node. Gradle finds the JDKs
-through the environment variables above (`org.gradle.java.installations.fromEnv`); automatic toolchain download is off.
-
-## Build and test
-
-Everything runs without admin rights and without a system-wide Java or Gradle. Windows (PowerShell), from `mod/`:
+Run from `mod/`. The helper downloads checksum-verified Temurin JDKs into `.jdk/` without a system-wide installation.
 
 ```powershell
-.\scripts\dev-env.ps1 -Node 1.21.1-neoforge        # default: the first node in nodes.txt
+.\scripts\dev-env.ps1 -Node 1.21.1-neoforge
 .\gradlew.bat -Pnode=1.21.1-neoforge build modIndex
 ```
-
-Linux and macOS (note the leading dot, so `JAVA_HOME` stays set; `PUMPKIN_NODE=<id> . scripts/dev-env.sh` where a shell passes no arguments to `.`):
 
 ```sh
 . scripts/dev-env.sh 1.21.1-neoforge
 ./gradlew -Pnode=1.21.1-neoforge build modIndex
 ```
 
-- `-Pnode=<id>[,<id>]` configures only those nodes. Use it: each loader's toolchain wants its own JDK, and the first run of a node decompiles Minecraft (about 7 minutes for NeoForge/Forge, cached afterwards). Without it Gradle configures every node and needs JDK 25.
-- `build` compiles each node against the real game and runs the JUnit tests of `core/`. `-Pcore.testJdk=<major>` runs those tests on exactly that JDK (CI passes the node's JDK).
-- `modIndex` writes `build/mod-index/mod-index.json` and copies the jars next to it, then `checkJarBudget` fails the build if one jar is above `mod.jarMaxBytes` (300 KB) or all together above `mod.totalMaxBytes` (8 MB), both in `gradle.properties`.
-- `node scripts/validate-mod-index.mjs build/mod-index/mod-index.json` checks the index against the contract (field rules, file name, SHA-256 of every jar, budget).
-- `node scripts/check-conditionals.mjs` checks the layer rules. `node scripts/check-conditionals.check.mjs`, `node scripts/validate-mod-index.check.mjs` and `node scripts/compile-matrix.check.mjs` run the specifications of the three scripts.
-- `./gradlew -Pnode=<id> runClient` starts a dev client. `./gradlew genSources` (Fabric node) gives readable game sources for the IDE.
-- First-run cost, measured on the dev machine for a Minecraft version that was not yet in the Gradle cache: decompiling and remapping takes about 1.5 to 2 minutes for a Fabric node (1.20.5: 2m08, 1.21: 1m30) and 2.5 to 4 minutes for a NeoForge node (1.21: 2m30; a complete first `build` of 26.2: 3m43; M1a measured about 7 minutes for its first NeoForge and Forge builds). The first `runClient` of a version also downloads the game assets. A further run of the same version takes seconds. The compile matrix pays the cost once per release it compiles against, and CI pays it again on a cold cache.
+`-Pnode=<id>[,<id>]` limits configuration to selected nodes. Without it, Gradle configures all targets and needs JDK 25. The `java` and `gradleJdk` columns in `nodes.txt` are authoritative: Gradle requires at least Java 21, and Fabric/Quilt use 25. Game JVM and compile release follow the node, including Java 8 for 1.16.5. Toolchains are supplied through `PUMPKIN_JDK_<major>`; automatic download by Gradle is disabled.
 
-### Running one node
+`build` includes the Minecraft-free core tests. They require a JVM of at least 17, selected with `-Pcore.testJdk=<major>`; Java-8 game targets still need that separate test toolchain. An explicit development client is `./gradlew -Pnode=<id> :<id>:runClient`.
+
+For a Java-8 game target, the helper also prepares its Gradle JDK; reuse that newer JDK for
+core tests instead of trying to run JUnit on the game JVM. A complete 1.16.5 Forge example
+from `mod/` is:
 
 ```powershell
-.\scripts\dev-env.ps1 -Node 1.21.1-fabric                      # sets JAVA_HOME (JDK 25 here) and PUMPKIN_JDK_21/25
-.\gradlew.bat -Pnode=1.21.1-fabric build modIndex              # jar in build\mod-index\
-.\gradlew.bat -Pnode=1.21.1-fabric runClient                   # dev client; stop it yourself (it opens a window)
+.\scripts\dev-env.ps1 -Node 1.16.5-forge
+.\gradlew.bat -Pnode=1.16.5-forge -Pcore.testJdk=21 build modIndex
 ```
-
-`26.2-neoforge` needs JDK 25, `1.21.1-neoforge` JDK 21, `1.20.1-forge` runs the game on JDK 17 and Gradle on 21;
-`dev-env` prepares exactly those.
-
-## Widget kit (package U1)
-
-The screens of the hub (INGAME 6.2) stand on two layers:
-
-- `core/src/main/java/.../ui/model/` computes every rectangle and colour Minecraft-free: `HubLayout` (title, status
-  line, tab bar, body, footer at 320x240 and up), `HubChrome`/`PumpkinTheme` (warm Pumpkin panel in the bevel language
-  of the vanilla chrome, orange accent, shadows for light text, the header pumpkin), `TabBarModel` (wraps
-  below 300 px), `ScrollModel` (whole-row scrolling, wheel, PageUp/PageDown,
-  reveal), `RowLayout`/`RowPainter` (one- and two-line rows, 24 and 36 px), `Fit` (clipping with an ellipsis through
-  an injected width function), `StateKeeper` (text, focus, scroll position and tab across `Screen.init` re-runs).
-  Golden rectangle lists at 320x240, 427x240, 480x270, 640x360 and 960x540 are the source of truth (`core` JUnit
-  tests).
-  `FriendCardLayout` reserves separate portrait/name/status areas and puts actions below the identity, keeping names,
-  translated status badges and invite buttons from overlapping.
-- `src/main/java/.../ui/kit/` is the thin widget glue with no version conditionals: `PumpkinScreen` (frame with title,
-  status line, optional tabs, body and footer "Zurück"), `ScrollPane` (row backdrops and text are clipped to the body;
-  widgets outside it get `visible = false`; the 4 px scrollbar comes from `ScrollModel`), `TabBar`, `Row`. Everything
-  era-specific sits in `compat/` (`CompatScreen`, `CompatPainter`, `Widgets` with the Pumpkin-painted button and
-  toggle — each with its era's render override — and the vanilla `EditBox`, `Text`, `GameScreens`, ...), keyed on the
-  Minecraft version through Stonecutter conditionals,
-  so the NeoForge and Forge nodes reuse it unchanged.
-- Friend cards group online/offline players, show names left and colored status badges right, and render native
-  Minecraft heads through `compat/PlayerHeads`. Known UUIDs resolve asynchronously with a vanilla default while loading;
-  missing UUIDs never trigger a name lookup. The bounded cache expires after write rather than after access.
-- `platform/fabric/mixin/PumpkinResourcesMixin` exposes only the mod's packaged client assets through the built-in
-  resource layer. This loads `en_us`/`de_de` without requiring Fabric API and preserves user resource-pack overrides.
-  It uses Minecraft's native resource-path validator and the existing UI soft-failure guard.
-- Screen constructors pass translation keys and arguments, not translated string snapshots. `CompatScreen` retains
-  the native translatable title component and caches its plain text only until Minecraft replaces the language instance.
-  This keeps early-opened screens and their native narration correct after language assets load or reload.
-- `core/src/main/java/.../ui/UiSession` is the soft-failure guard behind all of it (INGAME 4.2): every entry point that
-  calls game code — the pause-menu hook, the kit's button and toggle handlers, `CompatScreen`'s lifecycle overrides —
-  runs inside it. The first `RuntimeException` or `LinkageError` (era mismatches surface as the latter) logs one line
-  and switches the mod's UI off for the session; the pause button then stays away, while the input overrides keep the
-  vanilla half of their expression (above all the escape key) alive.
-
-`ui/home/BridgeHomeScreen` is the module tile entry; `modules/friends/ui/FriendsScreen` owns the
-Friends tabs. `CompatScreen` captures state before vanilla rebuild/removal, restores focus after
-vanilla chooses initial focus, and aggregates supplementary narration without replacing the focused button's name.
-
-### Kit demo (the render proof)
-
-`ui/demo/KitDemoScreen` proves the kit renders on a Minecraft version: two tabs, a scroll list of 40 rows (every fifth
-two-line), an `EditBox`, a toggle and buttons, wired to the clipboard. It is reachable **only** with
-`-Dpumpkin.dev.kitdemo=true` (never in normal play): with the property set it opens by itself when the title screen
-first shows (a dev thread polls through `Minecraft.execute`, no extra Mixin), logs
-`pumpkin_bridge kit demo rendered <n> frames at <w>x<h>` exactly once after its first three rendered frames, then
-closes itself. No `NoSuchMethodError`, no layout exception - that is the proof. `PUMPKIN_DEV_DEMO_HOLD=true` (or the
-Gradle property `-PdemoHold`) keeps the screen open instead: the owner's visual check path for tabs, focus, scrolling
-and both layout extremes.
 
 ```sh
-node scripts/kit-demo.mjs --node 1.21.1-fabric          # starts runClient -Pkitdemo, waits for the line, kills the client
+. scripts/dev-env.sh 1.16.5-forge
+./gradlew -Pnode=1.16.5-forge -Pcore.testJdk=21 build modIndex
 ```
 
-`ui/demo/ShareDemoScreen` (package U2b) proves the Teilen tab the same way, pure-UI: with the environment variable
-`PUMPKIN_SHARE_DEMO` set it opens on the title screen with fake topics and no world, and the tab logs
-`pumpkin_bridge share tab rendered <state> at <w>x<h>` once per state it has shown.
+This node uses Java 8 for the game and JDK 21 for Gradle/tests. Other legacy nodes can have
+a different `gradleJdk`; select that prepared major (at least 17) for `core.testJdk`, or
+provide another full JDK via `PUMPKIN_JDK_<major>`.
 
-The script uses a hard 180 s timeout and kills only its own process tree. Dev-run evidence (the render proof of U1,
-2026-10-04, dev machine, Gradle on JDK 25, game on the node's JDK):
+`modIndex` writes `build/mod-index/mod-index.json` and production JARs. It enforces the limits in `gradle.properties`: 320 KiB per JAR and 32 MiB aggregate. The mod version follows the launcher version; filenames are `pumpkin_bridge-<modVersion>+<node id>.jar`. [`index.schema.json`](index.schema.json) defines the index fields, including exact `minecraft` ids, `loaderMin`, `javaMin`, `strategy`, verification and SHA-256.
 
-| Node | Proof line of the dev run |
+## Source layout
+
+| Path | Purpose |
 |---|---|
-| `1.21.1-fabric` | `[11:20:39] [Render thread/INFO] (pumpkin_friends) pumpkin_friends kit demo rendered 3 frames at 427x240` |
-| `1.21.8-fabric` | `[11:07:49] [Render thread/INFO] (pumpkin_friends) pumpkin_friends kit demo rendered 3 frames at 427x240` |
-| `1.21.11-fabric` | `[11:09:37] [Render thread/INFO] (pumpkin_friends) pumpkin_friends kit demo rendered 3 frames at 427x240` |
-| `26.3-fabric` | `[11:11:56] [Render thread/INFO] (pumpkin_friends) pumpkin_friends kit demo rendered 3 frames at 427x240` |
+| `settings.gradle`, `stonecutter.gradle` | Node registration, Stonecutter controller and index tasks |
+| `build-*.gradle`, `gradle/node.gradle` | Loader toolchains, descriptors, production archives and dependency pins |
+| `versions/<node>/gradle.properties` | Per-node versions and compile-range overrides |
+| `descriptors/` | Client-only loader metadata |
+| `core/src/main/java/dev/laux/pumpkin/bridge/` | Java-8 transport, protocol, runtime, UI models and Friends state |
+| `src/main/java/dev/laux/pumpkin/bridge/compat/` | Minecraft-era adapters |
+| `src/main/java/dev/laux/pumpkin/bridge/platform/` | Loader entrypoints and shared bootstrap/menu hooks |
+| `src/main/java/dev/laux/pumpkin/bridge/ui/` | Shared widgets and module home |
+| `src/main/java/dev/laux/pumpkin/bridge/modules/friends/` | Friends screens and game adapters |
+| [`fixtures/protocol/`](fixtures/protocol/) | Shared Rust/Java protocol fixtures |
 
-A first attempt of `1.21.1-fabric` missed the 180 s twice: the Gradle compile plus the game start (datafixer, sound
-engine, resource reload) needed just over the limit on a loaded machine; the third run, with the build caches warm,
-passed with the line above. The window opens at 427x240 GUI pixels (the default `guiScale` of a 2560x1440 desktop),
-one of the golden resolutions of the layout tests.
+`core/` imports no Minecraft or loader classes. Stonecutter conditionals and swaps belong only under `compat/` or `platform/`. New modules implement `BridgeModule` and register explicitly in `platform/shared/BridgeBootstrap`; there is no plugin discovery. Production archives include core classes but exclude development demos.
 
-CI runs the same script per Fabric node under Xvfb with software GL (`kit-demo` job, best effort and marked
-unverified: never started on a GitHub runner; whether 26.x starts under software rendering is open, INGAME 12 risk 2).
+## Developer tools
 
-## Compile matrix
+These are optional tool references, not user acceptance tasks.
 
-`scripts/compile-matrix.mjs` (INGAME 4.3) compiles each node against both ends and one middle release of its
-`matrix` list in `nodes.txt` (the list of `docs/friends/INGAME-API.md` section 5): `1.21.1-fabric` against 1.20.5,
-1.21 and 1.21.1, `1.21.1-neoforge` against 1.21 and 1.21.1, a one-release node against that release.
+- `node scripts/validate-mod-index.mjs build/mod-index/mod-index.json`: index fields, JAR hashes and budgets.
+- `node scripts/check-conditionals.mjs`: source-layer boundaries.
+- `node scripts/compile-matrix.mjs --node <id>`: endpoints and a middle release of the node's `matrix`; `--only <release>` selects a release, `--plan` prints JSON without compiling. It uses `-Pcompile.minecraft=<release>` and the matching dependency pins.
+- `node scripts/kit-demo.mjs --node <id>`: development UI demonstration. `PUMPKIN_DEV_DEMO_HOLD=true` keeps the screen open. Demos are not shipped.
+- [`tools/mod-smoke`](../tools/mod-smoke/README.md): production injection harness using the launcher startup path.
+- [`tools/mc-api-probe`](../tools/mc-api-probe/README.md): Minecraft member descriptors for compatibility work.
 
-```sh
-node scripts/compile-matrix.mjs                              # every node
-node scripts/compile-matrix.mjs --node 1.21.1-fabric         # one node
-node scripts/compile-matrix.mjs --node 1.21.1-fabric --only 1.20.5   # exactly these releases
-node scripts/compile-matrix.mjs --plan                       # the plan as JSON, nothing is compiled
-```
+For a local protocol peer, run `java scripts/FakeLauncher.java` after preparing the JDK. It prints temporary IPC environment variables; paste them into a second terminal before starting `runClient`. It logs incoming/outgoing frames and accepts `allow`, `deny`, `invite`, `online`, `offline`, `error <code>`, `friends off`, `friends on` and `quit`. It simulates Friends state, not authenticated networking.
 
-The plumbing is one project property: `-Pcompile.minecraft=<release>` (needs exactly one node in `-Pnode`). `settings.gradle`
-rejects a release outside the node's `matrix`, registers that release as the Stonecutter version of the node (so
-`//? if` conditionals and the `minecraft_version` swap follow it), and `pinned('<key>')` in `gradle/node.gradle` takes the
-dependency version from the key `<key>@<release>` of `versions/<node>/gradle.properties`; a missing pin stops the
-build instead of silently using the wrong dependency. The script runs `compileJava` per release on the node's Gradle
-JDK (`PUMPKIN_JDK_<gradleJdk>`) and exits 1 if any compile fails. CI runs it as the `matrix-compile` job, one job per node.
+## Versions
 
-What it proves today: for the four Fabric nodes it is a real compatibility gate (their `compat/` sources use a
-different member set per era), for the three tracers it proves the build topology for every release of the list
-(the right Minecraft and loader artifacts resolve, the descriptor and the Mixin target compile). That the mechanism
-itself catches a source that does not fit a release was shown with a throw-away class
-that used `ResourceLocation.fromNamespaceAndPath` (added in Minecraft 1.21): `--only 1.20.5` failed with `Symbol: Methode
-fromNamespaceAndPath(String,String)`, `--only 1.21` compiled. The probe was not committed.
+Plugin and baseline library pins live in `gradle.properties`; node-specific pins live in `versions/<node>/gradle.properties`. The core compiles against Gson 2.8.0 and Log4j API 2.8.1 without bundling either library or a logging backend. Older games use the launcher's patched Log4j runtime. Gradle configuration cache is disabled for Unimined compatibility.
 
-## `mod-index.json`
-
-```json
-{ "modVersion": "0.2.0",
-  "nodes": [ { "id": "1.21.1-neoforge", "loader": "neoforge", "loaderMin": "21.1.0", "minecraft": ["1.21.1"],
-               "javaMin": 21, "strategy": "fmlMavenRoot", "verified": { "smoke": "2026-10-04", "owner": null },
-               "file": "pumpkin_bridge-0.2.0+1.21.1-neoforge.jar", "sha256": "<64 lowercase hex>" } ] }
-```
-
-`minecraft` lists explicit release ids; a node only claims what it was built against. `strategy` is
-`fabricAddMods` for Fabric, `fmlMavenRoot` for NeoForge up to FML 9 and Forge 1.20.1, `fmlModFolders` for NeoForge on FML 10 and newer (`1.21.10-neoforge`, `1.21.11-neoforge`, `26.2-neoforge`; INGAME 3.5).
-The mod version is `version` in `gradle.properties` (= the launcher version); the jar name is
-`pumpkin_bridge-<modVersion>+<node id>.jar`.
-
-## Tracer proof
-
-The log excerpts below are historical pre-Bridge evidence; their old mod identity is preserved verbatim.
-
-Each tracer node was started with `runClient` in the dev environment (hard limit 150 s, process killed afterwards) and the log was searched.
-
-| Node | Log line | Loader accepted the mod |
-|---|---|---|
-| `1.21.1-neoforge` (game on Java 21.0.12) | `[modloading-worker-0/INFO] [pumpkin_friends/]: pumpkin_friends tracer 1.21.1 neoforge` | `Pumpkin Friends 2.1.0+1.21.1-neoforge (pumpkin_friends)` in the Mod List, resource pack `mod/pumpkin_friends` |
-| `1.20.1-forge` (game on Java 17.0.20, Gradle on 21) | `[modloading-worker-0/INFO] [pumpkin_friends/]: pumpkin_friends tracer 1.20.1 forge` | `Creating FMLModContainer instance for dev.laux.pumpkin.friends.platform.forge.TracerMod` and `Attempting to inject @EventBusSubscriber classes ... for pumpkin_friends` |
-| `26.3-fabric` (regression) | `(pumpkin_friends) Nicht vom Pumpkin Launcher mit Freunden gestartet; Pumpkin Friends bleibt inaktiv` | `pumpkin_friends 2.1.0+26.3-fabric` in the loader's mod list |
-| `1.21.1-fabric` (game on Java 21, Gradle on 25, Fabric Loader 0.19.5) | `[Render thread/INFO] (pumpkin_friends) pumpkin_friends tracer 1.21.1 fabric`, then from the Mixin on `Minecraft#run`: `(pumpkin_friends) pumpkin_friends tracer 1.21.1 fabric mixin` | `pumpkin_friends 2.1.0+1.21.1-fabric` in the loader's mod list |
-| `26.2-neoforge` (game on Java 25, FancyModLoader 11.0.16) | `[modloading-worker-0/INFO] [pumpkin_friends/]: pumpkin_friends tracer 26.2 neoforge` | `Pumpkin Friends 2.1.0+26.2-neoforge (pumpkin_friends)` in the Mod List; the dev run itself starts with `-Dfml.modFolders=pumpkin_friends%%<build folders>` |
-| `1.20.1-forge` (rerun after the descriptor changed to `clientSideOnly = true`) | `[modloading-worker-0/INFO] [pumpkin_friends/]: pumpkin_friends tracer 1.20.1 forge` | Forge loaded the mod; the packaged `mods.toml` carries `clientSideOnly = true` at the top level |
-
-### The remapped Fabric jar (amendment A4)
-
-Fabric before 26.x runs in intermediary names, and a jar handed to `-Dfabric.addMods` is not remapped at runtime.
-Every obfuscated Fabric node therefore ships the Loom-remapped jar (`loomx.modJar` = `remapJar`; the plain `jar` task
-output is not what `modIndex` collects). The Mixin configuration `pumpkin_bridge.mixins.json` is generated per node by
-`build-fabric.gradle`: with `refmap` and the Loom refmap pipeline on the obfuscated nodes, without a refmap on 26.x
-(Mojang names), and with the `compatibilityLevel` of the node's `--release` (JAVA_21 below 26.x, JAVA_25 on 26.3).
-Historical evidence from the tracer jar `pumpkin_friends-2.1.0+1.21.1-fabric.jar` of spike S1 (target `Minecraft#run`,
-today the pause-menu Mixin `PauseScreenMixin` on `PauseScreen#init` rides the same pipeline):
-- `javap -v` of the Mixin class: the `@Mixin` target was `Lnet/minecraft/class_310;` (`Minecraft` in intermediary names);
-- `pumpkin_friends-refmap.json` mapped `run` to `Lnet/minecraft/class_310;method_1514()V` (namespace `named:intermediary`) and was named by the `refmap` field of the Mixin configuration;
-- `fabric.mod.json` listed the entry point and that Mixin configuration.
-The 26.3 jar has no refmap (`"refmap": null`); its Mixin runs against Mojang names directly.
-
-What this does **not** prove: the dev environment loads the classes and descriptor from the build
-folders, not the packaged jar, and not through the launcher's injection flags (`fabric.addMods`, `fml.mavenRoots`,
-`fml.modFolders`). In particular, that the remapped jar's Mixin applies when loaded through `-Dfabric.addMods` in a
-non-development game is still unproven; the dev run applies the Mixin through Loom's development mappings, the jar listing above
-only shows that the jar carries the intermediary names and the refmap that run needs. Both belong to the injection packages (L1, S2,
-Appendix B of INGAME). A first dev run found a real descriptor bug that is now fixed: FML rejects the version range
-`[1.21.1,1.21.1]`, a single version must be written `[1.21.1]`.
-
-## CI
-
-`.github/workflows/mod.yml` (not run on GitHub yet; checked with `actionlint` 1.7.12): the `nodes` job reads
-`nodes.txt`; `checks` runs the layer rules and the specifications of the three scripts; `build` is a matrix over the nodes
-(`fail-fast: false`) that sets up the node's JDK and the Gradle JDK (`gradleJdk` column) and runs
-`./gradlew -Pnode=<id> -Pcore.testJdk=<java> build modIndex`; `matrix-compile` is a second matrix over the same nodes that runs
-`node mod/scripts/compile-matrix.mjs --node <id>`; `package` merges the per-node indexes with `jq`, validates the result and
-uploads `mod-index.json` plus all jars as one artifact (every `build` job also uploads its own `mod-node-<id>` artifact).
-The Gradle cache is keyed per toolchain family (`fabric`, `neoforge`, `legacyforge`), not per node.
-The old `mod` job in `ci.yml` is gone, and so is the Modrinth publish workflow `mod-release.yml` (amendment A12): the launcher
-injects the jar itself, nothing is published to a mod platform.
-
-## Mod behaviour (node `26.3-fabric`)
-
-The Minecraft-free tests cover protocol parsing, connection/request lifecycle, Friends state/sanitization,
-layout bounds and retained screen state. `FriendsClientTest` uses a real loopback connection to
-`ScriptedLauncher`. The launcher-mod channel remains protocol 2; no protocol-1 compatibility path exists.
-
-## FakeLauncher
-
-`scripts/FakeLauncher.java` plays the launcher side of the bridge so you can try the mod in the
-game without the real launcher. It has no dependencies and runs straight from source.
-
-1. In one terminal, from the `mod` folder, after the dev-env script:
-
-   ```powershell
-   java scripts\FakeLauncher.java
-   ```
-
-   It prints the three environment variables (`PUMPKIN_IPC_PORT`, `PUMPKIN_IPC_TOKEN`,
-   `PUMPKIN_IPC_PROTOCOL`) as a ready-to-paste line for PowerShell and for sh. The token is new
-   on every start.
-
-2. In a second terminal, from the `mod` folder: run the dev-env script, paste the environment
-   line, then start the game with `.\gradlew.bat -Pnode=26.3-fabric runClient` (or `./gradlew ...`).
-
-3. The fake launcher prints every line it receives (`<-`) and sends (`->`). It knows three
-   friends: `jeb_` (online, with a head), one online friend whose name contains `§c` and a
-   right-to-left override, and `Notch` (offline). It answers `ping`, reports `lanOpened` and
-   `lanClosed`, asks for confirmation on the first `share`, and handles `kick` and
-   `stopSharing`. Type these commands into its terminal:
-
-   | Command | Effect |
-   |---|---|
-   | `allow` | allows the pending first share; the friends become guests and a toast with a head appears |
-   | `deny` | refuses it (`error{denied}`) |
-   | `invite` | sends an invite from `jeb_` |
-   | `online` / `offline` | switches `Notch` online (with a toast) or offline |
-   | `error <code>` | sends `error{code}`, for example `error busy` |
-   | `quit` | ends the fake launcher, as if the launcher was killed |
-   | `friends off` / `friends on` | switches the Friends module without ending the Bridge; disabled state is redacted |
-
-## Owner GUI checklist
-
-The Bridge cutover was exercised in Minecraft 26.3: title/pause logo, tooltip, tile navigation,
-Back/Escape, retained tab/scroll and keyboard focus on resize, pending-request summary, Friends
-disable/re-enable and launcher disconnect. Packaged production startup was also exercised.
-These checks do not replace the two-account, cross-network owner pass in `docs/friends/VERIFICATION.md`.
-
-Against `FakeLauncher.java` first, then the real launcher:
-  1. Without env: no button, no crash, one log line.
-  2. Detached logo in title and pause menus; tooltip/narration says Pumpkin, native widgets stay put.
-  3. Pumpkin tile home → Friends; Back/Escape returns Friends → home → original Minecraft menu.
-  4. Tab, scroll, text and keyboard focus survive module return, state pushes and resize.
-  5. Publish through Friends or vanilla World Options: launcher verifies the port (source `mod`).
-  6. First scoped action follows the launcher's configured confirmation policy; kick/stop still work.
-  7. `friends off`: Bridge stays connected, Friends explains disabled state and shows no feature actions.
-  8. Kill launcher mid-session: home explains disconnected state; native menu and game remain usable.
-  9. German and English; GUI scaling, edge collision avoidance and no duplicate logo after resize.
-  10. A name containing `§c` and bidi characters is shown without formatting.
+Related documentation: [Bridge integration and local protocol](../docs/bridge/README.md), [Minecraft API reference](../docs/bridge/MINECRAFT-API.md), [Friends contract](../docs/friends/SPEC.md), [release packaging](../CONTRIBUTING.md#release-packaging).

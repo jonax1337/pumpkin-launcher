@@ -1,62 +1,57 @@
 # mc-api-probe
 
-Prints the **exact method and field descriptors** of Minecraft classes with **Mojang names**, per Minecraft version, and
-turns them into the evidence tables of `docs/friends/INGAME-API.md` (spike S0 of `docs/friends/INGAME.md`).
+Inspect exact Minecraft method and field descriptors using Mojang names. Stored results support compatibility work without keeping game JARs in the repository.
 
-Node.js 20+ and a JDK (for `javap`) are needed. No packages, no build step, nothing is installed. A JDK 25 reads the
-class files of every probed version (the 26.x client jars are Java 25 class files); the `javap` of an older JDK cannot.
+Requires Node.js 20+ and a JDK providing `javap`; JDK 25 can read all supported class-file versions, including 26.x. No packages or build step are needed.
 
-## One run
+## Usage
 
+Run from the repository root:
+
+```sh
+export MC_API_PROBE_CACHE=/path/outside/repo/mc-api-cache
+export MC_API_PROBE_JAVA_HOME=/path/to/jdk25
+node tools/mc-api-probe/cli.mjs probe --version 1.21.1 'PauseScreen#init' 'Button#builder'
+node tools/mc-api-probe/cli.mjs collect 1.21.1
+node tools/mc-api-probe/cli.mjs report
 ```
-export MC_API_PROBE_CACHE=D:/pumpkin-build/scratch/S0/cache      # downloads go here, outside the repo
-export MC_API_PROBE_JAVA_HOME=D:/pumpkin-build/jdk/25            # or JAVA_HOME, or --java-home
-node tools/mc-api-probe/cli.mjs probe --version 1.21.1 'PauseScreen#init' 'Screen#render' 'Button#builder'
-node tools/mc-api-probe/cli.mjs probe --version 26.3   'PauseScreen#init' 'Screen#extractRenderState'
-```
 
-The first run for a version downloads `client.jar` and the official Mojang mapping file from Mojang's version manifest
-(SHA-1 checked). Versions from 26.1 on are unobfuscated and have no mapping file. `Class#member` takes a fully qualified
-class or the end of its name (`Screen`, `Button.Builder`); `<init>` selects the constructors. Members are resolved
-through the class hierarchy, so an inherited method is reported with the class that declares it. The output shows
-`descriptor` (JVM descriptor with Mojang class names) and `declaredIn` for every overload.
+`--cache` overrides `MC_API_PROBE_CACHE`; when neither is set, the cache is
+`<OS temporary directory>/mc-api-probe-cache`. `--java-home` overrides
+`MC_API_PROBE_JAVA_HOME`, then `JAVA_HOME`. Downloads use Mojang's manifest and verify SHA-1.
+From 26.1, clients are unobfuscated and have no mapping file.
+
+`probe` prints an ad hoc result (or writes the file selected by `--out`); it does not
+populate `results/`. `collect` writes persistent `tools/mc-api-probe/results/<id>.json`
+using the member specification. `report` reads those collected JSON files, not the previous
+probe's stdout. It prints a report unless `--doc` is supplied; it may refresh the cached
+release manifest but does not recollect descriptors. Use the same `--out <directory>` for
+`collect` and `report` when keeping persistent results elsewhere.
+
+`Class#member` accepts a fully qualified class or a short suffix such as `Button.Builder`; `<init>` selects constructors. Inherited methods report their declaring class. JSON output includes `descriptor` and `declaredIn` for every overload.
 
 ## Commands
 
 | Command | Purpose |
 |---|---|
-| `releases` | release ids of the Mojang manifest |
-| `fetch <id>...` | download jar and mappings into the cache |
-| `probe --version <id> (--members <file> \| Class#member...)` | descriptors of the listed members (`--format json` for machines) |
-| `list --version <id> <Class>` | every member the class declares |
-| `find --version <id> <regex>` | classes by Mojang name |
-| `code --version <id> Class#method [--grep regex]` | what a vanilla method calls (`javap -c`, Mojang names, `*` wildcard, `lambda$...` allowed) |
-| `collect <id>...` | probe `members/ingame.txt` and write `results/<id>.json` |
-| `report [--doc file]` | era tables, breaking changes, node list from `results/` and `nodes.json`; with `--doc` it replaces the regions between `<!-- name:begin -->` and `<!-- name:end -->` |
-| `check-nodes` | every Minecraft id of `nodes.json` against the Mojang manifest (release, no gaps, `javaMin`, no duplicates) |
-| `intermediary [--spec Class#member] <id>...` | Fabric intermediary names (what a Mixin must target at runtime on obfuscated versions) |
-| `neoforge-hooks <version>...`, `forge-hooks <version>...`, `fabric-floor <id>...` | loader evidence from the Maven repositories |
+| `releases` | List release ids from Mojang's manifest |
+| `fetch <id>...` | Cache client JARs and mappings |
+| `probe --version <id> (--members <file> \| Class#member...)` | Inspect members; `--format json` selects JSON |
+| `list --version <id> <Class>` | List declared members |
+| `find --version <id> <regex>` | Find classes by Mojang name |
+| `code --version <id> Class#method [--grep regex]` | Inspect bytecode calls with Mojang names |
+| `collect <id>...` | Resolve `members/ingame.txt` into `results/<id>.json` |
+| `report` | Print version tables, member tables, breakpoints and probe node data |
+| `check-nodes` | Compare the tool's `nodes.json` with Mojang's release manifest |
+| `intermediary [--spec Class#member] <id>...` | Resolve Fabric runtime names |
+| `neoforge-hooks <version>...`, `forge-hooks <version>...`, `fabric-floor <id>...` | Inspect loader evidence from Maven |
 
-## Regenerating the document tables
+`members/ingame.txt` marks directly used members with `@used`; those determine breaking-change boundaries. `results/` contains resolved descriptors, not game binaries. The probe's `nodes.json` is report input; the actual Bridge build targets are defined in [`mod/nodes.txt`](../../mod/nodes.txt).
 
-```
-node tools/mc-api-probe/cli.mjs collect 1.20 1.20.1 ... 26.3          # about 15 s per version
-node tools/mc-api-probe/cli.mjs report --doc docs/friends/INGAME-API.md
-node tools/mc-api-probe/cli.mjs check-nodes
-```
+## Optional document output
 
-`members/ingame.txt` is the list of members the compat layer needs. A line ending in `@used` marks a member the mod
-calls or overrides; only those decide where a **breaking change** (a node boundary) is. Everything else is context.
+`report --doc <file>` updates an existing Markdown document only when it contains all four matching marker pairs: `versions`, `probe-tables`, `breakpoints` and `nodes`, each written as `<!-- name:begin -->` and `<!-- name:end -->`. It has no default document path and does not create a missing document. Use plain `report` for output without a Markdown dependency. `report --out <directory>` reads collected JSON from that directory.
 
-## Tests
+To regenerate the [Minecraft API reference](../../docs/bridge/MINECRAFT-API.md), run `node tools/mc-api-probe/cli.mjs report --doc docs/bridge/MINECRAFT-API.md` from the repository root.
 
-```
-cd tools/mc-api-probe && node --test
-```
-
-The tests use small fixtures (Proguard text, `javap` output, a hand-built zip) and need neither network nor JDK.
-
-## What is stored in the repository
-
-`results/<id>.json` holds the resolved descriptors per version (about 60 KB each). Jars and mapping files are never
-committed; they live in `MC_API_PROBE_CACHE`.
+The offline fixture suite is available with `node --test` from this folder; it needs neither a network connection nor a JDK.

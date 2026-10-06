@@ -1,4 +1,4 @@
-//! Was die Vorgänge der Mod bewirken (INGAME 5.4): hier steht die Einteilung, jeder Vorgang hat seine eigene Funktion.
+//! Was die Vorgänge der Mod bewirken (docs/bridge/README.md, "Operations and consent"): hier steht die Einteilung, jeder Vorgang hat seine eigene Funktion.
 //! Freunde, Anfragen, Codes und Sperren liegen in `social`, Einladungen und Beitreten in `join`, das Teilen der Welt und
 //! `launcher.open` hier. Es gibt keinen Vorgang, den der Launcher mit `unsupportedOp` beantwortet.
 use std::sync::{Arc, Weak};
@@ -87,7 +87,7 @@ async fn execute(shared: &Arc<Shared>, ctx: &OpContext, op: Op) -> OpOutcome {
 }
 
 /// Holt das Fenster des Launchers nach vorn und zeigt `target`, aber nie, solange ein Dialog auf den Nutzer wartet: ein
-/// Fenster, das während einer Rückfrage aufspringt, lädt zum Fehlklick ein (INGAME 5.5).
+/// Fenster, das während einer Rückfrage aufspringt, lädt zum Fehlklick ein (docs/bridge/README.md, "Operations and consent").
 fn launcher_open(sessions: &FriendSessions, ctx: &OpContext, target: OpenTarget) -> OpOutcome {
     let mods = &sessions.shared.mods;
     if mods.has_open_question() {

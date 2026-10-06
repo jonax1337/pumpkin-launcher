@@ -319,6 +319,25 @@ mod tests {
     }
 
     #[test]
+    fn selected_legacy_releases_accept_login_start_without_modern_uuid_fields() {
+        for protocol in [754, 758, 760] {
+            let handshake = packet(&[
+                varint(0), varint(protocol), string("127.4.5.6\0FML2\0"),
+                41000u16.to_be_bytes().to_vec(), varint(2),
+            ].concat());
+            let login = packet(&[varint(0), string("Steve_01")].concat());
+            let opening = [handshake.clone(), login].concat();
+            assert_eq!(check_host_opening(&opening, MAX), Check::Valid(()), "{protocol}");
+            assert_eq!(check_host_opening(&opening[..opening.len() - 1], MAX), Check::NeedMore);
+            let Check::Valid((parsed, _)) = check_handshake(&handshake, GUEST_WINDOW.max_bytes) else {
+                panic!("valid legacy handshake refused");
+            };
+            assert!(parsed.is_addressed_to("127.4.5.6:41000".parse().unwrap()));
+            assert!(!parsed.is_addressed_to("127.4.5.6:41001".parse().unwrap()));
+        }
+    }
+
+    #[test]
     fn bad_player_names_are_refused() {
         for name in ["", "Steve Smith", "Stéve", "a_name_far_too_long", "x§c"] {
             assert_eq!(

@@ -3,7 +3,7 @@ package dev.laux.pumpkin.bridge.protocol;
 import dev.laux.pumpkin.bridge.protocol.json.WireNames;
 
 /**
- * Why an operation failed. All but the last two are codes the launcher can answer (INGAME 5.3, 5.4).
+ * Why an operation failed. All but the last two are codes the launcher can answer (docs/bridge/README.md, "Protocol 2").
  * {@link #INSTANCE_MISMATCH} answers {@code invite.joinHere} while the running game does not fit the invite; {@link #FORBIDDEN}
  * answers {@code friend.acknowledge} of a notice only the player may review in the launcher.
  * {@link #DISCONNECTED} is the mod's own answer while the link is down, {@link #UNRECOGNIZED} stands for a code this mod does not know.

@@ -2,7 +2,7 @@ package dev.laux.pumpkin.bridge.protocol;
 
 import java.util.regex.Pattern;
 
-/** The protocol number and the rule for request ids that both sides share (docs/friends/INGAME.md, 5.3). */
+/** The protocol number and the rule for request ids that both sides share (docs/bridge/README.md, "Protocol 2"). */
 public final class Protocol {
 	public static final int VERSION = 2;
 

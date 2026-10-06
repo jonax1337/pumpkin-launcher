@@ -85,7 +85,7 @@ pub(super) type GameLinkProbe = Arc<dyn Fn() -> bool + Send + Sync>;
 
 /// Woher das Zertifikat einer Anmeldung kommen darf. Ein Abruf bei Mojang kann den Chat-Schlüssel eines laufenden Spiels
 /// ersetzen; ob er das tut, klärt der Eigentümertest O-5 (BYNAME-ATTEST). Bis dahin holt der Launcher während eines Spiels
-/// mit verbundener Mod kein neues Zertifikat (INGAME 5.4).
+/// mit verbundener Mod kein neues Zertifikat (docs/bridge/README.md, "Operations and consent").
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CertificateSource {
     /// Das gemerkte, solange Mojang keine Erneuerung will, sonst ein frisches.

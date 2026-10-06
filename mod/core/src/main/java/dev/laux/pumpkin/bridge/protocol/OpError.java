@@ -1,5 +1,8 @@
 package dev.laux.pumpkin.bridge.protocol;
 
+import java.util.Objects;
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -9,13 +12,52 @@ import java.util.OptionalInt;
  * {@code badRequest} with {@code nameInvalid}); numbers and versions travel as {@code max}, {@code min}, {@code days},
  * {@code missing} and {@code extra}. Parameters arrive as text.
  */
-public record OpError(ErrorCode code, Map<String, String> params) {
-	public OpError {
-		params = Map.copyOf(params);
+public final class OpError {
+	private final ErrorCode code;
+	private final Map<String, String> params;
+
+	public OpError(ErrorCode code, Map<String, String> params) {
+		params = Immutable.copyMap(params);
+		this.code = code;
+		this.params = params;
 	}
 
+	public ErrorCode code() {
+		return code;
+	}
+
+	public Map<String, String> params() {
+		return params;
+	}
+
+	@Override
+	public boolean equals(Object other) {
+		if (this == other) {
+			return true;
+		}
+		if (!(other instanceof OpError)) {
+			return false;
+		}
+		OpError that = (OpError) other;
+		return Objects.equals(code, that.code)
+			&& Objects.equals(params, that.params);
+	}
+
+	@Override
+	public int hashCode() {
+		int hash = Objects.hashCode(code);
+		hash = 31 * hash + Objects.hashCode(params);
+		return hash;
+	}
+
+	@Override
+	public String toString() {
+		return "OpError[code=" + code + ", params=" + params + "]";
+	}
+
+
 	public static OpError of(ErrorCode code) {
-		return new OpError(code, Map.of());
+		return new OpError(code, java.util.Collections.emptyMap());
 	}
 
 	public Optional<String> param(String name) {

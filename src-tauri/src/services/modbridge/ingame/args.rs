@@ -1,4 +1,4 @@
-//! Die Startoptionen, mit denen der Loader das JAR lädt (INGAME 3.5, 3.6): je Strategie JVM- und Spielargumente,
+//! Die Startoptionen, mit denen der Loader das JAR lädt (docs/bridge/README.md, "Support selection"): je Strategie JVM- und Spielargumente,
 //! zusammengeführt mit dem, was der Nutzer selbst angegeben hat. Wohin die Optionen in der Argumentliste gehören
 //! (nach den JVM-Argumenten der Version, vor denen des Nutzers), entscheidet der Aufrufer.
 use std::fs;
@@ -19,6 +19,7 @@ pub const PATH_LIST_SEPARATOR: char = ';';
 pub const PATH_LIST_SEPARATOR: char = ':';
 
 const FABRIC_PROPERTY: &str = "fabric.addMods";
+const QUILT_PROPERTY: &str = "loader.addMods";
 const FOLDERS_PROPERTY: &str = "fml.modFolders";
 /// Bezeichnung des Mod-Ordners für `fml.modFolders`: `<Bezeichnung>%%<Pfad>`.
 const FOLDERS_LABEL: &str = "pumpkin";
@@ -38,6 +39,8 @@ pub struct UserArgs<'a> {
 /// Die einzuspeisenden Optionen und die eigenen Argumente des Nutzers, soweit sie bleiben.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct InjectedArgs {
+    /// Zusätzliche JARs für den Produktions-Classpath des Loaders.
+    pub classpath: Vec<PathBuf>,
     /// Kommen nach den JVM-Argumenten der Version und vor `user_jvm`.
     pub jvm: Vec<String>,
     /// Spielargumente der Einspeisung; kommen nach denen der Version und vor `user_game`.
@@ -83,22 +86,34 @@ fn build_with_separator(
     separator: char,
 ) -> Result<InjectedArgs, ArgsError> {
     match strategy {
-        Strategy::FabricAddMods => fabric_add_mods(jar, user, separator),
+        Strategy::FabricAddMods => add_mods(jar, user, separator, FABRIC_PROPERTY),
+        Strategy::QuiltAddMods => add_mods(jar, user, separator, QUILT_PROPERTY),
         Strategy::FmlMavenRoot => fml_maven_root(jar, user),
         Strategy::FmlModFolders => fml_mod_folders(jar, user, separator),
+        Strategy::ForgeClasspath => {
+            if path_text(jar.jar())?.contains(separator) {
+                return Err(ArgsError::PathHasListSeparator(jar.jar().to_owned()));
+            }
+            Ok(InjectedArgs {
+                classpath: vec![jar.jar().to_owned()],
+                user_jvm: user.jvm.to_vec(),
+                user_game: user.game.to_vec(),
+                ..InjectedArgs::default()
+            })
+        }
     }
 }
 
-/// Fabric: `-Dfabric.addMods=<Pfadliste>`. Hat der Nutzer die Eigenschaft gesetzt, bleiben seine Einträge, unserer
-/// kommt genau einmal ans Ende. Enthält sein Wert eine Listendatei (`@datei`), entsteht eine gemeinsame Listendatei
-/// im Datenordner, denn Fabric kennt nur die eine Eigenschaft.
-fn fabric_add_mods(
+/// Fabric und Quilt: ihre eigene addMods-Eigenschaft, mit unveränderten Nutzereinträgen und genau einem Bridge-JAR.
+/// Listendateien werden in einer gemeinsamen Datei zusammengeführt; Spielargumente bleiben unabhängig bestehen.
+fn add_mods(
     jar: &MaterialisedJar,
     user: &UserArgs,
     separator: char,
+    name: &str,
 ) -> Result<InjectedArgs, ArgsError> {
     let ours = path_text(jar.jar())?;
-    let existing = property::find(user.jvm, FABRIC_PROPERTY, separator);
+    let existing = property::find(user.jvm, name, separator);
     let uses_list_file =
         existing.entries.iter().any(|entry| entry.starts_with('@')) || ours.contains(separator);
     let mut entries = if uses_list_file {
@@ -113,7 +128,7 @@ fn fabric_add_mods(
         entries.join(&separator.to_string())
     };
     Ok(InjectedArgs {
-        jvm: vec![format!("-D{FABRIC_PROPERTY}={value}")],
+        jvm: vec![format!("-D{name}={value}")],
         user_jvm: existing.remaining,
         user_game: user.game.to_vec(),
         replaced: existing.replaced,
@@ -124,10 +139,12 @@ fn fabric_add_mods(
 /// NeoForge und Forge mit Maven-Verzeichnis: `--fml.mavenRoots <Wurzel> --fml.mods <Gruppe:Artefakt:Version>`.
 /// Beide Optionen dürfen mehrfach vorkommen, deshalb bleiben die des Nutzers; nur ein früheres Paar von uns entfällt.
 fn fml_maven_root(jar: &MaterialisedJar, user: &UserArgs) -> Result<InjectedArgs, ArgsError> {
-    let root = path_text(
-        jar.maven_root()
-            .ok_or_else(|| ArgsError::NotInMavenLayout(jar.jar().to_owned()))?,
-    )?;
+    let maven_root = jar.maven_root()
+        .ok_or_else(|| ArgsError::NotInMavenLayout(jar.jar().to_owned()))?;
+    let root = path_text(maven_root)?;
+    if root.contains(',') {
+        return Err(ArgsError::PathHasListSeparator(maven_root.to_owned()));
+    }
     let coordinate = format!("{MAVEN_GROUP}:{MAVEN_ARTIFACT}:{}", jar.mod_version());
     let (rest, roots_replaced) = without_option(user.game, MAVEN_ROOTS_OPTION, &root);
     let (rest, mods_replaced) = without_option(&rest, MODS_OPTION, &coordinate);
@@ -319,6 +336,63 @@ mod tests {
 
     fn fabric_case() -> Case {
         Case::new(Loader::Fabric, Strategy::FabricAddMods)
+    }
+
+    #[test]
+    fn quilt_merges_only_its_property_and_preserves_list_file_entries() {
+        let case = Case::new(Loader::Quilt, Strategy::QuiltAddMods);
+        fs::write(case.game_dir.path().join("mine.list"), "one.jar\nfolder/*\n").unwrap();
+        let result = case.run(
+            &["-Dloader.addMods=@mine.list;two.jar", "-Dfabric.addMods=fabric.jar", "-Xss2M"],
+            &["--addMods", "argument.jar"],
+            ';',
+        ).unwrap();
+        assert_eq!(result.user_jvm, strings(&["-Dfabric.addMods=fabric.jar", "-Xss2M"]));
+        assert_eq!(result.user_game, strings(&["--addMods", "argument.jar"]));
+        let value = single_jvm_value(&result, "loader.addMods");
+        let content = fs::read_to_string(value.strip_prefix('@').unwrap()).unwrap();
+        assert_eq!(content, format!("one.jar\nfolder/*\ntwo.jar\n{}\n", case.ours()));
+        let repeat = case.run(&[&result.jvm[0]], &[], ';').unwrap();
+        assert_eq!(repeat.jvm, result.jvm);
+    }
+
+    #[test]
+    fn quilt_joins_plain_paths_on_both_platforms_without_changing_game_arguments() {
+        for separator in [';', ':'] {
+            let case = Case::new(Loader::Quilt, Strategy::QuiltAddMods);
+            let result = case.run(&["-Dloader.addMods=mine.jar"], &["--demo"], separator).unwrap();
+            let value = single_jvm_value(&result, "loader.addMods");
+            if case.ours().contains(separator) {
+                assert_eq!(
+                    fs::read_to_string(value.strip_prefix('@').unwrap()).unwrap(),
+                    format!("mine.jar\n{}\n", case.ours()),
+                );
+            } else {
+                assert_eq!(value, format!("mine.jar{separator}{}", case.ours()));
+            }
+            assert_eq!(result.user_game, strings(&["--demo"]));
+            assert!(result.game.is_empty());
+        }
+    }
+
+    #[test]
+    fn modern_forge_adds_a_classpath_entry_without_unsupported_fml_flags() {
+        let case = Case::new(Loader::Forge, Strategy::ForgeClasspath);
+        let result = case.run(&["-Xss2M"], &["--demo"], ';').unwrap();
+        assert_eq!(result.classpath, [case.jar.jar().to_owned()]);
+        assert!(result.jvm.is_empty());
+        assert!(result.game.is_empty());
+        assert_eq!(result.user_jvm, strings(&["-Xss2M"]));
+        assert_eq!(result.user_game, strings(&["--demo"]));
+    }
+
+    #[test]
+    fn modern_forge_refuses_an_unrepresentable_classpath_instead_of_splitting_the_jar_path() {
+        let case = Case::new(Loader::Forge, Strategy::ForgeClasspath);
+        assert!(matches!(
+            case.run(&[], &[], SEPARATOR_IN_EVERY_TEST_PATH),
+            Err(ArgsError::PathHasListSeparator(_)),
+        ));
     }
 
     fn single_jvm_value(args: &InjectedArgs, property: &str) -> String {
@@ -544,6 +618,24 @@ mod tests {
             (args.user_jvm, args.user_game, args.replaced),
             (strings(&["-Xmx2G"]), strings(&["--demo"]), vec![])
         );
+    }
+
+    #[test]
+    fn a_maven_root_containing_the_loaders_comma_separator_is_refused() {
+        let node = Node {
+            strategy: Strategy::FmlMavenRoot,
+            ..jar_node("1.16.5-forge", Loader::Forge, JAR_BYTES)
+        };
+        let data = TempDir::new();
+        let jar = materialise(
+            &FakeSource::with_jar(&node, JAR_BYTES),
+            &data.path().join("with,comma"),
+            &node,
+        ).unwrap();
+        assert!(matches!(
+            build(&node, &jar, &UserArgs { jvm: &[], game: &[], game_dir: data.path() }),
+            Err(ArgsError::PathHasListSeparator(_)),
+        ));
     }
 
     #[test]

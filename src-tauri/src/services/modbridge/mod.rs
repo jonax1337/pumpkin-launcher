@@ -1,4 +1,4 @@
-//! Lokale Brücke zur Mod im Spiel: JSON-Zeilen über Loopback, Protokoll 2 (docs/friends/INGAME.md, 5.1 bis 5.3).
+//! Lokale Brücke zur Mod im Spiel: JSON-Zeilen über Loopback, Protokoll 2 (docs/bridge/README.md, "Protocol 2").
 //!
 //! Die Brücke lauscht ausschließlich auf `127.0.0.1`. Jeder Start eines Spiels bekommt einen Datensatz mit eigenem Token
 //! (`register_launch`); den Prozess des Spiels nennt `bind_pid`, sobald es ihn gibt. Eine Verbindung wird nur
@@ -76,7 +76,7 @@ impl ModBridge {
     }
 
     /// Der Datensatz des Starts sagt „kein Microsoft-Konto“: ein Zustand, den `register_launch` gar nicht erst entstehen
-    /// lässt, den INGAME 7 aber trotzdem prüft.
+    /// lässt, den docs/bridge/README.md, "In-game navigation and world behavior" aber trotzdem prüft.
     #[cfg(test)]
     pub fn mark_offline_for_test(&self, instance_id: &str) {
         let mut state = lock(&self.inner.state);

@@ -14,6 +14,9 @@ NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR 
 '''
 logoFile = "assets/pumpkin_bridge/icon.png"
 
+[[mixins]]
+config = "pumpkin_bridge.mixins.json"
+
 # Reine Client-Mod: Server verlangen sie nicht.
 [[dependencies.pumpkin_bridge]]
 modId = "neoforge"

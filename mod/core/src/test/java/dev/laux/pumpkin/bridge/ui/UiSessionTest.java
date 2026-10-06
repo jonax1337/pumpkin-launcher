@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** The soft-failure guard of the in-game UI (INGAME 4.2): a failure never throws, is logged once and switches the UI off. */
+/** The soft-failure guard of the in-game UI (docs/bridge/README.md): a failure never throws, is logged once and switches the UI off. */
 class UiSessionTest {
 	@BeforeEach
 	void turnTheUiOn() {

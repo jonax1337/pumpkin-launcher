@@ -8,7 +8,7 @@ import { detectDesktopOs } from "./download.js";
 const REPO_URL = "https://github.com/jonax1337/pumpkin-launcher";
 const LEGAL_PAGES = ["datenschutz.html", "impressum.html"];
 const RELEASES_URL = `${REPO_URL}/releases`;
-// Fixed asset names, created by the stable-names job of .github/workflows/release.yml (docs/RELEASING.md).
+// Fixed asset names, created by the stable-names job of .github/workflows/release.yml (CONTRIBUTING.md#release-packaging).
 const DOWNLOAD_BASE = `${RELEASES_URL}/latest/download/`;
 const STABLE_ASSETS = ["Pumpkin.Launcher_x64-setup.exe", "Pumpkin.Launcher_universal.dmg", "Pumpkin.Launcher_amd64.AppImage", "Pumpkin.Launcher_amd64.deb", "SHA256SUMS"];
 // The links only work if the release workflow really creates these names: compare both sides, so they cannot drift apart.

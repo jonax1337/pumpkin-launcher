@@ -92,7 +92,7 @@ public final class Fixtures {
 	}
 
 	private static Line toLine(String file, String text) {
-		JsonObject entry = JsonParser.parseString(text).getAsJsonObject();
+		JsonObject entry = new JsonParser().parse(text).getAsJsonObject();
 		return new Line(file, Direction.of(entry.get("direction").getAsString()), entry.getAsJsonObject("line"));
 	}
 

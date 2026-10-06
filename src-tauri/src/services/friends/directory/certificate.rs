@@ -1,4 +1,4 @@
-//! Mojang's player certificate (docs/friends/BYNAME-ATTEST.md 5.2): an RSA key pair Mojang generates, whose public half
+//! Mojang's player certificate (docs/friends/SPEC.md#directory-api): an RSA key pair Mojang generates, whose public half
 //! Mojang signs together with the account UUID and the expiry. The launcher proves its account to the directory with it.
 //! Pure functions; the certificate lives in memory only and its private key never leaves the launcher.
 use std::fmt;

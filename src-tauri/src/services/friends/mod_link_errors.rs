@@ -1,4 +1,4 @@
-//! Fehler des Launchers als Fehlercode der Mod (INGAME 5.3): die Mod kennt eine kleine, feste Liste und übersetzt sie
+//! Fehler des Launchers als Fehlercode der Mod (docs/bridge/README.md, "Protocol 2"): die Mod kennt eine kleine, feste Liste und übersetzt sie
 //! selbst in Texte. Was darüber hinaus zu sagen ist, steht in den Parametern: `reason` nennt die genauere Ursache, `max`,
 //! `min` und `days` die Zahlen dazu.
 use serde_json::{json, Value};
@@ -151,7 +151,7 @@ mod tests {
                 ErrorCode::PortNotGame,
             ),
             (
-                invalid(coded!("errors.friends.versionUnsupported", min = "1.20")),
+                invalid(coded!("errors.friends.versionUnsupported", min = "1.16.5")),
                 ErrorCode::VersionUnsupported,
             ),
             (
@@ -252,7 +252,7 @@ mod tests {
         let limit = mod_error(invalid(coded!("errors.friends.guestLimit", max = 7)));
         let version = mod_error(invalid(coded!(
             "errors.friends.versionUnsupported",
-            min = "1.20"
+            min = "1.16.5"
         )));
         let requests = mod_error(invalid(coded!(
             "errors.friends.tooManyNameRequests",
@@ -265,7 +265,7 @@ mod tests {
         )));
 
         assert_eq!(limit.params["max"], 7);
-        assert_eq!(version.params["min"], "1.20");
+        assert_eq!(version.params["min"], "1.16.5");
         assert_eq!(requests.params["max"], 5);
         assert_eq!(cooldown.params["days"], 7);
     }

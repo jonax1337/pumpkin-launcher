@@ -1,4 +1,4 @@
-//! Freunde, Anfragen, Codes und Sperren aus dem Spiel (INGAME 5.4, Stufen A und B). Jeder Vorgang prüft zuerst, was sich
+//! Freunde, Anfragen, Codes und Sperren aus dem Spiel (docs/bridge/README.md, "Operations and consent", Stufen A und B). Jeder Vorgang prüft zuerst, was sich
 //! ohne Nebenwirkung prüfen lässt (die Person oder Anfrage gibt es, die Eingabe ist gültig), damit der Nutzer nie
 //! etwas bestätigt, das ohnehin scheitert; dann fragt `consented` nach, wenn der Bereich noch nicht erlaubt ist, und erst
 //! danach geschieht etwas. Die Namen der Personen sind die, die der Launcher vor dem Vorgang zeigte.

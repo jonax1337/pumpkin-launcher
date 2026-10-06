@@ -15,8 +15,8 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
     "codeTtlSecs": 604800,
     "requestTtlSecs": 1209600,
     "inviteTtlSecs": 7200,
-    "minMcReleaseTime": "2023-06-02T08:36:17+00:00",
-    "minMcLabel": "1.20",
+    "minMcReleaseTime": "2021-01-14T16:05:32+00:00",
+    "minMcLabel": "1.16.5",
     "portMin": 1024,
     "portMax": 65535,
     "maxNameRequests": 5,
@@ -435,9 +435,9 @@ export const FRIENDS_FIXTURES = /*JSON-BEGIN*/{
     "state": "connected",
     "reason": null,
     "node": {
-      "id": "26.3-fabric",
-      "minecraft": "26.3",
-      "loader": "fabric"
+      "id": "1.16.5-quilt",
+      "minecraft": "1.16.5",
+      "loader": "quilt"
     }
   },
   "ingameStatus.off": {

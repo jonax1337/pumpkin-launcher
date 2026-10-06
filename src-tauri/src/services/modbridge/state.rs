@@ -1,5 +1,5 @@
 //! Der gemeinsame Zustand der Brücke: die Datensätze der Spielstarts und die Zulassung einer Verbindung
-//! (docs/friends/INGAME.md, 5.2).
+//! (docs/bridge/README.md, "Connection and ownership").
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -224,7 +224,7 @@ impl Inner {
         launch.pid.ok_or(RejectReason::Retry)
     }
 
-    /// Dieselbe Prüfung wie bei der Anmeldung; jeder Fehler gilt als „gehört nicht“ (INGAME 5.2).
+    /// Dieselbe Prüfung wie bei der Anmeldung; jeder Fehler gilt als „gehört nicht“ (docs/bridge/README.md, "Connection and ownership").
     pub async fn verify_owner(&self, pid: u32, peer: SocketAddr, local: SocketAddr) -> Result<(), RejectReason> {
         let owner = self.owner.clone();
         match tokio::task::spawn_blocking(move || owner.owns(pid, peer, local)).await {

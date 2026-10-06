@@ -4,15 +4,15 @@ import dev.laux.pumpkin.bridge.protocol.Scope;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /**
  * An operation on its way. Everything observable here happens on the main thread: {@link #reply()} completes there and
  * dependent stages run there, so UI code may continue straight from it.
  */
 public final class Request<T> {
-	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_bridge");
+	private static final Logger LOG = LogManager.getLogger("pumpkin_bridge");
 
 	private final CompletableFuture<Reply<T>> reply = new CompletableFuture<>();
 	private Optional<Scope> awaitedScope = Optional.empty();

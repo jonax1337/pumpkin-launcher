@@ -3,8 +3,8 @@ package dev.laux.pumpkin.bridge.ui.demo;
 import dev.laux.pumpkin.bridge.compat.GameScreens;
 import dev.laux.pumpkin.bridge.runtime.MainThread;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /**
  * Opens the {@link KitDemoScreen} once, when the title screen first shows, if the game runs with
@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory;
  * set instead, the same entry point opens the {@link ShareDemoScreen}: the render proof of the Teilen tab.
  */
 public final class KitDemo {
-	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_bridge");
+	private static final Logger LOG = LogManager.getLogger("pumpkin_bridge");
 	private static final String PROPERTY = "pumpkin.dev.kitdemo";
 	private static final String SHARE_DEMO_ENVIRONMENT = "PUMPKIN_SHARE_DEMO";
 	private static final long POLL_MILLIS = 250;

@@ -6,7 +6,7 @@ import { ADDED_LOADER, ingameRow, withAddedLoader } from './ingameModel.ts';
 
 const FAILURES = ['fabricIncompatibleModSet', 'mixinApplyFailed', 'modLoadingError', 'unsupportedClassVersion', 'unknown'];
 const SIMPLE_REASONS = [
-  'notInBuild', 'vanilla', 'quilt', 'noNode', 'unverified', 'loaderVersionUnknown', 'javaUnknown', 'idCollision', 'offlineAccount',
+  'notInBuild', 'vanilla', 'noNode', 'unverified', 'loaderVersionUnknown', 'javaUnknown', 'idCollision', 'offlineAccount',
   'bridgeNotRunning', 'instanceOff', 'globallyOff',
 ];
 const REASONS = [
@@ -26,6 +26,13 @@ assert.deepEqual(row('active'), {
 });
 assert.equal(ingameRow(status('active', null, { ...NODE, loader: 'neoforge' }), instance).line.loader, 'neoforge', 'der Loader der Zelle zählt');
 assert.equal(ingameRow(status('active', null, null), instance).line.loader, 'fabric', 'ohne Zelle der Loader der Instanz');
+assert.deepEqual(ingameRow(
+  status('active', null, { id: '1.16.5-quilt', minecraft: '1.16.5', loader: 'quilt' }),
+  { loader: 'quilt', minecraftVersion: '1.16.5' },
+), {
+  line: { key: 'friendsHost.ingame.active', loader: 'quilt', minecraft: '1.16.5' },
+  toggle: 'on', action: null, connected: false,
+});
 
 // verbunden: das Etikett zeigt es, der Schalter bleibt für den nächsten Start.
 assert.deepEqual(row('connected'), { line: { key: 'friendsHost.ingame.connected' }, toggle: 'on', action: null, connected: true });

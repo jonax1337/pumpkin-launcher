@@ -99,7 +99,7 @@ function IngameMenuRow({ settings }: { settings: FriendsSettings }) {
   );
 }
 
-/** „Aktionen im Spiel“: ob der Launcher bei jedem Spielstart einmal fragt oder die Aktionen aus dem Spiel gleich erlaubt (INGAME 5.5). */
+/** „Aktionen im Spiel“: ob der Launcher bei jedem Spielstart einmal fragt oder die Aktionen aus dem Spiel gleich erlaubt (docs/bridge/README.md, "Operations and consent"). */
 function IngameActionsRow({ settings }: { settings: FriendsSettings }) {
   const { t } = useI18n();
   const update = useUpdateFriendsSettings();

@@ -1,4 +1,4 @@
-//! Die Wache über die ersten 90 Sekunden eines Starts mit eingespeister Mod (INGAME 3.8). Sie liest die Zeilen des Spiels,
+//! Die Wache über die ersten 90 Sekunden eines Starts mit eingespeister Mod (docs/bridge/README.md, "Startup recovery"). Sie liest die Zeilen des Spiels,
 //! solange es läuft, und fragt [`analyze_log`], nach dem Ende [`analyze_exit`]. Der Fehlercode und das Zeitfenster
 //! lassen nur zu, dass das Log gelesen wird; ob die Mod schuld ist, entscheidet allein das Log.
 use std::collections::VecDeque;

@@ -51,8 +51,10 @@ pub struct LaunchSpec<'a> {
     pub memory_mb: u32,
     /// Startgröße des Heaps (`-Xms`); ohne entscheidet die JVM.
     pub min_memory_mb: Option<u32>,
-    /// Startoptionen der eingespeisten Mod (INGAME 3.6): nach den JVM-Argumenten der Version, vor `extra_jvm_args`.
+    /// Startoptionen der eingespeisten Mod (docs/bridge/README.md, "Support selection"): nach den JVM-Argumenten der Version, vor `extra_jvm_args`.
     pub injected_jvm_args: &'a [String],
+    /// Zusätzliche verifizierte Mod-JARs; verändert keine Library der Version.
+    pub injected_classpath: &'a [PathBuf],
     pub extra_jvm_args: &'a [String],
     pub window: GameWindow,
     /// Spielargumente der eingespeisten Mod: nach denen der Version, vor `extra_game_args`.
@@ -137,6 +139,13 @@ pub fn build_args(spec: &LaunchSpec, env: &Env) -> AppResult<Vec<String>> {
     let mut args = vec![format!("-Xmx{}M", spec.memory_mb)];
     args.extend(min_memory_arg(spec.min_memory_mb, spec.memory_mb));
     args.extend(jvm.iter().map(|a| substitute(a, &vars)));
+    // ForgeBootstrap sucht sonst relativ zum Spielverzeichnis statt im gemeinsamen Library-Verzeichnis.
+    if version.main_class == "net.minecraftforge.bootstrap.ForgeBootstrap"
+        && !args.iter().chain(spec.injected_jvm_args).chain(spec.extra_jvm_args)
+            .any(|arg| arg == "-DlibraryDirectory" || arg.starts_with("-DlibraryDirectory="))
+    {
+        args.push(format!("-DlibraryDirectory={}", vars["library_directory"]));
+    }
     if let Some(log) = &version.logging.client {
         let file = path_text(log_config_path(spec.dirs, log));
         args.push(substitute(&log.argument, &HashMap::from([("path", file)])));
@@ -184,7 +193,9 @@ fn path_text(path: PathBuf) -> String {
 fn launch_vars(spec: &LaunchSpec, env: &Env) -> HashMap<&'static str, String> {
     let LaunchSpec { version, dirs, instance_id, account, session, .. } = spec;
     let sep = env.classpath_separator();
-    let cp = classpath(version, dirs, env).into_iter().map(path_text).collect::<Vec<_>>().join(sep);
+    let cp = classpath(version, dirs, env).into_iter().map(path_text)
+        .chain(spec.injected_classpath.iter().map(|path| path.to_string_lossy().into_owned()))
+        .collect::<Vec<_>>().join(sep);
     let token = session.map_or(OFFLINE_PLACEHOLDER, |s| s.access_token);
     HashMap::from([
         ("auth_player_name", account.username.clone()),
@@ -316,6 +327,19 @@ async fn pump(stream: impl AsyncRead + Unpin, kind: LogStream, on_line: LineFn, 
     }
 }
 
+/// Grund des Prozessendes, vor dem Leeren der Ausgabepuffer festgestellt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExitCause {
+    Natural,
+    RequestedKill,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProcessExit {
+    pub code: Option<i32>,
+    pub cause: ExitCause,
+}
+
 /// Handle eines laufenden Spiels. `kill` beendet den Prozess; wird das Handle nur verworfen,
 /// läuft das Spiel weiter.
 pub struct Running {
@@ -333,7 +357,7 @@ impl Running {
 
 /// Startet `java args…` im Spielverzeichnis, mit den Umgebungsvariablen `env` zusätzlich zu denen des Launchers.
 /// `on_line` bekommt jede aufbereitete Ausgabezeile, `on_stdout_raw` jede stdout-Zeile unverändert,
-/// `on_exit` den Exit-Code (None bei Signal/Kill), nachdem alle Ausgaben gelesen sind.
+/// `on_exit` das Prozessende samt Ursache, nachdem alle Ausgaben gelesen sind.
 pub fn spawn(
     java: &Path,
     args: &[String],
@@ -341,7 +365,7 @@ pub fn spawn(
     env: &[(String, String)],
     on_line: impl Fn(LogStream, String) + Send + Sync + 'static,
     on_stdout_raw: impl Fn(&str) + Send + Sync + 'static,
-    on_exit: impl FnOnce(Option<i32>) + Send + 'static,
+    on_exit: impl FnOnce(ProcessExit) + Send + 'static,
 ) -> AppResult<Running> {
     std::fs::create_dir_all(game_dir)?;
     let mut child = tokio::process::Command::new(java)
@@ -365,37 +389,48 @@ pub fn spawn(
 }
 
 /// Wartet auf das Ende des Spiels oder beendet es auf Wunsch, liest die restlichen Ausgaben und meldet dann
-/// den Exit-Code.
+/// das Prozessende samt Ursache.
 async fn supervise(
     mut child: Child,
     mut kill_rx: oneshot::Receiver<()>,
     pumps: Vec<JoinHandle<()>>,
-    on_exit: impl FnOnce(Option<i32>),
+    on_exit: impl FnOnce(ProcessExit),
 ) {
     let pid = child.id().unwrap_or_default();
-    let status = tokio::select! {
-        status = child.wait() => status,
+    let (status, cause) = tokio::select! {
+        status = child.wait() => (status, ExitCause::Natural),
         // Ein verworfener Sender (Err) ist kein Kill-Wunsch: dann greift nur `wait`.
-        Ok(()) = &mut kill_rx => {
-            if let Err(err) = child.start_kill() {
-                tracing::warn!(pid, %err, "Prozess ließ sich nicht beenden");
-            }
-            child.wait().await
-        }
+        Ok(()) = &mut kill_rx => requested_stop(&mut child, pid).await,
     };
     for pump in pumps {
         if let Err(err) = pump.await {
             tracing::warn!(pid, %err, "Weiterreichen der Spielausgabe abgebrochen");
         }
     }
-    let code = match status {
-        Ok(s) => s.code(),
+    let result = match status {
+        Ok(status) => ProcessExit { code: status.code(), cause },
         Err(err) => {
             tracing::error!(pid, %err, "Warten auf den Spielprozess fehlgeschlagen");
-            None
+            ProcessExit { code: None, cause: ExitCause::Natural }
         }
     };
-    on_exit(code);
+    on_exit(result);
+}
+
+async fn requested_stop(child: &mut Child, pid: u32) -> (std::io::Result<std::process::ExitStatus>, ExitCause) {
+    match child.try_wait() {
+        Ok(Some(status)) => return (Ok(status), ExitCause::Natural),
+        Ok(None) => {}
+        Err(err) => tracing::warn!(pid, %err, "Prozessstatus vor dem Beenden nicht lesbar"),
+    }
+    let cause = match child.start_kill() {
+        Ok(()) => ExitCause::RequestedKill,
+        Err(err) => {
+            tracing::warn!(pid, %err, "Prozess ließ sich nicht beenden");
+            ExitCause::Natural
+        }
+    };
+    (child.wait().await, cause)
 }
 
 /// Auf Apple Silicon startet eine x64-Runtime (Minecraft bis 1.18.2, siehe `java`) nur mit Rosetta 2,
@@ -423,6 +458,7 @@ pub(crate) mod test_support {
             memory_mb: 2048,
             min_memory_mb: None,
             injected_jvm_args: &[],
+            injected_classpath: &[],
             extra_jvm_args: &[],
             window: GameWindow::Default,
             injected_game_args: &[],
@@ -513,6 +549,73 @@ mod tests {
         let args = build_args(&online, &LINUX).unwrap();
         let token = args.iter().position(|a| a == "--accessToken").unwrap();
         assert_eq!(args[token + 1], "eyJ.token");
+    }
+
+    #[test]
+    fn forge_bootstrap_defaults_to_shared_libraries_without_redundant_overrides() {
+        let (mut version, dirs, account) = (test_version(), Dirs::new("/shared data"), notch());
+        version.main_class = "net.minecraftforge.bootstrap.ForgeBootstrap".into();
+        let shared = format!("-DlibraryDirectory={}", dirs.libraries().display());
+        let injected = ["-DlibraryDirectory=injected-libraries".to_owned()];
+        let user = ["-DlibraryDirectory=user-libraries".to_owned()];
+        for (injected_jvm_args, extra_jvm_args, expected) in [
+            (&[][..], &[][..], vec![shared.as_str()]),
+            (&injected[..], &[][..], vec![injected[0].as_str()]),
+            (&[][..], &user[..], vec![user[0].as_str()]),
+            (&injected[..], &user[..], vec![injected[0].as_str(), user[0].as_str()]),
+        ] {
+            let spec = LaunchSpec { injected_jvm_args, extra_jvm_args, ..plain_spec(&version, &dirs, &account) };
+            let args = build_args(&spec, &LINUX).unwrap();
+            let main = args.iter().position(|arg| arg == &version.main_class).unwrap();
+            let libraries: Vec<_> = args[..main].iter()
+                .filter(|arg| arg.starts_with("-DlibraryDirectory="))
+                .map(String::as_str).collect();
+            assert_eq!(libraries, expected);
+        }
+    }
+
+    #[test]
+    fn forge_bootstrap_preserves_version_library_directory_and_override_order() {
+        let (mut version, dirs, account) = (test_version(), Dirs::new("/shared data"), notch());
+        version.main_class = "net.minecraftforge.bootstrap.ForgeBootstrap".into();
+        let injected = ["-DlibraryDirectory=injected-libraries".to_owned()];
+        let user = ["-DlibraryDirectory=user-libraries".to_owned()];
+        for (property, expected) in [
+            ("-DlibraryDirectory=profile-libraries", "-DlibraryDirectory=profile-libraries".to_owned()),
+            ("-DlibraryDirectory=${library_directory}", format!("-DlibraryDirectory={}", dirs.libraries().display())),
+            ("-DlibraryDirectory", "-DlibraryDirectory".to_owned()),
+        ] {
+            version.arguments.as_mut().unwrap().jvm = serde_json::from_value(serde_json::json!([property])).unwrap();
+            let spec = LaunchSpec {
+                injected_jvm_args: &injected,
+                extra_jvm_args: &user,
+                ..plain_spec(&version, &dirs, &account)
+            };
+            let args = build_args(&spec, &LINUX).unwrap();
+            let main = args.iter().position(|arg| arg == &version.main_class).unwrap();
+            let libraries: Vec<_> = args[..main].iter()
+                .filter(|arg| *arg == "-DlibraryDirectory" || arg.starts_with("-DlibraryDirectory="))
+                .map(String::as_str).collect();
+            assert_eq!(libraries, [expected.as_str(), injected[0].as_str(), user[0].as_str()]);
+        }
+    }
+
+    #[test]
+    fn non_forge_bootstrap_keeps_existing_jvm_arguments() {
+        let (mut version, dirs, account) = (test_version(), Dirs::new("/shared data"), notch());
+        let original = build_args(&plain_spec(&version, &dirs, &account), &LINUX).unwrap();
+        let original_main = original.iter().position(|arg| arg == &version.main_class).unwrap();
+        for main_class in [
+            "net.minecraft.client.main.Main",
+            "net.minecraft.launchwrapper.Launch",
+            "cpw.mods.modlauncher.Launcher",
+            "net.neoforged.bootstrap.ForgeBootstrap",
+        ] {
+            version.main_class = main_class.into();
+            let args = build_args(&plain_spec(&version, &dirs, &account), &LINUX).unwrap();
+            let main = args.iter().position(|arg| arg == main_class).unwrap();
+            assert_eq!(args[..main], original[..original_main]);
+        }
     }
 
     #[test]
@@ -664,15 +767,72 @@ mod tests {
             &[("PUMPKIN_TEST_VAR".to_owned(), "wert-42".to_owned())],
             move |_, line| on_line.lock().unwrap().push(line),
             move |raw| on_raw.lock().unwrap().push(raw.to_owned()),
-            move |code| {
-                exit_tx.send(code).ok();
+            move |result| {
+                exit_tx.send(result).ok();
             },
         )
         .unwrap();
-        assert_eq!(exit_rx.await.unwrap(), Some(0));
+        assert_eq!(exit_rx.await.unwrap(), ProcessExit { code: Some(0), cause: ExitCause::Natural });
         assert_eq!(*lines.lock().unwrap(), ["wert-42"]);
         assert_eq!(*raw_lines.lock().unwrap(), ["wert-42"]);
         std::fs::remove_dir_all(game_dir).unwrap();
+    }
+
+    #[tokio::test]
+    async fn supervisor_termination_retains_natural_exit_during_delayed_output_drain() {
+        use tokio::io::AsyncReadExt;
+        let (program, arguments) = if cfg!(windows) {
+            ("cmd.exe", vec!["/D", "/C", "echo ready & exit /b 7"])
+        } else {
+            ("sh", vec!["-c", "printf 'ready\\n'; exit 7"])
+        };
+        let mut child = tokio::process::Command::new(program).args(arguments).stdout(Stdio::piped()).spawn().unwrap();
+        child.wait().await.unwrap();
+        let mut output = child.stdout.take().unwrap();
+        let (drained_tx, drained_rx) = oneshot::channel();
+        let (release_tx, release_rx) = oneshot::channel();
+        let pump = tokio::spawn(async move {
+            output.read_to_end(&mut Vec::new()).await.unwrap();
+            drained_tx.send(()).unwrap();
+            release_rx.await.unwrap();
+        });
+        let (kill_tx, kill_rx) = oneshot::channel();
+        let (exit_tx, exit_rx) = oneshot::channel();
+        tokio::spawn(supervise(child, kill_rx, vec![pump], move |result| { exit_tx.send(result).ok(); }));
+        tokio::time::timeout(std::time::Duration::from_secs(10), drained_rx).await.unwrap().unwrap();
+        let _ = kill_tx.send(());
+        release_tx.send(()).unwrap();
+        let result = tokio::time::timeout(std::time::Duration::from_secs(10), exit_rx).await.unwrap().unwrap();
+        assert_eq!(result.code, Some(7));
+        assert_eq!(result.cause, ExitCause::Natural);
+    }
+
+    #[tokio::test]
+    async fn supervisor_termination_identifies_a_requested_kill_of_a_live_child() {
+        use tokio::io::{AsyncBufReadExt, AsyncReadExt};
+        let (program, arguments) = if cfg!(windows) {
+            ("cmd.exe", vec!["/D", "/C", "echo ready & set /p WAIT="])
+        } else {
+            ("sh", vec!["-c", "printf 'ready\\n'; read value"])
+        };
+        let mut child = tokio::process::Command::new(program).args(arguments)
+            .stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+        let input = child.stdin.take().unwrap();
+        let mut output = tokio::io::BufReader::new(child.stdout.take().unwrap());
+        let (ready_tx, ready_rx) = oneshot::channel();
+        let pump = tokio::spawn(async move {
+            output.read_line(&mut String::new()).await.unwrap();
+            ready_tx.send(()).unwrap();
+            output.read_to_end(&mut Vec::new()).await.unwrap();
+        });
+        let (kill_tx, kill_rx) = oneshot::channel();
+        let (exit_tx, exit_rx) = oneshot::channel();
+        tokio::spawn(supervise(child, kill_rx, vec![pump], move |result| { exit_tx.send(result).ok(); }));
+        tokio::time::timeout(std::time::Duration::from_secs(10), ready_rx).await.unwrap().unwrap();
+        kill_tx.send(()).unwrap();
+        let result = tokio::time::timeout(std::time::Duration::from_secs(10), exit_rx).await.unwrap().unwrap();
+        assert_eq!(result.cause, ExitCause::RequestedKill);
+        drop(input);
     }
 
     #[test]

@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use launcher_lib::models::{Account, GameWindow, Instance};
 use launcher_lib::services::content::ModIdScanner;
 use launcher_lib::services::modbridge::ingame::{inject, FailureKind, Injection, InjectionRequest, InjectionState, JavaMajors, LaunchFacts, ModSource, StartupWatch, UserArgs};
-use launcher_lib::services::launch::{self, LaunchSpec, Running};
+use launcher_lib::services::launch::{self, ExitCause, LaunchSpec, ProcessExit, Running};
 use launcher_lib::services::modbridge::ModBridge;
 use launcher_lib::services::rules::Env;
 use launcher_lib::services::{auth, java, loader, Dirs};
@@ -86,6 +86,7 @@ fn game_arguments(
         memory_mb: launch::DEFAULT_MEMORY_MB,
         min_memory_mb: None,
         injected_jvm_args: &[],
+        injected_classpath: &[],
         extra_jvm_args: user_jvm,
         window: WINDOW,
         injected_game_args: &[],
@@ -102,8 +103,15 @@ pub struct Game {
     started: Instant,
     process: Running,
     lines: Arc<Mutex<Vec<String>>>,
-    exit: Arc<Mutex<Option<Option<i32>>>>,
+    exit: Arc<Mutex<Option<ProcessExit>>>,
     breaker: Arc<Mutex<Option<FailureKind>>>,
+}
+
+pub struct Stopped {
+    pub exit_code: Option<i32>,
+    pub log: Vec<String>,
+    pub breaker: Option<FailureKind>,
+    pub natural_exit: bool,
 }
 
 impl Game {
@@ -123,9 +131,11 @@ impl Game {
         };
         let on_exit = {
             let (exit, breaker, watch) = (exit.clone(), breaker.clone(), watch);
-            move |code| {
-                record_breaker(&breaker, unpoisoned(&watch).on_exit(code, started.elapsed()));
-                *unpoisoned(&exit) = Some(code);
+            move |result: ProcessExit| {
+                if result.cause == ExitCause::Natural {
+                    record_breaker(&breaker, unpoisoned(&watch).on_exit(result.code, started.elapsed()));
+                }
+                *unpoisoned(&exit) = Some(result);
             }
         };
         let process = launch::spawn(java, &prepared.args, &prepared.game_dir, prepared.injection.env(), on_line, |_| {}, on_exit).map_err(|error| error.to_string())?;
@@ -137,9 +147,9 @@ impl Game {
         unpoisoned(&self.lines).clone()
     }
 
-    /// `Some(code)` nach dem Ende des Spiels (`code` ist `None`, wenn es von außen beendet wurde).
+    /// `Some(code)` nach dem Ende des Spiels (`code` ist `None`, wenn kein Exit-Code vorliegt).
     pub fn exit(&self) -> Option<Option<i32>> {
-        *unpoisoned(&self.exit)
+        unpoisoned(&self.exit).map(|result| result.code)
     }
 
     pub fn breaker(&self) -> Option<FailureKind> {
@@ -150,21 +160,22 @@ impl Game {
         self.started.elapsed()
     }
 
-    /// Beendet nur den Prozess, den dieser Lauf gestartet hat, wartet auf sein Ende und liefert Exit-Code und Log.
-    pub async fn stop(self) -> (Option<i32>, Vec<String>) {
-        let exit = self.exit.clone();
-        let lines = self.lines.clone();
+    /// Stops only this child and waits until its output pumps and exit callback finish.
+    pub async fn stop(self) -> Result<Stopped, String> {
         self.process.kill();
-        let mut code = None;
         for _ in 0..STOP_POLLS {
-            if let Some(ended) = *unpoisoned(&exit) {
-                code = ended;
+            if unpoisoned(&self.exit).is_some() {
                 break;
             }
             tokio::time::sleep(STOP_POLL).await;
         }
-        let log = unpoisoned(&lines).clone();
-        (code, log)
+        let result = (*unpoisoned(&self.exit)).ok_or_else(|| "the smoke child did not terminate after its stop request".to_owned())?;
+        Ok(Stopped {
+            exit_code: result.code,
+            log: unpoisoned(&self.lines).clone(),
+            breaker: *unpoisoned(&self.breaker),
+            natural_exit: result.cause == ExitCause::Natural,
+        })
     }
 }
 

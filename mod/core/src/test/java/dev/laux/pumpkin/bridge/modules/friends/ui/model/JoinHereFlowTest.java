@@ -9,7 +9,7 @@ import java.util.OptionalInt;
 import org.junit.jupiter.api.Test;
 
 /**
- * The join lifecycle of INGAME 7: the loopback validation, the confirm-leave-connect order, the thirty-second deadline
+ * The join lifecycle of docs/bridge/README.md, "In-game navigation and world behavior": the loopback validation, the confirm-leave-connect order, the thirty-second deadline
  * and the failure report.
  */
 class JoinHereFlowTest {

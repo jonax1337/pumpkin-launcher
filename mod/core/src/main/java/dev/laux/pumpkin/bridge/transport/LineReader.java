@@ -38,7 +38,7 @@ final class LineReader {
 				throw new OversizedLineException(maxLineBytes);
 			}
 		}
-		String complete = line.toString(StandardCharsets.UTF_8);
+		String complete = line.toString(StandardCharsets.UTF_8.name());
 		line.reset();
 		return complete.endsWith("\r") ? complete.substring(0, complete.length() - 1) : complete;
 	}

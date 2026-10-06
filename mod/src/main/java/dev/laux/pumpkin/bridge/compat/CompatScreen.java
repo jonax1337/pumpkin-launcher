@@ -8,29 +8,32 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.client.gui.components.AbstractWidget;
+//? if >=1.17 {
 import net.minecraft.client.gui.narration.NarratedElementType;
 import net.minecraft.client.gui.narration.NarrationElementOutput;
+//?}
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.locale.Language;
 import net.minecraft.network.chat.Component;
 //? if >=26.1 {
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-//?} else {
+//?} else if >=1.20 {
 /*import net.minecraft.client.gui.GuiGraphics;
+*///?} else {
+/*import com.mojang.blaze3d.vertex.PoseStack;
 *///?}
 //? if >=1.21.9 {
 import net.minecraft.client.input.KeyEvent;
 //?}
 
 /**
- * The one screen base class of the mod, and the only place where a Screen's era-specific methods are overridden: drawing,
- * the wheel and the page keys. Everything else a screen needs comes from signatures that did not change between 1.20 and
- * 26.3 (INGAME-API.md 3.1: override {@code init()} and {@code rebuildWidgets()}, never {@code resize}).
+ * The screen boundary for era-specific drawing, input, narration and lifecycle APIs. Legacy screens capture state
+ * before resize and rebuild explicitly where vanilla does not provide {@code rebuildWidgets()}.
  *
  * <p>Vanilla runs {@code init()} again on every window resize and builds all widgets anew. {@link #build()} therefore
  * must create every widget; text, focus, scroll position and tab survive through the {@link StateKeeper}.
  *
- * <p>Every override is the soft-failure boundary of INGAME 4.2: it runs inside {@link UiSession}, so a failure of the
+ * <p>Every override is the soft-failure boundary of docs/bridge/README.md: it runs inside {@link UiSession}, so a failure of the
  * mod's UI is logged and switches the UI off for the session instead of reaching the game. Drawing stops then, while
  * the input overrides keep the vanilla half of their expression alive, above all the escape key.
  */
@@ -45,9 +48,10 @@ public abstract class CompatScreen extends Screen {
 	private AbstractWidget lastFocused;
 	private Language titleLanguage;
 	private String translatedTitle = "";
+	private boolean widgetsBuilt;
 
 	protected CompatScreen(String titleKey, Object... titleArguments) {
-		super(Component.translatable(titleKey, titleArguments));
+		super(Text.component(titleKey, titleArguments));
 	}
 
 	/** Cache only within one language instance; resource reloads must not freeze early untranslated keys. */
@@ -84,7 +88,7 @@ public abstract class CompatScreen extends Screen {
 	}
 
 	/**
-	 * The main Enter key, before the focused widget sees it (INGAME 6.2 "Enter in an EditBox submits"): a screen that
+	 * The main Enter key, before the focused widget sees it (docs/bridge/README.md, "In-game navigation and world behavior"): a screen that
 	 * submits on Enter answers true. The numpad Enter (335) stays with vanilla.
 	 */
 	protected boolean onEnter() {
@@ -101,7 +105,7 @@ public abstract class CompatScreen extends Screen {
 
 	/** Text the narrator reads in addition to the focused widget, for example a status line the screen draws itself. */
 	protected List<String> narration() {
-		return List.of();
+		return java.util.Collections.emptyList();
 	}
 
 	protected final StateKeeper state() {
@@ -109,7 +113,11 @@ public abstract class CompatScreen extends Screen {
 	}
 
 	protected final <W extends AbstractWidget> W add(W widget) {
+		//? if >=1.17 {
 		return addRenderableWidget(widget);
+		//?} else {
+		/*return addButton(widget);
+		*///?}
 	}
 
 	/** Makes the widget's text and focus survive a rebuild; {@code id} must be the same on every build. */
@@ -119,7 +127,7 @@ public abstract class CompatScreen extends Screen {
 
 	/** The widget with the keyboard focus, if it is one of ours. */
 	protected final Optional<AbstractWidget> focusedWidget() {
-		return getFocused() instanceof AbstractWidget widget ? Optional.of(widget) : Optional.empty();
+		return getFocused() instanceof AbstractWidget ? Optional.of((AbstractWidget) getFocused()) : Optional.empty();
 	}
 
 	/** True once for each change of the focused widget; lets a screen react to focus without fighting the wheel. */
@@ -137,33 +145,62 @@ public abstract class CompatScreen extends Screen {
 		GameScreens.show(screen);
 	}
 
-	/** INGAME-API.md 3, "Screen: lifecycle and rendering": {@code init()} is {@code protected () → void} in every era. */
+	/** Vanilla 1.19 opens a screen through rebuildWidgets before its first widget build. */
+	private void captureState() {
+		if (widgetsBuilt) {
+			state.capture(tracked);
+			rememberState(state);
+		}
+	}
+
+	/** docs/bridge/MINECRAFT-API.md, "Screen: lifecycle and rendering": {@code init()} is {@code protected () → void} in every era. */
 	@Override
 	protected final void init() {
 		UiSession.run(() -> {
+			widgetsBuilt = false;
 			tracked.clear();
 			lastFocused = null;
 			build();
 			state.restore(tracked);
+			widgetsBuilt = true;
 		});
 	}
 
-	/** Same table: {@code rebuildWidgets()} is {@code protected () → void} in every era; it clears the widgets and calls {@code init()}. */
+	//? if >=1.19 {
 	@Override
+	//?}
 	protected void rebuildWidgets() {
 		UiSession.run(() -> {
-			state.capture(tracked);
-			rememberState(state);
+			captureState();
+			//? if >=1.19 {
 			super.rebuildWidgets();
+			//?} else if >=1.17 {
+			/*clearWidgets();
+			init();
+			*///?} else {
+			/*buttons.clear();
+			children.clear();
+			setFocused(null);
+			init();
+			*///?}
 			state.restoreFocus(tracked);
 		});
 	}
 
+
+	//? if <1.20 {
+	/*@Override
+	public void resize(net.minecraft.client.Minecraft minecraft, int width, int height) {
+		UiSession.run(() -> {
+			captureState();
+		});
+		super.resize(minecraft, width, height);
+	}
+	*///?}
 	@Override
 	public void removed() {
 		UiSession.run(() -> {
-			state.capture(tracked);
-			rememberState(state);
+			captureState();
 		});
 		super.removed();
 	}
@@ -193,7 +230,7 @@ public abstract class CompatScreen extends Screen {
 			paintBackdrop(new CompatPainter(graphics, font));
 		});
 	}
-	//?} else {
+	//?} else if >=1.20 {
 	/*// Same table: render(GuiGraphics, int, int, float) up to 1.21.11; renderBackground(GuiGraphics, int, int, float)
 	// since 1.20.2, one parameter before.
 	@Override
@@ -225,6 +262,24 @@ public abstract class CompatScreen extends Screen {
 		});
 	}
 	//?}
+	*///?}
+	//? if <1.20 {
+	/*@Override
+	public void render(PoseStack graphics, int mouseX, int mouseY, float partialTick) {
+		UiSession.run(() -> {
+			renderBackground(graphics);
+			super.render(graphics, mouseX, mouseY, partialTick);
+			paint(new CompatPainter(graphics, font));
+		});
+	}
+
+	@Override
+	public void renderBackground(PoseStack graphics) {
+		UiSession.run(() -> {
+			super.renderBackground(graphics);
+			paintBackdrop(new CompatPainter(graphics, font));
+		});
+	}
 	*///?}
 
 	/** Same table, "Screen: input": {@code mouseScrolled} has four doubles since 1.20.2, three before (no horizontal delta). */
@@ -276,15 +331,23 @@ public abstract class CompatScreen extends Screen {
 		return glfwKey == KEY_PAGE_DOWN && onPageDown();
 	}
 
-	/** Same table, "Screen: widgets and narration": {@code updateNarrationState(NarrationElementOutput)} is the same in every era. */
+	//? if >=1.17 {
 	@Override
 	protected void updateNarrationState(NarrationElementOutput output) {
 		UiSession.run(() -> {
 			super.updateNarrationState(output);
-			String supplementary = String.join(". ", narration()).strip();
+			String supplementary = String.join(". ", narration()).trim();
 			if (!supplementary.isEmpty()) {
 				output.nest().nest().add(NarratedElementType.TITLE, Text.literal(supplementary));
 			}
 		});
 	}
+	//?} else {
+	/*@Override
+	public String getNarrationMessage() {
+		String supplementary = String.join(". ", narration()).trim();
+		return supplementary.isEmpty() ? super.getNarrationMessage()
+			: super.getNarrationMessage() + ". " + supplementary;
+	}
+	*///?}
 }

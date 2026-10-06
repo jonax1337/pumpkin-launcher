@@ -1,6 +1,6 @@
 // Friends directory for Pumpkin Launcher: checks Minecraft accounts offline with Mojang-signed player certificates,
 // keeps the list of those who want to be findable by name, and holds friend requests for up to 14 days.
-// Design: docs/friends/BYNAME.md and BYNAME-ATTEST.md. The Worker makes no subrequests and never sees Minecraft
+// Design: docs/friends/SPEC.md#directory-api. The Worker makes no subrequests and never sees Minecraft
 // credentials, presence, connections or the outcome of a request.
 import { authenticate, issueChallenge, openSession } from "./auth.js";
 import { answerLetter, listInbox, retractLetter, sendLetter } from "./letters.js";
@@ -64,8 +64,8 @@ const ROUTES = [
   route("DELETE", `v1/blocks/(?<uuid>${UUID})`, unblock),
 ];
 
-// The 2.0.0 login (a Mojang call from the Worker) can never succeed. Refusing its first step keeps old
-// launchers from making a pointless Mojang `join` before the second.
+// Retired login routes required a Mojang call from the Worker, which cannot succeed.
+// Refuse the first step before clients make an unnecessary Mojang `join`.
 const RETIRED = [
   ["POST", "/v1/auth/challenge"],
   ["POST", "/v1/auth/session"],

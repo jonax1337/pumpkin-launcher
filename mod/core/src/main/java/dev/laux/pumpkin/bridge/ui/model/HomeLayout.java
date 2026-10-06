@@ -1,19 +1,61 @@
 package dev.laux.pumpkin.bridge.ui.model;
 
+import java.util.Objects;
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import java.util.ArrayList;
 import java.util.List;
 
 /** The Bridge home uses the shared chrome around a responsive grid of module tiles. */
-public record HomeLayout(HubLayout chrome, List<Rect> tiles) {
+public final class HomeLayout {
+	private final HubLayout chrome;
+	private final List<Rect> tiles;
+
+	public HomeLayout(HubLayout chrome, List<Rect> tiles) {
+		tiles = Immutable.copyList(tiles);
+		this.chrome = chrome;
+		this.tiles = tiles;
+	}
+
+	public HubLayout chrome() {
+		return chrome;
+	}
+
+	public List<Rect> tiles() {
+		return tiles;
+	}
+
+	@Override
+	public boolean equals(Object other) {
+		if (this == other) {
+			return true;
+		}
+		if (!(other instanceof HomeLayout)) {
+			return false;
+		}
+		HomeLayout that = (HomeLayout) other;
+		return Objects.equals(chrome, that.chrome)
+			&& Objects.equals(tiles, that.tiles);
+	}
+
+	@Override
+	public int hashCode() {
+		int hash = Objects.hashCode(chrome);
+		hash = 31 * hash + Objects.hashCode(tiles);
+		return hash;
+	}
+
+	@Override
+	public String toString() {
+		return "HomeLayout[chrome=" + chrome + ", tiles=" + tiles + "]";
+	}
+
 	private static final int MAX_WIDTH = 470;
 	private static final int PADDING = 10;
 	private static final int GAP = 10;
 	private static final int TILE_WIDTH = 210;
 	private static final int TILE_HEIGHT = 100;
 
-	public HomeLayout {
-		tiles = List.copyOf(tiles);
-	}
 
 	public static HomeLayout of(int width, int height, int count) {
 		int contentWidth = Math.max(0, Math.min(MAX_WIDTH, width - 2 * GuiMetrics.MIN_SIDE_MARGIN));
@@ -23,13 +65,13 @@ public record HomeLayout(HubLayout chrome, List<Rect> tiles) {
 		Rect footer = new Rect(left, height - GuiMetrics.FOOTER_HEIGHT, contentWidth, GuiMetrics.FOOTER_HEIGHT);
 		Rect body = new Rect(left, status.bottom() + 6, contentWidth,
 			Math.max(0, footer.y() - status.bottom() - 10));
-		HubLayout chrome = new HubLayout(title, status, List.of(), body, footer);
+		HubLayout chrome = new HubLayout(title, status, Immutable.list(), body, footer);
 		return new HomeLayout(chrome, grid(body, count));
 	}
 
 	private static List<Rect> grid(Rect body, int count) {
 		if (count == 0) {
-			return List.of();
+			return Immutable.list();
 		}
 		int available = Math.max(0, body.width() - 2 * PADDING);
 		int columns = available >= 2 * TILE_WIDTH + GAP ? 2 : 1;

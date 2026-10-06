@@ -1,4 +1,4 @@
-// Kit-Demo-Lauf (docs/friends/INGAME.md 11.2, Paket U1): startet den Entwicklungs-Client eines Fabric-Knotens mit -Pkitdemo,
+// Kit-Demo-Lauf (docs/bridge/README.md): startet den Entwicklungs-Client eines Fabric-Knotens mit -Pkitdemo,
 // wartet auf die Beweiszeile des Widget-Kit-Demo-Bildschirms und beendet den Client wieder.
 //
 // Aufruf aus beliebigem Ordner:

@@ -1,5 +1,7 @@
 package dev.laux.pumpkin.bridge.modules.friends.state;
 
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import com.google.gson.JsonElement;
 import dev.laux.pumpkin.bridge.protocol.json.JsonFields;
 import dev.laux.pumpkin.bridge.protocol.json.MalformedJson;
@@ -78,11 +80,14 @@ final class TopicParser {
 	 * the launcher alone decides what the player has to review, so a missing hint never lets the mod do more.
 	 */
 	private static Optional<FriendNotice> notice(JsonFields fields) {
-		return switch (fields.string("type")) {
-			case "renamed" -> Optional.of(new FriendNotice.Renamed(Sanitize.name(fields.string("previousName"))));
-			case "identityChanged" -> Optional.of(new FriendNotice.IdentityChanged());
-			default -> Optional.empty();
-		};
+		switch (fields.string("type")) {
+			case "renamed":
+				return Optional.of(new FriendNotice.Renamed(Sanitize.name(fields.string("previousName"))));
+			case "identityChanged":
+				return Optional.of(new FriendNotice.IdentityChanged());
+			default:
+				return Optional.empty();
+		}
 	}
 
 	private static Requests.Incoming incomingRequest(JsonFields fields) {
@@ -105,7 +110,7 @@ final class TopicParser {
 	}
 
 	private static <T> List<T> list(List<JsonFields> objects, Function<JsonFields, T> reader) {
-		return objects.stream().map(reader).toList();
+		return objects.stream().map(reader).collect(Immutable.toList());
 	}
 
 	/** A JSON null means "nothing", for the topics that can be absent. */

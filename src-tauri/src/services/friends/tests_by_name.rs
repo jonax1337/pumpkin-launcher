@@ -1212,7 +1212,7 @@ async fn the_inbox_is_polled_ten_seconds_after_start_then_per_interval_and_retry
     );
 }
 
-/// Das Thema `requests` trägt die Restzeit der Sperre von „Jetzt zustellen“ (INGAME A27): nichts vor dem ersten
+/// Das Thema `requests` trägt die Restzeit der Sperre von „Jetzt zustellen“ (docs/bridge/README.md): nichts vor dem ersten
 /// Abholen, fast die ganze Minute danach, wieder nichts eine Minute später.
 #[tokio::test(start_paused = true)]
 async fn the_retry_cooldown_covers_the_minute_after_a_poll_and_is_zero_when_a_press_may_act() {
@@ -1664,7 +1664,7 @@ async fn after_mojang_refuses_the_account_the_cached_certificate_is_never_used()
     assert_eq!(error_key(&refused), "errors.friends.directoryNotAllowed");
 }
 
-// ---- Freunde per Name aus dem Spiel (INGAME 5.4): solange eine Mod verbunden ist, kein neues Zertifikat ----
+// ---- Freunde per Name aus dem Spiel (docs/bridge/README.md, "Operations and consent"): solange eine Mod verbunden ist, kein neues Zertifikat ----
 
 #[path = "tests_mod_link_by_name.rs"]
 mod from_the_game;

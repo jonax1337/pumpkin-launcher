@@ -1,4 +1,4 @@
-//! Welcher Knoten des Index zu einer Instanz passt (INGAME 2.1). Reine Funktion: dieselbe Eingabe wählt immer
+//! Welcher Knoten des Index zu einer Instanz passt (docs/bridge/README.md, "Support selection"). Reine Funktion: dieselbe Eingabe wählt immer
 //! denselben Knoten oder nennt denselben Grund.
 use super::index::{Loader, ModIndex, Node};
 use super::version::{is_release_id, LoaderVersion};
@@ -33,7 +33,7 @@ impl<'a> Selection<'a> {
     }
 }
 
-/// Warum für eine Instanz kein Knoten gewählt wird; die Instanzseite zeigt daraus ihre Zeile (INGAME 3.9).
+/// Warum für eine Instanz kein Knoten gewählt wird; die Instanzseite zeigt daraus ihre Zeile (docs/bridge/README.md, "Support selection").
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Unfit {
     /// Kein Knoten nennt diese Minecraft-Release-Id für diesen Loader, auch nicht für Snapshots und neuere Versionen.
@@ -50,11 +50,10 @@ pub enum Unfit {
     JavaTooOld {
         need: u32,
     },
-    /// Die Java-Version ließ sich nicht feststellen; ohne Beweis wird nicht eingespeist (INGAME 3.4).
+    /// Die Java-Version ließ sich nicht feststellen; ohne Beweis wird nicht eingespeist (docs/bridge/README.md, "Support selection").
     JavaUnknown,
     /// Die Instanz hat keinen Loader, in den sich einspeisen ließe.
     VanillaNeedsLoader,
-    QuiltUnsupported,
 }
 
 /// Wählt den Knoten für `target`.
@@ -85,7 +84,7 @@ fn injectable_loader(loader: ModLoader) -> Result<Loader, Unfit> {
         ModLoader::NeoForge => Ok(Loader::Neoforge),
         ModLoader::Forge => Ok(Loader::Forge),
         ModLoader::Vanilla => Err(Unfit::VanillaNeedsLoader),
-        ModLoader::Quilt => Err(Unfit::QuiltUnsupported),
+        ModLoader::Quilt => Ok(Loader::Quilt),
     }
 }
 
@@ -175,6 +174,33 @@ mod tests {
                 java_major: java,
             },
         )
+    }
+
+    #[test]
+    fn quilt_requires_its_own_verified_artifact_and_keeps_its_loader_identity() {
+        let fabric = node("1.16.5-fabric", Loader::Fabric, &["1.16.5"], "0.14.21", 8);
+        let quilt = node("1.16.5-quilt", Loader::Quilt, &["1.16.5"], "0.29.2", 8);
+        let fabric_only = index_of(vec![fabric.clone()]);
+        assert_eq!(
+            pick(&fabric_only, "1.16.5", ModLoader::Quilt, "0.29.2", Some(8)),
+            Selection::Unfit(Unfit::NoNode),
+        );
+        let disabled = index_of(vec![fabric.clone(), unverified(quilt.clone())]);
+        assert_eq!(
+            pick(&disabled, "1.16.5", ModLoader::Quilt, "0.29.2", Some(8)),
+            Selection::Unfit(Unfit::Unverified),
+        );
+        let enabled = index_of(vec![fabric, quilt]);
+        let selected = pick(&enabled, "1.16.5", ModLoader::Quilt, "0.29.2", Some(8)).fit().unwrap();
+        assert_eq!(selected.loader, Loader::Quilt);
+        assert_eq!(selected.id, "1.16.5-quilt");
+        assert_eq!(
+            pick(&enabled, "1.16.5", ModLoader::Quilt, "0.28.0", Some(8)),
+            Selection::Unfit(Unfit::LoaderTooOld { need: "0.29.2".into() }),
+        );
+        for version in ["1.16", "1.16.4", "1.15.2", "1.16.5-rc1"] {
+            assert_eq!(pick(&enabled, version, ModLoader::Quilt, "0.29.2", Some(8)), Selection::Unfit(Unfit::NoNode));
+        }
     }
 
     #[test]
@@ -340,7 +366,7 @@ mod tests {
         );
         assert_eq!(
             pick(&index, "1.21.1", ModLoader::Quilt, "0.26.0", Some(21)),
-            Selection::Unfit(Unfit::QuiltUnsupported)
+            Selection::Unfit(Unfit::NoNode)
         );
     }
 }

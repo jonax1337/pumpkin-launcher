@@ -1,4 +1,4 @@
-// Reine Logik der Statuszeile „Pumpkin Bridge im Spiel“ (INGAME 3.9, kein React), damit ingameModel.check.mjs sie ohne Bundler prüft.
+// Reine Logik der Statuszeile „Pumpkin Bridge im Spiel“ (docs/bridge/README.md, "Support selection", kein React), damit ingameModel.check.mjs sie ohne Bundler prüft.
 import type { IngameFailureKind, IngameReason, IngameStatus } from "../../lib/friends-types.ts";
 import type { ModLoader } from "../../lib/types.ts";
 

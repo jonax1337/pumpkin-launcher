@@ -1,5 +1,5 @@
-//! Nachrichten zwischen Launcher und Mod, Protokoll 2: JSON-Zeilen, Format und Grenzen siehe docs/friends/INGAME.md,
-//! Abschnitt 5.3. Die Beispielzeilen stehen in `mod/fixtures/protocol/*.jsonl`; sie sind das gemeinsame Muster der
+//! Nachrichten zwischen Launcher und Mod, Protokoll 2: JSON-Zeilen, Format und Grenzen siehe docs/bridge/README.md,
+//! Abschnitt „Protocol 2“. Die Beispielzeilen stehen in `mod/fixtures/protocol/*.jsonl`; sie sind das gemeinsame Muster der
 //! Rust- und der Java-Tests.
 //!
 //! Die Mod ist ein nicht vertrauenswürdiger Kanal: jede Zeile wird gegen diese Typen geprüft, Unbekanntes verworfen.

@@ -148,7 +148,7 @@ impl Hosting {
     }
 
     /// Ob die (einzige) geteilte Welt zu einem anderen Spiel dieses Launchers gehört; die eigene Sitzung bleibt außen
-    /// vor und steht im Thema `session` (INGAME 6.4 „Gerade teilt …“).
+    /// vor und steht im Thema `session` (docs/bridge/README.md, "In-game navigation and world behavior" „Gerade teilt …“).
     pub(super) fn shares_another(&self, instance_id: &str) -> bool {
         lock(&self.session)
             .as_ref()
@@ -428,7 +428,7 @@ impl FriendSessions {
         Ok(current_view(&self.shared).into_iter().collect())
     }
 
-    /// Teilt die Welt der laufenden Instanz (SPEC 6.1): Microsoft-Start, Minecraft ab 1.20, ein geprüfter Port.
+    /// Teilt die Welt der laufenden Instanz: Microsoft-Start, Minecraft ab 1.16.5, ein geprüfter Port.
     pub async fn host_start(
         &self,
         instance_id: &str,
@@ -568,7 +568,6 @@ fn session_with_id<'a>(
     found.ok_or_else(|| invalid(coded!("errors.friends.sessionNotFound")))
 }
 
-/// Minecraft ab 1.20 (SPEC 6.1); eine Version, die Mojang nicht kennt, lässt sich nicht prüfen und zählt als zu alt.
 /// Das laufende Spiel der Instanz, gestartet mit Microsoft-Konto.
 fn hostable_game(shared: &Shared, instance_id: &str) -> AppResult<Game> {
     let game = shared
@@ -582,7 +581,7 @@ fn hostable_game(shared: &Shared, instance_id: &str) -> AppResult<Game> {
     }
 }
 
-/// Die Instanz, wenn ihre Minecraft-Version das Teilen unterstützt (ab 1.20).
+/// Die Instanz, wenn ihre Minecraft-Version das Teilen unterstützt (ab 1.16.5).
 async fn supported_instance(shared: &Shared, instance_id: &str) -> AppResult<Instance> {
     let instance = shared.instances.get(instance_id)?;
     ensure_supported_version(&instance.minecraft_version, &shared.versions.index().await?)?;
@@ -1581,14 +1580,16 @@ mod tests {
     }
 
     #[test]
-    fn versions_before_1_20_and_unknown_versions_cannot_be_shared() {
+    fn versions_before_1_16_5_and_unknown_versions_cannot_be_shared() {
         let versions = VersionIndex::new([
             ("26.3".to_owned(), "2026-09-01T10:00:00+00:00".to_owned()),
-            ("1.19.4".to_owned(), "2023-03-14T12:56:18+00:00".to_owned()),
+            ("1.16.4".to_owned(), "2020-10-29T15:49:37+00:00".to_owned()),
+            ("1.16.5".to_owned(), super::super::contract::MIN_MC_RELEASE_TIME.to_owned()),
         ]);
 
         assert!(ensure_supported_version("26.3", &versions).is_ok());
-        for version in ["1.19.4", "my-custom"] {
+        assert!(ensure_supported_version("1.16.5", &versions).is_ok());
+        for version in ["1.16.4", "my-custom"] {
             let err = ensure_supported_version(version, &versions).unwrap_err();
             assert_eq!(
                 error_key(&err),

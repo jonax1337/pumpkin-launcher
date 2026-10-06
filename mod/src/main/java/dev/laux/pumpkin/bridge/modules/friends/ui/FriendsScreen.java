@@ -1,5 +1,8 @@
 package dev.laux.pumpkin.bridge.modules.friends.ui;
 
+import java.util.Objects;
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import dev.laux.pumpkin.bridge.modules.friends.ui.model.HubCondition;
 import dev.laux.pumpkin.bridge.modules.friends.ui.model.HubTab;
 
@@ -30,14 +33,14 @@ import java.util.Optional;
 import net.minecraft.client.gui.screens.Screen;
 
 /**
- * The Friends module below the Pumpkin home (INGAME 6.1 to 6.3): title and status line for every link state, the five tabs,
+ * The Friends module below the Pumpkin home (docs/bridge/README.md, "In-game navigation and world behavior"): title and status line for every link state, the five tabs,
  * the scrolling body and the footer. Freunde and Anfragen render their rows here; Einladungen, Teilen and Optionen come
  * from their own tab classes (package U2b). The hub opens on the tab with pending items (Anfragen, else Einladungen,
  * else Freunde) and rebuilds itself whenever the launcher's state changes; a rebuild keeps text, focus, scroll position
- * and tab (INGAME 6.5).
+ * and tab (docs/bridge/README.md, "In-game navigation and world behavior").
  */
 public class FriendsScreen extends PumpkinScreen {
-	/** INGAME 5.4, host.invite: at most seven guests share one world. */
+	/** docs/bridge/README.md, "Operations and consent", host.invite: at most seven guests share one world. */
 	static final int MAX_GUESTS = 7;
 	private static final int ACTION_WIDTH = 68;
 	private static final int OPEN_WIDTH = 130;
@@ -63,10 +66,10 @@ public class FriendsScreen extends PumpkinScreen {
 	protected List<String> tabLabels() {
 		refreshView();
 		chooseOpeningTabOnce();
-		return Arrays.stream(HubTab.values()).map(this::tabTitle).toList();
+		return Arrays.stream(HubTab.values()).map(this::tabTitle).collect(Immutable.toList());
 	}
 
-	/** The first build opens on pending items (INGAME 6.1); afterwards the keeper holds the player's tab. */
+	/** The first build opens on pending items (docs/bridge/README.md, "In-game navigation and world behavior"); afterwards the keeper holds the player's tab. */
 	private void chooseOpeningTabOnce() {
 		if (!opened) {
 			opened = true;
@@ -80,13 +83,20 @@ public class FriendsScreen extends PumpkinScreen {
 		if (!condition.showsContent()) {
 			return conditionRows();
 		}
-		return switch (HubTab.values()[tab]) {
-			case FRIENDS -> friendRows();
-			case REQUESTS -> requestRows();
-			case INVITES -> invites.rows();
-			case SHARE -> share.rows();
-			case OPTIONS -> options.rows();
-		};
+		switch (HubTab.values()[tab]) {
+			case FRIENDS:
+				return friendRows();
+			case REQUESTS:
+				return requestRows();
+			case INVITES:
+				return invites.rows();
+			case SHARE:
+				return share.rows();
+			case OPTIONS:
+				return options.rows();
+			default:
+				throw new IncompatibleClassChangeError();
+		}
 	}
 
 	@Override
@@ -99,13 +109,16 @@ public class FriendsScreen extends PumpkinScreen {
 		if (condition == null || !condition.showsContent()) {
 			return Optional.empty();
 		}
-		return switch (currentTab()) {
-			case FRIENDS -> Optional.of(new FooterButton(Text.translate("pumpkin_bridge.friends.add"), this::openAddFriend));
-			case REQUESTS -> delivering()
+		switch (currentTab()) {
+			case FRIENDS:
+				return Optional.of(new FooterButton(Text.translate("pumpkin_bridge.friends.add"), this::openAddFriend));
+			case REQUESTS:
+				return delivering()
 				? Optional.of(new FooterButton(Text.translate("pumpkin_bridge.requests.deliverNow"), this::deliverNow))
 				: Optional.empty();
-			default -> Optional.empty();
-		};
+			default:
+				return Optional.empty();
+		}
 	}
 
 	@Override
@@ -158,15 +171,15 @@ public class FriendsScreen extends PumpkinScreen {
 		return rows;
 	}
 
-	// ---- Freunde (INGAME 6.2) ----
+	// ---- Freunde (docs/bridge/README.md, "In-game navigation and world behavior") ----
 
 	private List<Row> friendRows() {
 		if (shown.friends().isEmpty()) {
-			return List.of(Row.text(Text.translate("pumpkin_bridge.no_friends")));
+			return Immutable.list(Row.text(Text.translate("pumpkin_bridge.no_friends")));
 		}
 		List<Row> rows = new ArrayList<>();
-		List<Friend> online = shown.friends().stream().filter(Friend::isOnline).toList();
-		List<Friend> offline = shown.friends().stream().filter(friend -> !friend.isOnline()).toList();
+		List<Friend> online = shown.friends().stream().filter(Friend::isOnline).collect(Immutable.toList());
+		List<Friend> offline = shown.friends().stream().filter(friend -> !friend.isOnline()).collect(Immutable.toList());
 		addFriendGroup(rows, online, "pumpkin_bridge.friends.group.online");
 		addFriendGroup(rows, offline, "pumpkin_bridge.friends.group.offline");
 		return rows;
@@ -190,34 +203,39 @@ public class FriendsScreen extends PumpkinScreen {
 			Text.translate("pumpkin_bridge.presence." + presence), presenceColor(friend.presence()));
 		if (invitable(friend)) {
 			row.withAction("friend.invite." + friend.id(), Widgets.button(Text.translate("pumpkin_bridge.invite"),
-				ACTION_WIDTH, () -> HubOps.run(this, client, Ops.hostInvite(List.of(friend.id()), false))));
+				ACTION_WIDTH, () -> HubOps.run(this, client, Ops.hostInvite(Immutable.list(friend.id()), false))));
 		}
 		return row;
 	}
 
 	private static int presenceColor(Friend.Presence presence) {
-		return switch (presence) {
-			case ONLINE -> PumpkinTheme.ONLINE;
-			case PLAYING -> PumpkinTheme.PLAYING;
-			case OFFLINE -> PumpkinTheme.OFFLINE;
-		};
+		switch (presence) {
+			case ONLINE:
+				return PumpkinTheme.ONLINE;
+			case PLAYING:
+				return PumpkinTheme.PLAYING;
+			case OFFLINE:
+				return PumpkinTheme.OFFLINE;
+			default:
+				throw new IncompatibleClassChangeError();
+		}
 	}
 
 	private static String noticeText(FriendNotice notice) {
-		return notice instanceof FriendNotice.Renamed renamed
-			? Text.translate("pumpkin_bridge.friends.notice.renamed", renamed.previousName())
+		return notice instanceof FriendNotice.Renamed
+			? Text.translate("pumpkin_bridge.friends.notice.renamed", ((FriendNotice.Renamed) notice).previousName())
 			: Text.translate("pumpkin_bridge.friends.notice.identityChanged");
 	}
 
 	/**
 	 * The quick invite of a friend row: the friend is online, not a guest yet, and the world is published, because
-	 * {@code host.invite} shares the published LAN world (INGAME 5.4). Publishing itself is the Teilen tab.
+	 * {@code host.invite} shares the published LAN world (docs/bridge/README.md, "Operations and consent"). Publishing itself is the Teilen tab.
 	 */
 	private boolean invitable(Friend friend) {
 		if (!friend.isOnline()) {
 			return false;
 		}
-		List<Session.Guest> guests = shown.session().map(Session::guests).orElse(List.of());
+		List<Session.Guest> guests = shown.session().map(Session::guests).orElse(Immutable.list());
 		boolean room = guests.size() < MAX_GUESTS && guests.stream().noneMatch(guest -> guest.id().equals(friend.id()));
 		return room && shown.game().lanPort().isPresent();
 	}
@@ -226,12 +244,12 @@ public class FriendsScreen extends PumpkinScreen {
 		GameScreens.show(new AddFriendScreen(this, client));
 	}
 
-	// ---- Anfragen (INGAME 6.2) ----
+	// ---- Anfragen (docs/bridge/README.md, "In-game navigation and world behavior") ----
 
 	private List<Row> requestRows() {
 		List<Row> rows = new ArrayList<>();
 		if (shown.incoming().isEmpty() && shown.outgoing().isEmpty()) {
-			return List.of(Row.text(Text.translate("pumpkin_bridge.requests.empty")));
+			return Immutable.list(Row.text(Text.translate("pumpkin_bridge.requests.empty")));
 		}
 		if (!shown.incoming().isEmpty()) {
 			rows.add(Row.heading(Text.translate("pumpkin_bridge.requests.incoming")));
@@ -277,7 +295,7 @@ public class FriendsScreen extends PumpkinScreen {
 		HubOps.run(this, client, Ops.friendsRetry());
 	}
 
-	/** The launcher's own cooldown (INGAME A27), pushed with the requests topic; it re-pushes about once a second. */
+	/** The launcher's own cooldown (docs/bridge/README.md), pushed with the requests topic; it re-pushes about once a second. */
 	private long deliverCooldownMillis() {
 		return client.topics().retryCooldownMillis(System.currentTimeMillis());
 	}
@@ -300,8 +318,110 @@ public class FriendsScreen extends PumpkinScreen {
 	 * Everything the hub shows; a change of any of it rebuilds the screen. The requests go in as lists, not as one
 	 * value: the pushed cooldown ticks every second and must grey the footer button, not rebuild the screen.
 	 */
-	private record Snapshot(LinkState link, boolean awaitingDialog, Optional<Me> me, List<Friend> friends,
-			List<Requests.Incoming> incoming, List<Requests.Outgoing> outgoing, List<Invite> invites, Optional<Session> session,
-			Optional<Join> join, Game game) {
+	private static final class Snapshot {
+		private final LinkState link;
+		private final boolean awaitingDialog;
+		private final Optional<Me> me;
+		private final List<Friend> friends;
+		private final List<Requests.Incoming> incoming;
+		private final List<Requests.Outgoing> outgoing;
+		private final List<Invite> invites;
+		private final Optional<Session> session;
+		private final Optional<Join> join;
+		private final Game game;
+
+		private Snapshot(LinkState link, boolean awaitingDialog, Optional<Me> me, List<Friend> friends, List<Requests.Incoming> incoming, List<Requests.Outgoing> outgoing, List<Invite> invites, Optional<Session> session, Optional<Join> join, Game game) {
+			this.link = link;
+			this.awaitingDialog = awaitingDialog;
+			this.me = me;
+			this.friends = friends;
+			this.incoming = incoming;
+			this.outgoing = outgoing;
+			this.invites = invites;
+			this.session = session;
+			this.join = join;
+			this.game = game;
+		}
+
+		public LinkState link() {
+			return link;
+		}
+
+		public boolean awaitingDialog() {
+			return awaitingDialog;
+		}
+
+		public Optional<Me> me() {
+			return me;
+		}
+
+		public List<Friend> friends() {
+			return friends;
+		}
+
+		public List<Requests.Incoming> incoming() {
+			return incoming;
+		}
+
+		public List<Requests.Outgoing> outgoing() {
+			return outgoing;
+		}
+
+		public List<Invite> invites() {
+			return invites;
+		}
+
+		public Optional<Session> session() {
+			return session;
+		}
+
+		public Optional<Join> join() {
+			return join;
+		}
+
+		public Game game() {
+			return game;
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (this == other) {
+				return true;
+			}
+			if (!(other instanceof Snapshot)) {
+				return false;
+			}
+			Snapshot that = (Snapshot) other;
+			return Objects.equals(link, that.link)
+				&& awaitingDialog == that.awaitingDialog
+				&& Objects.equals(me, that.me)
+				&& Objects.equals(friends, that.friends)
+				&& Objects.equals(incoming, that.incoming)
+				&& Objects.equals(outgoing, that.outgoing)
+				&& Objects.equals(invites, that.invites)
+				&& Objects.equals(session, that.session)
+				&& Objects.equals(join, that.join)
+				&& Objects.equals(game, that.game);
+		}
+
+		@Override
+		public int hashCode() {
+			int hash = Objects.hashCode(link);
+			hash = 31 * hash + Boolean.hashCode(awaitingDialog);
+			hash = 31 * hash + Objects.hashCode(me);
+			hash = 31 * hash + Objects.hashCode(friends);
+			hash = 31 * hash + Objects.hashCode(incoming);
+			hash = 31 * hash + Objects.hashCode(outgoing);
+			hash = 31 * hash + Objects.hashCode(invites);
+			hash = 31 * hash + Objects.hashCode(session);
+			hash = 31 * hash + Objects.hashCode(join);
+			hash = 31 * hash + Objects.hashCode(game);
+			return hash;
+		}
+
+		@Override
+		public String toString() {
+			return "Snapshot[link=" + link + ", awaitingDialog=" + awaitingDialog + ", me=" + me + ", friends=" + friends + ", incoming=" + incoming + ", outgoing=" + outgoing + ", invites=" + invites + ", session=" + session + ", join=" + join + ", game=" + game + "]";
+		}
 	}
 }

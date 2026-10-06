@@ -1,5 +1,8 @@
 package dev.laux.pumpkin.bridge.ui.kit;
 
+import java.util.Objects;
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import dev.laux.pumpkin.bridge.compat.CompatScreen;
 import dev.laux.pumpkin.bridge.compat.Text;
 import dev.laux.pumpkin.bridge.compat.Widgets;
@@ -20,13 +23,53 @@ import net.minecraft.client.gui.screens.Screen;
  * The frame of feature screens: title and status line, an optional tab bar, the scrolling
  * body and a footer with "Zurück", optionally joined by one action of the shown tab ("Freund hinzufügen", "Jetzt
  * zustellen"). A subclass says which tabs it has and which rows a tab shows; the frame lays them out for the window
- * size, and keeps text, focus, scroll position and selected tab across a rebuild (INGAME 6.5).
+ * size, and keeps text, focus, scroll position and selected tab across a rebuild (docs/bridge/README.md, "In-game navigation and world behavior").
  */
 public abstract class PumpkinScreen extends CompatScreen {
 	private static final String DONE_ID = "footer.done";
 
 	/** The one action a tab adds to the footer, left of "Fertig". */
-	public record FooterButton(String label, Runnable onPress) {
+	public static final class FooterButton {
+		private final String label;
+		private final Runnable onPress;
+
+		public FooterButton(String label, Runnable onPress) {
+			this.label = label;
+			this.onPress = onPress;
+		}
+
+		public String label() {
+			return label;
+		}
+
+		public Runnable onPress() {
+			return onPress;
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (this == other) {
+				return true;
+			}
+			if (!(other instanceof FooterButton)) {
+				return false;
+			}
+			FooterButton that = (FooterButton) other;
+			return Objects.equals(label, that.label)
+				&& Objects.equals(onPress, that.onPress);
+		}
+
+		@Override
+		public int hashCode() {
+			int hash = Objects.hashCode(label);
+			hash = 31 * hash + Objects.hashCode(onPress);
+			return hash;
+		}
+
+		@Override
+		public String toString() {
+			return "FooterButton[label=" + label + ", onPress=" + onPress + "]";
+		}
 	}
 
 	private final Screen parent;
@@ -46,7 +89,7 @@ public abstract class PumpkinScreen extends CompatScreen {
 
 	/** Labels of the tabs; none means a screen without a tab bar. */
 	protected List<String> tabLabels() {
-		return List.of();
+		return Immutable.list();
 	}
 
 	protected String statusLine() {
@@ -100,8 +143,7 @@ public abstract class PumpkinScreen extends CompatScreen {
 
 	private AbstractWidget footerButton(FooterButton action, Rect bounds, String id) {
 		AbstractWidget widget = Widgets.button(action.label(), bounds.width(), action.onPress());
-		widget.setX(bounds.x());
-		widget.setY(bounds.y());
+		Widgets.setPosition(widget, bounds.x(), bounds.y());
 		add(widget);
 		track(id, widget);
 		return widget;
@@ -184,7 +226,7 @@ public abstract class PumpkinScreen extends CompatScreen {
 		return body.pageDown();
 	}
 
-	/** The narrator reads the status line and then the shown rows, so painted text is not silent (INGAME 6.2). */
+	/** The narrator reads the status line and then the shown rows, so painted text is not silent (docs/bridge/README.md, "In-game navigation and world behavior"). */
 	@Override
 	protected List<String> narration() {
 		List<String> lines = new ArrayList<>();

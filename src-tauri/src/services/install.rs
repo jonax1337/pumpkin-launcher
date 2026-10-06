@@ -52,22 +52,39 @@ pub async fn fetch_version(client: &reqwest::Client, dirs: &Dirs, version_id: &s
         .ok_or_else(|| AppError::NotFound(coded!("errors.game.minecraftVersionNotFound", id = version_id).into()))?;
     let path = dirs.version_file(version_id, "json");
     download::fetch(client, &Job { url: entry.url, path: path.clone(), sha1: Some(entry.sha1) }).await?;
-    download::read_json(&path).await
+    read_version(&path).await
 }
 
 /// Liest eine bereits installierte Versions-JSON (für den Start ohne Netz).
 pub async fn installed_version(dirs: &Dirs, version_id: &str) -> AppResult<VersionJson> {
-    download::read_json(&dirs.version_file(version_id, "json"))
+    read_version(&dirs.version_file(version_id, "json"))
         .await
         .map_err(|err| err.or_not_installed(format!("Version {version_id}")))
 }
 
 /// Die installierte Versions-JSON oder, fehlt sie, die von Mojang (dabei abgelegt wie bei `fetch_version`).
 pub async fn installed_or_fetched_version(client: &reqwest::Client, dirs: &Dirs, version_id: &str) -> AppResult<VersionJson> {
-    match download::read_json(&dirs.version_file(version_id, "json")).await {
+    match read_version(&dirs.version_file(version_id, "json")).await {
         Err(err) if err.is_not_found() => fetch_version(client, dirs, version_id).await,
         read => read,
     }
+}
+
+async fn read_version(path: &Path) -> AppResult<VersionJson> {
+    let mut version: VersionJson = download::read_json(path).await?;
+    crate::services::mojang::secure_logging_libraries(&mut version.libraries);
+    Ok(version)
+}
+
+/// Bereits installierte Legacy-Instanzen brauchen die gepatchten JARs vor dem nächsten Start.
+pub async fn ensure_logging_libraries(client: &reqwest::Client, dirs: &Dirs, version: &VersionJson) -> AppResult<()> {
+    let env = Env::current();
+    let jobs = version.artifacts(&env)
+        .filter(|(lib, artifact)| lib.name.starts_with("org.apache.logging.log4j:") && lib.name.ends_with(":2.17.1")
+            && artifact.url.starts_with("https://repo.maven.apache.org/maven2/org/apache/logging/log4j/"))
+        .map(|(lib, artifact)| library_job(dirs, lib, artifact))
+        .collect::<AppResult<Vec<_>>>()?;
+    download::fetch_all(client, dedup_by_path(jobs), &|_, _| {}).await
 }
 
 /// Inhalt der Markerdatei: die MC-Version, bei Mod-Loadern plus Loader und Version. Ein Wechsel
@@ -209,6 +226,10 @@ fn native_jars<'a>(version: &'a VersionJson, env: &'a Env) -> Vec<(&'a Library, 
 
 fn library_job(dirs: &Dirs, lib: &Library, d: &Download) -> AppResult<Job> {
     let path = d.path.as_deref().ok_or_else(|| AppError::invalid(coded!("errors.game.libraryWithoutPath", name = lib.name)))?;
+    if let Some((_, patched)) = crate::services::mojang::patched_logging_artifact(&lib.name) {
+        let path = patched.path.as_deref().ok_or_else(|| AppError::invalid(coded!("errors.game.libraryWithoutPath", name = lib.name)))?;
+        return Ok(Job::from_download(&patched, dirs.library(path)));
+    }
     Ok(Job::from_download(d, dirs.library(path)))
 }
 
@@ -253,6 +274,39 @@ fn extract_natives(jar: &Path, dest: &Path, exclude: &[String]) -> AppResult<u64
 mod tests {
     use super::*;
     use crate::models::NewInstance;
+
+    #[tokio::test]
+    async fn cached_legacy_versions_patch_logging_without_rewriting_mojang_metadata() {
+        let dirs = Dirs::new(std::env::temp_dir().join(crate::models::new_id()));
+        let client = download::http_client().unwrap();
+        for (mc, logging) in [("1.16.5", "2.8.1"), ("1.18.2", "2.17.0")] {
+            let raw = serde_json::to_vec(&serde_json::json!({
+                "id": mc, "type": "release", "mainClass": "net.minecraft.client.main.Main",
+                "assetIndex": {"id": mc, "sha1": "original", "url": "original"},
+                "downloads": {"client": {"sha1": "original", "url": "original"}},
+                "libraries": [
+                    {"name": format!("org.apache.logging.log4j:log4j-api:{logging}"),
+                     "downloads": {"artifact": {"path": "original.jar", "sha1": "original", "url": "original"}}},
+                    {"name": format!("org.apache.logging.log4j:log4j-core:{logging}"),
+                     "downloads": {"artifact": {"path": "original-core.jar", "sha1": "original", "url": "original"}}}
+                ]
+            })).unwrap();
+            let path = dirs.version_file(mc, "json");
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, &raw).unwrap();
+            let installed = installed_version(&dirs, mc).await.unwrap();
+            let cached = installed_or_fetched_version(&client, &dirs, mc).await.unwrap();
+            for version in [installed, cached] {
+                assert!(version.libraries.iter().all(|lib| lib.name.ends_with(":2.17.1")));
+                let library = &version.libraries[0];
+                let job = library_job(&dirs, library, library.downloads.artifact.as_ref().unwrap()).unwrap();
+                assert_eq!(job.sha1.as_deref(), Some("d771af8e336e372fb5399c99edabe0919aeaf5b2"));
+                assert!(job.path.to_string_lossy().contains("2.17.1"));
+            }
+            assert_eq!(fs::read(path).unwrap(), raw);
+        }
+        fs::remove_dir_all(dirs.root).unwrap();
+    }
 
     #[test]
     fn marker_text_stays_readable_by_installations_of_older_launchers() {

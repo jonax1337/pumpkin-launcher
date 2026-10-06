@@ -1,4 +1,4 @@
-//! Das Freunde-Verzeichnis (docs/friends/BYNAME.md): Freunde per Minecraft-Namen, Briefkasten und Kontonachweis über Mojang.
+//! Das Freunde-Verzeichnis (docs/friends/SPEC.md#directory-api): Freunde per Minecraft-Namen, Briefkasten und Kontonachweis über Mojang.
 //! Dieses Modul hält die Abhängigkeiten, die der Dienst von außen bekommt (Worker, Mojang, Konto), und die Fehlerart des Verzeichnisses.
 pub mod api;
 pub mod certificate;

@@ -1,5 +1,5 @@
 //! Welche Mod-IDs die JARs im Ordner `mods` einer Instanz tragen. Der Launcher fragt das vor jedem Start (und für die
-//! Statuszeile der Instanzseite), ob schon eine `pumpkin_bridge` darin liegt (INGAME 3.3, Punkt 6); darum merkt sich der
+//! Statuszeile der Instanzseite), ob schon eine `pumpkin_bridge` darin liegt (docs/bridge/README.md, "Support selection"); darum merkt sich der
 //! [`ModIdScanner`] das Ergebnis je Datei, solange Größe und Änderungszeit gleich bleiben.
 use std::collections::HashMap;
 use std::fs;

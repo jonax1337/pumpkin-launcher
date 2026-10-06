@@ -1,4 +1,4 @@
-// Prüft die Schichtenregeln der Mod (docs/friends/INGAME.md 4.1) und bricht mit Exit-Code 1 ab, wenn eine verletzt ist:
+// Prüft die Schichtenregeln der Mod (docs/bridge/README.md) und bricht mit Exit-Code 1 ab, wenn eine verletzt ist:
 //   1. Stonecutter-Bedingungen (//? if ..., /*? ... */) und Swaps (//$ name) stehen nur in compat/ und platform/.
 //   2. core/ importiert keine Minecraft- oder Loader-Klasse.
 // Aufruf aus beliebigem Ordner: node mod/scripts/check-conditionals.mjs [mod-Ordner]

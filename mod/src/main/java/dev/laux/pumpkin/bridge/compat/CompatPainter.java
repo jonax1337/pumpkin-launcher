@@ -6,28 +6,31 @@ import java.util.Optional;
 import net.minecraft.client.gui.Font;
 //? if >=26.1 {
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-//?} else {
+//?} else if >=1.20 {
 /*import net.minecraft.client.gui.GuiGraphics;
+*///?} else {
+/*import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiComponent;
 *///?}
 
-/**
- * The {@link Painter} over the graphics object of the running Minecraft version. INGAME-API.md 3, "Font, drawing, text
- * components": up to 1.21.11 {@code GuiGraphics#fill(int, int, int, int, int)} and {@code #drawString(Font, String, int,
- * int, int, boolean)} (its return type changes from {@code int} to {@code void} at 1.21.6; the result is not used here),
- * from 26.1 {@code GuiGraphicsExtractor#fill} and {@code #text(Font, String, int, int, int, boolean)}.
- */
 final class CompatPainter implements Painter {
 	//? if >=26.1 {
 	private GuiGraphicsExtractor graphics;
-	//?} else {
+	//?} else if >=1.20 {
 	/*private GuiGraphics graphics;
+	*///?} else {
+	/*private PoseStack graphics;
 	*///?}
 	private final Font font;
 
 	//? if >=26.1 {
 	CompatPainter(GuiGraphicsExtractor graphics, Font font) {
-	//?} else {
+	//?} else if >=1.20 {
 	/*CompatPainter(GuiGraphics graphics, Font font) {
+	*///?} else {
+	/*CompatPainter(PoseStack graphics, Font font) {
 	*///?}
 		this.graphics = graphics;
 		this.font = font;
@@ -39,20 +42,26 @@ final class CompatPainter implements Painter {
 
 	//? if >=26.1 {
 	void bind(GuiGraphicsExtractor graphics) {
-	//?} else {
+	//?} else if >=1.20 {
 	/*void bind(GuiGraphics graphics) {
+	*///?} else {
+	/*void bind(PoseStack graphics) {
 	*///?}
 		this.graphics = graphics;
 	}
 
 	@Override
 	public void fill(Rect area, int argb) {
-		graphics.fill(area.x(), area.y(), area.right(), area.bottom(), argb);
+		fill(area.x(), area.y(), area.width(), area.height(), argb);
 	}
 
 	@Override
 	public void fill(int x, int y, int width, int height, int argb) {
+		//? if >=1.20 {
 		graphics.fill(x, y, x + width, y + height, argb);
+		//?} else {
+		/*GuiComponent.fill(graphics, x, y, x + width, y + height, argb);
+		*///?}
 	}
 
 	@Override
@@ -67,43 +76,51 @@ final class CompatPainter implements Painter {
 
 	@Override
 	public void text(String text, int x, int y, int argb) {
-		//? if >=26.1 {
-		graphics.text(font, text, x, y, argb, false);
-		//?} else {
-		/*graphics.drawString(font, text, x, y, argb, false);
-	*///?}
+		text(text, x, y, argb, false);
 	}
 
-	//? if >=26.1 {
 	@Override
 	public void text(String text, int x, int y, int argb, boolean shadow) {
+		//? if >=26.1 {
 		graphics.text(font, text, x, y, argb, shadow);
+		//?} else if >=1.20 {
+		/*graphics.drawString(font, text, x, y, argb, shadow);
+		*///?} else {
+		/*if (shadow) font.drawShadow(graphics, text, x, y, argb);
+		else font.draw(graphics, text, x, y, argb);
+		*///?}
 	}
-	//?} else {
-	/*@Override
-	public void text(String text, int x, int y, int argb, boolean shadow) {
-		graphics.drawString(font, text, x, y, argb, shadow);
-	}
-	*///?}
 
-	/** {@code enableScissor(int, int, int, int)} and {@code disableScissor()} exist in every era. */
 	@Override
 	public void beginClip(Rect area) {
+		//? if >=1.20 {
 		graphics.enableScissor(area.x(), area.y(), area.right(), area.bottom());
+		//?} else {
+		/*Minecraft minecraft = Minecraft.getInstance();
+		double scale = minecraft.getWindow().getGuiScale();
+		int left = (int) Math.floor(area.x() * scale);
+		int right = (int) Math.ceil(area.right() * scale);
+		int top = (int) Math.floor(area.y() * scale);
+		int bottom = (int) Math.ceil(area.bottom() * scale);
+		RenderSystem.enableScissor(left, minecraft.getWindow().getHeight() - bottom,
+			Math.max(0, right - left), Math.max(0, bottom - top));
+		*///?}
 	}
 
 	@Override
 	public void endClip() {
+		//? if >=1.20 {
 		graphics.disableScissor();
+		//?} else {
+		/*RenderSystem.disableScissor();
+		*///?}
 	}
 
-	/** {@code Font#width(String)} exists in every era (same table). */
 	@Override
 	public int codePointWidth(int codePoint) {
 		return font.width(new String(Character.toChars(codePoint)));
 	}
 
-	/** {@code Font#lineHeight} is a field in every era (same table). */
 	@Override
 	public int lineHeight() {
 		return font.lineHeight;

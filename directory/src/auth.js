@@ -1,4 +1,4 @@
-// Account proof without calling Mojang (docs/friends/BYNAME-ATTEST.md): the launcher presents Mojang's signed player
+// Account proof without calling Mojang (docs/friends/SPEC.md#directory-api): the launcher presents Mojang's signed player
 // certificate and signs the challenge with its friends key (L1) and with the certificate key (L2). The Worker checks
 // everything offline against Mojang's pinned keys. Challenge and token stay stateless (HMAC with TOKEN_KEY).
 import { PLAYER_CERTIFICATE_KEYS } from "./mojang-keys.js";

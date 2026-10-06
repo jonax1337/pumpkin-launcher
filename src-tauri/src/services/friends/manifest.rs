@@ -76,6 +76,7 @@ impl VersionIndex {
             manifest
                 .versions
                 .iter()
+                .filter(|entry| entry.kind == "release")
                 .map(|entry| (entry.id.clone(), entry.release_time.clone())),
         )
     }
@@ -163,6 +164,9 @@ pub fn validate(raw: Manifest, versions: &VersionIndex) -> Result<Manifest, Mani
 
 /// ISO-8601 mit demselben Format (`+00:00`) wie [`MIN_MC_RELEASE_TIME`], daher als Text vergleichbar.
 fn ensure_supported_version(version: &str, versions: &VersionIndex) -> Result<(), ManifestError> {
+    if !crate::services::modbridge::ingame::is_release_id(version) {
+        return Err(ManifestError::Invalid("keine Minecraft-Release-Version"));
+    }
     let released = versions
         .release_time(version)
         .ok_or(ManifestError::Invalid("unbekannte Minecraft-Version"))?;

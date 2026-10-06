@@ -19,7 +19,7 @@ import net.minecraft.network.chat.Component;
 
 /**
  * Leaves the current world the way the pause menu's "Save and Quit" does: the same calls in the same order, so the world
- * is saved and the game ends on the title screen. INGAME-API.md 3.2, "Leave the world": four implementations, one per era.
+ * is saved and the game ends on the title screen. docs/bridge/MINECRAFT-API.md, "Minecraft: screens, main thread, leaving a world": four implementations, one per era.
  */
 public final class Disconnect {
 	private Disconnect() {
@@ -41,7 +41,7 @@ public final class Disconnect {
 		boolean local = minecraft.isLocalServer();
 		minecraft.level.disconnect();
 		if (local) {
-			minecraft.disconnect(new GenericMessageScreen(Component.translatable("menu.savingLevel")));
+			minecraft.disconnect(new GenericMessageScreen(Text.component("menu.savingLevel")));
 		} else {
 			minecraft.disconnect();
 		}
@@ -52,7 +52,7 @@ public final class Disconnect {
 		boolean local = minecraft.isLocalServer();
 		minecraft.level.disconnect();
 		if (local) {
-			minecraft.disconnect(new GenericDirtMessageScreen(Component.translatable("menu.savingLevel")));
+			minecraft.disconnect(new GenericDirtMessageScreen(Text.component("menu.savingLevel")));
 		} else {
 			minecraft.disconnect();
 		}
@@ -63,7 +63,7 @@ public final class Disconnect {
 		boolean local = minecraft.isLocalServer();
 		minecraft.level.disconnect();
 		if (local) {
-			minecraft.clearLevel(new GenericDirtMessageScreen(Component.translatable("menu.savingLevel")));
+			minecraft.clearLevel(new GenericDirtMessageScreen(Text.component("menu.savingLevel")));
 		} else {
 			minecraft.clearLevel();
 		}

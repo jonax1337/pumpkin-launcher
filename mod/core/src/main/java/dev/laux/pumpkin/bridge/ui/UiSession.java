@@ -1,11 +1,11 @@
 package dev.laux.pumpkin.bridge.ui;
 
 import java.util.function.BooleanSupplier;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /**
- * The soft-failure guard of the in-game UI (INGAME 4.2): the mod must never throw into the game. Every entry point
+ * The soft-failure guard of the in-game UI (docs/bridge/README.md): the mod must never throw into the game. Every entry point
  * that calls game code runs through here. The first failure is logged once and disables the mod's UI for the rest of
  * the session; after that new UI work is skipped. This is the {@code require = 0} philosophy of the pause-menu hook
  * extended to everything the hook itself cannot cover.
@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
  * {@link RuntimeException}s, so the guard catches both.
  */
 public final class UiSession {
-	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_bridge");
+	private static final Logger LOG = LogManager.getLogger("pumpkin_bridge");
 
 	private static volatile boolean off;
 

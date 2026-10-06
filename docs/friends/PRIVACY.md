@@ -1,388 +1,128 @@
-# Pumpkin Friends: privacy, relay and compliance
-
-Work package D1. This file is the wording basis for the in-app PrivacyNotice, the opt-in dialog
-and the relay information (SPEC 12.1 is the normative source for what the feature does). The relay
-runbook is [`RELAY-OPS.md`](RELAY-OPS.md).
-
-**Status: draft for the owner's review.** It is not legal advice. Items marked **(owner)** need a
-decision or a fact only the owner has (name and address of the operator, the hosting provider,
-the abuse mailbox). Everything else was derived from the spec and from the `iroh-relay` 1.3.0 source.
-
-## 1. Summary
-
-- Friends is **off by default**. Before opt-in it creates no Friends UDP endpoint, relay connection
-  or Friends-related Mojang request. The independent Pumpkin Bridge listener may already bind a
-  loopback-only TCP port on this PC; that is not Friends networking or consent (SPEC 12.1).
-- Friends connect through codes that the users exchange themselves, or, if both sides opt in, by exact Minecraft
-  name through the Pumpkin directory (section 9). There is no public list and no partial search, no chat, no
-  tracking, no telemetry.
-- The directory never contacts Mojang and stores no names. Your launcher proves the account with a player certificate
-  that Mojang signed, and the access token is only ever sent to Mojang (section 9).
-- Pumpkin Bridge may be injected into supported Microsoft-account launches even while Friends is off,
-  subject to its global/per-instance switches. Its logo opens the shared module home; Friends data
-  and actions remain disabled until opt-in. Known-UUID heads use Minecraft's native Mojang services
-  only when shown; other mods in the same game can access the same loopback channel.
-- Connections are encrypted end to end between the launchers. The relay forwards ciphertext.
-- Our own relay stores nothing about connections. It sees, while a connection is open, the client's IP
-  address and its endpoint id, and who it forwards to.
-
-## 2. Data map
-
-| Data | Who sees it | Where it is stored | Why |
-|---|---|---|---|
-| Minecraft player name and UUID (automatically sourced from the signed-in account; normal peer announcements remain self-asserted) | Confirmed friends | Locally at each friend, locally at the user | Show who a friend is; no separate configurable display name |
-| Online and playing status | Confirmed friends only | Not stored by us (kept in memory by the friend's launcher; `lastSeen` is stored locally) | Presence |
-| Hosting a world, version, loader, mod list (manifest) | Invited friends only | Not stored by us | Join a shared world |
-| Permanent identity key | Nobody. Only the derived id (64 hex) is shared with friends | The OS keychain, never in a file | Authenticate friends |
-| Friend code (80 characters, valid 7 days, single use) | Whoever the user gives it to | Hash only on the inviter's PC; the code is shown once | Add a friend |
-| Public IP and local network addresses | The other end of a **direct** connection (a friend; with "always relay" off also a code holder, see section 5) | Not stored by us | Connect directly |
-| IP address and endpoint id of a connected launcher | The relay operator, while the connection is open | Memory of the relay process only (section 3.4) | Forward packets, find the peer |
-| Minecraft UUID of a friend | Mojang's sessionserver | Skin image is cached locally | Show the friend's skin |
-| Minecraft UUID of a person who is findable by name, plus first and last refresh time | The Pumpkin directory | The directory's database (EU), until switched off or 30 days without refresh | Be found by exact name (section 9) |
-| By-name request: sender's UUID, friends id, Minecraft player name, one-time code | The directory, then the recipient | The directory's database, at most 14 days | Deliver a request while the recipient is offline (section 9) |
-| Player certificate (public key, expiry, Mojang's signature) and two signatures | The directory, during the login | **Not stored** | Prove account ownership offline (section 9) |
-| World traffic between the players | The two launchers | Nowhere | The game itself |
-| Friends data shown in the game (names, presence, requests, invites; planned) | The in-game mod and every other mod in the same game (section 10) | Memory of the game process only | Show the friends menu in the game |
-
-## 3. The relay (GDPR information text, Art. 13)
-
-### 3.1 Controller
-
-Operator of the relay: **(owner)** name, postal address, e-mail. Contact for privacy questions:
-**(owner)** `privacy@<relay-domain>`. A data protection officer is not required for this scale
-(to be confirmed by the owner).
-
-Hosting provider (processor): **(owner)** provider name and data centre location (EU). A data processing
-agreement (AVV, Art. 28 GDPR) has to be in place before launch.
-
-### 3.2 What the relay processes
-
-- The **IP address and port** of every launcher that connects (TCP 443 for relaying, UDP 7842 for address
-  discovery) and the **endpoint id** (the public key of the connecting endpoint).
-- Which endpoint asks the relay to forward to which other endpoint ("who talks to whom"), the amount of data
-  and the timing, as far as needed to forward it.
-- **Not processed:** the content of any message, world, chat or file. It is encrypted between the launchers
-  and the relay cannot read it. No Microsoft or Minecraft account data reaches the relay. The permanent id
-  of a user is not in a friend code, and the relay never sees a friend code.
-- The relay is a general-purpose iroh relay. The endpoint id it sees is the id of the user's
-  endpoint (the permanent id for the main connection, a one-time id for the hello connection of a friend code).
-
-### 3.3 Purpose and legal basis
-
-- Purpose: to connect two users' launchers when a direct connection fails, and to tell a launcher its
-  public address so that a direct connection can be made.
-- Legal basis: Art. 6(1)(b) GDPR (the user switched the feature on to get exactly this connection
-  service), with Art. 6(1)(f) as a fallback (legitimate interest in operating the service and keeping it
-  secure). The opt-in dialog is the transparency measure (Art. 13), it is not a consent for the relay.
-  **(owner)** confirm the choice.
-- No automated decisions, no profiling, no advertising, no sale or sharing of data.
-
-### 3.4 Retention and log policy
-
-| Item | Policy | Basis |
-|---|---|---|
-| Access log | **None.** The relay writes no access log at its default level | iroh-relay 1.3.0 source (connection-opened lines exist only at debug level) |
-| Error log | **Not stored.** The standing deployment discards all relay output (`logging: driver: none`) | `infra/relay/docker-compose.yml` |
-| Debug log | Only during a troubleshooting session, with client IPs (the relay cannot truncate them), one file of at most 1 MiB, deleted within **24 hours** by recreating the container | `docker-compose.debug.yml`, RELAY-OPS section 11 |
-| Metrics | Aggregate counters (connections, bytes, rate-limited connections), **no IPs and no ids**, reachable on the server's localhost only | `relay.toml`, compose `127.0.0.1` publish |
-| Process memory | While a connection is open: IP address and endpoint id. In addition the relay keeps a **set of the endpoint ids seen today** to count unique clients per day. It is cleared at 00:00 UTC and lost on every restart. It holds no IP addresses | `iroh-relay` 1.3.0, `ClientCounter` in `server/client.rs` |
-| Certificate volume | Let's Encrypt account and certificates, no user data | `relay-data` volume |
-| Server and network logs | Firewall logging is off, no connection-tracking logs, no flow export. Provider-level logging is **(owner)** to check with the provider and to name here | RELAY-OPS section 6 |
-
-Because the relay keeps no record that links a person to a connection, requests for access, correction
-or deletion can usually not be answered with data (Art. 11(2) GDPR). The rights under Art. 15 to 21
-and the right to complain to a supervisory authority apply. Contact the operator (section 3.1).
-
-### 3.5 Recipients and transfers
-
-- The hosting provider as processor (section 3.1). No other recipients. Own relay in the EU: no transfer to a
-  third country.
-- n0's public relays are a different controller, see section 4.
-
-### 3.6 Security
-
-TLS to the relay (Let's Encrypt certificate), end-to-end encryption between launchers, per-client
-bandwidth limit, no inbound ports other than 80, 443 and 7842 (RELAY-OPS section 4), the
-metrics port reachable on localhost only.
-
-### 3.7 Abuse contact
-
-`abuse@<relay-domain>` **(owner: create and monitor the mailbox; the address is a placeholder until the domain
-is registered)**.
-
-Reports need the full 64-character PeerId of the offending endpoint. The relay has no log to look
-anyone up. See RELAY-OPS section 13 for the steps (block list, bandwidth limit).
-
-## 4. Third-party relays (debug and closed-beta builds only)
-
-- A release build contains only our relay (SPEC 3.2). Debug builds and closed-beta builds
-  (feature `beta-relays`) also list n0's public relays: `use1-1.relay.n0.iroh.link`,
-  `usw1-1.relay.n0.iroh.link`, `euc1-1.relay.n0.iroh.link`, `aps1-1.relay.n0.iroh.link` (`IROH-NOTES.md`
-  section 2.1).
-- They are operated by n0 (the developers of iroh), who are the controller for what those servers
-  process. They see the same kind of data as in section 3.2. The legal address of the operator, its
-  retention policy and where the servers are located were **not verified here (owner)**. Check n0's
-  current terms and privacy policy before any beta build ships, and fill in the operator name below.
-- Because of that, `friends_enable` requires an explicit, separate consent while such a relay is in the
-  map (SPEC 3.2, `acceptThirdPartyRelays`), and the PrivacyNotice names the operator and the hosts. The
-  consent also serves as the basis for a possible transfer outside the EU (Art. 49(1)(a)).
-
-## 5. Who learns your address (stated honestly, SPEC 12.1)
-
-- On a **direct** connection both sides learn each other's public IP address and the addresses of their local
-  network interfaces (home network, VPN, Docker).
-- A friend-code holder cannot learn the inviter's addresses, because the hello connection is relay-only.
-- The invitee's main connection may reveal the invitee's addresses to the code owner unless "Immer über
-  Relay" is on.
-- Anyone who ever knew your permanent id (current or former friends) can tell whether you are online.
-- "Immer über Relay" hides your addresses from all peers. The cost is somewhat higher latency, and the
-  relay operator then sees who is connected to whom (never the content).
-
-## 6. Other notes, and hand-offs
-
-- **LAN port.** Opening a world to LAN binds the game's port on all network interfaces, as in
-  vanilla Minecraft. The tunnel does not change that. Devices in the local network (and anything the router
-  forwards) can reach the port, and Mojang's authentication is the only protection. Windows Firewall profiles
-  apply. The ShareDialog (F5) says this in short, and this file is the long form.
-- **Skins and sender names.** The launcher (not the page) fetches a friend's skin from Mojang's sessionserver. That sends the
-  friend's Minecraft UUID, and the launcher's IP address, to Mojang. The same endpoint answers the question "what is the
-  name of the sender of this by-name request", asked once for every new request you receive (section 9.3). The texture comes from
-  `textures.minecraft.net` and is cached on the user's PC. The exact sessionserver host is pinned by R6.
-  The in-game Friends menu also asks Minecraft's native profile/skin services for known-UUID friend heads. Mojang sees
-  that UUID and the game client's IP address; Minecraft manages the texture cache. No separate skin provider is used,
-  and friends without a UUID use a vanilla default head without a display-name lookup.
-- **Local data.** The identity key is in the OS keychain. Friend records, codes (as hashes), requests and
-  the 14-day outbox are in `friends.json` on the user's PC. "Identität zurücksetzen und alle Freunde löschen"
-  removes them. Logs never contain IPs, secrets, codes, tokens or hello ids (SPEC 12.1).
-- **Hand-off to F3 (not done by D1):** the Settings page should let the user copy the full 64-character
-  PeerId, because an abuse report to the relay needs it (section 3.7). The fingerprint alone (16 characters)
-  is not enough.
-
-## 7. In-app text drafts
-
-Final wording is reviewed by the owner (SPEC 13.5, item 4). The opt-in bullets are fixed in SPEC 10.9 and are not
-repeated here. Key names belong to F3 and are suggestions only. `{operator}`, `{hosts}` and `{relayHost}` are
-placeholders filled from `RELAY_MAP`.
-
-### 7.1 PrivacyNotice rows (`components/PrivacyNotice.tsx`)
-
-| Row | Deutsch | English |
-|---|---|---|
-| Name, own relay (`friendsRelay`) | Pumpkin-Relay | Pumpkin relay |
-| Hosts | `relay-eu1.<relay-domain>` | `relay-eu1.<relay-domain>` |
-| Purpose | Nur wenn du Freunde einschaltest. Freunde: verschlüsselte Weiterleitung, keine Inhalte. Das Relay leitet verschlüsselte Verbindungen zwischen Launchern weiter und hilft ihnen, sich direkt zu verbinden. Es sieht deine IP-Adresse und die Kennung deines Launchers, solange die Verbindung offen ist, und speichert keine Protokolle. | Only if you turn on Friends. Friends: encrypted forwarding, no content. The relay forwards encrypted connections between launchers and helps them connect directly. While a connection is open it sees your IP address and your launcher's identifier, and it stores no logs. |
-| Name, n0 (`friendsRelayN0`, only when the map lists n0) | n0 (Relay-Server für Tests) | n0 (relay servers for testing) |
-| Hosts | `use1-1.relay.n0.iroh.link`, `usw1-1.relay.n0.iroh.link`, `euc1-1.relay.n0.iroh.link`, `aps1-1.relay.n0.iroh.link` | same |
-| Purpose | Nur in Test-Versionen und nur mit deiner Zustimmung: Freunde: verschlüsselte Weiterleitung, keine Inhalte. Diese Relays betreibt n0, nicht wir. Sie sehen deine IP-Adresse und mit wem du verbunden bist, aber keine Inhalte. Wie lange n0 das speichert, bestimmt n0. | Only in test builds and only with your consent: Friends: encrypted forwarding, no content. n0 runs these relays, not us. They see your IP address and who you are connected to, but no content. How long n0 keeps this is up to n0. |
-| Name, Mojang skins (`friendsSkins`) | Mojang (Skins deiner Freunde) | Mojang (your friends' skins) |
-| Hosts | `sessionserver.mojang.com` (host to be confirmed by R6), `textures.minecraft.net` | same |
-| Purpose | Nur wenn Freunde an ist: Der Launcher fragt mit der Minecraft-UUID eines Freundes dessen Skin bei Mojang ab und speichert das Bild lokal. Mojang sieht dabei die UUID und deine IP-Adresse. | Only if Friends is on: the launcher asks Mojang for a friend's skin using the friend's Minecraft UUID and stores the image locally. Mojang sees the UUID and your IP address. |
-
-### 7.2 Third-party relay consent checkbox (opt-in dialog, SPEC 10.9)
-
-| Deutsch | English |
-|---|---|
-| Ich bin einverstanden, dass {operator} ({hosts}) als Relay genutzt wird. Der Betreiber sieht meine IP-Adresse und mit wem ich verbunden bin, aber keine Inhalte. Das gilt nur für diese Test-Version. | I agree that {operator} ({hosts}) is used as a relay. The operator sees my IP address and who I am connected to, but no content. This applies to this test build only. |
-
-### 7.3 Settings hints
-
-| Where | Deutsch | English |
-|---|---|---|
-| "Verbunden über {relayHost}" tooltip | Das Relay leitet verschlüsselt weiter und speichert keine Protokolle. | The relay forwards encrypted data and stores no logs. |
-| "Immer über Relay" hint (extends SPEC 10.8) | Freunde sehen deine IP-Adressen nicht. Etwas höhere Latenz. Der Relay-Betreiber sieht, wer mit wem verbunden ist, aber keine Inhalte. | Friends do not see your IP addresses. Slightly higher latency. The relay operator sees who is connected to whom, but no content. |
-| ShareDialog LAN note (F5) | Beim Öffnen für LAN lauscht Minecraft auf allen Netzwerkschnittstellen, wie im normalen Spiel. Geräte in deinem Netzwerk können den Port erreichen; geschützt ist er nur durch die Mojang-Anmeldung. | Opening to LAN makes Minecraft listen on all network interfaces, as in normal play. Devices on your network can reach the port, and only Mojang's login protects it. |
-
-### 7.4 Longer relay information (website or README)
-
-**Deutsch.** Der Pumpkin-Relay ist ein Server, der verschlüsselte Verbindungen zwischen Launchern weiterleitet, wenn
-sich zwei Computer nicht direkt erreichen können, und der Launchern ihre öffentliche Adresse mitteilt. Er wird von
-**(owner: Name, Anschrift)** betrieben und läuft bei **(owner: Hoster, EU)**. Er verarbeitet, solange eine
-Verbindung besteht, deine IP-Adresse, die Kennung deines Launchers und die Information, mit wem sie verbunden ist.
-Inhalte kann er nicht lesen. Der Relay führt keine Zugriffsprotokolle und speichert keine Fehlerprotokolle. Die Kennungen
-der heute gesehenen Verbindungen liegen bis 00:00 UTC im Arbeitsspeicher, nur zum Zählen. Rechtsgrundlage ist Art. 6
-Abs. 1 lit. b, hilfsweise lit. f DSGVO. Weil nichts gespeichert wird, können wir einzelnen Personen meist keine Daten
-zuordnen (Art. 11 DSGVO). Du hast die Rechte nach Art. 15 bis 21 DSGVO und kannst dich bei einer Aufsichtsbehörde
-beschweren. Datenschutzfragen: `privacy@<relay-domain>`. Missbrauch melden: `abuse@<relay-domain>` (bitte mit der
-vollständigen PeerId).
-
-**English.** The Pumpkin relay is a server that forwards encrypted connections between launchers when two computers
-cannot reach each other directly, and that tells launchers their public address. It is operated by **(owner: name,
-address)** and hosted at **(owner: provider, EU)**. While a connection exists it processes your IP address, the
-your launcher's identifier and the information of who it is connected to. It cannot read any content. The relay
-keeps no access log and stores no error log. The identifiers of the connections seen today are held in memory until
-00:00 UTC, only to count them. The legal basis is Art. 6(1)(b), alternatively (f) GDPR. Because nothing is stored, we
-usually cannot link data to a person (Art. 11 GDPR). You have the rights under Art. 15 to 21 GDPR and can complain to a
-supervisory authority. Privacy questions: `privacy@<relay-domain>`. Report abuse: `abuse@<relay-domain>` (please include
-the full PeerId).
-
-## 8. Mojang and Microsoft compliance checklist (SPEC Appendix C)
-
-Copied unticked from Appendix C. I1 ticks it in `VERIFICATION.md`. The right column says where each item is
-met, so I1 knows what to check. The Usage Guidelines and the approval scope are not checked here.
-
-| Done | Item | Where it is met or checked |
-|---|---|---|
-| [ ] | The launcher About page and the mod description carry "NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT." | About page (`AboutTab.tsx`): no such line exists in `src` or the README today (searched); needed before release. Mod: the description in the jar metadata (`fabric.mod.json`, `neoforge.mods.toml`, `mods.toml`) and `mod/README.md` (M1); a Modrinth description only while a Modrinth project exists (`INGAME.md` drops it) |
-| [ ] | No Minecraft logo or Mojang branding in the friends UI or the mod. The name "Pumpkin Friends" does not suggest officialness. | Review of F2 to F5 and M1 assets |
-| [ ] | Free, with no paid perks or gating. No game files are distributed between peers. Each client downloads from Mojang and Modrinth only (the in-game mod needs no download: it is part of the launcher, `INGAME.md` section 3.2). | SPEC 1.2 (no downloads from friends), R6 |
-| [ ] | Online-mode only. Offline accounts are refused before launch (E8a, plus the R3 unit test), and the host's game refuses them at login (E8b, with the recorded vanilla message). | E8a and E8b in `VERIFICATION.md` |
-| [ ] | Child-account behaviour recorded (E13). The feature does not bypass Xbox or Mojang multiplayer restrictions (it uses the vanilla join path). | E13 |
-| [ ] | The Usage Guidelines were re-read at release time (date recorded). | Owner, date in `VERIFICATION.md` |
-| [ ] | The owner confirmed that the Microsoft/Mojang app approval covers sharing player names and UUIDs between users (G4). | Owner, G4 (see `docs/ACCOUNT-SETUP.md`) |
-| [ ] | The Modrinth API is used with the launcher User-Agent and within its rate limits. | R6 mod install and lookup code, existing Modrinth client |
-| [ ] | The owner confirmed that fetching the player certificate (`/player/certificates`) and the account attributes (`/player/attributes`) from this launcher is covered by the Mojang/Microsoft approval and terms (unverified; BYNAME OD-N3). | Owner, `OWNER-CHECKLIST.md` step 8 |
-
-## 9. The Pumpkin directory (finding friends by Minecraft name)
-
-Applies only if "Per Minecraft-Namen auffindbar" is on, or you send a request by name. Both are off by default. The
-design is `BYNAME.md` with the certificate login of `BYNAME-ATTEST.md`; the website text is
-`website/datenschutz.html` (German). Not legal advice; **(owner)** marks what only the owner can confirm.
-
-### 9.1 Controller and processor
-
-The operator is the controller: **(owner)** name, postal address and e-mail as in the website's privacy page
-(Jonas Laux, `jonas@laux.digital`). Cloudflare, Inc. is the processor (Cloudflare Workers and D1, database in the EU
-jurisdiction; **(owner)** accept Cloudflare's data processing addendum). The Worker runs at Cloudflare's edge
-worldwide, and Cloudflare processes request metadata such as the IP address transiently, among other things for
-rate limiting. The Worker writes no logs (`[observability] enabled = false`).
-
-### 9.2 What the directory processes
-
-| Data | Stored | Kept | Why |
-|---|---|---|---|
-| Minecraft UUID of a findable person, time of first registration and last refresh | Yes, table `users` | Until switched off, until signing out of Friends, or 30 days without a refresh | The opt-in itself |
-| By-name request: sender's UUID and friends id (stamped by the directory), recipient's UUID, single-use code parts, Minecraft player name (signed `displayName` wire field), times, signature | Yes, table `letters` | Until answered, retracted, blocked or 14 days | Offline delivery |
-| Blocks: your UUID → blocked UUID | Yes, table `blocks` | Until unblocked or signed out | Refuse a sender |
-| Send log: who wrote to whom, when | Yes, table `sends` | 7 days, also for senders who are not findable | Abuse prevention |
-| **Player certificate: public key, expiry, Mojang's signature, and the two login signatures** | **No (processed, not stored)** | Only while the login request is handled | Prove account ownership offline |
-| Session token | No (stateless, sealed with a secret) | 6 hours at most, in the launcher's memory only | Authorise the calls after login |
-
-The certificate's public key is a pseudonymous identifier for the certificate's lifetime (about 48 hours, unverified).
-Every multiplayer server the player joins receives the same key. The directory does not keep it.
-
-**Never processed by the directory:** player names (it handles none), Minecraft access tokens, certificate private keys,
-friend lists, presence, whether a request was accepted, tunnel traffic. **The directory never contacts Mojang.**
-
-### 9.3 What your launcher sends to Mojang, from your IP address
-
-| Endpoint | Purpose | When | What Mojang learns |
-|---|---|---|---|
-| `POST api.minecraftservices.com/player/certificates` | Fetch the player certificate that proves the account | At a directory login (by-name is on, or you send a request by name), then again about every 40 hours while the launcher runs | The account, from your IP address (sends the access token) |
-| `GET api.minecraftservices.com/player/attributes` | Check that the account may use multiplayer and friends | At every directory login (about every 6 hours) | The account, from your IP address (sends the access token) |
-| `GET api.minecraftservices.com/minecraft/profile/lookup/name/{name}` | Name → UUID | When you send a request by name | The name you looked up |
-| `GET sessionserver.mojang.com/session/minecraft/profile/{uuid}` | UUID → current name of a sender | For each new by-name request you receive, after it was validated | That your launcher asked about that sender's UUID |
-| `POST sessionserver.mojang.com/session/minecraft/join` and `GET .../hasJoined` | Both launchers confirm each other's account | When a by-name request is accepted | Like joining an online-mode server |
-
-**The access token is only sent to Mojang, never to the directory.** Mojang's restrictions apply: an account that Mojang
-does not allow to use multiplayer or friends cannot become findable through this launcher, and cannot complete a
-friendship (`join` is refused).
-
-### 9.4 Retention and deletion
-
-- Switching off "Per Minecraft-Namen auffindbar" or Friends deletes your UUID entry, the requests addressed to you and
-  your blocks at once. If the Minecraft account was removed from the launcher before that could run, the 30-day
-  retention removes the entry.
-- A request is deleted when answered, retracted, blocked or after 14 days. The send log is deleted after 7 days.
-- **Restore window.** The database keeps its history (D1 Time Travel): deleted rows can be restored by the operator for
-  **7 days (Free plan) or 30 days (Paid plan)**. This cannot be switched off. After that they are gone for good.
-- Access: you see your own requests in the launcher. Erasure and other requests: the e-mail address of the
-  controller, with your UUID.
-
-### 9.5 Legal bases
-
-- Findable by name: consent, Art. 6(1)(a) GDPR, opt-in, off by default, withdrawable at any time with one switch that
-  deletes at once.
-- A request you send: Art. 6(1)(b) GDPR (you ask for the contact).
-- Send log: Art. 6(1)(f) GDPR (legitimate interest in abuse prevention), 7 days.
-- Processing of the certificate and signatures for the login: Art. 6(1)(b) GDPR, as part of the service you switched on.
-
-### 9.6 What stays unsafe, stated honestly
-
-- Whoever holds your player certificate's private key (it lives in the launcher's memory, and older vanilla releases
-  also write it to `profilekeys/` in the game folder) can open directory sessions as you for up to its lifetime:
-  read who wrote to you, delete requests, send requests as you, register or unregister you. The launcher never
-  includes `profilekeys/` in instance exports or templates. Such a holder still cannot become your friend or
-  impersonate you at acceptance, because that needs the access token.
-- The directory no longer enforces Mojang's multiplayer restrictions itself. The launcher checks them; a modified
-  launcher could skip the check. Completing a friendship still needs Mojang's `join` at acceptance.
-- Unverified until the owner's tests: the certificate's lifetime, which restricted accounts get which answers, and
-  whether fetching a certificate affects a running game (`OWNER-CHECKLIST.md`, step 8).
-
-### 9.7 PrivacyNotice rows (`components/PrivacyNotice.tsx`)
-
-| Row | Deutsch | English |
-|---|---|---|
-| Name, directory | Freunde-Verzeichnis | Friends directory |
-| Host | `directory.host` | `directory.host` |
-| Purpose | Nur wenn du per Name auffindbar bist oder jemandem per Name schreibst: Minecraft-UUID, Anfragen bis 14 Tage | Only if you are findable by name or write to someone by name: Minecraft UUID, requests for up to 14 days |
-| Name, name lookup (`nameLookupName`) | Minecraft-Namenssuche und Kontonachweis | Minecraft name lookup and account proof |
-| Host | `api.minecraftservices.com` | same |
-| Purpose (`nameLookup`) | Name → UUID beim Senden per Name; ein von Mojang signiertes Spielerzertifikat als Kontonachweis für das Verzeichnis | Name → UUID when sending by name; a Mojang-signed player certificate as account proof for the directory |
-| Mojang sessionserver, purpose (`sessionserverProof`) | Kontonachweis beim Annehmen einer Anfrage per Name und die Namen der Absender | Account proof when accepting a request by name, and the names of senders |
-
-## 10. The in-game mod (`INGAME.md`)
-
-Status: the launcher-injected mod is built and merged on `feat/ingame-mod` (waves 0 to 2 of `INGAME.md` section 11.2;
-five cells smoke-proven, `INGAME-SMOKE.md`) and is **not yet in a released build**. The hand-installed Fabric mod of
-the 2.0.x releases is gone from that branch (SPEC 11.5, changelog D.6). This section is the wording basis for the
-release that ships the injection. It does not change sections 1 to 9, in particular not the certificate login of
-section 9.
-
-### 10.1 What is added to the game, and when
-
-- Pumpkin Bridge is injected into supported Microsoft-account launches when the existing global/
-  per-instance injection switches permit it, independently of Friends opt-in (`INGAME.md` 3.3).
-  Before Friends opt-in the local Bridge may listen, but exposes no private Friends data or actions.
-  Offline accounts, Vanilla, Quilt and unsupported targets still get no injection.
-- The mod file lives in the launcher's own data folder, **outside your instance folder**. It is not in `mods/`, not in
-  exports or templates, and no pack update can overwrite it. It is part of the launcher and is not downloaded.
-- The mod's custom transport is only the loopback connection to the launcher on this PC (`127.0.0.1`).
-  Friends logic, identity operations, peer and relay traffic stay in the launcher. Minecraft's native
-  profile/skin services may contact Mojang when rendering a known-UUID head.
-- The mod can only trigger what you start in the game menu. Enabling or disabling Friends, rotating or resetting the
-  identity, relay consent and copying your full id are never possible from the game.
-- Disabling Friends or changing its identity revokes game-side grants and pending/private frames,
-  not the common Bridge listener. A private write interrupted by revocation may close that one socket
-  and reconnect; information already sent to the game cannot be recalled.
-
-### 10.2 Other mods in the same game (same-JVM exposure)
-
-Every mod in a game runs as your operating-system user, inside the same process. Another mod in the same game can
-therefore read the connection data the launcher hands to the game (port and a one-time token), connect to the launcher
-and use the same operations as our mod, for example answer a friend request or invite friends to your world.
-
-- The launcher limits what such a connection can do: no identity operations, no raw peer ids (friends are addressed by
-  per-launch aliases), rate limits, and a toast plus an activity entry for every action taken from the game.
-- Before friend and share actions from the game, the launcher asks once per game launch ("Dieses Spiel möchte deine Welt
-  mit ausgewählten Freunden teilen." and "Dieses Spiel möchte Freunde hinzufügen, Anfragen beantworten und Einladungen
-  annehmen."). The setting "Aktionen im Spiel" can allow them in advance.
-- The launcher checks that the connection comes from the game process it started, so a leaked token does not help another
-  program. This is **not a defence against malicious mods**: code in the game process is code on your PC.
-- Do not run mods you do not trust, with or without Pumpkin Friends.
-
-### 10.3 What same-user code can read, stated honestly
-
-- **Friends identity key.** On Windows and Linux, any program running as your user can read the key from the OS keyring.
-  Consent prompts and scopes do not change that.
-- **`profilekeys/`.** Older vanilla releases cache the account's player certificate, **including its private key**, in
-  `<gameDir>/profilekeys/`. Whoever can read it (any mod in the game, any program of your user) can open directory
-  sessions for your account for the certificate's lifetime (about 48 hours, unverified) and do what section 9.6 lists:
-  read who wrote to you, delete requests, send requests as you, register or unregister you. They still cannot become
-  your friend or impersonate you at acceptance, because that needs the access token. The launcher keeps `profilekeys/`
-  out of instance exports and templates. Injecting the mod does not make this worse and does not read the folder.
-
-### 10.4 Opt-in sentence
-
-Added to the opt-in dialog (SPEC 10.9) when the injection ships, and to the PrivacyNotice:
-
-| Deutsch | English |
-|---|---|
-| Pumpkin Bridge kann auch bei ausgeschalteten Freunden in unterstützten Spielen geladen sein. Die Mod liegt außerhalb des Instanzordners; ihr eigener Transport verbindet nur zum Launcher auf diesem PC. Minecraft kann für bekannte Spielerköpfe seine Mojang-Dienste nutzen. Freunde-Daten und -Aktionen benötigen deine Freigabe. Andere Mods im selben Spiel können dieselbe lokale Verbindung nutzen; Aktionen bleiben durch die Zustimmung im Launcher begrenzt. | Pumpkin Bridge may be loaded into supported games even while Friends is off. It is outside the instance folder; its custom transport connects only to the launcher on this PC. Minecraft may use its Mojang services for known player heads. Friends data/actions require your opt-in. Other mods in the same game can use the same local channel; launcher consent still limits actions. |
-
-### 10.5 Data that flows to the mod
-
-Only while Friends is enabled, confirmed friends' names, presence, requests and invites are sent to the
-mod as whole-state pushes. Disabling Friends redacts new pushes and revokes queued private work;
-previously sent information cannot be recalled from the game process's memory.
-Every other mod in the same game can see previously delivered data (section 10.2). Peer-supplied strings are sanitised before
-they reach the mod (SPEC 12.3).
+# Friends and Pumpkin Bridge privacy
+
+Last updated: 2026-10-06.
+
+This is the technical privacy reference for Friends, the directory and the shared in-game Bridge. It is not a completed operator-specific legal notice or legal advice. The public controller/contact details are maintained on the [website privacy page](../../website/datenschutz.html). Relay hosting/provider/contact details and Microsoft/Mojang approval scope still require operator confirmation; an undeployed relay must not be described as a live service.
+
+## Your choices at a glance
+
+In **0.3.0**, the **Pumpkin Bridge** setting controls a menu of in-game features that can load before Friends opt-in; this does not enable Friends networking or private actions. This reference describes 0.3.0's privacy controls and technical contracts.
+
+Friends is optional and off by default. If you turn it on, confirmed friends see your Minecraft name, skin and online/playing status. Invited friends also see your game's version, loader and required mod list. Friends does not send them your world files or configuration files. There is no Friends chat, advertising or telemetry.
+
+Make these choices in **Settings > Friends**:
+
+- **Friends:** switch it off to stop Friends networking while keeping your friends. This also queues deletion of your directory registration, inbox and owned blocks; remote deletion depends on connectivity and has [retention exceptions](#retention-and-deletion). To delete local friends, requests, codes and blocks and replace your identity, use **Danger zone > Reset identity and delete all friends > Reset**. Reset cannot be undone.
+- **Always connect through a relay:** hide your public and local IP addresses from peers. A relay forwards encrypted traffic; its operator still sees connection metadata (IP addresses, connected endpoints and timing), not content. Direct connections reveal those addresses to peers. Changing this setting ends active sharing/joining.
+- **Findable by Minecraft name:** allow anyone who knows your exact name to send a request through the directory. Turn it off to request deletion of your registration, inbox and owned blocks. Remote deletion waits until the service can be reached; outgoing requests and abuse-prevention history keep their normal expiry. See [Retention and deletion](#retention-and-deletion) for the full limits.
+- **Pumpkin Bridge / Actions in the game:** control the in-game integration and whether it must ask before taking Friends actions. **Allow** also allows every mod in that game process to use those actions; it is not protection against malicious mods. Use only mods you trust.
+
+You can **Block** a person from their friend menu and manage blocked people in **Settings > Friends > Blocked**. Open **Settings > About > Privacy** for the launcher's service notice. For data-rights enquiries, use the controller contact on the [website privacy page](../../website/datenschutz.html); directory enquiries need your Minecraft UUID.
+
+Jump to: [Before opt-in](#what-happens-before-opt-in) · [Data map](#data-map) · [Address visibility](#address-visibility-and-lan-exposure) · [Relays](#relay-processing-and-operations) · [Directory and Mojang](#directory-and-mojang) · [Retention and deletion](#retention-and-deletion) · [Local-mod risks](#local-mods-and-residual-security-risks).
+
+## What happens before opt-in
+
+Friends is off by default. Before opt-in the launcher creates no Friends UDP endpoint, relay connection or Friends-related Mojang request. The independent Pumpkin Bridge listener may already bind an IPv4 loopback TCP port and the bundled client mod may load in supported Microsoft-account launches, subject to its global/per-instance switches. This is not consent to Friends networking.
+
+The Pumpkin logo button opens the menu of in-game features. Private Friends data and actions are withheld until opt-in. Known-UUID heads, when displayed, can use Minecraft's native Mojang profile/skin services. Friends without a UUID use local default heads, not a display-name lookup.
+
+There is no Friends telemetry, chat, voice, public player listing, partial-name search, tracking or advertising. World tunnels are encrypted between launchers; relays cannot read their content.
+
+## Data map
+
+| Data | Recipient | Storage/retention |
+| --- | --- | --- |
+| Account-derived Minecraft name/UUID, local alias | Friends receive the announced name/UUID; aliases stay local | Local Friends records; normal peer profiles remain self-asserted |
+| Online/playing state | Confirmed friends | Live state in memory; local `lastSeen` can persist |
+| Invite, version/loader and required mod manifest | Selected invited friends | Live session state; no world/config/file transfer |
+| Permanent private Friends identity | OS keyring; not relays/peers | Until explicit identity change/reset; old key temporarily supports pending notifications |
+| Friend code | Anyone the user gives it to | Inviter stores hash/derivation data; plaintext shown once, seven-day single-use lifetime |
+| Pending request secret | Recipient/holder, and directory for name requests | Local retry record or directory letter, at most fourteen days |
+| Public/local interface addresses | Direct peers | Connection metadata, not a Pumpkin connection log |
+| IP/port, endpoint IDs, counterpart and timing | Relay while routing; Cloudflare while handling directory requests | Relay memory, provider-specific metadata processing; see below |
+| Friend/sender UUID | Mojang sessionserver and native game profile services | Skin cache on the PC; Mojang sees requester IP and requested UUID |
+| Directory registration | Cloudflare Worker/D1 | UUID plus first/last refresh, until opt-out or thirty days without refresh |
+| Directory letter | Worker/D1 and recipient | Sender/recipient UUIDs, bound peer ID, signed `displayName`, code parts, times and signature, until answer/retract/block or fourteen days |
+| Directory block/send log | Worker/D1 | Blocks until removal/opt-out; send history seven days |
+| Public player certificate/login signatures | Worker during authentication | Processed, not stored by the Worker; launcher memory cache only |
+| Directory session token | Launcher and Worker verifier | Stateless at Worker, launcher memory, at most six hours and never beyond certificate expiry |
+| Friends state delivered to game | Bridge and any other mod in that JVM | Game memory; already delivered bytes cannot be recalled |
+
+Local Friends data lives in separate files under `<app-data>/friends/`, not a single `friends.json`. Presence, host/join sessions and invitations are not persisted there. Tokens, private keys, codes, secrets and peer IPs must not enter launcher logs. Exact record fields: `src-tauri/src/services/friends/{records,config}.rs`.
+
+## Address visibility and LAN exposure
+
+On a direct connection both peers learn public IP and local interface addresses, including VPN/container interfaces. Code hello endpoints are relay-only, so a code holder cannot get the inviter's interface addresses from the hello connection. The invitee's main endpoint can reveal its addresses to the code owner unless **Always connect through a relay** is enabled.
+
+Always-relay hides peer addresses from other peers, with additional latency. Relay operators still see who connects and which endpoint forwards to which endpoint, not contents. Anyone who previously learned a permanent ID can attempt to determine whether that endpoint is online; removal does not erase knowledge of the ID.
+
+Opening a world to LAN binds Minecraft's game port on local interfaces, as in Vanilla. The launcher tunnel does not make that LAN port private. Local devices/router forwards and firewall profiles still matter; Minecraft online-mode authentication remains essential. Stopping a tunnel before Minecraft 26.2 leaves the LAN world open until the player leaves it.
+
+## Relay processing and operations
+
+The source's own-production relay map is currently empty. Official tagged release builds enable `beta-relays`, which includes n0's `use1-1`, `usw1-1`, `euc1-1` and `aps1-1` hosts under `relay.n0.iroh.link`, with explicit separate consent; debug builds also include them. The official release workflow configures a directory address, unlike ordinary source builds without configuration. These build settings do not establish service uptime or reliable cross-network play. n0 is a separate controller. Its current operator details, server locations, retention and transfer terms must be confirmed before describing a beta's legal basis; third-country transfers cannot be inferred away.
+
+The own-relay deployment is specified in [RELAY-OPS.md](RELAY-OPS.md). It processes IP/port and endpoint IDs for encrypted forwarding and UDP address discovery. It receives no Minecraft access tokens or private Friends keys. It is a general-purpose relay, not a user-account service; the main endpoint ID differs from a code's ephemeral endpoint ID.
+
+The intended standing deployment discards relay output (`logging: driver: none`, `RUST_LOG=error`), publishes only aggregate metrics on localhost and disables host firewall/flow logging. This is a configuration policy, not a claim that a running provider has been audited.
+
+| Surface | Policy |
+| --- | --- |
+| Relay access/error output | No stored standing log |
+| Temporary diagnostics | One size-capped 1 MiB log, can contain full client IPs, deleted by container recreation within 24 hours |
+| Metrics | Aggregate counters, no per-client IP/ID labels; local-only port |
+| Relay memory | Active connection metadata; set of endpoint IDs seen that UTC day for unique-client counts, cleared at midnight/restart |
+| Certificate volume | ACME account/certificates, no Friends content |
+| Host/provider logs | Operator must establish actual provider retention; no invented zero-retention guarantee |
+
+The relay purpose is connectivity requested by the user. The proposed legal basis is GDPR Art. 6(1)(b), with Art. 6(1)(f) for operation/security as appropriate; the operator must confirm applicability. Own EU hosting requires processor/provider details and an Art. 28 agreement. Relay notice/contact details must identify the actual operator, address, privacy and monitored abuse contact before launch.
+
+Access/erasure requests cannot normally retrieve connection records that are not retained (Art. 11). Rights of access, correction, erasure, restriction, portability, objection and supervisory-authority complaint still apply. An abuse report needs the full 64-character peer ID; the sixteen-character fingerprint is insufficient, and the relay cannot recover an ID from nonexistent logs.
+
+## Directory and Mojang
+
+The directory is an exact-name opt-in mailbox on Cloudflare Workers/D1. D1 is configured for EU jurisdiction; Worker execution and transient IP/rate-limit processing occur at Cloudflare's worldwide edge. `[observability] enabled=false` disables Worker request logging, not every provider-level analytic/restore facility. Cloudflare processor terms must be accepted by the operator.
+
+The directory makes no Mojang subrequests. Certificate authentication sends no account name in its session body/token and does not use the former `from_name` database column. **Letters nevertheless process and store a signed `displayName` field.** Saying that the directory handles or stores no names at all is inaccurate. The recipient separately looks up the sender's current canonical Minecraft name.
+
+Your launcher contacts Mojang from your IP:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST api.minecraftservices.com/player/certificates` | Fetch account certificate; cache until refresh/expiry, memory-only |
+| `GET api.minecraftservices.com/player/attributes` | Check multiplayer/friends restrictions at directory authentication |
+| `GET api.minecraftservices.com/minecraft/profile/lookup/name/{name}` | Resolve exact recipient name to UUID |
+| `GET sessionserver.mojang.com/session/minecraft/profile/{uuid}` | Resolve validated sender name and friend profiles/skins |
+| `POST sessionserver.mojang.com/session/minecraft/join`, `GET .../hasJoined` | Mutual account proof when accepting a name request |
+| `textures.minecraft.net` | Skin textures, locally cached |
+
+The access token is sent only to Mojang, never the directory; the certificate private key is never sent to the directory. Public certificate material can identify the certificate holder across uses for its lifetime (often described as about forty-eight hours, not an owner-verified guarantee here).
+
+While a game link is active, the by-name service uses only a cached certificate and refuses an empty/stale cache rather than fetch a new chat-signing certificate. A simultaneous account `join` proof can briefly interfere with a server login. A launcher restart during a Mojang outage loses the memory-only certificate cache.
+
+### Retention and deletion
+
+Findability/registration refresh is at most daily; inbox polling is normally every fifteen minutes. Switching off findability/Friends queues deletion of the user's registration, inbox and owned blocks. Visible deletion waits for successful remote processing when the service is unavailable; an account removed before cleanup can leave data until thirty-day inactive retention.
+
+Letters are deleted on answer, retract, block or expiry (fourteen days). Accept and decline both look like deletion to the Worker; it does not learn the completed friendship outcome. Opt-out does not erase outgoing letters and abuse-prevention send history before their normal expiry. Send history is kept seven days, including nonfindable senders. D1 Time Travel can restore deleted rows for seven days on Free or thirty days on Paid; that window is not the same as visible row retention.
+
+Proposed legal bases are consent for findability (Art. 6(1)(a)), requested contact/authentication service (Art. 6(1)(b)) and legitimate interest in abuse prevention for the seven-day send history (Art. 6(1)(f)). These are operator/legal determinations, not automated test results. Directory access/erasure enquiries use the controller contact and Minecraft UUID. The user sees their own incoming requests in the launcher.
+
+## Local mods and residual security risks
+
+The Bridge's own transport connects only to `127.0.0.1` on this PC. Friend identities, peer networking, directory access and host/join checks stay in Rust. Process ownership, per-launch aliases, narrow operations, rate limits and launcher consent limit accidental/semi-trusted API abuse.
+
+They do not isolate malicious mods. Every mod in a JVM executes as the OS user, can read the inherited token/port, speak the same local channel and inspect delivered Friends state. On Windows/Linux same-user programs can also read unlocked keyring entries. Do not claim scopes protect the permanent identity from malware.
+
+Older Vanilla versions cache player certificates including private keys in `<gameDir>/profilekeys/`. A stolen certificate key can open directory sessions until certificate expiry: register/unregister, read/delete/send letters. It cannot alone complete the P2P Mojang acceptance proof, which additionally needs the access token. Pumpkin excludes `profilekeys/` from instance exports/templates; it does not make the user's existing game directory unreadable to local code.
+
+Disabling Friends, reset and rotation revoke private work and grants without shutting down the shared listener. Data already sent to game memory remains accessible to that process. Identity changes, privacy switches and full-ID disclosure are launcher-only.
+
+The Worker verifies account certificates offline, not Mojang's current multiplayer restrictions itself. Official launcher attribute checks restrict findability, but a modified launcher can skip them. Completing a name-based friendship still uses Mojang's online account proof. Certificate lifetime, restricted-account responses and the approval to use certificates/attributes or share names/UUIDs are not established by fixture tests.
+
+## Product/legal constraints
+
+Pumpkin is not an official Minecraft product and must not imply Mojang/Microsoft endorsement. Friends is free, does not distribute game files between users and does not bypass Minecraft ownership/online-mode requirements. Forks need their own approved OAuth application and provider/service configuration. Applicable Minecraft Usage Guidelines, app approval scope, processor arrangements and operator-specific notices must be resolved by the operator, not replaced by a completed-looking checklist.
+
+The website and in-app notice should reflect these actual recipients and limits. In particular, distinguish Bridge loopback availability before Friends opt-in, signed `displayName` storage, directory deployment status, cached-only certificate behavior during a game and still-unproven authenticated cross-network behavior.

@@ -288,12 +288,12 @@ fn another_version_or_loader_is_no_candidate_and_never_offers_vanilla_to_a_modde
 }
 
 #[test]
-fn a_host_older_than_1_20_is_unsupported_after_validation() {
+fn a_host_older_than_1_16_5_is_unsupported_after_validation() {
     let versions = VersionIndex::new([
-        ("1.19.4".to_owned(), "2023-03-14T12:56:18+00:00".to_owned()),
+        ("1.16.4".to_owned(), "2020-10-29T15:49:37+00:00".to_owned()),
         ("26.3".to_owned(), "2026-09-01T10:00:00+00:00".to_owned()),
     ]);
-    let old = manifest_of(FABRIC, "1.19.4", vec![]);
+    let old = manifest_of(FABRIC, "1.16.4", vec![]);
 
     let verdict = match manifest::validate(old, &versions) {
         Err(ManifestError::VersionUnsupported) => matching::version_unsupported(&invite()),
@@ -746,8 +746,14 @@ fn a_vanilla_manifest_is_empty_and_serialises_with_the_wire_names() {
 fn versions() -> VersionIndex {
     VersionIndex::new([
         ("26.3".to_owned(), "2026-09-01T10:00:00+00:00".to_owned()),
-        ("1.20".to_owned(), MIN_MC_RELEASE_TIME.to_owned()),
-        ("1.19.4".to_owned(), "2023-03-14T12:56:18+00:00".to_owned()),
+        ("1.16.5".to_owned(), MIN_MC_RELEASE_TIME.to_owned()),
+        ("1.16.4".to_owned(), "2020-10-29T15:49:37+00:00".to_owned()),
+        ("1.16".to_owned(), "2020-06-23T16:20:52+00:00".to_owned()),
+        ("1.15.2".to_owned(), "2020-01-17T10:03:52+00:00".to_owned()),
+        ("1.18.2".to_owned(), "2022-02-28T10:42:45+00:00".to_owned()),
+        ("1.19.2".to_owned(), "2022-08-05T11:57:05+00:00".to_owned()),
+        ("1.16.5-rc1".to_owned(), "2021-01-13T16:22:59+00:00".to_owned()),
+        ("26.3-snapshot-1".to_owned(), "2026-06-23T11:57:02+00:00".to_owned()),
     ])
 }
 
@@ -778,12 +784,25 @@ fn a_valid_manifest_passes_with_sanitised_file_names() {
 }
 
 #[test]
-fn the_release_time_boundary_is_inclusive() {
-    assert!(manifest::validate(manifest_of(FABRIC, "1.20", vec![]), &versions()).is_ok());
-    assert_eq!(
-        manifest::validate(manifest_of(FABRIC, "1.19.4", vec![]), &versions()),
-        Err(ManifestError::VersionUnsupported)
-    );
+fn the_selected_release_floor_is_inclusive_and_rejects_earlier_releases() {
+    for version in ["1.16.5", "1.18.2", "1.19.2", "26.3"] {
+        for loader in [FABRIC, ModLoader::Forge, ModLoader::Quilt, ModLoader::Vanilla] {
+            assert!(manifest::validate(manifest_of(loader, version, vec![]), &versions()).is_ok(), "{version} {loader:?}");
+        }
+    }
+    for version in ["1.16", "1.16.4", "1.15.2"] {
+        assert_eq!(
+            manifest::validate(manifest_of(FABRIC, version, vec![]), &versions()),
+            Err(ManifestError::VersionUnsupported),
+        );
+    }
+}
+
+#[test]
+fn snapshots_do_not_pass_the_release_floor_even_after_its_release_date() {
+    for version in ["1.16.5-rc1", "26.3-snapshot-1"] {
+        invalid(manifest_of(FABRIC, version, vec![]));
+    }
 }
 
 #[test]
@@ -876,7 +895,7 @@ fn manifest_errors_map_to_their_friends_keys() {
 
     assert_eq!(invalid_key, "errors.friends.manifestInvalid");
     assert_eq!(error_key(&old), "errors.friends.versionUnsupported");
-    assert_eq!(serde_json::to_value(&old).unwrap()["params"]["min"], "1.20");
+    assert_eq!(serde_json::to_value(&old).unwrap()["params"]["min"], "1.16.5");
 }
 
 #[test]

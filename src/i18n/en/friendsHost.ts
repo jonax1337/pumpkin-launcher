@@ -78,7 +78,7 @@ export const friendsHost: typeof deFriendsHost = {
   "friendsHost.close.joining": "This ends the connection to {name}.",
   "friendsHost.close.both": "This stops sharing your world and ends the connection to {name}.",
 
-  // ---------- Pumpkin Bridge (status row of the instance page, INGAME 3.9) ----------
+  // ---------- Pumpkin Bridge (status row of the instance page, docs/bridge/README.md, "Support selection") ----------
   "friendsHost.ingame.name": "Pumpkin Bridge",
   "friendsHost.ingame.active": "active ({loader} {minecraft})",
   "friendsHost.ingame.connected": "connected",
@@ -90,7 +90,6 @@ export const friendsHost: typeof deFriendsHost = {
   "friendsHost.ingame.addLoaderDone": "{loader} is set and will be installed at the next start",
   "friendsHost.ingame.reason.notInBuild": "Not available in this build",
   "friendsHost.ingame.reason.vanilla": "Needs a loader",
-  "friendsHost.ingame.reason.quilt": "Not available with Quilt yet",
   "friendsHost.ingame.reason.noNode": "Not available for {loader} {minecraft} yet",
   "friendsHost.ingame.reason.unverified": "Not released for {loader} {minecraft} yet",
   "friendsHost.ingame.reason.loaderTooOld": "Needs {loader} {need} or newer",
@@ -108,7 +107,7 @@ export const friendsHost: typeof deFriendsHost = {
   "friendsHost.ingame.failure.unsupportedClassVersion": "The Java is too old for the mod",
   "friendsHost.ingame.failure.unknown": "unknown reason",
 
-  // ---------- Start failure caused by Pumpkin Bridge (circuit breaker, INGAME 3.8) ----------
+  // ---------- Start failure caused by Pumpkin Bridge (circuit breaker, docs/bridge/README.md, "Startup recovery") ----------
   "friendsHost.breaker.title": "Start failure",
   "friendsHost.breaker.text": "The game crashed while starting. Pumpkin Bridge may be the cause. Start without it?",
   "friendsHost.breaker.detail": "{instance}: {failure}",

@@ -105,7 +105,7 @@ public final class ScriptedLauncher implements AutoCloseable {
 		}
 
 		public JsonObject readFrame() throws IOException {
-			return JsonParser.parseString(readLine()).getAsJsonObject();
+			return new JsonParser().parse(readLine()).getAsJsonObject();
 		}
 
 		/** The next frame that is not a {@code ping}: the mod pings whenever it has been idle. */

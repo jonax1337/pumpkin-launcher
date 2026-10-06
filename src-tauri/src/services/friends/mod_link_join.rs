@@ -1,4 +1,4 @@
-//! Einladungen und Beitreten aus dem Spiel (INGAME 5.4, 7). `invite.joinHere` ist der einzige Vorgang, der ändert, was das
+//! Einladungen und Beitreten aus dem Spiel (docs/bridge/README.md, "Operations and consent"). `invite.joinHere` ist der einzige Vorgang, der ändert, was das
 //! laufende Spiel tut; er hält deshalb SPEC 6.2 ein: Microsoft-Konto, Zustimmung, Gastgeber erreichbar, die laufende Instanz
 //! passt, Besitzer der Verbindung noch einmal geprüft, ein einziger Zuhörer an einer Loopback-Adresse, der nur dem
 //! Spielprozess gehört.
@@ -66,7 +66,7 @@ pub(super) async fn invite_join_here(
     .await
 }
 
-/// Die Schritte 2 bis 4 von INGAME 7 nach der Zustimmung: Gastgeber erreichen, abgleichen, Besitzer prüfen, Zuhörer binden.
+/// Nach Zustimmung: Gastgeber erreichen, abgleichen, Besitzer prüfen und Zuhörer binden; siehe docs/bridge/README.md, "In-game navigation and world behavior".
 async fn join_running_game(
     sessions: &FriendSessions,
     ctx: &OpContext,
@@ -91,7 +91,7 @@ async fn join_running_game(
     }))
 }
 
-/// Passt das laufende Spiel nicht, bekommt die Mod das Urteil des Abgleichs (INGAME 7, Schritt 3).
+/// Passt das laufende Spiel nicht, bekommt die Mod das Urteil des Abgleichs (docs/bridge/README.md, "In-game navigation and world behavior").
 fn ensure_running_game_fits(plan: &InvitePlan) -> Result<(), OpError> {
     match plan.verdict {
         PlanVerdict::Ready => Ok(()),
@@ -302,7 +302,7 @@ mod tests {
             ensure_running_game_fits(&view(PlanVerdict::VersionUnsupported, 0, 0)).unwrap_err();
         assert_eq!(
             (version.code, version.params["min"].as_str()),
-            (ErrorCode::VersionUnsupported, Some("1.20"))
+            (ErrorCode::VersionUnsupported, Some("1.16.5"))
         );
         let missing =
             ensure_running_game_fits(&view(PlanVerdict::MissingContent, 3, 1)).unwrap_err();

@@ -1,49 +1,47 @@
-# CurseForge-Proxy (Cloudflare Worker)
+# CurseForge proxy
 
-Hält den CurseForge-API-Schlüssel, damit er nie in der App oder im Repo steckt. Der Launcher fragt diesen Worker
-statt `api.curseforge.com`; der Worker lässt nur die wenigen Abfragen durch, die der Launcher braucht, begrenzt
-sie pro Nutzer und hängt den Schlüssel selbst an.
+Cloudflare Worker that keeps the CurseForge API key out of the launcher and repository. It forwards only the catalog requests the launcher uses, adds the key server-side and rate-limits callers. The separate [Friends directory](../directory/README.md) uses different bindings and secrets.
 
-Regeln aus den [API-Bedingungen von CurseForge](https://support.curseforge.com/en/support/solutions/articles/9000207405-curse-forge-3rd-party-api-terms-and-conditions):
+## Setup
 
-- **Kein Zwischenspeicher.** Abschnitt 3(e) verbietet, Daten aus der API zu speichern oder zu cachen. Der Worker reicht
-  jede Antwort nur durch, der Launcher legt keinen Katalog auf der Platte ab (er merkt sich nur, welche Datei in
-  welcher Instanz steckt).
-- **Keine Dateien über den Worker.** Mods und Packs lädt der Launcher direkt vom CurseForge-CDN. Eine Download-Route
-  im Worker gäbe es nur mit schriftlicher Erlaubnis von CurseForge.
-- **Offen auftreten.** Der Worker meldet sich bei CurseForge mit einem eigenen User-Agent samt Repo-Adresse.
-- **Nur der Launcher.** Anfragen mit `Origin`-Header (also aus Browser-Seiten) werden abgelehnt, Suchparameter streng
-  geprüft (bekannte Felder, Seiten bis 50, `index + pageSize` bis 10 000), Antworten von CurseForge nach 15 s abgebrochen.
-
-Einrichten (einmalig, Cloudflare-Konto und Wrangler ab 4.36 nötig):
+Requires a Cloudflare account and Wrangler 4.36 or later. From this directory:
 
 ```sh
-cd proxy
 npx wrangler login
 npx wrangler deploy
-npx wrangler secret put CURSEFORGE_API_KEY   # Schlüssel einfügen, er wird nirgends angezeigt oder gespeichert
+npx wrangler secret put CURSEFORGE_API_KEY
 ```
 
-`wrangler deploy` nennt die Adresse des Workers. Der Launcher kennt die Adresse dieses Projekts fest
-(`DEFAULT_PROXY` in `curseforge.rs`). Es gibt keinen eigenen Schlüssel im Launcher: CurseForge läuft immer über einen Worker.
+Store the key as a Cloudflare secret, never in source or launcher settings. The official
+launcher uses `DEFAULT_PROXY` in `src-tauri/src/services/providers/curseforge/proxy.rs`.
+Forks need their own CurseForge key and Worker. Set `PUMPKIN_CF_PROXY` to that Worker's
+HTTPS base URL before building or launching the desktop app, for example from the repository root:
 
-**Forks** nutzen diesen Worker nicht. Der Schlüssel ist an dieses Projekt vergeben; wer den Launcher weitergibt,
-[beantragt einen eigenen Schlüssel](https://console.curseforge.com/) bei CurseForge, richtet einen eigenen Worker ein
-und setzt `PUMPKIN_CF_PROXY=<adresse>` (zur Laufzeit oder beim Bauen).
+```powershell
+$env:PUMPKIN_CF_PROXY = 'https://your-proxy.example'
+pnpm tauri dev
+```
 
-Die Begrenzung ist Pflicht: Fehlt die Bindung `LIMITER` (zum Beispiel nach einem Deploy ohne `[[ratelimits]]`), antwortet
-der Worker mit 503 statt ohne Begrenzung zu arbeiten. Ihr Schlüssel ist die IP-Adresse des Nutzers (`cf-connecting-ip`);
-Anfragen ohne diesen Header teilen sich einen gemeinsamen Eimer.
+Runtime configuration takes precedence over the compiled build-time value. Unlike the
+Friends directory, an empty/invalid selected proxy value falls back to `DEFAULT_PROXY`,
+not to a disabled proxy or the lower-priority build-time value. Set a valid own endpoint
+for a fork; an invalid override is not a way to prevent requests to the official Worker.
 
-Die Logik lässt sich ohne Cloudflare prüfen: `node test.mjs` (simuliert Cloudflare und CurseForge).
+The `LIMITER` binding in `wrangler.toml` permits 60 requests per minute per IP. Missing binding returns 503; missing API key returns 500. Requests without `cf-connecting-ip` share a fallback bucket. Rate-limited responses include `Retry-After: 60`.
 
-Der Worker läuft für dieses Projekt unter `https://pumpkin-curseforge.jonas-laux.workers.dev`. Die Begrenzung (60 Anfragen
-pro Minute und IP) steht als `[[ratelimits]]` in `wrangler.toml`; gedrosselte Anfragen bekommen `Retry-After` mit diesem
-Zeitraum.
+## API and constraints
 
-Schlüssel wechseln (etwa nach einem Leck oder wenn CurseForge ihn erneuert): neuen Schlüssel in der CurseForge-Konsole
-anlegen, `npx wrangler secret put CURSEFORGE_API_KEY` ausführen und einfügen; der Worker nutzt ihn sofort, ein neues
-Deploy ist nicht nötig. Danach den alten Schlüssel in der Konsole löschen.
+Allowed routes:
 
-Erlaubt sind nur: `GET /v1/mods/search`, `/v1/mods/{id}`, `/v1/mods/{id}/description`, `/v1/mods/{id}/files`,
-`/v1/mods/{id}/files/{fileId}` und `POST /v1/mods`, `/v1/mods/files` (Listen bis 200 Nummern).
+- `GET /v1/mods/search`
+- `GET /v1/mods/{id}` and `/v1/mods/{id}/description`
+- `GET /v1/mods/{id}/files` and `/v1/mods/{id}/files/{fileId}`
+- `POST /v1/mods` with `modIds`, and `/v1/mods/files` with `fileIds`, up to 200 positive ids
+
+Unknown methods/paths return 404; requests carrying an `Origin` header return 403. Search parameters are allowlisted, page size is at most 50 and `index + pageSize` at most 10,000. Upstream requests time out after 15 seconds.
+
+The Worker does not cache or store API data, and does not proxy file downloads. The launcher downloads mods and packs directly from CurseForge's CDN. These constraints follow the [CurseForge third-party API terms](https://support.curseforge.com/en/support/solutions/articles/9000207405-curse-forge-3rd-party-api-terms-and-conditions). Upstream requests identify the project with a User-Agent.
+
+## Maintenance
+
+To rotate the key, create its replacement in the CurseForge console, update `CURSEFORGE_API_KEY` with Wrangler and revoke the old key. A redeploy is not needed for the secret update. `node test.mjs` is the offline Worker/CurseForge simulation tool.

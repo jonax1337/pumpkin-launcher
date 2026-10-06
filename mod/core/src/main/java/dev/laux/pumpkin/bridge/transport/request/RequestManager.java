@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Matches the launcher's answers to the requests that wait for them (INGAME 5.3). A request gets exactly one {@link Reply},
+ * Matches the launcher's answers to the requests that wait for them (docs/bridge/README.md, "Protocol 2"). A request gets exactly one {@link Reply},
  * always on the main thread: the answer, {@code timeout} when none comes in time, {@code busy} for the ninth request in
  * flight, {@code disconnected} when the link is down or goes down.
  */
@@ -146,7 +146,7 @@ public final class RequestManager {
 
 		private Reply<T> readResult(Response response) {
 			try {
-				return new Reply.Success<>(op.resultReader().apply(response.result().orElseThrow()));
+				return new Reply.Success<>(op.resultReader().apply(response.result().get()));
 			} catch (MalformedJson unreadable) {
 				return Reply.failure(ErrorCode.INTERNAL);
 			}

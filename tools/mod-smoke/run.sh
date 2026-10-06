@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Starts one cell of the in-game mod smoke test (docs/friends/INGAME-SMOKE.md).
+# Starts one cell of the in-game mod smoke test (tools/mod-smoke/README.md).
 # Usage, from anywhere:  PUMPKIN_SMOKE_DATA=/path/to/data tools/mod-smoke/run.sh <cell> [scenario]
 # Needs mod/build/mod-index/ from `gradlew modIndex` (or PUMPKIN_SMOKE_DIST). The scenario is one of
 # hold (default) | release | wrong-jar:<node> | spawn-java:<path>. Further variables: README.md in this folder.

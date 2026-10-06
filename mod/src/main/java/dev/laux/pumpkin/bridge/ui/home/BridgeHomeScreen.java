@@ -1,5 +1,7 @@
 package dev.laux.pumpkin.bridge.ui.home;
 
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import dev.laux.pumpkin.bridge.compat.CompatScreen;
 import dev.laux.pumpkin.bridge.compat.Text;
 import dev.laux.pumpkin.bridge.compat.Widgets;
@@ -29,7 +31,7 @@ public final class BridgeHomeScreen extends CompatScreen {
 		super("pumpkin_bridge.home.title");
 		this.parent = parent;
 		this.bridge = bridge;
-		this.modules = List.copyOf(modules);
+		this.modules = Immutable.copyList(modules);
 		shownSummaries = new String[modules.size()];
 	}
 
@@ -47,8 +49,7 @@ public final class BridgeHomeScreen extends CompatScreen {
 		}
 		Rect bounds = layout.chrome().footerButtons(1).get(0);
 		AbstractWidget close = Widgets.button(Text.translate("pumpkin_bridge.back"), bounds.width(), this::onClose);
-		close.setX(bounds.x());
-		close.setY(bounds.y());
+		Widgets.setPosition(close, bounds.x(), bounds.y());
 		add(close);
 		track("home.back", close);
 	}
@@ -79,7 +80,7 @@ public final class BridgeHomeScreen extends CompatScreen {
 
 	@Override
 	protected List<String> narration() {
-		return List.of(status);
+		return Immutable.list(status);
 	}
 
 	@Override

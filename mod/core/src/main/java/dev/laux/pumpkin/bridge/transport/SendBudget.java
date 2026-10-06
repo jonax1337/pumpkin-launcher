@@ -4,7 +4,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 
 /**
- * Keeps the mod under the launcher's message limit (INGAME 5.3: 20 per second, more closes the link). Each message gets
+ * Keeps the mod under the launcher's message limit (docs/bridge/README.md, "Protocol 2": 20 per second, more closes the link). Each message gets
  * a send time; the {@code max + 1}-th message after a given one is never earlier than {@code window} later. The window
  * is a little longer than the launcher's second, so scheduling jitter on either side cannot squeeze 21 into one of its seconds.
  */

@@ -1,4 +1,4 @@
-// Reine Zeitlogik des Schutzes vor Fehlklicks in der Rückfrage der Mod (INGAME 5.5, kein React), damit consentGuardModel.check.mjs sie
+// Reine Zeitlogik des Schutzes vor Fehlklicks in der Rückfrage der Mod (docs/bridge/README.md, "Operations and consent", kein React), damit consentGuardModel.check.mjs sie
 // ohne Bundler prüft. Alle Zeiten sind Millisekunden auf derselben Uhr (`performance.now()`).
 
 /** So lange bleibt jede Schaltfläche außer „Ablehnen“ gesperrt, gerechnet ab dem Moment, in dem der Dialog sichtbar ist und das Fenster den Fokus hat. */

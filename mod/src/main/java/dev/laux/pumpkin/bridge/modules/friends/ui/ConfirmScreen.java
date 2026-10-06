@@ -1,5 +1,7 @@
 package dev.laux.pumpkin.bridge.modules.friends.ui;
 
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import dev.laux.pumpkin.bridge.modules.friends.ui.model.ConfirmFlow;
 
 import dev.laux.pumpkin.bridge.compat.Text;
@@ -11,7 +13,7 @@ import java.util.Optional;
 import net.minecraft.client.gui.screens.Screen;
 
 /**
- * ConfirmFlow (INGAME 6.2): the reusable yes/no screen for destructive in-game steps (leave the world, remove a
+ * ConfirmFlow (docs/bridge/README.md, "In-game navigation and world behavior"): the reusable yes/no screen for destructive in-game steps (leave the world, remove a
  * friend, block). The question wraps over the body, the confirm action sits left of the cancel button in the footer,
  * and the escape key decides like the cancel button — exactly once ({@link ConfirmFlow}).
  */
@@ -30,7 +32,7 @@ public final class ConfirmScreen extends PumpkinScreen {
 
 	@Override
 	protected List<Row> rows(int tab) {
-		return Fit.wrap(question, wrappedTextWidth(), Text::width).stream().map(Row::text).toList();
+		return Fit.wrap(question, wrappedTextWidth(), Text::width).stream().map(Row::text).collect(Immutable.toList());
 	}
 
 	@Override

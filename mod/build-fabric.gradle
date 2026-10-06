@@ -4,70 +4,25 @@ plugins {
 	id 'dev.kikugie.loom-back-compat'
 }
 
+// Fabric and Quilt share the Fabric-compatible entrypoint, without either loader's API mod.
+def isUnobfuscated = loomx.unobfuscated
+ext.mixin_refmap = isUnobfuscated ? 'null' : '"pumpkin_bridge-refmap.json"'
+
 apply from: rootProject.file('gradle/node.gradle')
 
-def isTracer = project.findProperty('tracer') == 'true'
-// Innerhalb von dependencies { } heißt "loomx" eine andere Erweiterung, daher hier festhalten.
-def isUnobfuscated = loomx.unobfuscated
-def fabricPackage = 'dev/laux/pumpkin/bridge/platform/fabric'
-
-// Andere Loader haben eigene Einstiegsklassen.
-sourceSets.main.java.exclude('dev/laux/pumpkin/bridge/platform/neoforge/**', 'dev/laux/pumpkin/bridge/platform/forge/**')
-if (isTracer) {
-	// Tracer-Knoten: nur Einstieg und Mixin des Tracers. compat/ und ui/ kommen mit den Paketen, die sie für diesen Knoten bauen.
-	sourceSets.main.java.exclude('dev/laux/pumpkin/bridge/compat/**', 'dev/laux/pumpkin/bridge/ui/**',
-		'dev/laux/pumpkin/bridge/modules/**',
-		"${fabricPackage}/BridgeClientInitializer.java", "${fabricPackage}/PumpkinMenuButton.java",
-		"${fabricPackage}/mixin/PauseScreenMixin.java", "${fabricPackage}/mixin/TitleScreenMixin.java",
-		"${fabricPackage}/mixin/PumpkinResourcesMixin.java")
-} else {
-	sourceSets.main.java.exclude("${fabricPackage}/TracerClient.java", "${fabricPackage}/mixin/TracerMinecraftMixin.java")
-}
+sourceSets.main.java.exclude('dev/laux/pumpkin/bridge/platform/neoforge/**',
+	'dev/laux/pumpkin/bridge/platform/neoforgelegacy/**', 'dev/laux/pumpkin/bridge/platform/forge/**')
 
 dependencies {
 	minecraft "com.mojang:minecraft:${sc.current.version}"
 	if (!isUnobfuscated) {
 		mappings loom.officialMojangMappings()
 	}
-	// Keine Fabric-API (INGAME 4.2, Entscheidung 3): die Mod braucht nur den Loader; modImplementation gibt es dank
+	// Keine Fabric-API (docs/bridge/README.md): die Mod braucht nur den Loader; modImplementation gibt es dank
 	// loom-back-compat auch ohne Remapping.
 	modImplementation "net.fabricmc:fabric-loader:${project.fabric_loader_version}"
 }
 
-// Mixin-Konfiguration des Knotens (Pausemenü-Hook, INGAME 4.2): eine Vorlage, pro Knoten mit Refmap und Klassenversion
-// gefüllt. Die Refmap gehört zu den verschleierten Knoten (INGAME A4); 26.x läuft in Mojang-Namen und braucht keine.
-// compatibilityLevel folgt dem --release des Knotens (node.javaMin), denn die Mixin-Klassen teilen seine Klassenversion.
-if (!isTracer) {
-	// In der Aktion einer Aufgabe sind die ext-Eigenschaften des Projekts nicht sichtbar, daher hier festhalten.
-	def nodeJavaMin = node.javaMin
-	def mixinConfig = layout.buildDirectory.file('generated/pumpkin_bridge.mixins.json')
-	def writeMixinConfig = tasks.register('writeMixinConfig') {
-		outputs.file(mixinConfig)
-		doLast {
-			def refmap = isUnobfuscated ? 'null' : '"pumpkin_bridge-refmap.json"'
-			mixinConfig.get().asFile.text = """{
-\t"required": true,
-\t"minVersion": "0.8",
-\t"package": "${fabricPackage.replace('/', '.')}.mixin",
-\t"refmap": ${refmap},
-\t"compatibilityLevel": "JAVA_${nodeJavaMin}",
-\t"client": [
-\t\t"PauseScreenMixin",
-\t\t"TitleScreenMixin",
-\t\t"PumpkinResourcesMixin"
-\t],
-\t"injectors": {
-\t\t"defaultRequire": 0
-\t}
-}
-"""
-		}
-	}
-	tasks.named('processResources') {
-		from(mixinConfig)
-		dependsOn writeMixinConfig
-	}
-}
 
 loom {
 	mods {
@@ -102,7 +57,7 @@ if (project.hasProperty('kitdemo')) {
 }
 
 if (!isUnobfuscated) {
-	// Das Jar im Launcher-Lauf wird nicht remappt (-Dfabric.addMods, INGAME A4): Es muss die Intermediary-Namen und die
+	// Das Jar im Launcher-Lauf wird nicht remappt (-Dfabric.addMods, docs/bridge/README.md): Es muss die Intermediary-Namen und die
 	// Refmap schon enthalten. Der Name der Refmap steht in der Mixin-Konfiguration des Knotens.
 	loom {
 		mixin {

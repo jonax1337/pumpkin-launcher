@@ -10,7 +10,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
- * The Optionen tab is read-only and complete for R-A (INGAME 6.2): the same six lines in every state, the values of the
+ * The Optionen tab is read-only and complete for R-A (docs/bridge/README.md, "In-game navigation and world behavior"): the same six lines in every state, the values of the
  * me topic and the welcome, and no line an edit could change. The me topic itself carries the display name, the name
  * findability and the relay host (A27), so no line waits for anything else.
  */

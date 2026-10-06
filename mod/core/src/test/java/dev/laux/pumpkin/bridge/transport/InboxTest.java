@@ -203,6 +203,6 @@ class InboxTest {
 	}
 
 	private static LauncherFrame state(Topic topic, long revision, String json) {
-		return new State(topic, revision, JsonParser.parseString(json));
+		return new State(topic, revision, new JsonParser().parse(json));
 	}
 }

@@ -1,7 +1,7 @@
 //! Forge und NeoForge über ihren offiziellen Installer: `install_profile.json` nennt Libraries und
 //! Processors (Java-Programme, die das Client-JAR entschlüsseln, umbenennen und patchen), die
 //! `version.json` darin ist ein Profil mit `inheritsFrom` auf Vanilla. Beide Loader nutzen dasselbe
-//! Installer-Format; unterstützt wird es ab Forge für Minecraft 1.17 bzw. NeoForge ab 1.20.1.
+//! Installer-Format; unterstützt wird es ab Forge für Minecraft 1.16.5 bzw. NeoForge ab 1.20.1.
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::Read;
@@ -17,12 +17,12 @@ use crate::error::{AppError, AppResult};
 use crate::models::ModLoader;
 use crate::services::download::{self, dedup_by_path, is_sha1, Job};
 use crate::services::limits::{FILE_LIMIT, ZIP_JSON_LIMIT};
-use crate::services::mojang::{Argument, Arguments, Download, Library};
+use crate::services::mojang::{secure_logging_libraries, Argument, Arguments, Download, Library};
 use crate::services::progress::CountFn;
 use crate::services::rules::Env;
 use crate::services::{blocking, zip_guard, Dirs};
 
-const FORGE_MAVEN: &str = "https://maven.minecraftforge.net";
+const FORGE_MAVEN: &str = "https://maven.minecraftforge.net/releases";
 const NEOFORGE_MAVEN: &str = "https://maven.neoforged.net/releases";
 const FORGE_VERSIONS_URL: &str = "https://files.minecraftforge.net/net/minecraftforge/forge/maven-metadata.json";
 const NEOFORGE_VERSIONS_URL: &str = "https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge";
@@ -142,11 +142,43 @@ impl LoaderProfile for Profile {
     /// Jede Koordinate nur einmal: Installer-Profile nennen manche doppelt.
     fn libraries(&self) -> AppResult<Vec<Library>> {
         let mut seen = HashSet::new();
-        self.libraries.iter().filter(|lib| seen.insert(lib.name.as_str())).map(InstallerLibrary::to_library).collect()
+        let mut libraries = self.libraries.iter().filter(|lib| seen.insert(lib.name.as_str()))
+            .map(InstallerLibrary::to_library).collect::<AppResult<Vec<_>>>()?;
+        secure_logging_libraries(&mut libraries);
+        Ok(libraries)
     }
 
     fn arguments(&self) -> (Vec<Argument>, Vec<Argument>) {
         (self.arguments.jvm.clone(), self.arguments.game.clone())
+    }
+}
+
+impl Profile {
+    /// Forge 1.16.5 findet diese Dateien über LibraryFinder, nicht über version.json/libraries.
+    /// Nicht in den JVM-Classpath aufnehmen: Minecraft-Klassen müssen durch den TransformingClassLoader.
+    fn runtime_coordinates(&self) -> AppResult<Vec<String>> {
+        if self.inherits_from != "1.16.5" {
+            return Ok(Vec::new());
+        }
+        let argument = |key: &str| -> AppResult<&str> {
+            self.arguments.game.windows(2).find_map(|pair| match pair {
+                [Argument::Plain(name), Argument::Plain(value)] if name == key => Some(value.as_str()),
+                _ => None,
+            }).ok_or_else(|| AppError::invalid(coded!("errors.game.installerVariableUnknown", variable = key)))
+        };
+        let forge = argument("--fml.forgeVersion")?;
+        let mcp = argument("--fml.mcpVersion")?;
+        let group = argument("--fml.forgeGroup")?;
+        let coordinates = vec![
+            format!("{group}:forge:{}-{forge}:universal", self.inherits_from),
+            format!("{group}:forge:{}-{forge}:client", self.inherits_from),
+            format!("net.minecraft:client:{}-{mcp}:extra", self.inherits_from),
+            format!("net.minecraft:client:{}-{mcp}:srg", self.inherits_from),
+        ];
+        for coordinate in &coordinates {
+            maven_path(coordinate)?;
+        }
+        Ok(coordinates)
     }
 }
 
@@ -197,12 +229,13 @@ fn mc_numbers(mc: &str) -> Option<Vec<u32>> {
 /// Vanilla, Fabric und Quilt gibt es für alle Versionen.
 pub fn check_loader(loader: ModLoader, mc: &str) -> AppResult<()> {
     let from = match loader {
-        ModLoader::Forge => "1.17",
+        ModLoader::Forge => "1.16.5",
         ModLoader::NeoForge => LEGACY_NEOFORGE_MC,
         ModLoader::Vanilla | ModLoader::Fabric | ModLoader::Quilt => return Ok(()),
     };
     let supported = match (loader, mc_numbers(mc).as_deref()) {
         (_, Some([major, ..])) if *major >= 2 => true,
+        (ModLoader::Forge, Some([1, 16, patch, ..])) => *patch >= 5,
         (ModLoader::Forge, Some([1, minor, ..])) => *minor >= 17,
         // 1.20.1: NeoForges erste Versionen, noch als Forge-Abzweig (`net.neoforged:forge`).
         (ModLoader::NeoForge, Some([1, 20, patch, ..])) => *patch >= 1,
@@ -327,7 +360,16 @@ fn read_installer(installer: &Path, libraries: &Path, tmp: &Path) -> AppResult<I
     let mut zip = zip::ZipArchive::new(fs::File::open(installer)?)?;
     let profile = read_profile(&mut zip)?;
     let version_json = read_entry(&mut zip, &profile.json, ZIP_JSON_LIMIT)?;
-    extract_maven(&mut zip, libraries)?;
+    #[derive(Deserialize)]
+    struct VersionLibraries {
+        #[serde(default)]
+        libraries: Vec<InstallerLibrary>,
+    }
+    let version: VersionLibraries = serde_json::from_slice(&version_json)?;
+    let hashes = profile.libraries.iter().chain(&version.libraries)
+        .filter_map(|lib| lib.sha1().map(|sha1| Ok((PathBuf::from(maven_path(&lib.name)?), sha1))))
+        .collect::<AppResult<HashMap<_, _>>>()?;
+    extract_maven(&mut zip, libraries, &hashes)?;
     let data_files = extract_data_files(&mut zip, &profile, tmp)?;
     Ok(Installer { profile, version_json, data_files })
 }
@@ -345,20 +387,27 @@ fn read_profile(zip: &mut InstallerZip) -> AppResult<InstallProfile> {
 }
 
 /// Entpackt `maven/…` in die Libraries.
-fn extract_maven(zip: &mut InstallerZip, libraries: &Path) -> AppResult<()> {
+fn extract_maven(zip: &mut InstallerZip, libraries: &Path, hashes: &HashMap<PathBuf, String>) -> AppResult<()> {
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i)?;
         // `enclosed_name` verwirft `..` und absolute Pfade.
         let Some(rel) = entry.enclosed_name().and_then(|p| p.strip_prefix("maven").ok().map(Path::to_path_buf)) else { continue };
+        let expected = hashes.get(&rel);
         let target = libraries.join(rel);
-        // Vorhandene Datei nur bei passender Größe behalten: ein früherer Abbruch kann sie abgeschnitten haben.
-        if entry.is_dir() || fs::metadata(&target).is_ok_and(|m| m.len() == entry.size()) {
+        let current = fs::metadata(&target).is_ok_and(|m| m.len() == entry.size())
+            && expected.is_none_or(|sha1| download::sha1_file(&target).is_ok_and(|actual| actual.eq_ignore_ascii_case(sha1)));
+        if entry.is_dir() || current {
             continue;
         }
         if let Some(parent) = target.parent() {
             fs::create_dir_all(parent)?;
         }
         download::write_stream_atomic(&mut entry, &target)?;
+        if let Some(sha1) = expected {
+            if !download::sha1_file(&target)?.eq_ignore_ascii_case(sha1) {
+                return Err(AppError::Download(coded!("errors.game.loaderSetupWrongFile", loader = "Forge", step = "maven").into()));
+            }
+        }
     }
     Ok(())
 }
@@ -397,9 +446,19 @@ async fn outputs_ok(outputs: &[(String, String)]) -> bool {
     true
 }
 
-/// Erste Library des Profils, die nicht unter `libraries` liegt.
-fn missing_library<'a>(profile: &'a Profile, libraries: &Path) -> Option<&'a InstallerLibrary> {
-    profile.libraries.iter().find(|lib| !maven_path(&lib.name).is_ok_and(|path| libraries.join(path).exists()))
+/// Fehlende Classpath- oder direkt vom Loader entdeckte Runtime-Library.
+fn missing_library(profile: &Profile, libraries: &Path) -> AppResult<Option<String>> {
+    for library in profile.libraries()? {
+        if !libraries.join(maven_path(&library.name)?).is_file() {
+            return Ok(Some(library.name));
+        }
+    }
+    for coordinate in profile.runtime_coordinates()? {
+        if !libraries.join(maven_path(&coordinate)?).is_file() {
+            return Ok(Some(coordinate));
+        }
+    }
+    Ok(None)
 }
 
 /// Installiert die Loader-Version. Voraussetzung: Vanilla-Client und Java-Runtime sind installiert.
@@ -413,9 +472,6 @@ pub(super) async fn install(
 ) -> AppResult<Profile> {
     check_loader(target.loader, target.mc)?;
     let setup = Setup::new(dirs, target, java);
-    if let Some(profile) = setup.complete_installation().await {
-        return Ok(profile);
-    }
     let installer_jar = setup.ensure_installer(client).await?;
     let installer = setup.read_installer(&installer_jar).await?;
     let profile = setup.version_profile(&installer)?;
@@ -425,7 +481,16 @@ pub(super) async fn install(
     let downloaded = jobs.len() as u64;
     download::fetch_all(client, jobs, &|done, _| on_progress(done, total)).await?;
 
-    let processing = Processing { setup: &setup, data: setup.processor_data(&installer_jar, &installer)?, count: processors.len() };
+    let data = setup.processor_data(&installer_jar, &installer)?;
+    let outputs = processors.iter().flat_map(|processor| &processor.outputs)
+        .map(|(file, sha1)| Ok((resolve(file, &data, &setup.libraries)?, resolve(sha1, &data, &setup.libraries)?)))
+        .collect::<AppResult<Vec<_>>>()?;
+    let processing = Processing { setup: &setup, data, count: processors.len(), outputs };
+    if setup.complete_installation(&profile, &processing, &installer.version_json).await? {
+        on_progress(total, total);
+        setup.remove_work_dir().await;
+        return Ok(profile);
+    }
     for (step, processor) in (1..).zip(&processors) {
         processing.run(step, processor).await?;
         on_progress(downloaded + step as u64, total);
@@ -439,12 +504,16 @@ pub(super) async fn install(
 
 /// Downloads der Libraries aus Install-Profil und Profil; ohne URL liegen sie im Installer oder entstehen
 /// durch einen Processor.
-fn library_jobs(install_profile: &InstallProfile, profile: &Profile, libraries: &Path) -> AppResult<Vec<Job>> {
+fn library_jobs(install_profile: &InstallProfile, profile: &Profile, root: &Path) -> AppResult<Vec<Job>> {
     let mut jobs = Vec::new();
-    for lib in install_profile.libraries.iter().chain(&profile.libraries) {
-        let path = libraries.join(maven_path(&lib.name)?);
-        if !lib.url().is_empty() {
-            jobs.push(Job { url: lib.url().to_owned(), path, sha1: lib.sha1() });
+    let mut libraries = install_profile.libraries.iter().map(InstallerLibrary::to_library)
+        .collect::<AppResult<Vec<_>>>()?;
+    libraries.extend(profile.libraries()?);
+    secure_logging_libraries(&mut libraries);
+    for lib in libraries {
+        let Some(artifact) = lib.downloads.artifact.as_ref() else { continue };
+        if !artifact.url.is_empty() {
+            jobs.push(Job::from_download(artifact, root.join(maven_path(&lib.name)?)));
         }
     }
     Ok(dedup_by_path(jobs))
@@ -466,10 +535,13 @@ impl<'a> Setup<'a> {
         Self { target, dirs, java, libraries: dirs.libraries(), work_dir }
     }
 
-    /// Das abgelegte Profil, wenn alle seine Libraries vorliegen.
-    async fn complete_installation(&self) -> Option<Profile> {
-        let profile: Profile = download::read_json(&profile_path::<Profile>(self.dirs, self.target)).await.ok()?;
-        missing_library(&profile, &self.libraries).is_none().then_some(profile)
+    /// Ein Marker reicht nicht: erzeugte Dateien und SHA-1-Ausgaben müssen weiterhin vollständig sein.
+    async fn complete_installation(&self, profile: &Profile, processing: &Processing<'_>, official_json: &[u8]) -> AppResult<bool> {
+        let cached = tokio::fs::read(profile_path::<Profile>(self.dirs, self.target)).await;
+        if !cached.is_ok_and(|bytes| bytes == official_json) || missing_library(profile, &self.libraries)?.is_some() {
+            return Ok(false);
+        }
+        Ok(outputs_ok(&processing.outputs).await)
     }
 
     /// Lädt das Installer-JAR, geprüft über die `.sha1` daneben, in die Libraries.
@@ -526,9 +598,9 @@ impl<'a> Setup<'a> {
     }
 
     fn verify_libraries(&self, profile: &Profile) -> AppResult<()> {
-        match missing_library(profile, &self.libraries) {
-            Some(lib) => Err(AppError::Download(
-                coded!("errors.game.loaderIncomplete", loader = self.target.name(), library = lib.name).into(),
+        match missing_library(profile, &self.libraries)? {
+            Some(library) => Err(AppError::Download(
+                coded!("errors.game.loaderIncomplete", loader = self.target.name(), library = library).into(),
             )),
             None => Ok(()),
         }
@@ -546,6 +618,7 @@ struct Processing<'a> {
     setup: &'a Setup<'a>,
     data: HashMap<String, String>,
     count: usize,
+    outputs: Vec<(String, String)>,
 }
 
 impl Processing<'_> {
@@ -625,7 +698,10 @@ mod tests {
     fn supported_versions() {
         assert!(check_loader(ModLoader::Forge, "1.21.1").is_ok());
         assert!(check_loader(ModLoader::Forge, "1.17").is_ok());
-        assert!(check_loader(ModLoader::Forge, "1.16.5").is_err());
+        assert!(check_loader(ModLoader::Forge, "1.16.5").is_ok());
+        assert!(check_loader(ModLoader::Forge, "1.16.4").is_err());
+        assert!(check_loader(ModLoader::Forge, "1.16").is_err());
+        assert!(check_loader(ModLoader::Forge, "1.15.2").is_err());
         assert!(check_loader(ModLoader::NeoForge, "1.20.2").is_ok());
         assert!(check_loader(ModLoader::NeoForge, "1.20.1").is_ok());
         assert!(check_loader(ModLoader::NeoForge, "1.20").is_err());
@@ -642,6 +718,93 @@ mod tests {
         assert_eq!(Profile::id_for(target(ModLoader::Forge, "1.21.1", "52.1.16")), "1.21.1-forge-52.1.16");
         let neoforge = Artifact::of(ModLoader::NeoForge, "1.21.1");
         assert_eq!(neoforge.installer_coord("1.21.1", "21.1.252"), "net.neoforged:neoforge:21.1.252:installer");
+    }
+
+    fn legacy_profile() -> Profile {
+        serde_json::from_str(include_str!("fixtures/forge-1.16.5-36.2.42-version.json")).unwrap()
+    }
+
+    #[test]
+    fn official_legacy_profile_preserves_launch_and_processor_contracts() {
+        let install: InstallProfile = serde_json::from_str(include_str!("fixtures/forge-1.16.5-36.2.42-install.json")).unwrap();
+        let profile = legacy_profile();
+        let libs = Path::new("/libs");
+        let data: HashMap<_, _> = install.data.iter().filter(|(_, value)| !value.client.starts_with('/'))
+            .map(|(key, value)| (key.clone(), resolve(&value.client, &HashMap::new(), libs).unwrap())).collect();
+        assert_eq!(install.processors.iter().map(|p| p.jar.as_str()).collect::<Vec<_>>(), [
+            "net.minecraftforge:installertools:1.3.0", "net.minecraftforge:jarsplitter:1.1.4",
+            "net.md-5:SpecialSource:1.8.5", "net.minecraftforge:binarypatcher:1.0.12",
+        ]);
+        assert_eq!(resolve("{PATCHED_SHA}", &data, libs).unwrap(), "427f13ce6f486c182c9693e94e907e2eb049773f");
+        assert_eq!(profile.runtime_coordinates().unwrap(), [
+            "net.minecraftforge:forge:1.16.5-36.2.42:universal",
+            "net.minecraftforge:forge:1.16.5-36.2.42:client",
+            "net.minecraft:client:1.16.5-20210115.111550:extra",
+            "net.minecraft:client:1.16.5-20210115.111550:srg",
+        ]);
+        let merged = merge(vanilla_version("1.16.5"), &profile).unwrap();
+        assert_eq!(merged.java_component(), "jre-legacy");
+        assert_eq!(merged.main_class, "cpw.mods.modlauncher.Launcher");
+        let dirs = Dirs::new("/d");
+        let account = crate::services::auth::offline_account("Notch").unwrap();
+        let args = build_args(&plain_spec(&merged, &dirs, &account), &Env { os: "windows", arch: "x86_64", features: Vec::new() }).unwrap();
+        assert!(args.windows(2).any(|pair| pair == ["--launchTarget", "fmlclient"]));
+        let cp = crate::services::launch::classpath(&merged, &dirs, &Env::current());
+        for module in ["log4j-api", "log4j-core", "log4j-slf4j18-impl"] {
+            assert!(cp.contains(&dirs.library(&format!("org/apache/logging/log4j/{module}/2.17.1/{module}-2.17.1.jar"))));
+        }
+        assert!(!cp.iter().any(|path| path.to_string_lossy().contains("2.15.0")));
+        let jobs = library_jobs(&install, &profile, libs).unwrap();
+        assert!(!jobs.iter().any(|job| job.url.contains("log4j") && !job.url.contains("2.17.1")));
+    }
+
+    #[tokio::test]
+    async fn completed_legacy_profile_requires_generated_runtime_artifacts() {
+        let dirs = Dirs::new(std::env::temp_dir().join(crate::models::new_id()));
+        let profile = legacy_profile();
+        for library in profile.libraries().unwrap() {
+            let path = dirs.library(library.downloads.artifact.unwrap().path.as_deref().unwrap());
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, b"present").unwrap();
+        }
+        assert_eq!(missing_library(&profile, &dirs.libraries()).unwrap().as_deref(),
+            Some("net.minecraftforge:forge:1.16.5-36.2.42:universal"));
+        for coordinate in profile.runtime_coordinates().unwrap() {
+            let path = dirs.library(&maven_path(&coordinate).unwrap());
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, b"present").unwrap();
+        }
+        assert!(missing_library(&profile, &dirs.libraries()).unwrap().is_none());
+        fs::remove_dir_all(dirs.root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn completed_installation_rechecks_processor_output_sha1() {
+        let dirs = Dirs::new(std::env::temp_dir().join(crate::models::new_id()));
+        let mut profile = legacy_profile();
+        profile.libraries.clear();
+        let setup = Setup::new(&dirs, target(ModLoader::Forge, "1.16.5", "36.2.42"), Path::new("java"));
+        let runtime = profile.runtime_coordinates().unwrap();
+        for coordinate in &runtime {
+            let path = dirs.library(&maven_path(coordinate).unwrap());
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, b"valid").unwrap();
+        }
+        let output = dirs.library(&maven_path(&runtime[1]).unwrap());
+        let processing = Processing {
+            setup: &setup, data: HashMap::new(), count: 4,
+            outputs: vec![(path_text(&output), download::sha1_hex(b"valid"))],
+        };
+        let marker = profile_path::<Profile>(&dirs, setup.target);
+        fs::create_dir_all(marker.parent().unwrap()).unwrap();
+        fs::write(&marker, b"official").unwrap();
+        assert!(setup.complete_installation(&profile, &processing, b"official").await.unwrap());
+        fs::write(&output, b"wrong").unwrap();
+        assert!(!setup.complete_installation(&profile, &processing, b"official").await.unwrap());
+        fs::write(&output, b"valid").unwrap();
+        fs::write(&marker, b"damaged").unwrap();
+        assert!(!setup.complete_installation(&profile, &processing, b"official").await.unwrap());
+        fs::remove_dir_all(dirs.root).unwrap();
     }
 
     #[test]
@@ -732,6 +895,28 @@ mod tests {
         assert_eq!(fs::read_to_string(libs.join("a/b.jar")).unwrap(), "vollständig");
         assert_eq!(fs::read_to_string(libs.join("a/c.jar")).unwrap(), "alt");
         assert!(!libs.join("a/b.jar.part").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn embedded_maven_sha1_replaces_same_size_corruption_without_rewriting_the_jar() {
+        use std::io::Write;
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        fs::create_dir_all(&root).unwrap();
+        let installer = root.join("installer.jar");
+        let relative = PathBuf::from(maven_path("a:b:1").unwrap());
+        let target = root.join("libs").join(&relative);
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        fs::write(&target, b"wrong").unwrap();
+        let mut writer = zip::ZipWriter::new(fs::File::create(&installer).unwrap());
+        writer.start_file(format!("maven/{}", relative.to_string_lossy()), zip::write::SimpleFileOptions::default()).unwrap();
+        writer.write_all(b"valid").unwrap();
+        writer.finish().unwrap();
+        let mut archive = zip::ZipArchive::new(fs::File::open(&installer).unwrap()).unwrap();
+        let hashes = HashMap::from([(relative, download::sha1_hex(b"valid"))]);
+        extract_maven(&mut archive, &root.join("libs"), &hashes).unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"valid");
+        assert_eq!(download::sha1_file(&target).unwrap(), download::sha1_hex(b"valid"));
         fs::remove_dir_all(root).unwrap();
     }
 

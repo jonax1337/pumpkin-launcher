@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/** The invite choices of the Teilen tab: the guest limit of seven and the "Weltname zeigen" toggle (INGAME 6.4). */
+/** The invite choices of the Teilen tab: the guest limit of seven and the "Weltname zeigen" toggle (docs/bridge/README.md, "In-game navigation and world behavior"). */
 class ShareControlsTest {
 	@Test
 	void settingAFriendSelectsAndDeselectsIt() {

@@ -8,7 +8,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import org.junit.jupiter.api.Test;
 
-/** Every row of INGAME 6.4 as one case, in the order the table lists them. */
+/** Every row of docs/bridge/README.md, "In-game navigation and world behavior" as one case, in the order the table lists them. */
 class ShareModelTest {
 	private static final Game HOSTABLE = new Game(true, Optional.empty(), OptionalInt.empty(), false);
 	private static final Game HOSTABLE_WITH_PORT = new Game(true, Optional.empty(), OptionalInt.of(50123), false);

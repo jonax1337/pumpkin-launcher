@@ -2,7 +2,7 @@ package dev.laux.pumpkin.bridge.protocol;
 
 import java.time.Duration;
 
-/** The numbers of docs/friends/INGAME.md, 5.3; {@code mod/fixtures/protocol/limits.jsonl} holds the same values for the launcher side. */
+/** The numbers of docs/bridge/README.md, "Protocol 2"; {@code mod/fixtures/protocol/limits.jsonl} holds the same values for the launcher side. */
 public final class Limits {
 	/** The longest line the launcher accepts before it has sent {@code welcome}; the {@code hello} must fit. */
 	public static final int PRE_WELCOME_LINE_BYTES = 1024;

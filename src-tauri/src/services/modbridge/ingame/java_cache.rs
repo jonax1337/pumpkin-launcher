@@ -1,4 +1,4 @@
-//! Die Java-Hauptversion einer Programmdatei (INGAME 3.4), je Pfad einmal ermittelt: aus der Datei `release` im
+//! Die Java-Hauptversion einer Programmdatei (docs/bridge/README.md, "Support selection"), je Pfad einmal ermittelt: aus der Datei `release` im
 //! Java-Home, sonst durch einen Aufruf von `java -version`. Gemerkt wird nur ein Fund; ein Fehlschlag wird beim nächsten
 //! Mal erneut versucht.
 use std::collections::HashMap;

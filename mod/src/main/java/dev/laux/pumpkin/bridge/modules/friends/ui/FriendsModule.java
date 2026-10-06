@@ -45,7 +45,7 @@ public final class FriendsModule implements BridgeModule {
 
 	@Override
 	public String summary() {
-		var topics = client.topics();
+		dev.laux.pumpkin.bridge.modules.friends.state.TopicStore topics = client.topics();
 		List<Friend> friends = topics.friends();
 		Optional<Me> me = topics.me();
 		Requests requests = topics.requests();
@@ -66,7 +66,7 @@ public final class FriendsModule implements BridgeModule {
 		if (!client.isConnected()) {
 			return Text.translate("pumpkin_bridge.home.friends.offline");
 		}
-		if (me.isEmpty()) {
+		if (!me.isPresent()) {
 			return Text.translate("pumpkin_bridge.home.friends.loading");
 		}
 		if (!me.get().enabled()) {

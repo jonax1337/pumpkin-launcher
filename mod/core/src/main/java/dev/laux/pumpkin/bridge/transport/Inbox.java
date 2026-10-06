@@ -12,8 +12,8 @@ import dev.laux.pumpkin.bridge.runtime.MainThread;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /**
  * The hand-over from the bridge thread to the main thread. Answers go to the {@link RequestManager}; state frames,
@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
  * A listener that throws is logged and skipped: the mod must never throw into the game.
  */
 final class Inbox {
-	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_bridge");
+	private static final Logger LOG = LogManager.getLogger("pumpkin_bridge");
 
 	private final RequestManager requests;
 	private final MainThread mainThread;
@@ -45,15 +45,20 @@ final class Inbox {
 
 	/** Bridge thread: a frame that is neither handshake nor keep-alive. */
 	void deliver(LauncherFrame frame) {
-		if (frame instanceof Response response) {
+		if (frame instanceof Response) {
+			Response response = (Response) frame;
 			requests.onResponse(response);
-		} else if (frame instanceof Pending pending) {
+		} else if (frame instanceof Pending) {
+			Pending pending = (Pending) frame;
 			requests.onPending(pending);
-		} else if (frame instanceof State push) {
+		} else if (frame instanceof State) {
+			State push = (State) frame;
 			postToMainThread(() -> tellListeners(listener -> listener.stateReceived(push)));
-		} else if (frame instanceof Notify notify) {
+		} else if (frame instanceof Notify) {
+			Notify notify = (Notify) frame;
 			postToMainThread(() -> tellListeners(listener -> listener.notice(notify.kind(), notify.name())));
-		} else if (frame instanceof Closing closing) {
+		} else if (frame instanceof Closing) {
+			Closing closing = (Closing) frame;
 			onClosing.accept(closing.reason());
 			postToMainThread(() -> tellListeners(listener -> listener.closing(closing.reason())));
 		}

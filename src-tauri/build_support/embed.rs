@@ -1,4 +1,4 @@
-//! Erzeugt aus dem Mod-Ordner (`mod-index.json` und die JARs, INGAME 3.2) den Quelltext, der sie ins Programm einbettet.
+//! Erzeugt aus dem Mod-Ordner (`mod-index.json` und die JARs, docs/bridge/README.md, "Embedded index and files") den Quelltext, der sie ins Programm einbettet.
 //! Die Datei wird von `build.rs` eingebunden und, für ihre Tests, vom Crate (`ingame/embedded.rs`); sie kennt deshalb
 //! nur die Standardbibliothek und die Hash-Crates. Was ein Index erfüllen muss, entscheidet der Aufrufer über den
 //! Parser, den er übergibt: `build.rs` und Laufzeit prüfen mit derselben Regeldatei (`ingame/validate.rs`).

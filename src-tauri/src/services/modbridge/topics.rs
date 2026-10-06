@@ -1,4 +1,4 @@
-//! Zustandsthemen (docs/friends/INGAME.md, 5.3): der Launcher schickt den ganzen Wert eines Themas mit einer
+//! Zustandsthemen (docs/bridge/README.md, "Protocol 2"): der Launcher schickt den ganzen Wert eines Themas mit einer
 //! Revision, die Mod ersetzt ihre Kopie und patcht nie. Jedes Thema hat eine harte Obergrenze für seine Einträge; der
 //! Test am Ende rechnet nach, dass der schlimmste Fall in `TOPIC_BUDGET_BYTES` passt.
 use std::collections::HashMap;
@@ -228,7 +228,7 @@ pub enum OutgoingState {
     AwaitingAnswer,
 }
 
-/// Die Welt, der dieses Spiel beigetreten ist (INGAME 7).
+/// Die Welt, der dieses Spiel beigetreten ist (docs/bridge/README.md, "In-game navigation and world behavior").
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JoinView {

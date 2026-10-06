@@ -9,7 +9,7 @@ import java.util.Locale;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
-/** Tab order, badges and the opening tab of the hub (INGAME 6.1, 6.2). */
+/** Tab order, badges and the opening tab of the hub (docs/bridge/README.md, "In-game navigation and world behavior"). */
 class HubTabTest {
 	private final Requests onlyOutgoing = new Requests(List.of(),
 		List.of(new Requests.Outgoing("r3", Optional.empty(), Requests.State.DELIVERING)), 0);

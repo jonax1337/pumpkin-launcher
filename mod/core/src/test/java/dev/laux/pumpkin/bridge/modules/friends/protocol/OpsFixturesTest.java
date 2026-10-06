@@ -37,7 +37,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * ops.jsonl, ops-join-failed.jsonl, request-response.jsonl and the requests of pending.jsonl: every request line is what
- * {@link Ops} builds, and every operation of INGAME 5.4 has a builder.
+ * {@link Ops} builds, and every operation of docs/bridge/README.md, "Operations and consent" has a builder.
  */
 class OpsFixturesTest {
 	private static final List<String> FILES = List.of("ops.jsonl", "ops-join-failed.jsonl", "request-response.jsonl", "pending.jsonl");
@@ -83,7 +83,7 @@ class OpsFixturesTest {
 
 		ModFrame.Req request = new ModFrame.Req(line.id(), op.name(), op.args());
 
-		assertEquals(line.message(), JsonParser.parseString(FrameCodec.encode(request)), line.file() + " " + line.id());
+		assertEquals(line.message(), new JsonParser().parse(FrameCodec.encode(request)), line.file() + " " + line.id());
 	}
 
 	@Test

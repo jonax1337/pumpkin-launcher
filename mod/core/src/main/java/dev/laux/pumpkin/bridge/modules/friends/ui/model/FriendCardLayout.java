@@ -1,5 +1,8 @@
 package dev.laux.pumpkin.bridge.modules.friends.ui.model;
 
+import java.util.Objects;
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import dev.laux.pumpkin.bridge.ui.model.GuiMetrics;
 import dev.laux.pumpkin.bridge.ui.model.Rect;
 import dev.laux.pumpkin.bridge.ui.model.RowLayout;
@@ -9,7 +12,73 @@ import java.util.List;
 import java.util.Optional;
 
 /** Portrait and identity above an optional, separate action strip, in GUI pixels. */
-public record FriendCardLayout(Rect portrait, Rect name, Rect status, Rect detail, List<Rect> actions) {
+public final class FriendCardLayout {
+	private final Rect portrait;
+	private final Rect name;
+	private final Rect status;
+	private final Rect detail;
+	private final List<Rect> actions;
+
+	public FriendCardLayout(Rect portrait, Rect name, Rect status, Rect detail, List<Rect> actions) {
+		actions = Immutable.copyList(actions);
+		this.portrait = portrait;
+		this.name = name;
+		this.status = status;
+		this.detail = detail;
+		this.actions = actions;
+	}
+
+	public Rect portrait() {
+		return portrait;
+	}
+
+	public Rect name() {
+		return name;
+	}
+
+	public Rect status() {
+		return status;
+	}
+
+	public Rect detail() {
+		return detail;
+	}
+
+	public List<Rect> actions() {
+		return actions;
+	}
+
+	@Override
+	public boolean equals(Object other) {
+		if (this == other) {
+			return true;
+		}
+		if (!(other instanceof FriendCardLayout)) {
+			return false;
+		}
+		FriendCardLayout that = (FriendCardLayout) other;
+		return Objects.equals(portrait, that.portrait)
+			&& Objects.equals(name, that.name)
+			&& Objects.equals(status, that.status)
+			&& Objects.equals(detail, that.detail)
+			&& Objects.equals(actions, that.actions);
+	}
+
+	@Override
+	public int hashCode() {
+		int hash = Objects.hashCode(portrait);
+		hash = 31 * hash + Objects.hashCode(name);
+		hash = 31 * hash + Objects.hashCode(status);
+		hash = 31 * hash + Objects.hashCode(detail);
+		hash = 31 * hash + Objects.hashCode(actions);
+		return hash;
+	}
+
+	@Override
+	public String toString() {
+		return "FriendCardLayout[portrait=" + portrait + ", name=" + name + ", status=" + status + ", detail=" + detail + ", actions=" + actions + "]";
+	}
+
 	public static final int HEIGHT = 48;
 	public static final int ACTION_HEIGHT = 72;
 	private static final int PADDING = 8;
@@ -18,9 +87,6 @@ public record FriendCardLayout(Rect portrait, Rect name, Rect status, Rect detai
 	private static final int LINE_HEIGHT = 12;
 	private static final int STATUS_GAP = 8;
 
-	public FriendCardLayout {
-		actions = List.copyOf(actions);
-	}
 
 	public static FriendCardLayout of(Rect row, int statusWidth, List<Integer> actionWidths) {
 		int portraitSize = Math.min(PORTRAIT_SIZE, Math.max(0, row.width() - 2 * PADDING));

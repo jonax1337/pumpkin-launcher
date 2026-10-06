@@ -15,14 +15,13 @@ import dev.laux.pumpkin.bridge.runtime.MainThread;
 import dev.laux.pumpkin.bridge.ui.UiSession;
 import dev.laux.pumpkin.bridge.modules.friends.ui.model.JoinHereFlow;
 import net.minecraft.client.gui.screens.ConfirmScreen;
-import net.minecraft.network.chat.Component;
 
 /**
- * Runs one join from the running game (INGAME 7): {@code invite.joinHere} asks the launcher, the pure {@link JoinHereFlow}
+ * Runs one join from the running game (docs/bridge/README.md, "In-game navigation and world behavior"): {@code invite.joinHere} asks the launcher, the pure {@link JoinHereFlow}
  * decides what happens next and this runner does it - the confirmation ("Welt verlassen und beitreten?"), leaving the
  * world, connecting to the validated loopback address, and the report back ({@code join.failed}) after a refused address,
  * a disconnect or thirty seconds without {@code connected}. A daemon thread ticks the machine through the main thread,
- * because the flow must keep running while the game shows its own connecting screens. One flow at a time (INGAME 7).
+ * because the flow must keep running while the game shows its own connecting screens. One flow at a time (docs/bridge/README.md, "In-game navigation and world behavior").
  */
 public final class JoinHereRunner {
 	private static final long POLL_MILLIS = 250;
@@ -56,32 +55,41 @@ public final class JoinHereRunner {
 	private void onAnswer(Reply<JoinHere> reply) {
 		if (reply.error().isPresent()) {
 			flow.abandoned();
-			Toasts.showError(reply.error().orElseThrow());
+			Toasts.showError(reply.error().get());
 			return;
 		}
-		if (reply instanceof Success<JoinHere> success) {
+		if (reply instanceof Success<?>) {
+			Success<JoinHere> success = (Success<JoinHere>) reply;
 			UiSession.run(() -> run(flow.answered(success.value().host(), success.value().port())));
 		}
 	}
 
 	/**
-	 * INGAME-API.md 3, "Pause menu, title screen, other screens": {@code ConfirmScreen#<init>(BooleanConsumer, Component,
+	 * docs/bridge/MINECRAFT-API.md, "Pause menu, title screen, other screens": {@code ConfirmScreen#<init>(BooleanConsumer, Component,
 	 * Component, Component, Component)} exists in every era. The buttons' answer is routed through the flow machine.
 	 */
 	private void run(JoinHereFlow.Step step) {
 		switch (step) {
-			case CONFIRM -> GameScreens.show(new ConfirmScreen(this::onConfirmed,
-				Component.translatable("pumpkin_bridge.join.confirm.title"),
-				Component.translatable("pumpkin_bridge.join.confirm.message"),
-				Component.translatable("pumpkin_bridge.join.confirm.yes"),
-				Component.translatable("pumpkin_bridge.join.confirm.no")));
-			case LEAVE_AND_CONNECT -> {
+			case CONFIRM:
+				GameScreens.show(new ConfirmScreen(this::onConfirmed,
+				Text.component("pumpkin_bridge.join.confirm.title"),
+				Text.component("pumpkin_bridge.join.confirm.message"),
+				Text.component("pumpkin_bridge.join.confirm.yes"),
+				Text.component("pumpkin_bridge.join.confirm.no")));
+				break;
+			case LEAVE_AND_CONNECT: {
 				Disconnect.leaveWorld();
 				Connect.toLoopback(GameScreens.current(), flow.host(), flow.port());
+				break;
 			}
-			case CANCEL_JOIN -> client.request(Ops.joinLeave());
-			case FAIL -> fail();
-			case NONE -> {
+			case CANCEL_JOIN:
+				client.request(Ops.joinLeave());
+				break;
+			case FAIL:
+				fail();
+				break;
+			case NONE: {
+				break;
 			}
 		}
 	}

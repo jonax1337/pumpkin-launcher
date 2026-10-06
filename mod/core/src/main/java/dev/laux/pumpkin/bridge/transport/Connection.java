@@ -21,8 +21,8 @@ import java.time.Duration;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /**
  * One connection to the launcher, from {@code hello} to its end. The thread that calls {@link #serve()} reads, watches the
@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory;
  * thread writes the outgoing queue with the send budget, and a {@code ping} when the queue was empty for a ping period.
  */
 final class Connection {
-	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_bridge");
+	private static final Logger LOG = LogManager.getLogger("pumpkin_bridge");
 	private static final long NOT_WRITING = Long.MIN_VALUE;
 	/** The launcher counts messages in its own second; this slack keeps timer jitter from squeezing 21 into one of them. */
 	private static final Duration SEND_WINDOW = Limits.MESSAGE_WINDOW.plusMillis(100);
@@ -102,9 +102,11 @@ final class Connection {
 	}
 
 	private void handle(LauncherFrame frame) {
-		if (frame instanceof Welcome welcome) {
+		if (frame instanceof Welcome) {
+			Welcome welcome = (Welcome) frame;
 			acceptWelcome(welcome);
-		} else if (frame instanceof Reject reject) {
+		} else if (frame instanceof Reject) {
+			Reject reject = (Reject) frame;
 			refuse(reject.reason());
 		} else if (frame instanceof Ping) {
 			outgoing.offer(new ModFrame.Pong());

@@ -1,51 +1,78 @@
-# Pumpkin Launcher: finale App-Assets
+# Pumpkin Launcher branding
 
-**SVG ist die Logoquelle.** Jede Season hat genau ein freigegebenes Zeichen. UI, Wortzeichen und Vorschau verwenden SVG direkt. Es gibt keine separaten Mini-Zeichnungen, monochromen Tray-Masken oder PNG-Versionen für die UI.
+Buddy and four seasonal variants share a 32×32 design grid. The approved `mark.svg` in each season directory is the source of truth: the UI scales SVG directly, and native icons are rendered from the same artwork. There are no separate miniature or monochrome tray designs.
 
-Die Dateien sind in **Pumpkin Launcher integriert**. `src/branding/Brand.tsx` verbindet die saisonalen SVGs mit UI, Favicon und nativem Fenster-/Taskleisten-Icon. `src/branding/calendar.ts` verwendet den vorbereiteten Kalender aus `seasons.mjs` mit dem lokalen Datum.
+## Assets and calendar
 
-## Dateien
+| Directory | Variant | Automatic local-date window |
+|---|---|---|
+| `assets/standard/` | Buddy | September and November 3–30; fallback outside seasonal windows |
+| `assets/spring/` | Bloom Buddy | March 1–May 31 |
+| `assets/summer/` | Sunny Buddy | June 1–August 31 |
+| `assets/halloween/` | Hex Buddy | October 1–November 2 |
+| `assets/winter/` | Frost Buddy | December 1–end of February |
 
-In `assets/<standard|spring|summer|halloween|winter>/`:
+`seasons.mjs` defines the calendar used by the preview and app integration. Each directory contains `mark.svg`, outlined `lockup.svg`, `32x32.png`, `128x128.png`, `128x128@2x.png`, `icon.ico` and `icon.icns`. Raster files are native-system exports, not UI sources.
 
-| Datei | Zweck |
-|---|---|
-| `mark.svg` | Verbindliches, editierbares Logo der Season; direkt für UI und Skalierung |
-| `lockup.svg` | Logo plus „PUMPKIN LAUNCHER“, Schrift als Pfade |
-| `32x32.png` | Native Tauri-/System-Bilddatei, bei Bedarf auch für ein farbiges Tray-Icon |
-| `128x128.png`, `128x128@2x.png` | Die von der vorhandenen Tauri-Konfiguration erwarteten PNG-Größen |
-| `icon.ico` | Windows-Container mit 16, 24, 32, 48, 64, 128 und 256 Pixeln |
-| `icon.icns` | macOS-Container mit 32–1024 Pixeln inklusive Retina-Einträgen |
+- `wordmark/`: light/dark outlined wordmarks.
+- `web/`: standard SVG/ICO favicon.
+- `index.html`: seasonal preview with date selection.
+- `overview.png`: asset-family overview.
+- `manifest.json`: asset paths, byte sizes and hashes.
+- [`motion/`](motion/README.md): animated SVGs and static posters.
+- `source/FONT-LICENSE.txt`: Jersey 10 font license.
+- `pumpkin-launcher-assets.zip`: generated asset/source package.
 
-Alle nativen Bilder werden **direkt aus derselben SVG-Datei** gerendert, ohne neue Gesichtszüge oder vereinfachte Formen. Die 32px-Renderings werden gegen die Pixel-Hashes der freigegebenen Entwürfe geprüft.
+The shared palette uses orange `#E9904D`, highlight `#F8BD72`, plum shadow `#784153` and outline `#2B2433`, with leaf greens `#69866E` and `#ADC795`. Seasonal accessories change the expression without replacing Buddy's base shape. Jersey 10 is the wordmark font; the app also uses Big Shoulders Display and Hanken Grotesk.
 
-`wordmark/` enthält das reine Wortzeichen als helle und dunkle SVG. Die Konturen sind in Pfade umgewandelt. `web/` enthält das Standard-Favicon als SVG und ICO. Weitere Rasterformate für die UI sind nicht nötig.
+## Regeneration
 
-## Übergabe
+**Consumers do not regenerate.** App/website builds stage committed `assets/`, `web/`
+and `motion/` files without running either Python generator.
 
-- `motion/`: 60 animierte SVGs (zwölf Bewegungen × fünf Seasons), statische Fallbacks und eine interaktive Vorschau. Sechs neue Reaktionen stehen zuerst; die bisherigen sechs bleiben erhalten. Details in [motion/README.md](motion/README.md).
-- `index.html`: finale Vorschau, inklusive Datumstest; alle gezeigten Logos sind SVGs.
-- `overview.png`: aufbewahrte Übersicht des letzten Konzepts.
-- `CONCEPT.md`: gewählte Motive und vorgeschlagene Saisonzeiten.
-- `manifest.json`: Asset-Pfade und Prüfsummen.
-- `pumpkin-launcher-assets.zip`: vollständiges Paket mit Quellen und Generator.
-
-Die verworfenen Entwürfe und die verworfenen Mini-/Tray-Dateien wurden aus dem Repository in einen lokalen Wiederherstellungsordner außerhalb des Projekts verschoben. Im Repository bleibt nur dieses finale Konzept.
-
-## Neubau und Prüfung
+**Static regeneration prerequisites:** install Pillow into the Python interpreter used
+below (`python -m pip install Pillow`) and install Node.js. The renderer
+[`source/render-svg.cjs`](source/render-svg.cjs) first tries `require('sharp')`; if unavailable,
+it uses `PUMPKIN_SHARP_PATH` or, when unset, a machine-specific Codex runtime cache.
+Sharp is not a root package dependency: `pnpm install` alone does not set up this generator.
+For example, install it outside the repository and point to the **package directory**,
+not the Node executable:
 
 ```powershell
-python branding/pumpkin-launcher/build.py
-python branding/pumpkin-launcher/build.py --check
-node branding/pumpkin-launcher/seasons.mjs --check
+npm install --prefix "$HOME/pumpkin-branding-tools" sharp
+$env:PUMPKIN_SHARP_PATH = "$HOME/pumpkin-branding-tools/node_modules/sharp"
 ```
 
-Benötigt werden Python mit Pillow sowie Node.js mit Sharp. Sharp ist im vorhandenen Codex-Runtime-Paket verfügbar; der Renderer findet zuerst eine reguläre Installation, danach die lokale Codex-Runtime. Alternativ kann `PUMPKIN_SHARP_PATH` auf das Sharp-Paket zeigen. Es wurden keine App-Abhängigkeiten installiert oder verändert.
+On a POSIX shell the corresponding environment assignment is
+`export PUMPKIN_SHARP_PATH="$HOME/pumpkin-branding-tools/node_modules/sharp"`.
+Then regenerate static native icons from the repository root:
 
-Der Build liest jede eingebettete ICO-/ICNS-Größe wieder ein und vergleicht sie mit einem direkten SVG-Rendering. Die SVGs sind die eigenständige Quelle; die alten Entwurfs-Skripte und der Pixel-Art-Studio-Skill werden für die statischen Assets nicht benötigt. Die Lizenz der verwendeten Jersey-10-Schrift liegt in `source/FONT-LICENSE.txt`.
+```sh
+python branding/pumpkin-launcher/build.py
+```
 
-Die Animationen werden separat mit `python branding/pumpkin-launcher/motion/build.py` erzeugt; ihr Zeichengenerator verwendet den installierten Pixel-Art-Studio-Skill. Anschließend aktualisiert der normale Branding-Build auch das vollständige ZIP. Der Branding-Build prüft, dass die Animationen weiterhin zu den unveränderten SVG-Quellen gehören.
+**Motion-inclusive packaging has an additional prerequisite:** an external Pixel Art
+Studio toolkit that is **not bundled**, with no acquisition URL or pinned version recorded
+in this repository. Read [its exact path requirement and reproducibility limit](motion/README.md#preview-and-regeneration)
+before attempting the full sequence. Without it, use the committed motion assets; a fresh
+checkout cannot reproduce motion generation alone.
 
-Bei `pnpm dev` und `pnpm build` übernimmt `scripts/sync-branding.mjs` die aktuelle Season in alle nativen Paket-Icons. Die laufende App wechselt spätestens an der nächsten lokalen Mitternacht und prüft beim Zurückkehren aus dem Standby sowie einmal pro Minute erneut. Installierte EXE-/Installer-Icons bleiben technisch an ihren Build gebunden; Fenster und Taskleiste erhalten zur Laufzeit das aktuelle Icon.
+Once both static and motion prerequisites are available, run from the repository root:
 
-Buddy erscheint in Fensterleiste, Startseite, Onboarding, Einstellungen, Leer- und Fehlerzuständen sowie Toasts. Die Animationen folgen echten Spiel-/Ladezuständen, respektieren reduzierte Bewegung und pausieren bei laufendem Spiel, verborgenem Fenster oder außerhalb des sichtbaren Bereichs. `pnpm check:branding` prüft Kalendergrenzen, lokale Mitternacht, Zeitzonen und alle Laufzeitdateien.
+```sh
+python branding/pumpkin-launcher/build.py
+python branding/pumpkin-launcher/motion/build.py
+python branding/pumpkin-launcher/build.py
+```
+
+The sequence is **static → motion → static**: the first step refreshes native exports,
+the motion step consumes the approved SVGs, and the final static build incorporates the
+new motion hashes/files into `manifest.json` and `pumpkin-launcher-assets.zip`.
+
+`build.py --check` compares native icon sizes with direct SVG renders; `node branding/pumpkin-launcher/seasons.mjs --check` is the calendar-boundary tool. These are developer references, not installation tasks.
+
+## App integration
+
+`src/branding/Brand.tsx` connects seasonal assets to the UI and runtime window/taskbar icon; `src/branding/calendar.ts` selects by local date. `scripts/sync-branding.mjs` stages native package icons during `pnpm dev` and `pnpm build`. Installed executable/installer icons reflect the build season; the running app can update its window icon.
+
+Buddy animations respect reduced motion and pause for running games, hidden windows and offscreen content. The website uses the same calendar and approved SVGs. See [website assets](../../website/README.md).

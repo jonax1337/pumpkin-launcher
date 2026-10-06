@@ -28,7 +28,7 @@ fn parse_mutated(mutate: impl FnOnce(&mut Value)) -> Result<ModIndex, IndexError
 // --- das Beispiel ------------------------------------------------------------------------------------------
 
 #[test]
-fn the_sample_parses_into_three_nodes_and_one_of_them_is_off() {
+fn the_sample_keeps_each_loader_identity_and_leaves_unproven_artifacts_off() {
     let index = ModIndex::parse(SAMPLE).unwrap();
     assert_eq!(index.mod_version, "2.1.0");
     let verified: Vec<(&str, bool)> = index
@@ -41,7 +41,10 @@ fn the_sample_parses_into_three_nodes_and_one_of_them_is_off() {
         [
             ("1.21.1-fabric", true),
             ("1.21.1-neoforge", true),
-            ("1.20.1-forge", false)
+            ("1.20.1-forge", false),
+            ("1.16.5-quilt", false),
+            ("1.16.5-forge", false),
+            ("1.21.11-forge", false),
         ]
     );
     assert_eq!(
@@ -53,6 +56,9 @@ fn the_sample_parses_into_three_nodes_and_one_of_them_is_off() {
         "1.21.1-fabric"
     );
     assert_eq!(index.node_serving(Loader::Fabric, "1.20.1"), None);
+    assert_eq!(index.node_serving(Loader::Quilt, "1.16.5").unwrap().strategy, Strategy::QuiltAddMods);
+    assert_eq!(index.node_serving(Loader::Forge, "1.16.5").unwrap().strategy, Strategy::FmlMavenRoot);
+    assert_eq!(index.node_serving(Loader::Forge, "1.21.11").unwrap().strategy, Strategy::ForgeClasspath);
 }
 
 #[test]
@@ -113,7 +119,7 @@ fn rejected_cases() -> Vec<(&'static str, Mutation, &'static str)> {
         ),
         (
             "unknown loader",
-            set_first_node("loader", json!("quilt")),
+            set_first_node("loader", json!("unknown")),
             "Malformed",
         ),
         (
@@ -360,9 +366,9 @@ fn the_schema_lists_the_loaders_and_strategies_of_the_code() {
     );
     assert_eq!(
         strings(&node["properties"]["loader"]["enum"]),
-        ["fabric", "neoforge", "forge"]
+        ["fabric", "neoforge", "forge", "quilt"]
     );
-    for loader in [Loader::Fabric, Loader::Neoforge, Loader::Forge] {
+    for loader in [Loader::Fabric, Loader::Neoforge, Loader::Forge, Loader::Quilt] {
         let name = serde_json::to_value(loader).unwrap();
         assert!(node["properties"]["loader"]["enum"]
             .as_array()

@@ -1,5 +1,7 @@
 package dev.laux.pumpkin.bridge.modules.friends.ui;
 
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import dev.laux.pumpkin.bridge.modules.friends.FriendsClient;
 import dev.laux.pumpkin.bridge.compat.MinecraftMainThread;
 import dev.laux.pumpkin.bridge.compat.Text;
@@ -22,14 +24,14 @@ import java.util.stream.Collectors;
 import net.minecraft.client.gui.screens.Screen;
 
 /**
- * One invite, examined (INGAME 6.2 "Einladungen"): the screen asks {@code invite.plan} once and shows the verdict. Only
- * {@code ready} offers [Beitreten] (the join flow of INGAME 7); every other verdict shows the launcher's reason and
+ * One invite, examined (docs/bridge/README.md, "In-game navigation and world behavior"): the screen asks {@code invite.plan} once and shows the verdict. Only
+ * {@code ready} offers [Beitreten] (the join flow of docs/bridge/README.md, "In-game navigation and world behavior"); every other verdict shows the launcher's reason and
  * [Im Launcher öffnen], because starting a matching instance is the launcher's to do. A failed or unanswered plan shows
- * the error inline (INGAME 6.2) and the same way out.
+ * the error inline (docs/bridge/README.md, "In-game navigation and world behavior") and the same way out.
  */
 public final class InviteScreen extends PumpkinScreen {
 	private static final int FULL_ROW_WIDTH = 130;
-	/** INGAME 6.2: inline errors carry the warning sign. */
+	/** docs/bridge/README.md, "In-game navigation and world behavior": inline errors carry the warning sign. */
 	private static final String WARNING = "⚠";
 
 	private final FriendsClient client;
@@ -46,9 +48,9 @@ public final class InviteScreen extends PumpkinScreen {
 
 	@Override
 	protected List<Row> rows(int tab) {
-		if (plan.isEmpty() && !failed) {
+		if (!plan.isPresent() && !failed) {
 			askForPlanOnce();
-			return List.of(Row.text(Text.translate("pumpkin_bridge.invite.checking", invite.title())));
+			return Immutable.list(Row.text(Text.translate("pumpkin_bridge.invite.checking", invite.title())));
 		}
 		return plan.map(this::planRows).orElseGet(this::failedRows);
 	}
@@ -56,7 +58,7 @@ public final class InviteScreen extends PumpkinScreen {
 	private List<Row> planRows(InvitePlan answer) {
 		InvitePlanView view = InvitePlanView.of(answer.verdict());
 		if (view.joinFromHere()) {
-			return List.of(Row.text(Text.translate("pumpkin_bridge.invite.verdict.ready")), joinRow());
+			return Immutable.list(Row.text(Text.translate("pumpkin_bridge.invite.verdict.ready")), joinRow());
 		}
 		List<Row> rows = new ArrayList<>();
 		rows.add(Row.text(Text.translate(view.reasonKey())));
@@ -77,7 +79,7 @@ public final class InviteScreen extends PumpkinScreen {
 	}
 
 	private List<Row> failedRows() {
-		return List.of(Row.text(WARNING + " " + Text.translate("pumpkin_bridge.error.internal")), openLauncherRow());
+		return Immutable.list(Row.text(WARNING + " " + Text.translate("pumpkin_bridge.error.internal")), openLauncherRow());
 	}
 
 	private static void addCountsAndAlternatives(List<Row> rows, InvitePlan answer) {
@@ -104,7 +106,8 @@ public final class InviteScreen extends PumpkinScreen {
 
 	private void onPlan(Reply<InvitePlan> reply) {
 		reply.error().ifPresent(Toasts::showError);
-		if (reply instanceof Success<InvitePlan> success) {
+		if (reply instanceof Success<?>) {
+			Success<InvitePlan> success = (Success<InvitePlan>) reply;
 			plan = Optional.of(success.value());
 		} else {
 			failed = true;

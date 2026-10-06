@@ -9,7 +9,7 @@ public final class GameScreens {
 	private GameScreens() {
 	}
 
-	/** INGAME-API.md 3, "Minecraft: screens, main thread, leaving a world": {@code Gui#screen()} from 26.2, the field {@code Minecraft#screen} before. */
+	/** docs/bridge/MINECRAFT-API.md, "Minecraft: screens, main thread, leaving a world": {@code Gui#screen()} from 26.2, the field {@code Minecraft#screen} before. */
 	public static Screen current() {
 		Minecraft minecraft = Minecraft.getInstance();
 		//? if >=26.2 {
@@ -19,7 +19,7 @@ public final class GameScreens {
 		*///?}
 	}
 
-	/** INGAME-API.md 3, same table: {@code Gui#setScreen(Screen)} from 26.2, {@code Minecraft#setScreen(Screen)} before. */
+	/** docs/bridge/MINECRAFT-API.md, same table: {@code Gui#setScreen(Screen)} from 26.2, {@code Minecraft#setScreen(Screen)} before. */
 	public static void show(Screen screen) {
 		Minecraft minecraft = Minecraft.getInstance();
 		//? if >=26.2 {

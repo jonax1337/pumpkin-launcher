@@ -11,7 +11,7 @@ import net.minecraft.client.gui.screens.Screen;
 
 /**
  * How the hub runs an operation: while the launcher asks the player, the {@link LauncherWaitScreen} covers the hub; a
- * failure arrives as a toast (INGAME 6.2), a success needs no words because the state topic shows it.
+ * failure arrives as a toast (docs/bridge/README.md, "In-game navigation and world behavior"), a success needs no words because the state topic shows it.
  */
 final class HubOps {
 	private HubOps() {

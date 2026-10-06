@@ -1,5 +1,7 @@
 package dev.laux.pumpkin.bridge.modules.friends.ui;
 
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import dev.laux.pumpkin.bridge.modules.friends.FriendsClient;
 import dev.laux.pumpkin.bridge.compat.GameScreens;
 import dev.laux.pumpkin.bridge.compat.Text;
@@ -14,7 +16,7 @@ import java.util.List;
 import net.minecraft.client.gui.screens.Screen;
 
 /**
- * The Einladungen tab of the hub (INGAME 6.2): one row per invite with [Ansehen] (the InviteScreen decides whether this
+ * The Einladungen tab of the hub (docs/bridge/README.md, "In-game navigation and world behavior"): one row per invite with [Ansehen] (the InviteScreen decides whether this
  * game can join) and [Ablehnen] ({@code invite.decline}); "Keine Einladungen" when the list is empty (6.3).
  */
 public final class InvitesTab {
@@ -32,7 +34,7 @@ public final class InvitesTab {
 	public List<Row> rows() {
 		List<Invite> invites = client.topics().invites();
 		if (invites.isEmpty()) {
-			return List.of(Row.text(Text.translate("pumpkin_bridge.invites.empty")));
+			return Immutable.list(Row.text(Text.translate("pumpkin_bridge.invites.empty")));
 		}
 		List<Row> rows = new ArrayList<>();
 		for (Invite invite : invites) {

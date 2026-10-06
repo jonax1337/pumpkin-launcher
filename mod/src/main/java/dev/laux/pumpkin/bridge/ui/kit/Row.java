@@ -1,5 +1,7 @@
 package dev.laux.pumpkin.bridge.ui.kit;
 
+import java.util.Objects;
+
 import dev.laux.pumpkin.bridge.modules.friends.ui.model.FriendCardLayout;
 import dev.laux.pumpkin.bridge.ui.model.GuiMetrics;
 import dev.laux.pumpkin.bridge.ui.model.RowStyle;
@@ -90,13 +92,101 @@ public final class Row {
 		return friendIdentity;
 	}
 
-	record FriendIdentity(Optional<String> uuid, String status, int statusColor) {
+	static final class FriendIdentity {
+		private final Optional<String> uuid;
+		private final String status;
+		private final int statusColor;
+
+		FriendIdentity(Optional<String> uuid, String status, int statusColor) {
+			this.uuid = uuid;
+			this.status = status;
+			this.statusColor = statusColor;
+		}
+
+		public Optional<String> uuid() {
+			return uuid;
+		}
+
+		public String status() {
+			return status;
+		}
+
+		public int statusColor() {
+			return statusColor;
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (this == other) {
+				return true;
+			}
+			if (!(other instanceof FriendIdentity)) {
+				return false;
+			}
+			FriendIdentity that = (FriendIdentity) other;
+			return Objects.equals(uuid, that.uuid)
+				&& Objects.equals(status, that.status)
+				&& statusColor == that.statusColor;
+		}
+
+		@Override
+		public int hashCode() {
+			int hash = Objects.hashCode(uuid);
+			hash = 31 * hash + Objects.hashCode(status);
+			hash = 31 * hash + Integer.hashCode(statusColor);
+			return hash;
+		}
+
+		@Override
+		public String toString() {
+			return "FriendIdentity[uuid=" + uuid + ", status=" + status + ", statusColor=" + statusColor + "]";
+		}
 	}
 
 	List<Action> actions() {
 		return actions;
 	}
 
-	record Action(String id, AbstractWidget widget) {
+	static final class Action {
+		private final String id;
+		private final AbstractWidget widget;
+
+		Action(String id, AbstractWidget widget) {
+			this.id = id;
+			this.widget = widget;
+		}
+
+		public String id() {
+			return id;
+		}
+
+		public AbstractWidget widget() {
+			return widget;
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (this == other) {
+				return true;
+			}
+			if (!(other instanceof Action)) {
+				return false;
+			}
+			Action that = (Action) other;
+			return Objects.equals(id, that.id)
+				&& Objects.equals(widget, that.widget);
+		}
+
+		@Override
+		public int hashCode() {
+			int hash = Objects.hashCode(id);
+			hash = 31 * hash + Objects.hashCode(widget);
+			return hash;
+		}
+
+		@Override
+		public String toString() {
+			return "Action[id=" + id + ", widget=" + widget + "]";
+		}
 	}
 }

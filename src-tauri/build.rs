@@ -1,4 +1,4 @@
-//! Build-Skript: Tauri und die Einbettung der Mod (docs/friends/INGAME.md, 3.2).
+//! Build-Skript: Tauri und die Einbettung der Mod (docs/bridge/README.md, "Embedded index and files").
 //!
 //! Liegt im Mod-Ordner (Umgebungsvariable `PUMPKIN_MOD_DIST`, sonst `<Repo>/mod/build/mod-index`) ein gültiger
 //! `mod-index.json` samt JARs, bettet `ingame/embedded.rs` sie ein; sonst trägt der Build keine Mod und die

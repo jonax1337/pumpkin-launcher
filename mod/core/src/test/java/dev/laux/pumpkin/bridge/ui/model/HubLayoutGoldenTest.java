@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-/** The hub layout at the five resolutions of INGAME 6.2, compared with the reviewable golden lists. */
+/** The hub layout at the five resolutions of docs/bridge/README.md, "In-game navigation and world behavior", compared with the reviewable golden lists. */
 class HubLayoutGoldenTest {
 	@ParameterizedTest(name = "{0}x{1}")
 	@CsvSource({"320,240", "427,240", "480,270", "640,360", "960,540"})

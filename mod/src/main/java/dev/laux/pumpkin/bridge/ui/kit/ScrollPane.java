@@ -1,6 +1,10 @@
 package dev.laux.pumpkin.bridge.ui.kit;
 
+import java.util.Objects;
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import dev.laux.pumpkin.bridge.compat.Text;
+import dev.laux.pumpkin.bridge.compat.Widgets;
 import dev.laux.pumpkin.bridge.ui.model.Fit;
 import dev.laux.pumpkin.bridge.modules.friends.ui.model.FriendCardLayout;
 import dev.laux.pumpkin.bridge.ui.model.GuiMetrics;
@@ -17,7 +21,7 @@ import java.util.Optional;
 import net.minecraft.client.gui.components.AbstractWidget;
 
 /**
- * The rows of a screen inside its body rectangle, scrolled by whole rows (INGAME 4.4). The widgets of every row are
+ * The rows of a screen inside its body rectangle, scrolled by whole rows (docs/bridge/README.md). The widgets of every row are
  * regular screen widgets; the ones outside the body are made invisible, so vanilla neither draws nor clicks them. Rows
  * are placed by the Minecraft-free {@link ScrollModel} and {@link RowLayout}.
  */
@@ -31,17 +35,17 @@ public final class ScrollPane {
 
 	/** {@code firstRow} is a remembered scroll position; it is clamped to what the new window can show. */
 	public ScrollPane(Rect body, List<Row> rows, int firstRow) {
-		this.rows = List.copyOf(rows);
+		this.rows = Immutable.copyList(rows);
 		rowArea = new Rect(body.x(), body.y(), body.width() - GuiMetrics.SCROLLBAR_GUTTER, body.height());
 		scrollbarTrack = new Rect(body.right() - GuiMetrics.SCROLLBAR_WIDTH, body.y(), GuiMetrics.SCROLLBAR_WIDTH, body.height());
 		viewport = body;
-		scroll = new ScrollModel(this.rows.stream().map(Row::height).toList(), body.height());
+		scroll = new ScrollModel(this.rows.stream().map(Row::height).collect(Immutable.toList()), body.height());
 		scroll.scrollTo(firstRow);
 	}
 
 	/** Every widget of every row, shown or not: the screen adds them all once per build. */
 	public List<Row.Action> actions() {
-		return rows.stream().flatMap(row -> row.actions().stream()).toList();
+		return rows.stream().flatMap(row -> row.actions().stream()).collect(Immutable.toList());
 	}
 
 	public int firstRow() {
@@ -62,7 +66,7 @@ public final class ScrollPane {
 				RowLayout.of(bounds, row.secondLine().isPresent(), actionWidths(row, bounds)));
 			placeActions(row, inside);
 			String statusLabel = row.friendIdentity().map(identity -> Fit.clip(identity.status(),
-				Math.max(0, card.orElseThrow().status().width() - 13),
+				Math.max(0, card.get().status().width() - 13),
 				codePoint -> Text.width(new String(Character.toChars(codePoint))))).orElse("");
 			placed.add(new PlacedRow(row, inside, bounds, card, statusLabel, Text.width(statusLabel)));
 		}
@@ -128,11 +132,11 @@ public final class ScrollPane {
 
 	private void paintCardBackdrop(Painter painter, PlacedRow shown) {
 		Rect area = shown.bounds();
-		int color = shown.row().friendIdentity().orElseThrow().statusColor();
+		int color = shown.row().friendIdentity().get().statusColor();
 		painter.fill(area.x() + 2, area.y() + 2, Math.max(0, area.width() - 4), area.height() - 6, PumpkinTheme.EDGE);
 		painter.fill(area.x() + 3, area.y() + 3, Math.max(0, area.width() - 6), area.height() - 8, PumpkinTheme.SURFACE);
 		painter.fill(area.x() + 3, area.y() + 3, 2, area.height() - 8, color);
-		Rect head = shown.card().orElseThrow().portrait();
+		Rect head = shown.card().get().portrait();
 		painter.fill(head.x() - 1, head.y() - 1, head.width() + 2, head.height() + 2, PumpkinTheme.BORDER);
 		if (!shown.row().actions().isEmpty()) {
 			painter.fill(area.x() + 8, area.y() + FriendCardLayout.HEIGHT - 12,
@@ -161,8 +165,8 @@ public final class ScrollPane {
 
 	private void paintFriend(Painter painter, PlacedRow shown) {
 		Row row = shown.row();
-		Row.FriendIdentity identity = row.friendIdentity().orElseThrow();
-		FriendCardLayout card = shown.card().orElseThrow();
+		Row.FriendIdentity identity = row.friendIdentity().get();
+		FriendCardLayout card = shown.card().get();
 		painter.head(row.firstLine(), identity.uuid(), card.portrait());
 		RowPainter.paint(painter, shown.layout(), row.style(), row.firstLine(), row.secondLine());
 		Rect status = card.status();
@@ -172,8 +176,7 @@ public final class ScrollPane {
 			status.y() + (status.height() - painter.lineHeight()) / 2, identity.statusColor(), true);
 	}
 
-
-	/** The narration of the shown rows in view order: both lines of a two-line row, one line per row (INGAME 6.2). */
+	/** The narration of the shown rows in view order: both lines of a two-line row, one line per row (docs/bridge/README.md, "In-game navigation and world behavior"). */
 	public List<String> narrationLines() {
 		List<String> lines = new ArrayList<>();
 		for (PlacedRow shown : placed) {
@@ -194,8 +197,7 @@ public final class ScrollPane {
 
 	private static List<Integer> actionWidths(Row row, Rect rowRect) {
 		return row.actions().stream()
-			.map(action -> row.widgetFillsRow() ? rowRect.width() - 2 * GuiMetrics.ROW_PADDING : action.widget().getWidth())
-			.toList();
+			.map(action -> row.widgetFillsRow() ? rowRect.width() - 2 * GuiMetrics.ROW_PADDING : action.widget().getWidth()).collect(Immutable.toList());
 	}
 
 	private void placeActions(Row row, RowLayout inside) {
@@ -203,13 +205,83 @@ public final class ScrollPane {
 			Rect target = inside.actions().get(index);
 			AbstractWidget widget = row.actions().get(index).widget();
 			widget.setWidth(target.width());
-			widget.setX(target.x());
-			widget.setY(target.y());
+			Widgets.setPosition(widget, target.x(), target.y());
 			widget.visible = target.y() >= viewport.y() && target.bottom() <= viewport.bottom();
 		}
 	}
 
-	private record PlacedRow(Row row, RowLayout layout, Rect bounds, Optional<FriendCardLayout> card,
-		String statusLabel, int statusWidth) {
+	private static final class PlacedRow {
+		private final Row row;
+		private final RowLayout layout;
+		private final Rect bounds;
+		private final Optional<FriendCardLayout> card;
+		private final String statusLabel;
+		private final int statusWidth;
+
+		private PlacedRow(Row row, RowLayout layout, Rect bounds, Optional<FriendCardLayout> card, String statusLabel, int statusWidth) {
+			this.row = row;
+			this.layout = layout;
+			this.bounds = bounds;
+			this.card = card;
+			this.statusLabel = statusLabel;
+			this.statusWidth = statusWidth;
+		}
+
+		public Row row() {
+			return row;
+		}
+
+		public RowLayout layout() {
+			return layout;
+		}
+
+		public Rect bounds() {
+			return bounds;
+		}
+
+		public Optional<FriendCardLayout> card() {
+			return card;
+		}
+
+		public String statusLabel() {
+			return statusLabel;
+		}
+
+		public int statusWidth() {
+			return statusWidth;
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (this == other) {
+				return true;
+			}
+			if (!(other instanceof PlacedRow)) {
+				return false;
+			}
+			PlacedRow that = (PlacedRow) other;
+			return Objects.equals(row, that.row)
+				&& Objects.equals(layout, that.layout)
+				&& Objects.equals(bounds, that.bounds)
+				&& Objects.equals(card, that.card)
+				&& Objects.equals(statusLabel, that.statusLabel)
+				&& statusWidth == that.statusWidth;
+		}
+
+		@Override
+		public int hashCode() {
+			int hash = Objects.hashCode(row);
+			hash = 31 * hash + Objects.hashCode(layout);
+			hash = 31 * hash + Objects.hashCode(bounds);
+			hash = 31 * hash + Objects.hashCode(card);
+			hash = 31 * hash + Objects.hashCode(statusLabel);
+			hash = 31 * hash + Integer.hashCode(statusWidth);
+			return hash;
+		}
+
+		@Override
+		public String toString() {
+			return "PlacedRow[row=" + row + ", layout=" + layout + ", bounds=" + bounds + ", card=" + card + ", statusLabel=" + statusLabel + ", statusWidth=" + statusWidth + "]";
+		}
 	}
 }

@@ -1,0 +1,38 @@
+plugins {
+	id 'xyz.wagyourtail.unimined' version "${unimined_version}"
+}
+
+ext.mixin_refmap = '"pumpkin_bridge-refmap.json"'
+apply from: rootProject.file('gradle/node.gradle')
+
+sourceSets.main.java.exclude('dev/laux/pumpkin/bridge/platform/fabric/**',
+	'dev/laux/pumpkin/bridge/platform/neoforge/**',
+	'dev/laux/pumpkin/bridge/platform/forge/BridgeMod.java')
+
+// NeoForge 47 uses Forge's descriptor and builtin mod id, but its own published artifacts.
+tasks.named('processResources') {
+	exclude 'META-INF/neoforge.mods.toml'
+	from(rootProject.file('descriptors/forge'))
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(node.javaMin)
+
+unimined.minecraft {
+	version sc.current.version
+	mappings {
+		searge()
+		mojmap()
+	}
+	neoForge {
+		loader "net.neoforged:forge:${project.pinned('forge_version')}:universal"
+		mixinConfig 'pumpkin_bridge.mixins.json'
+	}
+	defaultRemapJar = true
+}
+
+// Unimined generates the SRG refmap while remapping the production jar; no second Mixin processor is needed.
+tasks.named('jar') {
+	manifest.attributes('MixinConfigs': 'pumpkin_bridge.mixins.json')
+}
+
+registerModIndexEntry(tasks.named('remapJar').flatMap { it.archiveFile })

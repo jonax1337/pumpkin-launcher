@@ -7,7 +7,7 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.EditBox;
 
 /**
- * A vanilla widget as a {@link TrackedField}. INGAME-API.md 3, "Widgets: EditBox" ({@code getValue}, {@code setValue}) and
+ * A vanilla widget as a {@link TrackedField}. docs/bridge/MINECRAFT-API.md, "Widgets: EditBox" ({@code getValue}, {@code setValue}) and
  * "Widgets: Button, Checkbox, text" ({@code AbstractWidget#isFocused}); focusing goes through the screen.
  */
 final class TrackedWidget implements TrackedField {
@@ -28,13 +28,13 @@ final class TrackedWidget implements TrackedField {
 
 	@Override
 	public Optional<String> text() {
-		return widget instanceof EditBox box ? Optional.of(box.getValue()) : Optional.empty();
+		return widget instanceof EditBox ? Optional.of(((EditBox) widget).getValue()) : Optional.empty();
 	}
 
 	@Override
 	public void setText(String text) {
-		if (widget instanceof EditBox box) {
-			box.setValue(text);
+		if (widget instanceof EditBox) {
+			((EditBox) widget).setValue(text);
 		}
 	}
 
@@ -46,5 +46,6 @@ final class TrackedWidget implements TrackedField {
 	@Override
 	public void focus() {
 		focusOnScreen.accept(widget);
+		Widgets.setFocused(widget, true);
 	}
 }

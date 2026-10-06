@@ -17,6 +17,7 @@ pub fn instance_for(node: &Node, loader_version: Option<String>) -> Instance {
 fn mod_loader(loader: Loader) -> ModLoader {
     match loader {
         Loader::Fabric => ModLoader::Fabric,
+        Loader::Quilt => ModLoader::Quilt,
         Loader::Neoforge => ModLoader::NeoForge,
         Loader::Forge => ModLoader::Forge,
     }

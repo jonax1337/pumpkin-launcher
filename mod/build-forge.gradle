@@ -2,19 +2,37 @@ plugins {
 	id 'net.neoforged.moddev.legacyforge' version "${moddev_version}"
 }
 
+ext.mixin_refmap = '"pumpkin_bridge-refmap.json"'
 apply from: rootProject.file('gradle/node.gradle')
 
-// Tracer-Knoten: nur die Einstiegsklasse. compat/ und ui/ kommen mit den Paketen, die sie für diesen Knoten bauen.
-sourceSets.main.java.exclude('dev/laux/pumpkin/bridge/compat/**', 'dev/laux/pumpkin/bridge/ui/**',
-	'dev/laux/pumpkin/bridge/modules/**',
-	'dev/laux/pumpkin/bridge/platform/fabric/**', 'dev/laux/pumpkin/bridge/platform/neoforge/**')
+sourceSets.main.java.exclude('dev/laux/pumpkin/bridge/platform/fabric/**',
+	'dev/laux/pumpkin/bridge/platform/neoforge/**', 'dev/laux/pumpkin/bridge/platform/neoforgelegacy/**')
+
+dependencies {
+	annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+
+mixin {
+	add sourceSets.main, 'pumpkin_bridge-refmap.json'
+	config 'pumpkin_bridge.mixins.json'
+}
+
+tasks.named('jar') {
+	manifest.attributes('MixinConfigs': 'pumpkin_bridge.mixins.json')
+}
 
 legacyForge {
-	version = project.forge_version
+	version = pinned('forge_version')
 
 	runs {
 		client {
 			client()
+			if (project.hasProperty('kitdemo')) {
+				systemProperty 'pumpkin.dev.kitdemo', 'true'
+			}
+			if (project.hasProperty('demoHold')) {
+				systemProperty 'pumpkin.dev.demoHold', 'true'
+			}
 		}
 	}
 

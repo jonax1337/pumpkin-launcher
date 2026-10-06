@@ -120,7 +120,7 @@ export const friends: typeof deFriends = {
   "friends.enter.wrongShape": "That is not a friend code: it starts with \"pumpkin-\", followed by 72 letters and digits.",
   "friends.enter.consent": "Your Minecraft name goes to the owner of the code. They have to accept the request.",
 
-  // ---------- Activity in the game (INGAME 5.7) ----------
+  // ---------- Activity in the game (docs/bridge/README.md, "Protocol 2") ----------
   "friends.activity.title": "Activity in the game",
   "friends.activity.note": "What games triggered through the friends menu, the last 100. The list stays in the launcher's memory only.",
   "friends.activity.sub": "{time} · {instance}",

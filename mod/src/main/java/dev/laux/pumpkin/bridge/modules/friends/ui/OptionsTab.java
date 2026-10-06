@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * The Optionen tab of the hub (INGAME 6.2): read-only lines from the me topic and the welcome - nothing of it is
+ * The Optionen tab of the hub (docs/bridge/README.md, "In-game navigation and world behavior"): read-only lines from the me topic and the welcome - nothing of it is
  * editable in R-A, the settings live in the launcher, and [Im Launcher öffnen] is the only action. The lines themselves
  * come from the Minecraft-free {@link OptionsLines}, so their shape is unit-tested there.
  */
@@ -42,7 +42,9 @@ public final class OptionsTab {
 	private OptionsLines lines() {
 		Optional<String> launcherVersion = Optional.empty();
 		Optional<Scopes> scopes = Optional.empty();
-		if (client.state() instanceof LinkState.Connected connected) {
+		LinkState state = client.state();
+		if (state instanceof LinkState.Connected) {
+			LinkState.Connected connected = (LinkState.Connected) state;
 			launcherVersion = Optional.of(connected.launcherVersion());
 			scopes = Optional.of(connected.scopes());
 		}

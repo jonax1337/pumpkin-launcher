@@ -1,5 +1,7 @@
 package dev.laux.pumpkin.bridge.transport;
 
+import java.util.Objects;
+
 import dev.laux.pumpkin.bridge.protocol.Protocol;
 import java.util.Map;
 import java.util.Optional;
@@ -9,7 +11,44 @@ import java.util.regex.Pattern;
  * Verbindungsdaten, die der Launcher nur über die Umgebung des Spielprozesses übergibt (SPEC 7.1). Fehlt ein Wert
  * oder ist er ungültig, wurde das Spiel nicht vom Launcher mit aktivierten Freunden gestartet.
  */
-public record BridgeEnv(int port, String token) {
+public final class BridgeEnv {
+	private final int port;
+	private final String token;
+
+	public BridgeEnv(int port, String token) {
+		this.port = port;
+		this.token = token;
+	}
+
+	public int port() {
+		return port;
+	}
+
+	public String token() {
+		return token;
+	}
+
+	@Override
+	public boolean equals(Object other) {
+		if (this == other) {
+			return true;
+		}
+		if (!(other instanceof BridgeEnv)) {
+			return false;
+		}
+		BridgeEnv that = (BridgeEnv) other;
+		return port == that.port
+			&& Objects.equals(token, that.token);
+	}
+
+	@Override
+	public int hashCode() {
+		int hash = Integer.hashCode(port);
+		hash = 31 * hash + Objects.hashCode(token);
+		return hash;
+	}
+
+
 	static final String PORT_VARIABLE = "PUMPKIN_IPC_PORT";
 	static final String TOKEN_VARIABLE = "PUMPKIN_IPC_TOKEN";
 	static final String PROTOCOL_VARIABLE = "PUMPKIN_IPC_PROTOCOL";

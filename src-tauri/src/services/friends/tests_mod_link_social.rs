@@ -1,4 +1,4 @@
-//! Freunde, Anfragen, Codes und Sperren aus dem Spiel (INGAME 5.4): zu jedem Vorgang der Erfolg, seine wichtigsten
+//! Freunde, Anfragen, Codes und Sperren aus dem Spiel (docs/bridge/README.md, "Operations and consent"): zu jedem Vorgang der Erfolg, seine wichtigsten
 //! Fehlercodes und was die Zustimmung bewirkt. Anna spielt mit der Mod, Bert ist ihr Freund, Cleo ein Fremder.
 use super::mod_ops::ModScene;
 use super::*;

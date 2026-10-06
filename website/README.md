@@ -1,45 +1,51 @@
-# Pumpkin Launcher Website
+# Pumpkin Launcher website
 
-Eigenständige Marketing-Website im Launcher-Repo. Dunkle Pixelkino-Gestaltung mit den Originalfarben, Schriften, Icons und Landschaften der Desktop-App. HTML, CSS, GSAP und ScrollTrigger; unabhängig von Tauri gebaut.
+Standalone static marketing site built with HTML, CSS, GSAP and ScrollTrigger, independently of Tauri. It uses the launcher's original fonts, pixel icons, seasonal Buddy logos and landscape artwork.
+
+## Development and deployment
+
+From the repository root, after installing the root dependencies:
 
 ```sh
 pnpm dev:website       # http://127.0.0.1:1430
 pnpm build:website     # website/dist
-pnpm check:website     # lokale Links und finale Assets prüfen
 pnpm preview:website   # http://127.0.0.1:1431
 ```
 
-`website/dist/` ist ein eigenständiges statisches Deployment. Relative Asset-Pfade (`base: "./"`) erlauben auch ein Unterverzeichnis; GitHub Pages deployed per Workflow `.github/workflows/website.yml` auf `jonax1337.github.io/pumpkin-launcher/`. Der normale Launcher-Build bleibt separat. Schriftdateien, Bilder und GSAP werden lokal ausgeliefert; keine externen Anfragen oder Tracker. Externe Verweise sind nur Links auf GitHub (Quellcode, Releases, Download-Dateien); die Seite stellt selbst nie eine Anfrage dorthin.
+`website/dist/` is the deployment output. Relative paths (`base: "./"`) support subdirectory hosting. `.github/workflows/website.yml` deploys GitHub Pages; the desktop launcher build stays separate. `pnpm check:website` is the local asset/link reference tool.
 
-## Gestaltung und Bewegung
+Fonts, images and GSAP are served locally. The site has no trackers and does not fetch release metadata. External GitHub navigation occurs only when visitors follow a link.
 
-- Bildschirmfüllender Wald-Hero, gestaffelte Typografie und eine dezente Fahrt durch die Landschaft beim Scrollen.
-- Auf großen Bildschirmen führt eine gepinnte GSAP-Timeline durch vier echte App-Ansichten (Start, Bibliothek, Instanz, Entdecken). Die Screens wechseln mit Perspektivbewegung; es gibt keine simulierten App-Steuerelemente.
-- Nach der Tour füllt der Launch-Trailer die ganze Sektion: stummes MP4 in Endlosschleife (animiertes WebP wäre rund siebenmal so groß). Es lädt beim Heranscrollen, startet von vorn, sobald die Sektion erreicht ist, und pausiert, wenn sie den Bildschirm verlässt. Beim Hereinscrollen öffnet sich das Bild per Clip-Path und bewegt sich mit Parallax. Auf großen Bildschirmen bleibt die Sektion per CSS Sticky stehen, und ScrollTrigger rastet richtungsabhängig ins geöffnete Bild ein und von dort direkt in die nächste Sektion. Ein Knopf hält das Video an. Bei reduzierter Bewegung startet es angehalten; ohne JavaScript bleibt das Poster stehen. Der Outro-Knopf führt dorthin.
-- Gestaffelt einfahrende Landschaftsposter und Überschriften. Native FAQs, klare Informationen zum Entwicklungsstand.
-- Auf Mobilgeräten und bei reduzierter Bewegung stehen alle vier App-Ansichten normal untereinander. `gsap.matchMedia()` entfernt Animationen und Pinning beim Wechsel der Systemeinstellung. Ohne JavaScript bleiben Inhalte und Navigation nutzbar.
-- Buddy ist ein Markenzeichen. Die fünf Varianten erscheinen dezent im Branding; es gibt keine Auswahl oder Animations-Spielwiese.
-- Maskottchen und Favicon wechseln automatisch anhand des lokalen Datums. Die Website verwendet dafür denselben Kalender wie die App (`src/branding/calendar.ts`), prüft spätestens jede Minute sowie bei Fokus-/Sichtbarkeitswechseln und berücksichtigt lokale Mitternacht. Die vier Saisonbeispiele im Footer bleiben als Übersicht unverändert. Ohne JavaScript bleibt Standard-Buddy sichtbar.
+## Files and behavior
 
-## Download-Bereich
+- `index.html`: landing page, app tour, trailer, FAQ and platform download links.
+- `main.js`: scroll animation, trailer playback and seasonal branding. Mobile and reduced-motion layouts show the app views without the pinned tour; without JavaScript, content and navigation remain available.
+- `download.js`: local platform detection, download-card ordering and button labels, without network requests. Unknown/mobile systems retain neutral labels.
+- `datenschutz.html`, `impressum.html`: privacy and operator information, built as separate pages sharing `style.css` and `legal.js`.
+- `vite.config.mjs`: build inputs and staging of approved branding SVGs.
 
-`#download` ist reines HTML in `index.html`, ohne Build-Schritt und ohne Daten von außen. Die Knöpfe sind gewöhnliche Links auf stabile Dateinamen des neuesten veröffentlichten Releases: `https://github.com/jonax1337/pumpkin-launcher/releases/latest/download/<Name>` mit `Pumpkin.Launcher_x64-setup.exe`, `Pumpkin.Launcher_universal.dmg`, `Pumpkin.Launcher_amd64.AppImage`, `Pumpkin.Launcher_amd64.deb` und `SHA256SUMS`. Version, Größe und Prüfsumme stehen bewusst nicht auf der Seite, denn ohne Anfrage ließen sie sich nicht kennen. Erst der Klick öffnet GitHub; davor passiert kein Request. Die festen Namen legt der Job `stable-names` in `.github/workflows/release.yml` an (siehe `docs/RELEASING.md`). Bis das erste Release mit diesen Namen veröffentlicht ist, liefern die Links 404; darunter steht ein Satz mit dem Link auf die Release-Übersicht.
+Download links use `/releases/latest/download/<name>` with stable names created by the release workflow: `Pumpkin.Launcher_x64-setup.exe`, `Pumpkin.Launcher_universal.dmg`, `Pumpkin.Launcher_amd64.AppImage`, `Pumpkin.Launcher_amd64.deb` and `SHA256SUMS`. Changing names requires corresponding updates in the workflow, `index.html` and `check.mjs` (`STABLE_ASSETS`). These links require a published release containing the named assets. See [release packaging](../CONTRIBUTING.md#release-packaging).
 
-- Jede Plattform hat eine Karte mit Systemvoraussetzung, Hauptknopf und einem einklappbaren Hinweis zum ersten Start (SmartScreen, Gatekeeper, AppImage ausführbar machen; Quelle: `docs/RELEASING.md`). Dazu kommen die Aufklappzeile „Download prüfen“ (SHA256SUMS, `gh attestation verify`) und die Links auf alle Releases und den Quellcode.
-- `download.js` (lokal, ohne Netzwerk) erkennt das System aus `navigator.userAgentData` bzw. dem User-Agent, setzt die passende Karte an die erste Stelle im DOM (Tab-Reihenfolge und Anzeige bleiben gleich), markiert sie und beschriftet die Knöpfe in Kopfzeile und Hero mit „Für <System>“. Bei Handy, Tablet, ChromeOS oder unbekanntem System bleibt alles neutral und es erscheint „Der Launcher ist ein Desktop-Programm.“ Die Zeile ist im Layout reserviert (kein Layoutsprung). Ohne JavaScript bleiben alle drei Karten und Links voll nutzbar.
-- Neue Dateinamen: im Workflow, in `index.html` und in `check.mjs` (`STABLE_ASSETS`) anpassen.
+## Asset sources
 
-## Quellen der Assets
+| Asset | Source |
+|---|---|
+| `assets/brand/` | Staged by Vite from `branding/pumpkin-launcher/assets/*/mark.svg` and `web/favicon.svg`; not versioned |
+| Pixel icons | `src/pixel/icon-data.ts` |
+| `assets/world-*.png` | `SceneHost` / `src/pixel/scene.ts`: seed 27, flat mode, standard sun anchor, forest/nether/snow/sea biomes |
+| `assets/launcher-*.png` | Desktop-app browser captures for home, library, instance and discovery; replace when their layout changes |
+| `assets/trailer.mp4` | Silent web encoding of `media/launch-video/videos/pumpkin-launcher-yt-16x9.mp4` |
+| `assets/trailer-poster.jpg` | Trailer frame at 22.5 seconds |
+| Fonts | Root Big Shoulders Display, Hanken Grotesk and Jersey 10 packages |
 
-- `branding/pumpkin-launcher/assets/*/mark.svg`: unveränderte Originale, beim Start/Build nach `website/assets/brand/` kopiert. Der Zwischenordner wird nicht versioniert. Nur tatsächlich verwendete Dateien gelangen in den Build.
-- `src/pixel/icon-data.ts`: gemeinsame Pixel-Icons.
-- `assets/world-*.png`: direkt mit `SceneHost` aus `src/pixel/scene.ts` gerenderte Original-Landschaften, Seed 27, Modus `flat`, Sonnenanker `std`, Zeichenfläche 1920×1080 CSS-Pixel bei Rastergröße 3. Die daraus entstandenen 640×360-PNGs werden mit `image-rendering: pixelated` dargestellt. Biome: `forest`, `nether`, `snow`, `sea`. Keine KI-generierten Ersatzlandschaften.
-- `assets/launcher-*.png` (home, library, instance, discover): echte Browser-Aufnahmen der aktuellen App (Dev-Server mit Beispielinstanzen, 1280×720 bei Gerätefaktor 2, Seitenleisten-Layout) vom 30.09.2026. Der Katalog zeigt die zum Aufnahmezeitpunkt geladenen Modrinth-Inhalte. Bei größeren Layoutänderungen neu aufnehmen.
-- `assets/trailer.mp4` und `assets/trailer-poster.jpg`: Web-Fassung von `media/launch-video/videos/pumpkin-launcher-yt-16x9.mp4` (`ffmpeg -c:v libx264 -preset slow -crf 30 -pix_fmt yuv420p -an -movflags +faststart`, ≈ 9 MB, ohne Ton), Poster bei Sekunde 22,5. Nach einem neuen Render des Videos neu erzeugen.
-- Schriften: Big Shoulders Display, Hanken Grotesk und Jersey 10 aus den vorhandenen Font-Paketen.
+The trailer loads near its section, pauses out of view and starts paused for reduced motion; without JavaScript its poster remains. Seasonal branding uses the same local-date calendar as the app (`src/branding/calendar.ts`). See [branding](../branding/pumpkin-launcher/README.md) and [video sources](../media/launch-video/README.md).
 
-Der Name ist überall **Pumpkin Launcher** (früher stand auf der Seite versehentlich „Pumkpin“). Die FAQ nennt die Beta und verweist für die Installer auf den Download-Bereich. `datenschutz.html` (Hostliste, keine Tracker) und `impressum.html` nennen den Betreiber mit Name, Anschrift und E-Mail; `pnpm check:website` warnt, falls dort wieder Platzhalter (`[NAME]`, `[ANSCHRIFT]`, `[E-MAIL]`) stehen. Beide Seiten sind in `vite.config.mjs` als weitere Eingänge eingetragen und teilen sich `style.css`; ihre Schriften lädt `legal.js`.
-
-## Prüfung
-
-Der Produktionsbuild wurde bei 1440×900 sowie 390×844 und 320×780 im Browser geprüft: keine horizontale Überbreite, native FAQ per Tastatur bedienbar, alle App-Ansichten bei reduzierter Bewegung sichtbar. Die komplette Scrollsequenz mit CSS Sticky und GSAP zeigte im lokalen Browserlauf CLS 0. Keine Konsolenfehler. Der Download-Bereich wurde zusätzlich mit simulierten Windows-, macOS-, Linux- und iPhone-Kennungen sowie bei reduzierter Bewegung geprüft. `pnpm check:website` prüft außerdem, dass die Download-Links genau die festen Dateinamen auf github.com/…/releases/latest/download sind, nichts von außen geladen wird und die Erkennung des Systems stimmt. `pnpm build:website`, `pnpm check:website` und `pnpm exec tsc --noEmit` bestanden.
+The repository records the source video and poster time above, but contains no encoding/
+frame-extraction script or pinned command/codec settings for these two website files.
+`pnpm build:website` stages existing assets; it does not re-encode the retained video or
+extract a new poster. The video project's render scripts likewise stop at composition
+exports. Consequently the exact compressed trailer/poster cannot be regenerated from a
+repository command alone. Retain the existing web assets unless deliberately replacing
+both `assets/trailer.mp4` (silent MP4) and `assets/trailer-poster.jpg` (22.5-second frame)
+from the updated landscape export; changing only `media/launch-video/videos/` does not
+propagate to the website.

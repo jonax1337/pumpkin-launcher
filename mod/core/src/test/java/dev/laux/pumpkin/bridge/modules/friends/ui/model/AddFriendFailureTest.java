@@ -12,7 +12,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
- * The inline line of a failed {@code friend.addByName} (INGAME 6.2): the five own texts, the hints, the numbers, and the
+ * The inline line of a failed {@code friend.addByName} (docs/bridge/README.md, "In-game navigation and world behavior"): the five own texts, the hints, the numbers, and the
  * generic fallback — the shapes the launcher produces are the golden lines of {@code errors-reasons.jsonl}.
  */
 class AddFriendFailureTest {

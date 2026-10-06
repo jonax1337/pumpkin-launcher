@@ -114,7 +114,7 @@ export const defaultAddTab = (directory: DirectoryState): AddFriendTab => (nameT
 export const REQUESTS_ANCHOR = "friends-requests";
 
 /**
- * Wohin `launcher.open` der Mod führt (INGAME 5.4): auf die Freunde-Seite, dort zu den Anfragen oder zum Dialog der ältesten
+ * Wohin `launcher.open` der Mod führt (docs/bridge/README.md, "Operations and consent"): auf die Freunde-Seite, dort zu den Anfragen oder zum Dialog der ältesten
  * Einladung, oder zu den Einstellungen der Freunde.
  */
 export type ModOpenDestination =

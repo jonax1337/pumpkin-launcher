@@ -25,7 +25,7 @@ class HandshakeFixturesTest {
 
 		ModFrame.Hello hello = new ModFrame.Hello(Fixtures.TOKEN, "2.1.0", "0123456789abcdef", GAME);
 
-		assertEquals(expected, JsonParser.parseString(FrameCodec.encode(hello)));
+		assertEquals(expected, new JsonParser().parse(FrameCodec.encode(hello)));
 	}
 
 	@Test
@@ -59,8 +59,8 @@ class HandshakeFixturesTest {
 		"reject-token.jsonl,0123456789abcdef", "reject-owner.jsonl,0123456789abcdef", "reject-duplicate.jsonl,0123456789abcdef",
 		"reject-retry.jsonl,0123456789abcdef", "reject-build.jsonl,ffffffffffffffff", "reject-protocol.jsonl,0123456789abcdef"})
 	void theHelloOfEveryRejectScenarioIsTheSameLineWithItsBuild(String file, String build) {
-		JsonObject fixture = Fixtures.only(file, MOD_TO_LAUNCHER).message().deepCopy();
-		JsonObject ours = JsonParser.parseString(FrameCodec.encode(new ModFrame.Hello(Fixtures.TOKEN, "2.1.0", build, GAME)))
+		JsonObject fixture = new JsonParser().parse(Fixtures.only(file, MOD_TO_LAUNCHER).message().toString()).getAsJsonObject();
+		JsonObject ours = new JsonParser().parse(FrameCodec.encode(new ModFrame.Hello(Fixtures.TOKEN, "2.1.0", build, GAME)))
 			.getAsJsonObject();
 		// reject-protocol.jsonl shows a mod from the future (protocol 3); this mod only ever speaks protocol 2.
 		fixture.remove("protocol");

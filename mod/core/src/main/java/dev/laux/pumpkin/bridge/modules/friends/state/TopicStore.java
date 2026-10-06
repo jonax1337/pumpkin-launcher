@@ -1,5 +1,7 @@
 package dev.laux.pumpkin.bridge.modules.friends.state;
 
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import dev.laux.pumpkin.bridge.protocol.json.MalformedJson;
 import dev.laux.pumpkin.bridge.protocol.LauncherFrame.State;
 import dev.laux.pumpkin.bridge.protocol.Topic;
@@ -9,16 +11,16 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.LongSupplier;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /**
- * The last value of every topic (INGAME 5.3). The launcher pushes whole values with a revision per topic; a value replaces
+ * The last value of every topic (docs/bridge/README.md, "Protocol 2"). The launcher pushes whole values with a revision per topic; a value replaces
  * the copy here and is never patched, and a revision that is not newer than the one held is ignored. Everything here
  * runs on the main thread, so readers need no locking.
  */
 public final class TopicStore {
-	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_bridge");
+	private static final Logger LOG = LogManager.getLogger("pumpkin_bridge");
 
 	private final Map<Topic, Long> revisions = new EnumMap<>(Topic.class);
 	private final List<Listener> listeners = new CopyOnWriteArrayList<>();
@@ -26,14 +28,14 @@ public final class TopicStore {
 	private final LongSupplier wallClock;
 	private long deliverReadyAtMillis = Long.MIN_VALUE;
 	private Optional<Me> me = Optional.empty();
-	private List<Friend> friends = List.of();
+	private List<Friend> friends = Immutable.list();
 	private Requests requests = Requests.NONE;
-	private List<Invite> invites = List.of();
+	private List<Invite> invites = Immutable.list();
 	private Optional<Session> session = Optional.empty();
 	private Optional<Join> join = Optional.empty();
 	private Game game = Game.UNKNOWN;
-	private List<Code> codes = List.of();
-	private List<Blocked> blocked = List.of();
+	private List<Code> codes = Immutable.list();
+	private List<Blocked> blocked = Immutable.list();
 
 	/** Told on the main thread after a topic changed. */
 	@FunctionalInterface
@@ -129,32 +131,50 @@ public final class TopicStore {
 
 	/** Forgets everything, including the revisions: after a lost link the launcher starts over with its full state. */
 	public void clear() {
-		List<Topic> held = List.copyOf(revisions.keySet());
+		List<Topic> held = Immutable.copyList(revisions.keySet());
 		revisions.clear();
 		deliverReadyAtMillis = Long.MIN_VALUE;
 		me = Optional.empty();
-		friends = List.of();
+		friends = Immutable.list();
 		requests = Requests.NONE;
-		invites = List.of();
+		invites = Immutable.list();
 		session = Optional.empty();
 		join = Optional.empty();
 		game = Game.UNKNOWN;
-		codes = List.of();
-		blocked = List.of();
+		codes = Immutable.list();
+		blocked = Immutable.list();
 		held.forEach(topic -> listeners.forEach(listener -> listener.changed(topic)));
 	}
 
 	private void replace(State push) {
 		switch (push.topic()) {
-			case ME -> me = Optional.of(TopicParser.me(push.value()));
-			case FRIENDS -> friends = TopicParser.friends(push.value());
-			case REQUESTS -> requests = TopicParser.requests(push.value());
-			case INVITES -> invites = TopicParser.invites(push.value());
-			case SESSION -> session = TopicParser.session(push.value());
-			case JOIN -> join = TopicParser.join(push.value());
-			case GAME -> game = TopicParser.game(push.value());
-			case CODES -> codes = TopicParser.codes(push.value());
-			case BLOCKED -> blocked = TopicParser.blocked(push.value());
+			case ME:
+				me = Optional.of(TopicParser.me(push.value()));
+				break;
+			case FRIENDS:
+				friends = TopicParser.friends(push.value());
+				break;
+			case REQUESTS:
+				requests = TopicParser.requests(push.value());
+				break;
+			case INVITES:
+				invites = TopicParser.invites(push.value());
+				break;
+			case SESSION:
+				session = TopicParser.session(push.value());
+				break;
+			case JOIN:
+				join = TopicParser.join(push.value());
+				break;
+			case GAME:
+				game = TopicParser.game(push.value());
+				break;
+			case CODES:
+				codes = TopicParser.codes(push.value());
+				break;
+			case BLOCKED:
+				blocked = TopicParser.blocked(push.value());
+				break;
 		}
 	}
 }

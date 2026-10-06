@@ -1,4 +1,4 @@
-//! Das Tor der Einspeisung (INGAME 3.3): alle Bedingungen an einer Stelle, als reine Funktion über die Tatsachen des
+//! Das Tor der Einspeisung (docs/bridge/README.md, "Support selection"): alle Bedingungen an einer Stelle, als reine Funktion über die Tatsachen des
 //! Starts. Besteht eine nicht, startet das Spiel byte-identisch zu heute; der Grund füllt die Statuszeile der
 //! Instanzseite (3.9).
 use super::breaker::{FailureKind, InjectionState};
@@ -6,7 +6,7 @@ use super::index::{ModIndex, Node};
 use super::select::{select, Selection, Target, Unfit};
 use crate::models::ModLoader;
 
-/// Die Mod-Id, die in einer Instanz nicht schon vorhanden sein darf (INGAME 3.3, Punkt 6).
+/// Die Mod-Id, die in einer Instanz nicht schon vorhanden sein darf (docs/bridge/README.md, "Support selection").
 pub const MOD_ID: &str = "pumpkin_bridge";
 
 /// Alles, was das Tor über den Start wissen muss.
@@ -80,7 +80,6 @@ impl SkipReason {
             Self::Unfit(Unfit::JavaTooOld { .. }) => "javaTooOld",
             Self::Unfit(Unfit::JavaUnknown) => "javaUnknown",
             Self::Unfit(Unfit::VanillaNeedsLoader) => "vanillaNeedsLoader",
-            Self::Unfit(Unfit::QuiltUnsupported) => "quiltUnsupported",
             Self::GloballyOff => "globallyOff",
             Self::InstanceOff => "instanceOff",
             Self::Tripped(_) => "tripped",
@@ -264,7 +263,7 @@ mod tests {
                     loader: ModLoader::Quilt,
                     ..fitting_facts()
                 },
-                SkipReason::Unfit(Unfit::QuiltUnsupported),
+                SkipReason::Unfit(Unfit::NoNode),
             ),
             (
                 "newer minecraft",

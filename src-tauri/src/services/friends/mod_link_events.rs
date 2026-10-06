@@ -1,4 +1,4 @@
-//! Was ein Vorgang aus dem Spiel an der Oberfläche des Launchers bewirkt (INGAME 5.4, 5.7), jenseits der Sitzungs-Ereignisse:
+//! Was ein Vorgang aus dem Spiel an der Oberfläche des Launchers bewirkt (docs/bridge/README.md, "Operations and consent"), jenseits der Sitzungs-Ereignisse:
 //! die Aktivitätsliste bekommt einen Eintrag, und `launcher.open` holt das Fenster nach vorn. Die Sitzungen kennen nur
 //! [`ModAppEvents`]; in der App sendet [`TauriModAppEvents`] Tauri-Events, Tests zeichnen auf.
 use std::sync::{Arc, RwLock};

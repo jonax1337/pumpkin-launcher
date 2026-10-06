@@ -12,7 +12,7 @@ import java.util.List;
 import net.minecraft.client.gui.screens.Screen;
 
 /**
- * "Bestätige im Pumpkin Launcher" (INGAME 5.5, 6.2): shown while a request of this game waits for the player's answer
+ * "Bestätige im Pumpkin Launcher" (docs/bridge/README.md, "Operations and consent"): shown while a request of this game waits for the player's answer
  * in the launcher. [Abbrechen] — like the escape key — only stops waiting; the operation runs to its answer, and the
  * screen closes by itself as soon as waiting ends.
  */

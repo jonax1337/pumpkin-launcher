@@ -4,15 +4,15 @@ import dev.laux.pumpkin.bridge.modules.friends.FriendsClient;
 import dev.laux.pumpkin.bridge.modules.friends.ui.FriendsScreen;
 import dev.laux.pumpkin.bridge.ui.model.Painter;
 import net.minecraft.client.gui.screens.Screen;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /**
  * The hub as the dev run proves it (see {@link HubDemo}): after its first three rendered frames it logs one line and
  * closes itself unless the development-only demoHold switch is set. The screen is the real hub.
  */
 final class HubDemoScreen extends FriendsScreen {
-	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_bridge");
+	private static final Logger LOG = LogManager.getLogger("pumpkin_bridge");
 	private static final int FRAMES_BEFORE_PROOF = 3;
 
 	private int renderedFrames;

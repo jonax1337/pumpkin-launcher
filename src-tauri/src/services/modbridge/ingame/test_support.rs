@@ -12,6 +12,7 @@ pub const MOD_VERSION: &str = "2.1.0";
 fn default_strategy(loader: Loader) -> Strategy {
     match loader {
         Loader::Fabric => Strategy::FabricAddMods,
+        Loader::Quilt => Strategy::QuiltAddMods,
         Loader::Neoforge | Loader::Forge => Strategy::FmlMavenRoot,
     }
 }

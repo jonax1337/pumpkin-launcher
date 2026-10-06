@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import dev.laux.pumpkin.bridge.FakeClock;
 import dev.laux.pumpkin.bridge.Fixtures;
 import dev.laux.pumpkin.bridge.ManualMainThread;
@@ -346,7 +347,7 @@ class RequestManagerTest {
 	}
 
 	private static String rewriteId(Fixtures.Line line, String id) {
-		JsonObject copy = line.message().deepCopy();
+		JsonObject copy = new JsonParser().parse(line.message().toString()).getAsJsonObject();
 		copy.addProperty("id", id);
 		return copy.toString();
 	}

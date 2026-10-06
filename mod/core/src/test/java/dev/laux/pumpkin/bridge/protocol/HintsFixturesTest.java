@@ -23,7 +23,7 @@ class HintsFixturesTest {
 
 		assertEquals(frames.size(), FROM_MOD.size());
 		for (int index = 0; index < frames.size(); index++) {
-			JsonObject encoded = JsonParser.parseString(FrameCodec.encode(frames.get(index))).getAsJsonObject();
+			JsonObject encoded = new JsonParser().parse(FrameCodec.encode(frames.get(index))).getAsJsonObject();
 			assertEquals(FROM_MOD.get(index).message(), encoded, FROM_MOD.get(index).type());
 		}
 	}

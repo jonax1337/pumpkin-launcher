@@ -18,7 +18,7 @@ import java.util.function.Predicate;
 import org.junit.jupiter.api.Test;
 
 /**
- * Every state of INGAME 6.3 is reachable and says its text, its action and whether the tabs show content. The loading
+ * Every state of docs/bridge/README.md, "In-game navigation and world behavior" is reachable and says its text, its action and whether the tabs show content. The loading
  * state holds until the first push of every awaited topic (A27), not only of {@code me}.
  */
 class HubConditionTest {

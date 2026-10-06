@@ -1,5 +1,5 @@
 // Prüft den Verzeichnis-Worker ohne Cloudflare-Konto und ohne Netz: D1 auf node:sqlite, echte Ed25519- und RSA-Schlüssel.
-// All cases of docs/friends/BYNAME.md 10.1 and BYNAME-ATTEST.md 8.1; exit code 1 as soon as one fails.
+// Covers the directory routes and certificate login documented in docs/friends/SPEC.md#directory-api.
 // Run: `node directory/test.mjs`; MOJANG_PUBLICKEYS=<file> compares the pinned keys with another saved /publickeys answer.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -335,18 +335,18 @@ async function sessionShapes() {
   for (const [label, shape] of Object.entries(invalid)) check(`session ${label}`, errorOf(await w.call("POST", "/v2/auth/session", { body: shape })), "invalid");
   for (const text of ["[]", "null", "{", ""]) check(`session body ${JSON.stringify(text)}`, errorOf(await w.call("POST", "/v2/auth/session", { body: text })), "invalid");
   const legacy = { challenge: body.challenge, name: "Alex", signature: body.signature };
-  check("the 2.0.0 body {challenge, name, signature}", errorOf(await w.call("POST", "/v2/auth/session", { body: legacy })), "invalid");
+  check("the retired body {challenge, name, signature}", errorOf(await w.call("POST", "/v2/auth/session", { body: legacy })), "invalid");
   check("the genuine body still passes", (await w.call("POST", "/v2/auth/session", { body })).status, 200);
 }
 
-/** 2.0.0 launchers fail at their first step, before their Mojang `join`; no binding or rate limit is touched. */
+/** Retired login routes fail before Mojang `join`; no binding or rate limit is touched. */
 async function retiredLogin() {
   const w = await createWorld();
   const alex = await w.newAccount("Alex");
   const challenge = await w.call("POST", "/v1/auth/challenge", { body: { peerId: alex.identity.peerId }, env: { DB: undefined } });
-  check("2.0.0 challenge (A1 v1)", [challenge.status, errorOf(challenge)], [410, "gone"]);
+  check("retired v1 challenge", [challenge.status, errorOf(challenge)], [410, "gone"]);
   const session = await w.call("POST", "/v1/auth/session", { body: { challenge: "x", name: "Steve", signature: "00" } });
-  check("2.0.0 session (A2 v1)", [session.status, errorOf(session)], [410, "gone"]);
+  check("retired v1 session", [session.status, errorOf(session)], [410, "gone"]);
   check("retired routes skip the rate limiter", w.limits.ip, []);
   check("other methods on retired paths are unknown", (await w.call("GET", "/v1/auth/challenge")).status, 404);
 }

@@ -1,5 +1,8 @@
 package dev.laux.pumpkin.bridge.ui.model;
 
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+import dev.laux.pumpkin.bridge.runtime.Whitespace;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.IntUnaryOperator;
@@ -31,7 +34,7 @@ public final class Fit {
 			used += codePointWidth.applyAsInt(codePoints[fitting]);
 			fitting++;
 		}
-		return new String(codePoints, 0, fitting).stripTrailing() + new String(Character.toChars(ELLIPSIS_CODE_POINT));
+		return Whitespace.stripTrailing(new String(codePoints, 0, fitting)) + new String(Character.toChars(ELLIPSIS_CODE_POINT));
 	}
 
 	private static int widthOf(int[] codePoints, IntUnaryOperator codePointWidth) {
@@ -43,7 +46,7 @@ public final class Fit {
 	}
 
 	/**
-	 * Greedy word wrap to a pixel width, for sentences a screen draws over several rows (INGAME 6.2): words go to the
+	 * Greedy word wrap to a pixel width, for sentences a screen draws over several rows (docs/bridge/README.md, "In-game navigation and world behavior"): words go to the
 	 * current line while they fit, a word longer than the whole width is split at the border. Blank text wraps to one
 	 * empty line.
 	 */
@@ -66,13 +69,13 @@ public final class Fit {
 		if (line.length() > 0) {
 			lines.add(line.toString());
 		}
-		return lines.isEmpty() ? List.of("") : lines;
+		return lines.isEmpty() ? Immutable.list("") : lines;
 	}
 
 	/** The pieces of a word that each fit; a fitting word is one piece. */
 	private static List<String> chunksOf(String word, int maxWidth, ToIntFunction<String> widthOf) {
 		if (word.isEmpty() || widthOf.applyAsInt(word) <= maxWidth) {
-			return List.of(word);
+			return Immutable.list(word);
 		}
 		List<String> chunks = new ArrayList<>();
 		StringBuilder chunk = new StringBuilder();

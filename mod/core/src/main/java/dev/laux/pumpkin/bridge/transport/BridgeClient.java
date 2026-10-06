@@ -1,5 +1,7 @@
 package dev.laux.pumpkin.bridge.transport;
 
+import dev.laux.pumpkin.bridge.runtime.Immutable;
+
 import dev.laux.pumpkin.bridge.protocol.ClosingReason;
 import dev.laux.pumpkin.bridge.protocol.ErrorCode;
 import dev.laux.pumpkin.bridge.protocol.LauncherFrame.Welcome;
@@ -11,24 +13,23 @@ import dev.laux.pumpkin.bridge.transport.request.RequestManager;
 import dev.laux.pumpkin.bridge.transport.request.RequestManager.Delivery;
 import dev.laux.pumpkin.bridge.runtime.MonotonicClock;
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /**
- * The mod's side of the launcher channel (INGAME 5, protocol 2). A daemon thread connects, speaks the protocol and, after
+ * The mod's side of the launcher channel (docs/bridge/README.md, "Protocol 2", protocol 2). A daemon thread connects, speaks the protocol and, after
  * every end of the connection, waits the {@link Backoff} time (a fixed minute after a terminal {@code reject}) before it
  * tries again. Requests, state frames and notices are delivered on the main thread through {@link BridgeListener}.
  * Without the launcher's environment variables nothing starts.
  */
 public final class BridgeClient {
-	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_bridge");
+	private static final Logger LOG = LogManager.getLogger("pumpkin_bridge");
 	private static final String THREAD_NAME = "Pumpkin Bridge bridge";
 
 	private final BridgeEnv env;
@@ -42,7 +43,7 @@ public final class BridgeClient {
 	private volatile boolean running = true;
 	private volatile Connection current;
 	private volatile Socket socket;
-	private volatile List<String> readyScreens = List.of();
+	private volatile List<String> readyScreens = Immutable.list();
 	// Only the bridge thread touches the rest.
 	private Connection serving;
 	private Optional<RejectReason> rejection = Optional.empty();
@@ -100,7 +101,7 @@ public final class BridgeClient {
 
 	/** Names the screens this mod offers; sent now and again after every reconnect. */
 	public void announceReady(List<String> screens) {
-		readyScreens = List.copyOf(screens);
+		readyScreens = Immutable.copyList(screens);
 		sendReady();
 	}
 
@@ -155,7 +156,7 @@ public final class BridgeClient {
 	private void connectOnce() {
 		try (Socket connection = new Socket()) {
 			socket = connection;
-			connection.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), env.port()),
+			connection.connect(new InetSocketAddress("127.0.0.1", env.port()),
 				(int) timing.connectTimeout().toMillis());
 			serving = new Connection(connection, hello(), timing, clock, inbox, new HandshakeEvents());
 			serving.serve();

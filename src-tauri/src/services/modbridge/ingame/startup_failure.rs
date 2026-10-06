@@ -1,4 +1,4 @@
-//! Erkennt, ob ein Spielstart wegen der eingespeisten Mod gescheitert ist (INGAME 3.8). Die Erkennung ist eine
+//! Erkennt, ob ein Spielstart wegen der eingespeisten Mod gescheitert ist (docs/bridge/README.md, "Startup recovery"). Die Erkennung ist eine
 //! Tabelle von Mustern ([`PATTERNS`]); neue Loader-Meldungen sind eine neue Zeile samt Fixture-Log, kein neuer Code.
 use std::time::Duration;
 
@@ -48,6 +48,7 @@ const PATTERNS: [Pattern; 4] = [
             "Error during pre-loading phase",
             "ModLoadingException",
             "ModLoadingIssue",
+            "ModResolutionException",
             "mod loading error",
             "Error during mod loading",
         ],
@@ -68,8 +69,7 @@ pub fn analyze_log<S: AsRef<str>>(lines: &[S]) -> Option<FailureKind> {
 ///
 /// Das Spiel muss mit einem Fehlercode (`None` heißt: von außen beendet) innerhalb von [`STARTUP_WINDOW`] geendet
 /// sein, und das Log muss die Mod nennen. Ein früher Absturz ohne solchen Hinweis (Speichermangel, kaputtes Pack, eine
-/// fremde Mod) schaltet die Einspeisung nicht aus: INGAME 3.8 nennt den Fehlercode allein als Grund, aber ein
-/// Absturz, den die Mod nicht verursacht hat, soll sie nicht kosten.
+/// fremde Mod) schaltet die Einspeisung nicht aus; siehe docs/bridge/README.md, "Startup recovery".
 pub fn analyze_exit<S: AsRef<str>>(
     exit_code: Option<i32>,
     uptime: Duration,
@@ -101,9 +101,8 @@ fn names_the_mod(line: &str) -> bool {
 mod tests {
     use super::*;
 
-    // Die Logs unter fixtures/: echte Mitschnitte der Zellen, wo der Rauchtest (Paket S2) sie erzeugt hat
-    // (wrong-jar-Läufe, siehe INGAME-SMOKE.md); die übrigen sind nach den Meldungsformaten der Loader nachgebaut
-    // (Mixin, JVM, unverwandter Absturz), bis ein Lauf sie liefert.
+    // Fabric- und NeoForge-Logs stammen aus wrong-jar-Rauchtests; die übrigen Fixtures bilden
+    // die Meldungsformate von Mixin, JVM und unverwandten Abstürzen nach.
     const FABRIC_INCOMPATIBLE: &str = include_str!("fixtures/fabric_incompatible_mod_set.txt");
     const MIXIN_FAILED: &str = include_str!("fixtures/mixin_apply_failed.txt");
     const NEOFORGE_LOADING: &str = include_str!("fixtures/neoforge_mod_loading_error.txt");
@@ -128,6 +127,20 @@ mod tests {
         for (log, kind) in FAILURES {
             assert_eq!(analyze_log(&lines(log)), Some(kind), "{kind:?}");
         }
+    }
+
+    #[test]
+    fn quilt_resolution_errors_need_to_name_the_bridge_before_they_trip_the_breaker() {
+        let bridge = [
+            "org.quiltmc.loader.impl.discovery.ModResolutionException: Failed to resolve mods",
+            "pumpkin_bridge requires another Minecraft version",
+        ];
+        let other = [
+            "org.quiltmc.loader.impl.discovery.ModResolutionException: Failed to resolve mods",
+            "another_mod requires another Minecraft version",
+        ];
+        assert_eq!(analyze_exit(Some(1), QUICK, &bridge), Some(FailureKind::ModLoadingError));
+        assert_eq!(analyze_exit(Some(1), QUICK, &other), None);
     }
 
     #[test]

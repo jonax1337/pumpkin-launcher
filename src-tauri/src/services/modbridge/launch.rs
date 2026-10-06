@@ -1,4 +1,4 @@
-//! Der Datensatz eines Spielstarts (docs/friends/INGAME.md, 5.2): Token, erwartete Mod, Spielprozess, die (höchstens
+//! Der Datensatz eines Spielstarts (docs/bridge/README.md, "Connection and ownership"): Token, erwartete Mod, Spielprozess, die (höchstens
 //! eine) Verbindung, die Themen und alles, was zählt: Ratenfenster, Zustimmungen und Rückfragen. Der Datensatz lebt
 //! von `register_launch` bis `forget`; eine Verbindung kommt und geht in dieser Zeit, ohne dass Zähler oder
 //! Zustimmungen zurückgesetzt werden.
@@ -32,7 +32,7 @@ pub struct Expectations {
     /// Der volle SHA-256 der eingebauten Mod-Datei; die Mod meldet in `hello` dessen Anfang.
     pub build_id: Option<String>,
     /// Der Nutzer hat „Aktionen im Spiel“ auf „Erlauben“ gestellt: beide Geltungsbereiche sind von Anfang an
-    /// erlaubt, der Launcher fragt in diesem Spielstart nicht (INGAME 5.5).
+    /// erlaubt, der Launcher fragt in diesem Spielstart nicht (docs/bridge/README.md, "Operations and consent").
     pub pre_granted: bool,
 }
 
@@ -50,7 +50,7 @@ pub(super) struct Link {
     pub queue: Arc<LinkQueue>,
     /// Beendet die Verbindung sofort, ohne die Warteschlange zu leeren.
     pub abort: CancellationToken,
-    /// Die Endpunkte des TCP-Sockets, damit der Besitzer später noch einmal geprüft werden kann (INGAME 7, Schritt 4).
+    /// Die Endpunkte des TCP-Sockets, damit der Besitzer später noch einmal geprüft werden kann (docs/bridge/README.md, "In-game navigation and world behavior").
     pub peer: SocketAddr,
     pub local: SocketAddr,
 }
@@ -128,7 +128,7 @@ fn pre_granted(expectations: &Expectations) -> impl IntoIterator<Item = Scope> {
     scopes.iter().copied()
 }
 
-/// Die Zählfenster der Vorgänge je Klasse (INGAME 5.6).
+/// Die Zählfenster der Vorgänge je Klasse (docs/bridge/README.md, "Protocol 2").
 #[derive(Default)]
 pub(super) struct OpLimits {
     windows: HashMap<RateClass, Vec<SlidingWindow>>,
@@ -160,7 +160,7 @@ pub(super) enum PromptRefusal {
     Exhausted,
 }
 
-/// Zustimmungen und Rückfragen eines Spielstarts (INGAME 5.5).
+/// Zustimmungen und Rückfragen eines Spielstarts (docs/bridge/README.md, "Operations and consent").
 pub(super) struct Grants {
     allowed: HashSet<Scope>,
     prompt_open: bool,

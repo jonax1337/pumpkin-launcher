@@ -10,7 +10,7 @@ import {
 } from './modRequestModel.ts';
 
 const DICTS = [['de', { ...deFriends, ...deInvite }], ['en', { ...enFriends, ...enInvite }]];
-// Die Vorgänge mit Bereich share oder social aus INGAME 5.4 (Spalte „Scope“ S und C).
+// Die Vorgänge mit Bereich share oder social aus docs/bridge/README.md, "Operations and consent" (Spalte „Scope“ S und C).
 const SCOPED_OP_NAMES = [
   'host.invite', 'request.answer', 'friend.addByName', 'invite.joinHere', 'friend.addByCode', 'code.create', 'code.revoke',
   'friend.rename', 'friend.remove', 'friend.block', 'blocked.unblock', 'friend.acknowledge',

@@ -1,4 +1,4 @@
-//! Die Java-Hauptversion aus dem, was eine Java-Installation preisgibt (INGAME 3.4): die Datei `release` im
+//! Die Java-Hauptversion aus dem, was eine Java-Installation preisgibt (docs/bridge/README.md, "Support selection"): die Datei `release` im
 //! Java-Home oder die Ausgabe von `java -version`. Gestartet wird hier nichts; das tut der Aufrufer einmal je Pfad.
 
 /// Hauptversion aus der Datei `release` einer Runtime (`JAVA_VERSION="21.0.2"`, bei Java 8 `"1.8.0_392"`).

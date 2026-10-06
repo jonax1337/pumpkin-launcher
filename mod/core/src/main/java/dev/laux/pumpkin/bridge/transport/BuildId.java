@@ -12,11 +12,11 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Locale;
 import java.util.Optional;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /**
- * The build id the mod announces in {@code hello} (INGAME amendment A6): the first 16 hex characters of the SHA-256 of the
+ * The build id the mod announces in {@code hello} (docs/bridge/README.md): the first 16 hex characters of the SHA-256 of the
  * jar file this code runs from. A jar cannot contain its own hash, so it is computed at run time. Anything that does not run
  * from a {@code .jar} file (a development environment running from class folders) announces {@value #DEV}.
  */
@@ -24,7 +24,7 @@ public final class BuildId {
 	public static final String DEV = "dev";
 	public static final int PREFIX_CHARS = 16;
 
-	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_bridge");
+	private static final Logger LOG = LogManager.getLogger("pumpkin_bridge");
 	private static final int READ_BUFFER_BYTES = 8192;
 
 	private BuildId() {
@@ -39,7 +39,7 @@ public final class BuildId {
 		return locationOf(anchor).map(BuildId::ofLocation).orElse(DEV);
 	}
 
-	static String ofLocation(Path location) {
+	public static String ofLocation(Path location) {
 		if (!isJarFile(location)) {
 			return DEV;
 		}
@@ -57,7 +57,7 @@ public final class BuildId {
 			if (source == null || source.getLocation() == null) {
 				return Optional.empty();
 			}
-			return Optional.of(Path.of(fileUriOf(source.getLocation().toURI())));
+			return Optional.of(java.nio.file.Paths.get(fileUriOf(source.getLocation().toURI())));
 		} catch (URISyntaxException | IllegalArgumentException | FileSystemNotFoundException | SecurityException unusable) {
 			return Optional.empty();
 		}

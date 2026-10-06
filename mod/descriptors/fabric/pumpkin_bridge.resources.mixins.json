@@ -1,0 +1,11 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "dev.laux.pumpkin.bridge.platform.fabric.mixin",
+	"refmap": ${mixinRefmap},
+	"compatibilityLevel": "JAVA_${javaMin}",
+	"client": ["PumpkinResourcesMixin"],
+	"injectors": {
+		"defaultRequire": 0
+	}
+}

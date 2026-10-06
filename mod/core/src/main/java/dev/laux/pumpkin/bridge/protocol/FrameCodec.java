@@ -18,15 +18,20 @@ import java.util.function.Function;
 
 /** Turns frames into JSON lines and back. Whatever does not match the protocol exactly is dropped: the launcher channel is untrusted. */
 public final class FrameCodec {
-	private static final Map<String, Function<JsonFields, LauncherFrame>> READERS = Map.of(
-		"welcome", FrameCodec::welcome,
-		"reject", fields -> new Reject(fields.enumValue("reason", RejectReason.class)),
-		"res", FrameCodec::response,
-		"pending", FrameCodec::pending,
-		"state", FrameCodec::state,
-		"event", FrameCodec::event,
-		"ping", fields -> new Ping(),
-		"pong", fields -> new Pong());
+	private static final Map<String, Function<JsonFields, LauncherFrame>> READERS = createReaders();
+
+	private static Map<String, Function<JsonFields, LauncherFrame>> createReaders() {
+		Map<String, Function<JsonFields, LauncherFrame>> readers = new java.util.HashMap<>();
+		readers.put("welcome", FrameCodec::welcome);
+		readers.put("reject", fields -> new Reject(fields.enumValue("reason", RejectReason.class)));
+		readers.put("res", FrameCodec::response);
+		readers.put("pending", FrameCodec::pending);
+		readers.put("state", FrameCodec::state);
+		readers.put("event", FrameCodec::event);
+		readers.put("ping", fields -> new Ping());
+		readers.put("pong", fields -> new Pong());
+		return java.util.Collections.unmodifiableMap(readers);
+	}
 
 	private FrameCodec() {
 	}
@@ -62,7 +67,7 @@ public final class FrameCodec {
 				Optional.empty());
 		}
 		JsonFields error = fields.object("error");
-		Map<String, String> params = error.optionalObject("params").map(JsonFields::textMembers).orElse(Map.of());
+		Map<String, String> params = error.optionalObject("params").map(JsonFields::textMembers).orElse(java.util.Collections.emptyMap());
 		return new Response(id, Optional.empty(), Optional.of(new OpError(ErrorCode.fromWire(error.string("code")), params)));
 	}
 

@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * What a screen keeps across {@code Screen.init} re-runs (INGAME 6.5): vanilla clears every widget and builds them again
+ * What a screen keeps across {@code Screen.init} re-runs (docs/bridge/README.md, "In-game navigation and world behavior"): vanilla clears every widget and builds them again
  * on each window resize. Before the rebuild the screen captures its widgets, after it the keeper puts text and focus
  * back into the new ones; the scroll position and the selected tab are plain values the new screen reads again.
  */

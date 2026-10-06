@@ -420,7 +420,7 @@ export interface Backend {
   /** Öffnet den lokalen Tunnel; das Spiel startet die Oberfläche danach mit `LaunchOptions.friendJoin`. */
   inviteJoin(inviteId: string, instanceId: string): Promise<JoinTicket>;
   joinLeave(joinId: string): Promise<void>;
-  /** Was der nächste Start der Instanz mit der Mod im Spiel tut und warum, berechnet ohne Start (INGAME 3.9). */
+  /** Was der nächste Start der Instanz mit der Mod im Spiel tut und warum, berechnet ohne Start (docs/bridge/README.md, "Support selection"). */
   friendsIngameStatus(instanceId: string): Promise<IngameStatus>;
   /** Der Schalter „Freunde-Menü im Spiel“ der Instanz; hebt auch ein automatisches Ausschalten auf. */
   friendsIngameSetEnabled(instanceId: string, enabled: boolean): Promise<IngameStatus>;
@@ -428,7 +428,7 @@ export interface Backend {
   friendsIngameRetry(instanceId: string): Promise<IngameStatus>;
   /** Antwort auf `friends-mod-confirm`: darf die Mod die Welt teilen? */
   friendsModConfirm(requestId: string, allow: boolean): Promise<void>;
-  /** Die Vorgänge aus dem Spiel, die letzten 100, neueste zuerst; nur im Speicher des Launchers (INGAME 5.7). */
+  /** Die Vorgänge aus dem Spiel, die letzten 100, neueste zuerst; nur im Speicher des Launchers (docs/bridge/README.md, "Protocol 2"). */
   friendsModActivity(): Promise<ModActivityEntry[]>;
 }
 

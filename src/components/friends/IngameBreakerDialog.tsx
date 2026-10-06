@@ -9,7 +9,7 @@ import { runBreakerChoice, type BreakerChoice } from "./breakerModel";
 const DIALOG_WIDTH_PX = 480;
 
 /**
- * Das Spiel ist beim Start gescheitert und der Launcher hat das Freunde-Menü der Instanz ausgeschaltet (INGAME 3.8): hier wählt der
+ * Das Spiel ist beim Start gescheitert und der Launcher hat das Freunde-Menü der Instanz ausgeschaltet (docs/bridge/README.md, "Startup recovery"): hier wählt der
  * Spieler, ob es ohne Freunde-Menü weitergeht oder ob der Start es noch einmal versucht. Beide Wege starten das Spiel, der Dialog
  * schließt dafür vorher; `onStart` gehört dem, der nach dem Schließen noch da ist (usePlay hinge sonst an diesem Dialog).
  * Schlägt der Zustand fehl, bleibt er offen (der Fehler erscheint als Toast) und es startet nichts.

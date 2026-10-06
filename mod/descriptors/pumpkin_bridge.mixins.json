@@ -1,0 +1,14 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "dev.laux.pumpkin.bridge.platform.shared.mixin",
+	"refmap": ${mixinRefmap},
+	"compatibilityLevel": "${mixinCompatibility}",
+	"client": [
+		"PauseScreenMixin",
+		"TitleScreenMixin"
+	],
+	"injectors": {
+		"defaultRequire": 0
+	}
+}

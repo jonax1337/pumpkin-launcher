@@ -21,7 +21,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Plays the launcher side of the mod channel, protocol 2 (docs/friends/INGAME.md, 5.3), so the mod can be tried without the
+ * Plays the launcher side of the mod channel, protocol 2 (docs/bridge/README.md, "Protocol 2"), so the mod can be tried without the
  * launcher: {@code java scripts/FakeLauncher.java}, then set the printed environment variables and start the game.
  * It keeps the limits of the real bridge (hello within 2 s and 1 KiB, 16 KiB lines, 20 messages per second, 8 requests in
  * flight, ping every 10 s, 30 s of silence closes), pushes the topics, and answers the operations a player can try from the

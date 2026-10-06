@@ -26,7 +26,7 @@ public final class JsonFields {
 
 	public static JsonFields parseLine(String line) {
 		try {
-			return of(JsonParser.parseString(line));
+			return of(new JsonParser().parse(line));
 		} catch (JsonParseException notJson) {
 			throw new MalformedJson("not JSON: " + notJson.getMessage());
 		}
@@ -149,11 +149,12 @@ public final class JsonFields {
 	/** Every member as text; numbers and booleans keep their JSON spelling, nested values are skipped. */
 	public Map<String, String> textMembers() {
 		Map<String, String> members = new LinkedHashMap<>();
-		object.asMap().forEach((key, value) -> {
+		for (Map.Entry<String, JsonElement> member : object.entrySet()) {
+			JsonElement value = member.getValue();
 			if (value.isJsonPrimitive()) {
-				members.put(key, value.getAsString());
+				members.put(member.getKey(), value.getAsString());
 			}
-		});
+		}
 		return members;
 	}
 

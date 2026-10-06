@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-/** Every verdict of {@code invite.plan} maps to one body of the InviteScreen (INGAME 6.2 "Einladungen"). */
+/** Every verdict of {@code invite.plan} maps to one body of the InviteScreen (docs/bridge/README.md, "In-game navigation and world behavior"). */
 class InvitePlanViewTest {
 	@ParameterizedTest(name = "{0} joins from here: {1}, reason: {2}")
 	@CsvSource({

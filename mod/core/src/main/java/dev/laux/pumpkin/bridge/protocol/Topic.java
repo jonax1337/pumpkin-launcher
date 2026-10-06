@@ -1,6 +1,6 @@
 package dev.laux.pumpkin.bridge.protocol;
 
-/** The state topics the launcher pushes as whole values (INGAME 5.3). */
+/** The state topics the launcher pushes as whole values (docs/bridge/README.md, "Protocol 2"). */
 public enum Topic {
 	ME,
 	FRIENDS,

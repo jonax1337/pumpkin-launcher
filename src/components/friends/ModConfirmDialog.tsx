@@ -16,7 +16,7 @@ const ALLOW_WIDTH_PX = 210;
 
 /**
  * Die Mod einer Instanz will etwas tun, was nur der Launcher erlauben kann: eine Welt teilen oder die Freundesliste ändern
- * (INGAME 5.5). Der Dialog nennt den Bereich, das Spiel und den Vorgang; die Namen darin sind reiner Text.
+ * (docs/bridge/README.md, "Operations and consent"). Der Dialog nennt den Bereich, das Spiel und den Vorgang; die Namen darin sind reiner Text.
  * „Ablehnen“ ist der Startfokus, Enter gibt nichts frei; „Erlauben“ bleibt gegen Fehlklicks gesperrt (`useConsentGuard`).
  * Das Fenster kommt nach vorn, falls es beim Start minimiert wurde.
  */

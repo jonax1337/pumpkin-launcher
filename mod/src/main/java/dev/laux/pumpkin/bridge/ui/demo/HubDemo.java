@@ -5,8 +5,8 @@ import dev.laux.pumpkin.bridge.compat.GameScreens;
 import dev.laux.pumpkin.bridge.compat.MinecraftMainThread;
 import dev.laux.pumpkin.bridge.runtime.MainThread;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /**
  * Opens the {@link HubDemoScreen} once, right after the title screen, when the game runs with
@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
  * runs at the same time opens and closes first.
  */
 public final class HubDemo {
-	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_bridge");
+	private static final Logger LOG = LogManager.getLogger("pumpkin_bridge");
 	private static final String PROPERTY = "pumpkin.dev.hubdemo";
 	private static final String ENVIRONMENT = "PUMPKIN_DEV_HUBDEMO";
 	private static final long POLL_MILLIS = 250;

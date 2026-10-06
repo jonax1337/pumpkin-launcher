@@ -1,4 +1,4 @@
-//! JSON-Zeilen auf dem Draht (INGAME 5.3): Lesen mit Längengrenze, Schreiben mit Zeitgrenze, dazu die Uhr für Ping und
+//! JSON-Zeilen auf dem Draht (docs/bridge/README.md, "Protocol 2"): Lesen mit Längengrenze, Schreiben mit Zeitgrenze, dazu die Uhr für Ping und
 //! Stille.
 use std::io;
 use std::time::Duration;

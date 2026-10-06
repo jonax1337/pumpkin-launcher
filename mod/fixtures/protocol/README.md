@@ -1,8 +1,12 @@
 # Protocol 2 fixtures
 
-Golden JSON lines of the launcher-mod channel (`docs/friends/INGAME.md`, 5.3 and 5.4). They are the shared contract:
-the Rust tests (`src-tauri/src/services/modbridge/tests_fixtures.rs`) parse every line into the typed protocol and write
+Golden JSON lines of the launcher-mod channel described in the [Bridge contract](../../../docs/bridge/README.md).
+The Rust tests (`src-tauri/src/services/modbridge/tests_fixtures.rs`) parse every line into the typed protocol and write
 it back; the Java mod tests read the same files. Keep them stable and minimal. A change here is a protocol change.
+
+For execution instructions, use [Rust automated checks](../../../CONTRIBUTING.md#build-and-automated-checks)
+and [Java build and core tests](../../README.md#build-and-development).
+Both consumers must remain aligned when fixtures or protocol types change.
 
 ## Format
 
@@ -30,7 +34,7 @@ Inside one file, a `res` or `pending` belongs to the `req` with the same `id` th
 | `reject-token.jsonl`, `reject-protocol.jsonl`, `reject-owner.jsonl`, `reject-build.jsonl`, `reject-duplicate.jsonl`, `reject-retry.jsonl` | one `hello` and the `reject` with that reason |
 | `request-response.jsonl` | a request answered with a result and with errors (with and without params) |
 | `pending.jsonl` | a request that waits for the launcher dialog: `req`, `pending`, `res` |
-| `ops.jsonl` | every operation of 5.4 but `join.failed`: its `req` and the `res` it gets when it succeeds |
+| `ops.jsonl` | successful request/response pairs for the supported operations except `join.failed` |
 | `errors.jsonl` | one `res` for every error code (`instanceMismatch`: `invite.joinHere` while the running game does not match the invite; `forbidden`: `friend.acknowledge` for a notice only the user may review, `identityChanged` or `addedInGame`) |
 | `topics.jsonl` | a `state` push for every topic, with the aliases `f1`, `f2`, ... The `me` value carries `directory` (`active`, `off`, `unreachable`, `notAllowed`, `unavailable`): the state of the name directory, as `DirectoryState` in the launcher; it also carries `displayName`, `findableByName` and `relayHost` (null when not connected through a relay). `requests` carries `retryCooldownMs`, `game` carries `sharedElsewhere` (its second push shows another game of the same launcher sharing) |
 | `topics-me-directory.jsonl` | the `me` topic once for every value of `directory` |
@@ -39,4 +43,4 @@ Inside one file, a `res` or `pending` belongs to the `req` with the same `id` th
 | `errors-reasons.jsonl` | errors whose code is coarse and carries its cause in `params.reason` (`badRequest`, `denied`, `busy`, `directoryUnavailable`, `rateLimited`, `notFound` for a friend without a notice, `nameUnknown`), the numbers `max` and `days`, and `instanceMismatch` with the plan `verdict` and the counts `missing`, `extra` |
 | `events.jsonl` | every `notify` kind and every `closing` reason |
 | `hints.jsonl` | `lanOpened`, `lanClosed`, `ready`, `ping`, `pong` |
-| `limits.jsonl` | the numbers of 5.3 and 5.6 |
+| `limits.jsonl` | protocol size, count and timing limits |

@@ -15,8 +15,8 @@ pub const MAX_GUESTS: usize = 7;
 pub const CODE_TTL_SECS: u64 = 604_800;
 pub const REQUEST_TTL_SECS: u64 = 1_209_600;
 pub const INVITE_TTL_SECS: u64 = 7_200;
-pub const MIN_MC_RELEASE_TIME: &str = "2023-06-02T08:36:17+00:00";
-pub const MIN_MC_LABEL: &str = "1.20";
+pub const MIN_MC_RELEASE_TIME: &str = "2021-01-14T16:05:32+00:00";
+pub const MIN_MC_LABEL: &str = "1.16.5";
 pub const PORT_MIN: u16 = 1024;
 pub const PORT_MAX: u16 = 65535;
 pub const MAX_NAME_REQUESTS: usize = 5;
@@ -81,10 +81,10 @@ pub struct FriendsSettings {
     /// Fehlt in Dateien aus der Zeit vor der Suche per Name.
     #[serde(default)]
     pub findable_by_name: bool,
-    /// „Pumpkin Bridge im Spiel“ (INGAME 3.9): der globale Schalter der Einspeisung. Fehlt in älteren Dateien: an.
+    /// „Pumpkin Bridge im Spiel“ (docs/bridge/README.md, "Support selection"): der globale Schalter der Einspeisung. Fehlt in älteren Dateien: an.
     #[serde(default = "ingame_menu_default")]
     pub ingame_menu: bool,
-    /// „Aktionen im Spiel“ (INGAME 5.5). Fehlt in älteren Dateien: fragen.
+    /// „Aktionen im Spiel“ (docs/bridge/README.md, "Operations and consent"). Fehlt in älteren Dateien: fragen.
     #[serde(default)]
     pub ingame_actions: IngameActions,
 }
@@ -510,7 +510,7 @@ pub struct ModConfirmFriend {
     pub display_name: String,
 }
 
-// ---- Vorgänge aus dem Spiel: Rückfrage und Aktivitätsliste (INGAME 5.5, 5.7) ----
+// ---- Vorgänge aus dem Spiel: Rückfrage und Aktivitätsliste (docs/bridge/README.md, "Operations and consent") ----
 
 pub use crate::services::modbridge::ops::{OpenTarget as ModOpenTarget, Scope as ModScope};
 
@@ -519,12 +519,12 @@ pub use crate::services::modbridge::ops::{OpenTarget as ModOpenTarget, Scope as 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModConfirmSummary {
-    /// Der Name des Vorgangs aus INGAME 5.4, etwa `friend.addByName`.
+    /// Der Name des Vorgangs aus docs/bridge/README.md, "Operations and consent", etwa `friend.addByName`.
     pub op: String,
     pub target_name: Option<String>,
 }
 
-/// Ein Vorgang der Bereiche `share` und `social`, der aus dem Spiel kam (Aktivitätsliste, INGAME 5.7). Nur im Speicher,
+/// Ein Vorgang der Bereiche `share` und `social`, der aus dem Spiel kam (Aktivitätsliste, docs/bridge/README.md, "Protocol 2"). Nur im Speicher,
 /// die letzten 100, neueste zuerst.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -549,7 +549,7 @@ pub struct ModOpenEvent {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Pumpkin Bridge im Spiel (docs/friends/INGAME.md, 3.9): Status der Einspeisung je Instanz, berechnet ohne Start.
+// Pumpkin Bridge im Spiel (docs/bridge/README.md, "Support selection"): Status der Einspeisung je Instanz, berechnet ohne Start.
 // ---------------------------------------------------------------------------------------------------------------------
 
 use crate::services::modbridge::ingame::{FailureKind, Loader as IngameLoader};
@@ -581,7 +581,6 @@ pub enum IngameReason {
     /// Dieser Build trägt keine Mod (Entwicklungsbuild ohne JARs).
     NotInBuild,
     Vanilla,
-    Quilt,
     /// Kein Knoten für diese Minecraft-Version mit diesem Loader.
     NoNode,
     /// Es gibt einen Knoten, sein Rauchtest ist aber nicht bestanden.

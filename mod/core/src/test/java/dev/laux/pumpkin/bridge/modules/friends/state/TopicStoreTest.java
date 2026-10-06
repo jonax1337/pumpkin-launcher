@@ -172,7 +172,7 @@ class TopicStoreTest {
 	}
 
 	private boolean push(Topic topic, long revision, String json) {
-		return store.apply(new State(topic, revision, JsonParser.parseString(json)));
+		return store.apply(new State(topic, revision, new JsonParser().parse(json)));
 	}
 
 	private static List<String> ids(List<Friend> friends) {

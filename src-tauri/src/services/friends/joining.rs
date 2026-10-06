@@ -50,7 +50,7 @@ const REQUEST_WAIT: Duration = Duration::from_secs(30);
 const STATUS_INTERVAL: Duration = Duration::from_secs(5);
 /// So oft wird während der Schonfrist nachgesehen, ob die Verbindung zum Gastgeber wieder steht.
 const HOST_POLL: Duration = Duration::from_millis(250);
-/// Bei einem Beitritt aus dem laufenden Spiel muss die erste gültige Verbindung binnen dieser Zeit kommen (INGAME 7).
+/// Bei einem Beitritt aus dem laufenden Spiel muss die erste gültige Verbindung binnen dieser Zeit kommen (docs/bridge/README.md, "In-game navigation and world behavior").
 const HERE_FIRST_CONNECTION: Duration = Duration::from_secs(120);
 
 /// Zeitgrenzen eines Beitritts; die App nimmt [`JoinTimers::production`], Tests kurze Werte.
@@ -349,7 +349,7 @@ impl FriendSessions {
         Ok(())
     }
 
-    /// Der Abgleich der Einladung mit allen Instanzen, die laufende vorn (INGAME 7, Schritt 3): die Mod fragt für das Spiel,
+    /// Der Abgleich der Einladung mit allen Instanzen, die laufende vorn (docs/bridge/README.md, "In-game navigation and world behavior"): die Mod fragt für das Spiel,
     /// in dem sie läuft. Nichts wird geladen.
     pub(super) async fn plan_with_running_first(
         &self,
@@ -366,7 +366,7 @@ impl FriendSessions {
         Ok((received, plan))
     }
 
-    /// Der Beitritt aus dem laufenden Spiel (INGAME 7, Schritt 4): ein Zuhörer an einer Loopback-Adresse, dem nur der Prozess
+    /// Der Beitritt aus dem laufenden Spiel (docs/bridge/README.md, "In-game navigation and world behavior"): ein Zuhörer an einer Loopback-Adresse, dem nur der Prozess
     /// `game_pid` gehört. Das Spiel läuft schon, also gibt es keine Wartezeit auf den Start, und die erste Verbindung muss
     /// binnen [`HERE_FIRST_CONNECTION`] kommen. Vorher hat der Aufrufer geprüft, dass nichts anderes beitritt.
     pub(super) async fn start_join_here(
@@ -477,7 +477,7 @@ async fn plan_for(
     .await
 }
 
-/// Das geprüfte Manifest des Gastgebers; `None`, wenn seine Minecraft-Version älter als 1.20 ist.
+/// Das geprüfte Manifest des Gastgebers; `None`, wenn seine Minecraft-Version älter als 1.16.5 ist.
 async fn validated_manifest(shared: &Shared, received: &Received) -> AppResult<Option<Manifest>> {
     let raw = fetch_manifest(shared, received).await?;
     match manifest::validate(raw, &shared.versions.index().await?) {

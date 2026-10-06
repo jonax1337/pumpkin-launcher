@@ -5,9 +5,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ConnectScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ServerData;
+//? if >=1.17 {
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
+//?}
 
-/** Connects the game to a server: only ever to a literal loopback address, never to a name (INGAME 7). */
+/** Connects the game to a server: only ever to a literal loopback address, never to a name (docs/bridge/README.md, "In-game navigation and world behavior"). */
 public final class Connect {
 	private static final String SERVER_NAME = "Pumpkin Bridge";
 
@@ -15,7 +17,7 @@ public final class Connect {
 	}
 
 	/**
-	 * Starts the connection screen to {@code host:port}; call it on the main thread. INGAME-API.md 3, "Connecting" and 3.2:
+	 * Starts the connection screen to {@code host:port}; call it on the main thread. docs/bridge/MINECRAFT-API.md, "Connecting":
 	 * {@code ConnectScreen#startConnecting} gets a sixth parameter {@code TransferState} from 1.20.5 (null here);
 	 * {@code ServerData(String, String, ServerData.Type)} exists from 1.20.2, before that the third parameter is a
 	 * {@code boolean}.
@@ -34,9 +36,12 @@ public final class Connect {
 		*///?}
 		//? if >=1.20.5 {
 		ConnectScreen.startConnecting(parent, Minecraft.getInstance(), new ServerAddress(host, port), target, false, null);
-		//?} else {
-		/*// Same table, 1.20 to 1.20.4: five parameters, no TransferState.
-		ConnectScreen.startConnecting(parent, Minecraft.getInstance(), new ServerAddress(host, port), target, false);
+		//?} else if >=1.20 {
+		/*ConnectScreen.startConnecting(parent, Minecraft.getInstance(), new ServerAddress(host, port), target, false);
+		*///?} else if >=1.17 {
+		/*ConnectScreen.startConnecting(parent, Minecraft.getInstance(), new ServerAddress(host, port), target);
+		*///?} else {
+		/*GameScreens.show(new ConnectScreen(parent, Minecraft.getInstance(), target));
 		*///?}
 	}
 }

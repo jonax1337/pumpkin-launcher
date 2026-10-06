@@ -16,12 +16,12 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /** Friends state and operations on a shared launcher connection. All module callbacks run on the main thread. */
 public final class FriendsClient implements BridgeListener {
-	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_bridge");
+	private static final Logger LOG = LogManager.getLogger("pumpkin_bridge");
 
 	private final BridgeClient bridge;
 	private final TopicStore topics = new TopicStore();

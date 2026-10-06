@@ -78,7 +78,7 @@ export const friendsHost = {
   "friendsHost.close.joining": "Das beendet die Verbindung zu {name}.",
   "friendsHost.close.both": "Das beendet das Teilen deiner Welt und die Verbindung zu {name}.",
 
-  // ---------- Pumpkin Bridge im Spiel (Statuszeile der Instanzseite, INGAME 3.9) ----------
+  // ---------- Pumpkin Bridge im Spiel (Statuszeile der Instanzseite, docs/bridge/README.md, "Support selection") ----------
   "friendsHost.ingame.name": "Pumpkin Bridge im Spiel",
   "friendsHost.ingame.active": "aktiv ({loader} {minecraft})",
   "friendsHost.ingame.connected": "verbunden",
@@ -90,7 +90,6 @@ export const friendsHost = {
   "friendsHost.ingame.addLoaderDone": "{loader} ist eingetragen und wird beim nächsten Start installiert",
   "friendsHost.ingame.reason.notInBuild": "In diesem Build nicht verfügbar",
   "friendsHost.ingame.reason.vanilla": "Braucht einen Loader",
-  "friendsHost.ingame.reason.quilt": "Mit Quilt noch nicht verfügbar",
   "friendsHost.ingame.reason.noNode": "Für {loader} {minecraft} noch nicht verfügbar",
   "friendsHost.ingame.reason.unverified": "Für {loader} {minecraft} noch nicht freigegeben",
   "friendsHost.ingame.reason.loaderTooOld": "{loader} {need} oder neuer nötig",
@@ -108,7 +107,7 @@ export const friendsHost = {
   "friendsHost.ingame.failure.unsupportedClassVersion": "Das Java ist zu alt für die Mod",
   "friendsHost.ingame.failure.unknown": "unbekannter Grund",
 
-  // ---------- Startfehler durch Pumpkin Bridge (Sicherungsschalter, INGAME 3.8) ----------
+  // ---------- Startfehler durch Pumpkin Bridge (Sicherungsschalter, docs/bridge/README.md, "Startup recovery") ----------
   "friendsHost.breaker.title": "Startfehler",
   "friendsHost.breaker.text": "Das Spiel ist beim Start abgestürzt. Pumpkin Bridge könnte die Ursache sein. Ohne starten?",
   "friendsHost.breaker.detail": "{instance}: {failure}",

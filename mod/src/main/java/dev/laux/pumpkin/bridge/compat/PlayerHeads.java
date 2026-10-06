@@ -4,7 +4,6 @@ import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import dev.laux.pumpkin.bridge.ui.model.Rect;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -13,9 +12,13 @@ import net.minecraft.client.resources.DefaultPlayerSkin;
 //? if >=26.1 {
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.PlayerFaceExtractor;
-//?} else {
+//?} else if >=1.20 {
 /*import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.PlayerFaceRenderer;
+*///?} else {
+/*import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.systems.RenderSystem;
+import net.minecraft.client.gui.GuiComponent;
 *///?}
 //? if >=1.21.9 {
 import net.minecraft.client.renderer.PlayerSkinRenderCache;
@@ -30,14 +33,13 @@ import com.mojang.authlib.minecraft.MinecraftProfileTexture;
 import net.minecraft.Util;
 import net.minecraft.resources.ResourceLocation;
 *///?}
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /** Native profile/skin lookups outlive per-frame painters, without owning or downloading textures ourselves. */
 final class PlayerHeads {
-	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_bridge");
+	private static final Logger LOG = LogManager.getLogger("pumpkin_bridge");
 	private static final int MAX_CACHED_HEADS = 512;
-	private static final Duration CACHE_LIFETIME = Duration.ofMinutes(30);
 	private static final Cache<String, Head> KNOWN_HEADS = newCache();
 	private static final Cache<String, Head> DEFAULT_HEADS = newCache();
 
@@ -46,13 +48,15 @@ final class PlayerHeads {
 
 	private static Cache<String, Head> newCache() {
 		return CacheBuilder.newBuilder().maximumSize(MAX_CACHED_HEADS)
-			.expireAfterWrite(CACHE_LIFETIME).build();
+			.expireAfterWrite(30, java.util.concurrent.TimeUnit.MINUTES).build();
 	}
 
 	//? if >=26.1 {
 	static void draw(GuiGraphicsExtractor graphics, String name, Optional<String> uuid, Rect bounds) {
-	//?} else {
+	//?} else if >=1.20 {
 	/*static void draw(GuiGraphics graphics, String name, Optional<String> uuid, Rect bounds) {
+	*///?} else {
+	/*static void draw(PoseStack graphics, String name, Optional<String> uuid, Rect bounds) {
 	*///?}
 		int size = Math.min(bounds.width(), bounds.height());
 		if (size <= 0) return;
@@ -66,8 +70,22 @@ final class PlayerHeads {
 		// Vanilla draws the face at (8,8) and hat at (40,8), preserving the caller's scissor.
 		//? if >=26.1 {
 		PlayerFaceExtractor.extractRenderState(graphics, skin, x, y, size);
-		//?} else {
+		//?} else if >=1.20 {
 		/*PlayerFaceRenderer.draw(graphics, skin, x, y, size);
+		*///?} else {
+		/*// Bind the native skin texture and draw the face plus transparent hat layer.
+		//? if >=1.17 {
+		RenderSystem.setShaderTexture(0, skin);
+		RenderSystem.setShaderColor(1.0F, 1.0F, 1.0F, 1.0F);
+		//?} else {
+		Minecraft.getInstance().getTextureManager().bind(skin);
+		RenderSystem.color4f(1.0F, 1.0F, 1.0F, 1.0F);
+		//?}
+		RenderSystem.enableBlend();
+		RenderSystem.defaultBlendFunc();
+		GuiComponent.blit(graphics, x, y, size, size, 8.0F, 8.0F, 8, 8, 64, 64);
+		GuiComponent.blit(graphics, x, y, size, size, 40.0F, 8.0F, 8, 8, 64, 64);
+		RenderSystem.disableBlend();
 		*///?}
 	}
 
@@ -150,10 +168,26 @@ final class PlayerHeads {
 	}
 
 	//? if >=1.20.2 {
-	private record Head(PlayerSkin fallback, CompletableFuture<PlayerSkin> resolved) {
+	private static final class Head {
+		private final PlayerSkin fallback;
+		private final CompletableFuture<PlayerSkin> resolved;
+
+		Head(PlayerSkin fallback, CompletableFuture<PlayerSkin> resolved) {
+			this.fallback = fallback;
+			this.resolved = resolved;
+		}
+
 		PlayerSkin skin() {
 	//?} else {
-	/*private record Head(ResourceLocation fallback, CompletableFuture<ResourceLocation> resolved) {
+	/*private static final class Head {
+		private final ResourceLocation fallback;
+		private final CompletableFuture<ResourceLocation> resolved;
+
+		Head(ResourceLocation fallback, CompletableFuture<ResourceLocation> resolved) {
+			this.fallback = fallback;
+			this.resolved = resolved;
+		}
+
 		ResourceLocation skin() {
 	*///?}
 			return resolved.getNow(fallback);

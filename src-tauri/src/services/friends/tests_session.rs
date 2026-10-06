@@ -112,7 +112,7 @@ async fn until_true(what: &str, condition: impl Fn() -> bool) {
     until(what, || std::future::ready(condition())).await;
 }
 
-/// Mojangs Versionsliste, auf zwei Einträge verkürzt.
+/// Mojangs Versionsliste, auf die für diese Sitzungen nötigen Releases verkürzt.
 pub(super) struct FixedVersions;
 
 impl VersionCatalog for FixedVersions {
@@ -121,6 +121,8 @@ impl VersionCatalog for FixedVersions {
             Ok(VersionIndex::new([
                 ("26.3".to_owned(), "2026-09-01T10:00:00+00:00".to_owned()),
                 ("1.19.4".to_owned(), "2023-03-14T12:56:18+00:00".to_owned()),
+                ("1.16.5".to_owned(), super::contract::MIN_MC_RELEASE_TIME.to_owned()),
+                ("1.16.4".to_owned(), "2020-10-29T15:49:37+00:00".to_owned()),
             ]))
         })
     }
@@ -683,10 +685,10 @@ async fn refuses_connections(address: &str) -> bool {
 // ---- Gastgeber: Prüfungen vor dem Teilen (SPEC 6.1) ----
 
 #[tokio::test]
-async fn hosting_needs_a_running_microsoft_game_of_1_20_or_later() {
+async fn hosting_needs_a_running_microsoft_game_of_1_16_5_or_later() {
     let (relay, _server) = test_relay().await;
     let host = Node::online(options(&relay), "Anna", RELAXED).await;
-    host.add_instance("old", "1.19.4");
+    host.add_instance("old", "1.16.4");
     let start = |instance: &'static str| host.sessions.host_start(instance, None, false);
 
     let not_running = start(HOST_INSTANCE).await.unwrap_err();
@@ -715,6 +717,28 @@ async fn hosting_needs_a_running_microsoft_game_of_1_20_or_later() {
         error_key(&start("old").await.unwrap_err()),
         "errors.friends.versionUnsupported"
     );
+}
+
+#[tokio::test]
+async fn the_oldest_supported_game_still_requires_online_authentication_and_a_checked_lan_port() {
+    let (relay, _server) = test_relay().await;
+    let host = Node::online(options(&relay), "Anna", RELAXED).await;
+    host.add_instance("oldest", "1.16.5");
+    host.spawn_game("oldest", None);
+    let start = || host.sessions.host_start("oldest", None, false);
+    until("oldest game known", || async {
+        start().await.is_err_and(|error| error_key(&error) == "errors.friends.lanPortUnknown")
+    }).await;
+    assert_eq!(error_key(&start().await.unwrap_err()), "errors.friends.lanPortUnknown");
+    host.signals.send(GameSignal::Spawned {
+        instance_id: "oldest".into(),
+        pid: 1,
+        online_account: false,
+        friend_join: None,
+    });
+    until("oldest offline game refused", || async {
+        start().await.is_err_and(|error| error_key(&error) == "errors.friends.msAccountRequired")
+    }).await;
 }
 
 #[tokio::test]
@@ -1768,7 +1792,7 @@ async fn row_host_launcher_crashes() {
     assert!(is_closed_within(&mut game, LIMIT).await);
 }
 
-// ---- Mod: Teilen aus dem Spiel (INGAME 5.4, SPEC 7.4) ----
+// ---- Mod: Teilen aus dem Spiel (docs/bridge/README.md, "Operations and consent", SPEC 7.4) ----
 
 /// Die Umgebung für das Spiel der Instanz; den Prozess des Spiels nennt der Test selbst (er ist es), damit die Mod nicht
 /// auf das Spielsignal warten muss.
@@ -2124,7 +2148,7 @@ async fn kicking_a_guest_from_the_mod_revokes_their_invite() {
     );
 }
 
-// ---- Die übrigen Vorgänge der Mod (INGAME 5.4) und ihre Zustimmung: eigene Dateien, die diese Bausteine benutzen ----
+// ---- Die übrigen Vorgänge der Mod (docs/bridge/README.md, "Operations and consent") und ihre Zustimmung: eigene Dateien, die diese Bausteine benutzen ----
 
 #[path = "tests_mod_link_join.rs"]
 mod mod_join;

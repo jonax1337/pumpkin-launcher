@@ -1,6 +1,6 @@
 //! Konten: Offline (UUID aus dem Namen) und Microsoft per Browser oder Gerätecode → Xbox Live → XSTS →
 //! Minecraft-Token. Refresh-Tokens liegen im OS-Schlüsselbund (`keyring`), nie in JSON;
-//! Minecraft-Tokens nur im Speicher und mit Ablaufzeit. Anleitung: `docs/ACCOUNT-SETUP.md`.
+//! Minecraft-Tokens nur im Speicher und mit Ablaufzeit. Anleitung: `CONTRIBUTING.md#microsoft-sign-in-for-forks`.
 mod callback_server;
 mod keyring;
 mod oauth;
@@ -31,7 +31,7 @@ pub(crate) fn relogin() -> Coded {
 }
 
 /// Client-ID der Azure-App „Pumpkin Launcher“ (öffentlicher Client, kein Geheimnis). Forks müssen eine eigene
-/// Azure-App registrieren und von Microsoft freischalten lassen (`docs/ACCOUNT-SETUP.md`) und diese Konstante ändern.
+/// Azure-App registrieren und von Microsoft freischalten lassen (`CONTRIBUTING.md#microsoft-sign-in-for-forks`) und diese Konstante ändern.
 const DEFAULT_CLIENT_ID: &str = "5e27ee41-3be2-4c3a-a156-a3c61dbef8dc";
 /// So lange wartet die Browser-Anmeldung auf den Rücksprung.
 const BROWSER_TIMEOUT: Duration = Duration::from_secs(600);

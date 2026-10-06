@@ -19,7 +19,7 @@ import java.util.Optional;
 import java.util.function.Function;
 
 /**
- * The operations of INGAME 5.4. Friends are named by the aliases of the topics ({@code f1}, {@code f2}, ...), never by peer id.
+ * The operations of docs/bridge/README.md, "Operations and consent". Friends are named by the aliases of the topics ({@code f1}, {@code f2}, ...), never by peer id.
  * Operations that wait for the directory, a plan or a dialog get the longer timeout.
  */
 public final class Ops {

@@ -1,6 +1,6 @@
 package dev.laux.pumpkin.bridge.ui.model;
 
-/** The fixed measures of the in-game screens, in GUI pixels (INGAME 6.2). Every layout class reads them from here. */
+/** The fixed measures of the in-game screens, in GUI pixels (docs/bridge/README.md, "In-game navigation and world behavior"). Every layout class reads them from here. */
 public final class GuiMetrics {
 	/** The widest the content gets; narrower windows use the window width minus a margin on each side. */
 	public static final int MAX_CONTENT_WIDTH = 310;

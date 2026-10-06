@@ -1,4 +1,4 @@
-//! Die Pumpkin Bridge im Spiel, aus Sicht des Launchers (INGAME 2.1, 3.2 bis 3.9): welches eingebettete JAR zu einer
+//! Die Pumpkin Bridge im Spiel, aus Sicht des Launchers (docs/bridge/README.md, "Support selection"): welches eingebettete JAR zu einer
 //! Instanz passt, ob eingespeist wird, wie das JAR bereitgestellt und dem Loader übergeben wird und wann der
 //! Sicherungsschalter die Einspeisung abschaltet. Die Bausteine sind reine Funktionen und Werte; [`inject`] fügt sie für
 //! einen Start zusammen, die Verdrahtung in den Start liegt in `ingame_launch.rs` des Crates:

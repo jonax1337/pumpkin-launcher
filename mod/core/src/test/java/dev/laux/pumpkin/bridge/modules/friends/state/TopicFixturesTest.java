@@ -3,6 +3,7 @@ package dev.laux.pumpkin.bridge.modules.friends.state;
 import static dev.laux.pumpkin.bridge.Fixtures.Direction.LAUNCHER_TO_MOD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.laux.pumpkin.bridge.Fixtures;
@@ -10,6 +11,7 @@ import dev.laux.pumpkin.bridge.Fixtures.Line;
 import dev.laux.pumpkin.bridge.protocol.FrameCodec;
 import dev.laux.pumpkin.bridge.protocol.LauncherFrame.State;
 import dev.laux.pumpkin.bridge.protocol.Topic;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -131,6 +133,22 @@ class TopicFixturesTest {
 
 		replay(Topic.SESSION);
 		assertEquals(Optional.empty(), store.session());
+	}
+
+	@Test
+	void aSessionOwnsAnImmutableGuestSnapshot() {
+		Session.Guest guest = new Session.Guest("f1", "Alex", Session.State.CONNECTED);
+		List<Session.Guest> mutable = new ArrayList<>();
+		mutable.add(guest);
+		Session session = new Session(mutable);
+
+		mutable.clear();
+
+		assertEquals(List.of(guest), session.guests());
+		assertThrows(UnsupportedOperationException.class, () -> session.guests().clear());
+		Session same = new Session(List.of(new Session.Guest("f1", "Alex", Session.State.CONNECTED)));
+		assertEquals(same, session);
+		assertEquals(same.hashCode(), session.hashCode());
 	}
 
 	@Test

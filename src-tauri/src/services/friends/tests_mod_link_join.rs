@@ -1,5 +1,5 @@
-//! Einladungen und Beitreten aus dem Spiel (INGAME 5.4, 7): Bert spielt mit der Mod, Anna teilt ihre Welt und hat ihn
-//! eingeladen. `invite.joinHere` hält die Schritte von INGAME 7 ein, einer nach dem anderen.
+//! Einladungen und Beitreten aus dem Spiel (docs/bridge/README.md, "Operations and consent"): Bert spielt mit der Mod, Anna teilt ihre Welt und hat ihn
+//! eingeladen. `invite.joinHere` hält die Schritte von docs/bridge/README.md, "In-game navigation and world behavior" ein, einer nach dem anderen.
 use std::sync::atomic::AtomicBool;
 
 use super::mod_ops::{answer_prompt_of, Prompt, RecordingApp};

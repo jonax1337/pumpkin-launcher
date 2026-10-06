@@ -7,7 +7,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
- * The word wrap for sentences a screen draws over several rows (INGAME 6.2): the hint of the name tab, the question of
+ * The word wrap for sentences a screen draws over several rows (docs/bridge/README.md, "In-game navigation and world behavior"): the hint of the name tab, the question of
  * a ConfirmFlow. Widths come from an injected measure, as in the screens.
  */
 class FitWrapTest {

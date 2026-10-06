@@ -1,4 +1,4 @@
-//! Die Mod im Spiel in den Start und in die Statuszeile verdrahtet (docs/friends/INGAME.md, 3.3 bis 3.9): was der Start
+//! Die Mod im Spiel in den Start und in die Statuszeile verdrahtet (docs/bridge/README.md, "Support selection"): was der Start
 //! über die Instanz wissen muss, damit das Tor entscheidet, wie die Argumente der Einspeisung in `LaunchSpec` kommen, der
 //! Status ohne Start und die Wache der ersten 90 Sekunden. Die Entscheidungen selbst liegen in `services::modbridge::ingame`.
 use std::path::Path;
@@ -60,7 +60,7 @@ impl GateInputs {
     }
 }
 
-/// Die Einspeisung für den Start von `instance` mit dem Java `java`. Scheitert sie, startet das Spiel ohne (INGAME 3.3).
+/// Die Einspeisung für den Start von `instance` mit dem Java `java`. Scheitert sie, startet das Spiel ohne (docs/bridge/README.md, "Support selection").
 pub fn inject_into_launch(state: &AppState, instance: &Instance, java: &Path, online_account: bool, user_jvm: &[String]) -> Injection {
     let gate = gate_inputs(state, instance);
     let java_major = state.ingame.java.of(java);

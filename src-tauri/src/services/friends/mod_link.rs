@@ -1,4 +1,4 @@
-//! Verbindung zur Mod im Spiel (INGAME 5, SPEC 7), Launcher-Seite: Themen (Freunde, Anfragen, Sitzung, Einladungen,
+//! Verbindung zur Mod im Spiel (docs/bridge/README.md, "Protocol 2", SPEC 7), Launcher-Seite: Themen (Freunde, Anfragen, Sitzung, Einladungen,
 //! Beitritt, Spiel, Codes, Gesperrte, ich) und Hinweise an die Mod, ihre Vorgänge als nicht vertrauenswürdig behandelt.
 //! Die Brücke (`modbridge`) prüft Rahmen, Ratenfenster und Zustimmungen je Spielstart; was ein Vorgang bewirkt, steht in
 //! `mod_link_ops` (Einteilung), `mod_link_social` (Freunde und Anfragen), `mod_link_join` (Beitreten) und im Teilen
@@ -168,7 +168,7 @@ impl FriendSessions {
         Ok(())
     }
 
-    /// Die Vorgänge der Bereiche `share` und `social`, die aus dem Spiel kamen (INGAME 5.7), neueste zuerst; höchstens 100.
+    /// Die Vorgänge der Bereiche `share` und `social`, die aus dem Spiel kamen (docs/bridge/README.md, "Protocol 2"), neueste zuerst; höchstens 100.
     pub fn mod_activity(&self) -> Vec<ModActivityEntry> {
         self.shared.mods.activity.list()
     }

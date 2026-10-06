@@ -1,4 +1,4 @@
-//! Freunde per Minecraft-Namen aus dem Spiel (INGAME 5.4, BYNAME-ATTEST O-5): solange irgendein Spiel mit der Mod
+//! Freunde per Minecraft-Namen aus dem Spiel (docs/bridge/README.md, "Operations and consent", BYNAME-ATTEST O-5): solange irgendein Spiel mit der Mod
 //! verbunden ist, meldet sich der Launcher am Verzeichnis nur mit dem gemerkten Zertifikat an. Ein neues holt er dann
 //! nicht, auch wenn Mojang eine Erneuerung will; ohne brauchbares gemerktes Zertifikat bleibt es bei `directoryUnavailable`.
 //! Der Zähler für ausgestellte Zertifikate sitzt im falschen Mojang des Tests.

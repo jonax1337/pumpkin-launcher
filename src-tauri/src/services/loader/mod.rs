@@ -152,9 +152,11 @@ async fn resolve_version(client: &reqwest::Client, choice: GameChoice<'_>) -> Ap
 
 /// Die neueste stabile Version; Forge und NeoForge nehmen ohne stabile die neueste überhaupt.
 fn default_version(loader: ModLoader, versions: &[LoaderVersion]) -> Option<&LoaderVersion> {
-    let stable = versions.iter().find(|v| v.stable);
+    let newest = |stable_only: bool| versions.iter().filter(|v| !stable_only || v.stable)
+        .max_by(|a, b| compare_versions(&a.version, &b.version));
+    let stable = newest(true);
     match loader {
-        ModLoader::Forge | ModLoader::NeoForge => stable.or(versions.first()),
+        ModLoader::Forge | ModLoader::NeoForge => stable.or_else(|| newest(false)),
         _ => stable,
     }
 }
@@ -292,6 +294,7 @@ fn merge(mut version: VersionJson, profile: &impl LoaderProfile) -> AppResult<Ve
         args.jvm.extend(jvm);
         args.game.extend(game);
     }
+    crate::services::mojang::secure_logging_libraries(&mut version.libraries);
     Ok(version)
 }
 

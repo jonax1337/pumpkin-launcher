@@ -3,17 +3,17 @@ package dev.laux.pumpkin.bridge.ui.demo;
 import dev.laux.pumpkin.bridge.compat.GameScreens;
 import dev.laux.pumpkin.bridge.runtime.MainThread;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 /**
  * Opens the {@link ShareDemoScreen} once, when the title screen first shows, if the game runs with the environment
  * variable {@code PUMPKIN_SHARE_DEMO} set (the dev run sets it next to the launcher variables; a second system property
- * would need build wiring that is not this package's to add). The pure-UI render proof of the Teilen tab (INGAME 6.4):
+ * would need build wiring that is not this package's to add). The pure-UI render proof of the Teilen tab (docs/bridge/README.md, "In-game navigation and world behavior"):
  * no world, no clicks.
  */
 public final class ShareDemo {
-	private static final Logger LOG = LoggerFactory.getLogger("pumpkin_bridge");
+	private static final Logger LOG = LogManager.getLogger("pumpkin_bridge");
 	private static final long POLL_MILLIS = 250;
 
 	private ShareDemo() {

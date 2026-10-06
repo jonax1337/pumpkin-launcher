@@ -11,17 +11,28 @@ public final class Text {
 	private Text() {
 	}
 
-	/** INGAME-API.md 3, "Font, drawing, text components": {@code Component#literal(String)} is the same in every era. */
-	static Component literal(String text) {
+	/** Literal text uses the pre-1.19 concrete component or the modern factory, never a translation key. */
+	public static Component literal(String text) {
+		//? if >=1.19 {
 		return Component.literal(text);
+		//?} else {
+		/*return new net.minecraft.network.chat.TextComponent(text);
+		*///?}
 	}
 
-	/** INGAME-API.md 3, same table: {@code Component#translatable(String, Object[])} and {@code Component#getString()}. */
+	public static Component component(String key, Object... arguments) {
+		//? if >=1.19 {
+		return Component.translatable(key, arguments);
+		//?} else {
+		/*return new net.minecraft.network.chat.TranslatableComponent(key, arguments);
+		*///?}
+	}
+
 	public static String translate(String key, Object... arguments) {
-		return Component.translatable(key, arguments).getString();
+		return component(key, arguments).getString();
 	}
 
-	/** INGAME-API.md 3, same table: {@code Minecraft#font} (table "Minecraft: screens...") and {@code Font#width(String)}. */
+	/** docs/bridge/MINECRAFT-API.md, same table: {@code Minecraft#font} (table "Minecraft: screens...") and {@code Font#width(String)}. */
 	public static int width(String text) {
 		return Minecraft.getInstance().font.width(text);
 	}

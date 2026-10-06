@@ -120,7 +120,7 @@ export const friends = {
   "friends.enter.wrongShape": "Das ist kein Freundescode: Er beginnt mit „pumpkin-“, danach folgen 72 Buchstaben und Ziffern.",
   "friends.enter.consent": "Dein Minecraft-Name geht an den Besitzer des Codes. Er muss die Anfrage annehmen.",
 
-  // ---------- Aktivität im Spiel (INGAME 5.7) ----------
+  // ---------- Aktivität im Spiel (docs/bridge/README.md, "Protocol 2") ----------
   "friends.activity.title": "Aktivität im Spiel",
   "friends.activity.note": "Was Spiele über das Freunde-Menü ausgelöst haben, die letzten 100. Die Liste bleibt nur im Speicher des Launchers.",
   "friends.activity.sub": "{time} · {instance}",

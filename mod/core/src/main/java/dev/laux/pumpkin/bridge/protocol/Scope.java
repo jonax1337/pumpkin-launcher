@@ -1,6 +1,6 @@
 package dev.laux.pumpkin.bridge.protocol;
 
-/** What the player is asked about once per game launch in the launcher (INGAME 5.5). */
+/** What the player is asked about once per game launch in the launcher (docs/bridge/README.md, "Operations and consent"). */
 public enum Scope {
 	/** Share the world with chosen friends. */
 	SHARE,

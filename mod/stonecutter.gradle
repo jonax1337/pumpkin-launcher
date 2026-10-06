@@ -12,7 +12,7 @@ stonecutter.active null
 def selectedNodes = gradle.ext.selectedNodes
 def modIndexDir = layout.buildDirectory.dir('mod-index')
 
-// build/mod-index/{mod-index.json, <jar>...}: der Vertrag zwischen dem Gradle-Build und dem Launcher (INGAME 3.2).
+// build/mod-index/{mod-index.json, <jar>...}: der Vertrag zwischen dem Gradle-Build und dem Launcher (docs/bridge/README.md, "Embedded index and files").
 // Kein Knoten gilt als geprüft: "verified" bleibt null, bis ein Rauchtest die Zelle freigibt.
 def modIndex = tasks.register('modIndex') {
 	group = 'build'

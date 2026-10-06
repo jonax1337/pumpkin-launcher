@@ -8,7 +8,7 @@ import dev.laux.pumpkin.bridge.protocol.json.WireNames;
 import dev.laux.pumpkin.bridge.modules.friends.state.Me;
 import org.junit.jupiter.api.Test;
 
-/** The directory line of the "Per Name" tab (INGAME 6.2): the states the launcher shows, with their texts. */
+/** The directory line of the "Per Name" tab (docs/bridge/README.md, "In-game navigation and world behavior"): the states the launcher shows, with their texts. */
 class DirectoryNoticeTest {
 	@Test
 	void anActiveDirectorySaysNothing() {

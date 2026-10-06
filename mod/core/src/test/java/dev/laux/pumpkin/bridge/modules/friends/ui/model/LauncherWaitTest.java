@@ -25,7 +25,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
- * The wait state machine of the LauncherWaitScreen (INGAME 6.2), driven through a real {@link RequestManager}: pending,
+ * The wait state machine of the LauncherWaitScreen (docs/bridge/README.md, "In-game navigation and world behavior"), driven through a real {@link RequestManager}: pending,
  * answer, timeout and abort, each exactly once.
  */
 class LauncherWaitTest {

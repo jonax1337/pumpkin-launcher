@@ -8,7 +8,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.HttpUtil;
 
 /**
- * Opens the singleplayer world to the LAN and reports its port; only call it on the client thread. INGAME-API.md 3,
+ * Opens the singleplayer world to the LAN and reports its port; only call it on the client thread. docs/bridge/MINECRAFT-API.md,
  * "Publish to LAN" (rows {@code IntegratedServer#isPublished}, {@code #getPort}, {@code #publishServer}) and 3.2.
  */
 public final class Lan {
@@ -21,8 +21,8 @@ public final class Lan {
 	}
 
 	/**
-	 * Whether the player is on a multiplayer server, the gate of the Teilen tab (INGAME 6.4, "Auf Servern nicht möglich").
-	 * INGAME-API.md 3, "Minecraft: screens, main thread, leaving a world": {@code Minecraft#getCurrentServer()} in every
+	 * Whether the player is on a multiplayer server, the gate of the Teilen tab (docs/bridge/README.md, "In-game navigation and world behavior", "Auf Servern nicht möglich").
+	 * docs/bridge/MINECRAFT-API.md, "Minecraft: screens, main thread, leaving a world": {@code Minecraft#getCurrentServer()} in every
 	 * era. A game that joined a friend counts as joined, not as "on a server" - the share model checks the join first.
 	 */
 	public static boolean onMultiplayerServer() {

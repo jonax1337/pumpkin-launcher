@@ -1,4 +1,4 @@
-//! Die ins Programm eingebetteten Mod-JARs (INGAME 3.2). `build.rs` liest den Mod-Ordner und erzeugt `embedded_mod.rs`
+//! Die ins Programm eingebetteten Mod-JARs (docs/bridge/README.md, "Embedded index and files"). `build.rs` liest den Mod-Ordner und erzeugt `embedded_mod.rs`
 //! mit `include_str!` und `include_bytes!`; hier wird daraus die [`ModSource`] des Builds. Ohne gültigen Mod-Ordner
 //! (`tauri dev`) ist sie leer, und die Einspeisung meldet „in diesem Build nicht verfügbar“.
 use std::sync::OnceLock;

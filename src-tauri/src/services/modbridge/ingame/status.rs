@@ -1,4 +1,4 @@
-//! Der Status der Einspeisung einer Instanz, berechnet ohne zu starten (INGAME 3.9): dieselbe Entscheidung wie beim
+//! Der Status der Einspeisung einer Instanz, berechnet ohne zu starten (docs/bridge/README.md, "Support selection"): dieselbe Entscheidung wie beim
 //! Start ([`decide`]), nur mit einer Beschreibung statt einer Einspeisung. So zeigt die Instanzseite, was der nächste
 //! Start tut und warum.
 use super::breaker::FailureKind;
@@ -72,7 +72,6 @@ fn unfit_reason(unfit: Unfit, index: &ModIndex) -> IngameReason {
         Unfit::JavaTooOld { need } => IngameReason::JavaTooOld { need },
         Unfit::JavaUnknown => IngameReason::JavaUnknown,
         Unfit::VanillaNeedsLoader => IngameReason::Vanilla,
-        Unfit::QuiltUnsupported => IngameReason::Quilt,
     }
 }
 
@@ -133,6 +132,28 @@ mod tests {
 
     fn status(facts: &LaunchFacts) -> IngameStatus {
         status_of(&index(), facts, false)
+    }
+
+    #[test]
+    fn a_verified_legacy_quilt_cell_has_the_same_active_status_as_other_loaders() {
+        let quilt = node("1.16.5-quilt", Loader::Quilt, &["1.16.5"], "0.29.2", 8);
+        let index = index_of(vec![quilt]);
+        let target = LaunchFacts {
+            minecraft: "1.16.5",
+            loader: ModLoader::Quilt,
+            loader_version: "0.29.2",
+            java_major: Some(8),
+            ..facts()
+        };
+        assert_eq!(status_of(&index, &target, false), IngameStatus {
+            state: IngameState::Active,
+            reason: None,
+            node: Some(IngameNode {
+                id: "1.16.5-quilt".into(),
+                minecraft: "1.16.5".into(),
+                loader: Loader::Quilt,
+            }),
+        });
     }
 
     #[test]
@@ -263,7 +284,7 @@ mod tests {
                     loader: ModLoader::Quilt,
                     ..facts()
                 },
-                IngameReason::Quilt,
+                IngameReason::NoNode,
             ),
             (
                 "no node",
