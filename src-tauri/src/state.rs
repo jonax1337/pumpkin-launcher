@@ -138,7 +138,15 @@ impl AppState {
     pub async fn cancellable<T>(&self, key: &str, work: impl Future<Output = AppResult<T>>) -> AppResult<T> {
         let token = CancellationToken::new();
         self.cancels().insert(key.to_owned(), token.clone());
-        let result = until_phases_end(token.run_until_cancelled(work)).await;
+        let result = until_phases_end(async {
+            // Abbruch hat Vorrang vor gleichzeitig fertiger Arbeit, bevor diese ihre Instanz einträgt.
+            tokio::select! {
+                biased;
+                _ = token.cancelled() => None,
+                result = work => Some(result),
+            }
+        })
+        .await;
         self.cancels().remove(key);
         result.unwrap_or(Err(AppError::Cancelled))
     }
