@@ -23,6 +23,6 @@ export default defineConfig({
   build: {
     outDir: "dist",
     assetsInlineLimit: 0,
-    rollupOptions: { input: { index: page("index.html"), datenschutz: page("datenschutz.html"), impressum: page("impressum.html") } },
+    rollupOptions: { input: { index: page("index.html"), privacy: page("privacy/index.html"), legalNotice: page("legal-notice/index.html") } },
   },
 });

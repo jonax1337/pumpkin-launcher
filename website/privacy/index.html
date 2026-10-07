@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#070a11" />
+  <meta name="description" content="Privacy at Pumpkin Launcher: no trackers, no telemetry, and which hosts the launcher contacts and why." />
+  <title>Privacy Policy · Pumpkin Launcher</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/brand/favicon.svg" />
+  <link rel="stylesheet" href="../style.css" />
+  <script type="module" src="../legal.js"></script>
+</head>
+<body>
+  <span class="top-marker" aria-hidden="true"></span>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header" id="top" tabindex="-1">
+    <a class="brand" href="../" aria-label="Pumpkin Launcher, home"><img src="../assets/brand/standard/mark.svg" width="38" height="38" alt="" /><span>PUMPKIN <span>LAUNCHER</span></span></a>
+    <nav aria-label="Main navigation"><a href="../">Back to home</a></nav>
+  </header>
+  <main id="main" class="legal wrap">
+    <h1>PRIVACY POLICY</h1>
+    <h2>1. Data controller</h2>
+    <p>Jonas Laux<br />Potsdamer Chaussee 30<br />14129 Berlin<br />Email: <a href="mailto:jonas@laux.digital">jonas@laux.digital</a></p>
+
+    <h2>2. This website</h2>
+    <p>This website is static and served through GitHub Pages. It does not set cookies, use analytics or advertising services, or load fonts, scripts or images from third-party servers; everything comes from the same address.</p>
+    <p>When you visit the website, the hosting provider, GitHub, Inc., processes technically necessary connection data (IP address, time, requested file and browser). We have no control over this. The legal basis is Article 6(1)(f) GDPR (secure and stable operation of the website). Further details are provided in GitHub's privacy statement.</p>
+    <p>When you visit the website, your browser does not send requests to GitHub or other third parties, only to the server delivering the page. In the “Download” section, the installers are simple links to github.com. Only when you click a link does your browser open GitHub, which then processes connection data (such as your IP address) as described in GitHub's privacy statement. Detection of your operating system to highlight the appropriate download takes place only locally in your browser; nothing is transmitted or stored.</p>
+
+    <h2>3. The launcher</h2>
+    <p>Pumpkin Launcher sends no telemetry and has no trackers. You do not have an account with us. Instances, settings and accounts are stored only on your computer; your Microsoft account's authentication token is stored in your operating system's credential store (Windows Credential Manager, macOS Keychain or a Secret Service such as GNOME Keyring or KWallet).</p>
+    <p>The launcher connects only to the following services, and only when you use the relevant feature. Each service can see your IP address:</p>
+    <ul>
+      <li><strong>Modrinth</strong> (api.modrinth.com, cdn.modrinth.com): searches, project pages and downloads of mods and modpacks.</li>
+      <li><strong>CurseForge</strong>: searches and project data through a proxy on Cloudflare Workers (pumpkin-curseforge.jonas-laux.workers.dev), which holds the API key and does not store or log anything; Cloudflare technically processes the request, including the IP address for rate limiting. The launcher downloads files directly from edge.forgecdn.net, mediafilez.forgecdn.net and media.forgecdn.net.</li>
+      <li><strong>Feed The Beast</strong> (api.feed-the-beast.com, files.feed-the-beast.com, cdn.feed-the-beast.com): modpacks.</li>
+      <li><strong>Technic</strong> (api.technicpack.net, www.technicpack.net, cdn.technicpack.net), as well as the pack authors' servers hosting the files, such as Dropbox, GitHub or their own servers.</li>
+      <li><strong>Mojang</strong> (piston-meta.mojang.com, piston-data.mojang.com, launchermeta.mojang.com, libraries.minecraft.net, resources.download.minecraft.net, textures.minecraft.net): Minecraft, the Java runtime, libraries, assets and skin textures.</li>
+      <li><strong>Microsoft and Xbox</strong> (login.microsoftonline.com, user.auth.xboxlive.com, xsts.auth.xboxlive.com, api.minecraftservices.com): sign-in, profile, skins and capes, only if you sign in.</li>
+      <li><strong>Mod loaders</strong> (meta.fabricmc.net, maven.fabricmc.net, meta.quiltmc.org, maven.quiltmc.org, maven.minecraftforge.net, files.minecraftforge.net, maven.neoforged.net, repo1.maven.org): version lists and installers for Fabric, Quilt, Forge and NeoForge.</li>
+      <li><strong>GitHub</strong> (github.com, githubusercontent.com): launcher updates, with a silent check shortly after startup and a download at your request.</li>
+      <li><strong>mclo.gs</strong> (api.mclo.gs): only after you click “Share log”; the sanitized log is uploaded publicly.</li>
+      <li><strong>Image hosts in project descriptions</strong>: images from cdn.modrinth.com, media.forgecdn.net, raw.githubusercontent.com, avatars.githubusercontent.com, user-images.githubusercontent.com, media.githubusercontent.com and i.imgur.com load without asking. The launcher loads images from all other hosts only after you click.</li>
+    </ul>
+    <p>The launcher does not scan mods, modpacks or Technic packs for malware. It checks file sizes and checksums where the provider publishes them.</p>
+
+    <h2>4. Friends and playing together (optional)</h2>
+    <p>This feature is off by default. It becomes active only when you enable it in settings and are signed in with a Microsoft account. While it is off, the launcher makes no connections for this feature and opens no ports.</p>
+    <ul>
+      <li><strong>Connections between launchers.</strong> Friends and shared worlds are connected through an encrypted peer-to-peer connection. Nobody can read the content, including us and the relay servers. With a direct connection, the other person can see your IP address, including addresses on your local network. With the “Always use relay” setting, everything goes through a relay server, and the other person cannot see your IP address. Only someone who has accepted your friend request or invitation can connect.</li>
+      <li><strong>n0 relay servers.</strong> To establish connections and as a fallback route, this version of the launcher uses the public relay servers of Number 0, Inc. (use1-1.relay.n0.iroh.link, usw1-1.relay.n0.iroh.link, euc1-1.relay.n0.iroh.link and aps1-1.relay.n0.iroh.link). n0 can see your IP address, your launcher's technical identifier and the other party's identifier, but no content. If we start operating our own relay, we will state that here.</li>
+      <li><strong>Friend codes.</strong> You exchange codes yourselves, for example through chat. We do not provide a server for this. Each code is valid for seven days and can be used only once.</li>
+      <li><strong>Search by Minecraft name.</strong> For this, we operate a small service on Cloudflare Workers with its database in the EU (pumpkin-friends-directory.jonas-laux.workers.dev). The launcher signs in to this service when you send a request by name or enable “Discoverable by Minecraft name” (off by default).
+        <ul>
+          <li>The service itself does not contact Mojang. The launcher proves your account's identity using a player certificate signed by Mojang: it obtains the certificate from Mojang and uses it to sign the sign-in request. The service verifies Mojang's signature and the launcher's signatures itself. In doing so, it processes the certificate's public key, its expiry time and the sign-in signatures, but does not store them. The public key is a pseudonymous identifier for the certificate's lifetime (approximately two days, to our knowledge); every multiplayer server you join also receives it.</li>
+          <li>Your account's access token is sent only to Mojang, never to our service.</li>
+          <li>The launcher makes the following requests to Mojang, allowing Mojang to see your IP address: the certificate (api.minecraftservices.com/player/certificates, when signing in to the directory and then approximately every 40 hours), account attributes (api.minecraftservices.com/player/attributes, each time you sign in to the directory, to check whether Mojang permits multiplayer features and friends for the account), name searches (api.minecraftservices.com, when sending by name) and the name of each sender who sends you a new request (sessionserver.mojang.com/session/minecraft/profile/{UUID}; Mojang receives the sender's UUID). When a request is accepted, both launchers authenticate each other through Mojang, in the same way that an online server verifies a player (sessionserver.mojang.com).</li>
+          <li>Discoverability (only if you enable it): your Minecraft UUID, with the times of your first and most recent sign-ins. This is retained until you turn discoverability off, disable the feature or no refresh has been received for 30 days.</li>
+          <li>Requests to you: the sender's UUID, signed display name and technical identifier, together with a one-time code and the signature for acceptance. The display name is stored with the request but is not a verified Minecraft name; your launcher asks Mojang for the current Minecraft name. The request is retained until you respond, it is withdrawn or the sender is blocked, for a maximum of 14 days.</li>
+          <li>Block list: the UUIDs you have blocked, until you unblock them or disable the feature.</li>
+          <li>Sending log (who contacted whom and when) to prevent abuse: seven days, including for senders who are not themselves discoverable.</li>
+        </ul>
+        The player certificate and sign-in signatures, friend lists, online status and whether a request was accepted are not stored. However, display names and request signatures remain part of the stored request. Someone who contacts you by name learns your technical identifier and, if “Always use relay” is off, your IP address only after you accept. Cloudflare technically processes requests as a data processor, including the IP address for rate limiting. Cloudflare can restore deleted database entries for up to seven days (up to 30 days on a paid plan); after that, they are permanently deleted. Legal bases: consent for discoverability (Article 6(1)(a) GDPR, withdrawable at any time using a toggle, which deletes the data immediately); Article 6(1)(b) GDPR for a request you send yourself and for signing in to the directory, which you enable with the feature; and Article 6(1)(f) GDPR for the sending log (protection against abuse).</li>
+      <li><strong>In-game mod.</strong> The optional “Pumpkin Friends” mod performs friend actions through the launcher on your own computer. For player heads, it also uses Minecraft's own profile and skin services at Mojang (sessionserver.mojang.com, textures.minecraft.net). Mojang can see the friend's known Minecraft UUID and your IP address; Minecraft manages the skin cache. If no UUID is known, a default head is displayed without looking up the display name online.</li>
+    </ul>
+
+    <h2>5. Your rights</h2>
+    <p>You have the right of access, rectification, erasure, restriction of processing, data portability and objection. You may also lodge a complaint with a data protection supervisory authority. Please send requests to the email address above. Data in the friends directory is linked to your Minecraft UUID: you can delete it yourself by turning off “Discoverable by Minecraft name” or the friends feature; for anything else, an email with your UUID is sufficient.</p>
+
+    <p class="legal-date">Last updated: October 2026</p>
+  </main>
+  <footer class="site-footer wrap"><div class="footer-bottom"><span>© 2026 Pumpkin Launcher</span><nav class="footer-legal" aria-label="Legal"><a href="../privacy/">Privacy Policy</a><a href="../legal-notice/">Legal Notice</a></nav></div></footer>
+  <a class="button button-small back-to-top" href="#top" aria-label="Back to top" title="Back to top" hidden><span data-icon="up" aria-hidden="true"></span></a>
+</body>
+</html>

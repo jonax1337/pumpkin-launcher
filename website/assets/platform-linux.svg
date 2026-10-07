@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="256" viewBox="0 0 160 64" shape-rendering="crispEdges">
+  <!-- Original pixel-art penguin and alpine scenery; no third-party mascot artwork or external resources. -->
+  <path fill="#0a1d22" d="M0 0h160v64h-160z"/>
+  <path fill="#102d32" d="M42 4h76v49h-76zM33 14h94v30h-94z"/>
+  <path fill="#153a3d" d="M49 8h62v44h-62zM43 19h74v21h-74z"/>
+  <path fill="#1c4545" d="M55 13h50v35h-50z"/>
+  <path fill="#5b8f84" d="M21 9h2v2h-2zM37 19h1v1h-1zM127 10h2v2h-2zM145 23h1v1h-1z"/>
+  <path fill="#c4b582" d="M29 17h1v1h-1zM118 5h1v1h-1zM139 13h1v1h-1z"/>
+  <path fill="#1c4141" d="M0 37h10v-9h9v-7h8v9h8v10h9v7h9v17H0zM110 46h10v-9h8v-9h8v-8h8v11h8v8h8v25h-50z"/>
+  <path fill="#497e74" d="M10 28h9v-7h8v9h-5v-3h-3v4h-9zM128 28h8v-8h8v11h-5v-6h-3v6h-8z"/>
+  <path fill="#102c30" d="M0 49h12v-7h12v6h12v5h16v11H0zM108 54h12v-8h12v-5h12v6h16v17h-52z"/>
+  <path fill="#245048" d="M3 51h7v3h-7zM16 45h5v2h-5zM29 51h5v2h-5zM123 49h6v2h-6zM136 44h6v3h-6zM149 50h8v3h-8z"/>
+  <path fill="#091b21" d="M0 59h160v5h-160zM47 55h66v4h-66z"/>
+  <path fill="#376654" d="M57 54h46v1h-46zM64 56h32v1h-32z"/>
+  <path fill="#416069" d="M73 12h14v2h4v4h2v10h3v7h3v6h3v7h-7v3H65v-3h-7v-7h3v-6h3v-7h3V18h2v-4h4z"/>
+  <path fill="#111b25" d="M73 14h14v2h3v4h1v10h3v7h3v6h3v3h-8v4H68v-4h-8v-3h3v-6h3v-7h3V20h1v-4h3z"/>
+  <path fill="#23323b" d="M72 17h3v3h-3zM70 20h2v7h-2zM67 32h2v8h-2zM64 40h2v4h-2zM91 33h2v9h-2z"/>
+  <path fill="#dde5df" d="M74 30h12v3h3v5h2v8h-3v3H72v-3h-3v-8h2v-5h3z"/>
+  <path fill="#f3f0d9" d="M74 33h12v11h-12zM72 37h2v6h-2z"/>
+  <path fill="#bccdc9" d="M72 46h16v3h-16zM88 40h3v6h-3z"/>
+  <path fill="#ecede1" d="M73 22h5v7h-5zM82 22h5v7h-5z"/>
+  <path fill="#0c1720" d="M76 24h2v3h-2zM82 24h2v3h-2z"/>
+  <path fill="#f5b442" d="M76 28h8v1h3v3h-3v2h-8v-2h-3v-3h3z"/>
+  <path fill="#d77b2a" d="M76 32h8v2h-8z"/>
+  <path fill="#d9892e" d="M65 48h10v2h3v3H62v-3h3zM85 48h10v2h3v3H82v-3h3z"/>
+  <path fill="#f3b449" d="M65 48h10v2h-10zM85 48h10v2h-10zM63 50h13v1h-13zM84 50h13v1h-13z"/>
+</svg>

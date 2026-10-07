@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="256" viewBox="0 0 160 64" shape-rendering="crispEdges">
+  <!-- Windows 11 symbol sampled at 40 x 40 from the four square panes, excluding the wordmark: https://upload.wikimedia.org/wikipedia/commons/e/e6/Windows_11_logo.svg . Scenery is original pixel art. -->
+  <path fill="#091727" d="M0 0h160v64h-160z"/>
+  <path fill="#10233b" d="M42 4h76v49h-76zM33 12h94v32h-94z"/>
+  <path fill="#132c48" d="M49 7h62v44h-62zM43 17h74v24h-74z"/>
+  <path fill="#173853" d="M54 10h52v39h-52z"/>
+  <path fill="#3d6d87" d="M20 10h2v2h-2zM34 20h1v1h-1zM133 11h2v2h-2zM146 24h1v1h-1zM115 5h1v1h-1z"/>
+  <path fill="#8ab3bd" d="M26 7h1v1h-1zM122 17h1v1h-1z"/>
+  <path fill="#16354a" d="M0 34h9v-5h9v7h10v5h11v6h9v17H0zM112 46h10v-8h9v-5h8v-8h9v7h12v32h-48z"/>
+  <path fill="#21536a" d="M0 34h9v-5h9v3H9v5H0zM122 38h9v-5h8v-8h9v3h-6v8h-9v5h-11z"/>
+  <path fill="#0c2435" d="M0 48h16v-7h13v4h8v8h14v11H0zM108 53h12v-7h17v-5h12v5h11v18h-52z"/>
+  <path fill="#163a4d" d="M2 51h10v3h-10zM19 44h7v3h-7zM31 51h5v2h-5zM126 49h8v3h-8zM143 44h5v3h-5zM151 51h9v2h-9z"/>
+  <path fill="#071522" d="M0 59h160v5h-160zM45 55h70v4h-70z"/>
+  <path fill="#205576" d="M56 54h48v1h-48zM63 56h34v1h-34z"/>
+  <path fill="#258ee1" d="M60 10h19v1h-19zM81 10h19v1h-19zM60 11h19v1h-19zM81 11h19v1h-19zM60 12h19v1h-19zM81 12h19v1h-19zM60 13h19v1h-19zM81 13h19v1h-19zM60 14h19v1h-19zM81 14h19v1h-19zM60 15h19v1h-19zM81 15h19v1h-19zM60 16h19v1h-19zM81 16h19v1h-19zM60 17h19v1h-19zM81 17h19v1h-19zM60 18h19v1h-19zM81 18h19v1h-19zM60 19h19v1h-19zM81 19h19v1h-19zM60 20h19v1h-19zM81 20h19v1h-19zM60 21h19v1h-19zM81 21h19v1h-19zM60 22h19v1h-19zM81 22h19v1h-19zM60 23h19v1h-19zM81 23h19v1h-19zM60 24h19v1h-19zM81 24h19v1h-19zM60 25h19v1h-19zM81 25h19v1h-19zM60 26h19v1h-19zM81 26h19v1h-19zM60 27h19v1h-19zM81 27h19v1h-19zM60 28h19v1h-19zM81 28h19v1h-19zM60 31h19v1h-19zM81 31h19v1h-19zM60 32h19v1h-19zM81 32h19v1h-19zM60 33h19v1h-19zM81 33h19v1h-19zM60 34h19v1h-19zM81 34h19v1h-19zM60 35h19v1h-19zM81 35h19v1h-19zM60 36h19v1h-19zM81 36h19v1h-19zM60 37h19v1h-19zM81 37h19v1h-19zM60 38h19v1h-19zM81 38h19v1h-19zM60 39h19v1h-19zM81 39h19v1h-19zM60 40h19v1h-19zM81 40h19v1h-19zM60 41h19v1h-19zM81 41h19v1h-19zM60 42h19v1h-19zM81 42h19v1h-19zM60 43h19v1h-19zM81 43h19v1h-19zM60 44h19v1h-19zM81 44h19v1h-19zM60 45h19v1h-19zM81 45h19v1h-19zM60 46h19v1h-19zM81 46h19v1h-19zM60 47h19v1h-19zM81 47h19v1h-19zM60 48h19v1h-19zM81 48h19v1h-19zM60 49h19v1h-19zM81 49h19v1h-19z"/>
+  <path fill="#67c6fb" d="M60 10h19v2h-19zM81 10h19v2h-19z"/>
+  <path fill="#39aaf3" d="M60 12h2v17h-2zM81 12h2v17h-2zM60 31h2v19h-2zM81 31h2v19h-2z"/>
+</svg>

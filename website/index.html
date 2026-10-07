@@ -1,141 +1,166 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#070a11" />
-  <meta name="description" content="Jede Welt. Dein Ding. Pumpkin Launcher bringt deine Minecraft-Instanzen, Mods und Modpacks zusammen. Entdecke den Launcher für deinen nächsten Spielabend." />
+  <meta name="description" content="Keep your Minecraft worlds and modded setups together. Browse Modrinth, CurseForge, FTB and Technic, or import a pack you already love. Download the Pumpkin Launcher beta." />
   <meta property="og:type" content="website" />
-  <meta property="og:locale" content="de_DE" />
-  <meta property="og:title" content="Pumpkin Launcher · Jede Welt. Dein Ding." />
-  <meta property="og:description" content="Deine Welten, deine Mods, dein nächstes Abenteuer. Ein Launcher für Minecraft: Java Edition." />
-  <title>Pumpkin Launcher · Jede Welt. Dein Ding.</title>
+  <meta property="og:locale" content="en_US" />
+  <meta property="og:title" content="Pumpkin Launcher · One more adventure." />
+  <meta property="og:description" content="A Minecraft: Java Edition launcher for your survival saves, ambitious builds and next modpack obsession. Available for Windows, macOS and Linux." />
+  <title>Pumpkin Launcher · One more adventure.</title>
   <link data-seasonal rel="icon" type="image/svg+xml" href="./assets/brand/favicon.svg" />
   <link rel="stylesheet" href="./style.css" />
   <script type="module" src="./main.js"></script>
 </head>
-<body>
-  <a class="skip-link" href="#main">Zum Inhalt springen</a>
-  <header class="site-header">
-    <a class="brand" href="#" aria-label="Pumpkin Launcher, zur Startseite"><img data-seasonal src="./assets/brand/standard/mark.svg" width="38" height="38" alt="" /><span>PUMPKIN <span>LAUNCHER</span></span></a>
-    <nav aria-label="Hauptnavigation"><a href="#launcher">Der Launcher</a><a href="#welten">Deine Möglichkeiten</a><a href="#download">Download</a><a href="#fragen">FAQ</a></nav>
+<body class="marketing">
+  <span class="top-marker" aria-hidden="true"></span>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header" id="top" tabindex="-1">
+    <a class="brand" href="#top" aria-label="Pumpkin Launcher, back to top"><img data-seasonal src="./assets/brand/standard/mark.svg" width="38" height="38" alt="" /><span>PUMPKIN <span>LAUNCHER</span></span></a>
+    <nav aria-label="Main navigation"><a href="#worlds">Your worlds</a><a href="#features">Features</a><a href="#download">Download</a><a href="#faq">FAQ</a></nav>
     <a class="button button-small" href="#download"><span data-download-cta="short">Download</span> <span data-icon="dl" aria-hidden="true"></span></a>
   </header>
-  <main id="main">
+  <main id="main" tabindex="-1">
     <section class="hero" aria-labelledby="hero-title">
       <div class="hero-landscape"><img src="./assets/world-forest.png" width="640" height="360" alt="" fetchpriority="high" /></div>
       <div class="hero-shade"></div>
       <div class="hero-content wrap">
-        <p class="eyebrow hero-enter"><span class="tiny-square" aria-hidden="true"></span> DEIN LAUNCHER FÜR MINECRAFT: JAVA EDITION</p>
-        <h1 id="hero-title"><span class="title-line"><span>JEDE WELT.</span></span><span class="title-line"><span class="copper">DEIN DING.</span></span></h1>
-        <p class="hero-description hero-enter">Von der ersten Holzhütte bis zum nächsten großen Modpack.<br /> Dein Minecraft beginnt hier.</p>
-        <div class="hero-actions hero-enter"><a class="button" href="#download"><span data-icon="dl" aria-hidden="true"></span> <span data-download-cta="full">Zum Download</span></a><a class="quiet-link" href="#launcher">Den Launcher ansehen <span aria-hidden="true">↗</span></a></div>
+        <p class="eyebrow"><span class="tiny-square" aria-hidden="true"></span> MINECRAFT: JAVA EDITION. VANILLA &amp; MODDED.</p>
+        <h1 id="hero-title"><span class="title-line"><span>ONE MORE</span></span><span class="title-line"><span class="copper">ADVENTURE.</span></span></h1>
+        <p class="hero-description">Your survival save. Your latest modpack. That build you keep coming back to. Keep them together in Pumpkin, with a separate setup for each.</p>
+        <div class="hero-actions"><a class="button" href="#download"><span data-icon="dl" aria-hidden="true"></span> <span data-download-cta="full">Download the beta</span></a></div>
       </div>
-      <div class="hero-bottom wrap hero-enter"><span>DEINE WELTEN. EIN ZUHAUSE.</span><div><span>VANILLA</span><span>FABRIC</span><span>FORGE</span><span>NEOFORGE</span><span>QUILT</span></div><img data-seasonal src="./assets/brand/standard/mark.svg" width="40" height="40" alt="Buddy, das Kürbis-Maskottchen" /></div>
+      <div class="hero-bottom wrap"><span>VANILLA OR MODDED. YOUR CALL.</span><div><span>VANILLA</span><span>FABRIC</span><span>FORGE</span><span>NEOFORGE</span><span>QUILT</span></div><img data-seasonal src="./assets/brand/standard/mark.svg" width="40" height="40" alt="Buddy, the pumpkin mascot" /></div>
     </section>
-    <div class="showcase-track" id="launcher">
-    <section class="showcase" aria-labelledby="showcase-title">
-      <div class="showcase-heading wrap"><p class="eyebrow">WILLKOMMEN ZURÜCK IN DEINER WELT.</p><h2 id="showcase-title">WENIGER MENÜS.<br /><span class="copper">MEHR MINECRAFT.</span></h2><p>Ein Ort für deine Instanzen. Ein Klick ins nächste Abenteuer.</p></div>
-      <div class="product-reel">
-        <figure class="product-shot"><img src="./assets/launcher-home.png" width="2560" height="1440" alt="Launcher-Startseite mit Seitenleiste, Survival-Instanz, Spielen-Knopf, schlafendem Kürbis-Maskottchen und Pixel-Landschaft" loading="lazy" /><figcaption><strong>DIREKT WIEDER DRIN.</strong><span>Deine letzte Welt wartet schon auf dich. Ein Klick auf Spielen.</span></figcaption></figure>
-        <figure class="product-shot"><img src="./assets/launcher-library.png" width="2560" height="1440" alt="Bibliothek mit Suche, Loader-Filter, Sortierung und Instanzen als Pixel-Poster" loading="lazy" /><figcaption><strong>ALLES AN SEINEM PLATZ.</strong><span>Jede Instanz mit eigener Version, eigenen Mods und Einstellungen.</span></figcaption></figure>
-        <figure class="product-shot"><img src="./assets/launcher-instance.png" width="2560" height="1440" alt="Instanzseite mit Mod-Liste, Updates, Protokoll- und Einstellungs-Reitern" loading="lazy" /><figcaption><strong>JEDE INSTANZ FÜR SICH.</strong><span>Mods im Blick, Updates mit einem Klick, Protokoll gleich daneben.</span></figcaption></figure>
-        <figure class="product-shot"><img src="./assets/launcher-discover.png" width="2560" height="1440" alt="Entdecken-Seite mit Modpacks, Quellenwahl sowie Filtern für Version und Loader" loading="lazy" /><figcaption><strong>MEHR ZU ENTDECKEN.</strong><span>Mods, Modpacks, Shader und Ressourcenpakete, direkt im Launcher.</span></figcaption></figure>
-      </div>
-      <p class="preview-note">Aktuelle Entwicklungsversion mit Beispielinstanzen</p>
-    </section>
-    </div>
-    <div class="trailer-track" id="trailer">
-    <section class="trailer" aria-labelledby="trailer-title">
-      <div class="trailer-stage"><video class="trailer-video" muted loop playsinline preload="none" poster="./assets/trailer-poster.jpg" width="1920" height="1080" aria-label="Trailer: Buddy fliegt durch Modrinth, CurseForge, Feed the Beast und Technic bis in den Launcher"><source src="./assets/trailer.mp4" type="video/mp4" /></video></div>
-      <div class="trailer-shade"></div>
-      <div class="trailer-content wrap">
-        <div><p class="eyebrow"><span class="tiny-square" aria-hidden="true"></span> MODRINTH · CURSEFORGE · FTB · TECHNIC</p><h2 id="trailer-title">ALLES AN<br /><span class="copper">EINEM ORT.</span></h2></div>
-        <button class="trailer-toggle" type="button" hidden><span data-icon="play" aria-hidden="true"></span><span data-icon="stop" aria-hidden="true"></span><span class="trailer-toggle-label">ABSPIELEN</span></button>
-      </div>
-    </section>
-    </div>
-    <section class="worlds section" id="welten" aria-labelledby="worlds-title">
-      <div class="wrap"><h2 id="worlds-title" class="reveal">KEINE WELT<br />WIE <span class="outline-type">DEINE.</span></h2><p class="section-description reveal">Bau etwas Kleines. Probier etwas Großes.<br />Pumpkin macht Platz für beides.</p></div>
+    <section class="worlds section" id="worlds" tabindex="-1" aria-labelledby="worlds-title">
+      <div class="wrap"><h2 id="worlds-title">WHAT ARE<br />WE <span class="outline-type">PLAYING?</span></h2><p class="section-description">Back to your survival base, or into a pack you've never tried?<br />Keep both ready for when the mood changes.</p></div>
       <div class="world-grid wrap">
-        <article class="world-card world-vanilla"><img src="./assets/world-forest.png" width="640" height="360" alt="Pixel-Sonnenuntergang über einem Tannenwald" loading="lazy" /><div><span>MINECRAFT PUR</span><h3>DER ERSTE<br />BLOCK.</h3><p>Vanilla starten. Abschalten.<br />Einfach wieder Minecraft spielen.</p></div></article>
-        <article class="world-card world-modded"><img src="./assets/world-nether.png" width="640" height="360" alt="Glühende Pixel-Lavalandschaft im Nether" loading="lazy" /><div><span>MODS & MODPACKS</span><h3>NOCH NICHT<br />GENUG?</h3><p>Neue Mods. Ganze Modpacks.<br />Mehr Möglichkeiten für deine Welt.</p></div></article>
-        <article class="world-card world-own"><img src="./assets/world-snow.png" width="640" height="360" alt="Verschneite Pixel-Berglandschaft" loading="lazy" /><div><span>DEINE INSTANZEN</span><h3>DEIN GANZ<br />EIGENES.</h3><p>Jedes Projekt für sich.<br />Und trotzdem alles zusammen.</p></div></article>
+        <article class="world-card world-vanilla"><img src="./assets/world-forest.png" width="640" height="360" alt="Pixel sunset over a pine forest" loading="lazy" /><div><span>VANILLA</span><h3>BACK TO<br />BASICS.</h3><p>Pick a Minecraft version and start a world.<br />No modpack required.</p></div></article>
+        <article class="world-card world-modded"><img src="./assets/world-nether.png" width="640" height="360" alt="Glowing pixel lava landscape in the Nether" loading="lazy" /><div><span>MODS &amp; MODPACKS</span><h3>GO OFF<br />SCRIPT.</h3><p>Build a custom mod list or dive into a ready-made pack. See where it takes you.</p></div></article>
+        <article class="world-card world-own"><img src="./assets/world-snow.png" width="640" height="360" alt="Snow-covered pixel mountains" loading="lazy" /><div><span>SEPARATE INSTANCES</span><h3>ROOM FOR<br />ONE MORE.</h3><p>Give every playthrough its own mods, game version and settings.</p></div></article>
       </div>
     </section>
-    <section class="details-section wrap section" aria-labelledby="details-title">
-      <div class="details-heading reveal"><span data-icon="tasks" aria-hidden="true"></span><h2 id="details-title">ALLES DABEI.<br /><span class="muted-type">DU FEHLST NOCH.</span></h2></div>
+    <section class="details-section wrap section" id="features" tabindex="-1" aria-labelledby="details-title">
+      <div class="details-heading"><span data-icon="tasks" aria-hidden="true"></span><h2 id="details-title">YOUR MODS.<br /><span class="muted-type">YOUR RULES.</span></h2></div>
       <div class="feature-list">
-        <article class="reveal"><span data-icon="folder" aria-hidden="true"></span><div><h3>EIN ZUHAUSE FÜR JEDE INSTANZ.</h3><p>Survival, kreatives Bauen oder ein neues Modpack, mit Vanilla, Fabric, Forge, NeoForge oder Quilt: Versionen und Einstellungen bleiben genau dort, wo sie hingehören.</p></div></article>
-        <article class="reveal"><span data-icon="search" aria-hidden="true"></span><div><h3>DEIN NÄCHSTES „NUR NOCH EIN MOD“.</h3><p>Mods und Modpacks bei Modrinth, FTB, Technic und CurseForge finden und direkt zur passenden Instanz hinzufügen.</p></div></article>
-        <article class="reveal"><span data-icon="dl" aria-hidden="true"></span><div><h3>DEIN MODPACK ZIEHT MIT.</h3><p>Du hast schon eine .mrpack-Datei? Importiere sie und gib deinem nächsten Abenteuer einen eigenen Platz.</p></div></article>
+        <article><span data-icon="folder" aria-hidden="true"></span><div><h3>SWITCH WORLDS, NOT SETTINGS.</h3><p>Keep a Fabric survival run next to a Forge modpack without mixing their files. Each instance has its own version, mods and settings, with support for Vanilla, Fabric, Forge, NeoForge and Quilt.</p></div></article>
+        <article><span data-icon="search" aria-hidden="true"></span><div><h3>BROWSE BEYOND ONE STORE.</h3><p>Explore Modrinth, CurseForge, Feed the Beast and Technic from the launcher. Find your next pack or add a new mod to the setup you're already playing.</p></div></article>
+        <article><span data-icon="dl" aria-hidden="true"></span><div><h3>BRING A PACK YOU ALREADY LOVE.</h3><p>Have a .mrpack file saved? Import it as its own instance. No need to track down every mod again.</p></div></article>
       </div>
     </section>
-    <section class="download section" id="download" aria-labelledby="download-title">
+    <section class="download section" id="download" tabindex="-1" aria-labelledby="download-title">
       <div class="wrap">
         <div class="download-head">
-          <div class="reveal"><p class="eyebrow"><span class="tiny-square" aria-hidden="true"></span> DOWNLOAD · NEUESTE BETA</p><h2 id="download-title">HOL DIR<br />DEINEN <span class="copper">LAUNCHER.</span></h2><p class="section-description">Wähle dein System. Ein Klick lädt den Installer der neuesten Beta direkt von GitHub.</p></div>
-          <div class="buddy-note"><img data-seasonal src="./assets/brand/standard/mark.svg" width="48" height="48" alt="Buddy" /><p>Frisch aus dem Ofen.<br />Noch in der Beta.</p></div>
+          <div><p class="eyebrow"><span class="tiny-square" aria-hidden="true"></span> PUMPKIN LAUNCHER · LATEST BETA</p><h2 id="download-title">LET'S <span class="copper">PLAY.</span></h2><p class="section-description">Pick your platform to download the latest beta. Installers are hosted on GitHub.</p></div>
+          <div class="buddy-note"><img data-seasonal src="./assets/brand/standard/mark.svg" width="48" height="48" alt="Buddy" /><p>Beta build.<br />Feedback welcome.</p></div>
         </div>
         <div class="platform-grid" data-platform-grid>
-          <article class="platform-card reveal" data-platform="windows" data-os-name="Windows" aria-labelledby="download-windows">
-            <div class="platform-banner"><img src="./assets/world-forest.png" width="640" height="360" alt="" loading="lazy" style="object-position: 60% 62%" /></div>
+          <article class="platform-card" data-platform="windows" data-os-name="Windows" aria-labelledby="download-windows">
+            <div class="platform-banner"><img src="./assets/platform-windows.svg" width="640" height="256" alt="Pixel-art Windows 11 four-pane logo" loading="lazy" /></div>
             <div class="platform-body">
-              <p class="platform-flag">PASST ZU DEINEM SYSTEM</p>
+              <p class="platform-flag">RECOMMENDED FOR YOUR SYSTEM</p>
               <h3 id="download-windows">Windows</h3>
-              <p class="platform-req">Windows 10 oder 11, 64 Bit</p>
-              <a class="button platform-button" href="https://github.com/jonax1337/pumpkin-launcher/releases/latest/download/Pumpkin.Launcher_x64-setup.exe" rel="noopener"><span class="platform-button-label"><span data-icon="dl" aria-hidden="true"></span>Für Windows laden</span><small>.exe · Installer</small></a>
-              <details class="platform-notes"><summary>Windows warnt beim ersten Start?</summary><p>Der Installer ist noch nicht code-signiert. Zeigt Windows „Der Computer wurde durch Windows geschützt“, klicke auf <strong>Weitere Informationen → Trotzdem ausführen</strong>.</p></details>
+              <p class="platform-req">Windows 10 or 11, 64-bit</p>
+              <a class="button platform-button" href="https://github.com/jonax1337/pumpkin-launcher/releases/latest/download/Pumpkin.Launcher_x64-setup.exe" rel="noopener"><span class="platform-button-label"><span data-icon="dl" aria-hidden="true"></span>Get for Windows</span><small>.exe · Installer</small></a>
+              <div class="platform-help-row"><span>Installation guide</span><button class="button button-small platform-help" type="button" data-install-guide="windows" aria-label="Open Windows installation guide" aria-haspopup="dialog" aria-controls="install-guide" hidden><span data-icon="info" aria-hidden="true"></span></button></div>
             </div>
           </article>
-          <article class="platform-card reveal" data-platform="macos" data-os-name="macOS" aria-labelledby="download-macos">
-            <div class="platform-banner"><img src="./assets/world-snow.png" width="640" height="360" alt="" loading="lazy" style="object-position: 55% 55%" /></div>
+          <article class="platform-card" data-platform="macos" data-os-name="macOS" aria-labelledby="download-macos">
+            <div class="platform-banner"><img src="./assets/platform-macos.svg" width="640" height="256" alt="Pixel-art Apple logo for macOS" loading="lazy" /></div>
             <div class="platform-body">
-              <p class="platform-flag">PASST ZU DEINEM SYSTEM</p>
+              <p class="platform-flag">RECOMMENDED FOR YOUR SYSTEM</p>
               <h3 id="download-macos">macOS</h3>
-              <p class="platform-req">macOS, universal für Apple Silicon und Intel</p>
-              <a class="button platform-button" href="https://github.com/jonax1337/pumpkin-launcher/releases/latest/download/Pumpkin.Launcher_universal.dmg" rel="noopener"><span class="platform-button-label"><span data-icon="dl" aria-hidden="true"></span>Für macOS laden</span><small>.dmg · Universal</small></a>
-              <details class="platform-notes"><summary>macOS blockiert die App?</summary><p>Die App ist nicht notarisiert. Öffne sie beim ersten Mal per <strong>Rechtsklick → Öffnen</strong> und bestätige. Ab macOS 15: <strong>Systemeinstellungen → Datenschutz &amp; Sicherheit → Dennoch öffnen</strong>.</p></details>
+              <p class="platform-req">macOS, universal for Apple Silicon and Intel</p>
+              <a class="button platform-button" href="https://github.com/jonax1337/pumpkin-launcher/releases/latest/download/Pumpkin.Launcher_universal.dmg" rel="noopener"><span class="platform-button-label"><span data-icon="dl" aria-hidden="true"></span>Get for macOS</span><small>.dmg · Universal</small></a>
+              <div class="platform-help-row"><span>Installation guide</span><button class="button button-small platform-help" type="button" data-install-guide="macos" aria-label="Open macOS installation guide" aria-haspopup="dialog" aria-controls="install-guide" hidden><span data-icon="info" aria-hidden="true"></span></button></div>
             </div>
           </article>
-          <article class="platform-card reveal" data-platform="linux" data-os-name="Linux" aria-labelledby="download-linux">
-            <div class="platform-banner"><img src="./assets/world-nether.png" width="640" height="360" alt="" loading="lazy" style="object-position: 50% 60%" /></div>
+          <article class="platform-card" data-platform="linux" data-os-name="Linux" aria-labelledby="download-linux">
+            <div class="platform-banner"><img src="./assets/platform-linux.svg" width="640" height="256" alt="Pixel-art penguin for Linux" loading="lazy" /></div>
             <div class="platform-body">
-              <p class="platform-flag">PASST ZU DEINEM SYSTEM</p>
+              <p class="platform-flag">RECOMMENDED FOR YOUR SYSTEM</p>
               <h3 id="download-linux">Linux</h3>
-              <p class="platform-req">Linux x64 mit WebKitGTK 4.1</p>
-              <a class="button platform-button" href="https://github.com/jonax1337/pumpkin-launcher/releases/latest/download/Pumpkin.Launcher_amd64.AppImage" rel="noopener"><span class="platform-button-label"><span data-icon="dl" aria-hidden="true"></span>Für Linux laden</span><small>.AppImage · läuft überall</small></a>
-              <a class="platform-alt" href="https://github.com/jonax1337/pumpkin-launcher/releases/latest/download/Pumpkin.Launcher_amd64.deb" rel="noopener">Oder als .deb laden <span aria-hidden="true">↗</span></a>
-              <details class="platform-notes"><summary>So startest du es unter Linux</summary><p>AppImage ausführbar machen: Rechtsklick → Eigenschaften → Ausführen erlauben, oder <code>chmod +x Pumpkin.Launcher_amd64.AppImage</code>. Das .deb installierst du mit <code>sudo apt install ./Pumpkin.Launcher_amd64.deb</code>. Linux ist noch nicht auf vielen Geräten erprobt.</p></details>
+              <p class="platform-req">Linux x64 with WebKitGTK 4.1</p>
+              <a class="button platform-button" href="https://github.com/jonax1337/pumpkin-launcher/releases/latest/download/Pumpkin.Launcher_amd64.AppImage" rel="noopener"><span class="platform-button-label"><span data-icon="dl" aria-hidden="true"></span>Get for Linux</span><small>.AppImage · Portable</small></a>
+              <a class="platform-alt" href="https://github.com/jonax1337/pumpkin-launcher/releases/latest/download/Pumpkin.Launcher_amd64.deb" rel="noopener">Or download the .deb <span aria-hidden="true">↗</span></a>
+              <div class="platform-help-row"><span>Installation guide</span><button class="button button-small platform-help" type="button" data-install-guide="linux" aria-label="Open Linux installation guide" aria-haspopup="dialog" aria-controls="install-guide" hidden><span data-icon="info" aria-hidden="true"></span></button></div>
             </div>
           </article>
         </div>
         <div class="download-foot">
-          <p class="download-help">Startet der Download nicht? <a href="https://github.com/jonax1337/pumpkin-launcher/releases" rel="noopener">Alle Releases auf GitHub</a>.</p>
-          <p class="download-desktop" data-desktop-note>Der Launcher ist ein Desktop-Programm.</p>
+          <p class="download-help">Download not starting? <a href="https://github.com/jonax1337/pumpkin-launcher/releases" rel="noopener">View all releases on GitHub</a>.</p>
+          <p class="download-desktop" data-desktop-note>The launcher is a desktop application.</p>
+          <noscript><p class="download-help"><a href="https://github.com/jonax1337/pumpkin-launcher/blob/main/README.md#download-and-install" rel="noopener">Read the installation guides on GitHub</a>.</p></noscript>
         </div>
-        <details class="verify reveal">
-          <summary>Download prüfen</summary>
-          <div>
-            <p>Die Datei <a href="https://github.com/jonax1337/pumpkin-launcher/releases/latest/download/SHA256SUMS" rel="noopener">SHA256SUMS</a> listet die Prüfsummen aller Dateien des neuesten Releases. Vergleiche sie mit <code>sha256sum &lt;datei&gt;</code> (Windows: <code>Get-FileHash &lt;datei&gt;</code>).</p>
-            <p>Woher eine Datei stammt, zeigt der Herkunftsnachweis: <code>gh attestation verify &lt;datei&gt; --repo jonax1337/pumpkin-launcher</code></p>
-            <p class="verify-links"><a href="https://github.com/jonax1337/pumpkin-launcher/releases" rel="noopener">Alle Releases ↗</a><a href="https://github.com/jonax1337/pumpkin-launcher" rel="noopener">Quellcode auf GitHub ↗</a></p>
-          </div>
-        </details>
       </div>
     </section>
-    <section class="faq-section wrap section" id="fragen" aria-labelledby="faq-title">
-      <div class="faq-heading reveal"><p class="eyebrow">BEVOR ES LOSGEHT</p><h2 id="faq-title">NOCH<br /><span class="copper">FRAGEN?</span></h2><div class="buddy-note"><img data-seasonal src="./assets/brand/standard/mark.svg" width="48" height="48" alt="Buddy" /><p>Kleiner Kürbis.<br />Große Pläne.</p></div></div>
+    <section class="faq-section wrap section" id="faq" tabindex="-1" aria-labelledby="faq-title">
+      <div class="faq-heading"><p class="eyebrow">A FEW THINGS FIRST</p><h2 id="faq-title">GOOD TO<br /><span class="copper">KNOW.</span></h2><div class="buddy-note"><img data-seasonal src="./assets/brand/standard/mark.svg" width="48" height="48" alt="Buddy" /><p>Meet Buddy.<br />Your pumpkin sidekick.</p></div></div>
       <div class="faq-list">
-        <details><summary>Was ist Pumpkin Launcher?</summary><p>Ein eigenständiger Launcher für Minecraft: Java Edition. Hier verwaltest du deine Instanzen, entdeckst Mods und Modpacks und startest ins Spiel.</p></details>
-        <details><summary>Kann ich ihn schon herunterladen?</summary><p>Ja, als Beta (2.0.x). Installer für Windows, Linux (AppImage, .deb) und macOS (.dmg) findest du im <a href="#download">Download-Bereich</a>; die Dateien kommen direkt von GitHub. Sie sind noch nicht code-signiert, deshalb warnen Windows und macOS beim ersten Start. Getestet ist der Launcher vor allem unter Windows; Linux und macOS sind noch nicht auf echten Geräten erprobt. Den Quellcode findest du ebenfalls auf <a href="https://github.com/jonax1337/pumpkin-launcher" rel="noopener">GitHub</a>.</p></details>
-        <details><summary>Welche Versionen und Mods funktionieren?</summary><p>Vanilla, Fabric, Forge, NeoForge und Quilt lassen sich installieren und starten. Mods und Modpacks findest du bei Modrinth, FTB, Technic und CurseForge; eigene .mrpack-Dateien importierst du direkt.</p></details>
-        <details><summary>Wie melde ich mich an?</summary><p>Mit deinem Microsoft-Konto, bequem im Browser. Mojang hat den Launcher für die Anmeldung freigegeben.</p></details>
-        <details><summary>Brauche ich Minecraft: Java Edition?</summary><p>Ja. Pumpkin ersetzt den Besitz von Minecraft: Java Edition nicht. Der Launcher ist ein eigenständiges Projekt und kein offizielles Produkt von Mojang oder Microsoft.</p></details>
+        <details><summary>What does Pumpkin do?</summary><p>Pumpkin is an independent launcher for Minecraft: Java Edition. Use it to keep separate game setups, browse mods and modpacks, and launch the one you want to play.</p></details>
+        <details><summary>Is it ready to use?</summary><p>The beta is available now. Get the Windows, Linux (AppImage or .deb) or macOS (.dmg) installer from the <a href="#download">download section</a>. Builds are hosted on GitHub and aren't code-signed yet, so Windows and macOS may warn you on first launch. Windows is the primary test platform; Linux and macOS builds haven't yet been tested on real devices. The source is on <a href="https://github.com/jonax1337/pumpkin-launcher" rel="noopener">GitHub</a> too.</p></details>
+        <details><summary>Can I play with my usual mods?</summary><p>Pumpkin installs Vanilla, Fabric, Forge, NeoForge and Quilt. Browse mods and modpacks from Modrinth, CurseForge, FTB and Technic, or import a .mrpack file. Choose the Minecraft version and loader your mods need.</p></details>
+        <details><summary>How do I sign in?</summary><p>Use your Microsoft account in your browser. Mojang has approved Pumpkin for sign-in.</p></details>
+        <details><summary>Do I still need to own Minecraft?</summary><p>Yes. You'll need Minecraft: Java Edition to play. Pumpkin is an independent launcher, not a copy of the game or an official Mojang or Microsoft product.</p></details>
       </div>
     </section>
-    <section class="outro" id="start" aria-labelledby="start-title"><img class="outro-landscape" src="./assets/world-sea.png" width="640" height="360" alt="" loading="lazy" /><div class="outro-shade"></div><div class="outro-content wrap"><img class="outro-buddy" data-seasonal src="./assets/brand/standard/mark.svg" width="80" height="80" alt="Buddy, dein kleiner Begleiter" /><h2 id="start-title">DAS NÄCHSTE<br /><span class="copper">ABENTEUER</span><br />WARTET SCHON.</h2><p>Die Beta steht bereit.<br />Den Download findest du <a href="#download">für Windows, macOS und Linux</a> weiter oben.</p><a href="#trailer" class="button"><span data-icon="play" aria-hidden="true"></span> SCHON MAL REINSCHAUEN</a></div></section>
+    <section class="outro" aria-labelledby="start-title"><img class="outro-landscape" src="./assets/world-sea.png" width="640" height="360" alt="" loading="lazy" /><div class="outro-shade"></div><div class="outro-content wrap"><img class="outro-buddy" data-seasonal src="./assets/brand/standard/mark.svg" width="80" height="80" alt="Buddy, your little companion" /><h2 id="start-title">GOT A<br /><span class="copper">WORLD</span><br />IN MIND?</h2><p>Download the beta, pick a version or a modpack,<br />and make yourself at home.</p><a href="#download" class="button"><span data-icon="dl" aria-hidden="true"></span> DOWNLOAD PUMPKIN</a></div></section>
   </main>
-  <footer class="site-footer wrap"><div class="footer-top"><a class="brand" href="#" aria-label="Pumpkin Launcher, nach oben"><img data-seasonal src="./assets/brand/standard/mark.svg" width="34" height="34" alt="" /><span>PUMPKIN <span>LAUNCHER</span></span></a><p>Mit Liebe zum Spiel. Und zu Kürbissen.</p><a href="#fragen">FRAGEN & ANTWORTEN ↗</a></div><div class="footer-bottom"><span>© 2026 Pumpkin Launcher</span><p>Kein offizielles Minecraft-Produkt. Nicht mit Mojang oder Microsoft verbunden.</p><nav class="footer-legal" aria-label="Rechtliches"><a href="./datenschutz.html">Datenschutz</a><a href="./impressum.html">Impressum</a></nav><div class="season-marks" aria-label="Buddy im Wandel der Jahreszeiten"><img src="./assets/brand/spring/mark.svg" width="24" height="24" alt="Frühling" loading="lazy" /><img src="./assets/brand/summer/mark.svg" width="24" height="24" alt="Sommer" loading="lazy" /><img src="./assets/brand/halloween/mark.svg" width="24" height="24" alt="Halloween" loading="lazy" /><img src="./assets/brand/winter/mark.svg" width="24" height="24" alt="Winter" loading="lazy" /></div></div></footer>
+  <dialog id="install-guide" class="install-dialog" aria-labelledby="install-guide-title">
+    <div class="install-dialog-head">
+      <div><p class="eyebrow">GET READY TO PLAY</p><h2 id="install-guide-title" tabindex="-1">Installation guide</h2></div>
+      <form method="dialog"><button class="button button-small dialog-close" type="submit" aria-label="Close installation guide"><span data-icon="x" aria-hidden="true"></span></button></form>
+    </div>
+    <div class="install-dialog-content">
+      <section class="install-guide-panel" data-guide-platform="windows" hidden>
+        <p class="guide-note">For Windows 10 or 11, 64-bit. The installer is not code-signed. Only approve a Windows warning if you trust the download from this repository.</p>
+        <ol class="install-steps">
+          <li>Download <code>Pumpkin.Launcher_x64-setup.exe</code> using <strong>Get for Windows</strong>.</li>
+          <li>Make sure <a href="https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download-section" rel="noopener">Microsoft WebView2 Runtime</a> is installed. Pumpkin needs it to display the app.</li>
+          <li>Open the downloaded <code>.exe</code>. If SmartScreen shows <strong>Windows protected your PC</strong>, and you trust this repository's download, select <strong>More info → Run anyway</strong>.</li>
+          <li>Follow the installer prompts. Pumpkin installs for your Windows user. When installation finishes, open Pumpkin Launcher.</li>
+        </ol>
+      </section>
+      <section class="install-guide-panel" data-guide-platform="macos" hidden>
+        <p class="guide-note">The universal app supports Apple Silicon and Intel. It is ad hoc signed, but not notarized. This beta package has not yet been tested on real macOS devices.</p>
+        <ol class="install-steps">
+          <li>Download <code>Pumpkin.Launcher_universal.dmg</code> using <strong>Get for macOS</strong>, then open the disk image.</li>
+          <li>Drag <strong>Pumpkin Launcher</strong> to <strong>Applications</strong>. Open Applications and launch Pumpkin from there.</li>
+          <li>If macOS blocks opening, proceed only if you trust this repository's download. After trying to open the app, go to <strong>System Settings → Privacy &amp; Security</strong>, find the blocked-app message and choose <strong>Open Anyway</strong>. Authenticate if asked, then confirm <strong>Open</strong>. On older macOS versions where available, Control-click or right-click the app in Applications, choose <strong>Open</strong>, then confirm. Follow <a href="https://support.apple.com/en-us/102445" rel="noopener">Apple's app approval guidance</a>; do not disable system security protections.</li>
+          <li>On Apple Silicon, Minecraft versions through <strong>1.18.2</strong> need <strong>Rosetta 2</strong>. Install it when macOS prompts before playing those versions.</li>
+        </ol>
+      </section>
+      <section class="install-guide-panel" data-guide-platform="linux" hidden>
+        <p class="guide-note">For Linux x64. This beta package has not yet been tested on real Linux devices. Pumpkin needs <strong>WebKitGTK 4.1</strong> and an available, unlocked <strong>Secret Service keyring</strong>, such as GNOME Keyring or KWallet, for Microsoft sign-in.</p>
+        <ol class="install-steps">
+          <li>Choose a package. On Debian or Ubuntu, prefer the <strong>.deb</strong>: your package installer can report missing system libraries. For other distributions, choose the <strong>AppImage</strong>.</li>
+          <li>Open a terminal in the folder containing your download. For AppImage, make the file executable and start it:
+            <pre><code>chmod +x Pumpkin.Launcher_amd64.AppImage
+./Pumpkin.Launcher_amd64.AppImage</code></pre>
+            Alternatively, use the file's Properties to allow executing it as a program, then open it.
+          </li>
+          <li>If you chose the Debian/Ubuntu package instead, install it with:
+            <pre><code>sudo apt install ./Pumpkin.Launcher_amd64.deb</code></pre>
+            Then open Pumpkin Launcher from your applications menu.
+          </li>
+          <li>If AppImage startup fails, install your distribution's <strong>WebKitGTK 4.1 runtime</strong> package. If sign-in reports a storage error, make sure your Secret Service keyring is running and unlocked. Package names vary by distribution; <a href="https://v2.tauri.app/start/prerequisites/#linux" rel="noopener">Tauri's Linux guidance</a> lists distribution-specific dependencies. You do not need Rust, Node.js, compilers or development headers just to run a release.</li>
+        </ol>
+      </section>
+      <section aria-labelledby="install-first-launch">
+        <h3 id="install-first-launch">Your first launch</h3>
+        <ol class="install-steps">
+          <li>Choose <strong>Sign in with Microsoft</strong>. Use an account that owns <strong>Minecraft: Java Edition</strong>; Bedrock alone is not enough. Complete sign-in in your browser, or choose <strong>Use a code instead</strong>.</li>
+          <li>At <strong>How do you want to start?</strong>, choose <strong>Plain Minecraft → Create and play</strong>. Pumpkin downloads the required game files and matching Java runtime automatically; no separate Java or Minecraft installation is needed.</li>
+          <li>Next time, select your setup in the library and press <strong>Play</strong>. If you already completed onboarding, use <strong>Library → New instance → Custom instance</strong>, explicitly set <strong>Loader</strong> to <strong>Vanilla</strong>, then choose <strong>Create</strong> and <strong>Play</strong>.</li>
+        </ol>
+        <p class="guide-note">If your account has no Minecraft profile yet, open the official Minecraft Launcher once to choose a player name, then return to Pumpkin.</p>
+        <p>Still having startup or sign-in trouble? Ask in <a href="https://github.com/jonax1337/pumpkin-launcher/discussions" rel="noopener">GitHub Discussions</a> and include your operating system and the error message. Never share passwords or sign-in codes.</p>
+      </section>
+    </div>
+  </dialog>
+  <footer class="site-footer wrap"><div class="footer-top"><a class="brand" href="#top" aria-label="Pumpkin Launcher, back to top"><img data-seasonal src="./assets/brand/standard/mark.svg" width="34" height="34" alt="" /><span>PUMPKIN <span>LAUNCHER</span></span></a><p>An independent launcher. A soft spot for pumpkins.</p><a href="#faq">GOT QUESTIONS? ↗</a></div><div class="footer-bottom"><span>© 2026 Pumpkin Launcher</span><p>Not an official Minecraft product. Not affiliated with Mojang or Microsoft.</p><nav class="footer-legal" aria-label="Legal"><a href="./privacy/">Privacy policy</a><a href="./legal-notice/">Legal notice</a></nav></div></footer>
+  <a class="button button-small back-to-top" href="#top" aria-label="Back to top" title="Back to top" hidden><span data-icon="up" aria-hidden="true"></span></a>
 </body>
 </html>

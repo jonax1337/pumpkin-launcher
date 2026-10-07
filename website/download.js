@@ -1,8 +1,8 @@
 // Progressive enhancement for the download section. Local only: reads the browser's own OS hints, makes no request.
 const MOBILE_PATTERN = /Android|iPhone|iPad|iPod|Mobi|Windows Phone|CrOS/i;
 const CTA_LABELS = {
-  full: (name) => `Für ${name} herunterladen`,
-  short: (name) => `Für ${name}`,
+  full: (name) => `Download for ${name}`,
+  short: (name) => `For ${name}`,
 };
 
 // Returns "windows", "macos" or "linux"; null for phones, tablets, ChromeOS and anything unknown.

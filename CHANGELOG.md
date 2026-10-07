@@ -16,6 +16,43 @@ For installation and a first game, start with the [launcher guide](README.md#dow
 - Prevent Sonner's swipe and dismissal hit-area transforms from stretching the
   visible toast plate, and hide backing-toast contents in collapsed stacks.
 
+### Marketing website
+
+- Rewrite the marketing copy in natural English and translate download guidance
+  and legal pages.
+- Keep normal section navigation out of the address bar's URL fragment while
+  preserving keyboard focus and native anchor fallback without JavaScript.
+- Remove the app screenshot tour, marketing trailer, download-verification
+  disclosure and seasonal pumpkin collection in the footer.
+- Add a staged page-load entrance, scroll-driven world-card reveals, desktop
+  parallax and pointer tilt, and a choreographed outro using GSAP/ScrollTrigger.
+  Respect reduced motion and let immediate interaction finish the load entrance.
+- Prepare scroll-reveal start states offscreen and preserve completed entrances
+  across responsive and motion-preference changes to prevent text flicker.
+- Give main sections a viewport-height minimum while allowing content to grow;
+  animate FAQ disclosure opening and closing without moving its heading.
+- Overlay the header on the hero and reveal its background after scrolling.
+- Keep beta wording version-free and display “LET'S PLAY.” on one line.
+- Exclude unused font subsets/weights and keep landscape artwork lazy-loaded.
+- Keep navigation visible while scrolling, tighten logo spacing and add an
+  icon-only back-to-top control using the launcher's up icon and existing buttons.
+- Serve English legal pages at `/privacy/` and `/legal-notice/` without `.html`
+  links, including on subdirectory-based static hosting.
+- Fit headings and long privacy-policy domains on narrow screens.
+- Replace download-card accordions with info-icon installation dialogs, including
+  OS requirements, trust-qualified security guidance and first-launch steps.
+- Give Windows, macOS and Linux distinct pixel-art banners: the Windows 11
+  symbol, Apple logo and a Linux-only penguin.
+- Apply launcher-style pixel scrollbars to page and dialog scroll areas, with
+  standard color fallbacks and forced-color support.
+- Make both download-section dividers span the full page width.
+- Remove fixed hero minimum heights and scale its typography and spacing with
+  the viewport so Buddy remains visible during the entrance on 16:9 displays.
+- Keep world-card frames above animated artwork during scroll and pointer tilt.
+- Center header navigation and footer copy independently of their neighboring
+  elements, with stacked layouts on narrow screens.
+- Remove button-icon hover movement and the hero's secondary feature link.
+
 ## 0.3.1 — 2026-10-07
 
 ### Dependencies and build tooling

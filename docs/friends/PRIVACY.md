@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-06.
 
-This is the technical privacy reference for Friends, the directory and the shared in-game Bridge. It is not a completed operator-specific legal notice or legal advice. The public controller/contact details are maintained on the [website privacy page](../../website/datenschutz.html). Relay hosting/provider/contact details and Microsoft/Mojang approval scope still require operator confirmation; an undeployed relay must not be described as a live service.
+This is the technical privacy reference for Friends, the directory and the shared in-game Bridge. It is not a completed operator-specific legal notice or legal advice. The public controller/contact details are maintained on the [website privacy page](../../website/privacy/index.html). Relay hosting/provider/contact details and Microsoft/Mojang approval scope still require operator confirmation; an undeployed relay must not be described as a live service.
 
 ## Your choices at a glance
 
@@ -17,7 +17,7 @@ Make these choices in **Settings > Friends**:
 - **Findable by Minecraft name:** allow anyone who knows your exact name to send a request through the directory. Turn it off to request deletion of your registration, inbox and owned blocks. Remote deletion waits until the service can be reached; outgoing requests and abuse-prevention history keep their normal expiry. See [Retention and deletion](#retention-and-deletion) for the full limits.
 - **Pumpkin Bridge / Actions in the game:** control the in-game integration and whether it must ask before taking Friends actions. **Allow** also allows every mod in that game process to use those actions; it is not protection against malicious mods. Use only mods you trust.
 
-You can **Block** a person from their friend menu and manage blocked people in **Settings > Friends > Blocked**. Open **Settings > About > Privacy** for the launcher's service notice. For data-rights enquiries, use the controller contact on the [website privacy page](../../website/datenschutz.html); directory enquiries need your Minecraft UUID.
+You can **Block** a person from their friend menu and manage blocked people in **Settings > Friends > Blocked**. Open **Settings > About > Privacy** for the launcher's service notice. For data-rights enquiries, use the controller contact on the [website privacy page](../../website/privacy/index.html); directory enquiries need your Minecraft UUID.
 
 Jump to: [Before opt-in](#what-happens-before-opt-in) · [Data map](#data-map) · [Address visibility](#address-visibility-and-lan-exposure) · [Relays](#relay-processing-and-operations) · [Directory and Mojang](#directory-and-mojang) · [Retention and deletion](#retention-and-deletion) · [Local-mod risks](#local-mods-and-residual-security-risks).
 

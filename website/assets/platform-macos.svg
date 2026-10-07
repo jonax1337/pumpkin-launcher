@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="256" viewBox="0 0 160 64" shape-rendering="crispEdges">
+  <!-- Apple silhouette rasterized from the Simple Icons 24 x 24 source at 40 x 40, alpha threshold 128: https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/apple.svg . Scenery is original pixel art. -->
+  <path fill="#181429" d="M0 0h160v64h-160z"/>
+  <path fill="#221c39" d="M42 4h76v49h-76zM32 14h96v29h-96z"/>
+  <path fill="#2b2448" d="M50 7h60v45h-60zM44 19h72v20h-72z"/>
+  <path fill="#352d53" d="M56 12h48v36h-48z"/>
+  <path fill="#70618b" d="M17 12h2v2h-2zM35 7h1v1h-1zM128 7h2v2h-2zM142 21h1v1h-1zM112 14h1v1h-1z"/>
+  <path fill="#b7acc7" d="M28 22h1v1h-1zM133 16h1v1h-1z"/>
+  <path fill="#342b49" d="M0 32h10v-7h10v8h8v5h12v8h11v18H0zM111 46h10v-8h11v-8h8v-8h8v9h12v33h-49z"/>
+  <path fill="#655378" d="M0 32h10v-7h10v3h-7v7H0zM121 38h11v-8h8v-8h8v3h-5v8h-8v8h-14z"/>
+  <path fill="#211e35" d="M0 47h14v-6h13v5h11v7h15v11H0zM108 54h10v-8h15v-5h13v7h14v16h-52z"/>
+  <path fill="#413551" d="M3 50h8v3h-8zM17 44h7v2h-7zM28 49h6v3h-6zM121 49h9v2h-9zM137 44h6v3h-6zM150 51h8v2h-8z"/>
+  <path fill="#141323" d="M0 59h160v5h-160zM47 55h66v4h-66z"/>
+  <path fill="#5c4c78" d="M57 54h46v1h-46zM65 56h30v1h-30z"/>
+  <path fill="#b8b7d0" d="M66 39h30v1h-30zM66 40h29v1h-29zM67 41h28v1h-28zM67 42h27v1h-27zM68 43h26v1h-26zM68 44h25v1h-25zM69 45h23v1h-23zM70 46h22v1h-22zM71 47h8v1h-8zM82 47h9v1h-9zM73 48h3v1h-3zM85 48h4v1h-4z"/>
+  <path fill="#d4d4e6" d="M66 22h29v1h-29zM66 23h28v1h-28zM65 24h28v1h-28zM65 25h27v1h-27zM64 26h28v1h-28zM64 27h27v1h-27zM64 28h27v1h-27zM64 29h27v1h-27zM64 30h27v1h-27zM64 31h27v1h-27zM64 32h27v1h-27zM64 33h28v1h-28zM64 34h28v1h-28zM64 35h29v1h-29zM65 36h28v1h-28zM65 37h30v1h-30zM65 38h31v1h-31z"/>
+  <path fill="#eeeeF7" d="M87 9h1v1h-1zM84 10h4v1h-4zM83 11h5v1h-5zM82 12h5v1h-5zM81 13h6v1h-6zM81 14h5v1h-5zM80 15h6v1h-6zM80 16h5v1h-5zM80 17h3v1h-3zM71 19h6v1h-6zM84 19h7v1h-7zM69 20h11v1h-11zM81 20h12v1h-12zM67 21h27v1h-27z"/>
+</svg>
