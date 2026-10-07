@@ -1,14 +1,18 @@
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { useI18n } from "@/i18n";
 import { PlayStatus } from "@/components/play/PlayStatus";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
 import { SkelList } from "@/components/SkelList";
 import { Onboarding } from "@/components/Onboarding";
+import { useInstanceMenu } from "@/components/instance";
 import { byRecent, pickRecentInstance, useInstances } from "@/hooks/useInstances";
 import { useDropPackToImport } from "@/hooks/usePackFiles";
 import { PixelScene } from "@/pixel/PixelScene";
+import { newInstanceUrl } from "@/lib/routes";
+import type { Instance } from "@/lib/types";
 import { useLook } from "@/store/look";
-import { Button, ButtonLink, ErrorBox, SectionHeader, Skel } from "@/ui";
+import { Button, ButtonLink, ContextMenu, ErrorBox, SectionHeader, Skel, type MenuEntry } from "@/ui";
 import { HeroActions } from "./home/HeroActions";
 import { HeroInfo } from "./home/HeroInfo";
 import { Rail, TILE_H, TILE_W } from "./home/Rail";
@@ -39,7 +43,6 @@ export function HomePage() {
   useDropPackToImport();
   const [selected, setSelected] = useState<string | null>(null);
   const current = instances?.find((i) => i.id === selected) ?? pickRecentInstance(instances);
-  const look = useLook(current?.id);
 
   if (isLoading) return <HomeSkeleton />;
   if (error)
@@ -50,7 +53,26 @@ export function HomePage() {
     );
   if (!instances?.length || !current) return <Onboarding />;
 
+  return <HomeContent instances={instances} current={current} onPick={setSelected} />;
+}
+
+function HomeContent({ instances, current, onPick }: {
+  instances: Instance[]; current: Instance; onPick: (id: string) => void;
+}) {
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  const look = useLook(current.id);
+  const instanceItems = useInstanceMenu(current);
+  const items: MenuEntry[] = [
+    { label: current.name },
+    ...instanceItems,
+    "-",
+    { id: "new-instance", text: t("components.newInstance.title"), icon: "plus", onSelect: () => navigate(newInstanceUrl()) },
+    { id: "library", text: t("pages.home.allInLibrary"), icon: "grid", onSelect: () => navigate("/instances") },
+  ];
+
   return (
+    <ContextMenu items={items}>
     <section className="home">
       <PixelScene bio={look.bio} seed={look.seed} mode="hero" className="scene" />
       <div className="shade-home" />
@@ -74,8 +96,9 @@ export function HomePage() {
             }
           />
         </div>
-        <Rail instances={[...instances].sort(byRecent)} current={current.id} onPick={setSelected} />
+        <Rail instances={[...instances].sort(byRecent)} current={current.id} onPick={onPick} />
       </div>
     </section>
+    </ContextMenu>
   );
 }

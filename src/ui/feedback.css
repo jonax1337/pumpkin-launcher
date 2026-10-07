@@ -60,6 +60,11 @@
 .vx-toast[data-type="error"] { --t-bg: color-mix(in srgb, var(--bad) 8%, var(--panel-2)); --t-line: var(--bad); }
 .vx-toast[data-type="warning"] { --t-bg: color-mix(in srgb, var(--warn) 7%, var(--panel-2)); --t-line: var(--warn); }
 .vx-toast::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--t-bg); box-shadow: inset 0 0 0 var(--px) var(--t-line), inset var(--u2) var(--u2) 0 var(--hi), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--lo), 0 0 0 1px var(--edge); clip-path: var(--n2); }
+/* Sonners unsichtbare Swipe-/Exit-Hitfläche nutzt ::before; unsere sichtbare Platte darf dabei nicht wachsen.
+   !important überstimmt die ungeschichteten Sonner-Stile, nicht die Bewegung der Toast-Fläche selbst. */
+.vx-toast::before { inset: 0 !important; height: auto !important; transform: none !important; }
+/* Sonner blendet Stapel-Inhalte nur bei styled=true aus; das gilt auch für unsere unstyled-Toasts. */
+.vx-toast[data-expanded="false"][data-front="false"] > * { opacity: 0; }
 .vx-toast:focus-visible { box-shadow: none; outline: none; }
 .vx-toast:focus-visible::after { content: ""; position: absolute; inset: calc(var(--u2) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; }
 .vx-toast [data-icon] { grid-area: 1 / 1; display: grid; place-items: center; width: 24px; height: 24px; margin: 0; color: var(--fg-2); }

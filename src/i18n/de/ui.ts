@@ -28,7 +28,7 @@ export const ui = {
   // ---------- Fenster ----------
   "ui.window.minimize": "Minimieren",
   "ui.window.maximize": "Maximieren",
-  "ui.titlebar.homeAria": "Pumpkin Launcher, zum Start",
+  "ui.titlebar.updateAvailable": "Update verfügbar",
   "ui.offline.label": "Offline",
   "ui.offline.detail": ": keine Internetverbindung, Katalog und Downloads sind nicht verfügbar",
 
@@ -41,6 +41,13 @@ export const ui = {
   "ui.field.optional": "(optional)",
   "ui.search.clearAria": "Suche leeren",
   "ui.select.placeholder": "Keine Auswahl",
+
+  "ui.context.cut": "Ausschneiden",
+  "ui.context.copy": "Kopieren",
+  "ui.context.paste": "Einfügen",
+  "ui.context.selectAll": "Alles auswählen",
+  "ui.context.refresh": "Aktualisieren",
+  "ui.context.editFailed": "Text konnte nicht bearbeitet werden",
 
   // ---------- Listen ----------
   "ui.list.undo": "Rückgängig",

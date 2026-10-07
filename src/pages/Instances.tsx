@@ -1,4 +1,5 @@
 import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useSearchParams } from "react-router";
 import { currentLanguage, useI18n } from "@/i18n";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
 import { SkelList } from "@/components/SkelList";
@@ -6,9 +7,10 @@ import { useAnnouncement } from "@/hooks/useAnnouncement";
 import { useBackgroundUpdates } from "@/hooks/useContent";
 import { byRecent, groupsOf, useInstances } from "@/hooks/useInstances";
 import { focusSoon } from "@/pages/detail/content/focus";
+import { newInstanceParams } from "@/lib/routes";
 import { LOADER_LABELS, type Instance } from "@/lib/types";
 import { useLookStore } from "@/store/look";
-import { Button, ButtonLink, CardGrid, Empty, ErrorBox, Glyph, PageHeader } from "@/ui";
+import { Button, ButtonLink, CardGrid, ContextMenu, Empty, ErrorBox, Glyph, PageHeader, type MenuEntry } from "@/ui";
 import { GroupedView } from "./instances/GroupedView";
 import { InstanceView, LibraryRoving } from "./instances/InstanceView";
 import { LibraryToolbar, NewInstanceButton } from "./instances/LibraryToolbar";
@@ -91,6 +93,7 @@ function visibleIdsOf(shown: Instance[], sections: Section[] | null, collapsed: 
 
 export function InstancesPage() {
   const { t } = useI18n();
+  const [, setParams] = useSearchParams();
   const library = useInstances();
   const { data: instances, isLoading, error } = library;
   const view = useLibraryView();
@@ -139,8 +142,22 @@ export function InstancesPage() {
     <InstanceView instances={shown} mode={view.mode} />
   );
 
+  const menuItems: MenuEntry[] = [
+    { id: "new-instance", text: t("components.newInstance.title"), icon: "plus", onSelect: () => setParams(newInstanceParams(), { replace: true }) },
+    { id: "reset-filters", text: t("pages.instances.resetSearch"), icon: "x", disabled: !hasFilters(filters), onSelect: () => setFilters(NO_FILTERS) },
+    "-",
+    { label: t("pages.instances.viewLabel") },
+    { id: "poster-view", text: t("pages.instances.viewPoster"), icon: "grid", checked: view.mode === "poster", onSelect: () => view.setMode("poster") },
+    { id: "list-view", text: t("pages.instances.viewList"), icon: "list", checked: view.mode === "list", onSelect: () => view.setMode("list") },
+    "-",
+    { id: "pick", text: t("pages.instances.pick"), icon: "check", disabled: !visibleIds.length || selection.picking, onSelect: selection.startPicking },
+    { id: "select-all", text: t("pages.instances.selectAll"), icon: "check", disabled: !visibleIds.length || selection.picked.length === visibleIds.length, onSelect: selection.selectAll },
+    ...(selection.picking ? [{ id: "done-picking", text: t("common.done"), icon: "x" as const, onSelect: leavePicking }] : []),
+  ];
+
   return (
     <LibrarySelectionProvider value={selection}>
+      <ContextMenu items={menuItems}>
       <section className="page lib" data-picking={selection.picking || undefined} onKeyDown={onKeyDown}>
         <PageHeader title={t("ui.nav.library")} count={total} />
         {/* An fester Stelle für beide Knöpfe: füllt der erste Import die leere Bibliothek, bleibt der Dialog mit den übrigen offen */}
@@ -163,6 +180,7 @@ export function InstancesPage() {
           <SelectionBar picked={pickedInstances} groups={groups} onSelectAll={selection.selectAll} onDone={leavePicking} />
         )}
       </section>
+      </ContextMenu>
     </LibrarySelectionProvider>
   );
 }

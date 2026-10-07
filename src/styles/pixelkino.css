@@ -149,7 +149,6 @@ input, textarea, .console .cbody { -webkit-user-select: text; user-select: text;
 .bar { grid-column: 1 / -1; grid-row: 1; position: relative; z-index: 40; display: flex; align-items: center; gap: 4px; height: var(--bar); padding-left: calc((var(--side) - 32px) / 2 - 6px); background: var(--bg-2); box-shadow: inset 0 calc(var(--px) * -1) 0 var(--edge); -webkit-app-region: drag; user-select: none; }
 .bar button, .bar a { -webkit-app-region: no-drag; }
 .wm { display: inline-flex; align-items: center; height: 40px; padding: 0 12px 0 6px; text-decoration: none; color: var(--fg); flex: none; }
-.wm:active { translate: 0 var(--px); }
 .bar-mid { flex: 1; min-width: 12px; display: flex; justify-content: flex-start; padding-left: 20px; }
 .bar-right { position: relative; display: flex; align-items: center; gap: 4px; flex: none; }
 .win { display: flex; height: var(--bar); margin-left: 4px; }

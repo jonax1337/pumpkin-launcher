@@ -18,6 +18,7 @@ import { isGameActive, useGame } from "@/store/game";
 import { useSettings } from "@/store/settings";
 import { useI18n } from "@/i18n";
 import { Sidebar } from "./Sidebar";
+import { AppContextMenu } from "./AppContextMenu";
 import { TitleBar } from "./TitleBar";
 import { useAppearance } from "./useAppearance";
 import { useFits } from "./useFits";
@@ -77,22 +78,24 @@ export function Layout() {
 
   return (
     <ViewContext.Provider value={view}>
-      <div className={cn("app", ready && "ready")} data-offline={online ? undefined : ""}>
-        <button type="button" className="skip" onClick={() => view.current?.focus()}>
-          {t("ui.skipToContent")}
-        </button>
-        <TitleBar online={online} />
-        <Sidebar />
-        <main ref={view} className={cn("view", noscroll && "noscroll")} tabIndex={-1}>
-          {outlet}
-        </main>
-        <ViewScrollbar view={view} />
-      </div>
-      <InstanceDialogs />
-      <ShareLogDialog />
-      <FriendDialogs />
-      <ShortcutsDialog />
-      <ManualDownloads />
+      <AppContextMenu>
+        <div className={cn("app", ready && "ready")} data-offline={online ? undefined : ""}>
+          <button type="button" className="skip" onClick={() => view.current?.focus()}>
+            {t("ui.skipToContent")}
+          </button>
+          <TitleBar online={online} />
+          <Sidebar />
+          <main ref={view} className={cn("view", noscroll && "noscroll")} tabIndex={-1}>
+            {outlet}
+          </main>
+          <ViewScrollbar view={view} />
+          <InstanceDialogs />
+          <ShareLogDialog />
+          <FriendDialogs />
+          <ShortcutsDialog />
+          <ManualDownloads />
+        </div>
+      </AppContextMenu>
     </ViewContext.Provider>
   );
 }

@@ -4,6 +4,18 @@ Last updated: 2026-10-07.
 
 For installation and a first game, start with the [launcher guide](README.md#download-and-install).
 
+## 0.3.2 — 2026-10-07
+
+### Launcher interface
+
+- Keep an available launcher update visible beside Live Sharing in the title bar;
+  the button opens the existing update settings without installing automatically.
+- Make the title-bar logo and wordmark non-interactive while keeping them draggable.
+- Replace browser right-click menus with page-specific app actions, preserving
+  instance and skin menus and providing text-editing actions in fields.
+- Prevent Sonner's swipe and dismissal hit-area transforms from stretching the
+  visible toast plate, and hide backing-toast contents in collapsed stacks.
+
 ## 0.3.1 — 2026-10-07
 
 ### Dependencies and build tooling

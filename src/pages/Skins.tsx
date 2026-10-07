@@ -15,7 +15,7 @@ import { type Cape, type LibrarySkin } from "@/lib/types";
 import { useUsableAccount } from "@/store/offline";
 import type { ActiveAccount } from "@/store/settings";
 import {
-  Actions, Button, CardGrid, ConfirmDialog, Empty, ErrorBox, Field, Hint, Menu, PageHeader, Panel, SectionHeader, Select, Skel, StatusPanel,
+  Actions, Button, CardGrid, ConfirmDialog, ContextMenu, Empty, ErrorBox, Field, Hint, Menu, PageHeader, Panel, SectionHeader, Select, Skel, StatusPanel,
   type MenuEntry,
 } from "@/ui";
 import { DropHint, rejectedFileToast } from "./detail/dropFiles";
@@ -35,15 +35,44 @@ export function SkinsPage() {
   const active = useUsableAccount();
   const account = active?.kind === "microsoft" ? active : null;
   const add = useAddSkin();
+  const library = useSkinLibrary();
+  const [loadingPlayer, setLoadingPlayer] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const adding = add.isPending || picking || loadingPlayer;
+
+  async function pickFile() {
+    if (!api.capabilities.pickPaths || adding) return;
+    setPicking(true);
+    try {
+      const [path] = await api.pickPaths({ filters: [{ name: t("pages.skins.fileDialogSkin"), extensions: ["png"] }] });
+      if (path) add.mutate(path);
+    } finally {
+      setPicking(false);
+    }
+  }
+
+  const addMenu: MenuEntry[] = [
+    {
+      id: "file", text: t("pages.skins.addFromFile"), icon: "file", disabled: !api.capabilities.pickPaths || adding,
+      onSelect: () => void pickFile().catch(toastError),
+    },
+    { id: "player", text: t("pages.skins.addByName"), icon: "user", disabled: adding, onSelect: () => setLoadingPlayer(true) },
+  ];
+  const menu: MenuEntry[] = [
+    ...addMenu,
+    "-",
+    { id: "refresh", text: t("ui.context.refresh"), disabled: library.isFetching || adding, onSelect: () => void library.refetch() },
+  ];
   // PNG-Dateien aufs Fenster ziehen nimmt sie in die Bibliothek auf (nur in der App, der Browser kennt keine Pfade).
   const dragging = useFileDrop(true, (paths) => {
     for (const path of paths) (isPng(path) ? add.mutate(path) : rejectedFileToast(path, t("pages.skins.dropAllowed")));
   });
   return (
+    <ContextMenu items={menu}>
     <section className="page skins relative">
       <PageHeader title={t("ui.nav.skins")} />
       {account ? <CurrentLook account={account} /> : <NeedsMicrosoft />}
-      <Library account={account} />
+      <Library account={account} addMenu={addMenu} adding={adding} />
       {dragging && (
         <div className="drop over absolute inset-0 z-10 h-auto justify-start" aria-hidden>
           <div className="sticky top-[30vh] flex flex-col items-center gap-2 py-10">
@@ -51,7 +80,9 @@ export function SkinsPage() {
           </div>
         </div>
       )}
+      {loadingPlayer && <PlayerSkinDialog onClose={() => setLoadingPlayer(false)} />}
     </section>
+    </ContextMenu>
   );
 }
 
@@ -148,31 +179,23 @@ function useWornLook(skin: { url: string; variant: WornLook["variant"] } | null 
 }
 
 /** Lokale Skins: hinzufügen, umbenennen, Modell wählen, löschen und mit einem Microsoft-Konto verwenden. */
-function Library({ account }: { account: MicrosoftAccount | null }) {
+function Library({ account, addMenu, adding }: {
+  account: MicrosoftAccount | null;
+  addMenu: MenuEntry[];
+  adding: boolean;
+}) {
   const { t } = useI18n();
   const library = useSkinLibrary();
   const profile = useSkinProfile(account?.id ?? null);
   const worn = useWornLook(profile.data?.skin);
-  const add = useAddSkin();
   const remove = useDeleteSkin();
   const [renaming, setRenaming] = useState<LibrarySkin | null>(null);
-  const [loadingPlayer, setLoadingPlayer] = useState(false);
   const removal = useConfirmTarget<LibrarySkin>();
   // Umhang der Vorschau: ohne Wahl der, den das Konto trägt.
   const [chosenCape, setChosenCape] = useState<string>();
   const capes = profile.data?.capes ?? [];
   const previewCapeId = chosenCape ?? capes.find((c) => c.active)?.id ?? NO_CAPE;
   const previewCape = capes.find((c) => c.id === previewCapeId);
-
-  async function pickFile() {
-    const [path] = await api.pickPaths({ filters: [{ name: t("pages.skins.fileDialogSkin"), extensions: ["png"] }] });
-    if (path) add.mutate(path);
-  }
-
-  const addMenu: MenuEntry[] = [
-    { id: "file", text: t("pages.skins.addFromFile"), icon: "file", onSelect: () => void pickFile().catch(toastError) },
-    { id: "player", text: t("pages.skins.addByName"), icon: "user", onSelect: () => setLoadingPlayer(true) },
-  ];
 
   return (
     <section className="mt-6" aria-labelledby="skin-lib">
@@ -182,7 +205,7 @@ function Library({ account }: { account: MicrosoftAccount | null }) {
         actions={
           <Menu
             items={addMenu}
-            trigger={<Button icon="plus" iconEnd="chevd" disabled={add.isPending}>{t("pages.skins.addSkin")}</Button>}
+            trigger={<Button icon="plus" iconEnd="chevd" disabled={adding}>{t("pages.skins.addSkin")}</Button>}
           />
         }
       />
@@ -225,7 +248,6 @@ function Library({ account }: { account: MicrosoftAccount | null }) {
         </QueryList>
       </div>
       {renaming && <RenameDialog key={renaming.id} skin={renaming} onClose={() => setRenaming(null)} />}
-      {loadingPlayer && <PlayerSkinDialog onClose={() => setLoadingPlayer(false)} />}
       <ConfirmDialog
         {...removal.dialogProps({
           title: (skin) => t("components.instance.deleteQuotedTitle", { name: skin.name }),

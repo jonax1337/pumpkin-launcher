@@ -2,12 +2,13 @@
  * Menüs des Kits: Dropdown und Kontextmenü mit gleichen Einträgen, freie Menübausteine.
  * Verhalten aus Radix; Aussehen: ui/overlay.css (vx-pop, vx-mi). Innerhalb gilt der hellere Hover-Kontext (data-ctx="overlay", tokens.css).
  */
-import { useRef, type ComponentProps, type FocusEvent, type ReactNode } from "react";
+import { useRef, useState, type ComponentProps, type FocusEvent, type ReactNode } from "react";
 import { ContextMenu as CM, DropdownMenu as DM } from "radix-ui";
 import { cn } from "@/lib/utils";
 import { Icon } from "./Icon";
 import { markMenuClosed, rememberMenuOrigin } from "./menuOrigin";
 import { FOCUSABLE, flag, hasContent } from "./util";
+import { captureTextContext, restoreTextContext, textMenuEntries, type TextContext } from "./textMenu";
 import type { IconName } from "./types";
 
 /**
@@ -45,7 +46,7 @@ function subMenu(e: Extract<MenuEntry, { items: MenuEntry[] }>, M: MenuKit) {
         <Icon name="chev" size="s" className="vx-mi-sub" />
       </M.SubTrigger>
       <M.Portal>
-        <M.SubContent className="vx-pop" data-ctx="overlay" sideOffset={4} collisionPadding={8}>
+        <M.SubContent className="vx-pop" data-ctx="overlay" sideOffset={4} collisionPadding={8} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}>
           {entries(e.items, M)}
         </M.SubContent>
       </M.Portal>
@@ -124,23 +125,111 @@ export function Menu({ trigger, items, align = "end", width, className, open, on
 }
 
 /** Kontextmenü (Rechtsklick) mit denselben Einträgen. */
-export function ContextMenu({ items, children }: { items: MenuEntry[]; children: ReactNode }) {
+export function ContextMenu({ items, children, includePortals = false }: { items: MenuEntry[]; children: ReactNode; includePortals?: boolean }) {
+  const [textContext, setTextContext] = useState<TextContext>();
+  const originRef = useRef<HTMLElement | null>(null);
+  const interactedOutsideRef = useRef(false);
+  const portalTargetRef = useRef<Element | null>(null);
+
+  function dispatchPortalMenu(root: HTMLElement, target: Element, x: number, y: number) {
+    portalTargetRef.current = target;
+    try {
+      root.dispatchEvent(new MouseEvent("contextmenu", {
+        bubbles: true, cancelable: true, clientX: x, clientY: y,
+      }));
+    } finally {
+      portalTargetRef.current = null;
+    }
+  }
+
+  function isForeignPortal(root: HTMLElement, target: EventTarget) {
+    return includePortals && target instanceof Element && !root.contains(target)
+      && !target.closest('[data-context-menu-trigger], [role="menu"]');
+  }
+
+  function recordTarget(root: HTMLElement, target: Element) {
+    const context = captureTextContext(target);
+    setTextContext(context);
+    const hit = target.closest<HTMLElement>(FOCUSABLE);
+    const origin = hit && (includePortals || root.contains(hit)) ? hit
+      : root.matches(FOCUSABLE) ? root : root.querySelector<HTMLElement>(FOCUSABLE);
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    originRef.current = context ? context.field ?? (context.editable ? context.target : previousFocus) : origin;
+    rememberMenuOrigin(originRef.current);
+    interactedOutsideRef.current = false;
+  }
+
   return (
     <CM.Root modal={false} onOpenChange={(o) => !o && markMenuClosed()}>
       <CM.Trigger
         asChild
+        data-context-menu-trigger=""
+        onContextMenuCapture={(e) => {
+          if (e.defaultPrevented || !isForeignPortal(e.currentTarget as HTMLElement, e.target)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          dispatchPortalMenu(e.currentTarget as HTMLElement, e.target as Element, e.clientX, e.clientY);
+        }}
+        onKeyDownCapture={(e) => {
+          if (e.defaultPrevented || !(e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) return;
+          if (!isForeignPortal(e.currentTarget as HTMLElement, e.target)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          const target = e.target as Element;
+          const rect = target.getBoundingClientRect();
+          dispatchPortalMenu(e.currentTarget as HTMLElement, target, rect.left, rect.bottom);
+        }}
         onContextMenu={(e) => {
-          // Zurück zum angeklickten Bedienelement, sonst zum ersten im Auslöser (Poster: der Link)
+          if (e.defaultPrevented) return;
           const root = e.currentTarget as HTMLElement;
-          const hit = (e.target as Element).closest?.<HTMLElement>(FOCUSABLE);
-          rememberMenuOrigin(hit && root.contains(hit) ? hit : root.matches(FOCUSABLE) ? root : root.querySelector<HTMLElement>(FOCUSABLE));
+          if (!(e.target instanceof Element)) return;
+          if ((!includePortals && !root.contains(e.target)) || e.target.closest('[role="menu"]')) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          recordTarget(root, portalTargetRef.current ?? e.target);
+          e.stopPropagation();
+        }}
+        onPointerDown={(e) => {
+          if (e.defaultPrevented || e.pointerType === "mouse") return;
+          const root = e.currentTarget as HTMLElement;
+          if (!(e.target instanceof Element) || (!includePortals && !root.contains(e.target))) return;
+          recordTarget(root, e.target);
+          e.stopPropagation();
+        }}
+        onKeyDown={(e) => {
+          if (e.defaultPrevented || !(e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) return;
+          const root = e.currentTarget as HTMLElement;
+          if (!(e.target instanceof Element) || (!includePortals && !root.contains(e.target))) return;
+          const rect = e.target.getBoundingClientRect();
+          e.target.dispatchEvent(new MouseEvent("contextmenu", {
+            bubbles: true, cancelable: true, clientX: rect.left, clientY: rect.bottom,
+          }));
+          e.preventDefault();
+          e.stopPropagation();
         }}
       >
         {children}
       </CM.Trigger>
       <CM.Portal>
-        <CM.Content className="vx-pop" data-ctx="overlay" collisionPadding={8} onFocus={keepFocusWhenClosed}>
-          {entries(items, CM)}
+        <CM.Content
+          className="vx-pop"
+          data-ctx="overlay"
+          collisionPadding={8}
+          onFocus={keepFocusWhenClosed}
+          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onInteractOutside={() => { interactedOutsideRef.current = true; }}
+          onCloseAutoFocus={(e) => {
+            if (interactedOutsideRef.current) return;
+            e.preventDefault();
+            const active = document.activeElement;
+            if (active instanceof HTMLElement && active !== document.body && !active.closest('[role="menu"]')) return;
+            originRef.current?.isConnected && originRef.current.focus({ preventScroll: true });
+            if (textContext) restoreTextContext(textContext);
+          }}
+        >
+          {entries(textContext ? textMenuEntries(textContext) : items, CM)}
         </CM.Content>
       </CM.Portal>
     </CM.Root>

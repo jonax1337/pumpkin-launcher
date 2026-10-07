@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useI18n, type TKey } from "@/i18n";
 import { AccountMenu } from "@/components/accounts/AccountMenu";
@@ -8,7 +7,8 @@ import { BrandMark, BrandWordmark } from "@/branding/Brand";
 import { SessionChip } from "@/components/friends/SessionChip";
 import { closeWarning, type CloseWarning } from "@/components/friends/sharingModel";
 import { useSharingActivity, type SharingActivity } from "@/components/friends/useSharingActivity";
-import { Chip, ConfirmDialog, Icon } from "@/ui";
+import { useAppUpdate } from "@/hooks/useAppUpdate";
+import { ButtonLink, Chip, ConfirmDialog, Icon } from "@/ui";
 
 const CLOSE_TEXT: Record<CloseWarning, TKey> = {
   hosting: "friendsHost.close.hosting",
@@ -77,14 +77,20 @@ function WindowButtons({ activity }: { activity: SharingActivity }) {
 export function TitleBar({ online }: { online: boolean }) {
   const { t } = useI18n();
   const activity = useSharingActivity();
+  const { data: update } = useAppUpdate();
   return (
     <header className="bar" data-tauri-drag-region>
-      <Link to="/" className="wm fx" aria-label={t("ui.titlebar.homeAria")}>
+      <div className="wm" data-tauri-drag-region>
         <BrandMark />
         <BrandWordmark />
-      </Link>
-      <div className="bar-mid items-center" data-tauri-drag-region>
+      </div>
+      <div className="bar-mid items-center gap-2" data-tauri-drag-region>
         <SessionChip activity={activity} />
+        {update && (
+          <ButtonLink to="/settings?tab=ueber" size="s" icon="up" tone="acc" className="shrink-0">
+            {t("ui.titlebar.updateAvailable")}
+          </ButtonLink>
+        )}
       </div>
       <div className="bar-right">
         {/* Live-Region bleibt stehen (links neben der Gruppe, schiebt nichts); online leer, damit nichts vorgelesen wird */}

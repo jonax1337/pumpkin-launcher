@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useView } from "@/app/Layout";
 import { useI18n } from "@/i18n";
-import { ChipButton, PageHeader, SearchField, Select, TabPanel, Tabs, Toolbar } from "@/ui";
+import { ChipButton, ContextMenu, PageHeader, SearchField, Select, TabPanel, Tabs, Toolbar, type MenuEntry } from "@/ui";
 import { ContentDetail } from "@/components/catalog/ContentDetail";
 import { DiscoverIntro } from "@/components/catalog/DiscoverIntro";
 import { ContentResults } from "@/components/catalog/ContentResults";
@@ -118,9 +118,22 @@ export function DiscoverPage() {
     setParams(discoverParams({ tab, source }), { replace: true });
   };
 
+  const tabMenu: MenuEntry[] = tabs.map((tab) => ({
+    id: tab, text: typeLabel(tab), checked: tab === type, onSelect: () => openTab(tab),
+  }));
+  const listMenu: MenuEntry[] = [
+    { id: "reset", text: t("components.search.resetFilters"), onSelect: reset },
+    "-",
+    ...tabMenu,
+  ];
+
   return (
     <>
       {projectId && (
+        <ContextMenu items={[{
+          id: "back", text: t("common.back"), icon: "back",
+          onSelect: () => setParams(discoverParams({ tab: type, source })),
+        }, "-", ...tabMenu]}>
         <div className="page disc-proj">
           <ContentDetail
             key={`${projectSource}-${projectId}`}
@@ -132,8 +145,10 @@ export function DiscoverPage() {
             onBack={() => setParams(discoverParams({ tab: type, source }))}
           />
         </div>
+        </ContextMenu>
       )}
       {/* Bleibt beim Öffnen von Details erhalten, damit Suche und geladene Seiten nicht verloren gehen. */}
+      <ContextMenu items={listMenu}>
       <section className="page disc" hidden={!!projectId}>
         <PageHeader title={t("ui.nav.discover")}>
           {tabs.length > 1 && (
@@ -220,6 +235,7 @@ export function DiscoverPage() {
           )}
         </TabPanel>
       </section>
+      </ContextMenu>
     </>
   );
 }

@@ -3,7 +3,8 @@ import { useI18n } from "@/i18n";
 import { useView } from "@/app/Layout";
 import { AccountsSection } from "@/components/accounts/AccountsSection";
 import { SupportSection } from "@/components/support";
-import { FormSection, PageHeader, TabPanel, Tabs } from "@/ui";
+import { showShortcuts } from "@/components/ShortcutsDialog";
+import { ContextMenu, FormSection, PageHeader, TabPanel, Tabs, type MenuEntry } from "@/ui";
 import { AboutTab } from "./settings/AboutTab";
 import { AppearanceTab } from "./settings/AppearanceTab";
 import { FriendsTab } from "./settings/FriendsTab";
@@ -73,8 +74,20 @@ export function SettingsPage() {
   const section = sectionOf(params.get("tab")) ?? sectionOf(decodeURIComponent(hash.slice(1))) ?? SECTIONS[0];
   // Abschnitts-Beschriftungen erst hier auflösen, damit ein Sprachwechsel sofort greift.
   const tabs = SECTIONS.map(({ value, key }) => ({ value, label: t(key) }));
+  const selectSection = (id: SectionId) => {
+    setParams({ tab: id }, { replace: true });
+    view.current?.scrollTo({ top: 0 });
+  };
+  const menu: MenuEntry[] = [
+    ...tabs.map(({ value, label }) => ({
+      id: value, text: label, checked: value === section.value, onSelect: () => selectSection(value),
+    })),
+    "-",
+    { id: "shortcuts", text: t("pages.settings.shortcutsButton"), onSelect: showShortcuts },
+  ];
 
   return (
+    <ContextMenu items={menu}>
     <section className="page set">
       <PageHeader title={t("common.settings")} />
       <Tabs
@@ -95,5 +108,6 @@ export function SettingsPage() {
         </FormSection>
       </TabPanel>
     </section>
+    </ContextMenu>
   );
 }

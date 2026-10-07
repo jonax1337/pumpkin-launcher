@@ -63,9 +63,9 @@ For later imports, use **Library > New instance > File** for `.mrpack` or CurseF
 - **Keep your saves:** back up and restore worlds, enable automatic backups, manage world datapacks and servers, or jump straight into a world on Minecraft 1.20+. Pack updates preserve worlds and your own changes.
 - **Move and share:** import from Prism Launcher/MultiMC, Modrinth App, CurseForge App or ATLauncher without changing the source. Duplicate instances, export `.mrpack` files and reuse setups as templates.
 - **Skins and screenshots:** manage skins and capes, preview them in 3D, and browse each instance's screenshots.
-- **Comfort settings:** German and English, adjustable text size, reduced motion, keyboard shortcuts (`?` shows them) and optional Discord Rich Presence, off by default.
+- **Comfort settings:** German and English, adjustable text size, reduced motion, keyboard shortcuts (`?` shows them), page-specific right-click menus and optional Discord Rich Presence, off by default.
 - **Friends:** opt in to friend requests, online status and sharing worlds. Friends networking and actions need consent. See [Friends](docs/friends/README.md) for availability and limits.
-- **Updates and troubleshooting:** signed launcher updates install only when you choose, not while a game or task is running. Instance logs and crash hints help when a game fails to start.
+- **Updates and troubleshooting:** available launcher updates stay visible in the title bar and signed updates install only when you choose, not while a game or task is running. Instance logs and crash hints help when a game fails to start.
 
 To preserve or move saves:
 

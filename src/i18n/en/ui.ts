@@ -28,7 +28,7 @@ export const ui: typeof deUi = {
   // ---------- Window ----------
   "ui.window.minimize": "Minimize",
   "ui.window.maximize": "Maximize",
-  "ui.titlebar.homeAria": "Pumpkin Launcher, go to Start",
+  "ui.titlebar.updateAvailable": "Update available",
   "ui.offline.label": "Offline",
   "ui.offline.detail": ": no internet connection, catalog and downloads are unavailable",
 
@@ -41,6 +41,13 @@ export const ui: typeof deUi = {
   "ui.field.optional": "(optional)",
   "ui.search.clearAria": "Clear search",
   "ui.select.placeholder": "No selection",
+
+  "ui.context.cut": "Cut",
+  "ui.context.copy": "Copy",
+  "ui.context.paste": "Paste",
+  "ui.context.selectAll": "Select all",
+  "ui.context.refresh": "Refresh",
+  "ui.context.editFailed": "Could not edit text",
 
   // ---------- Lists ----------
   "ui.list.undo": "Undo",

@@ -1,13 +1,15 @@
 import { useState, type RefObject } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { useI18n } from "@/i18n";
-import { BackLink, ErrorBox, Icon, Skel, TabPanel, Tabs, type TabItem } from "@/ui";
+import { BackLink, ContextMenu, ErrorBox, Icon, Skel, TabPanel, Tabs, type MenuEntry, type TabItem } from "@/ui";
 import { LogConsole } from "@/components/log/LogConsole";
 import { AddContentSheet } from "@/components/ContentBrowser";
+import { useInstanceMenu } from "@/components/instance";
 import { useContentAnalysis } from "@/hooks/useContentAnalysis";
 import { useCurrentUpdates } from "@/hooks/useContent";
 import { useInstance } from "@/hooks/useInstances";
 import { instanceTabParams, readInstanceTab, type InstanceTab } from "@/lib/routes";
+import { updatesLabel } from "@/lib/format";
 import type { Instance } from "@/lib/types";
 import { PixelScene } from "@/pixel/PixelScene";
 import { useLook } from "@/store/look";
@@ -102,6 +104,7 @@ function Loaded({ instance, tab, setTab, head, compact }: {
   const analysis = useContentAnalysis(instance).data;
   const { findingsOf, total: warnTotal } = useWarnings(instance, analysis?.issues ?? []);
   const tabs = useDetailTabs(instance.mods.length, warnTotal);
+  const instanceItems = useInstanceMenu(instance, { showOpen: false });
   const toLog = () => setTab("console");
   // Klick auf „Updates“ im Kopf: Inhalte zeigen und „Alle aktualisieren“ in den Blick holen.
   const [updateClicks, setUpdateClicks] = useState(0);
@@ -117,7 +120,21 @@ function Loaded({ instance, tab, setTab, head, compact }: {
     setPackRequested(true);
   };
 
+  const menuItems: MenuEntry[] = [
+    { label: instance.name },
+    ...instanceItems.filter((item) => item === "-" || !("id" in item) || (item.id !== "settings" && item.id !== "log")),
+    "-",
+    { id: "content", text: t("pages.detail.tabContent"), icon: "list", checked: tab === "content", onSelect: () => setTab("content") },
+    { id: "add-content", text: t("common.add"), icon: "plus", onSelect: () => setAdding(true) },
+    { id: "updates", text: updatesLabel(updateFor.size), icon: "up", disabled: !updateFor.size, onSelect: showUpdates },
+    { id: "worlds", text: t("common.worlds"), checked: tab === "worlds", onSelect: () => setTab("worlds") },
+    { id: "screenshots", text: t("components.export.entry.screenshots"), checked: tab === "screenshots", onSelect: () => setTab("screenshots") },
+    { id: "console", text: t("components.log.ariaLabel"), icon: "term", checked: tab === "console", onSelect: toLog },
+    { id: "settings", text: t("common.settings"), icon: "gear", checked: tab === "settings", onSelect: () => setTab("settings") },
+  ];
+
   return (
+    <ContextMenu items={menuItems}>
     <section className="detail">
       <DetailHead
         instance={instance}
@@ -161,5 +178,6 @@ function Loaded({ instance, tab, setTab, head, compact }: {
 
       <AddContentSheet instance={instance} open={adding} onOpenChange={setAdding} />
     </section>
+    </ContextMenu>
   );
 }
