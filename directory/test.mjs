@@ -745,11 +745,12 @@ async function recipientFull() {
   check("21. Brief", [refused.status, errorOf(refused)], [409, "recipientFull"]);
   check("Ablehnung wegen vollem Postfach wird nicht protokolliert", w.count("sends", `from_uuid = '${senders[20].uuid}'`), 0);
   const [oldest] = (await w.authed(bob, "GET", "/v1/inbox")).json.letters;
+  const replacementSender = senders.find((sender) => sender.uuid !== oldest.from.uuid);
   await w.authed(bob, "DELETE", `/v1/inbox/${oldest.id}`);
   check("nach einer Antwort ist wieder Platz", (await w.send(senders[20], bob.uuid)).status, 202);
 
   w.advance(WEEK + 1);
-  check("ein erneuter Brief ersetzt seinen alten, auch bei vollem Postfach", [(await w.send(senders[1], bob.uuid)).status, w.count("letters", `to_uuid = '${bob.uuid}'`)], [202, 20]);
+  check("ein erneuter Brief ersetzt seinen alten, auch bei vollem Postfach", [(await w.send(replacementSender, bob.uuid)).status, w.count("letters", `to_uuid = '${bob.uuid}'`)], [202, 20]);
   w.advance(LETTER_TTL);
   check("abgelaufene Briefe sind nicht mehr im Postfach", (await w.authed(bob, "GET", "/v1/inbox")).json.letters, []);
   check("abgelaufene Briefe füllen das Postfach nicht", (await w.send(senders[0], bob.uuid)).status, 202);

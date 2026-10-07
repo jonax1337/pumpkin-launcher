@@ -96,4 +96,8 @@ Updating `TOKEN_KEY` invalidates all tokens and challenges immediately; clients 
 - `node scripts/mojang-keys.mjs update`: refresh `src/mojang-keys.js` and `test/mojang-publickeys.json`. Updated keys take effect after Worker deployment, without a launcher release.
 - `node test.mjs`: offline Node 24 route, quota, cleanup and certificate fixtures using `node:sqlite`; no Cloudflare account or network is needed. `MOJANG_PUBLICKEYS=<file>` supplies another saved key-list answer.
 
+The full-inbox replacement test selects a sender whose letter remains after deleting the
+observed oldest letter. Equal timestamps are ordered by letter UUID, not sender creation
+order; the test must not assume which sender's letter was deleted.
+
 `.github/workflows/mojang-keys.yml` monitors upstream keys. A new signing key can cause `401 badCertificate` until the pinned-key update is deployed; friend codes remain independent of directory login. Advance publication of keys is not guaranteed.
