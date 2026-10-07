@@ -1,6 +1,6 @@
 # Pixelkino design reference
 
-Last updated: 2026-10-06.
+Last updated: 2026-10-07.
 
 Pixelkino is Pumpkin Launcher's dark pixel interface. Scenes are the visually expressive layer; controls and page backgrounds stay flat and quiet. The [concept mockup](concepts/pixelkino.html) explains the original composition, but current styles and components are authoritative.
 
@@ -44,7 +44,35 @@ Corners use stepped clip paths (`--n1`, `--n2`), not rounded radii. Focus/select
 | Large | 56 px | 28 px, 7×7 glyph |
 | Extra-large icon | — | 56 px, doubled glyph cells |
 
-`--gut` is the shared page gutter (16-40 px with window width); `--page-max` is 1240 px for ordinary list/form content. Library posters fill the collection area and its toolbar wraps. Global/instance forms share label/control/help alignment and move help below controls at narrow widths.
+`--gut` is the shared page gutter (16–40 px with window width). Page content uses
+the available width; there is no global reading-width cap. `PageHeader` supplies a
+compact title, small optional count, wrapping actions and a bottom divider.
+
+The shared workspace is a Kit API exported from `@/ui`, implemented in
+`src/ui/Layout.tsx` with `vx-*` styles in `src/ui/layout.css`:
+
+- `Workspace` takes an optional `rail` slot. Its rail column is 280 px; content
+  fills the remaining width. Without a rail it is one full-width column.
+- `WorkspaceRail` supplies the context/navigation region and sticky positioning.
+- `WorkspaceContent` supplies the content surface. Use `variant="plain"` when
+  an enclosing sheet already provides the surface.
+- `WorkspaceTabs` reuses `Tabs`: vertical pixel plates on wide windows, horizontal
+  segments when the workspace stacks at 960 px. Pair its `idBase` with `TabPanel`.
+
+Vertical tabs use pixel edges, selected surfaces and accent text/icons, not an
+inner marker. Keyboard navigation follows the orientation; selected segments
+remain visible while switching or resizing. `TabPanel` has a visible keyboard
+focus outline. The interactive workspace example in `/_kit` → **Seitengerüst**
+demonstrates selection, disabled navigation, editable content, reset and a
+rail-free layout. Use this structure for meaningful context/navigation, not as
+a mandatory two-column wrapper for every collection.
+
+Library poster groups share the available horizontal space; list mode stays
+full-width. Settings use responsive form groups while keeping individual
+controls at a usable width and retaining their label/help associations.
+Home and instance details keep their scenes, with compact page controls and
+unrestricted collection/content areas. Accent edges and selection states carry
+the color; avoid oversized counter banners and generic explanatory introductions.
 
 ## Color semantics
 

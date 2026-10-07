@@ -37,7 +37,7 @@ function Disabled() {
   return (
     <>
       <Empty
-        size="page"
+        size="pane"
         title={t("friends.gate.disabled.title")}
         actions={<Button variant="primary" icon="users" onClick={() => setOptingIn(true)}>{t("friends.gate.disabled.action")}</Button>}
       >

@@ -1,0 +1,42 @@
+.disc .disc-results .vx-sech {
+  height: auto;
+  min-height: 32px;
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.disc-proj .proj-b {
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 24px;
+  margin-top: 20px;
+}
+
+.disc-proj .proj-side {
+  min-width: 0;
+  position: sticky;
+  top: 16px;
+}
+
+.disc-proj .proj-side > .vx-panel {
+  border-top: var(--px) solid var(--copper);
+}
+
+.disc-proj .lead,
+.disc-proj .desc {
+  max-width: none;
+  min-width: 0;
+}
+
+.disc-proj .kv {
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  overflow-wrap: anywhere;
+}
+
+.disc-proj .vtab-sec {
+  overflow-x: auto;
+}
+
+@media (max-width: 960px) {
+  .disc-proj .proj-b { grid-template-columns: minmax(0, 1fr); }
+  .disc-proj .proj-side { position: static; order: -1; }
+}

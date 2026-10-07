@@ -13,6 +13,7 @@ const AREA_TITLES: [prefix: string, key: TKey][] = [
   ["/settings", "common.settings"],
   ["/skins", "ui.nav.skins"],
   ["/friends", "ui.nav.friends"],
+  ["/announcements", "ui.nav.announcements"],
 ];
 
 const areaTitleKey = (pathname: string): TKey =>

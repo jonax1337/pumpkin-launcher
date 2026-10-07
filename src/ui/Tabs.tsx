@@ -1,4 +1,4 @@
-import { useCallback, type ComponentProps, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useRef, type ComponentProps, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Tip } from "./Tip";
 import { Icon } from "./Icon";
@@ -102,10 +102,31 @@ type Strip<V extends string> = StripProps<V> & {
 /** Gemeinsame Leiste von Tabs (tablist) und Segmented (radiogroup): ein Tab-Stopp, Pfeiltasten, Auswahl folgt dem Fokus. */
 function TabStrip<V extends string>({ variant, axis, group, itemProps, items, value, onChange, label, size = "m", iconsOnly, onActivate, className, style }: Strip<V>) {
   const onKeyDown = useRoving<HTMLDivElement>(axis);
+  const stripRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const strip = stripRef.current;
+    if (!strip || variant !== "segment") return;
+    const revealSelection = () => {
+      const selected = strip.querySelector<HTMLElement>('[aria-selected="true"], [aria-checked="true"]');
+      if (!selected || !strip.clientWidth) return;
+      const viewport = strip.getBoundingClientRect();
+      const item = selected.getBoundingClientRect();
+      const inset = parseFloat(getComputedStyle(strip).paddingLeft);
+      const left = item.left - viewport.left - inset;
+      const right = item.right - viewport.right + inset;
+      if (left < 0) strip.scrollLeft += left;
+      else if (right > 0) strip.scrollLeft += right;
+    };
+    revealSelection();
+    const observer = new ResizeObserver(revealSelection);
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [value, variant]);
   // Tab-Stopp: der gewählte Eintrag, sonst der erste freie
   const stop = items.some((o) => o.value === value && !o.disabled) ? value : items.find((o) => !o.disabled)?.value;
   return (
     <div
+      ref={stripRef}
       className={cn("vx-tabs", className)}
       data-variant={variant}
       data-size={size}
@@ -138,7 +159,7 @@ function TabStrip<V extends string>({ variant, axis, group, itemProps, items, va
               {o.count != null && <Count value={o.count} size={size === "s" ? 16 : 18} />}
               {o.badge != null && <span className="vx-tab-badge">{o.badge}</span>}
             </span>
-            {variant !== "segment" && <i className="vx-tab-tick" aria-hidden />}
+            {variant === "underline" && <i className="vx-tab-tick" aria-hidden />}
           </button>
         );
         const tip = o.tip ?? (iconsOnly && typeof o.label === "string" ? o.label : undefined);
@@ -150,7 +171,7 @@ function TabStrip<V extends string>({ variant, axis, group, itemProps, items, va
 
 /**
  * Tab-Leiste (role=tablist; der Inhalt wechselt). Ein Tab-Stopp (Roving), Pfeile (senkrecht ↑/↓), Pos1/Ende; Auswahl folgt dem Fokus.
- * Hover = Fläche (--hv-ctl), gewählt = erhabene Platte + Strich (Leiste unten, senkrecht links, Segment Kupferkante).
+ * Hover = Fläche (--hv-ctl), gewählt = erhabene Platte; nur die waagerechte Leiste trägt einen Strich.
  */
 export function Tabs<V extends string>({ variant = "underline", idBase, sticky, style, ...strip }: TabsProps<V>) {
   const vertical = variant === "vertical";

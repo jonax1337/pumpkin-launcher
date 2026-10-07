@@ -15,11 +15,12 @@ import { type Cape, type LibrarySkin } from "@/lib/types";
 import { useUsableAccount } from "@/store/offline";
 import type { ActiveAccount } from "@/store/settings";
 import {
-  Actions, Button, CardGrid, ConfirmDialog, ContextMenu, Empty, ErrorBox, Field, Hint, Menu, PageHeader, Panel, SectionHeader, Select, Skel, StatusPanel,
+  Actions, Button, CardGrid, ConfirmDialog, ContextMenu, Empty, ErrorBox, Field, Hint, IconButton, Menu, PageHeader, SectionHeader, Select, Skel, StatusPanel, Tip, Workspace, WorkspaceContent, WorkspaceRail,
   type MenuEntry,
 } from "@/ui";
 import { DropHint, rejectedFileToast } from "./detail/dropFiles";
 import { PlayerSkinDialog, RenameDialog, SkinCard, type WornLook } from "./skins/SkinCard";
+import "./skins/skins.css";
 
 // Radix-Auswahlen kennen keinen leeren Wert.
 const NO_CAPE = "none";
@@ -70,9 +71,20 @@ export function SkinsPage() {
   return (
     <ContextMenu items={menu}>
     <section className="page skins relative">
-      <PageHeader title={t("ui.nav.skins")} />
-      {account ? <CurrentLook account={account} /> : <NeedsMicrosoft />}
-      <Library account={account} addMenu={addMenu} adding={adding} />
+      <PageHeader title={t("ui.nav.skins")}>
+        <Menu
+          items={addMenu}
+          trigger={<Button icon="plus" iconEnd="chevd" disabled={adding}>{t("pages.skins.addSkin")}</Button>}
+        />
+      </PageHeader>
+      {!account && <NeedsMicrosoft />}
+      <Workspace rail={account ? (
+          <WorkspaceRail className="skins-rail" aria-label={t("pages.skins.currentSkinLabel", { name: account.username })}>
+            <CurrentLook account={account} />
+          </WorkspaceRail>
+        ) : undefined}>
+        <Library account={account} />
+      </Workspace>
       {dragging && (
         <div className="drop over absolute inset-0 z-10 h-auto justify-start" aria-hidden>
           <div className="sticky top-[30vh] flex flex-col items-center gap-2 py-10">
@@ -110,22 +122,22 @@ function CurrentLook({ account }: { account: MicrosoftAccount }) {
 
   if (profile.error) {
     const retry = () => void profile.refetch();
-    return <ErrorBox className="mt-4" title={t("pages.skins.loadErrorTitle")} error={profile.error} onRetry={retry} />;
+    return <ErrorBox title={t("pages.skins.loadErrorTitle")} error={profile.error} onRetry={retry} />;
   }
-  if (!profile.data) return <Skel className="mt-4" h={336} />;
+  if (!profile.data) return <Skel h={336} />;
   const { skin, capes } = profile.data;
   const cape = capes.find((c) => c.active);
 
   return (
-    <Panel pad="l" className="skin-now mt-4">
+    <div className="skins-current">
       <SkinViewer
         src={skin?.url}
         variant={skin?.variant ?? "classic"}
         capeSrc={cape?.url}
-        zoom={3}
+        zoom={2}
         label={t("pages.skins.currentSkinLabel", { name: account.username })}
       />
-      <div className="skin-now-t">
+      <div className="skins-current-details">
         <SectionHeader title={account.username} size="sub" as="h2" />
         <Hint>{skin ? t("pages.skins.modelLine", { model: t(`pages.skins.variant.${skin.variant}`) }) : t("pages.skins.defaultSkin")}</Hint>
         <CapeChoice accountId={account.id} capes={capes} />
@@ -149,7 +161,7 @@ function CurrentLook({ account }: { account: MicrosoftAccount }) {
           onConfirm: ({ id }, close) => reset.mutate({ accountId: id }, { onSuccess: close }),
         })}
       />
-    </Panel>
+    </div>
   );
 }
 
@@ -179,11 +191,7 @@ function useWornLook(skin: { url: string; variant: WornLook["variant"] } | null 
 }
 
 /** Lokale Skins: hinzufügen, umbenennen, Modell wählen, löschen und mit einem Microsoft-Konto verwenden. */
-function Library({ account, addMenu, adding }: {
-  account: MicrosoftAccount | null;
-  addMenu: MenuEntry[];
-  adding: boolean;
-}) {
+function Library({ account }: { account: MicrosoftAccount | null }) {
   const { t } = useI18n();
   const library = useSkinLibrary();
   const profile = useSkinProfile(account?.id ?? null);
@@ -198,18 +206,16 @@ function Library({ account, addMenu, adding }: {
   const previewCape = capes.find((c) => c.id === previewCapeId);
 
   return (
-    <section className="mt-6" aria-labelledby="skin-lib">
+    <WorkspaceContent role="region" className="skins-library" aria-labelledby="skin-lib">
       <SectionHeader
         id="skin-lib"
         title={t("pages.skins.libraryTitle")}
-        actions={
-          <Menu
-            items={addMenu}
-            trigger={<Button icon="plus" iconEnd="chevd" disabled={adding}>{t("pages.skins.addSkin")}</Button>}
-          />
+        info={
+          <Tip label={t("pages.skins.libraryHelp")} describe>
+            <IconButton icon="info" size="s" label={t("pages.skins.libraryTitle")} />
+          </Tip>
         }
       />
-      <Hint className="mt-1">{t("pages.skins.libraryHelp")}</Hint>
       {capes.length > 0 && (
         <Field label={t("pages.skins.capePreviewField")} htmlFor="skin-cape-preview" className="mt-3 max-w-[360px]">
           <Select id="skin-cape-preview" value={previewCapeId} options={capeOptions(capes, t("pages.skins.noCapeOption"))} onChange={setChosenCape} />
@@ -256,6 +262,6 @@ function Library({ account, addMenu, adding }: {
           onConfirm: (skin, close) => remove.mutate(skin.id, { onSuccess: close }),
         })}
       />
-    </section>
+    </WorkspaceContent>
   );
 }

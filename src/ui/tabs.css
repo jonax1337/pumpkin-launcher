@@ -1,5 +1,5 @@
 /* Kit-Tabs: Leiste (underline), Segment, senkrecht. Hover = Fläche (--hv-ctl), nie Linie.
-   Gewählt = erhabene Platte + Strich (1 Einheit): Leiste unten, senkrecht links, Segment als Kupferkante.
+   Gewählt = erhabene Platte: Leiste mit Strich unten, senkrechte Pixel-Platte ohne Strich, Segment mit Kupferkante.
    Druck: Inhalt 1 Einheit tiefer. data-force="hover|press" erzwingt den Zustand (Vorschau /_kit). */
 .vx-tab {
   --t-h: 36px; --t-pad: 16px; --t-gap: 8px; --t-fs: 14px;
@@ -28,19 +28,19 @@
 .vx-tab-tick { position: absolute; left: var(--u3); right: var(--u3); bottom: var(--px); height: var(--px); background: var(--acc-bar, var(--copper)); opacity: 0; }
 .vx-tab:is([aria-selected="true"], [aria-current="page"]) > .vx-tab-tick { opacity: 1; animation: vx-tick-x .16s steps(4, end); }
 @keyframes vx-tick-x { from { clip-path: inset(0 50%); } }
-@keyframes vx-tick-y { from { clip-path: inset(50% 0); } }
 
 /* ---------- Leiste: 48 px (s 40) mit Linie unten; bricht in die nächste Zeile um, wenn die Breite nicht reicht ---------- */
 .vx-tabs[data-variant="underline"] { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-height: 48px; box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); }
 .vx-tabs[data-variant="underline"][data-size="s"] { min-height: 40px; }
 .vx-tabs[data-sticky] { position: sticky; top: var(--vx-tabs-top, 0); z-index: 6; background: var(--bg); }
 
-/* ---------- Senkrecht: volle Breite, 44 px (s 36), Strich links ---------- */
+/* ---------- Senkrechte Pixel-Platten: volle Breite, 44 px (s 36), Auswahl ohne inneren Strich ---------- */
 .vx-tabs[data-variant="vertical"] { display: flex; flex-direction: column; gap: 4px; }
 .vx-tabs[data-variant="vertical"] .vx-tab { --t-h: 44px; width: 100%; justify-content: flex-start; }
 .vx-tabs[data-variant="vertical"][data-size="s"] .vx-tab { --t-h: 36px; }
-.vx-tabs[data-variant="vertical"] .vx-tab-tick { left: 0; right: auto; top: var(--u2); bottom: var(--u2); width: var(--px); height: auto; }
-.vx-tabs[data-variant="vertical"] .vx-tab[aria-selected="true"] > .vx-tab-tick { animation-name: vx-tick-y; }
+:where(.vx-tabs[data-variant="vertical"]) .vx-tab::before { background: var(--panel); box-shadow: var(--bv-plate); }
+:where(.vx-tabs[data-variant="vertical"]) .vx-tab[aria-selected="true"] { color: var(--copper); }
+:where(.vx-tabs[data-variant="vertical"]) .vx-tab[aria-selected="true"]::before { background: var(--sel-bg); box-shadow: var(--bv-raised); }
 
 /* ---------- Segment: eingelassene Gruppe 40 px (s 32); gewählt = Platte mit Steuerrahmen und Kupferkante unten ---------- */
 /* Reicht die Breite nicht (Zoom), lässt sich die Gruppe waagerecht verschieben statt abgeschnitten zu werden */
@@ -63,3 +63,4 @@
 .vx-tabs[data-icons]:not([data-variant="segment"]) .vx-tab { --t-pad: 6px; --t-pl: 6px; }
 
 .vx-tabpanel { display: flow-root; }
+.vx-tabpanel:focus-visible { outline: var(--px) solid var(--focus); outline-offset: 6px; }

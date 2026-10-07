@@ -5,10 +5,11 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import {
-  Actions, Button, ConfirmDialog, ContextMenu, Dialog, DialogActions, Empty, ErrorBox, Glyph, Heading, Icon, IconButton, JobProgress, Menu, PageHeader,
+  Actions, Button, ConfirmDialog, ContextMenu, Dialog, DialogActions, Empty, ErrorBox, Glyph, Heading, Icon, IconButton, JobProgress, Menu,
   Popover, Progress, SearchField, SectionHeader, Sheet, Skel, Spacer, StatusPanel, TextField, Tip, Toolbar, Trunc, type IconName, type MenuEntry,
 } from "@/ui";
 import { cap, row as baseRow, Sec } from "./kit-ui";
+import { WorkspaceDemo } from "./WorkspaceDemo";
 
 const row = { ...baseRow, gap: 12 };
 
@@ -199,7 +200,7 @@ export function OverlaySection() {
       </Sec>
 
       <Sec title="Seitengerüst" id="layout">
-        <PageHeader title="Bibliothek" count={12}><Button variant="primary" icon="plus">Neue Instanz</Button></PageHeader>
+        <WorkspaceDemo />
         <Toolbars />
         <SectionHeader title="Weiterspielen" actions={<Button variant="ghost" size="s" iconEnd="chev" bleed="end">Alle</Button>} />
         <SectionHeader title="Unterabschnitt" size="sub" as="h3" />

@@ -26,6 +26,21 @@ export default defineConfig(() => ({
     port: 1420,
     strictPort: true,
     host: host || false,
+    proxy: {
+      "^/api/announcements\\.atom\\?page=[1-9][0-9]*$": {
+        target: "https://github.com",
+        changeOrigin: true,
+        proxyTimeout: 20_000,
+        timeout: 20_000,
+        rewrite: (url) => url.replace("/api/announcements.atom", "/jonax1337/pumpkin-launcher/discussions/categories/announcements.atom"),
+        configure: (proxy) => {
+          proxy.on("proxyReq", (request) => {
+            request.removeHeader("authorization");
+            request.removeHeader("cookie");
+          });
+        },
+      },
+    },
     hmr: host
       ? {
           protocol: "ws",

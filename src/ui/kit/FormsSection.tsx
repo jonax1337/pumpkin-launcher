@@ -10,7 +10,7 @@ import {
 import { cap, Lab, row, Sec } from "./kit-ui";
 
 type T = "content" | "console" | "settings" | "off";
-type W = "blank" | "pack" | "file";
+type W = "blank" | "pack" | "file" | "locked";
 type V = "grid" | "list";
 
 const TABS: TabItem<T>[] = [
@@ -23,6 +23,10 @@ const WAYS: TabItem<W>[] = [
   { value: "blank", label: "Leer", icon: "plus" },
   { value: "pack", label: "Modpack", icon: "box" },
   { value: "file", label: "Aus Datei", icon: "file" },
+];
+const PLATE_WAYS: TabItem<W>[] = [
+  ...WAYS,
+  { value: "locked", label: "Gesperrt", icon: "folder", disabled: true },
 ];
 const VIEWS: TabItem<V>[] = [
   { value: "grid", label: "Poster", icon: "grid" },
@@ -52,16 +56,16 @@ function TabsDemo() {
       </div>
       <div style={{ ...row, alignItems: "flex-start" }}>
         <div style={{ width: 168 }} data-kit="vertical">
-          <span style={cap}>vertical m</span>
-          <Tabs variant="vertical" label="Weg" items={WAYS} value={w} onChange={setW} idBase="kit-ni" />
+          <span style={cap}>Pixel-Platten</span>
+          <Tabs variant="vertical" label="Weg" items={PLATE_WAYS} value={w} onChange={setW} />
         </div>
         <div style={{ width: 168 }}>
-          <span style={cap}>vertical s</span>
-          <Tabs variant="vertical" size="s" label="Weg klein" items={WAYS} value={w} onChange={setW} />
+          <span style={cap}>Pixel-Platten · s</span>
+          <Tabs variant="vertical" size="s" label="Weg klein" items={PLATE_WAYS} value={w} onChange={setW} />
         </div>
         <div className="plate" style={{ width: 200, padding: 12 }}>
-          <span style={cap}>vertical in Platte</span>
-          <Tabs variant="vertical" label="Weg (Platte)" items={WAYS} value={w} onChange={setW} />
+          <span style={cap}>Pixel-Platten · in Platte</span>
+          <Tabs variant="vertical" label="Weg (Platte)" items={PLATE_WAYS} value={w} onChange={setW} />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }} data-kit="segments">
           <span style={cap}>Segmented m · s · nur Symbole · radiogroup</span>
@@ -95,7 +99,7 @@ function FormDemo() {
   const [motion, setMotion] = useState(true);
   const [args, setArgs] = useState("");
   return (
-    <div style={{ maxWidth: "var(--page-max)" }} data-kit="form">
+    <div data-kit="form">
       <FormSection title="Allgemein">
         <FormRow label="Name" htmlFor="kit-name" aside="Erscheint auf Start, Poster und Kopf. Höchstens 64 Zeichen.">
           <TextField id="kit-name" value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />

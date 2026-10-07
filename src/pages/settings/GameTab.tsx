@@ -149,7 +149,7 @@ export function GameTab() {
   const set = useSettings((s) => s.set);
   return (
     <>
-      <FormSection title={t("settings.sectionJava")} level={3}>
+      <FormSection title={t("settings.sectionJava")} level={3} className="settings-field-grid">
         <FormRow
           label={t("ui.memory.label")}
           hint={t("pages.settings.memoryHint")}
@@ -164,7 +164,7 @@ export function GameTab() {
         <JavaRow />
         <JvmRow />
       </FormSection>
-      <FormSection title={t("settings.sectionStart")} level={3}>
+      <FormSection title={t("settings.sectionStart")} level={3} className="settings-field-grid">
         <FormRow label={t("detail.settings.windowLabel")} hint={t("settings.windowHint")} group="radiogroup">
           <WindowChooser name="gwindow" value={gameWindow} onChange={(next) => set({ window: next })} />
         </FormRow>

@@ -142,7 +142,7 @@ type BarLook = {
    * unter dem Symbol (`p` 0–1, null = unbestimmt); der Platz bleibt immer, nichts verschiebt sich.
    */
   activity?: { count: number; p: number | null };
-  /** Für die Seitenleiste: 44 px quadratisch, nur Symbol, Kupferstrich am linken Rand statt unten. */
+  /** Für die Seitenleiste: 44 px quadratisch, nur Symbol; aktiv durch Fläche und Iconfarbe. */
   side?: boolean;
   /** Zähler-Plakette an der Ecke, nur bei mehr als 0. Sie ist stumm: die Zahl gehört in den zugänglichen Namen (aria-label). */
   badge?: number;
@@ -161,7 +161,7 @@ const MAX_BADGE_COUNT = 9;
 
 const badgeText = (count: number) => (count > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : count);
 
-function BarInner({ children, label, iconEnd, activity, badge }: Pick<BarLook, "children" | "label" | "iconEnd" | "activity" | "badge">) {
+function BarInner({ children, label, iconEnd, activity, badge, side }: Pick<BarLook, "children" | "label" | "iconEnd" | "activity" | "badge" | "side">) {
   return (
     <>
       <span className="vx-bc">
@@ -169,7 +169,7 @@ function BarInner({ children, label, iconEnd, activity, badge }: Pick<BarLook, "
         {label != null && <span className="vx-bar-lab">{label}</span>}
         {iconEnd && <Icon name={iconEnd} size="s" />}
       </span>
-      <span className="vx-tick" aria-hidden />
+      {!side && <span className="vx-tick" aria-hidden />}
       {activity && (
         <>
           <span className="vx-bar-badge" aria-hidden>{badgeText(activity.count)}</span>
@@ -196,7 +196,7 @@ export function BarButton(props: BarLook & (BarLinkProps | BarPlainProps)) {
     "aria-current": current ? ("page" as const) : undefined,
     "aria-expanded": expanded,
   };
-  const inner = <BarInner label={label} iconEnd={iconEnd} activity={activity} badge={badge}>{children}</BarInner>;
+  const inner = <BarInner label={label} iconEnd={iconEnd} activity={activity} badge={badge} side={side}>{children}</BarInner>;
   return target.to != null ? (
     <Link {...common} {...target}>{inner}</Link>
   ) : (

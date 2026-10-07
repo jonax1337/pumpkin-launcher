@@ -9,10 +9,10 @@
 /* Seitenüberschrift bekommt nach dem Seitenwechsel den Fokus: kein Ring, sie ist nicht bedienbar */
 .vx-h[tabindex="-1"]:focus { outline: none; }
 
-/* ---------- Seitenkopf: 44 px, Titel 40 px unten bündig, Zahl daneben, Aktionen rechts; bricht um, wenn es eng wird ---------- */
-.vx-pageh { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 14px; min-height: 44px; min-width: 0; }
-.vx-pageh-n { padding-bottom: 3px; }
-.vx-pageh-a { display: flex; align-items: center; gap: 8px; margin-left: auto; min-width: 0; }
+/* Seitenkopf: kompakter Titel und Zähler, Aktionen rechts; bei wenig Platz mehrzeilig. */
+.vx-pageh { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; min-height: 44px; min-width: 0; padding-bottom: 18px; border-bottom: var(--px) solid var(--line); }
+.vx-pageh-n { color: var(--fg-2); }
+.vx-pageh-a { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; min-width: 0; }
 
 /* ---------- Abschnittskopf: 32 px, Titel links, Aktionen rechts ---------- */
 .vx-sech { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 32px; min-width: 0; }
@@ -48,3 +48,19 @@
 .vx-acts[data-align="end"] { justify-content: flex-end; }
 .vx-acts[data-align="between"] { justify-content: space-between; }
 .vx-acts[data-wrap] { flex-wrap: wrap; row-gap: 8px; }
+
+/* Seitenarbeitsbereich: optionaler Kontext links, Inhalt rechts; schmal untereinander. */
+.vx-workspace { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 24px; margin-top: 20px; }
+.vx-workspace[data-rail] { grid-template-columns: 280px minmax(0, 1fr); }
+.vx-workspace-rail { position: sticky; top: 16px; min-width: 0; background: var(--panel); border-top: var(--px) solid var(--copper); }
+.vx-workspace-content { min-width: 0; }
+.vx-workspace-content[data-variant="panel"] { padding: 24px; background: var(--panel); border-top: var(--px) solid var(--line-2); }
+.vx-workspace-rail:has(> .vx-workspace-tabs) { padding: 8px; background: none; border-top: 0; }
+.vx-workspace-tabs[data-variant="vertical"] { gap: 8px; }
+.vx-workspace-tabs[data-variant="vertical"] .vx-tab { height: auto; min-height: var(--t-h); padding-top: 10px; padding-bottom: 10px; }
+.vx-workspace-tabs[data-variant="vertical"] .vx-tc { white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.vx-workspace-tabs[data-variant="segment"] { width: 100%; }
+@media (max-width: 960px) {
+  .vx-workspace[data-rail] { grid-template-columns: minmax(0, 1fr); }
+  .vx-workspace-rail { position: static; }
+}

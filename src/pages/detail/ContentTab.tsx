@@ -233,7 +233,7 @@ export function ContentTab({ instance, shown, updateFor, analysis, findingsOf, o
 
   return (
     <ContentModelProvider value={model}>
-      <div className="relative max-w-[var(--page-max)]" ref={rootRef}>
+      <div className="relative min-w-0" ref={rootRef}>
         <LocalFilesDropzone {...local.dropzone} />
         <div className="sr" role="status" aria-live="polite" aria-atomic="true">{said}</div>
         <Toolbar height={56} search="s" alt={<BulkBar />} altActive={selection.pickedLive.length > 0}>

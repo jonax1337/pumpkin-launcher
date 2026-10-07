@@ -48,7 +48,7 @@ export function WorldsTab({ instance, onLaunched }: { instance: Instance; onLaun
   const busy = useBusyReason(instance.id);
   const quickPlay = (target: QuickPlay) => void play(instance, onLaunched, target);
   return (
-    <div className="max-w-[var(--page-max)] pt-2">
+    <div className="pt-2">
       <ShareSection instance={instance} busy={busy} />
       <WorldsSection instance={instance} busy={busy} onPlay={quickPlay} />
       <ServersSection instance={instance} busy={busy} onPlay={quickPlay} />

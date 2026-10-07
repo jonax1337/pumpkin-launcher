@@ -135,6 +135,9 @@ export const allCapabilities = (available: boolean): Capabilities => ({
 export interface Backend {
   capabilities: Capabilities;
 
+  /** Öffentliche GitHub-Ankündigungen als unverändertes Atom-XML; Seiten beginnen bei 1. */
+  announcementFeed(page: number): Promise<string>;
+
   modrinthSearch(options: SearchOptions): Promise<ContentSearch>;
   modrinthProject(projectId: string): Promise<ContentProject>;
   modrinthProjects(projectIds: string[]): Promise<ContentProject[]>;

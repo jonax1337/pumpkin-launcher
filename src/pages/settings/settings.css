@@ -1,0 +1,64 @@
+.settings-page .settings-content {
+  container: settings-content / inline-size;
+}
+
+.settings-page .settings-section {
+  padding: 0;
+  box-shadow: none;
+}
+
+.settings-page .settings-section > .vx-fsec-h {
+  margin-bottom: 20px;
+  line-height: 1.2;
+}
+
+.settings-page .settings-section > .vx-fsec:first-of-type {
+  padding-top: 0;
+}
+
+.settings-page .settings-field-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  column-gap: 28px;
+}
+
+.settings-page .settings-field-grid > .vx-fsec-h {
+  grid-column: 1 / -1;
+}
+
+.settings-page .settings-field-grid > .vx-frow > .vx-fc {
+  width: 100%;
+  max-width: 560px;
+}
+
+.settings-page .brand-about {
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+@container settings-content (min-width: 840px) {
+  .settings-page .settings-field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 16px;
+  }
+
+  .settings-page .settings-field-grid > .vx-frow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-page .settings-field-grid > .vx-frow > .vx-fl {
+    padding-top: 0;
+  }
+
+  .settings-page .settings-field-grid > .vx-frow > .vx-fc,
+  .settings-page .settings-field-grid > .vx-frow > .vx-fh {
+    grid-column: 1;
+  }
+
+  .settings-page .settings-field-grid > .vx-frow > .vx-fh {
+    margin-left: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+}

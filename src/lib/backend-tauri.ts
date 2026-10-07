@@ -47,6 +47,7 @@ export function createTauriBackend(): Backend {
   return {
     capabilities: allCapabilities(true),
     ...eventSubscriptions(on),
+    announcementFeed: (page) => call("announcement_feed", { page }),
 
     modrinthSearch: (options) => call("modrinth_search", { ...searchArgs(options), category: options.category }),
     modrinthProject: (projectId) => call("modrinth_project", { projectId }),

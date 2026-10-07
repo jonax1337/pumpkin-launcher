@@ -1,4 +1,5 @@
 mod account_commands;
+mod announcement_commands;
 mod commands;
 mod content_commands;
 mod friends_commands;
@@ -63,6 +64,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            announcement_commands::announcement_feed,
             commands::list_instances,
             commands::get_instance,
             commands::create_instance,

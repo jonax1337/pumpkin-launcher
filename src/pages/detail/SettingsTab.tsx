@@ -19,7 +19,7 @@ export function SettingsTab({ instance, packRequested = false, onPackShown }: { 
   // Solange das Spiel läuft, lehnt das Backend jede Änderung an der Instanz ab; das Bild lebt nur lokal.
   const locked = isGameLive(usePhase(instance.id));
   return (
-    <div className="max-w-[var(--page-max)] pt-2">
+    <div className="pt-2">
       {locked && <Hint className="mb-4">{t("detail.settings.lockedHint")}</Hint>}
       <GeneralSection instance={instance} form={form} locked={locked} />
       <GameSection instance={instance} form={form} locked={locked} />

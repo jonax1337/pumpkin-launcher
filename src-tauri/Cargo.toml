@@ -1,6 +1,6 @@
 [package]
 name = "launcher"
-version = "0.3.2"
+version = "0.3.3"
 description = "Pumpkin Launcher – Jede Welt. Ein Klick."
 authors = ["LAUX DIGITAL"]
 edition = "2021"

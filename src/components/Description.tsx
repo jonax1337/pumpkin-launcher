@@ -74,21 +74,24 @@ function loadGatedImage(gate: Element) {
 }
 
 /**
- * Markdown als bereinigtes HTML. Zuletzt läuft DOMPurify und liefert den String unverändert zurück:
+ * HTML als bereinigte Prosa. Zuletzt läuft DOMPurify und liefert den String unverändert zurück:
  * Ein nachträgliches Umbauen und erneutes Serialisieren des bereinigten DOM öffnete mXSS.
  */
-function renderBody(body: string, gateLabel: (host: string) => string): string {
-  const doc = new DOMParser().parseFromString(marked.parse(body, { async: false }), "text/html");
+function renderBody(html: string, gateLabel: (host: string) => string): string {
+  const doc = new DOMParser().parseFromString(html, "text/html");
   badgeRowsAsLinks(doc);
   gateUntrustedImages(doc, gateLabel);
   return DOMPurify.sanitize(doc.body.innerHTML, PURIFY);
 }
 
 /** Projektbeschreibung im Pixelkino-Stil (`.desc`). Links öffnen im Standardbrowser, Bilder fremder Hosts erst nach Klick. */
-export function Description({ body, className }: { body: string; className?: string }) {
+export function Description({ body, format = "markdown", className }: { body: string; format?: "markdown" | "html"; className?: string }) {
   const { t, resolved } = useI18n();
   // `resolved` neu auswerten, damit die Platzhalter beim Sprachwechsel mitziehen.
-  const html = useMemo(() => renderBody(body, (host) => t("components.description.loadImage", { host })), [body, t, resolved]);
+  const html = useMemo(() => renderBody(
+    format === "html" ? body : marked.parse(body, { async: false }),
+    (host) => t("components.description.loadImage", { host }),
+  ), [body, format, t, resolved]);
   function onClick(e: MouseEvent) {
     const target = e.target as Element;
     const gate = target.closest(`[${GATE_ATTR}]`);

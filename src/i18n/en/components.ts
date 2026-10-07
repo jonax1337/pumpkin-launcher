@@ -36,7 +36,7 @@ export const components: typeof deComponents = {
   "components.privacy.mojang": "Minecraft, the Java runtime, libraries, assets and skin textures.",
   "components.privacy.microsoft": "Signing in with your Microsoft account, plus profile, skins and capes. Only when you sign in.",
   "components.privacy.loaders": "Version lists and installers of the mod loaders.",
-  "components.privacy.github": "Launcher updates: a silent check shortly after start and the download when you trigger it.",
+  "components.privacy.github": "Launcher updates and announcements: silent checks at startup and periodically while the launcher is open. Updates download only when you choose. Announcement read status stays locally on your device.",
   "components.privacy.mclogs": "Only after you click “Share log”: the cleaned log is uploaded.",
   "components.privacy.discord": "Only if you turn on “Show in Discord”: the version and loader of the running game go to the Discord app on your computer, which shows them to your friends.",
   "components.privacy.discordWhere": "local only, no network host",

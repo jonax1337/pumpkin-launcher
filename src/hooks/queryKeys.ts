@@ -22,6 +22,7 @@ export const contentKeys = {
 };
 
 export const templateKeys = { all: ["templates"] as const };
+export const announcementKeys = { all: ["announcements"] as const };
 
 /** Pack-Updates und Wechsel von Minecraft-Version oder Loader einer Instanz. */
 export const lifecycleKeys = {

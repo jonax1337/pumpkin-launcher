@@ -19,10 +19,7 @@ export function NewInstanceButton() {
   );
 }
 
-/**
- * Werkzeugleiste der Bibliothek: Suche, Loader, Minecraft-Version, Sortierung, Ansicht, „Auswählen“ und „Neue Instanz“.
- * Sie bricht um (pixelkino.css), sobald der Platz fehlt, statt Bedienelemente zu verlieren; „Neue Instanz“ bleibt rechts.
- */
+/** Suche, Filter, Sortierung, Ansicht und Auswahlmodus; die Leiste bricht bei Platzmangel um. */
 export function LibraryToolbar({ filters, onFilters, versions, view, onPick, pickRef }: {
   filters: LibraryFilters;
   onFilters: (patch: Partial<LibraryFilters>) => void;
@@ -35,8 +32,7 @@ export function LibraryToolbar({ filters, onFilters, versions, view, onPick, pic
 }) {
   const { t } = useI18n();
   return (
-    // Abstände: 16 über, 18 unter der Werkzeugleiste
-    <Toolbar search="m" className="lib-toolbar mt-4 mb-4.5">
+    <Toolbar search="m" className="lib-toolbar mt-4">
       <SearchField value={filters.query} onChange={(query) => onFilters({ query })} placeholder={t("pages.instances.searchPlaceholder")} />
       <Select
         label={t("components.common.loader")}
@@ -72,7 +68,6 @@ export function LibraryToolbar({ filters, onFilters, versions, view, onPick, pic
         ]}
       />
       <Button ref={pickRef} icon="check" onClick={onPick}>{t("pages.instances.pick")}</Button>
-      <NewInstanceButton />
     </Toolbar>
   );
 }

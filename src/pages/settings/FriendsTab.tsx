@@ -267,7 +267,7 @@ function DangerSection() {
   const { t } = useI18n();
   const rotate = useRotateFriendsIdentity();
   return (
-    <FormSection title={t("friendsSettings.sectionDanger")} level={3}>
+    <FormSection title={t("friendsSettings.sectionDanger")} level={3} className="settings-field-grid">
       <FormRow label={t("friendsSettings.rotateLabel")} hint={t("friendsSettings.rotateHint")}>
         <Actions>
           <IdentityAction
@@ -295,7 +295,7 @@ function AvailableSettings({ state }: { state: FriendsState }) {
   const [optingIn, setOptingIn] = useState(false);
   return (
     <>
-      <FormSection title={t("friendsSettings.sectionGeneral")} level={3}>
+      <FormSection title={t("friendsSettings.sectionGeneral")} level={3} className="settings-field-grid">
         <EnableRow enabled={state.enabled} onEnable={() => setOptingIn(true)} />
         {state.enabled && (
           <>

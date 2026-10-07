@@ -14,6 +14,7 @@ const AREAS: Omit<MainTab, "shortcut">[] = [
   { to: "/discover", key: "ui.nav.discover", icon: "search", match: (p) => p.startsWith("/discover") },
   { to: "/skins", key: "ui.nav.skins", icon: "shirt", match: (p) => p.startsWith("/skins") },
   { to: FRIENDS_PATH, key: "ui.nav.friends", icon: "users", match: (p) => p.startsWith(FRIENDS_PATH) },
+  { to: "/announcements", key: "ui.nav.announcements", icon: "info", match: (p) => p.startsWith("/announcements") },
 ];
 
 /** Die Reihenfolge ist die der Seitenleiste und bestimmt das Kürzel: der n-te Bereich ist Strg+n. */

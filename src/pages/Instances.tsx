@@ -10,7 +10,7 @@ import { focusSoon } from "@/pages/detail/content/focus";
 import { newInstanceParams } from "@/lib/routes";
 import { LOADER_LABELS, type Instance } from "@/lib/types";
 import { useLookStore } from "@/store/look";
-import { Button, ButtonLink, CardGrid, ContextMenu, Empty, ErrorBox, Glyph, PageHeader, type MenuEntry } from "@/ui";
+import { Button, ButtonLink, CardGrid, ContextMenu, Empty, ErrorBox, Glyph, PageHeader, WorkspaceContent, type MenuEntry } from "@/ui";
 import { GroupedView } from "./instances/GroupedView";
 import { InstanceView, LibraryRoving } from "./instances/InstanceView";
 import { LibraryToolbar, NewInstanceButton } from "./instances/LibraryToolbar";
@@ -159,7 +159,9 @@ export function InstancesPage() {
     <LibrarySelectionProvider value={selection}>
       <ContextMenu items={menuItems}>
       <section className="page lib" data-picking={selection.picking || undefined} onKeyDown={onKeyDown}>
-        <PageHeader title={t("ui.nav.library")} count={total} />
+        <PageHeader title={t("ui.nav.library")}>
+          <NewInstanceButton />
+        </PageHeader>
         {/* An fester Stelle für beide Knöpfe: füllt der erste Import die leere Bibliothek, bleibt der Dialog mit den übrigen offen */}
         <NewInstanceDialog primary />
         <div className="sr" role="status" aria-live="polite" aria-atomic="true">{said}</div>
@@ -173,9 +175,11 @@ export function InstancesPage() {
             pickRef={pickRef}
           />
         )}
-        <LibraryBody library={library} matches={shown.length} filters={filters} onResetFilters={() => setFilters(NO_FILTERS)}>
-          <LibraryRoving>{listing}</LibraryRoving>
-        </LibraryBody>
+        <WorkspaceContent className="mt-4">
+          <LibraryBody library={library} matches={shown.length} filters={filters} onResetFilters={() => setFilters(NO_FILTERS)}>
+            <LibraryRoving>{listing}</LibraryRoving>
+          </LibraryBody>
+        </WorkspaceContent>
         {selection.picking && (
           <SelectionBar picked={pickedInstances} groups={groups} onSelectAll={selection.selectAll} onDone={leavePicking} />
         )}

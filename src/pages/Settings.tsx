@@ -4,21 +4,22 @@ import { useView } from "@/app/Layout";
 import { AccountsSection } from "@/components/accounts/AccountsSection";
 import { SupportSection } from "@/components/support";
 import { showShortcuts } from "@/components/ShortcutsDialog";
-import { ContextMenu, FormSection, PageHeader, TabPanel, Tabs, type MenuEntry } from "@/ui";
+import { Button, ContextMenu, FormSection, PageHeader, TabPanel, Workspace, WorkspaceContent, WorkspaceRail, WorkspaceTabs, type MenuEntry } from "@/ui";
 import { AboutTab } from "./settings/AboutTab";
 import { AppearanceTab } from "./settings/AppearanceTab";
 import { FriendsTab } from "./settings/FriendsTab";
 import { GameTab } from "./settings/GameTab";
 import { StorageTab } from "./settings/StorageTab";
+import "./settings/settings.css";
 
 // Abschnitte als Wert + Schlüssel; die Beschriftung löst die Oberfläche erst beim Rendern auf.
 const SECTIONS = [
-  { value: "konten", key: "components.account.accounts" },
-  { value: "spiel", key: "settings.tabJava" },
-  { value: "freunde", key: "friendsSettings.tab" },
-  { value: "speicher", key: "settings.tabStorage" },
-  { value: "darstellung", key: "pages.settings.tabAppearance" },
-  { value: "ueber", key: "pages.settings.tabAbout" },
+  { value: "konten", key: "components.account.accounts", icon: "user" },
+  { value: "spiel", key: "settings.tabJava", icon: "play" },
+  { value: "freunde", key: "friendsSettings.tab", icon: "users" },
+  { value: "speicher", key: "settings.tabStorage", icon: "folder" },
+  { value: "darstellung", key: "pages.settings.tabAppearance", icon: "eye" },
+  { value: "ueber", key: "pages.settings.tabAbout", icon: "info" },
 ] as const;
 type SectionId = (typeof SECTIONS)[number]["value"];
 
@@ -41,7 +42,7 @@ function AboutAndSupport() {
 function SectionBody({ id }: { id: SectionId }) {
   switch (id) {
     case "konten":
-      return <div className="set-acc"><AccountsSection /></div>;
+      return <AccountsSection />;
     case "spiel":
       return <GameTab />;
     case "freunde":
@@ -55,31 +56,21 @@ function SectionBody({ id }: { id: SectionId }) {
   }
 }
 
-/** Tabwechsel: klebt die Leiste oben, geht die Seite auf deren Ruhelage zurück, damit der neue Inhalt direkt darunter beginnt. */
-function settleScroll(view: HTMLElement | null, tab: HTMLElement) {
-  const bar = tab.closest<HTMLElement>("[role=tablist]");
-  const head = bar?.previousElementSibling;
-  if (!view || !bar || !head) return;
-  const headBottom = head.getBoundingClientRect().bottom - view.getBoundingClientRect().top + view.scrollTop;
-  const rest = headBottom + parseFloat(getComputedStyle(bar).marginTop);
-  if (view.scrollTop > rest) view.scrollTop = rest;
-}
-
 export function SettingsPage() {
   const { t } = useI18n();
   const view = useView();
   const { hash } = useLocation();
   const [params, setParams] = useSearchParams();
-  // ?tab=… gewinnt; #konten (aus dem Kontomenü) und die anderen Abschnitts-Anker öffnen ihren Tab.
+  // ?tab=… gewinnt; #konten (aus dem Kontomenü) und die anderen Abschnitts-Anker öffnen ihren Abschnitt.
   const section = sectionOf(params.get("tab")) ?? sectionOf(decodeURIComponent(hash.slice(1))) ?? SECTIONS[0];
   // Abschnitts-Beschriftungen erst hier auflösen, damit ein Sprachwechsel sofort greift.
-  const tabs = SECTIONS.map(({ value, key }) => ({ value, label: t(key) }));
+  const sections = SECTIONS.map(({ value, key, icon }) => ({ value, label: t(key), icon }));
   const selectSection = (id: SectionId) => {
     setParams({ tab: id }, { replace: true });
     view.current?.scrollTo({ top: 0 });
   };
   const menu: MenuEntry[] = [
-    ...tabs.map(({ value, label }) => ({
+    ...sections.map(({ value, label }) => ({
       id: value, text: label, checked: value === section.value, onSelect: () => selectSection(value),
     })),
     "-",
@@ -88,26 +79,31 @@ export function SettingsPage() {
 
   return (
     <ContextMenu items={menu}>
-    <section className="page set">
-      <PageHeader title={t("common.settings")} />
-      <Tabs
-        idBase="st"
-        sticky
-        className="mt-3"
-        label={t("pages.settings.tabsLabel")}
-        items={tabs}
-        value={section.value}
-        onChange={(id) => setParams({ tab: id }, { replace: true })}
-        onActivate={(_, el) => settleScroll(view.current, el)}
-      />
-
-      {/* Nur der gewählte Tab. Der Tab-Name ist die Überschrift; das h2 bleibt für Vorleser und Überschriften-Sprünge. */}
-      <TabPanel idBase="st" value={section.value}>
-        <FormSection key={section.value} title={t(section.key)} srOnlyTitle>
-          <SectionBody id={section.value} />
-        </FormSection>
-      </TabPanel>
-    </section>
+      <section className="page set settings-page">
+        <PageHeader title={t("common.settings")}>
+          <Button size="s" onClick={showShortcuts}>{t("pages.settings.shortcutsButton")}</Button>
+        </PageHeader>
+        <Workspace rail={
+          <WorkspaceRail>
+            <WorkspaceTabs
+              idBase="settings"
+              label={t("pages.settings.tabsLabel")}
+              items={sections}
+              value={section.value}
+              onChange={selectSection}
+              onActivate={() => view.current?.scrollTo({ top: 0 })}
+            />
+          </WorkspaceRail>
+        }>
+          <WorkspaceContent id="settings-content" className="settings-content">
+            <TabPanel idBase="settings" value={section.value} tabIndex={0}>
+              <FormSection key={section.value} title={t(section.key)} className="settings-section">
+                <SectionBody id={section.value} />
+              </FormSection>
+            </TabPanel>
+          </WorkspaceContent>
+        </Workspace>
+      </section>
     </ContextMenu>
   );
 }

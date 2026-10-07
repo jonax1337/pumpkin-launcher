@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router";
 import { useFriendRequests, useFriendsList, useFriendsState, useHostSessions, useInvites } from "@/hooks/useFriends";
 import { useI18n } from "@/i18n";
 import type { FriendsState } from "@/lib/types";
-import { ContextMenu, ErrorBox, PageHeader, Skel, type MenuEntry } from "@/ui";
+import { Button, ContextMenu, ErrorBox, PageHeader, Skel, Workspace, WorkspaceContent, WorkspaceRail, type MenuEntry } from "@/ui";
 import { ActivitySection } from "./ActivitySection";
 import { AddFriendButtons, AddFriendDialog, type AddFriendTab } from "./AddFriendDialog";
 import { FriendsSection } from "./FriendsSection";
@@ -21,7 +21,7 @@ function useScrollToAnchor(ready: boolean) {
   }, [ready, hash]);
 }
 
-/** Die benutzbare Seite: Kopf mit Zahl der Freunde online, Anfragen, Freundesliste und die Aktivität im Spiel. */
+/** Freundesliste neben Anfragen, Aktivität und Einstellungen; die Aktionen bleiben im kompakten Seitenkopf. */
 export function FriendsContent({ state }: { state: FriendsState }) {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -49,22 +49,33 @@ export function FriendsContent({ state }: { state: FriendsState }) {
   ];
   return (
     <ContextMenu items={menu}>
-    <section className="page">
-      <PageHeader title={t("ui.nav.friends")} count={friends.data && onlineCount(friends.data)}>
+    <section className="page friends-page">
+      <PageHeader title={t("ui.nav.friends")}>
         <AddFriendButtons onAdd={setAdding} />
       </PageHeader>
       <NetworkBanner network={state.network} />
-      {error ? (
-        <ErrorBox className="mt-4" title={t("friends.loadFailed")} error={error} onRetry={() => void Promise.all([friends.refetch(), requests.refetch()])} />
-      ) : !friends.data || !requests.data ? (
-        <Skel className="mt-4" h={120} />
-      ) : (
-        <>
-          {requests.data.length > 0 && <RequestsSection requests={requests.data} askBlock={actions.askBlock} {...retry} />}
-          <FriendsSection friends={friends.data} invites={invites.data ?? []} session={sessions.data?.[0]} actions={actions} onAdd={setAdding} />
-        </>
-      )}
-      <ActivitySection />
+      <Workspace rail={
+        <WorkspaceRail className="friends-rail">
+          <div className="friends-controls">
+            {friends.data && <span className="friends-online">{t("friends.presence.online")}: {onlineCount(friends.data)}</span>}
+            <Button variant="ghost" icon="gear" onClick={() => navigate("/settings?tab=freunde")}>{t("friendsSettings.tab")}</Button>
+          </div>
+          {!error && friends.data && requests.data && requests.data.length > 0 && (
+            <RequestsSection requests={requests.data} askBlock={actions.askBlock} {...retry} />
+          )}
+          <ActivitySection />
+        </WorkspaceRail>
+      }>
+        <WorkspaceContent className="friends-content">
+          {error ? (
+            <ErrorBox title={t("friends.loadFailed")} error={error} onRetry={() => void Promise.all([friends.refetch(), requests.refetch()])} />
+          ) : !friends.data || !requests.data ? (
+            <Skel h={120} />
+          ) : (
+            <FriendsSection friends={friends.data} invites={invites.data ?? []} session={sessions.data?.[0]} actions={actions} onAdd={setAdding} />
+          )}
+        </WorkspaceContent>
+      </Workspace>
       {adding && <AddFriendDialog initialTab={adding} onClose={() => setAdding(null)} />}
       {dialogs}
     </section>

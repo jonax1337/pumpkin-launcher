@@ -50,7 +50,7 @@ export function GroupedView({ sections, groups, mode, reorderable }: { sections:
   }
 
   return (
-    <>
+    <div className="lib-groups" data-mode={mode}>
       {mode === "list" && <InstanceListHeader />}
       {sections.map(([group, members]) => {
         // Schlüssel ist die Gruppe selbst ("" = ohne Gruppe): eine Gruppe darf auch „Ohne Gruppe“ heißen.
@@ -68,6 +68,6 @@ export function GroupedView({ sections, groups, mode, reorderable }: { sections:
           </div>
         );
       })}
-    </>
+    </div>
   );
 }

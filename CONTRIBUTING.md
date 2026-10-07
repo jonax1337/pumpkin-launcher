@@ -127,8 +127,8 @@ and `mod/gradle.properties`; `src-tauri/Cargo.lock` must record the same Rust pa
 After committing the intended release, create its annotated tag:
 
 ```bash
-git tag -a --cleanup=verbatim v0.3.2
-git push origin v0.3.2
+git tag -a --cleanup=verbatim v0.3.3
+git push origin v0.3.3
 ```
 
 The first command opens the tag-message editor. Use **only that version's entry** from

@@ -6,6 +6,7 @@ import { ContextMenu, ErrorBox, PageHeader, Skel, type MenuEntry } from "@/ui";
 import { FriendsContent } from "./friends/FriendsContent";
 import { FriendsGate } from "./friends/FriendsGate";
 import { friendsGate } from "./friends/friendsModel";
+import "./friends/friends.css";
 
 /** Freunde: Anfragen und Liste. Ist die Funktion nicht nutzbar, steht an ihrer Stelle der Grund mit dem nächsten Schritt. */
 export function FriendsPage() {
@@ -29,7 +30,7 @@ export function FriendsPage() {
   if (state.data && !gate && !accountError && !accountPending) return <FriendsContent state={state.data} />;
   return (
     <ContextMenu items={menu}>
-    <section className="page">
+    <section className="page friends-page">
       <PageHeader title={t("ui.nav.friends")} />
       {accountError ? (
         <ErrorBox className="mt-4" title={t("components.account.msLoadFailed")} error={accountError} onRetry={() => void query.refetch()} />

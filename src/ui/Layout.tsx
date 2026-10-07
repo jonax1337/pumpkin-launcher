@@ -3,9 +3,11 @@
  * Maße fest in px (nie von --px abhängig). Aussehen: ui/layout.css (vx-*).
  */
 import { Children, isValidElement, type ComponentProps, type ReactNode } from "react";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
 import { Count } from "./Chip";
-import { flag } from "./util";
+import { Tabs, type TabsProps } from "./Tabs";
+import { flag, hasContent } from "./util";
 
 /** Überschriftenstufen (Display, Versalien): Seite 40 · Dialog 26 · Abschnitt 22 · Unterabschnitt 20 · Karte 18. */
 export type HeadingLevel = "page" | "dialog" | "section" | "sub" | "card";
@@ -20,17 +22,45 @@ export function Heading({ level, as, className, children, ...props }: { level: H
 }
 
 /**
- * Seitenkopf: 44 px hoch, h1 40 px unten bündig; `count` als Pixelzahl daneben (grau), `children` rechts (Aktionen).
+ * Seitenkopf mit kompaktem Zähler und Trennlinie; `children` rechts (Aktionen).
  * Das h1 bekommt nach dem Seitenwechsel den Fokus (app/Layout).
  */
 export function PageHeader({ title, count, id, children, className }: { title: ReactNode; count?: number; id?: string; children?: ReactNode; className?: string }) {
   return (
     <div className={cn("vx-pageh", className)}>
       <Heading level="page" id={id} className="vx-trunc">{title}</Heading>
-      {count != null && <Count value={count} size={26} muted className="vx-pageh-n" />}
+      {count != null && <Count value={count} size={18} muted className="vx-pageh-n" />}
       {children && <div className="vx-pageh-a">{children}</div>}
     </div>
   );
+}
+
+/** Seitenraster mit optionalem Kontextbereich; ohne `rail` nutzt der Inhalt die volle Breite. */
+export function Workspace({ rail, className, children, ...props }: ComponentProps<"div"> & { rail?: ReactNode }) {
+  return (
+    <div className={cn("vx-workspace", className)} data-rail={flag(hasContent(rail))} {...props}>
+      {rail}
+      {children}
+    </div>
+  );
+}
+
+/** Kontext oder Navigation neben dem Inhalt, auf schmalen Fenstern darüber. */
+export function WorkspaceRail({ className, ...props }: ComponentProps<"aside">) {
+  return <aside className={cn("vx-workspace-rail", className)} {...props} />;
+}
+
+/** Inhaltsfläche; `plain` übernimmt die bereits vorhandene Oberfläche eines eingebetteten Bereichs. */
+export function WorkspaceContent({ variant = "panel", className, ...props }: ComponentProps<"div"> & { variant?: "panel" | "plain" }) {
+  return <div className={cn("vx-workspace-content", className)} data-variant={variant} {...props} />;
+}
+
+export type WorkspaceTabsProps<V extends string> = Omit<TabsProps<V>, "variant" | "sticky">;
+
+/** Kit-Navigation für das Seitenraster: Pixel-Platten links, kompakte Segmente über dem Inhalt. */
+export function WorkspaceTabs<V extends string>({ className, ...props }: WorkspaceTabsProps<V>) {
+  const stacked = useMediaQuery("(max-width: 960px)");
+  return <Tabs {...props} variant={stacked ? "segment" : "vertical"} className={cn("vx-workspace-tabs", className)} />;
 }
 
 /**

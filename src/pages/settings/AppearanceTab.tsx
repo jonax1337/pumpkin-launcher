@@ -53,7 +53,7 @@ export function AppearanceTab() {
   const set = useSettings((s) => s.set);
   const reduced = useReducedMotion();
   return (
-    <>
+    <div className="settings-field-grid">
       <FormRow label={t("common.language")} hint={t("pages.settings.languageHint")}>
         <Segmented<LanguageChoice>
           size="s"
@@ -106,6 +106,6 @@ export function AppearanceTab() {
           items={PX_SIZE_KEYS.map(({ value, key }) => ({ value, label: t(key) }))}
         />
       </FormRow>
-    </>
+    </div>
   );
 }

@@ -55,7 +55,7 @@ const onlyInApp = (whatKey: TKey) => unavailable(() => t("hooks.api.onlyInApp", 
 /** Modpacks und Anbieter ohne Schlüssel brauchen echte Dateien und Downloads. */
 const modpacksNeedApp = unavailable(() => t("hooks.api.modpacksNeedApp"));
 
-/** In-Memory-Backend für den reinen `pnpm dev` im Browser: Katalog echt von Modrinth, der Rest simuliert. */
+/** In-Memory-Backend für `pnpm dev`: Katalog und Ankündigungen sind echt, lokale App-Funktionen simuliert. */
 export function createMockBackend(): Backend {
   const { emit, on } = createEventBus();
   const context = { db: createDb(), emit };
@@ -80,6 +80,17 @@ export function createMockBackend(): Backend {
     ...createScreenshotMock(),
     ...createSettingsMock(context),
     ...friends.api,
+    async announcementFeed(page) {
+      if (!Number.isInteger(page) || page < 1 || page > 0xffff_ffff) {
+        throw new Error("Announcement page must be a positive 32-bit integer.");
+      }
+      const response = await fetch(`/api/announcements.atom?page=${page}`, {
+        credentials: "omit",
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!response.ok) throw new Error(`GitHub announcements: HTTP ${response.status}`);
+      return response.text();
+    },
     async launchInstance(instanceId, options) {
       const pid = await game.launchInstance(instanceId, options);
       friends.joinSpawned(options.friendJoin);

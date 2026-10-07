@@ -1,0 +1,92 @@
+.friends-page .friends-rail {
+  min-width: 0;
+  padding: 16px;
+}
+
+.friends-page .friends-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.friends-page .friends-online {
+  color: var(--fg-2);
+  font-size: calc(13px * var(--tz));
+}
+
+.friends-page .friends-rail .vx-list .vx-row {
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 0;
+  --r-bv: none;
+  border-bottom: 1px solid var(--line);
+}
+
+.friends-page .friends-rail .vx-list .vx-row > .vx-rt {
+  flex: 1 1 calc(100% - 48px);
+}
+
+.friends-page .friends-rail :is(.vx-rt-1, .vx-rt-s > span) {
+  flex-wrap: wrap;
+}
+
+.friends-page .friends-rail :is(.vx-rt-s, .vx-rt-a, .vx-rt-m) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.friends-page .friends-rail .vx-rt-m {
+  flex-wrap: wrap;
+}
+
+.friends-page .friends-content {
+  container: friends-list / inline-size;
+}
+
+.friends-page .friends-content .vx-toolbar {
+  align-items: flex-start;
+}
+
+.friends-page .vx-status {
+  flex-wrap: wrap;
+}
+
+@container friends-list (max-width: 640px) {
+  .friends-page .vx-list[data-variant="friends"] .vx-row {
+    grid-template-columns: 40px minmax(0, 1fr) 36px;
+    gap: 8px;
+    padding-block: 12px;
+  }
+
+  .friends-page .vx-list[data-variant="friends"] .vx-row > :nth-child(3) {
+    grid-column: 2;
+    grid-row: 2;
+    flex-wrap: wrap;
+  }
+
+  .friends-page .vx-list[data-variant="friends"] .vx-row > :nth-child(4) {
+    grid-column: 2;
+    grid-row: 3;
+    justify-content: flex-start;
+  }
+
+  .friends-page .vx-list[data-variant="friends"] .vx-row > :nth-child(5) {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .friends-page .vx-list[data-variant="friends"] .vx-row[data-note] > :first-child {
+    display: none;
+  }
+
+  .friends-page .vx-list[data-variant="friends"] .vx-row[data-note] > :nth-child(2) {
+    grid-column: 1 / -1;
+  }
+
+  .friends-page .vx-list[data-variant="friends"] .vx-row[data-note] > :nth-child(3) {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}

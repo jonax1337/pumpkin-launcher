@@ -153,7 +153,7 @@ function ResultsList({ search, source, type, layout, emptyText, headerEnd, activ
           <SectionHeader
             as={layout.heading.as}
             size={layout.heading.size}
-            title={!query ? sortHeading(index) : results.data ? <><Count value={formatCount(total)} size={32} /> {t("components.search.hits")}</> : t("components.search.searching")}
+            title={!query ? sortHeading(index) : results.data ? <>{formatCount(total)} {t("components.search.hits")}</> : t("components.search.searching")}
             info={hint && <Tip label={hint} describe><IconButton icon="info" size="s" label={t("components.sort.infoLabel")} tip={false} /></Tip>}
             actions={headerEnd}
           />

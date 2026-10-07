@@ -4,6 +4,41 @@ Last updated: 2026-10-07.
 
 For installation and a first game, start with the [launcher guide](README.md#download-and-install).
 
+## 0.3.3 — 2026-10-07
+
+### Announcements
+
+- Add a full-width announcements reader in the sidebar, backed by the public
+  GitHub Discussions category feed, with complete formatted posts and pagination.
+- Show an unread badge throughout the launcher. Check for announcements at
+  startup and every five minutes while the window is active, without a GitHub login.
+- Keep read status locally across restarts. Opening a specific post marks it read;
+  users can mark it unread again or mark all loaded posts read.
+- Keep the header compact and use restrained seasonal accents, without explanatory
+  banners. Preserve cached posts when refreshing fails.
+
+### Shared page layout
+
+- Apply the compact header, full-width content area and restrained seasonal
+  accents across Home, library, instance details, Discover, Skins, Friends,
+  Settings and the not-found page.
+- Place settings navigation, Friends requests and the current skin beside their
+  main content on wide windows; stack the workspace on smaller windows.
+- Arrange library poster groups side by side when space allows, while keeping
+  the list view full-width.
+- Move primary actions into page headers and remove redundant introductory
+  banners without removing account, consent, privacy or error guidance.
+- Remove the sidebar's inner active marker; use the active surface and accent
+  icon color while retaining the keyboard focus ring.
+- Remove the decorative Pumpkin beside Home's Play button and its hover/focus
+  animation state. Keep Play and the instance menu unchanged.
+- Promote the shared workspace into exported Pixel Kit components and migrate
+  all page consumers away from raw layout classes.
+- Use the Kit's icon-bearing pixel-plate tabs for Settings, with responsive
+  keyboard navigation, visible panel focus and no inner selection bar.
+- Add interactive workspace and disabled-tab examples to `/_kit`; keep selected
+  horizontal tabs visible when navigating or resizing.
+
 ## 0.3.2 — 2026-10-07
 
 ### Launcher interface

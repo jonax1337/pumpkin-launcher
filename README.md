@@ -66,6 +66,7 @@ For later imports, use **Library > New instance > File** for `.mrpack` or CurseF
 - **Comfort settings:** German and English, adjustable text size, reduced motion, keyboard shortcuts (`?` shows them), page-specific right-click menus and optional Discord Rich Presence, off by default.
 - **Friends:** opt in to friend requests, online status and sharing worlds. Friends networking and actions need consent. See [Friends](docs/friends/README.md) for availability and limits.
 - **Updates and troubleshooting:** available launcher updates stay visible in the title bar and signed updates install only when you choose, not while a game or task is running. Instance logs and crash hints help when a game fails to start.
+- **Announcements:** read the [GitHub announcements](https://github.com/jonax1337/pumpkin-launcher/discussions/categories/announcements) inside the launcher. The sidebar badge shows unread loaded posts; selecting a post marks it read. Read/unread status stays on this device across restarts. Older posts load on demand, and GitHub sign-in is not required.
 
 To preserve or move saves:
 
@@ -77,7 +78,7 @@ To preserve or move saves:
 
 **0.3.0** introduces [Pumpkin Bridge](docs/bridge/README.md), the bundled client-only integration between the launcher and Minecraft. In supported modded Microsoft-account launches, a Pumpkin button opens a menu of in-game features; no manual JAR installation is needed. The shared connection and menu work independently of Friends opt-in. Friends is its first implemented feature, with private data and actions withheld until consent.
 
-This guide describes **0.3.1**. Download links above follow the latest published release and become available for a version only after its installer pipeline succeeds and the release is published. See the [Changelog](CHANGELOG.md) for version-specific changes and historical limits.
+This guide describes **0.3.3**. Download links above follow the latest published release and become available for a version only after its installer pipeline succeeds and the release is published. See the [Changelog](CHANGELOG.md) for version-specific changes and historical limits.
 
 ## Help and privacy
 
@@ -104,4 +105,4 @@ Pumpkin Launcher is released under the [Apache License 2.0](LICENSE).
 Pumpkin Launcher is not affiliated with, endorsed by, or associated with Mojang, Microsoft, or Modrinth.
 "Minecraft" is a trademark of Mojang Synergies AB.
 
-Last updated: 2026-10-06.
+Last updated: 2026-10-07.

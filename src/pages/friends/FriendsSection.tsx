@@ -27,7 +27,7 @@ export function FriendsSection({ friends, invites, session, actions, onAdd }: {
   }
   const visible = visibleFriends(friends, labels, { query, onlineOnly: scope === "online" });
   return (
-    <section className="mt-6">
+    <section>
       <SectionHeader title={t("friends.list.title")} size="sub" as="h2" />
       <Toolbar search="m" className="mt-2 mb-3">
         <SearchField value={query} onChange={setQuery} placeholder={t("friends.search.placeholder")} />

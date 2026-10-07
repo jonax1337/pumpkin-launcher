@@ -24,7 +24,7 @@ export function HeroInfo({ instance }: { instance: Instance }) {
   return (
     <div className="hero-k rise">
       <div className="titlebox">
-        <h1 title={instance.name}>{instance.name}</h1>
+        <h2 title={instance.name}>{instance.name}</h2>
       </div>
       <div className="hmeta">
         <Meta

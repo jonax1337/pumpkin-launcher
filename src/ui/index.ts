@@ -16,4 +16,4 @@ export { ContextMenu, Menu, MenuItem, MenuLabel, MenuNote, MenuScroll, MenuSep, 
 export { Popover } from "./Popover";
 export { ConfirmDialog, Dialog, DialogActions, Sheet } from "./Dialog";
 export { Empty, ErrorBox, JobProgress, Progress, Skel, StatusPanel, Toaster } from "./Feedback";
-export { Actions, Heading, PageHeader, SectionHeader, Spacer, Toolbar, type HeadingLevel } from "./Layout";
+export { Actions, Heading, PageHeader, SectionHeader, Spacer, Toolbar, Workspace, WorkspaceContent, WorkspaceRail, WorkspaceTabs, type HeadingLevel, type WorkspaceTabsProps } from "./Layout";

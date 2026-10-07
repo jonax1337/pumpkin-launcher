@@ -12,15 +12,30 @@ import { PixelScene } from "@/pixel/PixelScene";
 import { newInstanceUrl } from "@/lib/routes";
 import type { Instance } from "@/lib/types";
 import { useLook } from "@/store/look";
-import { Button, ButtonLink, ContextMenu, ErrorBox, SectionHeader, Skel, type MenuEntry } from "@/ui";
+import { Actions, Button, ButtonLink, ContextMenu, ErrorBox, PageHeader, SectionHeader, Skel, type MenuEntry } from "@/ui";
 import { HeroActions } from "./home/HeroActions";
 import { HeroInfo } from "./home/HeroInfo";
 import { Rail, TILE_H, TILE_W } from "./home/Rail";
+
+function HomeHeader() {
+  const { t } = useI18n();
+  return (
+    <PageHeader title={t("ui.nav.home")} className="home-header">
+      <Actions wrap>
+        <NewInstanceDialog>
+          <Button icon="plus">{t("components.newInstance.title")}</Button>
+        </NewInstanceDialog>
+        <ButtonLink to="/instances" variant="ghost" iconEnd="chev">{t("ui.nav.library")}</ButtonLink>
+      </Actions>
+    </PageHeader>
+  );
+}
 
 function HomeSkeleton() {
   const { t } = useI18n();
   return (
     <section className="home" aria-busy aria-label={t("components.common.loadingAria")}>
+      <HomeHeader />
       <div className="hero">
         <div className="hero-k">
           <div className="titlebox"><Skel h={72} w="min(520px, 80%)" /></div>
@@ -48,6 +63,7 @@ export function HomePage() {
   if (error)
     return (
       <section className="page">
+        <PageHeader title={t("ui.nav.home")} />
         <ErrorBox title={t("pages.home.loadErrorTitle")} error={error} onRetry={() => void refetch()} />
       </section>
     );
@@ -76,6 +92,7 @@ function HomeContent({ instances, current, onPick }: {
     <section className="home">
       <PixelScene bio={look.bio} seed={look.seed} mode="hero" className="scene" />
       <div className="shade-home" />
+      <HomeHeader />
       <div className="hero">
         <HeroInfo key={`info-${current.id}`} instance={current} />
         <HeroActions instance={current} />
@@ -86,14 +103,6 @@ function HomeContent({ instances, current, onPick }: {
           <SectionHeader
             title={t("components.detail.yourInstances")}
             id="cont-h"
-            actions={
-              <>
-                <NewInstanceDialog>
-                  <Button variant="ghost" size="s" icon="plus">{t("components.newInstance.title")}</Button>
-                </NewInstanceDialog>
-                <ButtonLink to="/instances" variant="ghost" size="s" iconEnd="chev" bleed="end">{t("pages.home.allInLibrary")}</ButtonLink>
-              </>
-            }
           />
         </div>
         <Rail instances={[...instances].sort(byRecent)} current={current.id} onPick={onPick} />

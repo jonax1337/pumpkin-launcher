@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "@/i18n";
-import { BackLink, Button, Chip, Count, ErrorBox, Hint, List, ListRow, Meta, Panel, ProjectIcon, RowTitle, SectionHeader, Skel } from "@/ui";
+import { BackLink, Button, Chip, Count, ErrorBox, Hint, List, ListRow, Meta, PageHeader, Panel, ProjectIcon, RowTitle, SectionHeader, Skel, WorkspaceContent } from "@/ui";
 import { Description } from "@/components/Description";
 import { useInstances } from "@/hooks/useInstances";
 import { ALL_VERSIONS, catalogApi } from "@/lib/catalogApi";
@@ -93,20 +93,36 @@ function ProjectHead({ project, scope, hit }: { project: ContentProject; scope: 
   const { projectId, type, source, instance, world } = scope;
   const installedIn = useInstalledIn();
   const ref = { id: projectId, title: project.title };
+  const metadata = (
+    <>
+      {hit && <Meta items={[t("components.search.byAuthor", { author: hit.author }), <><Count value={formatDownloads(hit.downloads)} /> {t("components.stats.downloads")}</>]} />}
+      <Chip size="s">{t(TYPE_ONE_KEYS[type])}</Chip>
+      {hit && categoryNames(hit.categories, CATEGORIES_IN_HEAD).map((c) => <Chip key={c} size="s">{c}</Chip>)}
+      {!instance && <InstalledChipHead instances={installedIn.get(installedKey(source, projectId))} />}
+    </>
+  );
+  if (!instance) {
+    return (
+      <>
+        <PageHeader
+          className="mt-3"
+          title={<span className="inline-flex max-w-full items-center gap-3 align-middle"><ProjectIcon url={project.icon_url} seed={projectId} box={40} /><span className="truncate" title={project.title}>{project.title}</span></span>}
+        >
+          <ContentAction type={type} project={ref} source={source} large />
+        </PageHeader>
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-fg-2">{metadata}</div>
+      </>
+    );
+  }
   return (
     <div className="proj-h">
       <ProjectIcon url={project.icon_url} seed={projectId} box={64} />
       <div className="min-w-0">
         <h1 title={project.title}>{project.title}</h1>
-        <div className="by">
-          {hit && <Meta items={[t("components.search.byAuthor", { author: hit.author }), <><Count value={formatDownloads(hit.downloads)} /> {t("components.stats.downloads")}</>]} />}
-          <Chip size="s">{t(TYPE_ONE_KEYS[type])}</Chip>
-          {hit && categoryNames(hit.categories, CATEGORIES_IN_HEAD).map((c) => <Chip key={c} size="s">{c}</Chip>)}
-          {!instance && <InstalledChipHead instances={installedIn.get(installedKey(source, projectId))} />}
-        </div>
+        <div className="by">{metadata}</div>
       </div>
       <div className="projact">
-        {instance ? <AddProjectButton instance={instance} world={world} project={ref} type={type} source={source} /> : <ContentAction type={type} project={ref} source={source} large />}
+        <AddProjectButton instance={instance} world={world} project={ref} type={type} source={source} />
       </div>
     </div>
   );
@@ -244,12 +260,12 @@ export function ContentDetail({ projectId, type, source, instance, world, onBack
         <>
           <ProjectHead project={project.data} scope={scope} hit={hit} />
           <div className="proj-b">
-            <div>
+            <WorkspaceContent variant={instance ? "plain" : "panel"}>
               {project.data.description && <p className="lead">{project.data.description}</p>}
               <Gallery images={project.data.gallery} project={project.data.title} />
               <Description body={project.data.body} />
               {!instance && <VersionsSection project={project.data} scope={scope} />}
-            </div>
+            </WorkspaceContent>
             <aside className="proj-side">
               <FitsPanel project={project.data} scope={scope} />
               {instance && <FittingVersionsPanel project={project.data} scope={scope} instance={instance} />}

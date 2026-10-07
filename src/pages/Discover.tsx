@@ -2,9 +2,8 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useView } from "@/app/Layout";
 import { useI18n } from "@/i18n";
-import { ChipButton, ContextMenu, PageHeader, SearchField, Select, TabPanel, Tabs, Toolbar, type MenuEntry } from "@/ui";
+import { ChipButton, ContextMenu, PageHeader, SearchField, Select, TabPanel, Tabs, Toolbar, WorkspaceContent, type MenuEntry } from "@/ui";
 import { ContentDetail } from "@/components/catalog/ContentDetail";
-import { DiscoverIntro } from "@/components/catalog/DiscoverIntro";
 import { ContentResults } from "@/components/catalog/ContentResults";
 import { searchPlaceholder, typeLabel } from "@/components/catalog/labels";
 import { OtherTypeHits } from "@/components/catalog/OtherTypeHits";
@@ -20,6 +19,7 @@ import type { SearchRequest } from "@/lib/catalogSearch";
 import { discoverParams, readDiscoverParams } from "@/lib/routes";
 import { hasStarter } from "@/lib/starter";
 import { ALL_LOADERS, LOADER_LABELS, type VersionEntry } from "@/lib/types";
+import "./discover.css";
 
 const TABS = ["modpack", "mod", "shader", "resourcepack", "datapack"] as const satisfies readonly CatalogType[];
 
@@ -195,7 +195,7 @@ export function DiscoverPage() {
             />
           )}
         </Toolbar>
-        <DiscoverIntro key={type} type={type} />
+        <WorkspaceContent className="disc-results">
         <TabPanel idBase="disc" value={type}>
           <div className="mb-2 flex flex-wrap items-center gap-x-3 empty:hidden">
             {starterAvailable && (
@@ -234,6 +234,7 @@ export function DiscoverPage() {
             />
           )}
         </TabPanel>
+        </WorkspaceContent>
       </section>
       </ContextMenu>
     </>
