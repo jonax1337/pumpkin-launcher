@@ -9,7 +9,7 @@ sourceSets.main.java.exclude('dev/laux/pumpkin/bridge/platform/fabric/**',
 	'dev/laux/pumpkin/bridge/platform/neoforge/**', 'dev/laux/pumpkin/bridge/platform/neoforgelegacy/**')
 
 dependencies {
-	annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+	annotationProcessor 'org.spongepowered:mixin:0.8.7:processor'
 }
 
 mixin {

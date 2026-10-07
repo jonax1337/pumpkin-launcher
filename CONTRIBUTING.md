@@ -6,7 +6,7 @@ Report vulnerabilities privately through [SECURITY.md](.github/SECURITY.md).
 
 ## Development setup
 
-Install Node 24, pnpm 11 (the pinned version is in `package.json`) and Rust stable.
+Install Node 24, pnpm 12 (the pinned version is in `package.json`) and Rust stable.
 Desktop development also needs:
 
 - Windows: the MSVC Rust toolchain, MSVC Build Tools with C++ support and WebView2 Runtime.

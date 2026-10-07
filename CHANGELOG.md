@@ -1,8 +1,31 @@
 # Changelog
 
-Last updated: 2026-10-06.
+Last updated: 2026-10-07.
 
 For installation and a first game, start with the [launcher guide](README.md#download-and-install).
+
+## Unreleased
+
+### Dependencies and build tooling
+
+- Refreshed launcher and P2P-tool Rust dependencies and lockfiles, including Tauri,
+  Tokio, UUID and Base64.
+- Migrated credential storage to Keyring Core and the current native Windows,
+  Apple and Secret Service stores without changing credential identities or
+  legacy token encoding. Linux reconnects per operation so a failed service
+  initialization can recover. Added isolated native persistence and recovery
+  checks to CI.
+- Updated the frontend to React 19.3, React Router 8.4 and TypeScript 7, with pnpm
+  12.9.1 and refreshed JavaScript dependencies. Kept Vite 8.3.2 while 8.3.3 is
+  inside pnpm's release-age quarantine; the supply-chain policy remains enabled.
+- Updated SHA-pinned GitHub Actions, including all five pending Dependabot
+  updates, Checkout and Pages deployment.
+- Updated Gradle to 9.8.0, Forge Renamer's plugin/tool to 1.1.1/2.2.3 and the
+  Mixin annotation processor to 0.8.7. Resolve Renamer's published implementation
+  directly because its plugin marker is missing, replace its unpublished tool
+  default and run it on the prepared node JDK. Retain the oldest game-supplied
+  Gson and Log4j API contracts for the supported Minecraft matrix.
+- Updated the launch-video HyperFrames CLI pin to 0.8.138.
 
 ## 0.3.0 — 2026-10-06
 
