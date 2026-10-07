@@ -2,7 +2,6 @@ package dev.laux.pumpkin.bridge;
 
 import dev.laux.pumpkin.bridge.runtime.MainThread;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /** A main thread that runs tasks only when the test says so, like the game's tick. */
 public final class ManualMainThread implements MainThread {
@@ -15,12 +14,12 @@ public final class ManualMainThread implements MainThread {
 
 	/** Runs everything queued so far and returns how many tasks ran. */
 	public int runPending() {
-		AtomicInteger ran = new AtomicInteger();
+		int ran = 0;
 		for (Runnable task = tasks.poll(); task != null; task = tasks.poll()) {
 			task.run();
-			ran.incrementAndGet();
+			ran++;
 		}
-		return ran.get();
+		return ran;
 	}
 
 	public boolean hasPending() {

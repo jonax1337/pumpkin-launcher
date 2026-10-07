@@ -32,15 +32,15 @@ const normalized = (deg: number) => ((deg % FULL_TURN) + FULL_TURN) % FULL_TURN;
 const shortestWay = (from: number, to: number) => normalized(to - from + HALF_TURN) - HALF_TURN;
 
 const VIEW_NAMES: [from: number, key: TKey][] = [
-  [0, "pages.skins.view.front"],
-  [45, "pages.skins.view.left"],
-  [135, "pages.skins.view.back"],
-  [225, "pages.skins.view.right"],
   [315, "pages.skins.view.front"],
+  [225, "pages.skins.view.right"],
+  [135, "pages.skins.view.back"],
+  [45, "pages.skins.view.left"],
+  [0, "pages.skins.view.front"],
 ];
 
 /** Was man bei diesem Winkel sieht, für Vorleser. */
-const viewName = (turn: number): TKey => [...VIEW_NAMES].reverse().find(([from]) => turn >= from)![1];
+const viewName = (turn: number): TKey => VIEW_NAMES.find(([from]) => turn >= from)![1];
 
 /**
  * Winkel der Drehung (0 = von vorn). `flip` dreht mit Zwischenschritten auf die andere Seite, solange `animate`;

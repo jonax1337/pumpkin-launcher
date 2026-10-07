@@ -1,6 +1,7 @@
 //! Gemeinsame Bausteine der Downloads: Client-Grundlage, begrenztes Lesen, Weiterleitungen und Prüfsummen.
 use std::{future::Future, io::Read};
 
+use data_encoding::HEXLOWER;
 use sha1::Sha1;
 use sha2::{Digest, Sha256, Sha512};
 use tokio::io::{AsyncWrite, AsyncWriteExt};
@@ -144,9 +145,9 @@ impl Digests {
     /// Hex-Text des Hashes `algorithm` (`sha1`, `sha256`, `sha512`); jeder andere Name ist unbekannt.
     pub(crate) fn hex(&self, algorithm: &str) -> Option<String> {
         match algorithm {
-            "sha1" => Some(hex(&self.sha1.clone().finalize())),
-            "sha256" => Some(hex(&self.sha256.clone().finalize())),
-            "sha512" => Some(hex(&self.sha512.clone().finalize())),
+            "sha1" => Some(HEXLOWER.encode(&self.sha1.clone().finalize())),
+            "sha256" => Some(HEXLOWER.encode(&self.sha256.clone().finalize())),
+            "sha512" => Some(HEXLOWER.encode(&self.sha512.clone().finalize())),
             _ => None,
         }
     }
@@ -164,10 +165,6 @@ impl Digests {
     pub(crate) fn check<'a>(&self, expected: impl IntoIterator<Item = (&'a str, &'a str)>) -> AppResult<()> {
         expected.into_iter().try_for_each(|(algorithm, hash)| self.check_one(algorithm, hash))
     }
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 #[cfg(test)]

@@ -1,13 +1,12 @@
 import { toast } from "sonner";
 import { loaderLine } from "@/components/common";
 import { ChoiceList, ChoiceListSkeleton } from "@/components/newInstance/ChoiceList";
-import { Actions, Button, Chip, Choice, Empty, ErrorBox, Field, Glyph, Hint, JobProgress, Meta, Panel, TextField } from "@/ui";
-import { useContentState } from "@/store/contentState";
+import { Actions, Button, Chip, Choice, Empty, ErrorBox, Field, Glyph, Hint, Meta, Panel, TextField } from "@/ui";
+import { ROW_JOB_WIDTH, useJobProgressFor } from "@/components/catalog/jobProgress";
 import { importTarget, type ForeignSelection } from "@/hooks/useImport";
 import { useI18n, type TKey } from "@/i18n";
 import { api } from "@/lib/api";
 import { formatMemory, formatSize } from "@/lib/format";
-import { progressShare, progressShortLabel } from "@/lib/progress";
 import { FOREIGN_LAUNCHER_LABELS, FOREIGN_LAUNCHERS, type ForeignInstance, type NotAdopted } from "@/lib/types";
 
 const SKELETON_ROWS = 3;
@@ -89,17 +88,15 @@ function UnsupportedNote({ reason }: { reason: string }) {
 
 function ImportRow({ f, selection, busy }: { f: ForeignInstance; selection: ForeignSelection; busy: boolean }) {
   const { t } = useI18n();
-  const { active, target, progress } = useContentState();
+  const job = useJobProgressFor(importTarget(f), ROW_JOB_WIDTH);
   const contents = useContentsLine(f);
   const chosen = selection.isChosen(f);
   const trail =
-    active && target === importTarget(f) ? (
-      <JobProgress label={progressShortLabel(progress)} p={progressShare(progress)} width={120} />
-    ) : f.imported ? (
+    job ?? (f.imported ? (
       <Chip>{t("components.import.alreadyImported")}</Chip>
     ) : f.unsupported ? (
       <Chip tone="warn">{t("components.import.unsupported")}</Chip>
-    ) : undefined;
+    ) : undefined);
   return (
     <>
       <Choice

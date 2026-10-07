@@ -33,7 +33,10 @@ export const fingerprintHead = (fingerprint: string): string => fingerprint.spli
 /** Name je Freund; tragen mehrere denselben, steht die erste Gruppe des Fingerabdrucks dabei. */
 export function friendLabels(friends: Friend[]): Map<string, string> {
   const uses = new Map<string, number>();
-  for (const friend of friends) uses.set(friendName(friend), (uses.get(friendName(friend)) ?? 0) + 1);
+  for (const friend of friends) {
+    const name = friendName(friend);
+    uses.set(name, (uses.get(name) ?? 0) + 1);
+  }
   return new Map(
     friends.map((friend) => {
       const name = friendName(friend);

@@ -1,4 +1,4 @@
-// Reine Logik der Aktivität im Spiel (docs/bridge/README.md, "Operations and consent", kein React), damit activityModel.check.mjs sie ohne Bundler prüft.
+// Reine Logik der Aktivität im Spiel (docs/bridge/README.md, "Operations and consent", kein React), damit modRequestModel.check.mjs sie ohne Bundler prüft.
 import type { ModActivityEntry, ModConfirmEvent, ModScope } from "../../lib/friends-types.ts";
 
 /** So viele Vorgänge zeigt die Liste und hält der Launcher (`MOD_ACTIVITY_LIMIT`). */

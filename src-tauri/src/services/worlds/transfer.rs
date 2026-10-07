@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::backup::extract;
+use super::backup::extract_new_world;
 use super::{backups, read_world, World};
 use crate::coded;
 use crate::error::{AppError, AppResult};
@@ -36,11 +36,7 @@ pub fn import(dirs: &Dirs, instance_id: &str, zip_path: &Path, progress: Progres
     fs::create_dir_all(&saves)?;
     let id = free_name(&folder, "", |name| saves.join(name).exists());
     let target = saves.join(&id);
-    // `create_dir` statt `create_dir_all`: taucht der Ordner gerade erst auf, wird er nicht befüllt.
-    fs::create_dir(&target)?;
-    let guard = RemoveOnDrop::new(target.clone());
-    extract(&mut zip, world_files, &target, progress)?;
-    guard.disarm();
+    extract_new_world(&mut zip, world_files, &target, progress)?;
     tracing::info!(instance = %instance_id, world = %id, "Welt importiert");
     Ok(read_world(&target, &id))
 }

@@ -3,7 +3,12 @@ const calls = [];
 globalThis.fetch = async (url, init) => { calls.push({ url, method: init.method, headers: init.headers, body: init.body, signal: init.signal }); return new Response(JSON.stringify({ data: [] }), { status: 200, headers: { "content-type": "application/json" } }); };
 const env = { CURSEFORGE_API_KEY: "TESTKEY", LIMITER: { async limit() { return { success: true }; } } };
 const run = async (method, path, body, headers) => (await worker.fetch(new Request("https://p.example" + path, { method, body, headers }), env)).status;
-const check = async (label, got, want) => console.log(got === want ? "ok  " : "FAIL", label, got);
+let failures = 0;
+const check = async (label, got, want) => {
+  const passed = got === want;
+  if (!passed) failures += 1;
+  console.log(passed ? "ok  " : "FAIL", label, got);
+};
 await check("Suche", await run("GET", "/v1/mods/search?gameId=432&classId=6&searchFilter=jei&pageSize=20&index=9900"), 200);
 await check("Suche fremdes Spiel", await run("GET", "/v1/mods/search?gameId=1&classId=6"), 400);
 await check("Suche fremde Klasse", await run("GET", "/v1/mods/search?gameId=432&classId=17"), 400);
@@ -48,3 +53,4 @@ globalThis.fetch = async () => new Response("{}", { status: 429, headers: { "con
 await check("Wartezeit von CurseForge kommt durch", (await worker.fetch(new Request("https://p.example/v1/mods/1"), env)).headers.get("retry-after"), "17");
 globalThis.fetch = async () => { throw new DOMException("timeout", "TimeoutError"); };
 await check("CurseForge hängt", await run("GET", "/v1/mods/1"), 504);
+if (failures > 0) process.exitCode = 1;

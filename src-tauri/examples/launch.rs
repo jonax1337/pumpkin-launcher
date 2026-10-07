@@ -74,11 +74,18 @@ fn data_dir() -> PathBuf {
 /// Exakte Versions-ID oder die neueste Release mit diesem Präfix.
 async fn find_version(client: &reqwest::Client, wanted: &str) -> Result<String, Error> {
     let manifest: VersionManifest = download::get_json(client, MANIFEST_URL).await?;
+    select_version(manifest, wanted)
+}
+
+fn select_version(manifest: VersionManifest, wanted: &str) -> Result<String, Error> {
     let id = manifest
         .versions
-        .iter()
-        .find(|v| v.id == wanted || (v.kind == "release" && v.id.starts_with(&format!("{wanted}."))))
-        .map(|v| v.id.clone())
+        .into_iter()
+        .find(|version| {
+            version.id == wanted
+                || (version.kind == "release" && version.id.strip_prefix(wanted).is_some_and(|suffix| suffix.starts_with('.')))
+        })
+        .map(|version| version.id)
         .ok_or_else(|| format!("keine Version passt zu '{wanted}'"))?;
     Ok(id)
 }
@@ -136,5 +143,43 @@ async fn wait_for_exit(running: Running, mut exit_rx: ExitCode, seconds: Option<
             running.kill();
             Ok(exit_rx.await?)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use launcher_lib::services::mojang::{Latest, VersionEntry};
+
+    fn manifest(entries: &[(&str, &str)]) -> VersionManifest {
+        VersionManifest {
+            latest: Latest { release: String::new(), snapshot: String::new() },
+            versions: entries.iter().map(|&(id, kind)| VersionEntry {
+                id: id.to_owned(),
+                kind: kind.to_owned(),
+                url: String::new(),
+                sha1: String::new(),
+                release_time: String::new(),
+            }).collect(),
+        }
+    }
+
+    #[test]
+    fn version_selection_keeps_manifest_order_even_before_an_exact_id() {
+        let versions = manifest(&[("1.21.1", "release"), ("1.21", "release")]);
+        assert_eq!(select_version(versions, "1.21").unwrap(), "1.21.1");
+    }
+
+    #[test]
+    fn prefix_selection_skips_snapshots_but_exact_snapshots_are_allowed() {
+        let entries = [("1.21.snapshot", "snapshot"), ("1.21.2", "release")];
+        assert_eq!(select_version(manifest(&entries), "1.21").unwrap(), "1.21.2");
+        assert_eq!(select_version(manifest(&entries), "1.21.snapshot").unwrap(), "1.21.snapshot");
+    }
+
+    #[test]
+    fn prefix_selection_requires_the_dot_separator_and_keeps_the_error() {
+        let error = select_version(manifest(&[("1.210.1", "release")]), "1.21").unwrap_err();
+        assert_eq!(error.to_string(), "keine Version passt zu '1.21'");
     }
 }

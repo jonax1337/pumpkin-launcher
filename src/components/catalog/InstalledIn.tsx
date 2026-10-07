@@ -10,7 +10,11 @@ export function useInstalledIn() {
   const instances = useInstances();
   return useMemo(() => {
     const map = new Map<string, Instance[]>();
-    const add = (id: string, i: Instance) => map.set(id, [...(map.get(id) ?? []), i]);
+    const add = (id: string, instance: Instance) => {
+      const installed = map.get(id);
+      if (installed) installed.push(instance);
+      else map.set(id, [instance]);
+    };
     for (const i of instances.data ?? []) {
       const ids = new Set(i.mods.map(projectOf).filter((id): id is string => !!id));
       if (i.modpack?.type === "modrinth") ids.add(i.modpack.projectId);

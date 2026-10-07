@@ -53,7 +53,11 @@ export const RELAY_OPERATOR_KEYS: Record<RelayInfo["operator"], TKey> = {
 /** Hosts der Relay-Server je Betreiber, in der Reihenfolge der Liste. */
 function hostsByOperator(relays: RelayInfo[]) {
   const groups = new Map<RelayInfo["operator"], string[]>();
-  for (const { operator, host } of relays) groups.set(operator, [...(groups.get(operator) ?? []), host]);
+  for (const { operator, host } of relays) {
+    const hosts = groups.get(operator);
+    if (hosts) hosts.push(host);
+    else groups.set(operator, [host]);
+  }
   return [...groups];
 }
 

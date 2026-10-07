@@ -141,7 +141,7 @@ public final class RequestManager {
 		}
 
 		void fail(ErrorCode code) {
-			mainThread.execute(() -> request.complete(Reply.failure(code)));
+			finishLocally(request, code);
 		}
 
 		private Reply<T> readResult(Response response) {

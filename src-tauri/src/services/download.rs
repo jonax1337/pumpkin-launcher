@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
+use data_encoding::HEXLOWER;
 use futures::{StreamExt, TryStreamExt};
 use reqwest::header::{CONTENT_RANGE, RANGE};
 use serde::de::DeserializeOwned;
@@ -108,16 +109,12 @@ pub(crate) async fn get_capped(client: &reqwest::Client, url: &str, limit: u64) 
 }
 
 pub fn sha1_hex(bytes: &[u8]) -> String {
-    hex(&Sha1::digest(bytes))
+    HEXLOWER.encode(&Sha1::digest(bytes))
 }
 
 /// Ein SHA-1 als 40 Hex-Zeichen? Solche Hashes werden auch Teil von Pfaden.
 pub fn is_sha1(s: &str) -> bool {
     s.len() == 40 && s.bytes().all(|b| b.is_ascii_hexdigit())
-}
-
-fn hex(digest: &[u8]) -> String {
-    digest.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 pub async fn get_json<T: DeserializeOwned>(client: &reqwest::Client, url: &str) -> AppResult<T> {
@@ -150,7 +147,7 @@ pub fn sha1_file(path: &Path) -> std::io::Result<String> {
         }
         hash.update(&buffer[..n]);
     }
-    Ok(hex(&hash.finalize()))
+    Ok(HEXLOWER.encode(&hash.finalize()))
 }
 
 /// Entfernt Datei bzw. Ordner beim Verwerfen, solange nicht entschärft (`disarm`). Greift, wenn
@@ -282,7 +279,7 @@ async fn hash_existing_part(part: &Path) -> AppResult<(tokio::fs::File, Sha1)> {
 /// Benennt die vollständige Teildatei um, wenn ihr Hash passt; eine falsche wird nicht weiter fortgesetzt.
 async fn verify_and_commit(job: &Job, part: &Path, hash: Sha1) -> AppResult<()> {
     if let Some(expected) = &job.sha1 {
-        let actual = hex(&hash.finalize());
+        let actual = HEXLOWER.encode(&hash.finalize());
         if !actual.eq_ignore_ascii_case(expected) {
             tokio::fs::remove_file(part).await?;
             return Err(AppError::Download(coded!("errors.game.sha1Mismatch", url = job.url, actual = actual, expected = expected).into()));

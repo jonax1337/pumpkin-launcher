@@ -141,11 +141,7 @@ pub fn restore(dirs: &Dirs, instance_id: &str, backup_id: &str) -> AppResult<Wor
     fs::create_dir_all(&saves)?;
     let id = free_name(&saved.world, "", |name| saves.join(name).exists());
     let target = saves.join(&id);
-    // `create_dir` statt `create_dir_all`: taucht der Ordner gerade erst auf, wird er nicht befüllt.
-    fs::create_dir(&target)?;
-    let guard = RemoveOnDrop::new(target.clone());
-    extract(&mut zip, files, &target, &|_, _, _| {})?;
-    guard.disarm();
+    extract_new_world(&mut zip, files, &target, &|_, _, _| {})?;
     tracing::info!(instance = %instance_id, backup = %backup_id, world = %id, "Welt wiederhergestellt");
     Ok(read_world(&target, &id))
 }
@@ -187,14 +183,17 @@ pub(super) fn backup_stem(stem: &str) -> Option<(&str, u64)> {
     (!world.is_empty()).then_some((world, at.parse().ok()?))
 }
 
-/// Entpackt die geprüften Einträge `files` (aus `zip_paths`) nach `target`. Jede Datei hat genau die Länge, die das
-/// Archiv angibt: eine längere (ein Archiv, das über seine Größe lügt) füllte sonst die Platte.
-pub(super) fn extract(
+/// Legt `target` exklusiv an und entpackt die geprüften Einträge `files` (aus `zip_paths`); bei Fehlern verschwindet
+/// die halbe Welt. Jede Datei hat genau die Länge, die das Archiv angibt: eine längere füllte sonst die Platte.
+pub(super) fn extract_new_world(
     zip: &mut zip::ZipArchive<fs::File>,
     files: Vec<(PathBuf, usize)>,
     target: &Path,
     progress: ProgressFn<'_>,
 ) -> AppResult<()> {
+    // Taucht der Ordner gerade erst auf, wird er nicht befüllt und auch nicht vom Wächter entfernt.
+    fs::create_dir(target)?;
+    let guard = RemoveOnDrop::new(target.to_owned());
     let total = files.len() as u64;
     progress(Phase::Extract, 0, total);
     for (done, (path, index)) in (1..).zip(files) {
@@ -210,6 +209,7 @@ pub(super) fn extract(
         }
         progress(Phase::Extract, done, total);
     }
+    guard.disarm();
     Ok(())
 }
 
@@ -284,6 +284,45 @@ mod tests {
         assert!(check(&[]).is_err());
         assert!(check(&["level.dat", "data/aux.mcfunction"]).is_err());
         assert!(check(&["level.dat", "startup", "Startup"]).is_err());
+    }
+
+    #[test]
+    fn failed_extraction_removes_the_partial_world() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let (root, dirs) = setup();
+        let saved = backup(&dirs, "i", "Alt", &|_, _, _| {}).unwrap();
+        let mut zip = zip::ZipArchive::new(fs::File::open(dirs.backups("i").join(&saved.id)).unwrap()).unwrap();
+        let target = dirs.saves("i").join("Partial");
+        let files = vec![(PathBuf::from("level.dat"), 0), (PathBuf::from("missing.dat"), zip.len())];
+        let wrote_first = AtomicBool::new(false);
+        let progress = |_: Phase, done, _| {
+            if done == 1 {
+                wrote_first.store(target.join("level.dat").is_file(), Ordering::Relaxed);
+            }
+        };
+
+        assert!(extract_new_world(&mut zip, files, &target, &progress).is_err());
+
+        assert!(wrote_first.load(Ordering::Relaxed));
+        assert!(!target.exists());
+        drop(zip);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn extraction_never_changes_or_removes_an_existing_world() {
+        let (root, dirs) = setup();
+        let saved = backup(&dirs, "i", "Alt", &|_, _, _| {}).unwrap();
+        let mut zip = zip::ZipArchive::new(fs::File::open(dirs.backups("i").join(&saved.id)).unwrap()).unwrap();
+        let target = dirs.saves("i").join("Alt");
+        let before = fs::read(target.join("level.dat")).unwrap();
+
+        assert!(extract_new_world(&mut zip, vec![(PathBuf::from("level.dat"), 0)], &target, &|_, _, _| {}).is_err());
+
+        assert_eq!(fs::read(target.join("level.dat")).unwrap(), before);
+        drop(zip);
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

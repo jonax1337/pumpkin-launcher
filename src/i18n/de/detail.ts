@@ -29,7 +29,6 @@ export const detail = {
   "detail.content.oneUpToDate": "{name} ist aktuell",
   "detail.content.manyUpdated": "{n} Inhalte aktualisiert",
   "detail.content.restoredAnnouncement": "{name} wiederhergestellt",
-  "detail.content.itemsCount.one": "{n} Inhalt",
   "detail.content.itemsCount.other": "{n} Inhalte",
   "detail.content.dependencies.one": "{n} Abhängigkeit",
   "detail.content.dependencies.other": "{n} Abhängigkeiten",

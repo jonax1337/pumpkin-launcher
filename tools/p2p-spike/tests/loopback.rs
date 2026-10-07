@@ -29,13 +29,17 @@ const NORMAL: u32 = 0;
 const NOT_FRIEND: u32 = 2;
 const SHUTDOWN: u32 = 6;
 
-#[tokio::test]
-async fn echo_runs_over_a_direct_loopback_path() {
+async fn connected_protocol_pair(forward: Option<std::net::SocketAddr>) -> (Endpoint, Endpoint, Connection) {
     let net = without_relays();
     let (listener, dialer) = (bind_loopback(&net).await, bind_loopback(&net).await);
-    serve_one(listener.clone(), None);
-
+    serve_one(listener.clone(), forward);
     let conn = dialer.connect(listener.addr(), ALPN).await.unwrap();
+    (listener, dialer, conn)
+}
+
+#[tokio::test]
+async fn echo_runs_over_a_direct_loopback_path() {
+    let (_listener, _dialer, conn) = connected_protocol_pair(None).await;
 
     echo_works(&conn).await;
     assert_eq!(
@@ -58,10 +62,7 @@ async fn relay_only_without_relays_cannot_bind() {
 
 #[tokio::test]
 async fn unknown_stream_mode_is_reset_with_its_code() {
-    let net = without_relays();
-    let (listener, dialer) = (bind_loopback(&net).await, bind_loopback(&net).await);
-    serve_one(listener.clone(), None);
-    let conn = dialer.connect(listener.addr(), ALPN).await.unwrap();
+    let (_listener, _dialer, conn) = connected_protocol_pair(None).await;
     let (mut send, mut recv) = conn.open_bi().await.unwrap();
 
     send.write_all(b"x").await.unwrap();
@@ -117,10 +118,7 @@ async fn accepting_on_an_endpoint_without_alpns_fails_the_handshake() {
 
 #[tokio::test]
 async fn upload_is_confirmed_byte_for_byte() {
-    let net = without_relays();
-    let (listener, dialer) = (bind_loopback(&net).await, bind_loopback(&net).await);
-    serve_one(listener.clone(), None);
-    let conn = dialer.connect(listener.addr(), ALPN).await.unwrap();
+    let (_listener, _dialer, conn) = connected_protocol_pair(None).await;
 
     let upload = protocol::upload(&conn, 3 * 1024 * 1024).await.unwrap();
 
@@ -132,10 +130,7 @@ async fn tunnel_reaches_a_local_tcp_server() {
     let game = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let game_addr = game.local_addr().unwrap();
     tokio::spawn(answer_hello_with_world(game));
-    let net = without_relays();
-    let (listener, dialer) = (bind_loopback(&net).await, bind_loopback(&net).await);
-    serve_one(listener.clone(), Some(game_addr));
-    let conn = dialer.connect(listener.addr(), ALPN).await.unwrap();
+    let (_listener, _dialer, conn) = connected_protocol_pair(Some(game_addr)).await;
     let local = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let local_addr = local.local_addr().unwrap();
     tokio::spawn(protocol::forward_local(local, conn));

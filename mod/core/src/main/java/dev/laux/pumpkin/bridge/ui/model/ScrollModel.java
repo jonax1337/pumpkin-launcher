@@ -90,7 +90,8 @@ public final class ScrollModel {
 	public List<Rect> visibleRows(Rect area) {
 		List<Rect> rects = new ArrayList<>();
 		int top = area.y();
-		for (int row = firstRow; row < firstRow + visibleCount(); row++) {
+		int lastVisibleRow = firstRow + visibleCount();
+		for (int row = firstRow; row < lastVisibleRow; row++) {
 			rects.add(new Rect(area.x(), top, area.width(), rowHeights[row]));
 			top += rowHeights[row];
 		}

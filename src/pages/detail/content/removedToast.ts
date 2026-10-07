@@ -16,7 +16,7 @@ export function showRemovedToast({ removed, requestedIds, titleOf, onUndo }: {
   const dependencies = removed.length - requested.length;
   const things = requested.length === 1
     ? titleOf(requested[0])
-    : t(requested.length === 1 ? "detail.content.itemsCount.one" : "detail.content.itemsCount.other", { n: requested.length });
+    : t("detail.content.itemsCount.other", { n: requested.length });
   const text = dependencies
     ? t("detail.content.removedToastWithDeps", {
         things,

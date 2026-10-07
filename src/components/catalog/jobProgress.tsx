@@ -13,8 +13,8 @@ export const SIDE_JOB_WIDTH = 112;
 /** Die Breite für Menüs und Aktionen, die als Kopf (`large`) oder als Zeile stehen. */
 export const jobWidthOf = (large?: boolean) => (large ? HEAD_JOB_WIDTH : ROW_JOB_WIDTH);
 
-/** Fortschritt des laufenden Vorgangs, wenn er das Projekt `projectId` betrifft; sonst `null`. */
-export function useJobProgressFor(projectId: string, width: JobWidth) {
+/** Fortschritt des laufenden Vorgangs, wenn er `targetId` betrifft; sonst `null`. */
+export function useJobProgressFor(targetId: string, width: JobWidth) {
   const { active, target, progress } = useContentState();
-  return active && target === projectId ? <JobProgress label={progressShortLabel(progress)} p={progressShare(progress)} width={width} /> : null;
+  return active && target === targetId ? <JobProgress label={progressShortLabel(progress)} p={progressShare(progress)} width={width} /> : null;
 }

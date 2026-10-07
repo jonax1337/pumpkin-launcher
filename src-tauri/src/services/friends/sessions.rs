@@ -243,8 +243,6 @@ async fn follow_lifecycle(shared: Weak<Shared>, mut events: mpsc::Receiver<Lifec
         joining::end_for_lifecycle(&shared, kind);
         if matches!(kind, Lifecycle::Disabled | Lifecycle::IdentityChanged) {
             shared.invites.clear();
-        }
-        if matches!(kind, Lifecycle::Disabled | Lifecycle::IdentityChanged) {
             mod_link::disabled(&shared);
         }
         drop(done);
@@ -302,12 +300,6 @@ fn on_signal(shared: &Arc<Shared>, signal: GameSignal) {
         }
         GameSignal::ModConnected { instance_id } => mod_link::connected(shared, &instance_id),
         GameSignal::ModDisconnected { instance_id } => mod_link::disconnected(shared, &instance_id),
-        GameSignal::ModRequest {
-            instance_id,
-            request,
-        } => {
-            tokio::spawn(mod_link::handle(shared.clone(), instance_id, request));
-        }
     }
 }
 

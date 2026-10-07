@@ -7,10 +7,16 @@ import { contentKeys } from "./queryKeys";
 /** Dateigröße und Metadaten ändern sich nur, wenn sich die Inhaltsliste ändert; dann wechselt der Schlüssel. */
 const ANALYSIS_STALE_MS = 5 * MINUTE;
 
+const SIGNATURE_SEED = 5381;
+const SIGNATURE_MULTIPLIER = 33;
+
 /** Kurzer Stand der Inhaltsliste (welche Dateien, ob ein): ändert sich die Liste, liest das Backend neu. */
 function signatureOf(mods: Mod[]) {
-  let hash = 5381;
-  for (const m of mods) for (const c of `${m.fileName}|${m.sha1}|${m.enabled}`) hash = (hash * 33 + c.charCodeAt(0)) >>> 0;
+  let hash = SIGNATURE_SEED;
+  for (const mod of mods) {
+    const fileState = `${mod.fileName}|${mod.sha1}|${mod.enabled}`;
+    for (const character of fileState) hash = (hash * SIGNATURE_MULTIPLIER + character.charCodeAt(0)) >>> 0;
+  }
   return `${mods.length}:${hash}`;
 }
 

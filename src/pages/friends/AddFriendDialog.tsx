@@ -43,24 +43,23 @@ export function AddFriendDialog({ initialTab, onClose }: { initialTab: AddFriend
   const pending = addByCode.isPending || addByName.isPending;
   const ready = !pending && (tab === "name" ? isMcName(name) : isFriendCodeShape(code));
 
+  function finishRequest(message: string) {
+    toast.success(message);
+    onClose();
+  }
+
   function sendCode() {
     const normalized = normalizeFriendCode(code);
     if (!normalized || pending) return;
     addByCode.mutate(normalized, {
-      onSuccess: () => {
-        toast.success(t("friends.add.sent"));
-        onClose();
-      },
+      onSuccess: () => finishRequest(t("friends.add.sent")),
     });
   }
 
   function sendName() {
     if (!isMcName(name) || pending) return;
     addByName.mutate(name.trim(), {
-      onSuccess: (request) => {
-        toast.success(t("friends.name.sent", { name: request.mcName ?? name.trim() }));
-        onClose();
-      },
+      onSuccess: (request) => finishRequest(t("friends.name.sent", { name: request.mcName ?? name.trim() })),
       onError: (error) => {
         if (!isNotFindable(error)) toast.error(error.message);
       },

@@ -127,7 +127,7 @@ At spawn the launcher registers a launch token, instance/node/build expectations
 
 The listener binds only `127.0.0.1`, with exclusive address use on Windows. The Java client also connects explicitly to IPv4 loopback. A hello must use a registered token and come from the spawned game's process according to the OS TCP ownership lookup. Missing PID bookkeeping returns `retry`; lookup failure/mismatch fails closed with `owner`. A wrapper that spawns a different JVM is not silently accepted as the original PID.
 
-One live link is allowed per launch. Duplicate connections are rejected; grants, aliases and counters belong to the launch record and survive reconnects. The token ends with the launch, not with a temporary transport failure.
+One live link is allowed per launch. Duplicate connections are rejected; grants and counters belong to the launch record and survive reconnects. Friend aliases belong to the connection and are rebuilt on reconnect. The token ends with the launch, not with a temporary transport failure.
 
 Disable, reset and identity changes revoke feature grants, queued private topics/responses and work/publication generations without stopping the shared listener. `state.sync` and `launcher.open` remain shared operations. A private write interrupted during revocation can close that one socket to avoid completing a stale partial JSON line; the game can reconnect with its launch token. Previously delivered information cannot be recalled.
 
@@ -152,7 +152,7 @@ The mod hashes its own production JAR. FML uses the loader-registered ModFile pa
 
 A request is `req{id,op,args}`. IDs match `^[a-z0-9]{1,12}$`; duplicates/invalid arguments are refused. A response is `res{id,ok,result}` or `res{id,ok:false,error:{code,params}}`. When launcher consent is pending, `pending{id,prompt:"scope",scope}` precedes the final response. The backend deadline is 125 seconds; Java waits longer after pending so the consent response can arrive.
 
-Whole-value topic pushes carry per-topic revisions. The client replaces state, never patches. Topics include `me`, `friends`, `requests`, `invites`, `session`, `join`, `game`, `codes` and `blocked`; `me` includes directory availability. Friend IDs in this channel are per-launch aliases, not raw peer IDs. Private topics are gated/redacted by Friends availability.
+Whole-value topic pushes carry per-topic revisions. The client replaces state, never patches. Topics include `me`, `friends`, `requests`, `invites`, `session`, `join`, `game`, `codes` and `blocked`; `me` includes directory availability. Friend IDs in this channel are per-connection aliases, not raw peer IDs. Private topics are gated/redacted by Friends availability.
 
 Events are `event{event:"notify",kind,name?}` or `event{event:"closing",reason}`. Notifications include request/invite receipt, online friends, guest changes, session/join end and denied scope. Closing reasons include launch end, stopped Bridge and replacement. The mod additionally sends `lanOpened{port}`, `lanClosed`, `ready{screens}`, `ping` and `pong`; LAN frames are hints, never verified port ownership. Current ready capabilities are `home` and `friends`.
 

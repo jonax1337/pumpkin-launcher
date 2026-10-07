@@ -62,6 +62,7 @@ function InstanceRow({ instance, index }: { instance: Instance; index: number })
   const look = useLook(instance.id);
   const items = useInstanceMenu(instance);
   const pick = useInstancePick(instance);
+  const versionLabel = loaderLine(instance);
   return (
     <ListRow
       hit={pick.hit}
@@ -75,7 +76,7 @@ function InstanceRow({ instance, index }: { instance: Instance; index: number })
         {pick.checkbox}
       </span>
       <RowTitle title={instance.name} sub={t("pages.instances.createdOn", { date: formatDate(instance.createdAt) })} />
-      <Cell className="lib-version" title={loaderLine(instance)}>{loaderLine(instance)}</Cell>
+      <Cell className="lib-version" title={versionLabel}>{versionLabel}</Cell>
       <Cell hide={WIDTH.md}><Count value={instance.mods.length} /></Cell>
       <Cell hide={WIDTH.md}>{relativeTime(instance.lastPlayedAt)}</Cell>
       <Cell hide={WIDTH.xl}>{instance.playtimeSecs > 0 ? formatPlaytime(instance.playtimeSecs) : "–"}</Cell>

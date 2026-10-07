@@ -8,12 +8,12 @@ use std::path::{Path, PathBuf};
 use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::Mod;
-use crate::services::download::{sha1_file, sha1_hex};
+use crate::services::download::{is_sha1, sha1_file, sha1_hex};
 use crate::services::{content, none_if_missing, remove_logged, require_plain_name, walk, Dirs};
 
 /// Pfad eines Cache-Eintrags. Der Hash wird Teil des Pfads, daher nur echte SHA-1-Hex-Strings.
 pub fn cache_path(dirs: &Dirs, sha1: &str) -> AppResult<PathBuf> {
-    if sha1.len() != 40 || !sha1.bytes().all(|b| b.is_ascii_hexdigit()) {
+    if !is_sha1(sha1) {
         return Err(AppError::invalid(coded!("errors.modrinth.invalidSha1", sha1 = sha1)));
     }
     Ok(dirs.mod_cache().join(format!("{}.jar", sha1.to_ascii_lowercase())))

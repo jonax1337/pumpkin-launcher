@@ -32,7 +32,7 @@ impl OpHandler for ModOps {
                 .0
                 .upgrade()
                 .ok_or_else(|| OpError::new(ErrorCode::Internal))?;
-            if matches!(op, Op::StateSync {} | Op::LauncherOpen { .. }) {
+            if !op.requires_friends() {
                 return execute(&shared, &ctx, op).await;
             }
             shared.ensure_enabled().map_err(mod_error)?;

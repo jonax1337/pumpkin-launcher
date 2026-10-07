@@ -1,7 +1,6 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "@/i18n";
-import { Button, Chip, Dialog, Disclosure, ErrorBox, Hint, List, ListRow, RowTitle, Skel } from "@/ui";
+import { Button, Chip, Dialog, ErrorBox, Hint, List, ListRow, RowTitle, Skel } from "@/ui";
 import { fitFilter, fitsLabel } from "@/components/catalog/fit";
 import { versionLoaders, versionTypeSuffix } from "@/components/catalog/labels";
 import { catalogApi } from "@/lib/catalogApi";
@@ -9,7 +8,7 @@ import type { ContentVersion } from "@/lib/content-types";
 import { formatDate } from "@/lib/format";
 import { projectOf } from "@/lib/mods";
 import type { Instance, Mod } from "@/lib/types";
-import { Changelog } from "./Changelog";
+import { ChangelogDisclosure } from "./Changelog";
 
 /** So viele Versionen zeigt die Auswahl (neueste zuerst); Projekte wie die Fabric API haben über tausend. */
 const SHOWN_VERSIONS = 100;
@@ -26,7 +25,6 @@ function VersionItem({ instance, mod, version, current, locked, onPick }: {
   instance: Instance; mod: Mod; version: ContentVersion; current: boolean; locked: boolean; onPick: () => void;
 }) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
   return (
     <ListRow>
       <RowTitle title={version.version_number} sub={versionSub(version)} />
@@ -38,9 +36,7 @@ function VersionItem({ instance, mod, version, current, locked, onPick }: {
         </Button>
       )}
       <div className="col-span-full">
-        <Disclosure summary={t("detail.content.changes")} open={open} onToggle={setOpen}>
-          {open && <Changelog instance={instance} mod={mod} versionId={version.id} />}
-        </Disclosure>
+        <ChangelogDisclosure instance={instance} mod={mod} versionId={version.id} />
       </div>
     </ListRow>
   );

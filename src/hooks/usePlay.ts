@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { isCancelled } from "@/lib/errors";
 import { presetArgs } from "@/lib/jvm";
 import { applyLauncherOnPlay } from "@/lib/launcherWindow";
+import { instanceUrl } from "@/lib/routes";
 import { LONG_TOAST_MS } from "@/lib/toast";
 import type { FriendJoin, Instance, InstanceStatus, LaunchOptions, QuickPlay } from "@/lib/types";
 import { askPlayerName, openAddOffline, startMsLogin } from "@/store/accountUi";
@@ -33,14 +34,14 @@ export function useInstall() {
         label: t("hooks.install.doneTask", { name: instance.name }),
         sub: t("hooks.install.readySub"),
         state: "done",
-        to: `/instances/${instance.id}`,
+        to: instanceUrl(instance.id),
       });
       if (!useGame.getState().launching[instance.id]) toast.success(t("hooks.install.readyToast", { name: instance.name }));
     },
     onError: (err, instance) => {
       if (isCancelled(err)) return void toast(t("hooks.install.cancelled", { name: instance.name }));
       const failed = t("hooks.install.failed", { name: instance.name });
-      useTasks.getState().push({ label: failed, sub: err.message, state: "fail", to: `/instances/${instance.id}` });
+      useTasks.getState().push({ label: failed, sub: err.message, state: "fail", to: instanceUrl(instance.id) });
       toast.error(failed, {
         description: err.message,
         duration: LONG_TOAST_MS,

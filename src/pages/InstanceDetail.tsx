@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from "react-router";
 import { useI18n } from "@/i18n";
 import { BackLink, ContextMenu, ErrorBox, Icon, Skel, TabPanel, Tabs, type MenuEntry, type TabItem } from "@/ui";
 import { LogConsole } from "@/components/log/LogConsole";
-import { AddContentSheet } from "@/components/ContentBrowser";
+import { AddContentSheet } from "@/components/catalog/AddContentSheet";
 import { useInstanceMenu } from "@/components/instance";
 import { useContentAnalysis } from "@/hooks/useContentAnalysis";
 import { useCurrentUpdates } from "@/hooks/useContent";

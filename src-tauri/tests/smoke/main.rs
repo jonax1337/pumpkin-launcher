@@ -68,8 +68,8 @@ async fn run_cell(config: &Config) -> Result<(Outcome, Vec<String>), String> {
         let prepared = launch::prepare(&Inputs { dirs: &dirs, bridge: &bridge, source: &source, instance: &instance }).await?;
         let facts = Facts::of(&node, &instance, &prepared, &config.scenario);
         match &prepared.injection {
-            Injection::Injected(_) => run_game(config, &node, &instance.id, prepared, &bridge, &signals, &facts).await,
-            Injection::Skipped(reason) => Ok(skipped_outcome(&facts, &config.scenario, reason)),
+            Injection::Injected(_) => run_game(config, &node, &instance.id, prepared, &bridge, &signals, facts).await,
+            Injection::Skipped(reason) => Ok(skipped_outcome(facts, &config.scenario, reason)),
             Injection::Failed(error) => Ok(facts.not_started(Verdict::Failed, format!("the injection failed: {error}"))),
         }
     }.await;
@@ -96,7 +96,7 @@ fn finish_cleanup<T>(result: Result<T, String>, cleanup: Result<(), String>) -> 
 
 /// Eine ausgelassene Einspeisung ist nur beim Szenario „doppelte Id“ das Bestehen (Anhang B, Punkt 2): das Tor weigert
 /// sich, neben der Kopie im Mods-Ordner einzuspeisen; jedes andere Auslassen heißt, die Zelle kam nicht bis zum Spiel.
-fn skipped_outcome(facts: &Facts, scenario: &Scenario, reason: &SkipReason) -> (Outcome, Vec<String>) {
+fn skipped_outcome(facts: Facts, scenario: &Scenario, reason: &SkipReason) -> (Outcome, Vec<String>) {
     let refused_beside_copy = scenario == &Scenario::DuplicateId && reason.code() == "idCollision";
     let verdict = if refused_beside_copy { Verdict::Passed } else { Verdict::Failed };
     let text = if refused_beside_copy {
@@ -134,20 +134,20 @@ impl Facts {
         }
     }
 
-    fn outcome(&self, result: Verdict, reason: String, ended: Ended) -> (Outcome, Vec<String>) {
+    fn outcome(self, result: Verdict, reason: String, ended: Ended) -> (Outcome, Vec<String>) {
         let outcome = Outcome {
-            cell: self.cell.clone(),
-            scenario: self.scenario.clone(),
+            cell: self.cell,
+            scenario: self.scenario,
             result,
             reason,
-            strategy: self.strategy.clone(),
-            minecraft: self.minecraft.clone(),
-            loader_version: self.loader_version.clone(),
+            strategy: self.strategy,
+            minecraft: self.minecraft,
+            loader_version: self.loader_version,
             java_major: self.java_major,
             proof: ended.proof.as_ref().map(Proof::describe),
             breaker: ended.breaker.map(|kind| format!("{kind:?}")),
-            injected_jvm_args: self.injected_jvm_args.clone(),
-            injected_game_args: self.injected_game_args.clone(),
+            injected_jvm_args: self.injected_jvm_args,
+            injected_game_args: self.injected_game_args,
             seconds: seconds(ended.duration),
             exit_code: ended.exit_code,
             evidence: evidence_of(&ended.log),
@@ -155,7 +155,7 @@ impl Facts {
         (outcome, ended.log)
     }
 
-    fn not_started(&self, verdict: Verdict, reason: String) -> (Outcome, Vec<String>) {
+    fn not_started(self, verdict: Verdict, reason: String) -> (Outcome, Vec<String>) {
         self.outcome(verdict, reason, Ended::default())
     }
 }
@@ -180,7 +180,7 @@ async fn run_game(
     prepared: Prepared,
     bridge: &ModBridge,
     signals: &GameSignals,
-    facts: &Facts,
+    facts: Facts,
 ) -> Result<(Outcome, Vec<String>), String> {
     let java = match &config.scenario {
         Scenario::SpawnWithJava { java } => java.clone(),

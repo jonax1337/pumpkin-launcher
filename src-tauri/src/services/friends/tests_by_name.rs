@@ -1,7 +1,6 @@
 //! Freunde per Minecraft-Namen mit echten Sockets (BYNAME 10.2): Dienste am In-Process-Relay (SPEC 3.7) mit einem
 //! geteilten `FakeDirectory` und einem geteilten `FakeMojang`. Echte Zeit mit kurzen Werten; nur der Zeitplan des
 //! Postfachs läuft mit angehaltener Zeit und ohne Sockets.
-use std::borrow::Cow;
 use std::future::{ready, Future};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -11,7 +10,6 @@ use std::time::Duration;
 use data_encoding::HEXLOWER;
 use futures::future::BoxFuture;
 use futures::FutureExt;
-use iroh::test_utils::run_relay_server;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
@@ -41,7 +39,7 @@ use super::{AccountProfile, Friends, NetOptions};
 use crate::error::AppResult;
 use crate::services::gamesignal::GameSignals;
 use crate::services::modbridge::ModBridge;
-use crate::services::p2p::{PeerId, RelayEntry, RelayOperator, RelayTls, DIAL_TIMEOUT};
+use crate::services::p2p::{test_relay, PeerId, RelayEntry, RelayTls, DIAL_TIMEOUT};
 use crate::services::secrets::MemorySecretStore;
 use crate::services::{lock, Dirs};
 
@@ -124,15 +122,7 @@ struct World {
 
 impl World {
     async fn new() -> Self {
-        let (map, url, server) = run_relay_server().await.unwrap();
-        let quic_port = map.get(&url).unwrap().quic.as_ref().map(|quic| quic.port);
-        let url = Cow::Owned(url.to_string());
-        let relay = RelayEntry {
-            index: 0,
-            url,
-            operator: RelayOperator::Pumpkin,
-            quic_port,
-        };
+        let (relay, server) = test_relay().await;
         let mojang = Arc::new(FakeMojang::default());
         let directory = Arc::new(FakeDirectory::new(mojang.clone()));
         Self {

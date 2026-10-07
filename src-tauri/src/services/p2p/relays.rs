@@ -107,6 +107,20 @@ fn relay_config(entry: &RelayEntry) -> Result<RelayConfig, NetError> {
     Ok(config)
 }
 
+/// Startet ein Relay im Test-Prozess; es läuft, solange der zweite Wert lebt.
+#[cfg(test)]
+pub(crate) async fn test_relay() -> (RelayEntry, impl Send) {
+    let (map, url, server) = iroh::test_utils::run_relay_server().await.unwrap();
+    let quic_port = map.get(&url).unwrap().quic.as_ref().map(|quic| quic.port);
+    let entry = RelayEntry {
+        index: 0,
+        url: Cow::Owned(url.to_string()),
+        operator: RelayOperator::Pumpkin,
+        quic_port,
+    };
+    (entry, server)
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;

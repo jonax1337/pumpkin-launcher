@@ -1,6 +1,7 @@
+import { useState, type ComponentProps } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "@/i18n";
-import { Button, Hint, Skel } from "@/ui";
+import { Button, Disclosure, Hint, Skel } from "@/ui";
 import { Description } from "@/components/Description";
 import { fitFilter } from "@/components/catalog/fit";
 import { catalogApi } from "@/lib/catalogApi";
@@ -29,5 +30,15 @@ export function Changelog({ instance, mod, versionId }: { instance: Instance; mo
         </Button>
       )}
     </div>
+  );
+}
+
+export function ChangelogDisclosure(props: ComponentProps<typeof Changelog>) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  return (
+    <Disclosure summary={t("detail.content.changes")} open={open} onToggle={setOpen}>
+      {open && <Changelog {...props} />}
+    </Disclosure>
   );
 }

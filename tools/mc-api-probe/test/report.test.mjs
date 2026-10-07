@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildGroupTables, renderGroupTables } from "../lib/report.mjs";
+import { buildGroupTables, cellsBySpec, entriesBySpec, renderGroupTables } from "../lib/report.mjs";
 import { compatibleRuns, findBreakpoints, renderBreakpoints } from "../lib/breakpoints.mjs";
 import { parseMemberSpec } from "../lib/probe.mjs";
 import { formatCompactJson, unpackStored } from "../lib/format.mjs";
@@ -30,6 +30,28 @@ function history() {
     version("26.1", [entry("Screen#render", [], { used: true }), entry("Screen#tick", [method("tick", "()V")], { used: true })]),
   ]);
 }
+
+test("entry indexes retain source objects, spec order and requested version order", () => {
+  const results = history();
+  const versions = ["26.1", "1.21.1"];
+  const indexed = entriesBySpec(results, versions);
+  assert.deepEqual([...indexed.keys()], ["Screen#render", "Screen#tick"]);
+  assert.deepEqual([...indexed.get("Screen#render").keys()], versions);
+  assert.equal(indexed.get("Screen#render").get("26.1"), results.get("26.1").entries[0]);
+});
+
+test("entry and cell indexes keep the last entry for a repeated spec in a version", () => {
+  const first = entry("Screen#tick", [method("tick", "()V")]);
+  const last = entry("Screen#tick", [], { classFound: false });
+  const results = new Map([version("26.1", [first, last])]);
+  assert.equal(entriesBySpec(results, ["26.1"]).get("Screen#tick").get("26.1"), last);
+  assert.equal(cellsBySpec(results, ["26.1"]).get("Screen#tick").get("26.1"), "class absent");
+});
+
+test("entry and cell indexes are empty when no versions are requested", () => {
+  assert.deepEqual(entriesBySpec(new Map(), []), new Map());
+  assert.deepEqual(cellsBySpec(new Map(), []), new Map());
+});
 
 test("versions with identical signatures in a group share one era column", () => {
   const [table] = buildGroupTables(["1.21.1", "1.21.2", "26.1"], history());

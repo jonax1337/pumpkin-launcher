@@ -39,7 +39,11 @@ function useFontsReady() {
   const [ready, setReady] = useState(false);
   useEffect(() => {
     let done = false;
-    const show = () => !done && ((done = true), setReady(true));
+    const show = () => {
+      if (done) return;
+      done = true;
+      setReady(true);
+    };
     void document.fonts.ready.then(show);
     const fallback = setTimeout(show, FONTS_WAIT_MS);
     return () => clearTimeout(fallback);

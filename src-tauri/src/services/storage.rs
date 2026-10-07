@@ -8,6 +8,7 @@ use serde::Serialize;
 
 use crate::error::AppResult;
 use crate::models::Instance;
+use crate::services::download::is_sha1;
 use crate::services::{entries, none_if_missing, system, Dirs};
 
 /// Ordner, die sich alle Instanzen teilen: Libraries, Assets, Minecraft-Versionen und Java-Runtimes.
@@ -64,7 +65,7 @@ fn unused_cache_files(dirs: &Dirs, instances: &[Instance]) -> AppResult<Vec<(Pat
         .filter_map(|entry| {
             let name = entry.file_name().into_string().ok()?;
             let hash = name.strip_suffix(".jar")?;
-            let is_cache_entry = hash.len() == 40 && hash.bytes().all(|b| b.is_ascii_hexdigit());
+            let is_cache_entry = is_sha1(hash);
             (is_cache_entry && !used.contains(&hash.to_ascii_lowercase())).then(|| (entry.path(), entry.metadata().map_or(0, |m| m.len())))
         })
         .collect();

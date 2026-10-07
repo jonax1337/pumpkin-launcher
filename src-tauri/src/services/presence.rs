@@ -2,13 +2,14 @@
 //! spricht dazu nur lokal mit dem laufenden Discord (Named Pipe bzw. Unix-Socket); es geht nichts ins Netz.
 //! Welt, Server und Instanzname kommen nie in die Anzeige.
 use std::{
-    sync::{mpsc, Mutex, MutexGuard, PoisonError},
+    sync::{mpsc, Mutex},
     thread,
 };
 
 use discord_rich_presence::{activity, error::Error as IpcError, DiscordIpc, DiscordIpcClient};
 
 use crate::models::ModLoader;
+use crate::services::lock;
 
 /// Anwendungs-ID aus dem Discord Developer Portal (Application ID); der Name der Anwendung steht als „Spielt …“ in
 /// Discord, das Bild `pumpkin` gehört unter „Rich Presence › Art Assets“ hochgeladen. Leer: keine Verbindung zu Discord.
@@ -26,17 +27,7 @@ pub struct Activity {
 
 impl Activity {
     pub fn minecraft(minecraft_version: &str, loader: ModLoader, started_at_ms: i64) -> Self {
-        Self { details: format!("Minecraft {minecraft_version}"), state: loader_label(loader).to_owned(), started_at_ms }
-    }
-}
-
-fn loader_label(loader: ModLoader) -> &'static str {
-    match loader {
-        ModLoader::Vanilla => "Vanilla",
-        ModLoader::Fabric => "Fabric",
-        ModLoader::Quilt => "Quilt",
-        ModLoader::Forge => "Forge",
-        ModLoader::NeoForge => "NeoForge",
+        Self { details: format!("Minecraft {minecraft_version}"), state: loader.display_name().to_owned(), started_at_ms }
     }
 }
 
@@ -75,14 +66,14 @@ impl Presence {
     }
 
     pub fn started(&self, instance_id: &str, activity: Activity) {
-        let mut sessions = self.lock();
+        let mut sessions = lock(&self.sessions);
         sessions.retain(|session| session.instance_id != instance_id);
         sessions.push(Session { instance_id: instance_id.to_owned(), activity: activity.clone() });
         self.send(Command::Show(activity));
     }
 
     pub fn stopped(&self, instance_id: &str) {
-        let mut sessions = self.lock();
+        let mut sessions = lock(&self.sessions);
         let before = sessions.len();
         sessions.retain(|session| session.instance_id != instance_id);
         if sessions.len() == before {
@@ -94,10 +85,6 @@ impl Presence {
     fn send(&self, command: Command) {
         // Der Thread endet erst mit `Presence`; ein Fehler hieße, er ist abgestürzt, dann gibt es nichts mehr anzuzeigen.
         let _ = self.commands.send(command);
-    }
-
-    fn lock(&self) -> MutexGuard<'_, Vec<Session>> {
-        self.sessions.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
 

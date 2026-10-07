@@ -29,17 +29,6 @@ pub enum GameSignal {
     Exited { instance_id: String },
     ModConnected { instance_id: String },
     ModDisconnected { instance_id: String },
-    ModRequest { instance_id: String, request: ModRequest },
-}
-
-/// Was die Mod im Protokoll 1 verlangte. Die Brücke erzeugt dieses Signal nicht mehr: im Protokoll 2 laufen die Vorgänge
-/// über den `OpHandler` der Brücke (docs/bridge/README.md, "Operations and consent"), mit Zustimmung je Spielstart. Das Signal bleibt, bis
-/// die Sitzungen es nicht mehr auswerten.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ModRequest {
-    Share { friend_ids: Vec<String> },
-    StopSharing,
-    Kick { friend_id: String },
 }
 
 #[derive(Clone)]

@@ -3,7 +3,7 @@ import {
   Actions, Button, Cell, ConfirmDialog, Empty, Glyph, IconButton, JobProgress, List, ListRow, Menu, ProjectIcon, RowTitle, SectionHeader,
   type MenuEntry,
 } from "@/ui";
-import { AddContentSheet } from "@/components/ContentBrowser";
+import { AddContentSheet } from "@/components/catalog/AddContentSheet";
 import { QueryList } from "@/components/QueryList";
 import { useConfirmTarget } from "@/hooks/useConfirmTarget";
 import { useContentState } from "@/store/contentState";

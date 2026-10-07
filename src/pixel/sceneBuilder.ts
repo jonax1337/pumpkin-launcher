@@ -132,7 +132,7 @@ function buildForest(ctx: SceneCtx) {
   sunDisc(ctx, sunX, sunY, sunR, "#FAD39A", "#FFEBC0");
   if (!tiny) {
     rect(base, sunX - sunR - scaled(3), sunY - Math.round(sunR * 0.15), sunR * 2 + scaled(6), 1, abgr(GLOW));
-    rect(base, sunX - sunR - scaled(5), sunY + Math.round(sunR * 0.4), sunR * 2 + scaled(10), Math.max(1, scaled(0.8)), abgr(GLOW));
+    rect(base, sunX - sunR - scaled(5), sunY + Math.round(sunR * 0.4), sunR * 2 + scaled(10), scaled(0.8), abgr(GLOW));
     driftClouds(ctx, 6, clouds, (cl, i) => {
       streak(cl, randInt(W), Math.round(horizon * (0.4 + cloudY + i * 0.12)), scaled(26 + rand() * 30), "#8E4C68", "#B05A64");
     });
@@ -227,8 +227,8 @@ function buildEnd(ctx: SceneCtx) {
   addLayer(2, (b) => {
     const floor = Math.round(H * 0.7);
     END_PILLARS.forEach(([px, py, w], i) => {
-      const x = Math.round(M + W * mx(px, 0.06)), top = Math.round(H * (py + lift)), width = scaled(w), edge = Math.max(1, scaled(1.2));
-      const crystal = Math.max(1, scaled(1.5)), crystalX = x + (width >> 1) - (crystal >> 1), crystalY = top - crystal - 1;
+      const x = Math.round(M + W * mx(px, 0.06)), top = Math.round(H * (py + lift)), width = scaled(w), edge = scaled(1.2);
+      const crystal = scaled(1.5), crystalX = x + (width >> 1) - (crystal >> 1), crystalY = top - crystal - 1;
       rect(b, x, top, width, floor - top + 2, abgr("#08060F"));
       rect(b, x + width - edge, top, edge, floor - top, abgr("#241C3E"));
       rect(b, crystalX, crystalY, crystal, crystal, abgr("#C79BFF"));
@@ -242,7 +242,7 @@ function buildEnd(ctx: SceneCtx) {
       if (k <= 0) continue;
       const depth = Math.round(k * H * 0.3) + 1, startY = top + Math.round((1 - k) * H * 0.02);
       for (let y = 0; y < depth; y++) {
-        const shade = Math.min(END_ISLAND_COLORS.length - 1, Math.floor(y / Math.max(1, scaled(2.2))));
+        const shade = Math.min(END_ISLAND_COLORS.length - 1, Math.floor(y / scaled(2.2)));
         setPixel(b, x, startY + y, END_ISLAND_COLORS[shade]);
       }
     }
@@ -268,7 +268,7 @@ function buildSnow(ctx: SceneCtx) {
   sunDisc(ctx, sunX, sunY, sunR, "#FFE6D2", "#FFF6E6");
   addLayer(1, (b) => {
     ridge(b, rand, {
-      c: "#8A96C2", rim: "#F6D6CC", rimW: Math.max(1, scaled(0.8)), cap: "#EEF2FA", capAbove: 0.5,
+      c: "#8A96C2", rim: "#F6D6CC", rimW: scaled(0.8), cap: "#EEF2FA", capAbove: 0.5,
       base: 0.52 + lift, amp: 0.15 * ampK, f: 1.05 * fK, rough: 0.03, lx: M + sunX,
     });
   });
@@ -314,7 +314,7 @@ function buildCave(ctx: SceneCtx) {
     if (tiny) return;
     for (let i = 0; i < Math.round(W / 10); i++) {
       const x = randInt(b.w), y = Math.floor(H * (0.25 + rand() * 0.45));
-      const color = rand() < 0.5 ? "#7FDFE8" : "#E0B25A", size = Math.max(1, scaled(1));
+      const color = rand() < 0.5 ? "#7FDFE8" : "#E0B25A", size = scaled(1);
       rect(b, x, y, size, size, abgr(color));
       fx.stars.push({ x: x - M, y, ph: randInt(STAR_TWINKLE_PHASES), twinkle: abgr("#FFFFFF"), size });
     }
@@ -327,7 +327,7 @@ function buildCave(ctx: SceneCtx) {
     const tops = ridge(b, rand, { c: "#0A0F17", rim: "#1E2A3D", rimAll: true, base: 0.82, amp: 0.05, f: 2.4, rough: 0.05 });
     if (tiny) return;
     scatter(tops, rand, scaled(12), (x, y) => spike(b, x, y, scaled(3 + rand() * 7), 2.5, -1, "#0A0F17"));
-    const size = Math.max(1, scaled(1.2));
+    const size = scaled(1.2);
     rect(b, torchX + M, torchY - scaled(7), size, scaled(8), abgr("#5A3D26"));
     fx.torch = { x: torchX, y: torchY - scaled(7), s: size };
   });
@@ -367,7 +367,7 @@ function buildSea(ctx: SceneCtx) {
     if (tiny) return;
     rect(b, islandX + scaled(4), horizon - scaled(14), scaled(2), scaled(10), abgr(ISLAND));
     rect(b, islandX + scaled(3.5), horizon - scaled(15), scaled(3), scaled(1.4), abgr(ISLAND));
-    rect(b, islandX + scaled(4), horizon - scaled(13), scaled(2), Math.max(1, scaled(1)), abgr("#F4D68A"));
+    rect(b, islandX + scaled(4), horizon - scaled(13), scaled(2), scaled(1), abgr("#F4D68A"));
   });
   addLayer(4, (b) => {
     const baseW = Math.round(W * 0.34);
@@ -399,16 +399,16 @@ function buildPlains(ctx: SceneCtx) {
   });
   addLayer(2, (b) => {
     const tops = ridge(b, rand, { c: "#6E9481", base: 0.71, amp: 0.045, f: 2 });
-    if (!tiny) scatter(tops, rand, scaled(18), (x, y) => oak(b, x, y, Math.max(1, scaled(0.9)), "#587B6A"));
+    if (!tiny) scatter(tops, rand, scaled(18), (x, y) => oak(b, x, y, scaled(0.9), "#587B6A"));
   });
   addLayer(3, (b) => {
     const tops = ridge(b, rand, { c: "#4A735F", base: 0.81, amp: 0.035, f: 2.3 });
-    if (!tiny) scatter(tops, rand, scaled(22), (x, y) => oak(b, x, y, Math.max(1, scaled(1.4)), "#3A5E4C"));
+    if (!tiny) scatter(tops, rand, scaled(22), (x, y) => oak(b, x, y, scaled(1.4), "#3A5E4C"));
   });
   addLayer(4, (b) => {
     const tops = ridge(b, rand, { c: "#22392F", base: 0.94, amp: 0.02, f: 1.5 });
     const x = M + W - scaled(16);
-    if (!tiny) oak(b, x, tops[x], Math.max(1, scaled(3)), "#1B2E25");
+    if (!tiny) oak(b, x, tops[x], scaled(3), "#1B2E25");
   });
 }
 

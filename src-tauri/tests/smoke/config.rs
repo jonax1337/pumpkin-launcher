@@ -77,11 +77,9 @@ impl Config {
         let data = var("PUMPKIN_SMOKE_DATA").map(PathBuf::from).ok_or("PUMPKIN_SMOKE_DATA fehlt (Datenordner des Launchers, nie auf E:)")?;
         let dist = var("PUMPKIN_SMOKE_DIST").map(PathBuf::from).unwrap_or_else(default_dist);
         let out = var("PUMPKIN_SMOKE_OUT").map(PathBuf::from).unwrap_or_else(|| data.join("smoke-reports"));
-        let timeout = var("PUMPKIN_SMOKE_TIMEOUT_SECS").map_or(Ok(DEFAULT_TIMEOUT_SECS), |text| text.parse().map_err(|_| format!("PUMPKIN_SMOKE_TIMEOUT_SECS '{text}' ist keine Zahl")))?;
+        let timeout = parse_seconds("PUMPKIN_SMOKE_TIMEOUT_SECS", var("PUMPKIN_SMOKE_TIMEOUT_SECS").as_deref(), DEFAULT_TIMEOUT_SECS)?;
         let scenario = Scenario::parse(&var("PUMPKIN_SMOKE_SCENARIO").unwrap_or_default())?;
-        let ui_hold = var("PUMPKIN_SMOKE_UI_HOLD_SECS").map_or(Ok(0), |text| {
-            text.parse::<u64>().map_err(|_| format!("PUMPKIN_SMOKE_UI_HOLD_SECS '{text}' ist keine Zahl"))
-        })?;
+        let ui_hold = parse_seconds("PUMPKIN_SMOKE_UI_HOLD_SECS", var("PUMPKIN_SMOKE_UI_HOLD_SECS").as_deref(), 0)?;
         if ui_hold > 600 {
             return Err("PUMPKIN_SMOKE_UI_HOLD_SECS darf höchstens 600 sein".to_owned());
         }
@@ -90,6 +88,10 @@ impl Config {
             loader_version: var("PUMPKIN_SMOKE_LOADER_VERSION"), ui_hold: Duration::from_secs(ui_hold),
         }))
     }
+}
+
+fn parse_seconds(name: &str, text: Option<&str>, default: u64) -> Result<u64, String> {
+    text.map_or(Ok(default), |text| text.parse().map_err(|_| format!("{name} '{text}' ist keine Zahl")))
 }
 
 fn var(name: &str) -> Option<String> {
@@ -103,6 +105,25 @@ fn default_dist() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn absent_second_values_keep_their_configured_defaults() {
+        assert_eq!(parse_seconds("PUMPKIN_SMOKE_TIMEOUT_SECS", None, DEFAULT_TIMEOUT_SECS), Ok(240));
+        assert_eq!(parse_seconds("PUMPKIN_SMOKE_UI_HOLD_SECS", None, 0), Ok(0));
+    }
+
+    #[test]
+    fn second_values_keep_zero_and_the_u64_boundary() {
+        assert_eq!(parse_seconds("seconds", Some("0"), 240), Ok(0));
+        assert_eq!(parse_seconds("seconds", Some("18446744073709551615"), 0), Ok(u64::MAX));
+    }
+
+    #[test]
+    fn invalid_second_values_keep_the_variable_and_original_text_in_the_error() {
+        for text in ["-1", " 1", "1 ", "abc", "18446744073709551616"] {
+            assert_eq!(parse_seconds("PUMPKIN_SMOKE_UI_HOLD_SECS", Some(text), 0), Err(format!("PUMPKIN_SMOKE_UI_HOLD_SECS '{text}' ist keine Zahl")));
+        }
+    }
 
     #[test]
     fn scenarios_are_read_by_name_with_their_argument() {

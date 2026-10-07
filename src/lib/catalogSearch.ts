@@ -15,10 +15,16 @@ function requestFor(source: Source, { mc, loader, category, index, ...rest }: Se
   return { ...rest, mc: versions ? mc : null, loader: filters ? loader : null, category: categories ? category : null, index: filters ? index : defaultSort(rest.query) };
 }
 
-const rankInterleaved = <T>(lists: T[][]): T[] => {
+function rankInterleaved<T>(lists: T[][]): T[] {
   const longest = Math.max(...lists.map((list) => list.length));
-  return Array.from({ length: longest }, (_, i) => lists.flatMap((list) => (i < list.length ? [list[i]] : []))).flat();
-};
+  const ranked: T[] = [];
+  for (let rank = 0; rank < longest; rank++) {
+    for (const list of lists) {
+      if (rank < list.length) ranked.push(list[rank]);
+    }
+  }
+  return ranked;
+}
 
 /** Nach Downloads ist die Reihenfolge über Quellen vergleichbar, sonst nur der Rang je Quelle: dann abwechselnd. */
 const mergeHits = (lists: CatalogHit[][], index: SearchRequest["index"]) =>

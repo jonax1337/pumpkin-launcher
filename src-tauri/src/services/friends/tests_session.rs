@@ -1,7 +1,6 @@
 //! Geteilte Welten mit echten Sockets (SPEC 13.1, Zeile R5): zwei Freunde-Dienste am In-Process-Relay, ein falscher
 //! Minecraft-Server (gehört diesem Prozess, beantwortet die Statusabfrage, spiegelt nach dem Login) und ein falsches
 //! Spiel, das sich wie der Client mit Handshake und Login Start verbindet. Echte Zeit mit kurzen Werten.
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::future::Future;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -11,7 +10,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use futures::future::BoxFuture;
-use iroh::test_utils::run_relay_server;
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -42,7 +40,7 @@ use crate::models::{new_id, Instance, Mod, ModKind, ModSource, NewInstance};
 use crate::services::gamesignal::{GameSignal, GameSignals};
 use crate::services::modbridge::{Expectations, ModBridge, ENV_PORT, ENV_TOKEN};
 use crate::services::p2p::tunnel::LocalListener;
-use crate::services::p2p::{frame, BiStream, PeerId, RelayEntry, RelayOperator, RelayTls};
+use crate::services::p2p::{frame, test_relay, BiStream, PeerId, RelayEntry, RelayTls};
 use crate::services::store::JsonStore;
 use crate::services::{lock, Dirs};
 
@@ -70,19 +68,6 @@ const SHORT: JoinTimers = JoinTimers {
     first_connection: Duration::from_secs(3),
     host_offline_grace: Duration::from_secs(1),
 };
-
-/// Startet ein Relay im Test-Prozess; es läuft, solange der zweite Wert lebt (wie in `tests.rs`).
-async fn test_relay() -> (RelayEntry, impl Send) {
-    let (map, url, server) = run_relay_server().await.unwrap();
-    let quic_port = map.get(&url).unwrap().quic.as_ref().map(|quic| quic.port);
-    let entry = RelayEntry {
-        index: 0,
-        url: Cow::Owned(url.to_string()),
-        operator: RelayOperator::Pumpkin,
-        quic_port,
-    };
-    (entry, server)
-}
 
 fn options(relay: &RelayEntry) -> NetOptions {
     NetOptions {

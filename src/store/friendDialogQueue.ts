@@ -53,11 +53,15 @@ export const closeActive = (queue: DialogQueue): DialogQueue => ({ ...queue, act
 /** Eine verfallene Bitte der Mod verschwindet, ob sie offen ist oder wartet: das Backend nähme keine Antwort mehr an. */
 export const dropModConfirm = (queue: DialogQueue, requestId: string): DialogQueue => {
   const isRequest = (dialog: FriendDialog | null) => dialog?.kind === "modConfirm" && dialog.confirm.requestId === requestId;
-  return { active: isRequest(queue.active) ? null : queue.active, waiting: queue.waiting.filter((dialog) => !isRequest(dialog)) };
+  return dropMatching(queue, isRequest);
 };
 
 /** Eine widerrufene Einladung verschwindet, ob sie offen ist oder wartet. */
 export const dropInvite = (queue: DialogQueue, inviteId: string): DialogQueue => {
   const isInvite = (dialog: FriendDialog | null) => dialog?.kind === "invite" && dialog.inviteId === inviteId;
-  return { active: isInvite(queue.active) ? null : queue.active, waiting: queue.waiting.filter((dialog) => !isInvite(dialog)) };
+  return dropMatching(queue, isInvite);
 };
+
+function dropMatching(queue: DialogQueue, matches: (dialog: FriendDialog | null) => boolean): DialogQueue {
+  return { active: matches(queue.active) ? null : queue.active, waiting: queue.waiting.filter((dialog) => !matches(dialog)) };
+}

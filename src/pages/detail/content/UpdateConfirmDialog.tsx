@@ -1,16 +1,14 @@
-import { useState } from "react";
 import { useI18n } from "@/i18n";
-import { Dialog, DialogActions, Disclosure, Hint, ProjectIcon } from "@/ui";
+import { Dialog, DialogActions, Hint, ProjectIcon } from "@/ui";
 import type { ModUpdate } from "@/lib/content-types";
 import type { Instance, Mod } from "@/lib/types";
-import { Changelog } from "./Changelog";
+import { ChangelogDisclosure } from "./Changelog";
 
 /** Ein Update der Rückfrage: alter und neuer Stand, das Änderungsprotokoll erst auf Wunsch. */
 function UpdateItem({ instance, mod, update, title, icon }: {
   instance: Instance; mod: Mod; update: ModUpdate; title: string; icon: string | null | undefined;
 }) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
   return (
     <li className="grid grid-cols-[40px_minmax(0,1fr)] items-center gap-x-3 gap-y-1 py-2">
       <ProjectIcon url={icon} seed={mod.id} />
@@ -19,9 +17,7 @@ function UpdateItem({ instance, mod, update, title, icon }: {
         <span className="text-fg-3 text-[13px]">{t("detail.content.versionChange", { from: mod.version, to: update.versionNumber })}</span>
       </div>
       <div className="col-start-2">
-        <Disclosure summary={t("detail.content.changes")} open={open} onToggle={setOpen}>
-          {open && <Changelog instance={instance} mod={mod} versionId={update.versionId} />}
-        </Disclosure>
+        <ChangelogDisclosure instance={instance} mod={mod} versionId={update.versionId} />
       </div>
     </li>
   );

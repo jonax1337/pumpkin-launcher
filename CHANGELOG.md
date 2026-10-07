@@ -4,6 +4,21 @@ Last updated: 2026-10-07.
 
 For installation and a first game, start with the [launcher guide](README.md#download-and-install).
 
+## Unreleased
+
+### Desktop maintenance
+
+- Consolidate content-row state, lazy changelog disclosures, context-menu events,
+  dialog removal and query-cache updates without changing desktop interactions.
+- Reuse shared checksum, loader-name and lock helpers; keep world import and
+  restore directory creation and rollback in one extraction path.
+- Centralize Bridge Friends-availability checks and relay fixtures; remove the
+  unused protocol-1 request signal and retain current protocol-2 operations.
+- Reduce repeated allocations in grouping, JVM-property parsing and smoke
+  reports. Keep Java request completion on the same main-thread executor.
+- Add regression coverage for world rollback, JVM-property precedence and
+  tooling boundaries. Make proxy checks return a failing exit status on failure.
+
 ## 0.3.3 — 2026-10-07
 
 ### Announcements

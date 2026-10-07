@@ -135,7 +135,7 @@ impl StartArgs<'_> {
     /// Version und denen des Nutzers (docs/bridge/README.md, "Support selection"), dazu die verbleibenden des Nutzers.
     pub fn apply<'a>(&'a self, spec: LaunchSpec<'a>) -> LaunchSpec<'a> {
         LaunchSpec {
-            injected_classpath: &self.injected_classpath,
+            injected_classpath: self.injected_classpath,
             injected_jvm_args: &self.injected_jvm,
             extra_jvm_args: &self.user_jvm,
             injected_game_args: &self.injected_game,

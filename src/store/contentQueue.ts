@@ -5,7 +5,7 @@ export interface QueuedContent {
   id: string;
   target: string;
   label: string;
-  /** Läuft den Vorgang, meldet Fehler selbst (die Warteschlange fängt keine) und ist fertig, wenn er zu Ende ist. */
+  /** Meldet Fehler selbst und ist fertig, wenn der Vorgang zu Ende ist; die Warteschlange setzt danach den nächsten fort. */
   start: () => Promise<unknown>;
 }
 

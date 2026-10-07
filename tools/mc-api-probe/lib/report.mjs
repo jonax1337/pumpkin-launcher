@@ -59,25 +59,22 @@ function groupSpecsInOrder(results) {
 }
 
 export function entriesBySpec(resultsByVersion, versions) {
-  const entries = new Map();
-  for (const version of versions) {
-    for (const entry of resultsByVersion.get(version).entries) {
-      if (!entries.has(entry.spec)) entries.set(entry.spec, new Map());
-      entries.get(entry.spec).set(version, entry);
-    }
-  }
-  return entries;
+  return indexEntriesBySpec(resultsByVersion, versions, (entry) => entry);
 }
 
 export function cellsBySpec(resultsByVersion, versions) {
-  const cells = new Map();
+  return indexEntriesBySpec(resultsByVersion, versions, renderEntry);
+}
+
+function indexEntriesBySpec(resultsByVersion, versions, valueOfEntry) {
+  const indexed = new Map();
   for (const version of versions) {
     for (const entry of resultsByVersion.get(version).entries) {
-      if (!cells.has(entry.spec)) cells.set(entry.spec, new Map());
-      cells.get(entry.spec).set(version, renderEntry(entry));
+      if (!indexed.has(entry.spec)) indexed.set(entry.spec, new Map());
+      indexed.get(entry.spec).set(version, valueOfEntry(entry));
     }
   }
-  return cells;
+  return indexed;
 }
 
 function splitIntoEras(versions, specs, cells) {

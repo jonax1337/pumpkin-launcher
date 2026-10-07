@@ -29,7 +29,6 @@ export const detail: typeof deDetail = {
   "detail.content.oneUpToDate": "{name} is up to date",
   "detail.content.manyUpdated": "{n} items updated",
   "detail.content.restoredAnnouncement": "Restored {name}",
-  "detail.content.itemsCount.one": "{n} item",
   "detail.content.itemsCount.other": "{n} items",
   "detail.content.dependencies.one": "{n} dependency",
   "detail.content.dependencies.other": "{n} dependencies",

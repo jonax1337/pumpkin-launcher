@@ -225,7 +225,7 @@ impl Connection {
             tracing::debug!(instance = %self.instance_id, %err, "Anfrage der Mod verworfen");
             ErrorCode::BadRequest
         })?;
-        if !matches!(op, Op::StateSync {} | Op::LauncherOpen { .. }) && !self.inner.friends_enabled(&self.instance_id) {
+        if op.requires_friends() && !self.inner.friends_enabled(&self.instance_id) {
             return Err(ErrorCode::NotEnabled);
         }
         let op = op.resolve_friends(|alias| self.aliases.real(alias)).map_err(|UnknownFriend| ErrorCode::UnknownFriend)?;
@@ -242,7 +242,7 @@ impl Connection {
 
     fn spawn_handler(&self, id: String, op: Op, guard: InFlightGuard) {
         let ctx = OpContext::new(self.inner.clone(), self.instance_id.clone(), id.clone(), self.link.clone());
-        let friends_operation = !matches!(op, Op::StateSync {} | Op::LauncherOpen { .. });
+        let friends_operation = op.requires_friends();
         let generation = ctx.friends_generation();
         let handler = self.inner.handler();
         let (link, session) = (self.link.clone(), self.session.clone());

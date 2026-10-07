@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { errorMessage } from "@/lib/errors";
 import type { ContentProject, ModUpdate } from "@/lib/content-types";
 import { queryClient } from "@/lib/queryClient";
+import { instanceUrl } from "@/lib/routes";
 import { toastError } from "@/lib/toast";
 import { HOUR } from "@/lib/time";
 import type { Instance } from "@/lib/types";
@@ -74,7 +75,7 @@ const installMutation = (qc: QueryClient) => ({
   mutationFn: (install: ContentRun) =>
     trackContent(qc, install, (instance, label) => {
       qc.setQueryData(instanceKeys.detail(instance.id), instance);
-      return { label, sub: instance.name, to: `/instances/${instance.id}` };
+      return { label, sub: instance.name, to: instanceUrl(instance.id) };
     }),
   retry: false,
 });

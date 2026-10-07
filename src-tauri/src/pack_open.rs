@@ -9,6 +9,8 @@ use std::{
 
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use crate::services::lock;
+
 /// Die zuletzt geöffnete Pack-Datei, die die Oberfläche noch nicht abgeholt hat.
 #[derive(Default)]
 pub struct OpenedPack(Mutex<Option<PathBuf>>);
@@ -22,11 +24,11 @@ impl OpenedPack {
     }
 
     fn set(&self, path: PathBuf) {
-        *self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(path);
+        *lock(&self.0) = Some(path);
     }
 
     fn take(&self) -> Option<PathBuf> {
-        self.0.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take()
+        lock(&self.0).take()
     }
 }
 

@@ -17,14 +17,18 @@ pub(super) struct UserProperty {
 /// Sucht `-D<name>` in `args`; `separator` trennt die Pfadliste des Werts.
 pub(super) fn find(args: &[String], name: &str, separator: char) -> UserProperty {
     let mut property = UserProperty::default();
+    let mut last_value = None;
     for arg in args {
         match value_of(arg, name) {
             Some(value) => {
-                property.entries = split_list(value, separator);
+                last_value = Some(value);
                 property.replaced.push(arg.clone());
             }
             None => property.remaining.push(arg.clone()),
         }
+    }
+    if let Some(value) = last_value {
+        property.entries = split_list(value, separator);
     }
     property
 }
@@ -129,6 +133,19 @@ mod tests {
         assert_eq!(found.entries, entries(&["d.jar"]));
         assert_eq!(found.remaining, args(&["-Xss1M"]));
         assert_eq!(found.replaced.len(), 3);
+    }
+
+    #[test]
+    fn a_final_empty_property_discards_earlier_entries_but_keeps_every_replacement() {
+        for empty in ["-Dfabric.addMods", "-Dfabric.addMods=", r#"-Dfabric.addMods="""#] {
+            let original = args(&["-Dfabric.addMods=ignored.jar", "-Xss2M", empty]);
+
+            let found = find(&original, "fabric.addMods", ';');
+
+            assert!(found.entries.is_empty(), "{empty}");
+            assert_eq!(found.remaining, args(&["-Xss2M"]));
+            assert_eq!(found.replaced, args(&["-Dfabric.addMods=ignored.jar", empty]));
+        }
     }
 
     #[test]

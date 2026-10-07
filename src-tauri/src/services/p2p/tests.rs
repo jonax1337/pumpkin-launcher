@@ -12,10 +12,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use iroh::{
-    endpoint::{ReadError, VarInt},
-    test_utils::run_relay_server,
-};
+use iroh::endpoint::{ReadError, VarInt};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
@@ -35,14 +32,6 @@ const GUEST_LIMITS: ListenerLimits = ListenerLimits { before_first_valid: 1, aft
 const IDLE_TIMEOUT: Duration = Duration::from_secs(40);
 /// So viele Handshakes laufen höchstens zugleich (SPEC 3.5); jeder weitere wird vor dem Handshake verworfen.
 const HANDSHAKE_CAP: usize = 8;
-
-/// Startet ein Relay im Test-Prozess; es läuft, solange der zweite Wert lebt.
-async fn test_relay() -> (RelayEntry, impl Send) {
-    let (map, url, server) = run_relay_server().await.unwrap();
-    let quic_port = map.get(&url).unwrap().quic.as_ref().map(|quic| quic.port);
-    let entry = RelayEntry { index: 0, url: Cow::Owned(url.to_string()), operator: RelayOperator::Pumpkin, quic_port };
-    (entry, server)
-}
 
 fn config(seed: u8, relay_map: Vec<RelayEntry>) -> NetConfig {
     NetConfig {

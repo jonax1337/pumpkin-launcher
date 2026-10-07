@@ -125,8 +125,10 @@ pub async fn public_address(endpoint: &Endpoint, limit: Duration) -> Option<Stri
 }
 
 fn global_addrs(report: &NetReport) -> Option<String> {
-    let v4 = report.global_v4.map(|addr| addr.to_string());
-    let v6 = report.global_v6.map(|addr| addr.to_string());
-    let found: Vec<String> = v4.into_iter().chain(v6).collect();
-    (!found.is_empty()).then(|| found.join(", "))
+    match (report.global_v4, report.global_v6) {
+        (Some(v4), Some(v6)) => Some(format!("{v4}, {v6}")),
+        (Some(v4), None) => Some(v4.to_string()),
+        (None, Some(v6)) => Some(v6.to_string()),
+        (None, None) => None,
+    }
 }

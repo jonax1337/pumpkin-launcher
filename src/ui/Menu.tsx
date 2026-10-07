@@ -2,7 +2,7 @@
  * Menüs des Kits: Dropdown und Kontextmenü mit gleichen Einträgen, freie Menübausteine.
  * Verhalten aus Radix; Aussehen: ui/overlay.css (vx-pop, vx-mi). Innerhalb gilt der hellere Hover-Kontext (data-ctx="overlay", tokens.css).
  */
-import { useRef, useState, type ComponentProps, type FocusEvent, type ReactNode } from "react";
+import { useRef, useState, type ComponentProps, type FocusEvent, type KeyboardEvent, type ReactNode, type SyntheticEvent } from "react";
 import { ContextMenu as CM, DropdownMenu as DM } from "radix-ui";
 import { cn } from "@/lib/utils";
 import { Icon } from "./Icon";
@@ -46,7 +46,7 @@ function subMenu(e: Extract<MenuEntry, { items: MenuEntry[] }>, M: MenuKit) {
         <Icon name="chev" size="s" className="vx-mi-sub" />
       </M.SubTrigger>
       <M.Portal>
-        <M.SubContent className="vx-pop" data-ctx="overlay" sideOffset={4} collisionPadding={8} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}>
+        <M.SubContent className="vx-pop" data-ctx="overlay" sideOffset={4} collisionPadding={8} onContextMenu={suppressContextMenu}>
           {entries(e.items, M)}
         </M.SubContent>
       </M.Portal>
@@ -95,6 +95,21 @@ function keepFocusWhenClosed(e: FocusEvent<HTMLDivElement>) {
   if (prev instanceof HTMLElement && prev.isConnected) prev.focus({ preventScroll: true });
 }
 
+function suppressContextMenu(event: SyntheticEvent) {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function isContextMenuKey(event: KeyboardEvent<HTMLElement>) {
+  return event.key === "ContextMenu" || (event.shiftKey && event.key === "F10");
+}
+
+function dispatchContextMenu(target: Element, x: number, y: number) {
+  target.dispatchEvent(new MouseEvent("contextmenu", {
+    bubbles: true, cancelable: true, clientX: x, clientY: y,
+  }));
+}
+
 /** Dropdown-Menü an einem Auslöser. Einträge über `items` oder frei als `children` (MenuItem, MenuSep, MenuLabel). */
 export function Menu({ trigger, items, align = "end", width, className, open, onOpenChange, children }: {
   trigger: ReactNode; items?: MenuEntry[]; align?: "start" | "end";
@@ -134,9 +149,7 @@ export function ContextMenu({ items, children, includePortals = false }: { items
   function dispatchPortalMenu(root: HTMLElement, target: Element, x: number, y: number) {
     portalTargetRef.current = target;
     try {
-      root.dispatchEvent(new MouseEvent("contextmenu", {
-        bubbles: true, cancelable: true, clientX: x, clientY: y,
-      }));
+      dispatchContextMenu(root, x, y);
     } finally {
       portalTargetRef.current = null;
     }
@@ -166,15 +179,13 @@ export function ContextMenu({ items, children, includePortals = false }: { items
         data-context-menu-trigger=""
         onContextMenuCapture={(e) => {
           if (e.defaultPrevented || !isForeignPortal(e.currentTarget as HTMLElement, e.target)) return;
-          e.preventDefault();
-          e.stopPropagation();
+          suppressContextMenu(e);
           dispatchPortalMenu(e.currentTarget as HTMLElement, e.target as Element, e.clientX, e.clientY);
         }}
         onKeyDownCapture={(e) => {
-          if (e.defaultPrevented || !(e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) return;
+          if (e.defaultPrevented || !isContextMenuKey(e)) return;
           if (!isForeignPortal(e.currentTarget as HTMLElement, e.target)) return;
-          e.preventDefault();
-          e.stopPropagation();
+          suppressContextMenu(e);
           const target = e.target as Element;
           const rect = target.getBoundingClientRect();
           dispatchPortalMenu(e.currentTarget as HTMLElement, target, rect.left, rect.bottom);
@@ -184,8 +195,7 @@ export function ContextMenu({ items, children, includePortals = false }: { items
           const root = e.currentTarget as HTMLElement;
           if (!(e.target instanceof Element)) return;
           if ((!includePortals && !root.contains(e.target)) || e.target.closest('[role="menu"]')) {
-            e.preventDefault();
-            e.stopPropagation();
+            suppressContextMenu(e);
             return;
           }
           recordTarget(root, portalTargetRef.current ?? e.target);
@@ -199,15 +209,12 @@ export function ContextMenu({ items, children, includePortals = false }: { items
           e.stopPropagation();
         }}
         onKeyDown={(e) => {
-          if (e.defaultPrevented || !(e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) return;
+          if (e.defaultPrevented || !isContextMenuKey(e)) return;
           const root = e.currentTarget as HTMLElement;
           if (!(e.target instanceof Element) || (!includePortals && !root.contains(e.target))) return;
           const rect = e.target.getBoundingClientRect();
-          e.target.dispatchEvent(new MouseEvent("contextmenu", {
-            bubbles: true, cancelable: true, clientX: rect.left, clientY: rect.bottom,
-          }));
-          e.preventDefault();
-          e.stopPropagation();
+          dispatchContextMenu(e.target, rect.left, rect.bottom);
+          suppressContextMenu(e);
         }}
       >
         {children}
@@ -218,7 +225,7 @@ export function ContextMenu({ items, children, includePortals = false }: { items
           data-ctx="overlay"
           collisionPadding={8}
           onFocus={keepFocusWhenClosed}
-          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onContextMenu={suppressContextMenu}
           onInteractOutside={() => { interactedOutsideRef.current = true; }}
           onCloseAutoFocus={(e) => {
             if (interactedOutsideRef.current) return;

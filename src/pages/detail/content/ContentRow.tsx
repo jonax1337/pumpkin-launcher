@@ -125,15 +125,20 @@ function WarnCell({ warns, hideChipBelow }: { warns: Warn[]; hideChipBelow?: num
   );
 }
 
-/** Inhalt als Listenzeile: Auswahl, Symbol, Name, Herkunft, Hinweise, Update, An/Aus, Menü. */
-export function ContentRow({ row }: { row: Row }) {
-  const { t } = useI18n();
+function useRowPresentation(row: Row) {
   const model = useContentModel();
   const { mod } = row;
   const warns = model.warnsOf(mod);
   const picked = model.picked.has(mod.id);
   const description = useReaderDescription(row, warns);
   const subline = useSubline(row);
+  return { model, mod, warns, picked, description, subline };
+}
+
+/** Inhalt als Listenzeile: Auswahl, Symbol, Name, Herkunft, Hinweise, Update, An/Aus, Menü. */
+export function ContentRow({ row }: { row: Row }) {
+  const { t } = useI18n();
+  const { model, mod, warns, picked, description, subline } = useRowPresentation(row);
   return (
     <ListRow selected={picked} off={!mod.enabled} dep={model.grouped && row.owners.length > 0}>
       <Checkbox
@@ -161,12 +166,7 @@ export function ContentRow({ row }: { row: Row }) {
  */
 export function ContentTile({ row }: { row: Row }) {
   const { t } = useI18n();
-  const model = useContentModel();
-  const { mod } = row;
-  const warns = model.warnsOf(mod);
-  const picked = model.picked.has(mod.id);
-  const description = useReaderDescription(row, warns);
-  const subline = useSubline(row);
+  const { model, mod, warns, picked, description, subline } = useRowPresentation(row);
   // Beschreibung steht schon im Screenreader-Text (ReaderDescription); Art/Version nur hier.
   const about = row.owners.length ? "" : model.descriptionOf(mod) ?? "";
   return (

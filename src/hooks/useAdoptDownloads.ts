@@ -5,7 +5,7 @@ import { t } from "@/i18n";
 import { api } from "@/lib/api";
 import type { BlockedFile } from "@/lib/content-types";
 import { errorMessage } from "@/lib/errors";
-import { instanceKeys } from "./queryKeys";
+import { instanceSaved } from "./useInstances";
 
 /** Dateien, die der Nutzer von Hand laden muss, und die Instanz, in die sie kommen. */
 export interface ManualTarget {
@@ -59,8 +59,7 @@ export function useAdoptDownloads(target: ManualTarget | null, onFinished: () =>
           const updated = await api.curseforgeAdoptDownload(target.instanceId, item);
           if (updated) {
             markDone(item.fileId);
-            qc.setQueryData(instanceKeys.detail(updated.id), updated);
-            void qc.invalidateQueries({ queryKey: instanceKeys.all });
+            void instanceSaved(qc, updated);
           }
         } catch (err) {
           toast.error(t("components.manual.adoptFailed", { name: item.name }), { description: errorMessage(err) });

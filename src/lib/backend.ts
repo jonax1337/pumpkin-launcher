@@ -130,7 +130,7 @@ export const allCapabilities = (available: boolean): Capabilities => ({
 
 /**
  * Alles, was die Oberfläche vom Backend braucht: in der App die Tauri-Commands (`backend-tauri.ts`),
- * im Browser ein In-Memory-Mock (`mock-backend.ts`). Das Backend wirft Fehler als string; beide Seiten liefern `Error`.
+ * im Browser ein In-Memory-Mock (`mock-backend.ts`). Beide liefern `Error`; der Tauri-Adapter übersetzt codierte Backend- und Plugin-Fehler.
  */
 export interface Backend {
   capabilities: Capabilities;

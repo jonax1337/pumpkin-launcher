@@ -1,13 +1,11 @@
 //! Freunde-Dienste mit echten Sockets (SPEC 13.1, Zeile R4): Endpunkte nur auf Loopback, Peers finden sich über
 //! iroh's In-Process-Relay (SPEC 3.7). Echte Zeit mit kurzen Werten, kein Netz nötig.
-use std::borrow::Cow;
 use std::future::Future;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use futures::future::BoxFuture;
-use iroh::test_utils::run_relay_server;
 use serde_json::{json, Value};
 use tokio::sync::{oneshot, Notify};
 
@@ -34,7 +32,7 @@ use crate::services::gamesignal::{GameSignal, GameSignals};
 use crate::services::modbridge::{Expectations, ModBridge};
 use crate::services::p2p::{
     frame, Admission, BiStream, CloseCode, CloseReason, Gate, NetConfig, PeerConn, PeerId, PeerNet,
-    RelayEntry, RelayOperator, RelaySelection, RelayTls, DIAL_TIMEOUT,
+    test_relay, RelayEntry, RelaySelection, RelayTls, DIAL_TIMEOUT,
 };
 use crate::services::secrets::MemorySecretStore;
 use crate::services::shared_types::ModLoader;
@@ -50,19 +48,6 @@ const ACCOUNT_UUID: &str = "069a79f4-44e9-4726-a5be-fca90e38aaf5";
 const INVITE_ID: &str = "0f8d2c1e-6a4b-4f7e-9c3d-2b1a0e9f8d7c";
 const SESSION_ID: &str = "7c6b5a49-3827-4615-a0b9-c8d7e6f5a4b3";
 const DAY_SECS: u64 = 24 * 3600;
-
-/// Startet ein Relay im Test-Prozess; es läuft, solange der zweite Wert lebt.
-async fn test_relay() -> (RelayEntry, impl Send) {
-    let (map, url, server) = run_relay_server().await.unwrap();
-    let quic_port = map.get(&url).unwrap().quic.as_ref().map(|quic| quic.port);
-    let entry = RelayEntry {
-        index: 0,
-        url: Cow::Owned(url.to_string()),
-        operator: RelayOperator::Pumpkin,
-        quic_port,
-    };
-    (entry, server)
-}
 
 fn options(relay: &RelayEntry) -> NetOptions {
     NetOptions {

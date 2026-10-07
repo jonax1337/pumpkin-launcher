@@ -157,9 +157,13 @@ async fn api<T: DeserializeOwned>(
     path: &str,
     query: &[(String, String)],
 ) -> AppResult<T> {
+    Ok(serde_json::from_slice(&bytes(client.get(api_url(path, query)?), API_JSON_LIMIT).await?)?)
+}
+
+fn api_url(path: impl std::fmt::Display, query: &[(String, String)]) -> AppResult<reqwest::Url> {
     let mut url = parse_url(&format!("{API}/{path}"))?;
     url.query_pairs_mut().extend_pairs(query);
-    Ok(serde_json::from_slice(&bytes(client.get(url), API_JSON_LIMIT).await?)?)
+    Ok(url)
 }
 /// Quilt lädt auch Fabric-Mods: Katalog und Versionen fragen dann beide Loader an (ODER).
 fn loaders_to_query(loader: &str) -> Vec<&str> {
@@ -247,8 +251,7 @@ pub async fn listed_versions(
     loader: &str,
 ) -> AppResult<Vec<Version>> {
     let query = version_query(id, Some(mc), Some(loader))?;
-    let mut url = parse_url(&format!("{API}/project/{id}/version"))?;
-    url.query_pairs_mut().extend_pairs(&query);
+    let url = api_url(format_args!("project/{id}/version"), &query)?;
     parse_listed_versions(&bytes(client.get(url), API_JSON_LIMIT).await?)
 }
 fn version_query(id: &str, mc: Option<&str>, loader: Option<&str>) -> AppResult<Vec<(String, String)>> {
@@ -687,6 +690,22 @@ impl<'a> Resolver<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn version_urls_keep_the_fixed_api_and_quilt_fallback_query() {
+        let query = version_query("fabric-api", Some("1.21.1"), Some("quilt")).unwrap();
+
+        let url = api_url("project/fabric-api/version", &query).unwrap();
+
+        assert_eq!(url.origin().ascii_serialization(), "https://api.modrinth.com");
+        assert_eq!(url.path(), "/v2/project/fabric-api/version");
+        assert_eq!(
+            url.query_pairs().map(|(key, value)| (key.into_owned(), value.into_owned())).collect::<Vec<_>>(),
+            query
+        );
+        assert_eq!(query[1].1, r#"["quilt","fabric"]"#);
+    }
+
     fn v(id: &str) -> Version {
         Version {
             id: id.into(),

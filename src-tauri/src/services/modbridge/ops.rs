@@ -146,6 +146,10 @@ impl Op {
         }
     }
 
+    pub(crate) fn requires_friends(&self) -> bool {
+        !matches!(self, Self::StateSync {} | Self::LauncherOpen { .. })
+    }
+
     /// Der Geltungsbereich, den der Vorgang braucht (Spalte „Scope“ in 5.4).
     pub fn scope(&self) -> Option<Scope> {
         match self {
@@ -472,6 +476,17 @@ mod tests {
                 None
             };
             assert_eq!(op.scope(), expected, "{name}");
+        }
+    }
+
+    #[test]
+    fn only_shared_operations_are_available_without_friends() {
+        for name in OP_NAMES {
+            assert_eq!(
+                sample(name).requires_friends(),
+                !matches!(name, "state.sync" | "launcher.open"),
+                "{name}"
+            );
         }
     }
 

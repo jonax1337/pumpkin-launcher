@@ -19,7 +19,6 @@ use super::sessions::{shown_name, FriendSessions, Shared};
 use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::new_id;
-use crate::services::gamesignal::ModRequest;
 use crate::services::lock;
 use crate::services::modbridge::protocol::ModNotify;
 
@@ -218,12 +217,6 @@ pub(super) fn notify(
     shared
         .bridge
         .notify(instance_id, event, who.map(|(name, _mc_uuid)| name));
-}
-
-/// Vorgänge der Mod laufen über den `OpHandler` der Brücke und ihre Zustimmungen je Spielstart; das Spielsignal
-/// `ModRequest` erzeugt die Brücke nicht mehr. Käme eines an, würde es hier nichts ausführen: es hätte keine Zustimmung.
-pub(super) async fn handle(_shared: Arc<Shared>, instance_id: String, request: ModRequest) {
-    tracing::warn!(instance = %instance_id, ?request, "Spielsignal ModRequest ignoriert: Vorgänge laufen über die Brücke");
 }
 
 /// Setzt den Bearbeiter der Vorgänge in die Brücke ein und hält die Themen jeder verbundenen Mod aktuell; meldet

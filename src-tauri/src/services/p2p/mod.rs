@@ -21,3 +21,6 @@ pub use gate::{Admission, Gate};
 pub use peer_id::{InvalidPeerId, PeerId};
 pub use relays::{find_relay, RelayEntry, RelayOperator, RelaySelection, RELAY_MAP};
 pub use stream::BiStream;
+
+#[cfg(test)]
+pub(crate) use relays::test_relay;
