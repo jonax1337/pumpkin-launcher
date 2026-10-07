@@ -4,7 +4,7 @@ Last updated: 2026-10-07.
 
 For installation and a first game, start with the [launcher guide](README.md#download-and-install).
 
-## Unreleased
+## 0.3.1 — 2026-10-07
 
 ### Dependencies and build tooling
 

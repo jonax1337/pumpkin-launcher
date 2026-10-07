@@ -77,7 +77,7 @@ To preserve or move saves:
 
 **0.3.0** introduces [Pumpkin Bridge](docs/bridge/README.md), the bundled client-only integration between the launcher and Minecraft. In supported modded Microsoft-account launches, a Pumpkin button opens a menu of in-game features; no manual JAR installation is needed. The shared connection and menu work independently of Friends opt-in. Friends is its first implemented feature, with private data and actions withheld until consent.
 
-This guide describes **0.3.0**. Download links above follow the latest published release and become available for a version only after its installer pipeline succeeds and the release is published. See the [Changelog](CHANGELOG.md) for version-specific changes and historical limits.
+This guide describes **0.3.1**. Download links above follow the latest published release and become available for a version only after its installer pipeline succeeds and the release is published. See the [Changelog](CHANGELOG.md) for version-specific changes and historical limits.
 
 ## Help and privacy
 

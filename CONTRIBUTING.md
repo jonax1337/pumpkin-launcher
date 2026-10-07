@@ -127,8 +127,8 @@ and `mod/gradle.properties`; `src-tauri/Cargo.lock` must record the same Rust pa
 After committing the intended release, create its annotated tag:
 
 ```bash
-git tag -a v0.3.0
-git push origin v0.3.0
+git tag -a --cleanup=verbatim v0.3.1
+git push origin v0.3.1
 ```
 
 The first command opens the tag-message editor. Use **only that version's entry** from
@@ -185,4 +185,4 @@ To include the in-game Bridge, `PUMPKIN_MOD_DIST` must point to a valid `mod-ind
 see [mod/README.md](mod/README.md). Without the Bridge distribution, a local package is not equivalent
 to the release workflow. Local source checks do not verify GitHub's signing secrets or environment approvals.
 
-Last updated: 2026-10-06.
+Last updated: 2026-10-07.
