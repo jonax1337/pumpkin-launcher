@@ -6,7 +6,7 @@ export function HeroActions({ instance }: { instance: Instance }) {
   return (
     <div className="acts">
       <PlayButton key={instance.id} instance={instance} main />
-      <InstanceMenuButton instance={instance} onScene size="l" />
+      <InstanceMenuButton instance={instance} onScene />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import type { CSSProperties, MouseEvent, ReactNode } from "react";
 import { useI18n } from "@/i18n";
-import { Cell, CardGrid, Checkbox, Chip, Count, List, ListHeader, ListRow, RowTitle, SceneCard, SceneThumb } from "@/ui";
-import { loaderLine, playtimeLine } from "@/components/common";
+import { Cell, Checkbox, Chip, Count, List, ListHeader, ListRow, RowTitle, SceneThumb } from "@/ui";
+import { loaderLine } from "@/components/common";
 import { FreshImportChip, useIsFreshImport } from "@/components/FreshImportChip";
 import { InstanceIcon } from "@/components/InstanceIcon";
 import { InstanceMenuButton, useInstanceMenu } from "@/components/instance";
@@ -17,7 +17,6 @@ import type { Instance } from "@/lib/types";
 import { useLook } from "@/store/look";
 import { useLibrarySelection } from "./librarySelection";
 
-export type LibraryMode = "poster" | "list";
 
 /** Die Liste staffelt ihr Einblenden nur für so viele Zeilen. */
 const MAX_STAGGERED_ROWS = 12;
@@ -38,7 +37,7 @@ function LibStatus({ instance }: { instance: Instance }) {
   return null;
 }
 
-/** Was Karte und Zeile für die Mehrfachauswahl brauchen: Klick-Verhalten der Trefferfläche, Auswahlfeld, Zustand. */
+/** Klick-Verhalten, Auswahlfeld und Zustand einer Listenzeile für die Mehrfachauswahl. */
 function useInstancePick(instance: Instance) {
   const { t } = useI18n();
   const selection = useLibrarySelection();
@@ -56,33 +55,6 @@ function useInstancePick(instance: Instance) {
   };
 }
 
-/**
- * Poster: Instanzbild, Ausnahme-Status oben links, beim Überfahren oder Fokus großer Spielen-Knopf mittig und Menü oben rechts, Name unten.
- * Rechtsklick öffnet das Menü. Unter dem Namen ist nur Platz für eine Angabe neben der Version: Spielzeit, sonst „zuletzt gespielt“.
- */
-function PosterCard({ instance, index }: { instance: Instance; index: number }) {
-  const look = useLook(instance.id);
-  const items = useInstanceMenu(instance);
-  const pick = useInstancePick(instance);
-  return (
-    <SceneCard
-      variant="poster"
-      look={look}
-      art={<InstanceIcon instance={instance} bio={look.bio} />}
-      title={instance.name}
-      sub={`${loaderLine(instance)} · ${playtimeLine(instance) || relativeTime(instance.lastPlayedAt)}`}
-      status={<LibStatus instance={instance} />}
-      primary={<PlayButton instance={instance} size="m" />}
-      // Die ganze Karte öffnet die Instanz: „Öffnen“ im Menü wäre doppelt.
-      actions={<InstanceMenuButton instance={instance} size="s" variant="ghost" onScene showOpen={false} />}
-      hit={pick.hit}
-      pick={pick.checkbox}
-      selected={pick.picked}
-      menu={items}
-      index={index}
-    />
-  );
-}
 
 /** Listenzeile, 56 px, feste Spalten. Die ganze Zeile öffnet die Instanz; Spielen und Menü liegen darüber. */
 function InstanceRow({ instance, index }: { instance: Instance; index: number }) {
@@ -103,11 +75,11 @@ function InstanceRow({ instance, index }: { instance: Instance; index: number })
         {pick.checkbox}
       </span>
       <RowTitle title={instance.name} sub={t("pages.instances.createdOn", { date: formatDate(instance.createdAt) })} />
-      <Cell title={loaderLine(instance)}>{loaderLine(instance)}</Cell>
+      <Cell className="lib-version" title={loaderLine(instance)}>{loaderLine(instance)}</Cell>
       <Cell hide={WIDTH.md}><Count value={instance.mods.length} /></Cell>
       <Cell hide={WIDTH.md}>{relativeTime(instance.lastPlayedAt)}</Cell>
       <Cell hide={WIDTH.xl}>{instance.playtimeSecs > 0 ? formatPlaytime(instance.playtimeSecs) : "–"}</Cell>
-      <Cell flex><LibStatus instance={instance} /></Cell>
+      <Cell className="lib-status" flex><LibStatus instance={instance} /></Cell>
       <PlayButton instance={instance} size="i" />
       <InstanceMenuButton instance={instance} size="s" variant="ghost" showOpen={false} />
     </ListRow>
@@ -132,21 +104,15 @@ export function InstanceListHeader() {
   );
 }
 
-/** Ein Tab-Stopp für die ganze Bibliothek, auch über Gruppen hinweg; Pfeiltasten wandern zwischen Karten bzw. Zeilen. */
+/** Ein Tab-Stopp für die ganze Bibliothek, auch über Gruppen hinweg; Pfeiltasten wandern zwischen Zeilen. */
 export function LibraryRoving({ children }: { children: ReactNode }) {
-  const roving = useRovingItems<HTMLDivElement>({ item: ".vx-card, .vx-row" });
+  const roving = useRovingItems<HTMLDivElement>({ item: ".vx-row" });
   return <div {...roving}>{children}</div>;
 }
 
-/** Die Instanzen als Raster aus Postern oder als Zeilen unter dem Kopf `InstanceListHeader`. */
-export function InstanceItems({ instances, mode, label }: { instances: Instance[]; mode: LibraryMode; label?: string }) {
+/** Instanzen als Zeilen unter dem Kopf `InstanceListHeader`. */
+export function InstanceItems({ instances, label }: { instances: Instance[]; label?: string }) {
   const { t } = useI18n();
-  if (mode === "poster")
-    return (
-      <CardGrid>
-        {instances.map((instance, index) => <PosterCard key={instance.id} instance={instance} index={index} />)}
-      </CardGrid>
-    );
   return (
     <List variant="instances" divided aria-label={label ?? t("common.instances")}>
       {instances.map((instance, index) => <InstanceRow key={instance.id} instance={instance} index={index} />)}
@@ -154,12 +120,12 @@ export function InstanceItems({ instances, mode, label }: { instances: Instance[
   );
 }
 
-/** Instanzen als Poster oder Liste (mit Spaltenkopf). */
-export function InstanceView({ instances, mode }: { instances: Instance[]; mode: LibraryMode }) {
+/** Instanzenliste mit Spaltenkopf. */
+export function InstanceView({ instances }: { instances: Instance[] }) {
   return (
     <>
-      {mode === "list" && <InstanceListHeader />}
-      <InstanceItems instances={instances} mode={mode} />
+      <InstanceListHeader />
+      <InstanceItems instances={instances} />
     </>
   );
 }

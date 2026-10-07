@@ -181,9 +181,8 @@ input, textarea, .console .cbody { -webkit-user-select: text; user-select: text;
 .help { font-size: calc(13px * var(--tz)); color: var(--fg-3); }
 
 /* ---------- Start ---------- */
-.home { position: relative; min-height: 100%; display: grid; grid-template-rows: auto minmax(250px, 1fr) auto; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
+.home { position: relative; min-height: 100%; display: grid; grid-template-rows: minmax(250px, 1fr) auto; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
 .home > .scene { z-index: 0; }
-.home-header { position: relative; z-index: 2; margin: 22px var(--gut) 0; align-self: start; }
 .shade-home { position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background:
     linear-gradient(90deg, rgba(7,10,17,.94) 0, rgba(7,10,17,.88) 28%, rgba(7,10,17,.6) 48%, rgba(7,10,17,0) 68%),
@@ -197,8 +196,10 @@ input, textarea, .console .cbody { -webkit-user-select: text; user-select: text;
 .hmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; min-height: 32px; min-width: 0; }
 .hmeta .vx-meta, .dh-meta .vx-meta { flex-wrap: wrap; height: auto; min-height: 28px; row-gap: 2px; }
 .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-/* Die Instanzleiste nutzt dieselben Seitenränder wie der kompakte Kopf. */
+/* Instanzleiste und Hero teilen die Seitenränder; Sammlungsaktionen stehen direkt über den Karten. */
 .cont { position: relative; z-index: 2; width: 100%; min-width: 0; padding: 0 var(--gut) 18px; }
+.home .library-heading { height: auto; min-height: 40px; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 8px; }
+.home .library-heading .vx-sech-a { min-width: 0; max-width: 100%; }
 .railwrap { position: relative; }
 .rail { --fl: 0px; --fr: 0px; display: flex; gap: 12px; overflow-x: auto; overflow-y: hidden; padding: 8px 8px 10px; margin: 0 -8px; scrollbar-width: none;
   /* Verlauf nur an Rändern, hinter denen noch Kacheln liegen */
@@ -218,26 +219,37 @@ input, textarea, .console .cbody { -webkit-user-select: text; user-select: text;
 .page, .set { width: 100%; max-width: none; min-width: 0; }
 .page { padding: 22px var(--gut) 40px; }
 
-/* Bibliothek: eine Sammlung füllt das Fenster statt der Lesebreite (Poster wachsen mit der Breite: ~165 px bei 1100, ~210 bei 1440,
-   bis 240 ab 1920); die Werkzeugleiste bricht um, statt Bedienelemente zu verlieren */
-.page.lib { --lib-card: clamp(164px, calc(var(--vw1, 1vw) * 12), 240px); }
-.lib .vx-cards { grid-template-columns: repeat(auto-fill, minmax(var(--lib-card), 1fr)); }
+.page.lib { container: library / inline-size; }
+.lib-skel { height: 56px; }
 .vx-toolbar.lib-toolbar { flex-wrap: wrap; height: auto; min-height: var(--tb-h); row-gap: 8px; }
 .lib-toolbar > :last-child { margin-left: auto; }
-/* Auswahlfeld auf der Bild-Ecke einer Listenzeile: sichtbar bei Hover/Fokus, gewählt oder im Auswahlmodus (wie beim Poster, card.css) */
+/* Auswahlfeld auf der Bild-Ecke einer Listenzeile: sichtbar bei Hover/Fokus, gewählt oder im Auswahlmodus. */
 .lib-pick { position: relative; display: block; width: 44px; height: 44px; }
 .lib-pick .vx-check { position: absolute; left: -6px; top: -6px; padding: 2px; background: rgba(3,5,10,.9); opacity: 0; transition: opacity var(--st); }
 .vx-row:is(:hover, :focus-within, [data-selected]) .lib-pick .vx-check, [data-picking] .lib-pick .vx-check { opacity: 1; }
 /* Gruppenkopf: Verschieben-Knöpfe rechts, bei Hover oder Fokus (Touch: immer) */
 .lib-group { position: relative; }
-.lib-groups[data-mode="poster"] { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--lib-card) * 2 + 14px)), 1fr)); align-items: start; gap: 24px; }
-.lib-groups[data-mode="poster"] > .lib-group { min-width: 0; }
 .lib-group-move { position: absolute; z-index: 1; top: 0; right: 0; display: flex; gap: 2px; opacity: 0; transition: opacity .12s steps(2, end); }
 .lib-group:is(:hover, :focus-within) > .lib-group-move { opacity: 1; }
 @media (hover: none) { .lib-group-move { opacity: 1; } }
 /* Auswahlleiste: bleibt am unteren Fensterrand, solange die Liste scrollt */
 .vx-panel.lib-bar { position: sticky; bottom: 16px; z-index: 10; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 16px; }
 .lib-bar-count { font-weight: 600; color: var(--fg); }
+
+/* Wenig Inhaltsbreite (auch bei Zoom): Name über Metadaten/Aktionen statt abgeschnittener Spalten. */
+@container library (max-width: 640px) {
+  .lib .vx-lhead { display: none; }
+  .lib .vx-list[data-variant="instances"] .vx-row { grid-template-columns: 44px minmax(0, 1fr) 32px 32px; gap: 6px 8px; padding: 8px; min-height: 88px; }
+  .lib .vx-row > [data-hide] { display: none; }
+  .lib .vx-row > .lib-pick { grid-column: 1; grid-row: 1 / 3; }
+  .lib .vx-row > .vx-rt { grid-column: 2 / 5; grid-row: 1; }
+  .lib .vx-row > .lib-version { grid-column: 2; grid-row: 2; }
+  .lib .vx-row > .play { grid-column: 3; grid-row: 2; }
+  .lib .vx-row > .vx-ib { grid-column: 4; grid-row: 2; }
+  .lib .vx-row > .lib-status { grid-column: 2 / 5; grid-row: 3; }
+  .lib .vx-row > .lib-status:empty { display: none; }
+  .lib-skel { height: 88px; }
+}
 
 /* ---------- Instanz-Detail ---------- */
 .detail { --dh: clamp(168px, calc(var(--vh1, 1vh) * 24), 240px); --dc: 64px; }

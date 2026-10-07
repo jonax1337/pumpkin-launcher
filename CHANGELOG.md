@@ -19,13 +19,11 @@ For installation and a first game, start with the [launcher guide](README.md#dow
 
 ### Shared page layout
 
-- Apply the compact header, full-width content area and restrained seasonal
-  accents across Home, library, instance details, Discover, Skins, Friends,
-  Settings and the not-found page.
+- Apply compact headers, full-width content areas and restrained seasonal
+  accents across library, instance details, Discover, Skins, Friends, Settings
+  and the not-found page.
 - Place settings navigation, Friends requests and the current skin beside their
   main content on wide windows; stack the workspace on smaller windows.
-- Arrange library poster groups side by side when space allows, while keeping
-  the list view full-width.
 - Move primary actions into page headers and remove redundant introductory
   banners without removing account, consent, privacy or error guidance.
 - Remove the sidebar's inner active marker; use the active surface and accent
@@ -38,6 +36,28 @@ For installation and a first game, start with the [launcher guide](README.md#dow
   keyboard navigation, visible panel focus and no inner selection bar.
 - Add interactive workspace and disabled-tab examples to `/_kit`; keep selected
   horizontal tabs visible when navigating or resizing.
+
+### Instance cards
+
+- Restore large 256×144 wallpaper cards in Home's instance rail, with landscape
+  scenes and square modpack icons integrated into the lower caption.
+- Remove Home's visible page header; move New instance and Library beside the
+  instance-rail heading, retaining an accessible page heading.
+- Remove the library grid and its view switcher; retain full-width grouped
+  lists with square icons, search, filters, persisted sorting and bulk selection.
+- Stack library names above metadata and actions in narrow content areas,
+  keeping Play, menus and selection reachable when zoomed.
+- Preserve instance context menus and Home rail keyboard navigation;
+  keep the wide Home cards in low windows rather than shrinking them to squares.
+
+### Button alignment
+
+- Use the same compact 40×40 instance-menu button on Home and instance details.
+- Fix asymmetric padding in small and large ghost icon buttons, centering
+  list-end menus, skin rotation controls and other square icon buttons.
+- Preserve icon pixel snapping, hover/press feedback and accessible labels.
+
+
 
 ## 0.3.2 — 2026-10-07
 

@@ -15,49 +15,36 @@ export type SceneLook = { bio: Biome; seed: number; acc?: string };
 /** Nur Vorschau (/_kit): Zustand erzwingen. */
 type ForcedState = "hover" | "press" | "focus";
 
-/** Karten der Einblend-Staffel (40 ms je Karte) bleiben bei dieser Position stehen. */
-const MAX_STAGGER = 12;
 
 export type SceneCardProps = {
-  /** poster: quadratisches Bild im Raster (Bibliothek) · mini: 96-px-Quadrat (Start-Leiste); der Name steht jeweils darunter */
-  variant: "poster" | "mini";
   look: SceneLook;
-  /** Eigenes Bild statt der Szene; füllt die Karte (`.vx-icon` in card.css). */
+  /** Quadratisches Instanz-Icon neben der Beschriftung; die Landschaft bleibt unabhängig davon sichtbar. */
   art?: ReactNode;
   title: string;
   /** Unterzeile in der Bildunterschrift. */
   sub?: string;
   /** Status-Chip oben links (nur Ausnahmen, siehe Statusmodell). */
   status?: ReactNode;
-  /** Symbolknöpfe oben rechts, sichtbar bei Hover/Fokus. */
-  actions?: ReactNode;
-  /** Hauptaktion (Spielen): poster mittig über dem Titel, mini oben rechts; sichtbar bei Hover/Fokus. */
+  /** Hauptaktion (Spielen) oben rechts, sichtbar bei Hover/Fokus. */
   primary?: ReactNode;
   hit: Hit;
   /** „aktuell“: Akzentbalken unten (mini), aria-current am Knopf. */
   current?: boolean;
-  /** Auswahlfeld (Checkbox) unten links auf dem Bild; sichtbar bei Hover/Fokus, gewählt oder im Auswahlmodus (siehe card.css). */
-  pick?: ReactNode;
-  /** Gewählt: Kupferring um die Karte. */
-  selected?: boolean;
   /** Kontextmenü (Rechtsklick). */
   menu?: MenuEntry[];
-  /** Position für die Einblend-Staffel (40 ms je Karte, höchstens MAX_STAGGER). */
-  index?: number;
   /** Bedienhinweis im Tooltip; der volle Titel erscheint dort nur, wenn er abgeschnitten ist. */
   tip?: ReactNode;
   className?: string;
   "data-force"?: ForcedState;
 };
 
-const cardStyle = (look: SceneLook, index?: number) =>
-  cssVars({ "--acc": look.acc, "--i": index != null ? Math.min(index, MAX_STAGGER) : undefined });
+const cardStyle = (look: SceneLook) => cssVars({ "--acc": look.acc });
 
-/** Szene (oder `art`) mit Rahmenlicht; quadratisch bei Poster und Mini. */
-function SceneMedia({ look, art }: { look: SceneLook; art?: ReactNode }) {
+/** Landschaft mit Rahmenlicht; das Instanz-Icon bleibt in der Beschriftung unverzerrt. */
+function SceneMedia({ look }: { look: SceneLook }) {
   return (
     <span className="vx-card-media">
-      {art ? <span className="vx-art">{art}</span> : <PixelScene bio={look.bio} seed={look.seed} className="vx-art" />}
+      <PixelScene bio={look.bio} seed={look.seed} className="vx-art" />
       <span className="vx-card-frame" />
     </span>
   );
@@ -94,39 +81,33 @@ function CardHit({ hit, title, sub, tip, current, pressed, titleRef, subRef }: {
 }
 
 /**
- * Szenenkarte: quadratisches Bild (Pixel-Szene oder `art`) mit Rahmenlicht, darunter die Bildunterschrift, und eine
+ * Szenenkarte: breite Pixel-Landschaft, Instanz-Icon und Bildunterschrift, und eine
  * Trefferfläche (`hit`, Link oder Knopf) über allem. Hover: eine Hebung (1 Einheit) + helleres Rahmenlicht; Druck setzt ab.
  * Fokusring an der Karte (über Rahmen und Bildunterschrift).
  */
-export function SceneCard({ variant, look, art, title, sub, status, actions, primary, hit, current, pick, selected, menu, index, tip, className, "data-force": force }: SceneCardProps) {
+export function SceneCard({ look, art, title, sub, status, primary, hit, current, menu, tip, className, "data-force": force }: SceneCardProps) {
   const titleRef = useRef<HTMLElement>(null);
   const subRef = useRef<HTMLElement>(null);
   const card = (
     <div
       className={cn("vx-card", className)}
-      data-variant={variant}
+      data-variant="mini"
       data-bio={look.bio}
       data-cur={flag(current)}
-      data-pressed={flag(selected)}
-      data-rise={flag(index != null)}
       data-force={force}
-      style={cardStyle(look, index)}
+      style={cardStyle(look)}
     >
-      <SceneMedia look={look} art={art} />
+      <SceneMedia look={look} />
       <span className="vx-card-cap">
-        <b ref={titleRef}>{title}</b>
-        {sub && <span ref={subRef}>{sub}</span>}
+        {art && <span className="vx-card-icon" aria-hidden>{art}</span>}
+        <span className="vx-card-copy">
+          <b ref={titleRef}>{title}</b>
+          {sub && <span ref={subRef}>{sub}</span>}
+        </span>
       </span>
       {status && <span className="vx-card-st">{status}</span>}
       <CardHit hit={hit} title={title} sub={sub} tip={tip} current={current} titleRef={titleRef} subRef={subRef} />
-      {variant === "poster" && primary && <div className="vx-card-mid">{primary}</div>}
-      {(actions || (variant === "mini" && primary)) && (
-        <div className="vx-card-tr">
-          {actions}
-          {variant === "mini" && primary}
-        </div>
-      )}
-      {pick && <div className="vx-card-pick">{pick}</div>}
+      {primary && <div className="vx-card-tr">{primary}</div>}
     </div>
   );
   return menu ? <ContextMenu items={menu}>{card}</ContextMenu> : card;
@@ -149,7 +130,7 @@ export function ThumbCard({ look, title, pressed, hit, className, "data-force": 
   );
 }
 
-/** Kachel „Neu …“ in Kartengröße (184×104): Platte, Icon über der Beschriftung. */
+/** Kachel „Neu …“ in Wallpaper-Größe (256×144): Platte, Icon über der Beschriftung. */
 export function AddCard({ label, className, type = "button", ...props }: { label: string } & Omit<ComponentProps<"button">, "children">) {
   return (
     <button type={type} className={cn("vx-add fx", className)} {...props}>
@@ -172,7 +153,7 @@ export function PickTile({ label, pressed, size = 48, onClick, children }: {
   );
 }
 
-/** Raster für Karten: poster (auto-fill ab 188 px, Lücke 14) oder thumb (umbrechende Reihe, Lücke 12). */
+/** Raster für Bildkarten (auto-fill ab 188 px, Lücke 14) oder thumb (umbrechende Reihe, Lücke 12). */
 export function CardGrid({ variant = "poster", className, children, ...props }: { variant?: "poster" | "thumb" } & ComponentProps<"div">) {
   return (
     <div className={cn("vx-cards", className)} data-variant={variant} {...props}>

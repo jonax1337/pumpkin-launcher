@@ -4,6 +4,7 @@
  * Zustände per data-force (hover/press/focus); Pixelstufe oben auf der Seite.
  */
 import { useState } from "react";
+import { IconView } from "@/components/InstanceIcon";
 import { BIOMES, type Biome } from "@/pixel/scene";
 import type { GlyphName, GlyphPalette } from "@/pixel/icons";
 import {
@@ -67,31 +68,6 @@ function IconAudit() {
   );
 }
 
-function Posters() {
-  const primary = <Button variant="primary" icon="play" width={176}>Spielen</Button>;
-  const actions = <IconButton onScene size="s" icon="more" label="Mehr" tip={false} />;
-  const force = [undefined, "hover", "focus", "press", undefined] as const;
-  return (
-    <CardGrid data-kit="posters">
-      {INST.map((i, k) => (
-        <SceneCard
-          key={i.id}
-          variant="poster"
-          look={look(i)}
-          title={i.name}
-          sub={i.sub}
-          status={instanceStatus(k)}
-          actions={actions}
-          primary={primary}
-          hit={{ to: "/_kit", label: `${i.name} öffnen` }}
-          menu={MENU}
-          index={k}
-          data-force={force[k]}
-        />
-      ))}
-    </CardGrid>
-  );
-}
 
 function Minis() {
   const [cur, setCur] = useState("a");
@@ -101,8 +77,8 @@ function Minis() {
         <SceneCard
           key={i.id}
           data-force={n === 2 ? "hover" : n === 3 ? "focus" : undefined}
-          variant="mini"
           look={look(i)}
+          art={<IconView icon={{ type: "glyph", glyph: GLYPHS[n][0], palette: GLYPHS[n][1] }} bio={i.bio} fallback={{ type: "glyph", glyph: "cube", palette: "copper" }} />}
           title={i.name}
           sub={i.sub}
           current={cur === i.id}
@@ -381,8 +357,7 @@ export function CardsSection() {
   return (
     <>
       <Sec title="Glyphen, Projektbilder, Köpfe" id="glyphs"><IconAudit /></Sec>
-      <Sec title="Poster" id="poster"><Posters /></Sec>
-      <Sec title="Miniaturen und Szenen-Thumbs" id="mini">
+      <Sec title="Wallpaper und Szenen-Thumbs" id="mini">
         <Minis />
         <Thumbs />
       </Sec>

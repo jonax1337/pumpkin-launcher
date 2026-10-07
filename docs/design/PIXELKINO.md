@@ -44,6 +44,13 @@ Corners use stepped clip paths (`--n1`, `--n2`), not rounded radii. Focus/select
 | Large | 56 px | 28 px, 7×7 glyph |
 | Extra-large icon | — | 56 px, doubled glyph cells |
 
+Icon-only buttons use zero padding directly on the square control, independent
+of the text-button padding for each size and variant. This keeps the icon slot
+centered in small and large ghost controls as well as secondary/primary buttons.
+Raster pixels retain their device-pixel snapping. Home's instance-menu button
+uses the same medium 40×40 control as the instance detail header.
+
+
 `--gut` is the shared page gutter (16–40 px with window width). Page content uses
 the available width; there is no global reading-width cap. `PageHeader` supplies a
 compact title, small optional count, wrapping actions and a bottom divider.
@@ -67,12 +74,28 @@ demonstrates selection, disabled navigation, editable content, reset and a
 rail-free layout. Use this structure for meaningful context/navigation, not as
 a mandatory two-column wrapper for every collection.
 
-Library poster groups share the available horizontal space; list mode stays
-full-width. Settings use responsive form groups while keeping individual
-controls at a usable width and retaining their label/help associations.
-Home and instance details keep their scenes, with compact page controls and
-unrestricted collection/content areas. Accent edges and selection states carry
-the color; avoid oversized counter banners and generic explanatory introductions.
+The library uses full-width grouped lists, with no grid/list toggle. Settings
+use responsive form groups while keeping individual controls at a usable width
+and retaining their label/help associations.
+Home and instance details keep their scenes and unrestricted content areas.
+Home has no visible page header: New instance and Library sit beside the
+instance-rail heading and wrap below it when space is limited. A screen-reader
+page heading remains. Accent edges and selection states carry the color;
+avoid oversized counter banners and generic explanatory introductions.
+
+Home cards separate identity from scenery: the existing biome/seed supplies
+a 16:9 landscape; the square modpack image or pixel glyph stays uncropped in a
+44 px icon slot. The instance rail uses 256×144 wallpaper cards, with icon,
+name and metadata over a dark lower caption. Low windows retain that shape and
+scroll horizontally instead of shrinking the cards back to squares.
+
+Library rows keep square instance icons, version and activity information,
+selection controls, Play and menus in fixed columns. Below 640 px of library
+container width, names move above metadata/actions so zoom and narrow windows
+cannot hide the name or push Play and menus outside the row. Group collapsing,
+ordering, search, filters, persisted sorting and keyboard navigation remain
+available. An old saved grid preference no longer affects the library.
+
 
 ## Color semantics
 
@@ -102,7 +125,7 @@ German UI vocabulary distinguishes creating an instance (`Anlegen`), adding cont
 
 ## Interaction and state
 
-The Play button is the current action/state: play, install progress, starting, stop with elapsed time, or retry. Its dimensions stay stable. Do not duplicate its state in an adjacent chip; chips belong where no Play button already carries that information, such as unselected posters.
+The Play button is the current action/state: play, install progress, starting, stop with elapsed time, or retry. Its dimensions stay stable. Do not duplicate its state in an adjacent chip; chips belong where no Play button already carries that information, such as unselected Home cards.
 
 Menus/dialogs restore focus and support Escape/keyboard navigation. Dialog bodies scroll inside stable shells. Collections use one tab stop with directional navigation via `useRovingItems`; visible selection controls support multiselection. Toasts wrap text rather than cut it off and provide the applicable action/close control. Removed entries can keep same-height undo placeholders.
 

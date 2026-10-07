@@ -10,16 +10,16 @@ import { focusSoon } from "@/pages/detail/content/focus";
 import { newInstanceParams } from "@/lib/routes";
 import { LOADER_LABELS, type Instance } from "@/lib/types";
 import { useLookStore } from "@/store/look";
-import { Button, ButtonLink, CardGrid, ContextMenu, Empty, ErrorBox, Glyph, PageHeader, WorkspaceContent, type MenuEntry } from "@/ui";
+import { Button, ButtonLink, ContextMenu, Empty, ErrorBox, Glyph, List, PageHeader, WorkspaceContent, type MenuEntry } from "@/ui";
 import { GroupedView } from "./instances/GroupedView";
-import { InstanceView, LibraryRoving } from "./instances/InstanceView";
+import { InstanceListHeader, InstanceView, LibraryRoving } from "./instances/InstanceView";
 import { LibraryToolbar, NewInstanceButton } from "./instances/LibraryToolbar";
 import {
   hasFilters, matchesFilters, NO_FILTERS, orderedGroups, sectionsOf, versionsOf, type LibraryFilters, type Section, type Sort,
 } from "./instances/libraryModel";
 import { LibrarySelectionProvider, useSelectionState } from "./instances/librarySelection";
 import { SelectionBar } from "./instances/SelectionBar";
-import { useLibraryView } from "./instances/useLibraryView";
+import { useLibrarySort } from "./instances/useLibrarySort";
 
 const SORTS: Record<Sort, (a: Instance, b: Instance) => number> = {
   recent: byRecent,
@@ -28,12 +28,15 @@ const SORTS: Record<Sort, (a: Instance, b: Instance) => number> = {
   playtime: (a, b) => b.playtimeSecs - a.playtimeSecs,
 };
 
-function LoadingGrid() {
+function LoadingList() {
   const { t } = useI18n();
   return (
-    <CardGrid aria-busy aria-label={t("components.common.loadingAria")}>
-      <SkelList n={4} className="aspect-[4/5]" />
-    </CardGrid>
+    <div aria-busy aria-label={t("components.common.loadingAria")}>
+      <InstanceListHeader />
+      <List variant="instances" divided>
+        <SkelList n={6} className="lib-skel" />
+      </List>
+    </div>
   );
 }
 
@@ -79,7 +82,7 @@ function LibraryBody({ library, matches, filters, onResetFilters, children }: {
   const { t } = useI18n();
   const { data: instances, isLoading, error, refetch } = library;
   if (error) return <ErrorBox title={t("pages.instances.loadErrorTitle")} error={error} onRetry={() => void refetch()} />;
-  if (isLoading) return <LoadingGrid />;
+  if (isLoading) return <LoadingList />;
   if (!instances?.length) return <EmptyLibrary />;
   if (!matches) return <NoResults filters={filters} onReset={onResetFilters} />;
   return children;
@@ -96,24 +99,24 @@ export function InstancesPage() {
   const [, setParams] = useSearchParams();
   const library = useInstances();
   const { data: instances, isLoading, error } = library;
-  const view = useLibraryView();
+  const [sort, setSort] = useLibrarySort();
   const [filters, setFilters] = useState<LibraryFilters>(NO_FILTERS);
   const groupOrder = useLookStore((s) => s.groupOrder);
   const collapsed = useLookStore((s) => s.collapsed);
   const pickRef = useRef<HTMLButtonElement>(null);
 
   const all = instances ?? [];
-  const shown = all.filter((instance) => matchesFilters(instance, filters)).sort(SORTS[view.sort]);
+  const shown = all.filter((instance) => matchesFilters(instance, filters)).sort(SORTS[sort]);
   const groups = orderedGroups(groupsOf(all), groupOrder);
   const sections = shown.some((instance) => instance.group) ? sectionsOf(shown, groups) : null;
 
-  // Updates für Poster und Liste: sparsam im Hintergrund, zuletzt gespielte zuerst.
+  // Updates sparsam im Hintergrund, zuletzt gespielte zuerst.
   useBackgroundUpdates(all.filter((i) => i.mods.length > 0).sort(SORTS.recent).map((i) => i.id));
 
   // Ergebnis von Suche, Filter und Sortierung ansagen (nur Screenreader, beim Tippen nach kurzer Pause).
   const total = all.length;
   const [said, say] = useAnnouncement(
-    `${filters.query.trim().toLowerCase()}|${filters.loader}|${filters.version}|${view.sort}`,
+    `${filters.query.trim().toLowerCase()}|${filters.loader}|${filters.version}|${sort}`,
     t(total === 1 ? "pages.instances.resultCount.one" : "pages.instances.resultCount.other", { shown: shown.length, total }),
   );
 
@@ -137,18 +140,14 @@ export function InstancesPage() {
   const empty = !error && !isLoading && !all.length;
 
   const listing = sections ? (
-    <GroupedView sections={sections} groups={groups} mode={view.mode} reorderable={!hasFilters(filters)} />
+    <GroupedView sections={sections} groups={groups} reorderable={!hasFilters(filters)} />
   ) : (
-    <InstanceView instances={shown} mode={view.mode} />
+    <InstanceView instances={shown} />
   );
 
   const menuItems: MenuEntry[] = [
     { id: "new-instance", text: t("components.newInstance.title"), icon: "plus", onSelect: () => setParams(newInstanceParams(), { replace: true }) },
     { id: "reset-filters", text: t("pages.instances.resetSearch"), icon: "x", disabled: !hasFilters(filters), onSelect: () => setFilters(NO_FILTERS) },
-    "-",
-    { label: t("pages.instances.viewLabel") },
-    { id: "poster-view", text: t("pages.instances.viewPoster"), icon: "grid", checked: view.mode === "poster", onSelect: () => view.setMode("poster") },
-    { id: "list-view", text: t("pages.instances.viewList"), icon: "list", checked: view.mode === "list", onSelect: () => view.setMode("list") },
     "-",
     { id: "pick", text: t("pages.instances.pick"), icon: "check", disabled: !visibleIds.length || selection.picking, onSelect: selection.startPicking },
     { id: "select-all", text: t("pages.instances.selectAll"), icon: "check", disabled: !visibleIds.length || selection.picked.length === visibleIds.length, onSelect: selection.selectAll },
@@ -170,7 +169,8 @@ export function InstancesPage() {
             filters={filters}
             onFilters={(patch) => setFilters((f) => ({ ...f, ...patch }))}
             versions={versionsOf(all)}
-            view={view}
+            sort={sort}
+            onSort={setSort}
             onPick={selection.startPicking}
             pickRef={pickRef}
           />

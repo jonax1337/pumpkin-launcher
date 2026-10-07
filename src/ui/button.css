@@ -16,8 +16,8 @@
 .vx-btn:is([data-variant="ghost"], .vx-btn--ghost):is([data-size="l"], .vx-btn--l) { --b-pad: 16px; }
 /* Führendes Icon: die Box hat Luft um die Glyphe, links 2px weniger */
 .vx-btn[data-lead] { --b-pl: calc(var(--b-pad) - 2px); }
-/* Symbolknopf: quadratisch, Glyphe mittig */
-.vx-btn.vx-ib { width: var(--b-h); --b-pad: 0px; --b-pl: 0px; }
+/* Symbolknopf: eigener Padding-Reset, unabhängig von größenabhängigem Ghost-Padding. */
+.vx-btn.vx-ib { width: var(--b-h); padding: 0; }
 .vx-btn[data-w="full"] { width: 100%; }
 .vx-btn[data-bleed="start"] { margin-inline-start: calc(var(--b-pl) * -1); }
 .vx-btn[data-bleed="end"] { margin-inline-end: calc(var(--b-pad) * -1); }

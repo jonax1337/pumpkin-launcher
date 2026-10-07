@@ -73,8 +73,6 @@ export const pages: typeof dePages = {
   "pages.instances.moveGroupDown": "Move group “{name}” later",
   "pages.instances.sortLabel": "Sort by",
   "pages.instances.sortCreated": "Created",
-  "pages.instances.viewLabel": "View",
-  "pages.instances.viewPoster": "Poster",
   "pages.instances.viewList": "List",
 
   // Entdecken

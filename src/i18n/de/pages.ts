@@ -73,8 +73,6 @@ export const pages = {
   "pages.instances.moveGroupDown": "Gruppe „{name}“ später anzeigen",
   "pages.instances.sortLabel": "Sortieren",
   "pages.instances.sortCreated": "Erstellt",
-  "pages.instances.viewLabel": "Ansicht",
-  "pages.instances.viewPoster": "Poster",
   "pages.instances.viewList": "Liste",
 
   // Entdecken

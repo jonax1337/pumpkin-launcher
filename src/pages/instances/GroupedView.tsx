@@ -3,7 +3,7 @@ import { ungrouped } from "@/hooks/useInstances";
 import { useLookStore } from "@/store/look";
 import { focusSoon } from "@/pages/detail/content/focus";
 import { Count, Disclosure, IconButton } from "@/ui";
-import { InstanceItems, InstanceListHeader, type LibraryMode } from "./InstanceView";
+import { InstanceItems, InstanceListHeader } from "./InstanceView";
 import { movedGroup, type Section } from "./libraryModel";
 
 type Step = -1 | 1;
@@ -26,11 +26,11 @@ function MoveButtons({ group, groups, onMove }: { group: string; groups: string[
 }
 
 /**
- * Gruppen als aufklappbare Abschnitte in der gewählten Reihenfolge; zugeklappte und die Reihenfolge merkt sich der Look-Store
+ * Gruppen als aufklappbare Listenabschnitte in der gewählten Reihenfolge; zugeklappte und die Reihenfolge merkt sich der Look-Store
  * über den Neustart hinaus. `groups`: alle Gruppen in dieser Reihenfolge. `reorderable`: Verschieben anbieten (nur ungefiltert,
  * sonst wäre unklar, an wem vorbei eine Gruppe wandert). Die Listenansicht trägt ihren Spaltenkopf einmal über allen Gruppen.
  */
-export function GroupedView({ sections, groups, mode, reorderable }: { sections: Section[]; groups: string[]; mode: LibraryMode; reorderable: boolean }) {
+export function GroupedView({ sections, groups, reorderable }: { sections: Section[]; groups: string[]; reorderable: boolean }) {
   const collapsed = useLookStore((s) => s.collapsed);
   const setCollapsed = useLookStore((s) => s.setCollapsed);
   const setGroupOrder = useLookStore((s) => s.setGroupOrder);
@@ -50,8 +50,8 @@ export function GroupedView({ sections, groups, mode, reorderable }: { sections:
   }
 
   return (
-    <div className="lib-groups" data-mode={mode}>
-      {mode === "list" && <InstanceListHeader />}
+    <div className="lib-groups">
+      <InstanceListHeader />
       {sections.map(([group, members]) => {
         // Schlüssel ist die Gruppe selbst ("" = ohne Gruppe): eine Gruppe darf auch „Ohne Gruppe“ heißen.
         const key = group ?? "";
@@ -63,7 +63,7 @@ export function GroupedView({ sections, groups, mode, reorderable }: { sections:
               onToggle={(open) => setCollapsed(key, !open)}
               summary={<>{group ?? ungrouped()} <Count value={members.length} muted /></>}
             >
-              <InstanceItems instances={members} mode={mode} label={group ?? ungrouped()} />
+              <InstanceItems instances={members} label={group ?? ungrouped()} />
             </Disclosure>
           </div>
         );

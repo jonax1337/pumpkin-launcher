@@ -15,11 +15,11 @@ import { motionOff } from "@/pixel/scene";
 import { useLook } from "@/store/look";
 
 /**
- * Größe der Kacheln (`SceneCard` mini) und Abstand in der Leiste „Deine Instanzen“;
+ * Wallpaper-Karten und Abstand in der Leiste „Deine Instanzen“;
  * wie in ui/card.css und .rail (styles/pixelkino.css).
  */
-export const TILE_W = 96;
-export const TILE_H = 120;
+export const TILE_W = 256;
+export const TILE_H = 144;
 const TILE_GAP = 12;
 const TILE_STEP = TILE_W + TILE_GAP;
 
@@ -41,7 +41,6 @@ function MiniCard({ instance, current, onPick, hintId }: { instance: Instance; c
   return (
     <li data-id={instance.id}>
       <SceneCard
-        variant="mini"
         look={look}
         art={<InstanceIcon instance={instance} bio={look.bio} />}
         title={instance.name}

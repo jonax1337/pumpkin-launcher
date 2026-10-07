@@ -2,11 +2,10 @@ import type { Ref } from "react";
 import { useSearchParams } from "react-router";
 import { SHORTCUT } from "@/app/shortcuts";
 import { useI18n } from "@/i18n";
-import { Button, SearchField, Segmented, Select, Toolbar } from "@/ui";
+import { Button, SearchField, Select, Toolbar } from "@/ui";
 import { newInstanceParams } from "@/lib/routes";
 import { ALL_LOADERS, LOADER_LABELS } from "@/lib/types";
 import type { LibraryFilters, Sort } from "./libraryModel";
-import type { LibraryView } from "./useLibraryView";
 
 /** „Neue Instanz“: öffnet den Dialog über die Adresse (derselbe Weg wie Strg+N). */
 export function NewInstanceButton() {
@@ -19,13 +18,14 @@ export function NewInstanceButton() {
   );
 }
 
-/** Suche, Filter, Sortierung, Ansicht und Auswahlmodus; die Leiste bricht bei Platzmangel um. */
-export function LibraryToolbar({ filters, onFilters, versions, view, onPick, pickRef }: {
+/** Suche, Filter, Sortierung und Auswahlmodus; die Leiste bricht bei Platzmangel um. */
+export function LibraryToolbar({ filters, onFilters, versions, sort, onSort, onPick, pickRef }: {
   filters: LibraryFilters;
   onFilters: (patch: Partial<LibraryFilters>) => void;
   /** Minecraft-Versionen der Instanzen, aus denen der Filter wählen lässt. */
   versions: string[];
-  view: LibraryView;
+  sort: Sort;
+  onSort: (sort: Sort) => void;
   /** Auswahlmodus starten. */
   onPick: () => void;
   pickRef: Ref<HTMLButtonElement>;
@@ -48,23 +48,13 @@ export function LibraryToolbar({ filters, onFilters, versions, view, onPick, pic
       />
       <Select
         label={t("pages.instances.sortLabel")}
-        value={view.sort}
-        onChange={(sort) => view.setSort(sort as Sort)}
+        value={sort}
+        onChange={(value) => onSort(value as Sort)}
         options={[
           { value: "recent", label: t("pages.instances.colLastPlayed") },
           { value: "name", label: t("common.name") },
           { value: "created", label: t("pages.instances.sortCreated") },
           { value: "playtime", label: t("pages.instances.colPlaytime") },
-        ]}
-      />
-      <Segmented
-        iconsOnly
-        label={t("pages.instances.viewLabel")}
-        value={view.mode}
-        onChange={view.setMode}
-        items={[
-          { value: "poster", label: t("pages.instances.viewPoster"), icon: "grid" },
-          { value: "list", label: t("pages.instances.viewList"), icon: "list" },
         ]}
       />
       <Button ref={pickRef} icon="check" onClick={onPick}>{t("pages.instances.pick")}</Button>
