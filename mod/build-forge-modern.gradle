@@ -1,6 +1,6 @@
 plugins {
 	id 'net.minecraftforge.gradle' version '7.0.40'
-	id 'net.minecraftforge.renamer' version '1.0.14'
+	id 'net.minecraftforge.renamer' version '1.1.1'
 }
 
 // Forge through 1.20.4 ships SRG names; 1.20.6+ ships Mojang names.
@@ -92,6 +92,12 @@ if (needsSrg) {
 		renamer.mixin.run(it)
 	}
 	def productionJar = renamer.classes(tasks.named('jar')) {
+		// Plugin 1.1.1 defaults to unpublished Renamer 2.2.1; use the current released tool.
+		using 'net.minecraftforge:renamer:2.2.3:all@jar'
+		// Renamer's Java 8 minimum is not a requirement for a separate Java 8 installation.
+		javaLauncher = javaToolchains.launcherFor { spec ->
+			spec.languageVersion = JavaLanguageVersion.of(node.javaMin)
+		}
 		output.set(layout.buildDirectory.file("libs/pumpkin_bridge-${project.version}.jar"))
 		mappings renamer.mixin.generatedMappings
 	}

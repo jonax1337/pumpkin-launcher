@@ -23,6 +23,14 @@ pluginManagement {
 		mavenCentral()
 		gradlePluginPortal()
 	}
+	// Renamer 1.1.1 publishes its implementation but not its Gradle plugin marker on Forge Maven.
+	resolutionStrategy {
+		eachPlugin {
+			if (requested.id.id == 'net.minecraftforge.renamer') {
+				useModule("net.minecraftforge:renamer-gradle:${requested.version}")
+			}
+		}
+	}
 	plugins {
 		// Wählt je Knoten das Loom mit oder ohne Remapping (Fabric ab Minecraft 26.1 ist nicht mehr verschleiert, docs/bridge/README.md).
 		id('dev.kikugie.loom-back-compat').version '0.4.3'

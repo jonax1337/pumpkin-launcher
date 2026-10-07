@@ -19,7 +19,7 @@ A 44-second, 60 fps continuous camera move through a pixel world, with Buddy and
 
 ## Usage
 
-Requires root dependencies (`pnpm install`), Node 24 and Python 3 with NumPy and SciPy. Package scripts pin HyperFrames CLI 0.8.98 through `npx`.
+Requires root dependencies (`pnpm install`), Node 24 and Python 3 with NumPy and SciPy. Package scripts pin HyperFrames CLI 0.8.138 through `npx`.
 
 The [package scripts](package.json) invoke **`python`**, so install into that same
 interpreter before building:

@@ -15,57 +15,57 @@ name = "launcher_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2.7.1", features = [] }
 # Für die Einbettung der Mod (build.rs): dieselbe Indexprüfung und derselbe SHA-256 wie zur Laufzeit; alle schon im Baum.
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-thiserror = "2"
-sha2 = "0.11"
-data-encoding = "2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.21"
+sha2 = "0.11.0"
+data-encoding = "2.11.1"
 
 [dependencies]
-tauri = { version = "2", features = ["image-png", "protocol-asset"] }
-tauri-plugin-opener = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-thiserror = "2"
+tauri = { version = "2.12.1", features = ["image-png", "protocol-asset"] }
+tauri-plugin-opener = "2.7.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.21"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-uuid = { version = "1.26.1", features = ["v4"] }
-tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "fs", "process", "sync", "io-util", "time", "net"] }
+uuid = { version = "1.27.0", features = ["v4"] }
+tokio = { version = "1.53.2", features = ["rt-multi-thread", "macros", "fs", "process", "sync", "io-util", "time", "net"] }
 futures = "0.3.34"
 sha1 = "0.11.0"
-sha2 = "0.11"
+sha2 = "0.11.0"
 md-5 = "0.11.0"
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["json", "multipart", "rustls"] }
-tauri-plugin-dialog = "2"
+tauri-plugin-dialog = "2.8.1"
 tokio-util = "0.7.19"
-base64 = "0.22"
-keyring = { version = "3", features = ["apple-native", "crypto-rust", "sync-secret-service", "windows-native"] }
-tauri-plugin-updater = "2"
-tauri-plugin-process = "2"
-tauri-plugin-single-instance = "2"
+base64 = "0.23.1"
+keyring-core = "1.0.0"
+tauri-plugin-updater = "2.13.1"
+tauri-plugin-process = "2.4.0"
+tauri-plugin-single-instance = "2.5.2"
 regex = "1.13.1"
 fastnbt = "2.6.3"
 flate2 = "1.1.10"
 trash = "5.2.9"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
-dirs = "7"
+dirs = "7.0.0"
 percent-encoding = "2.3.2"
-toml = { version = "1.1", default-features = false, features = ["std", "serde", "parse"] }
+toml = { version = "1.1.6", default-features = false, features = ["std", "serde", "parse"] }
 hickory-resolver = { version = "0.26.3", default-features = false, features = ["system-config", "tokio"] }
 discord-rich-presence = "1.1.0"
-iroh = "1.3"
-data-encoding = "2"
-unicode-normalization = "0.1"
-bytes = "1"
+iroh = "1.3.0"
+data-encoding = "2.11.1"
+unicode-normalization = "0.1.25"
+bytes = "1.12.1"
 # Zufallsbytes für Freundescode-Geheimnis und Salz (schon im Baum über uuid und iroh).
-getrandom = "0.4"
+getrandom = "0.4.3"
 # Mojang's player certificate for the friends directory: RSA signing and the RFC 3339 times of the certificate
 # (both already in the tree through rustls and the Tauri crates; no new crate).
-ring = "0.17"
-time = { version = "0.3", features = ["parsing"] }
+ring = "0.17.14"
+time = { version = "0.3.55", features = ["parsing"] }
 
 [features]
 # Zusätzlich die öffentlichen Relays von n0 (nur Entwicklung und geschlossene Beta, siehe docs/friends/SPEC.md 3.2).
@@ -80,14 +80,21 @@ path = "tests/smoke/main.rs"
 required-features = ["smoke"]
 
 [dev-dependencies]
-tokio = { version = "1.53.1", features = ["test-util"] }
-iroh = { version = "1.3", features = ["test-utils"] }
+tokio = { version = "1.53.2", features = ["test-util"] }
+iroh = { version = "1.3.0", features = ["test-utils"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Wdk_System_SystemServices", "Win32_Storage_FileSystem", "Win32_System_SystemInformation", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock"] }
+windows-sys = { version = "0.61.2", features = ["Wdk_System_SystemServices", "Win32_Storage_FileSystem", "Win32_System_SystemInformation", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock"] }
+windows-native-keyring-store = { version = "1.1.0", default-features = false }
 
 [target."cfg(unix)".dependencies]
-libc = "0.2.189"
+libc = "0.2.190"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store = { version = "1.0.2", features = ["keychain"] }
+
+[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))'.dependencies]
+zbus-secret-service-keyring-store = { version = "1.0.1", features = ["rt-async-io-crypto-rust"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

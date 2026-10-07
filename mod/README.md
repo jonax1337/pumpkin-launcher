@@ -112,6 +112,68 @@ For a local protocol peer, run `java scripts/FakeLauncher.java` after preparing 
 
 ## Versions
 
-Plugin and baseline library pins live in `gradle.properties`; node-specific pins live in `versions/<node>/gradle.properties`. The core compiles against Gson 2.8.0 and Log4j API 2.8.1 without bundling either library or a logging backend. Older games use the launcher's patched Log4j runtime. Gradle configuration cache is disabled for Unimined compatibility.
+Plugin and baseline library pins live in `gradle.properties`; settings plugins are pinned in
+`settings.gradle`, Forge/NeoGradle plugins in the loader build scripts, and the Gradle
+distribution and its SHA-256 in `gradle/wrapper/gradle-wrapper.properties`.
+The following stable releases were checked against official metadata on 2026-10-07:
+
+| Build/test dependency | Stable pin | Published metadata |
+|---|---|---|
+| Gradle distribution | 9.8.0 | [Gradle current release](https://services.gradle.org/versions/current) |
+| Stonecutter | 0.9.8 | [KikuGie Maven](https://maven.kikugie.dev/releases/dev/kikugie/stonecutter/dev.kikugie.stonecutter.gradle.plugin/maven-metadata.xml) |
+| Loom back-compat | 0.4.3 | [KikuGie Maven](https://maven.kikugie.dev/releases/dev/kikugie/loom-back-compat/dev.kikugie.loom-back-compat.gradle.plugin/maven-metadata.xml) |
+| Fabric Loom | 1.18.2 | [Fabric Maven](https://maven.fabricmc.net/net/fabricmc/fabric-loom/maven-metadata.xml) |
+| ModDevGradle | 2.0.148 | [NeoForged Maven](https://maven.neoforged.net/releases/net/neoforged/moddev/net.neoforged.moddev.gradle.plugin/maven-metadata.xml) |
+| Unimined | 1.4.1 | [WagYourTail Maven](https://maven.wagyourtail.xyz/releases/xyz/wagyourtail/unimined/xyz.wagyourtail.unimined.gradle.plugin/maven-metadata.xml) |
+| ForgeGradle | 7.0.40 | [Forge Maven](https://maven.minecraftforge.net/net/minecraftforge/gradle/net.minecraftforge.gradle.gradle.plugin/maven-metadata.xml) |
+| Renamer Gradle plugin | 1.1.1 | [Forge implementation metadata](https://maven.minecraftforge.net/net/minecraftforge/renamer-gradle/maven-metadata.xml) |
+| Renamer bytecode tool | 2.2.3 | [Forge tool metadata](https://maven.minecraftforge.net/net/minecraftforge/renamer/maven-metadata.xml) |
+| NeoGradle userdev | 7.1.39 | [NeoForged Maven](https://maven.neoforged.net/releases/net/neoforged/gradle/userdev/net.neoforged.gradle.userdev.gradle.plugin/maven-metadata.xml) |
+| Mixin annotation processor | 0.8.7 | [Sponge Maven](https://repo.spongepowered.org/repository/maven-releases/org/spongepowered/mixin/maven-metadata.xml) |
+| JUnit BOM / Jupiter / Platform | 6.1.3 | [Maven Central](https://repo.maven.apache.org/maven2/org/junit/junit-bom/maven-metadata.xml) |
+
+Renamer 1.1.1 has a published `net.minecraftforge:renamer-gradle` implementation, but
+its Gradle plugin marker POM is missing from Forge Maven. `pluginManagement` maps the
+plugin request directly to that implementation; the requested version remains authoritative.
+The plugin also defaults to unpublished Renamer tool 2.2.1; `renameJar` uses its
+public `using` API to select the latest published tool, `net.minecraftforge:renamer:2.2.3:all@jar`.
+Artifact-only notation keeps the shaded executable JAR as the sole classpath entry,
+so its manifest supplies `net.minecraftforge.renamer.Main` without redundant dependencies.
+
+For SRG Forge nodes (1.20.2–1.20.4), `renameJar` runs Renamer on the node's
+game JDK, already prepared by `dev-env.*`. Renamer's Java 8 tool default is a
+minimum, not an additional JDK installation requirement: the task explicitly
+selects the node launcher instead of requesting Java 8. This does not change
+the production core's `--release 8` bytecode or enable automatic JDK downloads.
+
+JUnit 6.1.3 is published: both its
+[BOM POM](https://repo.maven.apache.org/maven2/org/junit/junit-bom/6.1.3/junit-bom-6.1.3.pom)
+and [Gradle module metadata](https://repo.maven.apache.org/maven2/org/junit/junit-bom/6.1.3/junit-bom-6.1.3.module)
+were available at the check above. It is test-only and requires Java 17 or newer.
+To exercise dependency resolution and the previously affected Forge node with fresh
+dependency metadata, run from `mod/`:
+
+```powershell
+.\scripts\dev-env.ps1 -Node 1.21.9-forge
+.\gradlew.bat --refresh-dependencies "-Pnode=1.21.9-forge" "-Pcore.testJdk=25" build modIndex
+```
+
+```sh
+. scripts/dev-env.sh 1.21.9-forge
+./gradlew --refresh-dependencies -Pnode=1.21.9-forge -Pcore.testJdk=25 build modIndex
+```
+
+The helper reuses existing `.jdk/21` and `.jdk/25` installations for this node.
+A Maven lookup failure is not evidence that a lower JUnit version is required;
+check the actual artifact endpoint before changing a published pin.
+
+Compatibility exceptions are deliberate: the core compiles and tests against game-supplied
+Gson 2.8.0 and Log4j API 2.8.1, the Minecraft 1.16.5 baseline, without bundling either
+library or a logging backend. Older games use the launcher's patched Log4j runtime.
+Upgrading those compile APIs would permit calls unavailable in the oldest supported game.
+Node-specific Minecraft and loader pins in `versions/<node>/gradle.properties` retain
+their separate release targets and compile-range overrides; they are not interchangeable
+with a single newest game/loader release. Gradle configuration cache remains disabled
+because Unimined retains Gradle objects and starts setup processes during configuration.
 
 Related documentation: [Bridge integration and local protocol](../docs/bridge/README.md), [Minecraft API reference](../docs/bridge/MINECRAFT-API.md), [Friends contract](../docs/friends/SPEC.md), [release packaging](../CONTRIBUTING.md#release-packaging).

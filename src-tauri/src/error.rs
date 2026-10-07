@@ -22,7 +22,7 @@ pub enum AppError {
     Download(ErrorText),
     Upload(ErrorText),
     Tauri(#[from] tauri::Error),
-    Keyring(#[from] keyring::Error),
+    Keyring(#[from] keyring_core::Error),
     Trash(#[from] trash::Error),
     Sqlite(#[from] rusqlite::Error),
     NotFound(ErrorText),
@@ -141,7 +141,7 @@ fn http_text(err: &reqwest::Error) -> Coded {
     text.with_details(err.to_string())
 }
 
-fn keyring_text(err: &keyring::Error) -> Coded {
+fn keyring_text(err: &keyring_core::Error) -> Coded {
     // Unter Linux fehlt oft der Secret-Service-Dienst; dort sagt die Meldung, welcher gebraucht wird.
     let text = if cfg!(target_os = "linux") { coded!("errors.keyring.linux") } else { coded!("errors.keyring") };
     text.with_details(err.to_string())
@@ -187,7 +187,7 @@ mod tests {
 
     #[test]
     fn an_unreachable_keyring_names_the_linux_service() {
-        let text = AppError::from(keyring::Error::NoStorageAccess("dienst fehlt".into())).to_string();
+        let text = AppError::from(keyring_core::Error::NoStorageAccess("dienst fehlt".into())).to_string();
         assert!(text.starts_with("Der Passwortspeicher des Systems ist nicht erreichbar."), "{text}");
         assert_eq!(text.contains("GNOME Keyring oder KWallet"), cfg!(target_os = "linux"), "{text}");
         assert!(text.contains(" – Details: ") && text.ends_with("dienst fehlt"), "{text}");
