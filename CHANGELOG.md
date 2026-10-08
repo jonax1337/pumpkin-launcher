@@ -4,7 +4,7 @@ Last updated: 2026-10-08.
 
 For installation and a first game, start with the [launcher guide](README.md#download-and-install).
 
-## Unreleased
+## 0.4.0 — 2026-10-08
 
 ### Windows installer
 
@@ -72,6 +72,20 @@ For installation and a first game, start with the [launcher guide](README.md#dow
   reports. Keep Java request completion on the same main-thread executor.
 - Add regression coverage for world rollback, JVM-property precedence and
   tooling boundaries. Make proxy checks return a failing exit status on failure.
+
+### Known limits
+
+- A requested instance folder that holds a large library is moved at startup,
+  before the window opens, and shows no progress. Moving it from Settings >
+  Storage reports success or failure when it finishes.
+- Before moving, the launcher refuses while a game started by this session runs.
+  Games started by an earlier launcher session are only detected on Windows,
+  through the world lock; on Linux and macOS close the game first.
+- The first start after updating from 0.3.3 renames `%APPDATA%\dev.laux.launcher`
+  to `%APPDATA%\Pumpkin Launcher` and moves the WebView profile; an existing
+  library keeps its contents. The program files stay in
+  `%LOCALAPPDATA%\Pumpkin Launcher`. Windows installers are still not
+  Authenticode-signed.
 
 ## 0.3.3 — 2026-10-07
 
