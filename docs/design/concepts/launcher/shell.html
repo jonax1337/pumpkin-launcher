@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pumpkin Launcher · Komplett-Mockup</title>
+<link rel="stylesheet" href="../base.css">
+<link rel="stylesheet" id="kit" href="../kit-klassik.css">
+<link rel="stylesheet" href="app.css">
+<!--SCREEN_CSS-->
+</head>
+<body class="k-klassik">
+<!--SPRITE-->
+
+<!-- Mockup-Leiste (nicht Teil der App): Stil und Bildschirm wechseln -->
+<header class="devbar" role="toolbar" aria-label="Mockup-Steuerung">
+  <span class="devbar-t">MOCKUP</span>
+  <span class="devbar-g" role="group" aria-label="Stil">
+    <button data-theme="slots">Inventar</button><button data-theme="schiefer">Schiefer</button><button data-theme="sandstein">Sandstein</button><button data-theme="klassik">Klassik</button>
+  </span>
+  <span class="devbar-g" role="group" aria-label="Bildschirm">
+    <button data-go="home">Start</button><button data-go="library">Bibliothek</button><button data-go="discover">Entdecken</button><button data-go="instance">Instanz</button><button data-go="skins">Skins</button><button data-go="friends">Freunde</button><button data-go="news">Neuigkeiten</button><button data-go="settings">Einstellungen</button>
+  </span>
+  <span class="devbar-g" role="group" aria-label="Overlays">
+    <button data-open="ov-new">Neue Instanz</button><button data-open="ov-palette">Palette</button><button data-open="ov-delete">Löschen</button><button data-open="ov-login">Anmelden</button>
+  </span>
+</header>
+
+<div class="app">
+  <header class="titlebar">
+    <span class="brand"><svg class="ico ico-l" aria-hidden="true"><use href="#i-pumpkin"/></svg><span class="brand-t">Pumpkin Launcher</span></span>
+    <span class="tb-sp"></span>
+    <button class="btn" data-v="ghost" data-s="s" data-menu="m-account" aria-haspopup="menu"><svg class="ico" aria-hidden="true" style="color:var(--warn)"><use href="#i-warn"/></svg><span class="bt" style="color:var(--warn)">Spielername fehlt</span><svg class="ico" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+    <span class="wc"><button class="btn ib" data-v="ghost" data-s="s" aria-label="Minimieren"><svg class="ico"><use href="#i-win-min"/></svg></button><button class="btn ib" data-v="ghost" data-s="s" aria-label="Maximieren"><svg class="ico"><use href="#i-win-max"/></svg></button><button class="btn ib" data-v="ghost" data-s="s" aria-label="Schließen"><svg class="ico"><use href="#i-win-close"/></svg></button></span>
+  </header>
+
+  <nav class="sidebar" aria-label="Hauptbereiche">
+    <a class="navbtn" href="#home" data-go="home" aria-label="Start" data-tip="Start"><svg class="ico ico-l"><use href="#i-home"/></svg></a>
+    <a class="navbtn" href="#library" data-go="library" aria-label="Bibliothek" data-tip="Bibliothek"><svg class="ico ico-l"><use href="#i-library"/></svg></a>
+    <a class="navbtn" href="#discover" data-go="discover" aria-label="Entdecken" data-tip="Entdecken"><svg class="ico ico-l"><use href="#i-discover"/></svg></a>
+    <a class="navbtn" href="#skins" data-go="skins" aria-label="Skins" data-tip="Skins"><svg class="ico ico-l"><use href="#i-skins"/></svg></a>
+    <a class="navbtn" href="#friends" data-go="friends" aria-label="Freunde" data-tip="Freunde"><svg class="ico ico-l"><use href="#i-friends"/></svg></a>
+    <a class="navbtn" href="#news" data-go="news" aria-label="Neuigkeiten, 1 ungelesen" data-tip="Neuigkeiten"><svg class="ico ico-l"><use href="#i-news"/></svg><span class="badge" data-always>1</span></a>
+    <span class="nav-sp"></span>
+    <button class="navbtn" data-menu="m-tasks" aria-label="Aufgaben" data-tip="Aufgaben" aria-haspopup="dialog"><svg class="ico ico-l"><use href="#i-tasks"/></svg><span class="meter" aria-hidden="true"></span></button>
+    <a class="navbtn" href="#settings" data-go="settings" aria-label="Einstellungen" data-tip="Einstellungen"><svg class="ico ico-l"><use href="#i-settings"/></svg></a>
+  </nav>
+
+  <main class="main" id="main">
+<!--SCREENS-->
+  </main>
+</div>
+
+<!--OVERLAYS-->
+
+<script src="app.js"></script>
+</body>
+</html>

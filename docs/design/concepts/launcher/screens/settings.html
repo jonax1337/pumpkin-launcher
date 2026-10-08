@@ -1,0 +1,220 @@
+<section class="screen" data-screen="settings" hidden>
+<div class="page s-settings">
+  <header class="page-head">
+    <h1>Einstellungen</h1>
+    <div class="page-actions"><button class="btn" data-v="secondary" data-open="ov-shortcuts"><svg class="ico" aria-hidden="true"><use href="#i-keyboard"/></svg>Kürzel anzeigen</button></div>
+  </header>
+
+  <div class="workspace">
+    <nav class="rail" aria-label="Einstellungen">
+      <div class="tabs" data-o="v" data-tabs="set" role="tablist" aria-orientation="vertical" aria-label="Bereiche">
+        <button role="tab" data-tab="accounts" aria-selected="false"><svg class="ico" aria-hidden="true"><use href="#i-user"/></svg><span>Konten</span></button>
+        <button role="tab" data-tab="java" aria-selected="true"><svg class="ico" aria-hidden="true"><use href="#i-java"/></svg><span>Java &amp; Start</span></button>
+        <button role="tab" data-tab="friends" aria-selected="false"><svg class="ico" aria-hidden="true"><use href="#i-friends"/></svg><span>Freunde</span></button>
+        <button role="tab" data-tab="storage" aria-selected="false"><svg class="ico" aria-hidden="true"><use href="#i-storage"/></svg><span>Speicher</span></button>
+        <button role="tab" data-tab="look" aria-selected="false"><svg class="ico" aria-hidden="true"><use href="#i-palette"/></svg><span>Darstellung</span></button>
+        <button role="tab" data-tab="about" aria-selected="false"><svg class="ico" aria-hidden="true"><use href="#i-info"/></svg><span>Über &amp; Support</span></button>
+      </div>
+    </nav>
+
+    <div class="panel set-body">
+
+      <!-- ===== Konten ===== -->
+      <div data-panel-of="set" data-panel="accounts" hidden>
+        <div class="panel-h"><h2 class="h2">Konten</h2>
+          <button class="btn" data-v="primary" data-s="s" data-open="ov-login"><svg class="ico" aria-hidden="true"><use href="#i-microsoft"/></svg>Microsoft-Konto hinzufügen</button>
+          <button class="btn" data-v="secondary" data-s="s" data-open="ov-offline-name"><svg class="ico" aria-hidden="true"><use href="#i-offline"/></svg>Offline-Profil hinzufügen</button>
+        </div>
+        <div class="stack-s">
+          <div class="slot set-acc" data-active>
+            <span class="avatar" data-s="l"><canvas data-head="#5A3A22|#C08A62"></canvas></span>
+            <div class="nm"><b>Steve</b><small class="muted"><svg class="ico ico-s" aria-hidden="true"><use href="#i-microsoft"/></svg> Microsoft-Konto · steve@example.net</small></div>
+            <span class="badge" data-always>Aktiv</span>
+            <button class="btn" data-v="ghost" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-logout"/></svg>Abmelden</button>
+          </div>
+          <div class="slot set-acc">
+            <span class="avatar" data-s="l"><canvas data-head="#2B2B2B|#E0B08A"></canvas></span>
+            <div class="nm"><b>Alex (offline)</b><small class="muted"><svg class="ico ico-s" aria-hidden="true"><use href="#i-offline"/></svg> Offline-Profil · kein Mehrspieler auf Online-Servern</small></div>
+            <button class="btn" data-v="secondary" data-s="s">Aktivieren</button>
+            <button class="btn ib" data-v="ghost" data-s="s" aria-label="Profil entfernen"><svg class="ico" aria-hidden="true"><use href="#i-trash"/></svg></button>
+          </div>
+        </div>
+        <div class="note" data-t="warn" style="margin-top:16px"><svg class="ico" aria-hidden="true"><use href="#i-warn"/></svg>
+          <div class="tx"><b>Spielername fehlt</b><small>Der Spielername kommt aus dem aktiven Konto. Offline-Profile dürfen frei benannt werden, Microsoft-Namen ändern sich nur bei Mojang.</small></div></div>
+      </div>
+
+      <!-- ===== Java & Start ===== -->
+      <div data-panel-of="set" data-panel="java">
+        <div class="panel-h"><h2 class="h2">Java &amp; Start</h2></div>
+        <div class="sgrp">
+          <div class="srow"><div class="lab"><b>Arbeitsspeicher</b><small>Maximal verfügbar: 14 GB von 16 GB.</small></div>
+            <div class="ctl stack-s">
+              <label class="rad"><input type="radio" name="ram" checked><span class="box"><i></i></span><span class="lb">Eigener Wert</span></label>
+              <div class="slider" style="--v:57%" role="slider" aria-label="Arbeitsspeicher" aria-valuemin="2" aria-valuemax="14" aria-valuenow="8" tabindex="0"><span class="trk"><span class="fill"></span><span class="thumb"></span></span><span class="val">8 GB</span></div>
+              <label class="rad"><input type="radio" name="ram"><span class="box"><i></i></span><span class="lb">Automatisch (empfohlen für Modpacks)</span></label>
+            </div></div>
+          <div class="srow"><div class="lab"><b>Minimaler Arbeitsspeicher</b><small>Startgröße des Speichers (-Xms).</small></div>
+            <div class="ctl"><button class="sel" aria-haspopup="listbox"><span>1 GB</span><svg class="ico" aria-hidden="true"><use href="#i-chev-down"/></svg></button></div></div>
+          <div class="srow"><div class="lab"><b>Java</b><small>Passende Version wird pro Minecraft-Version gewählt.</small></div>
+            <div class="ctl stack-s">
+              <label class="rad"><input type="radio" name="java" checked><span class="box"><i></i></span><span class="lb">Automatisch verwalten</span></label>
+              <label class="rad"><input type="radio" name="java"><span class="box"><i></i></span><span class="lb">Installierte Version wählen</span></label>
+              <button class="sel" aria-haspopup="listbox"><span>Java 21 · Temurin 21.0.5 (gefunden)</span><svg class="ico" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+              <label class="rad"><input type="radio" name="java"><span class="box"><i></i></span><span class="lb">Eigener Pfad</span></label>
+              <div class="row"><input class="in" aria-label="Java-Pfad" placeholder="C:\Program Files\Java\jdk-21\bin\javaw.exe"><button class="btn" data-v="secondary"><svg class="ico" aria-hidden="true"><use href="#i-folder-open"/></svg>Wählen</button></div>
+            </div></div>
+          <div class="srow"><div class="lab"><b>JVM-Argumente</b><small>Feinabstimmung der Speicherbereinigung.</small></div>
+            <div class="ctl stack-s">
+              <div class="row wrap" style="gap:8px 22px">
+                <label class="rad"><input type="radio" name="jvm" checked><span class="box"><i></i></span><span class="lb">Ausgewogen</span></label>
+                <label class="rad"><input type="radio" name="jvm"><span class="box"><i></i></span><span class="lb">Niedrige Latenz</span></label>
+                <label class="rad"><input type="radio" name="jvm"><span class="box"><i></i></span><span class="lb">Eigene</span></label>
+              </div>
+              <details class="disc"><summary><svg class="ico ico-s" aria-hidden="true"><use href="#i-chev-right"/></svg>Verwendete Argumente</summary>
+                <pre class="slot mono">-XX:+UseG1GC -XX:+ParallelRefProcEnabled
+-XX:MaxGCPauseMillis=200 -XX:+UnlockExperimentalVMOptions
+-XX:+DisableExplicitGC -XX:G1NewSizePercent=30
+-XX:G1MaxNewSizePercent=40 -XX:G1HeapRegionSize=8M
+-XX:G1ReservePercent=20 -XX:+AlwaysPreTouch</pre></details>
+            </div></div>
+        </div>
+
+        <h3 class="h3 sh">Spielstart</h3>
+        <div class="sgrp">
+          <div class="srow"><div class="lab"><b>Launcher nach Start</b><small>Was mit diesem Fenster passiert, sobald Minecraft läuft.</small></div>
+            <div class="ctl row wrap" style="gap:8px 22px">
+              <label class="rad"><input type="radio" name="after" checked><span class="box"><i></i></span><span class="lb">Schließen</span></label>
+              <label class="rad"><input type="radio" name="after"><span class="box"><i></i></span><span class="lb">Minimieren</span></label>
+              <label class="rad"><input type="radio" name="after"><span class="box"><i></i></span><span class="lb">Offen lassen</span></label>
+            </div></div>
+          <div class="srow"><div class="lab"><b>Konsole beim Start öffnen</b><small>Zeigt das Spielprotokoll live an.</small></div>
+            <div class="ctl"><label class="sw"><input type="checkbox" role="switch"><span class="t"><span class="k"></span></span><span class="lb">Konsole</span><span class="st"><span class="on">An</span><span class="off">Aus</span></span></label></div></div>
+          <div class="srow"><div class="lab"><b>Auflösung</b><small>Leer lassen für Standardgröße.</small></div>
+            <div class="ctl row"><input class="in set-num" aria-label="Breite" value="1920" inputmode="numeric"><span class="faint">×</span><input class="in set-num" aria-label="Höhe" value="1080" inputmode="numeric">
+              <label class="chk"><input type="checkbox"><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span><span class="lb">Vollbild</span></label></div></div>
+        </div>
+      </div>
+
+      <!-- ===== Freunde ===== -->
+      <div data-panel-of="set" data-panel="friends" hidden>
+        <div class="panel-h"><h2 class="h2">Freunde</h2></div>
+        <div class="eyebrow">Zustand: nicht aktiviert</div>
+        <div class="slot gate">
+          <svg class="ico ico-xl" aria-hidden="true" style="color:var(--copper)"><use href="#i-pumpkin"/></svg>
+          <h3 class="h2">Spiele mit Freunden</h3>
+          <p class="muted">Sieh, wer online ist, tritt Welten bei und teile Instanzen. Dafür wird ein Freundescode erzeugt; dein Spielstand bleibt auf deinem Rechner.</p>
+          <button class="btn" data-v="primary" data-s="l"><svg class="ico" aria-hidden="true"><use href="#i-friends"/></svg>Freunde aktivieren</button>
+        </div>
+        <hr class="divider">
+        <div class="eyebrow">Zustand: aktiviert</div>
+        <div class="sgrp" style="margin-top:12px">
+          <div class="srow"><div class="lab"><b>Freundesfunktionen</b><small>Jederzeit abschaltbar.</small></div>
+            <div class="ctl"><label class="sw"><input type="checkbox" role="switch" checked><span class="t"><span class="k"></span></span><span class="lb">Freunde</span><span class="st"><span class="on">An</span><span class="off">Aus</span></span></label></div></div>
+          <div class="srow"><div class="lab"><b>Dein Freundescode</b><small>Gib ihn Freunden, damit sie dich hinzufügen.</small></div>
+            <div class="ctl row"><div class="slot code num">PMK-7QX2-9D4F</div><button class="btn" data-v="secondary"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg>Kopieren</button></div></div>
+          <div class="srow"><div class="lab"><b>Netzwerk</b><small>Verbindung zum Vermittlungsserver.</small></div>
+            <div class="ctl row wrap"><span class="chip" data-t="run"><i class="dot"></i>Relay verbunden</span><span class="chip" data-t="n"><svg class="ico" aria-hidden="true"><use href="#i-wifi"/></svg>Direkt möglich</span><span class="faint sm num">Ping 38 ms</span></div></div>
+          <div class="srow"><div class="lab"><b>Privatsphäre</b><small>Was Freunde von dir sehen.</small></div>
+            <div class="ctl stack-s">
+              <label class="chk"><input type="checkbox" checked><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span><span class="lb">Online-Status anzeigen</span></label>
+              <label class="chk"><input type="checkbox" checked><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span><span class="lb">Aktuelle Instanz anzeigen</span></label>
+              <label class="chk"><input type="checkbox"><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span><span class="lb">Freundschaftsanfragen von Fremden erlauben</span></label>
+              <label class="chk"><input type="checkbox" checked><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span><span class="lb">Freunde dürfen Welten beitreten</span></label>
+            </div></div>
+        </div>
+      </div>
+
+      <!-- ===== Speicher ===== -->
+      <div data-panel-of="set" data-panel="storage" hidden>
+        <div class="panel-h"><h2 class="h2">Speicher</h2><span class="muted num">6,7 GB belegt</span></div>
+        <div class="store" role="img" aria-label="Speicherbelegung: Instanzen 4,2 GB, Java 612 MB, Cache 1,1 GB, Backups 820 MB">
+          <span style="--w:62.7%;--c:var(--acc)"></span><span style="--w:9.1%;--c:var(--fg-3)"></span><span style="--w:16.4%;--c:var(--warn)"></span><span style="--w:12.2%;--c:var(--run)"></span>
+        </div>
+        <ul class="legend">
+          <li><i style="--c:var(--acc)"></i>Instanzen <b class="num">4,2 GB</b></li>
+          <li><i style="--c:var(--fg-3)"></i>Java <b class="num">612 MB</b></li>
+          <li><i style="--c:var(--warn)"></i>Cache <b class="num">1,1 GB</b></li>
+          <li><i style="--c:var(--run)"></i>Backups <b class="num">820 MB</b></li>
+        </ul>
+        <div class="sgrp">
+          <div class="srow"><div class="lab"><b>Datenordner</b><small>Instanzen, Java und Cache liegen hier.</small></div>
+            <div class="ctl stack-s"><input class="in" aria-label="Datenordner" value="C:\Users\Jonas\AppData\Roaming\PumpkinLauncher" readonly>
+              <div class="row"><button class="btn" data-v="secondary" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-folder-open"/></svg>Öffnen</button><button class="btn" data-v="secondary" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-edit"/></svg>Ändern</button></div></div></div>
+          <div class="srow"><div class="lab"><b>Cache leeren</b><small>Entfernt heruntergeladene Vorschaubilder und Modlisten (1,1 GB).</small></div>
+            <div class="ctl"><button class="btn" data-v="danger"><svg class="ico" aria-hidden="true"><use href="#i-trash"/></svg>Cache leeren</button></div></div>
+        </div>
+        <h3 class="h3 sh">Backups</h3>
+        <div class="sgrp">
+          <div class="srow"><div class="lab"><b>Automatische Backups</b><small>Sichert Welten vor dem Spielstart.</small></div>
+            <div class="ctl"><label class="sw"><input type="checkbox" role="switch" checked><span class="t"><span class="k"></span></span><span class="lb">Backups</span><span class="st"><span class="on">An</span><span class="off">Aus</span></span></label></div></div>
+          <div class="srow"><div class="lab"><b>Intervall</b></div>
+            <div class="ctl"><button class="sel" aria-haspopup="listbox"><span>Täglich</span><svg class="ico" aria-hidden="true"><use href="#i-chev-down"/></svg></button></div></div>
+          <div class="srow"><div class="lab"><b>Backups behalten</b><small>Ältere werden automatisch gelöscht.</small></div>
+            <div class="ctl row"><input class="in set-num" aria-label="Anzahl" value="5" inputmode="numeric"><span class="muted">pro Welt</span></div></div>
+        </div>
+      </div>
+
+      <!-- ===== Darstellung ===== -->
+      <div data-panel-of="set" data-panel="look" hidden>
+        <div class="panel-h"><h2 class="h2">Darstellung</h2></div>
+        <div class="sgrp">
+          <div class="srow"><div class="lab"><b>Pixelgröße</b><small>Skaliert Rahmen und Symbole.</small></div>
+            <div class="ctl"><div class="seg" role="group" aria-label="Pixelgröße"><button aria-pressed="false">Fein</button><button aria-pressed="true">Mittel</button><button aria-pressed="false">Grob</button></div></div></div>
+          <div class="srow"><div class="lab"><b>Textgröße</b></div>
+            <div class="ctl"><div class="seg" role="group" aria-label="Textgröße"><button aria-pressed="false">Klein</button><button aria-pressed="true">Normal</button><button aria-pressed="false">Groß</button></div></div></div>
+          <div class="srow"><div class="lab"><b>Farbwelt</b><small>Jahreszeitliche Akzente.</small></div>
+            <div class="ctl"><button class="sel" aria-haspopup="listbox"><span>Kürbis (Standard)</span><svg class="ico" aria-hidden="true"><use href="#i-chev-down"/></svg></button></div></div>
+          <div class="srow"><div class="lab"><b>Szenen-Bewegung</b><small>Bewegte Hintergründe in Karten und Kopfbereichen.</small></div>
+            <div class="ctl"><label class="sw"><input type="checkbox" role="switch" checked><span class="t"><span class="k"></span></span><span class="lb">Szenen</span><span class="st"><span class="on">An</span><span class="off">Aus</span></span></label></div></div>
+          <div class="srow"><div class="lab"><b>Bewegung reduzieren</b><small>Schaltet Übergänge und Animationen ab.</small></div>
+            <div class="ctl"><label class="sw"><input type="checkbox" role="switch"><span class="t"><span class="k"></span></span><span class="lb">Reduziert</span><span class="st"><span class="on">An</span><span class="off">Aus</span></span></label></div></div>
+          <div class="srow"><div class="lab"><b>Sprache</b></div>
+            <div class="ctl"><button class="sel" aria-haspopup="listbox"><span>Deutsch</span><svg class="ico" aria-hidden="true"><use href="#i-chev-down"/></svg></button></div></div>
+        </div>
+        <h3 class="h3 sh">UI-Stil</h3>
+        <div class="styles" role="group" aria-label="UI-Stil">
+          <button class="stylecard" data-theme="slots" aria-pressed="false"><span class="prev"><span class="slot sl"><svg class="ico" aria-hidden="true"><use href="#i-box"/></svg></span><span class="btn" data-v="primary" data-s="s">Spielen</span></span><b>Inventar</b><small>Slots und Rastergefühl</small></button>
+          <button class="stylecard" data-theme="schiefer" aria-pressed="false"><span class="prev"><span class="slot sl"><svg class="ico" aria-hidden="true"><use href="#i-box"/></svg></span><span class="btn" data-v="primary" data-s="s">Spielen</span></span><b>Schiefer</b><small>Kühle, flache Platten</small></button>
+          <button class="stylecard" data-theme="sandstein" aria-pressed="false"><span class="prev"><span class="slot sl"><svg class="ico" aria-hidden="true"><use href="#i-box"/></svg></span><span class="btn" data-v="primary" data-s="s">Spielen</span></span><b>Sandstein</b><small>Warm, steinig, ruhig</small></button>
+          <button class="stylecard" data-theme="klassik" aria-pressed="true"><span class="prev"><span class="slot sl"><svg class="ico" aria-hidden="true"><use href="#i-box"/></svg></span><span class="btn" data-v="primary" data-s="s">Spielen</span></span><b>Klassik</b><small>Minecraft-GUI pur</small></button>
+        </div>
+      </div>
+
+      <!-- ===== Über & Support ===== -->
+      <div data-panel-of="set" data-panel="about" hidden>
+        <div class="panel-h"><h2 class="h2">Über &amp; Support</h2></div>
+        <div class="plate about">
+          <svg class="ico ico-xl" aria-hidden="true" style="color:var(--copper)"><use href="#i-pumpkin"/></svg>
+          <div class="nm"><b class="h2">Pumpkin Launcher 0.3.3</b><span class="muted sm">Version 0.3.3 · Build 2026-10-02 · Windows x64</span></div>
+          <span class="chip" data-t="run"><i class="dot"></i>Aktuell</span>
+          <button class="btn" data-v="secondary"><svg class="ico" aria-hidden="true"><use href="#i-refresh"/></svg>Nach Updates suchen</button>
+        </div>
+        <div class="grid2">
+          <div>
+            <h3 class="h3 sh">Links</h3>
+            <div class="tbl slot links">
+              <a class="tr" href="#" style="--cols:24px 1fr 24px"><svg class="ico ico-s" aria-hidden="true"><use href="#i-link"/></svg><span>GitHub</span><svg class="ico ico-s faint" aria-hidden="true"><use href="#i-external"/></svg></a>
+              <a class="tr" href="#" style="--cols:24px 1fr 24px"><svg class="ico ico-s" aria-hidden="true"><use href="#i-sparkle"/></svg><span>Website</span><svg class="ico ico-s faint" aria-hidden="true"><use href="#i-external"/></svg></a>
+              <a class="tr" href="#" style="--cols:24px 1fr 24px"><svg class="ico ico-s" aria-hidden="true"><use href="#i-shield"/></svg><span>Datenschutz</span><svg class="ico ico-s faint" aria-hidden="true"><use href="#i-external"/></svg></a>
+              <a class="tr" href="#" style="--cols:24px 1fr 24px"><svg class="ico ico-s" aria-hidden="true"><use href="#i-book"/></svg><span>Lizenzen</span><svg class="ico ico-s faint" aria-hidden="true"><use href="#i-external"/></svg></a>
+            </div>
+          </div>
+          <div>
+            <h3 class="h3 sh">Diagnose</h3>
+            <dl class="slot diag">
+              <dt>Betriebssystem</dt><dd>Windows 11 (10.0.26300)</dd>
+              <dt>Java</dt><dd>Temurin 21.0.5</dd>
+              <dt>Arbeitsspeicher</dt><dd class="num">16 GB gesamt</dd>
+              <dt>Konto</dt><dd>Steve (Microsoft)</dd>
+              <dt>Instanzen</dt><dd class="num">7</dd>
+              <dt>Datenordner</dt><dd class="trunc">…\PumpkinLauncher</dd>
+            </dl>
+            <div class="row wrap" style="margin-top:12px"><button class="btn" data-v="secondary"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg>Support-Daten kopieren</button><span class="faint sm">Ohne Tokens und Pfade mit Benutzernamen.</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</section>

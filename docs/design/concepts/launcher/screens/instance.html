@@ -1,0 +1,300 @@
+<!-- Instanz-Detail: Survival 1.21. Akzentfarbe der Instanz: --acc, Kit leitet .inst-Töne ab. -->
+<section class="screen" data-screen="instance" hidden>
+  <div class="page s-instance inst" style="--acc:#E78AC8">
+
+    <header class="ih">
+      <div class="scenebox ih-bg"><canvas data-scene="dusk" data-seed="7" data-w="320" data-h="9"></canvas></div>
+      <div class="ih-in">
+        <div class="ih-top"><button class="btn" data-v="ghost" data-s="m" data-go="library"><svg class="ico " aria-hidden="true"><use href="#i-arrow-left"/></svg><span class="bt">Bibliothek</span></button></div>
+        <div class="ih-bot">
+          <div class="ih-id">
+            <h1 class="title">Survival 1.21</h1>
+            <div class="ih-meta row wrap">
+              <span class="chip" data-t="n">Fabric 1.21.4</span>
+              <span class="muted sm">Loader 0.16.10</span><span class="dotsep"></span>
+              <span class="muted sm">37 Std. gespielt</span>
+              <button class="chip" data-t="warn" type="button" title="Updates anzeigen">Updates 3</button>
+              <button class="chip" data-t="acc" type="button" title="Neue Version des Pakets">Pack-Update</button>
+            </div>
+          </div>
+          <div class="ih-act">
+            <button class="btn" data-v="primary" data-s="l" ><svg class="ico " aria-hidden="true"><use href="#i-play"/></svg><span class="bt">Spielen</span></button>
+            <button class="btn ib" data-v="secondary" data-s="l" aria-label="Instanz-Menü" data-menu="m-instance"><svg class="ico " aria-hidden="true"><use href="#i-more"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="ib">
+      <div class="tabs" role="tablist" aria-label="Instanz" data-tabs="inst">
+        <button role="tab" data-tab="content" aria-selected="true">Inhalt <span class="badge">8</span></button><button role="tab" data-tab="worlds" aria-selected="false">Welten</button><button role="tab" data-tab="shots" aria-selected="false">Screenshots</button><button role="tab" data-tab="log" aria-selected="false">Protokoll</button><button role="tab" data-tab="settings" aria-selected="false">Einstellungen</button>
+      </div>
+
+      <!-- (1) Inhalt -->
+      <div class="pnl" role="tabpanel" data-panel-of="inst" data-panel="content">
+        <div class="toolbar tb-content">
+          <label class="field-ico grow"><svg class="ico" aria-hidden="true"><use href="#i-search"/></svg><input class="in" placeholder="Name oder Datei" aria-label="Inhalt durchsuchen"></label>
+          <div class="seg" role="group" aria-label="Filter"><button aria-pressed="true">Alle 8</button><button aria-pressed="false">Mods 5</button><button aria-pressed="false">Shader 1</button><button aria-pressed="false">Ressourcenpakete 2</button></div>
+          <button class="sel tb-sel" aria-haspopup="listbox" aria-label="Sortierung"><span>Name A–Z</span><svg class="ico ico-s" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <button class="sel tb-sel" aria-haspopup="listbox" aria-label="Profil"><span>Profil: Kein Profil</span><svg class="ico ico-s" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <div class="seg" role="group" aria-label="Ansicht"><button aria-pressed="true" aria-label="Liste"><svg class="ico ico-s" aria-hidden="true"><use href="#i-list"/></svg></button><button aria-pressed="false" aria-label="Raster"><svg class="ico ico-s" aria-hidden="true"><use href="#i-grid"/></svg></button></div>
+          <div class="page-actions tb-act">
+          <button class="btn" data-v="secondary" data-s="m" ><svg class="ico " aria-hidden="true"><use href="#i-update"/></svg><span class="bt">Alle aktualisieren 3</span></button>
+          <button class="btn" data-v="primary" data-s="m" data-menu="m-add"><svg class="ico " aria-hidden="true"><use href="#i-plus"/></svg><span class="bt">Hinzufügen</span></button></div>
+        </div>
+        <div class="panel tbl-wrap" data-flush>
+          <div class="tbl" style="--cols: 24px minmax(0,1fr) 150px 64px 32px">
+            <div class="tr th"><span></span><span>Name</span><span>Update</span><span>Aktiv</span><span></span></div>
+        <div class="tr" data-kind="mod">
+          <label class="chk"><input type="checkbox" aria-label="Lithium auswählen"><span class="box"><svg class="ico " aria-hidden="true"><use href="#i-check"/></svg></span></label>
+          <div class="nm-cell">
+            <span class="tile" data-s="s"><svg class="ico ico-s" aria-hidden="true"><use href="#i-mod"/></svg></span>
+            <span class="nm"><b>Lithium</b><small><span class="chip" data-t="acc">Modrinth</span> Mod · 0.15.1 · Aus dem Paket</small></span>
+          </div>
+          <div class="c-up"><button class="btn" data-v="secondary" data-s="s" aria-label="Lithium auf 0.15.2 aktualisieren"><svg class="ico " aria-hidden="true"><use href="#i-arrow-up"/></svg><span class="bt">0.15.2</span></button></div>
+          <label class="sw"><input type="checkbox" role="switch" aria-label="Lithium aktivieren" checked><span class="t"><span class="k"></span></span></label>
+          <button class="btn ib" data-v="ghost" data-s="s" aria-label="Lithium Optionen" data-menu="m-row"><svg class="ico " aria-hidden="true"><use href="#i-more"/></svg></button>
+        </div>
+        <div class="tr" data-kind="mod">
+          <label class="chk"><input type="checkbox" aria-label="Iris Shaders auswählen"><span class="box"><svg class="ico " aria-hidden="true"><use href="#i-check"/></svg></span></label>
+          <div class="nm-cell">
+            <span class="tile" data-s="s"><svg class="ico ico-s" aria-hidden="true"><use href="#i-mod"/></svg></span>
+            <span class="nm"><b>Iris Shaders</b><small><span class="chip" data-t="acc">Modrinth</span> Mod · 1.8.12 · Aus dem Paket</small></span>
+          </div>
+          <div class="c-up"><span class="faint sm">Aktuell</span></div>
+          <label class="sw"><input type="checkbox" role="switch" aria-label="Iris Shaders aktivieren" checked><span class="t"><span class="k"></span></span></label>
+          <button class="btn ib" data-v="ghost" data-s="s" aria-label="Iris Shaders Optionen" data-menu="m-row"><svg class="ico " aria-hidden="true"><use href="#i-more"/></svg></button>
+        </div>
+        <div class="tr" data-kind="mod">
+          <label class="chk"><input type="checkbox" aria-label="Mod Menu auswählen"><span class="box"><svg class="ico " aria-hidden="true"><use href="#i-check"/></svg></span></label>
+          <div class="nm-cell">
+            <span class="tile" data-s="s"><svg class="ico ico-s" aria-hidden="true"><use href="#i-mod"/></svg></span>
+            <span class="nm"><b>Mod Menu</b><small><span class="chip" data-t="acc">Modrinth</span> Mod · 13.0.3 · Aus dem Paket</small></span>
+          </div>
+          <div class="c-up"><button class="btn" data-v="secondary" data-s="s" aria-label="Mod Menu auf 13.0.4 aktualisieren"><svg class="ico " aria-hidden="true"><use href="#i-arrow-up"/></svg><span class="bt">13.0.4</span></button></div>
+          <label class="sw"><input type="checkbox" role="switch" aria-label="Mod Menu aktivieren" checked><span class="t"><span class="k"></span></span></label>
+          <button class="btn ib" data-v="ghost" data-s="s" aria-label="Mod Menu Optionen" data-menu="m-row"><svg class="ico " aria-hidden="true"><use href="#i-more"/></svg></button>
+        </div>
+        <div class="tr is-child" data-kind="mod">
+          <label class="chk"><input type="checkbox" aria-label="Fabric API auswählen"><span class="box"><svg class="ico " aria-hidden="true"><use href="#i-check"/></svg></span></label>
+          <div class="nm-cell">
+            <span class="tile" data-s="s"><svg class="ico ico-s" aria-hidden="true"><use href="#i-mod"/></svg></span>
+            <span class="nm"><b>Fabric API</b><small><span class="chip" data-t="acc">Modrinth</span> Mod · 0.119.2+1.21.4 · Benötigt von Mod Menu</small></span>
+          </div>
+          <div class="c-up"><span class="faint sm">Aktuell</span></div>
+          <label class="sw"><input type="checkbox" role="switch" aria-label="Fabric API aktivieren" checked><span class="t"><span class="k"></span></span></label>
+          <button class="btn ib" data-v="ghost" data-s="s" aria-label="Fabric API Optionen" data-menu="m-row"><svg class="ico " aria-hidden="true"><use href="#i-more"/></svg></button>
+        </div>
+        <div class="tr" data-kind="mod">
+          <label class="chk"><input type="checkbox" aria-label="AppleSkin auswählen"><span class="box"><svg class="ico " aria-hidden="true"><use href="#i-check"/></svg></span></label>
+          <div class="nm-cell">
+            <span class="tile" data-s="s"><svg class="ico ico-s" aria-hidden="true"><use href="#i-mod"/></svg></span>
+            <span class="nm"><b>AppleSkin</b><small><span class="chip" data-t="acc">Modrinth</span> Mod · 3.0.6 · Aus dem Paket</small></span>
+          </div>
+          <div class="c-up"><button class="btn" data-v="secondary" data-s="s" aria-label="AppleSkin auf 3.0.7 aktualisieren"><svg class="ico " aria-hidden="true"><use href="#i-arrow-up"/></svg><span class="bt">3.0.7</span></button></div>
+          <label class="sw"><input type="checkbox" role="switch" aria-label="AppleSkin aktivieren" checked><span class="t"><span class="k"></span></span></label>
+          <button class="btn ib" data-v="ghost" data-s="s" aria-label="AppleSkin Optionen" data-menu="m-row"><svg class="ico " aria-hidden="true"><use href="#i-more"/></svg></button>
+        </div>
+        <div class="tr" data-kind="resourcepack">
+          <label class="chk"><input type="checkbox" aria-label="Fresh Animations auswählen"><span class="box"><svg class="ico " aria-hidden="true"><use href="#i-check"/></svg></span></label>
+          <div class="nm-cell">
+            <span class="tile" data-s="s"><svg class="ico ico-s" aria-hidden="true"><use href="#i-resourcepack"/></svg></span>
+            <span class="nm"><b>Fresh Animations</b><small><span class="chip" data-t="acc">Modrinth</span> Ressourcenpaket · 1.9.3 · Aus dem Paket</small></span>
+          </div>
+          <div class="c-up"><span class="faint sm">Aktuell</span></div>
+          <label class="sw"><input type="checkbox" role="switch" aria-label="Fresh Animations aktivieren" checked><span class="t"><span class="k"></span></span></label>
+          <button class="btn ib" data-v="ghost" data-s="s" aria-label="Fresh Animations Optionen" data-menu="m-row"><svg class="ico " aria-hidden="true"><use href="#i-more"/></svg></button>
+        </div>
+        <div class="tr" data-kind="resourcepack">
+          <label class="chk"><input type="checkbox" aria-label="Faithful 32x auswählen"><span class="box"><svg class="ico " aria-hidden="true"><use href="#i-check"/></svg></span></label>
+          <div class="nm-cell">
+            <span class="tile" data-s="s"><svg class="ico ico-s" aria-hidden="true"><use href="#i-resourcepack"/></svg></span>
+            <span class="nm"><b>Faithful 32x</b><small><span class="chip" data-t="n">Lokal</span> Ressourcenpaket · 1.21.4 · faithful-32x.zip</small></span>
+          </div>
+          <div class="c-up"><span class="faint sm">Keine Updatequelle</span></div>
+          <label class="sw"><input type="checkbox" role="switch" aria-label="Faithful 32x aktivieren" checked><span class="t"><span class="k"></span></span></label>
+          <button class="btn ib" data-v="ghost" data-s="s" aria-label="Faithful 32x Optionen" data-menu="m-row"><svg class="ico " aria-hidden="true"><use href="#i-more"/></svg></button>
+        </div>
+        <div class="tr" data-kind="shader">
+          <label class="chk"><input type="checkbox" aria-label="Complementary Reimagined auswählen"><span class="box"><svg class="ico " aria-hidden="true"><use href="#i-check"/></svg></span></label>
+          <div class="nm-cell">
+            <span class="tile" data-s="s"><svg class="ico ico-s" aria-hidden="true"><use href="#i-shader"/></svg></span>
+            <span class="nm"><b>Complementary Reimagined</b><small><span class="chip" data-t="n">Lokal</span> Shader · r5.4 · ComplementaryReimagined_r5.4.zip</small></span>
+          </div>
+          <div class="c-up"><span class="faint sm">Keine Updatequelle</span></div>
+          <label class="sw"><input type="checkbox" role="switch" aria-label="Complementary Reimagined aktivieren" checked><span class="t"><span class="k"></span></span></label>
+          <button class="btn ib" data-v="ghost" data-s="s" aria-label="Complementary Reimagined Optionen" data-menu="m-row"><svg class="ico " aria-hidden="true"><use href="#i-more"/></svg></button>
+        </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- (2) Welten -->
+      <div class="pnl stack-l" role="tabpanel" data-panel-of="inst" data-panel="worlds" hidden>
+        <section class="stack-m">
+          <div class="panel-h"><h2 class="h2">Welten <span class="count">3</span></h2><button class="btn" data-v="secondary" data-s="m" ><svg class="ico " aria-hidden="true"><use href="#i-download"/></svg><span class="bt">Importieren</span></button><button class="btn" data-v="secondary" data-s="m" ><svg class="ico " aria-hidden="true"><use href="#i-backup"/></svg><span class="bt">Backups</span></button></div>
+          <div class="panel" data-flush><div class="tbl" style="--cols: minmax(0,1fr) 112px 32px">
+        <div class="tr">
+          <div class="nm-cell"><span class="tile" data-s="l"><svg class="ico ico-l" aria-hidden="true"><use href="#i-world"/></svg></span>
+            <span class="nm"><b>Kürbisinsel <span class="chip" data-t="acc">Neue Welt</span></b><small>Survival · 1.21.4 · 182 MB · vor 2 Stunden</small></span></div>
+          <button class="btn" data-v="secondary" data-s="s" ><svg class="ico " aria-hidden="true"><use href="#i-play"/></svg><span class="bt">Spielen</span></button>
+          <button class="btn ib" data-v="ghost" data-s="s" aria-label="Kürbisinsel Optionen" data-menu="m-row"><svg class="ico " aria-hidden="true"><use href="#i-more"/></svg></button>
+        </div>
+        <div class="tr">
+          <div class="nm-cell"><span class="tile" data-s="l"><svg class="ico ico-l" aria-hidden="true"><use href="#i-diamond"/></svg></span>
+            <span class="nm"><b>Kreativ-Bauplatz</b><small>Creative · 1.21.4 · 64 MB · vor 5 Tagen</small></span></div>
+          <button class="btn" data-v="secondary" data-s="s" ><svg class="ico " aria-hidden="true"><use href="#i-play"/></svg><span class="bt">Spielen</span></button>
+          <button class="btn ib" data-v="ghost" data-s="s" aria-label="Kreativ-Bauplatz Optionen" data-menu="m-row"><svg class="ico " aria-hidden="true"><use href="#i-more"/></svg></button>
+        </div>
+        <div class="tr">
+          <div class="nm-cell"><span class="tile" data-s="l"><svg class="ico ico-l" aria-hidden="true"><use href="#i-heart"/></svg></span>
+            <span class="nm"><b>Hardcore, dritter Versuch</b><small>Hardcore · 1.21.4 · 12 MB · vor 3 Wochen</small></span></div>
+          <button class="btn" data-v="secondary" data-s="s" ><svg class="ico " aria-hidden="true"><use href="#i-play"/></svg><span class="bt">Spielen</span></button>
+          <button class="btn ib" data-v="ghost" data-s="s" aria-label="Hardcore, dritter Versuch Optionen" data-menu="m-row"><svg class="ico " aria-hidden="true"><use href="#i-more"/></svg></button>
+        </div>
+          </div></div>
+        </section>
+        <section class="stack-m">
+          <div class="panel-h"><h2 class="h2">Server <span class="count">2</span></h2><button class="btn" data-v="secondary" data-s="m" ><svg class="ico " aria-hidden="true"><use href="#i-plus"/></svg><span class="bt">Server hinzufügen</span></button></div>
+          <div class="panel" data-flush><div class="tbl" style="--cols: minmax(0,1fr) auto 112px 32px">
+        <div class="tr">
+          <div class="nm-cell"><span class="tile" data-s="l"><svg class="ico ico-l" aria-hidden="true"><use href="#i-server"/></svg></span><span class="nm"><b>Pumpkin Lobby</b><small>play.example.net</small></span></div>
+          <span class="row"><span class="chip" data-t="run">42/200</span><span class="chip" data-t="n">38 ms</span></span>
+          <button class="btn" data-v="secondary" data-s="s" ><svg class="ico " aria-hidden="true"><use href="#i-play"/></svg><span class="bt">Beitreten</span></button><button class="btn ib" data-v="ghost" data-s="s" aria-label="Pumpkin Lobby Optionen" data-menu="m-row"><svg class="ico " aria-hidden="true"><use href="#i-more"/></svg></button>
+        </div>
+        <div class="tr">
+          <div class="nm-cell"><span class="tile" data-s="l"><svg class="ico ico-l" aria-hidden="true"><use href="#i-server"/></svg></span><span class="nm"><b>Freunde-SMP</b><small>smp.example.net:25570</small></span></div>
+          <span class="row"><span class="chip" data-t="bad">Nicht erreichbar</span></span>
+          <button class="btn" data-v="secondary" data-s="s" ><svg class="ico " aria-hidden="true"><use href="#i-refresh"/></svg><span class="bt">Prüfen</span></button><button class="btn ib" data-v="ghost" data-s="s" aria-label="Freunde-SMP Optionen" data-menu="m-row"><svg class="ico " aria-hidden="true"><use href="#i-more"/></svg></button>
+        </div>
+          </div></div>
+        </section>
+      </div>
+
+      <!-- (3) Screenshots -->
+      <div class="pnl stack-l" role="tabpanel" data-panel-of="inst" data-panel="shots" hidden>
+        <div class="panel-h"><h2 class="h2">Screenshots <span class="count">5</span></h2><button class="btn" data-v="secondary" data-s="m" ><svg class="ico " aria-hidden="true"><use href="#i-folder-open"/></svg><span class="bt">Ordner öffnen</span></button><button class="btn" data-v="secondary" data-s="m" ><svg class="ico " aria-hidden="true"><use href="#i-select"/></svg><span class="bt">Auswählen</span></button></div>
+        
+        <section class="stack-m">
+          <h3 class="h3">Heute <span class="count">2</span></h3>
+          <div class="grid-auto" style="--min: 300px">
+          <article class="card shot" tabindex="0">
+            <div class="pic"><canvas data-scene="dusk" data-seed="3" data-w="160" data-h="9"></canvas></div>
+            <div class="cap2"><span class="nm"><b>21:14 Uhr</b></span></div>
+          </article>
+          <article class="card shot" aria-selected="true" tabindex="0">
+            <div class="pic"><canvas data-scene="plains" data-seed="5" data-w="160" data-h="9"></canvas></div>
+            <div class="cap2"><span class="nm"><b>20:48 Uhr</b></span></div>
+          </article>
+          </div>
+        </section>
+        <section class="stack-m">
+          <h3 class="h3">Gestern <span class="count">2</span></h3>
+          <div class="grid-auto" style="--min: 300px">
+          <article class="card shot" tabindex="0">
+            <div class="pic"><canvas data-scene="nether" data-seed="2" data-w="160" data-h="9"></canvas></div>
+            <div class="cap2"><span class="nm"><b>22:31 Uhr</b></span></div>
+          </article>
+          <article class="card shot" tabindex="0">
+            <div class="pic"><canvas data-scene="coast" data-seed="9" data-w="160" data-h="9"></canvas></div>
+            <div class="cap2"><span class="nm"><b>19:05 Uhr</b></span></div>
+          </article>
+          </div>
+        </section>
+        <section class="stack-m">
+          <h3 class="h3">02. Okt. 2026 <span class="count">1</span></h3>
+          <div class="grid-auto" style="--min: 300px">
+          <article class="card shot" tabindex="0">
+            <div class="pic"><canvas data-scene="snow" data-seed="4" data-w="160" data-h="9"></canvas></div>
+            <div class="cap2"><span class="nm"><b>16:40 Uhr</b></span></div>
+          </article>
+          </div>
+        </section>
+      </div>
+
+      <!-- (4) Protokoll -->
+      <div class="pnl stack-m" role="tabpanel" data-panel-of="inst" data-panel="log" hidden>
+        <div class="note" data-t="acc"><svg class="ico " aria-hidden="true"><use href="#i-info"/></svg><div class="tx"><b>Zuletzt gespielt vor 2 Stunden.</b><small>Die Konsole leert sich beim Beenden des Spiels; die Protokolle früherer Starts bleiben über die Sitzungsauswahl abrufbar.</small></div></div>
+        <div class="toolbar">
+          <label class="field-ico grow"><svg class="ico" aria-hidden="true"><use href="#i-search"/></svg><input class="in" placeholder="Protokoll durchsuchen" aria-label="Protokoll durchsuchen"></label>
+          <div class="seg" role="group" aria-label="Stufe"><button aria-pressed="true">Alle</button><button aria-pressed="false">Warnungen</button><button aria-pressed="false">Fehler</button></div>
+          <button class="sel tb-sel" aria-haspopup="listbox" aria-label="Sitzung"><span>Letzter Start · 14:02</span><svg class="ico ico-s" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <span class="sp"></span>
+          <button class="btn" data-v="secondary" data-s="s" ><svg class="ico " aria-hidden="true"><use href="#i-copy"/></svg><span class="bt">Kopieren</span></button><button class="btn" data-v="secondary" data-s="s" ><svg class="ico " aria-hidden="true"><use href="#i-share"/></svg><span class="bt">Protokoll teilen</span></button><button class="btn" data-v="secondary" data-s="s" ><svg class="ico " aria-hidden="true"><use href="#i-bug"/></svg><span class="bt">Debug-Info kopieren</span></button><button class="btn" data-v="ghost" data-s="s" ><svg class="ico " aria-hidden="true"><use href="#i-trash"/></svg><span class="bt">Leeren</span></button>
+        </div>
+        <div class="slot console" role="log" aria-label="Spielprotokoll" tabindex="0">
+        <div class="ln"><span class="ts">14:02:11</span><span class="lv">[main/INFO]</span><span class="tx">Loading Minecraft 1.21.4 with Fabric Loader 0.16.10</span></div>
+        <div class="ln"><span class="ts">14:02:11</span><span class="lv">[main/INFO]</span><span class="tx">Loading 8 mods:</span></div>
+        <div class="ln"><span class="ts">14:02:12</span><span class="lv">[main/INFO]</span><span class="tx">Mixin config lithium.mixins.json: applying 214 patches</span></div>
+        <div class="ln"><span class="ts">14:02:13</span><span class="lv">[main/INFO]</span><span class="tx">[Iris] Iris 1.8.12 wurde initialisiert</span></div>
+        <div class="ln"><span class="ts">14:02:14</span><span class="lv">[main/INFO]</span><span class="tx">Environment: Environment[sessionHost=https://sessionserver.mojang.com]</span></div>
+        <div class="ln"><span class="ts">14:02:15</span><span class="lv">[Render thread/INFO]</span><span class="tx">Setting user: Steve</span></div>
+        <div class="ln"><span class="ts">14:02:16</span><span class="lv">[Render thread/INFO]</span><span class="tx">Backend library: LWJGL version 3.3.3-snapshot</span></div>
+        <div class="ln" data-l="warn"><span class="ts">14:02:17</span><span class="lv">[Render thread/WARN]</span><span class="tx"><svg class="ico ico-s" aria-hidden="true"><use href="#i-warn"/></svg>Shader-Paket „Complementary Reimagined“ nutzt veraltete Option 'shadowDistance'</span></div>
+        <div class="ln"><span class="ts">14:02:18</span><span class="lv">[Render thread/INFO]</span><span class="tx">Reloading ResourceManager: vanilla, fabric, Fresh Animations, Faithful 32x</span></div>
+        <div class="ln"><span class="ts">14:02:19</span><span class="lv">[Render thread/INFO]</span><span class="tx">OpenAL initialized on device OpenAL Soft on Lautsprecher (Realtek)</span></div>
+        <div class="ln"><span class="ts">14:02:21</span><span class="lv">[Render thread/INFO]</span><span class="tx">Created: 1024x512x4 minecraft:textures/atlas/blocks.png-atlas</span></div>
+        <div class="ln" data-l="bad"><span class="ts">14:02:22</span><span class="lv">[Render thread/ERROR]</span><span class="tx"><svg class="ico ico-s" aria-hidden="true"><use href="#i-error"/></svg>Couldn't load texture minecraft:textures/entity/fresh/axolotl_blue.png</span></div>
+        <div class="ln"><span class="ts">14:02:24</span><span class="lv">[Server thread/INFO]</span><span class="tx">Starting integrated minecraft server version 1.21.4</span></div>
+        <div class="ln"><span class="ts">14:02:26</span><span class="lv">[Server thread/INFO]</span><span class="tx">Preparing level „Kürbisinsel“</span></div>
+        <div class="ln"><span class="ts">14:02:28</span><span class="lv">[Server thread/INFO]</span><span class="tx">Steve joined the game</span></div>
+        <div class="ln"><span class="ts">14:02:28</span><span class="lv">[Render thread/INFO]</span><span class="tx">[CHAT] Willkommen zurück auf der Kürbisinsel!</span></div>
+        </div>
+      </div>
+
+      <!-- (5) Einstellungen -->
+      <div class="pnl stack-l" role="tabpanel" data-panel-of="inst" data-panel="settings" hidden>
+        <section class="panel">
+          <div class="panel-h"><h2 class="h2">Allgemein</h2></div>
+        <div class="frow"><div class="fl"><b>Name</b><small>So heißt die Instanz in der Bibliothek.</small></div><div class="fc"><div class="fld"><input class="in" value="Survival 1.21" aria-label="Name"></div></div></div>
+        <div class="frow"><div class="fl"><b>Gruppe</b><small>Gruppen sortieren die Bibliothek.</small></div><div class="fc"><div class="fld"><button class="sel" aria-haspopup="listbox" aria-label="Gruppe"><span>Mit Freunden</span><svg class="ico ico-s" aria-hidden="true"><use href="#i-chev-down"/></svg></button></div></div></div>
+        <div class="frow"><div class="fl"><b>Icon</b><small>Wird in Listen und der Seitenleiste gezeigt.</small></div><div class="fc"><div class="seg" role="group" aria-label="Icon"><button aria-pressed="true">Automatisch</button><button aria-pressed="false">Pixel-Icon</button><button aria-pressed="false">Eigenes Bild</button></div></div></div>
+        <div class="frow"><div class="fl"><b>Szene</b><small>Das Titelbild dieser Instanz.</small></div><div class="fc"><div class="scn-grid">
+            <button class="card scn" type="button" aria-selected="true">
+              <div class="pic"><canvas data-scene="dusk" data-seed="7" data-w="160" data-h="9"></canvas></div>
+              <div class="cap2"><span class="nm"><b>Wald in der Dämmerung</b></span></div>
+            </button>
+            <button class="card scn" type="button">
+              <div class="pic"><canvas data-scene="nether" data-seed="3" data-w="160" data-h="9"></canvas></div>
+              <div class="cap2"><span class="nm"><b>Nether</b></span></div>
+            </button>
+            <button class="card scn" type="button">
+              <div class="pic"><canvas data-scene="end" data-seed="5" data-w="160" data-h="9"></canvas></div>
+              <div class="cap2"><span class="nm"><b>Das Ende</b></span></div>
+            </button>
+            <button class="card scn" type="button">
+              <div class="pic"><canvas data-scene="snow" data-seed="4" data-w="160" data-h="9"></canvas></div>
+              <div class="cap2"><span class="nm"><b>Verschneite Berge</b></span></div>
+            </button>
+            <button class="card scn" type="button">
+              <div class="pic"><canvas data-scene="cave" data-seed="6" data-w="160" data-h="9"></canvas></div>
+              <div class="cap2"><span class="nm"><b>Höhle</b></span></div>
+            </button>
+            <button class="card scn" type="button">
+              <div class="pic"><canvas data-scene="coast" data-seed="8" data-w="160" data-h="9"></canvas></div>
+              <div class="cap2"><span class="nm"><b>Küste</b></span></div>
+            </button>
+            <button class="card scn" type="button">
+              <div class="pic"><canvas data-scene="plains" data-seed="2" data-w="160" data-h="9"></canvas></div>
+              <div class="cap2"><span class="nm"><b>Ebene</b></span></div>
+            </button>
+          </div></div></div>
+        </section>
+        <section class="panel">
+          <div class="panel-h"><h2 class="h2">Spiel</h2></div>
+        <div class="frow"><div class="fl"><b>Konto</b><small>Mit diesem Konto startet die Instanz.</small></div><div class="fc"><div class="fld"><button class="sel" aria-haspopup="listbox" aria-label="Konto"><span>Steve</span><svg class="ico ico-s" aria-hidden="true"><use href="#i-chev-down"/></svg></button></div></div></div>
+        <div class="frow"><div class="fl"><b>Speicher</b><small>Dieser Rechner hat 16 GB.</small></div><div class="fc"><div class="stack-s"><div class="row wrap" style="gap:22px"><label class="rad"><input type="radio" name="mem"><span class="box"><i></i></span><span class="lb">Automatisch</span></label><label class="rad"><input type="radio" name="mem" checked><span class="box"><i></i></span><span class="lb">Eigener Wert</span></label></div>
+            <div class="slider" style="--v:50%" role="slider" aria-label="Arbeitsspeicher" aria-valuemin="2" aria-valuemax="14" aria-valuenow="8" tabindex="0"><span class="trk"><span class="fill"></span><span class="thumb"></span></span><span class="val">8 GB</span></div></div></div></div>
+        <div class="frow"><div class="fl"><b>Java</b><small>Die passende Version wird automatisch geladen.</small></div><div class="fc"><div class="stack-s"><div class="row wrap" style="gap:22px"><label class="rad"><input type="radio" name="java" checked><span class="box"><i></i></span><span class="lb">Automatisch <small class="faint">Java 21</small></span></label><label class="rad"><input type="radio" name="java"><span class="box"><i></i></span><span class="lb">Eigene Installation</span></label></div><div class="fld"><button class="sel" aria-haspopup="listbox" aria-label="Java-Installation"><span>Java 21.0.5 · Temurin</span><svg class="ico ico-s" aria-hidden="true"><use href="#i-chev-down"/></svg></button></div></div></div></div>
+        <div class="frow"><div class="fl"><b>JVM-Argumente</b><small>Fortgeschrittene Startoptionen.</small></div><div class="fc"><div class="stack-s"><label class="rad"><input type="radio" name="jvm" checked><span class="box"><i></i></span><span class="lb">Standard</span></label><label class="rad"><input type="radio" name="jvm"><span class="box"><i></i></span><span class="lb">Ausgewogen <small class="faint">G1GC, kurze Pausen</small></span></label><label class="rad"><input type="radio" name="jvm"><span class="box"><i></i></span><span class="lb">Eigene Argumente</span></label></div></div></div>
+        <div class="frow"><div class="fl"><b>Auflösung</b><small>Leer lassen für die Standardgröße.</small></div><div class="fc"><div class="row res"><input class="in" placeholder="Breite" aria-label="Breite" value="1920"><span class="muted">×</span><input class="in" placeholder="Höhe" aria-label="Höhe" value="1080"></div></div></div>
+        </section>
+        <section class="panel danger">
+          <div class="panel-h"><h2 class="h2">Gefahrenzone</h2></div>
+        <div class="frow"><div class="fl"><b>Exportieren</b><small>Als Paket (.mrpack) mit Mods, Einstellungen und Welten.</small></div><div class="fc"><button class="btn" data-v="secondary" data-s="m" data-open="ov-export"><svg class="ico " aria-hidden="true"><use href="#i-upload"/></svg><span class="bt">Exportieren</span></button></div></div>
+        <div class="frow"><div class="fl"><b>Instanz löschen</b><small>Entfernt die Instanz samt Welten. Das lässt sich nicht rückgängig machen.</small></div><div class="fc"><button class="btn" data-v="danger" data-s="m" data-open="ov-delete"><svg class="ico " aria-hidden="true"><use href="#i-trash"/></svg><span class="bt">Instanz löschen</span></button></div></div>
+        </section>
+      </div>
+    </div>
+  </div>
+</section>

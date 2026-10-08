@@ -1,0 +1,63 @@
+<section class="screen" data-screen="news" hidden>
+<div class="page s-news">
+  <header class="page-head">
+    <h1>Neuigkeiten</h1>
+    <div class="page-actions">
+      <span class="chip" data-t="acc">1 ungelesen</span>
+      <button class="btn" data-v="secondary" data-s="m"><svg class="ico" aria-hidden="true"><use href="#i-refresh"/></svg><span class="bt">Aktualisieren</span></button>
+      <button class="btn" data-v="ghost" data-s="m"><svg class="ico" aria-hidden="true"><use href="#i-external"/></svg><span class="bt">Auf GitHub</span></button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="rail">
+      <section class="panel nw-list" data-flush>
+        <div class="nw-h"><h2 class="h2">Alle Beiträge</h2>
+          <button class="btn" data-v="ghost" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><span class="bt">Geladene als gelesen markieren</span></button></div>
+        <div class="nw-items" role="listbox" aria-label="Beiträge">
+          <button class="nw-item" role="option" aria-selected="true" data-unread>
+            <span class="row"><time class="faint sm">07. Okt. 2026</time><span class="sp"></span><span class="chip" data-t="acc">Ungelesen</span></span>
+            <b>Pumpkin Launcher is now in public beta</b><small class="faint">Von jonax1337</small>
+          </button>
+          <button class="nw-item" role="option" aria-selected="false">
+            <span class="row"><time class="faint sm">19. Sept. 2026</time></span>
+            <b>Skins und Umhänge in der Bibliothek</b><small class="faint">Von jonax1337</small>
+          </button>
+          <button class="nw-item" role="option" aria-selected="false">
+            <span class="row"><time class="faint sm">28. Aug. 2026</time></span>
+            <b>Freunde-Relay: Instanzen teilen leicht gemacht</b><small class="faint">Von jonax1337</small>
+          </button>
+        </div>
+        <div class="nw-f"><button class="btn" data-v="secondary" data-s="m"><span class="bt">Weitere Ankündigungen laden</span></button></div>
+      </section>
+    </aside>
+
+    <article class="panel nw-post">
+      <div class="eyebrow" style="color:var(--acc)">Neuester Beitrag</div>
+      <h2 class="nw-title">Pumpkin Launcher is now in public beta</h2>
+      <div class="row wrap muted sm nw-meta"><span>Von jonax1337</span><span class="dotsep"></span><time>07. Okt. 2026, 12:22</time></div>
+      <div class="nw-body">
+        <p>Nach Monaten in der geschlossenen Testphase ist der Pumpkin Launcher ab heute als öffentliche Beta verfügbar. Du kannst Instanzen für Fabric, Forge, NeoForge und Quilt anlegen, Mods und Ressourcenpakete direkt aus dem Launcher verwalten und mit Freunden teilen.</p>
+        <p>Der Launcher bleibt bewusst klein: ein Fenster, ein Ort für alle Instanzen, schnelle Starts. Jede Instanz bekommt ihre eigene Akzentfarbe, damit du auf einen Blick siehst, wo du gerade bist.</p>
+        <div class="nw-pic scenebox"><canvas data-scene="dusk" data-seed="7" data-w="320" data-h="9"></canvas></div>
+        <p>Das ist neu in dieser Version:</p>
+        <ul>
+          <li>Neue Bibliothek mit Gruppen, Suche und Sortierung</li>
+          <li>Skins und Umhänge mit Vorschau und Schnellwechsel</li>
+          <li>Freunde-Relay mit Einladungen und Aktivitätsübersicht</li>
+          <li>Vier Oberflächenstile, umschaltbar in den Einstellungen</li>
+        </ul>
+        <p>Fehler und Wünsche kannst du jederzeit auf GitHub melden. Danke an alle, die in der Testphase mitgeholfen haben.</p>
+      </div>
+      <button class="btn" data-v="primary" data-s="m"><svg class="ico" aria-hidden="true"><use href="#i-external"/></svg><span class="bt">Ankündigung lesen</span></button>
+    </article>
+  </div>
+</div>
+</section>
+<script>
+/* Beitragsliste: Auswahl umschalten, Ungelesen-Status beim Öffnen entfernen */
+document.querySelectorAll('.s-news .nw-item').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.s-news .nw-item').forEach(o => o.setAttribute('aria-selected', String(o === b)));
+  b.removeAttribute('data-unread'); b.querySelector('.chip')?.remove();
+}));
+</script>

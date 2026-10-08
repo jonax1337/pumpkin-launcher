@@ -1,0 +1,71 @@
+/* Gemeinsame Basis der Kit-Konzepte (nur Mockups, nicht Teil der App).
+   Palette, Schriften, Pixelraster und Kerben stammen 1:1 aus src/styles/pixelkino.css.
+   Jedes Konzept (kit-*.css) gestaltet NUR die Komponenten; Seitengerüst und Markup sind identisch. */
+@font-face { font-family: "Big Shoulders Display"; font-weight: 700; src: url(fonts/big-shoulders-display-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "Big Shoulders Display"; font-weight: 800; src: url(fonts/big-shoulders-display-latin-800-normal.woff2) format("woff2"); }
+@font-face { font-family: "Hanken Grotesk Variable"; font-weight: 100 900; src: url(fonts/hanken-grotesk-latin-wght-normal.woff2) format("woff2"); }
+@font-face { font-family: "Jersey 10"; font-weight: 400; src: url(fonts/jersey-10-latin-400-normal.woff2) format("woff2"); }
+
+:root {
+  --px: 3px; --u2: calc(var(--px) * 2); --u3: calc(var(--px) * 3); --u4: calc(var(--px) * 4);
+  --bg: #070A11; --bg-2: #0A0E17; --panel: #0F1521; --panel-2: #151D2C; --panel-3: #1D2739; --sunk: #0B1019;
+  --line: #232E42; --line-2: #33415C; --line-hi: #45557A; --edge: #03050A;
+  --ctl: #5F7094; --ctl-hi: #8A9ABD;
+  --hi: rgba(255,255,255,.14); --hi-2: rgba(255,255,255,.06); --lo: rgba(0,0,0,.45);
+  --fg: #EBF0F8; --fg-2: #A9B4C8; --fg-3: #8491A8;
+  --copper: #E39860; --acc: var(--copper); --ink: #120C07;
+  --run: #8CC8F0; --warn: #FFD84A; --bad: #FF6D86; --bad-fill: #C23A55; --focus: #F6E7C8;
+  --f-display: "Big Shoulders Display", "Arial Narrow", sans-serif;
+  --f-body: "Hanken Grotesk Variable", "Segoe UI", system-ui, sans-serif;
+  --f-px: "Jersey 10", Consolas, monospace;
+  --f-mono: "Cascadia Mono", ui-monospace, Consolas, monospace;
+  --n1: polygon(0 var(--px), var(--px) var(--px), var(--px) 0, calc(100% - var(--px)) 0, calc(100% - var(--px)) var(--px), 100% var(--px), 100% calc(100% - var(--px)), calc(100% - var(--px)) calc(100% - var(--px)), calc(100% - var(--px)) 100%, var(--px) 100%, var(--px) calc(100% - var(--px)), 0 calc(100% - var(--px)));
+  --n2: polygon(0 var(--u2), var(--px) var(--u2), var(--px) var(--px), var(--u2) var(--px), var(--u2) 0, calc(100% - var(--u2)) 0, calc(100% - var(--u2)) var(--px), calc(100% - var(--px)) var(--px), calc(100% - var(--px)) var(--u2), 100% var(--u2), 100% calc(100% - var(--u2)), calc(100% - var(--px)) calc(100% - var(--u2)), calc(100% - var(--px)) calc(100% - var(--px)), calc(100% - var(--u2)) calc(100% - var(--px)), calc(100% - var(--u2)) 100%, var(--u2) 100%, var(--u2) calc(100% - var(--px)), var(--px) calc(100% - var(--px)), var(--px) calc(100% - var(--u2)), 0 calc(100% - var(--u2)));
+}
+/* Akzent-Ableitungen überall dort, wo --acc gesetzt wird */
+:root, .inst { --acc-hi: color-mix(in oklab, var(--acc) 58%, #fff); --acc-mid: color-mix(in oklab, var(--acc) 76%, #070A11); --acc-lo: color-mix(in oklab, var(--acc) 45%, #070A11); --acc-dim: color-mix(in oklab, var(--acc) 16%, var(--panel)); }
+
+*, *::before, *::after { box-sizing: border-box; }
+html { background: var(--bg); color: var(--fg); }
+body { margin: 0; font: 14px/1.45 var(--f-body); -webkit-font-smoothing: antialiased; }
+button, input { font: inherit; color: inherit; }
+button { border: 0; background: none; padding: 0; cursor: pointer; }
+h1, h2, h3, p { margin: 0; }
+.ico { width: 1em; height: 1em; fill: currentColor; flex: none; shape-rendering: crispEdges; }
+.scene { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+/* ---------- Mockup-Gerüst (für alle Konzepte gleich) ---------- */
+.spec { max-width: 1240px; margin: 0 auto; padding: 32px 32px 96px; }
+.spec-nav { display: flex; flex-wrap: wrap; gap: 6px 18px; padding-bottom: 14px; border-bottom: 1px solid var(--line); font: 400 17px/1 var(--f-px); letter-spacing: .04em; }
+.spec-nav a { color: var(--fg-3); text-decoration: none; padding: 4px 0; }
+.spec-nav a:hover { color: var(--fg); }
+.spec-nav a[aria-current] { color: var(--copper); }
+.spec-head { padding: 36px 0 28px; display: grid; gap: 14px; }
+.spec-head .no { font: 400 20px/1 var(--f-px); color: var(--fg-3); letter-spacing: .06em; }
+.spec-head h1 { font: 800 clamp(48px, 7vw, 84px)/.92 var(--f-display); text-transform: uppercase; letter-spacing: .01em; }
+.spec-head p { max-width: 70ch; color: var(--fg-2); font-size: 16px; }
+.spec-head ul { margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 8px 22px; color: var(--fg-3); font-size: 13px; }
+.spec-head li::before { content: "▪ "; color: var(--copper); }
+.spec-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 36px 40px; align-items: start; }
+.sec { grid-column: span 6; display: grid; gap: 16px; align-content: start; min-width: 0; }
+.sec.wide { grid-column: span 12; }
+.sec.third { grid-column: span 4; }
+.sec > h2 { font: 400 18px/1 var(--f-px); letter-spacing: .08em; text-transform: uppercase; color: var(--fg-3); padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.stack { display: grid; gap: 14px; justify-items: start; }
+.rowx { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.cap { font-size: 12px; color: var(--fg-3); }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; width: 100%; }
+@media (max-width: 960px) { .spec-grid { grid-template-columns: minmax(0, 1fr); } .sec, .sec.third { grid-column: auto; } .sec.wide { grid-column: auto; } .spec { padding: 20px 16px 64px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* Zusatzschriften für die Inventar-Familie (Konzepte wählen per --f-*-Variablen) */
+@font-face { font-family: "Silkscreen"; font-weight: 400; src: url(fonts/silkscreen-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Silkscreen"; font-weight: 700; src: url(fonts/silkscreen-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "Pixelify Sans"; font-weight: 400; src: url(fonts/pixelify-sans-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Pixelify Sans"; font-weight: 700; src: url(fonts/pixelify-sans-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "Jacquard 12"; font-weight: 400; src: url(fonts/jacquard-12-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Jacquarda Bastarda 9"; font-weight: 400; src: url(fonts/jacquarda-bastarda-9-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Micro 5"; font-weight: 400; src: url(fonts/micro-5-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "VT323"; font-weight: 400; src: url(fonts/vt323-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Press Start 2P"; font-weight: 400; src: url(fonts/press-start-2p-latin-400-normal.woff2) format("woff2"); }

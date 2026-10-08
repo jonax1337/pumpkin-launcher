@@ -1,0 +1,77 @@
+<section class="screen" data-screen="friends" hidden>
+<div class="page s-friends">
+  <header class="page-head">
+    <h1>Freunde<span class="count">4</span></h1>
+    <div class="page-actions">
+      <button class="btn" data-v="primary" data-s="m" data-open="ov-friend-add"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg><span class="bt">Freund hinzufügen</span></button>
+    </div>
+  </header>
+
+  <div class="note" data-t="acc">
+    <svg class="ico" aria-hidden="true"><use href="#i-wifi"/></svg>
+    <div class="tx"><b>Relay verbunden · 38 ms</b><small>Freunde sehen, was du spielst, und können dir Instanzen schicken.</small></div>
+    <span class="chip" data-t="run"><i class="dot"></i>Online</span>
+  </div>
+
+  <div class="workspace fr-ws">
+    <div class="tabs" data-o="v" role="tablist" aria-orientation="vertical" aria-label="Bereiche" data-tabs="fr">
+      <button role="tab" data-tab="list" aria-selected="true"><svg class="ico" aria-hidden="true"><use href="#i-friends"/></svg><span>Freunde</span><span class="badge">4</span></button>
+      <button role="tab" data-tab="req" aria-selected="false"><svg class="ico" aria-hidden="true"><use href="#i-bell"/></svg><span>Anfragen</span><span class="badge">1</span></button>
+      <button role="tab" data-tab="act" aria-selected="false"><svg class="ico" aria-hidden="true"><use href="#i-clock"/></svg><span>Aktivität</span></button>
+    </div>
+
+    <div>
+      <section class="panel" data-flush data-panel-of="fr" data-panel="list">
+        <div class="panel-h fr-ph"><h2 class="h2">Freunde<span class="count">4</span></h2>
+          <label class="field-ico grow"><svg class="ico" aria-hidden="true"><use href="#i-search"/></svg><input class="in" placeholder="Freunde durchsuchen" aria-label="Freunde durchsuchen"></label></div>
+        <div class="tbl">
+          <div class="tr fr-row">
+            <div class="nm-cell"><span class="avatar fr-av" data-on><canvas data-head="#3A2414|#D9A27A"></canvas></span><div class="nm"><b>Alex</b><small class="fr-st" data-on>Spielt Survival 1.21</small></div></div>
+            <div class="fr-act"><button class="btn" data-v="primary" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg><span class="bt">Beitreten</span></button><button class="btn ib" data-v="ghost" data-s="s" aria-label="Mehr"><svg class="ico" aria-hidden="true"><use href="#i-more"/></svg></button></div>
+          </div>
+          <div class="tr fr-row">
+            <div class="nm-cell"><span class="avatar fr-av" data-on><canvas data-head="#D9C27A|#E0B08A"></canvas></span><div class="nm"><b>Mira</b><small class="fr-st" data-on>Online</small></div></div>
+            <div class="fr-act"><button class="btn" data-v="secondary" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-share"/></svg><span class="bt">Einladen</span></button><button class="btn ib" data-v="ghost" data-s="s" aria-label="Mehr"><svg class="ico" aria-hidden="true"><use href="#i-more"/></svg></button></div>
+          </div>
+          <div class="tr fr-row">
+            <div class="nm-cell"><span class="avatar fr-av"><canvas data-head="#1A1410|#C99A74"></canvas></span><div class="nm"><b>Jonas</b><small class="fr-st">Zuletzt online vor 3 Std.</small></div></div>
+            <div class="fr-act"><button class="btn" data-v="secondary" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-share"/></svg><span class="bt">Einladen</span></button><button class="btn ib" data-v="ghost" data-s="s" aria-label="Mehr"><svg class="ico" aria-hidden="true"><use href="#i-more"/></svg></button></div>
+          </div>
+          <div class="tr fr-row">
+            <div class="nm-cell"><span class="avatar fr-av"><canvas data-head="#7A4FC0|#B98E86"></canvas></span><div class="nm"><b>Tom</b><small class="fr-st"><span class="chip" data-t="warn">Anfrage offen</span></small></div></div>
+            <div class="fr-act"><button class="btn" data-v="ghost" data-s="s"><span class="bt">Zurückziehen</span></button><button class="btn ib" data-v="ghost" data-s="s" aria-label="Mehr"><svg class="ico" aria-hidden="true"><use href="#i-more"/></svg></button></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" data-panel-of="fr" data-panel="req" hidden>
+        <div class="panel-h"><h2 class="h2">Eingehend<span class="count">1</span></h2></div>
+        <div class="tbl">
+          <div class="tr fr-row">
+            <div class="nm-cell"><span class="avatar fr-av"><canvas data-head="#8A5A2A|#E0B08A"></canvas></span><div class="nm"><b>Lena</b><small>Möchte dein Freund sein · vor 12 Min.</small></div></div>
+            <div class="fr-act"><button class="btn" data-v="primary" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><span class="bt">Annehmen</span></button><button class="btn" data-v="ghost" data-s="s"><span class="bt">Ablehnen</span></button></div>
+          </div>
+        </div>
+        <div class="panel-h" style="margin-top:24px"><h2 class="h2">Ausgehend<span class="count">1</span></h2></div>
+        <div class="tbl">
+          <div class="tr fr-row">
+            <div class="nm-cell"><span class="avatar fr-av"><canvas data-head="#7A4FC0|#B98E86"></canvas></span><div class="nm"><b>Tom</b><small>Wartet auf Antwort · gesendet gestern</small></div></div>
+            <div class="fr-act"><span class="chip" data-t="warn">Ausstehend</span><button class="btn" data-v="ghost" data-s="s"><span class="bt">Zurückziehen</span></button></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" data-panel-of="fr" data-panel="act" hidden>
+        <div class="panel-h"><h2 class="h2">Aktivität</h2><span class="faint sm">Letzte 7 Tage</span></div>
+        <ol class="fr-tl">
+          <li><span class="tile" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-share"/></svg></span><div class="tx"><b>Mira hat dir Create-Fabrik geteilt</b><small class="faint">Forge 1.20.1 · 4 Inhalte</small></div><button class="btn" data-v="secondary" data-s="s"><span class="bt">Ansehen</span></button><time class="faint sm">vor 25 Min.</time></li>
+          <li><span class="tile" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></span><div class="tx"><b>Tom spielt PvP Training</b><small class="faint">Fabric 1.21.4</small></div><time class="faint sm">vor 1 Std.</time></li>
+          <li><span class="tile" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-pumpkin"/></svg></span><div class="tx"><b>Alex ist Survival 1.21 beigetreten</b><small class="faint">Kürbisinsel</small></div><button class="btn" data-v="primary" data-s="s"><span class="bt">Beitreten</span></button><time class="faint sm">vor 2 Std.</time></li>
+          <li><span class="tile" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-user"/></svg></span><div class="tx"><b>Lena hat dir eine Freundschaftsanfrage gesendet</b></div><time class="faint sm">vor 12 Min.</time></li>
+          <li><span class="tile" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-clock"/></svg></span><div class="tx"><b>Jonas war zuletzt online</b><small class="faint">Retro 1.16</small></div><time class="faint sm">vor 3 Std.</time></li>
+        </ol>
+      </section>
+    </div>
+  </div>
+</div>
+</section>
