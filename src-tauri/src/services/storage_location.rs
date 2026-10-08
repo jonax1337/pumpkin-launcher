@@ -1472,6 +1472,8 @@ mod tests {
         assert_eq!(dirs.instances_dir(), resolve(&target).unwrap());
         assert_eq!(read_path(&dirs.root.join(CURRENT)).unwrap(), Some(dirs.instances_dir()));
         assert_eq!(fs::read_to_string(dirs.instance("i").join("backups/a.zip")).unwrap(), "backup");
+        // The copy keeps the source's directory modes, so the new backups folder is read-only too.
+        fs::set_permissions(dirs.instance("i").join("backups"), fs::Permissions::from_mode(0o755)).unwrap();
         fs::remove_dir_all(root).unwrap();
     }
 
