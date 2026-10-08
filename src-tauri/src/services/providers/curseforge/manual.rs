@@ -94,7 +94,8 @@ fn place(state: &AppState, instance_id: &str, mut instance: Instance, planned: &
     if instance.mods.iter().any(|x| x.file_name.eq_ignore_ascii_case(&planned.file.file_name)) {
         return Err(AppError::invalid(coded!("errors.providers.modFileNameClash")));
     }
-    let staged = StagedInstall::new(&state.dirs.root);
+    let instances_root = state.dirs.instances_dir();
+    let staged = StagedInstall::new(&instances_root);
     staged.reserve(&target)?;
     staged.commit_or_rollback(|staged| {
         staged.write_file(target, data)?;

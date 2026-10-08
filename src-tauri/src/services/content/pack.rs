@@ -507,8 +507,8 @@ pub(crate) async fn import_plan(
 ) -> AppResult<Instance> {
     pack.instance.modpack = origin;
     let root = state.dirs.instance(&pack.instance.id);
-    regular_parents(&state.dirs.root, &root)?;
-    fs::create_dir_all(state.dirs.root.join("instances"))?;
+    regular_parents(&state.dirs.instances_dir(), &root)?;
+    fs::create_dir_all(state.dirs.instances_dir())?;
     fs::create_dir(&root)?;
     // Bei Fehler oder Abbruch (Future verworfen) räumt der Wächter die halbe Instanz weg.
     let guard = RemoveOnDrop::new(root);
@@ -578,7 +578,7 @@ impl Staging<'_> {
     }
 
     fn put(&mut self, path: &Path, data: &[u8]) -> AppResult<()> {
-        write_new(&self.dirs.root, &self.game_dir.join(path), data)?;
+        write_new(&self.dirs.instances_dir(), &self.game_dir.join(path), data)?;
         let sha1 = match content_file(path) {
             Some(file) => {
                 let sha1 = mods::cache_bytes(self.dirs, data)?;
@@ -771,6 +771,28 @@ mod tests {
         assert_eq!(i.modpack, Some(ModpackOrigin::File { name: "Abenteuer".into(), version: "1.2".into() }));
         let placed = PackFiles::load(&state.dirs, &i.id).unwrap().unwrap();
         assert_eq!(placed.iter().collect::<Vec<_>>(), [("config/a.txt", sha1_hex(b"a").as_str())]);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Instanzen leben im gewählten Ordner, Cache und Daten bleiben im Datenordner.
+    #[tokio::test]
+    async fn an_import_writes_into_a_relocated_instance_root_and_nowhere_else() {
+        let root = std::env::temp_dir().join(new_id());
+        let external = root.join("Externe Spiele 世界");
+        let state = AppState::load(&root.join("data")).unwrap();
+        crate::services::storage_location::relocate(&state.dirs, &external).unwrap();
+        let index = br#"{"formatVersion":1,"game":"minecraft","files":[],"dependencies":{"minecraft":"1.21.1"}}"#;
+        let data = archive(&[("modrinth.index.json", index), ("overrides/config/a.txt", b"a"), ("overrides/mods/a.jar", b"a")]);
+
+        let i = import(&state, &data, "extern", None, &|_, _, _| {}).await.unwrap();
+
+        let game = state.dirs.game_dir(&i.id);
+        assert!(game.starts_with(state.dirs.instances_dir()) && state.dirs.instances_dir().ends_with("Externe Spiele 世界"));
+        assert_eq!(fs::read(game.join("config/a.txt")).unwrap(), b"a");
+        assert_eq!(fs::read(game.join("mods/a.jar")).unwrap(), b"a");
+        assert_eq!(fs::read_dir(state.dirs.instances_dir()).unwrap().count(), 1);
+        assert!(!root.join("data/instances").exists());
+        assert!(state.dirs.mod_cache().starts_with(root.join("data")) && state.dirs.mod_cache().is_dir());
         fs::remove_dir_all(root).unwrap();
     }
 

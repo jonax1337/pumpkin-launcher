@@ -1,4 +1,4 @@
-import { copyFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +9,8 @@ const root = new URL('../', import.meta.url);
 const { id } = currentSeason();
 const source = new URL(`branding/pumpkin-launcher/assets/${id}/`, root);
 const target = new URL('src-tauri/icons/', root);
+const installerSource = new URL(`branding/pumpkin-launcher/installer/${id}/`, root);
+const installerTarget = new URL('src-tauri/installer/', root);
 const { run } = createRequire(import.meta.url)('@tauri-apps/cli');
 // Das Kürbis-Motiv lässt im 32er-Raster rundum Luft; Taskbar/Explorer zeigen das Icon dadurch zu klein.
 // Also auf die belegte Fläche zuschneiden (quadratisch, mittig), bevor die nativen Icons entstehen.
@@ -30,7 +32,12 @@ try {
   await run(['icon', markFile, '--output', fileURLToPath(target)]);
   // The in-game entry uses the launcher's unmodified, pixel-sharp 32px mark.
   await copyFile(new URL('32x32.png', source), new URL('mod/src/main/resources/assets/pumpkin_bridge/logo.png', root));
+  // Installer art is committed; ordinary builds never require Python or an SVG renderer.
+  await mkdir(installerTarget, { recursive: true });
+  for (const filename of ['sidebar.bmp', 'header.bmp']) {
+    await copyFile(new URL(filename, installerSource), new URL(filename, installerTarget));
+  }
 } finally {
   await rm(work, { recursive: true, force: true });
 }
-console.log(`Pumpkin Launcher: native Icons für ${id} aktualisiert.`);
+console.log(`Pumpkin Launcher: native Icons und Installer-Artwork für ${id} aktualisiert.`);

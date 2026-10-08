@@ -150,6 +150,7 @@ export const pages = {
   "pages.detail.tabsLabel": "Bereiche der Instanz",
 
   // Einstellungen
+  "pages.settings.notes": "Hinweise",
   "pages.settings.tabGame": "Spiel",
   "pages.settings.tabAppearance": "Darstellung",
   "pages.settings.tabSupport": "Support",

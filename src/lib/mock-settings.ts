@@ -1,4 +1,5 @@
 // Nur im Browser-Dev-Modus dynamisch geladen (siehe api.ts); im Release-Build nicht enthalten.
+import { t } from "@/i18n";
 import type { Backend } from "./backend";
 import { findInstance, wait, type MockContext } from "./mock-util";
 import { DAY, HOUR } from "./time";
@@ -31,11 +32,26 @@ const sessionText = (instanceId: string, sessionId: string) =>
 /** Speicher, Java-Suche, gesicherte Protokolle und Fenstersteuerung für den Browser. */
 export function createSettingsMock({ db }: MockContext) {
   let unusedCacheFiles = UNUSED_CACHE_FILES;
+  let instancesDir = "C:\\Users\\Steve\\Documents\\Pumpkin Launcher\\Instances";
   const now = Date.now();
   const sessions: LogSession[] = Array.from({ length: MOCK_SESSIONS }, (_, n) => {
     const startedAt = now - (n + 1) * DAY - n * HOUR;
     return { id: String(startedAt), startedAt, size: (n + 2) * 1024 };
   });
+
+  function storageOverview(): StorageOverview {
+    const usedCacheFiles = db.instances.reduce((sum, i) => sum + i.mods.length, 0);
+    return {
+      dataDir: "C:\\Users\\Steve\\AppData\\Roaming\\Pumpkin Launcher",
+      freeMb: 182_400,
+      instancesDir,
+      instancesFreeMb: 182_400,
+      instances: db.instances.map((i) => ({ id: i.id, bytes: (INSTANCE_BASE_MB + i.mods.length * MOD_MB) * MB })),
+      modCacheBytes: (usedCacheFiles + unusedCacheFiles) * CACHE_FILE_MB * MB,
+      unusedCacheBytes: unusedCacheFiles * CACHE_FILE_MB * MB,
+      sharedBytes: SHARED_MB * MB,
+    };
+  }
 
   return {
     async detectJava() {
@@ -44,15 +60,14 @@ export function createSettingsMock({ db }: MockContext) {
     },
     async storageOverview(): Promise<StorageOverview> {
       await wait();
-      const usedCacheFiles = db.instances.reduce((sum, i) => sum + i.mods.length, 0);
-      return {
-        dataDir: "C:\\Users\\Steve\\AppData\\Roaming\\net.pumpkin.launcher",
-        freeMb: 182_400,
-        instances: db.instances.map((i) => ({ id: i.id, bytes: (INSTANCE_BASE_MB + i.mods.length * MOD_MB) * MB })),
-        modCacheBytes: (usedCacheFiles + unusedCacheFiles) * CACHE_FILE_MB * MB,
-        unusedCacheBytes: unusedCacheFiles * CACHE_FILE_MB * MB,
-        sharedBytes: SHARED_MB * MB,
-      };
+      return storageOverview();
+    },
+    async storageSetInstancesDir(path) {
+      await wait();
+      if (db.running.size > 0) throw new Error(t("errors.instance.stillRunning"));
+      if (!path.trim() || /[\r\n\0]/.test(path)) throw new Error(t("errors.storage.invalidLocation"));
+      instancesDir = path;
+      return { overview: storageOverview(), retainedSourceDir: null };
     },
     async storageClearCache() {
       await wait();

@@ -24,7 +24,8 @@ pub async fn install_mod(state: &AppState, id: &str, version: &str, progress: Pr
     let Resolved { kind, root_project, selected } = resolve_install(&client, version, &instance).await?;
     keep_present(&mut instance.mods, &selected, &root_project)?;
     let planned = new_files(&instance.mods, &selected, kind)?;
-    let staged = StagedInstall::new(&state.dirs.root);
+    let instances_root = state.dirs.instances_dir();
+    let staged = StagedInstall::new(&instances_root);
     let folder = state.dirs.game_dir(id).join(kind.folder());
     for planned in &planned {
         staged.reserve(&folder.join(&planned.file.filename))?;

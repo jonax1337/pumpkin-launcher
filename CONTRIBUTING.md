@@ -185,4 +185,71 @@ To include the in-game Bridge, `PUMPKIN_MOD_DIST` must point to a valid `mod-ind
 see [mod/README.md](mod/README.md). Without the Bridge distribution, a local package is not equivalent
 to the release workflow. Local source checks do not verify GitHub's signing secrets or environment approvals.
 
-Last updated: 2026-10-07.
+### Windows installer template
+
+`src-tauri/tauri.conf.json` selects `installer/installer.nsi`, derived from
+[Tauri CLI 2.12.1](https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.12.1/crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi)
+under its Apache-2.0/MIT license. Customizations are limited to branding,
+native dark-control painting, font-aware layout, German/English text, an
+instance-folder page (`installer/instances.nsh`) and advancing to Finish after
+success. Installation, WebView2, maintenance and updater flags stay upstream.
+Data deletion stays upstream except for the uninstall checkbox, which removes
+only `accounts.json`, `skins.json` and `templates.json` and never deletes directories.
+
+The instance page appears in interactive first installs (not silent, passive or
+update mode). It defaults to `Documents\Pumpkin Launcher\Instances`, keeps an
+existing library where it is, rejects relative and drive-relative paths, drive
+roots, the install directory, system folders, `%APPDATA%`, `%LOCALAPPDATA%`, the
+metadata folder, `C:\Users`, the profile, Documents, Desktop and Downloads, and
+writes `instances-path-request.txt` (UTF-16LE with BOM, absolute path, CRLF) into
+the metadata directory. The launcher re-validates it at its next start and never
+blocks startup on a bad request: it sets the file aside as
+`instances-path-request.txt.rejected` and shows a notice; see
+[ARCHITECTURE.md](docs/ARCHITECTURE.md#data-and-process-boundaries). The bundle
+publisher is Jonas Laux.
+When upgrading the Tauri CLI, compare its template with this pinned source
+and port lifecycle fixes before publishing the next installer.
+
+`pnpm build` stages committed seasonal installer images together with the icons.
+Artwork regeneration is documented in the [branding guide](branding/pumpkin-launcher/README.md#windows-installer-artwork).
+To package only Windows NSIS locally:
+
+```sh
+pnpm tauri build --bundles nsis --config '{"bundle":{"createUpdaterArtifacts":false}}'
+```
+
+The committed x86 Unicode `src-tauri/installer/theme/PumpkinTheme.dll` is built
+from the adjacent C++ source. It uses Windows system libraries and a static MSVC
+runtime; standard app builds consume the DLL without rebuilding it. It also embeds
+the installer fonts (Hanken Grotesk, Big Shoulders Display) and their OFL notices
+from `src-tauri/installer/theme/fonts/`; the installer has no left stripe.
+The committed TTFs come from
+`python branding/pumpkin-launcher/installer/build-fonts.py`, which needs
+`pip install fonttools brotli` and the Fontsource packages in `node_modules`
+(`pnpm install`). Ordinary builds do not run it; rebuild the DLL after changing fonts.
+After changing the theme source, rebuild it on Windows:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File src-tauri/installer/theme/build.ps1
+```
+
+This requires MSVC x86 C++ tools, a Windows 11 SDK and NSIS plugin SDK headers.
+The script discovers Visual Studio with `vswhere` and NSIS through `NSISDIR`,
+Tauri's local NSIS cache or the standard installation folders; pass
+`-NsisSdkPath <NSIS/Examples/Plugin/nsis>` when necessary. Commit the rebuilt DLL
+together with its source. Verify native keyboard navigation, input visibility,
+checkbox state, page transitions and both install/uninstall surfaces.
+
+
+For destructive installer smoke tests, use a disposable Windows environment or a
+temporary bundle config with a unique `productName`, `identifier`, `bundle.publisher`
+and empty `bundle.fileAssociations`. A different `/D=` directory alone is **not**
+isolation: maintenance can uninstall the registered application. When bundling an
+existing binary for UI-only QA, do not launch it: its runtime identity remains the
+one compiled into that binary, regardless of the bundle config. Verify install,
+`/UPDATE /P`, shortcuts, uninstall and default preservation of application data.
+With a different `productName` the instance page and request file use that name
+(`%APPDATA%\<productName>`, `Documents\<productName>\Instances`) and never read
+the real `dev.laux.launcher` legacy folders.
+
+Last updated: 2026-10-08.

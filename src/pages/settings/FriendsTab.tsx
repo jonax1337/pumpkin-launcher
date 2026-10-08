@@ -15,6 +15,7 @@ import { formatDate } from "@/lib/format";
 import { type DirectoryStatus, type FriendsSettings, type FriendsState, type IngameActions, type Me, type NetworkStatus } from "@/lib/types";
 import { useFriendsUi } from "@/store/friendsUi";
 import { Actions, Button, ConfirmDialog, Count, ErrorBox, FormRow, FormSection, Hint, List, ListRow, RowTitle, Segmented, Skel, StatusPanel, Switch, type IconName } from "@/ui";
+import { SettingsInfo } from "./SettingsInfo";
 
 const SECOND_MS = 1000;
 const ROW_SKELETON_HEIGHT_PX = 60;
@@ -24,7 +25,7 @@ function EnableRow({ enabled, onEnable }: { enabled: boolean; onEnable: () => vo
   const { t } = useI18n();
   const disable = useDisableFriends();
   return (
-    <FormRow label={t("friendsSettings.enableLabel")} hint={t("friendsSettings.enableHint")} aside={t("friendsSettings.enableAside")}>
+    <FormRow label={t("friendsSettings.enableLabel")} hint={t("friendsSettings.enableHint")}>
       <Switch
         label={t("friendsSettings.enableLabel")}
         checked={enabled}
@@ -69,7 +70,7 @@ function FindableRow({ settings, directory }: { settings: FriendsSettings; direc
   const update = useUpdateFriendsSettings();
   const minecraftName = useAllAccounts().accounts.find((account) => account.kind === "microsoft")?.username;
   return (
-    <FormRow label={t("friendsSettings.findable.label")} hint={t("friendsSettings.findable.hint")} aside={t("friendsSettings.findable.aside")}>
+    <FormRow label={t("friendsSettings.findable.label")} hint={t("friendsSettings.findable.hint")}>
       <Switch
         label={t("friendsSettings.findable.label")}
         checked={settings.findableByName}
@@ -87,7 +88,7 @@ function IngameMenuRow({ settings }: { settings: FriendsSettings }) {
   const { t } = useI18n();
   const update = useUpdateFriendsSettings();
   return (
-    <FormRow label={t("friendsSettings.ingameMenu.label")} hint={t("friendsSettings.ingameMenu.hint")}>
+    <FormRow label={t("friendsSettings.ingameMenu.label")} hint={t("friendsSettings.ingameMenu.summary")}>
       <Switch
         label={t("friendsSettings.ingameMenu.label")}
         checked={settings.ingameMenu}
@@ -104,7 +105,7 @@ function IngameActionsRow({ settings }: { settings: FriendsSettings }) {
   const { t } = useI18n();
   const update = useUpdateFriendsSettings();
   return (
-    <FormRow label={t("friendsSettings.ingameActions.label")} hint={t("friendsSettings.ingameActions.hint")} group="radiogroup">
+    <FormRow label={t("friendsSettings.ingameActions.label")} hint={t("friendsSettings.ingameActions.summary")} group="radiogroup">
       <Segmented<IngameActions>
         label={t("friendsSettings.ingameActions.label")}
         value={settings.ingameActions}
@@ -138,7 +139,7 @@ function AlwaysRelayRow({ settings }: { settings: FriendsSettings }) {
   const confirm = useConfirmTarget<boolean>();
   const apply = (alwaysRelay: boolean, onDone?: () => void) => update.mutate({ ...settings, alwaysRelay }, { onSuccess: onDone });
   return (
-    <FormRow label={t("friendsSettings.relayLabel")} hint={t("friendsSettings.relayHint")} aside={t("friendsSettings.relayAside")}>
+    <FormRow label={t("friendsSettings.relayLabel")} hint={t("friendsSettings.relayHint")}>
       <Switch
         label={t("friendsSettings.relayLabel")}
         checked={settings.alwaysRelay}
@@ -163,7 +164,7 @@ function AlwaysRelayRow({ settings }: { settings: FriendsSettings }) {
 function FingerprintRow({ me }: { me: Me }) {
   const { t } = useI18n();
   return (
-    <FormRow label={t("friendsSettings.fingerprintLabel")} hint={t("friendsSettings.fingerprintHint")} aside={t("friendsSettings.fingerprintAside")}>
+    <FormRow label={t("friendsSettings.fingerprintLabel")} hint={t("friendsSettings.fingerprintHint")}>
       <Actions gap={12}>
         <Count value={me.fingerprint} size={20} className="select-text" />
         <Button size="s" icon="copy" onClick={() => copyWithToast(me.peerId, t("friendsSettings.peerIdCopied"))}>{t("friendsSettings.copyPeerId")}</Button>
@@ -338,6 +339,14 @@ export function FriendsTab() {
   const state = query.data;
   return (
     <>
+      <SettingsInfo title={t("friendsSettings.tab")}>
+        <FormSection title={t("friendsSettings.ingameMenu.label")} level={3}><p>{t("friendsSettings.ingameMenu.hint")}</p></FormSection>
+        <FormSection title={t("friendsSettings.enableLabel")} level={3}><p>{t("friendsSettings.enableAside")}</p></FormSection>
+        <FormSection title={t("friendsSettings.relayLabel")} level={3}><p>{t("friendsSettings.relayAside")}</p></FormSection>
+        <FormSection title={t("friendsSettings.findable.label")} level={3}><p>{t("friendsSettings.findable.aside")}</p></FormSection>
+        <FormSection title={t("friendsSettings.ingameActions.label")} level={3}><p>{t("friendsSettings.ingameActions.hint")}</p></FormSection>
+        <FormSection title={t("friendsSettings.fingerprintLabel")} level={3}><p>{t("friendsSettings.fingerprintAside")}</p></FormSection>
+      </SettingsInfo>
       <FormSection title={t("friendsSettings.ingameMenu.label")} level={3}>
         <IngameMenuRow settings={state.settings} />
       </FormSection>

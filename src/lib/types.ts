@@ -400,16 +400,25 @@ export interface JavaInstall {
   vendor: string | null;
 }
 
-/** Platz im Datenordner in Bytes. Mods zählen im Cache und in der Instanz (Hardlinks, belegen nur einmal Platz). */
+/** Platz je Instanz und in den gemeinsamen Launcher-Dateien in Bytes. */
 export interface StorageOverview {
   dataDir: string;
   /** Freier Platz auf dem Laufwerk in MB. */
   freeMb: number | null;
+  instancesDir: string;
+  /** Freier Platz auf dem Instanzlaufwerk in MB. */
+  instancesFreeMb: number | null;
   instances: { id: string; bytes: number }[];
   modCacheBytes: number;
   /** Teil des Mod-Caches, den keine Instanz braucht und „Cache leeren“ löscht. */
   unusedCacheBytes: number;
   sharedBytes: number;
+}
+
+export interface StorageRelocation {
+  overview: StorageOverview;
+  /** Nach erfolgreichem Umzug zurückgebliebene Quellkopie; sonst null. */
+  retainedSourceDir: string | null;
 }
 
 /** Gesichertes Protokoll einer früheren Spielsitzung; `id` ist ihre Startzeit. */

@@ -14,10 +14,6 @@ use crate::{
 
 const MAX_PATH_LEN: usize = 240;
 
-/// `FILE_ATTRIBUTE_REPARSE_POINT`: Junctions und andere Umleitungen unter Windows.
-#[cfg(windows)]
-const REPARSE_POINT: u32 = 0x400;
-
 /// Relativer Pfad mit `/` als Trenner, der unter Windows anlegbar ist und nicht aus dem Zielordner führt.
 pub fn safe_path(value: &str) -> AppResult<PathBuf> {
     if value.is_empty() || value.len() > MAX_PATH_LEN || value.contains('\\') {
@@ -51,17 +47,18 @@ fn is_reserved_windows_name(part: &str) -> bool {
     numbered || matches!(base.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$")
 }
 
-/// Kein Symlink zwischen `root` und `path`. Oberhalb von `root` zählt nichts: Unter macOS ist schon `/var`
-/// ein Symlink, unter manchen Linux-Systemen `/home`.
+/// Kein Symlink und keine Junction zwischen `root` und `path`. Oberhalb von `root` zählt nichts: Unter macOS ist schon
+/// `/var` ein Symlink, unter manchen Linux-Systemen `/home`. Unter Windows meldet `is_symlink` Symlinks und Junctions,
+/// also jedes Reparse-Tag, das auf einen anderen Namen zeigt. Das bloße Reparse-Point-Attribut genügt nicht: Cloud-Dateien
+/// (OneDrive) und komprimierte Dateien tragen es, sind aber gewöhnliche Dateien und Ordner.
 pub(crate) fn regular_parents(root: &Path, path: &Path) -> AppResult<()> {
+    if !path.starts_with(root) {
+        return Err(AppError::invalid(coded!("errors.game.pathOutsideGameDir")));
+    }
     for ancestor in path.ancestors().take_while(|ancestor| *ancestor != root) {
         match none_if_missing(fs::symlink_metadata(ancestor))? {
             Some(m) if m.file_type().is_symlink() => {
                 return Err(AppError::invalid(coded!("errors.modrinth.symlinkInTarget")))
-            }
-            #[cfg(windows)]
-            Some(m) if std::os::windows::fs::MetadataExt::file_attributes(&m) & REPARSE_POINT != 0 => {
-                return Err(AppError::invalid(coded!("errors.modrinth.reparsePointInTarget")))
             }
             Some(_) | None => {}
         }
@@ -157,6 +154,27 @@ mod tests {
         std::os::unix::fs::symlink(&real, &linked_root).unwrap();
         assert!(regular_parents(&linked_root, &linked_root.join("mods/a.jar")).is_ok());
         assert!(regular_parents(&base, &linked_root.join("mods/a.jar")).is_err());
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    /// Eine Junction anzulegen braucht unter Windows keine besonderen Rechte, ein Symlink schon.
+    #[cfg(windows)]
+    #[test]
+    fn junctions_below_the_root_are_refused_but_plain_folders_pass() {
+        use std::os::windows::process::CommandExt;
+        let base = std::env::temp_dir().join(crate::models::new_id());
+        let (data, real) = (base.join("data"), base.join("real"));
+        fs::create_dir_all(real.join("mods")).unwrap();
+        fs::create_dir_all(data.join("plain/mods")).unwrap();
+        let output = std::process::Command::new("cmd")
+            .args(["/S", "/C"])
+            .raw_arg(format!("\"mklink /J \"{}\" \"{}\"\"", data.join("linked").display(), real.display()))
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        assert!(regular_parents(&data, &data.join("plain/mods/a.jar")).is_ok());
+        assert!(regular_parents(&data, &data.join("linked/mods/a.jar")).is_err());
+        assert!(regular_parents(&data.join("linked"), &data.join("linked/mods/a.jar")).is_ok());
         fs::remove_dir_all(base).unwrap();
     }
 

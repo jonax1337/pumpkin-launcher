@@ -14,16 +14,6 @@
     "core:window:allow-set-icon",
     "core:window:allow-set-title",
     "opener:default",
-    {
-      "identifier": "opener:allow-open-path",
-      "allow": [
-        { "path": "$APPDATA/instances/*/minecraft" },
-        { "path": "$APPDATA/instances/*/minecraft/crash-reports/*.txt" },
-        { "path": "$APPDATA/instances/*/minecraft/logs/latest.log" },
-        { "path": "$APPDATA/instances/*/minecraft/saves/*" },
-        { "path": "$APPDATA/instances/*/minecraft/screenshots/*.png" }
-      ]
-    },
     "dialog:default",
     "updater:allow-check",
     "updater:allow-download",

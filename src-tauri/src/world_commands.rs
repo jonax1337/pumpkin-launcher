@@ -50,6 +50,7 @@ pub async fn world_restore(state: State<'_, AppState>, instance_id: String, back
 
 #[tauri::command]
 pub fn world_backup_delete(state: State<'_, AppState>, instance_id: String, backup_id: String) -> AppResult<()> {
+    let _operation = state.begin_operation()?;
     state.require_instance(&instance_id)?;
     worlds::delete_backup(&state.dirs, &instance_id, &backup_id)
 }

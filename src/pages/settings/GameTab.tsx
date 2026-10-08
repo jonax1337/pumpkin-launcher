@@ -9,6 +9,7 @@ import { JVM_PRESETS, presetArgs, type JvmPreset } from "@/lib/jvm";
 import { effectiveOnPlay } from "@/lib/onPlay";
 import { WindowChooser } from "@/pages/detail/settings/WindowChooser";
 import { useSettings, type LauncherOnPlay } from "@/store/settings";
+import { SettingsInfo } from "./SettingsInfo";
 
 const JVM_PRESET_KEYS: Record<JvmPreset, { name: TKey; note: TKey }> = {
   balanced: { name: "settings.jvm.balanced", note: "settings.jvm.balancedNote" },
@@ -30,7 +31,7 @@ function JavaRow() {
   const javaPath = useSettings((s) => s.javaPath);
   const set = useSettings((s) => s.set);
   return (
-    <FormRow label="Java" hint={t("pages.settings.javaHint")} group="radiogroup" aside={t("pages.settings.javaAside")}>
+    <FormRow label="Java" hint={t("pages.settings.javaHint")} group="radiogroup">
       <JavaChooser
         name="gjava"
         value={javaPath}
@@ -72,7 +73,7 @@ function JvmRow() {
   const custom = useSettings((s) => s.jvmArgs);
   const set = useSettings((s) => s.set);
   return (
-    <FormRow label={t("settings.jvm.label")} hint={t("settings.jvm.hint")} group="radiogroup" aside={t("settings.jvm.aside")}>
+    <FormRow label={t("settings.jvm.label")} hint={t("settings.jvm.hint")} group="radiogroup">
       {JVM_PRESETS.map((value) => (
         <Radio key={value} name="gjvm" checked={preset === value} onChange={() => set({ jvmPreset: value })}>
           {t(JVM_PRESET_KEYS[value].name)} <span className="text-fg-3">({t(JVM_PRESET_KEYS[value].note)})</span>
@@ -96,7 +97,7 @@ function LauncherOnPlayRow() {
   const set = useSettings((s) => s.set);
   const friendsEnabled = useFriendsState().data?.enabled ?? null;
   return (
-    <FormRow label={t("settings.onPlay.label")} hint={t("settings.onPlay.hint")} group="radiogroup" aside={t("friendsSettings.onPlayAside")}>
+    <FormRow label={t("settings.onPlay.label")} hint={t("settings.onPlay.hint")} group="radiogroup" aside={friendsEnabled ? t("friendsSettings.onPlayAside") : undefined}>
       {LAUNCHER_ON_PLAY.map((value) => (
         <Radio key={value} name="gonplay" checked={mode === value} onChange={() => set({ launcherOnPlay: value })}>
           {t(LAUNCHER_ON_PLAY_KEYS[value])}
@@ -113,7 +114,7 @@ function DiscordRow() {
   const enabled = useSettings((s) => s.discordPresence);
   const set = useSettings((s) => s.set);
   return (
-    <FormRow label={t("settings.discord.label")} hint={t("settings.discord.hint")} aside={t("settings.discord.aside")}>
+    <FormRow label={t("settings.discord.label")} hint={t("settings.discord.hint")}>
       <Switch label={t("settings.discord.label")} checked={enabled} onChange={(on) => set({ discordPresence: on })} stateText={[t("ui.switch.on"), t("ui.switch.off")]} />
     </FormRow>
   );
@@ -149,6 +150,12 @@ export function GameTab() {
   const set = useSettings((s) => s.set);
   return (
     <>
+      <SettingsInfo title={t("settings.tabJava")}>
+        <FormSection title={t("settings.memory.minLabel")} level={3}><p>{t("settings.memory.minAside")}</p></FormSection>
+        <FormSection title="Java" level={3}><p>{t("pages.settings.javaAside")}</p></FormSection>
+        <FormSection title={t("settings.jvm.label")} level={3}><p>{t("settings.jvm.aside")}</p></FormSection>
+        <FormSection title={t("settings.discord.label")} level={3}><p>{t("settings.discord.aside")}</p></FormSection>
+      </SettingsInfo>
       <FormSection title={t("settings.sectionJava")} level={3} className="settings-field-grid">
         <FormRow
           label={t("ui.memory.label")}
@@ -158,7 +165,7 @@ export function GameTab() {
         >
           <MemoryChooser name="gram" value={memoryMb} onChange={(mb) => set({ memoryMb: mb })} help={false} />
         </FormRow>
-        <FormRow label={t("settings.memory.minLabel")} htmlFor="gminram" hint={t("settings.memory.minHint")} aside={t("settings.memory.minAside")}>
+        <FormRow label={t("settings.memory.minLabel")} htmlFor="gminram" hint={t("settings.memory.minHint")}>
           <MinMemoryChooser id="gminram" value={minMemoryMb} onChange={(mb) => set({ minMemoryMb: mb })} autoLabel={t("components.memory.auto")} />
         </FormRow>
         <JavaRow />

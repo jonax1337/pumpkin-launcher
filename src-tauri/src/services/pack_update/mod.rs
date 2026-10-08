@@ -162,7 +162,7 @@ fn recover_work(dirs: &Dirs, instance: &Instance) -> AppResult<bool> {
     if !committed {
         restore_previous_files(dirs, &instance.id, &work)?;
     }
-    transaction::recover(&dirs.root, &dirs.game_dir(&instance.id), &work, committed)?;
+    transaction::recover(&dirs.instances_dir(), &dirs.game_dir(&instance.id), &work, committed)?;
     Ok(!committed)
 }
 
@@ -345,7 +345,7 @@ impl Apply {
             steps.iter().filter(|s| !matches!(s.action, Action::Keep | Action::Leave | Action::Drop)).collect();
         let total = changing.len() as u64;
         let work = self.dirs.instance(id).join(WORK_DIR);
-        Transaction::new(&self.dirs.root, self.dirs.game_dir(id), &work).run(|tx| {
+        Transaction::new(&self.dirs.instances_dir(), self.dirs.game_dir(id), &work).run(|tx| {
             self.note_target(&work)?;
             for (done, step) in (1..).zip(changing) {
                 check_cancelled(stop)?;
@@ -361,7 +361,7 @@ impl Apply {
     /// gespeichert wurde und nur noch aufräumen musste. Bleibt die Herkunft gleich, sagt sie darüber nichts.
     fn note_target(&self, work: &Path) -> AppResult<()> {
         let target = work.join(TARGET);
-        regular_parents(&self.dirs.root, &target)?;
+        regular_parents(&self.dirs.instances_dir(), &target)?;
         fs::create_dir_all(work)?;
         let origin = &self.plan.release.origin;
         if self.instance.modpack.as_ref() == Some(origin) {

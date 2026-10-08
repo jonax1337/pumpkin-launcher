@@ -150,6 +150,7 @@ export const pages: typeof dePages = {
   "pages.detail.tabsLabel": "Instance sections",
 
   // Einstellungen
+  "pages.settings.notes": "Details",
   "pages.settings.tabGame": "Game",
   "pages.settings.tabAppearance": "Appearance",
   "pages.settings.tabSupport": "Support",

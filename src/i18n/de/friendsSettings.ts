@@ -45,8 +45,10 @@ export const friendsSettings = {
 
   // Pumpkin Bridge im Spiel
   "friendsSettings.ingameMenu.label": "Pumpkin Bridge",
+  "friendsSettings.ingameMenu.summary": "Launcher-Menü in unterstützten Spielen",
   "friendsSettings.ingameMenu.hint": "Der Launcher fügt Pumpkin Bridge unterstützten Spielen hinzu, auch wenn Freunde ausgeschaltet ist. Freunde-Netzwerk und -Aktionen benötigen weiterhin deine Zustimmung.",
   "friendsSettings.ingameActions.label": "Aktionen im Spiel",
+  "friendsSettings.ingameActions.summary": "„Erlauben“ gibt auch Mods Zugriff auf Freunde und Weltfreigaben.",
   "friendsSettings.ingameActions.hint": "Bei „Immer fragen“ bestätigst du einmal je Spielstart im Launcher, bei „Erlauben“ darf das Spiel (und jede Mod darin) Freunde hinzufügen, Anfragen beantworten und Welten teilen, ohne zu fragen.",
   "friendsSettings.ingameActions.ask": "Immer fragen",
   "friendsSettings.ingameActions.allow": "Erlauben",

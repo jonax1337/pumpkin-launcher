@@ -45,8 +45,10 @@ export const friendsSettings: typeof deFriendsSettings = {
 
   // Pumpkin Bridge
   "friendsSettings.ingameMenu.label": "Pumpkin Bridge",
+  "friendsSettings.ingameMenu.summary": "Launcher menu in supported games",
   "friendsSettings.ingameMenu.hint": "The launcher adds Pumpkin Bridge to supported games, even when Friends is disabled. Friends networking and actions still require your consent.",
   "friendsSettings.ingameActions.label": "Actions in the game",
+  "friendsSettings.ingameActions.summary": "“Allow” also lets mods manage friends and share worlds.",
   "friendsSettings.ingameActions.hint": "With “Always ask” you confirm once per game start in the launcher, with “Allow” the game (and every mod in it) may add friends, answer requests and share worlds without asking.",
   "friendsSettings.ingameActions.ask": "Always ask",
   "friendsSettings.ingameActions.allow": "Allow",

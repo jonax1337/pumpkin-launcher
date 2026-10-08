@@ -1,12 +1,15 @@
-import { Actions, Button, Cell, ErrorBox, FormRow, FormSection, Hint, List, ListRow, RowTitle, Skel } from "@/ui";
+import { useRef, useState } from "react";
+import { Actions, Button, Cell, ConfirmDialog, ErrorBox, FormRow, FormSection, Hint, List, ListRow, RowTitle, Skel } from "@/ui";
 import { loaderLine } from "@/components/common";
 import { useI18n } from "@/i18n";
+import { useConfirmTarget } from "@/hooks/useConfirmTarget";
 import { useInstances } from "@/hooks/useInstances";
-import { useClearCache, useStorageOverview } from "@/hooks/useStorage";
+import { useClearCache, useInstancesMoveRunning, useSetInstancesDir, useStorageOverview } from "@/hooks/useStorage";
 import { api } from "@/lib/api";
 import { formatSize } from "@/lib/format";
 import { toastError } from "@/lib/toast";
 import type { Instance, StorageOverview } from "@/lib/types";
+import { SettingsInfo } from "./SettingsInfo";
 
 const BYTES_PER_MB = 1024 * 1024;
 
@@ -35,6 +38,70 @@ function DataFolder({ overview }: { overview: StorageOverview }) {
   );
 }
 
+function InstanceFolder({ overview }: { overview: StorageOverview }) {
+  const { t } = useI18n();
+  const move = useSetInstancesDir();
+  const confirm = useConfirmTarget<string>();
+  const selecting = useRef(false);
+  const submitting = useRef(false);
+  const [picking, setPicking] = useState(false);
+  const moveRunning = useInstancesMoveRunning();
+  const busy = picking || move.isPending || moveRunning;
+
+  async function pickFolder() {
+    if (selecting.current || submitting.current) return;
+    selecting.current = true;
+    setPicking(true);
+    try {
+      const [path] = await api.pickPaths({ directory: true, title: t("settings.storage.chooseInstances") });
+      if (path && path !== overview.instancesDir) confirm.ask(path);
+    } catch (error) {
+      toastError(error instanceof Error ? error : new Error(String(error)));
+    } finally {
+      selecting.current = false;
+      setPicking(false);
+    }
+  }
+
+  function relocate(path: string, close: () => void) {
+    if (submitting.current || moveRunning) return;
+    submitting.current = true;
+    move.mutate(path, {
+      onSuccess: close,
+      onSettled: () => { submitting.current = false; },
+    });
+  }
+
+  return (
+    <FormSection title={t("settings.storage.instancesSection")} level={3}>
+      <FormRow label={t("settings.storage.location")} hint={t("settings.storage.instancesHint")}>
+        <Actions wrap>
+          <code className="text-fg-2 break-all">{overview.instancesDir}</code>
+          <Button icon="folder" disabled={busy} onClick={() => void api.storageOpenInstancesDir().catch(toastError)}>{t("settings.storage.openFolder")}</Button>
+          <Button disabled={busy} onClick={() => void pickFolder()}>{t(move.isPending ? "settings.storage.moving" : "settings.storage.changeFolder")}</Button>
+        </Actions>
+      </FormRow>
+      {overview.instancesFreeMb != null && (
+        <FormRow label={t("settings.storage.free")}>{t("settings.storage.freeOnDrive", { size: formatSize(overview.instancesFreeMb * BYTES_PER_MB) })}</FormRow>
+      )}
+      <SettingsInfo title={t("settings.storage.changeFolder")}>
+        <p>{t("settings.storage.moveInfo")}</p>
+      </SettingsInfo>
+      <ConfirmDialog
+        {...confirm.dialogProps({
+          title: () => t("settings.storage.moveTitle"),
+          text: (path) => <>{t("settings.storage.moveConfirm")}<code className="mt-3 block break-all">{path}</code></>,
+          confirmLabel: t("settings.storage.moveButton"),
+          pending: move.isPending,
+          onConfirm: relocate,
+        })}
+        danger={false}
+        pendingLabel={t("settings.storage.moving")}
+      />
+    </FormSection>
+  );
+}
+
 /** Platz je Instanz, im Mod-Cache und in den geteilten Dateien. */
 function Usage({ overview, instances }: { overview: StorageOverview; instances: Instance[] }) {
   const { t } = useI18n();
@@ -56,7 +123,11 @@ function Usage({ overview, instances }: { overview: StorageOverview; instances: 
           <Cell align="end">{formatSize(overview.sharedBytes)}</Cell>
         </ListRow>
       </List>
-      <Hint className="mt-2.5 max-w-[70ch]">{t("settings.storage.hardlinkNote")}</Hint>
+      <div className="mt-2.5">
+        <SettingsInfo title={t("settings.storage.usageSection")}>
+          <p>{t("settings.storage.hardlinkNote")}</p>
+        </SettingsInfo>
+      </div>
     </FormSection>
   );
 }
@@ -90,6 +161,7 @@ export function StorageTab() {
   }
   return (
     <>
+      <InstanceFolder overview={overview.data} />
       <DataFolder overview={overview.data} />
       <Usage overview={overview.data} instances={instances} />
       <ClearCache unusedBytes={overview.data.unusedCacheBytes} />

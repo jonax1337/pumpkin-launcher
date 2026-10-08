@@ -94,6 +94,11 @@ impl Coded {
         self.details = Some(Box::new(details.into()));
         self
     }
+
+    /// Der Schlüssel im Wörterbuch, etwa für Protokolle und Meldungen, die nicht übersetzt werden.
+    pub fn key(&self) -> &'static str {
+        self.key
+    }
 }
 
 impl fmt::Display for Coded {

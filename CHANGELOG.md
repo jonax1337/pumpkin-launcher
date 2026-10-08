@@ -1,10 +1,64 @@
 # Changelog
 
-Last updated: 2026-10-07.
+Last updated: 2026-10-08.
 
 For installation and a first game, start with the [launcher guide](README.md#download-and-install).
 
 ## Unreleased
+
+### Windows installer
+
+- Brand NSIS welcome/finish panels and installer/uninstaller headers with the
+  seasonal Buddy, pixel wordmark and dark Pumpkin palette.
+- Add a custom template based on Tauri CLI 2.12.1, with concise German/English
+  copy and direct navigation to Finish after a successful installation.
+- Use a cohesive native dark theme for the title bar, navigation, inputs,
+  checkboxes and progress, with larger text and copper actions.
+  Preserve keyboard behavior and font-aware uninstall option placement.
+- Retain per-user installation, existing-install maintenance, WebView2 setup,
+  updater flags, file associations and opt-in app-data removal.
+- Add an instance-folder page. The installer writes a request that the launcher
+  applies at its next start. Suggest Documents/Pumpkin Launcher/Instances instead
+  of the old AppData default, while preserving existing custom locations.
+  The page rejects relative and drive-relative paths, drive roots, the program
+  folder, system folders, `%APPDATA%`, `%LOCALAPPDATA%`, the metadata folder,
+  `C:\Users`, the profile, Documents, Desktop and Downloads; the launcher
+  validates again.
+- Use Big Shoulders Display (headings, larger) and Hanken Grotesk (body) in the
+  installer, embedded in the theme DLL, and remove the left stripe.
+- Set installer headings in larger uppercase type and draw original artwork
+  proportionally inside the image controls, without squeezing the wordmark.
+- Publish the installer as Jonas Laux. The optional uninstall checkbox now removes
+  only `accounts.json`, `skins.json` and `templates.json`; the uninstaller never
+  deletes directories.
+
+### Storage
+
+- Choose where instances are stored in Settings > Storage, and open the folder
+  or an instance's folder from there. The launcher copies the instance folders
+  listed in `instances.json`, verifies them, switches, then removes the old root
+  without deleting unknown entries (reported as retained). Nothing is
+  overwritten, relocation is refused while a game runs, and a failure keeps the
+  old folder.
+- An installer request that cannot be applied never blocks startup: it is set
+  aside as `instances-path-request.txt.rejected`, the launcher uses the current
+  or default library and shows a notice. Only a missing or unsafe stored
+  location stops startup.
+- New Windows installs default to `Documents\Pumpkin Launcher\Instances`;
+  existing libraries stay where they are.
+- Use friendly Windows data folders named Pumpkin Launcher in `%APPDATA%` and
+  `%LOCALAPPDATA%` instead of `dev.laux.launcher`. The internal identifier and
+  keyring entry are unchanged.
+
+### Settings
+
+- Move the privacy service list and source attribution into an on-demand dialog
+  under About & support.
+- Move detailed Friends, Java and storage explanations into local information
+  dialogs. Keep controls, concise permission summaries, warnings and consent
+  confirmations directly accessible.
+- Support keyboard scrolling, focus return and narrow-window reflow in the
+  information dialogs, with German and English labels.
 
 ### Desktop maintenance
 

@@ -1,5 +1,6 @@
 //! Verzeichnislayout unter dem App-Datenverzeichnis.
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use super::fsutil::entries;
 use crate::error::AppResult;
@@ -13,11 +14,21 @@ pub(crate) const REGENERATED: [&str; 3] = ["logs", "crash-reports", ".fabric"];
 #[derive(Debug, Clone)]
 pub struct Dirs {
     pub root: PathBuf,
+    instances: Arc<Mutex<PathBuf>>,
 }
 
 impl Dirs {
     pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        let root = root.into();
+        Self { instances: Arc::new(Mutex::new(root.join("instances"))), root }
+    }
+
+    pub fn instances_dir(&self) -> PathBuf {
+        super::lock(&self.instances).clone()
+    }
+
+    pub(crate) fn set_instances_dir(&self, path: PathBuf) {
+        *super::lock(&self.instances) = path;
     }
 
     pub fn libraries(&self) -> PathBuf {
@@ -43,7 +54,7 @@ impl Dirs {
     }
 
     pub fn instance(&self, instance_id: &str) -> PathBuf {
-        self.root.join("instances").join(instance_id)
+        self.instances_dir().join(instance_id)
     }
 
     pub fn game_dir(&self, instance_id: &str) -> PathBuf {

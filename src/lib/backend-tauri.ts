@@ -2,7 +2,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import {
@@ -142,6 +142,8 @@ export function createTauriBackend(): Backend {
     storageOverview: () => call("storage_overview"),
     storageClearCache: () => call("storage_clear_cache"),
     storageOpenDir: () => call("storage_open_dir"),
+    storageSetInstancesDir: (path) => call("storage_set_instances_dir", { path }),
+    storageOpenInstancesDir: () => call("storage_open_instances_dir"),
     detectJava: () => call("java_detect"),
     setLauncherWindow,
 
@@ -180,7 +182,7 @@ export function createTauriBackend(): Backend {
     screenshotRead: (instanceId, fileName) => call("screenshot_read", { instanceId, fileName }),
     screenshotSrc: (shot) => convertFileSrc(shot.path),
 
-    openPath: (path) => openPath(path).catch(rethrowAsError),
+    openPath: (path) => call("storage_open_instance_path", { path }),
 
     checkAppUpdate: () => check().catch(rethrowAsError),
     restartApp: () => relaunch().catch(rethrowAsError),

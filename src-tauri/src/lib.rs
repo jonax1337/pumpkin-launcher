@@ -39,6 +39,28 @@ pub fn run() {
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
         .init();
 
+    let mut context = tauri::generate_context!();
+    let use_user_defaults = context.config().app.app_directories_override.is_none()
+        && context.config().identifier == "dev.laux.launcher";
+    #[cfg(windows)]
+    if use_user_defaults {
+        use tauri::utils::config::{AppDirectoriesOverride, AppDirectoryOverrides};
+        context.config_mut().app.app_directories_override = Some(AppDirectoriesOverride::Directories(
+            AppDirectoryOverrides {
+                config: Some("$CONFIG/Pumpkin Launcher".into()),
+                data: Some("$DATA/Pumpkin Launcher".into()),
+                local_data: Some("$LOCALDATA/Pumpkin Launcher/WebView".into()),
+                cache: Some("$LOCALDATA/Pumpkin Launcher/cache".into()),
+                log: Some("$LOCALDATA/Pumpkin Launcher/logs".into()),
+            },
+        ));
+    }
+    // WebView must not create the destination before the single-instance guard and migration.
+    let windows = context.config().app.windows.iter().filter(|window| window.create).cloned().collect::<Vec<_>>();
+    for window in &mut context.config_mut().app.windows {
+        window.create = false;
+    }
+
     tauri::Builder::default()
         // Zuerst: ein zweiter Prozess würde dieselben JSON-Stores schreiben.
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
@@ -49,14 +71,59 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .setup(|app| {
-            let data_dir = app.path().app_data_dir()?;
-            tracing::info!(?data_dir, "lade Daten");
-            app.manage(state::AppState::load(&data_dir)?);
+        .setup(move |app| {
+            app.manage(pack_open::OpenedPack::from_process_args());
+            let loaded = (|| -> Result<state::AppState, Box<dyn std::error::Error>> {
+                let data_dir = app.path().app_data_dir()?;
+                // Folders that could not be merged or moved are reported but never stop the start.
+                #[cfg(windows)]
+                let mut notices = if use_user_defaults {
+                    services::storage_location::migrate_windows_data(&data_dir, &app.path().app_local_data_dir()?)?
+                } else {
+                    Vec::new()
+                };
+                #[cfg(not(windows))]
+                let mut notices: Vec<String> = Vec::new();
+                let default_instances = use_user_defaults.then(|| {
+                    app.path().document_dir().ok().map(|path| path.join("Pumpkin Launcher").join("Instances"))
+                }).flatten();
+                tracing::info!(?data_dir, "lade Daten");
+                let mut state = state::AppState::load_with_instances_default(&data_dir, default_instances.as_deref())?;
+                notices.append(&mut state.startup_notices);
+                state.startup_notices = notices;
+                Ok(state)
+            })();
+            let state = match loaded {
+                Ok(state) => state,
+                Err(error) => {
+                    use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+                    tracing::error!(%error, "Storage initialization failed");
+                    let handle = app.handle().clone();
+                    app.dialog().message(format!("Pumpkin Launcher could not safely open its storage. No existing library has been replaced.\n\n{error}"))
+                        .title("Pumpkin Launcher — Storage")
+                        .kind(MessageDialogKind::Error)
+                        .show(move |_| handle.exit(1));
+                    return Ok(());
+                }
+            };
+            app.manage(state);
+            for window in &windows {
+                tauri::WebviewWindowBuilder::from_config(app, window)?.build()?;
+            }
+            let notices = app.state::<state::AppState>().startup_notices.clone();
+            if !notices.is_empty() {
+                use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+                for notice in &notices {
+                    tracing::warn!(%notice, "Storage notice at startup");
+                }
+                app.dialog().message(notices.join("\n\n"))
+                    .title("Pumpkin Launcher — Storage")
+                    .kind(MessageDialogKind::Warning)
+                    .show(|_| {});
+            }
             // friends: session wiring (R5)
             start_sessions(app.handle().clone())?;
             start_bridge(app.handle());
-            app.manage(pack_open::OpenedPack::from_process_args());
             spawn_startup_maintenance(app.handle().clone());
             attach_friends_directory(app.handle());
             start_friends(app.handle().clone());
@@ -139,6 +206,9 @@ pub fn run() {
             storage_commands::storage_overview,
             storage_commands::storage_clear_cache,
             storage_commands::storage_open_dir,
+            storage_commands::storage_set_instances_dir,
+            storage_commands::storage_open_instances_dir,
+            storage_commands::storage_open_instance_path,
             storage_commands::java_detect,
             skin_commands::skin_profile,
             skin_commands::skin_library,
@@ -211,7 +281,7 @@ pub fn run() {
             ingame_commands::friends_ingame_retry,
             friends_commands::friend_add_by_name,
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building tauri application")
         .run(handle_run_event);
 }

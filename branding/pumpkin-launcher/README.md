@@ -76,3 +76,38 @@ new motion hashes/files into `manifest.json` and `pumpkin-launcher-assets.zip`.
 `src/branding/Brand.tsx` connects seasonal assets to the UI and runtime window/taskbar icon; `src/branding/calendar.ts` selects by local date. `scripts/sync-branding.mjs` stages native package icons during `pnpm dev` and `pnpm build`. Installed executable/installer icons reflect the build season; the running app can update its window icon.
 
 Buddy animations respect reduced motion and pause for running games, hidden windows and offscreen content. The website uses the same calendar and approved SVGs. See [website assets](../../website/README.md).
+
+## Windows installer artwork
+
+`installer/{season}/` contains committed, uncompressed 24-bit BMPs: a 328×628 sidebar
+and a 300×114 header (2× the NSIS reference sizes). The artwork reuses the approved
+Buddy and outlined wordmark; no translated text is baked into the images.
+The installer has no left stripe or decorative side bar beyond this artwork.
+`scripts/sync-branding.mjs` stages the build season into `src-tauri/installer/`
+alongside the native icons. Regular builds do not need Python or Sharp.
+
+To regenerate all five seasons, use the same Pillow/Node/Sharp prerequisites
+described above:
+
+```sh
+python branding/pumpkin-launcher/installer/build.py
+```
+
+The native theme uses `#101521` for its dark surfaces; keep that background
+consistent with the bitmap generator. The theme draws the original bitmaps
+proportionally inside NSIS's font-scaled image controls, with unused space filled
+by the surrounding surface. Artwork never stretches or overlaps labels.
+
+`src-tauri/installer/theme/PumpkinTheme.cpp` paints the existing native controls:
+dark navigation, inputs, checkboxes, progress and title bar, with a copper primary
+action and visible keyboard focus. Control IDs, keyboard handling and accessibility
+remain native. The installer renders text in Hanken Grotesk (body) and Big Shoulders
+Display (larger, uppercase headings), loaded privately from fonts embedded in the theme DLL;
+the committed subsets live in `src-tauri/installer/theme/fonts/` with their SIL OFL 1.1
+notices. `build-fonts.py` rescales them to 1000 units/em and aligns the Windows
+metrics to hhea. Regenerate them with `python branding/pumpkin-launcher/installer/build-fonts.py`
+(`pip install fonttools brotli`; Fontsource packages from `pnpm install`), then rebuild the DLL.
+Decorative beveled dividers and repeated footer branding are omitted.
+System high-contrast palettes take precedence; external Windows dialogs follow
+the OS theme. See [theme rebuild instructions](../../CONTRIBUTING.md#windows-installer-template).
+

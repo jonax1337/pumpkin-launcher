@@ -29,6 +29,8 @@ pub struct InstanceUsage {
 pub struct StorageOverview {
     pub data_dir: String,
     pub free_mb: Option<u64>,
+    pub instances_dir: String,
+    pub instances_free_mb: Option<u64>,
     pub instances: Vec<InstanceUsage>,
     pub mod_cache_bytes: u64,
     /// Teil des Mod-Caches, den keine Instanz mehr braucht und [`clear_unused_cache`] löscht.
@@ -50,6 +52,8 @@ pub fn overview(dirs: &Dirs, instances: &[Instance]) -> AppResult<StorageOvervie
     Ok(StorageOverview {
         data_dir: dirs.root.to_string_lossy().into_owned(),
         free_mb: system::free_space_mb(&dirs.root).ok(),
+        instances_dir: dirs.instances_dir().to_string_lossy().into_owned(),
+        instances_free_mb: system::free_space_mb(&dirs.instances_dir()).ok(),
         instances: instances.iter().map(|i| InstanceUsage { id: i.id.clone(), bytes: dir_size(&dirs.instance(&i.id)) }).collect(),
         mod_cache_bytes: dir_size(&dirs.mod_cache()),
         unused_cache_bytes,
@@ -161,6 +165,11 @@ mod tests {
         assert_eq!(overview.instances, [InstanceUsage { id: instance.id, bytes: 104 }]);
         assert_eq!(overview.shared_bytes, 75);
         assert_eq!(overview.mod_cache_bytes, 0);
+        assert_eq!(overview.data_dir, dirs.root.to_string_lossy());
+        assert_eq!(overview.instances_dir, dirs.instances_dir().to_string_lossy());
+        dirs.set_instances_dir(dirs.root.join("elsewhere"));
+        let moved = super::overview(&dirs, &[]).unwrap();
+        assert_eq!(moved.instances_dir, dirs.root.join("elsewhere").to_string_lossy());
         fs::remove_dir_all(&dirs.root).unwrap();
     }
 }

@@ -442,8 +442,10 @@ fn announce_in_discord(state: &AppState, instance: &Instance, options: &LaunchOp
 fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, result: ProcessExit, watch: Option<LaunchWatch>) {
     let code = result.code;
     let state = app.state::<AppState>();
+    // Held until the process is gone and its session log is archived, so no relocation can start in between; released
+    // on every path (including a panic below) and before `instance-exit` is emitted, so a relaunch is possible then.
+    let running = ReleaseRunning { state: &state, instance_id: instance_id.clone() };
     state.presence.stopped(&instance_id);
-    drop(state.take_running(&instance_id));
     state.bridge.forget(&instance_id);
     state.signals.send(GameSignal::Exited { instance_id: instance_id.clone() });
     if let Some(watch) = watch {
@@ -461,8 +463,21 @@ fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, resul
     let log_file = Some(state.dirs.latest_log(&instance_id)).filter(|p| p.is_file()).map(text);
     record_playtime(&state, &instance_id, started);
     archive_log(&state, &instance_id, started);
+    drop(running);
     tracing::info!(instance = %instance_id, ?code, crashed, "Spiel beendet");
     emit(app, EXIT_EVENT, ExitPayload { instance_id, code, crashed, crash_report, log_file, suspected_mods });
+}
+
+/// Entfernt den Eintrag in den laufenden Spielen, wenn er fällt.
+struct ReleaseRunning<'a> {
+    state: &'a AppState,
+    instance_id: String,
+}
+
+impl Drop for ReleaseRunning<'_> {
+    fn drop(&mut self) {
+        drop(self.state.take_running(&self.instance_id));
+    }
 }
 
 /// Verdächtige Mods aus dem Absturzbericht, abgeglichen mit den Mods der Instanz.
@@ -494,10 +509,7 @@ fn record_playtime(state: &AppState, instance_id: &str, started: SystemTime) {
 /// Beendet das laufende Spiel einer Instanz; `instance-exit` folgt.
 #[tauri::command]
 pub fn instance_kill(state: State<'_, AppState>, instance_id: String) -> AppResult<()> {
-    let game = state
-        .take_running(&instance_id)
-        .ok_or_else(|| AppError::NotFound(coded!("errors.app.notFound.runningGame", id = instance_id).into()))?;
-    game.kill();
+    state.kill_running(&instance_id)?;
     tracing::info!(instance = %instance_id, "Spiel wird beendet");
     Ok(())
 }

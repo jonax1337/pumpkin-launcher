@@ -84,7 +84,7 @@ pub(crate) async fn populate_new_dir<T: Send + 'static>(
     dir: PathBuf,
     work: impl FnOnce(&CancellationToken) -> AppResult<T> + Send + 'static,
 ) -> AppResult<(RemoveOnDrop, T)> {
-    regular_parents(&dirs.root, &dir)?;
+    regular_parents(&dirs.instances_dir(), &dir)?;
     blocking(move |stop| {
         let guard = RemoveOnDrop::new(dir.clone());
         fs::create_dir_all(&dir)?;
@@ -103,7 +103,7 @@ pub(crate) async fn cancel_at_step<T, F: std::future::Future<Output = AppResult<
 ) -> AppResult<T> {
     const CLEANUP_POLLS: usize = 500;
     const POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
-    let instances = state.dirs.root.join("instances");
+    let instances = state.dirs.instances_dir();
     let folders = || fs::read_dir(&instances).map_or(0, Iterator::count);
     let before = folders();
     let (reached, started) = std::sync::mpsc::channel();

@@ -108,7 +108,7 @@ pub fn list(dirs: &Dirs, instance_id: &str, world_id: &str) -> AppResult<Vec<Dat
 pub fn add_files(dirs: &Dirs, instance_id: &str, world_id: &str, paths: &[String]) -> AppResult<()> {
     let world = worlds::world_dir(dirs, instance_id, world_id)?;
     let files = paths.iter().map(|path| read_zip(path)).collect::<AppResult<Vec<_>>>()?;
-    write_packs(&dirs.root, &world, files)?;
+    write_packs(&dirs.instances_dir(), &world, files)?;
     tracing::info!(instance = %instance_id, world = %world_id, count = paths.len(), "Datenpakete hinzugefügt");
     Ok(())
 }
@@ -133,7 +133,7 @@ pub async fn install(
     let file = modrinth::primary(&version, ".zip")?;
     progress(Phase::Download, 0, 1);
     let data = modrinth::download(&client, &file).await?;
-    let root = state.dirs.root.clone();
+    let root = state.dirs.instances_dir();
     blocking(move |_| write_packs(&root, &world, vec![(file.filename, data)])).await?;
     tracing::info!(instance = %instance_id, world = %world_id, version = %version_id, "Datenpaket installiert");
     progress(Phase::Complete, 1, 1);

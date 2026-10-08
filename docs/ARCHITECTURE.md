@@ -38,22 +38,36 @@ Commands are thin adapters to domain services. Their exact arguments and return 
 
 ## Data and process boundaries
 
-Rust resolves the application data directory with Tauri. Typical paths are `%APPDATA%\dev.laux.launcher` on Windows, `~/.local/share/dev.laux.launcher` on Linux and `~/Library/Application Support/dev.laux.launcher` on macOS.
+Rust resolves the application data directory with Tauri and keeps the internal identifier `dev.laux.launcher`. On Windows the metadata root is `%APPDATA%\Pumpkin Launcher`; WebView data is under `%LOCALAPPDATA%\Pumpkin Launcher\WebView`, and cache and logs are under `%LOCALAPPDATA%\Pumpkin Launcher`. Until the launcher has migrated an existing library, Windows installs that predate the friendly name still use `%APPDATA%\dev.laux.launcher` as the metadata root. Linux and macOS paths still use the `dev.laux.launcher` identifier: `~/.local/share/dev.laux.launcher` and `~/Library/Application Support/dev.laux.launcher`.
+
+The layout has two roots. The **metadata root** holds shared and launcher-owned data. The **instance root** holds the per-instance directories and is configurable. A fresh Windows install defaults it to `Documents\Pumpkin Launcher\Instances`; an existing library stays where it already is.
 
 `src-tauri/src/services/dirs.rs` owns the directory layout:
 
-| Location under application data | Contents |
+| Location under the metadata root | Contents |
 | --- | --- |
 | `versions/<id>/` | Minecraft version JSON and client JAR |
 | `libraries/`, `assets/` | Shared libraries and assets |
 | `runtime/<component>/` | Shared Java runtimes |
 | `runtime/bridge-mod/<modVersion>/` | Materialised, launcher-owned Bridge JARs; never instance content |
 | `cache/mods/<sha1>.jar` | Shared content cache |
-| `instances/<id>/minecraft/` | Isolated game directory, including mods, worlds and screenshots |
-| `instances/<id>/natives/`, `installed` | Native libraries and installed-version marker |
-| `instances/<id>/session-logs/`, `backups/` | Saved session logs and world backups outside the game directory |
 | `templates/<id>.mrpack`, `skins/<sha1>.png` | Templates and skin library |
 | `friends/` | Friends configuration, graph records, requests, blocks and pending delivery records |
+| `instances-path.txt`, `instances-path-request.txt` | Instance-root handoff files (below) |
+
+| Location under the instance root | Contents |
+| --- | --- |
+| `<id>/minecraft/` | Isolated game directory, including mods, worlds and screenshots |
+| `<id>/natives/`, `installed` | Native libraries and installed-version marker |
+| `<id>/session-logs/`, `backups/` | Saved session logs and world backups outside the game directory |
+
+`src-tauri/src/services/storage_location.rs` handles the instance-root handoff. `instances-path.txt` records the current instance root; `instances-path-request.txt` is a request written by the installer. Both live in the metadata directory (the legacy `dev.laux.launcher` directory before the first migration) and contain one absolute path in UTF-16LE with a byte-order mark, followed by CRLF (at most 64 KiB).
+
+Destinations must be absolute drive or UNC share paths. Device paths, localhost aliases, links and junctions are refused, as is anything inside or around the launcher data folder, the program folder or the current library. The destination must be absent or an empty real folder. Relocation is refused while any game runs.
+
+Relocation copies only the top-level folders listed in `instances.json` into a staging folder, verifies them by SHA-1, commits the new path and then removes the old root non-recursively. Unknown entries stay in the old root and produce a "retained" notice. Nothing at the destination is overwritten, and a failure keeps the old root. At startup the marker `instances-staging.txt` and stale `.pumpkin-instances-<uuid>` folders are cleaned up, and a destination that is already a complete copy is adopted.
+
+An installer request is only a hint and never blocks startup. If it cannot be read or applied (garbage, over 64 KiB, occupied or nested folder, missing drive, relocation error), it is renamed to `instances-path-request.txt.rejected` (or deleted), the launcher starts with the current or default library, and a one-time notice is shown. Only a stored current path that has vanished or is unsafe stops startup (fail closed: error dialog, no windows). Settings > Storage changes the folder through the IPC commands `storage_set_instances_dir`, `storage_open_instances_dir` and `storage_open_instance_path`.
 
 `src-tauri/src/services/store.rs` maintains JSON stores in memory and writes atomically through a temporary file and rename. Entry mutations happen under the store lock. Unreadable newer records are preserved instead of discarded during a write.
 

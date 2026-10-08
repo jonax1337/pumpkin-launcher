@@ -136,7 +136,8 @@ pub async fn install_mod(
     let client = modrinth::client()?;
     progress(Phase::Resolve, 0, 1);
     let plan = plan_install(&client, &instance, project, file_no).await?;
-    let staged = StagedInstall::new(&state.dirs.root);
+    let instances_root = state.dirs.instances_dir();
+    let staged = StagedInstall::new(&instances_root);
     let downloads = reserve_targets(&plan, &instance, &state.dirs.game_dir(instance_id), &staged)?;
     content::budget(downloads.iter().map(|download| download.planned.file.file_length))?;
     let total = downloads.len() as u64;

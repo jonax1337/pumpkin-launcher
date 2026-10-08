@@ -64,6 +64,14 @@ impl AppError {
         }
     }
 
+    /// Der Fehlercode (`errors.…`) der Meldung, wenn sie schon umgestellt ist; sonst `None`.
+    pub fn key(&self) -> Option<&'static str> {
+        match self {
+            Self::NotFound(text) | Self::Invalid(text) | Self::Refused(text) => text.as_coded().map(Coded::key),
+            _ => None,
+        }
+    }
+
     /// Fehlte die Datei oder der Ordner?
     pub fn is_not_found(&self) -> bool {
         matches!(self, Self::Io(e) if e.kind() == std::io::ErrorKind::NotFound)

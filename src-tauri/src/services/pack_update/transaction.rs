@@ -151,7 +151,7 @@ pub(super) fn left_behind(work: &Path) -> bool {
 
 /// Nach einem Absturz oder halben Zurücknehmen mitten im Update: entfernt die neu angelegten Dateien, legt die alten
 /// aus dem Arbeitsordner an ihren Platz (auch über die neue Fassung hinweg) und räumt den Arbeitsordner weg. War das
-/// Update schon gespeichert (`committed`), räumt es nur weg. `root` ist der Datenordner.
+/// Update schon gespeichert (`committed`), räumt es nur weg. `root` ist der Ordner aller Instanzen.
 pub(super) fn recover(root: &Path, game: &Path, work: &Path, committed: bool) -> AppResult<()> {
     if !committed {
         remove_placed(root, game, work)?;

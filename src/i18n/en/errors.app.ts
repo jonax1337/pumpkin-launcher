@@ -2,6 +2,12 @@ import { errorsApp as deErrorsApp } from "../de/errors.app.ts";
 
 /** Englische Fehlermeldungen der Gruppe „app“; der Typ erzwingt dieselben Codes wie im deutschen Wörterbuch. */
 export const errorsApp: typeof deErrorsApp = {
+  "errors.storage.invalidLocation": "Choose a full, safe folder path outside the launcher data and the current instance folder. Drive roots and linked folders are not allowed.",
+  "errors.storage.missingLocation": "The instance folder “{path}” is missing. Reconnect the drive or restore the folder.",
+  "errors.storage.occupiedLocation": "The destination “{path}” already contains files. Choose an empty folder; existing data will not be overwritten.",
+  "errors.storage.migrationConflict": "Both “{source}” and “{target}” already contain data. The launcher has not merged them. Back up and inspect both folders before resolving the conflict.",
+  "errors.storage.copyVerification": "The copied file “{path}” could not be verified. The move was not committed; the previous location remains active.",
+  "errors.storage.openNotAllowed": "“{path}” cannot be opened. The launcher only opens instance folders, worlds, screenshots, crash reports and the latest log of known instances.",
   "errors.app.auth.relogin": "Your sign-in has expired. Please sign in again with your Microsoft account.",
   "errors.app.auth.noneRunning": "No sign-in is in progress. Please start it again.",
   "errors.app.auth.notFinished": "Microsoft did not complete the sign-in. Please try again.",

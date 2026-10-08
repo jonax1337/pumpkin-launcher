@@ -117,6 +117,7 @@ export function createMockBackend(): Backend {
     revealPath: onlyInApp("hooks.api.openFolder"),
     instanceDir: onlyInApp("hooks.api.openFolder"),
     storageOpenDir: onlyInApp("hooks.api.openFolder"),
+    storageOpenInstancesDir: onlyInApp("hooks.api.openFolder"),
     shareLog: onlyInApp("hooks.api.shareLogs"),
     datapackAdd: onlyInApp("hooks.api.addLocalFiles"),
     screenshotSrc: (shot) => shot.path,

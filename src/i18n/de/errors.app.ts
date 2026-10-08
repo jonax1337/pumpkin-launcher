@@ -2,6 +2,12 @@ import type { Dict } from "../types.ts";
 
 /** Fehlermeldungen der Gruppe „app“ (Konten, Skins, Server, Protokolle, Importe und App-Befehle); Regeln siehe `errors.ts`. */
 export const errorsApp = {
+  "errors.storage.invalidLocation": "Wähle einen vollständigen, sicheren Ordnerpfad außerhalb der Launcher-Daten und des bisherigen Instanzordners. Laufwerkswurzeln und verknüpfte Ordner sind nicht erlaubt.",
+  "errors.storage.missingLocation": "Der Instanzordner „{path}“ fehlt. Verbinde das Laufwerk wieder oder stelle den Ordner wieder her.",
+  "errors.storage.occupiedLocation": "Der Zielordner „{path}“ enthält bereits Dateien. Wähle einen leeren Ordner; vorhandene Daten werden nicht überschrieben.",
+  "errors.storage.migrationConflict": "Die Ordner „{source}“ und „{target}“ enthalten bereits Daten. Der Launcher hat sie nicht zusammengeführt. Sichere und prüfe beide Ordner, bevor du den Konflikt auflöst.",
+  "errors.storage.copyVerification": "Die kopierte Datei „{path}“ konnte nicht bestätigt werden. Der Umzug wurde nicht übernommen; der bisherige Speicherort bleibt aktiv.",
+  "errors.storage.openNotAllowed": "„{path}“ lässt sich nicht öffnen. Der Launcher öffnet nur Instanzordner, Welten, Screenshots, Absturzberichte und das letzte Protokoll bekannter Instanzen.",
   "errors.app.auth.relogin": "Die Anmeldung ist abgelaufen. Bitte melde dich erneut mit deinem Microsoft-Konto an.",
   "errors.app.auth.noneRunning": "Es läuft gerade keine Anmeldung. Starte sie bitte neu.",
   "errors.app.auth.notFinished": "Microsoft hat die Anmeldung nicht abgeschlossen. Versuch es bitte erneut.",

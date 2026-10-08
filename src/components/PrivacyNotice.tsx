@@ -1,4 +1,4 @@
-import { FormRow, FormSection, Hint } from "@/ui";
+import { FormRow, Hint } from "@/ui";
 import { useFriendsState } from "@/hooks/useFriends";
 import { useI18n, type TKey } from "@/i18n";
 import { TRUSTED_IMAGE_HOSTS } from "@/lib/image-hosts";
@@ -104,7 +104,7 @@ function FriendsServices() {
 export function PrivacyNotice() {
   const { t } = useI18n();
   return (
-    <FormSection title={t("components.privacy.title")} level={3}>
+    <div>
       <Hint icon="info">{t("components.privacy.intro")}</Hint>
       {SERVICES.map((service) => (
         <ServiceRow key={service.name} label={service.name} purpose={t(service.purpose)} hosts={service.hosts} />
@@ -113,6 +113,6 @@ export function PrivacyNotice() {
       <ServiceRow label="Discord" purpose={t("components.privacy.discord")} hosts={[t("components.privacy.discordWhere")]} />
       <ServiceRow label={t("components.privacy.imagesName")} purpose={t("components.privacy.images")} hosts={TRUSTED_IMAGE_HOSTS} />
       <Hint icon="info" className="mt-3.5">{t("components.security.noScan")}</Hint>
-    </FormSection>
+    </div>
   );
 }

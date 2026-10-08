@@ -1,0 +1,7 @@
+#include <windows.h>
+
+101 RCDATA "fonts/HankenGrotesk-Regular.ttf"
+102 RCDATA "fonts/HankenGrotesk-Bold.ttf"
+103 RCDATA "fonts/BigShouldersDisplay-Bold.ttf"
+201 RCDATA "fonts/HankenGrotesk-OFL.txt"
+202 RCDATA "fonts/BigShouldersDisplay-OFL.txt"

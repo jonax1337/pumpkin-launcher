@@ -52,6 +52,7 @@ pub mod sessionlog;
 pub mod skins;
 pub mod sockowner;
 pub mod storage;
+pub(crate) mod storage_location;
 pub mod store;
 pub mod system;
 pub mod templates;

@@ -12,7 +12,7 @@ import type {
   InviteEvent, InviteRevokedEvent, JavaInstall, JoinPlan, JoinSessionEvent, JoinTicket, LanEvent, LanStatus, LaunchOptions, LibrarySkin,
   LoaderVersion, LocalFile, LogKind, LogPayload, LogSession, MigrationCheck, MigrationOutcome, MigrationTarget, ModActivityEntry, ModConfirmEvent,
   ModConnectionEvent, ModLoader, ModOpenEvent, MsLoginStart, NetworkStatus, NewInstance, PackSelection, PackTarget, PackUpdateOutcome,
-  Screenshot, Server, ServerStatus, SkinProfile, SkinVariant, StorageOverview, Template, VersionEntry, World, WorldBackup,
+  Screenshot, Server, ServerStatus, SkinProfile, SkinVariant, StorageOverview, StorageRelocation, Template, VersionEntry, World, WorldBackup,
 } from "./types";
 
 /** Events des Backends (Tauri-Events bzw. im Browser-Mock der gleiche Name auf einem EventTarget) mit ihrer Nutzlast. */
@@ -296,6 +296,9 @@ export interface Backend {
   storageClearCache(): Promise<number>;
   /** Datenordner im Dateimanager öffnen. */
   storageOpenDir(): Promise<void>;
+  /** Alle Instanzdateien sicher verschieben und den aktiven Speicherort wechseln. */
+  storageSetInstancesDir(path: string): Promise<StorageRelocation>;
+  storageOpenInstancesDir(): Promise<void>;
   /** Auf dem Rechner installierte Java-Versionen, neueste zuerst. */
   detectJava(): Promise<JavaInstall[]>;
   /** Launcher-Fenster minimieren, wiederherstellen oder schließen (Einstellung „Beim Spielstart“). */

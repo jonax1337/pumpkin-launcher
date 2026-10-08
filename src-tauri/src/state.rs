@@ -46,14 +46,17 @@ pub struct AppState {
     pub signals: GameSignals,
     /// Shared Bridge listener, available at startup independently of Friends consent.
     pub bridge: ModBridge,
+    /// Hinweise vom Start, die den Nutzer betreffen, aber den Start nicht verhindern (etwa eine nicht gelöschte alte Kopie
+    /// des Instanzordners nach erfolgreichem Umzug).
+    pub startup_notices: Vec<String>,
     /// Die Einspeisung der Mod in die Spielstarts: JARs des Builds, Zustand je Instanz, Java-Versionen.
     pub ingame: Ingame,
     /// Die Freunde-Funktion; aus, bis `lib.rs` sie beim Start (oder der Nutzer beim Aktivieren) startet.
     pub friends: Friends,
     /// Geteilte Welten, Einladungen, Beitritte und die Mod; hängt sich erst mit `start` in `friends` ein.
     pub sessions: FriendSessions,
-    /// Laufende Spiele je Instanz-ID.
-    running: Mutex<HashMap<String, Running>>,
+    /// Laufende Spiele je Instanz-ID; `None` hält die Sperre während eines angeforderten Stopps.
+    running: Mutex<HashMap<String, Option<Running>>>,
     /// Abbrechbare Vorgänge je Instanz- bzw. operationId.
     cancels: Mutex<HashMap<String, CancellationToken>>,
     /// Eine Sperre für alle Instanzen: Installationen, Inhalte, Starts und Änderungen laufen nacheinander.
@@ -66,9 +69,14 @@ pub type OperationGuard<'a> = tokio::sync::MutexGuard<'a, ()>;
 
 impl AppState {
     pub fn load(data_dir: &Path) -> AppResult<Self> {
+        Self::load_with_instances_default(data_dir, None)
+    }
+
+    pub(crate) fn load_with_instances_default(data_dir: &Path, default: Option<&Path>) -> AppResult<Self> {
         fs::create_dir_all(data_dir)?;
         let signals = GameSignals::default();
         let dirs = Dirs::new(data_dir);
+        let startup_notices = crate::services::storage_location::initialize(&dirs, default)?;
         let bridge = ModBridge::new(signals.clone());
         let friends =
             Friends::new(&dirs, Arc::new(KeyringSecrets), signals.clone(), bridge.clone(), NetOptions::production())?;
@@ -93,6 +101,7 @@ impl AppState {
             skins: JsonStore::open(data_dir.join("skins.json"))?,
             ms: MsState::default(),
             dirs,
+            startup_notices,
             http,
             presence: Presence::discord(),
             bridge,
@@ -120,6 +129,14 @@ impl AppState {
     pub fn begin_instance_operation(&self, id: &str) -> AppResult<OperationGuard<'_>> {
         let guard = self.begin_operation()?;
         if self.is_running(id) {
+            return Err(AppError::invalid(coded!("errors.instance.stillRunning")));
+        }
+        Ok(guard)
+    }
+
+    pub fn begin_storage_operation(&self) -> AppResult<OperationGuard<'_>> {
+        let guard = self.begin_operation()?;
+        if !lock(&self.running).is_empty() {
             return Err(AppError::invalid(coded!("errors.instance.stillRunning")));
         }
         Ok(guard)
@@ -192,13 +209,21 @@ impl AppState {
         }
         let game = spawn()?;
         let pid = game.pid;
-        running.insert(instance_id.to_owned(), game);
+        running.insert(instance_id.to_owned(), Some(game));
         Ok(pid)
     }
 
     /// Nimmt die Instanz aus den laufenden; `None`, wenn sie nicht (mehr) läuft.
     pub fn take_running(&self, instance_id: &str) -> Option<Running> {
-        lock(&self.running).remove(instance_id)
+        lock(&self.running).remove(instance_id).flatten()
+    }
+
+    pub fn kill_running(&self, instance_id: &str) -> AppResult<()> {
+        let mut running = lock(&self.running);
+        let game = running.get_mut(instance_id).and_then(Option::take)
+            .ok_or_else(|| AppError::NotFound(coded!("errors.app.notFound.runningGame", id = instance_id).into()))?;
+        game.kill();
+        Ok(())
     }
 
     fn cancels(&self) -> MutexGuard<'_, HashMap<String, CancellationToken>> {
@@ -212,6 +237,20 @@ mod tests {
     use crate::services::check_cancelled;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
+
+    #[test]
+    fn relocation_rejects_mutations_and_stopping_games() {
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        let state = AppState::load(&root).unwrap();
+        let guard = state.begin_operation().unwrap();
+        assert!(state.begin_storage_operation().is_err());
+        drop(guard);
+        lock(&state.running).insert("stopping".into(), None);
+        assert!(state.begin_storage_operation().is_err());
+        state.take_running("stopping");
+        assert!(state.begin_storage_operation().is_ok());
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[tokio::test]
     async fn cancel_stops_work_and_reports_cancelled() {

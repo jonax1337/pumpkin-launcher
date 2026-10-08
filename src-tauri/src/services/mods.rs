@@ -167,7 +167,7 @@ fn plan_changes(dirs: &Dirs, instance_id: &str, mods: &[Mod]) -> AppResult<Vec<C
 
 /// Die Änderung, die `m` an `target` braucht; `None`, wenn dort schon der gewünschte Stand ist.
 fn plan_change(dirs: &Dirs, m: &Mod, hash: &str, target: PathBuf) -> AppResult<Option<Change>> {
-    content::regular_parents(&dirs.root, &target)?;
+    content::regular_parents(&dirs.instances_dir(), &target)?;
     let on_disk = hash_of_regular_file(&target)?;
     let ours = on_disk.as_deref().is_some_and(|sha1| sha1.eq_ignore_ascii_case(hash));
     if !m.enabled {

@@ -8,6 +8,7 @@ import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
 import { openPage, REPO_URL } from "@/lib/links";
 import pkg from "../../../package.json";
+import { SettingsInfo } from "./SettingsInfo";
 
 /** Version der laufenden App; im Browser die aus der package.json. */
 function useAppVersion() {
@@ -55,8 +56,12 @@ export function AboutTab() {
       </div>
       <UpdateRow />
       <LicenseRows />
-      <Hint className="mt-3.5">{t("pages.settings.aboutSources")}</Hint>
-      <PrivacyNotice />
+      <div className="my-3.5">
+        <SettingsInfo title={t("components.privacy.title")} label={t("components.privacy.title")}>
+          <PrivacyNotice />
+          <Hint className="mt-3.5">{t("pages.settings.aboutSources")}</Hint>
+        </SettingsInfo>
+      </div>
     </>
   );
 }

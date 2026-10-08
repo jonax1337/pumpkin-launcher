@@ -39,13 +39,18 @@
       "dangerousDisableAssetCspModification": ["style-src"],
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPDATA/instances/*/minecraft/screenshots/*"]
+        "scope": []
       }
     }
   },
   "bundle": {
     "active": true,
+    "publisher": "Jonas Laux",
     "createUpdaterArtifacts": true,
+    "resources": {
+      "installer/theme/fonts/HankenGrotesk-OFL.txt": "licenses/HankenGrotesk-OFL.txt",
+      "installer/theme/fonts/BigShouldersDisplay-OFL.txt": "licenses/BigShouldersDisplay-OFL.txt"
+    },
     "targets": [
       "nsis",
       "appimage",
@@ -72,7 +77,14 @@
     ],
     "windows": {
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "template": "installer/installer.nsi",
+        "installerHooks": "installer/theme/theme.nsh",
+        "headerImage": "installer/header.bmp",
+        "sidebarImage": "installer/sidebar.bmp",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "languages": ["English", "German"]
       }
     },
     "macOS": {
