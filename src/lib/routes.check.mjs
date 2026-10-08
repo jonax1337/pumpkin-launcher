@@ -22,9 +22,13 @@ assert.equal(
   '/discover?tab=modpack&projekt=abc&anbieter=curseforge',
 );
 const ftbPack = { tab: 'modpack', source: 'ftb', project: 'abc', projectSource: 'ftb' };
-assert.deepEqual(readDiscoverParams(params(discoverUrl(ftbPack))), ftbPack);
+assert.deepEqual(readDiscoverParams(params(discoverUrl(ftbPack))), { ...ftbPack, query: null });
 // Ohne Projekt gibt es keinen Anbieter in der Adresse.
 assert.equal(discoverUrl({ source: 'ftb', projectSource: 'ftb' }), '/discover?quelle=ftb');
+// Suchbegriff: wird kodiert und kommt unverändert zurück; leer steht nicht in der Adresse.
+assert.equal(discoverUrl({ query: 'Sodium & Co' }), '/discover?suche=Sodium+%26+Co');
+assert.equal(readDiscoverParams(params(discoverUrl({ query: 'Sodium & Co' }))).query, 'Sodium & Co');
+assert.equal(discoverUrl({ query: '' }), '/discover');
 
 // Instanz: unbekannte Tabs fallen auf die Inhalte zurück.
 assert.equal(instanceUrl('x1'), '/instances/x1');

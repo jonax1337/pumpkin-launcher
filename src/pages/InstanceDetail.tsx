@@ -100,6 +100,12 @@ function Loaded({ instance, tab, setTab, head, compact }: {
 }) {
   const { t } = useI18n();
   const [adding, setAdding] = useState(false);
+  // Absturzassistent: „Mod suchen“ öffnet das Hinzufügen mit vorbelegter Suche; `seed` baut den Dialog dafür neu auf.
+  const [search, setSearch] = useState({ query: "", seed: 0 });
+  const addContentFor = (query: string) => {
+    setSearch(({ seed }) => ({ query, seed: seed + 1 }));
+    setAdding(true);
+  };
   const updateFor = useCurrentUpdates(instance, instance.mods.length > 0);
   const analysis = useContentAnalysis(instance).data;
   const { findingsOf, total: warnTotal } = useWarnings(instance, analysis?.issues ?? []);
@@ -172,11 +178,11 @@ function Loaded({ instance, tab, setTab, head, compact }: {
         </div>
         {tab === "worlds" && <WorldsTab instance={instance} onLaunched={toLog} />}
         {tab === "screenshots" && <ScreenshotsTab instance={instance} />}
-        {tab === "console" && <LogConsole instance={instance} />}
+        {tab === "console" && <LogConsole instance={instance} onAddContent={addContentFor} />}
         {tab === "settings" && <SettingsTab instance={instance} packRequested={packRequested} onPackShown={() => setPackRequested(false)} />}
       </TabPanel>
 
-      <AddContentSheet instance={instance} open={adding} onOpenChange={setAdding} />
+      <AddContentSheet key={search.seed} instance={instance} open={adding} onOpenChange={setAdding} initialQuery={search.query} />
     </section>
     </ContextMenu>
   );

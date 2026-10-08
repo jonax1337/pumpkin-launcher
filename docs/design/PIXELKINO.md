@@ -20,6 +20,7 @@ route with mock data, not a shipped player page.
 | Play/status controls | `src/components/play/`, `src/components/play.css` |
 | Motion and accessibility styles | `src/ui/motion.css`, `src/ui/a11y.css` |
 | Appearance and shortcuts | `src/app/useAppearance.ts`, `shortcuts.ts`, `mainTabs.ts` |
+| Command palette (Ctrl/Cmd+K) | `src/app/palette/`; styles in `src/app/palette/palette.css`, imported by `src/index.css` |
 | Seasonal branding | `src/branding/`, repository `branding/` assets |
 
 Kit classes use `vx-` and data attributes for variants. Component styles are collected centrally; avoid per-component CSS imports that alter layer order. `index.html` establishes `theme, base, components, utilities` before stylesheets. Class names must not accidentally collide with Tailwind utilities.

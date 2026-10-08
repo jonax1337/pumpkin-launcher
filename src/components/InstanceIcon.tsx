@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { usePackIconUrl } from "@/hooks/usePackIconUrl";
+import { chooseIcon } from "@/lib/instanceIcon";
 import type { IconChoice, Instance } from "@/lib/types";
-import { glyphFor, GlyphSvg } from "@/pixel/icons";
+import { GlyphSvg } from "@/pixel/icons";
 import { BIOMES, type Biome } from "@/pixel/scene";
 import { cssVars } from "@/ui/util";
 
@@ -43,8 +44,6 @@ export function IconView({ icon, bio, fallback }: { icon: IconChoice; bio: Biome
 /** Das Icon der Instanz: ihre Wahl, sonst das Icon des Modpacks, sonst ein Pixel-Icon, das fest aus der ID folgt. */
 export function InstanceIcon({ instance, bio }: { instance: Instance; bio: Biome }) {
   const packIconUrl = usePackIconUrl(instance);
-  const [glyph, palette] = glyphFor(instance.id);
-  const standard: IconChoice = { type: "glyph", glyph, palette };
-  const icon = instance.icon ?? (packIconUrl ? { type: "image" as const, src: packIconUrl } : standard);
+  const { icon, standard } = chooseIcon(instance, packIconUrl);
   return <IconView icon={icon} bio={bio} fallback={standard} />;
 }

@@ -44,6 +44,7 @@ export function useContentActions(instance: Instance, titleOf: (mod: Mod) => str
     const doneLabel = name ? t("detail.content.updateOneDone", { name }) : t("detail.content.updateManyDone", { n: modIds.length });
     background.run({
       key: single ? single.id : "updates",
+      instanceId: instance.id,
       label: name ? t("detail.content.updateOneLabel", { name }) : t("detail.content.updateManyLabel", { n: modIds.length }),
       doneLabel,
       task: (op) => api.modrinthUpdateMods(instance.id, modIds, op),
@@ -60,6 +61,7 @@ export function useContentActions(instance: Instance, titleOf: (mod: Mod) => str
     const doneLabel = t("detail.content.switchDone", { name, version: version.version_number });
     background.run({
       key: mod.id,
+      instanceId: instance.id,
       label: t("detail.content.switchLabel", { name, version: version.version_number }),
       doneLabel,
       task: (op) => api.modrinthSwitchVersion(instance.id, mod.id, version.id, op),

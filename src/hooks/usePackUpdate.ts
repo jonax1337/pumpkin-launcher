@@ -99,6 +99,7 @@ export function usePackUpdate(instance: Instance) {
   const start = (target: PackTarget) =>
     run({
       key: `pack:${instance.id}`,
+      instanceId: instance.id,
       label: t("detail.pack.updateTask", { name: instance.name }),
       doneLabel: t("detail.pack.updateTaskDone", { name: instance.name }),
       cancellable: true,

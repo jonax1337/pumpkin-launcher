@@ -38,7 +38,7 @@ function applyMigration(inst: Instance, target: MigrationTarget, changes: ModCha
     if (change?.outcome === "disable") return { ...m, enabled: false };
     return change?.version ? { ...m, version: change.version } : m;
   });
-  if (gameChanges(inst, target)) inst.modpack = null;
+  if (gameChanges(inst, target)) Object.assign(inst, { modpack: null, modProfiles: [], activeModProfile: null });
   Object.assign(inst, target);
 }
 

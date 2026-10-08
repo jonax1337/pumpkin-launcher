@@ -8,7 +8,9 @@ import { useI18n, type TKey } from "@/i18n";
 import { JVM_PRESETS, presetArgs, type JvmPreset } from "@/lib/jvm";
 import { effectiveOnPlay } from "@/lib/onPlay";
 import { WindowChooser } from "@/pages/detail/settings/WindowChooser";
+import { LaunchFields } from "@/pages/detail/settings/LaunchFields";
 import { useSettings, type LauncherOnPlay } from "@/store/settings";
+import { LinksSection } from "./LinksSection";
 import { SettingsInfo } from "./SettingsInfo";
 
 const JVM_PRESET_KEYS: Record<JvmPreset, { name: TKey; note: TKey }> = {
@@ -141,6 +143,13 @@ function ResetRow() {
   );
 }
 
+/** Umgebungsvariablen, Wrapper und Befehle für Instanzen, die zu einem Feld nichts eingestellt haben. */
+function LaunchDefaults() {
+  const launch = useSettings((s) => s.launch);
+  const set = useSettings((s) => s.set);
+  return <LaunchFields scope="launcher" value={launch} onCommit={(next) => set({ launch: next })} />;
+}
+
 /** Einstellungen › Java & Start: Arbeitsspeicher, Java, JVM-Argumente und Fenster für alle Instanzen ohne eigene Angabe. */
 export function GameTab() {
   const { t } = useI18n();
@@ -155,6 +164,7 @@ export function GameTab() {
         <FormSection title="Java" level={3}><p>{t("pages.settings.javaAside")}</p></FormSection>
         <FormSection title={t("settings.jvm.label")} level={3}><p>{t("settings.jvm.aside")}</p></FormSection>
         <FormSection title={t("settings.discord.label")} level={3}><p>{t("settings.discord.aside")}</p></FormSection>
+        <FormSection title={t("launchSettings.section")} level={3}><p>{t("launchSettings.infoAside")}</p></FormSection>
       </SettingsInfo>
       <FormSection title={t("settings.sectionJava")} level={3} className="settings-field-grid">
         <FormRow
@@ -177,9 +187,13 @@ export function GameTab() {
         </FormRow>
         <LauncherOnPlayRow />
       </FormSection>
+      <FormSection title={t("launchSettings.section")} level={3} className="settings-field-grid">
+        <LaunchDefaults />
+      </FormSection>
       <FormSection title={t("settings.sectionInGame")} level={3}>
         <DiscordRow />
       </FormSection>
+      <LinksSection />
       <FormSection title={t("settings.sectionReset")} level={3}>
         <ResetRow />
       </FormSection>

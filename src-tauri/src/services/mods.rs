@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::Mod;
-use crate::services::download::{is_sha1, sha1_file, sha1_hex};
+use crate::services::download::{is_sha1, sha1_file, sha1_hex, RemoveOnDrop};
 use crate::services::{content, none_if_missing, remove_logged, require_plain_name, walk, Dirs};
 
 /// Pfad eines Cache-Eintrags. Der Hash wird Teil des Pfads, daher nur echte SHA-1-Hex-Strings.
@@ -30,9 +30,12 @@ pub fn cache_bytes(dirs: &Dirs, bytes: &[u8]) -> AppResult<String> {
     let dest = cache_path(dirs, &sha1)?;
     if !dest.exists() {
         fs::create_dir_all(dirs.mod_cache())?;
-        let tmp = dest.with_extension("jar.part");
+        // Ein eigener Name je Aufruf: Vorgänge an verschiedenen Instanzen legen dieselbe JAR womöglich gleichzeitig ab.
+        let tmp = dest.with_extension(format!("jar.{}.part", crate::models::new_id()));
+        let guard = RemoveOnDrop::new(tmp.clone());
         fs::write(&tmp, bytes)?;
         fs::rename(&tmp, &dest)?;
+        guard.disarm();
     }
     Ok(sha1)
 }

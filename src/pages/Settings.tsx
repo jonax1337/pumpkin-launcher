@@ -10,20 +10,8 @@ import { AppearanceTab } from "./settings/AppearanceTab";
 import { FriendsTab } from "./settings/FriendsTab";
 import { GameTab } from "./settings/GameTab";
 import { StorageTab } from "./settings/StorageTab";
+import { SECTIONS, sectionOf, type SectionId } from "./settings/sections";
 import "./settings/settings.css";
-
-// Abschnitte als Wert + Schlüssel; die Beschriftung löst die Oberfläche erst beim Rendern auf.
-const SECTIONS = [
-  { value: "konten", key: "components.account.accounts", icon: "user" },
-  { value: "spiel", key: "settings.tabJava", icon: "play" },
-  { value: "freunde", key: "friendsSettings.tab", icon: "users" },
-  { value: "speicher", key: "settings.tabStorage", icon: "folder" },
-  { value: "darstellung", key: "pages.settings.tabAppearance", icon: "eye" },
-  { value: "ueber", key: "pages.settings.tabAbout", icon: "info" },
-] as const;
-type SectionId = (typeof SECTIONS)[number]["value"];
-
-const sectionOf = (id: string | null) => SECTIONS.find((section) => section.value === id);
 
 /** Über den Launcher, darunter Hilfe und Fehlermeldungen. */
 function AboutAndSupport() {

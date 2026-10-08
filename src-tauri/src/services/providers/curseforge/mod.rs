@@ -1,8 +1,8 @@
 //! CurseForge über einen eigenen Proxy (Cloudflare Worker, siehe `proxy/`), der den API-Schlüssel hält. Der Launcher
 //! kennt keinen Schlüssel: Alle Abfragen gehen an den Worker, nur die Dateien selbst kommen direkt vom CurseForge-CDN.
-//! Damit geht alles im Launcher: Suche, Mods mit Abhängigkeiten, Modpacks (auch sehr große). Mods, deren Autoren Downloads
-//! außerhalb von CurseForge verbieten (`downloadUrl` fehlt), werden nicht umgangen, sondern als „manuell laden“ gemeldet
-//! (`Blocked`).
+//! Damit geht alles im Launcher: Suche, Mods mit Abhängigkeiten, Modpacks (auch sehr große). Nennt die API zu einer
+//! Datei keine Adresse (die Autoren haben Downloads durch andere Launcher abgewählt), lädt der Launcher sie vom festen
+//! Pfad des CDN; erst wenn das CDN sie auch dort nicht herausgibt, wird sie als „manuell laden“ gemeldet (`Blocked`).
 mod codes;
 mod dto;
 mod install;
@@ -130,8 +130,7 @@ fn version(f: &CfFile) -> Version {
         changelog: None,
         files: vec![File {
             hashes: f.sha1().map(|h| BTreeMap::from([("sha1".to_string(), h)])).unwrap_or_default(),
-            // Leer = die Autoren erlauben den Download nur über die Webseite.
-            url: f.download_url.clone().unwrap_or_default(),
+            url: f.download_url(),
             filename: f.file_name.clone(),
             primary: true,
             size: f.file_length,
@@ -166,10 +165,10 @@ mod tests {
     }
 
     #[test]
-    fn blocked_files_are_listed_without_a_download_url() {
+    fn files_without_an_api_url_carry_the_cdn_address() {
         let mut f = jei();
         f.download_url = None;
-        assert_eq!(version(&f).files[0].url, "");
+        assert_eq!(version(&f).files[0].url, f.cdn_url());
     }
 
     #[test]

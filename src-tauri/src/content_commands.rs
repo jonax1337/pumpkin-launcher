@@ -82,7 +82,7 @@ pub async fn modrinth_install_pack(
     name: String,
     operation_id: String,
 ) -> AppResult<Instance> {
-    let _operation = state.begin_operation()?;
+    let _operation = state.begin_creation()?;
     let state = state.inner();
     state
         .run_cancellable(&app, &operation_id, |on_progress| async move {
@@ -99,7 +99,7 @@ pub async fn modrinth_import_pack(
     name: String,
     operation_id: String,
 ) -> AppResult<Instance> {
-    let _operation = state.begin_operation()?;
+    let _operation = state.begin_creation()?;
     let data = content::local_pack(std::path::Path::new(&path))?;
     let state = state.inner();
     state
@@ -118,7 +118,7 @@ pub async fn curseforge_import_pack(
     name: String,
     operation_id: String,
 ) -> AppResult<Instance> {
-    let _operation = state.begin_operation()?;
+    let _operation = state.begin_creation()?;
     let state = state.inner();
     let (instance, blocked) = state
         .run_cancellable(&app, &operation_id, |on_progress| async move {
@@ -189,7 +189,7 @@ pub async fn provider_install_pack(
     operation_id: String,
 ) -> AppResult<Instance> {
     let request = PackRequest { source: Source::parse(&source)?, project_id, version_id, name };
-    let _operation = state.begin_operation()?;
+    let _operation = state.begin_creation()?;
     let state = state.inner();
     let (instance, blocked) = state
         .run_cancellable(&app, &operation_id, |on_progress| async move {
@@ -227,7 +227,7 @@ pub async fn provider_install_mod(
 }
 
 /// Holt eine Datei, die der Nutzer auf CurseForge von Hand geladen hat, aus dem Downloads-Ordner in die Instanz.
-/// `None` = noch nicht da oder der Launcher ist gerade beschäftigt; die Oberfläche fragt wieder.
+/// `None` = noch nicht da oder an der Instanz läuft gerade ein Vorgang; die Oberfläche fragt wieder.
 #[tauri::command]
 pub async fn curseforge_adopt_download(
     state: State<'_, AppState>,
@@ -387,7 +387,7 @@ pub async fn template_create_instance(
     name: String,
     operation_id: String,
 ) -> AppResult<Instance> {
-    let _operation = state.begin_operation()?;
+    let _operation = state.begin_creation()?;
     let state = state.inner();
     state
         .run_cancellable(&app, &operation_id, |on_progress| async move {
@@ -429,7 +429,7 @@ pub async fn instance_import(
     request: ImportRequest,
     operation_id: String,
 ) -> AppResult<Instance> {
-    let _operation = state.begin_operation()?;
+    let _operation = state.begin_creation()?;
     let source = imports::resolve(request).await?;
     state
         .run_cancellable(&app, &operation_id, |on_progress| imports::import(&state, source, on_progress))

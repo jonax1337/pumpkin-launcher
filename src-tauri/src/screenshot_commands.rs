@@ -25,7 +25,7 @@ pub fn screenshot_list(app: AppHandle, state: State<'_, AppState>, instance_id: 
 /// COM im STA-Modus, und das hat das Fenster dort schon eingerichtet.
 #[tauri::command]
 pub fn screenshot_delete(state: State<'_, AppState>, instance_id: String, file_name: String) -> AppResult<()> {
-    let _operation = state.begin_operation()?;
+    let _operation = state.begin_instance_operation_even_if_running(&instance_id)?;
     crate::services::content::regular_parents(&state.dirs.instances_dir(), &state.dirs.screenshots_dir(&instance_id))?;
     state.require_instance(&instance_id)?;
     screenshots::delete(&state.dirs.screenshots_dir(&instance_id), &file_name)?;

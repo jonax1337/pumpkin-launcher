@@ -96,6 +96,17 @@ impl Dirs {
         self.root.join("cache").join("mods")
     }
 
+    /// Argumentdateien laufender Starts, je Start ein Unterordner (`services::argfile`); nur für Sekunden da.
+    pub fn argfiles(&self) -> PathBuf {
+        self.root.join("cache").join("argfiles")
+    }
+
+    /// Icons der Instanzen für ihre Desktop-Verknüpfungen (`services::shortcut_icon`), je Instanz eine Datei; die
+    /// Verknüpfungen verweisen darauf, sie bleiben also liegen.
+    pub fn shortcut_icons(&self) -> PathBuf {
+        self.root.join("shortcut-icons")
+    }
+
     /// Skin-Bibliothek, Dateien als `<sha1>.png`.
     pub fn skins(&self) -> PathBuf {
         self.root.join("skins")

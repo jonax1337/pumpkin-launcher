@@ -234,7 +234,7 @@ pub(crate) fn discard_request(dirs: &Dirs) -> AppResult<()> {
     Ok(())
 }
 
-/// The caller holds the global operation lock and has excluded all running games.
+/// The caller holds the library-wide operation lock and has excluded all running games.
 ///
 /// The destination must be absent or an empty folder. Only the instance folders listed in `instances.json` are
 /// copied into a staging folder next to the destination and verified; then it is renamed into place and the

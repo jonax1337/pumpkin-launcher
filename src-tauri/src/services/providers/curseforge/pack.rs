@@ -16,7 +16,7 @@ use crate::{
         limits::{MANIFEST_LIMIT, PLAN_FILES, ZIP_LIMIT},
         modrinth::{self, identifier},
         progress::{Phase, ProgressFn},
-        providers::{remote_file::mib_progress, zip_files, PackRequest, RemoteFile},
+        providers::{cdn, remote_file::mib_progress, zip_files, PackRequest, RemoteFile},
         transport::read_capped_io,
         zip_guard::ensure_no_file_as_parent,
         Dirs,
@@ -165,7 +165,7 @@ async fn plan_zip(client: &reqwest::Client, file: fs::File, name: &str) -> AppRe
     manifest.ensure_file_count()?;
     let prefix = manifest.overrides_prefix()?;
     let (infos, mods) = fetch_manifest_entries(client, &manifest).await?;
-    let listed = classify_files(&manifest, &infos, &mods)?;
+    let listed = classify_files(client, &manifest, &infos, &mods).await?;
     let instance = Instance::from_new(NewInstance { name: name.into(), minecraft_version: manifest.minecraft.version, loader, loader_version });
     let mut pack = merge_overrides(zip, &prefix, instance, listed.files)?;
     pack.origins = listed.origins;
@@ -211,7 +211,12 @@ async fn fetch_manifest_entries(
 
 /// Sortiert die Manifest-Einträge: ladbare Dateien in ihren Ordner, nur über die Webseite erhältliche als `Blocked`;
 /// Dateien anderer Klassen (Welten, Konfigurationen, Unbekanntes) fallen weg.
-fn classify_files(manifest: &Manifest, infos: &HashMap<u64, CfFile>, mods: &HashMap<u64, CfMod>) -> AppResult<Listed> {
+async fn classify_files(
+    client: &reqwest::Client,
+    manifest: &Manifest,
+    infos: &HashMap<u64, CfFile>,
+    mods: &HashMap<u64, CfMod>,
+) -> AppResult<Listed> {
     let mut listed = Listed::default();
     for entry in &manifest.files {
         let file = infos
@@ -222,7 +227,7 @@ fn classify_files(manifest: &Manifest, infos: &HashMap<u64, CfFile>, mods: &Hash
         if file.file_name.is_empty() || file.file_name.contains(['/', '\\']) {
             return Err(AppError::invalid(coded!("errors.providers.unexpectedFileName", name = file.file_name)));
         }
-        match file.remote_file() {
+        match resolve_download(client, file).await {
             Ok(remote) => {
                 listed.files.push((format!("{folder}/{}", file.file_name), remote));
                 listed.origins.insert(file.file_name.clone(), (entry.project_id, entry.file_id));
@@ -237,6 +242,27 @@ fn classify_files(manifest: &Manifest, infos: &HashMap<u64, CfFile>, mods: &Hash
         }
     }
     Ok(listed)
+}
+
+/// Die Datei zum Laden. Nennt die API keine Adresse, gilt der feste Pfad des CDN, sofern es die Datei dort herausgibt;
+/// sonst bleibt nur die Webseite (`Blocked`).
+async fn resolve_download(client: &reqwest::Client, file: &CfFile) -> AppResult<RemoteFile> {
+    let remote = file.remote_file()?;
+    if file.has_api_url() || cdn_serves(client, &remote.urls[0]).await {
+        return Ok(remote);
+    }
+    Err(AppError::invalid(coded!("errors.providers.downloadOnlyOnCurseForge")))
+}
+
+/// Ob das CDN die Datei herausgibt: eine Anfrage, von der nur die Kopfzeilen gelesen werden.
+async fn cdn_serves(client: &reqwest::Client, url: &str) -> bool {
+    match cdn::get(client, url).await {
+        Ok(_) => true,
+        Err(err) => {
+            tracing::info!(%err, url, "Das CDN gibt die Datei nicht heraus");
+            false
+        }
+    }
 }
 
 /// Plan aus den Dateien zum Laden und den Overrides des Zips. Overrides gewinnen gegen gleichnamige Downloads (wie im

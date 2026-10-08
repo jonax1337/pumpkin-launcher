@@ -4,6 +4,179 @@ Last updated: 2026-10-08.
 
 For installation and a first game, start with the [launcher guide](README.md#download-and-install).
 
+## Unreleased
+
+### Command palette
+
+- Press Ctrl+K (Cmd+K on macOS) anywhere to open a command palette: type to
+  filter, Up/Down/Home/End to select, Enter to run, Esc to close. It does not
+  open over another dialog, and the shortcut is listed in the `?` overview.
+- It finds instances ("Play", "Stop", "Open", and "Play last" into the world or
+  server of the last Quick Play), every page and Settings tab, and actions: new
+  instance, import from another launcher, check for launcher updates, open the
+  data and instances folders, animated scenes on/off and text size.
+- "Play" and "Stop" use the same paths as the Play button, including the stop
+  confirmation; entries that cannot run right now are dimmed with the reason.
+- "Search Discover for ..." opens Discover with the typed text in its search
+  field (`/discover?suche=...`).
+- Matching ignores case and accents and ranks prefixes before word starts before
+  scattered letters. With an empty field, the last five commands you ran come
+  first; they are remembered on this device.
+
+### Crash assistant
+
+- After a crash, the Log tab now explains what went wrong and offers a fix to
+  apply with one click, instead of only naming up to three suspect mods. It
+  reads the crash report; without one, it reads the log of the last session of
+  that launch. Each finding shows a short excerpt from the report.
+- It recognizes a full Java heap (raise memory to double, rounded up to 512 MB
+  steps and capped at what the PC allows; at the cap it only explains), a Java
+  version that is too old (shows the Java version that the class file version
+  needs; can remove a custom Java path), a missing mod dependency (Fabric,
+  Quilt, Forge and NeoForge; searches for it in Add content and can switch off
+  the mod that needs it), a failed Mixin and duplicate mods (switch the mod off),
+  a missing OpenGL driver (links to Minecraft Help for Windows messages), a busy
+  network port (explanation only) and damaged or missing game files (repair).
+- If none of these matches, the suspect mods from the report are listed, each
+  with a switch-off button, as before. The crash notification keeps naming them.
+- A game that dies before it writes a log or report (for example a Java that is
+  too old for the game) leaves nothing to analyze; the assistant then stays out of
+  the way.
+- New command `crash_diagnose` (instance ID and the launcher's default memory)
+  returns the findings; the rules live in `services::crashdiagnosis`, one file
+  per rule, registered in one table.
+
+### Release signing
+
+- The release workflow can Authenticode-sign the Windows installer through Azure
+  Artifact Signing: the app executable, Tauri's NSIS plugins, the installer theme
+  plugin, the uninstaller and the installer carry a timestamped signature, and
+  the updater signature is created afterwards over the signed installer.
+- The release workflow can Developer-ID sign and notarize the universal macOS
+  app when the Apple signing secrets are configured.
+- Without the secrets and variables listed in CONTRIBUTING.md, the workflow
+  behaves as before: unsigned Windows installer, ad hoc signed macOS app. Forks
+  need no setup.
+
+### Mod profiles
+
+- Save named profiles per instance in the Content tab (up to 20, names of 1 to
+  40 characters) and switch between them, for example a lean "Performance" set
+  and a "Full" set. A profile remembers which mods and shaders are on; resource
+  packs are chosen in the game and are not part of it.
+- Applying a profile switches content exactly like the on/off switches do: the
+  files and `instances.json` change together or not at all, it is refused while
+  the game runs, and pinning is untouched. Mods installed after a profile was
+  saved stay as they are, and mods removed since are ignored.
+- The toolbar shows the active profile and marks it "modified" once the current
+  state differs, with "Reset to ..." in the menu to restore it. Saving under an
+  existing name asks before overwriting; profiles can be renamed and deleted.
+- Profiles are not exported with `.mrpack` files or templates. Duplicating an
+  instance keeps its profiles; changing the Minecraft version or loader drops
+  them, because they describe the old game's mods.
+
+### Parallel instance operations
+
+- Installing, importing or editing one instance no longer blocks the others:
+  while a modpack downloads or an instance installs, you can launch another
+  instance, change its settings, back up its worlds or delete it. Before, a
+  single launcher-wide lock refused everything with "An installation or change
+  is already in progress".
+- Two operations on the same instance still exclude each other, and a running
+  game still refuses changes to its own instance.
+- Moving the instance folder, clearing the mod cache and the startup clean-up
+  of interrupted operations need the whole library to themselves: they are
+  refused while any instance operation runs and hold off new ones until they
+  finish.
+- Game installs still take turns writing the shared libraries, assets and Java
+  runtimes; a second install waits for the first instead of failing.
+- Content jobs started from the interface (adding content, importing,
+  exporting, world backups) still run one after another. The instance pages
+  block launching and editing only for the instance a job works on.
+
+### Shortcuts and deep links
+
+- Create a desktop shortcut from an instance's menu (Home, library, instance
+  page): a `.url` file on Windows, a `.desktop` file on Linux (also added to
+  the application menu) and a `.webloc` file on macOS. A double click starts the
+  instance without a prompt. The shortcut holds only a `pumpkin://launch/<id>`
+  link with a token, derived from a per-installation secret in
+  `shortcut-secret.txt` and valid for that instance only; an existing file is
+  never overwritten.
+- The shortcut carries the instance's own icon: the image you picked, otherwise
+  the modpack's icon (Modrinth, CurseForge, FTB and Technic packs; the launcher
+  downloads it once when you create the shortcut), otherwise the pixel icon. It
+  is stored as a 256 px `.ico` (Windows) or `.png` (Linux, macOS) in
+  `shortcut-icons/` in the launcher's data folder and replaced when you create
+  another shortcut. On Windows, a data path with non-ASCII characters falls back
+  to the launcher icon, since `.url` files are read in the ANSI code page. On
+  macOS the icon is applied through the Finder; this path has not been tried on a Mac.
+- Importing from the CurseForge App now brings the instance's icon along: the
+  image set in the app (`profileImagePath`), otherwise the icon of the installed
+  modpack, which the app stores only as an address and the launcher downloads once
+  from CurseForge's image server (`forgecdn.net`, nothing else). If it cannot be
+  loaded within 15 seconds, the instance keeps its pixel icon.
+- Register the `pumpkin://` scheme with the installer and bundles. A link opens
+  a running launcher or starts it: `pumpkin://launch/<id>` (optionally
+  `?world=<folder>` or `?server=<host[:port]>`) always asks "Start <name>?"
+  unless it carries a valid shortcut token, `pumpkin://open/<id>` opens the
+  instance page and `pumpkin://install/modrinth/<type>/<slug>` opens the
+  project, where installing is still your decision. Malformed links, unknown
+  paths and links for instances that no longer exist are ignored or reported
+  without starting anything.
+- Settings > Java & launch gets "Open Modrinth and CurseForge links in Pumpkin"
+  (Windows and Linux, off by default): it registers `modrinth://` and
+  `curseforge://` for this launcher and switching it off releases them again.
+  The switch shows what the system reports, and the launcher never registers
+  these schemes on its own.
+- Linux AppImages register `pumpkin://` for the current user at startup, as the
+  package itself cannot.
+
+### CurseForge downloads
+
+- Modpacks and mods whose authors hide the download address from other launchers
+  no longer send you to the CurseForge website. When the API names no address, the
+  launcher loads the file from CurseForge's CDN path for that file id and name, the
+  same address the website uses, and still verifies size and SHA-1. A pack plan checks
+  that the CDN serves the file; only a file the CDN refuses is still listed for a
+  manual download.
+- The catalog (Discover) now shows these files as installable too, and single mods
+  and their dependencies use the same path.
+
+### Launch environment, hooks and argument files
+
+- Each instance (Settings tab, "Launch environment") and the launcher (Settings >
+  Java & launch) can set environment variables, a wrapper command and commands
+  that run before launch and after exit. An instance's value wins per field; an
+  empty field uses the launcher default.
+- Environment variables follow `[A-Za-z_][A-Za-z0-9_]*` (up to 64, values up to
+  4096 characters); names starting with `PUMPKIN_` are reserved for the launcher
+  and refused. The Pumpkin Bridge variables are applied last and always win.
+- The wrapper (`wrapper args... java ...`) and the hooks are started directly,
+  never through a shell; quotes group words, backslashes stay as typed. A wrapper
+  that cannot be found stops the launch with a clear error. On Linux, presets
+  add GameMode, MangoHud, NVIDIA PRIME offload and AMD `DRI_PRIME`.
+- The pre-launch command runs in the game folder after the launch is prepared;
+  a failure or running longer than 60 seconds cancels the launch with its exit
+  code in the message. The post-exit command runs in the background after the game
+  exits (also limited to 60 seconds) and only logs failures. Both receive
+  `PUMPKIN_INSTANCE_ID`, `PUMPKIN_INSTANCE_NAME`, `PUMPKIN_GAME_DIR`,
+  `PUMPKIN_MC_VERSION` and `PUMPKIN_LOADER`; the post-exit command also gets
+  `PUMPKIN_EXIT_CODE` (`-1` when the game left no code).
+- Modpack, template and launcher imports never carry wrappers, hooks or variables;
+  only duplicating your own instance copies them.
+- With Java 9 or newer, Minecraft now starts with a single `@file` argument: the
+  arguments, including the Microsoft access token, no longer appear on the command
+  line and the Windows command-line length limit no longer applies. The file is
+  owner-only on Linux and macOS, lives in the launcher's cache folder and is deleted
+  seconds after the start; leftovers of a crashed session are removed at startup.
+  Java 8 (older Minecraft versions), an unknown Java version and, on Windows,
+  arguments or folders with non-ASCII characters keep the plain command line.
+- Stopping a game ends the whole process tree, so a wrapper that starts Minecraft
+  as a child (any script on Windows) no longer leaves the game running and the
+  instance marked as running. A wrapper's console window is hidden on Windows.
+
+
 ## 0.4.0 — 2026-10-08
 
 ### Windows installer

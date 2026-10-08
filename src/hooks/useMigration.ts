@@ -44,6 +44,7 @@ export function useMigration(instance: Instance) {
   const inPlace = (target: MigrationTarget) =>
     run({
       key: `migrate:${instance.id}`,
+      instanceId: instance.id,
       label: t("detail.migrate.task", label(target)),
       doneLabel: t("detail.migrate.taskDone", label(target)),
       cancellable: true,
@@ -57,6 +58,7 @@ export function useMigration(instance: Instance) {
   const asCopy = (target: MigrationTarget) =>
     run({
       key: `migrate:${instance.id}`,
+      instanceId: instance.id,
       label: t("detail.migrate.copyTask", label(target)),
       doneLabel: t("detail.migrate.copyTaskDone", label(target)),
       cancellable: true,

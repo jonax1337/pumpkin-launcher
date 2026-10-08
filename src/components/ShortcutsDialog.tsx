@@ -16,6 +16,7 @@ export function ShortcutsDialog() {
   const open = useShortcutHelp((s) => s.open);
   const rows = [
     ...TABS.map((tab) => ({ label: t("ui.shortcut.goTo", { name: t(tab.key) }), keys: [tab.shortcut] })),
+    { label: t("palette.shortcut"), keys: [SHORTCUT.palette] },
     { label: t("ui.shortcut.settings"), keys: [SHORTCUT.settings] },
     { label: t("ui.shortcut.newInstance"), keys: [SHORTCUT.newInstance] },
     { label: t("ui.shortcut.play"), keys: [SHORTCUT.play] },

@@ -1,0 +1,29 @@
+/* Befehlspalette (app/palette): Eingabe oben, darunter die scrollende Ergebnisliste in Gruppen.
+   Einträge sehen aus wie Menüeinträge (.vx-mi, ui/overlay.css), Gruppenköpfe nutzen .vx-mlabel. Keine eigene Bewegung. */
+
+/* Der Körper des Dialogs scrollt hier nicht, sondern nur die Liste; das Eingabefeld bleibt oben stehen */
+.vx-dlg-b:has(> .vx-pal) { display: flex; flex-direction: column; overflow: hidden; }
+.vx-pal { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 10px; }
+.vx-pal-empty { padding: 0 4px; color: var(--fg-3); font-size: calc(13px * var(--tz)); }
+.vx-pal-list { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+
+/* Eintrag: mindestens 48 px (Name und Untertitel); markiert (Pfeiltasten, Zeiger) = hellere Platte + Kupferbalken links.
+   scroll-margin lässt beim Nachführen den Gruppenkopf darüber im Blick. */
+.vx-pal-opt { position: relative; isolation: isolate; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 12px 6px 10px; color: var(--fg); cursor: pointer; user-select: none; scroll-margin-block: 32px 4px; }
+.vx-pal-opt::before { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--n1); }
+.vx-pal-opt .vx-ico { flex: none; color: var(--fg-2); }
+.vx-pal-opt[data-active]::before { background: var(--hl); box-shadow: inset var(--u2) 0 0 var(--copper); }
+.vx-pal-opt[data-active] .vx-ico { color: var(--fg); }
+.vx-pal-opt:active:not([aria-disabled="true"])::before { background: var(--panel-2); }
+.vx-pal-t { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.vx-pal-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: calc(14px * var(--tz)); font-weight: 600; }
+.vx-pal-s { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-3); font-size: calc(13px * var(--tz)); }
+
+/* Gerade nicht ausführbar: gedimmt, der Grund steht als Untertitel (Enter und Klick tun nichts) */
+.vx-pal-opt[aria-disabled="true"] { color: var(--fg-3); cursor: default; }
+.vx-pal-opt[aria-disabled="true"] .vx-ico { color: var(--fg-3); }
+
+@media (forced-colors: active) {
+  .vx-pal-opt[data-active]::before { border: 2px solid Highlight; }
+  .vx-pal-opt[aria-disabled="true"] { color: GrayText; }
+}

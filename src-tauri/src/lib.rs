@@ -2,13 +2,17 @@ mod account_commands;
 mod announcement_commands;
 mod commands;
 mod content_commands;
+mod crash_commands;
+mod deep_link;
 mod friends_commands;
 mod friends_session_commands;
 mod ingame_commands;
 mod ingame_launch;
 mod pack_commands;
 mod pack_open;
+mod profile_commands;
 mod screenshot_commands;
+mod shortcut_commands;
 mod skin_commands;
 pub mod error;
 pub mod models;
@@ -65,14 +69,17 @@ pub fn run() {
         // Zuerst: ein zweiter Prozess würde dieselben JSON-Stores schreiben.
         .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
             pack_open::announce_args(app, &args, Path::new(&cwd));
+            deep_link::announce_args(app, &args);
             focus_main_window(app);
         }))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(move |app| {
             app.manage(pack_open::OpenedPack::from_process_args());
+            app.manage(deep_link::DeepLinkInbox::from_process_args());
             let loaded = (|| -> Result<state::AppState, Box<dyn std::error::Error>> {
                 let data_dir = app.path().app_data_dir()?;
                 // Folders that could not be merged or moved are reported but never stop the start.
@@ -106,6 +113,9 @@ pub fn run() {
                     return Ok(());
                 }
             };
+            // Vor dem Fenster und damit vor jedem Start: was von früher übrig ist, gehört keinem laufenden Start.
+            services::argfile::sweep_stale(&state.dirs);
+            app.manage(services::shortcut_key::ShortcutKey::in_dir(&state.dirs.root));
             app.manage(state);
             for window in &windows {
                 tauri::WebviewWindowBuilder::from_config(app, window)?.build()?;
@@ -128,6 +138,8 @@ pub fn run() {
             attach_friends_directory(app.handle());
             start_friends(app.handle().clone());
             shut_down_friends_before_exit(app.handle());
+            #[cfg(target_os = "linux")]
+            deep_link::register_scheme_for_appimage(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -139,6 +151,10 @@ pub fn run() {
             commands::instance_set_group,
             commands::instance_set_icon,
             commands::instance_set_scene,
+            profile_commands::mod_profile_save,
+            profile_commands::mod_profile_apply,
+            profile_commands::mod_profile_rename,
+            profile_commands::mod_profile_delete,
             commands::delete_instance,
             commands::versions_list,
             commands::instance_install,
@@ -192,6 +208,11 @@ pub fn run() {
             content_commands::instance_export_targets,
             content_commands::instance_export,
             pack_open::pack_open_take,
+            deep_link::deep_link_take,
+            deep_link::deep_link_foreign_enabled,
+            deep_link::deep_link_set_foreign,
+            shortcut_commands::instance_create_shortcut,
+            shortcut_commands::instance_pack_icon,
             content_commands::import_detect,
             content_commands::instance_import,
             pack_commands::pack_changelog,
@@ -203,6 +224,7 @@ pub fn run() {
             support_commands::debug_info,
             support_commands::log_sessions,
             support_commands::log_session_read,
+            crash_commands::crash_diagnose,
             storage_commands::storage_overview,
             storage_commands::storage_clear_cache,
             storage_commands::storage_open_dir,
@@ -290,6 +312,8 @@ pub fn run() {
 fn handle_run_event(app: &tauri::AppHandle, event: tauri::RunEvent) {
     if let tauri::RunEvent::Opened { urls } = event {
         announce_opened_pack(app, &urls);
+        deep_link::announce_urls(app, &urls);
+        focus_main_window(app);
     }
 }
 

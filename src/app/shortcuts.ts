@@ -13,6 +13,7 @@ export const SHORTCUT = {
   newInstance: withMod("N"),
   play: withMod("Enter"),
   search: withMod("F"),
+  palette: withMod("K"),
 } as const;
 
 /** Taste ohne Befehlstaste: fokussiert die Suche der Seite. */

@@ -9,6 +9,8 @@ type BackgroundTask = {
   doneLabel: string;
   /** Das Aufgaben-Menü zeigt „Abbrechen“. */
   cancellable?: boolean;
+  /** Die Instanz, an der der Vorgang arbeitet; ohne Angabe legt er eine neue an. */
+  instanceId?: string;
   task: (operationId: string) => Promise<Instance>;
   /** Läuft nur bei Erfolg und nur, wenn der Vorgang wirklich gestartet wurde (nicht, wenn schon einer läuft). */
   onDone?: (result: Instance) => void;
@@ -20,7 +22,9 @@ type BackgroundTask = {
  */
 export function useBackgroundTask() {
   const install = useContentInstall();
-  const run = ({ key, label, doneLabel, cancellable, task, onDone }: BackgroundTask) =>
-    install.mutate(withTarget(key, task, label, { cancellable, doneLabel }), { onSuccess: (result) => result && onDone?.(result) });
+  const run = ({ key, label, doneLabel, cancellable, instanceId, task, onDone }: BackgroundTask) =>
+    install.mutate(withTarget(key, task, label, { cancellable, doneLabel, instanceIds: instanceId ? [instanceId] : undefined }), {
+      onSuccess: (result) => result && onDone?.(result),
+    });
   return { run, isPending: install.isPending };
 }

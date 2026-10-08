@@ -211,9 +211,9 @@ struct UntrackedFile {
 /// bekommen die Dateien aus `mods/`, `resourcepacks/`, `shaderpacks/` gecacht eingetragen;
 /// erkannt per Modrinth-Sammelabfrage, ohne Netz als lokal. Liefert die Anzahl neuer Einträge.
 /// Nur leere Listen: sonst kämen vom Nutzer entfernte Mods zurück, deren Datei nicht löschbar war.
-/// Läuft unter dem Operations-Lock; ist er belegt, entfällt der Lauf bis zum nächsten Start.
+/// Läuft unter der Sperre der ganzen Bibliothek; läuft irgendein anderer Vorgang, entfällt der Lauf bis zum nächsten Start.
 pub async fn adopt_untracked(state: &AppState) -> AppResult<usize> {
-    let Ok(_guard) = state.begin_operation() else {
+    let Ok(_guard) = state.begin_library_operation() else {
         tracing::info!("Nachtragen übersprungen: ein anderer Vorgang läuft");
         return Ok(0);
     };
@@ -435,7 +435,7 @@ mod tests {
         // auch wenn eine entfernte Mod-Datei noch im Ordner liegt.
         fs::write(game.join("mods/entfernt.jar"), "x").unwrap();
         assert_eq!(adopt_untracked(&state).await.unwrap(), 0);
-        // Belegter Operations-Lock: Lauf entfällt.
+        // Läuft ein Vorgang an irgendeiner Instanz, entfällt der Lauf.
         let empty = state
             .instances
             .insert(Instance::from_new(NewInstance {
@@ -448,7 +448,7 @@ mod tests {
         let empty_mods = state.dirs.game_dir(&empty.id).join("mods");
         fs::create_dir_all(&empty_mods).unwrap();
         fs::write(empty_mods.join("b.jar"), "b").unwrap();
-        let busy = state.begin_operation().unwrap();
+        let busy = state.begin_instance_operation(&empty.id).unwrap();
         assert_eq!(adopt_untracked(&state).await.unwrap(), 0);
         drop(busy);
         assert_eq!(adopt_untracked(&state).await.unwrap(), 1);

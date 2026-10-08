@@ -16,7 +16,8 @@ export function packProject(modpack: ModpackOrigin | null): PackProject | null {
 
 /**
  * Adresse des Modpack-Icons, aus dem die Instanz stammt; `undefined` ohne Pack, ohne Icon und solange nichts geladen ist (offline).
- * Wird nur angezeigt und nie auf die Platte geschrieben: bei CurseForge verbieten die API-Bedingungen das Zwischenspeichern.
+ * Die Oberfläche zeigt es nur an; gespeichert wird es nur auf Wunsch des Nutzers: als Icon einer Desktop-Verknüpfung und
+ * beim Import aus der CurseForge App.
  */
 export function usePackIconUrl(instance: Instance): string | undefined {
   const pack = packProject(instance.modpack);

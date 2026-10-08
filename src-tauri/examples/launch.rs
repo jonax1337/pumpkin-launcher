@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use launcher_lib::models::{GameWindow, ModLoader};
 use launcher_lib::services::install::InstallStep;
-use launcher_lib::services::launch::{self, LaunchSpec, Running};
+use launcher_lib::services::launch::{self, GameCommand, LaunchSpec, Running};
 use launcher_lib::services::loader::{self, GameChoice, InstalledGame};
 use launcher_lib::services::mojang::{VersionManifest, MANIFEST_URL};
 use launcher_lib::services::rules::Env;
@@ -129,7 +129,8 @@ fn start(dirs: &Dirs, game: &InstalledGame, instance_id: &str, username: &str) -
         exit_tx.send(result.code).ok();
     };
     let game_dir = dirs.game_dir(instance_id);
-    let running = launch::spawn(&game.java, &args, &game_dir, &[], |stream, line| println!("[{stream:?}] {line}"), |_| {}, on_exit)?;
+    let command = GameCommand { wrapper: None, java: &game.java, args: &args, argfile_dir: None, game_dir: &game_dir, env: &[] };
+    let running = launch::spawn(&command, |stream, line| println!("[{stream:?}] {line}"), |_| {}, on_exit)?;
     Ok((running, exit_rx))
 }
 

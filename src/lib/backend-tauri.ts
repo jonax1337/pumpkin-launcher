@@ -87,6 +87,10 @@ export function createTauriBackend(): Backend {
     setInstanceGroup: (instanceId, group) => call("instance_set_group", { instanceId, group }),
     setInstanceIcon: (instanceId, icon) => call("instance_set_icon", { instanceId, icon }),
     setInstanceScene: (instanceId, scene) => call("instance_set_scene", { instanceId, scene }),
+    modProfileSave: (instanceId, name) => call("mod_profile_save", { instanceId, name }),
+    modProfileApply: (instanceId, profileId) => call("mod_profile_apply", { instanceId, profileId }),
+    modProfileRename: (instanceId, profileId, name) => call("mod_profile_rename", { instanceId, profileId, name }),
+    modProfileDelete: (instanceId, profileId) => call("mod_profile_delete", { instanceId, profileId }),
     deleteInstance: (id) => call("delete_instance", { id }),
     duplicateInstance: (instanceId, operationId) => call("instance_duplicate", { instanceId, operationId }),
     exportEntries: (instanceId) => call("instance_export_entries", { instanceId }),
@@ -116,6 +120,11 @@ export function createTauriBackend(): Backend {
     templateImport: (path) => call("template_import", { path }),
 
     takeOpenedPack: () => call("pack_open_take"),
+    takeDeepLinks: () => call("deep_link_take"),
+    foreignLinksEnabled: () => call("deep_link_foreign_enabled"),
+    setForeignLinks: (enabled) => call("deep_link_set_foreign", { enabled }),
+    createShortcut: (instanceId, iconPng) => call("instance_create_shortcut", { instanceId, iconPng }),
+    packIcon: (instanceId) => call("instance_pack_icon", { instanceId }),
 
     versionsList: () => call("versions_list"),
     loaderVersions: (loader, mcVersion) => call("loader_versions", { loader, mcVersion }),
@@ -138,6 +147,7 @@ export function createTauriBackend(): Backend {
     debugInfo: ({ defaultMemoryMb, javaPath, instanceId }) => call("debug_info", { defaultMemoryMb, javaPath, instanceId }),
     logSessions: (instanceId) => call("log_sessions", { instanceId }),
     logSessionRead: (instanceId, sessionId) => call("log_session_read", { instanceId, sessionId }),
+    crashDiagnose: (instanceId, defaultMemoryMb) => call("crash_diagnose", { instanceId, defaultMemoryMb }),
 
     storageOverview: () => call("storage_overview"),
     storageClearCache: () => call("storage_clear_cache"),

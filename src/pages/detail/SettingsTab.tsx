@@ -4,6 +4,7 @@ import { useI18n } from "@/i18n";
 import type { Instance } from "@/lib/types";
 import { GameSection } from "./settings/GameSection";
 import { GeneralSection } from "./settings/GeneralSection";
+import { LaunchSection } from "./settings/LaunchSection";
 import { NotesSection } from "./settings/NotesSection";
 import { PackSection } from "./settings/PackSection";
 import { useInstanceForm } from "./settings/useInstanceForm";
@@ -23,6 +24,7 @@ export function SettingsTab({ instance, packRequested = false, onPackShown }: { 
       {locked && <Hint className="mb-4">{t("detail.settings.lockedHint")}</Hint>}
       <GeneralSection instance={instance} form={form} locked={locked} />
       <GameSection instance={instance} form={form} locked={locked} />
+      <LaunchSection instance={instance} form={form} locked={locked} />
       <NotesSection instance={instance} form={form} locked={locked} />
       <VersionSection instance={instance} />
       <PackSection instance={instance} requested={packRequested} onShown={onPackShown} />

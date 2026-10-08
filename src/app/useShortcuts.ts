@@ -5,6 +5,7 @@ import { platform } from "@/lib/platform";
 import { newInstanceUrl } from "@/lib/routes";
 import { dialogOpen } from "./dialogOpen";
 import { TABS } from "./mainTabs";
+import { openPalette } from "./palette/CommandPalette";
 import { HELP_KEY, SEARCH_KEY } from "./shortcuts";
 
 /** Eingabearten, in die man nichts tippt (dort bleiben auch die Einzeltasten frei). */
@@ -50,8 +51,9 @@ function clickMainPlay() {
 }
 
 /**
- * Befehle mit Befehlstaste. In Textfeldern gelten nur Strg+Zahl und Strg+F: Strg+Enter ist dort eine Eingabegeste,
- * Strg+N und Strg+, ließen beim Wegnavigieren Getipptes verloren gehen. `true`, wenn die Taste etwas ausgelöst hat.
+ * Befehle mit Befehlstaste. In Textfeldern gelten nur Strg+Zahl, Strg+F und Strg+K (die Palette lässt das Feld unberührt):
+ * Strg+Enter ist dort eine Eingabegeste, Strg+N und Strg+, ließen beim Wegnavigieren Getipptes verloren gehen.
+ * `true`, wenn die Taste etwas ausgelöst hat.
  */
 function runCommand(key: string, navigate: NavigateFunction, inField: boolean) {
   const tab = TABS[Number(key) - 1];
@@ -61,6 +63,10 @@ function runCommand(key: string, navigate: NavigateFunction, inField: boolean) {
   }
   const command = key.toLowerCase();
   if (command === "f") return focusPageSearch();
+  if (command === "k") {
+    openPalette();
+    return true;
+  }
   if (inField) return false;
   switch (command) {
     case ",":
@@ -85,10 +91,10 @@ function runPlainKey(key: string) {
 }
 
 /**
- * Strg+1…n wechselt den Bereich, Strg+, öffnet die Einstellungen, Strg+N „Neue Instanz“, Strg+Enter „Spielen“,
- * Strg+F und "/" fokussieren die Suche der Seite, "?" zeigt die Übersicht (macOS: Cmd statt Strg).
- * Bei offenem Dialog nichts (sonst gingen Eingaben verloren); Einzeltasten nur außerhalb von Textfeldern und Menüs,
- * Befehle in Textfeldern nur Strg+Zahl und Strg+F.
+ * Strg+1…n wechselt den Bereich, Strg+K öffnet die Befehlspalette, Strg+, die Einstellungen, Strg+N „Neue Instanz“,
+ * Strg+Enter „Spielen“, Strg+F und "/" fokussieren die Suche der Seite, "?" zeigt die Übersicht (macOS: Cmd statt Strg).
+ * Bei offenem Dialog nichts (sonst gingen Eingaben verloren, und die Palette öffnet sich nie über einem anderen Dialog);
+ * Einzeltasten nur außerhalb von Textfeldern und Menüs, Befehle in Textfeldern nur Strg+Zahl, Strg+F und Strg+K.
  */
 export function useShortcuts() {
   const navigate = useNavigate();

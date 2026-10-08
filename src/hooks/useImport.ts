@@ -79,7 +79,7 @@ async function adoptIcon(qc: QueryClient, instance: Instance, icon: string) {
 }
 
 /**
- * Importiert Instanzen nacheinander (das Backend erlaubt nur einen Vorgang zur Zeit); jede erscheint mit Fortschritt
+ * Importiert Instanzen nacheinander (die Oberfläche führt nur einen Inhalts-Vorgang zur Zeit aus); jede erscheint mit Fortschritt
  * im Aufgaben-Menü. Wird eine abgebrochen, im Dialog oder im Aufgaben-Menü, entfällt der Rest. `run` liefert die
  * angelegten Instanzen und merkt sie für die Bibliothek vor, die sie hervorhebt.
  */

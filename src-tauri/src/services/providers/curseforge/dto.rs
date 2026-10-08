@@ -6,10 +6,15 @@ use crate::{
     models::ModLoader,
     services::providers::RemoteFile,
 };
+use percent_encoding::{utf8_percent_encode, AsciiSet, NON_ALPHANUMERIC};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
 pub(super) const WEBSITE: &str = "https://www.curseforge.com/";
+/// Wurzel der Dateien auf dem CDN (`<Kennung / 1000>/<Kennung % 1000>/<Dateiname>`).
+const CDN_FILES: &str = "https://mediafilez.forgecdn.net/files";
+/// Ein Pfadsegment der CDN-Adresse maskiert alles außer Buchstaben, Ziffern und `-._~` (auch `+` und Leerzeichen).
+const PATH_SEGMENT: &AsciiSet = &NON_ALPHANUMERIC.remove(b'-').remove(b'.').remove(b'_').remove(b'~');
 
 /// `releaseType` einer Datei.
 pub(super) const RELEASE: u8 = 1;
@@ -196,15 +201,26 @@ impl CfFile {
         self.dependencies.iter().filter(|d| d.relation_type == REQUIRED).map(|d| d.mod_id)
     }
 
-    /// Download-Adresse und Prüfsumme; fehlt die Adresse, erlauben die Autoren den Download nur über die Webseite.
+    /// Ob die API eine Download-Adresse nennt. Fehlt sie, haben die Autoren Downloads durch andere Launcher abgewählt.
+    pub(super) fn has_api_url(&self) -> bool {
+        self.download_url.as_deref().is_some_and(|url| !url.is_empty())
+    }
+
+    /// Adresse der Datei auf dem CDN von CurseForge: fest aus Kennung und Dateiname gebildet, so wie die Webseite sie
+    /// selbst benutzt. Das CDN gibt auch Dateien heraus, zu denen die API keine Adresse nennt.
+    pub(super) fn cdn_url(&self) -> String {
+        format!("{CDN_FILES}/{}/{}/{}", self.id / 1000, self.id % 1000, utf8_percent_encode(&self.file_name, PATH_SEGMENT))
+    }
+
+    /// Die Adresse der API, sonst die des CDN.
+    pub(super) fn download_url(&self) -> String {
+        self.download_url.clone().filter(|url| !url.is_empty()).unwrap_or_else(|| self.cdn_url())
+    }
+
+    /// Download-Adresse und Prüfsumme; ohne Prüfsumme wird nichts geladen.
     pub(super) fn remote_file(&self) -> AppResult<RemoteFile> {
-        let url = self
-            .download_url
-            .clone()
-            .filter(|u| !u.is_empty())
-            .ok_or_else(|| AppError::invalid(coded!("errors.providers.downloadOnlyOnCurseForge")))?;
         let sha1 = self.sha1().ok_or_else(|| AppError::invalid(coded!("errors.providers.fileWithoutChecksum")))?;
-        Ok(RemoteFile { urls: vec![url], size: self.file_length, hashes: BTreeMap::from([("sha1", sha1)]) })
+        Ok(RemoteFile { urls: vec![self.download_url()], size: self.file_length, hashes: BTreeMap::from([("sha1", sha1)]) })
     }
 }
 
@@ -240,11 +256,35 @@ mod tests {
     use super::fixtures::jei;
 
     #[test]
-    fn blocked_files_have_no_url_and_cannot_be_fetched() {
+    fn files_without_an_api_url_get_the_cdn_path_of_the_website() {
         let mut f = jei();
+        assert!(f.has_api_url());
+        assert_eq!(f.download_url(), "https://edge.forgecdn.net/files/9019/497/jei-26.3-neoforge-31.8.0.49.jar");
         f.download_url = None;
-        assert!(f.remote_file().is_err());
+        assert!(!f.has_api_url());
+        assert_eq!(f.download_url(), "https://mediafilez.forgecdn.net/files/9019/497/jei-26.3-neoforge-31.8.0.49.jar");
+        assert_eq!(f.remote_file().unwrap().urls, [f.cdn_url()]);
+        f.download_url = Some(String::new());
+        assert!(!f.has_api_url(), "eine leere Adresse zählt nicht");
         assert_eq!(jei().remote_file().unwrap().hashes["sha1"], "abcdef0123456789abcdef0123456789abcdef01");
+    }
+
+    #[test]
+    fn the_cdn_path_masks_everything_but_plain_file_name_characters() {
+        let mut f = jei();
+        f.id = 8_942_319;
+        f.file_name = "Mod [Fabric] 1.0+mc1.21 ü_x-y~z.jar".into();
+        assert_eq!(f.cdn_url(), "https://mediafilez.forgecdn.net/files/8942/319/Mod%20%5BFabric%5D%201.0%2Bmc1.21%20%C3%BC_x-y~z.jar");
+        f.id = 7;
+        f.file_name = "a/../b?c#d.jar".into();
+        assert_eq!(f.cdn_url(), "https://mediafilez.forgecdn.net/files/0/7/a%2F..%2Fb%3Fc%23d.jar");
+    }
+
+    #[test]
+    fn a_file_without_a_checksum_is_never_loaded() {
+        let mut f = jei();
+        f.hashes.clear();
+        assert!(f.remote_file().is_err());
     }
 
     #[test]

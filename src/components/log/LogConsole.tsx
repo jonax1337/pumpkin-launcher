@@ -19,9 +19,10 @@ const CURRENT_SESSION = "current";
 
 /**
  * Ausgabe des Spiels mit Filter, Suche und Mitscrollen (solange man unten ist): live, oder eine gesicherte frühere
- * Sitzung. Ein neuer Start wechselt zurück zur laufenden.
+ * Sitzung. Ein neuer Start wechselt zurück zur laufenden. Nach einem Absturz steht der Absturzassistent darüber;
+ * `onAddContent` öffnet dessen Suche nach fehlenden Mods.
  */
-export function LogConsole({ instance }: { instance: Instance }) {
+export function LogConsole({ instance, onAddContent }: { instance: Instance; onAddContent: (query: string) => void }) {
   const live = useGame((s) => s.logs[instance.id]);
   const startedAt = useGame((s) => s.started[instance.id]);
   const [chosenSession, setChosenSession] = useState<string | null>(null);
@@ -39,7 +40,7 @@ export function LogConsole({ instance }: { instance: Instance }) {
 
   return (
     <>
-      <LogStat instance={instance} session={sessions.find((session) => session.id === sessionId)} />
+      <LogStat instance={instance} session={sessions.find((session) => session.id === sessionId)} onAddContent={onAddContent} />
       <LogToolbar
         instance={instance}
         lines={lines}

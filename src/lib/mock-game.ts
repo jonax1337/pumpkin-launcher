@@ -7,7 +7,7 @@ import { cancelledError } from "./errors";
 import { quickPlayTarget, type InstallStep, type ModLoader } from "./types";
 
 /** Arbeitsspeicher des vorgetäuschten PCs. */
-const MOCK_SYSTEM_MEMORY_MB = 16384;
+export const MOCK_SYSTEM_MEMORY_MB = 16384;
 
 const MOCK_LOADER_VERSIONS: Record<ModLoader, string[]> = {
   vanilla: [],

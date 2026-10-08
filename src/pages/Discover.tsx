@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useView } from "@/app/Layout";
 import { useI18n } from "@/i18n";
@@ -78,7 +78,7 @@ export function DiscoverPage() {
   const projectId = requested.project;
   const projectSource = SOURCE_KEYS.find((s) => s === requested.projectSource) ?? (source === ALL_SOURCES ? "modrinth" : source);
   const [hit, setHit] = useState<CatalogHit | null>(null);
-  const [filters, setFilters] = useState(NO_FILTERS);
+  const [filters, setFilters] = useState<Filters>(() => ({ ...NO_FILTERS, query: requested.query ?? "" }));
   const [sortChoice, setSortChoice] = usePersistedState("discover.sort", SORT_CHOICES);
   const sort = sortChoice === "auto" ? null : sortChoice;
   const query = filters.query.trim();
@@ -92,6 +92,15 @@ export function DiscoverPage() {
 
   const change = (patch: Partial<Filters>) => setFilters((current) => ({ ...current, ...patch }));
   const reset = () => setFilters(NO_FILTERS);
+
+  // Ein Suchbegriff in der Adresse (aus der Befehlspalette) füllt das Suchfeld einmalig und verschwindet wieder aus ihr;
+  // danach gehört die Eingabe dem Feld.
+  const handoffQuery = requested.query;
+  useEffect(() => {
+    if (handoffQuery === null) return;
+    setFilters((current) => ({ ...current, query: handoffQuery, starter: false }));
+    setParams(discoverParams({ tab: type, source }), { replace: true });
+  }, [handoffQuery, type, source, setParams]);
 
   const mc = filters.version === ALL ? null : filters.version;
   const loaderFor = (tab: CatalogType) => (hasLoaderFilter(tab) && filters.loader !== ALL ? filters.loader : null);

@@ -1,6 +1,7 @@
 // Beispieldaten des Browser-Mocks; nur im Dev-Modus dynamisch geladen (siehe api.ts).
 import { t } from "@/i18n";
 import { DAY, HOUR } from "./time";
+import { EMPTY_LAUNCH } from "./launchSettings";
 import type { ForeignInstance, Instance, Mod, ModKind, VersionEntry } from "./types";
 
 const now = Date.now();
@@ -77,6 +78,7 @@ export const blankInstanceFields = (): Omit<Instance, DerivedInstanceFields> => 
   javaPath: null,
   window: { type: "default" },
   gameArgs: [],
+  launch: { ...EMPTY_LAUNCH },
   playtimeSecs: 0,
   group: null,
   notes: "",
@@ -87,6 +89,8 @@ export const blankInstanceFields = (): Omit<Instance, DerivedInstanceFields> => 
   lastPlayedAt: null,
   lastQuickPlay: null,
   defaultAccount: null,
+  modProfiles: [],
+  activeModProfile: null,
 });
 
 export function initialInstances(): Instance[] {

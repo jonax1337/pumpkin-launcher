@@ -168,6 +168,8 @@ export interface LaunchOptions {
   defaultJvmArgs: string[];
   /** Fenster für Instanzen, die keines festgelegt haben; null = wie Minecraft. */
   defaultWindow: GameWindow | null;
+  /** Umgebungsvariablen, Wrapper und Hooks für Instanzen, die zu einem Feld nichts eingestellt haben. */
+  defaultLaunch: LaunchSettings;
   /** Launcher-Einstellung „In Discord anzeigen“, was gespielt wird. */
   discordPresence: boolean;
   /** Direkt in eine Welt oder auf einen Server. */
@@ -179,6 +181,26 @@ export interface LaunchOptions {
 /** Spielfenster beim Start; `default` = wie Minecraft es selbst öffnet. */
 export type GameWindow = { type: "default" } | { type: "size"; width: number; height: number } | { type: "fullscreen" };
 
+/** Eine Umgebungsvariable des Spiels. */
+export interface EnvVar {
+  name: string;
+  value: string;
+}
+
+/**
+ * Start-Umgebung einer Instanz oder (als Standard) des Launchers. `wrapper`, `preLaunch` und `postExit` sind Befehlszeilen
+ * (Programm und Argumente, `"` fasst Leerraum zusammen, keine Shell); leer = nichts bzw. der Standard des Launchers.
+ */
+export interface LaunchSettings {
+  env: EnvVar[];
+  /** Steht vor dem Java-Aufruf (`wrapper args… java …`). */
+  wrapper: string;
+  /** Läuft vor dem Start; scheitert er, startet das Spiel nicht. */
+  preLaunch: string;
+  /** Läuft nach dem Ende des Spiels; ein Fehler wird nur geloggt. */
+  postExit: string;
+}
+
 /** Vom Nutzer gewähltes Icon einer Instanz: ein Pixel-Icon oder ein eigenes Bild (quadratisch, als Datenadresse). */
 export type IconChoice = { type: "glyph"; glyph: GlyphName; palette: GlyphPalette } | { type: "image"; src: string };
 
@@ -186,6 +208,16 @@ export type IconChoice = { type: "glyph"; glyph: GlyphName; palette: GlyphPalett
 export interface InstanceScene {
   biome: Biome;
   seed: number;
+}
+
+/** Benanntes Profil der Inhalte: welche Mods und Shader an waren, als es gespeichert wurde. */
+export interface ModProfile {
+  id: string;
+  name: string;
+  /** `Mod.id` der Inhalte, die beim Speichern an waren. */
+  enabledIds: string[];
+  /** `Mod.id` aller schaltbaren Inhalte beim Speichern; später Hinzugekommene kennt das Profil nicht und lässt sie in Ruhe. */
+  knownIds: string[];
 }
 
 export interface Instance {
@@ -204,6 +236,8 @@ export interface Instance {
   window: GameWindow;
   /** Eigene Spielargumente nach denen der Version. */
   gameArgs: string[];
+  /** Eigene Umgebungsvariablen, Wrapper und Hooks; leere Felder erben den Standard des Launchers. */
+  launch: LaunchSettings;
   /** Gesamte Spielzeit in Sekunden; zählt nur das Backend (beim Beenden des Spiels). */
   playtimeSecs: number;
   /** Gruppe in der Bibliothek; null = ohne Gruppe. */
@@ -225,6 +259,10 @@ export interface Instance {
   lastQuickPlay: QuickPlay | null;
   /** Konto, mit dem diese Instanz startet (Schlüssel aus `keyOf`); null = aktives Konto. */
   defaultAccount: string | null;
+  /** Gespeicherte Profile der Inhalte; nur die Profil-Aufrufe des Backends ändern sie. */
+  modProfiles: ModProfile[];
+  /** `ModProfile.id` des zuletzt gespeicherten oder angewendeten Profils; null = keins. */
+  activeModProfile: string | null;
 }
 
 /** Vorlage: gespeicherter Schnappschuss einer Instanz (lokales .mrpack, ohne Welten). */

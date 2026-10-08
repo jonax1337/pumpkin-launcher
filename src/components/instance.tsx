@@ -14,6 +14,7 @@ import { useDeleteInstance, useGroups, useRenameInstance, useSetGroup } from "@/
 import { usePlay } from "@/hooks/usePlay";
 import { askStop } from "@/store/stopAsk";
 import { useSaveTemplate } from "@/hooks/useTemplates";
+import { useCreateShortcut } from "@/hooks/useCreateShortcut";
 import { api } from "@/lib/api";
 import type { ExportRequest } from "@/lib/backend";
 import { revealLocalPath } from "@/lib/links";
@@ -54,6 +55,7 @@ function useDuplicate() {
   return (instance: Instance) =>
     run({
       key: `duplicate:${instance.id}`,
+      instanceId: instance.id,
       label: t("components.instance.duplicateTask", { name: instance.name }),
       doneLabel: t("components.instance.duplicateTaskDone", { name: instance.name }),
       cancellable: true,
@@ -75,6 +77,7 @@ function useExport() {
   return (instance: Instance, request: ExportRequest, path: string) =>
     run({
       key: `export:${instance.id}`,
+      instanceId: instance.id,
       label: t("components.instance.exportTask", { name: instance.name }),
       doneLabel: t("components.instance.exportTaskDone", { name: instance.name }),
       cancellable: true,
@@ -117,6 +120,7 @@ export function useInstanceMenu(instance: Instance, { showOpen = true }: { showO
   const phase = usePhase(instance.id);
   const play = usePlay();
   const duplicate = useDuplicate();
+  const createShortcut = useCreateShortcut();
   const contentBusy = useContentState((s) => !!s.active);
   const navigate = useNavigate();
   const groupItems = useGroupMenu(instance);
@@ -157,6 +161,9 @@ export function useInstanceMenu(instance: Instance, { showOpen = true }: { showO
       onSelect: () => askExport(instance),
     },
     { id: "tpl", text: t("components.instance.saveAsTemplate"), icon: "save", onSelect: () => askSaveTemplate(instance) },
+    ...(api.capabilities.shortcuts
+      ? [{ id: "shortcut", text: t("deepLinks.shortcut.menu"), icon: "link" as const, onSelect: () => createShortcut.mutate(instance) }]
+      : []),
     "-",
     { id: "del", text: t("common.delete"), icon: "trash", bad: true, disabled: locked, onSelect: () => askDelete(instance) },
   ];

@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
+use std::time::Duration;
 
 use serde::Serialize;
 use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
@@ -14,9 +15,11 @@ use tokio::task::JoinHandle;
 use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::{Account, GameWindow, QuickPlay};
+use crate::services::argfile::{self, ArgFile};
 use crate::services::auth::McSession;
 use crate::services::gamelog::XmlLog;
 use crate::services::install::log_config_path;
+use crate::services::launch_command::Invocation;
 use crate::services::mojang::{Argument, OneOrMany, VersionJson};
 use crate::services::rules::{self, Env};
 use crate::services::Dirs;
@@ -355,28 +358,36 @@ impl Running {
     }
 }
 
-/// Startet `java args…` im Spielverzeichnis, mit den Umgebungsvariablen `env` zusätzlich zu denen des Launchers.
+/// Wie das Spiel gestartet wird.
+pub struct GameCommand<'a> {
+    /// Programm samt Argumenten, das dem Java-Aufruf vorangeht (`wrapper args… java …`).
+    pub wrapper: Option<&'a Invocation>,
+    pub java: &'a Path,
+    /// Alle Argumente nach der Java-Programmdatei.
+    pub args: &'a [String],
+    /// Ordner für die Argumentdatei (siehe `argfile::dir_for`); ohne gehen die Argumente direkt auf die Kommandozeile.
+    pub argfile_dir: Option<&'a Path>,
+    pub game_dir: &'a Path,
+    /// Umgebungsvariablen zusätzlich zu denen des Launchers; bei gleichem Namen gilt der spätere Eintrag.
+    pub env: &'a [(String, String)],
+}
+
+/// Startet `command` im Spielverzeichnis. Mit Argumentdatei bekommt Java nur `@datei`; die Datei verschwindet, sobald
+/// Java sie gelesen haben muss (`argfile::READ_GRACE`).
 /// `on_line` bekommt jede aufbereitete Ausgabezeile, `on_stdout_raw` jede stdout-Zeile unverändert,
 /// `on_exit` das Prozessende samt Ursache, nachdem alle Ausgaben gelesen sind.
 pub fn spawn(
-    java: &Path,
-    args: &[String],
-    game_dir: &Path,
-    env: &[(String, String)],
+    command: &GameCommand,
     on_line: impl Fn(LogStream, String) + Send + Sync + 'static,
     on_stdout_raw: impl Fn(&str) + Send + Sync + 'static,
     on_exit: impl FnOnce(ProcessExit) + Send + 'static,
 ) -> AppResult<Running> {
-    std::fs::create_dir_all(game_dir)?;
-    let mut child = tokio::process::Command::new(java)
-        .args(args)
-        .envs(env.iter().map(|(name, value)| (name, value)))
-        .current_dir(game_dir)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(spawn_error)?;
+    std::fs::create_dir_all(command.game_dir)?;
+    let argfile = command.argfile_dir.map(|dir| argfile::write(dir, command.args)).transpose()?;
+    let mut child = process(command, argfile.as_ref()).spawn().map_err(spawn_error)?;
+    if let Some(file) = argfile {
+        tokio::spawn(argfile::remove_after(file, read_grace(command)));
+    }
     let pid = child.id().unwrap_or_default();
     let on_line: LineFn = Arc::new(on_line);
     let pumps = [
@@ -386,6 +397,44 @@ pub fn spawn(
     let (kill, kill_rx) = oneshot::channel::<()>();
     tokio::spawn(supervise(child, kill_rx, pumps.into_iter().flatten().collect(), on_exit));
     Ok(Running { pid, kill })
+}
+
+fn process(command: &GameCommand, argfile: Option<&ArgFile>) -> tokio::process::Command {
+    let mut process = match command.wrapper {
+        Some(wrapper) => {
+            let mut process = tokio::process::Command::new(&wrapper.program);
+            process.args(&wrapper.args).arg(command.java);
+            process
+        }
+        None => tokio::process::Command::new(command.java),
+    };
+    match argfile {
+        Some(file) => process.arg(file.argument()),
+        None => process.args(command.args),
+    };
+    process
+        .envs(command.env.iter().map(|(name, value)| (name, value)))
+        .current_dir(command.game_dir)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    // Eigene Prozessgruppe: Beenden trifft so auch das Spiel hinter einem Wrapper (siehe `kill_tree`).
+    #[cfg(unix)]
+    process.process_group(0);
+    // Ein Wrapper-Skript würde sonst ein Konsolenfenster öffnen; das Spiel selbst (`javaw`) hat keines.
+    #[cfg(windows)]
+    if command.wrapper.is_some() {
+        process.creation_flags(CREATE_NO_WINDOW);
+    }
+    process
+}
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Ein Wrapper braucht bis zum Start der JVM länger als ein direkter Aufruf.
+fn read_grace(command: &GameCommand) -> Duration {
+    if command.wrapper.is_some() { argfile::WRAPPED_READ_GRACE } else { argfile::READ_GRACE }
 }
 
 /// Wartet auf das Ende des Spiels oder beendet es auf Wunsch, liest die restlichen Ausgaben und meldet dann
@@ -423,7 +472,7 @@ async fn requested_stop(child: &mut Child, pid: u32) -> (std::io::Result<std::pr
         Ok(None) => {}
         Err(err) => tracing::warn!(pid, %err, "Prozessstatus vor dem Beenden nicht lesbar"),
     }
-    let cause = match child.start_kill() {
+    let cause = match kill_tree(child, pid).await {
         Ok(()) => ExitCause::RequestedKill,
         Err(err) => {
             tracing::warn!(pid, %err, "Prozess ließ sich nicht beenden");
@@ -431,6 +480,32 @@ async fn requested_stop(child: &mut Child, pid: u32) -> (std::io::Result<std::pr
         }
     };
     (child.wait().await, cause)
+}
+
+/// Beendet den Prozess samt allem, was er gestartet hat. Ein Wrapper, der das Spiel nicht per `exec` ersetzt (unter
+/// Windows jedes Skript), ließe es sonst weiterlaufen, und das Ende der Ausgabe käme nie.
+#[cfg(windows)]
+async fn kill_tree(child: &mut Child, pid: u32) -> std::io::Result<()> {
+    let killed = tokio::process::Command::new("taskkill")
+        .args(["/PID", &pid.to_string(), "/T", "/F"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await?;
+    if killed.success() { Ok(()) } else { child.start_kill() }
+}
+
+/// Die Prozessgruppe des Kindes (siehe `process`) bekommt das Signal: der Wrapper und das Spiel dahinter.
+#[cfg(unix)]
+async fn kill_tree(child: &mut Child, pid: u32) -> std::io::Result<()> {
+    if pid == 0 {
+        // Ohne bekannte Kennung würde `-0` die eigene Prozessgruppe treffen.
+        return child.start_kill();
+    }
+    // SAFETY: `kill` mit der Gruppe, die `process` dem Kind gegeben hat; sie enthält nur Prozesse des Spiels.
+    let signalled = unsafe { libc::kill(-(pid as libc::pid_t), libc::SIGKILL) } == 0;
+    if signalled { Ok(()) } else { child.start_kill() }
 }
 
 /// Auf Apple Silicon startet eine x64-Runtime (Minecraft bis 1.18.2, siehe `java`) nur mit Rosetta 2,
@@ -760,11 +835,10 @@ mod tests {
         let (lines, raw_lines) = (Arc::new(Mutex::new(Vec::new())), Arc::new(Mutex::new(Vec::new())));
         let (on_line, on_raw) = (lines.clone(), raw_lines.clone());
         let (exit_tx, exit_rx) = oneshot::channel();
+        // Bei gleichem Namen gilt der spätere Eintrag.
+        let env = [("PUMPKIN_TEST_VAR".to_owned(), "erst".to_owned()), ("PUMPKIN_TEST_VAR".to_owned(), "wert-42".to_owned())];
         spawn(
-            Path::new(program),
-            &args,
-            &game_dir,
-            &[("PUMPKIN_TEST_VAR".to_owned(), "wert-42".to_owned())],
+            &GameCommand { wrapper: None, java: Path::new(program), args: &args, argfile_dir: None, game_dir: &game_dir, env: &env },
             move |_, line| on_line.lock().unwrap().push(line),
             move |raw| on_raw.lock().unwrap().push(raw.to_owned()),
             move |result| {
@@ -776,6 +850,79 @@ mod tests {
         assert_eq!(*lines.lock().unwrap(), ["wert-42"]);
         assert_eq!(*raw_lines.lock().unwrap(), ["wert-42"]);
         std::fs::remove_dir_all(game_dir).unwrap();
+    }
+
+    /// Startet `command`, wartet auf sein Ende mit Code 0 und liefert die ausgegebenen Zeilen.
+    #[cfg(unix)]
+    async fn lines_of(command: &GameCommand<'_>) -> Vec<String> {
+        let (line_tx, mut line_rx) = tokio::sync::mpsc::unbounded_channel();
+        let (exit_tx, exit_rx) = oneshot::channel();
+        spawn(command, move |_, line| drop(line_tx.send(line)), |_| {}, move |result| {
+            exit_tx.send(result).ok();
+        })
+        .unwrap();
+        assert_eq!(exit_rx.await.unwrap(), ProcessExit { code: Some(0), cause: ExitCause::Natural });
+        std::iter::from_fn(|| line_rx.try_recv().ok()).collect()
+    }
+
+    /// `sh` als Wrapper: `sh -c SKRIPT sh <java> <rest>`, das Skript gibt aus, was `<rest>` ihm zeigt.
+    #[cfg(unix)]
+    fn sh_wrapper(script: &str) -> Invocation {
+        Invocation { program: PathBuf::from("/bin/sh"), args: vec!["-c".into(), script.into(), "sh".into()] }
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn with_an_argument_file_the_wrapper_passes_java_exactly_one_at_argument() {
+        let base = std::env::temp_dir().join(crate::models::new_id());
+        let game_dir = base.join("game");
+        // `$1` ist Java, `$2` das Argument der Datei; danach gibt das Skript die Datei aus.
+        let wrapper = sh_wrapper(r#"echo "$#"; echo "$1"; cat "${2#@}""#);
+        let args = ["-cp".to_owned(), "mein Ordner/a.jar".to_owned(), "Main".to_owned()];
+
+        let lines = lines_of(&GameCommand {
+            wrapper: Some(&wrapper),
+            java: Path::new("java-platzhalter"),
+            args: &args,
+            argfile_dir: Some(&base.join("argfiles")),
+            game_dir: &game_dir,
+            env: &[],
+        })
+        .await;
+
+        assert_eq!(lines, ["2", "java-platzhalter", "-cp", "\"mein Ordner/a.jar\"", "Main"]);
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn without_an_argument_file_the_arguments_follow_java_directly() {
+        let base = std::env::temp_dir().join(crate::models::new_id());
+        let wrapper = sh_wrapper(r#"echo "$#"; shift; echo "$1"; echo "$2""#);
+        let args = ["-cp".to_owned(), "a b".to_owned()];
+
+        let lines = lines_of(&GameCommand { wrapper: Some(&wrapper), java: Path::new("java"), args: &args, argfile_dir: None, game_dir: &base, env: &[] }).await;
+
+        assert_eq!(lines, ["3", "-cp", "a b"]);
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_failed_start_leaves_no_argument_file_behind() {
+        let base = std::env::temp_dir().join(crate::models::new_id());
+        let missing = base.join("gibt-es-nicht");
+
+        let result = spawn(
+            &GameCommand { wrapper: None, java: &missing, args: &["secret".to_owned()], argfile_dir: Some(&base.join("argfiles")), game_dir: &base, env: &[] },
+            |_, _| {},
+            |_| {},
+            |_| {},
+        );
+
+        assert!(result.is_err());
+        assert_eq!(std::fs::read_dir(base.join("argfiles")).unwrap().count(), 0);
+        std::fs::remove_dir_all(base).unwrap();
     }
 
     #[tokio::test]
@@ -833,6 +980,35 @@ mod tests {
         let result = tokio::time::timeout(std::time::Duration::from_secs(10), exit_rx).await.unwrap().unwrap();
         assert_eq!(result.cause, ExitCause::RequestedKill);
         drop(input);
+    }
+
+    /// Ein Wrapper, der das Spiel als Kind startet statt es zu ersetzen (unter Windows jedes Skript), hält die Ausgabe
+    /// offen, solange das Kind lebt: Das Beenden muss den ganzen Baum treffen, sonst käme das Ende nie.
+    #[tokio::test]
+    async fn killing_a_game_behind_a_wrapper_ends_the_wrapper_and_the_game() {
+        let wrapper = if cfg!(windows) {
+            Invocation { program: PathBuf::from("cmd.exe"), args: vec!["/D".into(), "/C".into(), "ping -n 30 127.0.0.1 > nul & rem".into()] }
+        } else {
+            Invocation { program: PathBuf::from("/bin/sh"), args: vec!["-c".into(), "sleep 30 & wait".into(), "sh".into()] }
+        };
+        let game_dir = std::env::temp_dir().join(crate::models::new_id());
+        let (exit_tx, exit_rx) = oneshot::channel();
+        let running = spawn(
+            &GameCommand { wrapper: Some(&wrapper), java: Path::new("java"), args: &[], argfile_dir: None, game_dir: &game_dir, env: &[] },
+            |_, _| {},
+            |_| {},
+            move |result| {
+                exit_tx.send(result).ok();
+            },
+        )
+        .unwrap();
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+
+        running.kill();
+
+        let result = tokio::time::timeout(Duration::from_secs(10), exit_rx).await.expect("the output never ended").unwrap();
+        assert_eq!(result.cause, ExitCause::RequestedKill);
+        std::fs::remove_dir_all(game_dir).ok();
     }
 
     #[test]

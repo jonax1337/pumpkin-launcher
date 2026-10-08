@@ -11,7 +11,7 @@ use crate::{error::AppResult, state::AppState};
 /// Räumt beim Start unter `backups/` aller Instanzen auf, was ein unterbrochener Vorgang liegen ließ: halbe Sicherungen
 /// und gelöschte Welten, deren Ordner nicht ganz wegging. Läuft schon ein anderer Vorgang, bleibt alles bis zum nächsten Start.
 pub async fn remove_leftovers(state: &AppState) -> AppResult<usize> {
-    let Ok(_guard) = state.begin_operation() else { return Ok(0) };
+    let Ok(_guard) = state.begin_library_operation() else { return Ok(0) };
     let dirs: Vec<PathBuf> = state.instances.list().iter().map(|i| state.dirs.backups(&i.id)).collect();
     blocking(move |_| Ok(dirs.iter().map(|dir| remove_leftovers_in(dir)).sum())).await
 }

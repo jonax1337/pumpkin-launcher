@@ -175,10 +175,13 @@ export function useLoaderVersions(loader: ModLoader, mcVersion: string) {
   });
 }
 
+/** Abfrage des Status einer Instanz; auch für mehrere Instanzen auf einmal (`useQueries`). */
+export const instanceStatusQuery = (id: string | undefined) => ({
+  queryKey: instanceKeys.status(id ?? ""),
+  queryFn: () => api.instanceStatus(id!),
+  enabled: !!id,
+});
+
 export function useInstanceStatus(id: string | undefined) {
-  return useQuery({
-    queryKey: instanceKeys.status(id ?? ""),
-    queryFn: () => api.instanceStatus(id!),
-    enabled: !!id,
-  });
+  return useQuery(instanceStatusQuery(id));
 }

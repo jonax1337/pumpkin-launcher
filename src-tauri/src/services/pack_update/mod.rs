@@ -119,7 +119,7 @@ pub async fn changelog(client: &reqwest::Client, instance: &Instance, version_id
 /// Instanz unterbrochen hat. Läuft schon ein anderer Vorgang, bleibt alles bis zum nächsten Start (oder Update). Liefert die Zahl
 /// der wiederhergestellten Instanzen; was sich nicht zurückholen lässt, bleibt für den nächsten Versuch liegen.
 pub async fn recover_interrupted(state: &AppState) -> AppResult<usize> {
-    let Ok(_guard) = state.begin_operation() else { return Ok(0) };
+    let Ok(_guard) = state.begin_library_operation() else { return Ok(0) };
     let instances = state.instances.list();
     state
         .blocking_with_dirs(move |dirs| {

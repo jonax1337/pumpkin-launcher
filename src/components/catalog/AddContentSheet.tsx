@@ -20,9 +20,9 @@ function ShaderHint({ instance }: { instance: Instance }) {
   return hasIris(instance) ? null : <Hint tone="warn" className="mb-2">{t("components.sheet.shaderNeedsIris")}</Hint>;
 }
 
-/** Katalog im Seitenpanel einer Instanz; mit `world` nur Datenpakete für diese Welt. */
-export function AddContentSheet({ instance, world, open, onOpenChange }: {
-  instance: Instance; world?: World; open: boolean; onOpenChange: (open: boolean) => void;
+/** Katalog im Seitenpanel einer Instanz; mit `world` nur Datenpakete für diese Welt, mit `initialQuery` mit vorbelegter Suche. */
+export function AddContentSheet({ instance, world, open, onOpenChange, initialQuery = "" }: {
+  instance: Instance; world?: World; open: boolean; onOpenChange: (open: boolean) => void; initialQuery?: string;
 }) {
   const { t } = useI18n();
   // Datenpakete gibt es hier nur von Modrinth.
@@ -30,7 +30,7 @@ export function AddContentSheet({ instance, world, open, onOpenChange }: {
   const [type, setType] = useState<CatalogType>(kinds[0]);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [hit, setHit] = useState<ContentHit | null>(null);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [fit, setFit] = useState(true);
   // Modrinth oder CurseForge; der Shader-Hinweis zu Iris gilt für beide.
   const [source, setSource] = useState<Source>("modrinth");

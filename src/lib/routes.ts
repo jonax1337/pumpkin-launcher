@@ -36,21 +36,23 @@ export function readNewInstanceStart(params: URLSearchParams): NewInstanceStart 
 /**
  * Was „Entdecken“ zeigt. `source` ist die Quelle der Liste; „alle“ ist der Standard und steht nicht in der Adresse.
  * Ein geöffnetes Projekt nennt seine eigene Quelle in `projectSource`; fehlt sie, ist es ein Modrinth-Projekt.
+ * `query` füllt das Suchfeld der Liste vor (z. B. aus der Befehlspalette).
  */
-export type DiscoverTarget = { tab?: CatalogType; source?: SourceChoice; project?: string; projectSource?: Source };
+export type DiscoverTarget = { tab?: CatalogType; source?: SourceChoice; project?: string; projectSource?: Source; query?: string };
 
-export function discoverParams({ tab, source, project, projectSource }: DiscoverTarget = {}): Record<string, string> {
+export function discoverParams({ tab, source, project, projectSource, query }: DiscoverTarget = {}): Record<string, string> {
   const params: Record<string, string> = {};
   if (tab) params.tab = tab;
   if (source && source !== ALL_SOURCES) params.quelle = source;
   if (project) params.projekt = project;
   if (project && projectSource) params.anbieter = projectSource;
+  if (query) params.suche = query;
   return params;
 }
 
 export function discoverUrl(target?: DiscoverTarget) {
-  const query = new URLSearchParams(discoverParams(target)).toString();
-  return query ? `/discover?${query}` : "/discover";
+  const search = new URLSearchParams(discoverParams(target)).toString();
+  return search ? `/discover?${search}` : "/discover";
 }
 
 /** Rohwerte der Adresse; ob sie gültig sind, prüft die Seite gegen ihre Quellen und Kategorien. */
@@ -59,6 +61,7 @@ export const readDiscoverParams = (params: URLSearchParams) => ({
   source: params.get("quelle"),
   project: params.get("projekt"),
   projectSource: params.get("anbieter"),
+  query: params.get("suche"),
 });
 
 // ---------- Instanz ----------

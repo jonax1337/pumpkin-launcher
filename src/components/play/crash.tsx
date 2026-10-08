@@ -24,7 +24,7 @@ const EXIT_CODE_TEXTS: Record<number, TKey> = {
 };
 
 /** Was der Exit-Code in Alltagssprache heißt; für Codes ohne bekannte Bedeutung leer. */
-const exitCodeMeaning = (code: number | null) => {
+export const exitCodeMeaning = (code: number | null) => {
   const key = code == null ? undefined : EXIT_CODE_TEXTS[code];
   return key ? t(key) : "";
 };

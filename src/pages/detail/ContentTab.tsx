@@ -23,6 +23,7 @@ import { RP_HINT_KEY } from "./content/constants";
 import { focusSoon, retryPerFrame, revealAndFocus, UPDATE_FOCUS_RETRY_FRAMES } from "./content/focus";
 import { countByKind, KindFilter } from "./content/KindFilter";
 import { ResourcePackPanel, ShaderPanel } from "./content/PackPanel";
+import { ProfileBar } from "./content/ProfileBar";
 import { showRemovedToast } from "./content/removedToast";
 import { UndoBar } from "./content/UndoBar";
 import { UpdateAllButton } from "./content/UpdateAllButton";
@@ -37,7 +38,7 @@ import { VersionDialog } from "./content/VersionDialog";
 import type { Finding } from "./content/useWarnings";
 import { warnAction } from "./content/warnAction";
 import type { KindFilter as KindFilterValue, Row, Warn } from "./content/types";
-import { useBusyReason } from "./guards";
+import { useInstanceBusyReason } from "./guards";
 import { LocalFilesDropzone } from "./LocalFilesDropzone";
 import { useLocalFiles } from "./LocalFiles";
 
@@ -68,7 +69,7 @@ export function ContentTab({ instance, shown, updateFor, analysis, findingsOf, o
   const { t } = useI18n();
   const local = useLocalFiles(instance, shown);
   const { active, target, progress } = useContentState();
-  const busy = useBusyReason(instance.id);
+  const busy = useInstanceBusyReason(instance.id);
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<KindFilterValue>("all");
   const [mode, setMode] = useState<ViewMode>("list");
@@ -247,6 +248,7 @@ export function ContentTab({ instance, shown, updateFor, analysis, findingsOf, o
             onChange={(next) => setSort(next as ContentSort)}
             options={sortOptions}
           />
+          <ProfileBar instance={instance} busy={busy} />
           <Spacer />
           <Segmented
             size="s"

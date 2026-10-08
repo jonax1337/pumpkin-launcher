@@ -18,7 +18,7 @@ import { t, useI18n, type TKey } from "@/i18n";
 import type { Instance, QuickPlay, World } from "@/lib/types";
 import { BackupsDialog } from "./BackupsDialog";
 import { DatapacksDialog } from "./DatapacksDialog";
-import { GuardedButton, useBusyReason, type SectionProps } from "./guards";
+import { GuardedButton, useBusyReason, useInstanceBusyReason, type SectionProps } from "./guards";
 import { ServersSection } from "./ServersSection";
 import { ShareSection } from "./ShareSection";
 
@@ -45,7 +45,7 @@ const worldLine = (w: World) =>
 /** Welten und Server einer Instanz: direkt hineinspielen, Welten sichern und wiederherstellen, Serverliste pflegen, Welt für Freunde teilen. */
 export function WorldsTab({ instance, onLaunched }: { instance: Instance; onLaunched: () => void }) {
   const play = usePlay();
-  const busy = useBusyReason(instance.id);
+  const busy = useInstanceBusyReason(instance.id);
   const quickPlay = (target: QuickPlay) => void play(instance, onLaunched, target);
   return (
     <div className="pt-2">
@@ -96,6 +96,8 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
   const worlds = useWorlds(instance.id);
   const startsIntoWorlds = useWorldQuickPlay(instance);
   const { backup, remove, importWorld } = useWorldJobs(instance);
+  // Sichern, Löschen, Importieren und Wiederherstellen sind Inhalts-Vorgänge: von ihnen läuft nur einer zur Zeit.
+  const jobBusy = useBusyReason(instance.id);
   const removal = useConfirmTarget<World>();
   // Sicherungen einer Welt bzw. (world = null) aller Welten, auch gelöschter.
   const [showBackups, setShowBackups] = useState<{ world: string | null } | null>(null);
@@ -115,11 +117,11 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
 
   const menuFor = (w: World): MenuEntry[] => [
     { id: "dir", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => openLocalPath(w.path) },
-    { id: "backup", text: t("detail.worlds.backupNow"), icon: "save", disabled: !!busy, onSelect: () => backup.mutate(w) },
+    { id: "backup", text: t("detail.worlds.backupNow"), icon: "save", disabled: !!jobBusy, onSelect: () => backup.mutate(w) },
     { id: "backups", text: t("detail.worlds.backupsMenu"), icon: "clock", onSelect: () => setShowBackups({ world: w.id }) },
     { id: "packs", text: t("detail.worlds.datapacksMenu"), icon: "box", onSelect: () => setPacks({ world: w, search: false }) },
     "-",
-    { id: "del", text: t("detail.worlds.deleteMenu"), icon: "trash", bad: true, disabled: !!busy, onSelect: () => removal.ask(w) },
+    { id: "del", text: t("detail.worlds.deleteMenu"), icon: "trash", bad: true, disabled: !!jobBusy, onSelect: () => removal.ask(w) },
   ];
 
   return (
@@ -129,7 +131,7 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
         title={t("common.worlds")}
         actions={
           <Actions gap={4}>
-            <GuardedButton variant="ghost" size="s" icon="ul" blocked={busy} onClick={() => void pickWorld().catch(toastError)}>
+            <GuardedButton variant="ghost" size="s" icon="ul" blocked={jobBusy} onClick={() => void pickWorld().catch(toastError)}>
               {t("detail.worlds.importAction")}
             </GuardedButton>
             <Button variant="ghost" size="s" icon="clock" bleed="end" onClick={() => setShowBackups({ world: null })}>
@@ -174,7 +176,7 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
           },
         })}
       />
-      {showBackups && <BackupsDialog instance={instance} world={showBackups.world} busy={busy} onClose={() => setShowBackups(null)} />}
+      {showBackups && <BackupsDialog instance={instance} world={showBackups.world} busy={jobBusy} onClose={() => setShowBackups(null)} />}
       {packs && !packs.search && (
         <DatapacksDialog
           instance={instance}

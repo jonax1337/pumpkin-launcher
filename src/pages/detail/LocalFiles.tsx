@@ -87,6 +87,7 @@ export function useLocalFiles(instance: Instance, active: boolean) {
     const single = files.length === 1 ? fileName(files[0].path) : null;
     background.run({
       key: "files",
+      instanceId: instance.id,
       label: single ? t("detail.files.addOneLabel", { file: single }) : t("detail.files.addManyLabel", { n: files.length }),
       doneLabel: single ? t("detail.files.addOneDone", { file: single }) : t("detail.files.addedMany", { n: files.length }),
       task: (op) => api.addLocalFiles(instance.id, files, op),
@@ -103,6 +104,7 @@ export function useLocalFiles(instance: Instance, active: boolean) {
   function identify(m: Mod) {
     background.run({
       key: `identify:${m.id}`,
+      instanceId: instance.id,
       label: t("detail.files.matchLabel", { name: m.name }),
       doneLabel: t("detail.files.matchDone", { name: m.name }),
       task: () => api.modrinthIdentify(instance.id, [m.id]),

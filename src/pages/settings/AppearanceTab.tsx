@@ -11,7 +11,8 @@ const PX_SIZE_KEYS: { value: PxSize; key: TKey }[] = [
   { value: "l", key: "pages.settings.pxSizeLarge" },
 ];
 
-const TEXT_SIZE_KEYS: { value: TextSize; key: TKey }[] = [
+/** Die Stufen in der Reihenfolge der Auswahl; die Befehlspalette schaltet sie der Reihe nach weiter. */
+export const TEXT_SIZE_KEYS: { value: TextSize; key: TKey }[] = [
   { value: "m", key: "pages.settings.textSizeNormal" },
   { value: "l", key: "pages.settings.textSizeLarge" },
   { value: "xl", key: "pages.settings.textSizeLarger" },
