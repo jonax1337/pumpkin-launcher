@@ -5,12 +5,12 @@ import type { Instance } from "@/lib/types";
 import type { IconName } from "@/ui";
 
 export const ACTION_ICONS: Record<CrashFixAction["type"], IconName> = {
-  raiseMemory: "up",
-  useManagedJava: "x",
+  raiseMemory: "memory",
+  useManagedJava: "java",
   installDependency: "search",
   disableMod: "power",
-  openUrl: "ext",
-  reinstallGameFiles: "redo",
+  openUrl: "external",
+  reinstallGameFiles: "refresh",
 };
 
 /** Ist der Handgriff schon getan? Dann zeigt der Knopf es und ist aus. */

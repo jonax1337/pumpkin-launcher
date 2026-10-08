@@ -11,6 +11,8 @@ export interface PaletteItem {
   title: string;
   subtitle?: string;
   icon: IconName;
+  /** Tastenkürzel des Befehls in der Schreibweise von `aria-keyshortcuts` (siehe shortcuts.ts); die Palette zeigt es rechts an. */
+  shortcut?: string;
   /** Suchbegriffe, die nicht im Titel stehen (Synonyme, Name der Seite). */
   keywords: string[];
   /** Warum der Eintrag gerade nichts tut; er bleibt sichtbar, aber gedimmt. */

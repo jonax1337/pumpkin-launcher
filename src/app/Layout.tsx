@@ -86,7 +86,7 @@ export function Layout() {
     <ViewContext.Provider value={view}>
       <AppContextMenu>
         <div className={cn("app", ready && "ready")} data-offline={online ? undefined : ""}>
-          <button type="button" className="skip" onClick={() => view.current?.focus()}>
+          <button type="button" className="skip vx-stone vx-text" onClick={() => view.current?.focus()}>
             {t("ui.skipToContent")}
           </button>
           <TitleBar online={online} />

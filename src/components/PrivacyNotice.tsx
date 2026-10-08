@@ -65,7 +65,7 @@ function ServiceRow({ label, purpose, hosts }: { label: string; purpose: string;
   return (
     <FormRow label={label}>
       <span>{purpose}</span>
-      <span className="break-words font-mono text-[length:calc(13px*var(--tz))] text-fg-3">{hosts.join(", ")}</span>
+      <span className="privacy-hosts">{hosts.join(", ")}</span>
     </FormRow>
   );
 }
@@ -112,7 +112,7 @@ export function PrivacyNotice() {
       <FriendsServices />
       <ServiceRow label="Discord" purpose={t("components.privacy.discord")} hosts={[t("components.privacy.discordWhere")]} />
       <ServiceRow label={t("components.privacy.imagesName")} purpose={t("components.privacy.images")} hosts={TRUSTED_IMAGE_HOSTS} />
-      <Hint icon="info" className="mt-3.5">{t("components.security.noScan")}</Hint>
+      <Hint icon="info" className="privacy-foot">{t("components.security.noScan")}</Hint>
     </div>
   );
 }

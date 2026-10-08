@@ -116,7 +116,7 @@ export function SkinViewer({ src, variant, capeSrc, zoom, label }: { src: string
   }
 
   return (
-    <div className="skin-turn">
+    <div className="skin-turn vx-slot">
       <div
         className="skin-turn-view fx"
         role="slider"
@@ -139,7 +139,7 @@ export function SkinViewer({ src, variant, capeSrc, zoom, label }: { src: string
       >
         <TurnedSkin src={src} variant={variant} capeSrc={capeSrc} turn={turn} tilt={tilt} zoom={zoom} />
       </div>
-      <IconButton className="absolute right-0 top-0" icon="redo" size="s" label={t("pages.skins.turnAround")} onClick={flip} />
+      <IconButton className="skin-turn-flip" icon="refresh" size="s" label={t("pages.skins.turnAround")} onClick={flip} />
     </div>
   );
 }

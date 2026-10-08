@@ -34,13 +34,14 @@ function useFieldProps<P extends FieldA11y>({ id, "aria-describedby": describedB
 /**
  * Formularabschnitt mit Überschrift (20 px, Versalien) und Linie unten (nicht beim letzten).
  * Container für das Zeilenraster: unter 1100 px Breite rutscht die Hilfe unter das Steuerelement.
+ * `plate`: eigene gewölbte Platte statt Linie (Instanz-Einstellungen).
  */
-export function FormSection({ title, srOnlyTitle, level = 2, className, ref, children }: {
-  title: string; srOnlyTitle?: boolean; level?: 2 | 3; className?: string; ref?: Ref<HTMLElement>; children: ReactNode;
+export function FormSection({ title, srOnlyTitle, level = 2, plate, className, ref, children }: {
+  title: string; srOnlyTitle?: boolean; level?: 2 | 3; plate?: boolean; className?: string; ref?: Ref<HTMLElement>; children: ReactNode;
 }) {
   const H = level === 3 ? "h3" : "h2";
   return (
-    <section ref={ref} className={cn("vx-fsec", className)}>
+    <section ref={ref} className={cn("vx-fsec", className)} data-plate={plate ? "" : undefined}>
       <H className={srOnlyTitle ? "sr" : "vx-fsec-h"}>{title}</H>
       {children}
     </section>
@@ -142,11 +143,12 @@ type FieldLook = {
 
 const widthData = (width: FieldLook["width"]) => (typeof width === "string" ? width : undefined);
 
-/** Eingabefeld in der eingelassenen Platte. Props (auch ref) gehen an das <input>. */
-export function TextField({ size = "m", width, className, style, ...props }: FieldLook & Omit<ComponentProps<"input">, "size">) {
+/** Eingabefeld in der eingelassenen Platte, optional mit führendem Symbol (`icon`). Props (auch ref) gehen an das <input>. */
+export function TextField({ size = "m", width, className, style, icon, ...props }: FieldLook & { icon?: IconName } & Omit<ComponentProps<"input">, "size">) {
   const input = useFieldProps(props);
   return (
-    <label className={cn("vx-input", className)} data-size={size} data-w={widthData(width)} style={widthStyle(width, style)}>
+    <label className={cn("vx-input vx-slot", className)} data-size={size} data-lead={flag(icon)} data-w={widthData(width)} style={widthStyle(width, style)}>
+      {icon && <Icon name={icon} size="s" />}
       <input autoComplete="off" spellCheck={false} {...input} />
     </label>
   );
@@ -156,7 +158,7 @@ export function TextField({ size = "m", width, className, style, ...props }: Fie
 export function TextArea({ width, className, style, ...props }: Pick<FieldLook, "width"> & ComponentProps<"textarea">) {
   const input = useFieldProps(props);
   return (
-    <label className={cn("vx-input", className)} data-area="" data-w={widthData(width)} style={widthStyle(width, style)}>
+    <label className={cn("vx-input vx-slot", className)} data-area="" data-w={widthData(width)} style={widthStyle(width, style)}>
       <textarea spellCheck={false} {...input} />
     </label>
   );
@@ -169,7 +171,7 @@ export function SearchField({ value, onChange, placeholder, size = "m", width, a
   const { t } = useI18n();
   const f = useFieldProps({ id });
   return (
-    <label className={cn("vx-input", className)} data-size={size} data-lead="" data-w={widthData(width)} data-has={flag(value)} style={widthStyle(width)}>
+    <label className={cn("vx-input vx-slot", className)} data-size={size} data-lead="" data-w={widthData(width)} data-has={flag(value)} style={widthStyle(width)}>
       <Icon name="search" size="s" />
       <input
         type="search"
@@ -183,7 +185,7 @@ export function SearchField({ value, onChange, placeholder, size = "m", width, a
         onKeyDown={(e) => e.key === "Escape" && value && (e.stopPropagation(), onChange(""))}
         {...f}
       />
-      <IconButton icon="x" label={t("ui.search.clearAria")} tip={false} size="s" className="vx-clear" tabIndex={-1} onClick={() => onChange("")} />
+      <IconButton icon="close" label={t("ui.search.clearAria")} tip={false} size="s" className="vx-clear" tabIndex={-1} onClick={() => onChange("")} />
     </label>
   );
 }
@@ -194,7 +196,7 @@ export type Option = { value: string; label: string; disabled?: boolean };
 const SIZER_MAX_OPTIONS = 40;
 
 /**
- * Auswahl als erhabene Platte mit eigener Pixel-Liste (Radix Select: Tastatur, Tippsuche, Scrollen).
+ * Auswahl als Slot mit Pfeil-Steinknopf und eigener Pixel-Liste (Radix Select: Tastatur, Tippsuche, Scrollen).
  * Die Breite richtet sich nach der längsten Option (bis `SIZER_MAX_OPTIONS`), damit beim Wechseln nichts springt.
  * `label`: sichtbares Präfix im Knopf („Sortieren: …“) und Name; sonst `ariaLabel` oder ein Field/FormRow darum.
  */
@@ -209,19 +211,19 @@ export function Select({ value, onChange, options, label, size = "m", className,
   return (
     <S.Root value={value} onValueChange={onChange} disabled={disabled || !items.length}>
       {/* Name: ariaLabel, sonst die sichtbare Beschriftung (der Wert gehört nicht in den Namen) */}
-      <S.Trigger className={cn("vx-select fx", className)} data-size={size} aria-label={ariaLabel ?? label} {...f}>
+      <S.Trigger className={cn("vx-select vx-slot", className)} data-size={size} aria-label={ariaLabel ?? label} {...f}>
         {label && <span className="vx-sel-lab">{label}</span>}
         <span className="vx-sel-val">
           <S.Value placeholder={none} />
           {items.length <= SIZER_MAX_OPTIONS && items.map((o) => <span key={o.value} className="vx-sel-sizer" aria-hidden>{o.label}</span>)}
         </span>
         <S.Icon asChild>
-          <span className="vx-sel-chev"><Icon name="chevd" size="s" /></span>
+          <span className="vx-sel-chev"><Icon name="chev-down" size="s" /></span>
         </S.Icon>
       </S.Trigger>
       <S.Portal>
         <S.Content className="vx-pop vx-selpop" position="popper" sideOffset={6} collisionPadding={8} align="start">
-          <S.ScrollUpButton className="vx-selscroll"><Icon name="chevd" size="s" flip="y" /></S.ScrollUpButton>
+          <S.ScrollUpButton className="vx-selscroll"><Icon name="chev-up" size="s" /></S.ScrollUpButton>
           <S.Viewport>
             {items.map((o) => (
               <S.Item key={o.value} value={o.value} disabled={o.disabled} className="vx-selitem">
@@ -230,7 +232,7 @@ export function Select({ value, onChange, options, label, size = "m", className,
               </S.Item>
             ))}
           </S.Viewport>
-          <S.ScrollDownButton className="vx-selscroll"><Icon name="chevd" size="s" /></S.ScrollDownButton>
+          <S.ScrollDownButton className="vx-selscroll"><Icon name="chev-down" size="s" /></S.ScrollDownButton>
         </S.Content>
       </S.Portal>
     </S.Root>
@@ -248,7 +250,7 @@ export function Disclosure({ summary, open, onToggle, className, children }: {
     <details className={cn("vx-disc", className)} open={open || undefined} onToggle={(e) => onToggle?.(e.currentTarget.open)}>
       <summary className="vx-disc-s fx">
         <span className="vx-disc-c">
-          <Icon name="chev" size="s" />
+          <Icon name="chev-right" size="s" />
           {summary}
         </span>
       </summary>

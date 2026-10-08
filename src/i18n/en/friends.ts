@@ -29,6 +29,8 @@ export const friends: typeof deFriends = {
   "friends.network.relayUnreachable.body": "Friends show as offline until the connection is back. Check your internet connection.",
   "friends.network.bindFailed.title": "Network didn't start",
   "friends.network.bindFailed.body": "The launcher couldn't open a network port for Friends. Check whether a firewall or another program is blocking it.",
+  "friends.network.online.title": "Relay connected · {host}",
+  "friends.network.online.body": "Friends see what you play and can send you instances.",
 
   // ---------- Requests ----------
   "friends.requests.title": "Requests",

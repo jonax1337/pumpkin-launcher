@@ -36,7 +36,7 @@ export function PackSection({ instance, requested = false, onShown }: { instance
   }, [requested, present]);
   if (!status) return null;
   return (
-    <FormSection title={t("detail.pack.section")} ref={section}>
+    <FormSection plate title={t("detail.pack.section")} ref={section}>
       <FormRow label={t("detail.pack.label")} aside={t("detail.pack.aside")}>
         <PackIdentity status={status} />
       </FormRow>
@@ -57,9 +57,9 @@ function PackIdentity({ status }: { status: PackStatus }) {
   const { t } = useI18n();
   if (status.loading) return <Skel h={40} w={NAME_SKELETON_WIDTH} />;
   return (
-    <Actions wrap className="min-h-10 items-center">
+    <Actions wrap className="st-inline">
       <span>{[status.name, status.version].filter(Boolean).join(" · ") || t("detail.pack.unknownVersion")}</span>
-      {status.source ? <SourceTag source={status.source} /> : <span className="text-fg-2">{t("detail.pack.fromFile")}</span>}
+      {status.source ? <SourceTag source={status.source} /> : <span className="st-muted">{t("detail.pack.fromFile")}</span>}
     </Actions>
   );
 }
@@ -81,7 +81,7 @@ function VersionUpdates({ instance, status }: { instance: Instance; status: Pack
         <GuardedButton
           blocked={busy}
           variant={latest ? "primary" : "secondary"}
-          icon={latest ? "up" : "swap"}
+          icon={latest ? "update" : "swap"}
           disabled={status.loading || !status.versions.length}
           onClick={() => setChoosing(true)}
         >
@@ -123,10 +123,10 @@ function PackReport({ outcome }: { outcome: PackUpdateOutcome }) {
   const { t } = useI18n();
   return (
     <>
-      <span className="pt-2.5">{changesLine(outcome)}</span>
+      <span className="st-report">{changesLine(outcome)}</span>
       {CHANGE_KINDS.filter((kind) => outcome.changes[kind].length).map((kind) => (
         <Disclosure key={kind} summary={`${t(`detail.pack.list.${kind}`)} (${outcome.changes[kind].length})`}>
-          <ul className="text-fg-2 break-all">
+          <ul className="st-list">
             {outcome.changes[kind].map((path) => <li key={path}>{path}</li>)}
           </ul>
         </Disclosure>

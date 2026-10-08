@@ -8,6 +8,7 @@ export const palette: typeof dePalette = {
   "palette.placeholder": "Search commands, instances or pages…",
   "palette.listLabel": "Results",
   "palette.hint": "Arrow keys select, Enter runs.",
+  "palette.key.enter": "Enter",
   "palette.noResults": "No results for “{query}”",
   "palette.results.one": "{count} result",
   "palette.results.other": "{count} results",

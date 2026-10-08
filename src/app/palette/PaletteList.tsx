@@ -1,5 +1,6 @@
 import { useEffect, type MouseEvent } from "react";
 import { useI18n } from "@/i18n";
+import { shortcutLabel } from "../shortcuts";
 import { Icon } from "@/ui";
 import type { PaletteItem, PaletteSection } from "./paletteModel";
 
@@ -17,6 +18,7 @@ interface PaletteOptionProps {
 }
 
 function PaletteOption({ id, item, active, onActivate, onRun }: PaletteOptionProps) {
+  const { t } = useI18n();
   const detail = item.disabledReason ?? item.subtitle;
   // Ein Scrollen unter dem ruhenden Zeiger löst eine Mausbewegung ohne Weg aus und risse die Markierung von der Tastatur weg.
   function followPointer(e: MouseEvent) {
@@ -39,6 +41,11 @@ function PaletteOption({ id, item, active, onActivate, onRun }: PaletteOptionPro
       <span className="vx-pal-t">
         <span className="vx-pal-n">{item.title}</span>
         {detail && <span className="vx-pal-s">{detail}</span>}
+      </span>
+      {/* Rechts: Tastenkürzel des Befehls; der markierte, ausführbare Eintrag zeigt zusätzlich Enter */}
+      <span className="vx-pal-keys" aria-hidden="true">
+        {item.shortcut && <kbd className="vx-pal-kbd vx-slot">{shortcutLabel(item.shortcut, t)}</kbd>}
+        {active && !item.disabledReason && <kbd className="vx-pal-kbd vx-slot">{t("palette.key.enter")}</kbd>}
       </span>
     </div>
   );

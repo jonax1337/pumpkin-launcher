@@ -24,7 +24,7 @@ export function ArgsField({ label, hint, hintId, placeholder, rows, args, disabl
         onChange={(e) => setText(e.target.value)}
         onBlur={() => onCommit(text)}
       />
-      <Hint id={hintId} className="mt-1.5">{hint}</Hint>
+      <Hint id={hintId} className="st-hint">{hint}</Hint>
     </Disclosure>
   );
 }

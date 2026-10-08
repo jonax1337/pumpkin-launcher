@@ -1,0 +1,141 @@
+/* PIXELKINO, Basis (Inventar-Stil; Entwurf: docs/design/concepts/launcher/launcher.html mit ?theme=slots)
+   Layout: rahmenlose Fensterleiste oben (Wortzeichen, Spieler, Fensterknöpfe), darunter links eine schmale Seitenleiste
+   (Start, Bibliothek, Entdecken; unten Aufgaben, Einstellungen) und rechts davon eine Ansicht.
+   Die Szene ist die einzige laute Stelle. Alles andere ist flach, ruhig und folgt einem einzigen Pixelraster: --px.
+   --px ist ein Welt-Pixel. JS setzt es so, dass es immer eine ganze Zahl Gerätepixel trifft (100 %, 125 %, 150 %).
+   Alles Pixelige (Kerben, Bevel, Rahmen, Fokusring, Fortschrittssegmente, Icon-Pixel, Szenenpixel) ist ein Vielfaches davon.
+   Maße, die das Layout tragen (Höhen, Abstände), sind feste CSS-Pixel und hängen nie von --px ab: Pixelgröße umschalten verschiebt nichts.
+   Bausteine (Knöpfe, Chips, Felder, Listen, Überlagerungen …) liefert das Pixel-Kit (src/ui, vx-*). Hier stehen nur Tokens,
+   Reset, Scrollbalken, Fokus und Text-Hilfen; App-Gerüst, Fensterleiste, Szene und Seitenrahmen in shell.css, die Seitenlayouts
+   neben ihrer Seite (pages/**). Spielt der Spielen-Knopf eine Rolle, steht er in components/play.css; Bewegung in ui/motion.css;
+   Prosa (Markdown) in ui/prose.css. */
+:root {
+  color-scheme: dark;
+  /* Pixeleinheit (wird per JS überschrieben) */
+  --px: 3px;
+  --u2: calc(var(--px) * 2);
+  --u3: calc(var(--px) * 3);
+
+  /* Flächen: Blauschwarz, flach, ohne Raster */
+  --bg: #070A11;
+  --bg-2: #0A0E17;
+  --panel: #0F1521;
+  --panel-2: #151D2C;
+  --panel-3: #1D2739;
+  --sunk: #0B1019;
+  --line: #232E42;
+  --line-2: #33415C;
+  --line-hi: #45557A;
+  --edge: #03050A;
+  /* Grenzen bedienbarer Steuerelemente (Feld, Checkbox, Radio, Schalter): ≥ 3:1 gegen --bg/--panel/--panel-2/--sunk (3,4–4,0), Hover heller */
+  --ctl: #5F7094;
+  --ctl-hi: #8A9ABD;
+  --hi: rgba(255,255,255,.14);
+  --hi-2: rgba(255,255,255,.06);
+  /* Markierter Menüeintrag: 1,6:1 gegen --panel (Text --fg 9,8:1) */
+  --hl: #2E3B57;
+  --lo: rgba(0,0,0,.45);
+
+  /* Text */
+  --fg: #EBF0F8;
+  --fg-2: #A9B4C8;
+  --fg-3: #8491A8;
+
+  /* Marke und Akzent: Kupfer global, pro Instanz eigener Akzent in --acc (Werte: store/look.ts, Abstände: PIXELKINO.md) */
+  --copper: #E39860;
+  --acc: var(--copper);
+  --ink: #120C07;
+
+  /* Status (ohne Grün). Warnen = Zitronengelb, Fehler = Rosenrot: beide weit weg von Kupfer und den Biom-Akzenten */
+  --run: #8CC8F0;
+  --warn: #FFD84A;
+  --bad: #FF6D86;
+  --bad-fill: #C23A55;
+  --focus: #F6E7C8;
+
+  /* Tooltip wie ein Item-Tooltip */
+  --tip-bg: #0C0A18;
+  --tip-a: #54409A;
+  --tip-b: #2A2156;
+
+  /* Schrift */
+  --f-display: "Big Shoulders Display", "Arial Narrow", "Bahnschrift Condensed", sans-serif;
+  --f-body: "Hanken Grotesk Variable", "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
+  --f-px: "Jersey 10", "Consolas", monospace;
+  --f-mono: "Cascadia Mono", ui-monospace, Consolas, monospace;
+
+  /* Höhen (fest, unabhängig von --px) */
+  --h-s: 32px; --h-m: 40px; --h-l: 56px;
+  --bar: 48px;
+  --side: 64px;
+  /* Gemeinsamer Seitenrand; Arbeitsbereiche nutzen die verfügbare Fensterbreite. */
+  --gut: clamp(16px, calc(var(--vw1, 1vw) * 2.6), 40px);
+  /* Formularraster: Label | Steuerelement, gleich in globalen und Instanz-Einstellungen (Kit: ui/field.css) */
+  --form-lab: 220px;
+  --form-gap: 20px;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+
+  /* Kerben: 1 Stufe (klein), 2 Stufen (große Flächen), Fokusring (1 Einheit, 1 Einheit Abstand) */
+  --n1: polygon(0 var(--px), var(--px) var(--px), var(--px) 0, calc(100% - var(--px)) 0, calc(100% - var(--px)) var(--px), 100% var(--px), 100% calc(100% - var(--px)), calc(100% - var(--px)) calc(100% - var(--px)), calc(100% - var(--px)) 100%, var(--px) 100%, var(--px) calc(100% - var(--px)), 0 calc(100% - var(--px)));
+  --n2: polygon(0 var(--u2), var(--px) var(--u2), var(--px) var(--px), var(--u2) var(--px), var(--u2) 0, calc(100% - var(--u2)) 0, calc(100% - var(--u2)) var(--px), calc(100% - var(--px)) var(--px), calc(100% - var(--px)) var(--u2), 100% var(--u2), 100% calc(100% - var(--u2)), calc(100% - var(--px)) calc(100% - var(--u2)), calc(100% - var(--px)) calc(100% - var(--px)), calc(100% - var(--u2)) calc(100% - var(--px)), calc(100% - var(--u2)) 100%, var(--u2) 100%, var(--u2) calc(100% - var(--px)), var(--px) calc(100% - var(--px)), var(--px) calc(100% - var(--u2)), 0 calc(100% - var(--u2)));
+  --ring: polygon(evenodd, 0 var(--px), var(--px) var(--px), var(--px) 0, calc(100% - var(--px)) 0, calc(100% - var(--px)) var(--px), 100% var(--px), 100% calc(100% - var(--px)), calc(100% - var(--px)) calc(100% - var(--px)), calc(100% - var(--px)) 100%, var(--px) 100%, var(--px) calc(100% - var(--px)), 0 calc(100% - var(--px)), 0 var(--px), var(--px) var(--px), var(--px) calc(100% - var(--px)), calc(100% - var(--px)) calc(100% - var(--px)), calc(100% - var(--px)) var(--px), var(--px) var(--px), 0 var(--px));
+  /* Doppelring (Fokus auf Gewähltem): außen wie --ring, 1 Einheit Lücke, innen ein zweiter Ring; Farben per Hintergrund (Padding 2 Einheiten = innerer Ring) */
+  --ring2: polygon(evenodd, 0 var(--px), var(--px) var(--px), var(--px) 0, calc(100% - var(--px)) 0, calc(100% - var(--px)) var(--px), 100% var(--px), 100% calc(100% - var(--px)), calc(100% - var(--px)) calc(100% - var(--px)), calc(100% - var(--px)) 100%, var(--px) 100%, var(--px) calc(100% - var(--px)), 0 calc(100% - var(--px)), 0 var(--px), var(--px) var(--px), var(--px) calc(100% - var(--px)), calc(100% - var(--px)) calc(100% - var(--px)), calc(100% - var(--px)) var(--px), var(--px) var(--px), var(--u2) var(--u3), var(--u3) var(--u3), var(--u3) var(--u2), calc(100% - var(--u3)) var(--u2), calc(100% - var(--u3)) var(--u3), calc(100% - var(--u2)) var(--u3), calc(100% - var(--u2)) calc(100% - var(--u3)), calc(100% - var(--u3)) calc(100% - var(--u3)), calc(100% - var(--u3)) calc(100% - var(--u2)), var(--u3) calc(100% - var(--u2)), var(--u3) calc(100% - var(--u3)), var(--u2) calc(100% - var(--u3)), var(--u2) var(--u3), var(--u3) var(--u3), var(--u3) calc(100% - var(--u3)), calc(100% - var(--u3)) calc(100% - var(--u3)), calc(100% - var(--u3)) var(--u3), var(--u3) var(--u3), var(--u2) var(--u3), var(--px) var(--px), 0 var(--px));
+
+  /* Bevel: Licht oben links, Schatten unten rechts, je 1 Einheit, innerhalb eines 1-Einheit-Rahmens */
+  --bv-raised: inset 0 0 0 var(--px) var(--line-2), inset var(--u2) var(--u2) 0 var(--hi), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--lo);
+}
+/* Abgeleitete Akzente dort neu rechnen, wo --acc gesetzt wird (sonst erben alle die Kupfer-Werte von :root).
+   Schatten und Sockel mischen in OKLab mit dem neutralen Grund: Farbton bleibt, keine braunen Ränder bei kühlen Biomen. */
+:root, [style*="--acc:"], .play {
+  --acc-hi: color-mix(in oklab, var(--acc) 58%, #fff);
+  --acc-lo: color-mix(in oklab, var(--acc) 50%, #070A11);
+  --acc-mid: color-mix(in oklab, var(--acc) 76%, #070A11);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 400 calc(14px * var(--tz))/1.45 var(--f-body); -webkit-font-smoothing: antialiased; overflow: hidden; font-variant-numeric: tabular-nums; }
+button, input, select, textarea { font: inherit; color: inherit; border-radius: 0; margin: 0; }
+button { background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+button:disabled { cursor: default; }
+h1, h2, h3, h4, p, ul, ol, figure { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+svg, canvas { display: block; }
+a { color: inherit; }
+:focus { outline: none; }
+::selection { background: var(--copper); color: var(--ink); }
+/* Wie eine App, nicht wie eine Webseite: Text lässt sich nur markieren, wo man ihn bearbeitet oder kopieren will (Eingabefelder, Log).
+   Das Präfix braucht WKWebView (macOS). Einzelne Stellen wie die Anmeldecodes setzen `select-all` selbst. */
+body { -webkit-user-select: none; user-select: none; }
+input, textarea, .console .cbody { -webkit-user-select: text; user-select: text; }
+.sr { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.num { font-family: var(--f-px); font-weight: 400; letter-spacing: .02em; }
+
+/* Pixel-Scrollbalken: Daumen = kleine Steinplatte (Rand, Fase 1 Einheit), Bahn = eingelassen */
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: var(--bg); box-shadow: inset var(--px) 0 0 var(--edge); }
+::-webkit-scrollbar-thumb { background: var(--panel-3); box-shadow: inset 0 0 0 var(--px) var(--edge), inset var(--px) var(--px) 0 var(--hi), inset calc(var(--px) * -1) calc(var(--px) * -1) 0 var(--lo); }
+::-webkit-scrollbar-thumb:hover { background: var(--line-2); }
+::-webkit-scrollbar-corner { background: var(--bg); }
+
+/* ---------- Fokusring für Elemente ohne eigenen Ring: gestuft, 1 Einheit breit, 1 Einheit Abstand, Farbe wie der Ring der Kit-Bausteine (--ring-i).
+   Knöpfe, Leistenknöpfe, Reiter und Chips (Steinplatten/Slots mit Kerbe) zeichnen --ring-i selbst: der Außenring würde von ihrer Kerbe abgeschnitten. ---------- */
+.fx { position: relative; }
+.fx:where(:not(.vx-btn, .vx-bar, .vx-tab, .vx-chip)):focus-visible::after { content: ""; position: absolute; inset: calc(var(--u2) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; z-index: 5; }
+/* Seitenüberschrift bekommt nach dem Seitenwechsel den Fokus (Layout): kein Ring, sie ist nicht bedienbar */
+.view h1[tabindex="-1"]:focus { outline: none; }
+
+/* ---------- Text-Hilfen ---------- */
+.muted { color: var(--fg-2); }
+.faint { color: var(--fg-3); }
+.ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.help { font-size: calc(13px * var(--tz)); color: var(--fg-3); }
+
+@media (max-width: 900px) {
+  :root { --form-lab: 170px; --form-gap: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0s !important; animation-iteration-count: 1 !important; transition-duration: 0s !important; transition-delay: 0s !important; }
+}

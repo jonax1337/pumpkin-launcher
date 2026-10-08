@@ -1,6 +1,7 @@
-/* Pixel-Kit: sammelt alle Kit-Stile. Eingebunden in src/index.css hinter pixelkino.css (Schicht components).
+/* Pixel-Kit: sammelt alle Kit-Stile. Eingebunden in src/index.css hinter styles/base.css (Schicht components).
    Komponenten importieren kein CSS selbst. */
 @import "./tokens.css";
+@import "./surface.css";
 @import "./icon.css";
 @import "./button.css";
 @import "./chip.css";

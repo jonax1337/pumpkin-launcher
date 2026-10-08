@@ -45,9 +45,9 @@ function TemplatePane({ selected, onSelect }: { selected: string | null; onSelec
     <>
       <ChoiceList>
         {templates.data.map((tpl) => (
-          <div key={tpl.id} className="flex items-center gap-1">
+          <div key={tpl.id} className="ni-tpl">
             <Choice
-              className="min-w-0 flex-1"
+              className="ni-tpl-pick"
               media={<Glyph name="chest" pal="sand" />}
               title={tpl.name}
               sub={`${loaderLine(tpl)} · ${t(tpl.modCount === 1 ? "components.template.entryCount.one" : "components.template.entryCount.other", { n: tpl.modCount })} · ${t("components.template.savedAt", { date: formatDate(tpl.createdAt) })}`}
@@ -55,13 +55,13 @@ function TemplatePane({ selected, onSelect }: { selected: string | null; onSelec
               onClick={() => onSelect(tpl)}
             />
             {api.capabilities.exportInstance && (
-              <IconButton size="s" icon="ul" label={t("components.template.exportNamed", { name: tpl.name })} tip={t("components.template.export")} disabled={exportTemplate.isPending} onClick={() => exportTemplate.mutate(tpl)} />
+              <IconButton size="s" icon="upload" label={t("components.template.exportNamed", { name: tpl.name })} tip={t("components.template.export")} disabled={exportTemplate.isPending} onClick={() => exportTemplate.mutate(tpl)} />
             )}
             <IconButton size="s" icon="trash" tone="bad" label={t("components.template.deleteNamed", { name: tpl.name })} tip={t("components.template.delete")} disabled={del.isPending} onClick={() => removal.ask(tpl)} />
           </div>
         ))}
       </ChoiceList>
-      <div className="mt-3 flex flex-col items-start gap-3">
+      <div className="ni-tpl-foot">
         <Hint>{t("components.template.saveHint")}</Hint>
         <ImportTemplateButton />
       </div>

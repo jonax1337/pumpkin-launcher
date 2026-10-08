@@ -20,11 +20,11 @@ import { useTemplateTab } from "@/components/newInstance/TemplateTab";
 
 // Reiter des Dialogs; Beschriftungen als Schlüssel, übersetzt beim Rendern.
 const TABS: { value: Tab; label: TKey; icon: IconName }[] = [
-  { value: "blank", label: "components.newInstance.tab.own", icon: "plus" },
-  { value: "pack", label: TYPE_ONE_KEYS.modpack, icon: "box" },
+  { value: "blank", label: "components.newInstance.tab.own", icon: "grass" },
+  { value: "pack", label: TYPE_ONE_KEYS.modpack, icon: "modpack" },
   { value: "file", label: "components.newInstance.tab.file", icon: "file" },
-  { value: "tpl", label: "components.newInstance.tab.template", icon: "save" },
-  { value: "import", label: "components.newInstance.tab.import", icon: "swap" },
+  { value: "tpl", label: "components.newInstance.tab.template", icon: "book" },
+  { value: "import", label: "components.newInstance.tab.import", icon: "download" },
 ];
 
 /**
@@ -71,8 +71,8 @@ function NewInstanceForm({ open, onOpenChange, start, onBusy, onDone, onImported
       open={open}
       onOpenChange={onOpenChange}
       title={t("components.newInstance.title")}
-      width={720}
-      height={600}
+      size="l"
+      height="m"
       footLeft={hint}
       footer={
         <>

@@ -1,7 +1,7 @@
 import { useState, type RefObject } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { useI18n } from "@/i18n";
-import { BackLink, ContextMenu, ErrorBox, Icon, Skel, TabPanel, Tabs, type MenuEntry, type TabItem } from "@/ui";
+import { BackLink, ContextMenu, ErrorBox, HeroShade, Icon, Page, Skel, TabPanel, Tabs, type MenuEntry, type TabItem } from "@/ui";
 import { LogConsole } from "@/components/log/LogConsole";
 import { AddContentSheet } from "@/components/catalog/AddContentSheet";
 import { useInstanceMenu } from "@/components/instance";
@@ -37,10 +37,10 @@ function InstanceDetail({ id }: { id: string }) {
 
   if (error)
     return (
-      <section className="page">
+      <Page>
         <BackLink to="/instances">{t("ui.nav.library")}</BackLink>
-        <ErrorBox className="mt-4" title={t("pages.detail.loadErrorTitle")} error={error} onRetry={() => void refetch()} />
-      </section>
+        <ErrorBox title={t("pages.detail.loadErrorTitle")} error={error} onRetry={() => void refetch()} />
+      </Page>
     );
   if (!instance) return <DetailSkeleton id={id} />;
   return <Loaded instance={instance} tab={tab} setTab={setTab} head={head} compact={compact} />;
@@ -53,10 +53,10 @@ function DetailSkeleton({ id }: { id: string }) {
     <section className="detail" aria-busy aria-label={t("components.common.loadingAria")}>
       <header className="dhead">
         <PixelScene bio={look.bio} seed={look.seed} mode="live" className="scene" />
-        <div className="shade-head" />
+        <HeroShade />
         <div className="dh-full">
           <div className="dh-info">
-            <div className="flex"><BackLink to="/instances" onScene>{t("ui.nav.library")}</BackLink></div>
+            <div className="dh-back"><BackLink to="/instances" onScene>{t("ui.nav.library")}</BackLink></div>
             <Skel h={48} w="min(460px, 60%)" />
             <Skel h={28} w={280} />
           </div>
@@ -130,13 +130,13 @@ function Loaded({ instance, tab, setTab, head, compact }: {
     { label: instance.name },
     ...instanceItems.filter((item) => item === "-" || !("id" in item) || (item.id !== "settings" && item.id !== "log")),
     "-",
-    { id: "content", text: t("pages.detail.tabContent"), icon: "list", checked: tab === "content", onSelect: () => setTab("content") },
+    { id: "content", text: t("pages.detail.tabContent"), icon: "mod", checked: tab === "content", onSelect: () => setTab("content") },
     { id: "add-content", text: t("common.add"), icon: "plus", onSelect: () => setAdding(true) },
-    { id: "updates", text: updatesLabel(updateFor.size), icon: "up", disabled: !updateFor.size, onSelect: showUpdates },
-    { id: "worlds", text: t("common.worlds"), checked: tab === "worlds", onSelect: () => setTab("worlds") },
-    { id: "screenshots", text: t("components.export.entry.screenshots"), checked: tab === "screenshots", onSelect: () => setTab("screenshots") },
-    { id: "console", text: t("components.log.ariaLabel"), icon: "term", checked: tab === "console", onSelect: toLog },
-    { id: "settings", text: t("common.settings"), icon: "gear", checked: tab === "settings", onSelect: () => setTab("settings") },
+    { id: "updates", text: updatesLabel(updateFor.size), icon: "update", disabled: !updateFor.size, onSelect: showUpdates },
+    { id: "worlds", text: t("common.worlds"), icon: "world", checked: tab === "worlds", onSelect: () => setTab("worlds") },
+    { id: "screenshots", text: t("components.export.entry.screenshots"), icon: "screenshot", checked: tab === "screenshots", onSelect: () => setTab("screenshots") },
+    { id: "console", text: t("components.log.ariaLabel"), icon: "terminal", checked: tab === "console", onSelect: toLog },
+    { id: "settings", text: t("common.settings"), icon: "settings", checked: tab === "settings", onSelect: () => setTab("settings") },
   ];
 
   return (

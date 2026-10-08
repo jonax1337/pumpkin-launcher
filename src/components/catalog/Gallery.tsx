@@ -16,7 +16,7 @@ export function Gallery({ images, project }: { images: GalleryImage[]; project: 
   const alt = (img: GalleryImage, n: number) => img.title ?? t("components.detail.galleryImage", { n, project });
   return (
     <section className="gal" aria-label={t("components.detail.gallery")}>
-      <img className="gal-main" src={image.url} alt={alt(image, current + 1)} loading="lazy" referrerPolicy="no-referrer" />
+      <img className="gal-main vx-pit" src={image.url} alt={alt(image, current + 1)} loading="lazy" referrerPolicy="no-referrer" />
       {image.description && <p className="gal-cap">{image.description}</p>}
       {shown.length > 1 && (
         <div className="gal-thumbs">
@@ -24,7 +24,7 @@ export function Gallery({ images, project }: { images: GalleryImage[]; project: 
             <button
               key={img.url}
               type="button"
-              className="gal-thumb fx"
+              className="gal-thumb vx-slot fx"
               aria-pressed={i === current}
               aria-label={t("components.detail.showImage", { n: i + 1, total: shown.length })}
               onClick={() => setCurrent(i)}

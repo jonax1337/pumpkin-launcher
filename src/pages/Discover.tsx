@@ -2,10 +2,10 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useView } from "@/app/Layout";
 import { useI18n } from "@/i18n";
-import { ChipButton, ContextMenu, PageHeader, SearchField, Select, TabPanel, Tabs, Toolbar, WorkspaceContent, type MenuEntry } from "@/ui";
+import { ChipButton, ContextMenu, Page, PageHeader, SearchField, Select, TabPanel, Tabs, Toolbar, Workspace, WorkspaceContent, type MenuEntry } from "@/ui";
 import { ContentDetail } from "@/components/catalog/ContentDetail";
 import { ContentResults } from "@/components/catalog/ContentResults";
-import { searchPlaceholder, typeLabel } from "@/components/catalog/labels";
+import { searchPlaceholder, TYPE_ICONS, typeLabel } from "@/components/catalog/labels";
 import { OtherTypeHits } from "@/components/catalog/OtherTypeHits";
 import { SourceSelect } from "@/components/catalog/SourceSelect";
 import { StarterResults } from "@/components/catalog/StarterResults";
@@ -140,10 +140,10 @@ export function DiscoverPage() {
     <>
       {projectId && (
         <ContextMenu items={[{
-          id: "back", text: t("common.back"), icon: "back",
+          id: "back", text: t("common.back"), icon: "arrow-left",
           onSelect: () => setParams(discoverParams({ tab: type, source })),
         }, "-", ...tabMenu]}>
-        <div className="page disc-proj">
+        <Page className="disc-proj">
           <ContentDetail
             key={`${projectSource}-${projectId}`}
             source={projectSource}
@@ -153,26 +153,26 @@ export function DiscoverPage() {
             backLabel={typeLabel(type)}
             onBack={() => setParams(discoverParams({ tab: type, source }))}
           />
-        </div>
+        </Page>
         </ContextMenu>
       )}
       {/* Bleibt beim Öffnen von Details erhalten, damit Suche und geladene Seiten nicht verloren gehen. */}
       <ContextMenu items={listMenu}>
-      <section className="page disc" hidden={!!projectId}>
-        <PageHeader title={t("ui.nav.discover")}>
-          {tabs.length > 1 && (
+      <Page className="disc" hidden={!!projectId}>
+        <PageHeader
+          title={t("ui.nav.discover")}
+          tabs={tabs.length > 1 && (
             <Tabs
-              variant="segment"
               idBase="disc"
               label={t("pages.discover.categoryLabel")}
               value={type}
               onChange={openTab}
-              items={tabs.map((tab) => ({ value: tab, label: typeLabel(tab) }))}
+              items={tabs.map((tab) => ({ value: tab, label: typeLabel(tab), icon: TYPE_ICONS[tab] }))}
             />
           )}
-        </PageHeader>
+        />
         {/* Suchfeld bewusst breiter als in der Bibliothek */}
-        <Toolbar search="l" label={t("pages.discover.searchFilterLabel")} className="mt-4 mb-3.5">
+        <Toolbar search="l" label={t("pages.discover.searchFilterLabel")}>
           <SearchField
             value={filters.query}
             onChange={(next) => change({ query: next, ...(next.trim() && { starter: false }) })}
@@ -204,9 +204,10 @@ export function DiscoverPage() {
             />
           )}
         </Toolbar>
+        <Workspace>
         <WorkspaceContent className="disc-results">
         <TabPanel idBase="disc" value={type}>
-          <div className="mb-2 flex flex-wrap items-center gap-x-3 empty:hidden">
+          <div className="disc-extras">
             {starterAvailable && (
               <ChipButton pressed={showStarter} onClick={() => change({ starter: !showStarter })}>{t("pages.discover.starter")}</ChipButton>
             )}
@@ -244,7 +245,8 @@ export function DiscoverPage() {
           )}
         </TabPanel>
         </WorkspaceContent>
-      </section>
+        </Workspace>
+      </Page>
       </ContextMenu>
     </>
   );

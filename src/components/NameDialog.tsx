@@ -29,7 +29,7 @@ export function NameDialog({ title, label, help, initial, maxLength, pending, al
       open
       onOpenChange={(o) => !o && onClose()}
       title={title}
-      width={480}
+      size="s"
       footer={<DialogActions cancel={t("common.cancel")} confirm={{ label: pending ? (confirm?.pending ?? t("components.common.saving")) : (confirm?.label ?? t("common.save")), width: 130, form: formId, disabled: !ready }} />}
     >
       <form id={formId} onSubmit={submit}>

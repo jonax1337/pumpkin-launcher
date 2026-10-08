@@ -54,7 +54,7 @@ export function CrashActions({ crash, instance, onScene, onViewLog }: {
       <Button variant="ghost" size="s" onScene={onScene} onClick={onViewLog}>{t("components.game.viewLog")}</Button>
       {/* Nur als Symbol: Ausgeschrieben ließe die schmale Zeile keinen Platz für die Meldung. */}
       <IconButton
-        icon="ul"
+        icon="upload"
         size="s"
         label={t("components.game.shareLog")}
         onScene={onScene}

@@ -7,7 +7,6 @@ import { useI18n } from "@/i18n";
 import type { Instance, WorldBackup } from "@/lib/types";
 import { AutoBackupSettings } from "./AutoBackupSettings";
 import { GuardedButton } from "./guards";
-import { WORLD_DIALOG_WIDTH } from "./worldDialog";
 
 /** Sicherungen einer Welt (`world`) oder aller Welten (`null`): wiederherstellen (immer als neue Welt) oder löschen. */
 export function BackupsDialog({ instance, world, busy, onClose }: {
@@ -24,11 +23,10 @@ export function BackupsDialog({ instance, world, busy, onClose }: {
       onOpenChange={(open) => !open && onClose()}
       title={t("detail.worlds.backupsTitle")}
       sub={world ?? instance.name}
-      width={WORLD_DIALOG_WIDTH}
       footer={<DialogActions cancel={t("common.close")} />}
     >
       <AutoBackupSettings instance={instance} />
-      <Hint className="mb-2 mt-3">{t("detail.worlds.restoreHint")}</Hint>
+      <Hint className="bk-hint">{t("detail.worlds.restoreHint")}</Hint>
       <QueryList
         query={backups}
         error={t("detail.worlds.backupsLoadError")}
@@ -45,7 +43,7 @@ export function BackupsDialog({ instance, world, busy, onClose }: {
                   <RowTitle title={formatDateTime(backup.createdAt)} sub={formatSize(backup.sizeBytes)} />
                 )}
                 <Actions gap={4}>
-                  <GuardedButton size="s" icon="redo" blocked={busy} disabled={restore.isPending} onClick={() => restore.mutate(backup)}>
+                  <GuardedButton size="s" icon="undo" blocked={busy} disabled={restore.isPending} onClick={() => restore.mutate(backup)}>
                     {t("detail.worlds.restoreAction")}
                   </GuardedButton>
                   <IconButton

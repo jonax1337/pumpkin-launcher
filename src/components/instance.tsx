@@ -106,7 +106,7 @@ export function useGroupMenu(instance: Instance): MenuEntry[] {
     ...(groups.length ? ["-" as const] : []),
     { id: "group-new", text: t("components.instance.newGroupMenu"), icon: "plus", onSelect: () => askNewGroup(instance) },
     ...(instance.group
-      ? [{ id: "group-none", text: t("components.instance.removeFromGroup"), icon: "x" as const, onSelect: () => assign(null) }]
+      ? [{ id: "group-none", text: t("components.instance.removeFromGroup"), icon: "close" as const, onSelect: () => assign(null) }]
       : []),
   ];
 }
@@ -135,17 +135,17 @@ export function useInstanceMenu(instance: Instance, { showOpen = true }: { showO
           {
             id: "open",
             text: t("components.instance.openInstance"),
-            icon: "chev" as const,
+            icon: "chev-right" as const,
             onSelect: () => navigate(instanceUrl(instance.id)),
           },
         ]
       : []),
-    { id: "settings", text: t("common.settings"), icon: "gear", onSelect: () => navigate(instanceUrl(instance.id, "settings")) },
-    { id: "log", text: t("components.log.ariaLabel"), icon: "term", onSelect: () => navigate(instanceUrl(instance.id, "console")) },
+    { id: "settings", text: t("common.settings"), icon: "settings", onSelect: () => navigate(instanceUrl(instance.id, "settings")) },
+    { id: "log", text: t("components.log.ariaLabel"), icon: "terminal", onSelect: () => navigate(instanceUrl(instance.id, "console")) },
     { id: "dir", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => openInstanceFolder(instance) },
     "-",
-    { id: "rename", text: t("common.rename"), icon: "file", disabled: locked, onSelect: () => askRename(instance) },
-    { id: "group", text: t("components.instance.group"), icon: "box", disabled: locked, items: groupItems },
+    { id: "rename", text: t("common.rename"), icon: "edit", disabled: locked, onSelect: () => askRename(instance) },
+    { id: "group", text: t("components.instance.group"), icon: "tag", disabled: locked, items: groupItems },
     {
       id: "dup",
       text: t("components.instance.duplicate"),
@@ -156,7 +156,7 @@ export function useInstanceMenu(instance: Instance, { showOpen = true }: { showO
     {
       id: "exp",
       text: t("components.instance.exportEllipsis"),
-      icon: "ul",
+      icon: "upload",
       disabled: locked || contentBusy,
       onSelect: () => askExport(instance),
     },

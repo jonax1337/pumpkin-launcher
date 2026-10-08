@@ -1,26 +1,21 @@
-/* Kit-Icon: feste Box je Slot, Glyphe = Rasterzellen × --iu (1 Icon-Pixel = 1 Icon-Einheit).
-   --iu ist NICHT --px: die Pixelstufe (klein/mittel/groß) gilt nur für Rahmen, Kerben, Szenen. Icons bleiben in jeder Stufe gleich
-   (--iu = 3 px, auf ganze Gerätepixel gerundet; unit.ts).
-   | Slot | Box | Raster                  | Größe bei 3 px |
-   | s    | 20  | 5×5                     | 15             |
-   | m    | 24  | 7×7                     | 21             |
-   | l    | 28  | 7×7                     | 21             |
-   | xl   | 56  | 7×7, 2 Einheiten/Zelle  | 42             | */
-/* Die Glyphe sitzt mit festem Versatz in der Box: ungerade Kantenlänge (15, 21) in gerader Box (20, 24, 28) ergäbe beim Zentrieren halbe
-   Pixel, die der Browser je nach Seitenposition mal auf-, mal abrundet. --dp = ein Gerätepixel (unit.ts). */
-.vx-ico { --ico-box: var(--vx-ico-m); --g: 5; --e: var(--e5, 0); --gl: calc(var(--g) * var(--iu, 3px)); --off: round(down, calc((var(--ico-box) - var(--gl)) / 2), var(--dp, 1px)); width: var(--ico-box); height: var(--ico-box); display: inline-grid; place-items: start; flex: none; }
+/* Kit-Icon: feste Box je Slot, Glyphe = 8×8 Zellen × Zellgröße --ic (1 Icon-Pixel = 1 ganze Zelle).
+   Die Zelle hängt NICHT an --px: die Pixelstufe (klein/mittel/groß) gilt nur für Rahmen, Kerben, Szenen. --ic-<Slot> setzt unit.ts
+   Gerätepixel-genau (Zelle = Box / 8, auf ganze Gerätepixel gerundet; bei 125 % ragt das Raster höchstens ein paar Pixel über die Box), Rückfall hier bei 100 %.
+   | Slot | Box | Zelle | Glyphe |
+   | s    | 16  | 2     | 16     |
+   | m    | 24  | 3     | 24     |
+   | l    | 32  | 4     | 32     |
+   | xl   | 48  | 6     | 48     | */
+/* Die Glyphe sitzt mit festem Versatz in der Box: bei gebrochener Skalierung (125 %) ergäbe Zentrieren halbe Pixel, die der Browser je nach
+   Seitenposition mal auf-, mal abrundet. --dp = ein Gerätepixel (unit.ts). */
+.vx-ico { --ico-box: var(--vx-ico-m); --ic: var(--ic-m, 3px); --e: 0; --gl: calc(8 * var(--ic)); --off: round(down, calc((var(--ico-box) - var(--gl)) / 2), var(--dp, 1px)); width: var(--ico-box); height: var(--ico-box); display: inline-grid; place-items: start; flex: none; }
 .vx-ico svg { display: block; width: var(--gl); height: var(--gl); margin: var(--off); fill: currentColor; shape-rendering: crispEdges; }
-.vx-ico[data-size="s"] { --ico-box: var(--vx-ico-s); }
-.vx-ico:is([data-size="m"], [data-size="l"], [data-size="xl"]) { --g: 7; --e: var(--e7, 0); }
-.vx-ico[data-size="l"] { --ico-box: var(--vx-ico-l); }
-.vx-ico[data-size="xl"] { --ico-box: var(--vx-ico-xl); --gl: calc(var(--iu, 3px) * 14); }
-:root[data-ico-m="5"] .vx-ico[data-size="m"] { --g: 5; --e: var(--e5, 0); }
-/* Am Ende eines Knopfes: Luft der Box und leere Rasterspalten rechts abschneiden (Icon.edge) */
-.vx-ico[data-edge="end"] { margin-right: calc(-1 * (var(--ico-box) - var(--gl) - var(--off) + var(--e) * var(--iu, 3px))); }
-/* m: beide Raster im DOM, eines sichtbar (umschalten ohne Neurendern, kein Layoutshift: Box bleibt) */
-.vx-ico[data-size="m"] svg[data-g="5"] { display: none; }
-:root[data-ico-m="5"] .vx-ico[data-size="m"] svg[data-g="7"] { display: none; }
-:root[data-ico-m="5"] .vx-ico[data-size="m"] svg[data-g="5"] { display: block; }
+.vx-ico path[data-dim] { opacity: .5; }
+.vx-ico[data-size="s"] { --ico-box: var(--vx-ico-s); --ic: var(--ic-s, 2px); }
+.vx-ico[data-size="l"] { --ico-box: var(--vx-ico-l); --ic: var(--ic-l, 4px); }
+.vx-ico[data-size="xl"] { --ico-box: var(--vx-ico-xl); --ic: var(--ic-xl, 6px); }
+/* Am Ende eines Knopfes: Luft der Box und leere Rasterspalten rechts abschneiden (Icon.edge; --e = leere Spalten, Icon.tsx) */
+.vx-ico[data-edge="end"] { margin-right: calc(-1 * (var(--ico-box) - var(--gl) - var(--off) + var(--e) * var(--ic))); }
 
 .vx-ico[data-tone="neutral"] { color: var(--fg-2); }
 .vx-ico[data-tone="muted"] { color: var(--fg-3); }
@@ -28,8 +23,6 @@
 .vx-ico[data-tone="warn"] { color: var(--warn); }
 .vx-ico[data-tone="bad"] { color: var(--bad); }
 .vx-ico[data-tone="run"] { color: var(--run); }
-.vx-ico[data-flip="x"] svg { transform: scaleX(-1); }
-.vx-ico[data-flip="y"] svg { transform: scaleY(-1); }
 
 /* Glyphe aus pixel/icons.tsx (GlyphSvg): Pixel bleiben Pixel */
 .gl { image-rendering: pixelated; shape-rendering: crispEdges; }

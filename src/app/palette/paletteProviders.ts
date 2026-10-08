@@ -9,6 +9,7 @@ import { SECTIONS, settingsSectionUrl } from "@/pages/settings/sections";
 import { TEXT_SIZE_KEYS } from "@/pages/settings/AppearanceTab";
 import { useSettings, type TextSize } from "@/store/settings";
 import { FRIENDS_PATH, TABS } from "../mainTabs";
+import { SHORTCUT } from "../shortcuts";
 import type { PaletteItem } from "./paletteModel";
 
 /** Suchbegriffe eines Befehls: die Wörter des Eintrags `palette.kw.*`. */
@@ -78,7 +79,7 @@ function openItem(instance: Instance, actions: InstanceActions): PaletteItem {
     group: "instances",
     title: t("palette.open", { name: instance.name }),
     subtitle: loaderLine(instance),
-    icon: "box",
+    icon: "library",
     keywords: words("palette.kw.open"),
     run: () => actions.open(instance),
   };
@@ -111,6 +112,7 @@ export function navigationItems(go: Go, friendsHidden: boolean): PaletteItem[] {
     group: "navigation",
     title: t(tab.key),
     icon: tab.icon,
+    shortcut: tab.shortcut,
     keywords: navigate,
     run: () => go(tab.to),
   }));
@@ -118,7 +120,8 @@ export function navigationItems(go: Go, friendsHidden: boolean): PaletteItem[] {
     id: "nav:/settings",
     group: "navigation",
     title: t("common.settings"),
-    icon: "gear",
+    icon: "settings",
+    shortcut: SHORTCUT.settings,
     keywords: settingsWords,
     run: () => go("/settings"),
   };
@@ -151,7 +154,7 @@ function motionItem({ motion, systemReducesMotion }: ActionEnvironment): Palette
     id: "action:motion",
     group: "actions",
     title: t(motion ? "palette.motionOff" : "palette.motionOn"),
-    icon: "eye",
+    icon: "sparkle",
     keywords: words("palette.kw.motion"),
     disabledReason: systemReducesMotion ? t("pages.settings.motionReducedHint") : undefined,
     run: () => useSettings.getState().set({ motion: !motion }),
@@ -166,7 +169,7 @@ function textSizeItem({ textSize }: ActionEnvironment): PaletteItem {
     group: "actions",
     title: t("palette.textSize"),
     subtitle: t("palette.textSizeChange", { from: t(TEXT_SIZE_KEYS[at].key), to: t(next.key) }),
-    icon: "gear",
+    icon: "settings",
     keywords: words("palette.kw.textSize"),
     run: () => useSettings.getState().set({ textSize: next.value }),
   };
@@ -179,6 +182,7 @@ export function actionItems(env: ActionEnvironment): PaletteItem[] {
       group: "actions",
       title: t("palette.newInstance"),
       icon: "plus",
+      shortcut: SHORTCUT.newInstance,
       keywords: words("palette.kw.newInstance"),
       run: () => env.go(newInstanceUrl()),
     },
@@ -186,7 +190,7 @@ export function actionItems(env: ActionEnvironment): PaletteItem[] {
       id: "action:import",
       group: "actions",
       title: t("palette.import"),
-      icon: "dl",
+      icon: "download",
       keywords: words("palette.kw.import"),
       run: () => env.go(newInstanceUrl({ type: "import" })),
     },
@@ -194,7 +198,7 @@ export function actionItems(env: ActionEnvironment): PaletteItem[] {
       id: "action:checkUpdates",
       group: "actions",
       title: t("palette.checkUpdates"),
-      icon: "redo",
+      icon: "refresh",
       keywords: words("palette.kw.checkUpdates"),
       disabledReason: env.updateBlockedReason,
       run: env.checkForUpdates,

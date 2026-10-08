@@ -91,24 +91,24 @@ export function Onboarding() {
       {/* Kein Modal: die Fensterleiste bleibt bedienbar, deshalb eine benannte Region */}
       <section className="onb-card plate" aria-labelledby="onb-t">
         {step === 1 ? (
-          <form onSubmit={next} className="contents">
+          <form onSubmit={next} className="onb-form">
             {steps}
             <div className="onb-heading">
-              <Buddy mood="hello" size={72} />
+              <Buddy mood="hello" size={96} />
               <h1 id="onb-t">{t("components.onboarding.welcome")}</h1>
             </div>
             <p>{offlineOk ? t("components.account.askName") : t("components.account.msLoginPrompt")}</p>
             <div className="ob">
               {offlineOk && <PlayerNameField value={name} onChange={setName} help={t("components.playerName.helpShort")} />}
               {offlineOk && <div className="or">{t("components.common.or")}</div>}
-              <Button icon="user" variant={offlineOk ? undefined : "primary"} width="full" onClick={() => void startMsLogin()}>{t("components.account.msLogin")}</Button>
+              <Button icon="microsoft" variant={offlineOk ? undefined : "primary"} width="full" onClick={() => void startMsLogin()}>{t("components.account.msLogin")}</Button>
               <Hint className="ob-ms">
                 {offlineOk ? t("components.onboarding.msHintOfflineOk") : t("components.onboarding.msHintRequired")}
               </Hint>
             </div>
             <div className="of">
               <span className="help">{t("components.onboarding.stepOf", { step: 1 })}</span>
-              <Button type="submit" variant="primary" width={140} iconEnd="chev" disabled={!offlineOk || !nameOk}>
+              <Button type="submit" variant="primary" width={140} iconEnd="chev-right" disabled={!offlineOk || !nameOk}>
                 {t("common.next")}
               </Button>
             </div>
@@ -117,7 +117,7 @@ export function Onboarding() {
           <>
             {steps}
             <div className="onb-heading">
-              <Buddy mood={starter.busy ? "loading" : "hello"} size={72} />
+              <Buddy mood={starter.busy ? "loading" : "hello"} size={96} />
               <h1 id="onb-t">{t("components.onboarding.pickStart")}</h1>
             </div>
             <p>{t("components.onboarding.moreLater")}</p>
@@ -149,7 +149,7 @@ export function Onboarding() {
               <Button
                 variant="primary"
                 size="l"
-                icon={starter.busy ? "hour" : choice.ctaIcon}
+                icon={starter.busy ? "hourglass" : choice.ctaIcon}
                 width={232}
                 disabled={starter.busy || (createsHere && !starter.ready)}
                 onClick={go}

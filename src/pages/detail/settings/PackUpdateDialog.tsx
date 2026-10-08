@@ -7,9 +7,6 @@ import { installedPackVersion, usePackChangelog, usePackUpdate, type PackStatus 
 import type { ContentVersion } from "@/lib/content-types";
 import { LOADER_LABELS, type Instance, type ModLoader } from "@/lib/types";
 
-/** Feste Maße des Dialogs: das Änderungsprotokoll scrollt im Körper, nichts springt beim Wechsel der Version. */
-const DIALOG_WIDTH = 620;
-const DIALOG_HEIGHT = 640;
 const CONFIRM_WIDTH = 150;
 const CHANGELOG_SKELETON_HEIGHT = 160;
 
@@ -43,8 +40,7 @@ export function PackUpdateDialog({ instance, status, onClose }: { instance: Inst
       onOpenChange={(open) => !open && onClose()}
       title={t("detail.pack.dialogTitle")}
       sub={status.name ?? instance.name}
-      width={DIALOG_WIDTH}
-      height={DIALOG_HEIGHT}
+      height="l"
       footer={
         <DialogActions
           cancel={t("common.cancel")}
@@ -60,7 +56,7 @@ export function PackUpdateDialog({ instance, status, onClose }: { instance: Inst
       <Field label={t("detail.pack.versionLabel")} help={picked === installedId ? t("detail.pack.installed") : undefined} reserveLines={1}>
         <Select value={picked} onChange={setPicked} options={options} />
       </Field>
-      <div className="mb-5 flex flex-col gap-2">
+      <div className="st-notes">
         {version && <GameChange instance={instance} version={version} />}
         <Hint>{t("detail.pack.safety")}</Hint>
       </div>

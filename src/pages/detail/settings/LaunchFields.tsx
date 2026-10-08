@@ -86,7 +86,7 @@ export function LaunchFields({ scope, value, disabled = false, onCommit }: {
     <>
       {presets.length > 0 && (
         <FormRow label={t("launchSettings.presets.label")} hint={t("launchSettings.presets.hint")} group="group">
-          <div className="flex flex-wrap gap-2">
+          <div className="st-chips">
             {presets.map((preset) => (
               <ChipButton key={preset} pressed={isPresetOn(draft, preset)} disabled={disabled} onClick={() => replace(togglePreset(settleLaunch(draft), preset))}>
                 {t(PRESET_KEYS[preset])}
@@ -102,7 +102,7 @@ export function LaunchFields({ scope, value, disabled = false, onCommit }: {
         group="group"
       >
         {draft.env.map((row, index) => (
-          <div key={index} className="mb-2 flex items-center gap-2">
+          <div key={index} className="st-env-row">
             <TextField
               width="m"
               aria-label={t("launchSettings.env.name")}
@@ -133,7 +133,7 @@ export function LaunchFields({ scope, value, disabled = false, onCommit }: {
             />
           </div>
         ))}
-        {[...new Set(problems)].map((problem) => problem && <Hint key={problem} tone="bad" live className="mb-2">{t(NAME_PROBLEM_KEYS[problem])}</Hint>)}
+        {[...new Set(problems)].map((problem) => problem && <Hint key={problem} tone="bad" live className="st-hint-gap">{t(NAME_PROBLEM_KEYS[problem])}</Hint>)}
         <Button icon="plus" size="s" disabled={disabled || draft.env.length >= MAX_ENV_VARS} onClick={addRow}>
           {t("launchSettings.env.add")}
         </Button>
@@ -162,7 +162,7 @@ export function LaunchFields({ scope, value, disabled = false, onCommit }: {
           onChange={(e) => setDraft({ ...draft, preLaunch: e.target.value })}
           onBlur={() => commit(draft)}
         />
-        <Hint tone="warn" className="mt-1.5">{t("launchSettings.preLaunch.consent")}</Hint>
+        <Hint tone="warn" className="st-hint">{t("launchSettings.preLaunch.consent")}</Hint>
       </FormRow>
       <FormRow label={t("launchSettings.postExit.label")} htmlFor={id("post-exit")} hint={t("launchSettings.postExit.hint")}>
         <TextField
@@ -173,7 +173,7 @@ export function LaunchFields({ scope, value, disabled = false, onCommit }: {
           onChange={(e) => setDraft({ ...draft, postExit: e.target.value })}
           onBlur={() => commit(draft)}
         />
-        <Hint className="mt-1.5">{t("launchSettings.hooks.variables")}</Hint>
+        <Hint className="st-hint">{t("launchSettings.hooks.variables")}</Hint>
       </FormRow>
     </>
   );

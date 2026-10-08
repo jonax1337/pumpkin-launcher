@@ -61,7 +61,7 @@ export function WindowChooser({ name, value, onChange, disabled }: {
   return (
     <>
       <Radio name={name} checked={value.type === "default"} disabled={disabled} onChange={() => onChange({ type: "default" })}>
-        {t("format.memoryDefault")} <span className="text-fg-3">({t("detail.settings.windowAsMinecraft")})</span>
+        {t("format.memoryDefault")} <span className="st-muted">({t("detail.settings.windowAsMinecraft")})</span>
       </Radio>
       <Radio
         name={name}
@@ -73,7 +73,7 @@ export function WindowChooser({ name, value, onChange, disabled }: {
       </Radio>
       <Actions>
         {sizeField(t("detail.settings.windowWidthAria"), width, setWidth)}
-        <span className="text-fg-3" aria-hidden>×</span>
+        <span className="st-muted" aria-hidden>×</span>
         {sizeField(t("detail.settings.windowHeightAria"), height, setHeight)}
       </Actions>
       <Radio

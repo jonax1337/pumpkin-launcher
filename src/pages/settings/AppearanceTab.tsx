@@ -1,6 +1,6 @@
 import { Actions, FormRow, Hint, Segmented, Select, Switch } from "@/ui";
 import { Buddy, useBrand } from "@/branding/Brand";
-import { SEASONS, type PumpkinChoice } from "@/branding/calendar";
+import { SEASONS, type PumpkinChoice, type SeasonId } from "@/branding/calendar";
 import { useI18n, type LanguageChoice, type TKey } from "@/i18n";
 import { useReducedMotion } from "@/hooks/useMediaQuery";
 import { useSettings, type PxSize, type TextSize } from "@/store/settings";
@@ -24,14 +24,24 @@ const LANGUAGE_KEYS: { value: LanguageChoice; key: TKey }[] = [
   { value: "en", key: "pages.settings.langEnglish" },
 ];
 
+/** Name der Jahreszeit und ihr Zeitraum je Sprache (die Marken-Daten in branding/ sind deutsch); „standard“ hat keinen festen Zeitraum. */
+const SEASON_KEYS: Record<SeasonId, { label: TKey; period?: TKey }> = {
+  standard: { label: "pages.settings.season.standard" },
+  spring: { label: "pages.settings.season.spring", period: "pages.settings.season.spring.period" },
+  summer: { label: "pages.settings.season.summer", period: "pages.settings.season.summer.period" },
+  halloween: { label: "pages.settings.season.halloween", period: "pages.settings.season.halloween.period" },
+  winter: { label: "pages.settings.season.winter", period: "pages.settings.season.winter.period" },
+};
+
 /** Der Kürbis der laufenden Jahreszeit mit Name und dem Grund, warum er gerade gilt (automatisch oder fest gewählt). */
 function SeasonStatus() {
   const { t } = useI18n();
   const { season } = useBrand();
   const pumpkin = useSettings((s) => s.pumpkin);
-  const automaticTime = season.id === "standard" ? t("pages.settings.pumpkinBetweenSeasons") : season.period;
+  const periodKey = SEASON_KEYS[season.id].period;
+  const automaticTime = periodKey ? t(periodKey) : t("pages.settings.pumpkinBetweenSeasons");
   return (
-    <Actions gap={12}>
+    <div className="season-status">
       <Buddy size={72} />
       <div>
         <b>{season.name}</b>
@@ -39,7 +49,7 @@ function SeasonStatus() {
           {pumpkin === "auto" ? t("pages.settings.pumpkinAutoStatus", { time: automaticTime }) : t("pages.settings.pumpkinFixedStatus")}
         </Hint>
       </div>
-    </Actions>
+    </div>
   );
 }
 
@@ -54,14 +64,14 @@ export function AppearanceTab() {
   const set = useSettings((s) => s.set);
   const reduced = useReducedMotion();
   return (
-    <div className="settings-field-grid">
-      <FormRow label={t("common.language")} hint={t("pages.settings.languageHint")}>
-        <Segmented<LanguageChoice>
+    <>
+      <FormRow label={t("pages.settings.pxSizeLabel")} hint={t("pages.settings.pxSizeHint")}>
+        <Segmented<PxSize>
           size="s"
-          label={t("common.language")}
-          value={language}
-          onChange={(choice) => set({ language: choice })}
-          items={LANGUAGE_KEYS.map(({ value, key }) => ({ value, label: t(key) }))}
+          label={t("pages.settings.pxSizeLabel")}
+          value={pxSize}
+          onChange={(size) => set({ pxSize: size })}
+          items={PX_SIZE_KEYS.map(({ value, key }) => ({ value, label: t(key) }))}
         />
       </FormRow>
       <FormRow label={t("pages.settings.textSizeLabel")} hint={t("pages.settings.textSizeHint")}>
@@ -79,7 +89,7 @@ export function AppearanceTab() {
           value={pumpkin}
           options={[
             { value: "auto", label: t("pages.settings.pumpkinAuto") },
-            ...SEASONS.map((season) => ({ value: season.id, label: `${season.name} · ${season.label}` })),
+            ...SEASONS.map((season) => ({ value: season.id, label: `${season.name} · ${t(SEASON_KEYS[season.id].label)}` })),
           ]}
           onChange={(value) => set({ pumpkin: value as PumpkinChoice })}
         />
@@ -98,15 +108,15 @@ export function AppearanceTab() {
           {reduced && <Hint icon="info">{t("pages.settings.motionReducedHint")}</Hint>}
         </Actions>
       </FormRow>
-      <FormRow label={t("pages.settings.pxSizeLabel")} hint={t("pages.settings.pxSizeHint")}>
-        <Segmented<PxSize>
+      <FormRow label={t("common.language")} hint={t("pages.settings.languageHint")}>
+        <Segmented<LanguageChoice>
           size="s"
-          label={t("pages.settings.pxSizeLabel")}
-          value={pxSize}
-          onChange={(size) => set({ pxSize: size })}
-          items={PX_SIZE_KEYS.map(({ value, key }) => ({ value, label: t(key) }))}
+          label={t("common.language")}
+          value={language}
+          onChange={(choice) => set({ language: choice })}
+          items={LANGUAGE_KEYS.map(({ value, key }) => ({ value, label: t(key) }))}
         />
       </FormRow>
-    </div>
+    </>
   );
 }

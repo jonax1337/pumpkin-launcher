@@ -6,6 +6,25 @@ For installation and a first game, start with the [launcher guide](README.md#dow
 
 ## Unreleased
 
+### Inventar interface
+
+- The whole launcher now uses the "Inventar" look, inspired by Minecraft's own
+  menus: recessed slots for fields, selections and tracks, raised stone plates
+  for buttons, hard text shadows, creative-inventory tabs, purple item-tooltip
+  frames for menus, popovers and tooltips, XP-bar progress and sliders, and
+  advancement-style toasts. Keyboard focus is a double ring that never relies on
+  colour alone; the pixel size setting (small, medium, large) still works.
+- Chosen cards and tiles are framed in the accent colour, and chosen library rows
+  get a hotbar-style notch at the left.
+- New 8×8 pixel icon set with a second, half-transparent tone. Icons keep whole
+  pixels at every size and display scaling.
+- New details: key caps in the command palette (an entry's own shortcut, Enter
+  on the selected row), an account menu that opens with the active
+  account's avatar, name and type, a rotating skin figure on a stepped podium
+  with an "Active" chip on the skin in use, a legend under the storage bar in
+  Settings, a status plate for the connection to the Friends relay, and the
+  shortcuts overview in two columns with a key cap per key.
+
 ### Command palette
 
 - Press Ctrl+K (Cmd+K on macOS) anywhere to open a command palette: type to

@@ -31,7 +31,7 @@ export function EnterCodeTab({ formId, input, onInput, onSubmit }: { formId: str
           autoFocus
         />
       </Field>
-      <Hint className="mt-3" icon="info">{t("friends.enter.consent")}</Hint>
+      <Hint className="friends-add-hint" icon="info">{t("friends.enter.consent")}</Hint>
     </form>
   );
 }

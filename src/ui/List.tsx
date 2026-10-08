@@ -53,7 +53,7 @@ export type ListRowProps = {
   hit?: Hit;
   /** Name der Trefferfläche, falls `hit.label` fehlt. */
   hitLabel?: string;
-  /** gewählt: Kupferrahmen 1 Einheit + 10 % Tönung */
+  /** gewählt: Akzentrahmen (2 Einheiten) + Tönung (--acc-dim) */
   selected?: boolean;
   /** ausgeschaltet: Bild gedämpft, Name --fg-2 */
   off?: boolean;
@@ -145,7 +145,7 @@ export function GhostRow({ variant, text, media, undoId, onUndo }: { variant: "c
       {variant === "content" && <span className="vx-ghost-m">{media}</span>}
       <b className="vx-ghost-t ell" id={tid}>{text}</b>
       {onUndo ? (
-        <Button size="s" icon="redo" data-undo={undoId} aria-describedby={tid} onClick={onUndo}>{t("ui.list.undo")}</Button>
+        <Button size="s" icon="undo" data-undo={undoId} aria-describedby={tid} onClick={onUndo}>{t("ui.list.undo")}</Button>
       ) : (
         <span />
       )}

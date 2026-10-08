@@ -69,7 +69,7 @@ export function ExportDialog({ instance, onExport, onClose }: {
       onOpenChange={(o) => !o && onClose()}
       title={t("components.instance.export")}
       sub={instance.name}
-      width={520}
+      height="l"
       footLeft={api.capabilities.exportInstance ? undefined : t("components.export.appOnly")}
       footer={
         <DialogActions
@@ -83,12 +83,12 @@ export function ExportDialog({ instance, onExport, onClose }: {
         />
       }
     >
-      <div className="flex flex-col gap-4">
-        <div className="flex gap-3">
-          <Field label={t("components.export.packName")} className="min-w-0 flex-1">
+      <div className="exp">
+        <div className="exp-row">
+          <Field label={t("components.export.packName")} className="exp-name">
             <TextField value={name} onChange={(e) => setName(e.target.value)} maxLength={MAX_NAME_LENGTH} />
           </Field>
-          <Field label={t("components.export.packVersion")} className="w-36 flex-none">
+          <Field label={t("components.export.packVersion")} className="exp-ver">
             <TextField value={version} onChange={(e) => setVersion(e.target.value)} maxLength={MAX_VERSION_LENGTH} />
           </Field>
         </div>
@@ -114,7 +114,7 @@ function ExportEntries({ entries, chosen, onToggle }: {
   if (!entries.data) return <Skel h={120} />;
   if (!entries.data.length) return <Hint>{t("components.export.folderEmpty")}</Hint>;
   return (
-    <div className="flex flex-col gap-2">
+    <div className="exp-list">
       {entries.data.map((name) => (
         <Checkbox key={name} checked={chosen.has(name)} onChange={(on) => onToggle(name, on)}>
           {ENTRY_LABELS[name] ? `${t(ENTRY_LABELS[name])} (${name})` : name}
@@ -132,7 +132,7 @@ function ExportSummaryNote({ instanceId, include, enabled }: { instanceId: strin
   if (!summary.data) return <Hint live>{t("components.export.summaryLoading")}</Hint>;
   const { linked, embedded, skippedDisabled } = summary.data;
   return (
-    <div className="flex flex-col gap-2">
+    <div className="exp-list">
       {linked + embedded > 0 && <Hint live>{t("components.export.summary", { linked, embedded })}</Hint>}
       {skippedDisabled > 0 && (
         <Hint tone="warn" live>

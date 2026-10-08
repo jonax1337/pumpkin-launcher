@@ -7,7 +7,7 @@ import { fileName } from "@/lib/format";
 export function DropHint({ children }: { children: string }) {
   return (
     <>
-      <Icon name="ul" size="xl" />
+      <Icon name="download" size="xl" />
       <b>{t("detail.drop.releaseToAdd")}</b>
       <span>{children}</span>
     </>

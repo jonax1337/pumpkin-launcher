@@ -23,13 +23,13 @@ function modrinthEntries(mod: Mod, { update, locked, onUpdate, onPickVersion, on
       ? [{
           id: "up",
           text: t("detail.content.updateVersionTo", { version: update.versionNumber }),
-          icon: "up" as const,
+          icon: "update" as const,
           disabled: locked,
           onSelect: onUpdate,
         }]
       : []),
     { id: "version", text: t("detail.content.pickVersion"), icon: "swap", disabled: locked, onSelect: onPickVersion },
-    { id: "pin", text: t(mod.pinned ? "detail.content.unpin" : "detail.content.pin"), icon: "dot", onSelect: onTogglePin },
+    { id: "pin", text: t(mod.pinned ? "detail.content.unpin" : "detail.content.pin"), icon: "pin", onSelect: onTogglePin },
   ];
 }
 
@@ -49,7 +49,7 @@ export function contentMenuEntries(mod: Mod, actions: ContentMenuActions): MenuE
       ? [{
           id: "web",
           text: t(mod.source.type === "curseforge" ? "detail.content.viewOnCurseForge" : "detail.content.viewOnModrinth"),
-          icon: "ext" as const,
+          icon: "external" as const,
           onSelect: () => openPage(web),
         }]
       : []),

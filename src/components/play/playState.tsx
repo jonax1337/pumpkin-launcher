@@ -25,7 +25,8 @@ export type PlayContext = {
   instanceName: string;
   percent: number | null;
   exitCode: number | null;
-  hasAccount: boolean;
+  /** Name des Kontos, mit dem gespielt wird; `null` = noch kein nutzbares Konto. */
+  playerName: string | null;
   /** Laufzeit in ms; `null` = unbekannt. */
   runMs: number | null;
 };
@@ -43,7 +44,7 @@ function spokenSince(ms: number) {
 // Kein Knopf, sondern Vorgang: Abbrechen steht in der Statuszeile.
 const preparingState = ({ instanceName, percent }: PlayContext): PlayState => ({
   state: "prep",
-  icon: "dl",
+  icon: "download",
   label: t("components.game.installing"),
   compactLabel: t("components.content.installed"),
   detail: "",
@@ -55,7 +56,7 @@ const preparingState = ({ instanceName, percent }: PlayContext): PlayState => ({
 
 const startingState = ({ instanceName }: PlayContext): PlayState => ({
   state: "start",
-  icon: "hour",
+  icon: "hourglass",
   label: t("components.game.starting"),
   compactLabel: t("components.game.starting"),
   detail: "",
@@ -81,7 +82,7 @@ const runningState = ({ instanceName, runMs }: PlayContext): PlayState => ({
 
 const crashedState = ({ instanceName, exitCode }: PlayContext): PlayState => ({
   state: "error",
-  icon: "redo",
+  icon: "refresh",
   label: t("components.game.restart"),
   compactLabel: t("components.game.onceMore"),
   detail: t("components.game.crashed") + (exitCode != null ? t("components.game.exitCode", { code: exitCode }) : ""),
@@ -114,12 +115,17 @@ const playableState = ({ instanceName }: PlayContext, notice: { detail: string; 
 const needsNameNotice = () => ({ detail: t("components.game.needNameFirst"), hint: t("components.game.needNameFirstAria") });
 
 const readyState = (context: PlayContext) =>
-  playableState(context, context.hasAccount ? { detail: t("components.game.ready"), hint: "" } : needsNameNotice());
+  playableState(
+    context,
+    context.playerName != null
+      ? { detail: t("components.game.playsAs", { name: context.playerName }), hint: "" }
+      : needsNameNotice(),
+  );
 
 const notInstalledState = (context: PlayContext) =>
   playableState(
     context,
-    context.hasAccount
+    context.playerName != null
       ? { detail: t("components.game.installsOnFirstStart"), hint: t("components.game.installsOnFirstStartAria") }
       : needsNameNotice(),
   );

@@ -38,7 +38,7 @@ function PreparingStatus({ instance, progress, onScene }: { instance: Instance; 
         <Button
           variant="ghost"
           size="s"
-          icon="x"
+          icon="close"
           onScene={onScene}
           className="pcancel"
           disabled={cancel.isPending}
@@ -58,7 +58,7 @@ function RunningStatus({ onScene, onViewLog }: { onScene?: boolean; onViewLog: (
       // Laufzeit steht im Knopf („Läuft seit …“); hier nur für Screenreader die Zustandsänderung.
       lead={<span className="sr">{t("components.game.mcRunningSr")}</span>}
       acts={
-        <Button variant="ghost" size="s" icon="term" onScene={onScene} className="plog" onClick={onViewLog}>
+        <Button variant="ghost" size="s" icon="terminal" onScene={onScene} className="plog" onClick={onViewLog}>
           {t("components.game.viewLog")}
         </Button>
       }

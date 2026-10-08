@@ -1,8 +1,15 @@
 # Pixelkino design reference
 
-Last updated: 2026-10-07.
+Last updated: 2026-10-08.
 
-Pixelkino is Pumpkin Launcher's dark pixel interface. Scenes are the visually expressive layer; controls and page backgrounds stay flat and quiet. The [concept mockup](concepts/pixelkino.html) explains the original composition, but current styles and components are authoritative.
+Pixelkino is Pumpkin Launcher's dark pixel interface, rendered in the **Inventar** style: a game-menu look made of recessed slots, bevelled stone plates with a hard text shadow, creative-inventory tabs, item-tooltip menus, XP-bar progress and hotbar-style selection. Scenes are the visually expressive layer; controls and page backgrounds stay flat and quiet. Current styles and components are authoritative.
+
+Static design references (not implemented code, open in a browser):
+
+- [concepts/kit-concepts.html](concepts/kit-concepts.html): component languages side by side; Inventar is the adopted one.
+- [concepts/launcher/launcher.html](concepts/launcher/launcher.html): the complete launcher (all screens, dialogs, menus, 8×8 icon set) as a static mockup. Open it with `?theme=slots#<screen>` for Inventar. Regenerate it with `node build.mjs` in `concepts/launcher/`.
+
+The [`concepts/`](concepts/README.md) folder is design history; it is not edited when the app changes.
 
 To open the component examples, follow [development setup](../../CONTRIBUTING.md#development-setup),
 run `pnpm dev` from the repository root and visit
@@ -13,17 +20,62 @@ route with mock data, not a shipped player page.
 
 | Concern | Source, relative to repository root |
 | --- | --- |
-| Global colors, fonts, shell and page layout | `src/styles/pixelkino.css` |
-| Kit tokens and components | `src/ui/`, collected by `src/ui/ui.css`, imported through `@/ui` |
-| Pixel sizing | `src/pixel/unit.ts` |
+| Global colors, fonts, pixel unit default, notches, reset, scrollbars, focus, text helpers | `src/styles/base.css` |
+| App shell (window bar, side bar, plate, scenes) and shared page frame | `src/styles/shell.css` |
+| Page styles, next to their page | `src/pages/home/home.css`, `src/pages/instances/library.css`, `src/pages/detail/detail.css`, `src/pages/detail/screenshots/screenshots.css`, `src/pages/discover.css`, `src/pages/discover-project.css`, `src/pages/announcements.css`, `src/pages/settings/settings-layout.css`, `src/pages/skins/skins.css`, `src/pages/skins/skin-card.css`, `src/pages/friends/friends.css` |
+| Dialog, onboarding, account and friends content | `src/components/dialogs.css`, `src/components/onboarding.css`, `src/components/accounts/accounts.css`, `src/components/friends/friends.css` |
+| Kit tokens and surface recipes | `src/ui/tokens.css` (values), `src/ui/surface.css` (`.vx-slot`, `.vx-pit`, `.vx-stone`, `.vx-text`) |
+| Kit components | `src/ui/*.tsx` with `src/ui/*.css`, collected by `src/ui/ui.css`, imported through `@/ui` |
+| Kit specimen page (`/_kit`, development only) | `src/ui/kit/` (`kit.css`, `InventarSection.tsx`, …) |
+| Pixel unit and icon cell sizes | `src/pixel/unit.ts` |
+| Icon set (8×8 drawings) | `src/pixel/icon-data.ts`, rendered by `src/ui/Icon.tsx` |
 | Scene generation/configuration | `src/pixel/{scene,sceneBuilder,sceneConfig}.ts`, `PixelScene.tsx` |
 | Play/status controls | `src/components/play/`, `src/components/play.css` |
 | Motion and accessibility styles | `src/ui/motion.css`, `src/ui/a11y.css` |
 | Appearance and shortcuts | `src/app/useAppearance.ts`, `shortcuts.ts`, `mainTabs.ts` |
-| Command palette (Ctrl/Cmd+K) | `src/app/palette/`; styles in `src/app/palette/palette.css`, imported by `src/index.css` |
-| Seasonal branding | `src/branding/`, repository `branding/` assets |
+| Command palette (Ctrl/Cmd+K) | `src/app/palette/`; styles in `src/app/palette/palette.css` |
+| Seasonal branding | `src/branding/` (`branding.css`), repository `branding/` assets |
 
-Kit classes use `vx-` and data attributes for variants. Component styles are collected centrally; avoid per-component CSS imports that alter layer order. `index.html` establishes `theme, base, components, utilities` before stylesheets. Class names must not accidentally collide with Tailwind utilities.
+All stylesheets are imported centrally by `src/index.css` into `@layer components`; components never import CSS themselves. Order: base, shell, pages, dialogs/onboarding/accounts/friends, kit (`ui/ui.css`), play, branding, palette, kit specimen. Kit classes use `vx-` and data attributes for variants. `index.html` establishes `theme, base, components, utilities` before stylesheets. Class names must not accidentally collide with Tailwind utilities.
+
+## Inventar style
+
+One concept, one class: shared surfaces live in `src/ui/surface.css`; components add the class and set only size and state.
+
+| Surface | Class | Recipe |
+| --- | --- | --- |
+| Recessed slot | `.vx-slot` | `--sunk` fill, 1-unit border `--slot-bd` (dark top/left `--edge`, light bottom/right `--ctl`, ≥ 3:1), inset shadow `--slot-sh` (2 units dark top/left, 1 unit light bottom/right). Used by fields, selects, checkboxes, slider/progress tracks, icon tiles, chips, image frames, `kbd` caps. Hover: border `--fg-2`. Focus: border `--focus` + `--ring-i`. |
+| Recessed, not interactive | `.vx-pit` | Same look without hover/focus colouring: dialog bodies, note plates, progress tracks. |
+| Raised stone plate | `.vx-stone` | Face `--face` (default `--panel-3`), 1-unit `--edge` border, bevel `--bv` = 2 units (`--hi` top/left, `--lo` bottom/right); `--bv` is 1 unit for size `s`. Pressed reverses the bevel and moves content down 1 unit. Disabled is flat (`--panel`, `--line`). Used by buttons, tab handles, slider grips, toasts, dialogs, sheets. |
+| Hard text shadow | `.vx-text` | `text-shadow: var(--tsh)` = `0 var(--px) 0 #000`, on stone and slot labels. |
+
+Components in this language:
+
+- **Buttons** (`button.css`): secondary = stone; primary and danger = stone in the instance accent (`--acc`, `--acc-hi`, `--acc-lo`) or red; ghost is flat and becomes a slot on hover. Hover brightens face and border, press reverses the bevel, focus is the double ring. Over scenes, ghost/secondary use a dark plate (`--scene-plate`) and a hard shadow.
+- **Tabs** (`tabs.css`): creative-inventory tabs. The bar variant rises from a baseline, the selected tab is taller, has an accent edge on top and no bottom border; vertical tabs are stacked plates and the selected one reaches the right edge; segments are a slot group whose selected item is a stone with an accent edge below.
+- **Menus, popovers, select lists, tooltips** (`overlay.css`): item-tooltip frame: `--tip-bg` fill, `--tip-a` border, inner `--tip-b` ring, 2-unit hard drop shadow. Highlighted entries use `--hl` plus a 2-unit focus bar; `MenuHead` provides an account-style header row. Dialogs and side sheets are stone plates with a recessed (`.vx-pit`) body.
+- **Overlay sizes** (`overlay.css`, no pixel values at the call site): `Dialog size` s/m/l = 480/640/860 px wide, `Dialog height` s/m/l = 380/580/700 px fixed (always capped by the window; without it the dialog fits its content). Header 40 (title 26, close `IconButton` s), footer 52 (ghost cancel, primary right), body padding 16. Menus: min 240, `wide` 320, items 36, icons 16; `Popover size` m/l = 320/400. Toasts are 460 wide, 12 apart, 24 from the corner.
+- **Progress** (`feedback.css`): XP bar. Track is a slot with grid ticks every 4 units; the fill is accent with light top and dark bottom row, segment gaps every 4 units, a highlight at the tip, rounded to whole segments. Sliders share the cell logic (16 cells, stone grip).
+- **Toasts**: advancement plates (icon slot, text, action, close).
+- **Selection**: chosen cards and tiles get an accent border and `--acc-dim` tint (choice rows add a ▶ arrow); chosen library rows get a hotbar notch (2-unit accent bar at the left); the current item is marked by an accent bar. Hover is a surface, never a line.
+- **Chips and keys**: small slot in pixel font with a square pip in the tone colour; `kbd` caps (palette, shortcuts overview) are slots in pixel font.
+- **Console**: warning/error lines carry a coloured 2-unit bar and tint, not colour alone.
+
+## Tokens
+
+Palette and geometry live in `src/styles/base.css`; the Inventar block in `src/ui/tokens.css` adds:
+
+| Token | Meaning |
+| --- | --- |
+| `--slot-bd`, `--slot-sh` | Slot border colours and inset shadow |
+| `--ring-i` | Focus ring: 1-unit `--edge` gap line inside, then `--focus` ring (2 units) |
+| `--tsh` | Hard text shadow |
+| `--nt`, `--nl` | Notched shapes: tabs (notched top corners) and vertical tabs (notched left corners) |
+| `--dia`, `--arrow` | Stepped diamond (5×5 units) and arrow (3×5 units) shapes |
+| `--u4` | 4 units (companion to `--u2`, `--u3` in base.css) |
+| `--hv-*`, `--pr-*`, `--sel-*`, `--scene-*` | Hover/pressed/selection/scene-plate surfaces, one step lighter in overlay contexts |
+| `--vx-h-*`, `--vx-ico-*`, `--hd-*` | Control heights, icon slots, heading sizes |
+| `--tip-bg`, `--tip-a`, `--tip-b`, `--hl` | Item-tooltip frame colours and highlighted menu row (in base.css) |
 
 ## Pixel grid and geometry
 
@@ -34,23 +86,28 @@ devicePixels = round(targetCssPixels × devicePixelRatio)
 --px = devicePixels / devicePixelRatio
 ```
 
-Recompute when display resolution/DPR changes. Borders, notches, bevels, icon glyphs and scene pixels are integer multiples of this unit. Layout heights, spacing and columns are fixed CSS sizes, **not** multiples of the selected pixel size, so changing pixel appearance does not move controls.
+Recompute when display resolution/DPR changes. Borders, notches, bevels, rings and scene pixels are integer multiples of this unit (`--u2`/`--u3`/`--u4` are 2/3/4 units). Layout heights, spacing and columns are fixed CSS sizes, **not** multiples of the selected pixel size, so changing pixel appearance does not move controls. Icons, glyphs and avatars use their own unit `--iu` (3 CSS px rounded to device pixels) and do not follow `--px`.
 
-Corners use stepped clip paths (`--n1`, `--n2`), not rounded radii. Focus/selection rings follow the same grid. Glyphs have fixed slots and integer cell sizes rather than arbitrary image scaling.
+Corners use stepped clip paths (`--n1` one step, `--n2` two steps, `--nt`, `--nl`), not rounded radii. No blur shadows, no `border-radius`; transitions use `steps()` and movements jump whole units. Focus rings follow the same grid.
 
 | Kit size | Control height | Icon slot |
 | --- | --- | --- |
-| Small | 32 px | 20 px, 5×5 glyph |
-| Medium | 40 px | 24 px, 7×7 or 5×5 according to pixel size |
-| Large | 56 px | 28 px, 7×7 glyph |
-| Extra-large icon | — | 56 px, doubled glyph cells |
+| Small | 32 px | 16 px, 8×8 glyph, 2 px cells |
+| Medium | 40 px | 24 px, 8×8 glyph, 3 px cells |
+| Large | 56 px | 32 px, 8×8 glyph, 4 px cells |
+| Extra-large icon | — | 48 px, 8×8 glyph, 6 px cells |
+
+### Icons
+
+Every icon is a single 8×8 raster in `src/pixel/icon-data.ts` (`X` solid, `o` second tone at 50 % opacity, `.` empty). One icon pixel is one cell; the cell size per slot is a whole number of device pixels (`--ic-s/m/l/xl`, set in `pixel/unit.ts`), never scaled fractionally. Colour is `currentColor` unless `tone` is set. Only the canonical names exist (no aliases): `close`, `refresh` (again / reload), `undo` (revert / reset / restore), `update` (newer version), `chev-*` (disclosure, steps), `arrow-left` (back), `external`, `upload`/`download`, `settings`, `terminal`, `friends`. Slots: `s` 16 px in dense rows, chips, menus, tabs and fields; `m` 24 px in buttons and bars; `l` 32 px in the side bar and empty-state tiles; `xl` 48 px in hero and empty states. Trailing blank columns can be trimmed with `edge="end"` so the visible edge meets the padding. Larger 10×10 colour glyphs (projects, mods) and 8×8 avatars are separate components with their own fixed boxes.
 
 Icon-only buttons use zero padding directly on the square control, independent
 of the text-button padding for each size and variant. This keeps the icon slot
 centered in small and large ghost controls as well as secondary/primary buttons.
-Raster pixels retain their device-pixel snapping. Home's instance-menu button
-uses the same medium 40×40 control as the instance detail header.
+Home's instance-menu button uses the same medium 40×40 control as the instance
+detail header.
 
+## Layout
 
 `--gut` is the shared page gutter (16–40 px with window width). Page content uses
 the available width; there is no global reading-width cap. `PageHeader` supplies a
@@ -64,13 +121,12 @@ The shared workspace is a Kit API exported from `@/ui`, implemented in
 - `WorkspaceRail` supplies the context/navigation region and sticky positioning.
 - `WorkspaceContent` supplies the content surface. Use `variant="plain"` when
   an enclosing sheet already provides the surface.
-- `WorkspaceTabs` reuses `Tabs`: vertical pixel plates on wide windows, horizontal
+- `WorkspaceTabs` reuses `Tabs`: vertical stone plates on wide windows, horizontal
   segments when the workspace stacks at 960 px. Pair its `idBase` with `TabPanel`.
 
-Vertical tabs use pixel edges, selected surfaces and accent text/icons, not an
-inner marker. Keyboard navigation follows the orientation; selected segments
-remain visible while switching or resizing. `TabPanel` has a visible keyboard
-focus outline. The interactive workspace example in `/_kit` → **Seitengerüst**
+Keyboard navigation of tabs follows the orientation; selected tabs remain
+visible while switching or resizing. `TabPanel` has a visible keyboard focus
+outline. The interactive workspace example in `/_kit` → **Seitengerüst**
 demonstrates selection, disabled navigation, editable content, reset and a
 rail-free layout. Use this structure for meaningful context/navigation, not as
 a mandatory two-column wrapper for every collection.
@@ -97,6 +153,7 @@ cannot hide the name or push Play and menus outside the row. Group collapsing,
 ordering, search, filters, persisted sorting and keyboard navigation remain
 available. An old saved grid preference no longer affects the library.
 
+Other composed surfaces: the skins page shows the rotating figure on a stepped podium in a slot with an "Active" chip on the worn skin; Settings › Storage stacks hard segments with a legend; the friends page shows the relay connection as a status plate; the shortcuts overview is a two-column grid of key-cap rows.
 
 ## Color semantics
 
@@ -114,19 +171,21 @@ available. An old saved grid preference no longer affects the library.
 
 The accent identifies an instance/action; a status color describes a condition. Warning/error states also use symbols, text or form, never color alone. Biome accents are chosen away from warning/error/brand tones; the original design target is OKLab distance ×100 of at least 8, or 6 from running color because running also has text/icon. These are design targets, not a current accessibility certification.
 
-Accent bevels mix with the dark base in OKLab, not brown. Recompute dependent values both at root and elements overriding `--acc`, so a biome does not inherit copper bevels. Seasonal copper likewise drives enabled checkbox/toggle bevels.
+Accent bevels mix with the dark base in OKLab, not brown. Recompute dependent values both at root and elements overriding `--acc`, so a biome does not inherit copper bevels. Seasonal copper likewise drives enabled checkbox/toggle bevels (`--copper-hi`, `--copper-lo`).
 
-Hover is a surface, not an active-state line. `--hv-row`/`--hv-ctl` and pressed variants adapt to ordinary/overlay contexts. Selected means copper ring plus tint; current means accent underline/bar. Text underline is reserved for prose, not hovered collection names.
+Hover is a surface, not an active-state line. `--hv-row`/`--hv-ctl` and pressed variants adapt to ordinary/overlay contexts. Selected means accent or copper border plus tint; current means accent bar. Text underline is reserved for prose, not hovered collection names.
 
 ## Typography and wording
 
-Display headings use Big Shoulders Display 800, body/UI uses Hanken Grotesk, pixel counters/code/wordmark use Jersey 10 and logs use Cascadia Mono/system monospace. Body sizes respond to `--tz`; display/pixel sizes and explicitly fixed controls do not. Fonts are ready before the application is revealed to avoid layout movement.
+Display headings use Big Shoulders Display 800, body/UI uses Hanken Grotesk (variable), pixel counters, chips, key caps, code and wordmark use Jersey 10 and logs use Cascadia Mono/system monospace (`--f-display`, `--f-body`, `--f-px`, `--f-mono`, bundled via `@fontsource`). Labels on stone and slots carry the hard text shadow. Body sizes respond to `--tz`; display/pixel sizes and explicitly fixed controls do not. Fonts are ready before the application is revealed to avoid layout movement.
 
 German UI vocabulary distinguishes creating an instance (`Anlegen`), adding content (`Hinzufügen`), installation state (`Wird installiert`) and stopping the running game (`Beenden`, with confirmation). English equivalents live in the matching dictionaries rather than in component strings.
 
 ## Interaction and state
 
 The Play button is the current action/state: play, install progress, starting, stop with elapsed time, or retry. Its dimensions stay stable. Do not duplicate its state in an adjacent chip; chips belong where no Play button already carries that information, such as unselected Home cards.
+
+States of a stone control: rest, hover (brighter face and border), pressed (reversed bevel, content one unit lower), focus (`--ring-i`), disabled (flat, dimmed). `data-force="hover|press|focus"` pins a state for the `/_kit` specimens.
 
 Menus/dialogs restore focus and support Escape/keyboard navigation. Dialog bodies scroll inside stable shells. Collections use one tab stop with directional navigation via `useRovingItems`; visible selection controls support multiselection. Toasts wrap text rather than cut it off and provide the applicable action/close control. Removed entries can keep same-height undo placeholders.
 
@@ -140,9 +199,9 @@ The scene clock is 12 fps. Animation pauses for running/starting Minecraft, hidd
 
 ## Accessibility boundaries
 
-`a11y.css` covers text scaling, reduced motion and forced colors. Forced-color mode replaces pixel shadows/clips with system-color boundaries/focus states and suppresses scene imagery behind text. A component whose only visible boundary is a surface/shadow needs an explicit forced-color representation.
+`a11y.css` covers text scaling, reduced motion, the skip link, the shortcuts overview and forced colors. Forced-color mode replaces stepped focus rings and slot/stone shadows with system-color borders, outlines and `Highlight` focus, and suppresses scene imagery behind text. A component whose only visible boundary is a surface/shadow needs an explicit forced-color representation.
 
-UI text responds to normal/large/larger text preferences (1/1.125/1.25). Toolbars wrap instead of overflowing. Reduced-motion preference and the scene-motion switch disable decorative transitions, not just canvas animation. Status remains understandable without motion/color.
+Keyboard focus is always visible and never colour-only: border change plus the double ring `--ring-i`. Control borders (slot light edge `--ctl`) keep at least 3:1 against their surfaces; text targets at least 4.5:1. UI text responds to normal/large/larger text preferences (1/1.125/1.25). Toolbars wrap instead of overflowing. Reduced-motion preference and the scene-motion switch disable decorative transitions, not just canvas animation. Status remains understandable without motion/color.
 
 The first control is a skip link. Shortcut labels, `aria-keyshortcuts` and the overview share `src/app/shortcuts.ts`; do not duplicate bindings in tooltips. The frameless window still lacks keyboard move/resize controls. Bright scene areas under large text/error chips remain a contrast concern; the target is at least 4.5:1 text contrast against the actual shaded scene, not an unqualified claim that every composition passed.
 

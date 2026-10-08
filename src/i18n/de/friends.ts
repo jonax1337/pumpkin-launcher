@@ -29,6 +29,8 @@ export const friends = {
   "friends.network.relayUnreachable.body": "Freunde erscheinen offline, bis die Verbindung wieder steht. Prüfe deine Internetverbindung.",
   "friends.network.bindFailed.title": "Netzwerk nicht gestartet",
   "friends.network.bindFailed.body": "Der Launcher konnte für Freunde keinen Netzwerkanschluss öffnen. Prüfe, ob eine Firewall oder ein anderes Programm ihn blockiert.",
+  "friends.network.online.title": "Relay verbunden · {host}",
+  "friends.network.online.body": "Freunde sehen, was du spielst, und können dir Instanzen schicken.",
 
   // ---------- Anfragen ----------
   "friends.requests.title": "Anfragen",

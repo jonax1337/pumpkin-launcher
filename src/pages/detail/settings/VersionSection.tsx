@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Actions, Button, FormRow, FormSection, Progress, StatusPanel } from "@/ui";
+import { Actions, Button, FormRow, FormSection, Progress } from "@/ui";
 import { isBusy, usePhase } from "@/components/play/phase";
 import { useInstallPercent } from "@/components/play/installPercent";
 import { askDelete } from "@/components/instance";
@@ -31,11 +31,11 @@ export function VersionSection({ instance }: { instance: Instance }) {
   const [changing, setChanging] = useState(false);
   const repairing = percent != null;
   return (
-    <FormSection title={t("common.version")}>
+    <FormSection plate title={t("common.version")}>
       <FormRow label={t("detail.settings.gameVersionLabel")} aside={t("detail.settings.versionAside")}>
-        <Actions wrap className="min-h-10 items-center">
+        <Actions wrap className="st-inline">
           <span>{versionText(instance)}</span>
-          <GuardedButton blocked={busy} size="s" icon="swap" onClick={() => setChanging(true)}>
+          <GuardedButton blocked={busy} icon="swap" onClick={() => setChanging(true)}>
             {t("detail.migrate.change")}
           </GuardedButton>
         </Actions>
@@ -43,7 +43,7 @@ export function VersionSection({ instance }: { instance: Instance }) {
       <FormRow label={t("detail.settings.repairLabel")} hint={t("detail.settings.repairHint")}>
         <Actions>
           <Button
-            icon="redo"
+            icon="refresh"
             width={REPAIR_BUTTON_WIDTH}
             disabled={isBusy(phase) || install.isPending}
             onClick={() => install.mutate(instance)}
@@ -54,7 +54,7 @@ export function VersionSection({ instance }: { instance: Instance }) {
           <Progress
             p={(percent ?? 0) / 100}
             width={REPAIR_PROGRESS_WIDTH}
-            className={cn(!repairing && "invisible")}
+            className={cn(!repairing && "st-ghosted")}
             label={t("detail.settings.repairProgress")}
           />
         </Actions>
@@ -69,18 +69,12 @@ export function DangerSection({ instance }: { instance: Instance }) {
   const { t } = useI18n();
   const phase = usePhase(instance.id);
   return (
-    <FormSection title={t("detail.settings.dangerSection")}>
-      <StatusPanel
-        tone="bad"
-        title={t("detail.settings.deleteInstance")}
-        actions={
-          <Button variant="danger" icon="trash" disabled={isBusy(phase)} onClick={() => askDelete(instance)}>
-            {t("common.delete")}
-          </Button>
-        }
-      >
-        {t("detail.settings.deleteInstanceText")}
-      </StatusPanel>
+    <FormSection plate title={t("detail.settings.dangerSection")} className="st-danger">
+      <FormRow label={t("detail.settings.deleteInstance")} hint={t("detail.settings.deleteInstanceText")}>
+        <Button variant="danger" icon="trash" disabled={isBusy(phase)} onClick={() => askDelete(instance)}>
+          {t("common.delete")}
+        </Button>
+      </FormRow>
     </FormSection>
   );
 }

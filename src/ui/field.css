@@ -1,34 +1,52 @@
-/* Kit-Formular: Abschnitt, Zeile (Label | Steuerelement | Hilfe), Feld, Hinweis, Eingaben, Auswahl, Aufklappbereich.
-   Eingaben: eingelassene Platte mit Steuerrahmen; Hover hellt den Rahmen auf, Fokus zeigt zusätzlich den Ring. */
+/* Kit-Formular (Inventar): Abschnitt, Zeile (Label | Steuerelement | Hilfe), Feld, Hinweis, Eingaben, Auswahl, Aufklappbereich.
+   Eingaben und Auswahl sind eingelassene Slots (.vx-slot, surface.css): Hover hellt die Kante, Fokus zeigt den doppelten Ring. */
 
 /* ---------- Abschnitt: Container für das Zeilenraster ---------- */
 .vx-fsec { --form-ctl: 560px; container-type: inline-size; padding: 22px 0; box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); }
 .vx-fsec:last-child { box-shadow: none; }
-.vx-fsec-h { font: 800 var(--hd-sub)/1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; margin-bottom: 14px; }
+.vx-fsec[data-plate] {
+  padding: 18px 22px 10px;
+  background: var(--panel);
+  border: var(--px) solid var(--edge);
+  box-shadow: inset var(--u2) var(--u2) 0 var(--line), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--bg-2);
+  clip-path: var(--n1);
+}
+.vx-fsec-h { font: 800 var(--hd-sub)/1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; margin-bottom: 14px; text-shadow: var(--tsh); }
 
 /* ---------- Zeile: Label --form-lab | Steuerelement bis --form-ctl | Hilfe (höchstens ~60 Zeichen, 1-Einheit-Linie links) ---------- */
 .vx-frow { display: grid; grid-template-columns: var(--form-lab) minmax(0, var(--form-ctl, 560px)) minmax(0, 1fr); column-gap: var(--form-gap); row-gap: 8px; align-items: start; padding: 10px 0; }
-.vx-fl { padding-top: 10px; font-weight: 600; }
-.vx-fl small { display: block; margin-top: 2px; font-size: calc(13px * var(--tz)); font-weight: 400; color: var(--fg-3); }
+/* Beschriftung: erste Zeile auf der Mitte der ersten Steuerelement-Zeile (40 hoch → 10 px oben; 32 hoch: Schalter, Kästchen, Radio, Knopf s,
+   auch als erstes Kind einer Gruppe (Aktionen, Radiogruppe) → 6 px) */
+.vx-fl { padding-top: 10px; font-weight: 600; color: var(--fg-2); text-shadow: var(--tsh); }
+.vx-frow:where(:has(> .vx-fc > :first-child:is(.vx-switch, .vx-check, .vx-radio, .vx-tabs[data-size="s"], .vx-btn[data-size="s"]), > .vx-fc > :first-child > :first-child:is(.vx-switch, .vx-check, .vx-radio, .vx-btn[data-size="s"]))) .vx-fl { padding-top: 6px; }
+.vx-fl small { display: block; margin-top: 2px; font-size: calc(13px * var(--tz)); font-weight: 400; color: var(--fg-3); text-shadow: none; }
 .vx-fc { grid-column: 2; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+/* Knopf und Textwert in der Steuerspalte: Knopf behält seine Breite; ein Wert (p, Hinweis) sitzt mit seiner Zeilenmitte auf der eines 40er Felds */
+.vx-fc > .vx-btn { align-self: flex-start; }
+.vx-fc > :is(p, .vx-hint):first-child { padding-block: 10px; }
 .vx-fc[data-wide] { grid-column: 2 / -1; }
 .vx-fh { grid-column: 3; max-width: 60ch; margin-left: 12px; padding: 8px 0 2px 16px; font-size: calc(13px * var(--tz)); line-height: 1.5; color: var(--fg-3); box-shadow: inset var(--px) 0 0 var(--line); }
 @container (max-width: 1099px) {
   .vx-frow { grid-template-columns: var(--form-lab) minmax(0, 640px); }
   .vx-fh { grid-column: 2; margin-left: 0; padding: 0; box-shadow: none; }
 }
+/* Hilfe unter dem Steuerelement: das Label überspannt beide Zeilen, damit sie nicht unter dem (längeren) Label beginnt */
+@container (min-width: 521px) and (max-width: 1099px) {
+  .vx-frow:has(> .vx-fh) { grid-template-rows: auto 1fr; }
+  .vx-frow:has(> .vx-fh) > .vx-fl { grid-row: 1 / span 2; }
+}
 /* Schmal (z. B. 200 % Zoom): Label über dem Steuerelement, damit Segmente und Felder die volle Breite haben */
 @container (max-width: 520px) {
   .vx-frow { grid-template-columns: minmax(0, 1fr); }
-  .vx-fl { padding-top: 0; }
+  .vx-frow .vx-fl { padding-top: 0; }
   .vx-fc, .vx-fc[data-wide], .vx-fh { grid-column: 1; }
 }
 
 /* ---------- Feld: Label über der Eingabe, Hilfe/Fehler darunter ---------- */
 .vx-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
 .vx-field:last-child { margin-bottom: 0; }
-.vx-field-l { font-size: calc(13px * var(--tz)); font-weight: 600; }
-.vx-opt { font-weight: 400; color: var(--fg-3); }
+.vx-field-l { font-size: calc(14px * var(--tz)); font-weight: 600; color: var(--fg-2); text-shadow: var(--tsh); }
+.vx-opt { font-weight: 400; color: var(--fg-3); text-shadow: none; }
 .vx-help { font-size: calc(13px * var(--tz)); line-height: 20px; color: var(--fg-3); }
 .vx-help[data-reserve="1"] { min-height: 20px; }
 .vx-help[data-reserve="2"] { min-height: 40px; }
@@ -42,77 +60,72 @@
 .vx-hint[data-tone="ok"] { color: var(--fg-2); }
 .vx-hint[data-tone="ok"] > .vx-ico { color: var(--run); }
 
-/* ---------- Eingabe: 40 (s 32), eingelassen ---------- */
-.vx-input { position: relative; isolation: isolate; display: flex; align-items: center; gap: 6px; height: var(--vx-h-m); padding: 0 10px; color: var(--fg-3); cursor: text; }
-.vx-input[data-size="s"] { height: var(--vx-h-s); }
+/* ---------- Eingabe: 40 (s 32), Slot ---------- */
+.vx-input { --in-h: var(--vx-h-m); position: relative; display: flex; align-items: center; gap: 6px; height: var(--in-h); padding: 0 12px; color: var(--fg-3); cursor: text; }
+.vx-input[data-size="s"] { --in-h: var(--vx-h-s); }
 .vx-input[data-lead] { padding-left: 8px; gap: 4px; }
-.vx-input::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--sunk); box-shadow: inset 0 0 0 var(--px) var(--ctl), inset var(--u2) var(--u2) 0 var(--lo); clip-path: var(--n1); transition: box-shadow var(--st); }
-.vx-input:is(:hover, :focus-within, [data-force="hover"])::before { box-shadow: inset 0 0 0 var(--px) var(--ctl-hi), inset var(--u2) var(--u2) 0 var(--lo); }
-.vx-input:has(:focus-visible)::after { content: ""; position: absolute; inset: calc(var(--u2) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; z-index: 5; }
+.vx-input:is(:hover, [data-force="hover"]):not(:has(:disabled, :focus-visible)) { background: var(--bg-2); }
 .vx-input:focus-within > .vx-ico { color: var(--fg-2); }
 .vx-input :is(input, textarea) { flex: 1; min-width: 0; height: 100%; padding: 0; background: transparent; border: 0; color: var(--fg); outline: none; }
-.vx-input :is(input, textarea)::placeholder { color: var(--fg-3); }
+.vx-input :is(input, textarea)::placeholder { color: var(--fg-3); opacity: 1; }
 .vx-input input[type="search"]::-webkit-search-cancel-button { display: none; }
 .vx-input[data-w="s"] { width: 160px; }
 .vx-input[data-w="m"] { width: 240px; }
 .vx-input[data-w="l"] { width: 360px; }
 .vx-input[data-w="full"] { width: 100%; }
-/* Aus: Rahmen leiser, Text gedämpft */
-.vx-input:has(:disabled) { cursor: default; }
-.vx-input:has(:disabled)::before { box-shadow: inset 0 0 0 var(--px) var(--line), inset var(--u2) var(--u2) 0 var(--lo); }
+/* Aus: flach, Rahmen leise, Text gedämpft */
+.vx-input.vx-slot:has(:disabled) { background: var(--panel); border-color: var(--line); box-shadow: none; cursor: default; }
 .vx-input :is(input, textarea):disabled { color: var(--fg-3); }
-/* Ungültig: Rahmen in Fehlerrot (die Meldung steht mit Symbol darunter) */
-.vx-input:has([aria-invalid="true"])::before { box-shadow: inset 0 0 0 var(--px) var(--bad), inset var(--u2) var(--u2) 0 var(--lo); }
+/* Ungültig: roter Rand und roter Balken links (die Meldung steht mit Symbol darunter); Fokus zeigt weiter den Ring */
+.vx-input.vx-slot:has([aria-invalid="true"]) { border-color: var(--bad); box-shadow: inset var(--u2) 0 0 var(--bad), var(--slot-sh); }
+.vx-input.vx-slot:has([aria-invalid="true"]):focus-within { box-shadow: var(--ring-i); }
 /* Mehrzeilig */
 .vx-input[data-area] { height: auto; padding: 10px; align-items: stretch; }
 .vx-input[data-area] textarea { min-height: 84px; resize: none; font: calc(13px * var(--tz))/1.5 var(--f-mono); }
-/* Leeren-Knopf bündig rechts; Platz bleibt, auch wenn er verborgen ist */
-.vx-input .vx-clear { margin-right: -6px; visibility: hidden; }
-.vx-input[data-size="s"] .vx-clear { --b-h: 28px; margin-right: -8px; }
+/* Leeren-Knopf: Kante = Höhe − 4 Einheiten (1 Einheit Luft zum Rand), rechts mit demselben Abstand; Platz bleibt, auch wenn er verborgen ist */
+.vx-input .vx-clear { --b-h: calc(var(--in-h) - var(--px) * 4); margin-right: calc(var(--px) - 12px); visibility: hidden; }
 .vx-input[data-has] .vx-clear { visibility: visible; }
 
-/* ---------- Auswahl: erhabene Platte (wie Sekundärknopf), eigene Liste ---------- */
-.vx-select { position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 6px; flex: none; height: var(--vx-h-m); padding: 0 8px 0 12px; color: var(--fg); font-size: calc(14px * var(--tz)); font-weight: 600; white-space: nowrap; text-align: left; user-select: none; cursor: pointer; }
-.vx-select[data-size="s"] { height: var(--vx-h-s); padding: 0 6px 0 10px; font-size: calc(13px * var(--tz)); }
-.vx-select::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--panel-2); box-shadow: var(--bv-raised); clip-path: var(--n1); transition: background-color var(--st), box-shadow var(--st); }
-.vx-select:is(:hover, [data-state="open"], [data-force="hover"]):not([data-disabled])::before {
-  background: var(--panel-3);
-  box-shadow: inset 0 0 0 var(--px) var(--line-hi), inset var(--u2) var(--u2) 0 var(--hi), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--lo);
-}
-.vx-select:is(:active, [data-force="press"]):not([data-disabled])::before { background: var(--panel); box-shadow: var(--bv-sunk); }
-.vx-select:is(:active, [data-force="press"]):not([data-disabled]) > * { translate: 0 var(--px); }
-.vx-select[data-disabled] { color: var(--fg-3); cursor: default; }
-.vx-select[data-disabled]::before { background: var(--panel); box-shadow: inset 0 0 0 var(--px) var(--line); }
-.vx-select[aria-invalid="true"]::before { box-shadow: inset 0 0 0 var(--px) var(--bad), inset var(--u2) var(--u2) 0 var(--hi), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--lo); }
-.vx-sel-lab { color: var(--fg-3); font-size: calc(13px * var(--tz)); }
+/* ---------- Auswahl: Slot mit Steinknopf (Pfeil) rechts, eigene Liste. Der Knopf liegt mit 1 Einheit Abstand auf allen vier Seiten im Rand: Kante = Höhe − 4 Einheiten ---------- */
+.vx-select { --sel-h: var(--vx-h-m); --sel-nudge: 1px; position: relative; display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; flex: none; height: var(--sel-h); padding: 0 var(--px) 0 12px; color: var(--fg); font-size: calc(15px * var(--tz)); font-weight: 500; white-space: nowrap; text-align: left; user-select: none; cursor: pointer; }
+.vx-select[data-size="s"] { --sel-h: var(--vx-h-s); --sel-nudge: 0px; padding: 0 var(--px) 0 10px; font-size: calc(14px * var(--tz)); }
+.vx-select:is(:hover, [data-force="hover"]):not([data-disabled]) { background: var(--bg-2); }
+.vx-select[data-state="open"]:not([data-disabled]) { border-color: var(--fg-2); }
+.vx-select.vx-slot[data-disabled] { background: var(--panel); border-color: var(--line); box-shadow: none; color: var(--fg-3); cursor: default; }
+.vx-select.vx-slot[aria-invalid="true"] { border-color: var(--bad); box-shadow: inset var(--u2) 0 0 var(--bad), var(--slot-sh); }
+.vx-select.vx-slot[aria-invalid="true"]:focus-visible { box-shadow: var(--ring-i); }
+/* Vorspann des Auswahlfeldes in Pixelschrift („LOADER  Alle“), überall gleich */
+.vx-sel-lab { color: var(--fg-3); font: 400 calc(16px * var(--tz))/1 var(--f-px); letter-spacing: .04em; text-transform: uppercase; }
 /* Wert und unsichtbare Platzhalter übereinander: Breite = längste Option */
-.vx-sel-val { display: grid; min-width: 0; }
+.vx-sel-val { display: grid; min-width: 0; translate: 0 var(--sel-nudge); }
 .vx-sel-val > span { grid-area: 1 / 1; overflow: hidden; text-overflow: ellipsis; }
 .vx-sel-sizer { visibility: hidden; height: 0; }
 .vx-select[data-placeholder] .vx-sel-val > span:first-child { color: var(--fg-3); }
-.vx-sel-chev { display: grid; place-items: center; color: var(--fg-2); }
+/* Pfeilknopf: kleine Steinplatte im Slot */
+.vx-sel-chev { display: grid; place-items: center; flex: none; width: calc(var(--sel-h) - var(--px) * 4); height: calc(var(--sel-h) - var(--px) * 4); color: var(--fg); background: var(--panel-3); clip-path: var(--n1);
+  box-shadow: inset var(--px) var(--px) 0 var(--line-hi), inset calc(var(--px) * -1) calc(var(--px) * -1) 0 var(--bg-2); }
+.vx-select[data-disabled] .vx-sel-chev { color: var(--fg-3); background: var(--panel); box-shadow: none; }
 .vx-sel-chev .vx-ico { transition: transform .12s steps(2, end); }
 .vx-select[data-state="open"] .vx-sel-chev .vx-ico { transform: rotate(180deg); }
 
-/* Liste: Fläche aus .rpop (Menü), Einträge 34 px; markiert = Fläche + Kupferstrich links, gewählt = fett + Haken */
-.vx-selpop { min-width: max(var(--radix-select-trigger-width), 180px); max-height: min(360px, var(--radix-select-content-available-height)); display: flex; flex-direction: column; }
-.vx-selitem { position: relative; isolation: isolate; display: flex; align-items: center; gap: 12px; height: 34px; padding: 0 8px 0 12px; color: var(--fg); font-size: calc(13.5px * var(--tz)); font-weight: 500; white-space: nowrap; cursor: pointer; outline: none; user-select: none; }
-.vx-selitem::before { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--n1); }
-.vx-selitem[data-highlighted]::before { background: var(--hl); box-shadow: inset var(--u2) 0 0 var(--copper); }
-.vx-selitem:active:not([data-disabled])::before { background: var(--panel-2); }
+/* Liste: Fläche aus .vx-pop (Item-Tooltip), Einträge 36 px wie im Menü; markiert = --hl + Fokusbalken links, gewählt = fett + Haken */
+.vx-pop.vx-selpop { min-width: max(var(--radix-select-trigger-width), 180px); max-height: min(360px, var(--radix-select-content-available-height)); display: flex; flex-direction: column; }
+.vx-selitem { position: relative; display: flex; align-items: center; gap: 12px; height: 36px; padding: 0 8px 0 12px; color: var(--fg); font-size: calc(15px * var(--tz)); font-weight: 600; white-space: nowrap; cursor: pointer; outline: none; user-select: none; }
+.vx-selitem[data-highlighted] { background: var(--hl); box-shadow: inset var(--u2) 0 0 var(--focus); }
+.vx-selitem:active:not([data-disabled]) { background: var(--tip-b); }
 .vx-selitem:active:not([data-disabled]) > * { translate: 0 var(--px); }
-.vx-selitem[data-state="checked"] { font-weight: 600; }
+.vx-selitem[data-state="checked"] { color: #fff; }
 .vx-selitem[data-disabled] { color: var(--fg-3); cursor: default; }
-.vx-sel-ck { display: grid; margin-left: auto; color: var(--copper); }
+.vx-sel-ck { display: grid; margin-left: auto; color: var(--acc); }
 .vx-selscroll { display: grid; place-items: center; flex: none; height: 22px; color: var(--fg-2); cursor: default; }
 
-/* ---------- Aufklappbereich: Zusammenfassung wie Geist s, bündig (Hover-Platte ragt links hinaus) ---------- */
+/* ---------- Aufklappbereich: Zusammenfassung wie Geist s, bündig; beim Überfahren ein Slot (Hover-Platte ragt links hinaus) ---------- */
 .vx-disc-s { position: relative; isolation: isolate; display: inline-flex; align-items: center; height: var(--vx-h-s); margin-left: -6px; padding: 0 8px 0 6px; list-style: none; color: var(--fg-2); font-weight: 600; cursor: pointer; user-select: none; }
 .vx-disc-s::-webkit-details-marker { display: none; }
-.vx-disc-s::before { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--n1); transition: background-color var(--st); }
+.vx-disc-s::before { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--n1); }
 .vx-disc-s:is(:hover, [data-force="hover"]) { color: var(--fg); }
-.vx-disc-s:is(:hover, [data-force="hover"])::before { background: var(--hv-ctl); }
-.vx-disc-s:active::before { background: var(--pr-ctl); }
+.vx-disc-s:is(:hover, [data-force="hover"])::before { background: var(--sunk); box-shadow: var(--slot-sh); }
+.vx-disc-s:active::before { background: var(--edge); }
 .vx-disc-s:active > .vx-disc-c { translate: 0 var(--px); }
 .vx-disc-c { display: inline-flex; align-items: center; gap: 4px; }
 .vx-disc-c > .vx-ico { transition: transform .12s steps(2, end); }

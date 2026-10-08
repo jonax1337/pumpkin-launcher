@@ -23,7 +23,7 @@ import { useAddContent, type AddRequest } from "./useAddContent";
 function AddMenuTrigger({ title, target, large, ...props }: { title: string; target: string; large?: boolean } & ComponentProps<"button">) {
   const { t } = useI18n();
   return (
-    <Button {...props} variant={large ? "primary" : "secondary"} size={large ? "l" : "s"} icon="plus" iconEnd="chevd" aria-label={large ? undefined : t("components.content.addToOne", { name: title, target })}>
+    <Button {...props} variant={large ? "primary" : "secondary"} size={large ? "l" : "s"} icon="plus" iconEnd="chev-down" aria-label={large ? undefined : t("components.content.addToOne", { name: title, target })}>
       {large ? t("components.content.addTo", { target }) : t("common.add")}
     </Button>
   );
@@ -90,7 +90,7 @@ export function AddToInstanceMenu({ project, type, large, source }: { project: P
 
   if (job) return job;
   return (
-    <Menu open={open} onOpenChange={changeOpen} width={300} trigger={<AddMenuTrigger title={project.title} target={t("common.instance")} disabled={active} large={large} />}>
+    <Menu open={open} onOpenChange={changeOpen} wide trigger={<AddMenuTrigger title={project.title} target={t("common.instance")} disabled={active} large={large} />}>
       <MenuLabel>{t("components.content.addToMenu")}</MenuLabel>
       <MenuScroll>
         {rows.map(({ i, reason }) => {
@@ -165,7 +165,7 @@ export function AddToWorldMenu({ project, large }: { project: ProjectRef; large?
     <Menu
       open={open}
       onOpenChange={setOpen}
-      width={300}
+      wide
       trigger={<AddMenuTrigger title={project.title} target={t("components.common.world")} disabled={active} large={large} />}
       items={[{ label: t("components.content.addToMenu") }, ...items]}
     >

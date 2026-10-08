@@ -22,7 +22,7 @@ export function ShareGuests({ session }: { session: HostSession }) {
   const friends = useFriendsList().data;
   const labels = useMemo(() => friendLabels(friends ?? []), [friends]);
   return (
-    <List variant="friends" className="mt-3" aria-label={t("friendsHost.share.guestsLabel")}>
+    <List variant="friends" className="sh-guests" aria-label={t("friendsHost.share.guestsLabel")}>
       {session.guests.map((guest) => (
         <GuestRow key={guest.friendId} sessionId={session.id} guest={guest} label={labels.get(guest.friendId) ?? guest.displayName} />
       ))}
@@ -37,7 +37,7 @@ function GuestRow({ sessionId, guest, label }: { sessionId: string; guest: Sessi
   const status = guestStatus(guest);
   return (
     <ListRow>
-      <span className="grid place-items-center"><FriendAvatar friendId={guest.friendId} name={guest.displayName} /></span>
+      <span className="sh-avatar"><FriendAvatar friendId={guest.friendId} name={guest.displayName} /></span>
       <RowTitle title={label} sub={guest.path && <ConnectionText path={guest.path} rttMs={guest.rttMs} />} />
       <Cell flex>
         <Chip size="s" dot tone={status === "connected" ? "run" : undefined}>{t(STATUS_LABEL[status])}</Chip>
@@ -52,7 +52,7 @@ function GuestRow({ sessionId, guest, label }: { sessionId: string; guest: Sessi
       {canKick(guest) ? (
         <Menu
           trigger={<IconButton icon="more" size="s" label={t("components.instance.moreActionsFor", { name: label })} tip={t("components.instance.moreActions")} />}
-          items={[{ id: "kick", text: t("friendsHost.guest.kick"), icon: "x", bad: true, disabled: kick.isPending, onSelect: () => kick.mutate({ sessionId, friendId: guest.friendId }) }]}
+          items={[{ id: "kick", text: t("friendsHost.guest.kick"), icon: "close", bad: true, disabled: kick.isPending, onSelect: () => kick.mutate({ sessionId, friendId: guest.friendId }) }]}
         />
       ) : (
         <span />

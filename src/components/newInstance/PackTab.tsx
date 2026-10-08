@@ -29,15 +29,15 @@ function PackPane({ selected, onSelect }: { selected: PackChoice | null; onSelec
   const { results, hits, query, failed } = useCatalogSearch(source, "modpack", { query: input, mc: null, loader: null, category: null, sort: null });
   return (
     <>
-      <div className="mb-4 flex gap-2">
-        <SearchField value={input} onChange={setInput} placeholder={t("components.pack.searchPlaceholder")} autoFocus className="min-w-0 flex-1" />
+      <div className="ni-find">
+        <SearchField value={input} onChange={setInput} placeholder={t("components.pack.searchPlaceholder")} autoFocus className="ni-find-field" />
         <SourceSelect value={source} onChange={setSource} />
       </div>
       {results.error ? (
         <ErrorBox title={t("components.catalog.unreachable")} error={results.error} onRetry={() => void results.refetch()} />
       ) : (
         <>
-          {failed.length > 0 && <Hint tone="warn" className="mb-2">{t("components.source.partial", { sources: failed.map((s) => SOURCES[s].label).join(", ") })}</Hint>}
+          {failed.length > 0 && <Hint tone="warn" className="ni-partial">{t("components.source.partial", { sources: failed.map((s) => SOURCES[s].label).join(", ") })}</Hint>}
           <ChoiceList aria-busy={results.isPending || undefined}>
             {results.isPending && <ChoiceListSkeleton n={SKELETON_ROWS} />}
             {hits.map((hit) => (
@@ -59,7 +59,7 @@ function PackPane({ selected, onSelect }: { selected: PackChoice | null; onSelec
             {results.data && hits.length === 0 && <Hint>{t("components.pack.noneFound", { query })}</Hint>}
           </ChoiceList>
           {results.hasNextPage && (
-            <Button className="mt-2" disabled={results.isFetchingNextPage} onClick={() => void results.fetchNextPage()}>
+            <Button className="ni-more" disabled={results.isFetchingNextPage} onClick={() => void results.fetchNextPage()}>
               {results.isFetchingNextPage ? t("components.search.loadingMore") : t("components.search.loadMore")}
             </Button>
           )}
@@ -93,9 +93,9 @@ export function usePackTab(ctx: TabContext): TabModel {
         <Button
           variant="ghost"
           size="s"
-          icon="chev"
+          icon="chev-right"
           bleed="start"
-          className="mt-2.5"
+          className="ni-discover"
           onClick={() => {
             ctx.close();
             navigate(discoverUrl({ tab: "modpack", project: pack?.id, projectSource: pack?.source }));

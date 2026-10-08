@@ -1,6 +1,7 @@
 import { t, type TKey } from "@/i18n";
 import { TYPE_LABEL_KEYS } from "@/lib/catalog";
 import { ALL_SOURCES, SOURCES, type CatalogType, type ContentProject, type ContentVersion, type SearchIndex, type SourceChoice } from "@/lib/content-types";
+import type { IconName } from "@/ui";
 import { LOADER_LABELS, type ModLoader } from "@/lib/types";
 
 // Reine Funktionen auf Modul-`t`: Der Text entsteht bei jedem Aufruf neu, die aufrufende Komponente rendert bei
@@ -72,6 +73,11 @@ const LOADER_CATEGORIES = new Set([
 ]);
 
 export const typeLabel = (type: CatalogType) => t(TYPE_LABEL_KEYS[type]);
+
+/** Pixel-Symbol je Katalogart (Reiter, Anbieterlisten). */
+export const TYPE_ICONS: Record<CatalogType, IconName> = {
+  modpack: "modpack", mod: "mod", shader: "shader", resourcepack: "resourcepack", datapack: "datapack",
+};
 
 export const searchPlaceholder = (type: CatalogType) => t(SEARCH_PLACEHOLDER_KEYS[type]);
 

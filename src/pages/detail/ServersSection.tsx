@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import {
-  Cell, ConfirmDialog, Dialog, DialogActions, Empty, Field, Glyph, IconButton, List, ListRow, Menu, ProjectIcon, RowTitle, SectionHeader,
+  Actions, Cell, ConfirmDialog, Count, Dialog, DialogActions, Empty, Field, Glyph, IconButton, List, ListRow, Menu, RowTitle, SectionHeader,
   Segmented,
   TextField, type MenuEntry,
 } from "@/ui";
@@ -11,12 +11,12 @@ import { useI18n, type TKey } from "@/i18n";
 import { isValidServerAddress, serverNameFromAddress, SERVER_ADDRESS_MAX_LENGTH } from "@/lib/serverAddress";
 import type { Instance, Server } from "@/lib/types";
 import { GuardedButton, type SectionProps } from "./guards";
+import { KindTile } from "./KindTile";
 import { ServerStatusCell } from "./ServerStatusCell";
 
 const NEW_SERVER: Server = { name: "", address: "", icon: null, acceptTextures: null };
 
 const SERVER_FORM_ID = "server-form";
-const SERVER_DIALOG_WIDTH = 480;
 const SAVE_BUTTON_WIDTH = 130;
 const NAME_MAX_LENGTH = 64;
 
@@ -35,11 +35,11 @@ export function ServersSection({ instance, busy, onPlay }: SectionProps) {
     </GuardedButton>
   );
   const refreshButton = (
-    <IconButton size="s" icon="redo" label={t("detail.servers.refresh")} disabled={fetching} onClick={() => void refresh()} />
+    <IconButton size="s" icon="refresh" label={t("detail.servers.refresh")} disabled={fetching} onClick={() => void refresh()} />
   );
 
   const menuFor = (server: Server, index: number): MenuEntry[] => [
-    { id: "edit", text: t("detail.servers.editMenu"), icon: "file", disabled: !!busy, onSelect: () => setEditing({ index, server }) },
+    { id: "edit", text: t("detail.servers.editMenu"), icon: "edit", disabled: !!busy, onSelect: () => setEditing({ index, server }) },
     "-",
     {
       id: "rm",
@@ -52,9 +52,13 @@ export function ServersSection({ instance, busy, onPlay }: SectionProps) {
   ];
 
   return (
-    <section className="mt-8" aria-labelledby="servers-h">
-      <SectionHeader id="servers-h" title={t("common.server")} actions={<>{(servers.data?.length ?? 0) > 0 && refreshButton}{addButton}</>} />
-      <div className="mt-3">
+    <section aria-labelledby="servers-h">
+      <SectionHeader
+        id="servers-h"
+        title={<>{t("common.server")}{servers.data && <Count value={servers.data.length} muted />}</>}
+        actions={<Actions>{(servers.data?.length ?? 0) > 0 && refreshButton}{addButton}</Actions>}
+      />
+      <div className="wl-body">
         <QueryList
           query={servers}
           error={t("detail.servers.loadError")}
@@ -65,7 +69,7 @@ export function ServersSection({ instance, busy, onPlay }: SectionProps) {
           }
         >
           {(list) => (
-            <List variant="servers" divided aria-label={t("common.server")}>
+            <List variant="servers" className="dc-table vx-pit" divided aria-label={t("common.server")}>
               {list.map((server, index) => (
                 // Die Serverliste darf denselben Server mehrmals enthalten; die Stelle ist der Schlüssel.
                 <ServerRow key={index} instance={instance} server={server} menu={menuFor(server, index)} busy={busy} onPlay={onPlay} />
@@ -94,7 +98,7 @@ function ServerRow({ instance, server, menu, busy, onPlay }: SectionProps & { se
   const { motd, version } = status.data ?? {};
   return (
     <ListRow menu={menu}>
-      <ProjectIcon url={server.icon} seed={server.address} />
+      <KindTile url={server.icon} seed={server.address} icon="server" />
       <RowTitle title={server.name || server.address} sub={motd ? `${server.address} · ${motd}` : server.address} aside={version} />
       <ServerStatusCell status={status} />
       <Cell flex align="end">
@@ -151,7 +155,7 @@ function ServerDialog({ instance, index, server, onClose }: {
       open
       onOpenChange={(o) => !o && onClose()}
       title={index == null ? t("detail.servers.addTitle") : t("detail.servers.editTitle")}
-      width={SERVER_DIALOG_WIDTH}
+      size="s"
       footLeft={blocker}
       footer={
         <DialogActions

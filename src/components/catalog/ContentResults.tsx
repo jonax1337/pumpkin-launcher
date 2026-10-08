@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useI18n } from "@/i18n";
-import { Button, ButtonLink, Cell, Chip, ChipButton, Count, Empty, ErrorBox, Hint, Icon, IconButton, List, ListRow, ProjectIcon, RowTitle, SectionHeader, SkelRow, Tip, type GlyphBox, type ListVariant } from "@/ui";
+import { Button, ButtonLink, Cell, Chip, ChipButton, Count, Empty, ErrorBox, Hint, Icon, IconButton, List, ListRow, ProjectIcon, RowTitle, SectionHeader, SkelRow, StatusPanel, Tip, type GlyphBox, type ListVariant } from "@/ui";
 import { useDebounced } from "@/hooks/useDebounced";
 import { WIDTH } from "@/lib/breakpoints";
 import { catalogSearchQuery } from "@/lib/catalogSearch";
@@ -86,7 +86,7 @@ function Offline({ onRetry, layout }: { onRetry: () => void; layout: ResultsLayo
       size={layout.offlineSize}
       actions={
         <>
-          <Button icon="redo" onClick={onRetry}>{t("common.retry")}</Button>
+          <Button icon="refresh" onClick={onRetry}>{t("common.retry")}</Button>
           {layout.offlineLibraryLink && <ButtonLink variant="ghost" to="/instances">{t("components.offline.toLibrary")}</ButtonLink>}
         </>
       }
@@ -149,7 +149,7 @@ function ResultsList({ search, source, type, layout, emptyText, headerEnd, activ
     <div>
       {/* Ohne Suchbegriff die Sortierung als Abschnittsüberschrift (wie auf Start), mit Suchbegriff die Trefferzahl; gleiche Höhe */}
       {showHeading && (
-        <div aria-live="polite" className="mb-2.5">
+        <div aria-live="polite" className="cat-head">
           <SectionHeader
             as={layout.heading.as}
             size={layout.heading.size}
@@ -181,8 +181,8 @@ function ResultsList({ search, source, type, layout, emptyText, headerEnd, activ
         </Empty>
       ) : (
         <>
-          {failed.length > 0 && <Hint tone="warn" className="mb-2">{t("components.source.partial", { sources: failed.map((s) => SOURCES[s].label).join(", ") })}</Hint>}
-          <List variant={layout.list} aria-label={typeLabel(type)}>
+          {failed.length > 0 && <StatusPanel tone="warn" className="cat-note">{t("components.source.partial", { sources: failed.map((s) => SOURCES[s].label).join(", ") })}</StatusPanel>}
+          <List variant={layout.list} divided aria-label={typeLabel(type)}>
             {hits.map((hit, k) => (
               <ResultRow
                 key={`${hit.source}-${hit.project_id}`}
@@ -203,7 +203,7 @@ function ResultsList({ search, source, type, layout, emptyText, headerEnd, activ
                 {results.isFetchingNextPage ? t("components.search.loadingMore") : t("components.search.loadMore")}
               </Button>
             ) : (
-              <Hint className="self-center">{hits.length === 1 ? t("components.search.oneResult") : t("components.search.allLoaded", { n: hits.length })}</Hint>
+              <Hint>{hits.length === 1 ? t("components.search.oneResult") : t("components.search.allLoaded", { n: hits.length })}</Hint>
             )}
           </div>
         </>
@@ -220,7 +220,7 @@ export function usePageRowParts(type: CatalogType) {
     action: SOURCES[hit.source].install ? (
       <ContentAction type={type} project={{ id: hit.project_id, title: hit.title }} source={hit.source} />
     ) : (
-      <Icon name="chev" size="s" tone="muted" />
+      <Icon name="chev-right" size="s" tone="muted" />
     ),
   });
 }
@@ -230,8 +230,8 @@ function CategoryFilter({ category, source, onClear }: { category: string; sourc
   const { t } = useI18n();
   const name = categoryName(category);
   return (
-    <div className="mb-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-      <ChipButton pressed icon="x" aria-label={t("pages.discover.clearCategory", { name })} onClick={onClear}>
+    <div className="cat-filter">
+      <ChipButton pressed icon="close" aria-label={t("pages.discover.clearCategory", { name })} onClick={onClear}>
         {t("pages.discover.categoryChip", { name })}
       </ChipButton>
       {source === ALL_SOURCES && <Hint>{t("pages.discover.categoryOnlyModrinth")}</Hint>}

@@ -11,7 +11,7 @@ import type { Compact, IconName, Size, Tone } from "./types";
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 
 export type ButtonLook = {
-  /** primary = Akzentblock, secondary = Platte (Standard), ghost = nur Text (Hover-Platte), danger = roter Block */
+  /** primary = Steinplatte in der Akzentfarbe, secondary = Steinplatte (Standard), ghost = flach (beim Überfahren ein Slot), danger = rote Steinplatte */
   variant?: ButtonVariant;
   /** Höhe 32 / 40 / 56 px; bestimmt Icon-Slot (s/m/l), Schrift und Innenabstand. */
   size?: Size;
@@ -31,7 +31,8 @@ export type ButtonLook = {
   bleed?: "start" | "end";
 };
 
-const isBlock = (v: ButtonVariant) => v === "primary" || v === "danger";
+/** Steinplatte (surface.css) für alles außer Geist; Geist ist flach und wird erst beim Überfahren zum Slot. */
+const surface = (v: ButtonVariant) => (v === "ghost" ? undefined : "vx-stone vx-text");
 
 /** Trennt die Look-Props von den übrigen Props des Elements. */
 function splitLook<P extends ButtonLook>({ variant, size, icon, iconEnd, tone, width, count, compactBelow, onScene, bleed, ...rest }: P): [ButtonLook, Omit<P, keyof ButtonLook>] {
@@ -52,28 +53,25 @@ function lookData({ variant = "secondary", size = "m", icon, tone, width, compac
   };
 }
 
-function Inner({ variant = "secondary", size = "m", icon, iconEnd, count, compactBelow, children }: ButtonLook & { children?: ReactNode }) {
+function Inner({ size = "m", icon, iconEnd, count, children }: ButtonLook & { children?: ReactNode }) {
   return (
-    <>
-      {isBlock(variant) && <span className="vx-bf" aria-hidden />}
-      <span className="vx-bc">
-        {icon && <Icon name={icon} size={size} />}
-        {hasContent(children) && (compactBelow ? <span className="vx-lab">{children}</span> : children)}
-        {count != null && <Count value={count} />}
-        {iconEnd && <Icon name={iconEnd} size={size} edge="end" />}
-      </span>
-    </>
+    <span className="vx-bc">
+      {icon && <Icon name={icon} size={size} />}
+      {hasContent(children) && <span className="vx-lab">{children}</span>}
+      {count != null && <Count value={count} />}
+      {iconEnd && <Icon name={iconEnd} size={size} edge="end" />}
+    </span>
   );
 }
 
 /**
- * Knopf des Kits. Sockel + Fläche mit Bevel (primär/Gefahr), Platte (sekundär) oder Hover-Platte (Geist).
+ * Knopf des Kits: Steinplatte mit Fase (sekundär, primär in Akzentfarbe, Gefahr) oder flach (Geist, beim Überfahren ein Slot).
  * Props und ref gehen an das <button> (Radix asChild).
  */
 export function Button({ className, style, type = "button", children, ...props }: ButtonLook & ComponentProps<"button">) {
   const [look, rest] = splitLook(props);
   return (
-    <button type={type} className={cn("vx-btn fx", className)} {...lookData(look)} style={widthStyle(look.width, style)} {...rest}>
+    <button type={type} className={cn("vx-btn fx", surface(look.variant ?? "secondary"), className)} {...lookData(look)} style={widthStyle(look.width, style)} {...rest}>
       <Inner {...look}>{children}</Inner>
     </button>
   );
@@ -83,7 +81,7 @@ export function Button({ className, style, type = "button", children, ...props }
 export function ButtonLink({ className, style, children, ...props }: ButtonLook & LinkProps & { ref?: Ref<HTMLAnchorElement> }) {
   const [look, rest] = splitLook(props);
   return (
-    <Link className={cn("vx-btn fx", className)} {...lookData(look)} style={widthStyle(look.width, style)} {...rest}>
+    <Link className={cn("vx-btn fx", surface(look.variant ?? "secondary"), className)} {...lookData(look)} style={widthStyle(look.width, style)} {...rest}>
       <Inner {...look}>{children as ReactNode}</Inner>
     </Link>
   );
@@ -103,20 +101,20 @@ export function IconButton({ icon, label, tip, variant = "ghost", size, tone, on
   const look = { variant, size, icon, tone, onScene };
   // Der Symbolknopf ist quadratisch: ohne die Einrückung für ein führendes Icon (data-lead)
   const btn = (
-    <button type={type} className={cn("vx-btn vx-ib fx", className)} {...lookData(look)} data-lead={undefined} aria-label={label} {...props}>
+    <button type={type} className={cn("vx-btn vx-ib fx", surface(variant), className)} {...lookData(look)} data-lead={undefined} aria-label={label} {...props}>
       <Inner {...look} />
     </button>
   );
   return tip === false ? btn : <Tip label={tip ?? label}>{btn}</Tip>;
 }
 
-/** Zurück-Link über einer Überschrift („‹ Bibliothek“): Geist s, bündig mit der Überschrift. */
+/** Zurück-Link über einer Überschrift („‹ Bibliothek“): Geist s; auf Seiten bündig mit der Überschrift (Schrift), über Szenen die Platte selbst. */
 export function BackLink({ children, onScene, to, onClick }: { children: ReactNode; onScene?: boolean } & ({ to: string; onClick?: never } | { to?: never; onClick: () => void })) {
-  const data = lookData({ variant: "ghost", size: "s", icon: "chev", onScene, bleed: "start" });
+  const data = lookData({ variant: "ghost", size: "s", icon: "chev-right", onScene, bleed: onScene ? undefined : "start" });
   const inner = (
     <span className="vx-bc">
-      <Icon name="chev" size="s" flip="x" />
-      {children}
+      <Icon name="chev-left" size="s" />
+      <span className="vx-lab">{children}</span>
     </span>
   );
   return to != null ? (
@@ -161,7 +159,7 @@ const MAX_BADGE_COUNT = 9;
 
 const badgeText = (count: number) => (count > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : count);
 
-function BarInner({ children, label, iconEnd, activity, badge, side }: Pick<BarLook, "children" | "label" | "iconEnd" | "activity" | "badge" | "side">) {
+function BarInner({ children, label, iconEnd, activity, badge }: Pick<BarLook, "children" | "label" | "iconEnd" | "activity" | "badge">) {
   return (
     <>
       <span className="vx-bc">
@@ -169,7 +167,6 @@ function BarInner({ children, label, iconEnd, activity, badge, side }: Pick<BarL
         {label != null && <span className="vx-bar-lab">{label}</span>}
         {iconEnd && <Icon name={iconEnd} size="s" />}
       </span>
-      {!side && <span className="vx-tick" aria-hidden />}
       {activity && (
         <>
           <span className="vx-bar-badge" aria-hidden>{badgeText(activity.count)}</span>
@@ -185,7 +182,7 @@ type BarLinkProps = { to: string } & Omit<LinkProps, "to" | "children" | "classN
 type BarPlainProps = { to?: undefined } & Omit<ComponentProps<"button">, "children" | "className">;
 
 /**
- * Knopf in der Fensterleiste (36 px): Hover-Platte, `current` = Platte + Kupferstrich (aktueller Bereich),
+ * Knopf in der Fensterleiste (36 px) oder Seitenleiste (`side`, 44 px): Hover-Platte, `current` = Slot + Kupfersymbol (aktueller Bereich),
  * `expanded` = offen (Menü). Mit `to` ein Link. `label`/`tone`/`iconEnd`: Konto-Knopf; `activity`: Aufgaben.
  */
 export function BarButton(props: BarLook & (BarLinkProps | BarPlainProps)) {
@@ -196,7 +193,7 @@ export function BarButton(props: BarLook & (BarLinkProps | BarPlainProps)) {
     "aria-current": current ? ("page" as const) : undefined,
     "aria-expanded": expanded,
   };
-  const inner = <BarInner label={label} iconEnd={iconEnd} activity={activity} badge={badge} side={side}>{children}</BarInner>;
+  const inner = <BarInner label={label} iconEnd={iconEnd} activity={activity} badge={badge}>{children}</BarInner>;
   return target.to != null ? (
     <Link {...common} {...target}>{inner}</Link>
   ) : (
@@ -209,5 +206,5 @@ export function BarButton(props: BarLook & (BarLinkProps | BarPlainProps)) {
  * Nur Geist/Sekundär: primär braucht die Fläche als eigenes Element (Button).
  */
 export function buttonClass({ variant = "secondary", size = "m", tone, onScene }: Pick<ButtonLook, "size" | "tone" | "onScene"> & { variant?: "secondary" | "ghost" } = {}) {
-  return cn("vx-btn fx", `vx-btn--${variant}`, size !== "m" && `vx-btn--${size}`, tone && `vx-btn--${tone}`, onScene && "vx-btn--scene");
+  return cn("vx-btn fx", surface(variant), `vx-btn--${variant}`, size !== "m" && `vx-btn--${size}`, tone && `vx-btn--${tone}`, onScene && "vx-btn--scene");
 }

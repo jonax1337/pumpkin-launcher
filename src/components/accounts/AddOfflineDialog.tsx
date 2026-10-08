@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n";
 import { PlayerNameField } from "@/components/PlayerNameField";
-import { Button, Dialog, DialogActions, Hint } from "@/ui";
+import { Button, Dialog, DialogActions, Hint, StatusPanel } from "@/ui";
 import { startMsLogin, useAccountUi } from "@/store/accountUi";
 import { isValidPlayerName, useSettings } from "@/store/settings";
 import { ThenSub } from "./ThenSub";
@@ -42,8 +42,8 @@ export function AddOfflineDialog() {
       onOpenChange={(o) => !o && close()}
       title={then ? t("components.account.askName") : t("components.account.addPlayerName")}
       sub={then ? <ThenSub label={then.label} /> : undefined}
-      width={480}
-      height={then ? 402 : 278}
+      size="s"
+      height="s"
       footer={
         <DialogActions
           cancel={t("common.cancel")}
@@ -61,11 +61,16 @@ export function AddOfflineDialog() {
         {/* Zwei Zeilen reserviert: der kürzere Fehler ersetzt den Hilfetext, ohne dass etwas nachrückt */}
         <PlayerNameField value={name} onChange={setName} help={t("components.playerName.helpLong")} reserveLines={2} />
       </form>
+      {!then && (
+        <StatusPanel className="add-offline-note" icon="info" title={t("components.account.offlineNoteTitle")}>
+          {t("components.account.offlineNoteText")}
+        </StatusPanel>
+      )}
       {then && (
         <>
           <div className="or">{t("components.common.or")}</div>
-          <Button icon="user" width="full" onClick={microsoft}>{t("components.account.msLogin")}</Button>
-          <Hint className="mt-2">{t("components.account.neededForServers")}</Hint>
+          <Button icon="microsoft" width="full" onClick={microsoft}>{t("components.account.msLogin")}</Button>
+          <Hint className="add-offline-hint">{t("components.account.neededForServers")}</Hint>
         </>
       )}
     </Dialog>

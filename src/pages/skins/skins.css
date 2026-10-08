@@ -1,6 +1,5 @@
-.skins .skins-rail {
-  min-width: 0;
-  padding: 16px;
+.skins {
+  position: relative;
 }
 
 .skins .skins-current {
@@ -8,11 +7,6 @@
   flex-direction: column;
   align-items: stretch;
   gap: 16px;
-}
-
-.skins .skins-current > .skin-turn {
-  align-self: center;
-  padding-inline: 36px;
 }
 
 .skins .skins-current-details {
@@ -33,10 +27,38 @@
   white-space: normal;
 }
 
+.skins .skins-capes {
+  margin-top: 12px;
+}
+
+.skins .skins-grid {
+  margin-top: 12px;
+}
+
 .skins .skins-library .vx-cards {
-  grid-template-columns: repeat(auto-fill, minmax(min(188px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(208px, 100%), 1fr));
+  gap: 16px;
 }
 
 .skins .vx-status {
   flex-wrap: wrap;
+}
+
+/* Datei über dem Fenster: Hinweis bleibt beim Scrollen im Blick */
+.skins .skins-drop {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  height: auto;
+  justify-content: flex-start;
+}
+
+.skins .skins-drop-hint {
+  position: sticky;
+  top: 30vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-block: 40px;
 }

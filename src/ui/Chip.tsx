@@ -16,13 +16,13 @@ type ChipBase = {
 };
 
 /**
- * Status-Etikett: 28 px (m) oder 22 px (s). 1-Einheit-Rahmen, Kerbe. Optional Icon (Slot s) oder `dot` vor dem Text.
+ * Status-Etikett: kleiner Slot, 28 px (m) oder 22 px (s), Pixelschrift, Pip in der Tonfarbe. Optional Icon (Slot s) oder `dot` statt des Pips.
  * Zahlen darin als <Count> (Pixelschrift, feste Stellenbreite).
  */
 export function Chip({ tone, color, dot, size = "m", icon, className, style, children, ...props }: ChipBase & ComponentProps<"span">) {
   return (
     <span
-      className={cn("vx-chip", className)}
+      className={cn("vx-chip vx-slot", className)}
       data-size={size}
       data-tone={color ? "acc" : tone && tone !== "neutral" ? tone : undefined}
       data-lead={flag(icon)}
@@ -42,7 +42,7 @@ export function Chip({ tone, color, dot, size = "m", icon, className, style, chi
  */
 export function ChipButton({ pressed, size = "m", icon, className, type = "button", children, ...props }: Pick<ChipBase, "icon" | "size"> & { pressed?: boolean } & ComponentProps<"button">) {
   return (
-    <button type={type} className={cn("vx-chip fx", className)} data-size={size} data-press data-tone={pressed ? "acc" : undefined} data-lead={flag(icon)} aria-pressed={pressed} {...props}>
+    <button type={type} className={cn("vx-chip vx-slot fx", className)} data-size={size} data-press data-tone={pressed ? "acc" : undefined} data-lead={flag(icon)} aria-pressed={pressed} {...props}>
       {icon && <Icon name={icon} size="s" />}
       {children}
     </button>

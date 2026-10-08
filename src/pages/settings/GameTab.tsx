@@ -38,7 +38,7 @@ function JavaRow() {
         name="gjava"
         value={javaPath}
         onChange={(path) => set({ javaPath: path })}
-        fallback={<>{t("components.memory.auto")} <span className="text-fg-3">{t("pages.settings.javaAutomaticNote")}</span></>}
+        fallback={<>{t("components.memory.auto")} <span className="settings-note">{t("pages.settings.javaAutomaticNote")}</span></>}
       />
     </FormRow>
   );
@@ -76,11 +76,13 @@ function JvmRow() {
   const set = useSettings((s) => s.set);
   return (
     <FormRow label={t("settings.jvm.label")} hint={t("settings.jvm.hint")} group="radiogroup">
-      {JVM_PRESETS.map((value) => (
-        <Radio key={value} name="gjvm" checked={preset === value} onChange={() => set({ jvmPreset: value })}>
-          {t(JVM_PRESET_KEYS[value].name)} <span className="text-fg-3">({t(JVM_PRESET_KEYS[value].note)})</span>
-        </Radio>
-      ))}
+      <div className="settings-radios">
+        {JVM_PRESETS.map((value) => (
+          <Radio key={value} name="gjvm" checked={preset === value} onChange={() => set({ jvmPreset: value })}>
+            {t(JVM_PRESET_KEYS[value].name)} <span className="settings-note">({t(JVM_PRESET_KEYS[value].note)})</span>
+          </Radio>
+        ))}
+      </div>
       {preset === "custom" ? (
         <CustomJvmArgs />
       ) : (
@@ -100,11 +102,13 @@ function LauncherOnPlayRow() {
   const friendsEnabled = useFriendsState().data?.enabled ?? null;
   return (
     <FormRow label={t("settings.onPlay.label")} hint={t("settings.onPlay.hint")} group="radiogroup" aside={friendsEnabled ? t("friendsSettings.onPlayAside") : undefined}>
-      {LAUNCHER_ON_PLAY.map((value) => (
-        <Radio key={value} name="gonplay" checked={mode === value} onChange={() => set({ launcherOnPlay: value })}>
-          {t(LAUNCHER_ON_PLAY_KEYS[value])}
-        </Radio>
-      ))}
+      <div className="settings-radios">
+        {LAUNCHER_ON_PLAY.map((value) => (
+          <Radio key={value} name="gonplay" checked={mode === value} onChange={() => set({ launcherOnPlay: value })}>
+            {t(LAUNCHER_ON_PLAY_KEYS[value])}
+          </Radio>
+        ))}
+      </div>
       {effectiveOnPlay(mode, friendsEnabled) === "close" && <Hint tone="warn" live>{t("settings.onPlay.closeWarning")}</Hint>}
     </FormRow>
   );
@@ -130,7 +134,7 @@ function ResetRow() {
     <FormRow label={t("pages.settings.resetLabel")} hint={t("pages.settings.resetHint")}>
       <Actions>
         <Button
-          icon="redo"
+          icon="undo"
           onClick={() => {
             reset();
             toast.success(t("pages.settings.resetDoneToast"));
@@ -166,7 +170,7 @@ export function GameTab() {
         <FormSection title={t("settings.discord.label")} level={3}><p>{t("settings.discord.aside")}</p></FormSection>
         <FormSection title={t("launchSettings.section")} level={3}><p>{t("launchSettings.infoAside")}</p></FormSection>
       </SettingsInfo>
-      <FormSection title={t("settings.sectionJava")} level={3} className="settings-field-grid">
+      <FormSection title={t("settings.sectionJava")} srOnlyTitle level={3}>
         <FormRow
           label={t("ui.memory.label")}
           hint={t("pages.settings.memoryHint")}
@@ -181,13 +185,13 @@ export function GameTab() {
         <JavaRow />
         <JvmRow />
       </FormSection>
-      <FormSection title={t("settings.sectionStart")} level={3} className="settings-field-grid">
+      <FormSection title={t("settings.sectionStart")} level={3}>
         <FormRow label={t("detail.settings.windowLabel")} hint={t("settings.windowHint")} group="radiogroup">
           <WindowChooser name="gwindow" value={gameWindow} onChange={(next) => set({ window: next })} />
         </FormRow>
         <LauncherOnPlayRow />
       </FormSection>
-      <FormSection title={t("launchSettings.section")} level={3} className="settings-field-grid">
+      <FormSection title={t("launchSettings.section")} level={3}>
         <LaunchDefaults />
       </FormSection>
       <FormSection title={t("settings.sectionInGame")} level={3}>

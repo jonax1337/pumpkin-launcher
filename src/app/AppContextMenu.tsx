@@ -35,11 +35,11 @@ export function AppContextMenu({ children }: { children: AppSurface }) {
       id: tab.to, text: t(tab.key), icon: tab.icon, disabled: inDialog,
       checked: tab.match(pathname), onSelect: () => navigateFromMenu(tab.to),
     })),
-    { id: "settings", text: t("common.settings"), icon: "gear", disabled: inDialog, onSelect: () => navigateFromMenu("/settings") },
+    { id: "settings", text: t("common.settings"), icon: "settings", disabled: inDialog, onSelect: () => navigateFromMenu("/settings") },
     "-",
     { id: "new-instance", text: t("components.newInstance.title"), icon: "plus", disabled: inDialog, onSelect: () => navigateFromMenu(newInstanceUrl()) },
-    { id: "shortcuts", text: t("ui.shortcut.title"), icon: "info", disabled: inDialog, onSelect: () => { if (!dialogOpen()) showShortcuts(); } },
-    ...(update ? [{ id: "update", text: t("ui.titlebar.updateAvailable"), icon: "up" as const, disabled: inDialog, onSelect: () => navigateFromMenu("/settings?tab=ueber") }] : []),
+    { id: "shortcuts", text: t("ui.shortcut.title"), icon: "keyboard", disabled: inDialog, onSelect: () => { if (!dialogOpen()) showShortcuts(); } },
+    ...(update ? [{ id: "update", text: t("ui.titlebar.updateAvailable"), icon: "update" as const, disabled: inDialog, onSelect: () => navigateFromMenu("/settings?tab=ueber") }] : []),
   ];
 
   return (

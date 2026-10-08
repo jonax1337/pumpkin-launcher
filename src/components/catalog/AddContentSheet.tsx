@@ -16,8 +16,8 @@ const SOURCE_OPTIONS = (["modrinth", "curseforge"] as const).map((source) => ({ 
 function ShaderHint({ instance }: { instance: Instance }) {
   const { t } = useI18n();
   if (!irisSupported(instance))
-    return <Hint tone="warn" className="mb-2">{t("components.sheet.shadersUnsupported", { loader: LOADER_LABELS[instance.loader] })}</Hint>;
-  return hasIris(instance) ? null : <Hint tone="warn" className="mb-2">{t("components.sheet.shaderNeedsIris")}</Hint>;
+    return <Hint tone="warn" className="cat-hint-above">{t("components.sheet.shadersUnsupported", { loader: LOADER_LABELS[instance.loader] })}</Hint>;
+  return hasIris(instance) ? null : <Hint tone="warn" className="cat-hint-above">{t("components.sheet.shaderNeedsIris")}</Hint>;
 }
 
 /** Katalog im Seitenpanel einer Instanz; mit `world` nur Datenpakete für diese Welt, mit `initialQuery` mit vorbelegter Suche. */

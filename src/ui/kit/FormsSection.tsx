@@ -7,7 +7,7 @@ import {
   Checkbox, Disclosure, Field, FormRow, FormSection, Hint, Icon, Radio, SearchField, SegSlider, Segmented, Select, Switch,
   TabPanel, Tabs, TextArea, TextField, type TabItem,
 } from "@/ui";
-import { cap, Lab, row, Sec } from "./kit-ui";
+import { Cap, Lab, Sec } from "./kit-ui";
 
 type T = "content" | "console" | "settings" | "off";
 type W = "blank" | "pack" | "file" | "locked";
@@ -41,42 +41,45 @@ function TabsDemo() {
   const [px, setPx] = useState("m");
   return (
     <>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <span style={cap}>underline m · idBase + TabPanel · Zähler + Badge · aus</span>
+      <div className="kit-stack">
+        <Cap>underline m · idBase + TabPanel · Zähler + Badge · aus</Cap>
         <Tabs label="Bereiche der Instanz" items={TABS} value={tab} onChange={setTab} idBase="kit-dt" />
-        <TabPanel idBase="kit-dt" value={tab} style={{ padding: "10px 0", color: "var(--fg-2)" }}>Inhalt von „{tab}“</TabPanel>
-        <span style={cap}>underline s mit Icons · erzwungen hover / press</span>
-        <div style={row}>
+        <TabPanel idBase="kit-dt" value={tab} className="vx-pit kit-tabpanel">Inhalt von „{tab}“</TabPanel>
+        <Cap>underline s mit Icons · erzwungen hover / press / Fokus · gewählt · aus</Cap>
+        <div className="kit-row">
           <Tabs size="s" label="Weg klein" items={WAYS} value={w} onChange={setW} />
-          <span className="vx-tabs" data-variant="underline" style={{ boxShadow: "none" }}>
-            <button type="button" className="vx-tab fx" data-force="hover" tabIndex={-1}><span className="vx-tc">hover</span><i className="vx-tab-tick" /></button>
-            <button type="button" className="vx-tab fx" data-force="press" tabIndex={-1}><span className="vx-tc">press</span><i className="vx-tab-tick" /></button>
-          </span>
+          <div className="vx-tabs" data-variant="underline" data-kit="tab-states">
+            <button type="button" className="vx-tab fx" data-force="hover" tabIndex={-1}><span className="vx-tc">hover</span></button>
+            <button type="button" className="vx-tab fx" data-force="press" tabIndex={-1}><span className="vx-tc">press</span></button>
+            <button type="button" className="vx-tab fx" data-force="focus" tabIndex={-1}><span className="vx-tc">Fokus</span></button>
+            <button type="button" className="vx-tab fx" aria-selected="true" tabIndex={-1}><span className="vx-tc">gewählt</span></button>
+            <button type="button" className="vx-tab fx" disabled><span className="vx-tc">aus</span></button>
+          </div>
         </div>
       </div>
-      <div style={{ ...row, alignItems: "flex-start" }}>
-        <div style={{ width: 168 }} data-kit="vertical">
-          <span style={cap}>Pixel-Platten</span>
+      <div className="kit-row" data-align="start">
+        <div className="kit-col" data-kit="vertical">
+          <Cap>Reiter senkrecht</Cap>
           <Tabs variant="vertical" label="Weg" items={PLATE_WAYS} value={w} onChange={setW} />
         </div>
-        <div style={{ width: 168 }}>
-          <span style={cap}>Pixel-Platten · s</span>
+        <div className="kit-col">
+          <Cap>Reiter senkrecht · s</Cap>
           <Tabs variant="vertical" size="s" label="Weg klein" items={PLATE_WAYS} value={w} onChange={setW} />
         </div>
-        <div className="plate" style={{ width: 200, padding: 12 }}>
-          <span style={cap}>Pixel-Platten · in Platte</span>
+        <div className="plate kit-col" data-plate="">
+          <Cap>Reiter senkrecht · in Platte</Cap>
           <Tabs variant="vertical" label="Weg (Platte)" items={PLATE_WAYS} value={w} onChange={setW} />
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }} data-kit="segments">
-          <span style={cap}>Segmented m · s · nur Symbole · radiogroup</span>
+        <div className="kit-stack" data-gap="12" data-kit="segments">
+          <Cap>Segmented m · s · nur Symbole · radiogroup</Cap>
           <Segmented label="Ansicht" items={VIEWS} value={v} onChange={setV} />
           <Segmented size="s" label="Pixelstufe" items={[{ value: "s", label: "Klein" }, { value: "m", label: "Mittel" }, { value: "l", label: "Groß" }, { value: "x", label: "Riesig", disabled: true }]} value={px} onChange={setPx} />
-          <div style={row}>
+          <div className="kit-row">
             <Segmented iconsOnly label="Ansicht (Symbole)" items={VIEWS} value={v} onChange={setV} />
             <Segmented iconsOnly size="s" label="Ansicht (Symbole, klein)" items={VIEWS} value={v} onChange={setV} />
           </div>
           <Tabs variant="segment" label="Filter" items={[{ value: "all", label: "Alle", count: 42 }, { value: "mod", label: "Mods", count: 38 }, { value: "rp", label: "Ressourcenpakete", count: 4 }]} value={f} onChange={setF} />
-          <div className="plate" style={{ padding: 12 }}>
+          <div className="plate kit-plate-pad">
             <Segmented size="s" label="Ansicht (Platte)" items={VIEWS} value={v} onChange={setV} />
           </div>
         </div>
@@ -118,7 +121,7 @@ function FormDemo() {
           </Disclosure>
         </FormRow>
         <FormRow label="Breit" hint="wide: über Steuer- und Hilfespalte" wide>
-          <div style={{ height: 40, background: "var(--panel)", clipPath: "var(--n1)" }} />
+          <div className="kit-wide-fill" />
         </FormRow>
       </FormSection>
       <FormSection title="Nur für Vorleser" srOnlyTitle>
@@ -139,7 +142,7 @@ function FieldsDemo() {
   const [loader, setLoader] = useState("fabric");
   const [snap, setSnap] = useState(false);
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: "8px 40px", alignItems: "start" }} data-kit="fields">
+    <div className="kit-grid" data-cols="fields" data-kit="fields">
       <div>
         <Field label="Name" help="Zum Beispiel „Fabric 1.21.4“" reserveLines={1}>
           <TextField value={n} onChange={(e) => setN(e.target.value)} placeholder="Fabric 1.21.4" />
@@ -151,7 +154,7 @@ function FieldsDemo() {
           <TextField size="s" width="m" placeholder="play.example.net" />
         </Field>
         <Field label="Minecraft-Version" htmlFor="kit-mc">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="kit-row" data-gap="8">
             <Select id="kit-mc" value={ver} onChange={setVer} options={MC_VERSIONS} />
             <Checkbox checked={snap} onChange={setSnap}>Vorabversionen zeigen</Checkbox>
           </div>
@@ -160,14 +163,14 @@ function FieldsDemo() {
           <Segmented label="Loader" items={[{ value: "vanilla", label: "Vanilla" }, { value: "fabric", label: "Fabric" }, { value: "forge", label: "Forge" }, { value: "quilt", label: "Quilt" }]} value={loader} onChange={setLoader} />
         </Field>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "flex-start" }}>
+      <div className="kit-stack" data-gap="12" data-align="start">
         <SearchField value={q} onChange={setQ} placeholder="Mods suchen" width="l" />
         <SearchField size="s" value={qs} onChange={setQs} placeholder="Suchen (s)" width="m" />
-        <div style={row}>
+        <div className="kit-row">
           <TextField width="s" placeholder="width s" />
           <TextField width={120} size="s" disabled placeholder="aus" />
         </div>
-        <div style={row}>
+        <div className="kit-row">
           <Select label="Sortieren" value={sort} onChange={setSort} options={[{ value: "dl", label: "Downloads" }, { value: "new", label: "Neueste" }, { value: "rel", label: "Relevanz" }]} />
           <Select size="s" ariaLabel="Version klein" value={ver} onChange={setVer} options={MC_VERSIONS} />
           <Select size="s" ariaLabel="Leer" value="" onChange={() => undefined} options={[]} placeholder="Keine Versionen" />
@@ -191,8 +194,8 @@ function TogglesDemo() {
   const [r, setR] = useState("a");
   const [gb, setGb] = useState(6);
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }} data-kit="toggles">
-      <div style={row}>
+    <div className="kit-stack" data-kit="toggles">
+      <div className="kit-row">
         <Lab>Switch</Lab>
         <Switch checked={a} onChange={setA} label="Schalter A" />
         <Switch checked={!a} onChange={(x) => setA(!x)} label="Schalter B" stateText={["An", "Aus"]} />
@@ -200,7 +203,7 @@ function TogglesDemo() {
         <Switch checked={true} onChange={() => undefined} label="aus (an)" disabled />
         <Switch checked={false} onChange={() => undefined} label="aus (aus)" disabled visibleLabel />
       </div>
-      <div style={row}>
+      <div className="kit-row">
         <Lab>Checkbox</Lab>
         <Checkbox checked={c} onChange={setC} label="Nackt" />
         <Checkbox checked={false} indeterminate onChange={() => undefined} label="Teilweise" />
@@ -208,7 +211,7 @@ function TogglesDemo() {
         <Checkbox checked={true} onChange={() => undefined} disabled>aus (an)</Checkbox>
         <Checkbox checked={false} onChange={() => undefined} disabled>aus</Checkbox>
       </div>
-      <div style={{ ...row, alignItems: "flex-start" }}>
+      <div className="kit-row" data-align="start">
         <Lab>Radio</Lab>
         <div role="radiogroup" aria-label="Radio-Gruppe">
           <Radio name="kit-r" checked={r === "a"} onChange={() => setR("a")}>Automatisch</Radio>
@@ -217,10 +220,10 @@ function TogglesDemo() {
         </div>
         <Radio name="kit-r2" checked={false} onChange={() => undefined}>Einzeln</Radio>
       </div>
-      <div style={row}>
+      <div className="kit-row">
         <Lab>SegSlider</Lab>
         <SegSlider value={gb} max={12} onChange={setGb} label="Arbeitsspeicher" unit="GB" />
-        <span className="num" style={{ fontSize: 24 }}>{gb} GB</span>
+        <span className="num kit-big-num">{gb} GB</span>
         <SegSlider value={4} disabled onChange={() => undefined} label="Arbeitsspeicher (aus)" unit="GB" />
       </div>
     </div>

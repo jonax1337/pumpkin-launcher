@@ -46,16 +46,16 @@ function StatusIcon({ icon, tone }: { icon?: IconName | ReactElement | false; to
 }
 
 /**
- * Getönte Platte mit Icon, Text und Aktionen rechts (Fehler, Statuszeile, Gefahrenbereich, Hinweis-Boxen).
- * `title` fett in der ersten Zeile, `children` als Detail darunter (grau). `size`: s = 44 px, eine Zeile, Text mit Auslassung
- * (Statuszeile über dem Protokoll); m = min. 56 px, Text bricht um.
+ * Hinweisplatte (eingelassen) mit Icon in der Tonfarbe, Text und Aktionen rechts (Fehler, Statuszeile, Gefahrenbereich, Hinweis-Boxen).
+ * `title` fett in der ersten Zeile, `children` als Detail darunter (grau). `size`: s = 40 px, eine Zeile, Text mit Auslassung
+ * (Statuszeile über dem Protokoll); m = min. 48 px, Text bricht um.
  * `role`: alert für Fehler, die sofort angesagt werden sollen; status für wechselnde Zustände.
  */
 export function StatusPanel({ tone = "neutral", icon, title, children, actions, size = "m", role, id, className }: {
   tone?: Tone; icon?: IconName | ReactElement | false; title?: ReactNode; children?: ReactNode; actions?: ReactNode; size?: "s" | "m"; role?: "alert" | "status"; id?: string; className?: string;
 }) {
   return (
-    <div id={id} role={role} className={cn("vx-status", className)} data-tone={tone === "neutral" ? undefined : tone} data-size={size}>
+    <div id={id} role={role} className={cn("vx-status vx-pit", className)} data-tone={tone === "neutral" ? undefined : tone} data-size={size}>
       <StatusIcon icon={icon} tone={tone} />
       <div className="vx-status-t">
         {hasContent(title) && <b>{title}</b>}
@@ -78,7 +78,7 @@ export function ErrorBox({ error, title, onRetry, className }: { error: unknown;
       role="alert"
       className={className}
       title={title ?? message(error)}
-      actions={onRetry && <Button size="s" icon="redo" onClick={onRetry}>{t("common.retry")}</Button>}
+      actions={onRetry && <Button size="s" icon="refresh" onClick={onRetry}>{t("common.retry")}</Button>}
     >
       {title ? message(error) : undefined}
     </StatusPanel>
@@ -88,7 +88,7 @@ export function ErrorBox({ error, title, onRetry, className }: { error: unknown;
 // ---------- Fortschritt ----------
 
 /**
- * Segmentierter Fortschritt: Zellen 2 Einheiten, Lücke 1 (Höhe 3 Einheiten, `thin` 2); `p` 0–1, ohne `p` unbestimmt.
+ * XP-Leiste im Slot: Segmente alle 4 Einheiten, Akzentfüllung mit heller Kopfreihe (Höhe 5 Einheiten, `thin` 3); `p` 0–1, ohne `p` unbestimmt.
  * `label` ist der zugängliche Name (worum es geht, z. B. „Mods herunterladen“); `decorative` blendet ihn für Screenreader aus,
  * wenn derselbe Fortschritt schon anders angesagt wird. `tone`: Füllfarbe (Standard Akzent). `width`: feste Breite in px.
  */
@@ -110,16 +110,17 @@ export function Progress({ p, thin, tone, label, decorative, width, className, s
   return <span role="progressbar" aria-label={name} aria-valuemin={0} aria-valuemax={100} aria-valuenow={indeterminate ? undefined : Math.round(v * 100)} {...look} />;
 }
 
-/** Breite der großen Vorgangsanzeige; erst ab hier ist der Balken 3 statt 2 Einheiten hoch. */
+/** Breite der großen Vorgangsanzeige; erst ab hier ist der Balken 5 statt 3 Einheiten hoch. */
 const LARGE_JOB_WIDTH = 230;
 
 /**
  * Laufender Vorgang in einer Zeile oder Liste: Beschriftung (+ Prozent), Segmentbalken, optional `sub` darunter
  * und „Abbrechen“ (IconButton s) rechts.
  * `width`: feste Breite der Spalte (112 Kachel, 120 Zeile, 230 groß); ohne füllt es die Breite.
+ * `full`: voller Balken (5 Einheiten) auch ohne große Breite, z. B. im Aufgaben-Popover.
  */
-export function JobProgress({ label, sub, p, width, onCancel, cancelLabel, className }: {
-  label: string; sub?: ReactNode; p: number | null; width?: 112 | 120 | typeof LARGE_JOB_WIDTH; onCancel?: () => void; cancelLabel?: string; className?: string;
+export function JobProgress({ label, sub, p, width, full, onCancel, cancelLabel, className }: {
+  label: string; sub?: ReactNode; p: number | null; width?: 112 | 120 | typeof LARGE_JOB_WIDTH; full?: boolean; onCancel?: () => void; cancelLabel?: string; className?: string;
 }) {
   const { t } = useI18n();
   return (
@@ -129,10 +130,10 @@ export function JobProgress({ label, sub, p, width, onCancel, cancelLabel, class
           <span className="vx-trunc">{label}</span>
           {p != null && <Count value={`${Math.floor(p * 100)} %`} size={16} />}
         </span>
-        <Progress thin={width !== LARGE_JOB_WIDTH} p={p} label={label} />
+        <Progress thin={width !== LARGE_JOB_WIDTH && !full} p={p} label={label} />
         {hasContent(sub) && <span className="vx-job-s vx-trunc">{sub}</span>}
       </div>
-      {onCancel && <IconButton icon="x" size="s" label={cancelLabel ?? t("ui.job.cancelAria", { label })} tip={t("common.cancel")} onClick={onCancel} />}
+      {onCancel && <IconButton icon="close" size="s" label={cancelLabel ?? t("ui.job.cancelAria", { label })} tip={t("common.cancel")} onClick={onCancel} />}
     </div>
   );
 }
@@ -150,8 +151,8 @@ export function Skel({ w, h, className, style }: { w?: number | string; h?: numb
 const TOAST_DURATION_MS = 6500;
 
 /**
- * Toasts (Sonner) unten rechts: Platte mit Bevel, Icon m (Farbe je Art), Text, Aktion als Geist-Knopf s rechts daneben,
- * Schließen als Symbolknopf s. Fehler und Warnung tragen Warnsymbol, Rahmen und Tönung in der Statusfarbe.
+ * Toasts (Sonner) unten rechts: Advancement-Platte (Steinplatte), Symbol im Slot (Farbe je Art), Text, Aktion als Geist-Knopf s
+ * rechts daneben, Schließen als Symbolknopf s. Fehler und Warnung tragen Warnsymbol und Statusfarbe im Symbol-Slot.
  * Einmal in main.tsx eingehängt.
  */
 export function Toaster() {
@@ -160,8 +161,8 @@ export function Toaster() {
     <Sonner
       position="bottom-right"
       closeButton
-      gap={8}
-      offset={20}
+      gap={12}
+      offset={24}
       visibleToasts={4}
       containerAriaLabel={t("ui.toast.containerAria")}
       icons={{
@@ -170,7 +171,7 @@ export function Toaster() {
         warning: <Icon name="warn" />,
         error: <Icon name="warn" />,
         loading: <Buddy mood="loading" size={48} />,
-        close: <Icon name="x" size="s" />,
+        close: <Icon name="close" size="s" />,
       }}
       toastOptions={{
         unstyled: true,

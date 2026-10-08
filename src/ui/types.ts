@@ -7,7 +7,7 @@ export type { IconName } from "@/pixel/icon-data";
 export type Size = "s" | "m" | "l";
 /** Statusfarben; `acc` = Instanz-Akzent (--acc). */
 export type Tone = "neutral" | "acc" | "warn" | "bad" | "run";
-/** Icon-Slot: Box 20 / 24 / 28 / 56 px (Raster siehe ui/icon.css). */
+/** Icon-Slot: Box 16 / 24 / 32 / 48 px, 8×8-Raster mit Zellen 2 / 3 / 4 / 6 px (siehe ui/icon.css). */
 export type IconSize = "s" | "m" | "l" | "xl";
 /** Fensterbreiten (px), an denen die Stylesheets umschalten (lib/breakpoints). */
 export type Breakpoint = (typeof WIDTH)[keyof typeof WIDTH];

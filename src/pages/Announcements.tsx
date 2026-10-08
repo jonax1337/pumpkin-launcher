@@ -6,7 +6,7 @@ import { ANNOUNCEMENTS_URL, type Announcement } from "@/lib/announcements";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { openPage } from "@/lib/links";
 import { useAnnouncementReadStore } from "@/store/announcementRead";
-import { Actions, Button, Empty, ErrorBox, Heading, PageHeader, Skel, Workspace, WorkspaceRail } from "@/ui";
+import { Actions, Button, Chip, Empty, ErrorBox, Heading, Page, PageHeader, Panel, Skel, Workspace, WorkspaceRail } from "@/ui";
 import "./announcements.css";
 
 function uniqueAnnouncements(pages: Announcement[][]): Announcement[] {
@@ -43,18 +43,18 @@ export function AnnouncementsPage() {
   }
 
   return (
-    <section className="page announcements-page">
+    <Page className="announcements-page">
       <PageHeader title={t("ui.nav.announcements")}>
         <Actions wrap>
           {feed.data && unreadCount > 0 && (
-            <span className="announcements-unread-count" role="status">
+            <Chip tone="acc" role="status">
               {t("pages.announcements.unreadCount", { count: unreadCount })}
-            </span>
+            </Chip>
           )}
-          <Button icon="redo" disabled={feed.isFetching} onClick={() => void feed.refetch()}>
+          <Button icon="refresh" disabled={feed.isFetching} onClick={() => void feed.refetch()}>
             {t("ui.context.refresh")}
           </Button>
-          <Button variant="ghost" icon="ext" onClick={() => openPage(ANNOUNCEMENTS_URL)}>
+          <Button variant="ghost" icon="external" onClick={() => openPage(ANNOUNCEMENTS_URL)}>
             {t("pages.announcements.category")}
           </Button>
         </Actions>
@@ -79,12 +79,13 @@ export function AnnouncementsPage() {
       )}
       {announcements.length > 0 && (
         <Workspace rail={
-          <WorkspaceRail aria-labelledby="announcements-list-title">
+          <WorkspaceRail className="announcements-rail" aria-labelledby="announcements-list-title">
             <div className="announcements-rail-header">
               <Heading level="section" id="announcements-list-title">{t("pages.announcements.listTitle")}</Heading>
               <Button
                 size="s"
                 variant="ghost"
+                icon="check"
                 disabled={unreadCount === 0}
                 onClick={() => markAllRead(announcements.map((announcement) => announcement.id))}
               >
@@ -122,7 +123,7 @@ export function AnnouncementsPage() {
           )}
         </Workspace>
       )}
-    </section>
+    </Page>
   );
 }
 
@@ -147,9 +148,7 @@ function AnnouncementList({ announcements, readIds, selectedId, onSelect }: {
             >
               <span className="announcement-list-meta">
                 <time dateTime={announcement.published}>{formatDate(Date.parse(announcement.published))}</time>
-                <span className="announcement-read-label" data-read={isRead}>
-                  {t(isRead ? "pages.announcements.read" : "pages.announcements.unread")}
-                </span>
+                {isRead ? <span className="sr">{t("pages.announcements.read")}</span> : <Chip size="s" tone="acc">{t("pages.announcements.unread")}</Chip>}
               </span>
               <span className="announcement-list-title">{announcement.title}</span>
               <span className="announcement-list-author">{t("pages.announcements.author", { author: announcement.author })}</span>
@@ -167,7 +166,7 @@ function AnnouncementPreview({ latest, onSelect }: {
 }) {
   const { t } = useI18n();
   return (
-    <section className="announcements-preview" aria-labelledby="announcements-preview-title">
+    <Panel as="section" className="announcements-preview" aria-labelledby="announcements-preview-title">
       <div className="announcements-latest">
         <p className="announcements-eyebrow">{t("pages.announcements.latest")}</p>
         <Heading level="section" id="announcements-preview-title" className="announcements-latest-title">{latest.title}</Heading>
@@ -176,7 +175,7 @@ function AnnouncementPreview({ latest, onSelect }: {
           {t("pages.announcements.readAnnouncement")}
         </Button>
       </div>
-    </section>
+    </Panel>
   );
 }
 
@@ -190,12 +189,12 @@ function AnnouncementArticle({ announcement, headingRef }: {
   const markUnread = useAnnouncementReadStore((state) => state.markUnread);
 
   return (
-    <article className="announcement-article" aria-labelledby="announcement-title">
+    <Panel as="article" className="announcement-article" aria-labelledby="announcement-title">
       <header className="announcement-article-header">
         <div className="announcement-article-actions">
-          <span className="announcement-read-label" data-read={isRead} role="status">
+          <Chip tone={isRead ? "run" : "acc"} icon={isRead ? "check" : undefined} role="status">
             {t(isRead ? "pages.announcements.read" : "pages.announcements.unread")}
-          </span>
+          </Chip>
           <Button
             variant="ghost"
             size="s"
@@ -208,12 +207,12 @@ function AnnouncementArticle({ announcement, headingRef }: {
           {announcement.title}
         </Heading>
         <AnnouncementMeta announcement={announcement} />
-        <Button variant="ghost" size="s" icon="ext" onClick={() => openPage(announcement.url)}>
+        <Button variant="ghost" size="s" icon="external" onClick={() => openPage(announcement.url)}>
           {t("pages.announcements.discussion")}
         </Button>
       </header>
       <Description key={announcement.id} body={announcement.body} format="html" />
-    </article>
+    </Panel>
   );
 }
 

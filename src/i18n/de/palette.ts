@@ -8,6 +8,7 @@ export const palette = {
   "palette.placeholder": "Befehl, Instanz oder Seite suchen …",
   "palette.listLabel": "Ergebnisse",
   "palette.hint": "Pfeiltasten wählen, Enter führt aus.",
+  "palette.key.enter": "Enter",
   "palette.noResults": "Keine Treffer für „{query}“",
   "palette.results.one": "{count} Ergebnis",
   "palette.results.other": "{count} Ergebnisse",

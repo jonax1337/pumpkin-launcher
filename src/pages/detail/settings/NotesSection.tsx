@@ -16,7 +16,7 @@ export function NotesSection({ instance, form, locked }: { instance: Instance; f
   };
   useCommitOnUnmount(saveNotes);
   return (
-    <FormSection title={t("detail.settings.notesSection")}>
+    <FormSection plate title={t("detail.settings.notesSection")}>
       <FormRow label={t("detail.settings.notesLabel")} hint={t("detail.settings.notesHint")} htmlFor="inst-notes" wide>
         <TextArea
           id="inst-notes"

@@ -37,9 +37,9 @@ function ShareBody({ instance, busy }: { instance: Instance; busy: string | null
   const state = shareState({ instanceId: instance.id, versionSupported, running, lan, session });
   const [request, setRequest] = useState<ShareRequest | null>(null);
   return (
-    <section className="mb-8" aria-labelledby="share-h">
+    <section aria-labelledby="share-h">
       <SectionHeader id="share-h" title={t("friendsHost.share.title")} />
-      <div className="mt-3 flex flex-col gap-3">
+      <div className="sh-share-body">
         <ShareStatus state={state} onShare={(port) => setRequest({ port })} />
         <FriendsModRow instance={instance} busy={busy} />
       </div>
@@ -114,7 +114,7 @@ function ManualPortForm({ onContinue }: { onContinue: (port: number) => void }) 
         error={text.trim() !== "" && port === null && t("friendsHost.share.portInvalid", range)}
         reserveLines={1}
       >
-        <div className="flex items-center gap-2">
+        <div className="sh-port">
           <TextField width={PORT_FIELD_WIDTH} inputMode="numeric" maxLength={5} value={text} onChange={(e) => setText(e.target.value)} autoFocus />
           <Button type="submit" disabled={port === null}>{t("friendsHost.share.portContinue")}</Button>
         </div>

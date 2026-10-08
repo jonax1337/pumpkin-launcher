@@ -30,7 +30,7 @@ export function NameTab({ formId, input, onInput, onSubmit, notFindable, directo
   }
 
   return (
-    <form id={formId} onSubmit={submit} className="flex flex-col gap-3">
+    <form id={formId} onSubmit={submit} className="fr-form">
       <Field
         label={t("friends.name.label")}
         error={wrongShape ? t("friends.name.wrongShape", { max: FRIENDS_LIMITS.mcNameMax }) : undefined}

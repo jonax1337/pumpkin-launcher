@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router";
 import { useI18n } from "@/i18n";
 import { StopDialog } from "@/components/play/StopDialog";
-import { BarButton, Icon, Menu, type MenuEntry } from "@/ui";
+import { BarButton, Icon, Menu, MenuHead, MenuItem, MenuLabel, MenuSep } from "@/ui";
 import { openAddOffline, startMsLogin, useAccountUi } from "@/store/accountUi";
 import { useOfflineAllowed, useUsableAccount } from "@/store/offline";
 import { accountName, useSettings } from "@/store/settings";
@@ -22,42 +22,12 @@ export function AccountMenu() {
   const navigate = useNavigate();
   const name = accountName(active);
 
-  const items: MenuEntry[] = [
-    ...(accounts.length ? [{ label: t("components.account.accounts") } as const] : []),
-    ...accounts.map((account): MenuEntry => ({
-      id: keyOf(account),
-      text: accountName(account),
-      sub: kindLabel(account),
-      lead: <AccountAvatar account={account} />,
-      checked: isActiveAccount(active, account),
-      onSelect: () => select(account),
-    })),
-    ...(accounts.length ? ["-" as const] : []),
-    { id: "ms", text: t("components.account.msLogin"), icon: "user", onSelect: () => void startMsLogin() },
-    ...(allowed ? [{ id: "off", text: t("components.account.addPlayerName"), icon: "plus" as const, onSelect: openAddOffline }] : []),
-    { id: "skins", text: t("components.account.skins"), icon: "shirt", onSelect: () => navigate("/skins") },
-    { id: "set", text: t("common.settings"), icon: "gear", onSelect: () => navigate("/settings#konten") },
-    ...(active?.kind === "microsoft"
-      ? [
-          "-" as const,
-          {
-            id: "out",
-            text: t("components.account.signOutNamed", { name }),
-            icon: "power" as const,
-            bad: true,
-            onSelect: () => remove(active),
-          },
-        ]
-      : []),
-  ];
-
   return (
     <>
       <Menu
         open={open}
         onOpenChange={(o) => useAccountUi.setState({ menu: o })}
-        width={320}
-        items={items}
+        wide
         trigger={
           <BarButton
             aria-label={
@@ -67,13 +37,47 @@ export function AccountMenu() {
             }
             label={name || t(allowed ? "components.account.noName" : "components.account.notLoggedIn")}
             tone={name ? undefined : "warn"}
-            iconEnd="chevd"
+            iconEnd="chev-down"
           >
             {/* Ohne Namen: Warnsymbol statt Kopf (Form, nicht nur gelbe Schrift) */}
             {active ? <AccountAvatar account={active} /> : <Icon name="warn" tone="warn" />}
           </BarButton>
         }
-      />
+      >
+        {active && (
+          <>
+            <MenuHead lead={<AccountAvatar account={active} />} title={name} sub={kindLabel(active)} />
+            <MenuSep />
+          </>
+        )}
+        {accounts.length > 0 && (
+          <>
+            <MenuLabel>{t("components.account.accounts")}</MenuLabel>
+            {accounts.map((account) => (
+              <MenuItem
+                key={keyOf(account)}
+                sub={kindLabel(account)}
+                lead={<AccountAvatar account={account} />}
+                checked={isActiveAccount(active, account)}
+                onSelect={() => select(account)}
+              >
+                {accountName(account)}
+              </MenuItem>
+            ))}
+            <MenuSep />
+          </>
+        )}
+        <MenuItem icon="microsoft" onSelect={() => void startMsLogin()}>{t("components.account.msLogin")}</MenuItem>
+        {allowed && <MenuItem icon="user" onSelect={openAddOffline}>{t("components.account.addPlayerName")}</MenuItem>}
+        <MenuItem icon="skins" onSelect={() => navigate("/skins")}>{t("components.account.skins")}</MenuItem>
+        <MenuItem icon="settings" onSelect={() => navigate("/settings#konten")}>{t("common.settings")}</MenuItem>
+        {active?.kind === "microsoft" && (
+          <>
+            <MenuSep />
+            <MenuItem bad icon="logout" onSelect={() => remove(active)}>{t("components.account.signOutNamed", { name })}</MenuItem>
+          </>
+        )}
+      </Menu>
       <MsLoginDialog />
       <AddOfflineDialog />
       {/* Globale Rückfrage „Minecraft beenden?“ (askStop); hier, weil das Kontomenü immer eingehängt ist */}

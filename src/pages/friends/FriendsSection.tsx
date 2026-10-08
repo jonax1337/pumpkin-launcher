@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useI18n } from "@/i18n";
 import type { Friend, HostSession, Invite } from "@/lib/types";
-import { Empty, List, SearchField, SectionHeader, Segmented, Toolbar } from "@/ui";
+import { Count, Empty, List, SearchField, SectionHeader, Segmented, Toolbar } from "@/ui";
 import { AddFriendButtons, type AddFriendTab } from "./AddFriendDialog";
 import { FriendRow } from "./FriendRow";
 import { friendLabels, inviteFrom, visibleFriends } from "./friendsModel";
@@ -28,8 +28,8 @@ export function FriendsSection({ friends, invites, session, actions, onAdd }: {
   const visible = visibleFriends(friends, labels, { query, onlineOnly: scope === "online" });
   return (
     <section>
-      <SectionHeader title={t("friends.list.title")} size="sub" as="h2" />
-      <Toolbar search="m" className="mt-2 mb-3">
+      <SectionHeader title={<>{t("friends.list.title")}<Count value={friends.length} muted /></>} size="sub" as="h2" />
+      <Toolbar search="m" className="friends-toolbar">
         <SearchField value={query} onChange={setQuery} placeholder={t("friends.search.placeholder")} />
         <Segmented
           label={t("friends.filter.label")}

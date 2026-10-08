@@ -23,7 +23,7 @@ function PackConfirmBody({ title, source, versions, picked, onConfirm }: {
   const [name, setName] = useState(title);
   const v = picked?.version ?? null;
   // Platzhalter rechtsbündig in der Wertspalte (Zeile bleibt 19 px hoch)
-  const val = (text: ReactNode) => (v ? text : versions.isPending ? <Skel w={90} h={12} className="ml-auto mt-1" /> : "–");
+  const val = (text: ReactNode) => (v ? text : versions.isPending ? <Skel w={90} h={12} className="pcf-skel" /> : "–");
   const submit = () => v && onConfirm(v.id, name.trim() || title);
   return (
     <form
@@ -46,13 +46,13 @@ function PackConfirmBody({ title, source, versions, picked, onConfirm }: {
         <dd>{val(v && versionLoadersOrVanilla(v))}</dd>
       </dl>
       {versions.error ? (
-        <ErrorBox className="mt-3" title={t("components.version.loadFailed")} error={versions.error} onRetry={() => void versions.refetch()} />
+        <ErrorBox className="pcf-err" title={t("components.version.loadFailed")} error={versions.error} onRetry={() => void versions.refetch()} />
       ) : picked && !v ? (
         <Hint tone="bad" live>{picked.reason}</Hint>
       ) : (
         <Hint>{t("components.pack.confirmHint")}</Hint>
       )}
-      {source === "technic" && <Hint icon="info" className="mt-2">{t("components.security.technicHosts")}</Hint>}
+      {source === "technic" && <Hint icon="info" className="pcf-hint">{t("components.security.technicHosts")}</Hint>}
     </form>
   );
 }
@@ -77,8 +77,8 @@ export function usePackConfirm(pack: ProjectRef, source: Source) {
       onOpenChange={(o) => !o && setAsk(null)}
       title={t("components.pack.newInstanceTitle")}
       sub={pack.title}
-      width={480}
-      height={380}
+      size="s"
+      height="s"
       footer={<DialogActions cancel={t("common.cancel")} confirm={{ label: t("components.instance.createAction"), width: 170, form: "pack-confirm", disabled: !picked?.version || install.blocked }} />}
     >
       <PackConfirmBody
@@ -136,7 +136,7 @@ export function PackActions({ project, source }: { project: ProjectRef; source: 
         </Button>
         {fitting.length > 1 && (
           <Menu
-            trigger={<IconButton variant="primary" size="l" icon="chevd" label={t("components.pack.otherVersion")} disabled={install.blocked} />}
+            trigger={<IconButton variant="primary" size="l" icon="chev-down" label={t("components.pack.otherVersion")} disabled={install.blocked} />}
             items={[
               { label: t("components.pack.otherVersion") },
               ...fitting.slice(0, MAX_OTHER_VERSIONS).map((v) => ({

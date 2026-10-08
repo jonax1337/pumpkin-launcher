@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "@/i18n";
-import { BackLink, Button, Chip, Count, ErrorBox, Hint, List, ListRow, Meta, PageHeader, Panel, ProjectIcon, RowTitle, SectionHeader, Skel, WorkspaceContent } from "@/ui";
+import { BackLink, Button, Chip, Count, ErrorBox, Heading, Hint, List, ListRow, Meta, Panel, ProjectIcon, RowTitle, SectionHeader, Skel, WorkspaceContent } from "@/ui";
 import { Description } from "@/components/Description";
 import { useInstances } from "@/hooks/useInstances";
 import { ALL_VERSIONS, catalogApi } from "@/lib/catalogApi";
@@ -61,8 +61,8 @@ function McSummary({ versions }: { versions: ContentVersion[] }) {
   // Zwei feste Zeilen statt freiem Umbruch in der rechtsbündigen Spalte
   return (
     <>
-      <span className="block">{all[0]} – {all.at(-1)}</span>
-      <span className="block text-fg-3">{t("components.detail.versionCount", { n: all.length })}</span>
+      <span className="kv-line">{all[0]} – {all.at(-1)}</span>
+      <span className="kv-line kv-faint">{t("components.detail.versionCount", { n: all.length })}</span>
     </>
   );
 }
@@ -79,7 +79,7 @@ function ProjectSkeleton() {
   return (
     <div className="proj-h" aria-busy aria-label={t("components.common.loadingAria")}>
       <Skel w={64} h={64} />
-      <div className="flex flex-col gap-2.5">
+      <div className="proj-skel-t">
         <Skel h={36} w="50%" />
         <Skel h={14} w="30%" />
       </div>
@@ -103,21 +103,22 @@ function ProjectHead({ project, scope, hit }: { project: ContentProject; scope: 
   );
   if (!instance) {
     return (
-      <>
-        <PageHeader
-          className="mt-3"
-          title={<span className="inline-flex max-w-full items-center gap-3 align-middle"><ProjectIcon url={project.icon_url} seed={projectId} box={40} /><span className="truncate" title={project.title}>{project.title}</span></span>}
-        >
+      <header className="proj-hd">
+        <ProjectIcon url={project.icon_url} seed={projectId} box={104} />
+        <div className="proj-hd-main">
+          <Heading level="page" className="vx-trunc" title={project.title}>{project.title}</Heading>
+          <div className="proj-hd-meta">{metadata}</div>
+        </div>
+        <div className="proj-hd-act">
           <ContentAction type={type} project={ref} source={source} large />
-        </PageHeader>
-        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-fg-2">{metadata}</div>
-      </>
+        </div>
+      </header>
     );
   }
   return (
     <div className="proj-h">
       <ProjectIcon url={project.icon_url} seed={projectId} box={64} />
-      <div className="min-w-0">
+      <div className="proj-h-main">
         <h1 title={project.title}>{project.title}</h1>
         <div className="by">{metadata}</div>
       </div>
@@ -194,7 +195,7 @@ function FittingVersionsPanel({ project, scope, instance }: { project: ContentPr
           ))}
         </List>
       )}
-      {!!shown?.length && <Hint icon="info" className="mt-2.5">{t("components.security.noScan")}</Hint>}
+      {!!shown?.length && <Hint icon="info" className="cat-hint">{t("components.security.noScan")}</Hint>}
     </Panel>
   );
 }
@@ -217,7 +218,7 @@ function PackVersionTable({ project, scope, versions }: { project: ContentProjec
           )
         }
       />
-      <Hint icon="info" className="mt-2.5">{t("components.security.noScan")}</Hint>
+      <Hint icon="info" className="cat-hint">{t("components.security.noScan")}</Hint>
       {dialog}
     </>
   );
@@ -230,7 +231,7 @@ function VersionsSection({ project, scope }: { project: ContentProject; scope: D
   const asInstance = scope.type === "modpack" && SOURCES[scope.source].install;
   return (
     <section className="vtab-sec">
-      <SectionHeader as="h2" size="section" title={t("components.detail.allVersions")} className="mb-2.5" />
+      <SectionHeader as="h2" size="section" title={t("components.detail.allVersions")} className="vtab-head" />
       {all.isPending && <Skel h={44} />}
       {all.error && <ErrorBox title={t("components.version.loadFailed")} error={all.error} onRetry={() => void all.refetch()} />}
       {all.data?.length === 0 && <Hint>{t("components.detail.noVersionAvailable")}</Hint>}
@@ -255,7 +256,7 @@ export function ContentDetail({ projectId, type, source, instance, world, onBack
     <section className="proj">
       <BackLink onClick={onBack}>{backLabel}</BackLink>
       {project.isPending && <ProjectSkeleton />}
-      {project.error && <ErrorBox className="mt-3" title={t("components.detail.projectLoadFailed")} error={project.error} onRetry={() => void project.refetch()} />}
+      {project.error && <ErrorBox className="proj-err" title={t("components.detail.projectLoadFailed")} error={project.error} onRetry={() => void project.refetch()} />}
       {project.data && (
         <>
           <ProjectHead project={project.data} scope={scope} hit={hit} />

@@ -86,6 +86,7 @@ function PaletteBody({ play }: { play: InstanceActions["play"] }) {
   return (
     <div className="vx-pal">
       <TextField
+        icon="search"
         role="combobox"
         aria-expanded
         aria-controls={listId}
@@ -122,9 +123,9 @@ export function CommandPalette() {
       open={open}
       onOpenChange={(next) => usePaletteOpen.setState({ open: next })}
       title={t("palette.title")}
-      width={640}
-      height={560}
+      height="m"
       footLeft={t("palette.hint")}
+      footer={<kbd className="vx-pal-kbd vx-slot">Esc</kbd>}
     >
       <PaletteBody play={startGame} />
     </Dialog>

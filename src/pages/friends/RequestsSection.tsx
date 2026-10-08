@@ -4,8 +4,9 @@ import { useAnswerFriendRequest, useCancelFriendRequest } from "@/hooks/useFrien
 import { useI18n } from "@/i18n";
 import { FRIENDS_LIMITS } from "@/lib/friends-types";
 import type { FriendRequest } from "@/lib/types";
-import { Avatar, Button, Hint, Icon, IconButton, List, ListRow, Menu, RowTitle, SectionHeader, Tip } from "@/ui";
+import { Avatar, Button, Count, Hint, IconButton, List, ListRow, Menu, RowTitle, SectionHeader, Tip } from "@/ui";
 import { codeMayBeExpired, REQUESTS_ANCHOR, requestLine, requestName } from "./friendsModel";
+import { IconTile } from "./IconTile";
 import type { Person } from "./useFriendDialogs";
 
 const SECOND_MS = 1000;
@@ -20,8 +21,8 @@ type RequestActions = {
 export function RequestsSection({ requests, ...actions }: { requests: FriendRequest[] } & RequestActions) {
   const { t } = useI18n();
   return (
-    <section id={REQUESTS_ANCHOR} className="mt-6">
-      <SectionHeader title={t("friends.requests.title")} size="sub" as="h2" />
+    <section id={REQUESTS_ANCHOR} className="friends-block">
+      <SectionHeader title={<>{t("friends.requests.title")}<Count value={requests.length} muted /></>} size="sub" as="h2" />
       <List variant="accounts" aria-label={t("friends.requests.title")}>
         {requests.map((request) => (
           <RequestRow key={request.id} request={request} {...actions} />
@@ -58,7 +59,7 @@ function RequesterSub({ request }: { request: FriendRequest }) {
   const fingerprint = <Fingerprint value={request.fingerprint} />;
   if (request.via !== "name" || !request.mcName) return fingerprint;
   return (
-    <span className="inline-flex items-baseline gap-2">
+    <span className="friends-checked">
       <CheckedMcName name={request.mcName} />
       {fingerprint}
     </span>
@@ -70,7 +71,7 @@ function Requester({ request, aside }: { request: FriendRequest; aside?: string 
   const name = requestName(request);
   return (
     <>
-      <span className="grid place-items-center">
+      <span className="friends-av">
         <SelfAsserted><Avatar name={name} /></SelfAsserted>
       </span>
       <RowTitle title={name} aside={aside} sub={<RequesterSub request={request} />} />
@@ -105,7 +106,7 @@ function IncomingRow({ request, askBlock }: { request: FriendRequest; askBlock: 
 function NameTarget({ name, title, aside, sub }: { name: string; title: string; aside?: string; sub?: string }) {
   return (
     <>
-      <span className="grid place-items-center"><Avatar name={name} /></span>
+      <span className="friends-av"><Avatar name={name} /></span>
       <RowTitle title={title} aside={aside} sub={sub} />
     </>
   );
@@ -123,7 +124,7 @@ function DeliveringRow({ request, retryNow, cooling }: { request: FriendRequest;
         <NameTarget name={line.params.name} title={line.params.name} sub={t(line.key, line.params)} />
       ) : (
         <>
-          <span className="vx-av" data-box="32"><Icon name="link" size="l" /></span>
+          <IconTile icon="link" />
           <RowTitle
             title={request.codeTail ? t("friends.requests.codeTitle", { tail: request.codeTail }) : t("friends.requests.codeTitleNoTail")}
             sub={t(line.key, line.params)}
@@ -131,7 +132,7 @@ function DeliveringRow({ request, retryNow, cooling }: { request: FriendRequest;
           />
         </>
       )}
-      <Button size="s" icon="redo" disabled={cooling} onClick={retryNow}>{t("friends.requests.deliverNow")}</Button>
+      <Button size="s" icon="refresh" disabled={cooling} onClick={retryNow}>{t("friends.requests.deliverNow")}</Button>
       <Button size="s" variant="ghost" disabled={cancel.isPending} onClick={() => cancel.mutate(request.id)}>{t("friends.requests.withdraw")}</Button>
     </ListRow>
   );

@@ -1,8 +1,8 @@
 /* Prosa: Projektbeschreibung aus Markdown (Modrinth), gerendert von Description in Description.tsx.
-   Unterstriche sind hier erlaubt: Das ist Fließtext, keine Steuerfläche (PIXELKINO.md §5a). */
+   Unterstriche sind hier erlaubt: Das ist Fließtext, keine Steuerfläche (PIXELKINO.md, „Color semantics“). */
 
 .desc { margin-top: 22px; max-width: 68ch; }
-.desc h3 { font: 800 20px/1.1 var(--f-display); text-transform: uppercase; margin: 22px 0 8px; }
+.desc h3 { font: 800 20px/1.1 var(--f-display); text-transform: uppercase; margin: 22px 0 8px; text-shadow: var(--tsh); }
 .desc p { color: #C9D1DE; margin: 0 0 10px; line-height: 1.6; font-size: calc(14.5px * var(--tz)); }
 .desc ul { margin: 0 0 12px; }
 .desc li { position: relative; padding-left: 18px; color: #C9D1DE; line-height: 1.6; font-size: calc(14.5px * var(--tz)); }
@@ -10,8 +10,8 @@
 
 .desc.md { overflow-wrap: anywhere; }
 .desc.md > :first-child { margin-top: 0; }
-.desc.md h1, .desc.md h2 { font: 800 24px/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; margin: 24px 0 8px; color: var(--fg); }
-.desc.md h3, .desc.md h4, .desc.md h5, .desc.md h6 { font: 800 19px/1.1 var(--f-display); text-transform: uppercase; margin: 20px 0 8px; color: var(--fg); }
+.desc.md h1, .desc.md h2 { font: 800 24px/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; margin: 24px 0 8px; color: var(--fg); text-shadow: var(--tsh); }
+.desc.md h3, .desc.md h4, .desc.md h5, .desc.md h6 { font: 800 19px/1.1 var(--f-display); text-transform: uppercase; margin: 20px 0 8px; color: var(--fg); text-shadow: var(--tsh); }
 .desc.md a { color: var(--copper); text-decoration: underline; text-decoration-thickness: var(--px); text-underline-offset: 3px; }
 .desc.md a:hover { color: color-mix(in srgb, var(--copper) 60%, #fff); }
 .desc.md img { display: inline-block; max-width: 100%; height: auto; clip-path: var(--n1); vertical-align: middle; }
@@ -23,7 +23,7 @@
 .desc.md [data-badges] { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: calc(13.5px * var(--tz)); }
 .desc.md strong, .desc.md b { color: var(--fg); }
 .desc.md code { font: calc(13px * var(--tz))/1.5 var(--f-mono); background: var(--sunk); padding: 1px 5px; }
-.desc.md pre { overflow-x: auto; background: #05080D; padding: 10px 12px; margin: 0 0 12px; clip-path: var(--n1); }
+.desc.md pre { overflow-x: auto; padding: 10px 12px; margin: 0 0 12px; background: var(--sunk); border: var(--px) solid; border-color: var(--slot-bd); box-shadow: var(--slot-sh); clip-path: var(--n1); }
 .desc.md pre code { background: none; padding: 0; }
 .desc.md blockquote { margin: 0 0 12px; padding-left: 14px; box-shadow: inset var(--px) 0 0 var(--line-2); }
 .desc.md blockquote p { color: var(--fg-2); }

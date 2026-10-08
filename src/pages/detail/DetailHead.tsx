@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
 import { useNavigate } from "react-router";
 import { useI18n } from "@/i18n";
-import { Actions, BackLink, Button, Count, IconButton, Meta, Tip } from "@/ui";
+import { Actions, BackLink, Chip, ChipButton, Count, HeroMeta, HeroShade, HeroTitle, IconButton, Meta, Tip } from "@/ui";
 import { playtimeLine } from "@/components/common";
 import { InstanceMenuButton } from "@/components/instance";
 import { PlayButton } from "@/components/play/PlayButton";
@@ -33,18 +33,18 @@ export function DetailHead({ instance, headRef, compact, updateCount, onShowUpda
   return (
     <header ref={headRef} className={cn("dhead", compact && "compact")}>
       <PixelScene bio={look.bio} seed={look.seed} mode="live" className="scene" />
-      <div className="shade-head" />
+      <HeroShade />
       <div className="dh-full" aria-hidden={compact || undefined}>
         <div className="dh-info">
-          <div className="flex"><BackLink to="/instances" onScene>{t("ui.nav.library")}</BackLink></div>
-          <h1 title={instance.name}>{instance.name}</h1>
+          <div className="dh-back"><BackLink to="/instances" onScene>{t("ui.nav.library")}</BackLink></div>
+          <HeroTitle className="vx-trunc" title={instance.name}>{instance.name}</HeroTitle>
           {/* Infos als ruhiger Text, Updates als Knopf: was klickbar ist, sieht so aus. Einen Absturz melden Spielen-Knopf, Protokoll und Hinweis. */}
-          <div className="dh-meta">
+          <HeroMeta>
+            <Chip className="dh-ver">{version}</Chip>
             <Meta
               size="l"
               onScene
               items={[
-                version,
                 !narrow && instance.loaderVersion && (
                   <>{t("components.common.loader")} <Count value={instance.loaderVersion} size={20} /></>
                 ),
@@ -52,21 +52,22 @@ export function DetailHead({ instance, headRef, compact, updateCount, onShowUpda
               ]}
             />
             {updateCount > 0 && (
-              <Button size="s" icon="up" count={updateCount} onScene onClick={onShowUpdates} tabIndex={compact ? -1 : undefined}>
+              <ChipButton icon="update" data-tone="warn" onClick={onShowUpdates} tabIndex={compact ? -1 : undefined}>
                 {updatesLabel(updateCount)}
-              </Button>
+                <Count value={updateCount} />
+              </ChipButton>
             )}
             {pack?.latest && (
               <Tip label={t("detail.pack.headUpdateTip", { name: pack.name ?? instance.name, version: pack.latest.version_number })}>
-                <Button size="s" icon="box" compactBelow={WIDTH.sm} onScene onClick={onShowPack} tabIndex={compact ? -1 : undefined}>
+                <ChipButton icon="modpack" data-tone="acc" onClick={onShowPack} tabIndex={compact ? -1 : undefined}>
                   {t("detail.pack.headUpdate")}
-                </Button>
+                </ChipButton>
               </Tip>
             )}
-          </div>
+          </HeroMeta>
         </div>
         <div className="dh-act">
-          <Actions>
+          <Actions gap={12}>
             <PlayButton instance={instance} onLaunched={onLaunched} tabIndex={compact ? -1 : undefined} main />
             <InstanceMenuButton instance={instance} showOpen={false} />
           </Actions>
@@ -76,14 +77,14 @@ export function DetailHead({ instance, headRef, compact, updateCount, onShowUpda
       <div className="dh-compact" aria-hidden={!compact}>
         <IconButton
           size="s"
-          icon="back"
+          icon="arrow-left"
           label={t("pages.detail.toLibraryLabel")}
           onScene
           tabIndex={compact ? 0 : -1}
           onClick={() => navigate("/instances")}
         />
         <h2 title={instance.name}>{instance.name}</h2>
-        {!narrow && <Meta onScene className="flex-none" items={[version]} />}
+        {!narrow && <Meta onScene items={[version]} />}
         <PlayButton instance={instance} size="m" onLaunched={onLaunched} tabIndex={compact ? 0 : -1} main />
       </div>
     </header>

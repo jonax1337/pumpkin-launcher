@@ -73,7 +73,7 @@ export function AddVersionButton({ versionId, ...target }: AddTarget & { version
   const { t } = useI18n();
   const { instead, disabled, add } = useAddAction({ ...target, versionId, jobWidth: ROW_JOB_WIDTH });
   return (
-    instead ?? <IconButton size="s" icon="dl" label={t("components.content.addThisVersion", { name: target.project.title })} tip={t("components.content.addVersion")} disabled={disabled} onClick={add} />
+    instead ?? <IconButton size="s" icon="download" label={t("components.content.addThisVersion", { name: target.project.title })} tip={t("components.content.addVersion")} disabled={disabled} onClick={add} />
   );
 }
 

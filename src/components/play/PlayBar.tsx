@@ -1,5 +1,5 @@
-import type { CSSProperties } from "react";
 import { useI18n } from "@/i18n";
+import { cssVars } from "@/ui/util";
 import { cn } from "@/lib/utils";
 
 /**
@@ -18,7 +18,7 @@ export function PlayBar({ p, className }: { p: number | null; className?: string
       aria-valuemax={100}
       aria-valuenow={indeterminate ? undefined : Math.round(share * 100)}
       className={cn("prog", indeterminate && "ind", className)}
-      style={{ "--p": share } as CSSProperties}
+      style={cssVars({ "--p": share })}
     />
   );
 }

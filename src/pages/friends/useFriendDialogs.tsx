@@ -86,17 +86,17 @@ function FingerprintDialog({ friend, label, onClose }: { friend: Friend; label: 
       open
       onOpenChange={(open) => !open && onClose()}
       title={t("friends.fingerprint.title")}
-      width={480}
+      size="s"
       footer={<DialogActions confirm={{ label: t("common.done"), width: 124, autoFocus: true, onClick: onClose }} />}
     >
-      <div className="flex items-center gap-3">
+      <div className="fr-person">
         <FriendAvatar friendId={friend.id} name={friend.mcName ?? friend.displayName} />
-        <div className="min-w-0">
-          <b className="vx-trunc block">{label}</b>
-          {friend.mcName && <span className="vx-trunc block text-fg-3">{t("friends.fingerprint.mcName", { name: friend.mcName })}</span>}
+        <div className="fr-person-text">
+          <b className="vx-trunc fr-line">{label}</b>
+          {friend.mcName && <span className="vx-trunc fr-line-sub">{t("friends.fingerprint.mcName", { name: friend.mcName })}</span>}
         </div>
       </div>
-      <div className="code my-4 text-center select-text">
+      <div className="vx-slot fr-print">
         <Fingerprint value={friend.fingerprint} size="l" />
       </div>
       <Hint icon="info">{t("friends.fingerprint.hint", { name: label })}</Hint>

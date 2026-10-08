@@ -88,7 +88,7 @@ For the static website, `pnpm dev:website` serves port 1430 and `pnpm build:webs
 - GitHub Actions are pinned to commit SHAs with version comments. Commit subjects should be short and imperative.
 
 For module boundaries and data flow, see [Architecture](docs/ARCHITECTURE.md).
-UI tokens and text-size behavior are described in [Pixelkino](docs/design/PIXELKINO.md).
+UI tokens, the Inventar surface classes, icons and text-size behavior are described in [Pixelkino](docs/design/PIXELKINO.md); `docs/design/concepts/` holds the static design mockups.
 The [Pumpkin Bridge reference](docs/bridge/README.md) describes the launcher–game channel; [mod/README.md](mod/README.md) describes its build.
 
 ## Microsoft sign-in for forks

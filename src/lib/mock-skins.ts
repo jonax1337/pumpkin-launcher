@@ -30,13 +30,15 @@ function paintSkin(look: Look): string {
   return canvas.toDataURL();
 }
 
-/** Umhang (64×32) in einer Farbe mit Zeichen in der Mitte der Außenseite. */
-function paintCape(color: string, sign: string): string {
+/** Umhang (64×32): Grundfarbe über Außen- und Innenseite, dazu ein Zeichen in der Mitte der Außenseite (Pixel 1,1 bis 11,17). */
+function paintCape(color: string, marks: [color: string, x: number, y: number, w: number, h: number][]): string {
   const [ctx, canvas] = canvas2d(64, 32);
   ctx.fillStyle = color;
   ctx.fillRect(0, 0, 22, 17);
-  ctx.fillStyle = sign;
-  ctx.fillRect(4, 6, 4, 4);
+  for (const [fill, x, y, w, h] of marks) {
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, y, w, h);
+  }
   return canvas.toDataURL();
 }
 
@@ -64,8 +66,14 @@ export function createSkinMock() {
   const defaultSkin = { url: paintSkin(defaultLook), variant: "classic" as const };
   let skin: SkinProfile["skin"] = defaultSkin;
   const capes: Cape[] = [
-    { id: "mock-cape-migrator", alias: "Migrator", url: paintCape("#7F96B8", "#E5B85F"), active: true },
-    { id: "mock-cape-pan", alias: "Pan", url: paintCape("#9CCBDB", "#5C9DB3"), active: false },
+    {
+      id: "mock-cape-pumpkin", alias: "Pumpkin-Umhang", active: true,
+      url: paintCape("#E5702A", [["#CF5E20", 1, 1, 5, 16], ["#F2B34A", 3, 8, 6, 3], ["#1C2410", 4, 6, 1, 2], ["#1C1208", 7, 6, 1, 2]]),
+    },
+    {
+      id: "mock-cape-mojang", alias: "Mojang", active: false,
+      url: paintCape("#B7242C", [["#9E1D25", 1, 1, 10, 8], ["#E8E8E8", 3, 5, 6, 2], ["#E8E8E8", 4, 9, 4, 2]]),
+    },
   ];
   const find = (id: string) => {
     const found = library.find((s) => s.id === id);

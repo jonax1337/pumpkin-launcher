@@ -109,7 +109,7 @@ function BlankPane({ form }: { form: BlankForm }) {
       <Disclosure summary={t("components.newInstance.advanced")}>
         <Field label={t("components.newInstance.loaderVersion")} group={loader === "vanilla"}>
           {loader === "vanilla" ? (
-            <span className="text-fg-2">{t("components.loader.notNeededVanilla")}</span>
+            <span className="ni-note">{t("components.loader.notNeededVanilla")}</span>
           ) : (
             <Select
               value={selectedLoader}

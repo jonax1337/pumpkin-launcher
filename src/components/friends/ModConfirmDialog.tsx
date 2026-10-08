@@ -10,7 +10,6 @@ import { confirmOperationLine, scopeSentenceKey } from "./modRequestModel";
 import { opText } from "./modRequestText";
 import { useConsentGuard } from "./useConsentGuard";
 
-const DIALOG_WIDTH_PX = 480;
 const DENY_WIDTH_PX = 124;
 const ALLOW_WIDTH_PX = 210;
 
@@ -36,7 +35,7 @@ export function ModConfirmDialog({ confirm, onClose }: { confirm: ModConfirmEven
       open
       onOpenChange={(open) => !open && reply(false)}
       title={t("friendsInvite.mod.title")}
-      width={DIALOG_WIDTH_PX}
+      size="s"
       role="alertdialog"
       describedBy={textId}
       busy={answer.isPending}
@@ -56,14 +55,14 @@ export function ModConfirmDialog({ confirm, onClose }: { confirm: ModConfirmEven
       }
     >
       <p id={textId}>{t(scopeSentenceKey(confirm.scope))}</p>
-      <dl className="kv mt-3">
+      <dl className="kv fr-kv">
         <dt>{t("friendsInvite.mod.game")}</dt>
         <dd>{confirm.instanceName}</dd>
         <dt>{t("friendsInvite.mod.operation")}</dt>
-        <dd className="min-w-0 break-words">{opText(confirmOperationLine(confirm))}</dd>
+        <dd>{opText(confirmOperationLine(confirm))}</dd>
       </dl>
       {/* Der Platz bleibt reserviert: der Hinweis verschwindet, ohne dass der Dialog springt. */}
-      <Hint className={cn("mt-3", guard.armed && "invisible")}>{t("friendsInvite.mod.wait")}</Hint>
+      <Hint className={cn("fr-hint-above", guard.armed && "invisible")}>{t("friendsInvite.mod.wait")}</Hint>
     </Dialog>
   );
 }

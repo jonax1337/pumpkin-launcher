@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useI18n, t } from "@/i18n";
 import { useCommitOnUnmount } from "@/hooks/useCommitOnUnmount";
 import { useJavaInstalls } from "@/hooks/useJavaInstalls";
@@ -10,6 +10,7 @@ import { platform } from "@/lib/platform";
 import { toastError } from "@/lib/toast";
 import { LOADER_LABELS, type Instance, type JavaInstall } from "@/lib/types";
 import { Actions, Button, Hint, Radio, SegSlider, Select, TextField } from "@/ui";
+import { cssVars } from "@/ui/util";
 
 /** „Fabric 1.21.4“ bzw. „Vanilla 1.21.4“. */
 export const loaderLine = (i: Pick<Instance, "loader" | "minecraftVersion">) => `${LOADER_LABELS[i.loader]} ${i.minecraftVersion}`;
@@ -98,7 +99,7 @@ export function MemoryChooser({ name, value, onChange, autoText, help = true, di
         {t("components.memory.ownValue")}
       </Radio>
       <div className="memrow">
-        <div className="memsl" style={{ "--free": `${((MEMORY_SEGMENTS - top) / MEMORY_SEGMENTS) * 100}%` } as CSSProperties}>
+        <div className="memsl" style={cssVars({ "--free": `${((MEMORY_SEGMENTS - top) / MEMORY_SEGMENTS) * 100}%` })}>
           <SegSlider
             value={gb}
             max={top}
@@ -110,7 +111,7 @@ export function MemoryChooser({ name, value, onChange, autoText, help = true, di
           {/* Grenze unter dem letzten freien Segment; bei 16 unter dem Ende */}
           <span className="cap" aria-hidden>{t("components.memory.maxGb", { n: top })}</span>
         </div>
-        <span className="num" style={{ color: disabled || isAuto ? "var(--fg-3)" : undefined }}>{gb} GB</span>
+        <output className="mem-val" data-off={disabled || isAuto ? "" : undefined}>{gb} GB</output>
       </div>
       {help && <MemoryHelp value={value} />}
     </>

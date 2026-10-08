@@ -8,7 +8,7 @@ export function SelfAsserted({ children }: { children: ReactNode }) {
   const { t } = useI18n();
   return (
     <Tip label={t("friends.selfAsserted")}>
-      <span className="inline-flex min-w-0">{children}</span>
+      <span className="fr-self">{children}</span>
     </Tip>
   );
 }

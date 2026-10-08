@@ -39,7 +39,7 @@ export function LogConsole({ instance, onAddContent }: { instance: Instance; onA
   }, [startedAt]);
 
   return (
-    <>
+    <div className="log-tab">
       <LogStat instance={instance} session={sessions.find((session) => session.id === sessionId)} onAddContent={onAddContent} />
       <LogToolbar
         instance={instance}
@@ -54,7 +54,7 @@ export function LogConsole({ instance, onAddContent }: { instance: Instance; onA
       />
       <LogView lines={lines} shown={shown} highlight={highlight} />
       <span className="sr" role="status">{digest}</span>
-    </>
+    </div>
   );
 }
 
@@ -87,7 +87,7 @@ function LogToolbar({ instance, lines, filter, onFilter, query, onQuery, session
   const copy = () => copyWithToast((lines ?? []).map((l) => l.line).join("\n"), t("components.log.copySuccess"));
 
   return (
-    <Toolbar search="s" className="mb-2.5">
+    <Toolbar search="s">
       <SearchField size="s" value={query} onChange={onQuery} placeholder={t("components.log.searchPlaceholder")} />
       <Segmented
         size="s"
@@ -107,7 +107,7 @@ function LogToolbar({ instance, lines, filter, onFilter, query, onQuery, session
       )}
       <Spacer />
       <Button size="s" icon="copy" disabled={!hasLines} onClick={copy}>{t("common.copy")}</Button>
-      <Button size="s" icon="ul" disabled={archived || !hasLogToShare} onClick={() => askShareLog(instance.id, crash)}>
+      <Button size="s" icon="share" disabled={archived || !hasLogToShare} onClick={() => askShareLog(instance.id, crash)}>
         {t("components.game.shareLog")}
       </Button>
       <DebugInfoButton size="s" icon="info" instanceId={instance.id} />

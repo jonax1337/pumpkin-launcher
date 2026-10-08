@@ -28,8 +28,8 @@ export function LocalFilesDropzone({ dragging, ask, onAdd }: DropzoneState) {
   return (
     <>
       {dragging && (
-        <div className="drop over absolute inset-0 z-10 h-auto justify-start" aria-hidden>
-          <div className="sticky top-[30vh] flex flex-col items-center gap-2 py-10">
+        <div className="drop over dz-over" aria-hidden>
+          <div className="dz-hint">
             <DropHint>{t("detail.files.dropHintContent")}</DropHint>
           </div>
         </div>

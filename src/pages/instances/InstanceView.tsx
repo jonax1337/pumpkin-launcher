@@ -1,6 +1,7 @@
-import type { CSSProperties, MouseEvent, ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { useI18n } from "@/i18n";
 import { Cell, Checkbox, Chip, Count, List, ListHeader, ListRow, RowTitle, SceneThumb } from "@/ui";
+import { cssVars } from "@/ui/util";
 import { loaderLine } from "@/components/common";
 import { FreshImportChip, useIsFreshImport } from "@/components/FreshImportChip";
 import { InstanceIcon } from "@/components/InstanceIcon";
@@ -30,7 +31,7 @@ function LibStatus({ instance }: { instance: Instance }) {
   if (freshImport) return <FreshImportChip instanceId={instance.id} />;
   if (updateCount > 0)
     return (
-      <Chip icon="up">
+      <Chip tone="warn" dot icon="update">
         <Count value={updateCount} /> {updatesLabel(updateCount)}
       </Chip>
     );
@@ -69,7 +70,7 @@ function InstanceRow({ instance, index }: { instance: Instance; index: number })
       selected={pick.picked}
       menu={items}
       index={Math.min(index, MAX_STAGGERED_ROWS)}
-      style={{ "--acc": look.acc } as CSSProperties}
+      style={cssVars({ "--acc": look.acc })}
     >
       <span className="lib-pick">
         <SceneThumb bio={look.bio} seed={look.seed} art={<InstanceIcon instance={instance} bio={look.bio} />} />

@@ -16,11 +16,11 @@ import { useLook } from "@/store/look";
 
 /**
  * Wallpaper-Karten und Abstand in der Leiste „Deine Instanzen“;
- * wie in ui/card.css und .rail (styles/pixelkino.css).
+ * wie in ui/card.css und .rail (home.css).
  */
 export const TILE_W = 256;
 export const TILE_H = 144;
-const TILE_GAP = 12;
+const TILE_GAP = 14;
 const TILE_STEP = TILE_W + TILE_GAP;
 
 /** Rundung beim Messen der Scrollposition (px). */
@@ -134,24 +134,25 @@ export function Rail({ instances, current, onPick }: { instances: Instance[]; cu
         </li>
       </ul>
       <span id="rail-hint" className="sr">{t("pages.home.railHint")}</span>
-      {/* Nur für die Maus: per Tastatur scrollt die Leiste mit dem Fokus mit.
-          „absolute“ schlägt die Kit-Position (.rarr legt die Lage fest). */}
+      {/* Nur für die Maus: per Tastatur scrollt die Leiste mit dem Fokus mit. */}
       <IconButton
+        variant="secondary"
         onScene
-        icon="back"
+        icon="chev-left"
         label={t("pages.home.scrollBack")}
         tip={false}
-        className="rarr l absolute"
+        className="rarr l"
         tabIndex={-1}
         aria-hidden
         onClick={() => page(-1)}
       />
       <IconButton
+        variant="secondary"
         onScene
-        icon="chev"
+        icon="chev-right"
         label={t("pages.home.scrollForward")}
         tip={false}
-        className="rarr r absolute"
+        className="rarr r"
         tabIndex={-1}
         aria-hidden
         onClick={() => page(1)}

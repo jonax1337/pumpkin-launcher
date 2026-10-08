@@ -51,8 +51,8 @@ function useContentsLine(f: ForeignInstance): string {
 /** Ein Abschnitt unter einer gewählten Instanz: Überschrift und Einträge hintereinander. */
 function DetailLine({ label, items, tone }: { label: string; items: string[]; tone?: "warn" }) {
   return (
-    <div className={tone === "warn" ? "text-warn" : "text-fg-2"}>
-      <b className="mr-2">{label}</b>
+    <div className="li-detail" data-tone={tone}>
+      <b>{label}</b>
       <Meta items={items} wrap />
     </div>
   );
@@ -63,7 +63,7 @@ function ImportDetails({ f, name, busy, onRename }: { f: ForeignInstance; name: 
   const { t } = useI18n();
   const adopted = useAdoptedSettings(f);
   return (
-    <Panel level="sunk" pad="s" className="mb-2 flex flex-col gap-2">
+    <Panel level="sunk" pad="s" className="li-details">
       <Field label={t("components.import.nameLabel")} error={name.trim() ? undefined : t("components.import.nameEmpty")}>
         <TextField value={name} maxLength={NAME_MAX_LENGTH} disabled={busy} onChange={(e) => onRename(e.target.value)} />
       </Field>
@@ -79,7 +79,7 @@ function ImportDetails({ f, name, busy, onRename }: { f: ForeignInstance; name: 
 function UnsupportedNote({ reason }: { reason: string }) {
   const { t } = useI18n();
   return (
-    <Panel level="sunk" pad="s" className="mb-2 flex flex-col gap-1">
+    <Panel level="sunk" pad="s" className="li-unsupported">
       <Hint tone="warn">{reason}</Hint>
       <Hint icon={false}>{t("components.import.unsupportedAlternative")}</Hint>
     </Panel>
@@ -121,8 +121,8 @@ function SelectionBar({ selection, busy }: { selection: ForeignSelection; busy: 
   if (!selectable.length) return null;
   const all = chosen.length === selectable.length;
   return (
-    <Actions gap={12} wrap className="mb-3">
-      <span className="text-fg-2">{chosen.length ? t("components.import.selectedCount", { n: chosen.length, total: selectable.length }) : t("components.import.pickHint")}</span>
+    <Actions gap={12} wrap className="li-bar">
+      <span className="li-bar-t">{chosen.length ? t("components.import.selectedCount", { n: chosen.length, total: selectable.length }) : t("components.import.pickHint")}</span>
       <Button variant="ghost" size="s" disabled={busy} onClick={all ? selection.clear : selection.chooseAll}>
         {all ? t("components.import.clearSelection") : t("components.import.chooseAll")}
       </Button>
@@ -164,7 +164,7 @@ export function ImportPane({ selection, busy }: { selection: ForeignSelection; b
           ))}
         </>
       )}
-      <Button variant="ghost" size="s" icon="folder" bleed="start" className="mt-2.5" disabled={!api.capabilities.pickPaths || busy} onClick={() => void chooseFolder()}>
+      <Button variant="ghost" size="s" icon="folder" bleed="start" className="li-folder" disabled={!api.capabilities.pickPaths || busy} onClick={() => void chooseFolder()}>
         {t("components.import.chooseFolder")}
       </Button>
     </>

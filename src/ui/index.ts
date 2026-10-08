@@ -8,12 +8,12 @@ export { Segmented, TabPanel, Tabs, useRoving, type TabItem, type TabsProps } fr
 export { Disclosure, Field, FormRow, FormSection, Hint, SearchField, Select, TextArea, TextField, type Option } from "./Field";
 export { Checkbox, Radio, Switch } from "./Toggle";
 export { SegSlider } from "./Slider";
-export { AddCard, CardGrid, Choice, Panel, PickTile, SceneCard, SceneThumb, ThumbCard, type ChoiceProps, type PanelProps, type SceneCardProps, type SceneLook } from "./Card";
+export { AddCard, CardGrid, Choice, Panel, PickCard, PickTile, SceneCard, SceneThumb, ThumbCard, type ChoiceProps, type PanelProps, type PickCardProps, type SceneCardProps, type SceneLook } from "./Card";
 export type { Hit } from "./Hit";
 export { Cell, GhostRow, List, ListHeader, ListRow, RowTitle, SkelRow, type ListRowProps, type ListVariant } from "./List";
 export { Tip, TipProvider, Trunc } from "./Tip";
-export { ContextMenu, Menu, MenuItem, MenuLabel, MenuNote, MenuScroll, MenuSep, type MenuEntry } from "./Menu";
+export { ContextMenu, Menu, MenuHead, MenuItem, MenuLabel, MenuNote, MenuScroll, MenuSep, type MenuEntry } from "./Menu";
 export { Popover } from "./Popover";
 export { ConfirmDialog, Dialog, DialogActions, Sheet } from "./Dialog";
 export { Empty, ErrorBox, JobProgress, Progress, Skel, StatusPanel, Toaster } from "./Feedback";
-export { Actions, Heading, PageHeader, SectionHeader, Spacer, Toolbar, Workspace, WorkspaceContent, WorkspaceRail, WorkspaceTabs, type HeadingLevel, type WorkspaceTabsProps } from "./Layout";
+export { Actions, Heading, HeroMeta, HeroShade, HeroTitle, Page, PageHeader, SectionHeader, Spacer, Toolbar, Workspace, WorkspaceContent, WorkspaceRail, WorkspaceTabs, type HeadingLevel, type WorkspaceTabsProps } from "./Layout";

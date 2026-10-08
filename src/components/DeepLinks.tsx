@@ -32,7 +32,7 @@ function LaunchAskDialog() {
       open={!!ask}
       onOpenChange={(open) => !open && closeLaunchAsk()}
       title={ask ? t("deepLinks.launch.title", { name: ask.instance.name }) : ""}
-      width={460}
+      size="s"
       role="alertdialog"
       footer={
         <DialogActions
@@ -42,7 +42,7 @@ function LaunchAskDialog() {
       }
     >
       <p>{t("deepLinks.launch.text")}</p>
-      {note && <p className="mt-2">{note}</p>}
+      {note && <p className="dl-note">{note}</p>}
     </Dialog>
   );
 }

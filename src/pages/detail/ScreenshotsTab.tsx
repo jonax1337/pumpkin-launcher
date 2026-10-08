@@ -5,10 +5,13 @@ import { useScreenshots, useTrashScreenshots } from "@/hooks/useScreenshots";
 import { api } from "@/lib/api";
 import { dayLabel, dayStart, formatDateTime } from "@/lib/format";
 import { revealLocalPath } from "@/lib/links";
-import { useI18n } from "@/i18n";
+import { currentLanguage, useI18n } from "@/i18n";
 import type { Instance, Screenshot } from "@/lib/types";
 import { Button, CardGrid, Count, Empty, Glyph, Icon, SectionHeader, Spacer, Toolbar } from "@/ui";
 import { Lightbox } from "./screenshots/Lightbox";
+
+/** Uhrzeit der Aufnahme unter der Kachel („21:14“). */
+const formatTime = (ms: number) => new Date(ms).toLocaleTimeString(currentLanguage(), { hour: "2-digit", minute: "2-digit" });
 
 /** So viele Platzhalter zeigt das Raster, solange die Liste lädt. */
 const SKELETON_COUNT = 4;
@@ -30,7 +33,7 @@ export function ScreenshotsTab({ instance }: { instance: Instance }) {
   const { t } = useI18n();
   const shots = useScreenshots(instance.id);
   return (
-    <div className="pt-2">
+    <>
       <QueryList
         query={shots}
         error={t("detail.screenshots.loadError")}
@@ -47,7 +50,7 @@ export function ScreenshotsTab({ instance }: { instance: Instance }) {
       >
         {(list) => <Gallery instanceId={instance.id} shots={list} />}
       </QueryList>
-    </div>
+    </>
   );
 }
 
@@ -77,8 +80,9 @@ function Gallery({ instanceId, shots }: { instanceId: string; shots: Screenshot[
   };
 
   return (
-    <>
+    <div className="shots">
       <Toolbar
+        height={32}
         label={t("detail.screenshots.selectToolbar")}
         alt={
           <>
@@ -96,36 +100,42 @@ function Gallery({ instanceId, shots }: { instanceId: string; shots: Screenshot[
         }
         altActive={picked != null}
       >
+        <SectionHeader as="h2" title={<>{t("components.export.entry.screenshots")}<Count value={shots.length} muted /></>} />
         <Spacer />
-        <Button size="s" icon="check" onClick={() => setPicked(new Set())}>{t("detail.screenshots.select")}</Button>
+        <Button size="s" icon="select" onClick={() => setPicked(new Set())}>{t("detail.screenshots.select")}</Button>
       </Toolbar>
-      {byDay(shots).map(([day, group]) => (
-        <section key={day} className="mt-4">
-          <SectionHeader as="h2" title={<>{dayLabel(day)} <Count value={group.length} size={20} muted /></>} size="sub" />
-          <CardGrid className="mt-2">
-            {group.map((shot) => (
-              <button
-                key={shot.fileName}
-                type="button"
-                className="shot fx"
-                data-shot={shot.fileName}
-                data-selected={picked?.has(shot.fileName) ? "" : undefined}
-                aria-label={t("detail.screenshots.shotAria", { date: formatDateTime(shot.takenAt) })}
-                aria-pressed={picked ? picked.has(shot.fileName) : undefined}
-                onClick={() => (picked ? toggle(shot.fileName) : setShown(shot.fileName))}
-              >
-                {/* Hunderte Bilder in voller Auflösung: erst laden, wenn sie in den Sichtbereich kommen. */}
-                <img src={api.screenshotSrc(shot)} alt="" loading="lazy" decoding="async" />
-                {picked && (
-                  <span className="shot-mark" aria-hidden>
-                    {picked.has(shot.fileName) && <Icon name="check" size="s" />}
+      <div className="shots-days">
+        {byDay(shots).map(([day, group]) => (
+          <section key={day} className="shots-day">
+            <SectionHeader as="h2" title={<>{dayLabel(day)} <Count value={group.length} size={20} muted /></>} size="sub" />
+            <CardGrid className="shots-grid">
+              {group.map((shot) => (
+                <button
+                  key={shot.fileName}
+                  type="button"
+                  className="shot fx"
+                  data-shot={shot.fileName}
+                  data-selected={picked?.has(shot.fileName) ? "" : undefined}
+                  aria-label={t("detail.screenshots.shotAria", { date: formatDateTime(shot.takenAt) })}
+                  aria-pressed={picked ? picked.has(shot.fileName) : undefined}
+                  onClick={() => (picked ? toggle(shot.fileName) : setShown(shot.fileName))}
+                >
+                  {/* Hunderte Bilder in voller Auflösung: erst laden, wenn sie in den Sichtbereich kommen. */}
+                  <span className="shot-pic vx-slot">
+                    <img src={api.screenshotSrc(shot)} alt="" loading="lazy" decoding="async" />
                   </span>
-                )}
-              </button>
-            ))}
-          </CardGrid>
-        </section>
-      ))}
+                  <span className="shot-cap" aria-hidden>{formatTime(shot.takenAt)}</span>
+                  {picked && (
+                    <span className="shot-mark" aria-hidden>
+                      {picked.has(shot.fileName) && <Icon name="check" size="s" />}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </CardGrid>
+          </section>
+        ))}
+      </div>
       {current && (
         <Lightbox
           instanceId={instanceId}
@@ -136,6 +146,6 @@ function Gallery({ instanceId, shots }: { instanceId: string; shots: Screenshot[
           onClosed={focusShot}
         />
       )}
-    </>
+    </div>
   );
 }

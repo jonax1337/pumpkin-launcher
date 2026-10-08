@@ -1,49 +1,38 @@
 import { memo, useState } from "react";
 import { cn } from "@/lib/utils";
-import { ICON_DATA, rowsPath } from "@/pixel/icon-data";
+import { ICON_CELLS, iconShape } from "@/pixel/icon-data";
 import { Face, glyphFor, GlyphSvg, type GlyphName, type GlyphPalette } from "@/pixel/icons";
 import { SkinHead } from "@/pixel/SkinHead";
 import type { IconName, IconSize, Tone } from "./types";
 import { cssVars } from "./util";
 
-/** Leere Spalten rechts von den sichtbaren Pixeln, in Icon-Einheiten. */
-const blankColumnsAtEnd = (rows: readonly string[]) => rows[0].length - 1 - Math.max(...rows.map((row) => row.lastIndexOf("#")));
-
-function Raster({ name, g }: { name: IconName; g: 7 | 5 }) {
-  const rows = g === 7 ? ICON_DATA[name].g7 : ICON_DATA[name].g5;
-  return (
-    <svg viewBox={`0 0 ${g} ${g}`} data-g={g} aria-hidden>
-      <path d={rowsPath(`${name}:${g}`, rows)} />
-    </svg>
-  );
-}
-
 /**
- * Pixel-Icon in fester Box. Regel: 1 Icon-Pixel = 1 Icon-Einheit (--iu, unabhängig von der Pixelstufe --px), nie gebrochen skaliert (xl: fest 2 Einheiten).
- * s: Box 20, 5×5 · m: Box 24, 7×7 (5×5 nur, wenn 7 Einheiten nicht passen; unit.ts setzt data-ico-m) · l: Box 28, 7×7 · xl: Box 56, 7×7 × 2.
- * Farbe: currentColor, außer `tone`.
+ * Pixel-Icon in fester Box: ein 8×8-Raster, 1 Icon-Pixel = 1 ganze Zelle (nie gebrochen skaliert, unabhängig von der Pixelstufe --px).
+ * Zelle je Slot (Gerätepixel-genau, unit.ts): s Box 16 (2 px) · m Box 24 (3 px) · l Box 32 (4 px) · xl Box 48 (6 px).
+ * Farbe: currentColor (zweiter Ton 50 %), außer `tone`.
  */
-export const Icon = memo(function Icon({ name, size = "m", tone, flip, edge, className }: {
+export const Icon = memo(function Icon({ name, size = "m", tone, edge, className }: {
   name: IconName;
   size?: IconSize;
   tone?: Tone | "muted";
-  flip?: "x" | "y";
   /** Steht das Icon am Ende eines Knopfes, schneidet es die Luft der Box und die leeren Rasterspalten rechts ab: der sichtbare Rand liegt dann am Innenabstand. */
   edge?: "end";
   className?: string;
 }) {
+  const { solid, dim, blankEnd } = iconShape(name);
   return (
     <span
       className={cn("vx-ico", className)}
       data-size={size}
       data-tone={tone}
-      data-flip={flip}
       data-edge={edge}
-      style={edge && cssVars({ "--e5": blankColumnsAtEnd(ICON_DATA[name].g5), "--e7": blankColumnsAtEnd(ICON_DATA[name].g7) })}
+      style={edge && cssVars({ "--e": blankEnd })}
       aria-hidden
     >
-      {size !== "s" && <Raster name={name} g={7} />}
-      {(size === "s" || size === "m") && <Raster name={name} g={5} />}
+      <svg viewBox={`0 0 ${ICON_CELLS} ${ICON_CELLS}`}>
+        <path d={solid} />
+        {dim && <path d={dim} data-dim="" />}
+      </svg>
     </span>
   );
 });

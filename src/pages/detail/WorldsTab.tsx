@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
-  Actions, Button, Cell, ConfirmDialog, Empty, Glyph, IconButton, JobProgress, List, ListRow, Menu, ProjectIcon, RowTitle, SectionHeader,
-  type MenuEntry,
+  Actions, Button, Cell, ConfirmDialog, Count, Empty, Glyph, IconButton, JobProgress, List, ListRow, Menu, RowTitle, SectionHeader,
+  type IconName, type MenuEntry,
 } from "@/ui";
 import { AddContentSheet } from "@/components/catalog/AddContentSheet";
 import { QueryList } from "@/components/QueryList";
@@ -19,6 +19,7 @@ import type { Instance, QuickPlay, World } from "@/lib/types";
 import { BackupsDialog } from "./BackupsDialog";
 import { DatapacksDialog } from "./DatapacksDialog";
 import { GuardedButton, useBusyReason, useInstanceBusyReason, type SectionProps } from "./guards";
+import { KindTile } from "./KindTile";
 import { ServersSection } from "./ServersSection";
 import { ShareSection } from "./ShareSection";
 
@@ -42,13 +43,16 @@ const worldLine = (w: World) =>
     relativeTime(w.lastPlayed),
   ].filter(Boolean).join(" · ");
 
+/** Symbol der Welt ohne eigenes Bild: Hardcore Herz, Kreativ Diamant, sonst Welt. */
+const worldIcon = (w: World): IconName => (w.hardcore ? "heart" : w.gameMode === "creative" ? "diamond" : "world");
+
 /** Welten und Server einer Instanz: direkt hineinspielen, Welten sichern und wiederherstellen, Serverliste pflegen, Welt für Freunde teilen. */
 export function WorldsTab({ instance, onLaunched }: { instance: Instance; onLaunched: () => void }) {
   const play = usePlay();
   const busy = useInstanceBusyReason(instance.id);
   const quickPlay = (target: QuickPlay) => void play(instance, onLaunched, target);
   return (
-    <div className="pt-2">
+    <div className="wl-root">
       <ShareSection instance={instance} busy={busy} />
       <WorldsSection instance={instance} busy={busy} onPlay={quickPlay} />
       <ServersSection instance={instance} busy={busy} onPlay={quickPlay} />
@@ -65,7 +69,7 @@ function WorldRow({ instance, world, menu, playBlocked, onPlay }: {
   const progress = useContentState((s) => s.progress);
   return (
     <ListRow menu={menu}>
-      <ProjectIcon url={world.icon} seed={world.id} />
+      <KindTile url={world.icon} seed={world.id} icon={worldIcon(world)} />
       {/* Wie im Spiel: der Ordner steht dabei, wenn er anders heißt (z. B. wiederhergestellte Kopien). */}
       <RowTitle title={world.name} aside={world.name === world.id ? undefined : world.id} sub={worldLine(world)} />
       <Cell flex align="end">
@@ -117,9 +121,9 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
 
   const menuFor = (w: World): MenuEntry[] => [
     { id: "dir", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => openLocalPath(w.path) },
-    { id: "backup", text: t("detail.worlds.backupNow"), icon: "save", disabled: !!jobBusy, onSelect: () => backup.mutate(w) },
+    { id: "backup", text: t("detail.worlds.backupNow"), icon: "backup", disabled: !!jobBusy, onSelect: () => backup.mutate(w) },
     { id: "backups", text: t("detail.worlds.backupsMenu"), icon: "clock", onSelect: () => setShowBackups({ world: w.id }) },
-    { id: "packs", text: t("detail.worlds.datapacksMenu"), icon: "box", onSelect: () => setPacks({ world: w, search: false }) },
+    { id: "packs", text: t("detail.worlds.datapacksMenu"), icon: "datapack", onSelect: () => setPacks({ world: w, search: false }) },
     "-",
     { id: "del", text: t("detail.worlds.deleteMenu"), icon: "trash", bad: true, disabled: !!jobBusy, onSelect: () => removal.ask(w) },
   ];
@@ -128,19 +132,19 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
     <section aria-labelledby="worlds-h">
       <SectionHeader
         id="worlds-h"
-        title={t("common.worlds")}
+        title={<>{t("common.worlds")}{worlds.data && <Count value={worlds.data.length} muted />}</>}
         actions={
-          <Actions gap={4}>
-            <GuardedButton variant="ghost" size="s" icon="ul" blocked={jobBusy} onClick={() => void pickWorld().catch(toastError)}>
+          <Actions>
+            <GuardedButton size="s" icon="upload" blocked={jobBusy} onClick={() => void pickWorld().catch(toastError)}>
               {t("detail.worlds.importAction")}
             </GuardedButton>
-            <Button variant="ghost" size="s" icon="clock" bleed="end" onClick={() => setShowBackups({ world: null })}>
+            <Button size="s" icon="backup" onClick={() => setShowBackups({ world: null })}>
               {t("detail.worlds.backupsTitle")}
             </Button>
           </Actions>
         }
       />
-      <div className="mt-3">
+      <div className="wl-body">
         <QueryList
           query={worlds}
           error={t("detail.worlds.loadError")}
@@ -151,7 +155,7 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
           }
         >
           {(list) => (
-            <List variant="worlds" divided aria-label={t("common.worlds")}>
+            <List variant="worlds" className="dc-table vx-pit" divided aria-label={t("common.worlds")}>
               {list.map((world) => (
                 <WorldRow
                   key={world.id}

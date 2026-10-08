@@ -7,8 +7,6 @@ import type { Friend, Instance } from "@/lib/types";
 import { friendLabels } from "@/pages/friends/friendsModel";
 import { Checkbox, Dialog, DialogActions, Empty, Field, Hint } from "@/ui";
 
-const DIALOG_WIDTH_PX = 520;
-const DIALOG_HEIGHT_PX = 520;
 const CONFIRM_WIDTH_PX = 130;
 const AVATAR_BOX = 28;
 
@@ -52,8 +50,7 @@ export function ShareDialog({ instance, port, onClose }: { instance: Instance; p
       open
       onOpenChange={(open) => !open && onClose()}
       title={session ? t("friendsHost.dialog.titleMore") : t("friendsHost.dialog.title")}
-      width={DIALOG_WIDTH_PX}
-      height={DIALOG_HEIGHT_PX}
+      height="m"
       busy={pending}
       footLeft={chosen.length === 0 && candidates.length > 0 ? t("friendsHost.dialog.needFriend") : null}
       footer={
@@ -68,7 +65,7 @@ export function ShareDialog({ instance, port, onClose }: { instance: Instance; p
         />
       }
     >
-      <div className="flex flex-col gap-4">
+      <div className="sd-body">
         {candidates.length === 0 ? (
           <Empty size="pane" title={t("friendsHost.dialog.noFriends")}>{t("friendsHost.dialog.noFriendsHint")}</Empty>
         ) : (
@@ -77,12 +74,12 @@ export function ShareDialog({ instance, port, onClose }: { instance: Instance; p
           </Field>
         )}
         {!session && (
-          <div className="flex flex-col gap-1">
+          <div className="sd-tight">
             <Checkbox checked={showWorldName} onChange={setShowWorldName}>{t("friendsHost.dialog.worldName")}</Checkbox>
             <Hint>{t("friendsHost.dialog.worldNameHelp")}</Hint>
           </div>
         )}
-        <div className="flex flex-col gap-2">
+        <div className="sd-notes">
           <Hint icon="info">{t("friendsHost.dialog.infoVisible")}</Hint>
           <Hint icon="info">{t("friendsHost.dialog.infoHomeNet")}</Hint>
         </div>
@@ -96,7 +93,7 @@ function FriendChoices({ friends, labels, picked, full, onToggle }: {
   friends: Friend[]; labels: Map<string, string>; picked: ReadonlySet<string>; full: boolean; onToggle: (friendId: string, on: boolean) => void;
 }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="sd-tight">
       {friends.map((friend) => (
         <Checkbox
           key={friend.id}
@@ -104,7 +101,7 @@ function FriendChoices({ friends, labels, picked, full, onToggle }: {
           disabled={full && !picked.has(friend.id)}
           onChange={(on) => onToggle(friend.id, on)}
         >
-          <span className="flex min-w-0 items-center gap-3">
+          <span className="sd-friend">
             <FriendAvatar friendId={friend.id} name={friend.mcName ?? friend.displayName} box={AVATAR_BOX} />
             <span className="ell">{labels.get(friend.id)}</span>
           </span>

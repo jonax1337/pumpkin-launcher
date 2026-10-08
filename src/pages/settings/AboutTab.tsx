@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
-import { Actions, Button, FormRow, Hint } from "@/ui";
+import { Heading, Hint, Icon, Panel, type IconName } from "@/ui";
 import { BrandWordmark, Buddy } from "@/branding/Brand";
-import { UpdateRow } from "@/components/AppUpdate";
+import { UpdateCheckButton, UpdateChip, UpdateDetails } from "@/components/AppUpdate";
 import { PrivacyNotice } from "@/components/PrivacyNotice";
+import { SupportSection } from "@/components/support";
 import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
 import { openPage, REPO_URL } from "@/lib/links";
 import pkg from "../../../package.json";
-import { SettingsInfo } from "./SettingsInfo";
+import { InfoDialog } from "./SettingsInfo";
 
 /** Version der laufenden App; im Browser die aus der package.json. */
 function useAppVersion() {
@@ -20,47 +21,61 @@ function useAppVersion() {
   return version;
 }
 
-/** Lizenz des Launchers (Apache-2.0) und sein Quellcode. */
-function LicenseRows() {
-  const { t } = useI18n();
+/** Eine Zeile der Linkliste: Symbol, Name mit Zusatz, Pfeil nach außen; `onOpen` öffnet die Seite oder einen Dialog. */
+function LinkRow({ icon, label, hint, external = true, onOpen }: { icon: IconName; label: string; hint?: string; external?: boolean; onOpen: () => void }) {
   return (
-    <>
-      <FormRow label={t("settings.about.license")} hint={t("settings.about.licenseHint")}>
-        <Actions>
-          <Button icon="ext" onClick={() => openPage(`${REPO_URL}/blob/main/LICENSE`)}>{t("settings.about.licenseRead")}</Button>
-        </Actions>
-      </FormRow>
-      <FormRow label={t("settings.about.source")} hint={t("settings.about.sourceHint")}>
-        <Actions>
-          <Button icon="ext" onClick={() => openPage(REPO_URL)}>{t("settings.about.sourceOpen")}</Button>
-        </Actions>
-      </FormRow>
-    </>
+    <button type="button" className="about-link fx" onClick={onOpen}>
+      <Icon name={icon} size="s" />
+      <span className="about-link-t">
+        <span>{label}</span>
+        {hint && <small>{hint}</small>}
+      </span>
+      <Icon name={external ? "external" : "chev-right"} size="s" className="about-link-out" />
+    </button>
   );
 }
 
-/** Einstellungen › Über: Version, Updates, Lizenz, Quellcode, Datenschutz, Quellen. */
+/** Quellcode, Lizenz, Fragen, Fehler melden und Datenschutz an einer Stelle. */
+function AboutLinks() {
+  const { t } = useI18n();
+  const [privacyOpen, setPrivacyOpen] = useState(false);
+  return (
+    <div>
+      <Heading level="sub" className="about-sub">{t("settings.about.linksTitle")}</Heading>
+      <div className="vx-slot about-links">
+        <LinkRow icon="link" label={t("settings.about.source")} hint={t("settings.about.sourceHint")} onOpen={() => openPage(REPO_URL)} />
+        <LinkRow icon="book" label={t("settings.about.license")} hint={t("settings.about.licenseHint")} onOpen={() => openPage(`${REPO_URL}/blob/main/LICENSE`)} />
+        <LinkRow icon="bug" label={t("components.support.reportBug")} hint={t("components.support.reportHint")} onOpen={() => openPage(`${REPO_URL}/issues/new/choose`)} />
+        <LinkRow icon="question" label={t("components.support.questionsLabel")} hint={t("components.support.questionsHint")} onOpen={() => openPage(`${REPO_URL}/discussions`)} />
+        <LinkRow icon="shield" label={t("components.privacy.title")} external={false} onOpen={() => setPrivacyOpen(true)} />
+      </div>
+      <InfoDialog open={privacyOpen} onOpenChange={setPrivacyOpen} title={t("components.privacy.title")}>
+        <PrivacyNotice />
+        <Hint className="about-sources">{t("pages.settings.aboutSources")}</Hint>
+      </InfoDialog>
+    </div>
+  );
+}
+
+/** Einstellungen › Über & Support: Versionskarte mit Update-Suche, Links und Diagnose. */
 export function AboutTab() {
   const { t } = useI18n();
   const version = useAppVersion();
   return (
     <>
-      <div className="brand-about">
+      <Panel level="raised" className="about-card">
         <Buddy mood="hello" size={48} />
-        <div>
+        <div className="about-name">
           <BrandWordmark />
-          <div className="text-fg-2">
-            {t("common.version")} {version}
-          </div>
+          <span className="about-meta">{t("common.version")} {version} · {t("components.update.hint")}</span>
         </div>
-      </div>
-      <UpdateRow />
-      <LicenseRows />
-      <div className="my-3.5">
-        <SettingsInfo title={t("components.privacy.title")} label={t("components.privacy.title")}>
-          <PrivacyNotice />
-          <Hint className="mt-3.5">{t("pages.settings.aboutSources")}</Hint>
-        </SettingsInfo>
+        <UpdateChip />
+        <UpdateCheckButton />
+      </Panel>
+      <UpdateDetails />
+      <div className="about-grid">
+        <AboutLinks />
+        <SupportSection version={version} />
       </div>
     </>
   );

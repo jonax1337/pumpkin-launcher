@@ -3,8 +3,6 @@
 .brand-wordmark { width: 214px; height: 24px; }
 .wm { gap: 6px; }
 .wm .brand-wordmark { width: 178.5px; height: 20px; }
-.brand-about { display: flex; align-items: center; gap: 12px; }
-.brand-about .brand-wordmark { margin-bottom: 10px; }
 .library-heading { display: flex; align-items: center; gap: 12px; height: 56px; }
 .library-heading > .vx-sech { flex: 1; min-width: 0; }
 .onb-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }

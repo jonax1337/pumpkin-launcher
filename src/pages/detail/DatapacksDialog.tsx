@@ -10,7 +10,6 @@ import { useI18n } from "@/i18n";
 import type { Instance, World } from "@/lib/types";
 import { DropHint, rejectedFileToast } from "./dropFiles";
 import { GuardedButton } from "./guards";
-import { WORLD_DIALOG_WIDTH } from "./worldDialog";
 
 const isZip = (path: string) => /\.zip$/i.test(path);
 
@@ -54,13 +53,12 @@ export function DatapacksDialog({ instance, world, busy, onSearch, onClose }: {
       onOpenChange={(open) => !open && onClose()}
       title={t(TYPE_LABEL_KEYS.datapack)}
       sub={world.name}
-      width={WORLD_DIALOG_WIDTH}
       footer={<DialogActions cancel={t("common.close")} />}
     >
-      <Actions className="mb-3">
+      <Actions className="dp-actions">
         {/* Eigene Dateien gibt es nur in der App: der Browser liefert keine Pfade. */}
         {api.capabilities.pickPaths && (
-          <GuardedButton size="s" icon="ul" blocked={busy} disabled={add.isPending} onClick={() => void pick().catch(toastError)}>
+          <GuardedButton size="s" icon="upload" blocked={busy} disabled={add.isPending} onClick={() => void pick().catch(toastError)}>
             {t("detail.content.addFile")}
           </GuardedButton>
         )}
@@ -98,7 +96,7 @@ export function DatapacksDialog({ instance, world, busy, onSearch, onClose }: {
           )}
         </QueryList>
       )}
-      <Hint className="mt-3">{t("detail.worlds.packActiveHint")}</Hint>
+      <Hint className="dp-hint">{t("detail.worlds.packActiveHint")}</Hint>
     </Dialog>
   );
 }

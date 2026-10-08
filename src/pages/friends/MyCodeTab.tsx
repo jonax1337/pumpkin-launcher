@@ -5,7 +5,8 @@ import { friendCodeBodyGroups } from "@/lib/friendCode";
 import { FRIENDS_LIMITS } from "@/lib/friends-types";
 import { relativeTime } from "@/lib/format";
 import type { FriendCode } from "@/lib/types";
-import { Button, Chip, ErrorBox, Hint, Icon, List, ListRow, RowTitle, SectionHeader, Skel } from "@/ui";
+import { Button, Chip, ErrorBox, Hint, IconButton, List, ListRow, RowTitle, SectionHeader, Skel } from "@/ui";
+import { IconTile } from "./IconTile";
 import { activeCodeCount } from "./friendsModel";
 
 const SECOND_MS = 1000;
@@ -22,8 +23,8 @@ export function MyCodeTab({ create }: { create: ReturnType<typeof useCreateFrien
   const fresh = create.data?.code && codes.data?.some((code) => code.id === create.data.id) ? create.data : undefined;
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2.5">
+    <div className="friends-mycode">
+      <div className="friends-mycode-create">
         <div>
           <Button variant="primary" icon="link" disabled={atLimit || create.isPending} onClick={() => create.mutate()}>
             {t("friends.myCode.create")}
@@ -45,13 +46,13 @@ export function MyCodeTab({ create }: { create: ReturnType<typeof useCreateFrien
 function FreshCode({ code }: { code: string }) {
   const { t } = useI18n();
   return (
-    <div className="flex flex-col items-start gap-2.5">
-      <div className="code w-full text-[26px] leading-[1.35] tracking-[.05em] select-text">
+    <div className="vx-slot friends-code">
+      <div className="friends-code-text">
         {friendCodeBodyGroups(code).map((group, i) => (
-          <span key={i} className="mr-[.45em] inline-block">{i === 0 ? FRIENDS_LIMITS.codePrefix + group : group}</span>
+          <span key={i}>{i === 0 ? FRIENDS_LIMITS.codePrefix + group : group}</span>
         ))}
       </div>
-      <Button icon="copy" onClick={() => copyWithToast(code, t("friends.myCode.copied"))}>{t("common.copy")}</Button>
+      <IconButton variant="secondary" icon="copy" label={t("common.copy")} onClick={() => copyWithToast(code, t("friends.myCode.copied"))} />
     </div>
   );
 }
@@ -75,7 +76,7 @@ function CodeRow({ code }: { code: FriendCode }) {
   const revoke = useRevokeFriendCode();
   return (
     <ListRow>
-      <span className="vx-av" data-box="32"><Icon name="link" size="l" /></span>
+      <IconTile icon="key" />
       <RowTitle
         title={t("friends.requests.codeTitle", { tail: code.tail })}
         sub={code.used ? <Chip size="s" icon="check">{t("friends.myCode.used")}</Chip> : t("friends.myCode.expires", { time: relativeTime(code.expiresAt * SECOND_MS) })}

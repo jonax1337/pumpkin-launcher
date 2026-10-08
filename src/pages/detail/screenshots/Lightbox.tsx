@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { formatDateTime, formatSize } from "@/lib/format";
 import { openLocalPath, revealLocalPath } from "@/lib/links";
 import type { Screenshot } from "@/lib/types";
+import { cssVars } from "@/ui/util";
 import { useZoom } from "./useZoom";
 
 /** Toasts erscheinen oben in der Mitte: unten säßen sie auf den Knöpfen der großen Ansicht. */
@@ -81,7 +82,7 @@ export function Lightbox({ instanceId, shots, current, onShow, onClose, onClosed
               <p>{`${current.fileName} · ${formatSize(current.size)}`}</p>
             </div>
             <D.Close asChild>
-              <IconButton icon="x" label={t("common.close")} tip={false} />
+              <IconButton icon="close" label={t("common.close")} tip={false} />
             </D.Close>
           </header>
           <p id="shot-zoom-hint" className="sr">{t("detail.screenshots.zoomHint")}</p>
@@ -98,15 +99,16 @@ export function Lightbox({ instanceId, shots, current, onShow, onClose, onClosed
               src={api.screenshotSrc(current)}
               alt={t("detail.screenshots.shotAria", { date: title })}
               draggable={false}
-              style={zoom.size ?? { visibility: "hidden" }}
+              data-ready={zoom.size ? "" : undefined}
+              style={zoom.size ? cssVars({ "--w": `${zoom.size.width}px`, "--h": `${zoom.size.height}px` }) : undefined}
               onLoad={zoom.onLoad}
             />
           </div>
           <footer className="shot-lb-bar">
             <Actions>
-              <IconButton icon="back" label={t("detail.screenshots.prevAria")} disabled={!prev} onClick={() => onShow(prev)} />
+              <IconButton icon="chev-left" label={t("detail.screenshots.prevAria")} disabled={!prev} onClick={() => onShow(prev)} />
               <Count value={`${index + 1} / ${shots.length}`} size={16} />
-              <IconButton icon="chev" label={t("detail.screenshots.nextAria")} disabled={!next} onClick={() => onShow(next)} />
+              <IconButton icon="chev-right" label={t("detail.screenshots.nextAria")} disabled={!next} onClick={() => onShow(next)} />
             </Actions>
             <div className="shot-zoom" role="group" aria-label={t("detail.screenshots.zoomGroup")}>
               <IconButton icon="minus" label={t("detail.screenshots.zoomOut")} disabled={!zoom.canZoomOut} onClick={zoom.zoomOut} />
@@ -124,7 +126,7 @@ export function Lightbox({ instanceId, shots, current, onShow, onClose, onClosed
                 {t("detail.screenshots.copy")}
               </Button>
               <Button icon="folder" compactBelow={COMPACT_BELOW} onClick={() => revealLocalPath(current.path)}>{t("components.instance.revealInFolder")}</Button>
-              <Button variant="primary" icon="ext" compactBelow={COMPACT_BELOW} onClick={() => openLocalPath(current.path)}>{t("common.open")}</Button>
+              <Button variant="primary" icon="external" compactBelow={COMPACT_BELOW} onClick={() => openLocalPath(current.path)}>{t("common.open")}</Button>
             </Actions>
           </footer>
         </D.Content>

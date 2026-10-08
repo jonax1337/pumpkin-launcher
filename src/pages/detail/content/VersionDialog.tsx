@@ -35,7 +35,7 @@ function VersionItem({ instance, mod, version, current, locked, onPick }: {
           {t("detail.content.versionSwitch")}
         </Button>
       )}
-      <div className="col-span-full">
+      <div className="ver-changelog">
         <ChangelogDisclosure instance={instance} mod={mod} versionId={version.id} />
       </div>
     </ListRow>
@@ -54,8 +54,7 @@ export function VersionDialog({ instance, mod, title, locked, onPick, onClose }:
     <Dialog
       open
       onOpenChange={(open) => !open && onClose()}
-      width={620}
-      height={560}
+      height="m"
       title={t("detail.content.versionTitle", { name: title })}
       sub={t("detail.content.versionSub", { fits: fitsLabel(instance, mod.kind) })}
     >
@@ -78,7 +77,7 @@ export function VersionDialog({ instance, mod, title, locked, onPick, onClose }:
         </List>
       )}
       {versions.data && versions.data.length > SHOWN_VERSIONS && (
-        <Hint icon="info" className="mt-2">{t("detail.content.versionsCapped", { n: SHOWN_VERSIONS })}</Hint>
+        <Hint icon="info" className="dc-panel-hint">{t("detail.content.versionsCapped", { n: SHOWN_VERSIONS })}</Hint>
       )}
     </Dialog>
   );

@@ -60,7 +60,7 @@ export function VersionTable({ versions, action }: { versions: ContentVersion[];
                     {v.changelog?.trim() && (
                       <IconButton
                         size="s"
-                        icon={logOpen ? "up" : "chevd"}
+                        icon={logOpen ? "chev-up" : "chev-down"}
                         label={t("components.detail.changelogOf", { version: v.version_number })}
                         aria-expanded={logOpen}
                         aria-controls={logId}

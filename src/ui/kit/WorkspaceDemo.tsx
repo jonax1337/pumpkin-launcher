@@ -3,14 +3,14 @@ import {
   Button, FormRow, FormSection, Hint, PageHeader, Select, StatusPanel, TabPanel, TextField,
   Workspace, WorkspaceContent, WorkspaceRail, WorkspaceTabs, type TabItem,
 } from "@/ui";
-import { cap } from "./kit-ui";
+import { Cap } from "./kit-ui";
 
 type Section = "general" | "java" | "sync";
 
 const SECTIONS: TabItem<Section>[] = [
-  { value: "general", label: "Allgemein", icon: "gear" },
-  { value: "java", label: "Java", icon: "term" },
-  { value: "sync", label: "Synchronisierung", icon: "up", disabled: true },
+  { value: "general", label: "Allgemein", icon: "settings" },
+  { value: "java", label: "Java", icon: "terminal" },
+  { value: "sync", label: "Synchronisierung", icon: "update", disabled: true },
 ];
 const JAVA_OPTIONS = [
   { value: "auto", label: "Automatisch" },
@@ -26,7 +26,7 @@ export function WorkspaceDemo() {
   const changed = name !== "Survival" || java !== "auto";
 
   return (
-    <div data-kit="workspace">
+    <div className="kit-stack" data-gap="12" data-kit="workspace">
       <PageHeader title="Instanz" count={2}>
         <Button size="s" disabled={!changed} onClick={() => { setName("Survival"); setJava("auto"); }}>
           Zurücksetzen
@@ -57,7 +57,7 @@ export function WorkspaceDemo() {
           </TabPanel>
         </WorkspaceContent>
       </Workspace>
-      <span style={cap}>Ohne Rail · volle Breite</span>
+      <Cap>Ohne Rail · volle Breite</Cap>
       <Workspace>
         <WorkspaceContent variant="plain">
           <StatusPanel size="s" icon="info" title={name || "Unbenannte Instanz"}>

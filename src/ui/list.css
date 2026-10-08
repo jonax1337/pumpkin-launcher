@@ -1,18 +1,21 @@
-/* Kit-Listen: Spaltenraster je Variante (inkl. Media Queries), Zeile, Name, Zelle, Platzhalter.
-   Hover = Platte (--hv-row), Name wird #fff, nie Unterstrich. Gewählt = Kupferrahmen + 10 % Tönung.
-   Zeilenfläche über Variablen: --r-bg (Ruhe), --r-bv (Rahmen/Bevel), --r-hv (Hover), --r-clip (Kerbe).
+/* Kit-Listen (Inventar): Spaltenraster je Variante (inkl. Media Queries), Zeile, Name, Zelle, Platzhalter.
+   Tabellenzeilen: flach, Linie unten (Trenner), Kopf in Pixelschrift. Plattenzeilen (Konten, Kacheln, Karte):
+   erhabene Steinplatte mit Fase. Hover = Fläche (--hv-row), Name wird #fff. Gewählt = Akzentrahmen (2 Einheiten) + --acc-dim.
+   Zeilenfläche über Variablen: --r-bg (Ruhe), --r-bd (Rahmenfarbe, 1 Einheit), --r-bv (Fase), --r-hv (Hover).
    data-force="hover|press" erzwingt den Zustand (Vorschau /_kit). */
 
 .vx-list { --l-cols: minmax(0, 1fr); --l-gap: 12px; --l-pad: 0 8px; --l-h: 56px; --l-hh: 32px; display: flex; flex-direction: column; min-width: 0; }
 .vx-rows { display: flex; flex-direction: column; min-width: 0; }
 .vx-lhead, .vx-row { display: grid; grid-template-columns: var(--l-cols); column-gap: var(--l-gap); align-items: center; padding: var(--l-pad); }
-.vx-lhead { min-height: var(--l-hh); color: var(--fg-3); font-size: calc(13px * var(--tz)); font-weight: 600; white-space: nowrap; }
-.vx-row { --r-bg: transparent; --r-bv: none; --r-hv: var(--hv-row); --r-clip: var(--n1); position: relative; isolation: isolate; min-height: var(--l-h); min-width: 0; }
-.vx-row::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--r-bg); box-shadow: var(--r-bv); clip-path: var(--r-clip); transition: background-color var(--st); pointer-events: none; }
+.vx-lhead { min-height: var(--l-hh); color: var(--fg-3); font: 400 calc(17px * var(--tz))/1 var(--f-px); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); }
+.vx-row { --r-bg: transparent; --r-bd: transparent; --r-bv: none; --r-hv: var(--hv-row); --acc-dim: color-mix(in srgb, var(--acc) 16%, var(--panel)); position: relative; isolation: isolate; min-height: var(--l-h); min-width: 0; }
+.vx-row::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--r-bg); border: var(--px) solid var(--r-bd); box-shadow: var(--r-bv); clip-path: var(--n1); transition: background-color var(--st); pointer-events: none; }
 .vx-row[data-rise] { animation: vx-rise .32s var(--ease) both; animation-delay: calc(var(--i, 0) * 40ms); }
 .vx-row:is(:hover, :focus-within, [data-force="hover"])::before { background: var(--r-hv); }
 .vx-row[data-hit]:is(:has(> .hit:active), [data-force="press"])::before { background: var(--pr-row); }
-.vx-row[data-selected]::before { background: var(--sel-bg); box-shadow: var(--sel-edge); }
+.vx-row[data-selected]::before { background: var(--acc-dim); border-color: var(--acc); box-shadow: inset 0 0 0 var(--px) var(--acc); }
+/* Plattenzeile (Konten, Kacheln, Katalogkarte): Steinplatte mit Fase, Rand --edge; gewählt wie oben, zusätzlich ▶ links (nur Konten, dort ist Platz) */
+.vx-row[data-feature], .vx-list[data-variant="tiles"] .vx-row, .vx-list[data-variant="accounts"] .vx-row { --r-bg: var(--panel-2); --r-bd: var(--edge); --r-bv: inset var(--u2) var(--u2) 0 var(--line), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--bg-2); --r-hv: color-mix(in oklab, var(--panel-2) 80%, var(--line-2)); }
 
 /* Trefferfläche über der ganzen Zeile; Zellen lassen Klicks durch, nur ihre Bedienelemente fangen sie ab */
 .vx-row[data-hit] { cursor: pointer; }
@@ -32,14 +35,14 @@
 /* ---------- Name ---------- */
 .vx-rt { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
 .vx-rt-1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.vx-rt-n { font-weight: 600; font-size: calc(14px * var(--tz)); color: var(--fg); transition: color var(--st); }
+.vx-rt-n { font-weight: 700; font-size: calc(15px * var(--tz)); color: var(--fg); text-shadow: var(--tsh); transition: color var(--st); }
 .vx-rt-a { flex: none; font-size: calc(13px * var(--tz)); color: var(--fg-3); white-space: nowrap; }
 .vx-rt-s { margin: 0; font-size: calc(13px * var(--tz)); color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vx-rt-m { display: flex; align-items: center; gap: 6px; min-height: 22px; overflow: hidden; font-size: calc(13px * var(--tz)); color: var(--fg-3); }
 .vx-rt-m .vx-count { font-size: calc(17px * var(--tz)); color: var(--fg-2); }
 .vx-rt-m .vx-chip { flex: none; }
 .vx-rt[data-size="l"] { gap: 3px; line-height: normal; }
-.vx-rt[data-size="l"] .vx-rt-n { font-weight: 700; font-size: calc(15px * var(--tz)); }
+.vx-rt[data-size="l"] .vx-rt-n { font-weight: 700; font-size: calc(16px * var(--tz)); }
 .vx-rt[data-size="l"] .vx-rt-s { font-size: calc(13px * var(--tz)); color: var(--fg-2); }
 .vx-rt[data-size="feature"] { gap: 6px; line-height: normal; }
 .vx-rt[data-size="feature"] .vx-rt-n { font: 800 28px/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; }
@@ -71,8 +74,10 @@
 .vx-list[data-variant="instances"] .vx-rt { padding-right: 12px; }
 
 /* ---------- Inhalte: 48 px, Spalte „Hinweise“ entfällt ohne Hinweise (noWarnCol) ---------- */
-.vx-list[data-variant="content"] { --l-cols: 28px 40px minmax(0, 1fr) 300px 136px 72px 36px; --l-gap: 10px; --l-pad: 0 6px 0 8px; --l-h: 48px; --l-hh: 30px; }
-.vx-list[data-variant="content"][data-nw] { --l-cols: 28px 40px minmax(0, 1fr) 136px 72px 36px; }
+.vx-list[data-variant="content"] { --l-cols: 28px 40px minmax(0, 1fr) 300px 136px 100px 36px; --l-gap: 10px; --l-pad: 0 6px 0 8px; --l-h: 48px; --l-hh: 36px; }
+.vx-list[data-variant="content"][data-nw] { --l-cols: 28px 40px minmax(0, 1fr) 136px 100px 36px; }
+/* Spaltenkopf „An“ steht mittig über dem Schalter (Schalter rechtsbündig in der Zelle, dahinter das reservierte Zustandswort) */
+.vx-list[data-variant="content"] .vx-lhead > :nth-last-child(2) { width: calc(var(--vx-box) * 2); margin-left: auto; margin-right: calc(var(--sw-gap) + var(--sw-st-w)); text-align: center; }
 
 /* ---------- Welten und Server: 56 px, Aktion in fester Spalte (Spielen ↔ Fortschritt ohne Springen); Server mit Statusspalte ---------- */
 .vx-list[data-variant="worlds"] { --l-cols: 40px minmax(0, 1fr) 120px 36px; --l-gap: 12px; --l-pad: 0 6px 0 8px; }
@@ -87,8 +92,8 @@
 /* ---------- Katalog: 84 px, erster Treffer als Karte 132 px; kompakt (Seitenpanel) 76 px ---------- */
 .vx-list[data-variant="catalog"] { --l-cols: 72px minmax(0, 1fr) 190px; --l-gap: 14px; --l-pad: 0 10px 0 8px; --l-h: 84px; }
 .vx-list[data-variant="catalog-compact"] { --l-cols: 48px minmax(0, 1fr) 128px; --l-gap: 14px; --l-pad: 0 4px 0 8px; --l-h: 76px; }
-.vx-row[data-feature] { --r-bg: var(--panel); --r-bv: var(--bv-plate); --r-hv: var(--panel-2); --r-clip: var(--n2); min-height: 132px; grid-template-columns: 104px minmax(0, 1fr) 190px; column-gap: 18px; margin-bottom: 8px; }
-.vx-row[data-feature]:is(:has(> .hit:active), [data-force="press"])::before { background: var(--panel); box-shadow: var(--bv-sunk); }
+.vx-row[data-feature] { min-height: 132px; grid-template-columns: 104px minmax(0, 1fr) 190px; column-gap: 18px; margin-bottom: 8px; }
+.vx-row[data-feature]:is(:has(> .hit:active), [data-force="press"])::before { background: var(--panel-2); box-shadow: var(--slot-sh); }
 
 /* Platzhalter beim Laden (SkelRow): Bild 64 (kompakt 40, Karte 104), Zeilen 12 px, Aktion 32 px; ohne Hover */
 .vx-row[data-skel] { --r-hv: var(--r-bg); }
@@ -124,7 +129,7 @@
 
 /* ---------- Kacheln (Inhalte als Raster): 88 px, Platte; Kinder: Bild · Name · rechts oben · Unterzeile · rechts unten ---------- */
 .vx-list[data-variant="tiles"] .vx-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; padding-top: 4px; }
-.vx-list[data-variant="tiles"] .vx-row { --r-bg: var(--panel); --r-bv: var(--bv-plate); --r-hv: var(--panel-2); min-height: 88px; padding: 12px 8px 12px 12px; grid-template-columns: 52px minmax(0, 1fr) auto; grid-template-rows: minmax(32px, auto) minmax(32px, auto); column-gap: 12px; }
+.vx-list[data-variant="tiles"] .vx-row { min-height: 88px; padding: 12px 8px 12px 12px; grid-template-columns: 52px minmax(0, 1fr) auto; grid-template-rows: minmax(32px, auto) minmax(32px, auto); column-gap: 12px; }
 .vx-list[data-variant="tiles"] .vx-row:not([data-ghost]) > :nth-child(1) { grid-row: 1 / 3; position: relative; }
 .vx-list[data-variant="tiles"] .vx-row:not([data-ghost]) > :nth-child(2) { grid-column: 2; grid-row: 1; }
 .vx-list[data-variant="tiles"] .vx-row:not([data-ghost]) > :nth-child(3) { grid-column: 3; grid-row: 1; display: flex; align-items: center; gap: 2px; }
@@ -141,7 +146,8 @@
 
 /* ---------- Konten: 60-px-Platten, aktives Konto gewählt ---------- */
 .vx-list[data-variant="accounts"] .vx-rows { gap: 8px; }
-.vx-list[data-variant="accounts"] .vx-row { --r-bg: var(--panel); --r-bv: var(--bv-plate); --r-hv: var(--panel); display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 6px 8px 6px 12px; }
+.vx-list[data-variant="accounts"] .vx-row { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 6px 8px 6px 30px; }
+.vx-list[data-variant="accounts"] .vx-row[data-selected]::after { content: ""; position: absolute; left: var(--u3); top: 50%; width: var(--u3); height: calc(var(--px) * 5); margin-top: calc(var(--px) * -2.5); background: var(--acc); clip-path: var(--arrow); pointer-events: none; }
 .vx-list[data-variant="accounts"] .vx-row > .vx-rt { flex: 1; }
 /* Eine Hinweiszeile unter dem Namen (z. B. Warnung) bricht um, statt abgeschnitten zu werden */
 .vx-list[data-variant="accounts"] .vx-rt-m { overflow: visible; }
@@ -162,14 +168,14 @@
   .vx-list [data-hide="1180"] { display: none; }
 }
 @media (max-width: 1040px) {
-  .vx-list[data-variant="instances"] { --l-cols: 44px minmax(0, 1fr) 120px 110px 36px 36px; }
-  .vx-list[data-variant="content"] { --l-cols: 28px 40px minmax(0, 1fr) 190px 116px 72px 36px; }
-  .vx-list[data-variant="content"][data-nw] { --l-cols: 28px 40px minmax(0, 1fr) 116px 72px 36px; }
+  .vx-list[data-variant="instances"] { --l-cols: 44px minmax(0, 1fr) 120px 140px 36px 36px; }
+  .vx-list[data-variant="content"] { --l-cols: 28px 40px minmax(0, 1fr) 190px 132px 100px 36px; }
+  .vx-list[data-variant="content"][data-nw] { --l-cols: 28px 40px minmax(0, 1fr) 132px 100px 36px; }
   .vx-list [data-hide="1040"] { display: none; }
 }
 @media (max-width: 900px) {
-  .vx-list[data-variant="content"] { --l-cols: 28px 40px minmax(0, 1fr) 144px 104px 72px 36px; }
-  .vx-list[data-variant="content"][data-nw] { --l-cols: 28px 40px minmax(0, 1fr) 104px 72px 36px; }
+  .vx-list[data-variant="content"] { --l-cols: 28px 40px minmax(0, 1fr) 130px 132px 100px 36px; }
+  .vx-list[data-variant="content"][data-nw] { --l-cols: 28px 40px minmax(0, 1fr) 132px 100px 36px; }
   .vx-list [data-hide="900"] { display: none; }
 }
 @media (max-width: 720px) {

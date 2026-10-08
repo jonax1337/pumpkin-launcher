@@ -119,8 +119,15 @@ fn form_decode(s: &str) -> String {
 // Seite im Browser nach der Anmeldung: Vorlage und Schriften liegen in `assets/login/`; Stylesheets, Buddy, Wortzeichen
 // und Favicon sind die Dateien der App selbst (`src/`, `branding/`). Alles wird eingebunden, die Seite lädt nichts nach.
 const PAGE: &str = include_str!("../../../assets/login/page.html");
-const APP_CSS: &str = concat!(include_str!("../../../../src/styles/pixelkino.css"), "
-", include_str!("../../../../src/branding/branding.css"));
+const APP_CSS: &str = concat!(
+    include_str!("../../../../src/styles/base.css"),
+    "\n",
+    include_str!("../../../../src/styles/shell.css"),
+    "\n",
+    include_str!("../../../../src/components/onboarding.css"),
+    "\n",
+    include_str!("../../../../src/branding/branding.css")
+);
 const FONT_BIG: &[u8] = include_bytes!("../../../assets/login/big-shoulders-800.woff2");
 const FONT_HANKEN: &[u8] = include_bytes!("../../../assets/login/hanken-grotesk.woff2");
 const WORDMARK: &[u8] = include_bytes!("../../../../branding/pumpkin-launcher/wordmark/light.svg");

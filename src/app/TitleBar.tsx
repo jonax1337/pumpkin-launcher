@@ -50,7 +50,7 @@ function WindowButtons({ activity }: { activity: SharingActivity }) {
         aria-label={t("ui.window.minimize")}
         onClick={() => void win.minimize()}
       >
-        <Icon name="wmin" size="s" />
+        <Icon name="win-min" size="s" />
       </button>
       <button
         type="button"
@@ -58,7 +58,7 @@ function WindowButtons({ activity }: { activity: SharingActivity }) {
         aria-label={t("ui.window.maximize")}
         onClick={() => void win.toggleMaximize()}
       >
-        <Icon name="wmax" size="s" />
+        <Icon name="win-max" size="s" />
       </button>
       <button
         type="button"
@@ -66,7 +66,7 @@ function WindowButtons({ activity }: { activity: SharingActivity }) {
         aria-label={t("common.close")}
         onClick={askClose}
       >
-        <Icon name="x" size="s" />
+        <Icon name="win-close" size="s" />
       </button>
       <CloseConfirm activity={activity} open={confirmingClose} onOpenChange={setConfirmingClose} onConfirm={() => void win.close()} />
     </div>
@@ -84,17 +84,17 @@ export function TitleBar({ online }: { online: boolean }) {
         <BrandMark />
         <BrandWordmark />
       </div>
-      <div className="bar-mid items-center gap-2" data-tauri-drag-region>
+      <div className="bar-mid" data-tauri-drag-region>
         <SessionChip activity={activity} />
         {update && (
-          <ButtonLink to="/settings?tab=ueber" size="s" icon="up" tone="acc" className="shrink-0">
+          <ButtonLink to="/settings?tab=ueber" size="s" icon="update" tone="acc">
             {t("ui.titlebar.updateAvailable")}
           </ButtonLink>
         )}
       </div>
       <div className="bar-right">
         {/* Live-Region bleibt stehen (links neben der Gruppe, schiebt nichts); online leer, damit nichts vorgelesen wird */}
-        <span className="pointer-events-none absolute top-1/2 right-[calc(100%+8px)] flex -translate-y-1/2" role="status">
+        <span className="bar-live" role="status">
           {!online && (
             <Chip tone="warn" icon="plug">
               {t("ui.offline.label")}<span className="sr">{t("ui.offline.detail")}</span>

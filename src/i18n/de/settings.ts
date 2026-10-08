@@ -67,6 +67,8 @@ export const settings = {
   "settings.storage.moved": "Instanzen verschoben. Der neue Speicherort ist aktiv.",
   "settings.storage.sourceRetained": "Der neue Speicherort ist aktiv. Die alte Kopie unter „{path}“ konnte nicht vollständig entfernt werden. Prüfe deine Instanzen am neuen Ort, bevor du die alte Kopie manuell löschst.",
   "settings.storage.usageSection": "Belegter Platz",
+  "settings.storage.total": "{size} belegt",
+  "settings.storage.barLabel": "Speicherbelegung",
   "settings.storage.modCache": "Mod-Cache",
   "settings.storage.modCacheNote": "Jede Mod-Datei einmal, die Instanzen verlinken sie",
   "settings.storage.shared": "Geteilte Dateien",
@@ -85,10 +87,10 @@ export const settings = {
   // Über
   "settings.about.license": "Lizenz",
   "settings.about.licenseHint": "Pumpkin Launcher ist freie Software unter der Apache License 2.0.",
-  "settings.about.licenseRead": "Lizenz lesen",
   "settings.about.source": "Quellcode",
   "settings.about.sourceHint": "Offen auf GitHub: lesen, Fehler melden, mitmachen",
-  "settings.about.sourceOpen": "Auf GitHub ansehen",
+  "settings.about.linksTitle": "Links",
+  "settings.about.diagTitle": "Diagnose",
 
   // Protokoll: gesicherte Sitzungen
   "settings.log.session": "Sitzung",

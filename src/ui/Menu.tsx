@@ -1,6 +1,6 @@
 /**
  * Menüs des Kits: Dropdown und Kontextmenü mit gleichen Einträgen, freie Menübausteine.
- * Verhalten aus Radix; Aussehen: ui/overlay.css (vx-pop, vx-mi). Innerhalb gilt der hellere Hover-Kontext (data-ctx="overlay", tokens.css).
+ * Verhalten aus Radix; Aussehen: ui/overlay.css (vx-pop = Item-Tooltip-Rahmen, vx-mi). Innerhalb gilt der hellere Hover-Kontext (data-ctx="overlay", tokens.css).
  */
 import { useRef, useState, type ComponentProps, type FocusEvent, type KeyboardEvent, type ReactNode, type SyntheticEvent } from "react";
 import { ContextMenu as CM, DropdownMenu as DM } from "radix-ui";
@@ -43,7 +43,7 @@ function subMenu(e: Extract<MenuEntry, { items: MenuEntry[] }>, M: MenuKit) {
       <M.SubTrigger className="vx-mi" disabled={e.disabled}>
         {e.icon && <Icon name={e.icon} size="s" />}
         <span className="vx-trunc">{e.text}</span>
-        <Icon name="chev" size="s" className="vx-mi-sub" />
+        <Icon name="chev-right" size="s" className="vx-mi-sub" />
       </M.SubTrigger>
       <M.Portal>
         <M.SubContent className="vx-pop" data-ctx="overlay" sideOffset={4} collisionPadding={8} onContextMenu={suppressContextMenu}>
@@ -111,10 +111,10 @@ function dispatchContextMenu(target: Element, x: number, y: number) {
 }
 
 /** Dropdown-Menü an einem Auslöser. Einträge über `items` oder frei als `children` (MenuItem, MenuSep, MenuLabel). */
-export function Menu({ trigger, items, align = "end", width, className, open, onOpenChange, children }: {
+export function Menu({ trigger, items, align = "end", wide, className, open, onOpenChange, children }: {
   trigger: ReactNode; items?: MenuEntry[]; align?: "start" | "end";
-  /** Feste Breite in px (sonst nach Inhalt, mindestens 220). */
-  width?: number;
+  /** Feste Breite 320 (Kontomenü, Auswahl mit Zweitzeile), sonst nach Inhalt, mindestens 240. */
+  wide?: boolean;
   className?: string; open?: boolean; onOpenChange?: (o: boolean) => void; children?: ReactNode;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
@@ -130,7 +130,7 @@ export function Menu({ trigger, items, align = "end", width, className, open, on
     >
       <DM.Trigger asChild ref={ref}>{trigger}</DM.Trigger>
       <DM.Portal>
-        <DM.Content className={cn("vx-pop", className)} data-ctx="overlay" style={width ? { width } : undefined} align={align} sideOffset={6} collisionPadding={8} onFocus={keepFocusWhenClosed}>
+        <DM.Content className={cn("vx-pop", className)} data-ctx="overlay" data-wide={flag(wide)} align={align} sideOffset={6} collisionPadding={8} onFocus={keepFocusWhenClosed}>
           {items && entries(items, DM)}
           {children}
         </DM.Content>
@@ -264,4 +264,16 @@ export function MenuSep({ className, ...props }: ComponentProps<typeof DM.Separa
 }
 export function MenuLabel({ className, ...props }: ComponentProps<typeof DM.Label>) {
   return <DM.Label className={cn("vx-mlabel", className)} {...props} />;
+}
+/** Kopfzeile eines Menüs (Item-Tooltip-Titel): Bild/Symbol `lead`, Name, Zusatz; kein Eintrag, z. B. Konto im Kontomenü. */
+export function MenuHead({ lead, title, sub, className }: { lead?: ReactNode; title: ReactNode; sub?: ReactNode; className?: string }) {
+  return (
+    <DM.Label className={cn("vx-mhead", className)}>
+      {lead}
+      <span className="vx-mhead-t">
+        <b>{title}</b>
+        {sub && <small>{sub}</small>}
+      </span>
+    </DM.Label>
+  );
 }

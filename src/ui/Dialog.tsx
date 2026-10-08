@@ -1,6 +1,6 @@
 /**
  * Dialog, Rückfrage und Seitenpanel des Kits. Verhalten aus Radix; Fokus-Rückgabe, Akzent-Weitergabe und
- * Autofokus-Priorität ergänzt. Aussehen: ui/overlay.css (vx-dlg, vx-sheet). Innerhalb gilt der hellere Hover-Kontext (data-ctx="overlay", tokens.css).
+ * Autofokus-Priorität ergänzt. Aussehen: ui/overlay.css (vx-dlg, vx-sheet: Steinplatte mit eingelassenem Körper). Innerhalb gilt der hellere Hover-Kontext (data-ctx="overlay", tokens.css).
  */
 import { isValidElement, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Dialog as D } from "radix-ui";
@@ -10,8 +10,10 @@ import { recentMenuOrigin } from "./menuOrigin";
 import { cssVars, flag, hasContent } from "./util";
 import type { IconName } from "./types";
 
-/** Dialoghöhe bleibt so weit unter dem Fenster (Rand oben und unten). */
-const VIEWPORT_MARGIN_PX = 64;
+/** Dialogbreite (overlay.css, data-size): s 480 (Rückfrage, Name), m 640 (Formular, Liste, Standard), l 860 (zweispaltig). */
+export type DialogSize = "s" | "m" | "l";
+/** Feste Dialoghöhe (overlay.css, data-h): s 380, m 580, l 700 – immer begrenzt durch das Fenster. */
+export type DialogHeight = "s" | "m" | "l";
 
 /**
  * Fokus zurück an den Auslöser. Dialoge öffnen kontrolliert ohne Radix-Trigger; Radix fiele dann auf body zurück.
@@ -48,7 +50,7 @@ function useReturnFocus(open: boolean) {
 /**
  * --acc am Auslöser (berechnet, also auch geerbt). Ein Gefahrknopf (data-variant="danger") überschreibt
  * --acc nur für sich, dann zählt sein Umfeld. Nur wenn es vom globalen Kupfer abweicht; die Ableitungen
- * (--acc-hi/-mid/-lo) rechnet pixelkino.css über [style*="--acc:"].
+ * (--acc-hi/-mid/-lo) rechnet styles/base.css über [style*="--acc:"].
  */
 function accentOf(el: HTMLElement | null) {
   if (!el?.isConnected) return undefined;
@@ -92,20 +94,20 @@ function DialogHeader({ kind, title, sub, closeLabel, busy }: { kind: keyof type
         {sub && <p className={cls.sub}>{sub}</p>}
       </div>
       <D.Close asChild>
-        <IconButton icon="x" label={closeLabel} tip={false} disabled={busy} />
+        <IconButton icon="close" label={closeLabel} size="s" tip={false} disabled={busy} />
       </D.Close>
     </div>
   );
 }
 
 /**
- * Dialog mit fester Höhe (kein Nachrutschen, wenn sich der Inhalt ändert): Kopf (Titel 26 px, Schließen = IconButton m),
- * scrollender Körper, Fuß. `height` fest in px; ohne passt er sich an. Fuß: `footer` (meist <DialogActions>) und `footLeft`.
+ * Dialog mit fester Höhe (kein Nachrutschen, wenn sich der Inhalt ändert): Kopf (Titel 26 px, Schließen = IconButton s),
+ * scrollender Körper, Fuß. `size` = Breite (s/m/l), `height` fest (s/m/l); ohne `height` passt er sich an. Fuß: `footer` (meist <DialogActions>) und `footLeft`.
  * Startfokus: [data-autofocus] → erstes Eingabefeld im Körper → Primärknopf im Fuß → erstes Bedienbare; nie das Kreuz.
  * `busy`: die Aktion läuft und ließe sich nicht mehr aufhalten; Kreuz, Esc und Klick daneben schließen dann nicht.
  */
-export function Dialog({ open, onOpenChange, title, sub, width = 560, height, footer, footLeft, children, role = "dialog", describedBy, busy }: {
-  open: boolean; onOpenChange: (o: boolean) => void; title: ReactNode; sub?: ReactNode; width?: number; height?: number;
+export function Dialog({ open, onOpenChange, title, sub, size = "m", height, footer, footLeft, children, role = "dialog", describedBy, busy }: {
+  open: boolean; onOpenChange: (o: boolean) => void; title: ReactNode; sub?: ReactNode; size?: DialogSize; height?: DialogHeight;
   footer?: ReactNode; footLeft?: ReactNode; children: ReactNode;
   /** alertdialog für Rückfragen, die eine Entscheidung verlangen. */
   role?: "dialog" | "alertdialog";
@@ -131,11 +133,13 @@ export function Dialog({ open, onOpenChange, title, sub, width = 560, height, fo
             target.focus({ preventScroll: true });
           }}
           onCloseAutoFocus={ret.restore}
-          style={{ ...cssVars({ "--dw": `${width}px`, "--acc": ret.acc }), height: height ? `min(${height}px, calc(100vh - ${VIEWPORT_MARGIN_PX}px))` : undefined }}
+          data-size={size}
+          data-h={height}
+          style={cssVars({ "--acc": ret.acc })}
         >
           <div className="vx-ov-col">
             <DialogHeader kind="dialog" title={title} sub={sub} closeLabel={t("common.close")} busy={busy} />
-            <div className="vx-dlg-b">{children}</div>
+            <div className="vx-dlg-b vx-pit">{children}</div>
             {(footer || footLeft) && (
               <div className="vx-dlg-f">
                 {footLeft && <span className="vx-dlg-left">{footLeft}</span>}
@@ -175,7 +179,7 @@ export function DialogActions({ cancel, confirm }: { cancel?: ReactNode | Cancel
     <>
       {c && (
         <D.Close asChild>
-          <Button width={c.width} disabled={c.disabled} data-autofocus={flag(c.autoFocus)}>{c.label}</Button>
+          <Button variant="ghost" width={c.width} disabled={c.disabled} data-autofocus={flag(c.autoFocus)}>{c.label}</Button>
         </D.Close>
       )}
       {confirm && (
@@ -213,7 +217,7 @@ export function ConfirmDialog({ open, onOpenChange, title, text, confirmLabel, c
       open={open}
       onOpenChange={onOpenChange}
       title={title}
-      width={460}
+      size="s"
       role={danger ? "alertdialog" : "dialog"}
       describedBy={text ? textId : undefined}
       busy={pending}
@@ -247,7 +251,7 @@ export function Sheet({ open, onOpenChange, title, sub, acc, children, tools }: 
           <div className="vx-ov-col">
             <DialogHeader kind="sheet" title={title} sub={sub} closeLabel={t("ui.sheet.closeAria")} />
             {tools && <div className="vx-sheet-t">{tools}</div>}
-            <div className="vx-sheet-b">{children}</div>
+            <div className="vx-sheet-b vx-pit">{children}</div>
           </div>
         </D.Content>
       </D.Portal>

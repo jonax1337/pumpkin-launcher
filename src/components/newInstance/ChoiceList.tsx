@@ -6,7 +6,7 @@ const CHOICE_ROW_HEIGHT = 56;
 
 /** Untereinander stehende Auswahlzeilen. */
 export function ChoiceList(props: ComponentProps<"div">) {
-  return <div className="flex flex-col gap-1" {...props} />;
+  return <div className="ni-choices" {...props} />;
 }
 
 /** `n` Platzhalter für eine ladende Auswahlliste. */

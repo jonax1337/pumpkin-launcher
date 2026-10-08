@@ -1,14 +1,22 @@
 import { Fragment } from "react";
 import { useI18n } from "@/i18n";
-import { Button, Cell, Checkbox, Chip, GhostRow, ListRow, ProjectIcon, RowTitle, Tip } from "@/ui";
+import { Button, Cell, Checkbox, Chip, GhostRow, ListRow, ProjectIcon, RowTitle, Tip, type IconName } from "@/ui";
 import { WIDTH } from "@/lib/breakpoints";
 import { TYPE_ONE_KEYS } from "@/lib/catalog";
 import { formatDate, formatSize } from "@/lib/format";
 import { SourceTag } from "@/components/catalog/SourceTag";
 import type { Mod } from "@/lib/types";
+import { KindTile } from "../KindTile";
 import { useContentModel } from "./ContentModel";
 import { EnabledCell, MoreMenu, UpdateCell } from "./RowCells";
 import type { Ghost, Row, Warn } from "./types";
+
+/** Symbol je Art, solange das Projekt kein eigenes Bild hat. */
+const KIND_ICONS = { mod: "mod", resourcepack: "resourcepack", shader: "shader" } as const satisfies Record<Mod["kind"], IconName>;
+
+function ContentIcon({ mod, url, box }: { mod: Mod; url: string | null | undefined; box?: 40 | 52 }) {
+  return <KindTile url={url} seed={mod.id} icon={KIND_ICONS[mod.kind]} box={box} />;
+}
 
 /** Tooltip der Zeile: Name, Art und Version, wer den Inhalt braucht, Update, Hinweise, Beschreibung. */
 function RowTip({ row, warns }: { row: Row; warns: Warn[] }) {
@@ -113,7 +121,7 @@ function WarnCell({ warns, hideChipBelow }: { warns: Warn[]; hideChipBelow?: num
   return (
     <Fragment>
       <Tip label={first.detail ?? first.text}>
-        <Chip size="s" dot tone="warn" data-hide={hideChipBelow}><span className="truncate min-w-0">{first.text}</span></Chip>
+        <Chip size="s" dot tone="warn" data-hide={hideChipBelow}><span className="dc-warn-text">{first.text}</span></Chip>
       </Tip>
       {more.length > 0 && (
         <Tip label={more.map((w) => w.detail ?? w.text).join(" ")}>
@@ -146,10 +154,10 @@ export function ContentRow({ row }: { row: Row }) {
         onChange={(on) => model.togglePick(mod.id, on)}
         label={t("detail.content.selectItem", { name: model.titleOf(mod) })}
       />
-      <ProjectIcon url={model.iconOf(mod)} seed={mod.id} />
+      <ContentIcon mod={mod} url={model.iconOf(mod)} />
       <Tip label={<RowTip row={row} warns={warns} />}>
         <div>
-          <RowTitle title={model.titleOf(mod)} aside={<ModSourceTag mod={mod} />} sub={subline} trunc={false}><ReaderDescription row={row} text={description} /></RowTitle>
+          <RowTitle title={model.titleOf(mod)} meta={<><ModSourceTag mod={mod} /><span className="dc-sub">{subline}</span></>} trunc={false}><ReaderDescription row={row} text={description} /></RowTitle>
         </div>
       </Tip>
       {model.hasWarnings && <Cell flex><WarnCell warns={warns} hideChipBelow={WIDTH.md} /></Cell>}
@@ -172,7 +180,7 @@ export function ContentTile({ row }: { row: Row }) {
   return (
     <ListRow selected={picked} off={!mod.enabled}>
       <span>
-        <ProjectIcon url={model.iconOf(mod)} seed={mod.id} box={52} />
+        <ContentIcon mod={mod} url={model.iconOf(mod)} box={52} />
         <Checkbox
           checked={picked}
           onChange={(on) => model.togglePick(mod.id, on)}
@@ -189,7 +197,7 @@ export function ContentTile({ row }: { row: Row }) {
       <span>
         {warns.length
           ? <WarnCell warns={warns} />
-          : about ? <span className="truncate" aria-hidden>{about}</span> : <span className="truncate">{subline}</span>}
+          : about ? <span className="ell" aria-hidden>{about}</span> : <span className="ell">{subline}</span>}
       </span>
       <span><UpdateCell mod={mod} layout="tile" hideNoSource={warns.length > 0} /></span>
     </ListRow>

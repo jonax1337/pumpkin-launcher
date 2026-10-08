@@ -21,7 +21,7 @@ export function FriendsModRow({ instance, busy = null }: { instance: Instance; b
   return (
     <StatusPanel
       size="s"
-      icon="box"
+      icon="mod"
       role="status"
       tone={row.connected ? "run" : row.action === "retry" ? "warn" : "neutral"}
       title={t("friendsHost.ingame.name")}
@@ -66,7 +66,7 @@ function IngameSwitch({ instanceId, on }: { instanceId: string; on: boolean }) {
 
 function RetryButton({ instanceId }: { instanceId: string }) {
   const retry = useRetryIngame(instanceId);
-  return <Button size="s" icon="redo" disabled={retry.isPending} onClick={() => retry.mutate()}>{t("friendsHost.ingame.retry")}</Button>;
+  return <Button size="s" icon="refresh" disabled={retry.isPending} onClick={() => retry.mutate()}>{t("friendsHost.ingame.retry")}</Button>;
 }
 
 /** Vanilla hat keinen Loader, in den die Mod sich einhängen könnte: der Klick trägt Fabric ein, das nächste Spielen installiert es. */

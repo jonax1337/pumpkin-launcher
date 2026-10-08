@@ -12,7 +12,7 @@ import { PixelScene } from "@/pixel/PixelScene";
 import { newInstanceUrl } from "@/lib/routes";
 import type { Instance } from "@/lib/types";
 import { useLook } from "@/store/look";
-import { Actions, Button, ButtonLink, ContextMenu, ErrorBox, SectionHeader, Skel, type MenuEntry } from "@/ui";
+import { Actions, Button, ButtonLink, ContextMenu, ErrorBox, HeroMeta, HeroShade, Page, SectionHeader, Skel, type MenuEntry } from "@/ui";
 import { HeroActions } from "./home/HeroActions";
 import { HeroInfo } from "./home/HeroInfo";
 import { Rail, TILE_H, TILE_W } from "./home/Rail";
@@ -29,7 +29,7 @@ function HomeInstancesHeader() {
           <NewInstanceDialog>
             <Button icon="plus">{t("components.newInstance.title")}</Button>
           </NewInstanceDialog>
-          <ButtonLink to="/instances" variant="ghost" iconEnd="chev">{t("ui.nav.library")}</ButtonLink>
+          <ButtonLink to="/instances" iconEnd="chev-right">{t("ui.nav.library")}</ButtonLink>
         </Actions>
       }
     />
@@ -44,14 +44,14 @@ function HomeSkeleton() {
       <div className="hero">
         <div className="hero-k">
           <div className="titlebox"><Skel h={72} w="min(520px, 80%)" /></div>
-          <div className="hmeta"><Skel h={16} w={320} /></div>
+          <HeroMeta><Skel h={16} w={320} /></HeroMeta>
         </div>
-        <div className="acts"><Skel h={56} w={272} /><Skel h={40} w={40} /></div>
+        <Actions gap={12}><Skel h={56} w={272} /><Skel h={40} w={40} /></Actions>
         <div className="pstat" />
       </div>
       <div className="cont">
         <HomeInstancesHeader />
-        <div className="railwrap"><div className="rail"><SkelList n={4} w={TILE_W} h={TILE_H} className="flex-none" /></div></div>
+        <div className="railwrap"><div className="rail"><SkelList n={4} w={TILE_W} h={TILE_H} /></div></div>
       </div>
     </section>
   );
@@ -67,10 +67,10 @@ export function HomePage() {
   if (isLoading) return <HomeSkeleton />;
   if (error)
     return (
-      <section className="page">
+      <Page>
         <h1 className="sr">{t("ui.nav.home")}</h1>
         <ErrorBox title={t("pages.home.loadErrorTitle")} error={error} onRetry={() => void refetch()} />
-      </section>
+      </Page>
     );
   if (!instances?.length || !current) return <Onboarding />;
 
@@ -96,7 +96,7 @@ function HomeContent({ instances, current, onPick }: {
     <ContextMenu items={items}>
     <section className="home">
       <PixelScene bio={look.bio} seed={look.seed} mode="hero" className="scene" />
-      <div className="shade-home" />
+      <HeroShade />
       <h1 className="sr">{t("ui.nav.home")}</h1>
       <div className="hero">
         <HeroInfo key={`info-${current.id}`} instance={current} />

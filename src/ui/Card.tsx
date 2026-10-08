@@ -3,6 +3,7 @@ import { Tooltip as T } from "radix-ui";
 import { ContextMenu, type MenuEntry } from "./Menu";
 import { TIP_DELAY_MS } from "./Tip";
 import { cn } from "@/lib/utils";
+import { Chip } from "./Chip";
 import { PixelScene } from "@/pixel/PixelScene";
 import type { Biome } from "@/pixel/scene";
 import { HitEl, type Hit } from "./Hit";
@@ -82,7 +83,7 @@ function CardHit({ hit, title, sub, tip, current, pressed, titleRef, subRef }: {
 
 /**
  * Szenenkarte: breite Pixel-Landschaft, Instanz-Icon und Bildunterschrift, und eine
- * Trefferfläche (`hit`, Link oder Knopf) über allem. Hover: eine Hebung (1 Einheit) + helleres Rahmenlicht; Druck setzt ab.
+ * Trefferfläche (`hit`, Link oder Knopf) über allem. Platte mit Bildrahmen (Slot) und Namensschild; Hover hellt den Rand auf, „aktuell“ färbt die Platte in der Akzentfarbe (▶ am Namensschild).
  * Fokusring an der Karte (über Rahmen und Bildunterschrift).
  */
 export function SceneCard({ look, art, title, sub, status, primary, hit, current, menu, tip, className, "data-force": force }: SceneCardProps) {
@@ -98,7 +99,7 @@ export function SceneCard({ look, art, title, sub, status, primary, hit, current
       style={cardStyle(look)}
     >
       <SceneMedia look={look} />
-      <span className="vx-card-cap">
+      <span className="vx-card-cap vx-stone">
         {art && <span className="vx-card-icon" aria-hidden>{art}</span>}
         <span className="vx-card-copy">
           <b ref={titleRef}>{title}</b>
@@ -114,7 +115,7 @@ export function SceneCard({ look, art, title, sub, status, primary, hit, current
 }
 
 /**
- * Szenenwahl-Karte 96×64 mit dem Namen darunter. „gewählt“ (`pressed`): Kupferring, aria-pressed am Knopf.
+ * Szenenwahl-Karte 96×64 mit dem Namen darunter. „gewählt“ (`pressed`): Akzentring, aria-pressed am Knopf.
  * Fokus auf Gewähltem = Doppelring.
  */
 export function ThumbCard({ look, title, pressed, hit, className, "data-force": force }: {
@@ -142,7 +143,7 @@ export function AddCard({ label, className, type = "button", ...props }: { label
   );
 }
 
-/** Quadratische Auswahlkachel (Pixel-Icon, Farbe): Platte, „gewählt“ mit Kupferring. Der Name ist Pflicht, er steht als aria-label und Tooltip am Knopf. */
+/** Quadratische Auswahlkachel (Pixel-Icon, Farbe): Platte, „gewählt“ mit Akzentrahmen. Der Name ist Pflicht, er steht als aria-label und Tooltip am Knopf. */
 export function PickTile({ label, pressed, size = 48, onClick, children }: {
   label: string; pressed: boolean; size?: 32 | 48; onClick: () => void; children: ReactNode;
 }) {
@@ -153,8 +154,8 @@ export function PickTile({ label, pressed, size = 48, onClick, children }: {
   );
 }
 
-/** Raster für Bildkarten (auto-fill ab 188 px, Lücke 14) oder thumb (umbrechende Reihe, Lücke 12). */
-export function CardGrid({ variant = "poster", className, children, ...props }: { variant?: "poster" | "thumb" } & ComponentProps<"div">) {
+/** Raster für Bildkarten (auto-fill ab 188 px, Lücke 14), thumb (umbrechende Reihe, Lücke 12) oder pick (Auswahlkarten 160–200 px, Lücke 16). */
+export function CardGrid({ variant = "poster", className, children, ...props }: { variant?: "poster" | "thumb" | "pick" } & ComponentProps<"div">) {
   return (
     <div className={cn("vx-cards", className)} data-variant={variant} {...props}>
       {children}
@@ -162,7 +163,7 @@ export function CardGrid({ variant = "poster", className, children, ...props }: 
   );
 }
 
-/** Kleine Szene als Bild (Listenzeile 44, Menüeintrag 28): Kerbe, keine Fläche. */
+/** Kleine Szene als Bild (Listenzeile 44, Menüeintrag 28): Slot-Rand um das Bild. */
 export function SceneThumb({ bio, seed, size = 44, art, className }: {
   bio: Biome; seed: number; size?: 28 | 44; art?: ReactNode; className?: string;
 }) {
@@ -188,7 +189,7 @@ export type ChoiceProps = {
 } & Omit<ComponentProps<"button">, "title" | "role">;
 
 /**
- * Auswahlzeile/-karte. Hover-Platte --hv-row, gewählt = Kupferrahmen 1 Einheit + 10 % Tönung,
+ * Auswahlzeile/-karte. Hover-Platte --hv-row, gewählt = Akzentrahmen (2 Einheiten) + Tönung + ▶,
  * Druck: Fläche eingelassen, Inhalt 1 Einheit tiefer. Fokus auf Gewähltem: Doppelring.
  */
 export function Choice({ size = "m", media, title, sub, trail, selected, role = "button", className, type = "button", ...props }: ChoiceProps) {
@@ -201,6 +202,33 @@ export function Choice({ size = "m", media, title, sub, trail, selected, role = 
         {sub != null && <span>{sub}</span>}
       </span>
       {trail != null && <span className="vx-choice-r">{trail}</span>}
+    </button>
+  );
+}
+
+export type PickCardProps = {
+  /** Bild oben im Slot (Umhang, Skin …). */
+  media: ReactNode;
+  title: ReactNode;
+  sub?: ReactNode;
+  /** Marke oben links im Bild, solange die Karte gewählt ist (z. B. „Aktiv“). */
+  flag?: ReactNode;
+  selected: boolean;
+} & Omit<ComponentProps<"button">, "title" | "role">;
+
+/**
+ * Auswahlkarte für radiogroups: Bild im eingelassenen Slot, darunter Name und Zusatz. Gewählt = Akzentrahmen + Tönung + Marke
+ * mit Haken (`flag`), Fokus auf Gewähltem = Doppelring. Pfeiltasten legt der Container fest (`useRovingItems`, `item=".vx-pickcard"`).
+ */
+export function PickCard({ media, title, sub, flag: flagText, selected, className, type = "button", ...props }: PickCardProps) {
+  return (
+    <button type={type} role="radio" aria-checked={selected} className={cn("vx-pickcard fx", className)} data-selected={flag(selected)} {...props}>
+      <span className="vx-pickcard-pic vx-pit">
+        {media}
+        {selected && flagText != null && <Chip className="vx-pickcard-flag" tone="acc" icon="check" size="s">{flagText}</Chip>}
+      </span>
+      <b>{title}</b>
+      {sub != null && <small>{sub}</small>}
     </button>
   );
 }

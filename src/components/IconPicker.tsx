@@ -5,6 +5,7 @@ import { squareIcon } from "@/lib/image";
 import { GLYPH_NAMES, GLYPH_PALETTES, PALETTE_NAMES } from "@/pixel/icons";
 import type { IconChoice } from "@/lib/types";
 import { Button, Glyph, Hint, PickTile, Segmented } from "@/ui";
+import { cssVars } from "@/ui/util";
 
 type Mode = "auto" | "glyph" | "image";
 type GlyphChoice = Extract<IconChoice, { type: "glyph" }>;
@@ -17,7 +18,7 @@ function GlyphChooser({ icon, onChange }: { icon: GlyphChoice; onChange: (icon: 
   const { t } = useI18n();
   return (
     <>
-      <div role="group" aria-label={t("components.icon.paletteGroup")} className="flex flex-wrap gap-2">
+      <div role="group" aria-label={t("components.icon.paletteGroup")} className="ip-tiles">
         {PALETTE_NAMES.map((palette) => (
           <PickTile
             key={palette}
@@ -26,11 +27,11 @@ function GlyphChooser({ icon, onChange }: { icon: GlyphChoice; onChange: (icon: 
             pressed={palette === icon.palette}
             onClick={() => onChange({ ...icon, palette })}
           >
-            <span className="vx-swatch" style={{ background: GLYPH_PALETTES[palette].a }} />
+            <span className="vx-swatch" style={cssVars({ "--sw": GLYPH_PALETTES[palette].a })} />
           </PickTile>
         ))}
       </div>
-      <div role="group" aria-label={t("components.icon.glyphGroup")} className="flex flex-wrap gap-2">
+      <div role="group" aria-label={t("components.icon.glyphGroup")} className="ip-tiles">
         {GLYPH_NAMES.map((glyph) => (
           <PickTile key={glyph} label={t(`components.icon.glyph.${glyph}`)} pressed={glyph === icon.glyph} onClick={() => onChange({ ...icon, glyph })}>
             <Glyph name={glyph} pal={icon.palette} box={40} />
@@ -88,11 +89,11 @@ export function IconPicker({ value, onChange, preview }: { value: IconChoice | n
   }
 
   return (
-    <div className="flex items-start gap-4">
+    <div className="ip">
       <span className="vx-iconbox" aria-hidden>
         <span className="vx-art">{preview}</span>
       </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-3">
+      <div className="ip-side">
         <Segmented
           label={t("components.icon.modeLabel")}
           value={mode}

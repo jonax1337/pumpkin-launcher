@@ -27,12 +27,12 @@ export function ProfileBar({ instance, busy }: { instance: Instance; busy: strin
     instance.modProfiles.map((profile) => ({ id: profile.id, text: profile.name, onSelect: () => setDialog({ type, profile }) }));
 
   const reset: MenuEntry[] = active && modified
-    ? [{ id: "reset", text: t("modProfiles.reset", { name: active.name }), icon: "redo", onSelect: () => profiles.apply(active) }]
+    ? [{ id: "reset", text: t("modProfiles.reset", { name: active.name }), icon: "undo", onSelect: () => profiles.apply(active) }]
     : [];
   const manage: MenuEntry[] = instance.modProfiles.length
     ? [
         "-",
-        { id: "rename", text: t("common.rename"), icon: "file", items: perProfile("rename") },
+        { id: "rename", text: t("common.rename"), icon: "edit", items: perProfile("rename") },
         { id: "delete", text: t("common.delete"), icon: "trash", items: perProfile("delete") },
       ]
     : [];
@@ -42,7 +42,7 @@ export function ProfileBar({ instance, busy }: { instance: Instance; busy: strin
     <>
       <Select
         size="s"
-        className="max-[1280px]:[&_.vx-sel-lab]:hidden"
+        className="dc-sort"
         label={t("modProfiles.label")}
         placeholder={t("modProfiles.none")}
         value={active?.id ?? ""}

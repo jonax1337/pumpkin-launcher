@@ -47,6 +47,7 @@ export function ContentList({ entries }: { entries: Entry[] }) {
   return (
     <List
       variant="content"
+      className="dc-table vx-pit"
       noWarnCol={!model.hasWarnings}
       divided
       {...roving}

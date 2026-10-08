@@ -35,13 +35,13 @@ export function UpdateCell({ mod, layout, hideNoSource }: { mod: Mod; layout: Ce
     <Tip label={t("detail.content.updateFromTo", { name: title, from: mod.version, to: update.versionNumber })}>
       <Button
         size="s"
-        icon="up"
+        icon="update"
         width={UPDATE_BUTTON_WIDTH}
         disabled={model.locked}
         aria-label={t("detail.content.updateTo", { name: title, version: update.versionNumber })}
         onClick={() => model.runUpdates([mod.id])}
       >
-        <span className="truncate">{update.versionNumber}</span>
+        <span className="ell">{update.versionNumber}</span>
       </Button>
     </Tip>
   );
@@ -57,11 +57,12 @@ function NoUpdateStatus({ mod, hideNoSource }: { mod: Mod; hideNoSource?: boolea
       </Tip>
     );
   }
-  if (mod.source.type === "modrinth" || hideNoSource) return null;
+  if (hideNoSource) return null;
+  if (mod.source.type === "modrinth") return <span className="dc-nosrc">{t("detail.content.upToDate")}</span>;
   const tip = mod.source.type === "local" ? "detail.content.noUpdateSourceLocalTip" : "detail.content.noUpdateSourceTip";
   return (
     <Tip label={t(tip)}>
-      <span className="text-fg-3 truncate text-[length:calc(13px*var(--tz))]">{t("detail.content.noUpdateSource")}</span>
+      <span className="dc-nosrc">{t("detail.content.noUpdateSource")}</span>
     </Tip>
   );
 }

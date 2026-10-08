@@ -28,13 +28,13 @@ function useSubline() {
   };
 }
 
-/** Anwesenheit als Punkt und Text, nie nur als Farbe; „Relay“ dahinter, wenn die Verbindung nicht direkt ist. */
+/** Anwesenheit: Bei bestätigten Freunden steht sie schon (farbig) in der Zeile unter dem Namen und am Punkt des Kopfes; der Chip nennt sie nur, wo die Zeile etwas anderes sagt. „Relay“ dahinter, wenn die Verbindung nicht direkt ist. */
 function PresenceCell({ friend }: { friend: Friend }) {
   const { t } = useI18n();
   const tone = friend.presence === "playing" ? "acc" : friend.presence === "online" ? "run" : undefined;
   return (
     <Cell flex>
-      <Chip size="s" dot tone={tone}>{t(PRESENCE_LABEL[friend.presence])}</Chip>
+      {!friend.confirmed && <Chip size="s" dot tone={tone}>{t(PRESENCE_LABEL[friend.presence])}</Chip>}
       {friend.path === "relay" && (
         <Tip label={t("friends.path.relayTip")} describe>
           <Chip size="s">{t("friends.path.relay")}</Chip>
@@ -72,7 +72,7 @@ function RowMenu({ friend, label, actions }: { friend: Friend; label: string; ac
   const { t } = useI18n();
   const person = { id: friend.id, name: label };
   const items: MenuEntry[] = [
-    { id: "rename", text: t("common.rename"), icon: "file", onSelect: () => actions.rename(friend) },
+    { id: "rename", text: t("common.rename"), icon: "edit", onSelect: () => actions.rename(friend) },
     { id: "fingerprint", text: t("friends.menu.fingerprint"), icon: "eye", onSelect: () => actions.showFingerprint(friend, label) },
     "-",
     { id: "remove", text: t("common.remove"), icon: "trash", bad: true, onSelect: () => actions.askRemove(person) },
@@ -95,8 +95,8 @@ export function FriendRow({ friend, label, invite, session, actions }: {
   const gone = friend.removedByPeer;
   return (
     <>
-      <ListRow off={gone}>
-        <span className="grid place-items-center"><FriendAvatar friendId={friend.id} name={friendName(friend)} /></span>
+      <ListRow off={gone} data-presence={gone ? undefined : friend.presence}>
+        <span className="friends-av"><FriendAvatar friendId={friend.id} name={friendName(friend)} /></span>
         <SelfAsserted><RowTitle title={label} sub={subline(friend)} /></SelfAsserted>
         {gone ? <span /> : <PresenceCell friend={friend} />}
         {gone ? (
@@ -124,9 +124,9 @@ function NoticeRow({ friend, label }: { friend: Friend; label: string }) {
   return (
     <ListRow data-note="" data-tone={identityChanged ? "warn" : undefined}>
       <span />
-      <span className="flex min-w-0 items-center gap-2 text-[13px] text-fg-2">
+      <span className="friends-notice">
         <Icon name={identityChanged ? "warn" : "info"} size="s" tone={identityChanged ? "warn" : undefined} />
-        <span className="min-w-0">{text}</span>
+        <span>{text}</span>
       </span>
       <Cell flex align="end">
         <Button size="s" disabled={acknowledge.isPending} onClick={() => acknowledge.mutate(friend.id)}>{t("friends.notice.ok")}</Button>

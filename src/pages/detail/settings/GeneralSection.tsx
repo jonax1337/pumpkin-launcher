@@ -19,7 +19,7 @@ export function GeneralSection({ instance, form, locked }: { instance: Instance;
   const groupItems = useGroupMenu(instance);
   const groupText = instance.group ?? t("detail.settings.noGroup");
   return (
-    <FormSection title={t("detail.settings.generalSection")}>
+    <FormSection plate title={t("detail.settings.generalSection")}>
       <FormRow label={t("common.name")} htmlFor="inst-name">
         <TextField
           id="inst-name"
@@ -37,7 +37,7 @@ export function GeneralSection({ instance, form, locked }: { instance: Instance;
             align="start"
             items={groupItems}
             trigger={
-              <Button iconEnd="chevd" disabled={locked} aria-label={t("detail.settings.groupAria", { name: groupText })}>
+              <Button iconEnd="chev-down" disabled={locked} aria-label={t("detail.settings.groupAria", { name: groupText })}>
                 {groupText}
               </Button>
             }

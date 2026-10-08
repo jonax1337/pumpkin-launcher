@@ -3,7 +3,7 @@ import { hash, rng } from "./random";
 import { rowRuns } from "./rows";
 
 /*
- * Glyphen (10×10, farbig) und Spielerkopf. Die UI-Icons (7×7/5×5) liegen in
+ * Glyphen (10×10, farbig) und Spielerkopf. Die UI-Icons (8×8, einfarbig) liegen in
  * icon-data.ts und werden über `Icon` aus "@/ui" gerendert (Größen-Slots s/m/l/xl).
  */
 const GLYPHS = {

@@ -14,26 +14,39 @@ import { copyWithToast } from "@/lib/clipboard";
 import { formatDate } from "@/lib/format";
 import { type DirectoryStatus, type FriendsSettings, type FriendsState, type IngameActions, type Me, type NetworkStatus } from "@/lib/types";
 import { useFriendsUi } from "@/store/friendsUi";
-import { Actions, Button, ConfirmDialog, Count, ErrorBox, FormRow, FormSection, Hint, List, ListRow, RowTitle, Segmented, Skel, StatusPanel, Switch, type IconName } from "@/ui";
+import { Actions, Button, ConfirmDialog, Count, ErrorBox, FormRow, FormSection, Heading, Hint, Icon, List, ListRow, RowTitle, Segmented, Skel, StatusPanel, Switch, type IconName } from "@/ui";
 import { SettingsInfo } from "./SettingsInfo";
 
 const SECOND_MS = 1000;
 const ROW_SKELETON_HEIGHT_PX = 60;
 
-/** Schaltet Freunde ein (öffnet das Opt-in) oder aus; Ausschalten behält die Daten. */
-function EnableRow({ enabled, onEnable }: { enabled: boolean; onEnable: () => void }) {
+/** Schaltet Freunde aus; das behält die Daten. Einschalten geht über `EnableGate`. */
+function EnableRow() {
   const { t } = useI18n();
   const disable = useDisableFriends();
   return (
     <FormRow label={t("friendsSettings.enableLabel")} hint={t("friendsSettings.enableHint")}>
       <Switch
         label={t("friendsSettings.enableLabel")}
-        checked={enabled}
+        checked
         disabled={disable.isPending}
-        onChange={(on) => (on ? onEnable() : disable.mutate())}
+        onChange={() => disable.mutate()}
         stateText={[t("ui.switch.on"), t("ui.switch.off")]}
       />
     </FormRow>
+  );
+}
+
+/** Solange Freunde aus sind: Einstieg statt Schalter; „Freunde aktivieren“ öffnet das Opt-in. */
+function EnableGate({ onEnable }: { onEnable: () => void }) {
+  const { t } = useI18n();
+  return (
+    <div className="friends-gate vx-pit">
+      <Icon name="pumpkin" size="xl" />
+      <Heading level="sub">{t("friends.gate.disabled.title")}</Heading>
+      <p>{t("friendsSettings.enableAside")}</p>
+      <Button variant="primary" size="l" icon="friends" onClick={onEnable}>{t("friends.gate.disabled.action")}</Button>
+    </div>
   );
 }
 
@@ -166,7 +179,7 @@ function FingerprintRow({ me }: { me: Me }) {
   return (
     <FormRow label={t("friendsSettings.fingerprintLabel")} hint={t("friendsSettings.fingerprintHint")}>
       <Actions gap={12}>
-        <Count value={me.fingerprint} size={20} className="select-text" />
+        <span className="vx-slot friends-code"><Count value={me.fingerprint} size={20} /></span>
         <Button size="s" icon="copy" onClick={() => copyWithToast(me.peerId, t("friendsSettings.peerIdCopied"))}>{t("friendsSettings.copyPeerId")}</Button>
       </Actions>
     </FormRow>
@@ -203,7 +216,7 @@ function BlockedSection() {
   const unblock = useUnblockPeer();
   return (
     <FormSection title={t("friendsSettings.sectionBlocked")} level={3}>
-      <Hint icon="info" className="mb-2.5">{t("friendsSettings.blockedHint")}</Hint>
+      <Hint icon="info" className="blocked-hint">{t("friendsSettings.blockedHint")}</Hint>
       <QueryList
         query={blocked}
         error={t("friendsSettings.loadFailed")}
@@ -268,12 +281,12 @@ function DangerSection() {
   const { t } = useI18n();
   const rotate = useRotateFriendsIdentity();
   return (
-    <FormSection title={t("friendsSettings.sectionDanger")} level={3} className="settings-field-grid">
+    <FormSection title={t("friendsSettings.sectionDanger")} level={3}>
       <FormRow label={t("friendsSettings.rotateLabel")} hint={t("friendsSettings.rotateHint")}>
         <Actions>
           <IdentityAction
             mutation={rotate}
-            icon="redo"
+            icon="refresh"
             buttonLabel={t("friendsSettings.rotateButton")}
             title={t("friendsSettings.rotateTitle")}
             text={t("friendsSettings.rotateText")}
@@ -296,8 +309,8 @@ function AvailableSettings({ state }: { state: FriendsState }) {
   const [optingIn, setOptingIn] = useState(false);
   return (
     <>
-      <FormSection title={t("friendsSettings.sectionGeneral")} level={3} className="settings-field-grid">
-        <EnableRow enabled={state.enabled} onEnable={() => setOptingIn(true)} />
+      <FormSection title={t("friendsSettings.sectionGeneral")} level={3}>
+        {state.enabled ? <EnableRow /> : <EnableGate onEnable={() => setOptingIn(true)} />}
         {state.enabled && (
           <>
             <MinecraftNameRow />

@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router";
 import { useFriendRequests, useFriendsList, useFriendsState, useHostSessions, useInvites } from "@/hooks/useFriends";
 import { useI18n } from "@/i18n";
 import type { FriendsState } from "@/lib/types";
-import { Button, ContextMenu, ErrorBox, PageHeader, Skel, Workspace, WorkspaceContent, WorkspaceRail, type MenuEntry } from "@/ui";
+import { Button, ContextMenu, ErrorBox, Page, PageHeader, Skel, Workspace, WorkspaceContent, WorkspaceRail, type MenuEntry } from "@/ui";
 import { ActivitySection } from "./ActivitySection";
 import { AddFriendButtons, AddFriendDialog, type AddFriendTab } from "./AddFriendDialog";
 import { FriendsSection } from "./FriendsSection";
@@ -40,7 +40,7 @@ export function FriendsContent({ state }: { state: FriendsState }) {
     { id: "add", text: t("friends.add.button"), icon: "plus", onSelect: () => setAdding(defaultAddTab(state.directory.state)) },
     { id: "code", text: t("friends.myCode.button"), icon: "link", onSelect: () => setAdding("mine") },
     "-",
-    { id: "settings", text: t("friendsSettings.tab"), icon: "gear", onSelect: () => navigate("/settings?tab=freunde") },
+    { id: "settings", text: t("friendsSettings.tab"), icon: "settings", onSelect: () => navigate("/settings?tab=freunde") },
     {
       id: "refresh", text: t("ui.context.refresh"),
       disabled: stateQuery.isFetching || friends.isFetching || requests.isFetching || invites.isFetching || sessions.isFetching,
@@ -49,8 +49,8 @@ export function FriendsContent({ state }: { state: FriendsState }) {
   ];
   return (
     <ContextMenu items={menu}>
-    <section className="page friends-page">
-      <PageHeader title={t("ui.nav.friends")}>
+    <Page className="friends-page">
+      <PageHeader title={t("ui.nav.friends")} count={friends.data?.length}>
         <AddFriendButtons onAdd={setAdding} />
       </PageHeader>
       <NetworkBanner network={state.network} />
@@ -58,7 +58,7 @@ export function FriendsContent({ state }: { state: FriendsState }) {
         <WorkspaceRail className="friends-rail">
           <div className="friends-controls">
             {friends.data && <span className="friends-online">{t("friends.presence.online")}: {onlineCount(friends.data)}</span>}
-            <Button variant="ghost" icon="gear" onClick={() => navigate("/settings?tab=freunde")}>{t("friendsSettings.tab")}</Button>
+            <Button variant="ghost" icon="settings" onClick={() => navigate("/settings?tab=freunde")}>{t("common.settings")}</Button>
           </div>
           {!error && friends.data && requests.data && requests.data.length > 0 && (
             <RequestsSection requests={requests.data} askBlock={actions.askBlock} {...retry} />
@@ -78,7 +78,7 @@ export function FriendsContent({ state }: { state: FriendsState }) {
       </Workspace>
       {adding && <AddFriendDialog initialTab={adding} onClose={() => setAdding(null)} />}
       {dialogs}
-    </section>
+    </Page>
     </ContextMenu>
   );
 }

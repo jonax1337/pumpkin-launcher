@@ -3,7 +3,7 @@ import { FriendsOptInDialog } from "@/components/friends/FriendsOptInDialog";
 import { useResetFriends } from "@/hooks/useFriends";
 import { useI18n } from "@/i18n";
 import { startMsLogin } from "@/store/accountUi";
-import { Button, ConfirmDialog, Empty, StatusPanel } from "@/ui";
+import { Button, ConfirmDialog, Empty, StatusPanel, Workspace, WorkspaceContent } from "@/ui";
 import type { FriendsGate as Gate } from "./friendsModel";
 
 /** Was die Seite statt der Freundesliste zeigt, solange Freunde nicht nutzbar sind. */
@@ -11,7 +11,7 @@ export function FriendsGate({ gate }: { gate: Gate }) {
   const { t } = useI18n();
   switch (gate) {
     case "noSecretStore":
-      return <StatusPanel className="mt-4" tone="warn" title={t("friends.gate.noKeyring.title")}>{t("friends.gate.noKeyring.body")}</StatusPanel>;
+      return <StatusPanel tone="warn" title={t("friends.gate.noKeyring.title")}>{t("friends.gate.noKeyring.body")}</StatusPanel>;
     case "identityLost":
       return <IdentityLost />;
     case "disabled":
@@ -19,10 +19,9 @@ export function FriendsGate({ gate }: { gate: Gate }) {
     case "noMicrosoftAccount":
       return (
         <StatusPanel
-          className="mt-4"
           icon="user"
           title={t("friends.gate.noAccount.title")}
-          actions={<Button icon="user" onClick={() => void startMsLogin()}>{t("components.account.msLogin")}</Button>}
+          actions={<Button icon="microsoft" onClick={() => void startMsLogin()}>{t("components.account.msLogin")}</Button>}
         >
           {t("friends.gate.noAccount.body")}
         </StatusPanel>
@@ -36,13 +35,17 @@ function Disabled() {
   const [optingIn, setOptingIn] = useState(false);
   return (
     <>
-      <Empty
-        size="pane"
-        title={t("friends.gate.disabled.title")}
-        actions={<Button variant="primary" icon="users" onClick={() => setOptingIn(true)}>{t("friends.gate.disabled.action")}</Button>}
-      >
-        {t("friends.gate.disabled.body")}
-      </Empty>
+      <Workspace>
+        <WorkspaceContent>
+          <Empty
+            size="pane"
+            title={t("friends.gate.disabled.title")}
+            actions={<Button variant="primary" icon="friends" onClick={() => setOptingIn(true)}>{t("friends.gate.disabled.action")}</Button>}
+          >
+            {t("friends.gate.disabled.body")}
+          </Empty>
+        </WorkspaceContent>
+      </Workspace>
       {optingIn && <FriendsOptInDialog onClose={() => setOptingIn(false)} />}
     </>
   );
@@ -56,7 +59,6 @@ function IdentityLost() {
   return (
     <>
       <StatusPanel
-        className="mt-4"
         tone="bad"
         role="alert"
         title={t("friends.gate.lost.title")}

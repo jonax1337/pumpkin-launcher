@@ -67,6 +67,8 @@ export const settings = {
   "settings.storage.moved": "Instances moved. The new location is active.",
   "settings.storage.sourceRetained": "The new location is active. The old copy at “{path}” could not be fully removed. Check your instances at the new location before manually deleting the old copy.",
   "settings.storage.usageSection": "Used space",
+  "settings.storage.total": "{size} used",
+  "settings.storage.barLabel": "Storage usage",
   "settings.storage.modCache": "Mod cache",
   "settings.storage.modCacheNote": "Each mod file once, instances link to it",
   "settings.storage.shared": "Shared files",
@@ -85,10 +87,10 @@ export const settings = {
   // About
   "settings.about.license": "License",
   "settings.about.licenseHint": "Pumpkin Launcher is free software under the Apache License 2.0.",
-  "settings.about.licenseRead": "Read license",
   "settings.about.source": "Source code",
   "settings.about.sourceHint": "Open on GitHub: read it, report bugs, join in",
-  "settings.about.sourceOpen": "View on GitHub",
+  "settings.about.linksTitle": "Links",
+  "settings.about.diagTitle": "Diagnostics",
 
   // Log: saved sessions
   "settings.log.session": "Session",

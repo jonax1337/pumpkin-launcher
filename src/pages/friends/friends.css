@@ -1,6 +1,5 @@
 .friends-page .friends-rail {
   min-width: 0;
-  padding: 16px;
 }
 
 .friends-page .friends-controls {
@@ -16,25 +15,40 @@
   font-size: calc(13px * var(--tz));
 }
 
+/* Karten in der Leiste (Anfragen, Aktivität): Konten-Platte mit gleichem Innenabstand rundum; Kopf und Name oben, Knöpfe brechen darunter um,
+   das Menü sitzt in der Ecke */
 .friends-page .friends-rail .vx-list .vx-row {
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 12px 0;
-  --r-bv: none;
-  border-bottom: 1px solid var(--line);
+  align-items: flex-start;
+  gap: 8px 12px;
+  padding: 12px;
 }
 
 .friends-page .friends-rail .vx-list .vx-row > .vx-rt {
-  flex: 1 1 calc(100% - 48px);
+  flex: 1 1 calc(100% - 44px);
+}
+
+.friends-page .friends-rail .vx-list .vx-row:has(> .vx-ib) > .vx-rt {
+  padding-right: 28px;
+}
+
+.friends-page .friends-rail .vx-list .vx-row > .vx-ib {
+  position: absolute;
+  top: 6px;
+  right: 6px;
 }
 
 .friends-page .friends-rail :is(.vx-rt-1, .vx-rt-s > span) {
   flex-wrap: wrap;
 }
 
-.friends-page .friends-rail :is(.vx-rt-s, .vx-rt-a, .vx-rt-m) {
+.friends-page .friends-rail :is(.vx-rt-n, .vx-rt-s, .vx-rt-a, .vx-rt-m) {
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.friends-page .friends-rail .fr-fingerprint {
+  white-space: normal;
 }
 
 .friends-page .friends-rail .vx-rt-m {
@@ -89,4 +103,108 @@
     grid-column: 1 / -1;
     justify-content: flex-start;
   }
+}
+
+/* Abschnitt in der Leiste (Anfragen, Aktivität) */
+.friends-page .friends-block {
+  margin-top: 24px;
+}
+
+.friends-page .friends-block-note {
+  margin: 4px 0 10px;
+}
+
+/* Kopf mit Anwesenheitspunkt: eckiges Quadrat mit Rand unten rechts (Farbe + Text der Zeile, nie nur Farbe) */
+.friends-page .friends-av {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.friends-page .vx-row[data-presence] .friends-av::after {
+  content: "";
+  position: absolute;
+  right: calc(var(--px) * -2);
+  bottom: calc(var(--px) * -2);
+  width: calc(var(--px) * 6);
+  height: calc(var(--px) * 6);
+  background: var(--fg-3);
+  border: var(--u2) solid var(--panel);
+}
+
+.friends-page .vx-row[data-presence="online"] .friends-av::after,
+.friends-page .vx-row[data-presence="playing"] .friends-av::after {
+  background: var(--run);
+}
+
+.friends-page .vx-row[data-presence="online"] .vx-rt-s,
+.friends-page .vx-row[data-presence="playing"] .vx-rt-s {
+  color: var(--run);
+}
+
+.friends-page .friends-checked {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.friends-page .friends-notice {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-2);
+  font-size: calc(13px * var(--tz));
+}
+
+.friends-page .friends-toolbar {
+  margin-block: 8px 12px;
+}
+
+/* Dialog „Freund hinzufügen“ */
+.friends-add-panel {
+  margin-top: 16px;
+}
+
+.friends-add-hint {
+  margin-top: 12px;
+}
+
+.friends-mycode {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.friends-mycode-create {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* Frischer Code: große Pixelschrift im Slot, Kopieren rechts daneben */
+.friends-code {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  padding: 10px 10px 10px 18px;
+}
+
+.friends-code-text {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 .45em;
+  min-width: 0;
+  color: var(--copper);
+  font: 400 calc(24px * var(--tz))/1.3 var(--f-px);
+  letter-spacing: .05em;
+  text-shadow: var(--tsh);
+  user-select: text;
+}
+
+.friends-code-text > span {
+  white-space: nowrap;
 }

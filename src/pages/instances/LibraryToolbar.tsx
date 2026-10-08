@@ -1,4 +1,4 @@
-import type { Ref } from "react";
+import type { ReactNode, Ref } from "react";
 import { useSearchParams } from "react-router";
 import { SHORTCUT } from "@/app/shortcuts";
 import { useI18n } from "@/i18n";
@@ -18,8 +18,11 @@ export function NewInstanceButton() {
   );
 }
 
-/** Suche, Filter, Sortierung und Auswahlmodus; die Leiste bricht bei Platzmangel um. */
-export function LibraryToolbar({ filters, onFilters, versions, sort, onSort, onPick, pickRef }: {
+/**
+ * Suche, Filter, Sortierung und Auswahlmodus; die Leiste bricht bei Platzmangel um.
+ * Im Auswahlmodus (`picking`) steht `bar` als zweite Leiste im selben Platz.
+ */
+export function LibraryToolbar({ filters, onFilters, versions, sort, onSort, onPick, pickRef, picking, bar }: {
   filters: LibraryFilters;
   onFilters: (patch: Partial<LibraryFilters>) => void;
   /** Minecraft-Versionen der Instanzen, aus denen der Filter wählen lässt. */
@@ -29,10 +32,12 @@ export function LibraryToolbar({ filters, onFilters, versions, sort, onSort, onP
   /** Auswahlmodus starten. */
   onPick: () => void;
   pickRef: Ref<HTMLButtonElement>;
+  picking: boolean;
+  bar: ReactNode;
 }) {
   const { t } = useI18n();
   return (
-    <Toolbar search="m" className="lib-toolbar mt-4">
+    <Toolbar search="m" className="lib-toolbar" alt={bar} altActive={picking}>
       <SearchField value={filters.query} onChange={(query) => onFilters({ query })} placeholder={t("pages.instances.searchPlaceholder")} />
       <Select
         label={t("components.common.loader")}
@@ -57,7 +62,7 @@ export function LibraryToolbar({ filters, onFilters, versions, sort, onSort, onP
           { value: "playtime", label: t("pages.instances.colPlaytime") },
         ]}
       />
-      <Button ref={pickRef} icon="check" onClick={onPick}>{t("pages.instances.pick")}</Button>
+      <Button ref={pickRef} icon="select" onClick={onPick}>{t("pages.instances.pick")}</Button>
     </Toolbar>
   );
 }

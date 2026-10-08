@@ -1,0 +1,40 @@
+/* Gemeinsame Flächen des Inventar-Stils. Komponenten setzen diese Klassen (statt die Rezepte zu wiederholen)
+   und stellen nur Maße und Zustände ein. Werte: tokens.css (--slot-bd, --slot-sh, --tsh, --ring-i, --nt …).
+
+   .vx-slot   eingelassen: Felder, Auswahl, Kästchen, Regler-/Fortschrittsbahnen, Icon-Kacheln, Chips, Bildrahmen
+   .vx-stone  erhaben (Steinplatte): Knöpfe, Reiter, Griffe, Toasts, Zeilen. Variablen: --face --hi --lo --bv (Fasenbreite)
+   .vx-text   Beschriftung mit hartem Schatten (auf Stein und Slots)                                              */
+
+.vx-slot {
+  background: var(--sunk);
+  border: var(--px) solid;
+  border-color: var(--slot-bd);
+  box-shadow: var(--slot-sh);
+  clip-path: var(--n1);
+}
+/* Hover/Fokus: helle Kante auf allen Seiten, Fokus zusätzlich der doppelte Ring */
+.vx-slot:is(:hover, [data-force="hover"]):not(:disabled, [aria-disabled="true"]) { border-color: var(--fg-2); }
+.vx-slot:is(:focus-visible, :focus-within, [data-force="focus"]) { border-color: var(--focus); box-shadow: var(--ring-i); }
+
+.vx-stone {
+  --face: var(--panel-3); --hi: var(--line-hi); --lo: var(--bg-2); --bv: var(--bvw);
+  background: var(--face);
+  border: var(--px) solid var(--edge);
+  box-shadow: inset var(--bv) var(--bv) 0 var(--hi), inset calc(var(--bv) * -1) calc(var(--bv) * -1) 0 var(--lo);
+  clip-path: var(--n1);
+}
+/* Gedrückt: Fase umgekehrt */
+.vx-stone:is(:active, [data-force="press"]):not(:disabled, [aria-disabled="true"]) {
+  box-shadow: inset var(--bv) var(--bv) 0 var(--lo), inset calc(var(--bv) * -1) calc(var(--bv) * -1) 0 var(--hi);
+}
+/* Eingelassen ohne Bedienung: Körperflächen, Hinweisplatten, Fortschrittsbahnen. Wie .vx-slot, aber keine Hover-/Fokus-Kante
+   (sonst färbte sich ein Rahmen um bedienbaren Inhalt beim Fokussieren eines Kindes). */
+.vx-pit {
+  background: var(--sunk);
+  border: var(--px) solid;
+  border-color: var(--slot-bd);
+  box-shadow: var(--slot-sh);
+  clip-path: var(--n1);
+}
+
+.vx-text { text-shadow: var(--tsh); }

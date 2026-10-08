@@ -10,7 +10,7 @@ import { focusSoon } from "@/pages/detail/content/focus";
 import { newInstanceParams } from "@/lib/routes";
 import { LOADER_LABELS, type Instance } from "@/lib/types";
 import { useLookStore } from "@/store/look";
-import { Button, ButtonLink, ContextMenu, Empty, ErrorBox, Glyph, List, PageHeader, WorkspaceContent, type MenuEntry } from "@/ui";
+import { Button, ButtonLink, ContextMenu, Empty, ErrorBox, Glyph, List, Page, PageHeader, Workspace, WorkspaceContent, type MenuEntry } from "@/ui";
 import { GroupedView } from "./instances/GroupedView";
 import { InstanceListHeader, InstanceView, LibraryRoving } from "./instances/InstanceView";
 import { LibraryToolbar, NewInstanceButton } from "./instances/LibraryToolbar";
@@ -147,17 +147,17 @@ export function InstancesPage() {
 
   const menuItems: MenuEntry[] = [
     { id: "new-instance", text: t("components.newInstance.title"), icon: "plus", onSelect: () => setParams(newInstanceParams(), { replace: true }) },
-    { id: "reset-filters", text: t("pages.instances.resetSearch"), icon: "x", disabled: !hasFilters(filters), onSelect: () => setFilters(NO_FILTERS) },
+    { id: "reset-filters", text: t("pages.instances.resetSearch"), icon: "close", disabled: !hasFilters(filters), onSelect: () => setFilters(NO_FILTERS) },
     "-",
-    { id: "pick", text: t("pages.instances.pick"), icon: "check", disabled: !visibleIds.length || selection.picking, onSelect: selection.startPicking },
-    { id: "select-all", text: t("pages.instances.selectAll"), icon: "check", disabled: !visibleIds.length || selection.picked.length === visibleIds.length, onSelect: selection.selectAll },
-    ...(selection.picking ? [{ id: "done-picking", text: t("common.done"), icon: "x" as const, onSelect: leavePicking }] : []),
+    { id: "pick", text: t("pages.instances.pick"), icon: "select", disabled: !visibleIds.length || selection.picking, onSelect: selection.startPicking },
+    { id: "select-all", text: t("pages.instances.selectAll"), icon: "select", disabled: !visibleIds.length || selection.picked.length === visibleIds.length, onSelect: selection.selectAll },
+    ...(selection.picking ? [{ id: "done-picking", text: t("common.done"), icon: "check" as const, onSelect: leavePicking }] : []),
   ];
 
   return (
     <LibrarySelectionProvider value={selection}>
       <ContextMenu items={menuItems}>
-      <section className="page lib" data-picking={selection.picking || undefined} onKeyDown={onKeyDown}>
+      <Page className="lib" data-picking={selection.picking || undefined} onKeyDown={onKeyDown}>
         <PageHeader title={t("ui.nav.library")}>
           <NewInstanceButton />
         </PageHeader>
@@ -173,17 +173,18 @@ export function InstancesPage() {
             onSort={setSort}
             onPick={selection.startPicking}
             pickRef={pickRef}
+            picking={selection.picking}
+            bar={<SelectionBar picked={pickedInstances} groups={groups} onSelectAll={selection.selectAll} onDone={leavePicking} />}
           />
         )}
-        <WorkspaceContent className="mt-4">
-          <LibraryBody library={library} matches={shown.length} filters={filters} onResetFilters={() => setFilters(NO_FILTERS)}>
-            <LibraryRoving>{listing}</LibraryRoving>
-          </LibraryBody>
-        </WorkspaceContent>
-        {selection.picking && (
-          <SelectionBar picked={pickedInstances} groups={groups} onSelectAll={selection.selectAll} onDone={leavePicking} />
-        )}
-      </section>
+        <Workspace>
+          <WorkspaceContent>
+            <LibraryBody library={library} matches={shown.length} filters={filters} onResetFilters={() => setFilters(NO_FILTERS)}>
+              <LibraryRoving>{listing}</LibraryRoving>
+            </LibraryBody>
+          </WorkspaceContent>
+        </Workspace>
+      </Page>
       </ContextMenu>
     </LibrarySelectionProvider>
   );

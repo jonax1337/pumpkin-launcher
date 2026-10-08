@@ -1,0 +1,29 @@
+/* ---------- Start ---------- */
+.home { position: relative; min-height: 100%; display: grid; grid-template-rows: minmax(250px, 1fr) auto; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
+.home > .scene { z-index: 0; }
+/* Abdunklung: gemeinsame Bänder (ui/layout.css .vx-shade), hier über die untere Dreiviertelseite und dichter, damit Titel und Leiste lesbar bleiben */
+.home .vx-shade { --sh-h: 81.25%; --sh-c: rgb(0 0 0 / .4); }
+/* Hero: Titel, Metazeile, Aktionen im Abstand 8 / 16 (Rhythmus-Tokens); der Rest der Szene gehört der Zeile darüber */
+.hero { position: relative; z-index: 2; align-self: end; padding: var(--pg-gap-l) var(--gut); display: flex; flex-direction: column; gap: var(--pg-gap-m); min-width: 0; }
+.hero-k { display: flex; flex-direction: column; gap: var(--pg-gap-s); }
+/* Der Titel reserviert zwei Zeilen, damit die Seite beim Instanzwechsel nicht springt */
+.titlebox { height: calc(var(--hd-hero-xl) * 1.8); display: flex; align-items: flex-end; }
+.titlebox .vx-h { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-wrap: balance; padding-bottom: .02em; }
+/* Instanzleiste und Hero teilen die Seitenränder; Sammlungsaktionen stehen direkt über den Karten. */
+.cont { position: relative; z-index: 2; width: 100%; min-width: 0; padding: 0 var(--gut) var(--pg-bottom); }
+.home .library-heading { height: auto; min-height: 40px; flex-wrap: wrap; gap: var(--pg-gap-s) var(--pg-gap-m); margin-bottom: var(--pg-gap-s); }
+.home .library-heading .vx-sech-a { min-width: 0; max-width: 100%; }
+.railwrap { position: relative; }
+.rail { --fl: 0px; --fr: 0px; display: flex; gap: 14px; overflow-x: auto; overflow-y: hidden; padding: 8px 8px 10px; margin: 0 -8px; scrollbar-width: none;
+  /* Verlauf nur an Rändern, hinter denen noch Kacheln liegen */
+  mask-image: linear-gradient(90deg, transparent 0, #000 var(--fl), #000 calc(100% - var(--fr)), transparent 100%); }
+.rail::-webkit-scrollbar { display: none; }
+.rail > li, .rail > .vx-skel { flex: none; }
+.rail > li { display: flex; }
+.railwrap[data-l] .rail { --fl: 64px; }
+.railwrap[data-r] .rail { --fr: 64px; }
+/* Blättern-Pfeile (Steinknöpfe): fest über den Kachelrändern, nur sichtbar, wenn es in die Richtung weitergeht */
+.railwrap > .rarr { position: absolute; z-index: 3; top: 8px; bottom: 10px; margin: auto 0; opacity: 0; visibility: hidden; transition: opacity .12s steps(2, end), visibility 0s linear .12s; }
+.railwrap > .rarr.l { left: -4px; }
+.railwrap > .rarr.r { right: -4px; }
+.railwrap[data-l] > .rarr.l, .railwrap[data-r] > .rarr.r { opacity: 1; visibility: visible; transition: opacity .12s steps(2, end), visibility 0s; }

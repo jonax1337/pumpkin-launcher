@@ -9,9 +9,6 @@ import { FRIENDS_LIMITS, LOADER_LABELS, type InstanceCandidate, type InstanceSum
 import { Button, Chip, Dialog, DialogActions, ErrorBox, Field, Heading, Hint, Select, Skel, StatusPanel } from "@/ui";
 import { actionAllowed, canJoinWith, chosenCandidate, inviteAction, needsMicrosoftAccount } from "./inviteModel";
 
-const DIALOG_WIDTH_PX = 560;
-/** Fest, damit der Dialog zwischen Laden, Urteil und „Erneut prüfen“ nicht wächst und schrumpft; der Körper scrollt. */
-const DIALOG_HEIGHT_PX = 600;
 const PRIMARY_WIDTH_PX = 200;
 const PLAN_SKELETON_HEIGHT_PX = 96;
 
@@ -19,7 +16,7 @@ const PLAN_SKELETON_HEIGHT_PX = 96;
 function SummaryChips({ summary }: { summary: InstanceSummary }) {
   const { t } = useI18n();
   return (
-    <div className="mt-3 flex flex-wrap gap-2">
+    <div className="fr-chips">
       <Chip>{summary.minecraftVersion}</Chip>
       <Chip>{LOADER_LABELS[summary.loader]}</Chip>
       {summary.modCount > 0 && <Chip>{summary.modCount === 1 ? t("friendsInvite.mods.one") : t("friendsInvite.mods.other", { n: summary.modCount })}</Chip>}
@@ -31,14 +28,14 @@ function SummaryChips({ summary }: { summary: InstanceSummary }) {
 function Sender({ invite }: { invite: Invite }) {
   const { t } = useI18n();
   return (
-    <div className="flex items-center gap-3">
+    <div className="fr-person">
       <FriendAvatar friendId={invite.from} name={invite.fromName} />
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-baseline gap-2">
+      <div className="fr-person-text">
+        <div className="fr-person-line">
           <SelfAsserted><b className="vx-trunc">{invite.fromName}</b></SelfAsserted>
           <Fingerprint value={invite.fromFingerprint} />
         </div>
-        <span className="vx-trunc block text-fg-3">{t("friendsInvite.invites", { title: invite.title })}</span>
+        <span className="vx-trunc fr-line-sub">{t("friendsInvite.invites", { title: invite.title })}</span>
       </div>
     </div>
   );
@@ -48,13 +45,13 @@ function Sender({ invite }: { invite: Invite }) {
 function ModList({ title, mods }: { title: string; mods: ModRef[] }) {
   if (mods.length === 0) return null;
   return (
-    <section className="mt-3">
-      <Heading level="card" className="mb-1">{title}</Heading>
-      <ul className="flex flex-col gap-1">
+    <section className="fr-mods">
+      <Heading level="card" className="fr-mods-title">{title}</Heading>
+      <ul className="fr-mods-list">
         {mods.map((mod) => (
-          <li key={mod.fileName} className="min-w-0">
-            <b className="vx-trunc block">{mod.title}</b>
-            {mod.title !== mod.fileName && <span className="vx-trunc block text-fg-3">{mod.fileName}</span>}
+          <li key={mod.fileName}>
+            <b className="vx-trunc fr-line">{mod.title}</b>
+            {mod.title !== mod.fileName && <span className="vx-trunc fr-line-sub">{mod.fileName}</span>}
           </li>
         ))}
       </ul>
@@ -70,7 +67,7 @@ function MissingContent({ candidate }: { candidate: InstanceCandidate }) {
       <StatusPanel tone="warn" title={t("friendsInvite.missing.title", { name: candidate.name })}>{t("friendsInvite.missing.body")}</StatusPanel>
       <ModList title={t("friendsInvite.missing.listMissing")} mods={candidate.missing} />
       <ModList title={t("friendsInvite.missing.listExtra")} mods={candidate.extra} />
-      <Hint className="mt-3" icon="info">{t("friendsInvite.missing.hint")}</Hint>
+      <Hint className="fr-hint-above" icon="info">{t("friendsInvite.missing.hint")}</Hint>
     </>
   );
 }
@@ -82,10 +79,10 @@ function MissingContent({ candidate }: { candidate: InstanceCandidate }) {
 function InstancePicker({ plan, candidate, onPick }: { plan: JoinPlan; candidate: InstanceCandidate; onPick: (instanceId: string) => void }) {
   const { t } = useI18n();
   if (plan.candidates.length === 1) {
-    return candidate.matches && <p className="mb-3"><b>{t("friendsInvite.instance.single", { name: candidate.name })}</b></p>;
+    return candidate.matches && <p className="fr-pick"><b>{t("friendsInvite.instance.single", { name: candidate.name })}</b></p>;
   }
   return (
-    <Field label={t("friendsInvite.instance.label")} className="mb-3">
+    <Field label={t("friendsInvite.instance.label")} className="fr-pick">
       <Select
         value={candidate.instanceId}
         onChange={onPick}
@@ -102,7 +99,7 @@ function PlanView({ plan, candidate, onPick }: { plan: JoinPlan; candidate: Inst
   const { summary } = plan;
   return (
     <>
-      {plan.lookupFailed && <Hint className="mb-3" icon="info">{t("friendsInvite.lookupFailed")}</Hint>}
+      {plan.lookupFailed && <Hint className="fr-hint-below" icon="info">{t("friendsInvite.lookupFailed")}</Hint>}
       {plan.verdict === "versionUnsupported" && (
         <StatusPanel tone="bad" title={t("friendsInvite.unsupported.title", { min: FRIENDS_LIMITS.minMcLabel })}>
           {t("friendsInvite.unsupported.body", { version: summary.minecraftVersion, min: FRIENDS_LIMITS.minMcLabel })}
@@ -149,8 +146,7 @@ export function InviteDialog({ invite, onJoin, onClose }: { invite: Invite; onJo
       open
       onOpenChange={(open) => !open && onClose()}
       title={t("friendsInvite.title")}
-      width={DIALOG_WIDTH_PX}
-      height={DIALOG_HEIGHT_PX}
+      height="m"
       busy={busy}
       footLeft={<Button variant="ghost" tone="bad" disabled={busy} onClick={() => decline.mutate(invite.id, { onSuccess: onClose })}>{t("friendsInvite.decline")}</Button>}
       footer={
@@ -174,8 +170,8 @@ export function InviteDialog({ invite, onJoin, onClose }: { invite: Invite; onJo
     >
       <Sender invite={invite} />
       <SummaryChips summary={invite.instance} />
-      {!invite.hostOnline && <Hint className="mt-3" tone="warn">{t("friendsInvite.hostOffline")}</Hint>}
-      <div className="mt-4">
+      {!invite.hostOnline && <Hint className="fr-hint-above" tone="warn">{t("friendsInvite.hostOffline")}</Hint>}
+      <div className="fr-plan">
         {plan.isFetching ? (
           <Skel h={PLAN_SKELETON_HEIGHT_PX} />
         ) : plan.error ? (
@@ -184,7 +180,7 @@ export function InviteDialog({ invite, onJoin, onClose }: { invite: Invite; onJo
           verdict && <PlanView plan={verdict} candidate={candidate} onPick={setPickedId} />
         )}
       </div>
-      {needsMicrosoftAccount(action, hasMicrosoftAccount) && <Hint className="mt-3" tone="warn" live>{t("friendsInvite.offlineAccount")}</Hint>}
+      {needsMicrosoftAccount(action, hasMicrosoftAccount) && <Hint className="fr-hint-above" tone="warn" live>{t("friendsInvite.offlineAccount")}</Hint>}
     </Dialog>
   );
 }

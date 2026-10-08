@@ -19,7 +19,7 @@ export function KindFilter({ value, onChange, counts }: {
   // Leere Filter gedämpft, aber lesbar (--fg-3, ≥ 4,5:1).
   const labelOf = (kind: ModKind) => {
     const label = t(KIND_LABEL_KEYS[kind]);
-    return counts[kind] ? label : <span className="text-fg-3">{label}</span>;
+    return counts[kind] ? label : <span className="st-muted">{label}</span>;
   };
   return (
     <Segmented

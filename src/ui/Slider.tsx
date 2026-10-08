@@ -1,5 +1,5 @@
 import { useRef, type KeyboardEvent, type PointerEvent } from "react";
-import { clamp, flag } from "./util";
+import { clamp, cssVars, flag } from "./util";
 
 /** Anzahl der Segmente; muss zu `repeat(16, 1fr)` und `* 16` in toggle.css passen. */
 const SEGMENTS = 16;
@@ -8,7 +8,7 @@ const STEP_UP_KEYS = ["ArrowRight", "ArrowUp", "PageUp"];
 const STEP_KEYS = [...STEP_UP_KEYS, "ArrowLeft", "ArrowDown", "PageDown", "Home", "End"];
 
 /**
- * Wert von 1 bis 16 als 16 Segmente mit Griffblock. Pfeile, Bild auf/ab, Pos1, Ende.
+ * Wert von 1 bis 16 als 16 Zellen (XP-Leiste im Slot) mit Steingriff. Pfeile, Bild auf/ab, Pos1, Ende.
  * Segmente über `max` sind gesperrt. `label` ist der Name; `unit` hängt an den vorgelesenen Wert („6 GB“).
  */
 export function SegSlider({ value, onChange, disabled, max = SEGMENTS, label, unit, id }: {
@@ -49,12 +49,12 @@ export function SegSlider({ value, onChange, disabled, max = SEGMENTS, label, un
       onPointerMove={(e) => e.currentTarget.hasPointerCapture(e.pointerId) && fromX(e.clientX)}
       onKeyDown={onKey}
     >
-      <div className="vx-sl-trk">
+      <div className="vx-sl-trk vx-slot">
         {Array.from({ length: SEGMENTS }, (_, k) => (
           <i key={k} data-on={flag(k < v)} data-x={flag(k >= top)} />
         ))}
       </div>
-      <div className="vx-sl-th" style={{ left: `${((v - 0.5) / SEGMENTS) * 100}%` }} />
+      <div className="vx-sl-th" style={cssVars({ "--v": `${((v - 0.5) / SEGMENTS) * 100}%` })} />
     </div>
   );
 }

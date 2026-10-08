@@ -15,10 +15,10 @@ export function CrashAssistant({ instance, onAddContent }: { instance: Instance;
   const { t } = useI18n();
   const diagnoses = useCrashDiagnosis(instance.id);
   const { apply, busy } = useCrashActions(instance, onAddContent);
-  if (diagnoses.isError) return <Hint tone="warn" className="mb-2.5">{t("crashAssistant.loadFailed")} {diagnoses.error.message}</Hint>;
+  if (diagnoses.isError) return <Hint tone="warn">{t("crashAssistant.loadFailed")} {diagnoses.error.message}</Hint>;
   if (!diagnoses.data?.length) return null;
   return (
-    <section aria-label={t("crashAssistant.heading")} className="mb-2.5 flex flex-col gap-2.5">
+    <section aria-label={t("crashAssistant.heading")} className="crash-list">
       {diagnoses.data.map((diagnosis) => (
         <DiagnosisCard key={diagnosis.id} diagnosis={diagnosis} instance={instance} busy={busy} onApply={apply} />
       ))}
@@ -41,7 +41,7 @@ function DiagnosisCard({ diagnosis, instance, busy, onApply }: {
         {t(text.body, textParams(diagnosis))}
       </StatusPanel>
       {(actions.length > 0 || evidence.length > 0) && (
-        <div className="px-3 pt-2">
+        <div className="crash-more">
           {actions.length > 0 && (
             <Actions wrap>
               {actions.map((action, index) => {
@@ -62,10 +62,10 @@ function DiagnosisCard({ diagnosis, instance, busy, onApply }: {
             </Actions>
           )}
           {evidence.length > 0 && (
-            <Disclosure summary={t("crashAssistant.evidence")} className={actions.length > 0 ? "mt-1" : undefined}>
-              <ul className="m-0 list-none p-0">
+            <Disclosure summary={t("crashAssistant.evidence")} className={actions.length > 0 ? "crash-evidence" : undefined}>
+              <ul className="crash-lines">
                 {evidence.map((line) => (
-                  <li key={line} className="break-words font-mono text-[length:calc(13px*var(--tz))] text-fg-3">{line}</li>
+                  <li key={line}>{line}</li>
                 ))}
               </ul>
             </Disclosure>

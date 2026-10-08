@@ -1,19 +1,29 @@
-/* Kit-Chip, Zähler, Metazeile */
-.vx-chip { --c-line: var(--line); position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; font-size: calc(13px * var(--tz)); font-weight: 600; color: var(--fg-2); white-space: nowrap; flex: none; }
-.vx-chip::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--vx-chip-bg, rgba(10,14,23,.9)); box-shadow: inset 0 0 0 var(--px) var(--c-line); clip-path: var(--n1); }
-/* Führendes Icon (Box 20 mit Luft um die Glyphe): links 2px weniger, engerer Abstand */
-.vx-chip[data-lead] { padding-left: 8px; gap: 4px; }
-.vx-chip[data-size="s"] { --cnt-fs: 16px; height: 22px; padding: 0 7px; gap: 5px; font-size: calc(13px * var(--tz)); }
-/* Icon-Box 20 passt in die 22 px des kleinen Chips; ihre Luft um die Glyphe ersetzt den Innenabstand */
-.vx-chip[data-size="s"][data-lead] { padding-left: 1px; gap: 1px; }
-.vx-chip[data-tone="acc"] { color: var(--acc-hi); --c-line: color-mix(in srgb, var(--acc) 45%, transparent); }
-.vx-chip[data-tone="warn"] { color: var(--warn); --c-line: color-mix(in srgb, var(--warn) 40%, transparent); }
-.vx-chip[data-tone="bad"] { color: var(--bad); --c-line: color-mix(in srgb, var(--bad) 45%, transparent); }
-.vx-chip[data-tone="run"] { color: var(--run); --c-line: color-mix(in srgb, var(--run) 45%, transparent); }
+/* Kit-Chip (Inventar): kleiner Slot in Pixelschrift mit quadratischem Pip in der Tonfarbe (.vx-slot aus surface.css, Rand heller als beim Feld);
+   ChipButton = bedienbar (Hover heller Rand, Fokus doppelter Ring aus .vx-slot), gewählt = Akzentton + getönte Fläche. Zähler und Metazeile unten. */
+.vx-chip {
+  --tone: var(--fg-2); --cnt-fs: 20px; --c-bd: var(--edge) var(--line-2) var(--line-2) var(--edge);
+  position: relative; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px; flex: none;
+  font: 400 calc(20px * var(--tz))/1 var(--f-px); color: var(--tone); white-space: nowrap; text-shadow: var(--tsh); border-color: var(--c-bd);
+}
+/* Pip: Quadrat in der Tonfarbe; entfällt, wenn ein Icon oder `dot` (<i.vx-dot>) davorsteht */
+.vx-chip:not([data-lead], :has(> .vx-dot))::before { content: ""; width: var(--u2); height: var(--u2); flex: none; background: var(--tone); }
+/* Nicht bedienbar: kein Hover-Rand */
+.vx-chip:not([data-press]):hover { border-color: var(--c-bd); }
+/* Führendes Icon (Box 16 mit Luft um die Glyphe): links 2px weniger, engerer Abstand */
+.vx-chip[data-lead] { padding-left: 7px; gap: 4px; }
+/* s: Pixelschrift 18 sitzt ~1 px über der Mitte; 2 px Innenabstand oben senken den Text um 1 px, Pip, Punkt und Symbol
+   gleichen das mit 1 px nach oben aus und bleiben auf der Chipmitte */
+.vx-chip[data-size="s"] { --cnt-fs: 18px; height: 22px; padding: 2px 7px 0; gap: 5px; font-size: calc(18px * var(--tz)); }
+.vx-chip[data-size="s"][data-lead] { padding: 2px 7px 0 3px; gap: 2px; }
+.vx-chip[data-size="s"]:not([data-lead])::before, .vx-chip[data-size="s"] > :is(.vx-dot, .vx-ico) { translate: 0 -1px; }
+.vx-chip[data-tone="acc"] { --tone: var(--acc-hi); }
+.vx-chip[data-tone="warn"] { --tone: var(--warn); }
+.vx-chip[data-tone="bad"] { --tone: var(--bad); }
+.vx-chip[data-tone="run"] { --tone: var(--run); }
 .vx-chip:not([data-tone]) .vx-count { color: var(--fg); }
 .vx-chip[data-press] { cursor: pointer; }
-.vx-chip[data-press]:not([data-tone]):hover { color: var(--fg); --c-line: var(--fg-3); }
-.vx-chip[data-press][data-tone="acc"]:hover { --c-line: var(--acc); }
+.vx-chip[data-press]:not([data-tone]):hover { color: var(--fg); }
+.vx-chip[data-press][data-tone="acc"] { background: color-mix(in oklab, var(--acc) 14%, var(--sunk)); }
 .vx-dot { width: var(--u2); height: var(--u2); background: currentColor; flex: none; }
 
 /* Zahl in Pixelschrift; --dg Stellen reserviert (rechtsbündig), damit wechselnde Werte nichts verschieben */
@@ -37,3 +47,9 @@
 .vx-meta[data-scene] { text-shadow: var(--scene-shadow); }
 .vx-meta[data-scene] .vx-meta-i + .vx-meta-i::before { box-shadow: var(--scene-shadow); }
 .vx-meta[data-scene] .vx-ico svg { filter: drop-shadow(var(--scene-shadow)); }
+
+/* Windows-Kontrastmodus: Pip und Punkt in Textfarbe (Hintergründe ersetzt das System); gewählt = Systemumriss */
+@media (forced-colors: active) {
+  .vx-chip::before { background-color: ButtonText; }
+  .vx-chip[data-press][data-tone="acc"] { outline: 2px solid Highlight; outline-offset: -2px; }
+}

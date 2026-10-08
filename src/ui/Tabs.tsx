@@ -127,7 +127,7 @@ function TabStrip<V extends string>({ variant, axis, group, itemProps, items, va
   return (
     <div
       ref={stripRef}
-      className={cn("vx-tabs", className)}
+      className={cn("vx-tabs", variant === "segment" && "vx-pit", className)}
       data-variant={variant}
       data-size={size}
       data-icons={flag(iconsOnly)}
@@ -154,12 +154,11 @@ function TabStrip<V extends string>({ variant, axis, group, itemProps, items, va
             {...itemProps(o.value, on)}
           >
             <span className="vx-tc">
-              {o.icon && <Icon name={o.icon} size={size} />}
-              {iconsOnly ? <span className="sr">{o.label}</span> : o.label}
+              {o.icon && <Icon name={o.icon} size="s" />}
+              {iconsOnly ? <span className="sr">{o.label}</span> : <span className="vx-tab-l">{o.label}</span>}
               {o.count != null && <Count value={o.count} size={size === "s" ? 16 : 18} />}
               {o.badge != null && <span className="vx-tab-badge">{o.badge}</span>}
             </span>
-            {variant === "underline" && <i className="vx-tab-tick" aria-hidden />}
           </button>
         );
         const tip = o.tip ?? (iconsOnly && typeof o.label === "string" ? o.label : undefined);
@@ -171,7 +170,7 @@ function TabStrip<V extends string>({ variant, axis, group, itemProps, items, va
 
 /**
  * Tab-Leiste (role=tablist; der Inhalt wechselt). Ein Tab-Stopp (Roving), Pfeile (senkrecht ↑/↓), Pos1/Ende; Auswahl folgt dem Fokus.
- * Hover = Fläche (--hv-ctl), gewählt = erhabene Platte; nur die waagerechte Leiste trägt einen Strich.
+ * Hover = hellere Fläche, gewählt = höherer Reiter mit Akzentkante (waagerecht), Platte an der rechten Kante (senkrecht) bzw. erhabener Stein (Segment).
  */
 export function Tabs<V extends string>({ variant = "underline", idBase, sticky, style, ...strip }: TabsProps<V>) {
   const vertical = variant === "vertical";

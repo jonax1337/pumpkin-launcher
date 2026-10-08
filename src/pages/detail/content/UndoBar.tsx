@@ -8,11 +8,11 @@ export function UndoBar({ change, locked, onUndo, onDismiss }: {
 }) {
   const { t } = useI18n();
   return (
-    <div className="mt-1 mb-2 flex items-center gap-2">
+    <div className="dc-undo">
       <Hint icon="check" tone="ok" live>{change.text}</Hint>
       <Spacer />
-      <Button size="s" icon="redo" disabled={locked} onClick={onUndo}>{t("ui.list.undo")}</Button>
-      <IconButton size="s" icon="x" label={t("common.close")} onClick={onDismiss} />
+      <Button size="s" icon="undo" disabled={locked} onClick={onUndo}>{t("ui.list.undo")}</Button>
+      <IconButton size="s" icon="close" label={t("common.close")} onClick={onDismiss} />
     </div>
   );
 }

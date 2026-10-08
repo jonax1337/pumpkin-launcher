@@ -27,11 +27,10 @@ export function MsLoginDialog() {
       onOpenChange={(open) => !open && closeMsLogin()}
       title={t("components.account.msLogin")}
       sub={then && state.step !== "done" ? <ThenSub label={then.label} /> : undefined}
-      width={540}
-      height={state.step === "done" ? undefined : 580}
+      height={state.step === "done" ? undefined : "m"}
       footer={<MsLoginFooter state={state} />}
     >
-      <div className="flex min-h-full flex-col gap-3">
+      <div className="ms-body">
         <MsLoginStep state={state} />
         {state.step !== "done" && <MsLoginInfo />}
       </div>
@@ -44,11 +43,13 @@ function MsLoginFooter({ state }: { state: LoginState }) {
   if (state.step === "done") return <DialogActions confirm={{ label: t("common.done"), width: 124, autoFocus: true, onClick: closeMsLogin }} />;
   return (
     <>
-      {state.step === "code" && <Button icon="ext" onClick={() => openPage(state.info.verificationUri)}>{t("components.ms.openPage")}</Button>}
       {state.step === "code" && state.info.mode === "browser" && (
         <Button variant="ghost" onClick={() => void startMsLogin("device")}>{t("components.ms.useCodeInstead")}</Button>
       )}
-      <DialogActions cancel={{ label: state.step === "error" ? t("common.close") : t("common.cancel"), width: 124 }} />
+      <DialogActions
+        cancel={{ label: state.step === "error" ? t("common.close") : t("common.cancel"), width: 124 }}
+        confirm={state.step === "code" ? { label: t("components.ms.openPage"), icon: "external", onClick: () => openPage(state.info.verificationUri) } : undefined}
+      />
     </>
   );
 }
@@ -72,22 +73,22 @@ function MsLoginStep({ state }: { state: LoginState }) {
 function MsLoginInfo() {
   const { t } = useI18n();
   return (
-    <Panel level="sunk" pad="m" className="mt-auto flex shrink-0 flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
+    <Panel level="sunk" pad="m" className="ms-info">
+      <div className="ms-info-head">
         <b>{t("components.ms.javaTitle")}</b>
-        <Button variant="ghost" size="s" icon="ext" bleed="end" onClick={() => openPage(JAVA_EDITION_URL)}>
+        <Button variant="ghost" size="s" icon="external" bleed="end" onClick={() => openPage(JAVA_EDITION_URL)}>
           {t("components.ms.javaGet")}
         </Button>
       </div>
       <p>{t("components.ms.javaText")}</p>
-      <Hint icon="check">{t("components.ms.trust")}</Hint>
+      <Hint icon="shield">{t("components.ms.trust")}</Hint>
     </Panel>
   );
 }
 
 function StartingStep() {
   return (
-    <div className="flex flex-col gap-3 pt-1" aria-busy>
+    <div className="ms-starting" aria-busy>
       <Skel h={20} w="80%" />
       <Skel h={64} w={280} />
       <Skel h={16} w="60%" />
@@ -99,7 +100,7 @@ function StartingStep() {
 function WaitingRow({ hint }: { hint: string }) {
   const { t } = useI18n();
   return (
-    <div className="flex flex-col gap-2" aria-live="polite">
+    <div className="ms-waiting" aria-live="polite">
       <Progress label={t("components.ms.waiting")} />
       <Hint>{hint}</Hint>
     </div>
@@ -111,7 +112,7 @@ function BrowserStep({ info }: { info: MsLoginStart }) {
   return (
     <>
       <p>{t("components.ms.browserOpened")}</p>
-      <p>{t("components.ms.checkAddress")} <b className="select-all break-all font-mono">{addressOf(info)}</b></p>
+      <p>{t("components.ms.checkAddress")} <b className="ms-address">{addressOf(info)}</b></p>
       <WaitingRow hint={t("components.ms.windowWaits", { min: validMinutes(info) })} />
       <Hint>{t("components.ms.nothingHappens")}</Hint>
     </>
@@ -119,20 +120,34 @@ function BrowserStep({ info }: { info: MsLoginStart }) {
 }
 
 function DeviceStep({ info }: { info: MsLoginStart }) {
-  const { t } = useI18n();
+  const { t, tAround } = useI18n();
+  const [openBefore, openAfter] = tAround("components.ms.stepOpen", "address");
   return (
     <>
-      <p>{t("components.ms.openAt")} <b className="select-all break-all">{addressOf(info)}</b> {t("components.ms.enterCode")}</p>
-      {/* Code-Anzeige (Sonderform: große Pixelschrift in eingelassener Platte) */}
-      <div className="codebox">
-        <span
-          className="code select-all"
-          aria-label={t("components.ms.codeSpaced", { code: info.userCode.split("").join(" ") })}
-        >
-          {info.userCode}
-        </span>
-        <Button icon="copy" onClick={() => copyWithToast(info.userCode, t("components.ms.codeCopied"))}>{t("common.copy")}</Button>
+      {/* Code-Anzeige: große Pixelschrift in eingelassenem Slot, Kopieren daneben */}
+      <div className="ms-codebox">
+        <span className="ms-code-label">{t("components.ms.yourCode")}</span>
+        <div className="vx-slot ms-code">
+          <b className="ms-code-text" aria-label={t("components.ms.codeSpaced", { code: info.userCode.split("").join(" ") })}>
+            {info.userCode}
+          </b>
+          <Button icon="copy" onClick={() => copyWithToast(info.userCode, t("components.ms.codeCopied"))}>{t("common.copy")}</Button>
+        </div>
       </div>
+      <ol className="ms-steps">
+        <li>
+          <span className="vx-slot ms-step-n">1</span>
+          <span>{openBefore}<b className="ms-address">{addressOf(info)}</b>{openAfter}</span>
+        </li>
+        <li>
+          <span className="vx-slot ms-step-n">2</span>
+          <span>{t("components.ms.stepCode")}</span>
+        </li>
+        <li>
+          <span className="vx-slot ms-step-n">3</span>
+          <span>{t("components.ms.stepAccount")}</span>
+        </li>
+      </ol>
       <WaitingRow hint={t("components.ms.codeValid", { min: validMinutes(info) })} />
     </>
   );
@@ -141,7 +156,7 @@ function DeviceStep({ info }: { info: MsLoginStart }) {
 function DoneStep({ id, name }: { id: string; name: string }) {
   const { t } = useI18n();
   return (
-    <div className="mt-2 flex items-center gap-3.5">
+    <div className="ms-done">
       <AccountAvatar account={{ kind: "microsoft", id, username: name }} />
       <div>
         <Hint tone="ok">{t("components.account.loggedInAs", { name })}</Hint>
@@ -157,7 +172,7 @@ function ErrorStep({ message }: { message: string }) {
   return (
     <>
       <ErrorBox title={t("components.ms.loginFailed")} error={message} onRetry={() => void startMsLogin()} />
-      {offlineAllowed && <p className="mt-3">{t("components.ms.offlinePossible")}</p>}
+      {offlineAllowed && <p className="ms-offline">{t("components.ms.offlinePossible")}</p>}
     </>
   );
 }

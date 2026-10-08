@@ -12,10 +12,10 @@ import {
   ProjectIcon, RowTitle, SceneCard, SceneThumb, Switch, ThumbCard, type GlyphBox, type MenuEntry,
 } from "@/ui";
 import { cssVars } from "../util";
-import { cap, cell, Lab, row, Sec } from "./kit-ui";
+import { Cap, Frame, Lab, Sec } from "./kit-ui";
 
 const MENU: MenuEntry[] = [
-  { id: "open", text: "Öffnen", icon: "ext", onSelect: () => undefined },
+  { id: "open", text: "Öffnen", icon: "external", onSelect: () => undefined },
   { id: "folder", text: "Ordner öffnen", icon: "folder", onSelect: () => undefined },
   "-",
   { id: "del", text: "Löschen", icon: "trash", bad: true, onSelect: () => undefined },
@@ -38,29 +38,29 @@ const IMG = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.
 
 /** Zustand eines Beispiels per Instanz-Position erzwingen. */
 const instanceStatus = (k: number) =>
-  k === 1 ? <Chip size="s" tone="run" dot>Läuft</Chip> : k === 2 ? <Chip icon="up"><Count value={3} /> Updates</Chip> : null;
+  k === 1 ? <Chip size="s" tone="run" dot>Läuft</Chip> : k === 2 ? <Chip icon="update"><Count value={3} /> Updates</Chip> : null;
 
 function IconAudit() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div className="kit-stack" data-gap="12">
       {GLYPHS.slice(0, 2).map(([g, p]) => (
-        <div key={g} style={row}>
+        <div key={g} className="kit-row">
           <Lab>Glyph {g}</Lab>
-          {BOXES.map((b) => <span key={b} style={cell} title={`box ${b}`}><Glyph name={g} pal={p} box={b} /></span>)}
+          {BOXES.map((b) => <Frame key={b} title={`box ${b}`}><Glyph name={g} pal={p} box={b} /></Frame>)}
         </div>
       ))}
-      <div style={row}>
+      <div className="kit-row">
         <Lab>ProjectIcon</Lab>
-        {BOXES.map((b) => <span key={b} style={cell}><ProjectIcon url={IMG} seed="x" box={b} /></span>)}
-        <span style={cell} title="kaputt → Glyphe"><ProjectIcon url="/gibt-es-nicht.png" seed="sodium" box={52} /></span>
-        <span style={cell} title="ohne Bild"><ProjectIcon seed="lithium" box={72} /></span>
+        {BOXES.map((b) => <Frame key={b}><ProjectIcon url={IMG} seed="x" box={b} /></Frame>)}
+        <Frame title="kaputt → Glyphe"><ProjectIcon url="/gibt-es-nicht.png" seed="sodium" box={52} /></Frame>
+        <Frame title="ohne Bild"><ProjectIcon seed="lithium" box={72} /></Frame>
       </div>
-      <div style={row}>
+      <div className="kit-row">
         <Lab>Avatar 28 · 32</Lab>
         {["Steve", "Alex", "Notch"].map((n) => (
-          <span key={n} style={{ display: "flex", gap: 8 }}>
-            <span style={cell}><Avatar name={n} box={28} /></span>
-            <span style={cell}><Avatar name={n} box={32} /></span>
+          <span key={n} className="kit-avatars">
+            <Frame><Avatar name={n} box={28} /></Frame>
+            <Frame><Avatar name={n} box={32} /></Frame>
           </span>
         ))}
       </div>
@@ -72,7 +72,7 @@ function IconAudit() {
 function Minis() {
   const [cur, setCur] = useState("a");
   return (
-    <div style={{ ...row, gap: 12 }} data-kit="minis">
+    <div className="kit-row" data-gap="12" data-kit="minis">
       {INST.map((i, n) => (
         <SceneCard
           key={i.id}
@@ -125,9 +125,9 @@ function Choices() {
   const [pk, setPk] = useState("fab");
   const [st, setSt] = useState("blank");
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 520px) minmax(0, 420px)", gap: 24, alignItems: "start" }}>
+    <div className="kit-grid" data-cols="choices">
       <Panel level="raised" notch={2} pad="s" data-kit="choice-m">
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <div className="kit-stack" data-gap="2">
           {PACKS.map((p) => (
             <Choice
               key={p.id}
@@ -144,7 +144,7 @@ function Choices() {
           <Choice media={<Glyph name="chest" pal="copper" />} title="Gewählt + Fokus" sub="Doppelring" selected data-force="focus" />
         </div>
       </Panel>
-      <div role="radiogroup" aria-label="Start" style={{ display: "flex", flexDirection: "column", gap: 8 }} data-kit="choice-l">
+      <div role="radiogroup" aria-label="Start" className="kit-stack" data-gap="8" data-kit="choice-l">
         {STARTS.map((s) => (
           <Choice key={s.id} size="l" role="radio" media={<Glyph name={s.g} pal={s.p} />} title={s.t} sub={s.s} selected={st === s.id} onClick={() => setSt(s.id)} />
         ))}
@@ -156,16 +156,16 @@ function Choices() {
 
 function Panels() {
   return (
-    <div style={row} data-kit="panels">
+    <div className="kit-row" data-kit="panels">
       {(["plate", "raised", "sunk"] as const).map((l) => (
-        <Panel key={l} level={l} pad="m" style={{ width: 170 }}><b>{l}</b><p className="faint" style={{ fontSize: 12 }}>notch 1, pad m</p></Panel>
+        <Panel key={l} level={l} pad="m" className="kit-panel-w"><b>{l}</b><p className="faint kit-panel-note">notch 1, pad m</p></Panel>
       ))}
-      <Panel notch={2} pad="l" style={{ width: 170 }}><b>notch 2</b><p className="faint" style={{ fontSize: 12 }}>pad l</p></Panel>
-      <Panel pad="s" style={{ width: 240 }}>
-        <span style={cap}>Überlagerungs-Kontext</span>
-        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+      <Panel notch={2} pad="l" className="kit-panel-w"><b>notch 2</b><p className="faint kit-panel-note">pad l</p></Panel>
+      <Panel pad="s" className="kit-panel-w" data-wide="">
+        <Cap>Überlagerungs-Kontext</Cap>
+        <div className="kit-panel-actions">
           <Button variant="ghost" icon="copy" data-force="hover">Kopieren</Button>
-          <IconButton icon="x" label="Schließen" tip={false} data-force="hover" />
+          <IconButton icon="close" label="Schließen" tip={false} data-force="hover" />
         </div>
       </Panel>
     </div>
@@ -233,7 +233,7 @@ function ContentLists() {
           <ProjectIcon seed={m.id} />
           <RowTitle title={m.name} sub={m.s} />
           {!noWarnCol && <Cell flex>{m.warn && <><Chip size="s" tone="warn" dot data-hide="1040">{m.warn}</Chip><Button variant="ghost" size="s" tone="warn">Beheben</Button></>}</Cell>}
-          <Cell flex align="end">{m.id === "sodium" ? <Button size="s" icon="up" width={96}>0.6.6</Button> : null}</Cell>
+          <Cell flex align="end">{m.id === "sodium" ? <Button size="s" icon="update" width={96}>0.6.6</Button> : null}</Cell>
           <Cell flex align="end"><Switch checked={m.on} onChange={() => undefined} label={`${m.name} eingeschaltet`} /></Cell>
           <IconButton size="s" icon="more" label={`Mehr zu ${m.name}`} tip={false} />
         </ListRow>
@@ -245,9 +245,9 @@ function ContentLists() {
   return (
     <>
       <List variant="content" head={head(false)} divided data-kit="list-content">{rows(false)}</List>
-      <span style={cap}>noWarnCol</span>
+      <Cap>noWarnCol</Cap>
       <List variant="content" noWarnCol head={head(true)} divided data-kit="list-content-nw">{rows(true)}</List>
-      <span style={cap}>tiles (Kacheln)</span>
+      <Cap>tiles (Kacheln)</Cap>
       <List variant="tiles" data-kit="list-tiles">
         {MODS.map((m) => (
           <ListRow key={m.id} selected={picked.has(m.id)} off={!m.on}>
@@ -255,7 +255,7 @@ function ContentLists() {
             <RowTitle title={m.name} />
             <span><Switch checked={m.on} onChange={() => undefined} label={`${m.name} eingeschaltet`} /><IconButton size="s" icon="more" label={`Mehr zu ${m.name}`} tip={false} /></span>
             <span>{m.warn ? <Chip size="s" tone="warn" dot>{m.warn}</Chip> : <span className="ell">{m.s}</span>}</span>
-            <span>{m.id === "sodium" ? <Button size="s" icon="up" width={96}>0.6.6</Button> : null}</span>
+            <span>{m.id === "sodium" ? <Button size="s" icon="update" width={96}>0.6.6</Button> : null}</span>
           </ListRow>
         ))}
         <GhostRow variant="tile" text="Mod Menu entfernt" undoId="g1" onUndo={() => undefined} />
@@ -289,8 +289,8 @@ function CatalogLists() {
           </ListRow>
         ))}
       </List>
-      <span style={cap}>Katalog in der Platte</span>
-      <Panel pad="s" style={{ maxWidth: 520 }}>
+      <Cap>Katalog in der Platte</Cap>
+      <Panel pad="s" className="kit-max-520">
         <List variant="catalog-compact" data-kit="list-compact">
           {HITS.map((h) => (
             <ListRow key={h.id} hit={{ onClick: () => undefined, label: `${h.name} ansehen` }}>
@@ -306,16 +306,16 @@ function CatalogLists() {
 }
 
 const TASKS = [
-  { title: "Sodium wird installiert", sub: "3 von 7 Dateien", p: "42 %", icon: "dl", color: "var(--copper)" },
-  { title: "Überlebenswelt angelegt", sub: "vor 2 Min.", p: "", icon: "check", color: "var(--run)" },
-  { title: "Download fehlgeschlagen", sub: "Keine Verbindung", p: "", icon: "warn", color: "var(--bad)" },
+  { title: "Sodium wird installiert", sub: "3 von 7 Dateien", p: "42 %", icon: "download", tone: "acc" },
+  { title: "Überlebenswelt angelegt", sub: "vor 2 Min.", p: "", icon: "check", tone: "run" },
+  { title: "Download fehlgeschlagen", sub: "Keine Verbindung", p: "", icon: "warn", tone: "bad" },
 ] as const;
 
 function SmallLists() {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 360px))", gap: 24, alignItems: "start" }}>
+    <div className="kit-grid" data-cols="lists">
       <Panel pad="m" data-kit="list-versions">
-        <h3 style={{ ...cap, marginBottom: 6 }}>Versionen</h3>
+        <h3 className="kit-cap kit-h3">Versionen</h3>
         <List variant="versions">
           {["mc1.21.4-0.6.5", "mc1.21.4-0.6.4-beta", "mc1.21.1-0.6.0"].map((v, k) => (
             <ListRow key={v}>
@@ -329,10 +329,10 @@ function SmallLists() {
         <List variant="tasks" divided>
           {TASKS.map((task) => (
             <ListRow key={task.title}>
-              <span style={{ color: task.color }}><Icon name={task.icon} /></span>
+              <span className="kit-task-icon" data-tone={task.tone}><Icon name={task.icon} /></span>
               <RowTitle title={task.title} sub={task.sub} />
               <Cell align="end"><Count value={task.p} size={18} /></Cell>
-              {task.p ? <IconButton size="s" icon="x" label="Abbrechen" tip={false} /> : <span />}
+              {task.p ? <IconButton size="s" icon="close" label="Abbrechen" tip={false} /> : <span />}
             </ListRow>
           ))}
         </List>
