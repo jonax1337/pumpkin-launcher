@@ -13,6 +13,9 @@ For installation and a first game, start with the [launcher guide](README.md#dow
 - Buttons follow one size rule (page header 40 px, section and row actions
   32 px); unselected checkboxes and radios are clearly visible; selected rows
   share one selection colour.
+- The update badge looks the same on Home, in the Library and in the instance
+  header.
+- Removed the "Starter picks" switch from Discover.
 - Discover keeps its search bar in view, Friends moves in-game activity into a
   collapsible section, and the Home page fits the 800×600 minimum window.
   Hero scenes keep their soft gradients.

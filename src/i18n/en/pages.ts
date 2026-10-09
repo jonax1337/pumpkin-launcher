@@ -83,8 +83,6 @@ export const pages: typeof dePages = {
   "pages.discover.allSources": "All sources",
   "pages.discover.categoryLabel": "Category",
   "pages.discover.searchFilterLabel": "Search and filters",
-  "pages.discover.starter": "Starter picks",
-  "pages.discover.starterNote": "A fixed selection of well-known, widely used projects, not a seal of approval. Descriptions come from the provider and are often in English.",
   "pages.discover.olderVersions": "Older versions",
   "pages.discover.filterByCategory": "Filter by category {name}",
   "pages.discover.clearCategory": "Remove category {name}",

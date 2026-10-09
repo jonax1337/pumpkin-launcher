@@ -83,8 +83,6 @@ export const pages = {
   "pages.discover.allSources": "Alle Quellen",
   "pages.discover.categoryLabel": "Kategorie",
   "pages.discover.searchFilterLabel": "Suche und Filter",
-  "pages.discover.starter": "Zum Einstieg",
-  "pages.discover.starterNote": "Eine feste Auswahl bekannter, viel genutzter Projekte, kein Gütesiegel. Beschreibungen stammen vom Anbieter und sind oft auf Englisch.",
   "pages.discover.olderVersions": "Ältere Versionen",
   "pages.discover.filterByCategory": "Nach Kategorie {name} filtern",
   "pages.discover.clearCategory": "Kategorie {name} entfernen",

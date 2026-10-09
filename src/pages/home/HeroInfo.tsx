@@ -40,9 +40,8 @@ export function HeroInfo({ instance }: { instance: Instance }) {
           ]}
         />
         {updateCount > 0 && (
-          // Chip-Knopf (Slot, Warnton) wie im Entwurf: Pip, Pfeil, „Updates“ und Zähler
-          <Link to={instanceUrl(instance.id, "content")} className="vx-chip vx-slot fx" data-press data-tone="warn" data-lead>
-            <i className="vx-dot" aria-hidden />
+          // Chip-Knopf im Warnton, derselbe Aufbau wie im Instanzkopf: Pfeil, „Updates“ und Zähler
+          <Link to={instanceUrl(instance.id, "content")} className="vx-chip vx-slot fx" data-size="m" data-press data-tone="warn" data-lead>
             <Icon name="update" size="s" />
             {updatesLabel(updateCount)}
             <Count value={updateCount} />

@@ -2,13 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useView } from "@/app/Layout";
 import { useI18n } from "@/i18n";
-import { ChipButton, ContextMenu, Page, PageHeader, SearchField, Select, TabPanel, Tabs, Toolbar, Workspace, WorkspaceContent, type MenuEntry } from "@/ui";
+import { ContextMenu, Page, PageHeader, SearchField, Select, TabPanel, Tabs, Toolbar, Workspace, WorkspaceContent, type MenuEntry } from "@/ui";
 import { ContentDetail } from "@/components/catalog/ContentDetail";
 import { ContentResults } from "@/components/catalog/ContentResults";
 import { searchPlaceholder, TYPE_ICONS, typeLabel } from "@/components/catalog/labels";
 import { OtherTypeHits } from "@/components/catalog/OtherTypeHits";
 import { SourceSelect } from "@/components/catalog/SourceSelect";
-import { StarterResults } from "@/components/catalog/StarterResults";
 import { useDebounced } from "@/hooks/useDebounced";
 import { useVersions } from "@/hooks/useInstances";
 import { usePersistedState } from "@/hooks/usePersistedState";
@@ -17,7 +16,6 @@ import {
 } from "@/lib/content-types";
 import type { SearchRequest } from "@/lib/catalogSearch";
 import { discoverParams, readDiscoverParams } from "@/lib/routes";
-import { hasStarter } from "@/lib/starter";
 import { ALL_LOADERS, LOADER_LABELS, type VersionEntry } from "@/lib/types";
 import "./discover.css";
 
@@ -39,11 +37,9 @@ interface Filters {
   loader: string;
   /** Kategorie des Anbieters, auf die die Treffer eingegrenzt sind. */
   category: string | null;
-  /** „Zum Einstieg“: statt der Suche die feste Auswahl der Art. */
-  starter: boolean;
 }
 
-const NO_FILTERS: Filters = { query: "", version: ALL, loader: ALL, category: null, starter: false };
+const NO_FILTERS: Filters = { query: "", version: ALL, loader: ALL, category: null };
 
 /** Alle Release-Versionen, die jüngsten zuerst; „Ältere Versionen“ ist ein Trenner, nur wenn es ältere gibt. */
 function versionOptions(versions: VersionEntry[], allLabel: string, olderLabel: string) {
@@ -85,8 +81,6 @@ export function DiscoverPage() {
   const settledQuery = useDebounced(query);
   const versions = useVersions();
   const hasLoaderFilter = (tab: CatalogType) => info.filters && (tab === "mod" || tab === "modpack");
-  const starterAvailable = hasStarter(type) && (source === ALL_SOURCES || source === "modrinth");
-  const showStarter = filters.starter && starterAvailable && !query;
   const view = useView();
   const listScroll = useRef(0);
 
@@ -98,7 +92,7 @@ export function DiscoverPage() {
   const handoffQuery = requested.query;
   useEffect(() => {
     if (handoffQuery === null) return;
-    setFilters((current) => ({ ...current, query: handoffQuery, starter: false }));
+    setFilters((current) => ({ ...current, query: handoffQuery }));
     setParams(discoverParams({ tab: type, source }), { replace: true });
   }, [handoffQuery, type, source, setParams]);
 
@@ -122,7 +116,7 @@ export function DiscoverPage() {
   };
 
   const openTab = (tab: CatalogType) => {
-    change({ loader: hasLoaderFilter(tab) ? filters.loader : ALL, category: null, starter: false });
+    change({ loader: hasLoaderFilter(tab) ? filters.loader : ALL, category: null });
     rememberTab(tab);
     setParams(discoverParams({ tab, source }), { replace: true });
   };
@@ -176,7 +170,7 @@ export function DiscoverPage() {
         <Toolbar search="l" label={t("pages.discover.searchFilterLabel")}>
           <SearchField
             value={filters.query}
-            onChange={(next) => change({ query: next, ...(next.trim() && { starter: false }) })}
+            onChange={(next) => change({ query: next })}
             placeholder={searchPlaceholder(type)}
           />
           <SourceSelect
@@ -190,7 +184,6 @@ export function DiscoverPage() {
             <Select
               label={t("common.version")}
               value={filters.version}
-              disabled={showStarter}
               onChange={(version) => change({ version })}
               options={versionOptions(versions.data ?? [], t("common.all"), t("pages.discover.olderVersions"))}
             />
@@ -199,7 +192,6 @@ export function DiscoverPage() {
             <Select
               label={t("components.common.loader")}
               value={filters.loader}
-              disabled={showStarter}
               onChange={(loader) => change({ loader })}
               options={[{ value: ALL, label: t("common.all") }, ...ALL_LOADERS.filter((l) => l !== "vanilla").map((l) => ({ value: l, label: LOADER_LABELS[l] }))]}
             />
@@ -210,41 +202,34 @@ export function DiscoverPage() {
         <WorkspaceContent className="disc-results">
         <TabPanel idBase="disc" value={type}>
           <div className="disc-extras">
-            {starterAvailable && !query && (
-              <ChipButton pressed={showStarter} onClick={() => change({ starter: !showStarter })}>{t("pages.discover.starter")}</ChipButton>
-            )}
-            {!showStarter && <OtherTypeHits source={source} types={tabs.filter((tab) => tab !== type)} requestFor={requestFor} onPick={openTab} />}
+            <OtherTypeHits source={source} types={tabs.filter((tab) => tab !== type)} requestFor={requestFor} onPick={openTab} />
           </div>
-          {showStarter ? (
-            <StarterResults type={type} onOpen={open} />
-          ) : (
-            <ContentResults
-              key={`${source}-${type}`}
-              source={source}
-              type={type}
-              filter={{ query: filters.query, mc, loader: loaderFor(type), category: filters.category, sort }}
-              onReset={reset}
-              onOpen={open}
-              onCategory={(category) => change({ category })}
-              sortSelect={
-                info.filters && (
-                  <Select
-                    size="s"
-                    label={t("pages.instances.sortLabel")}
-                    value={sort ?? defaultSort(query)}
-                    onChange={(next) => setSortChoice(next as SearchIndex)}
-                    options={[
-                      { value: "relevance", label: t("pages.discover.sortRelevance") },
-                      { value: "downloads", label: t("pages.discover.sortDownloads") },
-                      { value: "follows", label: t("pages.discover.sortFollows") },
-                      { value: "newest", label: t("pages.discover.sortNewest") },
-                      { value: "updated", label: t("components.sort.updated") },
-                    ]}
-                  />
-                )
-              }
-            />
-          )}
+          <ContentResults
+            key={`${source}-${type}`}
+            source={source}
+            type={type}
+            filter={{ query: filters.query, mc, loader: loaderFor(type), category: filters.category, sort }}
+            onReset={reset}
+            onOpen={open}
+            onCategory={(category) => change({ category })}
+            sortSelect={
+              info.filters && (
+                <Select
+                  size="s"
+                  label={t("pages.instances.sortLabel")}
+                  value={sort ?? defaultSort(query)}
+                  onChange={(next) => setSortChoice(next as SearchIndex)}
+                  options={[
+                    { value: "relevance", label: t("pages.discover.sortRelevance") },
+                    { value: "downloads", label: t("pages.discover.sortDownloads") },
+                    { value: "follows", label: t("pages.discover.sortFollows") },
+                    { value: "newest", label: t("pages.discover.sortNewest") },
+                    { value: "updated", label: t("components.sort.updated") },
+                  ]}
+                />
+              )
+            }
+          />
         </TabPanel>
         </WorkspaceContent>
         </Workspace>

@@ -30,8 +30,9 @@ function LibStatus({ instance }: { instance: Instance }) {
   if (freshImport) return <FreshImportChip instanceId={instance.id} />;
   if (updateCount > 0)
     return (
-      <Chip tone="warn" dot icon="update">
-        <Count value={updateCount} /> {updatesLabel(updateCount)}
+      <Chip tone="warn" icon="update">
+        {updatesLabel(updateCount)}
+        <Count value={updateCount} />
       </Chip>
     );
   return null;

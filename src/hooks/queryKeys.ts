@@ -116,8 +116,6 @@ export const catalogKeys = {
   /** Trefferzahl einer Suche (erste Seite), z. B. „Auch 12 Treffer unter Mods“. */
   searchTotal: (source: SourceChoice, type: CatalogType, query: string, mc: string | null, loader: string | null) =>
     ["catalog-search-total", source, type, query, mc, loader] as const,
-  /** Die kuratierte Einstiegsauswahl eines Typs. */
-  starter: (type: CatalogType) => ["modrinth-starter", type] as const,
   project: (source: Source, projectId: string) =>
     source === "modrinth" ? (["modrinth-project", projectId] as const) : (["catalog-project", source, projectId] as const),
   /** Versionen eines Projekts, mit `null` für Minecraft-Version und Loader alle. */

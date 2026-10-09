@@ -19,8 +19,8 @@
   flex-wrap: wrap;
   row-gap: 8px;
 }
-/* Die Zeile reserviert die Höhe eines Chips, damit „Meistgeladen“ zwischen den Reitern nicht springt */
-.disc .disc-extras { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; margin-bottom: 10px; min-height: 28px; }
+.disc .disc-extras { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; margin-bottom: 10px; }
+.disc .disc-extras:empty { display: none; }
 
 .disc-proj .proj-b {
   grid-template-columns: minmax(0, 1fr) 280px;

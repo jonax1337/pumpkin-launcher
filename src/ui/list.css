@@ -54,7 +54,7 @@
 
 /* ---------- Zelle ---------- */
 .vx-cell { display: block; min-width: 0; color: var(--fg-2); font-size: calc(13px * var(--tz)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.vx-cell .vx-count { font-size: calc(var(--fs-px-m) * var(--tz)); color: var(--fg); }
+.vx-cell .vx-count:not(.vx-chip *) { font-size: calc(var(--fs-px-m) * var(--tz)); color: var(--fg); }
 .vx-cell[data-align="end"] { text-align: right; }
 .vx-cell[data-flex] { display: flex; align-items: center; gap: 6px; min-height: 32px; overflow: visible; }
 .vx-cell[data-flex][data-align="end"] { justify-content: flex-end; }
